@@ -247,7 +247,7 @@ namespace
 	{
 	public:
 		explicit AliasesConf(MemoryPool& p)
-			: ConfigCache(p, fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, ALIAS_FILE)),
+			: ConfigCache(p, fb_utils::getPrefix(IConfigManager::DIR_CONF, ALIAS_FILE)),
 			  databases(getPool()), aliases(getPool())
 #ifdef HAVE_ID_BY_NAME
 			  , ids(getPool())
@@ -292,7 +292,7 @@ namespace
 					db = FB_NEW_POOL(getPool()) DbName(getPool(), file);
 #ifdef HAVE_ID_BY_NAME
 					UCharBuffer id;
-					Firebird::os_utils::getUniqueFileId(db->name.c_str(), id);
+					os_utils::getUniqueFileId(db->name.c_str(), id);
 					if (id.hasData())
 					{
 						Id* i = idHash.lookup(id);
@@ -485,9 +485,9 @@ static bool setPath(const PathName& filename, PathName& expandedName)
 
 // Full processing of database name
 // Returns true if alias was found in databases.conf
-bool expandDatabaseName(Firebird::PathName alias,
-						Firebird::PathName& file,
-						Firebird::RefPtr<const Config>* config)
+bool expandDatabaseName(PathName alias,
+						PathName& file,
+						RefPtr<const Config>* config)
 {
 	try
 	{
@@ -496,7 +496,7 @@ bool expandDatabaseName(Firebird::PathName alias,
 	catch (const fatal_exception& ex)
 	{
 		gds__log("File databases.conf contains bad data: %s", ex.what());
-		Firebird::Arg::Gds(isc_server_misconfigured).raise();
+		Arg::Gds(isc_server_misconfigured).raise();
 	}
 
 	// remove whitespaces from database name
@@ -539,14 +539,14 @@ bool expandDatabaseName(Firebird::PathName alias,
 		if (!db)
 		{
 			UCharBuffer id;
-			Firebird::os_utils::getUniqueFileId(file.c_str(), id);
+			os_utils::getUniqueFileId(file.c_str(), id);
 			if (id.hasData())
 			{
 				Id* i = aliasesConf().idHash.lookup(id);
 				if (i)
 				{
 					UCharBuffer oldId;
-					Firebird::os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
+					os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
 					if (oldId == id)	// Yes, that's really same file, and we should use same config
 						db = i->db;
 				}
@@ -560,7 +560,7 @@ bool expandDatabaseName(Firebird::PathName alias,
 }
 
 // Probably file arrived on the disk
-bool notifyDatabaseName(const Firebird::PathName& file)
+bool notifyDatabaseName(const PathName& file)
 {
 #ifdef HAVE_ID_BY_NAME
 	// notifyDatabaseName typically causes changes in aliasesConf()
@@ -575,7 +575,7 @@ bool notifyDatabaseName(const Firebird::PathName& file)
 		return true;
 
 	UCharBuffer id;
-	Firebird::os_utils::getUniqueFileId(file.c_str(), id);
+	os_utils::getUniqueFileId(file.c_str(), id);
 	if (id.hasData())
 	{
 		aliasesConf().linkId(db, id);

@@ -162,8 +162,8 @@ ULONG FixedWidthCharSet::substring(const ULONG srcLen, const UCHAR* src, const U
 	}
 
 	if (result == INTL_BAD_STR_LENGTH)
-		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(dstLen) << Firebird::Arg::Num(len));
+		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) << Arg::Num(dstLen) << Arg::Num(len));
 
 	return result;
 }
@@ -229,8 +229,8 @@ ULONG MultiByteCharSet::substring(const ULONG srcLen, const UCHAR* src, const UL
 	}
 
 	if (result == INTL_BAD_STR_LENGTH)
-		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(dstLen) << Firebird::Arg::Num(len));
+		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) << Arg::Num(dstLen) << Arg::Num(len));
 
 	return result;
 }

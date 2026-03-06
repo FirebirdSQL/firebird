@@ -55,18 +55,18 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 	const UCHAR byte = rdr.getByte();
 	if (byte != blr_version4 && byte != blr_version5)
 	{
-		(Firebird::Arg::Gds(isc_dsql_error) <<
-		 Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-		 Firebird::Arg::Gds(isc_wroblrver2) << Firebird::Arg::Num(blr_version4) << Firebird::Arg::Num(blr_version5) << Firebird::Arg::Num(byte)
+		(Arg::Gds(isc_dsql_error) <<
+		 Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+		 Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5) << Arg::Num(byte)
 		).raise();
 	}
 
 	if (rdr.getByte() != blr_begin || rdr.getByte() != blr_message)
 	{
-		(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-		 Firebird::Arg::Gds(isc_dsql_sqlda_err)
+		(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+		 Arg::Gds(isc_dsql_sqlda_err)
 #ifdef DEV_BUILD
-		 << Firebird::Arg::Gds(isc_random) << "Missing blr_begin / blr_message"
+		 << Arg::Gds(isc_random) << "Missing blr_begin / blr_message"
 #endif
 		).raise();
 	}
@@ -209,20 +209,20 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 			break;
 
 		default:
-			(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-			 Firebird::Arg::Gds(isc_dsql_sqlda_err)
+			(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			 Arg::Gds(isc_dsql_sqlda_err)
 #ifdef DEV_BUILD
-			 << Firebird::Arg::Gds(isc_random) << "Wrong BLR type"
+			 << Arg::Gds(isc_random) << "Wrong BLR type"
 #endif
 			).raise();
 		}
 
 		if (rdr.getByte() != blr_short || rdr.getByte() != 0)
 		{
-			(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-			 Firebird::Arg::Gds(isc_dsql_sqlda_err)
+			(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			 Arg::Gds(isc_dsql_sqlda_err)
 #ifdef DEV_BUILD
-			 << Firebird::Arg::Gds(isc_random) << "Wrong BLR type for NULL indicator"
+			 << Arg::Gds(isc_random) << "Wrong BLR type for NULL indicator"
 #endif
 			).raise();
 		}
@@ -234,10 +234,10 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 
 	if (rdr.getByte() != (UCHAR) blr_end || length != aLength)
 	{
-		(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-		 Firebird::Arg::Gds(isc_dsql_sqlda_err)
+		(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+		 Arg::Gds(isc_dsql_sqlda_err)
 #ifdef DEV_BUILD
-		 << Firebird::Arg::Gds(isc_random) << (length != aLength ? "Invalid message length" : "Missing blr_end")
+		 << Arg::Gds(isc_random) << (length != aLength ? "Invalid message length" : "Missing blr_end")
 #endif
 		).raise();
 	}

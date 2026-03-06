@@ -199,13 +199,13 @@ namespace
 		{
 			PathName idsPath;
 			PathUtils::concatPath(idsPath, TimeZoneUtil::getTzDataPath(), "ids.dat");
-			const int fileHandle = Firebird::os_utils::open(idsPath.c_str(), O_RDONLY | O_BINARY, 0);
+			const int fileHandle = os_utils::open(idsPath.c_str(), O_RDONLY | O_BINARY, 0);
 
 			if (fileHandle == -1)
 				return false;
 
 			struct STAT stat;
-			if (Firebird::os_utils::fstat(fileHandle, &stat) != 0)
+			if (os_utils::fstat(fileHandle, &stat) != 0)
 			{
 				close(fileHandle);
 				return false;
@@ -433,7 +433,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	return cachedTimeZoneId;
 }
 
-void TimeZoneUtil::getDatabaseVersion(Firebird::string& str)
+void TimeZoneUtil::getDatabaseVersion(string& str)
 {
 	UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
@@ -441,7 +441,7 @@ void TimeZoneUtil::getDatabaseVersion(Firebird::string& str)
 	const char* version = icuLib.ucalGetTZDataVersion(&icuErrorCode);
 
 	if (U_FAILURE(icuErrorCode))
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_getTZDataVersion.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_getTZDataVersion.");
 
 	str = version;
 }
@@ -494,7 +494,7 @@ USHORT TimeZoneUtil::parse(const char* str, unsigned strLen, bool strict)
 			}
 		}
 
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_timezone_offset) << string(start, end));
+		status_exception::raise(Arg::Gds(isc_invalid_timezone_offset) << string(start, end));
 		return 0;	// avoid warning
 	}
 
@@ -535,7 +535,7 @@ USHORT TimeZoneUtil::parseRegion(const char* str, unsigned strLen)
 			return id;
 	}
 
-	status_exception::raise(Firebird::Arg::Gds(isc_invalid_timezone_region) << string(start, end));
+	status_exception::raise(Arg::Gds(isc_invalid_timezone_region) << string(start, end));
 	return 0;
 }
 
@@ -620,18 +620,18 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 		if (!icuCalendar)
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
 
 		icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
 
 		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
 
 		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
 	}
 
 	*offset = displacement;
@@ -655,7 +655,7 @@ USHORT TimeZoneUtil::makeFromOffset(int sign, unsigned tzh, unsigned tzm)
 	{
 		string str;
 		str.printf("%s%02u:%02u", (sign == -1 ? "-" : "+"), tzh, tzm);
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_timezone_offset) << str);
+		status_exception::raise(Arg::Gds(isc_invalid_timezone_offset) << str);
 	}
 
 	return (USHORT)displacementToOffsetZone((tzh * 60 + tzm) * sign);
@@ -720,7 +720,7 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 		if (!icuCalendar)
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
 
 		icuLib.ucalSetAttribute(icuCalendar, UCAL_REPEATED_WALL_TIME, UCAL_WALLTIME_FIRST);
 		icuLib.ucalSetAttribute(icuCalendar, UCAL_SKIPPED_WALL_TIME, UCAL_WALLTIME_FIRST);
@@ -729,13 +729,13 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 			times.tm_hour, times.tm_min, times.tm_sec, &icuErrorCode);
 
 		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_setDateTime.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setDateTime.");
 
 		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
 	}
 
 	const auto ticks = TimeStamp::timeStampToTicks(timeStampTz.utc_timestamp) -
@@ -773,25 +773,25 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 		{
 #ifdef DEV_BUILD
 			if (gmtFallback && getenv("MISSING_ICU_EMULATION"))
-				(Firebird::Arg::Gds(isc_random) << "Emulating missing ICU").raise();
+				(Arg::Gds(isc_random) << "Emulating missing ICU").raise();
 #endif
 			UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
 			auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
 
 			if (!icuCalendar)
-				status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
 
 			icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
 
 			if (U_FAILURE(icuErrorCode))
-				status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
 
 			displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
 				icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
 
 			if (U_FAILURE(icuErrorCode))
-				status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
 		}
 		catch (const Exception&)
 		{
@@ -1065,7 +1065,7 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aF
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
 
 	if (!icuCalendar)
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
 
 	icuDate = TimeZoneUtil::timeStampToIcuDate(aFrom.utc_timestamp);
 
@@ -1074,7 +1074,7 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aF
 	if (U_FAILURE(icuErrorCode))
 	{
 		fb_assert(false);
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
 	}
 
 	const UBool hasInitial = icuLib.ucalGetTimeZoneTransitionDate(icuCalendar,
@@ -1083,7 +1083,7 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aF
 	if (U_FAILURE(icuErrorCode))
 	{
 		fb_assert(false);
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_getTimeZoneTransitionDate.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_getTimeZoneTransitionDate.");
 	}
 
 	if (!hasInitial)
@@ -1094,7 +1094,7 @@ TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aF
 	if (U_FAILURE(icuErrorCode))
 	{
 		fb_assert(false);
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
 	}
 
 	startTicks = TimeStamp::timeStampToTicks(TimeZoneUtil::icuDateToTimeStamp(icuDate));
@@ -1119,7 +1119,7 @@ bool TimeZoneRuleIterator::next()
 	if (U_FAILURE(icuErrorCode))
 	{
 		fb_assert(false);
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error calling ICU's ucal_getTimeZoneTransitionDate.");
+		status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_getTimeZoneTransitionDate.");
 	}
 
 	if (!hasNext || icuDate > MAX_ICU_TIMESTAMP)
@@ -1149,7 +1149,7 @@ static const TimeZoneDesc* getDesc(USHORT timeZone)
 	if (id < timeZoneStartup().getTimeZoneList().getCount())
 		return &timeZoneStartup().getTimeZoneList()[id];
 
-	status_exception::raise(Firebird::Arg::Gds(isc_invalid_timezone_id) << Firebird::Arg::Num(timeZone));
+	status_exception::raise(Arg::Gds(isc_invalid_timezone_id) << Arg::Num(timeZone));
 	return nullptr;
 }
 

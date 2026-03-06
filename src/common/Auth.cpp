@@ -60,7 +60,7 @@ void WriterImplementation::reset()
 	sequence = 0;
 }
 
-void WriterImplementation::add(Firebird::CheckStatusWrapper* st, const char* name)
+void WriterImplementation::add(CheckStatusWrapper* st, const char* name)
 {
 	try
 	{
@@ -75,7 +75,7 @@ void WriterImplementation::add(Firebird::CheckStatusWrapper* st, const char* nam
 		}
 		type = "USER";
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
@@ -98,20 +98,20 @@ void WriterImplementation::putLevel()
 	result.insertBytes(sequence++, current.getBuffer(), current.getBufferLength());
 }
 
-void WriterImplementation::setType(Firebird::CheckStatusWrapper* st, const char* value)
+void WriterImplementation::setType(CheckStatusWrapper* st, const char* value)
 {
 	try
 	{
 		if (value)
 			type = value;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
 }
 
-void WriterImplementation::setDb(Firebird::CheckStatusWrapper* st, const char* value)
+void WriterImplementation::setDb(CheckStatusWrapper* st, const char* value)
 {
 	try
 	{
@@ -122,7 +122,7 @@ void WriterImplementation::setDb(Firebird::CheckStatusWrapper* st, const char* v
 			current.insertString(AuthReader::AUTH_SECURE_DB, target);
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}

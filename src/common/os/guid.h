@@ -128,16 +128,16 @@ public:
 			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
 	}
 
-	Firebird::string toString(bool withBrackets = true) const
+	string toString(bool withBrackets = true) const
 	{
-		Firebird::string result;
+		string result;
 		toString(result, withBrackets);
 		return result;
 	}
 
-	Firebird::PathName toPathName(bool withBrackets = true) const
+	PathName toPathName(bool withBrackets = true) const
 	{
-		Firebird::PathName result;
+		PathName result;
 		toString(result, withBrackets);
 		return result;
 	}
@@ -155,7 +155,7 @@ public:
 		return (result == GUID_FORMAT_ARGS) ? std::optional<Guid>(uuid) : std::nullopt;
 	}
 
-	static std::optional<Guid> fromString(const Firebird::string& str)
+	static std::optional<Guid> fromString(const string& str)
 	{
 		return fromString(str.nullStr());
 	}

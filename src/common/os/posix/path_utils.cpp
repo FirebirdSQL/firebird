@@ -100,7 +100,7 @@ const PosixDirIterator& PosixDirIterator::operator++()
 {
 	if (!done)
 	{
-		while ( (ent = Firebird::os_utils::readdir(dir)) )
+		while ( (ent = os_utils::readdir(dir)) )
 		{
 			PathName entryname;
 			PathUtils::concatPath(entryname, dirPrefix, ent->d_name);
@@ -241,10 +241,10 @@ bool PathUtils::isSymLink(const PathName& path)
 {
 	struct STAT st, lst;
 
-	if (Firebird::os_utils::stat(path.c_str(), &st) != 0)
+	if (os_utils::stat(path.c_str(), &st) != 0)
 		return false;
 
-	if (Firebird::os_utils::lstat(path.c_str(), &lst) != 0)
+	if (os_utils::lstat(path.c_str(), &lst) != 0)
 		return false;
 
 	return st.st_ino != lst.st_ino;

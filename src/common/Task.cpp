@@ -75,7 +75,7 @@ int WorkerThread::threadRoutine()
 		}
 		return 0;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Unexpected exception at WorkerThread", ex);
 	}

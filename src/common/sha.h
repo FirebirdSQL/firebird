@@ -69,7 +69,7 @@ public:
 	~Sha1();
 
 	// return base64-coded values
-	static void hashBased64(Firebird::string& hashBase64, const Firebird::string& data);
+	static void hashBased64(string& hashBase64, const string& data);
 
 private:
 	void clear() noexcept;

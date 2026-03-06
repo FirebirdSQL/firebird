@@ -31,7 +31,7 @@
 
 namespace {
 
-constexpr Firebird::Tokens::Comment sqlComments[3] = {
+constexpr Tokens::Comment sqlComments[3] = {
 	{ "/*", "*/", false },
 	{ "--", "\n", true },
 	{ NULL, NULL, false }
@@ -212,7 +212,7 @@ void Tokens::error(const char* fmt, ...)
 	buffer.vprintf(fmt, params);
 	va_end(params);
 
-	(Firebird::Arg::Gds(isc_tokens_parse) << Firebird::Arg::Gds(isc_random) << buffer).raise();
+	(Arg::Gds(isc_tokens_parse) << Arg::Gds(isc_random) << buffer).raise();
 }
 
 string Tokens::Tok::stripped() const

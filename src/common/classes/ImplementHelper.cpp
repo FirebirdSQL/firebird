@@ -33,14 +33,14 @@
 
 namespace
 {
-Firebird::IMaster* cached = NULL;
+IMaster* cached = NULL;
 
 #ifdef NEVERDEF
-typedef Firebird::ReferenceCounterDebugger* ReferenceCounterDebuggerPtr;
+typedef ReferenceCounterDebugger* ReferenceCounterDebuggerPtr;
 TLS_DECLARE(ReferenceCounterDebuggerPtr*, debugArray);
 #endif // DEV_BUILD
 
-Firebird::UnloadDetector myModule;
+UnloadDetector myModule;
 }
 
 namespace Firebird

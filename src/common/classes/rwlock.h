@@ -73,7 +73,7 @@ private:
 
 public:
 	RWLock() { init(); }
-	explicit RWLock(Firebird::MemoryPool&) { init(); }
+	explicit RWLock(MemoryPool&) { init(); }
 	~RWLock()
 	{
 		if (readers_semaphore && !CloseHandle(readers_semaphore))

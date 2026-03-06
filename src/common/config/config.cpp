@@ -55,24 +55,24 @@ namespace {
  *	firebird.conf implementation
  */
 
-class ConfigImpl : public Firebird::PermanentStorage
+class ConfigImpl : public PermanentStorage
 {
 public:
-	explicit ConfigImpl(Firebird::MemoryPool& p)
-		: Firebird::PermanentStorage(p), missConf(false)
+	explicit ConfigImpl(MemoryPool& p)
+		: PermanentStorage(p), missConf(false)
 	{
-		const auto fullName = fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, Firebird::CONFIG_FILE);
+		const auto fullName = fb_utils::getPrefix(IConfigManager::DIR_CONF, CONFIG_FILE);
 		missConf = !PathUtils::canAccess(fullName, 0);
 
 		if (missConf)
 		{
 			ConfigFile file(ConfigFile::USE_TEXT, "");
-			defaultConfig = FB_NEW Firebird::Config(file);
+			defaultConfig = FB_NEW Config(file);
 		}
 		else
 		{
 			ConfigFile file(fullName, ConfigFile::ERROR_WHEN_MISS);
-			defaultConfig = FB_NEW Firebird::Config(file);
+			defaultConfig = FB_NEW Config(file);
 		}
 	}
 
@@ -82,13 +82,13 @@ public:
 	/***
 	It was a kind of getting ready for changing config remotely...
 
-	void changeDefaultConfig(Firebird::Config* newConfig)
+	void changeDefaultConfig(Config* newConfig)
 	{
 		defaultConfig = newConfig;
 	}
 	***/
 
-	Firebird::RefPtr<const Firebird::Config>& getDefaultConfig() noexcept
+	RefPtr<const Config>& getDefaultConfig() noexcept
 	{
 		return defaultConfig;
 	}
@@ -98,15 +98,15 @@ public:
 		return missConf;
 	}
 
-	Firebird::IFirebirdConf* getFirebirdConf()
+	IFirebirdConf* getFirebirdConf()
 	{
-		Firebird::IFirebirdConf* rc = FB_NEW Firebird::FirebirdConf(defaultConfig);
+		IFirebirdConf* rc = FB_NEW FirebirdConf(defaultConfig);
 		rc->addRef();
 		return rc;
 	}
 
 private:
-	Firebird::RefPtr<const Firebird::Config> defaultConfig;
+	RefPtr<const Config> defaultConfig;
 
 	bool missConf;
 };
@@ -116,7 +116,7 @@ private:
  *	Static instance of the system configuration file
  */
 
-Firebird::InitInstance<ConfigImpl> firebirdConf;
+InitInstance<ConfigImpl> firebirdConf;
 
 }	// anonymous namespace
 
@@ -693,7 +693,7 @@ const char* Config::getPlugins(unsigned int type) const
 		}
 
 		default:
-			(Firebird::Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
+			(Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
 			return nullptr;
 	}
 

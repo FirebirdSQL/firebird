@@ -27,14 +27,14 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/config/config.h"
 
-bool resolveAlias(const Firebird::PathName& alias,
-				  Firebird::PathName& file,
-				  Firebird::RefPtr<const Firebird::Config>* config);
+bool resolveAlias(const PathName& alias,
+				  PathName& file,
+				  RefPtr<const Config>* config);
 
-bool expandDatabaseName(Firebird::PathName alias,
-						Firebird::PathName& file,
-						Firebird::RefPtr<const Firebird::Config>* config);
+bool expandDatabaseName(PathName alias,
+						PathName& file,
+						RefPtr<const Config>* config);
 
-bool notifyDatabaseName(const Firebird::PathName& file);
+bool notifyDatabaseName(const PathName& file);
 
 #endif // JRD_DB_ALIAS_H

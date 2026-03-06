@@ -111,11 +111,11 @@ private:
 };
 
 
-// Wraps a reference to a Firebird::string.
+// Wraps a reference to a string.
 class StringRefStream : public BaseStream
 {
 public:
-	StringRefStream(Firebird::string& aRef)
+	StringRefStream(string& aRef)
 		: ref(aRef)
 	{
 	}
@@ -127,7 +127,7 @@ public:
 	}
 
 private:
-	Firebird::string& ref;
+	string& ref;
 };
 
 } // namespace

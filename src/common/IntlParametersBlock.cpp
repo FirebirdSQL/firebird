@@ -154,18 +154,18 @@ void IntlParametersBlock::processParametersBlock(ProcessString* processString, C
 			}
 		}
 	}
-	catch (const Firebird::status_exception& st)
+	catch (const status_exception& st)
 	{
 		LocalStatus ls;
 		CheckStatusWrapper l(&ls);
 		st.stuffException(&l);
 		if ((l.getState() & IStatus::STATE_ERRORS) && (l.getErrors()[1] == isc_bad_conn_str) && tagName)
 		{
-			Firebird::Arg::Gds newErrors(isc_intl_char);
+			Arg::Gds newErrors(isc_intl_char);
 			newErrors << tagName;
 
 			const ISC_STATUS* errors = l.getErrors();
-			newErrors << Firebird::Arg::StatusVector(errors + 2);		// skip isc_bad_conn_str
+			newErrors << Arg::StatusVector(errors + 2);		// skip isc_bad_conn_str
 
 			l.setErrors(newErrors.value());
 			status_exception::raise(&l);

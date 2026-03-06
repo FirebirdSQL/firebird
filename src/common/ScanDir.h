@@ -48,7 +48,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/os/os_utils.h"
 
-class ScanDir : public Firebird::AutoStorage
+class ScanDir : public AutoStorage
 {
 public:
 	ScanDir(const char *dir, const char *pattern);
@@ -61,10 +61,10 @@ public:
 	const char* getFileName();
 	bool next();
 
-	Firebird::PathName	directory;
-	Firebird::PathName	pattern;
-	Firebird::PathName	fileName;
-	Firebird::PathName	filePath;
+	PathName	directory;
+	PathName	pattern;
+	PathName	fileName;
+	PathName	filePath;
 private:
 #ifdef _WIN32
 	WIN32_FIND_DATA	data;

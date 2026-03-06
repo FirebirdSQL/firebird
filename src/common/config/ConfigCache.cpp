@@ -72,12 +72,12 @@ void ConfigCache::checkLoadConfig()
 	loadConfig();
 }
 
-bool ConfigCache::addFile(const Firebird::PathName& fName)
+bool ConfigCache::addFile(const PathName& fName)
 {
 	return files->add(fName);
 }
 
-Firebird::PathName ConfigCache::getFileName()
+PathName ConfigCache::getFileName()
 {
 	return files->fileName;
 }
@@ -94,7 +94,7 @@ ConfigCache::File::PreciseTime ConfigCache::File::getTime()
 #else
 	struct STAT st;
 
-	if (Firebird::os_utils::stat(fileName.c_str(), &st) != 0)
+	if (os_utils::stat(fileName.c_str(), &st) != 0)
 	{
 		if (errno == ENOENT)
 		{

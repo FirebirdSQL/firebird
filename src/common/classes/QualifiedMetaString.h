@@ -110,7 +110,7 @@ public:
 					if (i + 1 < name.length() - 1 && name[i + 1] == '"')
 						++i;
 					else
-						(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+						(Arg::Gds(isc_invalid_name) << str).raise();
 				}
 
 				result += name[i];
@@ -122,7 +122,7 @@ public:
 		const auto validateUnquotedIdentifier = [&](const string& name)
 		{
 			if (name.length() > MAX_SQL_IDENTIFIER_LEN)
-				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+				(Arg::Gds(isc_invalid_name) << str).raise();
 
 			bool first = true;
 
@@ -136,7 +136,7 @@ public:
 					  (!first && c == '$') ||
 					  (!first && c == '_')))
 				{
-					(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+					(Arg::Gds(isc_invalid_name) << str).raise();
 				}
 
 				first = false;
@@ -247,7 +247,7 @@ public:
 			}
 
 			if (dotPos != string::npos && result.schema.isEmpty())
-				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+				(Arg::Gds(isc_invalid_name) << str).raise();
 
 			// Process object
 			if (isQuoted(object))
@@ -261,7 +261,7 @@ public:
 			}
 
 			if (result.object.isEmpty())
-				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+				(Arg::Gds(isc_invalid_name) << str).raise();
 
 			list.add(result);
 		} while (i < str.size());
@@ -273,7 +273,7 @@ public:
 		parseSchemaObjectListNoSep(str, list);
 
 		if (list.getCount() != 1)
-			(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+			(Arg::Gds(isc_invalid_name) << str).raise();
 
 		return list[0];
 	}
@@ -340,9 +340,9 @@ public:
 		return object.isEmpty();
 	}
 
-	Firebird::string toQuotedString() const
+	string toQuotedString() const
 	{
-		Firebird::string s;
+		string s;
 
 		const auto appendName = [&s](const T& name) {
 			if (name.hasData())
@@ -374,7 +374,7 @@ private:
 	bool unambiguous = false;
 };
 
-using QualifiedMetaString = Firebird::BaseQualifiedName<MetaString>;
+using QualifiedMetaString = BaseQualifiedName<MetaString>;
 
 } // namespace Firebird
 

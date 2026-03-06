@@ -46,16 +46,16 @@
 class DlfcnModule : public ModuleLoader::Module
 {
 public:
-	DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m);
+	DlfcnModule(MemoryPool& pool, const PathName& aFileName, void* m);
 	~DlfcnModule();
 
-	void* findSymbol(ISC_STATUS*, const Firebird::string&) override;
+	void* findSymbol(ISC_STATUS*, const string&) override;
 
-	bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) override;
+	bool getRealPath(const string& anySymbol, PathName& path) override;
 
 private:
 	void* module;
-	Firebird::PathName realPath;
+	PathName realPath;
 };
 
 static void makeErrorStatus(ISC_STATUS* status, const char* text)
@@ -70,11 +70,11 @@ static void makeErrorStatus(ISC_STATUS* status, const char* text)
 	}
 }
 
-bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
+bool ModuleLoader::isLoadableModule(const PathName& module)
 {
 	struct STAT sb;
 
-	if (-1 == Firebird::os_utils::stat(module.c_str(), &sb))
+	if (-1 == os_utils::stat(module.c_str(), &sb))
 		return false;
 
 	if ( ! (sb.st_mode & S_IFREG) )		// Make sure it is a plain file
@@ -86,7 +86,7 @@ bool ModuleLoader::isLoadableModule(const Firebird::PathName& module)
 	return true;
 }
 
-bool ModuleLoader::doctorModuleExtension(Firebird::PathName& name, int& step)
+bool ModuleLoader::doctorModuleExtension(PathName& name, int& step)
 {
 	if (name.isEmpty())
 		return false;
@@ -95,11 +95,11 @@ bool ModuleLoader::doctorModuleExtension(Firebird::PathName& name, int& step)
 	{
 	case 0: // Step 0: append missing extension
 		{
-			Firebird::PathName::size_type pos = name.rfind("." SHRLIB_EXT);
+			PathName::size_type pos = name.rfind("." SHRLIB_EXT);
 			if (pos != name.length() - 3)
 			{
 				pos = name.rfind("." SHRLIB_EXT ".");
-				if (pos == Firebird::PathName::npos)
+				if (pos == PathName::npos)
 				{
 					name += "." SHRLIB_EXT;
 					return true;
@@ -109,8 +109,8 @@ bool ModuleLoader::doctorModuleExtension(Firebird::PathName& name, int& step)
 		}
 	case 1: // Step 1: insert missing prefix
 		{
-			Firebird::PathName::size_type pos = name.rfind('/');
-			pos = (pos == Firebird::PathName::npos) ? 0 : pos + 1;
+			PathName::size_type pos = name.rfind('/');
+			pos = (pos == PathName::npos) ? 0 : pos + 1;
 			if (name.find("lib", pos) != pos)
 			{
 				name.insert(pos, "lib");
@@ -127,7 +127,7 @@ bool ModuleLoader::doctorModuleExtension(Firebird::PathName& name, int& step)
 #define FB_RTLD_MODE RTLD_LAZY	// save time when loading library
 #endif
 
-ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebird::PathName& modPath)
+ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const PathName& modPath)
 {
 	void* module = dlopen(modPath.nullStr(), FB_RTLD_MODE);
 	if (module == NULL)
@@ -137,13 +137,13 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebir
 	}
 
 #ifdef DEBUG_THREAD_IN_UNLOADED_LIBRARY
-	Firebird::string command;
+	string command;
 	command.printf("echo +++ %s +++ >>/tmp/fbmaps;date >> /tmp/fbmaps;cat /proc/%d/maps >>/tmp/fbmaps",
 		modPath.c_str(), getpid());
 	system(command.c_str());
 #endif
 
-	Firebird::PathName linkPath = modPath;
+	PathName linkPath = modPath;
 	char b[PATH_MAX];
 	const char* newPath = realpath(modPath.c_str(), b);
 	if (newPath)
@@ -152,7 +152,7 @@ ModuleLoader::Module* ModuleLoader::loadModule(ISC_STATUS* status, const Firebir
 	return FB_NEW_POOL(*getDefaultMemoryPool()) DlfcnModule(*getDefaultMemoryPool(), linkPath, module);
 }
 
-DlfcnModule::DlfcnModule(MemoryPool& pool, const Firebird::PathName& aFileName, void* m)
+DlfcnModule::DlfcnModule(MemoryPool& pool, const PathName& aFileName, void* m)
 	: ModuleLoader::Module(pool, aFileName),
 	  module(m),
 	  realPath(pool)
@@ -166,13 +166,13 @@ DlfcnModule::~DlfcnModule()
 		dlclose(module);
 }
 
-void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symName)
+void* DlfcnModule::findSymbol(ISC_STATUS* status, const string& symName)
 {
 	void* result = dlsym(module, symName.c_str());
 
 	if (!result)
 	{
-		Firebird::string newSym = '_' + symName;
+		string newSym = '_' + symName;
 		result = dlsym(module, newSym.c_str());
 	}
 
@@ -202,7 +202,7 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	if (PathUtils::isRelative(libraryPath) || PathUtils::isRelative(symbolPath))
 	{
 		// check only name (not path) of the library
-		Firebird::PathName dummyDir, nm1, nm2;
+		PathName dummyDir, nm1, nm2;
 		PathUtils::splitLastComponent(dummyDir, nm1, libraryPath);
 		PathUtils::splitLastComponent(dummyDir, nm2, symbolPath);
 		if (nm1 != nm2)
@@ -221,7 +221,7 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 	return result;
 }
 
-bool DlfcnModule::getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path)
+bool DlfcnModule::getRealPath(const string& anySymbol, PathName& path)
 {
 	if (realPath.hasData())
 	{

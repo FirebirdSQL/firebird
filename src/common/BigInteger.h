@@ -42,7 +42,7 @@ public:
 	BigInteger();
 	explicit BigInteger(const char* text, unsigned int radix = 16u);
 	BigInteger(unsigned int count, const unsigned char* bytes);
-	explicit BigInteger(const Firebird::UCharBuffer& val);
+	explicit BigInteger(const UCharBuffer& val);
 	BigInteger(const BigInteger& val);
 //	BigInteger(int numBits, Random& r);
 	~BigInteger();
@@ -65,9 +65,9 @@ public:
 
 	bool operator== (const BigInteger& val) const;
 
-	void getBytes(Firebird::UCharBuffer& bytes) const;
+	void getBytes(UCharBuffer& bytes) const;
 	unsigned int length() const;
-	void getText(Firebird::string& str, unsigned int radix = 16u) const;
+	void getText(string& str, unsigned int radix = 16u) const;
 
 	BigInteger modPow(const BigInteger& pow, const BigInteger& mod) const;
 

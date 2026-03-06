@@ -97,7 +97,7 @@ public:
 		fb_assert(pos);
 
 		if (pos >= end)
-			(Firebird::Arg::Gds(isc_invalid_blr) << Firebird::Arg::Num(getOffset())).raise();
+			(Arg::Gds(isc_invalid_blr) << Arg::Num(getOffset())).raise();
 
 		return *pos;
 	}
@@ -140,9 +140,9 @@ public:
 
 			default:
 				status_exception::raise(
-					Firebird::Arg::Gds(isc_metadata_corrupt) <<
-					Firebird::Arg::Gds(isc_wroblrver2) << Firebird::Arg::Num(blr_version4) << Firebird::Arg::Num(blr_version5/*6*/) <<
-						Firebird::Arg::Num(version));
+					Arg::Gds(isc_metadata_corrupt) <<
+					Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
+						Arg::Num(version));
 		}
 
 		auto code = getByte();
@@ -177,10 +177,10 @@ public:
 
 		if (byte != expected)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_syntaxerr) <<
-				Firebird::Arg::Num(expected) <<
-				Firebird::Arg::Num(getOffset() - 1) <<
-				Firebird::Arg::Num(byte));
+			status_exception::raise(Arg::Gds(isc_syntaxerr) <<
+				Arg::Num(expected) <<
+				Arg::Num(getOffset() - 1) <<
+				Arg::Num(byte));
 		}
 
 		return byte;
@@ -192,10 +192,10 @@ public:
 
 		if (word != expected)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_syntaxerr) <<
-				Firebird::Arg::Num(expected) <<
-				Firebird::Arg::Num(getOffset() - 2) <<
-				Firebird::Arg::Num(word));
+			status_exception::raise(Arg::Gds(isc_syntaxerr) <<
+				Arg::Num(expected) <<
+				Arg::Num(getOffset() - 2) <<
+				Arg::Num(word));
 		}
 
 		return word;
@@ -206,7 +206,7 @@ public:
 		const unsigned len = getByte();
 
 		if (pos + len >= end)
-			(Firebird::Arg::Gds(isc_invalid_blr) << Firebird::Arg::Num(getOffset())).raise();
+			(Arg::Gds(isc_invalid_blr) << Arg::Num(getOffset())).raise();
 
 		s.assign(pos, len);
 
@@ -222,7 +222,7 @@ public:
 		// Check for overly long identifiers at BLR parse stage to prevent unwanted
 		// surprises in deeper layers of the engine.
 		if (str.length() > MAX_SQL_IDENTIFIER_LEN)
-			(Firebird::Arg::Gds(isc_identifier_too_long) << Firebird::Arg::Str(str)).raise();
+			(Arg::Gds(isc_identifier_too_long) << Arg::Str(str)).raise();
 
 		name.assign(str.c_str());
 	}

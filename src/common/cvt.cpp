@@ -73,7 +73,9 @@
 #endif
 
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /* normally the following two definitions are part of limits.h
    but due to a compiler bug on Apollo casting LONG_MIN to be a
@@ -142,9 +144,9 @@ static void float_to_text(const dsc*, dsc*, Callbacks*);
 static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
 static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
-static void localError(const Firebird::Arg::StatusVector&);
+static void localError(const Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
-static void make_null_string(const dsc*, TTypeId, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+static void make_null_string(const dsc*, TTypeId, const char**, vary*, USHORT, DecimalStatus, ErrorFunction);
 
 namespace {
 	class RetPtr;
@@ -256,15 +258,15 @@ static void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETI
 		switch (expectedType)
 		{
 			case expect_sql_date:
-				cb->err(Firebird::Arg::Gds(isc_date_range_exceeded));
+				cb->err(Arg::Gds(isc_date_range_exceeded));
 				break;
 			case expect_sql_time:
 			case expect_sql_time_tz:
-				cb->err(Firebird::Arg::Gds(isc_time_range_exceeded));
+				cb->err(Arg::Gds(isc_time_range_exceeded));
 				break;
 			case expect_timestamp:
 			case expect_timestamp_tz:
-				cb->err(Firebird::Arg::Gds(isc_datetime_range_exceeded));
+				cb->err(Arg::Gds(isc_datetime_range_exceeded));
 				break;
 			default: // this should never happen!
 				CVT_conversion_error(desc, cb->err);
@@ -389,7 +391,7 @@ static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		const char num_format[] = "%- #*.*g";
 		chars_printed = fb_utils::snprintf(temp2, sizeof(temp2), num_format, width, precision, d);
 		if (chars_printed <= 0 || static_cast<unsigned int>(chars_printed) >= sizeof(temp2))
-			cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 		// If the full-precision result is too wide for the destination,
 		// reduce the precision and try again.
@@ -401,11 +403,11 @@ static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 			// If we cannot print at least two digits, one on each side of the
 			// ".", report an overflow exception.
 			if (precision < 2)
-				cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 			chars_printed = fb_utils::snprintf(temp2, sizeof(temp2), num_format, width, precision, d);
 			if (chars_printed <= 0 || static_cast<unsigned int>(chars_printed) >= sizeof(temp2))
-				cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 			// It's possible that reducing the precision caused sprintf to switch
 			// from f-format to e-format, and that the output is still too long
@@ -416,13 +418,13 @@ static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 			{
 				precision -= (chars_printed - width);
 				if (precision < 2)
-					cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 				// Note: we use here temp2 with sizeof(temp) because temp2 is bigger than temp.
 				// The check should be chars_printed > width because it's our last chance to
 				// fit into "width" else we should throw error.
 				chars_printed = fb_utils::snprintf(temp2, sizeof(temp), num_format, width, precision, d);
 				if (chars_printed <= 0 || chars_printed > width)
-					cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
 		}
 
@@ -478,7 +480,7 @@ static void decimal_float_to_text(const dsc* from, dsc* to, DecimalStatus decSt,
 	catch (const Exception& ex)
 	{
 		// reraise using function passed in callbacks
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		cb->err(v);
 	}
 
@@ -506,7 +508,7 @@ static void int128_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	catch (const Exception& ex)
 	{
 		// reraise using function passed in callbacks
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		cb->err(v);
 	}
 
@@ -540,7 +542,7 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	if (from->dsc_dtype == dtype_quad)
 	{
 		fb_assert(false);
-		cb->err(Firebird::Arg::Gds(isc_badblk));	// internal error
+		cb->err(Arg::Gds(isc_badblk));	// internal error
 	}
 
 	SSHORT pad_count = 0, decimal = 0, neg = 0;
@@ -1078,7 +1080,7 @@ void CVT_string_to_datetime(const dsc* desc,
 
 		// Fetch current date/time
 		tm times2;
-		Firebird::TimeStamp::getCurrentTimeStamp().decode(&times2);
+		TimeStamp::getCurrentTimeStamp().decode(&times2);
 
 		// Handle defaulting of year
 
@@ -1128,7 +1130,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	// convert day/month/year to Julian and validate result
 	// This catches things like 29-Feb-1995 (not a leap year)
 
-	Firebird::TimeStamp ts(times);
+	TimeStamp ts(times);
 	validateTimeStamp(ts.value(), expect_type, desc, cb);
 
 	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
@@ -1185,7 +1187,7 @@ void adjustForScale(V& val, SSHORT scale, const V limit, ErrorFunction err)
 	{
 		do {
 			if ((val > limit) || (val < -limit))
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			val *= 10;
 		} while (++scale);
 	}
@@ -1232,7 +1234,7 @@ static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, 
 		ULONG lval = CVT_get_long(desc, scale, decSt, err);
 		value = (SSHORT) lval;
 		if (value != SLONG(lval))
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 	}
 
 	return value;
@@ -1291,7 +1293,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		// adjust for scale first, *before* range-checking the value.
 		adjustForScale(val64, scale, INT64_LIMIT, err);
 		if ((val64 > LONG_MAX_int64) || (val64 < LONG_MIN_int64))
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		return (SLONG) val64;
 
 	case dtype_quad:
@@ -1299,7 +1301,7 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		high = ((SLONG *) p)[HIGH_WORD];
 		if ((value >= 0 && !high) || (value < 0 && high == -1))
 			break;
-		err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+		err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		break;
 
 	case dtype_dec64:
@@ -1345,13 +1347,13 @@ SLONG CVT_get_long(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 		{
 			if (d > (double) LONG_MIN_real - 1.)
 				return SLONG_MIN;
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		}
 		if (d > (double) LONG_MAX_real)
 		{
 			if (d < (double) LONG_MAX_real + 1.)
 				return LONG_MAX_int;
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 		}
 		return (SLONG) d;
 
@@ -1579,7 +1581,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 								return 0;
 							}
 
-							err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+							err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 						}
 					}
 					else if (*p == '-' && !digit_seen && !sign)
@@ -1620,7 +1622,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 					return 0;
 				}
 
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
 
 			//  Repeated division is a good way to mung the least significant bits
@@ -1643,7 +1645,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 					return 0;
 				}
 
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			}
 		}
 		return value;
@@ -1664,7 +1666,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 	// the user know...
 
 	if (ABSOLUT(dscale) > DBL_MAX_10_EXP)
-		err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+		err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 	if (dscale > 0)
 		value *= CVT_power_of_ten(dscale);
@@ -1964,9 +1966,9 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 				if (len / maxBytesPerChar < from->dsc_length)
 				{
-					cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-						Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(len / maxBytesPerChar) <<
-						Firebird::Arg::Num(from->dsc_length));
+					cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+						Arg::Gds(isc_trunc_limits) << Arg::Num(len / maxBytesPerChar) <<
+						Arg::Num(from->dsc_length));
 				}
 
 				cb->validateData(charSet, from->dsc_length, from->dsc_address);
@@ -2164,7 +2166,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		}
 
 		if (to->dsc_dtype != from->dsc_dtype)
-			cb->err(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_blobnotsup) << "move");
+			cb->err(Arg::Gds(isc_wish_list) << Arg::Gds(isc_blobnotsup) << "move");
 
 		// Note: DSC_EQUIV failed above as the blob sub_types were different,
 		// or their character sets were different.  In V4 we aren't trying
@@ -2200,7 +2202,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 		{
 			double d_value = CVT_get_double(from, decSt, cb->err);
 			if (ABSOLUT(d_value) > FLOAT_MAX && ABSOLUT(d_value) != INFINITY)
-				cb->err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				cb->err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 			*(float*) p = (float) d_value;
 		}
 		return;
@@ -2263,11 +2265,11 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 	if (from->dsc_dtype == dtype_array || from->dsc_dtype == dtype_blob)
 	{
-		cb->err(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_blobnotsup) << "move");
+		cb->err(Arg::Gds(isc_wish_list) << Arg::Gds(isc_blobnotsup) << "move");
 	}
 
 	fb_assert(false);
-	cb->err(Firebird::Arg::Gds(isc_badblk));	// internal error
+	cb->err(Arg::Gds(isc_badblk));	// internal error
 }
 
 
@@ -2288,7 +2290,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
 	if (desc->dsc_dtype >= DTYPE_TYPE_MAX)
 	{
 		fb_assert(false);
-		err(Firebird::Arg::Gds(isc_badblk));
+		err(Arg::Gds(isc_badblk));
 	}
 
 	if (desc->dsc_dtype == dtype_blob)
@@ -2352,10 +2354,10 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
 	}
 
 	//// TODO: Need access to transliterate here to convert message to metadata charset.
-	Firebird::Arg::StatusVector vector;
+	Arg::StatusVector vector;
 	if (original)
 		vector.assign(*original);
-	vector << Firebird::Arg::Gds(isc_convert_error) << message;
+	vector << Arg::Gds(isc_convert_error) << message;
 	err(vector);
 }
 
@@ -2388,7 +2390,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	switch (from->dsc_dtype)
 	{
 	case dtype_sql_time:
-		Firebird::TimeStamp::decode_time(*(GDS_TIME*) from->dsc_address,
+		TimeStamp::decode_time(*(GDS_TIME*) from->dsc_address,
 			&times.tm_hour, &times.tm_min, &times.tm_sec, &fractions);
 		break;
 
@@ -2400,12 +2402,12 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		break;
 
 	case dtype_sql_date:
-		Firebird::TimeStamp::decode_date(*(GDS_DATE *) from->dsc_address, &times);
+		TimeStamp::decode_date(*(GDS_DATE *) from->dsc_address, &times);
 		break;
 
 	case dtype_timestamp:
 		cb->isVersion4(version4); // Used in the conversion to text some lines below.
-		Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) from->dsc_address, &times, &fractions);
+		TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) from->dsc_address, &times, &fractions);
 		break;
 
 	case dtype_timestamp_tz:
@@ -2418,7 +2420,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	default:
 		fb_assert(false);
-		cb->err(Firebird::Arg::Gds(isc_badblk));	// internal error
+		cb->err(Arg::Gds(isc_badblk));	// internal error
 		break;
 	}
 
@@ -2539,9 +2541,9 @@ void make_null_string(const dsc*    desc,
 		length -= sizeof(USHORT);	// Take into an account VaryStr specifics
 		if (len > length)
 		{
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-				Firebird::Arg::Gds(isc_imp_exc) <<
-				Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(length) << Firebird::Arg::Num(len));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+				Arg::Gds(isc_imp_exc) <<
+				Arg::Gds(isc_trunc_limits) << Arg::Num(length) << Arg::Num(len));
 		}
 		memcpy(temp->vary_string, *address, len);
 		temp->vary_length = len;
@@ -2776,12 +2778,12 @@ static SSHORT cvt_decompose(const char*	string,
 					if (p >= end)
 						continue;
 				}
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 				return 0;
 			case RetPtr::RETVAL_POSSIBLE_OVERFLOW:
 				if ((*p > '8' && sign == -1) || (*p > '7' && sign != -1))
 				{
-					err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 					return 0;
 				}
 				break;
@@ -2857,7 +2859,7 @@ static SSHORT cvt_decompose(const char*	string,
 
 				if (exp >= SHORT_LIMIT)
 				{
-					err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 					return 0;
 				}
 			}
@@ -3127,7 +3129,7 @@ Decimal64 CVT_get_dec64(const dsc* desc, DecimalStatus decSt, ErrorFunction err)
 	catch (const Exception& ex)
 	{
 		// reraise using passed error function
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		err(v);
 	}
 
@@ -3211,7 +3213,7 @@ Decimal128 CVT_get_dec128(const dsc* desc, DecimalStatus decSt, ErrorFunction er
 	catch (const Exception& ex)
 	{
 		// reraise using passed error function
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		err(v);
 	}
 
@@ -3323,7 +3325,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 			   double, and thus will have no effect on the sum. */
 
 			if (d < I128_MIN_dbl || I128_MAX_dbl < d)
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 			int128.set(d);
 			break;
@@ -3347,7 +3349,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 			   double, and thus will have no effect on the sum. */
 
 			if (tmp.compare(decSt, I128_MIN_dcft) < 0 || I128_MAX_dcft.compare(decSt, tmp) < 0)
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 			int128.set(decSt, tmp);
 			break;
@@ -3359,14 +3361,14 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 
 		default:
 			fb_assert(false);
-			err(Firebird::Arg::Gds(isc_badblk));	// internal error
+			err(Arg::Gds(isc_badblk));	// internal error
 			break;
 		}
 	}
 	catch (const Exception& ex)
 	{
 		// reraise using passed error function
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		err(v);
 	}
 
@@ -3506,7 +3508,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 
 	default:
 		fb_assert(false);
-		err(Firebird::Arg::Gds(isc_badblk));	// internal error
+		err(Arg::Gds(isc_badblk));	// internal error
 		break;
 	}
 
@@ -3515,7 +3517,7 @@ SQUAD CVT_get_quad(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunc
 	if (scale != 0)
 	{
 		fb_assert(false);
-		err(Firebird::Arg::Gds(isc_badblk));	// internal error
+		err(Arg::Gds(isc_badblk));	// internal error
 	}
 
 	return value;
@@ -3614,7 +3616,7 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 		   double, and thus will have no effect on the sum. */
 
 		if (d < (double) QUAD_MIN_real || (double) QUAD_MAX_real < d)
-			err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
+			err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
 
 		return (SINT64) d;
 
@@ -3646,7 +3648,7 @@ SINT64 CVT_get_int64(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFu
 
 	default:
 		fb_assert(false);
-		err(Firebird::Arg::Gds(isc_badblk));	// internal error
+		err(Arg::Gds(isc_badblk));	// internal error
 		break;
 	}
 
@@ -3707,7 +3709,7 @@ static void hex_to_value(const char*& string, const char* end, RetPtr* retValue)
 }
 
 
-static void localError(const Firebird::Arg::StatusVector&)
+static void localError(const Arg::StatusVector&)
 {
 	throw DummyException();
 }
@@ -3769,9 +3771,9 @@ namespace
 			{
 				if (*p++ != fillChar)
 				{
-					err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-						Firebird::Arg::Gds(isc_trunc_limits) <<
-							Firebird::Arg::Num(size) << Firebird::Arg::Num(length));
+					err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+						Arg::Gds(isc_trunc_limits) <<
+							Arg::Num(size) << Arg::Num(length));
 				}
 			}
 		}
@@ -3855,3 +3857,6 @@ void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err, 
 	CommonCallbacks callbacks(err);
 	CVT_move_common(from, to, decSt, &callbacks, trustedSource);
 }
+
+
+}	// namespace Firebird

@@ -32,7 +32,7 @@
 class BlobWrapper
 {
 public:
-	explicit BlobWrapper(Firebird::CheckStatusWrapper* status)
+	explicit BlobWrapper(CheckStatusWrapper* status)
 		: m_status(status ? status : &m_default_status), m_blob(nullptr), m_direction(dir_none)
 	{ }
 
@@ -41,9 +41,9 @@ public:
 		close(true);
 	}
 
-	bool open(Firebird::IAttachment* db, Firebird::ITransaction* trans, ISC_QUAD& blobid,
+	bool open(IAttachment* db, ITransaction* trans, ISC_QUAD& blobid,
 				USHORT bpb_len = 0, const UCHAR* bpb = nullptr);
-	bool create(Firebird::IAttachment* db, Firebird::ITransaction* trans, ISC_QUAD& blobid,
+	bool create(IAttachment* db, ITransaction* trans, ISC_QUAD& blobid,
 				USHORT bpb_len = 0, const UCHAR* bpb = nullptr);
 	bool close(bool force_internal_SV = false);
 	bool getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len);
@@ -83,9 +83,9 @@ private:
 		dir_write
 	};
 
-	Firebird::FbLocalStatus m_default_status;
-	Firebird::CheckStatusWrapper* const m_status;
-	Firebird::IBlob* m_blob;
+	FbLocalStatus m_default_status;
+	CheckStatusWrapper* const m_status;
+	IBlob* m_blob;
 	b_direction m_direction;
 };
 

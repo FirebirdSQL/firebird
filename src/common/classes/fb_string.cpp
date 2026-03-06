@@ -63,12 +63,12 @@ namespace {
 	private:
 		char m[32]{};
 	public:
-		strBitMask(Firebird::AbstractString::const_pointer s, Firebird::AbstractString::size_type l) noexcept
+		strBitMask(AbstractString::const_pointer s, AbstractString::size_type l) noexcept
 		{
-			if (l == Firebird::AbstractString::npos) {
-				l = static_cast<Firebird::AbstractString::size_type>(strlen(s));
+			if (l == AbstractString::npos) {
+				l = static_cast<AbstractString::size_type>(strlen(s));
 			}
-			Firebird::AbstractString::const_pointer end = s + l;
+			AbstractString::const_pointer end = s + l;
 			while (s < end)
 			{
 				const unsigned char uc = static_cast<unsigned char>(*s++);
@@ -111,7 +111,7 @@ namespace Firebird
 		// fb_assert(n2 < npos - n1 && n1 + n2 <= max_length());
 		if (n2 > npos - n1)
 		{
-			Firebird::fatal_exception::raise("String length overflow");
+			fatal_exception::raise("String length overflow");
 		}
 		// checkLength(n1 + n2); redundant: initialize() will check.
 		initialize(n1 + n2);

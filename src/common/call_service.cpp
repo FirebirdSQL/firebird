@@ -94,7 +94,7 @@ static bool serverSizeValidate(ISC_STATUS* status, const TEXT* server)
 }
 
 
-static int typeBuffer(ISC_STATUS*, char*, int, Firebird::Auth::UserData&, Firebird::IListUsers*, Firebird::string&);
+static int typeBuffer(ISC_STATUS*, char*, int, Auth::UserData&, IListUsers*, string&);
 
 
 // all this spb-writing functions should be gone
@@ -279,7 +279,7 @@ isc_svc_handle attachRemoteServiceManager(ISC_STATUS* status,
 	@param userData
 
  **/
-static void userInfoToSpb(char*& spb, Firebird::Auth::UserData& userData)
+static void userInfoToSpb(char*& spb, Auth::UserData& userData)
 {
 	stuffSpb2(spb, isc_spb_sec_username, userData.user.get());
 	if (userData.u.entered())
@@ -327,7 +327,7 @@ static void userInfoToSpb(char*& spb, Firebird::Auth::UserData& userData)
 }
 
 
-static void setAttr(string& a, const char* nm, Firebird::IIntUserField* f)
+static void setAttr(string& a, const char* nm, IIntUserField* f)
 {
 	if (f->entered())
 	{
@@ -338,7 +338,7 @@ static void setAttr(string& a, const char* nm, Firebird::IIntUserField* f)
 }
 
 
-static void setAttr(CheckStatusWrapper* status, Firebird::Auth::UserData* u)
+static void setAttr(CheckStatusWrapper* status, Auth::UserData* u)
 {
 	string attr;
 	setAttr(attr, "Uid", &u->u);
@@ -367,16 +367,16 @@ static void setAttr(CheckStatusWrapper* status, Firebird::Auth::UserData* u)
  **/
 void callRemoteServiceManager(ISC_STATUS* status,
 							  isc_svc_handle handle,
-							  Firebird::Auth::UserData& userData,
-							  Firebird::IListUsers* callback)
+							  Auth::UserData& userData,
+							  IListUsers* callback)
 {
 	char spb_buffer[1024];
 	char* spb = spb_buffer;
 	const int op = userData.op;
-	if (op != Firebird::Auth::DIS_OPER &&
-		op != Firebird::Auth::OLD_DIS_OPER &&
-		op != Firebird::Auth::MAP_SET_OPER &&
-		op != Firebird::Auth::MAP_DROP_OPER &&
+	if (op != Auth::DIS_OPER &&
+		op != Auth::OLD_DIS_OPER &&
+		op != Auth::MAP_SET_OPER &&
+		op != Auth::MAP_DROP_OPER &&
 		!userData.user.entered())
 	{
 	    status[0] = isc_arg_gds;
@@ -387,17 +387,17 @@ void callRemoteServiceManager(ISC_STATUS* status,
 
 	switch (op)
 	{
-	case Firebird::Auth::ADD_OPER:
+	case Auth::ADD_OPER:
 		stuffSpbByte(spb, isc_action_svc_add_user);
 		userInfoToSpb(spb, userData);
 		break;
 
-	case Firebird::Auth::MOD_OPER:
+	case Auth::MOD_OPER:
 		stuffSpbByte(spb, isc_action_svc_modify_user);
 		userInfoToSpb(spb, userData);
 		break;
 
-	case Firebird::Auth::DEL_OPER:
+	case Auth::DEL_OPER:
 		stuffSpbByte(spb, isc_action_svc_delete_user);
 		stuffSpb2(spb, isc_spb_sec_username, userData.user.get());
 		if (userData.role.entered())
@@ -406,8 +406,8 @@ void callRemoteServiceManager(ISC_STATUS* status,
 		}
 		break;
 
-	case Firebird::Auth::DIS_OPER:
-	case Firebird::Auth::OLD_DIS_OPER:
+	case Auth::DIS_OPER:
+	case Auth::OLD_DIS_OPER:
 		{
 			char usersDisplayTag = 0;
 			checkServerUsersVersion(handle, usersDisplayTag);
@@ -423,11 +423,11 @@ void callRemoteServiceManager(ISC_STATUS* status,
 		}
 		break;
 
-	case Firebird::Auth::MAP_SET_OPER:
+	case Auth::MAP_SET_OPER:
 		stuffSpbByte(spb, isc_action_svc_set_mapping);
 		break;
 
-	case Firebird::Auth::MAP_DROP_OPER:
+	case Auth::MAP_DROP_OPER:
 		stuffSpbByte(spb, isc_action_svc_drop_mapping);
 		break;
 
@@ -454,17 +454,17 @@ void callRemoteServiceManager(ISC_STATUS* status,
 	stuffSpbLong(spb, 10);
 
 	char resultBuffer[RESULT_BUF_SIZE + 4];
-	Firebird::string text;
+	string text;
 
 	ISC_STATUS_ARRAY temp_status;
 	ISC_STATUS* local_status = status[1] ? temp_status : status;
 	fb_utils::init_status(local_status);
 
-	if (op == Firebird::Auth::DIS_OPER || op == Firebird::Auth::OLD_DIS_OPER)
+	if (op == Auth::DIS_OPER || op == Auth::OLD_DIS_OPER)
 	{
 		const char request[] = {isc_info_svc_get_users};
 		int startQuery = 0;
-		Firebird::Auth::UserData uData;
+		Auth::UserData uData;
 
 		for (;;)
 		{
@@ -558,7 +558,7 @@ void detachRemoteServiceManager(ISC_STATUS* status, isc_svc_handle handle)
 // all this spb-parsing functions should be gone
 // as soon as we create SvcClumpletReader
 
-static void parseString2(const char*& p, Firebird::Auth::CharField& f, FB_SIZE_T& loop)
+static void parseString2(const char*& p, Auth::CharField& f, FB_SIZE_T& loop)
 {
 	const FB_SIZE_T len = static_cast<FB_SIZE_T>(isc_vax_integer(p, sizeof(USHORT)));
 
@@ -580,7 +580,7 @@ static void parseString2(const char*& p, Firebird::Auth::CharField& f, FB_SIZE_T
 	check(&statusWrapper);
 }
 
-static void parseLong(const char*& p, Firebird::Auth::IntField& f, FB_SIZE_T& loop)
+static void parseLong(const char*& p, Auth::IntField& f, FB_SIZE_T& loop)
 {
 	LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
@@ -618,8 +618,8 @@ static void parseLong(const char*& p, Firebird::Auth::IntField& f, FB_SIZE_T& lo
 
  **/
 static int typeBuffer(ISC_STATUS* status, char* buf, int offset,
-					   Firebird::Auth::UserData& uData, Firebird::IListUsers* callback,
-					   Firebird::string& text)
+					   Auth::UserData& uData, IListUsers* callback,
+					   string& text)
 {
 	const char* p = &buf[offset];
 

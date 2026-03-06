@@ -146,7 +146,7 @@ namespace Firebird {
 						fb_utils::copyStatus(&w, rare[index].second);
 						return;
 					}
-					(Firebird::Arg::Gds(isc_batch_compl_detail) << Firebird::Arg::Num(pos)).raise();
+					(Arg::Gds(isc_batch_compl_detail) << Arg::Num(pos)).raise();
 				}
 			}
 			catch (const Exception& ex)
@@ -181,7 +181,7 @@ namespace Firebird {
 		void checkRange(unsigned pos)
 		{
 			if (pos >= reccount)
-				(Firebird::Arg::Gds(isc_batch_compl_range) << Firebird::Arg::Num(pos) << Firebird::Arg::Num(reccount)).raise();
+				(Arg::Gds(isc_batch_compl_range) << Arg::Num(pos) << Arg::Num(reccount)).raise();
 		}
 	};
 }

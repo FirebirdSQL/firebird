@@ -114,7 +114,7 @@ void Int128::setScale(int scale)
 	{
 		while (scale++) {
 			if (v > i128limit.v || v < -i128limit.v)
-				(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range)).raise();
+				(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range)).raise();
 			v *= 10;
 		}
 	}
@@ -126,8 +126,8 @@ void Int128::toString(int scale, unsigned length, char* to) const
 	toString(scale, buffer);
 	if (buffer.length() + 1 > length)
 	{
-		(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(length) << Firebird::Arg::Num(buffer.length() + 1)).raise();
+		(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) << Arg::Num(length) << Arg::Num(buffer.length() + 1)).raise();
 	}
 	buffer.copyTo(to, length);
 }
@@ -208,7 +208,7 @@ Int128 Int128::neg() const
 Int128 Int128::div(Int128 op2, int scale) const
 {
 	if (compare(MIN_Int128) == 0 && op2.compare(minus1) == 0)
-		Firebird::Arg::Gds(isc_exception_integer_overflow).raise();
+		Arg::Gds(isc_exception_integer_overflow).raise();
 
 	if (op2.v == 0)
 		zerodivide();
@@ -243,12 +243,12 @@ Int128 Int128::div(Int128 op2, int scale) const
 
 [[noreturn]] void Int128::zerodivide()
 {
-	(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
+	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
 }
 
 [[noreturn]] void Int128::overflow()
 {
-	(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_overflow)).raise();
+	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }
 
 #ifdef DEV_BUILD
@@ -394,7 +394,7 @@ void Int128::setScale(int scale)
 	{
 		while (scale++) {
 			if (v > i128limit.v || v < -i128limit.v)
-				(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range)).raise();
+				(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range)).raise();
 			v.MulInt(10);
 		}
 	}
@@ -416,8 +416,8 @@ void Int128::toString(int scale, unsigned length, char* to) const
 	toString(scale, buffer);
 	if (buffer.length() + 1 > length)
 	{
-		(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(length) << Firebird::Arg::Num(buffer.length() + 1)).raise();
+		(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) << Arg::Num(length) << Arg::Num(buffer.length() + 1)).raise();
 	}
 	buffer.copyTo(to, length);
 }
@@ -504,7 +504,7 @@ Int128 Int128::mul(Int128 op2) const
 Int128 Int128::div(Int128 op2, int scale) const
 {
 	if (compare(MIN_Int128) == 0 && op2.compare(minus1) == 0)
-		Firebird::Arg::Gds(isc_exception_integer_overflow).raise();
+		Arg::Gds(isc_exception_integer_overflow).raise();
 
 	static const CInt128 MIN_BY10(MIN_Int128 / 10);
 	static const CInt128 MAX_BY10(MAX_Int128 / 10);
@@ -604,12 +604,12 @@ Int128 Int128::operator&=(ULONG mask)
 
 [[noreturn]] void Int128::zerodivide()
 {
-	(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
+	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
 }
 
 [[noreturn]] void Int128::overflow()
 {
-	(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_overflow)).raise();
+	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }
 
 

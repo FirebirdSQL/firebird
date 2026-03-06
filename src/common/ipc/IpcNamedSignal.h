@@ -89,7 +89,7 @@ inline IpcNamedSignal::IpcNamedSignal(const string& name)
 	strncpy(objectName, name.c_str(), sizeof(objectName));
 
 	if (!fb_utils::private_kernel_object_name(objectName, sizeof(objectName)))
-		(Firebird::Arg::Gds(isc_random) << "private_kernel_object_name failed").raise();
+		(Arg::Gds(isc_random) << "private_kernel_object_name failed").raise();
 
 	handle = CreateEvent(nullptr, TRUE, FALSE, objectName);
 

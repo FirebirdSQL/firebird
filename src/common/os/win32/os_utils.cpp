@@ -320,7 +320,7 @@ int openCreateSharedFile(const char* pathname, int flags)
 	int rc = open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
 	if (rc < 0)
 	{
-		(Firebird::Arg::Gds(isc_io_error) << "open" << pathname << Firebird::Arg::Gds(isc_io_open_err)
+		(Arg::Gds(isc_io_error) << "open" << pathname << Arg::Gds(isc_io_open_err)
 			<< strerror(errno)).raise();
 	}
 	return rc;

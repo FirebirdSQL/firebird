@@ -853,6 +853,8 @@ namespace Firebird {
 	static IMessageMetadata* const DELAYED_OUT_FORMAT = reinterpret_cast<IMessageMetadata*>(1);
 }
 
+// FIXME:
+
 namespace Firebird::Jrd {
 	namespace Firebird = ::Firebird;
 }

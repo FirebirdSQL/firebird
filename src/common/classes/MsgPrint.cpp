@@ -356,7 +356,7 @@ int MsgPrintErr(const char* format, const SafeArg& arg, bool userFormatting)
 
 // Lookup and format message.  Return as much of formatted string as fits in caller's buffer.
 int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsize, TEXT* buffer,
-	const Firebird::MsgFormat::SafeArg& arg)
+	const MsgFormat::SafeArg& arg)
 {
 	int total_msg = 0;
 	char msg[BUFFER_SMALL] = "";
@@ -376,14 +376,14 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 	}
 	else
 	{
-		Firebird::string s;
+		string s;
 		s.printf("can't format message %d:%d -- ", facility, number);
 		if (n == -1)
 			s += "message text not found";
 		else if (n == -2)
 		{
 			s += "message file ";
-			s += fb_utils::getPrefix(Firebird::IConfigManager::DIR_MSG, MSG_FILE).ToString();
+			s += fb_utils::getPrefix(IConfigManager::DIR_MSG, MSG_FILE).ToString();
 			s += " not found";
 		}
 		else

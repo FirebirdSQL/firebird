@@ -200,7 +200,7 @@ public:
 	int setlock(const LockMode mode);
 
 	// Alternative locker is using status vector to report errors
-	bool setlock(Firebird::CheckStatusWrapper* status, const LockMode mode);
+	bool setlock(CheckStatusWrapper* status, const LockMode mode);
 
 	// Unlocking can only put error into log file - we can't throw in dtors
 	void unlock();
@@ -211,7 +211,7 @@ public:
 	enum LockLevel {LCK_NONE, LCK_SHARED, LCK_EXCL};
 
 private:
-	Firebird::RefPtr<SharedFileInfo> file;
+	RefPtr<SharedFileInfo> file;
 	InitFunction* initFunction;
 	LockLevel level;
 };
@@ -261,13 +261,13 @@ public:
 	~SharedMemoryBase();
 
 #ifdef HAVE_OBJECT_MAP
-	UCHAR* mapObject(Firebird::CheckStatusWrapper* status, ULONG offset, ULONG size);
-	void unmapObject(Firebird::CheckStatusWrapper* status, UCHAR** object, ULONG size);
+	UCHAR* mapObject(CheckStatusWrapper* status, ULONG offset, ULONG size);
+	void unmapObject(CheckStatusWrapper* status, UCHAR** object, ULONG size);
 #endif
-	bool remapFile(Firebird::CheckStatusWrapper* status, ULONG newSize, bool truncateFlag);
+	bool remapFile(CheckStatusWrapper* status, ULONG newSize, bool truncateFlag);
 	void removeMapFile();
 	static void unlinkFile(const TEXT* expanded_filename) noexcept;
-	Firebird::PathName getMapFileName();
+	PathName getMapFileName();
 
 	bool mutexLock(std::optional<std::chrono::milliseconds> timeout = std::nullopt);
 	bool mutexTryLock();
@@ -280,11 +280,11 @@ public:
 	int eventPost(event_t* event);
 
 	// Used as memory allocation unit and mapping alignment
-	static ULONG getSystemPageSize(Firebird::CheckStatusWrapper* status);
+	static ULONG getSystemPageSize(CheckStatusWrapper* status);
 
 public:
 #ifdef UNIX
-	Firebird::AutoPtr<FileLock> mainLock;
+	AutoPtr<FileLock> mainLock;
 #endif
 #ifdef WIN_NT
 	struct mtx sh_mem_winMutex;
@@ -295,7 +295,7 @@ public:
 #endif
 
 #ifdef UNIX
-	Firebird::AutoPtr<FileLock> initFile;
+	AutoPtr<FileLock> initFile;
 #endif
 
 	ULONG	sh_mem_length_mapped;
@@ -340,7 +340,7 @@ public:
 	};
 
 protected:
-	void logError(const char* text, const Firebird::CheckStatusWrapper* status);
+	void logError(const char* text, const CheckStatusWrapper* status);
 };
 
 template <class Header>		// Header must be "public MemoryHeader"
@@ -352,12 +352,12 @@ public:
 	{ }
 
 #ifdef HAVE_OBJECT_MAP
-	template <class Object> Object* mapObject(Firebird::CheckStatusWrapper* status, ULONG offset)
+	template <class Object> Object* mapObject(CheckStatusWrapper* status, ULONG offset)
 	{
 		return (Object*) SharedMemoryBase::mapObject(status, offset, sizeof(Object));
 	}
 
-	template <class Object> void unmapObject(Firebird::CheckStatusWrapper* status, Object** object)
+	template <class Object> void unmapObject(CheckStatusWrapper* status, Object** object)
 	{
 		SharedMemoryBase::unmapObject(status, (UCHAR**) object, sizeof(Object));
 	}
@@ -430,10 +430,10 @@ private:
 } // namespace Firebird
 
 #ifdef WIN_NT
-int		ISC_mutex_init(struct Firebird::mtx*, const TEXT*);
-void	ISC_mutex_fini(struct Firebird::mtx*);
-int		ISC_mutex_lock(struct Firebird::mtx*);
-int		ISC_mutex_unlock(struct Firebird::mtx*);
+int		ISC_mutex_init(struct mtx*, const TEXT*);
+void	ISC_mutex_fini(struct mtx*);
+int		ISC_mutex_lock(struct mtx*);
+int		ISC_mutex_unlock(struct mtx*);
 #endif
 
 ULONG	ISC_exception_post(ULONG, const TEXT*, ISC_STATUS&);

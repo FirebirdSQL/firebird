@@ -165,7 +165,7 @@ TextType::TextType(TTypeId _type, texttype *_tt, USHORT _attributes, CharSet* _c
 			canonical(length, temp, sizeof(ULONG),
 				reinterpret_cast<UCHAR*>(&canonicalChars[conversions[i].ch]));
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			memset(&canonicalChars[conversions[i].ch], 0, sizeof(ULONG));
 		}
@@ -194,7 +194,7 @@ USHORT TextType::string_to_key(USHORT srcLen, const UCHAR* src,
 
 	const UCHAR* space = getCharSet()->getSpace();
 	BYTE spaceLength = getCharSet()->getSpaceLength();
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str;
+	HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str;
 	UCHAR utf16Space[sizeof(ULONG)];
 
 	if (getCharSet()->isMultiByte())
@@ -228,7 +228,7 @@ USHORT TextType::string_to_key(USHORT srcLen, const UCHAR* src,
 
 	if (getCharSet()->isMultiByte())
 	{
-		dstLen = UnicodeUtil::utf16ToKey(srcLen, Firebird::Aligner<USHORT>(src, srcLen), dstLen, dst);
+		dstLen = UnicodeUtil::utf16ToKey(srcLen, Aligner<USHORT>(src, srcLen), dstLen, dst);
 	}
 	else
 	{
@@ -254,8 +254,8 @@ SSHORT TextType::compare(ULONG len1, const UCHAR* str1, ULONG len2, const UCHAR*
 
 	const UCHAR* space = getCharSet()->getSpace();
 	BYTE spaceLength = getCharSet()->getSpaceLength();
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str1;
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str2;
+	HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str1;
+	HalfStaticArray<UCHAR, BUFFER_SMALL> utf16Str2;
 	UCHAR utf16Space[sizeof(ULONG)];
 
 	if (getCharSet()->isMultiByte())
@@ -305,8 +305,8 @@ SSHORT TextType::compare(ULONG len1, const UCHAR* str1, ULONG len2, const UCHAR*
 	if (getCharSet()->isMultiByte())
 	{
 		INTL_BOOL error_flag;
-		return UnicodeUtil::utf16Compare(len1, Firebird::Aligner<USHORT>(str1, len1),
-										 len2, Firebird::Aligner<USHORT>(str2, len2), &error_flag);
+		return UnicodeUtil::utf16Compare(len1, Aligner<USHORT>(str1, len1),
+										 len2, Aligner<USHORT>(str2, len2), &error_flag);
 	}
 
 	int cmp = memcmp(str1, str2, MIN(len1, len2));
@@ -324,12 +324,12 @@ ULONG TextType::str_to_upper(ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR
 {
 	const ULONG result = tt->texttype_fn_str_to_upper ?
 		(*tt->texttype_fn_str_to_upper)(tt, srcLen, src, dstLen, dst) :
-		Firebird::IntlUtil::toUpper(getCharSet(), srcLen, src, dstLen, dst, NULL);
+		IntlUtil::toUpper(getCharSet(), srcLen, src, dstLen, dst, NULL);
 
 	if (result == INTL_BAD_STR_LENGTH)
 	{
-		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
-										  Firebird::Arg::Gds(isc_transliteration_failed));
+		status_exception::raise(Arg::Gds(isc_arith_except) <<
+										  Arg::Gds(isc_transliteration_failed));
 	}
 
 	return result;
@@ -340,12 +340,12 @@ ULONG TextType::str_to_lower(ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR
 {
 	const ULONG result = tt->texttype_fn_str_to_lower ?
 		(*tt->texttype_fn_str_to_lower)(tt, srcLen, src, dstLen, dst) :
-		Firebird::IntlUtil::toLower(getCharSet(), srcLen, src, dstLen, dst, NULL);
+		IntlUtil::toLower(getCharSet(), srcLen, src, dstLen, dst, NULL);
 
 	if (result == INTL_BAD_STR_LENGTH)
 	{
-		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
-										  Firebird::Arg::Gds(isc_transliteration_failed));
+		status_exception::raise(Arg::Gds(isc_arith_except) <<
+										  Arg::Gds(isc_transliteration_failed));
 	}
 
 	return result;
@@ -361,7 +361,7 @@ ULONG TextType::canonical(ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* d
 	{
 		fb_assert(tt->texttype_canonical_width == sizeof(ULONG));
 
-		Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
+		HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
 
 		ULONG utf16_len = getCharSet()->getConvToUnicode().convertLength(srcLen);
 
@@ -374,8 +374,8 @@ ULONG TextType::canonical(ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* d
 		USHORT errCode;
 
 		// convert UTF-16 to UTF-32
-		return UnicodeUtil::utf16ToUtf32(utf16_len, Firebird::Aligner<USHORT>(utf16_str.begin(), utf16_len),
-			dstLen, Firebird::OutAligner<ULONG>(dst, dstLen), &errCode, &errPos) / sizeof(ULONG);
+		return UnicodeUtil::utf16ToUtf32(utf16_len, Aligner<USHORT>(utf16_str.begin(), utf16_len),
+			dstLen, OutAligner<ULONG>(dst, dstLen), &errCode, &errPos) / sizeof(ULONG);
 	}
 
 	fb_assert(

@@ -72,7 +72,7 @@ namespace Firebird::os_utils {
 
 	SLONG get_user_group_id(const TEXT* user_group_name);
 	SLONG get_user_id(const TEXT* user_name);
-	bool get_user_home(int user_id, Firebird::PathName& homeDir);
+	bool get_user_home(int user_id, PathName& homeDir);
 
 	void createLockDirectory(const char* pathname);
 	int openCreateSharedFile(const char* pathname, int flags);
@@ -89,11 +89,11 @@ namespace Firebird::os_utils {
 
 	// return a binary string that uniquely identifies the file
 #ifdef WIN_NT
-	void getUniqueFileId(HANDLE fd, Firebird::UCharBuffer& id);
+	void getUniqueFileId(HANDLE fd, UCharBuffer& id);
 #else
-	void getUniqueFileId(int fd, Firebird::UCharBuffer& id);
+	void getUniqueFileId(int fd, UCharBuffer& id);
 #define HAVE_ID_BY_NAME
-	void getUniqueFileId(const char* name, Firebird::UCharBuffer& id);
+	void getUniqueFileId(const char* name, UCharBuffer& id);
 #endif
 
 	inline SINT64 lseek(int fd, SINT64 offset, int origin)

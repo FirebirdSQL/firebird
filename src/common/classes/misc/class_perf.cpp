@@ -202,9 +202,9 @@ static void testAllocatorOverhead()
 
 static void testAllocatorMemoryPool()
 {
-	printf("Test run for Firebird::MemoryPool...\n");
+	printf("Test run for MemoryPool...\n");
 	start();
-	Firebird::MemoryPool* pool = Firebird::MemoryPool::createPool();
+	MemoryPool* pool = MemoryPool::createPool();
 	MallocAllocator allocator;
 	BePlusTree<AllocItem, AllocItem, MallocAllocator, DefaultKeyValue<AllocItem>, AllocItem> items(&allocator),
 		bigItems(&allocator);
@@ -235,7 +235,7 @@ static void testAllocatorMemoryPool()
 	if (bigItems.getFirst()) do {
 		pool->deallocate(bigItems.current().item);
 	} while (bigItems.getNext());
-	Firebird::MemoryPool::deletePool(pool);
+	MemoryPool::deletePool(pool);
 	report();
 }
 

@@ -121,7 +121,7 @@ constexpr const char* MTAB = "/etc/mtab";
 #define MTAB_OPEN(path, type)	setmntent(path, "r")
 #define MTAB_CLOSE(stream)	endmntent(stream)
 #else
-#define MTAB_OPEN(path, type)	Firebird::os_utils::fopen(path, type)
+#define MTAB_OPEN(path, type)	os_utils::fopen(path, type)
 #define MTAB_CLOSE(stream)	fclose(stream)
 #endif
 
@@ -138,7 +138,7 @@ constexpr const char* MTAB = "/etc/mtab";
 using namespace Firebird;
 
 namespace {
-	typedef Firebird::PathName tstring;
+	typedef PathName tstring;
 	typedef tstring::size_type size;
 	typedef tstring::iterator iter;
 	const size npos = tstring::npos;
@@ -146,9 +146,9 @@ namespace {
 #ifndef NO_NFS
 	const char* NFS_TYPE = "nfs";
 
-	Firebird::GlobalPtr<Firebird::Mutex> mntinfoMutex;
+	GlobalPtr<Mutex> mntinfoMutex;
 
-	class Mnt : public Firebird::MutexLockGuard		// Protect static values returned by getmntinfo()/getmntent()
+	class Mnt : public MutexLockGuard		// Protect static values returned by getmntinfo()/getmntent()
 	{
 #ifdef DARWIN
 	private:
@@ -158,7 +158,7 @@ namespace {
 
 	public:
 		Mnt()
-			: Firebird::MutexLockGuard(mntinfoMutex, FB_FUNCTION),
+			: MutexLockGuard(mntinfoMutex, FB_FUNCTION),
 			  mnt_info(NULL), mnt_cnt(getmntinfo(&mnt_info, MNT_NOWAIT)), mnt_i(0)
 		{ }
 
@@ -169,7 +169,7 @@ namespace {
 
 	public:
 		Mnt()
-			: Firebird::MutexLockGuard(mntinfoMutex, FB_FUNCTION),
+			: MutexLockGuard(mntinfoMutex, FB_FUNCTION),
 			  mtab(MTAB_OPEN(MTAB, "r"))
 		{ }
 
@@ -236,14 +236,14 @@ bool ISC_analyze_nfs(tstring& expanded_filename, tstring& node_name)
 	struct stat fileStat;
 	unsigned m = 1;		// use something that is known to be not non-device major
 
-	if (Firebird::os_utils::stat(expanded_filename.c_str(), &fileStat) == 0)
+	if (os_utils::stat(expanded_filename.c_str(), &fileStat) == 0)
 		m = major(fileStat.st_dev);
 	else	// stat error - let's try with path component
 	{
 		tstring path, name;
 		PathUtils::splitLastComponent(path, name, expanded_filename);
 
-		if (path.hasData() && Firebird::os_utils::stat(path.c_str(), &fileStat) == 0)
+		if (path.hasData() && os_utils::stat(path.c_str(), &fileStat) == 0)
 			m = major(fileStat.st_dev);
 	}
 
@@ -533,8 +533,8 @@ bool ISC_check_if_remote(const tstring& file_name, bool implicit_flag)
 }
 
 
-iscProtocol ISC_extract_host(Firebird::PathName& file_name,
-							 Firebird::PathName& host_name,
+iscProtocol ISC_extract_host(PathName& file_name,
+							 PathName& host_name,
 							 bool implicit_flag)
 {
 /**************************************
@@ -1115,7 +1115,7 @@ static void expand_filename2(tstring& buff, bool expand_mounts)
 		tstring q;
 		while (*from && *from != '/')
 			q += *from++;
-		if (Firebird::os_utils::get_user_home(q.hasData() ? Firebird::os_utils::get_user_id(q.c_str()) : geteuid(),
+		if (os_utils::get_user_home(q.hasData() ? os_utils::get_user_id(q.c_str()) : geteuid(),
 									buff))
 		{
 			expand_filename2(buff, expand_mounts);
@@ -1601,9 +1601,9 @@ public:
 		char* inbuf = str.begin();
 		if (iconv(ic, &inbuf, &insize, &outbuf, &outsize) == (size_t) -1)
 		{
-			(Firebird::Arg::Gds(isc_bad_conn_str) <<
-			 Firebird::Arg::Gds(isc_transliteration_failed) <<
-			 Firebird::Arg::Unix(errno)).raise();
+			(Arg::Gds(isc_bad_conn_str) <<
+			 Arg::Gds(isc_transliteration_failed) <<
+			 Arg::Unix(errno)).raise();
 		}
 
 		outsize = outlength - outsize;
@@ -1635,7 +1635,7 @@ private:
 	{
 		iconv_t ret = iconv_open(tocode, fromcode);
 		if (ret == (iconv_t) -1)
-			(Firebird::Arg::Gds(isc_iconv_open) << fromcode << tocode << Firebird::Arg::Unix(errno)).raise();
+			(Arg::Gds(isc_iconv_open) << fromcode << tocode << Arg::Unix(errno)).raise();
 
 		return ret;
 	}
@@ -1774,7 +1774,7 @@ private:
 
 
 // Converts a string from the system charset to UTF-8.
-void ISC_systemToUtf8(Firebird::AbstractString& str)
+void ISC_systemToUtf8(AbstractString& str)
 {
 	if (str.isEmpty())
 		return;
@@ -1786,8 +1786,8 @@ void ISC_systemToUtf8(Firebird::AbstractString& str)
 	{
 		const DWORD err = GetLastError();
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_bad_conn_str) << Firebird::Arg::Gds(isc_transliteration_failed) <<
-			Firebird::Arg::Windows(err));
+			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
+			Arg::Windows(err));
 	}
 
 #elif defined(HAVE_ICONV_H)
@@ -1797,7 +1797,7 @@ void ISC_systemToUtf8(Firebird::AbstractString& str)
 
 
 // Converts a string from UTF-8 to the system charset.
-void ISC_utf8ToSystem(Firebird::AbstractString& str)
+void ISC_utf8ToSystem(AbstractString& str)
 {
 	if (str.isEmpty())
 		return;
@@ -1809,8 +1809,8 @@ void ISC_utf8ToSystem(Firebird::AbstractString& str)
 	{
 		const DWORD err = GetLastError();
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_bad_conn_str) << Firebird::Arg::Gds(isc_transliteration_failed) <<
-			Firebird::Arg::Windows(err));
+			Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_transliteration_failed) <<
+			Arg::Windows(err));
 	}
 
 #elif defined(HAVE_ICONV_H)
@@ -1893,7 +1893,7 @@ void ISC_unescape(AbstractString& /*str*/)
 		else if (pos + 2 <= str.length() && p[1] == '#')
 			str.erase(pos++, 1);
 		else
-			status_exception::raise(Firebird::Arg::Gds(isc_bad_conn_str) << Firebird::Arg::Gds(isc_escape_invalid));
+			status_exception::raise(Arg::Gds(isc_bad_conn_str) << Arg::Gds(isc_escape_invalid));
 	}
 #endif
 }

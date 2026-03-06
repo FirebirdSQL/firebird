@@ -48,7 +48,7 @@ private:
 	tReportEvent *fReportEvent;
 	bool InitFlag;
 public:
-	explicit SyslogAccess(Firebird::MemoryPool&)
+	explicit SyslogAccess(MemoryPool&)
 	{
 		InitializeCriticalSection(&cs);
 		InitFlag = false;
@@ -88,7 +88,7 @@ void SyslogAccess::Record(WORD wType, const char* msg)
 	LeaveCriticalSection(&cs);
 }
 
-Firebird::InitInstance<SyslogAccess> iSyslogAccess;
+InitInstance<SyslogAccess> iSyslogAccess;
 
 } // namespace
 

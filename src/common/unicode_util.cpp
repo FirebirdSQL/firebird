@@ -120,7 +120,7 @@ public:
 		}
 
 		if (!optional)
-			(Firebird::Arg::Gds(isc_icu_entrypoint) << name).raise();
+			(Arg::Gds(isc_icu_entrypoint) << name).raise();
 
 		return "";
 	}
@@ -203,7 +203,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 			(int) versionInfo[0], (int) versionInfo[1],
 			this->majorVersion, this->minorVersion);
 
-		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(err)).raise();
+		(Arg::Gds(isc_random) << Arg::Str(err)).raise();
 	}
 
 	majorVersion = versionInfo[0];
@@ -267,7 +267,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 		{
 			string diag;
 			diag.printf("u_init() error %d", status);
-			(Firebird::Arg::Gds(isc_random) << diag).raise();
+			(Arg::Gds(isc_random) << diag).raise();
 		}
 	}
 
@@ -517,7 +517,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	charset cs;
 	IntlUtil::initAsciiCharset(&cs);
 
-	AutoPtr<CharSet> ascii(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
+	AutoPtr<CharSet> ascii(CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
 
 	IntlUtil::SpecificAttributesMap config;
 	IntlUtil::parseSpecificAttributes(ascii, configInfo.length(),
@@ -1363,12 +1363,12 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 			major--;
 	}
 
-	Firebird::Arg::Gds err(isc_icu_library);
+	Arg::Gds err(isc_icu_library);
 
-	if (lastError.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (lastError.getState() & IStatus::STATE_ERRORS)
 	{
-		err << Firebird::Arg::StatusVector(lastError.getErrors()) <<
-			   Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(version);
+		err << Arg::StatusVector(lastError.getErrors()) <<
+			   Arg::Gds(isc_random) << Arg::Str(version);
 	}
 
 	err.raise();
@@ -1392,8 +1392,8 @@ string UnicodeUtil::getDefaultIcuVersion()
 }
 
 
-UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const Firebird::string& icuVersion,
-	const Firebird::string& configInfo, Firebird::string& collVersion)
+UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const string& icuVersion,
+	const string& configInfo, string& collVersion)
 {
 	ICU* icu = loadICU(icuVersion, configInfo);
 
@@ -1413,7 +1413,7 @@ UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const Firebird::string& icuVersion
 
 UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	texttype* tt, USHORT attributes,
-	Firebird::IntlUtil::SpecificAttributesMap& specificAttributes, const Firebird::string& configInfo)
+	IntlUtil::SpecificAttributesMap& specificAttributes, const string& configInfo)
 {
 	int attributeCount = 0;
 	bool error;
@@ -2070,7 +2070,7 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 			collVersion.c_str(), icuVersion.c_str());
 	}
 
-	(Firebird::Arg::Gds(isc_random) << errorMsg).raise();
+	(Arg::Gds(isc_random) << errorMsg).raise();
 }
 
 

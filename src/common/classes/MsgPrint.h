@@ -103,6 +103,6 @@ int fb_msg_format(void*        handle,
 				  USHORT       number,
 				  unsigned int bsize,
 				  TEXT*        buffer,
-				  const        Firebird::MsgFormat::SafeArg& arg);
+				  const        MsgFormat::SafeArg& arg);
 
 #endif // FB_MSGPRINT_H

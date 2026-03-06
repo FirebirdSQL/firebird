@@ -41,7 +41,7 @@ inline void SimpleDelete<charset>::clear(charset* cs)
 {
 	if (cs)
 	{
-		Firebird::IntlUtil::finiCharset(cs);
+		IntlUtil::finiCharset(cs);
 		delete cs;
 	}
 }
@@ -49,7 +49,7 @@ inline void SimpleDelete<charset>::clear(charset* cs)
 class CharSet
 {
 public:
-	static CharSet* createInstance(Firebird::MemoryPool& pool, USHORT id, charset* cs);
+	static CharSet* createInstance(MemoryPool& pool, USHORT id, charset* cs);
 
 protected:
 	CharSet(USHORT _id, charset* _cs)
@@ -61,7 +61,7 @@ protected:
 			sqlMatchAnyLength = getConvFromUnicode().convert(sizeof(SQL_MATCH_ANY_CHARS),
 				&SQL_MATCH_ANY_CHARS, sizeof(sqlMatchAny), sqlMatchAny);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			memset(sqlMatchAny, 0, sizeof(sqlMatchAny));
 			sqlMatchAnyLength = 0;
@@ -72,7 +72,7 @@ protected:
 			sqlMatchOneLength = getConvFromUnicode().convert(
 				sizeof(SQL_MATCH_1_CHAR), &SQL_MATCH_1_CHAR, sizeof(sqlMatchOne), sqlMatchOne);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			memset(sqlMatchOne, 0, sizeof(sqlMatchOne));
 			sqlMatchOneLength = 0;
@@ -117,7 +117,7 @@ public:
 
 	void destroy()
 	{
-		Firebird::IntlUtil::finiCharset(cs);
+		IntlUtil::finiCharset(cs);
 	}
 
 	const UCHAR* getSqlMatchAny() const { return sqlMatchAny; }

@@ -36,7 +36,7 @@ namespace {
 
 void raise()
 {
-	Firebird::Arg::Gds(isc_user_manager).raise();
+	Arg::Gds(isc_user_manager).raise();
 }
 
 } // anonymous namespace
@@ -44,7 +44,7 @@ void raise()
 namespace Firebird::Auth {
 
 Get::Get(const Config* firebirdConf)
-	: GetPlugins<Firebird::IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf)
+	: GetPlugins<IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf)
 {
 	if (!hasData())
 	{
@@ -53,7 +53,7 @@ Get::Get(const Config* firebirdConf)
 }
 
 Get::Get(const Config* firebirdConf, const char* plugName)
-	: GetPlugins<Firebird::IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf, plugName)
+	: GetPlugins<IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf, plugName)
 {
 	if (!hasData())
 	{
@@ -61,7 +61,7 @@ Get::Get(const Config* firebirdConf, const char* plugName)
 	}
 }
 
-void UserData::clear(Firebird::CheckStatusWrapper*)
+void UserData::clear(CheckStatusWrapper*)
 {
 	op = 0;
 

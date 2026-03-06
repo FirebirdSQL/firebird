@@ -77,14 +77,14 @@ namespace Firebird
 		void checkPos(size_type pos) const
 		{
 			if (pos >= length()) {
-				fatal_exception::raise("Firebird::string - pos out of range");
+				fatal_exception::raise("string - pos out of range");
 			}
 		}
 
 		void checkLength(size_type len) const
 		{
 			if (len > getMaxLength()) {
-				fatal_exception::raise("Firebird::string - length exceeds predefined limit");
+				fatal_exception::raise("string - length exceeds predefined limit");
 			}
 		}
 

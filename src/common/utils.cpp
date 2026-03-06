@@ -277,7 +277,7 @@ int name_length_limit(const TEXT* const name, size_t bufsize) noexcept
 //***************
 // Goes to read directly the environment variables from the operating system on Windows
 // and provides a stub for UNIX.
-bool readenv(const char* env_name, Firebird::string& env_value)
+bool readenv(const char* env_name, string& env_value)
 {
 #ifdef WIN_NT
 	const DWORD rc = GetEnvironmentVariable(env_name, NULL, 0);
@@ -303,9 +303,9 @@ bool readenv(const char* env_name, Firebird::string& env_value)
 }
 
 
-bool readenv(const char* env_name, Firebird::PathName& env_value)
+bool readenv(const char* env_name, PathName& env_value)
 {
-	Firebird::string result;
+	string result;
 	bool rc = readenv(env_name, result);
 	env_value.assign(result.c_str(), result.length());
 	return rc;
@@ -476,7 +476,7 @@ public:
 		{
 			init();
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			iscLogException("Error creating private namespace", ex);
 		}
@@ -521,7 +521,7 @@ private:
 
 	[[noreturn]] void raiseError(const char* apiRoutine)
 	{
-		(Firebird::Arg::Gds(isc_sys_request) << apiRoutine << Firebird::Arg::OsError()).raise();
+		(Arg::Gds(isc_sys_request) << apiRoutine << Arg::OsError()).raise();
 	}
 
 	void init()
@@ -557,7 +557,7 @@ private:
 			raiseError("ConvertStringSecurityDescriptorToSecurityDescriptor");
 		}
 
-		Firebird::Cleanup cleanSecDesc( [&sa] {
+		Cleanup cleanSecDesc( [&sa] {
 				LocalFree(sa.lpSecurityDescriptor);
 			});
 
@@ -565,7 +565,7 @@ private:
 		if (hBoundaryDesc == NULL)
 			raiseError("CreateBoundaryDescriptor");
 
-		Firebird::Cleanup cleanBndDesc( [&hBoundaryDesc] {
+		Cleanup cleanBndDesc( [&hBoundaryDesc] {
 				DeleteBoundaryDescriptor(hBoundaryDesc);
 			});
 
@@ -597,7 +597,7 @@ private:
 					if (err != ERROR_DUP_NAME)
 						raiseError("OpenPrivateNamespace");
 
-					Firebird::string name(sPrivateNameSpace);
+					string name(sPrivateNameSpace);
 					name.append("\\test");
 
 					m_hTestEvent = CreateEvent(ISC_get_security_desc(), TRUE, TRUE, name.c_str());
@@ -614,7 +614,7 @@ private:
 	HANDLE m_hTestEvent;
 };
 
-static Firebird::InitInstance<PrivateNamespace> privateNamespace;
+static InitInstance<PrivateNamespace> privateNamespace;
 
 
 bool private_kernel_object_name(char* name, size_t bufsize)
@@ -637,7 +637,7 @@ bool privateNameSpaceReady()
 // *******************************
 // Return the name of the current process
 
-Firebird::PathName get_process_name()
+PathName get_process_name()
 {
 	char buffer[MAXPATHLEN];
 
@@ -661,11 +661,11 @@ Firebird::PathName get_process_name()
 
 SLONG genUniqueId() noexcept
 {
-	static Firebird::AtomicCounter cnt;
+	static AtomicCounter cnt;
 	return ++cnt;
 }
 
-void getCwd(Firebird::PathName& pn)
+void getCwd(PathName& pn)
 {
 	char* buffer = pn.getBuffer(MAXPATHLEN);
 #if defined(WIN_NT)
@@ -682,14 +682,14 @@ namespace {
 	class InputFile
 	{
 	public:
-		explicit InputFile(const Firebird::PathName& name)
+		explicit InputFile(const PathName& name)
 		  : flagEcho(false)
 		{
 			if (name == "stdin") {
 				f = stdin;
 			}
 			else {
-				f = Firebird::os_utils::fopen(name.c_str(), "rt");
+				f = os_utils::fopen(name.c_str(), "rt");
 			}
 			if (f && isatty(fileno(f)))
 			{
@@ -749,7 +749,7 @@ namespace {
 } // namespace
 
 // fetch password from file
-FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& password)
+FetchPassResult fetchPassword(const PathName& name, const char*& password)
 {
 	InputFile file(name);
 	if (!file)
@@ -757,7 +757,7 @@ FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& passw
 		return FETCH_PASS_FILE_OPEN_ERROR;
 	}
 
-	Firebird::string pwd;
+	string pwd;
 	if (! pwd.LoadFromFile(file.getStdioFile()))
 	{
 		return ferror(file.getStdioFile()) ? FETCH_PASS_FILE_READ_ERROR : FETCH_PASS_FILE_EMPTY;
@@ -865,7 +865,7 @@ void get_process_times(SINT64 &userTime, SINT64 &sysTime)
 }
 
 
-void exactNumericToStr(SINT64 value, int scale, Firebird::string& target, bool append)
+void exactNumericToStr(SINT64 value, int scale, string& target, bool append)
 {
 	if (value == 0)
 	{
@@ -950,7 +950,7 @@ bool bootBuild()
 	if (state == FB_BOOT_UNKNOWN)
 	{
 		// not care much about protecting state with mutex - each thread will assign it same value
-		Firebird::string dummy;
+		string dummy;
 		state = readenv("FIREBIRD_BOOT_BUILD", dummy) ? FB_BOOT_SET : FB_BOOT_NORMAL;
 	}
 
@@ -958,22 +958,22 @@ bool bootBuild()
 }
 
 // Build full file name in specified directory
-Firebird::PathName getPrefix(unsigned int prefType, const char* name)
+PathName getPrefix(unsigned int prefType, const char* name)
 {
-	Firebird::PathName s;
+	PathName s;
 
 #ifdef ANDROID
 	const bool useInstallDir =
-		prefType == Firebird::IConfigManager::DIR_BIN ||
-		prefType == Firebird::IConfigManager::DIR_SBIN ||
-		prefType == Firebird::IConfigManager::DIR_LIB ||
-		prefType == Firebird::IConfigManager::DIR_GUARD ||
-		prefType == Firebird::IConfigManager::DIR_PLUGINS;
+		prefType == IConfigManager::DIR_BIN ||
+		prefType == IConfigManager::DIR_SBIN ||
+		prefType == IConfigManager::DIR_LIB ||
+		prefType == IConfigManager::DIR_GUARD ||
+		prefType == IConfigManager::DIR_PLUGINS;
 
 	if (useInstallDir)
 		s = name;
 	else
-		PathUtils::concatPath(s, Firebird::Config::getRootDirectory(), name);
+		PathUtils::concatPath(s, Config::getRootDirectory(), name);
 
 	return s;
 #else
@@ -985,14 +985,14 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 		FB_GUARDDIR, FB_PLUGDIR, FB_TZDATADIR
 	};
 
-	fb_assert(FB_NELEM(configDir) == Firebird::IConfigManager::DIR_COUNT);
-	fb_assert(prefType < Firebird::IConfigManager::DIR_COUNT);
+	fb_assert(FB_NELEM(configDir) == IConfigManager::DIR_COUNT);
+	fb_assert(prefType < IConfigManager::DIR_COUNT);
 
 	if (! bootBuild())
 	{
-		if (prefType != Firebird::IConfigManager::DIR_CONF &&
-			prefType != Firebird::IConfigManager::DIR_MSG &&
-			prefType != Firebird::IConfigManager::DIR_TZDATA &&
+		if (prefType != IConfigManager::DIR_CONF &&
+			prefType != IConfigManager::DIR_MSG &&
+			prefType != IConfigManager::DIR_TZDATA &&
 			configDir[prefType][0])
 		{
 			// Value is set explicitly and is not environment overridable
@@ -1010,8 +1010,8 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 
 	switch (prefType)
 	{
-		case Firebird::IConfigManager::DIR_BIN:
-		case Firebird::IConfigManager::DIR_SBIN:
+		case IConfigManager::DIR_BIN:
+		case IConfigManager::DIR_SBIN:
 #ifdef WIN_NT
 			s = "";
 #else
@@ -1019,14 +1019,14 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #endif
 			break;
 
-		case Firebird::IConfigManager::DIR_CONF:
-		case Firebird::IConfigManager::DIR_LOG:
-		case Firebird::IConfigManager::DIR_GUARD:
-		case Firebird::IConfigManager::DIR_SECDB:
+		case IConfigManager::DIR_CONF:
+		case IConfigManager::DIR_LOG:
+		case IConfigManager::DIR_GUARD:
+		case IConfigManager::DIR_SECDB:
 			s = "";
 			break;
 
-		case Firebird::IConfigManager::DIR_LIB:
+		case IConfigManager::DIR_LIB:
 #ifdef WIN_NT
 			s = "";
 #else
@@ -1034,47 +1034,47 @@ Firebird::PathName getPrefix(unsigned int prefType, const char* name)
 #endif
 			break;
 
-		case Firebird::IConfigManager::DIR_PLUGINS:
+		case IConfigManager::DIR_PLUGINS:
 			s = "plugins";
 			break;
 
-		case Firebird::IConfigManager::DIR_TZDATA:
-			PathUtils::concatPath(s, Firebird::TimeZoneUtil::getTzDataPath(), name);
+		case IConfigManager::DIR_TZDATA:
+			PathUtils::concatPath(s, TimeZoneUtil::getTzDataPath(), name);
 			return s;
 
-		case Firebird::IConfigManager::DIR_INC:
+		case IConfigManager::DIR_INC:
 			s = "include";
 			break;
 
-		case Firebird::IConfigManager::DIR_DOC:
+		case IConfigManager::DIR_DOC:
 			s = "doc";
 			break;
 
-		case Firebird::IConfigManager::DIR_UDF:
+		case IConfigManager::DIR_UDF:
 			s = "UDF";
 			break;
 
-		case Firebird::IConfigManager::DIR_SAMPLE:
+		case IConfigManager::DIR_SAMPLE:
 			s = "examples";
 			break;
 
-		case Firebird::IConfigManager::DIR_SAMPLEDB:
+		case IConfigManager::DIR_SAMPLEDB:
 			s = "examples/empbuild";
 			break;
 
-		case Firebird::IConfigManager::DIR_HELP:
+		case IConfigManager::DIR_HELP:
 			s = "help";
 			break;
 
-		case Firebird::IConfigManager::DIR_INTL:
+		case IConfigManager::DIR_INTL:
 			s = "intl";
 			break;
 
-		case Firebird::IConfigManager::DIR_MISC:
+		case IConfigManager::DIR_MISC:
 			s = "misc";
 			break;
 
-		case Firebird::IConfigManager::DIR_MSG:
+		case IConfigManager::DIR_MSG:
 			gds__prefix_msg(tmp, name);
 			return tmp;
 
@@ -1119,14 +1119,14 @@ unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
 }
 
 unsigned int mergeStatus(ISC_STATUS* const dest, unsigned int space,
-						 const Firebird::IStatus* from) noexcept
+						 const IStatus* from) noexcept
 {
 	const ISC_STATUS* s;
 	unsigned int copied = 0;
 	const int state = from->getState();
 	ISC_STATUS* to = dest;
 
-	if (state & Firebird::IStatus::STATE_ERRORS)
+	if (state & IStatus::STATE_ERRORS)
 	{
 		s = from->getErrors();
 		copied = copyStatus(to, space, s, statusLength(s));
@@ -1135,7 +1135,7 @@ unsigned int mergeStatus(ISC_STATUS* const dest, unsigned int space,
 		space -= copied;
 	}
 
-	if (state & Firebird::IStatus::STATE_WARNINGS)
+	if (state & IStatus::STATE_WARNINGS)
 	{
 		if (!copied)
 		{
@@ -1154,18 +1154,18 @@ unsigned int mergeStatus(ISC_STATUS* const dest, unsigned int space,
 	return copied;
 }
 
-void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept
+void copyStatus(CheckStatusWrapper* to, const IStatus* from) noexcept
 {
 	to->init();
 
 	const unsigned flags = from->getState();
-	if (flags & Firebird::IStatus::STATE_ERRORS)
+	if (flags & IStatus::STATE_ERRORS)
 		to->setErrors(from->getErrors());
-	if (flags & Firebird::IStatus::STATE_WARNINGS)
+	if (flags & IStatus::STATE_WARNINGS)
 		to->setWarnings(from->getWarnings());
 }
 
-void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept
+void setIStatus(IStatus* to, const ISC_STATUS* from) noexcept
 {
 	try
 	{
@@ -1181,7 +1181,7 @@ void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept
 		}
 		to->setErrors2(w - from, from);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(to);
 	}
@@ -1303,7 +1303,7 @@ miss:	pos += nextArg(in[pos]);
 // moves DB path information (from limbo transaction) to another buffer
 void getDbPathInfo(unsigned int& itemsLength, const unsigned char*& items,
 	unsigned int& bufferLength, unsigned char*& buffer,
-	Firebird::Array<unsigned char>& newItemsBuffer, const Firebird::PathName& dbpath)
+	Array<unsigned char>& newItemsBuffer, const PathName& dbpath)
 {
 	if (itemsLength && items)
 	{
@@ -1340,7 +1340,7 @@ bool isRunningCheck(const UCHAR* items, unsigned int length)
 	{
 		if (!items)
 		{
-			Firebird::Arg::Gds(isc_null_block).raise();
+			Arg::Gds(isc_null_block).raise();
 		}
 
 		switch (*items++)
@@ -1362,7 +1362,7 @@ bool isRunningCheck(const UCHAR* items, unsigned int length)
 		case isc_info_svc_stdin:
 			if (state == S_INF)
 			{
-				Firebird::Arg::Gds(isc_mixed_info).raise();
+				Arg::Gds(isc_mixed_info).raise();
 			}
 			state = S_RUN;
 			break;
@@ -1382,13 +1382,13 @@ bool isRunningCheck(const UCHAR* items, unsigned int length)
 		case isc_info_svc_get_licensed_users:
 			if (state == S_RUN)
 			{
-				Firebird::Arg::Gds(isc_mixed_info).raise();
+				Arg::Gds(isc_mixed_info).raise();
 			}
 			state = S_INF;
 			break;
 
 		default:
-			(Firebird::Arg::Gds(isc_unknown_info) << Firebird::Arg::Num(ULONG(items[-1]))).raise();
+			(Arg::Gds(isc_unknown_info) << Arg::Num(ULONG(items[-1]))).raise();
 			break;
 		}
 	}
@@ -1402,7 +1402,7 @@ static inline char conv_bin2ascii(ULONG l) noexcept
 }
 
 // converts bytes to BASE64 representation
-void base64(Firebird::string& b64, const Firebird::UCharBuffer& bin)
+void base64(string& b64, const UCharBuffer& bin)
 {
 	b64.erase();
 	const unsigned char* f = bin.begin();
@@ -1429,10 +1429,10 @@ void base64(Firebird::string& b64, const Firebird::UCharBuffer& bin)
 	}
 }
 
-void random64(Firebird::string& randomValue, FB_SIZE_T length)
+void random64(string& randomValue, FB_SIZE_T length)
 {
-	Firebird::UCharBuffer binRand;
-	Firebird::GenerateRandomBytes(binRand.getBuffer(length), length);
+	UCharBuffer binRand;
+	GenerateRandomBytes(binRand.getBuffer(length), length);
 	base64(randomValue, binRand);
 	randomValue.resize(length, '$');
 }
@@ -1440,7 +1440,7 @@ void random64(Firebird::string& randomValue, FB_SIZE_T length)
 [[noreturn]] void logAndDie(const char* text)
 {
 	gds__log(text);
-	Firebird::Syslog::Record(Firebird::Syslog::Error, text);
+	Syslog::Record(Syslog::Error, text);
 	abort();
 }
 
@@ -1508,7 +1508,7 @@ unsigned sqlTypeToDsc(unsigned runOffset, unsigned sqlType, unsigned sqlLength,
 	if (dscType == dtype_unknown)
 	{
 		fb_assert(false);
-		Firebird::Arg::Gds(isc_dsql_datatype_err).raise();
+		Arg::Gds(isc_dsql_datatype_err).raise();
 	}
 
 	if (dtype)
@@ -1563,7 +1563,7 @@ inline bool sqlSymbolChar(char c, bool first)
 	return (isdigit(c) && !first) || isalpha(c) || c == '_' || c == '$';
 }
 
-const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
+const char* dpbItemUpper(const char* s, FB_SIZE_T l, string& buf)
 {
 	if (l && (s[0] == '"' || s[0] == '\''))
 	{
@@ -1586,7 +1586,7 @@ const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
 				if (s[i] != end_quote)
 				{
 					buf.assign(&s[i], l - i);
-					(Firebird::Arg::Gds(isc_quoted_str_bad) << buf).raise();
+					(Arg::Gds(isc_quoted_str_bad) << buf).raise();
 				}
 
 				// skipped the escape quote, continue processing
@@ -1598,7 +1598,7 @@ const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
 		}
 
 		buf.assign(1, s[0]);
-		(Firebird::Arg::Gds(isc_quoted_str_miss) << buf).raise();
+		(Arg::Gds(isc_quoted_str_miss) << buf).raise();
 	}
 
 	// non-quoted string - try to uppercase
@@ -1615,13 +1615,13 @@ const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf)
 bool isBpbSegmented(unsigned parLength, const unsigned char* par)
 {
 	if (parLength && !par)
-		Firebird::Arg::Gds(isc_null_block).raise();
+		Arg::Gds(isc_null_block).raise();
 
-	Firebird::ClumpletReader bpb(Firebird::ClumpletReader::Tagged, par, parLength);
+	ClumpletReader bpb(ClumpletReader::Tagged, par, parLength);
 	if (bpb.getBufferTag() != isc_bpb_version1)
 	{
-		(Firebird::Arg::Gds(isc_bpb_version) << Firebird::Arg::Num(bpb.getBufferTag()) <<
-			Firebird::Arg::Num(isc_bpb_version1)).raise();
+		(Arg::Gds(isc_bpb_version) << Arg::Num(bpb.getBufferTag()) <<
+			Arg::Num(isc_bpb_version1)).raise();
 	}
 
 	if (!bpb.find(isc_bpb_type))

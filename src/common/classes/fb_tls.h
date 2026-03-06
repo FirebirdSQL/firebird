@@ -87,7 +87,7 @@ private:
 	DWORD key;
 };
 } // namespace Firebird
-# define TLS_DECLARE(TYPE, NAME) ::Firebird::Win32Tls<TYPE> NAME
+# define TLS_DECLARE(TYPE, NAME) ::Win32Tls<TYPE> NAME
 # define TLS_GET(NAME) (NAME).get()
 # define TLS_SET(NAME, VALUE) (NAME).set(VALUE)
 
@@ -162,7 +162,7 @@ private:
 
 } // namespace Firebird
 
-# define TLS_DECLARE(TYPE, NAME) ::Firebird::TlsValue<TYPE> NAME
+# define TLS_DECLARE(TYPE, NAME) ::TlsValue<TYPE> NAME
 # define TLS_GET(NAME) (NAME).get()
 # define TLS_SET(NAME, VALUE) (NAME).set(VALUE)
 

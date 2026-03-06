@@ -31,9 +31,9 @@ namespace Firebird::Jrd::Ods {
 struct sdl_info;
 struct array_alice;
 
-SLONG	SDL_compute_subscript(Firebird::CheckStatusWrapper*, const Ods::InternalArrayDesc*, USHORT, const SLONG*);
-ISC_STATUS SDL_info(Firebird::CheckStatusWrapper*, const UCHAR*, sdl_info*, const SLONG*);
-int		SDL_walk(Firebird::CheckStatusWrapper*, const UCHAR*, UCHAR*, Ods::InternalArrayDesc*, SLONG*,
+SLONG	SDL_compute_subscript(CheckStatusWrapper*, const Ods::InternalArrayDesc*, USHORT, const SLONG*);
+ISC_STATUS SDL_info(CheckStatusWrapper*, const UCHAR*, sdl_info*, const SLONG*);
+int		SDL_walk(CheckStatusWrapper*, const UCHAR*, UCHAR*, Ods::InternalArrayDesc*, SLONG*,
 				 SDL_walk_callback, array_slice*);
 
 #endif // JRD_SDL_PROTO_H

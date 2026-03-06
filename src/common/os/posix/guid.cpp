@@ -44,9 +44,9 @@ namespace Firebird {
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 {
 	// do not use /dev/random because it may return lesser data than we need.
-	int fd = Firebird::os_utils::open("/dev/urandom", O_RDONLY);
+	int fd = os_utils::open("/dev/urandom", O_RDONLY);
 	if (fd < 0)
-		Firebird::system_call_failed::raise("open");
+		system_call_failed::raise("open");
 
 	for (FB_SIZE_T offset = 0; offset < size; )
 	{
@@ -54,17 +54,17 @@ void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 		if (rc < 0)
 		{
 			if (errno != EINTR)
-				Firebird::system_call_failed::raise("read");
+				system_call_failed::raise("read");
 			continue;
 		}
 		if (rc == 0)
-			Firebird::system_call_failed::raise("read", EIO);
+			system_call_failed::raise("read", EIO);
 		offset += static_cast<FB_SIZE_T>(rc);
 	}
 	if (close(fd) < 0)
 	{
 		if (errno != EINTR)
-			Firebird::system_call_failed::raise("close");
+			system_call_failed::raise("close");
 		// In case when close() is interrupted by a signal,
 		// the state of fd is unspecified - give up and return success.
 	}

@@ -42,7 +42,7 @@
 namespace Firebird::fb_utils {
 	char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept;
 	char* exact_name(char* const name) noexcept;
-	inline void exact_name(Firebird::string& str)
+	inline void exact_name(string& str)
 	{
 		str.rtrim();
 	}
@@ -52,8 +52,8 @@ namespace Firebird::fb_utils {
 	bool implicit_pk(const char* pk_name) noexcept;
 	int name_length(const TEXT* const name) noexcept;
 	int name_length_limit(const TEXT* const name, size_t bufsize) noexcept;
-	bool readenv(const char* env_name, Firebird::string& env_value);
-	bool readenv(const char* env_name, Firebird::PathName& env_value);
+	bool readenv(const char* env_name, string& env_value);
+	bool readenv(const char* env_name, PathName& env_value);
 	bool setenv(const char* name, const char* value, bool overwrite);
 	int snprintf(char* buffer, size_t count, const char* format...) noexcept;
 	char* cleanup_passwd(char* arg);
@@ -134,9 +134,9 @@ namespace Firebird::fb_utils {
 		return n1 == n2 ? 0 : n1 < n2 ? 1 : -1;
 	}
 
-	Firebird::PathName get_process_name();
+	PathName get_process_name();
 	SLONG genUniqueId() noexcept;
-	void getCwd(Firebird::PathName& pn);
+	void getCwd(PathName& pn);
 
 	void inline initStatusTo(ISC_STATUS* status, ISC_STATUS to) noexcept
 	{
@@ -160,16 +160,16 @@ namespace Firebird::fb_utils {
 		initStatusTo(status, isc_exception_sigill);		// Any better ideas? New error code?
 	}
 
-	void inline init_status(Firebird::CheckStatusWrapper* status)
+	void inline init_status(CheckStatusWrapper* status)
 	{
 		status->init();
 	}
 
 	unsigned int copyStatus(ISC_STATUS* const to, const unsigned int space,
 							const ISC_STATUS* const from, const unsigned int count) noexcept;
-	void copyStatus(Firebird::CheckStatusWrapper* to, const Firebird::IStatus* from) noexcept;
-	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const Firebird::IStatus* from) noexcept;
-	void setIStatus(Firebird::IStatus* to, const ISC_STATUS* from) noexcept;
+	void copyStatus(CheckStatusWrapper* to, const IStatus* from) noexcept;
+	unsigned int mergeStatus(ISC_STATUS* const to, unsigned int space, const IStatus* from) noexcept;
+	void setIStatus(IStatus* to, const ISC_STATUS* from) noexcept;
 	unsigned int statusLength(const ISC_STATUS* const status) noexcept;
 	unsigned int subStatus(const ISC_STATUS* in, unsigned int cin,
 						   const ISC_STATUS* sub, unsigned int csub) noexcept;
@@ -204,7 +204,7 @@ namespace Firebird::fb_utils {
 		FETCH_PASS_FILE_READ_ERROR,
 		FETCH_PASS_FILE_EMPTY
 	};
-	FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& password);
+	FetchPassResult fetchPassword(const PathName& name, const char*& password);
 
 	// Returns current value of performance counter
 	SINT64 query_performance_counter();
@@ -214,27 +214,27 @@ namespace Firebird::fb_utils {
 
 	void get_process_times(SINT64 &userTime, SINT64 &sysTime);
 
-	void exactNumericToStr(SINT64 value, int scale, Firebird::string& target, bool append = false);
+	void exactNumericToStr(SINT64 value, int scale, string& target, bool append = false);
 
 	// Returns true if called from firebird build process (appr. environment is set)
 	bool bootBuild();
 
 	// Add appropriate file prefix.
-	Firebird::PathName getPrefix(unsigned int prefType, const char* name);
+	PathName getPrefix(unsigned int prefType, const char* name);
 
 	// moves DB path information (from limbo transaction) to another buffer
 	void getDbPathInfo(unsigned int& itemsLength, const unsigned char*& items,
 		unsigned int& bufferLength, unsigned char*& buffer,
-		Firebird::Array<unsigned char>& newItemsBuffer, const Firebird::PathName& dbpath);
+		Array<unsigned char>& newItemsBuffer, const PathName& dbpath);
 
 	// returns true if passed info items work with running svc thread
 	bool isRunningCheck(const UCHAR* items, unsigned int length);
 
 	// converts bytes to BASE64 representation
-	void base64(Firebird::string& b64, const Firebird::UCharBuffer& bin);
+	void base64(string& b64, const UCharBuffer& bin);
 
 	// generate random string in BASE64 representation
-	void random64(Firebird::string& randomValue, FB_SIZE_T length);
+	void random64(string& randomValue, FB_SIZE_T length);
 
 	[[noreturn]] void logAndDie(const char* text);
 
@@ -259,13 +259,13 @@ namespace Firebird::fb_utils {
 	}
 
 	// Uppercase/strip string according to login rules
-	const char* dpbItemUpper(const char* s, FB_SIZE_T l, Firebird::string& buf);
+	const char* dpbItemUpper(const char* s, FB_SIZE_T l, string& buf);
 
 	// Uppercase/strip string according to login rules
 	template <typename STR>
 	void dpbItemUpper(STR& name)
 	{
-		Firebird::string buf;
+		string buf;
 		const char* up = dpbItemUpper(name.c_str(), name.length(), buf);
 		if (up)
 			name = up;

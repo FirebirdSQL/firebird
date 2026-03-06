@@ -34,7 +34,7 @@
 namespace Firebird::Auth {
 
 class CharField :
-	public Firebird::AutoIface<Firebird::ICharUserFieldImpl<CharField, Firebird::CheckStatusWrapper> >
+	public AutoIface<ICharUserFieldImpl<CharField, CheckStatusWrapper> >
 {
 public:
 	CharField()
@@ -52,7 +52,7 @@ public:
 		return s;
 	}
 
-	void setEntered(Firebird::CheckStatusWrapper*, int newValue)
+	void setEntered(CheckStatusWrapper*, int newValue)
 	{
 		e = newValue;
 	}
@@ -71,13 +71,13 @@ public:
 		return value.c_str();
 	}
 
-	void set(Firebird::CheckStatusWrapper* status, const char* newValue)
+	void set(CheckStatusWrapper* status, const char* newValue)
 	{
 		try
 		{
 			value = newValue ? newValue : "";
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -96,11 +96,11 @@ public:
 
 private:
 	int e, s;
-	Firebird::string value;
+	string value;
 };
 
 class IntField :
-	public Firebird::AutoIface<Firebird::IIntUserFieldImpl<IntField, Firebird::CheckStatusWrapper> >
+	public AutoIface<IIntUserFieldImpl<IntField, CheckStatusWrapper> >
 {
 public:
 	IntField()
@@ -118,7 +118,7 @@ public:
 		return s;
 	}
 
-	void setEntered(Firebird::CheckStatusWrapper*, int newValue)
+	void setEntered(CheckStatusWrapper*, int newValue)
 	{
 		e = newValue;
 	}
@@ -137,7 +137,7 @@ public:
 		return value;
 	}
 
-	void set(Firebird::CheckStatusWrapper*, int newValue)
+	void set(CheckStatusWrapper*, int newValue)
 	{
 		value = newValue;
 	}
@@ -153,10 +153,10 @@ private:
 	int value;
 };
 
-typedef Firebird::Array<UCHAR> AuthenticationBlock;
+typedef Array<UCHAR> AuthenticationBlock;
 
 class UserData final :
-	public Firebird::VersionedIface<Firebird::IUserImpl<UserData, Firebird::CheckStatusWrapper> >
+	public VersionedIface<IUserImpl<UserData, CheckStatusWrapper> >
 {
 public:
 	UserData()
@@ -169,52 +169,52 @@ public:
 		return op;
 	}
 
-	Firebird::ICharUserField* userName()
+	ICharUserField* userName()
 	{
 		return &user;
 	}
 
-	Firebird::ICharUserField* password()
+	ICharUserField* password()
 	{
 		return &pass;
 	}
 
-	Firebird::ICharUserField* firstName()
+	ICharUserField* firstName()
 	{
 		return &first;
 	}
 
-	Firebird::ICharUserField* lastName()
+	ICharUserField* lastName()
 	{
 		return &last;
 	}
 
-	Firebird::ICharUserField* middleName()
+	ICharUserField* middleName()
 	{
 		return &middle;
 	}
 
-	Firebird::ICharUserField* comment()
+	ICharUserField* comment()
 	{
 		return &com;
 	}
 
-	Firebird::ICharUserField* attributes()
+	ICharUserField* attributes()
 	{
 		return &attr;
 	}
 
-	Firebird::IIntUserField* admin()
+	IIntUserField* admin()
 	{
 		return &adm;
 	}
 
-	Firebird::IIntUserField* active()
+	IIntUserField* active()
 	{
 		return &act;
 	}
 
-	void clear(Firebird::CheckStatusWrapper* status);
+	void clear(CheckStatusWrapper* status);
 
 
 	unsigned int op;
@@ -226,18 +226,18 @@ public:
 	CharField database, dba, dbaPassword, role;
 	AuthenticationBlock authenticationBlock;
 
-	Firebird::MetaString plugin;
+	MetaString plugin;
 
 	// deprecated
 	CharField group;
 	IntField u, g;
 };
 
-class Get : public Firebird::GetPlugins<Firebird::IManagement>
+class Get : public GetPlugins<IManagement>
 {
 public:
-	explicit Get(const Firebird::Config* firebirdConf);
-	Get(const Firebird::Config* firebirdConf, const char* plugName);
+	explicit Get(const Config* firebirdConf);
+	Get(const Config* firebirdConf, const char* plugName);
 };
 
 int setGsecCode(int code, unsigned int operation);

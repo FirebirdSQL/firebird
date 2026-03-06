@@ -30,10 +30,10 @@
 namespace Firebird {
 
 // BLR/DYN writer.
-class BlrWriter : public Firebird::PermanentStorage
+class BlrWriter : public PermanentStorage
 {
 public:
-	typedef Firebird::HalfStaticArray<UCHAR, 1024> BlrData;
+	typedef HalfStaticArray<UCHAR, 1024> BlrData;
 
 	explicit BlrWriter(MemoryPool& p)
 		: PermanentStorage(p),
@@ -128,7 +128,7 @@ public:
 	void setBaseOffset(ULONG value) { baseOffset = value; }
 
 	virtual bool isVersion4() = 0;
-	virtual void raiseError(const Firebird::Arg::StatusVector& vector);
+	virtual void raiseError(const Arg::StatusVector& vector);
 
 private:
 	BlrData blrData;

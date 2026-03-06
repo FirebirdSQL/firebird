@@ -231,7 +231,7 @@ namespace {
 	DevNode getNode(const char* name)
 	{
 		struct STAT statistics;
-		if (Firebird::os_utils::stat(name, &statistics) != 0)
+		if (os_utils::stat(name, &statistics) != 0)
 		{
 			if (errno == ENOENT)
 			{
@@ -248,7 +248,7 @@ namespace {
 	DevNode getNode(int fd)
 	{
 		struct STAT statistics;
-		if (Firebird::os_utils::fstat(fd, &statistics) != 0)
+		if (os_utils::fstat(fd, &statistics) != 0)
 			system_call_failed::raise("stat");
 
 		return DevNode(statistics.st_dev, statistics.st_ino);
@@ -298,7 +298,7 @@ public:
 
 		if (!file)
 		{
-			int fd = Firebird::os_utils::openCreateSharedFile(fileName, 0);
+			int fd = os_utils::openCreateSharedFile(fileName, 0);
 			id = getNode(fd);
 			file = FB_NEW_POOL(*getDefaultMemoryPool()) SharedFileInfo(fd, id);
 			SharedFileInfo** put = sharedFiles->put(id);
@@ -552,7 +552,7 @@ namespace {
 		if (rc == 0)
 			return 0;
 		iscLogStatus("Pthread Error",
-			(Firebird::Arg::Gds(isc_sys_request) << Firebird::Arg::Str(function) << Firebird::Arg::Unix(rc)).value());
+			(Arg::Gds(isc_sys_request) << Arg::Str(function) << Arg::Unix(rc)).value());
 		return rc;
 	}
 
@@ -579,8 +579,8 @@ bool MemoryHeader::check(const char* name, USHORT type, USHORT version, bool rai
 	expected.printf("%d/%d:%d", type, HEADER_VERSION, version);
 
 	// @1: inconsistent shared memory type/version; found @2, expected @3
-	(Firebird::Arg::Gds(isc_wrong_shmem_ver) <<
-		Firebird::Arg::Str(name) << Firebird::Arg::Str(found) << Firebird::Arg::Str(expected)).raise();
+	(Arg::Gds(isc_wrong_shmem_ver) <<
+		Arg::Str(name) << Arg::Str(found) << Arg::Str(expected)).raise();
 }
 
 int SharedMemoryBase::eventInit(event_t* event)
@@ -1218,7 +1218,7 @@ bool allocFileSpace(int fd, off_t offset, FB_SIZE_T length, CheckStatusWrapper* 
 	const FB_SIZE_T bufSize = length < buf128KSize ? length : buf128KSize;
 
 	memset(buf.getBuffer(bufSize), 0, bufSize);
-	Firebird::os_utils::lseek(fd, LSEEK_OFFSET_CAST offset, SEEK_SET);
+	os_utils::lseek(fd, LSEEK_OFFSET_CAST offset, SEEK_SET);
 
 	while (length)
 	{
@@ -1340,7 +1340,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		// Get and use the existing length of the shared segment
 		struct STAT file_stat;
 
-		if (Firebird::os_utils::fstat(mainLock->getFd(), &file_stat) == -1)
+		if (os_utils::fstat(mainLock->getFd(), &file_stat) == -1)
 			system_call_failed::raise("fstat");
 
 		length = file_stat.st_size;
@@ -1348,12 +1348,12 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		if (length == 0)
 		{
 			// keep old text of message here -  will be assigned a bit later
-			(Firebird::Arg::Gds(isc_random) << "shmem_data->sh_mem_length_mapped is 0").raise();
+			(Arg::Gds(isc_random) << "shmem_data->sh_mem_length_mapped is 0").raise();
 		}
 	}
 
 	// map file to memory
-	void* const address = Firebird::os_utils::mmap(0, length,
+	void* const address = os_utils::mmap(0, length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
@@ -1411,7 +1411,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	{
 		if (trunc_flag)
 		{
-			FB_UNUSED(Firebird::os_utils::ftruncate(mainLock->getFd(), length));
+			FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), length));
 			allocFileSpace(mainLock->getFd(), 0, length, NULL);
 		}
 
@@ -1454,8 +1454,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 					int protocolRc = pthread_mutexattr_setprotocol(&mattr, PTHREAD_PRIO_INHERIT);
 					if (protocolRc && (protocolRc != ENOTSUP))
 					{
-						iscLogStatus("Pthread Error", (Firebird::Arg::Gds(isc_sys_request) <<
-							"pthread_mutexattr_setprotocol" << Firebird::Arg::Unix(protocolRc)).value());
+						iscLogStatus("Pthread Error", (Arg::Gds(isc_sys_request) <<
+							"pthread_mutexattr_setprotocol" << Arg::Unix(protocolRc)).value());
 					}
 #ifdef BUGGY_LINUX_MUTEX
 				}
@@ -1483,8 +1483,8 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 #endif
 					)
 				{
-					iscLogStatus("Pthread Error", (Firebird::Arg::Gds(isc_sys_request) <<
-						"pthread_mutex_init" << Firebird::Arg::Unix(state)).value());
+					iscLogStatus("Pthread Error", (Arg::Gds(isc_sys_request) <<
+						"pthread_mutex_init" << Arg::Unix(state)).value());
 				}
 
 				LOG_PTHREAD_ERROR(pthread_mutexattr_destroy(&mattr));
@@ -1513,7 +1513,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (statusVector.hasData())
 					status_exception::raise(&statusVector);
 				else
-					(Firebird::Arg::Gds(isc_random) << "Unknown error in setlock(SHARED)").raise();
+					(Arg::Gds(isc_random) << "Unknown error in setlock(SHARED)").raise();
 			}
 		}
 	}
@@ -1526,7 +1526,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				if (statusVector.hasData())
 					status_exception::raise(&statusVector);
 				else
-					(Firebird::Arg::Gds(isc_random) << "Unknown error in setlock(SHARED)").raise();
+					(Arg::Gds(isc_random) << "Unknown error in setlock(SHARED)").raise();
 			}
 		}
 	}
@@ -1697,7 +1697,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		{
 			CloseHandle(event_handle);
 			if (retry_count > 10)
-				(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Wait for shared memory initialization timed out.")).raise();
+				(Arg::Gds(isc_random) << Arg::Str("Wait for shared memory initialization timed out.")).raise();
 
 			goto retry;
 		}
@@ -1758,7 +1758,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 						goto retry;
 
 					CloseHandle(event_handle);
-					Firebird::Arg::Gds(isc_instance_conflict).raise();
+					Arg::Gds(isc_instance_conflict).raise();
 				}
 				else
 				{
@@ -1779,7 +1779,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				unlinkFile();
 			}
 
-			(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("File for memory mapping is empty.")).raise();
+			(Arg::Gds(isc_random) << Arg::Str("File for memory mapping is empty.")).raise();
 		}
 
 		LARGE_INTEGER offset;
@@ -1924,7 +1924,7 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 				 "\tCheck for presence of another Firebird instance with different lock directory",
 				 expanded_filename, mappedName.c_str());
 
-		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Wrong file for memory mapping, see details in firebird.log")).raise();
+		(Arg::Gds(isc_random) << Arg::Str("Wrong file for memory mapping, see details in firebird.log")).raise();
 	}
 
 	ISC_mutex_init(&sh_mem_winMutex, filename);
@@ -1989,7 +1989,7 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 
-	UCHAR* address = (UCHAR*) Firebird::os_utils::mmap(0, length,
+	UCHAR* address = (UCHAR*) os_utils::mmap(0, length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), start);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
@@ -2521,7 +2521,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 	{
 		new_length = FB_ALIGN(new_length, getSystemPageSize(statusVector));
 
-		FB_UNUSED(Firebird::os_utils::ftruncate(mainLock->getFd(), new_length));
+		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
 
 		if (new_length > sh_mem_length_mapped)
 		{
@@ -2533,7 +2533,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 		}
 	}
 
-	MemoryHeader* const address = (MemoryHeader*) Firebird::os_utils::mmap(0, new_length,
+	MemoryHeader* const address = (MemoryHeader*) os_utils::mmap(0, new_length,
 		PROT_READ | PROT_WRITE, MAP_SHARED, mainLock->getFd(), 0);
 
 	if ((U_IPTR) address == (U_IPTR) -1)
@@ -2680,8 +2680,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG, bool)
  *
  **************************************/
 
-	(Firebird::Arg::Gds(isc_unavailable) <<
-		Firebird::Arg::Gds(isc_random) << "SharedMemory::remapFile").copyTo(statusVector);
+	(Arg::Gds(isc_unavailable) <<
+		Arg::Gds(isc_random) << "SharedMemory::remapFile").copyTo(statusVector);
 
 	return NULL;
 }
@@ -2907,6 +2907,6 @@ static void error(CheckStatusWrapper* statusVector, const TEXT* string, ISC_STAT
  *	We've encountered an error, report it.
  *
  **************************************/
-	(Firebird::Arg::StatusVector(statusVector) <<
-		Firebird::Arg::Gds(isc_sys_request) << string << SYS_ERR(status)).copyTo(statusVector);
+	(Arg::StatusVector(statusVector) <<
+		Arg::Gds(isc_sys_request) << string << SYS_ERR(status)).copyTo(statusVector);
 }

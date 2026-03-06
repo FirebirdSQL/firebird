@@ -263,20 +263,20 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 		break;
 
 	case dtype_dec64:
-		fb_assert(desc->dsc_length >= sizeof(Firebird::Decimal64));
-		if (!xdr_dec64(xdrs, reinterpret_cast<Firebird::Decimal64*>(p)))
+		fb_assert(desc->dsc_length >= sizeof(Decimal64));
+		if (!xdr_dec64(xdrs, reinterpret_cast<Decimal64*>(p)))
 			return FALSE;
 		break;
 
 	case dtype_dec128:
-		fb_assert(desc->dsc_length >= sizeof(Firebird::Decimal128));
-		if (!xdr_dec128(xdrs, reinterpret_cast<Firebird::Decimal128*>(p)))
+		fb_assert(desc->dsc_length >= sizeof(Decimal128));
+		if (!xdr_dec128(xdrs, reinterpret_cast<Decimal128*>(p)))
 			return FALSE;
 		break;
 
 	case dtype_int128:
-		fb_assert(desc->dsc_length >= sizeof(Firebird::Int128));
-		if (!xdr_int128(xdrs, reinterpret_cast<Firebird::Int128*>(p)))
+		fb_assert(desc->dsc_length >= sizeof(Int128));
+		if (!xdr_int128(xdrs, reinterpret_cast<Int128*>(p)))
 			return FALSE;
 		break;
 
@@ -419,20 +419,20 @@ static bool_t xdr_decfloat_hyper(xdr_t* xdrs, void* dec)
 }
 
 
-bool_t xdr_dec64(xdr_t* xdrs, Firebird::Decimal64* ip)
+bool_t xdr_dec64(xdr_t* xdrs, Decimal64* ip)
 {
 	return xdr_decfloat_hyper(xdrs, ip->getBytes());
 }
 
 
-bool_t xdr_dec128(xdr_t* xdrs, Firebird::Decimal128* ip)
+bool_t xdr_dec128(xdr_t* xdrs, Decimal128* ip)
 {
 	UCHAR* bytes = ip->getBytes();
 	return xdr_decfloat_hyper(xdrs, &bytes[8]) && xdr_decfloat_hyper(xdrs, &bytes[0]);
 }
 
 
-bool_t xdr_int128(xdr_t* xdrs, Firebird::Int128* ip)
+bool_t xdr_int128(xdr_t* xdrs, Int128* ip)
 {
 	UCHAR* bytes = ip->getBytes();
 

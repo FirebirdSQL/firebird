@@ -46,17 +46,17 @@ inline constexpr TEXT SVC_TRMNTR = '\377';	// ASCII 255
 
 class ClumpletWriter;
 
-class UtilSvc : public Firebird::GlobalStorage
+class UtilSvc : public GlobalStorage
 {
 public:
-	typedef Firebird::HalfStaticArray<const char*, 20> ArgvType;
+	typedef HalfStaticArray<const char*, 20> ArgvType;
 
 	// Services is rare for our code case where status vector is accessed from 2 different threads
 	// in async way. To ensure it's stability appropriate protection is needed.
 	class StatusAccessor
 	{
 	public:
-		StatusAccessor(Mutex& mtx, Firebird::CheckStatusWrapper* st, UtilSvc* u)
+		StatusAccessor(Mutex& mtx, CheckStatusWrapper* st, UtilSvc* u)
 			: mutex(&mtx), status(st), uSvc(u)
 		{
 			mutex->enter(FB_FUNCTION);
@@ -74,12 +74,12 @@ public:
 			sa.status = nullptr;
 		}
 
-		operator const Firebird::CheckStatusWrapper*() const noexcept
+		operator const CheckStatusWrapper*() const noexcept
 		{
 			return status;
 		}
 
-		const Firebird::CheckStatusWrapper* operator->() const noexcept
+		const CheckStatusWrapper* operator->() const noexcept
 		{
 			return status;
 		}
@@ -96,7 +96,7 @@ public:
 				uSvc->setServiceStatus(status);
 		}
 
-		void setServiceStatus(const USHORT fac, const USHORT code, const Firebird::MsgFormat::SafeArg& args)
+		void setServiceStatus(const USHORT fac, const USHORT code, const MsgFormat::SafeArg& args)
 		{
 			if (uSvc)
 				uSvc->setServiceStatus(fac, code, args);
@@ -113,7 +113,7 @@ public:
 
 	private:
 		Mutex* mutex;
-		Firebird::CheckStatusWrapper* status;
+		CheckStatusWrapper* status;
 		UtilSvc* uSvc;
 	};
 
@@ -135,17 +135,17 @@ public:
 
 private:
 	virtual void setServiceStatus(const ISC_STATUS*) = 0;
-	virtual void setServiceStatus(const USHORT, const USHORT, const Firebird::MsgFormat::SafeArg&) = 0;
+	virtual void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) = 0;
 
 public:
 	virtual StatusAccessor getStatusAccessor() = 0;
 	virtual void checkService() = 0;
 	virtual void hidePasswd(ArgvType&, int) = 0;
-	virtual void fillDpb(Firebird::ClumpletWriter& dpb) = 0;
+	virtual void fillDpb(ClumpletWriter& dpb) = 0;
 	virtual bool finished() = 0;
 	virtual unsigned int getAuthBlock(const unsigned char** bytes) = 0;
 	virtual bool utf8FileNames() = 0;
-	virtual Firebird::ICryptKeyCallback* getCryptCallback() = 0;
+	virtual ICryptKeyCallback* getCryptCallback() = 0;
 	virtual int getParallelWorkers() = 0;
 
 	void setDataMode(bool value) noexcept
@@ -157,7 +157,7 @@ public:
 
 	static UtilSvc* createStandalone(int ac, char** argv);
 
-	static inline void addStringWithSvcTrmntr(const Firebird::string& str, Firebird::string& switches)
+	static inline void addStringWithSvcTrmntr(const string& str, string& switches)
 	{
 		// All string parameters are delimited by SVC_TRMNTR.
 		// This is done to ensure that paths with spaces are handled correctly

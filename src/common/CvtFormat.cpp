@@ -485,12 +485,12 @@ namespace
 
 	void invalidPatternException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Firebird::Arg::Gds(isc_invalid_date_format) << pattern);
+		cb->err(Arg::Gds(isc_invalid_date_format) << pattern);
 	}
 
 	void incompatibleDateFormatException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Firebird::Arg::Gds(isc_incompatible_date_format_with_current_date_type) << pattern);
+		cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << pattern);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------
@@ -502,7 +502,7 @@ namespace
 		switch (desc->dsc_dtype)
 		{
 			case dtype_sql_time:
-				Firebird::TimeStamp::decode_time(*(GDS_TIME*) desc->dsc_address,
+				TimeStamp::decode_time(*(GDS_TIME*) desc->dsc_address,
 					&outTimes.tm_hour, &outTimes.tm_min, &outTimes.tm_sec, &outFractions);
 				break;
 
@@ -513,11 +513,11 @@ namespace
 				break;
 
 			case dtype_sql_date:
-				Firebird::TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &outTimes);
+				TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &outTimes);
 				break;
 
 			case dtype_timestamp:
-				Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) desc->dsc_address, &outTimes, &outFractions);
+				TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) desc->dsc_address, &outTimes, &outFractions);
 				break;
 
 			case dtype_timestamp_tz:
@@ -527,7 +527,7 @@ namespace
 				break;
 
 			default:
-				cb->err(Firebird::Arg::Gds(isc_invalid_data_type_for_date_format));
+				cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
 		}
 	}
 
@@ -549,7 +549,7 @@ namespace
 			{
 				const FB_SIZE_T pos = formatUpper.find('\"', i + 1);
 				if (pos == string::npos)
-					cb->err(Firebird::Arg::Gds(isc_invalid_raw_string_in_date_format));
+					cb->err(Arg::Gds(isc_invalid_raw_string_in_date_format));
 				FB_SIZE_T tempPos = pos;
 				if (formatUpper[--tempPos] == '\\')
 				{
@@ -949,7 +949,7 @@ namespace
 	void throwExceptionOnEmptyValue(std::optional<T> value, std::string_view pattern, Callbacks* cb)
 	{
 		if (!value.has_value())
-			cb->err(Firebird::Arg::Gds(isc_missing_value_for_format_pattern) << pattern);
+			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << pattern);
 	}
 
 	std::vector<Token> parseStringToDateTimeFormat(const dsc* desc, const string& formatUpper, Format::Patterns& outFormatPatterns, Callbacks* cb)
@@ -980,7 +980,7 @@ namespace
 			if (pattern == Format::NONE)
 				invalidPatternException(patternStr, cb);
 			if (outFormatPatterns & pattern)
-				cb->err(Firebird::Arg::Gds(isc_can_not_use_same_pattern_twice) << patternStr);
+				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << patternStr);
 			if (!patternIsCompatibleWithDscType(desc, pattern))
 				incompatibleDateFormatException(patternStr, cb);
 
@@ -1009,44 +1009,44 @@ namespace
 				case Format::YEAR:
 					break;
 				default:
-					cb->err(Firebird::Arg::Gds(isc_only_one_pattern_can_be_used) << Firebird::Arg::Str("Y/YY/YYY/YYYY/YEAR"));
+					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("Y/YY/YYY/YYYY/YEAR"));
 			}
 		}
 
 		// CT shall contain at most one of each of the following: <datetime template rounded year>
 		if (formatFlags & Format::RR && formatFlags & Format::RRRR)
-			cb->err(Firebird::Arg::Gds(isc_only_one_pattern_can_be_used) << Firebird::Arg::Str("RR/RRRR"));
+			cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("RR/RRRR"));
 
 		// CT shall not contain both <datetime template year> and <datetime template rounded year>
 		if ((formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY | Format::YEAR)) && (formatFlags & (Format::RR | Format::RRRR)))
-			cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("Y/YY/YYY/YYYY/YEAR") << Firebird::Arg::Str("RR/RRRR"));
+			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("Y/YY/YYY/YYYY/YEAR") << Arg::Str("RR/RRRR"));
 
 		// If CT contains <datetime template day of year>, then CT shall not contain <datetime template month>
 		// or <datetime template day of month>.
 		if (formatFlags & Format::DDD && formatFlags & (Format::MM | Format::DD))
-			cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("DDD") << Firebird::Arg::Str("MM/DD"));
+			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("DDD") << Arg::Str("MM/DD"));
 
 		if (formatFlags & (Format::HH | Format::HH12 | Format::AM | Format::PM))
 		{
 			// If CT contains <datetime template 24-hour>, then CT shall not contain <datetime template 12-hour> or <datetime template am/pm>.
 			if (formatFlags & Format::HH24)
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("HH24") << Firebird::Arg::Str("HH/HH12/A.M./P.M."));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("HH24") << Arg::Str("HH/HH12/A.M./P.M."));
 
 			// If CT contains <datetime template 12-hour>, then CT shall contain <datetime template am/pm> and shall not contain <datetime template 24-hour>.
 			// If CT contains <datetime template am/pm>, then CT shall contain <datetime template 12-hour> and shall not contain <datetime template 24-hour>.
 			if (static_cast<bool>(formatFlags & (Format::HH12 | Format::HH)) != static_cast<bool>(formatFlags & (Format::AM | Format::PM)))
 			{
-				cb->err(Firebird::Arg::Gds(isc_pattern_cant_be_used_without_other_pattern_and_vice_versa)
-					<< Firebird::Arg::Str("HH/HH12") << Firebird::Arg::Str("A.M./P.M."));
+				cb->err(Arg::Gds(isc_pattern_cant_be_used_without_other_pattern_and_vice_versa)
+					<< Arg::Str("HH/HH12") << Arg::Str("A.M./P.M."));
 			}
 
 			// CT shall contain at most one of each of the following: <datetime template 12-hour>
 			if (formatFlags & Format::HH && formatFlags & Format::HH12)
-				cb->err(Firebird::Arg::Gds(isc_only_one_pattern_can_be_used) << Firebird::Arg::Str("HH/HH12"));
+				cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("HH/HH12"));
 
 			// CT shall contain at most one of each of the following: <datetime template am/pm>
 			if (formatFlags & Format::AM && formatFlags & Format::PM)
-				cb->err(Firebird::Arg::Gds(isc_only_one_pattern_can_be_used) << Firebird::Arg::Str("A.M./P.M."));
+				cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("A.M./P.M."));
 		}
 
 		// CT shall contain at most one of each of the following: <datetime template fraction>
@@ -1067,7 +1067,7 @@ namespace
 				case Format::FF9:
 					break;
 				default:
-					cb->err(Firebird::Arg::Gds(isc_only_one_pattern_can_be_used) << Firebird::Arg::Str("FF1/FF2/FF3/FF4/FF5/FF6/FF7/FF8/FF9"));
+					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("FF1/FF2/FF3/FF4/FF5/FF6/FF7/FF8/FF9"));
 			}
 		}
 
@@ -1077,20 +1077,20 @@ namespace
 		if (formatFlags & Format::SSSSS)
 		{
 			if (formatFlags & Format::HH12)
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("SSSSS") << Firebird::Arg::Str("HH/HH12"));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH/HH12"));
 			if (formatFlags & Format::HH24)
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("SSSSS") << Firebird::Arg::Str("HH24"));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH24"));
 			if (formatFlags & Format::MI)
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("SSSSS") << Firebird::Arg::Str("MI"));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("MI"));
 			if (formatFlags & Format::SS)
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("SSSSS") << Firebird::Arg::Str("HH/HH12"));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("HH/HH12"));
 			if (formatFlags & (Format::AM | Format::PM))
-				cb->err(Firebird::Arg::Gds(isc_incompatible_format_patterns) << Firebird::Arg::Str("SSSSS") << Firebird::Arg::Str("A.M./P.M."));
+				cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("SSSSS") << Arg::Str("A.M./P.M."));
 		}
 
 		// If CT contains <datetime template time zone minute>, then CT shall contain <datetime template time zone hour>.
 		if (formatFlags & Format::TZM && !(formatFlags & Format::TZH))
-			cb->err(Firebird::Arg::Gds(isc_pattern_cant_be_used_without_other_pattern) << Firebird::Arg::Str("TZM") << Firebird::Arg::Str("TZH"));
+			cb->err(Arg::Gds(isc_pattern_cant_be_used_without_other_pattern) << Arg::Str("TZM") << Arg::Str("TZH"));
 	}
 
 	constexpr int romanToInt(const char* str, FB_SIZE_T length, FB_SIZE_T& offset)
@@ -1123,7 +1123,7 @@ namespace
 		return result;
 	}
 
-	constexpr int applyPeriod(std::string_view period, int twelveHours, Firebird::Callbacks* cb)
+	constexpr int applyPeriod(std::string_view period, int twelveHours, Callbacks* cb)
 	{
 		if (period == FormatStr::AM)
 		{
@@ -1134,7 +1134,7 @@ namespace
 		else if (period == FormatStr::PM)
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
-		cb->err(Firebird::Arg::Gds(isc_incorrect_hours_period) << period);
+		cb->err(Arg::Gds(isc_incorrect_hours_period) << period);
 		return 0; // suppress compiler warning/error
 	}
 
@@ -1253,7 +1253,7 @@ namespace
 	}
 
 	std::optional<int> getDisplacementFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset,
-		std::string_view patternStr, Firebird::Callbacks* cb)
+		std::string_view patternStr, Callbacks* cb)
 	{
 		int sign = getIntSignFromString(str, offset);
 
@@ -1273,15 +1273,15 @@ namespace
 
 		if (minutes.value() > 59)
 		{
-			cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr << Firebird::Arg::Num(0) <<
-				Firebird::Arg::Num(59));
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr << Arg::Num(0) <<
+				Arg::Num(59));
 		}
 
 		if (!TimeZoneUtil::isValidOffset(sign, hours.value(), minutes.value()))
 		{
 			string timezoneOffset;
 			timezoneOffset.printf("%c%u:%u", sign == -1 ? '-' : '+', hours.value(), minutes.value());
-			cb->err(Firebird::Arg::Gds(isc_invalid_timezone_offset) << timezoneOffset);
+			cb->err(Arg::Gds(isc_invalid_timezone_offset) << timezoneOffset);
 		}
 
 		return sign * (hours.value() * 60 + minutes.value());
@@ -1296,7 +1296,7 @@ namespace
 	}
 
 	void processStringToDateTimeDeferredTokens(const std::vector<DeferredToken>& deferredTokens,
-		StringToDateTimeData& outCvtData, Firebird::Callbacks* cb)
+		StringToDateTimeData& outCvtData, Callbacks* cb)
 	{
 		struct tm& outTimes = outCvtData.times;
 
@@ -1321,7 +1321,7 @@ namespace
 	}
 
 	void processStringToDateTimeTokens(const std::vector<Token>& tokens, string inputStr, StringToDateTimeData& outCvtData,
-		Firebird::Callbacks* cb)
+		Callbacks* cb)
 	{
 		const char* str = inputStr.c_str();
 		const FB_SIZE_T strLength = inputStr.length();
@@ -1345,7 +1345,7 @@ namespace
 					break;
 			}
 			if (strOffset >= strLength)
-				cb->err(Firebird::Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr.data()));
+				cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr.data()));
 
 			std::string_view patternStr = it->patternStr;
 
@@ -1396,8 +1396,8 @@ namespace
 
 					if (year > 9999)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(0) << Firebird::Arg::Num(9999));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(9999));
 					}
 					outTimes.tm_year = year.value() - 1900;
 					break;
@@ -1409,8 +1409,8 @@ namespace
 
 					if (minutes > 59)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(0) << Firebird::Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_min = minutes.value();
@@ -1423,8 +1423,8 @@ namespace
 
 					if (month < 1 || month > 12)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(1) << Firebird::Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month.value() - 1;
@@ -1448,7 +1448,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Firebird::Arg::Gds(isc_month_name_mismatch) << monthShortName);
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthShortName);
 					break;
 				}
 				case Format::MONTH:
@@ -1469,7 +1469,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Firebird::Arg::Gds(isc_month_name_mismatch) << monthFullName);
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthFullName);
 					break;
 				}
 
@@ -1501,8 +1501,8 @@ namespace
 					const int month = romanToInt(str, strLength, strOffset);
 					if (month == 0 || month > 12)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(1) << Firebird::Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month - 1;
@@ -1516,8 +1516,8 @@ namespace
 
 					if (day == 0 || day > 31)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(1) << Firebird::Arg::Num(31));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(31));
 					}
 
 					outTimes.tm_mday = day.value();
@@ -1533,8 +1533,8 @@ namespace
 					constexpr int maxJDN = 5373484; // 31.12.9999
 					if (JDN < minJDN || JDN > maxJDN)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(minJDN) << Firebird::Arg::Num(maxJDN));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(minJDN) << Arg::Num(maxJDN));
 					}
 
 					int year = 0, month = 0, day = 0;
@@ -1553,8 +1553,8 @@ namespace
 
 					if (hours < 1 || hours > 12)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(1) << Firebird::Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1567,8 +1567,8 @@ namespace
 
 					if (hours > 23)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(0) << Firebird::Arg::Num(23));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(23));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1582,8 +1582,8 @@ namespace
 
 					if (seconds > 59)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(0) << Firebird::Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_sec = seconds.value();
@@ -1599,8 +1599,8 @@ namespace
 					const int secondsInDayValue = secondsInDay.value();
 					if (secondsInDayValue > maximumSecondsInDay)
 					{
-						cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Firebird::Arg::Num(0) << Firebird::Arg::Num(maximumSecondsInDay));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 					}
 
 					const int hours = secondsInDayValue / 24;
@@ -1648,7 +1648,7 @@ namespace
 						const int hoursValue = hours.value();
 						const int signValue = sign(outTimezoneInMinutes);
 						if (!TimeZoneUtil::isValidOffset(signValue, abs(hoursValue), 0))
-							cb->err(Firebird::Arg::Gds(isc_invalid_timezone_offset) << Firebird::Arg::Num(hoursValue));
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
 
 						outTimezoneInMinutes += signValue * hoursValue * 60;
 					}
@@ -1659,7 +1659,7 @@ namespace
 
 						const int hoursValue = hours.value();
 						if (!TimeZoneUtil::isValidOffset(sign(hours), abs(hoursValue), 0))
-							cb->err(Firebird::Arg::Gds(isc_invalid_timezone_offset) << Firebird::Arg::Num(hoursValue));
+							cb->err(Arg::Gds(isc_invalid_timezone_offset) << Arg::Num(hoursValue));
 
 						outTimezoneInMinutes = hoursValue * 60;
 					}
@@ -1675,8 +1675,8 @@ namespace
 
 						if (minutes > 59)
 						{
-							cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-								Firebird::Arg::Num(0) << Firebird::Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes.value();
@@ -1689,8 +1689,8 @@ namespace
 						const int minutesValue = minutes.value();
 						if (abs(minutesValue) > 59)
 						{
-							cb->err(Firebird::Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-								Firebird::Arg::Num(0) << Firebird::Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes = minutesValue;
@@ -1716,7 +1716,7 @@ namespace
 
 						std::string_view timezoneName = getTimezoneNameFromString(str, strLength, oldOffset);
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_invalid_timezone_region_or_displacement) << timezoneName);
+							Arg::Gds(isc_invalid_timezone_region_or_displacement) << timezoneName);
 					}
 
 					strOffset += parsedTimezoneNameLength;
@@ -1735,7 +1735,7 @@ namespace
 				break;
 		}
 		if (strOffset < strLength)
-			cb->err(Firebird::Arg::Gds(isc_trailing_part_of_string) << string(str + strOffset));
+			cb->err(Arg::Gds(isc_trailing_part_of_string) << string(str + strOffset));
 	}
 
 	void timeStampToUtc(ISC_TIMESTAMP_TZ& timestampTZ, USHORT sessionTimeZone, EXPECT_DATETIME expectedType,
@@ -1766,15 +1766,15 @@ namespace
 			switch (expectedType)
 			{
 				case expect_sql_date:
-					cb->err(Firebird::Arg::Gds(isc_date_range_exceeded));
+					cb->err(Arg::Gds(isc_date_range_exceeded));
 					break;
 				case expect_sql_time:
 				case expect_sql_time_tz:
-					cb->err(Firebird::Arg::Gds(isc_time_range_exceeded));
+					cb->err(Arg::Gds(isc_time_range_exceeded));
 					break;
 				case expect_timestamp:
 				case expect_timestamp_tz:
-					cb->err(Firebird::Arg::Gds(isc_datetime_range_exceeded));
+					cb->err(Arg::Gds(isc_datetime_range_exceeded));
 					break;
 				default: // this should never happen!
 					CVT_conversion_error(desc, cb->err);
@@ -1822,7 +1822,7 @@ namespace
 string CVT_format_datetime_to_string(const dsc* desc, const string& format, Callbacks* cb)
 {
 	if (format.isEmpty())
-		cb->err(Firebird::Arg::Gds(isc_sysf_invalid_null_empty) << Firebird::Arg::Str(STRINGIZE(format)));
+		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
 
 	struct tm times;
 	memset(&times, 0, sizeof(struct tm));
@@ -1838,14 +1838,14 @@ string CVT_format_datetime_to_string(const dsc* desc, const string& format, Call
 	return result;
 }
 
-ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::string& format,
-	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb)
+ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const string& format,
+	const EXPECT_DATETIME expectedType, Callbacks* cb)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
-		cb->err(Firebird::Arg::Gds(isc_invalid_data_type_for_date_format));
+		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
 
 	if (format.isEmpty())
-		cb->err(Firebird::Arg::Gds(isc_sysf_invalid_null_empty) << Firebird::Arg::Str(STRINGIZE(format)));
+		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
 
 	TTypeId dtype;
 	UCHAR* sourceString;

@@ -62,12 +62,12 @@ class MainStream : public ConfigFile::Stream
 {
 public:
 	MainStream(const char* fname, bool errorWhenMissing)
-		: file(Firebird::os_utils::fopen(fname, "rt")), fileName(fname), l(0)
+		: file(os_utils::fopen(fname, "rt")), fileName(fname), l(0)
 	{
 		if (errorWhenMissing && !file)
 		{
 			// config file does not exist
-			(Firebird::Arg::Gds(isc_miss_config) << fname << Firebird::Arg::OsError()).raise();
+			(Arg::Gds(isc_miss_config) << fname << Arg::OsError()).raise();
 		}
 	}
 
@@ -110,7 +110,7 @@ public:
 
 private:
 	AutoPtr<FILE> file;
-	Firebird::PathName fileName;
+	PathName fileName;
 	unsigned int l;
 };
 
@@ -212,7 +212,7 @@ private:
 } // anonymous namespace
 
 
-ConfigFile::ConfigFile(const Firebird::PathName& file, USHORT fl, ConfigCache* cache)
+ConfigFile::ConfigFile(const PathName& file, USHORT fl, ConfigCache* cache)
 	: AutoStorage(),
 	  parameters(getPool()),
 	  flags(fl),
@@ -245,7 +245,7 @@ ConfigFile::ConfigFile(UseText, const char* configText, USHORT fl)
 	parse(&s);
 }
 
-ConfigFile::ConfigFile(MemoryPool& p, const Firebird::PathName& file, USHORT fl, ConfigCache* cache)
+ConfigFile::ConfigFile(MemoryPool& p, const PathName& file, USHORT fl, ConfigCache* cache)
 	: AutoStorage(p),
 	  parameters(getPool()),
 	  flags(fl),
@@ -571,7 +571,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		unsigned code;
 		const char* name;
 	} dirs[] = {
-#define NMDIR(a) {Firebird::IConfigManager::a, "FB_"#a},
+#define NMDIR(a) {IConfigManager::a, "FB_"#a},
 		NMDIR(DIR_CONF)
 		NMDIR(DIR_SECDB)
 		NMDIR(DIR_PLUGINS)
@@ -581,7 +581,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		NMDIR(DIR_INTL)
 		NMDIR(DIR_MSG)
 #undef NMDIR
-		{Firebird::IConfigManager::DIR_COUNT, NULL}
+		{IConfigManager::DIR_COUNT, NULL}
 	};
 
 	for (const Dir* d = dirs; d->name; ++d)
@@ -642,7 +642,7 @@ const ConfigFile::Parameter* ConfigFile::findParameter(const KeyType& name, cons
 
 void ConfigFile::badLine(const char* fileName, const String& line)
 {
-	(Firebird::Arg::Gds(isc_conf_line) << (fileName ? fileName : "Passed text") << line).raise();
+	(Arg::Gds(isc_conf_line) << (fileName ? fileName : "Passed text") << line).raise();
 }
 
 /******************************************************************************
@@ -762,7 +762,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	AutoSetRestore<unsigned> depth(&includeLimit, includeLimit + 1);
 	if (includeLimit > INCLUDE_LIMIT)
 	{
-		(Firebird::Arg::Gds(isc_conf_include) << currentFileName << parPath << Firebird::Arg::Gds(isc_include_depth)).raise();
+		(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_depth)).raise();
 	}
 
 	// for relative paths first of all prepend with current path (i.e. path of current conf file)
@@ -798,7 +798,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 		// no matches found - check for presence of wild symbols in path
 		if (!hadWildCards)
 		{
-			(Firebird::Arg::Gds(isc_conf_include) << currentFileName << parPath << Firebird::Arg::Gds(isc_include_miss)).raise();
+			(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_miss)).raise();
 		}
 	}
 }
@@ -885,7 +885,7 @@ SINT64 ConfigFile::Parameter::asInteger() const
 	int sign = 1;
 	int state = 1; // 1 - sign, 2 - numbers, 3 - multiplier
 
-	Firebird::string trimmed = value;
+	string trimmed = value;
 	trimmed.trim(" \t");
 
 	if (trimmed.isEmpty())

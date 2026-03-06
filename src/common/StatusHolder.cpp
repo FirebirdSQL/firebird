@@ -63,8 +63,8 @@ void StatusHolder::raise()
 {
 	if (getError())
 	{
-		Firebird::Arg::StatusVector tmp(getErrors());
-		tmp << Firebird::Arg::StatusVector(getWarnings());
+		Arg::StatusVector tmp(getErrors());
+		tmp << Arg::StatusVector(getWarnings());
 		m_raised = true;
 		tmp.raise();
 	}

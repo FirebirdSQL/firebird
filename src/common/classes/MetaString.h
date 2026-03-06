@@ -125,7 +125,7 @@ public:
 					if (i + 1 < name.length() - 1 && name[i + 1] == '"')
 						++i;
 					else
-						(Firebird::Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+						(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
 				}
 
 				result += name[i];
@@ -137,7 +137,7 @@ public:
 		const auto validateUnquotedIdentifier = [&](const string& name)
 		{
 			if (name.length() > MAX_SQL_IDENTIFIER_LEN)
-				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
+				(Arg::Gds(isc_invalid_name) << str).raise();
 
 			bool first = true;
 
@@ -151,7 +151,7 @@ public:
 					  (!first && c == '$') ||
 					  (!first && c == '_')))
 				{
-					(Firebird::Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+					(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
 				}
 
 				first = false;
@@ -193,7 +193,7 @@ public:
 			}
 
 			if (name.isEmpty())
-				(Firebird::Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
+				(Arg::Gds(isc_invalid_unqualified_name_list) << str).raise();
 
 			list.add(name);
 
@@ -236,7 +236,7 @@ public:
 
 	string toQuotedString() const
 	{
-		return Firebird::toQuotedString(*this);
+		return toQuotedString(*this);
 	}
 
 	bool operator==(const char* s) const noexcept { return compare(s) == 0; }

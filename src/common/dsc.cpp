@@ -1785,8 +1785,8 @@ void dsc::getSqlInfo(SLONG* sqlLength, SLONG* sqlSubType, SLONG* sqlScale, SLONG
 
 		default:
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-				Firebird::Arg::Gds(isc_dsql_datatype_err));
+				Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_dsql_datatype_err));
 	}
 }
 

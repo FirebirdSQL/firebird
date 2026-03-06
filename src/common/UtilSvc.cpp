@@ -48,7 +48,7 @@ namespace {
 			// runtime returns the number of characters (instead of bytes) written and make
 			// ferror(stdout) return true. So lets not check for errors here.
 #ifndef WIN_NT
-			Firebird::system_call_failed::raise("StandaloneUtilityInterface::output()/fwrite()");
+			system_call_failed::raise("StandaloneUtilityInterface::output()/fwrite()");
 #endif
 		}
 	}
@@ -121,7 +121,7 @@ public:
 
 	void checkService() override
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_utl_trusted_switch));
+		status_exception::raise(Arg::Gds(isc_utl_trusted_switch));
 	}
 
 	unsigned int getAuthBlock(const unsigned char** bytes) override
@@ -140,12 +140,12 @@ public:
 	void putBytes(const UCHAR*, FB_SIZE_T) override { }
 	ULONG getBytes(UCHAR*, ULONG) override { return 0; }
 	void setServiceStatus(const ISC_STATUS*) override { }
-	void setServiceStatus(const USHORT, const USHORT, const Firebird::MsgFormat::SafeArg&) override { }
+	void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) override { }
     StatusAccessor getStatusAccessor() override { return StatusAccessor(); }
 	void fillDpb(ClumpletWriter&) override { }
 	bool finished() override { return false; }
 	bool utf8FileNames() override { return false; }
-	Firebird::ICryptKeyCallback* getCryptCallback() override { return NULL; }
+	ICryptKeyCallback* getCryptCallback() override { return NULL; }
 	int getParallelWorkers() override { return 0; };
 };
 
