@@ -66,8 +66,9 @@
 #include "../jrd/validation.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // The variable DBSERVER_BASE_LEVEL was originally IB_MAJOR_VER but with
 // the change to Firebird this number could no longer be used.
@@ -631,7 +632,7 @@ void INF_database_info(thread_db* tdbb,
 
 				SyncLockGuard sync(&dbb->dbb_sync, SYNC_SHARED, "INF_database_info");
 
-				for (const Jrd::Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
+				for (const Attachment* att = dbb->dbb_attachments; att; att = att->att_next)
 				{
 					const UserId* const user = att->att_user;
 
@@ -1300,3 +1301,6 @@ void INF_transaction_info(const jrd_tra* transaction,
 		INF_put_item(isc_info_length, length, buffer, start_info, end, true);
 	}
 }
+
+
+} // namespace Firebird::Jrd
