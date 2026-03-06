@@ -35,8 +35,11 @@
 #endif
 #include <fcntl.h>
 
-using namespace Firebird;
-Firebird::Mutex open_mutex;
+namespace Firebird::Ntrace
+{
+
+
+Mutex open_mutex;
 
 void FileObject::open(int flags, int pflags)
 {
@@ -68,7 +71,7 @@ void FileObject::open(int flags, int pflags)
 	if (flags & fo_excl)
 		oflags |= O_EXCL;
 
-	file = Firebird::os_utils::open(filename.c_str(), oflags, pflags);
+	file = os_utils::open(filename.c_str(), oflags, pflags);
 	open_mutex.leave();
 
 	if (file < 0)
@@ -88,7 +91,7 @@ FB_UINT64 FileObject::size()
 {
 	off_t nFileLen = 0;
 	struct STAT file_stat;
-	if (!Firebird::os_utils::fstat(file, &file_stat))
+	if (!os_utils::fstat(file, &file_stat))
 		nFileLen = file_stat.st_size;
 	else
 		fatal_exception::raiseFmt("IO error (%d) file stat: %s", errno, filename.c_str());
@@ -137,7 +140,7 @@ void FileObject::reopen()
 	//fchmod(file, PMASK);
 }
 
-bool FileObject::renameFile(const Firebird::PathName new_filename)
+bool FileObject::renameFile(const PathName new_filename)
 {
 	if (rename(filename.c_str(), new_filename.c_str()))
 	{
@@ -176,7 +179,7 @@ SINT64 FileObject::seek(SINT64 newOffset, SeekOrigin origin)
 			break;
 	}
 
-	off_t result = Firebird::os_utils::lseek(file, newOffset, moveMethod);
+	off_t result = os_utils::lseek(file, newOffset, moveMethod);
 
 	if (result == (off_t) -1)
 	{
@@ -185,3 +188,6 @@ SINT64 FileObject::seek(SINT64 newOffset, SeekOrigin origin)
 
 	return result;
 }
+
+
+} // namespace Firebird::Ntrace

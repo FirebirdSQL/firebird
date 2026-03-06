@@ -40,7 +40,9 @@
 #define S_IWRITE S_IWUSR
 #endif
 
-using namespace Firebird;
+namespace Firebird::Ntrace
+{
+
 
 // seems to only be Solaris 9 that doesn't have strerror_r,
 // maybe we can remove this in the future
@@ -106,7 +108,7 @@ PluginLogWriter::~PluginLogWriter()
 
 SINT64 PluginLogWriter::seekToEnd()
 {
-	const SINT64 nFileLen = Firebird::os_utils::lseek(m_fileHandle, 0, SEEK_END);
+	const SINT64 nFileLen = os_utils::lseek(m_fileHandle, 0, SEEK_END);
 
 	if (nFileLen < 0)
 		checkErrno("lseek");
@@ -131,7 +133,7 @@ void PluginLogWriter::reopen()
 		);
 	m_fileHandle = _open_osfhandle((intptr_t) hFile, 0);
 #else
-	m_fileHandle = Firebird::os_utils::open(m_fileName.c_str(), O_CREAT | O_APPEND | O_RDWR, S_IREAD | S_IWRITE);
+	m_fileHandle = os_utils::open(m_fileName.c_str(), O_CREAT | O_APPEND | O_RDWR, S_IREAD | S_IWRITE);
 #endif
 
 	if (m_fileHandle < 0)
@@ -327,3 +329,6 @@ void PluginLogWriter::onIdleTimer(TimerImpl*)
 	::close(m_fileHandle);
 	m_fileHandle = -1;
 }
+
+
+} // namespace Firebird::Ntrace

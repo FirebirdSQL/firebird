@@ -41,8 +41,12 @@
 // Bring in off_t
 #include <sys/types.h>
 
+namespace Firebird::Ntrace
+{
+
+
 class TracePluginImpl final :
-	public Firebird::RefCntIface<Firebird::ITracePluginImpl<TracePluginImpl, Firebird::CheckStatusWrapper> >
+	public Firebird::RefCntIface<Firebird::ITracePluginImpl<TracePluginImpl, Firebird::CheckStatusWrapper>>
 {
 public:
 	// Serialize exception to TLS buffer to return it to user
@@ -366,5 +370,7 @@ public:
 			Firebird::ITraceSweepInfo* sweep, ntrace_process_state_t sweep_state);
 };
 
+
+} // namespace Firebird::Ntrace
 
 #endif // TRACEPLUGINIMPL_H
