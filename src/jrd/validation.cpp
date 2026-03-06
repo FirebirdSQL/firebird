@@ -585,11 +585,9 @@ static USHORT VAL_debug_level = 0;
 namespace Firebird::Jrd
 {
 
-using namespace Ods;	// FIXME:
-
 
 #ifdef DEBUG_VAL_VERBOSE
-static void print_rhd(USHORT, const rhd*);
+static void print_rhd(USHORT, const Ods::rhd*);
 #endif
 
 
@@ -622,31 +620,31 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 
 static void explain_pp_bits(const UCHAR bits, Firebird::string& names)
 {
-	if (bits & ppg_dp_full)
+	if (bits & Ods::ppg_dp_full)
 		names = "full";
 
-	if (bits & ppg_dp_large)
+	if (bits & Ods::ppg_dp_large)
 	{
 		if (!names.empty())
 			names.append(", ");
 		names.append("large");
 	}
 
-	if (bits & ppg_dp_swept)
+	if (bits & Ods::ppg_dp_swept)
 	{
 		if (!names.empty())
 			names.append(", ");
 		names.append("swept");
 	}
 
-	if (bits & ppg_dp_secondary)
+	if (bits & Ods::ppg_dp_secondary)
 	{
 		if (!names.empty())
 			names.append(", ");
 		names.append("secondary");
 	}
 
-	if (bits & ppg_dp_empty)
+	if (bits & Ods::ppg_dp_empty)
 	{
 		if (!names.empty())
 			names.append(", ");
@@ -1203,7 +1201,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 
 	window->win_page = page_number;
 	window->win_flags = 0;
-	pag** page_pointer = reinterpret_cast<pag**>(aPage_pointer);
+	Ods::pag** page_pointer = reinterpret_cast<Ods::pag**>(aPage_pointer);
 
 	FB_SIZE_T pos;
 	if (vdr_used_bdbs.find(page_number, pos))
@@ -1228,7 +1226,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 	if ((*page_pointer)->pag_type != type && type != pag_undefined)
 	{
 		corrupt(VAL_PAG_WRONG_TYPE, 0, page_number,
-			pagtype(type).c_str(), pagtype((*page_pointer)->pag_type).c_str());
+			Ods::pagtype(type).c_str(), Ods::pagtype((*page_pointer)->pag_type).c_str());
 		return fetch_type;
 	}
 
@@ -1272,7 +1270,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 		const ULONG page_scn = (*page_pointer)->pag_scn;
 
 		WIN scns_window(DB_PAGE_SPACE, scn_page_num);
-		scns_page* scns = (scns_page*) *page_pointer;
+		Ods::scns_page* scns = (Ods::scns_page*) *page_pointer;
 
 		if (scn_page_num != page_number) {
 			fetch_page(mark, scn_page_num, pag_scns, &scns_window, &scns);
@@ -1343,7 +1341,7 @@ void Validation::garbage_collect()
 	for (ULONG sequence = 0, number = 0; number < vdr_max_page; sequence++)
 	{
 		const ULONG page_number = sequence ? sequence * pageSpaceMgr.pagesPerPIP - 1 : pageSpace->pipFirst;
-		page_inv_page* page = 0;
+		Ods::page_inv_page* page = 0;
 		fetch_page(false, page_number, pag_pages, &window, &page);
 		UCHAR* p = page->pip_bits;
 		const UCHAR* const end = p + pageSpaceMgr.bytesBitPIP;
@@ -1409,7 +1407,7 @@ void Validation::garbage_collect()
 }
 
 #ifdef DEBUG_VAL_VERBOSE
-static void print_rhd(USHORT length, const rhd* header)
+static void print_rhd(USHORT length, const Ods::rhd* header)
 {
 /**************************************
  *
@@ -1428,26 +1426,26 @@ static void print_rhd(USHORT length, const rhd* header)
 				   length, Ods::getTraNum(header), (int) header->rhd_format);
 		fprintf(stdout, "BP %d/%d flags 0x%x ",
 				   header->rhd_b_page, header->rhd_b_line, header->rhd_flags);
-		if (header->rhd_flags & rhd_incomplete)
+		if (header->rhd_flags & Ods::rhd_incomplete)
 		{
-			const rhdf* fragment = (rhdf*) header;
+			const Ods::rhdf* fragment = (Ods::rhdf*) header;
 			fprintf(stdout, "FP %d/%d ", fragment->rhdf_f_page, fragment->rhdf_f_line);
 		}
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_deleted) ? "DEL" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_chain) ? "CHN" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_fragment) ? "FRG" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_incomplete) ? "INC" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_blob) ? "BLB" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_delta) ? "DLT" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_large) ? "LRG" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_damaged) ? "DAM" : "   ");
-		fprintf(stdout, "%s ", (header->rhd_flags & rhd_not_packed) ? "NPK" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_deleted) ? "DEL" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_chain) ? "CHN" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_fragment) ? "FRG" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_incomplete) ? "INC" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_blob) ? "BLB" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_delta) ? "DLT" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_large) ? "LRG" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_damaged) ? "DAM" : "   ");
+		fprintf(stdout, "%s ", (header->rhd_flags & Ods::rhd_not_packed) ? "NPK" : "   ");
 		fprintf(stdout, "\n");
 	}
 }
 #endif
 
-Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHORT length,
+Validation::RTN Validation::walk_blob(jrd_rel* relation, const Ods::blh* header, USHORT length,
 	RecordNumber number)
 {
 /**************************************
@@ -1496,7 +1494,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 
 	for (; pages1 < end1; pages1++)
 	{
-		blob_page* page1 = 0;
+		Ods::blob_page* page1 = 0;
 		fetch_page(true, *pages1, pag_blob, &window1, &page1);
 		if (page1->blp_lead_page != header->blh_lead_page) {
 			corrupt(VAL_BLOB_INCONSISTENT, relation, number.getValue());
@@ -1515,7 +1513,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 			const ULONG* const end2 = pages2 + (page1->blp_length >> SHIFTLONG);
 			for (; pages2 < end2; pages2++, sequence++)
 			{
-				blob_page* page2 = 0;
+				Ods::blob_page* page2 = 0;
 				fetch_page(true, *pages2, pag_blob, &window2, &page2);
 				if (page2->blp_lead_page != header->blh_lead_page || page2->blp_sequence != sequence)
 				{
@@ -1536,7 +1534,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 	return rtn_ok;
 }
 
-Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
+Validation::RTN Validation::walk_chain(jrd_rel* relation, const Ods::rhd* header,
 	RecordNumber head_number)
 {
 /**************************************
@@ -1560,13 +1558,13 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 
 	while (page_number)
 	{
-		const bool delta_flag = (header->rhd_flags & rhd_delta) ? true : false;
+		const bool delta_flag = (header->rhd_flags & Ods::rhd_delta) ? true : false;
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
 			fprintf(stdout, "  BV %02d: ", ++counter);
 #endif
 		vdr_rel_chain_counter++;
-		data_page* page = 0;
+		Ods::data_page* page = 0;
 		fetch_page(true, page_number, pag_data, &window, &page);
 
 		if (page->dpg_relation != relation->getId())
@@ -1578,11 +1576,11 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 		vdr_rel_chain_counter++;
 		PBM_SET(vdr_tdbb->getDefaultPool(), &vdr_chain_pages, page_number);
 
-		const data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
-		header = (const rhd*) ((UCHAR*) page + line->dpg_offset);
+		const Ods::data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
+		header = (const Ods::rhd*) ((UCHAR*) page + line->dpg_offset);
 		if (page->dpg_count <= line_number || !line->dpg_length ||
-			(header->rhd_flags & (rhd_blob | rhd_fragment)) ||
-			!(header->rhd_flags & rhd_chain) ||
+			(header->rhd_flags & (Ods::rhd_blob | Ods::rhd_fragment)) ||
+			!(header->rhd_flags & Ods::rhd_chain) ||
 			walk_record(relation, header, line->dpg_length,
 						head_number, delta_flag) != rtn_ok)
 		{
@@ -1622,7 +1620,7 @@ void Validation::walk_database()
 
 	DPM_scan_pages(vdr_tdbb);
 	WIN window(DB_PAGE_SPACE, -1);
-	header_page* page = 0;
+	Ods::header_page* page = 0;
 	fetch_page(true, HEADER_PAGE, pag_header, &window, &page);
 	const TraNumber next = vdr_max_transaction = page->hdr_next_transaction;
 
@@ -1721,7 +1719,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	WIN window(DB_PAGE_SPACE, -1);
 	window.win_flags = WIN_garbage_collector;
 
-	data_page* page = 0;
+	Ods::data_page* page = 0;
 	fetch_page(true, page_number, pag_data, &window, &page);
 
 #ifdef DEBUG_VAL_VERBOSE
@@ -1745,25 +1743,25 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 
 	// Evaluate what flags should be set on PP
 
-	if (dp_flags & dpg_full)
-		pp_bits |= ppg_dp_full;
+	if (dp_flags & Ods::dpg_full)
+		pp_bits |= Ods::ppg_dp_full;
 
-	if (dp_flags & dpg_large)
-		pp_bits |= ppg_dp_large;
+	if (dp_flags & Ods::dpg_large)
+		pp_bits |= Ods::ppg_dp_large;
 
-	if (dp_flags & dpg_swept)
-		pp_bits |= ppg_dp_swept;
+	if (dp_flags & Ods::dpg_swept)
+		pp_bits |= Ods::ppg_dp_swept;
 
-	if (dp_flags & dpg_secondary)
-		pp_bits |= ppg_dp_secondary;
+	if (dp_flags & Ods::dpg_secondary)
+		pp_bits |= Ods::ppg_dp_secondary;
 
 	if (page->dpg_count == 0)
-		pp_bits |= ppg_dp_empty;
+		pp_bits |= Ods::ppg_dp_empty;
 
 	// Walk records
 
 	const UCHAR* const end_page = (UCHAR*) page + dbb->dbb_page_size;
-	const data_page::dpg_repeat* const end = page->dpg_rpt + page->dpg_count;
+	const Ods::data_page::dpg_repeat* const end = page->dpg_rpt + page->dpg_count;
 	RecordNumber number((SINT64)sequence * dbb->dbb_max_records);
 	int primary_versions = 0;
 	bool marked = false;
@@ -1774,7 +1772,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	// releasing data page, to avoid deadlocks.
 	HalfStaticArray<FB_UINT64, 64> recnums;
 
-	for (const data_page::dpg_repeat* line = page->dpg_rpt; line < end; line++, number.increment())
+	for (const Ods::data_page::dpg_repeat* line = page->dpg_rpt; line < end; line++, number.increment())
 	{
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
@@ -1785,14 +1783,14 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 #endif
 		if (line->dpg_length)
 		{
-			rhd* header = (rhd*) ((UCHAR*) page + line->dpg_offset);
+			Ods::rhd* header = (Ods::rhd*) ((UCHAR*) page + line->dpg_offset);
 			if ((UCHAR*) header < (UCHAR*) end || (UCHAR*) header + line->dpg_length > end_page)
 			{
 				release_page(&window);
 				return corrupt(VAL_DATA_PAGE_LINE_ERR, relation, page_number,
 								sequence, (ULONG) (line - page->dpg_rpt));
 			}
-			if (header->rhd_flags & rhd_chain)
+			if (header->rhd_flags & Ods::rhd_chain)
 			{
 				vdr_rel_backversion_counter++;
 				PBM_SET(pool, &vdr_backversion_pages, page_number);
@@ -1801,7 +1799,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 			// Record the existence of a primary version of a record
 
 			if ((vdr_flags & VDR_records) &&
-				!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob)))
+				!(header->rhd_flags & (Ods::rhd_chain | Ods::rhd_fragment | Ods::rhd_blob)))
 			{
 				// Only set committed (or limbo) records in the bitmap. If there
 				// is a backversion then at least one of the record versions is
@@ -1810,7 +1808,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				// Note, if the primary record version is deleted and committed, the
 				// existence of an index entry is not required for such version chain
 				// because it is all garbage.
-				const bool deleted_flag = header->rhd_flags & rhd_deleted;
+				const bool deleted_flag = header->rhd_flags & Ods::rhd_deleted;
 
 				if (header->rhd_b_page && !deleted_flag)
 					RBM_SET(pool, &vdr_rel_records, number.getValue());
@@ -1832,19 +1830,19 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 #ifdef DEBUG_VAL_VERBOSE
 			if (VAL_debug_level)
 			{
-				if (header->rhd_flags & rhd_chain)
+				if (header->rhd_flags & Ods::rhd_chain)
 					fprintf(stdout, "(backvers)");
-				if (header->rhd_flags & rhd_fragment)
+				if (header->rhd_flags & Ods::rhd_fragment)
 					fprintf(stdout, "(fragment)");
-				if (header->rhd_flags & (rhd_fragment | rhd_chain))
+				if (header->rhd_flags & (Ods::rhd_fragment | Ods::rhd_chain))
 					print_rhd(line->dpg_length, header);
 			}
 #endif
-			if (!(header->rhd_flags & rhd_chain) &&
-				((header->rhd_flags & rhd_large) || (vdr_flags & VDR_records)))
+			if (!(header->rhd_flags & Ods::rhd_chain) &&
+				((header->rhd_flags & Ods::rhd_large) || (vdr_flags & VDR_records)))
 			{
-				const RTN result = (header->rhd_flags & rhd_blob) ?
-					walk_blob(relation, (const blh*) header, line->dpg_length, number) :
+				const RTN result = (header->rhd_flags & Ods::rhd_blob) ?
+					walk_blob(relation, (const Ods::blh*) header, line->dpg_length, number) :
 					walk_record(relation, header, line->dpg_length, number, false);
 
 				if ((result == rtn_corrupt) && (vdr_flags & VDR_repair))
@@ -1855,12 +1853,12 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 						marked = true;
 					}
 
-					header->rhd_flags |= rhd_damaged;
+					header->rhd_flags |= Ods::rhd_damaged;
 					vdr_fixed++;
 				}
 			}
 
-			if (!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob | rhd_damaged)) &&
+			if (!(header->rhd_flags & (Ods::rhd_chain | Ods::rhd_fragment | Ods::rhd_blob | Ods::rhd_damaged)) &&
 				(vdr_flags & VDR_records) && vdr_cond_idx.hasData())
 			{
 				recnums.add(number.getValue());
@@ -1872,7 +1870,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 #endif
 	}
 
-	if (primary_versions && (dp_flags & dpg_secondary))
+	if (primary_versions && (dp_flags & Ods::dpg_secondary))
 	{
 		corrupt(VAL_DATA_PAGE_SEC_PRI, relation, page_number, sequence);
 
@@ -1884,8 +1882,8 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 				marked = true;
 			}
 
-			page->dpg_header.pag_flags &= ~dpg_secondary;
-			pp_bits &= ~ppg_dp_secondary;
+			page->dpg_header.pag_flags &= ~Ods::dpg_secondary;
+			pp_bits &= ~Ods::ppg_dp_secondary;
 			vdr_fixed++;
 		}
 	}
@@ -1965,8 +1963,8 @@ void Validation::walk_generators()
 				if (VAL_debug_level)
 					fprintf(stdout, "walk_generator: page %d\n", pageNumber);
 #endif
-				// It doesn't make a difference generator_page or pointer_page because it's not used.
-				generator_page* page = NULL;
+				// It doesn't make a difference Ods::generator_page or Ods::pointer_page because it's not used.
+				Ods::generator_page* page = NULL;
 				fetch_page(true, pageNumber, pag_ids, &window, &page);
 				release_page(&window);
 			}
@@ -1974,7 +1972,7 @@ void Validation::walk_generators()
 	}
 }
 
-Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, USHORT id)
+Validation::RTN Validation::walk_index(jrd_rel* relation, Ods::index_root_page* root_page, USHORT id)
 {
 /**************************************
  *
@@ -1998,9 +1996,9 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 	if (!page_number)
 		return rtn_ok;
 
-	const bool unique = (root_page->irt_rpt[id].irt_flags & (irt_unique | idx_primary));
-	const bool descending = (root_page->irt_rpt[id].irt_flags & irt_descending);
-	const bool condition = (root_page->irt_rpt[id].irt_flags & irt_condition);
+	const bool unique = (root_page->irt_rpt[id].irt_flags & (Ods::irt_unique | idx_primary));
+	const bool descending = (root_page->irt_rpt[id].irt_flags & Ods::irt_descending);
+	const bool condition = (root_page->irt_rpt[id].irt_flags & Ods::irt_condition);
 
 	temporary_key nullKey, *null_key = nullptr;
 	if (unique)
@@ -2009,7 +2007,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 		{
 			// No need to evaluate index expression and/or condition
 			AutoSetRestoreFlag flags(&root_page->irt_rpt[id].irt_flags,
-				irt_expression | irt_condition, false);
+				Ods::irt_expression | Ods::irt_condition, false);
 
 			BTR_description(vdr_tdbb, getPermanent(relation), root_page, &idx, id);
 		}
@@ -2039,7 +2037,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 		WIN window(DB_PAGE_SPACE, -1);
 		window.win_flags = WIN_garbage_collector;
 
-		btree_page* page = 0;
+		Ods::btree_page* page = 0;
 		fetch_page(true, next, pag_index, &window, &page);
 
 		// remember each page for circular reference detection
@@ -2281,7 +2279,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 				WIN down_window(DB_PAGE_SPACE, -1);
 				down_window.win_flags = WIN_garbage_collector;
 
-				btree_page* down_page = 0;
+				Ods::btree_page* down_page = 0;
 				fetch_page(false, down_number, pag_index, &down_window, &down_page);
 				const bool downLeafPage = (down_page->btr_level == 0);
 
@@ -2442,7 +2440,7 @@ void Validation::walk_pip()
 	const PageSpace* pageSpace = pageSpaceMgr.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);
 
-	page_inv_page* page = 0;
+	Ods::page_inv_page* page = 0;
 
 	for (USHORT sequence = 0; true; sequence++)
 	{
@@ -2572,7 +2570,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	if (!vector || sequence >= vector->count())
 		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
 
-	pointer_page* page = 0;
+	Ods::pointer_page* page = 0;
 	WIN window(DB_PAGE_SPACE, -1);
 	window.win_flags = WIN_garbage_collector;
 
@@ -2666,7 +2664,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 	// If this is the last pointer page in the relation, we're done
 
-	if (page->ppg_header.pag_flags & ppg_eof)
+	if (page->ppg_header.pag_flags & Ods::ppg_eof)
 	{
 		release_page(&window);
 		return rtn_eof;
@@ -2713,7 +2711,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 }
 
 
-Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, USHORT length,
+Validation::RTN Validation::walk_record(jrd_rel* relation, const Ods::rhd* header, USHORT length,
 	RecordNumber number, bool delta_flag)
 {
 /**************************************
@@ -2738,7 +2736,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	}
 #endif
 
-	if (header->rhd_flags & rhd_damaged)
+	if (header->rhd_flags & Ods::rhd_damaged)
 	{
 		corrupt(VAL_REC_DAMAGED, relation, number.getValue());
 		return rtn_ok;
@@ -2751,7 +2749,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 
 	// If there's a back pointer, verify that it's good
 
-	if (header->rhd_b_page && !(header->rhd_flags & rhd_chain))
+	if (header->rhd_b_page && !(header->rhd_flags & Ods::rhd_chain))
 	{
 		const RTN result = walk_chain(relation, header, number);
 		if (result != rtn_ok)
@@ -2761,26 +2759,26 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	// If the record is a fragment, not large, or we're not interested in
 	// chasing records, skip the record
 
-	if ((header->rhd_flags & (rhd_fragment | rhd_deleted)) ||
-		!((header->rhd_flags & rhd_large) || (vdr_flags & VDR_records)))
+	if ((header->rhd_flags & (Ods::rhd_fragment | Ods::rhd_deleted)) ||
+		!((header->rhd_flags & Ods::rhd_large) || (vdr_flags & VDR_records)))
 	{
 		return rtn_ok;
 	}
 
 	// Pick up what length there is on the fragment
 
-	const rhdf* fragment = (rhdf*) header;
+	const Ods::rhdf* fragment = (Ods::rhdf*) header;
 
 	const UCHAR* p;
 
-	if (header->rhd_flags & rhd_incomplete)
+	if (header->rhd_flags & Ods::rhd_incomplete)
 	{
 		p = fragment->rhdf_data;
 		length -= RHDF_SIZE;
 	}
-	else if (header->rhd_flags & rhd_long_tranum)
+	else if (header->rhd_flags & Ods::rhd_long_tranum)
 	{
-		p = ((rhde*) header)->rhde_data;
+		p = ((Ods::rhde*) header)->rhde_data;
 		length -= RHDE_SIZE;
 	}
 	else
@@ -2813,7 +2811,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		return Compressor::getUnpackedLength(length, data);
 	};
 
-	bool notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+	bool notPacked = (fragment->rhdf_flags & Ods::rhd_not_packed) != 0;
 	remainingLength -= calculateLength(length, p, notPacked);
 
 	// Next, chase down fragments, if any
@@ -2822,15 +2820,15 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	USHORT line_number = fragment->rhdf_f_line;
 	USHORT flags = fragment->rhdf_flags;
 
-	data_page* page = 0;
-	while (flags & rhd_incomplete)
+	Ods::data_page* page = 0;
+	while (flags & Ods::rhd_incomplete)
 	{
 		WIN window(DB_PAGE_SPACE, -1);
 		window.win_flags = WIN_garbage_collector;
 
 		fetch_page(true, page_number, pag_data, &window, &page);
 
-		const data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
+		const Ods::data_page::dpg_repeat* line = &page->dpg_rpt[line_number];
 
 		if (page->dpg_relation != relation->getId() ||
 			line_number >= page->dpg_count || !(length = line->dpg_length))
@@ -2840,33 +2838,33 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 			return rtn_corrupt;
 		}
 
-		fragment = (rhdf*) ((UCHAR*) page + line->dpg_offset);
+		fragment = (Ods::rhdf*) ((UCHAR*) page + line->dpg_offset);
 
 #ifdef DEBUG_VAL_VERBOSE
 		if (VAL_debug_level)
 		{
 			fprintf(stdout, "fragment: pg %d/%d ", page_number, line_number);
-			print_rhd(line->dpg_length, (rhd*) fragment);
+			print_rhd(line->dpg_length, (Ods::rhd*) fragment);
 		}
 #endif
 
-		if (fragment->rhdf_flags & rhd_incomplete)
+		if (fragment->rhdf_flags & Ods::rhd_incomplete)
 		{
 			p = fragment->rhdf_data;
 			length -= RHDF_SIZE;
 		}
-		else if (fragment->rhdf_flags & rhd_long_tranum)
+		else if (fragment->rhdf_flags & Ods::rhd_long_tranum)
 		{
-			p = ((rhde*) fragment)->rhde_data;
+			p = ((Ods::rhde*) fragment)->rhde_data;
 			length -= RHDE_SIZE;
 		}
 		else
 		{
-			p = ((rhd*) fragment)->rhd_data;
+			p = ((Ods::rhd*) fragment)->rhd_data;
 			length -= RHD_SIZE;
 		}
 
-		notPacked = (fragment->rhdf_flags & rhd_not_packed) != 0;
+		notPacked = (fragment->rhdf_flags & Ods::rhd_not_packed) != 0;
 		remainingLength -= calculateLength(length, p, notPacked);
 
 		page_number = fragment->rhdf_f_page;
@@ -2887,32 +2885,32 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 
 void restoreFlags(UCHAR* byte, UCHAR flags, bool empty)
 {
-	UCHAR bit = PPG_DP_BIT_MASK(slot, ppg_dp_full);
+	UCHAR bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_full);
 
-	if (flags & dpg_full)
+	if (flags & Ods::dpg_full)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_large);
-	if (flags & dpg_large)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_large);
+	if (flags & Ods::dpg_large)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_swept);
-	if (flags & dpg_swept)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_swept);
+	if (flags & Ods::dpg_swept)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_secondary);
-	if (flags & dpg_secondary)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_secondary);
+	if (flags & Ods::dpg_secondary)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_empty);
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_empty);
 	if (empty)
 		*byte |= bit;
 	else
@@ -2930,7 +2928,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	**************************************/
 
 	WIN window(DB_PAGE_SPACE, page_number);
-	data_page* dpage;
+	Ods::data_page* dpage;
 	fetch_page(false, page_number, pag_data, &window, &dpage);
 	const ULONG sequence = dpage->dpg_sequence;
 	const bool dpEmpty = (dpage->dpg_count == 0);
@@ -2942,7 +2940,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
 	const vcl* vector = getPermanent(relation)->getBasePages()->rel_pages;
-	pointer_page* ppage = 0;
+	Ods::pointer_page* ppage = 0;
 	if (pp_sequence < vector->count())
 	{
 		fetch_page(false, (*vector)[pp_sequence], pag_pointer, &window, &ppage);
@@ -3010,7 +3008,7 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 
 	WIN pip_window(DB_PAGE_SPACE, (sequence == 0) ? pageSpace->pipFirst : sequence * pageMgr.pagesPerPIP - 1);
 
-	page_inv_page* pages;
+	Ods::page_inv_page* pages;
 	fetch_page(false, pip_window.win_page.getPageNum(), pag_pages, &pip_window, &pages);
 	if (pages->pip_bits[relative_bit >> 3] & (1 << (relative_bit & 7)))
 	{
@@ -3079,7 +3077,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		}
 
 		WIN window(DB_PAGE_SPACE, -1);
-		header_page* page = NULL;
+		Ods::header_page* page = NULL;
 		fetch_page(false, HEADER_PAGE, pag_header, &window, &page);
 		vdr_max_transaction = page->hdr_next_transaction;
 		release_page(&window);
@@ -3223,7 +3221,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
-	index_root_page* page = nullptr;
+	Ods::index_root_page* page = nullptr;
 	WIN window(DB_PAGE_SPACE, -1);
 	fetch_page(!getInfo, relPages->rel_index_root, pag_root, &window, &page);
 
@@ -3266,10 +3264,10 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 
 		if (getInfo)
 		{
-			if (page->irt_rpt[i].irt_flags & irt_condition)
+			if (page->irt_rpt[i].irt_flags & Ods::irt_condition)
 			{
 				// No need to evaluate index expression
-				AutoSetRestoreFlag flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
+				AutoSetRestoreFlag flag(&page->irt_rpt[i].irt_flags, Ods::irt_expression, false);
 
 				IdxInfo info;
 				if (BTR_description(vdr_tdbb, getPermanent(relation), page, &info.m_desc, i))
@@ -3304,7 +3302,7 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 	if (!dbb->getKnownPagesCount(pag_transactions))
 		return corrupt(VAL_TIP_LOST, 0);
 
-	tx_inv_page* page = 0;
+	Ods::tx_inv_page* page = 0;
 	const ULONG pages = transaction / dbb->dbb_page_manager.transPerTIP;
 
 	for (ULONG sequence = 0; sequence <= pages; sequence++)
@@ -3366,7 +3364,7 @@ Validation::RTN Validation::walk_scns()
 	{
 		const ULONG scnPage = pageSpace->getSCNPageNum(sequence);
 		WIN scnWindow(pageSpace->pageSpaceID, scnPage);
-		scns_page* scns = NULL;
+		Ods::scns_page* scns = NULL;
 		fetch_page(true, scnPage, pag_scns, &scnWindow, &scns);
 
 		if (scns->scn_sequence != sequence)
