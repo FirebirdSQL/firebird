@@ -56,9 +56,9 @@
 #define O_BINARY	0
 #endif
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 #if !defined(WIN_NT) && !defined(LINUX)
 #pragma FB_COMPILER_MESSAGE("Add support for your platform!")
@@ -1105,3 +1105,6 @@ ChangeLog::Segment* ChangeLog::getSegment(ULONG length)
 
 	return NULL;
 }
+
+
+}	// namespace Firebird::Jrd::Replication

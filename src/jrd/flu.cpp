@@ -68,7 +68,9 @@
 #define DYNAMIC_SHARED_LIBRARIES
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 	Firebird::InitInstance<Jrd::Module::LoadedModules> loadedModules;
@@ -133,7 +135,7 @@ namespace {
 	Firebird::InitInstance<UdfDirectoryList> iUdfDirectoryList;
 }
 
-namespace Firebird::Jrd {
+
 	bool Module::operator>(const Module &im) const
 	{
 		// we need it to sort on some key
@@ -278,5 +280,6 @@ namespace Firebird::Jrd {
 
 		fb_assert(false);
 	}
+
 
 } // namespace Firebird::Jrd

@@ -46,17 +46,17 @@
 // Thread data block
 #include "../common/ThreadData.h"
 
-using namespace Firebird;
 
-namespace
+namespace Firebird::Jrd
 {
-	void unableToRunSweepException(ISC_STATUS reason)
+	namespace
 	{
-		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+		void unableToRunSweepException(ISC_STATUS reason)
+		{
+			ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+		}
 	}
-}
 
-namespace Firebird::Jrd {
 	bool Database::onRawDevice() const
 	{
 		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -893,6 +893,4 @@ namespace Firebird::Jrd {
 		}
 		return result;
 	}
-
-
-} // namespace
+} // namespace Firebird::Jrd

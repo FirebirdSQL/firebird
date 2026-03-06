@@ -52,7 +52,6 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/sha.h"
 
-using namespace Firebird;
 
 namespace
 {
@@ -73,7 +72,8 @@ namespace
 }
 
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 	class Header
 	{
 	protected:
@@ -1520,5 +1520,4 @@ namespace Firebird::Jrd {
 			return NULL;
 		return cryptoManager->dbb.dbb_filename.c_str();
 	}
-
 } // namespace Firebird::Jrd

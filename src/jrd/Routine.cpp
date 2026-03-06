@@ -30,10 +30,9 @@
 #include "../jrd/par_proto.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-
-namespace Firebird::Jrd {
 
 RoutinePermanent::RoutinePermanent(thread_db* tdbb, MemoryPool& p, MetaId metaId, NoData)
 	: PermanentStorage(p),

@@ -36,9 +36,9 @@
 
 #include <sys/stat.h>
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
 {

@@ -31,14 +31,9 @@
 #include "Protocol.h"
 #include "Utils.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Replication;
-
 namespace Firebird::Jrd::Replication
 {
 	constexpr size_t MAX_BG_WRITER_LAG = 10 * 1024 * 1024;	// 10 MB
-}
 
 
 // Table matcher
@@ -418,3 +413,6 @@ void Manager::bgWriter()
 		iscLogException("Error while exiting replicator thread", ex);
 	}
 }
+
+
+}	// namespace Firebird::Jrd::Replication

@@ -41,9 +41,9 @@
 #include <process.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 GlobalPtr<StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;
 
@@ -606,4 +606,5 @@ void TraceManager::event_sweep(ITraceDatabaseConnection* connection, ITraceSweep
 		(connection, sweep, sweep_state));
 }
 
-}
+
+}	// namespace Firebird::Jrd

@@ -30,9 +30,8 @@
 #include "../dsql/dsql_proto.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 ResultSet::ResultSet(thread_db* tdbb, PreparedStatement* aStmt, jrd_tra* aTransaction)
@@ -143,4 +142,4 @@ void ResultSet::moveDesc(thread_db* tdbb, unsigned param, dsc& desc)
 }
 
 
-}	// namespace
+}	// namespace Firebird::Jrd

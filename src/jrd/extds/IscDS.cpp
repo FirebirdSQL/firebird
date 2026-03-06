@@ -40,11 +40,9 @@
 #include "../mov_proto.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Jrd::EDS
+{
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
-
-namespace Firebird::Jrd::EDS {
 
 const char* FIREBIRD_PROVIDER_NAME = "Firebird";
 
@@ -1849,5 +1847,4 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 }
 
 
-
-} // namespace EDS
+} // namespace Firebird::Jrd::EDS

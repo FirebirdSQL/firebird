@@ -40,8 +40,8 @@
 #include "../jrd/recsrc/Cursor.h"
 #include "../common/classes/auto.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* statement,
@@ -1167,3 +1167,6 @@ void srvDis(void* mem)
 
 }
 #endif // DEBUG_SHARED_VECTOR
+
+
+} // namespace Firebird::Jrd

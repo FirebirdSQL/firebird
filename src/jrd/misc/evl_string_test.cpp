@@ -37,7 +37,6 @@ void ERR_post(...) {
 
 #include "evl_string.h"
 
-using namespace Firebird;
 
 class StringLikeEvaluator : public LikeEvaluator<char>
 {

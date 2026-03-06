@@ -76,10 +76,9 @@
 #include "../jrd/InitCDSLib.h"
 #endif
 
+namespace Firebird::Jrd
+{
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
 
 // In the superserver mode, no page locks are acquired through the lock manager.
 // Instead, a latching mechanism is used.  So the calls to lock subsystem for
@@ -5523,5 +5522,6 @@ void suspend()
 }
 
 #endif // HASH_USE_CDS_LIST
+
 
 } // namespace Firebird::Jrd

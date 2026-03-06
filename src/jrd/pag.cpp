@@ -96,11 +96,11 @@
 #include "../common/classes/DbImplementation.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
+using namespace Ods;	// FIXME:
 
-using namespace Ods;
 
 namespace
 {

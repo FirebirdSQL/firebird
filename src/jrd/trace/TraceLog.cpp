@@ -48,9 +48,9 @@
 #include "../../common/utils_proto.h"
 #include "../../common/StatusHolder.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 constexpr unsigned int INIT_LOG_SIZE = 1024*1024;	// 1MB
 constexpr unsigned int FREE_SPACE_THRESHOLD = INIT_LOG_SIZE / 4;
@@ -343,5 +343,6 @@ void TraceLog::unlock()
 {
 	m_sharedMemory->mutexUnlock();
 }
+
 
 } // namespace Firebird::Jrd

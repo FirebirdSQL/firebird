@@ -60,10 +60,9 @@
 #define getpid _getpid
 #endif
 
+namespace Firebird::Jrd
+{
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
 
 static constexpr FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
 
@@ -1002,5 +1001,6 @@ void ConfigStorage::TouchFile::stop()
 	TimerInterfacePtr()->stop(&s, this);
 	// ignore error in stop timer
 }
+
 
 } // namespace Firebird::Jrd

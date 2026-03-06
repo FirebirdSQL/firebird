@@ -45,7 +45,8 @@
 #include "../common/os/path_utils.h"
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -67,8 +68,6 @@ namespace
 		}
 	};
 }
-
-namespace Firebird::Jrd {
 
 
 struct ExternalInfo

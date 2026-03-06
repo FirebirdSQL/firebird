@@ -39,9 +39,10 @@
 #include <cds/init.h>		//cds::Initialize, cds::Terminate
 #include <cds/gc/dhp.h>		//cds::gc::DHP (Hazard Pointer)
 
-using namespace Firebird;
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 Array<MemoryPool*>* InitCDS::m_pools = nullptr;
 MemoryPool* InitCDS::m_pool = nullptr;
@@ -140,6 +141,7 @@ MemoryPool* InitCDS::createPool()
 	m_pools->push(pool);
 	return pool;
 }
+
 
 } // namespace Firebird::Jrd
 

@@ -16,8 +16,8 @@
 #include "../jrd/Function.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
@@ -75,3 +75,6 @@ void Format::hash(Firebird::sha512& digest) const
 
 	digest.process(fmt_desc.getCount() * sizeof(dsc), fmt_desc.begin());
 }
+
+
+} // namespace Firebird::Jrd

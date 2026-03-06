@@ -32,8 +32,8 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/Attachment.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -171,9 +171,6 @@ namespace
 		}
 	}
 }
-
-
-namespace Firebird::Jrd {
 
 
 // Move data from result set message to user variables.
@@ -578,4 +575,4 @@ void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& va
 }
 
 
-}	// namespace
+}	// namespace Firebird::Jrd

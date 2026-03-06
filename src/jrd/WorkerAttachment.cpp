@@ -40,10 +40,8 @@
 #include "../jrd/status.h"
 #include "../jrd/Monitoring.h"
 
-
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 constexpr unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute
@@ -524,5 +522,6 @@ void WorkerAttachment::doDetach(FbStatusVector* status, StableAttachmentPart* sA
 	}
 	sAtt->release(); // !!
 }
+
 
 } // namespace Firebird::Jrd

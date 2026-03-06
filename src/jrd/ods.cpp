@@ -24,9 +24,9 @@
 #include "../jrd/ods.h"
 #include "../jrd/ods_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd::Ods
+{
 
-namespace Firebird::Jrd::Ods {
 
 bool isSupported(const header_page* hdr) noexcept
 {
@@ -195,8 +195,6 @@ void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size) noexcept
 	}
 }
 
-} // namespace
-
 
 #ifdef DEV_BUILD
 namespace
@@ -221,3 +219,6 @@ namespace
 	static CheckODS doCheck;
 }
 #endif // DEV_BUILD
+
+
+} // namespace Firebird::Jrd::Ods

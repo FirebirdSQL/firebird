@@ -40,8 +40,8 @@
 // Pick up relation ids
 #include "../jrd/ini.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 TrigArray::TrigArray(MemoryPool& p)
@@ -1157,3 +1157,5 @@ GCLock::State GCLock::isGCEnabled() const
 }
 #endif //DEV_BUILD
 
+
+} // namespace Firebird::Jrd

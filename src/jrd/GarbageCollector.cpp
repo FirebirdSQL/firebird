@@ -24,10 +24,9 @@
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/tra.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 void GarbageCollector::RelationData::clear()

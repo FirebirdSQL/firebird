@@ -25,8 +25,8 @@
 #include "../jrd/ids.h"
 #include "../common/Token.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 RecordBuffer* KeywordsTable::getRecords(thread_db* tdbb, RelationPermanent* relation)
@@ -101,3 +101,6 @@ RecordBuffer* KeywordsTableScan::getRecords(thread_db* tdbb, RelationPermanent* 
 
 	return impure->table->getRecords(tdbb, relation);
 }
+
+
+} // namespace Firebird::Jrd

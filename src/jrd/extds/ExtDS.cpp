@@ -70,11 +70,9 @@
 
 #endif
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd::EDS
+{
 
-
-namespace Firebird::Jrd::EDS {
 
 // Manager
 
@@ -2721,4 +2719,5 @@ bool CryptCallbackRedirector::operator==(const CryptHash& ch) const
 	return m_hash == ch;
 }
 
-} // namespace EDS
+
+} // namespace Firebird::Jrd::EDS
