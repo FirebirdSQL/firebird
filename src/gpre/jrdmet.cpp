@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods.h"
 
 #include "../gpre/gpre.h"
@@ -39,6 +39,8 @@
 #include "../gpre/jrdme_proto.h"
 #include "../gpre/msc_proto.h"
 
+
+using namespace Firebird;
 
 //____________________________________________________________
 //

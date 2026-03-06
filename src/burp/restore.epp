@@ -39,7 +39,7 @@
 #include "../jrd/align.h"
 #include "../jrd/flags.h"
 #include "../jrd/license.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/ods.h"
 #include "../common/stuff.h"
 #include "../burp/burp_proto.h"
@@ -49,7 +49,7 @@
 #include "../burp/resto_proto.h"
 #include "../burp/BurpTasks.h"
 #include "../common/gdsassert.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../remote/protocol.h"
 #ifdef DEBUG
 #include "../common/prett_proto.h"

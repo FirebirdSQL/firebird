@@ -24,7 +24,7 @@
 #define JRD_LOCAL_TEMPORARY_TABLE_H
 
 #include "firebird.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"
 #include "../common/dsc.h"

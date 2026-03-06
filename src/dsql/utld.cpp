@@ -37,7 +37,7 @@
 #include "firebird/impl/sqlda_pub.h"
 #include "ibase.h"
 #include "../jrd/align.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../dsql/utld_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/init.h"

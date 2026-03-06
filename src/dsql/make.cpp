@@ -41,7 +41,7 @@
 #include "../dsql/ExprNodes.h"
 #include "ibase.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/align.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/make_proto.h"

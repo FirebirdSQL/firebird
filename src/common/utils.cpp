@@ -47,7 +47,7 @@
 #include "../common/classes/locks.h"
 #include "../common/classes/init.h"
 #include "../common/isc_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/impl/inf_pub.h"
 #include "../jrd/align.h"
 #include "../common/os/path_utils.h"

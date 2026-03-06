@@ -36,6 +36,8 @@
 #include "../gpre/lang_proto.h"
 #include "../yvalve/gds_proto.h"
 
+using namespace Firebird;
+
 static void align(const int);
 static void asgn_from(ref*, int);
 #ifdef NOT_USED_OR_REPLACED

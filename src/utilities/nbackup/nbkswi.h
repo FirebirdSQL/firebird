@@ -27,7 +27,7 @@
 #ifndef NBACKUP_NBKSWI_H
 #define NBACKUP_NBKSWI_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 // Switch handling constants
 

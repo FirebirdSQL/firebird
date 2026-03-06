@@ -32,7 +32,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/MetaString.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include <atomic>
 

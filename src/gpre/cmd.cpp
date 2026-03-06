@@ -39,6 +39,8 @@
 #include "../gpre/msc_proto.h"
 #include "../gpre/gpre_meta.h"
 
+using namespace Firebird;
+
 typedef void (*pfn_local_trigger_cb) (gpre_nod*, gpre_req*);
 
 static void alter_database(gpre_req*, act*);

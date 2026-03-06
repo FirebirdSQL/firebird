@@ -44,6 +44,8 @@
 #include "../gpre/msc_proto.h"
 #include "../jrd/align.h"
 
+using namespace Firebird;
+
 static void cmp_array(gpre_nod*, gpre_req*);
 static void cmp_array_element(gpre_nod*, gpre_req*);
 static void cmp_cast(gpre_nod*, gpre_req*);

@@ -49,7 +49,7 @@
 #include "../common/os/path_utils.h"
 #include "../common/dsc.h"
 #include "../common/TimeZoneUtil.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/status.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/mac_utils.h"
@@ -115,6 +115,8 @@
 #ifdef ANDROID
 #include <android/log.h>
 #endif
+
+using namespace Firebird;
 
 static char fb_prefix_val[MAXPATHLEN];
 static char fb_prefix_lock_val[MAXPATHLEN];

@@ -29,7 +29,7 @@
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ini.h"
 #include "../jrd/jrd.h"
 #include "firebird/Interface.h"

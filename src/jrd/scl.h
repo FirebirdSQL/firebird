@@ -28,7 +28,7 @@
 #include "../jrd/QualifiedName.h"
 #include "../common/classes/tree.h"
 #include "../common/security.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/SystemPrivileges.h"
 
 namespace Firebird {

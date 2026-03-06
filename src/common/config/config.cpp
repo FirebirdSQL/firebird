@@ -29,7 +29,7 @@
 #include "../common/os/fbsyslog.h"
 #include "../common/os/path_utils.h"
 #include "../common/utils_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/Interface.h"
 #include "../common/db_alias.h"
 #include "../jrd/build_no.h"

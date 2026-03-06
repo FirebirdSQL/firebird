@@ -41,7 +41,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/YObjects.h"
 #include "../common/StatusArg.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/utils_proto.h"
 #include <optional>
 

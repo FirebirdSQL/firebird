@@ -39,6 +39,8 @@
 #include "../gpre/gpre_proto.h"
 #include "../common/cvt.h"
 
+using namespace Firebird;
+
 static void post_error(const Firebird::Arg::StatusVector&);
 
 

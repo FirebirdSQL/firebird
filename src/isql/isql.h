@@ -34,7 +34,7 @@
 #define ISQL_ISQL_H
 
 #include "../jrd/flags.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -35,7 +35,7 @@
 #include "../common/classes/ParsedList.h"
 #include "../common/isc_proto.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../auth/SecDbCache.h"
 
 using namespace Firebird;

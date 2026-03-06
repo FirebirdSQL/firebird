@@ -54,7 +54,7 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/auto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 using namespace Firebird;
 using namespace Firebird::Jrd;

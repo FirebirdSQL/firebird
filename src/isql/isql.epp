@@ -109,7 +109,7 @@ enum literal_string_type
 #include "../isql/isql.h"
 #include "../yvalve/perf.h"
 #include "../jrd/license.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods.h"
 #include "../common/file_params.h"
 #include "../common/classes/ImplementHelper.h"

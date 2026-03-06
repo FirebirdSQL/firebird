@@ -46,7 +46,9 @@
 
 #include "../jrd/event.h"
 #include "../yvalve/alt_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
+
+using namespace Firebird;
 
 static ISC_STATUS executeSecurityCommand(ISC_STATUS*, const USER_SEC_DATA*, Firebird::Auth::UserData&);
 

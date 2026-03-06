@@ -31,7 +31,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
 #include "../common/msg_encode.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/ods.h"
 #include "../jrd/tra.h"
 #include "../jrd/met.h"

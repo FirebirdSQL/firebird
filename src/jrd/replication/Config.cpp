@@ -28,7 +28,7 @@
 #include "../common/StatusArg.h"
 #include "../common/utils_proto.h"
 #include "../common/os/os_utils.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include "Utils.h"
 #include "Config.h"

@@ -50,7 +50,7 @@
 #include "../common/isc_f_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/ClumpletWriter.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods_proto.h"
 #include "../common/classes/MsgPrint.h"
 #include "../common/classes/QualifiedMetaString.h"

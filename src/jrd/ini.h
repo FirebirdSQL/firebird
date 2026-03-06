@@ -32,9 +32,9 @@
 #include "../jrd/intl.h"
 #include "../intl/country_codes.h"
 #include "../intl/charsets.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/dflt.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods.h"
 #include "../common/dsc.h"
 

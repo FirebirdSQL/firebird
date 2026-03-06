@@ -36,7 +36,7 @@
 #include "../common/dsc.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/val.h"
 #include "../jrd/vec.h"
 #include "../jrd/status.h"

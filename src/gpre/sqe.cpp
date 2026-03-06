@@ -56,6 +56,8 @@
 #include "../common/utils_proto.h"
 
 
+using namespace Firebird;
+
 struct scope
 {
 	gpre_ctx* req_contexts;

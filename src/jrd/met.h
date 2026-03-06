@@ -97,7 +97,7 @@ inline constexpr int TFB_array				= 2;
 } // namespace Jrd
 
 #include "../jrd/exe_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../dsql/sym.h"
 
 namespace Firebird::Jrd {

@@ -26,7 +26,7 @@
 #include "firebird.h"
 #include "../jrd/CharSetContainer.h"
 #include "../jrd/jrd.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 
 using namespace Firebird::Jrd;
 

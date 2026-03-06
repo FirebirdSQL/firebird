@@ -43,7 +43,7 @@
 
 #include "../jrd/Monitoring.h"
 #include "../jrd/TempSpace.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/EngineInterface.h"
 #include "../jrd/Savepoint.h"
 #include "../jrd/tra_proto.h"

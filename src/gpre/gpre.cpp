@@ -71,6 +71,8 @@
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
+using namespace Firebird;
+
 #endif
 
 // Globals

@@ -38,7 +38,7 @@
 #include <stdarg.h>
 #include "../jrd/jrd.h"
 #include "../jrd/svc.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "iberror.h"
 #include "../jrd/license.h"
 #include "../jrd/err_proto.h"

@@ -28,7 +28,7 @@
 #include "../common/classes/QualifiedMetaString.h"
 #include <firebird/Interface.h>
 #include "../isql/FrontendParser.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include <optional>
 
 void	SHOW_comments(bool force);

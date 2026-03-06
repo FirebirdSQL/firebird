@@ -37,7 +37,7 @@
 #include "../yvalve/YObjects.h"
 #include "../common/StatusArg.h"
 #include "../common/utils_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 using namespace Firebird;
 

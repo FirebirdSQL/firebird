@@ -35,7 +35,7 @@
 #include "../utilities/gsec/gsec.h"
 #include "../utilities/gsec/gsec_proto.h"
 #include "../jrd/license.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/security.h"
 #include "../common/classes/Switches.h"
 #include "../utilities/gsec/gsecswi.h"

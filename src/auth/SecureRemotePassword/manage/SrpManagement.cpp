@@ -33,7 +33,7 @@
 #include "../common/StatusHolder.h"
 #include "firebird/Interface.h"
 #include "../auth/SecureRemotePassword/srp.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/impl/inf_pub.h"
 #include "../utilities/gsec/gsec.h"
 #include "../auth/SecureRemotePassword/Message.h"

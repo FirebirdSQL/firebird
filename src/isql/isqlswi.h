@@ -26,7 +26,7 @@
 #define ISQL_ISQLSWI_H
 
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 enum isql_switches
 {

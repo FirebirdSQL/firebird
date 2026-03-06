@@ -25,7 +25,7 @@
 #define DBA_DBASWI_H
 
 #include "../common/classes/Switches.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 // Switch handling constants.  Note that the first IN_SW_DATA_ITEMS
 // switch constants refer to data items.  The remaining switch constants

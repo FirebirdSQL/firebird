@@ -44,7 +44,7 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "ibase.h"
 #include "../jrd/align.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
 #include "../jrd/val.h"

@@ -33,7 +33,7 @@
 #include "../auth/SecurityDatabase/LegacyHash.h"
 #include "../auth/SecDbCache.h"
 #include "../remote/remot_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/enc_proto.h"
 #include "../common/status.h"
 #include "../common/classes/init.h"

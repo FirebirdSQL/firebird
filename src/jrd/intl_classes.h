@@ -31,7 +31,7 @@
 #include "firebird.h"
 
 #include "../common/intlobj_new.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/unicode_util.h"
 #include "../common/CsConvert.h"
 #include "../common/CharSet.h"

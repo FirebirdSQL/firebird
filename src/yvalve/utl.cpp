@@ -57,7 +57,7 @@
 #include "../yvalve/why_proto.h"
 #include "../yvalve/prepa_proto.h"
 #include "../yvalve/PluginManager.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/build_no.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/ClumpletWriter.h"

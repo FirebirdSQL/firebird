@@ -44,7 +44,7 @@
 #include <ctype.h>
 #include "iberror.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/intlobj_new.h"
 #include "../common/gdsassert.h"
 #include "../common/CharSet.h"
@@ -52,7 +52,7 @@
 #include "../common/classes/timestamp.h"
 #include "../common/cvt.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/dsc_proto.h"

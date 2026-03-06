@@ -31,7 +31,7 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "iberror.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/init.h"
 #include "../common/classes/Hash.h"

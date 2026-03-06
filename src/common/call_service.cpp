@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "../common/utils_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 using namespace Firebird;
 

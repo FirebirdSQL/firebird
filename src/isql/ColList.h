@@ -25,7 +25,7 @@
 #ifndef FB_COLLIST_H
 #define FB_COLLIST_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 // This is a linked list implementing a seldom used feature: the ability to
 // asssign a maximum width to each column, by name. The name should match the

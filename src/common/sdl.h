@@ -26,6 +26,7 @@
 
 #include "../common/classes/MetaString.h"
 #include "../common/classes/QualifiedMetaString.h"
+#include "../common/constants.h"
 #include "../common/dsc.h"
 
 struct sdl_info
@@ -36,8 +37,8 @@ struct sdl_info
 	Firebird::QualifiedMetaString	sdl_info_relation;
 	dsc				sdl_info_element;
 	USHORT			sdl_info_dimensions;
-	SLONG			sdl_info_lower[MAX_ARRAY_DIMENSIONS];
-	SLONG			sdl_info_upper[MAX_ARRAY_DIMENSIONS];
+	SLONG			sdl_info_lower[Firebird::MAX_ARRAY_DIMENSIONS];
+	SLONG			sdl_info_upper[Firebird::MAX_ARRAY_DIMENSIONS];
 };
 
 
@@ -55,4 +56,3 @@ struct array_slice
 
 typedef void (*SDL_walk_callback)(array_slice*, ULONG, dsc*);
 #endif /* JRD_SDL_H */
-

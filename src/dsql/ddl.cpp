@@ -83,7 +83,7 @@
 #include "../jrd/intl_classes.h"
 #include "../jrd/jrd.h"
 #include "../jrd/flags.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/ddl_proto.h"
 #include "../dsql/gen_proto.h"

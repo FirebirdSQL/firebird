@@ -43,6 +43,8 @@
 
 
 
+using namespace Firebird;
+
 static void cmp_any(gpre_req*);
 static void cmp_assignment(gpre_nod*, gpre_req*);
 static void cmp_assignment_list(gpre_nod*, gpre_req*);

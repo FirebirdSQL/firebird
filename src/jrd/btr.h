@@ -27,7 +27,7 @@
 #ifndef JRD_BTR_H
 #define JRD_BTR_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/array.h"
 #include "../include/fb_blk.h"
 

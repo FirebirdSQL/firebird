@@ -23,7 +23,7 @@
 #define	ALICE_ALICESWI_H
 
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 // switch definitions
 

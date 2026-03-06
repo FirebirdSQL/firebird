@@ -43,6 +43,8 @@
 #include "../gpre/sqe_proto.h"
 #include "../gpre/sql_proto.h"
 
+using namespace Firebird;
+
 constexpr int ZERO_BASED	= 0;
 constexpr int ONE_BASED		= 1;
 

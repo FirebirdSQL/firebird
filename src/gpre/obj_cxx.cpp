@@ -46,6 +46,8 @@
 #include "../common/utils_proto.h"
 
 
+using namespace Firebird;
+
 static void align(int);
 static void asgn_from(const act*, ref*, int);
 static void asgn_to(const act*, ref*, int);

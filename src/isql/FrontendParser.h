@@ -25,7 +25,7 @@
 #define FB_ISQL_FRONTEND_PARSER_H
 
 #include "../isql/FrontendLexer.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../common/classes/MetaString.h"
 #include "../common/classes/QualifiedMetaString.h"
 #include <optional>

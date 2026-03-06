@@ -47,7 +47,7 @@
 #include "../jrd/blb_proto.h"
 #include "../jrd/tra.h"
 #include "../jrd/req.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/Aligner.h"
 #include "../common/classes/VaryStr.h"

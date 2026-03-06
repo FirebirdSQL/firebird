@@ -23,7 +23,7 @@
 
 #include "firebird.h"
 #include "../common/dsc.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/jrd.h"
 #include "../jrd/exe.h"
 #include "../jrd/ids.h"

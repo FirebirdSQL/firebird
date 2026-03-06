@@ -52,7 +52,7 @@
 #include <unistd.h>
 #endif
 #include "../common/isc_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/impl/inf_pub.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/init.h"

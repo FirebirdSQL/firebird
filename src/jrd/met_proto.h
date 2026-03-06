@@ -29,7 +29,7 @@
 #include "../jrd/MetaName.h"
 #include "../jrd/Resources.h"
 #include "../jrd/QualifiedName.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/CacheVector.h"
 #include "../jrd/LocalTemporaryTable.h"
 

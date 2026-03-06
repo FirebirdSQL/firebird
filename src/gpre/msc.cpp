@@ -50,6 +50,8 @@
 #include "../yvalve/gds_proto.h"
 
 
+using namespace Firebird;
+
 struct gpre_space
 {
 	gpre_space* spc_next;

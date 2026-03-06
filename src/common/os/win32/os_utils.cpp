@@ -33,7 +33,7 @@
 #include "../common/gdsassert.h"
 #include "../common/os/guid.h"
 #include "../common/os/os_utils.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/os/path_utils.h"
 #include "../common/isc_proto.h"
 #include "iberror.h"

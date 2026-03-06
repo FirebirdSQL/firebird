@@ -150,7 +150,7 @@
 #include "../jrd/intl.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/jrd.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../dsql/DdlNodes.h"

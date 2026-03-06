@@ -36,6 +36,8 @@
 #include "../gpre/lang_proto.h"
 
 
+using namespace Firebird;
+
 enum pat_t {
 	NL,
 	RH, RL, RT, RI, RS,			// Request handle, level, transaction, ident, length

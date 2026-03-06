@@ -29,7 +29,7 @@
 #include "../common/ScanDir.h"
 #include "../common/os/mod_loader.h"
 #include "../common/os/path_utils.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include "Utils.h"
 

@@ -36,7 +36,7 @@
 #include "../common/StatusArg.h"
 
 #include "../jrd/SharedReadVector.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/QualifiedName.h"
 

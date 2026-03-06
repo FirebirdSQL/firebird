@@ -26,7 +26,7 @@
 
 #include "firebird.h"
 #include "../common/classes/alloc.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/unicode_util.h"
 #include "../common/isc_proto.h"
 #include "../common/CharSet.h"

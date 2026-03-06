@@ -41,7 +41,7 @@
 #include "../jrd/ibsetjmp.h"
 #include "../common/msg_encode.h"
 #include "../jrd/ods.h"			// to get MAX_PAGE_SIZE
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../burp/burp.h"
 #include "../burp/std_desc.h"
 #include "../burp/split/spit.h"

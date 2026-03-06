@@ -23,7 +23,7 @@
 #include "firebird.h"
 #include "firebird/Message.h"
 #include "../common/common.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "ibase.h"
 #include "../jrd/license.h"
 #include "../jrd/ods.h"

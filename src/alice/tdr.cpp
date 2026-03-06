@@ -44,7 +44,7 @@
 #include "../alice/tdr_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../common/isc_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 
 using Firebird::MsgFormat::SafeArg;

@@ -33,7 +33,7 @@
 #include "../gpre/gpre.h"
 #include "ibase.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../gpre/cme_proto.h"
 #include "../gpre/cmp_proto.h"
 #include "../gpre/exp_proto.h"
@@ -46,6 +46,8 @@
 #include "../gpre/sql_proto.h"
 #include "../common/utils_proto.h"
 
+
+using namespace Firebird;
 
 constexpr int DEFAULT_BLOB_SEGMENT_LENGTH = 80;	// bytes
 

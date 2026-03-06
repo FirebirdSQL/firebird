@@ -24,7 +24,7 @@
 #ifndef GSEC_GSECSWI_H
 #define GSEC_GSECSWI_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 /* Switch handling constants.  Note that the first IN_SW_DATA_ITEMS
    switch constants refer to data items.  The remaining switch constants

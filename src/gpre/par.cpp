@@ -57,6 +57,8 @@
 #include "../gpre/sql_proto.h"
 #include "../common/utils_proto.h"
 
+using namespace Firebird;
+
 #ifdef FTN_BLK_DATA
 static void		block_data_list(const gpre_dbb*);
 #endif

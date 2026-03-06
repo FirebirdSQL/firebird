@@ -32,7 +32,7 @@
 #include "../common/gdsassert.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/isc_i_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

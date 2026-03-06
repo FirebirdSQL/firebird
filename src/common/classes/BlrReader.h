@@ -26,7 +26,7 @@
 #include "iberror.h"
 #include "../common/classes/fb_string.h"
 #include "../common/StatusArg.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 namespace Firebird {
 

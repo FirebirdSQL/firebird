@@ -26,7 +26,7 @@
 
 #include "../common/classes/fb_string.h"
 #include "../jrd/QualifiedName.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 
 void GRANT_privileges(Jrd::thread_db*, const Jrd::QualifiedName&, ObjectType, Jrd::jrd_tra*);
 

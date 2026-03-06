@@ -65,7 +65,7 @@
 #include <stdio.h>
 #include "dyn_consts.h"
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl.h"
 #include "../common/utils_proto.h"
 
@@ -381,7 +381,7 @@ struct ary
 	{
 		SLONG ary_lower;
 		SLONG ary_upper;
-	} ary_rpt[MAX_ARRAY_DIMENSIONS];
+	} ary_rpt[Firebird::MAX_ARRAY_DIMENSIONS];
 };
 
 // CVC: The count is ignored, the array is hardcoded at 16.
@@ -1627,4 +1627,3 @@ public:
 };
 
 #endif // GPRE_GPRE_H
-

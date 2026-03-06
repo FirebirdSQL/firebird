@@ -25,7 +25,7 @@
 #include "firebird/Interface.h"
 #include "../jrd/SystemTriggers.h"
 #include "../jrd/acl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ids.h"
 #include "../jrd/ini.h"
 #include "../jrd/req.h"
