@@ -52,8 +52,8 @@
 
 #include <cmath>
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -2648,3 +2648,6 @@ void Retrieval::printFinalCandidate(const InversionCandidate* candidate) const
 	printCandidate(candidate);
 }
 #endif
+
+
+}	// namespace Firebird::Jrd
