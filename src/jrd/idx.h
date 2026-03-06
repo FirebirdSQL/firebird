@@ -27,6 +27,10 @@
 #ifndef JRD_IDX_H
 #define JRD_IDX_H
 
+namespace Firebird::Jrd
+{
+
+
 /* Indices to be created */
 
 /* Maximum number of segments in any existing system index */
@@ -47,13 +51,6 @@ struct ini_idx_t
 };
 
 /* Encoded descriptions of system indices */
-
-using Jrd::idx_unique;
-using Jrd::idx_metadata;
-using Jrd::idx_numeric;
-using Jrd::idx_string;
-using Jrd::idx_descending;
-using Jrd::idx_timestamp_tz;
 
 #define INDEX(id, rel, unique, count, ods) {(id), (UCHAR) (rel), (unique), (count), (ods), {
 #define SEGMENT(fld, type) {(fld), (type)}
@@ -528,5 +525,8 @@ static inline constexpr struct ini_idx_t indices[] =
 };
 
 #define SYSTEM_INDEX_COUNT FB_NELEM(indices)
+
+
+}	// namespace Firebird::jrd
 
 #endif /* JRD_IDX_H */

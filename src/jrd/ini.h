@@ -38,6 +38,13 @@
 #include "../jrd/ods.h"
 #include "../common/dsc.h"
 
+// Should go before types.h
+#include "SystemPrivileges.h"
+
+namespace Firebird::Jrd
+{
+
+
 //******************************
 // names.h
 //******************************
@@ -166,13 +173,6 @@ static inline constexpr int relfields[] =
 #undef END_RELATION
 
 //******************************
-// SystemPrivileges.h
-//	should go before types.h
-//******************************
-
-#include "SystemPrivileges.h"
-
-//******************************
 // types.h
 //******************************
 
@@ -194,5 +194,8 @@ static inline constexpr rtyp types[] =
 };
 
 #undef TYPE
+
+
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_INI_H
