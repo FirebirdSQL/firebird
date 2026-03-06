@@ -47,6 +47,10 @@
 #ifndef JRD_DRQ_H
 #define JRD_DRQ_H
 
+namespace Firebird::Jrd
+{
+
+
 enum drq_type_t
 {
 	drq_s_rel_con,			// store relation constraints
@@ -245,5 +249,8 @@ enum drq_type_t
 
 	drq_MAX
 };
+
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_DRQ_H

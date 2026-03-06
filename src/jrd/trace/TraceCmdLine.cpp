@@ -45,8 +45,6 @@ namespace Firebird::Jrd
 
 namespace
 {
-	using namespace Firebird;
-
 	using MsgFormat::SafeArg;
 	constexpr USHORT TRACEMGR_MSG_FAC = FB_IMPL_MSG_FACILITY_FBTRACEMGR;
 
