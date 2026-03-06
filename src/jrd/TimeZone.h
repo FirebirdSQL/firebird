@@ -30,7 +30,8 @@
 #include "../jrd/SystemPackages.h"
 #include "../jrd/recsrc/RecordSource.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 class thread_db;
 class jrd_tra;
@@ -46,7 +47,7 @@ public:
 class TimeZonesTableScan final : public VirtualTableScan
 {
 public:
-	TimeZonesTableScan(CompilerScratch* csb, const Firebird::string& alias, StreamType stream, Rsc::Rel relation);
+	TimeZonesTableScan(CompilerScratch* csb, const string& alias, StreamType stream, Rsc::Rel relation);
 
 protected:
 	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
@@ -57,16 +58,16 @@ protected:
 class TimeZonePackage : public SystemPackage
 {
 public:
-	TimeZonePackage(Firebird::MemoryPool& pool);
+	TimeZonePackage(MemoryPool& pool);
 
 private:
-	FB_MESSAGE(TransitionsInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(TransitionsInput, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(MAX_SQL_IDENTIFIER_LEN, CS_METADATA), timeZoneName)
 		(FB_TIMESTAMP_TZ, fromTimestamp)
 		(FB_TIMESTAMP_TZ, toTimestamp)
 	);
 
-	FB_MESSAGE(TransitionsOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(TransitionsOutput, ThrowStatusExceptionWrapper,
 		(FB_TIMESTAMP_TZ, startTimestamp)
 		(FB_TIMESTAMP_TZ, endTimestamp)
 		(FB_SMALLINT, zoneOffset)
@@ -76,15 +77,15 @@ private:
 
 	class TransitionsResultSet :
 		public
-			Firebird::DisposeIface<
-				Firebird::IExternalResultSetImpl<
+			DisposeIface<
+				IExternalResultSetImpl<
 					TransitionsResultSet,
-					Firebird::ThrowStatusExceptionWrapper
+					ThrowStatusExceptionWrapper
 				>
 			>
 	{
 	public:
-		TransitionsResultSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+		TransitionsResultSet(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			const TransitionsInput::Type* in, TransitionsOutput::Type* out);
 
 	public:
@@ -94,15 +95,15 @@ private:
 		}
 
 	public:
-		FB_BOOLEAN fetch(Firebird::ThrowStatusExceptionWrapper* status) override;
+		FB_BOOLEAN fetch(ThrowStatusExceptionWrapper* status) override;
 
 	private:
 		TransitionsOutput::Type* out;
-		Firebird::AutoPtr<Firebird::TimeZoneRuleIterator> iterator;
+		AutoPtr<TimeZoneRuleIterator> iterator;
 	};
 
-	static Firebird::IExternalResultSet* transitionsProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static IExternalResultSet* transitionsProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const TransitionsInput::Type* in, TransitionsOutput::Type* out)
 	{
 		return FB_NEW TransitionsResultSet(status, context, in, out);
@@ -110,15 +111,15 @@ private:
 
 	//----------
 
-	FB_MESSAGE(DatabaseVersionOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(DatabaseVersionOutput, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(10, CS_ASCII), version)
 	);
 
-	static void databaseVersionFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const void* in, DatabaseVersionOutput::Type* out);
+	static void databaseVersionFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const void* in, DatabaseVersionOutput::Type* out);
 };
 
 
-}	// namespace
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_TIME_ZONE_H

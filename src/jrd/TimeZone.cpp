@@ -27,8 +27,8 @@
 #include "../jrd/tra.h"
 #include "../jrd/ids.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 TimeZoneSnapshot::TimeZoneSnapshot(thread_db* tdbb, MemoryPool& pool)
@@ -166,3 +166,6 @@ TimeZonePackage::TimeZonePackage(Firebird::MemoryPool& pool)
 	)
 {
 }
+
+
+}	// namespace Firebird::Jrd

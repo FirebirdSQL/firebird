@@ -72,8 +72,8 @@
 #include "../jrd/intl_proto.h"
 
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 static NodeParseFunc blr_parsers[256] = {NULL};
@@ -728,7 +728,7 @@ CompoundStmtNode* PAR_make_list(thread_db* tdbb, StmtNodeStack& stack)
 }
 
 
-ULONG PAR_marks(Jrd::CompilerScratch* csb)
+ULONG PAR_marks(CompilerScratch* csb)
 {
 	if (csb->csb_blr_reader.getByte() != blr_marks)
 		PAR_syntax_error(csb, "blr_marks");
@@ -791,7 +791,7 @@ CompilerScratch* PAR_parse(thread_db* tdbb, const UCHAR* blr, ULONG blr_length,
 }
 
 
-SLONG PAR_symbol_to_gdscode(const Firebird::string& name)
+SLONG PAR_symbol_to_gdscode(const string& name)
 {
 /**************************************
  *
@@ -811,7 +811,7 @@ SLONG PAR_symbol_to_gdscode(const Firebird::string& name)
  *
  **************************************/
 
-	return Firebird::MsgUtil::getCodeByName(name.c_str());
+	return MsgUtil::getCodeByName(name.c_str());
 }
 
 
@@ -1738,3 +1738,6 @@ static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffs
 			static_cast<StmtNode*>(node)->hasLineColumn = true;
 	}
 }
+
+
+}	// namespace Firebird::Jrd
