@@ -75,7 +75,7 @@ void ZLib::freeFunc(void*, void* address)
 	MemoryPool::globalFree(address);
 }
 
-#endif // HAVE_ZLIB_H
-
 
 }  // namespace Firebird
+
+#endif // HAVE_ZLIB_H
