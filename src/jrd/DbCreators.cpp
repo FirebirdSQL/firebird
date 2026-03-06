@@ -53,9 +53,9 @@
 
 #define DBC_DEBUG(A)
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
-using namespace Firebird::Auth;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 
@@ -101,8 +101,6 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 
 } // anonymous namespace
 
-
-namespace Firebird::Jrd {
 
 CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
 	const MetaString& sqlRole, const char* securityDb)
@@ -349,5 +347,6 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 
 	return getData(relation);
 }
+
 
 } // namespace Firebird::Jrd

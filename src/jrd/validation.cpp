@@ -582,9 +582,10 @@ VI. ADDITIONAL NOTES
 static USHORT VAL_debug_level = 0;
 #endif
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
+using namespace Ods;	// FIXME:
 
 
 #ifdef DEBUG_VAL_VERBOSE
@@ -804,8 +805,6 @@ int VAL_service(Firebird::UtilSvc* svc)
 	return exit_code;
 }
 
-
-namespace Firebird::Jrd {
 
 const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 {
@@ -3387,5 +3386,6 @@ Validation::RTN Validation::walk_scns()
 
 	return rtn_ok;
 }
+
 
 } // namespace Firebird::Jrd

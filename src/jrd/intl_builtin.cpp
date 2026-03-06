@@ -14,8 +14,8 @@
 #include "../intl/charsets.h"
 #include "../common/classes/Aligner.h"
 
-using Firebird::IntlUtil;
-using Firebird::UnicodeUtil;
+namespace Firebird::Jrd
+{
 
 
 static USHORT internal_keylength(texttype*, USHORT);
@@ -1767,3 +1767,6 @@ ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* char
 
 	return INTL_BAD_STR_LENGTH;
 }
+
+
+}	// namespace Firebird::Jrd

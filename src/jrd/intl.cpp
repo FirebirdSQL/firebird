@@ -124,8 +124,9 @@
 #include "../jrd/IntlManager.h"
 #include "../common/classes/init.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 #define IS_TEXT(x)      (((x)->dsc_dtype == dtype_text)   ||\
 			 ((x)->dsc_dtype == dtype_varying)||\
@@ -1112,3 +1113,6 @@ static void pad_spaces(thread_db* tdbb, CSetId charset, BYTE* ptr, ULONG len)
 		}
 	}
 }
+
+
+} // namespace Firebird::Jrd

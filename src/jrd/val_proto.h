@@ -24,8 +24,12 @@
 #ifndef JRD_VAL_PROTO_H
 #define JRD_VAL_PROTO_H
 
-bool VAL_validate(Jrd::thread_db*, USHORT);
-int VAL_service(Firebird::UtilSvc*);
+namespace Firebird::Jrd
+{
+
+
+bool VAL_validate(thread_db*, USHORT);
+int VAL_service(UtilSvc*);
 
 inline constexpr int IN_SW_VAL_TAB_INCL		= 1;
 inline constexpr int IN_SW_VAL_TAB_EXCL		= 2;
@@ -49,5 +53,7 @@ static inline constexpr Switches::in_sw_tab_t val_option_in_sw_table[] =
 	{0, 0, NULL, 0, 0, 0, false, false,	0, 0, NULL}		// End of List
 };
 
-#endif // JRD_VAL_PROTO_H
 
+} // namespace Firebird::Jrd
+
+#endif // JRD_VAL_PROTO_H

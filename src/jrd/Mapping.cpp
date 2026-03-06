@@ -56,8 +56,9 @@
 
 #define MAP_DEBUG(A)
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 
@@ -86,8 +87,6 @@ void checkStatus(const char* s, const IStatus* st)
 }
 
 } // anonymous namespace
-
-namespace Firebird::Jrd {
 
 class AuthWriter : public ClumpletWriter
 {
@@ -151,10 +150,6 @@ private:
 
 	unsigned char sequence;
 };
-
-} // namespace Firebird::Jrd
-
-
 Mapping::DbHandle::DbHandle() noexcept
 { }
 
@@ -1277,8 +1272,6 @@ void resetMap(const char* db, ULONG index)
 
 } // anonymous namespace
 
-namespace Firebird::Jrd {
-
 Mapping::Mapping(const ULONG f, Firebird::ICryptKeyCallback* cryptCb)
 	: flags(f),
 	  internalFlags(0),
@@ -1864,5 +1857,6 @@ void Mapping::shutdownIpc()
 {
 	mappingIpc->shutdown();
 }
+
 
 } // namespace Firebird::Jrd

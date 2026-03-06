@@ -24,17 +24,18 @@
 #ifndef JRD_SHUT_PROTO_H
 #define JRD_SHUT_PROTO_H
 
-namespace Firebird::Jrd {
-	class Database;
-}
-
 namespace Firebird {
 	class Sync;
 }
 
-bool SHUT_blocking_ast(Jrd::thread_db*, bool);
-void SHUT_database(Jrd::thread_db*, SSHORT, SSHORT, Firebird::Sync*);
-void SHUT_init(Jrd::thread_db*);
-void SHUT_online(Jrd::thread_db*, SSHORT, Firebird::Sync*);
+namespace Firebird::Jrd {
+	class Database;
+ 	class thread_db;
+
+	bool SHUT_blocking_ast(thread_db*, bool);
+	void SHUT_database(thread_db*, SSHORT, SSHORT, Sync*);
+	void SHUT_init(thread_db*);
+	void SHUT_online(thread_db*, SSHORT, Sync*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_SHUT_PROTO_H

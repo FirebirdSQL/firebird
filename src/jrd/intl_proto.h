@@ -27,49 +27,44 @@
 #include "../jrd/intl_classes.h"
 #include "../common/cvt.h"
 
-namespace Firebird::Jrd {
+struct dsc;
+struct texttype;
+
+namespace Firebird::Jrd
+{
 	class thread_db;
 	class Lock;
 	class Collation;
 	struct SubtypeInfo;
-}
 
-namespace Firebird {
-	class CsConvert;
-	class CharSet;
-}
+	void		INTL_adjust_text_descriptor(thread_db* tdbb, dsc* desc);
+	CSetId		INTL_charset(thread_db*, TTypeId);
+	int			INTL_compare(thread_db*, const dsc*, const dsc*, ErrorFunction);
+	ULONG		INTL_convert_bytes(thread_db*, CSetId, UCHAR*, const ULONG, CSetId,
+									const BYTE*, const ULONG, ErrorFunction);
+	CsConvert		INTL_convert_lookup(thread_db*, CSetId, CSetId);
+	void		INTL_convert_string(dsc*, const dsc*, Callbacks* cb);
+	bool		INTL_data(const dsc*);
+	bool		INTL_data_or_binary(const dsc*);
+	bool		INTL_defined_type(thread_db*, TTypeId);
+	USHORT		INTL_key_length(thread_db*, USHORT, USHORT);
+	CharSet*		INTL_charset_lookup(thread_db* tdbb, CSetId parm1);
+	Collation*			INTL_texttype_lookup(thread_db* tdbb, TTypeId parm1);
+	bool		INTL_texttype_validate(thread_db*, const SubtypeInfo*);
+	void		INTL_pad_spaces(thread_db*, dsc*, UCHAR*, ULONG);
+	USHORT		INTL_string_to_key(thread_db*, USHORT, const dsc*, dsc*, USHORT);
+	void		INTL_lookup_texttype(texttype* tt, const SubtypeInfo* info);
 
-struct dsc;
-struct texttype;
-
-void		INTL_adjust_text_descriptor(Jrd::thread_db* tdbb, dsc* desc);
-CSetId		INTL_charset(Jrd::thread_db*, TTypeId);
-int			INTL_compare(Jrd::thread_db*, const dsc*, const dsc*, ErrorFunction);
-ULONG		INTL_convert_bytes(Jrd::thread_db*, CSetId, UCHAR*, const ULONG, CSetId,
-								const BYTE*, const ULONG, ErrorFunction);
-Firebird::CsConvert		INTL_convert_lookup(Jrd::thread_db*, CSetId, CSetId);
-void		INTL_convert_string(dsc*, const dsc*, Firebird::Callbacks* cb);
-bool		INTL_data(const dsc*);
-bool		INTL_data_or_binary(const dsc*);
-bool		INTL_defined_type(Jrd::thread_db*, TTypeId);
-USHORT		INTL_key_length(Jrd::thread_db*, USHORT, USHORT);
-Firebird::CharSet*		INTL_charset_lookup(Jrd::thread_db* tdbb, CSetId parm1);
-Jrd::Collation*			INTL_texttype_lookup(Jrd::thread_db* tdbb, TTypeId parm1);
-bool		INTL_texttype_validate(Jrd::thread_db*, const Jrd::SubtypeInfo*);
-void		INTL_pad_spaces(Jrd::thread_db*, dsc*, UCHAR*, ULONG);
-USHORT		INTL_string_to_key(Jrd::thread_db*, USHORT, const dsc*, dsc*, USHORT);
-void		INTL_lookup_texttype(texttype* tt, const Jrd::SubtypeInfo* info);
-
-// Built-in charsets/texttypes interface
-INTL_BOOL INTL_builtin_lookup_charset(charset* cs, const ASCII* charset_name, const ASCII* config_info);
-INTL_BOOL INTL_builtin_lookup_texttype_status(
-	char* status_buffer, ULONG status_buffer_length,
-	texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
-	USHORT attributes, const UCHAR* specific_attributes,
-	ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
-	const ASCII* config_info);
-ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* charSetName,
-	const ASCII* configInfo, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst);
+	// Built-in charsets/texttypes interface
+	INTL_BOOL INTL_builtin_lookup_charset(charset* cs, const ASCII* charset_name, const ASCII* config_info);
+	INTL_BOOL INTL_builtin_lookup_texttype_status(
+		char* status_buffer, ULONG status_buffer_length,
+		texttype* tt, const ASCII* texttype_name, const ASCII* charset_name,
+		USHORT attributes, const UCHAR* specific_attributes,
+		ULONG specific_attributes_length, INTL_BOOL ignore_attributes,
+		const ASCII* config_info);
+	ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* charSetName,
+		const ASCII* configInfo, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst);
+} // namespace Firebird::Jrd
 
 #endif // JRD_INTL_PROTO_H
-
