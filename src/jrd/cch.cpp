@@ -967,7 +967,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 			  read_shadow(rs), pageSpace(ps)
 		{ }
 
-		bool callback(thread_db* tdbb, FbStatusVector* status, Firebird::Jrd::Ods::pag* page)
+		bool callback(thread_db* tdbb, FbStatusVector* status, Ods::pag* page)
 		{
 			Database *dbb = tdbb->getDatabase();
 			int retryCount = 0;
@@ -1005,10 +1005,10 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 	const auto bm = dbb->dbb_backup_manager;
 	BackupManager::StateReadGuard stateGuard(tdbb);
 	const auto backupState = bm->getState();
-	fb_assert(backupState != Firebird::Jrd::Ods::hdr_nbak_unknown);
+	fb_assert(backupState != Ods::hdr_nbak_unknown);
 
 	ULONG diff_page = 0;
-	if (!isTempPage && backupState != Firebird::Jrd::Ods::hdr_nbak_normal)
+	if (!isTempPage && backupState != Ods::hdr_nbak_normal)
 	{
 		diff_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		NBAK_TRACE(("Reading page %d:%06d, state=%d, diff page=%d",
@@ -1017,7 +1017,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 
 	// In merge mode, if we are reading past beyond old end of file and page is in .delta file
 	// then we maintain actual page in difference file. Always read it from there.
-	if (isTempPage || backupState == Firebird::Jrd::Ods::hdr_nbak_normal || !diff_page)
+	if (isTempPage || backupState == Ods::hdr_nbak_normal || !diff_page)
 	{
 		fb_assert(bdb->bdb_page == window->win_page);
 
@@ -1291,7 +1291,7 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 		{
 			BackupManager::StateReadGuard stateGuard(tdbb);
 			const auto backupState = bm->getState();
-			if (backupState == Firebird::Jrd::Ods::hdr_nbak_stalled || backupState == Firebird::Jrd::Ods::hdr_nbak_merge)
+			if (backupState == Ods::hdr_nbak_stalled || backupState == Ods::hdr_nbak_merge)
 				bm->flushDifference(tdbb);
 		}
 	}
@@ -1732,7 +1732,7 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 		CCH_unwind(tdbb, true);
 	}
 
-	fb_assert(dbb->dbb_backup_manager->getState() != Firebird::Jrd::Ods::hdr_nbak_unknown);
+	fb_assert(dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_unknown);
 
 	bdb->bdb_incarnation = ++bcb->bcb_page_incarnation;
 
@@ -1991,12 +1991,12 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 
 	const auto backupState = bm->getState();
 
-	if (backupState == Firebird::Jrd::Ods::hdr_nbak_normal)
+	if (backupState == Ods::hdr_nbak_normal)
 		return true;
 
 	switch (backupState)
 	{
-	case Firebird::Jrd::Ods::hdr_nbak_stalled:
+	case Ods::hdr_nbak_stalled:
 		bdb->bdb_difference_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		if (!bdb->bdb_difference_page)
 		{
@@ -2013,7 +2013,7 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 		}
 		break;
 
-	case Firebird::Jrd::Ods::hdr_nbak_merge:
+	case Ods::hdr_nbak_merge:
 		bdb->bdb_difference_page = bm->getPageIndex(tdbb, bdb->bdb_page.getPageNum());
 		if (bdb->bdb_difference_page)
 		{
@@ -2431,7 +2431,7 @@ bool CCH_validate(WIN* window)
 }
 
 
-bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Firebird::Jrd::Ods::pag* page,
+bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods::pag* page,
 	FbStatusVector* status, const bool inAst)
 {
 /**************************************
@@ -2460,7 +2460,7 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Fir
 
 	if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 	{
-		Firebird::Jrd::Ods::pag* newPage = (pag*) spare_buffer.getBuffer(dbb->dbb_page_size);
+		Ods::pag* newPage = (pag*) spare_buffer.getBuffer(dbb->dbb_page_size);
 		memcpy(newPage, page, HDR_SIZE);
 		page = newPage;
 		memset((UCHAR*) page + HDR_SIZE, 0, dbb->dbb_page_size - HDR_SIZE);
@@ -4926,7 +4926,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 		/// ASF: Always true: if (bdb->bdb_page.getPageNum() >= 0)
 		{
-			fb_assert(backupState != Firebird::Jrd::Ods::hdr_nbak_unknown);
+			fb_assert(backupState != Ods::hdr_nbak_unknown);
 			page->pag_pageno = bdb->bdb_page.getPageNum();
 
 #ifdef NBAK_DEBUG
@@ -4960,8 +4960,8 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 			const bool isTempPage = pageSpace->isTemporary();
 
 			if (!isTempPage &&
-				(backupState == Firebird::Jrd::Ods::hdr_nbak_stalled ||
-					(backupState == Firebird::Jrd::Ods::hdr_nbak_merge && bdb->bdb_difference_page)))
+				(backupState == Ods::hdr_nbak_stalled ||
+					(backupState == Ods::hdr_nbak_merge && bdb->bdb_difference_page)))
 			{
 				if (!dbb->dbb_backup_manager->writeDifference(tdbb, status,
 						bdb->bdb_difference_page, bdb->bdb_buffer))
@@ -4972,7 +4972,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 				}
 			}
 
-			if (!isTempPage && backupState == Firebird::Jrd::Ods::hdr_nbak_stalled)
+			if (!isTempPage && backupState == Ods::hdr_nbak_stalled)
 			{
 				// We finished. Adjust transaction accounting and get ready for exit
 				if (bdb->bdb_page == HEADER_PAGE_NUMBER)
@@ -4992,7 +4992,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 						: file(f), bdb(b), inAst(ast), isTempPage(tp), pageSpace(ps)
 					{ }
 
-					bool callback(thread_db* tdbb, FbStatusVector* status, Firebird::Jrd::Ods::pag* page)
+					bool callback(thread_db* tdbb, FbStatusVector* status, Ods::pag* page)
 					{
 						Database* dbb = tdbb->getDatabase();
 

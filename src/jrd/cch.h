@@ -245,7 +245,7 @@ public:
 	que			bdb_in_use;				// queue of buffers in use
 	que			bdb_dirty;				// dirty pages LRU queue
 	BufferDesc*	bdb_lru_chain;			// pending LRU chain
-	Firebird::Jrd::Ods::pag*	bdb_buffer;				// Actual buffer
+	Ods::pag*	bdb_buffer;				// Actual buffer
 	PageNumber	bdb_page;				// Database page number in buffer
 	ULONG		bdb_incarnation;
 	ULONG		bdb_transactions;		// vector of dirty flags to reduce commit overhead

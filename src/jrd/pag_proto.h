@@ -37,9 +37,9 @@ namespace Firebird::Jrd::Ods {
 	struct header_page;
 }
 
-void	PAG_add_header_entry(Jrd::thread_db* tdbb, Firebird::Jrd::Ods::header_page*, USHORT, USHORT, const UCHAR*);
-bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Firebird::Jrd::Ods::header_page*, USHORT, USHORT, const UCHAR*);
-Firebird::Jrd::Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
+void	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
+bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
+Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
 AttNumber	PAG_attachment_id(Jrd::thread_db*);
 bool	PAG_delete_clump_entry(Jrd::thread_db* tdbb, USHORT);
 void	PAG_format_header(Jrd::thread_db*);
@@ -65,7 +65,7 @@ void	PAG_set_repl_sequence(Jrd::thread_db* tdbb, FB_UINT64);
 void	PAG_set_sweep_interval(Jrd::thread_db* tdbb, SLONG);
 ULONG	PAG_page_count(Jrd::thread_db*);
 
-inline Firebird::Jrd::Ods::pag* PAG_allocate(Jrd::thread_db* tdbb, Jrd::win* window)
+inline Ods::pag* PAG_allocate(Jrd::thread_db* tdbb, Jrd::win* window)
 {
 	return PAG_allocate_pages(tdbb, window, 1, false);
 }
