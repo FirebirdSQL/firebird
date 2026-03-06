@@ -116,6 +116,9 @@
 #include "../auth/SecurityDatabase/LegacyServer.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
 
+namespace Firebird::Remote
+{
+
 
 static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM);
@@ -131,9 +134,6 @@ static TEXT protocol_inet[128];
 static TEXT instance[MAXPATHLEN];
 static USHORT server_flag = 0;
 static bool server_shutdown = false;
-
-using namespace Firebird;
-using namespace Firebird::Remote;
 
 class ThreadCounter
 {
@@ -169,6 +169,9 @@ AtomicCounter ThreadCounter::m_count;
 Semaphore ThreadCounter::m_semaphore;
 
 
+}	// namespace Firebird::Remote
+
+
 int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs, int nWndMode)
 {
 /**************************************
@@ -182,6 +185,9 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
  *      pipes and/or TCP/IP sockets.
  *
  **************************************/
+	using namespace Firebird;
+	using namespace Firebird::Remote;
+
 	hInst = hThisInst;
 
 	// We want server to crash without waiting for feedback from the user
@@ -362,6 +368,10 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 }
 
 
+namespace Firebird::Remote
+{
+
+
 THREAD_ENTRY_DECLARE process_connection_thread(THREAD_ENTRY_PARAM arg)
 {
 /**************************************
@@ -532,8 +542,8 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 		}
 	}
 
-	Replication::Config::ReplicaList replicas;
-	Replication::Config::enumerate(replicas);
+	Jrd::Replication::Config::ReplicaList replicas;
+	Jrd::Replication::Config::enumerate(replicas);
 
 	if (replicas.hasData())
 	{
@@ -742,3 +752,6 @@ static int wait_threads(const int, const int, void*)
 
 	return FB_SUCCESS;
 }
+
+
+}	// namespace Firebird::Remote
