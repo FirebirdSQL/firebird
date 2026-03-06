@@ -45,8 +45,8 @@ int			CCH_down_grade_dbb(void*);
 bool		CCH_exclusive(Jrd::thread_db*, USHORT, SSHORT, Firebird::Sync*);
 bool		CCH_exclusive_attachment(Jrd::thread_db*, USHORT, SSHORT, Firebird::Sync*);
 bool		CCH_expand(Jrd::thread_db*, ULONG);
-Ods::pag*	CCH_fake(Jrd::thread_db*, Jrd::win*, int);
-Ods::pag*	CCH_fetch(Jrd::thread_db*, Jrd::win*, int, SCHAR, int, const bool);
+Firebird::Jrd::Ods::pag*	CCH_fake(Jrd::thread_db*, Jrd::win*, int);
+Firebird::Jrd::Ods::pag*	CCH_fetch(Jrd::thread_db*, Jrd::win*, int, SCHAR, int, const bool);
 LockState	CCH_fetch_lock(Jrd::thread_db*, Jrd::win*, int, int, SCHAR);
 void		CCH_fetch_page(Jrd::thread_db*, Jrd::win*, const bool);
 void		CCH_fini(Jrd::thread_db*);
@@ -55,7 +55,7 @@ void		CCH_flush(Jrd::thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
 bool		CCH_free_page(Jrd::thread_db*);
 SLONG		CCH_get_incarnation(Jrd::win*);
 void		CCH_get_related(Jrd::thread_db*, Jrd::PageNumber, Jrd::PagesArray&);
-Ods::pag*	CCH_handoff(Jrd::thread_db*, Jrd::win*, ULONG, int, SCHAR, int, const bool);
+Firebird::Jrd::Ods::pag*	CCH_handoff(Jrd::thread_db*, Jrd::win*, ULONG, int, SCHAR, int, const bool);
 void		CCH_init(Jrd::thread_db*, ULONG);
 void		CCH_init2(Jrd::thread_db*);
 void		CCH_mark(Jrd::thread_db*, Jrd::win*, bool, bool);
@@ -74,22 +74,22 @@ void		CCH_shutdown(Jrd::thread_db*);
 void		CCH_unwind(Jrd::thread_db*, const bool);
 bool		CCH_validate(Jrd::win*);
 void		CCH_flush_ast(Jrd::thread_db*);
-bool		CCH_write_all_shadows(Jrd::thread_db*, Jrd::Shadow*, Jrd::BufferDesc*, Ods::pag*,
+bool		CCH_write_all_shadows(Jrd::thread_db*, Jrd::Shadow*, Jrd::BufferDesc*, Firebird::Jrd::Ods::pag*,
 					 Jrd::FbStatusVector*, const bool);
 
 // macros for dealing with cache pages
 
-inline Ods::pag* CCH_FETCH(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type)
+inline Firebird::Jrd::Ods::pag* CCH_FETCH(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type)
 {
 	return CCH_fetch (tdbb, window, lock_type, page_type, 1, true);
 }
 
-inline Ods::pag* CCH_FETCH_NO_SHADOW(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type)
+inline Firebird::Jrd::Ods::pag* CCH_FETCH_NO_SHADOW(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type)
 {
 	return CCH_fetch (tdbb, window, lock_type, page_type, 1, false);
 }
 
-inline Ods::pag* CCH_FETCH_TIMEOUT(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type, SSHORT latch_wait)
+inline Firebird::Jrd::Ods::pag* CCH_FETCH_TIMEOUT(Jrd::thread_db* tdbb, Jrd::win* window, USHORT lock_type, SCHAR page_type, SSHORT latch_wait)
 {
 	return CCH_fetch (tdbb, window, lock_type, page_type, latch_wait, true);
 }
@@ -114,17 +114,17 @@ inline void CCH_MARK_SYSTEM(Jrd::thread_db* tdbb, Jrd::win* window)
 	CCH_mark (tdbb, window, 1, 0);
 }
 
-inline Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
+inline Firebird::Jrd::Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
 	return CCH_handoff (tdbb, window, page, lock, page_type, 1, false);
 }
 
-inline Ods::pag* CCH_HANDOFF_TIMEOUT(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type, SSHORT latch_wait)
+inline Firebird::Jrd::Ods::pag* CCH_HANDOFF_TIMEOUT(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type, SSHORT latch_wait)
 {
 	return CCH_handoff (tdbb, window, page, lock, page_type, latch_wait, false);
 }
 
-inline Ods::pag* CCH_HANDOFF_TAIL(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
+inline Firebird::Jrd::Ods::pag* CCH_HANDOFF_TAIL(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
 	return CCH_handoff (tdbb, window, page, lock, page_type, 1, true);
 }

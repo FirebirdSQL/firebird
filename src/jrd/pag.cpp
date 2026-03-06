@@ -281,7 +281,7 @@ namespace
 
 		BackupManager::StateReadGuard stateGuard(tdbb);
 
-		if (dbb->dbb_backup_manager->getState() == Ods::hdr_nbak_stalled)
+		if (dbb->dbb_backup_manager->getState() == Firebird::Jrd::Ods::hdr_nbak_stalled)
 		{
 			// Our file is locked, so we can't extend it anyway.
 			// Delta will be extended via simple `write` syscalls.
@@ -1025,7 +1025,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	PIO_force_write(pageSpace->file, forceWrite && !readOnly);
 
-	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+	if (dbb->dbb_backup_manager->getState() != Firebird::Jrd::Ods::hdr_nbak_normal)
 		dbb->dbb_backup_manager->setForcedWrites(forceWrite);
 
 	if (header->hdr_flags & hdr_no_reserve)
@@ -1040,7 +1040,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	dbb->dbb_guid.assign(header->hdr_guid);
 
 	// If database in backup lock state...
-	if (!info && dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+	if (!info && dbb->dbb_backup_manager->getState() != Firebird::Jrd::Ods::hdr_nbak_normal)
 	{
 		// refetch some data from the header, because it could be changed in the delta file
 		// (as initially PAG_init2 reads the header from the main file and these values
@@ -1123,7 +1123,7 @@ void PAG_header_init(thread_db* tdbb)
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 
-	if (!Ods::isSupported(header))
+	if (!Firebird::Jrd::Ods::isSupported(header))
 	{
 		ERR_post(Firebird::Arg::Gds(isc_wrong_ods) << Firebird::Arg::Str(attachment->att_filename) <<
 											Firebird::Arg::Num(ods_version) <<
@@ -1189,21 +1189,21 @@ void PAG_init(thread_db* tdbb)
 	PageSpace* const pageSpace = pageMgr.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace);
 
-	pageMgr.bytesBitPIP = Ods::bytesBitPIP(dbb->dbb_page_size);
-	pageMgr.pagesPerPIP = Ods::pagesPerPIP(dbb->dbb_page_size);
-	pageMgr.pagesPerSCN = Ods::pagesPerSCN(dbb->dbb_page_size);
+	pageMgr.bytesBitPIP = Firebird::Jrd::Ods::bytesBitPIP(dbb->dbb_page_size);
+	pageMgr.pagesPerPIP = Firebird::Jrd::Ods::pagesPerPIP(dbb->dbb_page_size);
+	pageMgr.pagesPerSCN = Firebird::Jrd::Ods::pagesPerSCN(dbb->dbb_page_size);
 	pageSpace->pipFirst = FIRST_PIP_PAGE;
 	pageSpace->scnFirst = FIRST_SCN_PAGE;
 
-	pageMgr.transPerTIP = Ods::transPerTIP(dbb->dbb_page_size);
+	pageMgr.transPerTIP = Firebird::Jrd::Ods::transPerTIP(dbb->dbb_page_size);
 
 	// dbb_ods_version can be 0 when a new database is being created
 	fb_assert((dbb->dbb_ods_version == 0) || (dbb->dbb_ods_version >= ODS_VERSION12));
-	pageMgr.gensPerPage = Ods::gensPerPage(dbb->dbb_page_size);
+	pageMgr.gensPerPage = Firebird::Jrd::Ods::gensPerPage(dbb->dbb_page_size);
 
-	dbb->dbb_dp_per_pp = Ods::dataPagesPerPP(dbb->dbb_page_size);
-	dbb->dbb_max_records = Ods::maxRecsPerDP(dbb->dbb_page_size);
-	dbb->dbb_max_idx = Ods::maxIndices(dbb->dbb_page_size);
+	dbb->dbb_dp_per_pp = Firebird::Jrd::Ods::dataPagesPerPP(dbb->dbb_page_size);
+	dbb->dbb_max_records = Firebird::Jrd::Ods::maxRecsPerDP(dbb->dbb_page_size);
+	dbb->dbb_max_idx = Firebird::Jrd::Ods::maxIndices(dbb->dbb_page_size);
 
 	// Compute prefetch constants from database page size and maximum prefetch
 	// transfer size. Double pages per prefetch request so that cache reader
@@ -1461,7 +1461,7 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 	for (Shadow* shadow = dbb->dbb_shadow; shadow; shadow = shadow->sdw_next)
 		PIO_force_write(shadow->sdw_file, flag);
 
-	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
+	if (dbb->dbb_backup_manager->getState() != Firebird::Jrd::Ods::hdr_nbak_normal)
 		dbb->dbb_backup_manager->setForcedWrites(flag);
 }
 
@@ -2181,7 +2181,7 @@ ULONG PAG_page_count(thread_db* tdbb)
  *********************************************/
 	Database* const dbb = tdbb->getDatabase();
 	Array<UCHAR> temp;
-	page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
+	page_inv_page* pip = reinterpret_cast<Firebird::Jrd::Ods::page_inv_page*>
 		(temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize()));
 
 	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -2264,4 +2264,3 @@ void PageNumber::print(const char* text) const
 	printf("%s %d %d\n", text, pageSpaceID, pageNum);
 }
 #endif
-
