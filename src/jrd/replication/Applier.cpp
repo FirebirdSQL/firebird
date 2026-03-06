@@ -58,8 +58,6 @@ namespace Firebird::Jrd::Replication
 // Detect and resolve record-level conflicts (in favor of master copy)
 #define RESOLVE_CONFLICTS
 
-using namespace Firebird::Jrd::Ods;	// FIXME:
-
 
 namespace
 {
@@ -1056,7 +1054,7 @@ bool Applier::lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc&
 
 	const PageNumber root_page(relPages->rel_pg_space_id, page);
 	win window(root_page);
-	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+	const auto root = (Ods::index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
 	index_desc idx;
 	idx.idx_id = key.idx_id = idx_invalid;

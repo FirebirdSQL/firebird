@@ -71,8 +71,6 @@
 namespace Firebird::Jrd
 {
 
-using namespace Firebird::Jrd::Ods;	// FIXME:
-
 
 static idx_e check_duplicates(thread_db*, Record*, index_desc*, index_insertion*, jrd_rel*);
 static idx_e check_foreign_key(thread_db*, Record*, jrd_rel*, jrd_tra*, index_desc*, IndexErrorContext&);
@@ -986,7 +984,7 @@ void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 
 	auto* relPages = relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
@@ -1012,7 +1010,7 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	fb_assert(relPages->rel_index_root);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
@@ -1046,7 +1044,7 @@ void IDX_mark_indices(thread_db* tdbb, Cached::Relation* relation)
 	fb_assert(relPages->rel_index_root);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))

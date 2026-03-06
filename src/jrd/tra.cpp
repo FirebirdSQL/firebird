@@ -84,7 +84,6 @@
 namespace Firebird::Jrd
 {
 
-using namespace Firebird::Jrd::Ods;	// FIXME:
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
 
@@ -92,12 +91,12 @@ typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> >
 #ifdef SUPERSERVER_V2
 static TraNumber bump_transaction_id(thread_db*, WIN*);
 #else
-static header_page* bump_transaction_id(thread_db*, WIN*, bool);
+static Ods::header_page* bump_transaction_id(thread_db*, WIN*, bool);
 #endif
 static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, int state);
 static void expand_view_lock(thread_db* tdbb, jrd_tra*, jrd_rel*, UCHAR lock_type,
 	const char* option_name, RelationLockTypeMap& lockmap, const int level);
-static tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
+static Ods::tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
 static constexpr const char* get_lockname_v3(const UCHAR lock) noexcept;
 static ULONG inventory_page(thread_db*, ULONG);
 static int limbo_transaction(thread_db*, TraNumber id);
@@ -331,7 +330,7 @@ bool TRA_cleanup(thread_db* tdbb)
 	// transaction is automatically marked active.
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 	const TraNumber ceiling = header->hdr_next_transaction;
 	const TraNumber active = header->hdr_oldest_active;
 	CCH_RELEASE(tdbb, &window);
@@ -350,7 +349,7 @@ bool TRA_cleanup(thread_db* tdbb)
 	for (ULONG sequence = active / trans_per_tip; sequence <= last; sequence++, number = 0)
 	{
 		window.win_page = inventory_page(tdbb, sequence);
-		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+		Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 		TraNumber max = ceiling - (TraNumber) sequence * trans_per_tip;
 		if (max >= trans_per_tip)
 			max = trans_per_tip - 1;
@@ -399,13 +398,13 @@ bool TRA_cleanup(thread_db* tdbb)
 
 #ifdef SUPERSERVER_V2
 	window.win_page = inventory_page(tdbb, last);
-	tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 
 	while (tip->tip_next)
 	{
 		CCH_RELEASE(tdbb, &window);
 		window.win_page = inventory_page(tdbb, ++last);
-		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+		tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 		CCH_MARK(tdbb, &window);
 		for (number = 0; number < trans_per_tip; number++)
 		{
@@ -577,14 +576,14 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 	CHECK_DBB(dbb);
 
 	// Start by fetching prior transaction page, if any
-	tx_inv_page* prior_tip = NULL;
+	Ods::tx_inv_page* prior_tip = NULL;
 	WIN prior_window(DB_PAGE_SPACE, -1);
 	if (sequence)
 		prior_tip = fetch_inventory_page(tdbb, &prior_window, (sequence - 1), LCK_write);
 
 	// Allocate and format new page
 	WIN window(DB_PAGE_SPACE, -1);
-	tx_inv_page* tip = (tx_inv_page*) DPM_allocate(tdbb, &window);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) DPM_allocate(tdbb, &window);
 	tip->tip_header.pag_type = pag_transactions;
 
 	CCH_must_write(tdbb, &window);
@@ -634,7 +633,7 @@ int TRA_fetch_state(thread_db* tdbb, TraNumber number)
 	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
 	const ULONG tip_seq = number / trans_per_tip;
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
 
 	// calculate the state of the desired transaction
 
@@ -678,7 +677,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 	// fetch the first inventory page
 
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
 
 	// move the first page into the bit vector
 
@@ -698,7 +697,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 		// release the read lock as we go, so that some one else can
 		// commit without having to signal all other transactions.
 
-		tip = (tx_inv_page*) CCH_HANDOFF(tdbb, &window, inventory_page(tdbb, sequence++),
+		tip = (Ods::tx_inv_page*) CCH_HANDOFF(tdbb, &window, inventory_page(tdbb, sequence++),
 							  LCK_read, pag_transactions);
 
 		l = TRANS_OFFSET(MIN((top + TRA_MASK + 1 - base), trans_per_tip));
@@ -755,7 +754,7 @@ void TRA_header_write(thread_db* tdbb, Database* dbb, TraNumber number)
 	if (!number || dbb->dbb_last_header_write < number)
 	{
 		WIN window(HEADER_PAGE_NUMBER);
-		const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 		const TraNumber next_transaction = header->hdr_next_transaction;
 		const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -916,7 +915,7 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 	}
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	const TraNumber next_transaction = header->hdr_next_transaction;
 	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -1479,7 +1478,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 	const USHORT shift = TRANS_SHIFT(number);
 
 	WIN window(DB_PAGE_SPACE, -1);
-	tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
+	Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
 
 	UCHAR* address = tip->tip_transactions + byte;
 	const int old_state = ((*address) >> shift) & TRA_MASK;
@@ -1523,7 +1522,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 		Database::Checkout dcoHolder(dbb, FB_FUNCTION);
 		Thread::yield();
 	}
-	tip = reinterpret_cast<tx_inv_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_transactions));
+	tip = reinterpret_cast<Ods::tx_inv_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_transactions));
 	if (generation == tip->tip_header.pag_generation)
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 	CCH_RELEASE(tdbb, &window);
@@ -1871,7 +1870,7 @@ void TRA_sweep(thread_db* tdbb)
 			CCH_flush(tdbb, FLUSH_SWEEP, 0);
 
 			WIN window(HEADER_PAGE_NUMBER);
-			header_page* const header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+			Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 			if (header->hdr_oldest_transaction < --transaction_oldest_active)
 			{
@@ -2035,7 +2034,7 @@ static TraNumber bump_transaction_id(thread_db* tdbb, WIN* window)
 #else
 
 
-static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontWrite)
+static Ods::header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontWrite)
 {
 /**************************************
  *
@@ -2053,7 +2052,7 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 	CHECK_DBB(dbb);
 
 	window->win_page = HEADER_PAGE_NUMBER;
-	header_page* header = (header_page*) CCH_FETCH(tdbb, window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, window, LCK_write, pag_header);
 
 	const TraNumber next_transaction = header->hdr_next_transaction;
 	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -2247,7 +2246,7 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 }
 
 
-static tx_inv_page* fetch_inventory_page(thread_db* tdbb,
+static Ods::tx_inv_page* fetch_inventory_page(thread_db* tdbb,
 										 WIN* window,
 										 ULONG sequence,
 										 USHORT lock_level)
@@ -2267,7 +2266,7 @@ static tx_inv_page* fetch_inventory_page(thread_db* tdbb,
 	SET_TDBB(tdbb);
 
 	window->win_page = inventory_page(tdbb, sequence);
-	tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, window, lock_level, pag_transactions);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, window, lock_level, pag_transactions);
 
 	return tip;
 }
@@ -2336,14 +2335,14 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
 		WIN window(DB_PAGE_SPACE, dbb->getKnownPage(pag_transactions, tipCount - 1));
-		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
+		Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		const ULONG next = tip->tip_next;
 		CCH_RELEASE(tdbb, &window);
 		if (!(window.win_page = next))
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
 		// Type check it
-		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
+		tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
 		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
 	}
@@ -2378,7 +2377,7 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 	const ULONG number = id % trans_per_tip;
 
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
 
 	const ULONG trans_offset = TRANS_OFFSET(number);
 	const UCHAR* byte = tip->tip_transactions + trans_offset;
