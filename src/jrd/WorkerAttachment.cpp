@@ -102,7 +102,7 @@ WorkerStableAttachment* WorkerStableAttachment::create(FbStatusVector* status, D
 	return NULL;
 }
 
-void WorkerStableAttachment::doOnIdleTimer(Firebird::TimerImpl* timer)
+void WorkerStableAttachment::doOnIdleTimer(TimerImpl* timer)
 {
 	WorkerAttachment::detachIdle(this);
 }

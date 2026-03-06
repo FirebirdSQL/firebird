@@ -49,7 +49,7 @@ public:
 			loadAPI();
 	}
 
-	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const;
+	virtual void getRemoteError(const Jrd::FbStatusVector* status, string& err) const;
 
 protected:
 	ISC_STATUS notImplemented(Jrd::FbStatusVector*) const;
@@ -557,10 +557,10 @@ protected:
 
 	virtual ~IscTransaction() {}
 
-	virtual void generateTPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb,
+	virtual void generateTPB(Jrd::thread_db* tdbb, ClumpletWriter& tpb,
 		TraModes traMode, bool readOnly, bool wait, int lockTimeout) const;
 
-	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb);
+	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, ClumpletWriter& tpb);
 	virtual void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info);
 	virtual void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
 	virtual void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
@@ -583,7 +583,7 @@ protected:
 	virtual ~IscStatement();
 
 protected:
-	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql);
+	virtual void doPrepare(Jrd::thread_db* tdbb, const string& sql);
 	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	virtual void doExecute(Jrd::thread_db* tdbb);
 	virtual void doOpen(Jrd::thread_db* tdbb);
@@ -604,7 +604,7 @@ protected:
 	}
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	IscTransaction* getIscTransaction() { return (IscTransaction*) m_transaction; }
 
@@ -626,9 +626,9 @@ public:
 
 public:
 	virtual void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc,
-		const Firebird::UCharBuffer* bpb);
+		const UCharBuffer* bpb);
 	virtual void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc,
-		const Firebird::UCharBuffer* bpb);
+		const UCharBuffer* bpb);
 	virtual USHORT read(Jrd::thread_db* tdbb, UCHAR* buff, USHORT len);
 	virtual void write(Jrd::thread_db* tdbb, const UCHAR* buff, USHORT len);
 	virtual void close(Jrd::thread_db* tdbb);

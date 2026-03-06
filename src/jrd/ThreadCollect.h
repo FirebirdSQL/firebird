@@ -42,7 +42,7 @@ namespace Firebird::Jrd {
 	class ThreadCollect
 	{
 	public:
-		ThreadCollect(Firebird::MemoryPool& p)
+		ThreadCollect(MemoryPool& p)
 			: threads(p)
 		{ }
 
@@ -57,7 +57,7 @@ namespace Firebird::Jrd {
 		// put thread into completion wait queue when it finished running
 		void ending(Thread&& thd)
 		{
-			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
 			const Thread::Mark mark(thd);
 
@@ -75,7 +75,7 @@ namespace Firebird::Jrd {
 
 		void ending(Thread::Mark& m)
 		{
-			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
 			for (auto& n : threads)
 			{
@@ -92,7 +92,7 @@ namespace Firebird::Jrd {
 		// put thread into completion wait queue when it starts running
 		void running(Thread&& thd)
 		{
-			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
 			threads.push_back(Thrd(std::move(thd), false));
 		}
@@ -105,7 +105,7 @@ namespace Firebird::Jrd {
 			// join finished threads
 			AllThreads finished(threads.get_allocator());
 			{ // mutex scope
-				Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+				MutexLockGuard g(threadsMutex, FB_FUNCTION);
 
 				for (auto n = threads.begin(); n != threads.end(); )
 				{
@@ -146,17 +146,17 @@ namespace Firebird::Jrd {
 			bool ending;
 		};
 
-		using AllThreads = std::vector<Thrd, Firebird::PoolAllocator<Thrd>>;
+		using AllThreads = std::vector<Thrd, PoolAllocator<Thrd>>;
 
 		void waitFor(AllThreads& thr)
 		{
-			Firebird::MutexLockGuard g(threadsMutex, FB_FUNCTION);
+			MutexLockGuard g(threadsMutex, FB_FUNCTION);
 			while (!thr.empty())
 			{
 				Thrd t = std::move(thr.back());
 				thr.pop_back();
 				{
-					Firebird::MutexUnlockGuard u(threadsMutex, FB_FUNCTION);
+					MutexUnlockGuard u(threadsMutex, FB_FUNCTION);
 					t.thread.waitForCompletion();
 					fb_assert(t.ending);
 				}
@@ -164,7 +164,7 @@ namespace Firebird::Jrd {
 		}
 
 		AllThreads threads;
-		Firebird::Mutex threadsMutex;
+		Mutex threadsMutex;
 	};
 
 }	// namespace Firebird::Jrd

@@ -388,7 +388,7 @@ SINT64 DYN_UTIL_gen_unique_id(thread_db* tdbb, SSHORT id, const char* generator_
 		const FB_SIZE_T blr_size = static_cast<FB_SIZE_T>(
 			sizeof(gen_id_blr1) + sizeof(gen_id_blr2)) + 1 + name_length;
 
-		Firebird::UCharBuffer blr;
+		UCharBuffer blr;
 		UCHAR* p = blr.getBuffer(blr_size);
 
 		memcpy(p, gen_id_blr1, sizeof(gen_id_blr1));

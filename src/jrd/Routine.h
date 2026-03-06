@@ -43,7 +43,7 @@ namespace Firebird::Jrd {
 	class Parameter;
 	class UserId;
 
-	class RoutinePermanent : public Firebird::PermanentStorage
+	class RoutinePermanent : public PermanentStorage
 	{
 	public:
 		explicit RoutinePermanent(thread_db* tdbb, MemoryPool& p, MetaId metaId, NoData);
@@ -107,9 +107,9 @@ namespace Firebird::Jrd {
 		}
 
 	public:
-		static Firebird::MsgMetadata* createMetadata(
-			const Firebird::Array<NestConst<Parameter> >& parameters, bool isExtern);
-		static Format* createFormat(MemoryPool& pool, Firebird::IMessageMetadata* params, bool addEof);
+		static MsgMetadata* createMetadata(
+			const Array<NestConst<Parameter> >& parameters, bool isExtern);
+		static Format* createFormat(MemoryPool& pool, IMessageMetadata* params, bool addEof);
 
 	public:
 		static void destroy(thread_db* tdbb, Routine* routine);
@@ -137,22 +137,22 @@ namespace Firebird::Jrd {
 		const Format* getOutputFormat() const noexcept { return outputFormat; }
 		void setOutputFormat(const Format* value) noexcept { outputFormat = value; }
 
-		bool hash(thread_db* tdbb, Firebird::sha512& digest);
+		bool hash(thread_db* tdbb, sha512& digest);
 
-		const Firebird::Array<NestConst<Parameter> >& getInputFields() const noexcept
+		const Array<NestConst<Parameter> >& getInputFields() const noexcept
 		{
 			return inputFields;
 		}
-		Firebird::Array<NestConst<Parameter> >& getInputFields() noexcept { return inputFields; }
+		Array<NestConst<Parameter> >& getInputFields() noexcept { return inputFields; }
 
-		const Firebird::Array<NestConst<Parameter> >& getOutputFields() const noexcept
+		const Array<NestConst<Parameter> >& getOutputFields() const noexcept
 		{
 			return outputFields;
 		}
-		Firebird::Array<NestConst<Parameter> >& getOutputFields() noexcept { return outputFields; }
+		Array<NestConst<Parameter> >& getOutputFields() noexcept { return outputFields; }
 
 		void parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id, bid* blobDbg);
-		void parseMessages(thread_db* tdbb, CompilerScratch* csb, Firebird::BlrReader blrReader);
+		void parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blrReader);
 
 		virtual void releaseFormat()
 		{
@@ -180,8 +180,8 @@ namespace Firebird::Jrd {
 		USHORT defaultCount;		// default input arguments
 		const Format* inputFormat;	// input format
 		const Format* outputFormat;	// output format
-		Firebird::Array<NestConst<Parameter> > inputFields;		// array of field blocks
-		Firebird::Array<NestConst<Parameter> > outputFields;	// array of field blocks
+		Array<NestConst<Parameter> > inputFields;		// array of field blocks
+		Array<NestConst<Parameter> > outputFields;	// array of field blocks
 
 	public:
 		bool flReload;

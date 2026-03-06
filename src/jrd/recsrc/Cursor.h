@@ -67,9 +67,9 @@ namespace Firebird::Jrd {
 
 		void initializeInvariants(Request* request) const;
 
-		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+		void getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const override;
 
-		void printPlan(thread_db* tdbb, Firebird::string& plan, bool detailed) const
+		void printPlan(thread_db* tdbb, string& plan, bool detailed) const
 		{
 			if (detailed)
 			{

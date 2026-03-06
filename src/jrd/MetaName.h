@@ -54,7 +54,7 @@
 
 namespace Firebird::Jrd {
 
-class Dictionary : public Firebird::PermanentStorage
+class Dictionary : public PermanentStorage
 {
 public:
 	Dictionary(MemoryPool& p);
@@ -134,7 +134,7 @@ private:
 	Segment* segment;
 	unsigned segCount;
 
-	Firebird::Mutex mutex;	// The single mutex to protect dictionary when needed
+	Mutex mutex;	// The single mutex to protect dictionary when needed
 };
 
 class MetaName
@@ -160,7 +160,7 @@ public:
 		: word(get(s))
 	{ }
 
-	MetaName(const Firebird::MetaString& s);
+	MetaName(const MetaString& s);
 
 	MetaName(const char* s, FB_SIZE_T l)
 		: word(get(s, l))
@@ -168,7 +168,7 @@ public:
 
 	MetaName(const MetaName& m) = default;
 
-	MetaName(const Firebird::AbstractString& s)
+	MetaName(const AbstractString& s)
 		: word(get(s.c_str(), s.length()))
 	{ }
 
@@ -190,7 +190,7 @@ public:
 		test();
 	}
 
-	MetaName(MemoryPool&, const Firebird::AbstractString& s)
+	MetaName(MemoryPool&, const AbstractString& s)
 		: word(get(s.c_str(), s.length()))
 	{ }
 
@@ -213,7 +213,7 @@ public:
 		return *this;
 	}
 
-	MetaName& operator=(const Firebird::AbstractString& s)
+	MetaName& operator=(const AbstractString& s)
 	{
 		word = get(s.c_str(), s.length());
 		return *this;
@@ -221,7 +221,7 @@ public:
 
 	MetaName& operator=(const MetaName& m) = default;
 
-	MetaName& operator=(const Firebird::MetaString& s);
+	MetaName& operator=(const MetaString& s);
 
 	FB_SIZE_T length() const noexcept
 	{
@@ -271,12 +271,12 @@ public:
 		return compare(s, s ? fb_strlen(s) : 0);
 	}
 
-	int compare(const Firebird::AbstractString& s) const
+	int compare(const AbstractString& s) const
 	{
 		return compare(s.c_str(), s.length());
 	}
 
-	int compare(const Firebird::MetaString& s) const
+	int compare(const MetaString& s) const
 	{
 		return compare(s.c_str(), s.length());
 	}
@@ -289,7 +289,7 @@ public:
 		return compare(m.begin(), m.length());
 	}
 
-	Firebird::string toQuotedString() const
+	string toQuotedString() const
 	{
 		return Firebird::toQuotedString(*this);
 	}
@@ -304,22 +304,22 @@ public:
 		return compare(s) != 0;
 	}
 
-	bool operator==(const Firebird::AbstractString& s) const
+	bool operator==(const AbstractString& s) const
 	{
 		return compare(s) == 0;
 	}
 
-	bool operator!=(const Firebird::AbstractString& s) const
+	bool operator!=(const AbstractString& s) const
 	{
 		return compare(s) != 0;
 	}
 
-	bool operator==(const Firebird::MetaString& s) const
+	bool operator==(const MetaString& s) const
 	{
 		return compare(s) == 0;
 	}
 
-	bool operator!=(const Firebird::MetaString& s) const
+	bool operator!=(const MetaString& s) const
 	{
 		return compare(s) != 0;
 	}
@@ -356,7 +356,7 @@ public:
 
 	void printf(const char*, ...);
 	FB_SIZE_T copyTo(char* to, FB_SIZE_T toSize) const;
-	operator Firebird::MetaString() const noexcept;
+	operator MetaString() const noexcept;
 
 protected:
 	static void adjustLength(const char* const s, FB_SIZE_T& l) noexcept;
@@ -367,7 +367,7 @@ inline bool operator==(const char* s, const MetaName& m)
 	return m.compare(s) == 0;
 }
 
-typedef Firebird::Pair<Firebird::Full<MetaName, MetaName> > MetaNamePair;
+typedef Pair<Full<MetaName, MetaName> > MetaNamePair;
 
 } // namespace Firebird::Jrd
 

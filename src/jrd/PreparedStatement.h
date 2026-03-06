@@ -49,7 +49,7 @@ class ResultSet;
 template <typename T>
 struct PreparedStatementTypeDiscriminator {};
 
-class PreparedStatement : public Firebird::PermanentStorage
+class PreparedStatement : public PermanentStorage
 {
 friend class ResultSet;
 
@@ -152,7 +152,7 @@ public:
 		}
 
 	public:
-		const Firebird::string& getText() const
+		const string& getText() const
 		{
 			return text;
 		}
@@ -161,7 +161,7 @@ public:
 		void moveToStatement(thread_db* tdbb, PreparedStatement* stmt) const;
 
 	private:
-		void addInput(Type type, const void* address, bool isOptional, Firebird::Array<InputSlot>& slots)
+		void addInput(Type type, const void* address, bool isOptional, Array<InputSlot>& slots)
 		{
 			InputSlot slot;
 			slot.type = type;
@@ -171,7 +171,7 @@ public:
 			slots.add(slot);
 		}
 
-		void addOutput(Type type, void* address, bool isOptional, Firebird::Array<OutputSlot>& slots)
+		void addOutput(Type type, void* address, bool isOptional, Array<OutputSlot>& slots)
 		{
 			OutputSlot slot;
 			slot.type = type;
@@ -182,9 +182,9 @@ public:
 		}
 
 	private:
-		Firebird::string text;
-		Firebird::Array<InputSlot> inputSlots;
-		Firebird::Array<OutputSlot> outputSlots;
+		string text;
+		Array<InputSlot> inputSlots;
+		Array<OutputSlot> outputSlots;
 		unsigned outputParams;
 	};
 
@@ -193,7 +193,7 @@ private:
 	class PosBuilder
 	{
 	public:
-		explicit PosBuilder(const Firebird::string& aText)
+		explicit PosBuilder(const string& aText)
 			: text(aText),
 			  params(0)
 		{
@@ -212,27 +212,27 @@ private:
 			return *this;
 		}
 
-		operator const Firebird::string& ()
+		operator const string& ()
 		{
 			return text;
 		}
 
 	private:
-		Firebird::string text;
+		string text;
 		unsigned params;
 	};
 
 public:
 	// Create a PreparedStatement builder to use positional parameters with C++ variables.
-	static PosBuilder build(const Firebird::string& text)
+	static PosBuilder build(const string& text)
 	{
 		return PosBuilder(text);
 	}
 
 	// Escape a metadata name accordingly to SQL rules.
-	static Firebird::string escapeName(const MetaName& s)
+	static string escapeName(const MetaName& s)
 	{
-		Firebird::string ret;
+		string ret;
 
 		for (const char* p = s.begin(); p != s.end(); ++p)
 		{
@@ -245,9 +245,9 @@ public:
 	}
 
 	// Escape a string accordingly to SQL rules.
-	template <typename T> static Firebird::string escapeString(const T& s)
+	template <typename T> static string escapeString(const T& s)
 	{
-		Firebird::string ret;
+		string ret;
 
 		for (const char* p = s.begin(); p != s.end(); ++p)
 		{
@@ -260,15 +260,15 @@ public:
 	}
 
 public:
-	PreparedStatement(thread_db* tdbb, Firebird::MemoryPool& aPool, Attachment* attachment,
-		jrd_tra* transaction, const Firebird::string& text, bool isInternalRequest);
-	PreparedStatement(thread_db* tdbb, Firebird::MemoryPool& aPool, Attachment* attachment,
+	PreparedStatement(thread_db* tdbb, MemoryPool& aPool, Attachment* attachment,
+		jrd_tra* transaction, const string& text, bool isInternalRequest);
+	PreparedStatement(thread_db* tdbb, MemoryPool& aPool, Attachment* attachment,
 		jrd_tra* transaction, const Builder& aBuilder, bool isInternalRequest);
 	~PreparedStatement();
 
 private:
 	void init(thread_db* tdbb, Attachment* attachment, jrd_tra* transaction,
-		const Firebird::string& text, bool isInternalRequest);
+		const string& text, bool isInternalRequest);
 
 public:
 	void setDesc(thread_db* tdbb, unsigned param, const dsc& value);
@@ -318,7 +318,7 @@ public:
 		setDesc(tdbb, param, desc);
 	}
 
-	void setString(thread_db* tdbb, unsigned param, const Firebird::string& value)
+	void setString(thread_db* tdbb, unsigned param, const string& value)
 	{
 		fb_assert(param > 0);
 
@@ -337,7 +337,7 @@ public:
 		setDesc(tdbb, param, desc);
 	}
 
-	void setMetaString(thread_db* tdbb, unsigned param, const Firebird::MetaString& value)
+	void setMetaString(thread_db* tdbb, unsigned param, const MetaString& value)
 	{
 		fb_assert(param > 0);
 
@@ -358,19 +358,19 @@ public:
 		return dsqlRequest;
 	}
 
-	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Firebird::Array<dsc>& values,
-		Firebird::MsgMetadata* msgMetadata, Firebird::UCharBuffer& msg);
+	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& values,
+		MsgMetadata* msgMetadata, UCharBuffer& msg);
 
 private:
 	const Builder* builder;
 	DsqlRequest* dsqlRequest;
-	Firebird::Array<dsc> inValues, outValues;
-	Firebird::RefPtr<Firebird::MsgMetadata> inMetadata, outMetadata;
-	Firebird::UCharBuffer inMessage, outMessage;
+	Array<dsc> inValues, outValues;
+	RefPtr<MsgMetadata> inMetadata, outMetadata;
+	UCharBuffer inMessage, outMessage;
 	ResultSet* resultSet;
 };
 
-typedef Firebird::AutoPtr<PreparedStatement> AutoPreparedStatement;
+typedef AutoPtr<PreparedStatement> AutoPreparedStatement;
 
 // PreparedStatementTypeDiscriminator specializations.
 
@@ -399,7 +399,7 @@ struct PreparedStatementTypeDiscriminator<double>
 };
 
 template <>
-struct PreparedStatementTypeDiscriminator<Firebird::string>
+struct PreparedStatementTypeDiscriminator<string>
 {
 	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_STRING;
 };
@@ -411,7 +411,7 @@ struct PreparedStatementTypeDiscriminator<MetaName>
 };
 
 template <>
-struct PreparedStatementTypeDiscriminator<Firebird::MetaString>
+struct PreparedStatementTypeDiscriminator<MetaString>
 {
 	static constexpr PreparedStatement::Builder::Type TYPE = PreparedStatement::Builder::TYPE_METASTRING;
 };

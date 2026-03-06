@@ -61,7 +61,7 @@ struct impure_value;
 struct record_param;
 
 
-class ExtEngineManager final : public Firebird::PermanentStorage
+class ExtEngineManager final : public PermanentStorage
 {
 private:
 	class AttachmentImpl;
@@ -69,8 +69,8 @@ private:
 	class TransactionImpl;
 
 	class RoutineMetadata final :
-		public Firebird::VersionedIface<Firebird::IRoutineMetadataImpl<RoutineMetadata, Firebird::CheckStatusWrapper> >,
-		public Firebird::PermanentStorage
+		public VersionedIface<IRoutineMetadataImpl<RoutineMetadata, CheckStatusWrapper> >,
+		public PermanentStorage
 	{
 	public:
 		explicit RoutineMetadata(MemoryPool& pool)
@@ -83,91 +83,91 @@ private:
 		{
 		}
 
-		const char* getPackage(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getPackage(CheckStatusWrapper* /*status*/) const
 		{
 			return name.package.nullStr();
 		}
 
-		const char* getName(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getName(CheckStatusWrapper* /*status*/) const
 		{
 			return name.object.c_str();
 		}
 
-		const char* getEntryPoint(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getEntryPoint(CheckStatusWrapper* /*status*/) const
 		{
 			return entryPoint.c_str();
 		}
 
-		const char* getBody(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getBody(CheckStatusWrapper* /*status*/) const
 		{
 			return body.c_str();
 		}
 
-		Firebird::IMessageMetadata* getInputMetadata(Firebird::CheckStatusWrapper* /*status*/) const
+		IMessageMetadata* getInputMetadata(CheckStatusWrapper* /*status*/) const
 		{
 			return getMetadata(inputParameters);
 		}
 
-		Firebird::IMessageMetadata* getOutputMetadata(Firebird::CheckStatusWrapper* /*status*/) const
+		IMessageMetadata* getOutputMetadata(CheckStatusWrapper* /*status*/) const
 		{
 			return getMetadata(outputParameters);
 		}
 
-		Firebird::IMessageMetadata* getTriggerMetadata(Firebird::CheckStatusWrapper* /*status*/) const
+		IMessageMetadata* getTriggerMetadata(CheckStatusWrapper* /*status*/) const
 		{
 			return getMetadata(triggerFields);
 		}
 
-		const char* getTriggerTable(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getTriggerTable(CheckStatusWrapper* /*status*/) const
 		{
 			return triggerTable.object.c_str();
 		}
 
-		unsigned getTriggerType(Firebird::CheckStatusWrapper* /*status*/) const
+		unsigned getTriggerType(CheckStatusWrapper* /*status*/) const
 		{
 			return triggerType;
 		}
 
-		const char* getSchema(Firebird::CheckStatusWrapper* /*status*/) const
+		const char* getSchema(CheckStatusWrapper* /*status*/) const
 		{
 			return name.schema.c_str();
 		}
 
 	public:
 		QualifiedName name;
-		Firebird::string entryPoint;
-		Firebird::string body;
-		Firebird::RefPtr<Firebird::IMessageMetadata> inputParameters;
-		Firebird::RefPtr<Firebird::IMessageMetadata> outputParameters;
-		Firebird::RefPtr<Firebird::IMessageMetadata> triggerFields;
+		string entryPoint;
+		string body;
+		RefPtr<IMessageMetadata> inputParameters;
+		RefPtr<IMessageMetadata> outputParameters;
+		RefPtr<IMessageMetadata> triggerFields;
 		QualifiedName triggerTable;
 		unsigned triggerType;
 
 	private:
-		static Firebird::IMessageMetadata* getMetadata(const Firebird::IMessageMetadata* par)
+		static IMessageMetadata* getMetadata(const IMessageMetadata* par)
 		{
-			Firebird::IMessageMetadata* rc = const_cast<Firebird::IMessageMetadata*>(par);
+			IMessageMetadata* rc = const_cast<IMessageMetadata*>(par);
 			rc->addRef();
 			return rc;
 		}
 	};
 
 	class ExternalContextImpl :
-		public Firebird::VersionedIface<Firebird::IExternalContextImpl<ExternalContextImpl, Firebird::CheckStatusWrapper> >
+		public VersionedIface<IExternalContextImpl<ExternalContextImpl, CheckStatusWrapper> >
 	{
 	friend class AttachmentImpl;
 
 	public:
-		ExternalContextImpl(thread_db* tdbb, Firebird::IExternalEngine* aEngine);
+		ExternalContextImpl(thread_db* tdbb, IExternalEngine* aEngine);
 		virtual ~ExternalContextImpl();
 
 		void releaseTransaction();
 		void setTransaction(thread_db* tdbb);
 
-		Firebird::IMaster* getMaster();
-		Firebird::IExternalEngine* getEngine(Firebird::CheckStatusWrapper* status);
-		Firebird::IAttachment* getAttachment(Firebird::CheckStatusWrapper* status);
-		Firebird::ITransaction* getTransaction(Firebird::CheckStatusWrapper* status);
+		IMaster* getMaster();
+		IExternalEngine* getEngine(CheckStatusWrapper* status);
+		IAttachment* getAttachment(CheckStatusWrapper* status);
+		ITransaction* getTransaction(CheckStatusWrapper* status);
 		const char* getUserName();
 		const char* getDatabaseName();
 		const char* getClientCharSet();
@@ -176,18 +176,18 @@ private:
 		void* setInfo(int code, void* value);
 
 	private:
-		Firebird::IExternalEngine* engine;
+		IExternalEngine* engine;
 		Attachment* internalAttachment;
-		Firebird::ITransaction* internalTransaction;
-		Firebird::IAttachment* externalAttachment;
-		Firebird::ITransaction* externalTransaction;
-		Firebird::GenericMap<Firebird::NonPooled<int, void*> > miscInfo;
+		ITransaction* internalTransaction;
+		IAttachment* externalAttachment;
+		ITransaction* externalTransaction;
+		GenericMap<NonPooled<int, void*> > miscInfo;
 		MetaName clientCharSet;
 	};
 
 	struct EngineAttachment
 	{
-		EngineAttachment(Firebird::IExternalEngine* aEngine, Jrd::Attachment* aAttachment)
+		EngineAttachment(IExternalEngine* aEngine, Jrd::Attachment* aAttachment)
 			: engine(aEngine),
 			  attachment(aAttachment)
 		{
@@ -199,7 +199,7 @@ private:
 				(i1.engine == i2.engine && i1.attachment > i2.attachment);
 		}
 
-		Firebird::IExternalEngine* engine;
+		IExternalEngine* engine;
 		Jrd::Attachment* attachment;
 	};
 
@@ -212,8 +212,8 @@ private:
 		{
 		}
 
-		Firebird::IExternalEngine* engine;
-		Firebird::AutoPtr<ExternalContextImpl> context;
+		IExternalEngine* engine;
+		AutoPtr<ExternalContextImpl> context;
 		TTypeId adminCharSet;
 	};
 
@@ -222,20 +222,20 @@ public:
 	{
 	public:
 		ExtRoutine(thread_db* tdbb, ExtEngineManager* aExtManager,
-			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata);
+			IExternalEngine* aEngine, RoutineMetadata* aMetadata);
 		virtual ~ExtRoutine() = default;
 
 	private:
 		class PluginDeleter
 		{
 		public:
-			void operator()(Firebird::IPluginBase* ptr);
+			void operator()(IPluginBase* ptr);
 		};
 
 	protected:
 		ExtEngineManager* extManager;
-		std::unique_ptr<Firebird::IExternalEngine, PluginDeleter> engine;
-		Firebird::AutoPtr<RoutineMetadata> metadata;
+		std::unique_ptr<IExternalEngine, PluginDeleter> engine;
+		AutoPtr<RoutineMetadata> metadata;
 		Database* database;
 	};
 
@@ -246,11 +246,11 @@ public:
 
 	public:
 		Function(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
-			Firebird::IExternalEngine* aEngine,
+			IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
-			Firebird::IExternalFunction* aFunction,
-			Firebird::RefPtr<Firebird::IMessageMetadata> extInputParameters,
-			Firebird::RefPtr<Firebird::IMessageMetadata> extOutputParameters,
+			IExternalFunction* aFunction,
+			RefPtr<IMessageMetadata> extInputParameters,
+			RefPtr<IMessageMetadata> extOutputParameters,
 			const Jrd::Function* aUdf);
 		~Function() override;
 
@@ -261,11 +261,11 @@ public:
 		void validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const;
 
 	private:
-		Firebird::IExternalFunction* function;
+		IExternalFunction* function;
 		const Jrd::Function* udf;
-		Firebird::AutoPtr<Format> extInputFormat;
-		Firebird::AutoPtr<Format> extOutputFormat;
-		Firebird::AutoPtr<Impl> impl;
+		AutoPtr<Format> extInputFormat;
+		AutoPtr<Format> extOutputFormat;
+		AutoPtr<Impl> impl;
 		std::optional<ULONG> extInputImpureOffset;
 		std::optional<ULONG> extOutputImpureOffset;
 	};
@@ -278,16 +278,16 @@ public:
 
 	public:
 		Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
-			Firebird::IExternalEngine* aEngine,
+			IExternalEngine* aEngine,
 			RoutineMetadata* aMetadata,
-			Firebird::IExternalProcedure* aProcedure,
+			IExternalProcedure* aProcedure,
 			const jrd_prc* aPrc);
 		~Procedure() override;
 
 		ResultSet* open(thread_db* tdbb, UCHAR* inMsg, UCHAR* outMsg) const;
 
 	private:
-		Firebird::IExternalProcedure* procedure;
+		IExternalProcedure* procedure;
 		const jrd_prc* prc;
 	};
 
@@ -304,7 +304,7 @@ public:
 		Attachment* attachment;
 		bool firstFetch;
 		EngineAttachmentInfo* attInfo;
-		Firebird::IExternalResultSet* resultSet;
+		IExternalResultSet* resultSet;
 		CSetId charSet;
 	};
 
@@ -312,8 +312,8 @@ public:
 	{
 	public:
 		Trigger(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, ExtEngineManager* aExtManager,
-			Firebird::IExternalEngine* aEngine, RoutineMetadata* aMetadata,
-			Firebird::IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
+			IExternalEngine* aEngine, RoutineMetadata* aMetadata,
+			IExternalTrigger* aTrigger, const Jrd::Trigger* aTrg);
 		~Trigger() override;
 
 		void execute(thread_db* tdbb, Request* request, unsigned action,
@@ -321,17 +321,17 @@ public:
 
 	private:
 		void setupComputedFields(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb);
-		void setValues(thread_db* tdbb, Request* request, Firebird::Array<UCHAR>& msgBuffer, record_param* rpb) const;
+		void setValues(thread_db* tdbb, Request* request, Array<UCHAR>& msgBuffer, record_param* rpb) const;
 
 	public:
-		Firebird::Array<NestConst<StmtNode>> computedStatements;
+		Array<NestConst<StmtNode>> computedStatements;
 
 	private:
-		Firebird::AutoPtr<Format> format;
-		Firebird::IExternalTrigger* trigger;
+		AutoPtr<Format> format;
+		IExternalTrigger* trigger;
 		const Jrd::Trigger* trg;
-		Firebird::Array<USHORT> fieldsPos;
-		Firebird::Array<const DeclareVariableNode*> varDecls;
+		Array<USHORT> fieldsPos;
+		Array<const DeclareVariableNode*> varDecls;
 		USHORT computedCount;
 	};
 
@@ -346,32 +346,32 @@ public:
 	void closeAttachment(thread_db* tdbb, Attachment* attachment);
 
 	void makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
-		const MetaName& engine, const Firebird::string& entryPoint,
-		const Firebird::string& body);
+		const MetaName& engine, const string& entryPoint,
+		const string& body);
 	void makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_prc* prc,
-		const MetaName& engine, const Firebird::string& entryPoint,
-		const Firebird::string& body);
+		const MetaName& engine, const string& entryPoint,
+		const string& body);
 	void makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::Trigger* trg,
-		const MetaName& engine, const Firebird::string& entryPoint,
-		const Firebird::string& body, unsigned type);
+		const MetaName& engine, const string& entryPoint,
+		const string& body, unsigned type);
 
 private:
-	Firebird::IExternalEngine* getEngine(thread_db* tdbb,
+	IExternalEngine* getEngine(thread_db* tdbb,
 		const MetaName& name);
 	EngineAttachmentInfo* getEngineAttachment(thread_db* tdbb,
 		const MetaName& name);
 	EngineAttachmentInfo* getEngineAttachment(thread_db* tdbb,
-		Firebird::IExternalEngine* engine, bool closing = false);
-	void setupAdminCharSet(thread_db* tdbb, Firebird::IExternalEngine* engine,
+		IExternalEngine* engine, bool closing = false);
+	void setupAdminCharSet(thread_db* tdbb, IExternalEngine* engine,
 		EngineAttachmentInfo* attInfo);
 
 private:
-	typedef Firebird::GenericMap<Firebird::Pair<
-		Firebird::Left<MetaName, Firebird::IExternalEngine*> > > EnginesMap;
-	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<
+	typedef GenericMap<Pair<
+		Left<MetaName, IExternalEngine*> > > EnginesMap;
+	typedef GenericMap<Pair<NonPooled<
 		EngineAttachment, EngineAttachmentInfo*> >, EngineAttachment> EnginesAttachmentsMap;
 
-	Firebird::RWLock enginesLock;
+	RWLock enginesLock;
 	EnginesMap engines;
 	EnginesAttachmentsMap enginesAttachments;
 };

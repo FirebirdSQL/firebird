@@ -42,7 +42,7 @@ public:
 	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
 
 	virtual void initialize() {}
-	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const;
+	virtual void getRemoteError(const Jrd::FbStatusVector* status, string& err) const;
 
 protected:
 	virtual Connection* doCreateConnection();
@@ -72,8 +72,8 @@ public:
 	bool isConnected() const override { return (m_attachment != 0); }
 	bool validate(Jrd::thread_db* tdbb) override;
 
-	bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb, const CryptHash& ch) const override;
+	bool isSameDatabase(const PathName& dbName,
+		ClumpletReader& dpb, const CryptHash& ch) const override;
 
 	bool isCurrent() const override { return m_dpb.isEmpty(); }
 
@@ -86,8 +86,8 @@ protected:
 	Statement* doCreateStatement() override;
 	void doDetach(Jrd::thread_db* tdbb) override;
 
-	Firebird::AutoPlugin<Jrd::JProvider> m_provider;
-	Firebird::RefPtr<Jrd::JAttachment> m_attachment;
+	AutoPlugin<Jrd::JProvider> m_provider;
+	RefPtr<Jrd::JAttachment> m_attachment;
 };
 
 
@@ -108,13 +108,13 @@ public:
 	Jrd::JTransaction* getJrdTran() { return m_transaction; }
 
 protected:
-	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb);
+	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, ClumpletWriter& tpb);
 	virtual void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info);
 	virtual void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
 	virtual void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
 
 	InternalConnection& m_IntConnection;
-	Firebird::RefPtr<Jrd::JTransaction> m_transaction;
+	RefPtr<Jrd::JTransaction> m_transaction;
 };
 
 
@@ -127,7 +127,7 @@ protected:
 	~InternalStatement();
 
 protected:
-	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql);
+	virtual void doPrepare(Jrd::thread_db* tdbb, const string& sql);
 	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	virtual void doExecute(Jrd::thread_db* tdbb);
 	virtual void doOpen(Jrd::thread_db* tdbb);
@@ -138,7 +138,7 @@ protected:
 	{
 		if (m_inMetadata && index < m_inMetadata->getCount())
 		{
-			Firebird::FbLocalStatus status;
+			FbLocalStatus status;
 			return m_inMetadata->getAlias(&status, index);
 		}
 
@@ -156,9 +156,9 @@ protected:
 	InternalConnection& m_intConnection;
 	InternalTransaction* m_intTransaction;
 
-	Firebird::RefPtr<Jrd::JStatement> m_request;
-	Firebird::RefPtr<Jrd::JResultSet> m_cursor;
-	Firebird::RefPtr<Firebird::MsgMetadata> m_inMetadata, m_outMetadata;
+	RefPtr<Jrd::JStatement> m_request;
+	RefPtr<Jrd::JResultSet> m_cursor;
+	RefPtr<MsgMetadata> m_inMetadata, m_outMetadata;
 };
 
 
@@ -172,8 +172,8 @@ public:
 	~InternalBlob();
 
 public:
-	virtual void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc, const Firebird::UCharBuffer* bpb);
-	virtual void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc, const Firebird::UCharBuffer* bpb);
+	virtual void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc, const UCharBuffer* bpb);
+	virtual void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc, const UCharBuffer* bpb);
 	virtual USHORT read(Jrd::thread_db* tdbb, UCHAR* buff, USHORT len);
 	virtual void write(Jrd::thread_db* tdbb, const UCHAR* buff, USHORT len);
 	virtual void close(Jrd::thread_db* tdbb);
@@ -181,7 +181,7 @@ public:
 
 private:
 	InternalConnection& m_connection;
-	Firebird::RefPtr<Jrd::JBlob> m_blob;
+	RefPtr<Jrd::JBlob> m_blob;
 	ISC_QUAD m_blob_id;
 };
 

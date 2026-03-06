@@ -79,7 +79,6 @@
 // Service threads
 #include "../burp/burp_proto.h"
 #include "../alice/alice_proto.h"
-int main_gstat(Firebird::UtilSvc* uSvc);
 #include "../utilities/nbackup/nbk_proto.h"
 #include "../utilities/gsec/gsec_proto.h"
 #include "../jrd/trace/TraceService.h"
@@ -116,6 +115,8 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 #endif
 
 #include <sys/stat.h>
+
+int main_gstat(Firebird::UtilSvc* uSvc);
 
 namespace Firebird::Jrd
 {
@@ -529,7 +530,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 }
 
 void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
-	const Firebird::MsgFormat::SafeArg& args)
+	const MsgFormat::SafeArg& args)
 {
 	if (checkForShutdown() || checkForFailedStart())
 	{
@@ -554,9 +555,9 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 }
 
 
-void Service::put_status_arg(Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value)
+void Service::put_status_arg(Arg::StatusVector& status, const MsgFormat::safe_cell& value)
 {
-	using Firebird::MsgFormat::safe_cell;
+	using MsgFormat::safe_cell;
 
 	switch (value.type)
 	{
@@ -636,7 +637,7 @@ bool Service::utf8FileNames()
 	return svc_utf8;
 }
 
-Firebird::ICryptKeyCallback* Service::getCryptCallback()
+ICryptKeyCallback* Service::getCryptCallback()
 {
 	return svc_crypt_callback;
 }
@@ -672,7 +673,7 @@ namespace
 		val |= QUOTED_FILENAME_SUPPORT;
 #endif // WIN_NT
 
-		Firebird::MasterInterfacePtr master;
+		MasterInterfacePtr master;
 		switch (master->serverMode(-1))
 		{
 		case 1:		// super
@@ -690,7 +691,7 @@ namespace
 }
 
 Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_data,
-				 Firebird::ICryptKeyCallback* crypt_callback)
+				 ICryptKeyCallback* crypt_callback)
 	: svc_status(getPool()), svc_parsed_sw(getPool()),
 	svc_stdout_head(0), svc_stdout_tail(0), svc_service_run(NULL),
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
@@ -807,7 +808,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 
 		svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager(this);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		TraceManager* trace_manager = NULL;
 		FbLocalStatus status_vector;
@@ -835,7 +836,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 			if (!hasTrace)
 				delete trace_manager;
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 		}
 
@@ -1531,7 +1532,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_QUERY))
 		{
@@ -1907,7 +1908,7 @@ void Service::query(USHORT			send_item_length,
 		*info = isc_info_end;
 	}
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_QUERY))
 		{
@@ -2151,7 +2152,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 		{
@@ -2191,8 +2192,8 @@ void Service::readFbLog()
 {
 	bool svc_started = false;
 
-	Firebird::PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
-	FILE* file = Firebird::os_utils::fopen(name.c_str(), "r");
+	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
+	FILE* file = os_utils::fopen(name.c_str(), "r");
 
 	try
 	{
@@ -2229,7 +2230,7 @@ void Service::readFbLog()
 			}
 		}
 	}
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
 		setDataMode(false);
 

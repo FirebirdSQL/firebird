@@ -39,14 +39,14 @@ namespace Firebird::Jrd::EDS
 namespace {
 
 class DummyCryptKey final :
-    public Firebird::AutoIface<Firebird::ICryptKeyImpl<DummyCryptKey, Firebird::CheckStatusWrapper> >
+    public AutoIface<ICryptKeyImpl<DummyCryptKey, CheckStatusWrapper> >
 {
 public:
 	// ICryptKey implementation
-	void setSymmetric(Firebird::CheckStatusWrapper* status, const char* type, unsigned keyLength, const void* key)
+	void setSymmetric(CheckStatusWrapper* status, const char* type, unsigned keyLength, const void* key)
 	{ }
 
-	void setAsymmetric(Firebird::CheckStatusWrapper* status, const char* type, unsigned encryptKeyLength,
+	void setAsymmetric(CheckStatusWrapper* status, const char* type, unsigned encryptKeyLength,
 		const void* encryptKey, unsigned decryptKeyLength, const void* decryptKey)
 	{ }
 
@@ -79,7 +79,7 @@ public:
 		return 1;
 	}
 
-	// Firebird::IClientBlock implementation
+	// IClientBlock implementation
 	const char* getLogin() override
 	{
 		return login.c_str();
@@ -98,12 +98,12 @@ public:
 
 	void putData(CheckStatusWrapper* status, unsigned int length, const void* d) override;
 
-	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status) override
+	ICryptKey* newKey(CheckStatusWrapper* status) override
 	{
 		return &dummyCryptKey;
 	}
 
-	Firebird::IAuthBlock* getAuthBlock(Firebird::CheckStatusWrapper*) override
+	IAuthBlock* getAuthBlock(CheckStatusWrapper*) override
 	{
 		return nullptr;
 	}
@@ -127,7 +127,7 @@ public:
 		cBlock->sBlock = this;
 	}
 
-	// Firebird::IServerBlock implementation
+	// IServerBlock implementation
 	const char* getLogin()
 	{
 		return cBlock->getLogin();
@@ -141,7 +141,7 @@ public:
 
 	void putData(CheckStatusWrapper* status, unsigned int length, const void* d);
 
-	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status)
+	ICryptKey* newKey(CheckStatusWrapper* status)
 	{
 		return &dummyCryptKey;
 	}
@@ -224,7 +224,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 
 		CBlock cBlock(login, password);
 		SBlock sBlock(&cBlock);
-		Firebird::Auth::WriterImplementation writer;
+		Auth::WriterImplementation writer;
 		writer.setPlugin(client.name());
 
 		const int MAXLIMIT = 100;
@@ -245,7 +245,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 				continue;
 
 			case IAuth::AUTH_FAILED:
-				if (s.getState() & Firebird::IStatus::STATE_ERRORS)
+				if (s.getState() & IStatus::STATE_ERRORS)
 				{
 					iscLogStatus("Authentication failed, client plugin:", &s);
 					code = isc_login_error;
@@ -277,7 +277,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 				break;
 
 			case IAuth::AUTH_FAILED:
-				if (s.getState() & Firebird::IStatus::STATE_ERRORS)
+				if (s.getState() & IStatus::STATE_ERRORS)
 				{
 					iscLogStatus("Authentication faled, server plugin:", &s);
 					code = isc_login_error;

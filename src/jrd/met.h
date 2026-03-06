@@ -226,13 +226,13 @@ struct DSqlCacheItem;
 
 typedef std::atomic<Cached::Triggers*> TriggersSet;
 
-class MetadataCache : public Firebird::PermanentStorage
+class MetadataCache : public PermanentStorage
 {
 	friend class CharSetContainer;
 
 public:
 	MetadataCache(MemoryPool& pool)
-		: Firebird::PermanentStorage(pool),
+		: PermanentStorage(pool),
 		  mdc_generators(getPool()),
 		  mdc_relations(getPool()),
 		  mdc_procedures(getPool()),
@@ -504,7 +504,7 @@ private:
 
 	class GeneratorFinder
 	{
-		typedef Firebird::MutexLockGuard Guard;
+		typedef MutexLockGuard Guard;
 
 	public:
 		explicit GeneratorFinder(MemoryPool& pool)
@@ -556,8 +556,8 @@ private:
 		}
 
 	private:
-		Firebird::Array<QualifiedName> m_objects;
-		Firebird::Mutex m_tx;
+		Array<QualifiedName> m_objects;
+		Mutex m_tx;
 	};
 
 	class CleanupQueue
@@ -592,8 +592,8 @@ private:
 			{ }
 		};
 
-		Firebird::Mutex cq_mutex;
-		Firebird::HalfStaticArray<Stored, 32> cq_data;
+		Mutex cq_mutex;
+		HalfStaticArray<Stored, 32> cq_data;
 		TraNumber cq_traNum = MAX_TRA_NUMBER;
 		FB_SIZE_T cq_pos = 0;
 

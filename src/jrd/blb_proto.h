@@ -37,8 +37,8 @@ namespace Firebird::Jrd
 
 
 void BLB_garbage_collect(Jrd::thread_db*, Jrd::RecordStack&, Jrd::RecordStack&, ULONG, Jrd::jrd_rel*);
-void BLB_gen_bpb(SSHORT source, SSHORT target, UCHAR sourceCharset, UCHAR targetCharset, Firebird::UCharBuffer& bpb);
-void BLB_gen_bpb_from_descs(const dsc*, const dsc*, Firebird::UCharBuffer&);
+void BLB_gen_bpb(SSHORT source, SSHORT target, UCHAR sourceCharset, UCHAR targetCharset, UCharBuffer& bpb);
+void BLB_gen_bpb_from_descs(const dsc*, const dsc*, UCharBuffer&);
 
 
 class AutoBlb

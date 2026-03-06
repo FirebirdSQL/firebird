@@ -197,7 +197,7 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 
 static void ensure_relation_reload(thread_db* tdbb, MetaId id, jrd_tra* transaction)
 {
-	Firebird::AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+	AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
 		&thread_db::getTransaction,
 		&thread_db::setTransaction,
 		transaction);

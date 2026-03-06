@@ -38,31 +38,31 @@ namespace Firebird::Jrd {
 
 class Attachment;
 
-class EventManager final : public Firebird::GlobalStorage, public Firebird::IpcObject
+class EventManager final : public GlobalStorage, public IpcObject
 {
 	const int PID;
 
 public:
-	EventManager(const Firebird::string& id, const Firebird::Config* conf);
+	EventManager(const string& id, const Config* conf);
 	~EventManager();
 
 	static void init(Attachment*);
 
 	void deleteSession(SLONG);
 
-	SLONG queEvents(SLONG, USHORT, const UCHAR*, Firebird::IEventCallback*);
+	SLONG queEvents(SLONG, USHORT, const UCHAR*, IEventCallback*);
 	void cancelEvents(SLONG);
 	void postEvent(USHORT, const TEXT*, USHORT);
 	void deliverEvents();
 
-	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	bool initialize(SharedMemoryBase*, bool) override;
 	void mutexBug(int osErrorCode, const char* text) override;
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_EVENT_MANAGER; }
+	USHORT getType() const override { return SharedMemoryBase::SRAM_EVENT_MANAGER; }
 	USHORT getVersion() const override { return EVENT_VERSION; }
 	const char* getName() const override { return "EventManager";}
 
-	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<EventManager*>::ThreadRoutine* routine);
+	void exceptionHandler(const Exception& ex, ThreadFinishSync<EventManager*>::ThreadRoutine* routine);
 
 private:
 	void acquire_shmem();
@@ -100,11 +100,11 @@ private:
 	prb* m_process;
 	SLONG m_processOffset;
 
-	const Firebird::string& m_dbId;
-	const Firebird::Config* const m_config;
-	Firebird::AutoPtr<Firebird::SharedMemory<evh> > m_sharedMemory;
+	const string& m_dbId;
+	const Config* const m_config;
+	AutoPtr<SharedMemory<evh> > m_sharedMemory;
 
-	Firebird::Semaphore m_startupSemaphore;
+	Semaphore m_startupSemaphore;
 	ThreadFinishSync<EventManager*> m_cleanupSync;
 
 	bool m_sharedFileCreated;

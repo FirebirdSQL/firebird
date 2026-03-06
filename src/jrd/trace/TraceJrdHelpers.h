@@ -32,10 +32,9 @@
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
-using Firebird::ITracePlugin;
-using Firebird::ITraceFactory;
 
 class TraceTransactionEnd
 {
@@ -88,14 +87,14 @@ private:
 	jrd_tra* const m_transaction;
 	const ISC_INT64 m_prevID;
 	SINT64 m_start_clock;
-	Firebird::AutoPtr<RuntimeStatistics> m_baseline;
+	AutoPtr<RuntimeStatistics> m_baseline;
 };
 
 
 class TraceProcCompile
 {
 public:
-	TraceProcCompile(thread_db* tdbb, const Firebird::string& name) :
+	TraceProcCompile(thread_db* tdbb, const string& name) :
 		m_tdbb(tdbb), m_name(name)
 	{
 		const auto attachment = m_tdbb->getAttachment();
@@ -136,7 +135,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	const Firebird::string m_name;
+	const string m_name;
 	SINT64 m_start_clock;
 };
 
@@ -290,7 +289,7 @@ private:
 class TraceFuncCompile
 {
 public:
-	TraceFuncCompile(thread_db* tdbb, const Firebird::string& name) :
+	TraceFuncCompile(thread_db* tdbb, const string& name) :
 		m_tdbb(tdbb),
 		m_name(name)
 	{
@@ -332,7 +331,7 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	const Firebird::string m_name;
+	const string m_name;
 	SINT64 m_start_clock;
 };
 
@@ -510,8 +509,8 @@ public:
 private:
 	bool m_need_trace;
 	thread_db* const m_tdbb;
-	Firebird::string m_name;
-	Firebird::string m_relationName;
+	string m_name;
+	string m_relationName;
 	int m_which = 0;
 	int m_action = 0;
 	SINT64 m_start_clock;

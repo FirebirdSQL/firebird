@@ -36,9 +36,9 @@
 
 namespace Firebird::Jrd {
 
-using QualifiedName = Firebird::BaseQualifiedName<MetaName>;
-using QualifiedNameMetaNamePair = Firebird::FullPooledPair<QualifiedName, MetaName>;
-using QualifiedNamePair = Firebird::FullPooledPair<QualifiedName, QualifiedName>;
+using QualifiedName = BaseQualifiedName<MetaName>;
+using QualifiedNameMetaNamePair = FullPooledPair<QualifiedName, MetaName>;
+using QualifiedNamePair = FullPooledPair<QualifiedName, QualifiedName>;
 
 } // namespace Firebird::Jrd
 

@@ -122,7 +122,7 @@ private:
 
 	thread_db* m_tdbb;
 	jrd_tra* m_transaction;
-	Firebird::SortedArray<relLock, Firebird::InlineStorage<relLock, 2>, USHORT, relLock> m_locks;
+	SortedArray<relLock, InlineStorage<relLock, 2>, USHORT, relLock> m_locks;
 };
 
 /*

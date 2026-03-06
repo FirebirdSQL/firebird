@@ -73,11 +73,11 @@ class Resources;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
+	SecDbContext(IAttachment* a, ITransaction* t) noexcept;
 	~SecDbContext();
 
-	Firebird::IAttachment* att;
-	Firebird::ITransaction* tra;
+	IAttachment* att;
+	ITransaction* tra;
 	int savePoint;
 };
 
@@ -104,14 +104,14 @@ struct BlobIndex
 	{ }
 };
 
-typedef Firebird::BePlusTree<BlobIndex, ULONG, BlobIndex> BlobIndexTree;
-typedef Firebird::BePlusTree<bid, bid> FetchedBlobIdTree;
+typedef BePlusTree<BlobIndex, ULONG, BlobIndex> BlobIndexTree;
+typedef BePlusTree<bid, bid> FetchedBlobIdTree;
 
 // Transaction block
 
 struct CallerName
 {
-	CallerName(int aType, const QualifiedName& aName, const Firebird::MetaString& aUserName)
+	CallerName(int aType, const QualifiedName& aName, const MetaString& aUserName)
 		: type(aType),
 		  name(aName),
 		  userName(aUserName)
@@ -142,11 +142,11 @@ struct CallerName
 
 	int type;
 	QualifiedName name;
-	Firebird::MetaString userName;
+	MetaString userName;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
+typedef GenericMap<Pair<NonPooled<SINT64, ULONG> > > ReplBlobMap;
+typedef GenericMap<Pair<NonPooled<SLONG, blb*> > > BlobUtilMap;
 
 inline constexpr int DEFAULT_LOCK_TIMEOUT = -1; // infinite
 inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
@@ -155,13 +155,13 @@ inline constexpr ULONG MAX_TEMP_BLOBS = 1000;
 
 class jrd_tra final : public pool_alloc<type_tra>
 {
-	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, SINT64> > > GenIdCache;
+	typedef GenericMap<Pair<NonPooled<USHORT, SINT64> > > GenIdCache;
 
 	static constexpr size_t MAX_UNDO_RECORDS = 2;
-	typedef Firebird::HalfStaticArray<Record*, MAX_UNDO_RECORDS> UndoRecordList;
+	typedef HalfStaticArray<Record*, MAX_UNDO_RECORDS> UndoRecordList;
 
 public:
-	jrd_tra(MemoryPool* p, Firebird::MemoryStats* parent_stats,
+	jrd_tra(MemoryPool* p, MemoryStats* parent_stats,
 			Attachment* attachment, jrd_tra* outer)
 	:	tra_attachment(attachment),
 		tra_pool(p),
@@ -177,7 +177,7 @@ public:
 		traLttRel(*p),
 		tra_context_vars(*p),
 		tra_lock_timeout(DEFAULT_LOCK_TIMEOUT),
-		tra_timestamp(Firebird::TimeZoneUtil::getCurrentSystemTimeStamp()),
+		tra_timestamp(TimeZoneUtil::getCurrentSystemTimeStamp()),
 		tra_stats(*p),
 		tra_open_cursors(*p),
 		tra_outer(outer),
@@ -238,7 +238,7 @@ public:
 			else
 			{
 				MemoryPool* const pool = transaction->tra_pool;
-				Firebird::MemoryStats temp_stats;
+				MemoryStats temp_stats;
 				pool->setStatsGroup(temp_stats);
 				delete transaction;
 				attachment->att_database->deletePool(pool);
@@ -270,7 +270,7 @@ public:
 	TraNumber tra_initial_number;		// initial transaction number, not changed by retain context
 	jrd_tra* tra_next;					// next transaction in attachment
 	MemoryPool* const tra_pool;			// pool for transaction
-	Firebird::MemoryStats	tra_memory_stats;
+	MemoryStats	tra_memory_stats;
 	BlobIndexTree tra_blobs_tree;		// list of active blobs
 	BlobIndexTree* tra_blobs;			// pointer to actual list of active blobs
 	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
@@ -286,9 +286,9 @@ public:
 	SavNumber tra_save_point_number;	// next save point number to use
 	ULONG tra_flags;
 	DeferredJob*	tra_deferred_job;	// work deferred to commit time
-	Firebird::SortedArray<ExternalFile*>		traExtRel;	// extfile access list
-	Firebird::SortedArray<Cached::Relation*>	traLttRel;	// LTT access list
-	Firebird::StringMap tra_context_vars;	// Context variables for the transaction
+	SortedArray<ExternalFile*>		traExtRel;	// extfile access list
+	SortedArray<Cached::Relation*>	traLttRel;	// LTT access list
+	StringMap tra_context_vars;	// Context variables for the transaction
 	traRpbList* tra_rpblist;			// active record_param's of given transaction
 	UCHAR tra_use_count;				// use count for safe AST delivery
 	UCHAR tra_callback_count;			// callback count for 'execute statement'
@@ -299,7 +299,7 @@ public:
 	Request* tra_requests;				// Doubly linked list of requests active in this transaction
 	MonitoringSnapshot* tra_mon_snapshot;	// Database state snapshot (for monitoring purposes)
 	RuntimeStatistics tra_stats;
-	Firebird::Array<DsqlCursor*> tra_open_cursors;
+	Array<DsqlCursor*> tra_open_cursors;
 	bool tra_in_use;					// transaction in use (can't be committed or rolled back)
 	jrd_tra* const tra_outer;			// outer transaction of an autonomous transaction
 	CallerName tra_caller_name;			// caller object name
@@ -311,8 +311,8 @@ public:
 	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;
 	GenIdCache* tra_gen_ids;
-	Firebird::IReplicatedTransaction* tra_replicator;
-	Firebird::LeftPooledMap<QualifiedName, class dsql_rel*> tra_cache_rels;	// accessed DSQL relations
+	IReplicatedTransaction* tra_replicator;
+	LeftPooledMap<QualifiedName, class dsql_rel*> tra_cache_rels;	// accessed DSQL relations
 	MdcVersion tra_mdc_version = 0;
 
 private:
@@ -393,7 +393,7 @@ public:
 	TimeZoneSnapshot* getTimeZoneSnapshot(thread_db* tdbb);
 	UserManagement* getUserManagement();
 	SecDbContext* getSecDbContext() noexcept;
-	SecDbContext* setSecDbContext(Firebird::IAttachment* att, Firebird::ITransaction* tra);
+	SecDbContext* setSecDbContext(IAttachment* att, ITransaction* tra);
 	void eraseSecDbContext() noexcept;
 	MappingList* getMappingList();
 	Record* findNextUndo(VerbAction* before_this, jrd_rel* relation, SINT64 number);

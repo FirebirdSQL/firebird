@@ -201,11 +201,11 @@ namespace
 		}
 	};
 
-	class LocalThreadContext : Firebird::ContextPoolHolder
+	class LocalThreadContext : ContextPoolHolder
 	{
 	public:
 		LocalThreadContext(thread_db* tdbb, jrd_tra* tra, Request* req = NULL)
-			: Firebird::ContextPoolHolder(req ? req->req_pool : tdbb->getDefaultPool()),
+			: ContextPoolHolder(req ? req->req_pool : tdbb->getDefaultPool()),
 			  m_tdbb(tdbb)
 		{
 			tdbb->setTransaction(tra);

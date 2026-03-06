@@ -127,7 +127,7 @@ ULONG maxIndices(ULONG page_size) noexcept
 		(sizeof(index_root_page::irt_repeat) + sizeof(irtd)));
 }
 
-Firebird::string pagtype(UCHAR type)
+string pagtype(UCHAR type)
 {
 	// Print pretty name for database page type
 
@@ -145,7 +145,7 @@ Firebird::string pagtype(UCHAR type)
 		"SCN inventory"
 	};
 
-	Firebird::string rc;
+	string rc;
 	if (type < FB_NELEM(nameArray))
 		rc = nameArray[type];
 	else

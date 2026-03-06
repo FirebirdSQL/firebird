@@ -618,7 +618,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 }
 
 
-static void explain_pp_bits(const UCHAR bits, Firebird::string& names)
+static void explain_pp_bits(const UCHAR bits, string& names)
 {
 	if (bits & Ods::ppg_dp_full)
 		names = "full";
@@ -686,7 +686,7 @@ bool VAL_validate(thread_db* tdbb, USHORT switches)
 }
 
 
-static int validate(Firebird::UtilSvc* svc)
+static int validate(UtilSvc* svc)
 {
 	PathName dbName;
 	string userName;
@@ -780,7 +780,7 @@ static int validate(Firebird::UtilSvc* svc)
 }
 
 
-int VAL_service(Firebird::UtilSvc* svc)
+int VAL_service(UtilSvc* svc)
 {
 	svc->getStatusAccessor().init();
 
@@ -1019,7 +1019,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 	vdr_tdbb = tdbb;
 	MemoryPool* val_pool = NULL;
 	Database* dbb = tdbb->getDatabase();
-	Firebird::PathName fileName = tdbb->getAttachment()->att_filename;
+	PathName fileName = tdbb->getAttachment()->att_filename;
 
 	try
 	{
@@ -1057,11 +1057,11 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 		gds__log("Database: %s\n\tValidation finished: %d errors, %d warnings, %d fixed",
 			fileName.c_str(), vdr_errors, vdr_warns, vdr_fixed);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 
-		Firebird::string err;
+		string err;
 		err.printf("Database: %s\n\tValidation aborted", fileName.c_str());
 		iscLogStatus(err.c_str(), tdbb->tdbb_status_vector);
 
@@ -1627,7 +1627,7 @@ void Validation::walk_database()
 	if (vdr_flags & VDR_online)
 		release_page(&window);
 
-	Firebird::Cleanup hdrPage([&] {
+	Cleanup hdrPage([&] {
 		if (!(vdr_flags & VDR_online))
 			release_page(&window);
 	});
@@ -2639,7 +2639,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 				UCHAR &pp_bits = PPG_DP_BITS_BYTE(bits, slot);
 				if (pp_bits != new_pp_bits)
 				{
-					Firebird::string s_pp, s_dp;
+					string s_pp, s_dp;
 					explain_pp_bits(pp_bits, s_pp);
 					explain_pp_bits(new_pp_bits, s_dp);
 
@@ -3174,7 +3174,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	}
 
 	}	// try
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		if (!(vdr_flags & VDR_online))
 		{

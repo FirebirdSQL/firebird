@@ -128,7 +128,7 @@ namespace
 			if (PathUtils::isRelative(filename))
 				filename = fb_utils::getPrefix(IConfigManager::DIR_CONF, filename.c_str());
 
-			AutoPtr<FILE> file(Firebird::os_utils::fopen(filename.c_str(), "rt"));
+			AutoPtr<FILE> file(os_utils::fopen(filename.c_str(), "rt"));
 			if (!file)
 				configError("missing or inaccessible file", key, filename.c_str());
 

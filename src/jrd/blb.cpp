@@ -2979,7 +2979,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 }
 
 // Used by DPM_store_blob
-void blb::storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHAR** data, void* stack)
+void blb::storeToPage(USHORT* length, Array<UCHAR>& buffer, const UCHAR** data, void* stack)
 {
 	if (blb_level == 0)
 	{

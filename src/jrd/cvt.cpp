@@ -456,7 +456,7 @@ ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc* desc)
 }
 
 
-Firebird::GlobalPtr<EngineCallbacks> EngineCallbacks::instance;
+GlobalPtr<EngineCallbacks> EngineCallbacks::instance;
 
 
 bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CSetId& charset2)

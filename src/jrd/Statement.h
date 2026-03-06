@@ -105,7 +105,7 @@ public:
 	Request* verifyRequestSynchronization(USHORT level);
 	void release(thread_db* tdbb);
 
-	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
+	string getPlan(thread_db* tdbb, bool detailed) const;
 	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
 	const Resources* getResources()
@@ -133,7 +133,7 @@ public:
 
 private:
 	Requests requests;					// vector of requests
-	Firebird::Mutex requestsGrow;		// requests' vector protection when adding new element
+	Mutex requestsGrow;		// requests' vector protection when adding new element
 
 public:
 	ExternalAccessList externalList;	// Access to procedures/triggers to be checked
@@ -143,20 +143,20 @@ public:
 	QualifiedName triggerName;		// name of request (trigger), if any
 	Jrd::UserId* triggerInvoker;		// user name if trigger run with SQL SECURITY DEFINER
 	Statement* parentStatement;		// Sub routine's parent statement
-	Firebird::Array<Statement*> subStatements;	// Array of subroutines' statements
+	Array<Statement*> subStatements;	// Array of subroutines' statements
 	const StmtNode* topNode;			// top of execution tree
-	Firebird::Array<const Select*> fors;	// select expressions
-	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
-	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
-	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
-	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query
+	Array<const Select*> fors;	// select expressions
+	Array<const DeclareLocalTableNode*> localTables;	// local tables
+	Array<ULONG*> invariants;	// pointer to nodes invariant offsets
+	RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
+	Array<UCHAR> blr;			// BLR for non-SQL query
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
 
 private:
 	Resources* resources;				// Resources (relations, routines, etc.)
-	Firebird::RefPtr<VersionedObjects> latestVer;
-	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
-	Firebird::Array<MessageNode*> messages;	// Input/output messages
+	RefPtr<VersionedObjects> latestVer;
+	Mutex lvMutex;			// Protects upgrade of latestVer
+	Array<MessageNode*> messages;	// Input/output messages
 };
 
 

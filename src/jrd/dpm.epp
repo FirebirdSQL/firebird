@@ -2465,7 +2465,7 @@ RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, jrd_rel* relation, Recor
 	USHORT length;
 	const UCHAR* q;
 	PageStack stack;
-	Firebird::Array<UCHAR> buffer;
+	Array<UCHAR> buffer;
 
 	blob->storeToPage(&length, buffer, &q, &stack);
 

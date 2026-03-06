@@ -611,7 +611,7 @@ void resetMap(const char* securityDb, ULONG index);
 
 // ----------------------------------------------------
 
-class MappingHeader final : public Firebird::MemoryHeader
+class MappingHeader final : public MemoryHeader
 {
 public:
 	SLONG currentProcess;
@@ -632,7 +632,7 @@ public:
 	static constexpr ULONG FLAG_DELIVER = 0x2;
 };
 
-class MappingIpc final : public Firebird::IpcObject
+class MappingIpc final : public IpcObject
 {
 	static constexpr USHORT MAPPING_VERSION = 1;
 	static constexpr size_t DEFAULT_SIZE = 1024 * 1024;
@@ -1272,7 +1272,7 @@ void resetMap(const char* db, ULONG index)
 
 } // anonymous namespace
 
-Mapping::Mapping(const ULONG f, Firebird::ICryptKeyCallback* cryptCb)
+Mapping::Mapping(const ULONG f, ICryptKeyCallback* cryptCb)
 	: flags(f),
 	  internalFlags(0),
 	  cryptCallback(cryptCb),
@@ -1328,13 +1328,13 @@ bool Mapping::ensureCachePresence(RefPtr<Mapping::Cache>& cache, const char* ali
 }
 
 
-void Mapping::needAuthMethod(Firebird::string& method) noexcept
+void Mapping::needAuthMethod(string& method) noexcept
 {
 	fb_assert(!authMethod);
 	authMethod = &method;
 }
 
-void Mapping::needAuthBlock(Firebird::AuthReader::AuthBlock& block) noexcept
+void Mapping::needAuthBlock(AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!newAuthBlock);
 	newAuthBlock = &block;
@@ -1346,7 +1346,7 @@ void Mapping::needSystemPrivileges(UserId::Privileges& privileges) noexcept
 	systemPrivileges = &privileges;
 }
 
-void Mapping::setAuthBlock(const Firebird::AuthReader::AuthBlock& block) noexcept
+void Mapping::setAuthBlock(const AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!authBlock);
 	authBlock = &block;
@@ -1382,13 +1382,13 @@ void Mapping::setInternalFlags()
 	}
 }
 
-void Mapping::setSqlRole(const Firebird::string& role) noexcept
+void Mapping::setSqlRole(const string& role) noexcept
 {
 	fb_assert(!sqlRole);
 	sqlRole = &role;
 }
 
-void Mapping::setDb(const char* a, const char* d, Firebird::IAttachment* attachment)
+void Mapping::setDb(const char* a, const char* d, IAttachment* attachment)
 {
 	fb_assert(!mainAlias);
 	fb_assert(!mainDb);

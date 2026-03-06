@@ -65,7 +65,7 @@ public:
 	ISC_STATUS*		ctl_status;			// Address of status vector
 	IPTR		ctl_data[8];			// Application specific data
 	void*	ctl_internal[3];			// Firebird internal-use only
-	Firebird::string	ctl_exception_message;	// Message to use in case of filter exception
+	string	ctl_exception_message;	// Message to use in case of filter exception
 public:
 	explicit BlobControl(MemoryPool& p)
 		: ctl_exception_message(p)
@@ -85,7 +85,7 @@ class BlobFilter : public pool_alloc<type_blf>
 	SSHORT		blf_from;				// Source sub-type
 	SSHORT		blf_to;					// Target sub-type
 	FPTR_BFILTER_CALLBACK	blf_filter;	// Entrypoint of filter
-	Firebird::string	blf_exception_message;	// message to be used in case of filter exception
+	string	blf_exception_message;	// message to be used in case of filter exception
     public:
 	explicit BlobFilter(MemoryPool& p)
 		: blf_exception_message(p)

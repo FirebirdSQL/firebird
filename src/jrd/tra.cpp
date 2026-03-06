@@ -85,7 +85,7 @@ namespace Firebird::Jrd
 {
 
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
+typedef GenericMap<Pair<NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
 
 
 #ifdef SUPERSERVER_V2
@@ -1217,7 +1217,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 				{
 					const ULONG temp_id = current->bli_temp_id;
 					current->bli_blob_object->BLB_cancel(tdbb);
-					if (!transaction->tra_blobs->locate(Firebird::locGreat, temp_id))
+					if (!transaction->tra_blobs->locate(locGreat, temp_id))
 						break;
 				}
 			}
@@ -1399,7 +1399,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 				state = tra_committed;
 			}
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			// Prevent a bugcheck in TRA_set_state to cause a loop
 			// Clear the error because the rollback will succeed.
@@ -1890,7 +1890,7 @@ void TRA_sweep(thread_db* tdbb)
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		PathName message = "Error during sweep of ";
 		message += dbb->dbb_database_name;
@@ -1905,7 +1905,7 @@ void TRA_sweep(thread_db* tdbb)
 			{
 				TRA_commit(tdbb, transaction, false);
 			}
-			catch (const Firebird::Exception& ex2)
+			catch (const Exception& ex2)
 			{
 				ex2.stuffException(tdbb->tdbb_status_vector);
 			}
@@ -3816,7 +3816,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (dbb->isReplicating(tdbb))
 			trans->tra_flags |= TRA_replicating;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		LCK_release(tdbb, lock);
 		trans->tra_lock = nullptr;

@@ -43,13 +43,13 @@ enum class CreateGrant
 	ASSUMED		// User is admin and has all rights
 };
 
-CreateGrant checkCreateDatabaseGrant(const Firebird::MetaString& userName, const Firebird::MetaString& trustedRole,
-	const Firebird::MetaString& sqlRole, const char* securityDb);
+CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
+	const MetaString& sqlRole, const char* securityDb);
 
 class DbCreatorsScan: public VirtualTableScan
 {
 public:
-	DbCreatorsScan(CompilerScratch* csb, const Firebird::string& alias,
+	DbCreatorsScan(CompilerScratch* csb, const string& alias,
 					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}

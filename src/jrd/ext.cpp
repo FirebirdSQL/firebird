@@ -137,12 +137,12 @@ void ExternalFile::open(Database* dbb)
 	// If the database is updateable then try opening the external files in RW mode.
 	ext_flags = 0;
 	if (!dbb->readOnly())
-		ext_ifi = Firebird::os_utils::fopen(ext_filename, FOPEN_TYPE);
+		ext_ifi = os_utils::fopen(ext_filename, FOPEN_TYPE);
 
 	// If the DB is ReadOnly or RW access failed then open the external files only in ReadOnly mode.
 	if (!ext_ifi)
 	{
-		if (!(ext_ifi = Firebird::os_utils::fopen(ext_filename, FOPEN_READ_ONLY)))
+		if (!(ext_ifi = os_utils::fopen(ext_filename, FOPEN_READ_ONLY)))
 		{
 			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(ext_filename) <<
 					 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
@@ -181,7 +181,7 @@ double ExternalFile::getCardinality(thread_db* tdbb, jrd_rel* relation) noexcept
 			if (!_fstat64(_fileno(ext_ifi), &statistics))
 #else
 			struct STAT statistics;
-			if (!Firebird::os_utils::fstat(fileno(ext_ifi), &statistics))
+			if (!os_utils::fstat(fileno(ext_ifi), &statistics))
 #endif
 			{
 				file_size = statistics.st_size;

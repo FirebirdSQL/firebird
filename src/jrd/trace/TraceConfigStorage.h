@@ -52,7 +52,7 @@ namespace Firebird::Jrd {
 
 class StorageGuard;
 
-struct TraceCSHeader final : public Firebird::MemoryHeader
+struct TraceCSHeader final : public MemoryHeader
 {
 	static constexpr USHORT TRACE_STORAGE_VERSION = 2;
 	static constexpr USHORT TRACE_STORAGE_MAX_SLOTS = 1000;
@@ -85,7 +85,7 @@ static_assert(sizeof(TraceCSHeader) < TraceCSHeader::TRACE_STORAGE_MIN_SIZE,
 			  "TraceCSHeader not fits TRACE_STORAGE_MIN_SIZE");
 
 
-class ConfigStorage final : public Firebird::GlobalStorage, public Firebird::IpcObject, public Firebird::Reasons
+class ConfigStorage final : public GlobalStorage, public IpcObject, public Reasons
 {
 public:
 	enum GET_FLAGS {ALL, FLAGS, AUTH};
@@ -93,12 +93,12 @@ public:
 	ConfigStorage();
 	~ConfigStorage();
 
-	void addSession(Firebird::TraceSession& session);
-	void updateFlags(const Firebird::TraceSession& session);
+	void addSession(TraceSession& session);
+	void updateFlags(const TraceSession& session);
 	void removeSession(ULONG id);
 
 	// get session by sesion id
-	bool getSession(Firebird::TraceSession& session, GET_FLAGS getFlag);
+	bool getSession(TraceSession& session, GET_FLAGS getFlag);
 
 	ULONG getChangeNumber() const
 	{ return m_sharedMemory && m_sharedMemory->getHeader() ? m_sharedMemory->getHeader()->change_number.load() : 0; }
@@ -108,7 +108,7 @@ public:
 
 	void shutdown();
 
-	mutable Firebird::Mutex m_localMutex;
+	mutable Mutex m_localMutex;
 
 	class Accessor
 	{
@@ -129,7 +129,7 @@ public:
 			m_nextIdx = 0;
 		}
 
-		bool getNext(Firebird::TraceSession& session, GET_FLAGS getFlag);
+		bool getNext(TraceSession& session, GET_FLAGS getFlag);
 
 	private:
 		ConfigStorage* const m_storage;
@@ -141,18 +141,18 @@ public:
 
 private:
 	void mutexBug(int osErrorCode, const char* text) override;
-	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	bool initialize(SharedMemoryBase*, bool) override;
 
 	void initSharedFile();
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_CONFIG; }
+	USHORT getType() const override { return SharedMemoryBase::SRAM_TRACE_CONFIG; }
 	USHORT getVersion() const override { return TraceCSHeader::TRACE_STORAGE_VERSION; }
 	const char* getName() const override { return "TraceConfigStorage"; }
 
 	void checkAudit();
 
 	class TouchFile final :
-		public Firebird::RefCntIface<Firebird::ITimerImpl<TouchFile, Firebird::CheckStatusWrapper> >
+		public RefCntIface<ITimerImpl<TouchFile, CheckStatusWrapper> >
 	{
 	public:
 		TouchFile() :
@@ -164,9 +164,9 @@ private:
 		void stop();
 
 	private:
-		Firebird::PathName fileName;
+		PathName fileName;
 	};
-	Firebird::RefPtr<TouchFile> m_timer;
+	RefPtr<TouchFile> m_timer;
 
 	void checkDirty() noexcept
 	{
@@ -206,14 +206,14 @@ private:
 	void compact();
 	bool validate();
 
-	ULONG getSessionSize(const Firebird::TraceSession& session) noexcept;
+	ULONG getSessionSize(const TraceSession& session) noexcept;
 
 	bool findSession(ULONG sesId, ULONG& idx);
-	bool readSession(const TraceCSHeader::Slot* slot, Firebird::TraceSession& session, GET_FLAGS getFlag);
+	bool readSession(const TraceCSHeader::Slot* slot, TraceSession& session, GET_FLAGS getFlag);
 
 	// Search for used slot starting from nextIdx and increments nextIdx to point to the next slot
 	// returns false, if used slot was not found
-	bool getNextSession(Firebird::TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx);
+	bool getNextSession(TraceSession& session, GET_FLAGS getFlag, ULONG& nextIdx);
 
 	class Reader
 	{
@@ -241,7 +241,7 @@ private:
 
 		void write(ITEM tag, ULONG len, const void* data);
 
-		inline void writeData(const ITEM tag, const Firebird::AbstractString& data)
+		inline void writeData(const ITEM tag, const AbstractString& data)
 		{
 			if (data.empty())
 				return;
@@ -254,8 +254,8 @@ private:
 		const char* const m_end;
 	};
 
-	Firebird::AutoPtr<Firebird::SharedMemory<TraceCSHeader> > m_sharedMemory;
-	Firebird::PathName m_filename;
+	AutoPtr<SharedMemory<TraceCSHeader> > m_sharedMemory;
+	PathName m_filename;
 	int m_recursive;
 	ThreadId m_mutexTID;
 	bool m_dirty;
@@ -265,11 +265,11 @@ private:
 class StorageInstance
 {
 private:
-	Firebird::Mutex initMtx;
+	Mutex initMtx;
 	ConfigStorage* storage;
 
 public:
-	explicit StorageInstance(Firebird::MemoryPool&) :
+	explicit StorageInstance(MemoryPool&) :
 		storage(NULL)
 	{}
 
@@ -282,7 +282,7 @@ public:
 	{
 		if (!storage)
 		{
-			Firebird::MutexLockGuard guard(initMtx, FB_FUNCTION);
+			MutexLockGuard guard(initMtx, FB_FUNCTION);
 			if (!storage)
 			{
 				storage = FB_NEW ConfigStorage;
@@ -293,11 +293,11 @@ public:
 };
 
 
-class StorageGuard final : public Firebird::MutexLockGuard
+class StorageGuard final : public MutexLockGuard
 {
 public:
 	explicit StorageGuard(ConfigStorage* storage) :
-		Firebird::MutexLockGuard(storage->m_localMutex, FB_FUNCTION), m_storage(storage)
+		MutexLockGuard(storage->m_localMutex, FB_FUNCTION), m_storage(storage)
 	{
 		m_storage->acquire();
 	}

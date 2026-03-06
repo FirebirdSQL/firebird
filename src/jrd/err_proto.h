@@ -55,7 +55,7 @@ void	ERR_post_warning(const Arg::StatusVector& v);
 [[noreturn]] void ERR_error(int);
 [[noreturn]] void ERR_post(const Arg::StatusVector& v);
 void	ERR_post_nothrow(const Arg::StatusVector& v, FbStatusVector* statusVector = NULL);
-void	ERR_post_nothrow(const Firebird::IStatus* v, FbStatusVector* statusVector = NULL);
+void	ERR_post_nothrow(const IStatus* v, FbStatusVector* statusVector = NULL);
 [[noreturn]] void ERR_punt();
 void	ERR_warning(const Arg::StatusVector& v);
 void	ERR_log(int, int, const TEXT*);

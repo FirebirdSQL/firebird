@@ -796,7 +796,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	// check to see if the shadow is the same as the current database --
 	// if so, a shadow file is being accessed as a database
 
-	Firebird::PathName expanded_name(file_name);
+	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* dbb_file = pageSpace->file;
@@ -887,7 +887,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 		if (header_fetched) {
@@ -1020,7 +1020,7 @@ static int blocking_ast_shadowing(void* ast_object)
 
 		LCK_release(tdbb, lock);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 
 	return 0;
@@ -1042,7 +1042,7 @@ static bool check_for_file(thread_db* tdbb, const SCHAR* name, USHORT length)
  **************************************/
 
 	SET_TDBB(tdbb);
-	const Firebird::PathName path(name, length);
+	const PathName path(name, length);
 
 	try {
 		// This use of PIO_open is NOT checked against DatabaseAccess configuration
@@ -1051,7 +1051,7 @@ static bool check_for_file(thread_db* tdbb, const SCHAR* name, USHORT length)
 		jrd_file* temp_file = PIO_open(tdbb, path, path);
 		PIO_close(temp_file);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 		return false;

@@ -171,13 +171,13 @@ void ChangeLog::Segment::copyTo(const PathName& filename) const
 {
 	fb_assert(m_header != &m_builtinHeader);
 
-	if (Firebird::os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
+	if (os_utils::lseek(m_handle, 0, SEEK_SET) != 0)
 		raiseIOError("seek", m_filename.c_str(), ERRNO);
 
 	const auto totalLength = m_header->hdr_length;
 	fb_assert(totalLength > sizeof(SegmentHeader));
 
-	const auto dstHandle = Firebird::os_utils::openCreateSharedFile(filename.c_str(), O_TRUNC | O_BINARY);
+	const auto dstHandle = os_utils::openCreateSharedFile(filename.c_str(), O_TRUNC | O_BINARY);
 
 	AutoFile dstFile(dstHandle);
 
@@ -219,7 +219,7 @@ void ChangeLog::Segment::append(ULONG length, const UCHAR* data)
 
 	const auto currentLength = (SINT64) m_header->hdr_length;
 
-	if (Firebird::os_utils::lseek(m_handle, currentLength, SEEK_SET) != currentLength)
+	if (os_utils::lseek(m_handle, currentLength, SEEK_SET) != currentLength)
 		raiseError("Journal file %s seek failed (error %d)", m_filename.c_str(), ERRNO);
 
 	if (::write(m_handle, data, length) != length)
@@ -276,7 +276,7 @@ void ChangeLog::Segment::truncate()
 	if (ret != INVALID_SET_FILE_POINTER)
 		SetEndOfFile(hndl);
 #else
-	Firebird::os_utils::ftruncate(m_handle, length);
+	os_utils::ftruncate(m_handle, length);
 #endif
 
 	// Truncation is known to be error-prone in Windows CS, which does not allow to truncate
@@ -726,7 +726,7 @@ bool ChangeLog::archiveExecute(Segment* segment)
 		const auto archpathname = m_config->archiveDirectory + filename;
 
 		struct stat statistics;
-		if (Firebird::os_utils::stat(archpathname.c_str(), &statistics) == 0)
+		if (os_utils::stat(archpathname.c_str(), &statistics) == 0)
 		{
 			if (statistics.st_size > (int) sizeof(SegmentHeader))
 			{
@@ -923,7 +923,7 @@ void ChangeLog::initSegments()
 	{
 		const auto filename = **iter;
 
-		const auto fd = Firebird::os_utils::openCreateSharedFile(filename.c_str(), O_BINARY);
+		const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_BINARY);
 
 		AutoPtr<Segment> segment(FB_NEW_POOL(getPool()) Segment(getPool(), filename, fd));
 
@@ -967,7 +967,7 @@ ChangeLog::Segment* ChangeLog::createSegment()
 	filename.printf(FILENAME_PATTERN, m_config->filePrefix.c_str(), m_guid.toString(false).c_str(), sequence);
 	filename = m_config->journalDirectory + filename;
 
-	const auto fd = Firebird::os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
+	const auto fd = os_utils::openCreateSharedFile(filename.c_str(), O_EXCL | O_BINARY);
 
 	const SegmentHeader dummyHeader = {0};
 	if (::write(fd, &dummyHeader, sizeof(SegmentHeader)) != sizeof(SegmentHeader))
@@ -1035,7 +1035,7 @@ ChangeLog::Segment* ChangeLog::reuseSegment(ChangeLog::Segment* segment)
 
 	// Re-open the segment using a new name and initialize it
 
-	const auto fd = Firebird::os_utils::openCreateSharedFile(newname.c_str(), O_BINARY);
+	const auto fd = os_utils::openCreateSharedFile(newname.c_str(), O_BINARY);
 
 	segment = FB_NEW_POOL(getPool()) Segment(getPool(), newname, fd);
 

@@ -697,7 +697,7 @@ static_assert(offsetof(struct header_page, hdr_crypt_page) == 112, "hdr_crypt_pa
 static_assert(offsetof(struct header_page, hdr_crypt_plugin) == 116, "hdr_crypt_plugin offset mismatch");
 static_assert(offsetof(struct header_page, hdr_data) == 148, "hdr_data offset mismatch");
 
-static_assert(sizeof(header_page::hdr_guid) == Firebird::Guid::SIZE, "hdr_guid size mismatch");
+static_assert(sizeof(header_page::hdr_guid) == Guid::SIZE, "hdr_guid size mismatch");
 
 #define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::header_page, hdr_data[0]))
 
@@ -1092,7 +1092,7 @@ inline int IAD_LEN(int count)
 #define IAD_LEN(count)	(sizeof (Ods::InternalArrayDesc) + \
 	(count ? count - 1: count) * sizeof (Ods::InternalArrayDesc::iad_repeat))
 
-Firebird::string pagtype(UCHAR type);
+string pagtype(UCHAR type);
 
 } // namespace Firebird::Jrd::Ods
 

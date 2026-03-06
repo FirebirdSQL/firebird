@@ -103,7 +103,7 @@ namespace Firebird::Jrd {
 
 		public:
 			QualifiedName name;
-			Firebird::ObjectsArray<MetaName> columns;
+			ObjectsArray<MetaName> columns;
 			bool unique = false;
 			bool descending = false;
 			bool inactive = false;
@@ -135,9 +135,9 @@ namespace Firebird::Jrd {
 
 	public:
 		QualifiedName name;
-		Firebird::ObjectsArray<Field> fields;  // Committed state (stable)
-		Firebird::ObjectsArray<Field> pendingFields;  // Uncommitted changes (working copy)
-		Firebird::ObjectsArray<Index> indexes;
+		ObjectsArray<Field> fields;  // Committed state (stable)
+		ObjectsArray<Field> pendingFields;  // Uncommitted changes (working copy)
+		ObjectsArray<Index> indexes;
 		rel_t relationType;
 		jrd_rel* relation = nullptr;
 		USHORT relationId = 0;

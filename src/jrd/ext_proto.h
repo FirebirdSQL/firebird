@@ -81,7 +81,7 @@ public:
 	void release();
 
 private:
-	Firebird::Mutex	ext_sync;
+	Mutex	ext_sync;
 	USHORT			ext_flags;		// Misc and cruddy flags
 	USHORT			ext_tra_cnt;	// How many transactions used the file
 	FILE*			ext_ifi;		// Internal file identifier

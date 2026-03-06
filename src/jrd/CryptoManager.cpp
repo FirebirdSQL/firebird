@@ -984,7 +984,7 @@ namespace Firebird::Jrd
 			guard.leave();		// release in advance to avoid races with cryptThread()
 			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThread);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			if (!releasingLock)		// avoid secondary exception in catch
 			{
@@ -992,7 +992,7 @@ namespace Firebird::Jrd
 				{
 					LCK_release(tdbb, threadLock);
 				}
-				catch (const Firebird::Exception&)
+				catch (const Exception&)
 				{ }
 			}
 

@@ -172,7 +172,7 @@ void FilteredStream::nullRecords(thread_db* tdbb) const
 	m_next->nullRecords(tdbb);
 }
 
-Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
+TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 

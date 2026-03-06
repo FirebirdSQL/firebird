@@ -420,7 +420,7 @@ bool IntlManager::initialize()
 	ObjectsArray<CharSetCollationName> conflicts;
 	string builtinConfig;
 
-	PathName intlPath = fb_utils::getPrefix(Firebird::IConfigManager::DIR_INTL, "");
+	PathName intlPath = fb_utils::getPrefix(IConfigManager::DIR_INTL, "");
 
 	ScanDir dir(intlPath.c_str(), "*.conf");
 

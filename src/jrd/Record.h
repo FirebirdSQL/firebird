@@ -175,7 +175,7 @@ namespace Firebird::Jrd {
 
 	private:
 		PageStack m_precedence;			// stack of higher precedence pages/transactions
-		Firebird::Array<UCHAR> m_data;	// space for record data
+		Array<UCHAR> m_data;	// space for record data
 		const Format* m_format;			// what the data looks like
 		TraNumber m_transaction_nr;		// transaction number for a record
 		bool m_fake_nulls;				// all fields simulate being NULLs

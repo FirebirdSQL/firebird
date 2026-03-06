@@ -121,7 +121,7 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType 
 	}
 
 	const char* const ddlObjectName = getDdlObjectName(type);
-	const Firebird::string fullName = col_name.hasData() ?
+	const string fullName = col_name.hasData() ?
 		name.toQuotedString() + "." + col_name.toQuotedString() : name.toQuotedString();
 
 	Arg::StatusVector status;
@@ -1219,7 +1219,7 @@ void SCL_clear_classes(thread_db* tdbb, const MetaName& name)
 		return;
 
 	MetaNamePair key(name, {});
-	if (!list->locate(Firebird::locGreatEqual, key))
+	if (!list->locate(locGreatEqual, key))
 		return;
 
 	while (list->current()->sclClassUser.first == name)
@@ -1363,14 +1363,14 @@ static bool check_user_group(thread_db* tdbb, const UCHAR* acl, USHORT number)
 		}
 		else				// processing group name
 		{
-			Firebird::string user_group_name;
+			string user_group_name;
 			do {
 				const TEXT one_char = *acl++;
 				user_group_name += LOWWER(one_char);
 			} while (--l);
 
 			// convert unix group name to unix group id
-			n = Firebird::os_utils::get_user_group_id(user_group_name.c_str());
+			n = os_utils::get_user_group_id(user_group_name.c_str());
 		}
 	}
 
@@ -1725,7 +1725,7 @@ static SecurityClass::flags_t walk_acl(thread_db* tdbb,
 	return privilege;
 }
 
-void UserId::populateDpb(Firebird::ClumpletWriter& dpb, bool embeddedSupport)
+void UserId::populateDpb(ClumpletWriter& dpb, bool embeddedSupport)
 {
 	if (usr_auth_block.hasData())
 		dpb.insertBytes(isc_dpb_auth_block, usr_auth_block.begin(), usr_auth_block.getCount());
@@ -1736,7 +1736,7 @@ void UserId::populateDpb(Firebird::ClumpletWriter& dpb, bool embeddedSupport)
 		dpb.insertString(isc_dpb_sql_role_name, usr_sql_role_name);
 }
 
-void UserId::makeRoleName(Firebird::MetaString& role, const int dialect)
+void UserId::makeRoleName(MetaString& role, const int dialect)
 {
 	if (role.isEmpty())
 		return;
@@ -1748,7 +1748,7 @@ void UserId::makeRoleName(Firebird::MetaString& role, const int dialect)
 		// For unquoted string nothing bad happens
 		fb_utils::dpbItemUpper(role);
 		{
-			Firebird::string tmp(role);
+			string tmp(role);
 			tmp.upper();
 			role = tmp;
 		}
@@ -1765,7 +1765,7 @@ void UserId::makeRoleName(Firebird::MetaString& role, const int dialect)
 }
 
 // get privilege bit by name
-USHORT SCL_convert_privilege(thread_db* tdbb, jrd_tra* transaction, const Firebird::string& priv)
+USHORT SCL_convert_privilege(thread_db* tdbb, jrd_tra* transaction, const string& priv)
 {
 	static GlobalPtr<Mutex> privCacheMutex;
 	static bool cacheFlag = false;

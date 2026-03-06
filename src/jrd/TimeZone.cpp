@@ -110,8 +110,8 @@ FB_BOOLEAN TimeZonePackage::TransitionsResultSet::fetch(ThrowStatusExceptionWrap
 //--------------------------------------
 
 
-void TimeZonePackage::databaseVersionFunction(Firebird::ThrowStatusExceptionWrapper* status,
-	Firebird::IExternalContext* context, const void*, DatabaseVersionOutput::Type* out)
+void TimeZonePackage::databaseVersionFunction(ThrowStatusExceptionWrapper* status,
+	IExternalContext* context, const void*, DatabaseVersionOutput::Type* out)
 {
 	string str;
 	TimeZoneUtil::getDatabaseVersion(str);
@@ -124,7 +124,7 @@ void TimeZonePackage::databaseVersionFunction(Firebird::ThrowStatusExceptionWrap
 //--------------------------------------
 
 
-TimeZonePackage::TimeZonePackage(Firebird::MemoryPool& pool)
+TimeZonePackage::TimeZonePackage(MemoryPool& pool)
 	: SystemPackage(
 		pool,
 		"RDB$TIME_ZONE_UTIL",

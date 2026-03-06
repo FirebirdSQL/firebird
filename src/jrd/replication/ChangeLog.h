@@ -60,11 +60,11 @@ namespace Firebird::Jrd::Replication
 	inline constexpr USHORT CHANGELOG_VERSION_1 = 1;
 	inline constexpr USHORT CHANGELOG_CURRENT_VERSION = CHANGELOG_VERSION_1;
 
-	class ChangeLog : protected Firebird::PermanentStorage, public Firebird::IpcObject
+	class ChangeLog : protected PermanentStorage, public IpcObject
 	{
 		// Shared state of the changelog
 
-		struct State : public Firebird::MemoryHeader
+		struct State : public MemoryHeader
 		{
 			ULONG version;				// changelog version
 			time_t timestamp;			// timestamp of last write
@@ -137,16 +137,16 @@ namespace Firebird::Jrd::Replication
 
 		// Changelog segment (physical file on disk)
 
-		class Segment : public Firebird::RefCounted
+		class Segment : public RefCounted
 		{
 		public:
-			Segment(MemoryPool& pool, const Firebird::PathName& filename, int handle);
+			Segment(MemoryPool& pool, const PathName& filename, int handle);
 			virtual ~Segment();
 
-			void init(FB_UINT64 sequence, const Firebird::Guid& guid);
-			bool validate(const Firebird::Guid& guid) const;
+			void init(FB_UINT64 sequence, const Guid& guid);
+			bool validate(const Guid& guid) const;
 			void append(ULONG length, const UCHAR* data);
-			void copyTo(const Firebird::PathName& filename) const;
+			void copyTo(const PathName& filename) const;
 
 			bool isEmpty() const noexcept
 			{
@@ -178,9 +178,9 @@ namespace Firebird::Jrd::Replication
 			void truncate();
 			void flush(bool data);
 
-			Firebird::PathName getFileName() const;
+			PathName getFileName() const;
 
-			const Firebird::PathName& getPathName() const noexcept
+			const PathName& getPathName() const noexcept
 			{
 				return m_filename;
 			}
@@ -191,7 +191,7 @@ namespace Firebird::Jrd::Replication
 			void mapHeader();
 			void unmapHeader();
 
-			Firebird::PathName m_filename;
+			PathName m_filename;
 			int m_handle;
 			SegmentHeader* m_header;
 			SegmentHeader m_builtinHeader;		// used by free segments when there is no mapping
@@ -202,9 +202,9 @@ namespace Firebird::Jrd::Replication
 		};
 
 	public:
-		ChangeLog(Firebird::MemoryPool& pool,
-				  const Firebird::string& dbId,
-				  const Firebird::Guid& guid,
+		ChangeLog(MemoryPool& pool,
+				  const string& dbId,
+				  const Guid& guid,
 				  const FB_UINT64 sequence,
 				  const Config* config);
 		virtual ~ChangeLog();
@@ -224,10 +224,10 @@ namespace Firebird::Jrd::Replication
 		void linkSelf();
 		bool unlinkSelf();
 
-		bool initialize(Firebird::SharedMemoryBase* shmem, bool init) override;
+		bool initialize(SharedMemoryBase* shmem, bool init) override;
 		void mutexBug(int osErrorCode, const char* text) override;
 
-		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_CHANGELOG_STATE; }
+		USHORT getType() const override { return SharedMemoryBase::SRAM_CHANGELOG_STATE; }
 		USHORT getVersion() const override { return STATE_VERSION; };
 		const char* getName() const override { return "ChangeLog"; }
 
@@ -248,18 +248,18 @@ namespace Firebird::Jrd::Replication
 
 		void switchActiveSegment();
 
-		const Firebird::string& m_dbId;
-		const Firebird::Guid& m_guid;
+		const string& m_dbId;
+		const Guid& m_guid;
 		const Config* const m_config;
-		Firebird::Array<Segment*> m_segments;
-		Firebird::AutoPtr<Firebird::SharedMemory<State> > m_sharedMemory;
-		Firebird::Mutex m_localMutex;
+		Array<Segment*> m_segments;
+		AutoPtr<SharedMemory<State> > m_sharedMemory;
+		Mutex m_localMutex;
 		const FB_UINT64 m_sequence;
 		ULONG m_generation;
 
-		Firebird::Semaphore m_startupSemaphore;
-		Firebird::Semaphore m_cleanupSemaphore;
-		Firebird::Semaphore m_workingSemaphore;
+		Semaphore m_startupSemaphore;
+		Semaphore m_cleanupSemaphore;
+		Semaphore m_workingSemaphore;
 
 		volatile bool m_shutdown;
 	};

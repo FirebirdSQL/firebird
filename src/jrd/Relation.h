@@ -109,8 +109,8 @@ inline constexpr int TRIGGER_COMBINED_MAX	= 128;
 class Trigger
 {
 public:
-	Firebird::HalfStaticArray<UCHAR, 128> blr;			// BLR code
-	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
+	HalfStaticArray<UCHAR, 128> blr;			// BLR code
+	HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
 	Statement* statement = nullptr;						// Compiled statement
 	bool releaseInProgress = false;
 	fb_sysflag sysTrigger = fb_sysflag_user;			// See fb_sysflag in constants.h
@@ -120,9 +120,9 @@ public:
 	QualifiedName name;					// Trigger name
 	MetaName engine;					// External engine name
 	MetaName owner;						// Owner for SQL SECURITY
-	Firebird::string entryPoint;		// External trigger entrypoint
-	Firebird::string extBody;			// External trigger body
-	Firebird::TriState ssDefiner;		// SQL SECURITY
+	string entryPoint;		// External trigger entrypoint
+	string extBody;			// External trigger body
+	TriState ssDefiner;		// SQL SECURITY
 	std::unique_ptr<ExtEngineManager::Trigger> extTrigger;	// External trigger
 
 	MemoryPool& getPool();
@@ -188,10 +188,10 @@ public:
 	static void destroy(thread_db* tdbb, Triggers* trigs);
 
 private:
-	Firebird::HalfStaticArray<Trigger*, 8> triggers;
+	HalfStaticArray<Trigger*, 8> triggers;
 };
 
-class DbTriggersHeader : public Firebird::PermanentStorage
+class DbTriggersHeader : public PermanentStorage
 {
 public:
 	DbTriggersHeader(thread_db*, MemoryPool& p, MetaId& t, NoData = NoData());
@@ -239,7 +239,7 @@ public:
 		return scan(tdbb, flags);
 	}
 
-	bool hash(thread_db*, Firebird::sha512&)
+	bool hash(thread_db*, sha512&)
 	{
 		return true;
 	}
@@ -293,13 +293,13 @@ public:
 		return vc->vcx_context;
 	}
 
-	const Firebird::string vcx_context_name;
+	const string vcx_context_name;
 	const QualifiedName vcx_relation_name;
 	const USHORT vcx_context;
 	const ViewContextType vcx_type;
 };
 
-typedef Firebird::SortedArray<ViewContext*, Firebird::EmptyStorage<ViewContext*>,
+typedef SortedArray<ViewContext*, EmptyStorage<ViewContext*>,
 		USHORT, ViewContext> ViewContexts;
 
 
@@ -324,7 +324,7 @@ public:
 	ULONG rel_last_free_blb_dp;	// last blob data page found with space
 	USHORT rel_pg_space_id;
 
-	RelationPages(Firebird::MemoryPool& pool)
+	RelationPages(MemoryPool& pool)
 		: rel_pages(NULL), rel_instance_id(0),
 		  rel_index_root(0), rel_data_pages(0), rel_slot_space(0),
 		  rel_pri_data_space(0), rel_sec_data_space(0),
@@ -348,7 +348,7 @@ public:
 
 	ULONG getDPNumber(ULONG dpSequence)
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		MutexLockGuard g(dpMutex, FB_FUNCTION);
 
 		FB_SIZE_T pos;
 		if (dpMap.find(dpSequence, pos))
@@ -363,7 +363,7 @@ public:
 
 	void setDPNumber(ULONG dpSequence, ULONG dpNumber)
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		MutexLockGuard g(dpMutex, FB_FUNCTION);
 
 		FB_SIZE_T pos;
 		if (dpMap.find(dpSequence, pos))
@@ -387,7 +387,7 @@ public:
 
 	void freeOldestMapItems() noexcept
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		MutexLockGuard g(dpMutex, FB_FUNCTION);
 
 		ULONG minMark = MAX_ULONG;
 		FB_SIZE_T i;
@@ -430,9 +430,9 @@ private:
 		}
 	};
 
-	Firebird::SortedArray<DPItem, Firebird::InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> dpMap;
+	SortedArray<DPItem, InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> dpMap;
 	ULONG				dpMapMark;
-	Firebird::Mutex		dpMutex;
+	Mutex		dpMutex;
 
 friend class RelationPermanent;
 };
@@ -452,7 +452,7 @@ enum IndexStatus
 
 // Index block
 
-class IndexPermanent : public Firebird::PermanentStorage
+class IndexPermanent : public PermanentStorage
 {
 public:
 	IndexPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, RelationPermanent* rel)
@@ -540,7 +540,7 @@ public:
 		return idv_active;
 	}
 
-	bool hash(thread_db*, Firebird::sha512& digest)
+	bool hash(thread_db*, sha512& digest)
 	{
 		digest.process(sizeof(QualifiedName), &idv_foreignKey);
 		digest.process(sizeof(idv_active), &idv_active);
@@ -598,8 +598,8 @@ public:
 
 	TrigArray			rel_triggers;
 
-	Firebird::TriState	rel_ss_definer;
-	Firebird::TriState	rel_repl_state;		// replication state
+	TriState	rel_ss_definer;
+	TriState	rel_repl_state;		// replication state
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
@@ -634,7 +634,7 @@ public:
 		return scan(tdbb, flags);
 	}
 
-	bool hash(thread_db* tdbb, Firebird::sha512& digest);
+	bool hash(thread_db* tdbb, sha512& digest);
 
 	static const char* objectFamily(RelationPermanent* perm);
 	static int objectType();
@@ -743,7 +743,7 @@ public:
 		{
 			reinterpret_cast<GCLock*>(self)->blockingAst();
 		}
-		catch(const Firebird::Exception&) { }
+		catch(const Exception&) { }
 
 		return 0;
 	}
@@ -757,7 +757,7 @@ private:
 	void checkGuard(unsigned flags);
 
 private:
-	Firebird::AutoPtr<Lock> gcLck;
+	AutoPtr<Lock> gcLck;
 	RelationPermanent* gcRel;
 	std::atomic<unsigned> gcFlags = 0u;
 
@@ -771,10 +771,10 @@ private:
 
 // Non-versioned part of relation in cache
 
-class RelationPermanent : public Firebird::PermanentStorage
+class RelationPermanent : public PermanentStorage
 {
 	typedef CacheVector<Cached::Index, 4, RelationPermanent*> Indices;
-	typedef Firebird::HalfStaticArray<Record*, 4> GCRecordList;
+	typedef HalfStaticArray<Record*, 4> GCRecordList;
 
 public:
 	RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, NoData);
@@ -815,15 +815,15 @@ public:
 
 private:
 	GCRecordList	rel_gc_records;		// records for garbage collection
-	Firebird::Mutex	rel_gc_records_mutex;
+	Mutex	rel_gc_records_mutex;
 
 public:
 	std::atomic<SSHORT>	rel_scan_count;		// concurrent sequential scan count
 
-	class RelPagesSnapshot : public Firebird::Array<RelationPages*>
+	class RelPagesSnapshot : public Array<RelationPages*>
 	{
 	public:
-		typedef Firebird::Array<RelationPages*> inherited;
+		typedef Array<RelationPages*> inherited;
 
 		RelPagesSnapshot(thread_db* tdbb, RelationPermanent* relation)
 		{
@@ -917,7 +917,7 @@ public:
 
 private:
 	SharedReadVector<Format*, 16> rel_formats;	// Known record formats
-	Firebird::Mutex rel_formats_grow;	// Mutex to grow rel_formats
+	Mutex rel_formats_grow;	// Mutex to grow rel_formats
 
 public:
 	HazardPtr<Formats::Generation> getFormats()
@@ -935,17 +935,17 @@ public:
 	QualifiedName	rel_security_name;	// security class name for relation
 	std::atomic<ULONG>	rel_flags;		// flags
 
-	Firebird::TriState	rel_repl_state;	// replication state
+	TriState	rel_repl_state;	// replication state
 
 	PrimaryDeps*	rel_primary_dpnds = nullptr;	// foreign dependencies on this relation's primary key
 	ForeignRefs*	rel_foreign_refs = nullptr;		// foreign references to other relations' primary keys
 
 private:
-	Firebird::Mutex			rel_pages_mutex;
+	Mutex			rel_pages_mutex;
 
-	typedef Firebird::SortedArray<
+	typedef SortedArray<
 				RelationPages*,
-				Firebird::EmptyStorage<RelationPages*>,
+				EmptyStorage<RelationPages*>,
 				RelationPages::InstanceId,
 				RelationPages>
 			RelationPagesInstances;
@@ -958,7 +958,7 @@ private:
 
 	ExternalFile* rel_file;
 
-	Firebird::Array<QualifiedName> rel_clear_deps;
+	Array<QualifiedName> rel_clear_deps;
 };
 
 

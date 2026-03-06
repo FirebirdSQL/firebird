@@ -42,7 +42,7 @@ namespace Firebird::Jrd {
 class PatternMatcher
 {
 public:
-	PatternMatcher(MemoryPool& aPool, Firebird::TextType* aTextType) noexcept
+	PatternMatcher(MemoryPool& aPool, TextType* aTextType) noexcept
 		: pool(aPool),
 		  textType(aTextType)
 	{
@@ -58,13 +58,13 @@ public:
 
 protected:
 	MemoryPool& pool;
-	Firebird::TextType* textType;
+	TextType* textType;
 };
 
 class BaseSubstringSimilarMatcher : public PatternMatcher
 {
 public:
-	BaseSubstringSimilarMatcher(MemoryPool& pool, Firebird::TextType* ttype) noexcept
+	BaseSubstringSimilarMatcher(MemoryPool& pool, TextType* ttype) noexcept
 		: PatternMatcher(pool, ttype)
 	{
 	}
@@ -75,7 +75,7 @@ public:
 class NullStrConverter
 {
 public:
-	NullStrConverter(MemoryPool& /*pool*/, const Firebird::TextType* /*obj*/, const UCHAR* /*str*/, SLONG /*len*/) noexcept
+	NullStrConverter(MemoryPool& /*pool*/, const TextType* /*obj*/, const UCHAR* /*str*/, SLONG /*len*/) noexcept
 	{
 	}
 };
@@ -84,7 +84,7 @@ template <typename PrevConverter = NullStrConverter>
 class UpcaseConverter : public PrevConverter
 {
 public:
-	UpcaseConverter(MemoryPool& pool, Firebird::TextType* obj, const UCHAR*& str, SLONG& len)
+	UpcaseConverter(MemoryPool& pool, TextType* obj, const UCHAR*& str, SLONG& len)
 		: PrevConverter(pool, obj, str, len)
 	{
 		const auto* charSet = obj->getCharSet();
@@ -95,14 +95,14 @@ public:
 	}
 
 private:
-	Firebird::UCharBuffer tempBuffer;
+	UCharBuffer tempBuffer;
 };
 
 template <typename PrevConverter = NullStrConverter>
 class CanonicalConverter : public PrevConverter
 {
 public:
-	CanonicalConverter(MemoryPool& pool, Firebird::TextType* obj, const UCHAR*& str, SLONG& len)
+	CanonicalConverter(MemoryPool& pool, TextType* obj, const UCHAR*& str, SLONG& len)
 		: PrevConverter(pool, obj, str, len)
 	{
 		const SLONG out_len = len / obj->getCharSet()->minBytesPerChar() * obj->getCanonicalWidth();
@@ -117,7 +117,7 @@ public:
 	}
 
 private:
-	Firebird::UCharBuffer tempBuffer;
+	UCharBuffer tempBuffer;
 };
 
 } // namespace Firebird::Jrd

@@ -330,7 +330,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 	if (!function->fun_entrypoint)
 	{
-		Firebird::status_exception::raise(Arg::Gds(isc_funnotdef) <<
+		status_exception::raise(Arg::Gds(isc_funnotdef) <<
 										  Arg::Str(function->getName().toQuotedString()) <<
 										  Arg::Gds(isc_modnotfound));
 	}
@@ -1236,7 +1236,7 @@ static bool private_move(Jrd::thread_db* tdbb, dsc* from, dsc* to)
 		MOV_move(tdbb, from, to);
 		return true;
 	}
-	catch (const Firebird::status_exception& e)
+	catch (const status_exception& e)
 	{
 		e.stuffException(tdbb->tdbb_status_vector);
 		return false;

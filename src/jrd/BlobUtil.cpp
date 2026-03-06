@@ -197,7 +197,7 @@ void BlobUtilPackage::readDataFunction(ThrowStatusExceptionWrapper* status,
 //--------------------------------------
 
 
-BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
+BlobUtilPackage::BlobUtilPackage(MemoryPool& pool)
 	: SystemPackage(
 		pool,
 		"RDB$BLOB_UTIL",

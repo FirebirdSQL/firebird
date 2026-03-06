@@ -70,7 +70,7 @@ namespace
 		{
 			if (!att->att_user)
 				return NULL;
-			const Firebird::Auth::AuthenticationBlock& aBlock = att->att_user->usr_auth_block;
+			const Auth::AuthenticationBlock& aBlock = att->att_user->usr_auth_block;
 			*length = aBlock.getCount();
 			return aBlock.getCount() ? aBlock.begin() : NULL;
 		}
@@ -184,7 +184,7 @@ UserManagement::UserManagement(jrd_tra* pTra)
 }
 
 
-IManagement* UserManagement::registerManager(Firebird::Auth::Get& getPlugin, const char* plugName)
+IManagement* UserManagement::registerManager(Auth::Get& getPlugin, const char* plugName)
 {
 	IManagement* manager = getPlugin.plugin();
 	fb_assert(manager);
@@ -237,7 +237,7 @@ IManagement* UserManagement::getManager(const char* name)
 	}
 
 	// We have new user manager plugin
-	Firebird::Auth::Get getPlugin(att->att_database->dbb_config, plugName.c_str());
+	Auth::Get getPlugin(att->att_database->dbb_config, plugName.c_str());
 	return registerManager(getPlugin, plugName.c_str());
 }
 
@@ -260,7 +260,7 @@ void UserManagement::openAllManagers()
 		if (flag)
 			continue;
 
-		Firebird::Auth::Get getPlugin(att->att_database->dbb_config, plugName.c_str());
+		Auth::Get getPlugin(att->att_database->dbb_config, plugName.c_str());
 		registerManager(getPlugin, plugName.c_str());
 	}
 }
@@ -315,7 +315,7 @@ void UserManagement::commit()
 	}
 }
 
-USHORT UserManagement::put(Firebird::Auth::UserData* userData)
+USHORT UserManagement::put(Auth::UserData* userData)
 {
 	const FB_SIZE_T ret = commands.getCount();
 	if (ret > MAX_USHORT)
@@ -334,7 +334,7 @@ void UserManagement::checkSecurityResult(int errcode, IStatus* status,
 	{
 	    return;
 	}
-	errcode = Firebird::Auth::setGsecCode(errcode, operation);
+	errcode = Auth::setGsecCode(errcode, operation);
 
 	Arg::StatusVector tmp;
 	tmp << Arg::Gds(ENCODE_ISC_MSG(errcode, GSEC_MSG_FAC));
@@ -367,7 +367,7 @@ void UserManagement::execute(USHORT id)
 	if (!commands[id])
 		return;	// Already executed
 
-	Firebird::Auth::UserData* command = commands[id];
+	Auth::UserData* command = commands[id];
 	IManagement* manager = getManager(command->plugin.c_str());
 
 	if (!manager)
@@ -378,10 +378,10 @@ void UserManagement::execute(USHORT id)
 	ChangeCharset cc(att);
 	AutoSaveRestore<CoercionArray> restoreBindings(&att->att_bindings);
 
-	if (command->attr.entered() || command->op == Firebird::Auth::ADDMOD_OPER)
+	if (command->attr.entered() || command->op == Auth::ADDMOD_OPER)
 	{
-		Firebird::Auth::UserData cmd;
-		cmd.op = Firebird::Auth::DIS_OPER;
+		Auth::UserData cmd;
+		cmd.op = Auth::DIS_OPER;
 		cmd.user.set(&statusWrapper, command->userName()->get());
 		check(&statusWrapper);
 		cmd.user.setEntered(&statusWrapper, 1);
@@ -394,8 +394,8 @@ void UserManagement::execute(USHORT id)
 		else
 			statusWrapper.init();
 
-		if (command->op == Firebird::Auth::ADDMOD_OPER)
-			command->op = oldAttributes.present ? Firebird::Auth::MOD_OPER : Firebird::Auth::ADD_OPER;
+		if (command->op == Auth::ADDMOD_OPER)
+			command->op = oldAttributes.present ? Auth::MOD_OPER : Auth::ADD_OPER;
 
 		if (command->attr.entered())
 		{
@@ -468,7 +468,7 @@ void UserManagement::execute(USHORT id)
 		}
 	}
 
-	if (command->op == Firebird::Auth::ADD_OPER)
+	if (command->op == Auth::ADD_OPER)
 	{
 		if (!command->pass.entered())
 			Arg::PrivateDyn(291).raise();
@@ -615,8 +615,8 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, RelationPermanent* relati
 
 		for (FillSnapshot fillSnapshot(this); fillSnapshot.pos < managers.getCount(); ++fillSnapshot.pos)
 		{
-			Firebird::Auth::UserData u;
-			u.op = Firebird::Auth::DIS_OPER;
+			Auth::UserData u;
+			u.op = Auth::DIS_OPER;
 
 			*ec = managers[fillSnapshot.pos].second->execute(currentWrapper, &u, &fillSnapshot);
 			if (*ec)
@@ -629,7 +629,7 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, RelationPermanent* relati
 		}
 
 		if (!flagSuccess)
-			checkSecurityResult(errcode1, &st1, "Unknown", Firebird::Auth::DIS_OPER);
+			checkSecurityResult(errcode1, &st1, "Unknown", Auth::DIS_OPER);
 	}
 	catch (const Exception&)
 	{

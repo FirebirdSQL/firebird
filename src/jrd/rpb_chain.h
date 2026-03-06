@@ -60,13 +60,13 @@ public:
 };
 
 
-typedef Firebird::SortedArray<traRpbListElement,
-	Firebird::InlineStorage<traRpbListElement, 16>, traRpbListElement,
+typedef SortedArray<traRpbListElement,
+	InlineStorage<traRpbListElement, 16>, traRpbListElement,
 	traRpbListElement, traRpbListElement> traRpbArray;
 class traRpbList : public traRpbArray
 {
 public:
-	explicit traRpbList(Firebird::MemoryPool& p)
+	explicit traRpbList(MemoryPool& p)
 		: traRpbArray(p)
 	{}
 	int PushRpb(record_param* value);

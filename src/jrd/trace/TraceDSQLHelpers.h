@@ -33,10 +33,9 @@
 
 #include <string_view>
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
-using Firebird::ITracePlugin;
-using Firebird::ITraceFactory;
 
 class TraceDSQLPrepare
 {
@@ -94,7 +93,7 @@ public:
 		}
 		else
 		{
-			Firebird::string str(*getDefaultMemoryPool(), m_string, m_string_len);
+			string str(*getDefaultMemoryPool(), m_string, m_string_len);
 
 			TraceFailedSQLStatement stmt(str);
 			TraceManager::event_dsql_prepare(m_attachment, m_transaction, &stmt, millis, result);

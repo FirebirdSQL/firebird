@@ -34,16 +34,16 @@
 namespace Firebird::Jrd {
 
 // Bitmap of record numbers
-typedef Firebird::SparseBitmap<FB_UINT64> RecordBitmap;
+typedef SparseBitmap<FB_UINT64> RecordBitmap;
 
 // Bitmap of page numbers
-typedef Firebird::SparseBitmap<ULONG> PageBitmap;
+typedef SparseBitmap<ULONG> PageBitmap;
 
 // Bitmap of generic 32-bit integers
-typedef Firebird::SparseBitmap<ULONG> UInt32Bitmap;
+typedef SparseBitmap<ULONG> UInt32Bitmap;
 
 // Bitmap of transaction numbers
-typedef Firebird::SparseBitmap<TraNumber> TransactionBitmap;
+typedef SparseBitmap<TraNumber> TransactionBitmap;
 
 // Please do not try to turn these macros to inline routines simply.
 // They are used in very performance-sensitive places and we don't want

@@ -40,7 +40,7 @@ namespace Firebird::Jrd {
 	class MapNode;
 }
 
-Firebird::string OPT_get_plan(Jrd::thread_db* tdbb, const Jrd::Statement* statement, bool detailed);
+string OPT_get_plan(Jrd::thread_db* tdbb, const Jrd::Statement* statement, bool detailed);
 Jrd::RecordSource* OPT_compile(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb,
 	Jrd::RseNode* rse, Jrd::BoolExprNodeStack* parent_stack);
 void OPT_compile_relation(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::CompilerScratch* csb,

@@ -408,7 +408,7 @@ void Manager::bgWriter()
 	{
 		m_cleanupSemaphore.release();
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Error while exiting replicator thread", ex);
 	}

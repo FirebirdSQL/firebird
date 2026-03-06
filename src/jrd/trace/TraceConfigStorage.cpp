@@ -235,7 +235,7 @@ void ConfigStorage::checkAudit()
 			configFileName.insert(0, root);
 		}
 
-		cfgFile = Firebird::os_utils::fopen(configFileName.c_str(), "rb");
+		cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
 		if (!cfgFile) {
 			checkFileError(configFileName.c_str(), "fopen", isc_io_open_err);
 		}
@@ -469,7 +469,7 @@ void ConfigStorage::compact()
 	check_used = check_size = sizeof(TraceCSHeader);
 
 	// Track undeleted slots from dead processes
-	Firebird::SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
+	SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
 
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
@@ -732,7 +732,7 @@ void ConfigStorage::addSession(TraceSession& session)
 	writer.write(tagEnd, 0, NULL);
 }
 
-bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFlag)
+bool ConfigStorage::getSession(TraceSession& session, GET_FLAGS getFlag)
 {
 	ULONG idx;
 	if (!findSession(session.ses_id, idx))
@@ -973,7 +973,7 @@ void ConfigStorage::TouchFile::handler()
 {
 	try
 	{
-		if (!Firebird::os_utils::touchFile(fileName.c_str()))
+		if (!os_utils::touchFile(fileName.c_str()))
 			system_call_failed::raise("utime");
 
 		FbLocalStatus s;

@@ -2139,7 +2139,7 @@ USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
 	fb_assert(tempPageSpaceID != 0);
 	if (!tempFileCreated)
 	{
-		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
+		MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
 		if (!tempFileCreated)
 		{
 			FbLocalStatus status;

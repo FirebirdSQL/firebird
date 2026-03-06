@@ -49,29 +49,29 @@ public:
 	static constexpr ULONG MAP_NO_FLAGS = 0;
 	static constexpr ULONG MAP_THROW_NOT_FOUND = 1;
 	static constexpr ULONG MAP_ERROR_HANDLER = 2;
-	Mapping(const ULONG flags, Firebird::ICryptKeyCallback* cryptCb);
+	Mapping(const ULONG flags, ICryptKeyCallback* cryptCb);
 
 	~Mapping();
 
 	// First provide the main input information - old auth block ...
-	void setAuthBlock(const Firebird::AuthReader::AuthBlock& authBlock) noexcept;
+	void setAuthBlock(const AuthReader::AuthBlock& authBlock) noexcept;
 
 	// ... and finally specify additional information when available.
-	void setSqlRole(const Firebird::string& sqlRole) noexcept;
-	void setDb(const char* alias, const char* db, Firebird::IAttachment* att);
+	void setSqlRole(const string& sqlRole) noexcept;
+	void setDb(const char* alias, const char* db, IAttachment* att);
 	void setSecurityDbAlias(const char* alias, const char* mainExpandedName);
 	void setErrorMessagesContextName(const char* context) noexcept;
 
 	// This should be done before mapUser().
-	void needAuthMethod(Firebird::string& authMethod) noexcept;
-	void needAuthBlock(Firebird::AuthReader::AuthBlock& newAuthBlock) noexcept;
+	void needAuthMethod(string& authMethod) noexcept;
+	void needAuthBlock(AuthReader::AuthBlock& newAuthBlock) noexcept;
 	void needSystemPrivileges(UserId::Privileges& systemPrivileges) noexcept;
 
 	// bits returned by mapUser
 	static constexpr ULONG MAP_ERROR_NOT_THROWN = 1;
 	static constexpr ULONG MAP_DOWN = 2;
 	// Now mapper is ready to perform main task and provide mapped login and trusted role.
-	ULONG mapUser(Firebird::string& name, Firebird::string& trustedRole);
+	ULONG mapUser(string& name, string& trustedRole);
 
 	// Do not keep mainHandle opened longer than needed
 	void clearMainHandle();
@@ -87,92 +87,92 @@ public:
 private:
 	const ULONG flags;
 	ULONG internalFlags;
-	Firebird::ICryptKeyCallback* cryptCallback;
-	Firebird::string* authMethod;
-	Firebird::AuthReader::AuthBlock* newAuthBlock;
+	ICryptKeyCallback* cryptCallback;
+	string* authMethod;
+	AuthReader::AuthBlock* newAuthBlock;
 	UserId::Privileges* systemPrivileges;
-	const Firebird::AuthReader::AuthBlock* authBlock;
+	const AuthReader::AuthBlock* authBlock;
 	const char* mainAlias;
 	const char* mainDb;
 	const char* securityAlias;
 	const char* errorMessagesContext;
-	const Firebird::string* sqlRole;
+	const string* sqlRole;
 
 public:
-	struct ExtInfo final : public Firebird::AuthReader::Info
+	struct ExtInfo final : public AuthReader::Info
 	{
-		Firebird::NoCaseString currentRole, currentUser;
+		NoCaseString currentRole, currentUser;
 	};
 
-	class DbHandle final : public Firebird::RefPtr<Firebird::IAttachment>
+	class DbHandle final : public RefPtr<IAttachment>
 	{
 	public:
 		DbHandle() noexcept;
-		void setAttachment(Firebird::IAttachment* att);
+		void setAttachment(IAttachment* att);
 		void clear();
-		bool attach(const char* aliasDb, Firebird::ICryptKeyCallback* cryptCb);
+		bool attach(const char* aliasDb, ICryptKeyCallback* cryptCb);
 	};
 
 	class Map;
-	typedef Firebird::HashTable<Map, Firebird::DEFAULT_HASH_SIZE, Map, Firebird::DefaultKeyValue<Map>, Map> MapHash;
+	typedef HashTable<Map, DEFAULT_HASH_SIZE, Map, DefaultKeyValue<Map>, Map> MapHash;
 
-	class Map final : public MapHash::Entry, public Firebird::GlobalStorage
+	class Map final : public MapHash::Entry, public GlobalStorage
 	{
 	public:
 		Map(const char* aUsing, const char* aPlugin, const char* aDb,
 			const char* aFromType, const char* aFrom,
 			SSHORT aRole, const char* aTo);
-		explicit Map(Firebird::AuthReader::Info& info);		//type, name, plugin, secDb
+		explicit Map(AuthReader::Info& info);		//type, name, plugin, secDb
 
 		static FB_SIZE_T hash(const Map& value, FB_SIZE_T hashSize);
-		Firebird::NoCaseString makeHashKey() const;
+		NoCaseString makeHashKey() const;
 		void trimAll();
 		bool isEqual(const Map& k) const override;
 		Map* get() override;
 
-		Firebird::NoCaseString plugin, db, fromType, from, to;
+		NoCaseString plugin, db, fromType, from, to;
 		bool toRole;
 		char usng;
 	};
 
-	class Cache final : public MapHash, public Firebird::GlobalStorage, public Firebird::RefCounted
+	class Cache final : public MapHash, public GlobalStorage, public RefCounted
 	{
 	public:
-		Cache(const Firebird::NoCaseString& aliasDb, const Firebird::NoCaseString& db);
+		Cache(const NoCaseString& aliasDb, const NoCaseString& db);
 		~Cache();
 
-		bool populate(Firebird::IAttachment *att);
+		bool populate(IAttachment *att);
 		void map(bool flagWild, ExtInfo& info, AuthWriter& newBlock);
 		void search(ExtInfo& info, const Map& from, AuthWriter& newBlock,
-			const Firebird::NoCaseString& originalUserName);
+			const NoCaseString& originalUserName);
 		void varPlugin(ExtInfo& info, Map from, AuthWriter& newBlock);
 		void varDb(ExtInfo& info, Map from, AuthWriter& newBlock);
 		void varFrom(ExtInfo& info, Map from, AuthWriter& newBlock);
 		void varUsing(ExtInfo& info, Map from, AuthWriter& newBlock);
-		bool map4(bool flagWild, unsigned flagSet, Firebird::AuthReader& rdr,
+		bool map4(bool flagWild, unsigned flagSet, AuthReader& rdr,
 			ExtInfo& info, AuthWriter& newBlock);
 		static void eraseEntry(Map* m) noexcept;
 
 	public:
-		Firebird::Mutex populateMutex;
-		Firebird::NoCaseString alias, name;
+		Mutex populateMutex;
+		NoCaseString alias, name;
 		bool dataFlag;
 	};
 
 private:
-	Firebird::PathName secExpanded;
-	Firebird::RefPtr<Cache> dbCache, secCache;
+	PathName secExpanded;
+	RefPtr<Cache> dbCache, secCache;
 	DbHandle mainHandle;
 
 	void setInternalFlags();
-	bool ensureCachePresence(Firebird::RefPtr<Mapping::Cache>& cache, const char* alias,
-		const char* target, DbHandle& hdb, Firebird::ICryptKeyCallback* cryptCb, Cache* c2);
+	bool ensureCachePresence(RefPtr<Mapping::Cache>& cache, const char* alias,
+		const char* target, DbHandle& hdb, ICryptKeyCallback* cryptCb, Cache* c2);
 };
 
 class GlobalMappingScan final : public VirtualTableScan
 {
 public:
-	GlobalMappingScan(CompilerScratch* csb, const Firebird::string& alias,
+	GlobalMappingScan(CompilerScratch* csb, const string& alias,
 					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}

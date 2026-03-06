@@ -111,7 +111,7 @@ public:
 
 private:
 	struct Item;
-	using HashTableType = Firebird::HashTable<Item, MAP_SIZE, PageNumber, Item, Item>;
+	using HashTableType = HashTable<Item, MAP_SIZE, PageNumber, Item, Item>;
 
 	struct Item : public HashTableType::Entry
 	{

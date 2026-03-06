@@ -1115,7 +1115,7 @@ void Trigger::free(thread_db* tdbb)
 // class DbTriggers
 
 DbTriggersHeader::DbTriggersHeader(thread_db* tdbb, MemoryPool& p, MetaId& t, NoData)
-	: Firebird::PermanentStorage(p),
+	: PermanentStorage(p),
 	  type(t)
 { }
 

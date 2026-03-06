@@ -48,28 +48,28 @@ namespace Firebird::Jrd::Replication
 	};
 
 	[[noreturn]] void raiseError(const char* msg, ...);
-	int executeShell(const Firebird::string& command);
+	int executeShell(const string& command);
 
-	void logPrimaryError(const Firebird::PathName& database,
-						 const Firebird::string& message);
+	void logPrimaryError(const PathName& database,
+						 const string& message);
 
-	void logPrimaryWarning(const Firebird::PathName& database,
-						   const Firebird::string& message);
+	void logPrimaryWarning(const PathName& database,
+						   const string& message);
 
-	void logPrimaryStatus(const Firebird::PathName& database,
-						  const Firebird::CheckStatusWrapper* status);
+	void logPrimaryStatus(const PathName& database,
+						  const CheckStatusWrapper* status);
 
-	void logReplicaError(const Firebird::PathName& database,
-						 const Firebird::string& message);
+	void logReplicaError(const PathName& database,
+						 const string& message);
 
-	void logReplicaWarning(const Firebird::PathName& database,
-						   const Firebird::string& message);
+	void logReplicaWarning(const PathName& database,
+						   const string& message);
 
-	void logReplicaStatus(const Firebird::PathName& database,
-						  const Firebird::CheckStatusWrapper* status);
+	void logReplicaStatus(const PathName& database,
+						  const CheckStatusWrapper* status);
 
-	void logReplicaVerbose(const Firebird::PathName& database,
-						   const Firebird::string& message);
+	void logReplicaVerbose(const PathName& database,
+						   const string& message);
 
 	class AutoFile
 	{

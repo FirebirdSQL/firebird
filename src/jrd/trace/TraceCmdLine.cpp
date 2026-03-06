@@ -47,7 +47,7 @@ namespace
 {
 	using namespace Firebird;
 
-	using Firebird::MsgFormat::SafeArg;
+	using MsgFormat::SafeArg;
 	constexpr USHORT TRACEMGR_MSG_FAC = FB_IMPL_MSG_FACILITY_FBTRACEMGR;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)

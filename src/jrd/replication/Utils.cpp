@@ -102,7 +102,7 @@ namespace
 		{
 			const time_t now = time(NULL);
 
-			const auto file = Firebird::os_utils::fopen(m_filename.c_str(), "a");
+			const auto file = os_utils::fopen(m_filename.c_str(), "a");
 			if (file)
 			{
 				if (!lock(file))
@@ -145,7 +145,7 @@ namespace
 #ifdef HAVE_FLOCK
 				flock(fileno(file), LOCK_EX) == 0;
 #else
-				Firebird::os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
+				os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
 #endif
 #endif
 

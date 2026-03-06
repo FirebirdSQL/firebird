@@ -1484,7 +1484,7 @@ void MET_load_trigger(thread_db* tdbb,
 		if ((TRG.RDB$FLAGS & TRG_ignore_perm) && !verify_TRG_ignore_perm(tdbb, trigger_name))
 		{
 			fb_msg_format(NULL, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 304, sizeof(errmsg),
-							errmsg, Firebird::MsgFormat::SafeArg() << trigger_name.toQuotedString().c_str());
+							errmsg, MsgFormat::SafeArg() << trigger_name.toQuotedString().c_str());
 			ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 304, errmsg);
 
 			trig_flags &= ~TRG_ignore_perm;
@@ -3916,7 +3916,7 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 			if (id != CS_METADATA)
 			{
-				Firebird::UCharBuffer specificAttributes;
+				UCharBuffer specificAttributes;
 				ULONG size = info.specificAttributes.getCount() * charset->maxBytesPerChar();
 
 				size = INTL_convert_bytes(tdbb, id,

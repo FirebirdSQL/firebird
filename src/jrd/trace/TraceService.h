@@ -43,7 +43,7 @@ namespace Firebird::Jrd
 {
 
 
-int TRACE_main(Firebird::UtilSvc*);
+int TRACE_main(UtilSvc*);
 
 class TraceSvcIntf
 {

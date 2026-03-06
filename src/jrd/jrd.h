@@ -120,7 +120,6 @@ class Statement;
 class jrd_file;
 class Format;
 class BufferDesc;
-class SparseBitmap;
 class jrd_rel;
 class ExternalFile;
 class ViewContext;

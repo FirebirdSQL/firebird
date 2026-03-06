@@ -98,7 +98,7 @@ dsc& ResultSet::getDesc(unsigned param)
 }
 
 
-Firebird::string ResultSet::getString(thread_db* tdbb, unsigned param)
+string ResultSet::getString(thread_db* tdbb, unsigned param)
 {
 	fb_assert(param > 0);
 
@@ -120,7 +120,7 @@ MetaName ResultSet::getMetaName(thread_db* tdbb, unsigned param)
 }
 
 
-Firebird::MetaString ResultSet::getMetaString(thread_db* tdbb, unsigned param)
+MetaString ResultSet::getMetaString(thread_db* tdbb, unsigned param)
 {
 	return getString(tdbb, param);
 }

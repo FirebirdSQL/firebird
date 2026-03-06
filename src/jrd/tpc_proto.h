@@ -61,7 +61,7 @@ public:
 	static TipCache* create(thread_db* tdbb)
 	{
 		const auto dbb = tdbb->getDatabase();
-		Firebird::AutoPtr<TipCache> tipCache(FB_NEW_POOL(*dbb->dbb_permanent) TipCache(dbb));
+		AutoPtr<TipCache> tipCache(FB_NEW_POOL(*dbb->dbb_permanent) TipCache(dbb));
 		tipCache->initializeTpc(tdbb);
 		return tipCache.release();
 	}
@@ -195,7 +195,7 @@ public:
 	}
 
 private:
-	class GlobalTpcHeader : public Firebird::MemoryHeader
+	class GlobalTpcHeader : public MemoryHeader
 	{
 	public:
 		std::atomic<CommitNumber> latest_commit_number;
@@ -232,7 +232,7 @@ private:
 	// Note: when maintaining this structure, we are extra careful
 	// to keep it consistent at all times, so that the process using it
 	// can be killed at any time without adverse consequences.
-	class SnapshotList : public Firebird::MemoryHeader
+	class SnapshotList : public MemoryHeader
 	{
 	public:
 		std::atomic<ULONG> slots_allocated;
@@ -241,7 +241,7 @@ private:
 		SnapshotData slots[1];
 	};
 
-	class TransactionStatusBlock : public Firebird::MemoryHeader
+	class TransactionStatusBlock : public MemoryHeader
 	{
 	public:
 		std::atomic<CommitNumber> data[1];
@@ -259,7 +259,7 @@ private:
 		~StatusBlockData();
 
 		TpcBlockNumber blockNumber;
-		Firebird::SharedMemory<TransactionStatusBlock>* memory;
+		SharedMemory<TransactionStatusBlock>* memory;
 		Lock existenceLock;
 		TipCache* cache;
 		bool acceptAst;
@@ -271,10 +271,10 @@ private:
 
 		void clear(thread_db* tdbb);
 
-		static Firebird::PathName makeSharedMemoryFileName(Database* dbb, TpcBlockNumber n, bool fullPath);
+		static PathName makeSharedMemoryFileName(Database* dbb, TpcBlockNumber n, bool fullPath);
 	};
 
-	class MemoryInitializer : public Firebird::IpcObject
+	class MemoryInitializer : public IpcObject
 	{
 	public:
 		explicit MemoryInitializer(TipCache *cache) noexcept : m_cache(cache) {}
@@ -288,9 +288,9 @@ private:
 	{
 	public:
 		explicit GlobalTpcInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
-		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
+		bool initialize(SharedMemoryBase* sm, bool initFlag) override;
 
-		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_HEADER; }
+		USHORT getType() const override { return SharedMemoryBase::SRAM_TPC_HEADER; }
 		const char* getName() const override { return "TipCache:Global"; }
 	};
 
@@ -298,9 +298,9 @@ private:
 	{
 	public:
 		explicit SnapshotsInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
-		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
+		bool initialize(SharedMemoryBase* sm, bool initFlag) override;
 
-		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_SNAPSHOTS; }
+		USHORT getType() const override { return SharedMemoryBase::SRAM_TPC_SNAPSHOTS; }
 		const char* getName() const override { return "TipCache:Snapshots"; }
 	};
 
@@ -308,22 +308,22 @@ private:
 	{
 	public:
 		explicit MemBlockInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
-		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
+		bool initialize(SharedMemoryBase* sm, bool initFlag) override;
 
-		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_BLOCK; }
+		USHORT getType() const override { return SharedMemoryBase::SRAM_TPC_BLOCK; }
 		const char* getName() const override { return "TipCache:TranBlock"; }
 	};
 
-	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
+	typedef BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
 
 	static constexpr ULONG TPC_VERSION = 2;
 	static constexpr int SAFETY_GAP_BLOCKS = 1;
 
-	Firebird::SharedMemory<GlobalTpcHeader>* m_tpcHeader; // final
-	Firebird::SharedMemory<SnapshotList>* m_snapshots; // final
+	SharedMemory<GlobalTpcHeader>* m_tpcHeader; // final
+	SharedMemory<SnapshotList>* m_snapshots; // final
 	ULONG m_transactionsPerBlock; // final. When set, we assume TPC has been initialized.
 
-	Firebird::AutoPtr<Lock> m_lock;
+	AutoPtr<Lock> m_lock;
 
 	GlobalTpcInitializer globalTpcInitializer;
 	SnapshotsInitializer snapshotsInitializer;
@@ -333,7 +333,7 @@ private:
 	// Reads and writes to the tree are protected with m_sync_status.
 	BlocksMemoryMap m_blocks_memory;
 
-	Firebird::SyncObject m_sync_status;
+	SyncObject m_sync_status;
 
 	// Attach to shared memory objects and populate process-local structures.
 	// If shared memory area did not exist - populate initial TIP by reading cache
@@ -348,7 +348,7 @@ private:
 	// Returns NULL if requested block is too old and is no longer cached.
 	// Sync should be bound to m_sync_status. On enter, sync must be unlocked.
 	// If returns not NULL then sync remains locked.
-	TransactionStatusBlock* getTransactionStatusBlock(const GlobalTpcHeader* header, TpcBlockNumber blockNumber, Firebird::Sync& sync);
+	TransactionStatusBlock* getTransactionStatusBlock(const GlobalTpcHeader* header, TpcBlockNumber blockNumber, Sync& sync);
 
 	// Map shared memory for a block.
 	// Assume exclusive lock of m_sync_status.

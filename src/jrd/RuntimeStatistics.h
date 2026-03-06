@@ -73,7 +73,7 @@ enum class RecordStatType
 	TOTAL_ITEMS
 };
 
-class RuntimeStatistics : protected Firebird::AutoStorage
+class RuntimeStatistics : protected AutoStorage
 {
 	static constexpr size_t PAGE_TOTAL_ITEMS = static_cast<size_t>(PageStatType::TOTAL_ITEMS);
 	static constexpr size_t RECORD_TOTAL_ITEMS = static_cast<size_t>(RecordStatType::TOTAL_ITEMS);
@@ -213,8 +213,8 @@ private:
 	class GroupedCountsArray
 	{
 		typedef typename Counts::ID ID;
-		typedef Firebird::SortedArray<
-			Counts, Firebird::EmptyStorage<Counts>, ID, Counts> SortedCountsArray;
+		typedef SortedArray<
+			Counts, EmptyStorage<Counts>, ID, Counts> SortedCountsArray;
 		typedef typename SortedCountsArray::const_iterator ConstIterator;
 
 	public:
@@ -289,7 +289,7 @@ public:
 	typedef GroupedCountsArray<CountsGroup<RecordStatType, SLONG> > TableCounters;
 
 	RuntimeStatistics()
-		: Firebird::AutoStorage(),
+		: AutoStorage(),
 		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
 		  tableCounters(getPool(), rel_MAX)
 	{
@@ -297,7 +297,7 @@ public:
 	}
 
 	explicit RuntimeStatistics(MemoryPool& pool)
-		: Firebird::AutoStorage(pool),
+		: AutoStorage(pool),
 		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
 		  tableCounters(getPool(), rel_MAX)
 	{
@@ -305,7 +305,7 @@ public:
 	}
 
 	RuntimeStatistics(const RuntimeStatistics& other)
-		: Firebird::AutoStorage(),
+		: AutoStorage(),
 		  pageCounters(getPool(), other.pageCounters),
 		  tableCounters(getPool(), other.tableCounters)
 	{
@@ -320,7 +320,7 @@ public:
 	}
 
 	RuntimeStatistics(MemoryPool& pool, const RuntimeStatistics& other)
-		: Firebird::AutoStorage(pool),
+		: AutoStorage(pool),
 		  pageCounters(getPool(), other.pageCounters),
 		  tableCounters(getPool(), other.tableCounters)
 	{
@@ -485,7 +485,7 @@ private:
 	// This dummy RuntimeStatistics is used instead of missing elements in tdbb,
 	// helping us to avoid conditional checks in time-critical places of code.
 	// Values of it contain actually garbage - don't be surprised when debugging.
-	static Firebird::GlobalPtr<RuntimeStatistics> dummy;
+	static GlobalPtr<RuntimeStatistics> dummy;
 };
 
 } // namespace
