@@ -36,6 +36,7 @@
 #include "../../common/isc_s_proto.h"
 #include "../../jrd/jrd.h"
 #include "../../jrd/tra.h"
+#include "../../jrd/met.h"
 #include "../../jrd/DataTypeUtil.h"
 #include "../../dsql/ExprNodes.h"
 #include "../../dsql/StmtNodes.h"
@@ -104,7 +105,7 @@ bool descToUTF8(const paramdsc* param, string& result)
 
 	try
 	{
-		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, param->dsc_sub_type, status_exception::raise))
+		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, CSetId(param->dsc_sub_type), status_exception::raise))
 			result = src;
 	}
 	catch (const Firebird::Exception&)
@@ -128,6 +129,26 @@ const char* StatementHolder::ensurePlan(bool explained)
 	}
 
 	return m_plan.c_str();
+}
+
+
+/// StatementHolder
+
+Firebird::string StatementHolder::getName() const
+{
+	if (m_statement)
+	{
+		if (m_statement->procedure)
+			return m_statement->procedure->getName().toQuotedString();
+
+		if (m_statement->function)
+			return m_statement->function->getName().toQuotedString();
+
+		if (m_statement->triggerName.hasData())
+			return m_statement->triggerName.toQuotedString();
+	}
+
+	return "";
 }
 
 
@@ -259,16 +280,6 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 	}
 
 	return m_textUTF8.c_str();
-}
-
-PerformanceInfo* TraceSQLStatementImpl::getPerf()
-{
-	return m_perf;
-}
-
-ITraceParams* TraceSQLStatementImpl::getInputs()
-{
-	return &m_inputs;
 }
 
 
@@ -633,23 +644,58 @@ const char* TraceServiceImpl::getRemoteProcessName()
 
 /// TraceRuntimeStats
 
-TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baseline, RuntimeStatistics* stats,
-	SINT64 clock, SINT64 records_fetched)
+TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
+									 RuntimeStatistics* baseline, RuntimeStatistics* stats,
+									 SINT64 clock, SINT64 recordsFetched)
 {
+	memset(&m_info, 0, sizeof(m_info));
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
-	m_info.pin_records_fetched = records_fetched;
+	m_info.pin_records_fetched = recordsFetched;
+	m_info.pin_counters = m_globalCounters;
 
 	if (baseline && stats)
-		baseline->computeDifference(att, *stats, m_info, m_counts, m_tempNames);
+	{
+		baseline->setToDiff(*stats);
+
+		m_globalCounters[PerformanceInfo::FETCHES] = (*baseline)[PageStatType::FETCHES];
+		m_globalCounters[PerformanceInfo::READS] = (*baseline)[PageStatType::READS];
+		m_globalCounters[PerformanceInfo::MARKS] = (*baseline)[PageStatType::MARKS];
+		m_globalCounters[PerformanceInfo::WRITES] = (*baseline)[PageStatType::WRITES];
+
+		auto getTablespaceName = [&](MetaId id) -> Firebird::string
+		{
+			return ""; // TODO
+		};
+
+		m_pageCounters.reset(&baseline->getPageCounters(), getTablespaceName);
+
+		auto getTableName = [&](MetaId id) -> Firebird::string
+		{
+			auto* mdc = attachment->att_database->dbb_mdc;
+			if (const auto* relation = mdc->lookupRelationNoChecks(id))
+				return relation->getName().toQuotedString();
+
+			return "";
+		};
+
+		m_tableCounters.reset(&baseline->getTableCounters(), getTableName);
+
+		m_info.pin_count = m_tableCounters.getObjectCount();
+		m_legacyCounts.resize(m_info.pin_count);
+		m_info.pin_tables = m_legacyCounts.begin();
+
+		for (MetaId i = 0; i < m_info.pin_count; i++)
+		{
+			m_info.pin_tables[i].trc_relation_id = m_tableCounters.getObjectId(i);
+			m_info.pin_tables[i].trc_relation_name = m_tableCounters.getObjectName(i);
+			m_info.pin_tables[i].trc_counters = m_tableCounters.getObjectCounters(i);
+		}
+	}
 	else
 	{
-		// Report all zero counts for the moment.
-		memset(&m_info, 0, sizeof(m_info));
-		m_info.pin_counters = m_dummy_counts;
+		memset(m_globalCounters, 0, sizeof(m_globalCounters));
 	}
 }
-
-SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::GLOBAL_ITEMS] = {0};
 
 
 /// TraceStatusVectorImpl

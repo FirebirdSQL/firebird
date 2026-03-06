@@ -91,8 +91,6 @@ inline bool_t PUTLONG(xdr_t* xdrs, const SLONG* lp)
 	return xdrs->x_putbytes(reinterpret_cast<const char*>(&l), 4);
 }
 
-static SCHAR zeros[4] = { 0, 0, 0, 0 };
-
 
 bool_t xdr_hyper( xdr_t* xdrs, void* pi64)
 {

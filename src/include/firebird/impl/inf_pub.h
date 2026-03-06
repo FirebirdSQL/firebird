@@ -192,6 +192,9 @@ enum db_info_types
 	fb_info_max_blob_cache_size = 159,
 	fb_info_max_inline_blob_size = 160,
 
+	fb_info_counts_scope_att = 161,
+	fb_info_counts_scope_db = 162,
+
 	// Return list of SQL features supported by engine of external connection
 	fb_info_sql_features = 161,
 

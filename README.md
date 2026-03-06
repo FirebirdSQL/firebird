@@ -1,5 +1,6 @@
 [![Build Status (GitHub)](https://github.com/FirebirdSQL/firebird/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/FirebirdSQL/firebird/actions/workflows/main.yml?query=branch%3Amaster)
 [![Build Status (AppVeyor)](https://ci.appveyor.com/api/projects/status/github/FirebirdSQL/firebird?branch=master&svg=true)](https://ci.appveyor.com/project/FirebirdSQL/firebird)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FirebirdSQL/firebird)
 
 # Firebird README
 

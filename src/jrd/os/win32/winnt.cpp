@@ -46,7 +46,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/os/pio_proto.h"
 #include "../common/classes/init.h"
@@ -215,7 +215,13 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
+bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+{
+	return true;
+}
+
+
+bool PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -238,7 +244,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	// if file have no extend lock it is better to not extend file than corrupt it
 	if (!file->fil_ext_lock)
-		return;
+		return false;
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 	FileExtendLockGuard extLock(file->fil_ext_lock, true);
@@ -257,6 +263,8 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	if (!SetEndOfFile(hFile))
 		nt_error("SetEndOfFile", file, isc_io_write_err, NULL);
+
+	return true;
 }
 
 
@@ -732,7 +740,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************
  *
  * Functional description
- *	Compute number of pages in file, based only on file size.
+ *	Compute number of full-size pages in file, based only on file size.
  *
  **************************************/
 	HANDLE hFile = file->fil_desc;
@@ -744,7 +752,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 		nt_error("GetFileSize", file, isc_io_access_err, 0);
 
     const ULONGLONG ullFileSize = (((ULONGLONG) dwFileSizeHigh) << 32) + dwFileSizeLow;
-	return (ULONG) ((ullFileSize + pagesize - 1) / pagesize);
+	return ullFileSize / pagesize;
 }
 
 

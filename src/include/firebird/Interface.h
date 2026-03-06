@@ -45,8 +45,7 @@ namespace Firebird
 typedef int ntrace_relation_t;
 struct TraceCounts
 {
-	// Per-table performance counters, must correspond to RuntimeStatistics::StatType
-	// between RECORD_FIRST_ITEM and RECORD_LAST_ITEM
+	// Per-table performance counters, must correspond to enum RecordStatType
 	enum RecordCounters
 	{
 		SEQ_READS = 0,
@@ -74,8 +73,7 @@ struct TraceCounts
 // Performance statistics for operation
 struct PerformanceInfo
 {
-	// IO performance counters, must correspond to RuntimeStatistics::StatType
-	// between PAGE_FETCHES and (not including) RECORD_FIRST_ITEM
+	// IO performance counters, must correspond to enum PageStatType
 	enum PageCounters
 	{
 		FETCHES = 0,
@@ -231,7 +229,7 @@ namespace Firebird
 		}
 
 		static void setVersionError(IStatus* status, const char* interfaceName,
-			unsigned currentVersion, unsigned expectedVersion)
+			uintptr_t currentVersion, unsigned expectedVersion)
 		{
 			intptr_t codes[] = {
 				isc_arg_gds,

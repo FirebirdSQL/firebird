@@ -294,7 +294,7 @@ void ForeignTableStatement::openInternal(thread_db* tdbb, EDS::IscTransaction* t
 }
 
 void ForeignTableStatement::executeInternal(thread_db* tdbb, EDS::IscTransaction* transaction, record_param* org_rpb,
-	record_param* new_rpb, const Array<int>* skippedOrgRpb, const Array<int>* skippedNewRpb)
+	record_param* new_rpb, const SortedArray<int>* skippedOrgRpb, const SortedArray<int>* skippedNewRpb)
 {
 	fb_assert(isAllocated() && !m_stmt_selectable);
 	fb_assert(!m_active);
@@ -328,7 +328,7 @@ void ForeignTableStatement::executeInternal(thread_db* tdbb, EDS::IscTransaction
 		if (org_rpb)
 			addRecordDescs(sqldaDescs, org_rpb->rpb_record, skippedOrgRpb, OLD_PARAMS_MULTIPLIER);
 
-		remakeInputSQLDA(tdbb, count, sqldaDescs.begin());
+		remakeInputSQLDA(tdbb, sqldaDescs.getCount(), sqldaDescs.begin());
 	}
 
 	if (new_rpb)
@@ -354,7 +354,7 @@ void ForeignTableStatement::executeInternal(thread_db* tdbb, EDS::IscTransaction
 }
 
 void ForeignTableStatement::addRecordDescs(DescList& outDescs, Record* record,
-	const Array<int>* skippedParameters, const USHORT multiplier)
+	const SortedArray<int>* skippedParameters, const USHORT multiplier)
 {
 	const Jrd::Format* format = record->getFormat();
 	USHORT count = format->fmt_count;
@@ -377,7 +377,7 @@ void ForeignTableStatement::addRecordDescs(DescList& outDescs, Record* record,
 void ForeignTableStatement::setInParamsInternal(thread_db* tdbb,
 	record_param* rpb,
 	const USHORT offset,
-	const Array<int>* skippedParameters,
+	const SortedArray<int>* skippedParameters,
 	const USHORT multiplier)
 {
 	Record* const record = rpb->rpb_record;
@@ -745,7 +745,7 @@ const string ForeignTableAdapter::getWhereClauseSql() const
 void ForeignTableAdapter::addTableOption(const MetaName& name, const string& value,
 	const ExternalValueType type)
 {
-	ForeignOption* option = m_tableOptions.put(name);
+	ForeignOption* option = m_tableOptions.getOrPut(name);
 	option->m_name = name;
 	option->m_value = value;
 	option->m_type = type;
@@ -787,7 +787,7 @@ const string ForeignTableAdapter::getOriginalTableName() const
 	if (m_tableOptions.exist(MetaName(FOREIGN_TABLE_NAME)))
 		schemaQualifiedName += m_tableOptions.get(MetaName(FOREIGN_TABLE_NAME))->m_value;
 	else
-		schemaQualifiedName += m_relation->rel_name.object.toQuotedString();
+		schemaQualifiedName += m_relation->getName().object.toQuotedString();
 
 	return schemaQualifiedName;
 }
@@ -816,7 +816,7 @@ const string ForeignTableAdapter::getOriginalFieldName(const MetaName& name) con
 // In the case of an original record, if at least one primary key is specified
 // in the field parameters, the condition will use the primary key(s).
 // If no primary keys are specified, the condition will contain all fields except blobs.
-void ForeignTableAdapter::processRecord(Array<int>& outSkippedRpbIdx, record_param* rpb, bool isNewRecord)
+void ForeignTableAdapter::processRecord(SortedArray<int>& outSkippedRpbIdx, record_param* rpb, bool isNewRecord)
 {
 	vec<jrd_fld*>* vector = m_relation->rel_fields;
 	vec<jrd_fld*>::iterator fieldIter = vector->begin();
@@ -846,7 +846,7 @@ void ForeignTableAdapter::processRecord(Array<int>& outSkippedRpbIdx, record_par
 					if (rpb)
 						format = rpb->rpb_record->getFormat();
 
-					if ((format && format->fmt_desc[id].isBlob()) || isFieldReadOnlyOrComputed(field))
+					if ((format && format->fmt_desc[id].isBlob()))
 						outSkippedRpbIdx.add(id);
 				}
 				else

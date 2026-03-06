@@ -64,7 +64,7 @@
 
 #include <string.h>
 
-#if (defined SOLARIS || defined LINUX || defined DARWIN || defined AIX_PPC || defined FREEBSD || defined NETBSD || defined HPUX)
+#if (defined LINUX || defined DARWIN || defined FREEBSD || defined NETBSD)
 #define DYNAMIC_SHARED_LIBRARIES
 #endif
 
@@ -128,11 +128,6 @@ namespace {
 			: DirectoryList(p)
 		{
 			initialize();
-		}
-
-		~UdfDirectoryList()
-		{
-			//printf("Destroyed directory list\n");
 		}
 	};
 	Firebird::InitInstance<UdfDirectoryList> iUdfDirectoryList;

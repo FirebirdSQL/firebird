@@ -36,7 +36,7 @@ if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log
 @rmdir /S /Q "%FB_OUTPUT_DIR%" 2>nul
 
 :: short delay to let OS complete actions by rmdir above
-@timeout 1 >nul
+@%SystemRoot%\System32\timeout /t 1 /nobreak >nul
 
 @mkdir %FB_OUTPUT_DIR% 2>nul
 @mkdir %FB_OUTPUT_DIR%\tzdata 2>nul

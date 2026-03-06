@@ -97,7 +97,8 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_string.h"
 #include "../jrd/intl_classes.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
+#include "../jrd/intl_classes.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/Collation.h"
 #include "../common/TextType.h"
@@ -989,7 +990,7 @@ template <
 class CollationImpl : public Collation
 {
 public:
-	CollationImpl(TTYPE_ID a_type, texttype* a_tt, USHORT a_attributes, CharSet* a_cs)
+	CollationImpl(TTypeId a_type, texttype* a_tt, USHORT a_attributes, CharSet* a_cs)
 		: Collation(a_type, a_tt, a_attributes, a_cs)
 	{
 	}
@@ -1067,7 +1068,7 @@ public:
 };
 
 template <typename T>
-Collation* newCollation(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs)
+Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
 	using namespace Firebird;
 
@@ -1106,7 +1107,7 @@ Collation* newCollation(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attr
 namespace Jrd {
 
 
-Collation* Collation::createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs)
+Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
 	switch (tt->texttype_canonical_width)
 	{
@@ -1125,55 +1126,14 @@ Collation* Collation::createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt
 	}
 }
 
-void Collation::release(thread_db* tdbb)
-{
-	fb_assert(useCount >= 0);
-
-	if (existenceLock)
-		LCK_release(tdbb, existenceLock);
-
-	useCount = 0;
-}
-
 void Collation::destroy(thread_db* tdbb)
 {
-	fb_assert(useCount == 0);
-
 	if (tt->texttype_fn_destroy)
 		tt->texttype_fn_destroy(tt);
 
 	delete tt;
 
-	release(tdbb);
-
-	delete existenceLock;
-	existenceLock = NULL;
+	delete this;
 }
-
-void Collation::incUseCount(thread_db* /*tdbb*/)
-{
-	fb_assert(!obsolete);
-	fb_assert(useCount >= 0);
-
-	++useCount;
-}
-
-void Collation::decUseCount(thread_db* tdbb)
-{
-	fb_assert(useCount >= 0);
-
-	if (useCount > 0)
-	{
-		useCount--;
-
-		if (!useCount)
-		{
-			fb_assert(existenceLock);
-			if (obsolete)
-				LCK_re_post(tdbb, existenceLock);
-		}
-	}
-}
-
 
 }	// namespace Jrd

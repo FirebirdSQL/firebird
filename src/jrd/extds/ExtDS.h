@@ -474,7 +474,6 @@ private:
 	typedef Firebird::SortedArray<Data*, Firebird::EmptyStorage<Data*>, Data, Data, Data>
 		IdleArray;
 
-	Firebird::MemoryPool& m_pool;
 	Firebird::Mutex m_mutex;
 	IdleArray m_idleArray;
 	Data* m_idleList;
@@ -736,6 +735,9 @@ public:
 	// Active statement must be bound to parent jrd request
 	void bindToRequest(Jrd::Request* request, Statement** impure);
 	void unBindFromRequest();
+
+protected:
+	virtual const char* getParameterName(unsigned index) const { return nullptr; }
 
 protected:
 	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql) = 0;

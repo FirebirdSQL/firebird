@@ -703,7 +703,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
 	svc_stdin_size_requested(0), svc_stdin_buffer(NULL), svc_stdin_size_preload(0),
-	svc_stdin_preload_requested(0), svc_stdin_user_size(0), svc_thread(0)
+	svc_stdin_preload_requested(0), svc_stdin_user_size(0)
 #ifdef DEV_BUILD
 	, svc_debug(false)
 #endif
@@ -1946,12 +1946,13 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
-		Thread::Handle thrHandle = svc->svc_thread;
+		Thread svcThread(std::move(svc->svc_thread));
+
 		svc->started();
 		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->ending(thrHandle);
+		threadCollect->ending(std::move(svcThread));
 	}
 	catch (const Exception& ex)
 	{

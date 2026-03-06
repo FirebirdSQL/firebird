@@ -94,9 +94,9 @@ namespace Jrd
 	class ForeignServer
 	{
 	public:
-		explicit ForeignServer(MemoryPool& p, const MetaName& aName, const MetaName& aPlugin,
+		explicit ForeignServer(MemoryPool& pool, const MetaName& aName, const MetaName& aPlugin,
 			const MetaName& aSecurityClass)
-			: name(p, aName), plugin(p, aPlugin), securityClass(p, aSecurityClass), options(p)
+			: name(pool, aName), plugin(pool, aPlugin), securityClass(pool, aSecurityClass), options(pool)
 		{}
 
 		void addOption(const MetaName& name, const Firebird::string& value, const ExternalValueType type);
@@ -155,19 +155,19 @@ namespace Jrd
 	public:
 		void openInternal(thread_db* tdbb, EDS::IscTransaction* transaction);
 		void executeInternal(thread_db* tdbb, EDS::IscTransaction* transaction, record_param* org_rpb,
-			record_param* new_rpb, const Firebird::Array<int>* skippedOrgRpb = nullptr,
-			const Firebird::Array<int>* skippedNewRpb = nullptr);
+			record_param* new_rpb, const Firebird::SortedArray<int>* skippedOrgRpb = nullptr,
+			const Firebird::SortedArray<int>* skippedNewRpb = nullptr);
 		bool fetchInternal(thread_db* tdbb, Record* record);
 
 	private:
 		void addRecordDescs(DescList& outDescs,
 			Record* record,
-			const Firebird::Array<int>* skippedParameters = nullptr,
+			const Firebird::SortedArray<int>* skippedParameters = nullptr,
 			const USHORT multiplier = 1);
 		void setInParamsInternal(thread_db* tdbb,
 			record_param* rpb,
 			const USHORT offset,
-			const Firebird::Array<int>* skippedParameters = nullptr,
+			const Firebird::SortedArray<int>* skippedParameters = nullptr,
 			const USHORT multiplier = 1);
 	};
 
@@ -177,9 +177,9 @@ namespace Jrd
 		class ForeignField
 		{
 		public:
-			explicit ForeignField(MemoryPool& p)
-				: name(p),
-				options(p)
+			explicit ForeignField(MemoryPool& pool)
+				: name(pool),
+				options(pool)
 			{
 			}
 
@@ -230,7 +230,7 @@ namespace Jrd
 			record_param* org_rpb, record_param* new_rpb) const;
 		Firebird::string getRelationFieldsSql(bool select) const;
 		const Firebird::string getWhereClauseSql() const;
-		void processRecord(Firebird::Array<int>& outSkippedRpbIdx, record_param* rpb, bool isNewRecord = false);
+		void processRecord(Firebird::SortedArray<int>& outSkippedRpbIdx, record_param* rpb, bool isNewRecord = false);
 		bool isFieldReadOnlyOrComputed(const jrd_fld* field) const;
 
 		jrd_rel* m_relation;
@@ -243,8 +243,8 @@ namespace Jrd
 		Firebird::LeftPooledMap<Firebird::MetaString, ForeignField*> m_foreignFields;
 		Firebird::SortedArray<MetaName> m_foreignPKNames;
 		Firebird::SortedArray<MetaName> m_readOnlyNames;
-		Firebird::Array<int> m_skippedNewRpbIdx;
-		Firebird::Array<int> m_skippedOrgRpbIdx;
+		Firebird::SortedArray<int> m_skippedNewRpbIdx;
+		Firebird::SortedArray<int> m_skippedOrgRpbIdx;
 	};
 }
 

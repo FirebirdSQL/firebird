@@ -1,28 +1,35 @@
 SQL Language Extension: UNLIST
 
 Function:
-	The function parses the input string using the specified delimiter (comma "," is implied by default) and returns the identified substrings as discrete records containing a single field. Additionally, the desired type of the returned field can be specified. If the specified data type conversion is impossible, an error is raised at runtime.
+	The function splits the input string by the specified separator (comma "," is used by default) and returns
+	the identified substrings as discrete rows with a single column. Additionally, the desired type of the returned
+	field can be specified. If the specified data type conversion is not possible, an error is raised at runtime.
 
 Author:
 	Chudaykin Alex <chudaykinalex@gmail.com>
 
 Format
-	<table value function> ::=
-		UNLIST ( <input> [, <separator>] [, <data type conversion>] ) [AS] <correlation name> [ ( <derived column name> ) ]
+	<unlist> ::=
+	  UNLIST ( <input> [, <separator>] [<type-conversion>] )
+	    [AS] <correlation-name> [ ( <column-name> ) ]
 
-		<input> ::= <value>
+	<input> ::= <value>
 
-		<separator> ::= <value>
+	<separator> ::= <value>
 
-		<data type conversion> ::= RETURNING <data type>
+	<type-conversion> ::= RETURNING <data-type>
 
 Syntax Rules:
 
-1) <input>: any value expression that returns a string/blob of characters (or may be converted to a string), including string literals, table columns, constants, variables, expressions, etc. This parameter is mandatory.
-2) <separator>: optional value expression that returns a string which is used as a delimiter (i.e. it separates one value from another inside the input string). It may also be a BLOB TEXT value, limited to 32KB. If an empty string is specified, the output will be just one record containing the input string. If omitted, the comma character is used as a delimiter.
-2) <data type>: target data type to convert the output values into. Alternatively, a domain can be specified as the returned type. If omitted, VARCHAR(32) is implied. Feel free to suggest any better alternative default.
-3) <correlation name>: alias of the record set returned by the UNLIST function. It is a mandatory parameter (per SQL standard).
-4) <derived column name>: optional alias of the column returned by the UNLIST function. If omitted, UNLIST is used as an alias.
+1) <input>: any value expression that returns a string/blob of characters (or may be converted to a string), including
+   string literals, table columns, constants, variables, expressions, etc. This parameter is mandatory.
+2) <separator>: optional value expression that returns a string which is used as a delimiter (i.e. it separates one
+   value from another inside the input string). It may also be a BLOB TEXT value, limited to 32KB. If an empty string is
+   specified, the output will be just one record containing the input string. If omitted, the comma character is used as
+   a delimiter.
+2) <data-type>: target data type or domain to convert the output values into. If omitted, VARCHAR(32) is used.
+3) <correlation-name>: alias of the record set returned by the UNLIST function. It is a mandatory parameter.
+4) <column-name>: optional alias of the column returned by the UNLIST function. If omitted, UNLIST is used as an alias.
 
 Example:
 A)
@@ -32,13 +39,13 @@ B)
 	SELECT * FROM UNLIST('100:200:300:400:500', ':' RETURNING INT) AS U;
 
 C)
-	SELECT U.* FROM UNLIST(‘text1, text2, text3’) AS U;
+	SELECT U.* FROM UNLIST('text1, text2, text3') AS U;
 
 D)
-	SELECT C0 FROM UNLIST(‘text1, text2, text3’) AS U(C0);
+	SELECT C0 FROM UNLIST('text1, text2, text3') AS U(C0);
 
 E)
-	SELECT U.C0 FROM UNLIST(‘text1, text2, text3’) AS U(C0);
+	SELECT U.C0 FROM UNLIST('text1, text2, text3') AS U(C0);
 
 F)
 	SET TERM ^ ;

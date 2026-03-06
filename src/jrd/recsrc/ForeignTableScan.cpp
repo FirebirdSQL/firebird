@@ -23,6 +23,7 @@
 #include "firebird.h"
 #include "../jrd/intl.h"
 #include "../jrd/intl_proto.h"
+#include "../jrd/met.h"
 #include "../jrd/req.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
@@ -41,7 +42,7 @@ using namespace Firebird;
 using namespace Jrd;
 
 ForeignTableScan::ForeignTableScan(CompilerScratch* csb, const string& alias,
-									StreamType stream, jrd_rel* relation)
+									StreamType stream, Rsc::Rel relation)
 	: RecordStream(csb, stream),
 	m_relation(relation),
 	m_alias(csb->csb_pool, alias),
@@ -118,12 +119,12 @@ void ForeignTableScan::internalOpen(thread_db* tdbb) const
 			orderSql.rtrim(", ");
 		}
 
-		impure->statement = m_relation->rel_foreign_adapter->createStatement(tdbb, NULL, NULL, filterSql, orderSql);
+		impure->statement = m_relation()->getForeignAdapter()->createStatement(tdbb, NULL, NULL, filterSql, orderSql);
 	}
 
-	m_relation->rel_foreign_adapter->execute(tdbb, impure->statement);
+	m_relation()->getForeignAdapter()->execute(tdbb, impure->statement);
 
-	VIO_record(tdbb, rpb, MET_current(tdbb, m_relation), request->req_pool);
+	VIO_record(tdbb, rpb, rpb->rpb_relation->currentFormat(tdbb), request->req_pool);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 }
@@ -165,7 +166,7 @@ bool ForeignTableScan::internalGetRecord(thread_db* tdbb) const
 
 	Record* const record = rpb->rpb_record;
 
-	if (m_relation->rel_foreign_adapter->fetch(tdbb, impure->statement, record))
+	if (m_relation()->getForeignAdapter()->fetch(tdbb, impure->statement, record))
 	{
 		rpb->rpb_number.increment();
 		rpb->rpb_number.setValid(true);
@@ -207,13 +208,14 @@ void ForeignTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, un
 {
 	planEntry.className = "ForeignTableScan";
 
-	planEntry.lines.add().text = "Table " + printName(tdbb, m_relation->rel_name.toQuotedString(), m_alias) + " Full Scan";
+	planEntry.lines.add().text = "Table " +
+		printName(tdbb, m_relation()->getName().toQuotedString(), m_alias) + " Full Scan";
 	printOptInfo(planEntry.lines);
 
-	planEntry.objectType = m_relation->getObjectType();
-	planEntry.objectName = m_relation->rel_name;
+	planEntry.objectType = m_relation()->getObjectType();
+	planEntry.objectName = m_relation()->getName();
 
-	if (m_alias.hasData() && m_relation->rel_name.toQuotedString() != m_alias)
+	if (m_alias.hasData() && m_relation()->getName().toQuotedString() != m_alias)
 		planEntry.alias = m_alias;
 }
 
@@ -431,10 +433,10 @@ void ForeignTableScan::processArgument(thread_db* tdbb, string& conjunctSql, con
 	}
 	else if (const auto fieldNode = nodeAs<FieldNode>(node))
 	{
-		const jrd_fld* field = MET_get_field(m_relation, fieldNode->fieldId);
-		string value = m_relation->rel_foreign_adapter->getOriginalTableName();
+		const jrd_fld* field = MET_get_field(m_relation(tdbb), fieldNode->fieldId);
+		string value = m_relation()->getForeignAdapter()->getOriginalTableName();
 		value += ".";
-		value += m_relation->rel_foreign_adapter->getOriginalFieldName(field->fld_name.c_str());
+		value += m_relation()->getForeignAdapter()->getOriginalFieldName(field->fld_name.c_str());
 		appendFilterValue(value, conjunctSql);
 	}
 	else if (const auto literalNode = nodeAs<LiteralNode>(node))
@@ -560,7 +562,7 @@ void ForeignTableScan::processOperation(thread_db* /*tdbb*/, string& conjunctSql
 }
 
 ULONG ForeignTableScan::getDescString(thread_db* tdbb, const dsc* desc, Firebird::string& outString,
-	CHARSET_ID toCharset) const
+	CSetId toCharset) const
 {
 	UCHAR* ptr = NULL;
 	MoveBuffer temp;
@@ -576,18 +578,18 @@ ULONG ForeignTableScan::getDescString(thread_db* tdbb, const dsc* desc, Firebird
 	return length;
 }
 
-SSHORT ForeignTableScan::getServerCharset(thread_db* tdbb) const
+CSetId ForeignTableScan::getServerCharset(thread_db* tdbb) const
 {
 	string serverCharset;
-	const ForeignServer* server = m_relation->rel_foreign_adapter->getServer();
+	const ForeignServer* server = m_relation()->getForeignAdapter()->getServer();
 	ForeignOption option(*getDefaultMemoryPool());
 	if (server->getOptions().get(MetaName(FOREIGN_SERVER_CHARSET), option))
 		serverCharset = option.getActualValue();
 
-	USHORT charsetId = CS_UTF8;
+	TTypeId charsetId = CS_UTF8;
 	if (serverCharset.hasData())
 	{
-		if (!MET_get_char_coll_subtype(tdbb, &charsetId, QualifiedName(serverCharset)))
+		if (!MetadataCache::get_char_coll_subtype(tdbb, &charsetId, QualifiedName(serverCharset)))
 		{
 			// specified character set not found
 			(Arg::Gds(isc_charset_not_found) << Arg::Str(serverCharset)).raise();
@@ -632,5 +634,5 @@ bool ForeignTableScan::applySort(thread_db* tdbb, const SortNode* sort)
 
 const bool ForeignTableScan::externalSqlFeatureSupport(thread_db* tdbb, info_sql_features feature) const
 {
-	return m_relation->rel_foreign_adapter->testSqlFeature(tdbb, feature);
+	return m_relation()->getForeignAdapter()->testSqlFeature(tdbb, feature);
 }

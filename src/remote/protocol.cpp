@@ -1807,6 +1807,9 @@ static bool_t xdr_slice(RemoteXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ 
 	if (!xdr_long(xdrs, reinterpret_cast<SLONG*>(&slice->lstr_length)))
 		return FALSE;
 
+	if ((xdrs->x_op != XDR_FREE) && !sdl)
+		return FALSE;
+
 	// Handle operation specific stuff, particularly memory allocation/deallocation
 
 	switch (xdrs->x_op)
@@ -2244,7 +2247,6 @@ static bool_t xdr_trrq_message( RemoteXdr* xdrs, USHORT msg_type)
 	Rpr* procedure = port->port_rpr;
 
 	// normally that never happens
-	fb_assert(procedure);
 	if (!procedure)
 		return false;
 

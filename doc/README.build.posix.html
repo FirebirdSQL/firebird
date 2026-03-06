@@ -5,16 +5,16 @@
         "HTML Tidy for Windows (vers 12 April 2005), see www.w3.org">
 <style type="text/css">
 body {
-    font-family: Helvetica,sans-serif; 
+    font-family: Helvetica,sans-serif;
     font-size: 9pt;
-    font-style: normal; 
-    font-weight: normal; 
+    font-style: normal;
+    font-weight: normal;
     background-color: #FFFFFF;
     margin-left: 54px;
     margin-right: 54px;
     margin-top: 10px;
     margin-bottom: 36px;
-    padding:0px; 
+    padding:0px;
 }
 
 h1  {
@@ -24,32 +24,32 @@ h1  {
     font-variant: small-caps;
 }
 
-h2  { 
-    font-family: Helvetica, sans-serif; 
-    font-size: 14pt; 
-    font-weight: bold; 
+h2  {
+    font-family: Helvetica, sans-serif;
+    font-size: 14pt;
+    font-weight: bold;
     color: #000000;
 }
 
-h3  { 
-    font-family: Helvetica, sans-serif; 
-    font-size: 12pt; 
-    font-weight: bold; 
+h3  {
+    font-family: Helvetica, sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
     color: #000000;
 }
 
-h4  { 
-    font-family: Helvetica, sans-serif; 
-    font-size: 10pt; 
-    font-weight: bold; 
+h4  {
+    font-family: Helvetica, sans-serif;
+    font-size: 10pt;
+    font-weight: bold;
     color: #000000;
 }
 
 
-h5  { 
-    font-family: Helvetica, sans-serif; 
-    font-size: 9pt; 
-    font-weight: bold; 
+h5  {
+    font-family: Helvetica, sans-serif;
+    font-size: 9pt;
+    font-weight: bold;
     font-style: italic;
     color: #000000;
 }
@@ -57,10 +57,10 @@ h5  {
 
 
 p {
-    font-family: Helvetica,sans-serif; 
+    font-family: Helvetica,sans-serif;
     font-size: 10pt;
-    font-style: normal; 
-    font-weight: normal; 
+    font-style: normal;
+    font-weight: normal;
     padding-left: 0%;
 }
 
@@ -81,17 +81,17 @@ p.caption {
 
 
 div {
-    font-family: Helvetica,sans-serif; 
+    font-family: Helvetica,sans-serif;
     font-size: 9pt;
-    font-style: normal; 
-    font-weight: normal; 
-    padding-left: 7%; 
+    font-style: normal;
+    font-weight: normal;
+    padding-left: 7%;
     padding-right: 5%;
 }
 
 b{
-    font-family:  Helvetica, sans-serif; 
-    font-size: 9pt; 
+    font-family:  Helvetica, sans-serif;
+    font-size: 9pt;
     font-weight: bold;
 }
 
@@ -101,7 +101,7 @@ table {
 }
 
 table.fbtable {
-    font-size: 10pt; 
+    font-size: 10pt;
     border-width: 1px 1px 1px 1px;
     border-spacing: 2px;
     border-style: outset outset outset outset;
@@ -127,8 +127,8 @@ table.fbtable td {
 }
 
 table.fbtable td.code {
-    font-size: 10pt; 
-    font-family: Courier New,monospace; 
+    font-size: 10pt;
+    font-family: Courier New,monospace;
     color: black;
 }
 
@@ -162,14 +162,14 @@ table.platform_table tr.rarely td {
 
 td.left     {
     text-align: left;
-    font-size: 9pt; 
+    font-size: 9pt;
     width: 33%;
     padding-top: 10px;
     padding-bottom: 10px;}
 
 td.center   {
     text-align: center;
-    font-size: 9pt; 
+    font-size: 9pt;
     width: 33%;
     padding-top: 10px;
     padding-bottom: 10px;
@@ -177,7 +177,7 @@ td.center   {
 
 td.right    {
     text-align: right;
-    font-size: 9pt; 
+    font-size: 9pt;
     width: 33%;
     padding-top: 10px;
     padding-bottom: 10px;
@@ -212,25 +212,10 @@ td.right    {
         </ul><a href="#supported">Supported Platforms</a>
         <ul>
             <li>
-                <a href="#aix1">AIX 6.1, Power</a>
-            </li>
-            <li>
-                <a href="#hp1">HP-UX 11i v3, Itanium</a>
-            </li>
-            <li>
-                <a href="#hp2">HP-UX 11i v3, PA-RISC</a>
-            </li>
-            <li>
                 <a href="#linux1">64-bit Linux</a>
             </li>
             <li>
                 <a href="#linux2">32-bit Linux</a>
-            </li>
-            <li>
-                <a href="#sol1">Solaris 10, Sparc</a>
-            </li>
-            <li>
-                <a href="#sol2">Solaris 10, Intel</a>
             </li>
             <li>
                 <a href="#freebsd">FreeBSD</a>
@@ -254,9 +239,7 @@ td.right    {
         <p>
             Autogen.sh depends on the GNU autotools to create "configure".
             Modern LINUX distributions will already have the GNU autotools
-            installed, but if you are attempting to build on
-            AIX, HP-UX, or Solaris, you may need to install the
-            necessary GNU utilities.
+            installed.
         </p>
         <p>
             The table below shows the versions of the GNU tools that we use to
@@ -547,28 +530,6 @@ td.right    {
             </caption>
             <tr class="works">
                 <td>
-                    AIX 6.1, Power
-                </td>
-                <td>
-                    XL C++ Compiler, 10.1
-                </td>
-                <td class="works">
-                    Frequently Tested
-                </td>
-            </tr>
-            <tr class="rarely">
-                <td>
-                    AIX 5.3, Power
-                </td>
-                <td>
-                    XL C++ Compiler, 10.1
-                </td>
-                <td>
-                    Rarely Tested
-                </td>
-            </tr>
-            <tr class="works">
-                <td>
                     HP-UX 11.31 (11i v3), Itanium
                 </td>
                 <td>
@@ -644,39 +605,6 @@ td.right    {
                     Frequently Tested
                 </td>
             </tr>
-            <tr class="works">
-                <td>
-                    Solaris 10, SPARC
-                </td>
-                <td>
-                    Sun Studio 12, Update 1
-                </td>
-                <td>
-                    Frequently Tested
-                </td>
-            </tr>
-            <tr class="rarely">
-                <td>
-                    Solaris 9 SPARC
-                </td>
-                <td>
-                    Sun Studio 12
-                </td>
-                <td>
-                    Rarely Tested
-                </td>
-            </tr>
-            <tr class="works">
-                <td>
-                    Solaris 10, AMD64
-                </td>
-                <td>
-                    Sun Studio 12, Update 1
-                </td>
-                <td class="works">
-                    Frequently Tested
-                </td>
-            </tr>
             <tr class="rarely">
                 <td>
                     FreeBSD 8, AMD64/i386
@@ -689,83 +617,12 @@ td.right    {
                 </td>
             </tr>
         </table>
-        <h2>
-            <a name="aix1" id="aix1">4.1 AIX 6.1 on Power, IBM XL C++</a>
-        </h2>
         <pre>
    export CC=cc_r
    export CXX=xlC_r
    export CFLAGS=-q64
    export CXXFLAGS=-q64
 </pre>
-        <p class="caption">
-            Autoconf Environment Variables for AIX
-        </p>
-        <p>
-            This configuration was also successfully tested against AIX 5.3.
-        </p>
-        <p>
-            Compiler version was XL C++ compiler, version 10.1.
-        </p>
-        <h2>
-            <a name="hp1" id="hp1">4.2 HP-UX 11i v3 on Itanium, HP aCC C++
-            Compiler</a>
-        </h2>
-        <pre>
-   export CC=cc
-   export CXX=aCC
-   export CFLAGS=+DD64
-   export CXXFLAGS=+DD64
-</pre>
-        <p class="caption">
-            Autoconf Environment Variables for HP-UX 11i v3, Itanium
-        </p>
-        <P>
-        	Firebird requires the HP-UX Atomic APIs ("AtomicAPI" bundle),
-        	released as an optional Software Pack (SPK) for HP-UX 11i v2 or v3.
-        </P>
-        <P>
-            The Firebird build process requires HP linker (ld) option
-            "-concatrpath." -concatrpath is provided in the June 2007 patch bundle.
-            This update is available for HP-UX 11i v2 and v3.
-        </p>
-        <p>
-            Compiler version was HP ANSI C++ A.06.23.
-        </p>
-        <p>
-            The default instruction set architecture for HP-UX Itanium is
-            blended. Enthusiasts may add +DSnative to the CFLAGS/CXXFLAGS,
-            which tunes for the processor on which the compiler is running.
-        </p>
-        <h2>
-            <a name="hp2" id="hp2">4.3 HP-UX 11i v3 on PA-RISC, HP aCC C++
-            Compiler</a>
-        </h2>
-        <pre>
-   export CC=cc
-   export CXX=aCC
-   export CFLAGS=+DD64
-   export CXXFLAGS=+DD64
-</pre>
-        <p class="caption">
-            Autoconf Environment Variables for HP-UX 11i v3, PA-RISC
-        </p>
-        <P>
-        	Firebird requires the HP-UX Atomic APIs ("AtomicAPI" bundle),
-        	released as an optional Software Pack (SPK) for HP-UX 11i v2 or v3.
-        </P> 
-        <P>
-            The Firebird build process requires HP linker (ld) option
-            "-concatrpath." -concatrpath is provided in the June 2007 patch bundle.
-            This update is available for HP-UX 11i v2 and v3.
-        </p>
-        <p>
-            Compiler version was HP ANSI C++ A.03.85. <b><i>Note, A.03.85 is
-            the latest and last release of the aCC compiler on PA-RISC</i></b>.
-        </p>
-        <p>
-            This configuration was also successfully tested using HP-UX 11iv2.
-        </p>
         <h2>
             <a name="linux1" id="linux1">4.4 Linux on 64-bit AMD64, GNU C++
             compiler (g++)</a>
@@ -801,55 +658,18 @@ td.right    {
             No Autoconf Environment variables are required to build on 32-bit
             Linux when using g++.
         </p>
-        <h2>
-            <a name="sol1" id="sol1">4.6 Solaris 10 on SPARC, Sun Studio 12
-            Update 1</a>
-        </h2>
         <pre>
    export CC=cc
    export CXX=CC
    export CFLAGS="-m64"
    export CXXFLAGS="-m64"
 </pre>
-        <p class="caption">
-            Autoconf Environment Variables for Solaris 10, SPARC
-        </p>
-        <p>
-            This configuration was also tested on Solaris 9, SPARC, using Sun
-            Studio 12.
-        </p>
-        <p>
-            The default instruction set architecture for Solaris SPARC is
-            generic (-xarch=generic). Enthusiasts may add -xarch=native to the CFLAGS/CXXFLAGS,
-            which tunes for the processor on which the compiler is running.
-        </p>
-        <p>
-            <b>Note!</b> Sun Studio 12 is the last Sun Studio release to
-            support Solaris 9. Sun Studio "Update 1" requires Solaris 10 or
-            greater.
-        </p>
-        <h2>
-            <a name="sol2" id="sol2">4.7 Solaris 10 on AMD64, Sun Studio 12
-            Update 1</a>
-        </h2>
         <pre>
    export CC=cc
    export CXX=CC
    export CFLAGS="-m64"
    export CXXFLAGS="-m64"
 </pre>
-        <p class="caption">
-            Autoconf Environment Variables Solaris 10, AMD64
-        </p>
-        <p>
-            Firebird requires Solaris 10 or later when using Sun Studio on
-            Solaris AMD64. Solaris 9 is not supported on AMD64.
-        </p>
-        <p>
-            The default instruction set architecture for Solaris on AMD64 is
-            generic (-xarch=generic). Enthusiasts may add -xarch=native to the CFLAGS/CXXFLAGS,
-            which tunes for the processor on which the compiler is running.
-        </p>
         <h2>
             <a name="freebsd" id="freebsd">4.8 FreeBSD, g++</a>
         </h2>
