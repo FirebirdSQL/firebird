@@ -29,10 +29,14 @@
 #include "../common/constants.h"
 #include "firebird/impl/msg_helper.h"
 
-inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
-inline constexpr int MSG_LENGTH = 128;
+namespace Firebird::Gsec
+{
+	inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
+	inline constexpr int MSG_LENGTH = 128;
+} // namespace Firebird::Gsec
 
-namespace Firebird::Auth {
+namespace Firebird::Auth
+{
 
 class UserData;
 
@@ -58,6 +62,11 @@ namespace Firebird
 {
 	class UtilSvc;
 }
+
+
+namespace Firebird::Gsec
+{
+
 
 class tsec : public Firebird::ThreadData
 {
@@ -199,5 +208,7 @@ inline constexpr USHORT GsecMsg102	= 102;	// -adm(in) {yes|no}
 inline constexpr USHORT GsecMsg103	= 103;	// invalid parameter for -ADMIN, only YES or NO is accepted
 inline constexpr USHORT GsecMsg104	= 104;	// not enough privileges to complete operation
 
-#endif // UTILITIES_GSEC_H
 
+} // namespace Firebird::Gsec
+
+#endif // UTILITIES_GSEC_H

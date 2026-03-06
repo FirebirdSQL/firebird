@@ -163,10 +163,10 @@ inline constexpr serv_entry services[] =
 	{ isc_action_svc_backup, "Backup Database", Burp::BURP_main },
 	{ isc_action_svc_restore, "Restore Database", Burp::BURP_main },
 	{ isc_action_svc_repair, "Repair Database", Alice::ALICE_main },
-	{ isc_action_svc_add_user, "Add User", GSEC_main },
-	{ isc_action_svc_delete_user, "Delete User", GSEC_main },
-	{ isc_action_svc_modify_user, "Modify User", GSEC_main },
-	{ isc_action_svc_display_user, "Display User", GSEC_main },
+	{ isc_action_svc_add_user, "Add User", Gsec::GSEC_main },
+	{ isc_action_svc_delete_user, "Delete User", Gsec::GSEC_main },
+	{ isc_action_svc_modify_user, "Modify User", Gsec::GSEC_main },
+	{ isc_action_svc_display_user, "Display User", Gsec::GSEC_main },
 	{ isc_action_svc_properties, "Database Properties", Alice::ALICE_main },
 	{ isc_action_svc_db_stats, "Database Stats", main_gstat },
 	{ isc_action_svc_get_fb_log, "Get Log File", Service::readFbLog },
@@ -178,9 +178,9 @@ inline constexpr serv_entry services[] =
 	{ isc_action_svc_trace_suspend, "Suspend Trace Session", TRACE_main },
 	{ isc_action_svc_trace_resume, "Resume Trace Session", TRACE_main },
 	{ isc_action_svc_trace_list, "List Trace Sessions", TRACE_main },
-	{ isc_action_svc_set_mapping, "Set Domain Admins Mapping to RDB$ADMIN", GSEC_main },
-	{ isc_action_svc_drop_mapping, "Drop Domain Admins Mapping to RDB$ADMIN", GSEC_main },
-	{ isc_action_svc_display_user_adm, "Display User with Admin Info", GSEC_main },
+	{ isc_action_svc_set_mapping, "Set Domain Admins Mapping to RDB$ADMIN", Gsec::GSEC_main },
+	{ isc_action_svc_drop_mapping, "Drop Domain Admins Mapping to RDB$ADMIN", Gsec::GSEC_main },
+	{ isc_action_svc_display_user_adm, "Display User with Admin Info", Gsec::GSEC_main },
 	{ isc_action_svc_validate, "Validate Database", VAL_service},
 	{ 0, NULL, NULL }
 };
@@ -2766,7 +2766,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_drop_mapping:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2782,7 +2782,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sql_role_name:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2799,7 +2799,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_display_user_adm:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2823,7 +2823,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sql_role_name:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2845,7 +2845,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_modify_user:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2861,7 +2861,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sec_userid:
 			case isc_spb_sec_groupid:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2869,7 +2869,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_sec_admin:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2883,7 +2883,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_sec_middlename:
 			case isc_spb_sec_lastname:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}

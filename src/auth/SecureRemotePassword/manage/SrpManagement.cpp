@@ -541,7 +541,7 @@ public:
 						if (recordsCount(status, stmt, isc_info_req_update_count) != 1)
 						{
 							stmt->release();
-							return GsecMsg22;
+							return Gsec::GsecMsg22;
 						}
 
 						stmt->free(status);
@@ -579,7 +579,7 @@ public:
 						if (recordsCount(status, stmt, isc_info_req_delete_count) != 1)
 						{
 							stmt->release();
-							return GsecMsg22;
+							return Gsec::GsecMsg22;
 						}
 
 						stmt->free(status);

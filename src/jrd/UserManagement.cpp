@@ -337,8 +337,8 @@ void UserManagement::checkSecurityResult(int errcode, IStatus* status,
 	errcode = Auth::setGsecCode(errcode, operation);
 
 	Arg::StatusVector tmp;
-	tmp << Arg::Gds(ENCODE_ISC_MSG(errcode, GSEC_MSG_FAC));
-	if (errcode == GsecMsg22)
+	tmp << Arg::Gds(ENCODE_ISC_MSG(errcode, Gsec::GSEC_MSG_FAC));
+	if (errcode == Gsec::GsecMsg22)
 	{
 		tmp << userName;
 	}

@@ -46,11 +46,6 @@
 #include "../common/classes/MsgPrint.h"
 #include "../common/StatusHolder.h"
 
-using Firebird::MsgFormat::SafeArg;
-using namespace Firebird;
-using namespace Firebird::Auth;
-
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -58,6 +53,13 @@ using namespace Firebird::Auth;
 #ifdef HAVE_IO_H
 #include <io.h>
 #endif
+
+namespace Firebird::Gsec
+{
+
+using MsgFormat::SafeArg;
+using namespace Auth;	// FIXME:
+
 
 constexpr int MAXSTUFF = 1000;	// longest interactive command line
 
@@ -1769,3 +1771,6 @@ static void get_security_error(ISC_STATUS* status, int gsec_err)
 		return;
 	}
 }
+
+
+} // namespace Firebird::Gsec
