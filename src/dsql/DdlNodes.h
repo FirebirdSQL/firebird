@@ -1381,11 +1381,11 @@ public:
 		enum Type { TYPE_CHECK, TYPE_NOT_NULL, TYPE_PK, TYPE_UNIQUE, TYPE_FK };
 
 		// Specialized BlrWriter for constraints.
-		class BlrWriter final : public Jrd::BlrDebugWriter
+		class BlrWriter final : public BlrDebugWriter
 		{
 		public:
 			explicit BlrWriter(MemoryPool& p)
-				: Jrd::BlrDebugWriter(p),
+				: BlrDebugWriter(p),
 				  dsqlScratch(NULL)
 			{
 			}

@@ -30,14 +30,14 @@
 #include "../common/classes/GenericMap.h"
 
 
-namespace Firebird {
-
-class ClumpletReader;
-
+namespace Firebird
+{
+	class ClumpletReader;
 }
 
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 class DsqlDmlRequest;
 class dsql_msg;
@@ -168,6 +168,7 @@ private:
 	UCHAR m_blobPolicy = Firebird::IBatch::BLOB_NONE;
 };
 
-} // namespace
+
+} // namespace Firebird::Jrd
 
 #endif // DSQL_BATCH_H

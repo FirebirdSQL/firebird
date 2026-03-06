@@ -36,14 +36,15 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/BatchCompletionState.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 	const char* const TEMP_NAME = "fb_batch";
 	const UCHAR initBlobParameters[] = {isc_bpb_version1, isc_bpb_type, 1, isc_bpb_type_stream};
 
-	class JTransliterate : public Firebird::Transliterate
+	class JTransliterate : public Transliterate
 	{
 	public:
 		JTransliterate(thread_db* tdbb)
@@ -182,28 +183,28 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 	unsigned parLength, const UCHAR* par)
 {
 	SET_TDBB(tdbb);
-	Jrd::ContextPoolHolder context(tdbb, &req->getPool());
+	ContextPoolHolder context(tdbb, &req->getPool());
 
 	// Validate cursor or batch being not already open
 
 	if (req->req_cursor)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
-				  Firebird::Arg::Gds(isc_dsql_cursor_open_err));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
+				  Arg::Gds(isc_dsql_cursor_open_err));
 	}
 
 	if (req->req_batch)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
-				  Firebird::Arg::Gds(isc_batch_open));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
+				  Arg::Gds(isc_batch_open));
 	}
 
 	// Sanity checks before creating batch
 
 	if (!req->getRequest())
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
-				  Firebird::Arg::Gds(isc_unprepared_stmt));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+				  Arg::Gds(isc_unprepared_stmt));
 	}
 
 	const auto statement = req->getDsqlStatement();
@@ -218,22 +219,22 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 			break;
 
 		default:
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-					  Firebird::Arg::Gds(isc_batch_type));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					  Arg::Gds(isc_batch_type));
 	}
 
 	const dsql_msg* message = statement->getSendMsg();
 	if (! (inMetadata && message && message->msg_parameter > 0))
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-				  Firebird::Arg::Gds(isc_batch_param));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+				  Arg::Gds(isc_batch_param));
 	}
 
 	// Open reader for parameters block
 
 	ClumpletReader pb(ClumpletReader::WideTagged, par, parLength);
 	if (pb.getBufferLength() && (pb.getBufferTag() != IBatch::VERSION1))
-		ERRD_post(Firebird::Arg::Gds(isc_batch_param_version));
+		ERRD_post(Arg::Gds(isc_batch_param_version));
 
 	// Create batch
 
@@ -261,8 +262,8 @@ void DsqlBatch::blobCheckMeta()
 {
 	if (!m_blobMeta.hasData())
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_batch_blobs));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_batch_blobs));
 	}
 }
 
@@ -283,8 +284,8 @@ void DsqlBatch::blobCheckMode(bool stream, const char* fname)
 		break;
 	}
 
-	ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-		Firebird::Arg::Gds(isc_batch_policy) << fname);
+	ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		Arg::Gds(isc_batch_policy) << fname);
 }
 
 void DsqlBatch::blobSetSize()
@@ -312,8 +313,8 @@ void DsqlBatch::setDefaultBpb(thread_db* tdbb, unsigned parLength, const unsigne
 {
 	if (m_blobs.getSize())
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_batch_defbpb));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_batch_defbpb));
 	}
 	setDefBpb(parLength, par);
 }
@@ -364,8 +365,8 @@ void DsqlBatch::appendBlobData(thread_db* tdbb, ULONG length, const void* inBuff
 
 	if (m_lastBlob == MAX_ULONG)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_batch_blob_append));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_batch_blob_append));
 	}
 
 	m_setBlobSize = true;
@@ -378,8 +379,8 @@ void DsqlBatch::putSegment(ULONG length, const void* inBuffer)
 	{
 		if (length > MAX_USHORT)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_blobtoobig) <<
-					 Firebird::Arg::Gds(isc_big_segment) << Firebird::Arg::Num(length));
+			ERR_post(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blobtoobig) <<
+					 Arg::Gds(isc_big_segment) << Arg::Num(length));
 		}
 		USHORT l = length;
 		m_blobs.align(IBatch::BLOB_SEGHDR_ALIGN);
@@ -399,8 +400,8 @@ void DsqlBatch::addBlobStream(thread_db* tdbb, unsigned length, const void* inBu
 		return;
 	if (length % BLOB_STREAM_ALIGN)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_batch_stream_align));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_batch_stream_align));
 	}
 
 	blobCheckMode(true, "addBlobStream");
@@ -431,14 +432,14 @@ void DsqlBatch::registerBlob(const ISC_QUAD* engineBlob, const ISC_QUAD* batchBl
 	ISC_QUAD* idPtr = m_blobMap.put(*batchBlob);
 	if (!idPtr)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_batch_rpt_blob) << Firebird::Arg::Quad(batchBlob));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_batch_rpt_blob) << Arg::Quad(batchBlob));
 	}
 
 	*idPtr = *engineBlob;
 }
 
-Firebird::IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
+IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
 {
 	// todo - add new trace event here
 	// TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
@@ -524,9 +525,9 @@ private:
 							flow.remains = m_blobs.reget(flow.remains, &flow.data, BLOB_STREAM_ALIGN);
 						if (flow.remains < SIZEOF_BLOB_HEAD)
 						{
-							ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-								Firebird::Arg::Gds(isc_batch_blob_buf) <<
-								Firebird::Arg::Gds(isc_batch_small_data) << "BLOB");
+							ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								Arg::Gds(isc_batch_blob_buf) <<
+								Arg::Gds(isc_batch_small_data) << "BLOB");
 						}
 
 						// parse blob header
@@ -546,8 +547,8 @@ private:
 							// Sanity check
 							if (*bpbSize)
 							{
-								ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-									Firebird::Arg::Gds(isc_batch_blob_buf) << Firebird::Arg::Gds(isc_batch_cont_bpb));
+								ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+									Arg::Gds(isc_batch_blob_buf) << Arg::Gds(isc_batch_cont_bpb));
 							}
 						}
 						else
@@ -562,9 +563,9 @@ private:
 									flow.remains = m_blobs.reget(flow.remains, &flow.data, BLOB_STREAM_ALIGN);
 								if (currentBpbSize > flow.remains)
 								{
-									ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-										Firebird::Arg::Gds(isc_batch_blob_buf) <<
-										Firebird::Arg::Gds(isc_batch_big_bpb) << Firebird::Arg::Num(currentBpbSize) << Firebird::Arg::Num(flow.remains));
+									ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+										Arg::Gds(isc_batch_blob_buf) <<
+										Arg::Gds(isc_batch_big_bpb) << Arg::Num(currentBpbSize) << Arg::Num(flow.remains));
 								}
 								localBpb.add(flow.data, currentBpbSize);
 								bpb = &localBpb;
@@ -610,18 +611,18 @@ private:
 							DEB_BATCH(fprintf(stderr, "  Seg: %u\n", dataSize));
 							if (dataSize > flow.currentBlobSize)
 							{
-								ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-									Firebird::Arg::Gds(isc_batch_blob_buf) <<
-									Firebird::Arg::Gds(isc_batch_big_segment) << Firebird::Arg::Num(dataSize) << Firebird::Arg::Num(flow.currentBlobSize));
+								ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+									Arg::Gds(isc_batch_blob_buf) <<
+									Arg::Gds(isc_batch_big_segment) << Arg::Num(dataSize) << Arg::Num(flow.currentBlobSize));
 							}
 							if (dataSize > flow.remains)
 							{
 								flow.remains = m_blobs.reget(flow.remains, &flow.data, BLOB_STREAM_ALIGN);
 								if (dataSize > flow.remains)
 								{
-									ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-									Firebird::Arg::Gds(isc_batch_blob_buf) <<
-									Firebird::Arg::Gds(isc_batch_big_seg2) << Firebird::Arg::Num(dataSize) << Firebird::Arg::Num(flow.remains));
+									ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+									Arg::Gds(isc_batch_blob_buf) <<
+									Arg::Gds(isc_batch_big_seg2) << Arg::Num(dataSize) << Arg::Num(flow.remains));
 								}
 							}
 						}
@@ -678,9 +679,9 @@ private:
 	{
 		if (remains < m_messageSize)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				Firebird::Arg::Gds(isc_batch_blob_buf) <<
-				Firebird::Arg::Gds(isc_batch_small_data) << "messages");
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_batch_blob_buf) <<
+				Arg::Gds(isc_batch_small_data) << "messages");
 		}
 
 		while (remains >= m_messageSize)
@@ -716,8 +717,8 @@ private:
 				ISC_QUAD newId;
 				if (!m_blobMap.get(*id, newId))
 				{
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						Firebird::Arg::Gds(isc_batch_blob_id) << Firebird::Arg::Quad(id));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						Arg::Gds(isc_batch_blob_id) << Arg::Quad(id));
 				}
 
 				m_blobMap.remove(*id);
@@ -770,7 +771,7 @@ private:
 	if (m_blobMap.count())
 	{
 		DEB_BATCH(fprintf(stderr, "BLOBs %d were not used in messages\n", m_blobMap.count()));
-		ERR_post_warning(Firebird::Arg::Warning(isc_random) << "m_blobMap.count() BLOBs were not used in messages");		// !!!!!! new warning
+		ERR_post_warning(Arg::Warning(isc_random) << "m_blobMap.count() BLOBs were not used in messages");		// !!!!!! new warning
 	}
 
 	// reset to initial state
@@ -834,7 +835,7 @@ void DsqlBatch::DataCache::put3(const void* data, ULONG dataSize, ULONG offset)
 void DsqlBatch::DataCache::put(const void* d, ULONG dataSize)
 {
 	if (m_used + m_cache.getCount() + dataSize > m_limit)
-		ERR_post(Firebird::Arg::Gds(isc_batch_too_big));
+		ERR_post(Arg::Gds(isc_batch_too_big));
 
 	const UCHAR* data = reinterpret_cast<const UCHAR*>(d);
 
@@ -1101,3 +1102,5 @@ void DsqlBatch::info(thread_db* tdbb, unsigned int itemsLength, const unsigned c
 	memcpy(buffer, out.getBuffer(), out.getBufferLength());
 }
 
+
+}	// namespace Firebird::Jrd

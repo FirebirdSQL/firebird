@@ -61,13 +61,7 @@
 #include "../include/fb_blk.h"
 
 #include "../dsql/sym.h"
-
-// Context aliases used in triggers
-inline constexpr const char* OLD_CONTEXT_NAME = "OLD";
-inline constexpr const char* NEW_CONTEXT_NAME = "NEW";
-
-inline constexpr int OLD_CONTEXT_VALUE = 0;
-inline constexpr int NEW_CONTEXT_VALUE = 1;
+#include "../common/dsc.h"
 
 namespace Firebird::Jrd {
 	class Attachment;
@@ -95,17 +89,13 @@ namespace Firebird::Jrd {
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
 	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<WindowClause>>> NamedWindowClause;
 	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
-}
 
-//======================================================================
-// remaining node definitions for local processing
-//
+// Context aliases used in triggers
+inline constexpr const char* OLD_CONTEXT_NAME = "OLD";
+inline constexpr const char* NEW_CONTEXT_NAME = "NEW";
 
-/// Include definition of descriptor
-
-#include "../common/dsc.h"
-
-namespace Firebird::Jrd {
+inline constexpr int OLD_CONTEXT_VALUE = 0;
+inline constexpr int NEW_CONTEXT_VALUE = 1;
 
 #ifdef DSQL_DEBUG
 DEFINE_TRACE_ROUTINE(dsql_trace);
