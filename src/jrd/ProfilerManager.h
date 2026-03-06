@@ -284,9 +284,9 @@ public:
 		if (interval < 0)
 		{
 			Firebird::status_exception::raise(
-				Firebird::Arg::Gds(isc_not_valid_for_var) <<
+				Arg::Gds(isc_not_valid_for_var) <<
 				"\"FLUSH_INTERVAL\"" <<
-				Firebird::Arg::Num(interval));
+				Arg::Num(interval));
 		}
 	}
 

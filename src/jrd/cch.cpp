@@ -520,7 +520,7 @@ bool CCH_exclusive(thread_db* tdbb, USHORT level, SSHORT wait_flag, Firebird::Sy
 	// but can't get the lock, generate an error
 
 	if (wait_flag == LCK_WAIT)
-		ERR_post(Firebird::Arg::Gds(isc_deadlock));
+		ERR_post(Arg::Gds(isc_deadlock));
 
 	dbb->dbb_flags &= ~DBB_exclusive;
 
@@ -615,7 +615,7 @@ bool CCH_exclusive_attachment(thread_db* tdbb, USHORT level, SSHORT wait_flag, S
 					if (other_attachment->att_flags & ATT_exclusive_pending)
 					{
 						if (wait_flag == LCK_WAIT)
-							ERR_post(Firebird::Arg::Gds(isc_deadlock));
+							ERR_post(Arg::Gds(isc_deadlock));
 
 						attachment->att_flags &= ~ATT_exclusive_pending;
 						return false;
@@ -1599,7 +1599,7 @@ void CCH_init(thread_db* tdbb, ULONG number)
 			number -= number >> 2;
 
 			if (number < MIN_PAGE_BUFFERS)
-				ERR_post(Firebird::Arg::Gds(isc_cache_too_small));
+				ERR_post(Arg::Gds(isc_cache_too_small));
 		}
 	}
 
@@ -1620,7 +1620,7 @@ void CCH_init(thread_db* tdbb, ULONG number)
 	bcb->bcb_free_minimum = (SSHORT) MIN(bcb->bcb_count / 4, 128);
 
 	if (bcb->bcb_count < MIN_PAGE_BUFFERS)
-		ERR_post(Firebird::Arg::Gds(isc_cache_too_small));
+		ERR_post(Arg::Gds(isc_cache_too_small));
 
 	// Log if requested number of page buffers could not be allocated.
 
@@ -2524,7 +2524,7 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 						SDW_notify(tdbb);
 						CCH_unwind(tdbb, false);
 						SDW_dump_pages(tdbb);
-						ERR_post(Firebird::Arg::Gds(isc_deadlock));
+						ERR_post(Arg::Gds(isc_deadlock));
 					}
 				}
 			}
@@ -4162,7 +4162,7 @@ static LockState lock_buffer(thread_db* tdbb, BufferDesc* bdb, const SSHORT wait
 
 		fb_msg_format(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 216, sizeof(errmsg), errmsg,
 			Firebird::MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
-		ERR_append_status(status, Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(errmsg));
+		ERR_append_status(status, Arg::Gds(isc_random) << Arg::Str(errmsg));
 		ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 216, errmsg);	// // msg 216 page %ld, page type %ld lock denied
 
 		// CCH_unwind releases all the BufferDesc's and calls ERR_punt()
@@ -4205,7 +4205,7 @@ static LockState lock_buffer(thread_db* tdbb, BufferDesc* bdb, const SSHORT wait
 
 	fb_msg_format(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 215, sizeof(errmsg), errmsg,
 					Firebird::MsgFormat::SafeArg() << bdb->bdb_page.getPageNum() << (int) page_type);
-	ERR_append_status(status, Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(errmsg));
+	ERR_append_status(status, Arg::Gds(isc_random) << Arg::Str(errmsg));
 	ERR_log(FB_IMPL_MSG_FACILITY_JRD_BUGCHK, 215, errmsg);	// msg 215 page %ld, page type %ld lock conversion denied
 
 	CCH_unwind(tdbb, true);
@@ -4373,9 +4373,9 @@ static void page_validation_error(thread_db* tdbb, WIN* window, SSHORT type)
 		tdbb->getDatabase()->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
 
 	ERR_build_status(tdbb->tdbb_status_vector,
-					 Firebird::Arg::Gds(isc_db_corrupt) << Firebird::Arg::Str(pages->file->fil_string) <<
-					 Firebird::Arg::Gds(isc_page_type_err) <<
-					 Firebird::Arg::Gds(isc_badpagtyp) << Firebird::Arg::Num(bdb->bdb_page.getPageNum()) <<
+					 Arg::Gds(isc_db_corrupt) << Arg::Str(pages->file->fil_string) <<
+					 Arg::Gds(isc_page_type_err) <<
+					 Arg::Gds(isc_badpagtyp) << Arg::Num(bdb->bdb_page.getPageNum()) <<
 												Ods::pagtype(type) <<
 												Ods::pagtype(page->pag_type));
 	// We should invalidate this bad buffer.
@@ -4877,7 +4877,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 	if (bdb->bdb_flags & BDB_not_valid)
 	{
-		ERR_build_status(status, Firebird::Arg::Gds(isc_buf_invalid) << Firebird::Arg::Num(bdb->bdb_page.getPageNum()));
+		ERR_build_status(status, Arg::Gds(isc_buf_invalid) << Arg::Num(bdb->bdb_page.getPageNum()));
 		return false;
 	}
 

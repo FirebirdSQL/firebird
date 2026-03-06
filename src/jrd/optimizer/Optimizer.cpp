@@ -278,7 +278,7 @@ namespace
 
 		if (count > MAX_CONJUNCTS)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_optimizer_blk_exc));
+			ERR_post(Arg::Gds(isc_optimizer_blk_exc));
 			// Msg442: size of optimizer block exceeded
 		}
 
@@ -453,7 +453,7 @@ namespace
 				if (relationId != arg.relationId)
 				{
 					// index %s cannot be used in the specified plan
-					ERR_post(Firebird::Arg::Gds(isc_index_unused) << arg.indexName.toQuotedString());
+					ERR_post(Arg::Gds(isc_index_unused) << arg.indexName.toQuotedString());
 				}
 
 				if (idx.idx_id == arg.indexId)
@@ -791,7 +791,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	// Check if size of optimizer block exceeded.
 	if (conjunctCount > MAX_CONJUNCTS)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_optimizer_blk_exc));
+		ERR_post(Arg::Gds(isc_optimizer_blk_exc));
 		// Msg442: size of optimizer block exceeded
 	}
 
@@ -1470,7 +1470,7 @@ void Optimizer::generateAggregateDistincts(MapNode* map)
 			sort_key->setSkdLength(sort_dtypes[desc->dsc_dtype], desc->dsc_length);
 
 			if (!sort_key->skd_dtype)
-				ERR_post(Firebird::Arg::Gds(isc_invalid_sort_datatype) << Firebird::Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
+				ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 
 			if (desc->dsc_dtype == dtype_varying)
 			{
@@ -1559,8 +1559,8 @@ void Optimizer::generateAggregateSort(AggNode* aggNode)
 
 		if (!sortKey->skd_dtype)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_invalid_sort_datatype)
-					 << Firebird::Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
+			ERR_post(Arg::Gds(isc_invalid_sort_datatype)
+					 << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 		}
 
 		if (sortKey->skd_dtype == SKD_varying || sortKey->skd_dtype == SKD_cstring)
@@ -1798,7 +1798,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 			sort_key->skd_flags |= SKD_descending;
 
 		if (!sort_key->skd_dtype)
-			ERR_post(Firebird::Arg::Gds(isc_invalid_sort_datatype) << Firebird::Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
+			ERR_post(Arg::Gds(isc_invalid_sort_datatype) << Arg::Str(DSC_dtype_tostring(desc->dsc_dtype)));
 
 		if (sort_key->skd_dtype == SKD_varying || sort_key->skd_dtype == SKD_cstring)
 		{
@@ -1911,7 +1911,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 
 	if (map_length > MAX_SORT_RECORD)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_sort_rec_size_err) << Firebird::Arg::Num(map_length));
+		ERR_post(Arg::Gds(isc_sort_rec_size_err) << Arg::Num(map_length));
 		// Msg438: sort record size of %ld bytes is too big
 	}
 
@@ -1953,9 +1953,9 @@ void Optimizer::checkIndices()
 		{
 			// index %s cannot be used in the specified plan
 			if (isGbak)
-				ERR_post_warning(Firebird::Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
+				ERR_post_warning(Arg::Warning(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
 			else
-				ERR_post(Firebird::Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
+				ERR_post(Arg::Gds(isc_index_unused) << plan->accessType->items[0].indexName.toQuotedString());
 		}
 
 		if (!tail->csb_idx)
@@ -1978,9 +1978,9 @@ void Optimizer::checkIndices()
 
 				// index %s cannot be used in the specified plan
 				if (isGbak)
-					ERR_post_warning(Firebird::Arg::Warning(isc_index_unused) << index_name.toQuotedString());
+					ERR_post_warning(Arg::Warning(isc_index_unused) << index_name.toQuotedString());
 				else
-					ERR_post(Firebird::Arg::Gds(isc_index_unused) << index_name.toQuotedString());
+					ERR_post(Arg::Gds(isc_index_unused) << index_name.toQuotedString());
 			}
 		}
 	}

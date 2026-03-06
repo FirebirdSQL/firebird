@@ -227,7 +227,7 @@ CharSetContainer::CharSetContainer(thread_db* tdbb, MemoryPool& p, MetaId id, No
 	CSetId cs_id(id);
 
 	if (!(lookupInternalCharSet(cs_id, &info) || MET_get_char_coll_subtype_info(tdbb, cs_id, &info)))
-		ERR_post(Firebird::Arg::Gds(isc_text_subtype) << Firebird::Arg::Num(cs_id));
+		ERR_post(Arg::Gds(isc_text_subtype) << Arg::Num(cs_id));
 
 	charset* csL = FB_NEW_POOL(p) charset;
 
@@ -244,8 +244,8 @@ CharSetContainer::CharSetContainer(thread_db* tdbb, MemoryPool& p, MetaId id, No
 	}
 
 	delete csL;
-	ERR_post(Firebird::Arg::Gds(isc_charset_not_installed) <<
-		(info.charsetName.hasData() ? Firebird::Arg::Str(info.charsetName[0].toQuotedString()) : Firebird::Arg::Str("<Unknown character set>")));
+	ERR_post(Arg::Gds(isc_charset_not_installed) <<
+		(info.charsetName.hasData() ? Arg::Str(info.charsetName[0].toQuotedString()) : Arg::Str("<Unknown character set>")));
 }
 
 CsConvert CharSetContainer::lookupConverter(thread_db* tdbb, CSetId toCsId)
@@ -274,7 +274,7 @@ Collation* CharSetVers::getCollation(const QualifiedName& name)
 	if (charset_collations.find([name](Collation* col) { return col->name == name; }, pos))
 		return charset_collations[pos];
 
-	ERR_post(Firebird::Arg::Gds(isc_text_subtype) << name.toQuotedString());
+	ERR_post(Arg::Gds(isc_text_subtype) << name.toQuotedString());
 }
 
 
@@ -474,7 +474,7 @@ ULONG INTL_convert_bytes(thread_db* tdbb,
 			CharSet* toCharSet = INTL_charset_lookup(tdbb, destCs);
 
 			if (!toCharSet->wellFormed(src_len, src_ptr))
-				err(Firebird::Arg::Gds(isc_malformed_string));
+				err(Arg::Gds(isc_malformed_string));
 		}
 
 		ULONG len = MIN(dest_len, src_len);
@@ -490,8 +490,8 @@ ULONG INTL_convert_bytes(thread_db* tdbb,
 		if (len == 0 || allSpaces(INTL_charset_lookup(tdbb, srcCs), src_ptr, len, 0))
 			return dest_ptr - start_dest_ptr;
 
-		err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(dest_len) << Firebird::Arg::Num(src_len));
+		err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) << Arg::Num(dest_len) << Arg::Num(src_len));
 	}
 	else if (src_len)
 	{
@@ -633,7 +633,7 @@ void INTL_convert_string(dsc* to, const dsc* from, Firebird::Callbacks* cb)
 		// binary string can always be converted TO by byte-copy
 
 		if (!toCharSet->wellFormed(from_len, q))
-			cb->err(Firebird::Arg::Gds(isc_malformed_string));
+			cb->err(Arg::Gds(isc_malformed_string));
 
 		ULONG to_len = cb->validateLength(toCharSet, to_cs, from_len, q, to_size);
 
@@ -842,7 +842,7 @@ Collation* INTL_texttype_lookup(thread_db* tdbb, TTypeId parm1)
 			return coll;
 	}
 
-	ERR_post(Firebird::Arg::Gds(isc_text_subtype) << Firebird::Arg::Num(parm1));
+	ERR_post(Arg::Gds(isc_text_subtype) << Arg::Num(parm1));
 }
 
 

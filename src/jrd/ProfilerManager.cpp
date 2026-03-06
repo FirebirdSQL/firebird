@@ -107,7 +107,7 @@ namespace
 		if (LCK_lock(tdbb, &tempLock, LCK_EX, LCK_NO_WAIT))
 		{
 			LCK_release(tdbb, &tempLock);
-			(Firebird::Arg::Gds(isc_random) << "Cannot start remote profile session - attachment is not active").raise();
+			(Arg::Gds(isc_random) << "Cannot start remote profile session - attachment is not active").raise();
 		}
 
 		// Ask remote attachment to initialize the profile listener.
@@ -123,7 +123,7 @@ namespace
 		if (responseMessageOpt.has_value())
 		{
 			if (const auto exceptionResponse = std::get_if<ExceptionResponse>(&responseMessageOpt.value()))
-				(Firebird::Arg::Gds(isc_random) << exceptionResponse->text).raise();
+				(Arg::Gds(isc_random) << exceptionResponse->text).raise();
 		}
 
 		return responseMessageOpt;
@@ -132,7 +132,7 @@ namespace
 	const auto& checkResponseIsPresent(const std::optional<IpcResponseMessage>& responseMessageOpt)
 	{
 		if (!responseMessageOpt.has_value())
-			(Firebird::Arg::Gds(isc_random) << "Profiler client disconnected from server").raise();;
+			(Arg::Gds(isc_random) << "Profiler client disconnected from server").raise();;
 
 		return responseMessageOpt;
 	}
@@ -142,7 +142,7 @@ namespace
 		checkResponseIsPresent(responseMessageOpt);
 
 		if (!std::holds_alternative<Nothing>(responseMessageOpt.value()))
-			(Firebird::Arg::Gds(isc_random) << "Invalid profiler's remote response").raise();
+			(Arg::Gds(isc_random) << "Invalid profiler's remote response").raise();
 	}
 
 	template <typename T>
@@ -467,7 +467,7 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flush
 		{
 			string msg;
 			msg.printf("Profiler plugin %s is not found", pluginName.c_str());
-			(Firebird::Arg::Gds(isc_random) << msg).raise();
+			(Arg::Gds(isc_random) << msg).raise();
 		}
 
 		plugin.reset(plugins.plugin());
@@ -813,7 +813,7 @@ IpcResponseMessage ProfilerListener::processCommand(thread_db* tdbb, const IpcRe
 		[&](const CheckUserRequest& checkUser) -> IpcResponseMessage
 		{
 			if (attachment->getUserName() != checkUser.userName)
-				status_exception::raise(Firebird::Arg::Gds(isc_miss_prvlg) << "PROFILE_ANY_ATTACHMENT");
+				status_exception::raise(Arg::Gds(isc_miss_prvlg) << "PROFILE_ANY_ATTACHMENT");
 			return Nothing{};
 		},
 

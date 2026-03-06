@@ -390,7 +390,7 @@ namespace Firebird::Jrd {
 			if (dbb->dbb_flags & DBB_no_ast)
 			{
 				// usually to be swallowed by the AST, but it allows to skip its execution
-				Firebird::status_exception::raise(Firebird::Arg::Gds(isc_unavailable));
+				Firebird::status_exception::raise(Arg::Gds(isc_unavailable));
 			}
 		}
 	};
@@ -414,7 +414,7 @@ namespace Firebird::Jrd {
 				if (!lck->lck_id)
 				{
 					// usually to be swallowed by the AST, but it allows to skip its execution
-					Firebird::status_exception::raise(Firebird::Arg::Gds(isc_unavailable));
+					Firebird::status_exception::raise(Arg::Gds(isc_unavailable));
 				}
 
 				fb_assert((operator thread_db*())->getAttachment());

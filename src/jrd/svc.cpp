@@ -147,8 +147,8 @@ namespace {
 
 	void spbVersionError()
 	{
-		ERR_post(Firebird::Arg::Gds(isc_bad_spb_form) <<
-				 Firebird::Arg::Gds(isc_wrospbver));
+		ERR_post(Arg::Gds(isc_bad_spb_form) <<
+				 Arg::Gds(isc_wrospbver));
 	}
 
 } // anonymous namespace
@@ -192,7 +192,7 @@ Service::Validate::Validate(Service* svc)
 	if (! (svc && svc->locateInAllServices()))
 	{
 		// Service is null or so old that it's even missing in allServices array
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
 	// Appears we have correct service object, may use it later to lock mutex
@@ -219,7 +219,7 @@ Service::ExistenceGuard::ExistenceGuard(Service* svc, const char* from)
 	{
 		// could not lock service
 		existenceMutex->leave();
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 }
 
@@ -521,7 +521,7 @@ void Service::setServiceStatus(const ISC_STATUS* status_vector)
 		return;
 	}
 
-	Firebird::Arg::StatusVector passed(status_vector);
+	Arg::StatusVector passed(status_vector);
 	MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
 	ERR_post_nothrow(passed, &svc_status);
 }
@@ -535,10 +535,10 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 	}
 
 	// Append error codes to the status vector
-	Firebird::Arg::StatusVector status;
+	Arg::StatusVector status;
 
 	// stuff the error code
-	status << Firebird::Arg::Gds(ENCODE_ISC_MSG(errcode, facility));
+	status << Arg::Gds(ENCODE_ISC_MSG(errcode, facility));
 
 	// stuff params
 	svc_arg_ptr = svc_arg_conv;
@@ -552,7 +552,7 @@ void Service::setServiceStatus(const USHORT facility, const USHORT errcode,
 }
 
 
-void Service::put_status_arg(Firebird::Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value)
+void Service::put_status_arg(Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value)
 {
 	using Firebird::MsgFormat::safe_cell;
 
@@ -560,7 +560,7 @@ void Service::put_status_arg(Firebird::Arg::StatusVector& status, const Firebird
 	{
 	case safe_cell::at_int64:
 	case safe_cell::at_uint64:
-		status << Firebird::Arg::Num(static_cast<SLONG>(value.i_value)); // May truncate number!
+		status << Arg::Num(static_cast<SLONG>(value.i_value)); // May truncate number!
 		break;
 	case safe_cell::at_str:
 		status << value.st_value.s_string;
@@ -639,9 +639,9 @@ Firebird::ICryptKeyCallback* Service::getCryptCallback()
 	return svc_crypt_callback;
 }
 
-void Service::need_admin_privs(Firebird::Arg::StatusVector& status, const char* message) noexcept
+void Service::need_admin_privs(Arg::StatusVector& status, const char* message) noexcept
 {
-	status << Firebird::Arg::Gds(isc_insufficient_svc_privileges) << Firebird::Arg::Str(message);
+	status << Arg::Gds(isc_insufficient_svc_privileges) << Arg::Str(message);
 }
 
 bool Service::ck_space_for_numeric(UCHAR*& info, const UCHAR* const end) noexcept
@@ -782,13 +782,13 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 		{
 			// user name and password are required while
 			// attaching to the services manager
-			status_exception::raise(Firebird::Arg::Gds(isc_service_att_err) << Firebird::Arg::Gds(isc_svcnouser));
+			status_exception::raise(Arg::Gds(isc_service_att_err) << Arg::Gds(isc_svcnouser));
 		}
 
 		if (svc_username.length() > USERNAME_LENGTH)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_long_login) <<
-				Firebird::Arg::Num(svc_username.length()) << Firebird::Arg::Num(USERNAME_LENGTH));
+			status_exception::raise(Arg::Gds(isc_long_login) <<
+				Arg::Num(svc_username.length()) << Arg::Num(USERNAME_LENGTH));
 		}
 
 		// Check that the validated user has the authority to access this service
@@ -868,7 +868,7 @@ void Service::detach()
 	if (svc_flags & SVC_detached)
 	{
 		// Service was already detached
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
 	// save it cause after call to finish() we can't access class members any more
@@ -967,7 +967,7 @@ bool Service::checkForShutdown()
 		}
 
 		svc_shutdown_in_progress = true;
-		status_exception::raise(Firebird::Arg::Gds(isc_att_shutdown));
+		status_exception::raise(Arg::Gds(isc_att_shutdown));
 	}
 
 	return false;
@@ -1053,7 +1053,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 	if (svc_flags & SVC_detached)
 	{
 		// Service was already detached
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
 	UCHAR item;
@@ -1062,7 +1062,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 	UCHAR* stdin_request_notification = NULL;
 
 	// Setup the status vector
-	Firebird::Arg::StatusVector status;
+	Arg::StatusVector status;
 
 	ULONG requestFromPut = 0;
 
@@ -1140,8 +1140,8 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			case isc_info_svc_dump_pool_info:
 				break;
 			default:
-				status_exception::raise(Firebird::Arg::Gds(isc_bad_spb_form) <<
-										Firebird::Arg::Gds(isc_info_access));
+				status_exception::raise(Arg::Gds(isc_bad_spb_form) <<
+										Arg::Gds(isc_info_access));
 				break;
 			}
 		}
@@ -1476,7 +1476,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			break;
 
 		default:
-			status << Firebird::Arg::Gds(isc_wish_list);
+			status << Arg::Gds(isc_wish_list);
 			break;
 		}
 
@@ -1519,7 +1519,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		}
 		else
 		{
-			(Firebird::Arg::Gds(isc_svc_no_stdin)).raise();
+			(Arg::Gds(isc_svc_no_stdin)).raise();
 		}
 	}
 
@@ -1565,7 +1565,7 @@ void Service::query(USHORT			send_item_length,
 	if (svc_flags & SVC_detached)
 	{
 		// Service was already detached
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
 	UCHAR item, *p;
@@ -1972,7 +1972,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	if (svc_flags & SVC_detached)
 	{
 		// Service was already detached
-		Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+		Arg::Gds(isc_bad_svc_handle).raise();
 	}
 
 	try
@@ -1985,7 +1985,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	// The name of the service is the first element of the buffer
 	if (spb.isEof())
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_service_att_err) << Firebird::Arg::Gds(isc_spb_no_id));
+		status_exception::raise(Arg::Gds(isc_service_att_err) << Arg::Gds(isc_spb_no_id));
 	}
 	const UCHAR svc_id = spb.getClumpTag();
 	const serv_entry* serv;
@@ -1996,19 +1996,19 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	}
 
 	if (!serv->serv_name)
-		status_exception::raise(Firebird::Arg::Gds(isc_service_att_err) << Firebird::Arg::Gds(isc_service_not_supported));
+		status_exception::raise(Arg::Gds(isc_service_att_err) << Arg::Gds(isc_service_not_supported));
 
 	svc_service_run = serv;
 
 	// currently we do not use "anonymous" service for any purposes but isc_service_query()
 	if (svc_user_flag == SVC_user_none)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_spb_form) <<
-								Firebird::Arg::Gds(isc_svc_start_failed));
+		status_exception::raise(Arg::Gds(isc_bad_spb_form) <<
+								Arg::Gds(isc_svc_start_failed));
 	}
 
 	if (!(svc_flags & SVC_finished))
-		status_exception::raise(Firebird::Arg::Gds(isc_svc_in_use) << Firebird::Arg::Str(serv->serv_name));
+		status_exception::raise(Arg::Gds(isc_svc_in_use) << Arg::Str(serv->serv_name));
 
 	// Another service may have been started with this service block.
 	// If so, we must reset the service flags.
@@ -2094,14 +2094,14 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	spb.rewind();
 	if ((!svc_switches.hasData()) && actionNeedsArg(svc_id))
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_spb_form) <<
-								Firebird::Arg::Gds(isc_svc_no_switches));
+		status_exception::raise(Arg::Gds(isc_bad_spb_form) <<
+								Arg::Gds(isc_svc_no_switches));
 	}
 
 	// Do not let everyone look at server log
 	if (svc_id == isc_action_svc_get_fb_log && !(svc_user_flag & SVC_user_dba))
     {
-       	status_exception::raise(Firebird::Arg::Gds(isc_adm_task_denied) << Firebird::Arg::Gds(isc_not_dba));
+       	status_exception::raise(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_not_dba));
     }
 
 	// Break up the command line into individual arguments.
@@ -2145,7 +2145,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	}
 	else
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_svcnotdef) << Firebird::Arg::Str(serv->serv_name));
+		status_exception::raise(Arg::Gds(isc_svcnotdef) << Arg::Str(serv->serv_name));
 	}
 
 	}	// try
@@ -2219,7 +2219,7 @@ void Service::readFbLog()
 		if (!file || (file && ferror(file)))
 		{
 			MutexLockGuard g(svc_status_mutex, FB_FUNCTION);
-			(Firebird::Arg::Gds(isc_sys_request) << Firebird::Arg::Str(file ? "fgets" : "fopen") <<
+			(Arg::Gds(isc_sys_request) << Arg::Str(file ? "fgets" : "fopen") <<
 										  SYS_ERR(errno)).copyTo(&svc_status);
 			if (!svc_started)
 			{
@@ -2382,7 +2382,7 @@ void Service::get(UCHAR* buffer, USHORT length, USHORT flags, USHORT timeout, US
 			UnlockGuard guard(this, FB_FUNCTION);
 			svc_sem_full.tryEnter(1, 0);
 			if (!guard.enter())
-				Firebird::Arg::Gds(isc_bad_svc_handle).raise();
+				Arg::Gds(isc_bad_svc_handle).raise();
 		}
 #ifdef HAVE_GETTIMEOFDAY
 		GETTIMEOFDAY(&end_time);
@@ -2444,7 +2444,7 @@ ULONG Service::put(const UCHAR* buffer, ULONG length)
 	// check length correctness
 	if (length > svc_stdin_size_requested && length > svc_stdin_preload_requested)
 	{
-		(Firebird::Arg::Gds(isc_svc_bad_size)).raise();
+		(Arg::Gds(isc_svc_bad_size)).raise();
 	}
 
 	if (svc_stdin_size_requested)		// service waits for data from us
@@ -2654,7 +2654,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_dbname:
 				if (nbk_database.hasData())
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_dbname")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
 				get_action_svc_string(spb, nbk_database);
 				break;
@@ -2665,7 +2665,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 #endif
 				if (nbk_level >= 0 || nbk_guid.hasData())
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
 				}
 				nbk_level = spb.getInt();
 				break;
@@ -2676,8 +2676,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 #endif
 				if (nbk_level >= 0 || nbk_guid.hasData())
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) <<
-						Firebird::Arg::Str("only one isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
+					(Arg::Gds(isc_unexp_spb_form) <<
+						Arg::Str("only one isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
 				}
 				get_action_svc_string(spb, nbk_guid);
 				break;
@@ -2685,7 +2685,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_nbk_file:
 				if (nbk_file.hasData() && svc_action != isc_action_svc_nrest)
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_nbk_file")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_file")).raise();
 				}
 				get_action_svc_string(spb, nbk_file);
 				break;
@@ -2708,7 +2708,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_nbk_clean_history:
 				if (cleanHistory)
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_nbk_clean_history")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_clean_history")).raise();
 				}
 				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_action_in_sw_table, switches))
 				{
@@ -2721,7 +2721,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_nbk_keep_rows:
 				if (keepHistory)
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
 				}
 				switches += "-KEEP ";
 				get_action_svc_data(spb, switches, false);
@@ -2742,7 +2742,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_dbname:
 				if (nbk_database.hasData())
 				{
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_dbname")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
 				get_action_svc_string(spb, nbk_database);
 				break;
@@ -3155,7 +3155,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_dbname:
 				if (val_database) {
-					(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str("only one isc_spb_dbname")).raise();
+					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
 				val_database = true;
 				[[fallthrough]];
@@ -3184,7 +3184,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		svc_action != isc_action_svc_display_user_adm)
 	{
 		// unexpected item in service parameter block, expected @1
-		status_exception::raise(Firebird::Arg::Gds(isc_unexp_spb_form) << Firebird::Arg::Str(SPB_SEC_USERNAME));
+		status_exception::raise(Arg::Gds(isc_unexp_spb_form) << Arg::Str(SPB_SEC_USERNAME));
 	}
 
 	// postfixes for burp & nbackup
@@ -3207,11 +3207,11 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	case isc_action_svc_nrest:
 		if (nbk_database.isEmpty())
 		{
-			(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_dbname")).raise();
+			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 		if (nbk_file.isEmpty())
 		{
-			(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_nbk_file")).raise();
+			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_file")).raise();
 		}
 
 		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
@@ -3222,7 +3222,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		{
 			if (nbk_level < 0 && nbk_guid.isEmpty())
 			{
-				(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_level or isc_spb_nbk_guid")).raise();
 			}
 			if (nbk_level >= 0)
 			{
@@ -3235,12 +3235,12 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 
 			if (!cleanHistory && keepHistory)
 			{
-				(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_nbk_clean_history")).raise();
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_clean_history")).raise();
 			}
 
 			if (cleanHistory && !keepHistory)
 			{
-				(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
+				(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_keep_days or isc_spb_nbk_keep_rows")).raise();
 			}
 		}
 		switches += nbk_database;
@@ -3250,7 +3250,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	case isc_action_svc_nfix:
 		if (nbk_database.isEmpty())
 		{
-			(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_dbname")).raise();
+			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 
 		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
@@ -3263,7 +3263,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 	case isc_action_svc_validate:
 		if (!val_database)
 		{
-			(Firebird::Arg::Gds(isc_missing_required_spb) << Firebird::Arg::Str("isc_spb_dbname")).raise();
+			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 		break;
 	}

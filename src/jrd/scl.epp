@@ -123,13 +123,13 @@ static void raiseError(thread_db* tdbb, SecurityClass::flags_t mask, ObjectType 
 	const Firebird::string fullName = col_name.hasData() ?
 		name.toQuotedString() + "." + col_name.toQuotedString() : name.toQuotedString();
 
-	Firebird::Arg::StatusVector status;
-	status << Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str(names->p_names_string) <<
-			  Firebird::Arg::Str(ddlObjectName) <<
-			  Firebird::Arg::Str(fullName);
+	Arg::StatusVector status;
+	status << Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
+			  Arg::Str(ddlObjectName) <<
+			  Arg::Str(fullName);
 	if (invoker.hasData())
 	{
-		status << Firebird::Arg::Gds(isc_effective_user) << Firebird::Arg::Str(invoker);
+		status << Arg::Gds(isc_effective_user) << Arg::Str(invoker);
 	}
 	ERR_post(status);
 
@@ -167,13 +167,13 @@ void SCL_check_access(thread_db* tdbb,
 
 	if (s_class && (s_class->scl_flags & SCL_corrupt))
 	{
-		Firebird::Arg::StatusVector status;
-		status << Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("(ACL unrecognized)") <<
-										  Firebird::Arg::Str("security_class") <<
+		Arg::StatusVector status;
+		status << Arg::Gds(isc_no_priv) << Arg::Str("(ACL unrecognized)") <<
+										  Arg::Str("security_class") <<
 										  s_class->sclClassUser.first;
 		if (userName.hasData())
 		{
-			status << Firebird::Arg::Gds(isc_effective_user) << Firebird::Arg::Str(userName);
+			status << Arg::Gds(isc_effective_user) << Arg::Str(userName);
 		}
 		ERR_post(status);
 	}
@@ -237,7 +237,7 @@ void SCL_check_create_access(thread_db* tdbb, ObjectType type, const MetaName& s
 	if (!(obj_mask & SCL_create))
 	{
 		const char* name = getDdlObjectName(type);
-		ERR_post(Firebird::Arg::Gds(isc_dyn_no_create_priv) << name);
+		ERR_post(Arg::Gds(isc_dyn_no_create_priv) << name);
 	}
 }
 
@@ -338,9 +338,9 @@ void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask)
 			break;
 	}
 
-	ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str(names->p_names_string) <<
-									  Firebird::Arg::Str(getDdlObjectName(obj_database)) <<
-									  Firebird::Arg::Str(""));
+	ERR_post(Arg::Gds(isc_no_priv) << Arg::Str(names->p_names_string) <<
+									  Arg::Str(getDdlObjectName(obj_database)) <<
+									  Arg::Str(""));
 }
 
 
@@ -1063,7 +1063,7 @@ void UserId::findGrantedRoles(thread_db* tdbb) const
 void UserId::setRoleTrusted()
 {
 	if (!usr_trusted_role.hasData())
-		Firebird::Arg::Gds(isc_miss_trusted_role).raise();
+		Arg::Gds(isc_miss_trusted_role).raise();
 	setSqlRole(usr_trusted_role);
 }
 
@@ -1100,7 +1100,7 @@ void UserId::sclInit(thread_db* tdbb, bool create)
 		FOR(REQUEST_HANDLE request) X IN RDB$ROLES
 			WITH X.RDB$ROLE_NAME EQ login_name
 		{
-			ERR_post(Firebird::Arg::Gds(isc_login_same_as_role_name) << Firebird::Arg::Str(login_name));
+			ERR_post(Arg::Gds(isc_login_same_as_role_name) << Arg::Str(login_name));
 		}
 		END_FOR
 	}
@@ -1794,7 +1794,7 @@ USHORT SCL_convert_privilege(thread_db* tdbb, jrd_tra* transaction, const Firebi
 
 	USHORT rc;
 	if (!privCache->get(priv, rc))
-		(Firebird::Arg::Gds(isc_wrong_prvlg) << priv).raise();
+		(Arg::Gds(isc_wrong_prvlg) << priv).raise();
 
 	return rc;
 }

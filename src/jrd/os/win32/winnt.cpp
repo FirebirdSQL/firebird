@@ -178,8 +178,8 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 
 	if (desc == INVALID_HANDLE_VALUE)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("CreateFile (create)") << Firebird::Arg::Str(string) <<
-				 Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::Windows(GetLastError()));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (create)") << Arg::Str(string) <<
+				 Arg::Gds(isc_io_create_err) << Arg::Windows(GetLastError()));
 	}
 
 	// File open succeeded.  Now expand the file name.
@@ -321,9 +321,9 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 
 		if (hFile == INVALID_HANDLE_VALUE)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("CreateFile (force write)") <<
-											   Firebird::Arg::Str(file->fil_string) <<
-					 Firebird::Arg::Gds(isc_io_access_err) << Firebird::Arg::Windows(GetLastError()));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (force write)") <<
+											   Arg::Str(file->fil_string) <<
+					 Arg::Gds(isc_io_access_err) << Arg::Windows(GetLastError()));
 		}
 
 		if (forceWrite)
@@ -505,8 +505,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 
 		if (desc == INVALID_HANDLE_VALUE)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("CreateFile (open)") << Firebird::Arg::Str(file_name) <<
-					 Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::Windows(GetLastError()));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (open)") << Arg::Str(file_name) <<
+					 Arg::Gds(isc_io_open_err) << Arg::Windows(GetLastError()));
 		}
 		else
 		{
@@ -864,14 +864,14 @@ static bool nt_error(const TEXT* string,
  *
  **************************************/
 	const DWORD lastError = GetLastError();
-	Firebird::Arg::StatusVector status;
-	status << Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str(string) << Firebird::Arg::Str(file->fil_string) <<
-			  Firebird::Arg::Gds(operation);
+	Arg::StatusVector status;
+	status << Arg::Gds(isc_io_error) << Arg::Str(string) << Arg::Str(file->fil_string) <<
+			  Arg::Gds(operation);
 
 	// Caller must already handle ERROR_IO_PENDING by calling GetOverlappedResult().
 	// Since GetOverlappedResult() not clears last error - ignore it here.
 	if (lastError != ERROR_SUCCESS && lastError != ERROR_IO_PENDING)
-		status << Firebird::Arg::Windows(lastError);
+		status << Arg::Windows(lastError);
 
 	if (!status_vector)
 		ERR_post(status);

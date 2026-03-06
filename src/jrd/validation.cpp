@@ -611,8 +611,8 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 	}
 	catch (const Exception& ex)
 	{
-		Firebird::Arg::StatusVector status(ex);
-		status << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(pattern);
+		Arg::StatusVector status(ex);
+		status << Arg::Gds(isc_random) << Arg::Str(pattern);
 		status.raise();
 	}
 	return matcher;
@@ -905,7 +905,7 @@ void Validation::parse_args(thread_db* tdbb)
 			string s;
 			s.printf("Switch %s specified more than once", sw->in_sw_name);
 
-			(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(s)).raise();
+			(Arg::Gds(isc_random) << Arg::Str(s)).raise();
 		}
 
 		sw->in_sw_state = true;
@@ -925,7 +925,7 @@ void Validation::parse_args(thread_db* tdbb)
 				string s;
 				s.printf("Switch %s requires value", sw->in_sw_name);
 
-				(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(s)).raise();
+				(Arg::Gds(isc_random) << Arg::Str(s)).raise();
 			}
 			break;
 
@@ -969,7 +969,7 @@ void Validation::parse_args(thread_db* tdbb)
 					string s;
 					s.printf("Value (%s) is not a valid number", *argv);
 
-					(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(s)).raise();
+					(Arg::Gds(isc_random) << Arg::Str(s)).raise();
 				}
 			}
 			break;
@@ -1198,7 +1198,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, ULONG page_number,
 		if (vdr_service && vdr_service->finished())
 		{
 			CCH_unwind(vdr_tdbb, false);
-			Firebird::Arg::Gds(isc_att_shutdown).raise();
+			Arg::Gds(isc_att_shutdown).raise();
 		}
 	}
 

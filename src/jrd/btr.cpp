@@ -436,30 +436,30 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	switch (result)
 	{
 	case idx_e_keytoobig:
-		ERR_post_nothrow(Firebird::Arg::Gds(isc_imp_exc) <<
-						 Firebird::Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
+		ERR_post_nothrow(Arg::Gds(isc_imp_exc) <<
+						 Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
 		break;
 
 	case idx_e_foreign_target_doesnt_exist:
-		ERR_post_nothrow(Firebird::Arg::Gds(isc_foreign_key) <<
+		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
 						 constraintName.toQuotedString() << relationName.toQuotedString() <<
-						 Firebird::Arg::Gds(isc_foreign_key_target_doesnt_exist));
+						 Arg::Gds(isc_foreign_key_target_doesnt_exist));
 		break;
 
 	case idx_e_foreign_references_present:
-		ERR_post_nothrow(Firebird::Arg::Gds(isc_foreign_key) <<
+		ERR_post_nothrow(Arg::Gds(isc_foreign_key) <<
 						 constraintName.toQuotedString() << relationName.toQuotedString() <<
-						 Firebird::Arg::Gds(isc_foreign_key_references_present));
+						 Arg::Gds(isc_foreign_key_references_present));
 		break;
 
 	case idx_e_duplicate:
 		if (haveConstraint)
 		{
-			ERR_post_nothrow(Firebird::Arg::Gds(isc_unique_key_violation) <<
+			ERR_post_nothrow(Arg::Gds(isc_unique_key_violation) <<
 							 constraintName.toQuotedString() << relationName.toQuotedString());
 		}
 		else
-			ERR_post_nothrow(Firebird::Arg::Gds(isc_no_dup) << indexName.toQuotedString());
+			ERR_post_nothrow(Arg::Gds(isc_no_dup) << indexName.toQuotedString());
 		break;
 
 	default:
@@ -470,7 +470,7 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	{
 		const string keyString = print_key(tdbb, m_relation, m_index, record);
 		if (keyString.hasData())
-			ERR_post_nothrow(Firebird::Arg::Gds(isc_idx_key_value) << Firebird::Arg::Str(keyString));
+			ERR_post_nothrow(Arg::Gds(isc_idx_key_value) << Arg::Str(keyString));
 	}
 
 	ERR_punt();
@@ -492,7 +492,7 @@ IndexCondition::IndexCondition(thread_db* tdbb, index_desc* idx)
 	m_request = idx->idx_condition_statement->findRequest(tdbb, true);
 
 	if (!m_request)
-		ERR_post(Firebird::Arg::Gds(isc_random) << "Attempt to evaluate index condition recursively");
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index condition recursively");
 
 	fb_assert(m_request != orgRequest);
 
@@ -595,7 +595,7 @@ IndexExpression::IndexExpression(thread_db* tdbb, index_desc* idx)
 	m_request = idx->idx_expression_statement->findRequest(tdbb, true);
 
 	if (!m_request)
-		ERR_post(Firebird::Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
+		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
 
 	fb_assert(m_request != orgRequest);
 
@@ -805,7 +805,7 @@ idx_e IndexKey::compose(Record* record)
 	{
 		if (!(m_tdbb->tdbb_flags & TDBB_sys_error))
 		{
-			Firebird::Arg::StatusVector error(ex);
+			Arg::StatusVector error(ex);
 
 			if (!(error.length() > 1 &&
 				  error.value()[0] == isc_arg_gds &&
@@ -819,7 +819,7 @@ idx_e IndexKey::compose(Record* record)
 				if (indexName.object.isEmpty())
 					indexName.object = "***unknown***";
 
-				error.prepend(Firebird::Arg::Gds(isc_expression_eval_index) <<
+				error.prepend(Arg::Gds(isc_expression_eval_index) <<
 					indexName.toQuotedString() <<
 					m_relation->getName().toQuotedString());
 			}
@@ -1404,13 +1404,13 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 		if (idv)
 			indexName = idv->getName();
 
-		Firebird::Arg::StatusVector status;
+		Arg::StatusVector status;
 
 		if (indexName.object.hasData())
-			status.assign(Firebird::Arg::Gds(error) << indexName.toQuotedString());
+			status.assign(Arg::Gds(error) << indexName.toQuotedString());
 		else
 			// there is no index in table @1 with id @2
-			status.assign(Firebird::Arg::Gds(isc_indexnotdefined) << relation->rel_name.toQuotedString() << Firebird::Arg::Num(idx->idx_id));
+			status.assign(Arg::Gds(isc_indexnotdefined) << relation->rel_name.toQuotedString() << Arg::Num(idx->idx_id));
 
 		ERR_post_nothrow(status);
 		CCH_unwind(tdbb, true);
@@ -1919,8 +1919,8 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 		CCH_RELEASE(tdbb, root_window);
 
 		// Maximum level depth reached
-		status_exception::raise(Firebird::Arg::Gds(isc_imp_exc) <<
-			Firebird::Arg::Gds(isc_max_idx_depth) << Firebird::Arg::Num(MAX_LEVELS));
+		status_exception::raise(Arg::Gds(isc_imp_exc) <<
+			Arg::Gds(isc_max_idx_depth) << Arg::Num(MAX_LEVELS));
 	}
 
 	// Allocate and format new bucket, this will always be a non-leaf page
@@ -2892,8 +2892,8 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	if (root->irt_count > dbb->dbb_max_idx)
 	{
 		CCH_RELEASE(tdbb, &window);
-		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
-				 Firebird::Arg::Gds(isc_max_idx) << Firebird::Arg::Num(dbb->dbb_max_idx));
+		ERR_post(Arg::Gds(isc_no_meta_update) <<
+				 Arg::Gds(isc_max_idx) << Arg::Num(dbb->dbb_max_idx));
 	}
 
 	// Scan the index page looking for the high water mark of the descriptions and,
@@ -2942,8 +2942,8 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 			if (retry)
 			{
 				CCH_RELEASE(tdbb, &window);
-				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
-						 Firebird::Arg::Gds(isc_index_root_page_full));
+				ERR_post(Arg::Gds(isc_no_meta_update) <<
+						 Arg::Gds(isc_index_root_page_full));
 			}
 
 			compress_root(tdbb, root);
@@ -4754,8 +4754,8 @@ static ULONG fast_load(thread_db* tdbb,
 				if (level == MAX_LEVELS)
 				{
 					// Maximum level depth reached
-					status_exception::raise(Firebird::Arg::Gds(isc_imp_exc) <<
-						Firebird::Arg::Gds(isc_max_idx_depth) << Firebird::Arg::Num(MAX_LEVELS));
+					status_exception::raise(Arg::Gds(isc_imp_exc) <<
+						Arg::Gds(isc_max_idx_depth) << Arg::Num(MAX_LEVELS));
 				}
 
 				if (level == levels.getCount())

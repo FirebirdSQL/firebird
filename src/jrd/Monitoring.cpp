@@ -241,7 +241,7 @@ void MonitoringData::acquire()
 		}
 #else
 		release();
-		status_exception::raise(Firebird::Arg::Gds(isc_montabexh));
+		status_exception::raise(Arg::Gds(isc_montabexh));
 #endif
 	}
 }
@@ -378,8 +378,8 @@ void MonitoringData::ensureSpace(ULONG length)
 	{
 		if (newSize > MAX_ULONG)
 		{
-			(Firebird::Arg::Gds(isc_montabexh) <<
-				Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("storage size exceeds limit")).raise();
+			(Arg::Gds(isc_montabexh) <<
+				Arg::Gds(isc_random) << Arg::Str("storage size exceeds limit")).raise();
 		}
 
 		FB_UINT64 remapSize = FB_ALIGN(newSize, DEFAULT_SIZE);
@@ -394,7 +394,7 @@ void MonitoringData::ensureSpace(ULONG length)
 		}
 		m_sharedMemory->getHeader()->allocated = m_sharedMemory->sh_mem_length_mapped;
 #else
-		status_exception::raise(Firebird::Arg::Gds(isc_montabexh));
+		status_exception::raise(Arg::Gds(isc_montabexh));
 #endif
 	}
 }

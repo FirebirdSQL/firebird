@@ -63,7 +63,7 @@ void FirstRowsStream::internalOpen(thread_db* tdbb) const
 	const SINT64 value = desc ? MOV_get_int64(tdbb, desc, 0) : 0;
 
     if (value < 0)
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_limit_param));
+		status_exception::raise(Arg::Gds(isc_bad_limit_param));
 
 	if (value)
 	{

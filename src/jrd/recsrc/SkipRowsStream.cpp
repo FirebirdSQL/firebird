@@ -59,7 +59,7 @@ void SkipRowsStream::internalOpen(thread_db* tdbb) const
 
     if (value < 0)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_skip_param));
+		status_exception::raise(Arg::Gds(isc_bad_skip_param));
 	}
 
 	impure->irsb_count = value + 1;

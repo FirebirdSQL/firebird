@@ -217,8 +217,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 	int desc = Firebird::os_utils::open(file_name.c_str(), flag, 0666);
 	if (desc == -1)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open O_CREAT") << Firebird::Arg::Str(file_name) <<
-                 Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open O_CREAT") << Arg::Str(file_name) <<
+                 Arg::Gds(isc_io_create_err) << Arg::Unix(errno));
 	}
 
 	const bool shareMode = dbb->dbb_config->getServerMode() != MODE_SUPER;
@@ -235,8 +235,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 		// we cannot help much with former recovery
 		close(desc);
 		unlink(file_name.c_str());
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("chmod") << Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::Unix(chmodError));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("chmod") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_create_err) << Arg::Unix(chmodError));
 	}
 
 	if (temporary
@@ -250,8 +250,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 #ifdef DEV_BUILD
 		if (rc < 0)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("unlink") << Firebird::Arg::Str(file_name) <<
-					 Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::Unix(errno));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("unlink") << Arg::Str(file_name) <<
+					 Arg::Gds(isc_io_create_err) << Arg::Unix(errno));
 		}
 #endif
 	}
@@ -259,8 +259,8 @@ jrd_file* PIO_create(thread_db* tdbb, const PathName& file_name,
 #ifdef SOLARIS
 	if (directio(desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("directio") << Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_access_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("directio") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_access_err) << Arg::Unix(errno));
 	}
 #endif
 
@@ -682,8 +682,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 		desc = openFile(expandedName, forceWrite, notUseFSCache, true);
 		if (desc == -1)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open") << Firebird::Arg::Str(originalName) <<
-					 Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::Unix(errno));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(originalName) <<
+					 Arg::Gds(isc_io_open_err) << Arg::Unix(errno));
 		}
 
 		readOnly = true;
@@ -715,8 +715,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 #ifdef SOLARIS
 	if (directio(desc, notUseFSCache ? DIRECTIO_ON : DIRECTIO_OFF) != 0)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("directio") << Firebird::Arg::Str(originalName) <<
-				 Firebird::Arg::Gds(isc_io_access_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("directio") << Arg::Str(originalName) <<
+				 Arg::Gds(isc_io_access_err) << Arg::Unix(errno));
 	}
 #endif
 
@@ -734,8 +734,8 @@ jrd_file* PIO_open(thread_db* tdbb,
 		if (!raw_devices_validate_database(desc, expandedName))
 		{
 			maybeCloseFile(desc);
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open") << Firebird::Arg::Str(originalName) <<
-					 Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::Unix(ENOENT));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(originalName) <<
+					 Arg::Gds(isc_io_open_err) << Arg::Unix(ENOENT));
 		}
 	}
 #endif // SUPPORT_RAW_DEVICES
@@ -993,12 +993,12 @@ static void lockDatabaseFile(int& desc, const bool share, const bool temporary,
 
 	maybeCloseFile(desc);
 
-	Firebird::Arg::Gds err(isc_io_error);
+	Arg::Gds err(isc_io_error);
 	err << "lock" << fileName;
 	if (busy)
-		err << Firebird::Arg::Gds(isc_already_opened);
+		err << Arg::Gds(isc_already_opened);
 	else
-		err << Firebird::Arg::Gds(operation) << Firebird::Arg::Unix(errno);
+		err << Arg::Gds(operation) << Arg::Unix(errno);
 	ERR_post(err);
 }
 
@@ -1018,9 +1018,9 @@ static bool unix_error(const TEXT* string,
  *	to do something about it.  Harumph!
  *
  **************************************/
-	Firebird::Arg::Gds err(isc_io_error);
+	Arg::Gds err(isc_io_error);
 	err << string << file->fil_string <<
-		Firebird::Arg::Gds(operation) << Firebird::Arg::Unix(errno);
+		Arg::Gds(operation) << Arg::Unix(errno);
 
 	if (!status_vector)
 		ERR_post(err);
@@ -1052,8 +1052,8 @@ static bool block_size_error(const jrd_file* file, off_t offset, FbStatusVector*
 	if (offset < st.st_size)	// we might read more but were interupted
 		return true;
 
-	Firebird::Arg::Gds err(isc_io_error);
-	err << "read" << file->fil_string << Firebird::Arg::Gds(isc_block_size);
+	Arg::Gds err(isc_io_error);
+	err << "read" << file->fil_string << Arg::Gds(isc_block_size);
 
 	if (!status_vector)
 		ERR_post(err);
@@ -1206,17 +1206,17 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 	// Read in database header. Code lifted from PIO_header.
 	if (desc == -1)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("raw_devices_validate_database") <<
-										   Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("raw_devices_validate_database") <<
+										   Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
 	}
 
 	for (int i = 0; i < IO_RETRY; i++)
 	{
 		if (Firebird::os_utils::lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("lseek") << Firebird::Arg::Str(file_name) <<
-					 Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::Unix(errno));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("lseek") << Arg::Str(file_name) <<
+					 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
 		}
 
 		const ssize_t bytes = read(desc, header, RAW_HEADER_SIZE);
@@ -1225,20 +1225,20 @@ static bool raw_devices_validate_database(int desc, const PathName& file_name)
 
 		if (bytes == -1 && !SYSCALL_INTERRUPTED(errno))
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("read") << Firebird::Arg::Str(file_name) <<
-					 Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::Unix(errno));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("read") << Arg::Str(file_name) <<
+					 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
 		}
 	}
 
-	ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("read_retry") << Firebird::Arg::Str(file_name) <<
-			 Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::Unix(errno));
+	ERR_post(Arg::Gds(isc_io_error) << Arg::Str("read_retry") << Arg::Str(file_name) <<
+			 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
 
   read_finished:
 	// Rewind file pointer
 	if (Firebird::os_utils::lseek(desc, LSEEK_OFFSET_CAST 0, 0) == (off_t) -1)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("lseek") << Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("lseek") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_read_err) << Arg::Unix(errno));
 	}
 
 	// Validate database header. Code lifted from PAG_header.
@@ -1272,8 +1272,8 @@ static int raw_devices_unlink_database(const PathName& file_name)
 	int desc = Firebird::os_utils::open(file_name.c_str(), O_RDWR | O_BINARY);
 	if (desc < 0)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open") << Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_open_err) << Arg::Unix(errno));
 	}
 
 	memset(header, 0xa5, RAW_HEADER_SIZE);
@@ -1290,8 +1290,8 @@ static int raw_devices_unlink_database(const PathName& file_name)
 		if (bytes == -1 && SYSCALL_INTERRUPTED(errno))
 			continue;
 
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("write") << Firebird::Arg::Str(file_name) <<
-				 Firebird::Arg::Gds(isc_io_write_err) << Firebird::Arg::Unix(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("write") << Arg::Str(file_name) <<
+				 Arg::Gds(isc_io_write_err) << Arg::Unix(errno));
 	}
 
 	//if (desc != -1) perhaps it's better to check this???

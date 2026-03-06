@@ -39,7 +39,7 @@ namespace
 		if (transaction->tra_blob_util_map.get(handle, blob))
 			return blob;
 		else
-			status_exception::raise(Firebird::Arg::Gds(isc_invalid_blob_util_handle));
+			status_exception::raise(Arg::Gds(isc_invalid_blob_util_handle));
 	}
 
 	BlobIndex* getTempBlobIndexFromId(thread_db* tdbb, const bid& blobId)
@@ -50,7 +50,7 @@ namespace
 		const auto transaction = tdbb->getTransaction();
 
 		if (!transaction->tra_blobs->locate(blobId.bid_temp_id()))
-			status_exception::raise(Firebird::Arg::Gds(isc_bad_segstr_id));
+			status_exception::raise(Arg::Gds(isc_bad_segstr_id));
 
 		const auto blobIndex = &transaction->tra_blobs->current();
 		fb_assert(blobIndex->bli_blob_object);
@@ -73,7 +73,7 @@ IExternalResultSet* BlobUtilPackage::cancelBlobProcedure(ThrowStatusExceptionWra
 	if (const auto blobIdx = getTempBlobIndexFromId(tdbb, blobId))
 	{
 		if (blobIdx->bli_materialized)
-			status_exception::raise(Firebird::Arg::Gds(isc_bad_segstr_id));
+			status_exception::raise(Arg::Gds(isc_bad_segstr_id));
 
 		const auto blob = blobIdx->bli_blob_object;
 		blob->BLB_cancel(tdbb);
@@ -81,7 +81,7 @@ IExternalResultSet* BlobUtilPackage::cancelBlobProcedure(ThrowStatusExceptionWra
 		return nullptr;
 	}
 	else
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_temp_blob_id));
+		status_exception::raise(Arg::Gds(isc_bad_temp_blob_id));
 }
 
 IExternalResultSet* BlobUtilPackage::closeHandleProcedure(ThrowStatusExceptionWrapper* status,
@@ -162,12 +162,12 @@ void BlobUtilPackage::seekFunction(ThrowStatusExceptionWrapper* status,
 	const auto blob = getBlobFromHandle(tdbb, in->handle);
 
 	if (!(in->mode >= 0 && in->mode <= 2))
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Seek mode must be 0 (START), 1 (CURRENT) or 2 (END)");
+		status_exception::raise(Arg::Gds(isc_random) << "Seek mode must be 0 (START), 1 (CURRENT) or 2 (END)");
 
 	if (in->mode == 2 && in->offset > 0)	// 2 == from END
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_random) <<
+			Arg::Gds(isc_random) <<
 			"Argument OFFSET for RDB$BLOB_UTIL must be zero or negative when argument MODE is 2");
 	}
 
@@ -179,7 +179,7 @@ void BlobUtilPackage::readDataFunction(ThrowStatusExceptionWrapper* status,
 	IExternalContext* context, const ReadDataInput::Type* in, BinaryMessage::Type* out)
 {
 	if (!in->lengthNull && in->length <= 0)
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Length must be NULL or greater than 0");
+		status_exception::raise(Arg::Gds(isc_random) << "Length must be NULL or greater than 0");
 
 	const auto tdbb = JRD_get_thread_data();
 	const auto blob = getBlobFromHandle(tdbb, in->handle);

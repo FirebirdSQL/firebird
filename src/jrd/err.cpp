@@ -97,7 +97,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 	dbb->dbb_flags |= DBB_bugcheck;
 	CCH_shutdown(tdbb);
 
-	ERR_post(Firebird::Arg::Gds(isc_bug_check) << Firebird::Arg::Str(msg));
+	ERR_post(Arg::Gds(isc_bug_check) << Arg::Str(msg));
 }
 
 
@@ -156,7 +156,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 	if (gds__msg_lookup(0, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, number, sizeof(errmsg), errmsg, NULL) < 1)
 		snprintf(errmsg, sizeof(errmsg), "error code %d", number);
 
-	ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(errmsg));
+	ERR_post(Arg::Gds(isc_random) << Arg::Str(errmsg));
 }
 
 
@@ -188,7 +188,7 @@ void ERR_log(int facility, int number, const TEXT* message)
 }
 
 
-void ERR_post_warning(const Firebird::Arg::StatusVector& v)
+void ERR_post_warning(const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -227,7 +227,7 @@ void ERR_post_warning(const Firebird::Arg::StatusVector& v)
 }
 
 
-void ERR_post_nothrow(const Firebird::Arg::StatusVector& v, FbStatusVector* statusVector)
+void ERR_post_nothrow(const Arg::StatusVector& v, FbStatusVector* statusVector)
 /**************************************
  *
  *	E R R _ p o s t _ n o t h r o w
@@ -303,7 +303,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 }
 
 
-[[noreturn]] void ERR_post(const Firebird::Arg::StatusVector& v)
+[[noreturn]] void ERR_post(const Arg::StatusVector& v)
 /**************************************
  *
  *	E R R _ p o s t
@@ -350,7 +350,7 @@ static void post_nothrow(const unsigned lenToAdd, const ISC_STATUS* toAdd, FbSta
 }
 
 
-void ERR_warning(const Firebird::Arg::StatusVector& v)
+void ERR_warning(const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -375,7 +375,7 @@ void ERR_warning(const Firebird::Arg::StatusVector& v)
 }
 
 
-void ERR_append_status(FbStatusVector* status_vector, const Firebird::Arg::StatusVector& v)
+void ERR_append_status(FbStatusVector* status_vector, const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -388,7 +388,7 @@ void ERR_append_status(FbStatusVector* status_vector, const Firebird::Arg::Statu
  *
  **************************************/
 	// First build a status vector with the passed one
-	Firebird::Arg::StatusVector passed(status_vector);
+	Arg::StatusVector passed(status_vector);
 
 	// Now append the newly vector to the passed one
 	passed.append(v);
@@ -398,7 +398,7 @@ void ERR_append_status(FbStatusVector* status_vector, const Firebird::Arg::Statu
 }
 
 
-void ERR_build_status(FbStatusVector* status_vector, const Firebird::Arg::StatusVector& v) noexcept
+void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v) noexcept
 {
 /**************************************
  *
@@ -451,5 +451,5 @@ void ERR_build_status(FbStatusVector* status_vector, const Firebird::Arg::Status
 		snprintf(errmsg + len, sizeof(errmsg) - len, " (%d)", number);
 	}
 
-	ERR_post(Firebird::Arg::Gds(status) << Firebird::Arg::Str(errmsg));
+	ERR_post(Arg::Gds(status) << Arg::Str(errmsg));
 }

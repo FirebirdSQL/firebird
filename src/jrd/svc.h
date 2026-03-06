@@ -254,7 +254,7 @@ private:
 	// Returns number of bytes service wants more
 	ULONG	put(const UCHAR* buffer, ULONG length);
 	// Copies argument value to status vector
-	void put_status_arg(Firebird::Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value);
+	void put_status_arg(Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value);
 
 	// Increment circular buffer pointer
 	static ULONG		add_one(ULONG i) noexcept;
@@ -288,7 +288,7 @@ private:
 	static bool get_action_svc_parameter(UCHAR tag, const Switches::in_sw_tab_t* table,
 										 Firebird::string&);
 	// Create 'SYSDBA needed' error in status vector
-	static void need_admin_privs(Firebird::Arg::StatusVector& status, const char* message) noexcept;
+	static void need_admin_privs(Arg::StatusVector& status, const char* message) noexcept;
 	// Does info buffer have enough space for SLONG?
 	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end) noexcept;
 	// Make status vector permamnent, if one present in worker thread's space

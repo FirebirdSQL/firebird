@@ -183,7 +183,7 @@ void MET_get_domain(thread_db* tdbb, MemoryPool& csbPool, const QualifiedName& n
 	END_FOR
 
 	if (!found)
-		ERR_post(Firebird::Arg::Gds(isc_domnotdef) << name.toQuotedString());
+		ERR_post(Arg::Gds(isc_domnotdef) << name.toQuotedString());
 }
 
 
@@ -239,7 +239,7 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 			}
 		}
 
-		ERR_post(Firebird::Arg::Gds(isc_dyn_column_does_not_exist) <<
+		ERR_post(Arg::Gds(isc_dyn_column_does_not_exist) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString());
 	}
@@ -299,7 +299,7 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 
 	if (!found)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_dyn_column_does_not_exist) <<
+		ERR_post(Arg::Gds(isc_dyn_column_does_not_exist) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString());
 	}
@@ -945,8 +945,8 @@ void MET_error(const TEXT* string, ...)
 	VSNPRINTF(s, sizeof(s), string, ptr);
 	va_end(ptr);
 
-	ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
-			 Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(s));
+	ERR_post(Arg::Gds(isc_no_meta_update) <<
+			 Arg::Gds(isc_random) << Arg::Str(s));
 }
 
 Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
@@ -2734,8 +2734,8 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 							StaticStatusVector temp_status;
 							ex.stuffException(temp_status);
 							flReload = true;
-							(Firebird::Arg::StatusVector(temp_status.begin()) <<
-								Firebird::Arg::Gds(isc_bad_proc_BLR) << name).raise();
+							(Arg::StatusVector(temp_status.begin()) <<
+								Arg::Gds(isc_bad_proc_BLR) << name).raise();
 						}
 					}
 				}
@@ -2834,8 +2834,8 @@ ScanResult jrd_prc::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 				ex.stuffException(temp_status);
 				flReload = true;
 
-				(Firebird::Arg::StatusVector(temp_status.begin()) <<
-					Firebird::Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()).raise();
+				(Arg::StatusVector(temp_status.begin()) <<
+					Arg::Gds(isc_bad_proc_BLR) << this->getName().toQuotedString()).raise();
 			}
 		}
 		catch (const Exception&)
@@ -4214,9 +4214,9 @@ void MET_store_dependencies(thread_db* tdbb,
 					make_relation_scope_name(relation->getName(), relation->rel_flags, sMaster);
 					make_relation_scope_name(dep_rel->getName(), dep_rel->getPermanent()->rel_flags, sChild);
 
-					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
-							 Firebird::Arg::Gds(isc_met_wrong_gtt_scope) << Firebird::Arg::Str(sChild) <<
-																  Firebird::Arg::Str(sMaster));
+					ERR_post(Arg::Gds(isc_no_meta_update) <<
+							 Arg::Gds(isc_met_wrong_gtt_scope) << Arg::Str(sChild) <<
+																  Arg::Str(sMaster));
 				}
 			}
 

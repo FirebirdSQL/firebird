@@ -1190,7 +1190,7 @@ void INI_upgrade(thread_db* tdbb)
 	// If database is read-only, punt
 
 	if (dbb->dbb_flags & DBB_read_only)
-		Firebird::Arg::Gds(isc_read_only).raise();
+		Arg::Gds(isc_read_only).raise();
 
 	// Check current ODS version to see if we have work to do
 
@@ -1384,8 +1384,8 @@ void INI_upgrade(thread_db* tdbb)
 
 		if (context)
 		{
-			Firebird::Arg::StatusVector error(ex);
-			error.prepend(Firebird::Arg::Gds(isc_ods_upgrade_err) << Firebird::Arg::Str(context));
+			Arg::StatusVector error(ex);
+			error.prepend(Arg::Gds(isc_ods_upgrade_err) << Arg::Str(context));
 			error.raise();
 		}
 

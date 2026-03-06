@@ -485,7 +485,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// If the primary record version disappeared, we cannot proceed
 
 		if (!DPM_get(tdbb, &temp, LCK_read))
-			Firebird::Arg::Gds(isc_no_cur_rec).raise();
+			Arg::Gds(isc_no_cur_rec).raise();
 
 		tdbb->bumpStats(RecordStatType::RPT_READS, relation->getId());
 
@@ -502,7 +502,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 				continue; // we surely see the original record version
 		}
 		else if (!(temp.rpb_flags & rpb_deleted))
-			Firebird::Arg::Gds(isc_no_cur_rec).raise();
+			Arg::Gds(isc_no_cur_rec).raise();
 
 		if (temp.rpb_transaction_nr != selfTraNum)
 		{
@@ -586,7 +586,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// We don't know how to find the original record version.
 
 		if (temp.rpb_transaction_nr == selfTraNum)
-			Firebird::Arg::Gds(isc_no_cur_rec).raise();
+			Arg::Gds(isc_no_cur_rec).raise();
 
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
@@ -599,7 +599,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			// We can do nothing in this situation.
 
 			if (!temp.rpb_b_page)
-				Firebird::Arg::Gds(isc_no_cur_rec).raise();
+				Arg::Gds(isc_no_cur_rec).raise();
 
 			// Fetch the backversion. Punt if it's unexpectedly disappeared.
 
@@ -607,7 +607,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			temp.rpb_line = temp.rpb_b_line;
 
 			if (!DPM_fetch(tdbb, &temp, LCK_read))
-				Firebird::Arg::Gds(isc_no_cur_rec).raise();
+				Arg::Gds(isc_no_cur_rec).raise();
 
 			VIO_data(tdbb, &temp, tdbb->getDefaultPool());
 

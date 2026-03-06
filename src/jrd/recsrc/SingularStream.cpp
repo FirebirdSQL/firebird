@@ -114,7 +114,7 @@ void SingularStream::process(thread_db* tdbb) const
 	}
 
 	if (m_next->getRecord(tdbb))
-		status_exception::raise(Firebird::Arg::Gds(isc_sing_select_err));
+		status_exception::raise(Arg::Gds(isc_sing_select_err));
 
 	for (FB_SIZE_T i = 0; i < streamCount; i++)
 	{

@@ -59,7 +59,7 @@ void			PAR_dependency(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb, StreamTyp
 	SSHORT id, const Jrd::MetaName& field_name);
 USHORT			PAR_datatype(Jrd::thread_db*, Firebird::BlrReader&, dsc*);
 USHORT			PAR_desc(Jrd::thread_db*, Jrd::CompilerScratch*, dsc*, Jrd::ItemInfo* = NULL);
-void			PAR_error(Jrd::CompilerScratch*, const Firebird::Arg::StatusVector&, bool isSyntaxError = true);
+void			PAR_error(Jrd::CompilerScratch*, const Arg::StatusVector&, bool isSyntaxError = true);
 SSHORT			PAR_find_proc_field(const Jrd::jrd_prc*, const Jrd::MetaName&);
 Jrd::ValueExprNode* PAR_gen_field(Jrd::thread_db* tdbb, StreamType stream, USHORT id, bool byId = false);
 void PAR_getBlrVersionAndFlags(Jrd::CompilerScratch* csb);
@@ -82,6 +82,6 @@ Jrd::StmtNode* PAR_parse_stmt(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
 Jrd::DmlNode* PAR_parse_node(Jrd::thread_db* tdbb, Jrd::CompilerScratch* csb);
 void PAR_register(UCHAR blr, Jrd::NodeParseFunc parseFunc);
 void PAR_syntax_error(Jrd::CompilerScratch* csb, const TEXT* string);
-void PAR_warning(const Firebird::Arg::StatusVector& v);
+void PAR_warning(const Arg::StatusVector& v);
 
 #endif // JRD_PAR_PROTO_H

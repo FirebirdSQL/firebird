@@ -234,8 +234,8 @@ namespace Firebird::Jrd {
 			// must satisfy UdfAccess entry in config file.
 			if (! iUdfDirectoryList().isPathInList(fixedModule))
 			{
-				ERR_post(Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("UDF/BLOB-filter module") <<
-															 Firebird::Arg::Str(initialModule));
+				ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("UDF/BLOB-filter module") <<
+															 Arg::Str(initialModule));
 			}
 
 			ModuleLoader::Module* mlm = ModuleLoader::loadModule(NULL, fixedModule);

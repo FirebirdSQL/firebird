@@ -247,12 +247,12 @@ Sort::Sort(Database* dbb,
 	}
 	catch (const BadAlloc&)
 	{
-		Firebird::Arg::Gds(isc_sort_mem_err).raise();
+		Arg::Gds(isc_sort_mem_err).raise();
 	}
 	catch (const status_exception& ex)
 	{
-		Firebird::Arg::Gds status(isc_sort_err);
-		status.append(Firebird::Arg::StatusVector(ex.value()));
+		Arg::Gds status(isc_sort_err);
+		status.append(Arg::StatusVector(ex.value()));
 		status.raise();
 	}
 }
@@ -319,12 +319,12 @@ void Sort::get(thread_db* tdbb, ULONG** record_address)
 	}
 	catch (const BadAlloc&)
 	{
-		Firebird::Arg::Gds(isc_sort_mem_err).raise();
+		Arg::Gds(isc_sort_mem_err).raise();
 	}
 	catch (const status_exception& ex)
 	{
-		Firebird::Arg::Gds status(isc_sort_err);
-		status.append(Firebird::Arg::StatusVector(ex.value()));
+		Arg::Gds status(isc_sort_err);
+		status.append(Arg::StatusVector(ex.value()));
 		status.raise();
 	}
 }
@@ -394,12 +394,12 @@ void Sort::put(thread_db* tdbb, ULONG** record_address)
 	}
 	catch (const BadAlloc&)
 	{
-		Firebird::Arg::Gds(isc_sort_mem_err).raise();
+		Arg::Gds(isc_sort_mem_err).raise();
 	}
 	catch (const status_exception& ex)
 	{
-		Firebird::Arg::Gds status(isc_sort_err);
-		status.append(Firebird::Arg::StatusVector(ex.value()));
+		Arg::Gds status(isc_sort_err);
+		status.append(Arg::StatusVector(ex.value()));
 		status.raise();
 	}
 }
@@ -591,12 +591,12 @@ void Sort::sort(thread_db* tdbb)
 	}
 	catch (const BadAlloc&)
 	{
-		Firebird::Arg::Gds(isc_sort_mem_err).raise();
+		Arg::Gds(isc_sort_mem_err).raise();
 	}
 	catch (const status_exception& ex)
 	{
-		Firebird::Arg::Gds status(isc_sort_err);
-		status.append(Firebird::Arg::StatusVector(ex.value()));
+		Arg::Gds status(isc_sort_err);
+		status.append(Arg::StatusVector(ex.value()));
 		status.raise();
 	}
 }

@@ -81,7 +81,7 @@ bool TableValueFunctionScan::refetchRecord(thread_db* /*tdbb*/) const
 
 WriteLockResult TableValueFunctionScan::lockRecord(thread_db* /*tdbb*/) const
 {
-	status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
+	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
 void TableValueFunctionScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
@@ -415,7 +415,7 @@ void GenSeriesFunctionScan::internalOpen(thread_db* tdbb) const
 	impure->m_stepSign = MOV_compare(tdbb, stepDesc, &zeroDesc);
 
 	if (impure->m_stepSign == 0)
-		status_exception::raise(Firebird::Arg::Gds(isc_genseq_stepmustbe_nonzero) << Firebird::Arg::Str(m_name));
+		status_exception::raise(Arg::Gds(isc_genseq_stepmustbe_nonzero) << Arg::Str(m_name));
 
 	const auto boundaryComparison = MOV_compare(tdbb, startDesc, finishDesc);
 	// validate parameter value

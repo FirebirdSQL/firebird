@@ -870,7 +870,7 @@ SnapshotHandle TipCache::allocateSnapshotSlot()
 	// support platforms without HAVE_OBJECT_MAP capability, and the code below needs to be cleaned out
 	// sooner or later. And even if need to support such a platform suddenly appears we shall make it
 	// fail in remapFile code and not here.
-	(Firebird::Arg::Gds(isc_random) <<
+	(Arg::Gds(isc_random) <<
 		"Snapshots shared memory block is full on a platform that does not support shared memory remapping").raise();
 #endif
 
@@ -938,7 +938,7 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 		}
 
 		if (!found)
-			ERR_post(Firebird::Arg::Gds(isc_tra_snapshot_does_not_exist));
+			ERR_post(Arg::Gds(isc_tra_snapshot_does_not_exist));
 	}
 
 	SnapshotHandle slotNumber = allocateSnapshotSlot();

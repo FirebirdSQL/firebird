@@ -175,7 +175,7 @@ void CVT_double_to_date(double real, SLONG fixed[2])
 }
 
 
-static void error_swallow(const Firebird::Arg::StatusVector& v)
+static void error_swallow(const Arg::StatusVector& v)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 	v.copyTo(tdbb->tdbb_status_vector);
@@ -499,7 +499,7 @@ CharSet* EngineCallbacks::getToCharset(CSetId charSetId)
 void EngineCallbacks::validateData(CharSet* toCharSet, SLONG length, const UCHAR* q)
 {
 	if (toCharSet && !toCharSet->wellFormed(length, q))
-		err(Firebird::Arg::Gds(isc_malformed_string));
+		err(Arg::Gds(isc_malformed_string));
 }
 
 
@@ -523,8 +523,8 @@ ULONG EngineCallbacks::validateLength(CharSet* charSet, CSetId charSetId, ULONG 
 				return trimmedByteLength + (destCharLength - trimmedCharLength) * spaceByteLength;
 			else
 			{
-				err(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-					Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(destCharLength) << Firebird::Arg::Num(srcCharLength));
+				err(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					Arg::Gds(isc_trunc_limits) << Arg::Num(destCharLength) << Arg::Num(srcCharLength));
 			}
 		}
 	}
@@ -561,7 +561,7 @@ ULONG TruncateCallbacks::validateLength(CharSet* charSet, CSetId charSetId, ULON
 			else
 				length = size;
 
-			ERR_post_warning(Firebird::Arg::Warning(isc_truncate_warn) << Firebird::Arg::Warning(truncateReason));
+			ERR_post_warning(Arg::Warning(isc_truncate_warn) << Arg::Warning(truncateReason));
 		}
 	}
 

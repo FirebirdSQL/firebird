@@ -829,7 +829,7 @@ public:
 	{
 		auto obj = Versioned::create(tdbb, Permanent::getPool(), this);
 		if (!obj)
-			(Firebird::Arg::Gds(isc_random) << "Object create failed in makeObject()").raise();
+			(Arg::Gds(isc_random) << "Object create failed in makeObject()").raise();
 
 		switch (storeObject(tdbb, obj, fl & ~CacheFlag::ERASED))
 		{
@@ -1095,7 +1095,7 @@ public:
 				return val;
 		}
 #ifdef DEV_BUILD
-		(Firebird::Arg::Gds(isc_random) << "Object suddenly disappeared").raise();
+		(Arg::Gds(isc_random) << "Object suddenly disappeared").raise();
 #endif
 	}
 

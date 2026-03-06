@@ -325,14 +325,14 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	// We may be in danger of AV in UDF if ib_util init failed
 	if (!initDone)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_random) << "ib_util init failed - UDF usage disabled");
+		ERR_post(Arg::Gds(isc_random) << "ib_util init failed - UDF usage disabled");
 	}
 
 	if (!function->fun_entrypoint)
 	{
-		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_funnotdef) <<
-										  Firebird::Arg::Str(function->getName().toQuotedString()) <<
-										  Firebird::Arg::Gds(isc_modnotfound));
+		Firebird::status_exception::raise(Arg::Gds(isc_funnotdef) <<
+										  Arg::Str(function->getName().toQuotedString()) <<
+										  Arg::Gds(isc_modnotfound));
 	}
 
 	SET_TDBB(tdbb);
@@ -666,8 +666,8 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 						if (input->dsc_dtype != dtype_quad && input->dsc_dtype != dtype_blob)
 						{
-							ERR_post(Firebird::Arg::Gds(isc_wish_list) <<
-									 Firebird::Arg::Gds(isc_blobnotsup) << Firebird::Arg::Str("conversion"));
+							ERR_post(Arg::Gds(isc_wish_list) <<
+									 Arg::Gds(isc_blobnotsup) << Arg::Str("conversion"));
 						}
 
 						const auto blob_id = *(bid*) input->dsc_address;
@@ -736,7 +736,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 
 		const ISC_STATUS* status = tdbb->tdbb_status_vector->getErrors();
 		if (status[0] == isc_arg_gds && status[1] != FB_SUCCESS)
-			ERR_post(Firebird::Arg::StatusVector(tempStatus));
+			ERR_post(Arg::StatusVector(tempStatus));
 	}
 
 	switch (udfError)
@@ -751,7 +751,7 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 		ERR_punt(); // The error is already in the thread's tdbb_status_vector
 		break;
 	case UeDealloc:
-		status_exception::raise(Firebird::Arg::Gds(isc_bad_udf_freeit));
+		status_exception::raise(Arg::Gds(isc_bad_udf_freeit));
 		break;
 	}
 
@@ -764,45 +764,45 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 		case dtype_double:
 			if (std::isinf(value->vlu_misc.vlu_double))
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_overflow) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_overflow) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (std::isnan(value->vlu_misc.vlu_double))
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_nan) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_nan) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 
 		case dtype_dec64:
 			if (value->vlu_misc.vlu_dec64.isInf())
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_overflow) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_overflow) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (value->vlu_misc.vlu_dec64.isNan())
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_nan) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_nan) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 
 		case dtype_dec128:
 			if (value->vlu_misc.vlu_dec128.isInf())
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_overflow) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_overflow) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			else if (value->vlu_misc.vlu_dec128.isNan())
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
-									Firebird::Arg::Gds(isc_udf_fp_nan) <<
-									Firebird::Arg::Str(function->getName().toQuotedString()));
+				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
+									Arg::Gds(isc_udf_fp_nan) <<
+									Arg::Str(function->getName().toQuotedString()));
 			}
 			break;
 		}
@@ -815,9 +815,9 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 	} // try
 	catch (const Exception& ex)
 	{
-		Firebird::Arg::StatusVector v(ex);
+		Arg::StatusVector v(ex);
 		const string msg = "UDF: " + function->getName().toQuotedString();
-		v << Firebird::Arg::Gds(isc_random) << msg;
+		v << Arg::Gds(isc_random) << msg;
 
 		status->setErrors(v.value());
 	}

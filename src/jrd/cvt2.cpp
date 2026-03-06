@@ -678,7 +678,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		return CVT2_blob_compare(arg1, arg2, decSt);
 
 	case dtype_array:
-		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_blobnotsup) << "compare");
+		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_blobnotsup) << "compare");
 		break;
 
 	case dtype_dbkey:
@@ -727,7 +727,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 			return 0;
 		}
-		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << "DB_KEY compare");
+		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "DB_KEY compare");
 		break;
 
 	case dtype_boolean:
@@ -776,7 +776,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 	// DEV_BLKCHK (node, type_nod);
 
 	if (arg1->dsc_dtype != dtype_blob)
-		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_datnotsup));
+		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_datnotsup));
 
 	TTypeId ttype1, ttype2;
 	if (arg1->dsc_sub_type == isc_blob_text)
@@ -884,7 +884,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 	else if (arg2->dsc_dtype == dtype_array)
 	{
 		// We do not accept arrays for now. Maybe InternalArrayDesc in the future.
-		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_datnotsup));
+		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_datnotsup));
 	}
 	else
 	{

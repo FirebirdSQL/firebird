@@ -52,7 +52,7 @@ namespace
 {
 	void unableToRunSweepException(ISC_STATUS reason)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_sweep_unable_to_run) << Firebird::Arg::Gds(reason));
+		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
 	}
 }
 

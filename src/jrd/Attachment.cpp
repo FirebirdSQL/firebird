@@ -410,8 +410,8 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		// There are open transactions (@1 active)
 		if (err)
 		{
-			ERR_post(Firebird::Arg::Gds(isc_ses_reset_err) <<
-				Firebird::Arg::Gds(isc_ses_reset_open_trans) << Firebird::Arg::Num(n));
+			ERR_post(Arg::Gds(isc_ses_reset_err) <<
+				Arg::Gds(isc_ses_reset_open_trans) << Arg::Num(n));
 		}
 	}
 
@@ -445,8 +445,8 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		// Transaction is rolled back due to session reset, all changes are lost
 		if (oldFlags & TRA_write)
 		{
-			ERR_post_warning(Firebird::Arg::Warning(isc_ses_reset_warn) <<
-				Firebird::Arg::Gds(isc_ses_reset_tran_rollback));
+			ERR_post_warning(Arg::Warning(isc_ses_reset_warn) <<
+				Arg::Gds(isc_ses_reset_tran_rollback));
 		}
 
 		att_initial_options.resetAttachment(this);
@@ -501,9 +501,9 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		if (shutAtt)
 			signalShutdown(isc_ses_reset_failed);
 
-		Firebird::Arg::StatusVector error;
+		Arg::StatusVector error;
 		error.assign(ex);
-		error.prepend(Firebird::Arg::Gds(shutAtt ? isc_ses_reset_failed : isc_ses_reset_err));
+		error.prepend(Arg::Gds(shutAtt ? isc_ses_reset_failed : isc_ses_reset_err));
 		error.raise();
 	}
 }
@@ -753,7 +753,7 @@ void Jrd::Attachment::SyncGuard::init(const char* f, bool
 		if (!jStable->getHandle())
 		{
 			jStable->getSync()->leave();
-			Firebird::Arg::Gds(isc_att_shutdown).raise();
+			Arg::Gds(isc_att_shutdown).raise();
 		}
 	}
 }

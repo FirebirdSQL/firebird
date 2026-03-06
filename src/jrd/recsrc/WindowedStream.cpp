@@ -244,8 +244,8 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 						msg.printf("%s is not supported in windows with ORDER BY or frame by ROWS clauses", arg);
 
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_wish_list) <<
-							Firebird::Arg::Gds(isc_random) << msg);
+							Arg::Gds(isc_wish_list) <<
+							Arg::Gds(isc_random) << msg);
 					}
 				}
 			}
@@ -410,7 +410,7 @@ bool WindowedStream::refetchRecord(thread_db* tdbb) const
 
 WriteLockResult WindowedStream::lockRecord(thread_db* /*tdbb*/) const
 {
-	status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
+	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
 void WindowedStream::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
@@ -988,7 +988,7 @@ void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, Request* reque
 	if (error)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_window_frame_value_invalid));
+			Arg::Gds(isc_window_frame_value_invalid));
 	}
 }
 

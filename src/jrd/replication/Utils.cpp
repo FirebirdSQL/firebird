@@ -226,8 +226,8 @@ namespace Firebird::Jrd::Replication
 		vsnprintf(buffer, sizeof(buffer), msg, ptr);
 		va_end(ptr);
 
-		Firebird::Arg::StatusVector error;
-		error << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(buffer);
+		Arg::StatusVector error;
+		error << Arg::Gds(isc_random) << Arg::Str(buffer);
 		error.raise();
 	}
 

@@ -290,7 +290,7 @@ StableAttachmentPart* WorkerAttachment::getAttachment(FbStatusVector* status, Da
 	}
 #endif
 
-	Firebird::Arg::Gds(isc_shutdown).copyTo(status);
+	Arg::Gds(isc_shutdown).copyTo(status);
 
 	WorkerAttachment* item = getByName(dbb->dbb_filename);
 	if (!item)
@@ -330,7 +330,7 @@ StableAttachmentPart* WorkerAttachment::getAttachment(FbStatusVector* status, Da
 	{
 		if (item->m_activeAtts.getCount() >= maxWorkers)
 		{
-			(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("No enough free worker attachments")).copyTo(status);
+			(Arg::Gds(isc_random) << Arg::Str("No enough free worker attachments")).copyTo(status);
 			return NULL;
 		}
 

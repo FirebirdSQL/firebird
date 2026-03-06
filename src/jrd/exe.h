@@ -502,7 +502,7 @@ public:
 	StreamType nextStream(bool check = true)
 	{
 		if (csb_n_stream >= MAX_STREAMS && check)
-			ERR_post(Firebird::Arg::Gds(isc_too_many_contexts));
+			ERR_post(Arg::Gds(isc_too_many_contexts));
 
 		return csb_n_stream++;
 	}

@@ -134,8 +134,8 @@ void ExternalFile::open(Database* dbb)
 
 	if (!dbb->dbb_external_file_directory_list->isPathInList(ext_filename))
 	{
-		ERR_post(Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("external file") <<
-													 Firebird::Arg::Str(ext_filename));
+		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("external file") <<
+													 Arg::Str(ext_filename));
 	}
 
 	// If the database is updateable then try opening the external files in RW mode.
@@ -148,8 +148,8 @@ void ExternalFile::open(Database* dbb)
 	{
 		if (!(ext_ifi = Firebird::os_utils::fopen(ext_filename, FOPEN_READ_ONLY)))
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fopen") << Firebird::Arg::Str(ext_filename) <<
-					 Firebird::Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(ext_filename) <<
+					 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 		}
 		else {
 			ext_flags |= EXT_readonly;
@@ -221,7 +221,7 @@ void ExternalFile::erase(record_param*, jrd_tra*)
  *
  **************************************/
 
-	ERR_post(Firebird::Arg::Gds(isc_ext_file_delete));
+	ERR_post(Arg::Gds(isc_ext_file_delete));
 }
 
 
@@ -334,8 +334,8 @@ bool ExternalFile::get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 			SINT64 offset = FTELL64(ext_ifi);
 			if (offset < 0)
 			{
-				ERR_post(Firebird::Arg::Gds(isc_io_error) << STRINGIZE(FTELL64) << Firebird::Arg::Str(ext_filename) <<
-						 Firebird::Arg::Gds(isc_io_read_err) << SYS_ERR(errno));
+				ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FTELL64) << Arg::Str(ext_filename) <<
+						 Arg::Gds(isc_io_read_err) << SYS_ERR(errno));
 			}
 			doSeek = (static_cast<FB_UINT64>(offset) != position);
 		}
@@ -347,8 +347,8 @@ bool ExternalFile::get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 		{
 			if (FSEEK64(ext_ifi, position, SEEK_SET) != 0)
 			{
-				ERR_post(Firebird::Arg::Gds(isc_io_error) << STRINGIZE(FSEEK64) << Firebird::Arg::Str(ext_filename) <<
-						 Firebird::Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+				ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FSEEK64) << Arg::Str(ext_filename) <<
+						 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 			}
 		}
 
@@ -409,7 +409,7 @@ void ExternalFile::modify(record_param* /*old_rpb*/, record_param* /*new_rpb*/, 
  *
  **************************************/
 
-	ERR_post(Firebird::Arg::Gds(isc_ext_file_modify));
+	ERR_post(Arg::Gds(isc_ext_file_modify));
 }
 
 
@@ -440,12 +440,12 @@ void ExternalFile::store(thread_db* tdbb, record_param* rpb)
 		CHECK_DBB(dbb);
 		// Distinguish error message for a ReadOnly database
 		if (dbb->readOnly())
-			ERR_post(Firebird::Arg::Gds(isc_read_only_database));
+			ERR_post(Arg::Gds(isc_read_only_database));
 		else
 		{
-			ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("insert") << Firebird::Arg::Str(ext_filename) <<
-					 Firebird::Arg::Gds(isc_io_write_err) <<
-					 Firebird::Arg::Gds(isc_ext_readonly_err));
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("insert") << Arg::Str(ext_filename) <<
+					 Arg::Gds(isc_io_write_err) <<
+					 Arg::Gds(isc_ext_readonly_err));
 		}
 	}
 
@@ -488,15 +488,15 @@ void ExternalFile::store(thread_db* tdbb, record_param* rpb)
 	if ( (!(ext_flags & EXT_last_write) && FSEEK64(ext_ifi, (SINT64) 0, SEEK_END) != 0) )
 	{
 		ext_flags &= ~EXT_last_write;
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fseek") << Firebird::Arg::Str(ext_filename) <<
-				 Firebird::Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fseek") << Arg::Str(ext_filename) <<
+				 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 	}
 
 	if (!fwrite(p, l, 1, ext_ifi))
 	{
 		ext_flags &= ~EXT_last_write;
-		ERR_post(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fwrite") << Firebird::Arg::Str(ext_filename) <<
-				 Firebird::Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fwrite") << Arg::Str(ext_filename) <<
+				 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 	}
 
 	ext_flags |= EXT_last_write;
@@ -564,5 +564,5 @@ void ExternalFile::release()
 void ExternalFile::checkOpened()
 {
 	if (!ext_ifi)
-		ERR_post(Firebird::Arg::Gds(isc_random) << "Error accessing external table's file");
+		ERR_post(Arg::Gds(isc_random) << "Error accessing external table's file");
 }

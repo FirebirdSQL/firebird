@@ -281,7 +281,7 @@ public:
 
 			if (!att)
 			{
-				Firebird::Arg::Gds(isc_bad_db_handle).copyTo(status);
+				Arg::Gds(isc_bad_db_handle).copyTo(status);
 				return false;
 			}
 
@@ -442,7 +442,7 @@ bool SweepTask::handler(WorkItem& _item)
 			{
 				string str;
 				str.printf("Acquire garbage collection lock failed (%s)", relation->getName().toQuotedString().c_str());
-				status_exception::raise(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(str));
+				status_exception::raise(Arg::Gds(isc_random) << Arg::Str(str));
 			}
 
 			jrd_tra* tran = tdbb->getTransaction();
@@ -663,8 +663,8 @@ inline void check_gbak_cheating_insupd(thread_db* tdbb, const jrd_rel* relation,
 	if (relation->isSystem() && attachment->isGbak() && !(attachment->att_flags & ATT_creator) &&
 		!request->hasInternalStatement())
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_protect_sys_tab) <<
-			Firebird::Arg::Str(op) << relation->getName().toQuotedString());
+		status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
+			Arg::Str(op) << relation->getName().toQuotedString());
 	}
 }
 
@@ -1312,7 +1312,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					if (!(transaction->tra_flags & TRA_ignore_limbo))
 					{
 						CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-						ERR_post(Firebird::Arg::Gds(isc_deadlock) << Firebird::Arg::Gds(isc_trainlim));
+						ERR_post(Arg::Gds(isc_deadlock) << Arg::Gds(isc_trainlim));
 					}
 
 					state = tra_limbo;
@@ -1335,10 +1335,10 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				{
 					tdbb->bumpStats(RecordStatType::CONFLICTS, relation->getId());
 
-					// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-					ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-							 Firebird::Arg::Gds(isc_read_conflict) <<
-							 Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					ERR_post(Arg::Gds(isc_deadlock) <<
+							 Arg::Gds(isc_read_conflict) <<
+							 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
 				}
 
 				// refetch the record and try again.  The active transaction
@@ -1462,8 +1462,8 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			{
 				CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-				// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-				ERR_post(Firebird::Arg::Gds(isc_rec_in_limbo) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Int64(rpb->rpb_transaction_nr));
 			}
 
 		case tra_active:
@@ -1946,9 +1946,9 @@ static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transact
 		if (secondary)
 			transaction->tra_flags |= TRA_ex_restart;
 
-		ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-			Firebird::Arg::Gds(isc_update_conflict) <<
-			Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+		ERR_post(Arg::Gds(isc_deadlock) <<
+			Arg::Gds(isc_update_conflict) <<
+			Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
 	}
 
 	if (top_request)
@@ -2301,9 +2301,9 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 				if (grantor != currentUser)
 				{
-					ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("REVOKE") <<
-													  Firebird::Arg::Str("TABLE") <<
-													  Firebird::Arg::Str("RDB$USER_PRIVILEGES"));
+					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("REVOKE") <<
+													  Arg::Str("TABLE") <<
+													  Arg::Str("RDB$USER_PRIVILEGES"));
 				}
 			}
 			EVL_field(0, rpb->rpb_record, f_prv_rname, &desc);
@@ -3128,8 +3128,8 @@ bool VIO_get_current(thread_db* tdbb,
 		case tra_limbo:
 			if (!(transaction->tra_flags & TRA_ignore_limbo))
 			{
-				// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-				ERR_post(Firebird::Arg::Gds(isc_rec_in_limbo) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+				// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+				ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Int64(rpb->rpb_transaction_nr));
 			}
 			[[fallthrough]];
 
@@ -3999,7 +3999,7 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 		if (writelock)
 			return false;
 
-		ERR_post(Firebird::Arg::Gds(isc_no_cur_rec));
+		ERR_post(Arg::Gds(isc_no_cur_rec));
 	}
 
 	if (!(rpb->rpb_runtime_flags & RPB_undo_data))
@@ -4031,10 +4031,10 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 	{
 		tdbb->bumpStats(RecordStatType::CONFLICTS, rpb->rpb_relation->getId());
 
-		// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-		ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-				 Firebird::Arg::Gds(isc_update_conflict) <<
-				 Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+		ERR_post(Arg::Gds(isc_deadlock) <<
+				 Arg::Gds(isc_update_conflict) <<
+				 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
 	}
 
 	return true;
@@ -4938,9 +4938,9 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 				{
 					if (!(top_request->req_flags & req_restart_ready))
 					{
-						ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-								 Firebird::Arg::Gds(isc_update_conflict) <<
-								 Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(org_rpb->rpb_transaction_nr));
+						ERR_post(Arg::Gds(isc_deadlock) <<
+								 Arg::Gds(isc_update_conflict) <<
+								 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
 					}
 
 					top_request->req_flags |= req_update_conflict;
@@ -4961,10 +4961,10 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 			// Error details should be stuffed into status vector at this point
 			// hvlad: we have no details as TRA_wait has already cleared the status vector
 
-			// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-			ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-						Firebird::Arg::Gds(isc_update_conflict) <<
-						Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(org_rpb->rpb_transaction_nr));
+			// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+			ERR_post(Arg::Gds(isc_deadlock) <<
+						Arg::Gds(isc_update_conflict) <<
+						Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
 	}
 
 	// Old record was restored and re-fetched for write.  Now replace it.
@@ -5199,7 +5199,7 @@ static void check_owner(thread_db* tdbb,
 
 	// Note: NULL->USER and USER->NULL changes also cause the error to be raised
 
-	ERR_post(Firebird::Arg::Gds(isc_protect_ownership));
+	ERR_post(Arg::Gds(isc_protect_ownership));
 }
 
 
@@ -6779,18 +6779,18 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 					if (skipLocked)
 						return PrepareResult::SKIP_LOCKED;
 
-					// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-					ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
-							 Firebird::Arg::Gds(isc_update_conflict) <<
-							 Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(update_conflict_trans));
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					ERR_post(Arg::Gds(isc_deadlock) <<
+							 Arg::Gds(isc_update_conflict) <<
+							 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(update_conflict_trans));
 				}
 				return PrepareResult::CONFLICT;
 
 			case tra_limbo:
 				if (!(transaction->tra_flags & TRA_ignore_limbo))
 				{
-					// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
-					ERR_post(Firebird::Arg::Gds(isc_rec_in_limbo) << Firebird::Arg::Int64(rpb->rpb_transaction_nr));
+					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+					ERR_post(Arg::Gds(isc_rec_in_limbo) << Arg::Int64(rpb->rpb_transaction_nr));
 				}
 				[[fallthrough]];
 
@@ -6848,8 +6848,8 @@ static void protect_system_table_insert(thread_db* tdbb,
 			return;
 	}
 
-	status_exception::raise(Firebird::Arg::Gds(isc_protect_sys_tab) <<
-			Firebird::Arg::Str("INSERT") << relation->getName().toQuotedString());
+	status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
+			Arg::Str("INSERT") << relation->getName().toQuotedString());
 }
 
 
@@ -6880,8 +6880,8 @@ static void protect_system_table_delupd(thread_db* tdbb,
 			return;
 	}
 
-	status_exception::raise(Firebird::Arg::Gds(isc_protect_sys_tab) <<
-		Firebird::Arg::Str(operation) << relation->getName().toQuotedString());
+	status_exception::raise(Arg::Gds(isc_protect_sys_tab) <<
+		Arg::Str(operation) << relation->getName().toQuotedString());
 }
 
 

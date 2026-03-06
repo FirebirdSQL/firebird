@@ -64,7 +64,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relat
 		// In read-only databases, only GTTs with ON COMMIT DELETE ROWS clause are writable
 
 		if (dbb->readOnly() && !(relation->rel_flags & REL_temp_tran))
-			ERR_post(Firebird::Arg::Gds(isc_read_only_database));
+			ERR_post(Arg::Gds(isc_read_only_database));
 
 		// No other limitations for GTTs
 
@@ -73,7 +73,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relat
 			// Persistent tables are not writable in read-only transactions
 
 			if (transaction->tra_flags & TRA_readonly)
-				ERR_post(Firebird::Arg::Gds(isc_read_only_trans));
+				ERR_post(Arg::Gds(isc_read_only_trans));
 
 			// Inside a read-only replica, only replicator sessions are expected to be writable.
 			// However, we also allow not replicated DDL statements (e.g. ALTER DATABASE).
@@ -85,7 +85,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relat
 			{
 				// This condition is a workaround for nbackup
 				if (relation->getId() != rel_backup_history)
-					ERR_post(Firebird::Arg::Gds(isc_read_only_trans));
+					ERR_post(Arg::Gds(isc_read_only_trans));
 			}
 		}
 	}
@@ -128,7 +128,7 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relat
 		string err;
 		err.printf("Acquire lock for relation (%s) failed", relation->getName().toQuotedString().c_str());
 
-		ERR_append_status(tdbb->tdbb_status_vector, Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(err));
+		ERR_append_status(tdbb->tdbb_status_vector, Arg::Gds(isc_random) << Arg::Str(err));
 		ERR_punt();
 	}
 

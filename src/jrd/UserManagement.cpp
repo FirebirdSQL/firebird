@@ -176,7 +176,7 @@ UserManagement::UserManagement(jrd_tra* pTra)
 {
 	if (!att || !att->att_user)
 	{
-		(Firebird::Arg::Gds(isc_random) << "Unknown user name for given transaction").raise();
+		(Arg::Gds(isc_random) << "Unknown user name for given transaction").raise();
 	}
 
 	plugins = att->att_database->dbb_config->getPlugins(IPluginManager::TYPE_AUTH_USER_MANAGEMENT);
@@ -226,7 +226,7 @@ IManagement* UserManagement::getManager(const char* name)
 		}
 	}
 	if (!plugName.hasData())
-		Firebird::Arg::Gds(isc_user_manager).raise();
+		Arg::Gds(isc_user_manager).raise();
 
 	// Search for it in cache of already loaded plugins
 	for (unsigned i = 0; i < managers.getCount(); ++i)
@@ -319,7 +319,7 @@ USHORT UserManagement::put(Firebird::Auth::UserData* userData)
 	const FB_SIZE_T ret = commands.getCount();
 	if (ret > MAX_USHORT)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_random) << "Too many user management DDL per transaction");
+		status_exception::raise(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_random) << "Too many user management DDL per transaction");
 	}
 
 	commands.push(userData);
@@ -335,13 +335,13 @@ void UserManagement::checkSecurityResult(int errcode, IStatus* status,
 	}
 	errcode = Firebird::Auth::setGsecCode(errcode, operation);
 
-	Firebird::Arg::StatusVector tmp;
-	tmp << Firebird::Arg::Gds(ENCODE_ISC_MSG(errcode, GSEC_MSG_FAC));
+	Arg::StatusVector tmp;
+	tmp << Arg::Gds(ENCODE_ISC_MSG(errcode, GSEC_MSG_FAC));
 	if (errcode == GsecMsg22)
 	{
 		tmp << userName;
 	}
-	tmp.append(Firebird::Arg::StatusVector(status));
+	tmp.append(Arg::StatusVector(status));
 
 	tmp.raise();
 }
@@ -360,7 +360,7 @@ void UserManagement::execute(USHORT id)
 {
 	if (id >= commands.getCount())
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Wrong job id passed to UserManagement::execute()");
+		status_exception::raise(Arg::Gds(isc_random) << "Wrong job id passed to UserManagement::execute()");
 	}
 
 	if (!commands[id])
@@ -411,7 +411,7 @@ void UserManagement::execute(USHORT id)
 			while (cur != curEnd)
 			{
 				if (cur->name == prev)
-					(Firebird::Arg::Gds(isc_dup_attribute) << cur->name).raise();
+					(Arg::Gds(isc_dup_attribute) << cur->name).raise();
 
 				prev = cur->name;
 				++cur;
@@ -470,7 +470,7 @@ void UserManagement::execute(USHORT id)
 	if (command->op == Firebird::Auth::ADD_OPER)
 	{
 		if (!command->pass.entered())
-			Firebird::Arg::PrivateDyn(291).raise();
+			Arg::PrivateDyn(291).raise();
 
 		if (!command->act.entered())
 		{

@@ -74,7 +74,7 @@ void CoercionArray::setRule(const TypeClause* from, const TypeClause *to)
 void CoercionRule::raiseError()
 {
 	// Do not use ERR_post here - old error should be overwritten
-	(Firebird::Arg::Gds(isc_bind_convert) << fromDsc.typeToText() << toDsc.typeToText()).raise();
+	(Arg::Gds(isc_bind_convert) << fromDsc.typeToText() << toDsc.typeToText()).raise();
 }
 
 void CoercionRule::setRule(const TypeClause* from, const TypeClause *to)

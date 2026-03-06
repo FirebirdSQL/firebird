@@ -140,7 +140,7 @@ Provider* Manager::getProvider(const string& prvName)
 	}
 
 	// External Data Source provider ''@1'' not found
-	ERR_post(Firebird::Arg::Gds(isc_eds_provider_not_found) << Firebird::Arg::Str(prvName));
+	ERR_post(Arg::Gds(isc_eds_provider_not_found) << Arg::Str(prvName));
 	return NULL;
 }
 
@@ -199,7 +199,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 {
 	Attachment* att = tdbb->getAttachment();
 	if (att->att_ext_call_depth >= MAX_CALLBACKS)
-		ERR_post(Firebird::Arg::Gds(isc_exec_sql_max_call_exceeded));
+		ERR_post(Arg::Gds(isc_exec_sql_max_call_exceeded));
 
 	string prvName;
 	PathName dbName;
@@ -813,7 +813,7 @@ Transaction* Connection::findTransaction(thread_db* tdbb, TraScope traScope) con
 		break;
 
 	case traTwoPhase :
-		ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("2PC transactions not implemented"));
+		ERR_post(Arg::Gds(isc_random) << Arg::Str("2PC transactions not implemented"));
 
 		//ext_tran = tran->tra_ext_two_phase;
 		// join transaction if not already joined
@@ -828,16 +828,16 @@ void Connection::raise(const FbStatusVector* status, thread_db* /*tdbb*/, const 
 {
 	if (!getWrapErrors(status->getErrors()))
 	{
-		ERR_post(Firebird::Arg::StatusVector(status));
+		ERR_post(Arg::StatusVector(status));
 	}
 
 	string rem_err;
 	m_provider.getRemoteError(status, rem_err);
 
 	// Execute statement error at @1 :\n@2Data source : @3
-	ERR_post(Firebird::Arg::Gds(isc_eds_connection) << Firebird::Arg::Str(sWhere) <<
-											 Firebird::Arg::Str(rem_err) <<
-											 Firebird::Arg::Str(getDataSourceName()));
+	ERR_post(Arg::Gds(isc_eds_connection) << Arg::Str(sWhere) <<
+											 Arg::Str(rem_err) <<
+											 Arg::Str(getDataSourceName()));
 }
 
 
@@ -1136,7 +1136,7 @@ void ConnectionsPool::setMaxCount(ULONG val)
 		err.printf("Wrong value for connections pool size (%d). Allowed values are between %d and %d.",
 				   val, MIN_CONNPOOL_SIZE, MAX_CONNPOOL_SIZE);
 
-		ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(err));
+		ERR_post(Arg::Gds(isc_random) << Arg::Str(err));
 	}
 
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -1151,7 +1151,7 @@ void ConnectionsPool::setLifeTime(ULONG val)
 		err.printf("Wrong value for pooled connection lifetime (%d). Allowed values are between %d and %d.",
 				   val, MIN_LIFE_TIME, MAX_LIFE_TIME);
 
-		ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(err));
+		ERR_post(Arg::Gds(isc_random) << Arg::Str(err));
 	}
 
 	bool startIdleTimer = false;
@@ -1904,7 +1904,7 @@ bool Statement::fetch(thread_db* tdbb, const ValueListNode* out_params)
 		if (doFetch(tdbb))
 		{
 			FbLocalStatus status;
-			Firebird::Arg::Gds(isc_sing_select_err).copyTo(&status);
+			Arg::Gds(isc_sing_select_err).copyTo(&status);
 			raise(&status, tdbb, "isc_dsql_fetch");
 		}
 		return false;
@@ -2128,8 +2128,8 @@ void Statement::preprocess(const string& sql, string& ret)
 	{
 		// Execute statement preprocess SQL error
 		// Statement expected
-		ERR_post(Firebird::Arg::Gds(isc_eds_preprocess) <<
-				 Firebird::Arg::Gds(isc_eds_stmt_expected));
+		ERR_post(Arg::Gds(isc_eds_preprocess) <<
+				 Arg::Gds(isc_eds_stmt_expected));
 	}
 
 	start = i; // skip leading comments ??
@@ -2149,8 +2149,8 @@ void Statement::preprocess(const string& sql, string& ret)
 		{
 			// Execute statement preprocess SQL error
 			// Statement expected
-			ERR_post(Firebird::Arg::Gds(isc_eds_preprocess) <<
-					 Firebird::Arg::Gds(isc_eds_stmt_expected));
+			ERR_post(Arg::Gds(isc_eds_preprocess) <<
+					 Arg::Gds(isc_eds_stmt_expected));
 		}
 		string ident2(i2, p - i2);
 		ident2.upper();
@@ -2187,9 +2187,9 @@ void Statement::preprocess(const string& sql, string& ret)
 				if (tok == ttIdent)
 				{
 					if (ident.length() > MAX_SQL_IDENTIFIER_LEN)
-						ERR_post(Firebird::Arg::Gds(isc_eds_preprocess) <<
-								 Firebird::Arg::Gds(isc_dyn_name_longer) <<
-								 Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(ident));
+						ERR_post(Arg::Gds(isc_eds_preprocess) <<
+								 Arg::Gds(isc_dyn_name_longer) <<
+								 Arg::Gds(isc_random) << Arg::Str(ident));
 
 					ident.upper();
 				}
@@ -2205,8 +2205,8 @@ void Statement::preprocess(const string& sql, string& ret)
 			{
 				// Execute statement preprocess SQL error
 				// Parameter name expected
-				ERR_post(Firebird::Arg::Gds(isc_eds_preprocess) <<
-						 Firebird::Arg::Gds(isc_eds_prm_name_expected));
+				ERR_post(Arg::Gds(isc_eds_preprocess) <<
+						 Arg::Gds(isc_eds_prm_name_expected));
 			}
 			ret += '?';
 			break;
@@ -2236,15 +2236,15 @@ void Statement::preprocess(const string& sql, string& ret)
 				// Execute statement preprocess SQL error
 				// Unclosed comment found near ''@1''
 				string s(start, MIN(16, end - start));
-				ERR_post(Firebird::Arg::Gds(isc_eds_preprocess) <<
-						 Firebird::Arg::Gds(isc_eds_unclosed_comment) << Firebird::Arg::Str(s));
+				ERR_post(Arg::Gds(isc_eds_preprocess) <<
+						 Arg::Gds(isc_eds_unclosed_comment) << Arg::Str(s));
 			}
 			break;
 
 
 		case ttNone:
 			// Execute statement preprocess SQL error
-			ERR_post(Firebird::Arg::Gds(isc_eds_preprocess));
+			ERR_post(Arg::Gds(isc_eds_preprocess));
 			break;
 		}
 	}
@@ -2277,7 +2277,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 			{
 				m_error = true;
 				// Input parameter ''@1'' is not used in SQL query text
-				status_exception::raise(Firebird::Arg::Gds(isc_eds_input_prm_not_used) << Firebird::Arg::Str(*name));
+				status_exception::raise(Arg::Gds(isc_eds_input_prm_not_used) << Arg::Str(*name));
 			}
 		}
 	}
@@ -2306,7 +2306,7 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 			{
 				m_error = true;
 				// Input parameter ''@1'' have no value set
-				status_exception::raise(Firebird::Arg::Gds(isc_eds_input_prm_not_set) << Firebird::Arg::Str(*sqlName));
+				status_exception::raise(Arg::Gds(isc_eds_input_prm_not_set) << Arg::Str(*sqlName));
 			}
 
 			sqlParams[sqlNum] = params->items[num];
@@ -2325,7 +2325,7 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaStr
 	{
 		m_error = true;
 		// Input parameters mismatch
-		status_exception::raise(Firebird::Arg::Gds(isc_eds_input_prm_mismatch));
+		status_exception::raise(Arg::Gds(isc_eds_input_prm_mismatch));
 	}
 
 	if (!count)
@@ -2394,7 +2394,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 	{
 		m_error = true;
 		// Output parameters mismatch
-		status_exception::raise(Firebird::Arg::Gds(isc_eds_output_prm_mismatch));
+		status_exception::raise(Arg::Gds(isc_eds_output_prm_mismatch));
 	}
 
 	if (!count)
@@ -2410,7 +2410,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 		{
 			m_error = true;
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_exec_sql_invalid_var) << Firebird::Arg::Num(i + 1) << Firebird::Arg::Str(m_sql.substr(0, 31)));
+				Arg::Gds(isc_exec_sql_invalid_var) << Arg::Num(i + 1) << Arg::Str(m_sql.substr(0, 31)));
 		}
 		*/
 
@@ -2537,7 +2537,7 @@ void Statement::raise(FbStatusVector* status, thread_db* tdbb, const char* sWher
 
 	if (!m_connection.getWrapErrors(status->getErrors()))
 	{
-		ERR_post(Firebird::Arg::StatusVector(status));
+		ERR_post(Arg::StatusVector(status));
 	}
 
 	string rem_err;
@@ -2552,10 +2552,10 @@ void Statement::raise(FbStatusVector* status, thread_db* tdbb, const char* sWher
 	}
 
 	// Execute statement error at @1 :\n@2Statement : @3\nData source : @4
-	ERR_post(Firebird::Arg::Gds(isc_eds_statement) << Firebird::Arg::Str(sWhere) <<
-											Firebird::Arg::Str(rem_err) <<
-											Firebird::Arg::Str(sQuery ? sQuery->substr(0, 255) : m_sql.substr(0, 255)) <<
-											Firebird::Arg::Str(m_connection.getDataSourceName()));
+	ERR_post(Arg::Gds(isc_eds_statement) << Arg::Str(sWhere) <<
+											Arg::Str(rem_err) <<
+											Arg::Str(sQuery ? sQuery->substr(0, 255) : m_sql.substr(0, 255)) <<
+											Arg::Str(m_connection.getDataSourceName()));
 }
 
 void Statement::bindToRequest(Request* request, Statement** impure)
@@ -2611,7 +2611,7 @@ void EngineCallbackGuard::init(thread_db* tdbb, Connection& conn, const char* fr
 		if (transaction)
 		{
 			if (transaction->tra_callback_count >= MAX_CALLBACKS)
-				ERR_post(Firebird::Arg::Gds(isc_exec_sql_max_call_exceeded));
+				ERR_post(Arg::Gds(isc_exec_sql_max_call_exceeded));
 
 			transaction->tra_callback_count++;
 		}

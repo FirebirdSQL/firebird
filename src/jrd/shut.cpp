@@ -61,7 +61,7 @@ constexpr bool IGNORE_SAME_MODE = false;
 
 [[noreturn]] static void bad_mode(const Database* dbb)
 {
-	ERR_post(Firebird::Arg::Gds(isc_bad_shutdown_mode) << Firebird::Arg::Str(dbb->dbb_database_name));
+	ERR_post(Arg::Gds(isc_bad_shutdown_mode) << Arg::Str(dbb->dbb_database_name));
 }
 
 static void same_mode(const Database* dbb)
@@ -161,9 +161,9 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 
 	if (!attachment->locksmith(tdbb, CHANGE_SHUTDOWN_MODE))
 	{
-		ERR_post_nothrow(Firebird::Arg::Gds(isc_no_priv) << "shutdown" << "database" << dbb->dbb_filename);
+		ERR_post_nothrow(Arg::Gds(isc_no_priv) << "shutdown" << "database" << dbb->dbb_filename);
 		if (attachment->att_user && attachment->att_user->testFlag(USR_mapdown))
-			ERR_post_nothrow(Firebird::Arg::Gds(isc_map_down));
+			ERR_post_nothrow(Arg::Gds(isc_map_down));
 		ERR_punt();
 	}
 
@@ -269,7 +269,7 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 	{
 		notify_shutdown(tdbb, 0, -1, guard);	// Tell everyone we're giving up
 		attachment->att_flags &= ~ATT_shutdown_manager;
-		ERR_post(Firebird::Arg::Gds(isc_shutfail));
+		ERR_post(Arg::Gds(isc_shutfail));
 	}
 
 	if (!exclusive && !notify_shutdown(tdbb, shut_mode | isc_dpb_shut_force, 0, guard))
@@ -278,7 +278,7 @@ void SHUT_database(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* guard)
 		{
 			notify_shutdown(tdbb, 0, -1, guard);	// Tell everyone we're giving up
 			attachment->att_flags &= ~ATT_shutdown_manager;
-			ERR_post(Firebird::Arg::Gds(isc_shutfail));
+			ERR_post(Arg::Gds(isc_shutfail));
 		}
 	}
 
@@ -349,9 +349,9 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 
 	if (!attachment->locksmith(tdbb, CHANGE_SHUTDOWN_MODE))
 	{
-		ERR_post_nothrow(Firebird::Arg::Gds(isc_no_priv) << "bring online" << "database" << dbb->dbb_filename);
+		ERR_post_nothrow(Arg::Gds(isc_no_priv) << "bring online" << "database" << dbb->dbb_filename);
 		if (attachment->att_user && attachment->att_user->testFlag(USR_mapdown))
-			ERR_post_nothrow(Firebird::Arg::Gds(isc_map_down));
+			ERR_post_nothrow(Arg::Gds(isc_map_down));
 		ERR_punt();
 	}
 
@@ -451,7 +451,7 @@ static void check_backup_state(thread_db* tdbb)
 
 	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_bad_shutdown_mode) << Firebird::Arg::Str(dbb->dbb_filename));
+		ERR_post(Arg::Gds(isc_bad_shutdown_mode) << Arg::Str(dbb->dbb_filename));
 	}
 }
 

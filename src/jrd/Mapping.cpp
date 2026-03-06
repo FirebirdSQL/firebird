@@ -80,8 +80,8 @@ void checkStatus(const char* s, const IStatus* st)
 	if (!(st->getState() & IStatus::STATE_ERRORS))
 		return;
 
-	Firebird::Arg::StatusVector newStatus(st);
-	newStatus << Firebird::Arg::Gds(isc_map_load) << s;
+	Arg::StatusVector newStatus(st);
+	newStatus << Arg::Gds(isc_map_load) << s;
 	newStatus.raise();
 }
 
@@ -423,7 +423,7 @@ void Mapping::Cache::map(bool flagWild, ExtInfo& info, AuthWriter& newBlock)
 	Map from(info);
 
 	if (from.from == "*")
-		Firebird::Arg::Gds(isc_map_aster).raise();
+		Arg::Gds(isc_map_aster).raise();
 
 	if (!flagWild)
 		search(info, from, newBlock, from.from);
@@ -451,7 +451,7 @@ void Mapping::Cache::search(ExtInfo& info, const Map& from, AuthWriter& newBlock
 		{
 			if (infoName == newName)
 				continue;
-			(Firebird::Arg::Gds(isc_map_multi) << originalUserName).raise();
+			(Arg::Gds(isc_map_multi) << originalUserName).raise();
 		}
 
 		info.current |= flagRolUsr;
@@ -587,7 +587,7 @@ public:
 		if (val.plugin.hasData())
 			find = FND_PLUG;
 		if (find == found && value != val.name)
-			Firebird::Arg::Gds(isc_map_undefined).raise();
+			Arg::Gds(isc_map_undefined).raise();
 
 		if (find > found)
 		{
@@ -750,7 +750,7 @@ public:
 
 			if (sharedMemory->eventPost(&p->notifyEvent) != FB_SUCCESS)
 			{
-				(Firebird::Arg::Gds(isc_map_event) << "POST").raise();
+				(Arg::Gds(isc_map_event) << "POST").raise();
 			}
 
 			int tout = 0;
@@ -767,7 +767,7 @@ public:
 				}
 
 				if (++tout >= 1000) // 10 sec
-					(Firebird::Arg::Gds(isc_random) << "Timeout when waiting callback from other process.").raise();
+					(Arg::Gds(isc_random) << "Timeout when waiting callback from other process.").raise();
 			}
 
 			MAP_DEBUG(fprintf(stderr, "Notified pid %d about reset map %s\n", p->id, sMem->databaseForReset));
@@ -836,7 +836,7 @@ public:
 			if (((U_IPTR) &sMem->process[sMem->processes]) - ((U_IPTR) sMem) > DEFAULT_SIZE)
 			{
 				sMem->processes--;
-				(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_map_overflow)).raise();
+				(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_map_overflow)).raise();
 			}
 		}
 
@@ -846,11 +846,11 @@ public:
 
 		if (sharedMemory->eventInit(&sMem->process[process].notifyEvent) != FB_SUCCESS)
 		{
-			(Firebird::Arg::Gds(isc_map_event) << "INIT").raise();
+			(Arg::Gds(isc_map_event) << "INIT").raise();
 		}
 		if (sharedMemory->eventInit(&sMem->process[process].callbackEvent) != FB_SUCCESS)
 		{
-			(Firebird::Arg::Gds(isc_map_event) << "INIT").raise();
+			(Arg::Gds(isc_map_event) << "INIT").raise();
 		}
 
 		try
@@ -891,7 +891,7 @@ private:
 					MappingHeader::Process* cur = &sMem->process[sMem->currentProcess];
 					if (sharedMemory->eventPost(&cur->callbackEvent) != FB_SUCCESS)
 					{
-						(Firebird::Arg::Gds(isc_map_event) << "POST").raise();
+						(Arg::Gds(isc_map_event) << "POST").raise();
 					}
 				}
 
@@ -903,7 +903,7 @@ private:
 
 				if (sharedMemory->eventWait(&p->notifyEvent, value, 0) != FB_SUCCESS)
 				{
-					(Firebird::Arg::Gds(isc_map_event) << "WAIT").raise();
+					(Arg::Gds(isc_map_event) << "WAIT").raise();
 				}
 			}
 			if (startup)
@@ -935,7 +935,7 @@ private:
 	void mutexBug(int osErrorCode, const char* text) override
 	{
 		iscLogStatus("Error when working with user mapping shared memory",
-			(Firebird::Arg::Gds(isc_sys_request) << text << Firebird::Arg::OsError(osErrorCode)).value());
+			(Arg::Gds(isc_sys_request) << text << Arg::OsError(osErrorCode)).value());
 	}
 
 	USHORT getType() const override { return SharedMemoryBase::SRAM_MAPPING_RESET; }
@@ -1595,10 +1595,10 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 
 			gds__log("%s", msg.c_str());
 
-			Firebird::Arg::Gds v(isc_sec_context);
+			Arg::Gds v(isc_sec_context);
 			v << (errorMessagesContext ? errorMessagesContext : mainAlias ? mainAlias : "<unknown object>");
 			if (rc & MAP_DOWN)
-				v << Firebird::Arg::Gds(isc_map_down);
+				v << Arg::Gds(isc_map_down);
 			v.raise();
 		}
 		rc |= MAP_ERROR_NOT_THROWN;
@@ -1722,7 +1722,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 			if (MasterInterfacePtr()->serverMode(-1) < 0)
 				return makeBuffer(tdbb);
 
-			(Firebird::Arg::Gds(isc_map_nodb) << dbName).raise();
+			(Arg::Gds(isc_map_nodb) << dbName).raise();
 		}
 
 		ClumpletWriter readOnly(ClumpletWriter::Tpb, MAX_DPB_SIZE, isc_tpb_version1);
@@ -1761,7 +1761,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 			if (MasterInterfacePtr()->serverMode(-1) < 0)
 				return makeBuffer(tdbb);
 
-			(Firebird::Arg::Gds(isc_map_notable) << dbName).raise();
+			(Arg::Gds(isc_map_notable) << dbName).raise();
 		}
 
 		buffer = makeBuffer(tdbb);

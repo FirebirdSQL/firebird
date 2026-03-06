@@ -64,15 +64,15 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 	if (!proc->isImplemented())
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_proc_pack_not_implemented) <<
+			Arg::Gds(isc_proc_pack_not_implemented) <<
 				m_procedure()->getName().object.toQuotedString() <<
 				m_procedure()->getName().getSchemaAndPackage().toQuotedString());
 	}
 	else if (!proc->isDefined())
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_prcnotdef) << Firebird::Arg::Str(m_procedure()->getName().toQuotedString()) <<
-			Firebird::Arg::Gds(isc_modnotfound));
+			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure()->getName().toQuotedString()) <<
+			Arg::Gds(isc_modnotfound));
 	}
 
 	proc->checkReload(tdbb);
@@ -261,7 +261,7 @@ bool ProcedureScan::refetchRecord(thread_db* /*tdbb*/) const
 
 WriteLockResult ProcedureScan::lockRecord(thread_db* /*tdbb*/) const
 {
-	status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
+	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
 bool ProcedureScan::isDependent(const StreamList& streams) const

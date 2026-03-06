@@ -185,7 +185,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 	if (!usr->usr_auth_block.hasData())		// check for embedded attachment
 		return false;
 
-	Firebird::Arg::Gds loginError(isc_login_error);
+	Arg::Gds loginError(isc_login_error);
 
 	// Build list of client/server plugins
 	RefPtr<const Config> config;
@@ -197,7 +197,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 
 	if (!list.hasData())
 	{
-		Firebird::Arg::Gds noPlugins(isc_vld_plugins);
+		Arg::Gds noPlugins(isc_vld_plugins);
 		iscLogStatus(NULL, noPlugins.value());
 
 #ifdef DEV_BUILD
@@ -253,9 +253,9 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 					iscLogStatus("Authentication failed, client plugin:", &s);
 					code = isc_login_error;
 				}
-				(Firebird::Arg::Gds(code)
+				(Arg::Gds(code)
 #ifdef DEV_BUILD
-								 << Firebird::Arg::StatusVector(&s)
+								 << Arg::StatusVector(&s)
 #endif
 								 ).raise();
 				break;	// compiler silencer
@@ -285,9 +285,9 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 					iscLogStatus("Authentication faled, server plugin:", &s);
 					code = isc_login_error;
 				}
-				(Firebird::Arg::Gds(code)
+				(Arg::Gds(code)
 #ifdef DEV_BUILD
-								 << Firebird::Arg::StatusVector(&s)
+								 << Arg::StatusVector(&s)
 #endif
 								 ).raise();
 				break;	// compiler silencer
@@ -295,7 +295,7 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 		}
 	}
 
-	Firebird::Arg::Gds(isc_login).raise();
+	Arg::Gds(isc_login).raise();
 }
 
 } // namespace EDS

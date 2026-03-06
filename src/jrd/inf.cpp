@@ -84,7 +84,7 @@ using namespace Firebird::Jrd;
 #define CHECK_INPUT(fcn) \
 	{ \
 		if (!items || !item_length || !info || !output_length) \
-			ERR_post(Firebird::Arg::Gds(isc_internal_rejected_params) << Firebird::Arg::Str(fcn)); \
+			ERR_post(Arg::Gds(isc_internal_rejected_params) << Arg::Str(fcn)); \
 	}
 
 namespace

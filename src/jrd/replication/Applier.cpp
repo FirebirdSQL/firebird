@@ -236,7 +236,7 @@ Applier* Applier::create(thread_db* tdbb)
 	const auto attachment = tdbb->getAttachment();
 
 	if (!attachment->locksmith(tdbb, REPLICATE_INTO_DATABASE))
-		status_exception::raise(Firebird::Arg::Gds(isc_miss_prvlg) << "REPLICATE_INTO_DATABASE");
+		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "REPLICATE_INTO_DATABASE");
 
 	Request* request = nullptr;
 	const auto req_pool = dbb->createPool();

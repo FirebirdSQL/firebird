@@ -177,8 +177,8 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 		else	// we don't support this datatype here
 		{
 			// Unknown datatype
-			status_exception::raise(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-				Firebird::Arg::Gds(isc_dsql_datatype_err));
+			status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_dsql_datatype_err));
 		}
 	}
 
@@ -187,9 +187,9 @@ void DataTypeUtilBase::makeFromList(dsc* result, const char* expressionName, int
 	if (!anyBlobOrText && (result->isText() || result->isBlob()))
 	{
 		// Datatypes @1are not comparable in expression @2
-		status_exception::raise(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_dsql_datatypes_not_comparable) << Firebird::Arg::Str("") <<
-				Firebird::Arg::Str(expressionName));
+		status_exception::raise(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_dsql_datatypes_not_comparable) << Arg::Str("") <<
+				Arg::Str(expressionName));
 	}
 
 	if (allNulls)

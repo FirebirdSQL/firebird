@@ -170,7 +170,7 @@ namespace Firebird::Jrd {
 			const unsigned length = writer.getBufferLength();
 			fb_assert(length <= limit);
 			if (length > limit)
-				Firebird::Arg::Gds(isc_hdr_overflow).raise();
+				Arg::Gds(isc_hdr_overflow).raise();
 
 			memcpy(to, writer.getBuffer(), length);
 			to[length] = Ods::HDR_end;
@@ -430,7 +430,7 @@ namespace Firebird::Jrd {
 			{
 				hc.getString(hash);
 				if (hash != valid)
-					(Firebird::Arg::Gds(isc_bad_crypt_key) << keyName).raise();
+					(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
 			}
 			else
 				hash = valid;
@@ -468,7 +468,7 @@ namespace Firebird::Jrd {
 		AutoPtr<Factory> cryptControl(FB_NEW Factory(IPluginManager::TYPE_DB_CRYPT, dbb.dbb_config, plugName));
 		if (!cryptControl->hasData())
 		{
-			(Firebird::Arg::Gds(isc_no_crypt_plugin) << plugName).raise();
+			(Arg::Gds(isc_no_crypt_plugin) << plugName).raise();
 		}
 
 		// do not assign cryptPlugin directly before key init complete
@@ -478,7 +478,7 @@ namespace Firebird::Jrd {
 		bool fLoad = false, fTry = false;
 		bool holderLess = false;
 		FbLocalStatus errorVector;
-		Firebird::Arg::Gds(isc_db_crypt_key).copyTo(&errorVector);
+		Arg::Gds(isc_db_crypt_key).copyTo(&errorVector);
 		for (GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, dbb.dbb_config);
 			keyControl.hasData(); keyControl.next())
 		{
@@ -504,8 +504,8 @@ namespace Firebird::Jrd {
 			}
 			else
 			{
-				(Firebird::Arg::Gds(isc_plugin_name) << keyControl.name() <<
-					Firebird::Arg::StatusVector(&st)).appendTo(&errorVector);
+				(Arg::Gds(isc_plugin_name) << keyControl.name() <<
+					Arg::StatusVector(&st)).appendTo(&errorVector);
 			}
 		}
 
@@ -520,8 +520,8 @@ namespace Firebird::Jrd {
 			}
 			else
 			{
-				(Firebird::Arg::Gds(isc_plugin_name) << plugName <<
-					Firebird::Arg::StatusVector(&status)).appendTo(&errorVector);
+				(Arg::Gds(isc_plugin_name) << plugName <<
+					Arg::StatusVector(&status)).appendTo(&errorVector);
 			}
 		}
 
@@ -546,7 +546,7 @@ namespace Firebird::Jrd {
 	{
 		if (plugName.length() > MAX_PLUGIN_NAME_LEN)
 		{
-			(Firebird::Arg::Gds(isc_cp_name_too_long) << Firebird::Arg::Num(MAX_PLUGIN_NAME_LEN)).raise();
+			(Arg::Gds(isc_cp_name_too_long) << Arg::Num(MAX_PLUGIN_NAME_LEN)).raise();
 		}
 
 		const bool newCryptState = plugName.hasData();
@@ -563,18 +563,18 @@ namespace Firebird::Jrd {
 			// Check header page for flags
 			if (hdr->hdr_flags & Ods::hdr_crypt_process)
 			{
-				(Firebird::Arg::Gds(isc_cp_process_active)).raise();
+				(Arg::Gds(isc_cp_process_active)).raise();
 			}
 
 			bool headerCryptState = hdr->hdr_flags & Ods::hdr_encrypted;
 			if (headerCryptState == newCryptState)
 			{
-				(Firebird::Arg::Gds(isc_cp_already_crypted)).raise();
+				(Arg::Gds(isc_cp_already_crypted)).raise();
 			}
 
 			if (backupState != Ods::hdr_nbak_normal)
 			{
-				(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) <<
+				(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
 					"Cannot crypt: please wait for nbackup completion").raise();
 			}
 
@@ -590,7 +590,7 @@ namespace Firebird::Jrd {
 						cryptPlugin = NULL;
 					}
 					else
-						Firebird::Arg::Gds(isc_cp_already_crypted).raise();
+						Arg::Gds(isc_cp_already_crypted).raise();
 				}
 
 				keyName = key;
@@ -607,7 +607,7 @@ namespace Firebird::Jrd {
 		FbLocalStatus sv;
 		plugin->encrypt(&sv, sizeof(result), sample, result);
 		if (sv->getState() & IStatus::STATE_ERRORS)
-			Firebird::Arg::StatusVector(&sv).raise();
+			Arg::StatusVector(&sv).raise();
 
 		// calculate its hash
 		const string verifier(result, sizeof(result));
@@ -625,7 +625,7 @@ namespace Firebird::Jrd {
 	{
 		if (plugName.length() > MAX_PLUGIN_NAME_LEN)
 		{
-			(Firebird::Arg::Gds(isc_cp_name_too_long) << Firebird::Arg::Num(MAX_PLUGIN_NAME_LEN)).raise();
+			(Arg::Gds(isc_cp_name_too_long) << Arg::Num(MAX_PLUGIN_NAME_LEN)).raise();
 		}
 
 		const bool newCryptState = plugName.hasData();
@@ -657,20 +657,20 @@ namespace Firebird::Jrd {
 			auto backupState = dbb.dbb_backup_manager->getState();
 			if (backupState != Ods::hdr_nbak_normal)
 			{
-				(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) <<
+				(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
 					"Cannot crypt: please wait for nbackup completion").raise();
 			}
 
 			// Check header page for flags
 			if (hdr->hdr_flags & Ods::hdr_crypt_process)
 			{
-				(Firebird::Arg::Gds(isc_cp_process_active)).raise();
+				(Arg::Gds(isc_cp_process_active)).raise();
 			}
 
 			const bool headerCryptState = hdr->hdr_flags & Ods::hdr_encrypted;
 			if (headerCryptState == newCryptState)
 			{
-				(Firebird::Arg::Gds(isc_cp_already_crypted)).raise();
+				(Arg::Gds(isc_cp_already_crypted)).raise();
 			}
 
 			fb_assert(stateLock);
@@ -747,7 +747,7 @@ namespace Firebird::Jrd {
 					{
 						hc.getString(hash);
 						if (hash != valid)
-							(Firebird::Arg::Gds(isc_bad_crypt_key) << keyName).raise();
+							(Arg::Gds(isc_bad_crypt_key) << keyName).raise();
 					}
 				}
 				header->hdr_flags &= ~Ods::hdr_encrypted;
@@ -881,7 +881,7 @@ namespace Firebird::Jrd {
 				MutexLockGuard g(holdersMutex, FB_FUNCTION);
 
 				if (!keyProviders.hasData())
-					Firebird::Arg::Gds(isc_db_crypt_key).raise();
+					Arg::Gds(isc_db_crypt_key).raise();
 				keyConsumers.add(att->getStable());
 			}
 		}
@@ -1052,7 +1052,7 @@ namespace Firebird::Jrd {
 					AttSyncLockGuard attGuard(*(jAtt->getStable()->getSync()), FB_FUNCTION);
 					Attachment* att = jAtt->getHandle();
 					if (!att)
-						Firebird::Arg::Gds(isc_att_shutdown).raise();
+						Arg::Gds(isc_att_shutdown).raise();
 					att->att_flags |= ATT_from_thread;
 					releaseGuard.leave();
 
@@ -1251,7 +1251,7 @@ namespace Firebird::Jrd {
 		{
 			if (!cryptPlugin)
 			{
-				Firebird::Arg::Gds(isc_decrypt_error).copyTo(sv);
+				Arg::Gds(isc_decrypt_error).copyTo(sv);
 				return FAILED_CRYPT;
 			}
 
@@ -1276,7 +1276,7 @@ namespace Firebird::Jrd {
 		{
 			// Sanity check
 			if (page->pag_type > pag_max)
-				Firebird::Arg::Gds(isc_page_type_err).raise();
+				Arg::Gds(isc_page_type_err).raise();
 
 			// Page is never going to be encrypted. No locks needed.
 			if (!Ods::pag_crypt_page[page->pag_type])
@@ -1340,7 +1340,7 @@ namespace Firebird::Jrd {
 			fb_assert(cryptPlugin);
 			if (!cryptPlugin)
 			{
-				Firebird::Arg::Gds(isc_encrypt_error).copyTo(sv);
+				Arg::Gds(isc_encrypt_error).copyTo(sv);
 				return FAILED_CRYPT;
 			}
 
@@ -1471,7 +1471,7 @@ namespace Firebird::Jrd {
 		FbLocalStatus sv;
 		cryptPlugin->encrypt(&sv, len, signature.c_str(), enc.getBuffer(len));
 		if (sv->getState() & IStatus::STATE_ERRORS)
-			Firebird::Arg::StatusVector(&sv).raise();
+			Arg::StatusVector(&sv).raise();
 
 		Sha1::hashBased64(signature, enc);
 	}
@@ -1504,13 +1504,13 @@ namespace Firebird::Jrd {
 			ClumpletWriter hc(ClumpletWriter::UnTagged, hdr->hdr_page_size);
 			hdr.getClumplets(hc);
 			if (!hc.find(Ods::HDR_crypt_checksum))
-				Firebird::Arg::Gds(isc_crypt_checksum).raise();
+				Arg::Gds(isc_crypt_checksum).raise();
 
 			string sig1, sig2;
 			hc.getString(sig1);
 			calcDigitalSignature(tdbb, sig2, hdr);
 			if (sig1 != sig2)
-				Firebird::Arg::Gds(isc_crypt_checksum).raise();
+				Arg::Gds(isc_crypt_checksum).raise();
 		}
 	}
 

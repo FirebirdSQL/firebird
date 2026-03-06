@@ -129,8 +129,8 @@ void IscConnection::attach(thread_db* tdbb)
 
 	if (newDpb.getBufferLength() > MAX_USHORT)
 	{
-		ERR_post(Firebird::Arg::Gds(isc_imp_exc) <<
-			Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("DPB size greater than 64KB"));
+		ERR_post(Arg::Gds(isc_imp_exc) <<
+			Arg::Gds(isc_random) << Arg::Str("DPB size greater than 64KB"));
 	}
 
 	FbLocalStatus status;
@@ -191,7 +191,7 @@ void IscConnection::attach(thread_db* tdbb)
 				for (unsigned i = 0; i < p.getClumpLength(); i++)
 				{
 					if (b[i] == 0)
-						ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Bad provider feature value"));
+						ERR_post(Arg::Gds(isc_random) << Arg::Str("Bad provider feature value"));
 
 					if (b[i] < fb_feature_max)
 						setFeature(static_cast<info_features>(b[i]));
@@ -216,10 +216,10 @@ void IscConnection::attach(thread_db* tdbb)
 						break;
 					}
 				}
-				ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Unexpected error in isc_database_info"));
+				ERR_post(Arg::Gds(isc_random) << Arg::Str("Unexpected error in isc_database_info"));
 
 			case isc_info_truncated:
-				ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Result truncation in isc_database_info"));
+				ERR_post(Arg::Gds(isc_random) << Arg::Str("Result truncation in isc_database_info"));
 		}
 	}
 }
@@ -582,7 +582,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 
 	if (info_buff[0] != stmt_info[0])
 	{
-		ERR_build_status(&status, Firebird::Arg::Gds(isc_random) << "Unknown statement type");
+		ERR_build_status(&status, Arg::Gds(isc_random) << "Unknown statement type");
 
 		sWhereError = "isc_dsql_sql_info";
 		raise(&status, tdbb, sWhereError, &sql);
@@ -600,7 +600,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 			stmt_type == isc_info_sql_stmt_commit ||
 			stmt_type == isc_info_sql_stmt_rollback)
 		{
-			ERR_build_status(&status, Firebird::Arg::Gds(isc_eds_expl_tran_ctrl));
+			ERR_build_status(&status, Arg::Gds(isc_eds_expl_tran_ctrl));
 
 			sWhereError = "isc_dsql_prepare";
 			raise(&status, tdbb, sWhereError, &sql);
@@ -865,7 +865,7 @@ public:
 
 	~IscStatus()
 	{
-		Firebird::Arg::StatusVector tmp(aStatus);
+		Arg::StatusVector tmp(aStatus);
 		tmp.copyTo(iStatus);
 	}
 
@@ -882,7 +882,7 @@ private:
 
 ISC_STATUS IscProvider::notImplemented(FbStatusVector* status) const
 {
-	Firebird::Arg::Gds(isc_unavailable).copyTo(status);
+	Arg::Gds(isc_unavailable).copyTo(status);
 
 	return status->getErrors()[1];
 }

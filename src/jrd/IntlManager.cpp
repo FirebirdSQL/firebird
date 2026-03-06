@@ -720,12 +720,12 @@ void IntlManager::lookupCollation(const MetaString& collationName,
 
 	if (statusBufferBig[0])
 	{
-		(Firebird::Arg::Gds(isc_collation_not_installed) << collationName << charsetVariants[0].toQuotedString() <<
-			Firebird::Arg::Gds(isc_random) << statusBufferBig
+		(Arg::Gds(isc_collation_not_installed) << collationName << charsetVariants[0].toQuotedString() <<
+			Arg::Gds(isc_random) << statusBufferBig
 		).raise();
 	}
 	else
-		(Firebird::Arg::Gds(isc_collation_not_installed) << collationName << charsetVariants[0].toQuotedString()).raise();
+		(Arg::Gds(isc_collation_not_installed) << collationName << charsetVariants[0].toQuotedString()).raise();
 }
 
 

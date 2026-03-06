@@ -97,9 +97,9 @@ namespace
 
 	void raiseIOError(const char* syscall, const char* filename, ISC_STATUS errcode)
 	{
-		Firebird::Arg::Gds temp(isc_io_error);
-		temp << Firebird::Arg::Str(syscall);
-		temp << Firebird::Arg::Str(filename);
+		Arg::Gds temp(isc_io_error);
+		temp << Arg::Str(syscall);
+		temp << Arg::Str(filename);
 		temp << SYS_ERR(errcode);
 		temp.raise();
 	}
@@ -503,7 +503,7 @@ void ChangeLog::linkSelf()
 				}
 			}
 
-			status_exception::raise(Firebird::Arg::Gds(isc_imp_exc));
+			status_exception::raise(Arg::Gds(isc_imp_exc));
 		}
 
 		state->pids[state->pidUpper++] = process_id;
@@ -512,7 +512,7 @@ void ChangeLog::linkSelf()
 	else
 	{
 		if (state->pidLower == PID_CAPACITY) // safety check
-			status_exception::raise(Firebird::Arg::Gds(isc_imp_exc));
+			status_exception::raise(Arg::Gds(isc_imp_exc));
 
 		fb_assert(!state->pids[state->pidLower]);
 		state->pids[state->pidLower] = process_id;

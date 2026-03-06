@@ -187,11 +187,11 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 			// a read-only dummy value which cannot be assigned to.
 			// The usual reason is a field being unexpectedly dropped.
 			if (impure->vlu_desc.dsc_address && !(impure->vlu_desc.dsc_flags & DSC_null))
-				ERR_post(Firebird::Arg::Gds(isc_field_disappeared));
+				ERR_post(Arg::Gds(isc_field_disappeared));
 		}
 
 		if (!impure->vlu_desc.dsc_address)
-			ERR_post(Firebird::Arg::Gds(isc_read_only_field) << "<unknown>");
+			ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
 
 		return &impure->vlu_desc;
 	}
@@ -392,10 +392,10 @@ bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
 
 	if (!record)
 	{
-		// ASF: Usage of ERR_warning with Firebird::Arg::Gds (instead of Firebird::Arg::Warning) is correct here.
+		// ASF: Usage of ERR_warning with Arg::Gds (instead of Arg::Warning) is correct here.
 		// Maybe not all code paths are prepared for throwing an exception here,
 		// but it will leave the engine as an error (when testing for req_warning).
-		ERR_warning(Firebird::Arg::Gds(isc_no_cur_rec));
+		ERR_warning(Arg::Gds(isc_no_cur_rec));
 		return false;
 	}
 
@@ -668,6 +668,6 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 			arg = s.c_str();
 		}
 
-		ERR_post(Firebird::Arg::Gds(status) << Firebird::Arg::Str(arg) << Firebird::Arg::Str(value));
+		ERR_post(Arg::Gds(status) << Arg::Str(arg) << Arg::Str(value));
 	}
 }

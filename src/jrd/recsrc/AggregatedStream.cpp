@@ -111,7 +111,7 @@ bool BaseAggWinStream<ThisType, NextType>::refetchRecord(thread_db* tdbb) const
 template <typename ThisType, typename NextType>
 WriteLockResult BaseAggWinStream<ThisType, NextType>::lockRecord(thread_db* /*tdbb*/) const
 {
-	status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
+	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
 }
 
 template <typename ThisType, typename NextType>

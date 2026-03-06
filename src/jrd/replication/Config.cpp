@@ -95,9 +95,9 @@ namespace
 		string prefix;
 		prefix.printf("Incorrect entry in %s", REPLICATION_CFGFILE);
 
-		Firebird::Arg::StatusVector sv;
-		sv << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(prefix);
-		sv << Firebird::Arg::StatusVector(ex);
+		Arg::StatusVector sv;
+		sv << Arg::Gds(isc_random) << Arg::Str(prefix);
+		sv << Arg::StatusVector(ex);
 
 		status->setErrors(sv.value());
 	}

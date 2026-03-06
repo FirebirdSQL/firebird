@@ -497,7 +497,7 @@ Request* Statement::findRequest(thread_db* tdbb, bool unique)
 		}
 
 		if (count > MAX_CLONES)
-			ERR_post(Firebird::Arg::Gds(isc_req_max_clones_exceeded));
+			ERR_post(Arg::Gds(isc_req_max_clones_exceeded));
 
 		if (!clone)
 			clone = getRequest(tdbb, g, n);
@@ -601,7 +601,7 @@ void Statement::verifyAccess(thread_db* tdbb)
 			{
 				string name;
 				name.printf("id %d", item->exa_prc_id);
-				ERR_post(Firebird::Arg::Gds(isc_prcnotdef) << name);
+				ERR_post(Arg::Gds(isc_prcnotdef) << name);
 			}
 			aclType = id_procedure;
 		}
@@ -613,7 +613,7 @@ void Statement::verifyAccess(thread_db* tdbb)
 			{
 				string name;
 				name.printf("id %d", item->exa_fun_id);
-				ERR_post(Firebird::Arg::Gds(isc_funnotdef) << name);
+				ERR_post(Arg::Gds(isc_funnotdef) << name);
 			}
 
 			aclType = id_function;
@@ -961,12 +961,12 @@ MessageNode* Statement::getMessage(USHORT messageNumber) const
 {
 	if (messageNumber >= messages.getCount())
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_badmsgnum));
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
 	}
 	MessageNode* result = messages[messageNumber];
 	if (result == nullptr)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_badmsgnum));
+		status_exception::raise(Arg::Gds(isc_badmsgnum));
 	}
 	return result;
 }
@@ -984,7 +984,7 @@ Request* Statement::verifyRequestSynchronization(USHORT level)
 	auto g = requests.readAccessor();
 	fb_assert(g->getCount() > 0);
 	if (level && (level >= g->getCount() || !g->value(level)))
-		ERR_post(Firebird::Arg::Gds(isc_req_sync));
+		ERR_post(Arg::Gds(isc_req_sync));
 
 	return g->value(level);
 }

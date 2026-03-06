@@ -244,7 +244,7 @@ bool Cursor::fetchNext(thread_db* tdbb) const
 	if (!impure->irsb_active)
 	{
 		// error: invalid cursor state
-		status_exception::raise(Firebird::Arg::Gds(isc_cursor_not_open));
+		status_exception::raise(Arg::Gds(isc_cursor_not_open));
 	}
 
 	if (impure->irsb_state == EOS)
@@ -274,7 +274,7 @@ bool Cursor::fetchPrior(thread_db* tdbb) const
 	if (!m_rse->isScrollable())
 	{
 		// error: invalid fetch direction
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("PRIOR"));
+		status_exception::raise(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("PRIOR"));
 	}
 
 	return fetchRelative(tdbb, -1);
@@ -285,7 +285,7 @@ bool Cursor::fetchFirst(thread_db* tdbb) const
 	if (!m_rse->isScrollable())
 	{
 		// error: invalid fetch direction
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("FIRST"));
+		status_exception::raise(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("FIRST"));
 	}
 
 	return fetchAbsolute(tdbb, 1);
@@ -296,7 +296,7 @@ bool Cursor::fetchLast(thread_db* tdbb) const
 	if (!m_rse->isScrollable())
 	{
 		// error: invalid fetch direction
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("LAST"));
+		status_exception::raise(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("LAST"));
 	}
 
 	return fetchAbsolute(tdbb, -1);
@@ -307,7 +307,7 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 	if (!m_rse->isScrollable())
 	{
 		// error: invalid fetch direction
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("ABSOLUTE"));
+		status_exception::raise(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("ABSOLUTE"));
 	}
 
 	if (!validate(tdbb))
@@ -319,7 +319,7 @@ bool Cursor::fetchAbsolute(thread_db* tdbb, SINT64 offset) const
 	if (!impure->irsb_active)
 	{
 		// error: invalid cursor state
-		status_exception::raise(Firebird::Arg::Gds(isc_cursor_not_open));
+		status_exception::raise(Arg::Gds(isc_cursor_not_open));
 	}
 
 	if (!offset)
@@ -371,7 +371,7 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 	if (!m_rse->isScrollable())
 	{
 		// error: invalid fetch direction
-		status_exception::raise(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("RELATIVE"));
+		status_exception::raise(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("RELATIVE"));
 	}
 
 	if (!validate(tdbb))
@@ -383,7 +383,7 @@ bool Cursor::fetchRelative(thread_db* tdbb, SINT64 offset) const
 	if (!impure->irsb_active)
 	{
 		// error: invalid cursor state
-		status_exception::raise(Firebird::Arg::Gds(isc_cursor_not_open));
+		status_exception::raise(Arg::Gds(isc_cursor_not_open));
 	}
 
 	if (!offset)
@@ -454,13 +454,13 @@ void Cursor::checkState(Request* request) const
 	if (!impure->irsb_active)
 	{
 		// error: invalid cursor state
-		status_exception::raise(Firebird::Arg::Gds(isc_cursor_not_open));
+		status_exception::raise(Arg::Gds(isc_cursor_not_open));
 	}
 
 	if (impure->irsb_state != Cursor::POSITIONED)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_cursor_not_positioned) <<
+			Arg::Gds(isc_cursor_not_positioned) <<
 			getName().toQuotedString());
 	}
 }
