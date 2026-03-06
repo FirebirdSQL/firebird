@@ -50,7 +50,7 @@ class TransactionNode;
 struct RecordKey;
 
 
-class DsqlRequest : public Firebird::PermanentStorage
+class DsqlRequest : public PermanentStorage
 {
 public:
 	DsqlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement);
@@ -63,7 +63,7 @@ public:
 		return req_transaction;
 	}
 
-	Firebird::RefPtr<DsqlStatement> getDsqlStatement()
+	RefPtr<DsqlStatement> getDsqlStatement()
 	{
 		return dsqlStatement;
 	}
@@ -79,31 +79,31 @@ public:
 	}
 
 	virtual DsqlCursor* openCursor(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMeta, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMeta, ULONG flags)
+		IMessageMetadata* inMeta, const UCHAR* inMsg,
+		IMessageMetadata* outMeta, ULONG flags)
 	{
-		Firebird::Arg::Gds(isc_no_cursor).raise();
+		Arg::Gds(isc_no_cursor).raise();
 	}
 
-	virtual DsqlBatch* openBatch(thread_db* tdbb, Firebird::IMessageMetadata* inMetadata,
+	virtual DsqlBatch* openBatch(thread_db* tdbb, IMessageMetadata* inMetadata,
 		unsigned parLength, const UCHAR* par)
 	{
-		(Firebird::Arg::Gds(isc_sqlerr) <<
-			Firebird::Arg::Num(-504) <<
-			Firebird::Arg::Gds(isc_unprepared_stmt)
+		(Arg::Gds(isc_sqlerr) <<
+			Arg::Num(-504) <<
+			Arg::Gds(isc_unprepared_stmt)
 		).raise();
 	}
 
 	virtual void execute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) = 0;
 
 	virtual void setCursor(thread_db* tdbb, const TEXT* name);
 
 	virtual bool fetch(thread_db* tdbb, UCHAR* buffer);
 
-	virtual void setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata);
+	virtual void setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadata);
 
 	// Get session-level timeout, milliseconds
 	unsigned int getTimeout();
@@ -122,23 +122,23 @@ public:
 
 public:
 	dsql_dbb* req_dbb;					// DSQL attachment
-	Firebird::RefPtr<DsqlStatement> dsqlStatement;
-	Firebird::Array<DsqlDmlRequest*> cursors{getPool()};	// Cursor update statements
+	RefPtr<DsqlStatement> dsqlStatement;
+	Array<DsqlDmlRequest*> cursors{getPool()};	// Cursor update statements
 
 	jrd_tra* req_transaction = nullptr;	// JRD transaction
 
-	Firebird::string req_cursor_name{getPool()};	// Cursor name, if any
+	string req_cursor_name{getPool()};	// Cursor name, if any
 	DsqlCursor* req_cursor = nullptr;	// Open cursor, if any
 	DsqlBatch* req_batch = nullptr;		// Active batch, if any
 
-	Firebird::AutoPtr<Jrd::RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
+	AutoPtr<RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
 	SINT64 req_fetch_elapsed = 0;	// Number of clock ticks spent while fetching rows for this request since we reported it last time
 	SINT64 req_fetch_rowcount = 0;	// Total number of rows returned by this request
 	bool req_traced = false;		// request is traced via TraceAPI
 
 protected:
 	unsigned int req_timeout = 0;				// query timeout in milliseconds, set by the user
-	Firebird::RefPtr<TimeoutTimer> req_timer;	// timeout timer
+	RefPtr<TimeoutTimer> req_timer;	// timeout timer
 };
 
 
@@ -151,7 +151,7 @@ public:
 	// Reintroduce method to fake covariant return type with RefPtr.
 	auto getDsqlStatement()
 	{
-		return Firebird::RefPtr<DsqlDmlStatement>((DsqlDmlStatement*) dsqlStatement.getPtr());
+		return RefPtr<DsqlDmlStatement>((DsqlDmlStatement*) dsqlStatement.getPtr());
 	}
 
 	Statement* getStatement() const override;
@@ -167,26 +167,26 @@ public:
 	}
 
 	DsqlCursor* openCursor(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMeta, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMeta, ULONG flags) override;
+		IMessageMetadata* inMeta, const UCHAR* inMsg,
+		IMessageMetadata* outMeta, ULONG flags) override;
 
-	DsqlBatch* openBatch(thread_db* tdbb, Firebird::IMessageMetadata* inMetadata,
+	DsqlBatch* openBatch(thread_db* tdbb, IMessageMetadata* inMetadata,
 		unsigned parLength, const UCHAR* par) override;
 
 	void execute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) override;
 
 	void setCursor(thread_db* tdbb, const TEXT* name) override;
 
 	bool fetch(thread_db* tdbb, UCHAR* buffer) override;
 
-	void setDelayedFormat(thread_db* tdbb, Firebird::IMessageMetadata* metadata) override;
+	void setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadata) override;
 
 	// Convert IMessageMetadata to Format and force it to corresponding MessageNode for current request.
 	// After that this MessageNode and their ParameterNodes can work with client message buffer directly
-	void metadataToFormat(Firebird::IMessageMetadata* metadata, const dsql_msg* message);
+	void metadataToFormat(IMessageMetadata* metadata, const dsql_msg* message);
 	void mapCursorKey(thread_db* tdbb);
 	void gatherRecordKey(RecordKey* buffer) const;
 
@@ -196,13 +196,13 @@ private:
 
 	void doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		const UCHAR* inMsg, // Only data buffer, metadata must be synchronized before call
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton);
 
 	// [Re]start part of "request restarts" algorithm
 	void executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHandle,
 		const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton, bool exec, bool fetch);
 
 private:
@@ -220,8 +220,8 @@ public:
 	DsqlDdlRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlCompilerScratch* aInternalScratch, DdlNode* aNode);
 
 	void execute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) override;
 
 private:
@@ -236,8 +236,8 @@ public:
 	DsqlTransactionRequest(MemoryPool& pool, dsql_dbb* dbb, DsqlStatement* aStatement, TransactionNode* aNode);
 
 	void execute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) override;
 
 private:
@@ -256,8 +256,8 @@ public:
 	}
 
 	void execute(thread_db* tdbb, jrd_tra** traHandle,
-		Firebird::IMessageMetadata* inMetadata, const UCHAR* inMsg,
-		Firebird::IMessageMetadata* outMetadata, UCHAR* outMsg,
+		IMessageMetadata* inMetadata, const UCHAR* inMsg,
+		IMessageMetadata* outMetadata, UCHAR* outMsg,
 		bool singleton) override;
 
 private:

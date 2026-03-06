@@ -28,10 +28,8 @@
 #include "../jrd/mov_proto.h"
 #include "../dsql/movd_proto.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 // Move (and possible convert) something to something else.
@@ -43,11 +41,12 @@ void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
 	}
 	catch (const status_exception& ex)
 	{
-		Firebird::Arg::StatusVector newVector;
-		newVector << Firebird::Arg::Gds(isc_dsql_error) << Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-303);
-		newVector.append(Firebird::Arg::StatusVector(ex.value()));
+		Arg::StatusVector newVector;
+		newVector << Arg::Gds(isc_dsql_error) << Arg::Gds(isc_sqlerr) << Arg::Num(-303);
+		newVector.append(Arg::StatusVector(ex.value()));
 		status_exception::raise(newVector);
 	}
 }
+
 
 } // namespace Firebird::Jrd
