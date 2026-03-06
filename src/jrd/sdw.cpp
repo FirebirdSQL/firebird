@@ -50,9 +50,10 @@
 #include "../jrd/Attachment.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
+using namespace Ods;	// FIXME:
 
 
 // Out of alpha order because the first one was public.
@@ -1131,3 +1132,6 @@ static void update_dbb_to_sdw(Database* dbb)
 	pageSpace->file = shadow->sdw_file;
 	shadow->sdw_flags |= SDW_rollover;
 }
+
+
+} // namespace Firebird::Jrd
