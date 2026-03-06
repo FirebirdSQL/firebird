@@ -54,7 +54,7 @@ public:
 
 	DebugData& getDebugData() { return debugData; }
 
-	virtual void raiseError(const Firebird::Arg::StatusVector& vector);
+	virtual void raiseError(const Arg::StatusVector& vector);
 
 private:
 	void putValue(ULONG val);

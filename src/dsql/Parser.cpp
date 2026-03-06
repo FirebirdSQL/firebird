@@ -487,10 +487,10 @@ int Parser::yylexAux()
 			if (buffer != string)
 				gds__free (buffer);
 
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_string_byte_length) <<
-					  Firebird::Arg::Num(p - buffer) <<
-					  Firebird::Arg::Num(MAX_STR_SIZE));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_string_byte_length) <<
+					  Arg::Num(p - buffer) <<
+					  Arg::Num(MAX_STR_SIZE));
 		}
 
 		if (c == '"')
@@ -673,10 +673,10 @@ int Parser::yylexAux()
 		{
 			if (temp.length() / 2 > MAX_STR_SIZE)
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_string_byte_length) <<
-						  Firebird::Arg::Num(temp.length() / 2) <<
-						  Firebird::Arg::Num(MAX_STR_SIZE));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_string_byte_length) <<
+						  Arg::Num(temp.length() / 2) <<
+						  Arg::Num(MAX_STR_SIZE));
 			}
 
 			yylval.intlStringPtr = newIntlString(temp, "BINARY");
@@ -704,8 +704,8 @@ int Parser::yylexAux()
 			{
 				// character set name is not defined
 				ERRD_post(
-					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
-					Firebird::Arg::Gds(isc_charset_not_found) << introducerCharSetName->toQuotedString());
+					Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+					Arg::Gds(isc_charset_not_found) << introducerCharSetName->toQuotedString());
 			}
 
 			currentCharSet = INTL_charset_lookup(tdbb, symbol->intlsym_ttype);
@@ -756,10 +756,10 @@ int Parser::yylexAux()
 
 				if (len > MAX_STR_SIZE)
 				{
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-							  Firebird::Arg::Gds(isc_dsql_string_byte_length) <<
-							  Firebird::Arg::Num(len) <<
-							  Firebird::Arg::Num(MAX_STR_SIZE));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_string_byte_length) <<
+							  Arg::Num(len) <<
+							  Arg::Num(MAX_STR_SIZE));
 				}
 
 				yylval.intlStringPtr = newIntlString(Firebird::string(start, len));
@@ -1162,9 +1162,9 @@ int Parser::yylexAux()
 						 * the message text exceeds the 119-character limit
 						 * of our message database.
 						 */
-						ERRD_post_warning(Firebird::Arg::Warning(isc_dsql_warning_number_ambiguous) <<
-										  Firebird::Arg::Str(Firebird::string(lex.last_token, lex.ptr - lex.last_token)));
-						ERRD_post_warning(Firebird::Arg::Warning(isc_dsql_warning_number_ambiguous1));
+						ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous) <<
+										  Arg::Str(Firebird::string(lex.last_token, lex.ptr - lex.last_token)));
+						ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous1));
 					}
 
 					lex.last_token_bk = lex.last_token;
@@ -1271,19 +1271,19 @@ void Parser::yyerror_detailed(const TEXT* /*error_string*/, int yychar, YYSTYPE&
  **************************************/
 	if (yychar < 1)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command
-				  Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(posn.firstLine) <<
-													Firebird::Arg::Num(posn.firstColumn));
+				  Arg::Gds(isc_command_end_err2) << Arg::Num(posn.firstLine) <<
+													Arg::Num(posn.firstColumn));
 	}
 	else
 	{
-		ERRD_post (Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+		ERRD_post (Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Token unknown - line %d, column %d
-				  Firebird::Arg::Gds(isc_dsql_token_unk_err) << Firebird::Arg::Num(posn.firstLine) <<
-				  									  Firebird::Arg::Num(posn.firstColumn) <<
+				  Arg::Gds(isc_dsql_token_unk_err) << Arg::Num(posn.firstLine) <<
+				  									  Arg::Num(posn.firstColumn) <<
 				  // Show the token
-				  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(string(posn.firstPos, posn.lastPos - posn.firstPos)));
+				  Arg::Gds(isc_random) << Arg::Str(string(posn.firstPos, posn.lastPos - posn.firstPos)));
 	}
 }
 
@@ -1299,10 +1299,10 @@ void Parser::yyerror(const TEXT* error_string)
 
 void Parser::yyerrorIncompleteCmd(const YYPOSN& pos)
 {
-	ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+	ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 			  // Unexpected end of command
-			  Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(pos.lastLine) <<
-												Firebird::Arg::Num(pos.lastColumn + 1));
+			  Arg::Gds(isc_command_end_err2) << Arg::Num(pos.lastLine) <<
+												Arg::Num(pos.lastColumn + 1));
 }
 
 void Parser::check_bound(const char* const to, const char* const string)
@@ -1332,12 +1332,12 @@ void Parser::yyabandon(const Position& position, SLONG sql_code, ISC_STATUS erro
  **************************************/
 
 	ERRD_post(
-		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(sql_code) << Firebird::Arg::Gds(error_symbol) <<
-		Firebird::Arg::Gds(isc_dsql_line_col_error) <<
-			Firebird::Arg::Num(position.firstLine) << Firebird::Arg::Num(position.firstColumn));
+		Arg::Gds(isc_sqlerr) << Arg::Num(sql_code) << Arg::Gds(error_symbol) <<
+		Arg::Gds(isc_dsql_line_col_error) <<
+			Arg::Num(position.firstLine) << Arg::Num(position.firstColumn));
 }
 
-void Parser::yyabandon(const Position& position, SLONG sql_code, const Firebird::Arg::StatusVector& status)
+void Parser::yyabandon(const Position& position, SLONG sql_code, const Arg::StatusVector& status)
 {
 /**************************************
  *
@@ -1350,23 +1350,23 @@ void Parser::yyabandon(const Position& position, SLONG sql_code, const Firebird:
  *
  **************************************/
 	ERRD_post(
-		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(sql_code) << status <<
-		Firebird::Arg::Gds(isc_dsql_line_col_error) <<
-			Firebird::Arg::Num(position.firstLine) << Firebird::Arg::Num(position.firstColumn));
+		Arg::Gds(isc_sqlerr) << Arg::Num(sql_code) << status <<
+		Arg::Gds(isc_dsql_line_col_error) <<
+			Arg::Num(position.firstLine) << Arg::Num(position.firstColumn));
 }
 
 void Parser::checkTimeDialect()
 {
 	if (client_dialect < SQL_DIALECT_V6_TRANSITION)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_sql_dialect_datatype_unsupport) << Firebird::Arg::Num(client_dialect) <<
-																  Firebird::Arg::Str("TIME"));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_sql_dialect_datatype_unsupport) << Arg::Num(client_dialect) <<
+																  Arg::Str("TIME"));
 	}
 	if (db_dialect < SQL_DIALECT_V6_TRANSITION)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_sql_db_dialect_dtype_unsupport) << Firebird::Arg::Num(db_dialect) <<
-																  Firebird::Arg::Str("TIME"));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_sql_db_dialect_dtype_unsupport) << Arg::Num(db_dialect) <<
+																  Arg::Str("TIME"));
 	}
 }

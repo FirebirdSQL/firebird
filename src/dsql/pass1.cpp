@@ -402,10 +402,10 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 				isc_dsql_procedure_err : isc_dsql_relation_err;
 
 			ERRD_post(
-				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
-				Firebird::Arg::Gds(errorCode) <<
-				Firebird::Arg::Gds(isc_random) << name.toQuotedString() <<
-				Firebird::Arg::Gds(isc_dsql_line_col_error) << Firebird::Arg::Num(relationNode->line) << Firebird::Arg::Num(relationNode->column));
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(errorCode) <<
+				Arg::Gds(isc_random) << name.toQuotedString() <<
+				Arg::Gds(isc_dsql_line_col_error) << Arg::Num(relationNode->line) << Arg::Num(relationNode->column));
 		}
 
 		if (procedure)
@@ -413,7 +413,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 			if (procedure->prc_private && name.getSchemaAndPackage() != dsqlScratch->package)
 			{
 				status_exception::raise(
-					Firebird::Arg::Gds(isc_private_procedure) <<
+					Arg::Gds(isc_private_procedure) <<
 					name.object.toQuotedString() <<
 					name.getSchemaAndPackage().toQuotedString());
 			}
@@ -421,10 +421,10 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 			if (!procedure->prc_out_count)
 			{
 				ERRD_post(
-					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-84) <<
-					Firebird::Arg::Gds(isc_dsql_procedure_use_err) << name.toQuotedString() <<
-					Firebird::Arg::Gds(isc_dsql_line_col_error) <<
-						Firebird::Arg::Num(relationNode->line) << Firebird::Arg::Num(relationNode->column));
+					Arg::Gds(isc_sqlerr) << Arg::Num(-84) <<
+					Arg::Gds(isc_dsql_procedure_use_err) << name.toQuotedString() <<
+					Arg::Gds(isc_dsql_line_col_error) <<
+						Arg::Num(relationNode->line) << Arg::Num(relationNode->column));
 			}
 
 			procNode->dsqlName = name;
@@ -541,8 +541,8 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 					}
 				);
 
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
-						  Firebird::Arg::Gds(error_code) << conflictStr);
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+						  Arg::Gds(error_code) << conflictStr);
 			}
 		}
 	}
@@ -560,7 +560,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 		if (count > procedure->prc_in_count ||
 			count < procedure->prc_in_count - procedure->prc_def_count)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_prcmismat) << procNode->dsqlName.toQuotedString());
+			ERRD_post(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toQuotedString());
 		}
 
 		if (count)
@@ -597,7 +597,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 				for (const auto* field = procedure->prc_inputs; field; field = field->fld_next)
 					argsByName.put(field->fld_name, field);
 
-				Firebird::Arg::StatusVector mismatchStatus;
+				Arg::StatusVector mismatchStatus;
 
 				for (const auto& argName : *procNode->dsqlInputArgNames)
 				{
@@ -611,13 +611,13 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 							false);
 					}
 					else
-						mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argName;
+						mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
 
 					++argIt;
 				}
 
 				if (mismatchStatus.hasData())
-					status_exception::raise(Firebird::Arg::Gds(isc_prcmismat) << procNode->dsqlName.toQuotedString() << mismatchStatus);
+					status_exception::raise(Arg::Gds(isc_prcmismat) << procNode->dsqlName.toQuotedString() << mismatchStatus);
 			}
 		}
 	}
@@ -718,14 +718,14 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 
 	if (dsqlScratch->clientDialect >= SQL_DIALECT_V6)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
-				  Firebird::Arg::Gds(isc_dsql_ambiguous_field_name) << buffers[0] << buffers[1] <<
-				  Firebird::Arg::Gds(isc_random) << name);
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				  Arg::Gds(isc_dsql_ambiguous_field_name) << buffers[0] << buffers[1] <<
+				  Arg::Gds(isc_random) << name);
 	}
 
-	ERRD_post_warning(Firebird::Arg::Warning(isc_sqlwarn) << Firebird::Arg::Num(204) <<
-					  Firebird::Arg::Warning(isc_dsql_ambiguous_field_name) << buffers[0] << buffers[1] <<
-					  Firebird::Arg::Warning(isc_random) << name);
+	ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(204) <<
+					  Arg::Warning(isc_dsql_ambiguous_field_name) << buffers[0] << buffers[1] <<
+					  Arg::Warning(isc_random) << name);
 }
 
 
@@ -789,34 +789,34 @@ void PASS1_field_unknown(const TEXT* qualifier_name, const TEXT* field_name,
 	{
 		if (field_name)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-206) <<
-					  Firebird::Arg::Gds(isc_dsql_field_err) <<
-					  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(field_name) <<
-					  Firebird::Arg::Gds(isc_dsql_line_col_error) << Firebird::Arg::Num(flawed_node->line) <<
-					  									   Firebird::Arg::Num(flawed_node->column));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-206) <<
+					  Arg::Gds(isc_dsql_field_err) <<
+					  Arg::Gds(isc_random) << Arg::Str(field_name) <<
+					  Arg::Gds(isc_dsql_line_col_error) << Arg::Num(flawed_node->line) <<
+					  									   Arg::Num(flawed_node->column));
 		}
 		else
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-206) <<
-					  Firebird::Arg::Gds(isc_dsql_field_err) <<
-					  Firebird::Arg::Gds(isc_dsql_line_col_error) << Firebird::Arg::Num(flawed_node->line) <<
-					  									   Firebird::Arg::Num(flawed_node->column));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-206) <<
+					  Arg::Gds(isc_dsql_field_err) <<
+					  Arg::Gds(isc_dsql_line_col_error) << Arg::Num(flawed_node->line) <<
+					  									   Arg::Num(flawed_node->column));
 		}
 	}
 	else
 	{
 		if (field_name)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-206) <<
-					  Firebird::Arg::Gds(isc_dsql_field_err) <<
-					  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(field_name) <<
-					  Firebird::Arg::Gds(isc_dsql_unknown_pos));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-206) <<
+					  Arg::Gds(isc_dsql_field_err) <<
+					  Arg::Gds(isc_random) << Arg::Str(field_name) <<
+					  Arg::Gds(isc_dsql_unknown_pos));
 		}
 		else
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-206) <<
-					  Firebird::Arg::Gds(isc_dsql_field_err) <<
-					  Firebird::Arg::Gds(isc_dsql_unknown_pos));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-206) <<
+					  Arg::Gds(isc_dsql_field_err) <<
+					  Arg::Gds(isc_dsql_unknown_pos));
 		}
 	}
 }
@@ -964,15 +964,15 @@ DeclareCursorNode* PASS1_cursor_name(DsqlCompilerScratch* dsqlScratch, const Met
 	{
 		if (existence_flag)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
-					  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
-					  Firebird::Arg::Gds(isc_dsql_cursor_invalid));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+					  Arg::Gds(isc_dsql_cursor_err) <<
+					  Arg::Gds(isc_dsql_cursor_invalid));
 		}
 		else
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
-					  Firebird::Arg::Gds(isc_dsql_decl_err) <<
-					  Firebird::Arg::Gds(isc_dsql_cursor_invalid));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
+					  Arg::Gds(isc_dsql_decl_err) <<
+					  Arg::Gds(isc_dsql_cursor_invalid));
 		}
 	}
 
@@ -988,15 +988,15 @@ DeclareCursorNode* PASS1_cursor_name(DsqlCompilerScratch* dsqlScratch, const Met
 
 	if (!cursor && existence_flag)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
-				  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
-				  Firebird::Arg::Gds(isc_dsql_cursor_not_found) << name.toQuotedString());
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+				  Arg::Gds(isc_dsql_cursor_err) <<
+				  Arg::Gds(isc_dsql_cursor_not_found) << name.toQuotedString());
 	}
 	else if (cursor && !existence_flag)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
-				  Firebird::Arg::Gds(isc_dsql_decl_err) <<
-				  Firebird::Arg::Gds(isc_dsql_cursor_exists) << name.toQuotedString());
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
+				  Arg::Gds(isc_dsql_decl_err) <<
+				  Arg::Gds(isc_dsql_cursor_exists) << name.toQuotedString());
 	}
 
 	return cursor;
@@ -1176,9 +1176,9 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			if (input->columns->getCount() > rse->dsqlSelectList->items.getCount())
 				errcode = isc_dsql_derived_table_more_columns;
 
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_command_err) <<
-					  Firebird::Arg::Gds(errcode) << Firebird::Arg::Str(aliasname));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(errcode) << Arg::Str(aliasname));
 		}
 
 		// Generate derived fields and assign alias-name to them.
@@ -1239,10 +1239,10 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 		{
 			// no column name specified for column number %d in derived table %s
 
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_command_err) <<
-					  Firebird::Arg::Gds(isc_dsql_derived_field_unnamed) << Firebird::Arg::Num(count + 1) <<
-																  Firebird::Arg::Str(aliasname));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_dsql_derived_field_unnamed) << Arg::Num(count + 1) <<
+																  Arg::Str(aliasname));
 		}
 	}
 
@@ -1258,9 +1258,9 @@ RseNode* PASS1_derived_table(DsqlCompilerScratch* dsqlScratch, SelectExprNode* i
 			if (selectItem1->name == selectItem2->name)
 			{
 				// column %s was specified multiple times for derived table %s
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_command_err) <<
-						  Firebird::Arg::Gds(isc_dsql_derived_field_dup_name) << selectItem1->name <<
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
+						  Arg::Gds(isc_dsql_derived_field_dup_name) << selectItem1->name <<
 								aliasname);
 			}
 		}
@@ -1392,9 +1392,9 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 				if (!(derivedField = nodeAs<DerivedFieldNode>(select_item)))
 				{
 					// Internal dsql error: alias type expected by PASS1_expand_select_node
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-							  Firebird::Arg::Gds(isc_dsql_command_err) <<
-							  Firebird::Arg::Gds(isc_dsql_derived_alias_select));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_command_err) <<
+							  Arg::Gds(isc_dsql_derived_alias_select));
 				}
 
 				dsql_ctx* context = derivedField->context;
@@ -1526,9 +1526,9 @@ static ValueListNode* pass1_group_by_list(DsqlCompilerScratch* dsqlScratch, Valu
 	if (input->items.getCount() > MAX_SORT_ITEMS) // sort, group and distinct have the same limit for now
 	{
 		// cannot group on more than 255 items
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_command_err) <<
-				  Firebird::Arg::Gds(isc_dsql_max_group_items));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_dsql_max_group_items));
 	}
 
 	ValueListNode* retList = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
@@ -1562,8 +1562,8 @@ static ValueListNode* pass1_group_by_list(DsqlCompilerScratch* dsqlScratch, Valu
 			if (position < 1 || !selectList || position > (ULONG) selectList->items.getCount())
 			{
 				// Invalid column position used in the GROUP BY clause
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_column_pos_err) << Firebird::Arg::Str("GROUP BY"));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_column_pos_err) << Arg::Str("GROUP BY"));
 			}
 
 			frnode = Node::doDsqlPass(dsqlScratch, selectList->items[position - 1], false);
@@ -1674,10 +1674,10 @@ ValueExprNode* PASS1_lookup_alias(DsqlCompilerScratch* dsqlScratch, const MetaNa
 
 				strcat(buffer2, " in the select list with name");
 
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
-						  Firebird::Arg::Gds(isc_dsql_ambiguous_field_name) << Firebird::Arg::Str(buffer1) <<
-																	 Firebird::Arg::Str(buffer2) <<
-						  Firebird::Arg::Gds(isc_random) << name);
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+						  Arg::Gds(isc_dsql_ambiguous_field_name) << Arg::Str(buffer1) <<
+																	 Arg::Str(buffer2) <<
+						  Arg::Gds(isc_random) << name);
 			}
 
 			returnNode = matchingNode;
@@ -1905,8 +1905,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				!(relation = relNode->dsqlContext->ctx_relation) ||
 				(relation->rel_flags & (REL_view | REL_external))))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_wlock_simple));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_wlock_simple));
 		}
 	} // end scope block
 
@@ -1914,8 +1914,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 
 	if ((inputRse->dsqlFirst || inputRse->dsqlSkip) && rows)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_firstskip_rows));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_firstskip_rows));
 	}
 	else if (rows)
 		PASS1_limit(dsqlScratch, rows->length, rows->skip, rse);
@@ -1936,8 +1936,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				FIELD_MATCH_TYPE_EQUAL, false, rse->dsqlWhere))
 		{
 			// Cannot use an aggregate in a WHERE clause, use HAVING instead
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_agg_where_err));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_agg_where_err));
 		}
 	}
 
@@ -1959,9 +1959,9 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		(!selectList || selectList->items.getCount() > 1))
 	{
 		// More than one column (or asterisk) is specified in column_singleton
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_command_err) <<
-				  Firebird::Arg::Gds(isc_dsql_count_mismatch));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_dsql_count_mismatch));
 	}
 
 	if (inputRse->dsqlNamedWindows)
@@ -1973,8 +1973,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			if (dsqlScratch->context->object()->ctx_named_windows.exist(i->first))
 			{
 				ERRD_post(
-					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
-					Firebird::Arg::Gds(isc_dsql_window_duplicate) << i->first);
+					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+					Arg::Gds(isc_dsql_window_duplicate) << i->first);
 			}
 
 			i->second->dsqlPass(dsqlScratch);
@@ -1992,8 +1992,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				rse->dsqlSelectList))
 		{
 			// Recursive member of CTE cannot use aggregate function
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_cte_recursive_aggregate));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_cte_recursive_aggregate));
 		}
 	}
 
@@ -2010,8 +2010,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 					rse->dsqlOrder))
 			{
 				// Recursive member of CTE cannot use aggregate function
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_cte_recursive_aggregate));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_cte_recursive_aggregate));
 			}
 		}
 	}
@@ -2030,8 +2030,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		// dimitr: don't allow WITH LOCK for aggregates
 		if (updateLock)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_wlock_aggregates));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_wlock_aggregates));
 		}
 
 		parent_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
@@ -2082,8 +2082,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				false, aggregate->dsqlGroup))
 		{
 			// Cannot use an aggregate in a GROUP BY clause
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_agg_group_err));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_agg_group_err));
 		}
 	}
 
@@ -2100,8 +2100,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	{
 		if (updateLock)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_wlock_conflict) << Firebird::Arg::Str("DISTINCT"));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_wlock_conflict) << Arg::Str("DISTINCT"));
 		}
 
 		++dsqlScratch->inSelectList;
@@ -2112,9 +2112,9 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		if (selectList->items.getCount() > MAX_SORT_ITEMS)
 		{
 			// Cannot have more than 255 items in DISTINCT / UNION DISTINCT list.
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_command_err) <<
-					  Firebird::Arg::Gds(isc_dsql_max_distinct_items));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_dsql_max_distinct_items));
 		}
 	}
 
@@ -2138,8 +2138,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				{
 					// Invalid expression in the select list
 					// (not contained in either an aggregate or the GROUP BY clause)
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-							  Firebird::Arg::Gds(isc_dsql_agg_column_err) << Firebird::Arg::Str("select list"));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_agg_column_err) << Arg::Str("select list"));
 				}
 			}
 		} // end scope block
@@ -2160,8 +2160,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				{
 					// Invalid expression in the ORDER BY clause
 					// (not contained in either an aggregate or the GROUP BY clause)
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-							  Firebird::Arg::Gds(isc_dsql_agg_column_err) << Firebird::Arg::Str("ORDER BY clause"));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_agg_column_err) << Arg::Str("ORDER BY clause"));
 				}
 			}
 		}
@@ -2187,15 +2187,15 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			{
 				// Invalid expression in the HAVING clause
 				// (neither an aggregate nor contained in the GROUP BY clause)
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_agg_having_err) << Firebird::Arg::Str("HAVING clause"));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_agg_having_err) << Arg::Str("HAVING clause"));
 			}
 
 			if (AggregateFinder::find(dsqlScratch->getPool(), dsqlScratch, true, parentRse->dsqlWhere))
 			{
 				// Cannot use an aggregate in a WHERE clause, use HAVING instead
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_agg_where_err));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_agg_where_err));
 			}
 		}
 
@@ -2269,8 +2269,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 				{
 					// Invalid expression in the select list
 					// (not contained in either an aggregate or the GROUP BY clause)
-					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-							  Firebird::Arg::Gds(isc_dsql_agg_column_err) << Firebird::Arg::Str("select list"));
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_agg_column_err) << Arg::Str("select list"));
 				}
 			}
 		}
@@ -2293,8 +2293,8 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 					{
 						// Invalid expression in the ORDER BY list
 						// (not contained in either an aggregate or the GROUP BY clause)
-						ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-								  Firebird::Arg::Gds(isc_dsql_agg_column_err) << Firebird::Arg::Str("ORDER BY list"));
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								  Arg::Gds(isc_dsql_agg_column_err) << Arg::Str("ORDER BY list"));
 					}
 				}
 			}
@@ -2373,19 +2373,19 @@ ValueListNode* PASS1_sort(DsqlCompilerScratch* dsqlScratch, ValueListNode* input
 
 	if (!input)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_command_err) <<
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
 				  // invalid ORDER BY clause
-				  Firebird::Arg::Gds(isc_order_by_err));
+				  Arg::Gds(isc_order_by_err));
 	}
 
 	if (input->items.getCount() > MAX_SORT_ITEMS)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_command_err) <<
-				  Firebird::Arg::Gds(isc_order_by_err) <<
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_order_by_err) <<
 				  // invalid ORDER BY clause, cannot sort on more than 255 items
-				  Firebird::Arg::Gds(isc_dsql_max_sort_items));
+				  Arg::Gds(isc_dsql_max_sort_items));
 	}
 
 	// Node is simply to be rebuilt -- just recurse merrily
@@ -2399,10 +2399,10 @@ ValueListNode* PASS1_sort(DsqlCompilerScratch* dsqlScratch, ValueListNode* input
 		NestConst<OrderNode> node1 = nodeAs<OrderNode>(input->items[sortloop]);
 		if (!node1)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_command_err) <<
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
 					  // invalid ORDER BY clause
-					  Firebird::Arg::Gds(isc_order_by_err));
+					  Arg::Gds(isc_order_by_err));
 		}
 
 		// get node of value to be ordered by
@@ -2440,9 +2440,9 @@ ValueListNode* PASS1_sort(DsqlCompilerScratch* dsqlScratch, ValueListNode* input
 
 			if (position < 1 || !selectList || position > (ULONG) selectList->items.getCount())
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 						  // Invalid column position used in the ORDER BY clause
-						  Firebird::Arg::Gds(isc_dsql_column_pos_err) << Firebird::Arg::Str("ORDER BY"));
+						  Arg::Gds(isc_dsql_column_pos_err) << Arg::Str("ORDER BY"));
 			}
 
 			// substitute ordinal with appropriate field
@@ -2481,8 +2481,8 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 	if (updateLock && !input->dsqlAll)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_wlock_conflict) << Firebird::Arg::Str("UNION"));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_wlock_conflict) << Arg::Str("UNION"));
 	}
 
 	// set up the rse node for the union.
@@ -2553,9 +2553,9 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 	if (!input->dsqlAll && items->items.getCount() > MAX_SORT_ITEMS)
 	{
 		// Cannot have more than 255 items in DISTINCT / UNION DISTINCT list.
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					Firebird::Arg::Gds(isc_dsql_command_err) <<
-					Firebird::Arg::Gds(isc_dsql_max_distinct_items));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_dsql_max_distinct_items));
 	}
 
 	// loop through the list nodes, checking to be sure that they have the
@@ -2567,10 +2567,10 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 		if (items->items.getCount() != nod1->items.getCount())
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-					  Firebird::Arg::Gds(isc_dsql_command_err) <<
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
 					  // overload of msg
-					  Firebird::Arg::Gds(isc_dsql_count_mismatch));
+					  Arg::Gds(isc_dsql_count_mismatch));
 		}
 	}
 
@@ -2670,20 +2670,20 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 			if (!literal || literal->litDesc.dsc_dtype != dtype_long)
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_command_err) <<
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
 						  // invalid ORDER BY clause.
-						  Firebird::Arg::Gds(isc_order_by_err));
+						  Arg::Gds(isc_order_by_err));
 			}
 
 			const SLONG number = literal->getSlong();
 
 			if (number < 1 || ULONG(number) > union_items->items.getCount())
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_command_err) <<
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
 						  // invalid ORDER BY clause.
-						  Firebird::Arg::Gds(isc_order_by_err));
+						  Arg::Gds(isc_order_by_err));
 			}
 
 			// make a new order node pointing at the Nth item in the select list.
@@ -2780,9 +2780,9 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 			if (position >= list->items.getCount())
 			{
 				// Internal dsql error: column position out of range in pass1_union_auto_cast
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_command_err) <<
-						  Firebird::Arg::Gds(isc_dsql_auto_field_bad_pos));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
+						  Arg::Gds(isc_dsql_auto_field_bad_pos));
 			}
 			else
 			{

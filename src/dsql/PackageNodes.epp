@@ -252,9 +252,9 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				if (functionNames.exist(fun->name.object))
 				{
 					status_exception::raise(
-						Firebird::Arg::Gds(isc_no_meta_update) <<
-						Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-							Firebird::Arg::Str("FUNCTION") << fun->name.object.toQuotedString());
+						Arg::Gds(isc_no_meta_update) <<
+						Arg::Gds(isc_dyn_duplicate_package_item) <<
+							Arg::Str("FUNCTION") << fun->name.object.toQuotedString());
 				}
 
 				functionNames.add(fun->name.object);
@@ -273,9 +273,9 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				if (procedureNames.exist(proc->name.object))
 				{
 					status_exception::raise(
-						Firebird::Arg::Gds(isc_no_meta_update) <<
-						Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-							Firebird::Arg::Str("PROCEDURE") << proc->name.object.toQuotedString());
+						Arg::Gds(isc_no_meta_update) <<
+						Arg::Gds(isc_dyn_duplicate_package_item) <<
+							Arg::Str("PROCEDURE") << proc->name.object.toQuotedString());
 				}
 
 				procedureNames.add(proc->name.object);
@@ -345,8 +345,8 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		{
 			if (!executeAlterIndividualParameters(tdbb, dsqlScratch, transaction))
 				status_exception::raise(
-					Firebird::Arg::Gds(isc_no_meta_update) <<
-					Firebird::Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 		}
 		else if (!executeAlter(tdbb, dsqlScratch, transaction))
 		{
@@ -355,8 +355,8 @@ void CreateAlterPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			else
 			{
 				status_exception::raise(
-					Firebird::Arg::Gds(isc_no_meta_update) <<
-					Firebird::Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
+					Arg::Gds(isc_no_meta_update) <<
+					Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 			}
 		}
 
@@ -615,8 +615,8 @@ void DropPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	if (!found && !silent)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_no_meta_update) <<
-			Firebird::Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 	}
 
 	SortedObjectsArray<Signature> existingFuncs(pool);
@@ -712,9 +712,9 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (functionNames[i].exist(fun->name.object))
 					{
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_no_meta_update) <<
-							Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-								Firebird::Arg::Str("FUNCTION") << fun->name.object.toQuotedString());
+							Arg::Gds(isc_no_meta_update) <<
+							Arg::Gds(isc_dyn_duplicate_package_item) <<
+								Arg::Str("FUNCTION") << fun->name.object.toQuotedString());
 					}
 
 					functionNames[i].add(fun->name.object);
@@ -737,9 +737,9 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					if (procedureNames[i].exist(proc->name.object))
 					{
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_no_meta_update) <<
-							Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-								Firebird::Arg::Str("PROCEDURE") << proc->name.object.toQuotedString());
+							Arg::Gds(isc_no_meta_update) <<
+							Arg::Gds(isc_dyn_duplicate_package_item) <<
+								Arg::Str("PROCEDURE") << proc->name.object.toQuotedString());
 					}
 
 					procedureNames[i].add(proc->name.object);
@@ -810,8 +810,8 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				return;
 
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_no_meta_update) <<
-				Firebird::Arg::Gds(isc_dyn_package_body_exists) << name.toQuotedString());
+				Arg::Gds(isc_no_meta_update) <<
+				Arg::Gds(isc_dyn_package_body_exists) << name.toQuotedString());
 		}
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_PACKAGE_BODY, name, {});
@@ -833,8 +833,8 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	if (!modified)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_no_meta_update) <<
-			Firebird::Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 	}
 
 	SortedObjectsArray<Signature> headerFuncs(pool);
@@ -875,9 +875,9 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					else if (existingFuncs.exist(Signature(func->name.object)))
 					{
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_no_meta_update) <<
-							Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-								Firebird::Arg::Str("FUNCTION") << func->name.toQuotedString());
+							Arg::Gds(isc_no_meta_update) <<
+							Arg::Gds(isc_dyn_duplicate_package_item) <<
+								Arg::Str("FUNCTION") << func->name.toQuotedString());
 					}
 
 					func->packageOwner = owner;
@@ -896,9 +896,9 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					else if (existingProcs.exist(Signature(proc->name.object)))
 					{
 						status_exception::raise(
-							Firebird::Arg::Gds(isc_no_meta_update) <<
-							Firebird::Arg::Gds(isc_dyn_duplicate_package_item) <<
-								Firebird::Arg::Str("PROCEDURE") << proc->name.toQuotedString());
+							Arg::Gds(isc_no_meta_update) <<
+							Arg::Gds(isc_dyn_duplicate_package_item) <<
+								Arg::Str("PROCEDURE") << proc->name.toQuotedString());
 					}
 
 					proc->packageOwner = owner;
@@ -924,12 +924,12 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		if (!found || !newFuncs[pos].defined)
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_funcnotdef_package) << i->name << name.toQuotedString());
+				Arg::Gds(isc_dyn_funcnotdef_package) << i->name << name.toQuotedString());
 		}
 		else if (newFuncs[pos] != *i)
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_funcsignat_package) << i->name << name.toQuotedString());
+				Arg::Gds(isc_dyn_funcsignat_package) << i->name << name.toQuotedString());
 		}
 	}
 
@@ -942,12 +942,12 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		if (!found || !newProcs[pos].defined)
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_procnotdef_package) << i->name << name.toQuotedString());
+				Arg::Gds(isc_dyn_procnotdef_package) << i->name << name.toQuotedString());
 		}
 		else if (newProcs[pos] != *i)
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_procsignat_package) << i->name << name.toQuotedString());
+				Arg::Gds(isc_dyn_procsignat_package) << i->name << name.toQuotedString());
 		}
 	}
 
@@ -1018,8 +1018,8 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		}
 
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_no_meta_update) <<
-			Firebird::Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 	}
 
 	requestHandle.reset(tdbb, drq_m_pkg_fun, DYN_REQUESTS);

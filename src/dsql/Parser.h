@@ -220,7 +220,7 @@ private:
 	void check_copy_incr(char*& to, const char ch, const char* const string);
 
 	void yyabandon(const Position& position, SLONG, ISC_STATUS);
-	void yyabandon(const Position& position, SLONG, const Firebird::Arg::StatusVector& status);
+	void yyabandon(const Position& position, SLONG, const Arg::StatusVector& status);
 
 	MetaName optName(MetaName* name)
 	{
@@ -301,8 +301,8 @@ private:
 		if (clause & flag)
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
-				Firebird::Arg::Gds(isc_dsql_duplicate_spec) << duplicateMsg);
+				Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+				Arg::Gds(isc_dsql_duplicate_spec) << duplicateMsg);
 		}
 		clause |= flag;
 	}
@@ -314,8 +314,8 @@ private:
 		if (isDuplicateClause(clause))
 		{
 			status_exception::raise(
-				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
-				Firebird::Arg::Gds(isc_dsql_duplicate_spec) << duplicateMsg);
+				Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+				Arg::Gds(isc_dsql_duplicate_spec) << duplicateMsg);
 		}
 	}
 

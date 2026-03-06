@@ -422,9 +422,9 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			if (listNode->items.getCount() > MAX_MEMBER_LIST)
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-					Firebird::Arg::Gds(isc_imp_exc) <<
-					Firebird::Arg::Gds(isc_dsql_too_many_values) << Firebird::Arg::Num(MAX_MEMBER_LIST));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					Arg::Gds(isc_imp_exc) <<
+					Arg::Gds(isc_dsql_too_many_values) << Arg::Num(MAX_MEMBER_LIST));
 			}
 
 			if (listNode->items.getCount() == 1)
@@ -476,8 +476,8 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (desc.dsc_dtype != dtype_boolean && desc.dsc_dtype != dtype_unknown && !desc.isNull())
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				Firebird::Arg::Gds(isc_invalid_boolean_usage));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_invalid_boolean_usage));
 		}
 	}
 
@@ -668,7 +668,7 @@ void ComparativeBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, st
 	if (arg3)
 	{
 		if ((keyNode = nodeAs<RecordKeyNode>(arg3)) && keyNode->aggregate)
-			ERR_post(Firebird::Arg::Gds(isc_bad_dbkey));
+			ERR_post(Arg::Gds(isc_bad_dbkey));
 
 		dsc descriptor_c;
 		arg1->getDesc(tdbb, csb, &descriptor_c);
@@ -683,7 +683,7 @@ void ComparativeBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, st
 	if (((keyNode = nodeAs<RecordKeyNode>(arg1)) && keyNode->aggregate) ||
 		((keyNode = nodeAs<RecordKeyNode>(arg2)) && keyNode->aggregate))
 	{
-		ERR_post(Firebird::Arg::Gds(isc_bad_dbkey));
+		ERR_post(Arg::Gds(isc_bad_dbkey));
 	}
 
 	dsc descriptor_a, descriptor_b;
@@ -939,7 +939,7 @@ TriState ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request,
 			if (!escapeLen || charset->length(escapeLen, escapeStr, true) != 1)
 			{
 				// If characters left, or null byte character, return error
-				ERR_post(Firebird::Arg::Gds(isc_escape_invalid));
+				ERR_post(Arg::Gds(isc_escape_invalid));
 			}
 
 			USHORT escape[2] = {0, 0};
@@ -949,7 +949,7 @@ TriState ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request,
 			if (!escape[0])
 			{
 				// If or null byte character, return error
-				ERR_post(Firebird::Arg::Gds(isc_escape_invalid));
+				ERR_post(Arg::Gds(isc_escape_invalid));
 			}
 		}
 	}
@@ -1474,7 +1474,7 @@ void InListBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::fu
 	if (const auto keyNode = nodeAs<RecordKeyNode>(arg))
 	{
 		if (keyNode->aggregate)
-			ERR_post(Firebird::Arg::Gds(isc_bad_dbkey));
+			ERR_post(Arg::Gds(isc_bad_dbkey));
 	}
 
 	dsc argDesc, listDesc;
@@ -1593,8 +1593,8 @@ BoolExprNode* MissingBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlUnknown && desc.dsc_dtype != dtype_boolean && !desc.isNull())
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-			Firebird::Arg::Gds(isc_invalid_boolean_usage));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_invalid_boolean_usage));
 	}
 
 	return node;
@@ -1627,7 +1627,7 @@ void MissingBoolNode::pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::f
 	RecordKeyNode* keyNode = nodeAs<RecordKeyNode>(arg);
 
 	if (keyNode && keyNode->aggregate)
-		ERR_post(Firebird::Arg::Gds(isc_bad_dbkey));
+		ERR_post(Arg::Gds(isc_bad_dbkey));
 
 	// check for syntax errors in the calculation
 	dsc descriptor_a;
@@ -1908,8 +1908,8 @@ BoolExprNode* RseBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_VIEW_WITH_CHECK)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
-				  Firebird::Arg::Gds(isc_subquery_err));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				  Arg::Gds(isc_subquery_err));
 	}
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);

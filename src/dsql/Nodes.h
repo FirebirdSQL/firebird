@@ -188,7 +188,7 @@ public:
 		if (name == SYSTEM_SCHEMA)
 		{
 			Firebird::status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_cannot_mod_obj_sys_schema) <<
+				Arg::Gds(isc_dyn_cannot_mod_obj_sys_schema) <<
 				getObjectName(objType));
 		}
 	}
@@ -265,9 +265,9 @@ protected:
 
 public:
 	// Prefix DDL exceptions. To be implemented in each command.
-	// Attention: do not store temp strings in Firebird::Arg::StatusVector,
+	// Attention: do not store temp strings in Arg::StatusVector,
 	// when needed keep them permanently in command's node.
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) = 0;
+	virtual void putErrorPrefix(Arg::StatusVector& statusVector) = 0;
 
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) = 0;
 
@@ -1592,8 +1592,8 @@ public:
 	{
 		fb_assert(false);
 		Firebird::status_exception::raise(
-			Firebird::Arg::Gds(isc_cannot_copy_stmt) <<
-			Firebird::Arg::Num(int(getType())));
+			Arg::Gds(isc_cannot_copy_stmt) <<
+			Arg::Num(int(getType())));
 
 		return NULL;
 	}

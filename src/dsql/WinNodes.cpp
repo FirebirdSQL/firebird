@@ -579,8 +579,8 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* 
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records <= 0)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_sysf_argnmustbe_positive) <<
-			Firebird::Arg::Num(2) << Firebird::Arg::Str(aggInfo.name));
+		status_exception::raise(Arg::Gds(isc_sysf_argnmustbe_positive) <<
+			Arg::Num(2) << Arg::Str(aggInfo.name));
 	}
 
 	desc = EVL_expr(tdbb, request, from);
@@ -670,8 +670,8 @@ dsc* LagLeadWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* w
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records < 0)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
-			Firebird::Arg::Num(2) << Firebird::Arg::Str(aggInfo.name));
+		status_exception::raise(Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
+			Arg::Num(2) << Arg::Str(aggInfo.name));
 	}
 
 	if (!window->moveWithinPartition(records * direction))
@@ -794,7 +794,7 @@ void NTileWinNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	if (!argDesc.isExact() || argDesc.dsc_scale != 0)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_sysf_argmustbe_exact) << "NTILE");
+			Arg::Gds(isc_sysf_argmustbe_exact) << "NTILE");
 	}
 
 	if (dsqlScratch->clientDialect == 1)
@@ -837,8 +837,8 @@ void NTileWinNode::aggInit(thread_db* tdbb, Request* request) const
 	if (!desc)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_sysf_argnmustbe_positive) <<
-			Firebird::Arg::Num(1) << Firebird::Arg::Str(aggInfo.name));
+			Arg::Gds(isc_sysf_argnmustbe_positive) <<
+			Arg::Num(1) << Arg::Str(aggInfo.name));
 	}
 
 	thisImpure->buckets = MOV_get_int64(tdbb, desc, 0);
@@ -846,8 +846,8 @@ void NTileWinNode::aggInit(thread_db* tdbb, Request* request) const
 	if (thisImpure->buckets <= 0)
 	{
 		status_exception::raise(
-			Firebird::Arg::Gds(isc_sysf_argnmustbe_positive) <<
-			Firebird::Arg::Num(1) << Firebird::Arg::Str(aggInfo.name));
+			Arg::Gds(isc_sysf_argnmustbe_positive) <<
+			Arg::Num(1) << Arg::Str(aggInfo.name));
 	}
 }
 

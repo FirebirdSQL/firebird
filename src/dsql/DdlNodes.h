@@ -238,9 +238,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(ERROR_CODE) << createNode->name.toQuotedString();
+		statusVector << Arg::Gds(ERROR_CODE) << createNode->name.toQuotedString();
 	}
 
 protected:
@@ -275,9 +275,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_charset_failed) << charSet.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_charset_failed) << charSet.toQuotedString();
 	}
 
 private:
@@ -309,9 +309,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		// TODO: statusVector << Firebird::Arg::Gds(??);
+		// TODO: statusVector << Arg::Gds(??);
 	}
 
 private:
@@ -344,9 +344,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		// TODO: statusVector << Firebird::Arg::Gds(??);
+		// TODO: statusVector << Arg::Gds(??);
 	}
 
 private:
@@ -377,14 +377,14 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		str = name.toQuotedString();
 
 		if (subName.hasData())
 			str.append(".").append(subName.c_str());
 
-		statusVector << Firebird::Arg::Gds(isc_dsql_comment_on_failed) << str;
+		statusVector << Arg::Gds(isc_dsql_comment_on_failed) << str;
 	}
 
 private:
@@ -425,10 +425,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_func_failed, isc_dsql_alter_func_failed,
 					isc_dsql_create_alter_func_failed)) <<
 				name.toQuotedString();
@@ -502,9 +502,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_func_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_func_failed) << name.toQuotedString();
 	}
 
 public:
@@ -533,9 +533,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_func_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_func_failed) << name.toQuotedString();
 	}
 
 public:
@@ -578,10 +578,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_proc_failed, isc_dsql_alter_proc_failed,
 					isc_dsql_create_alter_proc_failed)) <<
 				name.toQuotedString();
@@ -643,9 +643,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_proc_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_proc_failed) << name.toQuotedString();
 	}
 
 public:
@@ -729,10 +729,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_trigger_failed, isc_dsql_alter_trigger_failed,
 					isc_dsql_create_alter_trigger_failed)) <<
 				name.toQuotedString();
@@ -804,9 +804,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_trigger_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_trigger_failed) << name.toQuotedString();
 	}
 
 public:
@@ -866,7 +866,7 @@ public:
 		{
 			// msg: 222: "Invalid collation attributes"
 			using namespace Firebird;
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) << Firebird::Arg::PrivateDyn(222));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
 		attributesOn |= attribute;
@@ -878,16 +878,16 @@ public:
 		{
 			// msg: 222: "Invalid collation attributes"
 			using namespace Firebird;
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) << Firebird::Arg::PrivateDyn(222));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
 		attributesOff |= attribute;
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_collation_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_collation_failed) << name.toQuotedString();
 	}
 
 public:
@@ -930,9 +930,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_collation_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_collation_failed) << name.toQuotedString();
 	}
 
 public:
@@ -969,9 +969,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_domain_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1019,9 +1019,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_domain_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1066,9 +1066,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1112,10 +1112,10 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_except_failed, isc_dsql_alter_except_failed,
 					isc_dsql_create_alter_except_failed)) <<
 				name.toQuotedString();
@@ -1163,9 +1163,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_except_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_except_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1196,10 +1196,10 @@ public:
 		if (!aValue.specified && !aStep.specified)
 		{
 			using namespace Firebird;
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  // Unexpected end of command
-					  Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(this->line) <<
-													Firebird::Arg::Num(this->column));
+					  Arg::Gds(isc_command_end_err2) << Arg::Num(this->line) <<
+													Arg::Num(this->column));
 		}
 		*/
 	}
@@ -1230,7 +1230,7 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override;
+	void putErrorPrefix(Arg::StatusVector& statusVector) override;
 
 private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
@@ -1279,9 +1279,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_sequence_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_sequence_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1766,9 +1766,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_table_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1809,9 +1809,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_table_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1858,9 +1858,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(view ? isc_dsql_drop_view_failed : isc_dsql_drop_table_failed) <<
+		statusVector << Arg::Gds(view ? isc_dsql_drop_view_failed : isc_dsql_drop_table_failed) <<
 			name.toQuotedString();
 	}
 
@@ -1898,10 +1898,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_view_failed, isc_dsql_alter_view_failed,
 					isc_dsql_create_alter_view_failed)) <<
 				name.toQuotedString();
@@ -2025,9 +2025,9 @@ private:
 		jrd_tra* transaction, LocalTemporaryTable* ltt);
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_index_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_index_failed) << name.toQuotedString();
 	}
 
 public:
@@ -2096,9 +2096,9 @@ private:
 	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
@@ -2133,10 +2133,10 @@ private:
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		// ASF: using ALTER INDEX's code.
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
@@ -2179,9 +2179,9 @@ private:
 	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_index_failed) << indexName.toQuotedString();
 	}
 
 public:
@@ -2239,9 +2239,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_filter_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_create_filter_failed) << name;
 	}
 
 public:
@@ -2269,9 +2269,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_filter_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_filter_failed) << name;
 	}
 
 public:
@@ -2304,9 +2304,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_shadow_failed) << Firebird::Arg::Num(number);
+		statusVector << Arg::Gds(isc_dsql_create_shadow_failed) << Arg::Num(number);
 	}
 
 public:
@@ -2339,9 +2339,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_shadow_failed) << Firebird::Arg::Num(number);
+		statusVector << Arg::Gds(isc_dsql_drop_shadow_failed) << Arg::Num(number);
 	}
 
 public:
@@ -2381,9 +2381,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(createFlag ? isc_dsql_create_role_failed :
+		statusVector << Arg::Gds(createFlag ? isc_dsql_create_role_failed :
 			isc_dsql_alter_role_failed) << name;
 	}
 
@@ -2436,9 +2436,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_mapping_failed) << name <<
+		statusVector << Arg::Gds(isc_dsql_mapping_failed) << name <<
 			(op == MAP_ADD ? "CREATE" : op == MAP_MOD ?
 			 "ALTER" : op == MAP_RPL ? "CREATE OR ALTER" : op == MAP_DROP ?
 			 "DROP" : "COMMENT ON");
@@ -2481,9 +2481,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_role_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_role_failed) << name;
 	}
 
 public:
@@ -2533,9 +2533,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(mode == USER_ADD ?
+		statusVector << Arg::Gds(mode == USER_ADD ?
 			isc_dsql_create_user_failed : isc_dsql_alter_user_failed) << name;
 	}
 
@@ -2602,9 +2602,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_user_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_user_failed) << name;
 	}
 
 public:
@@ -2730,10 +2730,10 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(isGrant ? isc_dsql_grant_failed : isc_dsql_revoke_failed);
+			Arg::Gds(isGrant ? isc_dsql_grant_failed : isc_dsql_revoke_failed);
 	}
 
 	void runInSecurityDb(SecDbContext* secDbContext) override;
@@ -2858,9 +2858,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_database_failed);
+		statusVector << Arg::Gds(isc_dsql_alter_database_failed);
 	}
 
 private:
@@ -2898,10 +2898,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_schema_failed, isc_dsql_alter_schema_failed,
 					isc_dsql_create_alter_schema_failed)) <<
 				name.toQuotedString();
@@ -2936,9 +2936,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_schema_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_schema_failed) << name.toQuotedString();
 	}
 
 private:

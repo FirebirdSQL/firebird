@@ -81,7 +81,7 @@ DmlNode* AggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	}
 
 	if (!node)
-		PAR_error(csb, Firebird::Arg::Gds(isc_funnotdef) << name);
+		PAR_error(csb, Arg::Gds(isc_funnotdef) << name);
 
 	const UCHAR count = csb->csb_blr_reader.getByte();
 
@@ -89,7 +89,7 @@ DmlNode* AggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 	node->getChildren(holder, false);
 
 	if (count != holder.refs.getCount())
-		PAR_error(csb, Firebird::Arg::Gds(isc_funmismat) << name);
+		PAR_error(csb, Arg::Gds(isc_funmismat) << name);
 
 	node->parseArgs(tdbb, csb, count);
 
@@ -100,8 +100,8 @@ AggNode* AggNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->isPsql())
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_command_err));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err));
 	}
 
 	if (!(dsqlScratch->inSelectList || dsqlScratch->inWhereClause || dsqlScratch->inGroupByClause ||
@@ -109,8 +109,8 @@ AggNode* AggNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
 		// not part of a select list, where clause, group by clause,
 		// having clause, or order by clause
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-				  Firebird::Arg::Gds(isc_dsql_agg_ref_err));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_agg_ref_err));
 	}
 
 	return dsqlCopy(dsqlScratch);
@@ -259,8 +259,8 @@ bool AggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
 					FIELD_MATCH_TYPE_EQUAL, false, *i))
 			{
 				// Nested aggregate functions are not allowed
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_dsql_agg_nested_err));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_agg_nested_err));
 			}
 		}
 	}
@@ -654,8 +654,8 @@ void AvgAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	{
 		if (!DTYPE_IS_NUMERIC(desc->dsc_dtype) && !DTYPE_IS_TEXT(desc->dsc_dtype))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-					  Firebird::Arg::Gds(isc_dsql_agg_wrongarg) << Firebird::Arg::Str("AVG"));
+			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+					  Arg::Gds(isc_dsql_agg_wrongarg) << Arg::Str("AVG"));
 		}
 		else if (DTYPE_IS_TEXT(desc->dsc_dtype))
 		{
@@ -667,8 +667,8 @@ void AvgAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	{
 		if (!DTYPE_IS_NUMERIC(desc->dsc_dtype))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-					  Firebird::Arg::Gds(isc_dsql_agg2_wrongarg) << Firebird::Arg::Str("AVG"));
+			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+					  Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("AVG"));
 		}
 		else if (desc->dsc_dtype == dtype_int128)
 		{
@@ -733,7 +733,7 @@ void AvgAggNode::outputDesc(dsc* desc) const
 		if (!(DTYPE_IS_NUMERIC(desc->dsc_dtype) || DTYPE_IS_TEXT(desc->dsc_dtype)))
 		{
 			if (desc->dsc_dtype != dtype_unknown)
-				ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+				ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 		}
 
 		desc->dsc_dtype = DEFAULT_DOUBLE;
@@ -774,7 +774,7 @@ void AvgAggNode::outputDesc(dsc* desc) const
 				if (desc->dsc_dtype == dtype_quad)
 					IBERROR(224);	// msg 224 quad word arithmetic not supported
 
-				ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+				ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 			}
 
 			desc->dsc_dtype = DEFAULT_DOUBLE;
@@ -1234,8 +1234,8 @@ void SumAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	{
 		if (!DTYPE_IS_NUMERIC(desc->dsc_dtype) && !DTYPE_IS_TEXT(desc->dsc_dtype))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-					  Firebird::Arg::Gds(isc_dsql_agg_wrongarg) << Firebird::Arg::Str("SUM"));
+			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+					  Arg::Gds(isc_dsql_agg_wrongarg) << Arg::Str("SUM"));
 		}
 		else if (desc->dsc_dtype == dtype_short)
 		{
@@ -1257,8 +1257,8 @@ void SumAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	{
 		if (!DTYPE_IS_NUMERIC(desc->dsc_dtype))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-					  Firebird::Arg::Gds(isc_dsql_agg2_wrongarg) << Firebird::Arg::Str("SUM"));
+			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+					  Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("SUM"));
 		}
 		else if (desc->dsc_dtype == dtype_int64 || desc->dsc_dtype == dtype_int128)
 		{
@@ -1398,7 +1398,7 @@ void SumAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 	if (desc->dsc_dtype == dtype_quad)
 		IBERROR(224);	// msg 224 quad word arithmetic not supported
 
-	ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+	ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 }
 
 ValueExprNode* SumAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -1584,19 +1584,19 @@ void BinAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 		switch (type)
 		{
 			case TYPE_BIN_AND:
-				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-						Firebird::Arg::Gds(isc_dsql_agg2_wrongarg) << Firebird::Arg::Str("BIN_AND_AGG"));
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_AND_AGG"));
 			break;
 
 			case TYPE_BIN_OR:
-				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-						Firebird::Arg::Gds(isc_dsql_agg2_wrongarg) << Firebird::Arg::Str("BIN_OR_AGG"));
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_OR_AGG"));
 			break;
 
 			case TYPE_BIN_XOR:
 			case TYPE_BIN_XOR_DISTINCT:
-				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
-						Firebird::Arg::Gds(isc_dsql_agg2_wrongarg) << Firebird::Arg::Str("BIN_XOR_AGG"));
+				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+						Arg::Gds(isc_dsql_agg2_wrongarg) << Arg::Str("BIN_XOR_AGG"));
 			break;
 
 			default:

@@ -34,8 +34,8 @@ namespace Firebird::Jrd {
 
 [[noreturn]] void ERRD_bugcheck(const char*);
 [[noreturn]] void ERRD_error(const char*);
-[[noreturn]] void ERRD_post(const Firebird::Arg::StatusVector& v);
-void ERRD_post_warning(const Firebird::Arg::StatusVector& v);
+[[noreturn]] void ERRD_post(const Arg::StatusVector& v);
+void ERRD_post_warning(const Arg::StatusVector& v);
 [[noreturn]] void ERRD_punt(const FbStatusVector* = 0);
 
 } // namespace Firebird::Jrd
