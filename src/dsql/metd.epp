@@ -56,8 +56,9 @@
 #include "../common/classes/init.h"
 #include "../jrd/LocalTemporaryTable.h"
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
 
 // NOTE: The static definition of DB and gds_trans by gpre will not
 // be used by the meta data routines.  Each of those routines has
@@ -1055,3 +1056,5 @@ static void convert_dtype(TypeClause* field, SSHORT field_type)
 	}
 }
 
+
+} // namespace Firebird::Jrd

@@ -43,31 +43,32 @@ namespace Firebird::Jrd {
 	class dsql_prc;
 	class dsql_rel;
 	class FieldNode;
-};
+	class TypeClause;
+}
 
-void METD_drop_charset(Jrd::jrd_tra*, const Jrd::QualifiedName&);
-void METD_drop_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
-void METD_drop_relation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
+namespace Firebird::Jrd {
 
-Jrd::dsql_intlsym* METD_get_charset(Jrd::jrd_tra*, const Jrd::QualifiedName& name);
-USHORT METD_get_charset_bpc(Jrd::jrd_tra*, CSetId);
-Jrd::QualifiedName METD_get_charset_name(Jrd::jrd_tra*, CSetId);
-Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&, CSetId charset_id);
-Jrd::QualifiedName METD_get_database_charset(Jrd::jrd_tra*);
-Jrd::QualifiedName METD_get_schema_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
-bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::QualifiedName& name);
-Jrd::dsql_udf* METD_get_function(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
-	const Jrd::QualifiedName&);
-void METD_get_primary_key(Jrd::jrd_tra*, const Jrd::QualifiedName&,
-	Firebird::Array<NestConst<Jrd::FieldNode>>&);
-Jrd::dsql_prc* METD_get_procedure(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*,
-	const Jrd::QualifiedName&);
-Jrd::dsql_rel* METD_get_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName&);
-bool METD_get_type(Jrd::jrd_tra*, const Jrd::MetaName&, const char*, SSHORT*);
-Jrd::dsql_rel* METD_get_view_base(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& viewName,
-	Jrd::MetaNamePairMap& fields);
-bool METD_get_view_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& view_name,
-	const Jrd::QualifiedName& relation_or_alias, Jrd::dsql_rel*& relation, Jrd::dsql_prc*& procedure);
+void METD_drop_charset(jrd_tra*, const QualifiedName&);
+void METD_drop_collation(jrd_tra*, const QualifiedName&);
+void METD_drop_relation(jrd_tra*, const QualifiedName&);
+
+dsql_intlsym* METD_get_charset(jrd_tra*, const QualifiedName& name);
+USHORT METD_get_charset_bpc(jrd_tra*, CSetId);
+QualifiedName METD_get_charset_name(jrd_tra*, CSetId);
+dsql_intlsym* METD_get_collation(jrd_tra*, const QualifiedName&, CSetId charset_id);
+QualifiedName METD_get_database_charset(jrd_tra*);
+QualifiedName METD_get_schema_charset(jrd_tra*, const MetaName&);
+bool METD_get_domain(jrd_tra*, TypeClause*, const QualifiedName& name);
+dsql_udf* METD_get_function(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
+void METD_get_primary_key(jrd_tra*, const QualifiedName&, Firebird::Array<NestConst<FieldNode>>&);
+dsql_prc* METD_get_procedure(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
+dsql_rel* METD_get_relation(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
+bool METD_get_type(jrd_tra*, const MetaName&, const char*, SSHORT*);
+dsql_rel* METD_get_view_base(jrd_tra*, DsqlCompilerScratch*, const QualifiedName& viewName, MetaNamePairMap& fields);
+bool METD_get_view_relation(jrd_tra*, DsqlCompilerScratch*, const QualifiedName& view_name,
+	const QualifiedName& relation_or_alias, dsql_rel*& relation, dsql_prc*& procedure);
+
+} // namespace Firebird::Jrd
 
 
 #endif // DSQL_METD_PROTO_H

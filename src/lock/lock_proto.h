@@ -572,6 +572,6 @@ private:
 #endif
 };
 
-} // namespace
+} // namespace Firebird::Jrd
 
 #endif // LOCK_LOCK_PROTO_H

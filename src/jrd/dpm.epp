@@ -72,9 +72,11 @@ DATABASE DB = FILENAME "ODS.RDB";
 #define HIGH_WATER(x)	((USHORT) sizeof (data_page) + (USHORT) sizeof (data_page::dpg_repeat) * (x - 1))
 #define SPACE_FUDGE	(ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(data_page::dpg_repeat))
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
+
+using namespace Ods;
 
 inline constexpr SSHORT MRK_commit = 256;		// Table to go into pag_drop after transaction commit
 inline constexpr SSHORT MRK_drop = 257;			// Table to be dropped when OAT >= next transaction at mark-set time
@@ -2438,8 +2440,6 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	else
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
-
-
 RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, jrd_rel* relation, Record* record)
 {
 /**************************************
@@ -4160,3 +4160,6 @@ static void store_big_record(thread_db* tdbb,
 	else
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
+
+
+} // namespace Firebird::Jrd
