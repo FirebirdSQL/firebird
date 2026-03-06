@@ -47,10 +47,10 @@
 #include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Alice
 {
+
+using MsgFormat::SafeArg;
 
 
 static SINT64 ask();

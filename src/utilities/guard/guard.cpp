@@ -56,6 +56,9 @@ int errno = -1;
 #include "../utilities/guard/util_proto.h"
 #include "../common/classes/fb_string.h"
 
+using namespace Firebird;
+
+
 const USHORT FOREVER	= 1;
 const USHORT ONETIME	= 2;
 const USHORT IGNORE		= 3;

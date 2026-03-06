@@ -60,10 +60,10 @@
 #include <io.h>
 #endif
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Alice
 {
+
+using MsgFormat::SafeArg;
 
 
 static constexpr USHORT val_err_table[] =

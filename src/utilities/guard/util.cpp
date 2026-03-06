@@ -62,6 +62,8 @@
 #include "../common/utils_proto.h"
 #include "../common/os/os_utils.h"
 
+using namespace Firebird;
+
 
 pid_t UTIL_start_process(const char* process, char** argv, const char* prog_name)
 {

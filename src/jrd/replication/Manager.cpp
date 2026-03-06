@@ -116,7 +116,7 @@ bool TableMatcher::matchTable(const QualifiedName& tableName)
 // Replication manager
 
 Manager::Manager(const string& dbId,
-				 const Replication::Config* config)
+				 const Config* config)
 	: m_config(config),
 	  m_replicas(getPool()),
 	  m_buffers(getPool()),

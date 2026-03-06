@@ -32,10 +32,11 @@
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Burp
 {
+
+using MsgFormat::SafeArg;
+
 
 // IO buffer should fit at least one blob segment, two is better.
 constexpr FB_SIZE_T MIN_IO_BUFFER_SIZE = 128 * 1024;

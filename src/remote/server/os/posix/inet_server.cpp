@@ -436,8 +436,8 @@ int CLIB_ROUTINE main(int argc, char** argv)
 			}
 		}
 
-		Replication::Config::ReplicaList replicas;
-		Replication::Config::enumerate(replicas);
+		Jrd::Replication::Config::ReplicaList replicas;
+		Jrd::Replication::Config::enumerate(replicas);
 
 		if (super || standaloneClassic)
 		{

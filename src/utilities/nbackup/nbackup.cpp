@@ -85,10 +85,11 @@
 namespace Firebird::Nbackup
 {
 
+using MsgFormat::SafeArg;
+
 
 namespace
 {
-	using MsgFormat::SafeArg;
 	constexpr USHORT nbackup_msg_fac = FB_IMPL_MSG_FACILITY_NBACKUP;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)

@@ -66,10 +66,10 @@
 #include "../common/msg_encode.h"
 #include "../common/classes/BatchCompletionState.h"
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Burp
 {
+
+using MsgFormat::SafeArg;
 
 
 //  For service APIs the follow DB handle is a value stored

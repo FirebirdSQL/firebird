@@ -72,7 +72,7 @@ namespace Firebird::Jrd::Replication
 		};
 
 	public:
-		Manager(const string& dbId, const Replication::Config* config);
+		Manager(const string& dbId, const Config* config);
 		~Manager();
 
 		void shutdown();
@@ -94,7 +94,7 @@ namespace Firebird::Jrd::Replication
 				m_changeLog->cleanup();
 		}
 
-		const Replication::Config* getConfig() const noexcept
+		const Config* getConfig() const noexcept
 		{
 			return m_config;
 		}
@@ -113,7 +113,7 @@ namespace Firebird::Jrd::Replication
 		Semaphore m_cleanupSemaphore;
 		Semaphore m_workingSemaphore;
 
-		const Replication::Config* const m_config;
+		const Config* const m_config;
 		Array<SyncReplica*> m_replicas;
 		Array<UCharBuffer*> m_buffers;
 		Mutex m_buffersMutex;

@@ -68,10 +68,10 @@
 #include "../common/status.h"
 #include "../common/classes/zip.h"
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Burp
 {
+
+using MsgFormat::SafeArg;
 
 
 inline constexpr int open_mask	= 0666;

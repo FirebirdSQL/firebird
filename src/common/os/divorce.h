@@ -24,6 +24,9 @@
 #ifndef JRD_DIVOR_PROTO_H
 #define JRD_DIVOR_PROTO_H
 
-extern void divorce_terminal(int);
+namespace Firebird
+{
+	void divorce_terminal(int);
+}	// namespace Firebird
 
 #endif /* JRD_DIVOR_PROTO_H */

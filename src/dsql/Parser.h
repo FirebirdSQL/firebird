@@ -38,7 +38,6 @@
 #include "../common/classes/stack.h"
 #include "../jrd/intl.h"
 
-#include "parse.h"
 
 namespace Firebird {
 class CharSet;
@@ -50,6 +49,8 @@ namespace Arg {
 
 namespace Firebird::Jrd
 {
+
+#include "parse.h"
 
 
 class Parser : public PermanentStorage

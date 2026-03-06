@@ -25,7 +25,7 @@
 
 namespace Firebird::Remote
 {
-	bool REPL_server(CheckStatusWrapper*, const Replication::Config::ReplicaList&, bool);
+	bool REPL_server(CheckStatusWrapper*, const Jrd::Replication::Config::ReplicaList&, bool);
 }	// namespace Firebird::Remote
 
 #endif // UTIL_REPL_SERVER_H

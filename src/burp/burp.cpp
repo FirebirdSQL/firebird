@@ -84,10 +84,10 @@
 #include <sys/file.h>
 #endif
 
-using MsgFormat::SafeArg;
-
 namespace Firebird::Burp
 {
+
+using MsgFormat::SafeArg;
 
 
 inline constexpr const char* fopen_write_type = "w";

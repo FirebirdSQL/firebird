@@ -895,15 +895,7 @@ namespace Firebird::os_utils {
 namespace Firebird::Why {
 }
 
-namespace Jrd = Firebird::Jrd;
-namespace EDS = Firebird::Jrd::EDS;
-namespace Replication = Firebird::Jrd::Replication;
 namespace Ods = Firebird::Jrd::Ods;
-namespace fb_utils = Firebird::fb_utils;
-namespace Arg = Firebird::Arg;
-namespace MsgFormat = Firebird::MsgFormat;
-namespace MsgUtil = Firebird::MsgUtil;
-namespace os_utils = Firebird::os_utils;
 namespace Why = Firebird::Why;
 
 //#define DEBUG_LOST_POOLS 1
