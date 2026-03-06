@@ -29,6 +29,10 @@
 
 #include "../common/constants.h"
 
+namespace Firebird::Nbackup
+{
+
+
 // Switch handling constants
 
 inline constexpr int IN_SW_NBK_0				= 0;
@@ -89,4 +93,8 @@ static inline constexpr struct Switches::in_sw_tab_t nbackup_action_in_sw_table 
 	{IN_SW_NBK_HELP,		0,						"?",				0, 0, 0, false, false,	0,	1,	NULL, 0},
 	{IN_SW_NBK_0,			0,						NULL,				0, 0, 0, false, false,	0,	0,	NULL, 0}	// End of List
 };
+
+
+} // namespace Firebird::Nbackup
+
 #endif // NBACKUP_NBKSWI_H

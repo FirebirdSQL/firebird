@@ -82,7 +82,9 @@
 #define O_LARGEFILE 0
 #endif
 
-using namespace Firebird;
+namespace Firebird::Nbackup
+{
+
 
 namespace
 {
@@ -2218,3 +2220,6 @@ void nbackup(UtilSvc* uSvc)
 		throw;
 	}
 }
+
+
+} // namespace Firebird::Nbackup

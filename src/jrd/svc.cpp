@@ -170,9 +170,9 @@ inline constexpr serv_entry services[] =
 	{ isc_action_svc_properties, "Database Properties", Alice::ALICE_main },
 	{ isc_action_svc_db_stats, "Database Stats", main_gstat },
 	{ isc_action_svc_get_fb_log, "Get Log File", Service::readFbLog },
-	{ isc_action_svc_nbak, "Incremental Backup Database", NBACKUP_main },
-	{ isc_action_svc_nrest, "Incremental Restore Database", NBACKUP_main },
-	{ isc_action_svc_nfix, "Fixup Database after FS Copy", NBACKUP_main },
+	{ isc_action_svc_nbak, "Incremental Backup Database", Nbackup::NBACKUP_main },
+	{ isc_action_svc_nrest, "Incremental Restore Database", Nbackup::NBACKUP_main },
+	{ isc_action_svc_nfix, "Fixup Database after FS Copy", Nbackup::NBACKUP_main },
 	{ isc_action_svc_trace_start, "Start Trace Session", TRACE_main },
 	{ isc_action_svc_trace_stop, "Stop Trace Session", TRACE_main },
 	{ isc_action_svc_trace_suspend, "Suspend Trace Session", TRACE_main },
@@ -2694,14 +2694,14 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, nbackup_in_sw_table, switches))
+				if (!get_action_svc_bitmask(spb, Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
 				break;
 
 			case isc_spb_nbk_direct:
-				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2713,7 +2713,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				{
 					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_clean_history")).raise();
 				}
-				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Nbackup::nbackup_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2751,7 +2751,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, nbackup_in_sw_table, switches))
+				if (!get_action_svc_bitmask(spb, Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3217,7 +3217,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_file")).raise();
 		}
 
-		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
+		if (!get_action_svc_parameter(svc_action, Nbackup::nbackup_action_in_sw_table, switches))
 		{
 			return false;
 		}
@@ -3256,7 +3256,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 
-		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
+		if (!get_action_svc_parameter(svc_action, Nbackup::nbackup_action_in_sw_table, switches))
 		{
 			return false;
 		}
