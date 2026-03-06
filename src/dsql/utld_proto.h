@@ -31,7 +31,5 @@ namespace Firebird::Jrd {
 USHORT UTLD_char_length_to_byte_length(USHORT lengthInChars, USHORT maxBytesPerChar, USHORT overhead);
 }
 
-using Firebird::Jrd::UTLD_char_length_to_byte_length;
-
 
 #endif //  DSQL_UTLD_PROTO_H

@@ -60,8 +60,9 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
 
 // DsqlDescMaker methods
 
@@ -605,3 +606,6 @@ LiteralNode* MAKE_system_privilege(const char* privilege)
 
 	return literal;
 }
+
+
+} // namespace Firebird::Jrd

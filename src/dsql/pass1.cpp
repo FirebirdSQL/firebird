@@ -175,8 +175,9 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
 
 
 static ValueListNode* pass1_group_by_list(DsqlCompilerScratch*, ValueListNode*, ValueListNode*);
@@ -3101,3 +3102,6 @@ WindowMap* dsql_ctx::getWindowMap(DsqlCompilerScratch* dsqlScratch, WindowClause
 
 	return windowMap;
 }
+
+
+} // namespace Firebird::Jrd

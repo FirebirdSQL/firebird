@@ -96,9 +96,11 @@
 #include "../common/classes/DbImplementation.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
+
+using namespace Ods;
 
 namespace
 {
@@ -2265,3 +2267,5 @@ void PageNumber::print(const char* text) const
 }
 #endif
 
+
+} // namespace Firebird::Jrd

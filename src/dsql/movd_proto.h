@@ -31,7 +31,5 @@ class thread_db;
 void MOVD_move(thread_db* tdbb, ::dsc*, ::dsc*);
 }
 
-using Firebird::Jrd::MOVD_move;
-
 
 #endif //  DSQL_MOVD_PROTO_H

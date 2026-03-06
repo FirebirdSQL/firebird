@@ -37,6 +37,8 @@ namespace Firebird::Jrd {
 	class ValueListNode;
 }
 
+namespace Firebird::Jrd {
+
 void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, const Jrd::DsqlContextStack&);
 bool PASS1_compare_alias(const Jrd::QualifiedName& contextAlias, const Jrd::QualifiedName& lookupAlias);
 bool PASS1_compare_alias(const Firebird::ObjectsArray<Jrd::QualifiedName>& contextAlias,
@@ -62,6 +64,8 @@ Jrd::RseNode* PASS1_rse(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const J
 bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, std::function<void (dsc*)>, bool);
 bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, NestConst<Jrd::ValueExprNode>, bool);
 Jrd::ValueListNode* PASS1_sort(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::ValueListNode*);
+
+} // namespace Firebird::Jrd
 
 
 #endif // DSQL_PASS1_PROTO_H
