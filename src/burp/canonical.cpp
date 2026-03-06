@@ -45,9 +45,6 @@
 #include "../common/status.h"
 #include "fb_types.h"
 
-
-using Firebird::FbLocalStatus;
-
 namespace Firebird::Burp
 {
 
