@@ -35,8 +35,9 @@
 #include "../jrd/met.h"
 #include "../jrd/tpc_proto.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // class TransactionNumber
 
@@ -203,3 +204,5 @@ bool ConsistencyCheck::commitNumber(thread_db* tdbb)
 	return false;
 }
 
+
+}	// namespace Firebird::Jrd

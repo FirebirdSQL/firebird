@@ -30,35 +30,38 @@
 #include "../jrd/exe.h"
 #include "../jrd/QualifiedName.h"
 
-void	BTR_all(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::IndexDescList&, Jrd::RelationPages*);
-bool	BTR_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
-bool	BTR_cleanup_index(Jrd::thread_db*, const Jrd::QualifiedName&, Jrd::jrd_tra*, MetaId);
-void	BTR_complement_key(Jrd::temporary_key*);
-void	BTR_create(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::SelectivityList&);
-bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, MetaId, bool);
-bool	BTR_description(Jrd::thread_db*, Jrd::Cached::Relation*, const Ods::index_root_page*, Jrd::index_desc*,
-						MetaId, bool raise = true);
-DSC*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*);
-void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
-UCHAR*	BTR_find_leaf(Ods::btree_page*, Jrd::temporary_key*, UCHAR*, USHORT*, bool, int);
-Ods::btree_page*	BTR_find_page(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::win*, Jrd::index_desc*,
-	Jrd::temporary_key*, Jrd::temporary_key*);
-void	BTR_insert(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
-USHORT	BTR_key_length(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::index_desc*);
-Ods::btree_page*	BTR_left_handoff(Jrd::thread_db*, Jrd::win*, Ods::btree_page*, SSHORT);
-bool	BTR_lookup(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::index_desc*, Jrd::RelationPages*);
-bool	BTR_make_bounds(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::IndexScanListIterator*,
-						Jrd::temporary_key*, Jrd::temporary_key*, USHORT&);
-Jrd::idx_e	BTR_make_key(Jrd::thread_db*, USHORT, const Jrd::ValueExprNode* const*, const SSHORT*,
-						 const Jrd::index_desc*, Jrd::temporary_key*, USHORT, bool*);
-void	BTR_make_null_key(Jrd::thread_db*, const Jrd::index_desc*, Jrd::temporary_key*);
-void	BTR_mark_index_for_delete(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::win*, Ods::index_root_page*);
-bool	BTR_next_index(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::jrd_tra*, Jrd::index_desc*, Jrd::win*);
-void	BTR_remove(Jrd::thread_db*, Jrd::win*, Jrd::index_insertion*);
-void	BTR_reserve_slot(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::IndexCreateLock&);
-void	BTR_selectivity(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::SelectivityList&);
-bool	BTR_types_comparable(const dsc& target, const dsc& source);
-Ods::index_root_page* BTR_fetch_root_for_update(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
-const Ods::index_root_page* BTR_fetch_root(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
+namespace Firebird::Jrd
+{
+	void	BTR_all(thread_db*, Cached::Relation*, IndexDescList&, RelationPages*);
+	bool	BTR_activate_index(thread_db*, Cached::Relation*, MetaId);
+	bool	BTR_cleanup_index(thread_db*, const QualifiedName&, jrd_tra*, MetaId);
+	void	BTR_complement_key(temporary_key*);
+	void	BTR_create(thread_db*, IndexCreation&, SelectivityList&);
+	bool	BTR_delete_index(thread_db*, win*, MetaId, bool);
+	bool	BTR_description(thread_db*, Cached::Relation*, const Ods::index_root_page*, index_desc*,
+							MetaId, bool raise = true);
+	DSC*	BTR_eval_expression(thread_db*, index_desc*, Record*);
+	void	BTR_evaluate(thread_db*, const IndexRetrieval*, RecordBitmap**, RecordBitmap*);
+	UCHAR*	BTR_find_leaf(Ods::btree_page*, temporary_key*, UCHAR*, USHORT*, bool, int);
+	Ods::btree_page*	BTR_find_page(thread_db*, const IndexRetrieval*, win*, index_desc*,
+		temporary_key*, temporary_key*);
+	void	BTR_insert(thread_db*, win*, index_insertion*);
+	USHORT	BTR_key_length(thread_db*, jrd_rel*, index_desc*);
+	Ods::btree_page*	BTR_left_handoff(thread_db*, win*, Ods::btree_page*, SSHORT);
+	bool	BTR_lookup(thread_db*, Cached::Relation*, MetaId, index_desc*, RelationPages*);
+	bool	BTR_make_bounds(thread_db*, const IndexRetrieval*, IndexScanListIterator*,
+							temporary_key*, temporary_key*, USHORT&);
+	idx_e	BTR_make_key(thread_db*, USHORT, const ValueExprNode* const*, const SSHORT*,
+							const index_desc*, temporary_key*, USHORT, bool*);
+	void	BTR_make_null_key(thread_db*, const index_desc*, temporary_key*);
+	void	BTR_mark_index_for_delete(thread_db*, Cached::Relation*, MetaId, win*, Ods::index_root_page*);
+	bool	BTR_next_index(thread_db*, Cached::Relation*, jrd_tra*, index_desc*, win*);
+	void	BTR_remove(thread_db*, win*, index_insertion*);
+	void	BTR_reserve_slot(thread_db*, IndexCreation&, IndexCreateLock&);
+	void	BTR_selectivity(thread_db*, Cached::Relation*, MetaId, SelectivityList&);
+	bool	BTR_types_comparable(const dsc& target, const dsc& source);
+	Ods::index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, win* window);
+	const Ods::index_root_page* BTR_fetch_root(const char* from, thread_db* tdbb, win* window);
+}	// namespace Firebird::Jrd
 
 #endif // JRD_BTR_PROTO_H

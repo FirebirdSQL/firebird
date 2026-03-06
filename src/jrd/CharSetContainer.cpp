@@ -28,7 +28,9 @@
 #include "../jrd/jrd.h"
 #include "../common/obj.h"
 
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 CharSetVers* CharSetVers::create(thread_db* tdbb, MemoryPool& pool, Cached::CharSet* csp)
 {
@@ -64,3 +66,5 @@ QualifiedName CharSetContainer::getName() const
 	return QualifiedName(cs->getName(), SYSTEM_SCHEMA);
 }
 
+
+}	// namespace Firebird::Jrd

@@ -40,12 +40,14 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/QualifiedName.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 class thread_db;
 class Lock;
 class MetadataCache;
 enum lck_t : UCHAR;
+
 
 class ObjectBase
 {
@@ -1371,6 +1373,7 @@ auto getPermanent(T* t) -> decltype(t->getPermanent())
 {
 	return t ? t->getPermanent() : nullptr;
 }
+
 
 } // namespace Firebird::Jrd
 
