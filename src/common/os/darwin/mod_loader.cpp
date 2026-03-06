@@ -36,6 +36,10 @@
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
 
+namespace Firebird
+{
+
+
 /// This is the Darwin implementation of the mod_loader abstraction.
 
 //#define DEBUG_LOADER
@@ -183,3 +187,6 @@ bool DlfcnModule::getRealPath(const string& anySymbol, PathName& path)
 	path.clear();
 	return false;
 }
+
+
+} // namespace Firebird
