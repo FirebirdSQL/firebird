@@ -28,7 +28,7 @@
 #include "../jrd/sys-packages/SqlPackage.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 namespace

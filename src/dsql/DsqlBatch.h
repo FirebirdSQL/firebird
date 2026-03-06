@@ -37,7 +37,7 @@ class ClumpletReader;
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class DsqlDmlRequest;
 class dsql_msg;

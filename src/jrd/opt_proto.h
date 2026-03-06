@@ -28,7 +28,7 @@
 #include "../jrd/btr.h"
 #include "../jrd/lls.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Request;
 	class jrd_rel;
 	class RecordSource;

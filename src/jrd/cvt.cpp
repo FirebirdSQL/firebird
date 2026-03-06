@@ -85,7 +85,7 @@
 #define INT64_LIMIT     ((((SINT64) 1) << 62) / 5)
 #define NUMERIC_LIMIT   (INT64_LIMIT)
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

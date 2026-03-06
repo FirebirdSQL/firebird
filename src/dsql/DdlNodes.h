@@ -40,7 +40,7 @@
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 enum SqlSecurity
 {

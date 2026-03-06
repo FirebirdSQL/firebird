@@ -54,7 +54,7 @@ namespace Ods {
 	struct pag;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Lock;
 class Record;

@@ -52,8 +52,7 @@ class MemoryPool;
 }
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class Database;
 class Attachment;

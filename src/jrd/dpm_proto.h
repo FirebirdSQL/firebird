@@ -30,8 +30,7 @@
 #include "../jrd/Resources.h"
 
 // fwd. decl.
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class blb;
 	class jrd_rel;
 	struct record_param;

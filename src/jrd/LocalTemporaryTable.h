@@ -32,8 +32,7 @@
 #include "../common/classes/objects_array.h"
 #include <optional>
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_rel;
 
 	class LocalTemporaryTable

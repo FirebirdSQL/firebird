@@ -32,7 +32,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 ResultSet::ResultSet(thread_db* tdbb, PreparedStatement* aStmt, jrd_tra* aTransaction)

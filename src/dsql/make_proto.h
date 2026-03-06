@@ -29,7 +29,7 @@
 #include "../dsql/sym.h"
 #include "../jrd/intl.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class dsql_ctx;
 	class dsql_fld;
 	class TypeClause;

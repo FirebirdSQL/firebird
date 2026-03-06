@@ -24,8 +24,7 @@
 #ifndef JRD_VIRTUAL_TABLE_H
 #define JRD_VIRTUAL_TABLE_H
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class VirtualTable
 	{
 	public:

@@ -56,8 +56,7 @@ namespace
 	}
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	bool Database::onRawDevice() const
 	{
 		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);

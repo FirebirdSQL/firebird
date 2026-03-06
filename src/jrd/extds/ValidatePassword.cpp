@@ -33,7 +33,7 @@
 #include "../common/classes/ParsedList.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 
@@ -170,7 +170,7 @@ void SBlock::putData(CheckStatusWrapper* status, unsigned int length, const void
 } // anonymous namespace
 
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
 {

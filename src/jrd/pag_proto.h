@@ -24,7 +24,7 @@
 #ifndef JRD_PAG_PROTO_H
 #define JRD_PAG_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class thread_db;
 	class Database;
 	class PageNumber;

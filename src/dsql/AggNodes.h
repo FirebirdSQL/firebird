@@ -27,7 +27,7 @@
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class AnyValueAggNode final : public AggNode

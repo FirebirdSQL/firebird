@@ -30,7 +30,7 @@
 #include <functional>
 #include "../common/sha2/sha2.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class PlanEntry;
 

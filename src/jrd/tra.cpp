@@ -81,7 +81,7 @@
 #include "firebird/impl/msg_helper.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 

@@ -32,7 +32,7 @@
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 using Firebird::ITracePlugin;
 using Firebird::ITraceFactory;

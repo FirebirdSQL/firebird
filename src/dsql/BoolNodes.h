@@ -26,7 +26,7 @@
 #include "firebird/impl/blr.h"
 #include "../dsql/Nodes.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class SubQuery;
 

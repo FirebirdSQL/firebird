@@ -40,7 +40,7 @@
 
 #include "../jrd/CharSetContainer.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Record types for record summary blob records
 
@@ -100,7 +100,7 @@ inline constexpr int TFB_array				= 2;
 #include "../jrd/obj.h"
 #include "../dsql/sym.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Forward decl
 

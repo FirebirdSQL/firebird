@@ -34,7 +34,7 @@
 #include "../common/config/config.h"
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Attachment;
 

@@ -30,7 +30,7 @@
 #include "../jrd/SystemPackages.h"
 #include "../jrd/recsrc/RecordSource.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;

@@ -63,7 +63,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 static constexpr FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
 

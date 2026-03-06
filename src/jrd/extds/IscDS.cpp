@@ -41,11 +41,10 @@
 #include "../common/utils_proto.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
-namespace EDS
-{
+namespace Firebird::Jrd::EDS {
 
 const char* FIREBIRD_PROVIDER_NAME = "Firebird";
 

@@ -37,7 +37,7 @@
 #include "../jrd/exe_proto.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 static void checkD(IStatus* st);

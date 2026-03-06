@@ -27,8 +27,7 @@
 #include "../jrd/pag.h"
 #include "../jrd/val.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Record
 	{
 		friend class AutoTempRecord;

@@ -33,7 +33,7 @@
 
 #include <string_view>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 using Firebird::ITracePlugin;
 using Firebird::ITraceFactory;

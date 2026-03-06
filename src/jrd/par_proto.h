@@ -24,7 +24,7 @@
 #ifndef JRD_PAR_PROTO_H
 #define JRD_PAR_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class CompilerScratch;
 	class jrd_rel;
 	class Request;

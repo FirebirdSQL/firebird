@@ -29,7 +29,7 @@
 #include "parse.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 #define PARSER_TOKEN(ident, str, nonReserved) \

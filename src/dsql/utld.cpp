@@ -42,7 +42,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/init.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 /**
 

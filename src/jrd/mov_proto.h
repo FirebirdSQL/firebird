@@ -57,8 +57,7 @@ Firebird::Decimal64 MOV_get_dec64(Jrd::thread_db*, const dsc*);
 Firebird::Decimal128 MOV_get_dec128(Jrd::thread_db*, const dsc*);
 Firebird::Int128 MOV_get_int128(Jrd::thread_db*, const dsc*, SSHORT);
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class DescPrinter
 {

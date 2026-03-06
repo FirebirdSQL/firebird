@@ -26,8 +26,7 @@
 #include "../jrd/Record.h"
 #include "../jrd/RecordNumber.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_tra;
 	class LocalTemporaryTable;
 

@@ -38,7 +38,7 @@
 #include "../jrd/Statement.h"
 #include <variant>
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

@@ -27,7 +27,7 @@
 #include "../jrd/intl_classes.h"
 #include "../common/cvt.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class thread_db;
 	class Lock;
 	class Collation;

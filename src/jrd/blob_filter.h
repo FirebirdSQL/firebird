@@ -26,7 +26,7 @@
 
 #include "../include/fb_blk.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 /* Note: The BlobControl class is the internal version of the
  * blob control structure (ISC_BLOB_CTL) which is in ibase.h.

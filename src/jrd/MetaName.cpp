@@ -36,7 +36,7 @@
 #include "../common/classes/RefMutex.h"
 #include "../jrd/jrd.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 int MetaName::compare(const char* s, FB_SIZE_T len) const
 {

@@ -41,8 +41,7 @@
 #include "../jrd/status.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class WorkerAttachment;
 

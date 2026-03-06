@@ -175,7 +175,7 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

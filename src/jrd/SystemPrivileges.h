@@ -33,7 +33,7 @@
 #define FB_JRD_SYSTEM_PRIVILEGES
 #define FB_JRD_SYSTEM_PRIVILEGES_TMP
 
-namespace Jrd {
+namespace Firebird::Jrd {
 enum SystemPrivilege
 {
 NULL_PRIVILEGE,

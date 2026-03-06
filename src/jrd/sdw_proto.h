@@ -23,7 +23,7 @@
 
 #ifndef JRD_SDW_PROTO_H
 #define JRD_SDW_PROTO_H
-namespace Jrd {
+namespace Firebird::Jrd {
 	class jrd_file;
 	class Shadow;
 }

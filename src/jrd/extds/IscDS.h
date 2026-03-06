@@ -29,7 +29,7 @@
 #include "../jrd/status.h"
 
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 class IscProvider : public Provider
 {

@@ -34,7 +34,7 @@
 
 #include <algorithm>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Attachment;
 class Database;

@@ -39,8 +39,7 @@
 #include "firebird/Interface.h"
 #include "memory_routines.h"
 
-namespace fb_utils
-{
+namespace Firebird::fb_utils {
 	char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept;
 	char* exact_name(char* const name) noexcept;
 	inline void exact_name(Firebird::string& str)

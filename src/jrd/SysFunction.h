@@ -36,8 +36,7 @@
 #include "../dsql/Nodes.h"
 #include "../common/dsc.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	struct impure_value;
 }

@@ -28,7 +28,7 @@
 #include "../dsql/dsql_proto.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

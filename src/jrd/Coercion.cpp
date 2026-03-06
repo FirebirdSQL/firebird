@@ -34,7 +34,7 @@
 #include "../jrd/align.h"
 #include "../jrd/DataTypeUtil.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |

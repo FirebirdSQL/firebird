@@ -67,7 +67,7 @@
 #include "../jrd/CryptoManager.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 // The variable DBSERVER_BASE_LEVEL was originally IB_MAJOR_VER but with
 // the change to Firebird this number could no longer be used.

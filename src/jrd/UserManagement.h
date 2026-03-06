@@ -31,7 +31,7 @@
 #include "firebird/Interface.h"
 #include "../common/security.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;

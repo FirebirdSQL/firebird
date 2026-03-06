@@ -54,7 +54,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

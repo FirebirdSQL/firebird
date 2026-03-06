@@ -30,8 +30,7 @@
 #include "../jrd/CacheVector.h"
 #include "../jrd/lck.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class ValueListNode;
 
 	class Function final : public Routine

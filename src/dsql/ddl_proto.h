@@ -30,7 +30,7 @@
 // This is a DSQL internal file. Not to be used by anything but
 // the DSQL module itself.
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class DsqlCompilerScratch;
 	class dsql_fld;
 };

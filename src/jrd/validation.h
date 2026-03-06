@@ -40,8 +40,7 @@ namespace Firebird
 class UtilSvc;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class Attachment;
 class Database;

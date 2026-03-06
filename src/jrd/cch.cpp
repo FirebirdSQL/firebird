@@ -77,7 +77,7 @@
 #endif
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 
@@ -208,8 +208,7 @@ constexpr int PRE_SEARCH_LIMIT	= 256;
 constexpr int PRE_EXISTS		= -1;
 constexpr int PRE_UNKNOWN		= -2;
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 #ifdef HASH_USE_CDS_LIST
 
@@ -5304,7 +5303,7 @@ void BufferDesc::unLockIO(thread_db* tdbb)
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 /// class BCBHashTable
 

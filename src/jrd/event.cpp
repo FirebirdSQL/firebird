@@ -63,7 +63,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 void EventManager::init(Attachment* attachment)

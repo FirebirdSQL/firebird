@@ -37,11 +37,11 @@
 #include "../common/classes/timestamp.h"
 #include "../common/TimeZoneUtil.h"
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 class Statement;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Lock;
 class jrd_rel;

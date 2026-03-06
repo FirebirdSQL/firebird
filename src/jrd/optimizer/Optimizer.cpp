@@ -89,7 +89,7 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 #ifdef OPT_DEBUG_RETRIEVAL

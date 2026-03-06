@@ -41,7 +41,7 @@
 #include "../dsql/DSqlDataTypeUtil.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, RecordSourceNode* source);

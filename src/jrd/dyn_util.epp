@@ -56,7 +56,7 @@
 using MsgFormat::SafeArg;
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 DATABASE DB = STATIC "ODS.RDB";
 

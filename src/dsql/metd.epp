@@ -56,7 +56,7 @@
 #include "../common/classes/init.h"
 #include "../jrd/LocalTemporaryTable.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // NOTE: The static definition of DB and gds_trans by gpre will not

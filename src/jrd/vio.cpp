@@ -95,7 +95,7 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 static void check_class(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
@@ -186,8 +186,7 @@ static bool set_security_class(thread_db*, Record*, USHORT);
 static void set_system_flag(thread_db*, Record*, USHORT);
 static void verb_post(thread_db*, jrd_tra*, record_param*, Record*);
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class SweepTask : public Task
 {

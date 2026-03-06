@@ -17,7 +17,7 @@
 #include "../jrd/lck.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 namespace

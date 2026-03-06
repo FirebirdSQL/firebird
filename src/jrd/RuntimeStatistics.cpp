@@ -30,7 +30,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 GlobalPtr<RuntimeStatistics> RuntimeStatistics::dummy;
 

@@ -32,8 +32,7 @@
 
 #include "Utils.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Applier : private Firebird::PermanentStorage
 	{
 		typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<TraNumber, jrd_tra*> > > TransactionMap;

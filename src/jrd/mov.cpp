@@ -494,8 +494,7 @@ Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 }
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, TTypeId charSetId)
 	: maxLen(mLen)

@@ -24,7 +24,7 @@
 
 #include "../common/classes/BlrWriter.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class DeclareSubFuncNode;

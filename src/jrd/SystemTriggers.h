@@ -25,14 +25,13 @@
 
 #include "firebird.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_rel;
 	class thread_db;
 	class Record;
 }	// namespace Jrd
 
-namespace Jrd::SystemTriggers
+namespace Firebird::Jrd::SystemTriggers
 {
 	void executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
 	void executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);

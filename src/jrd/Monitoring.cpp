@@ -60,7 +60,7 @@
 constexpr const char* SCRATCH = "fb_monitor_";
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 namespace

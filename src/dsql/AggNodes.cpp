@@ -43,9 +43,9 @@
 #include <math.h>
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 static RegisterNode<AggNode> regAggNode({blr_agg_function});

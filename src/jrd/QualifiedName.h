@@ -34,7 +34,7 @@
 #include "../common/classes/QualifiedMetaString.h"
 #include "../common/StatusArg.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 using QualifiedName = Firebird::BaseQualifiedName<MetaName>;
 using QualifiedNameMetaNamePair = Firebird::FullPooledPair<QualifiedName, MetaName>;

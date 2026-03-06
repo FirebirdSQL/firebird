@@ -40,7 +40,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/lls.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Page control block -- used by PAG to keep track of critical constants
 /**

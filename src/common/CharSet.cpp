@@ -95,7 +95,7 @@
 #include "../jrd/intl_classes.h"
 #include "../common/classes/Aligner.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

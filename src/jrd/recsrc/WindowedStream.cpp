@@ -32,7 +32,7 @@
 #include <exception>
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 // ------------------------------
 // Data access: window expression

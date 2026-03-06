@@ -31,7 +31,7 @@
 #ifndef JRD_EXT_PROTO_H
 #define JRD_EXT_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_tra;
 class RecordSource;

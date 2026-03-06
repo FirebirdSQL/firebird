@@ -43,7 +43,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 GlobalPtr<StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;
 

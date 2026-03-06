@@ -29,8 +29,7 @@
 #include "../jrd/recsrc/RecordSource.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class KeywordsTable : public SnapshotData
 {

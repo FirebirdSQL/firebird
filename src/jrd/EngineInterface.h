@@ -28,7 +28,7 @@
 #include "../common/StatementMetadata.h"
 #include "../common/classes/RefCounted.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Engine objects used by interface objects
 class blb;

@@ -36,7 +36,7 @@
 #include "../jrd/SystemPackages.h"
 #include "../jrd/Statement.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Attachment;
 class Request;

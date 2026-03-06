@@ -29,7 +29,7 @@
 #include "RecordSource.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 // ------------------------------------
 // Data access: stream locked for write

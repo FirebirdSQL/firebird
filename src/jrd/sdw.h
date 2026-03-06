@@ -26,7 +26,7 @@
 
 #include "../include/fb_blk.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class jrd_file;
 
 // Shadowing block

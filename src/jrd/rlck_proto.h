@@ -24,7 +24,7 @@
 #ifndef JRD_RLCK_PROTO_H
 #define JRD_RLCK_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Lock;
 	class jrd_tra;
 	struct record_param;

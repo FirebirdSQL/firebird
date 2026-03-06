@@ -46,7 +46,7 @@
 #include "../common/config/config.h"
 #include "../common/utils_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 //#define JRD_FAILURE_SPACE	2048

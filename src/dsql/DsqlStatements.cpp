@@ -31,7 +31,7 @@
 #include "../jrd/cmp_proto.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 // Class DsqlStatement

@@ -43,7 +43,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 constexpr unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute

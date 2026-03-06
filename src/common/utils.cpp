@@ -85,8 +85,7 @@
 #endif
 
 
-namespace fb_utils
-{
+namespace Firebird::fb_utils {
 
 bool implicit_name(const char* name, const char* prefix, int prefix_len) noexcept;
 

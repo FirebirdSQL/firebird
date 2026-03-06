@@ -33,8 +33,7 @@
 #include "../common/os/mod_loader.h"
 #include "../common/classes/RefCounted.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Database;
 
 	class Module

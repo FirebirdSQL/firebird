@@ -26,7 +26,7 @@
 
 #include "ExtDS.h"
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 class InternalProvider : public Provider
 {

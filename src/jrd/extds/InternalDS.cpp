@@ -44,10 +44,10 @@
 #include "InternalDS.h"
 #include "ValidatePassword.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 const char* INTERNAL_PROVIDER_NAME = "Internal";
 

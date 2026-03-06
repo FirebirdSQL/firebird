@@ -28,7 +28,7 @@
 #include "RecordSource.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 static const char* const SCRATCH = "fb_merge_";
 

@@ -118,7 +118,7 @@ bool descToUTF8(const paramdsc* param, string& result)
 
 } // namespace
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 const char* StatementHolder::ensurePlan(bool explained)
 {

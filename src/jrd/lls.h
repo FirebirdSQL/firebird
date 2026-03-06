@@ -25,7 +25,7 @@
 
 #include "../common/classes/stack.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Record;
 	class BoolExprNode;
 	class ValueExprNode;

@@ -47,8 +47,7 @@ namespace Ods
 	struct blh;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class Attachment;
 class BlobControl;

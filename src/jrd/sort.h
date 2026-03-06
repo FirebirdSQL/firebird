@@ -29,7 +29,7 @@
 #include "../jrd/TempSpace.h"
 #include "../jrd/align.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Forward declaration
 class Attachment;

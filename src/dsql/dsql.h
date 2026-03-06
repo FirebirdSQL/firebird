@@ -73,8 +73,7 @@ inline constexpr const char* NEW_CONTEXT_NAME = "NEW";
 inline constexpr int OLD_CONTEXT_VALUE = 0;
 inline constexpr int NEW_CONTEXT_VALUE = 1;
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Attachment;
 	class Database;
 	class DsqlCompilerScratch;
@@ -110,7 +109,7 @@ namespace Jrd
 
 #include "../common/dsc.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // blocks used to cache metadata
 

@@ -59,7 +59,7 @@
 #include "iberror.h"
 #include "../common/StatusArg.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);

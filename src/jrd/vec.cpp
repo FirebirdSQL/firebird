@@ -30,7 +30,7 @@
 
 #if defined(DEV_BUILD)
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 thread_db* JRD_get_thread_data()
 {

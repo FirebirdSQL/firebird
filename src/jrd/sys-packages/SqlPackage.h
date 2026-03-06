@@ -30,7 +30,7 @@
 #include "../common/classes/objects_array.h"
 #include "../jrd/SystemPackages.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class SqlPackage final : public SystemPackage

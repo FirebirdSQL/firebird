@@ -70,11 +70,11 @@
 
 #endif
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 // Manager
 

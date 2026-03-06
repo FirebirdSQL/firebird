@@ -50,7 +50,7 @@ namespace Firebird {
 	}
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 typedef int ServiceEntry(Firebird::UtilSvc*);
 

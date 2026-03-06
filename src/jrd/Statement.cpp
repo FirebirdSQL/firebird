@@ -41,7 +41,7 @@
 #include "../common/classes/auto.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* statement,
@@ -1118,7 +1118,7 @@ const int devNodePrint(DmlNode* node)
 #endif
 
 #ifdef DEBUG_SHARED_VECTOR
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct Acc
 {

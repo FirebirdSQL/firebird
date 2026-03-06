@@ -24,7 +24,7 @@
 #include "../jrd/ini.h"
 #include "../jrd/ids.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

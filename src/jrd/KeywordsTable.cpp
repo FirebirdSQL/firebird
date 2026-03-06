@@ -25,7 +25,7 @@
 #include "../jrd/ids.h"
 #include "../common/Token.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

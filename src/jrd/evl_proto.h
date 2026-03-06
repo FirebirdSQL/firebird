@@ -27,8 +27,7 @@
 #include "../jrd/intl_classes.h"
 #include "../jrd/req.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class DbKeyRangeNode;
 	class InversionNode;
 	struct Item;
@@ -43,8 +42,7 @@ bool		EVL_field(Jrd::jrd_rel*, Jrd::Record*, USHORT, dsc*);
 void		EVL_make_value(Jrd::thread_db* tdbb, const dsc*, Jrd::impure_value*, MemoryPool* pool = NULL);
 void		EVL_validate(Jrd::thread_db*, const Jrd::Item&, const Jrd::ItemInfo*, dsc*, bool);
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	// Evaluate a value expression.
 	inline dsc* EVL_expr(thread_db* tdbb, Request* request, const ValueExprNode* node)
 	{

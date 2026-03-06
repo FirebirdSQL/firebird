@@ -72,7 +72,7 @@ DATABASE DB = FILENAME "ODS.RDB";
 #define HIGH_WATER(x)	((USHORT) sizeof (data_page) + (USHORT) sizeof (data_page::dpg_repeat) * (x - 1))
 #define SPACE_FUDGE	(ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(data_page::dpg_repeat))
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 

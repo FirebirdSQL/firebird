@@ -48,7 +48,7 @@
 #include "../../common/prett_proto.h"
 
 //// TODO: DDL triggers, packages and external procedures and functions support
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Database;
 class Attachment;

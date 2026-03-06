@@ -32,7 +32,7 @@
 #if (!defined(FB_JRD_PROTECT_RELATIONS))
 #define FB_JRD_PROTECT_RELATIONS
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;

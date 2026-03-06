@@ -32,7 +32,7 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/RefCounted.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class Attachment;

@@ -24,8 +24,7 @@
 #ifndef DSQL_PASS1_PROTO_H
 #define DSQL_PASS1_PROTO_H
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class CompoundStmtNode;
 	class DeclareCursorNode;
 	class DsqlMapNode;

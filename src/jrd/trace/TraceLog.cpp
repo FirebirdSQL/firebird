@@ -50,7 +50,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 constexpr unsigned int INIT_LOG_SIZE = 1024*1024;	// 1MB
 constexpr unsigned int FREE_SPACE_THRESHOLD = INIT_LOG_SIZE / 4;

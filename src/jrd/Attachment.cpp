@@ -60,7 +60,7 @@
 #include "../common/classes/RefMutex.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 /// class ActiveSnapshots

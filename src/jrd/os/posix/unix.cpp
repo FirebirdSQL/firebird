@@ -77,7 +77,7 @@
 #include "../common/classes/init.h"
 #include "../common/os/os_utils.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // Some operating systems have problems with use of write/read with

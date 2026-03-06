@@ -33,7 +33,7 @@
 #include "../jrd/TempSpace.h"
 #include <string_view>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // forward declarations
 class jrd_rel;

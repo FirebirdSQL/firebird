@@ -33,7 +33,7 @@
 using namespace Firebird;
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 RoutinePermanent::RoutinePermanent(thread_db* tdbb, MemoryPool& p, MetaId metaId, NoData)
 	: PermanentStorage(p),

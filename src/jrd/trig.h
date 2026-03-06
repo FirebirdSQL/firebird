@@ -30,7 +30,7 @@
    check out GRANT.GDL, modify the trigger source to generate the
    proper blr, replace the blr in TRIG.H, and check both files back in. */
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 /* trigger definition structure */
 

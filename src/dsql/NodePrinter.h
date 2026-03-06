@@ -32,7 +32,7 @@
 
 //#define TRIVIAL_NODE_PRINTER
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 #ifndef TRIVIAL_NODE_PRINTER

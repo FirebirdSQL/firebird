@@ -114,7 +114,7 @@
 #include "../jrd/ProfilerManager.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // Item class implementation

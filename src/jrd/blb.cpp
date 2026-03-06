@@ -75,7 +75,7 @@
 #include "../common/classes/VaryStr.h"
 #include "../jrd/Statement.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 typedef Ods::blob_page blob_page;

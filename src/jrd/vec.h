@@ -29,7 +29,7 @@
 #include "../common/ThreadData.h"
 #include "../common/classes/array.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // general purpose vector
 template <class T, BlockType TYPE = type_vec>

@@ -40,7 +40,7 @@
 // Pick up relation ids
 #include "../jrd/ini.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

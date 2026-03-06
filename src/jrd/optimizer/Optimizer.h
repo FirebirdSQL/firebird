@@ -43,7 +43,7 @@
 #include "../jrd/Statement.h"
 #include "../jrd/recsrc/RecordSource.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // AB: 2005-11-05
 // Constants below needs some discussions and ideas

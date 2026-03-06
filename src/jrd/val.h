@@ -53,7 +53,7 @@ public:
 
 inline constexpr ULONG MAX_RECORD_SIZE	= 1048576; // 1 MB -- just to protect from possible misuse
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class ArrayField;
 class blb;

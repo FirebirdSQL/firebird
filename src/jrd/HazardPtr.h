@@ -38,7 +38,7 @@
 
 extern atomics::atomic<int> totHaz;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class HazardObject
 {

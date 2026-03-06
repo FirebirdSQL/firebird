@@ -32,7 +32,7 @@
 #include "Savepoint.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 // UndoItem implementation

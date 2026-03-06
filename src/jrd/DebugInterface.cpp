@@ -25,7 +25,7 @@
 #include "../jrd/DebugInterface.h"
 #include "../jrd/blb_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 void DBG_parse_debug_info(thread_db* tdbb, bid* blob_id, DbgInfo& dbgInfo)

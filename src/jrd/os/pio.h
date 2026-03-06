@@ -34,7 +34,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/File.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 #ifdef UNIX
 

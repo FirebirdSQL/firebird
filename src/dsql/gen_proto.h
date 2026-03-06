@@ -24,8 +24,7 @@
 #ifndef DSQL_GEN_PROTO_H
 #define DSQL_GEN_PROTO_H
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class ExprNode;
 	class ValueListNode;
 }

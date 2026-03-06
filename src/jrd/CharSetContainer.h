@@ -44,7 +44,7 @@ class CsConvert;
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct SubtypeInfo;
 

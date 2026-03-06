@@ -37,7 +37,7 @@
 #include "../common/classes/BatchCompletionState.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 namespace {
 	const char* const TEMP_NAME = "fb_batch";

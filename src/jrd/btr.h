@@ -41,7 +41,7 @@
 
 struct dsc;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_rel;
 class jrd_tra;

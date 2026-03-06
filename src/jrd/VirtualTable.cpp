@@ -42,7 +42,7 @@
 #include "../jrd/RecordBuffer.h"
 #include "../jrd/VirtualTable.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

@@ -68,7 +68,7 @@
 #include "../jrd/trace/TraceJrdHelpers.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 namespace
 {
@@ -200,7 +200,7 @@ namespace
 	}
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 static const long LONG_POS_MAX = 2147483647;

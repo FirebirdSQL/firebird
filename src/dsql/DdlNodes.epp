@@ -81,7 +81,7 @@
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/ProtectRelations.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Define range of user relation ids
 

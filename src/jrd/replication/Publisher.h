@@ -23,8 +23,7 @@
 #ifndef JRD_REPLICATION_PUBLISHER_H
 #define JRD_REPLICATION_PUBLISHER_H
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class jrd_tra;
 	class Database;

@@ -124,7 +124,7 @@
 #include "../jrd/IntlManager.h"
 #include "../common/classes/init.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 #define IS_TEXT(x)      (((x)->dsc_dtype == dtype_text)   ||\

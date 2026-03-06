@@ -34,7 +34,7 @@
 #include "../common/DecFloat.h"
 #include "../common/classes/TriState.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class CompoundStmtNode;
 class ExecBlockNode;

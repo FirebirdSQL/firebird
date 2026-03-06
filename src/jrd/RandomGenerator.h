@@ -24,7 +24,7 @@
 #define JRD_RANDOM_GENERATOR_H
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class RandomGenerator
 {

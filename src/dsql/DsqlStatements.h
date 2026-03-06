@@ -31,7 +31,7 @@
 #include "../jrd/ntrace.h"
 #include "../dsql/DsqlRequests.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class DdlNode;

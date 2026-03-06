@@ -34,8 +34,7 @@
 #include "../common/ThreadStart.h"
 #include "../common/sha2/sha2.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class CompilerScratch;
 	class Statement;

@@ -582,7 +582,7 @@ VI. ADDITIONAL NOTES
 static USHORT VAL_debug_level = 0;
 #endif
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 
@@ -805,8 +805,7 @@ int VAL_service(Firebird::UtilSvc* svc)
 }
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 {

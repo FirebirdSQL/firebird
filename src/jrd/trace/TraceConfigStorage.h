@@ -37,7 +37,7 @@
 #include "../../common/classes/RefCounted.h"
 #include <atomic>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 /*
   Session ID and flags are stored within slot itself.

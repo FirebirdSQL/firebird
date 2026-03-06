@@ -54,7 +54,7 @@
 #endif
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 static void bug_lck(const TEXT*);

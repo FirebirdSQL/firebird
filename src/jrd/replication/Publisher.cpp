@@ -41,7 +41,7 @@
 #include <numeric>
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Replication;
 
 namespace

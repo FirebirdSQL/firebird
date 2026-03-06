@@ -50,7 +50,7 @@ DEFINE_TRACE_ROUTINE(cos_trace);
 #endif
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 enum lck_t : UCHAR;
 

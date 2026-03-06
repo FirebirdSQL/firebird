@@ -52,7 +52,7 @@
 #include "../common/classes/Aligner.h"
 #include "../common/classes/VaryStr.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 /* The original order of dsc_type values corresponded to the priority

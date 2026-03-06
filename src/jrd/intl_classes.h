@@ -37,7 +37,7 @@
 #include "../common/CharSet.h"
 #include "../common/TextType.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class PatternMatcher
 {

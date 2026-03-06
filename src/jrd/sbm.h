@@ -31,7 +31,7 @@
 
 #include "../common/classes/sparse_bitmap.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Bitmap of record numbers
 typedef Firebird::SparseBitmap<FB_UINT64> RecordBitmap;

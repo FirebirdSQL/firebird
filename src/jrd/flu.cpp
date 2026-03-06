@@ -133,8 +133,7 @@ namespace {
 	Firebird::InitInstance<UdfDirectoryList> iUdfDirectoryList;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	bool Module::operator>(const Module &im) const
 	{
 		// we need it to sort on some key

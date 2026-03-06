@@ -31,7 +31,7 @@
 #include "../../common/classes/fb_string.h"
 #include "../../common/isc_s_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct TraceLogHeader final : public Firebird::MemoryHeader
 {

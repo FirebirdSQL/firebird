@@ -43,7 +43,7 @@ class CharSet;
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Lock;
 class BaseSubstringSimilarMatcher;

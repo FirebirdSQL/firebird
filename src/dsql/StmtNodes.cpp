@@ -67,10 +67,10 @@
 #include "../dsql/DsqlStatementCache.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields,
 	bool includeComputed);
@@ -191,7 +191,7 @@ namespace
 //--------------------
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 string StmtNode::internalPrint(NodePrinter& printer) const

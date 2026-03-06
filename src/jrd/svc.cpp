@@ -121,7 +121,7 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 inline constexpr int SVC_user_dba	= 2;
 inline constexpr int SVC_user_any	= 1;

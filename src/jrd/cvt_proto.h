@@ -42,8 +42,7 @@ ISC_TIME_TZ	CVT_get_sql_time_tz(const dsc*);
 GDS_TIMESTAMP CVT_get_timestamp(const dsc*);
 ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc*);
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class EngineCallbacks : public Firebird::Callbacks
 	{
 	public:

@@ -29,7 +29,7 @@
 
 const char* const SCRATCH = "fb_recbuf_";
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 RecordBuffer::RecordBuffer(MemoryPool& pool, const Format* format)
 	: PermanentStorage(pool)

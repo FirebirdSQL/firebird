@@ -33,8 +33,7 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 class thread_db;
 class TypeClause;
 

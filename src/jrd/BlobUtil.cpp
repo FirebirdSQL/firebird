@@ -25,7 +25,7 @@
 #include "../jrd/blb.h"
 #include "../jrd/tra.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 
@@ -59,7 +59,7 @@ namespace
 	}
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 //--------------------------------------
 

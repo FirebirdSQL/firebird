@@ -36,8 +36,7 @@
 #include <initializer_list>
 #include <functional>
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	struct SystemProcedureParameter
 	{
 		SystemProcedureParameter(

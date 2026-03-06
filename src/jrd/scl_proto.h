@@ -29,7 +29,7 @@
 #include "../common/classes/fb_string.h"
 #include "../jrd/MetaName.h"
 
-//namespace Jrd {
+//namespace Firebird::Jrd {
 //	class SecurityClass;
 //}
 
@@ -65,7 +65,7 @@ Jrd::SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type, const Jr
 ULONG SCL_get_number(const UCHAR*);
 USHORT SCL_convert_privilege(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& priv);
 
-namespace Jrd {
+namespace Firebird::Jrd {
 typedef Firebird::Array<UCHAR> Acl;
 }
 bool SCL_move_priv(Jrd::SecurityClass::flags_t, Jrd::Acl&);

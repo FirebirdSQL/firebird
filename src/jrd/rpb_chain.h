@@ -32,7 +32,7 @@
 
 // req.h defines struct record_param
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class traRpbListElement
 {

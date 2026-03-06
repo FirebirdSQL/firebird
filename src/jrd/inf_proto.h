@@ -24,7 +24,7 @@
 #ifndef JRD_INF_PROTO_H
 #define JRD_INF_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Request;
 	class jrd_tra;
 	class blb;

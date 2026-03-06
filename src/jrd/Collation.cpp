@@ -105,7 +105,7 @@
 #include "../common/SimilarToRegex.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 namespace {
@@ -1104,7 +1104,7 @@ Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attri
 //-------------
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)

@@ -33,7 +33,7 @@
 #include "../jrd/ods.h"
 #include "../common/classes/array.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Flags (3-bits) used for index node
 inline constexpr int BTN_NORMAL_FLAG					= 0;

@@ -24,7 +24,7 @@
 #ifndef JRD_INI_PROTO_H
 #define JRD_INI_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	struct jrd_trg;
 	class dsql_dbb;
 }

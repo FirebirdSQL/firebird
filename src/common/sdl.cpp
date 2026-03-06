@@ -32,7 +32,7 @@
 
 constexpr int COMPILE_SIZE = 256;
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 struct sdl_arg

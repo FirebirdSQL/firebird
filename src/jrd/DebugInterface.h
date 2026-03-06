@@ -35,7 +35,7 @@ inline constexpr UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
 inline constexpr UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
 inline constexpr UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 class MetaName;
 }
 

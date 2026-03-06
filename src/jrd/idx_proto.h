@@ -28,8 +28,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/req.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_rel;
 	class jrd_tra;
 	struct record_param;

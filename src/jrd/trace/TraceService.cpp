@@ -44,7 +44,7 @@
 #include "../../jrd/Mapping.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 class TraceSvcJrd : public TraceSvcIntf

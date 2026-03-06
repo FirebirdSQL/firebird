@@ -26,7 +26,7 @@
 #include "../dsql/DdlNodes.h"
 #include "../common/classes/array.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class CreateAlterPackageNode : public DdlNode

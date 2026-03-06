@@ -37,7 +37,7 @@
 #include <vector>
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 	class ThreadCollect
 	{

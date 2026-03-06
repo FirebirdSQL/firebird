@@ -17,7 +17,7 @@
 #include "../jrd/met.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)

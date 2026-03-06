@@ -32,7 +32,7 @@
 #include <string_view>
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 TableValueFunctionScan::TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
 											   const string& alias)

@@ -34,7 +34,7 @@
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/Monitoring.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 enum class CreateGrant
 {

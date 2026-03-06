@@ -54,7 +54,7 @@
 
 #include <windows.h>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class FileExtendLockGuard
 {
@@ -97,7 +97,7 @@ private:
 
 } // namespace Jrd
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 #ifdef TEXT

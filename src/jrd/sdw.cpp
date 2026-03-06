@@ -50,7 +50,7 @@
 #include "../jrd/Attachment.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 

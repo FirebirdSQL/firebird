@@ -34,8 +34,7 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/vio_proto.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class Request;
 	class jrd_prc;

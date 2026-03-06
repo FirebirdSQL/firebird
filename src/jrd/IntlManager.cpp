@@ -68,7 +68,7 @@ namespace
 	};
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 struct ExternalInfo

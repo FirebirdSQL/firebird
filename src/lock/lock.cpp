@@ -162,7 +162,7 @@ static constexpr bool compatibility[LCK_max][LCK_max] =
 };
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 LockManager::LockManager(const string& id, const Config* conf)

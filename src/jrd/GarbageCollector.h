@@ -30,7 +30,7 @@
 #include "../jrd/sbm.h"
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Database;
 class Savepoint;

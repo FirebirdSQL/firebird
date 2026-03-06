@@ -25,7 +25,7 @@
 #include "../common/os/guid.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 RandomGenerator::RandomGenerator()

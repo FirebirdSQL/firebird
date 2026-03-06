@@ -99,7 +99,7 @@
 
 struct dsc;
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 	class Connection;
 }
 
@@ -107,7 +107,7 @@ namespace Firebird {
 	class TextType;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 inline constexpr unsigned MAX_CALLBACKS = 50;
 
@@ -321,7 +321,7 @@ inline void SET_DBB(Jrd::Database*& dbb)
 
 // global variables for engine
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	typedef Firebird::SubsystemContextPoolHolder <Jrd::thread_db, MemoryPool> ContextPoolHolder;
 
 	class DatabaseContextHolder : public Jrd::ContextPoolHolder

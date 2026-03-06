@@ -36,7 +36,7 @@
 #include "../common/classes/MetaString.h"
 #include "../jrd/MetaName.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;

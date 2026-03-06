@@ -288,7 +288,7 @@ namespace Firebird {
 	class Config;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class LockManager final : public Firebird::GlobalStorage, public Firebird::IpcObject
 {

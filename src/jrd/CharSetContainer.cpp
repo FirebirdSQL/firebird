@@ -28,7 +28,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/obj.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 CharSetVers* CharSetVers::create(thread_db* tdbb, MemoryPool& pool, Cached::CharSet* csp)
 {

@@ -57,7 +57,7 @@
 
 using namespace Firebird;
 using namespace Ods;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Replication;
 
 namespace

@@ -24,7 +24,7 @@
 #ifndef JRD_TRA_PROTO_H
 #define JRD_TRA_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 class Attachment;
 class Database;
 class TraceTransactionEnd;

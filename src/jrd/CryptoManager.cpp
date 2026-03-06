@@ -73,8 +73,7 @@ namespace
 }
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Header
 	{
 	protected:

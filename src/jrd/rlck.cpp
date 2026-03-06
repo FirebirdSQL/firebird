@@ -32,7 +32,7 @@
 #include "../jrd/lck.h"
 #include "../jrd/rlck_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation, bool write_flag)

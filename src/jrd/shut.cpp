@@ -37,7 +37,7 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/extds/ExtDS.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // Shutdown lock data

@@ -31,7 +31,7 @@
 #include "../common/classes/RefCounted.h"
 #include "../jrd/jrd.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class DdlNode;

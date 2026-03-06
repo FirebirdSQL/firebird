@@ -66,7 +66,7 @@
 #include "../jrd/tpc_proto.h"
 #include "../dsql/DdlNodes.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 

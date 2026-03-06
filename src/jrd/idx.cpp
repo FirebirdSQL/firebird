@@ -68,7 +68,7 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Ods;
 using namespace Firebird;
 
@@ -206,7 +206,7 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class IndexCreateTask : public Task
 {

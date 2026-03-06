@@ -71,7 +71,7 @@ DEFINE_TRACE_ROUTINE(cmp_trace);
 
 class VaryingString;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_rel;
 class Sort;

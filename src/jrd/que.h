@@ -27,7 +27,7 @@
 //
 // general purpose queue
 //
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct que
 {

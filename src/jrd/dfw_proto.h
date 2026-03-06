@@ -29,8 +29,7 @@
 #include "../jrd/Resources.h"
 #include "../common/classes/fb_string.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	enum dfw_t : int;
 
 	class thread_db;

@@ -72,7 +72,7 @@
 #include "../jrd/intl_proto.h"
 
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

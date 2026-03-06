@@ -29,7 +29,7 @@
 #include "../common/classes/Hash.h"
 #include "../jrd/cch.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // PageToBufferMap used to cache pointers to the often used page buffers.
 // Its purpose is to avoid more costly usage of shared hash table.

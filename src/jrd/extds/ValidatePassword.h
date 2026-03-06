@@ -27,12 +27,11 @@
 #include "../../common/classes/ClumpletWriter.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 }
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 bool validatePassword(Jrd::thread_db* tdbb, const Firebird::PathName& file,
 	Firebird::ClumpletWriter& dpb);

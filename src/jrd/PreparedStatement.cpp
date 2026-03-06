@@ -173,7 +173,7 @@ namespace
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 // Move data from result set message to user variables.

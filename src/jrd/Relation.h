@@ -36,8 +36,7 @@
 #include "../common/classes/TriState.h"
 #include "../common/sha2/sha2.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 template <typename T> class vec;
 class BoolExprNode;

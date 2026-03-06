@@ -147,10 +147,10 @@ inline constexpr int WAIT_PERIOD = -1;
 
 DATABASE DB = FILENAME "ODS.RDB";
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 typedef HashTable<
 	DeferredWork,

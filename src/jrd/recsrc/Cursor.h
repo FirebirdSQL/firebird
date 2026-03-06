@@ -26,8 +26,7 @@
 #include "../common/classes/array.h"
 #include "../jrd/MetaName.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class CompilerScratch;
 	class RecordSource;

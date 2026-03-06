@@ -24,7 +24,7 @@
 #ifndef JRD_BLF_PROTO_H
 #define JRD_BLF_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	struct bid;
 }
 

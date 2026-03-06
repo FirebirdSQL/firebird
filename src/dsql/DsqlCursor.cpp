@@ -31,7 +31,7 @@
 #include "../dsql/StmtNodes.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB

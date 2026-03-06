@@ -33,14 +33,13 @@
 #include <limits>
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_tra;
 	class thread_db;
 	class ValueListNode;
 }
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 class Manager;
 class Provider;

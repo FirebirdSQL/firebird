@@ -36,7 +36,7 @@ struct tx_inv_page;
 
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Database;
 class thread_db;

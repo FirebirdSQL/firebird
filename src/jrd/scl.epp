@@ -64,7 +64,7 @@
 
 inline constexpr int UIC_BASE = 10;
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 DATABASE DB = FILENAME "ODS.RDB";

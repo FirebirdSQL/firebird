@@ -61,7 +61,7 @@ public:
 };
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 

@@ -29,8 +29,7 @@
 #include "../jrd/MetaName.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Keywords final
 	{
 	public:

@@ -148,7 +148,7 @@
 #include "../common/dllinst.h"
 #endif
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 constexpr SSHORT WAIT_PERIOD = -1;
@@ -158,8 +158,7 @@ constexpr SSHORT WAIT_PERIOD = -1;
 #endif
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 int JBlob::release()
 {
@@ -986,8 +985,7 @@ namespace
 }
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	// Option block for database parameter block
 
 	class DatabaseOptions
@@ -1557,7 +1555,7 @@ static void trace_failed_attach(const char* filename, const DatabaseOptions& opt
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 JTransaction* JAttachment::getTransactionInterface(CheckStatusWrapper* status, ITransaction* tra)
 {

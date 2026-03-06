@@ -31,7 +31,7 @@
 #include "../common/classes/fb_pair.h"
 
 // forward declarations
-namespace Jrd {
+namespace Firebird::Jrd {
 	typedef Firebird::GenericMap<Jrd::MetaNamePair> MetaNamePairMap;
 
 	class DsqlRequest;

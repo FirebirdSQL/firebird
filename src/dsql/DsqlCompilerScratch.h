@@ -34,8 +34,7 @@
 #include <optional>
 #include <variant>
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class BinaryBoolNode;
 class LocalDeclarationsNode;

@@ -43,7 +43,7 @@
 #include "../common/isc_s_proto.h"
 #include "iberror.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // System provided internal filters for filtering internal

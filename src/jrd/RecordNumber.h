@@ -205,8 +205,7 @@ private:
 	bool valid;
 };
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 /* Blob id.  A blob has two states -- temporary and permanent.  In each
    case, the blob id is 8 bytes (2 longwords) long.  In the case of a
    temporary blob, the first word is NULL and the second word points to

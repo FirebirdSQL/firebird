@@ -26,7 +26,7 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/NestConst.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class CompilerScratch;
 class ExprNode;

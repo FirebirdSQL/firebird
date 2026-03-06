@@ -37,7 +37,7 @@
 struct charset;
 struct texttype;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class IntlManager
 {

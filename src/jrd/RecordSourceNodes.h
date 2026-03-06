@@ -32,7 +32,7 @@
 #include "../dsql/Visitors.h"
 #include "../dsql/pass1_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class IndexRetrieval;
 class OptimizerRetrieval;

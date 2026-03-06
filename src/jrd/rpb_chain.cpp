@@ -23,7 +23,7 @@
 #include "firebird.h"
 #include "../jrd/rpb_chain.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 #ifdef DEV_BUILD
 #define ExecAssert(x) fb_assert(x)

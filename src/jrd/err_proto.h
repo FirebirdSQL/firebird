@@ -30,7 +30,7 @@
 #include "../common/StatusArg.h"
 #include "../jrd/status.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Index error types
 

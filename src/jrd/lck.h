@@ -35,7 +35,7 @@
 #include "../jrd/Attachment.h"
 #include "../common/classes/auto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Database;
 class thread_db;
@@ -209,7 +209,7 @@ void	LCK_re_post(Jrd::thread_db*, Jrd::Lock*);
 void	LCK_write_data(Jrd::thread_db*, Jrd::Lock*, LOCK_DATA_T);
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class AutoLock
 {

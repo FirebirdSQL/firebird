@@ -109,7 +109,7 @@
 
 DATABASE DB = FILENAME "ODS.RDB";
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 static ULONG get_rel_flags_from_FLAGS(USHORT);

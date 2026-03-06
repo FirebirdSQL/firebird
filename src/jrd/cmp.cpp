@@ -92,7 +92,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

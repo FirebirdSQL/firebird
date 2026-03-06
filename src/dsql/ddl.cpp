@@ -106,7 +106,7 @@
 #include "../common/prett_proto.h"
 #endif
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

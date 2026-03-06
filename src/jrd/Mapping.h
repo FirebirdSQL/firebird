@@ -38,7 +38,7 @@
 #include "../jrd/Monitoring.h"
 #include "../jrd/scl.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class AuthWriter;
 

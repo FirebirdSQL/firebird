@@ -30,7 +30,7 @@
 #include "Cursor.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 namespace
 {

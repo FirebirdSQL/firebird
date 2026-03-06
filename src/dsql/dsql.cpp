@@ -81,7 +81,7 @@
 #include <ctype.h>
 #endif
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

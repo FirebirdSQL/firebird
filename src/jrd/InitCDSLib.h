@@ -35,8 +35,7 @@
 
 //#define DEBUG_CDS_MEMORY
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class InitCDS
 {

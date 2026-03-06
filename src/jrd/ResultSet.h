@@ -33,7 +33,7 @@
 
 struct dsc;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;

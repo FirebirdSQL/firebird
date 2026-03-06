@@ -27,8 +27,7 @@
 #include "../include/fb_blk.h"
 #include "../../common/classes/array.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 
 	class Compressor

@@ -82,8 +82,7 @@ __int64 __cdecl _ftelli64(FILE*);
 
 using namespace Firebird;
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class ExternalFileDirectoryList : public DirectoryList
 	{
 	private:
@@ -113,7 +112,7 @@ namespace Jrd
 	};
 }
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 namespace {
 

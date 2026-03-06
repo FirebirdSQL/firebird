@@ -35,7 +35,7 @@
 #include <unordered_set>
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 #ifdef DSQL_DEBUG

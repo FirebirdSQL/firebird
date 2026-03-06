@@ -30,7 +30,7 @@
 #include "../jrd/optimizer/Optimizer.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 //

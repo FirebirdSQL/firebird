@@ -48,11 +48,11 @@
 #include "../jrd/Savepoint.h"
 #include "../jrd/tra_proto.h"
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 class Transaction;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class blb;
 class Lock;

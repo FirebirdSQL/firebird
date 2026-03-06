@@ -52,7 +52,7 @@
 #endif
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Dictionary : public Firebird::PermanentStorage
 {

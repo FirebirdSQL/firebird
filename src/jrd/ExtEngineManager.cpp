@@ -61,7 +61,7 @@
 #include "../common/classes/GetPlugins.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 static EngineCheckout::Type checkoutType(IExternalEngine* engine);

@@ -34,7 +34,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 void BlrDebugWriter::raiseError(const Arg::StatusVector& vector)
 {

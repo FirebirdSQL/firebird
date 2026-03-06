@@ -57,7 +57,7 @@
 #endif
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Replication;
 
 #if !defined(WIN_NT) && !defined(LINUX)

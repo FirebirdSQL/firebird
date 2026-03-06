@@ -26,7 +26,7 @@
 
 #include "../common/classes/fb_string.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class jrd_file;
 	class Database;
 	class BufferDesc;

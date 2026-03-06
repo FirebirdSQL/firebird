@@ -28,7 +28,7 @@
 #include "../common/classes/File.h"
 #include "../jrd/TempSpace.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Format;
 class Record;

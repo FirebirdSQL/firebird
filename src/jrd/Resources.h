@@ -29,7 +29,7 @@
 #include "../common/sha2/sha2.h"
 #include <functional>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class RelationPermanent;
 class RoutinePermanent;

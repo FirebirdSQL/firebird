@@ -350,7 +350,7 @@ bool DataTypeUtilBase::makeBlobOrText(dsc* result, const dsc* arg, bool force)
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 UCHAR DataTypeUtil::maxBytesPerChar(CSetId charSet)
 {

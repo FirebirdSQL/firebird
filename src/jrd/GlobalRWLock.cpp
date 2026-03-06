@@ -46,7 +46,7 @@ IMPLEMENT_TRACE_ROUTINE(cos_trace, "COS")
 #endif
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 int GlobalRWLock::blocking_ast_cached_lock(void* ast_object)

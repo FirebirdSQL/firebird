@@ -35,7 +35,7 @@
 #include "../jrd/met.h"
 #include "../jrd/tpc_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // class TransactionNumber

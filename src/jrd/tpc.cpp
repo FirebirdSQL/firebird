@@ -38,7 +38,7 @@
 
 using namespace Firebird;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
 {

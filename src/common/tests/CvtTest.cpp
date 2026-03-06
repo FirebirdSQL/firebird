@@ -8,7 +8,7 @@
 #include "../jrd/intl.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace CvtTestUtils;
 
 

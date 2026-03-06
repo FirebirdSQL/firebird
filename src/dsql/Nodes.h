@@ -33,7 +33,7 @@
 #include <initializer_list>
 #include <type_traits>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class AggregateSort;
 class CompilerScratch;

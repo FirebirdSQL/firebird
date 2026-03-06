@@ -33,7 +33,7 @@
 
 class SysFunction;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class ItemInfo;
 class DeclareVariableNode;

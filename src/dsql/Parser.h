@@ -48,7 +48,7 @@ namespace Arg {
 } // namespace
 } // namespace
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Parser : public Firebird::PermanentStorage
 {

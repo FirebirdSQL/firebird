@@ -114,7 +114,7 @@
 #include "../common/classes/Aligner.h"
 #include "../jrd/Function.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 

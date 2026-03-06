@@ -41,8 +41,7 @@
 
 using namespace Firebird;
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 Array<MemoryPool*>* InitCDS::m_pools = nullptr;
 MemoryPool* InitCDS::m_pool = nullptr;

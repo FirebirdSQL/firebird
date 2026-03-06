@@ -37,7 +37,7 @@
 #endif
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,

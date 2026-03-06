@@ -27,7 +27,7 @@
 #include "../jrd/cmp_proto.h"
 #include <atomic>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Request;
 	class jrd_tra;
 	class AssignmentNode;
@@ -57,8 +57,7 @@ void EXE_send(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, const void*);
 void EXE_start(Jrd::thread_db*, Jrd::Request*, Jrd::jrd_tra*);
 void EXE_unwind(Jrd::thread_db*, Jrd::Request*);
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class CachedRequestId
 	{
 	public:

@@ -57,7 +57,7 @@
 #include <optional>
 
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 	class Connection;
 }
 
@@ -66,8 +66,7 @@ namespace Replication
 	class TableMatcher;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class Database;
 	class jrd_tra;

@@ -28,7 +28,7 @@
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 // Compression (run-length encoding aka RLE) scheme:
 //

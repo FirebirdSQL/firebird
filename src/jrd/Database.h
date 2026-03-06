@@ -81,8 +81,7 @@
 #define SPTHR_DEBUG(A)
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 template <typename T> class vec;
 class jrd_rel;
 class Shadow;

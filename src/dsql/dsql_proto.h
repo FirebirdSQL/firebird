@@ -28,7 +28,7 @@
 #include "../common/classes/array.h"
 #include "firebird/Interface.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Attachment;
 	class jrd_tra;
 	class DsqlDmlRequest;

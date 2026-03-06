@@ -29,7 +29,7 @@
 #include "../common/classes/objects_array.h"
 #include "../jrd/status.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Database;
 	class Attachment;
 	class jrd_tra;

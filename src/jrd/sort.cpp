@@ -65,7 +65,7 @@
 constexpr USHORT RUN_GROUP			= 8;
 constexpr USHORT MAX_MERGE_LEVEL	= 2;
 
-using namespace Jrd;
+using namespace Firebird::Jrd;
 using namespace Firebird;
 
 // The sort buffer size should be just under a multiple of the
