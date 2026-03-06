@@ -42,8 +42,8 @@
 #include "../jrd/RecordBuffer.h"
 #include "../jrd/VirtualTable.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 void VirtualTable::erase(thread_db* tdbb, record_param* rpb)
@@ -111,3 +111,6 @@ void VirtualTable::store(thread_db* /*tdbb*/, record_param* /*rpb*/)
 {
 	ERR_post(Arg::Gds(isc_read_only));
 }
+
+
+}	// namespace Firebird::Jrd

@@ -62,11 +62,12 @@
 #include <io.h> // lseek, read, write, close
 #endif
 
+namespace Firebird::Jrd
+{
+
+
 constexpr USHORT RUN_GROUP			= 8;
 constexpr USHORT MAX_MERGE_LEVEL	= 2;
-
-using namespace Firebird::Jrd;
-using namespace Firebird;
 
 // The sort buffer size should be just under a multiple of the
 // hardware memory page size to account for memory allocator
@@ -2442,3 +2443,5 @@ sort_record* PartitionedSort::getMerge()
 	return eof ? NULL : record;
 }
 
+
+}	// namespace Firebird::Jrd
