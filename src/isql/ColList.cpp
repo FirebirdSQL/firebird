@@ -26,6 +26,9 @@
 #include "ColList.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Isql
+{
+
 
 ColList::item::item(const char* name, unsigned len)
 	: col_len(len), next(0)
@@ -132,3 +135,5 @@ bool ColList::find(const char* name, unsigned* out_len) const
 	return false;
 }
 
+
+} // namespace Firebird::Isql

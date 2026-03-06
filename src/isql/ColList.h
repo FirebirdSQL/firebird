@@ -27,6 +27,10 @@
 
 #include "../common/constants.h"
 
+namespace Firebird::Isql
+{
+
+
 // This is a linked list implementing a seldom used feature: the ability to
 // asssign a maximum width to each column, by name. The name should match the
 // one that appears in a result set (from a SELECT statement).
@@ -78,5 +82,7 @@ inline size_t ColList::count() const
 	return m_count;
 }
 
-#endif // FB_COLLIST_H
 
+} // namespace Firebird::Isql
+
+#endif // FB_COLLIST_H

@@ -42,6 +42,8 @@
 
 using Firebird::PathName;
 
+namespace Firebird::Isql {
+
 
 InputDevices::indev::indev()
 	: indev_fpointer(0), indev_line(0), indev_aux(0), indev_next(0),
@@ -298,3 +300,5 @@ void InputDevices::commandsToFile(FILE* f)
 
 	commands.clear();
 }
+
+} // namespace Firebird::Isql

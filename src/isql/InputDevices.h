@@ -31,6 +31,9 @@
 
 #include <stdio.h>
 
+namespace Firebird::Isql
+{
+
 // This is basically a stack of input files caused by the INPUT command,
 // because it can be invoked interactively and from a file. In turn, each file
 // (SQL script) can contain another INPUT command and so on.
@@ -153,5 +156,7 @@ inline size_t InputDevices::count() const
 	return m_count;
 }
 
-#endif // FB_INPUT_DEVICES_H
 
+} // namespace Firebird::Isql
+
+#endif // FB_INPUT_DEVICES_H

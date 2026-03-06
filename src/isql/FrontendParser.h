@@ -34,6 +34,10 @@
 #include <variant>
 #include <vector>
 
+namespace Firebird::Isql
+{
+
+
 class FrontendParser
 {
 private:
@@ -333,5 +337,8 @@ private:
 	FrontendLexer lexer;
 	const Options options;
 };
+
+
+} // namespace Firebird::Isql
 
 #endif	// FB_ISQL_FRONTEND_PARSER_H

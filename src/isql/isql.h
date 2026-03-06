@@ -41,6 +41,10 @@
 #include <firebird/Interface.h>
 #include "firebird/impl/msg_helper.h"
 
+namespace Firebird::Isql
+{
+
+
 // Define lengths used in isql.e
 
 inline constexpr int PRINT_BUFFER_LENGTH	= 1024;
@@ -337,5 +341,8 @@ private:
 	FB_UINT64 m_in_bytes = 0;
 	FB_UINT64 m_roundtrips = 0;
 };
+
+
+} // namespace Firebird::Isql
 
 #endif // ISQL_ISQL_H

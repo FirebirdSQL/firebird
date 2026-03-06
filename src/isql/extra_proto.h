@@ -28,12 +28,14 @@
 #include "../common/classes/MetaString.h"
 #include "../common/classes/QualifiedMetaString.h"
 
-using GetDefaultCharSetForSchemaFunc = std::function<SSHORT (const Firebird::MetaString& schemaName)>;
+namespace Firebird::Isql
+{
+	using GetDefaultCharSetForSchemaFunc = std::function<SSHORT (const Firebird::MetaString& schemaName)>;
 
-int	EXTRACT_ddl(LegacyTables, const Firebird::QualifiedMetaString&);
-int	EXTRACT_list_table(const Firebird::QualifiedMetaString&, const Firebird::QualifiedMetaString&, bool,
-	GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
-processing_state	EXTRACT_list_grants (const SCHAR*);
+	int	EXTRACT_ddl(LegacyTables, const Firebird::QualifiedMetaString&);
+	int	EXTRACT_list_table(const Firebird::QualifiedMetaString&, const Firebird::QualifiedMetaString&, bool,
+		GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
+	processing_state	EXTRACT_list_grants (const SCHAR*);
+} // namespace Firebird::Isql
 
 #endif // ISQL_EXTRA_PROTO_H
-

@@ -141,6 +141,9 @@ using Firebird::MsgFormat::SafeArg;
 #include "../intl/charsets.h"
 #include <unicode/utf8.h>
 
+namespace Firebird::Isql
+{
+
 
 //DATABASE DB = COMPILETIME "yachts.lnk";
 DATABASE DB = COMPILETIME "yachts.lnk" RUNTIME isqlGlob.global_Db_name;
@@ -9482,3 +9485,5 @@ bool IsqlWireStats::print(bool initial)
 
 	return true;
 }
+
+} // namespace Firebird::Isql

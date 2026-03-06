@@ -69,8 +69,10 @@
 #include <ctype.h>
 #endif
 
-using namespace Firebird;
-using Firebird::MsgFormat::SafeArg;
+namespace Firebird::Isql
+{
+
+using MsgFormat::SafeArg;
 
 
 //DATABASE DB = EXTERN COMPILETIME "yachts.lnk";
@@ -6735,3 +6737,6 @@ static processing_state show_wireStats()
 
 	return SKIP;
 }
+
+
+} // namespace Firebird::Isql
