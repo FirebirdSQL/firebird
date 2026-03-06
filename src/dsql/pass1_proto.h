@@ -24,7 +24,8 @@
 #ifndef DSQL_PASS1_PROTO_H
 #define DSQL_PASS1_PROTO_H
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 	class CompoundStmtNode;
 	class DeclareCursorNode;
 	class DsqlMapNode;
@@ -35,36 +36,32 @@ namespace Firebird::Jrd {
 	class SelectNode;
 	class ValueExprNode;
 	class ValueListNode;
-}
 
-namespace Firebird::Jrd {
-
-void PASS1_ambiguity_check(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, const Jrd::DsqlContextStack&);
-bool PASS1_compare_alias(const Jrd::QualifiedName& contextAlias, const Jrd::QualifiedName& lookupAlias);
-bool PASS1_compare_alias(const Firebird::ObjectsArray<Jrd::QualifiedName>& contextAlias,
-	const Firebird::ObjectsArray<Jrd::QualifiedName>& lookupAlias);
-Jrd::BoolExprNode* PASS1_compose(Jrd::BoolExprNode*, Jrd::BoolExprNode*, UCHAR);
-Jrd::DeclareCursorNode* PASS1_cursor_name(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&, USHORT, bool);
-Jrd::RseNode* PASS1_derived_table(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const char*,
-	const Jrd::SelectNode* = nullptr);
-void PASS1_expand_contexts(Jrd::DsqlContextStack& contexts, Jrd::dsql_ctx* context);
-Jrd::ValueListNode* PASS1_expand_select_list(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::RecSourceListNode*);
-void PASS1_expand_select_node(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*, Jrd::ValueListNode*, bool);
-void PASS1_field_unknown(const TEXT*, const TEXT*, const Jrd::ExprNode*);
-void PASS1_limit(Jrd::DsqlCompilerScratch*, NestConst<Jrd::ValueExprNode>,
-	NestConst<Jrd::ValueExprNode>, Jrd::RseNode*);
-Jrd::ValueExprNode* PASS1_lookup_alias(Jrd::DsqlCompilerScratch*, const Jrd::MetaName&,
-	Jrd::ValueListNode*, bool);
-Jrd::dsql_ctx* PASS1_make_context(Jrd::DsqlCompilerScratch* statement, Jrd::RecordSourceNode* relationNode);
-bool PASS1_node_match(Jrd::DsqlCompilerScratch*, const Jrd::ExprNode*, const Jrd::ExprNode*, bool);
-Jrd::DsqlMapNode* PASS1_post_map(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, Jrd::dsql_ctx*,
-	Jrd::WindowClause*);
-Jrd::RecordSourceNode* PASS1_relation(Jrd::DsqlCompilerScratch*, Jrd::RecordSourceNode*);
-Jrd::RseNode* PASS1_rse(Jrd::DsqlCompilerScratch*, Jrd::SelectExprNode*, const Jrd::SelectNode* = nullptr);
-bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, std::function<void (dsc*)>, bool);
-bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, NestConst<Jrd::ValueExprNode>, bool);
-Jrd::ValueListNode* PASS1_sort(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::ValueListNode*);
-
+	void PASS1_ambiguity_check(DsqlCompilerScratch*, const MetaName&, const DsqlContextStack&);
+	bool PASS1_compare_alias(const QualifiedName& contextAlias, const QualifiedName& lookupAlias);
+	bool PASS1_compare_alias(const ObjectsArray<QualifiedName>& contextAlias,
+		const ObjectsArray<QualifiedName>& lookupAlias);
+	BoolExprNode* PASS1_compose(BoolExprNode*, BoolExprNode*, UCHAR);
+	DeclareCursorNode* PASS1_cursor_name(DsqlCompilerScratch*, const MetaName&, USHORT, bool);
+	RseNode* PASS1_derived_table(DsqlCompilerScratch*, SelectExprNode*, const char*,
+		const SelectNode* = nullptr);
+	void PASS1_expand_contexts(DsqlContextStack& contexts, dsql_ctx* context);
+	ValueListNode* PASS1_expand_select_list(DsqlCompilerScratch*, ValueListNode*, RecSourceListNode*);
+	void PASS1_expand_select_node(DsqlCompilerScratch*, ExprNode*, ValueListNode*, bool);
+	void PASS1_field_unknown(const TEXT*, const TEXT*, const ExprNode*);
+	void PASS1_limit(DsqlCompilerScratch*, NestConst<ValueExprNode>,
+		NestConst<ValueExprNode>, RseNode*);
+	ValueExprNode* PASS1_lookup_alias(DsqlCompilerScratch*, const MetaName&,
+		ValueListNode*, bool);
+	dsql_ctx* PASS1_make_context(DsqlCompilerScratch* statement, RecordSourceNode* relationNode);
+	bool PASS1_node_match(DsqlCompilerScratch*, const ExprNode*, const ExprNode*, bool);
+	DsqlMapNode* PASS1_post_map(DsqlCompilerScratch*, ValueExprNode*, dsql_ctx*,
+		WindowClause*);
+	RecordSourceNode* PASS1_relation(DsqlCompilerScratch*, RecordSourceNode*);
+	RseNode* PASS1_rse(DsqlCompilerScratch*, SelectExprNode*, const SelectNode* = nullptr);
+	bool PASS1_set_parameter_type(DsqlCompilerScratch*, ValueExprNode*, std::function<void (dsc*)>, bool);
+	bool PASS1_set_parameter_type(DsqlCompilerScratch*, ValueExprNode*, NestConst<ValueExprNode>, bool);
+	ValueListNode* PASS1_sort(DsqlCompilerScratch*, ValueListNode*, ValueListNode*);
 } // namespace Firebird::Jrd
 
 

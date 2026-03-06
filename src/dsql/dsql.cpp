@@ -87,7 +87,7 @@ namespace Firebird::Jrd {
 
 
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);
-static dsql_dbb*	init(Jrd::thread_db*, Jrd::Attachment*);
+static dsql_dbb*	init(thread_db*, Attachment*);
 static DsqlRequest* prepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
 static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
 static RefPtr<DsqlStatement> prepareStatement(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT,
@@ -159,7 +159,7 @@ void DSQL_execute(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	const auto statement = dsqlRequest->getDsqlStatement();
 
@@ -213,7 +213,7 @@ void DSQL_free_statement(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
@@ -289,7 +289,7 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 
 		if (items && buffer)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			sql_info(tdbb, dsqlRequest, items->getCount(), items->begin(),
 				buffer->getCount(), buffer->begin());
 		}
@@ -300,7 +300,7 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 	{
 		if (dsqlRequest)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
@@ -330,7 +330,7 @@ void DSQL_sql_info(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	sql_info(tdbb, dsqlRequest, item_length, items, info_length, info);
 }
@@ -366,7 +366,7 @@ void DSQL_execute_immediate(thread_db* tdbb,
 					  Arg::Gds(isc_bad_trans_handle));
 		}
 
-		Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+		ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 		// A select having cursor is a singleton select when executed immediate
 		const bool singleton = dsqlStatement->isCursorBased();
@@ -386,7 +386,7 @@ void DSQL_execute_immediate(thread_db* tdbb,
 	{
 		if (dsqlRequest)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
@@ -435,7 +435,7 @@ static ULONG get_request_info(thread_db* tdbb, DsqlRequest* dsqlRequest, ULONG b
     @param db_handle
 
  **/
-static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
+static dsql_dbb* init(thread_db* tdbb, Attachment* attachment)
 {
 	SET_TDBB(tdbb);
 
@@ -584,7 +584,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 	DsqlCompilerScratch* scratch = nullptr;
 	MemoryPool* statementPool = database->createPool();
 
-	Jrd::ContextPoolHolder statementContext(tdbb, statementPool);
+	ContextPoolHolder statementContext(tdbb, statementPool);
 	try
 	{
 		scratchPool = database->createPool();
@@ -600,7 +600,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 		string transformedText;
 
 		{	// scope to delete parser before the scratch pool is gone
-			Jrd::ContextPoolHolder scratchContext(tdbb, scratchPool);
+			ContextPoolHolder scratchContext(tdbb, scratchPool);
 
 			scratch = FB_NEW_POOL(*scratchPool) DsqlCompilerScratch(*scratchPool, database, transaction);
 			scratch->clientDialect = clientDialect;
@@ -1170,7 +1170,7 @@ static UCHAR* var_info(const dsql_msg* message,
 		return info;
 
 	thread_db* tdbb = JRD_get_thread_data();
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 	HalfStaticArray<const dsql_par*, 16> parameters;
 

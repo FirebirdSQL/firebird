@@ -27,12 +27,18 @@
 #include "../dsql/DsqlCompilerScratch.h"
 #include "../dsql/metd_proto.h"
 
-UCHAR Jrd::DSqlDataTypeUtil::maxBytesPerChar(CSetId charSet)
+namespace Firebird::Jrd {
+
+
+UCHAR DSqlDataTypeUtil::maxBytesPerChar(CSetId charSet)
 {
 	return METD_get_charset_bpc(dsqlScratch->getTransaction(), charSet);
 }
 
-USHORT Jrd::DSqlDataTypeUtil::getDialect() const
+USHORT DSqlDataTypeUtil::getDialect() const
 {
 	return dsqlScratch->clientDialect;
 }
+
+
+}	// namespace Firebird::Jrd
