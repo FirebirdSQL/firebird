@@ -41,8 +41,7 @@
 #include "../common/dsc.h"
 #include "../jrd/Resources.h"
 
-namespace Ods
-{
+namespace Firebird::Jrd::Ods {
 	struct blob_page;
 	struct blh;
 }

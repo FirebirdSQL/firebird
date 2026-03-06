@@ -45,7 +45,7 @@
 
 // forward
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 struct pag;
 

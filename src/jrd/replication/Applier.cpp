@@ -56,7 +56,7 @@
 #define RESOLVE_CONFLICTS
 
 using namespace Firebird;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird::Jrd;
 using namespace Firebird::Jrd::Replication;
 

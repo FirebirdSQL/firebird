@@ -67,7 +67,7 @@
 #include "../dsql/DdlNodes.h"
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
 
 //#define DEBUG_BTR_SPLIT

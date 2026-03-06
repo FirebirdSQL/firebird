@@ -24,7 +24,7 @@
 #ifndef JRD_CCH_PROTO_H
 #define JRD_CCH_PROTO_H
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 

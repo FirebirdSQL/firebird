@@ -583,7 +583,7 @@ static USHORT VAL_debug_level = 0;
 #endif
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
 
 

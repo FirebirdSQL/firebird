@@ -26,7 +26,7 @@
 
 using namespace Firebird;
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 bool isSupported(const header_page* hdr) noexcept
 {

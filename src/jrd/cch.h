@@ -50,7 +50,7 @@ DEFINE_TRACE_ROUTINE(cch_trace);
 #define CCH_TRACEE_AST(message) // nothing
 #endif
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 

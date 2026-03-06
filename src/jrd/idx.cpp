@@ -69,7 +69,7 @@
 #include "../jrd/WorkerAttachment.h"
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
 
 static idx_e check_duplicates(thread_db*, Record*, index_desc*, index_insertion*, jrd_rel*);

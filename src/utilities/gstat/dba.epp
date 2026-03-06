@@ -83,7 +83,7 @@ using Firebird::MsgFormat::SafeArg;
 
 using namespace Firebird;
 using namespace Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 
 
 // For Netware the follow DB handle and isc_status is #defined to be a

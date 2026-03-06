@@ -55,7 +55,7 @@ static time_t times(struct tms*);
 #endif
 
 
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 
 static void analyse(int, const SCHAR*, const pag*, int);
 static SLONG get_long();

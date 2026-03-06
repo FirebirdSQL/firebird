@@ -32,7 +32,7 @@ namespace Firebird::Jrd {
 	struct win;
 }
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 	struct header_page;
 }

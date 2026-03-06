@@ -32,7 +32,7 @@ namespace Firebird::Jrd {
 	class BufferDesc;
 }
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 

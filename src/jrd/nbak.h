@@ -50,7 +50,7 @@ DEFINE_TRACE_ROUTINE(nbak_trace);
 #define NBAK_TRACE_AST(message) /* nothing */
 #endif
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 

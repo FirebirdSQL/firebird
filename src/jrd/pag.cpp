@@ -97,7 +97,7 @@
 #include "../jrd/CryptoManager.h"
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
 
 namespace

@@ -78,7 +78,7 @@
 
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using namespace Firebird;
 
 // In the superserver mode, no page locks are acquired through the lock manager.

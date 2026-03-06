@@ -31,7 +31,7 @@
 #include "../jrd/btn.h"
 
 using namespace Firebird::Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 
 USHORT IndexNode::computePrefix(const UCHAR* prevString, USHORT prevLength,
 								const UCHAR* string, USHORT length)

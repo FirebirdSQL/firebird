@@ -48,13 +48,13 @@ namespace Firebird::Jrd {
 	};
 }
 
-namespace Ods
+namespace Firebird::Jrd::Ods
 {
 	struct pag;
 	struct data_page;
 }
 
-Ods::pag* DPM_allocate(Jrd::thread_db*, Jrd::win*);
+Firebird::Jrd::Ods::pag* DPM_allocate(Jrd::thread_db*, Jrd::win*);
 void	DPM_backout(Jrd::thread_db*, Jrd::record_param*);
 void	DPM_backout_mark(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
 double	DPM_cardinality(Jrd::thread_db*, Jrd::jrd_rel*, const Jrd::Format*);

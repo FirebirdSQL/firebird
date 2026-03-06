@@ -30,7 +30,7 @@
 #include "../common/classes/SyncObject.h"
 #include "../jrd/tra.h"
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 struct tx_inv_page;
 

@@ -38,7 +38,7 @@
 #include "../utilities/gstat/ppg_proto.h"
 
 // gstat directly reads database files, therefore
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using Firebird::Guid;
 
 void PPG_print_header(const header_page* header, bool nocreation, Firebird::UtilSvc* uSvc)

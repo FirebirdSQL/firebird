@@ -26,7 +26,7 @@
 
 #include "../common/classes/fb_string.h"
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 struct header_page;
 

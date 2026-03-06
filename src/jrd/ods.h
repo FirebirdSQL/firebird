@@ -230,7 +230,7 @@ inline constexpr USHORT MAX_PAGE_SIZE		= 32768;
 
 inline constexpr USHORT DEFAULT_PAGE_SIZE	= 8192;
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 // Crypt page by type
 
@@ -1094,7 +1094,7 @@ inline int IAD_LEN(int count)
 
 Firebird::string pagtype(UCHAR type);
 
-} //namespace Ods
+} // namespace Firebird::Jrd::Ods
 
 // alignment for raw page access
 inline constexpr USHORT PAGE_ALIGNMENT = 1024;
