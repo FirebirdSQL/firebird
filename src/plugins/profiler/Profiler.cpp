@@ -36,7 +36,8 @@
 #include "../intl/charsets.h"
 #include "../jrd/intl.h"
 
-using namespace Firebird;
+namespace Firebird::Profiler
+{
 
 
 namespace
@@ -1583,9 +1584,15 @@ SimpleFactory<ProfilerPlugin> factory;
 
 } // anonymous namespace
 
+
+}	// namespace Firebird::Profiler
+
+
+using namespace Firebird;
+
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
 	CachedMasterInterface::set(master);
-	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_PROFILER, "Default_Profiler", &factory);
+	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_PROFILER, "Default_Profiler", &Profiler::factory);
 	getUnloadDetector()->registerMe();
 }

@@ -106,9 +106,8 @@
 #include "../common/prett_proto.h"
 #endif
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 static void assign_field_length(dsql_fld*, USHORT);

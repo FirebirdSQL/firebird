@@ -300,7 +300,6 @@ private:
 
 	void setClauseFlag(unsigned& clause, const unsigned flag, const char* duplicateMsg)
 	{
-		using namespace Firebird;
 		if (clause & flag)
 		{
 			status_exception::raise(
@@ -313,7 +312,6 @@ private:
 	template <typename T>
 	void checkDuplicateClause(const T& clause, const char* duplicateMsg)
 	{
-		using namespace Firebird;
 		if (isDuplicateClause(clause))
 		{
 			status_exception::raise(

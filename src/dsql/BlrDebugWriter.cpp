@@ -32,9 +32,9 @@
 #include "../jrd/DebugInterface.h"
 #include "../dsql/errd_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 void BlrDebugWriter::raiseError(const Arg::StatusVector& vector)
 {
@@ -187,5 +187,6 @@ void BlrDebugWriter::putBlrOffset()
 	const ULONG offset = (getBlrData().getCount() - getBaseOffset());
 	putValue(offset);
 }
+
 
 }	// namespace Firebird::Jrd

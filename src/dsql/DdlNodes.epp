@@ -81,14 +81,16 @@
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/ProtectRelations.h"
 
+
+DATABASE DB = STATIC "ODS.RDB";
+
+
 namespace Firebird::Jrd {
 
 // Define range of user relation ids
 
 inline constexpr MetaId MIN_RELATION_ID = USER_DEF_REL_INIT_ID;
 inline constexpr MetaId MAX_RELATION_ID = 32767;
-
-using namespace Firebird;
 
 static const UCHAR nonnull_validation_blr[] =
 {
@@ -143,8 +145,6 @@ static void updateRdbFields(const TypeClause* type,
 static ISC_STATUS getErrorCodeByObjectType(int obj_type);
 
 static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
-
-DATABASE DB = STATIC "ODS.RDB";
 
 
 //----------------------

@@ -60,9 +60,9 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 // DsqlDescMaker methods
 

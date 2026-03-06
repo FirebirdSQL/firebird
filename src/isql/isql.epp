@@ -128,9 +128,6 @@ enum literal_string_type
 #include "../common/classes/MsgPrint.h"
 #include "../remote/protocol.h"
 
-using namespace Firebird;
-using MsgFormat::SafeArg;
-
 #include "../isql/ColList.h"
 #include "../isql/InputDevices.h"
 #include "../isql/OptionsBase.h"
@@ -143,6 +140,8 @@ using MsgFormat::SafeArg;
 
 namespace Firebird::Isql
 {
+
+using MsgFormat::SafeArg;
 
 
 //DATABASE DB = COMPILETIME "yachts.lnk";

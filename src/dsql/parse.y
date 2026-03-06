@@ -135,7 +135,7 @@ inline unsigned trigger_type_suffix(const unsigned slot1, const unsigned slot2, 
 #include "../dsql/chars.h"
 
 using namespace Firebird;
-using namespace Firebird::Jrd;	// FIXME:
+using namespace Firebird::Jrd;
 
 %}
 

@@ -32,9 +32,9 @@
 #include "../common/utils_proto.h"
 #include "../common/db_alias.h"
 
-using namespace Firebird;
+namespace Firebird::Auth
+{
 
-namespace Firebird::Auth {
 
 WriterImplementation::WriterImplementation()
 	: current(*getDefaultMemoryPool(), ClumpletReader::WideUnTagged, MAX_DPB_SIZE),
@@ -127,5 +127,6 @@ void WriterImplementation::setDb(CheckStatusWrapper* st, const char* value)
 		ex.stuffException(st);
 	}
 }
+
 
 } // namespace Firebird::Auth

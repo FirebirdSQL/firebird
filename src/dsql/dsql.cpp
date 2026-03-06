@@ -81,9 +81,8 @@
 #include <ctype.h>
 #endif
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);

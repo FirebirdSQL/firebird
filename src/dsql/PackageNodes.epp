@@ -39,16 +39,10 @@
 #include "../jrd/scl_proto.h"
 
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
-
-using namespace Firebird;
-
 DATABASE DB = STATIC "ODS.RDB";
 
 
-//----------------------
+namespace Firebird::Jrd {
 
 
 namespace

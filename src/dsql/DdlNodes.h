@@ -865,7 +865,6 @@ public:
 		if ((attributesOn | attributesOff) & attribute)
 		{
 			// msg: 222: "Invalid collation attributes"
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
@@ -877,7 +876,6 @@ public:
 		if ((attributesOn | attributesOff) & attribute)
 		{
 			// msg: 222: "Invalid collation attributes"
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
@@ -1195,7 +1193,6 @@ public:
 		/*
 		if (!aValue.specified && !aStep.specified)
 		{
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  // Unexpected end of command
 					  Arg::Gds(isc_command_end_err2) << Arg::Num(this->line) <<
