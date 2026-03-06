@@ -129,7 +129,7 @@ enum literal_string_type
 #include "../remote/protocol.h"
 
 using namespace Firebird;
-using Firebird::MsgFormat::SafeArg;
+using MsgFormat::SafeArg;
 
 #include "../isql/ColList.h"
 #include "../isql/InputDevices.h"
@@ -278,13 +278,13 @@ namespace IcuUtil
 }
 
 
-static inline bool commit_trans(Firebird::ITransaction** x)
+static inline bool commit_trans(ITransaction** x)
 {
 	(*x)->commit(fbStatus);
 	if (ISQL_errmsg (fbStatus))
 	{
 		(*x)->rollback(fbStatus);
-		if (!(fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(fbStatus->getState() & IStatus::STATE_ERRORS))
 		{
 			*x = NULL;
 		}
@@ -374,13 +374,13 @@ static int win32ReadConsole(FILE* file, CharBuffer& mbBuffer)
 
 IsqlGlobals::IsqlGlobals()
 {
-	Firebird::AutoPtr<Firebird::IStatus, Firebird::SimpleDispose>
+	AutoPtr<IStatus, SimpleDispose>
 		status_vector(fbMaster->getStatus());
-	Firebird::CheckStatusWrapper statusWrapper(status_vector);
+	CheckStatusWrapper statusWrapper(status_vector);
 
-	df16 = Firebird::UtilInterfacePtr()->getDecFloat16(&statusWrapper);
-	df34 = Firebird::UtilInterfacePtr()->getDecFloat34(&statusWrapper);
-	i128 = Firebird::UtilInterfacePtr()->getInt128(&statusWrapper);
+	df16 = UtilInterfacePtr()->getDecFloat16(&statusWrapper);
+	df34 = UtilInterfacePtr()->getDecFloat34(&statusWrapper);
+	i128 = UtilInterfacePtr()->getInt128(&statusWrapper);
 }
 
 // I s q l G l o b a l s : : p r i n t f
@@ -447,14 +447,14 @@ static processing_state newtrans(const TEXT*);
 static processing_state parse_arg(int, SCHAR**, QualifiedMetaString&); //, FILE**);
 static unsigned print_item(TEXT**, const IsqlVar*, const unsigned);
 static void print_item_numeric(SINT64, int, int, TEXT*);
-static processing_state print_line(Firebird::IMessageMetadata*, UCHAR*, const unsigned pad[], TEXT line[]);
+static processing_state print_line(IMessageMetadata*, UCHAR*, const unsigned pad[], TEXT line[]);
 static processing_state print_performance(const SINT64* perf_before);
-static void print_message(Firebird::IMessageMetadata* msg, const char* dir);
-static void process_header(Firebird::IMessageMetadata*, const unsigned pad[], TEXT header[], TEXT header2[]);
+static void print_message(IMessageMetadata* msg, const char* dir);
+static void process_header(IMessageMetadata*, const unsigned pad[], TEXT header[], TEXT header2[]);
 static void process_plan();
 static void process_exec_path();
 static SINT64 process_record_count(const unsigned statement_type);
-static unsigned process_message_display(Firebird::IMessageMetadata* msg, unsigned pad[]);
+static unsigned process_message_display(IMessageMetadata* msg, unsigned pad[]);
 static processing_state process_statement(const std::string&);
 #ifdef WIN_NT
 static BOOL CALLBACK query_abort(DWORD);
@@ -477,17 +477,17 @@ bool Trusted_auth = false;
 bool Version_info = false;
 
 // Utility transaction handle
-static Firebird::ITransaction* D__trans = NULL;
-static Firebird::ITransaction* M__trans = NULL;
+static ITransaction* D__trans = NULL;
+static ITransaction* M__trans = NULL;
 static int global_numbufs;	// # of cache buffers on connect
-static Firebird::IStatement* global_Stmt = NULL;
+static IStatement* global_Stmt = NULL;
 static SCHAR Password[PASSWORD_LENGTH];
 static bool Merge_stderr;
 
-static Firebird::GlobalPtr<Firebird::UCharBuffer> global_Buffer;
+static GlobalPtr<UCharBuffer> global_Buffer;
 static bool Abort_flag = false;
 static bool Interrupt_flag = false;
-static Firebird::GlobalPtr<InputDevices> Filelist;
+static GlobalPtr<InputDevices> Filelist;
 static int Pagelength = 20;
 static bool Nodbtriggers = false; // No database triggers
 static int Exit_value = 0;
@@ -495,7 +495,7 @@ static bool Interactive = true;
 static bool Input_file = false;
 
 static const char* DEFAULT_DML_TRANS_SQL = "SET TRANSACTION";
-static Firebird::GlobalPtr<string> TranParams;
+static GlobalPtr<string> TranParams;
 
 // Values used in the SET command.
 // Initial options set exclusively from the command line are not included here.
@@ -599,18 +599,18 @@ static const SCHAR* alpha_months[] =
 class PerTableStats
 {
 public:
-	PerTableStats(Firebird::MemoryPool& pool) :
+	PerTableStats(MemoryPool& pool) :
 		m_initialized(false),
 		m_stat(pool),
 		m_relNames(pool)
 	{}
 
-	void getStats(Firebird::IAttachment* att, bool initial);
+	void getStats(IAttachment* att, bool initial);
 	void reset();
 
 private:
-	void printStats(Firebird::IAttachment* att);
-	unsigned loadRelNames(Firebird::IAttachment* att);
+	void printStats(IAttachment* att);
+	unsigned loadRelNames(IAttachment* att);
 
 	struct StatItem
 	{
@@ -645,11 +645,11 @@ private:
 		}
 	};
 
-	using StatArray = Firebird::SortedArray<
+	using StatArray = SortedArray<
 		StatItem,
-		Firebird::EmptyStorage<StatItem>,
+		EmptyStorage<StatItem>,
 		StatItem,
-		Firebird::DefaultKeyValue<StatItem>,
+		DefaultKeyValue<StatItem>,
 		StatItem>;
 
 	bool m_initialized;		// initial (before) stats loaded OK
@@ -661,7 +661,7 @@ private:
 	static const char* m_itemNames[ITEM_COUNT];
 };
 
-static Firebird::GlobalPtr<PerTableStats> perTableStats;
+static GlobalPtr<PerTableStats> perTableStats;
 
 
 class StatementGetter
@@ -734,7 +734,7 @@ static const ri_actions ri_actions_all[] =
 };
 
 
-static bool startTransaction(Firebird::ITransaction** t, unsigned len = 0, const UCHAR* tpb = NULL)
+static bool startTransaction(ITransaction** t, unsigned len = 0, const UCHAR* tpb = NULL)
 {
 	if (DB && !*t)
 	{
@@ -1142,7 +1142,7 @@ int getNextInputChar()
 }
 
 
-bool ISQL_errmsg(Firebird::IStatus* st)
+bool ISQL_errmsg(IStatus* st)
 {
 /**************************************
  *
@@ -1158,7 +1158,7 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 	const ISC_STATUS* const status = st->getErrors();
 
 	const unsigned state = st->getState();
-	if (Quiet && (state & Firebird::IStatus::STATE_ERRORS))
+	if (Quiet && (state & IStatus::STATE_ERRORS))
 		Exit_value = FINI_ERROR;
 	//else
 	{
@@ -1166,13 +1166,13 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 		if (vec[0] != isc_arg_gds)
 			return false;
 
-		if (!(state & Firebird::IStatus::STATE_ERRORS) &&
-			(!(state & Firebird::IStatus::STATE_WARNINGS) || !setValues.Warnings))
+		if (!(state & IStatus::STATE_ERRORS) &&
+			(!(state & IStatus::STATE_WARNINGS) || !setValues.Warnings))
 		{
 			return false;
 		}
 
-		if (state & Firebird::IStatus::STATE_ERRORS)
+		if (state & IStatus::STATE_ERRORS)
 		{
 			FB_SQLSTATE_STRING sqlstate;
 			fb_sqlstate(sqlstate, status);
@@ -1256,11 +1256,11 @@ bool ISQL_errmsg(Firebird::IStatus* st)
 			ISQL_warning(st);
 	}
 
-	return (state & Firebird::IStatus::STATE_ERRORS);
+	return (state & IStatus::STATE_ERRORS);
 }
 
 
-void ISQL_warning(Firebird::IStatus* st)
+void ISQL_warning(IStatus* st)
 {
 /**************************************
  *
@@ -1273,7 +1273,7 @@ void ISQL_warning(Firebird::IStatus* st)
  *	Simulate isc_print_status exactly, to control stderr
  **************************************/
 
-	if ((st->getState() & Firebird::IStatus::STATE_WARNINGS) && setValues.Warnings)
+	if ((st->getState() & IStatus::STATE_WARNINGS) && setValues.Warnings)
 	{
 		const ISC_STATUS* vec = st->getWarnings();
 		TEXT buf[MSG_LENGTH];
@@ -1512,7 +1512,7 @@ bool ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 
 inline static bool failed()
 {
-	return (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS);
+	return (fbStatus->getState() & IStatus::STATE_ERRORS);
 }
 
 
@@ -1523,7 +1523,7 @@ inline static bool succeeded()
 
 
 processing_state ISQL_fill_var(IsqlVar* var,
-							   Firebird::IMessageMetadata* msg,
+							   IMessageMetadata* msg,
 							   unsigned index,
 							   UCHAR* buf)
 {
@@ -2131,7 +2131,7 @@ bool ISQL_printNumericType(const QualifiedMetaString& fieldName, const int field
 void ISQL_print_validation(FILE* fp,
 						   ISC_QUAD* blobid,
 						   bool isComputedField,
-						   Firebird::ITransaction* trans)
+						   ITransaction* trans)
 {
 /**************************************
  *
@@ -2153,7 +2153,7 @@ void ISQL_print_validation(FILE* fp,
 	if (blobid->gds_quad_high == 0 || !DB)
 		return;
 
-	Firebird::IBlob* blob = DB->openBlob(fbStatus, trans, blobid, 0, NULL);
+	IBlob* blob = DB->openBlob(fbStatus, trans, blobid, 0, NULL);
 	if (ISQL_errmsg(fbStatus))
 		return;
 
@@ -2166,7 +2166,7 @@ void ISQL_print_validation(FILE* fp,
 	{
 		unsigned int length;
 		int cc = blob->getSegment(fbStatus, sizeof(buffer) - 1, buffer, &length);
-		if (cc == Firebird::IStatus::RESULT_NO_DATA || cc == Firebird::IStatus::RESULT_ERROR)
+		if (cc == IStatus::RESULT_NO_DATA || cc == IStatus::RESULT_ERROR)
 			break;
 
 		buffer[length] = 0;
@@ -2311,11 +2311,11 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 	}
 
 	global_Stmt = DB->prepare(fbStatus, D__trans, 0, str2.c_str(), isqlGlob.SQL_dialect,
-		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
+		IStatement::PREPARE_PREFETCH_METADATA);
 	if (ISQL_errmsg(fbStatus))
 		return (SKIP);
 
-	Firebird::RefPtr<Firebird::IMessageMetadata> msg(Firebird::REF_NO_INCR, global_Stmt->getOutputMetadata(fbStatus));
+	RefPtr<IMessageMetadata> msg(REF_NO_INCR, global_Stmt->getOutputMetadata(fbStatus));
 	if (ISQL_errmsg(fbStatus))
 		return (SKIP);
 
@@ -2329,7 +2329,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 	global_Stmt = NULL;
 
 	// Array for storing select/insert column mapping, colcheck sets it up
-	Firebird::Array<unsigned> coln;
+	Array<unsigned> coln;
 	unsigned* colnumber = coln.getBuffer(n_cols);
 
 	auto fixedTabName = tabname;
@@ -2377,7 +2377,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 	// Build metadata for insert message
 	if (i_cols != n_cols)
 	{
-		Firebird::RefPtr<Firebird::IMetadataBuilder> bldr(Firebird::REF_NO_INCR, msg->getBuilder(fbStatus));
+		RefPtr<IMetadataBuilder> bldr(REF_NO_INCR, msg->getBuilder(fbStatus));
 		if (ISQL_errmsg(fbStatus))
 			return (SKIP);
 
@@ -2526,7 +2526,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 						else
 						{
 							gds__edit(ftmp.c_str(), 0);
-							Firebird::UtilInterfacePtr()->loadBlob(fbStatus, blobid, DB, M__trans,
+							UtilInterfacePtr()->loadBlob(fbStatus, blobid, DB, M__trans,
 								ftmp.c_str(), FB_TRUE);
 							unlink(ftmp.c_str());
 							res = succeeded();
@@ -2538,7 +2538,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 						// being loaded.  As we aren't sure, we'll
 						// do binary operation - this is NEW data in
 						// the database, not updating existing info
-						Firebird::UtilInterfacePtr()->loadBlob(fbStatus, blobid, DB, M__trans,
+						UtilInterfacePtr()->loadBlob(fbStatus, blobid, DB, M__trans,
 							lastInputLine, FB_FALSE);
 						res = succeeded();
 					}
@@ -2572,7 +2572,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 					d64value = (FB_DEC16*) datap;
 					if (isqlGlob.df16)
 						isqlGlob.df16->fromString(fbStatus, lastInputLine, d64value);
-					if ((!isqlGlob.df16) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.df16) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -2588,7 +2588,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 					i128value = (FB_I128*) datap;
 					if (isqlGlob.i128)
 						isqlGlob.i128->fromString(fbStatus, scale, lastInputLine, i128value);
-					if ((!isqlGlob.i128) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.i128) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -2600,7 +2600,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
 						isqlGlob.df34->fromString(fbStatus, lastInputLine, d128value);
-					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.df34) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -2656,7 +2656,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 							done = true;
 						}
 
-						Firebird::UtilInterfacePtr()->encodeTimeTz(fbStatus,
+						UtilInterfacePtr()->encodeTimeTz(fbStatus,
 							(ISC_TIME_TZ*) datap, hours, minutes, seconds, 0, timeZone);
 						if (ISQL_errmsg(fbStatus))
 							done = true;
@@ -2719,7 +2719,7 @@ static processing_state add_row(const QualifiedMetaString& tabname)
 							done = true;
 						}
 
-						Firebird::UtilInterfacePtr()->encodeTimeStampTz(fbStatus,
+						UtilInterfacePtr()->encodeTimeStampTz(fbStatus,
 							(ISC_TIMESTAMP_TZ*) datap, year, month, day, hours, minutes, seconds, fractions, timeZone);
 						if (ISQL_errmsg(fbStatus))
 							done = true;
@@ -2882,7 +2882,7 @@ static processing_state blobedit(ISC_QUAD blobId, const char* path)
 	processing_state rc = SKIP;
 	if (!path)
 	{
-		Firebird::UtilInterfacePtr utl;
+		UtilInterfacePtr utl;
 		PathName tmpf = TempFile::create(fbStatus, "blob");
 		if (ISQL_errmsg(fbStatus))
 			return ps_ERR;
@@ -2901,7 +2901,7 @@ static processing_state blobedit(ISC_QUAD blobId, const char* path)
 		// If this is a blobdump, make sure there is a file name
 		// We can't be sure if the BLOB is TEXT or BINARY data,
 		// as we're not sure, we'll dump it in BINARY mode.
-		Firebird::UtilInterfacePtr()->dumpBlob(fbStatus, &blobId, DB, M__trans, path, FB_FALSE);
+		UtilInterfacePtr()->dumpBlob(fbStatus, &blobId, DB, M__trans, path, FB_FALSE);
 	}
 	else
 		rc = ps_ERR;
@@ -2968,7 +2968,7 @@ static processing_state bulk_insert_hack(const char* command)
 	SINT64 perf_before[ISQL_COUNTERS];
 	if (setValues.Stats)
 	{
-		Firebird::UtilInterfacePtr()->getPerfCounters(fbStatus,
+		UtilInterfacePtr()->getPerfCounters(fbStatus,
 			DB, ISQL_COUNTERS_SET, perf_before);
 		if (ISQL_errmsg(fbStatus))
 		{
@@ -2987,8 +2987,8 @@ static processing_state bulk_insert_hack(const char* command)
 			return (SKIP);
 	}
 
-	unsigned prepFlags = Firebird::IStatement::PREPARE_PREFETCH_METADATA |
-		(setValues.Plan ? Firebird::IStatement::PREPARE_PREFETCH_DETAILED_PLAN : 0);
+	unsigned prepFlags = IStatement::PREPARE_PREFETCH_METADATA |
+		(setValues.Plan ? IStatement::PREPARE_PREFETCH_DETAILED_PLAN : 0);
 
 	global_Stmt = DB->prepare(fbStatus, setValues.Autocommit ? D__trans : M__trans,  0, command,
 		isqlGlob.SQL_dialect, prepFlags);
@@ -3025,7 +3025,7 @@ static processing_state bulk_insert_hack(const char* command)
 	}
 	***/
 
-	Firebird::RefPtr<Firebird::IMessageMetadata> message(global_Stmt->getInputMetadata(fbStatus));
+	RefPtr<IMessageMetadata> message(global_Stmt->getInputMetadata(fbStatus));
 	if (ISQL_errmsg(fbStatus))
 	{
 		return ps_ERR;
@@ -3341,7 +3341,7 @@ static processing_state bulk_insert_hack(const char* command)
 					blobid = (ISC_QUAD*) datap;
 
 					{ // scope
-						Firebird::IBlob* bs = DB->createBlob(fbStatus, M__trans, blobid, 0, NULL);
+						IBlob* bs = DB->createBlob(fbStatus, M__trans, blobid, 0, NULL);
 						if (failed())
 						{
 							STDERROUT("Unable to create blob");
@@ -3390,7 +3390,7 @@ static processing_state bulk_insert_hack(const char* command)
 					d64value = (FB_DEC16*) datap;
 					if (isqlGlob.df16)
 						isqlGlob.df16->fromString(fbStatus, get_numeric_value(lastPos).c_str(), d64value);
-					if ((!isqlGlob.df16) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.df16) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -3402,7 +3402,7 @@ static processing_state bulk_insert_hack(const char* command)
 					d128value = (FB_DEC34*) datap;
 					if (isqlGlob.df34)
 						isqlGlob.df34->fromString(fbStatus, get_numeric_value(lastPos).c_str(), d128value);
-					if ((!isqlGlob.df34) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.df34) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -3421,7 +3421,7 @@ static processing_state bulk_insert_hack(const char* command)
 						isqlGlob.i128->fromString(fbStatus, scale,
 							get_numeric_value(lastPos).c_str(), i128value);
 					}
-					if ((!isqlGlob.i128) || (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+					if ((!isqlGlob.i128) || (fbStatus->getState() & IStatus::STATE_ERRORS))
 					{
 						STDERROUT("Input parsing problem");
 						ISQL_errmsg(fbStatus);
@@ -3477,7 +3477,7 @@ static processing_state bulk_insert_hack(const char* command)
 							done = true;
 						}
 
-						Firebird::UtilInterfacePtr()->encodeTimeTz(fbStatus,
+						UtilInterfacePtr()->encodeTimeTz(fbStatus,
 							(ISC_TIME_TZ*) datap, hours, minutes, seconds, 0, timeZone);
 						if (ISQL_errmsg(fbStatus))
 							done = true;
@@ -3541,7 +3541,7 @@ static processing_state bulk_insert_hack(const char* command)
 							done = true;
 						}
 
-						Firebird::UtilInterfacePtr()->encodeTimeStampTz(fbStatus,
+						UtilInterfacePtr()->encodeTimeStampTz(fbStatus,
 							(ISC_TIMESTAMP_TZ*) datap, year, month, day, hours, minutes, seconds, fractions, timeZone);
 						if (ISQL_errmsg(fbStatus))
 							done = true;
@@ -3876,7 +3876,7 @@ static void check_autoterm()
 	}
 
 	if (!(protocolVersion == 0 || protocolVersion >=
-		(Firebird::Remote::PROTOCOL_PREPARE_FLAG & Firebird::Remote::FB_PROTOCOL_MASK)) &&
+		(Remote::PROTOCOL_PREPARE_FLAG & Remote::FB_PROTOCOL_MASK)) &&
 		isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		setValues.AutoTerm = false;
@@ -4008,7 +4008,7 @@ static processing_state copy_table(const QualifiedMetaString& source, const Qual
 	const bool domain_flag = otherdb[0];
 
 	const PathName ftmp = TempFile::create(SCRATCH);
-	isqlGlob.Out = Firebird::os_utils::fopen(ftmp.c_str(), "w+b");
+	isqlGlob.Out = os_utils::fopen(ftmp.c_str(), "w+b");
 	if (!isqlGlob.Out)
 	{
 		// If we can't open a temp file then bail
@@ -4531,7 +4531,7 @@ static processing_state edit(const TEXT* file)
 	{
 		TEXT path[MAXPATHLEN];
 		strip_quotes(file, path);
-		FILE* fp = Firebird::os_utils::fopen(path, "r");
+		FILE* fp = os_utils::fopen(path, "r");
 		if (fp)
 		{
 			// Push the current ifp on the indev
@@ -4563,7 +4563,7 @@ static processing_state edit(const TEXT* file)
 			// File used to edit sessions
 			const PathName filename = TempFile::create(SCRATCH);
 			const char* Tmpfile = filename.c_str();
-			FILE* f = Firebird::os_utils::fopen(Tmpfile, "w+"); // It was w+b
+			FILE* f = os_utils::fopen(Tmpfile, "w+"); // It was w+b
 			if (f)
 			{
 				Ofp.init(f, Tmpfile, Tmpfile);
@@ -4582,7 +4582,7 @@ static processing_state edit(const TEXT* file)
 		Ofp.close();
 		PathName tmpfile = Ofp.fileName(false);
 		gds__edit(tmpfile.c_str(), 0);
-		Ofp.init(Firebird::os_utils::fopen(tmpfile.c_str(), "r+"),
+		Ofp.init(os_utils::fopen(tmpfile.c_str(), "r+"),
 			tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
 		Filelist->Ifp().init(Ofp);
 		Input_file = true;
@@ -4756,7 +4756,7 @@ static processing_state execSetDebugCommand()
 
 	DB->execute(fbStatus, nullptr, 0, stmt, isqlGlob.SQL_dialect, nullptr, nullptr, nullptr, nullptr);
 
-	if (setValues.ExecPathDisplay[0] && (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS))
+	if (setValues.ExecPathDisplay[0] && (fbStatus->getState() & IStatus::STATE_ERRORS))
 	{
 		STDERROUT("SET EXEC_PATH_DISPLAY is not supported in this connection.");
 		return FAIL;
@@ -5519,7 +5519,7 @@ void ISQL_get_version(bool call_by_create_db)
 		return;
 	}
 
-	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
 		UCHAR item = p.getClumpTag();
 		if (item == isc_info_end)
@@ -5878,11 +5878,11 @@ static processing_state print_sets()
 
 static processing_state explain(const TEXT* command)
 {
-	Firebird::AutoSetRestore autoExplainCommand(&setValues.ExplainCommand, true);
-	Firebird::AutoSetRestore autoPlanonly(&setValues.Planonly, true);
-	Firebird::AutoSetRestore autoPlan(&setValues.Plan, true);
-	Firebird::AutoSetRestore autoExplainPlan(&setValues.ExplainPlan, true);
-	Firebird::AutoSetRestore autoSqldaDisplay(&setValues.Sqlda_display, false);
+	AutoSetRestore autoExplainCommand(&setValues.ExplainCommand, true);
+	AutoSetRestore autoPlanonly(&setValues.Planonly, true);
+	AutoSetRestore autoPlan(&setValues.Plan, true);
+	AutoSetRestore autoExplainPlan(&setValues.ExplainPlan, true);
+	AutoSetRestore autoSqldaDisplay(&setValues.Sqlda_display, false);
 
 	process_statement(command);
 
@@ -6098,18 +6098,18 @@ static bool printUser(const char* dbName)
 		"SELECT CURRENT_USER, CURRENT_ROLE FROM %sRDB$DATABASE",
 		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""));
 
-	Firebird::RefPtr<Firebird::IStatement> st(Firebird::REF_NO_INCR,
-		DB->prepare(fbStatus, fbTrans, 0, sql.c_str(), 3, Firebird::IStatement::PREPARE_PREFETCH_METADATA));
+	RefPtr<IStatement> st(REF_NO_INCR,
+		DB->prepare(fbStatus, fbTrans, 0, sql.c_str(), 3, IStatement::PREPARE_PREFETCH_METADATA));
 	if (failed())
 		return false;
-	Firebird::RefPtr<Firebird::IMessageMetadata> m(Firebird::REF_NO_INCR,
+	RefPtr<IMessageMetadata> m(REF_NO_INCR,
 		st->getOutputMetadata(fbStatus));
 	if (failed())
 		return false;
 	unsigned bs = m->getMessageLength(fbStatus);
 	if (failed())
 		return false;
-	Firebird::UCharBuffer outBuf;
+	UCharBuffer outBuf;
 	UCHAR* buf = outBuf.getBuffer(bs);
 	st->execute(fbStatus, fbTrans, NULL, NULL, m, buf);
 	if (failed())
@@ -6246,7 +6246,7 @@ static processing_state newdb(const TEXT* dbname,
 		local_numbufs = global_numbufs;
 
 	// Build up a dpb
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	if (setValues.ISQL_charset)
 	{
@@ -6430,7 +6430,7 @@ static processing_state newinput(const TEXT* infile)
 	// the linked list before discarding the current Ifp.
 	// Filelist is a global pointing to base of list.
 
-	FILE* fp = Firebird::os_utils::fopen(file.c_str(), "r");
+	FILE* fp = os_utils::fopen(file.c_str(), "r");
 	if (fp)
 	{
 		Filelist->insertIfp();
@@ -6467,7 +6467,7 @@ static processing_state newoutput(const TEXT* outfile)
 
 	if (*outfile)
 	{
-		FILE* fp = Firebird::os_utils::fopen(outfile, "a");
+		FILE* fp = os_utils::fopen(outfile, "a");
 		if (fp)
 		{
 			if (isqlGlob.Out && isqlGlob.Out != stdout)
@@ -7051,7 +7051,7 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
 	if (std::isnan(value))
 		t = "NaN";
 	else if (std::isinf(value))
-		t = Firebird::isNegativeInf(value) ? "-Infinity" : "Infinity";
+		t = isNegativeInf(value) ? "-Infinity" : "Infinity";
 	else
 		return false;
 
@@ -7316,7 +7316,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 		case SQL_DEC16:
 			{
-				char decStr[Firebird::IDecFloat16::STRING_SIZE];
+				char decStr[IDecFloat16::STRING_SIZE];
 				if (isqlGlob.df16)
 				{
 					isqlGlob.df16->toString(fbStatus, var->value.asDec16, sizeof(decStr), decStr);
@@ -7335,7 +7335,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 		case SQL_DEC34:
 			{
-				char decStr[Firebird::IDecFloat34::STRING_SIZE];
+				char decStr[IDecFloat34::STRING_SIZE];
 				if (isqlGlob.df34)
 				{
 					isqlGlob.df34->toString(fbStatus, var->value.asDec34, sizeof(decStr), decStr);
@@ -7358,7 +7358,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 		case SQL_INT128:
 			{
-				char intStr[Firebird::IInt128::STRING_SIZE];
+				char intStr[IInt128::STRING_SIZE];
 				if (isqlGlob.i128)
 				{
 					isqlGlob.i128->toString(fbStatus, var->value.asInt128, dscale, sizeof(intStr), intStr);
@@ -7486,12 +7486,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				if (dtype == SQL_TIMESTAMP_TZ)
 				{
-					Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, var->value.asDateTimeTz,
+					UtilInterfacePtr()->decodeTimeStampTz(fbStatus, var->value.asDateTimeTz,
 						&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
 				}
 				else
 				{
-					Firebird::UtilInterfacePtr()->decodeTimeStampTzEx(fbStatus, var->value.asDateTimeTzEx,
+					UtilInterfacePtr()->decodeTimeStampTzEx(fbStatus, var->value.asDateTimeTzEx,
 						&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
 				}
 
@@ -7533,12 +7533,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				if (dtype == SQL_TIME_TZ)
 				{
-					Firebird::UtilInterfacePtr()->decodeTimeTz(fbStatus, var->value.asTimeTz, &hours, &minutes, &seconds,
+					UtilInterfacePtr()->decodeTimeTz(fbStatus, var->value.asTimeTz, &hours, &minutes, &seconds,
 						&fractions, sizeof(timeZone), timeZone);
 				}
 				else
 				{
-					Firebird::UtilInterfacePtr()->decodeTimeTzEx(fbStatus, var->value.asTimeTzEx, &hours, &minutes, &seconds,
+					UtilInterfacePtr()->decodeTimeTzEx(fbStatus, var->value.asTimeTzEx, &hours, &minutes, &seconds,
 						&fractions, sizeof(timeZone), timeZone);
 				}
 
@@ -7593,7 +7593,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 }
 
 
-processing_state ISQL_print_item_blob(FILE* fp, const IsqlVar* var, Firebird::ITransaction* trans, int subtype)
+processing_state ISQL_print_item_blob(FILE* fp, const IsqlVar* var, ITransaction* trans, int subtype)
 {
 /******************************************
  *
@@ -7663,7 +7663,7 @@ processing_state ISQL_print_item_blob(FILE* fp, const IsqlVar* var, Firebird::IT
 		set_bpb_for_translation(blob_subtype);
 	}
 
-	Firebird::IBlob* blob = DB->openBlob(fbStatus, trans, blobid, bpb_length, bpb);
+	IBlob* blob = DB->openBlob(fbStatus, trans, blobid, bpb_length, bpb);
 	if (ISQL_errmsg(fbStatus))
 	{
 		return ps_ERR;
@@ -7675,7 +7675,7 @@ processing_state ISQL_print_item_blob(FILE* fp, const IsqlVar* var, Firebird::IT
 	{
 		unsigned int length;
 		int cc = blob->getSegment(fbStatus, sizeof(buffer) - 1, buffer, &length);
-		if (cc == Firebird::IStatus::RESULT_NO_DATA || cc == Firebird::IStatus::RESULT_ERROR)
+		if (cc == IStatus::RESULT_NO_DATA || cc == IStatus::RESULT_ERROR)
 			break;
 
 		buffer[length] = 0;
@@ -7773,7 +7773,7 @@ static void print_item_numeric(SINT64 value, int length, int scale, TEXT* buf)
 }
 
 
-static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* buf, const unsigned pad[], TEXT line[])
+static processing_state print_line(IMessageMetadata* message, UCHAR* buf, const unsigned pad[], TEXT line[])
 {
 /**************************************
  *
@@ -7869,10 +7869,10 @@ static processing_state print_performance(const SINT64* perf_before)
 {
 	// Translation of report strings. Do not remove "static" modifier.
 	static bool have_report = false;
-	static Firebird::GlobalPtr<string> diag;
+	static GlobalPtr<string> diag;
 
 	SINT64 perf_after[ISQL_COUNTERS];
-	Firebird::UtilInterfacePtr()->getPerfCounters(fbStatus, DB, ISQL_COUNTERS_SET, perf_after);
+	UtilInterfacePtr()->getPerfCounters(fbStatus, DB, ISQL_COUNTERS_SET, perf_after);
 	if (ISQL_errmsg(fbStatus))
 	{
 		return ps_ERR;
@@ -7946,7 +7946,7 @@ static processing_state print_performance(const SINT64* perf_before)
 // p r i n t _ m e s s a g e
 // *********************************
 // Show the contents of the input msg, used typically for parameters.
-static void print_message(Firebird::IMessageMetadata* msg, const char* dir)
+static void print_message(IMessageMetadata* msg, const char* dir)
 {
 	unsigned n = msg->getCount(fbStatus);
 	isqlGlob.printf(
@@ -7990,7 +7990,7 @@ static void print_message(Firebird::IMessageMetadata* msg, const char* dir)
 // ***************************
 // Write into buffers the information that will be printed as page header for
 // statements that return data.
-static void process_header(Firebird::IMessageMetadata* msg, const unsigned pad[], TEXT header[], TEXT header2[])
+static void process_header(IMessageMetadata* msg, const unsigned pad[], TEXT header[], TEXT header2[])
 {
 	// Create the column header :  Left justify strings
 
@@ -8056,7 +8056,7 @@ static void process_exec_path()
 	if (!global_Stmt)
 		return;
 
-	Firebird::Array<UCHAR> pathBuffer;
+	Array<UCHAR> pathBuffer;
 	pathBuffer.getBuffer(MAX_USHORT, false);
 
 	for (const UCHAR* code = setValues.ExecPathDisplay; *code; ++code)
@@ -8168,7 +8168,7 @@ static SINT64 process_record_count(const unsigned statement_type)
 // p r o c e s s _ m e s s a g e _ d i s p l a y
 // *********************************************
 // Calculate individual column widths and return total line width.
-static unsigned process_message_display(Firebird::IMessageMetadata* message, unsigned pad[])
+static unsigned process_message_display(IMessageMetadata* message, unsigned pad[])
 {
 	unsigned linelength = 0;
 	unsigned ncols = message->getCount(fbStatus);
@@ -8234,13 +8234,13 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			disp_length = DOUBLE_LEN;
 			break;
 		case SQL_DEC16:
-			disp_length = Firebird::IDecFloat16::STRING_SIZE - 1;
+			disp_length = IDecFloat16::STRING_SIZE - 1;
 			break;
 		case SQL_INT128:
-			disp_length = Firebird::IInt128::STRING_SIZE - 1;
+			disp_length = IInt128::STRING_SIZE - 1;
 			break;
 		case SQL_DEC34:
-			disp_length = Firebird::IDecFloat34::STRING_SIZE - 1;
+			disp_length = IDecFloat34::STRING_SIZE - 1;
 			break;
 		case SQL_TEXT:
 			alignment = 1;
@@ -8377,7 +8377,7 @@ static processing_state process_statement(const std::string& str)
 	SINT64 perf_before[ISQL_COUNTERS];
 	if (setValues.Stats)
 	{
-		Firebird::UtilInterfacePtr()->getPerfCounters(fbStatus,
+		UtilInterfacePtr()->getPerfCounters(fbStatus,
 			DB, ISQL_COUNTERS_SET, perf_before);
 		if (ISQL_errmsg(fbStatus))
 		{
@@ -8396,7 +8396,7 @@ static processing_state process_statement(const std::string& str)
 	// But put this on the DDL transaction to get maximum visibility of
 	// metadata.
 
-	Firebird::ITransaction* prepare_trans = setValues.Autocommit ? D__trans : M__trans;
+	ITransaction* prepare_trans = setValues.Autocommit ? D__trans : M__trans;
 
 	if (global_Stmt)
 	{
@@ -8405,13 +8405,13 @@ static processing_state process_statement(const std::string& str)
 			return (SKIP);
 	}
 
-	unsigned flags = Firebird::IStatement::PREPARE_PREFETCH_METADATA;
+	unsigned flags = IStatement::PREPARE_PREFETCH_METADATA;
 	if (setValues.Plan)
 	{
 		if (setValues.ExplainPlan)
-			flags |= Firebird::IStatement::PREPARE_PREFETCH_DETAILED_PLAN;
+			flags |= IStatement::PREPARE_PREFETCH_DETAILED_PLAN;
 		else
-			flags |= Firebird::IStatement::PREPARE_PREFETCH_LEGACY_PLAN;
+			flags |= IStatement::PREPARE_PREFETCH_LEGACY_PLAN;
 	}
 
 	if (setValues.AutoTerm)
@@ -8498,8 +8498,8 @@ static processing_state process_statement(const std::string& str)
 
 		if (can_have_input_parameters)
 		{
-			Firebird::RefPtr<Firebird::IMessageMetadata>
-				input(Firebird::REF_NO_INCR, global_Stmt->getInputMetadata(fbStatus));
+			RefPtr<IMessageMetadata>
+				input(REF_NO_INCR, global_Stmt->getInputMetadata(fbStatus));
 			if (ISQL_errmsg(fbStatus))
 			{
 				return ps_ERR;
@@ -8657,8 +8657,8 @@ static processing_state process_statement(const std::string& str)
 		return ret;
 	}
 
-	Firebird::RefPtr<Firebird::IMessageMetadata>
-		message(Firebird::REF_NO_INCR, global_Stmt->getOutputMetadata(fbStatus));
+	RefPtr<IMessageMetadata>
+		message(REF_NO_INCR, global_Stmt->getOutputMetadata(fbStatus));
 	if (ISQL_errmsg(fbStatus))
 	{
 		return ps_ERR;
@@ -8748,7 +8748,7 @@ static processing_state process_statement(const std::string& str)
 	{
 		// Otherwise, open the cursor to start things up
 
-		Firebird::IResultSet* curs = global_Stmt->openCursor(fbStatus, M__trans,
+		IResultSet* curs = global_Stmt->openCursor(fbStatus, M__trans,
 			NULL, NULL, message, 0);
 		setValues.StmtTimeout = 0;
 		if (ISQL_errmsg(fbStatus))
@@ -8785,7 +8785,7 @@ static processing_state process_statement(const std::string& str)
 
 			// Fetch the current cursor
 
-			if (curs->fetchNext(fbStatus, buffer) == Firebird::IStatus::RESULT_NO_DATA)
+			if (curs->fetchNext(fbStatus, buffer) == IStatus::RESULT_NO_DATA)
 				break;
 
 			// Print the header every Pagelength number of lines for
@@ -8897,10 +8897,10 @@ static int query_abort(const int reason, const int, void*)
 
 	if (DB)
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper status(&ls);
+		LocalStatus ls;
+		CheckStatusWrapper status(&ls);
 		DB->cancelOperation(&status, fb_cancel_raise);
-		flag = !(status.getState() & Firebird::IStatus::STATE_ERRORS);
+		flag = !(status.getState() & IStatus::STATE_ERRORS);
 	}
 
 	if (flag)
@@ -9068,7 +9068,7 @@ static const QualifiedMetaString& charset_to_string(CSetId charset)
 			{
 				csMap->put(CS.RDB$CHARACTER_SET_ID, QualifiedMetaString(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME));
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				err = true;
 				ex.stuffException(fbStatus);
@@ -9105,14 +9105,14 @@ const char* PerTableStats::m_itemNames[] =
 };
 
 
-void PerTableStats::getStats(Firebird::IAttachment* att, bool initial)
+void PerTableStats::getStats(IAttachment* att, bool initial)
 {
 	if (initial)
 		m_stat.clear();
 	else if (!m_initialized)
 		return;
 
-	Firebird::Array<unsigned char> buffer(*getDefaultMemoryPool(), 32 * 1024);
+	Array<unsigned char> buffer(*getDefaultMemoryPool(), 32 * 1024);
 	unsigned char* buff = buffer.begin();
 
 	att->getInfo(fbStatus, sizeof(m_items), m_items, buffer.getCapacity(), buff);
@@ -9173,7 +9173,7 @@ void PerTableStats::reset()
 	m_relNames.clear();
 }
 
-void PerTableStats::printStats(Firebird::IAttachment* att)
+void PerTableStats::printStats(IAttachment* att)
 {
 	if (m_stat.isEmpty())
 		return;
@@ -9261,7 +9261,7 @@ void PerTableStats::printStats(Firebird::IAttachment* att)
 	}
 }
 
-unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
+unsigned PerTableStats::loadRelNames(IAttachment* att)
 {
 	string sIds;
 
@@ -9328,7 +9328,7 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 
 		SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
 
-		while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+		while (rs->fetchNext(fbStatus, msg) != IStatus::RESULT_NO_DATA)
 		{
 			if (*pRelID_Null == FB_TRUE)
 				continue;
@@ -9397,10 +9397,10 @@ bool IsqlWireStats::get(bool initial)
 
 	m_att->getInfo(fbStatus, sizeof(info), info, sizeof(buffer), buffer);
 
-	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (fbStatus->getState() & IStatus::STATE_ERRORS)
 		return false;
 
-	Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer));
+	ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer));
 	for (; !p.isEof(); p.moveNext())
 	{
 		FB_UINT64* pField = nullptr;

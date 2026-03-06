@@ -245,9 +245,9 @@ public:
 	USHORT major_ods;
 	USHORT minor_ods;
 	CSetId att_charset;
-	Firebird::IDecFloat16* df16;
-	Firebird::IDecFloat34* df34;
-	Firebird::IInt128* i128;
+	IDecFloat16* df16;
+	IDecFloat34* df34;
+	IInt128* i128;
 	void printf(const char* buffer, ...);
 	void prints(const char* buffer);
 
@@ -321,7 +321,7 @@ struct IsqlVar
 class IsqlWireStats
 {
 public:
-	explicit IsqlWireStats(Firebird::IAttachment* att) noexcept :
+	explicit IsqlWireStats(IAttachment* att) noexcept :
 		m_att(att)
 	{}
 
@@ -330,7 +330,7 @@ public:
 
 private:
 
-	Firebird::IAttachment* m_att;
+	IAttachment* m_att;
 	FB_UINT64 m_snd_packets = 0;
 	FB_UINT64 m_rcv_packets = 0;
 	FB_UINT64 m_out_packets = 0;

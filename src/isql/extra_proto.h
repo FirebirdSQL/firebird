@@ -30,10 +30,10 @@
 
 namespace Firebird::Isql
 {
-	using GetDefaultCharSetForSchemaFunc = std::function<SSHORT (const Firebird::MetaString& schemaName)>;
+	using GetDefaultCharSetForSchemaFunc = std::function<SSHORT (const MetaString& schemaName)>;
 
-	int	EXTRACT_ddl(LegacyTables, const Firebird::QualifiedMetaString&);
-	int	EXTRACT_list_table(const Firebird::QualifiedMetaString&, const Firebird::QualifiedMetaString&, bool,
+	int	EXTRACT_ddl(LegacyTables, const QualifiedMetaString&);
+	int	EXTRACT_list_table(const QualifiedMetaString&, const QualifiedMetaString&, bool,
 		GetDefaultCharSetForSchemaFunc getDefaultCharSetForSchemaFunc);
 	processing_state	EXTRACT_list_grants (const SCHAR*);
 } // namespace Firebird::Isql

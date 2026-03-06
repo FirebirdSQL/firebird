@@ -40,8 +40,6 @@
 #include "../common/os/os_utils.h"
 #include "InputDevices.h"
 
-using Firebird::PathName;
-
 namespace Firebird::Isql {
 
 
@@ -120,7 +118,7 @@ void InputDevices::indev::getPos(fpos_t* out) const
 {
 	fb_assert(out);
 	fb_assert(indev_fpointer);
-	Firebird::os_utils::fgetpos(indev_fpointer, out);
+	os_utils::fgetpos(indev_fpointer, out);
 }
 
 // Restore a previously stored reading position held in the parameter.
@@ -128,7 +126,7 @@ void InputDevices::indev::setPos(const fpos_t* in)
 {
 	fb_assert(in);
 	fb_assert(indev_fpointer);
-	Firebird::os_utils::fsetpos(indev_fpointer, in);
+	os_utils::fsetpos(indev_fpointer, in);
 }
 
 void InputDevices::indev::makeFullFileName()

@@ -132,11 +132,11 @@ namespace {
 // and not to stdout if IUtil::version gets called
 
 class VersionCallback :
-	public Firebird::AutoIface<Firebird::IVersionCallbackImpl<VersionCallback, Firebird::CheckStatusWrapper> >
+	public AutoIface<IVersionCallbackImpl<VersionCallback, CheckStatusWrapper> >
 {
 public:
 	// IVersionCallback implementation
-	void callback(Firebird::CheckStatusWrapper*, const char* text)
+	void callback(CheckStatusWrapper*, const char* text)
 	{
 		isqlGlob.printf("%s%s", text, NEWLINE);
 	}
@@ -394,7 +394,7 @@ void SHOW_comments(bool force)
 }
 
 
-void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
+void SHOW_dbb_parameters(IAttachment* db_handle,
 						 const UCHAR* db_itemsL,
 						 unsigned item_length,
 						 bool translate,
@@ -417,16 +417,16 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 	UCHAR buffer[BUFFER_LENGTH400];
 	TEXT msg[MSG_LENGTH];
 
-	Firebird::AutoPtr<Firebird::IStatus, Firebird::SimpleDispose>
+	AutoPtr<IStatus, SimpleDispose>
 		status_vector(fbMaster->getStatus());
-	Firebird::CheckStatusWrapper statusWrapper(status_vector);
+	CheckStatusWrapper statusWrapper(status_vector);
 	db_handle->getInfo(&statusWrapper, item_length, db_itemsL, sizeof(buffer), buffer);
 	if (ISQL_errmsg(status_vector))
 		return;
 
 	bool crdatePrinted = false;
 
-	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
 		const UCHAR item = p.getClumpTag();
 		SINT64 value_out = 0;
@@ -484,7 +484,7 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 			value_out = p.getBigInt();
 			if (translate)
 			{
-				Firebird::string s;
+				string s;
 				if (value_out & fb_info_crypt_encrypted)
 					IUTILS_msg_get(DATABASE_CRYPTED, msg);
 				else
@@ -622,9 +622,9 @@ void SHOW_dbb_parameters(Firebird::IAttachment* db_handle,
 				tsz.time_zone = ISQL_vax_integer(t, sizeof(ULONG));
 
 				unsigned year, month, day, hours, minutes, seconds, fractions;
-				char timeZone[Firebird::TimeZoneUtil::MAX_SIZE];
+				char timeZone[TimeZoneUtil::MAX_SIZE];
 
-				Firebird::UtilInterfacePtr()->decodeTimeStampTz(fbStatus, &tsz,
+				UtilInterfacePtr()->decodeTimeStampTz(fbStatus, &tsz,
 					&year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZone), timeZone);
 
 				if (ISQL_errmsg(fbStatus))
@@ -1723,7 +1723,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	if (UserBlob::blobIsNull(*blobid))
 		return;
 
-	Firebird::IBlob* blob = DB->openBlob(fbStatus, fbTrans, blobid,
+	IBlob* blob = DB->openBlob(fbStatus, fbTrans, blobid,
 		sizeof(metadata_text_bpb), metadata_text_bpb);
 	if (ISQL_errmsg(fbStatus))
 		return;
@@ -1736,7 +1736,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 	{
 		unsigned int length;
 		const int cc = blob->getSegment(fbStatus, sizeof(buffer) - 1, buffer, &length);
-		if (cc == Firebird::IStatus::RESULT_NO_DATA || cc == Firebird::IStatus::RESULT_ERROR)
+		if (cc == IStatus::RESULT_NO_DATA || cc == IStatus::RESULT_ERROR)
 			break;
 
 		// ASF: In Windows, \n characters are printed as \r\n in text mode.
@@ -1798,7 +1798,7 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 			fullText += "\r";
 	}
 
-	if (fbStatus->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (fbStatus->getState() & IStatus::STATE_ERRORS)
 		ISQL_errmsg(fbStatus);
 
 	blob->close(fbStatus);
@@ -4595,8 +4595,8 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
  **************************************/
 	bool found = false;
 
-	Firebird::RefPtr<Firebird::IMetadataBuilder>
-		mb(Firebird::REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 1));
+	RefPtr<IMetadataBuilder>
+		mb(REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 1));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
@@ -4608,12 +4608,12 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::RefPtr<Firebird::IMessageMetadata>
-		outMetadata(Firebird::REF_NO_INCR, mb->getMetadata(fbStatus));
+	RefPtr<IMessageMetadata>
+		outMetadata(REF_NO_INCR, mb->getMetadata(fbStatus));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::AlignedBuffer<20> outBuffer;
+	AlignedBuffer<20> outBuffer;
 	fb_assert(outMetadata->getMessageLength(fbStatus) <= outBuffer.size());
 	const unsigned off = outMetadata->getOffset(fbStatus, 0);
 	if (ISQL_errmsg (fbStatus))
@@ -6553,8 +6553,8 @@ static processing_state show_users12()
 		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""),
 		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""));
 
-	Firebird::RefPtr<Firebird::IMetadataBuilder>
-		mb(Firebird::REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 3));
+	RefPtr<IMetadataBuilder>
+		mb(REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 3));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
@@ -6576,12 +6576,12 @@ static processing_state show_users12()
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::RefPtr<Firebird::IMessageMetadata>
-		outMetadata(Firebird::REF_NO_INCR, mb->getMetadata(fbStatus));
+	RefPtr<IMessageMetadata>
+		outMetadata(REF_NO_INCR, mb->getMetadata(fbStatus));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::AlignedBuffer<MAX_SQL_IDENTIFIER_SIZE + 32> outBuffer;
+	AlignedBuffer<MAX_SQL_IDENTIFIER_SIZE + 32> outBuffer;
 	fb_assert(outMetadata->getMessageLength(fbStatus) <= outBuffer.size());
 
 	const char* mark = reinterpret_cast<char*>(&outBuffer[outMetadata->getOffset(fbStatus, 0)]);
@@ -6594,14 +6594,14 @@ static processing_state show_users12()
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::IResultSet* rs = DB->openCursor(fbStatus, fbTrans, 0, sql.c_str(), isqlGlob.SQL_dialect,
+	IResultSet* rs = DB->openCursor(fbStatus, fbTrans, 0, sql.c_str(), isqlGlob.SQL_dialect,
 		NULL, NULL, outMetadata, NULL, 0);
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
 	processing_state rc = OBJECT_NOT_FOUND;
 
-	while (rs->fetchNext(fbStatus, outBuffer) == Firebird::IStatus::RESULT_OK)
+	while (rs->fetchNext(fbStatus, outBuffer) == IStatus::RESULT_OK)
 	{
 		if (rc == OBJECT_NOT_FOUND)
 		{
@@ -6647,8 +6647,8 @@ static processing_state show_users()
 
 	TEXT msg[MSG_LENGTH]; // When messages can be translated.
 
-	Firebird::RefPtr<Firebird::IMetadataBuilder>
-		mb(Firebird::REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 1));
+	RefPtr<IMetadataBuilder>
+		mb(REF_NO_INCR, fbMaster->getMetadataBuilder(fbStatus, 1));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 	mb->setType(fbStatus, 0, SQL_VARYING);
@@ -6658,12 +6658,12 @@ static processing_state show_users()
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::RefPtr<Firebird::IMessageMetadata>
-		outMetadata(Firebird::REF_NO_INCR, mb->getMetadata(fbStatus));
+	RefPtr<IMessageMetadata>
+		outMetadata(REF_NO_INCR, mb->getMetadata(fbStatus));
 	if (ISQL_errmsg (fbStatus))
 		return ps_ERR;
 
-	Firebird::AlignedBuffer<MAX_SQL_IDENTIFIER_SIZE + 32> outBuffer;
+	AlignedBuffer<MAX_SQL_IDENTIFIER_SIZE + 32> outBuffer;
 	fb_assert(outMetadata->getMessageLength(fbStatus) <= outBuffer.size());
 	unsigned off = outMetadata->getOffset(fbStatus, 0);
 	if (ISQL_errmsg (fbStatus))
@@ -6687,7 +6687,7 @@ static processing_state show_users()
 
 	processing_state rc = OBJECT_NOT_FOUND;
 
-	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
 	{
 		switch (p.getClumpTag())
 		{
