@@ -276,4 +276,4 @@ bool BlrFromMessage::isVersion4()
 }
 
 
-}	// namesoace Firebird::Remote
+}	// namespace Firebird::Remote

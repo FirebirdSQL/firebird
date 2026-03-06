@@ -105,14 +105,14 @@ typedef struct xch
 
 typedef struct xcc
 {
-	explicit xcc(Firebird::Remote::XnetEndPoint* endPoint)
+	explicit xcc(XnetEndPoint* endPoint)
 	{
 		memset(this, 0, sizeof(*this));
 		xcc_endpoint = endPoint;
 	}
 
     struct xcc  *xcc_next;					// pointer to next thread
-	Firebird::Remote::XnetEndPoint*	xcc_endpoint;	// XnetEndPoint
+	XnetEndPoint*	xcc_endpoint;	// XnetEndPoint
     XPM         xcc_xpm;					// pointer back to xpm
     ULONG       xcc_map_num;				// this thread's mapped file number
     ULONG       xcc_slot;					// this thread's slot number
