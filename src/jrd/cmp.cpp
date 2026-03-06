@@ -391,7 +391,7 @@ bool CMP_procedure_arguments(
 	NestConst<ValueListNode>& sources,
 	NestConst<ValueListNode>& targets,
 	NestConst<MessageNode>& message,
-	Arg::StatusVector& mismatchStatus)
+	Firebird::Arg::StatusVector& mismatchStatus)
 {
 	auto& pool = *tdbb->getDefaultPool();
 	auto& fields = isInput ? routine->getInputFields() : routine->getOutputFields();
@@ -440,7 +440,7 @@ bool CMP_procedure_arguments(
 		if (positionalArgCount)
 		{
 			if (argCount > fields.getCount())
-				mismatchStatus << Arg::Gds(isc_wronumarg);
+				mismatchStatus << Firebird::Arg::Gds(isc_wronumarg);
 
 			for (auto pos = 0u; pos < positionalArgCount; ++pos)
 			{
@@ -449,7 +449,7 @@ bool CMP_procedure_arguments(
 					const auto& parameter = fields[pos];
 
 					if (argsByName.put(parameter->prm_name, *sourceArgIt))
-						mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+						mismatchStatus << Firebird::Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
 				}
 
 				++sourceArgIt;
@@ -461,7 +461,7 @@ bool CMP_procedure_arguments(
 			for (const auto& argName : *argNames)
 			{
 				if (argsByName.put(argName, *sourceArgIt++))
-					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+					mismatchStatus << Firebird::Arg::Gds(isc_param_multiple_assignments) << argName;
 			}
 		}
 
@@ -508,7 +508,7 @@ bool CMP_procedure_arguments(
 							*sourceArgIt = NullNode::instance();
 					}
 					else
-						mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+						mismatchStatus << Firebird::Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 				}
 				else
 					continue;
@@ -534,13 +534,13 @@ bool CMP_procedure_arguments(
 		if (argsByName.hasData())
 		{
 			for (const auto& argPair : argsByName)
-				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+				mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argPair.first;
 		}
 	}
 	else if (isInput && !argNames)
 	{
 		if (argCount > fields.getCount())
-			mismatchStatus << Arg::Gds(isc_wronumarg);
+			mismatchStatus << Firebird::Arg::Gds(isc_wronumarg);
 
 		for (unsigned i = 0; i < fields.getCount(); ++i)
 		{
@@ -550,7 +550,7 @@ bool CMP_procedure_arguments(
 				auto parameter = fields[i];
 
 				if (!parameter->prm_default_value)
-					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+					mismatchStatus << Firebird::Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 			}
 		}
 	}

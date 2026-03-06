@@ -600,7 +600,7 @@ void iscPrefixLock(TEXT* string, const TEXT* root, bool createLockDir)
 	gds__prefix_lock(string, "");
 
 	if (createLockDir)
-		os_utils::createLockDirectory(string);
+		Firebird::os_utils::createLockDirectory(string);
 
 	iscSafeConcatPath(string, root);
 }

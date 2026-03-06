@@ -543,9 +543,9 @@ void SQLDAMetadata::gatherData(DataBuffer& to)
 			// Make sure user has specified a location for null indicator.
 			if (!var.sqlind)
 			{
-				(Arg::Gds(isc_dsql_sqlda_value_err) <<
-				 Arg::Gds(isc_dsql_no_sqlind) <<
-				 Arg::Gds(isc_dsql_sqlvar_index) << Arg::Num(i)
+				(Firebird::Arg::Gds(isc_dsql_sqlda_value_err) <<
+				 Firebird::Arg::Gds(isc_dsql_no_sqlind) <<
+				 Firebird::Arg::Gds(isc_dsql_sqlvar_index) << Firebird::Arg::Num(i)
 				).raise();
 			}
 
@@ -557,9 +557,9 @@ void SQLDAMetadata::gatherData(DataBuffer& to)
 		// Make sure user has specified a data location (unless NULL).
 		if (!var.sqldata && !*nullInd && (var.sqltype & ~1) != SQL_NULL)
 		{
-			(Arg::Gds(isc_dsql_sqlda_value_err) <<
-				Arg::Gds(isc_dsql_no_sqldata) <<
-				Arg::Gds(isc_dsql_sqlvar_index) << Arg::Num(i)
+			(Firebird::Arg::Gds(isc_dsql_sqlda_value_err) <<
+				Firebird::Arg::Gds(isc_dsql_no_sqldata) <<
+				Firebird::Arg::Gds(isc_dsql_sqlvar_index) << Firebird::Arg::Num(i)
 			).raise();
 		}
 
@@ -593,9 +593,9 @@ void SQLDAMetadata::scatterData(DataBuffer& from)
 			// Make sure user has specified a data location.
 			if (!var.sqldata)
 			{
-				(Arg::Gds(isc_dsql_sqlda_value_err) <<
-					Arg::Gds(isc_dsql_no_sqldata) <<
-					Arg::Gds(isc_dsql_sqlvar_index) << Arg::Num(i)
+				(Firebird::Arg::Gds(isc_dsql_sqlda_value_err) <<
+					Firebird::Arg::Gds(isc_dsql_no_sqldata) <<
+					Firebird::Arg::Gds(isc_dsql_sqlvar_index) << Firebird::Arg::Num(i)
 				).raise();
 			}
 
@@ -610,9 +610,9 @@ void SQLDAMetadata::scatterData(DataBuffer& from)
 			// Make sure user has specified a location for null indicator.
 			if (!var.sqlind)
 			{
-				(Arg::Gds(isc_dsql_sqlda_value_err) <<
-					Arg::Gds(isc_dsql_no_sqlind) <<
-					Arg::Gds(isc_dsql_sqlvar_index) << Arg::Num(i)
+				(Firebird::Arg::Gds(isc_dsql_sqlda_value_err) <<
+					Firebird::Arg::Gds(isc_dsql_no_sqlind) <<
+					Firebird::Arg::Gds(isc_dsql_sqlvar_index) << Firebird::Arg::Num(i)
 				).raise();
 			}
 
@@ -734,14 +734,14 @@ RefPtr<T> translateHandle(GlobalPtr<GenericMap<Pair<NonPooled<FB_API_HANDLE, T*>
 	FB_API_HANDLE* handle)
 {
 	if (!handle)
-		status_exception::raise(Arg::Gds(T::ERROR_CODE));
+		status_exception::raise(Firebird::Arg::Gds(T::ERROR_CODE));
 
 	ReadLockGuard sync(handleMappingLock, FB_FUNCTION);
 
 	T** obj = map->get(*handle);
 
 	if (!obj)
-		status_exception::raise(Arg::Gds(T::ERROR_CODE));
+		status_exception::raise(Firebird::Arg::Gds(T::ERROR_CODE));
 
 	return RefPtr<T>(*obj);
 }
@@ -1184,7 +1184,7 @@ namespace Why
 			if (shutdownStarted)
 			{
 				fini();
-				Arg::Gds(isc_att_shutdown).raise();
+				Firebird::Arg::Gds(isc_att_shutdown).raise();
 			}
 		}
 
@@ -1212,11 +1212,11 @@ namespace Why
 		void nextIsEmpty(CheckStatusWrapper* aStatus, CHECK_ENTRY check)
 		{
 			if (check == CHECK_WARN_ZERO_HANDLE)
-				Arg::Warning(Y::ERROR_CODE).appendTo(aStatus);
+				Firebird::Arg::Warning(Y::ERROR_CODE).appendTo(aStatus);
 			else
 			{
 				fini();
-				Arg::Gds(Y::ERROR_CODE).raise();
+				Firebird::Arg::Gds(Y::ERROR_CODE).raise();
 			}
 		}
 
@@ -1258,22 +1258,22 @@ namespace Why
 		void checkPrepared(ISC_STATUS code = isc_unprepared_stmt) const
 		{
 			if (!statement)
-				Arg::Gds(code).raise();
+				Firebird::Arg::Gds(code).raise();
 		}
 
 		void checkCursorOpened() const
 		{
 			if (!statement || !statement->cursor)
-				(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					Arg::Gds(isc_dsql_cursor_err) <<
-					Arg::Gds(isc_dsql_cursor_not_open)).raise();
+				(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+					Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+					Firebird::Arg::Gds(isc_dsql_cursor_not_open)).raise();
 		}
 
 		void checkCursorClosed() const
 		{
 			if (statement && statement->cursor)
-				(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-					Arg::Gds(isc_dsql_cursor_open_err)).raise();
+				(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+					Firebird::Arg::Gds(isc_dsql_cursor_open_err)).raise();
 		}
 
 		IStatement* getInterface()
@@ -1333,7 +1333,7 @@ namespace Why
 				if (shutdownStarted)
 				{
 					--dispCounter;
-					Arg::Gds(isc_att_shutdown).raise();
+					Firebird::Arg::Gds(isc_att_shutdown).raise();
 				}
 			}
 		}
@@ -1387,7 +1387,7 @@ struct TEB
 
 [[noreturn]] static void badHandle(ISC_STATUS code)
 {
-	status_exception::raise(Arg::Gds(code));
+	status_exception::raise(Firebird::Arg::Gds(code));
 }
 
 static bool isNetworkError(const IStatus* status)
@@ -1405,9 +1405,9 @@ static void nullCheck(const FB_API_HANDLE* ptr, ISC_STATUS code)
 
 [[noreturn]] static void badSqldaVersion(const short version)
 {
-	(Arg::Gds(isc_dsql_sqlda_value_err) <<
-		Arg::Gds(isc_dsql_invalid_sqlda_version) <<
-		Arg::Num(SQLDA_VERSION1) << Arg::Num(SQLDA_VERSION1) << Arg::Num(version)
+	(Firebird::Arg::Gds(isc_dsql_sqlda_value_err) <<
+		Firebird::Arg::Gds(isc_dsql_invalid_sqlda_version) <<
+		Firebird::Arg::Num(SQLDA_VERSION1) << Firebird::Arg::Num(SQLDA_VERSION1) << Firebird::Arg::Num(version)
 	).raise();
 }
 
@@ -1646,7 +1646,7 @@ ISC_STATUS API_ROUTINE isc_attach_database(ISC_STATUS* userStatus, SSHORT fileLe
 		nullCheck(publicHandle, isc_bad_db_handle);
 
 		if (!filename)
-			status_exception::raise(Arg::Gds(isc_bad_db_format) << Arg::Str(""));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(""));
 
 		PathName pathName(filename, fileLength ? fileLength : fb_strlen(filename));
 
@@ -1779,7 +1779,7 @@ ISC_STATUS API_ROUTINE isc_cancel_events(ISC_STATUS* userStatus, isc_db_handle* 
 		}
 
 		if (event->attachment.get() != attachment)
-			Arg::Gds(isc_bad_events_handle).raise();
+			Firebird::Arg::Gds(isc_bad_events_handle).raise();
 
 		event->cancel(&statusWrapper);
 
@@ -1982,7 +1982,7 @@ ISC_STATUS API_ROUTINE isc_create_database(ISC_STATUS* userStatus, USHORT fileLe
 		nullCheck(publicHandle, isc_bad_db_handle);
 
 		if (!filename)
-			status_exception::raise(Arg::Gds(isc_bad_db_format) << Arg::Str(""));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(""));
 
 		PathName pathName(filename, fileLength ? fileLength : fb_strlen(filename));
 
@@ -2549,7 +2549,7 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, isc_stmt_handle* s
 	try
 	{
 		if (!sqlda)
-			status_exception::raise(Arg::Gds(isc_dsql_sqlda_err) << Arg::Gds(isc_dsql_no_output_sqlda));
+			status_exception::raise(Firebird::Arg::Gds(isc_dsql_sqlda_err) << Firebird::Arg::Gds(isc_dsql_no_output_sqlda));
 
 		RefPtr<IscStatement> statement(translateHandle(statements, stmtHandle));
 
@@ -2584,8 +2584,8 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch_m(ISC_STATUS* userStatus, isc_stmt_handle*
 
 		if (!msgBuffer.metadata)
 		{
-			(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				Arg::Gds(isc_dsql_cursor_open_err)).raise();
+			(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				Firebird::Arg::Gds(isc_dsql_cursor_open_err)).raise();
 		}
 
 		if (!statement->fetch(&statusWrapper, msgBuffer.metadata, reinterpret_cast<UCHAR*>(msg)) &&
@@ -2650,7 +2650,7 @@ ISC_STATUS API_ROUTINE isc_dsql_free_statement(ISC_STATUS* userStatus, isc_stmt_
 ISC_STATUS API_ROUTINE isc_dsql_insert(ISC_STATUS* userStatus, isc_stmt_handle* /*stmtHandle*/,
 	USHORT /*dialect*/, XSQLDA* /*sqlda*/)
 {
-	(Arg::Gds(isc_feature_removed) << Arg::Str("isc_dsql_insert")).copyTo(userStatus);
+	(Firebird::Arg::Gds(isc_feature_removed) << Firebird::Arg::Str("isc_dsql_insert")).copyTo(userStatus);
 	return userStatus[1];
 }
 
@@ -2660,7 +2660,7 @@ ISC_STATUS API_ROUTINE isc_dsql_insert_m(ISC_STATUS* userStatus, isc_stmt_handle
 	USHORT /*blrLength*/, const SCHAR* /*blr*/,
 	USHORT /*msgType*/, USHORT /*msgLength*/, const SCHAR* /*msg*/)
 {
-	(Arg::Gds(isc_feature_removed) << Arg::Str("isc_dsql_insert")).copyTo(userStatus);
+	(Firebird::Arg::Gds(isc_feature_removed) << Firebird::Arg::Str("isc_dsql_insert")).copyTo(userStatus);
 	return userStatus[1];
 }
 
@@ -2777,8 +2777,8 @@ ISC_STATUS API_ROUTINE isc_dsql_set_cursor_name(ISC_STATUS* userStatus, isc_stmt
 
 		if (statement->cursorName.hasData() && statement->cursorName != cursorName)
 		{
-			(Arg::Gds(isc_dsql_decl_err) <<
-			 Arg::Gds(isc_dsql_cursor_redefined) << statement->cursorName).raise();
+			(Firebird::Arg::Gds(isc_dsql_decl_err) <<
+			 Firebird::Arg::Gds(isc_dsql_cursor_redefined) << statement->cursorName).raise();
 		}
 
 		statement->cursorName = cursorName;
@@ -3052,10 +3052,10 @@ ISC_STATUS API_ROUTINE isc_get_segment(ISC_STATUS* userStatus, isc_blob_handle* 
 		switch (cc)
 		{
 		case IStatus::RESULT_NO_DATA:
-			Arg::Gds(isc_segstr_eof).raise();
+			Firebird::Arg::Gds(isc_segstr_eof).raise();
 			break;
 		case IStatus::RESULT_SEGMENT:
-			Arg::Gds(isc_segment).raise();
+			Firebird::Arg::Gds(isc_segment).raise();
 			break;
 		}
 	}
@@ -3429,7 +3429,7 @@ ISC_STATUS API_ROUTINE isc_service_attach(ISC_STATUS* userStatus, USHORT service
 		nullCheck(publicHandle, isc_bad_svc_handle);
 
 		if (!serviceName)
-			status_exception::raise(Arg::Gds(isc_service_att_err) << Arg::Gds(isc_svc_name_missing));
+			status_exception::raise(Firebird::Arg::Gds(isc_service_att_err) << Firebird::Arg::Gds(isc_svc_name_missing));
 
 		string svcName(serviceName, serviceLength ? serviceLength : fb_strlen(serviceName));
 
@@ -3598,7 +3598,7 @@ ISC_STATUS API_ROUTINE isc_start_multiple(ISC_STATUS* userStatus, isc_tr_handle*
 		nullCheck(traHandle, isc_bad_trans_handle);
 
 		if (count <= 0 || !vector)
-			status_exception::raise(Arg::Gds(isc_bad_teb_form));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_teb_form));
 
 		if (count == 1)
 		{
@@ -3847,7 +3847,7 @@ ISC_STATUS API_ROUTINE fb_get_database_handle(ISC_STATUS* userStatus, isc_db_han
 	try
 	{
 		if (!obj)
-			status_exception::raise(Arg::Gds(isc_bad_db_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_db_handle));
 
 		// Must first cast to the base interface.
 		YAttachment* yObject = static_cast<YAttachment*>(static_cast<IAttachment*>(obj));
@@ -3872,7 +3872,7 @@ ISC_STATUS API_ROUTINE fb_get_transaction_handle(ISC_STATUS* userStatus, isc_tr_
 	try
 	{
 		if (!obj)
-			status_exception::raise(Arg::Gds(isc_bad_trans_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_trans_handle));
 
 		// Must first cast to the base interface.
 		YTransaction* yObject = static_cast<YTransaction*>(static_cast<ITransaction*>(obj));
@@ -3898,7 +3898,7 @@ ISC_STATUS API_ROUTINE fb_get_transaction_interface(ISC_STATUS* userStatus, void
 	{
 		ITransaction** tra = (ITransaction**) iPtr;
 		if (*tra)
-			(Arg::Gds(isc_random) << "Interface must be null").raise();
+			(Firebird::Arg::Gds(isc_random) << "Interface must be null").raise();
 
 		RefPtr<YTransaction> transaction(translateHandle(transactions, hndlPtr));
 
@@ -3925,7 +3925,7 @@ ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, void* 
 	{
 		IStatement** stmt = (IStatement**) iPtr;
 		if (*stmt)
-			(Arg::Gds(isc_random) << "Interface must be null").raise();
+			(Firebird::Arg::Gds(isc_random) << "Interface must be null").raise();
 
 		RefPtr<IscStatement> statement(translateHandle(statements, hndlPtr));
 		statement->checkPrepared(isc_info_unprepared_stmt);
@@ -4679,7 +4679,7 @@ void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
 	else if (pseudoOpened)
 		pseudoOpened = false;
 	else if (raise)
-		Arg::Gds(isc_dsql_cursor_close_err).raise();
+		Firebird::Arg::Gds(isc_dsql_cursor_close_err).raise();
 }
 
 void IscStatement::closeStatement(CheckStatusWrapper* status)
@@ -4796,7 +4796,7 @@ YResultSet::YResultSet(YAttachment* anAttachment, YTransaction* aTransaction,
 	MutexLockGuard guard(statement->statementMutex, FB_FUNCTION);
 
 	if (statement->cursor)
-		Arg::Gds(isc_cursor_already_open).raise();
+		Firebird::Arg::Gds(isc_cursor_already_open).raise();
 
 	statement->cursor = this;
 }
@@ -5492,7 +5492,7 @@ void YTransaction::addCleanupHandler(CheckStatusWrapper* status, CleanupCallback
 void YTransaction::selfCheck()
 {
 	if (!next)
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 }
 
 ITransaction* YTransaction::join(CheckStatusWrapper* status, ITransaction* transaction)
@@ -6042,7 +6042,7 @@ void YAttachment::cancelOperation(CheckStatusWrapper* status, int option)
 		if (enterCount > 1 || option != fb_cancel_raise)
 			entry.next()->cancelOperation(status, option);
 		else
-			status_exception::raise(Arg::Gds(isc_nothing_to_cancel));
+			status_exception::raise(Firebird::Arg::Gds(isc_nothing_to_cancel));
 	}
 	catch (const Exception& e)
 	{
@@ -6135,7 +6135,7 @@ void YAttachment::addCleanupHandler(CheckStatusWrapper* status, CleanupCallback*
 YTransaction* YAttachment::getTransaction(ITransaction* tra)
 {
 	if (!tra)
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 
 	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
@@ -6143,7 +6143,7 @@ YTransaction* YAttachment::getTransaction(ITransaction* tra)
 	YTransaction* yt = static_cast<YTransaction*>(tra->validate(&status, this));
 	status.check();
 	if (!yt)
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 
 	yt->selfCheck();
 	return yt;
@@ -6155,7 +6155,7 @@ void YAttachment::getNextTransaction(CheckStatusWrapper* status, ITransaction* t
 {
 	next = getTransaction(tra)->next;
 	if (!next.hasData())
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 }
 
 
@@ -6508,10 +6508,10 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 		DispatcherEntry entry(status);
 
 		if (!filename)
-			status_exception::raise(Arg::Gds(isc_bad_db_format) << Arg::Str(""));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(""));
 
 		if (dpbLength > 0 && !dpb)
-			status_exception::raise(Arg::Gds(isc_bad_dpb_form));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_dpb_form));
 
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpbLength);
 		const bool utfData = newDpb.find(isc_dpb_utf8_filename);
@@ -6629,7 +6629,7 @@ YAttachment* Dispatcher::attachOrCreateDatabase(CheckStatusWrapper* status, bool
 		}
 
 		if (status->getErrors()[1] == 0)
-			Arg::Gds(isc_unavailable).raise();
+			Firebird::Arg::Gds(isc_unavailable).raise();
 	}
 	catch (const Exception& e)
 	{
@@ -6651,11 +6651,11 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 		DispatcherEntry entry(status);
 
 		if (!serviceName)
-			status_exception::raise(Arg::Gds(isc_service_att_err) << Arg::Gds(isc_svc_name_missing));
+			status_exception::raise(Firebird::Arg::Gds(isc_service_att_err) << Firebird::Arg::Gds(isc_svc_name_missing));
 
 		if (spbLength > 0 && !spb)
-			status_exception::raise(Arg::Gds(isc_bad_spb_form) <<
- 									Arg::Gds(isc_null_spb));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_spb_form) <<
+ 									Firebird::Arg::Gds(isc_null_spb));
 
 		PathName svcName(serviceName);
 		svcName.trim();
@@ -6772,8 +6772,8 @@ IService* Dispatcher::internalServiceAttach(CheckStatusWrapper* status, const Pa
 	fb_utils::copyStatus(status, &temp1);
 	if (!(status->getState() & IStatus::STATE_ERRORS))
 	{
-		(Arg::Gds(isc_service_att_err) <<
-		 Arg::Gds(isc_no_providers)).copyTo(status);
+		(Firebird::Arg::Gds(isc_service_att_err) <<
+		 Firebird::Arg::Gds(isc_no_providers)).copyTo(status);
 	}
 
 	return NULL;
@@ -6829,7 +6829,7 @@ void Dispatcher::shutdown(CheckStatusWrapper* userStatus, unsigned int timeout, 
 		if (reason == fb_shutrsn_exit_called)
 			PluginManager::shutdown();
 
-		const Arg::Gds error(isc_att_shutdown);	//// TODO: review
+		const Firebird::Arg::Gds error(isc_att_shutdown);	//// TODO: review
 
 		// Ask clients about shutdown confirmation.
 		if (ShutChain::run(fb_shut_confirmation, reason) != FB_SUCCESS)

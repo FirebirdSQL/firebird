@@ -135,7 +135,7 @@ private:
 	// append status_vector to service's status
 	void setServiceStatus(const ISC_STATUS* status_vector) override;
 	// append error message to service's status
-	void setServiceStatus(const USHORT facility, const USHORT errcode, const MsgFormat::SafeArg& args) override;
+	void setServiceStatus(const USHORT facility, const USHORT errcode, const Firebird::MsgFormat::SafeArg& args) override;
 
 public:
 	// no-op for services
@@ -254,7 +254,7 @@ private:
 	// Returns number of bytes service wants more
 	ULONG	put(const UCHAR* buffer, ULONG length);
 	// Copies argument value to status vector
-	void put_status_arg(Firebird::Arg::StatusVector& status, const MsgFormat::safe_cell& value);
+	void put_status_arg(Firebird::Arg::StatusVector& status, const Firebird::MsgFormat::safe_cell& value);
 
 	// Increment circular buffer pointer
 	static ULONG		add_one(ULONG i) noexcept;
@@ -319,7 +319,7 @@ private:
 	bool	svc_shutdown_request;
 	bool	svc_shutdown_in_progress;
 	bool	svc_timeout;
-	char	svc_arg_conv[MsgFormat::SAFEARG_MAX_ARG * 2];
+	char	svc_arg_conv[Firebird::MsgFormat::SAFEARG_MAX_ARG * 2];
 	char*	svc_arg_ptr;
 
 	Firebird::string	svc_username;

@@ -521,8 +521,8 @@ TempFile* TempSpace::setupFile(FB_SIZE_T size)
 	}
 
 	// no room in all directories
-	Arg::Gds status(isc_out_of_temp_space);
-	status.append(Arg::StatusVector(status_vector.begin()));
+	Firebird::Arg::Gds status(isc_out_of_temp_space);
+	status.append(Firebird::Arg::StatusVector(status_vector.begin()));
 	iscLogStatus(NULL, status.value());
 	status.raise();
 

@@ -32,7 +32,7 @@
 #include "../common/os/guid.h"
 #include "../common/utils_proto.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 inline constexpr size_t MAX_LEGACY_PASSWORD_LENGTH = 64;			// used to store passwords internally
 static inline constexpr const char* LEGACY_PASSWORD_SALT = "9z";	// for old ENC_crypt()

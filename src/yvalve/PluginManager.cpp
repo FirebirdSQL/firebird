@@ -876,14 +876,14 @@ namespace
 
 		RefPtr<PluginModule> loadModule(const PluginLoadInfo& info);
 
-		void loadError(const Arg::StatusVector& error)
+		void loadError(const Firebird::Arg::StatusVector& error)
 		{
-			(Arg::Gds(isc_pman_cannot_load_plugin) << currentName << error).raise();
+			(Firebird::Arg::Gds(isc_pman_cannot_load_plugin) << currentName << error).raise();
 		}
 
 		static void CLOOP_CARG upFunction(void* /*interface*/, IStatus* status)
 		{
-			status->setErrors(Arg::Gds(isc_wish_list).value());
+			status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 		}
 	};
 
@@ -933,8 +933,8 @@ namespace
 				int r = m->findPlugin(interfaceType, info.regName);
 				if (r < 0)
 				{
-					loadError(Arg::Gds(isc_pman_plugin_notfound) <<
-							  info.curModule << info.regName << Arg::Num(interfaceType));
+					loadError(Firebird::Arg::Gds(isc_pman_plugin_notfound) <<
+							  info.curModule << info.regName << Firebird::Arg::Num(interfaceType));
 				}
 
 				currentPlugin = FB_NEW ConfiguredPlugin(m, r, info.conf, info.plugConfigFile, currentName);
@@ -969,13 +969,13 @@ namespace
 		{
 			if (bad)
 			{
-				loadError(Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
-					Arg::StatusVector(statusArray));
+				loadError(Firebird::Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
+					Firebird::Arg::StatusVector(statusArray));
 			}
 			if (info.required)
 			{
-				loadError(Arg::Gds(isc_pman_module_notfound) << fixedModuleName <<
-					Arg::StatusVector(statusArray));
+				loadError(Firebird::Arg::Gds(isc_pman_module_notfound) << fixedModuleName <<
+					Firebird::Arg::StatusVector(statusArray));
 			}
 
 			return RefPtr<PluginModule>(NULL);
@@ -996,7 +996,7 @@ namespace
 			return rc;
 		}
 
-		loadError(Arg::Gds(isc_pman_entrypoint_notfound) << fixedModuleName << Arg::StatusVector(stArray));
+		loadError(Firebird::Arg::Gds(isc_pman_entrypoint_notfound) << fixedModuleName << Firebird::Arg::StatusVector(stArray));
 		return RefPtr<PluginModule>(NULL);	// compiler warning silencer
 	}
 

@@ -1,6 +1,6 @@
 #include "../auth/SecureRemotePassword/srp.h"
 
-using namespace Auth;
+using namespace Firebird::Auth;
 
 template<class SHA>void runTest(int argc, char** argv)
 {

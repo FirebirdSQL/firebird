@@ -88,8 +88,7 @@
 
 using namespace Firebird;
 
-namespace os_utils
-{
+namespace Firebird::os_utils {
 
 static GlobalPtr<Mutex> grMutex;
 
@@ -171,7 +170,7 @@ void createLockDirectory(const char* pathname)
 	{
 		if (access(pathname, R_OK | W_OK | X_OK) == 0)
 		{
-			if (os_utils::stat(pathname, &st) != 0)
+			if (Firebird::os_utils::stat(pathname, &st) != 0)
 				system_call_failed::raise("stat", pathname);
 			if (S_ISDIR(st.st_mode))
 				return;
@@ -195,7 +194,7 @@ void createLockDirectory(const char* pathname)
 	{
 		if (SYSCALL_INTERRUPTED(errno))
 			continue;
-		(Arg::Gds(isc_lock_dir_access) << pathname2).raise();
+		(Firebird::Arg::Gds(isc_lock_dir_access) << pathname2).raise();
 	}
 	changeFileRights(pathname2, 0770);
 
@@ -211,7 +210,7 @@ void createLockDirectory(const char* pathname)
 		}
 		if (SYSCALL_INTERRUPTED(errno))
 			continue;
-		(Arg::Gds(isc_lock_dir_access) << renameGuard).raise();
+		(Firebird::Arg::Gds(isc_lock_dir_access) << renameGuard).raise();
 	}
 
 	while (rename(pathname2, pathname) != 0)
@@ -225,21 +224,21 @@ void createLockDirectory(const char* pathname)
 			{
 				if (SYSCALL_INTERRUPTED(errno))
 					continue;
-				(Arg::Gds(isc_lock_dir_access) << pathname).raise();
+				(Firebird::Arg::Gds(isc_lock_dir_access) << pathname).raise();
 			}
 
 			while (rmdir(pathname2) != 0)
 			{
 				if (SYSCALL_INTERRUPTED(errno))
 					continue;
-				(Arg::Gds(isc_lock_dir_access) << pathname).raise();
+				(Firebird::Arg::Gds(isc_lock_dir_access) << pathname).raise();
 			}
 
 			for(;;)
 			{
 				if (access(pathname, R_OK | W_OK | X_OK) == 0)
 				{
-					if (os_utils::stat(pathname, &st) != 0)
+					if (Firebird::os_utils::stat(pathname, &st) != 0)
 						system_call_failed::raise("stat", pathname);
 					if (S_ISDIR(st.st_mode))
 						return;
@@ -255,7 +254,7 @@ void createLockDirectory(const char* pathname)
 			return;
 		}
 
-		(Arg::Gds(isc_lock_dir_access) << pathname).raise();
+		(Firebird::Arg::Gds(isc_lock_dir_access) << pathname).raise();
 	}
 }
 
@@ -268,7 +267,7 @@ void createLockDirectory(const char* pathname)
 
 static void raiseError(int errCode, const char* filename)
 {
-	(Arg::Gds(isc_io_error) << "open" << filename << Arg::Gds(isc_io_open_err)
+	(Firebird::Arg::Gds(isc_io_error) << "open" << filename << Firebird::Arg::Gds(isc_io_open_err)
 		<< SYS_ERR(errCode)).raise();
 }
 
@@ -276,7 +275,7 @@ static void raiseError(int errCode, const char* filename)
 // open (or create if missing) and set appropriate access rights
 int openCreateSharedFile(const char* pathname, int flags)
 {
-	int fd = os_utils::open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
+	int fd = Firebird::os_utils::open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
 	if (fd < 0)
 		raiseError(ERRNO, pathname);
 
@@ -287,7 +286,7 @@ int openCreateSharedFile(const char* pathname, int flags)
 	struct STAT st;
 	int rc;
 
-	rc = os_utils::fstat(fd, &st);
+	rc = Firebird::os_utils::fstat(fd, &st);
 
 	if (rc != 0)
 	{
@@ -409,7 +408,7 @@ static void makeUniqueFileId(const struct STAT& statistics, UCharBuffer& id)
 void getUniqueFileId(int fd, UCharBuffer& id)
 {
 	struct STAT statistics;
-	if (os_utils::fstat(fd, &statistics) != 0)
+	if (Firebird::os_utils::fstat(fd, &statistics) != 0)
 		system_call_failed::raise("fstat");
 
 	makeUniqueFileId(statistics, id);
@@ -419,7 +418,7 @@ void getUniqueFileId(int fd, UCharBuffer& id)
 void getUniqueFileId(const char* name, UCharBuffer& id)
 {
 	struct STAT statistics;
-	if (os_utils::stat(name, &statistics) != 0)
+	if (Firebird::os_utils::stat(name, &statistics) != 0)
 	{
 		id.clear();
 		return;

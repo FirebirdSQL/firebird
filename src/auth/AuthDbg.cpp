@@ -35,8 +35,8 @@
 //#define AUTH_VERBOSE
 
 // register plugin
-static Firebird::SimpleFactory<Auth::DebugClient> clientFactory;
-static Firebird::SimpleFactory<Auth::DebugServer> serverFactory;
+static Firebird::SimpleFactory<Firebird::Auth::DebugClient> clientFactory;
+static Firebird::SimpleFactory<Firebird::Auth::DebugServer> serverFactory;
 
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
@@ -51,7 +51,7 @@ extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 }
 
 
-namespace Auth {
+namespace Firebird::Auth {
 
 DebugServer::DebugServer(Firebird::IPluginConfig* pConf)
 	: str(getPool())

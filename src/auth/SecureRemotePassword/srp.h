@@ -15,7 +15,7 @@
 
 #include <functional>
 
-namespace Auth {
+namespace Firebird::Auth {
 
 /*
  * Order of battle for SRP handshake:
@@ -86,7 +86,7 @@ class RemotePassword : public Firebird::GlobalStorage
 {
 private:
 	const RemoteGroup*		group;
-	Auth::SecureHash<Firebird::Sha1>	hash;
+	Firebird::Auth::SecureHash<Firebird::Sha1>	hash;
 	Firebird::BigInteger	privateKey;
 	Firebird::BigInteger	scramble;
 
@@ -135,7 +135,7 @@ protected:
 	Firebird::BigInteger makeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
                 const char* salt, const Firebird::UCharBuffer& sessionKey)
     {
-		Auth::SecureHash<SHA> digest;
+		Firebird::Auth::SecureHash<SHA> digest;
 		digest.processInt(n1);				// H(prime) ^ H(g)
 		digest.processInt(n2);				// H(I)
 		digest.process(salt);				// s

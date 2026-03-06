@@ -85,7 +85,7 @@
 #endif
 
 using namespace Firebird;
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 using namespace Burp;
 
 inline constexpr const char* fopen_write_type = "w";
@@ -929,14 +929,14 @@ int gbak(Firebird::UtilSvc* uSvc)
 				if (tdgbl->sw_redirect == REDIRECT)		// not NOREDIRECT, and not NOOUTPUT
 				{
 					// Make sure the status file doesn't already exist
-					FILE* tmp_outfile = os_utils::fopen(redirect, fopen_read_type);
+					FILE* tmp_outfile = Firebird::os_utils::fopen(redirect, fopen_read_type);
 					if (tmp_outfile)
 					{
 						fclose(tmp_outfile);
 						BURP_error(66, true, SafeArg() << redirect);
 						// msg 66 can't open status and error output file %s
 					}
-					if (! (tdgbl->output_file = os_utils::fopen(redirect, fopen_write_type)))
+					if (! (tdgbl->output_file = Firebird::os_utils::fopen(redirect, fopen_write_type)))
 					{
 						BURP_error(66, true, SafeArg() << redirect);
 						// msg 66 can't open status and error output file %s
@@ -1884,7 +1884,7 @@ void BURP_verbose(USHORT number, const SafeArg& arg)
 }
 
 
-void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
+void BURP_message(USHORT number, const Firebird::MsgFormat::SafeArg& arg, bool totals)
 {
 /**************************************
  *
@@ -2310,7 +2310,7 @@ static gbak_action open_files(const TEXT* file1,
 		if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
 		const int rmode = MODE_READ | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
-		if ((fil->fil_fd = os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
+		if ((fil->fil_fd = Firebird::os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
 #endif
 		{
 			BURP_error(65, true, fil->fil_name.c_str());
@@ -2355,7 +2355,7 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
-				if ((fil->fil_fd = os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
+				if ((fil->fil_fd = Firebird::os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
 #endif
 				{
 					BURP_error(65, false, fil->fil_name.c_str());
@@ -2402,7 +2402,7 @@ static gbak_action open_files(const TEXT* file1,
 			else
 				SetTapePosition(fil->fil_fd, TAPE_REWIND, 0, 0, 0, FALSE);
 #else
-			os_utils::lseek(fil->fil_fd, 0, SEEK_SET);
+			Firebird::os_utils::lseek(fil->fil_fd, 0, SEEK_SET);
 #endif
 			tdgbl->file_desc = fil->fil_fd;
 			tdgbl->gbl_sw_files = fil->fil_next;
@@ -2684,10 +2684,10 @@ void close_platf(DESC file)
 #define O_ACCMODE 3
 #endif
 
-		off_t fileSize = os_utils::lseek(file, 0, SEEK_CUR);
+		off_t fileSize = Firebird::os_utils::lseek(file, 0, SEEK_CUR);
 		if (fileSize != (off_t)(-1))
 		{
-			FB_UNUSED(os_utils::ftruncate(file, fileSize));
+			FB_UNUSED(Firebird::os_utils::ftruncate(file, fileSize));
 		}
 	}
 
@@ -2906,15 +2906,15 @@ static void processFetchPass(const SCHAR*& password, int& itr, const int argc, F
 	case fb_utils::FETCH_PASS_OK:
 		break;
 	case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-		BURP_error(308, true, MsgFormat::SafeArg() << argv[itr] << errno);
+		BURP_error(308, true, Firebird::MsgFormat::SafeArg() << argv[itr] << errno);
 		// error @2 opening password file @1
 		break;
 	case fb_utils::FETCH_PASS_FILE_READ_ERROR:
-		BURP_error(309, true, MsgFormat::SafeArg() << argv[itr] << errno);
+		BURP_error(309, true, Firebird::MsgFormat::SafeArg() << argv[itr] << errno);
 		// error @2 reading password file @1
 		break;
 	case fb_utils::FETCH_PASS_FILE_EMPTY:
-		BURP_error(310, true, MsgFormat::SafeArg() << argv[itr]);
+		BURP_error(310, true, Firebird::MsgFormat::SafeArg() << argv[itr]);
 		// password file @1 is empty
 		break;
 	}

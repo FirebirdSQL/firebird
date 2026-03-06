@@ -34,7 +34,7 @@
 
 using namespace Firebird;
 
-namespace Auth {
+namespace Firebird::Auth {
 
 WriterImplementation::WriterImplementation()
 	: current(*getDefaultMemoryPool(), ClumpletReader::WideUnTagged, MAX_DPB_SIZE),

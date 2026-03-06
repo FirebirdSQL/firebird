@@ -364,7 +364,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 						{
 							const ISC_STATUS errorCode = getErrorInfo(&buffer, bufferEnd);
 							if (errorCode != isc_infunk)
-								Arg::Gds(errorCode).raise();
+								Firebird::Arg::Gds(errorCode).raise();
 							break;
 						}
 
@@ -422,7 +422,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 			{
 				const ISC_STATUS errorCode = getErrorInfo(&buffer, bufferEnd);
 				if (errorCode != isc_infunk)
-					Arg::Gds(errorCode).raise();
+					Firebird::Arg::Gds(errorCode).raise();
 				break;
 			}
 

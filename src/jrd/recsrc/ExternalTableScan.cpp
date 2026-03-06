@@ -108,7 +108,7 @@ bool ExternalTableScan::refetchRecord(thread_db* /*tdbb*/) const
 
 WriteLockResult ExternalTableScan::lockRecord(thread_db* /*tdbb*/) const
 {
-	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
+	status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
 }
 
 void ExternalTableScan::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const

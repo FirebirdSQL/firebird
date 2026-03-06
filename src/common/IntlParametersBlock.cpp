@@ -161,11 +161,11 @@ void IntlParametersBlock::processParametersBlock(ProcessString* processString, C
 		st.stuffException(&l);
 		if ((l.getState() & IStatus::STATE_ERRORS) && (l.getErrors()[1] == isc_bad_conn_str) && tagName)
 		{
-			Arg::Gds newErrors(isc_intl_char);
+			Firebird::Arg::Gds newErrors(isc_intl_char);
 			newErrors << tagName;
 
 			const ISC_STATUS* errors = l.getErrors();
-			newErrors << Arg::StatusVector(errors + 2);		// skip isc_bad_conn_str
+			newErrors << Firebird::Arg::StatusVector(errors + 2);		// skip isc_bad_conn_str
 
 			l.setErrors(newErrors.value());
 			status_exception::raise(&l);

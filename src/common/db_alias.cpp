@@ -292,7 +292,7 @@ namespace
 					db = FB_NEW_POOL(getPool()) DbName(getPool(), file);
 #ifdef HAVE_ID_BY_NAME
 					UCharBuffer id;
-					os_utils::getUniqueFileId(db->name.c_str(), id);
+					Firebird::os_utils::getUniqueFileId(db->name.c_str(), id);
 					if (id.hasData())
 					{
 						Id* i = idHash.lookup(id);
@@ -496,7 +496,7 @@ bool expandDatabaseName(Firebird::PathName alias,
 	catch (const fatal_exception& ex)
 	{
 		gds__log("File databases.conf contains bad data: %s", ex.what());
-		Arg::Gds(isc_server_misconfigured).raise();
+		Firebird::Arg::Gds(isc_server_misconfigured).raise();
 	}
 
 	// remove whitespaces from database name
@@ -539,14 +539,14 @@ bool expandDatabaseName(Firebird::PathName alias,
 		if (!db)
 		{
 			UCharBuffer id;
-			os_utils::getUniqueFileId(file.c_str(), id);
+			Firebird::os_utils::getUniqueFileId(file.c_str(), id);
 			if (id.hasData())
 			{
 				Id* i = aliasesConf().idHash.lookup(id);
 				if (i)
 				{
 					UCharBuffer oldId;
-					os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
+					Firebird::os_utils::getUniqueFileId(i->db->name.c_str(), oldId);
 					if (oldId == id)	// Yes, that's really same file, and we should use same config
 						db = i->db;
 				}
@@ -575,7 +575,7 @@ bool notifyDatabaseName(const Firebird::PathName& file)
 		return true;
 
 	UCharBuffer id;
-	os_utils::getUniqueFileId(file.c_str(), id);
+	Firebird::os_utils::getUniqueFileId(file.c_str(), id);
 	if (id.hasData())
 	{
 		aliasesConf().linkId(db, id);

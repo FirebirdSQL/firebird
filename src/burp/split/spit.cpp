@@ -73,7 +73,7 @@ static DESC open_platf(const char* name, int writeFlag)
 	return CreateFile(name, (writeFlag ? GENERIC_WRITE : GENERIC_READ), 0, NULL,
 		(writeFlag ? CREATE_ALWAYS : OPEN_EXISTING), FILE_ATTRIBUTE_NORMAL, 0);
 #else
-	return os_utils::open(name, (writeFlag ? mode_write : mode_read), mask);
+	return Firebird::os_utils::open(name, (writeFlag ? mode_write : mode_read), mask);
 #endif
 }
 

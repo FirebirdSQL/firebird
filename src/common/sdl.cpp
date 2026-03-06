@@ -62,7 +62,7 @@ struct array_range
 };
 
 static const UCHAR* compile(const UCHAR*, sdl_arg*);
-static ISC_STATUS error(CheckStatusWrapper* status_vector, const Arg::StatusVector& v);
+static ISC_STATUS error(CheckStatusWrapper* status_vector, const Firebird::Arg::StatusVector& v);
 static bool execute(sdl_arg*);
 static const UCHAR* get_range(const UCHAR*, array_range*, SLONG*, SLONG*);
 
@@ -131,8 +131,8 @@ SLONG SDL_compute_subscript(CheckStatusWrapper* status_vector,
  **************************************/
 	if (dimensions != desc->iad_dimensions)
 	{
-		error(status_vector, Arg::Gds(isc_invalid_dimension) << Arg::Num(desc->iad_dimensions) <<
-																Arg::Num(dimensions));
+		error(status_vector, Firebird::Arg::Gds(isc_invalid_dimension) << Firebird::Arg::Num(desc->iad_dimensions) <<
+																Firebird::Arg::Num(dimensions));
 		return -1;
 	}
 
@@ -145,8 +145,8 @@ SLONG SDL_compute_subscript(CheckStatusWrapper* status_vector,
 		const SLONG n = *subscripts++;
 		if (n < range->iad_lower || n > range->iad_upper)
 		{
-			error(status_vector, Arg::Gds(isc_ss_out_of_bounds) <<
-								 Arg::Num(n) << Arg::Num(range->iad_lower) << Arg::Num(range->iad_upper));
+			error(status_vector, Firebird::Arg::Gds(isc_ss_out_of_bounds) <<
+								 Firebird::Arg::Num(n) << Firebird::Arg::Num(range->iad_lower) << Firebird::Arg::Num(range->iad_upper));
 			return -1;
 		}
 		subscript += (n - range->iad_lower) * range->iad_length;
@@ -179,7 +179,7 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 	info->sdl_info_field.clear();
 
 	if (*p++ != isc_sdl_version1)
-		return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(0));
+		return error(status_vector, Firebird::Arg::Gds(isc_invalid_sdl) << Firebird::Arg::Num(0));
 
 	for (;;)
 		switch (*p++)
@@ -187,10 +187,10 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 		case isc_sdl_struct:
 			n = *p++;
 			if (n != 1)
-				return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(p - sdl - 1));
+				return error(status_vector, Firebird::Arg::Gds(isc_invalid_sdl) << Firebird::Arg::Num(p - sdl - 1));
 			offset = p - sdl;
 			if (!(p = sdl_desc(p, &info->sdl_info_element)))
-				return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(offset));
+				return error(status_vector, Firebird::Arg::Gds(isc_invalid_sdl) << Firebird::Arg::Num(offset));
 			info->sdl_info_element.dsc_address = 0;
 			break;
 
@@ -278,7 +278,7 @@ int	SDL_walk(CheckStatusWrapper* status_vector,
 			{
 				offset = p - sdl - 1;
 				if (!(p = sdl_desc(p, &junk)))
-					return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(offset));
+					return error(status_vector, Firebird::Arg::Gds(isc_invalid_sdl) << Firebird::Arg::Num(offset));
 			}
 			break;
 
@@ -430,8 +430,8 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 		if (arg && count != arg->sdl_arg_desc->iad_dimensions)
 		{
 			error(arg->sdl_arg_status_vector,
-				  Arg::Gds(isc_invalid_dimension) << Arg::Num(arg->sdl_arg_desc->iad_dimensions) <<
-													 Arg::Num(count));
+				  Firebird::Arg::Gds(isc_invalid_dimension) << Firebird::Arg::Num(arg->sdl_arg_desc->iad_dimensions) <<
+													 Firebird::Arg::Num(count));
 			return NULL;
 		}
 		expr = expressions;
@@ -454,7 +454,7 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 		count = *p++;
 		if (arg && count != 1)
 		{
-			error(arg->sdl_arg_status_vector, Arg::Gds(isc_datnotsup));
+			error(arg->sdl_arg_status_vector, Firebird::Arg::Gds(isc_datnotsup));
 			// Msg107: "data operation not supported" (arrays of structures)
 			return NULL;
 		}
@@ -474,13 +474,13 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 		return p;
 
 	default:
-		error(arg->sdl_arg_status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(p - arg->sdl_arg_sdl - 1));
+		error(arg->sdl_arg_status_vector, Firebird::Arg::Gds(isc_invalid_sdl) << Firebird::Arg::Num(p - arg->sdl_arg_sdl - 1));
 		return NULL;
 	}
 }
 
 
-static ISC_STATUS error(CheckStatusWrapper* status_vector, const Arg::StatusVector& v)
+static ISC_STATUS error(CheckStatusWrapper* status_vector, const Firebird::Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -594,8 +594,8 @@ static bool execute(sdl_arg* arg)
 					const SLONG n = *stack_ptr++;
 					if (n < range->iad_lower || n > range->iad_upper)
 					{
-						error(arg->sdl_arg_status_vector, Arg::Gds(isc_ss_out_of_bounds) <<
-														  Arg::Num(n) << Arg::Num(range->iad_lower) << Arg::Num(range->iad_upper));
+						error(arg->sdl_arg_status_vector, Firebird::Arg::Gds(isc_ss_out_of_bounds) <<
+														  Firebird::Arg::Num(n) << Firebird::Arg::Num(range->iad_lower) << Firebird::Arg::Num(range->iad_upper));
 						return false;
 					}
 					subscript += (n - range->iad_lower) * range->iad_length;
@@ -956,7 +956,7 @@ static IPTR* stuff(IPTR value, sdl_arg* arg)
 		return (IPTR*) TRUE;
 
 	if (arg->sdl_arg_next >= arg->sdl_arg_end)
-		error(arg->sdl_arg_status_vector, Arg::Gds(isc_virmemexh));
+		error(arg->sdl_arg_status_vector, Firebird::Arg::Gds(isc_virmemexh));
 		// unable to allocate memory from operating system
 
 	*(arg->sdl_arg_next)++ = value;

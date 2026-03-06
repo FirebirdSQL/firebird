@@ -31,7 +31,7 @@
 #include "firebird/Interface.h"
 
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class SecurityDatabaseManagement final :
 	public Firebird::StdPlugin<Firebird::IManagementImpl<SecurityDatabaseManagement, Firebird::CheckStatusWrapper> >

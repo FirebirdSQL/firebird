@@ -609,7 +609,7 @@ private:
 		TTypeId charSetId;
 
 		if (!MetadataCache::get_char_coll_subtype(tdbb, &charSetId, charSetName))
-			status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 
 		attachment->att_charset = charSetId;
 	}
@@ -1597,7 +1597,7 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 			if (!externalFunction)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_eem_func_not_returned) << udf->getName().toQuotedString() << engine);
+					Firebird::Arg::Gds(isc_eem_func_not_returned) << udf->getName().toQuotedString() << engine);
 			}
 		}
 		catch (const Exception&)
@@ -1686,7 +1686,7 @@ void ExtEngineManager::makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_
 			if (!externalProcedure)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_eem_proc_not_returned) <<
+					Firebird::Arg::Gds(isc_eem_proc_not_returned) <<
 						prc->getName().toQuotedString() << engine);
 			}
 		}
@@ -1843,7 +1843,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		if (!externalTrigger)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_eem_trig_not_returned) << trg->name.toQuotedString() << engine);
+				Firebird::Arg::Gds(isc_eem_trig_not_returned) << trg->name.toQuotedString() << engine);
 		}
 
 		if (relation)
@@ -1942,7 +1942,7 @@ IExternalEngine* ExtEngineManager::getEngine(thread_db* tdbb, const MetaName& na
 
 	if (!engine)
 	{
-		status_exception::raise(Arg::Gds(isc_eem_engine_notfound) << name);
+		status_exception::raise(Firebird::Arg::Gds(isc_eem_engine_notfound) << name);
 	}
 
 	return engine;
@@ -2021,7 +2021,7 @@ void ExtEngineManager::setupAdminCharSet(thread_db* tdbb, IExternalEngine* engin
 	}
 
 	if (!MetadataCache::get_char_coll_subtype(tdbb, &attInfo->adminCharSet, charSetName))
-		status_exception::raise(Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_charset_not_found) << charSetName.toQuotedString());
 }
 
 

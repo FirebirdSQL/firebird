@@ -95,9 +95,9 @@ namespace
 		string prefix;
 		prefix.printf("Incorrect entry in %s", REPLICATION_CFGFILE);
 
-		Arg::StatusVector sv;
-		sv << Arg::Gds(isc_random) << Arg::Str(prefix);
-		sv << Arg::StatusVector(ex);
+		Firebird::Arg::StatusVector sv;
+		sv << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(prefix);
+		sv << Firebird::Arg::StatusVector(ex);
 
 		status->setErrors(sv.value());
 	}
@@ -127,7 +127,7 @@ namespace
 			if (PathUtils::isRelative(filename))
 				filename = fb_utils::getPrefix(IConfigManager::DIR_CONF, filename.c_str());
 
-			AutoPtr<FILE> file(os_utils::fopen(filename.c_str(), "rt"));
+			AutoPtr<FILE> file(Firebird::os_utils::fopen(filename.c_str(), "rt"));
 			if (!file)
 				configError("missing or inaccessible file", key, filename.c_str());
 

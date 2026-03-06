@@ -322,7 +322,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 		return FB_FALSE;
 
-	FILE* file = os_utils::fopen(tmpf.c_str(), FOPEN_WRITE_TYPE_TEXT);
+	FILE* file = Firebird::os_utils::fopen(tmpf.c_str(), FOPEN_WRITE_TYPE_TEXT);
 	if (!file)
 	{
 		unlink(tmpf.c_str());
@@ -344,7 +344,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 	if (gds__edit(tmpf.c_str(), type))
 	{
 
-		if (!(file = os_utils::fopen(tmpf.c_str(), FOPEN_READ_TYPE_TEXT)))
+		if (!(file = Firebird::os_utils::fopen(tmpf.c_str(), FOPEN_READ_TYPE_TEXT)))
 		{
 			unlink(tmpf.c_str());
 			system_error::raise("fopen");
@@ -370,14 +370,14 @@ UtilInterface utilInterface;
 void UtilInterface::dumpBlob(CheckStatusWrapper* status, ISC_QUAD* blobId,
 	IAttachment* att, ITransaction* tra, const char* file_name, FB_BOOLEAN txt)
 {
-	FILE* file = os_utils::fopen(file_name, txt ? FOPEN_WRITE_TYPE_TEXT : FOPEN_WRITE_TYPE);
+	FILE* file = Firebird::os_utils::fopen(file_name, txt ? FOPEN_WRITE_TYPE_TEXT : FOPEN_WRITE_TYPE);
 	try
 	{
 		if (!file)
 			system_error::raise("fopen");
 
 		if (!att)
-			Arg::Gds(isc_bad_db_handle).raise();
+			Firebird::Arg::Gds(isc_bad_db_handle).raise();
 
 		dump(status, blobId, att, tra, file);
 	}
@@ -403,14 +403,14 @@ void UtilInterface::loadBlob(CheckStatusWrapper* status, ISC_QUAD* blobId,
  *	Load a blob with the contents of a file.
  *
  **************************************/
-	FILE* file = os_utils::fopen(file_name, txt ? FOPEN_READ_TYPE_TEXT : FOPEN_READ_TYPE);
+	FILE* file = Firebird::os_utils::fopen(file_name, txt ? FOPEN_READ_TYPE_TEXT : FOPEN_READ_TYPE);
 	try
 	{
 		if (!file)
 			system_error::raise("fopen");
 
 		if (!att)
-			Arg::Gds(isc_bad_db_handle).raise();
+			Firebird::Arg::Gds(isc_bad_db_handle).raise();
 
 		load(status, blobId, att, tra, file);
 	}
@@ -439,7 +439,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 	try
 	{
 		if (!att)
-			Arg::Gds(isc_bad_db_handle).raise();
+			Firebird::Arg::Gds(isc_bad_db_handle).raise();
 
 		UCharBuffer buffer;
 		USHORT buf_len = 256;
@@ -490,7 +490,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 					break;
 
 				default:
-					(Arg::Gds(isc_random) << "Invalid info item").raise();
+					(Firebird::Arg::Gds(isc_random) << "Invalid info item").raise();
 				}
 			}
 
@@ -821,7 +821,7 @@ void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
 	try
 	{
 		CVT_move(&sourceDesc, &targetDesc, 0,
-			[](const Arg::StatusVector& status)
+			[](const Firebird::Arg::StatusVector& status)
 			{
 				status.raise();
 			}
@@ -1268,8 +1268,8 @@ public:
 					strncpy(buffer, temp, bufSize);
 				else
 				{
-					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+					(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
+					 Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(bufSize) << Firebird::Arg::Num(len));
 				}
 			}
 		}
@@ -1329,8 +1329,8 @@ public:
 					strncpy(buffer, temp, bufSize);
 				else
 				{
-					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
+					(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
+					 Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(bufSize) << Firebird::Arg::Num(len));
 				}
 			}
 		}
@@ -1397,7 +1397,7 @@ public:
 		}
 	}
 
-	static void errorFunction(const Arg::StatusVector& v)
+	static void errorFunction(const Firebird::Arg::StatusVector& v)
 	{
 		v.raise();
 	}
@@ -1818,7 +1818,7 @@ int API_ROUTINE gds__edit(const TEXT* file_name, USHORT /*type*/)
 #endif
 
 	struct STAT before;
-	os_utils::stat(file_name, &before);
+	Firebird::os_utils::stat(file_name, &before);
 	// The path of the editor + the path of the file + quotes + one space.
 	// We aren't using quotes around the editor for now.
 	TEXT buffer[MAXPATHLEN * 2 + 5];
@@ -1827,7 +1827,7 @@ int API_ROUTINE gds__edit(const TEXT* file_name, USHORT /*type*/)
 	FB_UNUSED(system(buffer));
 
 	struct STAT after;
-	os_utils::stat(file_name, &after);
+	Firebird::os_utils::stat(file_name, &after);
 
 	return (before.st_mtime != after.st_mtime || before.st_size != after.st_size);
 }
@@ -3032,7 +3032,7 @@ void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 			break;
 
 		default:
-			(Arg::Gds(isc_random) << "Invalid info item").raise();
+			(Firebird::Arg::Gds(isc_random) << "Invalid info item").raise();
 		}
 	}
 }

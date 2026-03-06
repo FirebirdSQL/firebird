@@ -378,7 +378,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 	default:
 		disconnect(port);
 		delete rdb;
-		Arg::Gds(isc_connect_reject).raise();
+		Firebird::Arg::Gds(isc_connect_reject).raise();
 		break;
 	}
 
@@ -422,8 +422,8 @@ rem_port* XNET_connect(PACKET* packet,
  **************************************/
 	if (xnet_shutdown)
 	{
-		Arg::StatusVector temp;
-		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
+		Firebird::Arg::StatusVector temp;
+		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
 		temp.raise();
 	}
 
@@ -1092,7 +1092,7 @@ static void cleanup_port(rem_port* port)
 static void raise_lostconn_or_syserror(const char* msg)
 {
 	if (ERRNO == ERROR_FILE_NOT_FOUND)
-		status_exception::raise(Arg::Gds(isc_lost_db_connection));
+		status_exception::raise(Firebird::Arg::Gds(isc_lost_db_connection));
 	else
 		system_error::raise(msg);
 }
@@ -1152,15 +1152,15 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
 					make_obj_name(name_buffer, sizeof(name_buffer), "xnet://%s");
 
 					*xnet_endpoint = 0;
-					(Arg::Gds(isc_network_error) << Arg::Str(name_buffer)).raise();
+					(Firebird::Arg::Gds(isc_network_error) << Firebird::Arg::Str(name_buffer)).raise();
 				}
 			}
 		}
 
 
 		// setup status with net read error in case of wait timeout
-		Arg::StatusVector temp;
-		temp << Arg::Gds(isc_net_read_err);
+		Firebird::Arg::StatusVector temp;
+		temp << Firebird::Arg::Gds(isc_net_read_err);
 
 		static const int timeout = conf->getConnectionTimeout() * 1000;
 
@@ -1206,8 +1206,8 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
 	{
 		xnet_log_error("Server failed to respond on connect request");
 
-		Arg::StatusVector temp;
-		temp << Arg::Gds(isc_net_connect_err);
+		Firebird::Arg::StatusVector temp;
+		temp << Firebird::Arg::Gds(isc_net_connect_err);
 		temp.raise();
 	}
 
@@ -1472,8 +1472,8 @@ rem_port* XnetServerEndPoint::connect_server(USHORT flag)
 
 	if (xnet_shutdown)
 	{
-		Arg::StatusVector temp;
-		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
+		Firebird::Arg::StatusVector temp;
+		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
 		temp.raise();
 	}
 
@@ -1719,7 +1719,7 @@ static RemoteXdr* xdrxnet_create(rem_port* port, UCHAR* buffer, USHORT length, x
 }
 
 
-static void xnet_gen_error (rem_port* port, const Arg::StatusVector& v)
+static void xnet_gen_error (rem_port* port, const Firebird::Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -1759,11 +1759,11 @@ static void xnet_error(rem_port* port, ISC_STATUS operation, int status)
 			gds__log("XNET/xnet_error: errno = %d", status);
 		}
 
-		xnet_gen_error(port, Arg::Gds(operation) << SYS_ERR(status));
+		xnet_gen_error(port, Firebird::Arg::Gds(operation) << SYS_ERR(status));
 	}
 	else
 	{
-		xnet_gen_error(port, Arg::Gds(operation));
+		xnet_gen_error(port, Firebird::Arg::Gds(operation));
 	}
 }
 
@@ -2283,8 +2283,8 @@ bool XnetServerEndPoint::server_init(USHORT flag)
 		xnet_shutdown = true;
 
 		// the real error is already logged, return isc_net_server_shutdown instead
-		Arg::StatusVector temp;
-		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
+		Firebird::Arg::StatusVector temp;
+		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
 		temp.raise();
 	}
 

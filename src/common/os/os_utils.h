@@ -68,8 +68,7 @@
 #define FLOCK flock
 #endif
 
-namespace os_utils
-{
+namespace Firebird::os_utils {
 
 	SLONG get_user_group_id(const TEXT* user_group_name);
 	SLONG get_user_id(const TEXT* user_name);

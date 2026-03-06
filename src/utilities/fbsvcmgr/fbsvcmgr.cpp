@@ -71,7 +71,7 @@ struct SvcSwitches
 namespace
 {
 	constexpr int SVCMGR_FACILITY = FB_IMPL_MSG_FACILITY_FBSVCMGR;
-	using MsgFormat::SafeArg;
+	using Firebird::MsgFormat::SafeArg;
 }
 
 string getMessage(int n)
@@ -149,13 +149,13 @@ bool putFileArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	case fb_utils::FETCH_PASS_OK:
 		break;
 	case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-		(Arg::Gds(isc_fbsvcmgr_fp_open) << *av << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_open) << *av << Firebird::Arg::OsError()).raise();
 		break;
 	case fb_utils::FETCH_PASS_FILE_READ_ERROR:
-		(Arg::Gds(isc_fbsvcmgr_fp_read) << *av << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_read) << *av << Firebird::Arg::OsError()).raise();
 		break;
 	case fb_utils::FETCH_PASS_FILE_EMPTY:
-		(Arg::Gds(isc_fbsvcmgr_fp_empty) << *av).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_empty) << *av).raise();
 		break;
 	}
 
@@ -170,9 +170,9 @@ bool putFileFromArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	if (! *av)
 		return false;
 
-	FILE* const file = os_utils::fopen(*av, "rb");
+	FILE* const file = Firebird::os_utils::fopen(*av, "rb");
 	if (!file) {
-		(Arg::Gds(isc_fbsvcmgr_fp_open) << *av << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_open) << *av << Firebird::Arg::OsError()).raise();
 	}
 
 	fseek(file, 0, SEEK_END);
@@ -180,7 +180,7 @@ bool putFileFromArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	if (len == 0)
 	{
 		fclose(file);
-		(Arg::Gds(isc_fbsvcmgr_fp_empty) << *av).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_empty) << *av).raise();
 	}
 
 	HalfStaticArray<UCHAR, 1024> buff(*getDefaultMemoryPool(), len);
@@ -190,7 +190,7 @@ bool putFileFromArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	if (fread(p, 1, len, file) != size_t(len))
 	{
 		fclose(file);
-		(Arg::Gds(isc_fbsvcmgr_fp_read) << *av << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_fp_read) << *av << Firebird::Arg::OsError()).raise();
 	}
 
 	fclose(file);
@@ -218,7 +218,7 @@ bool putSpecTag(char**& av, ClumpletWriter& spb, unsigned int tag,
 		}
 	}
 
-	status_exception::raise(Arg::Gds(errorCode));
+	status_exception::raise(Firebird::Arg::Gds(errorCode));
 	return false;	// compiler warning silencer
 }
 
@@ -294,7 +294,7 @@ bool putIntArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 
 	SLONG n;
 	if (sscanf(*av++, "%" SLONGFORMAT, &n) != 1)
-		(Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-2]).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-2]).raise();
 
 	spb.insertInt(tag, n);
 
@@ -310,7 +310,7 @@ bool putBigIntArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 
 	SINT64 n;
 	if (sscanf(*av++, "%" SQUADFORMAT, &n) != 1)
-		(Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-2]).raise();
+		(Firebird::Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-2]).raise();
 
 	spb.insertBigInt(tag, n);
 
@@ -365,7 +365,7 @@ bool populateSpbFromSwitches(char**& av, ClumpletWriter& spb,
 				}
 				return true;
 			}
-			(Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-1]).raise();
+			(Firebird::Arg::Gds(isc_fbsvcmgr_bad_arg) << av[-1]).raise();
 		}
 	}
 
@@ -872,8 +872,8 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 					printInt(p, 17);
 					break;
 				default:
-					status_exception::raise(Arg::Gds(isc_fbsvcmgr_info_err) <<
-											Arg::Num(static_cast<unsigned char>(p[-1])));
+					status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_info_err) <<
+											Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 				}
 			}
 			p++;
@@ -908,8 +908,8 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 			            printMessage(41);
 						break;
 					default:
-						status_exception::raise(Arg::Gds(isc_fbsvcmgr_limbo_state) <<
-												Arg::Num(static_cast<unsigned char>(p[-1])));
+						status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_limbo_state) <<
+												Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 					}
 					break;
 				case isc_spb_tra_remote_site:
@@ -931,8 +931,8 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 			            printMessage(46);
 						break;
 					default:
-						status_exception::raise(Arg::Gds(isc_fbsvcmgr_info_limbo) <<
-												Arg::Num(static_cast<unsigned char>(p[-1])));
+						status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_info_limbo) <<
+												Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 					}
 					break;
 				case isc_spb_multi_tra_id:
@@ -954,8 +954,8 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 					printInt64(p, 37);
 					break;
 				default:
-					status_exception::raise(Arg::Gds(isc_fbsvcmgr_info_limbo) <<
-											Arg::Num(static_cast<unsigned char>(p[-1])));
+					status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_info_limbo) <<
+											Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 				}
 			}
 			if (*p == isc_info_flag_end)
@@ -1029,8 +1029,8 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_fbsvcmgr_query_err) <<
-									Arg::Num(static_cast<unsigned char>(p[-1])));
+			status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_query_err) <<
+									Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 		}
 	}
 
@@ -1224,7 +1224,7 @@ int main(int ac, char** av)
 			return 0;
 		}
 
-		os_utils::CtrlCHandler ctrlCHandler;
+		Firebird::os_utils::CtrlCHandler ctrlCHandler;
 		fb_utils::FbShutdown appShutdown(fb_shutrsn_app_stopped);
 
 		ISC_STATUS_ARRAY status;
@@ -1265,7 +1265,7 @@ int main(int ac, char** av)
 
 		if (*av)
 		{
-			status_exception::raise(Arg::Gds(isc_fbsvcmgr_switch_unknown) << Arg::Str(*av));
+			status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_switch_unknown) << Firebird::Arg::Str(*av));
 		}
 
 		isc_svc_handle svc_handle = 0;

@@ -31,7 +31,7 @@
 #include "../common/classes/MetaString.h"
 #include "../common/classes/objects_array.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class CharField :
 	public Firebird::AutoIface<Firebird::ICharUserFieldImpl<CharField, Firebird::CheckStatusWrapper> >

@@ -32,8 +32,7 @@
 #include <unistd.h>
 #endif
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 int RawStream::write(const void* str, unsigned int n)
 {

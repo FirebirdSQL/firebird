@@ -37,7 +37,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/ImplementHelper.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class WriterImplementation :
 	public Firebird::AutoIface<Firebird::IWriterImpl<WriterImplementation, Firebird::CheckStatusWrapper> >

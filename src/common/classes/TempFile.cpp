@@ -215,36 +215,36 @@ void TempFile::init(const PathName& directory, const PathName& prefix)
 		const DWORD err = GetLastError();
 		if (err != ERROR_FILE_EXISTS)
 		{
-			(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (create)") << Arg::Str(name) <<
-				Arg::Gds(isc_io_create_err) << Arg::OsError(err)).raise();
+			(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("CreateFile (create)") << Firebird::Arg::Str(name) <<
+				Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::OsError(err)).raise();
 		}
 		randomness++;
 	}
 	if (handle == INVALID_HANDLE_VALUE)
 	{
-		(Arg::Gds(isc_io_error) << Arg::Str("CreateFile (create)") << Arg::Str(filename) <<
-			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("CreateFile (create)") << Firebird::Arg::Str(filename) <<
+			Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::OsError()).raise();
 	}
 #else
 	filename += prefix;
 	filename += NAME_PATTERN;
 
 #ifdef HAVE_MKSTEMP
-	handle = (IPTR) os_utils::mkstemp(filename.begin());
+	handle = (IPTR) Firebird::os_utils::mkstemp(filename.begin());
 #else
 	if (!mktemp(filename.begin()))
 	{
-		(Arg::Gds(isc_io_error) << Arg::Str("mktemp") << Arg::Str(filename) <<
-			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("mktemp") << Firebird::Arg::Str(filename) <<
+			Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::OsError()).raise();
 	}
 
-	handle = os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_CREAT);
+	handle = Firebird::os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_CREAT);
 #endif
 
 	if (handle == -1)
 	{
-		(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(filename) <<
-			Arg::Gds(isc_io_create_err) << Arg::OsError()).raise();
+		(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open") << Firebird::Arg::Str(filename) <<
+			Firebird::Arg::Gds(isc_io_create_err) << Firebird::Arg::OsError()).raise();
 	}
 
 	if (doUnlink)
@@ -296,7 +296,7 @@ void TempFile::seek(const offset_t offset)
 		system_error::raise("SetFilePointer");
 	}
 #else
-	const off_t seek_result = os_utils::lseek(handle, (off_t) offset, SEEK_SET);
+	const off_t seek_result = Firebird::os_utils::lseek(handle, (off_t) offset, SEEK_SET);
 	if (seek_result == (off_t) -1)
 	{
 		system_error::raise("lseek");

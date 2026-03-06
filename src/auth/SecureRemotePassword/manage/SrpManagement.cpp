@@ -50,7 +50,7 @@ Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
 } // anonymous namespace
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class SrpManagement final : public Firebird::StdPlugin<Firebird::IManagementImpl<SrpManagement, Firebird::CheckStatusWrapper> >
 {
@@ -967,13 +967,13 @@ private:
 };
 
 // register plugin
-static Firebird::SimpleFactory<Auth::SrpManagement> factory;
+static Firebird::SimpleFactory<Firebird::Auth::SrpManagement> factory;
 
 } // namespace Auth
 
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	Firebird::CachedMasterInterface::set(master);
-	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Auth::RemotePassword::plugName, &Auth::factory);
+	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, Firebird::Auth::RemotePassword::plugName, &Firebird::Auth::factory);
 	Firebird::getUnloadDetector()->registerMe();
 }

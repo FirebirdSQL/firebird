@@ -105,9 +105,9 @@ public:
 
 		for (const Dec2fb* e = dec2fb; e->decError; ++e)
 		{
-			// Arg::Gds(isc_arith_except) as first vector element ?
+			// Firebird::Arg::Gds(isc_arith_except) as first vector element ?
 			if (e->decError & unmaskedExceptions)
-				Arg::Gds(dblError ? e->fbDoubleError : e->fbError).raise();
+				Firebird::Arg::Gds(dblError ? e->fbDoubleError : e->fbError).raise();
 		}
 	}
 
@@ -267,7 +267,7 @@ void grab(ULONG* key,
 			cl = DEC_CLASS_QNAN;
 			break;
 		default:
-			(Arg::Gds(isc_random) << "Invalid class of special decfloat value in sort key").raise();
+			(Firebird::Arg::Gds(isc_random) << "Invalid class of special decfloat value in sort key").raise();
 		}
 
 		return;

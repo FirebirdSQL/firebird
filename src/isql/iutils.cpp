@@ -38,7 +38,7 @@
 #include <stdarg.h>
 
 using namespace Firebird;
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 void IUTILS_copy_SQL_id(const TEXT* in_str, TEXT* output_str, TEXT escape_char)

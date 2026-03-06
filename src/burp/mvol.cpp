@@ -68,7 +68,7 @@
 #include "../common/status.h"
 #include "../common/classes/zip.h"
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
 using namespace Burp;
 
@@ -1625,12 +1625,12 @@ static void prompt_for_name(SCHAR* name, int length)
 	// Get a location to read from.
 	fb_assert(!tdgbl->uSvc->isService());
 
-	if (isatty(fileno(stdout)) || !(term_out = os_utils::fopen(TERM_OUTPUT, "w")))
+	if (isatty(fileno(stdout)) || !(term_out = Firebird::os_utils::fopen(TERM_OUTPUT, "w")))
 	{
 		term_out = stdout;
 	}
 
-	if (isatty(fileno(stdin)) || !(term_in = os_utils::fopen(TERM_INPUT, "r")))
+	if (isatty(fileno(stdin)) || !(term_in = Firebird::os_utils::fopen(TERM_INPUT, "r")))
 	{
 		term_in = stdin;
 	}

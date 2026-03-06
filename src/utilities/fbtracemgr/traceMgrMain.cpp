@@ -61,7 +61,7 @@ public:
 	void setActive(ULONG id, bool active) override;
 	void listSessions() override;
 
-	os_utils::CtrlCHandler ctrlCHandler;
+	Firebird::os_utils::CtrlCHandler ctrlCHandler;
 
 private:
 	void runService(size_t spbSize, const UCHAR* spb);
@@ -130,19 +130,19 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 	try
 	{
 		const char* fileName = session.ses_config.c_str();
-		file = os_utils::fopen(fileName, "rb");
+		file = Firebird::os_utils::fopen(fileName, "rb");
 		if (!file)
 		{
-			(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(fileName) <<
-				Arg::Gds(isc_io_open_err) << Arg::OsError()).raise();
+			(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fopen") << Firebird::Arg::Str(fileName) <<
+				Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::OsError()).raise();
 		}
 
 		fseek(file, 0, SEEK_END);
 		len = ftell(file);
 		if (len == 0)
 		{
-			(Arg::Gds(isc_io_error) << Arg::Str("fread") << Arg::Str(fileName) <<
-				Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
+			(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fread") << Firebird::Arg::Str(fileName) <<
+				Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::OsError()).raise();
 		}
 
 		fseek(file, 0, SEEK_SET);
@@ -150,8 +150,8 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 
 		if (fread(p, 1, len, file) != size_t(len))
 		{
-			(Arg::Gds(isc_io_error) << Arg::Str("fread") << Arg::Str(fileName) <<
-				Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
+			(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("fread") << Firebird::Arg::Str(fileName) <<
+				Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::OsError()).raise();
 		}
 		fclose(file);
 	}
@@ -285,8 +285,8 @@ void TraceSvcUtil::runService(size_t spbSize, const UCHAR* spb)
 				break;
 
 			default:
-				status_exception::raise(Arg::Gds(isc_fbsvcmgr_query_err) <<
-										Arg::Num(static_cast<unsigned char>(p[-1])));
+				status_exception::raise(Firebird::Arg::Gds(isc_fbsvcmgr_query_err) <<
+										Firebird::Arg::Num(static_cast<unsigned char>(p[-1])));
 			}
 		}
 	} while (!(ctrlCHandler.getTerminated() || noData));

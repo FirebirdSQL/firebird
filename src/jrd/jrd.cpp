@@ -458,7 +458,7 @@ public:
 		{
 			if (getUnloadDetector()->unloadStarted())
 			{
-				Arg::Gds(isc_att_shut_engine).raise();
+				Firebird::Arg::Gds(isc_att_shut_engine).raise();
 			}
 
 			IPluginBase* p = FB_NEW JProvider(factoryParameter);
@@ -664,7 +664,7 @@ namespace
 			return;
 
 		if (!attachment || !attachment->att_database)
-			status_exception::raise(Arg::Gds(isc_bad_db_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_db_handle));
 
 		tdbb->setAttachment(attachment);
 		tdbb->setDatabase(attachment->att_database);
@@ -673,7 +673,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, jrd_tra* const transaction)
 	{
 		if (!transaction)
-			status_exception::raise(Arg::Gds(isc_bad_trans_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_trans_handle));
 
 		const Attachment* att = tdbb->getAttachment();
 		if (att && transaction->tra_attachment)
@@ -687,7 +687,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, Statement* const statement)
 	{
 		if (!statement)
-			status_exception::raise(Arg::Gds(isc_bad_req_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_req_handle));
 
 		validateHandle(tdbb, statement->makeRootRequest(tdbb)->req_attachment);
 	}
@@ -695,7 +695,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, DsqlRequest* const statement)
 	{
 		if (!statement)
-			status_exception::raise(Arg::Gds(isc_bad_req_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_req_handle));
 
 		validateHandle(tdbb, statement->req_dbb->dbb_attachment);
 	}
@@ -703,7 +703,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, blb* blob)
 	{
 		if (!blob)
-			status_exception::raise(Arg::Gds(isc_bad_segstr_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_segstr_handle));
 
 		validateHandle(tdbb, blob->getTransaction());
 		validateHandle(tdbb, blob->getAttachment());
@@ -712,7 +712,7 @@ namespace
 	inline void validateHandle(const Service* service)
 	{
 		if (!service)
-			status_exception::raise(Arg::Gds(isc_bad_svc_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_svc_handle));
 	}
 
 	inline void validateHandle(thread_db* tdbb, JEvents* const events)
@@ -723,7 +723,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, const DsqlCursor* const cursor)
 	{
 		if (!cursor)
-			status_exception::raise(Arg::Gds(isc_bad_req_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_req_handle));
 
 		validateHandle(tdbb, cursor->getTransaction());
 		validateHandle(tdbb, cursor->getAttachment());
@@ -732,7 +732,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, const DsqlBatch* const batch)
 	{
 		if (!batch)
-			status_exception::raise(Arg::Gds(isc_bad_batch_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_batch_handle));
 
 		validateHandle(tdbb, batch->getAttachment());
 	}
@@ -740,7 +740,7 @@ namespace
 	inline void validateHandle(thread_db* tdbb, const Applier* const applier)
 	{
 		if (!applier)
-			status_exception::raise(Arg::Gds(isc_bad_repl_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_repl_handle));
 
 		validateHandle(tdbb, applier->getAttachment());
 	}
@@ -760,10 +760,10 @@ namespace
 			rs->fetch(tdbb);
 
 			const UserId* const u = attachment->att_user;
-			Arg::Gds err(isc_adm_task_denied);
-			err << Arg::Gds(isc_miss_prvlg) << missPriv;
+			Firebird::Arg::Gds err(isc_adm_task_denied);
+			err << Firebird::Arg::Gds(isc_miss_prvlg) << missPriv;
 			if (u && u->testFlag(USR_mapdown))
-				err << Arg::Gds(isc_map_down);
+				err << Firebird::Arg::Gds(isc_map_down);
 
 			ERR_post(err);
 		}
@@ -832,7 +832,7 @@ AttachmentHolder::AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, un
 	  blocking(!(lockFlags & ATT_NON_BLOCKING))
 {
 	if (!sa)
-		Arg::Gds(isc_att_shutdown).raise();
+		Firebird::Arg::Gds(isc_att_shutdown).raise();
 
 	if (blocking)
 		sAtt->getBlockingMutex()->enter(from);
@@ -852,9 +852,9 @@ AttachmentHolder::AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, un
 				// with the flag set cause shutdownMutex mutex is not locked here.
 				// That's not a danger cause check of att_use_count
 				// in shutdown code makes it anyway safe.
-				Arg::Gds err(isc_att_shutdown);
+				Firebird::Arg::Gds err(isc_att_shutdown);
 				if (sAtt->getShutError())
-					err << Arg::Gds(sAtt->getShutError());
+					err << Firebird::Arg::Gds(sAtt->getShutError());
 
 				err.raise();
 			}
@@ -1161,10 +1161,10 @@ namespace Firebird::Jrd {
 					}
 
 					// build and throw new vector
-					Arg::Gds newErr(isc_bind_err);
+					Firebird::Arg::Gds newErr(isc_bind_err);
 					newErr << options.dpb_set_bind <<
-						Arg::Gds(isc_bind_statement) << rules[i];
-					newErr << Arg::StatusVector(v);
+						Firebird::Arg::Gds(isc_bind_statement) << rules[i];
+					newErr << Firebird::Arg::StatusVector(v);
 					newErr.raise();
 				}
 			}
@@ -1176,7 +1176,7 @@ namespace Firebird::Jrd {
 				options.dpb_decfloat_round.c_str(), FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
 
 			if (!dfConst)
-				(Arg::Gds(isc_invalid_decfloat_round) << options.dpb_decfloat_round).raise();
+				(Firebird::Arg::Gds(isc_invalid_decfloat_round) << options.dpb_decfloat_round).raise();
 
 			decFloatStatus.roundingMode = dfConst->val;
 		}
@@ -1197,7 +1197,7 @@ namespace Firebird::Jrd {
 					trap.c_str(), FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
 
 				if (!dfConst)
-					(Arg::Gds(isc_invalid_decfloat_trap) << trap).raise();
+					(Firebird::Arg::Gds(isc_invalid_decfloat_trap) << trap).raise();
 
 				traps |= dfConst->val;
 
@@ -1560,7 +1560,7 @@ namespace Firebird::Jrd {
 JTransaction* JAttachment::getTransactionInterface(CheckStatusWrapper* status, ITransaction* tra)
 {
 	if (!tra)
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 
 	status->init();
 
@@ -1570,7 +1570,7 @@ JTransaction* JAttachment::getTransactionInterface(CheckStatusWrapper* status, I
 	if (status->getState() & IStatus::STATE_ERRORS)
 		status_exception::raise(status);
 	if (!jt)
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 
 	return jt;
 }
@@ -1650,7 +1650,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			// Check to see if the database is truly local
 			if (ISC_check_if_remote(expanded_name, true))
-				ERR_post(Arg::Gds(isc_unavailable));
+				ERR_post(Firebird::Arg::Gds(isc_unavailable));
 
 			// We are ready to setup security database - before entering guardDbInit!!!
 			mapping.setSecurityDbAlias(config->getSecurityDatabase(), expanded_name.c_str());
@@ -1696,9 +1696,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			// Check for ability to access requested DB remotely
 			if (options.dpb_remote_address.hasData() && !config->getRemoteAccess())
 			{
-				ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("remote") <<
-												  Arg::Str("database") <<
-												  Arg::Str(org_filename));
+				ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("remote") <<
+												  Firebird::Arg::Str("database") <<
+												  Firebird::Arg::Str(org_filename));
 			}
 
 #ifndef	WIN_NT
@@ -1855,9 +1855,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					(options.dpb_flags & DatabaseOptions::DPB_FLAGS_MASK))
 				{
 					// looks like someone tries to attach incompatibly
-					Arg::Gds err(isc_bad_dpb_content);
+					Firebird::Arg::Gds err(isc_bad_dpb_content);
 					if ((dbb->dbb_flags & DBB_damaged) != (options.dpb_flags & DBB_damaged))
-						err << Arg::Gds(isc_baddpb_damaged_mode);
+						err << Firebird::Arg::Gds(isc_baddpb_damaged_mode);
 					err.raise();
 				}
 
@@ -1871,7 +1871,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			if (dbb->isRestoring())
 			{
 				if (!options.dpb_gbak_attach && !options.dpb_map_attach && !options.dpb_worker_attach)
-					ERR_post(Arg::Gds(isc_no_user_att_while_restore));
+					ERR_post(Firebird::Arg::Gds(isc_no_user_att_while_restore));
 			}
 
 			// Attachments to a ReadOnly database need NOT do garbage collection
@@ -1883,8 +1883,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			if (options.dpb_disable_wal)
 			{
-				ERR_post(Arg::Gds(isc_lock_timeout) <<
-						 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+				ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+						 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 			}
 
 			if (options.dpb_buffers && !dbb->dbb_page_buffers)
@@ -1908,8 +1908,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			if (invalid_client_SQL_dialect)
 			{
-				ERR_post(Arg::Gds(isc_inv_client_dialect_specified) << Arg::Num(options.dpb_sql_dialect) <<
-						 Arg::Gds(isc_valid_client_dialects) << Arg::Str("1, 2 or 3"));
+				ERR_post(Firebird::Arg::Gds(isc_inv_client_dialect_specified) << Firebird::Arg::Num(options.dpb_sql_dialect) <<
+						 Firebird::Arg::Gds(isc_valid_client_dialects) << Firebird::Arg::Str("1, 2 or 3"));
 			}
 
 			switch (options.dpb_sql_dialect)
@@ -1999,22 +1999,22 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					const ISC_STATUS err = jAtt->getStable()->getShutError();
 
 					if (dbb->isShutdown())
-						ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(org_filename));
+						ERR_post(Firebird::Arg::Gds(isc_shutdown) << Firebird::Arg::Str(org_filename));
 
 					if (err)
-						ERR_post(Arg::Gds(isc_att_shutdown) << Arg::Gds(err));
+						ERR_post(Firebird::Arg::Gds(isc_att_shutdown) << Firebird::Arg::Gds(err));
 
-					ERR_post(Arg::Gds(isc_att_shutdown));
+					ERR_post(Firebird::Arg::Gds(isc_att_shutdown));
 				}
 
 				if (!attachment_succeeded)
-					ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_shutdown) << Firebird::Arg::Str(org_filename));
 			}
 
 			// If database is shutdown then kick 'em out.
 
 			if (dbb->dbb_ast_flags & (DBB_shut_attach | DBB_shut_tran))
-				ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(org_filename));
+				ERR_post(Firebird::Arg::Gds(isc_shutinprog) << Firebird::Arg::Str(org_filename));
 
 			if (dbb->isShutdown())
 			{
@@ -2042,7 +2042,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				if (!allow_access)
 				{
 					// Note we throw exception here when entering full-shutdown mode
-					ERR_post(Arg::Gds(isc_shutdown) << org_filename);
+					ERR_post(Firebird::Arg::Gds(isc_shutdown) << org_filename);
 				}
 			}
 
@@ -2076,8 +2076,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				validateAccess(tdbb, attachment, USE_GFIX_UTILITY);
 				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 				}
 
 				INI_upgrade(tdbb);
@@ -2087,7 +2087,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			{
 				validateAccess(tdbb, attachment, USE_GFIX_UTILITY);
 				if (!CCH_exclusive(tdbb, LCK_PW, WAIT_PERIOD, NULL))
-					ERR_post(Arg::Gds(isc_bad_dpb_content) << Arg::Gds(isc_cant_validate));
+					ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) << Firebird::Arg::Gds(isc_cant_validate));
 
 				// Can't allow garbage collection during database validation.
 
@@ -2109,12 +2109,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			if (options.dpb_journal.hasData())
-				ERR_post(Arg::Gds(isc_bad_dpb_content) << Arg::Gds(isc_cant_start_journal));
+				ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) << Firebird::Arg::Gds(isc_cant_start_journal));
 
 			if (options.dpb_wal_action)
 			{
 				// No WAL anymore. We deleted it.
-				ERR_post(Arg::Gds(isc_no_wal));
+				ERR_post(Firebird::Arg::Gds(isc_no_wal));
 			}
 
 			if (attachment->att_utility == Attachment::UTIL_GFIX ||
@@ -2179,8 +2179,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
 				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 				}
 				PAG_set_db_readonly(tdbb, options.dpb_db_readonly);
 				dbb->dbb_linger_seconds = 0;
@@ -2191,8 +2191,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				validateAccess(tdbb, attachment, CHANGE_HEADER_SETTINGS);
 				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, NULL))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 				}
 				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
 				dbb->dbb_linger_seconds = 0;
@@ -2850,7 +2850,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// Check to see if the database is truly local or if it just looks
 			// that way
 			if (ISC_check_if_remote(expanded_name, true))
-				ERR_post(Arg::Gds(isc_unavailable));
+				ERR_post(Firebird::Arg::Gds(isc_unavailable));
 
 			// Check for correct credentials supplied
 			mapping.setSecurityDbAlias(config->getSecurityDatabase(), nullptr);
@@ -2866,7 +2866,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			switch (powerLevel)
 			{
 			case CreateGrant::NONE:
-					(Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << filename).raise();
+					(Firebird::Arg::Gds(isc_no_priv) << "CREATE" << "DATABASE" << filename).raise();
 
 			case CreateGrant::ASSUMED:
 				if (options.dpb_owner.hasData())
@@ -2884,7 +2884,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 					fb_utils::dpbItemUpper(options.dpb_owner);
 					if (userId.getUserName() != MetaString(options.dpb_owner))
 					{
-						(Arg::Gds(isc_no_priv) << "IMPERSONATE USER" << "DATABASE" << filename).raise();
+						(Firebird::Arg::Gds(isc_no_priv) << "IMPERSONATE USER" << "DATABASE" << filename).raise();
 					}
 				}
 				break;
@@ -2931,9 +2931,9 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// Check for ability to access requested DB remotely
 			if (options.dpb_remote_address.hasData() && !config->getRemoteAccess())
 			{
-				ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("remote") <<
-												  Arg::Str("database") <<
-												  Arg::Str(org_filename));
+				ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("remote") <<
+												  Firebird::Arg::Str("database") <<
+												  Firebird::Arg::Str(org_filename));
 			}
 
 #ifndef WIN_NT
@@ -2991,9 +2991,9 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 				break;
 			default:
-				ERR_post(Arg::Gds(isc_database_create_failed) << Arg::Str(expanded_name) <<
-						 Arg::Gds(isc_inv_dialect_specified) << Arg::Num(options.dpb_sql_dialect) <<
-						 Arg::Gds(isc_valid_db_dialects) << Arg::Str("1 and 3"));
+				ERR_post(Firebird::Arg::Gds(isc_database_create_failed) << Firebird::Arg::Str(expanded_name) <<
+						 Firebird::Arg::Gds(isc_inv_dialect_specified) << Firebird::Arg::Num(options.dpb_sql_dialect) <<
+						 Firebird::Arg::Gds(isc_valid_db_dialects) << Firebird::Arg::Str("1 and 3"));
 				break;
 			}
 
@@ -3054,9 +3054,9 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 				if (!allow_overwrite)
 				{
-					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("overwrite") <<
-													  Arg::Str("database") <<
-													  Arg::Str(expanded_name));
+					ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("overwrite") <<
+													  Firebird::Arg::Str("database") <<
+													  Firebird::Arg::Str(expanded_name));
 				}
 
 				// file is a database and the user (SYSDBA or owner) has right to overwrite
@@ -3067,7 +3067,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_filename.assign(pageSpace->file->fil_string);	// first dbb file
 #endif
 #ifdef HAVE_ID_BY_NAME
-			os_utils::getUniqueFileId(dbb->dbb_filename.c_str(), dbb->dbb_id);
+			Firebird::os_utils::getUniqueFileId(dbb->dbb_filename.c_str(), dbb->dbb_id);
 #endif
 
 			// Initialize the global objects
@@ -3136,7 +3136,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// There is no point to move database online at database creation since it is online by default.
 			// We do not allow to create database that is fully shut down.
 			if (options.dpb_online || (options.dpb_shutdown & isc_dpb_shut_mode_mask) == isc_dpb_shut_full)
-				ERR_post(Arg::Gds(isc_bad_shutdown_mode) << Arg::Str(org_filename));
+				ERR_post(Firebird::Arg::Gds(isc_bad_shutdown_mode) << Firebird::Arg::Str(org_filename));
 
 			if (options.dpb_shutdown) {
 				SHUT_database(tdbb, options.dpb_shutdown, options.dpb_shutdown_delay, &dbbGuard);
@@ -3165,8 +3165,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			{
 				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, &dbbGuard))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 				}
 
 				PAG_set_db_readonly(tdbb, options.dpb_db_readonly);
@@ -3176,8 +3176,8 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			{
 				if (!CCH_exclusive(tdbb, LCK_EX, WAIT_PERIOD, &dbbGuard))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(org_filename));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(org_filename));
 				}
 
 				PAG_set_db_replica(tdbb, options.dpb_replica_mode);
@@ -3304,7 +3304,7 @@ void JAttachment::executeDyn(CheckStatusWrapper* status, ITransaction* /*tra*/, 
  * This function is deprecated and "removed".
  *
  **************************************/
-	(Arg::Gds(isc_feature_removed) << Arg::Str("isc_ddl")).copyTo(status);
+	(Firebird::Arg::Gds(isc_feature_removed) << Firebird::Arg::Str("isc_ddl")).copyTo(status);
 }
 
 
@@ -3353,7 +3353,7 @@ void JAttachment::freeEngineData(CheckStatusWrapper* user_status, bool forceFree
 		try
 		{
 			if (attachment->att_in_use)
-				status_exception::raise(Arg::Gds(isc_attachment_in_use));
+				status_exception::raise(Firebird::Arg::Gds(isc_attachment_in_use));
 
 			unsigned flags = PURGE_LINGER;
 
@@ -3443,7 +3443,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			EnsureUnlock<StableAttachmentPart::Sync, NotRefCounted> guard(*(getStable()->getSync()), FB_FUNCTION);
 			if (!guard.tryEnter())
 			{
-				status_exception::raise(Arg::Gds(isc_attachment_in_use));
+				status_exception::raise(Firebird::Arg::Gds(isc_attachment_in_use));
 			}
 
 			// Prepare to set ODS to 0
@@ -3456,7 +3456,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				Sync sync(&dbb->dbb_sync, "JAttachment::dropDatabase()");
 
 				if (attachment->att_in_use || attachment->att_use_count)
-					status_exception::raise(Arg::Gds(isc_attachment_in_use));
+					status_exception::raise(Firebird::Arg::Gds(isc_attachment_in_use));
 
 				const PathName& file_name = attachment->att_filename;
 
@@ -3467,25 +3467,25 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 					const ISC_STATUS err = getStable()->getShutError();
 
 					if (dbb->isShutdown())
-						ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(file_name));
+						ERR_post(Firebird::Arg::Gds(isc_shutdown) << Firebird::Arg::Str(file_name));
 
 					if (err)
-						ERR_post(Arg::Gds(isc_att_shutdown) << Arg::Gds(err));
+						ERR_post(Firebird::Arg::Gds(isc_att_shutdown) << Firebird::Arg::Gds(err));
 
-					ERR_post(Arg::Gds(isc_att_shutdown));
+					ERR_post(Firebird::Arg::Gds(isc_att_shutdown));
 				}
 
 				// try to block special threads before taking exclusive lock on database
 				if (!threadGuard.tryEnter())
 				{
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str("DATABASE"));
 				}
 
 				if (!CCH_exclusive(tdbb, LCK_PW, WAIT_PERIOD, NULL))
 				{
-					ERR_post(Arg::Gds(isc_lock_timeout) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str(file_name));
+					ERR_post(Firebird::Arg::Gds(isc_lock_timeout) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str(file_name));
 				}
 
 				if (!attachment->isWorker())
@@ -3498,8 +3498,8 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				sync.lock(SYNC_EXCLUSIVE);
 				if (dbb->dbb_attachments && dbb->dbb_attachments->att_next)
 				{
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str("DATABASE"));
 				}
 
 				// dbb->dbb_extManager->closeAttachment(tdbb, attachment);
@@ -3564,7 +3564,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 
 				if (err)
 				{
-					Arg::Gds(isc_drdb_completed_with_errs).copyTo(user_status);
+					Firebird::Arg::Gds(isc_drdb_completed_with_errs).copyTo(user_status);
 				}
 			}
 		}
@@ -3807,8 +3807,8 @@ void JBlob::putSegment(CheckStatusWrapper* user_status, unsigned int buffer_leng
 				b->BLB_put_data(tdbb, static_cast<const UCHAR*>(buffer), buffer_length);
 			else
 			{
-				ERR_post(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blobtoobig) <<
-						 Arg::Gds(isc_big_segment) << Arg::Num(buffer_length));
+				ERR_post(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_blobtoobig) <<
+						 Firebird::Arg::Gds(isc_big_segment) << Firebird::Arg::Num(buffer_length));
 			}
 		}
 		catch (const Exception& ex)
@@ -4863,8 +4863,8 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 				if (in_msg_length != len)
 				{
-					ERR_post(Arg::Gds(isc_port_len) << Arg::Num(in_msg_length) <<
-													   Arg::Num(len));
+					ERR_post(Firebird::Arg::Gds(isc_port_len) << Firebird::Arg::Num(in_msg_length) <<
+													   Firebird::Arg::Num(len));
 				}
 
 				memcpy(inMessage->getBuffer(request), in_msg, in_msg_length);
@@ -4876,8 +4876,8 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			if (out_msg_length != len)
 			{
-				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(out_msg_length) <<
-												   Arg::Num(len));
+				ERR_post(Firebird::Arg::Gds(isc_port_len) << Firebird::Arg::Num(out_msg_length) <<
+												   Firebird::Arg::Num(len));
 			}
 
 			if (out_msg_length)
@@ -5352,24 +5352,24 @@ IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
 
 unsigned JAttachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 	return 0;
 }
 
 void JAttachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 }
 
 unsigned JAttachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 	return 0;
 }
 
 void JAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 }
 
 
@@ -6161,13 +6161,13 @@ JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::
 
 unsigned JStatement::getMaxInlineBlobSize(CheckStatusWrapper* status)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 	return 0;
 }
 
 void JStatement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 {
-	status->setErrors(Arg::Gds(isc_wish_list).value());
+	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
 }
 
 
@@ -6714,7 +6714,7 @@ void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)
 	TEXT fname[MAXPATHLEN];
 
 	Firebird::string fname = fb_utils::getPrefix(IConfigManager::DIR_LOG, "proc_info.log");
-	FILE* fptr = os_utils::fopen(fname.c_str(), "a+");
+	FILE* fptr = Firebird::os_utils::fopen(fname.c_str(), "a+");
 	if (!fptr)
 	{
 		gds__log("Failed to open %s\n", fname.c_str());
@@ -6808,7 +6808,7 @@ static void check_database(thread_db* tdbb, bool async)
 	if (dbb->dbb_flags & DBB_bugcheck)
 	{
 		static const char string[] = "can't continue after bugcheck";
-		status_exception::raise(Arg::Gds(isc_bug_check) << Arg::Str(string));
+		status_exception::raise(Firebird::Arg::Gds(isc_bug_check) << Firebird::Arg::Str(string));
 	}
 
 	if ((attachment->att_flags & ATT_shutdown) &&
@@ -6820,13 +6820,13 @@ static void check_database(thread_db* tdbb, bool async)
 		if (dbb->isShutdown())
 		{
 			const PathName& filename = attachment->att_filename;
-			status_exception::raise(Arg::Gds(isc_shutdown) << Arg::Str(filename));
+			status_exception::raise(Firebird::Arg::Gds(isc_shutdown) << Firebird::Arg::Str(filename));
 		}
 
-		Arg::Gds err(isc_att_shutdown);
+		Firebird::Arg::Gds err(isc_att_shutdown);
 
 		if (attachment->getStable() && attachment->getStable()->getShutError())
-			err << Arg::Gds(attachment->getStable()->getShutError());
+			err << Firebird::Arg::Gds(attachment->getStable()->getShutError());
 
 		err.raise();
 	}
@@ -6842,7 +6842,7 @@ static void check_database(thread_db* tdbb, bool async)
 		!(attachment->att_flags & ATT_cancel_disable))
 	{
 		attachment->att_flags &= ~ATT_cancel_raise;
-		status_exception::raise(Arg::Gds(isc_cancelled));
+		status_exception::raise(Firebird::Arg::Gds(isc_cancelled));
 	}
 
 	Monitoring::checkState(tdbb);
@@ -6863,7 +6863,7 @@ static void commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_f
  **************************************/
 
 	if (transaction->tra_in_use)
-		status_exception::raise(Arg::Gds(isc_transaction_in_use));
+		status_exception::raise(Firebird::Arg::Gds(isc_transaction_in_use));
 
 	const Jrd::Attachment* const attachment = tdbb->getAttachment();
 
@@ -6895,9 +6895,9 @@ static bool drop_file(const Database* dbb, const jrd_file* file)
 
 	if (unlink(file->fil_string))
 	{
-		ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-														   Arg::Str(file->fil_string) <<
-								 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+		ERR_build_status(&status, Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("unlink") <<
+														   Firebird::Arg::Str(file->fil_string) <<
+								 Firebird::Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
 
 		const PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 		iscDbLogStatus(pageSpace->file->fil_string, &status);
@@ -6936,8 +6936,8 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
 	{
 		if (CSetId(id) == CS_BINARY)
 		{
-			ERR_post(Arg::Gds(isc_bad_dpb_content) <<
-					 Arg::Gds(isc_invalid_attachment_charset) << options->dpb_lc_ctype.toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) <<
+					 Firebird::Arg::Gds(isc_invalid_attachment_charset) << options->dpb_lc_ctype.toQuotedString());
 		}
 
 		attachment->att_client_charset = attachment->att_charset = CSetId(id);
@@ -6945,8 +6945,8 @@ static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, cons
 	else
 	{
 		// Report an error - we can't do what user has requested
-		ERR_post(Arg::Gds(isc_bad_dpb_content) <<
-				 Arg::Gds(isc_charset_not_found) << options->dpb_lc_ctype.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) <<
+				 Firebird::Arg::Gds(isc_charset_not_found) << options->dpb_lc_ctype.toQuotedString());
 	}
 }
 
@@ -6954,8 +6954,8 @@ namespace
 {
 	void dpbErrorRaise()
 	{
-		ERR_post(Arg::Gds(isc_bad_dpb_form) <<
-				 Arg::Gds(isc_wrodpbver));
+		ERR_post(Firebird::Arg::Gds(isc_bad_dpb_form) <<
+				 Firebird::Arg::Gds(isc_wrodpbver));
 	}
 } // anonymous
 
@@ -6982,7 +6982,7 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 		return;
 
 	if (dpb == NULL)
-		ERR_post(Arg::Gds(isc_bad_dpb_form));
+		ERR_post(Firebird::Arg::Gds(isc_bad_dpb_form));
 
 	ClumpletReader rdr(ClumpletReader::dpbList, dpb, dpb_length, dpbErrorRaise);
 	dumpAuthBlock("DatabaseOptions::get()", &rdr, isc_dpb_auth_block);
@@ -7004,8 +7004,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			if (dpb_page_buffers &&
 				(dpb_page_buffers < MIN_PAGE_BUFFERS || dpb_page_buffers > MAX_PAGE_BUFFERS))
 			{
-				ERR_post(Arg::Gds(isc_bad_dpb_content) << Arg::Gds(isc_baddpb_buffers_range) <<
-						 Arg::Num(MIN_PAGE_BUFFERS) << Arg::Num(MAX_PAGE_BUFFERS));
+				ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) << Firebird::Arg::Gds(isc_baddpb_buffers_range) <<
+						 Firebird::Arg::Num(MIN_PAGE_BUFFERS) << Firebird::Arg::Num(MAX_PAGE_BUFFERS));
 			}
 			dpb_set_page_buffers = true;
 			break;
@@ -7017,8 +7017,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 				constexpr unsigned TEMP_LIMIT = 25;
 				if (dpb_buffers < TEMP_LIMIT)
 				{
-					ERR_post(Arg::Gds(isc_bad_dpb_content) <<
-							 Arg::Gds(isc_baddpb_temp_buffers) << Arg::Num(TEMP_LIMIT));
+					ERR_post(Firebird::Arg::Gds(isc_bad_dpb_content) <<
+							 Firebird::Arg::Gds(isc_baddpb_temp_buffers) << Firebird::Arg::Num(TEMP_LIMIT));
 				}
 			}
 			else
@@ -7079,7 +7079,7 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			break;
 
 		case isc_dpb_old_file:
-			ERR_post(Arg::Gds(isc_num_old_files));
+			ERR_post(Firebird::Arg::Gds(isc_num_old_files));
 			break;
 
 		case isc_dpb_wal_chkptlen:
@@ -7113,8 +7113,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 		case isc_dpb_encrypt_key:
 			// Just in case there WAS a customer using this unsupported
 			// feature - post an error when they try to access it now
-			ERR_post(Arg::Gds(isc_uns_ext) <<
-					 Arg::Gds(isc_random) << Arg::Str("Passing encryption key in DPB not supported"));
+			ERR_post(Firebird::Arg::Gds(isc_uns_ext) <<
+					 Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Passing encryption key in DPB not supported"));
 			break;
 
 		case isc_dpb_no_garbage_collect:
@@ -7345,7 +7345,7 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 		case isc_dpb_ext_call_depth:
 			dpb_ext_call_depth = (ULONG) rdr.getInt();
 			if (dpb_ext_call_depth >= MAX_CALLBACKS)
-				ERR_post(Arg::Gds(isc_exec_sql_max_call_exceeded));
+				ERR_post(Firebird::Arg::Gds(isc_exec_sql_max_call_exceeded));
 			break;
 
 		case isc_dpb_config:
@@ -7385,9 +7385,9 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 				if (dpb_parallel_workers > maxWorkers || dpb_parallel_workers < 0)
 				{
 					// "Wrong parallel workers value @1, valid range are from 1 to @2"
-					ERR_post_warning(Arg::Warning(isc_bad_par_workers) <<
-						Arg::Num(dpb_parallel_workers) <<
-						Arg::Num(maxWorkers));
+					ERR_post_warning(Firebird::Arg::Warning(isc_bad_par_workers) <<
+						Firebird::Arg::Num(dpb_parallel_workers) <<
+						Firebird::Arg::Num(maxWorkers));
 
 					if (dpb_parallel_workers < 0)
 						dpb_parallel_workers = 1;
@@ -7427,7 +7427,7 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 	}
 
 	if (! rdr.isEof())
-		ERR_post(Arg::Gds(isc_bad_dpb_form));
+		ERR_post(Firebird::Arg::Gds(isc_bad_dpb_form));
 
 	if (dpb_worker_attach)
 	{
@@ -7459,7 +7459,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 	// make sure that no new attachments arrive after shutdown started
 	if (engineShutdown)
 	{
-		Arg::Gds(isc_att_shutdown).raise();
+		Firebird::Arg::Gds(isc_att_shutdown).raise();
 	}
 
 	// Initialize standard random generator.
@@ -7475,7 +7475,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 
 #ifdef HAVE_ID_BY_NAME
 	UCharBuffer db_id;
-	os_utils::getUniqueFileId(expanded_name.c_str(), db_id);
+	Firebird::os_utils::getUniqueFileId(expanded_name.c_str(), db_id);
 #endif
 
 	engineStartup.init();
@@ -7491,7 +7491,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 	if (!attach_flag && options.dpb_set_db_charset.hasData() &&
 		!IntlManager::charSetInstalled(charSetName))
 	{
-		ERR_post(Arg::Gds(isc_charset_not_installed) << charSetName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_charset_not_installed) << charSetName.toQuotedString());
 	}
 
 	// Check to see if the database is already attached
@@ -7520,7 +7520,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 					{
 						if (dbb->dbb_flags & DBB_bugcheck)
 						{
-							status_exception::raise(Arg::Gds(isc_bug_check) << "can't attach after bugcheck");
+							status_exception::raise(Firebird::Arg::Gds(isc_bug_check) << "can't attach after bugcheck");
 						}
 
 						initGuard.linkWith(dbb->dbb_init_fini);
@@ -7549,7 +7549,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 
 								if (options.dpb_config.hasData())
 								{
-									ERR_post_warning(Arg::Warning(isc_random) <<
+									ERR_post_warning(Firebird::Arg::Warning(isc_random) <<
 										"Secondary attachment - config data from DPB ignored");
 								}
 
@@ -7564,8 +7564,8 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 						continue;
 					}
 
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str("DATABASE"));
 				}
 
 				dbb = dbb->dbb_next;
@@ -7659,7 +7659,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 		MutexLockGuard guard(newAttachmentMutex, FB_FUNCTION);
 		if (engineShutdown)
 		{
-			status_exception::raise(Arg::Gds(isc_att_shutdown));
+			status_exception::raise(Firebird::Arg::Gds(isc_att_shutdown));
 		}
 
 		attachment = Attachment::create(dbb, provider);
@@ -7718,12 +7718,12 @@ static void check_single_maintenance(thread_db* tdbb)
 	UCHAR* const header_page_buffer = temp.getAlignedBuffer(headerSize, ioBlockSize);
 
 	if (!PIO_header(tdbb, header_page_buffer, headerSize))
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	const auto* header_page = reinterpret_cast<Ods::header_page*>(header_page_buffer);
 
 	if (header_page->hdr_shutdown_mode == Ods::hdr_shutdown_single)
-		ERR_post(Arg::Gds(isc_shutdown) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_shutdown) << Firebird::Arg::Str(attachment->att_filename));
 }
 
 
@@ -7785,7 +7785,7 @@ static void prepare_tra(thread_db* tdbb, jrd_tra* transaction, USHORT length, co
 	SET_TDBB(tdbb);
 
 	if (transaction->tra_in_use)
-		status_exception::raise(Arg::Gds(isc_transaction_in_use));
+		status_exception::raise(Firebird::Arg::Gds(isc_transaction_in_use));
 
 	if (!(transaction->tra_flags & TRA_prepared))
 	{
@@ -7989,7 +7989,7 @@ static void rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining
  *
  **************************************/
 	if (transaction->tra_in_use)
-		Arg::Gds(isc_transaction_in_use).raise();
+		Firebird::Arg::Gds(isc_transaction_in_use).raise();
 
 	ThreadStatusGuard tempStatus(tdbb);
 
@@ -8381,7 +8381,7 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
 
 	if (count)
 	{
-		ERR_post(Arg::Gds(isc_open_trans) << Arg::Num(count));
+		ERR_post(Firebird::Arg::Gds(isc_open_trans) << Firebird::Arg::Num(count));
 	}
 
 	// If there's a side transaction for db-key scope, get rid of it
@@ -8690,8 +8690,8 @@ static VdnResult verifyDatabaseName(const PathName& name, FbStatusVector* status
 	if (!JRD_verify_database_access(name))
 	{
 		if (!is_alias) {
-			ERR_build_status(status, Arg::Gds(isc_conf_access_denied) << Arg::Str("database") <<
-																		 Arg::Str(name));
+			ERR_build_status(status, Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("database") <<
+																		 Firebird::Arg::Str(name));
 		}
 		return VDN_FAIL;
 	}
@@ -8782,8 +8782,8 @@ static void getUserInfo(UserId& user, const DatabaseOptions& options, const char
 
 	if (name.length() > USERNAME_LENGTH)
 	{
-		status_exception::raise(Arg::Gds(isc_long_login) << Arg::Num(name.length())
-														 << Arg::Num(USERNAME_LENGTH));
+		status_exception::raise(Firebird::Arg::Gds(isc_long_login) << Firebird::Arg::Num(name.length())
+														 << Firebird::Arg::Num(USERNAME_LENGTH));
 	}
 
 	user.setUserName(name);
@@ -9380,13 +9380,13 @@ void thread_db::checkCancelState()
 
 	if (error)
 	{
-		Arg::Gds status(error);
+		Firebird::Arg::Gds status(error);
 
 		if (error == isc_shutdown)
-			status << Arg::Str(attachment->att_filename);
+			status << Firebird::Arg::Str(attachment->att_filename);
 
 		if (secondary)
-			status << Arg::Gds(secondary);
+			status << Firebird::Arg::Gds(secondary);
 
 		if (attachment)
 			attachment->att_flags &= ~ATT_cancel_raise;
@@ -9709,13 +9709,13 @@ static void start_transaction(thread_db* tdbb, bool transliterate, jrd_tra** tra
 	try
 	{
 		if (*tra_handle)
-			status_exception::raise(Arg::Gds(isc_bad_trans_handle));
+			status_exception::raise(Firebird::Arg::Gds(isc_bad_trans_handle));
 
 
 		try
 		{
 			if (tpb_length > 0 && !tpb)
-				status_exception::raise(Arg::Gds(isc_bad_tpb_form));
+				status_exception::raise(Firebird::Arg::Gds(isc_bad_tpb_form));
 
 			jrd_tra* transaction = TRA_start(tdbb, tpb_length, tpb);
 

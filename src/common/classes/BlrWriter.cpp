@@ -106,13 +106,13 @@ void BlrWriter::endBlr()
 	const ULONG length = (blrData.getCount() - baseOffset) - 2;
 
 	if (length > 0xFFFF)
-		raiseError(Arg::Gds(isc_too_big_blr) << Arg::Num(length) << Arg::Num(0xFFFF));
+		raiseError(Firebird::Arg::Gds(isc_too_big_blr) << Firebird::Arg::Num(length) << Firebird::Arg::Num(0xFFFF));
 
 	*blr_base++ = (UCHAR) length;
 	*blr_base = (UCHAR) (length >> 8);
 }
 
-void BlrWriter::raiseError(const Arg::StatusVector& vector)
+void BlrWriter::raiseError(const Firebird::Arg::StatusVector& vector)
 {
 	vector.raise();
 }

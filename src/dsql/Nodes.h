@@ -265,7 +265,7 @@ protected:
 
 public:
 	// Prefix DDL exceptions. To be implemented in each command.
-	// Attention: do not store temp strings in Arg::StatusVector,
+	// Attention: do not store temp strings in Firebird::Arg::StatusVector,
 	// when needed keep them permanently in command's node.
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) = 0;
 

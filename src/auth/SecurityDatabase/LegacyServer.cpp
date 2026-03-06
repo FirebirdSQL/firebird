@@ -57,7 +57,7 @@ const UCHAR PWD_REQUEST[] =
 	blr_long, 0,
 	blr_long, 0,
 	blr_short, 0,
-	blr_text, BLR_WORD(Auth::MAX_LEGACY_PASSWORD_LENGTH + 2),
+	blr_text, BLR_WORD(Firebird::Auth::MAX_LEGACY_PASSWORD_LENGTH + 2),
 	blr_message, 0, 1, 0,
 	blr_cstring, 129, 0,
 	blr_receive, 0,
@@ -107,7 +107,7 @@ struct user_record
 	SLONG gid;
 	SLONG uid;
 	SSHORT flag;
-	SCHAR password[Auth::MAX_LEGACY_PASSWORD_LENGTH + 2];
+	SCHAR password[Firebird::Auth::MAX_LEGACY_PASSWORD_LENGTH + 2];
 };
 
 typedef char user_name[129];
@@ -124,7 +124,7 @@ const UCHAR TPB[4] =
 
 } // anonymous namespace
 
-namespace Auth {
+namespace Firebird::Auth {
 
 GlobalPtr<PluginDatabases> instances;
 
@@ -263,13 +263,13 @@ void SecurityDatabase::checkStatus(const char* callName, ISC_STATUS userError)
 	if (!userError)
 		return;
 
-	Arg::Gds secDbError(userError);
+	Firebird::Arg::Gds secDbError(userError);
 
 	string message;
 	message.printf("Error in %s() API call when working with legacy security database", callName);
-	secDbError << Arg::Gds(isc_random) << message;
+	secDbError << Firebird::Arg::Gds(isc_random) << message;
 
-	secDbError << Arg::StatusVector(status);
+	secDbError << Firebird::Arg::StatusVector(status);
 	secDbError.raise();
 }
 
@@ -419,8 +419,8 @@ extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
 	CachedMasterInterface::set(master);
 
-	getUnloadDetector()->setCleanup(Auth::SecurityDatabase::cleanup);
-	Auth::registerLegacyServer(PluginManagerInterfacePtr());
+	getUnloadDetector()->setCleanup(Firebird::Auth::SecurityDatabase::cleanup);
+	Firebird::Auth::registerLegacyServer(PluginManagerInterfacePtr());
 	getUnloadDetector()->registerMe();
 }
 

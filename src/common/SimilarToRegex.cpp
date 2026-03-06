@@ -36,7 +36,7 @@ namespace
 	UChar32 getChar(bool latin, const char* str, unsigned len, unsigned& pos)
 	{
 		if (!hasChar(len, pos))
-			status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+			status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 		UChar32 c;
 
@@ -47,7 +47,7 @@ namespace
 			U8_NEXT_UNSAFE(str, pos, c);
 
 			if (c < 0)
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 		}
 
 		return c;
@@ -75,7 +75,7 @@ namespace
 			if (!(flags & COMP_FLAG_LATIN) && !(flags & COMP_FLAG_WELLFORMED))
 			{
 				if (!UnicodeUtil::utf8WellFormed(patternLen, reinterpret_cast<const UCHAR*>(patternStr), nullptr))
-					status_exception::raise(Arg::Gds(isc_malformed_string));
+					status_exception::raise(Firebird::Arg::Gds(isc_malformed_string));
 			}
 
 			if (escapeStr)
@@ -83,14 +83,14 @@ namespace
 				if (!(flags & COMP_FLAG_LATIN) && !(flags & COMP_FLAG_WELLFORMED))
 				{
 					if (!UnicodeUtil::utf8WellFormed(escapeLen, reinterpret_cast<const UCHAR*>(escapeStr), nullptr))
-						status_exception::raise(Arg::Gds(isc_malformed_string));
+						status_exception::raise(Firebird::Arg::Gds(isc_malformed_string));
 				}
 
 				unsigned escapePos = 0;
 				escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 				if (escapePos != escapeLen)
-					status_exception::raise(Arg::Gds(isc_escape_invalid));
+					status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 			}
 
 			if (flags & COMP_FLAG_GROUP_CAPTURE)
@@ -104,7 +104,7 @@ namespace
 
 			// Check for proper termination.
 			if (patternPos < patternLen)
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 			RE2::Options options;
 			options.set_log_errors(false);
@@ -116,7 +116,7 @@ namespace
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
 
 			if (!regexp->ok())
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 		}
 
 		inline bool hasPatternChar() const noexcept
@@ -233,7 +233,7 @@ namespace
 			}
 
 			if (!(parseFlags & PARSE_FLAG_NOT_EMPTY) && op != '?')
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 			fb_assert(op == '*' || op == '+' || op == '?' || op == '{');
 
@@ -265,20 +265,20 @@ namespace
 				while (true)
 				{
 					if (!hasPatternChar())
-						status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+						status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 					const UChar32 c = getPatternChar();
 
 					if (c == '}')
 					{
 						if (s1.isEmpty())
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 						break;
 					}
 					else if (c == ',')
 					{
 						if (comma)
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 						comma = true;
 					}
 					else
@@ -291,7 +291,7 @@ namespace
 								s1 += (char) c;
 						}
 						else
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 					}
 				}
 
@@ -305,7 +305,7 @@ namespace
 			}
 
 			if (hasPatternChar() && isRep(peekPatternChar()))
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 		}
 
 		void parsePrimary(int* parseFlagOut)
@@ -361,7 +361,7 @@ namespace
 				do
 				{
 					if (!hasPatternChar())
-						status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+						status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 					unsigned charSavePos = patternPos;
 					UChar32 c = getPatternChar();
@@ -370,13 +370,13 @@ namespace
 					if (useEscape && c == escapeChar)
 					{
 						if (!hasPatternChar())
-							status_exception::raise(Arg::Gds(isc_escape_invalid));
+							status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 
 						charSavePos = patternPos;
 						c = getPatternChar();
 
 						if (!(c == escapeChar || SimilarToRegex::isSpecialChar(c)))
-							status_exception::raise(Arg::Gds(isc_escape_invalid));
+							status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 					}
 					else
 					{
@@ -385,7 +385,7 @@ namespace
 						else if (c == '^')
 						{
 							if (exclude)
-								status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+								status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 							exclude = true;
 							continue;
@@ -398,7 +398,7 @@ namespace
 					if (charClass)
 					{
 						if (!hasPatternChar() || getPatternChar() != ':')
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 						charSavePos = patternPos;
 
@@ -408,7 +408,7 @@ namespace
 						const SLONG len = patternPos - charSavePos - 1;
 
 						if (!hasPatternChar() || getPatternChar() != ']')
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 						for (item.clazz = 0; static_cast<FB_SIZE_T>(item.clazz) < FB_NELEM(classes); ++item.clazz)
 						{
@@ -420,7 +420,7 @@ namespace
 						}
 
 						if (static_cast<FB_SIZE_T>(item.clazz) >= FB_NELEM(classes))
-							status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+							status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 					}
 					else
 					{
@@ -439,13 +439,13 @@ namespace
 							if (useEscape && c == escapeChar)
 							{
 								if (!hasPatternChar())
-									status_exception::raise(Arg::Gds(isc_escape_invalid));
+									status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 
 								charSavePos = patternPos;
 								c = getPatternChar();
 
 								if (!(c == escapeChar || SimilarToRegex::isSpecialChar(c)))
-									status_exception::raise(Arg::Gds(isc_escape_invalid));
+									status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 							}
 
 							item.lastStart = charSavePos;
@@ -475,7 +475,7 @@ namespace
 					}
 
 					if (!hasPatternChar())
-						status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+						status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 				} while (peekPatternChar() != ']');
 
 				exclude = includeCount < items.getCount();
@@ -590,7 +590,7 @@ namespace
 				parseExpr(&parseFlags);
 
 				if (!hasPatternChar() || getPatternChar() != ')')
-					status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+					status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 				re2PatternStr.append(")");
 
@@ -613,7 +613,7 @@ namespace
 						op = getPatternChar();
 
 						if (!SimilarToRegex::isSpecialChar(op) && op != escapeChar)
-							status_exception::raise(Arg::Gds(isc_escape_invalid));
+							status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 					}
 					else
 					{
@@ -634,7 +634,7 @@ namespace
 				} while (!controlChar && hasPatternChar());
 
 				if (patternPos == savePos)
-					status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+					status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 				*parseFlagOut |= PARSE_FLAG_NOT_EMPTY;
 			}
@@ -672,7 +672,7 @@ namespace
 			escapeChar = getChar(flags & COMP_FLAG_LATIN, escapeStr, escapeLen, escapePos);
 
 			if (escapePos != escapeLen)
-				status_exception::raise(Arg::Gds(isc_escape_invalid));
+				status_exception::raise(Firebird::Arg::Gds(isc_escape_invalid));
 
 			unsigned positions[2];
 			unsigned part = 0;
@@ -685,21 +685,21 @@ namespace
 					continue;
 
 				if (!hasPatternChar())
-					status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+					status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 				c = getPatternChar();
 
 				if (c == '"')
 				{
 					if (part >= 2)
-						status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+						status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 					positions[part++] = patternPos;
 				}
 			}
 
 			if (part != 2)
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 
 			AutoPtr<RE2> regexp1, regexp2, regexp3;
 
@@ -741,7 +741,7 @@ namespace
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
 
 			if (!regexp->ok())
-				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
+				status_exception::raise(Firebird::Arg::Gds(isc_invalid_similar_pattern));
 		}
 
 		inline bool hasPatternChar() const noexcept

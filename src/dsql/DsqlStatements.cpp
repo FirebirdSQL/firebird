@@ -48,10 +48,10 @@ DsqlStatement::DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
 // Rethrow an exception with isc_no_meta_update and prefix codes.
 void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdate, DdlNode* node)
 {
-	Arg::StatusVector newVector;
+	Firebird::Arg::StatusVector newVector;
 
 	if (metadataUpdate)
-		newVector << Arg::Gds(isc_no_meta_update);
+		newVector << Firebird::Arg::Gds(isc_no_meta_update);
 
 	node->putErrorPrefix(newVector);
 
@@ -60,7 +60,7 @@ void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdat
 	if (status[1] == isc_no_meta_update)
 		status += 2;
 
-	newVector.append(Arg::StatusVector(status));
+	newVector.append(Firebird::Arg::StatusVector(status));
 
 	status_exception::raise(newVector);
 }
@@ -204,8 +204,8 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	// restore warnings (if there are any)
 	if (localStatus->getState() & IStatus::STATE_WARNINGS)
 	{
-		Arg::StatusVector cur(tdbb->tdbb_status_vector->getWarnings());
-		Arg::StatusVector saved(localStatus->getWarnings());
+		Firebird::Arg::StatusVector cur(tdbb->tdbb_status_vector->getWarnings());
+		Firebird::Arg::StatusVector saved(localStatus->getWarnings());
 		saved << cur;
 
 		tdbb->tdbb_status_vector->setWarnings2(saved.length(), saved.value());
@@ -255,7 +255,7 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	}
 
 	if (dbb->readOnly() && node->disallowedInReadOnlyDatabase())
-		ERRD_post(Arg::Gds(isc_read_only_database));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	// In read-only replica, only replicator is allowed to execute DDL.
 	// As an exception, not replicated DDL statements are also allowed.
@@ -263,7 +263,7 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		!(tdbb->tdbb_flags & TDBB_replicator) &&
 		node->mustBeReplicated())
 	{
-		ERRD_post(Arg::Gds(isc_read_only_trans));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_trans));
 	}
 
 	const auto dbDialect = (dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? SQL_DIALECT_V6 : SQL_DIALECT_V5;
@@ -271,8 +271,8 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 	if ((scratch->flags & DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT) &&
 		dbDialect != scratch->clientDialect)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-817) <<
-				  Arg::Gds(isc_ddl_not_allowed_by_db_sql_dial) << Arg::Num(dbDialect));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-817) <<
+				  Firebird::Arg::Gds(isc_ddl_not_allowed_by_db_sql_dial) << Firebird::Arg::Num(dbDialect));
 	}
 
 	if (scratch->clientDialect > SQL_DIALECT_V5)

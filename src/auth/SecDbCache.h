@@ -35,7 +35,7 @@
 #include "../common/classes/auto.h"
 
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class VSecDb
 {

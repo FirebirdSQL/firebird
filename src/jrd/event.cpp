@@ -209,7 +209,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 
 	if (events_length && (!events || events[0] != EPB_version1))
 	{
-		Arg::Gds(isc_bad_epb_form).raise();
+		Firebird::Arg::Gds(isc_bad_epb_form).raise();
 	}
 
 	acquire_shmem();
@@ -244,7 +244,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 		if (count > end - events)
 		{
 			release_shmem();
-			Arg::Gds(isc_bad_epb_form).raise();
+			Firebird::Arg::Gds(isc_bad_epb_form).raise();
 		}
 
 		// The data in the event block may have trailing blanks. Strip them off.
@@ -311,7 +311,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 		if (!post_process((prb*) SRQ_ABS_PTR(m_processOffset)))
 		{
 			release_shmem();
-			(Arg::Gds(isc_random) << "post_process() failed").raise();
+			(Firebird::Arg::Gds(isc_random) << "post_process() failed").raise();
 		}
 	}
 
@@ -432,7 +432,7 @@ void EventManager::deliverEvents()
 				if (!post_process(process))
 				{
 					release_shmem();
-					(Arg::Gds(isc_random) << "post_process() failed").raise();
+					(Firebird::Arg::Gds(isc_random) << "post_process() failed").raise();
 				}
 				flag = true;
 				break;
@@ -612,7 +612,7 @@ void EventManager::create_process()
 	if (m_sharedMemory->eventInit(&process->prb_event) != FB_SUCCESS)
 	{
 		release_shmem();
-		(Arg::Gds(isc_random) << "eventInit() failed").raise();
+		(Firebird::Arg::Gds(isc_random) << "eventInit() failed").raise();
 	}
 
 	m_processOffset = SRQ_REL_PTR(process);

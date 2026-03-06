@@ -212,7 +212,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 
 		if (pidfilename)
 		{
-			FILE *pf = os_utils::fopen(pidfilename, "w");
+			FILE *pf = Firebird::os_utils::fopen(pidfilename, "w");
 			if (pf)
 			{
 				fprintf(pf, "%d", child_pid);

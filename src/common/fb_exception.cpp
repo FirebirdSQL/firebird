@@ -138,7 +138,7 @@ const char* status_exception::what() const noexcept
 	throw status_exception(status_vector.begin());
 }
 
-[[noreturn]] void status_exception::raise(const Arg::StatusVector& statusVector)
+[[noreturn]] void status_exception::raise(const Firebird::Arg::StatusVector& statusVector)
 {
 	throw status_exception(statusVector.value());
 }
@@ -205,11 +205,11 @@ const char* LongJump::what() const noexcept
 system_error::system_error(const char* syscall, const char* arg, int error_code) noexcept :
 	status_exception(), errorCode(error_code)
 {
-	Arg::Gds temp(isc_sys_request);
-	temp << Arg::Str(syscall);
+	Firebird::Arg::Gds temp(isc_sys_request);
+	temp << Firebird::Arg::Str(syscall);
 	temp << SYS_ERR(errorCode);
 	if (arg)
-		temp << Arg::Gds(isc_random) << arg;
+		temp << Firebird::Arg::Gds(isc_random) << arg;
 	set_status(temp.value());
 }
 

@@ -242,7 +242,7 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 				break;
 
 			default:
-				Arg::Gds(isc_dsql_sqlda_value_err).raise();
+				Firebird::Arg::Gds(isc_dsql_sqlda_value_err).raise();
 				break;
 		}
 
@@ -267,7 +267,7 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 
 	if (expectedMessageLength && msgLen && (expectedMessageLength != msgLen))
 	{
-		Arg::Gds(isc_wrong_message_length).raise();
+		Firebird::Arg::Gds(isc_wrong_message_length).raise();
 	}
 }
 

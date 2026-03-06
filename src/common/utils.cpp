@@ -689,7 +689,7 @@ namespace {
 				f = stdin;
 			}
 			else {
-				f = os_utils::fopen(name.c_str(), "rt");
+				f = Firebird::os_utils::fopen(name.c_str(), "rt");
 			}
 			if (f && isatty(fileno(f)))
 			{

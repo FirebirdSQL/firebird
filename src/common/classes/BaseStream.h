@@ -34,8 +34,7 @@
 #include "../common/classes/fb_string.h"
 #include <stdio.h>
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 // This is the abstract base class that is used by the MsgPrint routines.
 // It doesn't own the stream, thus it doesn't open, check or close it.

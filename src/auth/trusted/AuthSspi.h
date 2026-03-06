@@ -49,7 +49,7 @@
 #include <Security.h>
 #include <stdio.h>
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class AuthSspi
 {

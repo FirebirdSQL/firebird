@@ -70,7 +70,7 @@
 # endif
 #endif
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 #ifdef HAVE_UNISTD_H
@@ -2047,7 +2047,7 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 	strcpy(file->fil_string, file_name);
 	file->fil_length = file_length;
 
-	if ((file->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
+	if ((file->fil_desc = Firebird::os_utils::open(file_name, O_RDONLY)) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
 		// msg 29: Can't open database file %s
@@ -2079,7 +2079,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 	tddba->page_number = page_number;
 
 	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) tddba->page_size);
-	if (os_utils::lseek (tddba->file->fil_desc, offset, 0) == -1)
+	if (Firebird::os_utils::lseek (tddba->file->fil_desc, offset, 0) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page

@@ -693,7 +693,7 @@ const char* Config::getPlugins(unsigned int type) const
 		}
 
 		default:
-			(Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
+			(Firebird::Arg::Gds(isc_random) << "Internal error in Config::getPlugins(): unknown plugin type requested").raise();
 			return nullptr;
 	}
 

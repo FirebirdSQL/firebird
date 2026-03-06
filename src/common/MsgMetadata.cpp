@@ -264,7 +264,7 @@ void MetadataBuilder::moveNameToIndex(CheckStatusWrapper* status, const char* na
 			}
 		}
 
-		(Arg::Gds(isc_metadata_name) << name).raise();
+		(Firebird::Arg::Gds(isc_metadata_name) << name).raise();
 	}
 	catch (const Exception& ex)
 	{
@@ -301,7 +301,7 @@ IMessageMetadata* MetadataBuilder::getMetadata(CheckStatusWrapper* status)
 		const unsigned i = msgMetadata->makeOffsets();
 		if (i != ~0u)
 		{
-			(Arg::Gds(isc_item_finish) << Arg::Num(i)).raise();
+			(Firebird::Arg::Gds(isc_item_finish) << Firebird::Arg::Num(i)).raise();
 		}
 
 		MsgMetadata* rc = FB_NEW MsgMetadata(msgMetadata);
@@ -321,7 +321,7 @@ void MetadataBuilder::metadataError(const char* functionName)
 	// function and check for now.
 	if (!msgMetadata)
 	{
-		(Arg::Gds(isc_random) << (string("IMetadataBuilder interface is already inactive: "
+		(Firebird::Arg::Gds(isc_random) << (string("IMetadataBuilder interface is already inactive: "
 			"IMetadataBuilder::") + functionName)).raise();
 	}
 }
@@ -332,7 +332,7 @@ void MetadataBuilder::indexError(unsigned index, const char* functionName)
 
 	if (index >= msgMetadata->items.getCount())
 	{
-		(Arg::Gds(isc_invalid_index_val) << Arg::Num(index) << (string("IMetadataBuilder::") +
+		(Firebird::Arg::Gds(isc_invalid_index_val) << Firebird::Arg::Num(index) << (string("IMetadataBuilder::") +
 			functionName)).raise();
 	}
 }

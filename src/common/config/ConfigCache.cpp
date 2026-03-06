@@ -94,7 +94,7 @@ ConfigCache::File::PreciseTime ConfigCache::File::getTime()
 #else
 	struct STAT st;
 
-	if (os_utils::stat(fileName.c_str(), &st) != 0)
+	if (Firebird::os_utils::stat(fileName.c_str(), &st) != 0)
 	{
 		if (errno == ENOENT)
 		{

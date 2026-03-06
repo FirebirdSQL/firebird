@@ -29,7 +29,7 @@
 
 #include "firebird/Interface.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 void registerSrpClient(Firebird::IPluginManager* iPlugin);
 

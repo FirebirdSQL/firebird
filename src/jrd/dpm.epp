@@ -1487,12 +1487,12 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	if (dbb->readOnly())
 	{
 		CCH_RELEASE(tdbb, &window);
-		ERR_post(Arg::Gds(isc_read_only_database));
+		ERR_post(Firebird::Arg::Gds(isc_read_only_database));
 	}
 	else if (isReadOnly)
 	{
 		CCH_RELEASE(tdbb, &window);
-		ERR_post(Arg::Gds(isc_read_only_trans));
+		ERR_post(Firebird::Arg::Gds(isc_read_only_trans));
 	}
 
 	CCH_MARK_SYSTEM(tdbb, &window);
@@ -3497,7 +3497,7 @@ static bool get_header(WIN* window, USHORT line, record_param* rpb)
 		if (rpb->rpb_relation->getId() == 0 /*i.e.RDB$PAGES*/ && rpb->rpb_transaction_nr != 0)
 		{
 			// RDB$PAGES relation should be modified only by system transaction
-			ERR_post(Arg::Gds(isc_wrong_page));
+			ERR_post(Firebird::Arg::Gds(isc_wrong_page));
 		}
 	}
 

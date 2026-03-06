@@ -62,7 +62,7 @@
 #include "../burp/OdsDetection.h"
 #include "../burp/BurpTasks.h"
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 using namespace Firebird;
 using namespace Burp;
 

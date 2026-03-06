@@ -159,7 +159,7 @@ void blb::BLB_check_well_formed(Jrd::thread_db* tdbb, const dsc* desc)
 		else
 		{
 			if (pos == 0)
-				status_exception::raise(Arg::Gds(isc_malformed_string));
+				status_exception::raise(Firebird::Arg::Gds(isc_malformed_string));
 			else
 			{
 				buffer.removeCount(0, pos);
@@ -169,7 +169,7 @@ void blb::BLB_check_well_formed(Jrd::thread_db* tdbb, const dsc* desc)
 	}
 
 	if (pos != 0)
-		status_exception::raise(Arg::Gds(isc_malformed_string));
+		status_exception::raise(Firebird::Arg::Gds(isc_malformed_string));
 }
 
 
@@ -308,7 +308,7 @@ blb* blb::create2(thread_db* tdbb,
 
 		gds__log("Too many temporary blobs (%u allowed)\n%s", MAX_TEMP_BLOBS, info.c_str());
 
-		ERR_post(Arg::Gds(isc_random) << Arg::Str("Too many temporary blobs"));
+		ERR_post(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Too many temporary blobs"));
 	}
 
 	// Create a blob large enough to hold a single data page
@@ -675,7 +675,7 @@ USHORT blb::BLB_get_segment(thread_db* tdbb, void* segment, USHORT buffer_length
 	Database* dbb = tdbb->getDatabase();
 
 	if (blb_flags & BLB_temporary)
-		ERR_post(Arg::Gds(isc_cannot_read_new_blob));
+		ERR_post(Firebird::Arg::Gds(isc_cannot_read_new_blob));
 
 	JRD_reschedule(tdbb);
 
@@ -973,7 +973,7 @@ SLONG blb::BLB_lseek(USHORT mode, SLONG offset)
  **************************************/
 
 	if (!(blb_flags & BLB_stream))
-		ERR_post(Arg::Gds(isc_bad_segstr_type));
+		ERR_post(Firebird::Arg::Gds(isc_bad_segstr_type));
 
 	SINT64 position = offset;
 
@@ -1023,7 +1023,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 		// only array->array conversions are allowed
 		if (from_desc->dsc_dtype != dtype_array && from_desc->dsc_dtype != dtype_quad)
 		{
-			ERR_post(Arg::Gds(isc_array_convert_error));
+			ERR_post(Firebird::Arg::Gds(isc_array_convert_error));
 		}
 	}
 	else if (DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
@@ -1105,7 +1105,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	Request* request = tdbb->getRequest();
 
 	if (relation->getPermanent()->isVirtual()) {
-		ERR_post(Arg::Gds(isc_read_only));
+		ERR_post(Firebird::Arg::Gds(isc_read_only));
 	}
 
 	RelationPages* relPages = relation->getPermanent()->getPages(tdbb);
@@ -1198,7 +1198,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 						if (!temp_req)
 						{
 							// Trying to use temporary id of materialized blob from another request
-							ERR_post(Arg::Gds(isc_bad_segstr_id));
+							ERR_post(Firebird::Arg::Gds(isc_bad_segstr_id));
 						}
 					}
 					***/
@@ -1215,7 +1215,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 					if (blob && (blob->blb_flags & BLB_close_on_read))
 						blob->BLB_close(tdbb);
 					else
-						ERR_post(Arg::Gds(isc_bad_segstr_id));
+						ERR_post(Firebird::Arg::Gds(isc_bad_segstr_id));
 				}
 
 				if (blob->blb_level && (blob->blb_pg_space_id != relPages->rel_pg_space_id))
@@ -1247,7 +1247,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 		if (!blob || !(blob->blb_flags & BLB_closed))
 		{
-			ERR_post(Arg::Gds(isc_bad_segstr_id));
+			ERR_post(Firebird::Arg::Gds(isc_bad_segstr_id));
 		}
 
 		break;
@@ -1401,7 +1401,7 @@ blb* blb::open2(thread_db* tdbb,
 					if (new_blob && (new_blob->blb_flags & BLB_close_on_read))
 						new_blob->BLB_close(tdbb);
 					else
-						ERR_post(Arg::Gds(isc_bad_segstr_id));
+						ERR_post(Firebird::Arg::Gds(isc_bad_segstr_id));
 				}
 
 				blob->blb_lead_page = new_blob->blb_lead_page;
@@ -1451,7 +1451,7 @@ blb* blb::open2(thread_db* tdbb,
 
 		blob->blb_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, blobId.bid_internal.bid_relation_id, 0);
 		if (!blob->blb_relation)
-			ERR_post(Arg::Gds(isc_bad_segstr_id));
+			ERR_post(Firebird::Arg::Gds(isc_bad_segstr_id));
 
 		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
 		DPM_get_blob(tdbb, blob, blob->blb_relation, blobId.get_permanent_number(), false, 0);
@@ -1601,7 +1601,7 @@ void blb::BLB_put_segment(thread_db* tdbb, const void* seg, USHORT segment_lengt
 	// Make sure blob is a temporary blob.  If not, complain bitterly.
 
 	if (!(blb_flags & BLB_temporary) || (blb_flags & BLB_closed))
-		ERR_post(Arg::Gds(isc_cannot_update_old_blob));
+		ERR_post(Firebird::Arg::Gds(isc_cannot_update_old_blob));
 
 	if (blb_filter)
 	{
@@ -1775,7 +1775,7 @@ void blb::put_slice(thread_db*	tdbb,
 
 	ArrayField* array_desc = field->fld_array;
 	if (!array_desc)
-		ERR_post(Arg::Gds(isc_invalid_dimension) << Arg::Num(0) << Arg::Num(1));
+		ERR_post(Firebird::Arg::Gds(isc_invalid_dimension) << Firebird::Arg::Num(0) << Firebird::Arg::Num(1));
 
 	// Find and/or allocate array block.  There are three distinct cases:
 
@@ -1816,7 +1816,7 @@ void blb::put_slice(thread_db*	tdbb,
 	{
 		array = find_array(transaction, blob_id);
 		if (!array) {
-			ERR_post(Arg::Gds(isc_invalid_array_id));
+			ERR_post(Firebird::Arg::Gds(isc_invalid_array_id));
 		}
 
 		arg.slice_high_water = array->arr_data + array->arr_effective_length;
@@ -2111,7 +2111,7 @@ static ISC_STATUS blob_filter(USHORT action, BlobControl* control)
 		[[fallthrough]];
 
 	default:
-		ERR_post(Arg::Gds(isc_uns_ext));
+		ERR_post(Firebird::Arg::Gds(isc_uns_ext));
 		return FB_SUCCESS;
 	}
 }
@@ -2194,7 +2194,7 @@ void blb::delete_blob(thread_db* tdbb, ULONG prior_page)
 
 		if (pageSpaceID != tempSpaceID)
 		{
-			ERR_post(Arg::Gds(isc_read_only_database));
+			ERR_post(Firebird::Arg::Gds(isc_read_only_database));
 		}
 	}
 
@@ -2541,7 +2541,7 @@ void blb::insert_page(thread_db* tdbb)
 		(*vector)[l] = window.win_page.getPageNum();
 	}
 	else {
-		ERR_post(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blobtoobig));
+		ERR_post(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_blobtoobig));
 	}
 
 	CCH_precedence(tdbb, &window, page_number);
@@ -2582,7 +2582,7 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 		toCharSet != CS_NONE && toCharSet != CS_BINARY)
 	{
 		if (!INTL_charset_lookup(tdbb, toCharSet)->wellFormed(length, fromstr))
-			status_exception::raise(Arg::Gds(isc_malformed_string));
+			status_exception::raise(Firebird::Arg::Gds(isc_malformed_string));
 	}
 
 	Request* request = tdbb->getRequest();
@@ -2711,7 +2711,7 @@ static void move_to_string(thread_db* tdbb, dsc* fromDesc, dsc* toDesc)
 	const ULONG len = blob->BLB_get_data(tdbb, buffer.begin(), buffer.getCapacity(), true);
 
 	if (len > MAX_STR_SIZE)
-		ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_blob_truncation));
+		ERR_post(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_blob_truncation));
 
 	blobAsText.dsc_address = buffer.begin();
 	blobAsText.dsc_length = (USHORT) len;
@@ -2788,7 +2788,7 @@ static void slice_callback(array_slice* arg, ULONG /*count*/, DSC* descriptors)
 	BLOB_PTR* const next = slice_desc->dsc_address + arg->slice_element_length;
 
 	if (next > arg->slice_end)
-		ERR_post(Arg::Gds(isc_out_of_bounds));
+		ERR_post(Firebird::Arg::Gds(isc_out_of_bounds));
 
 	if (array_desc->dsc_address < arg->slice_base)
 		ERR_error(198);			// msg 198 array subscript computation error

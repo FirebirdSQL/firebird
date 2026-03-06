@@ -816,8 +816,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 
 			if (DTYPE_IS_BLOB(dtype))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			desc->dsc_flags = (desc1.dsc_flags | desc2.dsc_flags) & DSC_nullable;
@@ -827,7 +827,7 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 				case dtype_ex_time_tz:
 				case dtype_ex_timestamp_tz:
 					fb_assert(false);
-					ERRD_post(Arg::Gds(isc_expression_eval_err));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 				case dtype_sql_time:
 				case dtype_sql_time_tz:
@@ -837,8 +837,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 					// Forbid <date/time> +- <string>
 					if (DTYPE_IS_TEXT(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc2.dsc_dtype))
 					{
-						ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_dsql_nodateortime_pm_string));
+						ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_dsql_nodateortime_pm_string));
 					}
 					// fall into
 
@@ -882,8 +882,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 								dtype = desc2.dsc_dtype;
 							else
 							{
-								ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-										  Arg::Gds(isc_dsql_invalid_datetime_subtract));
+								ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										  Firebird::Arg::Gds(isc_dsql_invalid_datetime_subtract));
 							}
 
 							if (dtype == dtype_sql_date)
@@ -921,8 +921,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 							// <date> + <date>
 							// <time> + <time>
 							// CVC: Hard to see it, since we are in dialect 1.
-							ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-									  Arg::Gds(isc_dsql_invalid_dateortime_add));
+							ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									  Firebird::Arg::Gds(isc_dsql_invalid_dateortime_add));
 						}
 					}
 					else if (DTYPE_IS_DATE(desc1.dsc_dtype) || blrOp == blr_add)
@@ -940,8 +940,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 					{
 						// <non-date> - <date>
 						fb_assert(blrOp == blr_subtract);
-						ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-								  Arg::Gds(isc_dsql_invalid_type_minus_date));
+						ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+								  Firebird::Arg::Gds(isc_dsql_invalid_type_minus_date));
 					}
 					break;
 
@@ -976,8 +976,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 			// Arrays and blobs can never partipate in multiplication
 			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			dtype = DSC_multiply_blr4_result[desc1.dsc_dtype][desc2.dsc_dtype];
@@ -1005,8 +1005,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 					break;
 
 				default:
-					ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-							  Arg::Gds(isc_dsql_invalid_type_multip_dial1));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							  Firebird::Arg::Gds(isc_dsql_invalid_type_multip_dial1));
 			}
 
 			break;
@@ -1015,8 +1015,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 			// Arrays and blobs can never partipate in division
 			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			dtype1 = desc1.dsc_dtype;
@@ -1037,8 +1037,8 @@ void ArithmeticNode::makeDialect1(dsc* desc, dsc& desc1, dsc& desc2)
 
 			if (!DTYPE_IS_NUMERIC(dtype))
 			{
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						  Arg::Gds(isc_dsql_mustuse_numeric_div_dial1));
+				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+						  Firebird::Arg::Gds(isc_dsql_mustuse_numeric_div_dial1));
 			}
 
 			desc->dsc_dtype = dtype_double;
@@ -1063,16 +1063,16 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 			// Arrays and blobs can never partipate in addition/subtraction
 			if (DTYPE_IS_BLOB(dtype1) || DTYPE_IS_BLOB(dtype2))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			// In Dialect 2 or 3, strings can never partipate in addition / sub
 			// (use a specific cast instead)
 			if (DTYPE_IS_TEXT(dtype1) || DTYPE_IS_TEXT(dtype2))
 			{
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						  Arg::Gds(isc_dsql_nostring_addsub_dial3));
+				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+						  Firebird::Arg::Gds(isc_dsql_nostring_addsub_dial3));
 			}
 
 			// Determine the TYPE of arithmetic to perform, store it
@@ -1121,7 +1121,7 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 				case dtype_ex_time_tz:
 				case dtype_ex_timestamp_tz:
 					fb_assert(false);
-					ERRD_post(Arg::Gds(isc_expression_eval_err));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 				case dtype_sql_time:
 				case dtype_sql_time_tz:
@@ -1157,8 +1157,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 								dtype = dtype2;
 							else
 							{
-								ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-										  Arg::Gds(isc_dsql_invalid_datetime_subtract));
+								ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										  Firebird::Arg::Gds(isc_dsql_invalid_datetime_subtract));
 							}
 
 							if (dtype == dtype_sql_date)
@@ -1196,8 +1196,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 						{
 							// <date> + <date>
 							// <time> + <time>
-							ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-									  Arg::Gds(isc_dsql_invalid_dateortime_add));
+							ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									  Firebird::Arg::Gds(isc_dsql_invalid_dateortime_add));
 						}
 					}
 					else if (DTYPE_IS_DATE(desc1.dsc_dtype) || blrOp == blr_add)
@@ -1215,8 +1215,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 					{
 						// <non-date> - <date>
 						fb_assert(blrOp == blr_subtract);
-						ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-								  Arg::Gds(isc_dsql_invalid_type_minus_date));
+						ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+								  Firebird::Arg::Gds(isc_dsql_invalid_type_minus_date));
 					}
 					break;
 
@@ -1255,8 +1255,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 
 				default:
 					// a type which cannot participate in an add or subtract
-					ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-							  Arg::Gds(isc_dsql_invalid_type_addsub_dial3));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							  Firebird::Arg::Gds(isc_dsql_invalid_type_addsub_dial3));
 			}
 
 			break;
@@ -1266,15 +1266,15 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 			// (use a specific cast instead)
 			if (DTYPE_IS_TEXT(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						  Arg::Gds(isc_dsql_nostring_multip_dial3));
+				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+						  Firebird::Arg::Gds(isc_dsql_nostring_multip_dial3));
 			}
 
 			// Arrays and blobs can never partipate in multiplication
 			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			dtype = DSC_multiply_result[desc1.dsc_dtype][desc2.dsc_dtype];
@@ -1302,8 +1302,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 					break;
 
 				default:
-					ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-							  Arg::Gds(isc_dsql_invalid_type_multip_dial3));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							  Firebird::Arg::Gds(isc_dsql_invalid_type_multip_dial3));
 			}
 
 			break;
@@ -1313,15 +1313,15 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 			// (use a specific cast instead)
 			if (DTYPE_IS_TEXT(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						  Arg::Gds(isc_dsql_nostring_div_dial3));
+				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+						  Firebird::Arg::Gds(isc_dsql_nostring_div_dial3));
 			}
 
 			// Arrays and blobs can never partipate in division
 			if (DTYPE_IS_BLOB(desc1.dsc_dtype) || DTYPE_IS_BLOB(desc2.dsc_dtype))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						  Arg::Gds(isc_dsql_no_blob_array));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 			}
 
 			dtype = DSC_multiply_result[desc1.dsc_dtype][desc2.dsc_dtype];
@@ -1346,8 +1346,8 @@ void ArithmeticNode::makeDialect3(dsc* desc, dsc& desc1, dsc& desc2)
 					break;
 
 				default:
-					ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-							  Arg::Gds(isc_dsql_invalid_type_div_dial3));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							  Firebird::Arg::Gds(isc_dsql_invalid_type_div_dial3));
 			}
 
 			break;
@@ -1428,13 +1428,13 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 				case dtype_ex_time_tz:
 				case dtype_ex_timestamp_tz:
 					fb_assert(false);
-					ERRD_post(Arg::Gds(isc_expression_eval_err));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 				case dtype_sql_date:
 				case dtype_sql_time:
 				case dtype_sql_time_tz:
 					if (DTYPE_IS_TEXT(desc1.dsc_dtype) || DTYPE_IS_TEXT(desc2.dsc_dtype))
-						ERR_post(Arg::Gds(isc_expression_eval_err));
+						ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 					// fall into
 
 				case dtype_timestamp:
@@ -1478,7 +1478,7 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 							else if (desc2.isTimeStamp() && dtype1 == dtype_sql_date)
 								dtype = dtype2;
 							else
-								ERR_post(Arg::Gds(isc_expression_eval_err));
+								ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 							if (dtype == dtype_sql_date)
 							{
@@ -1520,7 +1520,7 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 						else
 						{
 							// <date> + <date>
-							ERR_post(Arg::Gds(isc_expression_eval_err));
+							ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 						}
 					}
 					else if (DTYPE_IS_DATE(desc1.dsc_dtype) || blrOp == blr_add)
@@ -1539,7 +1539,7 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 					else
 					{
 						// <non-date> - <date>
-						ERR_post(Arg::Gds(isc_expression_eval_err));
+						ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 					}
 					return;
 
@@ -1655,7 +1655,7 @@ void ArithmeticNode::getDescDialect1(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 	if (dtype == dtype_quad)
 		IBERROR(224);	// msg 224 quad word arithmetic not supported
 
-	ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+	ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 }
 
 void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& desc1, const dsc& desc2, UCHAR blrOp,
@@ -1674,7 +1674,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 			// In Dialect 2 or 3, strings can never participate in addition / sub
 			// (use a specific cast instead)
 			if (DTYPE_IS_TEXT(dtype1) || DTYPE_IS_TEXT(dtype2))
-				ERR_post(Arg::Gds(isc_expression_eval_err));
+				ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 			// Because dtype_int64 > dtype_double, we cannot just use the MAX macro to set
 			// the result dtype. The rule is that two exact numeric operands yield an int64
@@ -1723,7 +1723,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 				case dtype_ex_time_tz:
 				case dtype_ex_timestamp_tz:
 					fb_assert(false);
-					ERRD_post(Arg::Gds(isc_expression_eval_err));
+					ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 				case dtype_timestamp:
 				case dtype_timestamp_tz:
@@ -1768,7 +1768,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 							else if (desc2.isTimeStamp() && dtype1 == dtype_sql_date)
 								dtype = dtype2;
 							else
-								ERR_post(Arg::Gds(isc_expression_eval_err));
+								ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 							if (dtype == dtype_sql_date)
 							{
@@ -1811,7 +1811,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 						else
 						{
 							// <date> + <date>
-							ERR_post(Arg::Gds(isc_expression_eval_err));
+							ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 						}
 					}
 					else if (DTYPE_IS_DATE(desc1.dsc_dtype) || blrOp == blr_add)
@@ -1829,7 +1829,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 					else
 					{
 						// <non-date> - <date>
-						ERR_post(Arg::Gds(isc_expression_eval_err));
+						ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));
 					}
 					return;
 
@@ -1937,7 +1937,7 @@ void ArithmeticNode::getDescDialect3(thread_db* /*tdbb*/, dsc* desc, const dsc& 
 	if (dtype == dtype_quad)
 		IBERROR(224);	// msg 224 quad word arithmetic not supported
 
-	ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+	ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 }
 
 ValueExprNode* ArithmeticNode::copy(thread_db* tdbb, NodeCopier& copier) const
@@ -2029,16 +2029,16 @@ dsc* ArithmeticNode::execute(thread_db* tdbb, Request* request) const
 
 				if (divisor == 0)
 				{
-					ERR_post(Arg::Gds(isc_arith_except) <<
-								Arg::Gds(isc_exception_float_divide_by_zero));
+					ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+								Firebird::Arg::Gds(isc_exception_float_divide_by_zero));
 				}
 
 				impure->vlu_misc.vlu_double = MOV_get_double(tdbb, desc1) / divisor;
 
 				if (std::isinf(impure->vlu_misc.vlu_double))
 				{
-					ERR_post(Arg::Gds(isc_arith_except) <<
-								Arg::Gds(isc_exception_float_overflow));
+					ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+								Firebird::Arg::Gds(isc_exception_float_overflow));
 				}
 
 				impure->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
@@ -2116,7 +2116,7 @@ dsc* ArithmeticNode::addDialect1(thread_db* tdbb, const dsc* desc1, const dsc* d
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
 		if (std::isinf(value->vlu_misc.vlu_double))
-			ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_float_overflow));
 
 		result->dsc_dtype = DEFAULT_DOUBLE;
 		result->dsc_length = sizeof(double);
@@ -2137,7 +2137,7 @@ dsc* ArithmeticNode::addDialect1(thread_db* tdbb, const dsc* desc1, const dsc* d
 	const SINT64 rc = (blrOp == blr_subtract) ? l2 - l1 : l2 + l1;
 
 	if (rc < MIN_SLONG || rc > MAX_SLONG)
-		ERR_post(Arg::Gds(isc_exception_integer_overflow));
+		ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 
 	value->make_long(rc, nodScale);
 
@@ -2205,7 +2205,7 @@ dsc* ArithmeticNode::addDialect3(thread_db* tdbb, const dsc* desc1, const dsc* d
 		value->vlu_misc.vlu_double = (blrOp == blr_subtract) ? d2 - d1 : d1 + d2;
 
 		if (std::isinf(value->vlu_misc.vlu_double))
-			ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_float_overflow));
 
 		result->dsc_dtype = DEFAULT_DOUBLE;
 		result->dsc_length = sizeof(double);
@@ -2250,7 +2250,7 @@ dsc* ArithmeticNode::addDialect3(thread_db* tdbb, const dsc* desc1, const dsc* d
 		i1 ^= MIN_SINT64;		// invert the sign bit
 
 	if ((i1 ^ i2) >= 0 && (i1 ^ value->vlu_misc.vlu_int64) < 0)
-		ERR_post(Arg::Gds(isc_exception_integer_overflow));
+		ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 
 	return result;
 }
@@ -2309,8 +2309,8 @@ dsc* ArithmeticNode::multiplyDialect1(const dsc* desc, impure_value* value) cons
 
 		if (std::isinf(value->vlu_misc.vlu_double))
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_exception_float_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_exception_float_overflow));
 		}
 
 		value->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
@@ -2355,7 +2355,7 @@ dsc* ArithmeticNode::multiplyDialect1(const dsc* desc, impure_value* value) cons
 		value->vlu_desc.dsc_scale = 0;
 		value->vlu_desc.dsc_address = (UCHAR*) &value->vlu_misc.vlu_double;
 #else
-		ERR_post(Arg::Gds(isc_exception_integer_overflow));
+		ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 #endif
 	}
 	else
@@ -2422,8 +2422,8 @@ dsc* ArithmeticNode::multiplyDialect3(const dsc* desc, impure_value* value) cons
 
 		if (std::isinf(value->vlu_misc.vlu_double))
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_exception_float_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_exception_float_overflow));
 		}
 
 		value->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
@@ -2470,7 +2470,7 @@ dsc* ArithmeticNode::multiplyDialect3(const dsc* desc, impure_value* value) cons
 	const FB_UINT64 u_limit = ((i1 ^ i2) >= 0) ? MAX_SINT64 : (FB_UINT64) MAX_SINT64 + 1;
 
 	if ((u1 != 0) && ((u_limit / u1) < u2)) {
-		ERR_post(Arg::Gds(isc_exception_integer_overflow));
+		ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 	}
 
 	value->vlu_desc.dsc_dtype = dtype_int64;
@@ -2534,15 +2534,15 @@ dsc* ArithmeticNode::divideDialect3(const dsc* desc, impure_value* value) const
 		const double d2 = MOV_get_double(tdbb, desc);
 		if (d2 == 0.0)
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_exception_float_divide_by_zero));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_exception_float_divide_by_zero));
 		}
 		const double d1 = MOV_get_double(tdbb, &value->vlu_desc);
 		value->vlu_misc.vlu_double = d1 / d2;
 		if (std::isinf(value->vlu_misc.vlu_double))
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_exception_float_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_exception_float_overflow));
 		}
 		value->vlu_desc.dsc_dtype = DEFAULT_DOUBLE;
 		value->vlu_desc.dsc_length = sizeof(double);
@@ -2591,8 +2591,8 @@ dsc* ArithmeticNode::divideDialect3(const dsc* desc, impure_value* value) const
 	SINT64 i2 = MOV_get_int64(tdbb, desc, desc->dsc_scale);
 	if (i2 == 0)
 	{
-		ERR_post(Arg::Gds(isc_arith_except) <<
-				 Arg::Gds(isc_exception_integer_divide_by_zero));
+		ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+				 Firebird::Arg::Gds(isc_exception_integer_divide_by_zero));
 	}
 
 	SINT64 i1 = MOV_get_int64(tdbb, &value->vlu_desc, nodScale - desc->dsc_scale);
@@ -2628,7 +2628,7 @@ dsc* ArithmeticNode::divideDialect3(const dsc* desc, impure_value* value) const
 
 	// MIN_SINT64 / -1 = (MAX_SINT64 + 1), which overflows in SINT64.
 	if ((i1 == MIN_SINT64) && (i2 == -1))
-		ERR_post(Arg::Gds(isc_exception_integer_overflow));
+		ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 
 	value->vlu_desc.dsc_dtype = dtype_int64;
 	value->vlu_desc.dsc_length = sizeof(SINT64);
@@ -2659,8 +2659,8 @@ dsc* ArithmeticNode::divideDialect3(const dsc* desc, impure_value* value) const
 
 	if (addl_scale < 0)
 	{
-		ERR_post(Arg::Gds(isc_arith_except) <<
-				 Arg::Gds(isc_numeric_out_of_range));
+		ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+				 Firebird::Arg::Gds(isc_numeric_out_of_range));
 	}
 
 	return &value->vlu_desc;
@@ -2707,13 +2707,13 @@ dsc* ArithmeticNode::addDateTime(thread_db* tdbb, const dsc* desc, impure_value*
 			return addSqlDate(desc, value, blrOp);
 
 		case DTYPE_CANNOT:
-			ERR_post(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_invalid_type_datetime_op));
+			ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_invalid_type_datetime_op));
 			break;
 
 		case dtype_ex_time_tz:
 		case dtype_ex_timestamp_tz:
 			fb_assert(false);
-			ERRD_post(Arg::Gds(isc_expression_eval_err));
+			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));
 
 		case dtype_timestamp:
 		case dtype_timestamp_tz:
@@ -2753,7 +2753,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value, UCHAR blrO
 		d1 = MOV_get_int64(tdbb, &value->vlu_desc, 0);
 
 		if (fb_utils::abs64Compare(d1, TimeStamp::MAX_DATE - TimeStamp::MIN_DATE) > 0)
-			ERR_post(Arg::Gds(isc_date_range_exceeded));
+			ERR_post(Firebird::Arg::Gds(isc_date_range_exceeded));
 	}
 
 	SINT64 d2;
@@ -2769,7 +2769,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value, UCHAR blrO
 		d2 = MOV_get_int64(tdbb, desc, 0);
 
 		if (fb_utils::abs64Compare(d2, TimeStamp::MAX_DATE - TimeStamp::MIN_DATE) > 0)
-			ERR_post(Arg::Gds(isc_date_range_exceeded));
+			ERR_post(Firebird::Arg::Gds(isc_date_range_exceeded));
 	}
 
 	if (blrOp == blr_subtract && op1_is_date && op2_is_date)
@@ -2795,7 +2795,7 @@ dsc* ArithmeticNode::addSqlDate(const dsc* desc, impure_value* value, UCHAR blrO
 	value->vlu_misc.vlu_sql_date = d2;
 
 	if (!TimeStamp::isValidDate(value->vlu_misc.vlu_sql_date))
-		ERR_post(Arg::Gds(isc_date_range_exceeded));
+		ERR_post(Firebird::Arg::Gds(isc_date_range_exceeded));
 
 	result->dsc_dtype = dtype_sql_date;
 	result->dsc_length = type_lengths[result->dsc_dtype];
@@ -2994,7 +2994,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 			value->vlu_misc.vlu_timestamp_tz.utc_timestamp.timestamp_time = *(GDS_TIME*) op2_desc->dsc_address;
 		}
 		else
-			ERR_post(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_onlycan_add_timetodate));
+			ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_onlycan_add_timetodate));
 	}
 	else if (op2_desc->dsc_dtype == dtype_sql_date)
 	{
@@ -3005,7 +3005,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 			value->vlu_misc.vlu_timestamp_tz.utc_timestamp.timestamp_date = *(GDS_DATE*) op2_desc->dsc_address;
 		}
 		else
-			ERR_post(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_onlycan_add_datetotime));
+			ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_onlycan_add_datetotime));
 	}
 	else
 	{
@@ -3036,7 +3036,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 			// If the first operand couldn't represent a timestamp, bomb out
 
 			if (!(op1_desc->isTimeStamp() || DTYPE_IS_TEXT(op1_desc->dsc_dtype)))
-				ERR_post(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_onlycansub_tstampfromtstamp));
+				ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_onlycansub_tstampfromtstamp));
 
 			d1 = getTimeStampToIscTicks(tdbb, op1_desc);
 			d2 = getTimeStampToIscTicks(tdbb, op2_desc);
@@ -3111,7 +3111,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 		// which are errors
 
 		if (op1_is_timestamp == op2_is_timestamp)
-			ERR_post(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_onlyoneop_mustbe_tstamp));
+			ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_onlyoneop_mustbe_tstamp));
 
 		if (op1_is_timestamp)
 		{
@@ -3141,7 +3141,7 @@ dsc* ArithmeticNode::addTimeStamp(thread_db* tdbb, const dsc* desc, impure_value
 		value->vlu_misc.vlu_timestamp_tz.utc_timestamp = TimeStamp::ticksToTimeStamp(d2);
 
 		if (!TimeStamp::isValidTimeStamp(*(ISC_TIMESTAMP*) &value->vlu_misc.vlu_timestamp_tz))
-			ERR_post(Arg::Gds(isc_datetime_range_exceeded));
+			ERR_post(Firebird::Arg::Gds(isc_datetime_range_exceeded));
 	}
 
 	fb_assert(!(op1_tz.has_value() && op2_tz.has_value()));
@@ -3189,8 +3189,8 @@ ValueExprNode* ArrayNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->isPsql())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_invalid_array));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				  Firebird::Arg::Gds(isc_dsql_invalid_array));
 	}
 
 	return field->internalDsqlPass(dsqlScratch, NULL);
@@ -3304,7 +3304,7 @@ void AtNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	else if (dateTimeDesc.isTimeStamp())
 		desc->makeTimestampTz();
 	else
-		ERRD_post(Arg::Gds(isc_expression_eval_err));	//// TODO: more info
+		ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err));	//// TODO: more info
 
 	desc->setNullable(dateTimeDesc.isNullable() || (zoneArg && zoneDesc.isNullable()));
 }
@@ -3385,7 +3385,7 @@ dsc* AtNode::execute(thread_db* tdbb, Request* request) const
 		impure->vlu_misc.vlu_sql_time_tz.time_zone = zone;
 	}
 	else
-		ERR_post(Arg::Gds(isc_expression_eval_err));	//// TODO: more info
+		ERR_post(Firebird::Arg::Gds(isc_expression_eval_err));	//// TODO: more info
 
 	return &impure->vlu_desc;
 }
@@ -3760,8 +3760,8 @@ dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
 			string::size_type resultLength = result.length();
 			if (resultLength > dscLength)
 			{
-				ERR_post(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
-					Arg::Gds(isc_trunc_limits) << Arg::Num(dscLength) << Arg::Num(resultLength));
+				ERR_post(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
+					Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(dscLength) << Firebird::Arg::Num(resultLength));
 			}
 
 			USHORT dscOffset = 0;
@@ -4002,9 +4002,9 @@ ValueExprNode* CollateNode::pass1Collate(DsqlCompilerScratch* dsqlScratch, Value
 	}
 	else
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				  Arg::Gds(isc_dsql_datatype_err) <<
-				  Arg::Gds(isc_collation_requires_text));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+				  Firebird::Arg::Gds(isc_collation_requires_text));
 	}
 
 	DDL_resolve_intl_type(dsqlScratch, field, collation);
@@ -4151,7 +4151,7 @@ dsc* ConcatenateNode::execute(thread_db* tdbb, Request* request) const
 	{
 		if ((ULONG) value1->dsc_length + (ULONG) value2->dsc_length > MAX_STR_SIZE)
 		{
-			ERR_post(Arg::Gds(isc_concat_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_concat_overflow));
 			return NULL;
 		}
 
@@ -4203,7 +4203,7 @@ dsc* ConcatenateNode::execute(thread_db* tdbb, Request* request) const
 
 		if ((ULONG) length1 + (ULONG) length2 > MAX_STR_SIZE)
 		{
-			ERR_post(Arg::Gds(isc_concat_overflow));
+			ERR_post(Firebird::Arg::Gds(isc_concat_overflow));
 			return NULL;
 		}
 
@@ -4392,7 +4392,7 @@ DmlNode* CurrentTimeNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerS
 		precision = csb->csb_blr_reader.getByte();
 
 		if (precision > MAX_TIME_PRECISION)
-			ERR_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+			ERR_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 	}
 
 	return FB_NEW_POOL(pool) CurrentTimeNode(pool, precision);
@@ -4460,7 +4460,7 @@ ValueExprNode* CurrentTimeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 ValueExprNode* CurrentTimeNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
 	if (precision > MAX_TIME_PRECISION)
-		ERRD_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERRD_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return this;
 }
@@ -4496,7 +4496,7 @@ DmlNode* CurrentTimeStampNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, Comp
 		precision = csb->csb_blr_reader.getByte();
 
 		if (precision > MAX_TIME_PRECISION)
-			ERR_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+			ERR_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 	}
 
 	return FB_NEW_POOL(pool) CurrentTimeStampNode(pool, precision);
@@ -4564,7 +4564,7 @@ ValueExprNode* CurrentTimeStampNode::pass2(thread_db* tdbb, CompilerScratch* csb
 ValueExprNode* CurrentTimeStampNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
 	if (precision > MAX_TIME_PRECISION)
-		ERRD_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERRD_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return this;
 }
@@ -5174,12 +5174,12 @@ ValueExprNode* DefaultNode::createFromField(thread_db* tdbb, CompilerScratch* cs
 
 		bool sysGen = false;
 		if (!MET_load_generator(tdbb, genNode->generator, &sysGen, &genNode->step))
-			status_exception::raise(Arg::Gds(isc_gennotdef) << fld->fld_generator_name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_gennotdef) << fld->fld_generator_name.toQuotedString());
 
 		if (sysGen)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_cant_modify_sysobj) <<
+				Firebird::Arg::Gds(isc_cant_modify_sysobj) <<
 				"generator" <<
 				fld->fld_generator_name.toQuotedString());
 		}
@@ -5456,8 +5456,8 @@ ValueExprNode* DomainValidationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->domainValue.isUnknown())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_dsql_domain_err));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_dsql_domain_err));
 	}
 
 	DomainValidationNode* node = FB_NEW_POOL(dsqlScratch->getPool()) DomainValidationNode(dsqlScratch->getPool());
@@ -5565,8 +5565,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				sub1->getDsqlDesc().dsc_dtype != dtype_sql_date &&
 				!sub1->getDsqlDesc().isTimeStamp())
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
-						  Arg::Gds(isc_extract_input_mismatch));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-105) <<
+						  Firebird::Arg::Gds(isc_extract_input_mismatch));
 			}
 			break;
 
@@ -5578,8 +5578,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				!sub1->getDsqlDesc().isTime() &&
 				!sub1->getDsqlDesc().isTimeStamp())
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
-						  Arg::Gds(isc_extract_input_mismatch));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-105) <<
+						  Firebird::Arg::Gds(isc_extract_input_mismatch));
 			}
 			break;
 
@@ -5590,8 +5590,8 @@ ValueExprNode* ExtractNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				!sub1->getDsqlDesc().isTime() &&
 				!sub1->getDsqlDesc().isTimeStamp())
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-105) <<
-						  Arg::Gds(isc_extract_input_mismatch));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-105) <<
+						  Firebird::Arg::Gds(isc_extract_input_mismatch));
 			}
 			break;
 
@@ -5754,8 +5754,8 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 				}
 
 				default:
-					ERR_post(Arg::Gds(isc_expression_eval_err) <<
-							 Arg::Gds(isc_invalid_extractpart_time));
+					ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							 Firebird::Arg::Gds(isc_invalid_extractpart_time));
 			}
 			break;
 
@@ -5779,8 +5779,8 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 					break;
 
 				default:
-					ERR_post(Arg::Gds(isc_expression_eval_err) <<
-							 Arg::Gds(isc_invalid_extractpart_time));
+					ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							 Firebird::Arg::Gds(isc_invalid_extractpart_time));
 			}
 			break;
 
@@ -5794,8 +5794,8 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 				case blr_extract_timezone_hour:
 				case blr_extract_timezone_minute:
 				case blr_extract_timezone_name:
-					ERR_post(Arg::Gds(isc_expression_eval_err) <<
-							 Arg::Gds(isc_invalid_extractpart_date));
+					ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+							 Firebird::Arg::Gds(isc_invalid_extractpart_date));
 					break;
 
 				default:
@@ -5837,8 +5837,8 @@ dsc* ExtractNode::execute(thread_db* tdbb, Request* request) const
 			break;
 
 		default:
-			ERR_post(Arg::Gds(isc_expression_eval_err) <<
-					 Arg::Gds(isc_invalidarg_extract));
+			ERR_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+					 Firebird::Arg::Gds(isc_invalidarg_extract));
 			break;
 	}
 
@@ -6020,7 +6020,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 				but we must support legacy BLR.
 		*/
 	{
-		PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+		PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 	}
 
 	MetaName name;
@@ -6046,7 +6046,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
 			if ((id = PAR_find_proc_field(procedure, name)) == -1)
 			{
-				PAR_error(csb, Arg::Gds(isc_fldnotdef2) <<
+				PAR_error(csb, Firebird::Arg::Gds(isc_fldnotdef2) <<
 					name.toQuotedString() << procedure->getName().toQuotedString());
 			}
 		}
@@ -6059,7 +6059,7 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 		{
 			jrd_rel* relation = tail->csb_relation(tdbb);
 			if (!relation)
-				PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+				PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 
 			csb->csb_blr_reader.getMetaName(name);
 
@@ -6078,18 +6078,18 @@ DmlNode* FieldNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
  					if (tdbb->getAttachment()->isGbak())
 					{
-						PAR_warning(Arg::Warning(isc_fldnotdef) <<
+						PAR_warning(Firebird::Arg::Warning(isc_fldnotdef) <<
 							name.toQuotedString() <<
 							relation->getName().toQuotedString());
 					}
 					else if (!relation->getPermanent()->isDropped())
 					{
-						PAR_error(csb, Arg::Gds(isc_fldnotdef) <<
+						PAR_error(csb, Firebird::Arg::Gds(isc_fldnotdef) <<
 							name.toQuotedString() <<
 							relation->getName().toQuotedString());
 					}
 					else
-						PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+						PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 				}
 			}
 		}
@@ -6430,9 +6430,9 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 					else
 					{
 						// Internal dsql error: alias type expected by pass1_field
-						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-								  Arg::Gds(isc_dsql_command_err) <<
-								  Arg::Gds(isc_dsql_derived_alias_field));
+						ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+								  Firebird::Arg::Gds(isc_dsql_command_err) <<
+								  Firebird::Arg::Gds(isc_dsql_derived_alias_field));
 					}
 				}
 
@@ -6664,8 +6664,8 @@ void FieldNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 		*desc = getDsqlDesc();
 	else
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-203) <<
-				  Arg::Gds(isc_dsql_field_ref));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-203) <<
+				  Firebird::Arg::Gds(isc_dsql_field_ref));
 	}
 }
 
@@ -6878,7 +6878,7 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		}
 
 		// Msg 364 "cannot access column %s in view %s"
-		ERR_post(Arg::Gds(isc_no_field_access) <<
+		ERR_post(Firebird::Arg::Gds(isc_no_field_access) <<
 			field->fld_name.toQuotedString() <<
 			relation()->getName().toQuotedString());
 	}
@@ -6930,14 +6930,14 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		{
 			// This is an assignment to a computed column. Report the error here when we have the field name.
 			ERR_post(
-				Arg::Gds(isc_read_only_field) <<
+				Firebird::Arg::Gds(isc_read_only_field) <<
 				(relation()->getName().toQuotedString() + "." + field->fld_name.toQuotedString()));
 		}
 
 		FB_SIZE_T pos;
 
 		if (csb->csb_computing_fields.find(field, pos))
-			ERR_post(Arg::Gds(isc_circular_computed));
+			ERR_post(Firebird::Arg::Gds(isc_circular_computed));
 		else
 		{
 			csb->csb_computing_fields.insert(pos, field);
@@ -7122,12 +7122,12 @@ DmlNode* GenIdNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	{
 		fb_assert(!MASTER_GENERATOR[0]);
 		if (!(csb->csb_g_flags & csb_internal))
-			PAR_error(csb, Arg::Gds(isc_gennotdef) << name.toQuotedString());
+			PAR_error(csb, Firebird::Arg::Gds(isc_gennotdef) << name.toQuotedString());
 
 		node->generator.id = 0;
 	}
 	else if (!MET_load_generator(tdbb, node->generator, &node->sysGen, &node->step))
-		PAR_error(csb, Arg::Gds(isc_gennotdef) << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_gennotdef) << name.toQuotedString());
 
 	if (csb->collectingDependencies())
 	{
@@ -7316,7 +7316,7 @@ dsc* GenIdNode::execute(thread_db* tdbb, Request* request) const
 	if (sysGen && change != 0)
 	{
 		if (!request->hasInternalStatement() && !tdbb->getAttachment()->isRWGbak())
-			status_exception::raise(Arg::Gds(isc_cant_modify_sysobj) << "generator" << generator.name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_cant_modify_sysobj) << "generator" << generator.name.toQuotedString());
 	}
 
 	const SINT64 new_val = DPM_gen_id(tdbb, generator.id, false, change);
@@ -7602,10 +7602,10 @@ ValueExprNode* InternalInfoNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (attr.mask && !(dsqlScratch->flags & attr.mask))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 			// Token unknown
-			Arg::Gds(isc_token_err) <<
-			Arg::Gds(isc_random) << attr.alias);
+			Firebird::Arg::Gds(isc_token_err) <<
+			Firebird::Arg::Gds(isc_random) << attr.alias);
 	}
 
 	return FB_NEW_POOL(dsqlScratch->getPool()) InternalInfoNode(dsqlScratch->getPool(), doDsqlPass(dsqlScratch, arg));
@@ -7871,9 +7871,9 @@ void LiteralNode::genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc,
 				// didn't contain an exponent so it's not a valid DOUBLE
 				// PRECISION literal either, so we have to bounce it.
 
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-						  Arg::Gds(isc_arith_except) <<
-						  Arg::Gds(isc_numeric_out_of_range));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+						  Firebird::Arg::Gds(isc_arith_except) <<
+						  Firebird::Arg::Gds(isc_numeric_out_of_range));
 			}
  */
 			// We and the lexer both agree that this is an SINT64 constant,
@@ -7942,8 +7942,8 @@ void LiteralNode::genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc,
 
 		default:
 			// gen_constant: datatype not understood
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-103) <<
-					  Arg::Gds(isc_dsql_constant_err));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-103) <<
+					  Firebird::Arg::Gds(isc_dsql_constant_err));
 	}
 }
 
@@ -7983,8 +7983,8 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (!resolved)
 		{
 			// character set name is not defined
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					  Arg::Gds(isc_charset_not_found) << charSet.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+					  Firebird::Arg::Gds(isc_charset_not_found) << charSet.toQuotedString());
 		}
 
 		constant->litDesc.setTextType(resolved->intlsym_ttype);
@@ -8015,8 +8015,8 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (!charSet->wellFormed(dsqlStr->getString().length(), constant->litDesc.dsc_address, NULL))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_malformed_string));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				  Firebird::Arg::Gds(isc_malformed_string));
 	}
 	else
 	{
@@ -8025,10 +8025,10 @@ ValueExprNode* LiteralNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (charLength > MAX_STR_SIZE / charSet->maxBytesPerChar())
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_string_char_length) <<
-					  Arg::Num(charLength) <<
-					  Arg::Num(MAX_STR_SIZE / charSet->maxBytesPerChar()) <<
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+					  Firebird::Arg::Gds(isc_dsql_string_char_length) <<
+					  Firebird::Arg::Num(charLength) <<
+					  Firebird::Arg::Num(MAX_STR_SIZE / charSet->maxBytesPerChar()) <<
 					  METD_get_charset_name(dsqlScratch->getTransaction(), constant->litDesc.getCharSet()).toQuotedString());
 		}
 		else
@@ -8297,7 +8297,7 @@ DmlNode* LocalTimeNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScr
 	unsigned precision = csb->csb_blr_reader.getByte();
 
 	if (precision > MAX_TIME_PRECISION)
-		ERR_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERR_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return FB_NEW_POOL(pool) LocalTimeNode(pool, precision);
 }
@@ -8359,7 +8359,7 @@ ValueExprNode* LocalTimeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 ValueExprNode* LocalTimeNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
 	if (precision > MAX_TIME_PRECISION)
-		ERRD_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERRD_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return this;
 }
@@ -8388,7 +8388,7 @@ DmlNode* LocalTimeStampNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, Compil
 	unsigned precision = csb->csb_blr_reader.getByte();
 
 	if (precision > MAX_TIME_PRECISION)
-		ERR_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERR_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return FB_NEW_POOL(pool) LocalTimeStampNode(pool, precision);
 }
@@ -8450,7 +8450,7 @@ ValueExprNode* LocalTimeStampNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 ValueExprNode* LocalTimeStampNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
 	if (precision > MAX_TIME_PRECISION)
-		ERRD_post(Arg::Gds(isc_invalid_time_precision) << Arg::Num(MAX_TIME_PRECISION));
+		ERRD_post(Firebird::Arg::Gds(isc_invalid_time_precision) << Firebird::Arg::Num(MAX_TIME_PRECISION));
 
 	return this;
 }
@@ -8843,9 +8843,9 @@ void DerivedFieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 			if (derivedContextsCount > MAX_UCHAR)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-						  Arg::Gds(isc_imp_exc) <<
-						  Arg::Gds(isc_ctx_too_big));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+						  Firebird::Arg::Gds(isc_imp_exc) <<
+						  Firebird::Arg::Gds(isc_ctx_too_big));
 			}
 
 			dsqlScratch->appendUChar(blr_derived_expr);
@@ -8993,8 +8993,8 @@ void NegateNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 		{
 			if (dsqlScratch->clientDialect >= SQL_DIALECT_V6_TRANSITION)
 			{
-				ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-						  Arg::Gds(isc_dsql_nostring_neg_dial3));
+				ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+						  Firebird::Arg::Gds(isc_dsql_nostring_neg_dial3));
 			}
 
 			desc->dsc_dtype = dtype_double;
@@ -9002,13 +9002,13 @@ void NegateNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 		}
 		else if (DTYPE_IS_BLOB(desc->dsc_dtype))	// Forbid blobs and arrays
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					  Arg::Gds(isc_dsql_no_blob_array));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					  Firebird::Arg::Gds(isc_dsql_no_blob_array));
 		}
 		else if (!DTYPE_IS_NUMERIC(desc->dsc_dtype))	// Forbid other not numeric datatypes
 		{
-			ERRD_post(Arg::Gds(isc_expression_eval_err) <<
-					  Arg::Gds(isc_dsql_invalid_type_neg));
+			ERRD_post(Firebird::Arg::Gds(isc_expression_eval_err) <<
+					  Firebird::Arg::Gds(isc_dsql_invalid_type_neg));
 		}
 	}
 }
@@ -9053,13 +9053,13 @@ dsc* NegateNode::execute(thread_db* tdbb, Request* request) const
 	{
 		case dtype_short:
 			if (impure->vlu_misc.vlu_short == MIN_SSHORT)
-				ERR_post(Arg::Gds(isc_exception_integer_overflow));
+				ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 			impure->vlu_misc.vlu_short = -impure->vlu_misc.vlu_short;
 			break;
 
 		case dtype_long:
 			if (impure->vlu_misc.vlu_long == MIN_SLONG)
-				ERR_post(Arg::Gds(isc_exception_integer_overflow));
+				ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 			impure->vlu_misc.vlu_long = -impure->vlu_misc.vlu_long;
 			break;
 
@@ -9085,7 +9085,7 @@ dsc* NegateNode::execute(thread_db* tdbb, Request* request) const
 
 		case dtype_int64:
 			if (impure->vlu_misc.vlu_int64 == MIN_SINT64)
-				ERR_post(Arg::Gds(isc_exception_integer_overflow));
+				ERR_post(Firebird::Arg::Gds(isc_exception_integer_overflow));
 			impure->vlu_misc.vlu_int64 = -impure->vlu_misc.vlu_int64;
 			break;
 
@@ -9267,13 +9267,13 @@ WindowClause::FrameExtent* WindowClause::FrameExtent::dsqlPass(DsqlCompilerScrat
 		if (frame1->bound == Frame::Bound::CURRENT_ROW && frame2->bound == Frame::Bound::PRECEDING)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dsql_window_incompat_frames) << "CURRENT ROW" << "PRECEDING");
+				Firebird::Arg::Gds(isc_dsql_window_incompat_frames) << "CURRENT ROW" << "PRECEDING");
 		}
 
 		if (frame1->bound == Frame::Bound::FOLLOWING && frame2->bound != Frame::Bound::FOLLOWING)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dsql_window_incompat_frames) <<
+				Firebird::Arg::Gds(isc_dsql_window_incompat_frames) <<
 					"FOLLOWING" << "PRECEDING or CURRENT ROW");
 		}
 	}
@@ -9318,29 +9318,29 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (!context->ctx_named_windows.get(*name, window))
 		{
 			ERRD_post(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				Arg::Gds(isc_dsql_window_not_found) << *name);
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				Firebird::Arg::Gds(isc_dsql_window_not_found) << *name);
 		}
 
 		if (partition)
 		{
 			ERRD_post(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				Arg::Gds(isc_dsql_window_cant_overr_part) << *name);
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				Firebird::Arg::Gds(isc_dsql_window_cant_overr_part) << *name);
 		}
 
 		if (order && window->order)
 		{
 			ERRD_post(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				Arg::Gds(isc_dsql_window_cant_overr_order) << *name);
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				Firebird::Arg::Gds(isc_dsql_window_cant_overr_order) << *name);
 		}
 
 		if (window->extent)
 		{
 			ERRD_post(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				Arg::Gds(isc_dsql_window_cant_overr_frame) << *name);
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				Firebird::Arg::Gds(isc_dsql_window_cant_overr_frame) << *name);
 		}
 
 		window = window->dsqlPass(dsqlScratch);
@@ -9359,9 +9359,9 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		(node->extent->frame1->value || (node->extent->frame2 && node->extent->frame2->value)))
 	{
 		if (!node->order)
-			status_exception::raise(Arg::Gds(isc_dsql_window_range_inv_key_type));
+			status_exception::raise(Firebird::Arg::Gds(isc_dsql_window_range_inv_key_type));
 		else if (node->order->items.getCount() > 1)
-			status_exception::raise(Arg::Gds(isc_dsql_window_range_multi_key));
+			status_exception::raise(Firebird::Arg::Gds(isc_dsql_window_range_multi_key));
 		else
 		{
 			OrderNode* key = nodeAs<OrderNode>(node->order->items[0]);
@@ -9371,7 +9371,7 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			DsqlDescMaker::fromNode(dsqlScratch, &desc, key->value);
 
 			if (!desc.isDateTime() && !desc.isNumeric())
-				status_exception::raise(Arg::Gds(isc_dsql_window_range_inv_key_type));
+				status_exception::raise(Firebird::Arg::Gds(isc_dsql_window_range_inv_key_type));
 		}
 	}
 
@@ -9389,7 +9389,7 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				if (!desc.isNumeric())
 				{
 					status_exception::raise(
-						Arg::Gds(isc_dsql_window_frame_value_inv_type));
+						Firebird::Arg::Gds(isc_dsql_window_frame_value_inv_type));
 				}
 			}
 		}
@@ -9490,8 +9490,8 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 	if (Aggregate2Finder::find(visitor.getPool(), visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
 			true, window))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_agg_nested_err));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				  Firebird::Arg::Gds(isc_dsql_agg_nested_err));
 	}
 
 	visitor.windowNode = window;
@@ -9507,8 +9507,8 @@ ValueExprNode* OverNode::dsqlFieldRemapper(FieldRemapper& visitor)
 		if (Aggregate2Finder::find(visitor.getPool(), visitor.context->ctx_scope_level, FIELD_MATCH_TYPE_EQUAL,
 				true, *child))
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_agg_nested_err));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+					  Firebird::Arg::Gds(isc_dsql_agg_nested_err));
 		}
 	}
 
@@ -9587,8 +9587,8 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (!context->ctx_named_windows.get(*windowName, refWindow))
 		{
 			ERRD_post(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				Arg::Gds(isc_dsql_window_not_found) << *windowName);
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				Firebird::Arg::Gds(isc_dsql_window_not_found) << *windowName);
 		}
 	}
 	else
@@ -9660,8 +9660,8 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->isPsql())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					Arg::Gds(isc_dsql_command_err));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+					Firebird::Arg::Gds(isc_dsql_command_err));
 	}
 
 	auto msg = dsqlParameter ? dsqlParameter->par_message :
@@ -9765,10 +9765,10 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 			// to be outsise range can be worse.
 			if (dsqlParameter->par_desc.dsc_length > MAX_VARY_COLUMN_SIZE)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-							//Arg::Gds(isc_dsql_datatype_err)
-							Arg::Gds(isc_imp_exc));
-							//Arg::Gds(isc_field_name) << Arg::Str(parameter->par_name)
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+							//Firebird::Arg::Gds(isc_dsql_datatype_err)
+							Firebird::Arg::Gds(isc_imp_exc));
+							//Firebird::Arg::Gds(isc_field_name) << Firebird::Arg::Str(parameter->par_name)
 			}
 
 			dsqlParameter->par_desc.dsc_length += sizeof(USHORT);
@@ -9844,7 +9844,7 @@ void ParameterNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* 
 	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
-		status_exception::raise(Arg::Gds(isc_badparnum));
+		status_exception::raise(Firebird::Arg::Gds(isc_badparnum));
 
 	*desc = format->fmt_desc[argNumber];
 	// Must reset dsc_address because it's used in others places to read literals, but here it was
@@ -9888,7 +9888,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	if (!message)
 	{
 		if (messageNumber >= csb->csb_rpt.getCount() || !(message = csb->csb_rpt[messageNumber].csb_message))
-			status_exception::raise(Arg::Gds(isc_badmsgnum));
+			status_exception::raise(Firebird::Arg::Gds(isc_badmsgnum));
 
 		outerDecl = csb->outerMessagesMap.exist(messageNumber);
 	}
@@ -9896,7 +9896,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	const auto format = message->getFormat(nullptr);
 
 	if (argNumber >= format->fmt_count)
-		status_exception::raise(Arg::Gds(isc_badparnum));
+		status_exception::raise(Firebird::Arg::Gds(isc_badparnum));
 
 	if (argFlag)
 	{
@@ -9904,7 +9904,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		argFlag->outerDecl = outerDecl;
 
 		if (argFlag->argNumber >= format->fmt_count)
-			status_exception::raise(Arg::Gds(isc_badparnum));
+			status_exception::raise(Firebird::Arg::Gds(isc_badparnum));
 	}
 
 	if (outerDecl)
@@ -9912,7 +9912,7 @@ ParameterNode* ParameterNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		fb_assert(csb->mainCsb);
 
 		if (!csb->mainCsb)
-			status_exception::raise(Arg::Gds(isc_ctxnotdef) << Arg::Gds(isc_random) << Arg::Str("Outer parameter has no outer scratch"));
+			status_exception::raise(Firebird::Arg::Gds(isc_ctxnotdef) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Outer parameter has no outer scratch"));
 	}
 
 	const dsc& desc = format->fmt_desc[argNumber];
@@ -10102,7 +10102,7 @@ DmlNode* RecordKeyNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, CompilerScr
 	node->recStream = csb->csb_blr_reader.getByte();
 
 	if (node->recStream >= csb->csb_rpt.getCount() || !(csb->csb_rpt[node->recStream].csb_flags & csb_used))
-		PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+		PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 
 	node->recStream = csb->csb_rpt[node->recStream].csb_stream;
 
@@ -10622,8 +10622,8 @@ void RecordKeyNode::raiseError(dsql_ctx* context) const
 	if (blrOp != blr_record_version2)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_dbkey_from_non_table));
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_dbkey_from_non_table));
 	}
 
 	string name = context->getObjectName();
@@ -10638,8 +10638,8 @@ void RecordKeyNode::raiseError(dsql_ctx* context) const
 	}
 
 	status_exception::raise(
-		Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-		Arg::Gds(isc_dsql_record_version_table) << name);
+		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+		Firebird::Arg::Gds(isc_dsql_record_version_table) << name);
 }
 
 
@@ -10709,7 +10709,7 @@ dsc* ScalarNode::execute(thread_db* tdbb, Request* request) const
 		IBERROR(261);	// msg 261 scalar operator used on field which is not an array
 
 	if (subscripts->items.getCount() > MAX_ARRAY_DIMENSIONS)
-		ERR_post(Arg::Gds(isc_array_max_dimensions) << Arg::Num(MAX_ARRAY_DIMENSIONS));
+		ERR_post(Firebird::Arg::Gds(isc_array_max_dimensions) << Firebird::Arg::Num(MAX_ARRAY_DIMENSIONS));
 
 	SLONG numSubscripts[MAX_ARRAY_DIMENSIONS];
 	int iter = 0;
@@ -10977,7 +10977,7 @@ dsc* StrCaseNode::execute(thread_db* tdbb, Request* request) const
 		len = (textType->*intlFunction)(len, ptr, desc.dsc_length, impure->vlu_desc.dsc_address);
 
 		if (len == INTL_BAD_STR_LENGTH)
-			status_exception::raise(Arg::Gds(isc_arith_except));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except));
 
 		impure->vlu_desc.dsc_length = (USHORT) len;
 	}
@@ -11181,8 +11181,8 @@ dsc* StrLenNode::execute(thread_db* tdbb, Request* request) const
 
 		if (length > MAX_SINT64)
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_numeric_out_of_range));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_numeric_out_of_range));
 		}
 
 		*(FB_UINT64*) impure->vlu_desc.dsc_address = length;
@@ -11304,8 +11304,8 @@ ValueExprNode* SubQueryNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_VIEW_WITH_CHECK)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				  Arg::Gds(isc_subquery_err));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				  Firebird::Arg::Gds(isc_subquery_err));
 	}
 
 	const DsqlContextStack::iterator base(*dsqlScratch->context);
@@ -11505,7 +11505,7 @@ void SubQueryNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 		if (dtype == dtype_quad)
 			IBERROR(224);	// msg 224 quad word arithmetic not supported
 
-		ERR_post(Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
+		ERR_post(Firebird::Arg::Gds(isc_datype_notsup));	// data type not supported for arithmetic
 	}
 }
 
@@ -11543,7 +11543,7 @@ ValueExprNode* SubQueryNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 ValueExprNode* SubQueryNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	if (!rse)
-		ERR_post(Arg::Gds(isc_wish_list));
+		ERR_post(Firebird::Arg::Gds(isc_wish_list));
 
 	if (rse->isInvariant())
 	{
@@ -11699,7 +11699,7 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 					if (value2)
 						desc = EVL_expr(tdbb, request, value2);
 					else
-						ERR_post(Arg::Gds(isc_from_no_match));
+						ERR_post(Firebird::Arg::Gds(isc_from_no_match));
 				}
 
 				isNull = !desc;
@@ -11881,7 +11881,7 @@ void SubstringNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 			const SLONG len = MOV_get_long(tdbb, &desc2, 0);
 
 			if (len < 0)
-				ERR_post(Arg::Gds(isc_bad_substring_length) << Arg::Num(len));
+				ERR_post(Firebird::Arg::Gds(isc_bad_substring_length) << Firebird::Arg::Num(len));
 		}
 	}
 }
@@ -11931,7 +11931,7 @@ dsc* SubstringNode::perform(thread_db* tdbb, impure_value* impure, const dsc* va
 	SINT64 sLength = MOV_get_long(tdbb, lengthDsc, 0);
 
 	if (sLength < 0)
-		status_exception::raise(Arg::Gds(isc_bad_substring_length) << Arg::Num(sLength));
+		status_exception::raise(Firebird::Arg::Gds(isc_bad_substring_length) << Firebird::Arg::Num(sLength));
 
 	if (sStart < 0)
 	{
@@ -12240,7 +12240,7 @@ dsc* SubstringSimilarNode::execute(thread_db* tdbb, Request* request) const
 
 	// Verify the correctness of the escape character.
 	if (escapeLen == 0 || charSet->length(escapeLen, escapeStr, true) != 1)
-		ERR_post(Arg::Gds(isc_escape_invalid));
+		ERR_post(Firebird::Arg::Gds(isc_escape_invalid));
 
 	AutoPtr<BaseSubstringSimilarMatcher> autoEvaluator;	// deallocate non-invariant evaluator
 	BaseSubstringSimilarMatcher* evaluator;
@@ -12380,7 +12380,7 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 	if (!node->function)
 	{
 		csb->csb_blr_reader.seekBackward(count);
-		PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_funnotdef) << name.toQuotedString());
 	}
 
 	node->args = PAR_args(tdbb, csb);
@@ -12435,7 +12435,7 @@ void SysFuncCallNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (args->items.getCount() > MAX_UCHAR)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_max_args_exceeded) << Arg::Num(MAX_UCHAR) << function->name);
+			Firebird::Arg::Gds(isc_max_args_exceeded) << Firebird::Arg::Num(MAX_UCHAR) << function->name);
 	}
 
 	dsqlScratch->appendUChar(blr_sys_function);
@@ -13004,7 +13004,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		{
 			string str;
 			str.printf("%s should predate %s", preVerb, postVerb);
-			PAR_error(csb, Arg::Gds(isc_random) << str);
+			PAR_error(csb, Firebird::Arg::Gds(isc_random) << str);
 		}
 	};
 
@@ -13052,7 +13052,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 								break;
 
 							default:
-								PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function_id");
+								PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_invoke_function_id");
 								break;
 						}
 					}
@@ -13076,7 +13076,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					if (!node->function)
 					{
 						blrReader.setPos(startPos);
-						PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+						PAR_error(csb, Firebird::Arg::Gds(isc_funnotdef) << name.toQuotedString());
 					}
 
 					break;
@@ -13110,7 +13110,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					break;
 
 				default:
-					PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_function sub code");
+					PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_invoke_function sub code");
 			}
 		}
 	}
@@ -13148,7 +13148,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		if (!node->function)
 		{
 			blrReader.setPos(startPos);
-			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+			PAR_error(csb, Firebird::Arg::Gds(isc_funnotdef) << name.toQuotedString());
 		}
 
 		argCount = blrReader.getByte();
@@ -13159,7 +13159,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	{
 		blrReader.setPos(argNamesPos);
 		PAR_error(csb,
-			Arg::Gds(isc_random) <<
+			Firebird::Arg::Gds(isc_random) <<
 			"blr_invoke_function_arg_names count cannot be greater than blr_invoke_function_args");
 	}
 
@@ -13169,21 +13169,21 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	{
 		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
 		{
-			PAR_warning(Arg::Warning(isc_funnotdef) << name.toQuotedString() <<
-						Arg::Warning(isc_modnotfound));
+			PAR_warning(Firebird::Arg::Warning(isc_funnotdef) << name.toQuotedString() <<
+						Firebird::Arg::Warning(isc_modnotfound));
 		}
 		else
 		{
 			blrReader.setPos(startPos);
-			PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString() <<
-						Arg::Gds(isc_modnotfound));
+			PAR_error(csb, Firebird::Arg::Gds(isc_funnotdef) << name.toQuotedString() <<
+						Firebird::Arg::Gds(isc_modnotfound));
 		}
 	}
 
 	node->name = name;
 	node->isSubRoutine = node->function.isSubRoutine();
 
-	Arg::StatusVector mismatchStatus;
+	Firebird::Arg::StatusVector mismatchStatus;
 
 	if (!node->args)
 		node->args = FB_NEW_POOL(pool) ValueListNode(pool);
@@ -13195,7 +13195,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	if (positionalArgCount)
 	{
 		if (argCount > node->function(tdbb)->fun_inputs)
-			mismatchStatus << Arg::Gds(isc_wronumarg);
+			mismatchStatus << Firebird::Arg::Gds(isc_wronumarg);
 
 		for (auto pos = 0u; pos < positionalArgCount; ++pos)
 		{
@@ -13204,7 +13204,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 				const auto& parameter = node->function(tdbb)->getInputFields()[pos];
 
 				if (parameter->prm_name.hasData() && argsByName.put(parameter->prm_name, *argIt))
-					mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+					mismatchStatus << Firebird::Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
 			}
 
 			++argIt;
@@ -13216,7 +13216,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 		for (const auto& argName : *argNames)
 		{
 			if (argsByName.put(argName, *argIt++))
-				mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+				mismatchStatus << Firebird::Arg::Gds(isc_param_multiple_assignments) << argName;
 		}
 	}
 
@@ -13269,7 +13269,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 					*argIt = NullNode::instance();
 			}
 			else
-				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+				mismatchStatus << Firebird::Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
 		}
 
 		++argIt;
@@ -13278,11 +13278,11 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	if (argsByName.hasData())
 	{
 		for (const auto& argPair : argsByName)
-			mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+			mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argPair.first;
 	}
 
 	if (mismatchStatus.hasData())
-		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
+		status_exception::raise(Firebird::Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
 
 	// CVC: I will track ufds only if a function is not being dropped.
 	if (!node->function.isSubRoutine() && csb->collectingDependencies())
@@ -13575,15 +13575,15 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 	if (!func->isImplemented())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_func_pack_not_implemented) <<
+			Firebird::Arg::Gds(isc_func_pack_not_implemented) <<
 				function()->getName().object.toQuotedString() <<
 				function()->getName().getSchemaAndPackage().toQuotedString());
 	}
 	else if (!func->isDefined())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_funnotdef) << function()->getName().toQuotedString() <<
-			Arg::Gds(isc_modnotfound));
+			Firebird::Arg::Gds(isc_funnotdef) << function()->getName().toQuotedString() <<
+			Firebird::Arg::Gds(isc_modnotfound));
 	}
 
 	AutoSetRestore<USHORT> autoOriginalTimeZone(
@@ -13745,15 +13745,15 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (!function)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-				  Arg::Gds(isc_dsql_function_err) <<
-				  Arg::Gds(isc_random) << name.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+				  Firebird::Arg::Gds(isc_dsql_function_err) <<
+				  Firebird::Arg::Gds(isc_random) << name.toQuotedString());
 	}
 
 	if (function->udf_private && function->udf_name.getSchemaAndPackage() != dsqlScratch->package)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_private_function) <<
+			Firebird::Arg::Gds(isc_private_function) <<
 			function->udf_name.object.toQuotedString() <<
 			function->udf_name.getSchemaAndPackage().toQuotedString());
 	}
@@ -13790,7 +13790,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		for (const auto& arg : node->dsqlFunction->udf_arguments)
 			argsByName.put(arg.name, &arg.desc);
 
-		Arg::StatusVector mismatchStatus;
+		Firebird::Arg::StatusVector mismatchStatus;
 
 		for (const auto& argName : *node->dsqlArgNames)
 		{
@@ -13801,13 +13801,13 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					false);
 			}
 			else
-				mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+				mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argName;
 
 			++argIt;
 		}
 
 		if (mismatchStatus.hasData())
-			status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
+			status_exception::raise(Firebird::Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
 	}
 
 	return node;
@@ -14261,7 +14261,7 @@ ValueExprNode* VariableNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	vec<DeclareVariableNode*>* vector = csb->csb_variables;
 
 	if (!vector || varId >= vector->count() || !(varDecl = (*vector)[varId]))
-		status_exception::raise(Arg::Gds(isc_badvarnum));
+		status_exception::raise(Firebird::Arg::Gds(isc_badvarnum));
 
 	return this;
 }
@@ -14293,7 +14293,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 
 		//// FIXME: Variable with simple type has no varInfo.
 		const auto s = item.getDescription(request, varInfo);
-		ERR_post(Arg::Gds(isc_uninitialized_var) << s);
+		ERR_post(Firebird::Arg::Gds(isc_uninitialized_var) << s);
 	}
 
 	bool isNull = false;
@@ -14416,7 +14416,7 @@ static SINT64 getDayFraction(const dsc* d)
 	CVT_move(d, &result, tdbb->getAttachment()->att_dec_status);
 
 	if (fb_utils::abs64Compare(result_days, TimeStamp::MAX_DATE - TimeStamp::MIN_DATE) > 0)
-		ERR_post(Arg::Gds(isc_date_range_exceeded));
+		ERR_post(Firebird::Arg::Gds(isc_date_range_exceeded));
 
 	// There's likely some loss of precision here due to rounding of number
 

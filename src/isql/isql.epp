@@ -129,7 +129,7 @@ enum literal_string_type
 #include "../remote/protocol.h"
 
 using namespace Firebird;
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 #include "../isql/ColList.h"
 #include "../isql/InputDevices.h"
@@ -4004,7 +4004,7 @@ static processing_state copy_table(const QualifiedMetaString& source, const Qual
 	const bool domain_flag = otherdb[0];
 
 	const PathName ftmp = TempFile::create(SCRATCH);
-	isqlGlob.Out = os_utils::fopen(ftmp.c_str(), "w+b");
+	isqlGlob.Out = Firebird::os_utils::fopen(ftmp.c_str(), "w+b");
 	if (!isqlGlob.Out)
 	{
 		// If we can't open a temp file then bail
@@ -4527,7 +4527,7 @@ static processing_state edit(const TEXT* file)
 	{
 		TEXT path[MAXPATHLEN];
 		strip_quotes(file, path);
-		FILE* fp = os_utils::fopen(path, "r");
+		FILE* fp = Firebird::os_utils::fopen(path, "r");
 		if (fp)
 		{
 			// Push the current ifp on the indev
@@ -4559,7 +4559,7 @@ static processing_state edit(const TEXT* file)
 			// File used to edit sessions
 			const PathName filename = TempFile::create(SCRATCH);
 			const char* Tmpfile = filename.c_str();
-			FILE* f = os_utils::fopen(Tmpfile, "w+"); // It was w+b
+			FILE* f = Firebird::os_utils::fopen(Tmpfile, "w+"); // It was w+b
 			if (f)
 			{
 				Ofp.init(f, Tmpfile, Tmpfile);
@@ -4578,7 +4578,7 @@ static processing_state edit(const TEXT* file)
 		Ofp.close();
 		PathName tmpfile = Ofp.fileName(false);
 		gds__edit(tmpfile.c_str(), 0);
-		Ofp.init(os_utils::fopen(tmpfile.c_str(), "r+"),
+		Ofp.init(Firebird::os_utils::fopen(tmpfile.c_str(), "r+"),
 			tmpfile.c_str(), tmpfile.c_str()); // We don't check for failure.
 		Filelist->Ifp().init(Ofp);
 		Input_file = true;
@@ -6426,7 +6426,7 @@ static processing_state newinput(const TEXT* infile)
 	// the linked list before discarding the current Ifp.
 	// Filelist is a global pointing to base of list.
 
-	FILE* fp = os_utils::fopen(file.c_str(), "r");
+	FILE* fp = Firebird::os_utils::fopen(file.c_str(), "r");
 	if (fp)
 	{
 		Filelist->insertIfp();
@@ -6463,7 +6463,7 @@ static processing_state newoutput(const TEXT* outfile)
 
 	if (*outfile)
 	{
-		FILE* fp = os_utils::fopen(outfile, "a");
+		FILE* fp = Firebird::os_utils::fopen(outfile, "a");
 		if (fp)
 		{
 			if (isqlGlob.Out && isqlGlob.Out != stdout)

@@ -36,7 +36,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 
-namespace MsgFormat {
+namespace Firebird::MsgFormat {
 	class SafeArg;
 }
 
@@ -96,7 +96,7 @@ public:
 				uSvc->setServiceStatus(status);
 		}
 
-		void setServiceStatus(const USHORT fac, const USHORT code, const MsgFormat::SafeArg& args)
+		void setServiceStatus(const USHORT fac, const USHORT code, const Firebird::MsgFormat::SafeArg& args)
 		{
 			if (uSvc)
 				uSvc->setServiceStatus(fac, code, args);
@@ -135,7 +135,7 @@ public:
 
 private:
 	virtual void setServiceStatus(const ISC_STATUS*) = 0;
-	virtual void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) = 0;
+	virtual void setServiceStatus(const USHORT, const USHORT, const Firebird::MsgFormat::SafeArg&) = 0;
 
 public:
 	virtual StatusAccessor getStatusAccessor() = 0;

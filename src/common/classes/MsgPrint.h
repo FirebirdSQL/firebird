@@ -30,8 +30,7 @@
 #include "SafeArg.h"
 
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 class BaseStream;
 
 // Here we have routines that print a message that contains placeholders for
@@ -104,6 +103,6 @@ int fb_msg_format(void*        handle,
 				  USHORT       number,
 				  unsigned int bsize,
 				  TEXT*        buffer,
-				  const        MsgFormat::SafeArg& arg);
+				  const        Firebird::MsgFormat::SafeArg& arg);
 
 #endif // FB_MSGPRINT_H

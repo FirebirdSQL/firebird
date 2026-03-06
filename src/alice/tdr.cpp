@@ -47,7 +47,7 @@
 #include "../jrd/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 static SINT64 ask();

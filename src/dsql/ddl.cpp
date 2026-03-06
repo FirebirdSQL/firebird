@@ -111,7 +111,7 @@ using namespace Firebird;
 
 
 static void assign_field_length(dsql_fld*, USHORT);
-static void post_607(const Arg::StatusVector& v);
+static void post_607(const Firebird::Arg::StatusVector& v);
 
 
 ///const int DEFAULT_BLOB_SEGMENT_SIZE = 80; // bytes
@@ -188,7 +188,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			if (!fld)
 			{
 				// column @1 does not exist in table/view @2
-				post_607(Arg::Gds(isc_dyn_column_does_not_exist) <<
+				post_607(Firebird::Arg::Gds(isc_dyn_column_does_not_exist) <<
 						 		field->typeOfName.toQuotedString() <<
 								field->typeOfTable.toQuotedString());
 			}
@@ -200,15 +200,15 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			if (!METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
 			{
 				// Specified domain or source field does not exist
-				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
+				post_607(Firebird::Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
 			}
 		}
 
 		if (field->dimensions != 0)
 		{
-			ERRD_post(Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) <<
-				Arg::Str("Usage of domain or TYPE OF COLUMN of array type in PSQL"));
+			ERRD_post(Firebird::Arg::Gds(isc_wish_list) <<
+				Firebird::Arg::Gds(isc_random) <<
+				Firebird::Arg::Str("Usage of domain or TYPE OF COLUMN of array type in PSQL"));
 		}
 
 		if (field->dtype <= dtype_any_text ||
@@ -222,8 +222,8 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 	{
 		if (field->charSet.object.hasData() || collation_name.object.hasData() || (field->flags & FLD_national))
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) << Arg::Gds(isc_collation_requires_text));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) << Firebird::Arg::Gds(isc_collation_requires_text));
 		}
 		return;
 	}
@@ -236,9 +236,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			if (!METD_get_type(dsqlScratch->getTransaction(), field->subTypeName,
 					"RDB$FIELD_SUB_TYPE", &blob_sub_type))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-						  Arg::Gds(isc_dsql_datatype_err) <<
-						  Arg::Gds(isc_dsql_blob_type_unknown) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+						  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+						  Firebird::Arg::Gds(isc_dsql_blob_type_unknown) <<
 						  field->subTypeName);
 			}
 			field->subType = blob_sub_type;
@@ -246,9 +246,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 		if (field->subType > isc_blob_text)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-					  Arg::Gds(isc_subtype_for_internal_use));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+					  Firebird::Arg::Gds(isc_subtype_for_internal_use));
 		}
 
 		if (field->charSet.object.hasData() && (field->subType == isc_blob_untyped))
@@ -256,16 +256,16 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 		if (field->charSet.object.hasData() && (field->subType != isc_blob_text))
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_collation_requires_text));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+                      Firebird::Arg::Gds(isc_collation_requires_text));
 		}
 
 		if (collation_name.object.hasData() && (field->subType != isc_blob_text))
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_collation_requires_text));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+                      Firebird::Arg::Gds(isc_collation_requires_text));
 		}
 
 		if (field->subType != isc_blob_text)
@@ -367,9 +367,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		if (!resolved_charset)
 		{
 			// specified character set not found
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_charset_not_found) << charset_name.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+                      Firebird::Arg::Gds(isc_charset_not_found) << charset_name.toQuotedString());
 		}
 
 		field->charSetId = resolved_charset->intlsym_charset_id;
@@ -396,9 +396,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			}
 
 			// Specified collation not found
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  ///Arg::Gds(isc_dsql_datatype_err) <<	// (too large status vector)
-                      Arg::Gds(isc_collation_not_found) << collation_name.toQuotedString() << charSetName.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  ///Firebird::Arg::Gds(isc_dsql_datatype_err) <<	// (too large status vector)
+                      Firebird::Arg::Gds(isc_collation_not_found) << collation_name.toQuotedString() << charSetName.toQuotedString());
 		}
 
 		// If both specified, must be for same character set
@@ -409,9 +409,9 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 		if ((field->charSetId.value_or(CS_NONE) != resolved_type->intlsym_charset_id) &&
 			(field->charSetId.value_or(CS_NONE) != ttype_dynamic))
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_collation_not_for_charset) << collation_name.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+                      Firebird::Arg::Gds(isc_collation_not_for_charset) << collation_name.toQuotedString());
 		}
 
 		field->explicitCollation = true;
@@ -452,10 +452,10 @@ static void assign_field_length(dsql_fld* field, USHORT bytes_per_char)
 
 		if (field_length > MAX_COLUMN_SIZE)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-                      Arg::Gds(isc_imp_exc) <<
-					  Arg::Gds(isc_field_name) << Arg::Str(field->fld_name));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+                      Firebird::Arg::Gds(isc_imp_exc) <<
+					  Firebird::Arg::Gds(isc_field_name) << Firebird::Arg::Str(field->fld_name));
 		}
 
 		field->length = (USHORT) field_length;
@@ -465,10 +465,10 @@ static void assign_field_length(dsql_fld* field, USHORT bytes_per_char)
 
 
 // post very often used error - avoid code duplication
-static void post_607(const Arg::StatusVector& v)
+static void post_607(const Firebird::Arg::StatusVector& v)
 {
-	Arg::Gds err(isc_sqlerr);
-	err << Arg::Num(-607) << Arg::Gds(isc_dsql_command_err);
+	Firebird::Arg::Gds err(isc_sqlerr);
+	err << Firebird::Arg::Num(-607) << Firebird::Arg::Gds(isc_dsql_command_err);
 
 	err.append(v);
 	ERRD_post(err);

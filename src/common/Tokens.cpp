@@ -212,7 +212,7 @@ void Tokens::error(const char* fmt, ...)
 	buffer.vprintf(fmt, params);
 	va_end(params);
 
-	(Arg::Gds(isc_tokens_parse) << Arg::Gds(isc_random) << buffer).raise();
+	(Firebird::Arg::Gds(isc_tokens_parse) << Firebird::Arg::Gds(isc_random) << buffer).raise();
 }
 
 string Tokens::Tok::stripped() const

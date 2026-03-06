@@ -365,7 +365,7 @@ void DTransaction::internalDisconnect(CheckStatusWrapper* status)
 		WriteLockGuard guard(rwLock, FB_FUNCTION);
 
 		if (!limbo)
-			status_exception::raise(Arg::Gds(isc_no_recon));
+			status_exception::raise(Firebird::Arg::Gds(isc_no_recon));
 
 		for (unsigned int i = 0; i < sub.getCount(); ++i)
 		{
@@ -470,7 +470,7 @@ ITransaction* DTransaction::validate(CheckStatusWrapper* status, IAttachment* at
 				return rc;
 		}
 
-		Arg::Gds(isc_bad_trans_handle).raise();
+		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
 	}
 	catch (const Exception& ex)
 	{
@@ -562,7 +562,7 @@ YTransaction* DtcStart::start(CheckStatusWrapper* status)
 		if (status->getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 		if (cnt == 0)
-			(Arg::Gds(isc_random) << "No attachments to start distributed transaction provided").raise();
+			(Firebird::Arg::Gds(isc_random) << "No attachments to start distributed transaction provided").raise();
 
 		for (unsigned i = 0; i < cnt; ++i)
 		{

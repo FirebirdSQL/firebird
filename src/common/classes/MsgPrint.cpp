@@ -33,8 +33,7 @@
 #include "../common/file_params.h"
 
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 // Enough to the current conversions. If SINT128 is decoded as a full number
 // instead of two parts, it may be updated to 63, because 2^128 ~ 3.4e38.
@@ -357,7 +356,7 @@ int MsgPrintErr(const char* format, const SafeArg& arg, bool userFormatting)
 
 // Lookup and format message.  Return as much of formatted string as fits in caller's buffer.
 int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsize, TEXT* buffer,
-	const MsgFormat::SafeArg& arg)
+	const Firebird::MsgFormat::SafeArg& arg)
 {
 	int total_msg = 0;
 	char msg[BUFFER_SMALL] = "";

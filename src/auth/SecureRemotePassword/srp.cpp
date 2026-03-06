@@ -19,7 +19,7 @@ const char* primeStr =	"E67D2E994B2F900C3F41F08F5BB2627ED0D49EE1FE767A52EFCD565C
 const char* genStr = "02";
 } // anonumous namespace
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class RemoteGroup
 {
@@ -29,7 +29,7 @@ public:
 	explicit RemoteGroup(Firebird::MemoryPool&)
 		: prime(primeStr), generator(genStr), k()
 	{
-		Auth::SecureHash<Firebird::Sha1> hash;
+		Firebird::Auth::SecureHash<Firebird::Sha1> hash;
 
 		hash.processInt(prime);
 		if (prime.length() > generator.length())
@@ -240,7 +240,7 @@ void checkStatusVectorForMissingTable(const ISC_STATUS* v, std::function<void ()
 			if (cleanup)
 				cleanup();
 
-			Arg::Gds(isc_missing_data_structures).raise();
+			Firebird::Arg::Gds(isc_missing_data_structures).raise();
 		}
 
 		do

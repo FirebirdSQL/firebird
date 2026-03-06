@@ -827,7 +827,7 @@ void TracePluginImpl::str2Array(const Firebird::string& str, GdsCodesArray& arr)
 
 		ISC_STATUS code = atol(s.c_str());
 
-		if (!code && !(code = MsgUtil::getCodeByName(s.c_str())))
+		if (!code && !(code = Firebird::MsgUtil::getCodeByName(s.c_str())))
 		{
 			fatal_exception::raiseFmt(
 				"Error parsing error codes filter: \n"

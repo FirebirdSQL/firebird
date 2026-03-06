@@ -90,7 +90,7 @@ bool ScanDir::next()
 	if (!dir)
 		return false;
 
-	while ((data = os_utils::readdir (dir)))
+	while ((data = Firebird::os_utils::readdir (dir)))
 	{
 		if (match (pattern.c_str(), data->d_name))
 			return true;
@@ -155,7 +155,7 @@ bool ScanDir::isDirectory()
 #else
 	struct STAT buf;
 
-    if (os_utils::stat(getFilePath(), &buf))
+    if (Firebird::os_utils::stat(getFilePath(), &buf))
 		return false;
 
 	return S_ISDIR (buf.st_mode);

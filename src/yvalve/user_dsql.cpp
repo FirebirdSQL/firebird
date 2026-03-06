@@ -104,7 +104,7 @@ static void		cleanup(void*);
 static void		cleanup_database(FB_API_HANDLE*, void*);
 static ISC_STATUS	error(const Firebird::Exception& ex);
 static ISC_STATUS	error();
-static void		error_post(const Arg::StatusVector& v);
+static void		error_post(const Firebird::Arg::StatusVector& v);
 static dsql_name*		lookup_name(const SCHAR*, dsql_name*);
 static dsql_stmt*		lookup_stmt(const SCHAR*, dsql_name*, name_type);
 static void		init(FB_API_HANDLE*);
@@ -598,7 +598,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_prepare(ISC_STATUS*	user_status,
 		statement = (dsql_stmt*) gds__alloc((SLONG) sizeof(dsql_stmt));
 		// FREE: by user calling isc_embed_dsql_release()
 		if (!statement)			// NOMEM:
-			error_post(Arg::Gds(isc_virmemexh));
+			error_post(Firebird::Arg::Gds(isc_virmemexh));
 
 #ifdef DEBUG_GDS_ALLOC
 		gds_alloc_flag_unfreed((void *) statement);
@@ -1086,7 +1086,7 @@ static ISC_STATUS error()
 //	exception that it uses a different error block - one which
 //	is local to the V3 DSQL routines...
 //
-static void error_post(const Arg::StatusVector& v)
+static void error_post(const Firebird::Arg::StatusVector& v)
 {
 	// Save status vector in appropriate place
 	v.copyTo(UDSQL_error->dsql_status);
@@ -1169,7 +1169,7 @@ static dsql_name* insert_name(const TEXT* symbol_name, dsql_name** list_ptr, dsq
 	dsql_name* name = (dsql_name*) gds__alloc((SLONG) sizeof(dsql_name) + l);
 	// FREE: by exit handler cleanup() or database_cleanup()
 	if (!name)					// NOMEM:
-		error_post(Arg::Gds(isc_virmemexh));
+		error_post(Firebird::Arg::Gds(isc_virmemexh));
 	name->name_stmt = stmt;
 	name->name_length = l;
 	memcpy(name->name_symbol, symbol_name, l);
@@ -1229,16 +1229,16 @@ static dsql_stmt* lookup_stmt(const TEXT* name, dsql_name* list, name_type type)
 
 	if (type == NAME_statement)
 	{
-		error_post(Arg::Gds(isc_dsql_error) <<
-				   Arg::Gds(isc_sqlerr) << Arg::Num(-518) <<
-				   Arg::Gds(isc_dsql_request_err));
+		error_post(Firebird::Arg::Gds(isc_dsql_error) <<
+				   Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-518) <<
+				   Firebird::Arg::Gds(isc_dsql_request_err));
 	}
 	else
 	{
-		error_post(Arg::Gds(isc_dsql_error) <<
-				   Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				   Arg::Gds(isc_dsql_cursor_err) <<
-				   Arg::Gds(isc_dsql_cursor_not_found) << Arg::Str(name));
+		error_post(Firebird::Arg::Gds(isc_dsql_error) <<
+				   Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				   Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+				   Firebird::Arg::Gds(isc_dsql_cursor_not_found) << Firebird::Arg::Str(name));
 	}
 	return NULL;
 }

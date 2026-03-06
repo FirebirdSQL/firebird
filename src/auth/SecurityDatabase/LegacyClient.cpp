@@ -33,7 +33,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/init.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 int SecurityDatabaseClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* cb)
 {

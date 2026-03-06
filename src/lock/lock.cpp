@@ -549,7 +549,7 @@ SRQ_PTR LockManager::enqueue(const Callbacks& callbacks,
 		if (grant_or_que(callbacks, request, lock, lck_wait))
 			return request_offset;
 
-		Arg::Gds(lck_wait > 0 ? isc_deadlock : lck_wait < 0 ? isc_lock_timeout :
+		Firebird::Arg::Gds(lck_wait > 0 ? isc_deadlock : lck_wait < 0 ? isc_lock_timeout :
 			isc_lock_conflict).copyTo(statusVector);
 
 		return 0;
@@ -1256,9 +1256,9 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 			else
 			{
 				// Return an error if can't alloc enough memory
-				(Arg::Gds(isc_lockmanerr) <<
-				Arg::Gds(isc_random) << Arg::Str("lock table size exceeds limit") <<
-				Arg::StatusVector(statusVector)).copyTo(statusVector);
+				(Firebird::Arg::Gds(isc_lockmanerr) <<
+				Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("lock table size exceeds limit") <<
+				Firebird::Arg::StatusVector(statusVector)).copyTo(statusVector);
 
 				return NULL;
 			}
@@ -1288,9 +1288,9 @@ UCHAR* LockManager::alloc(USHORT size, CheckStatusWrapper* statusVector)
 			// Do not do abort in case if there is not enough room -- just
 			// return an error
 
-			(Arg::Gds(isc_lockmanerr) <<
-				Arg::Gds(isc_random) << Arg::Str("lock manager out of room") <<
-				Arg::StatusVector(statusVector)).copyTo(statusVector);
+			(Firebird::Arg::Gds(isc_lockmanerr) <<
+				Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("lock manager out of room") <<
+				Firebird::Arg::StatusVector(statusVector)).copyTo(statusVector);
 
 			return NULL;
 		}
@@ -1639,7 +1639,7 @@ void LockManager::bug(CheckStatusWrapper* statusVector, const TEXT* string)
 			TEXT buffer[MAXPATHLEN];
 			gds__prefix_lock(buffer, "fb_lock_table.dump");
 			const TEXT* const lock_file = buffer;
-			FILE* const fd = os_utils::fopen(lock_file, "wb");
+			FILE* const fd = Firebird::os_utils::fopen(lock_file, "wb");
 			if (fd)
 			{
 				FB_UNUSED(fwrite(header, 1, header->lhb_used, fd));
@@ -1659,9 +1659,9 @@ void LockManager::bug(CheckStatusWrapper* statusVector, const TEXT* string)
 
 		if (statusVector)
 		{
-			(Arg::Gds(isc_lockmanerr) <<
-				Arg::Gds(isc_random) << Arg::Str(string) <<
-				Arg::StatusVector(statusVector)).copyTo(statusVector);
+			(Firebird::Arg::Gds(isc_lockmanerr) <<
+				Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(string) <<
+				Firebird::Arg::StatusVector(statusVector)).copyTo(statusVector);
 
 			return;
 		}
@@ -1793,8 +1793,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 
 	if (m_sharedMemory->eventInit(&process->prc_blocking) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
-			Arg::Gds(isc_random) << Arg::Str("process blocking event failed to initialize properly")).copyTo(statusVector);
+		(Firebird::Arg::StatusVector(statusVector) << Firebird::Arg::Gds(isc_lockmanerr) <<
+			Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("process blocking event failed to initialize properly")).copyTo(statusVector);
 		return false;
 	}
 
@@ -1817,8 +1817,8 @@ bool LockManager::create_process(CheckStatusWrapper* statusVector)
 		}
 		catch (const Exception& ex)
 		{
-			(Arg::Gds(isc_lockmanerr) << Arg::StatusVector(ex) <<
-				Arg::Gds(isc_random) << Arg::Str("blocking thread failed to start")).copyTo(statusVector);
+			(Firebird::Arg::Gds(isc_lockmanerr) << Firebird::Arg::StatusVector(ex) <<
+				Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("blocking thread failed to start")).copyTo(statusVector);
 
 			return false;
 		}
@@ -2294,8 +2294,8 @@ bool LockManager::init_owner_block(CheckStatusWrapper* statusVector, own* owner,
 
 	if (m_sharedMemory->eventInit(&owner->own_wakeup) != FB_SUCCESS)
 	{
-		(Arg::StatusVector(statusVector) << Arg::Gds(isc_lockmanerr) <<
-			Arg::Gds(isc_random) << Arg::Str("owner wakeup event failed initialization")).copyTo(statusVector);
+		(Firebird::Arg::StatusVector(statusVector) << Firebird::Arg::Gds(isc_lockmanerr) <<
+			Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("owner wakeup event failed initialization")).copyTo(statusVector);
 		return false;
 	}
 
@@ -2581,7 +2581,7 @@ bool LockManager::internal_convert(const Callbacks& callbacks,
 	if (lck_wait < 0)
 		++(m_sharedMemory->getHeader()->lhb_timeouts);
 
-	(Arg::Gds(lck_wait > 0 ? isc_deadlock : lck_wait < 0 ? isc_lock_timeout :
+	(Firebird::Arg::Gds(lck_wait > 0 ? isc_deadlock : lck_wait < 0 ? isc_lock_timeout :
 		isc_lock_conflict)).copyTo(statusVector);
 
 	return false;
@@ -4044,9 +4044,9 @@ bool LockManager::checkHeader(const MemoryHeader* header, bool raiseError)
 	{
 		// @1-bit engine can't open database already opened by @2-bit engine
 		if constexpr (LHB_VERSION == BASE_LHB_VERSION)
-			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(32) << Arg::Num(64)).raise();
+			(Firebird::Arg::Gds(isc_wrong_shmem_bitness) << Firebird::Arg::Num(32) << Firebird::Arg::Num(64)).raise();
 		else
-			(Arg::Gds(isc_wrong_shmem_bitness) << Arg::Num(64) << Arg::Num(32)).raise();
+			(Firebird::Arg::Gds(isc_wrong_shmem_bitness) << Firebird::Arg::Num(64) << Firebird::Arg::Num(32)).raise();
 	}
 
 	return IpcObject::checkHeader(header, raiseError);

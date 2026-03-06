@@ -78,7 +78,7 @@ using namespace Firebird;
 
 static NodeParseFunc blr_parsers[256] = {NULL};
 
-static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isSyntaxError = true);
+static void par_error(BlrReader& blrReader, const Firebird::Arg::StatusVector& v, bool isSyntaxError = true);
 static PlanNode* par_plan(thread_db*, CompilerScratch*);
 static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb);
 static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffset);
@@ -183,7 +183,7 @@ namespace
 					return;
 			}
 
-			ERR_post(Arg::Gds(isc_text_subtype) << Arg::Num(parm1));
+			ERR_post(Firebird::Arg::Gds(isc_text_subtype) << Firebird::Arg::Num(parm1));
 		}
 	};
 }	// namespace
@@ -422,7 +422,7 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			break;
 
 		default:
-			par_error(blrReader, Arg::Gds(isc_datnotsup));
+			par_error(blrReader, Firebird::Arg::Gds(isc_datnotsup));
 	}
 
 	return type_alignments[desc->dsc_dtype];
@@ -504,7 +504,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 						break;
 
 					default:
-						PAR_error(csb, Arg::Gds(isc_collation_requires_text));
+						PAR_error(csb, Firebird::Arg::Gds(isc_collation_requires_text));
 						break;
 				}
 			}
@@ -574,7 +574,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 						break;
 
 					default:
-						PAR_error(csb, Arg::Gds(isc_collation_requires_text));
+						PAR_error(csb, Firebird::Arg::Gds(isc_collation_requires_text));
 						break;
 				}
 			}
@@ -659,9 +659,9 @@ void PAR_getBlrVersionAndFlags(CompilerScratch* csb)
 
 		default:
 			PAR_error(csb,
-				Arg::Gds(isc_metadata_corrupt) <<
-				Arg::Gds(isc_wroblrver2) <<
-					Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) << Arg::Num(version));
+				Firebird::Arg::Gds(isc_metadata_corrupt) <<
+				Firebird::Arg::Gds(isc_wroblrver2) <<
+					Firebird::Arg::Num(blr_version4) << Firebird::Arg::Num(blr_version5/*6*/) << Firebird::Arg::Num(version));
 	}
 
 	if (flags.searchSystemSchema)
@@ -811,7 +811,7 @@ SLONG PAR_symbol_to_gdscode(const Firebird::string& name)
  *
  **************************************/
 
-	return MsgUtil::getCodeByName(name.c_str());
+	return Firebird::MsgUtil::getCodeByName(name.c_str());
 }
 
 
@@ -824,7 +824,7 @@ void PAR_register(UCHAR blr, NodeParseFunc parseFunc)
 
 
 // We've got a blr error other than a syntax error. Handle it.
-static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isSyntaxError)
+static void par_error(BlrReader& blrReader, const Firebird::Arg::StatusVector& v, bool isSyntaxError)
 {
 	fb_assert(v.value()[0] == isc_arg_gds);
 
@@ -834,8 +834,8 @@ static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isS
 	if (isSyntaxError)
 	{
 		blrReader.seekBackward(1);
-		Arg::Gds p(isc_invalid_blr);
-		p << Arg::Num(blrReader.getOffset());
+		Firebird::Arg::Gds p(isc_invalid_blr);
+		p << Firebird::Arg::Num(blrReader.getOffset());
 		p.append(v);
 		p.copyTo(tdbb->tdbb_status_vector);
 	}
@@ -847,7 +847,7 @@ static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isS
 }
 
 // We've got a blr error other than a syntax error. Handle it.
-void PAR_error(CompilerScratch* csb, const Arg::StatusVector& v, bool isSyntaxError)
+void PAR_error(CompilerScratch* csb, const Firebird::Arg::StatusVector& v, bool isSyntaxError)
 {
 	par_error(csb->csb_blr_reader, v, isSyntaxError);
 }
@@ -919,13 +919,13 @@ StreamType par_context(CompilerScratch* csb, USHORT context)
 			return tail->csb_stream;
 		}
 
-		PAR_error(csb, Arg::Gds(isc_ctxinuse));
+		PAR_error(csb, Firebird::Arg::Gds(isc_ctxinuse));
 	}
 
 	const StreamType stream = csb->nextStream(false);
 	if (stream >= MAX_STREAMS)
 	{
-		PAR_error(csb, Arg::Gds(isc_too_many_contexts));
+		PAR_error(csb, Firebird::Arg::Gds(isc_too_many_contexts));
 	}
 
 	tail->csb_flags |= csb_used;
@@ -1017,21 +1017,21 @@ static void checkIndexStatus(CompilerScratch* csb, bool isGbak, IndexStatus idx_
 	case MET_index_deferred_drop:
 		if (isGbak)
 		{
-			PAR_warning(Arg::Warning(isc_indexname) << Arg::Str(name.toQuotedString()) <<
-													   Arg::Str(relation->getName().toQuotedString()));
+			PAR_warning(Firebird::Arg::Warning(isc_indexname) << Firebird::Arg::Str(name.toQuotedString()) <<
+													   Firebird::Arg::Str(relation->getName().toQuotedString()));
 		}
 		else
 		{
-			PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name.toQuotedString()) <<
-												  	  Arg::Str(relation->getName().toQuotedString()));
+			PAR_error(csb, Firebird::Arg::Gds(isc_indexname) << Firebird::Arg::Str(name.toQuotedString()) <<
+												  	  Firebird::Arg::Str(relation->getName().toQuotedString()));
 		}
 		break;
 
 	case MET_index_deferred_active:
 		if (!isGbak)
 		{
-			PAR_error(csb, Arg::Gds(isc_indexname) << Arg::Str(name.toQuotedString()) <<
-													  Arg::Str(relation->getName().toQuotedString()));
+			PAR_error(csb, Firebird::Arg::Gds(isc_indexname) << Firebird::Arg::Str(name.toQuotedString()) <<
+													  Firebird::Arg::Str(relation->getName().toQuotedString()));
 		}
 		break;
 
@@ -1132,7 +1132,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		// CVC: bottleneck
 		const auto context = csb->csb_blr_reader.getByte();
 		if (context >= csb->csb_rpt.getCount() || !(csb->csb_rpt[context].csb_flags & csb_used))
-			PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+			PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 		const StreamType stream = csb->csb_rpt[context].csb_stream;
 
 		plan->recordSourceNode->setStream(stream);
@@ -1156,7 +1156,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		case blr_navigational:
 			{
 				if (procedure)
-					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
+					PAR_error(csb, Firebird::Arg::Gds(isc_wrong_proc_plan));
 
 				plan->accessType = FB_NEW_POOL(csb->csb_pool) PlanNode::AccessType(csb->csb_pool,
 					PlanNode::AccessType::TYPE_NAVIGATIONAL);
@@ -1199,7 +1199,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 		case blr_indices:
 			{
 				if (procedure)
-					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
+					PAR_error(csb, Firebird::Arg::Gds(isc_wrong_proc_plan));
 
 				if (plan->accessType)
 					csb->csb_blr_reader.getByte(); // skip blr_indices
@@ -1395,11 +1395,11 @@ RseNode* PAR_rse(thread_db* tdbb, CompilerScratch* csb, SSHORT rse_op)
 				const auto* relation = relNode->relation();
 				fb_assert(relation);
 				if (relation->isVirtual())
-					PAR_error(csb, Arg::Gds(isc_forupdate_virtualtbl) << relation->getName().toQuotedString(), false);
+					PAR_error(csb, Firebird::Arg::Gds(isc_forupdate_virtualtbl) << relation->getName().toQuotedString(), false);
 				if (relation->isSystem())
-					PAR_error(csb, Arg::Gds(isc_forupdate_systbl) << relation->getName().toQuotedString(), false);
+					PAR_error(csb, Firebird::Arg::Gds(isc_forupdate_systbl) << relation->getName().toQuotedString(), false);
 				if (relation->isTemporary())
-					PAR_error(csb, Arg::Gds(isc_forupdate_temptbl) << relation->getName().toQuotedString(), false);
+					PAR_error(csb, Firebird::Arg::Gds(isc_forupdate_temptbl) << relation->getName().toQuotedString(), false);
 			}
 			rse->flags |= RseNode::FLAG_WRITELOCK;
 			break;
@@ -1670,13 +1670,13 @@ void PAR_syntax_error(CompilerScratch* csb, const TEXT* string)
 	csb->csb_blr_reader.seekBackward(1);
 
 	// BLR syntax error: expected @1 at offset @2, encountered @3
-	PAR_error(csb, Arg::Gds(isc_syntaxerr) << Arg::Str(string) <<
-										  Arg::Num(csb->csb_blr_reader.getOffset()) <<
-										  Arg::Num(csb->csb_blr_reader.peekByte()));
+	PAR_error(csb, Firebird::Arg::Gds(isc_syntaxerr) << Firebird::Arg::Str(string) <<
+										  Firebird::Arg::Num(csb->csb_blr_reader.getOffset()) <<
+										  Firebird::Arg::Num(csb->csb_blr_reader.peekByte()));
 }
 
 
-void PAR_warning(const Arg::StatusVector& v)
+void PAR_warning(const Firebird::Arg::StatusVector& v)
 {
 /**************************************
  *

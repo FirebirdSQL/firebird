@@ -886,7 +886,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 	const TEXT** arg = args;
 	const char* const* const argend = arg + FB_NELEM(args);
 
-	MsgFormat::SafeArg safe;
+	Firebird::MsgFormat::SafeArg safe;
 
 	// Parse and collect any arguments that may be present
 
@@ -988,7 +988,7 @@ static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
 								args[0], args[1], args[2], args[3], args[4]);
 						}
 						else
-							MsgFormat::MsgPrint(s, bufsize, messages[i].code_text, safe);
+							Firebird::MsgFormat::MsgPrint(s, bufsize, messages[i].code_text, safe);
 						found = true;
 						break;
 					}
@@ -1222,7 +1222,7 @@ void API_ROUTINE gds__trace_raw(const char* text, unsigned int length)
 	logFileHandles().trace_raw(text, length);
 #else
 	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
-	int file = os_utils::open(name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0660);
+	int file = Firebird::os_utils::open(name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0660);
 	if (file == -1)
 		return;
 
@@ -1356,7 +1356,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 	LogGuard guard;
 #endif
 
-	FILE* file = os_utils::fopen(name.c_str(), "a");
+	FILE* file = Firebird::os_utils::fopen(name.c_str(), "a");
 	if (file != NULL)
 	{
 #ifndef WIN_NT
@@ -1365,7 +1365,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 #ifdef HAVE_FLOCK
 		if (flock(fileno(file), LOCK_EX))
 #else
-		if (os_utils::lockf(fileno(file), F_LOCK, 0))
+		if (Firebird::os_utils::lockf(fileno(file), F_LOCK, 0))
 #endif
 		{
 			// give up
@@ -1425,7 +1425,7 @@ void gds__print_pool(MemoryPool* pool, const TEXT* text, ...)
 #ifdef WIN_NT
 	LogGuard guard;
 #endif
-	FILE* file = os_utils::fopen(name.c_str(), "a");
+	FILE* file = Firebird::os_utils::fopen(name.c_str(), "a");
 	if (file != NULL)
 	{
 		TEXT buffer[MAXPATHLEN];
@@ -1683,7 +1683,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		status = 0;
 		for (USHORT n = 1; !status; n++)
 		{
-			if (os_utils::lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
+			if (Firebird::os_utils::lseek(messageL->msg_file, LSEEK_OFFSET_CAST position, 0) < 0)
 				status = -6;
 			else if (read(messageL->msg_file, messageL->msg_bucket, messageL->msg_bucket_size) < 0)
 				status = -7;
@@ -1756,7 +1756,7 @@ int API_ROUTINE gds__msg_open(void** handle, const TEXT* filename)
  *	and update a message handle.
  *
  **************************************/
-	const int n = os_utils::open(filename, O_RDONLY | O_BINARY, 0);
+	const int n = Firebird::os_utils::open(filename, O_RDONLY | O_BINARY, 0);
 	if (n < 0)
 		return -2;
 
@@ -2636,11 +2636,11 @@ VoidPtr API_ROUTINE gds__temp_file(BOOLEAN stdio_flag, const TEXT* string, TEXT*
 
 		if (stdio_flag)
 		{
-			FILE* result = os_utils::fopen(filename.c_str(), "w+b");
+			FILE* result = Firebird::os_utils::fopen(filename.c_str(), "w+b");
 			return result ? result : (void*) (IPTR) (-1);
 		}
 
-		return (void*) (IPTR) os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_TRUNC);
+		return (void*) (IPTR) Firebird::os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_TRUNC);
 	}
 	catch (const Firebird::Exception&)
 	{
@@ -2889,7 +2889,7 @@ void API_ROUTINE isc_sql_interprete(SSHORT sqlcode, TEXT* buffer, SSHORT length)
  *	      an empty string instead of NULLs.
  *
  **************************************/
-	static const MsgFormat::SafeArg arg = MsgFormat::SafeArg() << "" << "" << "" << "" << "";
+	static const Firebird::MsgFormat::SafeArg arg = Firebird::MsgFormat::SafeArg() << "" << "" << "" << "" << "";
 
 	if (sqlcode < 0)
 		fb_msg_format(0, 13, (USHORT) (1000 + sqlcode), length, buffer, arg);

@@ -55,7 +55,7 @@
 
 using namespace Firebird;
 using namespace Firebird::Jrd;
-using namespace Auth;
+using namespace Firebird::Auth;
 
 namespace {
 
@@ -64,8 +64,8 @@ void checkStatus(const char* s, IStatus* st)
 	if (!(st->getState() & IStatus::STATE_ERRORS))
 		return;
 
-	Arg::StatusVector newStatus(st);
-	newStatus << Arg::Gds(isc_crdb_load) << s;
+	Firebird::Arg::StatusVector newStatus(st);
+	newStatus << Firebird::Arg::Gds(isc_crdb_load) << s;
 	newStatus.raise();
 }
 
@@ -295,7 +295,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 		if (MasterInterfacePtr()->serverMode(-1) < 0)
 			return makeBuffer(tdbb);
 
-		(Arg::Gds(isc_crdb_nodb) << dbName).raise();
+		(Firebird::Arg::Gds(isc_crdb_nodb) << dbName).raise();
 	}
 
 	Message gr;
@@ -319,7 +319,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 		if (MasterInterfacePtr()->serverMode(-1) < 0)
 			return makeBuffer(tdbb);
 
-		(Arg::Gds(isc_crdb_notable) << dbName).raise();
+		(Firebird::Arg::Gds(isc_crdb_notable) << dbName).raise();
 	}
 
 	try

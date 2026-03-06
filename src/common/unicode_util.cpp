@@ -120,7 +120,7 @@ public:
 		}
 
 		if (!optional)
-			(Arg::Gds(isc_icu_entrypoint) << name).raise();
+			(Firebird::Arg::Gds(isc_icu_entrypoint) << name).raise();
 
 		return "";
 	}
@@ -203,7 +203,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 			(int) versionInfo[0], (int) versionInfo[1],
 			this->majorVersion, this->minorVersion);
 
-		(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(err)).raise();
 	}
 
 	majorVersion = versionInfo[0];
@@ -267,7 +267,7 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 		{
 			string diag;
 			diag.printf("u_init() error %d", status);
-			(Arg::Gds(isc_random) << diag).raise();
+			(Firebird::Arg::Gds(isc_random) << diag).raise();
 		}
 	}
 
@@ -1363,12 +1363,12 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 			major--;
 	}
 
-	Arg::Gds err(isc_icu_library);
+	Firebird::Arg::Gds err(isc_icu_library);
 
 	if (lastError.getState() & Firebird::IStatus::STATE_ERRORS)
 	{
-		err << Arg::StatusVector(lastError.getErrors()) <<
-			   Arg::Gds(isc_random) << Arg::Str(version);
+		err << Firebird::Arg::StatusVector(lastError.getErrors()) <<
+			   Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(version);
 	}
 
 	err.raise();
@@ -2070,7 +2070,7 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 			collVersion.c_str(), icuVersion.c_str());
 	}
 
-	(Arg::Gds(isc_random) << errorMsg).raise();
+	(Firebird::Arg::Gds(isc_random) << errorMsg).raise();
 }
 
 

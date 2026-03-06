@@ -127,8 +127,7 @@ namespace
 	InitMutex<EntryPointLoader> entryLoader("EntryPointLoader");
 } // anonymous namespace
 
-namespace os_utils
-{
+namespace Firebird::os_utils {
 
 // waits for implementation
 SLONG get_user_group_id(const TEXT* /*user_group_name*/)
@@ -321,7 +320,7 @@ int openCreateSharedFile(const char* pathname, int flags)
 	int rc = open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
 	if (rc < 0)
 	{
-		(Arg::Gds(isc_io_error) << "open" << pathname << Arg::Gds(isc_io_open_err)
+		(Firebird::Arg::Gds(isc_io_error) << "open" << pathname << Firebird::Arg::Gds(isc_io_open_err)
 			<< strerror(errno)).raise();
 	}
 	return rc;

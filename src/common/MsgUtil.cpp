@@ -75,7 +75,7 @@ namespace
 }	// namespace
 
 
-ISC_STATUS MsgUtil::getCodeByName(const char* name)
+ISC_STATUS Firebird::MsgUtil::getCodeByName(const char* name)
 {
 	ISC_STATUS code;
 

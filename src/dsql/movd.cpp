@@ -41,9 +41,9 @@ void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
 	}
 	catch (const status_exception& ex)
 	{
-		Arg::StatusVector newVector;
-		newVector << Arg::Gds(isc_dsql_error) << Arg::Gds(isc_sqlerr) << Arg::Num(-303);
-		newVector.append(Arg::StatusVector(ex.value()));
+		Firebird::Arg::StatusVector newVector;
+		newVector << Firebird::Arg::Gds(isc_dsql_error) << Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-303);
+		newVector.append(Firebird::Arg::StatusVector(ex.value()));
 		status_exception::raise(newVector);
 	}
 }

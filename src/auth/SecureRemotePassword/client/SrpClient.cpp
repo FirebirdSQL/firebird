@@ -32,7 +32,7 @@
 
 using namespace Firebird;
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class SrpClient : public StdPlugin<IClientImpl<SrpClient, CheckStatusWrapper> >
 {
@@ -80,7 +80,7 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		if (sessionKey.hasData())
 		{
 			// Why are we called when auth is completed?
-			(Arg::Gds(isc_random) << "Auth sync failure - SRP's authenticate called more times than supported").raise();
+			(Firebird::Arg::Gds(isc_random) << "Auth sync failure - SRP's authenticate called more times than supported").raise();
 		}
 
 		if (!client)
@@ -108,14 +108,14 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		const unsigned char* saltAndKey = cb->getData(&length);
 		if (!saltAndKey || length == 0)
 		{
-			Arg::Gds(isc_auth_data).raise();
+			Firebird::Arg::Gds(isc_auth_data).raise();
 		}
 		constexpr unsigned expectedLength =
 			(RemotePassword::SRP_SALT_SIZE + RemotePassword::SRP_KEY_SIZE + 2) * 2;
 		if (length > expectedLength)
 		{
-			(Arg::Gds(isc_auth_datalength) << Arg::Num(length) <<
-				Arg::Num(expectedLength) << "data").raise();
+			(Firebird::Arg::Gds(isc_auth_datalength) << Firebird::Arg::Num(length) <<
+				Firebird::Arg::Num(expectedLength) << "data").raise();
 		}
 
 		string salt, key;
@@ -123,8 +123,8 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		charSize += ((unsigned) *saltAndKey++) << 8;
 		if (charSize > RemotePassword::SRP_SALT_SIZE * 2)
 		{
-			(Arg::Gds(isc_auth_datalength) << Arg::Num(charSize) <<
-				Arg::Num(RemotePassword::SRP_SALT_SIZE * 2) << "salt").raise();
+			(Firebird::Arg::Gds(isc_auth_datalength) << Firebird::Arg::Num(charSize) <<
+				Firebird::Arg::Num(RemotePassword::SRP_SALT_SIZE * 2) << "salt").raise();
 		}
 		salt.assign(saltAndKey, charSize);
 		dumpIt("Clnt: salt", salt);
@@ -135,8 +135,8 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		charSize += ((unsigned) *saltAndKey++) << 8;
 		if (charSize != length - 2)
 		{
-			(Arg::Gds(isc_auth_datalength) << Arg::Num(charSize) <<
-				Arg::Num(length - 2) << "key").raise();
+			(Firebird::Arg::Gds(isc_auth_datalength) << Firebird::Arg::Num(charSize) <<
+				Firebird::Arg::Num(length - 2) << "key").raise();
 		}
 		key.assign(saltAndKey, charSize);
 		dumpIt("Clnt: key(srvPub)", key);

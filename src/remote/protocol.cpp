@@ -1047,7 +1047,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 				if (xdrs->x_op == XDR_DECODE)
 				{
-					Arg::StatusVector sv(ptr->value());
+					Firebird::Arg::StatusVector sv(ptr->value());
 					LocalStatus to;
 					sv.copyTo(&to);
 					delete ptr;

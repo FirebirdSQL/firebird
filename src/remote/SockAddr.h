@@ -193,7 +193,7 @@ inline int SockAddr::connect(SOCKET s) const
 
 inline int SockAddr::accept(SOCKET s)
 {
-	return os_utils::accept(s, ptr(), &len);
+	return Firebird::os_utils::accept(s, ptr(), &len);
 }
 
 

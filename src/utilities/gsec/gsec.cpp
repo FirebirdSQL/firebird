@@ -46,8 +46,8 @@
 #include "../common/classes/MsgPrint.h"
 #include "../common/StatusHolder.h"
 
-using MsgFormat::SafeArg;
-using namespace Auth;
+using Firebird::MsgFormat::SafeArg;
+using namespace Firebird::Auth;
 
 
 #ifdef HAVE_UNISTD_H

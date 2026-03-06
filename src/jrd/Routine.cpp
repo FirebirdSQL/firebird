@@ -177,7 +177,7 @@ void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id
 void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blrReader)
 {
 	if (blrReader.getLength() < 2)
-		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
+		status_exception::raise(Firebird::Arg::Gds(isc_metadata_corrupt));
 
 	csb->csb_schema = getName().schema;
 	csb->csb_blr_reader = blrReader;
@@ -185,7 +185,7 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	PAR_getBlrVersionAndFlags(csb);
 
 	if (csb->csb_blr_reader.getByte() != blr_begin)
-		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
+		status_exception::raise(Firebird::Arg::Gds(isc_metadata_corrupt));
 
 	while (csb->csb_blr_reader.getByte() == blr_message)
 	{

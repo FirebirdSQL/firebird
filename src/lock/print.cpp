@@ -484,10 +484,10 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			FPRINTF(outfile, "Unable to open the database file (%u).\n", GetLastError());
 			return FINI_OK;
 		}
-		os_utils::getUniqueFileId(h, buffer);
+		Firebird::os_utils::getUniqueFileId(h, buffer);
 		CloseHandle(h);
 #else
-		os_utils::getUniqueFileId(db_name.c_str(), buffer);
+		Firebird::os_utils::getUniqueFileId(db_name.c_str(), buffer);
 #endif
 
 		string file_id;
@@ -624,7 +624,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	}
 	else if (lock_file)
 	{
-		const int fd = os_utils::open(filename.c_str(), O_RDONLY | O_BINARY);
+		const int fd = Firebird::os_utils::open(filename.c_str(), O_RDONLY | O_BINARY);
 		if (fd == -1)
 		{
 			FPRINTF(outfile, "Unable to open lock file.\n");
@@ -632,7 +632,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		}
 
 		struct STAT file_stat;
-		if (os_utils::fstat(fd, &file_stat) == -1)
+		if (Firebird::os_utils::fstat(fd, &file_stat) == -1)
 		{
 			close(fd);
 			FPRINTF(outfile, "Unable to retrieve lock file size.\n");
@@ -690,7 +690,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			PathName extName;
 			extName.printf("%s.ext%d", filename.c_str(), extent);
 
-			const int fd = os_utils::open(extName.c_str(), O_RDONLY | O_BINARY);
+			const int fd = Firebird::os_utils::open(extName.c_str(), O_RDONLY | O_BINARY);
 			if (fd == -1)
 			{
 				FPRINTF(outfile, "Unable to open lock file extent number %d, file %s.\n",

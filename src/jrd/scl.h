@@ -213,7 +213,7 @@ private:
 	mutable Privileges	usr_privileges;		// Privileges granted to user by default
 
 public:
-	Auth::AuthenticationBlock usr_auth_block;	// Authentication block after mapping
+	Firebird::Auth::AuthenticationBlock usr_auth_block;	// Authentication block after mapping
 	USHORT				usr_user_id;		// User id
 	USHORT				usr_group_id;		// Group id
 

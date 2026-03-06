@@ -101,12 +101,12 @@ namespace
 		{	// scope
 			char name[PATH_MAX];
 
-			if (os_utils::getCurrentModulePath(name, sizeof(name)))
+			if (Firebird::os_utils::getCurrentModulePath(name, sizeof(name)))
 				strncat(name, ".memdebug.log", sizeof(name) - 1);
 			else
 				strcpy(name, "memdebug.log");
 
-			file = os_utils::fopen(name, "w+t");
+			file = Firebird::os_utils::fopen(name, "w+t");
 		}
 #endif	// DEBUG_GDS_ALLOC
 
@@ -324,8 +324,7 @@ namespace Firebird
 		dontCleanup = true;
 	}
 
-	namespace StaticMutex
-	{
+	namespace StaticMutex {
 		Firebird::Mutex* mutex = NULL;
 
 		void create() noexcept

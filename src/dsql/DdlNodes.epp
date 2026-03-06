@@ -267,7 +267,7 @@ static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalT
 			string obj;
 			obj.printf("TABLE %s", ltt->name.toQuotedString().c_str());
 
-			status_exception::raise(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_obj_in_use) << obj);
+			status_exception::raise(Firebird::Arg::Gds(isc_no_meta_update) << Firebird::Arg::Gds(isc_obj_in_use) << obj);
 		}
 	}
 }
@@ -336,7 +336,7 @@ static void checkSpTrigDependency(thread_db* tdbb, jrd_tra* transaction,
 
 		// msg 206: Column %s from table %s is referenced in %s.
 		status_exception::raise(
-			Arg::PrivateDyn(206) <<
+			Firebird::Arg::PrivateDyn(206) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString() <<
 			depName.toQuotedString());
@@ -371,7 +371,7 @@ static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 
 		// msg 206: Column %s from table %s is referenced in  %s.
 		status_exception::raise(
-			Arg::PrivateDyn(206) <<
+			Firebird::Arg::PrivateDyn(206) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString() <<
 			viewName.toQuotedString());
@@ -558,7 +558,7 @@ static void deleteKeyConstraint(thread_db* tdbb, jrd_tra* transaction,
 	if (!found)
 	{
 		// msg 130: "CONSTRAINT %s does not exist."
-		status_exception::raise(Arg::PrivateDyn(130) << constraintName);
+		status_exception::raise(Firebird::Arg::PrivateDyn(130) << constraintName);
 	}
 }
 
@@ -645,7 +645,7 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	if (!silent)
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
+		status_exception::raise(Firebird::Arg::PrivateDyn(48));
 	}
 
 	return {};
@@ -704,7 +704,7 @@ static void checkRelationType(const rel_t type, const QualifiedName& name)
 
 	string scope;
 	makeRelationScopeName(scope, name, type);
-	(Arg::PrivateDyn(289) << scope).raise();
+	(Firebird::Arg::PrivateDyn(289) << scope).raise();
 }
 
 // Check, can a pair of relations be used in FK
@@ -718,7 +718,7 @@ static void checkFkPairTypes(const rel_t masterType, const QualifiedName& master
 		makeRelationScopeName(master, masterName, masterType);
 		makeRelationScopeName(child, childName, childType);
 		// Msg 232 : "%s can't reference %s"
-		status_exception::raise(Arg::PrivateDyn(232) << child << master);
+		status_exception::raise(Firebird::Arg::PrivateDyn(232) << child << master);
 	}
 }
 
@@ -780,7 +780,7 @@ static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 	{
 		// msg 176: "column %s does not exist in table/view %s"
 		status_exception::raise(
-			Arg::PrivateDyn(176) <<
+			Firebird::Arg::PrivateDyn(176) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString());
 	}
@@ -1107,8 +1107,8 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 	if (dims > MAX_ARRAY_DIMENSIONS)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-604) <<
-			Arg::Gds(isc_dsql_max_arr_dim_exceeded));
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-604) <<
+			Firebird::Arg::Gds(isc_dsql_max_arr_dim_exceeded));
 	}
 
 	if (name.object.isEmpty())
@@ -1181,8 +1181,8 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 			if (lrange >= hrange)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-604) <<
-					Arg::Gds(isc_dsql_arr_range_error));
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-604) <<
+					Firebird::Arg::Gds(isc_dsql_arr_range_error));
 			}
 
 			STORE (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
@@ -1290,12 +1290,12 @@ void AlterCharSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	END_FOR
 
 	if (!charSetFound)
-		status_exception::raise(Arg::Gds(isc_charset_not_found) << charSet.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_charset_not_found) << charSet.toQuotedString());
 
 	if (!collationFound)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_collation_not_found) << defaultCollation.toQuotedString() << charSet.toQuotedString());
+			Firebird::Arg::Gds(isc_collation_not_found) << defaultCollation.toQuotedString() << charSet.toQuotedString());
 	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_CHARACTER_SET, charSet, {});
@@ -1308,7 +1308,7 @@ void AlterCharSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 void AlterEDSPoolSetNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	if (!tdbb->getAttachment()->locksmith(tdbb, MODIFY_EXT_CONN_POOL))
-		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
+		status_exception::raise(Firebird::Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
 }
 
 string AlterEDSPoolSetNode::internalPrint(NodePrinter& printer) const
@@ -1336,7 +1336,7 @@ void AlterEDSPoolSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlSc
 
 	default:
 		status_exception::raise(
-			Arg::Gds(isc_random) << Arg::Str("Unknown param for ALTER EXTERNAL CONNECTIONS POOL statement"));
+			Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Unknown param for ALTER EXTERNAL CONNECTIONS POOL statement"));
 	}
 }
 
@@ -1347,7 +1347,7 @@ void AlterEDSPoolSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlSc
 void AlterEDSPoolClearNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	if (!tdbb->getAttachment()->locksmith(tdbb, MODIFY_EXT_CONN_POOL))
-		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
+		status_exception::raise(Firebird::Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
 }
 
 string AlterEDSPoolClearNode::internalPrint(NodePrinter& printer) const
@@ -1385,7 +1385,7 @@ void AlterEDSPoolClearNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsql
 
 	default:
 		status_exception::raise(
-			Arg::Gds(isc_random) << Arg::Str("Unknown param for ALTER EXTERNAL CONNECTIONS POOL statement"));
+			Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Unknown param for ALTER EXTERNAL CONNECTIONS POOL statement"));
 	}
 }
 
@@ -1457,16 +1457,16 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				objType = obj_procedure;
 			else
 			{
-				status_exception::raise(Arg::Gds(isc_dyn_routine_param_ambiguous) <<
-					Arg::Str(subName) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_routine_param_ambiguous) <<
+					Firebird::Arg::Str(subName) << name.toQuotedString());
 			}
 		}
 		END_FOR
 
 		if (objType == obj_parameter)
 		{
-			status_exception::raise(Arg::Gds(isc_dyn_routine_param_not_found) <<
-				Arg::Str(subName) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_routine_param_not_found) <<
+				Firebird::Arg::Str(subName) << name.toQuotedString());
 		}
 		else
 			name = nameCopy;
@@ -1500,7 +1500,7 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
 
-	Arg::StatusVector status;
+	Firebird::Arg::StatusVector status;
 
 	switch (objType)
 	{
@@ -1608,7 +1608,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	const char* subColumnClause = nullptr;
 	const char* addWhereClause = nullptr;
 	bool useSchemaClause = true;
-	Arg::StatusVector status;
+	Firebird::Arg::StatusVector status;
 	const string objNameStr = name.toQuotedString();
 
 	fb_assert(objType != obj_parameter);
@@ -1624,19 +1624,19 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			tableClause = "rdb$schemas";
 			columnClause = "rdb$schema_name";
 			useSchemaClause = false;
-			status << Arg::Gds(isc_dyn_schema_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_schema_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_field:
 			tableClause = "rdb$fields";
 			columnClause = "rdb$field_name";
-			status << Arg::Gds(isc_dyn_domain_not_found);
+			status << Firebird::Arg::Gds(isc_dyn_domain_not_found);
 			break;
 
 		case obj_relation:
 			if (attachment->att_local_temporary_tables.exist(name))
 			{
-				status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference) <<
+				status_exception::raise(Firebird::Arg::Gds(isc_dsql_ltt_invalid_reference) <<
 					name.toQuotedString() << "COMMENT ON");
 			}
 
@@ -1644,14 +1644,14 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			{
 				tableClause = "rdb$relation_fields";
 				subColumnClause = "rdb$field_name";
-				status << Arg::Gds(isc_dyn_column_does_not_exist) <<
-					Arg::Str(subName) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_column_does_not_exist) <<
+					Firebird::Arg::Str(subName) << Firebird::Arg::Str(objNameStr);
 			}
 			else
 			{
 				tableClause = "rdb$relations";
 				addWhereClause = "rdb$view_blr is null";
-				status << Arg::Gds(isc_dyn_table_not_found) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_table_not_found) << Firebird::Arg::Str(objNameStr);
 			}
 			columnClause = "rdb$relation_name";
 			break;
@@ -1659,7 +1659,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 		case obj_view:
 			tableClause = "rdb$relations";
 			columnClause = "rdb$relation_name";
-			status << Arg::Gds(isc_dyn_view_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_view_not_found) << Firebird::Arg::Str(objNameStr);
 			addWhereClause = "rdb$view_blr is not null";
 			break;
 
@@ -1668,13 +1668,13 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			{
 				tableClause = "rdb$procedure_parameters";
 				subColumnClause = "rdb$parameter_name";
-				status << Arg::Gds(isc_dyn_proc_param_not_found) <<
-					Arg::Str(subName) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_proc_param_not_found) <<
+					Firebird::Arg::Str(subName) << Firebird::Arg::Str(objNameStr);
 			}
 			else
 			{
 				tableClause = "rdb$procedures";
-				status << Arg::Gds(isc_dyn_proc_not_found) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_proc_not_found) << Firebird::Arg::Str(objNameStr);
 			}
 
 			columnClause = "rdb$procedure_name";
@@ -1683,7 +1683,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 		case obj_trigger:
 			tableClause = "rdb$triggers";
 			columnClause = "rdb$trigger_name";
-			status << Arg::Gds(isc_dyn_trig_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_trig_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_udf:
@@ -1691,13 +1691,13 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			{
 				tableClause = "rdb$function_arguments";
 				subColumnClause = "rdb$argument_name";
-				status << Arg::Gds(isc_dyn_func_param_not_found) <<
-					Arg::Str(subName) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_func_param_not_found) <<
+					Firebird::Arg::Str(subName) << Firebird::Arg::Str(objNameStr);
 			}
 			else
 			{
 				tableClause = "rdb$functions";
-				status << Arg::Gds(isc_dyn_func_not_found) << Arg::Str(objNameStr);
+				status << Firebird::Arg::Gds(isc_dyn_func_not_found) << Firebird::Arg::Str(objNameStr);
 			}
 
 			columnClause = "rdb$function_name";
@@ -1707,50 +1707,50 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			tableClause = "rdb$filters";
 			columnClause = "rdb$function_name";
 			useSchemaClause = false;
-			status << Arg::Gds(isc_dyn_filter_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_filter_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_exception:
 			tableClause = "rdb$exceptions";
 			columnClause = "rdb$exception_name";
-			status << Arg::Gds(isc_dyn_exception_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_exception_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_generator:
 			tableClause = "rdb$generators";
 			columnClause = "rdb$generator_name";
-			status << Arg::Gds(isc_dyn_gen_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_gen_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_index:
 			tableClause = "rdb$indices";
 			columnClause = "rdb$index_name";
-			status << Arg::Gds(isc_dyn_index_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_index_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_sql_role:
 			tableClause = "rdb$roles";
 			columnClause = "rdb$role_name";
 			useSchemaClause = false;
-			status << Arg::Gds(isc_dyn_role_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_role_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_charset:
 			tableClause = "rdb$character_sets";
 			columnClause = "rdb$character_set_name";
-			status << Arg::Gds(isc_dyn_charset_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_charset_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_collation:
 			tableClause = "rdb$collations";
 			columnClause = "rdb$collation_name";
-			status << Arg::Gds(isc_dyn_collation_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_collation_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		case obj_package_header:
 			tableClause = "rdb$packages";
 			columnClause = "rdb$package_name";
-			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
+			status << Firebird::Arg::Gds(isc_dyn_package_not_found) << Firebird::Arg::Str(objNameStr);
 			break;
 
 		default:
@@ -1847,9 +1847,9 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		else if (hasDefaultParams)
 		{
 			// parameter without default value after parameters with default
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_bad_default_value) <<
-					  Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_bad_default_value) <<
+					  Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("defaults must be last"));
 		}
 	}
 
@@ -1862,8 +1862,8 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// check SQL SECURITY is not set if function declared in package
 	if (name.package.hasData() && ssDefiner.has_value())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for functions is prohibit in packages"));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				  Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("SQL SECURITY for functions is prohibit in packages"));
 	}
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -1896,7 +1896,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
 			altered = true;
 		else
-			status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
 	}
 	else if (alter)
 	{
@@ -1907,7 +1907,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
 			else
-				status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
 		}
 	}
 	else if (!executeCreate(tdbb, dsqlScratch, transaction))
@@ -2061,7 +2061,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		if (FUN.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
 				name.toQuotedString());
 		}
 
@@ -2123,9 +2123,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 						{
 							// Return mode by value not allowed for this data type.
 							status_exception::raise(
-								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-								Arg::Gds(isc_dsql_command_err) <<
-								Arg::Gds(isc_return_mode_err));
+								Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+								Firebird::Arg::Gds(isc_dsql_command_err) <<
+								Firebird::Arg::Gds(isc_return_mode_err));
 						}
 
 						// For functions returning a blob, coerce return argument position to
@@ -2139,9 +2139,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 								// External functions can not have more than 10 parameters
 								// Or 9 if the function returns a BLOB.
 								status_exception::raise(
-									Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-									Arg::Gds(isc_dsql_command_err) <<
-									Arg::Gds(isc_extern_func_err));
+									Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+									Firebird::Arg::Gds(isc_dsql_command_err) <<
+									Firebird::Arg::Gds(isc_extern_func_err));
 							}
 
 							FUN.RDB$RETURN_ARGUMENT = (SSHORT) returnPos;
@@ -2161,9 +2161,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 							// External functions can not have more than 10 parameters
 							// Not strictly correct -- return position error
 							status_exception::raise(
-								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-								Arg::Gds(isc_dsql_command_err) <<	// gds__extern_func_err
-								Arg::Gds(isc_dsql_udf_return_pos_err) << Arg::Num(parameters.getCount()));
+								Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+								Firebird::Arg::Gds(isc_dsql_command_err) <<	// gds__extern_func_err
+								Firebird::Arg::Gds(isc_dsql_udf_return_pos_err) << Firebird::Arg::Num(parameters.getCount()));
 						}
 
 						// We'll verify that SCALAR_ARRAY can't be used as a return type.
@@ -2173,9 +2173,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 							parameters[udfReturnPos - 1]->udfMechanism.value() == FUN_scalar_array)
 						{
 							status_exception::raise(
-								Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-								Arg::Gds(isc_dsql_command_err) <<
-								Arg::Gds(isc_random) << "BY SCALAR_ARRAY can't be used as a return parameter");
+								Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+								Firebird::Arg::Gds(isc_dsql_command_err) <<
+								Firebird::Arg::Gds(isc_random) << "BY SCALAR_ARRAY can't be used as a return parameter");
 						}
 
 						FUN.RDB$RETURN_ARGUMENT = (SSHORT) udfReturnPos;
@@ -2191,13 +2191,13 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 					external->engine.copyTo(FUN.RDB$ENGINE_NAME, sizeof(FUN.RDB$ENGINE_NAME));
 
 					if (external->udfModule.length() >= sizeof(FUN.RDB$MODULE_NAME))
-						status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+						status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 					FUN.RDB$MODULE_NAME.NULL = (SSHORT) external->udfModule.isEmpty();
 					external->udfModule.copyTo(FUN.RDB$MODULE_NAME, sizeof(FUN.RDB$MODULE_NAME));
 
 					if (external->name.length() >= sizeof(FUN.RDB$ENTRYPOINT))
-						status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+						status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 					FUN.RDB$ENTRYPOINT.NULL = (SSHORT) external->name.isEmpty();
 					external->name.copyTo(FUN.RDB$ENTRYPOINT, sizeof(FUN.RDB$ENTRYPOINT));
@@ -2281,7 +2281,7 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 		if (FUN.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
 				name.toQuotedString());
 		}
 
@@ -2453,7 +2453,7 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 			if (preserveDefaults)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_dyn_defvaldecl_package_func) <<
+					Firebird::Arg::Gds(isc_dyn_defvaldecl_package_func) <<
 					name.getSchemaAndPackage().toQuotedString() <<
 					name.object.toQuotedString());
 			}
@@ -2520,7 +2520,7 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlScratch)
 {
 	if (invalid)
-		status_exception::raise(Arg::Gds(isc_dyn_invalid_ddl_func) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_invalid_ddl_func) << name.toQuotedString());
 
 	if (compiled)
 		return;
@@ -2656,10 +2656,10 @@ void AlterExternalFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 	if (clauses.name.isEmpty() && clauses.udfModule.isEmpty())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-104) /*** FIXME: <<
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) /*** FIXME: <<
 			// Unexpected end of command
-			Arg::Gds(isc_command_end_err2) << Arg::Num(node->nod_line) <<
-			Arg::Num(node->nod_column + obj_name->str_length)***/);	// + strlen("FUNCTION")
+			Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(node->nod_line) <<
+			Firebird::Arg::Num(node->nod_column + obj_name->str_length)***/);	// + strlen("FUNCTION")
 	}
 
 	// run all statements under savepoint control
@@ -2680,7 +2680,7 @@ void AlterExternalFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_FUNCTION, name, {});
 
 		if (!FUN.RDB$ENGINE_NAME.NULL || !FUN.RDB$FUNCTION_BLR.NULL)
-			status_exception::raise(Arg::Gds(isc_dyn_newfc_oldsyntax) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_newfc_oldsyntax) << name.toQuotedString());
 
 		MetadataCache::oldVersion<Cached::Function>(tdbb, (id = FUN.RDB$FUNCTION_ID), CacheFlag::OLD_ALTER);
 
@@ -2688,7 +2688,7 @@ void AlterExternalFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 			if (clauses.name.hasData())
 			{
 				if (clauses.name.length() >= sizeof(FUN.RDB$ENTRYPOINT))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 				FUN.RDB$ENTRYPOINT.NULL = FALSE;
 				strcpy(FUN.RDB$ENTRYPOINT, clauses.name.c_str());
@@ -2697,7 +2697,7 @@ void AlterExternalFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 			if (clauses.udfModule.hasData())
 			{
 				if (clauses.udfModule.length() >= sizeof(FUN.RDB$MODULE_NAME))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 				FUN.RDB$MODULE_NAME.NULL = FALSE;
 				strcpy(FUN.RDB$MODULE_NAME, clauses.udfModule.c_str());
@@ -2714,7 +2714,7 @@ void AlterExternalFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 	else
 	{
 		// msg 41: "Function %s not found"
-		status_exception::raise(Arg::PrivateDyn(41) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(41) << name.toQuotedString());
 	}
 
 	savePoint.release();	// everything is ok
@@ -2816,7 +2816,7 @@ void DropFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (FUN.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysfunc) <<
 				name.toQuotedString());
 		}
 
@@ -2833,7 +2833,7 @@ void DropFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	END_FOR
 
 	if (!found && !silent)
-		status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
 
 	if (name.package.isEmpty())
 	{
@@ -2921,9 +2921,9 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		else if (hasDefaultParams)
 		{
 			// parameter without default value after parameters with default
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_bad_default_value) <<
-					  Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_bad_default_value) <<
+					  Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("defaults must be last"));
 		}
 	}
 
@@ -2936,8 +2936,8 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	// check SQL SECURITY is not set if procedure declared in package
 	if (name.package.hasData() && ssDefiner.has_value())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				  Arg::Gds(isc_invalid_clause) << Arg::Str("SQL SECURITY for procedures is prohibit in packages"));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				  Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("SQL SECURITY for procedures is prohibit in packages"));
 	}
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -2970,7 +2970,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
 			altered = true;
 		else
-			status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
 	}
 	else if (alter)
 	{
@@ -2981,7 +2981,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
 			else
-				status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
 		}
 	}
 	else if (!executeCreate(tdbb, dsqlScratch, transaction))
@@ -3127,7 +3127,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 		if (P.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
 				name.toQuotedString());
 		}
 
@@ -3192,7 +3192,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 					strcpy(P.RDB$ENGINE_NAME, external->engine.c_str());
 
 					if (external->name.length() >= sizeof(P.RDB$ENTRYPOINT))
-						status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+						status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 					P.RDB$ENTRYPOINT.NULL = (SSHORT) external->name.isEmpty();
 					strcpy(P.RDB$ENTRYPOINT, external->name.c_str());
@@ -3329,7 +3329,7 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 		if (P.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
 				name.toQuotedString());
 		}
 
@@ -3448,7 +3448,7 @@ void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScrat
 			if (preserveDefaults)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_dyn_defvaldecl_package_proc) <<
+					Firebird::Arg::Gds(isc_dyn_defvaldecl_package_proc) <<
 					name.getSchemaAndPackage().toQuotedString() <<
 					name.object.toQuotedString());
 			}
@@ -3491,7 +3491,7 @@ void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScrat
 void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlScratch)
 {
 	if (invalid)
-		status_exception::raise(Arg::Gds(isc_dyn_invalid_ddl_proc) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_invalid_ddl_proc) << name.toQuotedString());
 
 	if (compiled)
 		return;
@@ -3700,7 +3700,7 @@ void DropProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		if (PRC.RDB$SYSTEM_FLAG)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_mod_sysproc) <<
 				name.toQuotedString());
 		}
 
@@ -3717,7 +3717,7 @@ void DropProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	END_FOR
 
 	if (!found && !silent)
-		status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
 
 	if (name.package.isEmpty())
 	{
@@ -3800,8 +3800,8 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			TRG.RDB$RELATION_NAME.NULL)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_db_trigger_type_cant_change));
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_db_trigger_type_cant_change));
 		}
 
 		if (systemFlag == fb_sysflag_user)
@@ -3811,11 +3811,11 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				case fb_sysflag_check_constraint:
 				case fb_sysflag_referential_constraint:
 				case fb_sysflag_view_check:
-					status_exception::raise(Arg::Gds(isc_dyn_cant_modify_auto_trig));
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_modify_auto_trig));
 					break;
 
 				case fb_sysflag_system:
-					status_exception::raise(Arg::Gds(isc_dyn_cannot_mod_systrig) <<
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_mod_systrig) <<
 						QualifiedName(TRG.RDB$TRIGGER_NAME, TRG.RDB$SCHEMA_NAME).toQuotedString());
 					break;
 
@@ -3859,7 +3859,7 @@ bool TriggerDefinition::modify(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				strcpy(TRG.RDB$ENGINE_NAME, external->engine.c_str());
 
 				if (external->name.length() >= sizeof(TRG.RDB$ENTRYPOINT))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 				TRG.RDB$ENTRYPOINT.NULL = (SSHORT) external->name.isEmpty();
 				strcpy(TRG.RDB$ENTRYPOINT, external->name.c_str());
@@ -3944,7 +3944,7 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (name.schema != relationName.schema)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_trig_schema_must_match_table) <<
+				Firebird::Arg::Gds(isc_dyn_trig_schema_must_match_table) <<
 				name.schema.toQuotedString() <<
 				relationName.schema.toQuotedString());
 		}
@@ -3965,13 +3965,13 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				(type.value() & (unsigned) TRIGGER_TYPE_MASK) != (unsigned) TRIGGER_TYPE_DDL)))
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_incompatible_trigger_type));
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_incompatible_trigger_type));
 		}
 	}
 
 	if (create && ssDefiner.has_value() && ssDefiner.value() == SqlSecurity::SS_DROP)
-		status_exception::raise(Arg::Gds(isc_dsql_command_err) << Arg::Gds(isc_dsql_invalid_drop_ss_clause));
+		status_exception::raise(Firebird::Arg::Gds(isc_dsql_command_err) << Firebird::Arg::Gds(isc_dsql_invalid_drop_ss_clause));
 
 	return DdlNode::dsqlPass(dsqlScratch);
 }
@@ -3996,7 +3996,7 @@ void CreateAlterTriggerNode::checkPermission(thread_db* tdbb, jrd_tra* transacti
 		END_FOR
 
 		if (!type.has_value())
-			status_exception::raise(Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
 	}
 
 	if (relationName.object.hasData())
@@ -4030,7 +4030,7 @@ void CreateAlterTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
 			else
-				status_exception::raise(Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
 		}
 	}
 	else
@@ -4057,7 +4057,7 @@ void CreateAlterTriggerNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 void CreateAlterTriggerNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlScratch)
 {
 	if (invalid)
-		status_exception::raise(Arg::Gds(isc_dyn_invalid_ddl_trig) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_invalid_ddl_trig) << name.toQuotedString());
 
 	if (compiled)
 		return;
@@ -4216,11 +4216,11 @@ void DropTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			case fb_sysflag_check_constraint:
 			case fb_sysflag_referential_constraint:
 			case fb_sysflag_view_check:
-				status_exception::raise(Arg::Gds(isc_dyn_cant_modify_auto_trig));
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_modify_auto_trig));
 				break;
 
 			case fb_sysflag_system:
-				status_exception::raise(Arg::Gds(isc_dyn_cannot_mod_systrig) <<
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_mod_systrig) <<
 					name.toQuotedString());
 				break;
 
@@ -4237,7 +4237,7 @@ void DropTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	END_FOR
 
 	if (!found && !silent)
-		status_exception::raise(Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_trig_not_found) << name.toQuotedString());
 
 	requestHandle.reset(tdbb, drq_e_trg_msgs3, DYN_REQUESTS);
 
@@ -4424,7 +4424,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			// msg: 223: "Collation @1 not installed for character set @2"
 			status_exception::raise(
-				Arg::PrivateDyn(223) << info.baseCollationName << info.charsetName[0].toQuotedString());
+				Firebird::Arg::PrivateDyn(223) << info.baseCollationName << info.charsetName[0].toQuotedString());
 		}
 
 		IntlUtil::SpecificAttributesMap map;
@@ -4435,7 +4435,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				cs, specificAttributes.getCount(), specificAttributes.begin(), &map))
 		{
 			// msg: 222: "Invalid collation attributes"
-			status_exception::raise(Arg::PrivateDyn(222));
+			status_exception::raise(Firebird::Arg::PrivateDyn(222));
 		}
 
 		const string s = IntlUtil::generateSpecificAttributes(cs, map);
@@ -4446,7 +4446,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				newSpecificAttributes))
 		{
 			// msg: 222: "Invalid collation attributes"
-			status_exception::raise(Arg::PrivateDyn(222));
+			status_exception::raise(Firebird::Arg::PrivateDyn(222));
 		}
 
 		memcpy(info.specificAttributes.getBuffer(newSpecificAttributes.length()),
@@ -4467,7 +4467,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (!INTL_texttype_validate(tdbb, &info))
 		{
 			// msg: 222: "Invalid collation attributes"
-			status_exception::raise(Arg::PrivateDyn(222));
+			status_exception::raise(Firebird::Arg::PrivateDyn(222));
 		}
 
 		// ASF: User collations are created with the last number available,
@@ -4496,7 +4496,7 @@ void CreateCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		END_FOR
 
 		if (X.RDB$COLLATION_ID.NULL)
-			status_exception::raise(Arg::Gds(isc_max_coll_per_charset));
+			status_exception::raise(Firebird::Arg::Gds(isc_max_coll_per_charset));
 	}
 	END_STORE
 
@@ -4529,8 +4529,8 @@ DdlNode* CreateCollationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!resolvedCharSet)
 	{
 		// specified character set not found
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				  Arg::Gds(isc_charset_not_found) << forCharSet.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				  Firebird::Arg::Gds(isc_charset_not_found) << forCharSet.toQuotedString());
 	}
 
 	forCharSetId = resolvedCharSet->intlsym_charset_id;
@@ -4543,8 +4543,8 @@ DdlNode* CreateCollationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (!resolvedCollation)
 		{
 			// Specified collation not found
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_collation_not_found) << fromName.toQuotedString() << forCharSet.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					  Firebird::Arg::Gds(isc_collation_not_found) << fromName.toQuotedString() << forCharSet.toQuotedString());
 		}
 
 		fromCollationId = resolvedCollation->intlsym_collate_id;
@@ -4589,14 +4589,14 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_COLLATION, name, {});
 
 		if (COLL.RDB$SYSTEM_FLAG)
-			status_exception::raise(Arg::Gds(isc_dyn_cannot_del_syscoll));
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_del_syscoll));
 
 		if (COLL.RDB$COLLATION_ID == 0 ||
 			(!CS.RDB$DEFAULT_COLLATE_NAME.NULL &&
 				name == QualifiedName(CS.RDB$DEFAULT_COLLATE_NAME, CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME)))
 		{
 			status_exception::raise(
-				Arg::Gds(isc_dyn_cannot_del_def_coll) <<
+				Firebird::Arg::Gds(isc_dyn_cannot_del_def_coll) <<
 				QualifiedName(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME).toQuotedString());
 		}
 
@@ -4617,7 +4617,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			fb_utils::exact_name_limit(RF.RDB$FIELD_NAME, sizeof(RF.RDB$FIELD_NAME));
 
 			status_exception::raise(
-				Arg::Gds(isc_dyn_coll_used_table) <<
+				Firebird::Arg::Gds(isc_dyn_coll_used_table) <<
 				name.toQuotedString() <<
 				QualifiedName(RF.RDB$RELATION_NAME, RF.RDB$SCHEMA_NAME).toQuotedString() <<
 				RF.RDB$FIELD_NAME);
@@ -4638,7 +4638,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			fb_utils::exact_name_limit(PRM.RDB$PARAMETER_NAME, sizeof(PRM.RDB$PARAMETER_NAME));
 
 			status_exception::raise(
-				Arg::Gds(isc_dyn_coll_used_procedure) <<
+				Firebird::Arg::Gds(isc_dyn_coll_used_procedure) <<
 				name.toQuotedString() <<
 				QualifiedName(PRM.RDB$PROCEDURE_NAME, PRM.RDB$SCHEMA_NAME,
 					(PRM.RDB$PACKAGE_NAME.NULL ? NULL : PRM.RDB$PACKAGE_NAME)).toQuotedString() <<
@@ -4660,7 +4660,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			fb_utils::exact_name_limit(ARG.RDB$ARGUMENT_NAME, sizeof(ARG.RDB$ARGUMENT_NAME));
 
 			status_exception::raise(
-				Arg::Gds(isc_dyn_coll_used_function) <<
+				Firebird::Arg::Gds(isc_dyn_coll_used_function) <<
 				name.toQuotedString() <<
 				QualifiedName(ARG.RDB$FUNCTION_NAME, ARG.RDB$SCHEMA_NAME,
 					(ARG.RDB$PACKAGE_NAME.NULL ? NULL : ARG.RDB$PACKAGE_NAME)).toQuotedString() <<
@@ -4678,7 +4678,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			fb_utils::exact_name_limit(F.RDB$FIELD_NAME, sizeof(F.RDB$FIELD_NAME));
 
 			status_exception::raise(
-				Arg::Gds(isc_dyn_coll_used_domain) <<
+				Firebird::Arg::Gds(isc_dyn_coll_used_domain) <<
 				name.toQuotedString() <<
 				F.RDB$FIELD_NAME);
 		}
@@ -4696,7 +4696,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	if (found)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_COLLATION, name, {});
 	else if (!silent)
-		status_exception::raise(Arg::Gds(isc_dyn_collation_not_found) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_collation_not_found) << name.toQuotedString());
 
 	savePoint.release();	// everything is ok
 
@@ -4736,8 +4736,8 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	if (strncmp(name.object.c_str(), IMPLICIT_DOMAIN_PREFIX, IMPLICIT_DOMAIN_PREFIX_LEN) == 0)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-			Arg::Gds(isc_dsql_implicit_domain_name) << name.toQuotedString());
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+			Firebird::Arg::Gds(isc_dsql_implicit_domain_name) << name.toQuotedString());
 	}
 
 	const ValueListNode* elements = type->ranges;
@@ -4746,7 +4746,7 @@ void CreateDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	if (defaultClause && dims != 0)
 	{
 		// Default value is not allowed for array type in domain %s
-		status_exception::raise(Arg::PrivateDyn(226) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(226) << name.toQuotedString());
 	}
 
 	type->resolve(dsqlScratch);
@@ -5228,18 +5228,18 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 	{
 	case isc_dyn_dtype_invalid:
 		// Cannot change datatype for column %s.The operation cannot be performed on DATE, BLOB, or ARRAY columns.
-		status_exception::raise(Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString());
 		break;
 
 	case isc_dyn_dtype_conv_invalid:
 		// Cannot convert column %s from character to non-character data.
-		status_exception::raise(Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString());
 		break;
 
 	case isc_dyn_char_fld_too_small:
 		// msg 208: New size specified for column %s must be at least %d characters.
 		status_exception::raise(
-			Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString() << Arg::Num(origLen));
+			Firebird::Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString() << Firebird::Arg::Num(origLen));
 		break;
 
 	case isc_dyn_scale_too_big:
@@ -5259,7 +5259,7 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 			// scale_too_big: New scale specified for column @1 must be at most @2.
 			// precision_too_small: New precision specified for column @1 must be at least @2.
 			status_exception::raise(
-				Arg::Gds(code) << origFld.dyn_fld_name.toQuotedString() << Arg::Num(diff));
+				Firebird::Arg::Gds(code) << origFld.dyn_fld_name.toQuotedString() << Firebird::Arg::Num(diff));
 		}
 		break;
 
@@ -5272,13 +5272,13 @@ void AlterDomainNode::checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld)
 
 			// Cannot change datatype for @1.  Conversion from base type @2 to @3 is not supported.
 			status_exception::raise(
-				Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString() << orig_type << new_type);
+				Firebird::Arg::Gds(errorCode) << origFld.dyn_fld_name.toQuotedString() << orig_type << new_type);
 		}
 		break;
 
 	default:
 		// msg 95: "MODIFY RDB$RELATION_FIELDS failed"
-		status_exception::raise(Arg::PrivateDyn(95));
+		status_exception::raise(Firebird::Arg::PrivateDyn(95));
 	}
 }
 
@@ -5409,7 +5409,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 		if (FLD.RDB$SYSTEM_FLAG == fb_sysflag_system)
 		{
-			status_exception::raise(Arg::Gds(isc_dyn_cant_modify_sysobj) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_modify_sysobj) <<
 				"domain" << name.toQuotedString());
 		}
 
@@ -5431,7 +5431,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				if (!FLD.RDB$VALIDATION_BLR.NULL)
 				{
 					// msg 160: "Only one constraint allowed for a domain"
-					status_exception::raise(Arg::PrivateDyn(160));
+					status_exception::raise(Firebird::Arg::PrivateDyn(160));
 				}
 
 				dsql_fld localField(dsqlScratch->getPool());
@@ -5442,9 +5442,9 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				{
 					// Specified domain or source field does not exist
 					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_dsql_domain_not_found) << name.toQuotedString());
+						Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						Firebird::Arg::Gds(isc_dsql_command_err) <<
+						Firebird::Arg::Gds(isc_dsql_domain_not_found) << name.toQuotedString());
 				}
 
 				DsqlDescMaker::fromField(&dsqlScratch->domainValue, &localField);
@@ -5480,7 +5480,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				if (FLD.RDB$DIMENSIONS)
 				{
 					// msg 226: "Default value is not allowed for array type in domain %s"
-					status_exception::raise(Arg::PrivateDyn(226) << name.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(226) << name.toQuotedString());
 				}
 
 				FLD.RDB$DEFAULT_SOURCE.NULL = FALSE;
@@ -5528,7 +5528,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 							 RELCON.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY
 					{
 						status_exception::raise(
-							Arg::Gds(isc_domain_primary_key_notnull) <<
+							Firebird::Arg::Gds(isc_domain_primary_key_notnull) <<
 							QualifiedName(RFL.RDB$RELATION_NAME, RFL.RDB$SCHEMA_NAME).toQuotedString());
 					}
 					END_FOR
@@ -5603,7 +5603,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 					{
 						// Domain @1 must be of exact number type with zero scale because it's used
 						// in an identity column.
-						status_exception::raise(Arg::PrivateDyn(276) << name.toQuotedString());
+						status_exception::raise(Firebird::Arg::PrivateDyn(276) << name.toQuotedString());
 					}
 					END_FOR
 				}
@@ -5643,8 +5643,8 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				if (strncmp(renameTo.c_str(), IMPLICIT_DOMAIN_PREFIX, IMPLICIT_DOMAIN_PREFIX_LEN) == 0)
 				{
 					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-						Arg::Gds(isc_dsql_implicit_domain_name) << renameTo);
+						Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+						Firebird::Arg::Gds(isc_dsql_implicit_domain_name) << renameTo);
 				}
 
 				rename(tdbb, transaction, (FLD.RDB$DIMENSIONS.NULL ? 0 : FLD.RDB$DIMENSIONS));
@@ -5657,7 +5657,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	if (!found)
 	{
 		// msg 89: "Global field not found"
-		status_exception::raise(Arg::PrivateDyn(89));
+		status_exception::raise(Firebird::Arg::PrivateDyn(89));
 	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_DOMAIN,
@@ -5679,7 +5679,7 @@ void AlterDomainNode::rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimen
 			 FLD.RDB$FIELD_NAME EQ renameTo.c_str()
 	{
 		// msg 204: Cannot rename domain %s to %s.  A domain with that name already exists.
-		status_exception::raise(Arg::PrivateDyn(204) << name.toQuotedString() << renameTo);
+		status_exception::raise(Firebird::Arg::PrivateDyn(204) << name.toQuotedString() << renameTo);
 	}
 	END_FOR
 
@@ -5789,7 +5789,7 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	else if (!silent)
 	{
 		// msg 89: "Domain not found"
-		status_exception::raise(Arg::PrivateDyn(89));
+		status_exception::raise(Firebird::Arg::PrivateDyn(89));
 	}
 
 	savePoint.release();	// everything is ok
@@ -5808,7 +5808,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 
 		// msg 43: "Domain %s is used in table %s (local name %s) and can not be dropped"
 		status_exception::raise(
-			Arg::PrivateDyn(43) << name.toQuotedString() <<
+			Firebird::Arg::PrivateDyn(43) << name.toQuotedString() <<
 			QualifiedName(Y.RDB$RELATION_NAME, Y.RDB$SCHEMA_NAME).toQuotedString() <<
 			MetaName(Y.RDB$FIELD_NAME).toQuotedString());
 	}
@@ -5825,7 +5825,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 
 		// msg 239: "Domain %s is used in procedure %s (parameter name %s) and cannot be dropped"
 		status_exception::raise(
-			Arg::PrivateDyn(239) << name.toQuotedString() <<
+			Firebird::Arg::PrivateDyn(239) << name.toQuotedString() <<
 				QualifiedName(X.RDB$PROCEDURE_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME).toQuotedString() <<
 				MetaName(X.RDB$PARAMETER_NAME).toQuotedString());
 	}
@@ -5842,7 +5842,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 
 		// msg 239: "Domain %s is used in function %s (parameter name %s) and cannot be dropped"
 		status_exception::raise(
-			Arg::Gds(isc_dyn_domain_used_function) << name.toQuotedString() <<
+			Firebird::Arg::Gds(isc_dyn_domain_used_function) << name.toQuotedString() <<
 				QualifiedName(X.RDB$FUNCTION_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME).toQuotedString() <<
 				MetaName(X.RDB$ARGUMENT_NAME).toQuotedString());
 	}
@@ -5881,7 +5881,7 @@ void CreateAlterExceptionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	fb_assert(create || alter);
 
 	if (message.length() > XCP_MESSAGE_LENGTH)
-		status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -5895,7 +5895,7 @@ void CreateAlterExceptionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 			else
 			{
 				// msg 144: "Exception not found"
-				status_exception::raise(Arg::PrivateDyn(144));
+				status_exception::raise(Firebird::Arg::PrivateDyn(144));
 			}
 		}
 	}
@@ -6042,7 +6042,7 @@ void DropExceptionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	else if (!silent)
 	{
 		// msg 144: "Exception not found"
-		status_exception::raise(Arg::PrivateDyn(144));
+		status_exception::raise(Firebird::Arg::PrivateDyn(144));
 	}
 
 	savePoint.release();	// everything is ok
@@ -6095,7 +6095,7 @@ void CreateAlterSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 			else
 			{
 				// msg 214: "Sequence not found"
-				status_exception::raise(Arg::PrivateDyn(214) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::PrivateDyn(214) << name.toQuotedString());
 			}
 		}
 	}
@@ -6147,7 +6147,7 @@ void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	{
 		initialStep = step.value();
 		if (initialStep == 0)
-			status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
 	}
 
 	store(tdbb, transaction, name, fb_sysflag_user, val, initialStep);
@@ -6174,7 +6174,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 			return false;
 
 		if (forbidden && !tdbb->getAttachment()->isRWGbak())
-			status_exception::raise(Arg::Gds(isc_dyn_cant_modify_sysobj) << "generator" << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_modify_sysobj) << "generator" << name.toQuotedString());
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_SEQUENCE, name, {});
 
@@ -6184,7 +6184,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		{
 			const SLONG newStep = step.value();
 			if (newStep == 0)
-				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
 
 			// Perhaps it's better to move this to DFW?
 			if (newStep != oldStep)
@@ -6226,7 +6226,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		{
 			const SLONG newStep = step.value();
 			if (newStep == 0)
-				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_use_zero_increment) << name.toQuotedString());
 
 			if (newStep != X.RDB$GENERATOR_INCREMENT)
 			{
@@ -6257,7 +6257,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 	END_FOR
 
 	if (forbidden)
-		status_exception::raise(Arg::Gds(isc_dyn_cant_modify_sysobj) << "generator" << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_modify_sysobj) << "generator" << name.toQuotedString());
 
 	return found;
 }
@@ -6362,7 +6362,7 @@ void DropSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (GEN.RDB$SYSTEM_FLAG != 0)
 		{
 			// msg 272: "Cannot delete system generator @1"
-			status_exception::raise(Arg::PrivateDyn(272) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(272) << name.toQuotedString());
 		}
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_SEQUENCE, name, {});
@@ -6381,7 +6381,7 @@ void DropSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	if (found)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_SEQUENCE, name, {});
 	else if (!silent)
-		status_exception::raise(Arg::Gds(isc_gennotdef) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_gennotdef) << name.toQuotedString());
 
 	savePoint.release();	// everything is ok
 }
@@ -6530,9 +6530,9 @@ MetaId RelationNode::generateRelId(thread_db* tdbb, MetaName name)
 	END_FOR
 
 // !!!!!! printf("\n"); fflush(stdout);
-	ERR_post(Arg::Gds(isc_no_meta_update) <<
-			 Arg::Gds(isc_table_name) << Arg::Str(name) <<
-			 Arg::Gds(isc_imp_exc));
+	ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+			 Firebird::Arg::Gds(isc_table_name) << Firebird::Arg::Str(name) <<
+			 Firebird::Arg::Gds(isc_imp_exc));
 }
 
 // Calculate the dbkey length to include each of the base relations.
@@ -6863,7 +6863,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 
 		// msg 52: "field %s from relation %s is referenced in view %s"
 		status_exception::raise(
-			Arg::PrivateDyn(52) <<
+			Firebird::Arg::PrivateDyn(52) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString() <<
 			QualifiedName(Y.RDB$RELATION_NAME, Y.RDB$SCHEMA_NAME).toQuotedString());
@@ -6900,7 +6900,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		{
 			// msg 187: "field %s from relation %s is referenced in index %s"
 			status_exception::raise(
-				Arg::PrivateDyn(187) <<
+				Firebird::Arg::PrivateDyn(187) <<
 				fieldName.toQuotedString() <<
 				relationName.toQuotedString() <<
 				MetaName(IDX.RDB$INDEX_NAME).toQuotedString());
@@ -6935,7 +6935,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 
 		// msg 187: "field %s from relation %s is referenced in index %s"
 		status_exception::raise(
-			Arg::PrivateDyn(187) <<
+			Firebird::Arg::PrivateDyn(187) <<
 				fieldName.toQuotedString() <<
 				relationName.toQuotedString() <<
 				MetaName(IDX.RDB$INDEX_NAME).toQuotedString());
@@ -6996,7 +6996,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	{
 		// msg 176: "column %s does not exist in table/view %s"
 		status_exception::raise(
-			Arg::PrivateDyn(176) <<
+			Firebird::Arg::PrivateDyn(176) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString());
 	}
@@ -7011,25 +7011,25 @@ void RelationNode::validateLttColumnClause(const AddColumnClause* addColumnClaus
 	if (addColumnClause->defaultValue)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_random) << "DEFAULT is not allowed for LOCAL TEMPORARY TABLE columns");
+			Firebird::Arg::Gds(isc_random) << "DEFAULT is not allowed for LOCAL TEMPORARY TABLE columns");
 	}
 
 	if (addColumnClause->computed)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_random) << "COMPUTED BY is not allowed for LOCAL TEMPORARY TABLE columns");
+			Firebird::Arg::Gds(isc_random) << "COMPUTED BY is not allowed for LOCAL TEMPORARY TABLE columns");
 	}
 
 	if (addColumnClause->identityOptions)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_random) << "IDENTITY columns are not allowed for LOCAL TEMPORARY TABLEs");
+			Firebird::Arg::Gds(isc_random) << "IDENTITY columns are not allowed for LOCAL TEMPORARY TABLEs");
 	}
 
 	if (addColumnClause->field->dimensions != 0)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_random) << "Array type columns are not allowed for LOCAL TEMPORARY TABLEs");
+			Firebird::Arg::Gds(isc_random) << "Array type columns are not allowed for LOCAL TEMPORARY TABLEs");
 	}
 
 	// Only unnamed NOT NULL constraints are supported on LTT columns
@@ -7046,9 +7046,9 @@ void RelationNode::validateLttColumnClause(const AddColumnClause* addColumnClaus
 	if (hasInvalidConstraint)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_random) <<
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_command_err) <<
+			Firebird::Arg::Gds(isc_random) <<
 				"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
 	}
 }
@@ -7090,9 +7090,9 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			{
 				// Specified domain or source field does not exist
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					Firebird::Arg::Gds(isc_dsql_command_err) <<
+					Firebird::Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
 			}
 
 			fieldDefinition.fieldSource = field->typeOfName;
@@ -7168,9 +7168,9 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			const char* typeName = (field->dtype == dtype_blob ? "BLOB" : "ARRAY");
 
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_type_not_supp_ext_tab) << typeName <<
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_type_not_supp_ext_tab) << typeName <<
 					name.toQuotedString() << field->fld_name.toQuotedString());
 		}
 
@@ -7178,8 +7178,8 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		{
 			if (clause->identityOptions->increment.value_or(1) == 0)
 			{
-				status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
-					Arg::Str(field->fld_name) <<
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
+					Firebird::Arg::Str(field->fld_name) <<
 					name.toQuotedString());
 			}
 
@@ -7189,7 +7189,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 			if (!desc.isExact() || desc.dsc_scale != 0)
 			{
 				// Identity column @1 of table @2 must be exact numeric with zero scale.
-				status_exception::raise(Arg::PrivateDyn(273) <<
+				status_exception::raise(Firebird::Arg::PrivateDyn(273) <<
 					field->fld_name.toQuotedString() <<
 					name.toQuotedString());
 			}
@@ -7213,9 +7213,9 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				notNullFlag)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					Arg::Gds(isc_bad_default_value) <<
-					Arg::Gds(isc_invalid_clause) << "default null not null");
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					Firebird::Arg::Gds(isc_bad_default_value) <<
+					Firebird::Arg::Gds(isc_invalid_clause) << "default null not null");
 			}
 		}
 
@@ -7320,7 +7320,7 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			if (attachment->att_local_temporary_tables.exist(clause->refRelation))
 			{
 				status_exception::raise(
-					Arg::Gds(isc_dsql_ltt_invalid_reference) << clause->refRelation.toQuotedString() << "FOREIGN KEY");
+					Firebird::Arg::Gds(isc_dsql_ltt_invalid_reference) << clause->refRelation.toQuotedString() << "FOREIGN KEY");
 			}
 
 			CreateDropConstraint& constraint = constraints.add();
@@ -7347,9 +7347,9 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					// KEY on referenced table
 
 					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_reftable_requires_pk));
+						Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						Firebird::Arg::Gds(isc_dsql_command_err) <<
+						Firebird::Arg::Gds(isc_reftable_requires_pk));
 				}
 				else
 				{
@@ -7364,9 +7364,9 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			{
 				// Foreign key field count does not match primary key.
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_key_field_count_err));
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					Firebird::Arg::Gds(isc_dsql_command_err) <<
+					Firebird::Arg::Gds(isc_key_field_count_err));
 			}
 
 			// Define the foreign key index and the triggers that may be needed
@@ -7595,7 +7595,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		{
 			// msg 123: "Field: %s not defined as NOT NULL - can't be used in PRIMARY KEY
 			// constraint definition"
-			status_exception::raise(Arg::PrivateDyn(123) <<
+			status_exception::raise(Firebird::Arg::PrivateDyn(123) <<
 				QualifiedName(RFR.RDB$FIELD_NAME, RFR.RDB$SCHEMA_NAME).toQuotedString());
 		}
 
@@ -7618,7 +7618,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	if (uniqueCount != allCount)
 	{
 		// msg 124: "A column name is repeated in the definition of constraint: %s"
-		status_exception::raise(Arg::PrivateDyn(124) << constraintName);
+		status_exception::raise(Firebird::Arg::PrivateDyn(124) << constraintName);
 	}
 
 	if (constraint.type == Constraint::TYPE_FK)
@@ -7705,7 +7705,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		{
 			// msg 126: "Same set of columns cannot be used in more than one PRIMARY KEY
 			// and/or UNIQUE constraint definition"
-			status_exception::raise(Arg::PrivateDyn(126));
+			status_exception::raise(Firebird::Arg::PrivateDyn(126));
 		}
 	}
 }
@@ -8463,8 +8463,8 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 						if (null_view && REL.RDB$FORMAT.NULL)
 							DPM_delete_relation(tdbb, getPermanent(relation));
 
-						ERR_post(Arg::Gds(isc_no_meta_update) <<
-								 Arg::Gds(isc_random) << relName.toQuotedString());
+						ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+								 Firebird::Arg::Gds(isc_random) << relName.toQuotedString());
 					}
 
 					// Make sure the text type specified is implemented
@@ -8473,8 +8473,8 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 						if (null_view && REL.RDB$FORMAT.NULL)
 							DPM_delete_relation(tdbb, getPermanent(relation));
 
-						ERR_post_nothrow(Arg::Gds(isc_no_meta_update) <<
-										 Arg::Gds(isc_random) << relName.toQuotedString());
+						ERR_post_nothrow(Firebird::Arg::Gds(isc_no_meta_update) <<
+										 Firebird::Arg::Gds(isc_random) << relName.toQuotedString());
 						INTL_texttype_lookup(tdbb, tfb->tfb_desc.getTextType());	// should punt
 						ERR_punt(); // if INTL_texttype_lookup hasn't punt
 					}
@@ -8601,9 +8601,9 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					if (REL.RDB$FORMAT.NULL)
 						DPM_delete_relation(tdbb, getPermanent(relation));
 
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_table_name) << relName.toQuotedString() <<
-			 				 Arg::Gds(isc_must_have_phys_field));
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_table_name) << relName.toQuotedString() <<
+			 				 Firebird::Arg::Gds(isc_must_have_phys_field));
 				}
 
 				blob = setupTriggers(tdbb, relation, null_view, triggers, blob);
@@ -8804,9 +8804,9 @@ void RelationNode::setupTriggerDetails(thread_db* tdbb, jrd_rel* relation, blb* 
 
 void RelationNode::raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name)
 {
-	ERR_post(Arg::Gds(isc_no_meta_update) <<
-			 Arg::Gds(getErrorCodeByObjectType(obj_type)) << obj_name.toQuotedString() <<
-			 Arg::Gds(isc_version_err));
+	ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+			 Firebird::Arg::Gds(getErrorCodeByObjectType(obj_type)) << obj_name.toQuotedString() <<
+			 Firebird::Arg::Gds(isc_version_err));
 }
 
 
@@ -9086,9 +9086,9 @@ Format* RelationNode::makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::
 	if (offset > MAX_RECORD_SIZE)
 	{
 		delete format;
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_rec_size_err) << Arg::Num(offset) <<
-				 Arg::Gds(isc_table_name) << relation->getName().toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_rec_size_err) << Firebird::Arg::Num(offset) <<
+				 Firebird::Arg::Gds(isc_table_name) << relation->getName().toQuotedString());
 		// Msg361: new record size of %ld bytes is too big
 	}
 
@@ -9283,10 +9283,10 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			if (externalFile)
 			{
 				if (externalFile->length() >= sizeof(REL.RDB$EXTERNAL_FILE))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 				if (ISC_check_if_remote(externalFile->c_str(), false))
-					status_exception::raise(Arg::PrivateDyn(163));
+					status_exception::raise(Firebird::Arg::PrivateDyn(163));
 
 				REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 				strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
@@ -9440,12 +9440,12 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 		if (createIfNotExistsOnly)
 			return;
 
-		status_exception::raise(Arg::PrivateDyn(132) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(132) << name.toQuotedString());
 	}
 
 	// Prevent external file for local temporary tables
 	if (externalFile)
-		status_exception::raise(Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
+		status_exception::raise(Firebird::Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
 
 	const auto ltt = FB_NEW_POOL(attPool) LocalTemporaryTable(attPool, name);
 	ltt->relationType = tempRowsFlag.value_or(REL_temp_tran) == REL_temp_tran ? rel_temp_delete : rel_temp_preserve;
@@ -9467,7 +9467,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 			{
 				// msg 323: "Column @1 already exists in table @2"
 				status_exception::raise(
-					Arg::PrivateDyn(323) <<
+					Firebird::Arg::PrivateDyn(323) <<
 					field->fld_name.toQuotedString() <<
 					name.toQuotedString());
 			}
@@ -9506,9 +9506,9 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 		else if (clause->type == Clause::TYPE_ADD_CONSTRAINT)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_random) <<
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_random) <<
 					"Only NOT NULL constraints without names are supported on local temporary tables");
 		}
 	}
@@ -9538,9 +9538,9 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 
 		if (attachment->att_next_ltt_id.value() == initialLttIdProbe)
 		{
-			ERR_post(Arg::Gds(isc_imp_exc) <<
-					 Arg::Gds(isc_random) <<
-					 Arg::Str("Too many local temporary tables exist already"));
+			ERR_post(Firebird::Arg::Gds(isc_imp_exc) <<
+					 Firebird::Arg::Gds(isc_random) <<
+					 Firebird::Arg::Str("Too many local temporary tables exist already"));
 		}
 	}
 
@@ -9590,9 +9590,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	if (!relation || (relation->rel_flags & REL_view))
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_command_err) <<
+			Firebird::Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
 	}
 
 	if (!dsqlScratch->relation)
@@ -9604,10 +9604,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		***/
 
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-			Arg::Gds(isc_dsql_relation_err) <<
-			Arg::Gds(isc_random) << name.toQuotedString() /***<<
-			Arg::Gds(isc_random) << linecol***/);
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+			Firebird::Arg::Gds(isc_dsql_relation_err) <<
+			Firebird::Arg::Gds(isc_random) << name.toQuotedString() /***<<
+			Firebird::Arg::Gds(isc_random) << linecol***/);
 	}
 
 	// Handle Local Temporary Tables differently
@@ -9712,7 +9712,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 								// msg 205: Cannot rename field %s to %s.  A field with that name
 								// already exists in table %s.
 								status_exception::raise(
-									Arg::PrivateDyn(205) << clause->fromName << clause->toName << name.toQuotedString());
+									Firebird::Arg::PrivateDyn(205) << clause->fromName << clause->toName << name.toQuotedString());
 							}
 						END_MODIFY
 					}
@@ -9721,7 +9721,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					if (!found)
 					{
 						// msg 176: "column %s does not exist in table/view %s"
-						status_exception::raise(Arg::PrivateDyn(176) << clause->fromName << name.toQuotedString());
+						status_exception::raise(Firebird::Arg::PrivateDyn(176) << clause->fromName << name.toQuotedString());
 					}
 
 					AutoRequest request2;
@@ -9767,7 +9767,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 							if (!clause->notNullFlag && !RFL.RDB$GENERATOR_NAME.NULL)
 							{
 								// msg 274: Identity column @1 of table @2 cannot be changed to NULLable
-								status_exception::raise(Arg::PrivateDyn(274) << clause->name << name.toQuotedString());
+								status_exception::raise(Firebird::Arg::PrivateDyn(274) << clause->name << name.toQuotedString());
 							}
 
 							if (clause->notNullFlag)
@@ -9812,7 +9812,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					if (!found)
 					{
 						// msg 176: "column %s does not exist in table/view %s"
-						status_exception::raise(Arg::PrivateDyn(176) << clause->name << name.toQuotedString());
+						status_exception::raise(Firebird::Arg::PrivateDyn(176) << clause->name << name.toQuotedString());
 					}
 
 					break;
@@ -9848,9 +9848,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					{
 						// Unsupported DSQL construct
 						status_exception::raise(
-							Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-							Arg::Gds(isc_dsql_command_err) <<
-							Arg::Gds(isc_dsql_construct_err));
+							Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+							Firebird::Arg::Gds(isc_dsql_command_err) <<
+							Firebird::Arg::Gds(isc_dsql_construct_err));
 					}
 
 					deleteLocalField(tdbb, transaction, name, clause->name, clause->silent, executeBeforeTrigger);
@@ -10007,7 +10007,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				if (!found)
 				{
 					// msg 130: "CONSTRAINT %s does not exist."
-					status_exception::raise(Arg::PrivateDyn(130) << constraint->name);
+					status_exception::raise(Firebird::Arg::PrivateDyn(130) << constraint->name);
 				}
 			}
 		}
@@ -10114,7 +10114,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			if (!isView && (!FLD.RDB$COMPUTED_BLR.NULL != (clause->computed != NULL)))
 			{
 				// Cannot add or remove COMPUTED from column @1
-				status_exception::raise(Arg::PrivateDyn(249) << field->fld_name);
+				status_exception::raise(Firebird::Arg::PrivateDyn(249) << field->fld_name);
 			}
 
 			dyn_fld origDom;
@@ -10157,7 +10157,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					if (!RFR.RDB$GENERATOR_NAME.NULL)
 					{
 						// msg 275: Identity column @1 of table @2 cannot have default value
-						status_exception::raise(Arg::PrivateDyn(275) <<
+						status_exception::raise(Firebird::Arg::PrivateDyn(275) <<
 							field->fld_name.toQuotedString() <<
 							name.toQuotedString());
 					}
@@ -10165,13 +10165,13 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					if (hasDimensions)
 					{
 						// msg 225: "Default value is not allowed for array type in field %s"
-						status_exception::raise(Arg::PrivateDyn(225) << field->fld_name);
+						status_exception::raise(Firebird::Arg::PrivateDyn(225) << field->fld_name);
 					}
 
 					if (clause->computed)
 					{
 						// msg 233: "Local column %s is computed, cannot set a default value"
-						status_exception::raise(Arg::PrivateDyn(233) << field->fld_name);
+						status_exception::raise(Firebird::Arg::PrivateDyn(233) << field->fld_name);
 					}
 
 					string defaultSource;
@@ -10197,13 +10197,13 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 						if (FLD.RDB$DEFAULT_VALUE.NULL)
 						{
 							// msg 229: "Local column %s doesn't have a default"
-							status_exception::raise(Arg::PrivateDyn(229) << field->fld_name);
+							status_exception::raise(Firebird::Arg::PrivateDyn(229) << field->fld_name);
 						}
 						else
 						{
 							// msg 230: "Local column %s default belongs to domain %s"
 							status_exception::raise(
-								Arg::PrivateDyn(230) <<
+								Firebird::Arg::PrivateDyn(230) <<
 								field->fld_name.toQuotedString() <<
 								QualifiedName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME).toQuotedString());
 						}
@@ -10220,7 +10220,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				if (RFR.RDB$GENERATOR_NAME.NULL)
 				{
 					// msg 285: "Column @1 is not an identity column"
-					status_exception::raise(Arg::PrivateDyn(285) << field->fld_name);
+					status_exception::raise(Firebird::Arg::PrivateDyn(285) << field->fld_name);
 				}
 
 				DropSequenceNode::deleteIdentity(tdbb, transaction,
@@ -10265,8 +10265,8 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					{
 						if (clause->identityOptions->increment.value() == 0)
 						{
-							status_exception::raise(Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
-								Arg::Str(field->fld_name) <<
+							status_exception::raise(Firebird::Arg::Gds(isc_dyn_cant_use_zero_inc_ident) <<
+								Firebird::Arg::Str(field->fld_name) <<
 								name.toQuotedString());
 						}
 
@@ -10286,7 +10286,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				if (!found)
 				{
 					// msg 285: "Column @1 is not an identity column"
-					status_exception::raise(Arg::PrivateDyn(285) << field->fld_name);
+					status_exception::raise(Firebird::Arg::PrivateDyn(285) << field->fld_name);
 				}
 			}
 			else
@@ -10307,7 +10307,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					{
 						// msg 224: "Cannot use the internal domain %s as new type for field %s".
 						status_exception::raise(
-							Arg::PrivateDyn(224) << newDomainName.toQuotedString() << field->fld_name);
+							Firebird::Arg::PrivateDyn(224) << newDomainName.toQuotedString() << field->fld_name);
 					}
 
 					// Get the domain information.
@@ -10315,9 +10315,9 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					{
 						// Specified domain or source field does not exist.
 						status_exception::raise(
-							Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-							Arg::Gds(isc_dsql_command_err) <<
-							Arg::Gds(isc_dsql_domain_not_found) << newDomainName.toQuotedString());
+							Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+							Firebird::Arg::Gds(isc_dsql_command_err) <<
+							Firebird::Arg::Gds(isc_dsql_domain_not_found) << newDomainName.toQuotedString());
 					}
 
 					QualifiedName dummyCollationName;
@@ -10406,7 +10406,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 						if (!newDom.dyn_dsc.isExact() || newDom.dyn_dsc.dsc_scale != 0)
 						{
 							// Identity column @1 of table @2 must be exact numeric with zero scale.
-							status_exception::raise(Arg::PrivateDyn(273) <<
+							status_exception::raise(Firebird::Arg::PrivateDyn(273) <<
 								field->fld_name.toQuotedString() <<
 								name.toQuotedString());
 						}
@@ -10509,7 +10509,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		if (!found)
 		{
 			// msg 176: "column %s does not exist in table/view %s"
-			status_exception::raise(Arg::PrivateDyn(176) <<
+			status_exception::raise(Firebird::Arg::PrivateDyn(176) <<
 				field->fld_name.toQuotedString() <<
 				name.toQuotedString());
 		}
@@ -10542,9 +10542,9 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 	if (!lttPtr)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_command_err) <<
+			Firebird::Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
 	}
 
 	const auto ltt = *lttPtr;
@@ -10579,7 +10579,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				{
 					// msg 323: "Column @1 already exists in table @2"
 					status_exception::raise(
-						Arg::PrivateDyn(323) <<
+						Firebird::Arg::PrivateDyn(323) <<
 						field->fld_name.toQuotedString() <<
 						name.toQuotedString());
 				}
@@ -10633,8 +10633,8 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 					if (ltt->pendingFields.getCount() == 1)
 					{
 						// Msg354: last column in a table cannot be deleted
-						status_exception::raise(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(isc_del_last_field));
+						status_exception::raise(Firebird::Arg::Gds(isc_no_meta_update) <<
+							Firebird::Arg::Gds(isc_del_last_field));
 					}
 
 					ltt->pendingFields.remove(fieldFoundIt);
@@ -10642,7 +10642,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				else if (!dropClause->silent)
 				{
 					// msg 176: "column %s does not exist in table/view %s"
-					status_exception::raise(Arg::PrivateDyn(176) << dropClause->name << name.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(176) << dropClause->name << name.toQuotedString());
 				}
 				break;
 			}
@@ -10657,7 +10657,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				{
 					// msg 205: Cannot rename field %s to %s. A field with that name already exists
 					status_exception::raise(
-						Arg::PrivateDyn(205) << renameClause->fromName << renameClause->toName << name.toQuotedString());
+						Firebird::Arg::PrivateDyn(205) << renameClause->fromName << renameClause->toName << name.toQuotedString());
 				}
 
 				auto fieldFoundIt = std::find_if(ltt->pendingFields.begin(), ltt->pendingFields.end(),
@@ -10666,7 +10666,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				if (fieldFoundIt == ltt->pendingFields.end())
 				{
 					// msg 176: "column %s does not exist in table/view %s"
-					status_exception::raise(Arg::PrivateDyn(176) << renameClause->fromName << name.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(176) << renameClause->fromName << name.toQuotedString());
 				}
 				else
 					fieldFoundIt->name = renameClause->toName;
@@ -10695,7 +10695,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				if (!found)
 				{
 					// msg 176: "column %s does not exist in table/view %s"
-					status_exception::raise(Arg::PrivateDyn(176) << nullClause->name << name.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(176) << nullClause->name << name.toQuotedString());
 				}
 				break;
 			}
@@ -10708,9 +10708,9 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				if (newPos < 0 || static_cast<FB_SIZE_T>(newPos) >= ltt->pendingFields.getCount())
 				{
 					status_exception::raise(
-						Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-						Arg::Gds(isc_dsql_command_err) <<
-						Arg::Gds(isc_random) << "Invalid column position");
+						Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+						Firebird::Arg::Gds(isc_dsql_command_err) <<
+						Firebird::Arg::Gds(isc_random) << "Invalid column position");
 				}
 
 				// Find the field and its current position
@@ -10727,7 +10727,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				if (currentPos >= ltt->pendingFields.getCount())
 				{
 					// msg 176: "column %s does not exist in table/view %s"
-					status_exception::raise(Arg::PrivateDyn(176) << posClause->name << name.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(176) << posClause->name << name.toQuotedString());
 				}
 
 				// Move the field
@@ -10809,7 +10809,7 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 				{
 					// msg 176: "column %s does not exist in table/view %s"
 					status_exception::raise(
-						Arg::PrivateDyn(176) <<
+						Firebird::Arg::PrivateDyn(176) <<
 						field->fld_name.toQuotedString() <<
 						name.toQuotedString());
 				}
@@ -10819,9 +10819,9 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 			case Clause::TYPE_ADD_CONSTRAINT:
 			case Clause::TYPE_DROP_CONSTRAINT:
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_random) <<
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					Firebird::Arg::Gds(isc_dsql_command_err) <<
+					Firebird::Arg::Gds(isc_random) <<
 						"Only NOT NULL constraints without names are supported on local temporary tables");
 				break;
 
@@ -10829,9 +10829,9 @@ void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch
 			case Clause::TYPE_ALTER_PUBLICATION:
 				// These don't apply to LTTs
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_random) << "Operation not supported for local temporary tables");
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					Firebird::Arg::Gds(isc_dsql_command_err) <<
+					Firebird::Arg::Gds(isc_random) << "Operation not supported for local temporary tables");
 				break;
 
 			default:
@@ -10931,9 +10931,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (view)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
 		}
 
 		const auto ltt = *lttIt;
@@ -10966,7 +10966,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		return;
 
 	if (tdbb->getDatabase()->readOnly())
-		ERRD_post(Arg::Gds(isc_read_only_database));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	auto* relation = getPermanent(rel);
 
@@ -10976,9 +10976,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (!relation || (relation && !(relation->isView())))
 		{
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_view_not_found) << name.toQuotedString());
 		}
 	}
 	else
@@ -10986,9 +10986,9 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (!relation || (relation && (relation->isView())))
 		{
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_dsql_table_not_found) << name.toQuotedString());
 		}
 	}
 
@@ -11011,7 +11011,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	if (!found)
 	{
 		// msg 61: "Relation not found"
-		status_exception::raise(Arg::PrivateDyn(61));
+		status_exception::raise(Firebird::Arg::PrivateDyn(61));
 	}
 
 	request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
@@ -11343,7 +11343,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		modifyingView = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, name);
 
 		if (!modifyingView && !create)
-			status_exception::raise(Arg::Gds(isc_dyn_view_not_found) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_view_not_found) << name.toQuotedString());
 	}
 
 	saveRelation(tdbb, dsqlScratch, name, true, modifyingView == NULL);
@@ -11400,7 +11400,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		END_FOR
 
 		if (!found)
-			status_exception::raise(Arg::Gds(isc_dyn_view_not_found) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_view_not_found) << name.toQuotedString());
 
 		AutoRequest request2;
 
@@ -11535,7 +11535,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			{
 				// msg 32: no permission for %s access to %s %s
 				status_exception::raise(
-					Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<	//	Non-Translatable
+					Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("SELECT") <<	//	Non-Translatable
 					// Remember, a view may be based on a view.
 					"TABLE/VIEW" <<	//  Non-Translatable
 					// We want to print the name of the base table or view.
@@ -11647,9 +11647,9 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			// must specify field name for view select expression
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_specify_field_err));
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_specify_field_err));
 		}
 
 		// CVC: Small modification here to catch any mismatch between number of
@@ -11684,9 +11684,9 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					{
 						// column @1 appears more than once in ALTER VIEW
 						status_exception::raise(
-							Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-							Arg::Gds(isc_dsql_command_err) <<
-							Arg::Gds(isc_dsql_col_more_than_once_view) << Arg::Str(fieldStr));
+							Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+							Firebird::Arg::Gds(isc_dsql_command_err) <<
+							Firebird::Arg::Gds(isc_dsql_col_more_than_once_view) << Firebird::Arg::Str(fieldStr));
 					}
 
 					modifiedFields.add(relField);
@@ -11848,9 +11848,9 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	{
 		// number of fields does not match select list
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_num_field_err));
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_command_err) <<
+			Firebird::Arg::Gds(isc_num_field_err));
 	}
 
 	if (modifyingView)	// modifying a view
@@ -11871,9 +11871,9 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			// Only simple column names permitted for VIEW WITH CHECK OPTION
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_col_name_err));
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_col_name_err));
 		}
 
 		RseNode* querySpec = nodeAs<RseNode>(selectExpr->querySpec);
@@ -11884,27 +11884,27 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		{
 			// Only one table allowed for VIEW WITH CHECK OPTION
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_table_view_err));
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_table_view_err));
 		}
 
 		if (!querySpec->dsqlWhere)
 		{
 			// No where clause for VIEW WITH CHECK OPTION
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_where_err));
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_where_err));
 		}
 
 		if (querySpec->dsqlDistinct || querySpec->dsqlGroup || querySpec->dsqlHaving)
 		{
 			// DISTINCT, GROUP or HAVING not permitted for VIEW WITH CHECK OPTION
 			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_distinct_err));
+				Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+				Firebird::Arg::Gds(isc_dsql_command_err) <<
+				Firebird::Arg::Gds(isc_distinct_err));
 		}
 
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_VIEW_WITH_CHECK;
@@ -12296,8 +12296,8 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 	jrd_rel* relation = rel->getVersioned(tdbb, CacheFlag::AUTOCREATE);
 	if (!relation)
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
 		// Msg308: can't create index %s
 	}
 
@@ -12340,14 +12340,14 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 		{
 			if (!idx.idx_count)
 			{
-				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_idx_seg_err) << indexName.toQuotedString());
+				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_idx_seg_err) << indexName.toQuotedString());
 				// Msg304: segment count of 0 defined for index %s
 			}
 			else
 			{
-				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_idx_key_err) << indexName.toQuotedString());
+				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_idx_key_err) << indexName.toQuotedString());
 				// Msg311: too many keys defined for index %s
 			}
 		}
@@ -12427,29 +12427,29 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 			{
 				if (key_count > idx.idx_count)
 				{
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_idx_key_err) << indexName.toQuotedString());
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_idx_key_err) << indexName.toQuotedString());
 					// Msg311: too many keys defined for index %s
 				}
 				else if (SEG.RDB$FIELD_POSITION > idx.idx_count)
 				{
 					fb_utils::exact_name(RFR.RDB$FIELD_NAME);
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_inval_key_posn) <<
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_inval_key_posn) <<
 							 // Msg358: invalid key position
-							 Arg::Gds(isc_field_name) << Arg::Str(RFR.RDB$FIELD_NAME) <<
-							 Arg::Gds(isc_index_name) << indexName.toQuotedString());
+							 Firebird::Arg::Gds(isc_field_name) << Firebird::Arg::Str(RFR.RDB$FIELD_NAME) <<
+							 Firebird::Arg::Gds(isc_index_name) << indexName.toQuotedString());
 				}
 				else if (FLD.RDB$FIELD_TYPE == blr_blob)
 				{
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_blob_idx_err) << indexName.toQuotedString());
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_blob_idx_err) << indexName.toQuotedString());
 					// Msg350: attempt to index blob column in index %s
 				}
 				else
 				{
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_array_idx_err) << indexName.toQuotedString());
+					ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							 Firebird::Arg::Gds(isc_array_idx_err) << indexName.toQuotedString());
 					// Msg351: attempt to index array column in index %s
 				}
 			}
@@ -12483,15 +12483,15 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 
 	if (key_count != idx.idx_count)
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_key_field_err) << indexName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_key_field_err) << indexName.toQuotedString());
 		// Msg352: too few key columns found for index %s (incorrect column name?)
 	}
 
 	if (rel->isView())
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
 		// Msg308: can't create index %s
 	}
 
@@ -12515,7 +12515,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 		{
 			MetaName constraint_name;
 			MET_lookup_cnstrt_for_index(tdbb, constraint_name, indexName);
-			ERR_post(Arg::Gds(isc_partner_idx_not_found) << Arg::Str(constraint_name));
+			ERR_post(Firebird::Arg::Gds(isc_partner_idx_not_found) << Firebird::Arg::Str(constraint_name));
 		}
 
 		// Get an protected_read lock on the both relations if the index being
@@ -12527,8 +12527,8 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 		int bad_segment;
 		if (!IDX_check_master_types(tdbb, idx, partner_relation, bad_segment))
 		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-						Arg::Gds(isc_partner_idx_incompat_type) << Arg::Num(bad_segment + 1));
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						Firebird::Arg::Gds(isc_partner_idx_incompat_type) << Firebird::Arg::Num(bad_segment + 1));
 		}
 
 		/*** hvlad: this code was never called but i preserve it for Claudio review and decision
@@ -12605,8 +12605,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 	jrd_rel* relation = rel->getVersioned(tdbb, CacheFlag::AUTOCREATE);
 	if (!relation)
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
 		// Msg308: can't create index %s
 	}
 
@@ -12646,8 +12646,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 		if (IDX.RDB$SEGMENT_COUNT)
 		{
 			// Msg359: segments not allowed in expression index %s
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-				Arg::Gds(isc_no_segments_err) << indexName.toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				Firebird::Arg::Gds(isc_no_segments_err) << indexName.toQuotedString());
 		}
 
 		if (IDX.RDB$UNIQUE_FLAG)
@@ -12717,8 +12717,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 	if (!relation)
 	{
 		// Msg308: can't create index %s
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-			Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+			Firebird::Arg::Gds(isc_idx_create_err) << indexName.toQuotedString());
 	}
 
 	delete csb;
@@ -12816,7 +12816,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			if (!VREL.RDB$VIEW_BLR.NULL)
 			{
 				// msg 181: "attempt to index a view"
-				status_exception::raise(Arg::PrivateDyn(181));
+				status_exception::raise(Firebird::Arg::PrivateDyn(181));
 			}
 		}
 		END_FOR
@@ -12849,7 +12849,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				{
 					// msg 240 "Field %s cannot be used twice in index %s"
 					status_exception::raise(
-						Arg::PrivateDyn(240) << definition.columns[i] << IDX.RDB$INDEX_NAME);
+						Firebird::Arg::PrivateDyn(240) << definition.columns[i] << IDX.RDB$INDEX_NAME);
 				}
 			}
 
@@ -12869,17 +12869,17 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				if (GF.RDB$FIELD_TYPE == blr_blob)
 				{
 					// msg 116 "attempt to index blob field in index %s"
-					status_exception::raise(Arg::PrivateDyn(116) << idxName.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(116) << idxName.toQuotedString());
 				}
 				else if (!GF.RDB$DIMENSIONS.NULL)
 				{
 					// msg 117 "attempt to index array field in index %s"
-					status_exception::raise(Arg::PrivateDyn(117) << idxName.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(117) << idxName.toQuotedString());
 				}
 				else if (!GF.RDB$COMPUTED_BLR.NULL)
 				{
 					// msg 179 "attempt to index COMPUTED BY field in index %s"
-					status_exception::raise(Arg::PrivateDyn(179) << idxName.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(179) << idxName.toQuotedString());
 				}
 				else if (GF.RDB$FIELD_TYPE == blr_varying || GF.RDB$FIELD_TYPE == blr_text)
 				{
@@ -12921,7 +12921,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			if (!found)
 			{
 				// msg 120 "Unknown columns in index %s"
-				status_exception::raise(Arg::PrivateDyn(120) << idxName.toQuotedString());
+				status_exception::raise(Firebird::Arg::PrivateDyn(120) << idxName.toQuotedString());
 			}
 		}
 
@@ -12941,7 +12941,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		if (keyLength >= MAX_KEY)
 		{
 			// msg 118 "key size too big for index %s"
-			status_exception::raise(Arg::PrivateDyn(118) << idxName.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(118) << idxName.toQuotedString());
 		}
 
 		if (definition.columns.hasData())
@@ -12968,7 +12968,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		else if (IDX.RDB$EXPRESSION_BLR.NULL)
 		{
 			// msg 119 "no keys for index %s"
-			status_exception::raise(Arg::PrivateDyn(119) << idxName.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(119) << idxName.toQuotedString());
 		}
 
 		if (definition.refColumns.hasData())
@@ -12979,7 +12979,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			{
 				// msg 133: "Number of referencing columns do not equal number of
 				// referenced columns
-				status_exception::raise(Arg::PrivateDyn(133));
+				status_exception::raise(Firebird::Arg::PrivateDyn(133));
 			}
 
 			// Lookup a unique index in the referenced relation with the
@@ -13060,19 +13060,19 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				if (isView)
 				{
 					// msg 242: "attempt to reference a view (%s) in a foreign key"
-					status_exception::raise(Arg::PrivateDyn(242) << definition.refRelation.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(242) << definition.refRelation.toQuotedString());
 				}
 
 				if (found)
 				{
 					// msg 18: "could not find UNIQUE or PRIMARY KEY constraint in table %s with
 					// specified columns"
-					status_exception::raise(Arg::PrivateDyn(18) << definition.refRelation.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(18) << definition.refRelation.toQuotedString());
 				}
 				else
 				{
 					// msg 241: "Table %s not found"
-					status_exception::raise(Arg::PrivateDyn(241) << definition.refRelation.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(241) << definition.refRelation.toQuotedString());
 				}
 			}
 		}
@@ -13095,7 +13095,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				{
 					// msg 133: "Number of referencing columns do not equal number of
 					// referenced columns"
-					status_exception::raise(Arg::PrivateDyn(133));
+					status_exception::raise(Firebird::Arg::PrivateDyn(133));
 				}
 
 				fb_utils::exact_name_limit(IND.RDB$SCHEMA_NAME, sizeof(IND.RDB$SCHEMA_NAME));
@@ -13115,7 +13115,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			if (IDX.RDB$FOREIGN_KEY.NULL)
 			{
 				// msg 20: "could not find PRIMARY KEY index in specified table %s"
-				status_exception::raise(Arg::PrivateDyn(20) << definition.refRelation.toQuotedString());
+				status_exception::raise(Firebird::Arg::PrivateDyn(20) << definition.refRelation.toQuotedString());
 			}
 		}
 
@@ -13191,7 +13191,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	}
 
 	if (tdbb->getDatabase()->readOnly())
-		ERRD_post(Arg::Gds(isc_read_only_database));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_index))
 		return;
@@ -13232,7 +13232,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	{
 		const auto dbb = tdbb->getDatabase();
 		if (dbb->getEncodedOdsVersion() < ODS_13_1)
-			ERR_post(Arg::Gds(isc_wish_list));
+			ERR_post(Firebird::Arg::Gds(isc_wish_list));
 
 		BlrDebugWriter::BlrData partialValue;
 		definePartial(dsqlScratch, relation, partial, partialValue);
@@ -13267,17 +13267,17 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 	if (computed)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_wish_list) <<
-			Arg::Gds(isc_random) << "Expression-based indexes are not supported for local temporary tables");
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_wish_list) <<
+			Firebird::Arg::Gds(isc_random) << "Expression-based indexes are not supported for local temporary tables");
 	}
 
 	if (partial)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_wish_list) <<
-			Arg::Gds(isc_random) << "Partial indexes are not supported for local temporary tables");
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_wish_list) <<
+			Firebird::Arg::Gds(isc_random) << "Partial indexes are not supported for local temporary tables");
 	}
 
 	// Check index name uniqueness within the LTT scope
@@ -13289,7 +13289,7 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 				return;
 
 			status_exception::raise(
-				Arg::Gds(isc_no_dup) << name.toQuotedString());
+				Firebird::Arg::Gds(isc_no_dup) << name.toQuotedString());
 		}
 	}
 
@@ -13300,11 +13300,11 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 		if (createIfNotExistsOnly)
 			return;
 
-		status_exception::raise(Arg::Gds(isc_no_dup) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_no_dup) << name.toQuotedString());
 	}
 
 	if (columns->items.getCount() > MAX_INDEX_SEGMENTS)
-		status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_idx_key_err) << name.toQuotedString());
 
 	const auto& fields = ltt->hasPendingChanges ? ltt->pendingFields : ltt->fields;
 
@@ -13319,12 +13319,12 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 		{
 			// Column not found in LTT
 			status_exception::raise(
-				Arg::Gds(isc_dyn_column_does_not_exist) << colName.c_str() << ltt->name.toQuotedString());
+				Firebird::Arg::Gds(isc_dyn_column_does_not_exist) << colName.c_str() << ltt->name.toQuotedString());
 		}
 
 		// Check if field type is indexable (no blobs or arrays)
 		if (fieldIt->desc.dsc_dtype == dtype_blob)
-			status_exception::raise(Arg::Gds(isc_blob_idx_err) << colName.c_str());
+			status_exception::raise(Firebird::Arg::Gds(isc_blob_idx_err) << colName.c_str());
 	}
 
 	// Register undo action with the savepoint
@@ -13345,7 +13345,7 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 		ltt->nextIndexId++;
 
 		if (ltt->nextIndexId == initialIdProbe)
-			status_exception::raise(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_max_idx) << Arg::Num(MAX_USHORT));
+			status_exception::raise(Firebird::Arg::Gds(isc_no_meta_update) << Firebird::Arg::Gds(isc_max_idx) << Firebird::Arg::Num(MAX_USHORT));
 	}
 
 	// Add the index to the LTT
@@ -13373,7 +13373,7 @@ DdlNode* CreateIndexNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (name.schema != relation->dsqlName.schema)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_dyn_index_schema_must_match_table) <<
+			Firebird::Arg::Gds(isc_dyn_index_schema_must_match_table) <<
 			name.schema.toQuotedString() <<
 			relation->dsqlName.schema.toQuotedString());
 	}
@@ -13424,7 +13424,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	}
 
 	if (tdbb->getDatabase()->readOnly())
-		ERRD_post(Arg::Gds(isc_read_only_database));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	Cached::Relation* relation = nullptr;
 	bool expressionIndex = false;
@@ -13485,7 +13485,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (!found)
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
+		status_exception::raise(Firebird::Arg::PrivateDyn(48));
 	}
 
 	if (active == create)
@@ -13647,7 +13647,7 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	else
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
+		status_exception::raise(Firebird::Arg::PrivateDyn(48));
 	}
 
 	savePoint.release();	// everything is ok
@@ -13738,7 +13738,7 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 	}
 
 	if (tdbb->getDatabase()->readOnly())
-		ERRD_post(Arg::Gds(isc_read_only_database));
+		ERRD_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	ModifyIndexList oneItemList(*MemoryPool::getContextPool());
 	Cached::Relation* rel = drop(tdbb, dsqlScratch, transaction, oneItemList, true);
@@ -13766,7 +13766,7 @@ Cached::Relation* DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsql
 		WITH RLC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
 			 RLC.RDB$INDEX_NAME EQ indexName.object.c_str()
 	{
-		ERR_post(Arg::Gds(isc_integ_index_del));
+		ERR_post(Firebird::Arg::Gds(isc_integ_index_del));
 	}
 	END_FOR
 
@@ -13851,7 +13851,7 @@ Cached::Relation* DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsql
 	else if (!silent)
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
+		status_exception::raise(Firebird::Arg::PrivateDyn(48));
 	}
 
 	return rel;
@@ -14124,9 +14124,9 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 					&X.RDB$INPUT_SUB_TYPE))
 			{
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					Arg::Gds(isc_dsql_datatype_err) <<
-					Arg::Gds(isc_dsql_blob_type_unknown) << inputFilter->name);
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+					Firebird::Arg::Gds(isc_dsql_blob_type_unknown) << inputFilter->name);
 			}
 		}
 		else
@@ -14138,9 +14138,9 @@ void CreateFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 					&X.RDB$OUTPUT_SUB_TYPE))
 			{
 				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					Arg::Gds(isc_dsql_datatype_err) <<
-					Arg::Gds(isc_dsql_blob_type_unknown) << outputFilter->name);
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+					Firebird::Arg::Gds(isc_dsql_datatype_err) <<
+					Firebird::Arg::Gds(isc_dsql_blob_type_unknown) << outputFilter->name);
 			}
 		}
 		else
@@ -14191,7 +14191,7 @@ void DropFilterNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch
 	if (!found && !silent)
 	{
 		// msg 37: "Blob Filter %s not found"
-		status_exception::raise(Arg::PrivateDyn(37) << name);
+		status_exception::raise(Firebird::Arg::PrivateDyn(37) << name);
 	}
 
 	savePoint.release();	// everything is ok
@@ -14224,9 +14224,9 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 	if (number == 0)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-			Arg::Gds(isc_dsql_command_err) <<
-			Arg::Gds(isc_dsql_shadow_number_err));
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+			Firebird::Arg::Gds(isc_dsql_command_err) <<
+			Firebird::Arg::Gds(isc_dsql_shadow_number_err));
 	}
 
 	// run all statements under savepoint control
@@ -14244,17 +14244,17 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 			return;
 
 		// msg 165: "Shadow %ld already exists"
-		status_exception::raise(Arg::PrivateDyn(165) << Arg::Num(number));
+		status_exception::raise(Firebird::Arg::PrivateDyn(165) << Firebird::Arg::Num(number));
 	}
 	END_FOR
 
 	PathName expandedName = fileName.ToPathName();
 
 	if (!ISC_expand_filename(expandedName, false))
-		status_exception::raise(Arg::PrivateDyn(231));	// File name is invalid
+		status_exception::raise(Firebird::Arg::PrivateDyn(231));	// File name is invalid
 
 	if (tdbb->getDatabase()->dbb_filename == expandedName)
-		status_exception::raise(Arg::PrivateDyn(166));
+		status_exception::raise(Firebird::Arg::PrivateDyn(166));
 
 	request.reset(tdbb, drq_l_files, DYN_REQUESTS);
 
@@ -14262,7 +14262,7 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 		FIRST 1 X IN RDB$FILES
 		WITH X.RDB$FILE_NAME EQ expandedName.c_str()
 	{
-		status_exception::raise(Arg::PrivateDyn(166));
+		status_exception::raise(Firebird::Arg::PrivateDyn(166));
 	}
 	END_FOR
 
@@ -14364,7 +14364,7 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	if (createFlag && sysPrivDrop)
 	{
 		// msg 293: DROP SYSTEM PRIVILEGES should not be used in CREATE ROLE
-		Arg::PrivateDyn(293).raise();
+		Firebird::Arg::PrivateDyn(293).raise();
 	}
 
 	Attachment* const attachment = transaction->tra_attachment;
@@ -14383,25 +14383,25 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	if (name == ownerName)
 	{
 		// msg 193: "user name @1 could not be used for SQL role"
-		status_exception::raise(Arg::PrivateDyn(193) << ownerName);
+		status_exception::raise(Firebird::Arg::PrivateDyn(193) << ownerName);
 	}
 
 	if (name == NULL_ROLE)
 	{
 		// msg 195: "keyword @1 could not be used as SQL role name"
-		status_exception::raise(Arg::PrivateDyn(195) << name);
+		status_exception::raise(Firebird::Arg::PrivateDyn(195) << name);
 	}
 
 	if (isItUserName(tdbb, transaction))
 	{
 		// msg 193: "user name @1 could not be used for SQL role"
-		status_exception::raise(Arg::PrivateDyn(193) << name);
+		status_exception::raise(Firebird::Arg::PrivateDyn(193) << name);
 	}
 
 	if (createFlag && isItSqlRole(tdbb, transaction, name, dummyName))
 	{
 		// msg 194: "SQL role @1 already exists"
-		status_exception::raise(Arg::PrivateDyn(194) << name);
+		status_exception::raise(Firebird::Arg::PrivateDyn(194) << name);
 	}
 
 	if (privileges.hasData() || sysPrivDrop)
@@ -14409,7 +14409,7 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (!tdbb->getAttachment()->locksmith(tdbb, CREATE_PRIVILEGED_ROLES))
 		{
 			// msg 294: Access to SYSTEM PRIVILEGES in ROLES denied to @1
-			(Arg::PrivateDyn(294) << ownerName).raise();
+			(Firebird::Arg::PrivateDyn(294) << ownerName).raise();
 		}
 	}
 
@@ -14442,7 +14442,7 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (ps->executeUpdate(tdbb, transaction) == 0)
 		{
 			// msg 155: "Role %s not found"
-			(Arg::PrivateDyn(155) << name).raise();
+			(Firebird::Arg::PrivateDyn(155) << name).raise();
 		}
 	}
 
@@ -14517,7 +14517,7 @@ string MappingNode::internalPrint(NodePrinter& printer) const
 void MappingNode::validateAdmin()
 {
 	if (to && (*to != ADMIN_ROLE))
-		Arg::Gds(isc_alter_role).raise();
+		Firebird::Arg::Gds(isc_alter_role).raise();
 }
 
 // add some item to DDL in quotes
@@ -14674,14 +14674,14 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 			{
 			case MAP_ADD:
 				if (hasLine)
-					(Arg::Gds(isc_map_already_exists) << name).raise();
+					(Firebird::Arg::Gds(isc_map_already_exists) << name).raise();
 				break;
 
 			case MAP_COMMENT:
 			case MAP_MOD:
 			case MAP_DROP:
 				if (!hasLine)
-					(Arg::Gds(isc_map_not_exists) << name).raise();
+					(Firebird::Arg::Gds(isc_map_not_exists) << name).raise();
 				break;
 
 			case MAP_RPL:
@@ -14775,7 +14775,7 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	if (!(tdbb->getAttachment() && tdbb->getAttachment()->locksmith(tdbb, CHANGE_MAPPING_RULES)))
-		(Arg::Gds(isc_adm_task_denied) << Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
+		(Firebird::Arg::Gds(isc_adm_task_denied) << Firebird::Arg::Gds(isc_miss_prvlg) << "CHANGE_MAPPING_RULES").raise();
 
 	if (from)
 		fromUtf8 = from->toUtf8(transaction);
@@ -14871,7 +14871,7 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 		{
 			if (createIfNotExistsOnly)
 				return;
-			(Arg::Gds(isc_map_already_exists) << name).raise();
+			(Firebird::Arg::Gds(isc_map_already_exists) << name).raise();
 		}
 		// fall through ...
 
@@ -14918,12 +14918,12 @@ void MappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd
 	case MAP_MOD:
 	case MAP_COMMENT:
 		if (!found)
-			(Arg::Gds(isc_map_not_exists) << name).raise();
+			(Firebird::Arg::Gds(isc_map_not_exists) << name).raise();
 		break;
 
 	case MAP_DROP:
 		if (!found && !silentDrop)
-			(Arg::Gds(isc_map_not_exists) << name).raise();
+			(Firebird::Arg::Gds(isc_map_not_exists) << name).raise();
 		break;
 	}
 
@@ -14972,7 +14972,7 @@ void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 		if (ROL.RDB$SYSTEM_FLAG != 0)
 		{
 			// msg 284: can not drop system SQL role @1
-			status_exception::raise(Arg::PrivateDyn(284) << name);
+			status_exception::raise(Firebird::Arg::PrivateDyn(284) << name);
 		}
 
 		AutoCacheRequest request2(tdbb, drq_del_role_1, DYN_REQUESTS);
@@ -15013,7 +15013,7 @@ void DropRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	else if (!silent)
 	{
 		// msg 155: "Role %s not found"
-		status_exception::raise(Arg::PrivateDyn(155) << name);
+		status_exception::raise(Firebird::Arg::PrivateDyn(155) << name);
 	}
 
 	savePoint.release();	// everything is ok
@@ -15052,7 +15052,7 @@ string CreateAlterUserNode::internalPrint(NodePrinter& printer) const
 }
 
 
-static void setCharField(Auth::CharField& field, const string* value)
+static void setCharField(Firebird::Auth::CharField& field, const string* value)
 {
 	if (value)
 	{
@@ -15090,19 +15090,19 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 			adminRole.isUnknown() && active.isUnknown() && !comment && !properties.hasData())
 		{
 			// 283: ALTER USER requires at least one clause to be specified
-			status_exception::raise(Arg::PrivateDyn(283));
+			status_exception::raise(Firebird::Arg::PrivateDyn(283));
 		}
 	}
 	else if (!password)
 	{
 		// 291: CREATE USER requires password to be specified
-		status_exception::raise(Arg::PrivateDyn(291));
+		status_exception::raise(Firebird::Arg::PrivateDyn(291));
 	}
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
+	Firebird::Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Firebird::Auth::UserData;
 
 	MetaName text(name);
 	if (text.isEmpty() && mode == USER_MOD)
@@ -15111,7 +15111,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		text = tdbb->getAttachment()->getUserName();
 
 		if (text.isEmpty())
-			(Arg::Gds(isc_random) << "Missing user name for ALTER CURRENT USER").raise();
+			(Firebird::Arg::Gds(isc_random) << "Missing user name for ALTER CURRENT USER").raise();
 	}
 
 	userData->createIfNotExistsOnly = createIfNotExistsOnly;
@@ -15119,8 +15119,8 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	Firebird::LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
-	userData->op = mode == USER_ADD ? Auth::ADD_OPER : mode == USER_MOD ?
-		Auth::MOD_OPER : Auth::ADDMOD_OPER;
+	userData->op = mode == USER_ADD ? Firebird::Auth::ADD_OPER : mode == USER_MOD ?
+		Firebird::Auth::MOD_OPER : Firebird::Auth::ADDMOD_OPER;
 	userData->user.set(&statusWrapper, text.c_str());
 	check(&statusWrapper);
 	userData->user.setEntered(&statusWrapper, 1);
@@ -15131,7 +15131,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		if (password->isEmpty())
 		{
 			// 250: Password should not be empty string
-			status_exception::raise(Arg::PrivateDyn(250));
+			status_exception::raise(Firebird::Arg::PrivateDyn(250));
 		}
 
 		setCharField(userData->pass, password);
@@ -15219,14 +15219,14 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
+	Firebird::Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Firebird::Auth::UserData;
 
 	string text = name.c_str();
 
 	Firebird::LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
-	userData->op = Auth::DEL_OPER;
+	userData->op = Firebird::Auth::DEL_OPER;
 	userData->user.set(&statusWrapper, text.c_str());
 	userData->user.setEntered(&statusWrapper, 1);
 	userData->plugin = plugin;
@@ -15351,8 +15351,8 @@ void GrantRevokeNode::runInSecurityDb(SecDbContext* secDbContext)
 			if (cnt == 0)
 			{
 				// msg 188: Role doesn't exist.
-				status_exception::raise(Arg::PrivateDyn(188) << j.user <<
-					Arg::Gds(isc_random) << "in security database");
+				status_exception::raise(Firebird::Arg::PrivateDyn(188) << j.user <<
+					Firebird::Arg::Gds(isc_random) << "in security database");
 			}
 		}
 
@@ -15397,18 +15397,18 @@ void GrantRevokeNode::runInSecurityDb(SecDbContext* secDbContext)
 					if (j.badGrantor)
 					{
 						// msg 246: @1 is not grantor of @2 on @3 to @4.
-						(Arg::PrivateDyn(246) << j.revoker.c_str() << all << all << j.user).raise();
+						(Firebird::Arg::PrivateDyn(246) << j.revoker.c_str() << all << all << j.user).raise();
 					}
 
 					// msg 247: Warning: @1 on @2 is not granted to @3.
 					ERR_post_warning(
-						Arg::Warning(isc_dyn_miss_priv_warning) <<
+						Firebird::Arg::Warning(isc_dyn_miss_priv_warning) <<
 						all << all << j.user);
 				}
 				else
 				{
 					// msg 247: Warning: @1 on @2 is not granted to @3.
-					ERR_post_warning(Arg::Warning(isc_dyn_miss_priv_warning) <<
+					ERR_post_warning(Firebird::Arg::Warning(isc_dyn_miss_priv_warning) <<
 						privilegeName('C') << "DATABASE" << j.user);
 				}
 			}
@@ -15612,13 +15612,13 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	{
 		if (options || grantor)
 		{
-			(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
+			(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) <<
 			 "GRANT/ADMIN OPTION and GRANTED BY not supported for CREATE DATABASE grants").raise();
 		}
 
 		if (userType != obj_sql_role && userType != obj_user)
 		{
-			(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
+			(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) <<
 				 "Only grants to USER or ROLE are supported for CREATE DATABASE").raise();
 		}
 
@@ -15638,7 +15638,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 				if (user.object == NULL_ROLE)
 				{
 					// msg 195: keyword NONE could not be used as SQL role name.
-					status_exception::raise(Arg::PrivateDyn(195) << user.toQuotedString());
+					status_exception::raise(Firebird::Arg::PrivateDyn(195) << user.toQuotedString());
 				}
 			}
 			else
@@ -15651,44 +15651,44 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 
 		case obj_udf:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::PrivateDyn(301) << user.toQuotedString());	// Function @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(301) << user.toQuotedString());	// Function @1 does not exist
 			break;
 
 		case obj_procedure:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::PrivateDyn(302) << user.toQuotedString());	// Procedure @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(302) << user.toQuotedString());	// Procedure @1 does not exist
 			break;
 
 		case obj_package_header:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::PrivateDyn(303) << user.toQuotedString());	// Package @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(303) << user.toQuotedString());	// Package @1 does not exist
 			break;
 
 		case obj_schema:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << user.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_schema_not_found) << user.toQuotedString());
 			break;
 
 		case obj_trigger:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::PrivateDyn(304) << user.toQuotedString());	// Trigger @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(304) << user.toQuotedString());	// Trigger @1 does not exist
 			break;
 
 		case obj_view:
 			if (!checkObjectExist(tdbb, transaction, user, userType))
-				status_exception::raise(Arg::PrivateDyn(305) << user.toQuotedString());	// View @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(305) << user.toQuotedString());	// View @1 does not exist
 			break;
 
 		case obj_sql_role:
 			if (!crdb && (!isItSqlRole(tdbb, transaction, user.object, dummyName)))
 			{
 				// msg 188: Role doesn't exist.
-				status_exception::raise(Arg::PrivateDyn(188) << user.toQuotedString());
+				status_exception::raise(Firebird::Arg::PrivateDyn(188) << user.toQuotedString());
 			}
 			if (user.object == NULL_ROLE)
 			{
 				// msg 195: keyword NONE could not be used as SQL role name.
-				status_exception::raise(Arg::PrivateDyn(195) << user.toQuotedString());
+				status_exception::raise(Firebird::Arg::PrivateDyn(195) << user.toQuotedString());
 			}
 			break;
 
@@ -15705,61 +15705,61 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	{
 		case obj_view:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(305) << objName.toQuotedString());	// View @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(305) << objName.toQuotedString());	// View @1 does not exist
 			break;
 
 		case obj_relation:
 			if (tdbb->getAttachment()->att_local_temporary_tables.exist(objName))
 			{
-				status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference) <<
+				status_exception::raise(Firebird::Arg::Gds(isc_dsql_ltt_invalid_reference) <<
 					objName.toQuotedString() << (isGrant ? "GRANT" : "REVOKE"));
 			}
 
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(306) << objName.toQuotedString());	// Table @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(306) << objName.toQuotedString());	// Table @1 does not exist
 
 			if (field.hasData() && !checkFieldExist(tdbb, transaction, objName, field))
-				status_exception::raise(Arg::PrivateDyn(309) << field.c_str() << objName.toQuotedString());	// Field @1 of table @2 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(309) << field.c_str() << objName.toQuotedString());	// Field @1 of table @2 does not exist
 			break;
 
 		case obj_schema:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
 			break;
 
 		case obj_trigger:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(304) << objName.toQuotedString());	// Trigger @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(304) << objName.toQuotedString());	// Trigger @1 does not exist
 			break;
 
 		case obj_procedure:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(302) << objName.toQuotedString());	// Procedure @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(302) << objName.toQuotedString());	// Procedure @1 does not exist
 			break;
 
 		case obj_exception:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(307) << objName.toQuotedString());	// Exception @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(307) << objName.toQuotedString());	// Exception @1 does not exist
 			break;
 
 		case obj_generator:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(308) << objName.toQuotedString());	// Generator/Sequence @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(308) << objName.toQuotedString());	// Generator/Sequence @1 does not exist
 			break;
 
 		case obj_udf:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(301) << objName.toQuotedString());	// Function @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(301) << objName.toQuotedString());	// Function @1 does not exist
 			break;
 
 		case obj_package_header:
 			if (!checkObjectExist(tdbb, transaction, objName, objType))
-				status_exception::raise(Arg::PrivateDyn(303) << objName.toQuotedString());	// Package @1 does not exist
+				status_exception::raise(Firebird::Arg::PrivateDyn(303) << objName.toQuotedString());	// Package @1 does not exist
 			break;
 
 		case obj_sql_role:
 			if (!isItSqlRole(tdbb, transaction, objName.object, dummyName))
-				status_exception::raise(Arg::PrivateDyn(188) << objName.toQuotedString());	// Role doesn't exist.
+				status_exception::raise(Firebird::Arg::PrivateDyn(188) << objName.toQuotedString());	// Role doesn't exist.
 			break;
 
 		case obj_relations:
@@ -15773,7 +15773,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		case obj_charsets:
 		case obj_collations:
 			if (!checkObjectExist(tdbb, transaction, QualifiedName(objName.schema), obj_schema))
-				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
 
 		default:
 			fb_assert(object == NULL || isDdlObject(objType));
@@ -15784,31 +15784,31 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		switch (userType)
 		{
 			case obj_procedure:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("procedures"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("procedures"));
 				break;
 
 			case obj_schema:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("schemas"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("schemas"));
 				break;
 
 			case obj_trigger:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("triggers"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("triggers"));
 				break;
 
 			case obj_view:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("views"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("views"));
 				break;
 
 			case obj_privilege:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("system privileges"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("system privileges"));
 				break;
 
 			case obj_udf:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("functions"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("functions"));
 				break;
 
 			case obj_package_header:
-				ERRD_post(Arg::Gds(isc_dsql_cant_grant_option) << Arg::Str("packages"));
+				ERRD_post(Firebird::Arg::Gds(isc_dsql_cant_grant_option) << Firebird::Arg::Str("packages"));
 				break;
 
 			default:
@@ -15823,9 +15823,9 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		const MetaName& owner(tdbb->getDatabase()->dbb_owner);
 
 		if (owner == DBA_USER_NAME)
-			(Arg::PrivateDyn(252) << DBA_USER_NAME).raise();
+			(Firebird::Arg::PrivateDyn(252) << DBA_USER_NAME).raise();
 		else
-			(Arg::PrivateDyn(295) << DBA_USER_NAME << owner).raise();
+			(Firebird::Arg::PrivateDyn(295) << DBA_USER_NAME << owner).raise();
 	}
 
 	const MetaName currentUser(attachment->getEffectiveUserName());
@@ -15866,7 +15866,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		if (isGrant)
 		{
 			// msg 195: keyword NONE could not be used as SQL role name.
-			status_exception::raise(Arg::PrivateDyn(195) << objName.object.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(195) << objName.object.toQuotedString());
 		}
 		else
 		{
@@ -15949,7 +15949,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					if (grantedRoles.roleInUse(tdbb, user.object))
 					{
 						// 292: role @1 can not be granted to role @2
-						status_exception::raise(Arg::PrivateDyn(292) << objName.toQuotedString() << user.toQuotedString());
+						status_exception::raise(Firebird::Arg::PrivateDyn(292) << objName.toQuotedString() << user.toQuotedString());
 					}
 				}
 			}
@@ -16103,15 +16103,15 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 				if (badGrantor)
 				{
 					// msg 246: @1 is not grantor of @2 on @3 to @4.
-					status_exception::raise(Arg::PrivateDyn(246) <<
+					status_exception::raise(Firebird::Arg::PrivateDyn(246) <<
 						grantorRevoker.c_str() << privilegeName(priv[0]) << objName.toQuotedString() <<
 						user.toQuotedString());
 				}
 
 				// msg 247: Warning: @1 on @2 is not granted to @3.
 				ERR_post_warning(
-					Arg::Warning(isc_dyn_miss_priv_warning) <<
-					Arg::Str(privilegeName(priv[0])) <<
+					Firebird::Arg::Warning(isc_dyn_miss_priv_warning) <<
+					Firebird::Arg::Str(privilegeName(priv[0])) <<
 					objName.toQuotedString() <<
 					user.toQuotedString());
 			}
@@ -16147,7 +16147,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 	if (!relationExists)
 	{
 		// table/view .. does not exist
-		status_exception::raise(Arg::PrivateDyn(175) << relationName.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(175) << relationName.toQuotedString());
 	}
 
 	// Verify the input field exists.
@@ -16171,7 +16171,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		if (!fieldExists)
 		{
 			// column .. does not exist in table/view ..
-			status_exception::raise(Arg::PrivateDyn(176) <<
+			status_exception::raise(Firebird::Arg::PrivateDyn(176) <<
 				fieldName.toQuotedString() <<
 				relationName.toQuotedString());
 		}
@@ -16255,7 +16255,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		if (goFld == 0)
 		{
 			// no grant option for privilege .. on column .. of [base] table/view ..
-			status_exception::raise(Arg::PrivateDyn(topLevel ? 167 : 168) <<
+			status_exception::raise(Firebird::Arg::PrivateDyn(topLevel ? 167 : 168) <<
 				privilegeName(*privilege) << fieldName.toQuotedString() << relationName.toQuotedString());
 		}
 
@@ -16264,14 +16264,14 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 			if (goRel == 0)
 			{
 				// no grant option for privilege .. on [base] table/view .. (for column ..)
-				status_exception::raise(Arg::PrivateDyn(topLevel ? 169 : 170) <<
+				status_exception::raise(Firebird::Arg::PrivateDyn(topLevel ? 169 : 170) <<
 					privilegeName(*privilege) << relationName.toQuotedString() << fieldName.toQuotedString());
 			}
 
 			if (goRel == -1)
 			{
 				// no .. privilege with grant option on [base] table/view .. (for column ..)
-				status_exception::raise(Arg::PrivateDyn(topLevel ? 171 : 172) <<
+				status_exception::raise(Firebird::Arg::PrivateDyn(topLevel ? 171 : 172) <<
 					privilegeName(*privilege) << relationName.toQuotedString() << fieldName.toQuotedString());
 			}
 		}
@@ -16281,13 +16281,13 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		if (goRel == 0)
 		{
 			// no grant option for privilege .. on table/view ..
-			status_exception::raise(Arg::PrivateDyn(173) << privilegeName(*privilege) << relationName.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(173) << privilegeName(*privilege) << relationName.toQuotedString());
 		}
 
 		if (goRel == -1)
 		{
 			// no .. privilege with grant option on table/view ..
-			status_exception::raise(Arg::PrivateDyn(174) << privilegeName(*privilege) << relationName.toQuotedString());
+			status_exception::raise(Firebird::Arg::PrivateDyn(174) << privilegeName(*privilege) << relationName.toQuotedString());
 		}
 	}
 
@@ -16395,7 +16395,7 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 	else
 	{
 		// 188: role name not exist.
-		status_exception::raise(Arg::PrivateDyn(188) << roleName.c_str());
+		status_exception::raise(Firebird::Arg::PrivateDyn(188) << roleName.c_str());
 	}
 
 	const int r = getGrantorOption(tdbb, transaction, grantor, obj_user, roleName);
@@ -16404,7 +16404,7 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 	{
 		// 189: user have no admin option.
 		// 190: user is not a member of the role.
-		status_exception::raise(Arg::PrivateDyn(r ? 189 : 190) << grantor.c_str() << roleName.c_str());
+		status_exception::raise(Firebird::Arg::PrivateDyn(r ? 189 : 190) << grantor.c_str() << roleName.c_str());
 	}
 }
 
@@ -16447,7 +16447,7 @@ void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transact
 	if (!grantable)
 	{
 		// no @1 privilege with grant option on DDL @2
-		status_exception::raise(Arg::PrivateDyn(299) << privilegeName(*privilege) << objName.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(299) << privilegeName(*privilege) << objName.toQuotedString());
 	}
 }
 
@@ -16487,7 +16487,7 @@ void GrantRevokeNode::checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* trans
 	if (!grantable)
 	{
 		// no @1 privilege with grant option on object @2
-		status_exception::raise(Arg::PrivateDyn(300) << privilegeName(*privilege) << objName.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(300) << privilegeName(*privilege) << objName.toQuotedString());
 	}
 }
 
@@ -16620,23 +16620,23 @@ void AlterDatabaseNode::checkClauses(thread_db* tdbb)
 	if (clauses & CLAUSE_END_BACKUP)
 	{
 		if (clauses & CLAUSE_BEGIN_BACKUP)
-			(Arg::PrivateDyn(298) << Arg::Str("BEGIN BACKUP") << Arg::Str("END BACKUP")).raise();
+			(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("BEGIN BACKUP") << Firebird::Arg::Str("END BACKUP")).raise();
 
 		if (differenceFile.hasData())
-			(Arg::PrivateDyn(298) << Arg::Str("END BACKUP") << Arg::Str("ADD DIFFERENCE FILE")).raise();
+			(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("END BACKUP") << Firebird::Arg::Str("ADD DIFFERENCE FILE")).raise();
 
 		if (clauses & CLAUSE_DROP_DIFFERENCE)
-			(Arg::PrivateDyn(298) << Arg::Str("END BACKUP") << Arg::Str("DROP DIFFERENCE FILE")).raise();
+			(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("END BACKUP") << Firebird::Arg::Str("DROP DIFFERENCE FILE")).raise();
 	}
 
 	if ((clauses & CLAUSE_DROP_DIFFERENCE) && differenceFile.hasData())
-		(Arg::PrivateDyn(298) << Arg::Str("ADD DIFFERENCE FILE") << Arg::Str("DROP DIFFERENCE FILE")).raise();
+		(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("ADD DIFFERENCE FILE") << Firebird::Arg::Str("DROP DIFFERENCE FILE")).raise();
 
 	if ((clauses & CLAUSE_ENABLE_PUB) && (clauses & CLAUSE_DISABLE_PUB))
-		(Arg::PrivateDyn(298) << Arg::Str("ENABLE PUBLICATION") << Arg::Str("DISABLE PUBLICATION")).raise();
+		(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("ENABLE PUBLICATION") << Firebird::Arg::Str("DISABLE PUBLICATION")).raise();
 
 	if ((clauses & CLAUSE_PUB_INCL_TABLE) && (clauses & CLAUSE_PUB_EXCL_TABLE))
-		(Arg::PrivateDyn(298) << Arg::Str("INCLUDE TABLE TO PUBLICATION") << Arg::Str("EXCLUDE TABLE FROM PUBLICATION")).raise();
+		(Firebird::Arg::PrivateDyn(298) << Firebird::Arg::Str("INCLUDE TABLE TO PUBLICATION") << Firebird::Arg::Str("EXCLUDE TABLE FROM PUBLICATION")).raise();
 }
 
 void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -16660,10 +16660,10 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			// msg 297: Concurrent ALTER DATABASE is not supported
 			if (!conflict_trans)
-				Arg::PrivateDyn(297).raise();
+				Firebird::Arg::PrivateDyn(297).raise();
 
-			// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
-			(Arg::PrivateDyn(297) << Arg::Gds(isc_concurrent_transaction) << Arg::Int64(conflict_trans)).raise();
+			// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
+			(Firebird::Arg::PrivateDyn(297) << Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(conflict_trans)).raise();
 		}
 	}
 
@@ -16745,7 +16745,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				END_FOR
 
 				if (!found)
-					status_exception::raise(Arg::Gds(isc_dyn_table_not_found) << tableName.toQuotedString());
+					status_exception::raise(Firebird::Arg::Gds(isc_dyn_table_not_found) << tableName.toQuotedString());
 			}
 		}
 
@@ -16800,7 +16800,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				if (!METD_get_charset(transaction, setDefaultCharSet))
 				{
 					// specified character set not found
-					status_exception::raise(Arg::Gds(isc_charset_not_found) << setDefaultCharSet.toQuotedString());
+					status_exception::raise(Firebird::Arg::Gds(isc_charset_not_found) << setDefaultCharSet.toQuotedString());
 				}
 
 				DBB.RDB$CHARACTER_SET_SCHEMA_NAME.NULL = FALSE;
@@ -16917,14 +16917,14 @@ void AlterDatabaseNode::changeBackupMode(thread_db* tdbb, jrd_tra* transaction, 
 	{
 		// msg 217: "Database is already in the physical backup mode"
 		// msg 218: "Database is not in the physical backup mode"
-		status_exception::raise(Arg::PrivateDyn(clause == CLAUSE_BEGIN_BACKUP ? 217 : 218));
+		status_exception::raise(Firebird::Arg::PrivateDyn(clause == CLAUSE_BEGIN_BACKUP ? 217 : 218));
 	}
 
 	if (!found)
 	{
 		// msg 218: "Database is not in the physical backup mode"
 		// msg 215: "Difference file is not defined"
-		status_exception::raise(Arg::PrivateDyn(clause == CLAUSE_END_BACKUP ? 218 : 215));
+		status_exception::raise(Firebird::Arg::PrivateDyn(clause == CLAUSE_END_BACKUP ? 218 : 215));
 	}
 }
 
@@ -16945,7 +16945,7 @@ void AlterDatabaseNode::defineDifference(thread_db* tdbb, jrd_tra* transaction, 
 	if (found)
 	{
 		// msg 216: "Difference file is already defined"
-		status_exception::raise(Arg::PrivateDyn(216));
+		status_exception::raise(Firebird::Arg::PrivateDyn(216));
 	}
 
 	request.reset(tdbb, drq_s_difference, DYN_REQUESTS);
@@ -16954,7 +16954,7 @@ void AlterDatabaseNode::defineDifference(thread_db* tdbb, jrd_tra* transaction, 
 		FIL IN RDB$FILES
 	{
 		if (file.length() >= sizeof(FIL.RDB$FILE_NAME))
-			status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_name_longer));
 
 		strcpy(FIL.RDB$FILE_NAME, file.c_str());
 		FIL.RDB$FILE_FLAGS = FILE_difference;
@@ -17027,7 +17027,7 @@ string CreateAlterSchemaNode::internalPrint(NodePrinter& printer) const
 DdlNode* CreateAlterSchemaNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (create && (name == "INFORMATION_SCHEMA" || name == "DEFINITION_SCHEMA"))
-		status_exception::raise(Arg::Gds(isc_dyn_cannot_create_reserved_schema) << name.toQuotedString());
+		status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_create_reserved_schema) << name.toQuotedString());
 
 	dsqlScratch->ddlSchema = name;
 
@@ -17036,7 +17036,7 @@ DdlNode* CreateAlterSchemaNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->qualifyExistingName(setDefaultCharSet.value(), obj_charset);
 
 		if (!METD_get_charset(dsqlScratch->getTransaction(), setDefaultCharSet.value()))
-			status_exception::raise(Arg::Gds(isc_charset_not_found) << setDefaultCharSet->toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_charset_not_found) << setDefaultCharSet->toQuotedString());
 	}
 
 	return DdlNode::dsqlPass(dsqlScratch);
@@ -17067,7 +17067,7 @@ void CreateAlterSchemaNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			if (create)	// create or alter
 				executeCreate(tdbb, dsqlScratch, transaction);
 			else
-				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << name.toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_dyn_schema_not_found) << name.toQuotedString());
 		}
 	}
 	else
@@ -17173,7 +17173,7 @@ bool CreateAlterSchemaNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* d
 		WITH SCH.RDB$SCHEMA_NAME = name.c_str()
 	{
 		if (SCH.RDB$SYSTEM_FLAG)
-			status_exception::raise(Arg::Gds(isc_dyn_cannot_mod_system_schema));
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_mod_system_schema));
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_SCHEMA, qualifiedName, {});
 
@@ -17261,14 +17261,14 @@ void DropSchemaNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		WITH SCH.RDB$SCHEMA_NAME = name.c_str()
 	{
 		if (SCH.RDB$SYSTEM_FLAG)
-			status_exception::raise(Arg::Gds(isc_dyn_cannot_mod_system_schema));
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_mod_system_schema));
 
 		found = true;
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_SCHEMA, qualifiedName, {});
 
 		if (collectObjects(tdbb, transaction))
-			status_exception::raise(Arg::Gds(isc_dyn_cannot_drop_non_emptyschema) << name.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_drop_non_emptyschema) << name.toQuotedString());
 
 		ERASE SCH;
 
@@ -17314,8 +17314,8 @@ void DropSchemaNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (!found && !silent)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_no_meta_update) <<
-			Arg::Gds(isc_dyn_schema_not_found) << name.toQuotedString());
+			Firebird::Arg::Gds(isc_no_meta_update) <<
+			Firebird::Arg::Gds(isc_dyn_schema_not_found) << name.toQuotedString());
 	}
 
 	if (found)

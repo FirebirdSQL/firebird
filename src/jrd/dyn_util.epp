@@ -53,7 +53,7 @@
 #include "../common/utils_proto.h"
 #include "../jrd/btr_proto.h"
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 using namespace Firebird;
 using namespace Firebird::Jrd;
@@ -358,7 +358,7 @@ void DYN_UTIL_check_unique_name(thread_db* tdbb, const QualifiedName& object_nam
 	USHORT errorCode;
 
 	if (!DYN_UTIL_check_unique_name_nothrow(tdbb, object_name, object_type, &errorCode, true))
-		status_exception::raise(Arg::PrivateDyn(errorCode) << object_name.toQuotedString());
+		status_exception::raise(Firebird::Arg::PrivateDyn(errorCode) << object_name.toQuotedString());
 }
 
 

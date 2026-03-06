@@ -376,7 +376,7 @@ static void open_blob(thread_db* tdbb,
 
 	if (!filter || !filter->blf_filter)
 	{
-		status_exception::raise(Arg::Gds(isc_nofilter) << Arg::Num(from) << Arg::Num(to));
+		status_exception::raise(Firebird::Arg::Gds(isc_nofilter) << Firebird::Arg::Num(from) << Firebird::Arg::Num(to));
 	}
 
 	// Allocate a filter control block and open blob

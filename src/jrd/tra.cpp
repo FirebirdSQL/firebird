@@ -469,7 +469,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	}
 
 	if (transaction->tra_flags & TRA_invalidated)
-		ERR_post(Arg::Gds(isc_trans_invalid));
+		ERR_post(Firebird::Arg::Gds(isc_trans_invalid));
 
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
@@ -1041,7 +1041,7 @@ void TRA_prepare(thread_db* tdbb, jrd_tra* transaction, USHORT length, const UCH
 		return;
 
 	if (transaction->tra_flags & TRA_invalidated)
-		ERR_post(Arg::Gds(isc_trans_invalid));
+		ERR_post(Firebird::Arg::Gds(isc_trans_invalid));
 
 	/* If there's a transaction description message, log it to RDB$TRANSACTION
 	We should only log a message to RDB$TRANSACTION if there is a message
@@ -1121,7 +1121,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 
 	// Cannot work on limbo transactions for ReadOnly database
 	if (dbb->readOnly())
-		ERR_post(Arg::Gds(isc_read_only_database));
+		ERR_post(Firebird::Arg::Gds(isc_read_only_database));
 
 	const TraNumber number = isc_portable_integer(id, length);
 	if (number > dbb->dbb_next_transaction)
@@ -1154,9 +1154,9 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 		USHORT flags = 0;
 		gds__msg_lookup(NULL, FB_IMPL_MSG_FACILITY_JRD_BUGCHK, message, sizeof(text), text, &flags);
 
-		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
-		ERR_post(Arg::Gds(isc_no_recon) <<
-				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str(text));
+		// Cannot use Firebird::Arg::Num here because transaction number is 64-bit unsigned integer
+		ERR_post(Firebird::Arg::Gds(isc_no_recon) <<
+				 Firebird::Arg::Gds(isc_tra_state) << Firebird::Arg::Int64(number) << Firebird::Arg::Str(text));
 	}
 
 	MemoryPool* const pool = dbb->createPool();
@@ -1672,7 +1672,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
 		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
-		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_shutinprog) << Firebird::Arg::Str(attachment->att_filename));
 	}
 
 	// To handle the problems of relation locks, allocate a temporary
@@ -1729,7 +1729,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	if (dbb->dbb_ast_flags & DBB_shut_tran &&
 		attachment->att_purge_tid != Thread::getCurrentThreadId())
 	{
-		ERR_post(Arg::Gds(isc_shutinprog) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_shutinprog) << Firebird::Arg::Str(attachment->att_filename));
 	}
 
 	// To handle the problems of relation locks, allocate a temporary
@@ -2010,8 +2010,8 @@ static TraNumber bump_transaction_id(thread_db* tdbb, WIN* window)
 	if (dbb->dbb_next_transaction >= MAX_TRA_NUMBER - 1)
 	{
 		CCH_RELEASE(tdbb, window);
-		ERR_post(Arg::Gds(isc_imp_exc) <<
-				 Arg::Gds(isc_tra_num_exc));
+		ERR_post(Firebird::Arg::Gds(isc_imp_exc) <<
+				 Firebird::Arg::Gds(isc_tra_num_exc));
 	}
 	const TraNumber number = ++dbb->dbb_next_transaction;
 	dbb->assignLastestTransactionId(number);
@@ -2072,8 +2072,8 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 	if (next_transaction >= MAX_TRA_NUMBER - 1)
 	{
 		CCH_RELEASE(tdbb, window);
-		ERR_post(Arg::Gds(isc_imp_exc) <<
-				 Arg::Gds(isc_tra_num_exc));
+		ERR_post(Firebird::Arg::Gds(isc_imp_exc) <<
+				 Firebird::Arg::Gds(isc_tra_num_exc));
 	}
 
 	const TraNumber number = next_transaction + 1;
@@ -2141,8 +2141,8 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 
 	if (level == 30)
 	{
-		ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-				 Arg::Gds(isc_tpb_reserv_max_recursion) << Arg::Num(30));
+		ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+				 Firebird::Arg::Gds(isc_tpb_reserv_max_recursion) << Firebird::Arg::Num(30));
 	}
 
 	// LCK_none < LCK_SR < LCK_PR < LCK_SW < LCK_EX
@@ -2157,16 +2157,16 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		if (level)
 		{
 			lock_type = oldlock; // Preserve the old, more powerful lock.
-			ERR_post_warning(Arg::Warning(isc_tpb_reserv_stronger_wng) << relation->getName().toQuotedString() <<
-																		  Arg::Str(oldname) <<
-																		  Arg::Str(newname));
+			ERR_post_warning(Firebird::Arg::Warning(isc_tpb_reserv_stronger_wng) << relation->getName().toQuotedString() <<
+																		  Firebird::Arg::Str(oldname) <<
+																		  Firebird::Arg::Str(newname));
 		}
 		else
 		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_stronger) << relation->getName().toQuotedString() <<
-														  Arg::Str(oldname) <<
-														  Arg::Str(newname));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_stronger) << relation->getName().toQuotedString() <<
+														  Firebird::Arg::Str(oldname) <<
+														  Firebird::Arg::Str(newname));
 		}
 	}
 
@@ -2176,22 +2176,22 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		// Reject explicit attempts to take locks on virtual tables.
 		if (relation->isVirtual())
 		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_virtualtbl) << relation->getName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_virtualtbl) << relation->getName().toQuotedString());
 		}
 
 		// Reject explicit attempts to take locks on system tables.
 		if (relation->isSystem())
 		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-		    		 Arg::Gds(isc_tpb_reserv_systbl) << relation->getName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+		    		 Firebird::Arg::Gds(isc_tpb_reserv_systbl) << relation->getName().toQuotedString());
 		}
 
 		if (relation->isTemporary() && (lock_type == LCK_PR || lock_type == LCK_EX))
 		{
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_temptbl) << Arg::Str(get_lockname_v3(LCK_PR)) <<
-					 									 Arg::Str(get_lockname_v3(LCK_EX)) <<
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_temptbl) << Firebird::Arg::Str(get_lockname_v3(LCK_PR)) <<
+					 									 Firebird::Arg::Str(get_lockname_v3(LCK_EX)) <<
 														 relation->getName().toQuotedString());
 		}
 	}
@@ -2235,10 +2235,10 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 		if (!base_rel)
 		{
 			// should be a BUGCHECK
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_baserelnotfound) << ctx[i]->vcx_relation_name.toQuotedString() <<
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_baserelnotfound) << ctx[i]->vcx_relation_name.toQuotedString() <<
 																 relation->getName().toQuotedString() <<
-																 Arg::Str(option_name));
+																 Firebird::Arg::Str(option_name));
 		}
 
 		expand_view_lock(tdbb, transaction, base_rel, lock_type, option_name, lockmap, level + 1);
@@ -2597,7 +2597,7 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 			if (!dbb->readOnly())
 				CCH_RELEASE(tdbb, &window);
 #endif
-			ERR_post(Arg::Gds(isc_lock_conflict));
+			ERR_post(Firebird::Arg::Gds(isc_lock_conflict));
 		}
 	}
 
@@ -2871,8 +2871,8 @@ static void transaction_options(thread_db* tdbb,
 	const UCHAR* const end = tpb + tpb_length;
 
 	if (*tpb != isc_tpb_version3 && *tpb != isc_tpb_version1)
-		ERR_post(Arg::Gds(isc_bad_tpb_form) <<
-				 Arg::Gds(isc_wrotpbver));
+		ERR_post(Firebird::Arg::Gds(isc_bad_tpb_form) <<
+				 Firebird::Arg::Gds(isc_wrotpbver));
 
 	Attachment* const attachment = tdbb->getAttachment();
 
@@ -2893,25 +2893,25 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_consistency:
 			if (!isolation.assignOnce(true))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_multiple_txn_isolation));
 			}
 
 			if (read_consistency.isAssigned())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_consistency") << Arg::Str("isc_tpb_read_consistency"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+					Firebird::Arg::Str("isc_tpb_consistency") << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			if (shared_snapshot)
 			{
 				ERR_post(
-					Arg::Gds(isc_bad_tpb_content) <<
+					Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-						Arg::Str("isc_tpb_consistency") << Arg::Str("isc_tpb_at_snapshot_number"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+						Firebird::Arg::Str("isc_tpb_consistency") << Firebird::Arg::Str("isc_tpb_at_snapshot_number"));
 			}
 
 			transaction->tra_flags |= TRA_degree3;
@@ -2921,16 +2921,16 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_concurrency:
 			if (!isolation.assignOnce(true))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_multiple_txn_isolation));
 			}
 
 			if (read_consistency.isAssigned())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_concurrency") << Arg::Str("isc_tpb_read_consistency"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+					Firebird::Arg::Str("isc_tpb_concurrency") << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			transaction->tra_flags &= ~TRA_degree3;
@@ -2940,17 +2940,17 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_read_committed:
 			if (!isolation.assignOnce(true))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_multiple_txn_isolation));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_multiple_txn_isolation));
 			}
 
 			if (shared_snapshot)
 			{
 				ERR_post(
-					Arg::Gds(isc_bad_tpb_content) <<
+					Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-						Arg::Str("isc_tpb_read_committed") << Arg::Str("isc_tpb_at_snapshot_number"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+						Firebird::Arg::Str("isc_tpb_read_committed") << Firebird::Arg::Str("isc_tpb_at_snapshot_number"));
 			}
 
 			transaction->tra_flags &= ~TRA_degree3;
@@ -2958,18 +2958,18 @@ static void transaction_options(thread_db* tdbb,
 			break;
 
 		case isc_tpb_shared:
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_before_table) << Arg::Str("isc_tpb_shared"));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_before_table) << Firebird::Arg::Str("isc_tpb_shared"));
 			break;
 
 		case isc_tpb_protected:
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_before_table) << Arg::Str("isc_tpb_protected"));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_before_table) << Firebird::Arg::Str("isc_tpb_protected"));
 			break;
 
 		case isc_tpb_exclusive:
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_before_table) << Arg::Str("isc_tpb_exclusive"));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_before_table) << Firebird::Arg::Str("isc_tpb_exclusive"));
 			break;
 
 		case isc_tpb_wait:
@@ -2977,14 +2977,14 @@ static void transaction_options(thread_db* tdbb,
 			{
 				if (!wait.asBool())
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_wait") <<
-																	  Arg::Str("isc_tpb_nowait"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_wait") <<
+																	  Firebird::Arg::Str("isc_tpb_nowait"));
 				}
 				else
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_wait"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_wait"));
 				}
 			}
 			break;
@@ -2992,22 +2992,22 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_rec_version:
 			if (isolation.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_rec_version"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_option_without_rc) << Firebird::Arg::Str("isc_tpb_rec_version"));
 			}
 
 			if (!rec_version.assignOnce(true))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_rec_version"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_rec_version"));
 			}
 
 			if (read_consistency.isAssigned())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_rec_version") << Arg::Str("isc_tpb_read_consistency"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+					Firebird::Arg::Str("isc_tpb_rec_version") << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			transaction->tra_flags &= ~TRA_read_consistency;
@@ -3017,22 +3017,22 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_no_rec_version:
 			if (isolation.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_no_rec_version"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_option_without_rc) << Firebird::Arg::Str("isc_tpb_no_rec_version"));
 			}
 
 			if (!rec_version.assignOnce(false))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_no_rec_version"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_no_rec_version"));
 			}
 
 			if (read_consistency.isAssigned())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_no_rec_version") << Arg::Str("isc_tpb_read_consistency"));
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+					Firebird::Arg::Str("isc_tpb_no_rec_version") << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			transaction->tra_flags &= ~(TRA_rec_version | TRA_read_consistency);
@@ -3041,14 +3041,14 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_read_consistency:
 			if (isolation.isAssigned() && !(transaction->tra_flags & TRA_read_committed))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					Arg::Gds(isc_tpb_option_without_rc) << Arg::Str("isc_tpb_read_consistency"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					Firebird::Arg::Gds(isc_tpb_option_without_rc) << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			if (!read_consistency.assignOnce(true))
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_read_consistency"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_read_consistency"));
 			}
 
 			if (rec_version.isAssigned())
@@ -3056,10 +3056,10 @@ static void transaction_options(thread_db* tdbb,
 				const auto tpbStr = rec_version.asBool() ?
 					"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
 
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
 					// 'Option @1 is not valid if @2 was used previously in TPB'
-					Arg::Gds(isc_tpb_conflicting_options) <<
-					Arg::Str("isc_tpb_read_consistency") << Arg::Str(tpbStr) );
+					Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+					Firebird::Arg::Str("isc_tpb_read_consistency") << Firebird::Arg::Str(tpbStr) );
 			}
 
 			transaction->tra_flags |= TRA_read_committed | TRA_read_consistency | TRA_rec_version;
@@ -3068,23 +3068,23 @@ static void transaction_options(thread_db* tdbb,
 		case isc_tpb_nowait:
 			if (lock_timeout.asBool())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
-																  Arg::Str("isc_tpb_lock_timeout"));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_nowait") <<
+																  Firebird::Arg::Str("isc_tpb_lock_timeout"));
 			}
 
 			if (!wait.assignOnce(false))
 			{
 				if (wait.asBool())
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_nowait") <<
-																	  Arg::Str("isc_tpb_wait"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_nowait") <<
+																	  Firebird::Arg::Str("isc_tpb_wait"));
 				}
 				else
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_nowait"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_nowait"));
 				}
 			}
 
@@ -3096,22 +3096,22 @@ static void transaction_options(thread_db* tdbb,
 			{
 				if (!read_only.asBool())
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_read") <<
-																	  Arg::Str("isc_tpb_write"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_read") <<
+																	  Firebird::Arg::Str("isc_tpb_write"));
 				}
 				else
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_read"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_read"));
 				}
 			}
 
 			// Cannot set the whole txn to R/O if we already saw a R/W table reservation.
 			if (anylock_write)
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_readtxn_after_writelock));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_readtxn_after_writelock));
 			}
 
 			transaction->tra_flags |= TRA_readonly;
@@ -3122,14 +3122,14 @@ static void transaction_options(thread_db* tdbb,
 			{
 				if (read_only.asBool())
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_write") <<
-																	  Arg::Str("isc_tpb_read"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_write") <<
+																	  Firebird::Arg::Str("isc_tpb_read"));
 				}
 				else
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_write"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_write"));
 				}
 			}
 
@@ -3149,16 +3149,16 @@ static void transaction_options(thread_db* tdbb,
 			break;
 
 		case isc_tpb_lock_table_schema:
-			ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-					 Arg::Gds(isc_tpb_reserv_before_table) << Arg::Str("isc_tpb_lock_table_schema"));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+					 Firebird::Arg::Gds(isc_tpb_reserv_before_table) << Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 			break;
 
 		case isc_tpb_lock_write:
 			// Cannot set a R/W table reservation if the whole txn is R/O.
 			if (read_only.asBool())
 			{
-				ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-						 Arg::Gds(isc_tpb_writelock_after_readtxn));
+				ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						 Firebird::Arg::Gds(isc_tpb_writelock_after_readtxn));
 			}
 			anylock_write = true;
 			[[fallthrough]];
@@ -3171,37 +3171,37 @@ static void transaction_options(thread_db* tdbb,
 				// Do we have space for the identifier length?
 				if (tpb >= end)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_missing_tlen) << Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_reserv_missing_tlen) << Firebird::Arg::Str(option_name));
 				}
 
 				USHORT len = *tpb++;
 				if (len > MAX_SQL_IDENTIFIER_LEN)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_long_tlen) << Arg::Num(len) <<
-																   Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_reserv_long_tlen) << Firebird::Arg::Num(len) <<
+																   Firebird::Arg::Str(option_name));
 				}
 
 				if (!len)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_null_tlen) << Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_reserv_null_tlen) << Firebird::Arg::Str(option_name));
 				}
 
 				// Does the identifier length surpasses the remaining of the TPB?
 				if (tpb >= end)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_missing_tname) << Arg::Num(len) <<
-							 										   Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_reserv_missing_tname) << Firebird::Arg::Num(len) <<
+							 										   Firebird::Arg::Str(option_name));
 				}
 
 				if (end - tpb < len)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_reserv_corrup_tlen) << Arg::Num(len) <<
-							 										 Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_reserv_corrup_tlen) << Firebird::Arg::Num(len) <<
+							 										 Firebird::Arg::Str(option_name));
 				}
 
 				relationName.object = attachment->nameToMetaCharSet(tdbb,
@@ -3214,42 +3214,42 @@ static void transaction_options(thread_db* tdbb,
 					if (++tpb >= end)
 					{
 						ERR_post(
-							Arg::Gds(isc_bad_tpb_content) <<
-							Arg::Gds(isc_tpb_reserv_missing_tlen) << Arg::Str("isc_tpb_lock_table_schema"));
+							Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							Firebird::Arg::Gds(isc_tpb_reserv_missing_tlen) << Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 					}
 
 					len = *tpb++;
 					if (len > MAX_SQL_IDENTIFIER_LEN)
 					{
 						ERR_post(
-							Arg::Gds(isc_bad_tpb_content) <<
-							Arg::Gds(isc_tpb_reserv_long_tlen) <<
-							Arg::Num(len) << Arg::Str("isc_tpb_lock_table_schema"));
+							Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							Firebird::Arg::Gds(isc_tpb_reserv_long_tlen) <<
+							Firebird::Arg::Num(len) << Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 					}
 
 					if (!len)
 					{
 						ERR_post(
-							Arg::Gds(isc_bad_tpb_content) <<
-							Arg::Gds(isc_tpb_reserv_null_tlen) <<
-							Arg::Str("isc_tpb_lock_table_schema"));
+							Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							Firebird::Arg::Gds(isc_tpb_reserv_null_tlen) <<
+							Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 					}
 
 					// Does the identifier length surpasses the remaining of the TPB?
 					if (tpb >= end)
 					{
 						ERR_post(
-							Arg::Gds(isc_bad_tpb_content) <<
-							Arg::Gds(isc_tpb_reserv_missing_tname) <<
-							Arg::Num(len) << Arg::Str("isc_tpb_lock_table_schema"));
+							Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							Firebird::Arg::Gds(isc_tpb_reserv_missing_tname) <<
+							Firebird::Arg::Num(len) << Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 					}
 
 					if (end - tpb < len)
 					{
 						ERR_post(
-							Arg::Gds(isc_bad_tpb_content) <<
-							Arg::Gds(isc_tpb_reserv_corrup_tlen) <<
-							Arg::Num(len) << Arg::Str("isc_tpb_lock_table_schema"));
+							Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							Firebird::Arg::Gds(isc_tpb_reserv_corrup_tlen) <<
+							Firebird::Arg::Num(len) << Firebird::Arg::Str("isc_tpb_lock_table_schema"));
 					}
 
 					relationName.schema = attachment->nameToMetaCharSet(tdbb,
@@ -3264,9 +3264,9 @@ static void transaction_options(thread_db* tdbb,
 				if (!relation)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_reserv_relnotfound) <<
-						relationName.toQuotedString() << Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_reserv_relnotfound) <<
+						relationName.toQuotedString() << Firebird::Arg::Str(option_name));
 				}
 
 				UCHAR lock_type = (op == isc_tpb_lock_read) ? LCK_none : LCK_SW;
@@ -3300,22 +3300,22 @@ static void transaction_options(thread_db* tdbb,
 				// Harmless for now even if formally invalid.
 				if (tpb >= end)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_missing_len) << Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_missing_len) << Firebird::Arg::Str(option_name));
 				}
 
 				const USHORT len = *tpb++;
 
 				if (tpb >= end && len > 0)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_missing_value) << Arg::Num(len) << Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_missing_value) << Firebird::Arg::Num(len) << Firebird::Arg::Str(option_name));
 				}
 
 				if (end - tpb < len)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_corrupt_len) << Arg::Num(len) << Arg::Str(option_name));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_corrupt_len) << Firebird::Arg::Num(len) << Firebird::Arg::Str(option_name));
 				}
 
 				tpb += len;
@@ -3334,22 +3334,22 @@ static void transaction_options(thread_db* tdbb,
 			{
 				if (wait.isAssigned() && !wait.asBool())
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_conflicting_options) << Arg::Str("isc_tpb_lock_timeout") <<
-																	  Arg::Str("isc_tpb_nowait"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_conflicting_options) << Firebird::Arg::Str("isc_tpb_lock_timeout") <<
+																	  Firebird::Arg::Str("isc_tpb_nowait"));
 				}
 
 				if (!lock_timeout.assignOnce(true))
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_multiple_spec) << Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				// Do we have space for the identifier length?
 				if (tpb >= end)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_missing_len) << Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_missing_len) << Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				const USHORT len = *tpb++;
@@ -3357,36 +3357,36 @@ static void transaction_options(thread_db* tdbb,
 				// Does the encoded number's length surpasses the remaining of the TPB?
 				if (tpb >= end)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_missing_value) << Arg::Num(len) <<
-																Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_missing_value) << Firebird::Arg::Num(len) <<
+																Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				if (end - tpb < len)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_corrupt_len) << Arg::Num(len) <<
-															  Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_corrupt_len) << Firebird::Arg::Num(len) <<
+															  Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				if (!len)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_null_len) << Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_null_len) << Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				if (len > sizeof(ULONG))
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_overflow_len) << Arg::Num(len) << Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_overflow_len) << Firebird::Arg::Num(len) << Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				const SLONG value = gds__vax_integer(tpb, len);
 
 				if (value <= 0 || value > MAX_SSHORT)
 				{
-					ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-							 Arg::Gds(isc_tpb_invalid_value) << Arg::Num(value) << Arg::Str("isc_tpb_lock_timeout"));
+					ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+							 Firebird::Arg::Gds(isc_tpb_invalid_value) << Firebird::Arg::Num(value) << Firebird::Arg::Str("isc_tpb_lock_timeout"));
 				}
 
 				transaction->tra_lock_timeout = (SSHORT) value;
@@ -3402,31 +3402,31 @@ static void transaction_options(thread_db* tdbb,
 				if (shared_snapshot)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_multiple_spec) << Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_multiple_spec) << Firebird::Arg::Str(option_name));
 				}
 
 				if (transaction->tra_flags & TRA_read_committed)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_conflicting_options) <<
-							Arg::Str(option_name) << Arg::Str("isc_tpb_read_committed"));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+							Firebird::Arg::Str(option_name) << Firebird::Arg::Str("isc_tpb_read_committed"));
 				}
 
 				if (transaction->tra_flags & TRA_degree3)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_conflicting_options) <<
-							Arg::Str(option_name) << Arg::Str("isc_tpb_consistency"));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_conflicting_options) <<
+							Firebird::Arg::Str(option_name) << Firebird::Arg::Str("isc_tpb_consistency"));
 				}
 
 				if (tpb >= end)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_missing_len) << Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_missing_len) << Firebird::Arg::Str(option_name));
 				}
 
 				const USHORT len = *tpb++;
@@ -3434,15 +3434,15 @@ static void transaction_options(thread_db* tdbb,
 				if (tpb >= end && len > 0)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_missing_value) << Arg::Num(len) << Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_missing_value) << Firebird::Arg::Num(len) << Firebird::Arg::Str(option_name));
 				}
 
 				if (end - tpb < len || len == 0)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Gds(isc_tpb_corrupt_len) << Arg::Num(len) << Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Gds(isc_tpb_corrupt_len) << Firebird::Arg::Num(len) << Firebird::Arg::Str(option_name));
 				}
 
 				shared_snapshot = true;
@@ -3451,8 +3451,8 @@ static void transaction_options(thread_db* tdbb,
 				if (transaction->tra_snapshot_number == 0)
 				{
 					ERR_post(
-						Arg::Gds(isc_bad_tpb_content) <<
-						Arg::Str(option_name));
+						Firebird::Arg::Gds(isc_bad_tpb_content) <<
+						Firebird::Arg::Str(option_name));
 				}
 
 				tpb += len;
@@ -3460,7 +3460,7 @@ static void transaction_options(thread_db* tdbb,
 			break;
 
 		default:
-			ERR_post(Arg::Gds(isc_bad_tpb_form));
+			ERR_post(Firebird::Arg::Gds(isc_bad_tpb_form));
 		}
 	}
 
@@ -3469,8 +3469,8 @@ static void transaction_options(thread_db* tdbb,
 		const auto tpbStr = rec_version.asBool() ?
 			"isc_tpb_rec_version" : "isc_tpb_no_rec_version";
 
-		ERR_post(Arg::Gds(isc_bad_tpb_content) <<
-				 Arg::Gds(isc_tpb_option_without_rc) << Arg::Str(tpbStr));
+		ERR_post(Firebird::Arg::Gds(isc_bad_tpb_content) <<
+				 Firebird::Arg::Gds(isc_tpb_option_without_rc) << Firebird::Arg::Str(tpbStr));
 	}
 
 	if ((transaction->tra_flags & TRA_read_committed) &&
@@ -3606,7 +3606,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (!dbb->readOnly())
 			CCH_RELEASE(tdbb, &window);
 #endif
-		ERR_post(Arg::Gds(isc_lock_conflict));
+		ERR_post(Firebird::Arg::Gds(isc_lock_conflict));
 	}
 
 	// Link the transaction to the attachment block before releasing
@@ -4184,9 +4184,9 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 				// Relation has been checked earlier and check was failed
 				if (punt)
 				{
-					ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
-						(fld ? Arg::Str("COLUMN") : Arg::Str("TABLE")) <<
-						(Arg::Str(fld ?
+					ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("SELECT") <<
+						(fld ? Firebird::Arg::Str("COLUMN") : Firebird::Arg::Str("TABLE")) <<
+						(Firebird::Arg::Str(fld ?
 							fld->fld_name.toQuotedString().c_str() :
 							blobRelation->getName().toQuotedString().c_str())));
 				}

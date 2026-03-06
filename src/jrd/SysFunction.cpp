@@ -186,7 +186,7 @@ const HashAlgorithmDescriptor* HashAlgorithmDescriptor::find(const HashAlgorithm
 			return *hashDescriptor;
 	}
 
-	status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << name);
+	status_exception::raise(Firebird::Arg::Gds(isc_sysf_invalid_hash_algorithm) << name);
 	return nullptr;
 }
 
@@ -198,7 +198,7 @@ const HashAlgorithmDescriptor* getHashAlgorithmDesc(thread_db* tdbb, const SysFu
 		*cHash = cryptHash;
 
 	if (!algDsc->dsc_address || !algDsc->isText())
-		status_exception::raise(Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
+		status_exception::raise(Firebird::Arg::Gds(isc_sysf_invalid_hash_algorithm) << "<not a string constant>");
 
 	MetaName algorithmName;
 	MOV_get_metaname(tdbb, algDsc, algorithmName);
@@ -449,12 +449,12 @@ double fbcot(double value) noexcept
 }
 
 
-void tomCheck(int err, const Arg::StatusVector& secondary)
+void tomCheck(int err, const Firebird::Arg::StatusVector& secondary)
 {
 	if (err == CRYPT_OK)
 		return;
 
-	status_exception::raise(Arg::Gds(isc_tom_error) << error_to_string(err) << secondary);
+	status_exception::raise(Firebird::Arg::Gds(isc_tom_error) << error_to_string(err) << secondary);
 }
 
 
@@ -1219,8 +1219,8 @@ void makeBin(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 		if (!args[i]->isExact() || args[i]->dsc_scale != 0)
 		{
 			status_exception::raise(
-				Arg::Gds(isc_expression_eval_err) <<
-				Arg::Gds(isc_sysf_argmustbe_exact) << Arg::Str(function->name));
+				Firebird::Arg::Gds(isc_expression_eval_err) <<
+				Firebird::Arg::Gds(isc_sysf_argmustbe_exact) << Firebird::Arg::Str(function->name));
 		}
 
 		if (args[i]->isExact())
@@ -1266,8 +1266,8 @@ void makeBinShift(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 
 		if (!args[i]->isExact() || args[i]->dsc_scale != 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_exact) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argmustbe_exact) << Firebird::Arg::Str(function->name));
 		}
 	}
 
@@ -1493,7 +1493,7 @@ void makeHash(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc* 
 unsigned decodeLen(unsigned len)
 {
  	if (len % 4 || !len)
- 		status_exception::raise(Arg::Gds(isc_tom_decode64len) << Arg::Num(len));
+ 		status_exception::raise(Firebird::Arg::Gds(isc_tom_decode64len) << Firebird::Arg::Num(len));
  	len = len / 4 * 3;
  	return len;
 }
@@ -1517,7 +1517,7 @@ void makeDecode64(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, d
 	else if (args[0]->isText())
 		result->makeVarying(decodeLen(characterLen(dataTypeUtil, args[0])), ttype_binary);
 	else
-		status_exception::raise(Arg::Gds(isc_tom_strblob));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_strblob));
 
 	result->setNullable(args[0]->isNullable());
 }
@@ -1543,7 +1543,7 @@ void makeEncode64(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, d
 			result->makeBlob(isc_blob_text, ttype_ascii);
 	}
 	else
-		status_exception::raise(Arg::Gds(isc_tom_strblob));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_strblob));
 
 	result->setNullable(args[0]->isNullable());
 }
@@ -1558,11 +1558,11 @@ void makeDecodeHex(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, 
 	{
 		const unsigned len = characterLen(dataTypeUtil, args[0]);
 	 	if (len % 2 || !len)
- 			status_exception::raise(Arg::Gds(isc_odd_hex_len) << Arg::Num(len));
+ 			status_exception::raise(Firebird::Arg::Gds(isc_odd_hex_len) << Firebird::Arg::Num(len));
 		result->makeVarying(len / 2, ttype_binary);
 	}
 	else
-		status_exception::raise(Arg::Gds(isc_tom_strblob));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_strblob));
 
 	result->setNullable(args[0]->isNullable());
 }
@@ -1582,7 +1582,7 @@ void makeEncodeHex(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, 
 			result->makeBlob(isc_blob_text, ttype_ascii);
 	}
 	else
-		status_exception::raise(Arg::Gds(isc_tom_strblob));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_strblob));
 
 	result->setNullable(args[0]->isNullable());
 }
@@ -1865,8 +1865,8 @@ void makeRound(DataTypeUtilBase*, const SysFunction* function, dsc* result,
 			result->dsc_scale = 0;
 	}
 	else
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_exact_or_fp) << Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_exact_or_fp) << Firebird::Arg::Str(function->name));
 
 	result->setNullable(value1->isNullable() || (argsCount > 1 && args[1]->isNullable()));
 }
@@ -1991,24 +1991,24 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	case trfCot:
 		if (!v)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_nonzero) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_nonzero) << Firebird::Arg::Str(function->name));
 		}
 		rc = fbcot(v);
 		break;
 	case trfAsin:
 		if (v < -1 || v > 1)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_range_inc1_1) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_range_inc1_1) << Firebird::Arg::Str(function->name));
 		}
 		rc = asin(v);
 		break;
 	case trfAcos:
 		if (v < -1 || v > 1)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_range_inc1_1) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_range_inc1_1) << Firebird::Arg::Str(function->name));
 		}
 		rc = acos(v);
 		break;
@@ -2030,16 +2030,16 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	case trfAcosh:
 		if (v < 1)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_gteq_one) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_gteq_one) << Firebird::Arg::Str(function->name));
 		}
 		rc = log(v + sqrt(v - 1) * sqrt (v + 1));
 		break;
 	case trfAtanh:
 		if (v <= -1 || v >= 1)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_range_exc1_1) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_range_exc1_1) << Firebird::Arg::Str(function->name));
 		}
 		rc = log((1 + v) / (1 - v)) / 2;
 		break;
@@ -2050,8 +2050,8 @@ dsc* evlStdMath(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 	if (std::isinf(rc))
 	{
-		status_exception::raise(Arg::Gds(isc_arith_except) <<
-								Arg::Gds(isc_sysf_fp_overflow) << Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
+								Firebird::Arg::Gds(isc_sysf_fp_overflow) << Firebird::Arg::Str(function->name));
 	}
 
 	impure->vlu_misc.vlu_double = rc;
@@ -2101,7 +2101,7 @@ dsc* evlAbs(thread_db* tdbb, const SysFunction*, const NestValueArray& args, imp
 			impure->vlu_misc.vlu_int64 = MOV_get_int64(tdbb, value, value->dsc_scale);
 
 			if (impure->vlu_misc.vlu_int64 == MIN_SINT64)
-				status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+				status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
 			else if (impure->vlu_misc.vlu_int64 < 0)
 				impure->vlu_misc.vlu_int64 = -impure->vlu_misc.vlu_int64;
 
@@ -2131,7 +2131,7 @@ dsc* evlAsciiChar(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 
 	const SLONG code = MOV_get_long(tdbb, value, 0);
 	if (!(code >= 0 && code <= 255))
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
 
 	impure->vlu_misc.vlu_uchar = (UCHAR) code;
 	impure->vlu_desc.makeText(1, ttype_none, &impure->vlu_misc.vlu_uchar);
@@ -2164,7 +2164,7 @@ dsc* evlAsciiVal(thread_db* tdbb, const SysFunction*, const NestValueArray& args
 		UCHAR dummy[4];
 
 		if (cs->substring(length, p, sizeof(dummy), dummy, 0, 1) != 1)
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_transliteration_failed));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_transliteration_failed));
 
 		impure->vlu_misc.vlu_short = p[0];
 	}
@@ -2195,8 +2195,8 @@ dsc* evlAtan2(thread_db* tdbb, const SysFunction* function, const NestValueArray
 
 	if (value1 == 0 && value2 == 0)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-								Arg::Gds(isc_sysf_argscant_both_be_zero) << Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+								Firebird::Arg::Gds(isc_sysf_argscant_both_be_zero) << Firebird::Arg::Str(function->name));
 	}
 
 	impure->vlu_misc.vlu_double = atan2(value1, value2);
@@ -2328,8 +2328,8 @@ dsc* evlBinShift(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	const SINT64 shift = MOV_get_int64(tdbb, value2, 0);
 	if (shift < 0)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-								Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+								Firebird::Arg::Gds(isc_sysf_argmustbe_nonneg) << Firebird::Arg::Str(function->name));
 	}
 
 	const Function func = (Function)(IPTR) function->misc;
@@ -2372,7 +2372,7 @@ static void appendFromBlob(thread_db* tdbb, jrd_tra* transaction, blb* blob,
 		return;
 
 	if (memcmp(blobDsc->dsc_address, srcDsc->dsc_address, sizeof(bid)) == 0)
-		status_exception::raise(Arg::Gds(isc_random) << Arg::Str("Can not append blob to itself"));
+		status_exception::raise(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Can not append blob to itself"));
 
 	UCharBuffer bpb;
 	BLB_gen_bpb_from_descs(srcDsc, blobDsc, bpb);
@@ -2432,7 +2432,7 @@ dsc* evlBlobAppend(thread_db* tdbb, const SysFunction* function, const NestValue
 		if (!blob_id.bid_internal.bid_relation_id)
 		{
 			if (!transaction->tra_blobs->locate(blob_id.bid_temp_id()))
-				status_exception::raise(Arg::Gds(isc_bad_segstr_id));
+				status_exception::raise(Firebird::Arg::Gds(isc_bad_segstr_id));
 
 			BlobIndex blobIdx = transaction->tra_blobs->current();
 			if (!blobIdx.bli_materialized && (blobIdx.bli_blob_object->blb_flags & BLB_close_on_read))
@@ -2601,8 +2601,8 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 
 	if (!value->isText())
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argviolates_uuidtype) << Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argviolates_uuidtype) << Firebird::Arg::Str(function->name));
 	}
 
 	UCHAR* data_temp;
@@ -2628,10 +2628,10 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 	// validate the UUID
 	if (len != Uuid::STR_LEN)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argviolates_uuidlen) <<
-										Arg::Num(Uuid::STR_LEN) <<
-										Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argviolates_uuidlen) <<
+										Firebird::Arg::Num(Uuid::STR_LEN) <<
+										Firebird::Arg::Str(function->name));
 	}
 
 	for (unsigned int i = 0; i < Uuid::STR_LEN; ++i)
@@ -2640,11 +2640,11 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 		{
 			if (data[i] != '-')
 			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-											Arg::Gds(isc_sysf_argviolates_uuidfmt) <<
-												Arg::Str(showInvalidChar(data[i])) <<
-												Arg::Num(i + 1) <<
-												Arg::Str(function->name));
+				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+											Firebird::Arg::Gds(isc_sysf_argviolates_uuidfmt) <<
+												Firebird::Arg::Str(showInvalidChar(data[i])) <<
+												Firebird::Arg::Num(i + 1) <<
+												Firebird::Arg::Str(function->name));
 			}
 		}
 		else
@@ -2654,11 +2654,11 @@ dsc* evlCharToUuid(thread_db* tdbb, const SysFunction* function, const NestValue
 
 			if (!((hex >= 'A' && hex <= 'F') || (c >= '0' && c <= '9')))
 			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-											Arg::Gds(isc_sysf_argviolates_guidigits) <<
-												Arg::Str(showInvalidChar(c)) <<
-												Arg::Num(i + 1) <<
-												Arg::Str(function->name));
+				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+											Firebird::Arg::Gds(isc_sysf_argviolates_guidigits) <<
+												Firebird::Arg::Str(showInvalidChar(c)) <<
+												Firebird::Arg::Num(i + 1) <<
+												Firebird::Arg::Str(function->name));
 			}
 		}
 	}
@@ -2761,9 +2761,9 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 				part != blr_extract_second &&
 				part != blr_extract_millisecond)
 			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-											Arg::Gds(isc_sysf_invalid_addpart_time) <<
-												Arg::Str(function->name));
+				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+											Firebird::Arg::Gds(isc_sysf_invalid_addpart_time) <<
+												Firebird::Arg::Str(function->name));
 			}
 			break;
 
@@ -2776,7 +2776,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 				part == blr_extract_second ||
 				part == blr_extract_millisecond)
 			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err));
+				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err));
 			}
 			*/
 			break;
@@ -2787,9 +2787,9 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_add_datetime) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_add_datetime) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -2809,7 +2809,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		case blr_extract_year:
 			{
 				if (fb_utils::abs64Compare(quantity, 9999) > 0)
-					ERR_post(Arg::Gds(rangeExceededStatus));
+					ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 
 				tm times;
 				int fractions;
@@ -2828,7 +2828,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 		case blr_extract_month:
 			{
 				if (fb_utils::abs64Compare(quantity, 9999 * 12) > 0)
-					ERR_post(Arg::Gds(rangeExceededStatus));
+					ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 
 				tm times;
 				int fractions;
@@ -2873,19 +2873,19 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 		case blr_extract_day:
 			if (fb_utils::abs64Compare(quantity, TimeStamp::MAX_DATE - TimeStamp::MIN_DATE) > 0)
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 			timestamp.value().timestamp_date += quantity;
 			break;
 
 		case blr_extract_week:
 			if (fb_utils::abs64Compare(quantity, (TimeStamp::MAX_DATE - TimeStamp::MIN_DATE) / 7 + 1) > 0)
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 			timestamp.value().timestamp_date += quantity * 7;
 			break;
 
 		case blr_extract_hour:
 			if (fb_utils::abs64Compare(quantity, SINT64(TimeStamp::MAX_DATE - TimeStamp::MIN_DATE + 1) * 24) > 0)
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 24;
@@ -2895,7 +2895,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 		case blr_extract_minute:
 			if (fb_utils::abs64Compare(quantity, SINT64(TimeStamp::MAX_DATE - TimeStamp::MIN_DATE + 1) * 24 * 60) > 0)
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 
 			if (valueDsc->dsc_dtype == dtype_sql_date)
 				timestamp.value().timestamp_date += quantity / 1440; // 1440 == 24 * 60
@@ -2907,7 +2907,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (fb_utils::abs64Compare(quantity,
 					SINT64(TimeStamp::MAX_DATE - TimeStamp::MIN_DATE + 1) * 24 * 60 * 60) > 0)
 			{
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 			}
 
 			if (valueDsc->dsc_dtype == dtype_sql_date)
@@ -2920,7 +2920,7 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			if (fb_utils::abs64Compare(quantity,
 					SINT64(TimeStamp::MAX_DATE - TimeStamp::MIN_DATE + 1) * 24 * 60 * 60 * 1000 * milliPow) > 0)
 			{
-				ERR_post(Arg::Gds(rangeExceededStatus));
+				ERR_post(Firebird::Arg::Gds(rangeExceededStatus));
 			}
 
 			if (valueDsc->dsc_dtype == dtype_sql_date)
@@ -2930,15 +2930,15 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_addpart_dtime) <<
-											Arg::Str(getPartName(part)) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_addpart_dtime) <<
+											Firebird::Arg::Str(getPartName(part)) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
 	if (!TimeStamp::isValidTimeStamp(timestamp.value()))
-		status_exception::raise(Arg::Gds(rangeExceededStatus));
+		status_exception::raise(Firebird::Arg::Gds(rangeExceededStatus));
 
 	EVL_make_value(tdbb, valueDsc, impure);
 
@@ -2959,8 +2959,8 @@ dsc* evlDateAdd(thread_db* tdbb, const SysFunction* function, const NestValueArr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_add_dtime_rc));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_add_dtime_rc));
 			break;
 	}
 
@@ -3001,14 +3001,14 @@ private:
 	void registerCipher(T& desc)
 	{
 		if (register_cipher(&desc) == -1)
-			status_exception::raise(Arg::Gds(isc_tom_reg) << "cipher");
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_reg) << "cipher");
 	}
 
 	template <typename T>
 	void registerHash(T& desc)
 	{
 		if (register_hash(&desc) == -1)
-			status_exception::raise(Arg::Gds(isc_tom_reg) << "hash");
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_reg) << "hash");
 	}
 };
 
@@ -3023,11 +3023,11 @@ public:
 		// register yarrow
 		index = register_prng(&yarrow_desc);
 		if (index == -1)
-			status_exception::raise(Arg::Gds(isc_random) << "Error registering PRNG yarrow");
+			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Error registering PRNG yarrow");
 
 		// setup the PRNG
-		tomCheck(yarrow_start(&state), Arg::Gds(isc_tom_yarrow_start));
-		tomCheck(rng_make_prng(64, index, &state, NULL),  Arg::Gds(isc_tom_yarrow_setup));
+		tomCheck(yarrow_start(&state), Firebird::Arg::Gds(isc_tom_yarrow_start));
+		tomCheck(rng_make_prng(64, index, &state, NULL),  Firebird::Arg::Gds(isc_tom_yarrow_setup));
 	}
 
 	~PseudoRandom()
@@ -3200,7 +3200,7 @@ public:
 		{
 			AutoPtr<blb> b(blb::open(tdbb, tdbb->getRequest()->req_transaction, (bid*) desc->dsc_address));
 			if (b->blb_length > MAX_VARY_COLUMN_SIZE)
-				(Arg::Gds(isc_expression_eval_err) << Arg::Gds(isc_malformed_string)).raise();
+				(Firebird::Arg::Gds(isc_expression_eval_err) << Firebird::Arg::Gds(isc_malformed_string)).raise();
 
 			UCHAR* data = buf.getBuffer(b->blb_length);
 			l = b->BLB_get_data(tdbb, data, b->blb_length, false);
@@ -3212,7 +3212,7 @@ public:
 		if (l == 0)
 		{
 			if (objectName)
-				(Arg::Gds(isc_sysf_invalid_null_empty) << objectName).raise();
+				(Firebird::Arg::Gds(isc_sysf_invalid_null_empty) << objectName).raise();
 
 			v = nullptr;
 		}
@@ -3291,7 +3291,7 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 	{
 		a = find(algorithms, algorithmName);
 		if (!a)
-			status_exception::raise(Arg::Gds(isc_tom_algorithm) << algorithmName);
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_algorithm) << algorithmName);
 	}
 
 	constexpr unsigned MODE_ECB = 1;
@@ -3313,14 +3313,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 	if (cipher >= 0)
 	{
 		if (!modeName.hasData())
-			status_exception::raise(Arg::Gds(isc_tom_mode_miss));
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_mode_miss));
 
 		m = find(modes, modeName);
 		if (!m)
-			status_exception::raise(Arg::Gds(isc_tom_mode_bad));
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_mode_bad));
 	}
 	else if (modeName.hasData())
-		status_exception::raise(Arg::Gds(isc_tom_no_mode));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_no_mode));
 
 	DscValue key(tdbb, dscs[CRYPT_ARG_KEY], "crypt key");
 
@@ -3328,10 +3328,10 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 	if ((m && (m->code != MODE_ECB)) || (a && (a->code != ALG_RC4)))	// all other need IV
 	{
 		if (!iv.getLength())
-			status_exception::raise(Arg::Gds(isc_tom_iv_miss));
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_iv_miss));
 	}
 	else if (iv.getLength())
-		status_exception::raise(Arg::Gds(isc_tom_no_iv));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_no_iv));
 
 	//constexpr unsigned CTR_32 = 1;
 	//constexpr unsigned CTR_64 = 2;
@@ -3353,13 +3353,13 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		{
 			c = find(counterTypes, counterType);
 			if (!c)
-				status_exception::raise(Arg::Gds(isc_tom_ctrtype_bad) << counterType);
+				status_exception::raise(Firebird::Arg::Gds(isc_tom_ctrtype_bad) << counterType);
 		}
 		else
 			c = &counterTypes[IDX_CTR_LITTLE_ENDIAN];
 	}
 	else if (counterType.hasData())
-		status_exception::raise(Arg::Gds(isc_tom_no_ctrtype) << (m ? m->value : "<unknown>"));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_no_ctrtype) << (m ? m->value : "<unknown>"));
 
 	FB_UINT64 ctrVal = 0;
 	if ((m && (m->code == MODE_CTR)) || (a && (a->code == ALG_CHACHA)))
@@ -3368,11 +3368,11 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		{
 			ctrVal = MOV_get_int64(tdbb, dscs[CRYPT_ARG_COUNTER], 0);
 			if (m && ctrVal > key.getLength())
-				status_exception::raise(Arg::Gds(isc_tom_ctr_big) << Arg::Num(ctrVal) <<  Arg::Num(key.getLength()));
+				status_exception::raise(Firebird::Arg::Gds(isc_tom_ctr_big) << Firebird::Arg::Num(ctrVal) <<  Firebird::Arg::Num(key.getLength()));
 		}
 	}
 	else if (dscHasData(dscs[CRYPT_ARG_COUNTER]))
-			status_exception::raise(Arg::Gds(isc_tom_no_ctr) << (m ? "mode" : "cipher") << (m ? m->value : a->value));
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_no_ctr) << (m ? "mode" : "cipher") << (m ? m->value : a->value));
 
 	if (!dscs[CRYPT_ARG_VALUE])
 		return nullptr;
@@ -3383,21 +3383,21 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 	{
 		const unsigned blockLen = cipher_descriptor[cipher].block_length;
 		if (iv.getLength() && iv.getLength() != blockLen)
-			status_exception::raise(Arg::Gds(isc_tom_iv_length) << Arg::Num(iv.getLength()) << Arg::Num(blockLen));
+			status_exception::raise(Firebird::Arg::Gds(isc_tom_iv_length) << Firebird::Arg::Num(iv.getLength()) << Firebird::Arg::Num(blockLen));
 
 		switch (m->code)
 		{
 		case MODE_ECB:
 			{
 				symmetric_ECB ecb;
-				tomCheck(ecb_start(cipher, key.getBytes(), key.getLength(), 0, &ecb), Arg::Gds(isc_tom_init_mode) << "ECB");
+				tomCheck(ecb_start(cipher, key.getBytes(), key.getLength(), 0, &ecb), Firebird::Arg::Gds(isc_tom_init_mode) << "ECB");
 
 				while (dp.hasData())
 				{
 					if (encryptFlag)
-						tomCheck(ecb_encrypt(dp.from(), dp.to(), dp.length(), &ecb), Arg::Gds(isc_tom_crypt_mode) << "ECB");
+						tomCheck(ecb_encrypt(dp.from(), dp.to(), dp.length(), &ecb), Firebird::Arg::Gds(isc_tom_crypt_mode) << "ECB");
 					else
-						tomCheck(ecb_decrypt(dp.from(), dp.to(), dp.length(), &ecb), Arg::Gds(isc_tom_decrypt_mode) << "ECB");
+						tomCheck(ecb_decrypt(dp.from(), dp.to(), dp.length(), &ecb), Firebird::Arg::Gds(isc_tom_decrypt_mode) << "ECB");
 					dp.next();
 				}
 				ecb_done(&ecb);
@@ -3407,14 +3407,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		case MODE_CBC:
 			{
 				symmetric_CBC cbc;
-				tomCheck(cbc_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &cbc), Arg::Gds(isc_tom_init_mode) << "CBC");
+				tomCheck(cbc_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &cbc), Firebird::Arg::Gds(isc_tom_init_mode) << "CBC");
 
 				while (dp.hasData())
 				{
 					if (encryptFlag)
-						tomCheck(cbc_encrypt(dp.from(), dp.to(), dp.length(), &cbc), Arg::Gds(isc_tom_crypt_mode) << "CBC");
+						tomCheck(cbc_encrypt(dp.from(), dp.to(), dp.length(), &cbc), Firebird::Arg::Gds(isc_tom_crypt_mode) << "CBC");
 					else
-						tomCheck(cbc_decrypt(dp.from(), dp.to(), dp.length(), &cbc), Arg::Gds(isc_tom_decrypt_mode) << "CBC");
+						tomCheck(cbc_decrypt(dp.from(), dp.to(), dp.length(), &cbc), Firebird::Arg::Gds(isc_tom_decrypt_mode) << "CBC");
 					dp.next();
 				}
 				cbc_done(&cbc);
@@ -3424,14 +3424,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		case MODE_CFB:
 			{
 				symmetric_CFB cfb;
-				tomCheck(cfb_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &cfb), Arg::Gds(isc_tom_init_mode) << "CFB");
+				tomCheck(cfb_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &cfb), Firebird::Arg::Gds(isc_tom_init_mode) << "CFB");
 
 				while (dp.hasData())
 				{
 					if (encryptFlag)
-						tomCheck(cfb_encrypt(dp.from(), dp.to(), dp.length(), &cfb), Arg::Gds(isc_tom_crypt_mode) << "CFB");
+						tomCheck(cfb_encrypt(dp.from(), dp.to(), dp.length(), &cfb), Firebird::Arg::Gds(isc_tom_crypt_mode) << "CFB");
 					else
-						tomCheck(cfb_decrypt(dp.from(), dp.to(), dp.length(), &cfb), Arg::Gds(isc_tom_decrypt_mode) << "CFB");
+						tomCheck(cfb_decrypt(dp.from(), dp.to(), dp.length(), &cfb), Firebird::Arg::Gds(isc_tom_decrypt_mode) << "CFB");
 					dp.next();
 				}
 				cfb_done(&cfb);
@@ -3441,14 +3441,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		case MODE_OFB:
 			{
 				symmetric_OFB ofb;
-				tomCheck(ofb_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &ofb), Arg::Gds(isc_tom_init_mode) << "OFB");
+				tomCheck(ofb_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0, &ofb), Firebird::Arg::Gds(isc_tom_init_mode) << "OFB");
 
 				while (dp.hasData())
 				{
 					if (encryptFlag)
-						tomCheck(ofb_encrypt(dp.from(), dp.to(), dp.length(), &ofb), Arg::Gds(isc_tom_crypt_mode) << "OFB");
+						tomCheck(ofb_encrypt(dp.from(), dp.to(), dp.length(), &ofb), Firebird::Arg::Gds(isc_tom_crypt_mode) << "OFB");
 					else
-						tomCheck(ofb_decrypt(dp.from(), dp.to(), dp.length(), &ofb), Arg::Gds(isc_tom_decrypt_mode) << "OFB");
+						tomCheck(ofb_decrypt(dp.from(), dp.to(), dp.length(), &ofb), Firebird::Arg::Gds(isc_tom_decrypt_mode) << "OFB");
 					dp.next();
 				}
 				ofb_done(&ofb);
@@ -3460,14 +3460,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 				symmetric_CTR ctr;
 				tomCheck(ctr_start(cipher, iv.getBytes(), key.getBytes(), key.getLength(), 0,
 					(c->code == CTR_LITTLE_ENDIAN ? CTR_COUNTER_LITTLE_ENDIAN : CTR_COUNTER_BIG_ENDIAN) | ctrVal,
-					&ctr), Arg::Gds(isc_tom_init_mode) << "CTR");
+					&ctr), Firebird::Arg::Gds(isc_tom_init_mode) << "CTR");
 
 				while (dp.hasData())
 				{
 					if (encryptFlag)
-						tomCheck(ctr_encrypt(dp.from(), dp.to(), dp.length(), &ctr), Arg::Gds(isc_tom_crypt_mode) << "CTR");
+						tomCheck(ctr_encrypt(dp.from(), dp.to(), dp.length(), &ctr), Firebird::Arg::Gds(isc_tom_crypt_mode) << "CTR");
 					else
-						tomCheck(ctr_decrypt(dp.from(), dp.to(), dp.length(), &ctr), Arg::Gds(isc_tom_decrypt_mode) << "CTR");
+						tomCheck(ctr_decrypt(dp.from(), dp.to(), dp.length(), &ctr), Firebird::Arg::Gds(isc_tom_decrypt_mode) << "CTR");
 					dp.next();
 				}
 				ctr_done(&ctr);
@@ -3483,14 +3483,14 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		case ALG_RC4:
 			{
 				if (key.getLength() < 5)		// 40 bit - constant from tomcrypt
-					(Arg::Gds(isc_tom_key_length) << Arg::Num(key.getLength()) << Arg::Num(4)).raise();
+					(Firebird::Arg::Gds(isc_tom_key_length) << Firebird::Arg::Num(key.getLength()) << Firebird::Arg::Num(4)).raise();
 				rc4_state rc4;
-				tomCheck(rc4_stream_setup(&rc4, key.getBytes(), key.getLength()), Arg::Gds(isc_tom_init_cip) << "RC4");
+				tomCheck(rc4_stream_setup(&rc4, key.getBytes(), key.getLength()), Firebird::Arg::Gds(isc_tom_init_cip) << "RC4");
 
 				while (dp.hasData())
 				{
 					tomCheck(rc4_stream_crypt(&rc4, dp.from(), dp.length(), dp.to()),
-						Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "RC4");
+						Firebird::Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "RC4");
 					dp.next();
 				}
 				rc4_stream_done(&rc4);
@@ -3506,26 +3506,26 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 				case 32:
 					break;
 				default:
-					status_exception::raise(Arg::Gds(isc_tom_chacha_key) << Arg::Num(key.getLength()));
+					status_exception::raise(Firebird::Arg::Gds(isc_tom_chacha_key) << Firebird::Arg::Num(key.getLength()));
 				}
-				tomCheck(chacha_setup(&chacha, key.getBytes(), key.getLength(), 20), Arg::Gds(isc_tom_init_cip) << "CHACHA#20");
+				tomCheck(chacha_setup(&chacha, key.getBytes(), key.getLength(), 20), Firebird::Arg::Gds(isc_tom_init_cip) << "CHACHA#20");
 				switch (iv.getLength())
 				{
 				case 12:
-					tomCheck(chacha_ivctr32(&chacha, iv.getBytes(), iv.getLength(), ctrVal), Arg::Gds(isc_tom_setup_cip) << "CHACHA#20");
+					tomCheck(chacha_ivctr32(&chacha, iv.getBytes(), iv.getLength(), ctrVal), Firebird::Arg::Gds(isc_tom_setup_cip) << "CHACHA#20");
 					break;
 				case 8:
-					tomCheck(chacha_ivctr64(&chacha, iv.getBytes(), iv.getLength(), ctrVal),  Arg::Gds(isc_tom_setup_cip) << "CHACHA#20");
+					tomCheck(chacha_ivctr64(&chacha, iv.getBytes(), iv.getLength(), ctrVal),  Firebird::Arg::Gds(isc_tom_setup_cip) << "CHACHA#20");
 					break;
 				default:
-					status_exception::raise(Arg::Gds(isc_tom_setup_chacha) << Arg::Num(iv.getLength()));
+					status_exception::raise(Firebird::Arg::Gds(isc_tom_setup_chacha) << Firebird::Arg::Num(iv.getLength()));
 					break;
 				}
 
 				while (dp.hasData())
 				{
 					tomCheck(chacha_crypt(&chacha, dp.from(), dp.length(), dp.to()),
-						Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "CHACHA#20");
+						Firebird::Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "CHACHA#20");
 					dp.next();
 				}
 				chacha_done(&chacha);
@@ -3535,15 +3535,15 @@ dsc* evlEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const NestV
 		case ALG_SOBER:
 			{
 				if (key.getLength() < 4)		// 4, 8, 12, ...
-					(Arg::Gds(isc_tom_key_length) << Arg::Num(key.getLength()) << Arg::Num(3)).raise();
+					(Firebird::Arg::Gds(isc_tom_key_length) << Firebird::Arg::Num(key.getLength()) << Firebird::Arg::Num(3)).raise();
 				sober128_state sober128;
-				tomCheck(sober128_stream_setup(&sober128, key.getBytes(), key.getLength()), Arg::Gds(isc_tom_init_cip) << "SOBER-128");
-				tomCheck(sober128_stream_setiv(&sober128, iv.getBytes(), iv.getLength()),  Arg::Gds(isc_tom_setup_cip) << "SOBER-128");
+				tomCheck(sober128_stream_setup(&sober128, key.getBytes(), key.getLength()), Firebird::Arg::Gds(isc_tom_init_cip) << "SOBER-128");
+				tomCheck(sober128_stream_setiv(&sober128, iv.getBytes(), iv.getLength()),  Firebird::Arg::Gds(isc_tom_setup_cip) << "SOBER-128");
 
 				while (dp.hasData())
 				{
 					tomCheck(sober128_stream_crypt(&sober128, dp.from(), dp.length(), dp.to()),
-						Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "SOBER-128");
+						Firebird::Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "SOBER-128");
 					dp.next();
 				}
 				sober128_stream_done(&sober128);
@@ -3604,7 +3604,7 @@ dsc* evlEncodeDecode64(thread_db* tdbb, bool encodeFlag, const SysFunction* func
 	unsigned long outLen = encodeFlag ? encodeLen(in.getCount()) + 1 : decodeLen(in.getCount());
 	auto* func = encodeFlag ? base64_encode : base64_decode;
 	tomCheck(func(in.begin(), in.getCount(), out.getBuffer(outLen), &outLen),
-		Arg::Gds(encodeFlag ? isc_tom_encode : isc_tom_decode) << "BASE64");
+		Firebird::Arg::Gds(encodeFlag ? isc_tom_encode : isc_tom_decode) << "BASE64");
 	out.resize(outLen);
 
 	dsc result;
@@ -3658,7 +3658,7 @@ UCHAR binChar(UCHAR c, unsigned p)
 	char s[2];
 	s[0] = c;
 	s[1] = 0;
-	(Arg::Gds(isc_invalid_hex_digit) << s << Arg::Num(p + 1)).raise();
+	(Firebird::Arg::Gds(isc_invalid_hex_digit) << s << Firebird::Arg::Num(p + 1)).raise();
 	return 0;		// warning silencer
 }
 
@@ -3722,7 +3722,7 @@ dsc* evlEncodeDecodeHex(thread_db* tdbb, bool encodeFlag, const SysFunction* fun
 	}
 
 	if ((!encodeFlag) && (pos & 1))
-		status_exception::raise(Arg::Gds(isc_odd_hex_len) << Arg::Num(pos));
+		status_exception::raise(Firebird::Arg::Gds(isc_odd_hex_len) << Firebird::Arg::Num(pos));
 
 	dsc result;
 	bool mkBlob = true;
@@ -3799,7 +3799,7 @@ dsc* evlRsaEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const Ne
 	aName.lower();
 	const int hash = find_hash(aName.c_str());
 	if (hash < 0)
-		status_exception::raise(Arg::Gds(isc_tom_hash_bad) << hashName);
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_hash_bad) << hashName);
 
 	DscValue data(tdbb, dscs[RSA_CRYPT_ARG_VALUE]);
 	if (!data.getBytes())
@@ -3813,7 +3813,7 @@ dsc* evlRsaEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const Ne
 
 	// Run tomcrypt functions
 	rsa_key rsaKey;
-	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Arg::Gds(isc_tom_rsa_import));
+	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Firebird::Arg::Gds(isc_tom_rsa_import));
 
 	unsigned long outlen = encryptFlag ? 256 : 190;
 	UCharBuffer outBuf;
@@ -3826,9 +3826,9 @@ dsc* evlRsaEncryptDecrypt(thread_db* tdbb, const SysFunction* function, const Ne
 			lParam.getBytes(), lParam.getLength(), hash,
 			pkcs15 ? LTC_PKCS_1_V1_5 : LTC_PKCS_1_OAEP, &stat, &rsaKey);
 	rsa_free(&rsaKey);
-	tomCheck(cryptRc, Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "RSA");
+	tomCheck(cryptRc, Firebird::Arg::Gds(encryptFlag ? isc_tom_crypt_cip : isc_tom_decrypt_cip) << "RSA");
 	if ((!encryptFlag) && (!stat))
-		status_exception::raise(Arg::Gds(isc_tom_oaep));
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_oaep));
 
 	dsc result;
 	result.makeText(outlen, ttype_binary, outBuf.begin());
@@ -3860,16 +3860,16 @@ dsc* evlRsaPrivate(thread_db* tdbb, const SysFunction* function, const NestValue
 
 	const SLONG length = MOV_get_long(tdbb, value, 0);
 	if (length < 1 || length > 1024)
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
 
 	rsa_key rsaKey;
-	tomCheck(rsa_make_key(prng().getState(), prng().getIndex(), length, 65537, &rsaKey), Arg::Gds(isc_tom_rsa_make));
+	tomCheck(rsa_make_key(prng().getState(), prng().getIndex(), length, 65537, &rsaKey), Firebird::Arg::Gds(isc_tom_rsa_make));
 
 	unsigned long outlen = length * 16;
 	UCharBuffer key;
 	const int cryptRc = rsa_export(key.getBuffer(outlen), &outlen, PK_PRIVATE, &rsaKey);
 	rsa_free(&rsaKey);
-	tomCheck(cryptRc, Arg::Gds(isc_tom_rsa_export) << "private");
+	tomCheck(cryptRc, Firebird::Arg::Gds(isc_tom_rsa_export) << "private");
 
 	dsc result;
 	result.makeText(outlen, ttype_binary, key.begin());
@@ -3891,13 +3891,13 @@ dsc* evlRsaPublic(thread_db* tdbb, const SysFunction* function, const NestValueA
 
 	DscValue data(tdbb, value, "private key");
 	rsa_key rsaKey;
-	tomCheck(rsa_import(data.getBytes(), data.getLength(), &rsaKey), Arg::Gds(isc_tom_rsa_import));
+	tomCheck(rsa_import(data.getBytes(), data.getLength(), &rsaKey), Firebird::Arg::Gds(isc_tom_rsa_import));
 
 	unsigned long outlen = data.getLength();
 	UCharBuffer key;
 	const int cryptRc = rsa_export(key.getBuffer(outlen), &outlen, PK_PUBLIC, &rsaKey);
 	rsa_free(&rsaKey);
-	tomCheck(cryptRc, Arg::Gds(isc_tom_rsa_export) << "public");
+	tomCheck(cryptRc, Firebird::Arg::Gds(isc_tom_rsa_export) << "public");
 
 	dsc result;
 	result.makeText(outlen, ttype_binary, key.begin());
@@ -3940,7 +3940,7 @@ dsc* evlRsaSign(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	aName.lower();
 	const int hash = find_hash(aName.c_str());
 	if (hash < 0)
-		status_exception::raise(Arg::Gds(isc_tom_hash_bad) << hashName);
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_hash_bad) << hashName);
 
 	DscValue data(tdbb, dscs[RSA_SIGN_ARG_VALUE]);
 	if (!data.getBytes())
@@ -3950,14 +3950,14 @@ dsc* evlRsaSign(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	if (!key.getBytes())
 		return nullptr;
 	rsa_key rsaKey;
-	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Arg::Gds(isc_tom_rsa_import));
+	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Firebird::Arg::Gds(isc_tom_rsa_import));
 
 	SLONG saltLength = 8;
 	if (dscHasData(dscs[RSA_SIGN_ARG_SALTLEN]))
 	{
 		saltLength = MOV_get_long(tdbb, dscs[RSA_SIGN_ARG_SALTLEN], 0);
 		if (saltLength < 0 || saltLength > getMaxSaltlen(hash, &rsaKey))
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
 	}
 
 	unsigned long signLen = 1024;
@@ -3965,7 +3965,7 @@ dsc* evlRsaSign(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	const int cryptRc = rsa_sign_hash_ex(data.getBytes(), data.getLength(), sign.getBuffer(signLen), &signLen,
 		pkcs15 ? LTC_PKCS_1_V1_5 : LTC_PKCS_1_PSS, prng().getState(), prng().getIndex(), hash, saltLength, &rsaKey);
 	rsa_free(&rsaKey);
-	tomCheck(cryptRc, Arg::Gds(isc_tom_rsa_sign));
+	tomCheck(cryptRc, Firebird::Arg::Gds(isc_tom_rsa_sign));
 
 	dsc result;
 	result.makeText(signLen, ttype_binary, sign.begin());
@@ -4008,7 +4008,7 @@ dsc* evlRsaVerify(thread_db* tdbb, const SysFunction* function, const NestValueA
 	aName.lower();
 	const int hash = find_hash(aName.c_str());
 	if (hash < 0)
-		status_exception::raise(Arg::Gds(isc_tom_hash_bad) << hashName);
+		status_exception::raise(Firebird::Arg::Gds(isc_tom_hash_bad) << hashName);
 
 	DscValue data(tdbb, dscs[RSA_VERIFY_ARG_VALUE]);
 	if (!data.getBytes())
@@ -4022,14 +4022,14 @@ dsc* evlRsaVerify(thread_db* tdbb, const SysFunction* function, const NestValueA
 	if (!key.getBytes())
 		return boolResult(tdbb, impure, false);
 	rsa_key rsaKey;
-	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Arg::Gds(isc_tom_rsa_import));
+	tomCheck(rsa_import(key.getBytes(), key.getLength(), &rsaKey), Firebird::Arg::Gds(isc_tom_rsa_import));
 
 	SLONG saltLength = 8;
 	if (dscHasData(dscs[RSA_VERIFY_ARG_SALTLEN]))
 	{
 		saltLength = MOV_get_long(tdbb, dscs[RSA_VERIFY_ARG_SALTLEN], 0);
 		if (saltLength < 0 || saltLength > getMaxSaltlen(hash, &rsaKey))
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_numeric_out_of_range));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_numeric_out_of_range));
 	}
 
 	int state = 0;
@@ -4037,7 +4037,7 @@ dsc* evlRsaVerify(thread_db* tdbb, const SysFunction* function, const NestValueA
 		pkcs15 ? LTC_PKCS_1_V1_5 : LTC_PKCS_1_PSS, hash, saltLength, &state, &rsaKey);
 	rsa_free(&rsaKey);
 	if (cryptRc != CRYPT_INVALID_PACKET)
-		tomCheck(cryptRc, Arg::Gds(isc_tom_rsa_verify));
+		tomCheck(cryptRc, Firebird::Arg::Gds(isc_tom_rsa_verify));
 	else
 		state = 0;
 
@@ -4094,9 +4094,9 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_diff_dtime) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_diff_dtime) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4130,9 +4130,9 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_diff_dtime) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_diff_dtime) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4170,9 +4170,9 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 		case blr_extract_week:
 			if (value1Dsc->isTime() || value2Dsc->isTime())
 			{
-				status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-											Arg::Gds(isc_sysf_invalid_timediff) <<
-												Arg::Str(function->name));
+				status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+											Firebird::Arg::Gds(isc_sysf_invalid_timediff) <<
+												Firebird::Arg::Str(function->name));
 			}
 			break;
 
@@ -4186,25 +4186,25 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 				if ((value1Dsc->isTimeStamp() && value2Dsc->isTime()) ||
 					(value1Dsc->isTime() && value2Dsc->isTimeStamp()))
 				{
-					status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-												Arg::Gds(isc_sysf_invalid_tstamptimediff) <<
-													Arg::Str(function->name));
+					status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+												Firebird::Arg::Gds(isc_sysf_invalid_tstamptimediff) <<
+													Firebird::Arg::Str(function->name));
 				}
 				if ((value1Dsc->dsc_dtype == dtype_sql_date && value2Dsc->isTime()) ||
 					(value1Dsc->isTime() && value2Dsc->dsc_dtype == dtype_sql_date))
 				{
-					status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-												Arg::Gds(isc_sysf_invalid_datetimediff) <<
-													Arg::Str(function->name));
+					status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+												Firebird::Arg::Gds(isc_sysf_invalid_datetimediff) <<
+													Firebird::Arg::Str(function->name));
 				}
 			}
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_diffpart) <<
-											Arg::Str(getPartName(part)) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_diffpart) <<
+											Firebird::Arg::Str(getPartName(part)) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4262,10 +4262,10 @@ dsc* evlDateDiff(thread_db* tdbb, const SysFunction* function, const NestValueAr
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_diffpart) <<
-											Arg::Str(getPartName(part)) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_diffpart) <<
+											Firebird::Arg::Str(getPartName(part)) <<
+											Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4301,9 +4301,9 @@ dsc* evlExp(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	{
 		const double rc = exp(MOV_get_double(tdbb, value));
 		if (rc == HUGE_VAL) // unlikely to trap anything
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_float_overflow));
 		if (std::isinf(rc))
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;
 		impure->vlu_desc.makeDouble(&impure->vlu_misc.vlu_double);
@@ -4352,9 +4352,9 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 
 		default:
 			status_exception::raise(
-				Arg::Gds(isc_expression_eval_err) <<
-				Arg::Gds(isc_sysf_invalid_date_timestamp) <<
-				Arg::Str(function->name));
+				Firebird::Arg::Gds(isc_expression_eval_err) <<
+				Firebird::Arg::Gds(isc_sysf_invalid_date_timestamp) <<
+				Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4380,9 +4380,9 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 
 		default:
 			status_exception::raise(
-				Arg::Gds(isc_expression_eval_err) <<
-				Arg::Gds(isc_sysf_invalid_first_last_part) <<
-				Arg::Str(function->name));
+				Firebird::Arg::Gds(isc_expression_eval_err) <<
+				Firebird::Arg::Gds(isc_sysf_invalid_first_last_part) <<
+				Firebird::Arg::Str(function->name));
 			break;
 	}
 
@@ -4424,7 +4424,7 @@ dsc* evlFirstLastDay(thread_db* tdbb, const SysFunction* function, const NestVal
 	timestamp.value().timestamp_date += adjust;
 
 	if (!TimeStamp::isValidTimeStamp(timestamp.value()))
-		status_exception::raise(Arg::Gds(isc_datetime_range_exceeded));
+		status_exception::raise(Firebird::Arg::Gds(isc_datetime_range_exceeded));
 
 	EVL_make_value(tdbb, valueDsc, impure);
 
@@ -4555,7 +4555,7 @@ dsc* evlGenUuid(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 			break;
 
 		default:
-			status_exception::raise(Arg::Gds(isc_sysf_invalid_gen_uuid_version) << Arg::Num(version));
+			status_exception::raise(Firebird::Arg::Gds(isc_sysf_invalid_gen_uuid_version) << Firebird::Arg::Num(version));
 			break;
 	}
 
@@ -4579,11 +4579,11 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
 	if (!nameSpace)	// Complain if namespace is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_bad_argument) << Firebird::Arg::Str(RDB_GET_CONTEXT));
 
 	const dsc* name = EVL_expr(tdbb, request, args[1]);
 	if (!name)	// Complain if variable name is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_GET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_bad_argument) << Firebird::Arg::Str(RDB_GET_CONTEXT));
 
 	const string nameSpaceStr(MOV_make_string2(tdbb, nameSpace, ttype_none));
 	const string nameStr(MOV_make_string2(tdbb, name, ttype_none));
@@ -4813,14 +4813,14 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
-			ERR_post(Arg::Gds(isc_ctx_var_not_found) << Arg::Str(nameStr) <<
-														Arg::Str(nameSpaceStr));
+			ERR_post(Firebird::Arg::Gds(isc_ctx_var_not_found) << Firebird::Arg::Str(nameStr) <<
+														Firebird::Arg::Str(nameSpaceStr));
 		}
 	}
 	else if (nameSpaceStr == DDL_TRIGGER_NAMESPACE)	// Handle ddl trigger variables
 	{
 		if (!attachment->ddlTriggersContext.hasData())
-			status_exception::raise(Arg::Gds(isc_sysf_invalid_trig_namespace));
+			status_exception::raise(Firebird::Arg::Gds(isc_sysf_invalid_trig_namespace));
 
 		const DdlTriggerContext* context = Stack<DdlTriggerContext*>::const_iterator(
 			attachment->ddlTriggersContext).object();
@@ -4876,8 +4876,8 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 		else
 		{
 			// "Context variable %s is not found in namespace %s"
-			ERR_post(Arg::Gds(isc_ctx_var_not_found) << Arg::Str(nameStr) <<
-														Arg::Str(nameStr));
+			ERR_post(Firebird::Arg::Gds(isc_ctx_var_not_found) << Firebird::Arg::Str(nameStr) <<
+														Firebird::Arg::Str(nameStr));
 		}
 	}
 	else if (nameSpaceStr == USER_SESSION_NAMESPACE)	// Handle user-defined session variables
@@ -4893,8 +4893,8 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	else
 	{
 		// "Invalid namespace name %s passed to %s"
-		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
-			Arg::Str(nameSpaceStr) << Arg::Str(RDB_GET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_namespace_invalid) <<
+			Firebird::Arg::Str(nameSpaceStr) << Firebird::Arg::Str(RDB_GET_CONTEXT));
 	}
 
 	dsc result;
@@ -4917,11 +4917,11 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 
 	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
 	if (!nameSpace)	// Complain if namespace is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_bad_argument) << Firebird::Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* name = EVL_expr(tdbb, request, args[1]);
 	if (!name)	// Complain if variable name is null
-		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_SET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_bad_argument) << Firebird::Arg::Str(RDB_SET_CONTEXT));
 
 	const dsc* value = EVL_expr(tdbb, request, args[2]);
 
@@ -4955,8 +4955,8 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	else
 	{
 		// "Invalid namespace name %s passed to %s"
-		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
-			Arg::Str(nameSpaceStr) << Arg::Str(RDB_SET_CONTEXT));
+		ERR_post(Firebird::Arg::Gds(isc_ctx_namespace_invalid) <<
+			Firebird::Arg::Str(nameSpaceStr) << Firebird::Arg::Str(RDB_SET_CONTEXT));
 	}
 
 	string valueStr;
@@ -4976,14 +4976,14 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 				impure->vlu_misc.vlu_long = 1;
 			}
 			else
-				ERR_post(Arg::Gds(isc_ctx_too_big)); // "Too many context variables"
+				ERR_post(Firebird::Arg::Gds(isc_ctx_too_big)); // "Too many context variables"
 		}
 		else
 		{
 			if (contextVars->count() >= MAX_CONTEXT_VARS)
 			{
 				// "Too many context variables"
-				ERR_post(Arg::Gds(isc_ctx_too_big));
+				ERR_post(Firebird::Arg::Gds(isc_ctx_too_big));
 			}
 
 			impure->vlu_misc.vlu_long = (SLONG) contextVars->put(nameStr, valueStr);
@@ -5143,9 +5143,9 @@ dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 		if (d.compare(decSt, CDecimal128(0)) <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		switch ((Function)(IPTR) function->misc)
@@ -5170,9 +5170,9 @@ dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 		if (v <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		double rc;
@@ -5222,16 +5222,16 @@ dsc* evlLog(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 
 		if (v1.compare(decSt, CDecimal128(0)) <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_basemustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_basemustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		if (v2.compare(decSt, CDecimal128(0)) <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		impure->vlu_misc.vlu_dec128 = v2.ln(decSt).div(decSt, v1.ln(decSt));
@@ -5244,16 +5244,16 @@ dsc* evlLog(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 
 		if (v1 <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_basemustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_basemustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		if (v2 <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argmustbe_positive) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argmustbe_positive) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		impure->vlu_misc.vlu_double = log(v2) / log(v1);
@@ -5417,7 +5417,7 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 
 		jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
 		if (!relation)
-			(Arg::Gds(isc_relnotdef) << relName.toQuotedString()).raise();
+			(Firebird::Arg::Gds(isc_relnotdef) << relName.toQuotedString()).raise();
 
 		relId = relation->getId();
 	}
@@ -5572,7 +5572,7 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		cmp0.set(0, 0);
 
 		if (divisor == cmp0)
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_divide_by_zero));
 
 		impure->vlu_misc.vlu_int128 = MOV_get_int128(tdbb, value1, 0).mod(divisor);
 
@@ -5582,7 +5582,7 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	const SINT64 divisor = MOV_get_int64(tdbb, value2, 0);
 
 	if (divisor == 0)
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_integer_divide_by_zero));
 
 	const SINT64 result = MOV_get_int64(tdbb, value1, 0) % divisor;
 
@@ -5642,10 +5642,10 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 		if (auxlen < 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
-											Arg::Num(4) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
+											Firebird::Arg::Num(4) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		length = auxlen;
@@ -5655,10 +5655,10 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 
 	if (from <= 0)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argnmustbe_positive) <<
-										Arg::Num(3) <<
-										Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argnmustbe_positive) <<
+										Firebird::Arg::Num(3) <<
+										Firebird::Arg::Str(function->name));
 	}
 
 	const auto resultTextType = DataTypeUtil::getResultTextType(value, placing);
@@ -5724,7 +5724,7 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 	{
 		const SINT64 newlen = (SINT64) len1 - length + len2;
 		if (newlen > static_cast<SINT64>(MAX_STR_SIZE))
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_imp_exc));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_imp_exc));
 
 		dsc desc;
 		desc.makeText(newlen, resultTextType);
@@ -5812,10 +5812,10 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	const SLONG padLenArg = MOV_get_long(tdbb, padLenDsc, 0);
 	if (padLenArg < 0)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
-										Arg::Num(2) <<
-										Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argnmustbe_nonneg) <<
+										Firebird::Arg::Num(2) <<
+										Firebird::Arg::Str(function->name));
 	}
 
 	ULONG padLen = static_cast<ULONG>(padLenArg);
@@ -5866,7 +5866,7 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	else
 	{
 		if (padLen * cs->maxBytesPerChar() > MAX_STR_SIZE)
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_imp_exc));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_imp_exc));
 
 		dsc desc;
 		desc.makeText(padLen * cs->maxBytesPerChar(), ttype);
@@ -5995,10 +5995,10 @@ dsc* evlPosition(thread_db* tdbb, const SysFunction* function, const NestValueAr
 		start = MOV_get_long(tdbb, value3, 0);
 		if (start <= 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_argnmustbe_positive) <<
-											Arg::Num(3) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_argnmustbe_positive) <<
+											Firebird::Arg::Num(3) <<
+											Firebird::Arg::Str(function->name));
 		}
 	}
 
@@ -6129,9 +6129,9 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 
 		if (v1 == 0 && v2 < 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_zeropowneg) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_zeropowneg) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		if (v1 < 0 &&
@@ -6139,14 +6139,14 @@ dsc* evlPower(thread_db* tdbb, const SysFunction* function, const NestValueArray
 			 MOV_get_int64(tdbb, value[1], 0) * SINT64(CVT_power_of_ten(-value[1]->dsc_scale)) !=
 				MOV_get_int64(tdbb, value[1], value[1]->dsc_scale)))
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_negpowfp) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_negpowfp) <<
+											Firebird::Arg::Str(function->name));
 		}
 
 		const double rc = pow(v1, v2);
 		if (std::isinf(rc))
-			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_float_overflow));
+			status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_exception_float_overflow));
 
 		impure->vlu_misc.vlu_double = rc;
 	}
@@ -6507,9 +6507,9 @@ dsc* evlRound(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		scale = MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(scale >= MIN_SCHAR && scale <= MAX_SCHAR))
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_scale) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_scale) <<
+											Firebird::Arg::Str(function->name));
 		}
 		scale = -scale;
 	}
@@ -6582,8 +6582,8 @@ dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 
 		if (impure->vlu_misc.vlu_dec128.compare(decSt, CDecimal128(0)) < 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_nonneg) << Firebird::Arg::Str(function->name));
 		}
 
 		impure->vlu_misc.vlu_dec128 = impure->vlu_misc.vlu_dec128.sqrt(decSt);
@@ -6595,8 +6595,8 @@ dsc* evlSqrt(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 
 		if (impure->vlu_misc.vlu_double < 0)
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_argmustbe_nonneg) << Firebird::Arg::Str(function->name));
 		}
 
 		impure->vlu_misc.vlu_double = sqrt(impure->vlu_misc.vlu_double);
@@ -6628,9 +6628,9 @@ dsc* evlTrunc(thread_db* tdbb, const SysFunction* function, const NestValueArray
 		resultScale = MOV_get_long(tdbb, scaleDsc, 0);
 		if (!(resultScale >= MIN_SCHAR && resultScale <= MAX_SCHAR))
 		{
-			status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-										Arg::Gds(isc_sysf_invalid_scale) <<
-											Arg::Str(function->name));
+			status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+										Firebird::Arg::Gds(isc_sysf_invalid_scale) <<
+											Firebird::Arg::Str(function->name));
 		}
 		resultScale = -resultScale;
 	}
@@ -6753,18 +6753,18 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 
 	if (!value->isText())
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_binuuid_mustbe_str) <<
-										Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_binuuid_mustbe_str) <<
+										Firebird::Arg::Str(function->name));
 	}
 
 	UCHAR* data;
 	if (MOV_get_string(tdbb, value, &data, NULL, 0) != Uuid::BYTE_LEN)
 	{
-		status_exception::raise(Arg::Gds(isc_expression_eval_err) <<
-									Arg::Gds(isc_sysf_binuuid_wrongsize) <<
-										Arg::Num(Uuid::BYTE_LEN) <<
-										Arg::Str(function->name));
+		status_exception::raise(Firebird::Arg::Gds(isc_expression_eval_err) <<
+									Firebird::Arg::Gds(isc_sysf_binuuid_wrongsize) <<
+										Firebird::Arg::Num(Uuid::BYTE_LEN) <<
+										Firebird::Arg::Str(function->name));
 	}
 
 	UCHAR buffer[GUID_BUFF_SIZE];
@@ -6847,12 +6847,12 @@ dsc* evlUnicodeChar(thread_db* tdbb, const SysFunction* function, const NestValu
 	if (code < 0)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_expression_eval_err) <<
-			Arg::Gds(isc_sysf_argmustbe_nonneg) << Arg::Str(function->name));
+			Firebird::Arg::Gds(isc_expression_eval_err) <<
+			Firebird::Arg::Gds(isc_sysf_argmustbe_nonneg) << Firebird::Arg::Str(function->name));
 	}
 
 	if (U8_LENGTH(code) == 0)
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_malformed_string));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_malformed_string));
 
 	UCHAR buffer[4];
 	int len = 0;
@@ -6887,7 +6887,7 @@ dsc* evlUnicodeVal(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	const ULONG dstLen = UnicodeUtil::utf8ToUtf16(len, str, sizeof(dst), dst, &errCode, &errPosition);
 
 	if (errCode != 0 && errCode != CS_TRUNCATION_ERROR)
-		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_transliteration_failed));
+		status_exception::raise(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_transliteration_failed));
 
 	if (dstLen == 0)
 		impure->vlu_misc.vlu_long = 0;
@@ -7020,6 +7020,6 @@ void SysFunction::checkArgsMismatch(int count) const
 {
 	if (count < minArgCount || (maxArgCount != -1 && count > maxArgCount))
 	{
-		status_exception::raise(Arg::Gds(isc_funmismat) << Arg::Str(name));
+		status_exception::raise(Firebird::Arg::Gds(isc_funmismat) << Firebird::Arg::Str(name));
 	}
 }

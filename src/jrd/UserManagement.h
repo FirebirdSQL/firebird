@@ -59,7 +59,7 @@ public:
 	~UserManagement();
 
 	// store userData for DFW-time processing
-	USHORT put(Auth::UserData* userData);
+	USHORT put(Firebird::Auth::UserData* userData);
 	// execute command with ID
 	void execute(USHORT id);
 	// commit transaction in security database
@@ -71,7 +71,7 @@ public:
 
 private:
 	thread_db* threadDbb;
-	Firebird::HalfStaticArray<Auth::UserData*, 8> commands;
+	Firebird::HalfStaticArray<Firebird::Auth::UserData*, 8> commands;
 	typedef Firebird::Pair<Firebird::NonPooled<MetaName, Firebird::IManagement*> > Manager;
 	Firebird::ObjectsArray<Manager> managers;
 	Firebird::NoCaseString plugins;
@@ -80,7 +80,7 @@ private:
 
 	Firebird::IManagement* getManager(const char* name);
 	void openAllManagers();
-	Firebird::IManagement* registerManager(Auth::Get& getPlugin, const char* plugName);
+	Firebird::IManagement* registerManager(Firebird::Auth::Get& getPlugin, const char* plugName);
 	static void checkSecurityResult(int errcode, Firebird::IStatus* status,
 		const char* userName, unsigned operation);
 };

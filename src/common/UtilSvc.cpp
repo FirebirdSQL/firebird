@@ -121,7 +121,7 @@ public:
 
 	void checkService() override
 	{
-		status_exception::raise(Arg::Gds(isc_utl_trusted_switch));
+		status_exception::raise(Firebird::Arg::Gds(isc_utl_trusted_switch));
 	}
 
 	unsigned int getAuthBlock(const unsigned char** bytes) override
@@ -140,7 +140,7 @@ public:
 	void putBytes(const UCHAR*, FB_SIZE_T) override { }
 	ULONG getBytes(UCHAR*, ULONG) override { return 0; }
 	void setServiceStatus(const ISC_STATUS*) override { }
-	void setServiceStatus(const USHORT, const USHORT, const MsgFormat::SafeArg&) override { }
+	void setServiceStatus(const USHORT, const USHORT, const Firebird::MsgFormat::SafeArg&) override { }
     StatusAccessor getStatusAccessor() override { return StatusAccessor(); }
 	void fillDpb(ClumpletWriter&) override { }
 	bool finished() override { return false; }

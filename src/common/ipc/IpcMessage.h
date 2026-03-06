@@ -187,7 +187,7 @@ public:
 	void mutexBug(int osErrorCode, const char* text) override
 	{
 		iscLogStatus(("Error when working with " + parameters.logicalName).c_str(),
-			(Arg::Gds(isc_sys_request) << text << Arg::OsError(osErrorCode)).value());
+			(Firebird::Arg::Gds(isc_sys_request) << text << Firebird::Arg::OsError(osErrorCode)).value());
 	}
 
 	USHORT getType() const override

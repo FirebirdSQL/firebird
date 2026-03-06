@@ -36,12 +36,12 @@ namespace {
 
 void raise()
 {
-	Arg::Gds(isc_user_manager).raise();
+	Firebird::Arg::Gds(isc_user_manager).raise();
 }
 
 } // anonymous namespace
 
-namespace Auth {
+namespace Firebird::Auth {
 
 Get::Get(const Config* firebirdConf)
 	: GetPlugins<Firebird::IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf)

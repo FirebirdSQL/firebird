@@ -110,7 +110,7 @@ public:
 					if (i + 1 < name.length() - 1 && name[i + 1] == '"')
 						++i;
 					else
-						(Arg::Gds(isc_invalid_name) << str).raise();
+						(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 				}
 
 				result += name[i];
@@ -122,7 +122,7 @@ public:
 		const auto validateUnquotedIdentifier = [&](const string& name)
 		{
 			if (name.length() > MAX_SQL_IDENTIFIER_LEN)
-				(Arg::Gds(isc_invalid_name) << str).raise();
+				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 
 			bool first = true;
 
@@ -136,7 +136,7 @@ public:
 					  (!first && c == '$') ||
 					  (!first && c == '_')))
 				{
-					(Arg::Gds(isc_invalid_name) << str).raise();
+					(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 				}
 
 				first = false;
@@ -247,7 +247,7 @@ public:
 			}
 
 			if (dotPos != string::npos && result.schema.isEmpty())
-				(Arg::Gds(isc_invalid_name) << str).raise();
+				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 
 			// Process object
 			if (isQuoted(object))
@@ -261,7 +261,7 @@ public:
 			}
 
 			if (result.object.isEmpty())
-				(Arg::Gds(isc_invalid_name) << str).raise();
+				(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 
 			list.add(result);
 		} while (i < str.size());
@@ -273,7 +273,7 @@ public:
 		parseSchemaObjectListNoSep(str, list);
 
 		if (list.getCount() != 1)
-			(Arg::Gds(isc_invalid_name) << str).raise();
+			(Firebird::Arg::Gds(isc_invalid_name) << str).raise();
 
 		return list[0];
 	}

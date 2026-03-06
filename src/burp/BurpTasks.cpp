@@ -32,7 +32,7 @@
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 using namespace Firebird;
 
 namespace Burp

@@ -431,7 +431,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 				case dtype_sql_date:
 					if (!TimeStamp::isValidDate(*(GDS_DATE*) from_desc->dsc_address))
 					{
-						ERR_post(Arg::Gds(isc_date_range_exceeded));
+						ERR_post(Firebird::Arg::Gds(isc_date_range_exceeded));
 					}
 					break;
 
@@ -440,7 +440,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 				case dtype_ex_time_tz:
 					if (!TimeStamp::isValidTime(*(GDS_TIME*) from_desc->dsc_address))
 					{
-						ERR_post(Arg::Gds(isc_time_range_exceeded));
+						ERR_post(Firebird::Arg::Gds(isc_time_range_exceeded));
 					}
 					break;
 
@@ -449,7 +449,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 				case dtype_ex_timestamp_tz:
 					if (!TimeStamp::isValidTimeStamp(*(GDS_TIMESTAMP*) from_desc->dsc_address))
 					{
-						ERR_post(Arg::Gds(isc_datetime_range_exceeded));
+						ERR_post(Firebird::Arg::Gds(isc_datetime_range_exceeded));
 					}
 					break;
 
@@ -700,7 +700,7 @@ void EXE_receive(thread_db* tdbb,
 
 	if (!(request->req_flags & req_active))
 	{
-		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Receive from inactive request"));
+		ERR_post(Firebird::Arg::Gds(isc_req_sync) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Receive from inactive request"));
 	}
 
 	SavNumber savNumber = 0;
@@ -743,7 +743,7 @@ void EXE_receive(thread_db* tdbb,
 			// This is obvious problem in blr logic
 			if (request->req_operation == Request::req_receive)
 			{
-				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to send but need to receive"));
+				ERR_post(Firebird::Arg::Gds(isc_req_sync) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Request expected to send but need to receive"));
 			}
 
 			execute_looper(tdbb, request, transaction, request->req_next, Request::req_sync);
@@ -755,11 +755,11 @@ void EXE_receive(thread_db* tdbb,
 
 			// Sanity checks first
 			if (message == nullptr || msg != message->messageNumber)
-				ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request got wrong message"));
+				ERR_post(Firebird::Arg::Gds(isc_req_sync) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Request got wrong message"));
 
 			const Format* format = message->getFormat(request);
 			if (length != format->fmt_length)
-				ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
+				ERR_post(Firebird::Arg::Gds(isc_port_len) << Firebird::Arg::Num(length) << Firebird::Arg::Num(format->fmt_length));
 
 			// To make sure that the buffer is allocated get it before calling of the looper
 			UCHAR* msgBuffer = message->getBuffer(request);
@@ -922,13 +922,13 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 
 		// This is obvious problem in blr logic
 		if (request->req_operation == Request::req_send)
-			ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Request expected to receive but need to send"));
+			ERR_post(Firebird::Arg::Gds(isc_req_sync) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Request expected to receive but need to send"));
 
 		execute_looper(tdbb, request, request->req_transaction, request->req_next, Request::req_sync);
 	}
 
 	if (!(request->req_flags & req_active))
-		ERR_post(Arg::Gds(isc_req_sync) << Arg::Gds(isc_random) << Arg::Str("Send data to inactive request"));
+		ERR_post(Firebird::Arg::Gds(isc_req_sync) << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Send data to inactive request"));
 
 	const auto node = request->req_message;
 	const StmtNode* message = nullptr;
@@ -956,10 +956,10 @@ void EXE_send(thread_db* tdbb, Request* request, USHORT msg, ULONG length, const
 	const auto format = messageNode->getFormat(request);
 
 	if (msg != messageNode->messageNumber)
-		ERR_post(Arg::Gds(isc_req_sync));
+		ERR_post(Firebird::Arg::Gds(isc_req_sync));
 
 	if (length != format->fmt_length)
-		ERR_post(Arg::Gds(isc_port_len) << Arg::Num(length) << Arg::Num(format->fmt_length));
+		ERR_post(Firebird::Arg::Gds(isc_port_len) << Firebird::Arg::Num(length) << Firebird::Arg::Num(format->fmt_length));
 
 	// Set data buffer to read parameters from
 	UCHAR* const msgBuffer = messageNode->getBuffer(request);
@@ -986,7 +986,7 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	}
 
 	if (transaction->tra_flags & TRA_prepared)
-		ERR_post(Arg::Gds(isc_req_no_trans));
+		ERR_post(Firebird::Arg::Gds(isc_req_no_trans));
 
 	const auto dbb = tdbb->getDatabase();
 	const auto statement = request->getStatement();
@@ -1060,7 +1060,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 		const SavNumber savNumber = startSavepoint(request, transaction);
 
 		if (!request->req_transaction)
-			ERR_post(Arg::Gds(isc_req_no_trans));
+			ERR_post(Firebird::Arg::Gds(isc_req_no_trans));
 
 		try
 		{
@@ -1149,7 +1149,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 			}
 
 			if (request->req_flags & req_abort)
-				ERR_post(Arg::Gds(isc_req_sync));
+				ERR_post(Firebird::Arg::Gds(isc_req_sync));
 		}
 		catch (const Exception&)
 		{
@@ -1668,7 +1668,7 @@ static void stuff_stack_trace(const Request* request)
 	string sTrace;
 
 	if (EXE_get_stack_trace(request, sTrace))
-		ERR_post_nothrow(Arg::Gds(isc_stack_trace) << Arg::Str(sTrace));
+		ERR_post_nothrow(Firebird::Arg::Gds(isc_stack_trace) << Firebird::Arg::Str(sTrace));
 }
 
 
@@ -1686,7 +1686,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
  *
  **************************************/
 	if (!request->req_transaction)
-		ERR_post(Arg::Gds(isc_req_no_trans));
+		ERR_post(Firebird::Arg::Gds(isc_req_no_trans));
 
 	SET_TDBB(tdbb);
 	const auto dbb = tdbb->getDatabase();
@@ -1892,7 +1892,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 	}
 
 	if (request->req_flags & req_abort)
-		ERR_post(Arg::Gds(isc_req_sync));
+		ERR_post(Firebird::Arg::Gds(isc_req_sync));
 
 	return node;
 }
@@ -2021,12 +2021,12 @@ static void trigger_failure(thread_db* tdbb, Request* trigger)
 		MET_trigger_msg(tdbb, msg, trigger->getStatement()->triggerName, trigger->req_label);
 		if (msg.hasData())
 		{
-			ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label) <<
-					 Arg::Gds(isc_random) << Arg::Str(msg));
+			ERR_post(Firebird::Arg::Gds(isc_integ_fail) << Firebird::Arg::Num(trigger->req_label) <<
+					 Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(msg));
 		}
 		else
 		{
-			ERR_post(Arg::Gds(isc_integ_fail) << Arg::Num(trigger->req_label));
+			ERR_post(Firebird::Arg::Gds(isc_integ_fail) << Firebird::Arg::Num(trigger->req_label));
 		}
 	}
 	else

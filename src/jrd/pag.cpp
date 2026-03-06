@@ -110,7 +110,7 @@ namespace
 		const auto* dbb = tdbb->getDatabase();
 
 		if (dbb->readOnly())
-			ERR_post(Arg::Gds(isc_read_only_database));
+			ERR_post(Firebird::Arg::Gds(isc_read_only_database));
 	}
 
 	class HeaderClumplet
@@ -259,7 +259,7 @@ namespace
 		if (!clump.checkSpace(len))
 		{
 			CCH_RELEASE(tdbb, &window);
-			Arg::Gds(isc_hdr_overflow).raise();
+			Firebird::Arg::Gds(isc_hdr_overflow).raise();
 		}
 
 		CCH_MARK_MUST_WRITE(tdbb, &window);
@@ -1005,9 +1005,9 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 		// Looks like the Header page says, it is NOT ReadOnly!! But the database
 		// file system permission gives only ReadOnly access. Punt out with
 		// isc_no_priv error (no privileges)
-		ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("read-write") <<
-										  Arg::Str("database") <<
-										  Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_no_priv) << Firebird::Arg::Str("read-write") <<
+										  Firebird::Arg::Str("database") <<
+										  Firebird::Arg::Str(attachment->att_filename));
 	}
 
 	// Determine the actual FW mode to be used. Use the setting stored on the header page
@@ -1111,25 +1111,25 @@ void PAG_header_init(thread_db* tdbb)
 	UCHAR* const temp_page = temp.getAlignedBuffer(headerSize, ioBlockSize);
 
 	if (!PIO_header(tdbb, temp_page, headerSize))
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	const auto* header = (header_page*) temp_page;
 
 	if (header->hdr_header.pag_type != pag_header || header->hdr_header.pag_pageno != HEADER_PAGE)
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	if (header->hdr_page_size < PAGE_SIZE_BASE || header->hdr_page_size % PAGE_SIZE_BASE != 0)
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 
 	if (!Ods::isSupported(header))
 	{
-		ERR_post(Arg::Gds(isc_wrong_ods) << Arg::Str(attachment->att_filename) <<
-											Arg::Num(ods_version) <<
-											Arg::Num(header->hdr_ods_minor) <<
-											Arg::Num(ODS_VERSION) <<
-											Arg::Num(ODS_CURRENT));
+		ERR_post(Firebird::Arg::Gds(isc_wrong_ods) << Firebird::Arg::Str(attachment->att_filename) <<
+											Firebird::Arg::Num(ods_version) <<
+											Firebird::Arg::Num(header->hdr_ods_minor) <<
+											Firebird::Arg::Num(ODS_VERSION) <<
+											Firebird::Arg::Num(ODS_CURRENT));
 	}
 
 	// Note that if this check is turned on, it should be recoded in order that
@@ -1147,20 +1147,20 @@ void PAG_header_init(thread_db* tdbb)
 	// is accessed with engine built for another architecture. - Nickolay 9-Feb-2005
 
 	if (!DbImplementation(header).compatible(DbImplementation::current))
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	if (header->hdr_page_size < MIN_PAGE_SIZE || header->hdr_page_size > MAX_PAGE_SIZE)
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	if (header->hdr_page_size % MIN_PAGE_SIZE != 0)
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	// Pagespace is already created at this point, so validate the database file
 	// to contain at least one full page
 	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	fb_assert(pageSpace && pageSpace->file);
 	if (!PIO_get_number_of_pages(pageSpace->file, header->hdr_page_size))
-		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+		ERR_post(Firebird::Arg::Gds(isc_bad_db_format) << Firebird::Arg::Str(attachment->att_filename));
 
 	dbb->dbb_ods_version = ods_version;
 	dbb->dbb_minor_version = header->hdr_ods_minor;
@@ -1632,7 +1632,7 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
 			if ((dbb->dbb_flags & DBB_DB_SQL_dialect_3) || (header->hdr_flags & hdr_SQL_dialect_3))
 			{
 				// Check the returned value here!
-				ERR_post_warning(Arg::Warning(isc_dialect_reset_warning));
+				ERR_post_warning(Firebird::Arg::Warning(isc_dialect_reset_warning));
 			}
 
 			dbb->dbb_flags &= ~DBB_DB_SQL_dialect_3;	// set to 0
@@ -1646,9 +1646,9 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
 
 		default:
 			CCH_RELEASE(tdbb, &window);
-			ERR_post(Arg::Gds(isc_inv_dialect_specified) << Arg::Num(flag) <<
-					 Arg::Gds(isc_valid_db_dialects) << Arg::Str("1 and 3") <<
-					 Arg::Gds(isc_dialect_not_changed));
+			ERR_post(Firebird::Arg::Gds(isc_inv_dialect_specified) << Firebird::Arg::Num(flag) <<
+					 Firebird::Arg::Gds(isc_valid_db_dialects) << Firebird::Arg::Str("1 and 3") <<
+					 Firebird::Arg::Gds(isc_dialect_not_changed));
 			break;
 		}
 	}

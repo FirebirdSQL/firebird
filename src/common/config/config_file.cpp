@@ -62,12 +62,12 @@ class MainStream : public ConfigFile::Stream
 {
 public:
 	MainStream(const char* fname, bool errorWhenMissing)
-		: file(os_utils::fopen(fname, "rt")), fileName(fname), l(0)
+		: file(Firebird::os_utils::fopen(fname, "rt")), fileName(fname), l(0)
 	{
 		if (errorWhenMissing && !file)
 		{
 			// config file does not exist
-			(Arg::Gds(isc_miss_config) << fname << Arg::OsError()).raise();
+			(Firebird::Arg::Gds(isc_miss_config) << fname << Firebird::Arg::OsError()).raise();
 		}
 	}
 
@@ -642,7 +642,7 @@ const ConfigFile::Parameter* ConfigFile::findParameter(const KeyType& name, cons
 
 void ConfigFile::badLine(const char* fileName, const String& line)
 {
-	(Arg::Gds(isc_conf_line) << (fileName ? fileName : "Passed text") << line).raise();
+	(Firebird::Arg::Gds(isc_conf_line) << (fileName ? fileName : "Passed text") << line).raise();
 }
 
 /******************************************************************************
@@ -762,7 +762,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	AutoSetRestore<unsigned> depth(&includeLimit, includeLimit + 1);
 	if (includeLimit > INCLUDE_LIMIT)
 	{
-		(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_depth)).raise();
+		(Firebird::Arg::Gds(isc_conf_include) << currentFileName << parPath << Firebird::Arg::Gds(isc_include_depth)).raise();
 	}
 
 	// for relative paths first of all prepend with current path (i.e. path of current conf file)
@@ -798,7 +798,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 		// no matches found - check for presence of wild symbols in path
 		if (!hadWildCards)
 		{
-			(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_miss)).raise();
+			(Firebird::Arg::Gds(isc_conf_include) << currentFileName << parPath << Firebird::Arg::Gds(isc_include_miss)).raise();
 		}
 	}
 }

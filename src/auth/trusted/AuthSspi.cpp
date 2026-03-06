@@ -38,8 +38,8 @@ using namespace Firebird;
 
 namespace
 {
-	Firebird::SimpleFactory<Auth::WinSspiClient> clientFactory;
-	Firebird::SimpleFactory<Auth::WinSspiServer> serverFactory;
+	Firebird::SimpleFactory<Firebird::Auth::WinSspiClient> clientFactory;
+	Firebird::SimpleFactory<Firebird::Auth::WinSspiServer> serverFactory;
 
 	constexpr const char* plugName = "Win_Sspi";
 
@@ -65,7 +65,7 @@ namespace
 	}
 }
 
-namespace Auth {
+namespace Firebird::Auth {
 
 
 static thread_local bool legacySSP = false;

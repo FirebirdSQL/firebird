@@ -202,9 +202,7 @@ inline size_t get_map_page_size()
 } // anonymous namespace
 
 namespace Firebird {
-
-namespace SemiDoubleLink
-{
+namespace SemiDoubleLink {
 	// SemiDoubleLink makes it possible to walk list one direction,
 	// push/pop/remove members with very efficient back-link to the head pointer somewhere
 
@@ -2467,13 +2465,13 @@ void* MemPool::allocRaw(size_t size)
 
 #ifdef MAP_ANONYMOUS
 
-		result = os_utils::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		result = Firebird::os_utils::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 #else // MAP_ANONYMOUS
 
 		if (dev_zero_fd < 0)
-			dev_zero_fd = os_utils::open("/dev/zero", O_RDWR);
-		result = os_utils::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero_fd, 0);
+			dev_zero_fd = Firebird::os_utils::open("/dev/zero", O_RDWR);
+		result = Firebird::os_utils::mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, dev_zero_fd, 0);
 
 #endif // MAP_ANONYMOUS
 
@@ -2670,7 +2668,7 @@ bool MemPool::validate(char* buf, FB_SIZE_T size)
 #ifdef MEM_DEBUG
 void MemPool::print_contents(const char* filename, unsigned flags, const char* filter_path) noexcept
 {
-	FILE* out = os_utils::fopen(filename, "w");
+	FILE* out = Firebird::os_utils::fopen(filename, "w");
 	if (!out)
 		return;
 
@@ -2926,12 +2924,12 @@ public:
 		{	// scope
 			char name[PATH_MAX];
 
-			if (os_utils::getCurrentModulePath(name, sizeof(name)))
+			if (Firebird::os_utils::getCurrentModulePath(name, sizeof(name)))
 				strncat(name, ".memdebug.external.log", sizeof(name) - 1);
 			else
 				strcpy(name, "memdebug.external.log");
 
-			file = os_utils::fopen(name, alreadyPrinted ? "at" : "w+t");
+			file = Firebird::os_utils::fopen(name, alreadyPrinted ? "at" : "w+t");
 		}
 
 		if (file)

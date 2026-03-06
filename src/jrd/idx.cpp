@@ -336,7 +336,7 @@ public:
 			if (!att)
 			{
 				if (!status->hasData())
-					Arg::Gds(isc_bad_db_handle).copyTo(status);
+					Firebird::Arg::Gds(isc_bad_db_handle).copyTo(status);
 
 				return false;
 			}
@@ -647,8 +647,8 @@ bool IndexCreateTask::handler(WorkItem& _item)
 						const auto bad_id = idx->idx_rpt[key_null_segment].idx_field;
 						const jrd_fld *bad_fld = MET_get_field(relation, bad_id);
 
-						ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(bad_fld->fld_name) <<
-															Arg::Str(NULL_STRING_MARK));
+						ERR_post(Firebird::Arg::Gds(isc_not_valid) << Firebird::Arg::Str(bad_fld->fld_name) <<
+															Firebird::Arg::Str(NULL_STRING_MARK));
 					}
 
 					// If foreign key index is being defined, make sure foreign
@@ -842,13 +842,13 @@ void IDX_create_index(thread_db* tdbb,
 
 	if (relation->getExtFile())
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_extfile_uns_op) << relation->getName().toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_extfile_uns_op) << relation->getName().toQuotedString());
 	}
 	else if (relation->isVirtual())
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_wish_list));
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_wish_list));
 	}
 
 	get_root_page(tdbb, getPermanent(relation));
@@ -872,8 +872,8 @@ void IDX_create_index(thread_db* tdbb,
 
 	if (key_length >= dbb->getMaxIndexKeyLength())
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_keytoobig) << index_name.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_keytoobig) << index_name.toQuotedString());
 	}
 
 	if (isForeign)

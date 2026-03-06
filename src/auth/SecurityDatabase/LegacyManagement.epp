@@ -104,7 +104,7 @@ static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_
 
 static Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
 
-namespace Auth {
+namespace Firebird::Auth {
 
 SecurityDatabaseManagement::SecurityDatabaseManagement(Firebird::IPluginConfig* par)
 	: database(0), transaction(0)
@@ -766,7 +766,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 } // namespace Auth
 
 // register plugin
-static Firebird::SimpleFactory<Auth::SecurityDatabaseManagement> factory;
+static Firebird::SimpleFactory<Firebird::Auth::SecurityDatabaseManagement> factory;
 
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {

@@ -58,7 +58,7 @@ using namespace Firebird::Jrd;
 using namespace Firebird;
 
 
-[[noreturn]] static void internal_post(const Arg::StatusVector& v);
+[[noreturn]] static void internal_post(const Firebird::Arg::StatusVector& v);
 
 #ifdef DEV_BUILD
 /**
@@ -125,7 +125,7 @@ using namespace Firebird;
 	snprintf(s, sizeof(s), "** DSQL error: %s **\n", text);
 	TRACE(s);
 
-	status_exception::raise(Arg::Gds(isc_random) << Arg::Str(s));
+	status_exception::raise(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(s));
 }
 
 
@@ -146,7 +146,7 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
 
 	Jrd::FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
 
-	Arg::StatusVector cur(status_vector->getWarnings());
+	Firebird::Arg::StatusVector cur(status_vector->getWarnings());
 	cur << v;
 	status_vector->setWarnings2(cur.length(), cur.value());
 }
@@ -164,7 +164,7 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
     @param
 
  **/
-[[noreturn]] void ERRD_post(const Arg::StatusVector& v)
+[[noreturn]] void ERRD_post(const Firebird::Arg::StatusVector& v)
 {
     fb_assert(v.value()[0] == isc_arg_gds);
 
@@ -184,15 +184,15 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
     @param
 
  **/
-[[noreturn]] static void internal_post(const Arg::StatusVector& v)
+[[noreturn]] static void internal_post(const Firebird::Arg::StatusVector& v)
 {
 	// start building resulting vector
 	Jrd::FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
-	Arg::StatusVector final(status_vector->getErrors());
+	Firebird::Arg::StatusVector final(status_vector->getErrors());
 	if (final.length() == 0)
 	{
 		// this is a blank status vector
-		final << Arg::Gds(isc_dsql_error);
+		final << Firebird::Arg::Gds(isc_dsql_error);
 	}
 
 	// check for duplicated error code

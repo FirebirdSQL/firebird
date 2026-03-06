@@ -34,8 +34,8 @@ int		alice(Firebird::UtilSvc*);
 class AliceGlobals;
 
 void	ALICE_upper_case(const TEXT*, TEXT*, const size_t) noexcept;
-void	ALICE_print(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-[[noreturn]] void ALICE_error(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+void	ALICE_print(USHORT, const Firebird::MsgFormat::SafeArg& arg = Firebird::MsgFormat::SafeArg());
+[[noreturn]] void ALICE_error(USHORT, const Firebird::MsgFormat::SafeArg& arg = Firebird::MsgFormat::SafeArg());
 void	ALICE_print_status(bool error, const ISC_STATUS*);
 [[noreturn]] void ALICE_exit(int, AliceGlobals*);
 

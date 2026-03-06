@@ -44,7 +44,7 @@ namespace Firebird {
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 {
 	// do not use /dev/random because it may return lesser data than we need.
-	int fd = os_utils::open("/dev/urandom", O_RDONLY);
+	int fd = Firebird::os_utils::open("/dev/urandom", O_RDONLY);
 	if (fd < 0)
 		Firebird::system_call_failed::raise("open");
 

@@ -32,8 +32,7 @@
 inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
 inline constexpr int MSG_LENGTH = 128;
 
-namespace Auth
-{
+namespace Firebird::Auth {
 
 class UserData;
 
@@ -72,7 +71,7 @@ public:
 	}
 
 	Firebird::UtilSvc*	utilSvc;
-	Auth::UserData*		tsec_user_data;
+	Firebird::Auth::UserData*		tsec_user_data;
 	int					tsec_exit_code;
 	bool				tsec_throw;
 	bool				tsec_interactive;

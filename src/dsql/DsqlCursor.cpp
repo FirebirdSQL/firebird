@@ -172,7 +172,7 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 int DsqlCursor::fetchPrior(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("PRIOR")).raise();
+		(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("PRIOR")).raise();
 
 	return fetchRelative(tdbb, buffer, -1);
 }
@@ -180,7 +180,7 @@ int DsqlCursor::fetchPrior(thread_db* tdbb, UCHAR* buffer)
 int DsqlCursor::fetchFirst(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("FIRST")).raise();
+		(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("FIRST")).raise();
 
 	return fetchAbsolute(tdbb, buffer, 1);
 }
@@ -188,7 +188,7 @@ int DsqlCursor::fetchFirst(thread_db* tdbb, UCHAR* buffer)
 int DsqlCursor::fetchLast(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("LAST")).raise();
+		(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("LAST")).raise();
 
 	return fetchAbsolute(tdbb, buffer, -1);
 }
@@ -196,7 +196,7 @@ int DsqlCursor::fetchLast(thread_db* tdbb, UCHAR* buffer)
 int DsqlCursor::fetchAbsolute(thread_db* tdbb, UCHAR* buffer, SLONG position)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("ABSOLUTE")).raise();
+		(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("ABSOLUTE")).raise();
 
 	if (!position)
 	{
@@ -229,7 +229,7 @@ int DsqlCursor::fetchAbsolute(thread_db* tdbb, UCHAR* buffer, SLONG position)
 int DsqlCursor::fetchRelative(thread_db* tdbb, UCHAR* buffer, SLONG offset)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-		(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("RELATIVE")).raise();
+		(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("RELATIVE")).raise();
 
 	SINT64 position = m_position + offset;
 

@@ -30,7 +30,7 @@
 #include "firebird/Interface.h"
 #include "../common/classes/ImplementHelper.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 // Required to stop analyzing rest of plugins before first roundtrip to server
 // if legacy login is present in DPB

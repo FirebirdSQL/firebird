@@ -269,6 +269,6 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 	if (bad_format || data != end)
 	{
 		dbgInfo.clear();
-		ERR_post_warning(Arg::Warning(isc_bad_debug_format));
+		ERR_post_warning(Firebird::Arg::Warning(isc_bad_debug_format));
 	}
 }

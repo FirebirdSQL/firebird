@@ -62,7 +62,7 @@
 #include "../jrd/constants.h"
 
 using namespace Firebird;
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 //DATABASE DB = EXTERN COMPILETIME "yachts.lnk";

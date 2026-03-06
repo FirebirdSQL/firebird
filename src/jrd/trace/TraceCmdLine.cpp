@@ -44,7 +44,7 @@ namespace
 {
 	using namespace Firebird;
 
-	using MsgFormat::SafeArg;
+	using Firebird::MsgFormat::SafeArg;
 	constexpr USHORT TRACEMGR_MSG_FAC = FB_IMPL_MSG_FACILITY_FBTRACEMGR;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)
@@ -83,7 +83,7 @@ namespace
 		if (uSvc->isService())
 		{
 			fb_assert(code);
-			Arg::Gds gds(code);
+			Firebird::Arg::Gds gds(code);
 			if (msg1)
 				gds << msg1;
 			if (msg2)
@@ -365,14 +365,14 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 						break;
 
 					case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-						(Arg::Gds(isc_io_error) << Arg::Str("open") << Arg::Str(fileName) <<
-							Arg::Gds(isc_io_open_err) << Arg::OsError()).raise();
+						(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("open") << Firebird::Arg::Str(fileName) <<
+							Firebird::Arg::Gds(isc_io_open_err) << Firebird::Arg::OsError()).raise();
 						break;
 
 					case fb_utils::FETCH_PASS_FILE_READ_ERROR:
 					case fb_utils::FETCH_PASS_FILE_EMPTY:
-						(Arg::Gds(isc_io_error) << Arg::Str("read") << Arg::Str(fileName) <<
-							Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
+						(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str("read") << Firebird::Arg::Str(fileName) <<
+							Firebird::Arg::Gds(isc_io_read_err) << Firebird::Arg::OsError()).raise();
 						break;
 				}
 			}

@@ -60,7 +60,7 @@
 #include <io.h>
 #endif
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 static constexpr USHORT val_err_table[] =
@@ -401,15 +401,15 @@ int alice(Firebird::UtilSvc* uSvc)
 			case fb_utils::FETCH_PASS_OK:
 				break;
 			case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-				ALICE_error(116, MsgFormat::SafeArg() << *argv << errno);
+				ALICE_error(116, Firebird::MsgFormat::SafeArg() << *argv << errno);
 				// error @2 opening password file @1
 				break;
 			case fb_utils::FETCH_PASS_FILE_READ_ERROR:
-				ALICE_error(117, MsgFormat::SafeArg() << *argv << errno);
+				ALICE_error(117, Firebird::MsgFormat::SafeArg() << *argv << errno);
 				// error @2 reading password file @1
 				break;
 			case fb_utils::FETCH_PASS_FILE_EMPTY:
-				ALICE_error(118, MsgFormat::SafeArg() << *argv);
+				ALICE_error(118, Firebird::MsgFormat::SafeArg() << *argv);
 				// password file @1 is empty
 				break;
 			}
@@ -506,7 +506,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	{
 		if (uSvc->isService())
 		{
-			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
+			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, Firebird::MsgFormat::SafeArg());
 		}
 		else
 		{

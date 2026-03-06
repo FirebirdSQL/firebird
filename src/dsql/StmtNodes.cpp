@@ -251,11 +251,11 @@ void AssignmentNode::validateTarget(thread_db* tdbb, CompilerScratch* csb, const
 			if (field && tail->csb_relation)
 				fieldName = tail->csb_relation()->getName().toQuotedString() + "." + fieldName;
 
-			ERR_post(Arg::Gds(isc_read_only_field) << fieldName);
+			ERR_post(Firebird::Arg::Gds(isc_read_only_field) << fieldName);
 		}
 	}
 	else if (!(nodeIs<ParameterNode>(target) || nodeIs<VariableNode>(target) || nodeIs<NullNode>(target)))
-		ERR_post(Arg::Gds(isc_read_only_field) << "<unknown>");
+		ERR_post(Firebird::Arg::Gds(isc_read_only_field) << "<unknown>");
 }
 
 void AssignmentNode::dsqlValidateTarget(const ValueExprNode* target)
@@ -267,7 +267,7 @@ void AssignmentNode::dsqlValidateTarget(const ValueExprNode* target)
 	{
 		const auto contextAliases = fieldNode->context->getConcatenatedAlias();
 
-		ERR_post(Arg::Gds(isc_read_only_field) <<
+		ERR_post(Firebird::Arg::Gds(isc_read_only_field) <<
 			(contextAliases + "." + fieldNode->name.toQuotedString()));
 	}
 }
@@ -800,9 +800,9 @@ CompoundStmtNode* CompoundStmtNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (++dsqlScratch->nestingLevel > DsqlCompilerScratch::MAX_NESTING)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_imp_exc) <<
-				  Arg::Gds(isc_dsql_max_nesting) << Arg::Num(DsqlCompilerScratch::MAX_NESTING));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_imp_exc) <<
+				  Firebird::Arg::Gds(isc_dsql_max_nesting) << Firebird::Arg::Num(DsqlCompilerScratch::MAX_NESTING));
 	}
 
 	CompoundStmtNode* node = FB_NEW_POOL(dsqlScratch->getPool()) CompoundStmtNode(dsqlScratch->getPool());
@@ -947,10 +947,10 @@ ContinueLeaveNode* ContinueLeaveNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (!dsqlScratch->loopLevel)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 			// Token unknown
-			Arg::Gds(isc_token_err) <<
-			Arg::Gds(isc_random) << cmd);
+			Firebird::Arg::Gds(isc_token_err) <<
+			Firebird::Arg::Gds(isc_random) << cmd);
 	}
 
 	labelNumber = dsqlPassLabel(dsqlScratch, true, dsqlLabelName);
@@ -1044,8 +1044,8 @@ CursorStmtNode* CursorStmtNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				break;
 		}
 
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Arg::Str(stmt));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Firebird::Arg::Str(stmt));
 	}
 
 	// Resolve the cursor.
@@ -1116,8 +1116,8 @@ void CursorStmtNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (list->items.getCount() != dsqlIntoStmt->items.getCount())
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-313) <<
-					  Arg::Gds(isc_dsql_count_mismatch));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-313) <<
+					  Firebird::Arg::Gds(isc_dsql_count_mismatch));
 		}
 
 		NestConst<ValueExprNode>* ptr = list->items.begin();
@@ -1412,7 +1412,7 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 		{
 			case blr_dcl_local_table_format:
 				if (node->format)
-					PAR_error(csb, Arg::Gds(isc_random) << "duplicate local table format");
+					PAR_error(csb, Firebird::Arg::Gds(isc_random) << "duplicate local table format");
 
 				fieldCount = blrReader.getWord();
 				node->format = Format::newFormat(pool, fieldCount);
@@ -1434,12 +1434,12 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 				break;
 
 			default:
-				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_dcl_local_table sub code");
+				PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_dcl_local_table sub code");
 		}
 	}
 
 	if (fieldCount == 0)
-		PAR_error(csb, Arg::Gds(isc_random) << "Local table without fields");
+		PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Local table without fields");
 
 	return node;
 }
@@ -1520,10 +1520,10 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 	csb->csb_blr_reader.getMetaName(name);
 
 	if (csb->csb_g_flags & csb_subroutine)
-		PAR_error(csb, Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub function");
+		PAR_error(csb, Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << "nested sub function");
 
 	if (csb->subFunctions.exist(name))
-		PAR_error(csb, Arg::Gds(isc_random) << "duplicate sub function");
+		PAR_error(csb, Firebird::Arg::Gds(isc_random) << "duplicate sub function");
 
 	DeclareSubFuncNode* node = FB_NEW_POOL(pool) DeclareSubFuncNode(pool, name);
 
@@ -1568,7 +1568,7 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 		USHORT count = subFunc->getInputFormat() ? subFunc->getInputFormat()->fmt_count : 0;
 		if (subFunc->getInputFields().getCount() * 2 != count)
-			PAR_error(csb, Arg::Gds(isc_fun_param_mismatch) << name);
+			PAR_error(csb, Firebird::Arg::Gds(isc_fun_param_mismatch) << name);
 
 		for (USHORT i = 0; i < count; i += 2u)
 		{
@@ -1580,7 +1580,7 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 		count = subFunc->getOutputFormat() ? subFunc->getOutputFormat()->fmt_count : 0;
 		if (count == 0 || paramArray.getCount() * 2 != count - 1u)
-			PAR_error(csb, Arg::Gds(isc_prc_out_param_mismatch) << name);
+			PAR_error(csb, Firebird::Arg::Gds(isc_prc_out_param_mismatch) << name);
 
 		for (USHORT i = 0; i < count - 1u; i += 2u)
 		{
@@ -1657,7 +1657,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	MemoryPool& pool = dsqlScratch->getPool();
 
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
-		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub function");
+		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << "nested sub function");
 
 	const auto prevDecl = dsqlScratch->getSubFunction(name);
 	const bool implemetingForward = prevDecl && prevDecl->isForwardDecl() && !isForwardDecl();
@@ -1713,7 +1713,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			if (prevDecl)
 			{
 				status_exception::raise(
-					Arg::Gds(isc_subfunc_defvaldecl) <<
+					Firebird::Arg::Gds(isc_subfunc_defvaldecl) <<
 					name.c_str());
 			}
 
@@ -1727,9 +1727,9 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 			if (defaultFound)
 			{
 				// Parameter without default value after parameters with default.
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-						Arg::Gds(isc_bad_default_value) <<
-						Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+						Firebird::Arg::Gds(isc_bad_default_value) <<
+						Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("defaults must be last"));
 			}
 
 			if (prevDecl && paramIndex < prevDecl->dsqlBlock->parameters.getCount())
@@ -1742,7 +1742,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	else if (dsqlSignature != prevDecl->dsqlSignature)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_subfunc_signat) <<
+			Firebird::Arg::Gds(isc_subfunc_signat) <<
 			name.c_str());
 	}
 
@@ -1844,10 +1844,10 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 	csb->csb_blr_reader.getMetaName(name);
 
 	if (csb->csb_g_flags & csb_subroutine)
-		PAR_error(csb, Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub procedure");
+		PAR_error(csb, Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << "nested sub procedure");
 
 	if (csb->subProcedures.exist(name))
-		PAR_error(csb, Arg::Gds(isc_random) << "duplicate sub procedure");
+		PAR_error(csb, Firebird::Arg::Gds(isc_random) << "duplicate sub procedure");
 
 	DeclareSubProcNode* node = FB_NEW_POOL(pool) DeclareSubProcNode(pool, name);
 
@@ -1889,7 +1889,7 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 		USHORT count = subProc->getInputFormat() ? subProc->getInputFormat()->fmt_count : 0;
 		if (subProc->getInputFields().getCount() * 2 != count)
-			PAR_error(csb, Arg::Gds(isc_prcmismat) << name);
+			PAR_error(csb, Firebird::Arg::Gds(isc_prcmismat) << name);
 
 		for (USHORT i = 0; i < count; i += 2u)
 		{
@@ -1901,7 +1901,7 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 		count = subProc->getOutputFormat() ? subProc->getOutputFormat()->fmt_count : 0;
 		if (count == 0 || paramArray.getCount() * 2 != count - 1u)
-			PAR_error(csb, Arg::Gds(isc_prc_out_param_mismatch) << name);
+			PAR_error(csb, Firebird::Arg::Gds(isc_prc_out_param_mismatch) << name);
 
 		Format* format = Format::newFormat(pool, paramArray.getCount());
 		subProc->prc_record_format = format;
@@ -1988,7 +1988,7 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	MemoryPool& pool = dsqlScratch->getPool();
 
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE)
-		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "nested sub procedure");
+		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << "nested sub procedure");
 
 	const auto prevDecl = dsqlScratch->getSubProcedure(name);
 	const bool implemetingForward = prevDecl && prevDecl->isForwardDecl() && !isForwardDecl();
@@ -2025,7 +2025,7 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 				if (prevDecl)
 				{
 					status_exception::raise(
-						Arg::Gds(isc_subproc_defvaldecl) <<
+						Firebird::Arg::Gds(isc_subproc_defvaldecl) <<
 						name.c_str());
 				}
 
@@ -2039,9 +2039,9 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 				if (defaultFound)
 				{
 					// Parameter without default value after parameters with default.
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-							Arg::Gds(isc_bad_default_value) <<
-							Arg::Gds(isc_invalid_clause) << Arg::Str("defaults must be last"));
+					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+							Firebird::Arg::Gds(isc_bad_default_value) <<
+							Firebird::Arg::Gds(isc_invalid_clause) << Firebird::Arg::Str("defaults must be last"));
 				}
 
 				if (prevDecl && paramIndex < prevDecl->dsqlBlock->parameters.getCount())
@@ -2074,7 +2074,7 @@ DeclareSubProcNode* DeclareSubProcNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 	else if (dsqlSignature != prevDecl->dsqlSignature)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_subproc_signat) <<
+			Firebird::Arg::Gds(isc_subproc_signat) <<
 			name.c_str());
 	}
 
@@ -2285,7 +2285,7 @@ DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	const USHORT n = csb->csb_blr_reader.getByte();
 
 	if (n >= csb->csb_rpt.getCount() || !(csb->csb_rpt[n].csb_flags & csb_used))
-		PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+		PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 
 	EraseNode* node = FB_NEW_POOL(pool) EraseNode(pool);
 	node->stream = csb->csb_rpt[n].csb_stream;
@@ -2510,8 +2510,8 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 		if (!relation)
 		{
 			ERR_post(
-				Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) << "erase local_table");
+				Firebird::Arg::Gds(isc_wish_list) <<
+				Firebird::Arg::Gds(isc_random) << "erase local_table");
 		}
 
 		view = relation->isView() ? relation : view;
@@ -2723,7 +2723,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		return parentStmt;
 
 	if (rpb->rpb_number.isBof() || (!relation->isView() && !rpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
+		ERR_post(Firebird::Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && forNode->isWriteLockMode(request))
 	{
@@ -2874,7 +2874,7 @@ DmlNode* ErrorHandlerNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScra
 				str.lower();
 				item.name.object = str;
 				if (!(item.code = PAR_symbol_to_gdscode(str)))
-					PAR_error(csb, Arg::Gds(isc_codnotdef) << item.name.object);
+					PAR_error(csb, Firebird::Arg::Gds(isc_codnotdef) << item.name.object);
 				break;
 			}
 
@@ -2887,7 +2887,7 @@ DmlNode* ErrorHandlerNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScra
 				csb->qualifyExistingName(tdbb, item.name, obj_exception);
 
 				if (!MET_load_exception(tdbb, item))
-					PAR_error(csb, Arg::Gds(isc_xcpnotdef) << item.name.toQuotedString());
+					PAR_error(csb, Firebird::Arg::Gds(isc_xcpnotdef) << item.name.toQuotedString());
 
 				if (csb->collectingDependencies())
 				{
@@ -3035,7 +3035,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		{
 			string str;
 			str.printf("%s should predate %s", preVerb, postVerb);
-			PAR_error(csb, Arg::Gds(isc_random) << str);
+			PAR_error(csb, Firebird::Arg::Gds(isc_random) << str);
 		}
 	};
 
@@ -3092,7 +3092,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 									break;
 
 								default:
-									PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
+									PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
 									break;
 							}
 						}
@@ -3202,7 +3202,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						break;
 
 					default:
-						PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_procedure sub code");
+						PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_invoke_procedure sub code");
 				}
 			}
 
@@ -3248,13 +3248,13 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 	if (!node->procedure)
 	{
 		blrReader.setPos(blrStartPos);
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_prcnotdef) << name.toQuotedString());
 	}
 
 	if ((inOutArgs || inOutArgNames) && (node->inputSources || inArgNames || node->outputTargets || outArgNames))
 	{
 		blrReader.setPos(inOutArgNamesPos);
-		PAR_error(csb, Arg::Gds(isc_random) << "IN/OUT args are not allowed with IN or OUT args");
+		PAR_error(csb, Firebird::Arg::Gds(isc_random) << "IN/OUT args are not allowed with IN or OUT args");
 	}
 
 	if (inOutArgs)
@@ -3324,7 +3324,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 	{
 		blrReader.setPos(inArgNamesPos);
 		PAR_error(csb,
-			Arg::Gds(isc_random) <<
+			Firebird::Arg::Gds(isc_random) <<
 			"blr_invsel_procedure_in_arg_names count cannot be greater than blr_invsel_procedure_in_args");
 	}
 
@@ -3347,7 +3347,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 	{
 		blrReader.setPos(outArgNamesPos);
 		PAR_error(csb,
-			Arg::Gds(isc_random) <<
+			Firebird::Arg::Gds(isc_random) <<
 			"blr_invsel_procedure_out_arg_names count cannot be greater than blr_invsel_procedure_out_args");
 	}
 
@@ -3356,21 +3356,21 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
 		{
 			PAR_warning(
-				Arg::Warning(isc_prcnotdef) << name.toQuotedString() <<
-				Arg::Warning(isc_modnotfound));
+				Firebird::Arg::Warning(isc_prcnotdef) << name.toQuotedString() <<
+				Firebird::Arg::Warning(isc_modnotfound));
 		}
 		else
 		{
 			csb->csb_blr_reader.setPos(blrStartPos);
 			PAR_error(csb,
-				Arg::Gds(isc_prcnotdef) << name.toQuotedString() <<
-				Arg::Gds(isc_modnotfound));
+				Firebird::Arg::Gds(isc_prcnotdef) << name.toQuotedString() <<
+				Firebird::Arg::Gds(isc_modnotfound));
 		}
 	}
 
 	node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure(tdbb)->getInputFields().getCount());
 
-	Arg::StatusVector mismatchStatus;
+	Firebird::Arg::StatusVector mismatchStatus;
 
 	CMP_procedure_arguments(
 		tdbb,
@@ -3398,7 +3398,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 
 	if (mismatchStatus.hasData())
 	{
-		status_exception::raise(Arg::Gds(isc_prcmismat) <<
+		status_exception::raise(Firebird::Arg::Gds(isc_prcmismat) <<
 			node->procedure()->getName().toQuotedString() << mismatchStatus);
 	}
 
@@ -3464,15 +3464,15 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (!procedure)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-				  Arg::Gds(isc_dsql_procedure_err) <<
-				  Arg::Gds(isc_random) << dsqlName.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-204) <<
+				  Firebird::Arg::Gds(isc_dsql_procedure_err) <<
+				  Firebird::Arg::Gds(isc_random) << dsqlName.toQuotedString());
 	}
 
 	if (procedure->prc_private && procedure->prc_name.getSchemaAndPackage() != dsqlScratch->package)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_private_procedure) <<
+			Firebird::Arg::Gds(isc_private_procedure) <<
 			procedure->prc_name.object.toQuotedString() <<
 			procedure->prc_name.getSchemaAndPackage().toQuotedString());
 	}
@@ -3576,7 +3576,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					for (const auto* field = procedure->prc_outputs; field; field = field->fld_next)
 						argsByName.put(field->fld_name, field);
 
-					Arg::StatusVector mismatchStatus;
+					Firebird::Arg::StatusVector mismatchStatus;
 
 					for (const auto& argName : *dsqlOutputArgNames)
 					{
@@ -3595,13 +3595,13 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 							}
 						}
 						else
-							mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+							mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argName;
 
 						++targetArgIt;
 					}
 
 					if (mismatchStatus.hasData())
-						status_exception::raise(Arg::Gds(isc_prcmismat) << dsqlName.toQuotedString() << mismatchStatus);
+						status_exception::raise(Firebird::Arg::Gds(isc_prcmismat) << dsqlName.toQuotedString() << mismatchStatus);
 				}
 			}
 		}
@@ -3660,7 +3660,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					argsByName.put(field->fld_name, field);
 			}
 
-			Arg::StatusVector mismatchStatus;
+			Firebird::Arg::StatusVector mismatchStatus;
 
 			for (const auto& argName : *node->dsqlInputArgNames)
 			{
@@ -3674,13 +3674,13 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 						false);
 				}
 				else
-					mismatchStatus << Arg::Gds(isc_param_not_exist) << argName;
+					mismatchStatus << Firebird::Arg::Gds(isc_param_not_exist) << argName;
 
 				++sourceArgIt;
 			}
 
 			if (mismatchStatus.hasData())
-				status_exception::raise(Arg::Gds(isc_prcmismat) << dsqlName.toQuotedString() << mismatchStatus);
+				status_exception::raise(Firebird::Arg::Gds(isc_prcmismat) << dsqlName.toQuotedString() << mismatchStatus);
 		}
 	}
 
@@ -3693,7 +3693,7 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			const USHORT outCount = outputTargets ? outputTargets->items.getCount() : 0;
 
 			if (outCount != procedure->prc_out_count)
-				ERRD_post(Arg::Gds(isc_prc_out_param_mismatch) << dsqlName.toQuotedString());
+				ERRD_post(Firebird::Arg::Gds(isc_prc_out_param_mismatch) << dsqlName.toQuotedString());
 		}
 
 		node->outputTargets = dsqlPassArray(dsqlScratch, outputTargets);
@@ -3702,10 +3702,10 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
 		if (outputTargets)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					  // Token unknown
-					  Arg::Gds(isc_token_err) <<
-					  Arg::Gds(isc_random) << Arg::Str("RETURNING_VALUES"));
+					  Firebird::Arg::Gds(isc_token_err) <<
+					  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("RETURNING_VALUES"));
 		}
 
 		node->outputTargets = explodeOutputs(dsqlScratch, procedure);
@@ -3951,14 +3951,14 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 	if (!proc->isImplemented())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_proc_pack_not_implemented) <<
+			Firebird::Arg::Gds(isc_proc_pack_not_implemented) <<
 				procedure()->getName().object.toQuotedString() << procedure()->getName().package.toQuotedString());
 	}
 	else if (!proc->isDefined())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_prcnotdef) << procedure()->getName().toQuotedString() <<
-			Arg::Gds(isc_modnotfound));
+			Firebird::Arg::Gds(isc_prcnotdef) << procedure()->getName().toQuotedString() <<
+			Firebird::Arg::Gds(isc_modnotfound));
 	}
 
 	proc->checkReload(tdbb);
@@ -4264,8 +4264,8 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			FB_SIZE_T pos;
 			if (names.find(name->c_str(), pos))
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-						  Arg::Gds(isc_dsql_duplicate_spec) << *name);
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+						  Firebird::Arg::Gds(isc_dsql_duplicate_spec) << *name);
 			}
 
 			names.insert(pos, name->c_str());
@@ -4930,7 +4930,7 @@ DmlNode* InitVariableNode::parse(thread_db* /*tdbb*/, MemoryPool& pool, Compiler
 	vec<DeclareVariableNode*>* vector = csb->csb_variables;
 
 	if (!vector || node->varId >= vector->count())
-		PAR_error(csb, Arg::Gds(isc_badvarnum));
+		PAR_error(csb, Firebird::Arg::Gds(isc_badvarnum));
 
 	return node;
 }
@@ -4969,7 +4969,7 @@ InitVariableNode* InitVariableNode::pass1(thread_db* /*tdbb*/, CompilerScratch* 
 	vec<DeclareVariableNode*>* vector = csb->csb_variables;
 
 	if (!vector || varId >= vector->count() || !(varDecl = (*vector)[varId]))
-		status_exception::raise(Arg::Gds(isc_badvarnum));
+		status_exception::raise(Firebird::Arg::Gds(isc_badvarnum));
 
 	return this;
 }
@@ -5279,7 +5279,7 @@ DmlNode* ExceptionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 			str.lower();
 			item->name.object = str;
 			if (!(item->code = PAR_symbol_to_gdscode(str)))
-				PAR_error(csb, Arg::Gds(isc_codnotdef) << item->name.object.toQuotedString());
+				PAR_error(csb, Firebird::Arg::Gds(isc_codnotdef) << item->name.object.toQuotedString());
 			break;
 		}
 
@@ -5295,7 +5295,7 @@ DmlNode* ExceptionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 			csb->qualifyExistingName(tdbb, item->name, obj_exception);
 
 			if (!MET_load_exception(tdbb, *item))
-				PAR_error(csb, Arg::Gds(isc_xcpnotdef) << item->name.toQuotedString());
+				PAR_error(csb, Firebird::Arg::Gds(isc_xcpnotdef) << item->name.toQuotedString());
 
 			if (csb->collectingDependencies())
 			{
@@ -5333,12 +5333,12 @@ StmtNode* ExceptionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (exception)
 		dsqlScratch->qualifyExistingName(exception->name, obj_exception);
 
-	if (parameters && parameters->items.getCount() > MsgFormat::SAFEARG_MAX_ARG)
+	if (parameters && parameters->items.getCount() > Firebird::MsgFormat::SAFEARG_MAX_ARG)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_dsql_max_exception_arguments) <<
-				Arg::Num(parameters->items.getCount()) <<
-				Arg::Num(MsgFormat::SAFEARG_MAX_ARG));
+			Firebird::Arg::Gds(isc_dsql_max_exception_arguments) <<
+				Firebird::Arg::Num(parameters->items.getCount()) <<
+				Firebird::Arg::Num(Firebird::MsgFormat::SAFEARG_MAX_ARG));
 	}
 
 	ExceptionNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ExceptionNode(dsqlScratch->getPool());
@@ -5532,10 +5532,10 @@ void ExceptionNode::setError(thread_db* tdbb) const
 				MetaName constraintName;
 				MET_lookup_cnstrt_for_trigger(tdbb, constraintName, relationName,
 					request->getStatement()->triggerName);
-				ERR_post(Arg::Gds(xcpCode) << constraintName.toQuotedString() << relationName.toQuotedString());
+				ERR_post(Firebird::Arg::Gds(xcpCode) << constraintName.toQuotedString() << relationName.toQuotedString());
 			}
 			else
-				ERR_post(Arg::Gds(xcpCode));
+				ERR_post(Firebird::Arg::Gds(xcpCode));
 
 		case ExceptionItem::XCP_CODE:
 		{
@@ -5553,27 +5553,27 @@ void ExceptionNode::setError(thread_db* tdbb) const
 			else
 				s = NULL;
 
-			Arg::StatusVector status;
+			Firebird::Arg::StatusVector status;
 			ISC_STATUS msgCode = parameters ? isc_formatted_exception : isc_random;
 
 			if (s && exName.object.hasData())
 			{
-				status << Arg::Gds(isc_except) << Arg::Num(xcpCode) <<
-						  Arg::Gds(isc_random) << exName.toQuotedString() <<
-						  Arg::Gds(msgCode);
+				status << Firebird::Arg::Gds(isc_except) << Firebird::Arg::Num(xcpCode) <<
+						  Firebird::Arg::Gds(isc_random) << exName.toQuotedString() <<
+						  Firebird::Arg::Gds(msgCode);
 			}
 			else if (s)
-				status << Arg::Gds(isc_except) << Arg::Num(xcpCode) <<
-						  Arg::Gds(msgCode);
+				status << Firebird::Arg::Gds(isc_except) << Firebird::Arg::Num(xcpCode) <<
+						  Firebird::Arg::Gds(msgCode);
 			else if (exName.object.hasData())
 			{
-				ERR_post(Arg::Gds(isc_except) << Arg::Num(xcpCode) <<
-						 Arg::Gds(isc_random) << exName.toQuotedString());
+				ERR_post(Firebird::Arg::Gds(isc_except) << Firebird::Arg::Num(xcpCode) <<
+						 Firebird::Arg::Gds(isc_random) << exName.toQuotedString());
 			}
 			else
-				ERR_post(Arg::Gds(isc_except) << Arg::Num(xcpCode));
+				ERR_post(Firebird::Arg::Gds(isc_except) << Firebird::Arg::Num(xcpCode));
 
-			// Preallocate objects, because Arg::StatusVector store pointers.
+			// Preallocate objects, because Firebird::Arg::StatusVector store pointers.
 			string formattedMsg;
 			ObjectsArray<string> paramsStr;
 
@@ -5597,12 +5597,12 @@ void ExceptionNode::setError(thread_db* tdbb) const
 				// And add the values to the args and status vector only after they are all created
 				// and will not move in paramsStr.
 
-				MsgFormat::SafeArg arg;
+				Firebird::MsgFormat::SafeArg arg;
 				for (FB_SIZE_T i = 0; i < parameters->items.getCount(); ++i)
 					arg << paramsStr[i].c_str();
 
-				MsgFormat::StringRefStream stream(formattedMsg);
-				MsgFormat::MsgPrint(stream, s, arg, true);
+				Firebird::MsgFormat::StringRefStream stream(formattedMsg);
+				Firebird::MsgFormat::MsgPrint(stream, s, arg, true);
 
 				status << formattedMsg;
 
@@ -5788,8 +5788,8 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		if (list->items.getCount() != dsqlInto->items.getCount())
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-313) <<
-					  Arg::Gds(isc_dsql_count_mismatch));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-313) <<
+					  Firebird::Arg::Gds(isc_dsql_count_mismatch));
 		}
 
 		NestConst<ValueExprNode>* ptr = list->items.begin();
@@ -6016,7 +6016,7 @@ void ForNode::checkRecordUpdated(thread_db* tdbb, Request* request, record_param
 		return;
 
 	if (impure->recUpdated->test(rpb->rpb_number.getValue()))
-		Arg::Gds(isc_merge_dup_update).raise();
+		Firebird::Arg::Gds(isc_merge_dup_update).raise();
 }
 
 void ForNode::setRecordUpdated(thread_db* tdbb, Request* request, record_param* rpb) const
@@ -6192,13 +6192,13 @@ ForRangeNode* ForRangeNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	byExpr->getDesc(tdbb, csb, &byDesc);
 
 	if (!variableDesc.isExact() || !initialDesc.isExact() || !finalDesc.isExact() || !byDesc.isExact())
-		ERRD_post(Arg::Gds(isc_argmustbe_exact_range_for));
+		ERRD_post(Firebird::Arg::Gds(isc_argmustbe_exact_range_for));
 
 	dsc incDecDesc;
 	ArithmeticNode::getDescDialect3(tdbb, &incDecDesc, variableDesc, byDesc, blr_add, &incDecScale, &incDecFlags);
 
 	if (!incDecDesc.isExact())
-		ERRD_post(Arg::Gds(isc_argmustbe_exact_range_for));
+		ERRD_post(Firebird::Arg::Gds(isc_argmustbe_exact_range_for));
 
 	impureOffset = csb->allocImpure<Impure>();
 
@@ -6225,7 +6225,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 			if (const auto finalDesc = EVL_expr(tdbb, request, finalExpr))
 			{
 				if (!finalDesc->isExact())
-					ERR_post(Arg::Gds(isc_argmustbe_exact_range_for));
+					ERR_post(Firebird::Arg::Gds(isc_argmustbe_exact_range_for));
 
 				EVL_make_value(tdbb, finalDesc, &impure->finalValue);
 			}
@@ -6238,7 +6238,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 			if (const auto byDesc = EVL_expr(tdbb, request, byExpr))
 			{
 				if (!byDesc->isExact())
-					ERR_post(Arg::Gds(isc_argmustbe_exact_range_for));
+					ERR_post(Firebird::Arg::Gds(isc_argmustbe_exact_range_for));
 
 				SLONG zero = 0;
 				dsc zeroDesc;
@@ -6246,7 +6246,7 @@ const StmtNode* ForRangeNode::execute(thread_db* tdbb, Request* request, ExeStat
 				if (const auto comparison = MOV_compare(tdbb, byDesc, &zeroDesc);
 					comparison <= 0)
 				{
-					ERR_post(Arg::Gds(isc_range_for_by_should_be_positive));
+					ERR_post(Firebird::Arg::Gds(isc_range_for_by_should_be_positive));
 				}
 
 				EVL_make_value(tdbb, byDesc, &impure->byValue);
@@ -6509,8 +6509,8 @@ void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* 
 					else
 					{
 						ERRD_post(
-							Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-							Arg::Gds(isc_dsql_duplicate_spec) << parameter->name.toQuotedString());
+							Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+							Firebird::Arg::Gds(isc_dsql_duplicate_spec) << parameter->name.toQuotedString());
 					}
 				}
 			}
@@ -6538,8 +6538,8 @@ void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* 
 			else
 			{
 				ERRD_post(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-					Arg::Gds(isc_dsql_duplicate_spec) << toQuotedString(string(name)));
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+					Firebird::Arg::Gds(isc_dsql_duplicate_spec) << toQuotedString(string(name)));
 			}
 		}
 	}
@@ -6567,8 +6567,8 @@ LocalDeclarationsNode* LocalDeclarationsNode::dsqlPass(DsqlCompilerScratch* dsql
 
 					if (field->fld_name == rest_field->fld_name)
 					{
-						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
-								  Arg::Gds(isc_dsql_duplicate_spec) << field->fld_name.toQuotedString());
+						ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-637) <<
+								  Firebird::Arg::Gds(isc_dsql_duplicate_spec) << field->fld_name.toQuotedString());
 					}
 				}
 			}
@@ -6632,7 +6632,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			if (subFunc->isForwardDecl())
 			{
 				status_exception::raise(
-					Arg::Gds(isc_subfunc_not_impl) <<
+					Firebird::Arg::Gds(isc_subfunc_not_impl) <<
 					name.c_str());
 			}
 		}
@@ -6643,7 +6643,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			if (subProc->isForwardDecl())
 			{
 				status_exception::raise(
-					Arg::Gds(isc_subproc_not_impl) <<
+					Firebird::Arg::Gds(isc_subproc_not_impl) <<
 					name.c_str());
 			}
 		}
@@ -7013,8 +7013,8 @@ StmtNode* MergeNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			{
 				// count of column list and value list don't match
 				ERRD_post(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_dsql_var_count_err));
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+					Firebird::Arg::Gds(isc_dsql_var_count_err));
 			}
 
 			auto ptr2 = values->items.begin();
@@ -7693,13 +7693,13 @@ DmlNode* ModifyNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* c
 	USHORT context = (unsigned int) csb->csb_blr_reader.getByte();
 
 	if (context >= csb->csb_rpt.getCount() || !(csb->csb_rpt[context].csb_flags & csb_used))
-		PAR_error(csb, Arg::Gds(isc_ctxnotdef));
+		PAR_error(csb, Firebird::Arg::Gds(isc_ctxnotdef));
 
 	const StreamType orgStream = csb->csb_rpt[context].csb_stream;
 	const StreamType newStream = csb->nextStream(false);
 
 	if (newStream >= MAX_STREAMS)
-		PAR_error(csb, Arg::Gds(isc_too_many_contexts));
+		PAR_error(csb, Firebird::Arg::Gds(isc_too_many_contexts));
 
 	context = csb->csb_blr_reader.getByte();
 
@@ -8055,8 +8055,8 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 		if (!relation)
 		{
 			ERR_post(
-				Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) << "modify local_table");
+				Firebird::Arg::Gds(isc_wish_list) <<
+				Firebird::Arg::Gds(isc_random) << "modify local_table");
 		}
 
 		view = relation->isView() ? relation : view;
@@ -8393,7 +8393,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	}
 
 	if (orgRpb->rpb_number.isBof() || (!relation->isView() && !orgRpb->rpb_number.isValid()))
-		ERR_post(Arg::Gds(isc_no_cur_rec));
+		ERR_post(Firebird::Arg::Gds(isc_no_cur_rec));
 
 	if (forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->checkRecordUpdated(tdbb, request, orgRpb);
@@ -8466,7 +8466,7 @@ DmlNode* OuterMapNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 {
 	fb_assert(csb->mainCsb);
 	if (!csb->mainCsb)
-		PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_outer_map. Must be inside subroutine.");
+		PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_outer_map. Must be inside subroutine.");
 
 	const auto node = FB_NEW_POOL(pool) OuterMapNode(pool);
 
@@ -8495,7 +8495,7 @@ DmlNode* OuterMapNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 			}
 
 			default:
-				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_outer_map sub code");
+				PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_outer_map sub code");
 		}
 	}
 
@@ -8506,7 +8506,7 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	fb_assert(csb->mainCsb);
 	if (!csb->mainCsb)
-		status_exception::raise(Arg::Gds(isc_random) << "Invalid blr_outer_map. Must be inside subroutine.");
+		status_exception::raise(Firebird::Arg::Gds(isc_random) << "Invalid blr_outer_map. Must be inside subroutine.");
 
 	for (const auto& [innerNumber, outerNumber] : csb->outerMessagesMap)
 	{
@@ -8514,7 +8514,7 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (!outerMessage)
 		{
 			fb_assert(false);
-			status_exception::raise(Arg::Gds(isc_random) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_random) <<
 				"Invalid blr_outer_map_message: outer message does not exist");
 		}
 
@@ -8522,7 +8522,7 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (tail->csb_message)
 		{
 			fb_assert(false);
-			status_exception::raise(Arg::Gds(isc_random) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_random) <<
 				"Invalid blr_outer_map_message: inner message already exist");
 		}
 
@@ -8538,7 +8538,7 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (outerNumber >= outerVariables.count() || !outerVariables[outerNumber])
 		{
 			fb_assert(false);
-			status_exception::raise(Arg::Gds(isc_random) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_random) <<
 				"Invalid blr_outer_map_variable: outer variable does not exist");
 		}
 
@@ -8548,7 +8548,7 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		if (innerVariables[innerNumber])
 		{
 			fb_assert(false);
-			status_exception::raise(Arg::Gds(isc_random) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_random) <<
 				"Invalid blr_outer_map_variable: inner variable already exist");
 		}
 
@@ -8903,8 +8903,8 @@ StmtNode* StoreNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch,
 		if (fields.getCount() != values->items.getCount())
 		{
 			// count of column list and value list don't match
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					  Arg::Gds(isc_dsql_var_count_err));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+					  Firebird::Arg::Gds(isc_dsql_var_count_err));
 		}
 
 		auto ptr2 = values->items.begin();
@@ -9108,7 +9108,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 			string relName = tail->csb_relation ? tail->csb_relation()->getName().toQuotedString() :
 				"*** unknown ***";
 
-			ERR_post(Arg::Gds(isc_relnotdef) << relName);
+			ERR_post(Firebird::Arg::Gds(isc_relnotdef) << relName);
 		}
 		view = relation->isView() ? relation : view;
 
@@ -9684,10 +9684,10 @@ DmlNode* SetGeneratorNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScra
 
 	bool sysGen = false;
 	if (!MET_load_generator(tdbb, node->generator, &sysGen))
-		PAR_error(csb, Arg::Gds(isc_gennotdef) << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_gennotdef) << name.toQuotedString());
 
 	if (sysGen)
-		PAR_error(csb, Arg::Gds(isc_cant_modify_sysobj) << "generator" << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_cant_modify_sysobj) << "generator" << name.toQuotedString());
 
 	node->value = PAR_parse_value(tdbb, csb);
 
@@ -9826,22 +9826,22 @@ SuspendNode* SuspendNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlScratch->flags & (DsqlCompilerScratch::FLAG_TRIGGER | DsqlCompilerScratch::FLAG_FUNCTION))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Token unknown
-				  Arg::Gds(isc_token_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("SUSPEND"));
+				  Firebird::Arg::Gds(isc_token_err) <<
+				  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("SUSPEND"));
 	}
 
 	if (dsqlScratch->outputVariables.isEmpty())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_suspend_without_returns));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				  Firebird::Arg::Gds(isc_suspend_without_returns));
 	}
 
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK)	// autonomous transaction
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Arg::Str("SUSPEND"));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Firebird::Arg::Str("SUSPEND"));
 	}
 
 	statement->addFlags(DsqlStatement::FLAG_SELECTABLE);
@@ -9944,16 +9944,16 @@ ReturnNode* ReturnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_FUNCTION))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Token unknown
-				  Arg::Gds(isc_token_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("RETURN"));
+				  Firebird::Arg::Gds(isc_token_err) <<
+				  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("RETURN"));
 	}
 
 	if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK)	// autonomous transaction
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Arg::Str("RETURN"));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Firebird::Arg::Str("RETURN"));
 	}
 
 	ReturnNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ReturnNode(dsqlScratch->getPool());
@@ -10249,7 +10249,7 @@ void SetRoleNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra** /*tra
 	else
 	{
 		if (!SCL_role_granted(tdbb, *user, roleName.c_str()))
-			(Arg::Gds(isc_set_invalid_role) << roleName).raise();
+			(Firebird::Arg::Gds(isc_set_invalid_role) << roleName).raise();
 
 		user->setSqlRole(roleName.c_str());
 	}
@@ -10279,7 +10279,7 @@ void SetDebugOptionNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_
 	{
 		// This currently can happen with negative numbers.
 		// Since it's not relevant for DSQL_KEEP_BLR, let's throw an error.
-		ERR_post(Arg::Gds(isc_random) << "Invalid DEBUG option value");
+		ERR_post(Firebird::Arg::Gds(isc_random) << "Invalid DEBUG option value");
 	}
 
 	const auto litDesc = &literal->litDesc;
@@ -10287,7 +10287,7 @@ void SetDebugOptionNode::execute(thread_db* tdbb, DsqlRequest* /*request*/, jrd_
 	if (name == "DSQL_KEEP_BLR")
 		debugOptions.setDsqlKeepBlr(MOV_get_boolean(litDesc));
 	else
-		ERR_post(Arg::Gds(isc_random) << "Invalid DEBUG option");
+		ERR_post(Firebird::Arg::Gds(isc_random) << "Invalid DEBUG option");
 }
 
 
@@ -10300,7 +10300,7 @@ SetDecFloatRoundNode::SetDecFloatRoundNode(MemoryPool& pool, MetaName* name)
 	fb_assert(name);
 	const DecFloatConstant* mode = DecFloatConstant::getByText(name->c_str(), FB_DEC_RoundModes, FB_DEC_RMODE_OFFSET);
 	if (!mode)
-		(Arg::Gds(isc_invalid_decfloat_round) << *name).raise();
+		(Firebird::Arg::Gds(isc_invalid_decfloat_round) << *name).raise();
 	rndMode = mode->val;
 }
 
@@ -10320,7 +10320,7 @@ void SetDecFloatTrapsNode::trap(MetaName* name)
 	fb_assert(name);
 	const DecFloatConstant* trap = DecFloatConstant::getByText(name->c_str(), FB_DEC_IeeeTraps, FB_DEC_TRAPS_OFFSET);
 	if (!trap)
-		(Arg::Gds(isc_invalid_decfloat_trap) << *name).raise();
+		(Firebird::Arg::Gds(isc_invalid_decfloat_trap) << *name).raise();
 	traps |= trap->val;
 }
 
@@ -10389,12 +10389,12 @@ SetSessionNode::SetSessionNode(MemoryPool& pool, Type aType, ULONG aVal, UCHAR b
 
 	case blr_extract_millisecond:
 		if (aType == TYPE_IDLE_TIMEOUT)
-			Arg::Gds(isc_invalid_extractpart_time).raise();
+			Firebird::Arg::Gds(isc_invalid_extractpart_time).raise();
 		mult = 1;
 		break;
 
 	default:
-		Arg::Gds(isc_invalid_extractpart_time).raise();
+		Firebird::Arg::Gds(isc_invalid_extractpart_time).raise();
 		break;
 	}
 
@@ -10499,7 +10499,7 @@ DmlNode* TruncateLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compil
 	node->tableNumber = csb->csb_blr_reader.getWord();
 
 	if (node->tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[node->tableNumber])
-		PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(node->tableNumber));
+		PAR_error(csb, Firebird::Arg::Gds(isc_bad_loctab_num) << Firebird::Arg::Num(node->tableNumber));
 
 	return node;
 }
@@ -10597,7 +10597,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		if (baseRel)
 			baseName = baseRel->rel_name;
 		else
-			ERRD_post(Arg::Gds(isc_upd_ins_with_complex_view));
+			ERRD_post(Firebird::Arg::Gds(isc_upd_ins_with_complex_view));
 	}
 
 	auto matchingCopy = matching;
@@ -10630,7 +10630,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		METD_get_primary_key(dsqlScratch->getTransaction(), baseName, matchingCopy);
 
 		if (matchingCopy.isEmpty())
-			ERRD_post(Arg::Gds(isc_primary_key_required) << baseName.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_primary_key_required) << baseName.toQuotedString());
 	}
 
 	// Build a boolean to use in the UPDATE dsqlScratch.
@@ -10672,7 +10672,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				if (testField == fieldName)
 				{
 					if (!*valuePtr)	// it's nullptr for DEFAULT
-						ERRD_post(Arg::Gds(isc_upd_ins_cannot_default) << fieldName);
+						ERRD_post(Firebird::Arg::Gds(isc_upd_ins_cannot_default) << fieldName);
 
 					++matchCount;
 
@@ -10705,9 +10705,9 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (matchCount != matchingCopy.getCount())
 	{
 		if (matching.hasData())
-			ERRD_post(Arg::Gds(isc_upd_ins_doesnt_match_matching));
+			ERRD_post(Firebird::Arg::Gds(isc_upd_ins_doesnt_match_matching));
 		else
-			ERRD_post(Arg::Gds(isc_upd_ins_doesnt_match_pk) << baseName.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_upd_ins_doesnt_match_pk) << baseName.toQuotedString());
 	}
 
 	// build the UPDATE node
@@ -10893,7 +10893,7 @@ void UserSavepointNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra**
 	}
 
 	if (!savepoint && command != CMD_SET)
-		ERR_post(Arg::Gds(isc_invalid_savepoint) << name.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_invalid_savepoint) << name.toQuotedString());
 
 	fb_assert(!savepoint || !previous || previous->getNext() == savepoint);
 
@@ -11372,10 +11372,10 @@ static void dsqlFieldAppearsOnce(const Array<NestConst<ValueExprNode> >& values,
 
 				//// FIXME: line/column is not very accurate for MERGE ... INSERT.
 				ERRD_post(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-206) <<
-					Arg::Gds(isc_dsql_no_dup_name) << str << command <<
-					Arg::Gds(isc_dsql_line_col_error) <<
-						Arg::Num(values[j]->line) << Arg::Num(values[j]->column));
+					Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-206) <<
+					Firebird::Arg::Gds(isc_dsql_no_dup_name) << str << command <<
+					Firebird::Arg::Gds(isc_dsql_line_col_error) <<
+						Firebird::Arg::Num(values[j]->line) << Firebird::Arg::Num(values[j]->column));
 			}
 		}
 	}
@@ -11416,8 +11416,8 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 	if (nodeRse->dsqlDistinct)
 	{
 		// cursor with DISTINCT is not updatable
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
-				  Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-510) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
 	}
 
 	NestConst<RecSourceListNode> temp = nodeRse->dsqlStreams;
@@ -11435,9 +11435,9 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 			{
 				if (context)
 				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-							  Arg::Gds(isc_dsql_cursor_err) <<
-							  Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
+					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+							  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+							  Firebird::Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
 							  	relName.toQuotedString() <<
 								cursor.toQuotedString());
 				}
@@ -11449,8 +11449,8 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 		else if (nodeIs<AggregateSourceNode>(recSource))
 		{
 			// cursor with aggregation is not updatable
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
-					  Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-510) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
 		}
 		// note that UnionSourceNode and joins will cause the error below,
 		// as well as derived tables. Some cases deserve fixing in the future
@@ -11458,9 +11458,9 @@ static dsql_ctx* dsqlPassCursorContext(DsqlCompilerScratch* dsqlScratch, const M
 
 	if (!context)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				  Arg::Gds(isc_dsql_cursor_err) <<
-				  Arg::Gds(isc_dsql_cursor_rel_not_found) << relName.toQuotedString() << cursor.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_rel_not_found) << relName.toQuotedString() << cursor.toQuotedString());
 	}
 
 	return context;
@@ -11482,9 +11482,9 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 	if (!symbol)
 	{
 		// cursor is not found
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				  Arg::Gds(isc_dsql_cursor_err) <<
-				  Arg::Gds(isc_dsql_cursor_not_found) << cursor.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_not_found) << cursor.toQuotedString());
 	}
 
 	DsqlDmlRequest* parent = *symbol;
@@ -11494,8 +11494,8 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 	if (parent->getDsqlStatement()->getType() != DsqlStatement::TYPE_SELECT_UPD)
 	{
 		// cursor is not updatable
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
-				  Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-510) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_update_err) << cursor.toQuotedString());
 	}
 
 	// Check that it contains this relation name
@@ -11513,8 +11513,8 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 			{
 				// Relation is used twice in cursor
 				ERRD_post(
-					Arg::Gds(isc_dsql_cursor_err) <<
-					Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
+					Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+					Firebird::Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
 						relName.toQuotedString() << cursor.toQuotedString());
 			}
 			found = true;
@@ -11525,8 +11525,8 @@ static RseNode* dsqlPassCursorReference(DsqlCompilerScratch* dsqlScratch, const 
 	{
 		// Relation is not in cursor
 		ERRD_post(
-			Arg::Gds(isc_dsql_cursor_err) <<
-			Arg::Gds(isc_dsql_cursor_rel_not_found) <<
+			Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+			Firebird::Arg::Gds(isc_dsql_cursor_rel_not_found) <<
 				relName.toQuotedString() << cursor.toQuotedString());
 	}
 
@@ -11647,10 +11647,10 @@ static USHORT dsqlPassLabel(DsqlCompilerScratch* dsqlScratch, bool breakContinue
 		else if (label)
 		{
 			// ERROR: Label %s is not found in the current scope
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_command_err) <<
-					  Arg::Gds(isc_dsql_invalid_label) << *label <<
-														  Arg::Str("is not found"));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+					  Firebird::Arg::Gds(isc_dsql_command_err) <<
+					  Firebird::Arg::Gds(isc_dsql_invalid_label) << *label <<
+														  Firebird::Arg::Str("is not found"));
 		}
 		else
 		{
@@ -11663,10 +11663,10 @@ static USHORT dsqlPassLabel(DsqlCompilerScratch* dsqlScratch, bool breakContinue
 		if (position > 0)
 		{
 			// ERROR: Label %s already exists in the current scope
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_command_err) <<
-					  Arg::Gds(isc_dsql_invalid_label) << *label <<
-					  Arg::Str("already exists"));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+					  Firebird::Arg::Gds(isc_dsql_command_err) <<
+					  Firebird::Arg::Gds(isc_dsql_invalid_label) << *label <<
+					  Firebird::Arg::Str("already exists"));
 		}
 		else
 		{
@@ -11716,20 +11716,20 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 	if (!dsqlScratch->isPsql() && input->second)
 	{
 		// RETURNING INTO is not allowed syntax for DSQL
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Token unknown
-				  Arg::Gds(isc_token_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("INTO"));
+				  Firebird::Arg::Gds(isc_token_err) <<
+				  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("INTO"));
 	}
 	else if (dsqlScratch->isPsql() && !input->second)
 	{
 		// This trick because we don't copy lexer positions when copying lists.
 		const ValueListNode* errSrc = input->first;
 		// RETURNING without INTO is not allowed for PSQL
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Unexpected end of command
-				  Arg::Gds(isc_command_end_err2) << Arg::Num(errSrc->line) <<
-													Arg::Num(errSrc->column));
+				  Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(errSrc->line) <<
+													Firebird::Arg::Num(errSrc->column));
 	}
 
 	const unsigned count = node->first->items.getCount();
@@ -11742,8 +11742,8 @@ static ReturningClause* dsqlProcessReturning(DsqlCompilerScratch* dsqlScratch, d
 		if (count != node->second->items.getCount())
 		{
 			// count of column list and value list don't match
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					  Arg::Gds(isc_dsql_var_count_err));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+					  Firebird::Arg::Gds(isc_dsql_var_count_err));
 		}
 	}
 	else
@@ -12194,7 +12194,7 @@ static RelationSourceNode* pass1Update(thread_db* tdbb, CompilerScratch* csb, jr
 	if (rse->rse_relations.getCount() != 1 || rse->rse_projection || rse->rse_sorted ||
 		rse->rse_relations[0]->getType() != RelationSourceNode::TYPE)
 	{
-		ERR_post(Arg::Gds(isc_read_only_view) << relation->getName().toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_read_only_view) << relation->getName().toQuotedString());
 	}
 
 	// for an updateable view, return the view source
@@ -12382,15 +12382,15 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 	if (insertOverride->has_value())
 	{
 		if (!identityType.has_value())
-			ERR_post(Arg::Gds(isc_overriding_without_identity) << relation->getName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_overriding_without_identity) << relation->getName().toQuotedString());
 
 		if (identityType == IDENT_TYPE_BY_DEFAULT && *insertOverride == OverrideClause::SYSTEM_VALUE)
-			ERR_post(Arg::Gds(isc_overriding_system_invalid) << relation->getName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_overriding_system_invalid) << relation->getName().toQuotedString());
 	}
 	else
 	{
 		if (identityType == IDENT_TYPE_ALWAYS)
-			ERR_post(Arg::Gds(isc_overriding_missing) << relation->getName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_overriding_missing) << relation->getName().toQuotedString());
 	}
 }
 
@@ -12402,9 +12402,9 @@ static void restartRequest(const Request* request, jrd_tra* transaction)
 
 	transaction->tra_flags |= TRA_ex_restart;
 
-	ERR_post(Arg::Gds(isc_deadlock) <<
-		Arg::Gds(isc_update_conflict) <<
-		Arg::Gds(isc_concurrent_transaction) << Arg::Int64(top_request->req_conflict_txn));
+	ERR_post(Firebird::Arg::Gds(isc_deadlock) <<
+		Firebird::Arg::Gds(isc_update_conflict) <<
+		Firebird::Arg::Gds(isc_concurrent_transaction) << Firebird::Arg::Int64(top_request->req_conflict_txn));
 }
 
 // Revert parameters order for EXECUTE BLOCK and USING statements.
@@ -12474,7 +12474,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 			if (name.isEmpty())
 				name = UNKNOWN_STRING_MARK;
 
-			ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(name) << Arg::Str(value));
+			ERR_post(Firebird::Arg::Gds(isc_not_valid) << Firebird::Arg::Str(name) << Firebird::Arg::Str(value));
 		}
 	}
 }

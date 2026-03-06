@@ -85,8 +85,8 @@ void SDW_add(thread_db* tdbb, const TEXT* file_name, USHORT shadow_number, USHOR
 	// Verify database file path against DatabaseAccess entry of firebird.conf
 	if (!JRD_verify_database_access(file_name))
 	{
-		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("additional database file") <<
-													 Arg::Str(file_name));
+		ERR_post(Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("additional database file") <<
+													 Firebird::Arg::Str(file_name));
 	}
 
 	jrd_file* shadow_file = PIO_create(tdbb, file_name, false, false);
@@ -708,7 +708,7 @@ bool SDW_rollover_to_shadow(thread_db* tdbb, const jrd_file* file, const bool in
 	{
 		CCH_unwind(tdbb, false);
 		SDW_dump_pages(tdbb);
-		ERR_post(Arg::Gds(isc_deadlock));
+		ERR_post(Firebird::Arg::Gds(isc_deadlock));
 	}
 
 	return true;
@@ -807,14 +807,14 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 		if (shadow && (shadow->sdw_flags & SDW_rollover))
 			return;
 
-		ERR_post(Arg::Gds(isc_shadow_accessed));
+		ERR_post(Firebird::Arg::Gds(isc_shadow_accessed));
 	}
 
 	// Verify shadow file path against DatabaseAccess entry of firebird.conf
 	if (!JRD_verify_database_access(expanded_name))
 	{
-		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("database shadow") <<
-													 Arg::Str(expanded_name));
+		ERR_post(Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("database shadow") <<
+													 Firebird::Arg::Str(expanded_name));
 	}
 
 	// catch errors: delete the shadow file if missing, and deallocate the spare buffer
@@ -901,7 +901,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 		}
 
 		if ((file_flags & FILE_manual) && !delete_files) {
-			ERR_post(Arg::Gds(isc_shadow_missing) << Arg::Num(shadow_number));
+			ERR_post(Firebird::Arg::Gds(isc_shadow_missing) << Firebird::Arg::Num(shadow_number));
 		}
 		else
 		{

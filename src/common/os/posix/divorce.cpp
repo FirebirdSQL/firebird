@@ -124,7 +124,7 @@ void divorce_terminal(int mask)
 	// Perform terminal divorce
 	// this is in case of BSD systems
 
-	fid = os_utils::open("/dev/tty", 2);
+	fid = Firebird::os_utils::open("/dev/tty", 2);
 
 	if (fid >= 0) {
 		ioctl(fid, TIOCNOTTY, 0);

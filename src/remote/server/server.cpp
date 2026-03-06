@@ -534,7 +534,7 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 					top = offset + 1;
 				if (checkBytes[offset])
 				{
-					(Arg::Gds(isc_multi_segment_dup) << Arg::Num(offset)).raise();
+					(Firebird::Arg::Gds(isc_multi_segment_dup) << Firebird::Arg::Num(offset)).raise();
 				}
 				checkBytes[offset] = 1;
 
@@ -550,7 +550,7 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 	for (UCHAR segment = 0; segment < top; ++segment)
 	{
 		if (!checkBytes[segment])
-			(Arg::Gds(isc_multi_segment) << Arg::Num(segment)).raise();
+			(Firebird::Arg::Gds(isc_multi_segment) << Firebird::Arg::Num(segment)).raise();
 	}
 
 	HANDSHAKE_DEBUG(fprintf(stderr, "Srv: getMultiPartConnectParameter: loaded tag %d length %u\n",
@@ -563,7 +563,7 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 class ServerAuth : public GlobalStorage, public ServerAuthBase
 {
 public:
-	virtual void accept(PACKET* send, Auth::WriterImplementation* authBlock) = 0;
+	virtual void accept(PACKET* send, Firebird::Auth::WriterImplementation* authBlock) = 0;
 
 	ServerAuth(ClumpletReader* aPb, const ParametersSet& aTags,
 			   rem_port* port, bool multiPartData = false)
@@ -588,7 +588,7 @@ public:
 			if (authPort->port_srv_auth_block->getLogin() &&
 				userName != authPort->port_srv_auth_block->getLogin())
 			{
-				(Arg::Gds(isc_login) << Arg::Gds(isc_login_changed)).raise();
+				(Firebird::Arg::Gds(isc_login) << Firebird::Arg::Gds(isc_login_changed)).raise();
 			}
 			authPort->port_srv_auth_block->setLogin(userName);
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: ServerAuth(): user name=%s\n", userName.c_str()));
@@ -633,10 +633,10 @@ public:
 			aPb->getData(u);
 			if (aPb->getClumpTag() == tags->password)
 			{
-				TEXT pwt[Auth::MAX_LEGACY_PASSWORD_LENGTH + 2];
+				TEXT pwt[Firebird::Auth::MAX_LEGACY_PASSWORD_LENGTH + 2];
 				u.push(0);
 				ENC_crypt(pwt, sizeof pwt, reinterpret_cast<TEXT*>(u.begin()),
-					Auth::LEGACY_PASSWORD_SALT);
+					Firebird::Auth::LEGACY_PASSWORD_SALT);
 				const FB_SIZE_T len = fb_strlen(&pwt[2]);
 				memcpy(u.getBuffer(len), &pwt[2], len);
 				HANDSHAKE_DEBUG(fprintf(stderr, "Srv: ServerAuth(): CALLED des locally\n"));
@@ -670,7 +670,7 @@ public:
 		if (++hopsCount > 100)
 #endif
 		{
-			(Arg::Gds(isc_login) << Arg::Gds(isc_auth_handshake_limit)).raise();
+			(Firebird::Arg::Gds(isc_login) << Firebird::Arg::Gds(isc_auth_handshake_limit)).raise();
 		}
 
 		if (authPort->port_srv_auth_block->authCompleted())
@@ -756,7 +756,7 @@ public:
 				{
 					authServer = NULL;
 					working = false;
-					Arg::Gds(isc_non_plugin_protocol).copyTo(&st);
+					Firebird::Arg::Gds(isc_non_plugin_protocol).copyTo(&st);
 					break;
 				}
 
@@ -792,7 +792,7 @@ public:
 					{
 						authServer = NULL;
 						working = false;
-						Arg::Gds(isc_non_plugin_protocol).copyTo(&st);
+						Firebird::Arg::Gds(isc_non_plugin_protocol).copyTo(&st);
 						break;
 					}
 				}
@@ -835,14 +835,14 @@ public:
 			}
 
 			iscLogStatus("Authentication error", &st);
-			Arg::Gds loginError(isc_login_error);
+			Firebird::Arg::Gds loginError(isc_login_error);
 #ifdef DEV_BUILD
-			loginError << Arg::StatusVector(&st);
+			loginError << Firebird::Arg::StatusVector(&st);
 #endif
 			loginError.raise();
 		}
 		else
-			Arg::Gds(isc_login).raise();
+			Firebird::Arg::Gds(isc_login).raise();
 
 		return false;	// compiler warning silencer
 	}
@@ -869,7 +869,7 @@ public:
 		  operation(op)
 	{ }
 
-	void accept(PACKET* send, Auth::WriterImplementation* authBlock);
+	void accept(PACKET* send, Firebird::Auth::WriterImplementation* authBlock);
 
 private:
 	PathName dbName;
@@ -887,7 +887,7 @@ public:
 		  pb(spb)
 	{ }
 
-	void accept(PACKET* send, Auth::WriterImplementation* authBlock);
+	void accept(PACKET* send, Firebird::Auth::WriterImplementation* authBlock);
 
 private:
 	PathName managerName;
@@ -956,7 +956,7 @@ public:
 			firebirdPortMutex.printf(PORT_FILE, id);
 			TEXT filename[MAXPATHLEN];
 			gds__prefix_lock(filename, firebirdPortMutex.c_str());
-			fd = os_utils::open(filename, O_WRONLY | O_CREAT, 0666);
+			fd = Firebird::os_utils::open(filename, O_WRONLY | O_CREAT, 0666);
 			if (fd < 0)
 			{
 				system_call_failed::raise("open");
@@ -1290,7 +1290,7 @@ static void		release_sql_request(Rsr*);
 static void		release_transaction(Rtr*);
 
 static void		send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode);
-static void		send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector&);
+static void		send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector&);
 static void		set_server(rem_port*, USHORT);
 static int		shut_server(const int, const int, void*);
 static int		pre_shutdown(const int, const int, void*);
@@ -1944,7 +1944,7 @@ bool wireEncryption(rem_port* port, ClumpletReader& id)
 	int serverCrypt = port->getPortConfig()->getWireCrypt(WC_SERVER);
 	if (wcCompatible[clientCrypt][serverCrypt] == WIRECRYPT_BROKEN)
 	{
-		Arg::Gds(isc_wirecrypt_incompatible).raise();
+		Firebird::Arg::Gds(isc_wirecrypt_incompatible).raise();
 	}
 
 	port->port_crypt_level = wcCompatible[clientCrypt][serverCrypt];
@@ -1961,7 +1961,7 @@ public:
 		HANDSHAKE_DEBUG(fprintf(stderr, "Srv: ConnectAuth::ConnectAuth()\n"));
 	}
 
-	void accept(PACKET* send, Auth::WriterImplementation* authBlock);
+	void accept(PACKET* send, Firebird::Auth::WriterImplementation* authBlock);
 
 	bool useResponse;
 };
@@ -1969,7 +1969,7 @@ public:
 
 static void setErrorStatus(IStatus* status)
 {
-	Arg::Gds loginError(isc_login);
+	Firebird::Arg::Gds loginError(isc_login);
 	if (!(status->getState() & IStatus::STATE_ERRORS))
 		status->setErrors(loginError.value());
 }
@@ -2214,9 +2214,9 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 			default:
 				{
 					iscLogStatus("Authentication error", &status);
-					Arg::Gds loginError(isc_login_error);
+					Firebird::Arg::Gds loginError(isc_login_error);
 #ifdef DEV_BUILD
-					loginError << Arg::StatusVector(&status);
+					loginError << Firebird::Arg::StatusVector(&status);
 #endif
 					LocalStatus tmp;
 					loginError.copyTo(&tmp);
@@ -2249,7 +2249,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 }
 
 
-void ConnectAuth::accept(PACKET* send, Auth::WriterImplementation*)
+void ConnectAuth::accept(PACKET* send, Firebird::Auth::WriterImplementation*)
 {
 	HANDSHAKE_DEBUG(fprintf(stderr, "Srv: ConnectAuth::accept: accepted protocol=%x op=%s\n",
 		authPort->port_protocol, useResponse ? "response" : "accept"));
@@ -2280,21 +2280,21 @@ void ConnectAuth::accept(PACKET* send, Auth::WriterImplementation*)
 void Rsr::checkIface(ISC_STATUS code)
 {
 	if (!rsr_iface)
-		Arg::Gds(code).raise();
+		Firebird::Arg::Gds(code).raise();
 }
 
 
 void Rsr::checkCursor()
 {
 	if (!rsr_cursor)
-		Arg::Gds(isc_cursor_not_open).raise();
+		Firebird::Arg::Gds(isc_cursor_not_open).raise();
 }
 
 
 void Rsr::checkBatch()
 {
 	if (!rsr_batch)
-		Arg::Gds(isc_bad_batch_handle).raise();
+		Firebird::Arg::Gds(isc_bad_batch_handle).raise();
 }
 
 
@@ -2338,7 +2338,7 @@ static ISC_STATUS allocate_statement( rem_port* port, /*P_RLSE* allocate,*/ PACK
 		delete statement;
 
 		status_vector.init();
-		(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 	}
 
 	return port->send_response(send, object, 0, &status_vector, true);
@@ -2526,7 +2526,7 @@ static void attach_database(rem_port* port, P_OP operation, P_ATCH* attach, PACK
 	WIRECRYPT_DEBUG(fprintf(stderr, "Line encryption %sabled on attach\n", port->port_crypt_complete ? "en" : "dis"));
 	if (port->port_crypt_level == WIRECRYPT_REQUIRED && !port->port_crypt_complete)
 	{
-		Arg::Gds(isc_miss_wirecrypt).raise();
+		Firebird::Arg::Gds(isc_miss_wirecrypt).raise();
 	}
 
 	ClumpletWriter* wrt = FB_NEW_POOL(*getDefaultMemoryPool()) ClumpletWriter(*getDefaultMemoryPool(),
@@ -2544,7 +2544,7 @@ static void attach_database(rem_port* port, P_OP operation, P_ATCH* attach, PACK
 }
 
 
-void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
+void DatabaseAuth::accept(PACKET* send, Firebird::Auth::WriterImplementation* authBlock)
 {
 	DispatcherPtr provider;
 
@@ -2718,7 +2718,7 @@ static bool bad_port_context(IStatus* status_vector, IReferenceCounted* iface, c
 	{
 		return false;
 	}
-	(Arg::Gds(error)).copyTo(status_vector);
+	(Firebird::Arg::Gds(error)).copyTo(status_vector);
 	return true;
 }
 
@@ -2956,7 +2956,7 @@ ISC_STATUS rem_port::compile(P_CMPL* compileL, PACKET* sendL)
 	{
 		requestL->rrq_iface->free(&status_vector);
 		delete requestL;
-		(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 	}
 
@@ -3378,7 +3378,7 @@ ISC_STATUS rem_port::end_statement(P_SQLFREE* free_stmt, PACKET* sendL)
 		}
 		else if (!(free_stmt->p_sqlfree_option & (DSQL_drop | DSQL_unprepare)))
 		{
-			Arg::Gds(isc_dsql_cursor_close_err).copyTo(&status_vector);
+			Firebird::Arg::Gds(isc_dsql_cursor_close_err).copyTo(&status_vector);
 			return this->send_response(sendL, 0, 0, &status_vector, true);
 		}
 	}
@@ -3590,7 +3590,7 @@ ISC_STATUS rem_port::execute_immediate(P_OP op, P_SQLST * exnow, PACKET* sendL)
 		else if (!transaction && newTra)
 		{
 			if (!(transaction = make_transaction(rdb, newTra)))
-				(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+				(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 		}
 		else if (newTra && newTra != tra)
 			transaction->rtr_iface = newTra;
@@ -3611,12 +3611,12 @@ void rem_port::batch_create(P_BATCH_CREATE* batch, PACKET* sendL)
 
 	// Check for previously opened batch for the statement
 	if (statement->rsr_batch)
-		Arg::Gds(isc_batch_open).raise();
+		Firebird::Arg::Gds(isc_batch_open).raise();
 
 	const ULONG blr_length = batch->p_batch_blr.cstr_length;
 	const UCHAR* blr = batch->p_batch_blr.cstr_address;
 	if (!blr)
-		(Arg::Gds(isc_random) << "Missing required format info in createBatch()").raise();	// signals internal protocol error
+		(Firebird::Arg::Gds(isc_random) << "Missing required format info in createBatch()").raise();	// signals internal protocol error
 	InternalMessageBuffer msgBuffer(blr_length, blr, batch->p_batch_msglen, NULL);
 
 	// Flush out any previous format information
@@ -3629,7 +3629,7 @@ void rem_port::batch_create(P_BATCH_CREATE* batch, PACKET* sendL)
 	// large enough to hold it.
 
 	if (!(statement->rsr_format = statement->rsr_bind_format))
-		(Arg::Gds(isc_random) << "Error parsing message format in createBatch()").raise();
+		(Firebird::Arg::Gds(isc_random) << "Error parsing message format in createBatch()").raise();
 
 	RMessage* message = statement->rsr_buffer;
 	if (!message || statement->rsr_format->fmt_length > statement->rsr_fmt_length)
@@ -3653,7 +3653,7 @@ void rem_port::batch_create(P_BATCH_CREATE* batch, PACKET* sendL)
 	ClumpletWriter wrt(ClumpletReader::WideTagged, MAX_DPB_SIZE,
 		batch->p_batch_pb.cstr_address, batch->p_batch_pb.cstr_length);
 	if (wrt.getBufferLength() && (wrt.getBufferTag() != IBatch::VERSION1))
-		(Arg::Gds(isc_batch_param_version) << Arg::Num(wrt.getBufferTag()) << Arg::Num(IBatch::VERSION1)).raise();
+		(Firebird::Arg::Gds(isc_batch_param_version) << Firebird::Arg::Num(wrt.getBufferTag()) << Firebird::Arg::Num(IBatch::VERSION1)).raise();
 	statement->rsr_batch_flags = (wrt.find(IBatch::TAG_RECORD_COUNTS) && wrt.getInt()) ?
 		(1 << IBatch::TAG_RECORD_COUNTS) : 0;
 	if (wrt.find(IBatch::TAG_BLOB_POLICY) && (wrt.getInt() != IBatch::BLOB_STREAM))
@@ -3960,8 +3960,8 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 
 	if (statement->rsr_cursor || statement->rsr_batch)
 	{
-		(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-			Arg::Gds(isc_dsql_cursor_open_err)).raise();
+		(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+			Firebird::Arg::Gds(isc_dsql_cursor_open_err)).raise();
 	}
 
 	InternalMessageBuffer iMsgBuffer(sqldata->p_sqldata_blr.cstr_length,
@@ -3978,8 +3978,8 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 	{
 		if (sqldata->p_sqldata_timeout)
 		{
-			(Arg::Gds(isc_wish_list) <<
-			 Arg::Gds(isc_random) << "Timeouts not supported by selected on server provider").raise();
+			(Firebird::Arg::Gds(isc_wish_list) <<
+			 Firebird::Arg::Gds(isc_random) << "Timeouts not supported by selected on server provider").raise();
 		}
 	}
 	else
@@ -4037,7 +4037,7 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 		else if (!transaction && newTra)
 		{
 			if (!(transaction = make_transaction(statement->rsr_rdb, newTra)))
-				(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+				(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 		}
 		else if (newTra && newTra != tra)
 			transaction->rtr_iface = newTra;
@@ -4124,8 +4124,8 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 			sqldata->p_sqldata_blr.cstr_address, msg_length, NULL);
 
 		if (!msgBuffer.metadata)
-			(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				Arg::Gds(isc_dsql_cursor_open_err)).raise();
+			(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				Firebird::Arg::Gds(isc_dsql_cursor_open_err)).raise();
 
 		cursor->setDelayedOutputFormat(&status_vector, msgBuffer.metadata);
 		check(&status_vector);
@@ -4895,7 +4895,7 @@ ISC_STATUS rem_port::open_blob(P_OP op, P_BLOB* stuff, PACKET* sendL)
 		{
 			blob->rbl_iface->cancel(&status_vector);
 			delete blob;
-			(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+			(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 		}
 	}
 
@@ -5433,7 +5433,7 @@ static bool continue_authentication(rem_port* port, PACKET* send, PACKET* receiv
 			 receive->p_operation == op_trusted_auth && port->port_protocol >= PROTOCOL_VERSION13 ||
 			 receive->p_operation == op_cont_auth && port->port_protocol < PROTOCOL_VERSION13)
 	{
-		send_error(port, send, Arg::Gds(isc_non_plugin_protocol));
+		send_error(port, send, Firebird::Arg::Gds(isc_non_plugin_protocol));
 	}
 	else
 	{
@@ -5602,7 +5602,7 @@ ISC_STATUS rem_port::que_events(P_EVENT * stuff, PACKET* sendL)
 
 	rem_port* asyncPort = rdb->rdb_port->port_async;
 	if (!asyncPort || (asyncPort->port_flags & PORT_detached))
-		Arg::Gds(isc_net_event_connect_err).copyTo(&status_vector);
+		Firebird::Arg::Gds(isc_net_event_connect_err).copyTo(&status_vector);
 	else
 	{
 		RefMutexGuard portGuard(*asyncPort->port_sync, FB_FUNCTION);
@@ -5697,7 +5697,7 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 
 	if (msg_number > requestL->rrq_max_msg)
 	{
-		(Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 	}
 	Rrq::rrq_repeat* tail = &requestL->rrq_rpt[msg_number];
@@ -6229,7 +6229,7 @@ ISC_STATUS rem_port::send_msg(P_DATA * data, PACKET* sendL)
 	requestL = REMOTE_find_request(requestL, data->p_data_incarnation);
 	if (number > requestL->rrq_max_msg)
 	{
-		(Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 	}
 	RMessage* message = requestL->rrq_rpt[number].rrq_message;
@@ -6386,12 +6386,12 @@ static void send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
-	(Arg::Gds(errcode)).copyTo(&status_vector);
+	(Firebird::Arg::Gds(errcode)).copyTo(&status_vector);
 	port->send_response(apacket, 0, 0, &status_vector, false);
 }
 
 // Maybe this can be a member of rem_port?
-static void send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector& err)
+static void send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector& err)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
@@ -6405,7 +6405,7 @@ static void attach_service(rem_port* port, P_ATCH* attach, PACKET* sendL)
 	WIRECRYPT_DEBUG(fprintf(stderr, "Line encryption %sabled on attach svc\n", port->port_crypt_complete ? "en" : "dis"));
 	if (port->port_crypt_level == WIRECRYPT_REQUIRED && !port->port_crypt_complete)
 	{
-		Arg::Gds(isc_miss_wirecrypt).raise();
+		Firebird::Arg::Gds(isc_miss_wirecrypt).raise();
 	}
 
 	PathName manager(attach->p_atch_file.cstr_address, attach->p_atch_file.cstr_length);
@@ -6423,7 +6423,7 @@ static void attach_service(rem_port* port, P_ATCH* attach, PACKET* sendL)
 }
 
 
-void ServiceAttachAuth::accept(PACKET* sendL, Auth::WriterImplementation* authBlock)
+void ServiceAttachAuth::accept(PACKET* sendL, Firebird::Auth::WriterImplementation* authBlock)
 {
 	authBlock->store(pb, isc_spb_auth_block);
 	authPort->extractNewKeys(&sendL->p_resp.p_resp_data);
@@ -6597,8 +6597,8 @@ ISC_STATUS rem_port::set_cursor(P_SQLCUR * sqlcur, PACKET* sendL)
 	if (port_protocol < PROTOCOL_VERSION13 && statement->rsr_cursor_name.hasData() &&
 		statement->rsr_cursor_name != name)
 	{
-		(Arg::Gds(isc_dsql_decl_err) <<
-		 Arg::Gds(isc_dsql_cursor_redefined) << statement->rsr_cursor_name).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_dsql_decl_err) <<
+		 Firebird::Arg::Gds(isc_dsql_cursor_redefined) << statement->rsr_cursor_name).copyTo(&status_vector);
 	}
 	else
 		statement->rsr_cursor_name = name;
@@ -6641,7 +6641,7 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 
 		if (! key)
 		{
-			(Arg::Gds(isc_wirecrypt_key) << keyName).raise();
+			(Firebird::Arg::Gds(isc_wirecrypt_key) << keyName).raise();
 		}
 
 		PathName plugName(crypt->p_plugin.cstr_address, crypt->p_plugin.cstr_length);
@@ -6661,13 +6661,13 @@ void rem_port::start_crypt(P_CRYPT * crypt, PACKET* sendL)
 		}
 		if (!found)
 		{
-			(Arg::Gds(isc_wirecrypt_plugin) << plugName).raise();
+			(Firebird::Arg::Gds(isc_wirecrypt_plugin) << plugName).raise();
 		}
 
 		GetPlugins<IWireCryptPlugin> cp(IPluginManager::TYPE_WIRE_CRYPT, plugName.c_str());
 		if (!cp.hasData())
 		{
-			(Arg::Gds(isc_wirecrypt_plugin) << plugName).raise();
+			(Firebird::Arg::Gds(isc_wirecrypt_plugin) << plugName).raise();
 		}
 
 		// Initialize crypt key
@@ -6838,7 +6838,7 @@ ISC_STATUS rem_port::start_and_send(P_OP operation, P_DATA* data, PACKET* sendL)
 
 	if (number > requestL->rrq_max_msg)
 	{
-		(Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
+		(Firebird::Arg::Gds(isc_badmsgnum)).copyTo(&status_vector);
 		return this->send_response(sendL, 0, 0, &status_vector, false);
 	}
 
@@ -6913,7 +6913,7 @@ ISC_STATUS rem_port::start_transaction(P_OP operation, P_STTR * stuff, PACKET* s
 				iface->disconnect(&status_vector);
 			}
 
-			(Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
+			(Firebird::Arg::Gds(isc_too_many_handles)).copyTo(&status_vector);
 		}
 	}
 
@@ -7445,7 +7445,7 @@ void Worker::start(USHORT flags)
 		{
 			if (!m_cntAll)
 			{
-				Arg::Gds(isc_no_threads).raise();
+				Firebird::Arg::Gds(isc_no_threads).raise();
 			}
 		}
 	}
@@ -7637,9 +7637,9 @@ void SrvAuthBlock::createPluginsItr()
 	{
 		HANDSHAKE_DEBUG(fprintf(stderr, "Srv: createPluginsItr: No matching plugins on server\n"));
 
-		Arg::Gds loginError(isc_login_error);
+		Firebird::Arg::Gds loginError(isc_login_error);
 #ifdef DEV_BUILD
-		loginError << Arg::Gds(isc_random) << "No matching plugins on server";
+		loginError << Firebird::Arg::Gds(isc_random) << "No matching plugins on server";
 #endif
 		gds__log("Authentication error\n\tNo matching plugins on server");
 		loginError.raise();

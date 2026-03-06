@@ -68,9 +68,9 @@ void DsqlCompilerScratch::qualifyNewName(QualifiedName& name) const
 	if (!dbb->dbb_attachment->qualifyNewName(tdbb, name))
 	{
 		if (name.schema.isEmpty())
-			status_exception::raise(Arg::Gds(isc_dyn_cannot_infer_schema));
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_cannot_infer_schema));
 		else
-			status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << name.schema.toQuotedString());
+			status_exception::raise(Firebird::Arg::Gds(isc_dyn_schema_not_found) << name.schema.toQuotedString());
 	}
 }
 
@@ -635,9 +635,9 @@ void DsqlCompilerScratch::addCTEs(WithClause* withClause)
 {
 	if (ctes.getCount())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // WITH clause can't be nested
-				  Arg::Gds(isc_dsql_cte_nested_with));
+				  Firebird::Arg::Gds(isc_dsql_cte_nested_with));
 	}
 
 	if (withClause->recursive)
@@ -702,11 +702,11 @@ void DsqlCompilerScratch::checkUnusedCTEs()
 		{
 			if (!sqlWarn)
 			{
-				ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(-104));
+				ERRD_post_warning(Firebird::Arg::Warning(isc_sqlwarn) << Firebird::Arg::Num(-104));
 				sqlWarn = true;
 			}
 
-			ERRD_post_warning(Arg::Warning(isc_dsql_cte_not_used) << cte->alias);
+			ERRD_post_warning(Firebird::Arg::Warning(isc_dsql_cte_not_used) << cte->alias);
 		}
 	}
 
@@ -735,7 +735,7 @@ void DsqlCompilerScratch::putSubFunction(DeclareSubFuncNode* subFunc, bool repla
 	if (!replace && subFunctions.exist(subFunc->name))
 	{
 		status_exception::raise(
-			Arg::Gds(isc_dsql_duplicate_spec) << subFunc->name);
+			Firebird::Arg::Gds(isc_dsql_duplicate_spec) << subFunc->name);
 	}
 
 	subFunctions.put(subFunc->name, subFunc);
@@ -757,7 +757,7 @@ void DsqlCompilerScratch::putSubProcedure(DeclareSubProcNode* subProc, bool repl
 	if (!replace && subProcedures.exist(subProc->name))
 	{
 		status_exception::raise(
-			Arg::Gds(isc_dsql_duplicate_spec) << subProc->name);
+			Firebird::Arg::Gds(isc_dsql_duplicate_spec) << subProc->name);
 	}
 
 	subProcedures.put(subProc->name, subProc);
@@ -791,9 +791,9 @@ SelectExprNode* DsqlCompilerScratch::pass1RecursiveCte(SelectExprNode* input)
 		if (!pass1RseIsRecursive(nodeAs<RseNode>(query)))
 			return input;
 
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Recursive CTE (%s) must be an UNION
-				  Arg::Gds(isc_dsql_cte_not_a_union) << input->alias);
+				  Firebird::Arg::Gds(isc_dsql_cte_not_a_union) << input->alias);
 	}
 
 	// Split queries list on two parts: anchor and recursive.
@@ -839,40 +839,40 @@ SelectExprNode* DsqlCompilerScratch::pass1RecursiveCte(SelectExprNode* input)
 		{
 			if (anchors)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					// CTE '%s' defined non-recursive member after recursive
-					Arg::Gds(isc_dsql_cte_nonrecurs_after_recurs) << input->alias);
+					Firebird::Arg::Gds(isc_dsql_cte_nonrecurs_after_recurs) << input->alias);
 			}
 
 			if (newRse->dsqlDistinct)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					// Recursive member of CTE '%s' has %s clause
-					Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
-														   Arg::Str("DISTINCT"));
+					Firebird::Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
+														   Firebird::Arg::Str("DISTINCT"));
 			}
 
 			if (newRse->dsqlGroup)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					// Recursive member of CTE '%s' has %s clause
-					Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
-														   Arg::Str("GROUP BY"));
+					Firebird::Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
+														   Firebird::Arg::Str("GROUP BY"));
 			}
 
 			if (newRse->dsqlHaving)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					// Recursive member of CTE '%s' has %s clause
-					Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
-														   Arg::Str("HAVING"));
+					Firebird::Arg::Gds(isc_dsql_cte_wrong_clause) << input->alias <<
+														   Firebird::Arg::Str("HAVING"));
 			}
 
 			if (!dsqlAll)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					// Recursive members of CTE (%s) must be linked with another members via UNION ALL
-					Arg::Gds(isc_dsql_cte_union_all) << input->alias);
+					Firebird::Arg::Gds(isc_dsql_cte_union_all) << input->alias);
 			}
 
 			recursiveStack.push(newRse);
@@ -913,9 +913,9 @@ SelectExprNode* DsqlCompilerScratch::pass1RecursiveCte(SelectExprNode* input)
 	}
 	else if (!anchorRse)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 			// Non-recursive member is missing in CTE '%s'
-			Arg::Gds(isc_dsql_cte_miss_nonrecursive) << input->alias);
+			Firebird::Arg::Gds(isc_dsql_cte_miss_nonrecursive) << input->alias);
 	}
 
 	// Merge recursive parts into a single node
@@ -1008,9 +1008,9 @@ RseNode* DsqlCompilerScratch::pass1RseIsRecursive(RseNode* input)
 			{
 				if (found)
 				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 							  // Recursive member of CTE can't reference itself more than once
-							  Arg::Gds(isc_dsql_cte_mult_references));
+							  Firebird::Arg::Gds(isc_dsql_cte_mult_references));
 				}
 
 				found = true;
@@ -1025,9 +1025,9 @@ RseNode* DsqlCompilerScratch::pass1RseIsRecursive(RseNode* input)
 			{
 				if (found)
 				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 							  // Recursive member of CTE can't reference itself more than once
-							  Arg::Gds(isc_dsql_cte_mult_references));
+							  Firebird::Arg::Gds(isc_dsql_cte_mult_references));
 				}
 				found = true;
 
@@ -1113,9 +1113,9 @@ BoolExprNode* DsqlCompilerScratch::pass1JoinIsRecursive(RecordSourceNode*& input
 
 	if (leftRecursive && joinType != blr_inner)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Recursive member of CTE can't be member of an outer join
-				  Arg::Gds(isc_dsql_cte_outer_join));
+				  Firebird::Arg::Gds(isc_dsql_cte_outer_join));
 	}
 
 	bool rightRecursive = false;
@@ -1139,16 +1139,16 @@ BoolExprNode* DsqlCompilerScratch::pass1JoinIsRecursive(RecordSourceNode*& input
 
 	if (rightRecursive && joinType != blr_inner)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Recursive member of CTE can't be member of an outer join
-				  Arg::Gds(isc_dsql_cte_outer_join));
+				  Firebird::Arg::Gds(isc_dsql_cte_outer_join));
 	}
 
 	if (leftRecursive && rightRecursive)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Recursive member of CTE can't reference itself more than once
-				  Arg::Gds(isc_dsql_cte_mult_references));
+				  Firebird::Arg::Gds(isc_dsql_cte_mult_references));
 	}
 
 	if (leftRecursive)

@@ -48,7 +48,7 @@
 #include "../yvalve/alt_proto.h"
 #include "../jrd/constants.h"
 
-static ISC_STATUS executeSecurityCommand(ISC_STATUS*, const USER_SEC_DATA*, Auth::UserData&);
+static ISC_STATUS executeSecurityCommand(ISC_STATUS*, const USER_SEC_DATA*, Firebird::Auth::UserData&);
 
 SLONG API_ROUTINE_VARARG isc_event_block(UCHAR** event_buffer,
 										 UCHAR** result_buffer,
@@ -862,8 +862,8 @@ ISC_STATUS API_ROUTINE isc_add_user(ISC_STATUS* status, const USER_SEC_DATA* inp
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::UserData userInfo;
-	userInfo.op = Auth::ADD_OPER;
+	Firebird::Auth::UserData userInfo;
+	userInfo.op = Firebird::Auth::ADD_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);
 
@@ -925,8 +925,8 @@ ISC_STATUS API_ROUTINE isc_delete_user(ISC_STATUS* status, const USER_SEC_DATA* 
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::UserData userInfo;
-	userInfo.op = Auth::DEL_OPER;
+	Firebird::Auth::UserData userInfo;
+	userInfo.op = Firebird::Auth::DEL_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);
 
@@ -970,8 +970,8 @@ ISC_STATUS API_ROUTINE isc_modify_user(ISC_STATUS* status, const USER_SEC_DATA* 
  *	    Return > 0 if any error occurs.
  *
  **************************************/
-	Auth::UserData userInfo;
-	userInfo.op = Auth::MOD_OPER;
+	Firebird::Auth::UserData userInfo;
+	userInfo.op = Firebird::Auth::MOD_OPER;
 	Firebird::LocalStatus s;
 	Firebird::CheckStatusWrapper statusWrapper(&s);
 
@@ -1020,7 +1020,7 @@ ISC_STATUS API_ROUTINE isc_modify_user(ISC_STATUS* status, const USER_SEC_DATA* 
 
 static ISC_STATUS executeSecurityCommand(ISC_STATUS* status,
 										const USER_SEC_DATA* input_user_data,
-										Auth::UserData& userInfo
+										Firebird::Auth::UserData& userInfo
 )
 {
 /**************************************

@@ -50,7 +50,7 @@ namespace Firebird
 			BadAlloc::raise();
 		default:
 			// Libtommath error code @1 in function @2
-			(Arg::Gds(isc_libtommath_generic) << Arg::Num(rc) << function).raise();
+			(Firebird::Arg::Gds(isc_libtommath_generic) << Firebird::Arg::Num(rc) << function).raise();
 		}
 	}
 

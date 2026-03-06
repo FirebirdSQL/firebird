@@ -32,9 +32,7 @@
 #include <atomic>
 
 namespace Firebird {
-
-namespace StaticMutex
-{
+namespace StaticMutex {
 	// Support for common mutex for various inits
 	extern Mutex* mutex;
 	void create() noexcept;

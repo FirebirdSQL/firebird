@@ -73,7 +73,7 @@ void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
 		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
 			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
 	{
-		ERR_post(Arg::Gds(isc_check_cnstrnt_del));
+		ERR_post(Firebird::Arg::Gds(isc_check_cnstrnt_del));
 	}
 	END_FOR
 }
@@ -170,7 +170,7 @@ void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* new
 			 RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
 			 RLC.RDB$CONSTRAINT_NAME EQ constraintName.c_str()
 	{
-		ERR_post(Arg::Gds(isc_check_cnstrnt_update));
+		ERR_post(Firebird::Arg::Gds(isc_check_cnstrnt_update));
 	}
 	END_FOR
 }
@@ -238,7 +238,7 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 				oldSegmentCount != newSegmentCount ||
 				oldForeignKey != newForeignKey)
 			{
-				ERR_post(Arg::Gds(isc_integ_index_mod));
+				ERR_post(Firebird::Arg::Gds(isc_integ_index_mod));
 			}
 		}
 	}
@@ -265,7 +265,7 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 				 IND2.RDB$FOREIGN_KEY_SCHEMA_NAME = IND1.RDB$SCHEMA_NAME AND
 				 IND2.RDB$FOREIGN_KEY = IND1.RDB$INDEX_NAME
 		{
-			ERR_post(Arg::Gds(isc_integ_index_deactivate));
+			ERR_post(Firebird::Arg::Gds(isc_integ_index_deactivate));
 		}
 		END_FOR
 
@@ -283,9 +283,9 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 			fb_utils::exact_name_limit(RCL.RDB$CONSTRAINT_TYPE, sizeof(RCL.RDB$CONSTRAINT_TYPE));
 
 			if (strcmp(RCL.RDB$CONSTRAINT_TYPE, FOREIGN_KEY) == 0)
-				ERR_post(Arg::Gds(isc_integ_index_deactivate));
+				ERR_post(Firebird::Arg::Gds(isc_integ_index_deactivate));
 			else
-				ERR_post(Arg::Gds(isc_integ_deactivate_primary));
+				ERR_post(Firebird::Arg::Gds(isc_integ_deactivate_primary));
 		}
 		END_FOR
 	}
@@ -341,7 +341,7 @@ void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
 			 RLC.RDB$INDEX_NAME EQ indexName.c_str()
 	{
-		ERR_post(Arg::Gds(isc_integ_index_seg_del));
+		ERR_post(Firebird::Arg::Gds(isc_integ_index_seg_del));
 	}
 	END_FOR
 }
@@ -395,7 +395,7 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 				oldFieldName != newFieldName ||
 				oldFieldPosition != newFieldPosition)
 			{
-				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+				ERR_post(Firebird::Arg::Gds(isc_integ_index_seg_mod));
 			}
 		}
 	}
@@ -467,7 +467,7 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 					 RLC.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
 					 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 			{
-				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+				ERR_post(Firebird::Arg::Gds(isc_integ_index_seg_mod));
 			}
 			END_FOR
 		}
@@ -510,7 +510,7 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	END_FOR
 
 	if (!fkFound)
-		ERR_post(Arg::Gds(isc_ref_cnstrnt_notfound));
+		ERR_post(Firebird::Arg::Gds(isc_ref_cnstrnt_notfound));
 
 	MetaName constraintNameUq;
 	if (EVL_field(nullptr, record, f_refc_uq, &desc))
@@ -531,7 +531,7 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	END_FOR
 
 	if (!pkUniqueFound)
-		ERR_post(Arg::Gds(isc_foreign_key_notfound));
+		ERR_post(Firebird::Arg::Gds(isc_foreign_key_notfound));
 }
 
 void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
@@ -564,7 +564,7 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 			WITH REF.RDB$CONST_SCHEMA_NAME_UQ = schemaName.c_str() AND
 				 REF.RDB$CONST_NAME_UQ = constraintName.c_str()
 		{
-			ERR_post(Arg::Gds(isc_primary_key_ref));
+			ERR_post(Firebird::Arg::Gds(isc_primary_key_ref));
 		}
 		END_FOR
 	}
@@ -620,7 +620,7 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 					 RCL.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 					 RCL.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
 			{
-				ERR_post(Arg::Gds(isc_primary_key_notnull));
+				ERR_post(Firebird::Arg::Gds(isc_primary_key_notnull));
 			}
 			END_FOR
 		}
@@ -795,7 +795,7 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 			 REL.RDB$RELATION_NAME EQ relationName.c_str() AND
 			 REL.RDB$VIEW_SOURCE NOT MISSING
 	{
-		ERR_post(Arg::Gds(isc_constaint_on_view));
+		ERR_post(Firebird::Arg::Gds(isc_constaint_on_view));
 	}
 	END_FOR
 
@@ -810,7 +810,7 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 				 RLC.RDB$RELATION_NAME EQ relationName.c_str() AND
 				 RLC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
 		{
-			ERR_post(Arg::Gds(isc_primary_key_exists));
+			ERR_post(Firebird::Arg::Gds(isc_primary_key_exists));
 		}
 		END_FOR
 	}
@@ -860,7 +860,7 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 				 IDS2.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS2.RDB$FIELD_NAME != fieldName.c_str()
 		{
-			ERR_post(Arg::Gds(isc_cnstrnt_fld_del));
+			ERR_post(Firebird::Arg::Gds(isc_cnstrnt_fld_del));
 		}
 		END_FOR
 
@@ -899,7 +899,7 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 				 DEP4.RDB$DEPENDED_ON_NAME = relationName.c_str() AND
 				 DEP4.RDB$FIELD_NAME != fieldName.c_str()
 		{
-			ERR_post(Arg::Gds(isc_cnstrnt_fld_del));
+			ERR_post(Firebird::Arg::Gds(isc_cnstrnt_fld_del));
 		}
 		END_FOR
 
@@ -1001,10 +1001,10 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 				 RLC.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
 		{
 			if (oldFieldName != newFieldName)
-				ERR_post(Arg::Gds(isc_cnstrnt_fld_rename));
+				ERR_post(Firebird::Arg::Gds(isc_cnstrnt_fld_rename));
 
 			if (!(oldFieldSource == newFieldSource && oldCollationId == newCollationId))
-				ERR_post(Arg::Gds(isc_integ_index_seg_mod));
+				ERR_post(Firebird::Arg::Gds(isc_integ_index_seg_mod));
 		}
 		END_FOR
 	}
@@ -1030,7 +1030,7 @@ void beforeInsertSchema(thread_db* tdbb, Record* record)
 	{
 		string message;
 		message.printf("schema name is limited to %d characters", schemaCharLenLimit);
-		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << message);
+		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) << message);
 	}
 }
 
@@ -1040,7 +1040,7 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	if (EVL_field(nullptr, record, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
-		ERR_post(Arg::Gds(isc_systrig_update));
+		ERR_post(Firebird::Arg::Gds(isc_systrig_update));
 
 	MetaName oldSchemaName;
 	if (EVL_field(nullptr, record, f_trg_schema, &desc))
@@ -1062,7 +1062,7 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 			 RCL.RDB$CONSTRAINT_NAME EQ CHK.RDB$CONSTRAINT_NAME AND
 			 RCL.RDB$CONSTRAINT_TYPE = CHECK_CNSTRT
 	{
-		ERR_post(Arg::Gds(isc_check_trig_del));
+		ERR_post(Firebird::Arg::Gds(isc_check_trig_del));
 	}
 	END_FOR
 }
@@ -1073,7 +1073,7 @@ void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 	dsc desc;
 
 	if (EVL_field(nullptr, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
-		ERR_post(Arg::Gds(isc_systrig_update));
+		ERR_post(Firebird::Arg::Gds(isc_systrig_update));
 
 	MetaName oldSchemaName, newSchemaName;
 	if (EVL_field(nullptr, orgRecord, f_trg_schema, &desc))
@@ -1143,7 +1143,7 @@ void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 			  oldFlags == newFlags &&
 			  oldDebugInfo == newDebugInfo))
 		{
-			ERR_post(Arg::Gds(isc_check_trig_update));
+			ERR_post(Firebird::Arg::Gds(isc_check_trig_update));
 		}
 	}
 	END_FOR
@@ -1303,7 +1303,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 									END_FOR
 
 									if (!privilegeFound)
-										ERR_post(Arg::Gds(isc_grant_nopriv_on_base));
+										ERR_post(Firebird::Arg::Gds(isc_grant_nopriv_on_base));
 								}
 							}
 							END_FOR
@@ -1345,7 +1345,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 									END_FOR
 
 									if (!privilegeFound)
-										ERR_post(Arg::Gds(isc_grant_nopriv_on_base));
+										ERR_post(Firebird::Arg::Gds(isc_grant_nopriv_on_base));
 								}
 							}
 							END_FOR
@@ -1367,7 +1367,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					END_MODIFY
 				}
 				else if (strncmp(REL.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
-					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+					ERR_post(Firebird::Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
 
@@ -1396,7 +1396,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 						END_MODIFY
 					}
 					else if (strncmp(RFL6.RDB$SECURITY_CLASS, SQL_FLD_SECCLASS_PREFIX, SQL_FLD_SECCLASS_PREFIX_LEN) != 0)
-						ERR_post(Arg::Gds(isc_nonsql_security_fld));
+						ERR_post(Firebird::Arg::Gds(isc_nonsql_security_fld));
 				}
 				END_FOR
 			}
@@ -1429,7 +1429,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					END_MODIFY
 				}
 				else if (strncmp(PRC.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
-					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+					ERR_post(Firebird::Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
 
@@ -1461,7 +1461,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					END_MODIFY
 				}
 				else if (strncmp(FUN.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
-					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+					ERR_post(Firebird::Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
 
@@ -1492,7 +1492,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					END_MODIFY
 				}
 				else if (strncmp(PKG.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
-					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+					ERR_post(Firebird::Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
 
@@ -1529,7 +1529,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 					END_MODIFY
 				}
 				else if (strncmp(SCH.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN) != 0)
-					ERR_post(Arg::Gds(isc_nonsql_security_rel));
+					ERR_post(Firebird::Arg::Gds(isc_nonsql_security_rel));
 			}
 			END_FOR
 

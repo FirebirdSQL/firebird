@@ -42,7 +42,7 @@
 using namespace Firebird;
 
 static void copy_exact_name (const UCHAR*, UCHAR*, SSHORT);
-static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v);
+static ISC_STATUS error(ISC_STATUS* status, const Firebird::Arg::StatusVector& v);
 
 
 void API_ROUTINE isc_blob_default_desc(ISC_BLOB_DESC* desc,
@@ -93,7 +93,7 @@ ISC_STATUS API_ROUTINE isc_blob_gen_bpb(ISC_STATUS* status,
  *
  **************************************/
 	if (bpb_buffer_length < 17)
-		return error(status, Arg::Gds(isc_random) << Arg::Str("BPB buffer too small"));
+		return error(status, Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("BPB buffer too small"));
 
 	UCHAR* p = bpb_buffer;
 	*p++ = isc_bpb_version1;
@@ -116,7 +116,7 @@ ISC_STATUS API_ROUTINE isc_blob_gen_bpb(ISC_STATUS* status,
 
 	*bpb_length = p - bpb_buffer;
 
-	return error(status, Arg::Gds(FB_SUCCESS));
+	return error(status, Firebird::Arg::Gds(FB_SUCCESS));
 }
 
 
@@ -292,9 +292,9 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 
 	if (!flag)
 	{
-		(Arg::Gds(isc_fldnotdef) <<
-			Arg::Str((const char*)(desc->blob_desc_field_name)) <<
-			Arg::Str((const char*)(desc->blob_desc_relation_name))).raise();
+		(Firebird::Arg::Gds(isc_fldnotdef) <<
+			Firebird::Arg::Str((const char*)(desc->blob_desc_field_name)) <<
+			Firebird::Arg::Str((const char*)(desc->blob_desc_relation_name))).raise();
 	}
 
 	if (global)
@@ -332,7 +332,7 @@ ISC_STATUS API_ROUTINE isc_blob_set_desc(ISC_STATUS* status,
 	desc->blob_desc_charset = charset;
 	desc->blob_desc_segment_size = segment_size;
 
-	return error(status, Arg::Gds(FB_SUCCESS));
+	return error(status, Firebird::Arg::Gds(FB_SUCCESS));
 }
 
 
@@ -363,7 +363,7 @@ static void copy_exact_name (const UCHAR* from, UCHAR* to, SSHORT bsize)
 }
 
 
-static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v)
+static ISC_STATUS error(ISC_STATUS* status, const Firebird::Arg::StatusVector& v)
 {
 /**************************************
  *

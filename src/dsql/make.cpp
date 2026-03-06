@@ -211,7 +211,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 			size_t l = strlen(str);
 			if (l > MAX_SSHORT)
 			{
-				ERRD_post(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_num_literal));
+				ERRD_post(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_num_literal));
 			}
 			literal->litNumStringLength = static_cast<USHORT>(l);
 			literal->litDesc.dsc_length = numeric_flag == CONSTANT_DOUBLE ? sizeof(double) :
@@ -411,8 +411,8 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 	{
 		if (indices)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					  Arg::Gds(isc_dsql_only_can_subscript_array) << Arg::Str(field->fld_name));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-607) <<
+					  Firebird::Arg::Gds(isc_dsql_only_can_subscript_array) << Firebird::Arg::Str(field->fld_name));
 		}
 
 		DsqlDescMaker::fromField(&desc, field);
@@ -500,8 +500,8 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 {
 	if (!message)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_badmsgnum));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_badmsgnum));
 	}
 
 	if (sqlda_flag && sqlda_index && sqlda_index <= message->msg_index)
@@ -521,8 +521,8 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 		string msg;
 		msg.printf("Maximum number of parameters: %d", MAX_USHORT / 2);
 
-		ERRD_post(Arg::Gds(isc_imp_exc) <<
-			Arg::Gds(isc_random) <<
+		ERRD_post(Firebird::Arg::Gds(isc_imp_exc) <<
+			Firebird::Arg::Gds(isc_random) <<
 			msg);
 	}
 

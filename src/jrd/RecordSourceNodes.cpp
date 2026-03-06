@@ -533,9 +533,9 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 	if (!context)
 	{
 		// there is no alias or table named %s at this scope level.
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_command_err) <<
-				  Arg::Gds(isc_dsql_no_relation_alias) << arg->toQuotedString());
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+				  Firebird::Arg::Gds(isc_dsql_command_err) <<
+				  Firebird::Arg::Gds(isc_dsql_no_relation_alias) << arg->toQuotedString());
 	}
 
 	return context;
@@ -581,9 +581,9 @@ dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextS
 			if (result_context)
 			{
 				// the table %s is referenced twice; use aliases to differentiate
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-						  Arg::Gds(isc_dsql_command_err) <<
-						  Arg::Gds(isc_dsql_self_join) << alias.toQuotedString());
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+						  Firebird::Arg::Gds(isc_dsql_command_err) <<
+						  Firebird::Arg::Gds(isc_dsql_self_join) << alias.toQuotedString());
 			}
 
 			result_context = context;
@@ -638,7 +638,7 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 	const USHORT tableNumber = csb->csb_blr_reader.getWord();
 
 	if (tableNumber >= csb->csb_localTables.getCount())
-		PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+		PAR_error(csb, Firebird::Arg::Gds(isc_bad_loctab_num) << Firebird::Arg::Num(tableNumber));
 
 	// Make a relation reference node
 
@@ -662,7 +662,7 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 		node->stream = PAR_context(csb, &node->context);
 
 		if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
-			PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+			PAR_error(csb, Firebird::Arg::Gds(isc_bad_loctab_num) << Firebird::Arg::Num(tableNumber));
 
 		csb->csb_rpt[node->stream].csb_format = csb->csb_localTables[tableNumber]->format;
 		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
@@ -717,7 +717,7 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 	newSource->context = context;
 
 	if (tableNumber >= copier.csb->csb_localTables.getCount() || !copier.csb->csb_localTables[tableNumber])
-		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+		ERR_post(Firebird::Arg::Gds(isc_bad_loctab_num) << Firebird::Arg::Num(tableNumber));
 
 	const auto element = CMP_csb_element(copier.csb, newSource->stream);
 
@@ -755,7 +755,7 @@ RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, Optimizer* opt, boo
 	const auto csb = opt->getCompilerScratch();
 
 	if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
-		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+		ERR_post(Firebird::Arg::Gds(isc_bad_loctab_num) << Firebird::Arg::Num(tableNumber));
 
 	auto localTable = csb->csb_localTables[tableNumber];
 
@@ -828,7 +828,7 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 	}
 
 	if (!rel)
-		PAR_error(csb, Arg::Gds(isc_relnotdef) << name.toQuotedString(), false);
+		PAR_error(csb, Firebird::Arg::Gds(isc_relnotdef) << name.toQuotedString(), false);
 
 	// Store relation in CSB resources and after it - in the node
 
@@ -1143,7 +1143,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		{
 			string str;
 			str.printf("%s should predate %s", preVerb, postVerb);
-			PAR_error(csb, Arg::Gds(isc_random) << str);
+			PAR_error(csb, Firebird::Arg::Gds(isc_random) << str);
 		}
 	};
 
@@ -1195,7 +1195,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 									break;
 
 								default:
-									PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
+									PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
 									break;
 							}
 						}
@@ -1251,7 +1251,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 						if (!parseContext)
 						{
 							PAR_error(csb,
-								Arg::Gds(isc_random) <<
+								Firebird::Arg::Gds(isc_random) <<
 								"blr_invsel_procedure_context not expected inside plan clauses");
 						}
 
@@ -1275,7 +1275,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 						break;
 
 					default:
-						PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_select_procedure sub code");
+						PAR_error(csb, Firebird::Arg::Gds(isc_random) << "Invalid blr_select_procedure sub code");
 				}
 			}
 
@@ -1344,7 +1344,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 	{
 		blrReader.setPos(inArgNamesPos);
 		PAR_error(csb,
-			Arg::Gds(isc_random) <<
+			Firebird::Arg::Gds(isc_random) <<
 			"blr_invsel_procedure_in_arg_names count cannot be greater than blr_invsel_procedure_in_args");
 	}
 
@@ -1353,15 +1353,15 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 	if (!procedure)
 	{
 		blrReader.setPos(blrStartPos);
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toQuotedString());
+		PAR_error(csb, Firebird::Arg::Gds(isc_prcnotdef) << name.toQuotedString());
 	}
 
 	if (procedure->prc_type == prc_executable)
 	{
 		if (tdbb->getAttachment()->isGbak())
-			PAR_warning(Arg::Warning(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
+			PAR_warning(Firebird::Arg::Warning(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
 		else
-			PAR_error(csb, Arg::Gds(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
+			PAR_error(csb, Firebird::Arg::Gds(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
 	}
 
 	node->procedureId = node->procedure.isSubRoutine() ? 0 : node->procedure()->getId();
@@ -1371,15 +1371,15 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
 		{
 			PAR_warning(
-				Arg::Warning(isc_prcnotdef) << name.toQuotedString() <<
-				Arg::Warning(isc_modnotfound));
+				Firebird::Arg::Warning(isc_prcnotdef) << name.toQuotedString() <<
+				Firebird::Arg::Warning(isc_modnotfound));
 		}
 		else
 		{
 			blrReader.setPos(blrStartPos);
 			PAR_error(csb,
-				Arg::Gds(isc_prcnotdef) << name.toQuotedString() <<
-				Arg::Gds(isc_modnotfound));
+				Firebird::Arg::Gds(isc_prcnotdef) << name.toQuotedString() <<
+				Firebird::Arg::Gds(isc_modnotfound));
 		}
 	}
 
@@ -1402,7 +1402,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 
 		node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, procedure->getInputFields().getCount());
 
-		Arg::StatusVector mismatchStatus;
+		Firebird::Arg::StatusVector mismatchStatus;
 
 		if (!CMP_procedure_arguments(
 			tdbb,
@@ -1416,7 +1416,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			node->inputMessage,
 			mismatchStatus))
 		{
-			status_exception::raise(Arg::Gds(isc_prcmismat) <<
+			status_exception::raise(Firebird::Arg::Gds(isc_prcmismat) <<
 				node->procedure()->getName().toQuotedString() << mismatchStatus);
 		}
 
@@ -1583,7 +1583,7 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		}
 
 		if (dsqlContext->ctx_context > MAX_UCHAR)
-			ERRD_post(Arg::Gds(isc_too_many_contexts));
+			ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
 
 		dsqlScratch->appendUChar(blr_invsel_procedure_context);
 		dsqlScratch->appendUShort(dsqlContext->ctx_context);
@@ -1671,7 +1671,7 @@ ProcedureSourceNode* ProcedureSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 			string name;
 			name.printf("id %d", procedureId);
 			delete newSource;
-			ERR_post(Arg::Gds(isc_prcnotdef) << name);
+			ERR_post(Firebird::Arg::Gds(isc_prcnotdef) << name);
 		}
 		newSource->procedure = copier.csb->csb_resources->procedures.registerResource(proc);
 	}
@@ -1913,7 +1913,7 @@ void AggregateSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			ValueListNode* order = (*i)->window ? (*i)->window->order : NULL;
 
 			if ((*i)->context > MAX_UCHAR)
-				ERRD_post(Arg::Gds(isc_too_many_contexts));
+				ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
 
 			dsqlScratch->appendUChar(v3 ? blr_partition_by : blr_window_win);
 			dsqlScratch->appendUChar((*i)->context);
@@ -2014,7 +2014,7 @@ void AggregateSourceNode::genMap(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb
 		++count;
 
 	//if (count >= STREAM_MAP_LENGTH) // not sure if the same limit applies
-	//	ERR_post(Arg::Gds(isc_too_many_contexts)); // maybe there's better msg.
+	//	ERR_post(Firebird::Arg::Gds(isc_too_many_contexts)); // maybe there's better msg.
 
 	dsqlScratch->appendUChar(blrVerb);
 	dsqlScratch->appendUShort(count);
@@ -2283,9 +2283,9 @@ void UnionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	if (!mapNode)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_dsql_internal_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("UnionSourceNode::genBlr: expected DsqlMapNode") );
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_dsql_internal_err) <<
+				  Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("UnionSourceNode::genBlr: expected DsqlMapNode") );
 	}
 
 	dsql_ctx* dsqlContext = mapNode->context;
@@ -2653,8 +2653,8 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 			case blr_window_win_exclusion:
 				//// TODO: CORE-5338 - write code for execution.
 				PAR_error(csb,
-					Arg::Gds(isc_wish_list) <<
-					Arg::Gds(isc_random) << "window EXCLUDE clause");
+					Firebird::Arg::Gds(isc_wish_list) <<
+					Firebird::Arg::Gds(isc_random) << "window EXCLUDE clause");
 
 				window.exclusion = (WindowClause::Exclusion) csb->csb_blr_reader.getByte();
 
@@ -3066,8 +3066,8 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	{
 		if (dsqlScratch->clientDialect < SQL_DIALECT_V6)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-					  Arg::Gds(isc_dsql_unsupp_feature_dialect) << Arg::Num(dsqlScratch->clientDialect));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+					  Firebird::Arg::Gds(isc_dsql_unsupp_feature_dialect) << Firebird::Arg::Num(dsqlScratch->clientDialect));
 		}
 
 		ValueListNode leftStack(pool, 0u);
@@ -3133,8 +3133,8 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				FB_SIZE_T pos;
 				if (usedColumns.find(field->dsqlName.c_str(), pos))
 				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-							  Arg::Gds(isc_dsql_col_more_than_once_using) << field->dsqlName);
+					ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+							  Firebird::Arg::Gds(isc_dsql_col_more_than_once_using) << field->dsqlName);
 				}
 				else
 					usedColumns.insert(pos, field->dsqlName.c_str());
@@ -3698,7 +3698,7 @@ void RseNode::planCheck(thread_db* tdbb, const CompilerScratch* csb) const
 			if (!csb->csb_rpt[stream].csb_plan)
 			{
 				const auto name = csb->csb_rpt[stream].getName(false).toQuotedString();
-				ERR_post(Arg::Gds(isc_no_stream_plan) << Arg::Str(name));
+				ERR_post(Firebird::Arg::Gds(isc_no_stream_plan) << Firebird::Arg::Str(name));
 			}
 		}
 		else if (const auto rse = nodeAs<RseNode>(node))
@@ -3832,7 +3832,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 				else
 				{
 					// view %s has more than one base relation; use aliases to distinguish
-					ERR_post(Arg::Gds(isc_view_alias) << name.toQuotedString());
+					ERR_post(Firebird::Arg::Gds(isc_view_alias) << name.toQuotedString());
 				}
 
 				break;
@@ -3866,7 +3866,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 						if (duplicateName.object.hasData())
 						{
 							// table %s is referenced twice in view; use an alias to distinguish
-							ERR_post(Arg::Gds(isc_duplicate_base_table) <<
+							ERR_post(Firebird::Arg::Gds(isc_duplicate_base_table) <<
 								duplicateName.toQuotedString());
 						}
 						else
@@ -3905,7 +3905,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 			if (!*map)
 			{
 				// table or procedure %s is referenced in the plan but not the from list
-				ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
+				ERR_post(Firebird::Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 			}
 		}
 
@@ -3914,7 +3914,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 		if (!map || !*map)
 		{
 			// table or procedure %s is referenced in the plan but not the from list
-			ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 		}
 
 		plan->recordSourceNode->setStream(*map);
@@ -3925,7 +3925,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 	if (!tail->csb_relation && !tail->csb_procedure)
 	{
 		// table or procedure %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 	}
 
 	if ((tail->csb_relation && planRelation &&
@@ -3934,7 +3934,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 		tail->csb_procedure()->getId() != planProcedure->getId() && !viewProcedure))
 	{
 		// table or procedure %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 	}
 
 	// Check if we already have a plan for this stream
@@ -3942,7 +3942,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 	if (tail->csb_plan)
 	{
 		// table or procedure %s is referenced more than once in plan; use aliases to distinguish
-		ERR_post(Arg::Gds(isc_stream_twice) << name.toQuotedString());
+		ERR_post(Firebird::Arg::Gds(isc_stream_twice) << name.toQuotedString());
 	}
 
 	tail->csb_plan = plan;
@@ -4396,10 +4396,10 @@ dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
 	{
 		if (dsqlNameColumns.getCount() > 1)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
-										   << Arg::Gds(isc_dsql_table_value_many_columns)
-										   << Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
-										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) << Firebird::Arg::Gds(isc_dsql_command_err)
+										   << Firebird::Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Firebird::Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
+										   << Firebird::Arg::Num(1) << Firebird::Arg::Num(dsqlNameColumns.getCount()));
 		}
 
 		field->fld_name = dsqlNameColumns[0];
@@ -4441,17 +4441,17 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 	dsc startDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &startDesc, startItem, true);
 	if (!startDesc.isExact() && !startDesc.isNull())
-		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+		status_exception::raise(Firebird::Arg::Gds(isc_argmustbe_exact_function) << Firebird::Arg::Str(getName()));
 
 	dsc finishDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &finishDesc, finishItem, true);
 	if (!finishDesc.isExact() && !finishDesc.isNull())
-		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+		status_exception::raise(Firebird::Arg::Gds(isc_argmustbe_exact_function) << Firebird::Arg::Str(getName()));
 
 	dsc stepDesc;
 	DsqlDescMaker::fromNode(dsqlScratch, &stepDesc, stepItem, true);
 	if (!stepDesc.isExact() && !stepDesc.isNull())
-		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+		status_exception::raise(Firebird::Arg::Gds(isc_argmustbe_exact_function) << Firebird::Arg::Str(getName()));
 
 	// common scale
 	const auto scale = MIN(MIN(startDesc.dsc_scale, finishDesc.dsc_scale), stepDesc.dsc_scale);
@@ -4478,10 +4478,10 @@ dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratc
 	{
 		if (dsqlNameColumns.getCount() > 1)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
-										   << Arg::Gds(isc_dsql_table_value_many_columns)
-										   << Arg::Str(getName())
-										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) << Firebird::Arg::Gds(isc_dsql_command_err)
+										   << Firebird::Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Firebird::Arg::Str(getName())
+										   << Firebird::Arg::Num(1) << Firebird::Arg::Num(dsqlNameColumns.getCount()));
 		}
 
 		field->fld_name = dsqlNameColumns[0];
@@ -4536,9 +4536,9 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		 dsqlScratch->currCtes.hasData() &&
 		 (dsqlScratch->currCtes.object() == cte))
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 				  // Recursive CTE member (%s) can refer itself only in FROM clause
-				  Arg::Gds(isc_dsql_cte_wrong_reference) << relName.toQuotedString());
+				  Firebird::Arg::Gds(isc_dsql_cte_wrong_reference) << relName.toQuotedString());
 	}
 
 	for (Stack<SelectExprNode*>::const_iterator stack(dsqlScratch->currCtes); stack.hasData(); ++stack)
@@ -4546,9 +4546,9 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		SelectExprNode* cte1 = stack.object();
 		if (cte1 == cte)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
 					  // CTE %s has cyclic dependencies
-					  Arg::Gds(isc_dsql_cte_cycle) << relName.toQuotedString());
+					  Firebird::Arg::Gds(isc_dsql_cte_cycle) << relName.toQuotedString());
 		}
 	}
 

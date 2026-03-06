@@ -245,7 +245,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 
 	// Check for raw device
 	if ((!explicit_diff_name) && database->onRawDevice()) {
-		ERR_post(Arg::Gds(isc_need_difference));
+		ERR_post(Firebird::Arg::Gds(isc_need_difference));
 	}
 
 	MasterGuard masterGuard(*this);
@@ -268,7 +268,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 	{
 		NBAK_TRACE(("begin backup - crypt thread runs"));
 		stateGuard.setSuccess();
-		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
+		ERR_post(Firebird::Arg::Gds(isc_wish_list) << Firebird::Arg::Gds(isc_random) <<
 			"Cannot begin backup: please wait for crypt thread completion");
 	}
 
@@ -295,7 +295,7 @@ void BackupManager::beginBackup(thread_db* tdbb)
 			PageSpace* pageSpace = database->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const char* func = NULL;
 
-			if (os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
+			if (Firebird::os_utils::fstat(pageSpace->file->fil_desc, &st) != 0)
 			{
 				func = "fstat";
 			}
@@ -663,7 +663,7 @@ bool BackupManager::actualizeAlloc(thread_db* tdbb, bool haveGlobalLock)
 				{
 					database->dbb_flags |= DBB_bugcheck;
 					ERR_build_status(status_vector,
-						Arg::Gds(isc_bug_check) << Arg::Str("Duplicated item in allocation table detected"));
+						Firebird::Arg::Gds(isc_bug_check) << Firebird::Arg::Str("Duplicated item in allocation table detected"));
 					return false;
 				}
 			}
@@ -803,7 +803,7 @@ bool BackupManager::writeDifference(thread_db* tdbb, FbStatusVector* status, ULO
 		// We should never be here but if it happens let not overwrite first allocation
 		// page with garbage.
 
-		(Arg::Gds(isc_random) << "Can't allocate difference page").copyTo(status);
+		(Firebird::Arg::Gds(isc_random) << "Can't allocate difference page").copyTo(status);
 		return false;
 	}
 

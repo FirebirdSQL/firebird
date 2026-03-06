@@ -128,7 +128,7 @@ public:
 	void setBaseOffset(ULONG value) { baseOffset = value; }
 
 	virtual bool isVersion4() = 0;
-	virtual void raiseError(const Arg::StatusVector& vector);
+	virtual void raiseError(const Firebird::Arg::StatusVector& vector);
 
 private:
 	BlrData blrData;

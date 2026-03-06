@@ -39,7 +39,7 @@
 #include "../auth/SecDbCache.h"
 
 using namespace Firebird;
-using namespace Auth;
+using namespace Firebird::Auth;
 
 namespace {
 
@@ -276,7 +276,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 
 			const size_t len = account.length();
 			if (len > SZ_LOGIN)
-				status_exception::raise(Arg::Gds(isc_long_login) << Arg::Num(len) << Arg::Num(SZ_LOGIN));
+				status_exception::raise(Firebird::Arg::Gds(isc_long_login) << Firebird::Arg::Num(len) << Firebird::Arg::Num(SZ_LOGIN));
 
 			unsigned int length;
 			const unsigned char* val = sb->getData(&length);
@@ -418,7 +418,7 @@ SimpleFactory<SrpServerImpl<sha512> > factory_sha512;
 } // anonymous namespace
 
 
-namespace Auth {
+namespace Firebird::Auth {
 
 void registerSrpServer(IPluginManager* iPlugin)
 {

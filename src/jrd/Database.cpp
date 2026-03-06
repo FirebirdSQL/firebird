@@ -52,7 +52,7 @@ namespace
 {
 	void unableToRunSweepException(ISC_STATUS reason)
 	{
-		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+		ERR_post(Firebird::Arg::Gds(isc_sweep_unable_to_run) << Firebird::Arg::Gds(reason));
 	}
 }
 
@@ -141,7 +141,7 @@ namespace Firebird::Jrd {
 			const PageSpace* const pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 
 			UCharBuffer buffer;
-			os_utils::getUniqueFileId(pageSpace->file->fil_desc, buffer);
+			Firebird::os_utils::getUniqueFileId(pageSpace->file->fil_desc, buffer);
 
 			dbb_file_id.reserve(2 * static_cast<size_t>(buffer.getCount()));
 			char hex[3];

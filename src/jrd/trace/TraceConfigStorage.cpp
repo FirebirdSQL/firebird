@@ -77,11 +77,11 @@ void checkFileError(const char* filename, const char* operation, ISC_STATUS iscE
 	// the same as GetLastError() codes
 	const char* strErr = strerror(errno);
 
-	(Arg::Gds(isc_io_error) << Arg::Str(operation) << Arg::Str(filename) <<
-		Arg::Gds(iscError) << Arg::Str(strErr)).raise();
+	(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str(operation) << Firebird::Arg::Str(filename) <<
+		Firebird::Arg::Gds(iscError) << Firebird::Arg::Str(strErr)).raise();
 #else
-	(Arg::Gds(isc_io_error) << Arg::Str(operation) << Arg::Str(filename) <<
-		Arg::Gds(iscError) << SYS_ERR(errno)).raise();
+	(Firebird::Arg::Gds(isc_io_error) << Firebird::Arg::Str(operation) << Firebird::Arg::Str(filename) <<
+		Firebird::Arg::Gds(iscError) << SYS_ERR(errno)).raise();
 #endif
 }
 
@@ -236,7 +236,7 @@ void ConfigStorage::checkAudit()
 			configFileName.insert(0, root);
 		}
 
-		cfgFile = os_utils::fopen(configFileName.c_str(), "rb");
+		cfgFile = Firebird::os_utils::fopen(configFileName.c_str(), "rb");
 		if (!cfgFile) {
 			checkFileError(configFileName.c_str(), "fopen", isc_io_open_err);
 		}
@@ -277,7 +277,7 @@ void ConfigStorage::checkAudit()
 void ConfigStorage::acquire()
 {
 	if (!m_sharedMemory)
-		(Arg::Gds(isc_random) << "Trace shared memory can not be accessed").raise();
+		(Firebird::Arg::Gds(isc_random) << "Trace shared memory can not be accessed").raise();
 
 	fb_assert(m_recursive >= 0);
 	const ThreadId currTID = getThreadId();
@@ -323,7 +323,7 @@ void ConfigStorage::acquire()
 #else
 		release();
 		fb_assert(false);
-		(Arg::Gds(isc_random) << Arg::Str("Trace storage memory remapping error")).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Trace storage memory remapping error")).raise();
 #endif
 	}
 }
@@ -350,13 +350,13 @@ ULONG ConfigStorage::allocSlot(ULONG slotSize)
 	TraceCSHeader* header = m_sharedMemory->getHeader();
 
 	if (header->slots_free == 0 && header->slots_cnt == TraceCSHeader::TRACE_STORAGE_MAX_SLOTS)
-		(Arg::Gds(isc_random) << Arg::Str("No enough free slots")).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("No enough free slots")).raise();
 
 	// try to extend shared memory, if needed
 	if (header->mem_used + slotSize > header->mem_allocated)
 	{
 		if (header->mem_allocated >= header->mem_max_size)
-			(Arg::Gds(isc_random) << Arg::Str("No enough memory for new trase session")).raise();
+			(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("No enough memory for new trase session")).raise();
 
 		ULONG newAlloc = FB_ALIGN(header->mem_used + slotSize, header->mem_allocated);
 		newAlloc = MIN(newAlloc, header->mem_max_size);
@@ -366,7 +366,7 @@ ULONG ConfigStorage::allocSlot(ULONG slotSize)
 		if (!m_sharedMemory->remapFile(&status, newAlloc, true))
 			status_exception::raise(&status);
 #else
-		(Arg::Gds(isc_random) << Arg::Str("Can not remap trace storage memory")).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Can not remap trace storage memory")).raise();
 #endif
 		header = m_sharedMemory->getHeader();
 		header->mem_allocated = m_sharedMemory->sh_mem_length_mapped;
@@ -926,14 +926,14 @@ bool ConfigStorage::Accessor::getNext(TraceSession& session, GET_FLAGS getFlag)
 void ConfigStorage::Writer::write(ITEM tag, ULONG len, const void* data)
 {
 	if (m_mem + 1 > m_end)
-		(Arg::Gds(isc_random) << Arg::Str("Item data not fits into memory")).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Item data not fits into memory")).raise();
 
 	*m_mem++ = tag;
 	if (tag == tagEnd)
 		return;
 
 	if (m_mem + sizeof(len) + len > m_end)
-		(Arg::Gds(isc_random) << Arg::Str("Item data not fits into memory")).raise();
+		(Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("Item data not fits into memory")).raise();
 
 	memcpy(m_mem, &len, sizeof(len));
 	m_mem += sizeof(len);
@@ -974,7 +974,7 @@ void ConfigStorage::TouchFile::handler()
 {
 	try
 	{
-		if (!os_utils::touchFile(fileName.c_str()))
+		if (!Firebird::os_utils::touchFile(fileName.c_str()))
 			system_call_failed::raise("utime");
 
 		FbLocalStatus s;

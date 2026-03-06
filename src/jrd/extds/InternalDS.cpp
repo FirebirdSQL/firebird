@@ -563,7 +563,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	case DsqlStatement::TYPE_COMMIT_RETAIN:
 	case DsqlStatement::TYPE_ROLLBACK_RETAIN:
 	case DsqlStatement::TYPE_CREATE_DB:
-		Arg::Gds(isc_eds_expl_tran_ctrl).copyTo(&status);
+		Firebird::Arg::Gds(isc_eds_expl_tran_ctrl).copyTo(&status);
 		raise(&status, tdbb, "JAttachment::prepare", &sql);
 		break;
 

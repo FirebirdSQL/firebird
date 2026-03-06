@@ -119,8 +119,7 @@ namespace Firebird {
 typedef int SOCKET;
 #endif
 
-namespace os_utils
-{
+namespace Firebird::os_utils {
 	// force descriptor to have O_CLOEXEC set
 	SOCKET socket(int domain, int type, int protocol);
 	SOCKET accept(SOCKET sockfd, sockaddr *addr, socklen_t *addrlen);
@@ -1189,7 +1188,7 @@ private:
 
 public:
 	AuthServerPlugins* plugins;
-	Auth::WriterImplementation authBlockWriter;
+	Firebird::Auth::WriterImplementation authBlockWriter;
 
 	// extractNewKeys flags
 	static constexpr ULONG EXTRACT_PLUGINS_LIST = 0x1;

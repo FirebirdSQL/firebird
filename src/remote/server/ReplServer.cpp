@@ -311,7 +311,7 @@ namespace
 #endif
 			const PathName filename = directory + guid.toPathName();
 
-			const int fd = os_utils::open(filename.c_str(),
+			const int fd = Firebird::os_utils::open(filename.c_str(),
 				O_CREAT | O_RDWR | O_BINARY, ACCESS_MODE);
 
 			if (fd < 0)
@@ -665,7 +665,7 @@ namespace
 					continue;
 				}
 
-				const int fd = os_utils::open(filename.c_str(), O_RDONLY | O_BINARY);
+				const int fd = Firebird::os_utils::open(filename.c_str(), O_RDONLY | O_BINARY);
 				if (fd < 0)
 				{
 					if (errno == EACCES || errno == EAGAIN)
@@ -861,7 +861,7 @@ namespace
 
 				const FB_UINT64 org_oldest_sequence = oldest_sequence;
 
-				const int fd = os_utils::open(segment->filename.c_str(), O_RDONLY | O_BINARY);
+				const int fd = Firebird::os_utils::open(segment->filename.c_str(), O_RDONLY | O_BINARY);
 				if (fd < 0)
 				{
 					if (errno == EACCES || errno == EAGAIN)

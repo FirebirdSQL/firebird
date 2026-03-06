@@ -101,7 +101,7 @@ namespace
 		{
 			const time_t now = time(NULL);
 
-			const auto file = os_utils::fopen(m_filename.c_str(), "a");
+			const auto file = Firebird::os_utils::fopen(m_filename.c_str(), "a");
 			if (file)
 			{
 				if (!lock(file))
@@ -144,7 +144,7 @@ namespace
 #ifdef HAVE_FLOCK
 				flock(fileno(file), LOCK_EX) == 0;
 #else
-				os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
+				Firebird::os_utils::lockf(fileno(file), F_LOCK, 0) == 0;
 #endif
 #endif
 
@@ -226,8 +226,8 @@ namespace Replication
 		vsnprintf(buffer, sizeof(buffer), msg, ptr);
 		va_end(ptr);
 
-		Arg::StatusVector error;
-		error << Arg::Gds(isc_random) << Arg::Str(buffer);
+		Firebird::Arg::StatusVector error;
+		error << Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str(buffer);
 		error.raise();
 	}
 

@@ -29,7 +29,7 @@
 
 #include "firebird/Interface.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 void registerLegacyServer(Firebird::IPluginManager* iPlugin);
 

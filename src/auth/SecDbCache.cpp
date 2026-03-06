@@ -35,7 +35,7 @@
 
 using namespace Firebird;
 
-namespace Auth {
+namespace Firebird::Auth {
 
 void CachedSecurityDatabase::close()
 {
@@ -64,7 +64,7 @@ void PluginDatabases::getInstance(IPluginConfig* pluginConfig, CachedSecurityDat
 		unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
 		const char* tmp = config->asString(secDbKey);
 		if (!tmp)
-			Arg::Gds(isc_secdb_name).raise();
+			Firebird::Arg::Gds(isc_secdb_name).raise();
 
 		secDbName = tmp;
 	}

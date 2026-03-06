@@ -112,25 +112,25 @@ void DsqlRequest::releaseRequest(thread_db* tdbb)
 void DsqlRequest::setCursor(thread_db* /*tdbb*/, const TEXT* /*name*/)
 {
 	status_exception::raise(
-		Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-		Arg::Gds(isc_dsql_sqlda_err) <<
-		Arg::Gds(isc_req_sync));
+		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+		Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+		Firebird::Arg::Gds(isc_req_sync));
 }
 
 void DsqlRequest::setDelayedFormat(thread_db* /*tdbb*/, IMessageMetadata* /*metadata*/)
 {
 	status_exception::raise(
-		Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-		Arg::Gds(isc_dsql_sqlda_err) <<
-		Arg::Gds(isc_req_sync));
+		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+		Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+		Firebird::Arg::Gds(isc_req_sync));
 }
 
 bool DsqlRequest::fetch(thread_db* /*tdbb*/, UCHAR* /*msgBuffer*/)
 {
 	status_exception::raise(
-		Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-		Arg::Gds(isc_dsql_sqlda_err) <<
-		Arg::Gds(isc_req_sync));
+		Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+		Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+		Firebird::Arg::Gds(isc_req_sync));
 
 	return false;	// avoid warning
 }
@@ -254,9 +254,9 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		if (!symbol)
 		{
 			// cursor is not found
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					  Arg::Gds(isc_dsql_cursor_err) <<
-					  Arg::Gds(isc_dsql_cursor_not_found) << aStatement->parentCursorName);
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_not_found) << aStatement->parentCursorName);
 		}
 
 		parentRequest = *symbol;
@@ -267,8 +267,8 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		if (parentRequest->getDsqlStatement()->getType() != DsqlStatement::TYPE_SELECT_UPD)
 		{
 			// cursor is not updatable
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-510) <<
-					  Arg::Gds(isc_dsql_cursor_update_err) << aStatement->parentCursorName);
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-510) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_update_err) << aStatement->parentCursorName);
 		}
 
 		// Check that it contains this relation name
@@ -287,8 +287,8 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 				{
 					// Relation is used twice in cursor
 					ERRD_post(
-						Arg::Gds(isc_dsql_cursor_err) <<
-						Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
+						Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+						Firebird::Arg::Gds(isc_dsql_cursor_rel_ambiguous) <<
 							relName.toQuotedString() << aStatement->parentCursorName.toQuotedString());
 				}
 				parentContext = i;
@@ -300,8 +300,8 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		{
 			// Relation is not in cursor
 			ERRD_post(
-				Arg::Gds(isc_dsql_cursor_err) <<
-				Arg::Gds(isc_dsql_cursor_rel_not_found) <<
+				Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+				Firebird::Arg::Gds(isc_dsql_cursor_rel_not_found) <<
 					relName.toQuotedString() << aStatement->parentCursorName.toQuotedString());
 		}
 		parentRequest->cursors.add(this);
@@ -332,9 +332,9 @@ void DsqlDmlRequest::setDelayedFormat(thread_db* tdbb, IMessageMetadata* metadat
 	if (!needDelayedFormat)
 	{
 		status_exception::raise(
-			Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-			Arg::Gds(isc_dsql_sqlda_err) <<
-			Arg::Gds(isc_req_sync));
+			Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
+			Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+			Firebird::Arg::Gds(isc_req_sync));
 	}
 
 	metadataToFormat(metadata, dsqlStatement->getReceiveMsg());
@@ -353,23 +353,23 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	{
 		if (!req_cursor)
 		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					  Arg::Gds(isc_dsql_cursor_err) <<
-					  Arg::Gds(isc_dsql_cursor_not_open));
+			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+					  Firebird::Arg::Gds(isc_dsql_cursor_not_open));
 		}
 	}
 
 	if (!request)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				  Arg::Gds(isc_unprepared_stmt));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				  Firebird::Arg::Gds(isc_unprepared_stmt));
 	}
 
 	// At this point we have to have output metadata from client
 	if (needDelayedFormat)
 	{
-		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-				  Arg::Gds(isc_dsql_no_output_sqlda));
+		ERRD_post(Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+				  Firebird::Arg::Gds(isc_dsql_no_output_sqlda));
 	}
 
 	// Set up things for tracing this call
@@ -457,9 +457,9 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 
 	if (!length)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				  Arg::Gds(isc_dsql_decl_err) <<
-				  Arg::Gds(isc_dsql_cursor_invalid));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				  Firebird::Arg::Gds(isc_dsql_decl_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_invalid));
 	}
 
 	if (length > MAX_CURSOR_LENGTH)
@@ -475,9 +475,9 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 		if (this == *symbol)
 			return;
 
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				  Arg::Gds(isc_dsql_decl_err) <<
-				  Arg::Gds(isc_dsql_cursor_redefined) << cursor);
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				  Firebird::Arg::Gds(isc_dsql_decl_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_redefined) << cursor);
 	}
 
 	// If there already is a cursor and its name isn't the same, ditto.
@@ -486,9 +486,9 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 	if (req_cursor && req_cursor_name.hasData())
 	{
 		fb_assert(!symbol);
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				  Arg::Gds(isc_dsql_decl_err) <<
-				  Arg::Gds(isc_dsql_cursor_redefined) << req_cursor_name);
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				  Firebird::Arg::Gds(isc_dsql_decl_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_redefined) << req_cursor_name);
 	}
 
 	if (req_cursor_name.hasData())
@@ -509,27 +509,27 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 
 	if (!*traHandle)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
-				  Arg::Gds(isc_bad_trans_handle));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
+				  Firebird::Arg::Gds(isc_bad_trans_handle));
 	}
 
 	// Validate statement type
 
 	if (!dsqlStatement->isCursorBased())
-		Arg::Gds(isc_no_cursor).raise();
+		Firebird::Arg::Gds(isc_no_cursor).raise();
 
 	// Validate cursor or batch being not already open
 
 	if (req_cursor)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				  Arg::Gds(isc_dsql_cursor_open_err));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_open_err));
 	}
 
 	if (req_batch)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
-				  Arg::Gds(isc_batch_open));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
+				  Firebird::Arg::Gds(isc_batch_open));
 	}
 
 	req_transaction = *traHandle;
@@ -600,7 +600,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 				// No record returned though expected
 				if (!(request->req_flags & req_active))
 				{
-					status_exception::raise(Arg::Gds(isc_stream_eof));
+					status_exception::raise(Firebird::Arg::Gds(isc_stream_eof));
 				}
 
 				// Create a temp message buffer and try one more receive.
@@ -613,7 +613,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 				// Still active request means that second record exists
 				if ((request->req_flags & req_active))
 				{
-					status_exception::raise(Arg::Gds(isc_sing_select_err));
+					status_exception::raise(Firebird::Arg::Gds(isc_sing_select_err));
 				}
 			}
 		}
@@ -624,18 +624,18 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 		case DsqlStatement::TYPE_UPDATE_CURSOR:
 			if (!request->req_records_updated)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-913) <<
-						  Arg::Gds(isc_deadlock) <<
-						  Arg::Gds(isc_update_conflict));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-913) <<
+						  Firebird::Arg::Gds(isc_deadlock) <<
+						  Firebird::Arg::Gds(isc_update_conflict));
 			}
 			break;
 
 		case DsqlStatement::TYPE_DELETE_CURSOR:
 			if (!request->req_records_deleted)
 			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-913) <<
-						  Arg::Gds(isc_deadlock) <<
-						  Arg::Gds(isc_update_conflict));
+				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-913) <<
+						  Firebird::Arg::Gds(isc_deadlock) <<
+						  Firebird::Arg::Gds(isc_update_conflict));
 			}
 			break;
 
@@ -658,8 +658,8 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 {
 	if (!request)
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-				  Arg::Gds(isc_unprepared_stmt));
+		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
+				  Firebird::Arg::Gds(isc_unprepared_stmt));
 	}
 
 	// If there is no data required, just start the request
@@ -669,8 +669,8 @@ void DsqlDmlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 	{
 		if (!inMetadata)
 		{
-			ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-					  Arg::Gds(isc_dsql_no_input_sqlda));
+			ERRD_post(Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+					  Firebird::Arg::Gds(isc_dsql_no_input_sqlda));
 		}
 
 		// If this is not first call of execute(), metadata most likely is already converted to message
@@ -754,7 +754,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 				string s;
 				s.printf("restarts = %d", numTries);
 
-				ERRD_post_warning(Arg::Warning(isc_random) << Arg::Str(s));
+				ERRD_post_warning(Firebird::Arg::Warning(isc_random) << Firebird::Arg::Str(s));
 			}
 #endif
 			savePoint.release();	// everything is ok
@@ -812,8 +812,8 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 
 	if (count * 2 != count2)
 	{
-		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(count2 / 2) << Arg::Num(count));
+		ERRD_post(Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+				  Firebird::Arg::Gds(isc_dsql_wrong_param_num) <<Firebird::Arg::Num(count2 / 2) << Firebird::Arg::Num(count));
 	}
 
 	if (count == 0)
@@ -877,8 +877,8 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 	if (assigned != newFormat->fmt_count)
 	{
 		fb_assert(false);
-		ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
-				  Arg::Gds(isc_dsql_wrong_param_num) <<Arg::Num(newFormat->fmt_count) << Arg::Num(assigned));
+		ERRD_post(Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
+				  Firebird::Arg::Gds(isc_dsql_wrong_param_num) <<Firebird::Arg::Num(newFormat->fmt_count) << Firebird::Arg::Num(assigned));
 	}
 
 	msg->setFormat(request, newFormat);
@@ -895,13 +895,13 @@ void DsqlDmlRequest::mapCursorKey(thread_db* tdbb)
 	if (!parentRequest || !parentRequest->req_cursor) // It has been already closed
 	{
 		// Here may be code to re-establish link to parent cursor.
-		ERRD_post(Arg::Gds(isc_dsql_cursor_err) <<
-				  Arg::Gds(isc_dsql_cursor_not_found) << dsqlStatement->parentCursorName);
+		ERRD_post(Firebird::Arg::Gds(isc_dsql_cursor_err) <<
+				  Firebird::Arg::Gds(isc_dsql_cursor_not_found) << dsqlStatement->parentCursorName);
 	}
 
 	if (!parentRequest->req_cursor->getCurrentRecordKey(parentContext, dbKey))
 	{
-		ERRD_post(Arg::Gds(isc_cursor_not_positioned) << dsqlStatement->parentCursorName);
+		ERRD_post(Firebird::Arg::Gds(isc_cursor_not_positioned) << dsqlStatement->parentCursorName);
 	}
 
 	fb_assert(request);
@@ -1059,5 +1059,5 @@ void DsqlSessionManagementRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 static void checkD(IStatus* st)
 {
 	if (st->getState() & IStatus::STATE_ERRORS)
-		ERRD_post(Arg::StatusVector(st));
+		ERRD_post(Firebird::Arg::StatusVector(st));
 }

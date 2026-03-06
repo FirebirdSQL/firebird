@@ -495,13 +495,13 @@ static void raiseDatabaseInUseError(bool timeout)
 {
 	if (timeout)
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_lock_timeout) <<
-				 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_lock_timeout) <<
+				 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str("DATABASE"));
 	}
 
-	ERR_post(Arg::Gds(isc_no_meta_update) <<
-			 Arg::Gds(isc_obj_in_use) << Arg::Str("DATABASE"));
+	ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+			 Firebird::Arg::Gds(isc_obj_in_use) << Firebird::Arg::Str("DATABASE"));
 }
 
 static void raiseObjectInUseError(const string& obj_type, const QualifiedName& obj_name)
@@ -509,8 +509,8 @@ static void raiseObjectInUseError(const string& obj_type, const QualifiedName& o
 	string name;
 	name.printf("%s %s", obj_type.c_str(), obj_name.toQuotedString().c_str());
 
-	ERR_post(Arg::Gds(isc_no_meta_update) <<
-			 Arg::Gds(isc_obj_in_use) << name);
+	ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+			 Firebird::Arg::Gds(isc_obj_in_use) << name);
 }
 
 void DFW_raiseRelationInUseError(const Cached::Relation* relation)
@@ -641,8 +641,8 @@ namespace
 					T* routine = lookupById(tdbb, work->dfw_id, flag);
 					if (!routine)
 					{
-						ERR_post(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(getErrorNotFound(routine->getObjectType())) << Arg::Num(work->dfw_id));
+						ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+							Firebird::Arg::Gds(getErrorNotFound(routine->getObjectType())) << Firebird::Arg::Num(work->dfw_id));
 					}
 
 					return true;
@@ -1017,13 +1017,13 @@ namespace
 
 		if (names.hasData())
 		{
-			Arg::StatusVector status;
-			status << Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_no_delete);
+			Firebird::Arg::StatusVector status;
+			status << Firebird::Arg::Gds(isc_no_meta_update) << Firebird::Arg::Gds(isc_no_delete);
 
 			for (auto& name : names)
-				status << Arg::Gds(isc_parameter_name) << name;
+				status << Firebird::Arg::Gds(isc_parameter_name) << name;
 
-			status << Arg::Gds(isc_dependency) << Arg::Num(depCount);
+			status << Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(depCount);
 
 			ERR_post(status);
 		}
@@ -1106,13 +1106,13 @@ namespace
 
 		if (names.hasData())
 		{
-			Arg::StatusVector status;
-			status << Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_no_delete);
+			Firebird::Arg::StatusVector status;
+			status << Firebird::Arg::Gds(isc_no_meta_update) << Firebird::Arg::Gds(isc_no_delete);
 
 			for (auto& name : names)
-				status << Arg::Gds(isc_parameter_name) << name;
+				status << Firebird::Arg::Gds(isc_parameter_name) << name;
 
-			status << Arg::Gds(isc_dependency) << Arg::Num(depCount);
+			status << Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(depCount);
 
 			ERR_post(status);
 		}
@@ -1211,8 +1211,8 @@ USHORT DFW_assign_index_type(thread_db* tdbb, const QualifiedName& name, SSHORT 
 		if (INTL_defined_type(tdbb, ttype))
 			return INTL_TEXT_TO_INDEX(ttype);
 
-		ERR_post_nothrow(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_random) << name.toQuotedString());
+		ERR_post_nothrow(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_random) << name.toQuotedString());
 		INTL_texttype_lookup(tdbb, ttype);	// should punt
 		ERR_punt(); // if INTL_texttype_lookup hasn't punt
 	}
@@ -1888,8 +1888,8 @@ static bool add_difference(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			BackupManager::StateReadGuard stateGuard(tdbb);
 			if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
 			{
-				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_wrong_backup_state));
+				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_wrong_backup_state));
 			}
 			check_filename(tdbb, work->dfw_name.c_str(), true);
 			dbb->dbb_backup_manager->setDifference(tdbb, work->dfw_name.c_str());
@@ -1928,8 +1928,8 @@ static bool delete_difference(thread_db* tdbb, SSHORT phase, DeferredWork*, jrd_
 
 			if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
 			{
-				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_wrong_backup_state));
+				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_wrong_backup_state));
 			}
 			dbb->dbb_backup_manager->setDifference(tdbb, NULL);
 		}
@@ -2095,7 +2095,7 @@ static bool set_generator(thread_db* tdbb,
 			}
 #ifdef DEV_BUILD
 			else // This is a test only
-				status_exception::raise(Arg::Gds(isc_cant_modify_sysobj) << "generator" << work->getQualifiedName().toQuotedString());
+				status_exception::raise(Firebird::Arg::Gds(isc_cant_modify_sysobj) << "generator" << work->getQualifiedName().toQuotedString());
 #endif
 		}
 		break;
@@ -2319,14 +2319,14 @@ static void check_filename(thread_db* tdbb, const Firebird::string& name, bool s
 	const bool valid = file_name.find("::") == Firebird::PathName::npos;
 
 	if (!valid || ISC_check_if_remote(file_name, shareExpand)) {
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_node_name_err));
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_node_name_err));
 		// Msg305: A node name is not permitted in a secondary, shadow, or log file name
 	}
 
 	if (!JRD_verify_database_access(file_name)) {
-		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("additional database file") <<
-													 Arg::Str(name));
+		ERR_post(Firebird::Arg::Gds(isc_conf_access_denied) << Firebird::Arg::Str("additional database file") <<
+													 Firebird::Arg::Str(name));
 	}
 }
 
@@ -2751,8 +2751,8 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 
 	if (err)
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_circular_computed));
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_circular_computed));
 	}
 }
 
@@ -3016,10 +3016,10 @@ static bool delete_field(thread_db*	tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		if (field_count)
 		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-					 Arg::Gds(isc_no_delete) <<								// Msg353: can not delete
-					 Arg::Gds(isc_domain_name) << work->getQualifiedName().toQuotedString() <<
-					 Arg::Gds(isc_dependency) << Arg::Num(field_count)); 	// Msg310: there are %ld dependencies
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+					 Firebird::Arg::Gds(isc_no_delete) <<								// Msg353: can not delete
+					 Firebird::Arg::Gds(isc_domain_name) << work->getQualifiedName().toQuotedString() <<
+					 Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(field_count)); 	// Msg310: there are %ld dependencies
 		}
 
 		check_dependencies(tdbb, work->getQualifiedName(), NULL, obj_field, transaction);
@@ -3621,10 +3621,10 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 		if (view_count)
 		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-					 Arg::Gds(isc_no_delete) << // Msg353: can not delete
-					 Arg::Gds(isc_table_name) << work->getQualifiedName().toQuotedString() <<
-					 Arg::Gds(isc_dependency) << Arg::Num(view_count));
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+					 Firebird::Arg::Gds(isc_no_delete) << // Msg353: can not delete
+					 Firebird::Arg::Gds(isc_table_name) << work->getQualifiedName().toQuotedString() <<
+					 Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(view_count));
 					 // Msg310: there are %ld dependencies
 		}
 
@@ -3778,10 +3778,10 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 
 		if (field_count)
 		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-					 Arg::Gds(isc_no_delete) <<	// Msg353: can not delete
-					 Arg::Gds(isc_field_name) << Arg::Str(f) <<
-					 Arg::Gds(isc_dependency) << Arg::Num(field_count));
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+					 Firebird::Arg::Gds(isc_no_delete) <<	// Msg353: can not delete
+					 Firebird::Arg::Gds(isc_field_name) << Firebird::Arg::Str(f) <<
+					 Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(field_count));
 					 // Msg310: there are %ld dependencies
 		}
 
@@ -3828,8 +3828,8 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 
 			if (!field_count)
 			{
-				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						 Arg::Gds(isc_del_last_field));
+				ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+						 Firebird::Arg::Gds(isc_del_last_field));
 				// Msg354: last column in a relation cannot be deleted
 			}
 		}
@@ -4511,7 +4511,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				EXE_receive(tdbb, request, 1, fields.getCount() * sizeof(USHORT),
 					(UCHAR*) hasRecord.getBuffer(fields.getCount()));
 
-				Arg::Gds errs(isc_no_meta_update);
+				Firebird::Arg::Gds errs(isc_no_meta_update);
 				bool hasError = false;
 
 				for (FB_SIZE_T i = 0; i < fields.getCount(); ++i)
@@ -4519,7 +4519,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 					if (hasRecord[i])
 					{
 						hasError = true;
-						errs << Arg::Gds(isc_cannot_make_not_null) <<
+						errs << Firebird::Arg::Gds(isc_cannot_make_not_null) <<
 								(*relation->rel_fields)[fields[i]]->fld_name.toQuotedString() <<
 								relation->getName().toQuotedString();
 					}
@@ -4621,18 +4621,18 @@ static void check_dependencies(thread_db* tdbb,
 		fld_name.append(".");
 		fld_name.append(field_name.toQuotedString());
 
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
-				 Arg::Gds(isc_field_name) << Arg::Str(fld_name) <<
-				 Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
+				 Firebird::Arg::Gds(isc_field_name) << Firebird::Arg::Str(fld_name) <<
+				 Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(total));	// Msg310: there are %ld dependencies
 	}
 	else
 	{
-		ERR_post(Arg::Gds(isc_no_meta_update) <<
-				 Arg::Gds(isc_no_delete) <<						// can not delete
-				 Arg::Gds(getErrorCodeByObjectType(dpdo_type)) <<
+		ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+				 Firebird::Arg::Gds(isc_no_delete) <<						// can not delete
+				 Firebird::Arg::Gds(getErrorCodeByObjectType(dpdo_type)) <<
 				 dpdo_name.toQuotedString() <<
-				 Arg::Gds(isc_dependency) << Arg::Num(total));	// there are %ld dependencies
+				 Firebird::Arg::Gds(isc_dependency) << Firebird::Arg::Num(total));	// there are %ld dependencies
 	}
 }
 
@@ -4712,8 +4712,8 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		if (!found)
 		{
-			ERR_post(Arg::Gds(isc_no_meta_update) <<
-					 Arg::Gds(isc_idx_seg_err) << work->getQualifiedName().toQuotedString());
+			ERR_post(Firebird::Arg::Gds(isc_no_meta_update) <<
+					 Firebird::Arg::Gds(isc_idx_seg_err) << work->getQualifiedName().toQuotedString());
 		}
 
 		++keyPos;

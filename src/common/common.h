@@ -355,7 +355,7 @@
 #define FB_CC CcMsvc
 #endif
 
-#define SYS_ERR		Arg::Windows
+#define SYS_ERR		Firebird::Arg::Windows
 
 //format for __LINE__
 #define LINEFORMAT "d"
@@ -415,11 +415,11 @@
  * UNIX
 *****************************************************/
 #ifdef UNIX
-#define SYS_ERR		Arg::Unix
+#define SYS_ERR		Firebird::Arg::Unix
 #endif /* UNIX */
 
 #ifndef SYS_ERR
-#define SYS_ERR		Arg::Unix
+#define SYS_ERR		Firebird::Arg::Unix
 #endif
 
 #ifndef ERRNO
@@ -854,17 +854,43 @@ namespace Firebird {
 }
 
 namespace Firebird::Jrd {
+	namespace Firebird = ::Firebird;
 }
 
 namespace Firebird::Jrd::EDS {
 }
 
 namespace Firebird::fb_utils {
+	namespace Firebird = ::Firebird;
+}
+
+namespace Firebird::Arg {
+	namespace Firebird = ::Firebird;
+}
+
+namespace Firebird::Auth {
+	namespace Firebird = ::Firebird;
+}
+
+namespace Firebird::MsgFormat {
+	namespace Firebird = ::Firebird;
+}
+
+namespace Firebird::MsgUtil {
+	namespace Firebird = ::Firebird;
+}
+
+namespace Firebird::os_utils {
+	namespace Firebird = ::Firebird;
 }
 
 namespace Jrd = Firebird::Jrd;
 namespace EDS = Firebird::Jrd::EDS;
 namespace fb_utils = Firebird::fb_utils;
+namespace Arg = Firebird::Arg;
+namespace MsgFormat = Firebird::MsgFormat;
+namespace MsgUtil = Firebird::MsgUtil;
+namespace os_utils = Firebird::os_utils;
 
 //#define DEBUG_LOST_POOLS 1
 

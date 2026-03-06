@@ -907,7 +907,7 @@ static void bug_lck(const TEXT* string)
 	TEXT s[BUFFER_TINY];
 	snprintf(s, sizeof(s), "Fatal lock interface error: %s", string);
 	gds__log(s);
-	ERR_post(Arg::Gds(isc_db_corrupt) << Arg::Str(string));
+	ERR_post(Firebird::Arg::Gds(isc_db_corrupt) << Firebird::Arg::Str(string));
 }
 
 
@@ -1408,7 +1408,7 @@ static bool internal_enqueue(thread_db* tdbb, CheckStatusWrapper* statusVector, 
 			// for now return a lock conflict; it would be better if we were to
 			// do a wait on the other lock by setting some flag bit or some such
 
-			(Arg::StatusVector(statusVector) << Arg::Gds(isc_lock_conflict)).copyTo(statusVector);
+			(Firebird::Arg::StatusVector(statusVector) << Firebird::Arg::Gds(isc_lock_conflict)).copyTo(statusVector);
 			return false;
 		}
 

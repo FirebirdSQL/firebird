@@ -391,5 +391,5 @@ static void generate_error(const NoCaseString& token, SSHORT error, char result)
 		break;
 	}
 
-	Arg::StatusVector(temp_status).raise();
+	Firebird::Arg::StatusVector(temp_status).raise();
 }

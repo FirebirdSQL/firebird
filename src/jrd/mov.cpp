@@ -417,8 +417,8 @@ ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 
 		if (limit && size > MAX_COLUMN_SIZE)
 		{
-			ERR_post(Arg::Gds(isc_arith_except) <<
-					 Arg::Gds(isc_blob_truncation));
+			ERR_post(Firebird::Arg::Gds(isc_arith_except) <<
+					 Firebird::Arg::Gds(isc_blob_truncation));
 		}
 
 		return size;
