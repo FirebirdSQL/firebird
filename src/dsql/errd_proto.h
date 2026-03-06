@@ -26,6 +26,8 @@
 
 #include "../jrd/status.h"
 
+namespace Firebird::Jrd {
+
 #ifdef DEV_BUILD
 [[noreturn]] void ERRD_assert_msg(const char*, const char*, ULONG);
 #endif
@@ -34,7 +36,8 @@
 [[noreturn]] void ERRD_error(const char*);
 [[noreturn]] void ERRD_post(const Firebird::Arg::StatusVector& v);
 void ERRD_post_warning(const Firebird::Arg::StatusVector& v);
-[[noreturn]] void ERRD_punt(const Jrd::FbStatusVector* = 0);
+[[noreturn]] void ERRD_punt(const FbStatusVector* = 0);
+
+} // namespace Firebird::Jrd
 
 #endif // DSQL_ERRD_PROTO_H
-

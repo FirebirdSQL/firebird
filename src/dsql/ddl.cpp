@@ -106,8 +106,9 @@
 #include "../common/prett_proto.h"
 #endif
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
 
 
 static void assign_field_length(dsql_fld*, USHORT);
@@ -124,8 +125,8 @@ bool DDL_ids(const DsqlCompilerScratch* scratch)
 }
 
 
-void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
-	QualifiedName& collation_name, bool modifying)
+void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch,
+	dsql_fld* field, QualifiedName& collation_name, bool modifying)
 {
 /**************************************
  *
@@ -473,3 +474,6 @@ static void post_607(const Firebird::Arg::StatusVector& v)
 	err.append(v);
 	ERRD_post(err);
 }
+
+
+} // namespace Firebird::Jrd

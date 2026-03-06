@@ -24,6 +24,14 @@
 #ifndef DSQL_MOVD_PROTO_H
 #define DSQL_MOVD_PROTO_H
 
-void MOVD_move(Jrd::thread_db* tdbb, dsc*, dsc*);
+struct dsc;
+
+namespace Firebird::Jrd {
+class thread_db;
+void MOVD_move(thread_db* tdbb, ::dsc*, ::dsc*);
+}
+
+using Firebird::Jrd::MOVD_move;
+
 
 #endif //  DSQL_MOVD_PROTO_H

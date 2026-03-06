@@ -81,8 +81,9 @@
 #include <ctype.h>
 #endif
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
 
 
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);
@@ -168,8 +169,8 @@ void DSQL_execute(thread_db* tdbb,
 		statement->getType() != DsqlStatement::TYPE_START_TRANS &&
 		statement->getType() != DsqlStatement::TYPE_SESSION_MANAGEMENT)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-				  Firebird::Arg::Gds(isc_bad_trans_handle));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+				  Arg::Gds(isc_bad_trans_handle));
 	}
 
 	// A select with a non zero output length is a singleton select
@@ -182,12 +183,12 @@ void DSQL_execute(thread_db* tdbb,
 	{
 		if (dsqlRequest->req_cursor)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-502) <<
-					  Firebird::Arg::Gds(isc_dsql_cursor_open_err));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-502) <<
+					  Arg::Gds(isc_dsql_cursor_open_err));
 		}
 
 		if (!singleton)
-			(Firebird::Arg::Gds(isc_random) << "Cannot execute SELECT statement").raise();
+			(Arg::Gds(isc_random) << "Cannot execute SELECT statement").raise();
 	}
 
 	dsqlRequest->req_transaction = *tra_handle;
@@ -207,7 +208,8 @@ void DSQL_execute(thread_db* tdbb,
     @param option
 
  **/
-void DSQL_free_statement(thread_db* tdbb, DsqlRequest* dsqlRequest, USHORT option)
+void DSQL_free_statement(thread_db* tdbb,
+	DsqlRequest* dsqlRequest, USHORT option)
 {
 	SET_TDBB(tdbb);
 
@@ -229,8 +231,8 @@ void DSQL_free_statement(thread_db* tdbb, DsqlRequest* dsqlRequest, USHORT optio
 		{
 			if (!dsqlRequest->req_cursor)
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-501) <<
-						  Firebird::Arg::Gds(isc_dsql_cursor_close_err));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-501) <<
+						  Arg::Gds(isc_dsql_cursor_close_err));
 			}
 
 			DsqlCursor::close(tdbb, dsqlRequest->req_cursor);
@@ -281,8 +283,8 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 		const auto statement = dsqlRequest->getDsqlStatement();
 		if (statement->getType() == DsqlStatement::TYPE_CREATE_DB)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-530) <<
-					  Firebird::Arg::Gds(isc_dsql_crdb_prepare_err));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-530) <<
+					  Arg::Gds(isc_dsql_crdb_prepare_err));
 		}
 
 		if (items && buffer)
@@ -335,7 +337,8 @@ void DSQL_sql_info(thread_db* tdbb,
 
 
 // Common part of prepare and execute a statement.
-void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tra** tra_handle,
+void DSQL_execute_immediate(thread_db* tdbb,
+	Attachment* attachment, jrd_tra** tra_handle,
 	ULONG length, const TEXT* string, USHORT dialect,
 	IMessageMetadata* in_meta, const UCHAR* in_msg,
 	IMessageMetadata* out_meta, UCHAR* out_msg,
@@ -359,8 +362,8 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 			dsqlStatement->getType() != DsqlStatement::TYPE_START_TRANS &&
 			dsqlStatement->getType() != DsqlStatement::TYPE_SESSION_MANAGEMENT)
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-					  Firebird::Arg::Gds(isc_bad_trans_handle));
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+					  Arg::Gds(isc_bad_trans_handle));
 		}
 
 		Jrd::ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
@@ -369,8 +372,8 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 		const bool singleton = dsqlStatement->isCursorBased();
 		if (singleton && !(out_msg && out_meta))
 		{
-			ERRD_post(Firebird::Arg::Gds(isc_dsql_sqlda_err) <<
-					  Firebird::Arg::Gds(isc_dsql_no_output_sqlda));
+			ERRD_post(Arg::Gds(isc_dsql_sqlda_err) <<
+					  Arg::Gds(isc_dsql_no_output_sqlda));
 		}
 
 		dsqlRequest->req_transaction = *tra_handle;
@@ -527,16 +530,16 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 	if (clientDialect > SQL_DIALECT_CURRENT)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-901) <<
-				  Firebird::Arg::Gds(isc_wish_list));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
+				  Arg::Gds(isc_wish_list));
 	}
 
 	if (!text || textLength == 0)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Unexpected end of command
 				  // CVC: Nothing will be line 1, column 1 for the user.
-				  Firebird::Arg::Gds(isc_command_end_err2) << Firebird::Arg::Num(1) << Firebird::Arg::Num(1));
+				  Arg::Gds(isc_command_end_err2) << Arg::Num(1) << Arg::Num(1));
 	}
 
 	if (!(prepareFlags & IStatement::PREPARE_REQUIRE_SEMICOLON))
@@ -556,9 +559,9 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 	if (textLength > MAX_SQL_LENGTH)
 	{
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-902) <<
-				  Firebird::Arg::Gds(isc_imp_exc) <<
-				  Firebird::Arg::Gds(isc_sql_too_long) << Firebird::Arg::Num(MAX_SQL_LENGTH));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-902) <<
+				  Arg::Gds(isc_imp_exc) <<
+				  Arg::Gds(isc_sql_too_long) << Arg::Num(MAX_SQL_LENGTH));
 	}
 
 	string textStr(text, textLength);
@@ -639,8 +642,8 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 			if (!charSet->wellFormed(transformedText.length(),
 					(const UCHAR*) transformedText.begin(), NULL))
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-104) <<
-						  Firebird::Arg::Gds(isc_malformed_string));
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_malformed_string));
 			}
 
 			UCharBuffer temp;
@@ -751,8 +754,8 @@ string IntlString::toUtf8(jrd_tra* transaction) const
 		if (!resolved)
 		{
 			// character set name is not defined
-			ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-504) <<
-					  Firebird::Arg::Gds(isc_charset_not_found) << charset.toQuotedString());
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
+					  Arg::Gds(isc_charset_not_found) << charset.toQuotedString());
 		}
 
 		id = resolved->intlsym_charset_id;
@@ -1511,3 +1514,6 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 		udf_arguments.add(arg);
 	}
 }
+
+
+} // namespace Firebird::Jrd

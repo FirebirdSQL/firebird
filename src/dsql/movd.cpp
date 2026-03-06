@@ -31,6 +31,8 @@
 using namespace Firebird::Jrd;
 using namespace Firebird;
 
+namespace Firebird::Jrd {
+
 
 // Move (and possible convert) something to something else.
 void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
@@ -47,3 +49,5 @@ void MOVD_move(thread_db* tdbb, dsc* from, dsc* to)
 		status_exception::raise(newVector);
 	}
 }
+
+} // namespace Firebird::Jrd

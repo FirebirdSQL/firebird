@@ -69,4 +69,5 @@ Jrd::dsql_rel* METD_get_view_base(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, cons
 bool METD_get_view_relation(Jrd::jrd_tra*, Jrd::DsqlCompilerScratch*, const Jrd::QualifiedName& view_name,
 	const Jrd::QualifiedName& relation_or_alias, Jrd::dsql_rel*& relation, Jrd::dsql_prc*& procedure);
 
+
 #endif // DSQL_METD_PROTO_H

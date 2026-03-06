@@ -63,4 +63,5 @@ bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, st
 bool PASS1_set_parameter_type(Jrd::DsqlCompilerScratch*, Jrd::ValueExprNode*, NestConst<Jrd::ValueExprNode>, bool);
 Jrd::ValueListNode* PASS1_sort(Jrd::DsqlCompilerScratch*, Jrd::ValueListNode*, Jrd::ValueListNode*);
 
+
 #endif // DSQL_PASS1_PROTO_H

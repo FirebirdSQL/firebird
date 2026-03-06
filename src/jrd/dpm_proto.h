@@ -86,4 +86,5 @@ void	DPM_update(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack*, const Jrd:
 void DPM_create_relation_pages(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*);
 void DPM_delete_relation_pages(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*);
 
+
 #endif // JRD_DPM_PROTO_H

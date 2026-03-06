@@ -59,8 +59,10 @@
 #include "iberror.h"
 #include "../common/StatusArg.h"
 
-using namespace Firebird::Jrd;
 using namespace Firebird;
+
+namespace Firebird::Jrd {
+
 
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
 
@@ -326,7 +328,7 @@ void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
     @param texttype
 
  **/
-void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype)
+void GEN_descriptor(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype)
 {
 	switch (desc->dsc_dtype)
 	{
@@ -444,7 +446,7 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 
 
 // Generate a parameter reference.
-void GEN_parameter( DsqlCompilerScratch* dsqlScratch, const dsql_par* parameter)
+void GEN_parameter(DsqlCompilerScratch* dsqlScratch, const dsql_par* parameter)
 {
 	const dsql_msg* message = parameter->par_message;
 
@@ -716,10 +718,14 @@ void GEN_stuff_context(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context
 
 
 // Write a context number into the BLR buffer. Check for possible overflow.
-void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch, USHORT contextNumber)
+void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch,
+	USHORT contextNumber)
 {
 	if (contextNumber > MAX_UCHAR)
 		ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
 
 	dsqlScratch->appendUChar(contextNumber);
 }
+
+
+} // namespace Firebird::Jrd

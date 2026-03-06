@@ -57,10 +57,6 @@
 #define DSQL_DEBUG
 #endif
 
-#ifdef DSQL_DEBUG
-DEFINE_TRACE_ROUTINE(dsql_trace);
-#endif
-
 // generic block used as header to all allocated structures
 #include "../include/fb_blk.h"
 
@@ -110,6 +106,10 @@ namespace Firebird::Jrd {
 #include "../common/dsc.h"
 
 namespace Firebird::Jrd {
+
+#ifdef DSQL_DEBUG
+DEFINE_TRACE_ROUTINE(dsql_trace);
+#endif
 
 // blocks used to cache metadata
 
@@ -899,9 +899,6 @@ struct Signature
 	bool defined = false;
 };
 
-
-} // namespace
-
 /*! \var unsigned DSQL_debug
     \brief Debug level
 
@@ -919,5 +916,8 @@ struct Signature
 #ifdef DSQL_DEBUG
 extern unsigned DSQL_debug;
 #endif
+
+
+} // namespace Firebird::Jrd
 
 #endif // DSQL_DSQL_H

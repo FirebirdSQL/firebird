@@ -70,4 +70,5 @@ inline Ods::pag* PAG_allocate(Jrd::thread_db* tdbb, Jrd::win* window)
 	return PAG_allocate_pages(tdbb, window, 1, false);
 }
 
+
 #endif // JRD_PAG_PROTO_H

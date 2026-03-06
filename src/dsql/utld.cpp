@@ -44,6 +44,8 @@
 
 using namespace Firebird::Jrd;
 
+namespace Firebird::Jrd {
+
 /**
 
 	UTLD_char_length_to_byte_length
@@ -59,3 +61,5 @@ USHORT UTLD_char_length_to_byte_length(USHORT lengthInChars, USHORT maxBytesPerC
 	return MIN(((MAX_COLUMN_SIZE - overhead) / maxBytesPerChar) * maxBytesPerChar,
 			   (ULONG) lengthInChars * maxBytesPerChar);
 }
+
+} // namespace Firebird::Jrd
