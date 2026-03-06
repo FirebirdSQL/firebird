@@ -402,7 +402,7 @@ namespace
 			if (cleanup)
 			{
 				// Pause timer thread for cleanup period
-				MutexLockGuard timerPause(Why::pauseTimer(), FB_FUNCTION);
+				MutexLockGuard timerPause(pauseTimer(), FB_FUNCTION);
 
 				cleanup->doClean();
 			}
@@ -717,7 +717,7 @@ namespace
 				if (refCounter != 0)
 					return 1;
 
-				if (Why::timerThreadStopped() && !processingDelayedDelete && delayedDelete)
+				if (timerThreadStopped() && !processingDelayedDelete && delayedDelete)
 				{
 					// delay delete
 					addRef();

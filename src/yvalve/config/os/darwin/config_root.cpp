@@ -113,7 +113,7 @@ static string getDlInfoPath()
 }
 
 
-void ConfigRoot::osConfigRoot()
+void Firebird::ConfigRoot::osConfigRoot()
 {
 	// Attempt to locate the Firebird.framework bundle
 	root_dir = getFrameworkFromBundle();
@@ -141,7 +141,7 @@ void ConfigRoot::osConfigRoot()
 }
 
 
-void ConfigRoot::osConfigInstallDir()
+void Firebird::ConfigRoot::osConfigInstallDir()
 {
 	// Attempt to locate the Firebird.framework bundle
 	install_dir = getFrameworkFromBundle();

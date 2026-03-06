@@ -783,7 +783,7 @@ void API_ROUTINE gds_alloc_report(ULONG flags, const char* filter_filename, int 
 // Skidder: Calls to this function must be replaced with MemoryPool::print_contents
 	Firebird::PathName report_name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, "fbsrvreport.txt");
 	// Our new facilities don't expose flags for reporting.
-	const bool used_only = !(flags & ALLOC_verbose);
+	const bool used_only = !(flags & Firebird::Why::ALLOC_verbose);
 	getDefaultMemoryPool()->print_contents(report_name.c_str(),
 		used_only ? MemoryPool::PRINT_USED_ONLY : 0, filter_filename);
 }
@@ -1677,7 +1677,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		// Search down index levels to the leaf.  If we get lost, punt
 
 		const ULONG code = MSG_NUMBER(facility, number);
-		const msgnod* const end = (msgnod*) ((char*) messageL->msg_bucket + messageL->msg_bucket_size);
+		const Firebird::msgnod* const end = (Firebird::msgnod*) ((char*) messageL->msg_bucket + messageL->msg_bucket_size);
 		ULONG position = messageL->msg_top_tree;
 
 		status = 0;
@@ -1691,7 +1691,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 				break;
 			else
 			{
-				for (const msgnod* node = (msgnod*) messageL->msg_bucket; !status; node++)
+				for (const Firebird::msgnod* node = (Firebird::msgnod*) messageL->msg_bucket; !status; node++)
 				{
 					if (node >= end)
 					{
@@ -1710,9 +1710,9 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		if (!status)
 		{
 			// Search the leaf
-			for (const msgrec* leaf = (msgrec*) messageL->msg_bucket; !status; leaf = leaf->next())
+			for (const Firebird::msgrec* leaf = (Firebird::msgrec*) messageL->msg_bucket; !status; leaf = leaf->next())
 			{
-				if (leaf >= (const msgrec*) end || leaf->msgrec_code > code)
+				if (leaf >= (const Firebird::msgrec*) end || leaf->msgrec_code > code)
 				{
 					status = -1;
 					break;
@@ -1760,16 +1760,16 @@ int API_ROUTINE gds__msg_open(void** handle, const TEXT* filename)
 	if (n < 0)
 		return -2;
 
-	isc_msghdr header;
+	Firebird::isc_msghdr header;
 	if (read(n, &header, sizeof(header)) < 0)
 	{
 		close(n);
 		return -3;
 	}
 
-	if (header.msghdr_major_version != MSG_MAJOR_VERSION
+	if (header.msghdr_major_version != Firebird::MSG_MAJOR_VERSION
 #if FB_MSG_MINOR_VERSION > 0
-		|| header.msghdr_minor_version < MSG_MINOR_VERSION
+		|| header.msghdr_minor_version < Firebird::MSG_MINOR_VERSION
 #endif
 		)
 	{
@@ -1864,7 +1864,7 @@ SLONG API_ROUTINE gds__get_prefix(SSHORT arg_type, const TEXT* passed_string)
 		}
 	}
 
-	if (arg_type == IB_PREFIX_TYPE)
+	if (arg_type == Firebird::Why::IB_PREFIX_TYPE)
 	{
 		// it's very important to do it BEFORE GDS_init_prefix()
 		Firebird::Config::setRootDirectoryFromCommandLine(prefix);
@@ -1874,13 +1874,13 @@ SLONG API_ROUTINE gds__get_prefix(SSHORT arg_type, const TEXT* passed_string)
 
 	switch (arg_type)
 	{
-	case IB_PREFIX_TYPE:
+	case Firebird::Why::IB_PREFIX_TYPE:
 		prefix.copyTo(fb_prefix_val, sizeof fb_prefix_val);
 		break;
-	case IB_PREFIX_LOCK_TYPE:
+	case Firebird::Why::IB_PREFIX_LOCK_TYPE:
 		prefix.copyTo(fb_prefix_lock_val, sizeof fb_prefix_lock_val);
 		break;
-	case IB_PREFIX_MSG_TYPE:
+	case Firebird::Why::IB_PREFIX_MSG_TYPE:
 		prefix.copyTo(fb_prefix_msg_val, sizeof fb_prefix_msg_val);
 		break;
 	default:

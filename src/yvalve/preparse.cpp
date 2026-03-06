@@ -155,7 +155,9 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
     @param dialect
 
  **/
-bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
+namespace Firebird::Why {
+
+bool PREPARSE_execute(CheckStatusWrapper* status, YAttachment** ptrAtt,
 					  string& stmt, bool* stmt_eaten, USHORT dialect, unsigned dpbLength, const unsigned char* dpb)
 {
 	// no use creating separate pool for a couple of strings
@@ -320,7 +322,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 				} // for
 			} while (matched);
 
-			RefPtr<Why::Dispatcher> dispatcher(FB_NEW Why::Dispatcher);
+			RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 			*ptrAtt = dispatcher->createDatabase(status, file_name.c_str(),
 				dpbWriter.getBufferLength(), dpbWriter.getBuffer());
 
@@ -340,6 +342,8 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 
 	return true;
 }
+
+} // namespace Firebird::Why
 
 
 /**

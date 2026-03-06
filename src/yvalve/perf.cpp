@@ -337,7 +337,9 @@ constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 
 } // anonymous namespace
 
-void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
+namespace Firebird::Why {
+
+void UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 	Firebird::IAttachment* att, const char* countersSet, ISC_INT64* counters)
 {
 	try
@@ -501,3 +503,5 @@ parsed:		;
 		ex.stuffException(status);
 	}
 }
+
+} // namespace Firebird::Why

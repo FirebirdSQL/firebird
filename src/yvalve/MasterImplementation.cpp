@@ -459,7 +459,7 @@ namespace Firebird
 
 	extern "C" IMasterPtr API_ROUTINE fb_get_master_interface()
 	{
-		static Static<Firebird::Why::MasterImplementation> instance;
+		static Static<Why::MasterImplementation> instance;
 		return &instance;
 	}
 }

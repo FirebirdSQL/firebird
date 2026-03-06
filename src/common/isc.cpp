@@ -462,9 +462,9 @@ SLONG ISC_set_prefix(const TEXT* sw, const TEXT* path)
 	{
 		if (eSw)
 		{
-			setPrefixIfNotEmpty(eSw->prefix, IB_PREFIX_TYPE);
-			setPrefixIfNotEmpty(eSw->lockPrefix, IB_PREFIX_LOCK_TYPE);
-			setPrefixIfNotEmpty(eSw->msgPrefix, IB_PREFIX_MSG_TYPE);
+			setPrefixIfNotEmpty(eSw->prefix, Firebird::Why::IB_PREFIX_TYPE);
+			setPrefixIfNotEmpty(eSw->lockPrefix, Firebird::Why::IB_PREFIX_LOCK_TYPE);
+			setPrefixIfNotEmpty(eSw->msgPrefix, Firebird::Why::IB_PREFIX_MSG_TYPE);
 
 			delete eSw;
 			eSw = 0;

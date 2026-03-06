@@ -58,12 +58,12 @@ bool getPathFromHInstance(PathName& root)
 } // namespace
 
 
-void ConfigRoot::osConfigRoot()
+void Firebird::ConfigRoot::osConfigRoot()
 {
 	root_dir = install_dir;
 }
 
-void ConfigRoot::osConfigInstallDir()
+void Firebird::ConfigRoot::osConfigInstallDir()
 {
 	// get the pathname of the running dll / executable
 	PathName module_path;

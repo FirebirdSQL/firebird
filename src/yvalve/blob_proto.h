@@ -29,10 +29,10 @@
 namespace Firebird::Why {
 	class YAttachment;
 	class YTransaction;
-}
 
-void iscBlobLookupDescImpl(Firebird::Why::YAttachment* attachment, Firebird::Why::YTransaction* transaction,
-	const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global);
+	void iscBlobLookupDescImpl(YAttachment* attachment, YTransaction* transaction,
+		const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global);
+}
 
 // Only declared in ibase.h:
 //void API_ROUTINE isc_blob_default_desc(ISC_BLOB_DESC* desc,
@@ -40,4 +40,3 @@ void iscBlobLookupDescImpl(Firebird::Why::YAttachment* attachment, Firebird::Why
 
 
 #endif // DSQL_BLOB_PROTO_H
-

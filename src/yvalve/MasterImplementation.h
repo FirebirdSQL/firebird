@@ -46,7 +46,7 @@ namespace Firebird::Why
 		public Firebird::AutoIface<Firebird::IMasterImpl<MasterImplementation, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		static Firebird::Static<Firebird::Why::Dtc> dtc;
+		static Firebird::Static<Dtc> dtc;
 
 	public:
 		// IMaster implementation
@@ -58,7 +58,7 @@ namespace Firebird::Why
 			Firebird::IAttachment* attachment);
 		Firebird::ITransaction* registerTransaction(Firebird::IAttachment* attachment,
 			Firebird::ITransaction* transaction);
-		Firebird::Why::Dtc* getDtc();
+		Dtc* getDtc();
 		Firebird::IMetadataBuilder* getMetadataBuilder(Firebird::CheckStatusWrapper* status, unsigned fieldCount);
 		int serverMode(int mode);
 		Firebird::IUtil* getUtilInterface();

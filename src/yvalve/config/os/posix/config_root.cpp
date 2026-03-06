@@ -42,7 +42,7 @@ typedef Firebird::PathName string;
  *	Platform-specific root locator
  */
 
-void ConfigRoot::osConfigRoot()
+void Firebird::ConfigRoot::osConfigRoot()
 {
 	// Try to use value set at configure time
 	if (FB_CONFDIR[0])
@@ -60,7 +60,7 @@ void ConfigRoot::osConfigRoot()
 }
 
 
-void ConfigRoot::osConfigInstallDir()
+void Firebird::ConfigRoot::osConfigInstallDir()
 {
 #ifdef ENABLE_BINRELOC
 	BrInitError brError;

@@ -52,6 +52,8 @@
 	getConfigFilePath() member function.
 **/
 
+namespace Firebird
+{
 class ConfigRoot : public Firebird::PermanentStorage
 {
 	// we deal with names of files here
@@ -132,5 +134,6 @@ private:
 	ConfigRoot(const ConfigRoot&);
 	void operator=(const ConfigRoot&);
 };
+}
 
 #endif // CONFIG_ROOT_H
