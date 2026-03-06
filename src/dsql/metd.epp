@@ -74,7 +74,7 @@ namespace
 	{
 		if (!transaction || !transaction->checkHandle())
 		{
-			ERR_post(Firebird::Arg::Gds(isc_bad_trans_handle));
+			ERR_post(Arg::Gds(isc_bad_trans_handle));
 		}
 	}
 }
@@ -555,8 +555,8 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 	{
 		if (userFunc->udf_private && name.getSchemaAndPackage() != dsqlScratch->package)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_private_function) <<
-				Firebird::Arg::Str(name.object) << Firebird::Arg::Str(name.package));
+			status_exception::raise(Arg::Gds(isc_private_function) <<
+				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
 		return userFunc;
@@ -573,8 +573,8 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 		if (userFunc->udf_private && name.getSchemaAndPackage() != dsqlScratch->package)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_private_procedure) <<
-				Firebird::Arg::Str(name.object) << Firebird::Arg::Str(name.package));
+			status_exception::raise(Arg::Gds(isc_private_procedure) <<
+				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
 		dsqlScratch->functions.put(userFunc->udf_name, userFunc);
@@ -648,8 +648,8 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 	{
 		if (procedure->prc_private && name.getSchemaAndPackage() != dsqlScratch->package)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_private_procedure) <<
-				Firebird::Arg::Str(name.object) << Firebird::Arg::Str(name.package));
+			status_exception::raise(Arg::Gds(isc_private_procedure) <<
+				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
 		return procedure;
@@ -664,8 +664,8 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 		if (procedure->prc_private && name.getSchemaAndPackage() != dsqlScratch->package)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_private_procedure) <<
-				Firebird::Arg::Str(name.object) << Firebird::Arg::Str(name.package));
+			status_exception::raise(Arg::Gds(isc_private_procedure) <<
+				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
 		dsqlScratch->procedures.put(procedure->prc_name, procedure);
@@ -734,7 +734,7 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES))
 		{
 			// LTTs cannot be referenced in persistent metadata (DDL other than LTT DDL itself)
-			status_exception::raise(Firebird::Arg::Gds(isc_dsql_ltt_invalid_reference)
+			status_exception::raise(Arg::Gds(isc_dsql_ltt_invalid_reference)
 				<< name.toQuotedString()
 				<< "persistent metadata");
 		}
@@ -956,7 +956,7 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 
 bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const Jrd::QualifiedName& view_name, const Jrd::QualifiedName& relation_or_alias,
+	const QualifiedName& view_name, const QualifiedName& relation_or_alias,
 	dsql_rel*& relation, dsql_prc*& procedure)
 {
 /**************************************

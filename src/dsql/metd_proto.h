@@ -32,7 +32,7 @@
 
 // forward declarations
 namespace Firebird::Jrd {
-	typedef Firebird::GenericMap<Jrd::MetaNamePair> MetaNamePairMap;
+	typedef Firebird::GenericMap<MetaNamePair> MetaNamePairMap;
 
 	class DsqlRequest;
 	class DsqlCompilerScratch;
@@ -44,9 +44,6 @@ namespace Firebird::Jrd {
 	class dsql_rel;
 	class FieldNode;
 	class TypeClause;
-}
-
-namespace Firebird::Jrd {
 
 void METD_drop_charset(jrd_tra*, const QualifiedName&);
 void METD_drop_collation(jrd_tra*, const QualifiedName&);

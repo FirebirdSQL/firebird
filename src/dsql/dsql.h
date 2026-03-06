@@ -93,7 +93,7 @@ namespace Firebird::Jrd {
 	class MetaName;
 
 	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
-	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<Jrd::WindowClause>>> NamedWindowClause;
+	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<WindowClause>>> NamedWindowClause;
 	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
 }
 
