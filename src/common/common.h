@@ -855,48 +855,10 @@ namespace Firebird {
 
 // FIXME:
 
-namespace Firebird::Jrd {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::Jrd::EDS {
-}
-
-namespace Firebird::Jrd::Replication {
-}
-
 namespace Firebird::Jrd::Ods {
 }
 
-namespace Firebird::fb_utils {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::Arg {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::Auth {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::MsgFormat {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::MsgUtil {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::os_utils {
-	namespace Firebird = ::Firebird;
-}
-
-namespace Firebird::Why {
-}
-
 namespace Ods = Firebird::Jrd::Ods;
-namespace Why = Firebird::Why;
 
 //#define DEBUG_LOST_POOLS 1
 
