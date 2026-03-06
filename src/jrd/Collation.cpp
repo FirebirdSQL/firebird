@@ -1070,8 +1070,6 @@ public:
 template <typename T>
 Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
-	using namespace Firebird;
-
 	typedef StartsMatcher<UCHAR, NullStrConverter> StartsMatcherUCharDirect;
 	typedef StartsMatcher<UCHAR, CanonicalConverter<> > StartsMatcherUCharCanonical;
 	typedef ContainsMatcher<UCHAR, UpcaseConverter<> > ContainsMatcherUCharDirect;

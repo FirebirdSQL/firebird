@@ -142,15 +142,15 @@
 // Pick up system relation ids
 #include "../jrd/ini.h"
 
+namespace Firebird::Jrd
+{
+
+
 inline constexpr int COMPUTED_FLAG = 128;
 inline constexpr int WAIT_PERIOD = -1;
 
 DATABASE DB = FILENAME "ODS.RDB";
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
-
-namespace Firebird::Jrd {
 
 typedef HashTable<
 	DeferredWork,
@@ -361,8 +361,6 @@ public:
 
 	DeferredJob() : work(NULL), end(&work) { }
 };
-
-} // namespace Firebird::Jrd
 
 
 /*==================================================================
@@ -4998,3 +4996,4 @@ static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 }
 
 
+} // namespace Firebird::Jrd
