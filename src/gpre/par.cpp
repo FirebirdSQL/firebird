@@ -296,7 +296,7 @@ act* PAR_action(const TEXT* base_dir)
 					if (gpreGlob.sw_language == lang_internal || gpreGlob.sw_language == lang_cxx ||
 						gpreGlob.sw_language == lang_cplusplus)
 					{
-						if (CPR_token())
+						while (true)
 						{
 							if (gpreGlob.token_global.tok_keyword == KW_L_BRACE)
 							{
@@ -305,6 +305,12 @@ act* PAR_action(const TEXT* base_dir)
 								++brace_count;
 								return NULL;
 							}
+
+							if (gpreGlob.token_global.tok_keyword == KW_SEMI_COLON)
+								break;
+
+							if (!CPR_token())
+								break;
 						}
 					}
 					break;
@@ -2786,11 +2792,8 @@ static act* par_right_brace()
 	if (--brace_count < 0)
 		brace_count = 0;
 
-	if (brace_count <= 0)
-	{
-		if (--namespace_count < 0)
-			namespace_count = 0;
-	}
+	if (namespace_count > brace_count)
+		namespace_count = brace_count;
 
 	return NULL;
 }
