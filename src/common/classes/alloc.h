@@ -62,7 +62,7 @@
 #include "../common/StdHelper.h"
 #endif
 
-#define FB_NEW new(*getDefaultMemoryPool())
+#define FB_NEW new(*::Firebird::getDefaultMemoryPool())
 #define FB_NEW_POOL(pool) new(pool)
 #define FB_NEW_RPT(pool, count) new(pool, count)
 
