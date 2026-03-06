@@ -40,6 +40,6 @@ using QualifiedName = Firebird::BaseQualifiedName<MetaName>;
 using QualifiedNameMetaNamePair = Firebird::FullPooledPair<QualifiedName, MetaName>;
 using QualifiedNamePair = Firebird::FullPooledPair<QualifiedName, QualifiedName>;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_QUALIFIEDNAME_H

@@ -104,6 +104,6 @@ private:
 	Firebird::MemoryStats& m_stats;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// FB_INIT_CDSLIB_H

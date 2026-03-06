@@ -94,7 +94,7 @@ public:
 inline constexpr int TFB_computed			= 1;
 inline constexpr int TFB_array				= 2;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #include "../jrd/exe_proto.h"
 #include "../common/obj.h"
@@ -662,6 +662,6 @@ inline Cached::Relation* MetadataCache::getPerm<Cached::Relation>(thread_db* tdb
 	return rc;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_MET_H

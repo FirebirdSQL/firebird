@@ -369,6 +369,6 @@ inline bool operator==(const char* s, const MetaName& m)
 
 typedef Firebird::Pair<Firebird::Full<MetaName, MetaName> > MetaNamePair;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_METANAME_H

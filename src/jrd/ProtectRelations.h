@@ -216,6 +216,6 @@ private:
 };
 */
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // FB_JRD_PROTECT_RELATIONS

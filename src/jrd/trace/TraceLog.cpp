@@ -344,4 +344,4 @@ void TraceLog::unlock()
 	m_sharedMemory->mutexUnlock();
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

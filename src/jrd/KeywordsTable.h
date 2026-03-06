@@ -73,6 +73,6 @@ private:
 	ULONG impureOffset;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_KEYWORDS_TABLE_H

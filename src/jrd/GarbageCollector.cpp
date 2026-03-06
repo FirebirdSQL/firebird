@@ -216,4 +216,4 @@ GarbageCollector::RelationData* GarbageCollector::getRelData(Sync &sync, const U
 }
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

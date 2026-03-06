@@ -75,6 +75,6 @@ public:
 	{ }
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_DYN_H

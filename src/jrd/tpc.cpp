@@ -1241,4 +1241,4 @@ int TPC_snapshot_state(thread_db* tdbb, TraNumber number)
 }
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

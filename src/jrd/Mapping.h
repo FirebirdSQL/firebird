@@ -194,7 +194,7 @@ private:
 	RecordBuffer* makeBuffer(thread_db* tdbb);
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_MAPPING

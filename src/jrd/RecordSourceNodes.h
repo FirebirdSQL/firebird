@@ -1091,6 +1091,6 @@ public:
 	}
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_RECORD_SOURCE_NODES_H

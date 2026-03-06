@@ -298,7 +298,7 @@ struct bid
 
 static_assert(sizeof(bid) == 8);	// make sure that compiler packed structure like we wanted
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_RECORDNUMBER_H

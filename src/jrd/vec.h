@@ -162,7 +162,7 @@ typedef vec<TraNumber> TransactionsVector;
 class Database;
 class thread_db;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 /* Define JRD_get_thread_data off the platform specific version.
  * If we're in DEV mode, also do consistancy checks on the

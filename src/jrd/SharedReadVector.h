@@ -231,6 +231,6 @@ private:
 	std::atomic<Generation*> currentData;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SHAREDREADVECTOR_H

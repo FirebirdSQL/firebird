@@ -149,7 +149,7 @@ public:
 	}
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_CHARSETCONTAINER_H
 

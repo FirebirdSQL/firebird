@@ -130,6 +130,6 @@ private:
 	Firebird::Condition m_noWorkers;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_WORKER_ATTACHMENT_H

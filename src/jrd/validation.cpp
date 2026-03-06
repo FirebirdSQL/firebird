@@ -3388,4 +3388,4 @@ Validation::RTN Validation::walk_scns()
 	return rtn_ok;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

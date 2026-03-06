@@ -717,6 +717,6 @@ inline constexpr unsigned XCP_MESSAGE_LENGTH = 1023;
 // Array which stores relative pointers to impure areas of invariant nodes
 typedef Firebird::SortedArray<ULONG> VarInvariantArray;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_EXE_H

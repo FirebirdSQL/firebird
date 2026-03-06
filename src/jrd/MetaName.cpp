@@ -491,4 +491,4 @@ Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_P
 	return nullptr;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

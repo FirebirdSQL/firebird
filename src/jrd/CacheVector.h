@@ -1372,6 +1372,6 @@ auto getPermanent(T* t) -> decltype(t->getPermanent())
 	return t ? t->getPermanent() : nullptr;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_CACHEVECTOR_H

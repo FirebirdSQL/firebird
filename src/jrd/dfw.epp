@@ -362,7 +362,7 @@ public:
 	DeferredJob() : work(NULL), end(&work) { }
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 /*==================================================================

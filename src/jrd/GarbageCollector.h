@@ -121,6 +121,6 @@ private:
 	USHORT m_nextRelID;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_GARBAGE_COLLECTOR_H

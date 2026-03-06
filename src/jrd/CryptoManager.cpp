@@ -1521,4 +1521,4 @@ namespace Firebird::Jrd {
 		return cryptoManager->dbb.dbb_filename.c_str();
 	}
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

@@ -73,6 +73,6 @@ private:
 	ULONG m_impure;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_CONFIG_TABLE_H

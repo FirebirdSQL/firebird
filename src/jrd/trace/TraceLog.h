@@ -98,6 +98,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // TRACE_LOG

@@ -525,4 +525,4 @@ void WorkerAttachment::doDetach(FbStatusVector* status, StableAttachmentPart* sA
 	sAtt->release(); // !!
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

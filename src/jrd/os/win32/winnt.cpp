@@ -95,7 +95,7 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 using namespace Firebird::Jrd;
 using namespace Firebird;

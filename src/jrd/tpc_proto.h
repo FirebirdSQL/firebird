@@ -390,6 +390,6 @@ inline void TPC_set_state(thread_db* tdbb, TraNumber number, int state)
 
 int TPC_snapshot_state(thread_db* tdbb, TraNumber number);
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TPC_PROTO_H

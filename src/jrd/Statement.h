@@ -160,6 +160,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_STATEMENT_H

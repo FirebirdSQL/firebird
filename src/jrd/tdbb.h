@@ -501,6 +501,6 @@ private:
 	thread_db context;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TDBB_H

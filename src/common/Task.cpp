@@ -342,4 +342,4 @@ void Coordinator::releaseThread(WorkerThread* thd)
 }
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

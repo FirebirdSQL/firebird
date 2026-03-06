@@ -279,4 +279,4 @@ namespace Firebird::Jrd {
 		fb_assert(false);
 	}
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

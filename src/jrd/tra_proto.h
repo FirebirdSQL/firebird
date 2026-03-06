@@ -40,7 +40,7 @@ enum tra_wait_t {
 	tra_probe,
 	tra_wait
 };
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 bool	TRA_active_transactions(Jrd::thread_db* tdbb, Jrd::Database*);
 bool	TRA_cleanup(Jrd::thread_db*);

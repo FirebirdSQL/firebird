@@ -224,6 +224,6 @@ private:
 	RTN walk_tip(TraNumber);
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif

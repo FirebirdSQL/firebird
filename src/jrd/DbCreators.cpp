@@ -350,4 +350,4 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 	return getData(relation);
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

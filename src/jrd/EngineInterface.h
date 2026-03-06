@@ -564,6 +564,6 @@ private:
 	Firebird::IPluginConfig* pluginConfig;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_ENGINE_INTERFACE_H

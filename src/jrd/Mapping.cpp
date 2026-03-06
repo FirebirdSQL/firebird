@@ -152,7 +152,7 @@ private:
 	unsigned char sequence;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 Mapping::DbHandle::DbHandle() noexcept
@@ -1865,4 +1865,4 @@ void Mapping::shutdownIpc()
 	mappingIpc->shutdown();
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

@@ -67,6 +67,6 @@ public:
 	void setRule(const TypeClause* from, const TypeClause *to);
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_COERCION_H

@@ -250,6 +250,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TRACE_DSQL_HELPERS_H

@@ -1003,4 +1003,4 @@ void ConfigStorage::TouchFile::stop()
 	// ignore error in stop timer
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

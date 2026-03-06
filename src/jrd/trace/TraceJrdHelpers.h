@@ -742,6 +742,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TRACE_JRD_HELPERS_H

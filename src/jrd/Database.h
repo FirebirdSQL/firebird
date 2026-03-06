@@ -626,6 +626,6 @@ private:
 	const Database& operator =(const Database&) { return *this; }
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_DATABASE_H

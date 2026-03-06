@@ -191,7 +191,7 @@ public:
 	}
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 void	LCK_assert(Jrd::thread_db*, Jrd::Lock*);
 bool	LCK_cancel_wait(Jrd::Attachment*);
@@ -258,6 +258,6 @@ private:
 	Lock* m_lock;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_LCK_H

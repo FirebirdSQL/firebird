@@ -418,7 +418,7 @@ private:
 	bool down() const;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_CRYPTO_MANAGER

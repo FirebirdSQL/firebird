@@ -120,7 +120,7 @@ private:
 	Firebird::UCharBuffer tempBuffer;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 #endif	// JRD_INTL_CLASSES_H

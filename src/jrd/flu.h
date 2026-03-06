@@ -127,6 +127,6 @@ namespace Firebird::Jrd {
 
 	typedef Firebird::SortedObjectsArray<Module> DatabaseModules;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_FLU_H

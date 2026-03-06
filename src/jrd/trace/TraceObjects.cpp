@@ -729,4 +729,4 @@ const char* TraceStatusVectorImpl::getText()
 	return m_error.c_str();
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

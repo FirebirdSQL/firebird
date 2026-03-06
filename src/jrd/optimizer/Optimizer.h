@@ -993,6 +993,6 @@ private:
 	OuterJoinStream joinStreams[2];
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // OPTIMIZER_H

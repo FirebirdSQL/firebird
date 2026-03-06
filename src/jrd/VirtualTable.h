@@ -33,6 +33,6 @@ namespace Firebird::Jrd {
 		static void store(thread_db*, record_param*);
 	};
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_VIRTUAL_TABLE_H

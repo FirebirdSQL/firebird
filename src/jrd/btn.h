@@ -276,6 +276,6 @@ struct IndexJumpNode
 	UCHAR* writeJumpNode(UCHAR* pagePointer);
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_BTN_H

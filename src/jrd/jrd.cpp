@@ -489,7 +489,7 @@ void registerEngine(IPluginManager* iPlugin)
 	module->registerMe();
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
@@ -6695,7 +6695,7 @@ void JAttachment::ping(CheckStatusWrapper* user_status)
 	successful_completion(user_status);
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #ifdef DEBUG_PROCS
 void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)

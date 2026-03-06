@@ -141,6 +141,6 @@ MemoryPool* InitCDS::createPool()
 	return pool;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// CDS_UNAVAILABLE

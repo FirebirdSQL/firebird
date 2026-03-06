@@ -949,6 +949,6 @@ private:
 	TraceRuntimeStats* m_stats = nullptr;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TRACE_OBJECTS_H

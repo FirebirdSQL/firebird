@@ -221,6 +221,6 @@ private:
 	Item* m_free = nullptr;		// unused items
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PAGE_TO_BUFFER_MAP

@@ -315,7 +315,7 @@ namespace Rsc
 }; //namespace Rsc
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_RESOURCES_H
 
