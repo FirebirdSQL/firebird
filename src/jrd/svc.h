@@ -50,9 +50,9 @@ namespace Firebird {
 	}
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
-typedef int ServiceEntry(Firebird::UtilSvc*);
+typedef int ServiceEntry(UtilSvc*);
 
 struct serv_entry
 {
@@ -106,7 +106,7 @@ class thread_db;
 class TraceManager;
 
 // Service manager
-class Service : public Firebird::UtilSvc, public TypedHandle<type_svc>
+class Service : public UtilSvc, public TypedHandle<type_svc>
 {
 public:		// utilities interface with service
 	// output to svc_stdout verbose info
@@ -145,11 +145,11 @@ public:
 	// no-op for services
 	void checkService() override;
 	// add address path and utf8 flag (taken from spb) to dpb if present
-	void fillDpb(Firebird::ClumpletWriter& dpb) override;
+	void fillDpb(ClumpletWriter& dpb) override;
 	// encoding for string parameters passed to utility
 	bool utf8FileNames() override;
 	// get database encryption key transfer callback routine
-	Firebird::ICryptKeyCallback* getCryptCallback() override;
+	ICryptKeyCallback* getCryptCallback() override;
 	int getParallelWorkers() override { return svc_parallel_workers; }
 
 	TraceManager* getTraceManager() noexcept
@@ -169,7 +169,7 @@ public:
 public:		// external interface with service
 	// Attach - service ctor
 	Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_data,
-		Firebird::ICryptKeyCallback* crypt_callback);
+		ICryptKeyCallback* crypt_callback);
 	// Start service thread
 	void start(USHORT spb_length, const UCHAR* spb_data);
 	// Query service state (v. 1 & 2)
@@ -188,7 +188,7 @@ public:		// external interface with service
 	}
 
 	// Firebird log reader
-	static int readFbLog(Firebird::UtilSvc* uSvc);
+	static int readFbLog(UtilSvc* uSvc);
 	// Shuts all service threads (should be called after databases shutdown)
 	static void shutdownServices();
 
@@ -198,12 +198,12 @@ public:		// external interface with service
 	const char* getServiceMgr() const noexcept;
 	const char* getServiceName() const noexcept;
 
-	const Firebird::string&	getUserName() const noexcept
+	const string&	getUserName() const noexcept
 	{
 		return svc_username;
 	}
 
-	const Firebird::string&	getRoleName() const noexcept
+	const string&	getRoleName() const noexcept
 	{
 		return svc_sql_role;
 	}
@@ -212,11 +212,11 @@ public:		// external interface with service
 	// for service user authentication
 	bool getUserAdminFlag() const noexcept;
 
-	const Firebird::string&	getNetworkProtocol() const noexcept	{ return svc_network_protocol; }
-	const Firebird::string&	getRemoteAddress() const noexcept	{ return svc_remote_address; }
-	const Firebird::string&	getRemoteProcess() const noexcept	{ return svc_remote_process; }
+	const string&	getNetworkProtocol() const noexcept	{ return svc_network_protocol; }
+	const string&	getRemoteAddress() const noexcept	{ return svc_remote_address; }
+	const string&	getRemoteProcess() const noexcept	{ return svc_remote_process; }
 	int	getRemotePID() const noexcept { return svc_remote_pid; }
-	const Firebird::PathName& getExpectedDb() const noexcept	{ return svc_expected_db; }
+	const PathName& getExpectedDb() const noexcept	{ return svc_expected_db; }
 
 private:
 	// Service must have private destructor, called from finish
@@ -254,7 +254,7 @@ private:
 	// Returns number of bytes service wants more
 	ULONG	put(const UCHAR* buffer, ULONG length);
 	// Copies argument value to status vector
-	void put_status_arg(Firebird::Arg::StatusVector& status, const MsgFormat::safe_cell& value);
+	void put_status_arg(Arg::StatusVector& status, const MsgFormat::safe_cell& value);
 
 	// Increment circular buffer pointer
 	static ULONG		add_one(ULONG i) noexcept;
@@ -263,51 +263,51 @@ private:
 #ifndef DEV_BUILD
 	static
 #endif
-	void				conv_switches(Firebird::ClumpletReader& spb, Firebird::string& switches);
+	void				conv_switches(ClumpletReader& spb, string& switches);
 	// Find spb switch in switch table
 	static const TEXT*	find_switch(int in_spb_sw, const Switches::in_sw_tab_t* table, bool bitmask);
 	// Loop through the appropriate switch table looking for the text for the given command switch
 #ifndef DEV_BUILD
 	static
 #endif
-	bool				process_switches(Firebird::ClumpletReader& spb, Firebird::string& switches);
+	bool				process_switches(ClumpletReader& spb, string& switches);
 	// Get bitmask from within spb buffer, find corresponding switches within specified table,
 	// add them to the command line
-	static bool get_action_svc_bitmask(const Firebird::ClumpletReader& spb,
+	static bool get_action_svc_bitmask(const ClumpletReader& spb,
 									   const Switches::in_sw_tab_t* table,
-									   Firebird::string& sw);
+									   string& sw);
 	// Get string from within spb buffer, add it to the command line
-	static void get_action_svc_string(const Firebird::ClumpletReader& spb, Firebird::string& sw);
+	static void get_action_svc_string(const ClumpletReader& spb, string& sw);
 	// Get string from within spb buffer, insert it at given position into command line
-	static void get_action_svc_string_pos(const Firebird::ClumpletReader& spb, Firebird::string& switches,
-										  Firebird::string::size_type p = Firebird::string::npos);
+	static void get_action_svc_string_pos(const ClumpletReader& spb, string& switches,
+										  string::size_type p = string::npos);
 	// Get integer from within spb buffer, add it to the command line
-	static void get_action_svc_data(const Firebird::ClumpletReader& spb, Firebird::string& sw, bool bigint);
+	static void get_action_svc_data(const ClumpletReader& spb, string& sw, bool bigint);
 	// Get parameter from within spb buffer, find corresponding switch within specified table,
 	// add it to the command line
 	static bool get_action_svc_parameter(UCHAR tag, const Switches::in_sw_tab_t* table,
-										 Firebird::string&);
+										 string&);
 	// Create 'SYSDBA needed' error in status vector
-	static void need_admin_privs(Firebird::Arg::StatusVector& status, const char* message) noexcept;
+	static void need_admin_privs(Arg::StatusVector& status, const char* message) noexcept;
 	// Does info buffer have enough space for SLONG?
 	static bool ck_space_for_numeric(UCHAR*& info, const UCHAR* const end) noexcept;
 	// Make status vector permamnent, if one present in worker thread's space
 	void makePermanentStatusVector() noexcept;
 	// Read SPB on attach
-	void getOptions(Firebird::ClumpletReader&);
+	void getOptions(ClumpletReader&);
 	// Invoke appropriate service thread entry and finalize it correctly
 	static THREAD_ENTRY_DECLARE run(THREAD_ENTRY_PARAM arg);
 
 private:
-	Firebird::FbLocalStatus svc_status;				// status vector for running service
-	Firebird::Mutex svc_status_mutex;				// protects svc_status from access in different threads
-	Firebird::string svc_parsed_sw;					// Here point elements of argv
+	FbLocalStatus svc_status;				// status vector for running service
+	Mutex svc_status_mutex;				// protects svc_status from access in different threads
+	string svc_parsed_sw;					// Here point elements of argv
 	ULONG	svc_stdout_head;
 	ULONG	svc_stdout_tail;
 	UCHAR	svc_stdout[SVC_STDOUT_BUFFER_SIZE];		// output from service
-	Firebird::Semaphore	svcStart;
+	Semaphore	svcStart;
 	const serv_entry*	svc_service_run;			// running service's entry
-	Firebird::Array<UCHAR> svc_resp_alloc;
+	Array<UCHAR> svc_resp_alloc;
 	UCHAR*	svc_resp_buf;
 	const UCHAR*	svc_resp_ptr;
 	USHORT	svc_resp_buf_len;
@@ -322,30 +322,30 @@ private:
 	char	svc_arg_conv[MsgFormat::SAFEARG_MAX_ARG * 2];
 	char*	svc_arg_ptr;
 
-	Firebird::string	svc_username;
-	Firebird::string	svc_sql_role;
-	Firebird::AuthReader::AuthBlock	svc_auth_block;
-	Firebird::PathName	svc_expected_db;
+	string	svc_username;
+	string	svc_sql_role;
+	AuthReader::AuthBlock	svc_auth_block;
+	PathName	svc_expected_db;
 	bool                svc_trusted_role;
 	bool				svc_utf8;
-	Firebird::string	svc_switches;	// Full set of switches
-	Firebird::string	svc_perm_sw;	// Switches, taken from services table and/or passed using spb_command_line
-	Firebird::UCharBuffer	svc_address_path;
-	Firebird::string	svc_command_line;
+	string	svc_switches;	// Full set of switches
+	string	svc_perm_sw;	// Switches, taken from services table and/or passed using spb_command_line
+	UCharBuffer	svc_address_path;
+	string	svc_command_line;
 	int					svc_parallel_workers;
 
-	Firebird::string	svc_network_protocol;
-	Firebird::string	svc_remote_address;
-	Firebird::string	svc_remote_process;
+	string	svc_network_protocol;
+	string	svc_remote_address;
+	string	svc_remote_process;
 	SLONG				svc_remote_pid;
 
 	TraceManager*		svc_trace_manager;
-	Firebird::ICryptKeyCallback* svc_crypt_callback;
+	ICryptKeyCallback* svc_crypt_callback;
 
 public:
-	Firebird::Semaphore	svc_detach_sem;
+	Semaphore	svc_detach_sem;
 
-	class SvcMutex : public Firebird::RefMutex
+	class SvcMutex : public RefMutex
 	{
 	public:
 		explicit SvcMutex(Service* svc)
@@ -355,10 +355,10 @@ public:
 		Service* link;
 	};
 
-	Firebird::RefPtr<SvcMutex> svc_existence;
+	RefPtr<SvcMutex> svc_existence;
 
 private:
-	Firebird::Semaphore svc_sem_empty, svc_sem_full;
+	Semaphore svc_sem_empty, svc_sem_full;
 	bool svc_output_overflow;
 
 	void unblockQueryGet(bool over = false);
@@ -368,7 +368,7 @@ public:
 	{
 	public:
 		explicit Validate(Service* svc);
-		Firebird::MutexEnsureUnlock sharedGuard;
+		MutexEnsureUnlock sharedGuard;
 	};
 
 private:
@@ -379,7 +379,7 @@ private:
 		bool lock();
 
 	protected:
-		Firebird::RefPtr<SvcMutex> existenceMutex;
+		RefPtr<SvcMutex> existenceMutex;
 		const char* from;
 	};
 
@@ -405,8 +405,8 @@ private:
 	};
 
 	// Data pipe from client to service
-	Firebird::Semaphore svc_stdin_semaphore;
-	Firebird::Mutex svc_stdin_mutex;
+	Semaphore svc_stdin_semaphore;
+	Mutex svc_stdin_mutex;
 	// Size of data, requested by service (set in getBytes, reset in put)
 	ULONG svc_stdin_size_requested;
 	// Buffer passed by service
@@ -414,7 +414,7 @@ private:
 	// Size of data, preloaded by user (set in put, reset in getBytes)
 	ULONG svc_stdin_size_preload;
 	// Buffer for datam preloaded by user
-	Firebird::AutoPtr<UCHAR> svc_stdin_preload;
+	AutoPtr<UCHAR> svc_stdin_preload;
 	// Size of data, requested from user to preload (set in getBytes)
 	ULONG svc_stdin_preload_requested;
 	// Size of data, placed into svc_stdin_buffer (set in put)
@@ -428,6 +428,6 @@ private:
 #endif
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SVC_H

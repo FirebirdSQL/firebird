@@ -29,25 +29,26 @@
 #include "../common/classes/fb_string.h"
 #include "../common/UtilSvc.h"
 
-class BurpGlobals;
+namespace Firebird::Burp
+{
+	int		BURP_main(UtilSvc*);
+	int		gbak(UtilSvc*);
 
-int		BURP_main(Firebird::UtilSvc*);
-int		gbak(Firebird::UtilSvc*);
-
-void	BURP_abort(const Firebird::IStatus* status = nullptr);
-void	BURP_error(USHORT, bool, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_error(USHORT, bool, const char* str);
-void	BURP_error_redirect(const Firebird::IStatus*, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_msg_partial(bool, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_msg_put(bool, USHORT, const MsgFormat::SafeArg& arg);
-inline constexpr int BURP_MSG_GET_SIZE = 128; // Use it for buffers passed to this function.
-void	BURP_msg_get(USHORT, TEXT*, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_print(bool err, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_print(bool err, USHORT, const char* str);
-void	BURP_print_status(bool err, const Firebird::IStatus* status, USHORT secondNumber = 0);
-void	BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarning = false);
-void	BURP_verbose(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
-void	BURP_verbose(USHORT, const Firebird::string& str);
-void	BURP_message(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg(), bool totals = false);
+	void	BURP_abort(const IStatus* status = nullptr);
+	void	BURP_error(USHORT, bool, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_error(USHORT, bool, const char* str);
+	void	BURP_error_redirect(const IStatus*, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_msg_partial(bool, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_msg_put(bool, USHORT, const MsgFormat::SafeArg& arg);
+	inline constexpr int BURP_MSG_GET_SIZE = 128; // Use it for buffers passed to this function.
+	void	BURP_msg_get(USHORT, TEXT*, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_print(bool err, USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_print(bool err, USHORT, const char* str);
+	void	BURP_print_status(bool err, const IStatus* status, USHORT secondNumber = 0);
+	void	BURP_print_warning(const IStatus* status, bool printErrorAsWarning = false);
+	void	BURP_verbose(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
+	void	BURP_verbose(USHORT, const string& str);
+	void	BURP_message(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg(), bool totals = false);
+} // namespace Firebird::Burp
 
 #endif	//  BURP_BURP_PROTO_H

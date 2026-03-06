@@ -32,7 +32,7 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "iberror.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/init.h"
 #include "../common/classes/RefMutex.h"
 #include "../common/classes/SyncObject.h"
@@ -56,8 +56,9 @@
 
 #define MAP_DEBUG(A)
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 
@@ -75,7 +76,7 @@ constexpr const char* NM_ROLE = "Role";
 constexpr const char* NM_USER = "User";
 constexpr const char* TYPE_SEEN = "Seen";
 
-void check(const char* s, const IStatus* st)
+void checkStatus(const char* s, const IStatus* st)
 {
 	if (!(st->getState() & IStatus::STATE_ERRORS))
 		return;
@@ -86,8 +87,6 @@ void check(const char* s, const IStatus* st)
 }
 
 } // anonymous namespace
-
-namespace Jrd {
 
 class AuthWriter : public ClumpletWriter
 {
@@ -151,10 +150,6 @@ private:
 
 	unsigned char sequence;
 };
-
-} // namespace Jrd
-
-
 Mapping::DbHandle::DbHandle() noexcept
 { }
 
@@ -187,7 +182,7 @@ bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
 	if (cryptCb)
 	{
 		prov->setDbCryptCallback(&st, cryptCb);
-		check("IProvider::setDbCryptCallback", &st);
+		checkStatus("IProvider::setDbCryptCallback", &st);
 	}
 
 	ClumpletWriter embeddedSysdba(ClumpletWriter::dpbList, MAX_DPB_SIZE);
@@ -208,7 +203,7 @@ bool Mapping::DbHandle::attach(const char* aliasDb, ICryptKeyCallback* cryptCb)
 		const bool missing = fb_utils::containsErrorCode(s, isc_io_error);
 		down = fb_utils::containsErrorCode(s, isc_shutdown);
 		if (!(missing || down))
-			check("IProvider::attachDatabase", &st);
+			checkStatus("IProvider::attachDatabase", &st);
 
 		// down/missing DB is not a reason to fail mapping
 	}
@@ -334,7 +329,7 @@ bool Mapping::Cache::populate(IAttachment *att)
 		readOnly.insertTag(isc_tpb_read);
 		readOnly.insertTag(isc_tpb_wait);
 		tra = att->startTransaction(&st, readOnly.getBufferLength(), readOnly.getBuffer());
-		check("IAttachment::startTransaction", &st);
+		checkStatus("IAttachment::startTransaction", &st);
 
 		Message mMap;
 		Field<Text> usng(mMap, 1);
@@ -360,7 +355,7 @@ bool Mapping::Cache::populate(IAttachment *att)
 				dataFlag = true;
 				return false;
 			}
-			check("IAttachment::openCursor", &st);
+			checkStatus("IAttachment::openCursor", &st);
 		}
 
 		while (curs->fetchNext(&st, mMap.getBuffer()) == IStatus::RESULT_OK)
@@ -381,14 +376,14 @@ bool Mapping::Cache::populate(IAttachment *att)
 			MAP_DEBUG(fprintf(stderr, "Add = %s\n", map->makeHashKey().c_str()));
 			add(map);
 		}
-		check("IResultSet::fetchNext", &st);
+		checkStatus("IResultSet::fetchNext", &st);
 
 		curs->close(&st);
-		check("IResultSet::close", &st);
+		checkStatus("IResultSet::close", &st);
 		curs = nullptr;
 
 		tra->rollback(&st);
-		check("ITransaction::rollback", &st);
+		checkStatus("ITransaction::rollback", &st);
 		tra = nullptr;
 
 		dataFlag = true;
@@ -616,7 +611,7 @@ void resetMap(const char* securityDb, ULONG index);
 
 // ----------------------------------------------------
 
-class MappingHeader final : public Firebird::MemoryHeader
+class MappingHeader final : public MemoryHeader
 {
 public:
 	SLONG currentProcess;
@@ -637,7 +632,7 @@ public:
 	static constexpr ULONG FLAG_DELIVER = 0x2;
 };
 
-class MappingIpc final : public Firebird::IpcObject
+class MappingIpc final : public IpcObject
 {
 	static constexpr USHORT MAPPING_VERSION = 1;
 	static constexpr size_t DEFAULT_SIZE = 1024 * 1024;
@@ -1277,9 +1272,7 @@ void resetMap(const char* db, ULONG index)
 
 } // anonymous namespace
 
-namespace Jrd {
-
-Mapping::Mapping(const ULONG f, Firebird::ICryptKeyCallback* cryptCb)
+Mapping::Mapping(const ULONG f, ICryptKeyCallback* cryptCb)
 	: flags(f),
 	  internalFlags(0),
 	  cryptCallback(cryptCb),
@@ -1335,13 +1328,13 @@ bool Mapping::ensureCachePresence(RefPtr<Mapping::Cache>& cache, const char* ali
 }
 
 
-void Mapping::needAuthMethod(Firebird::string& method) noexcept
+void Mapping::needAuthMethod(string& method) noexcept
 {
 	fb_assert(!authMethod);
 	authMethod = &method;
 }
 
-void Mapping::needAuthBlock(Firebird::AuthReader::AuthBlock& block) noexcept
+void Mapping::needAuthBlock(AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!newAuthBlock);
 	newAuthBlock = &block;
@@ -1353,7 +1346,7 @@ void Mapping::needSystemPrivileges(UserId::Privileges& privileges) noexcept
 	systemPrivileges = &privileges;
 }
 
-void Mapping::setAuthBlock(const Firebird::AuthReader::AuthBlock& block) noexcept
+void Mapping::setAuthBlock(const AuthReader::AuthBlock& block) noexcept
 {
 	fb_assert(!authBlock);
 	authBlock = &block;
@@ -1389,13 +1382,13 @@ void Mapping::setInternalFlags()
 	}
 }
 
-void Mapping::setSqlRole(const Firebird::string& role) noexcept
+void Mapping::setSqlRole(const string& role) noexcept
 {
 	fb_assert(!sqlRole);
 	sqlRole = &role;
 }
 
-void Mapping::setDb(const char* a, const char* d, Firebird::IAttachment* attachment)
+void Mapping::setDb(const char* a, const char* d, IAttachment* attachment)
 {
 	fb_assert(!mainAlias);
 	fb_assert(!mainDb);
@@ -1716,7 +1709,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
 			if (!fb_utils::containsErrorCode(st->getErrors(), isc_io_error))
-				check("IProvider::attachDatabase", &st);
+				checkStatus("IProvider::attachDatabase", &st);
 
 			// In embedded mode we are not raising any errors - silent return
 			if (MasterInterfacePtr()->serverMode(-1) < 0)
@@ -1729,7 +1722,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 		readOnly.insertTag(isc_tpb_read);
 		readOnly.insertTag(isc_tpb_wait);
 		tra = att->startTransaction(&st, readOnly.getBufferLength(), readOnly.getBuffer());
-		check("IAttachment::startTransaction", &st);
+		checkStatus("IAttachment::startTransaction", &st);
 
 		Message mMap;
 		Field<Varying> name(mMap, MAX_SQL_IDENTIFIER_SIZE);
@@ -1750,7 +1743,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 		if (st->getState() & IStatus::STATE_ERRORS)
 		{
 			if (!fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
-				check("IAttachment::openCursor", &st);
+				checkStatus("IAttachment::openCursor", &st);
 
 			// isc_dsql_relation_err when opening cursor - i.e. table RDB$AUTH_MAPPING
 			// is missing due to non-FB3 security DB
@@ -1817,12 +1810,12 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 			if (!desc.null)
 			{
 				RefPtr<IBlob> blb(REF_NO_INCR, att->openBlob(&st, tra, &desc, 0, nullptr));
-				check("IAttachment::openBlob", &st);
+				checkStatus("IAttachment::openBlob", &st);
 				string buf;
 				constexpr FB_SIZE_T FLD_LIMIT = MAX_COLUMN_SIZE;
 				unsigned length = 0;
 				blb->getSegment(&st, FLD_LIMIT, buf.getBuffer(FLD_LIMIT), &length);
-				check("IBlob::getSegment", &st);
+				checkStatus("IBlob::getSegment", &st);
 
 				putField(tdbb, record,
 					DumpField(f_sec_map_comment, VALUE_STRING, length, buf.c_str()));
@@ -1830,18 +1823,18 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 
 			buffer->store(record);
 		}
-		check("IResultSet::fetchNext", &st);
+		checkStatus("IResultSet::fetchNext", &st);
 
 		curs->close(&st);
-		check("IResultSet::close", &st);
+		checkStatus("IResultSet::close", &st);
 		curs = nullptr;
 
 		tra->rollback(&st);
-		check("ITransaction::rollback", &st);
+		checkStatus("ITransaction::rollback", &st);
 		tra = nullptr;
 
 		att->detach(&st);
-		check("IAttachment::detach", &st);
+		checkStatus("IAttachment::detach", &st);
 		att = nullptr;
 	}
 	catch (const Exception&)
@@ -1865,4 +1858,5 @@ void Mapping::shutdownIpc()
 	mappingIpc->shutdown();
 }
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd

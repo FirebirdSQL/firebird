@@ -49,8 +49,8 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 //
@@ -788,3 +788,6 @@ void InnerJoin::printStartOrder() const
 	optimizer->printf("\n");
 }
 #endif
+
+
+}	// namespace Firebird::Jrd

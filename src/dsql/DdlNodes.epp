@@ -31,7 +31,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
 #include "../common/msg_encode.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/ods.h"
 #include "../jrd/tra.h"
 #include "../jrd/met.h"
@@ -81,14 +81,16 @@
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/ProtectRelations.h"
 
-namespace Jrd {
+
+DATABASE DB = STATIC "ODS.RDB";
+
+
+namespace Firebird::Jrd {
 
 // Define range of user relation ids
 
 inline constexpr MetaId MIN_RELATION_ID = USER_DEF_REL_INIT_ID;
 inline constexpr MetaId MAX_RELATION_ID = 32767;
-
-using namespace Firebird;
 
 static const UCHAR nonnull_validation_blr[] =
 {
@@ -143,8 +145,6 @@ static void updateRdbFields(const TypeClause* type,
 static ISC_STATUS getErrorCodeByObjectType(int obj_type);
 
 static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
-
-DATABASE DB = STATIC "ODS.RDB";
 
 
 //----------------------
@@ -6106,7 +6106,7 @@ void CreateAlterSequenceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 }
 
-void CreateAlterSequenceNode::putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+void CreateAlterSequenceNode::putErrorPrefix(Arg::StatusVector& statusVector)
 {
 	// Possibilities I see in parse.y
 	//CREATE SEQ -> !legacy, create, !alter
@@ -6128,7 +6128,7 @@ void CreateAlterSequenceNode::putErrorPrefix(Firebird::Arg::StatusVector& status
 		else
 			rc = isc_dsql_create_sequence_failed;
 	}
-	statusVector << Firebird::Arg::Gds(rc) << name.toQuotedString();
+	statusVector << Arg::Gds(rc) << name.toQuotedString();
 }
 
 void CreateAlterSequenceNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -8492,7 +8492,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 
 					if (notNull && !defaultValue->isEmpty())
 					{
-						Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
+						JrdContextPoolHolder context(tdbb, dbb->createPool());
 						Statement* defaultStatement = NULL;
 						try
 						{
@@ -8510,7 +8510,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 
 							dsc* result = nullptr;
 							{ // scope
-								Firebird::Cleanup detach([&defaultRequest] {TRA_detach_request(defaultRequest);});
+								Cleanup detach([&defaultRequest] {TRA_detach_request(defaultRequest);});
 								TRA_attach_request(transaction, defaultRequest);
 								result = EVL_expr(tdbb, defaultRequest, defaultNode);
 							}
@@ -9124,7 +9124,7 @@ Format* RelationNode::makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::
 
 		// Use generic representation of formats with 32-bit offsets
 
-		Firebird::Array<Ods::Descriptor> odsDescs;
+		Array<Ods::Descriptor> odsDescs;
 		Ods::Descriptor* odsDesc = odsDescs.getBuffer(format->fmt_count);
 
 		for (Format::fmt_desc_const_iterator desc = format->fmt_desc.begin();
@@ -12189,7 +12189,7 @@ bool ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tr
 	return rc;
 }
 
-string ModifyIndexNode::print(Jrd::NodePrinter& printer) const
+string ModifyIndexNode::print(NodePrinter& printer) const
 {
 	NODE_PRINT(printer, indexName);
 	NODE_PRINT(printer, create);
@@ -12383,7 +12383,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 
 			try
 			{
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$CONDITION_BLR,
 					nullptr, &csb, indexName, obj_index_condition, 0,
@@ -12661,7 +12661,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 
 		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, new_pool);
+			JrdContextPoolHolder context(tdbb, new_pool);
 
 			MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$EXPRESSION_BLR,
 				nullptr, &csb, indexName, obj_index_expression, 0,
@@ -12694,7 +12694,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 
 			try
 			{
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$CONDITION_BLR,
 					nullptr, &csb, indexName, obj_index_condition, 0,
@@ -14543,7 +14543,7 @@ void MappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 {
-	Firebird::LocalStatus st;
+	LocalStatus st;
 	CheckStatusWrapper statusWrapper(&st);
 
 	// first of all try to use regenerated DDL statement
@@ -15116,7 +15116,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	userData->createIfNotExistsOnly = createIfNotExistsOnly;
 
-	Firebird::LocalStatus s;
+	LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
 	userData->op = mode == USER_ADD ? Auth::ADD_OPER : mode == USER_MOD ?
@@ -15223,7 +15223,7 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 
 	string text = name.c_str();
 
-	Firebird::LocalStatus s;
+	LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
 	userData->op = Auth::DEL_OPER;
@@ -17521,4 +17521,4 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 	return objects && objects->hasData();
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

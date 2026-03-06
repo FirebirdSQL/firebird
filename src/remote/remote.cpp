@@ -40,7 +40,9 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/utils_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
+
 
 #ifdef DEV_BUILD
 AtomicCounter rem_port::portCounter;
@@ -1826,3 +1828,6 @@ const signed char wcCompatible[3][3] = {
 /* ENABLED  */	{WIRECRYPT_DISABLED,	WIRECRYPT_ENABLED,		WIRECRYPT_REQUIRED},
 /* REQUIRED */	{WIRECRYPT_BROKEN,		WIRECRYPT_REQUIRED,		WIRECRYPT_REQUIRED}
 };
+
+
+} // namespace Firebird::Remote

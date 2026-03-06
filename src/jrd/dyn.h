@@ -40,7 +40,7 @@ inline constexpr const char* ALL_DDL_PRIVILEGES = "CLO";
 inline constexpr int DYN_MSG_FAC = FB_IMPL_MSG_FACILITY_DYN;
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_tra;
 class thread_db;
@@ -75,6 +75,6 @@ public:
 	{ }
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_DYN_H

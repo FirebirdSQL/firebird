@@ -104,8 +104,8 @@
 #include "../common/TextType.h"
 #include "../common/SimilarToRegex.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace {
@@ -427,7 +427,7 @@ public:
 
 		fb_assert(pl % sizeof(CharType) == 0);
 		fb_assert(sl % sizeof(CharType) == 0);
-		Firebird::LikeEvaluator<CharType> evaluator(pool,
+		LikeEvaluator<CharType> evaluator(pool,
 			reinterpret_cast<const CharType*>(p), pl / sizeof(CharType),
 			(escape ? *reinterpret_cast<const CharType*>(escape) : 0), escape_length != 0,
 			*reinterpret_cast<const CharType*>(sql_match_any),
@@ -437,7 +437,7 @@ public:
 	}
 
 private:
-	Firebird::LikeEvaluator<CharType> evaluator;
+	LikeEvaluator<CharType> evaluator;
 };
 
 template <typename CharType, typename StrConverter>
@@ -510,7 +510,7 @@ public:
 		StrConverter cvt2(pool, ttype, s, sl);
 		fb_assert(sl % sizeof(CharType) == 0);
 
-		Firebird::StartsEvaluator<CharType> evaluator(pool,
+		StartsEvaluator<CharType> evaluator(pool,
 			reinterpret_cast<const CharType*>(p), pl / sizeof(CharType));
 
 		evaluator.processNextChunk(reinterpret_cast<const CharType*>(s), sl / sizeof(CharType));
@@ -519,7 +519,7 @@ public:
 	}
 
 private:
-	Firebird::StartsEvaluator<CharType> evaluator;
+	StartsEvaluator<CharType> evaluator;
 	SLONG byteLengthLimit;
 	SLONG processedByteLength = 0;
 };
@@ -567,14 +567,14 @@ public:
 		StrConverter cvt2(pool, ttype, s, sl);
 		fb_assert(pl % sizeof(CharType) == 0);
 		fb_assert(sl % sizeof(CharType) == 0);
-		Firebird::ContainsEvaluator<CharType> evaluator(pool,
+		ContainsEvaluator<CharType> evaluator(pool,
 			reinterpret_cast<const CharType*>(p), pl / sizeof(CharType));
 		evaluator.processNextChunk(reinterpret_cast<const CharType*>(s), sl / sizeof(CharType));
 		return evaluator.getResult();
 	}
 
 private:
-	Firebird::ContainsEvaluator<CharType> evaluator;
+	ContainsEvaluator<CharType> evaluator;
 };
 
 template <typename CharType, typename StrConverter = CanonicalConverter<> >
@@ -1070,8 +1070,6 @@ public:
 template <typename T>
 Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
-	using namespace Firebird;
-
 	typedef StartsMatcher<UCHAR, NullStrConverter> StartsMatcherUCharDirect;
 	typedef StartsMatcher<UCHAR, CanonicalConverter<> > StartsMatcherUCharCanonical;
 	typedef ContainsMatcher<UCHAR, UpcaseConverter<> > ContainsMatcherUCharDirect;
@@ -1104,9 +1102,6 @@ Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attri
 //-------------
 
 
-namespace Jrd {
-
-
 Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
 	switch (tt->texttype_canonical_width)
@@ -1136,4 +1131,5 @@ void Collation::destroy(thread_db* tdbb)
 	delete this;
 }
 
-}	// namespace Jrd
+
+}	// namespace Firebird::Jrd

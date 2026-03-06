@@ -23,7 +23,7 @@
 #ifndef ODS_PROTO_H
 #define ODS_PROTO_H
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 	bool isSupported(const header_page* hdr) noexcept;
 

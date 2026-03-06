@@ -24,16 +24,17 @@
 #ifndef JRD_INI_PROTO_H
 #define JRD_INI_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
 	struct jrd_trg;
 	class dsql_dbb;
-}
 
-void	INI_format(Jrd::thread_db*, const Firebird::string&);
-void	INI_init(Jrd::thread_db*);
-void	INI_init_sys_relations(Jrd::thread_db*);
-void	INI_init_dsql(Jrd::thread_db*, Jrd::dsql_dbb* database);
-Firebird::string INI_owner_privileges();
-void	INI_upgrade(Jrd::thread_db*);
+	void	INI_format(thread_db*, const string&);
+	void	INI_init(thread_db*);
+	void	INI_init_sys_relations(thread_db*);
+	void	INI_init_dsql(thread_db*, dsql_dbb* database);
+	string INI_owner_privileges();
+	void	INI_upgrade(thread_db*);
+}	// namespace Firebird::Jrd
 
 #endif // JRD_INI_PROTO_H

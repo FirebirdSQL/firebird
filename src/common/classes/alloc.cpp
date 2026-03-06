@@ -74,6 +74,10 @@
 //#define VALGRIND_FIX_IT		// overrides suspicious valgrind behavior
 #endif	// USE_VALGRIND
 
+namespace Firebird
+{
+
+
 namespace {
 
 ///#define MEM_DEBUG_EXTERNAL
@@ -136,7 +140,7 @@ size_t delayedExtentsPos = 0;
 // Could slowdown pool significantly !
 //#define VALIDATE_POOL
 
-typedef Firebird::AtomicCounter::counter_type StatInt;
+typedef AtomicCounter::counter_type StatInt;
 
 // We cache this amount of extents to avoid memory mapping overhead
 constexpr int MAP_CACHE_SIZE = 16; // == 1 MB
@@ -164,13 +168,13 @@ FailedBlock* failedList = NULL;
 
 void corrupt(const char* text) noexcept
 {
-	const bool bcAbort = Firebird::Config::getBugcheckAbort();
-	Firebird::Syslog::Record(bcAbort ? Firebird::Syslog::Error : Firebird::Syslog::Warning, text);
+	const bool bcAbort = Config::getBugcheckAbort();
+	Syslog::Record(bcAbort ? Syslog::Error : Syslog::Warning, text);
 	if (bcAbort)
 		abort();
 }
 
-Firebird::Mutex* cache_mutex = NULL;
+Mutex* cache_mutex = NULL;
 
 #if defined(WIN_NT)
 size_t get_page_size()
@@ -192,7 +196,7 @@ inline size_t get_map_page_size()
 	static volatile size_t map_page_size = 0;
 	if (!map_page_size)
 	{
-		Firebird::MutexLockGuard guard(cache_mutex, "get_map_page_size");
+		MutexLockGuard guard(cache_mutex, "get_map_page_size");
 		if (!map_page_size)
 			map_page_size = get_page_size();
 	}
@@ -201,10 +205,7 @@ inline size_t get_map_page_size()
 
 } // anonymous namespace
 
-namespace Firebird {
-
-namespace SemiDoubleLink
-{
+namespace SemiDoubleLink {
 	// SemiDoubleLink makes it possible to walk list one direction,
 	// push/pop/remove members with very efficient back-link to the head pointer somewhere
 
@@ -293,7 +294,7 @@ private:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-	Firebird::CustomSourceLocation location;
+	CustomSourceLocation location;
 #elif (SIZEOF_VOID_P == 4)
 	FB_UINT64 dummyAlign;
 #endif
@@ -2415,7 +2416,7 @@ void MemPool::releaseBlock(MemBlock* block, int flags) noexcept
 
 void MemPool::memoryIsExhausted(void)
 {
-	Firebird::BadAlloc::raise();
+	BadAlloc::raise();
 }
 
 void* MemPool::allocRaw(size_t size)
@@ -2921,7 +2922,7 @@ public:
 			return;
 
 		static bool alreadyPrinted = false;
-		Firebird::AutoPtr<FILE> file;
+		AutoPtr<FILE> file;
 
 		{	// scope
 			char name[PATH_MAX];
@@ -2939,7 +2940,7 @@ public:
 			fprintf(file, "********* Moment: %s\n", moment);
 
 			MemoryPool::externalMemoryManager->print_contents(file,
-				Firebird::MemoryPool::PRINT_USED_ONLY | Firebird::MemoryPool::PRINT_RECURSIVE);
+				MemoryPool::PRINT_USED_ONLY | MemoryPool::PRINT_RECURSIVE);
 			file = NULL;
 			alreadyPrinted = true;
 		}
@@ -3024,6 +3025,7 @@ void AutoStorage::ProbeStack() const noexcept
 }
 #endif
 
+
 } // namespace Firebird
 
 
@@ -3031,6 +3033,8 @@ void AutoStorage::ProbeStack() const noexcept
 // Global operator "delete" is always redefined by firebird,
 // in a case when we actually need "new" only with file/line information
 // this version should be also present as a pair for "delete".
+
+using namespace Firebird;
 
 void* operator new(size_t s)
 {

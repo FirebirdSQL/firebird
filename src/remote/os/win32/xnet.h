@@ -37,6 +37,11 @@
 #define FILE_ID	HANDLE
 #endif
 
+namespace Firebird::Remote
+{
+	class XnetEndPoint;
+
+
 // Receive wait timeout (ms)
 inline constexpr DWORD XNET_RECV_WAIT_TIMEOUT = 500;
 
@@ -96,23 +101,18 @@ typedef struct xch
 	ULONG		xch_dummy2;					// with 32-bit builds
 } *XCH;
 
-
-namespace Remote {
-class XnetEndPoint;
-};
-
 // Thread connection control block
 
 typedef struct xcc
 {
-	explicit xcc(Remote::XnetEndPoint* endPoint)
+	explicit xcc(XnetEndPoint* endPoint)
 	{
 		memset(this, 0, sizeof(*this));
 		xcc_endpoint = endPoint;
 	}
 
     struct xcc  *xcc_next;					// pointer to next thread
-	Remote::XnetEndPoint*	xcc_endpoint;	// XnetEndPoint
+	XnetEndPoint*	xcc_endpoint;	// XnetEndPoint
     XPM         xcc_xpm;					// pointer back to xpm
     ULONG       xcc_map_num;				// this thread's mapped file number
     ULONG       xcc_slot;					// this thread's slot number
@@ -200,5 +200,8 @@ inline constexpr const char* XNET_E_C2S_EVNT_CHAN_FILLED	= "%s_E_C2S_EVNT_FILLED
 inline constexpr const char* XNET_E_C2S_EVNT_CHAN_EMPTED	= "%s_E_C2S_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
 inline constexpr const char* XNET_E_S2C_EVNT_CHAN_FILLED	= "%s_E_S2C_EVNT_FILLED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
 inline constexpr const char* XNET_E_S2C_EVNT_CHAN_EMPTED	= "%s_E_S2C_EVNT_EMPTED_%" ULONGFORMAT"_%" ULONGFORMAT"_%" ULONGFORMAT;
+
+
+}	// namespace Firebird::Remote
 
 #endif // REMOTE_XNET_H

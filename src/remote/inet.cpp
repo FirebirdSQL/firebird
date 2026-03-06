@@ -118,7 +118,8 @@ constexpr int INET_RETRY_CALL = 5;
 extern int h_errno;
 #endif
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
 
 
 #ifdef WIN_NT
@@ -3370,7 +3371,11 @@ void setStopMainThread(FPTR_INT func)
 	tryStopMainThread = func;
 }
 
-namespace os_utils
+} // namespace Firebird::Remote
+
+
+// FIXME: Move this part to src/common/os
+namespace Firebird::os_utils
 {
 
 // force socket descriptor to have SOCK_CLOEXEC set

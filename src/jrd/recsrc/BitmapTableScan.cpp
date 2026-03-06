@@ -28,8 +28,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ---------------------------------------------
 // Data access: Bitmap (DBKEY) driven table scan
@@ -152,3 +153,6 @@ void BitmapTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, uns
 	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }
+
+
+}	// namespace Firebird::Jrd

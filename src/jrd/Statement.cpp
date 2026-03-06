@@ -40,8 +40,8 @@
 #include "../jrd/recsrc/Cursor.h"
 #include "../common/classes/auto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* statement,
@@ -278,7 +278,7 @@ Statement* Statement::makeStatement(thread_db* tdbb, CompilerScratch* csb, bool 
 #if defined(DEV_BUILD) && defined(DEBUG_LOST_POOLS)
 	MemoryPool* defPool = tdbb->getDefaultPool();
 	{ // scope
-		Firebird::SyncLockGuard guard(&dbb->dbb_pools_sync, Firebird::SYNC_SHARED, "Statement::makeStatement");
+		SyncLockGuard guard(&dbb->dbb_pools_sync, SYNC_SHARED, "Statement::makeStatement");
 		for (FB_SIZE_T i = 1; i < dbb->dbb_pools.getCount(); ++i)
 		{
 			if (dbb->dbb_pools[i] == defPool)
@@ -1049,7 +1049,7 @@ StmtNumber Request::getRequestId() const
 	return req_id;
 }
 
-Request::Request(Firebird::AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement)
+Request::Request(AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement)
 	: statement(aStatement),
 	  req_inUse(false),
 	  req_pool(pool),
@@ -1118,7 +1118,7 @@ const int devNodePrint(DmlNode* node)
 #endif
 
 #ifdef DEBUG_SHARED_VECTOR
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct Acc
 {
@@ -1136,7 +1136,7 @@ GlobalPtr<Mutex> mtx;
 class Member : public Array<Acc>
 {
 public:
-	Member(Firebird::MemoryPool& p)
+	Member(MemoryPool& p)
 		: Array<Acc>(p)
 	{ }
 
@@ -1167,3 +1167,6 @@ void srvDis(void* mem)
 
 }
 #endif // DEBUG_SHARED_VECTOR
+
+
+} // namespace Firebird::Jrd

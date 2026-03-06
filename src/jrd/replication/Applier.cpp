@@ -49,16 +49,15 @@
 #include "Publisher.h"
 #include "Utils.h"
 
+namespace Firebird::Jrd::Replication
+{
+
 // Log conflicts as warnings
 #define LOG_CONFLICTS
 
 // Detect and resolve record-level conflicts (in favor of master copy)
 #define RESOLVE_CONFLICTS
 
-using namespace Firebird;
-using namespace Ods;
-using namespace Jrd;
-using namespace Replication;
 
 namespace
 {
@@ -202,11 +201,11 @@ namespace
 		}
 	};
 
-	class LocalThreadContext : Firebird::ContextPoolHolder
+	class LocalThreadContext : ContextPoolHolder
 	{
 	public:
 		LocalThreadContext(thread_db* tdbb, jrd_tra* tra, Request* req = NULL)
-			: Firebird::ContextPoolHolder(req ? req->req_pool : tdbb->getDefaultPool()),
+			: ContextPoolHolder(req ? req->req_pool : tdbb->getDefaultPool()),
 			  m_tdbb(tdbb)
 		{
 			tdbb->setTransaction(tra);
@@ -243,7 +242,7 @@ Applier* Applier::create(thread_db* tdbb)
 
 	try
 	{
-		Jrd::ContextPoolHolder context(tdbb, req_pool);
+		JrdContextPoolHolder context(tdbb, req_pool);
 		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
 		request = Statement::makeRequest(tdbb, csb, true);
@@ -549,7 +548,7 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
@@ -713,7 +712,7 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
@@ -859,7 +858,7 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
@@ -1055,7 +1054,7 @@ bool Applier::lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc&
 
 	const PageNumber root_page(relPages->rel_pg_space_id, page);
 	win window(root_page);
-	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+	const auto root = (Ods::index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
 	index_desc idx;
 	idx.idx_id = key.idx_id = idx_invalid;
@@ -1277,7 +1276,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
 	if (m_enableCascade)
-		REPL_store(tdbb, rpb, transaction);
+		Replication::REPL_store(tdbb, rpb, transaction);
 }
 
 void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newRpb,
@@ -1376,7 +1375,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
 	if (m_enableCascade)
-		REPL_modify(tdbb, orgRpb, newRpb, transaction);
+		Replication::REPL_modify(tdbb, orgRpb, newRpb, transaction);
 }
 
 void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
@@ -1389,7 +1388,7 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	VIO_erase(tdbb, rpb, transaction);
 	if (m_enableCascade)
-		REPL_erase(tdbb, rpb, transaction);
+		Replication::REPL_erase(tdbb, rpb, transaction);
 }
 
 void Applier::logConflict(const char* msg, ...)
@@ -1405,3 +1404,6 @@ void Applier::logConflict(const char* msg, ...)
 	logReplicaWarning(m_database, buffer);
 #endif
 }
+
+
+} // namespace Firebird::Jrd::Replication

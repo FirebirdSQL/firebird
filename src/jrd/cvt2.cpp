@@ -47,13 +47,15 @@
 #include "../jrd/blb_proto.h"
 #include "../jrd/tra.h"
 #include "../jrd/req.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/Aligner.h"
 #include "../common/classes/VaryStr.h"
 
-using namespace Jrd;
-using namespace Firebird;
+
+namespace Firebird::Jrd
+{
+
 
 /* The original order of dsc_type values corresponded to the priority
    of conversion (that is, always convert the lesser to the greater
@@ -203,7 +205,7 @@ bool CVT2_get_binary_comparable_desc(dsc* result, const dsc* arg1, const dsc* ar
 }
 
 
-static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt)
+static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 {
 /**************************************
  *
@@ -236,7 +238,7 @@ static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, Firebird::Decima
 }
 
 
-int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt)
+int CVT2_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 {
 /**************************************
  *
@@ -821,8 +823,8 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 		CharSet* charSet1 = obj1->getCharSet();
 		CharSet* charSet2 = obj2->getCharSet();
 
-		Firebird::HalfStaticArray<UCHAR, BUFFER_LARGE> buffer1;
-		Firebird::HalfStaticArray<UCHAR, BUFFER_LARGE> buffer2;
+		HalfStaticArray<UCHAR, BUFFER_LARGE> buffer1;
+		HalfStaticArray<UCHAR, BUFFER_LARGE> buffer2;
 		fb_assert(BUFFER_LARGE % 4 == 0);	// 4 is our maximum character length
 
 		UCHAR bpb[] = {isc_bpb_version1,
@@ -906,7 +908,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 
 		CharSet* charSet1 = obj1->getCharSet();
 
-		Firebird::HalfStaticArray<UCHAR, BUFFER_LARGE> buffer1;
+		HalfStaticArray<UCHAR, BUFFER_LARGE> buffer1;
 		UCHAR* p;
 		MoveBuffer temp_str;
 
@@ -1041,3 +1043,6 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
 
 	return vtmp->vary_length;
 }
+
+
+} // namespace Firebird::Jrd

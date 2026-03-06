@@ -69,12 +69,12 @@ DATABASE DB = FILENAME "ODS.RDB";
 
 #define DECOMPOSE(n, divisor, q, r) {r = n % divisor; q = n / divisor;}
 //#define DECOMPOSE_QUOTIENT(n, divisor, q) {q = n / divisor;}
-#define HIGH_WATER(x)	((USHORT) sizeof (data_page) + (USHORT) sizeof (data_page::dpg_repeat) * (x - 1))
-#define SPACE_FUDGE	(ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(data_page::dpg_repeat))
+#define HIGH_WATER(x)	((USHORT) sizeof (Ods::data_page) + (USHORT) sizeof (Ods::data_page::dpg_repeat) * (x - 1))
+#define SPACE_FUDGE	(ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(Ods::data_page::dpg_repeat))
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 inline constexpr SSHORT MRK_commit = 256;		// Table to go into pag_drop after transaction commit
 inline constexpr SSHORT MRK_drop = 257;			// Table to be dropped when OAT >= next transaction at mark-set time
@@ -82,14 +82,14 @@ inline constexpr SSHORT MRK_rollback = 258;		// Table to be dropped after transa
 
 static void set_marker(thread_db*, SSHORT, SSHORT, TraNumber);
 static void check_swept(thread_db*, record_param*);
-static USHORT compress(thread_db*, data_page*);
-static void delete_tail(thread_db*, rhdf*, const USHORT, USHORT);
+static USHORT compress(thread_db*, Ods::data_page*);
+static void delete_tail(thread_db*, Ods::rhdf*, const USHORT, USHORT);
 static void fragment(thread_db*, record_param*, SSHORT, Compressor&, SSHORT, const jrd_tra*);
 static void extend_relation(thread_db*, Cached::Relation*, WIN*, const Jrd::RecordStorageType type);
 static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
 static bool get_header(WIN*, USHORT, record_param*);
-static pointer_page* get_pointer_page(thread_db*, RelationPermanent*, RelationPages*, WIN*, ULONG, USHORT);
-static rhd* locate_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
+static Ods::pointer_page* get_pointer_page(thread_db*, RelationPermanent*, RelationPages*, WIN*, ULONG, USHORT);
+static Ods::rhd* locate_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
 static void mark_full(thread_db*, record_param*);
 static void store_big_record(thread_db*, record_param*, PageStack&, Compressor&, const Jrd::RecordStorageType type);
 
@@ -141,7 +141,7 @@ namespace
 }
 
 
-PAG DPM_allocate(thread_db* tdbb, WIN* window)
+Ods::PAG DPM_allocate(thread_db* tdbb, WIN* window)
 {
 /**************************************
  *
@@ -163,7 +163,7 @@ PAG DPM_allocate(thread_db* tdbb, WIN* window)
 		window ? window->win_page.getPageNum() : 0);
 #endif
 
-	pag* page = PAG_allocate(tdbb, window);
+	Ods::pag* page = PAG_allocate(tdbb, window);
 
 	return page;
 }
@@ -201,14 +201,14 @@ void DPM_backout( thread_db* tdbb, record_param* rpb)
 #endif
 
 	CCH_MARK(tdbb, &rpb->getWindow(tdbb));
-	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
-	data_page::dpg_repeat* index1 = page->dpg_rpt + rpb->rpb_line;
-	data_page::dpg_repeat* index2 = page->dpg_rpt + rpb->rpb_b_line;
+	Ods::data_page* page = (Ods::data_page*) rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page::dpg_repeat* index1 = page->dpg_rpt + rpb->rpb_line;
+	Ods::data_page::dpg_repeat* index2 = page->dpg_rpt + rpb->rpb_b_line;
 	*index1 = *index2;
 	index2->dpg_offset = index2->dpg_length = 0;
 
-	rhd* header = (rhd*) ((SCHAR *) page + index1->dpg_offset);
-	header->rhd_flags &= ~(rhd_chain | rhd_gc_active);
+	Ods::rhd* header = (Ods::rhd*) ((SCHAR *) page + index1->dpg_offset);
+	header->rhd_flags &= ~(Ods::rhd_chain | Ods::rhd_gc_active);
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
@@ -233,7 +233,7 @@ void DPM_backout( thread_db* tdbb, record_param* rpb)
 		"    new dpg_count %d\n", page->dpg_count);
 #endif
 
-	fb_assert((page->dpg_header.pag_flags & dpg_swept) == 0);
+	fb_assert((page->dpg_header.pag_flags & Ods::dpg_swept) == 0);
 
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
@@ -248,11 +248,11 @@ void DPM_backout_mark(thread_db* tdbb, record_param* rpb, const jrd_tra* transac
 	WIN* window = &rpb->getWindow(tdbb);
 	CCH_MARK(tdbb, window);
 
-	data_page* page = (data_page*) window->win_buffer;
-	data_page::dpg_repeat* index = page->dpg_rpt + rpb->rpb_line;
-	rhd* header = (rhd*) ((SCHAR*) page + index->dpg_offset);
+	Ods::data_page* page = (Ods::data_page*) window->win_buffer;
+	Ods::data_page::dpg_repeat* index = page->dpg_rpt + rpb->rpb_line;
+	Ods::rhd* header = (Ods::rhd*) ((SCHAR*) page + index->dpg_offset);
 
-	header->rhd_flags |= rhd_gc_active;
+	header->rhd_flags |= Ods::rhd_gc_active;
 	rpb->rpb_flags |= rpb_gc_active;
 
 	CCH_RELEASE(tdbb, window);
@@ -291,7 +291,7 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 		{
 			WIN window(relPages->rel_pg_space_id, -1);
 
-			const pointer_page* ppage =
+			const Ods::pointer_page* ppage =
 				get_pointer_page(tdbb, getPermanent(relation), relPages, &window, sequence, LCK_read);
 			if (!ppage)
 			{
@@ -303,14 +303,14 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 			for (USHORT slot = 0; slot < ppage->ppg_count; slot++)
 			{
 				if (ppage->ppg_page[slot] &&
-					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
-					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty))
+					!PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_secondary) &&
+					!PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_empty))
 				{
 					Ods::data_page* dpage =
 						(Ods::data_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_page[slot], LCK_read, pag_data);
 
-					const data_page::dpg_repeat* index = dpage->dpg_rpt;
-					const data_page::dpg_repeat* const end = index + dpage->dpg_count;
+					const Ods::data_page::dpg_repeat* index = dpage->dpg_rpt;
+					const Ods::data_page::dpg_repeat* const end = index + dpage->dpg_count;
 					for (; index < end; index++)
 					{
 						if (index->dpg_offset)
@@ -325,7 +325,7 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 				}
 			}
 
-			done = (recordCount != 0) || (ppage->ppg_header.pag_flags & ppg_eof);
+			done = (recordCount != 0) || (ppage->ppg_header.pag_flags & Ods::ppg_eof);
 			CCH_RELEASE(tdbb, &window);
 		}
 	}
@@ -451,11 +451,11 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 		return false;
 	}
 
-	data_page* page = (data_page*) org_rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page* page = (Ods::data_page*) org_rpb->getWindow(tdbb).win_buffer;
 
 	// If the record obviously isn't going to fit, don't even try
 
-	if (size > dbb->dbb_page_size - (sizeof(data_page) + header_size))
+	if (size > dbb->dbb_page_size - (sizeof(Ods::data_page) + header_size))
 	{
 		CCH_RELEASE(tdbb, &org_rpb->getWindow(tdbb));
 #ifdef VIO_DEBUG
@@ -483,8 +483,8 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	SSHORT available = dbb->dbb_page_size - top;
 
 	USHORT n = 0;
-	const data_page::dpg_repeat* index = page->dpg_rpt;
-	for (const data_page::dpg_repeat* const end = index + page->dpg_count;
+	const Ods::data_page::dpg_repeat* index = page->dpg_rpt;
+	for (const Ods::data_page::dpg_repeat* const end = index + page->dpg_count;
 		 index < end; index++, n++)
 	{
 		if (!index->dpg_length && slot == page->dpg_count)
@@ -499,8 +499,8 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 
 	if (slot == page->dpg_count)
 	{
-		top += sizeof(data_page::dpg_repeat);
-		available -= sizeof(data_page::dpg_repeat);
+		top += sizeof(Ods::data_page::dpg_repeat);
+		available -= sizeof(Ods::data_page::dpg_repeat);
 	}
 
 	// If the record doesn't fit, punt
@@ -537,15 +537,15 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	new_rpb->rpb_line = org_rpb->rpb_line;
 	new_rpb->rpb_flags &= ~rpb_not_packed;
 
-	data_page::dpg_repeat* index2 = page->dpg_rpt + org_rpb->rpb_line;
-	rhd* header = (rhd*) ((SCHAR *) page + index2->dpg_offset);
-	header->rhd_flags |= rhd_chain;
+	Ods::data_page::dpg_repeat* index2 = page->dpg_rpt + org_rpb->rpb_line;
+	Ods::rhd* header = (Ods::rhd*) ((SCHAR *) page + index2->dpg_offset);
+	header->rhd_flags |= Ods::rhd_chain;
 	page->dpg_rpt[slot] = *index2;
 
 	index2->dpg_offset = space;
 	index2->dpg_length = header_size + size + fill;
 
-	header = (rhd*) ((SCHAR *) page + space);
+	header = (Ods::rhd*) ((SCHAR *) page + space);
 	header->rhd_flags = new_rpb->rpb_flags;
 	if (new_rpb->rpb_relation)
 		fb_assert((new_rpb->rpb_relation->getId() != 0) || (new_rpb->rpb_transaction_nr == 0));
@@ -555,7 +555,7 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 	header->rhd_b_line = new_rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_not_packed;
+		header->rhd_flags |= Ods::rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -573,9 +573,9 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 		new_rpb->rpb_f_line, new_rpb->rpb_flags);
 #endif
 
-	if (page->dpg_header.pag_flags & dpg_swept)
+	if (page->dpg_header.pag_flags & Ods::dpg_swept)
 	{
-		page->dpg_header.pag_flags &= ~dpg_swept;
+		page->dpg_header.pag_flags &= ~Ods::dpg_swept;
 		mark_full(tdbb, org_rpb);
 	}
 	else
@@ -656,10 +656,10 @@ void DPM_create_relation_pages(thread_db* tdbb, RelationPermanent* relation, Rel
 
 	// Allocate first pointer page
 	WIN window(relPages->rel_pg_space_id, -1);
-	pointer_page* page = (pointer_page*) DPM_allocate(tdbb, &window);
+	Ods::pointer_page* page = (Ods::pointer_page*) DPM_allocate(tdbb, &window);
 	page->ppg_header.pag_type = pag_pointer;
 	page->ppg_relation = relation->getId();
-	page->ppg_header.pag_flags = ppg_eof;
+	page->ppg_header.pag_flags = Ods::ppg_eof;
 	CCH_RELEASE(tdbb, &window);
 
 	// If this is relation 0 (RDB$PAGES), update the header
@@ -667,7 +667,7 @@ void DPM_create_relation_pages(thread_db* tdbb, RelationPermanent* relation, Rel
 	if (relation->getId() == 0)
 	{
 		WIN root_window(HEADER_PAGE_NUMBER);
-		header_page* header = (header_page*) CCH_FETCH(tdbb, &root_window, LCK_write, pag_header);
+		Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &root_window, LCK_write, pag_header);
 		CCH_MARK(tdbb, &root_window);
 		header->hdr_PAGES = window.win_page.getPageNum();
 
@@ -687,7 +687,7 @@ void DPM_create_relation_pages(thread_db* tdbb, RelationPermanent* relation, Rel
 	// Therefore, I decided that the root_window in the if() above and this one aren't related.
 	// Create an index root page
 	WIN root_window(relPages->rel_pg_space_id, -1);
-	index_root_page* root = (index_root_page*) DPM_allocate(tdbb, &root_window);
+	Ods::index_root_page* root = (Ods::index_root_page*) DPM_allocate(tdbb, &root_window);
 	root->irt_header.pag_type = pag_root;
 	root->irt_relation = relation->getId();
 	//root->irt_count = 0;
@@ -725,7 +725,7 @@ ULONG DPM_data_pages(thread_db* tdbb, Cached::Relation* relation)
 		WIN window(relPages->rel_pg_space_id, -1);
 		for (ULONG sequence = 0; true; sequence++)
 		{
-			const pointer_page* ppage =
+			const Ods::pointer_page* ppage =
 				get_pointer_page(tdbb, relation, relPages, &window, sequence, LCK_read);
 			if (!ppage)
 			{
@@ -737,14 +737,14 @@ ULONG DPM_data_pages(thread_db* tdbb, Cached::Relation* relation)
 			for (USHORT slot = 0; slot < ppage->ppg_count; slot++)
 			{
 				if (ppage->ppg_page[slot] &&
-					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
-					!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty))
+					!PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_secondary) &&
+					!PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_empty))
 				{
 					pages++;
 				}
 			}
 
-			if (ppage->ppg_header.pag_flags & ppg_eof)
+			if (ppage->ppg_header.pag_flags & Ods::ppg_eof)
 				break;
 
 			CCH_RELEASE(tdbb, &window);
@@ -799,9 +799,9 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 #endif
 
 	WIN* const window = &rpb->getWindow(tdbb);
-	data_page* page = (data_page*) window->win_buffer;
+	Ods::data_page* page = (Ods::data_page*) window->win_buffer;
 	const ULONG sequence = page->dpg_sequence;
-	data_page::dpg_repeat* index = &page->dpg_rpt[rpb->rpb_line];
+	Ods::data_page::dpg_repeat* index = &page->dpg_rpt[rpb->rpb_line];
 	const RecordNumber number = rpb->rpb_number;
 
 	if (!get_header(window, rpb->rpb_line, rpb))
@@ -835,7 +835,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	// If the page is not empty and used to be marked as full, change the
 	// state of both the page and the appropriate pointer page.
 
-	if (count && (page->dpg_header.pag_flags & dpg_full))
+	if (count && (page->dpg_header.pag_flags & Ods::dpg_full))
 	{
 		// hvlad: delay clearing of page_full flag until page has at least 25%
 		// of free space. It saves few costly mark_full() calls when space is
@@ -855,7 +855,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 			return;
 		}
 
-		page->dpg_header.pag_flags &= ~dpg_full;
+		page->dpg_header.pag_flags &= ~Ods::dpg_full;
 		mark_full(tdbb, rpb);
 
 #ifdef VIO_DEBUG
@@ -866,7 +866,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	}
 
 	if (!count) {
-		page->dpg_header.pag_flags &= ~dpg_full; // PP will be modified later
+		page->dpg_header.pag_flags &= ~Ods::dpg_full; // PP will be modified later
 	}
 	const UCHAR flags = page->dpg_header.pag_flags;
 	CCH_RELEASE(tdbb, window);
@@ -876,7 +876,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	if (count)
 		return;
 
-	if (flags & dpg_orphan)
+	if (flags & Ods::dpg_orphan)
 	{
 		// The page inventory page will be written after the page being
 		// released, which will be written after the pages from which earlier
@@ -891,7 +891,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	// Data page has gone empty.  Refetch page thru pointer page.  If it's
 	// still empty, remove page from relation.
 
-	pointer_page* ppage;
+	Ods::pointer_page* ppage;
 	USHORT slot;
 	ULONG pp_sequence;
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
@@ -919,7 +919,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		// Since this fetch for exclusive access follows a (pointer page) fetch for
 		// exclusive access, put a timeout on this fetch to be able to recover from
 		// possible deadlocks.
-		page = (data_page*) CCH_FETCH_TIMEOUT(tdbb, window, LCK_write, pag_data, -1);
+		page = (Ods::data_page*) CCH_FETCH_TIMEOUT(tdbb, window, LCK_write, pag_data, -1);
 		if (page)
 			break;
 
@@ -957,7 +957,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	{
 		if (s != slot)
 		{
-			const bool bit_empty = PPG_DP_BIT_TEST(bits, s, ppg_dp_empty);
+			const bool bit_empty = PPG_DP_BIT_TEST(bits, s, Ods::ppg_dp_empty);
 			empty &= bit_empty;
 
 			if (!ppage->ppg_page[s])
@@ -993,7 +993,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 			if (s != slot)
 			{
 				WIN dp_window(relPages->rel_pg_space_id, pages[i]);
-				data_page* dpage = (data_page*) CCH_FETCH(tdbb, &dp_window, LCK_read, pag_data);
+				Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, &dp_window, LCK_read, pag_data);
 				if (dpage->dpg_count)
 				{
 					empty = false;
@@ -1012,8 +1012,8 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		CCH_precedence(tdbb, &pwindow, window->win_page);
 		CCH_MARK(tdbb, &pwindow);
 
-		PPG_DP_BIT_SET(bits, slot, ppg_dp_empty);
-		PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_full);
+		PPG_DP_BIT_SET(bits, slot, Ods::ppg_dp_empty);
+		PPG_DP_BIT_CLEAR(bits, slot, Ods::ppg_dp_full);
 
 		CCH_RELEASE(tdbb, &pwindow);
 		return;
@@ -1137,7 +1137,7 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::RelationPermanent* rel
 
 	for (ULONG sequence = 0; true; sequence++)
 	{
-		const pointer_page* ppage =
+		const Ods::pointer_page* ppage =
 			get_pointer_page(tdbb, relation, relPages, &window, sequence, LCK_read);
 		if (!ppage)
 			 BUGCHECK(246);	// msg 246 pointer page lost from DPM_delete_relation
@@ -1155,21 +1155,21 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::RelationPermanent* rel
 				continue;
 
 			// if (flags[i >> 2] & (2 << ((i & 3) << 1)))
-			if (PPG_DP_BIT_TEST(flags, i, ppg_dp_large))
+			if (PPG_DP_BIT_TEST(flags, i, Ods::ppg_dp_large))
 			{
 				data_window.win_page = *page;
-				data_page* dpage = (data_page*) CCH_FETCH(tdbb, &data_window, LCK_write, pag_data);
+				Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, &data_window, LCK_write, pag_data);
 
-				const data_page::dpg_repeat* line = dpage->dpg_rpt;
-				const data_page::dpg_repeat* const end_line = line + dpage->dpg_count;
+				const Ods::data_page::dpg_repeat* line = dpage->dpg_rpt;
+				const Ods::data_page::dpg_repeat* const end_line = line + dpage->dpg_count;
 				for (; line < end_line; line++)
 				{
 					if (line->dpg_length)
 					{
-						rhd* header = (rhd*) ((UCHAR *) dpage + line->dpg_offset);
-						if (header->rhd_flags & rhd_large)
+						Ods::rhd* header = (Ods::rhd*) ((UCHAR *) dpage + line->dpg_offset);
+						if (header->rhd_flags & Ods::rhd_large)
 						{
-							delete_tail(tdbb, (rhdf*)header, relPages->rel_pg_space_id,
+							delete_tail(tdbb, (Ods::rhdf*)header, relPages->rel_pg_space_id,
 										line->dpg_length);
 						}
 					}
@@ -1186,7 +1186,7 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::RelationPermanent* rel
 		pages.add(window.win_page.getPageNum());
 		PAG_release_pages(tdbb, relPages->rel_pg_space_id, pages.getCount(), pages.begin(), 0);
 
-		if (pag_flags & ppg_eof)
+		if (pag_flags & Ods::ppg_eof)
 			break;
 	}
 
@@ -1441,7 +1441,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 		pageNumber = dbb->getKnownPage(pag_ids, sequence);
 		if (!pageNumber)
 		{
-			generator_page* page = (generator_page*) DPM_allocate(tdbb, &window);
+			Ods::generator_page* page = (Ods::generator_page*) DPM_allocate(tdbb, &window);
 			page->gpg_header.pag_type = pag_ids;
 			page->gpg_sequence = sequence;
 			CCH_must_write(tdbb, &window);
@@ -1466,7 +1466,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 		generator != BACKUP_HISTORY_GENERATOR);
 
 	const SSHORT lock_mode = isReadOnly ? LCK_read : LCK_write;
-	generator_page* const page = (generator_page*) CCH_FETCH(tdbb, &window, lock_mode, pag_ids);
+	Ods::generator_page* const page = (Ods::generator_page*) CCH_FETCH(tdbb, &window, lock_mode, pag_ids);
 
 	/*  If we are in ODS >= 10, then we have a pointer to an int64 value in the
 	 *  generator page: if earlier than 10, it's a pointer to a long value.
@@ -1509,7 +1509,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	if (transaction)
 		transaction->tra_flags |= TRA_write;
 
-	REPL_gen_id(tdbb, generator, value, transaction);
+	Replication::REPL_gen_id(tdbb, generator, value, transaction);
 
 	return value;
 }
@@ -1560,11 +1560,11 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	if (page_number)
 	{
 		window->win_page = page_number;
-		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+		Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (Ods::dpg_secondary | Ods::dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->getId() &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -1582,7 +1582,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	}
 
 	// Find the pointer page, data page, and record
-	pointer_page* page = get_pointer_page(tdbb, getPermanent(rpb->rpb_relation),
+	Ods::pointer_page* page = get_pointer_page(tdbb, getPermanent(rpb->rpb_relation),
 		relPages, window, pp_sequence, LCK_read);
 
 	if (!page)
@@ -1657,7 +1657,7 @@ ULONG DPM_get_blob(thread_db* tdbb,
 	// record doesn't exist, or the record isn't a blob, give up and
 	// let somebody else complain.
 
-	pointer_page* ppage = get_pointer_page(tdbb, relation->getPermanent(),
+	Ods::pointer_page* ppage = get_pointer_page(tdbb, relation->getPermanent(),
 		relation->getPages(tdbb), &rpb.getWindow(tdbb), pp_sequence, LCK_read);
 	if (!ppage)
 	{
@@ -1672,7 +1672,7 @@ ULONG DPM_get_blob(thread_db* tdbb,
 		if (!page_number)
 			goto punt;
 
-		data_page* page = (data_page*) CCH_HANDOFF(tdbb,
+		Ods::data_page* page = (Ods::data_page*) CCH_HANDOFF(tdbb,
 							&rpb.getWindow(tdbb),
 							page_number,
 							(SSHORT) (delete_flag ? LCK_write : LCK_read),
@@ -1680,12 +1680,12 @@ ULONG DPM_get_blob(thread_db* tdbb,
 		if (line >= page->dpg_count)
 			goto punt;
 
-		data_page::dpg_repeat* index = &page->dpg_rpt[line];
+		Ods::data_page::dpg_repeat* index = &page->dpg_rpt[line];
 		if (index->dpg_offset == 0)
 			goto punt;
 
-		blh* header = (blh*) ((SCHAR *) page + index->dpg_offset);
-		if (!(header->blh_flags & rhd_blob))
+		Ods::blh* header = (Ods::blh*) ((SCHAR *) page + index->dpg_offset);
+		if (!(header->blh_flags & Ods::rhd_blob))
 			goto punt;
 
 		// We've got the blob header and everything looks ducky.  Get the header
@@ -1708,10 +1708,10 @@ ULONG DPM_get_blob(thread_db* tdbb,
 				blob->blb_flags |= BLB_large_scan;
 		}
 
-		if (header->blh_flags & rhd_stream_blob)
+		if (header->blh_flags & Ods::rhd_stream_blob)
 			blob->blb_flags |= BLB_stream;
 
-		if (header->blh_flags & rhd_damaged)
+		if (header->blh_flags & Ods::rhd_damaged)
 			goto punt;
 
 		// Retrieve the data either into page clump (level 0) or page vector (levels
@@ -1824,11 +1824,11 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
 
 		window->win_page = page_number;
-		const data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
+		const Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
-			!(dpage->dpg_header.pag_flags & (dpg_secondary | dpg_orphan)) &&
+			!(dpage->dpg_header.pag_flags & (Ods::dpg_secondary | Ods::dpg_orphan)) &&
 			dpage->dpg_relation == rpb->rpb_relation->getId() &&
 			dpage->dpg_sequence == dpSequence &&
 			(dpage->dpg_count > 0);
@@ -1857,7 +1857,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 
 	while (true)
 	{
-		const pointer_page* ppage = get_pointer_page(tdbb, getPermanent(rpb->rpb_relation),
+		const Ods::pointer_page* ppage = get_pointer_page(tdbb, getPermanent(rpb->rpb_relation),
 							relPages, window, pp_sequence, LCK_read);
 		if (!ppage)
 			BUGCHECK(249);	// msg 249 pointer page vanished from DPM_next
@@ -1866,9 +1866,9 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		{
 			const ULONG page_number = ppage->ppg_page[slot];
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
-			if (page_number && !PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
-				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) &&
-				(!sweeper || !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
+			if (page_number && !PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_secondary) &&
+				!PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_empty) &&
+				(!sweeper || !PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_swept)) )
 			{
 #ifdef SUPERSERVER_V2
 				// Perform sequential prefetch of relation's data pages.
@@ -1895,7 +1895,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 #endif
 				dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
 				relPages->setDPNumber(dpSequence, page_number);
-				const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window,
+				const Ods::data_page* dpage = (Ods::data_page*) CCH_HANDOFF(tdbb, window,
 									page_number, lock_type, pag_data);
 
 				for (; line < dpage->dpg_count; ++line)
@@ -1972,7 +1972,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		else
 			CCH_RELEASE(tdbb, window);
 
-		if ((flags & ppg_eof) || (scope != DPM_next_all))
+		if ((flags & Ods::ppg_eof) || (scope != DPM_next_all))
 			return false;
 	}
 }
@@ -2062,7 +2062,7 @@ SLONG DPM_prefetch_bitmap(thread_db* tdbb, jrd_rel* relation, PageBitmap* bitmap
 		DECOMPOSE(number, dbb->dbb_max_records, dp_sequence, line);
 		DECOMPOSE(dp_sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
-		const pointer_page* ppage = get_pointer_page(tdbb, relation->getPermanent(), &window, pp_sequence, LCK_read);
+		const Ods::pointer_page* ppage = get_pointer_page(tdbb, relation->getPermanent(), &window, pp_sequence, LCK_read);
 		if (!ppage)
 			BUGCHECK(249);	// msg 249 pointer page vanished from DPM_prefetch_bitmap
 
@@ -2110,7 +2110,7 @@ ULONG DPM_pointer_pages(thread_db* tdbb, jrd_rel* relation)
 
 	while (true)
 	{
-		const pointer_page* ppage =
+		const Ods::pointer_page* ppage =
 			get_pointer_page(tdbb, getPermanent(relation), relPages, &window, sequence, LCK_read);
 
 		if (!ppage)
@@ -2119,7 +2119,7 @@ ULONG DPM_pointer_pages(thread_db* tdbb, jrd_rel* relation)
 			 // msg 243 missing pointer page in DPM_data_pages
 		}
 
-		const bool eof = (ppage->ppg_header.pag_flags & ppg_eof);
+		const bool eof = (ppage->ppg_header.pag_flags & Ods::ppg_eof);
 		CCH_RELEASE(tdbb, &window);
 
 		if (eof)
@@ -2171,14 +2171,14 @@ void DPM_scan_pages( thread_db* tdbb)
 	vcl* vector = *address;
 	FB_SIZE_T sequence = vector->count() - 1;
 	WIN window(relPages->rel_pg_space_id, (*vector)[sequence]);
-	pointer_page* ppage = (pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
+	Ods::pointer_page* ppage = (Ods::pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
 
 	while (ppage->ppg_next)
 	{
 		++sequence;
 		vector->resize(sequence + 1);
 		(*vector)[sequence] = ppage->ppg_next;
-		ppage = (pointer_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_next, LCK_read, pag_pointer);
+		ppage = (Ods::pointer_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_next, LCK_read, pag_pointer);
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -2373,7 +2373,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	const auto size = dcc.getPackedLength();
 
 	const ULONG header_size = (rpb->rpb_transaction_nr > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
-	const ULONG max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
+	const ULONG max_data = dbb->dbb_page_size - sizeof(Ods::data_page) - header_size;
 
 	// If the record isn't going to fit on a page, even if fragmented,
 	// handle it a little differently.
@@ -2390,7 +2390,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 
 	// Accommodate max record size i.e. 64K
 	const SLONG length = header_size + size + fill;
-	rhd* header = locate_space(tdbb, rpb, (SSHORT) length, stack, NULL, type);
+	Ods::rhd* header = locate_space(tdbb, rpb, (SSHORT) length, stack, NULL, type);
 
 	rpb->rpb_flags &= ~rpb_not_packed;
 
@@ -2403,7 +2403,7 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	header->rhd_b_line = rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_not_packed;
+		header->rhd_flags |= Ods::rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2427,19 +2427,17 @@ void DPM_store( thread_db* tdbb, record_param* rpb, PageStack& stack, const Jrd:
 	// When restoring, mark primary data page as swept, pointer page already marked by locate_space()
 	if (swept_at_restore(tdbb, rpb->rpb_relation->getPermanent()) && (type == DPM_primary))
 	{
-		page->pag_flags |= dpg_swept;
+		page->pag_flags |= Ods::dpg_swept;
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 	}
-	else if (page->pag_flags & dpg_swept)
+	else if (page->pag_flags & Ods::dpg_swept)
 	{
-		page->pag_flags &= ~dpg_swept;
+		page->pag_flags &= ~Ods::dpg_swept;
 		mark_full(tdbb, rpb);
 	}
 	else
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
-
-
 RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, jrd_rel* relation, Record* record)
 {
 /**************************************
@@ -2467,7 +2465,7 @@ RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, jrd_rel* relation, Recor
 	USHORT length;
 	const UCHAR* q;
 	PageStack stack;
-	Firebird::Array<UCHAR> buffer;
+	Array<UCHAR> buffer;
 
 	blob->storeToPage(&length, buffer, &q, &stack);
 
@@ -2483,25 +2481,25 @@ RecordNumber DPM_store_blob(thread_db* tdbb, blb* blob, jrd_rel* relation, Recor
 	if (blob->blb_flags & BLB_bulk)
 		rpb.rpb_stream_flags |= RPB_s_bulk;
 
-	blh* header = (blh*) locate_space(tdbb, &rpb, (SSHORT) (BLH_SIZE + length),
+	Ods::blh* header = (Ods::blh*) locate_space(tdbb, &rpb, (SSHORT) (BLH_SIZE + length),
 									  stack, record, DPM_other);
-	header->blh_flags = rhd_blob;
+	header->blh_flags = Ods::rhd_blob;
 
 	if (blob->blb_flags & BLB_stream)
-		header->blh_flags |= rhd_stream_blob;
+		header->blh_flags |= Ods::rhd_stream_blob;
 
 	if (blob->getLevel())
-		header->blh_flags |= rhd_large;
+		header->blh_flags |= Ods::rhd_large;
 
 	blob->toPageHeader(header);
 
 	if (length)
 		memcpy(header->blh_page, q, length);
 
-	data_page* page = (data_page*) rpb.getWindow(tdbb).win_buffer;
-	if (blob->getLevel() && !(page->dpg_header.pag_flags & dpg_large))
+	Ods::data_page* page = (Ods::data_page*) rpb.getWindow(tdbb).win_buffer;
+	if (blob->getLevel() && !(page->dpg_header.pag_flags & Ods::dpg_large))
 	{
-		page->dpg_header.pag_flags |= dpg_large;
+		page->dpg_header.pag_flags |= Ods::dpg_large;
 		mark_full(tdbb, &rpb);
 	}
 	else {
@@ -2540,8 +2538,8 @@ void DPM_rewrite_header( thread_db* tdbb, record_param* rpb)
 #endif
 
 	WIN* window = &rpb->getWindow(tdbb);
-	data_page* page = (data_page*) window->win_buffer;
-	rhd* header = (rhd*) ((SCHAR *) page + page->dpg_rpt[rpb->rpb_line].dpg_offset);
+	Ods::data_page* page = (Ods::data_page*) window->win_buffer;
+	Ods::rhd* header = (Ods::rhd*) ((SCHAR *) page + page->dpg_rpt[rpb->rpb_line].dpg_offset);
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
@@ -2611,7 +2609,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 
 	CCH_tra_precedence(tdbb, &rpb->getWindow(tdbb), rpb->rpb_transaction_nr);
 	CCH_MARK(tdbb, &rpb->getWindow(tdbb));
-	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page* page = (Ods::data_page*) rpb->getWindow(tdbb).win_buffer;
 
 	Compressor dcc(tdbb, rpb->rpb_length, rpb->rpb_address);
 	const auto size = dcc.getPackedLength();
@@ -2636,8 +2634,8 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	const USHORT old_length = page->dpg_rpt[slot].dpg_length;
 	page->dpg_rpt[slot].dpg_length = 0;
 
-    const data_page::dpg_repeat* index = page->dpg_rpt;
-	for (const data_page::dpg_repeat* const end = index + page->dpg_count; index < end; index++)
+    const Ods::data_page::dpg_repeat* index = page->dpg_rpt;
+	for (const Ods::data_page::dpg_repeat* const end = index + page->dpg_count; index < end; index++)
 	{
 		if (index->dpg_offset)
 		{
@@ -2664,7 +2662,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 
 	rpb->rpb_flags &= ~rpb_not_packed;
 
-	rhd* header = (rhd*) ((SCHAR *) page + space);
+	Ods::rhd* header = (Ods::rhd*) ((SCHAR *) page + space);
 	header->rhd_flags = rpb->rpb_flags;
 	if (rpb->rpb_relation)
 		fb_assert((rpb->rpb_relation->getId() != 0) || (rpb->rpb_transaction_nr == 0));
@@ -2674,7 +2672,7 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	header->rhd_b_line = rpb->rpb_b_line;
 
 	if (!dcc.isPacked())
-		header->rhd_flags |= rhd_not_packed;
+		header->rhd_flags |= Ods::rhd_not_packed;
 
 	UCHAR* const data = (UCHAR*) header + header_size;
 
@@ -2693,9 +2691,9 @@ void DPM_update( thread_db* tdbb, record_param* rpb, PageStack* stack, const jrd
 	if (fill)
 		memset(data + size, 0, fill);
 
-	if (page->dpg_header.pag_flags & dpg_swept)
+	if (page->dpg_header.pag_flags & Ods::dpg_swept)
 	{
-		page->dpg_header.pag_flags &= ~dpg_swept;
+		page->dpg_header.pag_flags &= ~Ods::dpg_swept;
 		mark_full(tdbb, rpb);
 	}
 	else
@@ -2728,28 +2726,28 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 	rpb->rpb_number.decompose(dbb->dbb_max_records, dbb->dbb_dp_per_pp,
 		line, slot, pp_sequence);
 
-	pointer_page* ppage =
+	Ods::pointer_page* ppage =
 		get_pointer_page(tdbb, getPermanent(rpb->rpb_relation), relPages, window, pp_sequence, LCK_read);
 	if (!ppage)
 		return;
 
 	const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 	if (slot >= ppage->ppg_count || !ppage->ppg_page[slot] ||
-		PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary | ppg_dp_swept))
+		PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_secondary | Ods::ppg_dp_swept))
 	{
 		CCH_RELEASE(tdbb, window);
 		return;
 	}
 
-	data_page* dpage = (data_page*)
+	Ods::data_page* dpage = (Ods::data_page*)
 		CCH_HANDOFF(tdbb, window, ppage->ppg_page[slot], LCK_write, pag_data);
 
 	for (USHORT line = 0; line < dpage->dpg_count; ++line)
 	{
-		const data_page::dpg_repeat* index = &dpage->dpg_rpt[line];
+		const Ods::data_page::dpg_repeat* index = &dpage->dpg_rpt[line];
 		if (index->dpg_offset)
 		{
-			rhd* header = (rhd*) ((SCHAR*) dpage + index->dpg_offset);
+			Ods::rhd* header = (Ods::rhd*) ((SCHAR*) dpage + index->dpg_offset);
 			if (Ods::getTraNum(header) > transaction->tra_oldest ||
 				(header->rhd_flags & (rpb_blob | rpb_chained | rpb_fragment | rpb_deleted)) ||
 				header->rhd_b_page)
@@ -2761,12 +2759,12 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
 	}
 
 	CCH_MARK(tdbb, window);
-	dpage->dpg_header.pag_flags |= dpg_swept;
+	dpage->dpg_header.pag_flags |= Ods::dpg_swept;
 	mark_full(tdbb, rpb);
 }
 
 
-static USHORT compress(thread_db* tdbb, data_page* page)
+static USHORT compress(thread_db* tdbb, Ods::data_page* page)
 {
 /**************************************
  *
@@ -2794,9 +2792,9 @@ static USHORT compress(thread_db* tdbb, data_page* page)
 		BUGCHECK(250);			// msg 250 temporary page buffer too small
 
 	USHORT space = dbb->dbb_page_size;
-	const data_page::dpg_repeat* const end = page->dpg_rpt + page->dpg_count;
+	const Ods::data_page::dpg_repeat* const end = page->dpg_rpt + page->dpg_count;
 
-	for (data_page::dpg_repeat* index = page->dpg_rpt; index < end; index++)
+	for (Ods::data_page::dpg_repeat* index = page->dpg_rpt; index < end; index++)
 	{
 		if (index->dpg_offset)
 		{
@@ -2820,7 +2818,7 @@ static USHORT compress(thread_db* tdbb, data_page* page)
 }
 
 
-static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, USHORT length)
+static void delete_tail(thread_db* tdbb, Ods::rhdf* header, const USHORT page_space, USHORT length)
 {
 /**************************************
  *
@@ -2853,22 +2851,22 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 
 	// If the object isn't a blob, things are a little simpler.
 
-	if (!(header->rhdf_flags & rhd_blob))
+	if (!(header->rhdf_flags & Ods::rhd_blob))
 	{
 		USHORT flags = header->rhdf_flags;
 		ULONG page_number = header->rhdf_f_page;
-		fb_assert(flags & rhd_incomplete);
+		fb_assert(flags & Ods::rhd_incomplete);
 
-		while (flags & rhd_incomplete)
+		while (flags & Ods::rhd_incomplete)
 		{
 			window.win_page = page_number;
-			data_page* dpage = (data_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_data);
+			Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_data);
 
-			if (dpage->dpg_header.pag_flags & dpg_orphan &&
-				dpage->dpg_header.pag_flags & dpg_full &&
+			if (dpage->dpg_header.pag_flags & Ods::dpg_orphan &&
+				dpage->dpg_header.pag_flags & Ods::dpg_full &&
 				dpage->dpg_count == 1)
 			{
-				header = (rhdf*) ((UCHAR *) dpage + dpage->dpg_rpt[0].dpg_offset);
+				header = (Ods::rhdf*) ((UCHAR *) dpage + dpage->dpg_rpt[0].dpg_offset);
 				flags = header->rhdf_flags;
 				page_number = header->rhdf_f_page;
 
@@ -2886,7 +2884,7 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 
 	// Object is a blob, and a big one at that
 
-	blh* blob = (blh*) header;
+	Ods::blh* blob = (Ods::blh*) header;
 	const ULONG* page1 = blob->blh_page;
 	const ULONG* const end1 = page1 + (length - BLH_SIZE) / sizeof(ULONG);
 
@@ -2895,7 +2893,7 @@ static void delete_tail(thread_db* tdbb, rhdf* header, const USHORT page_space, 
 		if (blob->blh_level == 2)
 		{
 			window.win_page = *page1;
-			blob_page* bpage = (blob_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_blob);
+			Ods::blob_page* bpage = (Ods::blob_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_blob);
 			ULONG* page2 = bpage->blp_page;
 			const ULONG* const end2 = page2 + ((bpage->blp_length) / sizeof(ULONG));
 
@@ -3001,28 +2999,28 @@ static void fragment(thread_db* tdbb,
 	   new version. */
 
 	WIN* window = &rpb->getWindow(tdbb);
-	data_page* page = (data_page*) window->win_buffer;
+	Ods::data_page* page = (Ods::data_page*) window->win_buffer;
 	const USHORT line = rpb->rpb_line;
 
-	rhdf* header;
+	Ods::rhdf* header;
 	if (rpb->rpb_transaction_nr != transaction->tra_number)
 	{
-		header = (rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
+		header = (Ods::rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
 		page->dpg_rpt[line].dpg_length = available_space = length;
 	}
 	else
 	{
 		if (rpb->rpb_flags & rpb_delta)
 		{
-			header = (rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
+			header = (Ods::rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
 			header->rhdf_flags |= rpb_delta;
 			page->dpg_rpt[line].dpg_length = available_space = length;
 		}
 		else
 		{
 			const USHORT space = compress(tdbb, page) - available_space;
-			header = (rhdf*) ((SCHAR *) page + space);
-			header->rhdf_flags = rhd_deleted;
+			header = (Ods::rhdf*) ((SCHAR *) page + space);
+			header->rhdf_flags = Ods::rhd_deleted;
 			header->rhdf_f_page = header->rhdf_f_line = 0;
 
 			const ULONG header_size = (transaction->tra_number > MAX_ULONG) ? RHDE_SIZE : RHD_SIZE;
@@ -3038,7 +3036,7 @@ static void fragment(thread_db* tdbb,
 		header->rhdf_b_line = rpb->rpb_b_line;
 	}
 
-	header->rhdf_flags |= rhd_gc_active;
+	header->rhdf_flags |= Ods::rhd_gc_active;
 
 	AutoLock gcLockGuard(tdbb, lockGCActive(tdbb, transaction, rpb));
 
@@ -3083,14 +3081,14 @@ static void fragment(thread_db* tdbb,
 	// That was unreasonablly easy.  Now re-fetch the original page and
 	// fill in the fragment pointer
 
-	page = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_data);
+	page = (Ods::data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_data);
 	CCH_precedence(tdbb, window, tail_rpb.rpb_page);
 	CCH_MARK(tdbb, window);
 
 	rpb->rpb_flags &= ~rpb_not_packed;
 
-	header = (rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
-	header->rhdf_flags = rhd_incomplete | rpb->rpb_flags;
+	header = (Ods::rhdf*) ((SCHAR *) page + page->dpg_rpt[line].dpg_offset);
+	header->rhdf_flags = Ods::rhd_incomplete | rpb->rpb_flags;
 	if (rpb->rpb_relation)
 		fb_assert((rpb->rpb_relation->getId() != 0) || (rpb->rpb_transaction_nr == 0));
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, RHDF_SIZE);
@@ -3105,7 +3103,7 @@ static void fragment(thread_db* tdbb,
 	}
 
 	if (!dcc.isPacked())
-		header->rhdf_flags |= rhd_not_packed;
+		header->rhdf_flags |= Ods::rhd_not_packed;
 
 	gcLockGuard.release();
 
@@ -3128,9 +3126,9 @@ static void fragment(thread_db* tdbb,
 		header->rhdf_b_line);
 #endif
 
-	if (page->dpg_header.pag_flags & dpg_swept)
+	if (page->dpg_header.pag_flags & Ods::dpg_swept)
 	{
-		page->dpg_header.pag_flags &= ~dpg_swept;
+		page->dpg_header.pag_flags &= ~Ods::dpg_swept;
 		mark_full(tdbb, rpb);
 	}
 	else
@@ -3170,7 +3168,7 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 	//   - allocation of a new pointer page requires the fetching of the PIP page with
 	//     an exlusive latch.
 
-	pointer_page* ppage = NULL;
+	Ods::pointer_page* ppage = NULL;
 	ULONG pp_sequence;
 	USHORT slot = 0;
 
@@ -3200,12 +3198,12 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 			break;
 		}
 
-		if (ppage->ppg_header.pag_flags & ppg_eof)
+		if (ppage->ppg_header.pag_flags & Ods::ppg_eof)
 		{
 			WIN new_pp_window(relPages->rel_pg_space_id, -1);
-			pointer_page* new_ppage = (pointer_page*) DPM_allocate(tdbb, &new_pp_window);
+			Ods::pointer_page* new_ppage = (Ods::pointer_page*) DPM_allocate(tdbb, &new_pp_window);
 			new_ppage->ppg_header.pag_type = pag_pointer;
-			new_ppage->ppg_header.pag_flags |= ppg_eof;
+			new_ppage->ppg_header.pag_flags |= Ods::ppg_eof;
 			new_ppage->ppg_relation = relation->getId();
 			new_ppage->ppg_sequence = ++pp_sequence;
 			slot = 0;
@@ -3225,7 +3223,7 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 			relPages->rel_slot_space = pp_sequence;
 
 			CCH_MARK(tdbb, &pp_window);
-			ppage->ppg_header.pag_flags &= ~ppg_eof;
+			ppage->ppg_header.pag_flags &= ~Ods::ppg_eof;
 			ppage->ppg_next = new_pp_window.win_page.getPageNum();
 			--pp_sequence;
 		}
@@ -3252,14 +3250,14 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 		}
 	}
 
-	data_page* dpage = (data_page*) PAG_allocate_pages(tdbb, window, cntAlloc, cntAlloc != 1);
+	Ods::data_page* dpage = (Ods::data_page*) PAG_allocate_pages(tdbb, window, cntAlloc, cntAlloc != 1);
 	const PageNumber firstPage = window->win_page;
 
 	dpage->dpg_sequence = pp_sequence * dbb->dbb_dp_per_pp + slot;
 	dpage->dpg_relation = relation->getId();
 	dpage->dpg_header.pag_type = pag_data;
 	if (type != DPM_primary) {
-		dpage->dpg_header.pag_flags |= dpg_secondary;
+		dpage->dpg_header.pag_flags |= Ods::dpg_secondary;
 	}
 	CCH_RELEASE(tdbb, window);
 
@@ -3269,7 +3267,7 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 	{
 		window->win_page = firstPage.getPageNum() + i;
 
-		dpage = (data_page*) CCH_fake(tdbb, window, 1);
+		dpage = (Ods::data_page*) CCH_fake(tdbb, window, 1);
 		dpage->dpg_sequence = pp_sequence * dbb->dbb_dp_per_pp + slot + i;
 		dpage->dpg_relation = relation->getId();
 		dpage->dpg_header.pag_type = pag_data;
@@ -3284,24 +3282,24 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 	ppage->ppg_count = MAX(ppage->ppg_count, slot + cntAlloc);
 
 	UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
-	PPG_DP_BIT_CLEAR(bits, slot, PPG_DP_ALL_BITS);
+		PPG_DP_BIT_CLEAR(bits, slot, Ods::PPG_DP_ALL_BITS);
 
 	if (type == DPM_primary)
 	{
 		// When restoring, mark slot as swept, data page will be marked by our caller
 		if (swept_at_restore(tdbb, relation))
-			PPG_DP_BIT_SET(bits, slot, ppg_dp_swept);
+			PPG_DP_BIT_SET(bits, slot, Ods::ppg_dp_swept);
 	}
 	else
-		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
+		PPG_DP_BIT_SET(bits, slot, Ods::ppg_dp_secondary);
 
 	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		fb_assert(ppage->ppg_page[slot + i] == 0);
 		ppage->ppg_page[slot + i] = firstPage.getPageNum() + i;
 
-		PPG_DP_BIT_CLEAR(bits, slot + i, PPG_DP_ALL_BITS);
-		PPG_DP_BIT_SET(bits, slot + i, ppg_dp_empty);
+		PPG_DP_BIT_CLEAR(bits, slot + i, Ods::PPG_DP_ALL_BITS);
+		PPG_DP_BIT_SET(bits, slot + i, Ods::ppg_dp_empty);
 	}
 
 	if (type == DPM_primary)
@@ -3356,9 +3354,9 @@ static UCHAR* find_space(thread_db*	tdbb,
 	CHECK_DBB(dbb);
 
 	const SSHORT aligned_size = ROUNDUP(size, ODS_ALIGNMENT);
-	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page* page = (Ods::data_page*) rpb->getWindow(tdbb).win_buffer;
 
-	if ((page->dpg_count > 0) && (type == DPM_primary) && (page->dpg_header.pag_flags & dpg_secondary))
+	if ((page->dpg_count > 0) && (type == DPM_primary) && (page->dpg_header.pag_flags & Ods::dpg_secondary))
 	{
 		// Attempt to put primary record on secondary data page - seems
 		// flags on PP is not correct. Fix flags and let caller to find
@@ -3377,7 +3375,7 @@ static UCHAR* find_space(thread_db*	tdbb,
 
 	{ // scope
 		const bool reserving = !(dbb->dbb_flags & DBB_no_reserve);
-		const data_page::dpg_repeat* index = page->dpg_rpt;
+		const Ods::data_page::dpg_repeat* index = page->dpg_rpt;
 		for (USHORT i = 0; i < page->dpg_count; i++, index++)
 		{
 			if (index->dpg_offset)
@@ -3386,9 +3384,9 @@ static UCHAR* find_space(thread_db*	tdbb,
 				used += ROUNDUP(index->dpg_length, ODS_ALIGNMENT);
 				if (type == DPM_primary && reserving)
 				{
-					const rhd* header = (rhd*) ((SCHAR *) page + index->dpg_offset);
+					const Ods::rhd* header = (Ods::rhd*) ((SCHAR *) page + index->dpg_offset);
 					if (!header->rhd_b_page &&
-						!(header->rhd_flags & (rhd_chain | rhd_blob | rhd_deleted | rhd_fragment)))
+						!(header->rhd_flags & (Ods::rhd_chain | Ods::rhd_blob | Ods::rhd_deleted | Ods::rhd_fragment)))
 					{
 						used += SPACE_FUDGE;
 					}
@@ -3400,16 +3398,16 @@ static UCHAR* find_space(thread_db*	tdbb,
 	} // scope
 
 	if (!slot)
-		used += sizeof(data_page::dpg_repeat);
+		used += sizeof(Ods::data_page::dpg_repeat);
 
 	// If there isn't space, give up
 
 	if (aligned_size > (int) dbb->dbb_page_size - used)
 	{
-		if (!(page->dpg_header.pag_flags & dpg_full))
+		if (!(page->dpg_header.pag_flags & Ods::dpg_full))
 		{
 			CCH_MARK(tdbb, &rpb->getWindow(tdbb));
-			page->dpg_header.pag_flags |= dpg_full;
+			page->dpg_header.pag_flags |= Ods::dpg_full;
 			mark_full(tdbb, rpb);
 		}
 		else
@@ -3439,7 +3437,7 @@ static UCHAR* find_space(thread_db*	tdbb,
 	fb_assert(space >= aligned_size);
 	space -= aligned_size;
 
-	data_page::dpg_repeat* index = &page->dpg_rpt[slot];
+	Ods::data_page::dpg_repeat* index = &page->dpg_rpt[slot];
 	index->dpg_length = size;
 	index->dpg_offset = space;
 	rpb->rpb_page = rpb->getWindow(tdbb).win_page.getPageNum();
@@ -3452,9 +3450,9 @@ static UCHAR* find_space(thread_db*	tdbb,
 	if (page->dpg_count == 1)
 	{
 		if (type == DPM_primary)
-			page->dpg_header.pag_flags &= ~dpg_secondary;
+			page->dpg_header.pag_flags &= ~Ods::dpg_secondary;
 		else
-			page->dpg_header.pag_flags |= dpg_secondary;
+			page->dpg_header.pag_flags |= Ods::dpg_secondary;
 	}
 
 	return (UCHAR*) page + space;
@@ -3474,15 +3472,15 @@ static bool get_header(WIN* window, USHORT line, record_param* rpb)
  *	the line is empty, return false;
  *
  **************************************/
-	const data_page* page = (data_page*) window->win_buffer;
+	const Ods::data_page* page = (Ods::data_page*) window->win_buffer;
 	if (line >= page->dpg_count)
 		return false;
 
-	const data_page::dpg_repeat* index = &page->dpg_rpt[line];
+	const Ods::data_page::dpg_repeat* index = &page->dpg_rpt[line];
 	if (index->dpg_offset == 0)
 		return false;
 
-	rhdf* header = (rhdf*) ((SCHAR *) page + index->dpg_offset);
+	Ods::rhdf* header = (Ods::rhdf*) ((SCHAR *) page + index->dpg_offset);
 	rpb->rpb_page = window->win_page.getPageNum();
 	rpb->rpb_line = line;
 	rpb->rpb_flags = header->rhdf_flags;
@@ -3517,7 +3515,7 @@ static bool get_header(WIN* window, USHORT line, record_param* rpb)
 }
 
 
-static pointer_page* get_pointer_page(thread_db* tdbb,
+static Ods::pointer_page* get_pointer_page(thread_db* tdbb,
 	   	 							  RelationPermanent* relation, RelationPages* relPages,
 									  WIN* window, ULONG sequence, USHORT lock)
 {
@@ -3550,7 +3548,7 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
 				break;			// we are in business again
 
 			window->win_page = (*vector)[vector->count() - 1];
-			const pointer_page* page = (pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
+			const Ods::pointer_page* page = (Ods::pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
 			const ULONG next_ppg = page->ppg_next;
 			CCH_RELEASE(tdbb, window);
 			if (!next_ppg)
@@ -3563,7 +3561,7 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
 	}
 
 	window->win_page = (*vector)[sequence];
-	pointer_page* page = (pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
+	Ods::pointer_page* page = (Ods::pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
 
 	if (page->ppg_relation != relation->getId() || page->ppg_sequence != sequence)
 		CORRUPT(259);	// msg 259 bad pointer page
@@ -3572,7 +3570,7 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
 }
 
 
-static rhd* locate_space(thread_db* tdbb,
+static Ods::rhd* locate_space(thread_db* tdbb,
 						 record_param* rpb,
 						 SSHORT size, PageStack& stack, Record* record, const Jrd::RecordStorageType type)
 {
@@ -3607,7 +3605,7 @@ static rhd* locate_space(thread_db* tdbb,
 		USHORT slot, line;
 		rpb->rpb_number.decompose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, line, slot, pp_sequence);
 
-		const pointer_page* ppage =
+		const Ods::pointer_page* ppage =
 			get_pointer_page(tdbb, relation, relPages, window, pp_sequence, LCK_read);
 
 		if (ppage)
@@ -3617,7 +3615,7 @@ static rhd* locate_space(thread_db* tdbb,
 				CCH_HANDOFF(tdbb, window, dp_primary, LCK_write, pag_data);
 				UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
 				if (space)
-					return (rhd*) space;
+					return (Ods::rhd*) space;
 
 				if (!window->win_page.isTemporary())
 					CCH_get_related(tdbb, window->win_page, lowPages);
@@ -3633,10 +3631,10 @@ static rhd* locate_space(thread_db* tdbb,
 	{
 		window->win_page = (type == DPM_primary) ? relPages->rel_last_free_pri_dp :
 												   relPages->rel_last_free_blb_dp;
-		data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
+		Ods::data_page* dpage = (Ods::data_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
 
-		const UCHAR wrongFlags = dpg_orphan |
-			((type == DPM_primary) ? dpg_secondary : 0);
+		const UCHAR wrongFlags = Ods::dpg_orphan |
+			((type == DPM_primary) ? Ods::dpg_secondary : 0);
 
 		const bool pageOk =
 			dpage->dpg_header.pag_type == pag_data &&
@@ -3649,7 +3647,7 @@ static rhd* locate_space(thread_db* tdbb,
 		{
 			UCHAR* space = find_space(tdbb, rpb, size, stack, record, type);
 			if (space)
-				return (rhd*)space;
+				return (Ods::rhd*)space;
 		}
 		else
 			CCH_RELEASE(tdbb, window);
@@ -3687,7 +3685,7 @@ static rhd* locate_space(thread_db* tdbb,
 		else
 			relPages->rel_sec_data_space = pp_sequence;
 
-		const pointer_page* ppage =
+		const Ods::pointer_page* ppage =
 			get_pointer_page(tdbb, relation, relPages, window, pp_sequence, ppLock);
 		if (!ppage)
 			BUGCHECK(254);	// msg 254 pointer page vanished from relation list in locate_space
@@ -3700,7 +3698,7 @@ static rhd* locate_space(thread_db* tdbb,
 				continue;
 
 			UCHAR* bits = (UCHAR *) (ppage->ppg_page + dbb->dbb_dp_per_pp);
-			if (PPG_DP_BIT_TEST(bits, slot, ppg_dp_full))
+			if (PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_full))
 				continue;
 
 			// hvlad: avoid creating circle in precedence graph, if possible
@@ -3717,9 +3715,9 @@ static rhd* locate_space(thread_db* tdbb,
 
 			// hvlad: if data page is empty, we could change its primary\secondary
 			// type as needed (i.e. to be same as "type" passed). Also, we must clear
-			// ppg_dp_empty bit. To do it, we need to re-fetch PP with write lock.
-			bool dp_is_empty = PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty);
-			bool dp_is_secondary = PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary);
+			// Ods::ppg_dp_empty bit. To do it, we need to re-fetch PP with write lock.
+			bool dp_is_empty = PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_empty);
+			bool dp_is_secondary = PPG_DP_BIT_TEST(bits, slot, Ods::ppg_dp_secondary);
 
 			if (bulkInsert && !dp_is_empty)
 				continue;
@@ -3743,17 +3741,17 @@ static rhd* locate_space(thread_db* tdbb,
 				CCH_precedence(tdbb, window, dp_number);
 				CCH_MARK(tdbb, window);
 
-				PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_empty);
+				PPG_DP_BIT_CLEAR(bits, slot, Ods::ppg_dp_empty);
 				if (type == DPM_primary)
 				{
-					PPG_DP_BIT_CLEAR(bits, slot, ppg_dp_secondary);
+					PPG_DP_BIT_CLEAR(bits, slot, Ods::ppg_dp_secondary);
 
 					// When restoring, mark slot as swept, data page will be marked by our caller
 					if (swept_at_restore(tdbb, relation))
-						PPG_DP_BIT_SET(bits, slot, ppg_dp_swept);
+						PPG_DP_BIT_SET(bits, slot, Ods::ppg_dp_swept);
 				}
 				else
-					PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
+					PPG_DP_BIT_SET(bits, slot, Ods::ppg_dp_secondary);
 
 				dp_is_secondary = !(type == DPM_primary);
 				tries = 0;
@@ -3761,14 +3759,14 @@ static rhd* locate_space(thread_db* tdbb,
 
 			if ((type == DPM_primary) ^ dp_is_secondary)
 			{
-				data_page* dpage = NULL;
+				Ods::data_page* dpage = NULL;
 				if (tries && (slot + 1 < ppage->ppg_count))
 				{
-					dpage = (data_page*) CCH_HANDOFF_TIMEOUT(tdbb, window, dp_number, LCK_write, pag_data, 0);
+					dpage = (Ods::data_page*) CCH_HANDOFF_TIMEOUT(tdbb, window, dp_number, LCK_write, pag_data, 0);
 					tries--;
 				}
 				else
-					dpage = (data_page*) CCH_HANDOFF(tdbb, window, dp_number, LCK_write, pag_data);
+					dpage = (Ods::data_page*) CCH_HANDOFF(tdbb, window, dp_number, LCK_write, pag_data);
 
 				if (dpage)
 				{
@@ -3780,13 +3778,13 @@ static rhd* locate_space(thread_db* tdbb,
 						else if (isBlob)
 							relPages->rel_last_free_blb_dp = dp_number;
 
-						return (rhd*)space;
+						return (Ods::rhd*)space;
 					}
 				}
 
 				ppLock = LCK_read;
 				window->win_page = pp_number;
-				ppage = (pointer_page*) CCH_FETCH(tdbb, window, ppLock, pag_pointer);
+				ppage = (Ods::pointer_page*) CCH_FETCH(tdbb, window, ppLock, pag_pointer);
 
 				if (!ppage)
 					BUGCHECK(254);
@@ -3796,7 +3794,7 @@ static rhd* locate_space(thread_db* tdbb,
 		const UCHAR flags = ppage->ppg_header.pag_flags;
 		CCH_RELEASE(tdbb, window);
 
-		if (flags & ppg_eof)
+		if (flags & Ods::ppg_eof)
 			break;
 	}
 
@@ -3833,7 +3831,7 @@ static rhd* locate_space(thread_db* tdbb,
 		relation->getId(), window->win_page.getPageNum(), size);
 #endif
 
-	return (rhd*) space;
+	return (Ods::rhd*) space;
 }
 
 
@@ -3865,7 +3863,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	// and re-fetch the data page.  If the data page is still empty, set
 	// it's "full" bit on the pointer page.
 
-	data_page* dpage = (data_page*) rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page* dpage = (Ods::data_page*) rpb->getWindow(tdbb).win_buffer;
 	const ULONG sequence = dpage->dpg_sequence;
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
@@ -3882,7 +3880,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	// is accomplished by timing out the second latch request and retrying
 	// the whole thing.
 
-	pointer_page* ppage = 0;
+	Ods::pointer_page* ppage = 0;
 	do {
 		ppage = get_pointer_page(tdbb, relation->getPermanent(), relPages, &pp_window, pp_sequence, LCK_write);
 		if (!ppage)
@@ -3897,7 +3895,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		}
 
 		// Fetch the data page, but timeout after 1 second to break a possible deadlock.
-		dpage = (data_page*) CCH_FETCH_TIMEOUT(tdbb, &rpb->getWindow(tdbb), LCK_read, pag_data, -1);
+		dpage = (Ods::data_page*) CCH_FETCH_TIMEOUT(tdbb, &rpb->getWindow(tdbb), LCK_read, pag_data, -1);
 
 		// In case of a latch timeout, release the latch on the pointer page and retry.
 		if (!dpage)
@@ -3909,19 +3907,19 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
 	// page can't be full and empty at the same time
-	fb_assert(!(flags & ppg_dp_full) || !dpEmpty);
+	fb_assert(!(flags & Ods::ppg_dp_full) || !dpEmpty);
 
 	// Check if PP flags already equal to the DP flags
 
 	UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
 
-	const UCHAR bit_full_set  = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_full))  == 0) ? 0 : dpg_full;
-	const UCHAR bit_large_set = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_large)) == 0) ? 0 : dpg_large;
-	const UCHAR bit_swept_set = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_swept)) == 0) ? 0 : dpg_swept;
-	const UCHAR bit_scnd_set  = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_secondary)) == 0) ? 0 : dpg_secondary;
-	const bool bit_empty_set  = ((*byte & PPG_DP_BIT_MASK(slot, ppg_dp_empty)) != 0);
+	const UCHAR bit_full_set  = ((*byte & PPG_DP_BIT_MASK(slot, Ods::ppg_dp_full))  == 0) ? 0 : Ods::dpg_full;
+	const UCHAR bit_large_set = ((*byte & PPG_DP_BIT_MASK(slot, Ods::ppg_dp_large)) == 0) ? 0 : Ods::dpg_large;
+	const UCHAR bit_swept_set = ((*byte & PPG_DP_BIT_MASK(slot, Ods::ppg_dp_swept)) == 0) ? 0 : Ods::dpg_swept;
+	const UCHAR bit_scnd_set  = ((*byte & PPG_DP_BIT_MASK(slot, Ods::ppg_dp_secondary)) == 0) ? 0 : Ods::dpg_secondary;
+	const bool bit_empty_set  = ((*byte & PPG_DP_BIT_MASK(slot, Ods::ppg_dp_empty)) != 0);
 
-	if ((flags & (dpg_full | dpg_large | dpg_swept | dpg_secondary)) ==
+	if ((flags & (Ods::dpg_full | Ods::dpg_large | Ods::dpg_swept | Ods::dpg_secondary)) ==
 			(bit_full_set | bit_large_set | bit_swept_set | bit_scnd_set) &&
 		(dpEmpty == bit_empty_set))
 	{
@@ -3933,8 +3931,8 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	CCH_MARK(tdbb, &pp_window);
 
 
-	UCHAR bit = PPG_DP_BIT_MASK(slot, ppg_dp_full);
-	if (flags & dpg_full)
+	UCHAR bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_full);
+	if (flags & Ods::dpg_full)
 	{
 		*byte |= bit;
 		if (slot == ppage->ppg_min_space)
@@ -3943,7 +3941,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 			while (ppage->ppg_min_space < ppage->ppg_count)
 			{
 				ppage->ppg_min_space++;
-				if (!PPG_DP_BIT_TEST(bits, ppage->ppg_min_space, ppg_dp_full))
+				if (!PPG_DP_BIT_TEST(bits, ppage->ppg_min_space, Ods::ppg_dp_full))
 					break;
 			}
 		}
@@ -3953,31 +3951,31 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 		*byte &= ~bit;
 		ppage->ppg_min_space = MIN(slot, ppage->ppg_min_space);
 
-		if (flags & dpg_secondary)
+		if (flags & Ods::dpg_secondary)
 			relPages->rel_sec_data_space = MIN(pp_sequence, relPages->rel_sec_data_space);
 		else
 			relPages->rel_pri_data_space = MIN(pp_sequence, relPages->rel_pri_data_space);
 	}
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_large);
-	if (flags & dpg_large)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_large);
+	if (flags & Ods::dpg_large)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_swept);
-	if (flags & dpg_swept)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_swept);
+	if (flags & Ods::dpg_swept)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_secondary);
-	if (flags & dpg_secondary)
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_secondary);
+	if (flags & Ods::dpg_secondary)
 		*byte |= bit;
 	else
 		*byte &= ~bit;
 
-	bit = PPG_DP_BIT_MASK(slot, ppg_dp_empty);
+	bit = PPG_DP_BIT_MASK(slot, Ods::ppg_dp_empty);
 	if (dpEmpty)
 	{
 		*byte |= bit;
@@ -4025,10 +4023,10 @@ static void store_big_record(thread_db* tdbb,
 	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
 	PageNumber prior(relPages->rel_pg_space_id, 0);
 
-	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
-	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
+	// The last fragment should have Ods::rhd header because Ods::rhd_incomplete flag won't be set for it.
+	// It's important for get_header() function which relies on Ods::rhd_incomplete flag to determine header size.
 	ULONG header_size = RHD_SIZE;
-	ULONG max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
+	ULONG max_data = dbb->dbb_page_size - sizeof(Ods::data_page) - header_size;
 
 	// Fill up data pages tail first until what's left fits on a single page.
 
@@ -4039,9 +4037,9 @@ static void store_big_record(thread_db* tdbb,
 	{
 		// Allocate and format data page and fragment header
 
-		data_page* page = (data_page*) DPM_allocate(tdbb, &rpb->getWindow(tdbb));
+		Ods::data_page* page = (Ods::data_page*) DPM_allocate(tdbb, &rpb->getWindow(tdbb));
 		page->dpg_header.pag_type = pag_data;
-		page->dpg_header.pag_flags = dpg_orphan | dpg_full;
+		page->dpg_header.pag_flags = Ods::dpg_orphan | Ods::dpg_full;
 		page->dpg_relation = rpb->rpb_relation->getId();
 		page->dpg_count = 1;
 
@@ -4053,21 +4051,21 @@ static void store_big_record(thread_db* tdbb,
 		const auto tail_size = tailDcc.getPackedLength();
 		fb_assert(tail_size <= max_data);
 
-		// Cast to (rhdf*) but use only rhd fields for the last fragment
-		rhdf* header = (rhdf*) &page->dpg_rpt[1];
+		// Cast to (Ods::rhdf*) but use only Ods::rhd fields for the last fragment
+		Ods::rhdf* header = (Ods::rhdf*) &page->dpg_rpt[1];
 		page->dpg_rpt[0].dpg_offset = (UCHAR*) header - (UCHAR*) page;
 		page->dpg_rpt[0].dpg_length = tail_size + header_size;
-		header->rhdf_flags = rhd_fragment;
+		header->rhdf_flags = Ods::rhd_fragment;
 
 		if (prior.getPageNum())
 		{
 			// This is not the last fragment
-			header->rhdf_flags |= rhd_incomplete;
+			header->rhdf_flags |= Ods::rhd_incomplete;
 			header->rhdf_f_page = prior.getPageNum();
 		}
 
 		if (!tailDcc.isPacked())
-			header->rhdf_flags |= rhd_not_packed;
+			header->rhdf_flags |= Ods::rhd_not_packed;
 
 		const auto out = (UCHAR*) header + header_size;
 		tailDcc.pack(in, out);
@@ -4089,9 +4087,9 @@ static void store_big_record(thread_db* tdbb,
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 		prior = rpb->getWindow(tdbb).win_page;
 
-		// Other fragments except the last one should have rhdf header
+		// Other fragments except the last one should have Ods::rhdf header
 		header_size = RHDF_SIZE;
-		max_data = dbb->dbb_page_size - sizeof(data_page) - header_size;
+		max_data = dbb->dbb_page_size - sizeof(Ods::data_page) - header_size;
 	} while (size > max_data);
 
 	// What's left fits on a page. Store it somewhere.
@@ -4100,11 +4098,11 @@ static void store_big_record(thread_db* tdbb,
 
 	stack.push(prior);
 
-	rhdf* header = (rhdf*) locate_space(tdbb, rpb, (SSHORT) (RHDF_SIZE + size), stack, NULL, type);
+	Ods::rhdf* header = (Ods::rhdf*) locate_space(tdbb, rpb, (SSHORT) (RHDF_SIZE + size), stack, NULL, type);
 
 	rpb->rpb_flags &= ~rpb_not_packed;
 
-	header->rhdf_flags = rhd_incomplete | rhd_large | rpb->rpb_flags;
+	header->rhdf_flags = Ods::rhd_incomplete | Ods::rhd_large | rpb->rpb_flags;
 	if (rpb->rpb_relation)
 		fb_assert((rpb->rpb_relation->getId() != 0) || (rpb->rpb_transaction_nr == 0));
 	Ods::writeTraNum(header, rpb->rpb_transaction_nr, RHDF_SIZE);
@@ -4115,11 +4113,11 @@ static void store_big_record(thread_db* tdbb,
 	header->rhdf_f_line = 0;
 
 	if (!dcc.isPacked())
-		header->rhdf_flags |= rhd_not_packed;
+		header->rhdf_flags |= Ods::rhd_not_packed;
 
 	dcc.pack(rpb->rpb_address, header->rhdf_data);
 
-	data_page* page = (data_page*) rpb->getWindow(tdbb).win_buffer;
+	Ods::data_page* page = (Ods::data_page*) rpb->getWindow(tdbb).win_buffer;
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
@@ -4141,17 +4139,17 @@ static void store_big_record(thread_db* tdbb,
 	// When restoring, mark primary data page as swept, pointer page already marked by locate_space()
 	if (swept_at_restore(tdbb, rpb->rpb_relation->getPermanent()) && (type == DPM_primary))
 	{
-		page->dpg_header.pag_flags |= dpg_swept;
+		page->dpg_header.pag_flags |= Ods::dpg_swept;
 	}
-	else if (page->dpg_header.pag_flags & dpg_swept)
+	else if (page->dpg_header.pag_flags & Ods::dpg_swept)
 	{
-		page->dpg_header.pag_flags &= ~dpg_swept;
+		page->dpg_header.pag_flags &= ~Ods::dpg_swept;
 		markPP = true;
 	}
 
-	if (!(page->dpg_header.pag_flags & dpg_large))
+	if (!(page->dpg_header.pag_flags & Ods::dpg_large))
 	{
-		page->dpg_header.pag_flags |= dpg_large;
+		page->dpg_header.pag_flags |= Ods::dpg_large;
 		markPP = true;
 	}
 
@@ -4160,3 +4158,6 @@ static void store_big_record(thread_db* tdbb,
 	else
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
+
+
+} // namespace Firebird::Jrd

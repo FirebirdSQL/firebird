@@ -41,13 +41,13 @@
 #endif
 
 constexpr int max_levels = 4;
-typedef msgnod* msgnod_ptr_array[max_levels];
+typedef Firebird::msgnod* msgnod_ptr_array[max_levels];
 
 static char* copy_terminate(char* dest, const char* src, size_t bufsize);
 static void do_codes(const TEXT* gen_c_filename, const TEXT* gen_pas_filename);
 static USHORT do_msgs(const TEXT*);
-static void propagate(msgnod**, msgnod**, ULONG, ULONG);
-static SLONG write_bucket(const msgnod*, USHORT);
+static void propagate(Firebird::msgnod**, Firebird::msgnod**, ULONG, ULONG);
+static SLONG write_bucket(const Firebird::msgnod*, USHORT);
 
 static SLONG global_file_position;
 static int global_file;
@@ -295,9 +295,9 @@ static USHORT do_msgs(const TEXT* filename)
 
 	// Divy up memory among various buffers
 	// Memory leaking until the program finishes?
-	msgrec* leaf_node = (msgrec*) malloc((SLONG) MSG_BUCKET);
-	msgrec* const leaf = leaf_node;
-	const TEXT* const end_leaf = (TEXT*) leaf + MSG_BUCKET;
+	Firebird::msgrec* leaf_node = (Firebird::msgrec*) malloc((SLONG) Firebird::MSG_BUCKET);
+	Firebird::msgrec* const leaf = leaf_node;
+	const TEXT* const end_leaf = (TEXT*) leaf + Firebird::MSG_BUCKET;
 
 	// Open output file
 
@@ -310,14 +310,14 @@ static USHORT do_msgs(const TEXT* filename)
 	global_file_position = 0;
 
 	// Format and write header
-	isc_msghdr header;
-	header.msghdr_major_version = MSG_MAJOR_VERSION;
-	header.msghdr_minor_version = MSG_MINOR_VERSION;
-	header.msghdr_bucket_size = MSG_BUCKET;
+	Firebird::isc_msghdr header;
+	header.msghdr_major_version = Firebird::MSG_MAJOR_VERSION;
+	header.msghdr_minor_version = Firebird::MSG_MINOR_VERSION;
+	header.msghdr_bucket_size = Firebird::MSG_BUCKET;
 	// CVC: Since this is an unused field that holds garbage in the *.msg file,
 	// we'll initialize it to the date the FB project was registered with SF.
 	header.msghdr_origin = 20000730; // 2000-07-30
-	write_bucket((msgnod*) &header, sizeof(header));
+	write_bucket((Firebird::msgnod*) &header, sizeof(header));
 
 	// Write out messages building B-tree
 
@@ -333,7 +333,7 @@ static USHORT do_msgs(const TEXT* filename)
 
 		if (leaf_node->msgrec_text + textLen >= end_leaf)
 		{
-			position = write_bucket((msgnod*) leaf, n);
+			position = write_bucket((Firebird::msgnod*) leaf, n);
 			propagate(buckets, nodes, prior_code, position);
 			leaf_node = leaf;
 		}
@@ -352,7 +352,7 @@ static USHORT do_msgs(const TEXT* filename)
 		leaf_node->msgrec_length = static_cast<USHORT>(textLen);
 		// Let's not store trash in flags.
 		leaf_node->msgrec_flags = 0;
-		//n = offsetof(msgrec, msgrec_text) + textLen; // useless? See assignment below.
+		//n = offsetof(Firebird::msgrec, msgrec_text) + textLen; // useless? See assignment below.
 		TEXT* p = leaf_node->msgrec_text;
 		memcpy(p, message.text, textLen);
 		n = static_cast<USHORT>(p + textLen - (SCHAR*) leaf); // For the next iteration.
@@ -364,7 +364,7 @@ static USHORT do_msgs(const TEXT* filename)
 	if (leaf_node->msgrec_text + len >= end_leaf)
 	{
 		n = (SCHAR *) leaf_node - (SCHAR *) leaf;
-		position = write_bucket((msgnod*) leaf, n);
+		position = write_bucket((Firebird::msgnod*) leaf, n);
 		propagate(buckets, nodes, prior_code, position);
 		leaf_node = leaf;
 	}
@@ -373,15 +373,15 @@ static USHORT do_msgs(const TEXT* filename)
 	leaf_node->msgrec_length = 0;
 	leaf_node->msgrec_flags = 0;
 	n = (SCHAR *) leaf_node - (SCHAR *) leaf;
-	position = write_bucket((msgnod*) leaf, n);
+	position = write_bucket((Firebird::msgnod*) leaf, n);
 
 	// Finish off upper levels of tree
 
 	header.msghdr_levels = 1;
 
-	for (msgnod** ptr = nodes, **ptr2 = buckets; *ptr; ptr++, ptr2++)
+	for (Firebird::msgnod** ptr = nodes, **ptr2 = buckets; *ptr; ptr++, ptr2++)
 	{
-		msgnod* node = *ptr;
+		Firebird::msgnod* node = *ptr;
 		node->msgnod_code = ~0;
 		node->msgnod_seek = position;
 		n = (SCHAR *) (node + 1) - (SCHAR *) * ptr2;
@@ -402,7 +402,7 @@ static USHORT do_msgs(const TEXT* filename)
 }
 
 
-static void propagate(msgnod** buckets, msgnod** nodes, ULONG prior_code, ULONG position)
+static void propagate(Firebird::msgnod** buckets, Firebird::msgnod** nodes, ULONG prior_code, ULONG position)
 {
 /**************************************
  *
@@ -419,32 +419,32 @@ static void propagate(msgnod** buckets, msgnod** nodes, ULONG prior_code, ULONG 
 
 	if (!*nodes)
 	{
-		*nodes = *buckets = (msgnod*) malloc((SLONG) MSG_BUCKET);
+		*nodes = *buckets = (Firebird::msgnod*) malloc((SLONG) Firebird::MSG_BUCKET);
 		nodes[1] = NULL;
 	}
 
 	// Insert into current bucket
 
-	msgnod* node = (*nodes)++;
+	Firebird::msgnod* node = (*nodes)++;
 	node->msgnod_code = prior_code;
 	node->msgnod_seek = position;
 
 	// Check for full bucket.  If not, we're done
 
-	const msgnod* const end = (msgnod*) ((SCHAR*) *buckets + MSG_BUCKET);
+	const Firebird::msgnod* const end = (Firebird::msgnod*) ((SCHAR*) *buckets + Firebird::MSG_BUCKET);
 
 	if (*nodes < end)
 		return;
 
 	// Bucket is full -- write it out, propagate the split, and re-initialize
 
-	position = write_bucket(*buckets, MSG_BUCKET);
+	position = write_bucket(*buckets, Firebird::MSG_BUCKET);
 	propagate(buckets + 1, nodes + 1, prior_code, position);
 	*nodes = *buckets;
 }
 
 
-static SLONG write_bucket(const msgnod* bucket, USHORT length)
+static SLONG write_bucket(const Firebird::msgnod* bucket, USHORT length)
 {
 /**************************************
  *

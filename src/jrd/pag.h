@@ -40,7 +40,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/lls.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Page control block -- used by PAG to keep track of critical constants
 /**
@@ -91,8 +91,8 @@ public:
 	~PageSpace();
 
 	USHORT pageSpaceID;
-	Firebird::AtomicCounter pipHighWater;		// Lowest PIP with space
-	Firebird::AtomicCounter pipWithExtent;		// Lowest PIP with free extent
+	AtomicCounter pipHighWater;		// Lowest PIP with space
+	AtomicCounter pipWithExtent;		// Lowest PIP with free extent
 	ULONG pipFirst;								// First pointer page
 	ULONG scnFirst;								// First SCN's page
 
@@ -148,7 +148,7 @@ private:
 class PageManager : public pool_alloc<type_PageManager>
 {
 public:
-	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool) :
+	explicit PageManager(Database* aDbb, MemoryPool& aPool) :
 		dbb(aDbb),
 		pageSpaces(aPool),
 		pool(aPool)
@@ -184,7 +184,7 @@ public:
 	ULONG pagesPerSCN;			// Slots per SCN's page
 
 private:
-	typedef Firebird::SortedArray<PageSpace*, Firebird::EmptyStorage<PageSpace*>,
+	typedef SortedArray<PageSpace*, EmptyStorage<PageSpace*>,
 		USHORT, PageSpace> PageSpaceArray;
 
 	PageSpace* addPageSpace(const USHORT pageSpaceID);
@@ -192,8 +192,8 @@ private:
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
-	Firebird::MemoryPool& pool;
-	Firebird::Mutex	initTmpMtx;
+	MemoryPool& pool;
+	Mutex	initTmpMtx;
 	USHORT tempPageSpaceID;
 	bool tempFileCreated;
 };
@@ -209,7 +209,7 @@ public:
 		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
 	}
 
-	// Required to be able to keep it in Firebird::Stack
+	// Required to be able to keep it in Stack
 	inline PageNumber() noexcept
 		: pageNum(0), pageSpaceID(INVALID_PAGE_SPACE)
 	{ }
@@ -321,8 +321,8 @@ private:
 const PageNumber ZERO_PAGE_NUMBER(DB_PAGE_SPACE, 0);
 const PageNumber HEADER_PAGE_NUMBER(DB_PAGE_SPACE, HEADER_PAGE);
 
-typedef Firebird::Stack<PageNumber> PageStack;
+typedef Stack<PageNumber> PageStack;
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PAG_H

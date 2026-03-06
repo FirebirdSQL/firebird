@@ -31,9 +31,9 @@
 #include "../../common/classes/fb_string.h"
 #include "../../common/isc_s_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
-struct TraceLogHeader final : public Firebird::MemoryHeader
+struct TraceLogHeader final : public MemoryHeader
 {
 	static constexpr USHORT TRACE_LOG_VERSION = 2;
 
@@ -44,10 +44,10 @@ struct TraceLogHeader final : public Firebird::MemoryHeader
 	ULONG flags;
 };
 
-class TraceLog final : public Firebird::IpcObject
+class TraceLog final : public IpcObject
 {
 public:
-	TraceLog(Firebird::MemoryPool& pool, const Firebird::PathName& fileName, bool reader);
+	TraceLog(MemoryPool& pool, const PathName& fileName, bool reader);
 	virtual ~TraceLog();
 
 	FB_SIZE_T read(void* buf, FB_SIZE_T size);
@@ -62,9 +62,9 @@ private:
 	static constexpr ULONG FLAG_DONE = 0x0002;	// set when reader is gone
 
 	void mutexBug(int osErrorCode, const char* text) override;
-	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	bool initialize(SharedMemoryBase*, bool) override;
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_LOG; }
+	USHORT getType() const override { return SharedMemoryBase::SRAM_TRACE_LOG; }
 	USHORT getVersion() const override { return TraceLogHeader::TRACE_LOG_VERSION; }
 	const char* getName() const override { return "TraceLog"; }
 
@@ -75,9 +75,9 @@ private:
 	FB_SIZE_T getFree(bool useMax);	// available for write
 	void extend(FB_SIZE_T size);
 
-	Firebird::AutoPtr<Firebird::SharedMemory<TraceLogHeader> > m_sharedMemory;
+	AutoPtr<SharedMemory<TraceLogHeader> > m_sharedMemory;
 	bool m_reader;
-	Firebird::string m_fullMsg;
+	string m_fullMsg;
 
 	class TraceLogGuard
 	{
@@ -98,6 +98,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // TRACE_LOG

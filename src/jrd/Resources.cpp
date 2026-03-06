@@ -16,8 +16,8 @@
 #include "../jrd/Function.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
@@ -67,11 +67,14 @@ jrd_rel* CachedResource<jrd_rel, RelationPermanent>::operator()(thread_db* tdbb)
 	return cacheElement->getVersioned(tdbb, cacheElement->isSystem() ? CacheFlag::NOSCAN : 0);
 }
 
-void Format::hash(Firebird::sha512& digest) const
+void Format::hash(sha512& digest) const
 {
-	// Here is supposed that in fmt_desc (i.e. Firebird::Array) all elements are located
+	// Here is supposed that in fmt_desc (i.e. Array) all elements are located
 	// one after another starting with begin() position.
 	// If that became wrong this function to be modified.
 
 	digest.process(fmt_desc.getCount() * sizeof(dsc), fmt_desc.begin());
 }
+
+
+} // namespace Firebird::Jrd

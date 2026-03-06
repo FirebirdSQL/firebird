@@ -36,7 +36,9 @@
 
 #include <windows.h>
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
+
 
 constexpr unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
 
@@ -236,3 +238,6 @@ static USHORT report_status(DWORD state, DWORD exit_code, DWORD checkpoint, DWOR
 
 	return ret;
 }
+
+
+}	// namespace Firebird::Remote

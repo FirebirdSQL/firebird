@@ -28,7 +28,7 @@
 #include "../common/StatusArg.h"
 #include "../common/utils_proto.h"
 #include "../common/os/os_utils.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include "Utils.h"
 #include "Config.h"
@@ -46,8 +46,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-using namespace Firebird;
-using namespace Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 namespace
 {
@@ -555,3 +556,6 @@ void Config::splitConnectionString(const string& input, string& database, string
 		}
 	}
 }
+
+
+} // namespace Firebird::Jrd::Replication

@@ -31,19 +31,19 @@
 
 #include "../common/classes/sparse_bitmap.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Bitmap of record numbers
-typedef Firebird::SparseBitmap<FB_UINT64> RecordBitmap;
+typedef SparseBitmap<FB_UINT64> RecordBitmap;
 
 // Bitmap of page numbers
-typedef Firebird::SparseBitmap<ULONG> PageBitmap;
+typedef SparseBitmap<ULONG> PageBitmap;
 
 // Bitmap of generic 32-bit integers
-typedef Firebird::SparseBitmap<ULONG> UInt32Bitmap;
+typedef SparseBitmap<ULONG> UInt32Bitmap;
 
 // Bitmap of transaction numbers
-typedef Firebird::SparseBitmap<TraNumber> TransactionBitmap;
+typedef SparseBitmap<TraNumber> TransactionBitmap;
 
 // Please do not try to turn these macros to inline routines simply.
 // They are used in very performance-sensitive places and we don't want
@@ -68,7 +68,7 @@ typedef Firebird::SparseBitmap<TraNumber> TransactionBitmap;
 #define TBM_SET(POOL_PTR, BITMAP_PPTR, VALUE) \
 	(*(BITMAP_PPTR) ? *(BITMAP_PPTR) : (*(BITMAP_PPTR) = FB_NEW_POOL(*(POOL_PTR)) Jrd::TransactionBitmap(*(POOL_PTR))))->set(VALUE)
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_SBM_H
 

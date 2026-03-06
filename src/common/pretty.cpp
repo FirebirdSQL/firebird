@@ -32,9 +32,13 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/prett_proto.h"
 #include "../yvalve/gds_proto.h"
+
+namespace Firebird
+{
+
 
 static inline void ADVANCE_PTR(TEXT*& ptr) noexcept
 {
@@ -899,3 +903,5 @@ static int print_word( ctl* control)
 	return (v2 << 8) | v1;
 }
 
+
+}  // namespace Firebird

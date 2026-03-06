@@ -182,10 +182,10 @@ public:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-#define ALLOC_PARAMS , const Firebird::CustomSourceLocation location = Firebird::CustomSourceLocation::current()
-#define ALLOC_PARAMS_NO_COMMA const Firebird::CustomSourceLocation location = Firebird::CustomSourceLocation::current()
-#define ALLOC_PARAMS_DEF , const Firebird::CustomSourceLocation location
-#define ALLOC_PARAMS_NO_COMMA_DEF const Firebird::CustomSourceLocation location
+#define ALLOC_PARAMS , const ::Firebird::CustomSourceLocation location = ::Firebird::CustomSourceLocation::current()
+#define ALLOC_PARAMS_NO_COMMA const ::Firebird::CustomSourceLocation location = ::Firebird::CustomSourceLocation::current()
+#define ALLOC_PARAMS_DEF , const ::Firebird::CustomSourceLocation location
+#define ALLOC_PARAMS_NO_COMMA_DEF const ::Firebird::CustomSourceLocation location
 #define ALLOC_PASS_ARGS , location
 #define ALLOC_PASS_ARGS_NO_COMMA location
 #else
@@ -303,25 +303,19 @@ private:
 
 void initExternalMemoryPool();
 
-} // namespace Firebird
-
-static inline Firebird::MemoryPool* getDefaultMemoryPool() noexcept
+static inline MemoryPool* getDefaultMemoryPool() noexcept
 {
-	fb_assert(Firebird::MemoryPool::defaultMemoryManager);
-	return Firebird::MemoryPool::defaultMemoryManager;
+	fb_assert(MemoryPool::defaultMemoryManager);
+	return MemoryPool::defaultMemoryManager;
 }
 
-static inline Firebird::MemoryPool* getExternalMemoryPool() noexcept
+static inline MemoryPool* getExternalMemoryPool() noexcept
 {
-	using namespace Firebird;
-
 	if (!MemoryPool::externalMemoryManager)
 		initExternalMemoryPool();
 
 	return MemoryPool::externalMemoryManager;
 }
-
-namespace Firebird {
 
 // Class intended to manage execution context pool stack
 // Declare instance of this class when you need to set new context pool and it
@@ -372,8 +366,6 @@ private:
 
 } // namespace Firebird
 
-using Firebird::MemoryPool;
-
 // operators new and delete
 
 inline void* operator new(size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS)
@@ -388,12 +380,12 @@ inline void* operator new[](size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS)
 
 inline void operator delete(void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
 {
-	MemoryPool::globalFree(mem);
+	Firebird::MemoryPool::globalFree(mem);
 }
 
 inline void operator delete[](void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS_DEF) noexcept
 {
-	MemoryPool::globalFree(mem);
+	Firebird::MemoryPool::globalFree(mem);
 }
 
 #ifdef DEBUG_GDS_ALLOC

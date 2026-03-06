@@ -35,11 +35,12 @@
 #include "../common/classes/ParsedList.h"
 #include "../common/isc_proto.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../auth/SecDbCache.h"
 
-using namespace Firebird;
-using namespace Auth;
+namespace Firebird::Auth
+{
+
 
 namespace {
 
@@ -70,7 +71,7 @@ struct Metadata
 InitInstance<Metadata> meta;
 
 
-class SrpServer : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper> >
+class SrpServer : public StdPlugin<IServerImpl<SrpServer, CheckStatusWrapper>>
 {
 public:
 	explicit SrpServer(IPluginConfig* par)
@@ -141,7 +142,7 @@ public:
 
 	static void forceClean(IProvider* p, CachedSecurityDatabase::Instance& instance)
 	{
-		Firebird::PathName secDbName(instance->secureDbName);
+		PathName secDbName(instance->secureDbName);
 
 		instance.reset();
 		cleanup();
@@ -418,8 +419,6 @@ SimpleFactory<SrpServerImpl<sha512> > factory_sha512;
 } // anonymous namespace
 
 
-namespace Auth {
-
 void registerSrpServer(IPluginManager* iPlugin)
 {
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::plugName, &factory_sha1);
@@ -429,4 +428,5 @@ void registerSrpServer(IPluginManager* iPlugin)
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, RemotePassword::pluginName(512).c_str(), &factory_sha512);
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

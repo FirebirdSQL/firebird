@@ -32,7 +32,9 @@
 #include "../dsql/Visitors.h"
 #include "../dsql/pass1_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 class IndexRetrieval;
 class OptimizerRetrieval;
@@ -46,7 +48,7 @@ class SelectExprNode;
 class ValueListNode;
 
 
-class SortNode : public Firebird::PermanentStorage, public Printable
+class SortNode : public PermanentStorage, public Printable
 {
 public:
 	explicit SortNode(MemoryPool& pool)
@@ -59,7 +61,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	virtual string internalPrint(NodePrinter& printer) const
 	{
 		//// FIXME-PRINT:
 		return "SortNode";
@@ -86,11 +88,11 @@ public:
 public:
 	bool unique;						// sort uses unique key - for DISTINCT and GROUP BY
 	NestValueArray expressions;			// sort expressions
-	Firebird::Array<SortDirection> direction;	// rse_order_*
-	Firebird::Array<NullsPlacement> nullOrder;	// rse_nulls_*
+	Array<SortDirection> direction;	// rse_order_*
+	Array<NullsPlacement> nullOrder;	// rse_nulls_*
 };
 
-class MapNode : public Firebird::PermanentStorage, public Printable
+class MapNode : public PermanentStorage, public Printable
 {
 public:
 	explicit MapNode(MemoryPool& pool)
@@ -105,7 +107,7 @@ public:
 	MapNode* pass2(thread_db* tdbb, CompilerScratch* csb);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	virtual string internalPrint(NodePrinter& printer) const
 	{
 		/*** FIXME-PRINT:
 		NODE_PRINT(printer, sourceList);
@@ -120,7 +122,7 @@ public:
 	NestValueArray targetList;
 };
 
-class PlanNode : public Firebird::PermanentStorage, public Printable
+class PlanNode : public PermanentStorage, public Printable
 {
 public:
 	enum Type : UCHAR
@@ -166,7 +168,7 @@ public:
 		}
 
 		Type const type;
-		Firebird::ObjectsArray<AccessItem> items;
+		ObjectsArray<AccessItem> items;
 	};
 
 public:
@@ -181,7 +183,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	virtual string internalPrint(NodePrinter& printer) const
 	{
 		//// FIXME-PRINT:
 		return "PlanNode";
@@ -198,8 +200,8 @@ public:
 	Type const type;
 	AccessType* accessType;
 	RecordSourceNode* recordSourceNode;
-	Firebird::Array<NestConst<PlanNode> > subNodes;
-	Firebird::ObjectsArray<QualifiedName>* dsqlNames;
+	Array<NestConst<PlanNode> > subNodes;
+	ObjectsArray<QualifiedName>* dsqlNames;
 };
 
 class InversionNode
@@ -268,11 +270,11 @@ public:
 	NestConst<ValueExprNode> upper;
 };
 
-class WithClause : public Firebird::Array<SelectExprNode*>
+class WithClause : public Array<SelectExprNode*>
 {
 public:
-	explicit WithClause(Firebird::MemoryPool& pool)
-		: Firebird::Array<SelectExprNode*>(pool),
+	explicit WithClause(MemoryPool& pool)
+		: Array<SelectExprNode*>(pool),
 		  recursive(false)
 	{
 	}
@@ -294,7 +296,7 @@ public:
 	static LocalTableSourceNode* parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp,
 		bool parseContext);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlSubSelectFinder(SubSelectFinder& /*visitor*/) override
@@ -346,7 +348,7 @@ public:
 	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
 
 public:
-	Firebird::string alias;
+	string alias;
 	USHORT tableNumber = 0;
 	SSHORT context = 0;			// user-specified context number for the local table reference
 };
@@ -365,7 +367,7 @@ public:
 	static RelationSourceNode* parse(thread_db* tdbb, CompilerScratch* csb, const SSHORT blrOp,
 		bool parseContext);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
 	virtual bool dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
@@ -415,7 +417,7 @@ public:
 
 public:
 	QualifiedName dsqlName;
-	Firebird::string alias;	// SQL alias for the relation
+	string alias;	// SQL alias for the relation
 	Rsc::Rel relation;
 
 private:
@@ -440,7 +442,7 @@ public:
 		bool parseContext);
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
@@ -486,7 +488,7 @@ public:
 
 public:
 	QualifiedName dsqlName;
-	Firebird::string alias;
+	string alias;
 
 	/***
 	dimitr: Referencing procedures via a pointer is not currently reliable, because
@@ -509,7 +511,7 @@ public:
 	SubRoutine<jrd_prc> procedure;
 	NestConst<ValueListNode> inputSources;
 	NestConst<ValueListNode> inputTargets;
-	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
+	NestConst<ObjectsArray<MetaName>> dsqlInputArgNames;
 
 private:
 	NestConst<MessageNode> inputMessage;
@@ -534,7 +536,7 @@ public:
 
 	static AggregateSourceNode* parse(thread_db* tdbb, CompilerScratch* csb);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual bool dsqlAggregateFinder(AggregateFinder& visitor);
 	virtual bool dsqlAggregate2Finder(Aggregate2Finder& visitor);
 	virtual bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor);
@@ -604,7 +606,7 @@ public:
 	virtual bool dsqlFieldFinder(FieldFinder& visitor);
 	virtual RecordSourceNode* dsqlFieldRemapper(FieldRemapper& visitor);
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 
 	virtual UnionSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
@@ -632,8 +634,8 @@ public:
 	RseNode* dsqlParentRse;
 
 private:
-	Firebird::Array<NestConst<RseNode> > clauses;	// RseNode's for union
-	Firebird::Array<NestConst<MapNode> > maps;		// RseNode's maps
+	Array<NestConst<RseNode> > clauses;	// RseNode's for union
+	Array<NestConst<MapNode> > maps;		// RseNode's maps
 	StreamType mapStream;	// stream for next level record of recursive union
 
 public:
@@ -681,7 +683,7 @@ public:
 		return 0;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 
 	virtual WindowSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
@@ -706,7 +708,7 @@ public:
 
 private:
 	NestConst<RseNode> rse;
-	Firebird::ObjectsArray<Window> windows;
+	ObjectsArray<Window> windows;
 };
 
 class RseNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>
@@ -852,7 +854,7 @@ public:
 		}
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual bool dsqlAggregateFinder(AggregateFinder& visitor);
 	virtual bool dsqlAggregate2Finder(Aggregate2Finder& visitor);
 	virtual bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor);
@@ -913,10 +915,10 @@ public:
 	NestConst<SortNode> rse_aggregate;	// singleton aggregate for optimizing to index
 	NestConst<PlanNode> rse_plan;		// user-specified access plan
 	NestConst<VarInvariantArray> rse_invariants; // Invariant nodes bound to top-level RSE
-	Firebird::Array<NestConst<RecordSourceNode> > rse_relations;
+	Array<NestConst<RecordSourceNode> > rse_relations;
 	USHORT flags = 0;
 	UCHAR rse_jointype = INNER_JOIN;
-	Firebird::TriState firstRows;		// optimize for first rows
+	TriState firstRows;		// optimize for first rows
 };
 
 class SelectExprNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_SELECT_EXPR>
@@ -933,7 +935,7 @@ public:
 	{
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual RseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
 	virtual bool dsqlSubSelectFinder(SubSelectFinder& visitor)
@@ -992,8 +994,8 @@ public:
 	NestConst<ValueListNode> orderClause;
 	NestConst<RowsClause> rowsClause;
 	NestConst<WithClause> withClause;
-	Firebird::string alias;
-	Firebird::ObjectsArray<MetaName>* columns;
+	string alias;
+	ObjectsArray<MetaName>* columns;
 };
 
 class TableValueFunctionSourceNode
@@ -1012,7 +1014,7 @@ public:
 													   CompilerScratch* csb,
 													   const SSHORT blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
 				   bool ignoreMapCast) const override;
@@ -1047,7 +1049,7 @@ public:
 	MetaName alias;
 	NestConst<ValueListNode> inputList;
 	dsql_fld* dsqlField;
-	Firebird::ObjectsArray<Jrd::MetaName> dsqlNameColumns;
+	ObjectsArray<MetaName> dsqlNameColumns;
 
 private:
 	jrd_table_value_fun* m_csbTableValueFun;
@@ -1094,6 +1096,7 @@ public:
 	}
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif	// JRD_RECORD_SOURCE_NODES_H

@@ -36,27 +36,28 @@
 #include "../jrd/Resources.h"
 
 
-namespace Firebird {
-
-class CharSet;
-
+namespace Firebird
+{
+	class CharSet;
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 class Lock;
 class BaseSubstringSimilarMatcher;
 class PatternMatcher;
 
-class Collation : public Firebird::TextType
+
+class Collation : public TextType
 {
 public:
 	static Collation* createInstance(MemoryPool& pool, TTypeId id, texttype* tt,
-		USHORT attributes, Firebird::CharSet* cs);
+		USHORT attributes, CharSet* cs);
 
 protected:
-	Collation(TTypeId id, texttype *a_tt, USHORT a_attributes, Firebird::CharSet* a_cs)
+	Collation(TTypeId id, texttype *a_tt, USHORT a_attributes, CharSet* a_cs)
 		: TextType(id, a_tt, a_attributes, a_cs),
 		  obsolete(false)
 	{
@@ -95,7 +96,7 @@ public:
 	bool obsolete;
 };
 
-}	// namespace Jrd
 
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_COLLATION_H

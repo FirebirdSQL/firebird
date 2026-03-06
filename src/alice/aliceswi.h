@@ -23,7 +23,11 @@
 #define	ALICE_ALICESWI_H
 
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
+
+namespace Firebird::Alice
+{
+
 
 // switch definitions
 
@@ -330,5 +334,8 @@ static inline constexpr const char* alice_repl_mode_sw_table[] =
 {
 	ALICE_SW_MODE_NONE, ALICE_SW_MODE_RO, ALICE_SW_MODE_RW
 };
+
+
+} // namespace Firebird::Alice
 
 #endif // ALICE_ALICESWI_H

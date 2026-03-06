@@ -6,10 +6,9 @@
 #include "../common/TimeZoneUtil.h"
 #include "../common/TimeZones.h"
 
-using Firebird::NoThrowTimeStamp;
-using Firebird::TimeZoneUtil;
+namespace Firebird::CvtTestUtils
+{
 
-namespace CvtTestUtils {
 
 #define DECOMPOSE_TM_STRUCT(times, fractions, timezone) "Year:" << times.tm_year + 1900 << \
 	" Month:" << times.tm_mon << \
@@ -102,7 +101,7 @@ static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetI
 }
 
 
-class MockCallback : public Firebird::Callbacks
+class MockCallback : public Callbacks
 {
 public:
 	explicit MockCallback(ErrorFunction aErr, std::function<SLONG()> mockGetLocalDateFunc)
@@ -112,9 +111,9 @@ public:
 public:
 	bool transliterate(const dsc* from, dsc* to, CSetId&) override { return true; }
 	CSetId getChid(const dsc* d) override { return CSetId(0); }
-	Firebird::CharSet* getToCharset(CSetId charset2) override { return nullptr; }
-	void validateData(Firebird::CharSet* toCharset, SLONG length, const UCHAR* q) override { }
-	ULONG validateLength(Firebird::CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
+	CharSet* getToCharset(CSetId charset2) override { return nullptr; }
+	void validateData(CharSet* toCharset, SLONG length, const UCHAR* q) override { }
+	ULONG validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 		const USHORT size) override { return 0; }
 
 	SLONG getLocalDate() override
@@ -149,6 +148,7 @@ UCHAR getDSCTypeFromDateType<ISC_TIME_TZ>() { return dtype_sql_time_tz; }
 template<>
 UCHAR getDSCTypeFromDateType<ISC_TIMESTAMP_TZ>() { return dtype_timestamp_tz; }
 
-} // namespace CvtTestUtils
+
+} // namespace Firebird::CvtTestUtils
 
 #endif // CVT_TEST_UTILS_H

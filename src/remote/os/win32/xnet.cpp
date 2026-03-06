@@ -50,8 +50,9 @@
 #pragma FB_COMPILER_MESSAGE("POSIX implementation is required")
 #endif // WIN_NT
 
-using namespace Firebird;
-using namespace Remote;
+namespace Firebird::Remote
+{
+
 
 static bool accept_connection(rem_port*, const P_CNCT*);
 static rem_port* alloc_port(rem_port*, UCHAR*, ULONG, UCHAR*, ULONG);
@@ -84,8 +85,7 @@ static DWORD current_process_id;
 static volatile bool xnet_shutdown = false;
 static GlobalPtr<PortsCleanup>	xnet_ports;
 
-namespace Remote
-{
+
 	class XnetEndPoint
 	{
 	public:
@@ -186,7 +186,6 @@ namespace Remote
 
 	static GlobalPtr<XnetClientEndPoint> xnet_client;
 	static GlobalPtr<XnetServerEndPoint> xnet_server;
-} // namespace Remote
 
 
 inline void XnetEndPoint::make_obj_name(char* buffer, size_t size, const char* format)
@@ -2547,3 +2546,6 @@ rem_port* XnetServerEndPoint::get_server_port(ULONG client_pid,
 
 	return port;
 }
+
+
+}	// namespace Firebird::Remote

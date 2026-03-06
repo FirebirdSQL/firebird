@@ -30,6 +30,10 @@
 #include "firebird.h"
 #include "../common/classes/fb_string.h"
 
+namespace Firebird
+{
+
+
 class Switches
 {
 public:
@@ -67,11 +71,11 @@ public:
 	// and strings that don't start by an hyphen are discarded silently (function returns NULL).
 	// Strings prefixed by an hyphen that are not found cause invalidSwitchInd to be activated
 	// if the pointer is provided.
-	const in_sw_tab_t* findSwitch(Firebird::string sw, bool* invalidSwitchInd = 0) const;
+	const in_sw_tab_t* findSwitch(string sw, bool* invalidSwitchInd = 0) const;
 
 	// Same as the previous, but it returns a modifiable item. Beware it throws system_call_failed
 	// if "copy" was false in the constructor (no modifiable table was created).
-	in_sw_tab_t* findSwitchMod(Firebird::string& sw, bool* invalidSwitchInd = 0);
+	in_sw_tab_t* findSwitchMod(string& sw, bool* invalidSwitchInd = 0);
 
 	// Get the same unmodifiable table that was passed as parameter to the constructor.
 	const in_sw_tab_t* getTable() const noexcept;
@@ -98,7 +102,7 @@ public:
 
 private:
 	// Auxiliar function for findSwitch, findSwitchMod and exists().
-	static bool matchSwitch(const Firebird::string& sw, const char* target, FB_SIZE_T n);
+	static bool matchSwitch(const string& sw, const char* target, FB_SIZE_T n);
 	// Auxiliar function for exists().
 	const in_sw_tab_t* findByTag(const int in_sw, FB_SIZE_T* pos = 0, bool rejectAmbiguity = true) const;
 	// Shortcut to raise exceptions
@@ -111,5 +115,8 @@ private:
 	in_sw_tab_t*	m_table;			// modifiable copy
 	FB_SIZE_T*		m_opLengths;		// array of in_sw_name's lengths to avoid recalculation
 };
+
+
+} // namespace Firebird
 
 #endif // CLASSES_SWITCHES

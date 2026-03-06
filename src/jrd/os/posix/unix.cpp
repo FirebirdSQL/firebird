@@ -77,8 +77,9 @@
 #include "../common/classes/init.h"
 #include "../common/os/os_utils.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // Some operating systems have problems with use of write/read with
 // big (>2Gb) files. On the other hand, pwrite/pread works fine for them.
@@ -146,7 +147,7 @@ static SLONG pwrite(int, SCHAR*, SLONG, SLONG);
 static bool raw_devices_validate_database (int, const PathName&);
 static int  raw_devices_unlink_database (const PathName&);
 #endif
-static int	openFile(const Firebird::PathName&, const bool, const bool, const bool);
+static int	openFile(const PathName&, const bool, const bool, const bool);
 static void	maybeCloseFile(int&);
 
 
@@ -299,7 +300,7 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+bool PIO_fast_extension_is_supported(const jrd_file& file) noexcept
 {
 #if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
 	return !(file.fil_flags & FIL_no_fast_extend);
@@ -579,7 +580,7 @@ bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 
 // we need a class here only to return memory on shutdown and avoid
 // false memory leak reports
-static Firebird::InitInstance<ZeroBuffer> zeros;
+static InitInstance<ZeroBuffer> zeros;
 
 
 USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector,
@@ -1305,3 +1306,6 @@ static int raw_devices_unlink_database(const PathName& file_name)
 	return 0;
 }
 #endif // SUPPORT_RAW_DEVICES
+
+
+}	// namespace Firebird::Jrd

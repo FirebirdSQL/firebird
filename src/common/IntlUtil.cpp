@@ -35,7 +35,8 @@
 #include <unicode/utf8.h>
 
 
-using Firebird::UnicodeUtil;
+namespace Firebird
+{
 
 
 namespace
@@ -50,7 +51,7 @@ namespace
 
 		~TextTypeImpl()
 		{
-			Firebird::IntlUtil::finiCharset(cs);
+			IntlUtil::finiCharset(cs);
 
 			delete cs;
 			delete collation;
@@ -60,9 +61,6 @@ namespace
 		UnicodeUtil::Utf16Collation* collation;
 	};
 }
-
-
-namespace Firebird {
 
 
 static void unicodeDestroy(texttype* tt) noexcept;
@@ -80,11 +78,11 @@ GlobalPtr<IntlUtil::Utf8CharSet> IntlUtil::utf8CharSet;
 IntlUtil::Utf8CharSet::Utf8CharSet(MemoryPool& pool)
 {
 	IntlUtil::initUtf8Charset(&obj);
-	charSet = Firebird::CharSet::createInstance(pool, CS_UTF8, &obj);
+	charSet = CharSet::createInstance(pool, CS_UTF8, &obj);
 }
 
 
-string IntlUtil::generateSpecificAttributes(Firebird::CharSet* cs, SpecificAttributesMap& map)
+string IntlUtil::generateSpecificAttributes(CharSet* cs, SpecificAttributesMap& map)
 {
 	SpecificAttributesMap::Accessor accessor(&map);
 
@@ -125,7 +123,7 @@ string IntlUtil::generateSpecificAttributes(Firebird::CharSet* cs, SpecificAttri
 }
 
 
-bool IntlUtil::parseSpecificAttributes(Firebird::CharSet* cs, ULONG len, const UCHAR* s,
+bool IntlUtil::parseSpecificAttributes(CharSet* cs, ULONG len, const UCHAR* s,
 									   SpecificAttributesMap* map)
 {
 	// Note that the map isn't cleared.
@@ -295,7 +293,7 @@ ULONG IntlUtil::cvtAsciiToUtf16(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,
 	if (ppDest == NULL)			/* length estimate needed? */
 		return (2 * nSrc);
 
-	Firebird::OutAligner<USHORT> d(ppDest, nDest);
+	OutAligner<USHORT> d(ppDest, nDest);
 	USHORT* pDest = d;
 
 	const USHORT* const pStart = pDest;
@@ -343,7 +341,7 @@ ULONG IntlUtil::cvtUtf16ToAscii(csconvert* obj, ULONG nSrc, const UCHAR* ppSrc,
 	if (pDest == NULL)			/* length estimate needed? */
 		return (nSrc / 2);
 
-	Firebird::Aligner<USHORT> s(ppSrc, nSrc);
+	Aligner<USHORT> s(ppSrc, nSrc);
 	const USHORT* pSrc = s;
 
 	const UCHAR* const pStart = pDest;
@@ -374,7 +372,7 @@ ULONG IntlUtil::cvtUtf8ToUtf16(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,
 	fb_assert(obj != NULL);
 	fb_assert(obj->csconvert_fn_convert == cvtUtf8ToUtf16);
 	return UnicodeUtil::utf8ToUtf16(nSrc, pSrc,
-		nDest, Firebird::OutAligner<USHORT>(ppDest, nDest), err_code, err_position);
+		nDest, OutAligner<USHORT>(ppDest, nDest), err_code, err_position);
 }
 
 
@@ -383,7 +381,7 @@ ULONG IntlUtil::cvtUtf16ToUtf8(csconvert* obj, ULONG nSrc, const UCHAR* ppSrc,
 {
 	fb_assert(obj != NULL);
 	fb_assert(obj->csconvert_fn_convert == cvtUtf16ToUtf8);
-	return UnicodeUtil::utf16ToUtf8(nSrc, Firebird::Aligner<USHORT>(ppSrc, nSrc),
+	return UnicodeUtil::utf16ToUtf8(nSrc, Aligner<USHORT>(ppSrc, nSrc),
 		nDest, pDest, err_code, err_position);
 }
 
@@ -523,11 +521,11 @@ bool IntlUtil::initUnicodeCollation(texttype* tt, charset* cs, const ASCII* name
 
 	IntlUtil::SpecificAttributesMap map;
 
-	Firebird::CharSet* charSet = NULL;
+	CharSet* charSet = NULL;
 
 	try
 	{
-		charSet = Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
+		charSet = CharSet::createInstance(*getDefaultMemoryPool(), 0, cs);
 		IntlUtil::parseSpecificAttributes(charSet, specificAttributes.getCount(),
 			specificAttributes.begin(), &map);
 		delete charSet;
@@ -594,11 +592,11 @@ void IntlUtil::finiCharset(charset* cs)
 }
 
 
-ULONG IntlUtil::toLower(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+ULONG IntlUtil::toLower(CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 	const ULONG* exceptions)
 {
 	const ULONG utf16_length = cs->getConvToUnicode().convertLength(srcLen);
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
+	HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
 	UCHAR* utf16_ptr;
 
 	if (dst != src && dstLen >= utf16_length)	// if dst buffer is sufficient large, use it as intermediate
@@ -610,9 +608,9 @@ ULONG IntlUtil::toLower(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, U
 	srcLen = cs->getConvToUnicode().convert(srcLen, src, utf16_length, utf16_ptr);
 
 	// convert to lowercase
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> lower_str;
-	srcLen = UnicodeUtil::utf16LowerCase(srcLen, Firebird::Aligner<USHORT>(utf16_ptr, srcLen),
-		utf16_length, Firebird::OutAligner<USHORT>(lower_str.getBuffer(utf16_length), utf16_length),
+	HalfStaticArray<UCHAR, BUFFER_SMALL> lower_str;
+	srcLen = UnicodeUtil::utf16LowerCase(srcLen, Aligner<USHORT>(utf16_ptr, srcLen),
+		utf16_length, OutAligner<USHORT>(lower_str.getBuffer(utf16_length), utf16_length),
 		exceptions);
 
 	// convert to original character set
@@ -620,11 +618,11 @@ ULONG IntlUtil::toLower(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, U
 }
 
 
-ULONG IntlUtil::toUpper(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
+ULONG IntlUtil::toUpper(CharSet* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,
 	const ULONG* exceptions)
 {
 	const ULONG utf16_length = cs->getConvToUnicode().convertLength(srcLen);
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
+	HalfStaticArray<UCHAR, BUFFER_SMALL> utf16_str;
 	UCHAR* utf16_ptr;
 
 	if (dst != src && dstLen >= utf16_length)	// if dst buffer is sufficient large, use it as intermediate
@@ -636,9 +634,9 @@ ULONG IntlUtil::toUpper(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, U
 	srcLen = cs->getConvToUnicode().convert(srcLen, src, utf16_length, utf16_ptr);
 
 	// convert to uppercase
-	Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> upper_str;
-	srcLen = UnicodeUtil::utf16UpperCase(srcLen, Firebird::Aligner<USHORT>(utf16_ptr, srcLen),
-		utf16_length, Firebird::OutAligner<USHORT>(upper_str.getBuffer(utf16_length), utf16_length),
+	HalfStaticArray<UCHAR, BUFFER_SMALL> upper_str;
+	srcLen = UnicodeUtil::utf16UpperCase(srcLen, Aligner<USHORT>(utf16_ptr, srcLen),
+		utf16_length, OutAligner<USHORT>(upper_str.getBuffer(utf16_length), utf16_length),
 		exceptions);
 
 	// convert to original character set
@@ -646,7 +644,7 @@ ULONG IntlUtil::toUpper(Firebird::CharSet* cs, ULONG srcLen, const UCHAR* src, U
 }
 
 
-bool IntlUtil::readOneChar(Firebird::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size)
+bool IntlUtil::readOneChar(CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size)
 {
 	(*s) += *size;
 
@@ -668,7 +666,7 @@ bool IntlUtil::readOneChar(Firebird::CharSet* cs, const UCHAR** s, const UCHAR* 
 bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 	const string& configInfo, string& newSpecificAttributes)
 {
-	AutoPtr<Firebird::CharSet> charSet(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
+	AutoPtr<CharSet> charSet(CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
 
 	IntlUtil::SpecificAttributesMap map;
 	if (!IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
@@ -704,7 +702,7 @@ bool IntlUtil::setupIcuAttributes(charset* cs, const string& specificAttributes,
 }
 
 
-string IntlUtil::escapeAttribute(Firebird::CharSet* cs, const string& s)
+string IntlUtil::escapeAttribute(CharSet* cs, const string& s)
 {
 	string ret;
 	const UCHAR* p = (const UCHAR*)s.begin();
@@ -739,7 +737,7 @@ string IntlUtil::escapeAttribute(Firebird::CharSet* cs, const string& s)
 }
 
 
-string IntlUtil::unescapeAttribute(Firebird::CharSet* cs, const string& s)
+string IntlUtil::unescapeAttribute(CharSet* cs, const string& s)
 {
 	string ret;
 	const UCHAR* p = (const UCHAR*)s.begin();
@@ -753,7 +751,7 @@ string IntlUtil::unescapeAttribute(Firebird::CharSet* cs, const string& s)
 }
 
 
-bool IntlUtil::isAttributeEscape(Firebird::CharSet* cs, const UCHAR* s, ULONG size)
+bool IntlUtil::isAttributeEscape(CharSet* cs, const UCHAR* s, ULONG size)
 {
 	UCHAR uc[sizeof(ULONG)];
 	const ULONG uSize = cs->getConvToUnicode().convert(size, s, sizeof(uc), uc);
@@ -762,7 +760,7 @@ bool IntlUtil::isAttributeEscape(Firebird::CharSet* cs, const UCHAR* s, ULONG si
 }
 
 
-bool IntlUtil::readAttributeChar(Firebird::CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size, bool returnEscape)
+bool IntlUtil::readAttributeChar(CharSet* cs, const UCHAR** s, const UCHAR* end, ULONG* size, bool returnEscape)
 {
 	if (readOneChar(cs, s, end, size))
 	{
@@ -943,8 +941,8 @@ static ULONG unicodeCanonical(texttype* tt, ULONG srcLen, const UCHAR* src, ULON
 			&offendingPos);
 
 		return impl->collation->canonical(
-			utf16Len, Firebird::Aligner<USHORT>(utf16Str.begin(), utf16Len),
-			dstLen, Firebird::OutAligner<ULONG>(dst, dstLen), NULL);
+			utf16Len, Aligner<USHORT>(utf16Str.begin(), utf16Len),
+			dstLen, OutAligner<ULONG>(dst, dstLen), NULL);
 	}
 	catch (const BadAlloc&)
 	{

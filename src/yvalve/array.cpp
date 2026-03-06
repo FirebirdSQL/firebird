@@ -41,7 +41,7 @@
 #include "../yvalve/gds_proto.h"
 #include "../yvalve/YObjects.h"
 #include "../common/StatusArg.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/utils_proto.h"
 #include <optional>
 
@@ -143,8 +143,12 @@ ISC_STATUS API_ROUTINE isc_array_get_slice(ISC_STATUS* status,
 }
 
 
-void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
-	Why::YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
+namespace Firebird::Why
+{
+
+
+void iscArrayLookupBoundsImpl(YAttachment* attachment,
+	YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
 {
 	LocalStatus status;
 	CheckStatusWrapper statusWrapper(&status);
@@ -223,8 +227,8 @@ void iscArrayLookupBoundsImpl(Why::YAttachment* attachment,
 }
 
 
-void iscArrayLookupDescImpl(Why::YAttachment* attachment,
-	Why::YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc,
+void iscArrayLookupDescImpl(YAttachment* attachment,
+	YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc,
 	MetaString* globalField)
 {
 	LocalStatus status;
@@ -323,6 +327,9 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		Arg::Str(desc->array_desc_field_name) <<
 		Arg::Str(desc->array_desc_relation_name)).raise();
 }
+
+
+} // namespace Firebird::Why
 
 
 ISC_STATUS API_ROUTINE isc_array_put_slice(ISC_STATUS* status,

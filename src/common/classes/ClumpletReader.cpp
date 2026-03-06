@@ -1018,9 +1018,9 @@ void dumpAuthBlock(const char* text, ClumpletReader* pb, unsigned char param)
 	fprintf(stderr, "AuthBlock in %s:", text);
 	if (pb->find(param))
 	{
-		Firebird::AuthReader::AuthBlock tmp;
+		AuthReader::AuthBlock tmp;
 		tmp.assign(pb->getBytes(), pb->getClumpLength());
-		Firebird::AuthReader rdr(tmp);
+		AuthReader rdr(tmp);
 		string name, plugin;
 		PathName secureDb;
 		bool x = false;

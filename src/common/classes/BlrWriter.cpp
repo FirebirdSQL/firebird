@@ -117,4 +117,4 @@ void BlrWriter::raiseError(const Arg::StatusVector& vector)
 	vector.raise();
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

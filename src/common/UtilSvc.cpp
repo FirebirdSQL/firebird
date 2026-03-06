@@ -48,7 +48,7 @@ namespace {
 			// runtime returns the number of characters (instead of bytes) written and make
 			// ferror(stdout) return true. So lets not check for errors here.
 #ifndef WIN_NT
-			Firebird::system_call_failed::raise("StandaloneUtilityInterface::output()/fwrite()");
+			system_call_failed::raise("StandaloneUtilityInterface::output()/fwrite()");
 #endif
 		}
 	}
@@ -145,7 +145,7 @@ public:
 	void fillDpb(ClumpletWriter&) override { }
 	bool finished() override { return false; }
 	bool utf8FileNames() override { return false; }
-	Firebird::ICryptKeyCallback* getCryptCallback() override { return NULL; }
+	ICryptKeyCallback* getCryptCallback() override { return NULL; }
 	int getParallelWorkers() override { return 0; };
 };
 

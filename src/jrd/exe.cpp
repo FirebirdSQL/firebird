@@ -113,9 +113,9 @@
 #include "../jrd/Function.h"
 #include "../jrd/ProfilerManager.h"
 
+namespace Firebird::Jrd
+{
 
-using namespace Jrd;
-using namespace Firebird;
 
 // Item class implementation
 
@@ -1066,7 +1066,7 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 		{
 			// Save the old pool and request to restore on exit
 			StmtNode::ExeState exeState(tdbb, request, request->req_transaction);
-			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
+			JrdContextPoolHolder context(tdbb, request->req_pool);
 
 			fb_assert(!request->req_caller);
 			request->req_caller = exeState.oldRequest;
@@ -1214,7 +1214,7 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 
 		if (statement->fors.hasData() || request->req_ext_resultset || request->req_ext_stmt)
 		{
-			Jrd::ContextPoolHolder context(tdbb, request->req_pool);
+			JrdContextPoolHolder context(tdbb, request->req_pool);
 			Request* old_request = tdbb->getRequest();
 			jrd_tra* old_transaction = tdbb->getTransaction();
 
@@ -1697,7 +1697,7 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 	// Save the old pool and request to restore on exit
 	StmtNode::ExeState exeState(tdbb, request, request->req_transaction);
-	Jrd::ContextPoolHolder context(tdbb, request->req_pool);
+	JrdContextPoolHolder context(tdbb, request->req_pool);
 
 	fb_assert(request->req_caller == NULL);
 	request->req_caller = exeState.oldRequest;
@@ -2077,4 +2077,7 @@ QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 		return QualifiedName("");
 	}
 }
+
+
+} // namespace Firebird::Jrd
 

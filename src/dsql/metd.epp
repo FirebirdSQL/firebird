@@ -56,14 +56,14 @@
 #include "../common/classes/init.h"
 #include "../jrd/LocalTemporaryTable.h"
 
-using namespace Jrd;
-using namespace Firebird;
 
 // NOTE: The static definition of DB and gds_trans by gpre will not
 // be used by the meta data routines.  Each of those routines has
 // its own local definition of these variables.
-
 DATABASE DB = STATIC "yachts.lnk";
+
+
+namespace Firebird::Jrd {
 
 static void convert_dtype(TypeClause*, SSHORT);
 
@@ -955,7 +955,7 @@ dsql_rel* METD_get_view_base(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 
 
 bool METD_get_view_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-	const Jrd::QualifiedName& view_name, const Jrd::QualifiedName& relation_or_alias,
+	const QualifiedName& view_name, const QualifiedName& relation_or_alias,
 	dsql_rel*& relation, dsql_prc*& procedure)
 {
 /**************************************
@@ -1055,3 +1055,5 @@ static void convert_dtype(TypeClause* field, SSHORT field_type)
 	}
 }
 
+
+} // namespace Firebird::Jrd

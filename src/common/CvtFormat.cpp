@@ -40,7 +40,9 @@
 #include <algorithm>
 #include <optional>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -150,8 +152,7 @@ namespace
 	#define CVT_FORMAT(id, format) constexpr Patterns format = 1llu << (id - 1);
 	#define CVT_FORMAT2(id, format1, format2) constexpr Patterns format2 = 1llu << (id - 1);
 	#define CVT_FORMAT_FLAG(id, format) constexpr Patterns format = 1llu << (id - 1);
-	namespace Format
-	{
+	namespace Format {
 		typedef FB_UINT64 Patterns;
 
 		constexpr Patterns NONE = 0;
@@ -164,8 +165,7 @@ namespace
 	#define CVT_FORMAT(id, format) constexpr const char* format = #format;
 	#define CVT_FORMAT2(id, format1, format2) constexpr const char* format2 = #format1;
 	#define CVT_FORMAT_FLAG(id, format)
-	namespace FormatStr
-	{
+	namespace FormatStr {
 		#include "CvtFormatImpl.h"
 	}
 	#undef CVT_FORMAT
@@ -214,10 +214,8 @@ namespace
 		Token token;
 		std::string_view data;
 	};
-}
 
-namespace
-{
+
 	template <typename T>
 	constexpr int sign(T value)
 	{
@@ -504,7 +502,7 @@ namespace
 		switch (desc->dsc_dtype)
 		{
 			case dtype_sql_time:
-				Firebird::TimeStamp::decode_time(*(GDS_TIME*) desc->dsc_address,
+				TimeStamp::decode_time(*(GDS_TIME*) desc->dsc_address,
 					&outTimes.tm_hour, &outTimes.tm_min, &outTimes.tm_sec, &outFractions);
 				break;
 
@@ -515,11 +513,11 @@ namespace
 				break;
 
 			case dtype_sql_date:
-				Firebird::TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &outTimes);
+				TimeStamp::decode_date(*(GDS_DATE*) desc->dsc_address, &outTimes);
 				break;
 
 			case dtype_timestamp:
-				Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) desc->dsc_address, &outTimes, &outFractions);
+				TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) desc->dsc_address, &outTimes, &outFractions);
 				break;
 
 			case dtype_timestamp_tz:
@@ -1125,7 +1123,7 @@ namespace
 		return result;
 	}
 
-	constexpr int applyPeriod(std::string_view period, int twelveHours, Firebird::Callbacks* cb)
+	constexpr int applyPeriod(std::string_view period, int twelveHours, Callbacks* cb)
 	{
 		if (period == FormatStr::AM)
 		{
@@ -1255,7 +1253,7 @@ namespace
 	}
 
 	std::optional<int> getDisplacementFromString(const char* str, FB_SIZE_T length, FB_SIZE_T& offset,
-		std::string_view patternStr, Firebird::Callbacks* cb)
+		std::string_view patternStr, Callbacks* cb)
 	{
 		int sign = getIntSignFromString(str, offset);
 
@@ -1298,7 +1296,7 @@ namespace
 	}
 
 	void processStringToDateTimeDeferredTokens(const std::vector<DeferredToken>& deferredTokens,
-		StringToDateTimeData& outCvtData, Firebird::Callbacks* cb)
+		StringToDateTimeData& outCvtData, Callbacks* cb)
 	{
 		struct tm& outTimes = outCvtData.times;
 
@@ -1323,7 +1321,7 @@ namespace
 	}
 
 	void processStringToDateTimeTokens(const std::vector<Token>& tokens, string inputStr, StringToDateTimeData& outCvtData,
-		Firebird::Callbacks* cb)
+		Callbacks* cb)
 	{
 		const char* str = inputStr.c_str();
 		const FB_SIZE_T strLength = inputStr.length();
@@ -1840,8 +1838,8 @@ string CVT_format_datetime_to_string(const dsc* desc, const string& format, Call
 	return result;
 }
 
-ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::string& format,
-	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb)
+ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const string& format,
+	const EXPECT_DATETIME expectedType, Callbacks* cb)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
 		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
@@ -1879,3 +1877,6 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 
 	return timestampTZ;
 }
+
+
+}	// namespace Firebird

@@ -31,14 +31,9 @@
 #include "Protocol.h"
 #include "Utils.h"
 
-using namespace Firebird;
-using namespace Jrd;
-using namespace Replication;
-
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	constexpr size_t MAX_BG_WRITER_LAG = 10 * 1024 * 1024;	// 10 MB
-}
 
 
 // Table matcher
@@ -121,7 +116,7 @@ bool TableMatcher::matchTable(const QualifiedName& tableName)
 // Replication manager
 
 Manager::Manager(const string& dbId,
-				 const Replication::Config* config)
+				 const Config* config)
 	: m_config(config),
 	  m_replicas(getPool()),
 	  m_buffers(getPool()),
@@ -413,8 +408,11 @@ void Manager::bgWriter()
 	{
 		m_cleanupSemaphore.release();
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Error while exiting replicator thread", ex);
 	}
 }
+
+
+}	// namespace Firebird::Jrd::Replication

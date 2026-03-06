@@ -37,7 +37,9 @@
 #include "../common/classes/array.h"
 #include <ctype.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -247,7 +249,7 @@ namespace
 	{
 	public:
 		explicit AliasesConf(MemoryPool& p)
-			: ConfigCache(p, fb_utils::getPrefix(Firebird::IConfigManager::DIR_CONF, ALIAS_FILE)),
+			: ConfigCache(p, fb_utils::getPrefix(IConfigManager::DIR_CONF, ALIAS_FILE)),
 			  databases(getPool()), aliases(getPool())
 #ifdef HAVE_ID_BY_NAME
 			  , ids(getPool())
@@ -396,8 +398,9 @@ namespace
 #endif
 	};
 
-	InitInstance<AliasesConf> aliasesConf;
+InitInstance<AliasesConf> aliasesConf;
 }
+
 
 // Checks that argument doesn't contain colon or directory separator
 static inline bool hasSeparator(const PathName& name)
@@ -485,9 +488,9 @@ static bool setPath(const PathName& filename, PathName& expandedName)
 
 // Full processing of database name
 // Returns true if alias was found in databases.conf
-bool expandDatabaseName(Firebird::PathName alias,
-						Firebird::PathName& file,
-						Firebird::RefPtr<const Config>* config)
+bool expandDatabaseName(PathName alias,
+						PathName& file,
+						RefPtr<const Config>* config)
 {
 	try
 	{
@@ -560,7 +563,7 @@ bool expandDatabaseName(Firebird::PathName alias,
 }
 
 // Probably file arrived on the disk
-bool notifyDatabaseName(const Firebird::PathName& file)
+bool notifyDatabaseName(const PathName& file)
 {
 #ifdef HAVE_ID_BY_NAME
 	// notifyDatabaseName typically causes changes in aliasesConf()
@@ -585,3 +588,6 @@ bool notifyDatabaseName(const Firebird::PathName& file)
 
 	return false;
 }
+
+
+} // namespace Firebird

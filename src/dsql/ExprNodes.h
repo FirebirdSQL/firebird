@@ -31,14 +31,13 @@
 #include "../common/classes/TriState.h"
 #include "../dsql/pass1_proto.h"
 
-class SysFunction;
-
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class ItemInfo;
 class DeclareVariableNode;
 class SubQuery;
 class RelationSourceNode;
+class SysFunction;
 class ValueListNode;
 
 
@@ -80,7 +79,7 @@ public:
 		}
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -124,7 +123,7 @@ public:
 		SCHAR* nodScale, USHORT* nodFlags);
 
 public:
-	Firebird::string label;
+	string label;
 	NestConst<ValueExprNode> arg1;
 	NestConst<ValueExprNode> arg2;
 	const UCHAR blrOp;
@@ -137,7 +136,7 @@ class ArrayNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_ARRAY>
 public:
 	ArrayNode(MemoryPool& pool, FieldNode* aField);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	// This class is used only in the parser. It turns in a FieldNode in dsqlPass.
@@ -193,7 +192,7 @@ public:
 		holder.add(zoneArg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -225,7 +224,7 @@ public:
 		holder.add(boolean);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	void setParameterName(dsql_par* parameter) const override
@@ -250,7 +249,7 @@ class CastNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_CAST>
 {
 public:
 	explicit CastNode(MemoryPool& pool, ValueExprNode* aSource = NULL, dsql_fld* aDsqlField = NULL,
-		const Firebird::string& aFormat = NULL);
+		const string& aFormat = NULL);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -260,7 +259,7 @@ public:
 		holder.add(source);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -281,14 +280,14 @@ public:
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 	static dsc* perform(thread_db* tdbb, impure_value* impure, dsc* value,
-		const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format = nullptr);
+		const dsc* castDesc, const ItemInfo* itemInfo, const string& format = nullptr);
 
 public:
 	MetaName dsqlAlias;
 	dsql_fld* dsqlField;
 	NestConst<ValueExprNode> source;
 	NestConst<ItemInfo> itemInfo;
-	Firebird::string format;
+	string format;
 	dsc castDesc;
 	bool artificial;
 };
@@ -312,7 +311,7 @@ public:
 		holder.add(args);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -355,7 +354,7 @@ public:
 			holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	static ValueExprNode* pass1Collate(DsqlCompilerScratch* dsqlScratch, ValueExprNode* input,
@@ -418,7 +417,7 @@ public:
 		holder.add(arg2);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -447,7 +446,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
@@ -470,7 +469,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -497,7 +496,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -523,7 +522,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -546,7 +545,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -569,7 +568,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -607,7 +606,7 @@ public:
 		holder.add(values);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -631,7 +630,7 @@ public:
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 
 public:
-	Firebird::string label;
+	string label;
 	NestConst<ValueExprNode> test;
 	NestConst<ValueListNode> conditions;
 	NestConst<ValueListNode> values;
@@ -647,7 +646,7 @@ public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 	static ValueExprNode* createFromField(thread_db* tdbb, CompilerScratch* csb, StreamType* map, jrd_fld* fld);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -688,7 +687,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		ValueExprNode::internalPrint(printer);
 
@@ -730,7 +729,7 @@ public:
 
 public:
 	NestConst<ValueExprNode> arg;
-	Firebird::Array<StreamType> internalStreamList;
+	Array<StreamType> internalStreamList;
 	std::optional<USHORT> cursorNumber;
 };
 
@@ -743,7 +742,7 @@ public:
 	{
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	void setParameterName(dsql_par* /*parameter*/) const override
@@ -776,7 +775,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -805,7 +804,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	ValueExprNode* internalDsqlPass(DsqlCompilerScratch* dsqlScratch, RecordSourceNode** list);
@@ -901,7 +900,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -956,7 +955,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -984,7 +983,7 @@ public:
 	static void genConstant(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool negateValue, USHORT numStringLength = 0);
 	static void genNegZero(DsqlCompilerScratch* dsqlScratch, int prec);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -1039,7 +1038,7 @@ public:
 		holder.add(value);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	void setParameterName(dsql_par* parameter) const override;
@@ -1080,7 +1079,7 @@ class DsqlMapNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_MAP>
 public:
 	DsqlMapNode(MemoryPool& pool, dsql_ctx* aContext, dsql_map* aMap);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
@@ -1147,7 +1146,7 @@ public:
 	{
 	}
 
-	static void getContextNumbers(Firebird::SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack);
+	static void getContextNumbers(SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack);
 
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
@@ -1157,7 +1156,7 @@ public:
 			holder.add(value);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
@@ -1212,7 +1211,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -1239,7 +1238,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -1268,7 +1267,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -1289,7 +1288,7 @@ public:
 class NullNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_NULL>
 {
 private:
-	friend class Firebird::GlobalPtr<NullNode>;
+	friend class GlobalPtr<NullNode>;
 
 	explicit NullNode(MemoryPool& pool)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_NULL>(pool)
@@ -1310,7 +1309,7 @@ public:
 		return true;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
@@ -1320,7 +1319,7 @@ public:
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 
 private:
-	static Firebird::GlobalPtr<NullNode> INSTANCE;
+	static GlobalPtr<NullNode> INSTANCE;
 };
 
 
@@ -1342,7 +1341,7 @@ public:
 		holder.add(value);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	OrderNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 
@@ -1384,7 +1383,7 @@ public:
 			holder.add(value);
 		}
 
-		Firebird::string internalPrint(NodePrinter& printer) const override
+		string internalPrint(NodePrinter& printer) const override
 		{
 			NODE_PRINT_ENUM(printer, bound);
 			NODE_PRINT(printer, value);
@@ -1466,7 +1465,7 @@ public:
 			holder.add(frame2);
 		}
 
-		Firebird::string internalPrint(NodePrinter& printer) const override
+		string internalPrint(NodePrinter& printer) const override
 		{
 			NODE_PRINT_ENUM(printer, unit);
 			NODE_PRINT(printer, frame1);
@@ -1540,7 +1539,7 @@ public:
 		holder.add(extent);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, partition);
 		NODE_PRINT(printer, order);
@@ -1608,7 +1607,7 @@ public:
 		}
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
@@ -1652,7 +1651,7 @@ public:
 			holder.add(argFlag);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	ParameterNode* dsqlFieldRemapper(FieldRemapper& visitor) override
@@ -1714,7 +1713,7 @@ public:
 			holder.add(dsqlRelation);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 	bool dsqlAggregate2Finder(Aggregate2Finder& visitor) override;
@@ -1809,7 +1808,7 @@ public:
 		holder.add(subscripts);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		ValueExprNode::internalPrint(printer);
 
@@ -1867,7 +1866,7 @@ public:
 		holder.add(expr);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		ValueExprNode::internalPrint(printer);
 
@@ -1917,7 +1916,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -1951,7 +1950,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -1983,7 +1982,7 @@ public:
 
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override;
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -2053,7 +2052,7 @@ public:
 		holder.add(length);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -2093,7 +2092,7 @@ public:
 		holder.add(escape);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -2128,7 +2127,7 @@ public:
 		holder.add(args);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -2167,7 +2166,7 @@ public:
 		holder.add(trimChars);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -2196,12 +2195,12 @@ private:
 	struct Impure
 	{
 		impure_value value;	// must be first
-		Firebird::Array<UCHAR>* temp;
+		Array<UCHAR>* temp;
 	};
 
 public:
 	UdfCallNode(MemoryPool& pool, const QualifiedName& aName = {},
-		ValueListNode* aArgs = nullptr, Firebird::ObjectsArray<MetaName>* aDsqlArgNames = nullptr);
+		ValueListNode* aArgs = nullptr, ObjectsArray<MetaName>* aDsqlArgNames = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
@@ -2212,7 +2211,7 @@ public:
 		holder.add(args);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -2241,7 +2240,7 @@ public:
 public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
-	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
+	NestConst<ObjectsArray<MetaName>> dsqlArgNames;
 	SubRoutine<Function> function;
 
 private:
@@ -2267,7 +2266,7 @@ public:
 		holder.add(falseValue);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
@@ -2306,7 +2305,7 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;

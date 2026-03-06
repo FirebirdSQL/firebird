@@ -150,7 +150,7 @@
 #include "../jrd/intl.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/jrd.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../dsql/DdlNodes.h"
@@ -175,8 +175,8 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 static ValueListNode* pass1_group_by_list(DsqlCompilerScratch*, ValueListNode*, ValueListNode*);
@@ -3101,3 +3101,6 @@ WindowMap* dsql_ctx::getWindowMap(DsqlCompilerScratch* dsqlScratch, WindowClause
 
 	return windowMap;
 }
+
+
+} // namespace Firebird::Jrd

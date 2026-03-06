@@ -60,8 +60,8 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/GetPlugins.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 static EngineCheckout::Type checkoutType(IExternalEngine* engine);
@@ -693,14 +693,14 @@ IExternalEngine* ExtEngineManager::ExternalContextImpl::getEngine(CheckStatusWra
 	return engine;
 }
 
-Firebird::IAttachment* ExtEngineManager::ExternalContextImpl::getAttachment(
+IAttachment* ExtEngineManager::ExternalContextImpl::getAttachment(
 	CheckStatusWrapper* /*status*/)
 {
 	externalAttachment->addRef();
 	return externalAttachment;
 }
 
-Firebird::ITransaction* ExtEngineManager::ExternalContextImpl::getTransaction(
+ITransaction* ExtEngineManager::ExternalContextImpl::getTransaction(
 	CheckStatusWrapper* /*status*/)
 {
 	externalTransaction->addRef();
@@ -2032,3 +2032,6 @@ static EngineCheckout::Type checkoutType(IExternalEngine* engine)
 {
 	return engine == SystemEngine::INSTANCE ? EngineCheckout::AVOID : EngineCheckout::REQUIRED;
 }
+
+
+} // namespace Firebird::Jrd

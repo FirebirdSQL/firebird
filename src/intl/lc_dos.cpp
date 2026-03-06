@@ -27,6 +27,8 @@
 #include "lc_narrow.h"
 #include "ld_proto.h"
 
+using namespace Firebird;
+
 static inline bool FAMILY1(texttype* cache,
 							SSHORT country,
 							USHORT flags,

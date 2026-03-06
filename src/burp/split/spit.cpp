@@ -63,6 +63,9 @@
 #include <locale.h>
 #endif
 
+using namespace Firebird;
+
+
 static constexpr int mode_read	= O_RDONLY;
 static constexpr int mode_write	= O_WRONLY | O_CREAT;
 static constexpr int mask		= 0666;

@@ -30,8 +30,8 @@
 #include "../dsql/gen_proto.h"
 #include "../jrd/cmp_proto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 // Class DsqlStatement
@@ -138,7 +138,7 @@ unsigned DsqlDmlStatement::getSize() const
 void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult)
 {
 	{	// scope
-		ContextPoolHolder scratchContext(tdbb, &scratch->getPool());
+		JrdContextPoolHolder scratchContext(tdbb, &scratch->getPool());
 		node = Node::doDsqlPass(scratch, node);
 	}
 
@@ -308,3 +308,6 @@ DsqlTransactionRequest* DsqlTransactionStatement::createRequest(thread_db* tdbb,
 {
 	return FB_NEW_POOL(getPool()) DsqlTransactionRequest(getPool(), dbb, this, node);
 }
+
+
+}	// namespace Firebird::Jrd

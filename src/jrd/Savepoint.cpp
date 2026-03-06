@@ -31,8 +31,8 @@
 
 #include "Savepoint.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 // UndoItem implementation
@@ -849,3 +849,6 @@ void StableCursorSavePoint::release()
 
 	m_number = 0;
 }
+
+
+}	// namespace Firebird::Jrd

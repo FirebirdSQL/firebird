@@ -52,8 +52,9 @@
 
 #include "../jrd/Function.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 DATABASE DB = FILENAME "ODS.RDB";
 
@@ -238,7 +239,7 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					setDefaultCount(getDefaultCount() + 1);
 
 					MemoryPool* const csb_pool = dbb->createPool();
-					Jrd::ContextPoolHolder context(tdbb, csb_pool);
+					JrdContextPoolHolder context(tdbb, csb_pool);
 
 					try
 					{
@@ -307,7 +308,7 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			else if (!X.RDB$ENGINE_NAME.NULL || !X.RDB$FUNCTION_BLR.NULL)
 			{
 				MemoryPool* const csb_pool = dbb->createPool();
-				Jrd::ContextPoolHolder context(tdbb, csb_pool);
+				JrdContextPoolHolder context(tdbb, csb_pool);
 
 				try
 				{
@@ -419,7 +420,7 @@ ScanResult Function::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 		found = true;
 
 		MemoryPool* const csb_pool = dbb->createPool();
-		Jrd::ContextPoolHolder context(tdbb, csb_pool);
+		JrdContextPoolHolder context(tdbb, csb_pool);
 
 		try
 		{
@@ -462,3 +463,5 @@ void Function::checkReload(thread_db* tdbb) const
 		getPermanent()->reload(tdbb, 0);
 }
 
+
+} // namespace Firebird::Jrd

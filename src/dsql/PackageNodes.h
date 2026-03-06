@@ -26,7 +26,7 @@
 #include "../dsql/DdlNodes.h"
 #include "../common/classes/array.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class CreateAlterPackageNode : public DdlNode
@@ -83,15 +83,15 @@ public:
 
 public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_pack_failed, isc_dsql_alter_pack_failed,
 					isc_dsql_create_alter_pack_failed)) <<
 				name.toQuotedString();
@@ -108,10 +108,10 @@ public:
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
-	Firebird::string source;
-	Firebird::Array<Item>* items;
-	Firebird::SortedArray<MetaName> functionNames;
-	Firebird::SortedArray<MetaName> procedureNames;
+	string source;
+	Array<Item>* items;
+	SortedArray<MetaName> functionNames;
+	SortedArray<MetaName> procedureNames;
 	std::optional<SqlSecurity> ssDefiner;
 
 private:
@@ -129,7 +129,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
@@ -147,9 +147,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_pack_failed) << name.toQuotedString();
 	}
 
 public:
@@ -178,25 +178,25 @@ public:
 
 public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_pack_body_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_pack_body_failed) << name.toQuotedString();
 	}
 
 public:
 	QualifiedName name;
-	Firebird::string source;
-	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
-	Firebird::Array<CreateAlterPackageNode::Item>* items;
+	string source;
+	Array<CreateAlterPackageNode::Item>* declaredItems;
+	Array<CreateAlterPackageNode::Item>* items;
 	bool createIfNotExistsOnly = false;
 
 private:
-	Firebird::string owner;
+	string owner;
 };
 
 
@@ -210,7 +210,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
@@ -224,9 +224,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_body_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_pack_body_failed) << name.toQuotedString();
 	}
 
 public:

@@ -29,14 +29,14 @@
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ini.h"
 #include "../jrd/jrd.h"
 #include "firebird/Interface.h"
 #include <initializer_list>
 #include <functional>
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	struct SystemProcedureParameter
 	{
@@ -55,7 +55,7 @@ namespace Jrd
 		{
 		}
 
-		SystemProcedureParameter(Firebird::MemoryPool& pool, const SystemProcedureParameter& other)
+		SystemProcedureParameter(MemoryPool& pool, const SystemProcedureParameter& other)
 			: defaultBlr(pool)
 		{
 			*this = other;
@@ -65,21 +65,21 @@ namespace Jrd
 		USHORT fieldId;
 		bool nullable;
 		const char* defaultText = nullptr;
-		Firebird::Array<UCHAR> defaultBlr;
+		Array<UCHAR> defaultBlr;
 	};
 
 	struct SystemProcedure
 	{
-		typedef std::function<Firebird::IExternalProcedure* (
-				Firebird::ThrowStatusExceptionWrapper*,
-				Firebird::IExternalContext*,
-				Firebird::IRoutineMetadata*,
-				Firebird::IMetadataBuilder*,
-				Firebird::IMetadataBuilder*
+		typedef std::function<IExternalProcedure* (
+				ThrowStatusExceptionWrapper*,
+				IExternalContext*,
+				IRoutineMetadata*,
+				IMetadataBuilder*,
+				IMetadataBuilder*
 			)> Factory;
 
 		SystemProcedure(
-			Firebird::MemoryPool& pool,
+			MemoryPool& pool,
 			const char* aName,
 			Factory aFactory,
 			prc_t aType,
@@ -94,7 +94,7 @@ namespace Jrd
 		{
 		}
 
-		SystemProcedure(Firebird::MemoryPool& pool, const SystemProcedure& other)
+		SystemProcedure(MemoryPool& pool, const SystemProcedure& other)
 			: inputParameters(pool),
 			  outputParameters(pool)
 		{
@@ -104,8 +104,8 @@ namespace Jrd
 		const char* name;
 		Factory factory;
 		prc_t type;
-		Firebird::ObjectsArray<SystemProcedureParameter> inputParameters;
-		Firebird::ObjectsArray<SystemProcedureParameter> outputParameters;
+		ObjectsArray<SystemProcedureParameter> inputParameters;
+		ObjectsArray<SystemProcedureParameter> outputParameters;
 	};
 
 	struct SystemFunctionParameter
@@ -125,7 +125,7 @@ namespace Jrd
 		{
 		}
 
-		SystemFunctionParameter(Firebird::MemoryPool& pool, const SystemFunctionParameter& other)
+		SystemFunctionParameter(MemoryPool& pool, const SystemFunctionParameter& other)
 			: defaultBlr(pool)
 		{
 			*this = other;
@@ -135,7 +135,7 @@ namespace Jrd
 		USHORT fieldId;
 		bool nullable;
 		const char* defaultText = nullptr;
-		Firebird::Array<UCHAR> defaultBlr;
+		Array<UCHAR> defaultBlr;
 	};
 
 	struct SystemFunctionReturnType
@@ -146,16 +146,16 @@ namespace Jrd
 
 	struct SystemFunction
 	{
-		typedef std::function<Firebird::IExternalFunction* (
-				Firebird::ThrowStatusExceptionWrapper*,
-				Firebird::IExternalContext*,
-				Firebird::IRoutineMetadata*,
-				Firebird::IMetadataBuilder*,
-				Firebird::IMetadataBuilder*
+		typedef std::function<IExternalFunction* (
+				ThrowStatusExceptionWrapper*,
+				IExternalContext*,
+				IRoutineMetadata*,
+				IMetadataBuilder*,
+				IMetadataBuilder*
 			)> Factory;
 
 		SystemFunction(
-			Firebird::MemoryPool& pool,
+			MemoryPool& pool,
 			const char* aName,
 			Factory aFactory,
 			std::initializer_list<SystemFunctionParameter> aParameters,
@@ -168,7 +168,7 @@ namespace Jrd
 		{
 		}
 
-		SystemFunction(Firebird::MemoryPool& pool, const SystemFunction& other)
+		SystemFunction(MemoryPool& pool, const SystemFunction& other)
 			: parameters(pool)
 		{
 			*this = other;
@@ -176,14 +176,14 @@ namespace Jrd
 
 		const char* name;
 		Factory factory;
-		Firebird::ObjectsArray<SystemFunctionParameter> parameters;
+		ObjectsArray<SystemFunctionParameter> parameters;
 		SystemFunctionReturnType returnType;
 	};
 
 	struct SystemPackage
 	{
 		SystemPackage(
-			Firebird::MemoryPool& pool,
+			MemoryPool& pool,
 			const char* aName,
 			USHORT aOdsVersion,
 			std::initializer_list<SystemProcedure> aProcedures,
@@ -196,7 +196,7 @@ namespace Jrd
 		{
 		}
 
-		SystemPackage(Firebird::MemoryPool& pool, const SystemPackage& other)
+		SystemPackage(MemoryPool& pool, const SystemPackage& other)
 			: procedures(pool),
 			  functions(pool)
 		{
@@ -205,10 +205,10 @@ namespace Jrd
 
 		const char* name;
 		USHORT odsVersion;
-		Firebird::ObjectsArray<SystemProcedure> procedures;
-		Firebird::ObjectsArray<SystemFunction> functions;
+		ObjectsArray<SystemProcedure> procedures;
+		ObjectsArray<SystemFunction> functions;
 
-		static Firebird::ObjectsArray<SystemPackage>& get();
+		static ObjectsArray<SystemPackage>& get();
 
 	private:
 		SystemPackage(const SystemPackage&) = delete;
@@ -221,7 +221,7 @@ namespace Jrd
 		typedef void Type;
 
 	public:
-		static void setup(Firebird::ThrowStatusExceptionWrapper*, Firebird::IMetadataBuilder*)
+		static void setup(ThrowStatusExceptionWrapper*, IMetadataBuilder*)
 		{
 		}
 	};
@@ -229,9 +229,9 @@ namespace Jrd
 	template <
 		typename Input,
 		typename Output,
-		Firebird::IExternalResultSet* (*OpenFunction)(
-			Firebird::ThrowStatusExceptionWrapper*,
-			Firebird::IExternalContext*,
+		IExternalResultSet* (*OpenFunction)(
+			ThrowStatusExceptionWrapper*,
+			IExternalContext*,
 			const typename Input::Type*,
 			typename Output::Type*
 		)
@@ -240,15 +240,15 @@ namespace Jrd
 	{
 		class SystemResultSet :
 			public
-				Firebird::DisposeIface<
-					Firebird::IExternalResultSetImpl<
+				DisposeIface<
+					IExternalResultSetImpl<
 						SystemResultSet,
-						Firebird::ThrowStatusExceptionWrapper
+						ThrowStatusExceptionWrapper
 					>
 				>
 		{
 		public:
-			SystemResultSet(Attachment* aAttachment, Firebird::IExternalResultSet* aResultSet)
+			SystemResultSet(Attachment* aAttachment, IExternalResultSet* aResultSet)
 				: attachment(aAttachment),
 				  resultSet(aResultSet)
 			{
@@ -261,31 +261,31 @@ namespace Jrd
 			}
 
 		public:
-			FB_BOOLEAN fetch(Firebird::ThrowStatusExceptionWrapper* status) override
+			FB_BOOLEAN fetch(ThrowStatusExceptionWrapper* status) override
 			{
 				// See comment in Attachment.h.
-				// Firebird::AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
+				// AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
 
 				return resultSet->fetch(status);
 			}
 
 		private:
 			Attachment* attachment;
-			Firebird::AutoDispose<Firebird::IExternalResultSet> resultSet;
+			AutoDispose<IExternalResultSet> resultSet;
 		};
 
 		class SystemProcedureImpl :
 			public
-				Firebird::DisposeIface<
-					Firebird::IExternalProcedureImpl<
+				DisposeIface<
+					IExternalProcedureImpl<
 						SystemProcedureImpl,
-						Firebird::ThrowStatusExceptionWrapper
+						ThrowStatusExceptionWrapper
 					>
 				>
 		{
 		public:
-			SystemProcedureImpl(Firebird::ThrowStatusExceptionWrapper* status,
-				Firebird::IMetadataBuilder* inBuilder, Firebird::IMetadataBuilder* outBuilder)
+			SystemProcedureImpl(ThrowStatusExceptionWrapper* status,
+				IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
 			{
 				const auto tdbb = JRD_get_thread_data();
 				attachment = tdbb->getAttachment();
@@ -301,17 +301,17 @@ namespace Jrd
 			}
 
 		public:
-			void getCharSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+			void getCharSet(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 				char* name, unsigned nameSize) override
 			{
 				strncpy(name, "UTF8", nameSize);
 			}
 
-			Firebird::IExternalResultSet* open(Firebird::ThrowStatusExceptionWrapper* status,
-				Firebird::IExternalContext* context, void* inMsg, void* outMsg) override
+			IExternalResultSet* open(ThrowStatusExceptionWrapper* status,
+				IExternalContext* context, void* inMsg, void* outMsg) override
 			{
 				// See comment in Attachment.h.
-				// Firebird::AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
+				// AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
 
 				const auto resultSet = OpenFunction(status, context,
 					static_cast<typename Input::Type*>(inMsg),
@@ -325,11 +325,11 @@ namespace Jrd
 		};
 
 		SystemProcedureImpl* operator()(
-			Firebird::ThrowStatusExceptionWrapper* status,
-			Firebird::IExternalContext* /*context*/,
-			Firebird::IRoutineMetadata* /*metadata*/,
-			Firebird::IMetadataBuilder* inBuilder,
-			Firebird::IMetadataBuilder* outBuilder)
+			ThrowStatusExceptionWrapper* status,
+			IExternalContext* /*context*/,
+			IRoutineMetadata* /*metadata*/,
+			IMetadataBuilder* inBuilder,
+			IMetadataBuilder* outBuilder)
 		{
 			return FB_NEW SystemProcedureImpl(status, inBuilder, outBuilder);
 		}
@@ -339,8 +339,8 @@ namespace Jrd
 		typename Input,
 		typename Output,
 		void (*ExecFunction)(
-			Firebird::ThrowStatusExceptionWrapper*,
-			Firebird::IExternalContext*,
+			ThrowStatusExceptionWrapper*,
+			IExternalContext*,
 			const typename Input::Type*,
 			typename Output::Type*
 		)
@@ -349,16 +349,16 @@ namespace Jrd
 	{
 		class SystemFunctionImpl :
 			public
-				Firebird::DisposeIface<
-					Firebird::IExternalFunctionImpl<
+				DisposeIface<
+					IExternalFunctionImpl<
 						SystemFunctionImpl,
-						Firebird::ThrowStatusExceptionWrapper
+						ThrowStatusExceptionWrapper
 					>
 				>
 		{
 		public:
-			SystemFunctionImpl(Firebird::ThrowStatusExceptionWrapper* status,
-				Firebird::IMetadataBuilder* inBuilder, Firebird::IMetadataBuilder* outBuilder)
+			SystemFunctionImpl(ThrowStatusExceptionWrapper* status,
+				IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
 			{
 				const auto tdbb = JRD_get_thread_data();
 				attachment = tdbb->getAttachment();
@@ -368,17 +368,17 @@ namespace Jrd
 			}
 
 		public:
-			void getCharSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+			void getCharSet(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 				char* name, unsigned nameSize) override
 			{
 				strncpy(name, "UTF8", nameSize);
 			}
 
-			void execute(Firebird::ThrowStatusExceptionWrapper* status,
-				Firebird::IExternalContext* context, void* inMsg, void* outMsg) override
+			void execute(ThrowStatusExceptionWrapper* status,
+				IExternalContext* context, void* inMsg, void* outMsg) override
 			{
 				// See comment in Attachment.h.
-				// Firebird::AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
+				// AutoSetRestore<bool> autoInSystemPackage(&attachment->att_in_system_routine, true);
 
 				ExecFunction(status, context,
 					static_cast<typename Input::Type*>(inMsg),
@@ -390,15 +390,15 @@ namespace Jrd
 		};
 
 		SystemFunctionImpl* operator()(
-			Firebird::ThrowStatusExceptionWrapper* status,
-			Firebird::IExternalContext* /*context*/,
-			Firebird::IRoutineMetadata* /*metadata*/,
-			Firebird::IMetadataBuilder* inBuilder,
-			Firebird::IMetadataBuilder* outBuilder)
+			ThrowStatusExceptionWrapper* status,
+			IExternalContext* /*context*/,
+			IRoutineMetadata* /*metadata*/,
+			IMetadataBuilder* inBuilder,
+			IMetadataBuilder* outBuilder)
 		{
 			return FB_NEW SystemFunctionImpl(status, inBuilder, outBuilder);
 		}
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_SYSTEM_PACKAGES_H

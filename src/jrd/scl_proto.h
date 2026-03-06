@@ -29,48 +29,47 @@
 #include "../common/classes/fb_string.h"
 #include "../jrd/MetaName.h"
 
-//namespace Jrd {
-//	class SecurityClass;
-//}
-
 struct dsc;
 
-void SCL_check_access(Jrd::thread_db*, const Jrd::SecurityClass*,
-					  SLONG, const Jrd::QualifiedName&,
-					  Jrd::SecurityClass::flags_t, ObjectType type, bool recursive, const Jrd::QualifiedName&,
-					  const Jrd::MetaName& = {});
-void SCL_check_create_access(Jrd::thread_db*, ObjectType type, const Jrd::MetaName& schema);
-void SCL_check_charset(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, Jrd::SecurityClass::flags_t);
-void SCL_check_collation(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, Jrd::SecurityClass::flags_t);
-void SCL_check_database(Jrd::thread_db* tdbb, Jrd::SecurityClass::flags_t mask);
-void SCL_check_domain(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, Jrd::SecurityClass::flags_t);
-bool SCL_check_exception(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, Jrd::SecurityClass::flags_t);
-bool SCL_check_generator(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, Jrd::SecurityClass::flags_t);
-void SCL_check_index(Jrd::thread_db*, const Jrd::QualifiedName&, UCHAR, Jrd::SecurityClass::flags_t);
-bool SCL_check_package(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t);
-bool SCL_check_procedure(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t);
-bool SCL_check_function(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t);
-void SCL_check_filter(Jrd::thread_db* tdbb, const Jrd::MetaName& name, Jrd::SecurityClass::flags_t);
-void SCL_check_relation(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t,
-	bool protectSys = true);
-bool SCL_check_schema(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
-bool SCL_check_view(Jrd::thread_db* tdbb, const Jrd::QualifiedName& name, Jrd::SecurityClass::flags_t);
-void SCL_check_role(Jrd::thread_db* tdbb, const Jrd::MetaName&, Jrd::SecurityClass::flags_t);
-Jrd::SecurityClass* SCL_get_class(Jrd::thread_db*, const Jrd::MetaName& name);
-Jrd::SecurityClass::flags_t SCL_get_mask(Jrd::thread_db* tdbb, const Jrd::QualifiedName&, const TEXT*);
-void SCL_clear_classes(Jrd::thread_db*, const Jrd::MetaName&);
-void SCL_release_all(Jrd::SecurityClassList*&);
-bool SCL_role_granted(Jrd::thread_db* tdbb, const Jrd::UserId& usr, const TEXT* sql_role);
-Jrd::SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type, const Jrd::MetaName& schema);
-ULONG SCL_get_number(const UCHAR*);
-USHORT SCL_convert_privilege(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& priv);
+namespace Firebird::Jrd
+{
 
-namespace Jrd {
-typedef Firebird::Array<UCHAR> Acl;
-}
-bool SCL_move_priv(Jrd::SecurityClass::flags_t, Jrd::Acl&);
 
-inline Jrd::MetaName SCL_getDdlSecurityClassName(ObjectType objectType, const Jrd::MetaName& schema)
+	void SCL_check_access(thread_db*, const SecurityClass*,
+						SLONG, const QualifiedName&,
+						SecurityClass::flags_t, ObjectType type, bool recursive, const QualifiedName&,
+						const MetaName& = {});
+	void SCL_check_create_access(thread_db*, ObjectType type, const MetaName& schema);
+	void SCL_check_charset(thread_db* tdbb, const QualifiedName&, SecurityClass::flags_t);
+	void SCL_check_collation(thread_db* tdbb, const QualifiedName&, SecurityClass::flags_t);
+	void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask);
+	void SCL_check_domain(thread_db* tdbb, const QualifiedName&, SecurityClass::flags_t);
+	bool SCL_check_exception(thread_db* tdbb, const QualifiedName&, SecurityClass::flags_t);
+	bool SCL_check_generator(thread_db* tdbb, const QualifiedName&, SecurityClass::flags_t);
+	void SCL_check_index(thread_db*, const QualifiedName&, UCHAR, SecurityClass::flags_t);
+	bool SCL_check_package(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t);
+	bool SCL_check_procedure(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t);
+	bool SCL_check_function(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t);
+	void SCL_check_filter(thread_db* tdbb, const MetaName& name, SecurityClass::flags_t);
+	void SCL_check_relation(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t,
+		bool protectSys = true);
+	bool SCL_check_schema(thread_db* tdbb, const MetaName&, SecurityClass::flags_t);
+	bool SCL_check_view(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t);
+	void SCL_check_role(thread_db* tdbb, const MetaName&, SecurityClass::flags_t);
+	SecurityClass* SCL_get_class(thread_db*, const MetaName& name);
+	SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const QualifiedName&, const TEXT*);
+	void SCL_clear_classes(thread_db*, const MetaName&);
+	void SCL_release_all(SecurityClassList*&);
+	bool SCL_role_granted(thread_db* tdbb, const UserId& usr, const TEXT* sql_role);
+	SecurityClass::flags_t SCL_get_object_mask(ObjectType object_type, const MetaName& schema);
+	ULONG SCL_get_number(const UCHAR*);
+	USHORT SCL_convert_privilege(thread_db* tdbb, jrd_tra* transaction, const string& priv);
+
+	typedef Array<UCHAR> Acl;
+
+	bool SCL_move_priv(SecurityClass::flags_t, Acl&);
+
+inline MetaName SCL_getDdlSecurityClassName(ObjectType objectType, const MetaName& schema)
 {
 	switch (objectType)
 	{
@@ -91,7 +90,7 @@ inline Jrd::MetaName SCL_getDdlSecurityClassName(ObjectType objectType, const Jr
 		case obj_tablespaces:
 		case obj_schemas:
 		{
-			Firebird::string str;
+			string str;
 			str.printf(SQL_DDL_SECCLASS_FORMAT, (int) objectType, schema.c_str());
 			return str;
 		}
@@ -101,6 +100,9 @@ inline Jrd::MetaName SCL_getDdlSecurityClassName(ObjectType objectType, const Jr
 			return "";
 	}
 }
+
+
+}	// namespace Firebird::Jrd
 
 
 #endif // JRD_SCL_PROTO_H

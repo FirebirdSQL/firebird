@@ -46,18 +46,17 @@
 // Thread data block
 #include "../common/ThreadData.h"
 
-using namespace Firebird;
 
-namespace
+namespace Firebird::Jrd
 {
-	void unableToRunSweepException(ISC_STATUS reason)
+	namespace
 	{
-		ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+		void unableToRunSweepException(ISC_STATUS reason)
+		{
+			ERR_post(Arg::Gds(isc_sweep_unable_to_run) << Arg::Gds(reason));
+		}
 	}
-}
 
-namespace Jrd
-{
 	bool Database::onRawDevice() const
 	{
 		const auto pageSpace = dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -135,7 +134,7 @@ namespace Jrd
 		return dbb_tip_cache->newMonitorGeneration();
 	}
 
-	const Firebird::string& Database::getUniqueFileId()
+	const string& Database::getUniqueFileId()
 	{
 		if (dbb_file_id.isEmpty())
 		{
@@ -166,7 +165,7 @@ namespace Jrd
 			pool->setStatsGroup(*stats);
 		}
 
-		Firebird::SyncLockGuard guard(&dbb_pools_sync, Firebird::SYNC_EXCLUSIVE, "Database::createPool");
+		SyncLockGuard guard(&dbb_pools_sync, SYNC_EXCLUSIVE, "Database::createPool");
 		dbb_pools.add(pool);
 
 #ifdef DEBUG_LOST_POOLS
@@ -790,9 +789,9 @@ namespace Jrd
 		return m_replMgr;
 	}
 
-	Database::Database(MemoryPool* p, Firebird::IPluginConfig* pConf, bool shared)
+	Database::Database(MemoryPool* p, IPluginConfig* pConf, bool shared)
 	:	dbb_permanent(p),
-		dbb_guid(Firebird::Guid::empty()),
+		dbb_guid(Guid::empty()),
 		dbb_page_manager(this, *p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
@@ -813,7 +812,7 @@ namespace Jrd
 		dbb_stats(*p),
 		dbb_lock_owner_id(getLockOwnerId()),
 		dbb_tip_cache(NULL),
-		dbb_creation_date(Firebird::TimeZoneUtil::getCurrentGmtTimeStamp()),
+		dbb_creation_date(TimeZoneUtil::getCurrentGmtTimeStamp()),
 		dbb_external_file_directory_list(NULL),
 		dbb_init_fini(FB_NEW_POOL(*getDefaultMemoryPool()) ExistenceRefMutex()),
 		dbb_linger_seconds(0),
@@ -894,6 +893,4 @@ namespace Jrd
 		}
 		return result;
 	}
-
-
-} // namespace
+} // namespace Firebird::Jrd

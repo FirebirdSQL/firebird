@@ -66,7 +66,7 @@ public:
 
 	void convert(ULONG srcLen,
 				 const UCHAR* src,
-				 Firebird::UCharBuffer& dst,
+				 UCharBuffer& dst,
 				 ULONG* badInputPos = NULL,
 				 bool ignoreTrailingSpaces = false)
 	{
@@ -124,7 +124,7 @@ public:
 
 			fb_assert(len % sizeof(USHORT) == 0);
 
-			Firebird::HalfStaticArray<USHORT, BUFFER_SMALL> temp;
+			HalfStaticArray<USHORT, BUFFER_SMALL> temp;
 
 			len = (*cnvt1->csconvert_fn_convert)(cnvt1, srcLen, src, len,
 				reinterpret_cast<UCHAR*>(temp.getBuffer(len / 2)), &errCode, &errPos);
@@ -182,7 +182,7 @@ public:
 				{
 					// ASF: We should report the bad pos in context of the source string.
 					// Convert the "good" UTF-16 buffer to it to know the length.
-					Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> dummyBuffer;
+					HalfStaticArray<UCHAR, BUFFER_SMALL> dummyBuffer;
 					USHORT dummyErr;
 					ULONG dummyPos;
 					*badInputPos = (*charSet1->charset_from_unicode.csconvert_fn_convert)(
@@ -272,16 +272,16 @@ private:
 private:
 	[[noreturn]] void raiseError(ISC_STATUS code)
 	{
-		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
-			Firebird::Arg::Gds(code));
+		status_exception::raise(Arg::Gds(isc_arith_except) <<
+			Arg::Gds(code));
 	}
 
 	[[noreturn]] void raiseError(ULONG dstLen, ULONG srcLen)
 	{
-		Firebird::status_exception::raise(Firebird::Arg::Gds(isc_arith_except) <<
-			Firebird::Arg::Gds(isc_string_truncation) <<
-			Firebird::Arg::Gds(isc_trunc_limits) <<
-				Firebird::Arg::Num(dstLen) << Firebird::Arg::Num(srcLen));
+		status_exception::raise(Arg::Gds(isc_arith_except) <<
+			Arg::Gds(isc_string_truncation) <<
+			Arg::Gds(isc_trunc_limits) <<
+				Arg::Num(dstLen) << Arg::Num(srcLen));
 	}
 
 };

@@ -28,13 +28,15 @@
 
 int CLIB_ROUTINE main(int argc, char* argv[])
 {
+	using namespace Firebird;
+
 	try
 	{
-		return ISQL_main(argc, argv);
+		return Isql::ISQL_main(argc, argv);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
-		Firebird::StaticStatusVector st;
+		StaticStatusVector st;
 		ex.stuffException(st);
 		isc_print_status(st.begin());
 	}

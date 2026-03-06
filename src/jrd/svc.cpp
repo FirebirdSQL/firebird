@@ -38,7 +38,7 @@
 #include <stdarg.h>
 #include "../jrd/jrd.h"
 #include "../jrd/svc.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "iberror.h"
 #include "../jrd/license.h"
 #include "../jrd/err_proto.h"
@@ -79,7 +79,6 @@
 // Service threads
 #include "../burp/burp_proto.h"
 #include "../alice/alice_proto.h"
-int main_gstat(Firebird::UtilSvc* uSvc);
 #include "../utilities/nbackup/nbk_proto.h"
 #include "../utilities/gsec/gsec_proto.h"
 #include "../jrd/trace/TraceService.h"
@@ -117,11 +116,15 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 
 #include <sys/stat.h>
 
+int main_gstat(Firebird::UtilSvc* uSvc);
+
+namespace Firebird::Jrd
+{
+
+
 #define statistics	stat
 
 
-using namespace Firebird;
-using namespace Jrd;
 
 inline constexpr int SVC_user_dba	= 2;
 inline constexpr int SVC_user_any	= 1;
@@ -157,27 +160,27 @@ namespace {
 namespace {
 inline constexpr serv_entry services[] =
 {
-	{ isc_action_svc_backup, "Backup Database", BURP_main },
-	{ isc_action_svc_restore, "Restore Database", BURP_main },
-	{ isc_action_svc_repair, "Repair Database", ALICE_main },
-	{ isc_action_svc_add_user, "Add User", GSEC_main },
-	{ isc_action_svc_delete_user, "Delete User", GSEC_main },
-	{ isc_action_svc_modify_user, "Modify User", GSEC_main },
-	{ isc_action_svc_display_user, "Display User", GSEC_main },
-	{ isc_action_svc_properties, "Database Properties", ALICE_main },
+	{ isc_action_svc_backup, "Backup Database", Burp::BURP_main },
+	{ isc_action_svc_restore, "Restore Database", Burp::BURP_main },
+	{ isc_action_svc_repair, "Repair Database", Alice::ALICE_main },
+	{ isc_action_svc_add_user, "Add User", Gsec::GSEC_main },
+	{ isc_action_svc_delete_user, "Delete User", Gsec::GSEC_main },
+	{ isc_action_svc_modify_user, "Modify User", Gsec::GSEC_main },
+	{ isc_action_svc_display_user, "Display User", Gsec::GSEC_main },
+	{ isc_action_svc_properties, "Database Properties", Alice::ALICE_main },
 	{ isc_action_svc_db_stats, "Database Stats", main_gstat },
 	{ isc_action_svc_get_fb_log, "Get Log File", Service::readFbLog },
-	{ isc_action_svc_nbak, "Incremental Backup Database", NBACKUP_main },
-	{ isc_action_svc_nrest, "Incremental Restore Database", NBACKUP_main },
-	{ isc_action_svc_nfix, "Fixup Database after FS Copy", NBACKUP_main },
+	{ isc_action_svc_nbak, "Incremental Backup Database", Nbackup::NBACKUP_main },
+	{ isc_action_svc_nrest, "Incremental Restore Database", Nbackup::NBACKUP_main },
+	{ isc_action_svc_nfix, "Fixup Database after FS Copy", Nbackup::NBACKUP_main },
 	{ isc_action_svc_trace_start, "Start Trace Session", TRACE_main },
 	{ isc_action_svc_trace_stop, "Stop Trace Session", TRACE_main },
 	{ isc_action_svc_trace_suspend, "Suspend Trace Session", TRACE_main },
 	{ isc_action_svc_trace_resume, "Resume Trace Session", TRACE_main },
 	{ isc_action_svc_trace_list, "List Trace Sessions", TRACE_main },
-	{ isc_action_svc_set_mapping, "Set Domain Admins Mapping to RDB$ADMIN", GSEC_main },
-	{ isc_action_svc_drop_mapping, "Drop Domain Admins Mapping to RDB$ADMIN", GSEC_main },
-	{ isc_action_svc_display_user_adm, "Display User with Admin Info", GSEC_main },
+	{ isc_action_svc_set_mapping, "Set Domain Admins Mapping to RDB$ADMIN", Gsec::GSEC_main },
+	{ isc_action_svc_drop_mapping, "Drop Domain Admins Mapping to RDB$ADMIN", Gsec::GSEC_main },
+	{ isc_action_svc_display_user_adm, "Display User with Admin Info", Gsec::GSEC_main },
 	{ isc_action_svc_validate, "Validate Database", VAL_service},
 	{ 0, NULL, NULL }
 };
@@ -634,7 +637,7 @@ bool Service::utf8FileNames()
 	return svc_utf8;
 }
 
-Firebird::ICryptKeyCallback* Service::getCryptCallback()
+ICryptKeyCallback* Service::getCryptCallback()
 {
 	return svc_crypt_callback;
 }
@@ -670,7 +673,7 @@ namespace
 		val |= QUOTED_FILENAME_SUPPORT;
 #endif // WIN_NT
 
-		Firebird::MasterInterfacePtr master;
+		MasterInterfacePtr master;
 		switch (master->serverMode(-1))
 		{
 		case 1:		// super
@@ -688,7 +691,7 @@ namespace
 }
 
 Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_data,
-				 Firebird::ICryptKeyCallback* crypt_callback)
+				 ICryptKeyCallback* crypt_callback)
 	: svc_status(getPool()), svc_parsed_sw(getPool()),
 	svc_stdout_head(0), svc_stdout_tail(0), svc_service_run(NULL),
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
@@ -805,7 +808,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 
 		svc_trace_manager = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager(this);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		TraceManager* trace_manager = NULL;
 		FbLocalStatus status_vector;
@@ -833,7 +836,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 			if (!hasTrace)
 				delete trace_manager;
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 		}
 
@@ -1529,7 +1532,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_QUERY))
 		{
@@ -1905,7 +1908,7 @@ void Service::query(USHORT			send_item_length,
 		*info = isc_info_end;
 	}
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_QUERY))
 		{
@@ -2149,7 +2152,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		if (svc_trace_manager->needs(ITraceFactory::TRACE_EVENT_SERVICE_START))
 		{
@@ -2189,7 +2192,7 @@ void Service::readFbLog()
 {
 	bool svc_started = false;
 
-	Firebird::PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
+	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
 	FILE* file = os_utils::fopen(name.c_str(), "r");
 
 	try
@@ -2227,7 +2230,7 @@ void Service::readFbLog()
 			}
 		}
 	}
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
 		setDataMode(false);
 
@@ -2691,14 +2694,14 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, nbackup_in_sw_table, switches))
+				if (!get_action_svc_bitmask(spb, Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
 				break;
 
 			case isc_spb_nbk_direct:
-				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2710,7 +2713,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				{
 					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_nbk_clean_history")).raise();
 				}
-				if (!get_action_svc_parameter(spb.getClumpTag(), nbackup_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Nbackup::nbackup_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2748,7 +2751,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, nbackup_in_sw_table, switches))
+				if (!get_action_svc_bitmask(spb, Nbackup::nbackup_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2763,7 +2766,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_drop_mapping:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2779,7 +2782,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sql_role_name:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2796,7 +2799,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_display_user_adm:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2820,7 +2823,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sql_role_name:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2842,7 +2845,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		case isc_action_svc_modify_user:
 			if (!found)
 			{
-				if (!get_action_svc_parameter(svc_action, gsec_action_in_sw_table, switches))
+				if (!get_action_svc_parameter(svc_action, Gsec::gsec_action_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2858,7 +2861,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sec_userid:
 			case isc_spb_sec_groupid:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2866,7 +2869,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 
 			case isc_spb_sec_admin:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2880,7 +2883,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_sec_middlename:
 			case isc_spb_sec_lastname:
 			case isc_spb_dbname:
-				if (!get_action_svc_parameter(spb.getClumpTag(), gsec_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Gsec::gsec_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2968,7 +2971,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 			case isc_spb_options:
 				burp_options |= spb.getInt();
-				if (!get_action_svc_bitmask(spb, reference_burp_in_sw_table, switches))
+				if (!get_action_svc_bitmask(spb, Burp::reference_burp_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -2984,33 +2987,33 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_res_buffers:
 			case isc_spb_res_page_size:
 			case isc_spb_verbint:
-				if (!get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Burp::reference_burp_in_sw_table, switches))
 				{
 					return false;
 				}
 				get_action_svc_data(spb, switches, bigint);
 				break;
 			case isc_spb_res_access_mode:
-				if (!get_action_svc_parameter(*(spb.getBytes()), reference_burp_in_sw_table, switches))
+				if (!get_action_svc_parameter(*(spb.getBytes()), Burp::reference_burp_in_sw_table, switches))
 				{
 					return false;
 				}
 				break;
 			case isc_spb_res_replica_mode:
-				if (get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				if (get_action_svc_parameter(spb.getClumpTag(), Burp::reference_burp_in_sw_table, switches))
 				{
 					const unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(burp_repl_mode_sw_table))
+					if (val >= FB_NELEM(Burp::burp_repl_mode_sw_table))
 					{
 						return false;
 					}
-					switches += burp_repl_mode_sw_table[val];
+					switches += Burp::burp_repl_mode_sw_table[val];
 					switches += " ";
 					break;
 				}
 				return false;
 			case isc_spb_verbose:
-				if (!get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Burp::reference_burp_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3023,7 +3026,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_bkp_keyholder:
 			case isc_spb_bkp_keyname:
 			case isc_spb_bkp_crypt:
-				if (!get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				if (!get_action_svc_parameter(spb.getClumpTag(), Burp::reference_burp_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3042,7 +3045,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
                 get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, alice_in_sw_table, switches))
+			if (!get_action_svc_bitmask(spb, Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3065,7 +3068,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
 			case isc_spb_rpr_par_workers:
-				if (!get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (!get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3074,34 +3077,34 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_prp_write_mode:
 			case isc_spb_prp_access_mode:
 			case isc_spb_prp_reserve_space:
-				if (!get_action_svc_parameter(*(spb.getBytes()), alice_in_sw_table, switches))
+			if (!get_action_svc_parameter(*(spb.getBytes()), Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
 				break;
 			case isc_spb_prp_shutdown_mode:
 			case isc_spb_prp_online_mode:
-				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
+			{
+				const unsigned int val = spb.getInt();
+				if (val >= FB_NELEM(Alice::alice_shut_mode_sw_table))
 				{
-					const unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(alice_shut_mode_sw_table))
-					{
-						return false;
-					}
-					switches += alice_shut_mode_sw_table[val];
+					return false;
+				}
+				switches += Alice::alice_shut_mode_sw_table[val];
 					switches += " ";
 					break;
 				}
 				return false;
 			case isc_spb_prp_replica_mode:
-				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
+			{
+				const unsigned int val = spb.getInt();
+				if (val >= FB_NELEM(Alice::alice_repl_mode_sw_table))
 				{
-					const unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(alice_repl_mode_sw_table))
-					{
-						return false;
-					}
-					switches += alice_repl_mode_sw_table[val];
+					return false;
+				}
+				switches += Alice::alice_repl_mode_sw_table[val];
 					switches += " ";
 					break;
 				}
@@ -3214,7 +3217,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_nbk_file")).raise();
 		}
 
-		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
+		if (!get_action_svc_parameter(svc_action, Nbackup::nbackup_action_in_sw_table, switches))
 		{
 			return false;
 		}
@@ -3253,7 +3256,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			(Arg::Gds(isc_missing_required_spb) << Arg::Str("isc_spb_dbname")).raise();
 		}
 
-		if (!get_action_svc_parameter(svc_action, nbackup_action_in_sw_table, switches))
+		if (!get_action_svc_parameter(svc_action, Nbackup::nbackup_action_in_sw_table, switches))
 		{
 			return false;
 		}
@@ -3359,3 +3362,6 @@ bool Service::getUserAdminFlag() const noexcept
 {
 	return (svc_user_flag & SVC_user_dba);
 }
+
+
+} // namespace Firebird::Jrd

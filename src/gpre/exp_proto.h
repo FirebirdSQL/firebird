@@ -24,6 +24,10 @@
 #ifndef GPRE_EXP_PROTO_H
 #define GPRE_EXP_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 gpre_nod*	EXP_array(gpre_req*, gpre_fld*, bool, bool);
 gpre_fld*	EXP_cast(gpre_fld*);
 gpre_ctx*	EXP_context(gpre_req*, gpre_sym*);
@@ -44,5 +48,7 @@ ULONG		EXP_ULONG_ordinal(bool);
 USHORT		EXP_USHORT_ordinal(bool);
 USHORT		EXP_pos_USHORT_ordinal(bool);
 
-#endif // GPRE_EXP_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_EXP_PROTO_H

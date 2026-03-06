@@ -57,17 +57,15 @@
 #include <optional>
 
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 	class Connection;
 }
 
-namespace Replication
-{
+namespace Firebird::Jrd::Replication {
 	class TableMatcher;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class thread_db;
 	class Database;
 	class jrd_tra;
@@ -77,7 +75,6 @@ namespace Jrd
 	class Format;
 	class BufferControl;
 	class PageToBufferMap;
-	class SparseBitmap;
 	class jrd_rel;
 	class ExternalFile;
 	class ViewContext;
@@ -98,8 +95,12 @@ namespace Jrd
 	class Statement;
 	class ProfilerManager;
 	class Validation;
-	class Applier;
 	enum InternalRequest : USHORT;
+
+	namespace Replication
+	{
+		class Applier;
+	}
 
 
 struct DSqlCacheItem
@@ -112,14 +113,14 @@ struct DSqlCacheItem
 	{
 	}
 
-	Firebird::string key;
-	Firebird::LeftPooledMap<QualifiedName, bool> obsoleteMap;
+	string key;
+	LeftPooledMap<QualifiedName, bool> obsoleteMap;
 	Lock* lock;
 	bool locked;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::Full<
-	Firebird::string, DSqlCacheItem> > > DSqlCache;
+typedef GenericMap<Pair<Full<
+	string, DSqlCacheItem> > > DSqlCache;
 
 
 struct DdlTriggerContext
@@ -134,12 +135,12 @@ struct DdlTriggerContext
 	{
 	}
 
-	Firebird::string eventType;
-	Firebird::string objectType;
+	string eventType;
+	string objectType;
 	QualifiedName objectName;
 	QualifiedName oldObjectName;
 	QualifiedName newObjectName;
-	Firebird::string sqlText;
+	string sqlText;
 };
 
 
@@ -182,7 +183,7 @@ struct bid;
 class ActiveSnapshots
 {
 public:
-	explicit ActiveSnapshots(Firebird::MemoryPool& p);
+	explicit ActiveSnapshots(MemoryPool& p);
 
 	// Returns snapshot number given version belongs to.
 	// It is not needed to maintain two versions for the same snapshot, so the latter
@@ -193,7 +194,7 @@ public:
 	CommitNumber getSnapshotForVersion(CommitNumber version_cn);
 
 private:
-	Firebird::SparseBitmap<CommitNumber> m_snapshots;		// List of active snapshots as of the moment of time
+	SparseBitmap<CommitNumber> m_snapshots;		// List of active snapshots as of the moment of time
 	CommitNumber m_lastCommit;		// CN_ACTIVE here means object is not populated
 	ULONG m_releaseCount;			// Release event counter when list was last updated
 	ULONG m_slots_used;				// Snapshot slots used when list was last updated
@@ -205,7 +206,7 @@ private:
 //
 // RefCounted part of Attachment object, placed into permanent pool
 //
-class StableAttachmentPart : public Firebird::RefCounted, public Firebird::GlobalStorage
+class StableAttachmentPart : public RefCounted, public GlobalStorage
 {
 public:
 	class Sync
@@ -298,7 +299,7 @@ public:
 		}
 
 	private:
-		Firebird::Mutex syncMutex;
+		Mutex syncMutex;
 		std::atomic<int> waiters;
 		ThreadId threadId;
 		std::atomic<FB_UINT64> totalLocksCounter;
@@ -337,7 +338,7 @@ public:
 		return useAsync ? &async : &mainSync;
 	}
 
-	Firebird::Mutex* getBlockingMutex() noexcept
+	Mutex* getBlockingMutex() noexcept
 	{
 		return &blockingMutex;
 	}
@@ -349,12 +350,12 @@ public:
 		att = NULL;
 	}
 
-	jrd_tra* getEngineTransaction(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra)
+	jrd_tra* getEngineTransaction(CheckStatusWrapper* status, ITransaction* tra)
 	{
 		return getInterface()->getEngineTransaction(status, tra);
 	}
 
-	JTransaction* getTransactionInterface(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tra)
+	JTransaction* getTransactionInterface(CheckStatusWrapper* status, ITransaction* tra)
 	{
 		return getInterface()->getTransactionInterface(status, tra);
 	}
@@ -374,13 +375,13 @@ public:
 		return shutError;
 	}
 
-	void onIdleTimer(Firebird::TimerImpl* timer)
+	void onIdleTimer(TimerImpl* timer)
 	{
 		doOnIdleTimer(timer);
 	}
 
 protected:
-	virtual void doOnIdleTimer(Firebird::TimerImpl* timer);
+	virtual void doOnIdleTimer(TimerImpl* timer);
 
 private:
 	Attachment* att;
@@ -391,11 +392,11 @@ private:
 	// zero att_use_count one should check does attachment still exists calling getHandle().
 	Sync mainSync, async;
 	// This mutex guarantees attachment is not accessed by more than single external thread.
-	Firebird::Mutex blockingMutex;
+	Mutex blockingMutex;
 };
 
-typedef Firebird::RaiiLockGuard<StableAttachmentPart::Sync> AttSyncLockGuard;
-typedef Firebird::RaiiUnlockGuard<StableAttachmentPart::Sync> AttSyncUnlockGuard;
+typedef RaiiLockGuard<StableAttachmentPart::Sync> AttSyncLockGuard;
+typedef RaiiUnlockGuard<StableAttachmentPart::Sync> AttSyncUnlockGuard;
 
 //
 // the attachment block; one is created for each attachment to a database
@@ -431,7 +432,7 @@ public:
 	private:
 		void init(const char* f, bool optional);
 
-		Firebird::RefPtr<StableAttachmentPart> jStable;
+		RefPtr<StableAttachmentPart> jStable;
 	};
 
 	class InitialOptions
@@ -439,9 +440,9 @@ public:
 	public:
 		InitialOptions(MemoryPool& pool)
 			: bindings(pool),
-			  schemaSearchPath(FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool)),
+			  schemaSearchPath(FB_NEW_POOL(pool) AnyRef<ObjectsArray<MetaString>>(pool)),
 			  blrRequestSchemaSearchPath(
-				FB_NEW_POOL(pool) Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>(pool))
+				FB_NEW_POOL(pool) AnyRef<ObjectsArray<MetaString>>(pool))
 		{
 		}
 
@@ -460,11 +461,11 @@ public:
 		}
 
 	private:
-		Firebird::DecimalStatus decFloatStatus = Firebird::DecimalStatus::DEFAULT;
+		DecimalStatus decFloatStatus = DecimalStatus::DEFAULT;
 		CoercionArray bindings;
-		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
-		Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> blrRequestSchemaSearchPath;
-		USHORT originalTimeZone = Firebird::TimeZoneUtil::GMT_ZONE;
+		RefPtr<AnyRef<ObjectsArray<MetaString>>> schemaSearchPath;
+		RefPtr<AnyRef<ObjectsArray<MetaString>>> blrRequestSchemaSearchPath;
+		USHORT originalTimeZone = TimeZoneUtil::GMT_ZONE;
 	};
 
 	class DebugOptions
@@ -509,7 +510,7 @@ public:
 	static void destroy(Attachment* const attachment);
 
 	MemoryPool* const att_pool;					// Memory pool
-	Firebird::MemoryStats att_memory_stats;
+	MemoryStats att_memory_stats;
 
 	Database*	att_database;				// Parent database block
 	Attachment*	att_next;					// Next attachment to database
@@ -526,7 +527,7 @@ private:
 	StableAttachmentPart* att_stable;
 
 public:
-	Firebird::SortedArray<Request*> att_requests;		// Requests belonging to attachment
+	SortedArray<Request*> att_requests;		// Requests belonging to attachment
 
 	Lock*		att_id_lock;				// Attachment lock (if any)
 	AttNumber	att_attachment_id;			// Attachment ID
@@ -561,25 +562,25 @@ public:
 	std::atomic<SLONG>	att_wait_owner_handle;	// lock owner with which attachment waits currently
 	vec<Lock*>*	att_compatibility_table;	// hash table of compatible locks
 	Validation*	att_validation;
-	Firebird::PathName	att_working_directory;	// Current working directory is cached
-	Firebird::PathName	att_filename;			// alias used to attach the database
+	PathName	att_working_directory;	// Current working directory is cached
+	PathName	att_filename;			// alias used to attach the database
 	ISC_TIMESTAMP_TZ	att_timestamp;	    // Connection date and time
-	Firebird::StringMap att_context_vars;	// Context variables for the connection
-	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
-	Firebird::string att_network_protocol;	// Network protocol used by client for connection
-	Firebird::PathName att_remote_crypt;	// Name of wire crypt plugin (if any)
-	Firebird::string att_remote_address;	// Protocol-specific address of remote client
+	StringMap att_context_vars;	// Context variables for the connection
+	Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
+	string att_network_protocol;	// Network protocol used by client for connection
+	PathName att_remote_crypt;	// Name of wire crypt plugin (if any)
+	string att_remote_address;	// Protocol-specific address of remote client
 	SLONG att_remote_pid;					// Process id of remote client
 	ULONG att_remote_flags;					// Flags specific for server/client link
-	Firebird::PathName att_remote_process;	// Process name of remote client
-	Firebird::string att_client_version;	// Version of the client library
-	Firebird::string att_remote_protocol;	// Details about the remote protocol
-	Firebird::string att_remote_host;		// Host name of remote client
-	Firebird::string att_remote_os_user;	// OS user name of remote client
+	PathName att_remote_process;	// Process name of remote client
+	string att_client_version;	// Version of the client library
+	string att_remote_protocol;	// Details about the remote protocol
+	string att_remote_host;		// Host name of remote client
+	string att_remote_os_user;	// OS user name of remote client
 	RandomGenerator att_random_generator;	// Random bytes generator
 	Lock*		att_temp_pg_lock;			// temporary pagespace ID lock
 	DSqlCache att_dsql_cache;	// DSQL cache locks
-	Firebird::SortedArray<void*> att_udf_pointers;
+	SortedArray<void*> att_udf_pointers;
 	dsql_dbb* att_dsql_instance;
 	bool att_in_use;						// attachment in use (can't be detached or dropped)
 	int att_use_count;						// number of API calls running except of asynchronous ones
@@ -594,32 +595,32 @@ public:
 	CoercionArray* att_dest_bind;
 	USHORT att_original_timezone;
 	USHORT att_current_timezone;
-	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_schema_search_path;
-	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_blr_request_schema_search_path;
-	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> att_system_schema_search_path;
+	RefPtr<AnyRef<ObjectsArray<MetaString>>> att_schema_search_path;
+	RefPtr<AnyRef<ObjectsArray<MetaString>>> att_blr_request_schema_search_path;
+	RefPtr<AnyRef<ObjectsArray<MetaString>>> att_system_schema_search_path;
 
-	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>>
+	RefPtr<AnyRef<ObjectsArray<MetaString>>>
 		att_unqualified_charset_resolved_cache_search_path;
-	Firebird::NonPooledMap<MetaName, QualifiedName> att_unqualified_charset_resolved_cache;
+	NonPooledMap<MetaName, QualifiedName> att_unqualified_charset_resolved_cache;
 
 	int att_parallel_workers;
-	Firebird::TriState att_opt_first_rows;
+	TriState att_opt_first_rows;
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
-	Firebird::LeftPooledMap<QualifiedName, LocalTemporaryTable*> att_local_temporary_tables;
+	LeftPooledMap<QualifiedName, LocalTemporaryTable*> att_local_temporary_tables;
 	std::optional<USHORT> att_next_ltt_id;		// Next available LTT relation ID
 
-	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
-	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
-	Firebird::Array<Applier*> att_repl_appliers;
+	RefPtr<IReplicatedSession> att_replicator;
+	AutoPtr<Replication::TableMatcher> att_repl_matcher;
+	Array<Replication::Applier*> att_repl_appliers;
 
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 
 	UtilType att_utility;
 
-	Firebird::ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
-	Firebird::DecimalStatus			att_dec_status;			// error handling and rounding
+	ICryptKeyCallback*	att_crypt_callback;		// callback for DB crypt
+	DecimalStatus			att_dec_status;			// error handling and rounding
 
 	void initLocks(thread_db* tdbb);
 	void releaseLocks(thread_db* tdbb);
@@ -653,21 +654,21 @@ public:
 	bool isUtility() const noexcept; // gbak, gfix and gstat.
 
 	PreparedStatement* prepareStatement(thread_db* tdbb, jrd_tra* transaction,
-		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
+		const string& text, MemoryPool* pool = NULL);
 	PreparedStatement* prepareStatement(thread_db* tdbb, jrd_tra* transaction,
-		const PreparedStatement::Builder& builder, Firebird::MemoryPool* pool = NULL);
+		const PreparedStatement::Builder& builder, MemoryPool* pool = NULL);
 
 	PreparedStatement* prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
-		const Firebird::string& text, Firebird::MemoryPool* pool = NULL);
+		const string& text, MemoryPool* pool = NULL);
 
 	MetaName nameToMetaCharSet(thread_db* tdbb, const MetaName& name);
 	MetaName nameToUserCharSet(thread_db* tdbb, const MetaName& name);
-	Firebird::string stringToUserCharSet(thread_db* tdbb, const Firebird::string& str);
+	string stringToUserCharSet(thread_db* tdbb, const string& str);
 
 	void storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
-		bid* blobId, const Firebird::string& text, USHORT fromCharSet = CS_METADATA);
+		bid* blobId, const string& text, USHORT fromCharSet = CS_METADATA);
 	void storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction, bid* blobId,
-		const Firebird::ByteChunk& chunk);
+		const ByteChunk& chunk);
 
 	void releaseBatches();
 	void releaseLocalTempTables(thread_db* tdbb);
@@ -742,15 +743,15 @@ public:
 		att_batches.findAndRemove(b);
 	}
 
-	UserId* getUserId(const Firebird::MetaString& userName);
+	UserId* getUserId(const MetaString& userName);
 
-	const Firebird::MetaString& getUserName(const Firebird::MetaString& emptyName = "")
+	const MetaString& getUserName(const MetaString& emptyName = "")
 	{
 		saveMetaString(!att_user, att_retUser, emptyName);
 		return att_user ? att_user->getUserName() : *att_retUser;
 	}
 
-	const Firebird::MetaString& getSqlRole(const Firebird::MetaString& emptyName = "")
+	const MetaString& getSqlRole(const MetaString& emptyName = "")
 	{
 		saveMetaString(!att_user, att_retRole, emptyName);
 		return att_user ? att_user->getSqlRole() : *att_retRole;
@@ -763,7 +764,7 @@ public:
 		return att_user;
 	}
 
-	const Firebird::MetaString& getEffectiveUserName(const Firebird::MetaString& emptyName = "") const
+	const MetaString& getEffectiveUserName(const MetaString& emptyName = "") const
 	{
 		const auto user = getEffectiveUserId();
 		return user ? user->getUserName() : emptyName;
@@ -797,11 +798,11 @@ public:
 	}
 
 	bool qualifyNewName(thread_db* tdbb, QualifiedName& name,
-		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
+		const ObjectsArray<MetaString>* schemaSearchPath = nullptr);
 
 	void qualifyExistingName(thread_db* tdbb, QualifiedName& name,
 		std::initializer_list<ObjectType> objTypes,
-		const Firebird::ObjectsArray<Firebird::MetaString>* schemaSearchPath = nullptr);
+		const ObjectsArray<MetaString>* schemaSearchPath = nullptr);
 
 private:
 	Attachment(MemoryPool* pool, Database* dbb, JProvider* provider);
@@ -809,23 +810,23 @@ private:
 
 	unsigned int att_idle_timeout;		// seconds
 	unsigned int att_stmt_timeout;		// milliseconds
-	Firebird::RefPtr<Firebird::TimerImpl> att_idle_timer;
+	RefPtr<TimerImpl> att_idle_timer;
 
-	Firebird::Array<DsqlBatch*> att_batches;
+	Array<DsqlBatch*> att_batches;
 	InitialOptions att_initial_options;	// Initial session options
 	DebugOptions att_debug_options;
-	Firebird::AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager
+	AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager
 
 	Lock* att_repl_lock;				// Replication set lock
 	JProvider* att_provider;	// Provider which created this attachment
 
-	Firebird::AutoPtr<Firebird::MetaString> att_retUser, att_retRole;
-	void saveMetaString(bool cond, Firebird::AutoPtr<Firebird::MetaString>& meta, const Firebird::MetaString& src)
+	AutoPtr<MetaString> att_retUser, att_retRole;
+	void saveMetaString(bool cond, AutoPtr<MetaString>& meta, const MetaString& src)
 	{
 		if (cond)
 		{
 			if (!meta)
-				meta = FB_NEW_POOL(*att_pool) Firebird::MetaString(*att_pool);
+				meta = FB_NEW_POOL(*att_pool) MetaString(*att_pool);
 			meta->operator=(src);
 		}
 	}
@@ -961,7 +962,7 @@ public:
 private:
 	AttachmentsRefHolder(const AttachmentsRefHolder&);
 
-	Firebird::HalfStaticArray<StableAttachmentPart*, 128> m_attachments;
+	HalfStaticArray<StableAttachmentPart*, 128> m_attachments;
 };
 
 // Class used in system background threads
@@ -986,9 +987,9 @@ protected:
 	void destroy(Attachment* attachment);
 
 	// "public" interface for internal (system) attachment
-	Firebird::RefPtr<JAttachment> m_JAttachment;
+	RefPtr<JAttachment> m_JAttachment;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_ATTACHMENT_H

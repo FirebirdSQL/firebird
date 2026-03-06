@@ -33,14 +33,13 @@
 #include "../common/os/mod_loader.h"
 #include "../common/classes/RefCounted.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Database;
 
 	class Module
 	{
 	private:
-		class InternalModule : public Firebird::RefCounted
+		class InternalModule : public RefCounted
 		{
 		private:
 			InternalModule(const InternalModule &im);
@@ -48,9 +47,9 @@ namespace Jrd
 
 		public:
 			ModuleLoader::Module* handle;
-			Firebird::PathName originalName, loadName;
+			PathName originalName, loadName;
 
-			void* findSymbol(const Firebird::string& name)
+			void* findSymbol(const string& name)
 			{
 				if (! handle)
 				{
@@ -61,8 +60,8 @@ namespace Jrd
 
 			InternalModule(MemoryPool& p,
 						   ModuleLoader::Module* h,
-						   const Firebird::PathName& on,
-						   const Firebird::PathName& ln)
+						   const PathName& on,
+						   const PathName& ln)
 				: handle(h),
 				  originalName(p, on),
 				  loadName(p, ln)
@@ -70,14 +69,14 @@ namespace Jrd
 
 			~InternalModule();
 
-			bool operator==(const Firebird::PathName &pn) const
+			bool operator==(const PathName &pn) const
 			{
 				return originalName == pn || loadName == pn;
 			}
 
 		};
 
-		Firebird::RefPtr<InternalModule> interMod;
+		RefPtr<InternalModule> interMod;
 
 		explicit Module(InternalModule* h)
 			: interMod(h)
@@ -85,10 +84,10 @@ namespace Jrd
 
 		static Module lookupModule(const char*);
 
-		static InternalModule* scanModule(const Firebird::PathName& name);
+		static InternalModule* scanModule(const PathName& name);
 
 	public:
-		typedef Firebird::Array<InternalModule*> LoadedModules;
+		typedef Array<InternalModule*> LoadedModules;
 
 		Module()
 		{ }
@@ -111,7 +110,7 @@ namespace Jrd
 
 		bool operator>(const Module &im) const;
 
-		void *lookupSymbol(const Firebird::string& name)
+		void *lookupSymbol(const string& name)
 		{
 			if (! interMod)
 			{
@@ -126,8 +125,8 @@ namespace Jrd
 		}
 	};
 
-	typedef Firebird::SortedObjectsArray<Module> DatabaseModules;
+	typedef SortedObjectsArray<Module> DatabaseModules;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_FLU_H

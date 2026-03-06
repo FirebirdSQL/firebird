@@ -49,6 +49,9 @@
 #include "../gpre/msc_proto.h"
 #include "../yvalve/gds_proto.h"
 
+namespace Firebird::Gpre
+{
+
 
 struct gpre_space
 {
@@ -520,3 +523,5 @@ gpre_usn* MSC_username(const SCHAR* name, USHORT name_dyn)
 	return username;
 }
 
+
+} // namespace Firebird::Gpre

@@ -37,11 +37,11 @@
 #include "../common/classes/timestamp.h"
 #include "../common/TimeZoneUtil.h"
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 class Statement;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Lock;
 class jrd_rel;
@@ -176,7 +176,7 @@ inline constexpr USHORT RPB_CLEAR_FLAGS	= (RPB_UNDO_FLAGS | RPB_just_deleted | R
 
 // List of active blobs controlled by request
 
-typedef Firebird::BePlusTree<ULONG, ULONG> TempBlobIdTree;
+typedef BePlusTree<ULONG, ULONG> TempBlobIdTree;
 
 // Affected rows counter class
 
@@ -271,7 +271,7 @@ private:
 				timeStamp.utc_timestamp = gmtTimeStamp.value();
 				timeStamp.time_zone = timeZone;
 
-				timeTz = Firebird::TimeZoneUtil::timeStampTzToTimeTz(timeStamp);
+				timeTz = TimeZoneUtil::timeStampTzToTimeTz(timeStamp);
 
 				localTime = timeTz.utc_time;
 				localTimeValid = true;
@@ -284,7 +284,7 @@ private:
 		{
 			if (gmtTimeStamp.isEmpty())
 			{
-				Firebird::TimeZoneUtil::validateGmtTimeStamp(gmtTimeStamp);
+				TimeZoneUtil::validateGmtTimeStamp(gmtTimeStamp);
 				update(currentTimeZone, false);
 			}
 		}
@@ -294,7 +294,7 @@ private:
 		{
 			if (updateLocalTimeStamp)
 			{
-				localTimeStamp = Firebird::TimeZoneUtil::timeStampTzToTimeStamp(
+				localTimeStamp = TimeZoneUtil::timeStampTzToTimeStamp(
 					getTimeStampTz(currentTimeZone), currentTimeZone);
 			}
 
@@ -304,7 +304,7 @@ private:
 		}
 
 	private:
-		Firebird::TimeStamp gmtTimeStamp;		// Start time of request in GMT time zone
+		TimeStamp gmtTimeStamp;		// Start time of request in GMT time zone
 
 		mutable bool localTimeStampValid = false;	// localTimeStamp calculation is expensive. So is it valid (calculated)?
 		mutable bool localTimeValid = false;		// localTime calculation is expensive. So is it valid (calculated)?
@@ -353,7 +353,7 @@ private:
 	};
 
 public:
-	Request(Firebird::AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement);
+	Request(AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement);
 
 private:
 	~Request();			// destroyed only by pool
@@ -403,7 +403,7 @@ private:
 
 public:
 	MemoryPool* req_pool;
-	Firebird::MemoryStats req_memory_stats;
+	MemoryStats req_memory_stats;
 	Attachment*	req_attachment;			// database attachment
 	USHORT		req_incarnation;		// incarnation number
 
@@ -429,16 +429,16 @@ public:
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements
-	Firebird::Array<const Cursor*>	req_cursors;	// named cursors
+	Array<const Cursor*>	req_cursors;	// named cursors
 	ExtEngineManager::ResultSet*	req_ext_resultset;	// external result set
 	USHORT		req_label;				// label for leave
 	ULONG		req_flags;				// misc request flags
 	Savepoint*	req_savepoints;			// Looper savepoint list
 	Savepoint*	req_proc_sav_point;		// procedure savepoint list
 	unsigned int req_timeout;					// query timeout in milliseconds, set by the DsqlRequest::setupTimer
-	Firebird::RefPtr<TimeoutTimer> req_timer;	// timeout timer, shared with DsqlRequest
+	RefPtr<TimeoutTimer> req_timer;	// timeout timer, shared with DsqlRequest
 
-	Firebird::AutoPtr<Jrd::RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
+	AutoPtr<Jrd::RuntimeStatistics> req_fetch_baseline; // State of request performance counters when we reported it last time
 	SINT64 req_fetch_elapsed;	// Number of clock ticks spent while fetching rows for this request since we reported it last time
 	SINT64 req_fetch_rowcount;	// Total number of rows returned by this request
 	Request* req_proc_caller;	// Procedure's caller request
@@ -449,25 +449,25 @@ public:
 	ULONG req_src_column;
 
 	dsc*			req_domain_validation;	// Current VALUE for constraint validation
-	Firebird::Stack<AutoTranCtx> req_auto_trans;	// Autonomous transactions
+	Stack<AutoTranCtx> req_auto_trans;	// Autonomous transactions
 	SortOwner req_sorts;
-	Firebird::Array<record_param> req_rpb;	// record parameter blocks
-	Firebird::Array<UCHAR> impureArea;		// impure area
+	Array<record_param> req_rpb;	// record parameter blocks
+	Array<UCHAR> impureArea;		// impure area
 	TriggerAction req_trigger_action;		// action that caused trigger to fire
 	SnapshotData req_snapshot;
 	StatusXcp req_last_xcp;			// last known exception
 	bool req_batch_mode;
 
 private:
-	Firebird::RefPtr<VersionedObjects> req_resources;
+	RefPtr<VersionedObjects> req_resources;
 
 public:
-	const Firebird::RefPtr<VersionedObjects>& getResources()
+	const RefPtr<VersionedObjects>& getResources()
 	{
 		return req_resources;
 	}
 
-	typedef Firebird::Array<RecordParameter> RecordParameters;
+	typedef Array<RecordParameter> RecordParameters;
 	void setResources(VersionedObjects* r, RecordParameters& rpbsSetup);
 
 	enum req_s {
@@ -573,7 +573,7 @@ inline constexpr ULONG req_reserved			= 0x400L;		// Request reserved for client
 inline constexpr ULONG req_update_conflict	= 0x800L;		// We need to restart request due to update conflict
 inline constexpr ULONG req_restart_ready	= 0x1000L;		// Request is ready to restart in case of update conflict
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 namespace Firebird
 {

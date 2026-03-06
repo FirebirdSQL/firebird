@@ -30,7 +30,9 @@
    check out GRANT.GDL, modify the trigger source to generate the
    proper blr, replace the blr in TRIG.H, and check both files back in. */
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 /* trigger definition structure */
 
@@ -65,8 +67,6 @@ struct gen
 	USHORT			gen_ods_version;
 };
 
-} //namespace Jrd
-
 /* generators needed by the system triggers */
 // Keep in sync with constants.h
 static inline constexpr Jrd::gen generators[] =
@@ -85,5 +85,7 @@ static inline constexpr Jrd::gen generators[] =
 	{ nullptr, 0, nullptr, 0 }
 };
 
+
+} // namespace Firebird::Jrd
 
 #endif /* JRD_TRIG_H */

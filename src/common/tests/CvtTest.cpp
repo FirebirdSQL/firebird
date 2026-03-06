@@ -8,15 +8,14 @@
 #include "../jrd/intl.h"
 
 using namespace Firebird;
-using namespace Jrd;
-using namespace CvtTestUtils;
+using namespace Firebird::CvtTestUtils;
 
 
 BOOST_AUTO_TEST_SUITE(CVTSuite)
 BOOST_AUTO_TEST_SUITE(CVTDatetimeFormat)
 
 // Currently we cannot print our error messages because we need master interface for that
-static void errFunc(const Firebird::Arg::StatusVector& v)
+static void errFunc(const Arg::StatusVector& v)
 {
 	v.raise();
 }
@@ -315,7 +314,7 @@ BOOST_AUTO_TEST_SUITE_END()	// CVTDatetimeToFormatString
 BOOST_AUTO_TEST_SUITE(CVTStringToFormatDateTime)
 
 static void testCVTStringToFormatDateTime(const string& date, const string& format,
-	const ISC_TIMESTAMP_TZ& expected, Firebird::EXPECT_DATETIME expectedType, Callbacks& cb)
+	const ISC_TIMESTAMP_TZ& expected, EXPECT_DATETIME expectedType, Callbacks& cb)
 {
 	try
 	{

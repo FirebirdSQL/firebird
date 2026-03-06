@@ -71,7 +71,7 @@ namespace Firebird
 		assign(count, bytes);
 	}
 
-	BigInteger::BigInteger(const Firebird::UCharBuffer& val)
+	BigInteger::BigInteger(const UCharBuffer& val)
 	{
 		CHECK_MP(mp_init(&t));
 		assign(val.getCount(), val.begin());
@@ -95,8 +95,8 @@ namespace Firebird
 
 	void BigInteger::random(int numBytes)
 	{
-		Firebird::UCharBuffer b;
-		Firebird::GenerateRandomBytes(b.getBuffer(numBytes), numBytes);
+		UCharBuffer b;
+		GenerateRandomBytes(b.getBuffer(numBytes), numBytes);
 		assign(numBytes, b.begin());
 	}
 
@@ -175,7 +175,7 @@ namespace Firebird
 		return mp_cmp(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t)) == 0;
 	}
 
-	void BigInteger::getBytes(Firebird::UCharBuffer& bytes) const
+	void BigInteger::getBytes(UCharBuffer& bytes) const
 	{
 		CHECK_MP(mp_to_unsigned_bin(const_cast<mp_int*>(&t), bytes.getBuffer(length())));
 	}

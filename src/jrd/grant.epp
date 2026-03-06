@@ -54,10 +54,11 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/auto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // privileges given to the owner of a relation
 
@@ -196,7 +197,7 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 
 static void ensure_relation_reload(thread_db* tdbb, MetaId id, jrd_tra* transaction)
 {
-	Firebird::AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
+	AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
 		&thread_db::getTransaction,
 		&thread_db::setTransaction,
 		transaction);
@@ -1282,3 +1283,6 @@ static bool check_string(const UCHAR* acl, const MetaName& name)
 
 	return (*string && *string != ' ') ? true : false;
 }
+
+
+} // namespace Firebird::Jrd

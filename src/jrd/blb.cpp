@@ -75,8 +75,9 @@
 #include "../common/classes/VaryStr.h"
 #include "../jrd/Statement.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 typedef Ods::blob_page blob_page;
 
@@ -886,7 +887,7 @@ SLONG blb::get_slice(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
     //Database* database = GET_DBB();
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Checkout slice description language
 	SLONG variables[64];
@@ -1743,7 +1744,7 @@ void blb::put_slice(thread_db*	tdbb,
 	transaction = transaction->getOuter();
 
 	SET_TDBB(tdbb);
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Do initial parse of slice description to get relation and field identification
 	sdl_info info;
@@ -2978,7 +2979,7 @@ void blb::getFromPage(USHORT length, const UCHAR* data)
 }
 
 // Used by DPM_store_blob
-void blb::storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHAR** data, void* stack)
+void blb::storeToPage(USHORT* length, Array<UCHAR>& buffer, const UCHAR** data, void* stack)
 {
 	if (blb_level == 0)
 	{
@@ -3029,3 +3030,6 @@ void blb::BLB_cancel()
 {
 	BLB_cancel(JRD_get_thread_data());
 }
+
+
+}	// namespace Firebird::Jrd

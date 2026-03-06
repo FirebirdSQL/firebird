@@ -29,7 +29,7 @@
 #include "../common/sha2/sha2.h"
 #include <functional>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class RelationPermanent;
 class RoutinePermanent;
@@ -69,7 +69,7 @@ union VersionedPartPtr
 };
 
 class VersionedObjects : public pool_alloc_rpt<VersionedPartPtr>,
-	public Firebird::RefCounted
+	public RefCounted
 {
 
 public:
@@ -199,13 +199,13 @@ class Resources final
 {
 public:
 	template <class OBJ, class PERM>
-	class RscArray : public Firebird::Array<CachedResource<OBJ, PERM>>
+	class RscArray : public Array<CachedResource<OBJ, PERM>>
 	{
 	public:
 		typedef CacheElement<OBJ, PERM> StoredElement;
 
 		RscArray(MemoryPool& p, FB_SIZE_T& pos)
-			: Firebird::Array<CachedResource<OBJ, PERM>>(p),
+			: Array<CachedResource<OBJ, PERM>>(p),
 			  versionCurrentPosition(pos)
 		{ }
 
@@ -227,7 +227,7 @@ public:
 			return this->getElement(pos);
 		}
 
-		int transfer(thread_db* tdbb, VersionedObjects* to, bool internal, Firebird::sha512& digest)
+		int transfer(thread_db* tdbb, VersionedObjects* to, bool internal, sha512& digest)
 		{
 			for (auto& resource : *this)
 			{
@@ -315,7 +315,7 @@ namespace Rsc
 }; //namespace Rsc
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_RESOURCES_H
 

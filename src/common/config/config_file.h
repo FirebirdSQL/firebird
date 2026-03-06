@@ -29,6 +29,9 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/auto.h"
 
+namespace Firebird
+{
+
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
 	easy-to-use abilities to work with complex configurations, a decision
@@ -48,7 +51,7 @@
 
 class ConfigCache;
 
-class ConfigFile : public Firebird::AutoStorage, public Firebird::RefCounted
+class ConfigFile : public AutoStorage, public RefCounted
 {
 public:
 	// flags for config file
@@ -63,9 +66,9 @@ public:
 	enum UseText {USE_TEXT};
 
 	// config_file strings are mostly case sensitive
-	typedef Firebird::string String;
+	typedef string String;
 	// keys are case-insensitive
-	typedef Firebird::NoCaseString KeyType;
+	typedef NoCaseString KeyType;
 
 	class Stream
 	{
@@ -90,7 +93,7 @@ public:
 
 		KeyType name;
 		String value;
-		Firebird::RefPtr<ConfigFile> sub;
+		RefPtr<ConfigFile> sub;
 		unsigned int line;
 		bool hasValue;
 
@@ -100,15 +103,15 @@ public:
 		}
 	};
 
-    typedef Firebird::SortedObjectsArray<Parameter, Firebird::InlineStorage<Parameter*, 100>,
+    typedef SortedObjectsArray<Parameter, InlineStorage<Parameter*, 100>,
 										 KeyType, Parameter> Parameters;
-	typedef Firebird::ObjectsArray<Firebird::PathName> FilesArray;
+	typedef ObjectsArray<PathName> FilesArray;
 
-	ConfigFile(const Firebird::PathName& file, USHORT fl = 0, ConfigCache* cache = NULL);
+	ConfigFile(const PathName& file, USHORT fl = 0, ConfigCache* cache = NULL);
 	ConfigFile(const char* file, USHORT fl = 0, ConfigCache* cache = NULL);
 	ConfigFile(UseText, const char* configText, USHORT fl = 0);
 
-	ConfigFile(MemoryPool& p, const Firebird::PathName& file, USHORT fl = 0, ConfigCache* cache = NULL);
+	ConfigFile(MemoryPool& p, const PathName& file, USHORT fl = 0, ConfigCache* cache = NULL);
 
 private:
 	ConfigFile(MemoryPool& p, ConfigFile::Stream* s, USHORT fl);
@@ -142,11 +145,14 @@ private:
 	LineType parseLine(const char* fileName, const String& input, Parameter& par);
 	bool translate(const char* fileName, const String& from, String& to) const;
 	[[noreturn]] void badLine(const char* fileName, const String& line);
-	void include(const char* currentFileName, const Firebird::PathName& path);
-	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
+	void include(const char* currentFileName, const PathName& path);
+	bool wildCards(const char* currentFileName, const PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;
 	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
 	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;
 };
+
+
+} // namespace Firebird
 
 #endif	// CONFIG_CONFIG_FILE_H

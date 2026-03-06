@@ -28,7 +28,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/req.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class jrd_rel;
 	class jrd_tra;
@@ -36,23 +36,23 @@ namespace Jrd
 	struct index_desc;
 	class CompilerScratch;
 	class thread_db;
-}
 
-bool IDX_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
-void IDX_check_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::Cached::Relation*, Jrd::Cached::Relation*);
-bool IDX_check_master_types (Jrd::thread_db*, Jrd::index_desc&, Jrd::Cached::Relation*, int&);
-void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*, const Jrd::QualifiedName&,
-					  USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
-void IDX_mark_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
-void IDX_delete_indices(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*, bool);
-void IDX_mark_indices(Jrd::thread_db*, Jrd::Cached::Relation*);
-void IDX_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_garbage_collect(Jrd::thread_db*, Jrd::record_param*, Jrd::RecordStack&, Jrd::RecordStack&);
-void IDX_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_modify_check_constraints(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_statistics(Jrd::thread_db*, Jrd::Cached::Relation*, USHORT, Jrd::SelectivityList&);
-void IDX_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_modify_flag_uk_modified(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
+	bool IDX_activate_index(thread_db*, Cached::Relation*, MetaId);
+	void IDX_check_access(thread_db*, CompilerScratch*, Cached::Relation*, Cached::Relation*);
+	bool IDX_check_master_types (thread_db*, index_desc&, Cached::Relation*, int&);
+	void IDX_create_index(thread_db*, IdxCreate createMethod, jrd_rel*, index_desc*, const QualifiedName&,
+						USHORT*, jrd_tra*, SelectivityList&);
+	void IDX_mark_index(thread_db*, Cached::Relation*, MetaId);
+	void IDX_delete_indices(thread_db*, RelationPermanent*, RelationPages*, bool);
+	void IDX_mark_indices(thread_db*, Cached::Relation*);
+	void IDX_erase(thread_db*, record_param*, jrd_tra*);
+	void IDX_garbage_collect(thread_db*, record_param*, RecordStack&, RecordStack&);
+	void IDX_modify(thread_db*, record_param*, record_param*, jrd_tra*);
+	void IDX_modify_check_constraints(thread_db*, record_param*, record_param*, jrd_tra*);
+	void IDX_statistics(thread_db*, Cached::Relation*, USHORT, SelectivityList&);
+	void IDX_store(thread_db*, record_param*, jrd_tra*);
+	void IDX_modify_flag_uk_modified(thread_db*, record_param*, record_param*, jrd_tra*);
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_IDX_PROTO_H

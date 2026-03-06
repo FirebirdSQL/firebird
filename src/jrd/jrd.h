@@ -36,7 +36,7 @@
 #include "../common/dsc.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/val.h"
 #include "../jrd/vec.h"
 #include "../jrd/status.h"
@@ -99,7 +99,7 @@
 
 struct dsc;
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 	class Connection;
 }
 
@@ -107,7 +107,7 @@ namespace Firebird {
 	class TextType;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 inline constexpr unsigned MAX_CALLBACKS = 50;
 
@@ -120,7 +120,6 @@ class Statement;
 class jrd_file;
 class Format;
 class BufferDesc;
-class SparseBitmap;
 class jrd_rel;
 class ExternalFile;
 class ViewContext;
@@ -247,14 +246,14 @@ public:
 	}
 
 private:
-	Firebird::FbLocalStatus m_local_status;
+	FbLocalStatus m_local_status;
 	thread_db* const m_tdbb;
 	FbStatusVector* const m_old_status;
 };
 
 
 // duplicate context of firebird string
-inline char* stringDup(MemoryPool& p, const Firebird::string& s)
+inline char* stringDup(MemoryPool& p, const string& s)
 {
 	char* rc = (char*) p.allocate(s.length() + 1);
 	strcpy(rc, s.c_str());
@@ -279,11 +278,9 @@ inline char* stringDup(MemoryPool& p, const char* s)
 }
 
 // Used in string conversion calls
-typedef Firebird::HalfStaticArray<UCHAR, 256> MoveBuffer;
+typedef HalfStaticArray<UCHAR, 256> MoveBuffer;
 
-} //namespace Jrd
-
-inline bool JRD_reschedule(Jrd::thread_db* tdbb, bool force = false)
+inline bool JRD_reschedule(thread_db* tdbb, bool force = false)
 {
 	if (force || --tdbb->tdbb_quantum < 0)
 	{
@@ -294,7 +291,7 @@ inline bool JRD_reschedule(Jrd::thread_db* tdbb, bool force = false)
 	return false;
 }
 
-inline Jrd::Database* GET_DBB()
+inline Database* GET_DBB()
 {
 	return JRD_get_thread_data()->getDatabase();
 }
@@ -302,7 +299,7 @@ inline Jrd::Database* GET_DBB()
 /*-------------------------------------------------------------------------*
  * macros used to set thread_db and Database pointers when there are not set already *
  *-------------------------------------------------------------------------*/
-inline void SET_TDBB(Jrd::thread_db*& tdbb)
+inline void SET_TDBB(thread_db*& tdbb)
 {
 	if (tdbb == NULL) {
 		tdbb = JRD_get_thread_data();
@@ -310,7 +307,7 @@ inline void SET_TDBB(Jrd::thread_db*& tdbb)
 	CHECK_TDBB(tdbb);
 }
 
-inline void SET_DBB(Jrd::Database*& dbb)
+inline void SET_DBB(Database*& dbb)
 {
 	if (dbb == NULL) {
 		dbb = GET_DBB();
@@ -319,16 +316,15 @@ inline void SET_DBB(Jrd::Database*& dbb)
 }
 
 
-// global variables for engine
+	// global variables for engine
 
-namespace Jrd {
-	typedef Firebird::SubsystemContextPoolHolder <Jrd::thread_db, MemoryPool> ContextPoolHolder;
+	typedef SubsystemContextPoolHolder <thread_db, MemoryPool> JrdContextPoolHolder;
 
-	class DatabaseContextHolder : public Jrd::ContextPoolHolder
+	class DatabaseContextHolder : public JrdContextPoolHolder
 	{
 	public:
 		explicit DatabaseContextHolder(thread_db* tdbb)
-			: Jrd::ContextPoolHolder(tdbb, tdbb->getDatabase()->dbb_permanent)
+			: JrdContextPoolHolder(tdbb, tdbb->getDatabase()->dbb_permanent)
 		{}
 
 		// copying is prohibited
@@ -337,13 +333,13 @@ namespace Jrd {
 	};
 
 	class BackgroundContextHolder : public ThreadContextHolder, public DatabaseContextHolder,
-		public Jrd::Attachment::SyncGuard
+		public Attachment::SyncGuard
 	{
 	public:
-		BackgroundContextHolder(Database* dbb, Jrd::Attachment* att, FbStatusVector* status, const char* f)
+		BackgroundContextHolder(Database* dbb, Attachment* att, FbStatusVector* status, const char* f)
 			: ThreadContextHolder(dbb, att, status),
 			  DatabaseContextHolder(operator thread_db*()),
-			  Jrd::Attachment::SyncGuard(att, f)
+			  Attachment::SyncGuard(att, f)
 		{}
 
 		// copying is prohibited
@@ -367,7 +363,7 @@ namespace Jrd {
 		AttachmentHolder& operator =(const AttachmentHolder&) = delete;
 
 	private:
-		Firebird::RefPtr<StableAttachmentPart> sAtt;
+		RefPtr<StableAttachmentPart> sAtt;
 		bool async;			// async mutex should be locked instead normal
 		bool nolock; 		// if locked manually, no need to take lock recursively
 		bool blocking;		// holder instance is blocking other instances
@@ -377,32 +373,32 @@ namespace Jrd {
 	{
 	public:
 		template <typename I>
-		EngineContextHolder(Firebird::CheckStatusWrapper* status, I* interfacePtr, const char* from,
+		EngineContextHolder(CheckStatusWrapper* status, I* interfacePtr, const char* from,
 							unsigned lockFlags = 0);
 	};
 
-	class AstLockHolder : public Firebird::ReadLockGuard
+	class AstLockHolder : public ReadLockGuard
 	{
 	public:
 		AstLockHolder(Database* dbb, const char* f)
-			: Firebird::ReadLockGuard(dbb->dbb_ast_lock, f)
+			: ReadLockGuard(dbb->dbb_ast_lock, f)
 		{
 			if (dbb->dbb_flags & DBB_no_ast)
 			{
 				// usually to be swallowed by the AST, but it allows to skip its execution
-				Firebird::status_exception::raise(Firebird::Arg::Gds(isc_unavailable));
+				status_exception::raise(Arg::Gds(isc_unavailable));
 			}
 		}
 	};
 
-	class AsyncContextHolder : public AstLockHolder, public Jrd::Attachment::SyncGuard,
+	class AsyncContextHolder : public AstLockHolder, public Attachment::SyncGuard,
 		public ThreadContextHolder, public DatabaseContextHolder
 	{
 	public:
 		AsyncContextHolder(Database* dbb, const char* f, Lock* lck = NULL)
 			: AstLockHolder(dbb, f),
-			  Jrd::Attachment::SyncGuard(lck ?
-				lck->getLockStable() : Firebird::RefPtr<StableAttachmentPart>(), f, true),
+			  Attachment::SyncGuard(lck ?
+				lck->getLockStable() : RefPtr<StableAttachmentPart>(), f, true),
 			  ThreadContextHolder(dbb, lck ? lck->getLockAttachment() : NULL),
 			  DatabaseContextHolder(operator thread_db*())
 		{
@@ -414,7 +410,7 @@ namespace Jrd {
 				if (!lck->lck_id)
 				{
 					// usually to be swallowed by the AST, but it allows to skip its execution
-					Firebird::status_exception::raise(Firebird::Arg::Gds(isc_unavailable));
+					status_exception::raise(Arg::Gds(isc_unavailable));
 				}
 
 				fb_assert((operator thread_db*())->getAttachment());
@@ -488,14 +484,14 @@ namespace Jrd {
 
 	private:
 		thread_db* const m_tdbb;
-		Firebird::RefPtr<StableAttachmentPart> m_ref;
+		RefPtr<StableAttachmentPart> m_ref;
 		const char* m_from;
 	};
 
 	class CheckoutLockGuard
 	{
 	public:
-		CheckoutLockGuard(thread_db* tdbb, Firebird::Mutex& mutex,
+		CheckoutLockGuard(thread_db* tdbb, Mutex& mutex,
 						  const char* from, bool optional = false)
 			: m_mutex(mutex)
 		{
@@ -516,14 +512,14 @@ namespace Jrd {
 		CheckoutLockGuard& operator=(const CheckoutLockGuard&) = delete;
 
 	private:
-		Firebird::Mutex& m_mutex;
+		Mutex& m_mutex;
 	};
 
 	class CheckoutSyncGuard
 	{
 	public:
-		CheckoutSyncGuard(thread_db* tdbb, Firebird::SyncObject& sync,
-						  Firebird::SyncType type,
+		CheckoutSyncGuard(thread_db* tdbb, SyncObject& sync,
+						  SyncType type,
 						  const char* from, bool optional = false)
 			: m_sync(&sync, from)
 		{
@@ -539,9 +535,10 @@ namespace Jrd {
 		CheckoutSyncGuard& operator=(const CheckoutSyncGuard&) = delete;
 
 	private:
-		Firebird::Sync m_sync;
+		Sync m_sync;
 	};
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_JRD_H

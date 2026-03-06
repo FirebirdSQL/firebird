@@ -76,10 +76,9 @@
 #include "../jrd/InitCDSLib.h"
 #endif
 
+namespace Firebird::Jrd
+{
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
 
 // In the superserver mode, no page locks are acquired through the lock manager.
 // Instead, a latching mechanism is used.  So the calls to lock subsystem for
@@ -208,9 +207,6 @@ constexpr int PRE_SEARCH_LIMIT	= 256;
 constexpr int PRE_EXISTS		= -1;
 constexpr int PRE_UNKNOWN		= -2;
 
-namespace Jrd
-{
-
 #ifdef HASH_USE_CDS_LIST
 
 template <typename T>
@@ -284,8 +280,6 @@ private:
 	ULONG m_count;
 	chain_type* m_chains;
 };
-
-}
 
 
 void CCH_clean_page(thread_db* tdbb, PageNumber page)
@@ -462,14 +456,14 @@ int CCH_down_grade_dbb(void* ast_object)
 
 		dbb->dbb_ast_flags &= ~DBB_blocking;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 
 	return 0;
 }
 
 
-bool CCH_exclusive(thread_db* tdbb, USHORT level, SSHORT wait_flag, Firebird::Sync* guard)
+bool CCH_exclusive(thread_db* tdbb, USHORT level, SSHORT wait_flag, Sync* guard)
 {
 /**************************************
  *
@@ -680,7 +674,7 @@ bool CCH_expand(thread_db* tdbb, ULONG number)
 }
 
 
-pag* CCH_fake(thread_db* tdbb, WIN* window, int wait)
+Ods::pag* CCH_fake(thread_db* tdbb, WIN* window, int wait)
 {
 /**************************************
  *
@@ -775,7 +769,7 @@ pag* CCH_fake(thread_db* tdbb, WIN* window, int wait)
 }
 
 
-pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int wait,
+Ods::pag* CCH_fetch(thread_db* tdbb, WIN* window, int lock_type, SCHAR page_type, int wait,
 	const bool read_shadow)
 {
 /**************************************
@@ -928,7 +922,7 @@ void CCH_fetch_page(thread_db* tdbb, WIN* window, const bool read_shadow)
 
 	FbStatusVector* const status = tdbb->tdbb_status_vector;
 
-	pag* page = bdb->bdb_buffer;
+	Ods::pag* page = bdb->bdb_buffer;
 	bdb->bdb_incarnation = ++bcb->bcb_page_incarnation;
 
 	const ULONG pageSpaceId = bdb->bdb_page.getPageSpaceID();
@@ -1440,7 +1434,7 @@ void CCH_get_related(thread_db* tdbb, PageNumber page, PagesArray &lowPages)
 }
 
 
-pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_type,
+Ods::pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_type,
 	int wait, const bool release_tail)
 {
 /**************************************
@@ -1597,7 +1591,7 @@ void CCH_init(thread_db* tdbb, ULONG number)
 				BCBHashTable(*bcb->bcb_bufferpool, number);
 			break;
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(tdbb->tdbb_status_vector);
 
@@ -1646,7 +1640,7 @@ void CCH_init2(thread_db* tdbb)
 	BufferControl* bcb = dbb->dbb_bcb;
 
 	// Avoid running CCH_init2() in 2 parallel threads
-	Firebird::MutexEnsureUnlock guard(bcb->bcb_threadStartup, FB_FUNCTION);
+	MutexEnsureUnlock guard(bcb->bcb_threadStartup, FB_FUNCTION);
 	guard.enter();
 
 	if (!(bcb->bcb_flags & BCB_exclusive) || (bcb->bcb_flags & (BCB_cache_writer | BCB_writer_start)))
@@ -1884,7 +1878,7 @@ void CCH_prefetch(thread_db* tdbb, SLONG* pages, SSHORT count)
 	}
 
 	// Switch default pool to permanent pool for setting bits in prefetch bitmap.
-	Jrd::ContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
+	JrdContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
 
 	// The global prefetch bitmap is the key to the I/O coalescense mechanism which dovetails
 	// all thread prefetch requests to minimize sequential I/O requests.
@@ -2389,7 +2383,7 @@ void CCH_unwind(thread_db* tdbb, const bool punt)
 		}
 
 #ifndef SUPERSERVER
-		const pag* const page = bdb->bdb_buffer;
+		const Ods::pag* const page = bdb->bdb_buffer;
 		if (page->pag_type == pag_header || page->pag_type == pag_transactions)
 		{
 			++bdb->bdb_use_count;
@@ -2457,11 +2451,11 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 		return true;
 
 	bool result = true;
-	Firebird::UCharBuffer spare_buffer;
+	UCharBuffer spare_buffer;
 
 	if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 	{
-		Ods::pag* newPage = (pag*) spare_buffer.getBuffer(dbb->dbb_page_size);
+		Ods::pag* newPage = (Ods::pag*) spare_buffer.getBuffer(dbb->dbb_page_size);
 		memcpy(newPage, page, HDR_SIZE);
 		page = newPage;
 		memset((UCHAR*) page + HDR_SIZE, 0, dbb->dbb_page_size - HDR_SIZE);
@@ -2489,17 +2483,17 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 		if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 		{
 			// fixup header for shadow file
-			header_page* header = (header_page*) page;
+			Ods::header_page* header = (Ods::header_page*) page;
 
 			PageSpace* pageSpaceID = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 			const UCHAR* q = (UCHAR *) pageSpaceID->file->fil_string;
-			header->hdr_data[0] = HDR_end;
+			header->hdr_data[0] = Ods::HDR_end;
 			header->hdr_end = HDR_SIZE;
 
-			PAG_add_header_entry(tdbb, header, HDR_root_file_name,
+			PAG_add_header_entry(tdbb, header, Ods::HDR_root_file_name,
 								 (USHORT) strlen((const char*) q), q);
 
-			header->hdr_flags |= hdr_active_shadow;
+			header->hdr_flags |= Ods::hdr_active_shadow;
 			header->hdr_header.pag_pageno = bdb->bdb_page.getPageNum();
 		}
 
@@ -2638,7 +2632,7 @@ static int blocking_ast_bdb(void* ast_object)
 		if (tdbb->tdbb_status_vector->getState() & IStatus::STATE_ERRORS)
 			iscDbLogStatus(dbb->dbb_filename.c_str(), tdbb->tdbb_status_vector);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return -1;
 	} // no-op
@@ -2676,7 +2670,7 @@ static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_o
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
-	Firebird::HalfStaticArray<BufferDesc*, 1024> flush;
+	HalfStaticArray<BufferDesc*, 1024> flush;
 
 	{  // dirtySync scope
 		Sync dirtySync(&bcb->bcb_syncDirtyBdbs, "flushDirty");
@@ -2716,7 +2710,7 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag)
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
 	BufferControl* bcb = dbb->dbb_bcb;
-	Firebird::HalfStaticArray<BufferDesc*, 1024> flush(bcb->bcb_dirty_count);
+	HalfStaticArray<BufferDesc*, 1024> flush(bcb->bcb_dirty_count);
 
 	const bool all_flag = (flush_flag & FLUSH_ALL) != 0;
 	const bool sweep_flag = (flush_flag & FLUSH_SWEEP) != 0;
@@ -2888,7 +2882,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 	Jrd::Attachment* const attachment = Attachment::create(dbb, nullptr);
 	tdbb->setAttachment(attachment);
 	attachment->att_filename = dbb->dbb_filename;
-	Jrd::ContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
+	JrdContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
 
 	// This try block is specifically to protect the LCK_init call: if
 	// LCK_init fails we won't be able to accomplish anything anyway, so
@@ -2904,7 +2898,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 		bcb->bcb_flags |= BCB_cache_reader;
 		dbb->dbb_reader_init.post();	// Notify our creator that we have started
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status_vector);
 		iscDbLogStatus(dbb->dbb_filename.c_str(), status_vector);
@@ -3004,7 +2998,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 	dbb->dbb_reader_fini.post();
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status_vector);
 		iscDbLogStatus(dbb->dbb_filename.c_str(), status_vector);
@@ -3120,7 +3114,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 				}
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(&status_vector);
 			iscDbLogStatus(dbb->dbb_filename.c_str(), &status_vector);
@@ -3132,7 +3126,7 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		bcb->exceptionHandler(ex, cache_writer);
 	}
@@ -3147,14 +3141,14 @@ void BufferControl::cache_writer(BufferControl* bcb)
 			bcb->bcb_writer_init.release();
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		bcb->exceptionHandler(ex, cache_writer);
 	}
 }
 
 
-void BufferControl::exceptionHandler(const Firebird::Exception& ex, BcbThreadSync::ThreadRoutine*)
+void BufferControl::exceptionHandler(const Exception& ex, BcbThreadSync::ThreadRoutine*)
 {
 	FbLocalStatus status_vector;
 	ex.stuffException(&status_vector);
@@ -4273,7 +4267,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 					memory_end = memory + memory_size;
 					break;
 				}
-				catch (Firebird::BadAlloc&)
+				catch (BadAlloc&)
 				{
 					// Either there's not enough virtual memory or there is
 					// but it's not virtually contiguous. Let's find out by
@@ -4315,7 +4309,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 			lock_memory += lock_size;
 		}
 
-		tail->bdb_buffer = (pag*) memory;
+		tail->bdb_buffer = (Ods::pag*) memory;
 		memory += bcb->bcb_page_size;
 
 		QUE_INSERT(bcb->bcb_empty, tail->bdb_que);
@@ -4372,7 +4366,7 @@ static void page_validation_error(thread_db* tdbb, WIN* window, SSHORT type)
  **************************************/
 	SET_TDBB(tdbb);
 	BufferDesc* bdb = window->win_bdb;
-	const pag* page = bdb->bdb_buffer;
+	const Ods::pag* page = bdb->bdb_buffer;
 
 	PageSpace* pages =
 		tdbb->getDatabase()->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
@@ -4381,8 +4375,8 @@ static void page_validation_error(thread_db* tdbb, WIN* window, SSHORT type)
 					 Arg::Gds(isc_db_corrupt) << Arg::Str(pages->file->fil_string) <<
 					 Arg::Gds(isc_page_type_err) <<
 					 Arg::Gds(isc_badpagtyp) << Arg::Num(bdb->bdb_page.getPageNum()) <<
-												pagtype(type) <<
-												pagtype(page->pag_type));
+												Ods::pagtype(type) <<
+												Ods::pagtype(page->pag_type));
 	// We should invalidate this bad buffer.
 	CCH_unwind(tdbb, true);
 }
@@ -4436,7 +4430,7 @@ static void prefetch_epilogue(Prefetch* prefetch, FbStatusVector* status_vector)
 	{
 		if (*next_bdb)
 		{
-			pag* page = (*next_bdb)->bdb_buffer;
+			Ods::pag* page = (*next_bdb)->bdb_buffer;
 			if (next_buffer != reinterpret_cast<char*>(page))
 				memcpy(page, next_buffer, (ULONG) dbb->dbb_page_size);
 
@@ -4887,13 +4881,13 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 	}
 
 	Database* const dbb = tdbb->getDatabase();
-	pag* const page = bdb->bdb_buffer;
+	Ods::pag* const page = bdb->bdb_buffer;
 
 	// Before writing db header page, make sure that
 	// the next_transaction > oldest_active transaction
 	if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 	{
-		const auto header = (const header_page*) page;
+		const auto header = (const Ods::header_page*) page;
 
 		const TraNumber next_transaction = header->hdr_next_transaction;
 		const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -4978,7 +4972,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 				// We finished. Adjust transaction accounting and get ready for exit
 				if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 				{
-					const auto header = (const header_page*) page;
+					const auto header = (const Ods::header_page*) page;
 					dbb->dbb_last_header_write = header->hdr_next_transaction;
 				}
 			}
@@ -5011,7 +5005,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 						if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 						{
-							const auto header = (const header_page*) page;
+							const auto header = (const Ods::header_page*) page;
 							dbb->dbb_last_header_write = header->hdr_next_transaction;
 						}
 
@@ -5304,8 +5298,6 @@ void BufferDesc::unLockIO(thread_db* tdbb)
 }
 
 
-namespace Jrd {
-
 /// class BCBHashTable
 
 void BCBHashTable::resize(ULONG count)
@@ -5503,7 +5495,7 @@ void BCBHashTable::remove(BufferDesc* bdb)
 }
 
 
-}; // namespace Jrd
+// end namespace Firebird::Jrd is below
 
 
 #ifdef HASH_USE_CDS_LIST
@@ -5530,3 +5522,6 @@ void suspend()
 }
 
 #endif // HASH_USE_CDS_LIST
+
+
+} // namespace Firebird::Jrd

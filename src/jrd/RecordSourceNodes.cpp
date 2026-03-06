@@ -40,8 +40,8 @@
 #include "../jrd/optimizer/Optimizer.h"
 #include "../dsql/DSqlDataTypeUtil.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, RecordSourceNode* source);
@@ -4146,7 +4146,7 @@ TableValueFunctionSourceNode* TableValueFunctionSourceNode::parseFunction(thread
 	return node;
 }
 
-Firebird::string TableValueFunctionSourceNode::internalPrint(NodePrinter& printer) const
+string TableValueFunctionSourceNode::internalPrint(NodePrinter& printer) const
 {
 	RecordSourceNode::internalPrint(printer);
 
@@ -4928,3 +4928,6 @@ static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const 
 
 	return node;
 }
+
+
+}	// namespace Firebird::Jrd

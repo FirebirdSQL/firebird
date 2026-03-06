@@ -23,7 +23,7 @@
 #ifndef JRD_REPLICATION_PUBLISHER_H
 #define JRD_REPLICATION_PUBLISHER_H
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class thread_db;
 	class jrd_tra;
@@ -32,22 +32,25 @@ namespace Jrd
 	struct record_param;
 }
 
-void REPL_attach(Jrd::thread_db* tdbb, bool cleanupTransactions);
-void REPL_trans_prepare(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void REPL_trans_commit(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void REPL_trans_rollback(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void REPL_trans_cleanup(Jrd::thread_db* tdbb, TraNumber number);
-void REPL_save_cleanup(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-				  	   const Jrd::Savepoint* savepoint, bool undo);
-void REPL_store(Jrd::thread_db* tdbb, const Jrd::record_param* rpb,
-				Jrd::jrd_tra* transaction);
-void REPL_modify(Jrd::thread_db* tdbb, const Jrd::record_param* orgRpb,
-				 const Jrd::record_param* newRpb, Jrd::jrd_tra* transaction);
-void REPL_erase(Jrd::thread_db* tdbb, const Jrd::record_param* rpb, Jrd::jrd_tra* transaction);
-void REPL_gen_id(Jrd::thread_db* tdbb, SLONG genId, SINT64 value, Jrd::jrd_tra* transaction);
-void REPL_exec_sql(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction, const Firebird::string& sql,
-	const Firebird::ObjectsArray<Firebird::MetaString>& schemaSearchPath);
-void REPL_journal_switch(Jrd::thread_db* tdbb);
-void REPL_journal_cleanup(Jrd::Database* dbb);
+namespace Firebird::Jrd::Replication
+{
+	void REPL_attach(thread_db* tdbb, bool cleanupTransactions);
+	void REPL_trans_prepare(thread_db* tdbb, jrd_tra* transaction);
+	void REPL_trans_commit(thread_db* tdbb, jrd_tra* transaction);
+	void REPL_trans_rollback(thread_db* tdbb, jrd_tra* transaction);
+	void REPL_trans_cleanup(thread_db* tdbb, TraNumber number);
+	void REPL_save_cleanup(thread_db* tdbb, jrd_tra* transaction,
+						const Savepoint* savepoint, bool undo);
+	void REPL_store(thread_db* tdbb, const record_param* rpb,
+					jrd_tra* transaction);
+	void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
+					const record_param* newRpb, jrd_tra* transaction);
+	void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction);
+	void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value, jrd_tra* transaction);
+	void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql,
+		const ObjectsArray<MetaString>& schemaSearchPath);
+	void REPL_journal_switch(thread_db* tdbb);
+	void REPL_journal_cleanup(Database* dbb);
+} // namespace Firebird::Jrd::Replication
 
 #endif // JRD_REPLICATION_PUBLISHER_H

@@ -142,15 +142,15 @@
 // Pick up system relation ids
 #include "../jrd/ini.h"
 
+namespace Firebird::Jrd
+{
+
+
 inline constexpr int COMPUTED_FLAG = 128;
 inline constexpr int WAIT_PERIOD = -1;
 
 DATABASE DB = FILENAME "ODS.RDB";
 
-using namespace Jrd;
-using namespace Firebird;
-
-namespace Jrd {
 
 typedef HashTable<
 	DeferredWork,
@@ -362,8 +362,6 @@ public:
 	DeferredJob() : work(NULL), end(&work) { }
 };
 
-} // namespace Jrd
-
 
 /*==================================================================
  *
@@ -421,7 +419,7 @@ static bool set_statistics(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& fieldName);
-static void check_filename(thread_db*, const Firebird::string&, bool);
+static void check_filename(thread_db*, const string&, bool);
 static bool	find_depend_in_dfw(thread_db*, const QualifiedName&, USHORT, USHORT, jrd_tra*);
 static void get_trigger_dependencies(DeferredWork*, bool, jrd_tra*);
 
@@ -721,13 +719,13 @@ namespace
 						MemoryPool* newPool = dbb->createPool();
 						try
 						{
-							Jrd::ContextPoolHolder context(tdbb, newPool);
+							JrdContextPoolHolder context(tdbb, newPool);
 
 							// compile the routine to know if the BLR is still valid
 							if (lookupById(tdbb, work->dfw_id, CacheFlag::AUTOCREATE))
 								validBlr = TRUE;
 						}
-						catch (const Firebird::Exception&)
+						catch (const Exception&)
 						{
 							fb_utils::init_status(tdbb->tdbb_status_vector);
 						}
@@ -851,7 +849,7 @@ namespace
 				// block is used to ensure verify_cache()
 				// works in not deleted context
 				{
-					Jrd::ContextPoolHolder context(tdbb, new_pool);
+					JrdContextPoolHolder context(tdbb, new_pool);
 					MET_get_dependencies(tdbb, nullptr, NULL, 0, NULL, &blobId,
 						(compile ? &statement : NULL),
 						NULL, depName,
@@ -1398,7 +1396,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	if (dsql && dsql->dbb_statement_cache)
 		dsql->dbb_statement_cache->purgeAllAttachments(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	/* Loop for as long as any of the deferred work routines says that it has
 	more to do.  A deferred work routine should be able to deal with any
@@ -1448,7 +1446,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 
 			++phase;
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			// Do any necessary cleanup
 			if (!phase)
@@ -1752,7 +1750,7 @@ static bool add_shadow(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 	AutoRequest handle;
 	Shadow* shadow;
 	bool finished;
-	Firebird::PathName expanded_fname;
+	PathName expanded_fname;
 
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
@@ -2299,7 +2297,7 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	return false;
 }
 
-static void check_filename(thread_db* tdbb, const Firebird::string& name, bool shareExpand)
+static void check_filename(thread_db* tdbb, const string& name, bool shareExpand)
 {
 /**************************************
  *
@@ -2315,8 +2313,8 @@ static void check_filename(thread_db* tdbb, const Firebird::string& name, bool s
 	if (tdbb->tdbb_flags & TDBB_replicator)
 		return;
 
-	const Firebird::PathName file_name(name.ToPathName());
-	const bool valid = file_name.find("::") == Firebird::PathName::npos;
+	const PathName file_name(name.ToPathName());
+	const bool valid = file_name.find("::") == PathName::npos;
 
 	if (!valid || ISC_check_if_remote(file_name, shareExpand)) {
 		ERR_post(Arg::Gds(isc_no_meta_update) <<
@@ -2377,14 +2375,14 @@ string DFW_remove_icu_info_from_attributes(const QualifiedName& charsetName, con
 {
 	DbgRebuildIntl::Lvl debLevel;
 
-	Firebird::AutoPtr<charset> cs(FB_NEW charset);
+	AutoPtr<charset> cs(FB_NEW charset);
 	memset(cs, 0, sizeof(*cs));
 
 	if (IntlManager::lookupCharSet(charsetName, cs))
 	{
 		DbgRebuildIntl::out("Remove_icu_info_from_attributes for charset '%s'\n", charsetName.toQuotedString().c_str());
 
-		AutoPtr<Firebird::CharSet> charSet(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
+		AutoPtr<CharSet> charSet(CharSet::createInstance(*getDefaultMemoryPool(), 0, cs));
 		IntlUtil::SpecificAttributesMap map;
 		if (IntlUtil::parseSpecificAttributes(charSet, specificAttributes.length(),
 			(const UCHAR*) specificAttributes.begin(), &map))
@@ -2641,7 +2639,7 @@ void DFW_reset_icu(thread_db* tdbb)
 		transaction = NULL;
 		tdbb->setTransaction(oldTransaction);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		if (transaction)
 		{
@@ -2711,8 +2709,8 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 	SET_TDBB(tdbb);
 
 	bool err = false;
-	Firebird::SortedObjectsArray<QualifiedName> sortedNames(*tdbb->getDefaultPool());
-	Firebird::ObjectsArray<QualifiedName> names;
+	SortedObjectsArray<QualifiedName> sortedNames(*tdbb->getDefaultPool());
+	ObjectsArray<QualifiedName> names;
 
 	sortedNames.add(fieldName);
 	names.add(fieldName);
@@ -2947,7 +2945,7 @@ static bool create_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			{
 				Jrd::Database* dbb = tdbb->getDatabase();
 				MemoryPool* new_pool = dbb->createPool();
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, nullptr, NULL, 0, NULL, &validation,
 					NULL, NULL, depName, obj_validation, 0, transaction, depName);
@@ -3119,7 +3117,7 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			{
 				Jrd::Database* dbb = tdbb->getDatabase();
 				MemoryPool* new_pool = dbb->createPool();
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, nullptr, NULL, 0, NULL, &validation,
 					NULL, NULL, depName, obj_validation, 0, transaction, depName);
@@ -4148,7 +4146,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 						try
 						{
-							Jrd::ContextPoolHolder context(tdbb, new_pool);
+							JrdContextPoolHolder context(tdbb, new_pool);
 
 							MET_load_trigger(tdbb, rel, work->getQualifiedName(),
 								[&triggers](int t)->Triggers& {return triggers[t];});
@@ -4166,7 +4164,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 							valid_blr = TRUE;
 						}
-						catch (const Firebird::Exception&)
+						catch (const Exception&)
 						{
 							dbb->deletePool(new_pool);
 							throw;
@@ -4175,7 +4173,7 @@ static bool modify_trigger(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 						dbb->deletePool(new_pool);
 					}
 				}
-				catch (const Firebird::Exception&)
+				catch (const Exception&)
 				{
 				}
 
@@ -4316,7 +4314,7 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 		else
 			par_flags = 0;
 
-		Jrd::ContextPoolHolder context(tdbb, new_pool);
+		JrdContextPoolHolder context(tdbb, new_pool);
 		const auto depName(work->getQualifiedName());
 		MET_get_dependencies(tdbb, relation, NULL, 0, NULL, &blob_id, (compile ? &statement : NULL),
 							 NULL, depName, obj_trigger, par_flags, transaction);
@@ -4957,7 +4955,7 @@ static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		if (lttField.notNullFlag)
 		{
-			Jrd::ContextPoolHolder context(tdbb, &attPool);
+			JrdContextPoolHolder context(tdbb, &attPool);
 			relField->fld_not_null = PAR_validation_blr(tdbb, &relation->getName().schema, relation->getPermanent(),
 				nonnull_validation_blr, sizeof(nonnull_validation_blr), NULL, NULL, 0);
 		}
@@ -4998,3 +4996,4 @@ static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 }
 
 
+} // namespace Firebird::Jrd

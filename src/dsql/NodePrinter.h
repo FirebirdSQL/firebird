@@ -32,7 +32,7 @@
 
 //#define TRIVIAL_NODE_PRINTER
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 #ifndef TRIVIAL_NODE_PRINTER
@@ -46,7 +46,7 @@ public:
 	}
 
 public:
-	void begin(const Firebird::string& s)
+	void begin(const string& s)
 	{
 		printIndent();
 		text += "<";
@@ -59,7 +59,7 @@ public:
 
 	void end()
 	{
-		Firebird::string s = stack.pop();
+		string s = stack.pop();
 
 		--indent;
 
@@ -69,7 +69,7 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, const MetaName& value)
+	void print(const string& s, const MetaName& value)
 	{
 		printIndent();
 
@@ -82,7 +82,7 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, const QualifiedName& value)
+	void print(const string& s, const QualifiedName& value)
 	{
 		printIndent();
 
@@ -95,12 +95,12 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string&, const IntlString&)
+	void print(const string&, const IntlString&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string& s, const Firebird::string& value)
+	void print(const string& s, const string& value)
 	{
 		printIndent();
 
@@ -113,7 +113,7 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, bool value)
+	void print(const string& s, bool value)
 	{
 		printIndent();
 
@@ -126,118 +126,118 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, SINT64 value)
+	void print(const string& s, SINT64 value)
 	{
 		printIndent();
 
-		Firebird::string temp;
+		string temp;
 		temp.printf("<%s>%" QUADFORMAT"d</%s>\n", s.c_str(), value, s.c_str());
 		text += temp;
 	}
 
-	void print(const Firebird::string& s, long value)
+	void print(const string& s, long value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string& s, unsigned long value)
+	void print(const string& s, unsigned long value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string& s, int value)
+	void print(const string& s, int value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string& s, unsigned int value)
+	void print(const string& s, unsigned int value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string& s, USHORT value)
+	void print(const string& s, USHORT value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string& s, SSHORT value)
+	void print(const string& s, SSHORT value)
 	{
 		print(s, (SINT64) value);
 	}
 
-	void print(const Firebird::string&, const Firebird::UCharBuffer&)
+	void print(const string&, const UCharBuffer&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsql_ctx&)
+	void print(const string&, const dsql_ctx&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsql_var&)
+	void print(const string&, const dsql_var&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsql_fld&)
+	void print(const string&, const dsql_fld&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsql_map&)
+	void print(const string&, const dsql_map&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsql_par&)
+	void print(const string&, const dsql_par&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const ImplicitJoin&)
+	void print(const string&, const ImplicitJoin&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const dsc&)
+	void print(const string&, const dsc&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const Format&)
+	void print(const string&, const Format&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const GeneratorItem&)
+	void print(const string&, const GeneratorItem&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const RecordSource& recordSource)
+	void print(const string&, const RecordSource& recordSource)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const SubQuery&)
+	void print(const string&, const SubQuery&)
 	{
 		//// FIXME-PRINT:
 	}
 
-	void print(const Firebird::string&, const Cursor&)
+	void print(const string&, const Cursor&)
 	{
 		//// FIXME-PRINT:
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const Firebird::Array<T>& array)
+	void print(const string& s, const Array<T>& array)
 	{
 		begin(s);
 
 		for (const T* i = array.begin(); i != array.end(); ++i)
 		{
-			Firebird::string s2;
+			string s2;
 			s2.printf("%d", i - array.begin());
 			print(s2, *i);
 		}
@@ -246,17 +246,17 @@ public:
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const Firebird::ObjectsArray<T>& array)
+	void print(const string& s, const ObjectsArray<T>& array)
 	{
 		begin(s);
 
 		unsigned n = 0;
 
-		for (typename Firebird::ObjectsArray<T>::const_iterator i = array.begin();
+		for (typename ObjectsArray<T>::const_iterator i = array.begin();
 			 i != array.end();
 			 ++i, ++n)
 		{
-			Firebird::string s2;
+			string s2;
 			s2.printf("%d", n);
 			print(s2, *i);
 		}
@@ -265,38 +265,38 @@ public:
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const T* array)
+	void print(const string& s, const T* array)
 	{
 		if (array)
 			print(s, *array);
 	}
 
-	void print(const Firebird::string& s, const Firebird::TriState& triState)
+	void print(const string& s, const TriState& triState)
 	{
 		if (triState.isAssigned())
 			print(s, triState.asBool());
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const std::optional<T>& optional)
+	void print(const string& s, const std::optional<T>& optional)
 	{
 		if (optional.has_value())
 			print(s, optional.value());
 	}
 
 	template <typename T>
-	void print(const Firebird::string&, const Firebird::Pair<T>&)
+	void print(const string&, const Pair<T>&)
 	{
 		//// FIXME-PRINT:
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const NestConst<T>& ptr)
+	void print(const string& s, const NestConst<T>& ptr)
 	{
 		print(s, ptr.getObject());
 	}
 
-	void print(const Firebird::string& s, const Printable* printable)
+	void print(const string& s, const Printable* printable)
 	{
 		printIndent();
 		text += "<";
@@ -320,7 +320,7 @@ public:
 		text += ">\n";
 	}
 
-	void print(const Firebird::string& s, const Printable& printable)
+	void print(const string& s, const Printable& printable)
 	{
 		print(s, &printable);
 	}
@@ -335,7 +335,7 @@ public:
 		return indent;
 	}
 
-	const Firebird::string& getText() const
+	const string& getText() const
 	{
 		return text;
 	}
@@ -351,8 +351,8 @@ private:
 	unsigned indent;
 
 private:
-	Firebird::ObjectsArray<Firebird::string> stack;
-	Firebird::string text;
+	ObjectsArray<string> stack;
+	string text;
 };
 
 #else // TRIVIAL_NODE_PRINTER
@@ -366,7 +366,7 @@ public:
 	}
 
 public:
-	void begin(const Firebird::string& s)
+	void begin(const string& s)
 	{
 	}
 
@@ -375,7 +375,7 @@ public:
 	}
 
 	template <typename T>
-	void print(const Firebird::string& s, const T& value)
+	void print(const string& s, const T& value)
 	{
 	}
 
@@ -388,7 +388,7 @@ public:
 		return 0;
 	}
 
-	const Firebird::string getText() const
+	const string getText() const
 	{
 		return "";
 	}
@@ -397,6 +397,6 @@ public:
 #endif // TRIVIAL_NODE_PRINTER
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// DSQL_NODE_PRINTER_H

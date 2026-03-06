@@ -30,10 +30,9 @@
 #include "../jrd/par_proto.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-
-namespace Jrd {
 
 RoutinePermanent::RoutinePermanent(thread_db* tdbb, MemoryPool& p, MetaId metaId, NoData)
 	: PermanentStorage(p),
@@ -233,7 +232,7 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	}
 }
 
-bool Routine::hash(thread_db* tdbb, Firebird::sha512& digest)
+bool Routine::hash(thread_db* tdbb, sha512& digest)
 {
 	if (inputFields.hasData())
 	{
@@ -276,4 +275,4 @@ void Routine::destroy(thread_db* tdbb, Routine* routine)
 	delete routine;
 }
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

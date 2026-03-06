@@ -53,10 +53,11 @@
 #include "../common/utils_proto.h"
 #include "../jrd/btr_proto.h"
 
-using MsgFormat::SafeArg;
+namespace Firebird::Jrd
+{
 
-using namespace Firebird;
-using namespace Jrd;
+
+using MsgFormat::SafeArg;
 
 DATABASE DB = STATIC "ODS.RDB";
 
@@ -387,7 +388,7 @@ SINT64 DYN_UTIL_gen_unique_id(thread_db* tdbb, SSHORT id, const char* generator_
 		const FB_SIZE_T blr_size = static_cast<FB_SIZE_T>(
 			sizeof(gen_id_blr1) + sizeof(gen_id_blr2)) + 1 + name_length;
 
-		Firebird::UCharBuffer blr;
+		UCharBuffer blr;
 		UCHAR* p = blr.getBuffer(blr_size);
 
 		memcpy(p, gen_id_blr1, sizeof(gen_id_blr1));
@@ -746,3 +747,6 @@ void DYN_UTIL_store_check_constraints(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_STORE
 }
+
+
+} // namespace Firebird::Jrd

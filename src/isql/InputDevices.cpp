@@ -40,7 +40,7 @@
 #include "../common/os/os_utils.h"
 #include "InputDevices.h"
 
-using Firebird::PathName;
+namespace Firebird::Isql {
 
 
 InputDevices::indev::indev()
@@ -298,3 +298,5 @@ void InputDevices::commandsToFile(FILE* f)
 
 	commands.clear();
 }
+
+} // namespace Firebird::Isql

@@ -37,8 +37,9 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/extds/ExtDS.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // Shutdown lock data
 union shutdown_data
@@ -541,3 +542,6 @@ static bool shutdown(thread_db* tdbb, SSHORT flag, bool force)
 
 	return false;
 }
+
+
+} // namespace Firebird::Jrd

@@ -28,7 +28,7 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/config/config_file.h"
 #include "../common/classes/ImplementHelper.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include <type_traits>
 

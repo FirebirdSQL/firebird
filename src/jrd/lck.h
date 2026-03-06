@@ -35,7 +35,9 @@
 #include "../jrd/Attachment.h"
 #include "../common/classes/auto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 class Database;
 class thread_db;
@@ -111,7 +113,7 @@ public:
 
 	Lock* detach();
 
-	Firebird::RefPtr<StableAttachmentPart> getLockStable()
+	RefPtr<StableAttachmentPart> getLockStable()
 	{
 		return lck_attachment;
 	}
@@ -121,13 +123,13 @@ public:
 	void setLockAttachment(Attachment* att);
 
 #ifdef DEBUG_LCK
-	Firebird::SyncObject	lck_sync;
+	SyncObject	lck_sync;
 #endif
 
 	Database* lck_dbb;				// Database object is contained in
 
 private:
-	Firebird::RefPtr<StableAttachmentPart> lck_attachment;		// Attachment that owns lock, set only using set_lock_attachment()
+	RefPtr<StableAttachmentPart> lck_attachment;		// Attachment that owns lock, set only using set_lock_attachment()
 
 public:
 	void* lck_compatible;			// Enter into internal_enqueue() and treat as compatible
@@ -191,25 +193,22 @@ public:
 	}
 };
 
-} // namespace Jrd
 
-void	LCK_assert(Jrd::thread_db*, Jrd::Lock*);
-bool	LCK_cancel_wait(Jrd::Attachment*);
-bool	LCK_convert(Jrd::thread_db*, Jrd::Lock*, USHORT, SSHORT);
-bool	LCK_convert_opt(Jrd::thread_db*, Jrd::Lock*, USHORT);
-void	LCK_downgrade(Jrd::thread_db*, Jrd::Lock*);
-void	LCK_fini(Jrd::thread_db*, Jrd::lck_owner_t);
-void	LCK_init(Jrd::thread_db*, Jrd::lck_owner_t);
-bool	LCK_lock(Jrd::thread_db*, Jrd::Lock*, USHORT, SSHORT);
-bool	LCK_lock_opt(Jrd::thread_db*, Jrd::Lock*, USHORT, SSHORT);
-LOCK_DATA_T LCK_query_data(Jrd::thread_db*, Jrd::lck_t, USHORT);
-LOCK_DATA_T LCK_read_data(Jrd::thread_db*, Jrd::Lock*);
-void	LCK_release(Jrd::thread_db*, Jrd::Lock*);
-void	LCK_re_post(Jrd::thread_db*, Jrd::Lock*);
-void	LCK_write_data(Jrd::thread_db*, Jrd::Lock*, LOCK_DATA_T);
+void	LCK_assert(thread_db*, Lock*);
+bool	LCK_cancel_wait(Attachment*);
+bool	LCK_convert(thread_db*, Lock*, USHORT, SSHORT);
+bool	LCK_convert_opt(thread_db*, Lock*, USHORT);
+void	LCK_downgrade(thread_db*, Lock*);
+void	LCK_fini(thread_db*, lck_owner_t);
+void	LCK_init(thread_db*, lck_owner_t);
+bool	LCK_lock(thread_db*, Lock*, USHORT, SSHORT);
+bool	LCK_lock_opt(thread_db*, Lock*, USHORT, SSHORT);
+LOCK_DATA_T LCK_query_data(thread_db*, lck_t, USHORT);
+LOCK_DATA_T LCK_read_data(thread_db*, Lock*);
+void	LCK_release(thread_db*, Lock*);
+void	LCK_re_post(thread_db*, Lock*);
+void	LCK_write_data(thread_db*, Lock*, LOCK_DATA_T);
 
-
-namespace Jrd {
 
 class AutoLock
 {
@@ -258,6 +257,7 @@ private:
 	Lock* m_lock;
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_LCK_H

@@ -29,32 +29,31 @@
 #include "../jrd/Resources.h"
 #include "../common/classes/fb_string.h"
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	enum dfw_t : int;
 
 	class thread_db;
 	class jrd_tra;
 	class DeferredWork;
-}
 
-USHORT DFW_assign_index_type(Jrd::thread_db*, const Jrd::QualifiedName&, SSHORT, TTypeId);
-void DFW_delete_deferred(Jrd::jrd_tra*, SavNumber);
-Firebird::SortedArray<int>& DFW_get_ids(Jrd::DeferredWork* work);
-void DFW_merge_work(Jrd::jrd_tra*, SavNumber, SavNumber);
-void DFW_perform_work(Jrd::thread_db*, Jrd::jrd_tra*);
-void DFW_perform_post_commit_work(Jrd::jrd_tra*);
-void DFW_raiseRelationInUseError(const Jrd::Cached::Relation*);
-Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const dsc* nameDesc, const dsc* schemaDesc, USHORT,
-	const Jrd::MetaName& package = {});
-Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const Firebird::string&, const Jrd::MetaName& schema,
-	USHORT, const Jrd::MetaName& package = {});
-Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
-	USHORT);
-Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
-	USHORT, Jrd::dfw_t);
-void DFW_update_index(const Jrd::QualifiedName&, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*);
-void DFW_reset_icu(Jrd::thread_db*);
-Firebird::string DFW_remove_icu_info_from_attributes(const Jrd::QualifiedName&, const Firebird::string&);
+	USHORT DFW_assign_index_type(thread_db*, const QualifiedName&, SSHORT, TTypeId);
+	void DFW_delete_deferred(jrd_tra*, SavNumber);
+	SortedArray<int>& DFW_get_ids(DeferredWork* work);
+	void DFW_merge_work(jrd_tra*, SavNumber, SavNumber);
+	void DFW_perform_work(thread_db*, jrd_tra*);
+	void DFW_perform_post_commit_work(jrd_tra*);
+	void DFW_raiseRelationInUseError(const Cached::Relation*);
+	DeferredWork* DFW_post_work(jrd_tra*, dfw_t, const dsc* nameDesc, const dsc* schemaDesc, USHORT,
+		const MetaName& package = {});
+	DeferredWork* DFW_post_work(jrd_tra*, dfw_t, const string&, const MetaName& schema,
+		USHORT, const MetaName& package = {});
+	DeferredWork* DFW_post_work_arg(jrd_tra*, DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
+		USHORT);
+	DeferredWork* DFW_post_work_arg(jrd_tra*, DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
+		USHORT, dfw_t);
+	void DFW_update_index(const QualifiedName&, USHORT, const SelectivityList&, jrd_tra*);
+	void DFW_reset_icu(thread_db*);
+	string DFW_remove_icu_info_from_attributes(const QualifiedName&, const string&);
+} // namespace Firebird::Jrd
 
 #endif // JRD_DFW_PROTO_H

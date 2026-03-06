@@ -41,39 +41,42 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 
-namespace Auth {
+namespace Firebird::Auth
+{
+
 
 // The idea of debug plugin is to send some data from server to client,
 // modify them on client and return result (which becomes login name) to the server
 
 class DebugServer final :
-	public Firebird::StdPlugin<Firebird::IServerImpl<DebugServer, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IServerImpl<DebugServer, CheckStatusWrapper>>
 {
 public:
-	explicit DebugServer(Firebird::IPluginConfig*);
+	explicit DebugServer(IPluginConfig*);
 
-    int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
-    				 Firebird::IWriter* writerInterface);
-	void setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*);
+    int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock,
+    				 IWriter* writerInterface);
+	void setDbCryptCallback(CheckStatusWrapper*, ICryptKeyCallback*);
 
 private:
-	Firebird::string str;
-	Firebird::RefPtr<Firebird::IConfig> config;
+	string str;
+	RefPtr<IConfig> config;
 };
 
 class DebugClient final :
-	public Firebird::StdPlugin<Firebird::IClientImpl<DebugClient, Firebird::CheckStatusWrapper> >
+	public StdPlugin<IClientImpl<DebugClient, CheckStatusWrapper>>
 {
 public:
-	DebugClient(Firebird::IPluginConfig*);
+	DebugClient(IPluginConfig*);
 
-    int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* sBlock);
+    int authenticate(CheckStatusWrapper* status, IClientBlock* sBlock);
 
 private:
-	Firebird::string str;
+	string str;
 };
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_DEBUG
 

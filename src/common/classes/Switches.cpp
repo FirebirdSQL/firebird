@@ -25,6 +25,10 @@
 #include "Switches.h"
 #include "fb_exception.h"
 
+namespace Firebird
+{
+
+
 namespace
 {
 	constexpr char switch_char = '-';
@@ -66,7 +70,7 @@ Switches::~Switches()
 	delete[] m_opLengths;
 }
 
-const Switches::in_sw_tab_t* Switches::findSwitch(Firebird::string sw, bool* invalidSwitchInd) const
+const Switches::in_sw_tab_t* Switches::findSwitch(string sw, bool* invalidSwitchInd) const
 {
 /**************************************
  *
@@ -110,7 +114,7 @@ const Switches::in_sw_tab_t* Switches::findSwitch(Firebird::string sw, bool* inv
 	return 0;
 }
 
-Switches::in_sw_tab_t* Switches::findSwitchMod(Firebird::string& sw, bool* invalidSwitchInd)
+Switches::in_sw_tab_t* Switches::findSwitchMod(string& sw, bool* invalidSwitchInd)
 {
 /**************************************
  *
@@ -212,7 +216,7 @@ bool Switches::exists(const int in_sw, const char* const* argv, const int start,
 
 	for (int itr = start; itr < stop; ++itr)
 	{
-		Firebird::string sw(argv[itr]);
+		string sw(argv[itr]);
 		if (sw.length() < 2 || sw[0] != switch_char)
 			continue;
 		sw.erase(0, 1);
@@ -238,7 +242,7 @@ const char* Switches::findNameByTag(const int in_sw) const
 // Begin private functions.
 
 // static function
-bool Switches::matchSwitch(const Firebird::string& sw, const char* target, FB_SIZE_T n)
+bool Switches::matchSwitch(const string& sw, const char* target, FB_SIZE_T n)
 {
 /**************************************
  *
@@ -295,5 +299,8 @@ const Switches::in_sw_tab_t* Switches::findByTag(const int in_sw, FB_SIZE_T* pos
 // static function
 void Switches::complain(const char* msg)
 {
-	Firebird::system_call_failed::raise(msg);
+	system_call_failed::raise(msg);
 }
+
+
+} // namespace Firebird

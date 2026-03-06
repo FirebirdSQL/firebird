@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // -------------------------------------------
 // Data access: sequential complete table scan
@@ -201,3 +202,6 @@ void FullTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }
+
+
+}	// namespace Firebird::Jrd

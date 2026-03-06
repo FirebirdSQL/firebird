@@ -25,7 +25,7 @@
 #define FB_ISQL_FRONTEND_PARSER_H
 
 #include "../isql/FrontendLexer.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../common/classes/MetaString.h"
 #include "../common/classes/QualifiedMetaString.h"
 #include <optional>
@@ -33,6 +33,10 @@
 #include <string_view>
 #include <variant>
 #include <vector>
+
+namespace Firebird::Isql
+{
+
 
 class FrontendParser
 {
@@ -47,10 +51,10 @@ public:
 
 	struct InvalidNode {};
 
-	struct AddNode { Firebird::QualifiedMetaString tableName; };
+	struct AddNode { QualifiedMetaString tableName; };
 	struct BlobDumpViewNode { ISC_QUAD blobId; std::optional<std::string> file; };
 	struct ConnectNode { std::vector<Token> args; };
-	struct CopyNode { Firebird::QualifiedMetaString source; Firebird::QualifiedMetaString destination; std::string database; };
+	struct CopyNode { QualifiedMetaString source; QualifiedMetaString destination; std::string database; };
 	struct CreateDatabaseNode { std::vector<Token> args; };
 	struct DropDatabaseNode {};
 	struct EditNode { std::optional<std::string> file; };
@@ -77,7 +81,7 @@ public:
 	struct SetListNode { std::string arg; };
 	struct SetLocalTimeoutNode { std::string arg; };
 	struct SetMaxRowsNode { std::string arg; };
-	struct SetNamesNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct SetNamesNode { std::optional<QualifiedMetaString> name; };
 	struct SetPerTableStatsNode { std::string arg; };
 	struct SetPlanNode { std::string arg; };
 	struct SetPlanOnlyNode { std::string arg; };
@@ -92,32 +96,32 @@ public:
 	struct SetWireStatsNode { std::string arg; };
 
 	struct ShowNode {};
-	struct ShowChecksNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowCollationsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowChecksNode { std::optional<QualifiedMetaString> name; };
+	struct ShowCollationsNode { std::optional<QualifiedMetaString> name; };
 	struct ShowCommentsNode {};
 	struct ShowDatabaseNode {};
-	struct ShowDomainsNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowDependenciesNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowExceptionsNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowFiltersNode { std::optional<Firebird::MetaString> name; };
-	struct ShowFunctionsNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowGeneratorsNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowGrantsNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowIndexesNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowMappingsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowPackagesNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowProceduresNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowPublicationsNode { std::optional<Firebird::MetaString> name; };
-	struct ShowRolesNode { std::optional<Firebird::MetaString> name; };
-	struct ShowSchemasNode { std::optional<Firebird::MetaString> name; };
-	struct ShowSecClassesNode { std::optional<Firebird::QualifiedMetaString> name; bool detail = false; };
+	struct ShowDomainsNode { std::optional<QualifiedMetaString> name; };
+	struct ShowDependenciesNode { std::optional<QualifiedMetaString> name; };
+	struct ShowExceptionsNode { std::optional<QualifiedMetaString> name; };
+	struct ShowFiltersNode { std::optional<MetaString> name; };
+	struct ShowFunctionsNode { std::optional<QualifiedMetaString> name; };
+	struct ShowGeneratorsNode { std::optional<QualifiedMetaString> name; };
+	struct ShowGrantsNode { std::optional<QualifiedMetaString> name; };
+	struct ShowIndexesNode { std::optional<QualifiedMetaString> name; };
+	struct ShowMappingsNode { std::optional<MetaString> name; };
+	struct ShowPackagesNode { std::optional<QualifiedMetaString> name; };
+	struct ShowProceduresNode { std::optional<QualifiedMetaString> name; };
+	struct ShowPublicationsNode { std::optional<MetaString> name; };
+	struct ShowRolesNode { std::optional<MetaString> name; };
+	struct ShowSchemasNode { std::optional<MetaString> name; };
+	struct ShowSecClassesNode { std::optional<QualifiedMetaString> name; bool detail = false; };
 	struct ShowSqlDialectNode {};
 	struct ShowSystemNode { std::optional<ObjectType> objType; };
-	struct ShowTablesNode { std::optional<Firebird::QualifiedMetaString> name; };
-	struct ShowTriggersNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowTablesNode { std::optional<QualifiedMetaString> name; };
+	struct ShowTriggersNode { std::optional<QualifiedMetaString> name; };
 	struct ShowUsersNode {};
 	struct ShowVersionNode {};
-	struct ShowViewsNode { std::optional<Firebird::QualifiedMetaString> name; };
+	struct ShowViewsNode { std::optional<QualifiedMetaString> name; };
 	struct ShowWireStatsNode {};
 
 	using AnySetNode = std::variant<
@@ -261,21 +265,21 @@ private:
 		return lexer.getToken().type == Token::TYPE_EOF;
 	}
 
-	std::optional<Firebird::MetaString> parseName()
+	std::optional<MetaString> parseName()
 	{
 		const auto token = lexer.getNameToken();
 
 		if (token.type != Token::TYPE_EOF)
-			return Firebird::MetaString(token.processedText.c_str());
+			return MetaString(token.processedText.c_str());
 
 		return std::nullopt;
 	}
 
-	std::optional<Firebird::QualifiedMetaString> parseQualifiedName(bool allowPackage = false)
+	std::optional<QualifiedMetaString> parseQualifiedName(bool allowPackage = false)
 	{
 		if (const auto optName1 = parseName())
 		{
-			Firebird::QualifiedMetaString name(optName1.value());
+			QualifiedMetaString name(optName1.value());
 
 			auto lexerPos = lexer.getPos();
 			auto token = lexer.getToken();
@@ -333,5 +337,8 @@ private:
 	FrontendLexer lexer;
 	const Options options;
 };
+
+
+} // namespace Firebird::Isql
 
 #endif	// FB_ISQL_FRONTEND_PARSER_H

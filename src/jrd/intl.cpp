@@ -124,8 +124,9 @@
 #include "../jrd/IntlManager.h"
 #include "../common/classes/init.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 #define IS_TEXT(x)      (((x)->dsc_dtype == dtype_text)   ||\
 			 ((x)->dsc_dtype == dtype_varying)||\
@@ -310,7 +311,7 @@ void INTL_adjust_text_descriptor(thread_db* tdbb, dsc* desc)
 
 		if (charSet->isMultiByte())
 		{
-			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+			HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
 
 			desc->dsc_length = charSet->substring(TEXT_LEN(desc), desc->dsc_address,
 				TEXT_LEN(desc), buffer.getBuffer(TEXT_LEN(desc)), 0,
@@ -539,7 +540,7 @@ CsConvert INTL_convert_lookup(thread_db* tdbb, CSetId to_cs, CSetId from_cs)
 }
 
 
-void INTL_convert_string(dsc* to, const dsc* from, Firebird::Callbacks* cb)
+void INTL_convert_string(dsc* to, const dsc* from, Callbacks* cb)
 {
 /**************************************
  *
@@ -1112,3 +1113,6 @@ static void pad_spaces(thread_db* tdbb, CSetId charset, BYTE* ptr, ULONG len)
 		}
 	}
 }
+
+
+} // namespace Firebird::Jrd

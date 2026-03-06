@@ -26,22 +26,25 @@
 #define JRD_GDS_PROTO_H
 
 
-inline constexpr SSHORT IB_PREFIX_TYPE		= 0;
-inline constexpr SSHORT IB_PREFIX_LOCK_TYPE	= 1;
-inline constexpr SSHORT IB_PREFIX_MSG_TYPE	= 2;
-
-// flags for gds_alloc_report
-inline constexpr ULONG ALLOC_dont_report		= 1L << 0;	/* Don't report this block */
-inline constexpr ULONG ALLOC_silent				= 1L << 1;	/* Don't report new leaks */
-inline constexpr ULONG ALLOC_verbose			= 1L << 2;	/* Report all leaks, even old */
-inline constexpr ULONG ALLOC_mark_current		= 1L << 3;	/* Mark all current leaks */
-inline constexpr ULONG ALLOC_check_each_call	= 1L << 4;	/* Check memory integrity on each alloc/free call */
-inline constexpr ULONG ALLOC_dont_check			= 1L << 5;	/* Stop checking integrity on each call */
-
 #ifdef __cplusplus
 namespace Firebird
 {
 	class MemoryPool;
+}
+
+namespace Firebird::Why
+{
+	inline constexpr SSHORT IB_PREFIX_TYPE		= 0;
+	inline constexpr SSHORT IB_PREFIX_LOCK_TYPE	= 1;
+	inline constexpr SSHORT IB_PREFIX_MSG_TYPE	= 2;
+
+	// flags for gds_alloc_report
+	inline constexpr ULONG ALLOC_dont_report		= 1L << 0;	/* Don't report this block */
+	inline constexpr ULONG ALLOC_silent				= 1L << 1;	/* Don't report new leaks */
+	inline constexpr ULONG ALLOC_verbose			= 1L << 2;	/* Report all leaks, even old */
+	inline constexpr ULONG ALLOC_mark_current		= 1L << 3;	/* Mark all current leaks */
+	inline constexpr ULONG ALLOC_check_each_call	= 1L << 4;	/* Check memory integrity on each alloc/free call */
+	inline constexpr ULONG ALLOC_dont_check			= 1L << 5;	/* Stop checking integrity on each call */
 }
 
 extern "C" {

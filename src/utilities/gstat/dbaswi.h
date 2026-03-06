@@ -25,7 +25,7 @@
 #define DBA_DBASWI_H
 
 #include "../common/classes/Switches.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 // Switch handling constants.  Note that the first IN_SW_DATA_ITEMS
 // switch constants refer to data items.  The remaining switch constants
@@ -53,7 +53,7 @@ inline constexpr int IN_SW_DBA_HELP			= 16;	// show help
 inline constexpr int IN_SW_DBA_ROLE			= 17;	// SQL role
 inline constexpr int IN_SW_DBA_SCHEMA		= 18;	// analyze specific schemas
 
-inline constexpr static struct Switches::in_sw_tab_t dba_in_sw_table[] =
+inline constexpr static struct Firebird::Switches::in_sw_tab_t dba_in_sw_table[] =
 {
     {IN_SW_DBA_DATAIDX,			0,							"ALL",		0,0,0,	false,	false,	22,	1, NULL},	// msg 22: -a      analyze data and index pages
     {IN_SW_DBA_DATA,			isc_spb_sts_data_pages,		"DATA",		0,0,0,	false,	true,	23,	1, NULL},	// msg 23: -d      analyze data pages

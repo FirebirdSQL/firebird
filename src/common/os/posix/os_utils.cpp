@@ -32,7 +32,7 @@
 #include "../common/gdsassert.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/isc_i_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -86,10 +86,9 @@
 
 #include <stdio.h>
 
-using namespace Firebird;
-
-namespace os_utils
+namespace Firebird::os_utils
 {
+
 
 static GlobalPtr<Mutex> grMutex;
 
@@ -186,7 +185,7 @@ void createLockDirectory(const char* pathname)
 		system_call_failed::raise("access", pathname);
 	}
 
-	Firebird::PathName newname(pathname);
+	PathName newname(pathname);
 	newname.rtrim("/");
 	newname += ".tmp.XXXXXX";
 	char* pathname2 = newname.begin();
@@ -199,7 +198,7 @@ void createLockDirectory(const char* pathname)
 	}
 	changeFileRights(pathname2, 0770);
 
-	Firebird::PathName renameGuard(pathname2);
+	PathName renameGuard(pathname2);
 	renameGuard += "/fb_rename_guard";
 	for(;;)
 	{
@@ -451,4 +450,5 @@ void CtrlCHandler::handler(void*)
 	terminated = true;
 }
 
-} // namespace os_utils
+
+} // namespace Firebird::os_utils

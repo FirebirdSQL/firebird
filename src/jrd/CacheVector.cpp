@@ -35,8 +35,9 @@
 #include "../jrd/met.h"
 #include "../jrd/tpc_proto.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // class TransactionNumber
 
@@ -101,13 +102,13 @@ MdcVersion VersionIncr::getVersion()
 
 [[noreturn]] void ElementBase::newVersionBusy(thread_db* tdbb, MetaId id, const char* family, TraNumber traNum)
 {
-	Firebird::fatal_exception::raiseFmt("newVersion: %s %d is used by transaction %d\n",
+	fatal_exception::raiseFmt("newVersion: %s %d is used by transaction %d\n",
 		family, id, traNum);
 }
 
 [[noreturn]] void ElementBase::newVersionScan(thread_db* tdbb, MetaId id, const char* family)
 {
-	Firebird::fatal_exception::raiseFmt("newVersion: %s %d is scanned by us\n",
+	fatal_exception::raiseFmt("newVersion: %s %d is scanned by us\n",
 		family, id);
 }
 
@@ -161,7 +162,7 @@ void ElementBase::pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, c
 	{
 		if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))
 		{
-			Firebird::fatal_exception::raiseFmt("Unable to obtain WRITE rescan lock for %s %d",
+			fatal_exception::raiseFmt("Unable to obtain WRITE rescan lock for %s %d",
 				family, id);
 		}
 
@@ -176,7 +177,7 @@ void ElementBase::setLock(thread_db* tdbb, MetaId id, const char* family)
 	{
 		if (!LCK_lock(tdbb, lock, LCK_PR, LCK_WAIT))
 		{
-			Firebird::fatal_exception::raiseFmt("Unable to obtain READ rescan lock for %s %d",
+			fatal_exception::raiseFmt("Unable to obtain READ rescan lock for %s %d",
 				family, id);
 		}
 	}
@@ -203,3 +204,5 @@ bool ConsistencyCheck::commitNumber(thread_db* tdbb)
 	return false;
 }
 
+
+}	// namespace Firebird::Jrd

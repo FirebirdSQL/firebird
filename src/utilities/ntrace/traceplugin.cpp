@@ -32,28 +32,32 @@
 #include "TraceConfiguration.h"
 #include "TracePluginImpl.h"
 
+namespace Firebird::Ntrace
+{
+
+
 class TraceFactoryImpl final :
-	public Firebird::StdPlugin<Firebird::ITraceFactoryImpl<TraceFactoryImpl, Firebird::CheckStatusWrapper> >
+	public StdPlugin<ITraceFactoryImpl<TraceFactoryImpl, CheckStatusWrapper>>
 {
 public:
-	explicit TraceFactoryImpl(Firebird::IPluginConfig*)
+	explicit TraceFactoryImpl(IPluginConfig*)
 	{ }
 
 	// TraceFactory implementation
 	ntrace_mask_t trace_needs();
-	Firebird::ITracePlugin* trace_create(Firebird::CheckStatusWrapper* status,
-		Firebird::ITraceInitInfo* init_info);
+	ITracePlugin* trace_create(CheckStatusWrapper* status,
+		ITraceInitInfo* init_info);
 };
 
 ntrace_mask_t TraceFactoryImpl::trace_needs()
 {
-	return (1 << Firebird::ITraceFactory::TRACE_EVENT_MAX) - 1;
+	return (1 << ITraceFactory::TRACE_EVENT_MAX) - 1;
 }
 
-Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrapper* status,
-	Firebird::ITraceInitInfo* initInfo)
+ITracePlugin* TraceFactoryImpl::trace_create(CheckStatusWrapper* status,
+	ITraceInitInfo* initInfo)
 {
-	Firebird::MasterInterfacePtr master;
+	MasterInterfacePtr master;
 	const char* dbname = NULL;
 	try
 	{
@@ -64,7 +68,7 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 		TracePluginConfig config;
 		TraceCfgReader::readTraceConfiguration(initInfo->getConfigText(), dbname, config);
 
-		Firebird::ITraceDatabaseConnection* connection = initInfo->getConnection();
+		ITraceDatabaseConnection* connection = initInfo->getConnection();
 
 		if (!config.enabled ||
 			(config.connection_id && connection &&
@@ -73,7 +77,7 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 			return NULL; // Plugin is not needed, no error happened.
 		}
 
-		Firebird::AutoPtr<Firebird::ITraceLogWriter, Firebird::SimpleRelease>
+		AutoPtr<ITraceLogWriter, SimpleRelease>
 			logWriter(initInfo->getLogWriter());
 
 		if (logWriter)
@@ -82,14 +86,14 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 		return FB_NEW TracePluginImpl(this, config, initInfo);	// Everything is ok, we created a plugin
 
 	}
-	catch (Firebird::Exception& ex)
+	catch (Exception& ex)
 	{
 		// put error into trace log
-		Firebird::ITraceLogWriter* logWriter = initInfo->getLogWriter();
+		ITraceLogWriter* logWriter = initInfo->getLogWriter();
 		if (logWriter)
 		{
 			const char* strEx = TracePluginImpl::marshal_exception(ex);
-			Firebird::string err;
+			string err;
 			if (dbname && dbname[0])
 				err.printf("Error creating trace session for database \"%s\":\n%s\n", dbname, strEx);
 			else
@@ -106,17 +110,22 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 }
 
 
-static Firebird::SimpleFactory<TraceFactoryImpl> traceFactory;
+static SimpleFactory<TraceFactoryImpl> traceFactory;
 
-void registerTrace(Firebird::IPluginManager* iPlugin)
+void registerTrace(IPluginManager* iPlugin)
 {
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_TRACE, "fbtrace", &traceFactory);
-	Firebird::getUnloadDetector()->registerMe();
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_TRACE, "fbtrace", &traceFactory);
+	getUnloadDetector()->registerMe();
 }
 
 
-extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+} // namespace Firebird::Ntrace
+
+
+using namespace Firebird;
+
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
-	Firebird::CachedMasterInterface::set(master);
-	registerTrace(Firebird::PluginManagerInterfacePtr());
+	CachedMasterInterface::set(master);
+	Ntrace::registerTrace(PluginManagerInterfacePtr());
 }

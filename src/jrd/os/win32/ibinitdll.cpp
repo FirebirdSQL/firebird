@@ -27,7 +27,6 @@
 #include "../../../common/dllinst.h"
 #include "../../../yvalve/utl_proto.h"
 
-
 using namespace Firebird;
 
 

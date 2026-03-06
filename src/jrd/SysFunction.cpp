@@ -79,8 +79,9 @@
 #include <tomcrypt.h>
 #include <limits.h>
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 
@@ -334,7 +335,7 @@ dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray&
 dsc* evlLeft(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLnLog10(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLog(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
-dsc* evlMakeDbkey(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, Jrd::impure_value* impure);
+dsc* evlMakeDbkey(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlMaxMinValue(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlMod(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -4572,7 +4573,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 {
 	fb_assert(args.getCount() == 2);
 
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* transaction = tdbb->getTransaction();
 	Request* request = tdbb->getRequest();
@@ -4911,7 +4912,7 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 {
 	fb_assert(args.getCount() == 3);
 
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 	jrd_tra* transaction = tdbb->getTransaction();
 	Request* request = tdbb->getRequest();
 
@@ -5392,7 +5393,7 @@ dsc* evlNormDec(thread_db* tdbb, const SysFunction* function, const NestValueArr
 }
 
 
-dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestValueArray& args, Jrd::impure_value* impure)
+dsc* evlMakeDbkey(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
 {
 	// MAKE_DBKEY ( REL_NAME | REL_ID, RECNUM [, DPNUM [, PPNUM] ] )
 
@@ -6788,7 +6789,7 @@ dsc* evlRoleInUse(thread_db* tdbb, const SysFunction*, const NestValueArray& arg
 	fb_assert(args.getCount() == 1);
 
 	Request* request = tdbb->getRequest();
-	const Jrd::Attachment* attachment = tdbb->getAttachment();
+	const Attachment* attachment = tdbb->getAttachment();
 
 	const dsc* value = EVL_expr(tdbb, request, args[0]);
 	if (!value)	// return NULL if value is NULL
@@ -6822,7 +6823,7 @@ dsc* evlSystemPrivilege(thread_db* tdbb, const SysFunction*, const NestValueArra
 	fb_assert(value->dsc_dtype == dtype_short);
 	const USHORT p = *((USHORT*) value->dsc_address);
 
-	const Jrd::Attachment* attachment = tdbb->getAttachment();
+	const Attachment* attachment = tdbb->getAttachment();
 	impure->vlu_misc.vlu_uchar = (attachment->att_user &&
 		attachment->att_user->locksmith(tdbb, p)) ? FB_TRUE : FB_FALSE;
 	impure->vlu_desc.makeBoolean(&impure->vlu_misc.vlu_uchar);
@@ -7023,3 +7024,6 @@ void SysFunction::checkArgsMismatch(int count) const
 		status_exception::raise(Arg::Gds(isc_funmismat) << Arg::Str(name));
 	}
 }
+
+
+}	// namespace Firebird::Jrd

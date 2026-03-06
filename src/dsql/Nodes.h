@@ -33,7 +33,7 @@
 #include <initializer_list>
 #include <type_traits>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class AggregateSort;
 class CompilerScratch;
@@ -66,10 +66,10 @@ inline constexpr StreamType STREAM_MAP_LENGTH = MAX_STREAMS + 2;
 // New formula is simply MAX_STREAMS / BITS_PER_LONG
 inline constexpr int OPT_STREAM_BITS = MAX_STREAMS / BITS_PER_LONG; // 128 with 4096 streams
 
-typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_STREAMS> StreamList;
-typedef Firebird::SortedArray<StreamType> SortedStreamList;
+typedef HalfStaticArray<StreamType, OPT_STATIC_STREAMS> StreamList;
+typedef SortedArray<StreamType> SortedStreamList;
 
-typedef Firebird::Array<NestConst<ValueExprNode> > NestValueArray;
+typedef Array<NestConst<ValueExprNode> > NestValueArray;
 
 
 class Printable
@@ -82,7 +82,7 @@ public:
 public:
 	void print(NodePrinter& printer) const;
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const = 0;
+	virtual string internalPrint(NodePrinter& printer) const = 0;
 };
 
 
@@ -158,7 +158,7 @@ public:
 		doDsqlPass(dsqlScratch, target, node);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 
 	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
 	{
@@ -187,8 +187,8 @@ public:
 	{
 		if (name == SYSTEM_SCHEMA)
 		{
-			Firebird::status_exception::raise(
-				Firebird::Arg::Gds(isc_dyn_cannot_mod_obj_sys_schema) <<
+			status_exception::raise(
+				Arg::Gds(isc_dyn_cannot_mod_obj_sys_schema) <<
 				getObjectName(objType));
 		}
 	}
@@ -232,11 +232,11 @@ public:
 
 	static void executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction,
 		DdlTriggerWhen when, int action, const QualifiedName& objectName,
-		const QualifiedName& oldNewObjectName, const Firebird::string& sqlText);
+		const QualifiedName& oldNewObjectName, const string& sqlText);
 
 protected:
-	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
-	typedef Firebird::GenericMap<MetaNameBidPair> MetaNameBidMap;
+	typedef Pair<Left<MetaName, bid> > MetaNameBidPair;
+	typedef GenericMap<MetaNameBidPair> MetaNameBidMap;
 
 	// Return exception code based on combination of create and alter clauses.
 	static ISC_STATUS createAlterCode(bool create, bool alter, ISC_STATUS createCode,
@@ -260,14 +260,14 @@ protected:
 		const QualifiedName& oldNewObjectName);
 	void storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedName& name,
 		const TypeClause* field,
-		const Firebird::string& computedSource = "",
+		const string& computedSource = "",
 		const BlrDebugWriter::BlrData& computedValue = BlrDebugWriter::BlrData());
 
 public:
 	// Prefix DDL exceptions. To be implemented in each command.
 	// Attention: do not store temp strings in Arg::StatusVector,
 	// when needed keep them permanently in command's node.
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) = 0;
+	virtual void putErrorPrefix(Arg::StatusVector& statusVector) = 0;
 
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) = 0;
 
@@ -411,7 +411,7 @@ template <typename To, typename From> static bool nodeIs(const NestConst<From>& 
 }
 
 
-class NodeRefsHolder : public Firebird::AutoStorage
+class NodeRefsHolder : public AutoStorage
 {
 public:
 	NodeRefsHolder()
@@ -459,7 +459,7 @@ public:
 	}
 
 public:
-	Firebird::HalfStaticArray<ExprNode**, 8> refs;
+	HalfStaticArray<ExprNode**, 8> refs;
 };
 
 
@@ -582,7 +582,7 @@ public:
 
 	virtual Type getType() const = 0;
 
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 
 	virtual bool dsqlAggregateFinder(AggregateFinder& visitor)
 	{
@@ -792,7 +792,7 @@ public:
 	}
 
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override = 0;
-	virtual Firebird::TriState execute(thread_db* tdbb, Request* request) const = 0;
+	virtual TriState execute(thread_db* tdbb, Request* request) const = 0;
 };
 
 class ValueExprNode : public ExprNode
@@ -804,7 +804,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 
 	Kind getKind() override
 	{
@@ -1050,7 +1050,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 
 	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
 	bool dsqlAggregate2Finder(Aggregate2Finder& visitor) override;
@@ -1185,7 +1185,7 @@ public:
 		stream = value;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 
 	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -1336,7 +1336,7 @@ public:
 		items.clear();
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
@@ -1412,7 +1412,7 @@ public:
 			holder.add(item);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 	RecSourceListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -1441,7 +1441,7 @@ public:
 	}
 
 public:
-	Firebird::Array<NestConst<RecordSourceNode> > items;
+	Array<NestConst<RecordSourceNode> > items;
 };
 
 
@@ -1577,7 +1577,7 @@ public:
 		return KIND_STATEMENT;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 	StmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -1591,9 +1591,9 @@ public:
 	StmtNode* copy(thread_db* /*tdbb*/, NodeCopier& /*copier*/) const override
 	{
 		fb_assert(false);
-		Firebird::status_exception::raise(
-			Firebird::Arg::Gds(isc_cannot_copy_stmt) <<
-			Firebird::Arg::Num(int(getType())));
+		status_exception::raise(
+			Arg::Gds(isc_cannot_copy_stmt) <<
+			Arg::Num(int(getType())));
 
 		return NULL;
 	}
@@ -1667,7 +1667,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 public:
 	NestConst<ValueExprNode> length;
@@ -1678,7 +1678,7 @@ public:
 class GeneratorItem : public Printable
 {
 public:
-	GeneratorItem(Firebird::MemoryPool& pool, const QualifiedName& name)
+	GeneratorItem(MemoryPool& pool, const QualifiedName& name)
 		: id(0), name(pool, name), secName(pool)
 	{}
 
@@ -1691,7 +1691,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 public:
 	SLONG id;
@@ -1699,13 +1699,13 @@ public:
 	QualifiedName secName;
 };
 
-typedef Firebird::Array<StreamType> StreamMap;
+typedef Array<StreamType> StreamMap;
 
 // Copy sub expressions (including subqueries).
 class SubExprNodeCopier : private StreamMap, public NodeCopier
 {
 public:
-	SubExprNodeCopier(Firebird::MemoryPool& pool, CompilerScratch* aCsb)
+	SubExprNodeCopier(MemoryPool& pool, CompilerScratch* aCsb)
 		: NodeCopier(pool, aCsb, getBuffer(STREAM_MAP_LENGTH))
 	{
 		// Initialize the map so all streams initially resolve to the original number.

@@ -33,6 +33,8 @@
 #include "../common/classes/array.h"
 #include "../common/UtilSvc.h"
 
+namespace Firebird::Alice {
+
 enum val_errors {
 	VAL_INVALID_DB_VERSION	= 0,
 
@@ -105,16 +107,16 @@ struct tdr : public pool_alloc<alice_type_tdr>
 {
 	tdr* tdr_next;						// next sub-transaction
 	TraNumber tdr_id;					// database-specific transaction id
-	Firebird::string tdr_fullpath;		// full (possibly) remote pathname
-	Firebird::string tdr_filename;		// filename
-	Firebird::string tdr_host_site;		// host for transaction
-	Firebird::string tdr_remote_site;	// site for remote transaction
+	string tdr_fullpath;		// full (possibly) remote pathname
+	string tdr_filename;		// filename
+	string tdr_host_site;		// host for transaction
+	string tdr_remote_site;	// site for remote transaction
 	FB_API_HANDLE tdr_handle;			// reconnected transaction handle
 	FB_API_HANDLE tdr_db_handle;		// re-attached database handle
 	USHORT tdr_db_caps;					// capabilities of database
 	USHORT tdr_state;					// see flags below
 
-	tdr(Firebird::MemoryPool& p)
+	tdr(MemoryPool& p)
 		: tdr_fullpath(p), tdr_filename(p), tdr_host_site(p), tdr_remote_site(p)
 	{ }
 };
@@ -149,11 +151,11 @@ enum tdr_state_vals {
 
 // Global data
 
-class AliceGlobals : public Firebird::ThreadData
+class AliceGlobals : public ThreadData
 {
 private:
 	MemoryPool* ALICE_default_pool;
-	friend class Firebird::SubsystemContextPoolHolder <AliceGlobals, MemoryPool>;
+	friend class SubsystemContextPoolHolder <AliceGlobals, MemoryPool>;
 
 	void setDefaultPool(MemoryPool* p)
 	{
@@ -161,7 +163,7 @@ private:
 	}
 
 public:
-	AliceGlobals(Firebird::UtilSvc* us)
+	AliceGlobals(UtilSvc* us)
 		: ThreadData(ThreadData::tddALICE),
 		ALICE_default_pool(0),
 		exit_code(FINI_ERROR),	// prevent FINI_OK in case of unknown error thrown
@@ -184,7 +186,7 @@ public:
 	user_action		ALICE_data;
 	ISC_STATUS_ARRAY	status_vector;
 	int				exit_code;
-	Firebird::UtilSvc*	uSvc;
+	UtilSvc*	uSvc;
 	FILE*		output_file;
 	isc_db_handle	db_handle;
 	isc_tr_handle	tr_handle;
@@ -206,7 +208,8 @@ public:
 	}
 };
 
-typedef Firebird::SubsystemContextPoolHolder <AliceGlobals, MemoryPool> AliceContextPoolHolder;
+typedef SubsystemContextPoolHolder <AliceGlobals, MemoryPool> AliceContextPoolHolder;
+
+} // namespace Firebird::Alice
 
 #endif	// ALICE_ALICE_H
-

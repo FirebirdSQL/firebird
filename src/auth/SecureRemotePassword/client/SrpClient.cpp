@@ -30,11 +30,11 @@
 #include "../auth/SecureRemotePassword/srp.h"
 #include "../common/classes/ImplementHelper.h"
 
-using namespace Firebird;
+namespace Firebird::Auth
+{
 
-namespace Auth {
 
-class SrpClient : public StdPlugin<IClientImpl<SrpClient, CheckStatusWrapper> >
+class SrpClient : public StdPlugin<IClientImpl<SrpClient, CheckStatusWrapper>>
 {
 public:
 	explicit SrpClient(IPluginConfig*)
@@ -195,4 +195,5 @@ void registerSrpClient(IPluginManager* iPlugin)
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, RemotePassword::pluginName(512).c_str(), &factory_sha512);
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

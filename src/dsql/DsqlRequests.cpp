@@ -36,8 +36,8 @@
 #include "../dsql/movd_proto.h"
 #include "../jrd/exe_proto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 static void checkD(IStatus* st);
@@ -81,7 +81,7 @@ void DsqlRequest::releaseRequest(thread_db* tdbb)
 		// It seems to me we should destroy owner request here, not a child
 		// statement - as it always was before
 
-		//Jrd::ContextPoolHolder context(tdbb, &childStatement->getPool());
+		//JrdContextPoolHolder context(tdbb, &childStatement->getPool());
 		//releaseStatement(childStatement);
 	}
 
@@ -96,7 +96,7 @@ void DsqlRequest::releaseRequest(thread_db* tdbb)
 		req_batch = nullptr;
 	}
 
-	Jrd::Attachment* att = req_dbb->dbb_attachment;
+	Attachment* att = req_dbb->dbb_attachment;
 	const bool need_trace_free = req_traced && TraceManager::need_dsql_free(att);
 	if (need_trace_free)
 	{
@@ -346,7 +346,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	// if the cursor isn't open, we've got a problem
 	if (dsqlStatement->isCursorBased())
@@ -373,7 +373,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 	}
 
 	// Set up things for tracing this call
-	Jrd::Attachment* att = req_dbb->dbb_attachment;
+	Attachment* att = req_dbb->dbb_attachment;
 	TraceDSQLFetch trace(att, this);
 
 	thread_db::TimerGuard timerGuard(tdbb, req_timer, false);
@@ -427,7 +427,7 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	constexpr size_t MAX_CURSOR_LENGTH = 132 - 1;
 	string cursor = name;
@@ -503,7 +503,7 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 {
 	SET_TDBB(tdbb);
 
-	Jrd::ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	// Validate transaction handle
 
@@ -644,7 +644,7 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	}
 }
 
-DsqlBatch* DsqlDmlRequest::openBatch(thread_db* tdbb, Firebird::IMessageMetadata* inMetadata,
+DsqlBatch* DsqlDmlRequest::openBatch(thread_db* tdbb, IMessageMetadata* inMetadata,
 	unsigned parLength, const UCHAR* par)
 {
 	return DsqlBatch::open(tdbb, this, inMetadata, parLength, par);
@@ -788,7 +788,7 @@ void DsqlDmlRequest::executeReceiveWithRestarts(thread_db* tdbb, jrd_tra** traHa
 	}
 }
 
-void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const dsql_msg* message)
+void DsqlDmlRequest::metadataToFormat(IMessageMetadata* meta, const dsql_msg* message)
 {
 	if (!message)
 	{
@@ -983,7 +983,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 			if (!isInternalRequest && node->mustBeReplicated())
 			{
-				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
+				Replication::REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
 					*getDsqlStatement()->getSchemaSearchPath());
 			}
 		}
@@ -1061,3 +1061,6 @@ static void checkD(IStatus* st)
 	if (st->getState() & IStatus::STATE_ERRORS)
 		ERRD_post(Arg::StatusVector(st));
 }
+
+
+}	// namespace Firebird::Jrd

@@ -45,6 +45,10 @@
 #include <string.h>
 #endif
 
+namespace Firebird::Gpre
+{
+
+
 static void	align (int);
 static void	asgn_from (const act*, ref*, int);
 static void	asgn_to (const act*, ref*, int);
@@ -3635,3 +3639,5 @@ static void t_start_auto(const act* action,
 	endp(column);
 }
 
+
+} // namespace Firebird::Gpre

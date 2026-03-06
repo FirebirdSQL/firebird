@@ -31,7 +31,7 @@
 #ifndef JRD_EXT_PROTO_H
 #define JRD_EXT_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_tra;
 class RecordSource;
@@ -81,7 +81,7 @@ public:
 	void release();
 
 private:
-	Firebird::Mutex	ext_sync;
+	Mutex	ext_sync;
 	USHORT			ext_flags;		// Misc and cruddy flags
 	USHORT			ext_tra_cnt;	// How many transactions used the file
 	FILE*			ext_ifi;		// Internal file identifier
@@ -93,6 +93,6 @@ const USHORT EXT_readonly	= 1;	// File could only be opened for read
 const USHORT EXT_last_read	= 2;	// last operation was read
 const USHORT EXT_last_write	= 4;	// last operation was write
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_EXT_PROTO_H

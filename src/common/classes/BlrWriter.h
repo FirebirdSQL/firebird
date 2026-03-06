@@ -30,10 +30,10 @@
 namespace Firebird {
 
 // BLR/DYN writer.
-class BlrWriter : public Firebird::PermanentStorage
+class BlrWriter : public PermanentStorage
 {
 public:
-	typedef Firebird::HalfStaticArray<UCHAR, 1024> BlrData;
+	typedef HalfStaticArray<UCHAR, 1024> BlrData;
 
 	explicit BlrWriter(MemoryPool& p)
 		: PermanentStorage(p),

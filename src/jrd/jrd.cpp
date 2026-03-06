@@ -143,13 +143,19 @@
 
 #ifdef WIN_NT
 #include <process.h>
+#include <windows.h>
 #define getpid _getpid
+
+// these should stop a most annoying warning
+#undef TEXT
+#define TEXT    SCHAR
 
 #include "../common/dllinst.h"
 #endif
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 constexpr SSHORT WAIT_PERIOD = -1;
 
@@ -157,9 +163,6 @@ constexpr SSHORT WAIT_PERIOD = -1;
 #define unlink PIO_unlink
 #endif
 
-
-namespace Jrd
-{
 
 int JBlob::release()
 {
@@ -344,12 +347,12 @@ JRequest::JRequest(Statement* handle, StableAttachmentPart* sa)
 {
 }
 
-JEvents::JEvents(int aId, StableAttachmentPart* sa, Firebird::IEventCallback* aCallback)
+JEvents::JEvents(int aId, StableAttachmentPart* sa, IEventCallback* aCallback)
 	: id(aId), sAtt(sa), callback(aCallback)
 {
 }
 
-JStatement::JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Firebird::Array<UCHAR>& meta)
+JStatement::JStatement(DsqlRequest* handle, StableAttachmentPart* sa, Array<UCHAR>& meta)
 	: statement(handle), sAtt(sa), metadata(getPool(), this, sAtt)
 {
 	metadata.parse(meta.getCount(), meta.begin());
@@ -466,7 +469,7 @@ public:
 			p->addRef();
 			return p;
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -488,14 +491,6 @@ void registerEngine(IPluginManager* iPlugin)
 
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_PROVIDER, CURRENT_ENGINE, &engineFactory);
 	module->registerMe();
-}
-
-} // namespace Jrd
-
-extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
-{
-	CachedMasterInterface::set(master);
-	registerEngine(PluginManagerInterfacePtr());
 }
 
 namespace
@@ -738,7 +733,7 @@ namespace
 		validateHandle(tdbb, batch->getAttachment());
 	}
 
-	inline void validateHandle(thread_db* tdbb, const Applier* const applier)
+	inline void validateHandle(thread_db* tdbb, const Replication::Applier* const applier)
 	{
 		if (!applier)
 			status_exception::raise(Arg::Gds(isc_bad_repl_handle));
@@ -806,12 +801,12 @@ namespace
 			return 0;
 		}
 
-		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		int getHashLength(CheckStatusWrapper* status) override
 		{
 			return 0;
 		}
 
-		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		void getHashData(CheckStatusWrapper* status, void* h) override
 		{
 			fb_assert(false);
 		}
@@ -869,14 +864,14 @@ AttachmentHolder::AttachmentHolder(thread_db* tdbb, StableAttachmentPart* sa, un
 				attachment->setupIdleTimer(true);
 			}
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			if (!nolock)
 				sAtt->getSync(async)->leave();
 			throw;
 		}
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		if (blocking)
 			sAtt->getBlockingMutex()->leave();
@@ -919,14 +914,6 @@ EngineContextHolder::EngineContextHolder(CheckStatusWrapper* status, I* interfac
 // Used in ProfilerManager.cpp
 template EngineContextHolder::EngineContextHolder(
 	CheckStatusWrapper* status, JAttachment* interfacePtr, const char* from, unsigned lockFlags);
-
-
-#ifdef  WIN_NT
-#include <windows.h>
-// these should stop a most annoying warning
-#undef TEXT
-#define TEXT    SCHAR
-#endif	// WIN_NT
 
 
 namespace
@@ -986,8 +973,6 @@ namespace
 }
 
 
-namespace Jrd
-{
 	// Option block for database parameter block
 
 	class DatabaseOptions
@@ -1069,8 +1054,8 @@ namespace Jrd
 		string	dpb_decfloat_round;
 		string	dpb_decfloat_traps;
 		string	dpb_owner;
-		Firebird::ObjectsArray<Firebird::MetaString> dpb_schema_search_path;
-		Firebird::ObjectsArray<Firebird::MetaString> dpb_blr_request_schema_search_path;
+		ObjectsArray<MetaString> dpb_schema_search_path;
+		ObjectsArray<MetaString> dpb_blr_request_schema_search_path;
 
 	public:
 		static constexpr ULONG DPB_FLAGS_MASK = DBB_damaged;
@@ -1258,7 +1243,7 @@ namespace Jrd
 		attachment->att_schema_search_path = schemaSearchPath;
 		attachment->att_blr_request_schema_search_path = blrRequestSchemaSearchPath;
 	}
-}	// namespace Jrd
+
 
 /// trace manager support
 
@@ -1416,7 +1401,7 @@ static ISC_STATUS transliterateException(thread_db* tdbb, const Exception& ex, F
 
 
 // Transliterate status vector to the client charset.
-void JRD_transliterate(thread_db* tdbb, Firebird::IStatus* vector) noexcept
+void JRD_transliterate(thread_db* tdbb, IStatus* vector) noexcept
 {
 	const Jrd::Attachment* attachment = tdbb->getAttachment();
 	CSetId charSet;
@@ -1556,8 +1541,6 @@ static void trace_failed_attach(const char* filename, const DatabaseOptions& opt
 		tempMgr.event_error(&conn, &traceStatus, func);
 }
 
-
-namespace Jrd {
 
 JTransaction* JAttachment::getTransactionInterface(CheckStatusWrapper* status, ITransaction* tra)
 {
@@ -2206,7 +2189,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 			CCH_release_exclusive(tdbb);
 
-			REPL_attach(tdbb, cleanupTransactions);
+			Replication::REPL_attach(tdbb, cleanupTransactions);
 
 			attachment->att_trace_manager->activate();
 			if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
@@ -2808,7 +2791,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 		DatabaseOptions options;
 		PathName org_filename, expanded_name;
 		bool is_alias = false;
-		Firebird::RefPtr<const Config> config;
+		RefPtr<const Config> config;
 		Mapping mapping(Mapping::MAP_THROW_NOT_FOUND, cryptCallback);
 		LateRefGuard lateBlocking(FB_FUNCTION);
 
@@ -3044,7 +3027,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 				{
 					allow_overwrite = attachment2->getHandle()->locksmith(tdbb, DROP_DATABASE);
 					if (allow_overwrite)
-						REPL_journal_cleanup(attachment2->getHandle()->att_database);
+						Replication::REPL_journal_cleanup(attachment2->getHandle()->att_database);
 					attachment2->detach(user_status);
 				}
 				else
@@ -3222,7 +3205,7 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			dbb->dbb_flags &= ~(DBB_new | DBB_creating);
 			guardDbInit.leave();
 
-			REPL_attach(tdbb, false);
+			Replication::REPL_attach(tdbb, false);
 
 			// Report that we created attachment to Trace API
 			attachment->att_trace_manager->activate();
@@ -3540,7 +3523,7 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			}
 
 			// Unlink active replication segments
-			REPL_journal_cleanup(dbb);
+			Replication::REPL_journal_cleanup(dbb);
 
 			// Unlink attachment from database
 			release_attachment(tdbb, attachment, &threadGuard);
@@ -4819,7 +4802,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			try
 			{
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				CompilerScratch* csb = PAR_parse(tdbb, blr, blr_length, false);
 
@@ -4917,7 +4900,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 	successful_completion(user_status);
 }
 
-unsigned int JAttachment::getIdleTimeout(Firebird::CheckStatusWrapper* user_status)
+unsigned int JAttachment::getIdleTimeout(CheckStatusWrapper* user_status)
 {
 	unsigned int result = 0;
 	try
@@ -4937,7 +4920,7 @@ unsigned int JAttachment::getIdleTimeout(Firebird::CheckStatusWrapper* user_stat
 	return result;
 }
 
-void JAttachment::setIdleTimeout(Firebird::CheckStatusWrapper* user_status, unsigned int timeOut)
+void JAttachment::setIdleTimeout(CheckStatusWrapper* user_status, unsigned int timeOut)
 {
 	try
 	{
@@ -4955,7 +4938,7 @@ void JAttachment::setIdleTimeout(Firebird::CheckStatusWrapper* user_status, unsi
 	successful_completion(user_status);
 }
 
-unsigned int JAttachment::getStatementTimeout(Firebird::CheckStatusWrapper* user_status)
+unsigned int JAttachment::getStatementTimeout(CheckStatusWrapper* user_status)
 {
 	unsigned int result = 0;
 	try
@@ -4975,7 +4958,7 @@ unsigned int JAttachment::getStatementTimeout(Firebird::CheckStatusWrapper* user
 	return result;
 }
 
-void JAttachment::setStatementTimeout(Firebird::CheckStatusWrapper* user_status, unsigned int timeOut)
+void JAttachment::setStatementTimeout(CheckStatusWrapper* user_status, unsigned int timeOut)
 {
 	try
 	{
@@ -5330,7 +5313,7 @@ IReplicator* JAttachment::createReplicator(CheckStatusWrapper* user_status)
 
 		try
 		{
-			const auto applier = Applier::create(tdbb);
+			const auto applier = Replication::Applier::create(tdbb);
 
 			jr = FB_NEW JReplicator(applier, getStable());
 			jr->addRef();
@@ -5996,7 +5979,7 @@ void JStatement::setCursorName(CheckStatusWrapper* user_status, const char* curs
 }
 
 
-void JResultSet::setDelayedOutputFormat(CheckStatusWrapper* user_status, Firebird::IMessageMetadata* outMetadata)
+void JResultSet::setDelayedOutputFormat(CheckStatusWrapper* user_status, IMessageMetadata* outMetadata)
 {
 	try
 	{
@@ -6115,7 +6098,7 @@ void JStatement::setTimeout(CheckStatusWrapper* user_status, unsigned int timeOu
 }
 
 
-JBatch* JStatement::createBatch(Firebird::CheckStatusWrapper* status, Firebird::IMessageMetadata* inMetadata,
+JBatch* JStatement::createBatch(CheckStatusWrapper* status, IMessageMetadata* inMetadata,
 	unsigned parLength, const unsigned char* par)
 {
 	JBatch* batch = NULL;
@@ -6219,7 +6202,7 @@ void JBatch::close(CheckStatusWrapper* user_status)
 }
 
 
-void JBatch::freeEngineData(Firebird::CheckStatusWrapper* user_status)
+void JBatch::freeEngineData(CheckStatusWrapper* user_status)
 {
 	try
 	{
@@ -6574,9 +6557,7 @@ void JBatch::getInfo(CheckStatusWrapper* user_status,
 }
 
 
-
-
-JReplicator::JReplicator(Applier* appl, StableAttachmentPart* sa)
+JReplicator::JReplicator(Replication::Applier* appl, StableAttachmentPart* sa)
 	: applier(appl), sAtt(sa)
 { }
 
@@ -6600,7 +6581,7 @@ int JReplicator::release()
 }
 
 
-void JReplicator::freeEngineData(Firebird::CheckStatusWrapper* user_status)
+void JReplicator::freeEngineData(CheckStatusWrapper* user_status)
 {
 	try
 	{
@@ -6697,7 +6678,6 @@ void JAttachment::ping(CheckStatusWrapper* user_status)
 	successful_completion(user_status);
 }
 
-} // namespace Jrd
 
 #ifdef DEBUG_PROCS
 void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)
@@ -6715,7 +6695,7 @@ void JRD_print_procedure_info(thread_db* tdbb, const char* mesg)
  ******************************************************/
 	TEXT fname[MAXPATHLEN];
 
-	Firebird::string fname = fb_utils::getPrefix(IConfigManager::DIR_LOG, "proc_info.log");
+	string fname = fb_utils::getPrefix(IConfigManager::DIR_LOG, "proc_info.log");
 	FILE* fptr = os_utils::fopen(fname.c_str(), "a+");
 	if (!fptr)
 	{
@@ -7608,7 +7588,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 	} // end scope
 
 	// provide context pool for the rest stuff
-	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+	JrdContextPoolHolder context(tdbb, dbb->dbb_permanent);
 
 	// set a garbage collection policy
 
@@ -9200,7 +9180,7 @@ bool TimeoutTimer::getExpireTimestamp(const ISC_TIMESTAMP_TZ start, ISC_TIMESTAM
 void TimeoutTimer::start()
 {
 	FbLocalStatus s;
-	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
+	ITimerControl* timerCtrl = TimerInterfacePtr();
 
 	m_expired = false;
 
@@ -9229,7 +9209,7 @@ void TimeoutTimer::stop()
 		m_started = 0;
 
 		FbLocalStatus s;
-		ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
+		ITimerControl* timerCtrl = TimerInterfacePtr();
 		timerCtrl->stop(&s, this);
 	}
 }
@@ -9957,3 +9937,14 @@ void JRD_cancel_operation(thread_db* /*tdbb*/, Jrd::Attachment* attachment, int 
 	}
 }
 
+
+} // namespace Firebird::Jrd
+
+
+using namespace Firebird;
+
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
+{
+	CachedMasterInterface::set(master);
+	Jrd::registerEngine(PluginManagerInterfacePtr());
+}

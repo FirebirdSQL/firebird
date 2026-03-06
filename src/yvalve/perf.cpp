@@ -337,15 +337,20 @@ constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 
 } // anonymous namespace
 
-void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
-	Firebird::IAttachment* att, const char* countersSet, ISC_INT64* counters)
+
+namespace Firebird::Why
+{
+
+
+void UtilInterface::getPerfCounters(CheckStatusWrapper* status,
+	IAttachment* att, const char* countersSet, ISC_INT64* counters)
 {
 	try
 	{
 		// Parse countersSet
 		unsigned cntLink[TOTAL_COUNTERS];
 		memset(cntLink, 0xFF, sizeof cntLink);
-		Firebird::string dupSet(countersSet);
+		string dupSet(countersSet);
 		char* set = dupSet.begin();
 		char* save = NULL;
 		constexpr const char* delim = " \t,;";
@@ -362,14 +367,14 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 
 		for (char* nm = strtok_r(set, delim, &save); nm; nm = strtok_r(NULL, delim, &save))
 		{
-			Firebird::NoCaseString name(nm);
+			NoCaseString name(nm);
 
 			for (unsigned i = 0; i < TOTAL_COUNTERS; ++i)
 			{
 				if (name == knownCounters[i].name)
 				{
 					if (cntLink[i] != ~0u)
-						(Firebird::Arg::Gds(isc_random) << "Duplicated name").raise();	//report name & position
+						(Arg::Gds(isc_random) << "Duplicated name").raise();	//report name & position
 
 					cntLink[i] = n++;
 					typeMask |= knownCounters[i].type;
@@ -387,7 +392,7 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 					goto found;
 				}
 			}
-			(Firebird::Arg::Gds(isc_random) << "Unknown name").raise();	//report name & position
+			(Arg::Gds(isc_random) << "Unknown name").raise();	//report name & position
 found:		;
 		}
 
@@ -440,7 +445,7 @@ found:		;
 		{
 			UCHAR buffer[BUFFER_LARGE];
 			att->getInfo(status, pinfo - info, info, sizeof(buffer), buffer);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				return;
 
 			const UCHAR* p = buffer;
@@ -479,7 +484,7 @@ found:		;
 				}
 
 				default:
-					(Firebird::Arg::Gds(isc_random) << "Unknown info code").raise();   //report char code
+					(Arg::Gds(isc_random) << "Unknown info code").raise();   //report char code
 				}
 
 				for (unsigned i = 0; i < TOTAL_COUNTERS; ++i)
@@ -496,8 +501,11 @@ found:		;
 parsed:		;
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
 }
+
+
+} // namespace Firebird::Why

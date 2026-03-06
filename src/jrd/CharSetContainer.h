@@ -44,11 +44,13 @@ class CsConvert;
 }
 
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 struct SubtypeInfo;
 
-class CharSetContainer : public Firebird::PermanentStorage
+class CharSetContainer : public PermanentStorage
 {
 public:
 	CharSetContainer(thread_db* tdbb, MemoryPool& p, MetaId cs_id, NoData);
@@ -57,12 +59,12 @@ public:
 	static CharSetContainer* create(thread_db* tdbb, MetaId id);
 	void releaseLock(thread_db*) { }
 
-	Firebird::CharSet* getCharSet()
+	CharSet* getCharSet()
 	{
 		return cs;
 	}
 
-	Firebird::CsConvert lookupConverter(thread_db* tdbb, CSetId to_cs);
+	CsConvert lookupConverter(thread_db* tdbb, CSetId to_cs);
 
 	static CharSetContainer* lookupCharset(thread_db* tdbb, TTypeId ttype);
 
@@ -86,7 +88,7 @@ public:
 	CharsetVariants names;
 
 private:
-	Firebird::CharSet* cs;
+	CharSet* cs;
 	Lock* cs_lock;
 };
 
@@ -133,14 +135,14 @@ public:
 
 	static int objectType();
 
-	bool hash(thread_db*, Firebird::sha512&)
+	bool hash(thread_db*, sha512&)
 	{
 		return true;
 	}
 
 private:
 	Cached::CharSet* perm;
-	Firebird::HalfStaticArray<Collation*, 16> charset_collations;
+	HalfStaticArray<Collation*, 16> charset_collations;
 
 public:
 	decltype(perm) getPermanent() const
@@ -149,7 +151,8 @@ public:
 	}
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_CHARSETCONTAINER_H
 

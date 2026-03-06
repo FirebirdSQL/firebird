@@ -34,9 +34,11 @@
 #include "../common/classes/array.h"
 #include "../common/StatusHolder.h"
 
-namespace Why {
+namespace Firebird::Why
+{
 
-class DtcStart : public Firebird::DisposeIface<Firebird::IDtcStartImpl<DtcStart, Firebird::CheckStatusWrapper> >
+
+class DtcStart : public DisposeIface<IDtcStartImpl<DtcStart, CheckStatusWrapper> >
 {
 public:
 	DtcStart()
@@ -45,41 +47,42 @@ public:
 
 	struct Component
 	{
-		Firebird::IAttachment* att;
+		IAttachment* att;
 		unsigned tpbLen;
 		const unsigned char* tpb;
 	};
 
-	unsigned getCount(Firebird::CheckStatusWrapper*)
+	unsigned getCount(CheckStatusWrapper*)
 	{
 		return components.getCount();
 	}
 
-	const Component* getEntry(Firebird::CheckStatusWrapper* status, unsigned pos)
+	const Component* getEntry(CheckStatusWrapper* status, unsigned pos)
 	{
 		return &components[pos];
 	}
 
 	// IDtcStart implementation
-	void addAttachment(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att) override;
-	void addWithTpb(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
+	void addAttachment(CheckStatusWrapper* status, IAttachment* att) override;
+	void addWithTpb(CheckStatusWrapper* status, IAttachment* att,
 		unsigned length, const unsigned char* tpb) override;
-	YTransaction* start(Firebird::CheckStatusWrapper* status) override;
+	YTransaction* start(CheckStatusWrapper* status) override;
 	void dispose() override;
 
 private:
-	Firebird::HalfStaticArray<Component, 16> components;
+	HalfStaticArray<Component, 16> components;
 };
 
-class Dtc : public Firebird::AutoIface<Firebird::IDtcImpl<Dtc, Firebird::CheckStatusWrapper> >
+class Dtc : public AutoIface<IDtcImpl<Dtc, CheckStatusWrapper> >
 {
 public:
 	// IDtc implementation
-	YTransaction* join(Firebird::CheckStatusWrapper* status,
-		Firebird::ITransaction* one, Firebird::ITransaction* two);
-	DtcStart* startBuilder(Firebird::CheckStatusWrapper* status);
+	YTransaction* join(CheckStatusWrapper* status,
+		ITransaction* one, ITransaction* two);
+	DtcStart* startBuilder(CheckStatusWrapper* status);
 };
 
-} // namespace Why
+
+} // namespace Firebird::Why
 
 #endif // YVALVE_DISTRIBUTED_TRANSACTION_H

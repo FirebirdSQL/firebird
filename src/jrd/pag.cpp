@@ -96,9 +96,9 @@
 #include "../common/classes/DbImplementation.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -116,7 +116,7 @@ namespace
 	class HeaderClumplet
 	{
 	public:
-		HeaderClumplet(header_page* header, USHORT type) noexcept
+		HeaderClumplet(Ods::header_page* header, USHORT type) noexcept
 			: m_header(header), m_type(type)
 		{}
 
@@ -125,7 +125,7 @@ namespace
 			UCHAR* p = m_header->hdr_data;
 			UCHAR* q = nullptr;
 
-			for (; *p != HDR_end; p += 2 + p[1])
+			for (; *p != Ods::HDR_end; p += 2 + p[1])
 			{
 				if (*p == m_type)
 					q = p;
@@ -150,7 +150,7 @@ namespace
 		void add(USHORT length, const UCHAR* entry, bool first = false) const
 		{
 			UCHAR* p = (UCHAR*) m_header + m_header->hdr_end;
-			fb_assert(*p == HDR_end);
+			fb_assert(*p == Ods::HDR_end);
 
 			if (first)
 			{
@@ -175,7 +175,7 @@ namespace
 			}
 
 			if (!first)
-				*p = HDR_end;
+				*p = Ods::HDR_end;
 
 			m_header->hdr_end += length + 2;
 		}
@@ -186,7 +186,7 @@ namespace
 
 			const USHORT orgLen = entry[1] + 2;
 			const UCHAR* const tail = entry + orgLen;
-			const USHORT shift = end - tail + 1; // to preserve HDR_end
+			const USHORT shift = end - tail + 1; // to preserve Ods::HDR_end
 			memmove(entry, tail, shift);
 
 			m_header->hdr_end -= orgLen;
@@ -205,7 +205,7 @@ namespace
 		}
 
 	private:
-		header_page* const m_header;
+		Ods::header_page* const m_header;
 		const USHORT m_type;
 	};
 
@@ -218,8 +218,8 @@ namespace
 		ensureDbWritable(tdbb);
 
 		WIN window(HEADER_PAGE_NUMBER);
-		pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
-		header_page* header = (header_page*) page;
+		Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		Ods::header_page* header = (Ods::header_page*) page;
 
 		const HeaderClumplet clump(header, type);
 
@@ -358,7 +358,7 @@ namespace
 } // namespace
 
 
-void PAG_add_header_entry(thread_db* tdbb, header_page* header,
+void PAG_add_header_entry(thread_db* tdbb, Ods::header_page* header,
 						  USHORT type, USHORT len, const UCHAR* entry)
 {
 /***********************************************
@@ -388,7 +388,7 @@ void PAG_add_header_entry(thread_db* tdbb, header_page* header,
 }
 
 
-bool PAG_replace_entry_first(thread_db* tdbb, header_page* header,
+bool PAG_replace_entry_first(thread_db* tdbb, Ods::header_page* header,
 							 USHORT type, USHORT len, const UCHAR* entry)
 {
 /***********************************************
@@ -427,7 +427,7 @@ bool PAG_replace_entry_first(thread_db* tdbb, header_page* header,
 }
 
 
-PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool aligned)
+Ods::PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool aligned)
 {
 /**************************************
  *
@@ -449,7 +449,7 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 	PageSpace* const pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
 	fb_assert(pageSpace);
 
-	PAG new_page = NULL;
+	Ods::PAG new_page = NULL;
 
 	// Find an allocation page with something on it
 
@@ -459,7 +459,7 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 		WIN pip_window(pageSpace->pageSpaceID,
 			(sequence == 0) ? pageSpace->pipFirst : sequence * dbb->dbb_page_manager.pagesPerPIP - 1);
 
-		page_inv_page* pip_page = (page_inv_page*) CCH_FETCH(tdbb, &pip_window, LCK_write, pag_pages);
+		Ods::page_inv_page* pip_page = (Ods::page_inv_page*) CCH_FETCH(tdbb, &pip_window, LCK_write, pag_pages);
 
 		ULONG firstBit = MAX_ULONG, lastBit = MAX_ULONG;
 
@@ -512,18 +512,18 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 					if (lastBit + 1 > pipUsed)
 						pipUsed = ensureDiskSpace(tdbb, &pip_window, window->win_page, pipUsed);
 
-					pag* new_page = CCH_fake(tdbb, window, 1);
+					Ods::pag* new_page = CCH_fake(tdbb, window, 1);
 
 					if (newSCN)
 					{
-						scns_page* new_scns_page = (scns_page*) new_page;
+						Ods::scns_page* new_scns_page = (Ods::scns_page*) new_page;
 						new_scns_page->scn_header.pag_type = pag_scns;
 						new_scns_page->scn_sequence = pageNum / pageMgr.pagesPerSCN;
 					}
 
 					if (newPIP)
 					{
-						page_inv_page* new_pip_page = (page_inv_page*) new_page;
+						Ods::page_inv_page* new_pip_page = (Ods::page_inv_page*) new_page;
 						new_pip_page->pip_header.pag_type = pag_pages;
 						const UCHAR* end = (UCHAR*) new_pip_page + dbb->dbb_page_size;
 						memset(new_pip_page->pip_bits, 0xff, end - new_pip_page->pip_bits);
@@ -718,7 +718,7 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 	else
 	{
 		WIN window(HEADER_PAGE_NUMBER);
-		header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 		CCH_MARK(tdbb, &window);
 
@@ -750,8 +750,8 @@ bool PAG_delete_clump_entry(thread_db* tdbb, USHORT type)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
-	header_page* header = (header_page*) page;
+	Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) page;
 
 	const HeaderClumplet clump(header, type);
 
@@ -788,7 +788,7 @@ void PAG_format_header(thread_db* tdbb)
 	// Initialize header page
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_fake(tdbb, &window, 1);
+	Ods::header_page* header = (Ods::header_page*) CCH_fake(tdbb, &window, 1);
 	header->hdr_header.pag_type = pag_header;
 	header->hdr_header.pag_scn = 0;
 	Guid::generate().copyTo(header->hdr_guid);
@@ -801,13 +801,13 @@ void PAG_format_header(thread_db* tdbb)
 	header->hdr_ods_minor = ODS_CURRENT;
 	header->hdr_oldest_transaction = 1;
 	header->hdr_end = HDR_SIZE;
-	header->hdr_data[0] = HDR_end;
+	header->hdr_data[0] = Ods::HDR_end;
 
 	if (dbb->dbb_flags & DBB_DB_SQL_dialect_3)
-		header->hdr_flags |= hdr_SQL_dialect_3;
+		header->hdr_flags |= Ods::hdr_SQL_dialect_3;
 
 	if (dbb->dbb_flags & DBB_force_write)
-		header->hdr_flags |= hdr_force_write;
+		header->hdr_flags |= Ods::hdr_force_write;
 
 	dbb->dbb_ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 	dbb->dbb_minor_version = header->hdr_ods_minor;
@@ -842,7 +842,7 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
 		pageSpace.scnFirst = FIRST_SCN_PAGE;
 
 		WIN window(pageSpace.pageSpaceID, pageSpace.scnFirst);
-		scns_page* page = (scns_page*) CCH_fake(tdbb, &window, 1);
+		Ods::scns_page* page = (Ods::scns_page*) CCH_fake(tdbb, &window, 1);
 
 		page->scn_header.pag_type = pag_scns;
 		page->scn_sequence = 0;
@@ -855,12 +855,12 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
 		pageSpace.pipFirst = FIRST_PIP_PAGE;
 
 		WIN window(pageSpace.pageSpaceID, pageSpace.pipFirst);
-		page_inv_page* pages = (page_inv_page*) CCH_fake(tdbb, &window, 1);
+		Ods::page_inv_page* pages = (Ods::page_inv_page*) CCH_fake(tdbb, &window, 1);
 
 		pages->pip_header.pag_type = pag_pages;
 		pages->pip_used = (pageSpace.scnFirst ? pageSpace.scnFirst : pageSpace.pipFirst) + 1;
 		pages->pip_min = pages->pip_used;
-		const int count = dbb->dbb_page_size - static_cast<int>(offsetof(page_inv_page, pip_bits[0]));
+		const int count = dbb->dbb_page_size - static_cast<int>(offsetof(Ods::page_inv_page, pip_bits[0]));
 
 		memset(pages->pip_bits, 0xFF, count);
 
@@ -893,8 +893,8 @@ bool PAG_get_clump(thread_db* tdbb, USHORT type, USHORT* inout_len, UCHAR* entry
 	SET_TDBB(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-	header_page* header = (header_page*) page;
+	Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	Ods::header_page* header = (Ods::header_page*) page;
 
 	const HeaderClumplet clump(header, type);
 
@@ -942,8 +942,8 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	fb_assert(attachment);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
-	header_page* header = (header_page*) page;
+	Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	Ods::header_page* header = (Ods::header_page*) page;
 
 	try {
 
@@ -961,7 +961,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 			BUGCHECK(267);		// next transaction older than oldest transaction
 	}
 
-	if (header->hdr_flags & hdr_SQL_dialect_3)
+	if (header->hdr_flags & Ods::hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
 	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, 0u, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
@@ -990,7 +990,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	dbb->dbb_creation_date.utc_timestamp = *(ISC_TIMESTAMP*) header->hdr_creation_date;
 	dbb->dbb_creation_date.time_zone = TimeZoneUtil::GMT_ZONE;
 
-	const bool readOnly = header->hdr_flags & hdr_read_only;
+	const bool readOnly = header->hdr_flags & Ods::hdr_read_only;
 
 	if (readOnly)
 	{
@@ -999,7 +999,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 		dbb->dbb_flags |= DBB_read_only;
 	}
 
-	// If hdr_read_only is not set...
+	// If Ods::hdr_read_only is not set...
 	if (!readOnly && (dbb->dbb_flags & DBB_being_opened_read_only))
 	{
 		// Looks like the Header page says, it is NOT ReadOnly!! But the database
@@ -1012,7 +1012,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 
 	// Determine the actual FW mode to be used. Use the setting stored on the header page
 	// unless something different is explicitly specified in DPB.
-	const bool currentForceWrite = (header->hdr_flags & hdr_force_write) != 0;
+	const bool currentForceWrite = (header->hdr_flags & Ods::hdr_force_write) != 0;
 	const bool forceWrite = newForceWrite.valueOr(currentForceWrite);
 
 	// Adjust the flag inside the database block
@@ -1028,7 +1028,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (dbb->dbb_backup_manager->getState() != Ods::hdr_nbak_normal)
 		dbb->dbb_backup_manager->setForcedWrites(forceWrite);
 
-	if (header->hdr_flags & hdr_no_reserve)
+	if (header->hdr_flags & Ods::hdr_no_reserve)
 		dbb->dbb_flags |= DBB_no_reserve;
 
 	const auto shutMode = (shut_mode_t) header->hdr_shutdown_mode;
@@ -1045,16 +1045,16 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 		// refetch some data from the header, because it could be changed in the delta file
 		// (as initially PAG_init2 reads the header from the main file and these values
 		// may be outdated there)
-		for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2u + p[1])
+		for (const UCHAR* p = header->hdr_data; *p != Ods::HDR_end; p += 2u + p[1])
 		{
 			switch (*p)
 			{
-			case HDR_sweep_interval:
+			case Ods::HDR_sweep_interval:
 				fb_assert(p[1] == sizeof(SLONG));
 				memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
 				break;
 
-			case HDR_repl_seq:
+			case Ods::HDR_repl_seq:
 				fb_assert(p[1] == sizeof(FB_UINT64));
 				memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
 				break;
@@ -1113,7 +1113,7 @@ void PAG_header_init(thread_db* tdbb)
 	if (!PIO_header(tdbb, temp_page, headerSize))
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
-	const auto* header = (header_page*) temp_page;
+	const auto* header = (Ods::header_page*) temp_page;
 
 	if (header->hdr_header.pag_type != pag_header || header->hdr_header.pag_pageno != HEADER_PAGE)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
@@ -1231,18 +1231,18 @@ void PAG_init2(thread_db* tdbb)
 	const auto dbb = tdbb->getDatabase();
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const auto* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const auto* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 
-	for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2 + p[1])
+	for (const UCHAR* p = header->hdr_data; *p != Ods::HDR_end; p += 2 + p[1])
 	{
 		switch (*p)
 		{
-		case HDR_sweep_interval:
+		case Ods::HDR_sweep_interval:
 			fb_assert(p[1] == sizeof(SLONG));
 			memcpy(&dbb->dbb_sweep_interval, p + 2, sizeof(SLONG));
 			break;
 
-		case HDR_repl_seq:
+		case Ods::HDR_repl_seq:
 			fb_assert(p[1] == sizeof(FB_UINT64));
 			memcpy(&dbb->dbb_repl_sequence, p + 2, sizeof(FB_UINT64));
 			break;
@@ -1324,7 +1324,7 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 	fb_assert(pageSpace);
 
 	WIN pip_window(pageSpaceID, -1);
-	page_inv_page* pages = NULL;
+	Ods::page_inv_page* pages = NULL;
 	ULONG sequence = 0;
 
 #ifdef VIO_DEBUG
@@ -1359,7 +1359,7 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
 			pip_window.win_page = (sequence == 0) ?
 				pageSpace->pipFirst : sequence * pageMgr.pagesPerPIP - 1;
 
-			pages = (page_inv_page*) CCH_FETCH(tdbb, &pip_window, LCK_write, pag_pages);
+			pages = (Ods::page_inv_page*) CCH_FETCH(tdbb, &pip_window, LCK_write, pag_pages);
 			CCH_precedence(tdbb, &pip_window, prior_page);
 			CCH_MARK(tdbb, &pip_window);
 		}
@@ -1409,7 +1409,7 @@ void PAG_set_db_guid(thread_db* tdbb, const Guid& guid)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 
 	const auto dbb = tdbb->getDatabase();
@@ -1437,19 +1437,19 @@ void PAG_set_force_write(thread_db* tdbb, bool flag)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 
 	const auto dbb = tdbb->getDatabase();
 
 	if (flag)
 	{
-		header->hdr_flags |= hdr_force_write;
+		header->hdr_flags |= Ods::hdr_force_write;
 		dbb->dbb_flags |= DBB_force_write;
 	}
 	else
 	{
-		header->hdr_flags &= ~hdr_force_write;
+		header->hdr_flags &= ~Ods::hdr_force_write;
 		dbb->dbb_flags &= ~DBB_force_write;
 	}
 
@@ -1482,19 +1482,19 @@ void PAG_set_no_reserve(thread_db* tdbb, bool flag)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 
 	const auto dbb = tdbb->getDatabase();
 
 	if (flag)
 	{
-		header->hdr_flags |= hdr_no_reserve;
+		header->hdr_flags |= Ods::hdr_no_reserve;
 		dbb->dbb_flags |= DBB_no_reserve;
 	}
 	else
 	{
-		header->hdr_flags &= ~hdr_no_reserve;
+		header->hdr_flags &= ~Ods::hdr_no_reserve;
 		dbb->dbb_flags &= ~DBB_no_reserve;
 	}
 
@@ -1518,7 +1518,7 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 	const auto dbb = tdbb->getDatabase();
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	if (!flag)
 	{
@@ -1526,7 +1526,7 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 		// in-memory Database flag which indicates that the database is RO.
 		// This will allow the CCH subsystem to allow pages to be MARK'ed
 		// for WRITE operations
-		header->hdr_flags &= ~hdr_read_only;
+		header->hdr_flags &= ~Ods::hdr_read_only;
 		dbb->dbb_flags &= ~DBB_read_only;
 
 		// Take into account current attachment ID, else next attachment
@@ -1549,7 +1549,7 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 
 	if (flag)
 	{
-		header->hdr_flags |= hdr_read_only;
+		header->hdr_flags |= Ods::hdr_read_only;
 		dbb->dbb_flags |= DBB_read_only;
 	}
 
@@ -1573,7 +1573,7 @@ void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 
@@ -1582,15 +1582,15 @@ void PAG_set_db_replica(thread_db* tdbb, ReplicaMode mode)
 	switch (mode)
 	{
 	case REPLICA_NONE:
-		header->hdr_replica_mode = hdr_replica_none;
+		header->hdr_replica_mode = Ods::hdr_replica_none;
 		break;
 
 	case REPLICA_READ_ONLY:
-		header->hdr_replica_mode = hdr_replica_read_only;
+		header->hdr_replica_mode = Ods::hdr_replica_read_only;
 		break;
 
 	case REPLICA_READ_WRITE:
-		header->hdr_replica_mode = hdr_replica_read_write;
+		header->hdr_replica_mode = Ods::hdr_replica_read_write;
 		break;
 
 	default:
@@ -1619,7 +1619,7 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	const auto dbb = tdbb->getDatabase();
 
@@ -1629,19 +1629,19 @@ void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT flag)
 		{
 		case SQL_DIALECT_V5:
 
-			if ((dbb->dbb_flags & DBB_DB_SQL_dialect_3) || (header->hdr_flags & hdr_SQL_dialect_3))
+			if ((dbb->dbb_flags & DBB_DB_SQL_dialect_3) || (header->hdr_flags & Ods::hdr_SQL_dialect_3))
 			{
 				// Check the returned value here!
 				ERR_post_warning(Arg::Warning(isc_dialect_reset_warning));
 			}
 
 			dbb->dbb_flags &= ~DBB_DB_SQL_dialect_3;	// set to 0
-			header->hdr_flags &= ~hdr_SQL_dialect_3;	// set to 0
+			header->hdr_flags &= ~Ods::hdr_SQL_dialect_3;	// set to 0
 			break;
 
 		case SQL_DIALECT_V6:
 			dbb->dbb_flags |= DBB_DB_SQL_dialect_3;	// set to dialect 3
-			header->hdr_flags |= hdr_SQL_dialect_3;	// set to dialect 3
+			header->hdr_flags |= Ods::hdr_SQL_dialect_3;	// set to dialect 3
 			break;
 
 		default:
@@ -1675,7 +1675,7 @@ void PAG_set_page_buffers(thread_db* tdbb, ULONG buffers)
 	ensureDbWritable(tdbb);
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 	header->hdr_page_buffers = buffers;
 	CCH_RELEASE(tdbb, &window);
@@ -1695,7 +1695,7 @@ void PAG_set_repl_sequence(thread_db* tdbb, FB_UINT64 sequence)
  *
  **************************************/
  	SET_TDBB(tdbb);
-	storeClump(tdbb, HDR_repl_seq, sizeof(FB_UINT64), (UCHAR*) &sequence);
+	storeClump(tdbb, Ods::HDR_repl_seq, sizeof(FB_UINT64), (UCHAR*) &sequence);
 }
 
 
@@ -1712,7 +1712,7 @@ void PAG_set_sweep_interval(thread_db* tdbb, SLONG interval)
  *
  **************************************/
  	SET_TDBB(tdbb);
-	storeClump(tdbb, HDR_sweep_interval, sizeof(SLONG), (UCHAR*) &interval);
+	storeClump(tdbb, Ods::HDR_sweep_interval, sizeof(SLONG), (UCHAR*) &interval);
 }
 
 
@@ -1793,13 +1793,13 @@ ULONG PageSpace::lastUsedPage()
 
 	while (true)
 	{
-		const pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+		const Ods::pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
 
 		if (moveUp)
 		{
 			fb_assert(page->pag_type == pag_pages);
 
-			const page_inv_page* pip = (page_inv_page*) page;
+			const Ods::page_inv_page* pip = (Ods::page_inv_page*) page;
 
 			if (pip->pip_used != pageMgr.pagesPerPIP)
 				break;
@@ -1833,7 +1833,7 @@ ULONG PageSpace::lastUsedPage()
 		window.win_page = pipLast;
 	}
 
-	const page_inv_page* pip = (page_inv_page*) window.win_buffer;
+	const Ods::page_inv_page* pip = (Ods::page_inv_page*) window.win_buffer;
 
 	int last_bit = pip->pip_used;
 	int byte_num = last_bit / 8;
@@ -1914,7 +1914,7 @@ ULONG PageSpace::usedPages()
 
 	while (true)
 	{
-		const page_inv_page* pip = (page_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+		const Ods::page_inv_page* pip = (Ods::page_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
 		if (pip->pip_header.pag_type != pag_pages)
 		{
 			CCH_RELEASE(tdbb, &window);
@@ -2139,7 +2139,7 @@ USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
 	fb_assert(tempPageSpaceID != 0);
 	if (!tempFileCreated)
 	{
-		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
+		MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
 		if (!tempFileCreated)
 		{
 			FbLocalStatus status;
@@ -2181,7 +2181,7 @@ ULONG PAG_page_count(thread_db* tdbb)
  *********************************************/
 	Database* const dbb = tdbb->getDatabase();
 	Array<UCHAR> temp;
-	page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
+	Ods::page_inv_page* pip = reinterpret_cast<Ods::page_inv_page*>
 		(temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize()));
 
 	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -2240,14 +2240,14 @@ void PAG_set_page_scn(thread_db* tdbb, win* window)
 
 	if (scn_page == page_num)
 	{
-		scns_page* page = (scns_page*) window->win_buffer;
+		Ods::scns_page* page = (Ods::scns_page*) window->win_buffer;
 		page->scn_pages[scn_slot] = curr_scn;
 		return;
 	}
 
 	win scn_window(pageSpace->pageSpaceID, scn_page);
 
-	scns_page* page = (scns_page*) CCH_FETCH(tdbb, &scn_window, LCK_write, pag_scns);
+	Ods::scns_page* page = (Ods::scns_page*) CCH_FETCH(tdbb, &scn_window, LCK_write, pag_scns);
 	if (page->scn_pages[scn_slot] != curr_scn)
 	{
 		CCH_MARK(tdbb, &scn_window);
@@ -2265,3 +2265,5 @@ void PageNumber::print(const char* text) const
 }
 #endif
 
+
+} // namespace Firebird::Jrd

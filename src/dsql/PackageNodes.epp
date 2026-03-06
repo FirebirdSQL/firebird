@@ -39,16 +39,10 @@
 #include "../jrd/scl_proto.h"
 
 
-using namespace Firebird;
-
-namespace Jrd {
-
-using namespace Firebird;
-
 DATABASE DB = STATIC "ODS.RDB";
 
 
-//----------------------
+namespace Firebird::Jrd {
 
 
 namespace
@@ -1081,4 +1075,4 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

@@ -41,6 +41,9 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Gpre
+{
+
 
 static void align(const int);
 static void asgn_from(const act*, const ref*, int);
@@ -3489,3 +3492,6 @@ static void t_start_auto( const act* action, const gpre_req* request,
 	set_sqlcode(action, column);
 	ends(column);
 }
+
+
+} // namespace Firebird::Gpre

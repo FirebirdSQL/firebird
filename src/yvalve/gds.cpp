@@ -49,7 +49,7 @@
 #include "../common/os/path_utils.h"
 #include "../common/dsc.h"
 #include "../common/TimeZoneUtil.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/status.h"
 #include "../common/os/os_utils.h"
 #include "../common/os/mac_utils.h"
@@ -115,6 +115,8 @@
 #ifdef ANDROID
 #include <android/log.h>
 #endif
+
+using namespace Firebird;
 
 static char fb_prefix_val[MAXPATHLEN];
 static char fb_prefix_lock_val[MAXPATHLEN];
@@ -189,10 +191,6 @@ constexpr SLONG GENERIC_SQLCODE = -999;
 #include "../common/classes/SafeArg.h"
 #include "../common/classes/MsgPrint.h"
 
-using Firebird::TimeStamp;
-using Firebird::TimeZoneUtil;
-using Firebird::BlrReader;
-
 // This structure is used to parse the firebird.msg file.
 struct gds_msg
 {
@@ -216,7 +214,7 @@ struct gds_ctl
 	FPTR_PRINT_CALLBACK ctl_routine;	// Call back
 	void* ctl_user_arg;					// User argument
 	SSHORT ctl_language;
-	Firebird::string ctl_string;
+	string ctl_string;
 };
 
 #ifdef DEV_BUILD
@@ -239,7 +237,7 @@ static void		blr_print_name(gds_ctl*);
 static void		blr_print_verb(gds_ctl*, SSHORT);
 static int		blr_print_word(gds_ctl*);
 
-static void		sanitize(Firebird::string& locale);
+static void		sanitize(string& locale);
 
 // New functions that try to be safe.
 static SLONG safe_interpret(char* const s, const FB_SIZE_T bufsize,
@@ -248,7 +246,7 @@ static void safe_strncpy(char* target, const char* source, size_t bs) noexcept;
 
 // Useful only in Windows. The hardcoded definition for the English-only version
 // is too crude.
-static bool GetProgramFilesDir(Firebird::PathName& output);
+static bool GetProgramFilesDir(PathName& output);
 
 
 // Generic cleanup handlers
@@ -260,9 +258,9 @@ struct clean_t
 	void*		clean_arg;
 };
 
-static Firebird::GlobalPtr<Firebird::Mutex> cleanup_handlers_mutex;
+static GlobalPtr<Mutex> cleanup_handlers_mutex;
 static clean_t* cleanup_handlers = NULL;
-static Firebird::GlobalPtr<Firebird::Mutex> global_msg_mutex;
+static GlobalPtr<Mutex> global_msg_mutex;
 static gds_msg* global_default_msg = NULL;
 
 VoidPtr API_ROUTINE gds__alloc_debug(SLONG size_request, const TEXT* filename, ULONG lineno)
@@ -270,7 +268,7 @@ VoidPtr API_ROUTINE gds__alloc_debug(SLONG size_request, const TEXT* filename, U
 	try
 	{
 #ifdef DEBUG_GDS_ALLOC
-		Firebird::CustomSourceLocation location{
+		CustomSourceLocation location{
 			.fileName = filename,
 			.line = static_cast<int>(lineno)
 		};
@@ -279,7 +277,7 @@ VoidPtr API_ROUTINE gds__alloc_debug(SLONG size_request, const TEXT* filename, U
 		return getDefaultMemoryPool()->allocate(size_request);
 #endif
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return NULL;
 	}
@@ -571,7 +569,7 @@ void API_ROUTINE isc_decode_sql_time(const GDS_TIME* sql_time, void* times_arg)
  **************************************/
 	tm* const times = static_cast<struct tm*>(times_arg);
 	memset(times, 0, sizeof(*times));
-	Firebird::TimeStamp::decode_time(*sql_time, &times->tm_hour, &times->tm_min, &times->tm_sec);
+	TimeStamp::decode_time(*sql_time, &times->tm_hour, &times->tm_min, &times->tm_sec);
 }
 
 
@@ -591,7 +589,7 @@ void API_ROUTINE isc_decode_timestamp(const GDS_TIMESTAMP* date, void* times_arg
  *
  **************************************/
 	tm* const times = static_cast<struct tm*>(times_arg);
-	Firebird::TimeStamp::decode_timestamp(*date, times);
+	TimeStamp::decode_timestamp(*date, times);
 }
 
 
@@ -661,7 +659,7 @@ void API_ROUTINE isc_encode_sql_time(const void* times_arg, GDS_TIME* isc_time)
  *
  **************************************/
 	const tm* const times = static_cast<const struct tm*>(times_arg);
-	*isc_time = Firebird::TimeStamp::encode_time(times->tm_hour, times->tm_min, times->tm_sec);
+	*isc_time = TimeStamp::encode_time(times->tm_hour, times->tm_min, times->tm_sec);
 }
 
 
@@ -681,7 +679,7 @@ void API_ROUTINE isc_encode_timestamp(const void* times_arg, GDS_TIMESTAMP* date
  *
  **************************************/
 	const tm* const times = static_cast<const struct tm*>(times_arg);
-	*date = Firebird::TimeStamp::encode_timestamp(times);
+	*date = TimeStamp::encode_timestamp(times);
 }
 
 
@@ -781,9 +779,9 @@ void API_ROUTINE gds_alloc_report(ULONG flags, const char* filter_filename, int 
  *
  **************************************/
 // Skidder: Calls to this function must be replaced with MemoryPool::print_contents
-	Firebird::PathName report_name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, "fbsrvreport.txt");
+	PathName report_name = fb_utils::getPrefix(IConfigManager::DIR_LOG, "fbsrvreport.txt");
 	// Our new facilities don't expose flags for reporting.
-	const bool used_only = !(flags & ALLOC_verbose);
+	const bool used_only = !(flags & Why::ALLOC_verbose);
 	getDefaultMemoryPool()->print_contents(report_name.c_str(),
 		used_only ? MemoryPool::PRINT_USED_ONLY : 0, filter_filename);
 }
@@ -1110,7 +1108,7 @@ namespace {
 class LogFileHandles
 {
 public:
-	LogFileHandles(Firebird::MemoryPool&)
+	LogFileHandles(MemoryPool&)
 	{
 		mutex_handle = CreateMutex(ISC_get_security_desc(), FALSE, "firebird_trace_mutex");
 	}
@@ -1148,7 +1146,7 @@ void LogFileHandles::trace_raw(const char* text, unsigned int length)
 	{
 		if (file_handle == INVALID_HANDLE_VALUE)
 		{
-			Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+			PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
 
 			// We do not care to close this file.
 			// It will be closed automatically when our process terminates.
@@ -1177,7 +1175,7 @@ void LogFileHandles::trace_raw(const char* text, unsigned int length)
 	}
 }
 
-Firebird::InitInstance<LogFileHandles> logFileHandles;
+InitInstance<LogFileHandles> logFileHandles;
 
 HANDLE LogFileHandles::mutex_handle = INVALID_HANDLE_VALUE;
 HANDLE LogFileHandles::file_handle = INVALID_HANDLE_VALUE;
@@ -1221,7 +1219,7 @@ void API_ROUTINE gds__trace_raw(const char* text, unsigned int length)
 	LogGuard guard;
 	logFileHandles().trace_raw(text, length);
 #else
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
 	int file = os_utils::open(name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0660);
 	if (file == -1)
 		return;
@@ -1295,7 +1293,7 @@ void API_ROUTINE gds__trace(const TEXT* text)
 	*p++ = ' ';
 	*p = '\0';
 
-	Firebird::string s(buffer);
+	string s(buffer);
 	s += text;
 	s += "\n";
 
@@ -1333,10 +1331,10 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 
 	if (isSandboxed())
 	{
-		static Firebird::GlobalPtr<Firebird::Mutex> logMutex;	// protects big static
+		static GlobalPtr<Mutex> logMutex;	// protects big static
 		static char buffer[10240];								// buffer for messages
 
-		Firebird::MutexLockGuard(logMutex, FB_FUNCTION);
+		MutexLockGuard(logMutex, FB_FUNCTION);
 		fb_utils::snprintf(buffer, sizeof(buffer), "\n\n%s\t%.25s\t", hostName, ctime(&now));
 		unsigned hdrlen = strlen(buffer);
 		va_start(ptr, text);
@@ -1350,7 +1348,7 @@ void API_ROUTINE gds__log(const TEXT* text, ...)
 
 #endif // DARWIN
 
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
 
 #ifdef WIN_NT
 	LogGuard guard;
@@ -1419,7 +1417,7 @@ void gds__print_pool(MemoryPool* pool, const TEXT* text, ...)
 	now = time((time_t *)0);
 #endif
 
-	Firebird::PathName name = fb_utils::getPrefix(Firebird::IConfigManager::DIR_LOG, LOGFILE);
+	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, LOGFILE);
 
 	const int oldmask = umask(0111);
 #ifdef WIN_NT
@@ -1463,7 +1461,7 @@ void API_ROUTINE gds__log_status(const TEXT* database, const ISC_STATUS* status_
 	{
 		if (database)
 		{
-			Firebird::string buffer;
+			string buffer;
 			buffer.printf("Database: %s", database);
 			iscLogStatus(buffer.c_str(), status_vector);
 		}
@@ -1472,7 +1470,7 @@ void API_ROUTINE gds__log_status(const TEXT* database, const ISC_STATUS* status_
 			iscLogStatus(NULL, status_vector);
 		}
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 }
 
@@ -1492,7 +1490,7 @@ int API_ROUTINE gds__msg_close(void *handle)
 
 	gds_msg* messageL = static_cast<gds_msg*>(handle);
 
-	Firebird::MutexLockGuard guard(global_msg_mutex, "gds__msg_close");
+	MutexLockGuard guard(global_msg_mutex, "gds__msg_close");
 
 	if (!messageL)
 	{
@@ -1562,7 +1560,7 @@ SSHORT API_ROUTINE gds__msg_format(void*       handle,
 	}
 	else
 	{
-		Firebird::string s;
+		string s;
 		s.printf("can't format message %d:%d -- ", facility, number);
 		if (n == -1)
 			s += "message text not found";
@@ -1620,13 +1618,13 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 		int status = -1;
 		gds_msg* messageL = (gds_msg*) handle;
 
-		Firebird::MutexLockGuard guard(global_msg_mutex, "gds__msg_lookup");
+		MutexLockGuard guard(global_msg_mutex, "gds__msg_lookup");
 
 		if (!messageL && !(messageL = global_default_msg))
 		{
 			// Try environment variable setting first
 
-			Firebird::string p;
+			string p;
 			if (!fb_utils::readenv("ISC_MSGS", p) ||
 				(status = gds__msg_open(reinterpret_cast<void**>(&messageL), p.c_str())))
 			{
@@ -1643,11 +1641,11 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 				if (fb_utils::readenv("LC_MESSAGES", p))
 				{
 					sanitize(p);
-					Firebird::string::size_type pos = p.find_last_of('/');
-					if (pos == Firebird::string::npos)
+					string::size_type pos = p.find_last_of('/');
+					if (pos == string::npos)
 					    pos = p.find_last_of('\\');
 
-					if (pos != Firebird::string::npos)
+					if (pos != string::npos)
 					    p.erase(0, pos + 1);
 
 					fb_utils::snprintf(translated_msg_file,
@@ -1735,7 +1733,7 @@ SSHORT API_ROUTINE gds__msg_lookup(void* handle,
 
 		return status;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		// not much can be done here
 		return -100;
@@ -1850,7 +1848,7 @@ SLONG API_ROUTINE gds__get_prefix(SSHORT arg_type, const TEXT* passed_string)
 	if (! passed_string)
 		return -1;
 
-	Firebird::PathName prefix(passed_string);
+	PathName prefix(passed_string);
 	prefix.erase(MAXPATHLEN);
 	for (FB_SIZE_T n = 0; n < prefix.length(); ++n)
 	{
@@ -1864,23 +1862,23 @@ SLONG API_ROUTINE gds__get_prefix(SSHORT arg_type, const TEXT* passed_string)
 		}
 	}
 
-	if (arg_type == IB_PREFIX_TYPE)
+	if (arg_type == Why::IB_PREFIX_TYPE)
 	{
 		// it's very important to do it BEFORE GDS_init_prefix()
-		Firebird::Config::setRootDirectoryFromCommandLine(prefix);
+		Config::setRootDirectoryFromCommandLine(prefix);
 	}
 
 	GDS_init_prefix();
 
 	switch (arg_type)
 	{
-	case IB_PREFIX_TYPE:
+	case Why::IB_PREFIX_TYPE:
 		prefix.copyTo(fb_prefix_val, sizeof fb_prefix_val);
 		break;
-	case IB_PREFIX_LOCK_TYPE:
+	case Why::IB_PREFIX_LOCK_TYPE:
 		prefix.copyTo(fb_prefix_lock_val, sizeof fb_prefix_lock_val);
 		break;
-	case IB_PREFIX_MSG_TYPE:
+	case Why::IB_PREFIX_MSG_TYPE:
 		prefix.copyTo(fb_prefix_msg_val, sizeof fb_prefix_msg_val);
 		break;
 	default:
@@ -2250,7 +2248,7 @@ int API_ROUTINE fb_print_blr(const UCHAR* blr, ULONG blr_length,
 		blr_format(control, "blr_eoc");
 		blr_print_line(control, (SSHORT) offset);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return FB_FAILURE;
 	}
@@ -2336,7 +2334,7 @@ void API_ROUTINE gds__register_cleanup(FPTR_VOID_PTR routine, void* arg)
 	gds_pid = getpid();
 #endif
 
-	Firebird::InstanceControl::registerGdsCleanup(gds__cleanup);
+	InstanceControl::registerGdsCleanup(gds__cleanup);
 
 	clean_t* clean = (clean_t*) gds__alloc((SLONG) sizeof(clean_t));
 	clean->clean_routine = routine;
@@ -2347,7 +2345,7 @@ void API_ROUTINE gds__register_cleanup(FPTR_VOID_PTR routine, void* arg)
 	gds_alloc_flag_unfreed((void *) clean);
 #endif
 
-	Firebird::MutexLockGuard guard(cleanup_handlers_mutex, "gds__register_cleanup");
+	MutexLockGuard guard(cleanup_handlers_mutex, "gds__register_cleanup");
 	clean->clean_next = cleanup_handlers;
 	cleanup_handlers = clean;
 }
@@ -2627,7 +2625,7 @@ VoidPtr API_ROUTINE gds__temp_file(BOOLEAN stdio_flag, const TEXT* string, TEXT*
 		// Fortunately, utilities never pass non-default values.
 		fb_assert(!dir && !unlink_flag);
 
-		Firebird::PathName filename = Firebird::TempFile::create(string);
+		PathName filename = TempFile::create(string);
 
 		if (expanded_string)
 		{
@@ -2642,7 +2640,7 @@ VoidPtr API_ROUTINE gds__temp_file(BOOLEAN stdio_flag, const TEXT* string, TEXT*
 
 		return (void*) (IPTR) os_utils::open(filename.c_str(), O_RDWR | O_EXCL | O_TRUNC);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return (void*) (IPTR) (-1);
 	}
@@ -2661,7 +2659,7 @@ void API_ROUTINE gds__unregister_cleanup(FPTR_VOID_PTR routine, void *arg)
  *	Unregister a cleanup handler.
  *
  **************************************/
-	Firebird::MutexLockGuard guard(cleanup_handlers_mutex, "gds__unregister_cleanup");
+	MutexLockGuard guard(cleanup_handlers_mutex, "gds__unregister_cleanup");
 
 	clean_t* clean;
 	for (clean_t** clean_ptr = &cleanup_handlers; (clean = *clean_ptr); clean_ptr = &clean->clean_next)
@@ -2696,7 +2694,7 @@ BOOLEAN API_ROUTINE gds__validate_lib_path(const TEXT* module,
  * 	else, if the module is not in the path return FALSE.
  *
  **************************************/
-	Firebird::string ib_ext_lib_path;
+	string ib_ext_lib_path;
 	if (!fb_utils::readenv(ib_env_var, ib_ext_lib_path))
 	{
 		fb_utils::copy_terminate(resolved_module, module, length);
@@ -2918,7 +2916,7 @@ static void blr_error(gds_ctl* control, const TEXT* string, ...)
 	va_end(args);
 	offset = 0;
 	blr_print_line(control, (SSHORT) offset);
-	Firebird::LongJump::raise();
+	LongJump::raise();
 }
 
 
@@ -3294,12 +3292,12 @@ static int blr_print_dtype(gds_ctl* control)
 
 	case blr_dec64:
 		string = "dec64";
-		length = sizeof(Firebird::Decimal64);
+		length = sizeof(Decimal64);
 		break;
 
 	case blr_int128:
 		string = "int128";
-		length = sizeof(Firebird::Int128);
+		length = sizeof(Int128);
 		break;
 
 	case blr_domain_name:
@@ -4500,9 +4498,9 @@ void gds__cleanup()
 
 	gds__msg_close(NULL);
 
-	Firebird::MutexLockGuard guard(cleanup_handlers_mutex, "gds__cleanup");
+	MutexLockGuard guard(cleanup_handlers_mutex, "gds__cleanup");
 
-	Firebird::InstanceControl::registerGdsCleanup(0);
+	InstanceControl::registerGdsCleanup(0);
 
 	clean_t* clean;
 	while ( (clean = cleanup_handlers) )
@@ -4522,7 +4520,7 @@ void gds__cleanup()
 }
 
 
-static void sanitize(Firebird::string& locale)
+static void sanitize(string& locale)
 {
 /**************************************
  *
@@ -4537,7 +4535,7 @@ static void sanitize(Firebird::string& locale)
  *
  **************************************/
 
-	for (Firebird::string::pointer p = locale.begin(); *p; ++p)
+	for (string::pointer p = locale.begin(); *p; ++p)
 	{
 		if (*p == '.')
 			*p = '_';
@@ -4574,7 +4572,7 @@ VoidPtr API_ROUTINE gds__alloc(SLONG size_request)
 	{
 		return getDefaultMemoryPool()->allocate(size_request);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		return NULL;
 	}
@@ -4589,14 +4587,14 @@ public:
 		// CVC: I put this protection block because we can't raise exceptions
 		// if exceptions are already raised due to the same reason:
 		// config file not found.
-		Firebird::PathName prefix;
+		PathName prefix;
 		try
 		{
-			prefix = Firebird::Config::getRootDirectory();
+			prefix = Config::getRootDirectory();
 			if (prefix.isEmpty() && !GetProgramFilesDir(prefix))
 				prefix = FB_CONFDIR[0] ? FB_CONFDIR : FB_PREFIX;
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			// CVC: Presumably here we failed because the config file can't be located.
 			if (!GetProgramFilesDir(prefix))
@@ -4606,7 +4604,7 @@ public:
 		fb_prefix = fb_prefix_val;
 
 		// Find appropriate temp directory
-		Firebird::PathName tempDir;
+		PathName tempDir;
 		if (!fb_utils::readenv(FB_TMP_ENV, tempDir))
 		{
 #ifdef WIN_NT
@@ -4633,7 +4631,7 @@ public:
 		// Find appropriate Firebird lock file prefix
 		// Override conditional defines with the enviroment
 		// variable FIREBIRD_LOCK if it is set.
-		Firebird::PathName lockPrefix;
+		PathName lockPrefix;
 		if (!fb_utils::readenv(FB_LOCK_ENV, lockPrefix))
 		{
 #if !defined(WIN_NT)
@@ -4657,7 +4655,7 @@ public:
 		fb_prefix_lock = fb_prefix_lock_val;
 
 		// Find appropriate Firebird message file prefix.
-		Firebird::PathName msgPrefix;
+		PathName msgPrefix;
 		if (!fb_utils::readenv(FB_MSG_ENV, msgPrefix))
 		{
 			if (FB_MSGDIR[0] && PathUtils::isRelative(FB_MSGDIR))
@@ -4675,7 +4673,7 @@ public:
 	}
 };
 
-static Firebird::InitMutex<InitPrefix> initPrefix("InitPrefix");
+static InitMutex<InitPrefix> initPrefix("InitPrefix");
 
 void GDS_init_prefix()
 {
@@ -4700,7 +4698,7 @@ void GDS_init_prefix()
 
 // We try to see if the registry has the information for the Program Files
 // directory, that follows the boot partition and is localized.
-static bool GetProgramFilesDir(Firebird::PathName& output)
+static bool GetProgramFilesDir(PathName& output)
 {
 #ifdef WIN_NT
 	const char* pdir = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion";

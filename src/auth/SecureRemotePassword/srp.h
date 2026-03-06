@@ -15,7 +15,9 @@
 
 #include <functional>
 
-namespace Auth {
+namespace Firebird::Auth
+{
+
 
 /*
  * Order of battle for SRP handshake:
@@ -55,23 +57,23 @@ class RemoteGroup;
 template <class SHA> class SecureHash : public SHA
 {
 public:
-	void getInt(Firebird::BigInteger& hash)
+	void getInt(BigInteger& hash)
 	{
-		Firebird::UCharBuffer tmp;
+		UCharBuffer tmp;
 		SHA::getHash(tmp);
 		hash.assign(tmp.getCount(), tmp.begin());
 	}
 
-	void processInt(const Firebird::BigInteger& data)
+	void processInt(const BigInteger& data)
 	{
-		Firebird::UCharBuffer bytes;
+		UCharBuffer bytes;
 		data.getBytes(bytes);
 		SHA::process(bytes);
 	}
 
-	void processStrippedInt(const Firebird::BigInteger& data)
+	void processStrippedInt(const BigInteger& data)
 	{
-		Firebird::UCharBuffer bytes;
+		UCharBuffer bytes;
 		data.getBytes(bytes);
 		if (bytes.getCount())
 		{
@@ -82,21 +84,21 @@ public:
 };
 
 
-class RemotePassword : public Firebird::GlobalStorage
+class RemotePassword : public GlobalStorage
 {
 private:
 	const RemoteGroup*		group;
-	Auth::SecureHash<Firebird::Sha1>	hash;
-	Firebird::BigInteger	privateKey;
-	Firebird::BigInteger	scramble;
+	Auth::SecureHash<Sha1>	hash;
+	BigInteger	privateKey;
+	BigInteger	scramble;
 
 protected:
-    virtual Firebird::BigInteger makeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
-                const char* salt, const Firebird::UCharBuffer& sessionKey) = 0;
+    virtual BigInteger makeProof(const BigInteger n1, const BigInteger n2,
+                const char* salt, const UCharBuffer& sessionKey) = 0;
 
 public:
-	Firebird::BigInteger	clientPublicKey;
-	Firebird::BigInteger	serverPublicKey;
+	BigInteger	clientPublicKey;
+	BigInteger	serverPublicKey;
 
 public:
 	RemotePassword();
@@ -107,33 +109,33 @@ public:
 	static constexpr unsigned SRP_VERIFIER_SIZE = SRP_KEY_SIZE;
 	static constexpr unsigned SRP_SALT_SIZE = 32;
 
-	static Firebird::string pluginName(unsigned bits);
+	static string pluginName(unsigned bits);
 
-	Firebird::BigInteger getUserHash(const char* account,
+	BigInteger getUserHash(const char* account,
 									 const char* salt,
 									 const char* password);
-	Firebird::BigInteger computeVerifier(const Firebird::string& account,
-										 const Firebird::string& salt,
-										 const Firebird::string& password);
-	void genClientKey(Firebird::string& clientPubKey);
-	void genServerKey(Firebird::string& serverPubKey, const Firebird::UCharBuffer& verifier);
+	BigInteger computeVerifier(const string& account,
+										 const string& salt,
+										 const string& password);
+	void genClientKey(string& clientPubKey);
+	void genServerKey(string& serverPubKey, const UCharBuffer& verifier);
 	void computeScramble();
-	void clientSessionKey(Firebird::UCharBuffer& sessionKey, const char* account,
+	void clientSessionKey(UCharBuffer& sessionKey, const char* account,
 						  const char* salt, const char* password,
 						  const char* serverPubKey);
-	void serverSessionKey(Firebird::UCharBuffer& sessionKey,
+	void serverSessionKey(UCharBuffer& sessionKey,
 						  const char* clientPubKey,
-						  const Firebird::UCharBuffer& verifier);
-	Firebird::BigInteger clientProof(const char* account,
+						  const UCharBuffer& verifier);
+	BigInteger clientProof(const char* account,
 									 const char* salt,
-									 const Firebird::UCharBuffer& sessionKey);
+									 const UCharBuffer& sessionKey);
 };
 
 template <class SHA> class RemotePasswordImpl : public RemotePassword
 {
 protected:
-	Firebird::BigInteger makeProof(const Firebird::BigInteger n1, const Firebird::BigInteger n2,
-                const char* salt, const Firebird::UCharBuffer& sessionKey)
+	BigInteger makeProof(const BigInteger n1, const BigInteger n2,
+                const char* salt, const UCharBuffer& sessionKey)
     {
 		Auth::SecureHash<SHA> digest;
 		digest.processInt(n1);				// H(prime) ^ H(g)
@@ -143,7 +145,7 @@ protected:
 		digest.processInt(serverPublicKey);	// B
 		digest.process(sessionKey);			// K
 
-		Firebird::BigInteger rc;
+		BigInteger rc;
 		digest.getInt(rc);
 		return rc;
 	}
@@ -152,19 +154,20 @@ protected:
 
 
 #if SRP_DEBUG > 0
-void dumpIt(const char* name, const Firebird::BigInteger& bi);
-void dumpIt(const char* name, const Firebird::UCharBuffer& data);
-void dumpIt(const char* name, const Firebird::string& str);
-void dumpBin(const char* name, const Firebird::string& str);
+void dumpIt(const char* name, const BigInteger& bi);
+void dumpIt(const char* name, const UCharBuffer& data);
+void dumpIt(const char* name, const string& str);
+void dumpBin(const char* name, const string& str);
 #else
-void static inline dumpIt(const char* /*name*/, const Firebird::BigInteger& /*bi*/) { }
-void static inline dumpIt(const char* /*name*/, const Firebird::UCharBuffer& /*data*/) { }
-void static inline dumpIt(const char* /*name*/, const Firebird::string& /*str*/) { }
-void static inline dumpBin(const char* /*name*/, const Firebird::string& /*str*/) { }
+void static inline dumpIt(const char* /*name*/, const BigInteger& /*bi*/) { }
+void static inline dumpIt(const char* /*name*/, const UCharBuffer& /*data*/) { }
+void static inline dumpIt(const char* /*name*/, const string& /*str*/) { }
+void static inline dumpBin(const char* /*name*/, const string& /*str*/) { }
 #endif
 
 void checkStatusVectorForMissingTable(const ISC_STATUS* v, std::function<void ()> cleanup = nullptr);
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_SRP_SRP_H

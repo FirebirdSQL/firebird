@@ -30,7 +30,7 @@
 #include "../jrd/CacheVector.h"
 #include "../jrd/lck.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class ValueListNode;
 
@@ -115,7 +115,7 @@ namespace Jrd
 		USHORT fun_return_arg;					// return argument
 		ULONG fun_temp_length;					// temporary space required
 
-		Firebird::string fun_exception_message;	// message containing the exception error message
+		string fun_exception_message;	// message containing the exception error message
 
 		bool fun_deterministic;
 		const ExtEngineManager::Function* fun_external;
@@ -127,6 +127,6 @@ namespace Jrd
 
 		ScanResult reload(thread_db* tdbb, ObjectBase::Flag fl);
 	};
-}
+}	// namespace Firebird::Jrd
 
 #endif // JRD_FUNCTION_H

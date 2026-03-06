@@ -44,7 +44,7 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "ibase.h"
 #include "../jrd/align.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
 #include "../jrd/val.h"
@@ -59,8 +59,9 @@
 #include "iberror.h"
 #include "../common/StatusArg.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
 
@@ -173,7 +174,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	class ParamCmp
 	{
 	public:
-		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2) noexcept
+		static int greaterThan(const dsql_par* p1, const dsql_par* p2) noexcept
 		{
 			return p1->par_index > p2->par_index;
 		}
@@ -326,7 +327,7 @@ void GEN_statement(DsqlCompilerScratch* scratch, DmlNode* node)
     @param texttype
 
  **/
-void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype)
+void GEN_descriptor(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype)
 {
 	switch (desc->dsc_dtype)
 	{
@@ -444,7 +445,7 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 
 
 // Generate a parameter reference.
-void GEN_parameter( DsqlCompilerScratch* dsqlScratch, const dsql_par* parameter)
+void GEN_parameter(DsqlCompilerScratch* dsqlScratch, const dsql_par* parameter)
 {
 	const dsql_msg* message = parameter->par_message;
 
@@ -716,10 +717,14 @@ void GEN_stuff_context(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context
 
 
 // Write a context number into the BLR buffer. Check for possible overflow.
-void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch, USHORT contextNumber)
+void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch,
+	USHORT contextNumber)
 {
 	if (contextNumber > MAX_UCHAR)
 		ERRD_post(Arg::Gds(isc_too_many_contexts));
 
 	dsqlScratch->appendUChar(contextNumber);
 }
+
+
+} // namespace Firebird::Jrd

@@ -35,52 +35,52 @@
 #include "Config.h"
 #include "ChangeLog.h"
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	class TableMatcher
 	{
-		typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Jrd::QualifiedName, bool> > > TablePermissionMap;
+		typedef GenericMap<Pair<Left<Jrd::QualifiedName, bool> > > TablePermissionMap;
 
 	public:
 		TableMatcher(MemoryPool& pool,
-					 const Firebird::string& includeSchemaFilter,
-					 const Firebird::string& excludeSchemaFilter,
-					 const Firebird::string& includeFilter,
-					 const Firebird::string& excludeFilter);
+					 const string& includeSchemaFilter,
+					 const string& excludeSchemaFilter,
+					 const string& includeFilter,
+					 const string& excludeFilter);
 
 		bool matchTable(const Jrd::QualifiedName& tableName);
 
 	private:
-		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeSchemaMatcher;
-		Firebird::AutoPtr<Firebird::SimilarToRegex> m_excludeSchemaMatcher;
-		Firebird::AutoPtr<Firebird::SimilarToRegex> m_includeMatcher;
-		Firebird::AutoPtr<Firebird::SimilarToRegex> m_excludeMatcher;
+		AutoPtr<SimilarToRegex> m_includeSchemaMatcher;
+		AutoPtr<SimilarToRegex> m_excludeSchemaMatcher;
+		AutoPtr<SimilarToRegex> m_includeMatcher;
+		AutoPtr<SimilarToRegex> m_excludeMatcher;
 		TablePermissionMap m_tables;
 	};
 
-	class Manager final : public Firebird::GlobalStorage
+	class Manager final : public GlobalStorage
 	{
 		struct SyncReplica
 		{
-			SyncReplica(Firebird::MemoryPool& pool, Firebird::IAttachment* att, Firebird::IReplicator* repl)
+			SyncReplica(MemoryPool& pool, IAttachment* att, IReplicator* repl)
 				: status(pool), attachment(att), replicator(repl)
 			{}
 
-			Firebird::FbLocalStatus status;
-			Firebird::IAttachment* attachment;
-			Firebird::IReplicator* replicator;
+			FbLocalStatus status;
+			IAttachment* attachment;
+			IReplicator* replicator;
 		};
 
 	public:
-		Manager(const Firebird::string& dbId, const Replication::Config* config);
+		Manager(const string& dbId, const Config* config);
 		~Manager();
 
 		void shutdown();
 
-		Firebird::UCharBuffer* getBuffer();
-		void releaseBuffer(Firebird::UCharBuffer* buffer);
+		UCharBuffer* getBuffer();
+		void releaseBuffer(UCharBuffer* buffer);
 
-		void flush(Firebird::UCharBuffer* buffer, bool sync, bool prepare);
+		void flush(UCharBuffer* buffer, bool sync, bool prepare);
 
 		void forceJournalSwitch()
 		{
@@ -94,7 +94,7 @@ namespace Replication
 				m_changeLog->cleanup();
 		}
 
-		const Replication::Config* getConfig() const noexcept
+		const Config* getConfig() const noexcept
 		{
 			return m_config;
 		}
@@ -109,24 +109,24 @@ namespace Replication
 			return 0;
 		}
 
-		Firebird::Semaphore m_startupSemaphore;
-		Firebird::Semaphore m_cleanupSemaphore;
-		Firebird::Semaphore m_workingSemaphore;
+		Semaphore m_startupSemaphore;
+		Semaphore m_cleanupSemaphore;
+		Semaphore m_workingSemaphore;
 
-		const Replication::Config* const m_config;
-		Firebird::Array<SyncReplica*> m_replicas;
-		Firebird::Array<Firebird::UCharBuffer*> m_buffers;
-		Firebird::Mutex m_buffersMutex;
-		Firebird::Array<Firebird::UCharBuffer*> m_queue;
-		Firebird::Mutex m_queueMutex;
+		const Config* const m_config;
+		Array<SyncReplica*> m_replicas;
+		Array<UCharBuffer*> m_buffers;
+		Mutex m_buffersMutex;
+		Array<UCharBuffer*> m_queue;
+		Mutex m_queueMutex;
 		ULONG m_queueSize;
 		FB_UINT64 m_sequence;
 
 		volatile bool m_shutdown;
 		volatile bool m_signalled;
 
-		Firebird::AutoPtr<ChangeLog> m_changeLog;
-		Firebird::RWLock m_lock;
+		AutoPtr<ChangeLog> m_changeLog;
+		RWLock m_lock;
 	};
 }
 
