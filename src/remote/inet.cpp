@@ -3374,7 +3374,7 @@ void setStopMainThread(FPTR_INT func)
 } // namespace Firebird::Remote
 
 
-// FIXME:
+// FIXME: Move this part to src/common/os
 namespace Firebird::os_utils
 {
 
