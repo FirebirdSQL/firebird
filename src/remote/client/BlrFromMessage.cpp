@@ -33,10 +33,9 @@
 #include "firebird/impl/sqlda_pub.h"
 #include "../remote/protocol.h"
 
-using namespace Firebird;
-
-namespace Remote
+namespace Firebird::Remote
 {
+
 
 BlrFromMessage::BlrFromMessage(IMessageMetadata* metadata, unsigned aDialect, unsigned aProtocol)
 	: BlrWriter(*getDefaultMemoryPool()),
@@ -242,7 +241,7 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 				break;
 
 			default:
-				Firebird::Arg::Gds(isc_dsql_sqlda_value_err).raise();
+				Arg::Gds(isc_dsql_sqlda_value_err).raise();
 				break;
 		}
 
@@ -267,7 +266,7 @@ void BlrFromMessage::buildBlr(IMessageMetadata* metadata)
 
 	if (expectedMessageLength && msgLen && (expectedMessageLength != msgLen))
 	{
-		Firebird::Arg::Gds(isc_wrong_message_length).raise();
+		Arg::Gds(isc_wrong_message_length).raise();
 	}
 }
 
@@ -276,4 +275,5 @@ bool BlrFromMessage::isVersion4()
 	return dialect <= 1;
 }
 
-}
+
+}	// namesoace Firebird::Remote

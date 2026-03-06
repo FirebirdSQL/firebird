@@ -24,8 +24,10 @@
 #ifndef REMOTE_MERGE_PROTO_H
 #define REMOTE_MERGE_PROTO_H
 
-USHORT MERGE_database_info(const UCHAR*, UCHAR*, USHORT, USHORT,
-							USHORT, USHORT, const UCHAR*, const UCHAR*, USHORT);
+namespace Firebird::Remote
+{
+	USHORT MERGE_database_info(const UCHAR*, UCHAR*, USHORT, USHORT,
+								USHORT, USHORT, const UCHAR*, const UCHAR*, USHORT);
+} // namespace Firebird::Remote
 
 #endif // REMOTE_MERGE_PROTO_H
-

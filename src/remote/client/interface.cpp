@@ -88,6 +88,9 @@
 #include "../remote/os/win32/xnet_proto.h"
 #endif
 
+namespace Firebird::Remote
+{
+
 
 const char* const PROTOCOL_INET = "inet";
 const char* const PROTOCOL_INET4 = "inet4";
@@ -101,12 +104,10 @@ const char* const INET_SEPARATOR = "/";
 const char* const INET_LOCALHOST = "localhost";
 
 
-using namespace Firebird;
-
 namespace {
 	[[noreturn]] void handle_error(ISC_STATUS code)
 	{
-		Firebird::Arg::Gds(code).raise();
+		Arg::Gds(code).raise();
 	}
 
 	template <typename T>
@@ -121,7 +122,7 @@ namespace {
 	inline void CHECK_LENGTH(rem_port* port, size_t length)
 	{
 		if (length > MAX_USHORT && port->port_protocol < PROTOCOL_VERSION13)
-			status_exception::raise(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_blktoobig));
+			status_exception::raise(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blktoobig));
 	}
 
 	class UsePreallocatedBuffer
@@ -180,8 +181,6 @@ namespace {
 
 	GlobalPtr<ClientPortsCleanup> outPorts;
 }
-
-namespace Remote {
 
 // Provider stuff
 class Attachment;
@@ -539,8 +538,8 @@ private:
 		{
 			if (size > MAX_USHORT)
 			{
-				(Firebird::Arg::Gds(isc_imp_exc) << Firebird::Arg::Gds(isc_blobtoobig)
-					<< Firebird::Arg::Gds(isc_big_segment) << Firebird::Arg::Num(size)).raise();
+				(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_blobtoobig)
+					<< Arg::Gds(isc_big_segment) << Arg::Num(size)).raise();
 			}
 
 			*sizePointer += sizeof(USHORT);
@@ -680,7 +679,7 @@ public:
 	{
 		if (statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
-			status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+			status->setErrors(Arg::Gds(isc_wish_list).value());
 			return 0;
 		}
 
@@ -691,7 +690,7 @@ public:
 	{
 		if (timeOut && statement->rsr_rdb->rdb_port->port_protocol < PROTOCOL_STMT_TOUT)
 		{
-			status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+			status->setErrors(Arg::Gds(isc_wish_list).value());
 			return;
 		}
 
@@ -1093,16 +1092,14 @@ void registerRedirector(IPluginManager* iPlugin)
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_PROVIDER, "Remote", &remoteFactory);
 	iPlugin->registerPluginFactory(IPluginManager::TYPE_PROVIDER, "Loopback", &loopbackFactory);
 
-	Firebird::Auth::registerLegacyClient(iPlugin);
-	Firebird::Auth::registerSrpClient(iPlugin);
+	Auth::registerLegacyClient(iPlugin);
+	Auth::registerSrpClient(iPlugin);
 #ifdef TRUSTED_AUTH
-	Firebird::Auth::registerTrustedClient(iPlugin);
+	Auth::registerTrustedClient(iPlugin);
 #endif
 
 	Crypt::registerArc4(iPlugin);
 }
-
-} // namespace Remote
 
 /*
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
@@ -1112,8 +1109,6 @@ extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 	pi->release();
 }
 */
-
-namespace Remote {
 
 static Rvnt* add_event(rem_port*);
 static void add_other_params(rem_port*, ClumpletWriter&, const ParametersSet&);
@@ -1138,7 +1133,7 @@ static bool init(CheckStatusWrapper*, ClntAuthBlock&, rem_port*, P_OP, PathName&
 	ClumpletWriter&, IntlParametersBlock&, ICryptKeyCallback* cryptCallback);
 static Rtr* make_transaction(Rdb*, USHORT);
 static void mov_dsql_message(const UCHAR*, const rem_fmt*, UCHAR*, const rem_fmt*);
-[[noreturn]] static void move_error(const Firebird::Arg::StatusVector& v);
+[[noreturn]] static void move_error(const Arg::StatusVector& v);
 static void receive_after_start(Rrq*, USHORT);
 static void receive_packet(rem_port*, PACKET *);
 static void receive_packet_noqueue(rem_port*, PACKET *);
@@ -1235,7 +1230,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
 
 		if (!port)
 		{
-			Firebird::Arg::Gds(isc_unavailable).copyTo(status);
+			Arg::Gds(isc_unavailable).copyTo(status);
 			return NULL;
 		}
 
@@ -1925,7 +1920,7 @@ IAttachment* RProvider::create(CheckStatusWrapper* status, const char* filename,
 
 		if (!port)
 		{
-			Firebird::Arg::Gds(isc_unavailable).copyTo(status);
+			Arg::Gds(isc_unavailable).copyTo(status);
 			return NULL;
 		}
 
@@ -2401,7 +2396,7 @@ void Attachment::execWithCheck(CheckStatusWrapper* status, const string& stmt)
 		status->init();
 	}
 
-	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+	status->setErrors(Arg::Gds(isc_wish_list).value());
 }
 
 
@@ -2410,7 +2405,7 @@ unsigned int Attachment::getIdleTimeout(CheckStatusWrapper* status)
 	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
 		return getSingleInfo(status, fb_info_ses_idle_timeout_att);
 
-	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+	status->setErrors(Arg::Gds(isc_wish_list).value());
 	return 0;
 }
 
@@ -2429,7 +2424,7 @@ unsigned int Attachment::getStatementTimeout(CheckStatusWrapper* status)
 	if (rdb->rdb_port->port_protocol >= PROTOCOL_STMT_TOUT)
 		return getSingleInfo(status, fb_info_statement_timeout_att);
 
-	status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+	status->setErrors(Arg::Gds(isc_wish_list).value());
 	return 0;
 }
 
@@ -2831,7 +2826,7 @@ void Batch::add(CheckStatusWrapper* status, unsigned count, const void* inBuffer
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -2884,7 +2879,7 @@ void Batch::addBlob(CheckStatusWrapper* status, unsigned length, const void* inB
 		// Check and validate handles, etc.
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -2903,7 +2898,7 @@ void Batch::addBlob(CheckStatusWrapper* status, unsigned length, const void* inB
 		case IBatch::BLOB_ID_USER:
 			break;
 		default:
-			(Firebird::Arg::Gds(isc_batch_policy) << "addBlob").raise();
+			(Arg::Gds(isc_batch_policy) << "addBlob").raise();
 		}
 
 		// Build blob HDR in stream
@@ -2934,7 +2929,7 @@ void Batch::appendBlobData(CheckStatusWrapper* status, unsigned length, const vo
 		// Check and validate handles, etc.
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		// Policy check
@@ -2944,7 +2939,7 @@ void Batch::appendBlobData(CheckStatusWrapper* status, unsigned length, const vo
 		case IBatch::BLOB_ID_ENGINE:
 			break;
 		default:
-			(Firebird::Arg::Gds(isc_batch_policy) << "appendBlobData").raise();
+			(Arg::Gds(isc_batch_policy) << "appendBlobData").raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -2971,13 +2966,13 @@ void Batch::addBlobStream(CheckStatusWrapper* status, unsigned length, const voi
 		// Check and validate handles, etc.
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		// Policy check
 		if (blobPolicy != IBatch::BLOB_STREAM)
 		{
-			(Firebird::Arg::Gds(isc_batch_policy) << "addBlobStream").raise();
+			(Arg::Gds(isc_batch_policy) << "addBlobStream").raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -3063,7 +3058,7 @@ void Batch::setDefaultBpb(CheckStatusWrapper* status, unsigned parLength, const 
 	{
 		// Check and validate handles, etc.
 		if (!stmt)
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 
 		Rsr* statement = stmt->getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -3074,7 +3069,7 @@ void Batch::setDefaultBpb(CheckStatusWrapper* status, unsigned parLength, const 
 
 		// Check for presence of any data in batch buffers
 		if (batchHasData())
-			Firebird::Arg::Gds(isc_batch_defbpb).raise();
+			Arg::Gds(isc_batch_defbpb).raise();
 
 		// Set default segmentation flag
 		defSegmented = fb_utils::isBpbSegmented(parLength, par);
@@ -3119,7 +3114,7 @@ void Batch::setServerInfo()
 	// Check and validate handles, etc.
 	if (!stmt)
 	{
-		Firebird::Arg::Gds(isc_bad_req_handle).raise();
+		Arg::Gds(isc_bad_req_handle).raise();
 	}
 
 	Rsr* statement = stmt->getStatement();
@@ -3142,13 +3137,13 @@ void Batch::setServerInfo()
 
 		// Extract from buffer
 		if (buffer[0] != item)
-			Firebird::Arg::Gds(isc_batch_align).raise();
+			Arg::Gds(isc_batch_align).raise();
 
 		int len = gds__vax_integer(&buffer[1], 2);
 		statement->rsr_batch_stream.alignment = blobAlign = gds__vax_integer(&buffer[3], len);
 
 		if (!blobAlign)
-			Firebird::Arg::Gds(isc_batch_align).raise();
+			Arg::Gds(isc_batch_align).raise();
 
 		return;
 	}
@@ -3180,20 +3175,20 @@ void Batch::setServerInfo()
 			blobHeadSize = out.getInt();
 			break;
 		case isc_info_error:
-			(Firebird::Arg::Gds(isc_batch_align) << Firebird::Arg::Gds(out.getInt())).raise();
+			(Arg::Gds(isc_batch_align) << Arg::Gds(out.getInt())).raise();
 		case isc_info_truncated:
-			(Firebird::Arg::Gds(isc_batch_align) << Firebird::Arg::Gds(isc_random) << "truncated").raise();
+			(Arg::Gds(isc_batch_align) << Arg::Gds(isc_random) << "truncated").raise();
 		default:
 			{
 				string msg;
 				msg.printf("Wrong info item %u", item);
-				(Firebird::Arg::Gds(isc_batch_align) << Firebird::Arg::Gds(isc_random) << msg).raise();
+				(Arg::Gds(isc_batch_align) << Arg::Gds(isc_random) << msg).raise();
 			}
 		}
 	}
 
 	if (! (blobAlign && serverSize && blobHeadSize))
-		Firebird::Arg::Gds(isc_batch_align).raise();
+		Arg::Gds(isc_batch_align).raise();
 }
 
 
@@ -3214,7 +3209,7 @@ void Batch::registerBlob(CheckStatusWrapper* status, const ISC_QUAD* existingBlo
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -3251,7 +3246,7 @@ IBatchCompletionState* Batch::execute(CheckStatusWrapper* status, ITransaction* 
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_bad_req_handle).raise();
+			Arg::Gds(isc_bad_req_handle).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -3315,7 +3310,7 @@ void Batch::cancel(CheckStatusWrapper* status)
 		// Check and validate handles, etc.
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -3354,7 +3349,7 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 		}
 
 		Rsr* statement = stmt->getStatement();
@@ -4821,7 +4816,7 @@ void ResultSet::setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetad
 		// Check and validate handles, etc.
 		if (!delayedFormat)
 		{
-			(Firebird::Arg::Gds(isc_dsql_cursor_err) << Firebird::Arg::Gds(isc_bad_req_handle)).raise();
+			(Arg::Gds(isc_dsql_cursor_err) << Arg::Gds(isc_bad_req_handle)).raise();
 		}
 
 		outputFormat = format;
@@ -4853,7 +4848,7 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 	if (delayedFormat || !stmt)
 	{
-		(Firebird::Arg::Gds(isc_dsql_cursor_err) << Firebird::Arg::Gds(isc_bad_req_handle)).raise();
+		(Arg::Gds(isc_dsql_cursor_err) << Arg::Gds(isc_bad_req_handle)).raise();
 	}
 
 	Rsr* const statement = stmt->getStatement();
@@ -5058,7 +5053,7 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 				// If we get end-of-stream, something went seriously wrong, thus punt
 				if (packet->p_sqldata.p_sqldata_status == 100)
-					Firebird::Arg::Gds(isc_req_sync).raise();
+					Arg::Gds(isc_req_sync).raise();
 
 				// We should get either the requested row or the end-of-batch marker
 				fb_assert(packet->p_sqldata.p_sqldata_messages == 0 ||
@@ -5142,7 +5137,7 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 		{
 			// We were asked to fetch from the statement, not ready for it.
 			// Give up before sending something to the server.
-			Firebird::Arg::Gds(isc_req_sync).raise();
+			Arg::Gds(isc_req_sync).raise();
 		}
 
 		// Make the batch request - and force the packet over the wire
@@ -5222,15 +5217,15 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 	if (statement->rsr_user_select_format->fmt_length != msg_length)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_port_len) <<
-			Firebird::Arg::Num(msg_length) << Firebird::Arg::Num(statement->rsr_user_select_format->fmt_length));
+		status_exception::raise(Arg::Gds(isc_port_len) <<
+			Arg::Num(msg_length) << Arg::Num(statement->rsr_user_select_format->fmt_length));
 	}
 
 	if (statement->rsr_user_select_format == statement->rsr_select_format)
 	{
 		if (!msg || !message->msg_address)
 		{
-			move_error(Firebird::Arg::Gds(isc_dsql_sqlda_err));
+			move_error(Arg::Gds(isc_dsql_sqlda_err));
 			// Msg 263 SQLDA missing or wrong number of variables
 		}
 
@@ -5268,7 +5263,7 @@ int ResultSet::fetchPrior(CheckStatusWrapper* user_status, void* buffer)
 	try
 	{
 		if (!(flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-			(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("PRIOR")).raise();
+			(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("PRIOR")).raise();
 
 		return fetch(user_status, buffer, fetch_prior) ?
 			IStatus::RESULT_OK : IStatus::RESULT_NO_DATA;
@@ -5287,7 +5282,7 @@ int ResultSet::fetchFirst(CheckStatusWrapper* user_status, void* buffer)
 	try
 	{
 		if (!(flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-			(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("FIRST")).raise();
+			(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("FIRST")).raise();
 
 		return fetch(user_status, buffer, fetch_first) ?
 			IStatus::RESULT_OK : IStatus::RESULT_NO_DATA;
@@ -5306,7 +5301,7 @@ int ResultSet::fetchLast(CheckStatusWrapper* user_status, void* buffer)
 	try
 	{
 		if (!(flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-			(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("LAST")).raise();
+			(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("LAST")).raise();
 
 		return fetch(user_status, buffer, fetch_last) ?
 			IStatus::RESULT_OK : IStatus::RESULT_NO_DATA;
@@ -5325,7 +5320,7 @@ int ResultSet::fetchAbsolute(CheckStatusWrapper* user_status, int position, void
 	try
 	{
 		if (!(flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-			(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("ABSOLUTE")).raise();
+			(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("ABSOLUTE")).raise();
 
 		return fetch(user_status, buffer, fetch_absolute, position) ?
 			IStatus::RESULT_OK : IStatus::RESULT_NO_DATA;
@@ -5344,7 +5339,7 @@ int ResultSet::fetchRelative(CheckStatusWrapper* user_status, int offset, void* 
 	try
 	{
 		if (!(flags & IStatement::CURSOR_TYPE_SCROLLABLE))
-			(Firebird::Arg::Gds(isc_invalid_fetch_option) << Firebird::Arg::Str("RELATIVE")).raise();
+			(Arg::Gds(isc_invalid_fetch_option) << Arg::Str("RELATIVE")).raise();
 
 		return fetch(user_status, buffer, fetch_relative, offset) ?
 			IStatus::RESULT_OK : IStatus::RESULT_NO_DATA;
@@ -5368,7 +5363,7 @@ FB_BOOLEAN ResultSet::isEof(CheckStatusWrapper* status)
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 		}
 		Rsr* statement = stmt->getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -5397,7 +5392,7 @@ FB_BOOLEAN ResultSet::isBof(CheckStatusWrapper* status)
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 		}
 		Rsr* statement = stmt->getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -5420,7 +5415,7 @@ IMessageMetadata* ResultSet::getMetadata(CheckStatusWrapper* status)
 {
 	if (!outputFormat)
 	{
-		status->setErrors(Firebird::Arg::Gds(isc_no_output_format).value());
+		status->setErrors(Arg::Gds(isc_no_output_format).value());
 		return NULL;
 	}
 
@@ -5441,7 +5436,7 @@ void ResultSet::getInfo(CheckStatusWrapper* status,
 		// Check and validate handles, etc.
 
 		if (!stmt)
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 
 		const auto statement = stmt->getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -5481,7 +5476,7 @@ void ResultSet::freeClientData(CheckStatusWrapper* status, bool force)
 
 		if (!stmt)
 		{
-			Firebird::Arg::Gds(isc_dsql_cursor_err).raise();
+			Arg::Gds(isc_dsql_cursor_err).raise();
 		}
 		Rsr* statement = stmt->getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -6482,8 +6477,8 @@ void Request::receive(CheckStatusWrapper* status, int level, unsigned int msg_ty
 
 		if (tail->rrq_format->fmt_length != msg_length)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_port_len) <<
-				Firebird::Arg::Num(msg_length) << Firebird::Arg::Num(tail->rrq_format->fmt_length));
+			status_exception::raise(Arg::Gds(isc_port_len) <<
+				Arg::Num(msg_length) << Arg::Num(tail->rrq_format->fmt_length));
 		}
 
 		message = tail->rrq_message;
@@ -6914,7 +6909,7 @@ int Blob::seekCached(int mode, int offset)
 {
 	// Segmented blobs does not support seek
 	if (blob->rbl_info.blob_type == 0)
-		Firebird::Arg::Gds(isc_bad_segstr_type).raise();
+		Arg::Gds(isc_bad_segstr_type).raise();
 
 	if (mode == 1)						// seek from current position
 		offset += blob->rbl_offset;
@@ -7243,7 +7238,7 @@ void Service::cancel(CheckStatusWrapper* status)
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 */
 
-		Firebird::Arg::Gds(isc_wish_list).raise();
+		Arg::Gds(isc_wish_list).raise();
 	}
 	catch (const Exception& ex)
 	{
@@ -7321,7 +7316,7 @@ void Request::startAndSend(CheckStatusWrapper* status, ITransaction* apiTra, int
 
 		if (transaction->rtr_rdb != rdb)
 		{
-			Firebird::Arg::Gds(isc_trareqmis).raise();
+			Arg::Gds(isc_trareqmis).raise();
 		}
 
 		clear_queue(rdb->rdb_port);
@@ -7394,7 +7389,7 @@ void Request::start(CheckStatusWrapper* status, ITransaction* apiTra, int level)
 
 		if (transaction->rtr_rdb != rdb)
 		{
-			Firebird::Arg::Gds(isc_trareqmis).raise();
+			Arg::Gds(isc_trareqmis).raise();
 		}
 
 		clear_queue(rdb->rdb_port);
@@ -7449,7 +7444,7 @@ ITransaction* Attachment::startTransaction(CheckStatusWrapper* status, unsigned 
 
 		if (/***tpbLength < 0 ||***/ (tpbLength > 0 && !tpb))
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_bad_tpb_form));
+			status_exception::raise(Arg::Gds(isc_bad_tpb_form));
 		}
 
 		// Validate data length
@@ -7828,9 +7823,9 @@ static void authenticateStep0(ClntAuthBlock& cBlock)
 			{
 				iscLogStatus("Authentication, client plugin:", &s);
 			}
-			(Firebird::Arg::Gds(isc_login_error)
+			(Arg::Gds(isc_login_error)
 #ifdef DEV_BUILD
-								 << Firebird::Arg::StatusVector(&s)
+								 << Arg::StatusVector(&s)
 #endif
 								 ).raise();
 			break;	// compiler silencer
@@ -7899,7 +7894,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 
 #ifdef TRUSTED_AUTH
 	bool legacySSP = false;
-	Firebird::Auth::setLegacySSP(legacySSP);
+	Auth::setLegacySSP(legacySSP);
 #endif
 
 	rem_port* port;
@@ -8014,7 +8009,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 				else
 					break;
 
-				Firebird::Auth::setLegacySSP(legacySSP);
+				Auth::setLegacySSP(legacySSP);
 
 				if (legacySSP && savePluginName == "WIN_SSPI")
 				{
@@ -8040,7 +8035,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 
 			// Retry connect with failed plugin only and using legacy security package
 			legacySSP = true;
-			Firebird::Auth::setLegacySSP(legacySSP);
+			Auth::setLegacySSP(legacySSP);
 			attach_name = save_attach_name;
 
 			cBlock.plugins.set(pluginName);
@@ -8051,7 +8046,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 	}
 
 	if (!port)
-		Firebird::Arg::Gds(isc_unavailable).raise();
+		Arg::Gds(isc_unavailable).raise();
 
 	try
 	{
@@ -8685,7 +8680,7 @@ static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par, bool loop
  **************************************/
     if (dpb.find(par.address_path) || dpb.find(par.map_attach))
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_unavailable));
+		status_exception::raise(Arg::Gds(isc_unavailable));
 	}
 
 	return dpb.find(par.user_name);
@@ -8789,7 +8784,7 @@ static void authFillParametersBlock(ClntAuthBlock& cBlock, ClumpletWriter& dpb,
 			case IAuth::AUTH_FAILED:
 				HANDSHAKE_DEBUG(fprintf(stderr, "Cli: authFillParametersBlock: plugin %s FAILED\n",
 					cBlock.plugins.name()));
-				(Firebird::Arg::Gds(isc_login) << Firebird::Arg::StatusVector(&s)).raise();
+				(Arg::Gds(isc_login) << Arg::StatusVector(&s)).raise();
 				break;	// compiler silencer
 			}
 		}
@@ -8945,7 +8940,7 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& cBlock, rem_port
 	}
 
 	// If we have exited from the cycle, this mean auth failed
-	(Firebird::Arg::Gds(isc_login) << Firebird::Arg::StatusVector(&s)).raise();
+	(Arg::Gds(isc_login) << Arg::StatusVector(&s)).raise();
 }
 
 static bool init(CheckStatusWrapper* status, ClntAuthBlock& cBlock, rem_port* port, P_OP op, PathName& file_name,
@@ -9092,7 +9087,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 	if (!from_msg || !from_fmt || !to_msg || !to_fmt ||
 		from_fmt->fmt_desc.getCount() != to_fmt->fmt_desc.getCount())
 	{
-		move_error(Firebird::Arg::Gds(isc_dsql_sqlda_err));
+		move_error(Arg::Gds(isc_dsql_sqlda_err));
 		// Msg 263 SQLDA missing or wrong number of variables
 	}
 
@@ -9111,7 +9106,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 }
 
 
-[[noreturn]] static void move_error(const Firebird::Arg::StatusVector& v)
+[[noreturn]] static void move_error(const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -9124,8 +9119,8 @@ static void mov_dsql_message(const UCHAR* from_msg,
  *
  **************************************/
 
-	Firebird::Arg::Gds status_vector(isc_random);
-	status_vector << "Dynamic SQL Error" << Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-303);
+	Arg::Gds status_vector(isc_random);
+	status_vector << "Dynamic SQL Error" << Arg::Gds(isc_sqlerr) << Arg::Num(-303);
 
 	// append any other arguments which may have been handed to us, then post the error
 	status_vector.append(v);
@@ -9267,7 +9262,7 @@ static void receive_packet_with_callback(rem_port* port, PACKET* packet)
 	{
 		if (!port->receive(packet))
 		{
-			Firebird::Arg::Gds(isc_net_read_err).raise();
+			Arg::Gds(isc_net_read_err).raise();
 		}
 
 		switch (packet->p_operation)
@@ -9832,9 +9827,9 @@ static void send_packet(rem_port* port, PACKET* packet)
 
 	if (port->port_flags & PORT_detached || port->port_state == rem_port::BROKEN)
 	{
-		(Firebird::Arg::Gds(isc_net_write_err)
+		(Arg::Gds(isc_net_write_err)
 #ifdef DEV_BUILD
-			<< Firebird::Arg::Gds(isc_random) << "port detached"
+			<< Arg::Gds(isc_random) << "port detached"
 #endif
 		).raise();
 	}
@@ -9850,8 +9845,8 @@ static void send_packet(rem_port* port, PACKET* packet)
 			if (!p->sent)
 			{
 				if (!port->send_partial(&p->packet))
-					(Firebird::Arg::Gds(isc_net_write_err) <<
-					 Firebird::Arg::Gds(isc_random) << "send_packet/send_partial").raise();
+					(Arg::Gds(isc_net_write_err) <<
+					 Arg::Gds(isc_random) << "send_packet/send_partial").raise();
 
 				p->sent = true;
 			}
@@ -9860,7 +9855,7 @@ static void send_packet(rem_port* port, PACKET* packet)
 
 	if (!port->send(packet))
 	{
-		(Firebird::Arg::Gds(isc_net_write_err)<< Firebird::Arg::Gds(isc_random) << "send_packet/send").raise();
+		(Arg::Gds(isc_net_write_err)<< Arg::Gds(isc_random) << "send_packet/send").raise();
 	}
 }
 
@@ -9891,9 +9886,9 @@ static void send_partial_packet(rem_port* port, PACKET* packet)
 
 	if (port->port_flags & PORT_detached || port->port_state == rem_port::BROKEN)
 	{
-		(Firebird::Arg::Gds(isc_net_write_err)
+		(Arg::Gds(isc_net_write_err)
 #ifdef DEV_BUILD
-			<< Firebird::Arg::Gds(isc_random) << "port detached"
+			<< Arg::Gds(isc_random) << "port detached"
 #endif
 		).raise();
 	}
@@ -9909,8 +9904,8 @@ static void send_partial_packet(rem_port* port, PACKET* packet)
 			{
 				if (!port->send_partial(&p->packet))
 				{
-					(Firebird::Arg::Gds(isc_net_write_err) <<
-					 Firebird::Arg::Gds(isc_random) << "send_partial_packet/send_partial").raise();
+					(Arg::Gds(isc_net_write_err) <<
+					 Arg::Gds(isc_random) << "send_partial_packet/send_partial").raise();
 				}
 				p->sent = true;
 			}
@@ -9919,8 +9914,8 @@ static void send_partial_packet(rem_port* port, PACKET* packet)
 
 	if (!port->send_partial(packet))
 	{
-		(Firebird::Arg::Gds(isc_net_write_err) <<
-		 Firebird::Arg::Gds(isc_random) << "send_partial_packet/send").raise();
+		(Arg::Gds(isc_net_write_err) <<
+		 Arg::Gds(isc_random) << "send_partial_packet/send").raise();
 	}
 }
 
@@ -10008,7 +10003,7 @@ static void unsupported()
  *
  **************************************/
 
-	Firebird::Arg::Gds(isc_wish_list).raise();
+	Arg::Gds(isc_wish_list).raise();
 }
 
 
@@ -10062,7 +10057,7 @@ void Attachment::cancelOperation(CheckStatusWrapper* status, int kind)
 		if (++(rdb->rdb_async_lock) != 1)
 		{
 			// Something async already runs
-			Firebird::Arg::Gds(isc_async_active).raise();
+			Arg::Gds(isc_async_active).raise();
 		}
 
 		PACKET packet;
@@ -10106,8 +10101,6 @@ static void cleanDpb(ClumpletWriter& dpb, const ParametersSet* tags)
 	dpb.deleteWithTag(tags->password_enc);
 	dpb.deleteWithTag(tags->trusted_auth);
 }
-
-} //namespace Remote
 
 
 void ClientPortsCleanup::closePort(rem_port* port)
@@ -10563,15 +10556,18 @@ void ClntAuthBlock::ClientCrypt::dispose()
 	}
 }
 
-int ClntAuthBlock::ClientCrypt::getHashLength(Firebird::CheckStatusWrapper* status)
+int ClntAuthBlock::ClientCrypt::getHashLength(CheckStatusWrapper* status)
 {
 	getHashData(status, nullptr);
 
 	return -1;
 }
 
-void ClntAuthBlock::ClientCrypt::getHashData(Firebird::CheckStatusWrapper* status, void*)
+void ClntAuthBlock::ClientCrypt::getHashData(CheckStatusWrapper* status, void*)
 {
 	ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 	status->setErrors2(FB_NELEM(err), err);
 }
+
+
+} // namespace Firebird::Remote

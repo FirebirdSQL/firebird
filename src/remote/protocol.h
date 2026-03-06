@@ -34,12 +34,16 @@
 #define REMOTE_PROTOCOL_H
 
 // forward
-namespace Firebird {
+namespace Firebird
+{
 	class DynamicStatusVector;
 }
 
-class RemBlobBuffer;	// see remote.h
+namespace Firebird::Remote
+{
 
+
+class RemBlobBuffer;	// see remote.h
 
 // dimitr: ask for asymmetric protocols only.
 // Comment it out to return back to FB 1.0 behaviour.
@@ -847,5 +851,8 @@ public:
 		memset(this, 0, sizeof(*this));
 	}
 } PACKET;
+
+
+}	// namespace Firebird::Remote
 
 #endif // REMOTE_PROTOCOL_H

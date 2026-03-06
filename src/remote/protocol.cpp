@@ -45,7 +45,9 @@
 #include "../common/utils_proto.h"
 #include "../dsql/DsqlBatch.h"
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
+
 
 #ifdef DEBUG_XDR_MEMORY
 inline bool_t P_TRUE(RemoteXdr* xdrs, PACKET* p)
@@ -2602,3 +2604,6 @@ static bool_t xdr_blobBuffer(RemoteXdr* xdrs, RemBlobBuffer* buff)
 
 	return FALSE;
 }
+
+
+} // namespace Firebird::Remote

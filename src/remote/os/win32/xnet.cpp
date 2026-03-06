@@ -50,8 +50,9 @@
 #pragma FB_COMPILER_MESSAGE("POSIX implementation is required")
 #endif // WIN_NT
 
-using namespace Firebird;
-using namespace Remote;
+namespace Firebird::Remote
+{
+
 
 static bool accept_connection(rem_port*, const P_CNCT*);
 static rem_port* alloc_port(rem_port*, UCHAR*, ULONG, UCHAR*, ULONG);
@@ -84,8 +85,7 @@ static DWORD current_process_id;
 static volatile bool xnet_shutdown = false;
 static GlobalPtr<PortsCleanup>	xnet_ports;
 
-namespace Remote
-{
+
 	class XnetEndPoint
 	{
 	public:
@@ -186,7 +186,6 @@ namespace Remote
 
 	static GlobalPtr<XnetClientEndPoint> xnet_client;
 	static GlobalPtr<XnetServerEndPoint> xnet_server;
-} // namespace Remote
 
 
 inline void XnetEndPoint::make_obj_name(char* buffer, size_t size, const char* format)
@@ -378,7 +377,7 @@ rem_port* XNET_analyze(ClntAuthBlock* cBlock,
 	default:
 		disconnect(port);
 		delete rdb;
-		Firebird::Arg::Gds(isc_connect_reject).raise();
+		Arg::Gds(isc_connect_reject).raise();
 		break;
 	}
 
@@ -422,8 +421,8 @@ rem_port* XNET_connect(PACKET* packet,
  **************************************/
 	if (xnet_shutdown)
 	{
-		Firebird::Arg::StatusVector temp;
-		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
+		Arg::StatusVector temp;
+		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
 		temp.raise();
 	}
 
@@ -1092,7 +1091,7 @@ static void cleanup_port(rem_port* port)
 static void raise_lostconn_or_syserror(const char* msg)
 {
 	if (ERRNO == ERROR_FILE_NOT_FOUND)
-		status_exception::raise(Firebird::Arg::Gds(isc_lost_db_connection));
+		status_exception::raise(Arg::Gds(isc_lost_db_connection));
 	else
 		system_error::raise(msg);
 }
@@ -1152,15 +1151,15 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
 					make_obj_name(name_buffer, sizeof(name_buffer), "xnet://%s");
 
 					*xnet_endpoint = 0;
-					(Firebird::Arg::Gds(isc_network_error) << Firebird::Arg::Str(name_buffer)).raise();
+					(Arg::Gds(isc_network_error) << Arg::Str(name_buffer)).raise();
 				}
 			}
 		}
 
 
 		// setup status with net read error in case of wait timeout
-		Firebird::Arg::StatusVector temp;
-		temp << Firebird::Arg::Gds(isc_net_read_err);
+		Arg::StatusVector temp;
+		temp << Arg::Gds(isc_net_read_err);
 
 		static const int timeout = conf->getConnectionTimeout() * 1000;
 
@@ -1206,8 +1205,8 @@ rem_port* XnetClientEndPoint::connect_client(PACKET* packet, const RefPtr<const 
 	{
 		xnet_log_error("Server failed to respond on connect request");
 
-		Firebird::Arg::StatusVector temp;
-		temp << Firebird::Arg::Gds(isc_net_connect_err);
+		Arg::StatusVector temp;
+		temp << Arg::Gds(isc_net_connect_err);
 		temp.raise();
 	}
 
@@ -1472,8 +1471,8 @@ rem_port* XnetServerEndPoint::connect_server(USHORT flag)
 
 	if (xnet_shutdown)
 	{
-		Firebird::Arg::StatusVector temp;
-		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
+		Arg::StatusVector temp;
+		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
 		temp.raise();
 	}
 
@@ -1719,7 +1718,7 @@ static RemoteXdr* xdrxnet_create(rem_port* port, UCHAR* buffer, USHORT length, x
 }
 
 
-static void xnet_gen_error (rem_port* port, const Firebird::Arg::StatusVector& v)
+static void xnet_gen_error (rem_port* port, const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -1759,11 +1758,11 @@ static void xnet_error(rem_port* port, ISC_STATUS operation, int status)
 			gds__log("XNET/xnet_error: errno = %d", status);
 		}
 
-		xnet_gen_error(port, Firebird::Arg::Gds(operation) << SYS_ERR(status));
+		xnet_gen_error(port, Arg::Gds(operation) << SYS_ERR(status));
 	}
 	else
 	{
-		xnet_gen_error(port, Firebird::Arg::Gds(operation));
+		xnet_gen_error(port, Arg::Gds(operation));
 	}
 }
 
@@ -2283,8 +2282,8 @@ bool XnetServerEndPoint::server_init(USHORT flag)
 		xnet_shutdown = true;
 
 		// the real error is already logged, return isc_net_server_shutdown instead
-		Firebird::Arg::StatusVector temp;
-		temp << Firebird::Arg::Gds(isc_net_server_shutdown) << Firebird::Arg::Str("XNET");
+		Arg::StatusVector temp;
+		temp << Arg::Gds(isc_net_server_shutdown) << Arg::Str("XNET");
 		temp.raise();
 	}
 
@@ -2547,3 +2546,6 @@ rem_port* XnetServerEndPoint::get_server_port(ULONG client_pid,
 
 	return port;
 }
+
+
+}	// namespace Firebird::Remote

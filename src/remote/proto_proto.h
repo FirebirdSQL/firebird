@@ -24,10 +24,13 @@
 #ifndef REMOTE_PROTO_PROTO_H
 #define REMOTE_PROTO_PROTO_H
 
+namespace Firebird::Remote
+{
 #ifdef DEBUG_XDR_MEMORY
-void	xdr_debug_memory (RemoteXdr*, enum xdr_op, const void*, const void*, ULONG);
+	void	xdr_debug_memory(RemoteXdr*, enum xdr_op, const void*, const void*, ULONG);
 #endif
-bool_t	xdr_protocol (RemoteXdr*, struct packet*);
-ULONG	xdr_protocol_overhead (P_OP) noexcept;
+	bool_t	xdr_protocol(RemoteXdr*, struct packet*);
+	ULONG	xdr_protocol_overhead(P_OP) noexcept;
+} // namespace Firebird::Remote
 
 #endif	//  REMOTE_PROTO_PROTO_H

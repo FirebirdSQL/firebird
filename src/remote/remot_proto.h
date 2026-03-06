@@ -37,7 +37,12 @@ namespace Firebird
 	class ClumpletReader;
 }
 
+namespace Firebird::Remote
+{
+
+
 struct rem_port;
+
 struct RemoteXdr : public xdr_t
 {
 	RemoteXdr() noexcept
@@ -76,5 +81,8 @@ extern const signed char wcCompatible[3][3];
 
 #define HANDSHAKE_DEBUG(A)
 #define WIRECRYPT_DEBUG(A)
+
+
+}	// namespace Firebird::Remote
 
 #endif // REMOTE_REMOT_PROTO_H

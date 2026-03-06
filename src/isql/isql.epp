@@ -3872,7 +3872,8 @@ static void check_autoterm()
 		}
 	}
 
-	if (!(protocolVersion == 0 || protocolVersion >= (PROTOCOL_PREPARE_FLAG & FB_PROTOCOL_MASK)) &&
+	if (!(protocolVersion == 0 || protocolVersion >=
+		(Firebird::Remote::PROTOCOL_PREPARE_FLAG & Firebird::Remote::FB_PROTOCOL_MASK)) &&
 		isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		setValues.AutoTerm = false;

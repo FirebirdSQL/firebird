@@ -76,7 +76,8 @@
 #include "../common/os/os_utils.h"
 #include "../common/security.h"
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
 
 
 struct server_req_t : public GlobalStorage
@@ -7749,3 +7750,6 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 
 	return to->cstr_length > 0;
 }
+
+
+} // namespace Firebird::Remote
