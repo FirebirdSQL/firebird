@@ -55,8 +55,9 @@
 
 //#define DEBUG_PLUGINS
 
-using namespace Firebird;
-using namespace Firebird::Why;
+namespace Firebird::Why
+{
+
 
 namespace
 {
@@ -1040,8 +1041,6 @@ namespace
 } // anonymous namespace
 
 
-namespace Firebird::Why {
-
 PluginManager::PluginManager()
 {
 	MutexLockGuard g(plugins->mutex, FB_FUNCTION);
@@ -1253,7 +1252,6 @@ void PluginManager::deleteDelayed()
 	ConfiguredPlugin::processDelayedDelete();
 }
 
-}	// namespace Firebird::Why
 
 namespace {
 
@@ -1291,8 +1289,6 @@ private:
 InitInstance<DataCache> dataCache;
 
 }	// anonymous namespace
-
-namespace Firebird {
 
 /******************************************************************************
 *
@@ -1382,4 +1378,5 @@ public:
 static ConfigManager configManager;
 IConfigManager* iConfigManager(&configManager);
 
-}	// namespace Firebird
+
+}	// namespace Firebird::Why

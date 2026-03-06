@@ -433,17 +433,13 @@ namespace Firebird::Why {
 // ConfigManager (config info access)
 //
 
-namespace Firebird {
-
+namespace Firebird::Why
+{
 	extern IConfigManager* iConfigManager;
-
-} // namespace Firebird
-
-namespace Firebird::Why {
 
 	IConfigManager* MasterImplementation::getConfigManager()
 	{
-		return Firebird::iConfigManager;
+		return iConfigManager;
 	}
 
 } // namespace Firebird::Why
