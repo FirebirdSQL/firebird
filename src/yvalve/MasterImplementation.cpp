@@ -49,8 +49,9 @@
 #include "../yvalve/utl_proto.h"
 
 using namespace Firebird;
+using namespace Firebird::Why;
 
-namespace Why {
+namespace Firebird::Why {
 
 //
 // getStatus()
@@ -122,13 +123,13 @@ int MasterImplementation::serverMode(int mode)
 	return currentMode;
 }
 
-} // namespace Why
+} // namespace Firebird::Why
 
 //
 // timer
 //
 
-namespace Why {
+namespace Firebird::Why {
 
 static bool abortShutdownFlag = false;
 
@@ -409,14 +410,14 @@ bool timerThreadStopped()
 	return stopTimerThread.value() != 0;
 }
 
-} // namespace Why
+} // namespace Firebird::Why
 
 
 //
 // Util (misc calls)
 //
 
-namespace Why {
+namespace Firebird::Why {
 
 	extern UtilInterface utilInterface;		// Implemented in utl.cpp
 
@@ -425,7 +426,7 @@ namespace Why {
 		return &utilInterface;
 	}
 
-} // namespace Why
+} // namespace Firebird::Why
 
 
 //
@@ -438,14 +439,14 @@ namespace Firebird {
 
 } // namespace Firebird
 
-namespace Why {
+namespace Firebird::Why {
 
 	IConfigManager* MasterImplementation::getConfigManager()
 	{
 		return Firebird::iConfigManager;
 	}
 
-} // namespace Why
+} // namespace Firebird::Why
 
 
 //
@@ -458,7 +459,7 @@ namespace Firebird
 
 	extern "C" IMasterPtr API_ROUTINE fb_get_master_interface()
 	{
-		static Static<Why::MasterImplementation> instance;
+		static Static<Firebird::Why::MasterImplementation> instance;
 		return &instance;
 	}
 }

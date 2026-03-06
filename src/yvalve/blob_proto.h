@@ -26,19 +26,12 @@
 
 #include "../common/classes/RefCounted.h"
 
-namespace Why {
+namespace Firebird::Why {
 	class YAttachment;
 	class YTransaction;
 }
 
-ISC_STATUS API_ROUTINE isc_blob_gen_bpb(ISC_STATUS*, const ISC_BLOB_DESC*,
-										const ISC_BLOB_DESC*, USHORT, UCHAR*, USHORT*);
-ISC_STATUS API_ROUTINE isc_blob_lookup_desc(ISC_STATUS*, void**, void**,
-											const UCHAR*, const UCHAR*, ISC_BLOB_DESC*, UCHAR*);
-ISC_STATUS API_ROUTINE isc_blob_set_desc(ISC_STATUS*, const UCHAR*, const UCHAR*,
-										 SSHORT, SSHORT, SSHORT, ISC_BLOB_DESC*);
-
-void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
+void iscBlobLookupDescImpl(Firebird::Why::YAttachment* attachment, Firebird::Why::YTransaction* transaction,
 	const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global);
 
 // Only declared in ibase.h:

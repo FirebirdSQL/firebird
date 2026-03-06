@@ -56,6 +56,7 @@
 //#define DEBUG_PLUGINS
 
 using namespace Firebird;
+using namespace Firebird::Why;
 
 namespace
 {
@@ -1039,7 +1040,7 @@ namespace
 } // anonymous namespace
 
 
-namespace Firebird {
+namespace Firebird::Why {
 
 PluginManager::PluginManager()
 {
@@ -1252,7 +1253,7 @@ void PluginManager::deleteDelayed()
 	ConfiguredPlugin::processDelayedDelete();
 }
 
-}	// namespace Firebird
+}	// namespace Firebird::Why
 
 namespace {
 

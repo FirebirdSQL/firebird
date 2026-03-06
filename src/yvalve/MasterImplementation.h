@@ -40,13 +40,13 @@ namespace Firebird
 	class Mutex;
 }
 
-namespace Why
+namespace Firebird::Why
 {
 	class MasterImplementation :
 		public Firebird::AutoIface<Firebird::IMasterImpl<MasterImplementation, Firebird::CheckStatusWrapper> >
 	{
 	public:
-		static Firebird::Static<Dtc> dtc;
+		static Firebird::Static<Firebird::Why::Dtc> dtc;
 
 	public:
 		// IMaster implementation
@@ -58,7 +58,7 @@ namespace Why
 			Firebird::IAttachment* attachment);
 		Firebird::ITransaction* registerTransaction(Firebird::IAttachment* attachment,
 			Firebird::ITransaction* transaction);
-		Dtc* getDtc();
+		Firebird::Why::Dtc* getDtc();
 		Firebird::IMetadataBuilder* getMetadataBuilder(Firebird::CheckStatusWrapper* status, unsigned fieldCount);
 		int serverMode(int mode);
 		Firebird::IUtil* getUtilInterface();

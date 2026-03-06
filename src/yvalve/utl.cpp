@@ -90,6 +90,7 @@
 
 
 using namespace Firebird;
+using namespace Firebird::Why;
 
 IAttachment* handleToIAttachment(CheckStatusWrapper*, FB_API_HANDLE*);
 ITransaction* handleToITransaction(CheckStatusWrapper*, FB_API_HANDLE*);
@@ -363,7 +364,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 } // anonymous namespace
 
 
-namespace Why {
+namespace Firebird::Why {
 
 UtilInterface utilInterface;
 
@@ -3547,7 +3548,7 @@ void makePermanentVector(ISC_STATUS* v) noexcept
 }
 
 #ifdef WIN_NT
-namespace Why
+namespace Firebird::Why
 {
 	// This is called from ibinitdll.cpp:DllMain()
 	void threadCleanup()

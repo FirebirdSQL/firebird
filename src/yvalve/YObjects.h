@@ -38,7 +38,7 @@
 
 #include <functional>
 
-namespace Why
+namespace Firebird::Why
 {
 
 

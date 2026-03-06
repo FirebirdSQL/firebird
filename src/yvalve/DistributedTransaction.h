@@ -34,7 +34,7 @@
 #include "../common/classes/array.h"
 #include "../common/StatusHolder.h"
 
-namespace Why {
+namespace Firebird::Why {
 
 class DtcStart : public Firebird::DisposeIface<Firebird::IDtcStartImpl<DtcStart, Firebird::CheckStatusWrapper> >
 {

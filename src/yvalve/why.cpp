@@ -82,7 +82,7 @@
 #include <functional>
 
 using namespace Firebird;
-using namespace Why;
+using namespace Firebird::Why;
 
 
 [[noreturn]] static void badHandle(ISC_STATUS code);
@@ -99,7 +99,7 @@ static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHand
 //-------------------------------------
 
 
-namespace Why {
+namespace Firebird::Why {
 	class StatusVector;
 	extern UtilInterface utilInterface;
 };
@@ -874,7 +874,7 @@ private:
 
 //-------------------------------------
 
-namespace Why
+namespace Firebird::Why
 {
 	// StatusVector:	Provides correct status vector for operation and init() it.
 	class StatusVector final : public AutoIface<BaseStatus<StatusVector> >
@@ -3943,7 +3943,7 @@ ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, void* 
 
 //-------------------------------------
 
-namespace Why {
+namespace Firebird::Why {
 
 IAttachment* MasterImplementation::registerAttachment(IProvider* provider, IAttachment* attachment)
 {
