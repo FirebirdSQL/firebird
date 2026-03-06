@@ -28,7 +28,9 @@
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
 
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // Compression (run-length encoding aka RLE) scheme:
 //
@@ -670,3 +672,6 @@ ULONG Difference::make(ULONG length1, const UCHAR* rec1,
 
 	return (diffLength <= MAX_DIFFERENCES) ? diffLength : 0;
 }
+
+
+}	// namespace Firebird::Jrd

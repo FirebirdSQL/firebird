@@ -27,8 +27,8 @@
 #include "../jrd/ProfilerManager.h"
 #include "../jrd/sys-packages/SqlPackage.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -57,3 +57,6 @@ ObjectsArray<SystemPackage>& SystemPackage::get()
 {
 	return *SystemPackagesInit::INSTANCE().list.get();
 }
+
+
+}	// namespace Firebird::Jrd

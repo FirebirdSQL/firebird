@@ -27,7 +27,8 @@
 #include "../include/fb_blk.h"
 #include "../../common/classes/array.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 	class thread_db;
 
 	class Compressor
@@ -57,7 +58,7 @@ namespace Firebird::Jrd {
 	private:
 		unsigned nonCompressableRun(unsigned length);
 
-		Firebird::HalfStaticArray<int, 256> m_runs;
+		HalfStaticArray<int, 256> m_runs;
 		ULONG m_length = 0;
 
 		// Compatibility options
@@ -94,7 +95,6 @@ namespace Firebird::Jrd {
 	private:
 		UCHAR m_differences[MAX_DIFFERENCES];
 	};
-
 } // namespace Firebird::Jrd
 
 #endif // JRD_SQZ_H

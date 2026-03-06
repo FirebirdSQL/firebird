@@ -36,7 +36,8 @@
 #include "../jrd/SystemPackages.h"
 #include "../jrd/Statement.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 class Attachment;
 class Request;
@@ -47,13 +48,13 @@ class thread_db;
 class ProfilerListener;
 
 
-class ProfilerManager final : public Firebird::PerformanceStopWatch
+class ProfilerManager final : public PerformanceStopWatch
 {
 	friend class ProfilerListener;
 	friend class ProfilerPackage;
 
 public:
-	class Stats final : public Firebird::IProfilerStatsImpl<Stats, Firebird::ThrowStatusExceptionWrapper>
+	class Stats final : public IProfilerStatsImpl<Stats, ThrowStatusExceptionWrapper>
 	{
 	public:
 		explicit Stats(FB_UINT64 aElapsedTicks)
@@ -97,7 +98,7 @@ public:
 			{
 				lastTicks = profilerManager->queryTicks();
 
-				if (profilerManager->currentSession->flags & Firebird::IProfilerSession::FLAG_BEFORE_EVENTS)
+				if (profilerManager->currentSession->flags & IProfilerSession::FLAG_BEFORE_EVENTS)
 				{
 					if (event == Event::OPEN)
 						profilerManager->beforeRecordSourceOpen(request, recordSource);
@@ -149,9 +150,9 @@ private:
 		void operator=(const Statement&) = delete;
 
 		SINT64 id = 0;
-		Firebird::NonPooledMap<ULONG, ULONG> cursorNextSequence;
-		Firebird::SortedArray<ULONG> definedCursors;
-		Firebird::NonPooledMap<ULONG, ULONG> recSourceSequence;
+		NonPooledMap<ULONG, ULONG> cursorNextSequence;
+		SortedArray<ULONG> definedCursors;
+		NonPooledMap<ULONG, ULONG> recSourceSequence;
 	};
 
 	class Session final
@@ -166,10 +167,10 @@ private:
 		Session(const Session&) = delete;
 		void operator=(const Session&) = delete;
 
-		Firebird::AutoPlugin<Firebird::IProfilerPlugin> plugin;
-		Firebird::AutoDispose<Firebird::IProfilerSession> pluginSession;
-		Firebird::RightPooledMap<StmtNumber, Statement> statements;
-		Firebird::SortedArray<StmtNumber> requests;
+		AutoPlugin<IProfilerPlugin> plugin;
+		AutoDispose<IProfilerSession> pluginSession;
+		RightPooledMap<StmtNumber, Statement> statements;
+		SortedArray<StmtNumber> requests;
 		unsigned flags = 0;
 	};
 
@@ -189,14 +190,14 @@ public:
 
 public:
 	SINT64 startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
-		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
+		const PathName& pluginName, const string& description, const string& options);
 
 	void prepareCursor(thread_db* tdbb, Request* request, const Select* select);
 	void onRequestFinish(Request* request, Stats& stats);
 
 	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 			currentSession->pluginSession->beforePsqlLineColumn(profileStatement->id, profileRequestId, line, column);
@@ -205,7 +206,7 @@ public:
 
 	void afterPsqlLineColumn(Request* request, ULONG line, ULONG column, Stats& stats)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 			currentSession->pluginSession->afterPsqlLineColumn(profileStatement->id, profileRequestId,
@@ -215,7 +216,7 @@ public:
 
 	void beforeRecordSourceOpen(Request* request, const AccessPath* recordSource)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 
@@ -229,7 +230,7 @@ public:
 
 	void afterRecordSourceOpen(Request* request, const AccessPath* recordSource, Stats& stats)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 
@@ -243,7 +244,7 @@ public:
 
 	void beforeRecordSourceGetRecord(Request* request, const AccessPath* recordSource)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_BEFORE_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_BEFORE_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 
@@ -257,7 +258,7 @@ public:
 
 	void afterRecordSourceGetRecord(Request* request, const AccessPath* recordSource, Stats& stats)
 	{
-		if (const auto profileRequestId = getRequest(request, Firebird::IProfilerSession::FLAG_AFTER_EVENTS))
+		if (const auto profileRequestId = getRequest(request, IProfilerSession::FLAG_AFTER_EVENTS))
 		{
 			const auto* profileStatement = getStatement(request);
 
@@ -283,7 +284,7 @@ public:
 	{
 		if (interval < 0)
 		{
-			Firebird::status_exception::raise(
+			status_exception::raise(
 				Arg::Gds(isc_not_valid_for_var) <<
 				"\"FLUSH_INTERVAL\"" <<
 				Arg::Num(interval));
@@ -341,10 +342,10 @@ private:
 	}
 
 private:
-	Firebird::AutoPtr<ProfilerListener> listener;
-	Firebird::LeftPooledMap<Firebird::PathName, Firebird::AutoPlugin<Firebird::IProfilerPlugin>> activePlugins;
-	Firebird::AutoPtr<Session> currentSession;
-	Firebird::RefPtr<Firebird::TimerImpl> flushTimer;
+	AutoPtr<ProfilerListener> listener;
+	LeftPooledMap<PathName, AutoPlugin<IProfilerPlugin>> activePlugins;
+	AutoPtr<Session> currentSession;
+	RefPtr<TimerImpl> flushTimer;
 	unsigned currentFlushInterval = 0;
 	bool paused = false;
 };
@@ -356,79 +357,79 @@ class ProfilerPackage final : public SystemPackage
 	friend class ProfilerManager;
 
 public:
-	ProfilerPackage(Firebird::MemoryPool& pool);
+	ProfilerPackage(MemoryPool& pool);
 
 	ProfilerPackage(const ProfilerPackage&) = delete;
 	ProfilerPackage& operator=(const ProfilerPackage&) = delete;
 
 public:
-	FB_MESSAGE(DiscardInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(DiscardInput, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* discardProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const DiscardInput::Type* in, void* out);
+	static IExternalResultSet* discardProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const DiscardInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(FlushInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(FlushInput, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* flushProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const FlushInput::Type* in, void* out);
+	static IExternalResultSet* flushProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const FlushInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(CancelSessionInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(CancelSessionInput, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* cancelSessionProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const CancelSessionInput::Type* in, void* out);
+	static IExternalResultSet* cancelSessionProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const CancelSessionInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(FinishSessionInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(FinishSessionInput, ThrowStatusExceptionWrapper,
 		(FB_BOOLEAN, flush)
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* finishSessionProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const FinishSessionInput::Type* in, void* out);
+	static IExternalResultSet* finishSessionProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const FinishSessionInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(PauseSessionInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(PauseSessionInput, ThrowStatusExceptionWrapper,
 		(FB_BOOLEAN, flush)
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* pauseSessionProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const PauseSessionInput::Type* in, void* out);
+	static IExternalResultSet* pauseSessionProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const PauseSessionInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(ResumeSessionInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ResumeSessionInput, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* resumeSessionProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const ResumeSessionInput::Type* in, void* out);
+	static IExternalResultSet* resumeSessionProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const ResumeSessionInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(SetFlushIntervalInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(SetFlushIntervalInput, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, flushInterval)
 		(FB_BIGINT, attachmentId)
 	);
 
-	static Firebird::IExternalResultSet* setFlushIntervalProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const SetFlushIntervalInput::Type* in, void* out);
+	static IExternalResultSet* setFlushIntervalProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const SetFlushIntervalInput::Type* in, void* out);
 
 	//----------
 
-	FB_MESSAGE(StartSessionInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(StartSessionInput, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), description)
 		(FB_INTEGER, flushInterval)
 		(FB_BIGINT, attachmentId)
@@ -436,15 +437,15 @@ public:
 		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginOptions)
 	);
 
-	FB_MESSAGE(StartSessionOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(StartSessionOutput, ThrowStatusExceptionWrapper,
 		(FB_BIGINT, sessionId)
 	);
 
-	static void startSessionFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const StartSessionInput::Type* in, StartSessionOutput::Type* out);
+	static void startSessionFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const StartSessionInput::Type* in, StartSessionOutput::Type* out);
 };
 
 
-}	// namespace
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_PROFILER_MANAGER_H
