@@ -52,6 +52,9 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/sha.h"
 
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -72,8 +75,6 @@ namespace
 }
 
 
-namespace Firebird::Jrd
-{
 	class Header
 	{
 	protected:

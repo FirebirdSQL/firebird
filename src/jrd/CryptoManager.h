@@ -57,7 +57,8 @@ class ClumpletReader;
 
 }
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 class Database;
 class Attachment;

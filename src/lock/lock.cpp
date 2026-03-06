@@ -128,7 +128,9 @@ SSHORT LOCK_debug_level = 0;
 #define DEBUG_DELAY
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // hvlad: enable to log deadlocked owners and its PIDs in firebird.log
 //#define DEBUG_TRACE_DEADLOCKS
@@ -160,9 +162,6 @@ static constexpr bool compatibility[LCK_max][LCK_max] =
 /* PW */	{true,	true,	true,	false,	false,	false,	false},
 /* EX */	{true,	true,	false,	false,	false,	false,	false}
 };
-
-
-namespace Firebird::Jrd {
 
 
 LockManager::LockManager(const string& id, const Config* conf)
@@ -1639,7 +1638,7 @@ void LockManager::bug(CheckStatusWrapper* statusVector, const TEXT* string)
 			TEXT buffer[MAXPATHLEN];
 			gds__prefix_lock(buffer, "fb_lock_table.dump");
 			const TEXT* const lock_file = buffer;
-			FILE* const fd = Firebird::os_utils::fopen(lock_file, "wb");
+			FILE* const fd = os_utils::fopen(lock_file, "wb");
 			if (fd)
 			{
 				FB_UNUSED(fwrite(header, 1, header->lhb_used, fd));
@@ -4065,4 +4064,5 @@ void LockManager::Extent::assign(const SharedMemoryBase& p)
 }
 #endif // USE_SHMEM_EXT
 
-} // namespace
+
+} // namespace Firebird::Jrd
