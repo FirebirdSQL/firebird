@@ -48,6 +48,10 @@
 // operator in destructor will cause AV.
 #undef DEBUG_INIT
 
+namespace Firebird
+{
+
+
 static bool dontCleanup = false;
 
 namespace
@@ -188,8 +192,6 @@ namespace
 }
 
 
-namespace Firebird
-{
 	InstanceControl::InstanceControl()
 	{
 		// Initialize required subsystems, including static mutex
@@ -338,4 +340,6 @@ namespace Firebird
 			mutex->~Mutex();
 		}
 	}
-}
+
+
+} // namespace Firebird

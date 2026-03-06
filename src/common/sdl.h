@@ -29,6 +29,10 @@
 #include "../common/constants.h"
 #include "../common/dsc.h"
 
+namespace Firebird
+{
+
+
 struct sdl_info
 {
 	USHORT			sdl_info_fid;
@@ -55,4 +59,8 @@ struct array_slice
 };
 
 typedef void (*SDL_walk_callback)(array_slice*, ULONG, dsc*);
+
+
+} // namespace Firebird
+
 #endif /* JRD_SDL_H */

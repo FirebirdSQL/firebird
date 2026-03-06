@@ -30,7 +30,9 @@
 #include "../common/utils_proto.h"
 #include "../common/constants.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 constexpr FB_SIZE_T SERVICE_SIZE = 256;
 constexpr FB_SIZE_T SERVER_PART = 200;
@@ -778,3 +780,6 @@ static void checkServerUsersVersion(isc_svc_handle svc_handle, char& server_user
 		}
 	}
 }
+
+
+} // namespace Firebird

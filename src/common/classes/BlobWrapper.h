@@ -29,6 +29,10 @@
 #include <memory.h>
 #include "../common/status.h"
 
+namespace Firebird
+{
+
+
 class BlobWrapper
 {
 public:
@@ -90,6 +94,6 @@ private:
 };
 
 
+} // namespace Firebird
 
 #endif // FB_USER_BLOB_H
-

@@ -556,9 +556,9 @@ namespace Firebird
 
 
 template <typename TAlloc>
-struct std::allocator_traits<PoolAllocator<TAlloc>>
+struct std::allocator_traits<Firebird::PoolAllocator<TAlloc>>
 {
-	using Alloc = PoolAllocator<TAlloc>;
+	using Alloc = Firebird::PoolAllocator<TAlloc>;
 
 	using allocator_type = Alloc;
 	using value_type = typename Alloc::value_type;
@@ -607,5 +607,8 @@ struct std::allocator_traits<PoolAllocator<TAlloc>>
 	}
 };
 
+
+// FIXME:
+using Firebird::getDefaultMemoryPool;
 
 #endif // CLASSES_ALLOC_H

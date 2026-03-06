@@ -54,8 +54,12 @@
 #include <errno.h>
 #include <unistd.h>
 
-namespace {
+namespace Firebird
+{
 
+
+namespace
+{
 	// Here we can't use atomic counter instead mutex/counter pair - or some thread may leave SyncSignalsSet()
 	// before signals are actually set in the other thread, which incremented counter first
 	GlobalPtr<Mutex> syncEnterMutex;
@@ -79,10 +83,8 @@ namespace {
 		act.sa_handler = handler;
 		sigaction(signum, &act, NULL);
 	}
-
 } // anonymous namespace
 
-namespace Firebird {
 
 void syncSignalsSet(sigjmp_buf* sigenv)
 {
@@ -136,5 +138,6 @@ void syncSignalsReset()
 		fb_sigset(SIGSEGV, SIG_DFL);
 	}
 }
+
 
 } // namespace Firebird

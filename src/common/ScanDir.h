@@ -48,6 +48,10 @@
 #include "../common/classes/fb_string.h"
 #include "../common/os/os_utils.h"
 
+namespace Firebird
+{
+
+
 class ScanDir : public AutoStorage
 {
 public:
@@ -71,8 +75,11 @@ private:
 	HANDLE			handle;
 #else
 	DIR				*dir;
-	dirent			*data;
+		dirent			*data;
 #endif
 };
+
+
+} // namespace Firebird
 
 #endif // !defined(AFX_SCANDIR_H__D3AE9FF3_1295_11D6_B8F7_00E0180AC49E__INCLUDED_)

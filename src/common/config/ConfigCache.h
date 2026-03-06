@@ -32,6 +32,10 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/rwlock.h"
 
+namespace Firebird
+{
+
+
 class ConfigCache : public PermanentStorage
 {
 public:
@@ -102,5 +106,8 @@ private:
 public:
 	RWLock rwLock;
 };
+
+
+} // namespace Firebird
 
 #endif // COMMON_CONFIG_CACHE_H

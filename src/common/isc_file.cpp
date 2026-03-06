@@ -91,8 +91,6 @@
 
 #include "../common/config/config.h"
 
-constexpr char INET_FLAG = ':';
-
 // Unix/NFS specific stuff
 #ifndef NO_NFS
 
@@ -135,13 +133,17 @@ constexpr const char* MTAB = "/etc/mtab";
 #define MAXHOSTLEN	64
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace {
 	typedef PathName tstring;
 	typedef tstring::size_type size;
 	typedef tstring::iterator iter;
 	const size npos = tstring::npos;
+
+	constexpr char INET_FLAG = ':';
 
 #ifndef NO_NFS
 	const char* NFS_TYPE = "nfs";
@@ -1897,3 +1899,6 @@ void ISC_unescape(AbstractString& /*str*/)
 	}
 #endif
 }
+
+
+} // namespace Firebird

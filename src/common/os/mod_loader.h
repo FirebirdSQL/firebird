@@ -30,6 +30,10 @@
 
 #include "../common/classes/fb_string.h"
 
+namespace Firebird
+{
+
+
 /***
 	The ModuleLoader class is an abstraction of the dynamic code loading
 	facilities provided by the host operating system.  The class provides
@@ -134,5 +138,7 @@ public:
 	static bool isLoadableModule(const PathName&);
 };
 
-#endif // JRD_OS_MOD_LOADER_H
 
+} // namespace Firebird
+
+#endif // JRD_OS_MOD_LOADER_H

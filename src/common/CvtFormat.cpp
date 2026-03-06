@@ -40,7 +40,9 @@
 #include <algorithm>
 #include <optional>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -212,10 +214,8 @@ namespace
 		Token token;
 		std::string_view data;
 	};
-}
 
-namespace
-{
+
 	template <typename T>
 	constexpr int sign(T value)
 	{
@@ -1877,3 +1877,6 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const string& fo
 
 	return timestampTZ;
 }
+
+
+}	// namespace Firebird

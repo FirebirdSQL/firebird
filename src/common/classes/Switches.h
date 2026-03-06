@@ -30,6 +30,10 @@
 #include "firebird.h"
 #include "../common/classes/fb_string.h"
 
+namespace Firebird
+{
+
+
 class Switches
 {
 public:
@@ -111,5 +115,11 @@ private:
 	in_sw_tab_t*	m_table;			// modifiable copy
 	FB_SIZE_T*		m_opLengths;		// array of in_sw_name's lengths to avoid recalculation
 };
+
+
+} // namespace Firebird
+
+// FIXME:
+using Firebird::Switches;
 
 #endif // CLASSES_SWITCHES

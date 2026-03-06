@@ -199,6 +199,9 @@ static InitInstance<SecurityAttributes> security_attributes;
 #include <fcntl.h>
 #endif
 
+namespace Firebird
+{
+
 
 bool ISC_check_process_existence(SLONG pid)
 {
@@ -642,3 +645,6 @@ void iscSafeConcatPath(TEXT *resultString, const TEXT *appendString)
 	memcpy(&resultString[len], appendString, alen);
 	resultString[len + alen] = 0;
 }
+
+
+} // namespace Firebird

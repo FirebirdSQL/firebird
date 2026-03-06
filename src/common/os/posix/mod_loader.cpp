@@ -41,6 +41,10 @@
 #include <link.h>
 #include <dlfcn.h>
 
+namespace Firebird
+{
+
+
 /// This is the POSIX (dlopen) implementation of the mod_loader abstraction.
 
 class DlfcnModule : public ModuleLoader::Module
@@ -287,3 +291,6 @@ bool DlfcnModule::getRealPath(const string& anySymbol, PathName& path)
 	path.clear();
 	return false;
 }
+
+
+} // namespace Firebird

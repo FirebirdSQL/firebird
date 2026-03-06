@@ -25,6 +25,10 @@
 #include "Switches.h"
 #include "fb_exception.h"
 
+namespace Firebird
+{
+
+
 namespace
 {
 	constexpr char switch_char = '-';
@@ -297,3 +301,6 @@ void Switches::complain(const char* msg)
 {
 	system_call_failed::raise(msg);
 }
+
+
+} // namespace Firebird

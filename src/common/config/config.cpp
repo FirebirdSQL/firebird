@@ -48,6 +48,10 @@
 // Currently user can only guess which parameter values have been applied by the engine
 // and which were ignored. Or resort to reading source code and using debugger to find out.
 
+namespace Firebird
+{
+
+
 namespace {
 
 /******************************************************************************
@@ -120,8 +124,6 @@ InitInstance<ConfigImpl> firebirdConf;
 
 }	// anonymous namespace
 
-namespace Firebird
-{
 
 IFirebirdConf* getFirebirdConfig()
 {

@@ -37,7 +37,9 @@
 #include "../common/classes/array.h"
 #include <ctype.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -396,8 +398,9 @@ namespace
 #endif
 	};
 
-	InitInstance<AliasesConf> aliasesConf;
+InitInstance<AliasesConf> aliasesConf;
 }
+
 
 // Checks that argument doesn't contain colon or directory separator
 static inline bool hasSeparator(const PathName& name)
@@ -585,3 +588,6 @@ bool notifyDatabaseName(const PathName& file)
 
 	return false;
 }
+
+
+} // namespace Firebird

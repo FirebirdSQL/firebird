@@ -236,7 +236,7 @@ public:
 
 	string toQuotedString() const
 	{
-		return toQuotedString(*this);
+		return Firebird::toQuotedString(*this);
 	}
 
 	bool operator==(const char* s) const noexcept { return compare(s) == 0; }

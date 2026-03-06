@@ -81,6 +81,10 @@
 
 //#define LOCAL_SEMAPHORES 4
 
+namespace Firebird
+{
+
+
 struct sig
 {
 	struct sig* sig_next;
@@ -140,6 +144,7 @@ namespace {
 
 static bool isc_signal2(int signal, FPTR_VOID handler, void* arg, ULONG);
 static SIG que_signal(int signal, FPTR_VOID handler, void* arg, int flags, bool w_siginfo);
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -393,3 +398,6 @@ static void CLIB_ROUTINE signal_action(int number)
 		}
 	}
 }
+
+
+} // namespace Firebird

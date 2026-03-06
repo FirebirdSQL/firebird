@@ -27,6 +27,10 @@
 #include "../common/dsc.h"
 #include "../common/xdr.h"
 
+namespace Firebird
+{
+
+
 bool_t	xdr_datum(xdr_t*, const dsc*, UCHAR*);
 bool_t	xdr_double(xdr_t*, double*);
 bool_t	xdr_dec64(xdr_t*, Decimal64*);
@@ -46,5 +50,8 @@ bool_t	xdr_u_short(xdr_t*, u_short*);
 bool_t	xdr_wrapstring(xdr_t*, SCHAR**);
 bool_t	xdr_hyper(xdr_t*, void*);
 SLONG	xdr_peek_long(const xdr_t*, const void* data, size_t size);
+
+
+} // namespace Firebird
 
 #endif	// REMOTE_XDR_PROTO_H

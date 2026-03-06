@@ -24,17 +24,20 @@
 #ifndef JRD_SDL_PROTO_H
 #define JRD_SDL_PROTO_H
 
-namespace Firebird::Jrd::Ods {
-	struct InternalArrayDesc;
-}
+namespace Firebird
+{
+	namespace Jrd::Ods
+	{
+		struct InternalArrayDesc;
+	}
 
-struct sdl_info;
-struct array_alice;
+	struct sdl_info;
+	struct array_alice;
 
-SLONG	SDL_compute_subscript(CheckStatusWrapper*, const Ods::InternalArrayDesc*, USHORT, const SLONG*);
-ISC_STATUS SDL_info(CheckStatusWrapper*, const UCHAR*, sdl_info*, const SLONG*);
-int		SDL_walk(CheckStatusWrapper*, const UCHAR*, UCHAR*, Ods::InternalArrayDesc*, SLONG*,
-				 SDL_walk_callback, array_slice*);
+	SLONG	SDL_compute_subscript(CheckStatusWrapper*, const Jrd::Ods::InternalArrayDesc*, USHORT, const SLONG*);
+	ISC_STATUS SDL_info(CheckStatusWrapper*, const UCHAR*, sdl_info*, const SLONG*);
+	int		SDL_walk(CheckStatusWrapper*, const UCHAR*, UCHAR*, Jrd::Ods::InternalArrayDesc*, SLONG*,
+					SDL_walk_callback, array_slice*);
+} // namespace Firebird
 
 #endif // JRD_SDL_PROTO_H
-

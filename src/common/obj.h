@@ -29,6 +29,7 @@
 namespace Firebird
 {
 
+
 // Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES and stored in backup.
 // Note: some values are hard coded in grant.gdl
 // Keep existing constants unchanged.
@@ -278,61 +279,63 @@ inline const char* getObjectName(ObjectType objType)
 			return "<unknown object type>";
 	}
 }
+
+
 } // namespace Firebird
 
 // Compatibility aliases for migration (temporary).
 // FIXME: remove once all call sites are namespace-qualified.
-using ObjectType;
-using obj_relation;
-using obj_view;
-using obj_trigger;
-using obj_computed;
-using obj_validation;
-using obj_procedure;
-using obj_index_expression;
-using obj_exception;
-using obj_user;
-using obj_field;
-using obj_index;
-using obj_charset;
-using obj_user_group;
-using obj_sql_role;
-using obj_generator;
-using obj_udf;
-using obj_blob_filter;
-using obj_collation;
-using obj_package_header;
-using obj_package_body;
-using obj_privilege;
-using obj_database;
-using obj_relations;
-using obj_views;
-using obj_procedures;
-using obj_functions;
-using obj_packages;
-using obj_generators;
-using obj_domains;
-using obj_exceptions;
-using obj_roles;
-using obj_charsets;
-using obj_collations;
-using obj_filters;
-using obj_jobs;
-using obj_tablespace;
-using obj_tablespaces;
-using obj_index_condition;
-using obj_schema;
-using obj_schemas;
-using obj_type_MAX;
-using obj_user_or_role;
-using obj_parameter;
-using obj_column;
-using obj_publication;
-using obj_any;
-using isSchemaBoundObject;
-using isDdlObject;
-using getDdlSecurityName;
-using getDdlObjectName;
-using getObjectName;
+using Firebird::ObjectType;
+using Firebird::obj_relation;
+using Firebird::obj_view;
+using Firebird::obj_trigger;
+using Firebird::obj_computed;
+using Firebird::obj_validation;
+using Firebird::obj_procedure;
+using Firebird::obj_index_expression;
+using Firebird::obj_exception;
+using Firebird::obj_user;
+using Firebird::obj_field;
+using Firebird::obj_index;
+using Firebird::obj_charset;
+using Firebird::obj_user_group;
+using Firebird::obj_sql_role;
+using Firebird::obj_generator;
+using Firebird::obj_udf;
+using Firebird::obj_blob_filter;
+using Firebird::obj_collation;
+using Firebird::obj_package_header;
+using Firebird::obj_package_body;
+using Firebird::obj_privilege;
+using Firebird::obj_database;
+using Firebird::obj_relations;
+using Firebird::obj_views;
+using Firebird::obj_procedures;
+using Firebird::obj_functions;
+using Firebird::obj_packages;
+using Firebird::obj_generators;
+using Firebird::obj_domains;
+using Firebird::obj_exceptions;
+using Firebird::obj_roles;
+using Firebird::obj_charsets;
+using Firebird::obj_collations;
+using Firebird::obj_filters;
+using Firebird::obj_jobs;
+using Firebird::obj_tablespace;
+using Firebird::obj_tablespaces;
+using Firebird::obj_index_condition;
+using Firebird::obj_schema;
+using Firebird::obj_schemas;
+using Firebird::obj_type_MAX;
+using Firebird::obj_user_or_role;
+using Firebird::obj_parameter;
+using Firebird::obj_column;
+using Firebird::obj_publication;
+using Firebird::obj_any;
+using Firebird::isSchemaBoundObject;
+using Firebird::isDdlObject;
+using Firebird::getDdlSecurityName;
+using Firebird::getDdlObjectName;
+using Firebird::getObjectName;
 
 #endif // COMMON_OBJ_H

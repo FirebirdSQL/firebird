@@ -12,6 +12,10 @@
 #include "../common/classes/alloc.h"
 #include "../common/classes/init.h"
 
+namespace Firebird
+{
+
+
 /*
 #ifdef HAVE_UNISTD_H
 #ifdef LINUX
@@ -931,3 +935,6 @@ init_perm(C_block perm[64 / CHUNKBITS][1 << CHUNKBITS],
 		}
 	}
 }
+
+
+} // namespace Firebird

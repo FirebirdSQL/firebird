@@ -35,7 +35,8 @@
 #include <unicode/utf8.h>
 
 
-using UnicodeUtil;
+namespace Firebird
+{
 
 
 namespace
@@ -60,9 +61,6 @@ namespace
 		UnicodeUtil::Utf16Collation* collation;
 	};
 }
-
-
-namespace Firebird {
 
 
 static void unicodeDestroy(texttype* tt) noexcept;

@@ -31,6 +31,9 @@
 #include "../common/classes/fb_string.h"
 #include "../../common/classes/alloc.h"
 
+namespace Firebird
+{
+
 
 /** This is a utility class that provides a platform independent way to do some
 	file path operations.  The operations include determining if a path is
@@ -179,5 +182,7 @@ public:
 	static int makeDir(const PathName& path);
 };
 
-#endif // JRD_OS_PATH_UTILS_H
 
+} // namespace Firebird
+
+#endif // JRD_OS_PATH_UTILS_H

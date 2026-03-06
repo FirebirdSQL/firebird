@@ -32,8 +32,9 @@
 
 constexpr int COMPILE_SIZE = 256;
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird
+{
+
 
 struct sdl_arg
 {
@@ -963,3 +964,6 @@ static IPTR* stuff(IPTR value, sdl_arg* arg)
 
 	return arg->sdl_arg_next - 1;
 }
+
+
+} // namespace Firebird

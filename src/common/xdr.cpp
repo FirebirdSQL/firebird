@@ -33,6 +33,10 @@
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
 
+namespace Firebird
+{
+
+
 typedef struct xdr_t xdr_t;
 
 inline UCHAR* XDR_ALLOC(ULONG size)
@@ -962,3 +966,5 @@ bool_t xdr_t::x_putbytes(const SCHAR* buff, unsigned bytecount)
 xdr_t::~xdr_t()
 { }
 
+
+} // namespace Firebird

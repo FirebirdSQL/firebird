@@ -33,6 +33,10 @@
 #include <ctype.h>
 #include <stdarg.h>
 
+namespace Firebird
+{
+
+
 #ifdef HAVE_STRCASECMP
 #define STRNCASECMP strncasecmp
 #else
@@ -85,8 +89,6 @@ namespace {
 
 } // namespace
 
-namespace Firebird
-{
 	const AbstractString::size_type AbstractString::npos = (AbstractString::size_type)(~0);
 
 	AbstractString::AbstractString(const size_type limit, const AbstractString& v)

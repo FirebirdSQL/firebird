@@ -28,7 +28,9 @@
 #include "../common/Task.h"
 #include "../common/isc_proto.h"
 
-namespace Firebird {
+namespace Firebird
+{
+
 
 /// class WorkerThread
 
@@ -342,4 +344,4 @@ void Coordinator::releaseThread(WorkerThread* thd)
 }
 
 
-} // namespace Firebird::Jrd
+} // namespace Firebird

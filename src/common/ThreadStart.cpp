@@ -53,6 +53,9 @@
 #include "../common/classes/rwlock.h"
 #include "../common/classes/Synchronize.h"
 
+namespace Firebird
+{
+
 
 namespace
 {
@@ -409,3 +412,6 @@ void Thread::yield()
 }
 
 #endif  // WIN_NT
+
+
+} // namespace Firebird

@@ -29,6 +29,9 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/auto.h"
 
+namespace Firebird
+{
+
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
 	easy-to-use abilities to work with complex configurations, a decision
@@ -148,5 +151,11 @@ private:
 	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
 	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;
 };
+
+
+} // namespace Firebird
+
+// FIXME:
+using Firebird::ConfigFile;
 
 #endif	// CONFIG_CONFIG_FILE_H
