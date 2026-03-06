@@ -49,6 +49,8 @@ using namespace Firebird;
 
 void JRDMET_init( gpre_dbb* db)
 {
+	using namespace Firebird::Jrd;
+
 	const int* relfld = relfields;
 
 	while (relfld[RFLD_R_NAME])

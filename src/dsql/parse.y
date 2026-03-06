@@ -845,7 +845,7 @@ using namespace Firebird;
 	Jrd::RelationNode::RefActionClause* refActionClause;
 	Jrd::RelationNode::IndexConstraintClause* indexConstraintClause;
 	Jrd::RelationNode::IdentityOptions* identityOptions;
-	IdentityType identityType;
+	Firebird::IdentityType identityType;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;

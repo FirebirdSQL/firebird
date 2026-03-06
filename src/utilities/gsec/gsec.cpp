@@ -47,6 +47,7 @@
 #include "../common/StatusHolder.h"
 
 using Firebird::MsgFormat::SafeArg;
+using namespace Firebird;
 using namespace Firebird::Auth;
 
 
