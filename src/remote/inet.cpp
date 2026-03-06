@@ -542,7 +542,7 @@ static SocketsArray* forkSockets;
 
 static void		get_peer_info(rem_port*);
 
-static void		inet_gen_error(bool, rem_port*, const Firebird::Arg::StatusVector& v);
+static void		inet_gen_error(bool, rem_port*, const Arg::StatusVector& v);
 static void		inet_error(bool, rem_port*, const TEXT*, ISC_STATUS, int);
 static bool		inet_read(RemoteXdr*);
 static rem_port*		inet_try_connect(	PACKET*,
@@ -820,7 +820,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		default:
 			disconnect(port);
 			delete rdb;
-			Firebird::Arg::Gds(isc_connect_reject).raise();
+			Arg::Gds(isc_connect_reject).raise();
 			break;
 		}
 
@@ -954,7 +954,7 @@ rem_port* INET_connect(const TEXT* name,
 	}
 
 	// Prepare hints
-	const bool ipv6 = Firebird::os_utils::isIPv6supported();
+	const bool ipv6 = os_utils::isIPv6supported();
 
 	addrinfo gai_hints {};
 	if (packet)
@@ -1015,13 +1015,13 @@ rem_port* INET_connect(const TEXT* name,
 	{
 		gds__log("INET/INET_connect: getaddrinfo(%s,%s) failed: %s",
 				host.c_str(), protocol.c_str(), gai_strerror(n));
-		inet_gen_error(true, port, Firebird::Arg::Gds(isc_net_lookup_err) << Firebird::Arg::Gds(isc_host_unknown));
+		inet_gen_error(true, port, Arg::Gds(isc_net_lookup_err) << Arg::Gds(isc_host_unknown));
 	}
 
 	for (const addrinfo* pai = gai_result.ptr; pai; pai = pai->ai_next)
 	{
 		// Allocate a port block and initialize a socket for communications
-		port->port_handle = Firebird::os_utils::socket(pai->ai_family, pai->ai_socktype, pai->ai_protocol);
+		port->port_handle = os_utils::socket(pai->ai_family, pai->ai_socktype, pai->ai_protocol);
 
 		if (port->port_handle == INVALID_SOCKET)
 		{
@@ -1178,7 +1178,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 
 	while (true)
 	{
-		SOCKET s = Firebird::os_utils::accept(port->port_handle, NULL, NULL);
+		SOCKET s = os_utils::accept(port->port_handle, NULL, NULL);
 		const int inetErrNo = INET_ERRNO;
 		if (s == INVALID_SOCKET)
 		{
@@ -1521,7 +1521,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		if (port->port_channel == INVALID_SOCKET)
 			return NULL;
 
-		const SOCKET n = Firebird::os_utils::accept(port->port_channel, NULL, NULL);
+		const SOCKET n = os_utils::accept(port->port_channel, NULL, NULL);
 		inetErrNo = INET_ERRNO;
 
 		if (n == INVALID_SOCKET)
@@ -1570,7 +1570,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 	// Set up new socket
 
-	SOCKET n = Firebird::os_utils::socket(address.family(), SOCK_STREAM, 0);
+	SOCKET n = os_utils::socket(address.family(), SOCK_STREAM, 0);
 	if (n == INVALID_SOCKET)
 	{
 		const int savedError = INET_ERRNO;
@@ -1621,7 +1621,7 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 	const unsigned short aux_port = port->getPortConfig()->getRemoteAuxPort();
 	our_address.setPort(aux_port); // may be 0
 
-	const SOCKET n = Firebird::os_utils::socket(our_address.family(), SOCK_STREAM, 0);
+	const SOCKET n = os_utils::socket(our_address.family(), SOCK_STREAM, 0);
 	if (n == INVALID_SOCKET)
 	{
 		inet_error(false, port, "socket", isc_net_event_listen_err, INET_ERRNO);
@@ -2087,7 +2087,7 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 #ifdef NEVERDEF
 	static int dummyCnt = 0;
 	if (++dummyCnt % 64 == 0)
-		(Firebird::Arg::Gds(isc_random) << "Simulated select_multi error").raise();
+		(Arg::Gds(isc_random) << "Simulated select_multi error").raise();
 #endif
 
 	for (;;)
@@ -2169,7 +2169,7 @@ static rem_port* select_accept( rem_port* main_port)
 	rem_port* const port = alloc_port(main_port);
 	inet_ports->registerPort(port);
 
-	port->port_handle = Firebird::os_utils::accept(main_port->port_handle, NULL, NULL);
+	port->port_handle = os_utils::accept(main_port->port_handle, NULL, NULL);
 	if (port->port_handle == INVALID_SOCKET)
 	{
 		inet_error(true, port, "accept", isc_net_connect_err, INET_ERRNO);
@@ -2536,7 +2536,7 @@ void get_peer_info(rem_port* port)
 }
 
 
-static void inet_gen_error(bool releasePort, rem_port* port, const Firebird::Arg::StatusVector& v)
+static void inet_gen_error(bool releasePort, rem_port* port, const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -2559,8 +2559,8 @@ static void inet_gen_error(bool releasePort, rem_port* port, const Firebird::Arg
 		disconnect(port);
 	}
 
-	Firebird::Arg::Gds error(isc_network_error);
-	error << Firebird::Arg::Str(node_name) << v;
+	Arg::Gds error(isc_network_error);
+	error << Arg::Str(node_name) << v;
 	error.raise();
 }
 
@@ -2685,12 +2685,12 @@ static void inet_error(bool releasePort, rem_port* port, const TEXT* function, I
 			gds__log("%s", err.c_str());
 		}
 
-		inet_gen_error(releasePort, port, Firebird::Arg::Gds(operation) << SYS_ERR(status));
+		inet_gen_error(releasePort, port, Arg::Gds(operation) << SYS_ERR(status));
 	}
 	else
 	{
 		// No status value, just format the basic arguments.
-		inet_gen_error(releasePort, port, Firebird::Arg::Gds(operation));
+		inet_gen_error(releasePort, port, Arg::Gds(operation));
 	}
 }
 

@@ -1012,7 +1012,7 @@ typedef GetPlugins<IClient> AuthClientPlugins;
 // Representation of authentication data, visible for plugin
 // Transferred in format, depending upon type of the packet (phase of handshake)
 class RmtAuthBlock final :
-	public VersionedIface<IAuthBlockImpl<RmtAuthBlock, Firebird::CheckStatusWrapper>>
+	public VersionedIface<IAuthBlockImpl<RmtAuthBlock, CheckStatusWrapper>>
 {
 public:
 	RmtAuthBlock(const AuthReader::AuthBlock& aBlock);

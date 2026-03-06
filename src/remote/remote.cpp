@@ -1168,9 +1168,9 @@ void ClntAuthBlock::resetClnt(const CSTRING* listStr)
 		if (final.length() == 0)
 		{
 			HANDSHAKE_DEBUG(fprintf(stderr, "Cli: No matching plugins on client\n"));
-			(Firebird::Arg::Gds(isc_login)
+			(Arg::Gds(isc_login)
 #ifdef DEV_BUILD
-								<< Firebird::Arg::Gds(isc_random) << "No matching plugins on client"
+								<< Arg::Gds(isc_random) << "No matching plugins on client"
 #endif
 								).raise();
 		}
@@ -1292,7 +1292,7 @@ void rem_port::checkResponse(IStatus* warning, const PACKET* packet, bool checkK
 	if ((packet->p_operation == op_response || packet->p_operation == op_response_piggyback) &&
 		!pktErr)
 	{
-		Firebird::Arg::StatusVector s(vector);
+		Arg::StatusVector s(vector);
 		s.copyTo(warning);
 		return;
 	}
@@ -1301,7 +1301,7 @@ void rem_port::checkResponse(IStatus* warning, const PACKET* packet, bool checkK
 
 	if (!pktErr)
 	{
-		Firebird::Arg::Gds(isc_net_read_err).raise();
+		Arg::Gds(isc_net_read_err).raise();
 	}
 
 	status_exception::raise(vector);
@@ -1741,7 +1741,7 @@ void rem_port::initCompression()
 		port_send_stream.opaque = Z_NULL;
 		int ret = zlib().deflateInit(&port_send_stream, Z_DEFAULT_COMPRESSION);
 		if (ret != Z_OK)
-			(Firebird::Arg::Gds(isc_deflate_init) << Firebird::Arg::Num(ret)).raise();
+			(Arg::Gds(isc_deflate_init) << Arg::Num(ret)).raise();
 		port_send_stream.next_out = NULL;
 
 		port_recv_stream.zalloc = ZLib::allocFunc;
@@ -1753,7 +1753,7 @@ void rem_port::initCompression()
 		if (ret != Z_OK)
 		{
 			zlib().deflateEnd(&port_send_stream);
-			(Firebird::Arg::Gds(isc_inflate_init) << Firebird::Arg::Num(ret)).raise();
+			(Arg::Gds(isc_inflate_init) << Arg::Num(ret)).raise();
 		}
 
 		try

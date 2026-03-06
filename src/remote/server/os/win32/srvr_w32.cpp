@@ -221,7 +221,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	if (affinity)
 		SetProcessAffinityMask(GetCurrentProcess(), affinity);
 	else
-		Firebird::os_utils::setDefaultAffinity();
+		os_utils::setDefaultAffinity();
 
 	protocol_inet[0] = 0;
 
@@ -269,10 +269,10 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 
 	{ // scope for interface ptr
 		PluginManagerInterfacePtr pi;
-		//Firebird::Auth::registerLegacyServer(pi);
-		Firebird::Auth::registerSrpServer(pi);
+		//Auth::registerLegacyServer(pi);
+		Auth::registerSrpServer(pi);
 #ifdef TRUSTED_AUTH
-		Firebird::Auth::registerTrustedServer(pi);
+		Auth::registerTrustedServer(pi);
 #endif
 	}
 
@@ -348,7 +348,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	// due to remote access
 
 	PathName name = fb_utils::getPrefix(IConfigManager::DIR_LOG, "memdebug.log");
-	FILE* file = Firebird::os_utils::fopen(name.c_str(), "w+t");
+	FILE* file = os_utils::fopen(name.c_str(), "w+t");
 	if (file)
 	{
 		fprintf(file, "Global memory pool allocated objects\n");

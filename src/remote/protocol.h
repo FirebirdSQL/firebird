@@ -472,7 +472,7 @@ typedef struct p_resp
 	OBJCT		p_resp_object;		// Object id
 	SQUAD		p_resp_blob_id;		// Blob id
 	CSTRING		p_resp_data;		// Data
-	Firebird::DynamicStatusVector* p_resp_status_vector;
+	DynamicStatusVector* p_resp_status_vector;
 } P_RESP;
 
 #define p_resp_partner	p_resp_blob_id.bid_number

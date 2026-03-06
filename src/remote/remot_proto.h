@@ -61,7 +61,7 @@ enum LegacyPlugin {PLUGIN_NEW = 0, PLUGIN_LEGACY, PLUGIN_TRUSTED};
 
 void		REMOTE_cleanup_transaction (struct Rtr *);
 USHORT		REMOTE_compute_batch_size(const rem_port*, USHORT, P_OP, const rem_fmt*) noexcept;
-void		REMOTE_get_timeout_params(rem_port* port, Firebird::ClumpletReader* pb);
+void		REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb);
 struct Rrq*	REMOTE_find_request (struct Rrq *, USHORT);
 void		REMOTE_free_packet(rem_port*, PACKET*, bool = false);
 struct rem_str*	REMOTE_make_string (const SCHAR*);
@@ -71,9 +71,9 @@ void		REMOTE_reset_request(struct Rrq*, const struct RMessage*);
 void		REMOTE_reset_statement(struct Rsr*) noexcept;
 bool_t		REMOTE_getbytes (RemoteXdr*, SCHAR*, unsigned);
 LegacyPlugin REMOTE_legacy_auth(const char* nm, int protocol) noexcept;
-Firebird::RefPtr<const Firebird::Config> REMOTE_get_config(const Firebird::PathName* dbName,
-	const Firebird::string* dpb_config = NULL);
-void		REMOTE_check_response(Firebird::IStatus* warning, Rdb* rdb, const PACKET* packet, bool checkKeys = false);
+RefPtr<const Config> REMOTE_get_config(const PathName* dbName,
+	const string* dpb_config = NULL);
+void		REMOTE_check_response(IStatus* warning, Rdb* rdb, const PACKET* packet, bool checkKeys = false);
 bool		REMOTE_inflate(rem_port*, PacketReceive*, UCHAR*, SSHORT, SSHORT*);
 bool		REMOTE_deflate(RemoteXdr*, ProtoWrite*, PacketSend*, bool flash);
 

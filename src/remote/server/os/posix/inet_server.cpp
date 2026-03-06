@@ -199,7 +199,7 @@ int CLIB_ROUTINE main(int argc, char** argv)
 		// It's very easy to detect that we are spawned - just check fd 0 to be a socket.
 		const int channel = 0;
 		struct STAT stat0;
-		if (Firebird::os_utils::fstat(channel, &stat0) == 0 && S_ISSOCK(stat0.st_mode))
+		if (os_utils::fstat(channel, &stat0) == 0 && S_ISSOCK(stat0.st_mode))
 		{
 			// classic server mode
 			classic = true;
@@ -540,7 +540,7 @@ int CLIB_ROUTINE main(int argc, char** argv)
 
 		{ // scope for interface ptr
 			PluginManagerInterfacePtr pi;
-			Firebird::Auth::registerSrpServer(pi);
+			Auth::registerSrpServer(pi);
 		}
 
 		if (super)
@@ -678,12 +678,12 @@ static void raiseLimit(int resource)
 {
 	struct rlimit lim;
 
-	if (Firebird::os_utils::getrlimit(resource, &lim) == 0)
+	if (os_utils::getrlimit(resource, &lim) == 0)
 	{
 		if (lim.rlim_cur != lim.rlim_max)
 		{
 			lim.rlim_cur = lim.rlim_max;
-			if (Firebird::os_utils::setrlimit(resource, &lim) != 0)
+			if (os_utils::setrlimit(resource, &lim) != 0)
 			{
 				gds__log("setrlimit() failed, errno=%d", errno);
 			}
