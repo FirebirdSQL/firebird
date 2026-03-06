@@ -68,9 +68,11 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
+using namespace Firebird::Jrd::Ods;	// FIXME:
+
 
 static idx_e check_duplicates(thread_db*, Record*, index_desc*, index_insertion*, jrd_rel*);
 static idx_e check_foreign_key(thread_db*, Record*, jrd_rel*, jrd_tra*, index_desc*, IndexErrorContext&);
@@ -205,8 +207,6 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 	return true;
 }
 
-
-namespace Firebird::Jrd {
 
 class IndexCreateTask : public Task
 {
@@ -814,8 +814,6 @@ int IndexCreateTask::getMaxWorkers()
 
 	return MIN(parWorkers, m_countPP);
 }
-
-}; // namespace Jrd
 
 
 void IDX_create_index(thread_db* tdbb,
@@ -2053,3 +2051,6 @@ static idx_e insert_key(thread_db* tdbb,
 
 	return result;
 }
+
+
+} // namespace Firebird::Jrd

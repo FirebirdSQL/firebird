@@ -47,7 +47,7 @@
 
 namespace Firebird {
 
-class TraceSvcUtil final : public TraceSvcIntf
+class TraceSvcUtil final : public Jrd::TraceSvcIntf
 {
 public:
 	TraceSvcUtil() noexcept {};

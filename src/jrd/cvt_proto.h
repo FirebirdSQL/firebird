@@ -33,17 +33,18 @@ namespace Firebird
 	class CharSet;
 }
 
-double		CVT_date_to_double(const dsc*);
-void		CVT_double_to_date(double, SLONG[2]);
-UCHAR		CVT_get_numeric(const UCHAR*, const USHORT, SSHORT*, void*);
-GDS_DATE	CVT_get_sql_date(const dsc*);
-GDS_TIME	CVT_get_sql_time(const dsc*);
-ISC_TIME_TZ	CVT_get_sql_time_tz(const dsc*);
-GDS_TIMESTAMP CVT_get_timestamp(const dsc*);
-ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc*);
+namespace Firebird::Jrd
+{
+	double		CVT_date_to_double(const dsc*);
+	void		CVT_double_to_date(double, SLONG[2]);
+	UCHAR		CVT_get_numeric(const UCHAR*, const USHORT, SSHORT*, void*);
+	GDS_DATE	CVT_get_sql_date(const dsc*);
+	GDS_TIME	CVT_get_sql_time(const dsc*);
+	ISC_TIME_TZ	CVT_get_sql_time_tz(const dsc*);
+	GDS_TIMESTAMP CVT_get_timestamp(const dsc*);
+	ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc*);
 
-namespace Firebird::Jrd {
-	class EngineCallbacks : public Firebird::Callbacks
+	class EngineCallbacks : public Callbacks
 	{
 	public:
 		explicit EngineCallbacks(ErrorFunction aErr)
@@ -51,7 +52,7 @@ namespace Firebird::Jrd {
 		{
 		}
 
-		explicit EngineCallbacks(Firebird::MemoryPool&)
+		explicit EngineCallbacks(MemoryPool&)
 			: Callbacks(ERR_post)
 		{
 		}
@@ -59,9 +60,9 @@ namespace Firebird::Jrd {
 	public:
 		virtual bool transliterate(const dsc* from, dsc* to, CSetId&);
 		virtual CSetId getChid(const dsc* d);
-		virtual Firebird::CharSet* getToCharset(CSetId charset2);
-		virtual void validateData(Firebird::CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(Firebird::CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
+		virtual CharSet* getToCharset(CSetId charset2);
+		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
+		virtual ULONG validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
@@ -69,7 +70,7 @@ namespace Firebird::Jrd {
 		virtual void isVersion4(bool& v4);
 
 	public:
-		static Firebird::GlobalPtr<EngineCallbacks> instance;
+		static GlobalPtr<EngineCallbacks> instance;
 	};
 
 	class TruncateCallbacks : public EngineCallbacks
@@ -80,24 +81,24 @@ namespace Firebird::Jrd {
 		{
 		}
 
-		virtual ULONG validateLength(Firebird::CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
+		virtual ULONG validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 			const USHORT size);
 
 	private:
 		const ISC_STATUS truncateReason;
 	};
-}
 
-inline void CVT_move(const dsc* from, dsc* to, Firebird::DecimalStatus decSt)
-{
-	CVT_move_common(from, to, decSt, &Jrd::EngineCallbacks::instance);
-}
+	inline void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt)
+	{
+		CVT_move_common(from, to, decSt, &EngineCallbacks::instance);
+	}
 
-inline USHORT CVT_get_string_ptr(const dsc* desc, TTypeId* ttype, UCHAR** address,
-                                 vary* temp, USHORT length, Firebird::DecimalStatus decSt)
-{
-	return CVT_get_string_ptr_common(desc, ttype, address, temp, length, decSt,
-									 &Jrd::EngineCallbacks::instance);
-}
+	inline USHORT CVT_get_string_ptr(const dsc* desc, TTypeId* ttype, UCHAR** address,
+									vary* temp, USHORT length, DecimalStatus decSt)
+	{
+		return CVT_get_string_ptr_common(desc, ttype, address, temp, length, decSt,
+										&EngineCallbacks::instance);
+	}
+} // namespace Firebird::Jrd
 
 #endif // JRD_CVT_PROTO_H

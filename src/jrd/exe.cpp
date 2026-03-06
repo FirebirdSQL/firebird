@@ -113,9 +113,9 @@
 #include "../jrd/Function.h"
 #include "../jrd/ProfilerManager.h"
 
+namespace Firebird::Jrd
+{
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
 
 // Item class implementation
 
@@ -2077,4 +2077,7 @@ QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 		return QualifiedName("");
 	}
 }
+
+
+} // namespace Firebird::Jrd
 

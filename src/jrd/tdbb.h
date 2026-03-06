@@ -45,14 +45,15 @@
 #define BUGCHECK(number) ERR_bugcheck(number, __FILE__, __LINE__)
 
 
-namespace Firebird {
-
-class MemoryPool;
-
+namespace Firebird
+{
+	class MemoryPool;
 }
 
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 class Database;
 class Attachment;
@@ -500,6 +501,7 @@ private:
 	Firebird::FbLocalStatus localStatus;
 	thread_db context;
 };
+
 
 } // namespace Firebird::Jrd
 

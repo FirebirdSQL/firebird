@@ -32,14 +32,14 @@
 
 #include "Utils.h"
 
-namespace Firebird::Jrd {
-	class Applier : private Firebird::PermanentStorage
+namespace Firebird::Jrd::Replication {
+	class Applier : private PermanentStorage
 	{
-		typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<TraNumber, jrd_tra*> > > TransactionMap;
-		typedef Firebird::HalfStaticArray<bid, 16> BlobList;
-		typedef Firebird::GenericMap<QualifiedNamePair> ConstraintIndexMap;
+		typedef GenericMap<Pair<NonPooled<TraNumber, jrd_tra*> > > TransactionMap;
+		typedef HalfStaticArray<bid, 16> BlobList;
+		typedef GenericMap<QualifiedNamePair> ConstraintIndexMap;
 /*
-		class ReplicatedTransaction : public Firebird::IReplicatedTransaction
+		class ReplicatedTransaction : public IReplicatedTransaction
 		{
 		public:
 			// IDispose methods
@@ -79,25 +79,25 @@ namespace Firebird::Jrd {
 			}
 
 			bool insertRecord(const char* name,
-							  Firebird::IReplicatedRecord* record)
+							  IReplicatedRecord* record)
 			{
 				return m_applier->insertRecord(this, name, record);
 			}
 
 			bool updateRecord(const char* name,
-							  Firebird::IReplicatedRecord* orgRecord,
-							  Firebird::IReplicatedRecord* newRecord)
+							  IReplicatedRecord* orgRecord,
+							  IReplicatedRecord* newRecord)
 			{
 				return m_applier->updateRecord(this, name, orgRecord, newRecord);
 			}
 
 			bool deleteRecord(const char* name,
-							  Firebird::IReplicatedRecord* record)
+							  IReplicatedRecord* record)
 			{
 				return m_applier->insertRecord(this, name, record);
 			}
 
-			bool storeBlob(ISC_QUAD blobId, Firebird::IReplicatedBlob* blob)
+			bool storeBlob(ISC_QUAD blobId, IReplicatedBlob* blob)
 			{
 				return m_applier->storeBlob(this, blobId, blob);
 			}
@@ -124,8 +124,8 @@ namespace Firebird::Jrd {
 		};
 */
 	public:
-		Applier(Firebird::MemoryPool& pool,
-				const Firebird::PathName& database,
+		Applier(MemoryPool& pool,
+				const PathName& database,
 				Request* request, bool cascade)
 			: PermanentStorage(pool),
 			  m_txnMap(pool), m_database(pool, database),
@@ -151,7 +151,7 @@ namespace Firebird::Jrd {
 
 	private:
 		TransactionMap m_txnMap;
-		const Firebird::PathName m_database;
+		const PathName m_database;
 		Request* m_request;
 		RecordBitmap* m_bitmap = nullptr;
 		Record* m_record = nullptr;
@@ -185,8 +185,8 @@ namespace Firebird::Jrd {
 
 		void executeSql(thread_db* tdbb, TraNumber traNum,
 						CSetId charset,
-						const Firebird::string& schemaSearchPath,
-						const Firebird::string& sql,
+						const string& schemaSearchPath,
+						const string& sql,
 						const MetaName& owner);
 
 		bool lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc& idx);

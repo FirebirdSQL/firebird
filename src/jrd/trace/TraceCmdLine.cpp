@@ -39,6 +39,9 @@
 #include "../common/classes/ClumpletReader.h"
 #include "../jrd/license.h"
 
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -126,9 +129,6 @@ namespace
 	}
 }
 
-
-namespace Firebird
-{
 
 void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 {
@@ -430,8 +430,6 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 		}
 	}
 
-
-
 	traceSvc->setAttachInfo(svc_name, user, role, pwd, trusted);
 
 	switch (action_sw->in_sw)
@@ -461,4 +459,4 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 	}
 }
 
-} // namespace Firebird
+} // namespace Firebird::Jrd

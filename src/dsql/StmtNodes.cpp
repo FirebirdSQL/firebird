@@ -578,7 +578,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 						transaction->tra_save_point->getNext() &&
 						transaction->tra_save_point->getNext()->getNumber() > savNumber)
 					{
-						REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+						Replication::REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
 						transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
 					}
 
@@ -2782,7 +2782,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			return forNode;
 		}
 
-		REPL_erase(tdbb, rpb, transaction);
+		Replication::REPL_erase(tdbb, rpb, transaction);
 	}
 	spPreTriggers.release();
 
@@ -8322,7 +8322,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					}
 
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
-					REPL_modify(tdbb, orgRpb, newRpb, transaction);
+					Replication::REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
 				spPreTriggers.release();
 
@@ -9391,7 +9391,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 				{
 					VIO_store(tdbb, rpb, transaction);
 					IDX_store(tdbb, rpb, transaction);
-					REPL_store(tdbb, rpb, transaction);
+					Replication::REPL_store(tdbb, rpb, transaction);
 				}
 
 				rpb->rpb_number.setValid(true);

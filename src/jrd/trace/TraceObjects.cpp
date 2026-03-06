@@ -55,7 +55,9 @@
 #include <unistd.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -118,7 +120,6 @@ bool descToUTF8(const paramdsc* param, string& result)
 
 } // namespace
 
-namespace Firebird::Jrd {
 
 const char* StatementHolder::ensurePlan(bool explained)
 {
@@ -728,5 +729,6 @@ const char* TraceStatusVectorImpl::getText()
 
 	return m_error.c_str();
 }
+
 
 } // namespace Firebird::Jrd

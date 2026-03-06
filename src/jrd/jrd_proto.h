@@ -29,7 +29,8 @@
 #include "../common/classes/objects_array.h"
 #include "../jrd/status.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 	class Database;
 	class Attachment;
 	class jrd_tra;
@@ -42,45 +43,43 @@ namespace Firebird::Jrd {
 	struct teb;
 	class DsqlRequest;
 	class MetaName;
-}
 
-void jrd_vtof(const char*, char*, SSHORT);
+	void jrd_vtof(const char*, char*, SSHORT);
 
-typedef Firebird::SortedObjectsArray<Firebird::PathName> PathNameList;
-void JRD_enum_attachments(PathNameList*, ULONG&, ULONG&, ULONG&);
+	typedef SortedObjectsArray<PathName> PathNameList;
+	void JRD_enum_attachments(PathNameList*, ULONG&, ULONG&, ULONG&);
 
 #ifdef DEBUG_PROCS
-void	JRD_print_procedure_info(Jrd::thread_db*, const char*);
+	void	JRD_print_procedure_info(thread_db*, const char*);
 #endif
 
+	void JRD_autocommit_ddl(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_receive(thread_db* tdbb, Request* request, USHORT msg_type, ULONG msg_length, void* msg);
+	void JRD_start(thread_db* tdbb, Request* request, jrd_tra* transaction);
 
-void JRD_autocommit_ddl(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_receive(Jrd::thread_db* tdbb, Jrd::Request* request, USHORT msg_type, ULONG msg_length,
-	void* msg);
-void JRD_start(Jrd::thread_db* tdbb, Jrd::Request* request, Jrd::jrd_tra* transaction);
+	void JRD_commit_transaction(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_commit_retaining(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_rollback_transaction(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_rollback_retaining(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_run_trans_start_triggers(thread_db* tdbb, jrd_tra* transaction);
+	void JRD_send(thread_db* tdbb, Request* request, USHORT msg_type, ULONG msg_length,
+		const void* msg);
+	void JRD_start_and_send(thread_db* tdbb, Request* request, jrd_tra* transaction,
+		USHORT msg_type, ULONG msg_length, const void* msg);
+	void JRD_start_transaction(thread_db* tdbb, jrd_tra** transaction,
+		Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
+	void JRD_unwind_request(thread_db* tdbb, Request* request);
+	bool JRD_verify_database_access(const PathName&);
+	void JRD_shutdown_attachment(Attachment* attachment);
+	void JRD_shutdown_attachments(Database* dbb);
+	void JRD_cancel_operation(thread_db* tdbb, Attachment* attachment, int option);
+	void JRD_transliterate(thread_db* tdbb, IStatus* vector) noexcept;
 
-void JRD_commit_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_commit_retaining(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_rollback_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_rollback_retaining(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_run_trans_start_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction);
-void JRD_send(Jrd::thread_db* tdbb, Jrd::Request* request, USHORT msg_type, ULONG msg_length,
-	const void* msg);
-void JRD_start_and_send(Jrd::thread_db* tdbb, Jrd::Request* request, Jrd::jrd_tra* transaction,
-	USHORT msg_type, ULONG msg_length, const void* msg);
-void JRD_start_transaction(Jrd::thread_db* tdbb, Jrd::jrd_tra** transaction,
-	Jrd::Attachment* attachment, unsigned int tpb_length, const UCHAR* tpb);
-void JRD_unwind_request(Jrd::thread_db* tdbb, Jrd::Request* request);
-bool JRD_verify_database_access(const Firebird::PathName&);
-void JRD_shutdown_attachment(Jrd::Attachment* attachment);
-void JRD_shutdown_attachments(Jrd::Database* dbb);
-void JRD_cancel_operation(Jrd::thread_db* tdbb, Jrd::Attachment* attachment, int option);
-void JRD_transliterate(Jrd::thread_db* tdbb, Firebird::IStatus* vector) noexcept;
-
-bool JRD_shutdown_database(Jrd::Database* dbb, const unsigned flags = 0);
-// JRD_shutdown_database() flags
-static constexpr unsigned SHUT_DBB_RELEASE_POOLS	= 0x01;
-static constexpr unsigned SHUT_DBB_LINGER			= 0x02;
-static constexpr unsigned SHUT_DBB_OVERWRITE_CHECK	= 0x04;
+	bool JRD_shutdown_database(Database* dbb, const unsigned flags = 0);
+	// JRD_shutdown_database() flags
+	static constexpr unsigned SHUT_DBB_RELEASE_POOLS	= 0x01;
+	static constexpr unsigned SHUT_DBB_LINGER			= 0x02;
+	static constexpr unsigned SHUT_DBB_OVERWRITE_CHECK	= 0x04;
+} // namespace Firebird::Jrd
 
 #endif /* JRD_JRD_PROTO_H */

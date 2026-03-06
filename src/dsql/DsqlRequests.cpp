@@ -983,7 +983,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 
 			if (!isInternalRequest && node->mustBeReplicated())
 			{
-				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
+				Replication::REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
 					*getDsqlStatement()->getSchemaSearchPath());
 			}
 		}

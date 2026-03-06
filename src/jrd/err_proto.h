@@ -30,7 +30,9 @@
 #include "../common/StatusArg.h"
 #include "../jrd/status.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 // Index error types
 
@@ -44,8 +46,6 @@ enum idx_e {
 	idx_e_foreign_references_present
 };
 
-} // namespace Firebird::Jrd
-
 void	ERR_post_warning(const Arg::StatusVector& v);
 //void	ERR_assert(const TEXT*, int);
 [[noreturn]] void ERR_bugcheck(int, const TEXT* = NULL, int = 0);
@@ -54,12 +54,15 @@ void	ERR_post_warning(const Arg::StatusVector& v);
 [[noreturn]] void ERR_corrupt(int);
 [[noreturn]] void ERR_error(int);
 [[noreturn]] void ERR_post(const Arg::StatusVector& v);
-void	ERR_post_nothrow(const Arg::StatusVector& v, Jrd::FbStatusVector* statusVector = NULL);
-void	ERR_post_nothrow(const Firebird::IStatus* v, Jrd::FbStatusVector* statusVector = NULL);
+void	ERR_post_nothrow(const Arg::StatusVector& v, FbStatusVector* statusVector = NULL);
+void	ERR_post_nothrow(const Firebird::IStatus* v, FbStatusVector* statusVector = NULL);
 [[noreturn]] void ERR_punt();
 void	ERR_warning(const Arg::StatusVector& v);
 void	ERR_log(int, int, const TEXT*);
-void	ERR_append_status(Jrd::FbStatusVector*, const Arg::StatusVector& v);
-void	ERR_build_status(Jrd::FbStatusVector*, const Arg::StatusVector& v) noexcept;
+void	ERR_append_status(FbStatusVector*, const Arg::StatusVector& v);
+void	ERR_build_status(FbStatusVector*, const Arg::StatusVector& v) noexcept;
+
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_ERR_PROTO_H

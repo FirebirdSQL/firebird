@@ -52,8 +52,10 @@
 #include "../common/classes/Aligner.h"
 #include "../common/classes/VaryStr.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+
+namespace Firebird::Jrd
+{
+
 
 /* The original order of dsc_type values corresponded to the priority
    of conversion (that is, always convert the lesser to the greater
@@ -1041,3 +1043,6 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
 
 	return vtmp->vary_length;
 }
+
+
+} // namespace Firebird::Jrd

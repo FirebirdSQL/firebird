@@ -46,8 +46,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-using namespace Firebird;
-using namespace Firebird::Jrd::Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 namespace
 {
@@ -555,3 +556,6 @@ void Config::splitConnectionString(const string& input, string& database, string
 		}
 	}
 }
+
+
+} // namespace Firebird::Jrd::Replication

@@ -41,8 +41,9 @@
 #include "../jrd/DebugInterface.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 static ISC_STATUS caller(USHORT, BlobControl*, USHORT, UCHAR*, USHORT*);
 static void dump_blr(void*, SSHORT, const char*);
@@ -1571,3 +1572,6 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 
 	return FB_SUCCESS;
 }
+
+
+} // namespace Firebird::Jrd

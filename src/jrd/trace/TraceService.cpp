@@ -43,8 +43,8 @@
 #include "../../jrd/scl.h"
 #include "../../jrd/Mapping.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 class TraceSvcJrd : public TraceSvcIntf
@@ -412,3 +412,6 @@ int TRACE_main(UtilSvc* arg)
 
 	return exit_code;
 }
+
+
+} // namespace Firebird::Jrd

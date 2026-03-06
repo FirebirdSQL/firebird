@@ -32,9 +32,8 @@
 #include "../common/classes/GetPlugins.h"
 #include "../common/classes/ParsedList.h"
 
-
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd::EDS
+{
 
 
 namespace {
@@ -170,8 +169,6 @@ void SBlock::putData(CheckStatusWrapper* status, unsigned int length, const void
 } // anonymous namespace
 
 
-namespace Firebird::Jrd::EDS {
-
 bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
 {
 	// Preliminary checks - should we really validate the password ourselves
@@ -298,4 +295,5 @@ bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 	Arg::Gds(isc_login).raise();
 }
 
-} // namespace EDS
+
+} // namespace Firebird::Jrd::EDS

@@ -117,11 +117,13 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 
 #include <sys/stat.h>
 
+namespace Firebird::Jrd
+{
+
+
 #define statistics	stat
 
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
 
 inline constexpr int SVC_user_dba	= 2;
 inline constexpr int SVC_user_any	= 1;
@@ -3359,3 +3361,6 @@ bool Service::getUserAdminFlag() const noexcept
 {
 	return (svc_user_flag & SVC_user_dba);
 }
+
+
+} // namespace Firebird::Jrd

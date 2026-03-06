@@ -96,8 +96,12 @@ namespace Firebird::Jrd {
 	class Statement;
 	class ProfilerManager;
 	class Validation;
-	class Applier;
 	enum InternalRequest : USHORT;
+
+	namespace Replication
+	{
+		class Applier;
+	}
 
 
 struct DSqlCacheItem
@@ -610,7 +614,7 @@ public:
 
 	Firebird::RefPtr<Firebird::IReplicatedSession> att_replicator;
 	Firebird::AutoPtr<Replication::TableMatcher> att_repl_matcher;
-	Firebird::Array<Applier*> att_repl_appliers;
+	Firebird::Array<Replication::Applier*> att_repl_appliers;
 
 	enum UtilType { UTIL_NONE, UTIL_GBAK, UTIL_GFIX, UTIL_GSTAT };
 

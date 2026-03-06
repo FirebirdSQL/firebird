@@ -49,16 +49,17 @@
 #include "Publisher.h"
 #include "Utils.h"
 
+namespace Firebird::Jrd::Replication
+{
+
 // Log conflicts as warnings
 #define LOG_CONFLICTS
 
 // Detect and resolve record-level conflicts (in favor of master copy)
 #define RESOLVE_CONFLICTS
 
-using namespace Firebird;
-using namespace Firebird::Jrd::Ods;
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Replication;
+using namespace Firebird::Jrd::Ods;	// FIXME:
+
 
 namespace
 {
@@ -1277,7 +1278,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
 	if (m_enableCascade)
-		REPL_store(tdbb, rpb, transaction);
+		Replication::REPL_store(tdbb, rpb, transaction);
 }
 
 void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newRpb,
@@ -1376,7 +1377,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
 	if (m_enableCascade)
-		REPL_modify(tdbb, orgRpb, newRpb, transaction);
+		Replication::REPL_modify(tdbb, orgRpb, newRpb, transaction);
 }
 
 void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
@@ -1389,7 +1390,7 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	VIO_erase(tdbb, rpb, transaction);
 	if (m_enableCascade)
-		REPL_erase(tdbb, rpb, transaction);
+		Replication::REPL_erase(tdbb, rpb, transaction);
 }
 
 void Applier::logConflict(const char* msg, ...)
@@ -1405,3 +1406,6 @@ void Applier::logConflict(const char* msg, ...)
 	logReplicaWarning(m_database, buffer);
 #endif
 }
+
+
+} // namespace Firebird::Jrd::Replication

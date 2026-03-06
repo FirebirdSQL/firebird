@@ -33,8 +33,10 @@
 
 #include "../jrd/TempSpace.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+
+namespace Firebird::Jrd
+{
+
 
 // Static definitions/initializations
 
@@ -802,3 +804,6 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 
 	return segments.getCount();
 }
+
+
+} // namespace Firebird::Jrd

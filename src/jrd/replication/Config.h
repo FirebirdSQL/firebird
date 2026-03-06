@@ -43,45 +43,45 @@ namespace Firebird::Jrd::Replication
 			: database(p, other.database), username(p, other.username), password(p, other.password)
 		{}
 
-		Firebird::string database;
-		Firebird::string username;
-		Firebird::string password;
+		string database;
+		string username;
+		string password;
 	};
 
-	struct Config : public Firebird::GlobalStorage
+	struct Config : public GlobalStorage
 	{
-		typedef Firebird::HalfStaticArray<Config*, 4> ReplicaList;
+		typedef HalfStaticArray<Config*, 4> ReplicaList;
 
 		Config();
 		Config(const Config& other);
 
-		static Config* get(const Firebird::PathName& dbName);
+		static Config* get(const PathName& dbName);
 		static void enumerate(ReplicaList& replicas);
-		static void splitConnectionString(const Firebird::string& input, Firebird::string& database,
-										  Firebird::string& username, Firebird::string& password);
+		static void splitConnectionString(const string& input, string& database,
+										  string& username, string& password);
 
-		Firebird::PathName dbName;
+		PathName dbName;
 		ULONG bufferSize;
-		Firebird::string includeSchemaFilter;
-		Firebird::string excludeSchemaFilter;
-		Firebird::string includeFilter;
-		Firebird::string excludeFilter;
+		string includeSchemaFilter;
+		string excludeSchemaFilter;
+		string includeFilter;
+		string excludeFilter;
 		ULONG segmentSize;
 		ULONG segmentCount;
-		Firebird::PathName journalDirectory;
-		Firebird::PathName filePrefix;
+		PathName journalDirectory;
+		PathName filePrefix;
 		ULONG groupFlushDelay;
-		Firebird::PathName archiveDirectory;
-		Firebird::string archiveCommand;
+		PathName archiveDirectory;
+		string archiveCommand;
 		ULONG archiveTimeout;
-		Firebird::ObjectsArray<SyncReplica> syncReplicas;
-		Firebird::PathName sourceDirectory;
-		std::optional<Firebird::Guid> sourceGuid;
+		ObjectsArray<SyncReplica> syncReplicas;
+		PathName sourceDirectory;
+		std::optional<Guid> sourceGuid;
 		bool verboseLogging;
 		ULONG applyIdleTimeout;
 		ULONG applyErrorTimeout;
-		Firebird::string schemaSearchPath;
-		Firebird::string pluginName;
+		string schemaSearchPath;
+		string pluginName;
 		bool logErrors;
 		bool reportErrors;
 		bool disableOnError;

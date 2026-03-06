@@ -41,7 +41,11 @@ class StableAttachmentPart;
 class Attachment;
 class Service;
 class UserId;
-class Applier;
+
+namespace Replication
+{
+	class Applier;
+}
 
 // forward declarations
 class JStatement;
@@ -253,14 +257,14 @@ public:
 	void deprecatedClose(Firebird::CheckStatusWrapper* status) override;
 
 public:
-	JReplicator(Applier* appl, StableAttachmentPart* sa);
+	JReplicator(Replication::Applier* appl, StableAttachmentPart* sa);
 
 	StableAttachmentPart* getAttachment()
 	{
 		return sAtt;
 	}
 
-	Applier* getHandle() noexcept
+	Replication::Applier* getHandle() noexcept
 	{
 		return applier;
 	}
@@ -271,7 +275,7 @@ public:
 	}
 
 private:
-	Applier* applier;
+	Replication::Applier* applier;
 	Firebird::RefPtr<StableAttachmentPart> sAtt;
 
 	void freeEngineData(Firebird::CheckStatusWrapper* status);

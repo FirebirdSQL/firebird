@@ -81,9 +81,10 @@
 #include "firebird/impl/msg_helper.h"
 
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
+using namespace Firebird::Jrd::Ods;	// FIXME:
 
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
 
@@ -479,7 +480,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Let replicator perform heavy and error-prone part of work
 
-	REPL_trans_prepare(tdbb, transaction);
+	Replication::REPL_trans_prepare(tdbb, transaction);
 
 	// Perform any meta data work deferred
 
@@ -538,7 +539,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Set the state on the inventory page to be committed
 
-	REPL_trans_commit(tdbb, transaction);
+	Replication::REPL_trans_commit(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_committed);
 
 	// Perform any post commit work
@@ -1371,7 +1372,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// because record data won't be updated with intermediate versions
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
 			{
-				REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+				Replication::REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
 				transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
 			}
 
@@ -1434,7 +1435,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 		return;
 	}
 
-	REPL_trans_rollback(tdbb, transaction);
+	Replication::REPL_trans_rollback(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
 
 	TRA_release_transaction(tdbb, transaction, &trace);
@@ -1975,7 +1976,7 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, tra_wait_t wait)
 	if (state == tra_active)
 	{
 		state = tra_dead;
-		REPL_trans_cleanup(tdbb, number);
+		Replication::REPL_trans_cleanup(tdbb, number);
 		TRA_set_state(tdbb, 0, number, tra_dead);
 	}
 
@@ -2616,9 +2617,9 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 	if (!dbb->readOnly())
 	{
 		if (commit)
-			REPL_trans_commit(tdbb, transaction);
+			Replication::REPL_trans_commit(tdbb, transaction);
 		else
-			REPL_trans_rollback(tdbb, transaction);
+			Replication::REPL_trans_rollback(tdbb, transaction);
 
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
@@ -4043,7 +4044,7 @@ void jrd_tra::rollbackSavepoint(thread_db* tdbb, bool preserveLocks)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, true);
 
 		if (tra_flags & TRA_ex_restart)
 			preserveLocks = true;
@@ -4074,7 +4075,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, true);
 		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 
@@ -4104,7 +4105,7 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, false);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, false);
 
 		JrdContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollforward(tdbb);
@@ -4381,3 +4382,5 @@ void jrd_tra::eraseSecDbContext() noexcept
 	tra_sec_db_context = NULL;
 }
 
+
+} // namespace Firebird::Jrd

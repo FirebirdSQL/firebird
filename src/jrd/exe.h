@@ -69,9 +69,9 @@ DEFINE_TRACE_ROUTINE(cmp_trace);
 #define CMP_TRACE(args) // nothing
 #endif
 
-class VaryingString;
+namespace Firebird::Jrd
+{
 
-namespace Firebird::Jrd {
 
 class jrd_rel;
 class Sort;
@@ -91,6 +91,7 @@ class MessageNode;
 class PlanNode;
 class RecordSource;
 class Select;
+class VaryingString;
 
 // Direction for each column in sort order
 enum SortDirection { ORDER_ANY, ORDER_ASC, ORDER_DESC };
@@ -130,10 +131,10 @@ inline constexpr int csb_skip_locked	= 4096;		// skip locked record
 
 // Aggregate Sort Block (for DISTINCT aggregates)
 
-class AggregateSort : protected Firebird::PermanentStorage, public Printable
+class AggregateSort : protected PermanentStorage, public Printable
 {
 public:
-	explicit AggregateSort(Firebird::MemoryPool& p)
+	explicit AggregateSort(MemoryPool& p)
 		: PermanentStorage(p),
 		  keyItems(p),
 		  descOrder(p)
@@ -141,7 +142,7 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	virtual string internalPrint(NodePrinter& printer) const
 	{
 		return "AggregateSort";
 	}
@@ -151,8 +152,8 @@ public:
 	ULONG length = 0;
 	bool intl = false;
 	ULONG impure = 0;
-	Firebird::HalfStaticArray<sort_key_def, 2> keyItems;
-	Firebird::HalfStaticArray<dsc, 2> descOrder;
+	HalfStaticArray<sort_key_def, 2> keyItems;
+	HalfStaticArray<dsc, 2> descOrder;
 };
 
 // Inversion (i.e. nod_index) impure area
@@ -225,8 +226,8 @@ struct AccessItem
 	{}
 };
 
-typedef Firebird::SortedArray<AccessItem, Firebird::EmptyStorage<AccessItem>,
-	AccessItem, Firebird::DefaultKeyValue<AccessItem>, AccessItem> AccessItemList;
+typedef SortedArray<AccessItem, EmptyStorage<AccessItem>,
+	AccessItem, DefaultKeyValue<AccessItem>, AccessItem> AccessItemList;
 
 // Triggers and procedures the request accesses
 struct ExternalAccess
@@ -278,8 +279,8 @@ struct ExternalAccess
 	}
 };
 
-typedef Firebird::SortedArray<ExternalAccess, Firebird::EmptyStorage<ExternalAccess>,
-	ExternalAccess, Firebird::DefaultKeyValue<ExternalAccess>, ExternalAccess> ExternalAccessList;
+typedef SortedArray<ExternalAccess, EmptyStorage<ExternalAccess>,
+	ExternalAccess, DefaultKeyValue<ExternalAccess>, ExternalAccess> ExternalAccessList;
 
 // The three structs below are used for domains DEFAULT and constraints in PSQL
 struct Item
@@ -322,7 +323,7 @@ struct Item
 		return type > x.type;
 	}
 
-	Firebird::string getDescription(Request* request, const ItemInfo* itemInfo) const;
+	string getDescription(Request* request, const ItemInfo* itemInfo) const;
 };
 
 struct FieldInfo
@@ -372,7 +373,7 @@ public:
 		return !nullable || fullDomain;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const
+	virtual string internalPrint(NodePrinter& printer) const
 	{
 		/*** FIXME-PRINT:
 		NODE_PRINT(printer, name);
@@ -393,8 +394,8 @@ public:
 	bool fullDomain;
 };
 
-typedef Firebird::LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
-typedef Firebird::RightPooledMap<Item, ItemInfo> MapItemInfo;
+typedef LeftPooledMap<QualifiedNameMetaNamePair, FieldInfo> MapFieldInfo;
+typedef RightPooledMap<Item, ItemInfo> MapItemInfo;
 
 // Table value function block
 
@@ -413,7 +414,7 @@ public:
 	}
 
 	const Format* recordFormat;
-	Firebird::LeftPooledMap<MetaName, SSHORT> fields;
+	LeftPooledMap<MetaName, SSHORT> fields;
 	MetaName name;
 	USHORT funcId;
 };
@@ -487,7 +488,7 @@ public:
 		csb_preferredDesc(NULL),
 		csb_rpt(p)
 	{
-		csb_dbg_info = FB_NEW_POOL(p) Firebird::DbgInfo(p);
+		csb_dbg_info = FB_NEW_POOL(p) DbgInfo(p);
 	}
 
 	// Implemented in Statement.cpp
@@ -527,7 +528,7 @@ public:
 
 		if (csb_schema.hasData())
 		{
-			Firebird::ObjectsArray<Firebird::MetaString> schemaSearchPath;
+			ObjectsArray<MetaString> schemaSearchPath;
 
 			if (csb_g_flags & csb_search_system_schema)
 				schemaSearchPath.push(SYSTEM_SCHEMA);
@@ -546,7 +547,7 @@ public:
 		va_list params;
 		va_start(params, format);
 
-		Firebird::string s;
+		string s;
 		s.vprintf(format, params);
 
 		va_end(params);
@@ -554,38 +555,38 @@ public:
 		csb_dump += s;
 	}
 
-	Firebird::string csb_dump;
+	string csb_dump;
 #endif
 
 	CompilerScratch* mainCsb;
-	Firebird::BlrReader	csb_blr_reader;
+	BlrReader	csb_blr_reader;
 	DmlNode*		csb_node;
 	ExternalAccessList csb_external;			// Access to outside procedures/triggers to be checked
 	AccessItemList	csb_access;					// Access items to be checked
 	vec<DeclareVariableNode*>*	csb_variables;	// Vector of variables, if any
 	Resources*	csb_resources;					// Resources (relations, indexes, routines, etc.)
-	Firebird::Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
-	Firebird::Array<const Select*> csb_fors;	// select expressions
-	Firebird::Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
-	Firebird::Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
-	Firebird::Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
+	Array<Dependency>	csb_dependencies;	// objects that this statement depends upon
+	Array<const Select*> csb_fors;	// select expressions
+	Array<const DeclareLocalTableNode*> csb_localTables;	// local tables
+	Array<ULONG*> csb_invariants;		// stack of pointer to nodes invariant offsets
+	Array<ExprNode*> csb_current_nodes;	// RseNode's and other invariant
 												// candidates within whose scope we are
-	Firebird::Array<ForNode*> csb_current_for_nodes;
-	Firebird::RightPooledMap<ForNode*, MetaName> csb_forCursorNames;
-	Firebird::SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
-	Firebird::Array<BoolExprNode*> csb_inner_booleans;	// Inner booleans at the current scope
-	Firebird::SortedArray<USHORT> csb_variables_used_in_subroutines;
+	Array<ForNode*> csb_current_for_nodes;
+	RightPooledMap<ForNode*, MetaName> csb_forCursorNames;
+	SortedArray<jrd_fld*> csb_computing_fields;	// Computed fields being compiled
+	Array<BoolExprNode*> csb_inner_booleans;	// Inner booleans at the current scope
+	SortedArray<USHORT> csb_variables_used_in_subroutines;
 	StreamType		csb_n_stream;				// Next available stream
 	USHORT			csb_msg_number;				// Highest used message number
 	ULONG			csb_impure;					// Next offset into impure area
 	USHORT			csb_g_flags;
 	MemoryPool&		csb_pool;					// Memory pool to be used by csb
-	Firebird::AutoPtr<Firebird::DbgInfo> csb_dbg_info;	// Debug information
+	AutoPtr<DbgInfo> csb_dbg_info;	// Debug information
 	MapFieldInfo		csb_map_field_info;		// Map field name to field info
 	MapItemInfo			csb_map_item_info;		// Map item to item info
 
 	// Map of message number to field number to pad for external routines.
-	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;
+	GenericMap<Pair<NonPooled<USHORT, USHORT> > > csb_message_pad;
 
 	QualifiedName	csb_domain_validation;	// Parsing domain constraint in PSQL
 
@@ -599,10 +600,10 @@ public:
 	bool		csb_returning_expr;
 	bool		csb_implicit_cursor;
 
-	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
-	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
-	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
-	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
+	LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
+	LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
+	NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
+	NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
 
 	MetaName csb_schema;
 
@@ -630,7 +631,7 @@ public:
 		USHORT csb_flags;
 
 		Rsc::Rel csb_relation;
-		Firebird::string* csb_alias;	// SQL alias name for this instance of relation
+		string* csb_alias;	// SQL alias name for this instance of relation
 		SubRoutine<jrd_prc> csb_procedure;
 		Rsc::Rel csb_view;				// parent view
 
@@ -648,7 +649,7 @@ public:
 
 	typedef csb_repeat* rpt_itr;
 	typedef const csb_repeat* rpt_const_itr;
-	Firebird::HalfStaticArray<csb_repeat, 5> csb_rpt;
+	HalfStaticArray<csb_repeat, 5> csb_rpt;
 };
 
 	// We must zero-initialize this one
@@ -682,7 +683,7 @@ inline void CompilerScratch::csb_repeat::deactivate() noexcept
 	csb_flags &= ~csb_active;
 }
 
-class AutoSetCurrentCursorId : private Firebird::AutoSetRestore<ULONG>
+class AutoSetCurrentCursorId : private AutoSetRestore<ULONG>
 {
 public:
 	explicit AutoSetCurrentCursorId(CompilerScratch* csb)
@@ -695,27 +696,28 @@ public:
 
 class StatusXcp
 {
-	Firebird::FbLocalStatus status;
+	FbLocalStatus status;
 
 public:
 	StatusXcp();
 
 	void clear();
-	void init(const Jrd::FbStatusVector*) noexcept;
-	void copyTo(Jrd::FbStatusVector*) const noexcept;
+	void init(const FbStatusVector*) noexcept;
+	void copyTo(FbStatusVector*) const noexcept;
 	bool success() const;
 	SLONG as_gdscode() const;
 	SLONG as_sqlcode() const;
 	void as_sqlstate(char*) const;
 	SLONG as_xcpcode() const;
-	Firebird::string as_text() const;
+	string as_text() const;
 };
 
 // must correspond to the declared size of RDB$EXCEPTIONS.RDB$MESSAGE
 inline constexpr unsigned XCP_MESSAGE_LENGTH = 1023;
 
 // Array which stores relative pointers to impure areas of invariant nodes
-typedef Firebird::SortedArray<ULONG> VarInvariantArray;
+typedef SortedArray<ULONG> VarInvariantArray;
+
 
 } // namespace Firebird::Jrd
 

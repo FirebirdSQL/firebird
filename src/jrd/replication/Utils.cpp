@@ -51,8 +51,9 @@
 #include <time.h>
 #include <atomic>
 
-using namespace Firebird;
-using namespace Firebird::Jrd::Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 namespace
 {
@@ -215,8 +216,7 @@ namespace
 
 } // namespace
 
-namespace Firebird::Jrd::Replication
-{
+
 	void raiseError(const char* msg, ...)
 	{
 		char buffer[BUFFER_LARGE];
@@ -291,4 +291,5 @@ namespace Firebird::Jrd::Replication
 		logMessage(REPLICA_SIDE, VERBOSE_MSG, database, message);
 	}
 
-} // namespace
+
+} // namespace Firebird::Jrd::Replication

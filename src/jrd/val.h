@@ -41,6 +41,10 @@
 
 #define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
 
+namespace Firebird::Jrd
+{
+
+
 // Random string block -- as long as impure areas don't have
 // constructors and destructors, the need this varying string
 
@@ -52,8 +56,6 @@ public:
 };
 
 inline constexpr ULONG MAX_RECORD_SIZE	= 1048576; // 1 MB -- just to protect from possible misuse
-
-namespace Firebird::Jrd {
 
 class ArrayField;
 class blb;
@@ -91,7 +93,7 @@ struct SortValueItem
 	const dsc* desc;
 };
 
-typedef Firebird::SortedArray<SortValueItem> SortedValueList;
+typedef SortedArray<SortValueItem> SortedValueList;
 
 class LookupValueList
 {
@@ -103,10 +105,10 @@ public:
 	ValueExprNode** end() { return m_values.end(); }
 
 	const SortedValueList* init(thread_db* tdbb, Request* request) const;
-	Firebird::TriState find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const;
+	TriState find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const;
 
 private:
-	Firebird::HalfStaticArray<ValueExprNode*, 4> m_values;
+	HalfStaticArray<ValueExprNode*, 4> m_values;
 	const ULONG m_impureOffset;
 };
 
@@ -129,7 +131,7 @@ struct impure_value
 		ULONG keySize;
 		USHORT ttype;
 		USHORT patternLen;
-		Firebird::AutoPtr<Jrd::PatternMatcher> matcher;
+		AutoPtr<PatternMatcher> matcher;
 		USHORT escapeLen;
 		UCHAR key[1];
 	};
@@ -148,9 +150,9 @@ struct impure_value
 		SLONG vlu_dbkey[2];
 		float vlu_float;
 		double vlu_double;
-		Firebird::Decimal64 vlu_dec64;
-		Firebird::Decimal128 vlu_dec128;
-		Firebird::Int128 vlu_int128;
+		Decimal64 vlu_dec64;
+		Decimal128 vlu_dec128;
+		Int128 vlu_int128;
 		GDS_TIMESTAMP vlu_timestamp;
 		ISC_TIMESTAMP_TZ vlu_timestamp_tz;
 		GDS_TIME vlu_sql_time;
@@ -159,7 +161,7 @@ struct impure_value
 		bid vlu_bid;
 
 		// Pre-compiled invariant object for pattern matcher functions
-		Jrd::PatternMatcher* vlu_invariant;
+		PatternMatcher* vlu_invariant;
 		PatternMatcherCache* vlu_patternMatcherCache;
 		SortedValueList* vlu_sortedList;
 	} vlu_misc;
@@ -167,8 +169,8 @@ struct impure_value
 	void make_long(const SLONG val, const signed char scale = 0);
 	void make_int64(const SINT64 val, const signed char scale = 0);
 	void make_double(const double val);
-	void make_decimal128(const Firebird::Decimal128 val);
-	void make_decimal_fixed(const Firebird::Int128 val, const signed char scale);
+	void make_decimal128(const Decimal128 val);
+	void make_decimal_fixed(const Int128 val, const signed char scale);
 
 	template<class T>
 	VaryingString* getString(MemoryPool& pool, const T length) = delete; // Prevent dangerous length shrink
@@ -209,21 +211,21 @@ inline void impure_value::make_double(const double val)
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_double);
 }
 
-inline void impure_value::make_decimal128(const Firebird::Decimal128 val)
+inline void impure_value::make_decimal128(const Decimal128 val)
 {
 	this->vlu_misc.vlu_dec128 = val;
 	this->vlu_desc.dsc_dtype = dtype_dec128;
-	this->vlu_desc.dsc_length = sizeof(Firebird::Decimal128);
+	this->vlu_desc.dsc_length = sizeof(Decimal128);
 	this->vlu_desc.dsc_scale = 0;
 	this->vlu_desc.dsc_sub_type = 0;
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_dec128);
 }
 
-inline void impure_value::make_decimal_fixed(const Firebird::Int128 val, const signed char scale)
+inline void impure_value::make_decimal_fixed(const Int128 val, const signed char scale)
 {
 	this->vlu_misc.vlu_int128 = val;
 	this->vlu_desc.dsc_dtype = dtype_int128;
-	this->vlu_desc.dsc_length = sizeof(Firebird::Int128);
+	this->vlu_desc.dsc_length = sizeof(Int128);
 	this->vlu_desc.dsc_scale = scale;
 	this->vlu_desc.dsc_sub_type = 0;
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_int128);
@@ -314,18 +316,18 @@ public:
 		return fmt_desc == v.fmt_desc;
 	}
 
-	void hash(Firebird::sha512& digest) const;
+	void hash(sha512& digest) const;
 
 	ULONG fmt_length;
 	USHORT fmt_count;
 	USHORT fmt_version;
-	Firebird::Array<dsc> fmt_desc;
-	Firebird::Array<impure_value> fmt_defaults;
+	Array<dsc> fmt_desc;
+	Array<impure_value> fmt_defaults;
 
-	typedef Firebird::Array<dsc>::iterator fmt_desc_iterator;
-	typedef Firebird::Array<dsc>::const_iterator fmt_desc_const_iterator;
+	typedef Array<dsc>::iterator fmt_desc_iterator;
+	typedef Array<dsc>::const_iterator fmt_desc_const_iterator;
 
-	typedef Firebird::Array<impure_value>::iterator fmt_defaults_iterator;
+	typedef Array<impure_value>::iterator fmt_defaults_iterator;
 };
 
 
@@ -393,6 +395,7 @@ struct udf_blob
 	void (*blob_put_segment) (blb*, const UCHAR*, USHORT);
 	SLONG (*blob_seek) (blb*, USHORT, SLONG);
 };
+
 
 } // namespace Firebird::Jrd
 
