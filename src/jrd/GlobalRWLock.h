@@ -50,11 +50,13 @@ DEFINE_TRACE_ROUTINE(cos_trace);
 #endif
 
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 enum lck_t : UCHAR;
 
-class GlobalRWLock : public Firebird::PermanentStorage
+class GlobalRWLock : public PermanentStorage
 {
 public:
 	GlobalRWLock(thread_db* tdbb, MemoryPool& p,
@@ -87,17 +89,17 @@ protected:
 
 	virtual void blockingAstHandler(thread_db* tdbb);
 
-	Firebird::Mutex counterMutex;	// Protects counter and blocking flag
+	Mutex counterMutex;	// Protects counter and blocking flag
 
 private:
 	ULONG pendingLock;
 
 	ULONG	readers;
-	Firebird::Condition noReaders;		// Semaphore to wait all readers unlock to start relock
+	Condition noReaders;		// Semaphore to wait all readers unlock to start relock
 
 	ULONG	pendingWriters;
 	bool	currentWriter;
-	Firebird::Condition	writerFinished;
+	Condition	writerFinished;
 
 	// true - unlock keep cached lock and release by AST.
 	// false - unlock releases cached lock if possible
@@ -107,6 +109,7 @@ private:
 	static int blocking_ast_cached_lock(void* ast_object);
 };
 
-}
+
+}	// namespace Firebird::Jrd
 
 #endif // GLOBAL_RW_LOCK
