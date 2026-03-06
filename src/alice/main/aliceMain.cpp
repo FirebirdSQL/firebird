@@ -53,6 +53,8 @@ int CLIB_ROUTINE main(int argc, char* argv[])
  *	Invoke real gfix main function
  *
  **************************************/
+	using namespace Firebird;
+
 #ifdef HAVE_LOCALE_H
 	// Pick up the system locale to allow SYSTEM<->UTF8 conversions
 	setlocale(LC_CTYPE, "");
@@ -61,12 +63,12 @@ int CLIB_ROUTINE main(int argc, char* argv[])
 
 	try
 	{
-		Firebird::AutoPtr<Firebird::UtilSvc> uSvc(Firebird::UtilSvc::createStandalone(argc, argv));
-		return Firebird::Alice::alice(uSvc);
+		AutoPtr<UtilSvc> uSvc(UtilSvc::createStandalone(argc, argv));
+		return Alice::alice(uSvc);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
-		Firebird::StaticStatusVector st;
+		StaticStatusVector st;
 		ex.stuffException(st);
 		isc_print_status(st.begin());
 	}
