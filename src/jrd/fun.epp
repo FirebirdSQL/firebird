@@ -73,8 +73,8 @@
 #include <dlfcn.h>	// dladdr
 #endif
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -1242,3 +1242,6 @@ static bool private_move(Jrd::thread_db* tdbb, dsc* from, dsc* to)
 		return false;
 	}
 }
+
+
+} // namespace Firebird::Jrd
