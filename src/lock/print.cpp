@@ -78,6 +78,10 @@
 #define FPRINTF         fprintf
 #endif
 
+namespace Firebird::Jrd
+{
+
+
 typedef FILE* OUTFILE;
 
 constexpr USHORT SW_I_ACQUIRE	= 1;
@@ -92,8 +96,6 @@ struct waitque
 	USHORT waitque_depth;
 	SRQ_PTR waitque_entry[30];
 };
-
-using namespace Firebird;
 
 namespace
 {
@@ -233,9 +235,13 @@ static constexpr UCHAR compatibility[LCK_max][LCK_max] =
 /* EX */	{true,	true,	false,	false,	false,	false,	false}
 };
 
+
+}	// namespace Firebird::Jrd
+
+
 //#define COMPATIBLE(st1, st2)	compatibility [st1 * LCK_max + st2]
 
-int CLIB_ROUTINE main( int argc, char *argv[])
+int CLIB_ROUTINE main(int argc, char *argv[])
 {
 /**************************************
  *
@@ -252,6 +258,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	// Pick up the system locale to allow SYSTEM<->UTF8 conversions
 	setlocale(LC_CTYPE, "");
 #endif
+
+	using namespace Firebird;
+	using namespace Firebird::Jrd;
 
 	OUTFILE outfile = stdout;
 
@@ -892,6 +901,9 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 }
 
 
+namespace Firebird::Jrd {
+
+
 static void prt_lock_activity(OUTFILE outfile,
 							  const lhb* LOCK_header,
 							  USHORT flag,
@@ -1010,23 +1022,23 @@ static void prt_lock_activity(OUTFILE outfile,
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
-					(LOCK_header->lhb_operations[Jrd::LCK_database] -
-					 	prior.lhb_operations[Jrd::LCK_database]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_relation] -
-					 	prior.lhb_operations[Jrd::LCK_relation]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_bdb] -
-					 	prior.lhb_operations[Jrd::LCK_bdb]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_tra] -
-					 	prior.lhb_operations[Jrd::LCK_tra]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_attachment] -
-						prior.lhb_operations[Jrd::LCK_attachment]) / seconds,
+					(LOCK_header->lhb_operations[LCK_database] -
+					 	prior.lhb_operations[LCK_database]) / seconds,
+					(LOCK_header->lhb_operations[LCK_relation] -
+					 	prior.lhb_operations[LCK_relation]) / seconds,
+					(LOCK_header->lhb_operations[LCK_bdb] -
+					 	prior.lhb_operations[LCK_bdb]) / seconds,
+					(LOCK_header->lhb_operations[LCK_tra] -
+					 	prior.lhb_operations[LCK_tra]) / seconds,
+					(LOCK_header->lhb_operations[LCK_attachment] -
+						prior.lhb_operations[LCK_attachment]) / seconds,
 					(LOCK_header->lhb_operations[0] - prior.lhb_operations[0]) / seconds);
 
-			prior.lhb_operations[Jrd::LCK_database] = LOCK_header->lhb_operations[Jrd::LCK_database];
-			prior.lhb_operations[Jrd::LCK_relation] = LOCK_header->lhb_operations[Jrd::LCK_relation];
-			prior.lhb_operations[Jrd::LCK_bdb] = LOCK_header->lhb_operations[Jrd::LCK_bdb];
-			prior.lhb_operations[Jrd::LCK_tra] = LOCK_header->lhb_operations[Jrd::LCK_tra];
-			prior.lhb_operations[Jrd::LCK_attachment] = LOCK_header->lhb_operations[Jrd::LCK_attachment];
+			prior.lhb_operations[LCK_database] = LOCK_header->lhb_operations[LCK_database];
+			prior.lhb_operations[LCK_relation] = LOCK_header->lhb_operations[LCK_relation];
+			prior.lhb_operations[LCK_bdb] = LOCK_header->lhb_operations[LCK_bdb];
+			prior.lhb_operations[LCK_tra] = LOCK_header->lhb_operations[LCK_tra];
+			prior.lhb_operations[LCK_attachment] = LOCK_header->lhb_operations[LCK_attachment];
 			prior.lhb_operations[0] = LOCK_header->lhb_operations[0];
 		}
 
@@ -1092,16 +1104,16 @@ static void prt_lock_activity(OUTFILE outfile,
 	{
 		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
 				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
-				(LOCK_header->lhb_operations[Jrd::LCK_database] -
-				 	base.lhb_operations[Jrd::LCK_database]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_relation] -
-				 	base.lhb_operations[Jrd::LCK_relation]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_bdb] -
-				 	base.lhb_operations[Jrd::LCK_bdb]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_tra] -
-				 	base.lhb_operations[Jrd::LCK_tra]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_attachment] -
-					base.lhb_operations[Jrd::LCK_attachment]) / factor,
+				(LOCK_header->lhb_operations[LCK_database] -
+				 	base.lhb_operations[LCK_database]) / factor,
+				(LOCK_header->lhb_operations[LCK_relation] -
+				 	base.lhb_operations[LCK_relation]) / factor,
+				(LOCK_header->lhb_operations[LCK_bdb] -
+				 	base.lhb_operations[LCK_bdb]) / factor,
+				(LOCK_header->lhb_operations[LCK_tra] -
+				 	base.lhb_operations[LCK_tra]) / factor,
+				(LOCK_header->lhb_operations[LCK_attachment] -
+					base.lhb_operations[LCK_attachment]) / factor,
 				(LOCK_header->lhb_operations[0] - base.lhb_operations[0]) / factor);
 	}
 
@@ -1183,8 +1195,8 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 			"\tSeries: %d, State: %d, Size: %d, Length: %d, Data: %" SQUADFORMAT"\n",
 			lock->lbl_series, lock->lbl_state, lock->lbl_size, lock->lbl_length, lock->lbl_data);
 
-	if ((lock->lbl_series == Jrd::LCK_bdb || lock->lbl_series == Jrd::LCK_btr_dont_gc) &&
-		lock->lbl_length == Jrd::PageNumber::getLockLen())
+	if ((lock->lbl_series == LCK_bdb || lock->lbl_series == LCK_btr_dont_gc) &&
+		lock->lbl_length == PageNumber::getLockLen())
 	{
 		// Since fb 2.1 lock keys for page numbers (series == 3) contains
 		// page space number in high long of two-longs key. Lets print it
@@ -1200,8 +1212,8 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 
 		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%06" ULONGFORMAT",", pg_space, pageno);
 	}
-	else if ((lock->lbl_series == Jrd::LCK_relation || lock->lbl_series == Jrd::LCK_rel_gc) &&
-		lock->lbl_length == sizeof(ULONG) + sizeof(SINT64)) // Jrd::jrd_rel::getRelLockKeyLength()
+	else if ((lock->lbl_series == LCK_relation || lock->lbl_series == LCK_rel_gc) &&
+		lock->lbl_length == sizeof(ULONG) + sizeof(SINT64)) // jrd_rel::getRelLockKeyLength()
 	{
 		const UCHAR* q = lock->lbl_key;
 
@@ -1214,10 +1226,10 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 
 		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%09" SQUADFORMAT",", rel_id, instance_id);
 	}
-	else if ((lock->lbl_series == Jrd::LCK_tra ||
-			  lock->lbl_series == Jrd::LCK_attachment ||
-			  lock->lbl_series == Jrd::LCK_monitor ||
-			  lock->lbl_series == Jrd::LCK_cancel) &&
+	else if ((lock->lbl_series == LCK_tra ||
+			  lock->lbl_series == LCK_attachment ||
+			  lock->lbl_series == LCK_monitor ||
+			  lock->lbl_series == LCK_cancel) &&
 			 lock->lbl_length == sizeof(SINT64))
 	{
 		SINT64 key;
@@ -1225,7 +1237,7 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 
 		FPRINTF(outfile, "\tKey: %09" SQUADFORMAT",", key);
 	}
-	else if (lock->lbl_series == Jrd::LCK_record_gc &&
+	else if (lock->lbl_series == LCK_record_gc &&
 		lock->lbl_length == sizeof(SINT64))
 	{
 		SINT64 key;
@@ -1236,7 +1248,7 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 
 		FPRINTF(outfile, "\tKey: %06" ULONGFORMAT":%04" ULONGFORMAT",", pageno, line);
 	}
-	else if (lock->lbl_series == Jrd::LCK_idx_rescan &&
+	else if (lock->lbl_series == LCK_idx_rescan &&
 		lock->lbl_length == sizeof(SLONG))
 	{
 		SLONG key;
@@ -1642,3 +1654,6 @@ static void prt_html_end(OUTFILE outfile)
 	FPRINTF(outfile, "</pre>");
 	FPRINTF(outfile, "</body></html>");
 }
+
+
+}	// namespace Firebird::Jrd

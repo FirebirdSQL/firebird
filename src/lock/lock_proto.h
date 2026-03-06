@@ -512,7 +512,7 @@ private:
 	const bool m_useBlockingThread;
 
 #ifdef USE_SHMEM_EXT
-	struct SecondaryFile : public Jrd::MemoryHeader
+	struct SecondaryFile : public MemoryHeader
 	{
 	};
 
