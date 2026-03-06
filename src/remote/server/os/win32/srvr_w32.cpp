@@ -133,6 +133,7 @@ static USHORT server_flag = 0;
 static bool server_shutdown = false;
 
 using namespace Firebird;
+using namespace Firebird::Remote;
 
 class ThreadCounter
 {
