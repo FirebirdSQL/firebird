@@ -60,7 +60,10 @@
 #include <io.h>
 #endif
 
-using Firebird::MsgFormat::SafeArg;
+using MsgFormat::SafeArg;
+
+namespace Firebird::Alice
+{
 
 
 static constexpr USHORT val_err_table[] =
@@ -90,7 +93,7 @@ constexpr int ALICE_MSG_FAC = FB_IMPL_MSG_FACILITY_GFIX;
 [[noreturn]] void ALICE_exit(int code, AliceGlobals* tdgbl)
 {
 	tdgbl->exit_code = code;
-    Firebird::LongJump::raise();
+    LongJump::raise();
 }
 
 static void alice_output(bool error, const SCHAR*, ...) ATTRIBUTE_FORMAT(2,3);
@@ -102,16 +105,16 @@ static void alice_output(bool error, const SCHAR*, ...) ATTRIBUTE_FORMAT(2,3);
 //	Entry point for GFIX in case of service manager.
 //
 
-int ALICE_main(Firebird::UtilSvc* uSvc)
+int ALICE_main(UtilSvc* uSvc)
 {
 	int exit_code = FINI_OK;
 
 	try {
 		exit_code = alice(uSvc);
 	}
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
-		Firebird::StaticStatusVector status;
+		StaticStatusVector status;
 		e.stuffException(status);
 		uSvc->getStatusAccessor().setServiceStatus(status.begin());
 		uSvc->started();
@@ -127,7 +130,7 @@ int ALICE_main(Firebird::UtilSvc* uSvc)
 //		Parse switches and do work
 //
 
-int alice(Firebird::UtilSvc* uSvc)
+int alice(UtilSvc* uSvc)
 {
 	AliceGlobals gblInstance(uSvc);
 	AliceGlobals* tdgbl = &gblInstance;
@@ -401,15 +404,15 @@ int alice(Firebird::UtilSvc* uSvc)
 			case fb_utils::FETCH_PASS_OK:
 				break;
 			case fb_utils::FETCH_PASS_FILE_OPEN_ERROR:
-				ALICE_error(116, Firebird::MsgFormat::SafeArg() << *argv << errno);
+				ALICE_error(116, MsgFormat::SafeArg() << *argv << errno);
 				// error @2 opening password file @1
 				break;
 			case fb_utils::FETCH_PASS_FILE_READ_ERROR:
-				ALICE_error(117, Firebird::MsgFormat::SafeArg() << *argv << errno);
+				ALICE_error(117, MsgFormat::SafeArg() << *argv << errno);
 				// error @2 reading password file @1
 				break;
 			case fb_utils::FETCH_PASS_FILE_EMPTY:
-				ALICE_error(118, Firebird::MsgFormat::SafeArg() << *argv);
+				ALICE_error(118, MsgFormat::SafeArg() << *argv);
 				// password file @1 is empty
 				break;
 			}
@@ -506,7 +509,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	{
 		if (uSvc->isService())
 		{
-			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, Firebird::MsgFormat::SafeArg());
+			uSvc->getStatusAccessor().setServiceStatus(ALICE_MSG_FAC, 20, MsgFormat::SafeArg());
 		}
 		else
 		{
@@ -579,16 +582,16 @@ int alice(Firebird::UtilSvc* uSvc)
 
 	}	// try
 
-	catch (const Firebird::LongJump&)
+	catch (const LongJump&)
 	{
 		// All "calls" to ALICE_exit(), normal and error exits, wind up here
 		exit_code = tdgbl->exit_code;
 	}
 
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
 		// Non-alice exception was caught
-		Firebird::StaticStatusVector status;
+		StaticStatusVector status;
 		e.stuffException(status);
 		fb_utils::copyStatus(tdgbl->status_vector, ISC_STATUS_LENGTH, status.begin(), status.getCount());
 		ALICE_print_status(true, tdgbl->status_vector);
@@ -607,7 +610,7 @@ int alice(Firebird::UtilSvc* uSvc)
 	if ((exit_code != FINI_OK) && uSvc->isService() &&
 		(tdgbl->status[0] == 1) && (tdgbl->status[1] != 0))
 	{
-		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
+		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
 		sa.init();
 		uSvc->getStatusAccessor().setServiceStatus(tdgbl->status);
 	}
@@ -720,7 +723,7 @@ static void alice_output(bool error, const SCHAR* format, ...)
 
 	va_list arglist;
 	va_start(arglist, format);
-	Firebird::string buf;
+	string buf;
 	buf.vprintf(format, arglist);
 	va_end(arglist);
 
@@ -729,3 +732,6 @@ static void alice_output(bool error, const SCHAR* format, ...)
 	else
 		tdgbl->uSvc->outputVerbose(buf.c_str());
 }
+
+
+} // namespace Firebird::Alice

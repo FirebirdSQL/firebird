@@ -47,7 +47,10 @@
 #include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 
-using Firebird::MsgFormat::SafeArg;
+using MsgFormat::SafeArg;
+
+namespace Firebird::Alice
+{
 
 
 static SINT64 ask();
@@ -185,7 +188,7 @@ bool TDR_attach_database(ISC_STATUS* status_vector, tdr* trans, const TEXT* path
 	if (tdgbl->ALICE_data.ua_debug)
 		ALICE_print(68, SafeArg() << pathname); // msg 68: ATTACH_DATABASE: attempted attach of %s
 
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	dpb.insertTag(isc_dpb_no_garbage_collect);
 	dpb.insertTag(isc_dpb_gfix_attach);
 	tdgbl->uSvc->fillDpb(dpb);
@@ -289,7 +292,7 @@ void TDR_list_limbo(FB_API_HANDLE handle, const TEXT* name, const SINT64 switche
     TraNumber id;
    	tdr* trans;
 
-	for (Firebird::ClumpletReader p(Firebird::ClumpletReader::InfoResponse, buffer, sizeof(buffer));
+	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer));
 		!p.isEof(); p.moveNext())
 	{
 		const UCHAR item = p.getClumpTag();
@@ -687,7 +690,7 @@ static void reattach_database(tdr* trans)
 
 	if (trans->tdr_fullpath.hasData())
 	{
-		Firebird::string hostname;
+		string hostname;
 		ISC_get_host(hostname);
 
 		// if this is being run from the same host,
@@ -703,7 +706,7 @@ static void reattach_database(tdr* trans)
 			//  try going through the previous host with all available
 			//  protocols, using chaining to try the same method of
 			//  attachment originally used from that host
-			const Firebird::string pathname = trans->tdr_host_site + ':' + trans->tdr_fullpath;
+			const string pathname = trans->tdr_host_site + ':' + trans->tdr_fullpath;
 			if (TDR_attach_database(status_vector, trans, pathname.c_str()))
 				return;
 		}
@@ -713,7 +716,7 @@ static void reattach_database(tdr* trans)
 
 		if (trans->tdr_remote_site.hasData())
 		{
-			const Firebird::string pathname = trans->tdr_remote_site + ':' + trans->tdr_filename;
+			const string pathname = trans->tdr_remote_site + ':' + trans->tdr_filename;
 			if (TDR_attach_database(status_vector, trans, pathname.c_str()))
 				return;
 		}
@@ -830,3 +833,6 @@ static bool reconnect(FB_API_HANDLE handle, TraNumber number, const TEXT* name, 
 
 	return false;
 }
+
+
+} // namespace Firebird::Alice

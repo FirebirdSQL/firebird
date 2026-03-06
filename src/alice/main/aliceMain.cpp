@@ -62,13 +62,13 @@ int CLIB_ROUTINE main(int argc, char* argv[])
 	try
 	{
 		Firebird::AutoPtr<Firebird::UtilSvc> uSvc(Firebird::UtilSvc::createStandalone(argc, argv));
- 		return alice(uSvc);
- 	}
+		return Firebird::Alice::alice(uSvc);
+	}
 	catch (const Firebird::Exception& ex)
- 	{
- 		Firebird::StaticStatusVector st;
- 		ex.stuffException(st);
- 		isc_print_status(st.begin());
- 	}
- 	return 1;
+	{
+		Firebird::StaticStatusVector st;
+		ex.stuffException(st);
+		isc_print_status(st.begin());
+	}
+	return 1;
 }

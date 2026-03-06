@@ -47,8 +47,11 @@
 #include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 
+namespace Firebird::Alice
+{
 
-static void buildDpb(Firebird::ClumpletWriter&, const SINT64);
+
+static void buildDpb(ClumpletWriter&, const SINT64);
 static void extract_db_info(const UCHAR*, size_t);
 
 // Keep always in sync with function extract_db_info()
@@ -73,7 +76,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 	bool error = false;
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	{
-		Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
+		AutoMemoryPool newPool(MemoryPool::createPool());
 		AliceContextPoolHolder context(tdgbl, newPool);
 
 		for (USHORT i = 0; i < MAX_VAL_ERRORS; i++)
@@ -83,7 +86,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 
 		// generate the database parameter block for the attach,
 		// based on the various switches
-		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE);
+		ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE);
 		buildDpb(dpb, switches);
 
 		FB_API_HANDLE handle = 0;
@@ -110,8 +113,8 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 			if ((switches & sw_validate) && (tdgbl->status[1] != isc_bug_check))
 			{
 				isc_database_info(tdgbl->status, &handle, sizeof(val_errors),
-							   val_errors, sizeof(error_string),
-							   reinterpret_cast<char*>(error_string));
+						   val_errors, sizeof(error_string),
+						   reinterpret_cast<char*>(error_string));
 
 				extract_db_info(error_string, sizeof(error_string));
 			}
@@ -145,7 +148,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 	bool error = false;
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	{
-		Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
+		AutoMemoryPool newPool(MemoryPool::createPool());
 		AliceContextPoolHolder context(tdgbl, newPool);
 
 		for (USHORT i = 0; i < MAX_VAL_ERRORS; i++)
@@ -155,7 +158,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 
 		// generate the database parameter block for the attach,
 		// based on the various switches
-		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE);
+		ClumpletWriter dpb(ClumpletReader::Tagged, MAX_DPB_SIZE);
 		buildDpb(dpb, switches);
 
 		FB_API_HANDLE handle = 0;
@@ -198,7 +201,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 //  based on the various switches
 //
 
-static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
+static void buildDpb(ClumpletWriter& dpb, const SINT64 switches)
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	dpb.reset(isc_dpb_version1);
@@ -483,3 +486,6 @@ static void extract_db_info(const UCHAR* db_info_buffer, size_t buf_size)
 		p += length;
 	}
 }
+
+
+} // namespace Firebird::Alice

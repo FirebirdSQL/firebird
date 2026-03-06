@@ -159,12 +159,12 @@ inline constexpr serv_entry services[] =
 {
 	{ isc_action_svc_backup, "Backup Database", BURP_main },
 	{ isc_action_svc_restore, "Restore Database", BURP_main },
-	{ isc_action_svc_repair, "Repair Database", ALICE_main },
+	{ isc_action_svc_repair, "Repair Database", Alice::ALICE_main },
 	{ isc_action_svc_add_user, "Add User", GSEC_main },
 	{ isc_action_svc_delete_user, "Delete User", GSEC_main },
 	{ isc_action_svc_modify_user, "Modify User", GSEC_main },
 	{ isc_action_svc_display_user, "Display User", GSEC_main },
-	{ isc_action_svc_properties, "Database Properties", ALICE_main },
+	{ isc_action_svc_properties, "Database Properties", Alice::ALICE_main },
 	{ isc_action_svc_db_stats, "Database Stats", main_gstat },
 	{ isc_action_svc_get_fb_log, "Get Log File", Service::readFbLog },
 	{ isc_action_svc_nbak, "Incremental Backup Database", NBACKUP_main },
@@ -3042,7 +3042,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
                 get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_options:
-				if (!get_action_svc_bitmask(spb, alice_in_sw_table, switches))
+			if (!get_action_svc_bitmask(spb, Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3065,7 +3065,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_rpr_rollback_trans:
 			case isc_spb_rpr_recover_two_phase:
 			case isc_spb_rpr_par_workers:
-				if (!get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (!get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
@@ -3074,34 +3074,34 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_prp_write_mode:
 			case isc_spb_prp_access_mode:
 			case isc_spb_prp_reserve_space:
-				if (!get_action_svc_parameter(*(spb.getBytes()), alice_in_sw_table, switches))
+			if (!get_action_svc_parameter(*(spb.getBytes()), Alice::alice_in_sw_table, switches))
 				{
 					return false;
 				}
 				break;
 			case isc_spb_prp_shutdown_mode:
 			case isc_spb_prp_online_mode:
-				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
+			{
+				const unsigned int val = spb.getInt();
+				if (val >= FB_NELEM(Alice::alice_shut_mode_sw_table))
 				{
-					const unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(alice_shut_mode_sw_table))
-					{
-						return false;
-					}
-					switches += alice_shut_mode_sw_table[val];
+					return false;
+				}
+				switches += Alice::alice_shut_mode_sw_table[val];
 					switches += " ";
 					break;
 				}
 				return false;
 			case isc_spb_prp_replica_mode:
-				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+			if (get_action_svc_parameter(spb.getClumpTag(), Alice::alice_in_sw_table, switches))
+			{
+				const unsigned int val = spb.getInt();
+				if (val >= FB_NELEM(Alice::alice_repl_mode_sw_table))
 				{
-					const unsigned int val = spb.getInt();
-					if (val >= FB_NELEM(alice_repl_mode_sw_table))
-					{
-						return false;
-					}
-					switches += alice_repl_mode_sw_table[val];
+					return false;
+				}
+				switches += Alice::alice_repl_mode_sw_table[val];
 					switches += " ";
 					break;
 				}

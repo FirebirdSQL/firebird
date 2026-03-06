@@ -25,6 +25,10 @@
 #include "ibase.h"
 #include "../common/constants.h"
 
+namespace Firebird::Alice
+{
+
+
 // switch definitions
 
 inline constexpr SINT64 sw_list				= 0x0000000000000001L;	// Byte 0, Bit 0
@@ -330,5 +334,8 @@ static inline constexpr const char* alice_repl_mode_sw_table[] =
 {
 	ALICE_SW_MODE_NONE, ALICE_SW_MODE_RO, ALICE_SW_MODE_RW
 };
+
+
+} // namespace Firebird::Alice
 
 #endif // ALICE_ALICESWI_H
