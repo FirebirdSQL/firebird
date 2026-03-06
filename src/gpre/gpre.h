@@ -385,7 +385,7 @@ struct ary
 	{
 		SLONG ary_lower;
 		SLONG ary_upper;
-	} ary_rpt[Firebird::MAX_ARRAY_DIMENSIONS];
+	} ary_rpt[MAX_ARRAY_DIMENSIONS];
 };
 
 // CVC: The count is ignored, the array is hardcoded at 16.
@@ -1609,7 +1609,7 @@ extern GpreGlobals gpreGlob;
 //#define assert_IS_ACT(x) fb_assert(!(x) || ((x)->act_type >= 0 && (x)->act_type < ACT_LASTACT))
 
 
-class gpre_exception: public Firebird::LongJump
+class gpre_exception: public LongJump
 {
 	char msg[MAXPATHLEN << 1];
 public:

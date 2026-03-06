@@ -893,7 +893,7 @@ int main(int argc, char* argv[])
 [[noreturn]] void CPR_abort()
 {
 	++fatals_global;
-	//throw Firebird::Exception();
+	//throw Exception();
 	throw gpre_exception("Program terminated.");
 }
 
