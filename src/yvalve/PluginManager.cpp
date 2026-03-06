@@ -165,7 +165,7 @@ namespace
 			{
 				return confFile.hasData() ? newParam(confFile->findParameter(name)) : NULL;
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -178,7 +178,7 @@ namespace
 			{
 				return confFile.hasData() ? newParam(confFile->findParameter(name, value)) : NULL;
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -208,7 +208,7 @@ namespace
 
 				return newParam(&p[n + pos]);
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -242,7 +242,7 @@ namespace
 				return rc;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -306,7 +306,7 @@ namespace
 	};
 
 	// Controls module, containing plugins.
-	class PluginModule : public Firebird::RefCounted, public GlobalStorage
+	class PluginModule : public RefCounted, public GlobalStorage
 	{
 	public:
 		PluginModule(ModuleLoader::Module* pmodule, const PathName& pname);
@@ -410,8 +410,8 @@ namespace
 		}
 
 		PathName name;
-		Firebird::AutoPtr<ModuleLoader::Module> module;
-		Firebird::IPluginModule* cleanup;
+		AutoPtr<ModuleLoader::Module> module;
+		IPluginModule* cleanup;
 		ObjectsArray<RegisteredPlugin> regPlugins;
 		PluginModule* next;
 		PluginModule** prev;
@@ -611,7 +611,7 @@ namespace
 		FbLocalStatus ls;
 		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&ls, par);
 
-		if (plugin && !(ls->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (plugin && !(ls->getState() & IStatus::STATE_ERRORS))
 		{
 			plugin->setOwner(par);
 			return plugin;
@@ -844,7 +844,7 @@ namespace
 				namesList.alltrim(" \t");
 				next(status);
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -878,14 +878,14 @@ namespace
 
 		RefPtr<PluginModule> loadModule(const PluginLoadInfo& info);
 
-		void loadError(const Firebird::Arg::StatusVector& error)
+		void loadError(const Arg::StatusVector& error)
 		{
-			(Firebird::Arg::Gds(isc_pman_cannot_load_plugin) << currentName << error).raise();
+			(Arg::Gds(isc_pman_cannot_load_plugin) << currentName << error).raise();
 		}
 
 		static void CLOOP_CARG upFunction(void* /*interface*/, IStatus* status)
 		{
-			status->setErrors(Firebird::Arg::Gds(isc_wish_list).value());
+			status->setErrors(Arg::Gds(isc_wish_list).value());
 		}
 	};
 
@@ -935,8 +935,8 @@ namespace
 				int r = m->findPlugin(interfaceType, info.regName);
 				if (r < 0)
 				{
-					loadError(Firebird::Arg::Gds(isc_pman_plugin_notfound) <<
-							  info.curModule << info.regName << Firebird::Arg::Num(interfaceType));
+					loadError(Arg::Gds(isc_pman_plugin_notfound) <<
+							  info.curModule << info.regName << Arg::Num(interfaceType));
 				}
 
 				currentPlugin = FB_NEW ConfiguredPlugin(m, r, info.conf, info.plugConfigFile, currentName);
@@ -945,7 +945,7 @@ namespace
 				return;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -971,13 +971,13 @@ namespace
 		{
 			if (bad)
 			{
-				loadError(Firebird::Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
-					Firebird::Arg::StatusVector(statusArray));
+				loadError(Arg::Gds(isc_pman_module_bad) << fixedModuleName <<
+					Arg::StatusVector(statusArray));
 			}
 			if (info.required)
 			{
-				loadError(Firebird::Arg::Gds(isc_pman_module_notfound) << fixedModuleName <<
-					Firebird::Arg::StatusVector(statusArray));
+				loadError(Arg::Gds(isc_pman_module_notfound) << fixedModuleName <<
+					Arg::StatusVector(statusArray));
 			}
 
 			return RefPtr<PluginModule>(NULL);
@@ -998,7 +998,7 @@ namespace
 			return rc;
 		}
 
-		loadError(Firebird::Arg::Gds(isc_pman_entrypoint_notfound) << fixedModuleName << Firebird::Arg::StatusVector(stArray));
+		loadError(Arg::Gds(isc_pman_entrypoint_notfound) << fixedModuleName << Arg::StatusVector(stArray));
 		return RefPtr<PluginModule>(NULL);	// compiler warning silencer
 	}
 
@@ -1013,11 +1013,11 @@ namespace
 					return p;
 
 				next(status);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					break;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -1136,8 +1136,8 @@ void PluginManager::unregisterModule(IPluginModule* cleanup)
 	// exit() is called by client of embedded server. Shutdown ourselves.
 
 #ifdef WIN_NT
-	if (!Firebird::dDllUnloadTID)
-		Firebird::dDllUnloadTID = GetCurrentThreadId();
+	if (!dDllUnloadTID)
+		dDllUnloadTID = GetCurrentThreadId();
 #endif
 
 	fb_shutdown(10000, fb_shutrsn_exit_called);
@@ -1195,7 +1195,7 @@ IConfig* PluginManager::getConfig(CheckStatusWrapper* status, const char* filena
 		rc->addRef();
 		return rc;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
@@ -1345,7 +1345,7 @@ public:
 		try
 		{
 			PathName dummy;
-			Firebird::RefPtr<const Firebird::Config> config;
+			RefPtr<const Config> config;
 			expandDatabaseName(dbName, dummy, &config);
 
 			IFirebirdConf* firebirdConf = FB_NEW FirebirdConf(config);

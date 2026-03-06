@@ -88,7 +88,7 @@ namespace Firebird::Nbackup
 
 namespace
 {
-	using Firebird::MsgFormat::SafeArg;
+	using MsgFormat::SafeArg;
 	constexpr USHORT nbackup_msg_fac = FB_IMPL_MSG_FACILITY_NBACKUP;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)
@@ -123,7 +123,7 @@ namespace
 		if (uSvc->isService())
 		{
 			fb_assert(code);
-			Firebird::Arg::Gds gds(code);
+			Arg::Gds gds(code);
 			if (message)
 				gds << message;
 			gds.raise();
@@ -196,7 +196,7 @@ namespace
 #ifdef HAVE_POSIX_FADVISE
 	int fb_fadvise(int fd, off_t offset, off_t len, int advice)
 	{
-		int rc = Firebird::os_utils::posix_fadvise(fd, offset, len, advice);
+		int rc = os_utils::posix_fadvise(fd, offset, len, advice);
 
 		if (rc < 0)
 		{
@@ -236,7 +236,7 @@ static void checkCtrlC(UtilSvc* /*uSvc*/)
 {
 	if (flShutdown)
 	{
-		Firebird::Arg::Gds(isc_nbackup_user_stop).raise();
+		Arg::Gds(isc_nbackup_user_stop).raise();
 	}
 }
 
@@ -415,10 +415,10 @@ FB_SIZE_T NBackup::read_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize)
 		{
 			const int err = errno;
 #endif
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_read) <<
+			status_exception::raise(Arg::Gds(isc_nbackup_err_read) <<
 				(&file == &dbase ? dbname.c_str() :
 					&file == &backup ? bakname.c_str() : "unknown") <<
-				Firebird::Arg::OsError(err));
+				Arg::OsError(err));
 		}
 
 		if (!res)
@@ -446,10 +446,10 @@ void NBackup::write_file(FILE_HANDLE &file, void *buffer, FB_SIZE_T bufsize)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_write) <<
+	status_exception::raise(Arg::Gds(isc_nbackup_err_write) <<
 		(&file == &dbase ? dbname.c_str() :
 			&file == &backup ? bakname.c_str() : "unknown") <<
-		Firebird::Arg::OsError());
+		Arg::OsError());
 }
 
 void NBackup::seek_file(FILE_HANDLE &file, SINT64 pos)
@@ -464,14 +464,14 @@ void NBackup::seek_file(FILE_HANDLE &file, SINT64 pos)
 		return;
 	}
 #else
-	if (Firebird::os_utils::lseek(file, pos, SEEK_SET) != (off_t) -1)
+	if (os_utils::lseek(file, pos, SEEK_SET) != (off_t) -1)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_seek) <<
+	status_exception::raise(Arg::Gds(isc_nbackup_err_seek) <<
 		(&file == &dbase ? dbname.c_str() :
 			&file == &backup ? bakname.c_str() : "unknown") <<
-		Firebird::Arg::OsError());
+		Arg::OsError());
 }
 
 void NBackup::open_database_write(bool exclusive)
@@ -490,12 +490,12 @@ void NBackup::open_database_write(bool exclusive)
 		O_EXCL | O_RDWR | O_LARGEFILE :
 		O_RDWR | O_LARGEFILE;
 
-	dbase = Firebird::os_utils::open(dbname.c_str(), flags);
+	dbase = os_utils::open(dbname.c_str(), flags);
 	if (dbase >= 0)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Firebird::Arg::OsError());
+	status_exception::raise(Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Arg::OsError());
 }
 
 void NBackup::open_database_scan()
@@ -514,7 +514,7 @@ void NBackup::open_database_scan()
 		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | (direct_io ? FILE_FLAG_NO_BUFFERING : 0),
 		NULL);
 	if (dbase == INVALID_HANDLE_VALUE)
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Firebird::Arg::OsError());
+		status_exception::raise(Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Arg::OsError());
 
 #else // WIN_NT
 
@@ -530,23 +530,23 @@ void NBackup::open_database_scan()
 #define O_DIRECT 0
 #endif // O_DIRECT
 
-	dbase = Firebird::os_utils::open(dbname.c_str(), O_RDONLY | O_LARGEFILE | O_NOATIME | (direct_io ? O_DIRECT : 0));
+	dbase = os_utils::open(dbname.c_str(), O_RDONLY | O_LARGEFILE | O_NOATIME | (direct_io ? O_DIRECT : 0));
 	if (dbase < 0)
 	{
 		// Non-root may fail when opening file of another user with O_NOATIME
-		dbase = Firebird::os_utils::open(dbname.c_str(), O_RDONLY | O_LARGEFILE | (direct_io ? O_DIRECT : 0));
+		dbase = os_utils::open(dbname.c_str(), O_RDONLY | O_LARGEFILE | (direct_io ? O_DIRECT : 0));
 	}
 	if (dbase < 0)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Firebird::Arg::OsError());
+		status_exception::raise(Arg::Gds(isc_nbackup_err_opendb) << dbname.c_str() << Arg::OsError());
 	}
 
 #ifdef POSIX_FADV_SEQUENTIAL
 	int rc = fb_fadvise(dbase, 0, 0, POSIX_FADV_SEQUENTIAL);
 	if (rc)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_fadvice) <<
-								"SEQUENTIAL" << dbname.c_str() << Firebird::Arg::Unix(rc));
+		status_exception::raise(Arg::Gds(isc_nbackup_err_fadvice) <<
+								"SEQUENTIAL" << dbname.c_str() << Arg::Unix(rc));
 	}
 #endif // POSIX_FADV_SEQUENTIAL
 
@@ -556,8 +556,8 @@ void NBackup::open_database_scan()
 		rc = fb_fadvise(dbase, 0, 0, POSIX_FADV_NOREUSE);
 		if (rc)
 		{
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_fadvice) <<
-									"NOREUSE" << dbname.c_str() << Firebird::Arg::Unix(rc));
+			status_exception::raise(Arg::Gds(isc_nbackup_err_fadvice) <<
+									"NOREUSE" << dbname.c_str() << Arg::Unix(rc));
 		}
 	}
 #endif // POSIX_FADV_NOREUSE
@@ -573,12 +573,12 @@ void NBackup::create_database()
 	if (dbase != INVALID_HANDLE_VALUE)
 		return;
 #else
-	dbase = Firebird::os_utils::open(dbname.c_str(), O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
+	dbase = os_utils::open(dbname.c_str(), O_RDWR | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
 	if (dbase >= 0)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_createdb) << dbname.c_str() << Firebird::Arg::OsError());
+	status_exception::raise(Arg::Gds(isc_nbackup_err_createdb) << dbname.c_str() << Arg::OsError());
 }
 
 void NBackup::close_database()
@@ -616,12 +616,12 @@ void NBackup::open_backup_scan()
 	if (backup != INVALID_HANDLE_VALUE)
 		return;
 #else
-	backup = Firebird::os_utils::open(bakname.c_str(), O_RDONLY | O_LARGEFILE);
+	backup = os_utils::open(bakname.c_str(), O_RDONLY | O_LARGEFILE);
 	if (backup >= 0)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_openbk) << bakname.c_str() << Firebird::Arg::OsError());
+	status_exception::raise(Arg::Gds(isc_nbackup_err_openbk) << bakname.c_str() << Arg::OsError());
 }
 
 void NBackup::open_backup_decompress()
@@ -705,7 +705,7 @@ void NBackup::open_backup_decompress()
 				{
 					if (narg >= ARGCOUNT)
 					{
-						status_exception::raise(Firebird::Arg::Gds(isc_nbackup_deco_parse) << Firebird::Arg::Num(ARGCOUNT));
+						status_exception::raise(Arg::Gds(isc_nbackup_deco_parse) << Arg::Num(ARGCOUNT));
 					}
 					inStr = true;
 					args[narg++] = &command[i];
@@ -731,7 +731,7 @@ void NBackup::open_backup_decompress()
 		{
 			if (narg >= ARGCOUNT)
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_nbackup_deco_parse) << Firebird::Arg::Num(ARGCOUNT));
+				status_exception::raise(Arg::Gds(isc_nbackup_deco_parse) << Arg::Num(ARGCOUNT));
 			}
 			args[narg++] = &bakname[0];
 		}
@@ -789,12 +789,12 @@ void NBackup::create_backup()
 		backup = 1; // Posix file handle for stdout
 		return;
 	}
-	backup = Firebird::os_utils::open(bakname.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
+	backup = os_utils::open(bakname.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, 0660);
 	if (backup >= 0)
 		return;
 #endif
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_createbk) << bakname.c_str() << Firebird::Arg::OsError());
+	status_exception::raise(Arg::Gds(isc_nbackup_err_createbk) << bakname.c_str() << Arg::OsError());
 }
 
 void NBackup::close_backup()
@@ -819,7 +819,7 @@ void NBackup::close_backup()
 		childId = childStdErr = 0;
 
 		if (killed)
-			status_exception::raise(Firebird::Arg::Gds(isc_random) << "Child process seems hung. Killed");
+			status_exception::raise(Arg::Gds(isc_random) << "Child process seems hung. Killed");
 	}
 #else
 	close(backup);
@@ -841,14 +841,14 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 	auto header = reinterpret_cast<Ods::header_page*>(header_buffer.getBuffer(size));
 
 	if (read_file(dbase, header, size) != size)
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
+		status_exception::raise(Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
 
 	const auto page_size = header->hdr_page_size;
 
 	if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
 	{
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_fixup_wrongstate) << dbname.c_str() <<
-			Firebird::Arg::Num(Ods::hdr_nbak_stalled));
+		status_exception::raise(Arg::Gds(isc_nbackup_fixup_wrongstate) << dbname.c_str() <<
+			Arg::Num(Ods::hdr_nbak_stalled));
 	}
 
 	if (!repl_seq)
@@ -862,7 +862,7 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 		seek_file(dbase, 0);
 
 		if (read_file(dbase, header, size) != size)
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
+			status_exception::raise(Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
 
 		// Replace existing database GUID with a regenerated one
 		Guid::generate().copyTo(header->hdr_guid);
@@ -913,7 +913,7 @@ void NBackup::pr_error(const ISC_STATUS* status, const char* operation)
 
 	m_printed = true;
 
-	status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_db));
+	status_exception::raise(Arg::Gds(isc_nbackup_err_db));
 }
 
 void NBackup::print_child_stderr()
@@ -992,7 +992,7 @@ void NBackup::attach_database()
 	{
 		if (m_silent)
 			return;
-		status_exception::raise(Firebird::Arg::Gds(isc_nbackup_userpw_toolong));
+		status_exception::raise(Arg::Gds(isc_nbackup_userpw_toolong));
 	}
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
@@ -1260,19 +1260,19 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 			case 100: // No more records available
 				if (level > 0)
 				{
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostrec_db) << database.c_str() <<
-											Firebird::Arg::Num(level - 1));
+					status_exception::raise(Arg::Gds(isc_nbackup_lostrec_db) << database.c_str() <<
+											Arg::Num(level - 1));
 				}
 				else
 				{
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostrec_guid_db) << database.c_str() <<
-											Firebird::Arg::Str(guidStr));
+					status_exception::raise(Arg::Gds(isc_nbackup_lostrec_guid_db) << database.c_str() <<
+											Arg::Str(guidStr));
 				}
 				break; // avoid compiler warnings
 
 			case 0:
 				if (guid_null || scn_null)
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostguid_db));
+					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
 				guid_value[sizeof(guid_value) - 1] = 0;
 				break;
 
@@ -1286,7 +1286,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 
 			prev_guid = Guid::fromString(guid_value);
 			if (!prev_guid)
-				status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostguid_db));
+				status_exception::raise(Arg::Gds(isc_nbackup_lostguid_db));
 		}
 
 		// Lock database for backup
@@ -1349,20 +1349,20 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 			(header_buffer.getAlignedBuffer(headerSize, ioBlockSize));
 
 		if (read_file(dbase, header, headerSize) != headerSize)
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Firebird::Arg::Num(1));
+			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
 		if (!Ods::isSupported(header))
 		{
 			const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
-			status_exception::raise(Firebird::Arg::Gds(isc_wrong_ods) << Firebird::Arg::Str(database.c_str()) <<
-									Firebird::Arg::Num(ods_version) <<
-									Firebird::Arg::Num(header->hdr_ods_minor) <<
-									Firebird::Arg::Num(ODS_VERSION) <<
-									Firebird::Arg::Num(ODS_CURRENT));
+			status_exception::raise(Arg::Gds(isc_wrong_ods) << Arg::Str(database.c_str()) <<
+									Arg::Num(ods_version) <<
+									Arg::Num(header->hdr_ods_minor) <<
+									Arg::Num(ODS_VERSION) <<
+									Arg::Num(ODS_CURRENT));
 		}
 
 		if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_db_notlock) << Firebird::Arg::Num(header->hdr_flags));
+			status_exception::raise(Arg::Gds(isc_nbackup_db_notlock) << Arg::Num(header->hdr_flags));
 
 		Array<UCHAR> page_buffer;
 		Ods::pag* page_buff = reinterpret_cast<Ods::pag*>
@@ -1372,7 +1372,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		seek_file(dbase, 0);
 
 		if (read_file(dbase, page_buff, header->hdr_page_size) != header->hdr_page_size)
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Firebird::Arg::Num(2));
+			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(2));
 		--db_size;
 		page_reads++;
 
@@ -1392,7 +1392,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		}
 
 		if (!backup_guid)
-			status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostguid_bk));
+			status_exception::raise(Arg::Gds(isc_nbackup_lostguid_bk));
 
 		// Write data to backup file
 		ULONG backup_scn = header->hdr_header.pag_scn - 1;
@@ -1415,7 +1415,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 
 			seek_file(dbase, 0);
 			if (read_file(dbase, page_buff, header->hdr_page_size) != header->hdr_page_size)
-				status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Firebird::Arg::Num(2));
+				status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(2));
 		}
 
 		ULONG curPage = 0;
@@ -1434,8 +1434,8 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		{
 			if (curPage && page_buff->pag_scn > backup_scn)
 			{
-				status_exception::raise(Firebird::Arg::Gds(isc_nbackup_page_changed) << Firebird::Arg::Num(curPage) <<
-										Firebird::Arg::Num(page_buff->pag_scn) << Firebird::Arg::Num(backup_scn));
+				status_exception::raise(Arg::Gds(isc_nbackup_page_changed) << Arg::Num(curPage) <<
+										Arg::Num(page_buff->pag_scn) << Arg::Num(backup_scn));
 			}
 
 			if (!level || page_buff->pag_scn > prev_scn)
@@ -1491,7 +1491,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 			if (bytesDone == 0)
 				break;
 			if (bytesDone != header->hdr_page_size)
-				status_exception::raise(Firebird::Arg::Gds(isc_nbackup_dbsize_inconsistent));
+				status_exception::raise(Arg::Gds(isc_nbackup_dbsize_inconsistent));
 
 			if (level && page_buff->pag_type == pag_scns)
 			{
@@ -1687,7 +1687,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 						if (!curLevel)
 						{
 							remove(dbname.c_str());
-							status_exception::raise(Firebird::Arg::Gds(isc_nbackup_failed_lzbk));
+							status_exception::raise(Arg::Gds(isc_nbackup_failed_lzbk));
 						}
 						fixup_database(repl_seq);
 						return;
@@ -1739,22 +1739,22 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 			{
 				inc_header bakheader;
 				if (read_file(backup, &bakheader, sizeof(bakheader)) != sizeof(bakheader))
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
+					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
 				if (memcmp(bakheader.signature, backup_signature, sizeof(backup_signature)) != 0)
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_invalid_incbk) << bakname.c_str());
+					status_exception::raise(Arg::Gds(isc_nbackup_invalid_incbk) << bakname.c_str());
 				if (bakheader.version != BACKUP_VERSION)
 				{
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_unsupvers_incbk) <<
-										Firebird::Arg::Num(bakheader.version) << bakname.c_str());
+					status_exception::raise(Arg::Gds(isc_nbackup_unsupvers_incbk) <<
+										Arg::Num(bakheader.version) << bakname.c_str());
 				}
 				if (bakheader.level && bakheader.level != curLevel)
 				{
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_invlevel_incbk) <<
-						Firebird::Arg::Num(bakheader.level) << bakname.c_str() << Firebird::Arg::Num(curLevel));
+					status_exception::raise(Arg::Gds(isc_nbackup_invlevel_incbk) <<
+						Arg::Num(bakheader.level) << bakname.c_str() << Arg::Num(curLevel));
 				}
 				// We may also add SCN check, but GUID check covers this case too
 				if (Guid(bakheader.prev_guid) != prev_guid.value())
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
+					status_exception::raise(Arg::Gds(isc_nbackup_wrong_orderbk) << bakname.c_str());
 
 				// Emulate seek_file(backup, bakheader.page_size)
 				// Backup is stream-oriented, if -decompress is used pipe can't be seek()'ed
@@ -1764,7 +1764,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					char char_buf[1024];
 					const FB_SIZE_T step = left > sizeof(char_buf) ? sizeof(char_buf) : left;
 					if (read_file(backup, &char_buf, step) != step)
-						status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
+						status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrbk) << bakname.c_str());
 					left -= step;
 				}
 
@@ -1778,7 +1778,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					if (bytesDone == 0)
 						break;
 					if (bytesDone != bakheader.page_size) {
-						status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofbk) << bakname.c_str());
+						status_exception::raise(Arg::Gds(isc_nbackup_err_eofbk) << bakname.c_str());
 					}
 					const SINT64 pageNum = reinterpret_cast<Ods::pag*>(page_ptr)->pag_pageno;
 					seek_file(dbase, pageNum * bakheader.page_size);
@@ -1809,14 +1809,14 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 				// Read database header
 				Ods::header_page header;
 				if (read_file(dbase, &header, HDR_SIZE) != HDR_SIZE)
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Firebird::Arg::Num(1));
+					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(1));
 
 				const auto page_ptr = page_buffer.getBuffer(header.hdr_page_size);
 
 				seek_file(dbase, 0);
 
 				if (read_file(dbase, page_ptr, header.hdr_page_size) != header.hdr_page_size)
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Firebird::Arg::Num(2));
+					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(2));
 
 				prev_guid.reset();
 				auto p = reinterpret_cast<Ods::header_page*>(page_ptr)->hdr_data;
@@ -1833,7 +1833,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					p += p[1] + 2;
 				}
 				if (!prev_guid)
-					status_exception::raise(Firebird::Arg::Gds(isc_nbackup_lostguid_l0bk));
+					status_exception::raise(Arg::Gds(isc_nbackup_lostguid_l0bk));
 				// We are likely to have normal database here
 				delete_database = false;
 			}
