@@ -20,7 +20,8 @@
 #endif // INTERNAL_FIREBIRD
 
 
-namespace Firebird	// FIXME: bad
+// FIXME: Move this file outside of Auth. It's not directly related to Auth.
+namespace Firebird
 {
 
 

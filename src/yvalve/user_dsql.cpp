@@ -52,11 +52,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+using namespace Firebird;
+
+
 // SQLDA dialects
 constexpr USHORT DIALECT_sqlda	= 0;
-
-namespace Firebird::Why
-{
 
 
 enum name_type {
@@ -1327,6 +1327,3 @@ static bool scompare(const SCHAR* string1, USHORT length1, const SCHAR* string2,
 
 	return true;
 }
-
-
-}	// namespace Firebird::Why
