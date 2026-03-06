@@ -134,8 +134,8 @@ private:
 
 	// Fool-proof requested by Alex
 	// Private memory operators to be sure that this class is used in heap only with launcher
-	void* operator new (size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS) { return pool.allocate(s ALLOC_PASS_ARGS); }
-	void operator delete (void* mem, Firebird::MemoryPool& ALLOC_PARAMS_DEF) { MemoryPool::globalFree(mem); }
+	void* operator new (size_t s, MemoryPool& pool ALLOC_PARAMS) { return pool.allocate(s ALLOC_PASS_ARGS); }
+	void operator delete (void* mem, MemoryPool& ALLOC_PARAMS_DEF) { MemoryPool::globalFree(mem); }
 	void operator delete (void* mem) { MemoryPool::globalFree(mem); }
 
 public:
@@ -1561,7 +1561,7 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
-Firebird::IAttachment* Firebird::Why::handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
+IAttachment* Why::handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
 {
 	try
 	{
@@ -1578,7 +1578,7 @@ Firebird::IAttachment* Firebird::Why::handleToIAttachment(CheckStatusWrapper* st
 }
 
 
-Firebird::ITransaction* Firebird::Why::handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle)
+ITransaction* Why::handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle)
 {
 	try
 	{

@@ -56,7 +56,7 @@ enum pp_vals {
 };
 
 
-static void generate_error(const Firebird::NoCaseString&, SSHORT, char = 0);
+static void generate_error(const NoCaseString&, SSHORT, char = 0);
 
 struct pp_table
 {
@@ -104,7 +104,7 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
 	if (pos >= toks.getCount())
 		generate_error("", UNEXPECTED_END_OF_COMMAND);
 
-	Firebird::NoCaseString curTok(Firebird::NoCaseString(toks[pos].text, toks[pos].length));
+	NoCaseString curTok(NoCaseString(toks[pos].text, toks[pos].length));
 
 	switch(symbol)
 	{

@@ -35,14 +35,16 @@
 #include "../common/os/path_utils.h"
 #include "binreloc.h"
 
-typedef Firebird::PathName string;
+namespace Firebird::Why
+{
+
 
 /******************************************************************************
  *
  *	Platform-specific root locator
  */
 
-void Firebird::ConfigRoot::osConfigRoot()
+void ConfigRoot::osConfigRoot()
 {
 	// Try to use value set at configure time
 	if (FB_CONFDIR[0])
@@ -60,7 +62,7 @@ void Firebird::ConfigRoot::osConfigRoot()
 }
 
 
-void Firebird::ConfigRoot::osConfigInstallDir()
+void ConfigRoot::osConfigInstallDir()
 {
 #ifdef ENABLE_BINRELOC
 	BrInitError brError;
@@ -72,7 +74,7 @@ void Firebird::ConfigRoot::osConfigInstallDir()
 #ifdef ANDROID
 			install_dir = temp;
 #else
-			string dummy;
+			PathName dummy;
 			PathUtils::splitLastComponent(install_dir, dummy, temp);
 #endif
 			free(temp);
@@ -82,5 +84,8 @@ void Firebird::ConfigRoot::osConfigInstallDir()
 #endif
 
     // As a last resort get it from the default install directory
-	install_dir = string(FB_PREFIX);
+	install_dir = PathName(FB_PREFIX);
 }
+
+
+}	// namespace Firebird::Why

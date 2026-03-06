@@ -366,7 +366,7 @@ void DTransaction::internalDisconnect(CheckStatusWrapper* status)
 		WriteLockGuard guard(rwLock, FB_FUNCTION);
 
 		if (!limbo)
-			status_exception::raise(Firebird::Arg::Gds(isc_no_recon));
+			status_exception::raise(Arg::Gds(isc_no_recon));
 
 		for (unsigned int i = 0; i < sub.getCount(); ++i)
 		{
@@ -471,7 +471,7 @@ ITransaction* DTransaction::validate(CheckStatusWrapper* status, IAttachment* at
 				return rc;
 		}
 
-		Firebird::Arg::Gds(isc_bad_trans_handle).raise();
+		Arg::Gds(isc_bad_trans_handle).raise();
 	}
 	catch (const Exception& ex)
 	{

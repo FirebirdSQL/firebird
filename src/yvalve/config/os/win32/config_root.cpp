@@ -30,7 +30,8 @@
 #include "../../../../common/dllinst.h"
 #include "../../../../yvalve/config/os/config_root.h"
 
-using Firebird::PathName;
+namespace Firebird::Why
+{
 
 
 /******************************************************************************
@@ -41,7 +42,7 @@ namespace {
 
 bool getPathFromHInstance(PathName& root)
 {
-	const HINSTANCE hDllInst = Firebird::hDllInst;
+	const HINSTANCE hDllInst = hDllInst;
 	if (!hDllInst)
 	{
 		return false;
@@ -58,12 +59,12 @@ bool getPathFromHInstance(PathName& root)
 } // namespace
 
 
-void Firebird::ConfigRoot::osConfigRoot()
+void ConfigRoot::osConfigRoot()
 {
 	root_dir = install_dir;
 }
 
-void Firebird::ConfigRoot::osConfigInstallDir()
+void ConfigRoot::osConfigInstallDir()
 {
 	// get the pathname of the running dll / executable
 	PathName module_path;
@@ -79,7 +80,7 @@ void Firebird::ConfigRoot::osConfigInstallDir()
 		PathUtils::splitLastComponent(bin_dir, file_name, module_path);
 
 		// search for the configuration file in the bin directory
-		PathUtils::concatPath(file_name, bin_dir, Firebird::CONFIG_FILE);
+		PathUtils::concatPath(file_name, bin_dir, CONFIG_FILE);
 		DWORD attributes = GetFileAttributes(file_name.c_str());
 		if (attributes == INVALID_FILE_ATTRIBUTES || attributes == FILE_ATTRIBUTE_DIRECTORY)
 		{
@@ -89,7 +90,7 @@ void Firebird::ConfigRoot::osConfigInstallDir()
 
 			if (parent_dir.hasData())
 			{
-				PathUtils::concatPath(file_name, parent_dir, Firebird::CONFIG_FILE);
+				PathUtils::concatPath(file_name, parent_dir, CONFIG_FILE);
 				attributes = GetFileAttributes(file_name.c_str());
 				if (attributes != INVALID_FILE_ATTRIBUTES && attributes != FILE_ATTRIBUTE_DIRECTORY)
 				{
@@ -112,3 +113,6 @@ void Firebird::ConfigRoot::osConfigInstallDir()
 
 	PathUtils::ensureSeparator(install_dir);
 }
+
+
+}	// namespace Firebird::Why
