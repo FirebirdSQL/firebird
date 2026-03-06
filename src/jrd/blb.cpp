@@ -887,7 +887,7 @@ SLONG blb::get_slice(thread_db* tdbb,
 
 	SET_TDBB(tdbb);
     //Database* database = GET_DBB();
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Checkout slice description language
 	SLONG variables[64];
@@ -1744,7 +1744,7 @@ void blb::put_slice(thread_db*	tdbb,
 	transaction = transaction->getOuter();
 
 	SET_TDBB(tdbb);
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Do initial parse of slice description to get relation and field identification
 	sdl_info info;

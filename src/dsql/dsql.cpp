@@ -159,7 +159,7 @@ void DSQL_execute(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	const auto statement = dsqlRequest->getDsqlStatement();
 
@@ -213,7 +213,7 @@ void DSQL_free_statement(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
@@ -289,7 +289,7 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 
 		if (items && buffer)
 		{
-			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			sql_info(tdbb, dsqlRequest, items->getCount(), items->begin(),
 				buffer->getCount(), buffer->begin());
 		}
@@ -300,7 +300,7 @@ DsqlRequest* DSQL_prepare(thread_db* tdbb,
 	{
 		if (dsqlRequest)
 		{
-			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
@@ -330,7 +330,7 @@ void DSQL_sql_info(thread_db* tdbb,
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+	JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 	sql_info(tdbb, dsqlRequest, item_length, items, info_length, info);
 }
@@ -366,7 +366,7 @@ void DSQL_execute_immediate(thread_db* tdbb,
 					  Arg::Gds(isc_bad_trans_handle));
 		}
 
-		ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+		JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 
 		// A select having cursor is a singleton select when executed immediate
 		const bool singleton = dsqlStatement->isCursorBased();
@@ -386,7 +386,7 @@ void DSQL_execute_immediate(thread_db* tdbb,
 	{
 		if (dsqlRequest)
 		{
-			ContextPoolHolder context(tdbb, &dsqlRequest->getPool());
+			JrdContextPoolHolder context(tdbb, &dsqlRequest->getPool());
 			DsqlRequest::destroy(tdbb, dsqlRequest);
 		}
 		throw;
@@ -584,7 +584,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 	DsqlCompilerScratch* scratch = nullptr;
 	MemoryPool* statementPool = database->createPool();
 
-	ContextPoolHolder statementContext(tdbb, statementPool);
+	JrdContextPoolHolder statementContext(tdbb, statementPool);
 	try
 	{
 		scratchPool = database->createPool();
@@ -600,7 +600,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 		string transformedText;
 
 		{	// scope to delete parser before the scratch pool is gone
-			ContextPoolHolder scratchContext(tdbb, scratchPool);
+			JrdContextPoolHolder scratchContext(tdbb, scratchPool);
 
 			scratch = FB_NEW_POOL(*scratchPool) DsqlCompilerScratch(*scratchPool, database, transaction);
 			scratch->clientDialect = clientDialect;

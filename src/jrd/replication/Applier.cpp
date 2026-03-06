@@ -243,7 +243,7 @@ Applier* Applier::create(thread_db* tdbb)
 
 	try
 	{
-		Jrd::ContextPoolHolder context(tdbb, req_pool);
+		JrdContextPoolHolder context(tdbb, req_pool);
 		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
 		request = Statement::makeRequest(tdbb, csb, true);
@@ -549,7 +549,7 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
@@ -713,7 +713,7 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
@@ -859,7 +859,7 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 		raiseError("Transaction %" SQUADFORMAT" is not found", traNum);
 
 	LocalThreadContext context(tdbb, transaction, m_request);
-	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	JrdContextPoolHolder context2(tdbb, m_request->req_pool);
 	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);

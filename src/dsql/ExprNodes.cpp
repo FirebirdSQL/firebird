@@ -13659,7 +13659,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 		try
 		{
-			ContextPoolHolder context(tdbb, funcRequest->req_pool);	// Save the old pool.
+			JrdContextPoolHolder context(tdbb, funcRequest->req_pool);	// Save the old pool.
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 

@@ -32,8 +32,9 @@
 #include "../jrd/ini.h"
 #include "../jrd/ids.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -638,3 +639,6 @@ RecordBuffer* UserManagement::getList(thread_db* tdbb, RelationPermanent* relati
 
 	return getData(relation);
 }
+
+
+}	// namespace Firebird::Jrd

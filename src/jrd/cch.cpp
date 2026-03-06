@@ -1879,7 +1879,7 @@ void CCH_prefetch(thread_db* tdbb, SLONG* pages, SSHORT count)
 	}
 
 	// Switch default pool to permanent pool for setting bits in prefetch bitmap.
-	Jrd::ContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
+	JrdContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
 
 	// The global prefetch bitmap is the key to the I/O coalescense mechanism which dovetails
 	// all thread prefetch requests to minimize sequential I/O requests.
@@ -2883,7 +2883,7 @@ void BufferControl::cache_reader(BufferControl* bcb)
 	Jrd::Attachment* const attachment = Attachment::create(dbb, nullptr);
 	tdbb->setAttachment(attachment);
 	attachment->att_filename = dbb->dbb_filename;
-	Jrd::ContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
+	JrdContextPoolHolder context(tdbb, bcb->bcb_bufferpool);
 
 	// This try block is specifically to protect the LCK_init call: if
 	// LCK_init fails we won't be able to accomplish anything anyway, so

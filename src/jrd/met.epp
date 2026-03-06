@@ -163,7 +163,7 @@ void MET_get_domain(thread_db* tdbb, MemoryPool& csbPool, const QualifiedName& n
 			{
 				fieldInfo->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
 
-				Jrd::ContextPoolHolder context(tdbb, &csbPool);
+				JrdContextPoolHolder context(tdbb, &csbPool);
 
 				if (FLD.RDB$DEFAULT_VALUE.NULL)
 					fieldInfo->defaultValue = NULL;
@@ -272,7 +272,7 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 				fieldInfo->nullable = RFL.RDB$NULL_FLAG.NULL ?
 					(FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0) : RFL.RDB$NULL_FLAG == 0;
 
-				Jrd::ContextPoolHolder context(tdbb, &csbPool);
+				JrdContextPoolHolder context(tdbb, &csbPool);
 				bid* defaultId = NULL;
 
 				if (!RFL.RDB$DEFAULT_VALUE.NULL)
@@ -2630,7 +2630,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 				{
 					setDefaultCount(getDefaultCount() + 1);
 					MemoryPool* pool = dbb->createPool();
-					Jrd::ContextPoolHolder context(tdbb, pool);
+					JrdContextPoolHolder context(tdbb, pool);
 
 					try
 					{
@@ -2684,7 +2684,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			if (external || !P.RDB$PROCEDURE_BLR.NULL)
 			{
 				MemoryPool* const csb_pool = dbb->createPool();
-				Jrd::ContextPoolHolder context(tdbb, csb_pool);
+				JrdContextPoolHolder context(tdbb, csb_pool);
 
 				try
 				{
@@ -2815,7 +2815,7 @@ ScanResult jrd_prc::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 			return ScanResult::REPEAT;
 
 		MemoryPool* const csb_pool = tdbb->getDatabase()->createPool();
-		Jrd::ContextPoolHolder context(tdbb, csb_pool);
+		JrdContextPoolHolder context(tdbb, csb_pool);
 
 		try
 		{
@@ -2924,7 +2924,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
-	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+	JrdContextPoolHolder context(tdbb, dbb->dbb_permanent);
 	blb* blob = NULL;
 	jrd_tra* trans = attachment->getMetaTransaction(tdbb);
 
@@ -4676,7 +4676,7 @@ void Trigger::compile(thread_db* tdbb)
 
 	try
 	{
-		Jrd::ContextPoolHolder context(tdbb, new_pool);
+		JrdContextPoolHolder context(tdbb, new_pool);
 
 		AutoPtr<CompilerScratch> auto_csb(FB_NEW_POOL(*new_pool) CompilerScratch(*new_pool));
 		CompilerScratch* csb = auto_csb;
@@ -4828,7 +4828,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	MetaId relId = getPermanent()->getRelation()->getId();
 	bool found = false;
 
-	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+	JrdContextPoolHolder context(tdbb, dbb->dbb_permanent);
 
 	AutoCacheRequest handle(tdbb, irq_index_scan, IRQ_REQUESTS);
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
@@ -4869,7 +4869,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		MemoryPool* stmtPool = dbb->createPool();
 		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
+			JrdContextPoolHolder context(tdbb, stmtPool);
 
 			CompilerScratch* csb = nullptr;
 			Cleanup cc([csb]() {delete csb;});
@@ -4888,7 +4888,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		MemoryPool* stmtPool = dbb->createPool();
 		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
+			JrdContextPoolHolder context(tdbb, stmtPool);
 
 			CompilerScratch* csb = nullptr;
 			Cleanup cc([csb]() {delete csb;});

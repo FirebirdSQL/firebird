@@ -36,10 +36,10 @@
 #include "../dsql/Nodes.h"
 #include "../common/dsc.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 	class thread_db;
 	struct impure_value;
-}
 
 
 class SysFunction
@@ -47,8 +47,7 @@ class SysFunction
 public:
 	typedef void (*SetParamsFunc)(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int, dsc**);
 	typedef void (*MakeFunc)(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc*, int, const dsc**);
-	typedef dsc* (*EvlFunc)(Jrd::thread_db*, const SysFunction* function,
-		const Jrd::NestValueArray&, Jrd::impure_value*);
+	typedef dsc* (*EvlFunc)(thread_db*, const SysFunction* function, const NestValueArray&, impure_value*);
 
 	const char* name;
 	int minArgCount;
@@ -67,6 +66,8 @@ private:
 	const static SysFunction functions[];
 };
 
+
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_SYSFUNCTION_H
 

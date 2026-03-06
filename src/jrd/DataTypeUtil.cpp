@@ -35,7 +35,8 @@
 #include "../jrd/intl_proto.h"
 #include "../common/gdsassert.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 SSHORT DataTypeUtilBase::getResultBlobSubType(const dsc* value1, const dsc* value2)
@@ -350,8 +351,6 @@ bool DataTypeUtilBase::makeBlobOrText(dsc* result, const dsc* arg, bool force)
 }
 
 
-namespace Firebird::Jrd {
-
 UCHAR DataTypeUtil::maxBytesPerChar(CSetId charSet)
 {
 	return INTL_charset_lookup(tdbb, charSet)->maxBytesPerChar();
@@ -401,5 +400,6 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset,
 
 	return true;
 }
+
 
 }	// namespace Firebird::Jrd

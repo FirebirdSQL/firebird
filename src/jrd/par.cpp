@@ -1708,7 +1708,7 @@ static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb)
 	for (auto& pair : csb->subFunctions)
 	{
 		const auto node = pair.second;
-		Jrd::ContextPoolHolder context(tdbb, &node->subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &node->subCsb->csb_pool);
 		PAR_blr(tdbb, &csb->csb_schema, nullptr, node->blrStart, node->blrLength, nullptr,
 			&node->subCsb, nullptr, false, 0);
 	}
@@ -1716,7 +1716,7 @@ static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb)
 	for (auto& pair : csb->subProcedures)
 	{
 		const auto node = pair.second;
-		Jrd::ContextPoolHolder context(tdbb, &node->subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &node->subCsb->csb_pool);
 		PAR_blr(tdbb, &csb->csb_schema, nullptr, node->blrStart, node->blrLength, nullptr,
 			&node->subCsb, nullptr, false, 0);
 	}

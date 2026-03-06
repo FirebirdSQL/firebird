@@ -183,7 +183,7 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 	unsigned parLength, const UCHAR* par)
 {
 	SET_TDBB(tdbb);
-	ContextPoolHolder context(tdbb, &req->getPool());
+	JrdContextPoolHolder context(tdbb, &req->getPool());
 
 	// Validate cursor or batch being not already open
 

@@ -157,7 +157,7 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 
 	try
 	{
-		ContextPoolHolder context(tdbb, newPool);
+		JrdContextPoolHolder context(tdbb, newPool);
 
 		const auto csb = PAR_parse(tdbb, blr, blrLength, internalFlag, dbginfoLength, dbginfo);
 

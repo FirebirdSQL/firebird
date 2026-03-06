@@ -8492,7 +8492,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 
 					if (notNull && !defaultValue->isEmpty())
 					{
-						ContextPoolHolder context(tdbb, dbb->createPool());
+						JrdContextPoolHolder context(tdbb, dbb->createPool());
 						Statement* defaultStatement = NULL;
 						try
 						{
@@ -12383,7 +12383,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* t
 
 			try
 			{
-				ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$CONDITION_BLR,
 					nullptr, &csb, indexName, obj_index_condition, 0,
@@ -12661,7 +12661,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 
 		try
 		{
-			ContextPoolHolder context(tdbb, new_pool);
+			JrdContextPoolHolder context(tdbb, new_pool);
 
 			MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$EXPRESSION_BLR,
 				nullptr, &csb, indexName, obj_index_expression, 0,
@@ -12694,7 +12694,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, Cached::Relation* rel, 
 
 			try
 			{
-				ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				MET_get_dependencies(tdbb, relation, nullptr, 0, nullptr, &IDX.RDB$CONDITION_BLR,
 					nullptr, &csb, indexName, obj_index_condition, 0,

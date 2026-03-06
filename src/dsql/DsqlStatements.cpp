@@ -138,7 +138,7 @@ unsigned DsqlDmlStatement::getSize() const
 void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, ntrace_result_t* traceResult)
 {
 	{	// scope
-		ContextPoolHolder scratchContext(tdbb, &scratch->getPool());
+		JrdContextPoolHolder scratchContext(tdbb, &scratch->getPool());
 		node = Node::doDsqlPass(scratch, node);
 	}
 

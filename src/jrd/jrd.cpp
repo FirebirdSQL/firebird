@@ -4817,7 +4817,7 @@ void JAttachment::transactRequest(CheckStatusWrapper* user_status, ITransaction*
 
 			try
 			{
-				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				JrdContextPoolHolder context(tdbb, new_pool);
 
 				CompilerScratch* csb = PAR_parse(tdbb, blr, blr_length, false);
 
@@ -7606,7 +7606,7 @@ static JAttachment* initAttachment(thread_db* tdbb, const PathName& expanded_nam
 	} // end scope
 
 	// provide context pool for the rest stuff
-	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+	JrdContextPoolHolder context(tdbb, dbb->dbb_permanent);
 
 	// set a garbage collection policy
 

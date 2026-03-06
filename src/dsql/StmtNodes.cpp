@@ -571,7 +571,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 					// The savepoint of this block will be dealt with below.
 					// Do this only if error handlers exist. Otherwise, leave undo up to callers.
 
-					ContextPoolHolder context(tdbb, transaction->tra_pool);
+					JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 					while (transaction->tra_save_point &&
 						transaction->tra_save_point->getNumber() > savNumber &&
@@ -610,7 +610,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 						// request for that invocation of looper. Avoid this.
 
 						{
-							ContextPoolHolder contextLooper(tdbb, exeState->oldPool);
+							JrdContextPoolHolder contextLooper(tdbb, exeState->oldPool);
 							tdbb->setRequest(exeState->oldRequest);
 							fb_assert(request->req_caller == exeState->oldRequest);
 							request->req_caller = NULL;
@@ -1533,7 +1533,7 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
 		BlrReader& reader = subCsb->csb_blr_reader;
-		ContextPoolHolder context(tdbb, &subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &subCsb->csb_pool);
 
 		UCHAR type = reader.getByte();
 		if (type != SUB_ROUTINE_TYPE_PSQL)
@@ -1856,7 +1856,7 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
 		BlrReader& reader = subCsb->csb_blr_reader;
-		ContextPoolHolder context(tdbb, &subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &subCsb->csb_pool);
 
 		UCHAR type = reader.getByte();
 		if (type != SUB_ROUTINE_TYPE_PSQL)

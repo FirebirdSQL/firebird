@@ -34,6 +34,10 @@
 
 struct dsc;
 
+namespace Firebird::Jrd
+{
+
+
 class DataTypeUtilBase
 {
 public:
@@ -61,8 +65,6 @@ public:
 };
 
 
-namespace Firebird::Jrd {
-
 class thread_db;
 
 class DataTypeUtil : public DataTypeUtilBase
@@ -78,12 +80,13 @@ public:
 	virtual USHORT getDialect() const;
 
 public:
-	static bool convertToUTF8(const Firebird::string& src, Firebird::string& dst,
+	static bool convertToUTF8(const string& src, string& dst,
 		CSetId charset = CS_dynamic, ErrorFunction err = ERR_post);
 
 private:
 	thread_db* tdbb;
 };
+
 
 }	// namespace Firebird::Jrd
 

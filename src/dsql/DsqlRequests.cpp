@@ -81,7 +81,7 @@ void DsqlRequest::releaseRequest(thread_db* tdbb)
 		// It seems to me we should destroy owner request here, not a child
 		// statement - as it always was before
 
-		//ContextPoolHolder context(tdbb, &childStatement->getPool());
+		//JrdContextPoolHolder context(tdbb, &childStatement->getPool());
 		//releaseStatement(childStatement);
 	}
 
@@ -346,7 +346,7 @@ bool DsqlDmlRequest::fetch(thread_db* tdbb, UCHAR* msgBuffer)
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	// if the cursor isn't open, we've got a problem
 	if (dsqlStatement->isCursorBased())
@@ -427,7 +427,7 @@ void DsqlDmlRequest::setCursor(thread_db* tdbb, const TEXT* name)
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	constexpr size_t MAX_CURSOR_LENGTH = 132 - 1;
 	string cursor = name;
@@ -503,7 +503,7 @@ DsqlCursor* DsqlDmlRequest::openCursor(thread_db* tdbb, jrd_tra** traHandle,
 {
 	SET_TDBB(tdbb);
 
-	ContextPoolHolder context(tdbb, &getPool());
+	JrdContextPoolHolder context(tdbb, &getPool());
 
 	// Validate transaction handle
 

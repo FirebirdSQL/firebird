@@ -539,7 +539,7 @@ TriState IndexCondition::evaluate(Record* record) const
 
 	try
 	{
-		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+		JrdContextPoolHolder context(m_tdbb, m_request->req_pool);
 
 		result = m_condition->execute(m_tdbb, m_request).asBool();
 	}
@@ -647,7 +647,7 @@ dsc* IndexExpression::evaluate(Record* record) const
 
 	try
 	{
-		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+		JrdContextPoolHolder context(m_tdbb, m_request->req_pool);
 
 		result = EVL_expr(m_tdbb, m_request, m_expression);
 	}

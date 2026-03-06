@@ -471,7 +471,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	if (transaction->tra_flags & TRA_invalidated)
 		ERR_post(Arg::Gds(isc_trans_invalid));
 
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Get rid of all user savepoints
 	while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
@@ -1160,7 +1160,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 	}
 
 	MemoryPool* const pool = dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const trans = jrd_tra::create(pool, attachment, NULL);
 	trans->tra_number = number;
 	trans->tra_flags |= TRA_prepared | TRA_reconnected | TRA_write;
@@ -1335,7 +1335,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, retaining_flag, false /*force_flag ?*/);
 
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	if (transaction->tra_flags & (TRA_prepare2 | TRA_reconnected))
 		MET_update_transaction(tdbb, transaction, false);
@@ -1679,7 +1679,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
 	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
 	transaction->tra_flags = flags & TRA_OPTIONS_MASK;
@@ -1736,7 +1736,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
 	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
 	try
@@ -4048,7 +4048,7 @@ void jrd_tra::rollbackSavepoint(thread_db* tdbb, bool preserveLocks)
 		if (tra_flags & TRA_ex_restart)
 			preserveLocks = true;
 
-		Jrd::ContextPoolHolder context(tdbb, tra_pool);
+		JrdContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollback(tdbb, NULL, preserveLocks);
 	}
 }
@@ -4068,7 +4068,7 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
  *
  **************************************/
 {
-	Jrd::ContextPoolHolder context(tdbb, tra_pool);
+	JrdContextPoolHolder context(tdbb, tra_pool);
 
 	// Merge all savepoints (except the given one) into a single one
 	while (tra_save_point && tra_save_point->getNumber() > number &&
@@ -4106,7 +4106,7 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 	{
 		REPL_save_cleanup(tdbb, this, tra_save_point, false);
 
-		Jrd::ContextPoolHolder context(tdbb, tra_pool);
+		JrdContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 }

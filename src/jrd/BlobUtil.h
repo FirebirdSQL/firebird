@@ -37,88 +37,88 @@ namespace Firebird::Jrd
 class BlobUtilPackage : public SystemPackage
 {
 public:
-	BlobUtilPackage(Firebird::MemoryPool& pool);
+	BlobUtilPackage(MemoryPool& pool);
 
 private:
-	FB_MESSAGE(BinaryMessage, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(BinaryMessage, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(MAX_VARY_COLUMN_SIZE, 0), data)
 	);
 
-	FB_MESSAGE(BlobMessage, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(BlobMessage, ThrowStatusExceptionWrapper,
 		(FB_BLOB, blob)
 	);
 
-	FB_MESSAGE(HandleMessage, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(HandleMessage, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, handle)
 	);
 
-	FB_MESSAGE(BooleanMessage, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(BooleanMessage, ThrowStatusExceptionWrapper,
 		(FB_BOOLEAN, boolean)
 	);
 
 	//----------
 
-	static Firebird::IExternalResultSet* cancelBlobProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const BlobMessage::Type* in, void* out);
+	static IExternalResultSet* cancelBlobProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const BlobMessage::Type* in, void* out);
 
 	//----------
 
-	static Firebird::IExternalResultSet* closeHandleProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const HandleMessage::Type* in, void* out);
+	static IExternalResultSet* closeHandleProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const HandleMessage::Type* in, void* out);
 
 	//----------
 
-	static void isWritableFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static void isWritableFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const BlobMessage::Type* in, BooleanMessage::Type* out);
 
 	//----------
 
-	FB_MESSAGE(NewBlobInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(NewBlobInput, ThrowStatusExceptionWrapper,
 		(FB_BOOLEAN, segmented)
 		(FB_BOOLEAN, tempStorage)
 	);
 
-	static void newBlobFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static void newBlobFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const NewBlobInput::Type* in, BlobMessage::Type* out);
 
 	//----------
 
-	static void openBlobFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static void openBlobFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const BlobMessage::Type* in, HandleMessage::Type* out);
 
 	//----------
 
-	FB_MESSAGE(SeekInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(SeekInput, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, handle)
 		(FB_INTEGER, mode)
 		(FB_INTEGER, offset)
 	);
 
-	FB_MESSAGE(SeekOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(SeekOutput, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, offset)
 	);
 
-	static void seekFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const SeekInput::Type* in, SeekOutput::Type* out);
+	static void seekFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const SeekInput::Type* in, SeekOutput::Type* out);
 
 	//----------
 
-	FB_MESSAGE(ReadDataInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ReadDataInput, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, handle)
 		(FB_INTEGER, length)
 	);
 
-	static void readDataFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static void readDataFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const ReadDataInput::Type* in, BinaryMessage::Type* out);
 
 	//----------
 
-	static void makeBlobFunction(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static void makeBlobFunction(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const HandleMessage::Type* in, BlobMessage::Type* out);
 };
 

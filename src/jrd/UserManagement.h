@@ -31,7 +31,9 @@
 #include "firebird/Interface.h"
 #include "../common/security.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 class thread_db;
 class jrd_tra;
@@ -40,7 +42,7 @@ class RecordBuffer;
 class UsersTableScan: public VirtualTableScan
 {
 public:
-	UsersTableScan(CompilerScratch* csb, const Firebird::string& alias,
+	UsersTableScan(CompilerScratch* csb, const string& alias,
 				   StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}
@@ -59,7 +61,7 @@ public:
 	~UserManagement();
 
 	// store userData for DFW-time processing
-	USHORT put(Firebird::Auth::UserData* userData);
+	USHORT put(Auth::UserData* userData);
 	// execute command with ID
 	void execute(USHORT id);
 	// commit transaction in security database
@@ -67,24 +69,25 @@ public:
 	// return users list for SEC$USERS
 	RecordBuffer* getList(thread_db* tdbb, RelationPermanent* relation);
 	// callback for users display
-	void list(Firebird::IUser* u, unsigned cachePosition);
+	void list(IUser* u, unsigned cachePosition);
 
 private:
 	thread_db* threadDbb;
-	Firebird::HalfStaticArray<Firebird::Auth::UserData*, 8> commands;
-	typedef Firebird::Pair<Firebird::NonPooled<MetaName, Firebird::IManagement*> > Manager;
-	Firebird::ObjectsArray<Manager> managers;
-	Firebird::NoCaseString plugins;
+	HalfStaticArray<Auth::UserData*, 8> commands;
+	typedef Pair<NonPooled<MetaName, IManagement*> > Manager;
+	ObjectsArray<Manager> managers;
+	NoCaseString plugins;
 	Attachment* att;
 	jrd_tra* tra;
 
-	Firebird::IManagement* getManager(const char* name);
+	IManagement* getManager(const char* name);
 	void openAllManagers();
-	Firebird::IManagement* registerManager(Firebird::Auth::Get& getPlugin, const char* plugName);
-	static void checkSecurityResult(int errcode, Firebird::IStatus* status,
+	IManagement* registerManager(Auth::Get& getPlugin, const char* plugName);
+	static void checkSecurityResult(int errcode, IStatus* status,
 		const char* userName, unsigned operation);
 };
 
-}	// namespace
+
+}	// namespace Firebird::Jrd
 
 #endif // JRD_USER_MANAGEMENT_H

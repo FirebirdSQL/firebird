@@ -340,7 +340,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 
 		if (poolCreated)
 			pool = dbb->createPool(false);
-		Jrd::ContextPoolHolder context(tdbb, pool);
+		JrdContextPoolHolder context(tdbb, pool);
 
 		jrd_tra* idxTran = tdbb->getTransaction();
 		if (!idxTran)

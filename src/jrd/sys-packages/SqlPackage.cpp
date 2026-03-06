@@ -28,8 +28,8 @@
 #include "../dsql/dsql_proto.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 //--------------------------------------
@@ -259,3 +259,6 @@ SqlPackage::SqlPackage(MemoryPool& pool)
 	)
 {
 }
+
+
+}	// namespace Firebird::Jrd

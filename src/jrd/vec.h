@@ -36,8 +36,8 @@ template <class T, BlockType TYPE = type_vec>
 class vec_base : protected pool_alloc<TYPE>
 {
 public:
-	typedef typename Firebird::Array<T>::iterator iterator;
-	typedef typename Firebird::Array<T>::const_iterator const_iterator;
+	typedef typename Array<T>::iterator iterator;
+	typedef typename Array<T>::const_iterator const_iterator;
 
 	/*
 	static vec_base* newVector(MemoryPool& p, int len)
@@ -97,7 +97,7 @@ protected:
 	}
 
 private:
-	Firebird::Array<T> v;
+	Array<T> v;
 };
 
 template <typename T>
@@ -162,8 +162,6 @@ typedef vec<TraNumber> TransactionsVector;
 class Database;
 class thread_db;
 
-} // namespace Firebird::Jrd
-
 /* Define JRD_get_thread_data off the platform specific version.
  * If we're in DEV mode, also do consistancy checks on the
  * retrieved memory structure.  This was originally done to
@@ -181,26 +179,28 @@ class thread_db;
 
 #if defined(DEV_BUILD)
 
-Jrd::thread_db* JRD_get_thread_data();
-void CHECK_TDBB(const Jrd::thread_db* tdbb);
-void CHECK_DBB(const Jrd::Database* dbb);
+thread_db* JRD_get_thread_data();
+void CHECK_TDBB(const thread_db* tdbb);
+void CHECK_DBB(const Database* dbb);
 
 #else // PROD_BUILD
 
-inline Jrd::thread_db* JRD_get_thread_data()
+inline thread_db* JRD_get_thread_data()
 {
-	return (Jrd::thread_db*) Firebird::ThreadData::getSpecific();
+	return (thread_db*) ThreadData::getSpecific();
 }
 
-inline void CHECK_DBB(const Jrd::Database*)
+inline void CHECK_DBB(const Database*)
 {
 }
 
-inline void CHECK_TDBB(const Jrd::thread_db*)
+inline void CHECK_TDBB(const thread_db*)
 {
 }
 
 #endif
 
-#endif // JRD_VEC_H
 
+}	// namespace Firebird::Jrd
+
+#endif // JRD_VEC_H

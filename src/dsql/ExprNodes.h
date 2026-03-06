@@ -31,14 +31,13 @@
 #include "../common/classes/TriState.h"
 #include "../dsql/pass1_proto.h"
 
-class SysFunction;
-
 namespace Firebird::Jrd {
 
 class ItemInfo;
 class DeclareVariableNode;
 class SubQuery;
 class RelationSourceNode;
+class SysFunction;
 class ValueListNode;
 
 

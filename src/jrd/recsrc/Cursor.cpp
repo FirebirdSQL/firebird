@@ -29,8 +29,9 @@
 #include "RecordSource.h"
 #include "Cursor.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -107,7 +108,7 @@ void Select::initializeInvariants(Request* request) const
 	}
 }
 
-void Select::getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const
+void Select::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	if (m_line || m_column)
 	{
@@ -464,3 +465,6 @@ void Cursor::checkState(Request* request) const
 			getName().toQuotedString());
 	}
 }
+
+
+}	// namespace Firebird::Jrd
