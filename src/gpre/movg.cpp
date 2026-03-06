@@ -39,9 +39,11 @@
 #include "../gpre/gpre_proto.h"
 #include "../common/cvt.h"
 
-using namespace Firebird;
+namespace Firebird::Gpre
+{
 
-static void post_error(const Firebird::Arg::StatusVector&);
+
+static void post_error(const Arg::StatusVector&);
 
 
 //____________________________________________________________
@@ -60,8 +62,11 @@ void MOVG_move(const dsc* from, dsc* to)
 //		A conversion error occurred.  Complain.
 //
 
-static void post_error(const Firebird::Arg::StatusVector&)
+static void post_error(const Arg::StatusVector&)
 {
 	CPR_error("conversion error: illegal string literal");
 	CPR_abort();
 }
+
+
+} // namespace Firebird::Gpre

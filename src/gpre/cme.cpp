@@ -44,7 +44,9 @@
 #include "../gpre/msc_proto.h"
 #include "../jrd/align.h"
 
-using namespace Firebird;
+namespace Firebird::Gpre
+{
+
 
 static void cmp_array(gpre_nod*, gpre_req*);
 static void cmp_array_element(gpre_nod*, gpre_req*);
@@ -2453,3 +2455,6 @@ static void get_dtype_of_list(const gpre_nod* node, gpre_fld* f)
 	CPR_error("Incompatible data types");
 	return;
 }
+
+
+} // namespace Firebird::Gpre

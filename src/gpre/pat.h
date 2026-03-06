@@ -24,6 +24,10 @@
 #ifndef GPRE_PAT_H
 #define GPRE_PAT_H
 
+namespace Firebird::Gpre
+{
+
+
 /*
 Substitution codes:
 
@@ -98,5 +102,7 @@ struct pat
 
 typedef pat PAT;
 
-#endif // GPRE_PAT_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_PAT_H

@@ -71,9 +71,11 @@
 
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
-using namespace Firebird;
-
 #endif
+
+namespace Firebird::Gpre
+{
+
 
 // Globals
 GpreGlobals gpreGlob;
@@ -407,7 +409,7 @@ int main(int argc, char* argv[])
 		{
 			strcpy(spare_file_name, file_name);
 			if (file_rename(spare_file_name, ext_tab->in, NULL) &&
-				(input_file = Firebird::os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
+				(input_file = os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
 			{
 				file_name = spare_file_name;
 				break;
@@ -436,11 +438,11 @@ int main(int argc, char* argv[])
 		while (ext_tab->ext_language != gpreGlob.sw_language)
 			ext_tab++;
 		const bool renamed = file_rename(spare_file_name, ext_tab->in, NULL);
-		if (renamed && (input_file = Firebird::os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
+		if (renamed && (input_file = os_utils::fopen(spare_file_name, FOPEN_READ_TYPE)))
 		{
 			file_name = spare_file_name;
 		}
-		else if (!(input_file = Firebird::os_utils::fopen(file_name, FOPEN_READ_TYPE)))
+		else if (!(input_file = os_utils::fopen(file_name, FOPEN_READ_TYPE)))
 		{
 			if (renamed) {
 				fprintf(stderr, "gpre: can't open %s or %s\n", file_name, spare_file_name);
@@ -828,7 +830,7 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "gpre: output file %s would duplicate input\n", out_file_name);
 			CPR_exit(FINI_ERROR);
 		}
-		if ((gpreGlob.out_file = Firebird::os_utils::fopen(out_file_name, FOPEN_WRITE_TYPE)) == NULL)
+		if ((gpreGlob.out_file = os_utils::fopen(out_file_name, FOPEN_WRITE_TYPE)) == NULL)
 		{
 			fprintf(stderr, "gpre: can't open output file %s\n", out_file_name);
 			CPR_exit(FINI_ERROR);
@@ -844,7 +846,7 @@ int main(int argc, char* argv[])
 		while ((end_position = compile_module(end_position, filename_array[3])))
 			; // empty loop body
 	}	// try
-	catch (const Firebird::Exception&) {}  // fall through to the cleanup code
+	catch (const Exception&) {}  // fall through to the cleanup code
 
 #ifdef FTN_BLK_DATA
 	if (gpreGlob.sw_language == lang_fortran)
@@ -1309,9 +1311,9 @@ static SLONG compile_module( SLONG start_position, const TEXT* base_directory)
 	fseek(input_file, start_position, 0);
 	input_char = input_buffer;
 
-	const Firebird::PathName filename = Firebird::TempFile::create(SCRATCH);
+	const PathName filename = TempFile::create(SCRATCH);
 	strcpy(trace_file_name, filename.c_str());
-	trace_file = Firebird::os_utils::fopen(trace_file_name, "w+b");
+	trace_file = os_utils::fopen(trace_file_name, "w+b");
 #ifdef UNIX
 	unlink(trace_file_name);
 #endif
@@ -2913,4 +2915,13 @@ static SSHORT skip_white()
 	}
 
 	return c;
+}
+
+
+} // namespace Firebird::Gpre
+
+
+int main(int argc, char* argv[])
+{
+	return Firebird::Gpre::main(argc, argv);
 }

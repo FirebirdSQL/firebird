@@ -35,8 +35,9 @@
 #include "../gpre/pat_proto.h"
 #include "../gpre/lang_proto.h"
 
+namespace Firebird::Gpre
+{
 
-using namespace Firebird;
 
 enum pat_t {
 	NL,
@@ -492,3 +493,5 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 
 }
 
+
+} // namespace Firebird::Gpre

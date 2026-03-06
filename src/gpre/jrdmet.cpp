@@ -39,8 +39,9 @@
 #include "../gpre/jrdme_proto.h"
 #include "../gpre/msc_proto.h"
 
+namespace Firebird::Gpre
+{
 
-using namespace Firebird;
 
 //____________________________________________________________
 //
@@ -49,7 +50,7 @@ using namespace Firebird;
 
 void JRDMET_init( gpre_dbb* db)
 {
-	using namespace Firebird::Jrd;
+	using namespace Jrd;
 
 	const int* relfld = relfields;
 
@@ -146,3 +147,5 @@ void JRDMET_init( gpre_dbb* db)
 	}
 }
 
+
+} // namespace Firebird::Gpre

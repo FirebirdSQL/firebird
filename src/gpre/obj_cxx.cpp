@@ -45,8 +45,9 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Gpre
+{
 
-using namespace Firebird;
 
 static void align(int);
 static void asgn_from(const act*, ref*, int);
@@ -169,7 +170,7 @@ static inline void set_sqlcode(const act* action, const int column)
 static inline void ObjectNotImplemented()
 {
 	CPR_error("Feature is not implemented for object API");
-	throw Firebird::LongJump();
+	throw LongJump();
 }
 
 //____________________________________________________________
@@ -4039,3 +4040,6 @@ static void t_start_auto(const act* action,
 
 	endp(column);
 }
+
+
+} // namespace Firebird::Gpre

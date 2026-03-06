@@ -55,8 +55,9 @@
 #include "../gpre/sql_proto.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Gpre
+{
 
-using namespace Firebird;
 
 struct scope
 {
@@ -4051,3 +4052,5 @@ static bool validate_references(const gpre_nod* fields, const gpre_nod* group_by
 	return invalid;
 }
 
+
+} // namespace Firebird::Gpre

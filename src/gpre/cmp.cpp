@@ -41,9 +41,9 @@
 #include "../gpre/msc_proto.h"
 #include "../gpre/par_proto.h"
 
+namespace Firebird::Gpre
+{
 
-
-using namespace Firebird;
 
 static void cmp_any(gpre_req*);
 static void cmp_assignment(gpre_nod*, gpre_req*);
@@ -1840,3 +1840,5 @@ static void update_references( ref* references)
 	}
 }
 
+
+} // namespace Firebird::Gpre
