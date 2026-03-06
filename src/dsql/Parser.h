@@ -48,9 +48,11 @@ namespace Arg {
 } // namespace
 } // namespace
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
-class Parser : public Firebird::PermanentStorage
+
+class Parser : public PermanentStorage
 {
 private:
 	// User-defined text position type.
@@ -141,7 +143,7 @@ public:
 public:
 	DsqlStatement* parse();
 
-	const Firebird::string& getTransformedString() const
+	const string& getTransformedString() const
 	{
 		return transformedString;
 	}
@@ -151,17 +153,17 @@ public:
 		return stmt_ambiguous;
 	}
 
-	Firebird::string* newString(const Firebird::string& s)
+	string* newString(const string& s)
 	{
-		return FB_NEW_POOL(getPool()) Firebird::string(getPool(), s);
+		return FB_NEW_POOL(getPool()) string(getPool(), s);
 	}
 
-	Lim64String* newLim64String(const Firebird::string& s, int scale)
+	Lim64String* newLim64String(const string& s, int scale)
 	{
 		return FB_NEW_POOL(getPool()) Lim64String(getPool(), s, scale);
 	}
 
-	IntlString* newIntlString(const Firebird::string& s, const char* charSet = NULL)
+	IntlString* newIntlString(const string& s, const char* charSet = NULL)
 	{
 		return FB_NEW_POOL(getPool()) IntlString(getPool(), s, charSet);
 	}
@@ -232,8 +234,8 @@ private:
 		return (name ? *name : QualifiedName());
 	}
 
-	void transformString(const char* start, unsigned length, Firebird::string& dest);
-	Firebird::string makeParseStr(const Position& p1, const Position& p2);
+	void transformString(const char* start, unsigned length, string& dest);
+	string makeParseStr(const Position& p1, const Position& p2);
 	ParameterNode* make_parameter();
 
 	// Set the value of a clause, checking if it was already specified.
@@ -246,7 +248,7 @@ private:
 	}
 
 	template <typename T, template <typename C> class Delete>
-	void setClause(Firebird::AutoPtr<T, Delete>& clause, const char* duplicateMsg, T* value)
+	void setClause(AutoPtr<T, Delete>& clause, const char* duplicateMsg, T* value)
 	{
 		checkDuplicateClause(clause, duplicateMsg);
 		clause = value;
@@ -269,13 +271,13 @@ private:
 		}
 	}
 
-	void setClause(Firebird::TriState& clause, const char* duplicateMsg, bool value)
+	void setClause(TriState& clause, const char* duplicateMsg, bool value)
 	{
 		checkDuplicateClause(clause, duplicateMsg);
 		clause = value;
 	}
 
-	void setClause(Firebird::TriState& clause, const char* duplicateMsg, const Firebird::TriState& value)
+	void setClause(TriState& clause, const char* duplicateMsg, const TriState& value)
 	{
 		if (value.isAssigned())
 		{
@@ -335,7 +337,7 @@ private:
 		return clause.object.hasData();
 	}
 
-	bool isDuplicateClause(const Firebird::TriState& clause)
+	bool isDuplicateClause(const TriState& clause)
 	{
 		return clause.isAssigned();
 	}
@@ -347,7 +349,7 @@ private:
 	}
 
 	template <typename T>
-	bool isDuplicateClause(const Firebird::Array<T>& clause)
+	bool isDuplicateClause(const Array<T>& clause)
 	{
 		return clause.hasData();
 	}
@@ -383,11 +385,11 @@ private:
 	USHORT db_dialect;
 	const bool requireSemicolon;
 	USHORT parser_version = 0;
-	Firebird::CharSet* charSet;
+	CharSet* charSet;
 
-	Firebird::CharSet* metadataCharSet;
-	Firebird::string transformedString;
-	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
+	CharSet* metadataCharSet;
+	string transformedString;
+	GenericMap<NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
 	DsqlStatement* parsedStatement = nullptr;
 
@@ -433,6 +435,7 @@ public:
 	LexerState lex;
 };
 
-} // namespace
+
+} // namespace Firebird::Jrd
 
 #endif	// DSQL_PARSER_H

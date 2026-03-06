@@ -519,6 +519,11 @@ inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; /
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
+
+
+inline constexpr int EPB_version1 = 1;
+
+
 } // namespace Firebird
 
 // Compatibility aliases for migration (temporary).

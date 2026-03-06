@@ -76,7 +76,7 @@ namespace Firebird::Jrd {
 		}
 
 	private:
-		Firebird::LeftPooledMap<MetaName, Keyword> map;
+		LeftPooledMap<MetaName, Keyword> map;
 	};
 }	// namespace Firebird::Jrd
 

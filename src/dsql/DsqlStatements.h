@@ -46,7 +46,7 @@ class TransactionNode;
 
 
 // Compiled statement - shared by multiple requests.
-class DsqlStatement : public Firebird::PermanentStorage
+class DsqlStatement : public PermanentStorage
 {
 public:
 	enum Type	// statement type
@@ -62,7 +62,7 @@ public:
 	static inline constexpr unsigned FLAG_NO_BATCH		= 0x01;
 	static inline constexpr unsigned FLAG_SELECTABLE	= 0x02;
 
-	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
+	static void rethrowDdlException(status_exception& ex, bool metadataUpdate, DdlNode* node);
 
 public:
 	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment);
@@ -102,12 +102,12 @@ public:
 	unsigned getBlrVersion() const { return blrVersion; }
 	void setBlrVersion(unsigned value) { blrVersion = value; }
 
-	Firebird::RefStrPtr& getSqlText() { return sqlText; }
-	const Firebird::RefStrPtr& getSqlText() const { return sqlText; }
-	void setSqlText(Firebird::RefString* value) { sqlText = value; }
+	RefStrPtr& getSqlText() { return sqlText; }
+	const RefStrPtr& getSqlText() const { return sqlText; }
+	void setSqlText(RefString* value) { sqlText = value; }
 
 	void setOrgText(const char* ptr, ULONG len);
-	const Firebird::string& getOrgText() const { return *orgText; }
+	const string& getOrgText() const { return *orgText; }
 
 	dsql_msg* getSendMsg() { return sendMsg; }
 	const dsql_msg* getSendMsg() const { return sendMsg; }
@@ -117,8 +117,8 @@ public:
 	const dsql_msg* getReceiveMsg() const { return receiveMsg; }
 	void setReceiveMsg(dsql_msg* value) { receiveMsg = value; }
 
-	Firebird::RefStrPtr getCacheKey() { return cacheKey; }
-	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
+	RefStrPtr getCacheKey() { return cacheKey; }
+	void setCacheKey(RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
 
 	const auto getSchemaSearchPath() const { return schemaSearchPath; }
@@ -157,20 +157,20 @@ protected:
 
 protected:
 	dsql_dbb* dsqlAttachment;
-	Firebird::MemoryStats memoryStats;
+	MemoryStats memoryStats;
 	Type type = TYPE_SELECT;	// Type of statement
 	ULONG flags = 0;			// generic flag
 	unsigned blrVersion = blr_version5;
-	Firebird::RefStrPtr sqlText;
-	Firebird::RefStrPtr orgText;
-	Firebird::RefStrPtr cacheKey;
+	RefStrPtr sqlText;
+	RefStrPtr orgText;
+	RefStrPtr cacheKey;
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
 	DsqlCompilerScratch* scratch = nullptr;
-	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
+	RefPtr<AnyRef<ObjectsArray<MetaString>>> schemaSearchPath;
 
 private:
-	Firebird::AtomicCounter refCounter;
+	AtomicCounter refCounter;
 };
 
 

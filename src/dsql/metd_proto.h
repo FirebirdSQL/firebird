@@ -32,7 +32,7 @@
 
 // forward declarations
 namespace Firebird::Jrd {
-	typedef Firebird::GenericMap<MetaNamePair> MetaNamePairMap;
+	typedef GenericMap<MetaNamePair> MetaNamePairMap;
 
 	class DsqlRequest;
 	class DsqlCompilerScratch;
@@ -57,7 +57,7 @@ QualifiedName METD_get_database_charset(jrd_tra*);
 QualifiedName METD_get_schema_charset(jrd_tra*, const MetaName&);
 bool METD_get_domain(jrd_tra*, TypeClause*, const QualifiedName& name);
 dsql_udf* METD_get_function(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
-void METD_get_primary_key(jrd_tra*, const QualifiedName&, Firebird::Array<NestConst<FieldNode>>&);
+void METD_get_primary_key(jrd_tra*, const QualifiedName&, Array<NestConst<FieldNode>>&);
 dsql_prc* METD_get_procedure(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
 dsql_rel* METD_get_relation(jrd_tra*, DsqlCompilerScratch*, const QualifiedName&);
 bool METD_get_type(jrd_tra*, const MetaName&, const char*, SSHORT*);

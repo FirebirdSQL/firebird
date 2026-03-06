@@ -41,7 +41,7 @@ class Lock;
 class thread_db;
 
 
-class DsqlStatementCache final : public Firebird::PermanentStorage
+class DsqlStatementCache final : public PermanentStorage
 {
 private:
 	struct StatementEntry
@@ -63,9 +63,9 @@ private:
 		StatementEntry(const StatementEntry&) = delete;
 		StatementEntry& operator=(const StatementEntry&) = delete;
 
-		Firebird::RefStrPtr key;
-		Firebird::RefPtr<DsqlStatement> dsqlStatement;
-		Firebird::SortedObjectsArray<Firebird::string> verifyCache;
+		RefStrPtr key;
+		RefPtr<DsqlStatement> dsqlStatement;
+		SortedObjectsArray<string> verifyCache;
 		unsigned size = 0;
 		bool active = true;
 	};
@@ -73,7 +73,7 @@ private:
 	class RefStrPtrComparator
 	{
 	public:
-		static bool greaterThan(const Firebird::RefStrPtr& i1, const Firebird::RefStrPtr& i2)
+		static bool greaterThan(const RefStrPtr& i1, const RefStrPtr& i2)
 		{
 			return *i1 > *i2;
 		}
@@ -100,14 +100,14 @@ public:
 		return activeStatementList.isEmpty() && inactiveStatementList.isEmpty();
 	}
 
-	Firebird::RefPtr<DsqlStatement> getStatement(thread_db* tdbb, const Firebird::string& text,
+	RefPtr<DsqlStatement> getStatement(thread_db* tdbb, const string& text,
 		USHORT clientDialect, bool isInternalRequest);
 
-	void putStatement(thread_db* tdbb, const Firebird::string& text, USHORT clientDialect, bool isInternalRequest,
-		Firebird::RefPtr<DsqlStatement> dsqlStatement);
+	void putStatement(thread_db* tdbb, const string& text, USHORT clientDialect, bool isInternalRequest,
+		RefPtr<DsqlStatement> dsqlStatement);
 
 	void removeStatement(thread_db* tdbb, DsqlStatement* statement);
-	void statementGoingInactive(Firebird::RefStrPtr& key);
+	void statementGoingInactive(RefStrPtr& key);
 
 	void purge(thread_db* tdbb, bool releaseLock);
 	void purgeAllAttachments(thread_db* tdbb);
@@ -118,10 +118,10 @@ public:
 	}
 
 private:
-	void buildStatementKey(thread_db* tdbb, Firebird::RefStrPtr& key, const Firebird::string& text,
+	void buildStatementKey(thread_db* tdbb, RefStrPtr& key, const string& text,
 		USHORT clientDialect, bool isInternalRequest);
 
-	void buildVerifyKey(thread_db* tdbb, Firebird::string& key, bool isInternalRequest);
+	void buildVerifyKey(thread_db* tdbb, string& key, bool isInternalRequest);
 	void shrink();
 	void ensureLockIsCreated(thread_db* tdbb);
 
@@ -130,14 +130,14 @@ private:
 #endif
 
 private:
-	Firebird::NonPooledMap<
-		Firebird::RefStrPtr,
-		Firebird::DoublyLinkedList<StatementEntry>::Iterator,
+	NonPooledMap<
+		RefStrPtr,
+		DoublyLinkedList<StatementEntry>::Iterator,
 		RefStrPtrComparator
 	> map;
-	Firebird::DoublyLinkedList<StatementEntry> activeStatementList;
-	Firebird::DoublyLinkedList<StatementEntry> inactiveStatementList;
-	Firebird::AutoPtr<Lock> lock;
+	DoublyLinkedList<StatementEntry> activeStatementList;
+	DoublyLinkedList<StatementEntry> inactiveStatementList;
+	AutoPtr<Lock> lock;
 	unsigned maxCacheSize = 0;
 	unsigned cacheSize = 0;
 };

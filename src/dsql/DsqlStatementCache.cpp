@@ -181,7 +181,7 @@ void DsqlStatementCache::removeStatement(thread_db* tdbb, DsqlStatement* stateme
 	}
 }
 
-void DsqlStatementCache::statementGoingInactive(Firebird::RefStrPtr& key)
+void DsqlStatementCache::statementGoingInactive(RefStrPtr& key)
 {
 	const auto entryPtr = map.get(key);
 

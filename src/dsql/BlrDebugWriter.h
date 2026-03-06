@@ -31,13 +31,13 @@ class DeclareSubFuncNode;
 class DeclareSubProcNode;
 
 // BLR writer with debug info support.
-class BlrDebugWriter : public Firebird::BlrWriter
+class BlrDebugWriter : public BlrWriter
 {
 public:
-	typedef Firebird::HalfStaticArray<UCHAR, 128> DebugData;
+	typedef HalfStaticArray<UCHAR, 128> DebugData;
 
 	explicit BlrDebugWriter(MemoryPool& p)
-		: Firebird::BlrWriter(p),
+		: BlrWriter(p),
 		  debugData(p)
 	{
 	}

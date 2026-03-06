@@ -83,7 +83,7 @@ public:
 
 public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
@@ -108,10 +108,10 @@ public:
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
-	Firebird::string source;
-	Firebird::Array<Item>* items;
-	Firebird::SortedArray<MetaName> functionNames;
-	Firebird::SortedArray<MetaName> procedureNames;
+	string source;
+	Array<Item>* items;
+	SortedArray<MetaName> functionNames;
+	SortedArray<MetaName> procedureNames;
 	std::optional<SqlSecurity> ssDefiner;
 
 private:
@@ -129,7 +129,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
@@ -178,7 +178,7 @@ public:
 
 public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
@@ -190,13 +190,13 @@ protected:
 
 public:
 	QualifiedName name;
-	Firebird::string source;
-	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
-	Firebird::Array<CreateAlterPackageNode::Item>* items;
+	string source;
+	Array<CreateAlterPackageNode::Item>* declaredItems;
+	Array<CreateAlterPackageNode::Item>* items;
 	bool createIfNotExistsOnly = false;
 
 private:
-	Firebird::string owner;
+	string owner;
 };
 
 
@@ -210,7 +210,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 

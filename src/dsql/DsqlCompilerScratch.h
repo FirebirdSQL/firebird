@@ -48,8 +48,8 @@ class TypeClause;
 class VariableNode;
 class WithClause;
 
-typedef Firebird::Pair<
-	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
+typedef Pair<
+	NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
 // DSQL Compiler scratch block.
@@ -197,8 +197,8 @@ public:
 	dsql_var* resolveVariable(const MetaName& varName);
 	void genReturn(bool eosFlag = false);
 
-	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
-		Firebird::Array<NestConst<ParameterClause> >& returns);
+	void genParameters(Array<NestConst<ParameterClause> >& parameters,
+		Array<NestConst<ParameterClause> >& returns);
 
 	// Get rid of any predefined contexts created for a view or trigger definition.
 	// Also reset hidden variables.
@@ -221,23 +221,23 @@ public:
 	SelectExprNode* findCTE(const MetaName& name);
 	void clearCTEs();
 	void checkUnusedCTEs();
-	void addCTEAlias(const Firebird::string& alias);
+	void addCTEAlias(const string& alias);
 
-	const Firebird::string* getNextCTEAlias()
+	const string* getNextCTEAlias()
 	{
 		return *(--currCteAlias);
 	}
 
-	void resetCTEAlias(const Firebird::string& alias)
+	void resetCTEAlias(const string& alias)
 	{
 #ifdef DEV_BUILD
-		const Firebird::string* const* begin = cteAliases.begin();
+		const string* const* begin = cteAliases.begin();
 #endif
 
 		currCteAlias = cteAliases.end() - 1;
 		fb_assert(currCteAlias >= begin);
 
-		const Firebird::string* curr = *(currCteAlias);
+		const string* curr = *(currCteAlias);
 
 		while (strcmp(curr->c_str(), alias.c_str()))
 		{
@@ -309,11 +309,11 @@ public:
 	USHORT derivedContextNumber = 0;		// Next available context number for derived tables
 	USHORT scopeLevel = 0;					// Scope level for parsing aliases in subqueries
 	USHORT loopLevel = 0;					// Loop level
-	Firebird::Stack<MetaName*> labels;		// Loop labels
+	Stack<MetaName*> labels;		// Loop labels
 	USHORT cursorNumber = 0;				// Cursor number
-	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
+	Array<DeclareCursorNode*> cursors; // Cursors
 	USHORT localTableNumber = 0;			// Local table number
-	Firebird::Array<DeclareLocalTableNode*> localTables; // Local tables
+	Array<DeclareLocalTableNode*> localTables; // Local tables
 	USHORT inSelectList = 0;				// now processing "select list"
 	USHORT inWhereClause = 0;				// processing "where clause"
 	USHORT inGroupByClause = 0;				// processing "group by clause"
@@ -322,37 +322,37 @@ public:
 	USHORT errorHandlers = 0;				// count of active error handlers
 	USHORT clientDialect = 0;				// dialect passed into the API call
 	USHORT inOuterJoin = 0;					// processing inside outer-join part
-	Firebird::ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
+	ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
 	QualifiedName package;				// package being defined
-	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
+	Stack<SelectExprNode*> currCtes;	// current processing CTE's
 	dsql_ctx* recursiveCtx = nullptr;		// context of recursive CTE
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
 	bool processingWindow = false;			// processing window functions
 	bool checkConstraintTrigger = false;	// compiling a check constraint trigger
 	dsc domainValue;						// VALUE in the context of domain's check constraint
-	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
-	Firebird::Array<dsql_var*> variables;
-	Firebird::Array<dsql_var*> outputVariables;
+	Array<dsql_var*> hiddenVariables;	// hidden variables
+	Array<dsql_var*> variables;
+	Array<dsql_var*> outputVariables;
 	ReturningClause* returningClause = nullptr;
-	const Firebird::string* const* currCteAlias = nullptr;
+	const string* const* currCteAlias = nullptr;
 	DsqlCompilerScratch* mainScratch = nullptr;
-	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
-	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
+	NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
 	MetaName ddlSchema;
-	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
+	AutoPtr<ObjectsArray<MetaString>> cachedDdlSchemaSearchPath;
 	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML
 
 private:
-	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
-	Firebird::HalfStaticArray<const Firebird::string*, 4> cteAliases; // CTE aliases in recursive members
+	HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
+	HalfStaticArray<const string*, 4> cteAliases; // CTE aliases in recursive members
 	USHORT nextVarNumber = 0;				// Next available variable number
 	bool psql = false;
-	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
-	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
+	LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
+	LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
 
 public:
-	Firebird::LeftPooledMap<QualifiedName, class dsql_prc*>	procedures;	// known procedures
-	Firebird::LeftPooledMap<QualifiedName, class dsql_udf*>	functions;	// known functions
+	LeftPooledMap<QualifiedName, class dsql_prc*>	procedures;	// known procedures
+	LeftPooledMap<QualifiedName, class dsql_udf*>	functions;	// known functions
 	bool regularCacheValid = false;										// flag for relations cache
 };
 

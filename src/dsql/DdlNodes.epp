@@ -8510,7 +8510,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 
 							dsc* result = nullptr;
 							{ // scope
-								Firebird::Cleanup detach([&defaultRequest] {TRA_detach_request(defaultRequest);});
+								Cleanup detach([&defaultRequest] {TRA_detach_request(defaultRequest);});
 								TRA_attach_request(transaction, defaultRequest);
 								result = EVL_expr(tdbb, defaultRequest, defaultNode);
 							}
@@ -9124,7 +9124,7 @@ Format* RelationNode::makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::
 
 		// Use generic representation of formats with 32-bit offsets
 
-		Firebird::Array<Ods::Descriptor> odsDescs;
+		Array<Ods::Descriptor> odsDescs;
 		Ods::Descriptor* odsDesc = odsDescs.getBuffer(format->fmt_count);
 
 		for (Format::fmt_desc_const_iterator desc = format->fmt_desc.begin();
@@ -14543,7 +14543,7 @@ void MappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 {
-	Firebird::LocalStatus st;
+	LocalStatus st;
 	CheckStatusWrapper statusWrapper(&st);
 
 	// first of all try to use regenerated DDL statement
@@ -15052,7 +15052,7 @@ string CreateAlterUserNode::internalPrint(NodePrinter& printer) const
 }
 
 
-static void setCharField(Firebird::Auth::CharField& field, const string* value)
+static void setCharField(Auth::CharField& field, const string* value)
 {
 	if (value)
 	{
@@ -15102,7 +15102,7 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Firebird::Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Firebird::Auth::UserData;
+	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
 
 	MetaName text(name);
 	if (text.isEmpty() && mode == USER_MOD)
@@ -15116,11 +15116,11 @@ void CreateAlterUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 	userData->createIfNotExistsOnly = createIfNotExistsOnly;
 
-	Firebird::LocalStatus s;
+	LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
-	userData->op = mode == USER_ADD ? Firebird::Auth::ADD_OPER : mode == USER_MOD ?
-		Firebird::Auth::MOD_OPER : Firebird::Auth::ADDMOD_OPER;
+	userData->op = mode == USER_ADD ? Auth::ADD_OPER : mode == USER_MOD ?
+		Auth::MOD_OPER : Auth::ADDMOD_OPER;
 	userData->user.set(&statusWrapper, text.c_str());
 	check(&statusWrapper);
 	userData->user.setEntered(&statusWrapper, 1);
@@ -15219,14 +15219,14 @@ void DropUserNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	Firebird::Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Firebird::Auth::UserData;
+	Auth::UserData* userData = FB_NEW_POOL(*transaction->tra_pool) Auth::UserData;
 
 	string text = name.c_str();
 
-	Firebird::LocalStatus s;
+	LocalStatus s;
 	CheckStatusWrapper statusWrapper(&s);
 
-	userData->op = Firebird::Auth::DEL_OPER;
+	userData->op = Auth::DEL_OPER;
 	userData->user.set(&statusWrapper, text.c_str());
 	userData->user.setEntered(&statusWrapper, 1);
 	userData->plugin = plugin;

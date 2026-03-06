@@ -305,7 +305,7 @@ TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExp
 void Printable::print(NodePrinter& printer) const
 {
 	NodePrinter subPrinter(printer.getIndent() + 1);
-	Firebird::string tag(internalPrint(subPrinter));
+	string tag(internalPrint(subPrinter));
 	printer.begin(tag);
 	printer.append(subPrinter);
 	printer.end();
@@ -561,7 +561,7 @@ string ValueExprNode::internalPrint(NodePrinter& printer) const
 //--------------------
 
 
-Firebird::string ValueListNode::internalPrint(NodePrinter& printer) const
+string ValueListNode::internalPrint(NodePrinter& printer) const
 {
 	ListExprNode::internalPrint(printer);
 
@@ -596,7 +596,7 @@ void ValueListNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 //--------------------
 
 
-Firebird::string RecSourceListNode::internalPrint(NodePrinter& printer) const
+string RecSourceListNode::internalPrint(NodePrinter& printer) const
 {
 	ListExprNode::internalPrint(printer);
 
@@ -3710,7 +3710,7 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 
 // Cast from one datatype to another.
 dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
-	const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format)
+	const dsc* castDesc, const ItemInfo* itemInfo, const string& format)
 {
 	// If validation is not required and the source value is either NULL
 	// or already in the desired data type, simply return it "as is"
@@ -8688,7 +8688,7 @@ bool DsqlMapNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* ot
 //--------------------
 
 
-void DerivedFieldNode::getContextNumbers(Firebird::SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack)
+void DerivedFieldNode::getContextNumbers(SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack)
 {
 	for (DsqlContextStack::const_iterator stack(contextStack); stack.hasData(); ++stack)
 	{
@@ -10066,7 +10066,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 		if (charSet->isMultiByte() && maxCharLength * charSet->maxBytesPerChar() == retDesc->dsc_length)
 		{
-			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+			HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
 
 			retDesc->dsc_length = charSet->substring(retDesc->dsc_length, retDesc->dsc_address,
 				retDesc->dsc_length, buffer.getBuffer(retDesc->dsc_length), 0,
@@ -14362,7 +14362,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-Firebird::string RowsClause::internalPrint(NodePrinter& printer) const
+string RowsClause::internalPrint(NodePrinter& printer) const
 {
 	NODE_PRINT(printer, length);
 	NODE_PRINT(printer, skip);
@@ -14374,7 +14374,7 @@ Firebird::string RowsClause::internalPrint(NodePrinter& printer) const
 //--------------------
 
 
-Firebird::string GeneratorItem::internalPrint(NodePrinter& printer) const
+string GeneratorItem::internalPrint(NodePrinter& printer) const
 {
 	NODE_PRINT(printer, id);
 	NODE_PRINT(printer, name);

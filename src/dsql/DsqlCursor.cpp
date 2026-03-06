@@ -123,7 +123,7 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 
 			JRD_unwind_request(tdbb, dsqlRequest->getRequest());
 		}
-		catch (Firebird::Exception&)
+		catch (Exception&)
 		{} // no-op
 	}
 

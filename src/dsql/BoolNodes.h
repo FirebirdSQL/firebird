@@ -47,7 +47,7 @@ public:
 		holder.add(arg2);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -61,11 +61,11 @@ public:
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 private:
-	Firebird::TriState executeAnd(thread_db* tdbb, Request* request) const;
-	Firebird::TriState executeOr(thread_db* tdbb, Request* request) const;
+	TriState executeAnd(thread_db* tdbb, Request* request) const;
+	TriState executeOr(thread_db* tdbb, Request* request) const;
 
 public:
 	UCHAR blrOp;
@@ -102,7 +102,7 @@ public:
 		holder.add(dsqlSpecialArg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -121,10 +121,10 @@ public:
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 private:
-	Firebird::TriState stringBoolean(thread_db* tdbb, Request* request, dsc* desc1, dsc* desc2,
+	TriState stringBoolean(thread_db* tdbb, Request* request, dsc* desc1, dsc* desc2,
 		bool computedInvariant) const;
 	bool sleuth(thread_db* tdbb, Request* request, const dsc* desc1,
 		const dsc* desc2) const;
@@ -159,7 +159,7 @@ public:
 		holder.add(list);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -186,7 +186,7 @@ public:
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	BoolExprNode* decompose(CompilerScratch* csb);
@@ -211,7 +211,7 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -228,7 +228,7 @@ public:
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 public:
 	bool dsqlUnknown;
@@ -249,13 +249,13 @@ public:
 		holder.add(arg);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	BoolExprNode* process(DsqlCompilerScratch* dsqlScratch, bool invert);
@@ -282,7 +282,7 @@ public:
 			holder.add(rse);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -311,7 +311,7 @@ public:
 	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
 	BoolExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	void pass2Boolean(thread_db* tdbb, CompilerScratch* csb, std::function<void ()> process) override;
-	Firebird::TriState execute(thread_db* tdbb, Request* request) const override;
+	TriState execute(thread_db* tdbb, Request* request) const override;
 
 private:
 	BoolExprNode* convertNeqAllToNotAny(thread_db* tdbb, CompilerScratch* csb);

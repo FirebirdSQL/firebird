@@ -86,9 +86,9 @@ namespace Firebird::Jrd {
 	class TimeoutTimer;
 	class MetaName;
 
-	typedef Firebird::Stack<dsql_ctx*> DsqlContextStack;
-	typedef Firebird::Pair<Firebird::Left<MetaName, NestConst<WindowClause>>> NamedWindowClause;
-	typedef Firebird::ObjectsArray<NamedWindowClause> NamedWindowsClause;
+	typedef Stack<dsql_ctx*> DsqlContextStack;
+	typedef Pair<Left<MetaName, NestConst<WindowClause>>> NamedWindowClause;
+	typedef ObjectsArray<NamedWindowClause> NamedWindowsClause;
 
 // Context aliases used in triggers
 inline constexpr const char* OLD_CONTEXT_NAME = "OLD";
@@ -107,15 +107,15 @@ DEFINE_TRACE_ROUTINE(dsql_trace);
 class dsql_dbb : public pool_alloc<dsql_type_dbb>
 {
 public:
-	Firebird::LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_charsets;	// known charsets in database
-	Firebird::LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_collations;	// known collations in database
-	Firebird::NonPooledMap<SSHORT, dsql_intlsym*> dbb_charsets_by_id;		// charsets sorted by charset_id
-	Firebird::LeftPooledMap<Firebird::string, DsqlDmlRequest*> dbb_cursors;	// known cursors in database
-	Firebird::AutoPtr<DsqlStatementCache> dbb_statement_cache;
+	LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_charsets;	// known charsets in database
+	LeftPooledMap<QualifiedName, class dsql_intlsym*> dbb_collations;	// known collations in database
+	NonPooledMap<SSHORT, dsql_intlsym*> dbb_charsets_by_id;		// charsets sorted by charset_id
+	LeftPooledMap<string, DsqlDmlRequest*> dbb_cursors;	// known cursors in database
+	AutoPtr<DsqlStatementCache> dbb_statement_cache;
 
 	MemoryPool& dbb_pool;			// The current pool for the dbb
 	Attachment* dbb_attachment;
-	Firebird::FullPooledMap<MetaName, QualifiedName> dbb_schemas_dfl_charset;
+	FullPooledMap<MetaName, QualifiedName> dbb_schemas_dfl_charset;
 	QualifiedName dbb_dfl_charset;
 	bool dbb_no_charset = false;
 
@@ -301,7 +301,7 @@ public:
 	bool prc_private = false;			// Packaged private procedure
 
 private:
-	dsql_fld* cpFields(MemoryPool& p, const Firebird::Array<NestConst<Parameter>>& fields);
+	dsql_fld* cpFields(MemoryPool& p, const Array<NestConst<Parameter>>& fields);
 };
 
 // prc_flags bits
@@ -345,7 +345,7 @@ public:
 	CSetId udf_character_set_id = CSetId();
 	USHORT udf_flags = 0;
 	QualifiedName udf_name;
-	Firebird::Array<Argument> udf_arguments;
+	Array<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
 	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
@@ -359,7 +359,7 @@ enum udf_flags_vals {
 // Variables - input, output & local
 
 //! Variable block
-class dsql_var : public Firebird::PermanentStorage
+class dsql_var : public PermanentStorage
 {
 public:
 	enum Type
@@ -476,13 +476,13 @@ public:
 	USHORT ctx_scope_level = 0;					// Subquery level within this request
 	USHORT ctx_flags = 0;						// Various flag values
 	USHORT ctx_in_outer_join = 0;				// inOuterJoin when context was created
-	Firebird::ObjectsArray<QualifiedName> ctx_alias;	// Context alias (can include concatenated derived table alias)
+	ObjectsArray<QualifiedName> ctx_alias;	// Context alias (can include concatenated derived table alias)
 	QualifiedName ctx_internal_alias;			// Alias as specified in query
 	DsqlContextStack ctx_main_derived_contexts;	// contexts used for blr_derived_expr
 	DsqlContextStack ctx_childs_derived_table;	// Childs derived table context
-	Firebird::LeftPooledMap<MetaName, ImplicitJoin*> ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
-	Firebird::Array<WindowMap*> ctx_win_maps;	// Maps for window functions
-	Firebird::GenericMap<NamedWindowClause> ctx_named_windows;
+	LeftPooledMap<MetaName, ImplicitJoin*> ctx_imp_join;	// Map of USING fieldname to ImplicitJoin
+	Array<WindowMap*> ctx_win_maps;	// Maps for window functions
+	GenericMap<NamedWindowClause> ctx_named_windows;
 
 	dsql_ctx& operator=(dsql_ctx& v)
 	{
@@ -508,7 +508,7 @@ public:
 		return *this;
 	}
 
-	Firebird::string getObjectName() const
+	string getObjectName() const
 	{
 		if (ctx_relation)
 			return ctx_relation->rel_name.toQuotedString();
@@ -517,7 +517,7 @@ public:
 		return "";
 	}
 
-	Firebird::string getConcatenatedAlias() const
+	string getConcatenatedAlias() const
 	{
 		if (ctx_alias.hasData())
 		{
@@ -563,7 +563,7 @@ public:
 };
 
 // Message block used in communicating with a running request
-class dsql_msg : public Firebird::PermanentStorage
+class dsql_msg : public PermanentStorage
 {
 public:
 	explicit dsql_msg(MemoryPool& p)
@@ -572,7 +572,7 @@ public:
 	{
 	}
 
-	Firebird::Array<dsql_par*> msg_parameters;	// Parameter list
+	Array<dsql_par*> msg_parameters;	// Parameter list
 	USHORT msg_number = 0;			// Message number
 	ULONG msg_length = 0;			// Message length
 	USHORT msg_parameter = 0;		// Next parameter number
@@ -580,7 +580,7 @@ public:
 };
 
 // Parameter block used to describe a parameter of a message
-class dsql_par : public Firebird::PermanentStorage
+class dsql_par : public PermanentStorage
 {
 public:
 	explicit dsql_par(MemoryPool& p)
@@ -616,39 +616,39 @@ public:
 	}
 };
 
-typedef Firebird::SortedArray<const char*,
-			Firebird::EmptyStorage<const char*>, const char*,
-			Firebird::DefaultKeyValue<const char*>,
+typedef SortedArray<const char*,
+			EmptyStorage<const char*>, const char*,
+			DefaultKeyValue<const char*>,
 			CStrCmp>
 		StrArray;
 
 class IntlString
 {
 public:
-	IntlString(Firebird::MemoryPool& p, const Firebird::string& str,
+	IntlString(MemoryPool& p, const string& str,
 		const MetaName& cs = NULL)
 		: charset(p, cs),
 		  s(p, str)
 	{ }
 
-	explicit IntlString(const Firebird::string& str, const QualifiedName& cs = {})
+	explicit IntlString(const string& str, const QualifiedName& cs = {})
 		: charset(cs),
 		  s(str)
 	{ }
 
-	IntlString(Firebird::MemoryPool& p, const IntlString& o)
+	IntlString(MemoryPool& p, const IntlString& o)
 		: charset(p, o.charset),
 		  s(p, o.s)
 	{ }
 
-	explicit IntlString(Firebird::MemoryPool& p)
+	explicit IntlString(MemoryPool& p)
 		: charset(p),
 		  s(p)
 	{ }
 
 	void dsqlPass(DsqlCompilerScratch* dsqlScratch);
 
-	Firebird::string toUtf8(jrd_tra* transaction) const;
+	string toUtf8(jrd_tra* transaction) const;
 
 	const QualifiedName& getCharSet() const noexcept
 	{
@@ -660,7 +660,7 @@ public:
 		charset = value;
 	}
 
-	const Firebird::string& getString() const noexcept
+	const string& getString() const noexcept
 	{
 		return s;
 	}
@@ -677,14 +677,14 @@ public:
 
 private:
 	QualifiedName charset;
-	Firebird::string s;
+	string s;
 };
 
-class Lim64String : public Firebird::string
+class Lim64String : public string
 {
 public:
-	Lim64String(Firebird::MemoryPool& p, const Firebird::string& str, int sc)
-		: Firebird::string(p, str),
+	Lim64String(MemoryPool& p, const string& str, int sc)
+		: string(p, str),
 		  scale(sc)
 	{ }
 
@@ -848,7 +848,7 @@ struct Signature
 		  flags(o.flags),
 		  defined(o.defined)
 	{
-		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = o.parameters.begin();
+		for (SortedObjectsArray<SignatureParameter>::const_iterator i = o.parameters.begin();
 			 i != o.parameters.end();
 			 ++i)
 		{
@@ -866,7 +866,7 @@ struct Signature
 		if (name != o.name || flags != o.flags || parameters.getCount() != o.parameters.getCount())
 			return false;
 
-		for (Firebird::SortedObjectsArray<SignatureParameter>::const_iterator i = parameters.begin(),
+		for (SortedObjectsArray<SignatureParameter>::const_iterator i = parameters.begin(),
 				j = o.parameters.begin();
 			i != parameters.end();
 			++i, ++j)
@@ -884,7 +884,7 @@ struct Signature
 	}
 
 	MetaName name;
-	Firebird::SortedObjectsArray<SignatureParameter> parameters;
+	SortedObjectsArray<SignatureParameter> parameters;
 	unsigned flags = 0;
 	bool defined = false;
 };

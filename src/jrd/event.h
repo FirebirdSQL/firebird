@@ -141,8 +141,6 @@ struct req_int
 	SLONG rint_count;				// Threshold count
 };
 
-inline constexpr int EPB_version1 = 1;
-
 
 }	// namespace Firebird::Jrd
 
