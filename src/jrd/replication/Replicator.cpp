@@ -30,7 +30,7 @@
 
 using namespace Firebird;
 using namespace Firebird::Jrd;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
 
 Replicator::Replicator(MemoryPool& pool,

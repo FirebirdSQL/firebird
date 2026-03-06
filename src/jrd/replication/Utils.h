@@ -32,7 +32,7 @@
 
 #include <stdio.h>
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	enum LogMsgSide
 	{

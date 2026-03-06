@@ -47,7 +47,7 @@
 #include <time.h>
 
 using namespace Firebird;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
 namespace
 {

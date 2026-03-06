@@ -31,7 +31,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/os/guid.h"
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	struct SyncReplica
 	{

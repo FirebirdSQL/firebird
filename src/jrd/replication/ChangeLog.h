@@ -33,7 +33,7 @@
 
 #include "Utils.h"
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	struct Config;
 

@@ -35,7 +35,7 @@
 #include "Config.h"
 #include "ChangeLog.h"
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	class TableMatcher
 	{

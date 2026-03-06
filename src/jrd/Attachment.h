@@ -61,8 +61,7 @@ namespace Firebird::Jrd::EDS {
 	class Connection;
 }
 
-namespace Replication
-{
+namespace Firebird::Jrd::Replication {
 	class TableMatcher;
 }
 

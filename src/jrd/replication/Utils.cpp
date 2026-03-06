@@ -52,7 +52,7 @@
 #include <atomic>
 
 using namespace Firebird;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
 namespace
 {
@@ -215,7 +215,7 @@ namespace
 
 } // namespace
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	void raiseError(const char* msg, ...)
 	{

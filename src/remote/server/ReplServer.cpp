@@ -66,7 +66,7 @@
 //#define PRESERVE_LOG
 
 using namespace Firebird;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
 namespace
 {

@@ -33,9 +33,9 @@
 
 using namespace Firebird;
 using namespace Firebird::Jrd;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	constexpr size_t MAX_BG_WRITER_LAG = 10 * 1024 * 1024;	// 10 MB
 }

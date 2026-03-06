@@ -34,7 +34,7 @@
 #include "Manager.h"
 #include <utility>
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	class Replicator final :
 		public Firebird::StdPlugin<Firebird::IReplicatedSessionImpl<Replicator, Firebird::CheckStatusWrapper> >

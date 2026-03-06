@@ -860,6 +860,9 @@ namespace Firebird::Jrd {
 namespace Firebird::Jrd::EDS {
 }
 
+namespace Firebird::Jrd::Replication {
+}
+
 namespace Firebird::fb_utils {
 	namespace Firebird = ::Firebird;
 }
@@ -889,6 +892,7 @@ namespace Firebird::Why {
 
 namespace Jrd = Firebird::Jrd;
 namespace EDS = Firebird::Jrd::EDS;
+namespace Replication = Firebird::Jrd::Replication;
 namespace fb_utils = Firebird::fb_utils;
 namespace Arg = Firebird::Arg;
 namespace MsgFormat = Firebird::MsgFormat;

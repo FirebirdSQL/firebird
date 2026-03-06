@@ -58,7 +58,7 @@
 
 using namespace Firebird;
 using namespace Firebird::Jrd;
-using namespace Replication;
+using namespace Firebird::Jrd::Replication;
 
 #if !defined(WIN_NT) && !defined(LINUX)
 #pragma FB_COMPILER_MESSAGE("Add support for your platform!")
