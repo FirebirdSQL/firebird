@@ -445,7 +445,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	TraceTransactionEnd trace(transaction, true, retaining_flag);
 
-	EDS::Transaction::jrdTransactionEnd(tdbb, transaction, true, retaining_flag, false);
+	Firebird::Jrd::EDS::Transaction::jrdTransactionEnd(tdbb, transaction, true, retaining_flag, false);
 
 	const jrd_tra* const sysTran = tdbb->getAttachment()->getSysTransaction();
 
@@ -1333,7 +1333,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	TraceTransactionEnd trace(transaction, false, retaining_flag);
 
-	EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, retaining_flag, false /*force_flag ?*/);
+	Firebird::Jrd::EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, retaining_flag, false /*force_flag ?*/);
 
 	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
 
@@ -4380,4 +4380,3 @@ void jrd_tra::eraseSecDbContext() noexcept
 	delete tra_sec_db_context;
 	tra_sec_db_context = NULL;
 }
-

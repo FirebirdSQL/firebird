@@ -4673,7 +4673,7 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 
 			ThreadContextHolder tdbb;
 			WorkerAttachment::shutdown();
-			EDS::Manager::shutdown();
+			Firebird::Jrd::EDS::Manager::shutdown();
 
 			ULONG attach_count, database_count, svc_count;
 			JRD_enum_attachments(NULL, attach_count, database_count, svc_count);
@@ -8311,7 +8311,7 @@ void JTransaction::freeEngineData(CheckStatusWrapper* user_status)
 			if (transaction->tra_flags & TRA_prepared)
 			{
 				TraceTransactionEnd trace(transaction, false, false);
-				EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, false, false);
+				Firebird::Jrd::EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, false, false);
 				TRA_release_transaction(tdbb, transaction, &trace);
 			}
 			else
@@ -8369,7 +8369,7 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
 			if (transaction->tra_flags & TRA_prepared)
 			{
 				TraceTransactionEnd trace(transaction, false, false); // need ability to indicate prepared (in limbo) transaction
-				EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, false, true);
+				Firebird::Jrd::EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, false, true);
 				TRA_release_transaction(tdbb, transaction, &trace);
 			}
 			else if (force_flag)
@@ -8564,7 +8564,7 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 	try
 	{
 		// allow to free resources used by dynamic statements
-		EDS::Manager::jrdAttachmentEnd(tdbb, attachment, forcedPurge);
+		Firebird::Jrd::EDS::Manager::jrdAttachmentEnd(tdbb, attachment, forcedPurge);
 
 		if (!(dbb->dbb_flags & DBB_bugcheck))
 		{
@@ -9954,4 +9954,3 @@ void JRD_cancel_operation(thread_db* /*tdbb*/, Jrd::Attachment* attachment, int 
 		fb_assert(false);
 	}
 }
-

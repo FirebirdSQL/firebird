@@ -647,7 +647,7 @@ public:
 		  excessInputs(NULL),
 		  dsqlLabelNumber(0),
 		  useCallerPrivs(false),
-		  traScope(EDS::traNotSet)	// not defined
+		  traScope(Firebird::Jrd::EDS::traNotSet)	// not defined
 	{
 	}
 
@@ -677,11 +677,11 @@ public:
 	NestConst<StmtNode> innerStmt;
 	NestConst<ValueListNode> inputs;
 	NestConst<ValueListNode> outputs;
-	EDS::ParamNames* inputNames;
-	EDS::ParamNumbers* excessInputs;
+	Firebird::Jrd::EDS::ParamNames* inputNames;
+	Firebird::Jrd::EDS::ParamNumbers* excessInputs;
 	USHORT dsqlLabelNumber;
 	bool useCallerPrivs;
-	EDS::TraScope traScope;
+	Firebird::Jrd::EDS::TraScope traScope;
 };
 
 

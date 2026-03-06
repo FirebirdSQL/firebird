@@ -428,7 +428,7 @@ public:
 	FB_UINT64 req_profiler_ticks;		// profiler ticks
 
 	const StmtNode*	req_next;			// next node for execution
-	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements
+	Firebird::Jrd::EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements
 	Firebird::Array<const Cursor*>	req_cursors;	// named cursors
 	ExtEngineManager::ResultSet*	req_ext_resultset;	// external result set
 	USHORT		req_label;				// label for leave
