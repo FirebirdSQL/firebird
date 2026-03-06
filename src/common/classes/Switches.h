@@ -119,7 +119,4 @@ private:
 
 } // namespace Firebird
 
-// FIXME:
-using Firebird::Switches;
-
 #endif // CLASSES_SWITCHES

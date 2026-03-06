@@ -30,6 +30,10 @@
 #include "../common/constants.h"
 #include "ibase.h"
 
+namespace Firebird::Burp
+{
+
+
 /* Local copies of global variables.  They will be copied into
    a data structure. */
 
@@ -247,5 +251,6 @@ static inline constexpr const char* burp_repl_mode_sw_table[] =
 };
 
 
-#endif // BURP_BURP_H
+}	// namespace Firebird::Burp
 
+#endif // BURP_BURP_H
