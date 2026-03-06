@@ -88,9 +88,9 @@
 #include <sys/file.h>
 #endif
 
+namespace Firebird::Why
+{
 
-using namespace Firebird;
-using namespace Firebird::Why;
 
 IAttachment* handleToIAttachment(CheckStatusWrapper*, FB_API_HANDLE*);
 ITransaction* handleToITransaction(CheckStatusWrapper*, FB_API_HANDLE*);
@@ -364,21 +364,19 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 } // anonymous namespace
 
 
-namespace Firebird::Why {
-
 UtilInterface utilInterface;
 
 void UtilInterface::dumpBlob(CheckStatusWrapper* status, ISC_QUAD* blobId,
 	IAttachment* att, ITransaction* tra, const char* file_name, FB_BOOLEAN txt)
 {
-	FILE* file = Firebird::os_utils::fopen(file_name, txt ? FOPEN_WRITE_TYPE_TEXT : FOPEN_WRITE_TYPE);
+	FILE* file = os_utils::fopen(file_name, txt ? FOPEN_WRITE_TYPE_TEXT : FOPEN_WRITE_TYPE);
 	try
 	{
 		if (!file)
 			system_error::raise("fopen");
 
 		if (!att)
-			Firebird::Arg::Gds(isc_bad_db_handle).raise();
+			Arg::Gds(isc_bad_db_handle).raise();
 
 		dump(status, blobId, att, tra, file);
 	}
@@ -404,14 +402,14 @@ void UtilInterface::loadBlob(CheckStatusWrapper* status, ISC_QUAD* blobId,
  *	Load a blob with the contents of a file.
  *
  **************************************/
-	FILE* file = Firebird::os_utils::fopen(file_name, txt ? FOPEN_READ_TYPE_TEXT : FOPEN_READ_TYPE);
+	FILE* file = os_utils::fopen(file_name, txt ? FOPEN_READ_TYPE_TEXT : FOPEN_READ_TYPE);
 	try
 	{
 		if (!file)
 			system_error::raise("fopen");
 
 		if (!att)
-			Firebird::Arg::Gds(isc_bad_db_handle).raise();
+			Arg::Gds(isc_bad_db_handle).raise();
 
 		load(status, blobId, att, tra, file);
 	}
@@ -440,7 +438,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 	try
 	{
 		if (!att)
-			Firebird::Arg::Gds(isc_bad_db_handle).raise();
+			Arg::Gds(isc_bad_db_handle).raise();
 
 		UCharBuffer buffer;
 		USHORT buf_len = 256;
@@ -454,7 +452,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 		do
 		{
 			att->getInfo(status, sizeof(info), info, buf_len, buf);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				return;
 
 			ClumpletReader p(ClumpletReader::InfoResponse, buf, buf_len);
@@ -491,7 +489,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 					break;
 
 				default:
-					(Firebird::Arg::Gds(isc_random) << "Invalid info item").raise();
+					(Arg::Gds(isc_random) << "Invalid info item").raise();
 				}
 			}
 
@@ -549,14 +547,14 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 			s.printf("%s (%s), version \"%.*s\"", implementation_string, class_string, l, versions);
 
 			callback->callback(status, s.c_str());
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				return;
 			versions += l;
 		}
 
 		USHORT ods_version, ods_minor_version;
 		UTL_get_ods_version(status, att, &ods_version, &ods_minor_version);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return;
 
 		s.printf("on disk structure version %d.%d", ods_version, ods_minor_version);
@@ -569,7 +567,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 }
 
 YAttachment* UtilInterface::executeCreateDatabase2(
-	Firebird::CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
+	CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
 	unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb)
 {
 	try
@@ -589,7 +587,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		if (stmtIsCreateDb)
 			*stmtIsCreateDb = FB_TRUE;
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return NULL;
 
 		LocalStatus tempStatus;
@@ -597,7 +595,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 
 		ITransaction* crdbTrans = att->startTransaction(status, 0, NULL);
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			att->dropDatabase(&tempCheckStatusWrapper);
 			return NULL;
@@ -606,7 +604,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		if (!stmtEaten)
 		{
 			att->execute(status, crdbTrans, statement.length(), statement.c_str(), dialect, NULL, NULL, NULL, NULL);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 			{
 				crdbTrans->rollback(&tempCheckStatusWrapper);
 				att->dropDatabase(&tempCheckStatusWrapper);
@@ -615,7 +613,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		}
 
 		crdbTrans->commit(status);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			crdbTrans->rollback(&tempCheckStatusWrapper);
 			att->dropDatabase(&tempCheckStatusWrapper);
@@ -699,7 +697,7 @@ void UtilInterface::decodeTimeTz(CheckStatusWrapper* status, const ISC_TIME_TZ* 
 		hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
 }
 
-void UtilInterface::decodeTimeTzEx(Firebird::CheckStatusWrapper* status, const ISC_TIME_TZ_EX* timeEx,
+void UtilInterface::decodeTimeTzEx(CheckStatusWrapper* status, const ISC_TIME_TZ_EX* timeEx,
 	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions,
 	unsigned timeZoneBufferLength, char* timeZoneBuffer)
 {
@@ -797,7 +795,7 @@ void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_
 	}
 }
 
-void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
+void UtilInterface::convert(CheckStatusWrapper* status,
 	unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
 	unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
 {
@@ -822,7 +820,7 @@ void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
 	try
 	{
 		CVT_move(&sourceDesc, &targetDesc, 0,
-			[](const Firebird::Arg::StatusVector& status)
+			[](const Arg::StatusVector& status)
 			{
 				status.raise();
 			}
@@ -1269,8 +1267,8 @@ public:
 					strncpy(buffer, temp, bufSize);
 				else
 				{
-					(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-					 Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(bufSize) << Firebird::Arg::Num(len));
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
 				}
 			}
 		}
@@ -1330,8 +1328,8 @@ public:
 					strncpy(buffer, temp, bufSize);
 				else
 				{
-					(Firebird::Arg::Gds(isc_arith_except) << Firebird::Arg::Gds(isc_string_truncation) <<
-					 Firebird::Arg::Gds(isc_trunc_limits) << Firebird::Arg::Num(bufSize) << Firebird::Arg::Num(len));
+					(Arg::Gds(isc_arith_except) << Arg::Gds(isc_string_truncation) <<
+					 Arg::Gds(isc_trunc_limits) << Arg::Num(bufSize) << Arg::Num(len));
 				}
 			}
 		}
@@ -1398,7 +1396,7 @@ public:
 		}
 	}
 
-	static void errorFunction(const Firebird::Arg::StatusVector& v)
+	static void errorFunction(const Arg::StatusVector& v)
 	{
 		v.raise();
 	}
@@ -1444,8 +1442,6 @@ unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata*
 
 	return 0;
 }
-
-} // namespace Why
 
 
 #if (defined SOLARIS ) || (defined __cplusplus)
@@ -3557,3 +3553,6 @@ namespace Firebird::Why
 	}
 }
 #endif
+
+
+} // namespace Firebird::Why

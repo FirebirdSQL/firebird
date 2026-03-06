@@ -34,6 +34,10 @@
 
 #include <firebird/Interface.h>
 
+namespace Firebird::Why
+{
+
+
 enum pp_vals {
 	PP_CREATE = 0,
 	PP_DATABASE,
@@ -95,15 +99,12 @@ enum token_vals {
 static const char* quotes = "\"\'";
 
 
-using namespace Firebird;
-
-
 static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYMBOL)
 {
 	if (pos >= toks.getCount())
 		generate_error("", UNEXPECTED_END_OF_COMMAND);
 
-	NoCaseString curTok(NoCaseString(toks[pos].text, toks[pos].length));
+	Firebird::NoCaseString curTok(Firebird::NoCaseString(toks[pos].text, toks[pos].length));
 
 	switch(symbol)
 	{
@@ -155,8 +156,6 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
     @param dialect
 
  **/
-namespace Firebird::Why {
-
 bool PREPARSE_execute(CheckStatusWrapper* status, YAttachment** ptrAtt,
 					  string& stmt, bool* stmt_eaten, USHORT dialect, unsigned dpbLength, const unsigned char* dpb)
 {
@@ -343,8 +342,6 @@ bool PREPARSE_execute(CheckStatusWrapper* status, YAttachment** ptrAtt,
 	return true;
 }
 
-} // namespace Firebird::Why
-
 
 /**
 
@@ -395,5 +392,8 @@ static void generate_error(const NoCaseString& token, SSHORT error, char result)
 		break;
 	}
 
-	Firebird::Arg::StatusVector(temp_status).raise();
+	Arg::StatusVector(temp_status).raise();
 }
+
+
+} // namespace Firebird::Why

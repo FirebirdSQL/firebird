@@ -35,7 +35,9 @@
 #include "../common/config/config_file.h"
 #include "../common/config/config.h"
 
-namespace Firebird::Why {
+namespace Firebird::Why
+{
+
 
 class PluginManager : public AutoIface<IPluginManagerImpl<PluginManager, CheckStatusWrapper> >
 {
@@ -57,6 +59,7 @@ public:
 	static void threadDetach();
 	static void deleteDelayed();
 };
+
 
 }	// namespace Firebird::Why
 

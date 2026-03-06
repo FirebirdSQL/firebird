@@ -48,18 +48,19 @@
 #include "ibase.h"
 #include "../yvalve/utl_proto.h"
 
-using namespace Firebird;
-using namespace Firebird::Why;
-
-namespace Firebird::Why {
+namespace Firebird::Why
+{
 
 //
 // getStatus()
 //
 
-class UserStatus final : public Firebird::DisposeIface<Firebird::BaseStatus<UserStatus> >
+namespace
 {
-};
+	class UserStatus final : public DisposeIface<BaseStatus<UserStatus>>
+	{
+	};
+}
 
 IStatus* MasterImplementation::getStatus()
 {
@@ -123,13 +124,10 @@ int MasterImplementation::serverMode(int mode)
 	return currentMode;
 }
 
-} // namespace Firebird::Why
 
 //
 // timer
 //
-
-namespace Firebird::Why {
 
 static bool abortShutdownFlag = false;
 
@@ -260,7 +258,7 @@ THREAD_ENTRY_DECLARE TimerEntry::timeThread(THREAD_ENTRY_PARAM)
 
 	while (stopTimerThread.value() == 0
 #ifdef WIN_NT
-			&& Firebird::dDllUnloadTID == 0
+			&& dDllUnloadTID == 0
 #endif
 			)
 	{
@@ -307,7 +305,7 @@ THREAD_ENTRY_DECLARE TimerEntry::timeThread(THREAD_ENTRY_PARAM)
 	timerCleanup->release();
 
 #ifdef WIN_NT
-	if (Firebird::dDllUnloadTID)
+	if (dDllUnloadTID)
 	{
 		// fb_shutdown is called as result of FreeLibrary, not by application.
 		// Sooner of all we are the last user of fbclient.dll, and code will be
@@ -361,7 +359,7 @@ public:
 
 			timerWakeup->release();
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -380,7 +378,7 @@ public:
 				timerQueue->remove(curTimer);
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -410,37 +408,31 @@ bool timerThreadStopped()
 	return stopTimerThread.value() != 0;
 }
 
-} // namespace Firebird::Why
-
 
 //
 // Util (misc calls)
 //
 
-namespace Firebird::Why {
+extern UtilInterface utilInterface;		// Implemented in utl.cpp
 
-	extern UtilInterface utilInterface;		// Implemented in utl.cpp
-
-	IUtil* MasterImplementation::getUtilInterface()
-	{
-		return &utilInterface;
-	}
-
-} // namespace Firebird::Why
+IUtil* MasterImplementation::getUtilInterface()
+{
+	return &utilInterface;
+}
 
 
 //
 // ConfigManager (config info access)
 //
 
-namespace Firebird::Why
-{
-	extern IConfigManager* iConfigManager;
+extern IConfigManager* iConfigManager;
 
-	IConfigManager* MasterImplementation::getConfigManager()
-	{
-		return iConfigManager;
-	}
+IConfigManager* MasterImplementation::getConfigManager()
+{
+	return iConfigManager;
+}
+
+
 
 } // namespace Firebird::Why
 

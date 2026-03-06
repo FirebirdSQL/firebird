@@ -37,8 +37,9 @@
 #include "../common/isc_proto.h"
 #include "../jrd/acl.h"
 
-using namespace Firebird;
-using namespace Firebird::Why;
+namespace Firebird::Why
+{
+
 
 namespace {
 
@@ -515,9 +516,6 @@ DTransaction::~DTransaction()
 } // anonymous namespace
 
 
-namespace Firebird::Why {
-
-
 void DtcStart::addAttachment(CheckStatusWrapper* status, IAttachment* att)
 {
 	this->addWithTpb(status, att, 0, NULL);
@@ -562,7 +560,7 @@ YTransaction* DtcStart::start(CheckStatusWrapper* status)
 		if (status->getState() & IStatus::STATE_ERRORS)
 			status_exception::raise(status);
 		if (cnt == 0)
-			(Firebird::Arg::Gds(isc_random) << "No attachments to start distributed transaction provided").raise();
+			(Arg::Gds(isc_random) << "No attachments to start distributed transaction provided").raise();
 
 		for (unsigned i = 0; i < cnt; ++i)
 		{
@@ -638,5 +636,6 @@ DtcStart* Dtc::startBuilder(CheckStatusWrapper* status)
 
 	return NULL;
 }
+
 
 } // namespace Firebird::Why

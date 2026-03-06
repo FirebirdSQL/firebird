@@ -24,6 +24,9 @@
 #ifndef DSQL_USER_PROTO_H
 #define DSQL_USER_PROTO_H
 
+namespace Firebird::Why	// FIXME:
+{
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -90,5 +93,8 @@ ISC_STATUS API_ROUTINE isc_prepare(ISC_STATUS*, FB_API_HANDLE*, FB_API_HANDLE*, 
 #ifdef __cplusplus
 }	// extern "C"
 #endif
+
+
+}	// namespace Firebird::Why
 
 #endif //  DSQL_USER_PROTO_H

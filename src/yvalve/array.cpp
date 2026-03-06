@@ -61,7 +61,7 @@ struct gen_t
 
 static void adjust_length(ISC_ARRAY_DESC*) noexcept;
 static void copy_exact_name (const char*, char*, SSHORT) noexcept;
-static ISC_STATUS error(ISC_STATUS* status, const Firebird::Arg::StatusVector& v) noexcept;
+static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v) noexcept;
 static ISC_STATUS gen_sdl(ISC_STATUS*, const ISC_ARRAY_DESC*, SSHORT*, UCHAR**, SSHORT*, bool);
 static ISC_STATUS stuff_args(gen_t*, SSHORT, ...);
 static ISC_STATUS stuff_literal(gen_t*, SLONG);
@@ -143,7 +143,9 @@ ISC_STATUS API_ROUTINE isc_array_get_slice(ISC_STATUS* status,
 }
 
 
-namespace Firebird::Why {
+namespace Firebird::Why
+{
+
 
 void iscArrayLookupBoundsImpl(YAttachment* attachment,
 	YTransaction* transaction, const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc)
@@ -321,10 +323,11 @@ void iscArrayLookupDescImpl(YAttachment* attachment,
 
 	status.check();
 
-	(Firebird::Arg::Gds(isc_fldnotdef) <<
-		Firebird::Arg::Str(desc->array_desc_field_name) <<
-		Firebird::Arg::Str(desc->array_desc_relation_name)).raise();
+	(Arg::Gds(isc_fldnotdef) <<
+		Arg::Str(desc->array_desc_field_name) <<
+		Arg::Str(desc->array_desc_relation_name)).raise();
 }
+
 
 } // namespace Firebird::Why
 
@@ -455,11 +458,11 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS* status,
 		desc->array_desc_dtype = blr_int128;
 		break;
 	default:
-		return error(status, Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-							 Firebird::Arg::Gds(isc_random) << Firebird::Arg::Str("data type not understood"));
+		return error(status, Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+							 Arg::Gds(isc_random) << Arg::Str("data type not understood"));
 	}
 
-	return error(status, Firebird::Arg::Gds(FB_SUCCESS));
+	return error(status, Arg::Gds(FB_SUCCESS));
 }
 
 
@@ -503,7 +506,7 @@ static void copy_exact_name(const char* from, char* to, SSHORT bsize) noexcept
 }
 
 
-static ISC_STATUS error(ISC_STATUS* status, const Firebird::Arg::StatusVector& v) noexcept
+static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v) noexcept
 {
 /**************************************
  *
@@ -538,7 +541,7 @@ static ISC_STATUS gen_sdl(ISC_STATUS* status,
 	const SSHORT dimensions = desc->array_desc_dimensions;
 
 	if (dimensions > 16)
-		return error(status, Firebird::Arg::Gds(isc_invalid_dimension) << Firebird::Arg::Num(dimensions) << Firebird::Arg::Num(16));
+		return error(status, Arg::Gds(isc_invalid_dimension) << Arg::Num(dimensions) << Arg::Num(16));
 
 	gen_t gen_block;
 	gen_t* gen = &gen_block;
@@ -627,7 +630,7 @@ static ISC_STATUS gen_sdl(ISC_STATUS* status,
 		return status[1];
 	*sdl_length = gen->gen_sdl - *gen->gen_sdl_ptr;
 
-	return error(status, Firebird::Arg::Gds(FB_SUCCESS));
+	return error(status, Arg::Gds(FB_SUCCESS));
 }
 
 
@@ -650,7 +653,7 @@ static ISC_STATUS stuff_args(gen_t* gen, SSHORT count, ...)
 	if (gen->gen_sdl + count >= gen->gen_end)
 	{
 		if (gen->gen_internal < 0) {
-			return error(gen->gen_status, Firebird::Arg::Gds(isc_misc_interpreted) << Firebird::Arg::Str("SDL buffer overflow"));
+			return error(gen->gen_status, Arg::Gds(isc_misc_interpreted) << Arg::Str("SDL buffer overflow"));
 		}
 
 		// The sdl buffer is too small.  Allocate a larger one.
@@ -659,8 +662,8 @@ static ISC_STATUS stuff_args(gen_t* gen, SSHORT count, ...)
 		UCHAR* const new_sdl = (UCHAR*) gds__alloc(new_len);
 		if (!new_sdl)
 		{
-			return error(gen->gen_status, Firebird::Arg::Gds(isc_misc_interpreted) << Firebird::Arg::Str("SDL buffer overflow") <<
-										  Firebird::Arg::Gds(isc_virmemexh));
+			return error(gen->gen_status, Arg::Gds(isc_misc_interpreted) << Arg::Str("SDL buffer overflow") <<
+										  Arg::Gds(isc_virmemexh));
 		}
 
 		const SSHORT current_len = gen->gen_sdl - *gen->gen_sdl_ptr;

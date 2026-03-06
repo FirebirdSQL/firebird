@@ -36,6 +36,7 @@
  */
 
 #include "firebird.h"
+#include "ibase.h"
 #include "../dsql/chars.h"
 #include "firebird/impl/sqlda_pub.h"
 #include "../yvalve/gds_proto.h"
@@ -54,7 +55,9 @@
 // SQLDA dialects
 constexpr USHORT DIALECT_sqlda	= 0;
 
-using namespace Firebird;
+namespace Firebird::Why
+{
+
 
 enum name_type {
 	NAME_statement = 1,
@@ -1045,9 +1048,9 @@ static void cleanup_database(FB_API_HANDLE* db_handle, void* /*dummy*/)
 //
 static ISC_STATUS error(const Firebird::Exception& ex)
 {
-	Firebird::StaticStatusVector v;
+	StaticStatusVector v;
 	ex.stuffException(v);
-	makePermanentVector(v.begin());
+	Why::makePermanentVector(v.begin());
 
 	if (UDSQL_error->dsql_user_status)
 	{
@@ -1324,3 +1327,6 @@ static bool scompare(const SCHAR* string1, USHORT length1, const SCHAR* string2,
 
 	return true;
 }
+
+
+}	// namespace Firebird::Why

@@ -29,6 +29,11 @@
 #include "fb_types.h"
 #include "../common/classes/ImplementHelper.h"
 
+namespace Firebird
+{
+	class ClumpletWriter;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -74,22 +79,17 @@ int		API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR*, void*, int, int, void*);
 } /* extern "C" */
 #endif
 
-// new utl
-namespace Firebird
-{
-	class ClumpletWriter;
-}
-void setLogin(Firebird::ClumpletWriter& dpb, bool spbFlag);
-
-// Put status vector strings into strings circular buffer
-void makePermanentVector(ISC_STATUS* v) noexcept;
-
-void UTL_get_ods_version(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
-	USHORT* ods_version, USHORT* ods_minor_version);
-
 namespace Firebird::Why
 {
+	void setLogin(ClumpletWriter& dpb, bool spbFlag);
+
+	// Put status vector strings into strings circular buffer
+	void makePermanentVector(ISC_STATUS* v) noexcept;
+
+	void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
+		USHORT* ods_version, USHORT* ods_minor_version);
+
 	void threadCleanup();
-}
+} // namespace Firebird::Why
 
 #endif // JRD_UTL_PROTO_H

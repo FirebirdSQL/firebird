@@ -26,7 +26,8 @@
 
 #include "../common/classes/MetaString.h"
 
-namespace Firebird::Why {
+namespace Firebird::Why
+{
 	class YAttachment;
 	class YTransaction;
 
@@ -34,8 +35,8 @@ namespace Firebird::Why {
 		const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
 
 	void iscArrayLookupDescImpl(YAttachment* attachment, YTransaction* transaction,
-		const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc, Firebird::MetaString* globalField);
-}
+		const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc, MetaString* globalField);
+} // namespace Firebird::Why
 
 #ifdef __cplusplus
 extern "C" {

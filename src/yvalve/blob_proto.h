@@ -26,17 +26,17 @@
 
 #include "../common/classes/RefCounted.h"
 
-namespace Firebird::Why {
+namespace Firebird::Why
+{
 	class YAttachment;
 	class YTransaction;
 
 	void iscBlobLookupDescImpl(YAttachment* attachment, YTransaction* transaction,
 		const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global);
+
+	// Only declared in ibase.h:
+	//void API_ROUTINE isc_blob_default_desc(ISC_BLOB_DESC* desc,
+	//									   const UCHAR*, const UCHAR*);
 }
-
-// Only declared in ibase.h:
-//void API_ROUTINE isc_blob_default_desc(ISC_BLOB_DESC* desc,
-//									   const UCHAR*, const UCHAR*);
-
 
 #endif // DSQL_BLOB_PROTO_H
