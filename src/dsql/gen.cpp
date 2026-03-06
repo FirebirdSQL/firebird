@@ -59,9 +59,8 @@
 #include "iberror.h"
 #include "../common/StatusArg.h"
 
-using namespace Firebird;
-
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 static void gen_plan(DsqlCompilerScratch*, const PlanNode*);
@@ -143,8 +142,8 @@ void GEN_expr(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
 		if (desc.dsc_dtype == dtype_int64)
 		{
 			ERRD_post_warning(
-				Firebird::Arg::Warning(isc_dsql_dialect_warning_expr) <<
-				Firebird::Arg::Str(compatDialectVerb));
+				Arg::Warning(isc_dsql_dialect_warning_expr) <<
+				Arg::Str(compatDialectVerb));
 		}
 	}
 }
@@ -175,7 +174,7 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 	class ParamCmp
 	{
 	public:
-		static int greaterThan(const Jrd::dsql_par* p1, const Jrd::dsql_par* p2) noexcept
+		static int greaterThan(const dsql_par* p1, const dsql_par* p2) noexcept
 		{
 			return p1->par_index > p2->par_index;
 		}
@@ -439,8 +438,8 @@ void GEN_descriptor(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool text
 
 	default:
 		// don't understand dtype
-		ERRD_post(Firebird::Arg::Gds(isc_sqlerr) << Firebird::Arg::Num(-804) <<
-				  Firebird::Arg::Gds(isc_dsql_datatype_err));
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				  Arg::Gds(isc_dsql_datatype_err));
 	}
 }
 
@@ -517,7 +516,7 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 				idx_iter->indexName.schema.hasData() &&
 				idx_iter->indexName.schema != node->recordSourceNode->dsqlContext->ctx_relation->rel_name.schema)
 			{
-				ERRD_post(Firebird::Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
+				ERRD_post(Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
 			}
 		};
 
@@ -703,14 +702,14 @@ void GEN_sort(DsqlCompilerScratch* dsqlScratch, UCHAR blrVerb, ValueListNode* li
 void GEN_stuff_context(DsqlCompilerScratch* dsqlScratch, const dsql_ctx* context)
 {
 	if (context->ctx_context > MAX_UCHAR)
-		ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
+		ERRD_post(Arg::Gds(isc_too_many_contexts));
 
 	dsqlScratch->appendUChar(context->ctx_context);
 
 	if (context->ctx_flags & CTX_recursive)
 	{
 		if (context->ctx_recursive > MAX_UCHAR)
-			ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
+			ERRD_post(Arg::Gds(isc_too_many_contexts));
 
 		dsqlScratch->appendUChar(context->ctx_recursive);
 	}
@@ -722,7 +721,7 @@ void GEN_stuff_context_number(DsqlCompilerScratch* dsqlScratch,
 	USHORT contextNumber)
 {
 	if (contextNumber > MAX_UCHAR)
-		ERRD_post(Firebird::Arg::Gds(isc_too_many_contexts));
+		ERRD_post(Arg::Gds(isc_too_many_contexts));
 
 	dsqlScratch->appendUChar(contextNumber);
 }

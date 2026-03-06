@@ -756,6 +756,7 @@ using namespace Firebird;
 	YYSTYPE()
 	{}
 
+	// FIXME:
 	Firebird::PodOptional<int> nullableIntVal;
 	Firebird::TriState triState;
 	Firebird::PodOptional<Jrd::SqlSecurity> nullableSqlSecurityVal;

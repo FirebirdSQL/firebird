@@ -987,6 +987,6 @@ protected:
 	Firebird::RefPtr<JAttachment> m_JAttachment;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_ATTACHMENT_H
