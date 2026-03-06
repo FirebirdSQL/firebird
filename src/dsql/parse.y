@@ -3769,7 +3769,7 @@ named_param($execStatementNode)
 	: symbol_variable_name BIND_PARAM value
 		{
 			if (!$execStatementNode->inputNames)
-				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) Firebird::Jrd::EDS::ParamNames(getPool());
+				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) EDS::ParamNames(getPool());
 
 			$execStatementNode->inputNames->add($1);
 
@@ -3781,10 +3781,10 @@ named_param($execStatementNode)
 	| EXCESS symbol_variable_name BIND_PARAM value
 		{
 			if (!$execStatementNode->inputNames)
-				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) Firebird::Jrd::EDS::ParamNames(getPool());
+				$execStatementNode->inputNames = FB_NEW_POOL(getPool()) EDS::ParamNames(getPool());
 
 			if (!$execStatementNode->excessInputs)
-				$execStatementNode->excessInputs = FB_NEW_POOL(getPool()) Firebird::Jrd::EDS::ParamNumbers(getPool());
+				$execStatementNode->excessInputs = FB_NEW_POOL(getPool()) EDS::ParamNumbers(getPool());
 
 			$execStatementNode->excessInputs->add($execStatementNode->inputNames->getCount());
 
@@ -3839,14 +3839,14 @@ exec_stmt_option($execStatementNode)
 	| ROLE value
 		{ setClause($execStatementNode->role, "ROLE", $2); }
 	| WITH AUTONOMOUS TRANSACTION
-		{ setClause($execStatementNode->traScope, "TRANSACTION", Firebird::Jrd::EDS::traAutonomous); }
+		{ setClause($execStatementNode->traScope, "TRANSACTION", EDS::traAutonomous); }
 	| WITH COMMON TRANSACTION
-		{ setClause($execStatementNode->traScope, "TRANSACTION", Firebird::Jrd::EDS::traCommon); }
+		{ setClause($execStatementNode->traScope, "TRANSACTION", EDS::traCommon); }
 	| WITH CALLER PRIVILEGES
 		{ setClause($execStatementNode->useCallerPrivs, "CALLER PRIVILEGES"); }
 	/*
 	| WITH TWO_PHASE TRANSACTION
-		{ setClause($execStatementNode->traScope, "TRANSACTION", Firebird::Jrd::EDS::traTwoPhase); }
+		{ setClause($execStatementNode->traScope, "TRANSACTION", EDS::traTwoPhase); }
 	*/
 	;
 

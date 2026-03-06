@@ -583,8 +583,8 @@ public:
 	int att_use_count;						// number of API calls running except of asynchronous ones
 	ThreadId att_purge_tid;					// ID of thread running purge_attachment()
 
-	Firebird::Jrd::EDS::Connection* att_ext_connection;	// external connection executed by this attachment
-	Firebird::Jrd::EDS::Connection* att_ext_parent;		// external connection, parent of this attachment
+	EDS::Connection* att_ext_connection;	// external connection executed by this attachment
+	EDS::Connection* att_ext_parent;		// external connection, parent of this attachment
 	ULONG att_ext_call_depth;				// external connection call depth, 0 for user attachment
 	TraceManager* att_trace_manager;		// Trace API manager
 

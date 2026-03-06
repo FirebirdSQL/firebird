@@ -308,7 +308,7 @@ public:
 	SortOwner tra_sorts;
 	SLONG tra_blob_util_next = 1;
 
-	Firebird::Jrd::EDS::Transaction *tra_ext_common;
+	EDS::Transaction *tra_ext_common;
 	//Transaction *tra_ext_two_phase;
 	GenIdCache* tra_gen_ids;
 	Firebird::IReplicatedTransaction* tra_replicator;

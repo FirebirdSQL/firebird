@@ -4094,7 +4094,7 @@ static RegisterNode<ExecStatementNode> regExecStatementNode({blr_exec_sql, blr_e
 DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
 	ExecStatementNode* node = FB_NEW_POOL(pool) ExecStatementNode(pool);
-	node->traScope = Firebird::Jrd::EDS::traCommon;
+	node->traScope = EDS::traCommon;
 
 	switch (blrOp)
 	{
@@ -4163,7 +4163,7 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						break;
 
 					case blr_exec_stmt_tran_clone:
-						node->traScope = static_cast<Firebird::Jrd::EDS::TraScope>(csb->csb_blr_reader.getByte());
+						node->traScope = static_cast<EDS::TraScope>(csb->csb_blr_reader.getByte());
 						break;
 
 					case blr_exec_stmt_privs:
@@ -4190,7 +4190,7 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 									MemoryPool& pool = csb->csb_pool;
 
 									if (!node->inputNames)
-							node->inputNames = FB_NEW_POOL(pool) Firebird::Jrd::EDS::ParamNames(pool);
+										node->inputNames = FB_NEW_POOL(pool) EDS::ParamNames(pool);
 
 									MetaName* newName = FB_NEW_POOL(pool) MetaName(pool, name);
 									node->inputNames->add(newName);
@@ -4210,7 +4210,7 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 					case blr_exec_stmt_in_excess:
 					{
 						MemoryPool& pool = csb->csb_pool;
-					node->excessInputs = FB_NEW_POOL(pool) Firebird::Jrd::EDS::ParamNumbers(pool);
+						node->excessInputs = FB_NEW_POOL(pool) EDS::ParamNumbers(pool);
 						const USHORT count = csb->csb_blr_reader.getWord();
 						for (FB_SIZE_T i = 0; i < count; i++)
 						{
@@ -4336,7 +4336,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// If no new features of EXECUTE STATEMENT are used, lets generate old BLR.
 	if (!dataSource && !userName && !password && !role && !useCallerPrivs && !inputs &&
-		 traScope == Firebird::Jrd::EDS::traNotSet)
+		 traScope == EDS::traNotSet)
 	{
 		if (outputs)
 		{
@@ -4397,7 +4397,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_role, role);
 
 		// dsqlScratch's transaction behavior.
-		if (traScope != Firebird::Jrd::EDS::traNotSet)
+		if (traScope != EDS::traNotSet)
 		{
 			// Transaction parameters equal to current transaction.
 			dsqlScratch->appendUChar(blr_exec_stmt_tran_clone);
@@ -4494,15 +4494,15 @@ ExecStatementNode* ExecStatementNode::pass2(thread_db* tdbb, CompilerScratch* cs
 		}
 	}
 
-	impureOffset = csb->allocImpure<Firebird::Jrd::EDS::Statement*>();
+	impureOffset = csb->allocImpure<EDS::Statement*>();
 
 	return this;
 }
 
 const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
 {
-	Firebird::Jrd::EDS::Statement** stmtPtr = request->getImpure<Firebird::Jrd::EDS::Statement*>(impureOffset);
-	Firebird::Jrd::EDS::Statement* stmt = *stmtPtr;
+	EDS::Statement** stmtPtr = request->getImpure<EDS::Statement*>(impureOffset);
+	EDS::Statement* stmt = *stmtPtr;
 
 	if (request->req_operation == Request::req_evaluate)
 	{
@@ -4523,13 +4523,13 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 		string sRole;
 		getString(tdbb, request, role, sRole);
 
-		Firebird::Jrd::EDS::Connection* conn = Firebird::Jrd::EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope);
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);
 		stmt->setCallerPrivileges(useCallerPrivs);
 
-		Firebird::Jrd::EDS::Transaction* tran = Firebird::Jrd::EDS::Transaction::getTransaction(tdbb, stmt->getConnection(), traScope);
+		EDS::Transaction* tran = EDS::Transaction::getTransaction(tdbb, stmt->getConnection(), traScope);
 
 		const MetaName* const* inpNames = inputNames ? inputNames->begin() : NULL;
 		stmt->prepare(tdbb, tran, sSql, inputNames != NULL);

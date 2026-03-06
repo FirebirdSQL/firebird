@@ -1323,7 +1323,7 @@ string AlterEDSPoolSetNode::internalPrint(NodePrinter& printer) const
 
 void AlterEDSPoolSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch*/, jrd_tra* /*transaction*/)
 {
-	Firebird::Jrd::EDS::ConnectionsPool* pool = Firebird::Jrd::EDS::Manager::getConnPool(true);
+	EDS::ConnectionsPool* pool = EDS::Manager::getConnPool(true);
 	switch (m_param)
 	{
 	case POOL_SIZE:
@@ -1362,7 +1362,7 @@ string AlterEDSPoolClearNode::internalPrint(NodePrinter& printer) const
 
 void AlterEDSPoolClearNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScratch*/, jrd_tra* /*transaction*/)
 {
-	Firebird::Jrd::EDS::ConnectionsPool* pool = Firebird::Jrd::EDS::Manager::getConnPool(false);
+	EDS::ConnectionsPool* pool = EDS::Manager::getConnPool(false);
 	if (!pool)
 		return;
 
