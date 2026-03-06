@@ -29,37 +29,40 @@
 #include "../jrd/scl.h"
 #include "../jrd/Resources.h"
 
-StreamType* CMP_alloc_map(Jrd::thread_db*, Jrd::CompilerScratch*, StreamType stream);
-Jrd::ValueExprNode* CMP_clone_node_opt(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::ValueExprNode*);
-Jrd::BoolExprNode* CMP_clone_node_opt(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::BoolExprNode*);
-Jrd::ValueExprNode* CMP_clone_node(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::ValueExprNode*);
-Jrd::Statement* CMP_compile(Jrd::thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
-	ULONG dbginfoLength, const UCHAR* dbginfo);
-Jrd::Request* CMP_compile_request(Jrd::thread_db*, const UCHAR* blr, ULONG blrLength, bool internalFlag);
-Jrd::CompilerScratch::csb_repeat* CMP_csb_element(Jrd::CompilerScratch*, StreamType element);
-const Jrd::Format* CMP_format(Jrd::thread_db*, Jrd::CompilerScratch*, StreamType);
-Jrd::Request* CMP_make_request(Jrd::thread_db*, Jrd::CompilerScratch*, bool);
-Jrd::ItemInfo* CMP_pass2_validation(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::Item&);
+namespace Firebird::Jrd
+{
+	StreamType* CMP_alloc_map(thread_db*, CompilerScratch*, StreamType stream);
+	ValueExprNode* CMP_clone_node_opt(thread_db*, CompilerScratch*, ValueExprNode*);
+	BoolExprNode* CMP_clone_node_opt(thread_db*, CompilerScratch*, BoolExprNode*);
+	ValueExprNode* CMP_clone_node(thread_db*, CompilerScratch*, ValueExprNode*);
+	Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool internalFlag,
+		ULONG dbginfoLength, const UCHAR* dbginfo);
+	Request* CMP_compile_request(thread_db*, const UCHAR* blr, ULONG blrLength, bool internalFlag);
+	CompilerScratch::csb_repeat* CMP_csb_element(CompilerScratch*, StreamType element);
+	const Format* CMP_format(thread_db*, CompilerScratch*, StreamType);
+	Request* CMP_make_request(thread_db*, CompilerScratch*, bool);
+	ItemInfo* CMP_pass2_validation(thread_db*, CompilerScratch*, const Item&);
 
-bool CMP_procedure_arguments(
-	Jrd::thread_db* tdbb,
-	Jrd::CompilerScratch* csb,
-	Jrd::Routine* routine,
-	bool isInput,
-	USHORT argCount,
-	Firebird::ObjectsArray<Jrd::MetaName>* argNames,
-	NestConst<Jrd::ValueListNode>& sources,
-	NestConst<Jrd::ValueListNode>& targets,
-	NestConst<Jrd::MessageNode>& message,
-	Arg::StatusVector& mismatchStatus);
+	bool CMP_procedure_arguments(
+		thread_db* tdbb,
+		CompilerScratch* csb,
+		Routine* routine,
+		bool isInput,
+		USHORT argCount,
+		ObjectsArray<MetaName>* argNames,
+		NestConst<ValueListNode>& sources,
+		NestConst<ValueListNode>& targets,
+		NestConst<MessageNode>& message,
+		Arg::StatusVector& mismatchStatus);
 
-void CMP_post_access(Jrd::thread_db*, Jrd::CompilerScratch*, const Jrd::MetaName&, SLONG ssRelationId,
-					 Jrd::SecurityClass::flags_t, ObjectType obj_type,
-					 const Jrd::QualifiedName&,
-					 const Jrd::MetaName& = {});
+	void CMP_post_access(thread_db*, CompilerScratch*, const MetaName&, SLONG ssRelationId,
+						SecurityClass::flags_t, ObjectType obj_type,
+						const QualifiedName&,
+						const MetaName& = {});
 
-void CMP_post_procedure_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::Cached::Procedure*);
-Jrd::RecordSource* CMP_post_rse(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::RseNode*);
-void CMP_release(Jrd::thread_db*, Jrd::Request*);
+	void CMP_post_procedure_access(thread_db*, CompilerScratch*, Cached::Procedure*);
+	RecordSource* CMP_post_rse(thread_db*, CompilerScratch*, RseNode*);
+	void CMP_release(thread_db*, Request*);
+}	// namespace Firebird::Jrd
 
 #endif // JRD_CMP_PROTO_H

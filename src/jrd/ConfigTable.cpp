@@ -24,8 +24,8 @@
 #include "../jrd/ini.h"
 #include "../jrd/ids.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 ///  class ConfigTable
@@ -123,3 +123,6 @@ RecordBuffer* ConfigTableScan::getRecords(thread_db* tdbb, RelationPermanent* re
 
 	return impure->table->getRecords(tdbb, relation);
 }
+
+
+}	// namespace Firebird::Jrd

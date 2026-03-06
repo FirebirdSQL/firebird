@@ -104,8 +104,8 @@
 #include "../common/TextType.h"
 #include "../common/SimilarToRegex.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace {
@@ -1104,9 +1104,6 @@ Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attri
 //-------------
 
 
-namespace Firebird::Jrd {
-
-
 Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
 	switch (tt->texttype_canonical_width)
@@ -1135,5 +1132,6 @@ void Collation::destroy(thread_db* tdbb)
 
 	delete this;
 }
+
 
 }	// namespace Firebird::Jrd

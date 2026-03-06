@@ -29,25 +29,27 @@
 #include "../jrd/recsrc/RecordSource.h"
 
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 class ConfigTable : public SnapshotData
 {
 public:
-	ConfigTable(MemoryPool& pool, const Firebird::Config* conf);
+	ConfigTable(MemoryPool& pool, const Config* conf);
 
 	// return data for RDB$CONFIG
 	RecordBuffer* getRecords(thread_db* tdbb, RelationPermanent* relation);
 
 private:
-	const Firebird::Config* m_conf;
+	const Config* m_conf;
 };
 
 
 class ConfigTableScan final : public VirtualTableScan
 {
 public:
-	ConfigTableScan(CompilerScratch* csb, const Firebird::string& alias,
+	ConfigTableScan(CompilerScratch* csb, const string& alias,
 					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{
@@ -72,6 +74,7 @@ private:
 
 	ULONG m_impure;
 };
+
 
 } // namespace Firebird::Jrd
 
