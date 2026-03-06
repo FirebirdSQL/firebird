@@ -31,8 +31,9 @@
 #include "RecordSource.h"
 #include <exception>
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------
 // Data access: window expression
@@ -1163,3 +1164,6 @@ bool SlidingWindow::moveWithinFrame(SINT64 delta)
 
 	return moveWithinPartition(delta);
 }
+
+
+}	// namespace Firebird::Jrd

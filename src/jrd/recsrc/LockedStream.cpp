@@ -28,8 +28,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------------
 // Data access: stream locked for write
@@ -153,3 +154,6 @@ void LockedStream::nullRecords(thread_db* tdbb) const
 {
 	m_next->nullRecords(tdbb);
 }
+
+
+}	// namespace Firebird::Jrd

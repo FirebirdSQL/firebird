@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Firebird::Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ----------------------------
 // Data access: recursive union
@@ -321,3 +322,6 @@ void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 
 	delete[] tmp;
 }
+
+
+}	// namespace Firebird::Jrd
