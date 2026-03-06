@@ -41,9 +41,11 @@
 #include "../jrd/intl_proto.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-int MOV_compare(Jrd::thread_db* tdbb, const dsc* arg1, const dsc* arg2)
+
+int MOV_compare(thread_db* tdbb, const dsc* arg1, const dsc* arg2)
 {
 /**************************************
  *
@@ -105,7 +107,7 @@ bool MOV_get_boolean(const dsc* desc)
 }
 
 
-double MOV_get_double(Jrd::thread_db* tdbb, const dsc* desc)
+double MOV_get_double(thread_db* tdbb, const dsc* desc)
 {
 /**************************************
  *
@@ -122,7 +124,7 @@ double MOV_get_double(Jrd::thread_db* tdbb, const dsc* desc)
 }
 
 
-SLONG MOV_get_long(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
+SLONG MOV_get_long(thread_db* tdbb, const dsc* desc, SSHORT scale)
 {
 /**************************************
  *
@@ -140,7 +142,7 @@ SLONG MOV_get_long(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 }
 
 
-SINT64 MOV_get_int64(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
+SINT64 MOV_get_int64(thread_db* tdbb, const dsc* desc, SSHORT scale)
 {
 /**************************************
  *
@@ -158,7 +160,7 @@ SINT64 MOV_get_int64(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 }
 
 
-void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, Jrd::MetaName& name)
+void MOV_get_metaname(thread_db* tdbb, const dsc* desc, MetaName& name)
 {
 /**************************************
  *
@@ -181,7 +183,7 @@ void MOV_get_metaname(Jrd::thread_db* tdbb, const dsc* desc, Jrd::MetaName& name
 }
 
 
-SQUAD MOV_get_quad(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
+SQUAD MOV_get_quad(thread_db* tdbb, const dsc* desc, SSHORT scale)
 {
 /**************************************
  *
@@ -199,7 +201,7 @@ SQUAD MOV_get_quad(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 }
 
 
-int MOV_get_string_ptr(Jrd::thread_db* tdbb,
+int MOV_get_string_ptr(thread_db* tdbb,
 					   const dsc* desc,
 					   TTypeId* ttype,
 					   UCHAR** address, vary* temp, USHORT length)
@@ -225,7 +227,7 @@ int MOV_get_string_ptr(Jrd::thread_db* tdbb,
 }
 
 
-int MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, UCHAR** address, vary* temp, USHORT length)
+int MOV_get_string(thread_db* tdbb, const dsc* desc, UCHAR** address, vary* temp, USHORT length)
 {
 /**************************************
  *
@@ -242,7 +244,7 @@ int MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, UCHAR** address, vary*
 }
 
 
-void MOV_get_string(Jrd::thread_db* tdbb, const dsc* desc, string& str)
+void MOV_get_string(thread_db* tdbb, const dsc* desc, string& str)
 {
 	VaryStr<MAX_SQL_IDENTIFIER_SIZE> temp;
 	const char* strPtr = NULL;
@@ -336,7 +338,7 @@ ISC_TIMESTAMP_TZ MOV_get_timestamp_tz(const dsc* desc)
 }
 
 
-USHORT MOV_make_string(Jrd::thread_db* tdbb,
+USHORT MOV_make_string(thread_db* tdbb,
 					const dsc*	 desc,
 					TTypeId	     ttype,
 					const char** address,
@@ -366,11 +368,11 @@ USHORT MOV_make_string(Jrd::thread_db* tdbb,
 }
 
 
-ULONG MOV_make_string2(Jrd::thread_db* tdbb,
+ULONG MOV_make_string2(thread_db* tdbb,
 					 const dsc* desc,
 					 TTypeId ttype,
 					 UCHAR** address,
-					 Jrd::MoveBuffer& buffer,
+					 MoveBuffer& buffer,
 					 bool limit)
 {
 /**************************************
@@ -393,11 +395,11 @@ ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 		temp.dsc_dtype = dtype_text;
 		temp.setTextType(ttype);
 
-		Firebird::UCharBuffer bpb;
+		UCharBuffer bpb;
 		BLB_gen_bpb_from_descs(desc, &temp, bpb);
 
-		Jrd::blb* blob = Jrd::blb::open2(tdbb, tdbb->getRequest()->req_transaction,
-			reinterpret_cast<Jrd::bid*>(desc->dsc_address), bpb.getCount(), bpb.begin());
+		blb* blob = blb::open2(tdbb, tdbb->getRequest()->req_transaction,
+			reinterpret_cast<bid*>(desc->dsc_address), bpb.getCount(), bpb.begin());
 
 		ULONG size;
 
@@ -428,9 +430,9 @@ ULONG MOV_make_string2(Jrd::thread_db* tdbb,
 }
 
 
-Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, TTypeId ttype, bool limit)
+string MOV_make_string2(thread_db* tdbb, const dsc* desc, TTypeId ttype, bool limit)
 {
-	Jrd::MoveBuffer buffer;
+	MoveBuffer buffer;
 	UCHAR* ptr;
 	int len = MOV_make_string2(tdbb, desc, ttype, &ptr, buffer, limit);
 
@@ -438,7 +440,7 @@ Firebird::string MOV_make_string2(Jrd::thread_db* tdbb, const dsc* desc, TTypeId
 }
 
 
-void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSource)
+void MOV_move(thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSource)
 {
 /**************************************
  *
@@ -452,13 +454,13 @@ void MOV_move(Jrd::thread_db* tdbb, /*const*/ dsc* from, dsc* to, bool trustedSo
  **************************************/
 
 	if (DTYPE_IS_BLOB_OR_QUAD(from->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to->dsc_dtype))
-		Jrd::blb::move(tdbb, from, to);
+		blb::move(tdbb, from, to);
 	else
-		CVT_move_common(from, to, tdbb->getAttachment()->att_dec_status, &Jrd::EngineCallbacks::instance, trustedSource);
+		CVT_move_common(from, to, tdbb->getAttachment()->att_dec_status, &EngineCallbacks::instance, trustedSource);
 }
 
 
-Decimal64 MOV_get_dec64(Jrd::thread_db* tdbb, const dsc* desc)
+Decimal64 MOV_get_dec64(thread_db* tdbb, const dsc* desc)
 {
 /**************************************
  *
@@ -470,7 +472,7 @@ Decimal64 MOV_get_dec64(Jrd::thread_db* tdbb, const dsc* desc)
 }
 
 
-Decimal128 MOV_get_dec128(Jrd::thread_db* tdbb, const dsc* desc)
+Decimal128 MOV_get_dec128(thread_db* tdbb, const dsc* desc)
 {
 /**************************************
  *
@@ -482,7 +484,7 @@ Decimal128 MOV_get_dec128(Jrd::thread_db* tdbb, const dsc* desc)
 }
 
 
-Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
+Int128 MOV_get_int128(thread_db* tdbb, const dsc* desc, SSHORT scale)
 {
 /**************************************
  *
@@ -493,8 +495,6 @@ Int128 MOV_get_int128(Jrd::thread_db* tdbb, const dsc* desc, SSHORT scale)
 	return CVT_get_int128(desc, scale, tdbb->getAttachment()->att_dec_status, ERR_post);
 }
 
-
-namespace Firebird::Jrd {
 
 DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, TTypeId charSetId)
 	: maxLen(mLen)
@@ -558,5 +558,6 @@ DescPrinter::DescPrinter(thread_db* tdbb, const dsc* desc, FB_SIZE_T mLen, TType
 		value += "...";
 	}
 }
+
 
 }	// namespace Firebird::Jrd

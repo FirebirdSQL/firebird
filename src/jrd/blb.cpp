@@ -75,8 +75,9 @@
 #include "../common/classes/VaryStr.h"
 #include "../jrd/Statement.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 typedef Ods::blob_page blob_page;
 
@@ -3029,3 +3030,6 @@ void blb::BLB_cancel()
 {
 	BLB_cancel(JRD_get_thread_data());
 }
+
+
+}	// namespace Firebird::Jrd
