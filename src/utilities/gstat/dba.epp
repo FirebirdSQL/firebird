@@ -649,7 +649,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	tddba->page_number = -1;
 	const header_page* header = (const header_page*) db_read(HEADER_PAGE);
 
-	if (!Ods::isSupported(header))
+	if (!Jrd::Ods::isSupported(header))
 	{
 		const int oversion = (header->hdr_ods_version & ~ODS_FIREBIRD_FLAG);
 		dba_error(3, SafeArg() << ODS_VERSION << oversion);
@@ -668,8 +668,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	fl_print_complete = true;
 
 	tddba->page_size = header->hdr_page_size;
-	tddba->dp_per_pp = Ods::dataPagesPerPP(tddba->page_size);
-	tddba->max_records = Ods::maxRecsPerDP(tddba->page_size);
+	tddba->dp_per_pp = Jrd::Ods::dataPagesPerPP(tddba->page_size);
+	tddba->max_records = Jrd::Ods::maxRecsPerDP(tddba->page_size);
 	{ // scope
 		char* buff = alloc(tddba->page_size * 3 + DIRECT_IO_BLOCK_SIZE);
 		buff = FB_ALIGN(buff, DIRECT_IO_BLOCK_SIZE);
@@ -1264,8 +1264,8 @@ static ULONG lastUsedPage(ULONG pageSize)
 {
 	constexpr ULONG pipFirst = FIRST_PIP_PAGE;
 	ULONG pipLast = pipFirst;
-	const ULONG pagesPerPIP = Ods::pagesPerPIP(pageSize);
-	const ULONG bytesBitPIP = Ods::bytesBitPIP(pageSize);
+	const ULONG pagesPerPIP = Jrd::Ods::pagesPerPIP(pageSize);
+	const ULONG bytesBitPIP = Jrd::Ods::bytesBitPIP(pageSize);
 	page_inv_page* pip;
 
 	while (true)
@@ -1811,7 +1811,7 @@ static USHORT get_format_length(ISC_STATUS* status_vector, isc_db_handle databas
 	buffer.resize(return_length);
 
 	const USHORT count = buffer[0] | (buffer[1] << 8);
-	const Ods::Descriptor* const desc = (Ods::Descriptor*) &buffer[2] + count - 1;
+	const Jrd::Ods::Descriptor* const desc = (Jrd::Ods::Descriptor*) &buffer[2] + count - 1;
 	return desc->dsc_offset + desc->dsc_length;
 }
 
@@ -1973,7 +1973,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 		// msg 4: Unexpected end of database file.
 	}
 
-	if (tddba->global_buffer->pag_flags & Ods::crypted_page && !ok_enc)
+	if (tddba->global_buffer->pag_flags & Jrd::Ods::crypted_page && !ok_enc)
 	{
 		dba_error(55);
 	}
@@ -2109,7 +2109,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 		length -= l;
 	}
 
-	if (tddba->global_buffer->pag_flags & Ods::crypted_page && !ok_enc)
+	if (tddba->global_buffer->pag_flags & Jrd::Ods::crypted_page && !ok_enc)
 	{
 		dba_error(55);
 	}

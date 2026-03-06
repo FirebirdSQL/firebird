@@ -699,7 +699,7 @@ static_assert(offsetof(struct header_page, hdr_data) == 148, "hdr_data offset mi
 
 static_assert(sizeof(header_page::hdr_guid) == Guid::SIZE, "hdr_guid size mismatch");
 
-#define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::header_page, hdr_data[0]))
+#define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Firebird::Jrd::Ods::header_page, hdr_data[0]))
 
 // Header page clumplets
 

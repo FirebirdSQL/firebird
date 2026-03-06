@@ -853,13 +853,6 @@ namespace Firebird {
 	static IMessageMetadata* const DELAYED_OUT_FORMAT = reinterpret_cast<IMessageMetadata*>(1);
 }
 
-// FIXME:
-
-namespace Firebird::Jrd::Ods {
-}
-
-namespace Ods = Firebird::Jrd::Ods;
-
 //#define DEBUG_LOST_POOLS 1
 
 #endif /* COMMON_COMMON_H */
