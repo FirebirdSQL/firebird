@@ -109,7 +109,7 @@ inline constexpr UCHAR PIOB_success	= 2;	// I/O successfully completed
 inline constexpr UCHAR PIOB_pending	= 4;	// Asynchronous I/O not yet completed
 #endif
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PIO_H
 

@@ -26,7 +26,9 @@
 
 #include "../include/fb_blk.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 /* Note: The BlobControl class is the internal version of the
  * blob control structure (ISC_BLOB_CTL) which is in ibase.h.
@@ -74,7 +76,6 @@ public:
 };
 
 
-
 // Blob filter management
 
 class BlobFilter : public pool_alloc<type_blf>
@@ -109,6 +110,7 @@ static const char* const EXCEPTION_MESSAGE = "The blob filter: \t\t%s\n"
 										"\t             in module: \t%s\n"
 										"\tcaused the fatal exception:";
 
-} //namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_BLF_H

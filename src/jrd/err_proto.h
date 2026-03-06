@@ -44,7 +44,7 @@ enum idx_e {
 	idx_e_foreign_references_present
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 void	ERR_post_warning(const Arg::StatusVector& v);
 //void	ERR_assert(const TEXT*, int);

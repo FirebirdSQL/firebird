@@ -68,7 +68,7 @@ typedef Firebird::SparseBitmap<TraNumber> TransactionBitmap;
 #define TBM_SET(POOL_PTR, BITMAP_PPTR, VALUE) \
 	(*(BITMAP_PPTR) ? *(BITMAP_PPTR) : (*(BITMAP_PPTR) = FB_NEW_POOL(*(POOL_PTR)) Jrd::TransactionBitmap(*(POOL_PTR))))->set(VALUE)
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_SBM_H
 

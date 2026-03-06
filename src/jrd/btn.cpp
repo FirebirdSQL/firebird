@@ -30,8 +30,9 @@
 #include "../jrd/ods.h"
 #include "../jrd/btn.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird::Jrd::Ods;
+namespace Firebird::Jrd
+{
+
 
 USHORT IndexNode::computePrefix(const UCHAR* prevString, USHORT prevLength,
 								const UCHAR* string, USHORT length)
@@ -66,7 +67,7 @@ USHORT IndexNode::computePrefix(const UCHAR* prevString, USHORT prevLength,
 }
 
 
-SLONG IndexNode::findPageInDuplicates(const btree_page* page, UCHAR* pointer,
+SLONG IndexNode::findPageInDuplicates(const Ods::btree_page* page, UCHAR* pointer,
 									  SLONG previousNumber, RecordNumber findRecordNumber)
 {
 /**************************************
@@ -629,3 +630,6 @@ UCHAR* IndexNode::writeNode(UCHAR* pagePointer, bool leafNode, bool withData)
 
 	return pagePointer;
 }
+
+
+}	// namespace Firebird::Jrd

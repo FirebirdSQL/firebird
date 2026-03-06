@@ -73,7 +73,7 @@ public:
 	bool PopRpb(record_param* value, int Level);
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	//JRD_RPB_CHAIN_H
 

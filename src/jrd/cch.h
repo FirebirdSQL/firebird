@@ -380,6 +380,6 @@ inline constexpr int PRF_active = 1;		// prefetch block currently in use
 typedef Firebird::SortedArray<SLONG, Firebird::InlineStorage<SLONG, 256>, SLONG> PagesArray;
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_CCH_H

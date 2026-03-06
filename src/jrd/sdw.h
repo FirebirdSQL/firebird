@@ -58,6 +58,6 @@ inline constexpr USHORT SDW_conditional	= 64;	// shadow to be used if another sh
 inline constexpr USHORT SDW_INVALID	= (SDW_shutdown | SDW_delete | SDW_rollover | SDW_conditional);
 inline constexpr USHORT SDW_IGNORE	= (SDW_shutdown | SDW_delete);
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SDW_H

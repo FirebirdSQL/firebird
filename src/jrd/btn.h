@@ -33,7 +33,9 @@
 #include "../jrd/ods.h"
 #include "../common/classes/array.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
+
 
 // Flags (3-bits) used for index node
 inline constexpr int BTN_NORMAL_FLAG					= 0;
@@ -275,6 +277,7 @@ struct IndexJumpNode
 	UCHAR* readJumpNode(UCHAR* pagePointer);
 	UCHAR* writeJumpNode(UCHAR* pagePointer);
 };
+
 
 } // namespace Firebird::Jrd
 

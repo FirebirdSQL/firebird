@@ -394,6 +394,6 @@ struct udf_blob
 	SLONG (*blob_seek) (blb*, USHORT, SLONG);
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_VAL_H

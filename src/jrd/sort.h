@@ -436,6 +436,6 @@ private:
 	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SORT_H

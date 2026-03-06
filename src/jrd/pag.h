@@ -323,6 +323,6 @@ const PageNumber HEADER_PAGE_NUMBER(DB_PAGE_SPACE, HEADER_PAGE);
 
 typedef Firebird::Stack<PageNumber> PageStack;
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PAG_H

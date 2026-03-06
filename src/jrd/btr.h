@@ -591,6 +591,6 @@ private:
 	USHORT m_segno = MAX_USHORT;
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_BTR_H

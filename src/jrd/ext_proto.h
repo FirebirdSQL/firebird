@@ -93,6 +93,6 @@ const USHORT EXT_readonly	= 1;	// File could only be opened for read
 const USHORT EXT_last_read	= 2;	// last operation was read
 const USHORT EXT_last_write	= 4;	// last operation was write
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_EXT_PROTO_H

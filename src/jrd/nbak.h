@@ -546,6 +546,6 @@ private:
 };
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif /* JRD_NBAK_H */

@@ -428,6 +428,6 @@ private:
 #endif
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SVC_H

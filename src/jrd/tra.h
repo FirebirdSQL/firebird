@@ -550,6 +550,6 @@ enum dfw_t : int {
 	dfw_set_statistics		// set statistics support
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_TRA_H

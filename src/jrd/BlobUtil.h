@@ -30,7 +30,8 @@
 #include "../common/status.h"
 #include "../jrd/SystemPackages.h"
 
-namespace Firebird::Jrd {
+namespace Firebird::Jrd
+{
 
 
 class BlobUtilPackage : public SystemPackage
@@ -122,6 +123,6 @@ private:
 };
 
 
-}	// namespace
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_BLOB_UTIL_H

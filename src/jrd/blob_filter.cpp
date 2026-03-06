@@ -43,8 +43,9 @@
 #include "../common/isc_s_proto.h"
 #include "iberror.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // System provided internal filters for filtering internal
 // subtypes to text.
@@ -453,3 +454,5 @@ static void open_blob(thread_db* tdbb,
 	}
 }
 
+
+}	// namespace Firebird::Jrd

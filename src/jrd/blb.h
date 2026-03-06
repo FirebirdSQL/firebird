@@ -255,7 +255,7 @@ inline USHORT blb::getMaxSegment() const
 }
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 
 namespace Firebird {

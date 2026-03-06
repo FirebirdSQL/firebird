@@ -573,7 +573,7 @@ inline constexpr ULONG req_reserved			= 0x400L;		// Request reserved for client
 inline constexpr ULONG req_update_conflict	= 0x800L;		// We need to restart request due to update conflict
 inline constexpr ULONG req_restart_ready	= 0x1000L;		// Request is ready to restart in case of update conflict
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 namespace Firebird
 {

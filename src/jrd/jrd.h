@@ -281,7 +281,7 @@ inline char* stringDup(MemoryPool& p, const char* s)
 // Used in string conversion calls
 typedef Firebird::HalfStaticArray<UCHAR, 256> MoveBuffer;
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 inline bool JRD_reschedule(Jrd::thread_db* tdbb, bool force = false)
 {

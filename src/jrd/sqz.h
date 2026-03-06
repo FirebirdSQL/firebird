@@ -95,6 +95,6 @@ namespace Firebird::Jrd {
 		UCHAR m_differences[MAX_DIFFERENCES];
 	};
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SQZ_H

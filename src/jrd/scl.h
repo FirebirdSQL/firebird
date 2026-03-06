@@ -395,6 +395,6 @@ private:
 };
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SCL_H

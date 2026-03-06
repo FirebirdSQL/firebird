@@ -25,8 +25,8 @@
 #include "../jrd/blb.h"
 #include "../jrd/tra.h"
 
-using namespace Firebird::Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -59,7 +59,6 @@ namespace
 	}
 }
 
-namespace Firebird::Jrd {
 
 //--------------------------------------
 
@@ -290,5 +289,6 @@ BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
 	)
 {
 }
+
 
 }	// namespace Firebird::Jrd

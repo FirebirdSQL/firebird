@@ -65,7 +65,7 @@ struct gen
 	USHORT			gen_ods_version;
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 /* generators needed by the system triggers */
 // Keep in sync with constants.h
