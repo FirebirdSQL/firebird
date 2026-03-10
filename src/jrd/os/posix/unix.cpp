@@ -533,7 +533,7 @@ bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 	const auto dbb = tdbb->getDatabase();
 
 	unsigned i;
-	SINT64 bytes;
+	SINT64 bytes = 0;
 
 	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* const file = pageSpace->file;

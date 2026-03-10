@@ -767,7 +767,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
  *
  **************************************/
 
-	SLONG l1, l2;
+	SLONG l1 = NULL, l2 = NULL;
 	int ret_val = 0;
 
 	thread_db* tdbb = NULL;
@@ -973,6 +973,7 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
  **************************************/
 	UCHAR* from_buf;
 	USHORT from_len;
+
 	TTypeId from_interp;
 
 	fb_assert(desc != NULL);

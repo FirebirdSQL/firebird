@@ -523,7 +523,7 @@ BlockNode* BlockNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
 {
 	jrd_tra* transaction = request->req_transaction;
-	SavNumber savNumber;
+	SavNumber savNumber = 0;
 
 	switch (request->req_operation)
 	{
@@ -2494,7 +2494,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream;
+	StreamType parentStream = 0;
 
 	for (;;)
 	{
@@ -5173,7 +5173,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		inputStart = dsqlScratch->variables.getCount();
 		dsqlScratch->genParameters(parameters, returns);
-		returnsPos = dsqlScratch->variables.getCount() - dsqlScratch->outputVariables.getCount();
 	}
 
 	if (parameters.hasData())
@@ -5188,6 +5187,8 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		// This validation is needed only for subroutines. Standard EXECUTE BLOCK moves input
 		// parameters to variables and are then validated.
+		// Number of input parameters to validate (total variables minus output variables)
+		const unsigned returnsPos = dsqlScratch->variables.getCount() - dsqlScratch->outputVariables.getCount();
 
 		for (unsigned i = inputStart; i < returnsPos; ++i)
 		{
@@ -8035,7 +8036,7 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream, parentNewStream;
+	StreamType parentStream = 0, parentNewStream = 0;
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
@@ -9090,7 +9091,7 @@ bool StoreNode::pass1Store(thread_db* tdbb, CompilerScratch* csb, StoreNode* nod
 
 	jrd_rel* parent = NULL;
 	jrd_rel* view = NULL;
-	StreamType parentStream;
+	StreamType parentStream = 0;
 
 	// To support nested views, loop until we hit a table or a view with user-defined triggers
 	// (which means no update).
@@ -12437,7 +12438,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 		if (i->boolean->execute(tdbb, request) == TriState(false))
 		{
 			// Validation error -- report result
-			const char* value;
+			const char* value = nullptr;
 			VaryStr<TEMP_STR_LENGTH> temp;
 
 			const dsc* desc = EVL_expr(tdbb, request, i->value);
@@ -12449,6 +12450,7 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 			else if (!length)
 				value = "";
 			else
+				fb_assert(value);
 				const_cast<char*>(value)[length] = 0;	// safe cast - data is actually on the stack
 
 			string name;

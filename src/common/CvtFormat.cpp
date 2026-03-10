@@ -1347,7 +1347,7 @@ namespace
 					break;
 			}
 			if (strOffset >= strLength)
-				cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr.data()));
+				cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr.data(), it->patternStr.length()));
 
 			std::string_view patternStr = it->patternStr;
 

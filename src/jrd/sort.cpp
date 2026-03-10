@@ -417,7 +417,6 @@ void Sort::sort(thread_db* tdbb)
  **************************************/
 	run_control* run;
 	merge_control* merge;
-	merge_control* merge_pool;
 
 	try
 	{
@@ -488,56 +487,56 @@ void Sort::sort(thread_db* tdbb)
 		{
 			fb_assert(!m_merge_pool);	// shouldn't have a pool
 			m_merge_pool = FB_NEW_POOL(m_owner->getPool()) merge_control[count - 1];
-			merge_pool = m_merge_pool;
+			merge_control* merge_pool = m_merge_pool;
 			memset(merge_pool, 0, (count - 1) * sizeof(merge_control));
+
+			// Each pass through the vector builds a level of the merge tree
+			// by condensing two runs into one.
+			// We will continue to make passes until there is a single item.
+			//
+			// See also kissing cousin of this loop in mergeRuns()
+
+			while (count > 1)
+			{
+				run_merge_hdr** m2 = m1 = streams;
+
+				// "m1" is used to sequence through the runs being merged,
+				// while "m2" points at the new merged run
+
+				while (count >= 2)
+				{
+					merge = merge_pool++;
+					merge->mrg_header.rmh_type = RMH_TYPE_MRG;
+
+					// garbage watch
+					fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
+
+					(*m1)->rmh_parent = merge;
+					merge->mrg_stream_a = *m1++;
+
+					// garbage watch
+					fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
+
+					(*m1)->rmh_parent = merge;
+					merge->mrg_stream_b = *m1++;
+
+					merge->mrg_record_a = NULL;
+					merge->mrg_record_b = NULL;
+
+					*m2++ = (run_merge_hdr*) merge;
+					count -= 2;
+				}
+
+				if (count)
+					*m2++ = *m1++;
+				count = m2 - streams;
+			}
 		}
 		else
 		{
 			// Merge of 1 or 0 runs doesn't make sense
 			fb_assert(false);				// We really shouldn't get here
 			merge = (merge_control*) *streams;	// But if we do...
-		}
-
-		// Each pass through the vector builds a level of the merge tree
-		// by condensing two runs into one.
-		// We will continue to make passes until there is a single item.
-		//
-		// See also kissing cousin of this loop in mergeRuns()
-
-		while (count > 1)
-		{
-			run_merge_hdr** m2 = m1 = streams;
-
-			// "m1" is used to sequence through the runs being merged,
-			// while "m2" points at the new merged run
-
-			while (count >= 2)
-			{
-				merge = merge_pool++;
-				merge->mrg_header.rmh_type = RMH_TYPE_MRG;
-
-				// garbage watch
-				fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
-
-				(*m1)->rmh_parent = merge;
-				merge->mrg_stream_a = *m1++;
-
-				// garbage watch
-				fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
-
-				(*m1)->rmh_parent = merge;
-				merge->mrg_stream_b = *m1++;
-
-				merge->mrg_record_a = NULL;
-				merge->mrg_record_b = NULL;
-
-				*m2++ = (run_merge_hdr*) merge;
-				count -= 2;
-			}
-
-			if (count)
-				*m2++ = *m1++;
-			count = m2 - streams;
 		}
 
 		streams.reset();

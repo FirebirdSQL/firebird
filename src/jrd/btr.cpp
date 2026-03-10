@@ -2907,15 +2907,13 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	}
 
 	UCHAR* desc = 0;
-	USHORT len, space;
+	const USHORT len = idx->idx_count * sizeof(irtd);
+	USHORT space = dbb->dbb_page_size;
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
 
 	for (int retry = 0; retry < 2; ++retry)
 	{
-		len = idx->idx_count * sizeof(irtd);
-
-		space = dbb->dbb_page_size;
 		slot = NULL;
 
 		end = root->irt_rpt + root->irt_count;
@@ -2950,6 +2948,8 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 		}
 		else
 			break;
+
+		space = dbb->dbb_page_size;
 	}
 
 	// If we didn't pick up an empty slot, allocate a new one
@@ -3410,8 +3410,8 @@ static void compress(thread_db* tdbb,
 
 	bool first_key = true;
 	VaryStr<MAX_KEY * 4> buffer;
-	size_t multiKeyLength;
-	UCHAR* ptr;
+	size_t multiKeyLength = 0;
+	UCHAR* ptr = nullptr;
 	UCHAR* p = key->key_data;
 	SSHORT scale = matchScale ? matchScale : desc->dsc_scale;
 
@@ -3423,7 +3423,7 @@ static void compress(thread_db* tdbb,
 
 		do
 		{
-			size_t length;
+			size_t length = 0;
 
 			has_next = false;
 
@@ -6400,7 +6400,7 @@ static ULONG insert_node(thread_db* tdbb,
 	// For checking on duplicate nodes we should find the first matching key.
 	UCHAR* pointer = find_node_start_point(bucket, key, 0, &prefix,
 						idx->idx_flags & idx_descending,
-						false, true, validateDuplicates ? NO_VALUE : newRecordNumber);
+						0, true, validateDuplicates ? NO_VALUE : newRecordNumber);
 	if (!pointer)
 		return NO_VALUE_PAGE;
 
@@ -7207,8 +7207,8 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 	UCHAR* pointer;
 	USHORT prefix;
 	while (!(pointer = find_node_start_point(page, key, 0, &prefix,
-			(idx->idx_flags & idx_descending),
-			false, false,
+			idx->idx_flags & idx_descending,
+			0, false,
 			(validateDuplicates ? NO_VALUE : insertion->iib_number))))
 	{
 		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);

@@ -5543,10 +5543,10 @@ void ISQL_get_version(bool call_by_create_db)
 		switch (item)
 		{
 		case isc_info_ods_version:
-			isqlGlob.major_ods = p.getInt();
+			isqlGlob.major_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_ods_minor_version:
-			isqlGlob.minor_ods = p.getInt();
+			isqlGlob.minor_ods = static_cast<USHORT>(p.getInt());
 			break;
 		case isc_info_db_sql_dialect:
 			global_dialect_spoken = p.getInt();
@@ -5555,10 +5555,11 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5 && setValues.Warnings)
 				{
 					isqlGlob.printf(NEWLINE);
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					[[maybe_unused]] auto result = snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: Pre IB V6 database only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
+					fb_assert(result >= 0);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -5584,9 +5585,10 @@ void ISQL_get_version(bool call_by_create_db)
 				{
 					print_warning = false;
 					isqlGlob.printf(NEWLINE);
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					[[maybe_unused]] auto result = snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: This database speaks SQL dialect %d but Client SQL dialect was "
 						"set to %d .\n", global_dialect_spoken, isqlGlob.SQL_dialect);
+					fb_assert(result >= 0);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -5603,17 +5605,21 @@ void ISQL_get_version(bool call_by_create_db)
 			{
 				isqlGlob.printf(NEWLINE);
 				if (call_by_create_db)
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+				{
+					[[maybe_unused]] auto result = snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"WARNING: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
+					fb_assert(result >= 0);
+				}
 				else
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					[[maybe_unused]] auto result = snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
+					fb_assert(result >= 0);
 				}
 				isqlGlob.prints(bad_dialect_buf);
 			}
@@ -5622,10 +5628,11 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect == 0)
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+					[[maybe_unused]] auto result = snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
 						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
 						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
 						isqlGlob.SQL_dialect);
+					fb_assert(result >= 0);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -6153,13 +6160,16 @@ static bool printUser(const char* dbName)
 			continue;
 
 		string txt;
-		switch(v.type & ~1)
+		switch (v.type & ~1)
 		{
 		case SQL_TEXT:
 			txt.assign(v.value.asChar, v.length);
 			break;
 		case SQL_VARYING:
 			txt.assign(v.value.asVary->vary_string, v.value.asVary->vary_length);
+			break;
+		default:
+			fb_assert(false);
 			break;
 		}
 
@@ -6486,7 +6496,10 @@ static processing_state newoutput(const TEXT* outfile)
 		if (fp)
 		{
 			if (isqlGlob.Out && isqlGlob.Out != stdout)
-				fclose(isqlGlob.Out);
+			{
+				[[maybe_unused]] auto result = fclose(isqlGlob.Out);
+				fb_assert(result == 0);
+			}
 			isqlGlob.Out = fp;
 			if (Merge_stderr)
 				isqlGlob.Errfp = isqlGlob.Out;
@@ -6506,7 +6519,8 @@ static processing_state newoutput(const TEXT* outfile)
 		// Revert to stdout
 		if (isqlGlob.Out != stdout)
 		{
-			fclose(isqlGlob.Out);
+			[[maybe_unused]] auto result = fclose(isqlGlob.Out);
+			fb_assert(result == 0);
 			isqlGlob.Out = stdout;
 			if (Merge_stderr)
 				isqlGlob.Errfp = isqlGlob.Out;
@@ -6645,7 +6659,7 @@ static processing_state newtrans(const TEXT* statement)
 }
 
 
-static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& tabname)
+static processing_state parse_arg(int argc, SCHAR** argv, [[maybe_unused]] QualifiedMetaString& tabname)
 //	, FILE** sess) Last param was for wisql
 {
 /**************************************
@@ -6976,7 +6990,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& t
 					break;
 
 				case IN_SW_ISQL_SQLDIALECT:
-					requested_SQL_dialect = swarg_int;
+					requested_SQL_dialect = static_cast<USHORT>(swarg_int);
 					if (requested_SQL_dialect < SQL_DIALECT_V5 ||
 						requested_SQL_dialect > SQL_DIALECT_CURRENT)
 					{
@@ -7077,7 +7091,8 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
 	// produce of the value, and that the available buffer is at least 2 bytes longer for
 	// a space (column separator) and nul-termination.
 	const size_t bufSize = static_cast<size_t>(length) + 2;
-	snprintf(p, bufSize, "%*.*s ", length, length, t);
+	[[maybe_unused]] auto result = snprintf(p, bufSize, "%*.*s ", length, length, t);
+	fb_assert(result >= 0);
 
 	return true;
 }
@@ -7120,9 +7135,15 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 		}
 
 		if (dtype == SQL_TEXT || dtype == SQL_VARYING || dtype == SQL_BOOLEAN)
-			snprintf(p, bufSize, "%-*.*s ", length, length, "<null>");
+		{
+			[[maybe_unused]] auto result = snprintf(p, bufSize, "%-*.*s ", length, length, "<null>");
+			fb_assert(result >= 0);
+		}
 		else
-			snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
+		{
+			[[maybe_unused]] auto result = snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
+			fb_assert(result >= 0);
+		}
 	}
 	else if (!strncmp(var->field, "DB_KEY", 6))
 	{
@@ -7137,7 +7158,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			}
 			else
 			{
-				snprintf(d, sizeof(d), "%02X", (unsigned int)(UCHAR)*t);
+				[[maybe_unused]] auto result = snprintf(d, sizeof(d), "%02X", (unsigned int)(UCHAR)*t);
+				fb_assert(result >= 0);
 				strcat(p, d);
 			}
 		}
@@ -7156,28 +7178,36 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 		switch (dtype)
 		{
 		case SQL_ARRAY:
+			{
 
-			// Print blob-ids only here
+				// Print blob-ids only here
 
-			blobid = var->value.blobid;
-			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
-			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
+				blobid = var->value.blobid;
+				[[maybe_unused]] auto result = snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+					static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
+				fb_assert(result >= 0);
+				result = snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
+				fb_assert(result >= 0);
+			}
 			break;
 
 		case SQL_BLOB:
-
-			// Print blob-ids only here
-
-			blobid = var->value.blobid;
-			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
-				blobid->gds_quad_high, blobid->gds_quad_low);
-			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
-			if (setValues.List)
 			{
-				isqlGlob.printf("%s%s", blobbuf, NEWLINE);
-				dtype = ISQL_print_item_blob(isqlGlob.Out, var, M__trans, setValues.Doblob);
-				isqlGlob.printf(NEWLINE);
+
+				// Print blob-ids only here
+
+				blobid = var->value.blobid;
+				[[maybe_unused]] auto result = snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+					static_cast<ISC_ULONG>(blobid->gds_quad_high), blobid->gds_quad_low);
+				fb_assert(result >= 0);
+				result = snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
+				fb_assert(result >= 0);
+				if (setValues.List)
+				{
+					isqlGlob.printf("%s%s", blobbuf, NEWLINE);
+					dtype = ISQL_print_item_blob(isqlGlob.Out, var, M__trans, setValues.Doblob);
+					isqlGlob.printf(NEWLINE);
+				}
 			}
 			break;
 
@@ -7198,11 +7228,15 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				case SQL_INT64:
 					value = *var->value.asBigint;
 					break;
+				default:
+					fb_assert(false);
+					break;
 				}
 
 				string str_buf;
 				print_item_numeric(value, length, dscale, str_buf.getBuffer(length));
-				snprintf(p, bufSize, "%s ", str_buf.c_str());
+				[[maybe_unused]] auto result = snprintf(p, bufSize, "%s ", str_buf.c_str());
+				fb_assert(result >= 0);
 				if (setValues.List)
 				{
 					str_buf.ltrim(); // Added 1999-03-23 to left-justify in LIST ON mode
@@ -7219,7 +7253,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				// one digit more than the specified precision when the value is 0
 				// The bug appears in TCS DSQL_DOMAIN_12 and 13
 				//
-				const double value = *var->value.asFloat;
+				const double value = static_cast<double>(*var->value.asFloat);
 
 				if (checkSpecial(p, length, value))
 				{
@@ -7229,20 +7263,26 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 #if defined(MINGW)
 				if (value == 0)
 				{
-					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6 -1, value, NEWLINE);
 					}
 				}
 				else
 				{
-					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					fb_assert(res >= 0);
+					
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 					}
 				}
 #else
-				snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+				[[maybe_unused]] auto res = snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+			    fb_assert(res >= 0);
+					
 				if (setValues.List) {
 					isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 				}
@@ -7262,7 +7302,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				// Don't let numeric/decimal doubles overflow print length
 				// Special handling for 0 -- don't test log for length
 				unsigned rounded = 0;
-				if (dscale && (!value ||
+				if (dscale && (value == 0 ||
 					(rounded = static_cast<unsigned int>(ceil(fabs(log10(fabs(value)))))) < length - 10))
 				{
 					unsigned precision = 0;

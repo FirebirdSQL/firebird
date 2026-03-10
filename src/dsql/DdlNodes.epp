@@ -216,7 +216,8 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 {
 	AutoCacheRequest request(tdbb, drq_l_rel_info, DYN_REQUESTS);
 	QualifiedName masterRelName;
-	rel_t masterType, childType;
+	rel_t masterType = rel_persistent;
+	rel_t childType = rel_persistent;
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC_M IN RDB$RELATION_CONSTRAINTS CROSS
@@ -402,7 +403,7 @@ void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode* relati
 	// Save the size of the field if it is specified.
 	dsc saveDesc;
 	saveDesc.dsc_dtype = 0;
-	bool saveCharSetIdSpecified;
+	bool saveCharSetIdSpecified = false;
 
 	if (field && field->dtype)
 	{

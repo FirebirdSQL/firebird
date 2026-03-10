@@ -579,7 +579,7 @@ void INTL_convert_string(dsc* to, const dsc* from, Firebird::Callbacks* cb)
 		reinterpret_cast<UCHAR*>(((vary*) p)->vary_string) :
 		p;
 
-	ULONG to_fill;
+	ULONG to_fill = 0;
 
 	if (from_cs != to_cs && to_cs != CS_BINARY && to_cs != CS_NONE && from_cs != CS_NONE)
 	{

@@ -190,7 +190,7 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 	// on the right.
 
 	// ANY/ALL select node pointer
-	const BoolExprNode* select_node;
+	const BoolExprNode* select_node = nullptr;
 
 	// ANY/ALL column node pointer
 	const BoolExprNode* column_node = m_anyBoolean;
@@ -206,8 +206,6 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 			select_node = booleanNode->arg1;
 			column_node = booleanNode->arg2;
 		}
-		else
-			select_node = NULL;
 	}
 
 	if (column_node && m_ansiAny)

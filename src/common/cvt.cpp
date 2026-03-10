@@ -1433,7 +1433,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
  *      Convert something arbitrary to a double precision number
  *
  **************************************/
-	double value;
+	double value = 0.0;
 
 	switch (desc->dsc_dtype)
 	{

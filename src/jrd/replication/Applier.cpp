@@ -990,10 +990,12 @@ void Applier::storeBlob(thread_db* tdbb, TraNumber traNum, bid* blobId,
 	fb_assert(blob->blb_flags & BLB_temporary);
 	fb_assert(!(blob->blb_flags & BLB_closed));
 
-	if (length)
-		blob->BLB_put_segment(tdbb, data, length);
-	else
-		blob->BLB_close(tdbb);
+	if (blob){
+		if (length)
+			blob->BLB_put_segment(tdbb, data, length);
+		else
+			blob->BLB_close(tdbb);
+	}
 }
 
 void Applier::executeSql(thread_db* tdbb,

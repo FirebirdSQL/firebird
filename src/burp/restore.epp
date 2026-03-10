@@ -1602,7 +1602,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
 
 	ULONG length = 0;
 	UCHAR item;
-	USHORT max_segment;
+	USHORT max_segment = 0;
 	ULONG num_segments;
 	const UCHAR* p = blob_info;
 
@@ -1777,7 +1777,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG		fld_ranges[2 * MAX_DIMENSION];
 	SLONG       slice_length = 0;
 	SLONG       *range;
-	const SLONG* end_ranges;
+	const SLONG* end_ranges = nullptr;
 	scan_attr_t scan_next_attr;
 	skip_init(&scan_next_attr);
 	att_type	attribute;
@@ -1843,7 +1843,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG last_element_dim[MAX_DIMENSION];
 	if (return_length != slice_length)
 	{
-		int upper, lower;
+		int upper = 0, lower = 0;
 		//
 		// Ugh!  The full array wasn't returned and versions of gbak prior to
 		// V3.2I don't explicitly signal this.  We must recompute the top
@@ -3375,7 +3375,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 					}
 				}
 
-				UCHAR* p;
+				UCHAR* p = nullptr;
 				if (tdgbl->gbl_sw_transportable)
 				{
 					if (get(tdgbl) != att_xdr_length)
@@ -9078,7 +9078,7 @@ bool get_db_creator(BurpGlobals* tdgbl)
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
 	TEXT			usr[GDS_NAME_LEN];
-	SSHORT			uType;
+	SSHORT			uType = 0;
 	bool			userSet, typeSet;
 
 	userSet = typeSet = false;
@@ -9401,7 +9401,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
  *	Get a trigger definition for a relation.
  *
  **************************************/
-	enum trig_t	type;
+	enum trig_t	type = trig_none;
 	att_type	attribute;
 	TEXT		name[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;

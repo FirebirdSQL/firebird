@@ -1069,6 +1069,9 @@ static Lock* hash_get_lock(Lock* lock, USHORT* hash_slot, Lock*** prior)
 
 	// if no collisions found, we're done
 
+	if (!att->att_compatibility_table)
+		return NULL;
+
 	Lock* match = (*att->att_compatibility_table)[hash_value];
 	if (!match)
 		return NULL;
@@ -1353,6 +1356,9 @@ static USHORT internal_downgrade(thread_db* tdbb, CheckStatusWrapper* statusVect
 
 	// if we can convert to that level, set all identical locks as having that level
 
+	if (!first || !first->lck_physical)
+		return NULL;
+	
 	if (level < first->lck_physical)
 	{
 		if (dbb->lockManager()->convert(LockManagerEngineCallbacks(tdbb), statusVector,

@@ -144,7 +144,7 @@ void INF_blob_info(const blb* blob,
 	CHECK_INPUT("INF_blob_info");
 
 	UCHAR buffer[BUFFER_TINY];
-	USHORT length;
+	USHORT length = 0;
 
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
@@ -256,6 +256,7 @@ void INF_database_info(thread_db* tdbb,
 
 	HalfStaticArray<UCHAR, BUFFER_SMALL> resultBuffer;
 
+
 	const auto dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 	const auto attachment = tdbb->getAttachment();
@@ -294,7 +295,7 @@ void INF_database_info(thread_db* tdbb,
 	};
 
 	UCHAR* buffer = resultBuffer.getBuffer(BUFFER_SMALL, false);
-	ULONG length, err_val;
+	ULONG length = 0, err_val = 0;
 	bool headerRefreshed = false;
 
 	auto refreshHeader = [&]()
@@ -755,7 +756,7 @@ void INF_database_info(thread_db* tdbb,
 		case fb_info_page_contents:
 			{
 				bool validArgs = false;
-				ULONG pageNum;
+				ULONG pageNum = 0;
 
 				if (end_items - items >= 2)
 				{
@@ -1185,7 +1186,7 @@ void INF_transaction_info(const jrd_tra* transaction,
 	CHECK_INPUT("INF_transaction_info");
 
 	UCHAR buffer[MAXPATHLEN];
-	ULONG length;
+	ULONG length = 0;
 
 	const UCHAR* const end_items = items + item_length;
 	const UCHAR* const end = info + output_length;
