@@ -1937,7 +1937,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 		// second pass
 		if (alterIndividualParameters)
-			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, !altered, true, false);
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true, false);
 		else
 			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
@@ -3012,7 +3012,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 
 		// second pass
 		if (alterIndividualParameters)
-			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, !altered, true, false);
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true, false);
 		else
 			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
