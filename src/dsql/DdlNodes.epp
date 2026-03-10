@@ -1902,7 +1902,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	// first pass
 	if (alterIndividualParameters)
 	{
-		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, false, true))
+		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
 			altered = true;
 		else
 			status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
@@ -1937,7 +1937,7 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 		// second pass
 		if (alterIndividualParameters)
-			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true, false);
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
 		else
 			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
@@ -2271,7 +2271,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 }
 
 bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool secondPass, bool runTriggers)
 {
 	const auto attachment = transaction->getAttachment();
 
@@ -2296,9 +2296,6 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_FUNCTION, name, {});
 
 		id = FUN.RDB$FUNCTION_ID;
-
-		// Avoid modify routine dfw when execute CREATE
-		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY FUN
 			if (deterministic.isAssigned())
@@ -2977,7 +2974,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	// first pass
 	if (alterIndividualParameters)
 	{
-		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, false, true))
+		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
 			altered = true;
 		else
 			status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
@@ -3012,7 +3009,7 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 
 		// second pass
 		if (alterIndividualParameters)
-			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true, false);
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
 		else
 			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
@@ -3321,7 +3318,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 }
 
 bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool secondPass, bool runTriggers)
 {
 	const auto attachment = transaction->getAttachment();
 
@@ -3346,9 +3343,6 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_PROCEDURE, name, {});
 
 		id = P.RDB$PROCEDURE_ID;
-
-		// Avoid modify routine dfw when execute CREATE
-		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY P
 			if (ssDefiner.has_value())
