@@ -577,11 +577,7 @@ int main(int argc, char* argv[])
 			sw_lines = false;
 			gpreGlob.sw_cstring = false;
 			gen_routine = FTN_action;
-#ifdef __sun
-			comment_start = "*      ";
-#else
 			comment_start = "C      ";
-#endif
 			comment_stop = " ";
 
 			// Change the patterns for v4.0
@@ -2488,8 +2484,8 @@ static void pass2( SLONG start_position)
 	SLONG current = 1 + start_position;
 	SLONG column = 0;
 
-	const SSHORT comment_start_len = static_cast<SSHORT>(strlen(comment_start));
 #if defined(GPRE_COBOL)
+	const SSHORT comment_start_len = static_cast<SSHORT>(strlen(comment_start));
 	SSHORT to_skip = 0;
 #endif
 

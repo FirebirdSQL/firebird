@@ -1843,7 +1843,6 @@ void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarnin
 		return;
 
 	BurpMaster master;
-	BurpGlobals* tdgbl = master.get();
 
 	// print the warning message
 	SCHAR s[1024];

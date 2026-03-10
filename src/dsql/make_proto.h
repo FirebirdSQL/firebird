@@ -27,6 +27,7 @@
 #define DSQL_MAKE_PROTO_H
 
 #include "../dsql/sym.h"
+#include "../jrd/intl.h"
 
 namespace Jrd {
 	class dsql_ctx;
@@ -72,8 +73,8 @@ namespace Jrd {
 								SSHORT scale,
 								SSHORT subType,
 								FLD_LENGTH length,
-								const SSHORT charsetId,
-								SSHORT collationId,
+								const CSetId charsetId,
+								CollId collationId,
 								bool nullable);
 	};
 }
@@ -82,7 +83,7 @@ namespace Jrd {
 Jrd::LiteralNode* MAKE_const_slong(SLONG);
 Jrd::LiteralNode* MAKE_const_sint64(SINT64 value, SCHAR scale);
 Jrd::ValueExprNode* MAKE_constant(const char*, Jrd::dsql_constant_type, SSHORT = 0);
-Jrd::LiteralNode* MAKE_str_constant(Jrd::IntlString*, SSHORT);
+Jrd::LiteralNode* MAKE_str_constant(Jrd::IntlString*, CSetId);
 Jrd::FieldNode* MAKE_field(Jrd::dsql_ctx*, Jrd::dsql_fld*, Jrd::ValueListNode*);
 void MAKE_field(Jrd::dsql_fld*, const dsc*);
 Jrd::FieldNode* MAKE_field_name(const char*);

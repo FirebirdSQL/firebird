@@ -70,8 +70,9 @@ Start user trace session :
 		isc_action_svc_trace_start    
 
 	parameter(s)
-		isc_spb_trc_name : trace session name, string, optional
-		isc_spb_trc_cfg  : trace session configuration, string, mandatory
+		isc_spb_trc_name     : trace session name, string, optional
+		isc_spb_trc_cfg      : trace session configuration, string, mandatory
+		isc_spb_trc_plugins  : plugins for use with trace session, list of plugin names (valid separators: '\t', ',', ';'), optional
 
 	output
 		text message with status of operation :
@@ -130,10 +131,11 @@ List of existing trace sessions
 	output
 		text messages with list and state of trace sessions
 			- Session ID: <number>
-			-   name:  <string>
-			-   user:  <string>
-			-   date:  YYYY-MM-DD HH:NN:SS
-			-   flags: <string>
+			-   name:    <string>
+			-   user:    <string>
+			-   date:    YYYY-MM-DD HH:NN:SS
+			-   flags:   <string>
+			-   plugins: <string list>
 
 		"name" is trace session name and not printed if empty.
 		"user" is creator user name
@@ -144,7 +146,9 @@ List of existing trace sessions
 			if the session was created by the engine itself : "system"
 			kind of session : "audit" or "trace"
 			if user session log file is full : "log full"
-
+		"plugins" is a set of plugins for use with trace session
+			Plugins can be specified via API/tracemgr.
+			By default, plugins form the firebird.conf (TracePlugin) are used
 
 	Output of every service is obtained as usually using isc_service_query call
 with isc_info_svc_line or isc_info_svc_to_eof information items.

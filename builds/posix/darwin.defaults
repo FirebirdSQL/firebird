@@ -21,7 +21,7 @@
 #FirebirdInstallPrefix=
 LIB_BUNDLE_OPTIONS=$(LD_FLAGS) -bundle
 LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib
-LIB_LINK_SONAME:=-current_version @FIREBIRD_VERSION@ -compatibility_version @FIREBIRD_VERSION@ -seg1addr 0x30000000
+LIB_LINK_SONAME:=-current_version @FIREBIRD_VERSION@ -compatibility_version @FIREBIRD_VERSION@
 LIB_LINK_MAPFILE=-Wl,-exported_symbols_list,$(1)
 
 ADD_LIBS:=-lobjc -framework Foundation -framework Security

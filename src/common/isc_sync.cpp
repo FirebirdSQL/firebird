@@ -38,6 +38,7 @@
  */
 
 #include "firebird.h"
+#include <chrono>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -327,7 +328,7 @@ public:
 		else if (!guard.tryEnter())
 			return -1;
 
-		DEB_FLOCK("%d lock %p %c%c\n", Thread::getId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
+		DEB_FLOCK("%d lock %p %c%c\n", Thread::getCurrentThreadId(), this, shared ? 's' : 'X', wait ? 'W' : 't');
 
 		while (counter != 0)	// file lock belongs to our process
 		{
@@ -336,14 +337,14 @@ public:
 			{
 				// one more shared lock
 				++counter;
-				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 				return 0;
 			}
-			if ((!shared) && counter < 0 && threadId == Thread::getId())
+			if ((!shared) && counter < 0 && threadId == Thread::getCurrentThreadId())
 			{
 				// recursive excl lock
 				--counter;
-				DEB_FLOCK("%d fast %p c=%d\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d fast %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 				return 0;
 			}
 
@@ -351,11 +352,11 @@ public:
 			// wait for another thread to release a lock
 			if (!wait)
 			{
-				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getId(), this, counter);
+				DEB_FLOCK("%d failed internally %p c=%d rc -1\n", Thread::getCurrentThreadId(), this, counter);
 				return -1;
 			}
 
-			DEB_FLOCK("%d wait %p c=%d\n", Thread::getId(), this, counter);
+			DEB_FLOCK("%d wait %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 			waitOn.wait(mutex);
 		}
 
@@ -379,13 +380,13 @@ public:
 			if (!wait && (rc == EWOULDBLOCK))
 				rc = -1;
 #endif
-			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getId(), this, counter, rc);
+			DEB_FLOCK("%d failed on file %p c=%d rc %d\n", Thread::getCurrentThreadId(), this, counter, rc);
 			return rc;
 		}
 
 		if (!shared)
 		{
-			threadId = Thread::getId();
+			threadId = Thread::getCurrentThreadId();
 
 			// call init() when needed
 			if (init && !shared)
@@ -394,7 +395,7 @@ public:
 
 		// mark lock as taken
 		counter = shared ? 1 : -1;
-		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getId(), this, counter);
+		DEB_FLOCK("%d filelock %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 		return 0;
 	}
 
@@ -405,7 +406,7 @@ public:
 		MutexEnsureUnlock guard(mutex, FB_FUNCTION);
 		guard.enter();
 
-		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getId(), this, counter);
+		DEB_FLOCK("%d UNlock %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 
 		if (counter < 0)
 			++counter;
@@ -414,7 +415,7 @@ public:
 
 		if (counter != 0)
 		{
-			DEB_FLOCK("%d done %p c=%d\n", Thread::getId(), this, counter);
+			DEB_FLOCK("%d done %p c=%d\n", Thread::getCurrentThreadId(), this, counter);
 			return;
 		}
 
@@ -438,7 +439,7 @@ public:
 			iscLogStatus("Unlock error", &local);
 		}
 
-		DEB_FLOCK("%d file-done %p\n", Thread::getId(), this);
+		DEB_FLOCK("%d file-done %p\n", Thread::getCurrentThreadId(), this);
 		waitOn.notifyAll();
 	}
 
@@ -1249,12 +1250,38 @@ void SharedMemoryBase::internalUnmap()
 	}
 }
 
+
+ULONG SharedMemoryBase::getSystemPageSize(CheckStatusWrapper* statusVector)
+{
+	// Get system page size as this is the unit of mapping.
+
+#ifdef SOLARIS
+	const long ps = sysconf(_SC_PAGESIZE);
+	if (ps == -1)
+	{
+		error(statusVector, "sysconf", errno);
+		return 0;
+	}
+#else
+	const int ps = getpagesize();
+	if (ps == -1)
+	{
+		error(statusVector, "getpagesize", errno);
+		return 0;
+	}
+#endif
+	return ps;
+}
+
+
 SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback, bool skipLock)
 	:
 #ifdef HAVE_SHARED_MUTEX_SECTION
 	sh_mem_mutex(0),
 #endif
-	sh_mem_length_mapped(0), sh_mem_header(NULL),
+	sh_mem_length_mapped(0),
+	sh_mem_increment(0),
+	sh_mem_header(NULL),
 	sh_mem_callback(callback)
 {
 /**************************************
@@ -1284,6 +1311,14 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	TEXT init_filename[MAXPATHLEN];
 	iscPrefixLock(init_filename, INIT_FILE, true);
+
+	if (length)
+	{
+		sh_mem_increment = length = FB_ALIGN(length, getSystemPageSize(&statusVector));
+
+		if (statusVector.hasData())
+			status_exception::raise(&statusVector);
+	}
 
 	const bool trunc_flag = (length != 0);
 
@@ -1568,8 +1603,17 @@ void SharedMemoryBase::internalUnmap()
 		unlinkFile();
 }
 
+
+ULONG SharedMemoryBase::getSystemPageSize(CheckStatusWrapper* /*statusVector*/)
+{
+	SYSTEM_INFO sys_info;
+	GetSystemInfo(&sys_info);
+	return sys_info.dwAllocationGranularity;
+}
+
+
 SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb, bool /*skipLock*/)
-  :	sh_mem_mutex(0), sh_mem_length_mapped(0),
+  :	sh_mem_mutex(0), sh_mem_length_mapped(0), sh_mem_increment(0),
 	sh_mem_handle(INVALID_HANDLE_VALUE), sh_mem_object(0), sh_mem_interest(0), sh_mem_hdr_object(0),
 	sh_mem_hdr_address(0), sh_mem_header(NULL), sh_mem_callback(cb), sh_mem_unlink(false)
 {
@@ -1596,6 +1640,17 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	bool init_flag = false;
 	DWORD err = 0;
+
+	if (length)
+	{
+		LocalStatus ls;
+		CheckStatusWrapper statusVector(&ls);
+
+		sh_mem_increment = length = FB_ALIGN(length, getSystemPageSize(&statusVector));
+
+		if (statusVector.hasData())
+			status_exception::raise(&statusVector);
+	}
 
 	// retry to attach to mmapped file if the process initializing dies during initialization.
 
@@ -1924,24 +1979,9 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector, ULONG objec
  *
  **************************************/
 
-	// Get system page size as this is the unit of mapping.
-
-#ifdef SOLARIS
-	const long ps = sysconf(_SC_PAGESIZE);
-	if (ps == -1)
-	{
-		error(statusVector, "sysconf", errno);
+	const ULONG page_size = getSystemPageSize(statusVector);
+	if (!page_size)
 		return NULL;
-	}
-#else
-	const int ps = getpagesize();
-	if (ps == -1)
-	{
-		error(statusVector, "getpagesize", errno);
-		return NULL;
-	}
-#endif
-	const ULONG page_size = (ULONG) ps;
 
 	// Compute the start and end page-aligned offsets which contain the object being mapped.
 
@@ -1979,24 +2019,9 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector, UCHAR** obj
  *	Zero the object pointer after a successful unmap.
  *
  **************************************/
-	// Get system page size as this is the unit of mapping.
-
-#ifdef SOLARIS
-	const long ps = sysconf(_SC_PAGESIZE);
-	if (ps == -1)
-	{
-		error(statusVector, "sysconf", errno);
+	const size_t page_size = getSystemPageSize(statusVector);
+	if (!page_size)
 		return;
-	}
-#else
-	const int ps = getpagesize();
-	if (ps == -1)
-	{
-		error(statusVector, "getpagesize", errno);
-		return;
-	}
-#endif
-	const size_t page_size = (ULONG) ps;
 
 	// Compute the start and end page-aligned addresses which contain the mapped object.
 
@@ -2034,9 +2059,7 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector,
  *
  **************************************/
 
-	SYSTEM_INFO sys_info;
-	GetSystemInfo(&sys_info);
-	const ULONG page_size = sys_info.dwAllocationGranularity;
+	const ULONG page_size = getSystemPageSize(statusVector);
 
 	// Compute the start and end page-aligned offsets which
 	// contain the object being mapped.
@@ -2045,6 +2068,8 @@ UCHAR* SharedMemoryBase::mapObject(CheckStatusWrapper* statusVector,
 	const ULONG end = FB_ALIGN(object_offset + object_length, page_size);
 	const ULONG length = end - start;
 	const HANDLE handle = sh_mem_object;
+
+	fb_assert(end <= sh_mem_length_mapped);
 
 	UCHAR* address = (UCHAR*) MapViewOfFile(handle, FILE_MAP_WRITE, 0, start, length);
 
@@ -2074,9 +2099,7 @@ void SharedMemoryBase::unmapObject(CheckStatusWrapper* statusVector,
  *	Zero the object pointer after a successful unmap.
  *
  **************************************/
-	SYSTEM_INFO sys_info;
-	GetSystemInfo(&sys_info);
-	const size_t page_size = sys_info.dwAllocationGranularity;
+	const size_t page_size = getSystemPageSize(statusVector);
 
 	// Compute the start and end page-aligned offsets which
 	// contain the object being mapped.
@@ -2421,7 +2444,7 @@ void ISC_mutex_fini(struct mtx *mutex)
 }
 
 
-int ISC_mutex_lock(struct mtx* mutex)
+int ISC_mutex_lock(struct mtx* mutex, std::optional<std::chrono::milliseconds> timeout)
 {
 /**************************************
  *
@@ -2434,29 +2457,10 @@ int ISC_mutex_lock(struct mtx* mutex)
  *
  **************************************/
 
+	const DWORD dwTimeout = timeout.has_value() ? static_cast<DWORD>(timeout->count()) : INFINITE;
 	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, INFINITE) :
-			WaitForSingleObject(mutex->mtx_fast.hEvent, INFINITE);
-
-    return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
-}
-
-
-int ISC_mutex_lock_cond(struct mtx* mutex)
-{
-/**************************************
- *
- *	I S C _ m u t e x _ l o c k _ c o n d	( W I N _ N T )
- *
- **************************************
- *
- * Functional description
- *	Conditionally seize a mutex.
- *
- **************************************/
-
-	const DWORD status = (mutex->mtx_fast.lpSharedInfo) ?
-		enterFastMutex(&mutex->mtx_fast, 0) : WaitForSingleObject(mutex->mtx_fast.hEvent, 0L);
+		enterFastMutex(&mutex->mtx_fast, dwTimeout) :
+			WaitForSingleObject(mutex->mtx_fast.hEvent, dwTimeout);
 
     return (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) ? FB_SUCCESS : FB_FAILURE;
 }
@@ -2515,6 +2519,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector, ULONG new_len
 
 	if (flag)
 	{
+		new_length = FB_ALIGN(new_length, getSystemPageSize(statusVector));
+
 		FB_UNUSED(os_utils::ftruncate(mainLock->getFd(), new_length));
 
 		if (new_length > sh_mem_length_mapped)
@@ -2571,6 +2577,8 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 
 	if (flag)
 	{
+		new_length = FB_ALIGN(new_length, getSystemPageSize(statusVector));
+
 		LARGE_INTEGER offset;
 		offset.QuadPart = new_length;
 
@@ -2743,15 +2751,43 @@ static bool make_object_name(TEXT* buffer, size_t bufsize,
 #endif // WIN_NT
 
 
-void SharedMemoryBase::mutexLock()
+bool SharedMemoryBase::mutexLock(std::optional<std::chrono::milliseconds> timeout)
 {
 #if defined(WIN_NT)
 
-	int state = ISC_mutex_lock(sh_mem_mutex);
+	int state = ISC_mutex_lock(sh_mem_mutex, timeout);
 
 #else // POSIX SHARED MUTEX
 
-	int state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+	int state;
+
+	if (timeout.has_value())
+	{
+		if (timeout.value().count() == 0)
+			state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
+		else
+		{
+			const auto now = std::chrono::system_clock::now();
+			const auto deadline = now + timeout.value();
+			const auto deadlineDuration = deadline.time_since_epoch();
+			const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(deadlineDuration);
+			const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(deadlineDuration - seconds);
+
+			const timespec ts{
+				.tv_sec = (time_t) seconds.count(),
+				.tv_nsec = (long) nanoseconds.count()
+			};
+
+#ifdef HAVE_PTHREAD_MUTEX_TIMEDLOCK
+			state = pthread_mutex_timedlock(sh_mem_mutex->mtx_mutex, &ts);
+#else
+			state = pthread_mutex_timedlock_fallback(sh_mem_mutex->mtx_mutex, &ts);
+#endif
+		}
+	}
+	else
+		state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
+
 #ifdef USE_ROBUST_MUTEX
 	if (state == EOWNERDEAD)
 	{
@@ -2764,35 +2800,16 @@ void SharedMemoryBase::mutexLock()
 
 #endif // os-dependent choice
 
-	if (state != 0)
-	{
+	if (!timeout.has_value() && state != 0)
 		sh_mem_callback->mutexBug(state, "mutexLock");
-	}
+
+	return state == 0;
 }
 
 
-bool SharedMemoryBase::mutexLockCond()
+bool SharedMemoryBase::mutexTryLock()
 {
-#if defined(WIN_NT)
-
-	return ISC_mutex_lock_cond(sh_mem_mutex) == 0;
-
-#else // POSIX SHARED MUTEX
-
-	int state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
-#ifdef USE_ROBUST_MUTEX
-	if (state == EOWNERDEAD)
-	{
-		// We always perform check for dead process
-		// Therefore may safely mark mutex as recovered
-		LOG_PTHREAD_ERROR(pthread_mutex_consistent(sh_mem_mutex->mtx_mutex));
-		state = 0;
-	}
-#endif
-	return state == 0;
-
-#endif // os-dependent choice
-
+	return mutexLock(std::chrono::milliseconds(0));
 }
 
 

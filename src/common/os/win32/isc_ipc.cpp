@@ -67,15 +67,14 @@
 
 namespace {
 
-static int process_id		= 0;
-const int MAX_OPN_EVENTS	= 40;
+static int process_id = 0;
+constexpr int MAX_OPN_EVENTS = 40;
 
 class OpenEvents
 {
 public:
-	explicit OpenEvents(Firebird::MemoryPool&)
+	explicit OpenEvents(Firebird::MemoryPool&) noexcept
 	{
-		memset(&m_events, 0, sizeof(m_events));
 		m_count = 0;
 		m_clock = 0;
 	}
@@ -143,7 +142,7 @@ private:
 		FB_UINT64 age;
 	};
 
-	Item m_events[MAX_OPN_EVENTS];
+	Item m_events[MAX_OPN_EVENTS]{};
 	int m_count;
 	FB_UINT64 m_clock;
 	Firebird::Mutex m_mutex;

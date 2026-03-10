@@ -135,7 +135,6 @@ static const TEXT* global_status_name = 0;
 constexpr int INDENT = 3;
 
 static constexpr const char* NULL_STRING	= "NULL";
-static constexpr const char* NULL_STATUS	= "NULL";
 static constexpr const char* NULL_SQLDA		= "NULL";
 
 static constexpr const char* GDS_INCLUDE	= "<ibase.h>";

@@ -314,7 +314,8 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const auto subRsb = args[i];
 		fb_assert(subRsb);
 
-		m_cardinality *= subRsb->getCardinality();
+		if (m_joinType == JoinType::INNER || m_joinType == JoinType::OUTER)
+			m_cardinality *= subRsb->getCardinality();
 
 		SubStream sub;
 		sub.buffer = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, subRsb);
@@ -352,7 +353,10 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	}
 
 	if (!selectivity)
-		selectivity = pow(REDUCE_SELECTIVITY_FACTOR_EQUALITY, keyCount);
+	{
+		selectivity = (m_joinType == JoinType::INNER || m_joinType == JoinType::OUTER) ?
+			pow(REDUCE_SELECTIVITY_FACTOR_EQUALITY, keyCount) : REDUCE_SELECTIVITY_FACTOR_ANY;
+	}
 
 	m_cardinality *= selectivity;
 }
@@ -415,7 +419,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
 
-			if (m_boolean && !m_boolean->execute(tdbb, request))
+			if (m_boolean && m_boolean->execute(tdbb, request) != TriState(true))
 			{
 				// The boolean pertaining to the left sub-stream is false
 				// so just join sub-stream to a null valued right sub-stream
@@ -568,7 +572,7 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 		dsc* const desc = EVL_expr(tdbb, request, (*sub.keys)[i]);
 		const USHORT keyLength = sub.keyLengths[i];
 
-		if (desc && !(request->req_flags & req_null))
+		if (desc)
 		{
 			if (desc->isText())
 			{

@@ -28,7 +28,7 @@
 #define DLL_EXPORT __declspec(dllexport)
 #else
 #include <dlfcn.h>
-#define DLL_EXPORT
+#define DLL_EXPORT __attribute__((visibility("default")))
 #endif
 
 
@@ -263,6 +263,14 @@ struct CALC_ICalculator* CALC_IBrokenCalculatorImpl_create()
 // CALC_IFactoryImpl
 
 
+struct CALC_IFactoryImpl
+{
+	void* cloopDummy;
+	struct CALC_IFactoryVTable* vtable;
+	struct CALC_IStatusFactory* statusFactory;
+};
+
+
 static void CALC_IFactoryImpl_dispose(struct CALC_IFactory* self)
 {
 	free(self);
@@ -270,7 +278,9 @@ static void CALC_IFactoryImpl_dispose(struct CALC_IFactory* self)
 
 static struct CALC_IStatus* CALC_IFactoryImpl_createStatus(struct CALC_IFactory* self)
 {
-	return CALC_IStatusImpl_create();
+	struct CALC_IFactoryImpl* selfImpl = (struct CALC_IFactoryImpl*) self;
+	return selfImpl->statusFactory ?
+		CALC_IStatusFactory_createStatus(selfImpl->statusFactory) : CALC_IStatusImpl_create();
 }
 
 static struct CALC_ICalculator* CALC_IFactoryImpl_createCalculator(struct CALC_IFactory* self,
@@ -291,6 +301,13 @@ static struct CALC_ICalculator* CALC_IFactoryImpl_createBrokenCalculator(struct 
 	return CALC_IBrokenCalculatorImpl_create();
 }
 
+static void CALC_IFactoryImpl_setStatusFactory(struct CALC_IFactory* self,
+	struct CALC_IStatusFactory* aStatusFactory)
+{
+	struct CALC_IFactoryImpl* selfImpl = (struct CALC_IFactoryImpl*) self;
+	selfImpl->statusFactory = aStatusFactory;
+}
+
 struct CALC_IFactory* CALC_IFactoryImpl_create()
 {
 	static struct CALC_IFactoryVTable vtable = {
@@ -300,13 +317,15 @@ struct CALC_IFactory* CALC_IFactoryImpl_create()
 		CALC_IFactoryImpl_createStatus,
 		CALC_IFactoryImpl_createCalculator,
 		CALC_IFactoryImpl_createCalculator2,
-		CALC_IFactoryImpl_createBrokenCalculator
+		CALC_IFactoryImpl_createBrokenCalculator,
+		CALC_IFactoryImpl_setStatusFactory
 	};
 
-	struct CALC_IFactory* impl = malloc(sizeof(struct CALC_IFactory));
+	struct CALC_IFactoryImpl* impl = malloc(sizeof(struct CALC_IFactoryImpl));
 	impl->vtable = &vtable;
+	impl->statusFactory = NULL;
 
-	return impl;
+	return (struct CALC_IFactory*) impl;
 }
 
 

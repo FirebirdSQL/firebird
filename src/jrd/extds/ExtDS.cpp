@@ -394,7 +394,6 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 	const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
 	TraScope tra_scope, bool isCurrentAtt)
 {
-	Database* dbb = tdbb->getDatabase();
 	Attachment* att = tdbb->getAttachment();
 	CryptHash ch;
 	if (!isCurrentAtt)
@@ -516,6 +515,7 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 				}
 			}
 		}
+		status->init();
 	}
 
 	if (inPool)
@@ -867,8 +867,7 @@ bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 /// ConnectionsPool
 
 ConnectionsPool::ConnectionsPool(MemoryPool& pool)
-	: m_pool(pool),
-	  m_idleArray(pool),
+	: m_idleArray(pool),
 	  m_idleList(NULL),
 	  m_activeList(NULL),
 	  m_allCount(0),
@@ -1826,6 +1825,27 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	m_sql = sql;
 	m_sql.trim();
 	m_preparedByReq = m_callerPrivileges ? tdbb->getRequest() : NULL;
+
+	if (m_sqlParamNames.isEmpty() && getInputs() > 0)
+	{
+		fb_assert(m_sqlParamsMap.isEmpty());
+
+		// Populate parameters from metadata if preprocessing was skipped
+
+		const unsigned count = getInputs();
+		const MetaString empty;
+
+		for (unsigned i = 0; i < count; ++i)
+		{
+			const MetaString parameterName(getParameterName(i));
+			FB_SIZE_T n = 0;
+
+			if (!m_sqlParamNames.find(parameterName, n))
+				n = m_sqlParamNames.add(parameterName);
+
+			m_sqlParamsMap.add(&m_sqlParamNames[n]);
+		}
+	}
 }
 
 void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
@@ -2238,12 +2258,6 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 	const FB_SIZE_T excCount = in_excess ? in_excess->getCount() : 0;
 	const FB_SIZE_T sqlCount = m_sqlParamNames.getCount();
 
-	if ((m_error = (!names && sqlCount)))
-	{
-		// Parameter name expected
-		ERR_post(Arg::Gds(isc_eds_prm_name_expected));
-	}
-
 	// OK : count - excCount <= sqlCount <= count
 
 	// Check if all passed named parameters, not marked as excess, are present in query text
@@ -2268,7 +2282,9 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 		}
 	}
 
-	if (sqlCount || names && count > 0)
+	// When names is provided (named parameters), do named matching
+	// When names is nullptr (unnamed parameters), do positional matching even if SQL has named parameters
+	if (names && count > 0 && sqlCount)
 	{
 		const unsigned int mapCount = m_sqlParamsMap.getCount();
 		// Here NestConst plays against its objective. It temporary unconstifies the values.
@@ -2332,12 +2348,7 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaStr
 			paramDescs.put(*jrdVar, src);
 
 			if (src)
-			{
-				if (request->req_flags & req_null)
-					src->setNull();
-				else
-					src->clearNull();
-			}
+				src->clearNull();
 		}
 
 		const bool srcNull = !src || src->isNull();
@@ -2420,7 +2431,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 		}
 
 		// and assign to the target
-		EXE_assignment(tdbb, *jrdVar, local, srcNull, NULL, NULL);
+		EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
 	}
 }
 

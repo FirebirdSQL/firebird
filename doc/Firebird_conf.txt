@@ -136,7 +136,6 @@ LockHashSlots              integer  default 101
 LockRequireSpins           boolean  default false
 EventMemSize               integer  default 65536
 DeadlockTimeout            integer  default 10 (seconds)
-SolarisStallValue          integer  default 60 (seconds)
 TraceMemoryPools           boolean  default false
 PrioritySwitchDelay        integer  default 100 (milliseconds)
 DeadThreadsCollection      integer  default 50

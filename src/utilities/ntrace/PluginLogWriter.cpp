@@ -53,7 +53,7 @@ void strerror_r(int err, char* buf, size_t bufSize)
 }
 #endif
 
-void getMappedFileName(PathName& file, PathName& mapFile)
+void getMappedFileName(const PathName& file, PathName& mapFile)
 {
 	const ULONG hash = file.hash(0xFFFFFFFF);
 	mapFile.printf("%s_%08x", FB_TRACE_LOG_MUTEX, hash);
@@ -239,7 +239,7 @@ FB_SIZE_T PluginLogWriter::write_s(CheckStatusWrapper* status, const void* buf, 
 	{
 		return write(buf, size);
 	}
-	catch (Exception &ex)
+	catch (const Exception &ex)
 	{
 		ex.stuffException(status);
 	}
@@ -264,7 +264,7 @@ void PluginLogWriter::checkErrno(const char* operation)
 		operation, m_fileName.c_str(), strErr);
 }
 
-void PluginLogWriter::mutexBug(int state, const TEXT* string)
+void PluginLogWriter::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
 	snprintf(msg, sizeof(msg), "PluginLogWriter: mutex %s error, status = %d", string, state);
@@ -292,11 +292,11 @@ void PluginLogWriter::unlock()
 }
 
 
-const unsigned int IDLE_TIMEOUT = 30; // seconds
+constexpr unsigned int IDLE_TIMEOUT = 30; // seconds
 
 void PluginLogWriter::setupIdleTimer(bool clear)
 {
-	unsigned int timeout = clear ? 0 : IDLE_TIMEOUT;
+	const unsigned int timeout = clear ? 0 : IDLE_TIMEOUT;
 	if (!timeout)
 	{
 		if (m_idleTimer)

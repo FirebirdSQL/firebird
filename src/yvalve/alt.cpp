@@ -150,7 +150,7 @@ USHORT API_ROUTINE isc_event_block_a(SCHAR** event_buffer,
  *	Return the size of the block.
  *
  **************************************/
-	const int MAX_NAME_LENGTH = 31;
+	constexpr int MAX_NAME_LENGTH = 31;
 
 	// calculate length of event parameter block, setting initial length to include version
 	// and counts for each argument
@@ -473,7 +473,7 @@ ISC_STATUS API_ROUTINE gds__put_slice(ISC_STATUS* status_vector,
 {
 	return isc_put_slice(status_vector, db_handle, tra_handle, array_id,
 						 sdl_length, sdl, parameters_leng, parameters,
-						 slice_length, reinterpret_cast<SCHAR*>(slice));
+						 slice_length, static_cast<SCHAR*>(slice));
 }
 
 ISC_STATUS API_ROUTINE gds__que_events(ISC_STATUS* status_vector,
@@ -812,7 +812,7 @@ void API_ROUTINE CVT_move(const dsc*, dsc*, FPTR_ERROR err)
 }
 
 namespace {
-	ISC_STATUS user_error(ISC_STATUS* vector, ISC_STATUS code)
+	ISC_STATUS user_error(ISC_STATUS* vector, ISC_STATUS code) noexcept
 	{
 		vector[0] = isc_arg_gds;
 		vector[1] = code;
@@ -874,7 +874,7 @@ ISC_STATUS API_ROUTINE isc_add_user(ISC_STATUS* status, const USER_SEC_DATA* inp
 			return user_error(status, isc_usrname_too_long);
 		}
 
-		Firebird::string::size_type l = work.find(' ');
+		const auto l = work.find(' ');
 		if (l != Firebird::string::npos) {
 			work.resize(l);
 		}
@@ -937,7 +937,7 @@ ISC_STATUS API_ROUTINE isc_delete_user(ISC_STATUS* status, const USER_SEC_DATA* 
 			return user_error(status, isc_usrname_too_long);
 		}
 
-		Firebird::string::size_type l = work.find(' ');
+		const auto l = work.find(' ');
 		if (l != Firebird::string::npos) {
 			work.resize(l);
 		}
@@ -982,7 +982,7 @@ ISC_STATUS API_ROUTINE isc_modify_user(ISC_STATUS* status, const USER_SEC_DATA* 
 			return user_error(status, isc_usrname_too_long);
 		}
 
-		Firebird::string::size_type l = work.find(' ');
+		const auto l = work.find(' ');
 		if (l != Firebird::string::npos) {
 			work.resize(l);
 		}
@@ -1034,13 +1034,9 @@ static ISC_STATUS executeSecurityCommand(ISC_STATUS* status,
  *    Executes command according to input_user_data
  *    and userInfo. Calls service manager to do job.
  **************************************/
-
-	isc_svc_handle handle = attachRemoteServiceManager(status,
-													   input_user_data->dba_user_name,
-													   input_user_data->dba_password,
-													   false,
-													   input_user_data->protocol,
-													   input_user_data->server);
+		const isc_svc_handle handle = attachRemoteServiceManager(status,
+		input_user_data->dba_user_name, input_user_data->dba_password, false,
+		input_user_data->protocol, input_user_data->server);
 	if (handle)
 	{
 		callRemoteServiceManager(status, handle, userInfo, NULL);

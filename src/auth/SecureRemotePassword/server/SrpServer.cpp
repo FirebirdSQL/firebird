@@ -158,7 +158,7 @@ public:
 			p->attachDatabase(&status, secDbName.c_str(), dpb.getBufferLength(), dpb.getBuffer()));
 		check(&status);
 
-		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName));
+		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName.c_str()));
 	}
 
 	SecurityDatabase(CachedSecurityDatabase::Instance& instance, ICryptKeyCallback* cryptCallback)
