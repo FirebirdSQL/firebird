@@ -1111,8 +1111,16 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 			Arg::Gds(isc_dsql_max_arr_dim_exceeded));
 	}
 
+	bool implicitDomain = false;
+
 	if (name.object.isEmpty())
+	{
 		DYN_UTIL_generate_field_name(tdbb, name);
+		implicitDomain = true;
+	}
+
+	// Avoid the security class being assigned for implicit domains
+	AutoSetRestoreFlag<ULONG> noSecurityClass(&tdbb->tdbb_flags, implicitDomain ? TDBB_no_security_class : 0, true);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_fld_src, DYN_REQUESTS);
 
@@ -1198,7 +1206,8 @@ void DdlNode::storeGlobalField(thread_db* tdbb, jrd_tra* transaction, QualifiedN
 		}
 	}
 
-	storePrivileges(tdbb, transaction, name, obj_field, USAGE_PRIVILEGES);
+	if (!implicitDomain)
+		storePrivileges(tdbb, transaction, name, obj_field, USAGE_PRIVILEGES);
 }
 
 
@@ -1893,14 +1902,14 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 	// first pass
 	if (alterIndividualParameters)
 	{
-		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
+		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, false, true))
 			altered = true;
 		else
 			status_exception::raise(Arg::Gds(isc_dyn_func_not_found) << name.toQuotedString());
 	}
 	else if (alter)
 	{
-		if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
+		if (executeAlter(tdbb, dsqlScratch, transaction, false, false, true))
 			altered = true;
 		else
 		{
@@ -1915,26 +1924,22 @@ void CreateAlterFunctionNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 	fb_assert(id);
 	auto* permanent = MetadataCache::newVersion<Cached::Function>(tdbb, id);
+
 	try
 	{
 		auto* prc = permanent ? permanent->getVersioned(tdbb, CacheFlag::NOCOMMIT | CacheFlag::MINISCAN) : nullptr;
 		{
 			bool dummy = false;
-			AutoSetRestore compiling(prc ? &(prc->compiling) : &dummy, true);
+			AutoSetRestore compiling(prc ? &prc->compiling : &dummy, true);
 
 			compile(tdbb, dsqlScratch);
 		}
 
-		{ // scope
-			// avoid modify routine dfw during second pass on CREATE
-			AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, altered ? 0 : TDBB_dont_post_dfw, true);
-
-			// second pass
-			if (alterIndividualParameters)
-				executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
-			else
-				executeAlter(tdbb, dsqlScratch, transaction, true, false);
-		}
+		// second pass
+		if (alterIndividualParameters)
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, !altered, true, false);
+		else
+			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
 		if (name.package.isEmpty())
 		{
@@ -2034,18 +2039,15 @@ bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	if (name.package.isEmpty())
 		storePrivileges(tdbb, transaction, name, obj_udf, EXEC_PRIVILEGES);
 
-	// avoid modify routine dfw when execute CREATE
-	AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
-
-	executeAlter(tdbb, dsqlScratch, transaction, false, false);
+	executeAlter(tdbb, dsqlScratch, transaction, true, false, false);
 
 	return true;
 }
 
 bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
-	Attachment* const attachment = transaction->getAttachment();
+	const auto attachment = transaction->getAttachment();
 
 	bool modified = false;
 	unsigned returnPos = 0;
@@ -2074,6 +2076,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 			MetadataCache::oldVersion<Cached::Function>(tdbb, id, CacheFlag::OLD_ALTER);
 		}
+
+		// Avoid modify routine dfw when execute CREATE
+		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY FUN
 			if (secondPass)
@@ -2235,14 +2240,16 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 	if (!secondPass && modified)
 	{
-		// Get all comments and defaults from the old parameter list.
+		// Get all comments and defaults from the old parameter list
+
 		CollectedParameterMap collectedParameters;
 		collectParameters(tdbb, transaction, collectedParameters);
 
-		// delete all old arguments
+		// Delete all old arguments ...
+
 		DropFunctionNode::dropArguments(tdbb, transaction, name);
 
-		// and insert the new ones
+		// ... and insert the new ones
 
 		if (returnType && returnType->type)
 			storeArgument(tdbb, dsqlScratch, transaction, returnPos, true, returnType, NULL);
@@ -2264,9 +2271,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 }
 
 bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
-	Attachment* const attachment = transaction->getAttachment();
+	const auto attachment = transaction->getAttachment();
 
 	bool modified = false;
 
@@ -2289,6 +2296,9 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_FUNCTION, name, {});
 
 		id = FUN.RDB$FUNCTION_ID;
+
+		// Avoid modify routine dfw when execute CREATE
+		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY FUN
 			if (deterministic.isAssigned())
@@ -2967,14 +2977,14 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 	// first pass
 	if (alterIndividualParameters)
 	{
-		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, true))
+		if (executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, false, false, true))
 			altered = true;
 		else
 			status_exception::raise(Arg::Gds(isc_dyn_proc_not_found) << name.toQuotedString());
 	}
 	else if (alter)
 	{
-		if (executeAlter(tdbb, dsqlScratch, transaction, false, true))
+		if (executeAlter(tdbb, dsqlScratch, transaction, false, false, true))
 			altered = true;
 		else
 		{
@@ -2989,26 +2999,22 @@ void CreateAlterProcedureNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsq
 
 	fb_assert(id);
 	auto* permanent = MetadataCache::newVersion<Cached::Procedure>(tdbb, id);
+
 	try
 	{
 		auto* prc = permanent ? permanent->getVersioned(tdbb, CacheFlag::NOCOMMIT | CacheFlag::MINISCAN) : nullptr;
 		{
 			bool dummy = false;
-			AutoSetRestore compiling(prc ? &(prc->compiling) : &dummy, true);
+			AutoSetRestore compiling(prc ? &prc->compiling : &dummy, true);
 
 			compile(tdbb, dsqlScratch);
 		}
 
-		{ // scope
-			// avoid modify routine dfw during second pass on CREATE
-			AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, altered ? 0 : TDBB_dont_post_dfw, true);
-
-			// second pass
-			if (alterIndividualParameters)
-				executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, true, false);
-			else
-				executeAlter(tdbb, dsqlScratch, transaction, true, false);
-		}
+		// second pass
+		if (alterIndividualParameters)
+			executeAlterIndividualParameters(tdbb, dsqlScratch, transaction, !altered, true, false);
+		else
+			executeAlter(tdbb, dsqlScratch, transaction, !altered, true, false);
 
 		if (name.package.isEmpty())
 		{
@@ -3101,18 +3107,16 @@ bool CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 	if (name.package.isEmpty())
 		storePrivileges(tdbb, transaction, name, obj_procedure, EXEC_PRIVILEGES);
 
-	// avoid modify routine dfw when execute CREATE
-	AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
-
-	executeAlter(tdbb, dsqlScratch, transaction, false, false);
+	executeAlter(tdbb, dsqlScratch, transaction, true, false, false);
 
 	return true;
 }
 
 bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
-	Attachment* const attachment = transaction->getAttachment();
+	const auto attachment = transaction->getAttachment();
+
 	AutoCacheRequest requestHandle(tdbb, drq_m_prcs2, DYN_REQUESTS);
 	bool modified = false;
 
@@ -3140,6 +3144,9 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 			MetadataCache::oldVersion<Cached::Procedure>(tdbb, id, CacheFlag::OLD_ALTER);
 		}
+
+		// Avoid modify routine dfw when execute CREATE
+		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY P
 			if (secondPass)
@@ -3227,14 +3234,16 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 	if (!secondPass && modified)
 	{
-		// Get all comments and defaults from the old parameter list.
+		// Get all comments and defaults from the old parameter list
+
 		CollectedParameterMap collectedParameters;
 		collectParameters(tdbb, transaction, collectedParameters);
 
-		// Delete all old input and output parameters.
+		// Delete all old input and output parameters ...
+
 		DropProcedureNode::dropParameters(tdbb, transaction, name);
 
-		// And insert the new ones.
+		// ... and insert the new ones
 
 		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
 		{
@@ -3312,9 +3321,9 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 }
 
 bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, bool secondPass, bool runTriggers)
+	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
-	Attachment* const attachment = transaction->getAttachment();
+	const auto attachment = transaction->getAttachment();
 
 	bool modified = false;
 
@@ -3337,6 +3346,9 @@ bool CreateAlterProcedureNode::executeAlterIndividualParameters(thread_db* tdbb,
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_PROCEDURE, name, {});
 
 		id = P.RDB$PROCEDURE_ID;
+
+		// Avoid modify routine dfw when execute CREATE
+		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, create ? TDBB_dont_post_dfw : 0, true);
 
 		MODIFY P
 			if (ssDefiner.has_value())
