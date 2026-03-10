@@ -408,6 +408,9 @@
     <ClCompile Include="..\..\..\src\jrd\validation.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\vec.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\vio.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -547,6 +550,15 @@
       <Filter>Optimizer</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\WorkerAttachment.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\CacheVector.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\CharSetContainer.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Resources.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
   </ItemGroup>

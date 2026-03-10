@@ -52,6 +52,7 @@
 #include "../common/sdl.h"
 #include "../jrd/intl.h"
 #include "../jrd/cch.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/blf_proto.h"
@@ -72,6 +73,7 @@
 #include "../common/dsc_proto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/VaryStr.h"
+#include "../jrd/Statement.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -79,15 +81,9 @@ using namespace Firebird;
 typedef Ods::blob_page blob_page;
 
 static ArrayField* alloc_array(jrd_tra*, Ods::InternalArrayDesc*);
-//static blb* allocate_blob(thread_db*, jrd_tra*);
 static ISC_STATUS blob_filter(USHORT, BlobControl*);
-//static blb* copy_blob(thread_db*, const bid*, bid*, USHORT, const UCHAR*, USHORT);
-//static void delete_blob(thread_db*, blb*, ULONG);
-//static void delete_blob_id(thread_db*, const bid*, ULONG, jrd_rel*);
 static ArrayField* find_array(jrd_tra*, const bid*);
 static BlobFilter* find_filter(thread_db*, SSHORT, SSHORT);
-//static blob_page* get_next_page(thread_db*, blb*, WIN *);
-//static void insert_page(thread_db*, blb*);
 static void move_from_string(Jrd::thread_db*, const dsc*, dsc*, jrd_rel*, Record*, USHORT);
 static void move_to_string(Jrd::thread_db*, dsc*, dsc*);
 static void slice_callback(array_slice*, ULONG, dsc*);
@@ -474,7 +470,7 @@ void BLB_garbage_collect(thread_db* tdbb,
 				const bid* blob = (bid*) desc.dsc_address;
 				if (!blob->isEmpty())
 				{
-					if (blob->bid_internal.bid_relation_id == relation->rel_id)
+					if (blob->bid_internal.bid_relation_id == relation->getId())
 					{
 						const RecordNumber number = blob->get_permanent_number();
 						bmGoing.set(number.getValue());
@@ -487,7 +483,7 @@ void BLB_garbage_collect(thread_db* tdbb,
 						// ignore it. To be reconsider latter based on real user reports.
 						// The same about staying blob few lines below
 						gds__log("going blob (%ld:%ld) is not owned by relation (id = %d), ignored",
-							blob->bid_quad.bid_quad_high, blob->bid_quad.bid_quad_low, relation->rel_id);
+							blob->bid_quad.bid_quad_high, blob->bid_quad.bid_quad_low, relation->getId());
 					}
 				}
 			}
@@ -513,7 +509,7 @@ void BLB_garbage_collect(thread_db* tdbb,
 				const bid* blob = (bid*) desc.dsc_address;
 				if (!blob->isEmpty())
 				{
-					if (blob->bid_internal.bid_relation_id == relation->rel_id)
+					if (blob->bid_internal.bid_relation_id == relation->getId())
 					{
 						const RecordNumber number = blob->get_permanent_number();
 						if (bmGoing.test(number.getValue()))
@@ -526,7 +522,7 @@ void BLB_garbage_collect(thread_db* tdbb,
 					else
 					{
 						gds__log("staying blob (%ld:%ld) is not owned by relation (id = %d), ignored",
-							blob->bid_quad.bid_quad_high, blob->bid_quad.bid_quad_low, relation->rel_id);
+							blob->bid_quad.bid_quad_high, blob->bid_quad.bid_quad_low, relation->getId());
 					}
 				}
 			}
@@ -540,7 +536,7 @@ void BLB_garbage_collect(thread_db* tdbb,
 			const FB_UINT64 id = bmGoing.current();
 
 			bid blob;
-			blob.set_permanent(relation->rel_id, RecordNumber(id));
+			blob.set_permanent(relation->getId(), RecordNumber(id));
 
 			blb::delete_blob_id(tdbb, &blob, prior_page, relation);
 		} while (bmGoing.getNext());
@@ -1051,7 +1047,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 	// We should not materialize the blob if the destination field
 	// stream (nod_union, for example) doesn't have a relation.
-	const bool simpleMove = (relation == NULL);
+	const bool simpleMove = !relation;
 
 	// Use local copy of source blob id to not change contents of from_desc in
 	// a case when it points to materialized temporary blob (see below for
@@ -1108,11 +1104,11 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 	Request* request = tdbb->getRequest();
 
-	if (relation->isVirtual()) {
+	if (relation->getPermanent()->isVirtual()) {
 		ERR_post(Arg::Gds(isc_read_only));
 	}
 
-	RelationPages* relPages = relation->getPages(tdbb);
+	RelationPages* relPages = relation->getPermanent()->getPages(tdbb);
 
 	// If either the source value is null or the blob id itself is null
 	// (all zeros), then the blob is null.
@@ -1131,7 +1127,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	// If the target is a view, this must be from a view update trigger.
 	// Just pass the blob id thru.
 
-	if (relation->rel_view_rse)
+	if (relation->isView())
 	{
 		// But if the sub_type or charset is different, create a new blob.
 		if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) &&
@@ -1257,7 +1253,6 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 		break;
 	}
 
-	blob->blb_relation = relation;
 	blob->blb_sub_type = to_desc->getBlobSubType();
 	blob->blb_charset = to_desc->getCharSet();
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
@@ -1266,7 +1261,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	if (bulk)
 		blob->blb_flags |= BLB_bulk;
 
-	destination->set_permanent(relation->rel_id, DPM_store_blob(tdbb, blob, record));
+	destination->set_permanent(relation->getId(), DPM_store_blob(tdbb, blob, relation, record));
 	// This is the only place in the engine where blobs are materialized
 	// If new places appear code below should transform to common sub-routine
 	if (materialized_blob)
@@ -1448,25 +1443,21 @@ blb* blb::open2(thread_db* tdbb,
 
 	if (try_relations)
 	{
-		// Ordinarily, we would call MET_relation to get the relation id.
+		// Ordinarily, we call with AUTOCREATE set to get the relation by id.
 		// However, since the blob id must be considered suspect, this is
 		// not a good idea.  On the other hand, if we don't already
 		// know about the relation, the blob id has got to be invalid
 		// anyway.
 
-		vec<jrd_rel*>* vector = tdbb->getAttachment()->att_relations;
-
-		if (blobId.bid_internal.bid_relation_id >= vector->count() ||
-			!(blob->blb_relation = (*vector)[blobId.bid_internal.bid_relation_id] ) )
-		{
-				ERR_post(Arg::Gds(isc_bad_segstr_id));
-		}
+		blob->blb_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, blobId.bid_internal.bid_relation_id, 0);
+		if (!blob->blb_relation)
+			ERR_post(Arg::Gds(isc_bad_segstr_id));
 
 		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
-		DPM_get_blob(tdbb, blob, blobId.get_permanent_number(), false, 0);
+		DPM_get_blob(tdbb, blob, blob->blb_relation, blobId.get_permanent_number(), false, 0);
 
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
-		if (!blob->blb_relation->isSystem() && blob->blb_fld_id < blob->blb_relation->rel_fields->count())
+		if (!relation->isSystem() && blob->blb_fld_id < relation->rel_fields->count())
 		{
 			jrd_fld* fld = (*blob->blb_relation->rel_fields)[blob->blb_fld_id];
 			transaction->checkBlob(tdbb, &blobId, fld, true);
@@ -1764,38 +1755,27 @@ void blb::put_slice(thread_db*	tdbb,
 	{
 		QualifiedName infoRelationName(info.sdl_info_relation);
 		tdbb->getAttachment()->qualifyExistingName(tdbb, infoRelationName, {obj_relation});
-
-		relation = MET_lookup_relation(tdbb, infoRelationName);
+		relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, infoRelationName, CacheFlag::AUTOCREATE);
 	}
-	else {
-		relation = MET_relation(tdbb, info.sdl_info_rid);
-	}
+	else
+		relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, info.sdl_info_rid, CacheFlag::AUTOCREATE);
 
-	if (!relation) {
+	if (!relation)
 		IBERROR(196);			// msg 196 relation for array not known
-	}
 
 	SSHORT	n;
-	if (info.sdl_info_field.length()) {
+	if (info.sdl_info_field.length())
 	    n = MET_lookup_field(tdbb, relation, info.sdl_info_field);
-	}
-	else {
+	else
 		n = info.sdl_info_fid;
-	}
 
-	// Make sure relation is scanned
-	MET_scan_relation(tdbb, relation);
-
-	jrd_fld* field = NULL;
-	if (n < 0 || !(field = MET_get_field(relation, n))) {
+	jrd_fld* field;
+	if (n < 0 || !(field = MET_get_field(relation, n)))
 		IBERROR(197);			// msg 197 field for array not known
-	}
 
 	ArrayField* array_desc = field->fld_array;
 	if (!array_desc)
-	{
 		ERR_post(Arg::Gds(isc_invalid_dimension) << Arg::Num(0) << Arg::Num(1));
-	}
 
 	// Find and/or allocate array block.  There are three distinct cases:
 
@@ -2297,15 +2277,14 @@ void blb::delete_blob_id(thread_db* tdbb, const bid* blob_id, ULONG prior_page, 
 	if (blob_id->isEmpty())
 		return;
 
-	if (blob_id->bid_internal.bid_relation_id != relation->rel_id)
+	if (blob_id->bid_internal.bid_relation_id != relation->getId())
 		CORRUPT(200);			// msg 200 invalid blob id
 
 	// Fetch blob
 
 	blb* blob = allocate_blob(tdbb, attachment->getSysTransaction());
-	blob->blb_relation = relation;
 	blob->blb_pg_space_id = relation->getPages(tdbb)->rel_pg_space_id;
-	prior_page = DPM_get_blob(tdbb, blob, blob_id->get_permanent_number(), true, prior_page);
+	prior_page = DPM_get_blob(tdbb, blob, relation, blob_id->get_permanent_number(), true, prior_page);
 
 	if (!(blob->blb_flags & BLB_damaged))
 		blob->delete_blob(tdbb, prior_page);
@@ -2592,12 +2571,12 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
  **************************************/
 	SET_TDBB (tdbb);
 
-	const UCHAR charSet = INTL_GET_CHARSET(from_desc);
+	const auto charSet = INTL_GET_CHARSET(from_desc);
 	UCHAR* fromstr = NULL;
 
 	MoveBuffer buffer;
 	const int length = MOV_make_string2(tdbb, from_desc, charSet, &fromstr, buffer);
-	const UCHAR toCharSet = to_desc->getCharSet();
+	const auto toCharSet = to_desc->getCharSet();
 
 	if ((charSet == CS_NONE || charSet == CS_BINARY || charSet == toCharSet) &&
 		toCharSet != CS_NONE && toCharSet != CS_BINARY)
@@ -2710,9 +2689,9 @@ static void move_to_string(thread_db* tdbb, dsc* fromDesc, dsc* toDesc)
 	blobAsText.dsc_dtype = dtype_text;
 
 	if (DTYPE_IS_TEXT(toDesc->dsc_dtype))
-		blobAsText.dsc_ttype() = toDesc->dsc_ttype();
+		blobAsText.setTextType(toDesc->getTextType());
 	else
-		blobAsText.dsc_ttype() = ttype_ascii;
+		blobAsText.setTextType(ttype_ascii);
 
 	Request* request = tdbb->getRequest();
 	jrd_tra* transaction = request ? request->req_transaction : tdbb->getTransaction();
@@ -2724,7 +2703,7 @@ static void move_to_string(thread_db* tdbb, dsc* fromDesc, dsc* toDesc)
 	blb* blob = blb::open2(tdbb, transaction,
 		(bid*) fromDesc->dsc_address, bpb.getCount(), bpb.begin());
 
-	const CharSet* fromCharSet = INTL_charset_lookup(tdbb, fromDesc->dsc_scale);
+	const CharSet* fromCharSet = INTL_charset_lookup(tdbb, fromDesc->getCharSet());
 	const CharSet* toCharSet = INTL_charset_lookup(tdbb, INTL_GET_CHARSET(&blobAsText));
 
 	HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
@@ -2843,7 +2822,7 @@ static void slice_callback(array_slice* arg, ULONG /*count*/, DSC* descriptors)
 			DynamicVaryStr<1024> tmp_buffer;
 			const USHORT tmp_len = array_desc->dsc_length;
 			const char* p;
-			const USHORT len = MOV_make_string(tdbb, slice_desc, INTL_TEXT_TYPE(*array_desc), &p,
+			const USHORT len = MOV_make_string(tdbb, slice_desc, array_desc->getTextType(), &p,
 											   tmp_buffer.getBuffer(tmp_len), tmp_len);
 			memcpy(array_desc->dsc_address, &len, sizeof(USHORT));
 			memcpy(array_desc->dsc_address + sizeof(USHORT), p, (int) len);
@@ -2958,7 +2937,7 @@ void blb::fromPageHeader(const Ods::blh* header)
 	blb_max_segment = header->blh_max_segment;
 	blb_level = header->blh_level;
 	blb_sub_type = header->blh_sub_type;
-	blb_charset = header->blh_charset;
+	blb_charset = CSetId(header->blh_charset);
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
 	blb_fld_id = header->blh_fld_id;
 #endif

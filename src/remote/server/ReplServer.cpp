@@ -1054,7 +1054,7 @@ bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaL
 		for (const auto replica : replicas)
 		{
 			const auto target = FB_NEW Target(replica);
-			Thread::start(process_thread, target, THREAD_medium, NULL);
+			Thread::start(process_thread, target, THREAD_medium);
 			++activeThreads;
 		}
 

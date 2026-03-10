@@ -314,7 +314,8 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 		const auto subRsb = args[i];
 		fb_assert(subRsb);
 
-		m_cardinality *= subRsb->getCardinality();
+		if (m_joinType == JoinType::INNER || m_joinType == JoinType::OUTER)
+			m_cardinality *= subRsb->getCardinality();
 
 		SubStream sub;
 		sub.buffer = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, subRsb);
@@ -352,7 +353,10 @@ void HashJoin::init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
 	}
 
 	if (!selectivity)
-		selectivity = pow(REDUCE_SELECTIVITY_FACTOR_EQUALITY, keyCount);
+	{
+		selectivity = (m_joinType == JoinType::INNER || m_joinType == JoinType::OUTER) ?
+			pow(REDUCE_SELECTIVITY_FACTOR_EQUALITY, keyCount) : REDUCE_SELECTIVITY_FACTOR_ANY;
+	}
 
 	m_cardinality *= selectivity;
 }

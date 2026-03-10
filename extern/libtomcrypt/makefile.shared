@@ -42,23 +42,41 @@ include makefile_include.mk
 
 
 #ciphers come in two flavours... enc+dec and enc
-src/ciphers/aes/aes_enc.o: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
-	$(LTCOMPILE) $(LTC_CFLAGS) $(CPPFLAGS) -DENCRYPT_ONLY -c src/ciphers/aes/aes.c -o src/ciphers/aes/aes_enc.o
+$(OBJDIR_PREFIX)src/ciphers/aes/aes_enc.lo: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
+	@mkdir -p $(dir $@)
+	$(LTCOMPILE) $(LTC_CFLAGS) $(CPPFLAGS) -DENCRYPT_ONLY -c src/ciphers/aes/aes.c -o $@
 
-.c.o:
+$(OBJDIR_PREFIX)%.lo: %.c
+	@mkdir -p $(dir $@)
 	$(LTCOMPILE) $(LTC_CFLAGS) $(CPPFLAGS) -o $@ -c $<
 
-LOBJECTS = $(OBJECTS:.o=.lo)
+#These are the rules to make certain object files.
+$(OBJDIR_PREFIX)src/ciphers/aes/aes.lo: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
+$(OBJDIR_PREFIX)src/ciphers/twofish/twofish.lo: src/ciphers/twofish/twofish.c src/ciphers/twofish/twofish_tab.c
+$(OBJDIR_PREFIX)src/hashes/whirl/whirl.lo: src/hashes/whirl/whirl.c src/hashes/whirl/whirltab.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512.lo: src/hashes/sha2/sha512.c src/hashes/sha2/sha384.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512_224.lo: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_224.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha512_256.lo: src/hashes/sha2/sha512.c src/hashes/sha2/sha512_256.c
+$(OBJDIR_PREFIX)src/hashes/sha2/sha256.lo: src/hashes/sha2/sha256.c src/hashes/sha2/sha224.c
 
-$(LIBNAME): $(OBJECTS)
+LOBJECTS = $(OBJECTS:.o=.lo)
+LTOBJECTS = $(TOBJECTS:.o=.lo)
+LDOBJECTS = $(DOBJECTS:.o=.lo)
+
+$(LOBJECTS): $(HEADERS)
+$(LTOBJECTS): $(HEADERS) $(THEADERS)
+$(LDOBJECTS): $(HEADERS) $(THEADERS)
+
+$(LIBNAME): $(LOBJECTS)
+	@mkdir -p $(dir $@)
 	$(LIBTOOL) --mode=link --tag=CC $(CC) $(LTC_LDFLAGS) $(LOBJECTS) $(EXTRALIBS) -o $@ -rpath $(LIBPATH) -version-info $(VERSION_LT) $(NO_UNDEFINED)
 
-test: $(call print-help,test,Builds the library and the 'test' application to run all self-tests) $(LIBNAME) $(TOBJECTS)
-	$(LIBTOOL) --mode=link --tag=CC $(CC) $(LTC_LDFLAGS) -o $(TEST) $(TOBJECTS) $(LIBNAME) $(EXTRALIBS)
+test: $(call print-help,test,Builds the library and the 'test' application to run all self-tests) $(LIBNAME) $(LTOBJECTS)
+	$(LIBTOOL) --mode=link --tag=CC $(CC) $(LTC_LDFLAGS) -o $(TEST) $(LTOBJECTS) $(LIBNAME) $(EXTRALIBS)
 
 # build the demos from a template
 define DEMO_template
-$(1): $(call print-help,$(1),Builds the library and the '$(1)' demo) demos/$(1).o $$(LIBNAME)
+$(1): $(call print-help,$(1),Builds the library and the '$(1)' demo) $(OBJDIR_PREFIX)demos/$(1).lo $$(LIBNAME)
 	$$(LIBTOOL) --mode=link --tag=CC $$(CC) $$(LTC_LDFLAGS) $$^ $$(EXTRALIBS) -o $(1)
 endef
 

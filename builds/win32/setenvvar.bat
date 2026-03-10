@@ -46,16 +46,20 @@
 ::
 
 @if not DEFINED FB_VSCOMNTOOLS (
-  if DEFINED VS170COMNTOOLS (
-    set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
+  if DEFINED VS180COMNTOOLS (
+    set "FB_VSCOMNTOOLS=%VS180COMNTOOLS%"
   ) else (
-    if DEFINED VS160COMNTOOLS (
-      set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
+    if DEFINED VS170COMNTOOLS (
+      set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
     ) else (
-      if DEFINED VS150COMNTOOLS (
-        set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+      if DEFINED VS160COMNTOOLS (
+        set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
       ) else (
-        goto :HELP
+        if DEFINED VS150COMNTOOLS (
+          set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+        ) else (
+          goto :HELP
+        )
       )
     )
   )
@@ -64,6 +68,10 @@
 :: Now set some firebird build specific variables that depend upon the
 :: version of Visual Studio that is being used for the build.
 @if DEFINED FB_VSCOMNTOOLS (
+  if "%FB_VSCOMNTOOLS%" == "%VS180COMNTOOLS%" (
+    set MSVC_VERSION=15
+    set MSVC_CMAKE_GENERATOR=Visual Studio 18 2026
+  )
   if "%FB_VSCOMNTOOLS%" == "%VS170COMNTOOLS%" (
     set MSVC_VERSION=15
     set MSVC_CMAKE_GENERATOR=Visual Studio 17 2022

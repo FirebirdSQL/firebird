@@ -1744,10 +1744,10 @@ completed at the moment when given timer should alarm.
 - void decodeTimeStampTzEx(Status status, const ISC_TIMESTAMP_TZ_EX* timeStampTz, uint* year, uint* month, uint* day,
   uint* hours, uint* minutes, uint* seconds, uint* fractions, uint timeZoneBufferLength, string timeZoneBuffer) – decode
   timestamp taking extended time zone into an account.
-- Attachment executeCreateDatabase2(Status status, uint stmtLength, const string creatDBstatement, uint dialect,
-  uint dpbLength, const uchar* dpb, boolean* stmtIsCreateDb);
 - void convert(Status status, uint sourceType, uint sourceScale, uint sourceLength, const void* source,
   uint targetType, uint targetScale, uint targetLength, void* target);
+- Attachment executeCreateDatabase2(Status status, uint stmtLength, const string creatDBstatement, uint dialect,
+  uint dpbLength, const uchar* dpb, boolean* stmtIsCreateDb);
 
 <a name="XpbBuilder"></a> XpbBuilder methods:
 

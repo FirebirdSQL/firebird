@@ -318,7 +318,7 @@ WriteLockResult RecordStream::lockRecord(thread_db* tdbb) const
 
 	fb_assert(relation && !relation->rel_view_rse);
 
-	RLCK_reserve_relation(tdbb, transaction, relation, true);
+	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
 	return VIO_writelock(tdbb, rpb, transaction);
 }

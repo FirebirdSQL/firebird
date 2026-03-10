@@ -36,8 +36,9 @@
 #include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
+#include "../jrd/intl.h"
 
-#include "gen/parse.h"
+#include "parse.h"
 
 namespace Firebird {
 class CharSet;
@@ -101,7 +102,7 @@ private:
 		const TEXT* line_start;
 		const TEXT* last_token_bk;
 		const TEXT* line_start_bk;
-		SSHORT charSetId;
+		CSetId charSetId;
 		SLONG lines, lines_bk;
 		int prev_keyword;
 		USHORT param_number;
@@ -134,7 +135,7 @@ public:
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
 		USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
-		const TEXT* string, size_t length, SSHORT charSetId);
+		const TEXT* string, size_t length, CSetId charSetId);
 	~Parser();
 
 public:

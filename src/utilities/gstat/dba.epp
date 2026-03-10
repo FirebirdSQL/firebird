@@ -827,9 +827,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 		if (!X.RDB$VIEW_BLR.NULL || !X.RDB$EXTERNAL_FILE.NULL) {
 			continue;
 		}
-		//rel_virtual, rel_global_temp_preserve, rel_global_temp_delete
+		//rel_virtual, rel_temp_preserve, rel_temp_delete
 		if (!X.RDB$SYSTEM_FLAG.NULL && X.RDB$SYSTEM_FLAG == fb_sysflag_system &&
-			X.RDB$RELATION_TYPE >= rel_virtual && X.RDB$RELATION_TYPE <= rel_global_temp_delete)
+			X.RDB$RELATION_TYPE >= rel_virtual && X.RDB$RELATION_TYPE <= rel_temp_delete)
 		{
 			continue;
 		}

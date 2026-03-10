@@ -293,8 +293,7 @@ private:
 
 public:
 #ifdef DEBUG_GDS_ALLOC
-	INT32		lineNumber = -1;
-	const char	*fileName = nullptr;
+	Firebird::CustomSourceLocation location;
 #elif (SIZEOF_VOID_P == 4)
 	FB_UINT64 dummyAlign;
 #endif
@@ -412,8 +411,8 @@ public:
 		{
 			bool filter = filter_path != NULL;
 
-			if (isActive() && filter && fileName)
-				filter = strncmp(filter_path, fileName, filter_len) != 0;
+			if (isActive() && filter && location.fileName)
+				filter = strncmp(filter_path, location.fileName, filter_len) != 0;
 
 			if (!filter)
 			{
@@ -421,7 +420,7 @@ public:
 				{
 					fprintf(file, "%s %p: size=%" SIZEFORMAT " allocated at %s:%d",
 						isExtent() ? "EXTN" : redirected() ? "RDIR" : "USED",
-						this, getSize(), fileName, lineNumber);
+						this, getSize(), location.fileName, location.line);
 				}
 				else
 					fprintf(file, "FREE %p: size=%" SIZEFORMAT, this, getSize());
@@ -1670,8 +1669,17 @@ private:
 	};
 #endif // VALIDATE_POOL
 
-	MemBlock* allocateInternal(size_t from, size_t& length, bool flagRedirect);
-	void releaseBlock(MemBlock *block, bool flagDecr) noexcept;
+	MemBlock* allocateInternal2(size_t from, size_t& length, bool flagRedirect);
+	MemBlock* allocateInternal(size_t from, size_t& length, bool flagRedirect)
+	{
+		auto* block = allocateInternal2(from, length, flagRedirect);
+		block->pool = this;
+		return block;
+	}
+
+	void releaseBlock(MemBlock *block, int flag) noexcept;
+	static constexpr int RELEASE_DECR = 0x1;	// Decrement memory usage
+	static constexpr int RELEASE_RED = 0x2;		// Perform red zone checks (MEM_DEBUG only)
 
 public:
 	void* allocate(size_t size ALLOC_PARAMS);
@@ -1705,9 +1713,6 @@ public:
 
 	static void deallocate(void* block) noexcept;
 	bool validate(char* buf, FB_SIZE_T size);
-
-	// Create memory pool instance
-	static MemPool* createPool(MemPool* parent, MemoryStats& stats);
 
 	MemoryStats& getStatsGroup() noexcept
 	{
@@ -1814,9 +1819,16 @@ public:
 private:
 	MemPool* next;
 	MemPool* child;
-#endif
 
-friend class MemoryPool;
+#ifdef DEBUG_LOST_POOLS
+	const char* fileName;
+	int lineNum;
+
+	int seq = -1;
+#endif
+#endif // MEM_DEBUG
+
+	friend class MemoryPool;
 };
 
 
@@ -2051,11 +2063,18 @@ MemPool::~MemPool(void)
 
 			block->resetExtent();
 #endif
-			parent->releaseBlock(block, false);
+			parent->releaseBlock(block, RELEASE_RED);
 		}
 	}
 
 #ifdef MEM_DEBUG
+#ifdef DEBUG_LOST_POOLS
+	for (auto* c = child; c; c = c->child)
+		fprintf(stderr, "%p: child = %p\n", this, c);
+#endif
+
+	fb_assert(!child);
+
 	if (parent)
 	{
 		MutexLockGuard unlinkGuard(parent->mutex, FB_FUNCTION);
@@ -2106,13 +2125,22 @@ void MemPool::newExtent(size_t& size, Extent** linkedList)
 	size = extent->spaceRemaining;
 }
 
-MemoryPool* MemoryPool::createPool(MemoryPool* parentPool, MemoryStats& stats)
+MemoryPool* MemoryPool::createPool(MemoryPool* parentPool, MemoryStats& stats ALLOC_PARAMS_DEF)
 {
 	if (!parentPool)
 		parentPool = getDefaultMemoryPool();
 
-	MemPool* p = FB_NEW_POOL(*parentPool) MemPool(*(parentPool->pool), stats, &defaultExtentsCache);
-	return FB_NEW_POOL(*parentPool) MemoryPool(p);
+	MemPool* p = new(*parentPool ALLOC_PASS_ARGS) MemPool(*(parentPool->pool), stats, &defaultExtentsCache);
+#ifdef MEM_DEBUG
+#ifdef DEBUG_LOST_POOLS
+	p->location = location;
+
+	static std::atomic<int> seqGen = 0;
+	p->seq = ++seqGen;
+#endif
+#endif
+
+	return new(*parentPool ALLOC_PASS_ARGS) MemoryPool(p);
 }
 
 void MemPool::setStatsGroup(MemoryStats& newStats) noexcept
@@ -2141,9 +2169,9 @@ void MemoryPool::setStatsGroup(MemoryStats& newStats) noexcept
 	pool->setStatsGroup(newStats);
 }
 
-MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedirect)
+MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, bool flagRedirect)
 {
-	MutexEnsureUnlock guard(mutex, "MemPool::allocateInternal");
+	MutexEnsureUnlock guard(mutex, "MemPool::allocateInternal2");
 	guard.enter();
 
 	++blocksAllocated;
@@ -2178,7 +2206,7 @@ MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedire
 			else					// worst case - very low possibility
 			{
 				guard.leave();
-				parent->releaseBlock(block, false);
+				parent->releaseBlock(block, 0);
 				guard.enter();
 			}
 		}
@@ -2201,20 +2229,18 @@ MemBlock* MemPool::allocateInternal(size_t from, size_t& length, bool flagRedire
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
+MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS_DEF)
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
 	MemBlock* memory = allocateInternal(from, length, true);
 	size = length - (VALGRIND_REDZONE + GUARD_BYTES);
-	memory->pool = this;
 
 #ifdef USE_VALGRIND
 	VALGRIND_MEMPOOL_ALLOC(this, &memory->body, size);
 #endif
 
 #ifdef DEBUG_GDS_ALLOC
-	memory->fileName = file;
-	memory->lineNumber = line;
+	memory->location = location;
 #endif
 
 #ifdef MEM_DEBUG
@@ -2231,7 +2257,7 @@ MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS)
 }
 
 
-void* MemPool::allocate(size_t size ALLOC_PARAMS)
+void* MemPool::allocate(size_t size ALLOC_PARAMS_DEF)
 {
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::allocate");
@@ -2306,16 +2332,16 @@ void MemPool::releaseMemory(void* object, bool flagExtent) noexcept
 		block->valgrindInternal();
 
 #ifdef DEBUG_GDS_ALLOC
-		block->fileName = NULL;
+		block->location.fileName = nullptr;
 #endif
 
 		// Finally delete it
 		block->resetExtent();
-		pool->releaseBlock(block, !flagExtent);
+		pool->releaseBlock(block, RELEASE_RED | (flagExtent ? 0 : RELEASE_DECR));
 	}
 }
 
-void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
+void MemPool::releaseBlock(MemBlock* block, int flags) noexcept
 {
 #ifdef DELAYED_FREE
 	fb_assert(!block->isActive());
@@ -2328,10 +2354,13 @@ void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 	}
 
 #ifdef MEM_DEBUG
-	for (const UCHAR* end = (UCHAR*) block + block->getSize(), *p = end - GUARD_BYTES; p < end;)
+	if (flags & RELEASE_RED)
 	{
-		if (*p++ != GUARD_BYTE)
-			corrupt("guard bytes overwritten");
+		for (const UCHAR* end = (UCHAR*) block + block->getSize(), *p = end - GUARD_BYTES; p < end;)
+		{
+			if (*p++ != GUARD_BYTE)
+				corrupt("guard bytes overwritten");
+		}
 	}
 #endif
 
@@ -2342,9 +2371,9 @@ void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 
 	--blocksActive;
 
-	const Validator vld(decrUsage ? this : NULL);
+	const Validator vld(flags & RELEASE_DECR ? this : NULL);
 
-	if (decrUsage)
+	if (flags & RELEASE_DECR)
 		decrement_usage(length);
 
 	// If length is less than threshold, this is a small block
@@ -2363,7 +2392,7 @@ void MemPool::releaseBlock(MemBlock* block, bool decrUsage) noexcept
 		MutexLockGuard guard(parent->mutex, "MemPool::releaseBlock /parent");
 #endif
 		block->resetRedirect(parent);
-		parent->releaseBlock(block, false);
+		parent->releaseBlock(block, RELEASE_RED);
 		return;
 	}
 
@@ -2474,7 +2503,7 @@ void* MemPool::getExtent(size_t from, size_t& to)		// pass desired minimum size,
 #ifdef VALIDATE_POOL
 	MutexLockGuard guard(mutex, "MemPool::getExtent");
 #endif
-	MemBlock* extent = allocateRange(from, to ALLOC_ARGS);
+	MemBlock* extent = allocateRange(from, to);
 	extent->setExtent();
 	return &extent->body;
 }
@@ -2590,7 +2619,7 @@ void MemPool::globalFree(void* block) noexcept
 	deallocate(block);
 }
 
-void* MemoryPool::calloc(size_t size ALLOC_PARAMS)
+void* MemoryPool::calloc(size_t size ALLOC_PARAMS_DEF)
 {
 	void* block = allocate(size ALLOC_PASS_ARGS);
 	memset(block, 0, size);
@@ -2736,7 +2765,7 @@ MemoryPool& AutoStorage::getAutoMemoryPool()
 	return *p;
 }
 
-void* MemoryPool::allocate(size_t size ALLOC_PARAMS)
+void* MemoryPool::allocate(size_t size ALLOC_PARAMS_DEF)
 {
 	return pool->allocate(size ALLOC_PASS_ARGS);
 }
@@ -3005,12 +3034,12 @@ void AutoStorage::ProbeStack() const noexcept
 
 void* operator new(size_t s)
 {
-	return getExternalMemoryPool()->allocate(s ALLOC_ARGS);
+	return getExternalMemoryPool()->allocate(s);
 }
 
 void* operator new[](size_t s)
 {
-	return getExternalMemoryPool()->allocate(s ALLOC_ARGS);
+	return getExternalMemoryPool()->allocate(s);
 }
 
 void operator delete(void* mem) noexcept

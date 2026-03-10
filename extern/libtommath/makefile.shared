@@ -50,7 +50,7 @@ else
    USER=$(INSTALL_USER)
 endif
 
-default: libtommath.la
+default: $(LIBNAME)
 
 #default files to install
 ifndef LIBNAME
@@ -60,6 +60,9 @@ ifndef LIBNAME_S
    LIBNAME_S=libtommath.a
 endif
 HEADERS=tommath.h tommath_class.h tommath_superclass.h
+
+OBJDIR ?=
+OBJDIR_PREFIX := $(if $(OBJDIR),$(OBJDIR)/,)
 
 #LIBPATH-The directory for libtommath to be installed to.
 #INCPATH-The directory to install the header files for libtommath.
@@ -97,10 +100,18 @@ bn_mp_prime_random_ex.o bn_mp_get_int.o bn_mp_sqrt.o bn_mp_is_square.o bn_mp_ini
 bn_mp_init_set_int.o bn_mp_invmod_slow.o bn_mp_prime_rabin_miller_trials.o \
 bn_mp_to_signed_bin_n.o bn_mp_to_unsigned_bin_n.o
 
+OBJECTS := $(addprefix $(OBJDIR_PREFIX),$(OBJECTS))
+LOBJECTS = $(OBJECTS:.o=.lo)
+
 objs: $(OBJECTS)
 
-$(LIBNAME):  $(OBJECTS)
-	$(LIBTOOL) --mode=link --tag=CC $(GCC) *.lo -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION) $(NO_UNDEFINED)
+$(OBJDIR_PREFIX)%.lo: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LIBNAME):  $(LOBJECTS)
+	@mkdir -p $(dir $@)
+	$(LIBTOOL) --mode=link --tag=CC $(GCC) $(LOBJECTS) -o $(LIBNAME) -rpath $(LIBPATH) -version-info $(VERSION) $(NO_UNDEFINED)
 
 install: $(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(LIBPATH)
@@ -108,9 +119,10 @@ install: $(LIBNAME)
 	install -d -g $(GROUP) -o $(USER) $(DESTDIR)$(INCPATH)
 	install -g $(GROUP) -o $(USER) $(HEADERS) $(DESTDIR)$(INCPATH)
 
-test: $(LIBNAME) demo/demo.o
-	$(GCC) $(CFLAGS) -c demo/demo.c -o demo/demo.o
-	$(LIBTOOL) --mode=link $(GCC) -o test demo/demo.o $(LIBNAME_S)
+test: $(LIBNAME) $(OBJDIR_PREFIX)demo/demo.o
+	@mkdir -p $(dir $(OBJDIR_PREFIX)demo/demo.o)
+	$(GCC) $(CFLAGS) -c demo/demo.c -o $(OBJDIR_PREFIX)demo/demo.o
+	$(LIBTOOL) --mode=link $(GCC) -o test $(OBJDIR_PREFIX)demo/demo.o $(LIBNAME_S)
 
 mtest: test
 	cd mtest ; $(GCC) $(CFLAGS) mtest.c -o mtest

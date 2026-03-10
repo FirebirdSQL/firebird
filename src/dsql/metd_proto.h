@@ -47,14 +47,12 @@ namespace Jrd {
 
 void METD_drop_charset(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
-void METD_drop_function(Jrd::jrd_tra*, const Jrd::QualifiedName&);
-void METD_drop_procedure(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_relation(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 
 Jrd::dsql_intlsym* METD_get_charset(Jrd::jrd_tra*, const Jrd::QualifiedName& name);
-USHORT METD_get_charset_bpc(Jrd::jrd_tra*, SSHORT);
-Jrd::QualifiedName METD_get_charset_name(Jrd::jrd_tra*, SSHORT);
-Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&, USHORT charset_id);
+USHORT METD_get_charset_bpc(Jrd::jrd_tra*, CSetId);
+Jrd::QualifiedName METD_get_charset_name(Jrd::jrd_tra*, CSetId);
+Jrd::dsql_intlsym* METD_get_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&, CSetId charset_id);
 Jrd::QualifiedName METD_get_database_charset(Jrd::jrd_tra*);
 Jrd::QualifiedName METD_get_schema_charset(Jrd::jrd_tra*, const Jrd::MetaName&);
 bool METD_get_domain(Jrd::jrd_tra*, class Jrd::TypeClause*, const Jrd::QualifiedName& name);

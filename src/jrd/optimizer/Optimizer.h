@@ -40,6 +40,7 @@
 #include "../dsql/ExprNodes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/exe.h"
+#include "../jrd/Statement.h"
 #include "../jrd/recsrc/RecordSource.h"
 
 #include <cmath>
@@ -54,6 +55,7 @@ inline constexpr double REDUCE_SELECTIVITY_FACTOR_LESS = 0.05;
 inline constexpr double REDUCE_SELECTIVITY_FACTOR_GREATER = 0.05;
 inline constexpr double REDUCE_SELECTIVITY_FACTOR_STARTING = 0.01;
 inline constexpr double REDUCE_SELECTIVITY_FACTOR_OTHER = 0.01;
+inline constexpr double REDUCE_SELECTIVITY_FACTOR_ANY = 0.5;
 
 // Cost of simple (CPU bound) operations is less than the page access cost
 inline constexpr double COST_FACTOR_MEMCOPY = 0.5;
@@ -513,11 +515,6 @@ public:
 		return rse->isOuterJoin();
 	}
 
-	bool isLeftJoin() const
-	{
-		return rse->isLeftJoin();
-	}
-
 	bool isFullJoin() const
 	{
 		return rse->isFullJoin();
@@ -557,6 +554,11 @@ public:
 	bool getEquiJoinKeys(BoolExprNode* boolean,
 						 NestConst<ValueExprNode>* node1,
 						 NestConst<ValueExprNode>* node2);
+
+	void setOuterStreams(const StreamList& streams)
+	{
+		outerStreams.assign(streams);
+	}
 
 	Firebird::string getStreamName(StreamType stream);
 	Firebird::string makeAlias(StreamType stream);
@@ -781,7 +783,7 @@ private:
 	const bool innerFlag;
 	const bool outerFlag;
 	SortNode* const sort;
-	jrd_rel* relation;
+	Rsc::Rel relation;
 	const bool createIndexScanNodes;
 	const bool setConjunctionsMatched;
 	Firebird::string alias;
@@ -969,8 +971,19 @@ class OuterJoin : private Firebird::PermanentStorage
 {
 	struct OuterJoinStream
 	{
-		RecordSource* rsb = nullptr;
+		RecordSourceNode* node = nullptr;
+		River* river = nullptr;
 		StreamType number = INVALID_STREAM;
+
+		void getStreams(StreamList& streams)
+		{
+			if (number != INVALID_STREAM)
+				streams.add(number);
+			else if (river)
+				streams.assign(river->getStreams());
+			else
+				fb_assert(false);
+		}
 	};
 
 public:
@@ -981,7 +994,7 @@ public:
 	RecordSource* generate();
 
 private:
-	RecordSource* process(StreamList* outerStreams = nullptr);
+	RecordSource* process();
 
 	thread_db* const tdbb;
 	Optimizer* const optimizer;

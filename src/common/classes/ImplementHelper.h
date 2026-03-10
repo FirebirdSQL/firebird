@@ -124,7 +124,7 @@ public:
 protected:
 	void refCntDPrt(char f) noexcept
 	{
-#ifdef DEV_BUILD
+#ifdef NEVERDEF //DEV_BUILD
 		if (mark)
 			fprintf(stderr, "%s %p %c %d\n", mark, this, f, int(refCounter));
 #endif
