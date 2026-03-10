@@ -10894,6 +10894,12 @@ void DropRelationNode::deleteGlobalField(thread_db* tdbb, jrd_tra* transaction,
 				ARG.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME)
 	{
 		DropDomainNode::deleteDimensionRecords(tdbb, transaction, globalName);
+
+		if (!FLD.RDB$SECURITY_CLASS.NULL)
+			deleteSecurityClass(tdbb, transaction, FLD.RDB$SECURITY_CLASS);
+
+		deletePrivilegesByRelName(tdbb, transaction, globalName, obj_field);
+
 		ERASE FLD;
 	}
 	END_FOR
