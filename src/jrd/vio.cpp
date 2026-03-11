@@ -4464,7 +4464,8 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				EVL_field(0, rpb->rpb_record, f_idx_relation, &desc);
 				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 				MOV_get_metaname(tdbb, &desc, object_name.object);
-				auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name, CacheFlag::AUTOCREATE);
+				auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name,
+					CacheFlag::AUTOCREATE | CacheFlag::MINISCAN);
 				fb_assert(irel);
 
 				EVL_field(0, rpb->rpb_record, f_idx_id, &desc);

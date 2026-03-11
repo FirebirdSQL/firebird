@@ -512,7 +512,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 			if (csb->collectingDependencies())
 			{
 				Dependency dependency(obj_field);
-				dependency.name = name;
+				dependency.name = *name;
 				csb->addDependency(dependency);
 			}
 
@@ -586,7 +586,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 				if (!rel)
 					fatal_exception::raiseFmt("Unexpectedly lost relation %s\n", relationName->toQuotedString().c_str());
 				dependency.relation = rel;
-				dependency.subName = fieldName;
+				dependency.subName = *fieldName;
 				csb->addDependency(dependency);
 			}
 
@@ -999,7 +999,7 @@ void PAR_dependency(thread_db* tdbb, CompilerScratch* csb, StreamType stream, SS
 	}
 
 	if (field_name.length() > 0)
-		dependency.subName = FB_NEW_POOL(*tdbb->getDefaultPool()) MetaName(*tdbb->getDefaultPool(), field_name);
+		dependency.subName = field_name;
 	else if (id >= 0)
 		dependency.subNumber = id;
 
@@ -1185,7 +1185,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				if (csb->collectingDependencies())
 				{
 					Dependency dependency(obj_index);
-					dependency.name = &item.indexName;
+					dependency.name = item.indexName;
 					csb->addDependency(dependency);
 				}
 
@@ -1237,7 +1237,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					if (csb->collectingDependencies())
 					{
 						Dependency dependency(obj_index);
-						dependency.name = &item.indexName;
+						dependency.name = item.indexName;
 						csb->addDependency(dependency);
 		            }
 				}

@@ -126,7 +126,9 @@ void		MET_release_existence(Jrd::thread_db*, Jrd::jrd_rel*);
 void		MET_revoke(Jrd::thread_db*, Jrd::jrd_tra*, const Jrd::QualifiedName&,
 	const Jrd::QualifiedName&, const Firebird::string&);
 void		MET_store_dependencies(Jrd::thread_db*, Firebird::Array<Jrd::Dependency>&, const Jrd::jrd_rel*,
-	const Jrd::QualifiedName&, int, Jrd::jrd_tra*);
+	const Jrd::QualifiedName&, int);
+void		MET_store_dependency(Jrd::thread_db*, Jrd::Dependency&, const Jrd::jrd_rel*,
+	const Jrd::QualifiedName&, int);
 void		MET_trigger_msg(Jrd::thread_db*, Firebird::string&, const Jrd::QualifiedName&, USHORT);
 void		MET_update_shadow(Jrd::thread_db*, Jrd::Shadow*, USHORT);
 void		MET_update_transaction(Jrd::thread_db*, Jrd::jrd_tra*, const bool);

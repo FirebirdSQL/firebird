@@ -301,6 +301,8 @@ static inline int fb_isdigit(const char c)
 typedef Array<char> CharBuffer;
 GlobalPtr<CharBuffer> charBuffer;
 
+static bool sigTstp = false;
+
 #ifdef WIN_NT
 
 GlobalPtr<Array<WCHAR>> wideBuffer;
@@ -789,6 +791,8 @@ int ISQL_main(int argc, char* argv[])
  *
  **************************************/
 
+	os_utils::StopHandler stopHandler(&sigTstp);
+
 #if defined(HAVE_EDITLINE_H) && defined(HAVE_LOCALE_H)
 	setlocale(LC_CTYPE, "");
 #endif
@@ -1023,7 +1027,22 @@ static void readNextInputLine(const char* prompt)
 		// CVC: On 2005-04-02, use an empty prompt when not working in
 		// interactive mode to behave like @@@ below at request by Pavel.
 		const char* new_prompt = Interactive ? prompt : "";
-		lastInputLine = readline(new_prompt);
+		for(;;)
+		{
+			lastInputLine = readline(new_prompt);
+
+			// In a case of ignored SIGTSTP (ctrl-Z typically) readline return NULL -
+			// same as for EOF case, causing normal termination. Let's avoid it.
+			if (!lastInputLine)
+			{
+				if (!sigTstp)
+					break;
+				sigTstp = false;
+				new_prompt = "";
+			}
+			else
+				break;
+		}
 
 		if (lastInputLine != NULL && strlen(lastInputLine) != 0) {
 			add_history(lastInputLine);

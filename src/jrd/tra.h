@@ -197,7 +197,8 @@ public:
 		tra_mapping_list(NULL),
 		tra_dbcreators_list(nullptr),
 		tra_autonomous_pool(NULL),
-		tra_autonomous_cnt(0)
+		tra_autonomous_cnt(0),
+		tra_dependencies(*p)
 	{
 	}
 
@@ -331,6 +332,9 @@ private:
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 
 public:
+	Firebird::Array<WildDependency> tra_dependencies;
+
+public:
 	MemoryPool* getAutonomousPool();
 	void releaseAutonomousPool(MemoryPool* toRelease);
 	jrd_tra* getOuter() noexcept;
@@ -444,6 +448,7 @@ inline constexpr ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to 
 inline constexpr ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
 inline constexpr ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
 inline constexpr ULONG TRA_auto_release_temp_blobid = 0x400000L;// remove temp ids of materialized user blobs from tra_blobs
+inline constexpr ULONG TRA_deps_to_disk			= 0x800000L;	// store dependencies to RDB$DEPENDENCIES
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
@@ -548,7 +553,8 @@ enum dfw_t : int {
 	dfw_db_crypt,			// change database encryption status
 	dfw_set_linger,			// set database linger
 	dfw_clear_cache,		// clear user mapping cache
-	dfw_set_statistics		// set statistics support
+	dfw_set_statistics,		// set statistics support
+	dfw_deps_to_disk		// store saved deps to disk
 };
 
 } //namespace Jrd

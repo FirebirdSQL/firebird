@@ -48,6 +48,7 @@
 #include "../common/IntlParametersBlock.h"
 #include "../common/os/isc_i_proto.h"
 #include "../common/os/path_utils.h"
+#include "../common/os/os_utils.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
@@ -863,6 +864,7 @@ private:
 	void signalInit()
 	{
 #ifdef UNIX
+		static GlobalPtr<os_utils::StopHandler> stopHandler;
 		static GlobalPtr<CtrlCHandler> ctrlCHandler;
 #else
 		static GlobalPtr<ShutdownInit> shutdownInit;

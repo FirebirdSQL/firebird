@@ -1073,6 +1073,9 @@ public:
 	{
 		return FUNC_NAME;
 	}
+
+public:
+	NestConst<ValueExprNode> dsqlAutoTypeFromValue;
 };
 
 class GenSeriesFunctionSourceNode final : public TableValueFunctionSourceNode

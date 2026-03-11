@@ -435,12 +435,24 @@ struct Dependency
 		Cached::Relation* relation;
 		Cached::Function* function;
 		Cached::Procedure* procedure;
-		const QualifiedName* name;
 		SLONG number;
 	};
+	QualifiedName name;
 
-	const MetaName* subName;
+	MetaName subName;
 	SLONG subNumber;
+};
+
+struct WildDependency
+{
+	WildDependency()
+		: dependency(0)
+	{ }
+
+	Dependency dependency;
+	const jrd_rel* dep_rel;
+	QualifiedName object_name;
+	int dependency_type;
 };
 
 class CompilerScratch : public pool_alloc<type_csb>
