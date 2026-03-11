@@ -1655,7 +1655,7 @@ void put_index( burp_rel* relation)
 				I_S IN RDB$INDEX_SEGMENTS CROSS
 				RFR IN RDB$RELATION_FIELDS WITH
 				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
-				I_S.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+				I_S.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
 				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
 				RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
 				RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str()
@@ -1684,7 +1684,7 @@ void put_index( burp_rel* relation)
 
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
 				Y IN RDB$INDEX_SEGMENTS WITH
-				Y.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+				Y.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
 				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
 				SORTED BY Y.RDB$FIELD_POSITION
 			{

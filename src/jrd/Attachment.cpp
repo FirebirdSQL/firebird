@@ -959,6 +959,12 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 	{
 		att_meta_transaction = TRA_start(tdbb,
 			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version, DEFAULT_LOCK_TIMEOUT);
+
+		if (att_meta_transaction && att_meta_transaction->tra_lock)
+		{
+			LCK_release(tdbb, att_meta_transaction->tra_lock);
+			att_meta_transaction->tra_lock = nullptr;
+		}
 	}
 }
 
