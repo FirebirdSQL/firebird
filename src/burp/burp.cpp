@@ -1162,21 +1162,23 @@ int gbak(Firebird::UtilSvc* uSvc)
 		Firebird::PathName expanded;
 		expandDatabaseName(file->fil_name, expanded, NULL);
 
+		const bool isSource = (file->fil_name.c_str() == file1);
+
 		for (file_list = file->fil_next; file_list;
 			 file_list = file_list->fil_next)
 		{
-			if (file->fil_name == file_list->fil_name || expanded == file_list->fil_name)
-			{
-				BURP_error(9, true);
-				// msg 9 mutiple sources or destinations specified
-			}
-
 			Firebird::PathName expanded2;
 			expandDatabaseName(file_list->fil_name, expanded2, NULL);
-			if (file->fil_name == expanded2 || expanded == expanded2)
+
+			if (file->fil_name == file_list->fil_name || expanded == file_list->fil_name ||
+				file->fil_name == expanded2 || expanded == expanded2)
 			{
-				BURP_error(9, true);
-				// msg 9 mutiple sources or destinations specified
+				if (isSource)
+					BURP_error(11, true);
+					// msg 11 input and output have the same name.  Disallowed.
+				else
+					BURP_error(9, true);
+					// msg 9 mutiple sources or destinations specified
 			}
 		}
 
