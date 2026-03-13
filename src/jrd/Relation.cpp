@@ -160,8 +160,8 @@ bool RelationPermanent::destroy(thread_db* tdbb, RelationPermanent* rel)
 
 	if (rel->rel_foreign_adapter)
 	{
+		rel->rel_foreign_adapter->release(tdbb);
 		delete rel->rel_foreign_adapter;
-		rel->rel_foreign_adapter = nullptr;
 	}
 
 	rel->rel_indices.cleanup(tdbb);

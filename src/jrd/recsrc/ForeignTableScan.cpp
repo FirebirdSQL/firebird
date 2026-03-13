@@ -582,7 +582,7 @@ CSetId ForeignTableScan::getServerCharset(thread_db* tdbb) const
 {
 	string serverCharset;
 	const ForeignServer* server = m_relation()->getForeignAdapter()->getServer();
-	ForeignOption option(*getDefaultMemoryPool());
+	ForeignOption option(m_relation()->getPool());
 	if (server->getOptions().get(MetaName(FOREIGN_SERVER_CHARSET), option))
 		serverCharset = option.getActualValue();
 

@@ -86,75 +86,6 @@ class SortedStream;
 
 
 //
-// StreamStateHolder
-//
-
-class StreamStateHolder
-{
-public:
-	explicit StreamStateHolder(CompilerScratch* csb)
-		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
-	{
-		for (StreamType stream = 0; stream < csb->csb_n_stream; stream++)
-			m_streams.add(stream);
-
-		init();
-	}
-
-	StreamStateHolder(CompilerScratch* csb, const StreamList& streams)
-		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
-	{
-		m_streams.assign(streams);
-
-		init();
-	}
-
-	~StreamStateHolder()
-	{
-		for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
-		{
-			const StreamType stream = m_streams[i];
-
-			if (m_flags[i >> 3] & (1 << (i & 7)))
-				m_csb->csb_rpt[stream].activate();
-			else
-				m_csb->csb_rpt[stream].deactivate();
-		}
-	}
-
-	void activate() noexcept
-	{
-		for (const auto stream : m_streams)
-			m_csb->csb_rpt[stream].activate();
-	}
-
-	void deactivate() noexcept
-	{
-		for (const auto stream : m_streams)
-			m_csb->csb_rpt[stream].deactivate();
-	}
-
-private:
-	void init()
-	{
-		m_flags.resize(FLAG_BYTES(m_streams.getCount()));
-
-		for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
-		{
-			const StreamType stream = m_streams[i];
-
-			if (m_csb->csb_rpt[stream].csb_flags & csb_active)
-				m_flags[i >> 3] |= (1 << (i & 7));
-		}
-	}
-
-	CompilerScratch* const m_csb;
-	StreamList m_streams;
-	Firebird::HalfStaticArray<UCHAR, sizeof(SLONG)> m_flags;
-};
-
-
-//
 // River
 //
 
@@ -230,15 +161,106 @@ public:
 		return true;
 	}
 
+	bool isDependent(const StreamList& streams) const
+	{
+		return m_rsb->isDependent(streams);
+	}
+
 	bool isDependent(const River& river) const
 	{
-		return m_rsb->isDependent(river.getStreams());
+		return isDependent(river.getStreams());
 	}
 
 protected:
 	RecordSource* m_rsb;
 	Firebird::HalfStaticArray<RecordSourceNode*, OPT_STATIC_ITEMS> m_nodes;
 	StreamList m_streams;
+};
+
+
+//
+// StreamStateHolder
+//
+
+class StreamStateHolder
+{
+public:
+	explicit StreamStateHolder(CompilerScratch* csb)
+		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
+	{
+		for (StreamType stream = 0; stream < csb->csb_n_stream; stream++)
+			m_streams.add(stream);
+
+		init();
+	}
+
+	StreamStateHolder(CompilerScratch* csb, const StreamList& streams)
+		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
+	{
+		m_streams.assign(streams);
+
+		init();
+	}
+
+	StreamStateHolder(CompilerScratch* csb, const River* river)
+		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
+	{
+		m_streams.assign(river->getStreams());
+
+		init();
+	}
+
+	StreamStateHolder(CompilerScratch* csb, const RiverList& rivers)
+		: m_csb(csb), m_streams(csb->csb_pool), m_flags(csb->csb_pool)
+	{
+		for (const auto river : rivers)
+			m_streams.join(river->getStreams());
+
+		init();
+	}
+
+	~StreamStateHolder()
+	{
+		for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
+		{
+			const StreamType stream = m_streams[i];
+
+			if (m_flags[i >> 3] & (1 << (i & 7)))
+				m_csb->csb_rpt[stream].activate();
+			else
+				m_csb->csb_rpt[stream].deactivate();
+		}
+	}
+
+	void activate() noexcept
+	{
+		for (const auto stream : m_streams)
+			m_csb->csb_rpt[stream].activate();
+	}
+
+	void deactivate() noexcept
+	{
+		for (const auto stream : m_streams)
+			m_csb->csb_rpt[stream].deactivate();
+	}
+
+private:
+	void init()
+	{
+		m_flags.resize(FLAG_BYTES(m_streams.getCount()));
+
+		for (FB_SIZE_T i = 0; i < m_streams.getCount(); i++)
+		{
+			const StreamType stream = m_streams[i];
+
+			if (m_csb->csb_rpt[stream].csb_flags & csb_active)
+				m_flags[i >> 3] |= (1 << (i & 7));
+		}
+	}
+
+	CompilerScratch* const m_csb;
+	StreamList m_streams;
+	Firebird::HalfStaticArray<UCHAR, sizeof(SLONG)> m_flags;
 };
 
 
@@ -577,9 +599,11 @@ private:
 	void checkIndices();
 	void checkSorts();
 	unsigned distributeEqualities(BoolExprNodeStack& orgStack, unsigned baseCount);
-	void findDependentStreams(const StreamList& streams,
-							  StreamList& dependent_streams,
-							  StreamList& free_streams);
+	void findDependentStreams(const RiverList& rivers,
+							  const StreamList& streams,
+							  StreamList& dependentStreams,
+							  StreamList& freeStreams);
+	bool joinDependentStreams(StreamList& joinStreams, RiverList& rivers, SortNode** sort);
 	void formRivers(const StreamList& streams,
 					RiverList& rivers,
 					SortNode** sortClause,

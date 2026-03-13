@@ -132,7 +132,7 @@ ForeignTableConnection* ForeignTableProvider::createForeignConnection(thread_db*
 	// get a map of the connection parameters.
 	Mapping mapping(Mapping::MAP_NO_FLAGS, NULL);
 	GenericMap<MetaStringOptionPair>* foreignMap;
-	ForeignOption option(*getDefaultMemoryPool());
+	ForeignOption option(*tdbb->getAttachment()->att_pool);
 	if (mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap))
 	{
 		if (foreignMap->get(FOREIGN_SERVER_CONNECTION_STRING, option))

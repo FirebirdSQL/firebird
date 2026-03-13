@@ -963,7 +963,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		river->activate(csb);
 
 	bool sortCanBeUsed = true;
-	SortNode* const orgSortNode = sort;
+	const auto orgSortNode = sort;
 
 	// When DISTINCT and ORDER BY are done on different fields,
 	// and ORDER BY can be mapped to an index, then the records
@@ -987,6 +987,8 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 	}
 	else
 	{
+		fb_assert(isInnerJoin() || isSpecialJoin());
+
 		// AB: If previous rsb's are already on the stack we can't use
 		// a navigational-retrieval for an ORDER BY because the next
 		// streams are JOINed to the previous ones
@@ -1001,61 +1003,45 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				;
 		}
 
-		StreamList joinStreams(compileStreams);
-
-		if (isInnerJoin())
+		if (compileStreams.hasData())
 		{
-			fb_assert(joinStreams.getCount() != 1 || csb->csb_rpt[joinStreams[0]].csb_relation);
+			StreamList joinStreams(compileStreams);
 
-			while (true)
+			if (isInnerJoin())
 			{
-				// AB: Determine which streams have an index relationship
-				// with the currently active rivers. This is needed so that
-				// no merge is made between a new cross river and the
-				// currently active rivers. Where in the new cross river
-				// a stream depends (index) on the active rivers.
-				StreamList dependentStreams, freeStreams;
-				findDependentStreams(joinStreams, dependentStreams, freeStreams);
+				fb_assert(joinStreams.getCount() != 1 || csb->csb_rpt[joinStreams[0]].csb_relation);
 
-				// If we have dependent and free streams then we can't rely on
-				// the sort node to be used for index navigation
-				if (dependentStreams.hasData() && freeStreams.hasData())
+				// Process streams dependent on the priorly created rivers
+
+				if (joinDependentStreams(joinStreams, rivers, &sort))
 				{
-					sort = nullptr;
-					sortCanBeUsed = false;
-				}
-
-				if (dependentStreams.hasData())
-				{
-					// Copy free streams
-					joinStreams.assign(freeStreams);
-
-					// Make rivers from the dependent streams
-					generateInnerJoin(dependentStreams, rivers, &sort, rse->rse_plan);
+					// If we have dependent and free streams then we can't rely on
+					// the sort node to be used for index navigation
+					if (joinStreams.hasData())
+					{
+						sortCanBeUsed = false;
+						sort = nullptr;
+					}
 
 					// Generate one river which holds a cross join rsb between
-					// all currently available rivers
+					// all currently available rivers. This is needed to exclude
+					// dependent rivers from hashing or sort/merging that happens below.
 
 					rivers.add(FB_NEW_POOL(getPool()) CrossJoin(this, rivers, JoinType::INNER));
 					rivers.back()->activate(csb);
 				}
-				else
-				{
-					if (freeStreams.hasData())
-					{
-						// Deactivate streams from rivers on stack, because
-						// the remaining streams don't have any indexed relationship with them
-						for (const auto river : rivers)
-							river->deactivate(csb);
-					}
 
-					break;
-				}
+				// Now process streams dependent on rivers that are dependent themselves
+
+				for (const auto depRiver : dependentRivers)
+					depRiver->activate(csb);
+
+				joinDependentStreams(joinStreams, dependentRivers, nullptr);
 			}
-		}
 
-		// Attempt to form joins in decreasing order of desirability
-		generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
+			// Attempt to form joins in decreasing order of desirability
+			generateInnerJoin(joinStreams, rivers, &sort, rse->rse_plan);
+		}
 
 		if (rivers.isEmpty() && dependentRivers.isEmpty())
 		{
@@ -2473,9 +2459,10 @@ unsigned Optimizer::distributeEqualities(BoolExprNodeStack& orgStack, unsigned b
 // Find the streams that can use an index with the currently active streams
 //
 
-void Optimizer::findDependentStreams(const StreamList& streams,
-									 StreamList& dependent_streams,
-									 StreamList& free_streams)
+void Optimizer::findDependentStreams(const RiverList& rivers,
+									 const StreamList& streams,
+									 StreamList& dependentStreams,
+									 StreamList& freeStreams)
 {
 #ifdef OPT_DEBUG_RETRIEVAL
 	if (streams.hasData())
@@ -2489,7 +2476,7 @@ void Optimizer::findDependentStreams(const StreamList& streams,
 		// Set temporary active flag for this stream
 		tail->activate();
 
-		bool indexed_relationship = false;
+		bool dependent = false;
 
 		if (conjuncts.hasData())
 		{
@@ -2503,18 +2490,84 @@ void Optimizer::findDependentStreams(const StreamList& streams,
 			const auto* candidate = retrieval.getInversion();
 
 			if (candidate->dependentFromStreams.hasData())
-				indexed_relationship = true;
+			{
+				dependent = true;
+
+				StreamList checkStreams;
+				checkStreams.add(stream);
+
+				for (const auto river : rivers)
+				{
+					// If some river already depends on this stream,
+					// then itself it cannot be dependent
+					if (river->isDependent(checkStreams))
+					{
+						dependent = false;
+						break;
+					}
+				}
+			}
 		}
 
-		if (indexed_relationship)
-			dependent_streams.add(stream);
+		if (dependent)
+			dependentStreams.add(stream);
 		else
-			free_streams.add(stream);
+			freeStreams.add(stream);
 
 		// Reset active flag
 		tail->deactivate();
 	}
 }
+
+//
+// Find streams dependent on the priorly created rivers and make a join from them
+//
+
+bool Optimizer::joinDependentStreams(StreamList& joinStreams, RiverList& rivers, SortNode** sort)
+{
+	bool hasDependentStreams = false;
+
+	while (true)
+	{
+		// AB: Determine which streams have an index relationship
+		// with the currently active rivers. This is needed so that
+		// no merge is made between a new cross river and the
+		// currently active rivers. Where in the new cross river
+		// a stream depends (index) on the active rivers.
+		StreamList dependentStreams, freeStreams;
+		findDependentStreams(rivers, joinStreams, dependentStreams, freeStreams);
+
+		// If we have dependent and free streams then we can't rely on
+		// the sort node to be used for index navigation
+		if (dependentStreams.hasData() && freeStreams.hasData())
+			sort = nullptr;
+
+		if (dependentStreams.hasData())
+		{
+			hasDependentStreams = true;
+
+			// Copy free streams
+			joinStreams.assign(freeStreams);
+
+			// Make rivers from the dependent streams
+			generateInnerJoin(dependentStreams, rivers, sort, rse->rse_plan);
+		}
+		else
+		{
+			if (freeStreams.hasData())
+			{
+				// Deactivate streams from rivers on stack, because
+				// the remaining streams don't have any indexed relationship with them
+				for (const auto river : rivers)
+					river->deactivate(csb);
+			}
+
+			break;
+		}
+	}
+
+	return hasDependentStreams;
+};
 
 
 //

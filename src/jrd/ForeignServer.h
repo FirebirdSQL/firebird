@@ -198,7 +198,7 @@ namespace Jrd
 			m_skippedOrgRpbIdx(pool)
 		{ }
 
-		~ForeignTableAdapter()
+		void release(thread_db* tdbb)
 		{
 			Firebird::LeftPooledMap<Firebird::MetaString, ForeignField*>::Accessor accessor(&m_foreignFields);
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
