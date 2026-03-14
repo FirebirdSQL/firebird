@@ -1061,6 +1061,7 @@ public:
 	bool		gbl_sw_mode_val;
 	bool		gbl_sw_overwrite;
 	bool		gbl_sw_direct_io;
+	bool		gbl_sw_backup_overwrite;
 	bool		gbl_sw_zip;
 	const SCHAR*	gbl_sw_keyholder;
 	const SCHAR*	gbl_sw_crypt;

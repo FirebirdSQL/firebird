@@ -1025,6 +1025,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_direct_io = true;
 			break;
+		case IN_SW_BURP_OVERWRITE:
+			if (tdgbl->gbl_sw_backup_overwrite)
+				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
+			tdgbl->gbl_sw_backup_overwrite = true;
+			break;
 		case IN_SW_BURP_E:
 			if (!tdgbl->gbl_sw_compress)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
@@ -2218,15 +2223,29 @@ static gbak_action open_files(const TEXT* file1,
 			{
 				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
-				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
+				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE,
+					tdgbl->gbl_sw_backup_overwrite ? CREATE_ALWAYS : CREATE_NEW)) == INVALID_HANDLE_VALUE)
 #else
-				const int wmode = MODE_WRITE | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+				const int wmode = MODE_WRITE
+					| (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0)
+					| (tdgbl->gbl_sw_backup_overwrite ? 0 : O_EXCL);
 				if ((fil->fil_fd = open(fil->fil_name.c_str(), wmode, open_mask)) == -1)
 #endif // WIN_NT
 				{
-
-					BURP_error(65, false, fil->fil_name.c_str());
-					// msg 65 can't open backup file %s
+#ifdef WIN_NT
+					if (GetLastError() == ERROR_FILE_EXISTS)
+#else
+					if (errno == EEXIST)
+#endif // WIN_NT
+					{
+						BURP_error(424, false, fil->fil_name.c_str());
+						// msg 424 backup file %s already exists, use -OVERWRITE to replace
+					}
+					else
+					{
+						BURP_error(65, false, fil->fil_name.c_str());
+						// msg 65 can't open backup file %s
+					}
 					flag = QUIT;
 					break;
 				}

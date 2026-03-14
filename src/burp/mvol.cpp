@@ -1548,17 +1548,38 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		prompt_for_name(new_file, sizeof(new_file));
 
 #ifdef WIN_NT
-		new_desc = NT_tape_open(new_file, mode, OPEN_ALWAYS);
+		if (mode == MODE_WRITE)
+		{
+			new_desc = NT_tape_open(new_file, mode,
+				tdgbl->gbl_sw_backup_overwrite ? CREATE_ALWAYS : CREATE_NEW);
+		}
+		else
+			new_desc = NT_tape_open(new_file, mode, OPEN_ALWAYS);
 		if (new_desc == INVALID_HANDLE_VALUE)
 #else
 		ULONG mode2 = mode;
-		if (mode == MODE_WRITE && tdgbl->gbl_sw_direct_io)
-			mode2 |= O_DIRECT;
+		if (mode == MODE_WRITE)
+		{
+			if (tdgbl->gbl_sw_direct_io)
+				mode2 |= O_DIRECT;
+			if (!tdgbl->gbl_sw_backup_overwrite)
+				mode2 |= O_EXCL;
+		}
 
 		new_desc = open(new_file, mode2, open_mask);
 		if (new_desc < 0)
 #endif // WIN_NT
 		{
+#ifdef WIN_NT
+			if (mode == MODE_WRITE && GetLastError() == ERROR_FILE_EXISTS)
+#else
+			if (mode == MODE_WRITE && errno == EEXIST)
+#endif // WIN_NT
+			{
+				BURP_print(true, 424, new_file);
+				// msg 424 backup file %s already exists, use -OVERWRITE to replace
+				continue;
+			}
 			BURP_print(true, 222, new_file);
 			// msg 222 \n\nCould not open file name \"%s\"\n
 			continue;
