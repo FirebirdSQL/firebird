@@ -444,40 +444,7 @@ bool_t xdr_int128(xdr_t* xdrs, Firebird::Int128* ip)
 #endif
 }
 
-
-bool_t xdr_enum(xdr_t* xdrs, xdr_op* ip)
-{
-/**************************************
- *
- *	x d r _ e n u m
- *
- **************************************
- *
- * Functional description
- *	Map from external to internal representation (or vice versa).
- *
- **************************************/
-	SLONG temp;
-
-	switch (xdrs->x_op)
-	{
-	case XDR_ENCODE:
-		temp = (SLONG) *ip;
-		return PUTLONG(xdrs, &temp);
-
-	case XDR_DECODE:
-		if (!GETLONG(xdrs, &temp))
-			return FALSE;
-		*ip = (xdr_op) temp;
-		return TRUE;
-
-	case XDR_FREE:
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
+// xdr_enum is now a template function in xdr_proto.h
 
 bool_t xdr_float(xdr_t* xdrs, float* ip)
 {
