@@ -104,7 +104,6 @@ inline constexpr int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
 
 inline constexpr int IN_SW_BURP_SKIP_SCHEMA_DATA	= 56;	// skip data from schema
 inline constexpr int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
-inline constexpr int IN_SW_BURP_OVERWRITE			= 58;	// allow overwriting existing backup file
 
 /**************************************************************************/
 
@@ -171,8 +170,6 @@ static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 99: @1ONE_AT_A_TIME restore one relation at a time
 	{IN_SW_BURP_OL,	isc_spb_bkp_old_descriptions, "OLD_DESCRIPTIONS", 0, 0, 0, false, true,	186, 2, NULL, boBackup},
 				// msg 186: @1OLD_DESCRIPTIONS save old style metadata descriptions
-	{IN_SW_BURP_OVERWRITE, 0,					"OVERWRITE",		0, 0, 0, false, true,	423,	2, NULL, boBackup},
-			// msg 423: @1OV(ERWRITE) allow overwriting existing backup file(s)
 	{IN_SW_BURP_P,	isc_spb_res_page_size,		"PAGE_SIZE",		0, 0, 0, false, false,	101,	1, NULL, boRestore},
 				// msg 101: @1PAGE_SIZE override default page size
 	{IN_SW_BURP_PARALLEL_WORKERS, isc_spb_bkp_parallel_workers, "PARALLEL", 0, 0, 0, false, false, 406, 3, NULL, boGeneral},

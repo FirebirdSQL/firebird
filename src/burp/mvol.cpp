@@ -1551,7 +1551,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		if (mode == MODE_WRITE)
 		{
 			new_desc = NT_tape_open(new_file, mode,
-				tdgbl->gbl_sw_backup_overwrite ? CREATE_ALWAYS : CREATE_NEW);
+				tdgbl->gbl_sw_overwrite ? CREATE_ALWAYS : CREATE_NEW);
 		}
 		else
 			new_desc = NT_tape_open(new_file, mode, OPEN_ALWAYS);
@@ -1562,7 +1562,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		{
 			if (tdgbl->gbl_sw_direct_io)
 				mode2 |= O_DIRECT;
-			if (!tdgbl->gbl_sw_backup_overwrite)
+			if (!tdgbl->gbl_sw_overwrite)
 				mode2 |= O_EXCL;
 		}
 
@@ -1576,8 +1576,8 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 			if (mode == MODE_WRITE && errno == EEXIST)
 #endif // WIN_NT
 			{
-				BURP_print(true, 424, new_file);
-				// msg 424 backup file %s already exists, use -OVERWRITE to replace
+				BURP_print(true, 423, new_file);
+				// msg 423 backup file %s already exists, use OVERWRITE to replace
 				continue;
 			}
 			BURP_print(true, 222, new_file);

@@ -669,6 +669,19 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 		switch (in_sw_tab->in_sw)
 		{
+		case IN_SW_BURP_B:
+			if ((itr < argc - 1) && (*argv[itr + 1] != switch_char))
+			{
+				// find optional BURP_SW_OVERWRITE parameter
+				Firebird::string next(argv[itr + 1]);
+				next.upper();
+				if (strstr(BURP_SW_OVERWRITE, next.c_str()) == BURP_SW_OVERWRITE)
+				{
+					tdgbl->gbl_sw_overwrite = true;
+					itr++;
+				}
+			}
+			break;
 		case IN_SW_BURP_RECREATE:
 			{
 				int real_sw = IN_SW_BURP_C;
@@ -1024,11 +1037,6 @@ int gbak(Firebird::UtilSvc* uSvc)
 			if (tdgbl->gbl_sw_direct_io)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_direct_io = true;
-			break;
-		case IN_SW_BURP_OVERWRITE:
-			if (tdgbl->gbl_sw_backup_overwrite)
-				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
-			tdgbl->gbl_sw_backup_overwrite = true;
 			break;
 		case IN_SW_BURP_E:
 			if (!tdgbl->gbl_sw_compress)
@@ -2224,11 +2232,11 @@ static gbak_action open_files(const TEXT* file1,
 				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE,
-					tdgbl->gbl_sw_backup_overwrite ? CREATE_ALWAYS : CREATE_NEW)) == INVALID_HANDLE_VALUE)
+					tdgbl->gbl_sw_overwrite ? CREATE_ALWAYS : CREATE_NEW)) == INVALID_HANDLE_VALUE)
 #else
 				const int wmode = MODE_WRITE
 					| (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0)
-					| (tdgbl->gbl_sw_backup_overwrite ? 0 : O_EXCL);
+					| (tdgbl->gbl_sw_overwrite ? 0 : O_EXCL);
 				if ((fil->fil_fd = open(fil->fil_name.c_str(), wmode, open_mask)) == -1)
 #endif // WIN_NT
 				{
@@ -2238,8 +2246,8 @@ static gbak_action open_files(const TEXT* file1,
 					if (errno == EEXIST)
 #endif // WIN_NT
 					{
-						BURP_error(424, false, fil->fil_name.c_str());
-						// msg 424 backup file %s already exists, use -OVERWRITE to replace
+						BURP_error(423, false, fil->fil_name.c_str());
+						// msg 423 backup file %s already exists, use OVERWRITE to replace
 					}
 					else
 					{
