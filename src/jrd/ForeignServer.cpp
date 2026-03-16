@@ -677,6 +677,8 @@ void ForeignTableAdapter::getSql(string& sql, const string& filter, const string
 
 		sql += getWhereClauseSql();
 	}
+
+	sql.trim();
 }
 
 // Get a list of fields to access the foreign table.
