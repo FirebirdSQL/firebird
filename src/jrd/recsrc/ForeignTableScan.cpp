@@ -120,6 +120,7 @@ void ForeignTableScan::internalOpen(thread_db* tdbb) const
 		}
 
 		impure->statement = m_relation()->getForeignAdapter()->createStatement(tdbb, NULL, NULL, filterSql, orderSql);
+		impure->statement->bindToRequest(request, &impure->statement);
 	}
 
 	m_relation()->getForeignAdapter()->execute(tdbb, impure->statement);
@@ -173,9 +174,6 @@ bool ForeignTableScan::internalGetRecord(thread_db* tdbb) const
 
 		return true;
 	}
-
-	impure->statement->close(tdbb);
-	impure->statement = nullptr;
 
 	rpb->rpb_number.setValid(false);
 	return false;
