@@ -29,6 +29,7 @@
 #include "../common/classes/GenericMap.h"
 #include "../jrd/MetaName.h"
 #include "../common/classes/fb_pair.h"
+#include "Nodes.h"
 
 // forward declarations
 namespace Jrd {
@@ -38,12 +39,15 @@ namespace Jrd {
 	class DsqlCompilerScratch;
 	class jrd_tra;
 	class dsql_intlsym;
-	class dsql_fld;
 	class dsql_udf;
 	class dsql_prc;
 	class dsql_rel;
-	class FieldNode;
 };
+
+namespace Metadata
+{
+	void resolveType(Jrd::DsqlCompilerScratch* dsqlScratch, Jrd::QualifiedName& relationName, Jrd::QualifiedName& fieldOrDomainName, Jrd::TypeClause& type);
+}
 
 void METD_drop_charset(Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void METD_drop_collation(Jrd::jrd_tra*, const Jrd::QualifiedName&);

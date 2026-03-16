@@ -184,6 +184,34 @@ public:
 	{
 	}
 
+	TypeClause(MemoryPool& pool, const TypeClause& orig)
+		: dtype(orig.dtype),
+		  length(orig.length),
+		  scale(orig.scale),
+		  subType(orig.subType),
+		  segLength(orig.segLength),
+		  precision(orig.precision),
+		  charLength(orig.charLength),
+		  charSetId(orig.charSetId),
+		  collationId(orig.collationId),
+		  textType(orig.textType),
+		  mechanism(orig.mechanism),
+		  notNull(orig.notNull),
+		  fieldSource(pool, orig.fieldSource),
+		  typeOfTable(pool, orig.typeOfTable),
+		  typeOfName(pool, orig.typeOfName),
+		  collate(pool, orig.collate),
+		  charSet(pool, orig.charSet),
+		  subTypeName(pool, orig.subTypeName),
+		  flags(orig.flags),
+		  elementDtype(orig.elementDtype),
+		  elementLength(orig.elementLength),
+		  dimensions(orig.dimensions),
+		  ranges(orig.ranges),
+		  explicitCollation(orig.explicitCollation)
+	{
+	}
+
 	virtual ~TypeClause()
 	{
 	}
@@ -228,10 +256,10 @@ public:
 	std::optional<CSetId> charSetId;
 	CollId collationId = CollId();
 	TTypeId textType = TTypeId();
-	bool fullDomain = false;			// Domain name without TYPE OF prefix
+	prm_mech_t mechanism = prm_mech_normal;
 	bool notNull = false;				// NOT NULL was explicit specified
 	QualifiedName fieldSource;
-	QualifiedName typeOfTable;		// TYPE OF table name
+	QualifiedName typeOfTable;		// TYPE OF COLUMN table name
 	QualifiedName typeOfName;		// TYPE OF
 	QualifiedName collate;
 	QualifiedName charSet;			// empty means not specified
@@ -708,32 +736,20 @@ private:
 	int scale;
 };
 
-struct SignatureParameter
+struct SignatureParameter : public TypeClause
 {
 	explicit SignatureParameter(MemoryPool& p)
-		: name(p),
-		  fieldSource(p),
-		  fieldName(p),
-		  relationName(p),
-		  charSetName(p),
-		  collationName(p),
-		  subTypeName(p)
+		: TypeClause(p, {}),
+		  name(p)
 	{
 	}
 
 	SignatureParameter(MemoryPool& p, const SignatureParameter& o)
-		: type(o.type),
+		: TypeClause(p, o),
+		  type(o.type),
 		  number(o.number),
 		  name(p, o.name),
-		  fieldSource(p, o.fieldSource),
-		  fieldName(p, o.fieldName),
-		  relationName(p, o.relationName),
-		  charSetName(p, o.charSetName),
-		  collationName(p, o.collationName),
-		  subTypeName(p, o.subTypeName),
-		  collationId(o.collationId),
 		  nullFlag(o.nullFlag),
-		  mechanism(o.mechanism),
 		  fieldLength(o.fieldLength),
 		  fieldScale(o.fieldScale),
 		  fieldType(o.fieldType),
@@ -755,31 +771,22 @@ struct SignatureParameter
 		fieldSubType = type->subType;
 		fieldLength = type->length;
 		fieldCharLength = type->charLength;
-		charSetName = type->charSet;
+		charSet = type->charSet;
 		fieldCharSetId = type->charSetId;
-		collationName = type->collate;
+		collate = type->collate;
 		fieldCollationId = type->collationId;
 		fieldSource = type->fieldSource;
-		fieldName = type->typeOfName;
-		relationName = type->typeOfTable;
+		typeOfName = type->typeOfName;
+		typeOfTable = type->typeOfTable;
 		fieldSegmentLength = type->segLength;
 		fieldPrecision = type->precision;
 		nullFlag = (SSHORT) type->notNull;
-		mechanism = (SSHORT) type->fullDomain;
 	}
 
 	SSHORT type = 0;
 	SSHORT number = 0;
 	MetaName name;
-	QualifiedName fieldSource;
-	QualifiedName fieldName;
-	QualifiedName relationName;
-	QualifiedName charSetName;
-	QualifiedName collationName;
-	MetaName subTypeName;
-	std::optional<CollId> collationId;
 	std::optional<SSHORT> nullFlag;
-	SSHORT mechanism = 0;
 	std::optional<SSHORT> fieldLength;
 	std::optional<SSHORT> fieldScale;
 	std::optional<SSHORT> fieldType;
@@ -805,8 +812,8 @@ struct SignatureParameter
 				(fieldSource.schema == o.fieldSource.schema &&
 					fb_utils::implicit_domain(fieldSource.object.c_str()) &&
 					fb_utils::implicit_domain(o.fieldSource.object.c_str()))) &&
-			fieldName == o.fieldName &&
-			relationName == o.relationName &&
+			typeOfName == o.typeOfName &&
+			typeOfTable == o.typeOfTable &&
 			collationId == o.collationId &&
 			nullFlag.value_or(FALSE) == o.nullFlag.value_or(FALSE) &&
 			mechanism == o.mechanism &&
@@ -817,8 +824,8 @@ struct SignatureParameter
 			fieldSegmentLength == o.fieldSegmentLength &&
 			fieldNullFlag.value_or(FALSE) == o.fieldNullFlag.value_or(FALSE) &&
 			fieldCharLength == o.fieldCharLength &&
-			charSetName == o.charSetName &&
-			collationName == o.collationName &&
+			charSet == o.charSet &&
+			collate == o.collate &&
 			subTypeName == o.subTypeName &&
 			fieldCollationId.value_or(CollId()) == o.fieldCollationId.value_or(CollId()) &&
 			fieldCharSetId == o.fieldCharSetId &&

@@ -299,6 +299,23 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 
 	if (!found)
 	{
+		// May be one of pseudocolumns?..
+		if (fieldName == RDB_DB_KEY_NAME)
+		{
+			const jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relationName, CacheFlag::AUTOCREATE);
+			if (relation != nullptr)
+			{
+				desc->makeText(relation->rel_dbkey_length, ttype_binary);
+				if (fieldInfo)
+				{
+					fieldInfo->nullable = false;
+					fieldInfo->defaultValue = nullptr;
+					fieldInfo->validationExpr = nullptr;
+				}
+				return;
+			}
+		}
+
 		ERR_post(Arg::Gds(isc_dyn_column_does_not_exist) <<
 			fieldName.toQuotedString() <<
 			relationName.toQuotedString());
@@ -2570,24 +2587,21 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			getOutputFields().resize(P.RDB$PROCEDURE_OUTPUTS);
 			setDefaultCount(0);
 
-			AutoCacheRequest request2(tdbb, irq_r_params, IRQ_REQUESTS);
 
 			const MetaName packageName(P.RDB$PACKAGE_NAME.NULL ? NULL : P.RDB$PACKAGE_NAME);
 
+			static const CachedRequestId irq_r_params;
+			AutoCacheRequest request2(tdbb, irq_r_params);
 			FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				PA IN RDB$PROCEDURE_PARAMETERS
-				CROSS F IN RDB$FIELDS
 				WITH PA.RDB$SCHEMA_NAME = P.RDB$SCHEMA_NAME AND
 					 PA.RDB$PACKAGE_NAME EQUIV NULLIF(packageName.c_str(), '') AND
-					 PA.RDB$PROCEDURE_NAME = P.RDB$PROCEDURE_NAME AND
-					 F.RDB$SCHEMA_NAME = PA.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-					 F.RDB$FIELD_NAME = PA.RDB$FIELD_SOURCE
-
+					 PA.RDB$PROCEDURE_NAME = P.RDB$PROCEDURE_NAME
 			{
 				const SSHORT pa_collation_id_null = PA.RDB$COLLATION_ID.NULL;
 				const CollId pa_collation_id(PA.RDB$COLLATION_ID);
 				const SSHORT pa_default_value_null = PA.RDB$DEFAULT_VALUE.NULL;
-				bid pa_default_value = pa_default_value_null ? F.RDB$DEFAULT_VALUE : PA.RDB$DEFAULT_VALUE;
+				bid pa_default_value = PA.RDB$DEFAULT_VALUE;
 
 				Array<NestConst<Parameter> >& paramArray = PA.RDB$PARAMETER_TYPE ?
 					getOutputFields() : getInputFields();
@@ -2601,16 +2615,46 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 				parameter->prm_mechanism = PA.RDB$PARAMETER_MECHANISM.NULL ?	// ODS_11_1
 					prm_mech_normal : (prm_mech_t) PA.RDB$PARAMETER_MECHANISM;
 
-				if (!PA.RDB$FIELD_SOURCE.NULL)
+				if (!PA.RDB$RELATION_NAME.NULL && !PA.RDB$FIELD_NAME.NULL)
+				{
+					parameter->prm_type_of_table = QualifiedName(PA.RDB$RELATION_NAME, PA.RDB$RELATION_SCHEMA_NAME);
+					parameter->prm_type_of_column = PA.RDB$FIELD_NAME;
+					// TYPE OF COLUMN cannot cause inheritance of constraints and default value
+					MET_get_relation_field(tdbb, mdc->getPool(),
+						parameter->prm_type_of_table, parameter->prm_type_of_column,
+						&parameter->prm_desc, nullptr);
+				}
+				else if (!PA.RDB$FIELD_SOURCE.NULL)
+				{
 					parameter->prm_field_source = QualifiedName(PA.RDB$FIELD_SOURCE, PA.RDB$FIELD_SOURCE_SCHEMA_NAME);
 
-				DSC_make_descriptor(&parameter->prm_desc, F.RDB$FIELD_TYPE,
-									F.RDB$FIELD_SCALE, F.RDB$FIELD_LENGTH,
-									F.RDB$FIELD_SUB_TYPE, CSetId(F.RDB$CHARACTER_SET_ID),
-									(pa_collation_id_null ? CollId(F.RDB$COLLATION_ID) : pa_collation_id));
+					const bool fullDomain = PA.RDB$PARAMETER_TYPE == 0	// Input parameter
+						&& parameter->prm_mechanism == prm_mech_normal	// Not TYPE OF
+						&& pa_default_value_null;	// Default not overriden
 
-				if (F.RDB$FIELD_TYPE == blr_blob)
-					parameter->prm_seg_length = F.RDB$SEGMENT_LENGTH;
+					FieldInfo fieldInfo;
+					FieldInfo* fieldInfoPtr = fullDomain ? &fieldInfo : nullptr;
+					MET_get_domain(tdbb, mdc->getPool(), parameter->prm_field_source, &parameter->prm_desc, fieldInfoPtr);
+
+					if (fullDomain)
+					{
+						// Perhaps nullable should be borrowed as well
+						parameter->prm_default_value = fieldInfo.defaultValue;
+						setDefaultCount(getDefaultCount() + 1);
+						// Currently parameter don't support validation
+						// parameter->??? = fieldInfo->validationExpr;
+					}
+
+					if (!pa_collation_id_null) // Replace domain collation with parameter collation
+						parameter->prm_desc.setTextType(TTypeId(parameter->prm_desc.getCharSet(), pa_collation_id));
+
+//					if (parameter->prm_desc.isBlob())
+//						parameter->prm_seg_length = F.RDB$SEGMENT_LENGTH;
+				}
+				else
+				{
+					ERR_post(Arg::PrivateDyn(80));
+				}
 
 				if (parameter->prm_desc.isText() && parameter->prm_desc.getTextType() != CS_NONE)
 				{
@@ -2618,34 +2662,14 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 						parameter->prm_text_type = parameter->prm_desc.getTextType();
 				}
 
-				if (!PA.RDB$RELATION_NAME.NULL)
-					parameter->prm_type_of_table = QualifiedName(PA.RDB$RELATION_NAME, PA.RDB$RELATION_SCHEMA_NAME);
-
-				if (!PA.RDB$FIELD_NAME.NULL)
-					parameter->prm_type_of_column = PA.RDB$FIELD_NAME;
-
-				if (PA.RDB$PARAMETER_TYPE == 0 &&
-					(!pa_default_value_null ||
-					 (fb_utils::implicit_domain(F.RDB$FIELD_NAME) && !F.RDB$DEFAULT_VALUE.NULL)))
+				if (PA.RDB$PARAMETER_TYPE == 0 && !pa_default_value_null)
 				{
 					setDefaultCount(getDefaultCount() + 1);
-					MemoryPool* pool = dbb->createPool();
-					Jrd::ContextPoolHolder context(tdbb, pool);
+					Jrd::ContextPoolHolder context(tdbb, &mdc->getPool());
 
-					try
-					{
-						parameter->prm_default_value = static_cast<ValueExprNode*>(
-							MET_parse_blob(tdbb, &getName().schema, nullptr, &pa_default_value,
-								NULL, NULL, false, false));
-					}
-					catch (const Exception&)
-					{
-						// Here we lose pools created for previous defaults.
-						// Probably we should use common pool for defaults and procedure itself.
-
-						dbb->deletePool(pool);
-						throw;
-					}
+					parameter->prm_default_value = static_cast<ValueExprNode*>(
+						MET_parse_blob(tdbb, &getName().schema, nullptr, &pa_default_value,
+							NULL, NULL, false, false));
 				}
 			}
 			END_FOR
