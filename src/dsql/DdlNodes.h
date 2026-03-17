@@ -2873,7 +2873,7 @@ public:
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_foreign_server_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_foreign_server_failed) << name.toQuotedString();
 	}
 
 public:
