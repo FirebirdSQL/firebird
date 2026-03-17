@@ -420,6 +420,7 @@ void ForeignTableStatement::setInParamsInternal(thread_db* tdbb,
 					dst.dsc_flags = validDestDesc.dsc_flags;
 					dst.dsc_scale = validDestDesc.dsc_scale;
 					dst.dsc_sub_type = validDestDesc.dsc_sub_type;
+					dst.dsc_address = validDestDesc.dsc_address;
 				}
 
 				if (dst.isBlob())
