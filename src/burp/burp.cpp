@@ -669,6 +669,19 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 		switch (in_sw_tab->in_sw)
 		{
+		case IN_SW_BURP_B:
+			if ((itr < argc - 1) && (*argv[itr + 1] != switch_char))
+			{
+				// find optional BURP_SW_OVERWRITE parameter
+				Firebird::string next(argv[itr + 1]);
+				next.upper();
+				if (strstr(BURP_SW_OVERWRITE, next.c_str()) == BURP_SW_OVERWRITE)
+				{
+					tdgbl->gbl_sw_overwrite = true;
+					itr++;
+				}
+			}
+			break;
 		case IN_SW_BURP_RECREATE:
 			{
 				int real_sw = IN_SW_BURP_C;
@@ -1162,21 +1175,23 @@ int gbak(Firebird::UtilSvc* uSvc)
 		Firebird::PathName expanded;
 		expandDatabaseName(file->fil_name, expanded, NULL);
 
+		const bool isSource = (file->fil_name.c_str() == file1);
+
 		for (file_list = file->fil_next; file_list;
 			 file_list = file_list->fil_next)
 		{
-			if (file->fil_name == file_list->fil_name || expanded == file_list->fil_name)
-			{
-				BURP_error(9, true);
-				// msg 9 mutiple sources or destinations specified
-			}
-
 			Firebird::PathName expanded2;
 			expandDatabaseName(file_list->fil_name, expanded2, NULL);
-			if (file->fil_name == expanded2 || expanded == expanded2)
+
+			if (file->fil_name == file_list->fil_name || expanded == file_list->fil_name ||
+				file->fil_name == expanded2 || expanded == expanded2)
 			{
-				BURP_error(9, true);
-				// msg 9 mutiple sources or destinations specified
+				if (isSource)
+					BURP_error(11, true);
+					// msg 11 input and output have the same name.  Disallowed.
+				else
+					BURP_error(9, true);
+					// msg 9 mutiple sources or destinations specified
 			}
 		}
 
@@ -2216,15 +2231,29 @@ static gbak_action open_files(const TEXT* file1,
 			{
 				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
-				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
+				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE,
+					tdgbl->gbl_sw_overwrite ? CREATE_ALWAYS : CREATE_NEW)) == INVALID_HANDLE_VALUE)
 #else
-				const int wmode = MODE_WRITE | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+				const int wmode = MODE_WRITE
+					| (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0)
+					| (tdgbl->gbl_sw_overwrite ? 0 : O_EXCL);
 				if ((fil->fil_fd = open(fil->fil_name.c_str(), wmode, open_mask)) == -1)
 #endif // WIN_NT
 				{
-
-					BURP_error(65, false, fil->fil_name.c_str());
-					// msg 65 can't open backup file %s
+#ifdef WIN_NT
+					if (GetLastError() == ERROR_FILE_EXISTS)
+#else
+					if (errno == EEXIST)
+#endif // WIN_NT
+					{
+						BURP_error(423, false, fil->fil_name.c_str());
+						// msg 423 backup file %s already exists, use OVERWRITE to replace
+					}
+					else
+					{
+						BURP_error(65, false, fil->fil_name.c_str());
+						// msg 65 can't open backup file %s
+					}
 					flag = QUIT;
 					break;
 				}
