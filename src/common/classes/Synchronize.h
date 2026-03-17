@@ -84,7 +84,6 @@ public:
 
 	static ThreadSync* findThread();
 	static ThreadSync* getThread(const char* desc);
-	static ThreadId getCurrentThreadId();
 
 	const char* getWhere() const;
 

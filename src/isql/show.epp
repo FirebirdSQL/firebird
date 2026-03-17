@@ -4410,6 +4410,9 @@ static processing_state show_func(const QualifiedMetaString& name)
 				show_charsets(charset, collation);
 			}
 
+			if (!ARG.RDB$NULL_FLAG.NULL && ARG.RDB$NULL_FLAG)
+				isqlGlob.printf(" NOT NULL");
+
 			if (ARG.RDB$ARGUMENT_POSITION != FUN.RDB$RETURN_ARGUMENT) // input, try to show default and make Vlad happy.
 			{
 				if (!prm_default_source_null)
@@ -5317,6 +5320,9 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 
 				show_charsets(charset, collation);
 			}
+
+			if (!PRM.RDB$NULL_FLAG.NULL && PRM.RDB$NULL_FLAG)
+				isqlGlob.printf(" NOT NULL");
 
 			if (PRM.RDB$PARAMETER_TYPE == 0) // input, try to show default and make Vlad happy.
 			{

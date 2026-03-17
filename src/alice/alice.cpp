@@ -600,7 +600,7 @@ int alice(Firebird::UtilSvc* uSvc)
 #if defined(DEBUG_GDS_ALLOC)
 	if (!uSvc->isService())
 	{
-		gds_alloc_report(0 ALLOC_ARGS);
+		gds_alloc_report(0, __FILE__, __LINE__);
 	}
 #endif
 

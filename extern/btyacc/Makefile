@@ -25,12 +25,27 @@ LIBS=
 
 MAKEFILE      = Makefile
 
-OBJS	      = closure.o error.o lalr.o lr0.o main.o mkpar.o output.o	\
-		mstring.o reader.o readskel.o skeleton.o symtab.o verbose.o warshall.o
+OBJ_DIR       = ../../temp/extern/btyacc
+
+all: $(PROGRAM)
+
+OBJS	      = $(OBJ_DIR)/closure.o $(OBJ_DIR)/error.o $(OBJ_DIR)/lalr.o \
+		$(OBJ_DIR)/lr0.o $(OBJ_DIR)/main.o $(OBJ_DIR)/mkpar.o $(OBJ_DIR)/output.o \
+		$(OBJ_DIR)/mstring.o $(OBJ_DIR)/reader.o $(OBJ_DIR)/readskel.o \
+		$(OBJ_DIR)/skeleton.o $(OBJ_DIR)/symtab.o $(OBJ_DIR)/verbose.o \
+		$(OBJ_DIR)/warshall.o
+
+$(OBJ_DIR)/%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJS): | $(OBJ_DIR)
+
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
 
 PRINT	      = pr -f -l88
 
-PROGRAM	      = btyacc
+PROGRAM	      = ../../gen/extern/btyacc/btyacc
 
 SRCS	      = closure.c error.c lalr.c lr0.c main.c mkpar.c output.c	\
 		mstring.c reader.c readskel.c skeleton.c symtab.c verbose.c warshall.c
@@ -42,6 +57,7 @@ OTHERS	      = README README.BYACC \
 all:		$(PROGRAM)
 
 $(PROGRAM):     $(OBJS) $(LIBS)
+		mkdir -p $(dir $(PROGRAM))
 		$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(LIBS)
 
 clean:;		rm -f $(OBJS)
@@ -90,16 +106,18 @@ etags TAGS:
 		etags *.c *.h
 
 ###
-closure.o: defs.h
-error.o: defs.h
-lalr.o: defs.h
-lr0.o: defs.h
-main.o: defs.h
-mkpar.o: defs.h
-mstring.o: mstring.h
-output.o: defs.h
-reader.o: defs.h mstring.h
-skeleton.o: defs.h
-symtab.o: defs.h
-verbose.o: defs.h
-warshall.o: defs.h
+$(OBJ_DIR)/closure.o: defs.h
+$(OBJ_DIR)/error.o: defs.h
+$(OBJ_DIR)/lalr.o: defs.h
+$(OBJ_DIR)/lr0.o: defs.h
+$(OBJ_DIR)/main.o: defs.h
+$(OBJ_DIR)/mkpar.o: defs.h
+$(OBJ_DIR)/mstring.o: mstring.h
+$(OBJ_DIR)/output.o: defs.h
+$(OBJ_DIR)/reader.o: defs.h mstring.h
+$(OBJ_DIR)/skeleton.o: defs.h
+$(OBJ_DIR)/symtab.o: defs.h
+$(OBJ_DIR)/verbose.o: defs.h
+$(OBJ_DIR)/warshall.o: defs.h
+
+

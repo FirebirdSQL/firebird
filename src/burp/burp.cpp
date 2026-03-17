@@ -318,6 +318,25 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 			argv[itr] = 0;
 			break;
 #endif
+		case IN_SW_BURP_S:
+		case IN_SW_BURP_P:
+		case IN_SW_BURP_BU:
+		case IN_SW_BURP_MODE:
+		case IN_SW_BURP_SKIP_DATA:
+		case IN_SW_BURP_INCLUDE_DATA:
+		case IN_SW_BURP_ROLE:
+		case IN_SW_BURP_KEYHOLD:
+		case IN_SW_BURP_CRYPT:
+		case IN_SW_BURP_KEYNAME:
+		case IN_SW_BURP_FA:
+		case IN_SW_BURP_FIX_FSS_DATA:
+		case IN_SW_BURP_FIX_FSS_METADATA:
+		case IN_SW_BURP_PARALLEL_WORKERS:
+		case IN_SW_BURP_Y:
+		case IN_SW_BURP_STATS:
+		case IN_SW_BURP_REPLICA:
+			++itr;
+			break;
 		}
 	}
 

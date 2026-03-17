@@ -254,7 +254,7 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		rethrowDdlException(ex, false, node);
 	}
 
-	if (dbb->readOnly())
+	if (dbb->readOnly() && node->disallowedInReadOnlyDatabase())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
 	// In read-only replica, only replicator is allowed to execute DDL.

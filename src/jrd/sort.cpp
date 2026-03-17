@@ -2188,7 +2188,6 @@ void SortOwner::releaseBuffer(UCHAR* memory)
 	buffers.push(memory);
 }
 
-
 void SortOwner::unlinkAll()
 {
 	while (sorts.getCount())
@@ -2442,3 +2441,4 @@ sort_record* PartitionedSort::getMerge()
 
 	return eof ? NULL : record;
 }
+

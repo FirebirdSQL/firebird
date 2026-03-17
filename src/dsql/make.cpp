@@ -128,8 +128,8 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 								SSHORT scale,
 								SSHORT subType,
 								FLD_LENGTH length,
-								SSHORT charsetId,
-								SSHORT collationId,
+								CSetId charsetId,
+								CollId collationId,
 								bool nullable)
 {
 	desc->clear();
@@ -139,8 +139,7 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 	desc->dsc_length = length;
 	desc->dsc_flags = nullable ? DSC_nullable : 0;
 
-	if (desc->isText() || desc->isBlob())
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charsetId, collationId));
+	desc->setTextType(TTypeId(charsetId, collationId));
 }
 
 
@@ -256,7 +255,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 			tmp.dsc_dtype = dtype_text;
 			tmp.dsc_scale = 0;
 			tmp.dsc_flags = 0;
-			tmp.dsc_ttype() = ttype_ascii;
+			tmp.setTextType(ttype_ascii);
 			tmp.dsc_length = static_cast<USHORT>(strlen(str));
 			tmp.dsc_address = (UCHAR*) str;
 
@@ -350,7 +349,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
     @param character_set
 
  **/
-LiteralNode* MAKE_str_constant(IntlString* constant, SSHORT character_set)
+LiteralNode* MAKE_str_constant(IntlString* constant, CSetId character_set)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -362,7 +361,7 @@ LiteralNode* MAKE_str_constant(IntlString* constant, SSHORT character_set)
 	literal->litDesc.dsc_scale = 0;
 	literal->litDesc.dsc_length = static_cast<USHORT>(str.length());
 	literal->litDesc.dsc_address = (UCHAR*) str.c_str();
-	literal->litDesc.dsc_ttype() = character_set;
+	literal->litDesc.setTextType(character_set);
 
 	literal->dsqlStr = constant;
 
@@ -451,15 +450,10 @@ void MAKE_field(dsql_fld* field, const dsc* desc)
 	field->subType = desc->dsc_sub_type;
 	field->length = desc->dsc_length;
 
-	if (desc->dsc_dtype <= dtype_any_text)
+	if (desc->dsc_dtype <= dtype_any_text || desc->dsc_dtype == dtype_blob)
 	{
-		field->collationId = DSC_GET_COLLATE(desc);
-		field->charSetId = DSC_GET_CHARSET(desc);
-	}
-	else if (desc->dsc_dtype == dtype_blob)
-	{
-		field->charSetId = desc->dsc_scale;
-		field->collationId = desc->dsc_flags >> 8;
+		field->charSetId = desc->getCharSet();
+		field->collationId = desc->getCollation();
 	}
 
 	if (desc->dsc_flags & DSC_nullable)

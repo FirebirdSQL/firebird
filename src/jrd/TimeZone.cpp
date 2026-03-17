@@ -56,12 +56,12 @@ TimeZoneSnapshot::TimeZoneSnapshot(thread_db* tdbb, MemoryPool& pool)
 
 
 TimeZonesTableScan::TimeZonesTableScan(CompilerScratch* csb, const string& alias,
-		StreamType stream, jrd_rel* relation)
+		StreamType stream, Rsc::Rel relation)
 	: VirtualTableScan(csb, alias, stream, relation)
 {
 }
 
-const Format* TimeZonesTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* TimeZonesTableScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	return tdbb->getTransaction()->getTimeZoneSnapshot(tdbb)->getData(relation)->getFormat();
 }
@@ -73,7 +73,7 @@ const Format* TimeZonesTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) 
 bool TimeZonesTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 	FB_UINT64 position, Record* record) const
 {
-	return tdbb->getTransaction()->getTimeZoneSnapshot(tdbb)->getData(relation)->fetch(position, record);
+	return tdbb->getTransaction()->getTimeZoneSnapshot(tdbb)->getData(getPermanent(relation))->fetch(position, record);
 }
 
 

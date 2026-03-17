@@ -42,6 +42,7 @@
 #include "../../jrd/status.h"
 #include "../../jrd/Function.h"
 #include "../../jrd/RuntimeStatistics.h"
+#include "../../jrd/Statement.h"
 #include "../../jrd/trace/TraceSession.h"
 #include "../../common/classes/ImplementHelper.h"
 #include "../../common/prett_proto.h"
@@ -70,23 +71,7 @@ public:
 		return m_statement ? m_statement->getStatementId() : 0;
 	}
 
-	Firebird::string getName() const
-	{
-		if (m_statement)
-		{
-			if (m_statement->procedure)
-				return m_statement->procedure->getName().toQuotedString();
-
-			if (m_statement->function)
-				return m_statement->function->getName().toQuotedString();
-
-			if (m_statement->triggerName.object.hasData())
-				return m_statement->triggerName.toQuotedString();
-		}
-
-		return "";
-	}
-
+	Firebird::string getName() const;
 	const char* ensurePlan(bool explained);
 
 private:
@@ -221,7 +206,7 @@ class TraceConnectionImpl :
 	public Firebird::AutoIface<Firebird::ITraceDatabaseConnectionImpl<TraceConnectionImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceConnectionImpl(const Attachment* att) :
+	TraceConnectionImpl(Attachment* att) :
 		m_att(att)
 	{}
 
@@ -240,7 +225,7 @@ public:
 	ISC_INT64 getConnectionID();
 	const char* getDatabaseName();
 private:
-	const Attachment* const m_att;
+	Attachment* const m_att;
 };
 
 
@@ -756,7 +741,7 @@ public:
 		StatementHolder(request),
 		m_name(getName()),
 		m_relationName((request->req_rpb.hasData() && request->req_rpb[0].rpb_relation) ?
-			request->req_rpb[0].rpb_relation->rel_name.toQuotedString() : ""),
+			request->req_rpb[0].rpb_relation->getName().toQuotedString() : ""),
 		m_which(which),
 		m_action(request->req_trigger_action),
 		m_stats(stats)
@@ -849,7 +834,7 @@ class TraceInitInfoImpl :
 	public Firebird::AutoIface<Firebird::ITraceInitInfoImpl<TraceInitInfoImpl, Firebird::CheckStatusWrapper> >
 {
 public:
-	TraceInitInfoImpl(const Firebird::TraceSession& session, const Attachment* att,
+	TraceInitInfoImpl(const Firebird::TraceSession& session, Attachment* att,
 					const char* filename) :
 		m_session(session),
 		m_trace_conn(att),

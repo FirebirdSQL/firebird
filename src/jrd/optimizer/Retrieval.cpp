@@ -31,6 +31,7 @@
 #include "../jrd/intl.h"
 #include "../jrd/Collation.h"
 #include "../jrd/ods.h"
+#include "../jrd/met.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../dsql/BoolNodes.h"
@@ -157,7 +158,6 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 
 	const auto tail = &csb->csb_rpt[stream];
 	relation = tail->csb_relation;
-	fb_assert(relation);
 
 	if (!tail->csb_idx)
 		return;
@@ -173,7 +173,7 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 		if ((index.idx_flags & idx_condition) && !checkIndexCondition(index, matches))
 			continue;
 
-		const auto length = ROUNDUP(BTR_key_length(tdbb, relation, &index), sizeof(SLONG));
+		const auto length = ROUNDUP(BTR_key_length(tdbb, relation(tdbb), &index), sizeof(SLONG));
 
 		// AB: Calculate the cardinality which should reflect the total number
 		// of index pages for this index.
@@ -249,7 +249,7 @@ InversionCandidate* Retrieval::getInversion()
 
 	InversionCandidate* invCandidate = nullptr;
 
-	if (relation && !relation->rel_file && !relation->isVirtual())
+	if (relation && !relation()->getExtFile() && !relation()->isVirtual())
 	{
 		InversionCandidateList inversions;
 
@@ -316,51 +316,73 @@ InversionCandidate* Retrieval::getInversion()
 		invCandidate = FB_NEW_POOL(getPool()) InversionCandidate(getPool());
 	}
 
-	invCandidate->matchSelectivity = invCandidate->selectivity;
+	// Apply navigational candidate (if present) to the final inversion
+	if (navigationCandidate && navigationCandidate->matches.hasData())
+	{
+		invCandidate->unique = invCandidate->unique || navigationCandidate->unique;
+		invCandidate->selectivity *= navigationCandidate->selectivity;
+		invCandidate->indexes += navigationCandidate->indexes;
 
-	// Adjust the effective selectivity by treating computable but unmatched conjunctions
-	// as filters. But consider only those local to our stream.
+		for (const auto navMatch : navigationCandidate->matches)
+		{
+			if (!invCandidate->matches.exist(navMatch))
+				invCandidate->matches.add(navMatch);
+		}
+	}
+
+	invCandidate->selectivity = invCandidate->matchSelectivity =
+		MIN(invCandidate->selectivity, MAXIMUM_SELECTIVITY);
+
+	// Adjust the effective selectivity by treating computable but unmatched conjunctions as filters.
+	// But if inversion is available, consider only those local to our stream.
 	// While being here, also mark matched conjuncts, if requested.
-	double selectivity = MAXIMUM_SELECTIVITY;
 	for (iter.rewind(); iter.hasData(); ++iter)
 	{
-		if (!(iter & Optimizer::CONJUNCT_USED))
+		if (!(iter & Optimizer::CONJUNCT_USED) &&
+			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
+			iter->computable(csb, INVALID_STREAM, false))
 		{
-			const auto matched = invCandidate->matches.exist(iter) ||
-				(navigationCandidate && navigationCandidate->matches.exist(iter));
-
-			if (matched)
+			if (invCandidate->matches.exist(iter))
 			{
 				if (setConjunctionsMatched)
 					iter |= Optimizer::CONJUNCT_MATCHED;
 			}
-			else if (iter->computable(csb, stream, true) &&
-				iter->containsStream(stream))
+			else
 			{
-				selectivity *= Optimizer::getSelectivity(*iter);
-			}
-
-			if (iter->computable(csb, INVALID_STREAM, false) &&
-				iter->containsStream(stream))
-			{
-				invCandidate->conjuncts.add(*iter);
+				if (invCandidate->matches.hasData())
+				{
+					if (iter->containsStream(stream))
+						invCandidate->filters.add(*iter);
+				}
+				else if (iter->computable(csb, stream, true))
+					invCandidate->filters.add(*iter);
 			}
 		}
 	}
 
-	Optimizer::adjustSelectivity(invCandidate->selectivity, selectivity);
+	const auto streamCardinality = csb->csb_rpt[stream].csb_cardinality;
+	invCandidate->applyFilters(streamCardinality);
 
-	// Apply navigational walk, if meaningful
+	// Double check whether navigational walk is preferrable to the external sort
 	if (navigationCandidate)
 		applyNavigation(invCandidate);
 
-	// Add the records retrieval cost to the priorly calculated index scan cost.
-	// For unique retrievals, set up a fixed cost (independent from a possibly outdated statistics).
-	// It includes DEFAULT_INDEX_COST index scans plus one data page fetch.
+	// Calculate total retrieval cost
 	if (invCandidate->unique)
+	{
+		// For unique retrievals, set up a fixed cost (independent from a possibly outdated statistics).
+		// It includes DEFAULT_INDEX_COST index scans plus one data page fetch.
 		invCandidate->cost = DEFAULT_INDEX_COST * invCandidate->indexes + 1;
+	}
 	else
+	{
+		// Add the navigation cost
+		if (navigationCandidate)
+			invCandidate->cost += navigationCandidate->cost;
+
+		// Add the records retrieval cost to the priorly calculated index scan cost
 		invCandidate->cost += cardinality * invCandidate->selectivity;
+	}
 
 	// Add the streams where this stream is depending on
 	for (auto match : invCandidate->matches)
@@ -396,7 +418,7 @@ IndexTableScan* Retrieval::getNavigation()
 	const auto indexNode = makeIndexScanNode(scratch);
 
 	const USHORT keyLength =
-		ROUNDUP(BTR_key_length(tdbb, relation, scratch->index), sizeof(SLONG));
+		ROUNDUP(BTR_key_length(tdbb, relation(tdbb), scratch->index), sizeof(SLONG));
 
 	return FB_NEW_POOL(getPool())
 		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
@@ -529,12 +551,12 @@ void Retrieval::analyzeNavigation(const InversionCandidateList& inversions)
 				dsc desc;
 				node->getDesc(tdbb, csb, &desc);
 
-				// ASF: "desc.dsc_ttype() > ttype_last_internal" is to avoid recursion
+				// ASF: "desc.getTextType() > ttype_last_internal" is to avoid recursion
 				// when looking for charsets/collations
 
-				if (DTYPE_IS_TEXT(desc.dsc_dtype) && desc.dsc_ttype() > ttype_last_internal)
+				if (DTYPE_IS_TEXT(desc.dsc_dtype) && desc.getTextType() > ttype_last_internal)
 				{
-					const TextType* const tt = INTL_texttype_lookup(tdbb, desc.dsc_ttype());
+					auto tt = INTL_texttype_lookup(tdbb, desc.getTextType());
 
 					if (idx->idx_flags & idx_unique)
 					{
@@ -683,15 +705,17 @@ void Retrieval::applyNavigation(InversionCandidate* candidate)
 			// quicksort algorithm is O(n*log(n)) in average
 			cardinality * log2(cardinality) * COST_FACTOR_QUICKSORT;
 
+		// If we have any matches, the index retrieval cost will be accounted in candidate->cost,
+		// so we ignore it in the calculations below
+		auto navigationCost = navigationCandidate->matches.isEmpty() ? navigationCandidate->cost : 0;
 		// During navigation we fetch an index leaf page per every record being returned,
 		// thus add the estimated cardinality to the cost
-		auto navigationCost = navigationCandidate->cost +
-			matchCardinality * navigationCandidate->selectivity;
+		navigationCost += matchCardinality * navigationCandidate->selectivity;
 
 		if (optimizer->favorFirstRows())
 		{
 			// Reset the cost to represent a single record retrieval
-			navigationCost = DEFAULT_INDEX_COST;
+			navigationCost = navigationCandidate->matches.isEmpty() ? DEFAULT_INDEX_COST : 0;
 
 			// We know that some local filtering is applied, so we need
 			// to adjust the cost as we need to walk the index
@@ -706,21 +730,12 @@ void Retrieval::applyNavigation(InversionCandidate* candidate)
 		if (sortCost < navigationCost)
 		{
 			candidate->navigated = false;
-			navigationCandidate->cost = 0;
+
+			if (navigationCandidate->matches.isEmpty())
+				navigationCandidate->cost = 0;
 		}
-	}
-
-	// Update the final inversion candidate
-
-	candidate->unique = candidate->unique || navigationCandidate->unique;
-	candidate->selectivity *= navigationCandidate->selectivity;
-	candidate->cost += navigationCandidate->cost;
-	candidate->indexes += navigationCandidate->indexes;
-
-	for (const auto navMatch : navigationCandidate->matches)
-	{
-		if (!candidate->matches.exist(navMatch))
-			candidate->matches.add(navMatch);
+		else
+			navigationCandidate->cost = navigationCost;
 	}
 
 	if (!candidate->navigated)
@@ -834,9 +849,9 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 
 bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 {
-	fb_assert(idx.idx_condition);
+	fb_assert(idx.idx_condition_node);
 
-	if (!idx.idx_condition->containsStream(0, true))
+	if (!idx.idx_condition_node->containsStream(0, true))
 		return false;
 
 	fb_assert(matches.isEmpty());
@@ -844,7 +859,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition_node, idxConjuncts);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;
@@ -911,11 +926,11 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 
 bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node) const
 {
-	fb_assert(idx && idx->idx_expression);
+	fb_assert(idx && idx->idx_expression_node);
 
 	// The desired expression can be hidden inside a derived expression node,
 	// so try to recover it (see CORE-4118).
-	while (!idx->idx_expression->sameAs(node, true))
+	while (!idx->idx_expression_node->sameAs(node, true))
 	{
 		const auto derivedExpr = nodeAs<DerivedExprNode>(node);
 		const auto cast = nodeAs<CastNode>(node);
@@ -930,7 +945,7 @@ bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node)
 
 	// Check the index for matching both the given stream and the given expression tree
 
-	return idx->idx_expression->containsStream(0, true) &&
+	return idx->idx_expression_node->containsStream(0, true) &&
 		node->containsStream(stream, true);
 }
 
@@ -1241,19 +1256,16 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	const auto idx = indexScratch->index;
 	auto& segments = indexScratch->segments;
 
-	// Check whether this is during a compile or during a SET INDEX operation
-	if (csb)
-		CMP_post_resource(&csb->csb_resources, relation, Resource::rsc_index, idx->idx_id);
-	else
-	{
-		CMP_post_resource(&tdbb->getRequest()->getStatement()->resources, relation,
-			Resource::rsc_index, idx->idx_id);
-	}
+	fb_assert(csb);
 
 	// For external requests, determine index name (to be reported in plans)
 	QualifiedName indexName;
-	if (!(csb->csb_g_flags & csb_internal))
-		MET_lookup_index(tdbb, indexName, relation->rel_name, idx->idx_id + 1);
+	if (relation && !(csb->csb_g_flags & csb_internal))
+	{
+		auto* idp = relation()->lookupIndex(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
+		if (idp)
+			indexName = idp->getName();
+	}
 
 	const auto retrieval =
 		FB_NEW_POOL(getPool()) IndexRetrieval(getPool(), relation, idx, indexName);
@@ -1440,7 +1452,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 	double previousTotalCost = maximumCost;
 
 	// Force to always choose at least one index
-	bool firstCandidate = true;
+	unsigned usedInversions = 0;
 
 	InversionCandidate* invCandidate = nullptr;
 
@@ -1471,7 +1483,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 				for (auto otherInversion : inversions)
 				{
 					if (otherInversion->boolean &&
-						idx->idx_condition->sameAs(otherInversion->boolean, true))
+						idx->idx_condition_node->sameAs(otherInversion->boolean, true))
 					{
 						otherInversion->used = true;
 					}
@@ -1492,7 +1504,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 		previousTotalCost = totalIndexCost + totalSelectivity * streamCardinality;
 
 		if (navigationCandidate->matchedSegments)
-			firstCandidate = false;
+			usedInversions++;
 	}
 
 	for (FB_SIZE_T i = 0; i < inversions.getCount(); i++)
@@ -1626,6 +1638,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 
 					if (bestCandidate->condition)
 					{
+						bestCandidate->used = true;
 						bestCandidate = currentInv;
 						restartLoop = true;
 						break;
@@ -1652,49 +1665,29 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 			// For example two "good" selectivities will result in a very good selectivity, but
 			// mostly a filter is made by adding criteria's where every criteria is an extra filter
 			// compared to the previous one. Thus with the second criteria in _most_ cases still
-			// records are returned. (Think also on the segment-selectivity in compound indexes)
-			// Assume a table with 100000 records and two selectivities of 0.001 (100 records) which
-			// are both AND-ed (with S1 * S2 => 0.001 * 0.001 = 0.000001 => 0.1 record).
+			// records are returned.
 			//
-			// A better formula could be where the result is between "Sbest" and "Sbest * factor"
-			// The reducing factor should be between 0 and 1 (Sbest = best selectivity)
+			// dimitr: exponential backoff is now used to address this issue.
+			// Starting with the most selective inversion, every next selectivity is adjusted
+			// to have a smaller impact to the overall value:
 			//
-			// Example:
-			/*
-			double newTotalSelectivity = 0;
-			double bestSel = bestCandidate->selectivity;
-			double worstSel = totalSelectivity;
-			if (bestCandidate->selectivity > totalSelectivity)
-			{
-				worstSel = bestCandidate->selectivity;
-				bestSel = totalSelectivity;
-			}
+			//   selectivity = selectivity1 * sqrt(selectivity2) * sqrt(sqrt(selectivity3)) and so on.
 
-			if (bestSel >= MAXIMUM_SELECTIVITY) {
-				newTotalSelectivity = MAXIMUM_SELECTIVITY;
-			}
-			else if (bestSel == 0) {
-				newTotalSelectivity = 0;
-			}
-			else {
-				newTotalSelectivity = bestSel - ((1 - worstSel) * (bestSel - (bestSel * 0.01)));
-			}
-			*/
+			const auto bestSelectivity = optimizer->applyBackoff(bestCandidate->selectivity, usedInversions);
 
-			const double newTotalSelectivity = bestCandidate->selectivity * totalSelectivity;
+			const double newTotalSelectivity = bestSelectivity * totalSelectivity;
 			const double newTotalDataCost = newTotalSelectivity * streamCardinality;
 			const double newTotalIndexCost = totalIndexCost + bestCandidate->cost;
 			const double totalCost = newTotalDataCost + newTotalIndexCost;
 
 			// Test if the new totalCost will be higher than the previous totalCost
 			// and if the current selectivity (without the bestCandidate) is already good enough.
-			if (customPlan || sysRequest || smallTable || firstCandidate ||
+			if (customPlan || sysRequest || smallTable || !usedInversions ||
 				(totalCost < previousTotalCost && totalSelectivity > minimumSelectivity))
 			{
 				// Exclude index from next pass
 				bestCandidate->used = true;
-
-				firstCandidate = false;
+				usedInversions++;
 
 				previousTotalCost = totalCost;
 				totalIndexCost = newTotalIndexCost;
@@ -1795,7 +1788,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 	{
 		// If index condition matches the boolean, this should not be
 		// considered a match. Full index scan will be used instead.
-		if (idx->idx_condition->sameAs(boolean, true))
+		if (idx->idx_condition_node->sameAs(boolean, true))
 			return false;
 	}
 

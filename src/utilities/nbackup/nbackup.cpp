@@ -851,6 +851,9 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 
 	if (!repl_seq)
 	{
+		// Replace existing database GUID with a regenerated one
+		Guid::generate().copyTo(header->hdr_guid);
+
 		size = page_size;
 		header = reinterpret_cast<Ods::header_page*>(header_buffer.getBuffer(size));
 

@@ -161,11 +161,6 @@ constexpr FB_SIZE_T FB_NELEM(const T (&)[N]) noexcept
 	return static_cast<FB_SIZE_T>(N);
 }
 
-// Intl types
-typedef SSHORT CHARSET_ID;
-typedef SSHORT COLLATE_ID;
-typedef USHORT TTYPE_ID;
-
 // Stream type, had to move it from dsql/Nodes.h due to circular dependencies.
 typedef ULONG StreamType;
 
@@ -176,13 +171,15 @@ constexpr T FB_ALIGN(T n, uintptr_t b)
 	return (T) ((((uintptr_t) n) + b - 1) & ~(b - 1));
 }
 
-// Various object IDs (longer-than-32-bit)
+// Various object IDs
 
 typedef FB_UINT64 AttNumber;
 typedef FB_UINT64 TraNumber;
 typedef FB_UINT64 StmtNumber;
 typedef FB_UINT64 CommitNumber;
 typedef ULONG SnapshotHandle;
+typedef ULONG MdcVersion;
+typedef USHORT MetaId;
 typedef SINT64 SavNumber;
 
 #endif /* INCLUDE_FB_TYPES_H */

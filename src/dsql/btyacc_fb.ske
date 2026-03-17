@@ -29,7 +29,7 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
-#include "gen/parse.h"
+#include "parse.h"
 #include "../dsql/Parser.h"
 
 %% tables
