@@ -100,6 +100,8 @@ public:
 	struct ShowDependenciesNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowExceptionsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowFiltersNode { std::optional<Firebird::MetaString> name; };
+	struct ShowForeignServersNode { std::optional<Firebird::MetaString> name; };
+	struct ShowForeignUserMappingsNode { std::optional<Firebird::MetaString> name; };
 	struct ShowFunctionsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowGeneratorsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowGrantsNode { std::optional<Firebird::QualifiedMetaString> name; };
@@ -165,6 +167,8 @@ public:
 		ShowDependenciesNode,
 		ShowExceptionsNode,
 		ShowFiltersNode,
+		ShowForeignServersNode,
+		ShowForeignUserMappingsNode,
 		ShowFunctionsNode,
 		ShowGeneratorsNode,
 		ShowGrantsNode,

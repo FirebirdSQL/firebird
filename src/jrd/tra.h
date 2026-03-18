@@ -542,6 +542,7 @@ enum dfw_t : int {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_delete_foreign_server,
 
 	// deferred works argument types
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory

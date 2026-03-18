@@ -132,6 +132,7 @@
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
 #include "../jrd/ProtectRelations.h"
+#include "../jrd/ForeignServer.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -417,6 +418,7 @@ static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_statistics(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool deps_to_disk(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool delete_foreign_server(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 // ----------------------------------------------------------------
 
@@ -465,6 +467,9 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_header:
 	case obj_package_body:
 		err_code = isc_package_name;
+		break;
+	case obj_foreign_server:
+		err_code = isc_foreign_server;
 		break;
 	default:
 		fb_assert(false);
@@ -1171,6 +1176,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
 	{ dfw_set_statistics, set_statistics },
+	{ dfw_delete_foreign_server, delete_foreign_server },
 	{ dfw_null, NULL }
 };
 
@@ -4994,6 +5000,32 @@ static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 	// Now invalidate DSQL cache at commit time
 	// METD_drop_relation(transaction, work->getQualifiedName());
+
+	return false;
+}
+
+static bool delete_foreign_server(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	d e l e t e _ f o r e i g n _ s e r v e r
+ *
+ **************************************
+ *
+ * Functional description
+ *	Check if it is allowable to delete
+ *	an foreign server, and if so, clean up after it.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+
+	switch (phase)
+	{
+	case 1:
+		check_dependencies(tdbb, work->getQualifiedName(), {}, obj_foreign_server, transaction);
+		break;
+	}
 
 	return false;
 }

@@ -156,7 +156,13 @@ public:
 	static Provider* getProvider(const Firebird::string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
+		const Firebird::string& pwd, const Firebird::string& role,
+		const Firebird::PathName& providers, TraScope tra_scope);
+	static Connection* getProviderConnection(Jrd::thread_db* tdbb,
+		Provider* provider, Firebird::ClumpletWriter& dpb,
+		const Firebird::string& database, const Firebird::string& user,
+		const Firebird::string& pwd, const Firebird::string& role,
+		TraScope tra_scope);
 
 	static ConnectionsPool* getConnPool(bool create);
 
@@ -705,6 +711,10 @@ public:
 
 	const Firebird::string& getSql() const noexcept { return m_sql; }
 
+	const Firebird::string& getRawSql() const noexcept { return m_rawSql; }
+
+	void setRawSql(const Firebird::string& rawSql) { m_rawSql = rawSql; }
+
 	void setCallerPrivileges(bool use) noexcept { m_callerPrivileges = use; }
 
 	bool isActive() const noexcept { return m_active; }
@@ -767,6 +777,7 @@ protected:
 	Statement* m_prevInReq;
 
 	Firebird::string m_sql;
+	Firebird::string m_rawSql;
 
 	// passed in open()
 	bool	m_singleton;

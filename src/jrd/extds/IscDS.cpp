@@ -213,6 +213,7 @@ void IscConnection::attach(thread_db* tdbb)
 							m_features[fb_feature_multi_statements] = true;
 							m_features[fb_feature_multi_transactions] = true;
 							m_features[fb_feature_statement_long_life] = true;
+							m_features[fb_feature_prepared_input_types] = true;
 						}
 						break;
 					}
@@ -698,6 +699,38 @@ void IscStatement::doClose(thread_db* tdbb, bool drop)
 void IscStatement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaString* const* names,
 	const NestConst<Jrd::ValueExprNode>* params)
 {
+	// If the foreign provider didn't return the input parameters metadata,
+	// let's create it from the node descriptors
+	if (!m_connection.testFeature(fb_feature_prepared_input_types))
+	{
+		const NestConst<ValueExprNode>* jrdVar = params;
+		NonPooledMap<const ValueExprNode*, dsc*> paramDescs(getPool());
+		DescList sqldaDescs(count);
+
+		Request* request = tdbb->getRequest();
+
+		for (FB_SIZE_T i = 0; i < count; ++i, ++jrdVar)
+		{
+			dsc* src = nullptr;
+
+			if (!paramDescs.get(*jrdVar, src))
+			{
+				src = EVL_expr(tdbb, request, *jrdVar);
+				paramDescs.put(*jrdVar, src);
+			}
+
+			if (src)
+				sqldaDescs.add(*src);
+			else
+			{
+				dsc& dst = sqldaDescs.add();
+				dst.makeNullString();
+			}
+		}
+
+		remakeInputSQLDA(tdbb, count, sqldaDescs.begin());
+	}
+
 	Statement::doSetInParams(tdbb, count, names, params);
 
 	if (names)
@@ -712,6 +745,40 @@ void IscStatement::doSetInParams(thread_db* tdbb, unsigned int count, const Meta
 			xVar->sqlname[max_len-1] = 0;
 		}
 	}
+}
+
+void IscStatement::remakeInputSQLDA(thread_db* tdbb, FB_SIZE_T count, const dsc* descs)
+{
+	if (count <= 0)
+		return;
+
+	Request* request = tdbb->getRequest();
+
+	m_inDescs.clear();
+	m_in_buffer.clear();
+	delete[] (char*) m_in_xsqlda;
+
+	m_in_xsqlda = (XSQLDA*) FB_NEW_POOL (getPool()) char [XSQLDA_LENGTH(count)];
+	m_in_xsqlda->sqld = (SSHORT) count;
+	m_in_xsqlda->sqln = (SSHORT) count;
+	m_in_xsqlda->version = SQLDA_VERSION1;
+
+	XSQLVAR* xVar = m_in_xsqlda->sqlvar;
+
+	for (FB_SIZE_T i = 0; i < count; ++i, ++xVar)
+	{
+		const dsc& src = descs[i];
+
+		SLONG sqlLen, sqlSubType, sqlScale, sqlType;
+		src.getSqlInfo(&sqlLen, &sqlSubType, &sqlScale, &sqlType);
+
+		xVar->sqllen = sqlLen;
+		xVar->sqlsubtype = sqlSubType;
+		xVar->sqlscale = sqlScale;
+		xVar->sqltype = sqlType;
+	}
+
+	parseSQLDA(m_in_xsqlda, m_in_buffer, m_inDescs);
 }
 
 //  IscBlob

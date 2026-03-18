@@ -35,6 +35,7 @@
 #include "../jrd/ext_proto.h"
 #include "../jrd/dfw_proto.h"
 #include "../jrd/Statement.h"
+#include "../jrd/ForeignServer.h"
 #include "../common/StatusArg.h"
 
 // Pick up relation ids
@@ -130,6 +131,7 @@ RelationPermanent::RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, 
 	  rel_pages_base(p),
 	  rel_pages_free(nullptr),
 	  rel_file(nullptr),
+	  rel_foreign_adapter(nullptr),
 	  rel_clear_deps(p)
 {
 	rel_partners_lock = FB_NEW_RPT(getPool(), 0)
@@ -154,6 +156,12 @@ bool RelationPermanent::destroy(thread_db* tdbb, RelationPermanent* rel)
 	{
 		rel->rel_file->release();
 		delete rel->rel_file;
+	}
+
+	if (rel->rel_foreign_adapter)
+	{
+		rel->rel_foreign_adapter->release(tdbb);
+		delete rel->rel_foreign_adapter;
 	}
 
 	rel->rel_indices.cleanup(tdbb);
