@@ -510,7 +510,6 @@ inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
 	fb_assert(getState() == irt_in_progress || getState() == irt_normal);
 	fb_assert(rootPage);
 
-	irt_transaction = 0;
 	irt_page_num = rootPage;
 	irt_page_space_id = 0;
 	setState(irt_normal);
@@ -578,7 +577,6 @@ inline void index_root_page::irt_repeat::setNormal()
 	fb_assert(irt_page_num);
 	fb_assert(irt_transaction);
 
-	irt_transaction = 0;
 	setState(irt_normal);
 }
 
@@ -589,7 +587,6 @@ inline void index_root_page::irt_repeat::setNormal(ULONG rootPage)
 	fb_assert(!irt_page_num);
 	fb_assert(rootPage);
 
-	irt_transaction = 0;
 	irt_page_num = rootPage;
 	irt_page_space_id = 0;
 	setState(irt_normal);

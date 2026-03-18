@@ -4715,6 +4715,8 @@ static void show_index(const QualifiedMetaString& relationName,
 
 	if (ISQL_get_index_segments(collist, sizeof(collist), indexName))
 		isqlGlob.printf("(%s) %s%s", collist, (inactive ? "(inactive)" : ""), NEWLINE);
+	else
+		isqlGlob.printf("%s", NEWLINE);
 }
 
 

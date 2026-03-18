@@ -35,6 +35,7 @@
 #include "../jrd/Resources.h"
 #include "../common/classes/TriState.h"
 #include "../common/sha2/sha2.h"
+#include "../jrd/ods.h"
 
 namespace Jrd
 {
@@ -460,13 +461,17 @@ public:
 		: PermanentStorage(p),
 		  idp_relation(rel),
 		  idp_id(id)
-	{ }
+	{
+		idp_expression_bid.clear();
+		idp_condition_bid.clear();
+	}
 
 	~IndexPermanent()
 	{ }
 
 	static bool destroy(thread_db* tdbb, IndexPermanent* idp)
 	{
+		idp->releaseStatements(tdbb);
 		return false;
 	}
 
@@ -488,8 +493,42 @@ public:
 private:
 	RelationPermanent*	idp_relation;
 	MetaId				idp_id;
+	TraNumber			idp_tranum = 0;
+	UCHAR				idp_state = 0;
 
 	[[noreturn]] void errIndexGone();
+
+	void releaseStatements(thread_db* tdbb);
+
+public:
+	void lookupIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+		const Ods::index_root_page::irt_repeat* irt_desc)
+	{
+		if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+			refreshIndexCode(tdbb, relation, idx, irt_desc);
+
+		idx->idx_condition_node = idp_condition;
+		idx->idx_condition_statement = idp_condition_statement;
+
+		idx->idx_expression_node = idp_expression;
+		idx->idx_expression_statement = idp_expression_statement;
+		memcpy(&idx->idx_expression_desc, &idp_expression_desc, sizeof(struct dsc));
+	}
+
+	void refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		index_desc* idx, const Ods::index_root_page::irt_repeat* irt_desc);
+
+private:
+	Firebird::Mutex		idp_code_mutex;			// Delays concurrent threads till the end of code refresh
+
+	bid					idp_expression_bid;
+	ValueExprNode*		idp_expression = nullptr;			// node tree for index expression
+	Statement*			idp_expression_statement = nullptr;	// statement for index expression evaluation
+	dsc					idp_expression_desc;				// descriptor for expression result
+
+	bid					idp_condition_bid;
+	BoolExprNode*		idp_condition = nullptr;			// node tree for index condition
+	Statement*			idp_condition_statement = nullptr;	// statement for index condition evaluation
 };
 
 
@@ -561,13 +600,6 @@ private:
 	SSHORT idv_type = 0;
 	QualifiedName idv_foreignKey;					// FOREIGN RELATION NAME
 	IndexStatus idv_active = MET_index_state_unknown;
-
-public:
-	ValueExprNode* idv_expression = nullptr;		// node tree for index expression
-	Statement* idv_expression_statement = nullptr;	// statement for index expression evaluation
-	dsc			idv_expression_desc;				// descriptor for expression result
-	BoolExprNode* idv_condition = nullptr;			// node tree for index condition
-	Statement* idv_condition_statement = nullptr;	// statement for index condition evaluation
 };
 
 
@@ -792,6 +824,7 @@ public:
 	IndexVersion* lookup_index(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 	Cached::Index* lookupIndex(thread_db* tdbb, MetaId id, ObjectBase::Flag flags);
 	Cached::Index* lookupIndex(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
+	Cached::Index* ensureIndex(thread_db* tdbb, MetaId id);
 
 	void newIndexVersion(thread_db* tdbb, MetaId id, ObjectBase::Flag scanType)
 	{

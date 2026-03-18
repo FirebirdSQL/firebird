@@ -2149,7 +2149,8 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 }
 
 
-void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_desc* idx)
+void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+	const Ods::index_root_page::irt_repeat* irt_desc)
 {
 /***********************************************
 *
@@ -2163,15 +2164,85 @@ void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_de
 **************************************/
 	SET_TDBB(tdbb);
 
-	IndexVersion* idv = relation->lookup_index(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
-	if (idv)
-	{
-		idx->idx_condition_node = idv->idv_condition;
-		idx->idx_condition_statement = idv->idv_condition_statement;
+	MutexLockGuard g(idp_code_mutex, FB_FUNCTION);
 
-		idx->idx_expression_node = idv->idv_expression;
-		idx->idx_expression_statement = idv->idv_expression_statement;
-		memcpy(&idx->idx_expression_desc, &idv->idv_expression_desc, sizeof(struct dsc));
+	if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+	{
+		Database* dbb = tdbb->getDatabase();
+		Attachment* attachment = tdbb->getAttachment();
+
+		bid expression, condition;
+		expression.clear();
+		condition.clear();
+
+		MetaId relId = relation->getId();
+
+		Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+
+		AUTO_HANDLE(handle);
+		FOR(REQUEST_HANDLE handle)		// Use system transaction
+			IND IN RDB$INDICES
+			CROSS REL IN RDB$RELATIONS
+				OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
+			WITH IND.RDB$INDEX_ID EQ getId() + 1
+				AND REL.RDB$RELATION_ID EQ relId
+		{
+			if (!IND.RDB$EXPRESSION_BLR.NULL)
+				expression = IND.RDB$EXPRESSION_BLR;
+			if (!IND.RDB$CONDITION_BLR.NULL)
+				condition = IND.RDB$CONDITION_BLR;
+		}
+		END_FOR
+
+		if ((expression.hasData() && expression != idp_expression_bid) ||
+			(condition.hasData() && condition != idp_condition_bid))
+		{
+			releaseStatements(tdbb);
+
+			idp_expression_bid = expression;
+			idp_condition_bid = condition;
+
+			if (expression.hasData())
+			{
+				MemoryPool* stmtPool = dbb->createPool();
+				try
+				{
+					Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+					CompilerScratch* csb = nullptr;
+					Cleanup cc([csb]() {delete csb;});
+					MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
+					idp_expression_statement = Statement::makeValueExpression(tdbb, idp_expression, idp_expression_desc, csb, false);
+				}
+				catch (const Exception&)
+				{
+					dbb->deletePool(stmtPool);
+					throw;
+				}
+			}
+
+			if (condition.hasData())
+			{
+				MemoryPool* stmtPool = dbb->createPool();
+				try
+				{
+					Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+					CompilerScratch* csb = nullptr;
+					Cleanup cc([csb]() {delete csb;});
+					MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
+					idp_condition_statement = Statement::makeBoolExpression(tdbb, idp_condition, csb, false);
+				}
+				catch (const Exception&)
+				{
+					dbb->deletePool(stmtPool);
+					throw;
+				}
+			}
+		}
+
+		idp_state = irt_desc->getState();
+		idp_tranum = irt_desc->getTransaction();
 	}
 }
 
@@ -4878,9 +4949,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* transaction = attachment->getMetaTransaction(tdbb);
 
-	bid expression, condition;
-	expression.clear();
-	condition.clear();
 	MetaId relId = getPermanent()->getRelation()->getId();
 	bool found = false;
 
@@ -4903,11 +4971,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		idv_foreignKey = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
 
 		idv_active = MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE);
-
-		if (!IND.RDB$EXPRESSION_BLR.NULL)
-			expression = IND.RDB$EXPRESSION_BLR;
-		if (!IND.RDB$CONDITION_BLR.NULL)
-			condition = IND.RDB$CONDITION_BLR;
 	}
 	END_FOR
 
@@ -4917,46 +4980,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		return ScanResult::MISS;
 	}
 
-	auto* relation = (expression.hasData() || condition.hasData()) ?
-		MetadataCache::getPerm<Cached::Relation>(tdbb, relId, CacheFlag::AUTOCREATE) : nullptr;
-
-	if (expression.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
-			idv_expression_statement = Statement::makeValueExpression(tdbb, idv_expression, idv_expression_desc, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
-
-	if (condition.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
-			idv_condition_statement = Statement::makeBoolExpression(tdbb, idv_condition, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
 
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }

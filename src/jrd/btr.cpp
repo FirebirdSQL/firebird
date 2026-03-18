@@ -1259,7 +1259,6 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 
 		jrd_tra* tra = tdbb->getTransaction();
 		fb_assert(tra);
-		TraNumber descTrans = irt_desc->getTransaction();
 
 		if (tra)
 		{
@@ -1374,7 +1373,9 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	ISC_STATUS error = 0;
 	if (idx->idx_flags & (idx_expression | idx_condition))
 	{
-		MET_lookup_index_code(tdbb, relation, idx);
+		auto* idp = relation->ensureIndex(tdbb, idx->idx_id);
+		if (idp)
+			idp->lookupIndexCode(tdbb, relation, idx, irt_desc);
 
 		if (idx->idx_flags & idx_expression && !idx->idx_expression_node)
 		{
