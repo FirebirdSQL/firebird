@@ -2126,7 +2126,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			{
 				BURP_print(81, field->fld_name);
 				// msg 81 error accessing blob field %s -- continuing
-				BURP_print_status(&status_vector, true);
+				BURP_print_status(&status_vector);
 #ifdef DEBUG
 				PRETTY_print_sdl (blr_buffer, NULL, NULL, 0);
 #endif
