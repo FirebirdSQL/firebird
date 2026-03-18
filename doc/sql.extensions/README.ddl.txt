@@ -720,7 +720,7 @@ CREATE [UNIQUE] [ASC[ENDING] | DESC[ENDING]]
 
 'isql -x' generates script accordingly.
 
-4) Non-enforced constraints.
+9) Non-enforced constraints.
 
 CREATE/ALTER TABLE supports creation of non-enforced constraints.
 

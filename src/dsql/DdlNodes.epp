@@ -241,11 +241,12 @@ static void modifyIndex(thread_db* tdbb, jrd_tra* transaction,
 // Check if given index is referenced by active foreign key constraint
 static void checkIndexReferenced(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name)
 {
-	AutoCacheRequest fkCheck(tdbb, drq_c_active_fk, DYN_REQUESTS);
+	static const CachedRequestId drq_c_active_fk;
+	AutoCacheRequest fkCheck(tdbb, drq_c_active_fk);
 
 	FOR(REQUEST_HANDLE fkCheck TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
-		WITH IDX.RDB$FOREIGN_KEY_SCHEMA_NAME EQ name.schema.c_str() AND
+		WITH IDX.RDB$FOREIGN_KEY_SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
 			 IDX.RDB$FOREIGN_KEY EQ name.object.c_str() AND
 			 IDX.RDB$INDEX_INACTIVE EQ 0 OR IDX.RDB$INDEX_INACTIVE MISSING
 	{
@@ -9967,7 +9968,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					executeBeforeTrigger();
 
 					const AlterConstraintClause* clause = static_cast<const AlterConstraintClause*>(i->getObject());
-					AutoCacheRequest request(tdbb, drq_get_constr_type, DYN_REQUESTS);
+					static const CachedRequestId drq_get_constr_type;
+					AutoCacheRequest request(tdbb, drq_get_constr_type);
 					bool found = false;
 
 					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -9996,7 +9998,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						}
 						else if (strcmp(RC.RDB$CONSTRAINT_TYPE, CHECK_CNSTRT) == 0)
 						{
-							AutoCacheRequest requestHandle(tdbb, drq_m_check_trgs, DYN_REQUESTS);
+							static const CachedRequestId drq_m_check_trgs;
+							AutoCacheRequest requestHandle(tdbb, drq_m_check_trgs);
 
 							FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 								TRG IN RDB$TRIGGERS CROSS
@@ -13634,7 +13637,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		}
 
 		if (!active)
-			checkIndexReferenced(tdbb, transaction, name);
+			checkIndexReferenced(tdbb, transaction, indexName);
 
 		if (active != create)
 		{
@@ -13672,7 +13675,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (!found)
 	{
 		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48) << Arg::Gds(isc_index_name) << name.toQuotedString());
+		status_exception::raise(Arg::PrivateDyn(48) << Arg::Gds(isc_index_name) << indexName.toQuotedString());
 	}
 
 	if (active == create)
