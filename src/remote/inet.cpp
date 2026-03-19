@@ -1804,8 +1804,8 @@ static void disconnect(rem_port* port)
 		SOCLOSE(port->port_channel);
 	}
 
-	if (port->port_thread_guard && port->port_events_thread && !port->port_events_threadId.isCurrent())
-		port->port_thread_guard->setWait(port->port_events_thread);
+	if (port->port_thread_guard && port->port_events_thread.isCurrent())
+		port->port_thread_guard->setWait(std::move(port->port_events_thread));
 	else
 		port->releasePort();
 
@@ -3121,7 +3121,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 			INET_force_error = 1;
 			try
 			{
-				inet_error(false, port, "simulated error - read", isc_net_read_err);
+				inet_error(false, port, "simulated error - read", isc_net_read_err, 0);
 			}
 			catch (const Exception&) { }
 			return false;

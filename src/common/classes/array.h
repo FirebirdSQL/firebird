@@ -29,6 +29,7 @@
 
 #include "../common/gdsassert.h"
 #include <initializer_list>
+#include <type_traits>
 #include <string.h>
 #include "../common/classes/vector.h"
 #include "../common/classes/alloc.h"
@@ -43,11 +44,11 @@ public:
 	explicit InlineStorage(MemoryPool& p) : AutoStorage(p) { }
 	InlineStorage() : AutoStorage() { }
 protected:
-	T* getStorage()
+	T* getStorage() noexcept
 	{
 		return buffer;
 	}
-	FB_SIZE_T getStorageSize() const
+	FB_SIZE_T getStorageSize() const noexcept
 	{
 		return Capacity;
 	}
@@ -63,14 +64,18 @@ public:
 	explicit EmptyStorage(MemoryPool& p) : AutoStorage(p) { }
 	EmptyStorage() : AutoStorage() { }
 protected:
-	T* getStorage() { return NULL; }
-	FB_SIZE_T getStorageSize() const { return 0; }
+	T* getStorage() noexcept { return NULL; }
+	FB_SIZE_T getStorageSize() const noexcept { return 0; }
 };
 
 // Dynamic array of simple types
 template <typename T, typename Storage = EmptyStorage<T> >
-class Array : protected Storage
+class Array : public Storage
 {
+#ifndef _MSC_VER
+	static_assert(std::is_trivially_copyable<T>(), "Only simple (trivially copyable) types supported in array");
+#endif
+
 public:
 	typedef FB_SIZE_T size_type;
 	typedef FB_SSIZE_T difference_type;
@@ -81,6 +86,8 @@ public:
 	typedef T value_type;
 	typedef pointer iterator;
 	typedef const_pointer const_iterator;
+
+	static const size_type npos = ~size_type(0);
 
 	explicit Array(MemoryPool& p)
 		: Storage(p),
@@ -175,7 +182,7 @@ protected:
   		return data[index];
 	}
 
-	void freeData()
+	void freeData() noexcept
 	{
 		// CVC: Warning, after this call, "data" is an invalid pointer, be sure to reassign it
 		// or make it equal to this->getStorage()
@@ -194,6 +201,15 @@ public:
 	Array<T, Storage>& operator =(const Array<T, Storage>& source)
 	{
 		copyFrom(source);
+		return *this;
+	}
+
+	template <typename T2, typename S2 >
+	Array& operator=(const Array<T2, S2>& source)
+	{
+		ensureCapacity(source.getCount(), false);
+		for (size_type index = 0; index < count; ++index)
+			data[index] = source[index];
 		return *this;
 	}
 
@@ -219,9 +235,9 @@ public:
 		return *(data + count - 1);
 	}
 
-	const T* begin() const { return data; }
+	const T* begin() const noexcept { return data; }
 
-	const T* end() const { return data + count; }
+	const T* end() const noexcept { return data + count; }
 
 	T& front()
 	{
@@ -235,9 +251,9 @@ public:
 		return *(data + count - 1);
 	}
 
-	T* begin() { return data; }
+	T* begin() noexcept { return data; }
 
-	T* end() { return data + count; }
+	T* end() noexcept { return data + count; }
 
 	void insert(const size_type index, const T& item)
 	{
@@ -388,11 +404,11 @@ public:
 
 	size_type getCount() const noexcept { return count; }
 
-	bool isEmpty() const { return count == 0; }
+	bool isEmpty() const noexcept { return count == 0; }
 
-	bool hasData() const { return count != 0; }
+	bool hasData() const noexcept { return count != 0; }
 
-	size_type getCapacity() const { return capacity; }
+	size_type getCapacity() const noexcept { return capacity; }
 
 	void push(const T& item)
 	{
@@ -451,13 +467,26 @@ public:
 		data = this->getStorage();
 	}
 
-	// This method only assigns "pos" if the element is found.
+	// This methods only assigns "pos" if the element is found.
 	// Maybe we should modify it to iterate directy with "pos".
 	bool find(const T& item, size_type& pos) const
 	{
 		for (size_type i = 0; i < count; i++)
 		{
 			if (data[i] == item)
+			{
+				pos = i;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool find(const std::function<int(const T& item)>& compare, size_type& pos) const
+	{
+		for (size_type i = 0; i < count; i++)
+		{
+			if (compare(data[i]) == 0)
 			{
 				pos = i;
 				return true;
@@ -488,7 +517,19 @@ public:
 	{
 		if (count != op.count)
 			return false;
-		return memcmp(data, op.data, count) == 0;
+
+		// return memcmp(data, op.data, count) == 0;
+		// fast but wrong - imagine array element with non-dense elements
+
+		auto my = begin();
+		const auto my_end = end();
+		for (auto him = op.begin(); my != my_end; ++my, ++him)
+		{
+			if (! (*my == *him))
+				return false;
+		}
+
+		return true;
 	}
 
 	// Member function only for some debugging tests. Hope nobody is bothered.
@@ -531,7 +572,7 @@ protected:
 			fb_assert(newcapacity < FB_MAX_SIZEOF / sizeof(T));
 
 			T* newdata = static_cast<T*>
-				(this->getPool().allocate(sizeof(T) * newcapacity ALLOC_ARGS));
+				(this->getPool().allocate(sizeof(T) * newcapacity));
 			if (preserve)
 				memcpy(static_cast<void*>(newdata), data, sizeof(T) * count);
 			freeData();
@@ -541,9 +582,8 @@ protected:
 	}
 };
 
-const static int FB_ARRAY_SORT_MANUAL = 0;
-const static int FB_ARRAY_SORT_WHEN_ADD = 1;
-// const static int FB_ARRAY_SORT_ON_FIND
+static inline constexpr int FB_ARRAY_SORT_MANUAL = 0;
+static inline constexpr int FB_ARRAY_SORT_WHEN_ADD = 1;
 
 // Dynamic sorted array of simple objects
 template <typename Value,
@@ -621,6 +661,18 @@ public:
 		}
 		this->insert(pos, item);
 		return pos;
+	}
+
+	size_type addUniq(const Value& item)
+	{
+		size_type pos;
+		fb_assert(sortMode == FB_ARRAY_SORT_WHEN_ADD);
+		if (!find(KeyOfValue::generate(item), pos))
+		{
+			this->insert(pos, item);
+			return pos;
+		}
+		return this->npos;
 	}
 
 	void setSortMode(int sm)

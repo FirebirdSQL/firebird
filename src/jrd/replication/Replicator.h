@@ -36,15 +36,23 @@
 
 namespace Replication
 {
-	class Replicator :
+	class Replicator final :
 		public Firebird::StdPlugin<Firebird::IReplicatedSessionImpl<Replicator, Firebird::CheckStatusWrapper> >
 	{
 		typedef Firebird::ObjectsArray<Firebird::string> NameCache;
 		typedef Firebird::HalfStaticArray<SavNumber, 16> SavepointStack;
 
+		struct GeneratorValue
+		{
+			Jrd::QualifiedName name;
+			SINT64 value = 0;
+		};
+
+		typedef Firebird::Array<GeneratorValue> GeneratorCache;
+
 		struct BatchBlock
 		{
-			Block header;
+			Block header{};
 			Firebird::UCharBuffer* buffer;
 			NameCache atoms;
 			ULONG lastAtom;
@@ -54,10 +62,9 @@ namespace Replication
 				: buffer(NULL), atoms(pool),
 				  lastAtom(MAX_ULONG), flushes(0)
 			{
-				memset(&header, 0, sizeof(Block));
 			}
 
-			ULONG getSize() const
+			ULONG getSize() const noexcept
 			{
 				return (ULONG) buffer->getCount();
 			}
@@ -90,8 +97,7 @@ namespace Replication
 				buffer->add(ptr, sizeof(SINT64));
 			}
 
-			template <typename T>
-			ULONG defineAtom(const T& name)
+			ULONG defineAtom(const Firebird::string& name)
 			{
 				if (lastAtom < atoms.getCount() && atoms[lastAtom] == name)
 					return lastAtom;
@@ -137,9 +143,24 @@ namespace Replication
 			{
 				buffer->add(data, length);
 			}
+
+			void putGenerators(const GeneratorCache& generators)
+			{
+				for (const auto& generator : generators)
+				{
+					fb_assert(generator.name.object.hasData() && generator.name.schema.hasData());
+
+					const auto [schemaAtom, objectAtom] = defineQualifiedAtom(generator.name);
+
+					putTag(opSetSequence);
+					putInt32(schemaAtom);
+					putInt32(objectAtom);
+					putInt64(generator.value);
+				}
+			}
 		};
 
-		class Transaction :
+		class Transaction final :
 			public Firebird::AutoIface<Firebird::IReplicatedTransactionImpl<Transaction, Firebird::CheckStatusWrapper> >
 		{
 		public:
@@ -147,12 +168,12 @@ namespace Replication
 				: m_replicator(replicator), m_transaction(trans), m_data(replicator->getPool())
 			{}
 
-			BatchBlock& getData()
+			BatchBlock& getData() noexcept
 			{
 				return m_data;
 			}
 
-			Firebird::ITransaction* getInterface()
+			Firebird::ITransaction* getInterface() noexcept
 			{
 				return m_transaction.getPtr();
 			}
@@ -256,14 +277,6 @@ namespace Replication
 			Firebird::RefPtr<Firebird::ITransaction> m_transaction;
 			BatchBlock m_data;
 		};
-
-		struct GeneratorValue
-		{
-			Jrd::QualifiedName name;
-			SINT64 value;
-		};
-
-		typedef Firebird::Array<GeneratorValue> GeneratorCache;
 
 		enum FlushReason
 		{

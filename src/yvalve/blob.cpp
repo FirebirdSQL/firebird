@@ -245,7 +245,21 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 			          pp.rdb$package_name is null
 		)""";
 
-		const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
+		constexpr auto sqlNoSchemasNoPackages = R"""(
+			select f.rdb$field_sub_type,
+			       f.rdb$segment_length,
+			       f.rdb$character_set_id
+			    from rdb$procedure_parameters pp
+			    join rdb$fields f
+			      on f.rdb$field_name = pp.rdb$field_source
+			    where pp.rdb$procedure_name = ? and
+			          pp.rdb$parameter_name = ?
+		)""";
+
+		const auto sql =
+			majorOdsVersion >= ODS_VERSION14 ? sqlSchemas :
+			majorOdsVersion >= ODS_VERSION12 ? sqlNoSchemas :
+			sqlNoSchemasNoPackages;
 
 		FB_MESSAGE(InputMessage, CheckStatusWrapper,
 			(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), procedureName)

@@ -39,7 +39,7 @@
 
 namespace Firebird {
 
-void TimeStamp::report_error(const char* msg)
+[[noreturn]] void TimeStamp::report_error(const char* msg)
 {
 	system_call_failed::raise(msg);
 }

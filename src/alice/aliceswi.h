@@ -27,49 +27,49 @@
 
 // switch definitions
 
-const SINT64 sw_list			= 0x0000000000000001L;	// Byte 0, Bit 0
-const SINT64 sw_prompt			= 0x0000000000000002L;
-const SINT64 sw_commit			= 0x0000000000000004L;
-const SINT64 sw_rollback		= 0x0000000000000008L;
-const SINT64 sw_sweep			= 0x0000000000000010L;
-const SINT64 sw_validate		= 0x0000000000000020L;
-const SINT64 sw_no_update		= 0x0000000000000040L;
-const SINT64 sw_full			= 0x0000000000000080L;
-const SINT64 sw_mend			= 0x0000000000000100L;	// Byte 1, Bit 0
-const SINT64 sw_all				= 0x0000000000000200L;
-const SINT64 sw_enable			= 0x0000000000000400L;
-const SINT64 sw_disable			= 0x0000000000000800L;
-const SINT64 sw_ignore			= 0x0000000000001000L;
-const SINT64 sw_activate		= 0x0000000000002000L;
-const SINT64 sw_two_phase		= 0x0000000000004000L;
-const SINT64 sw_housekeeping	= 0x0000000000008000L;
-const SINT64 sw_kill			= 0x0000000000010000L;	// Byte 2, Bit 0
-//const SINT64 sw_begin_log		= 0x0000000000020000L;
-//const SINT64 sw_quit_log		= 0x0000000000040000L;
-const SINT64 sw_write			= 0x0000000000080000L;
-const SINT64 sw_no_reserve		= 0x0000000000100000L;
-const SINT64 sw_user			= 0x0000000000200000L;
-const SINT64 sw_password		= 0x0000000000400000L;
-const SINT64 sw_shut			= 0x0000000000800000L;
-const SINT64 sw_online			= 0x0000000001000000L;	// Byte 3, Bit 0
-//const SINT64 sw_cache			= 0x0000000002000000L;
-const SINT64 sw_attach			= 0x0000000004000000L;
-const SINT64 sw_force			= 0x0000000008000000L;
-const SINT64 sw_tran			= 0x0000000010000000L;
-const SINT64 sw_buffers			= 0x0000000020000000L;
-const SINT64 sw_mode			= 0x0000000040000000L;
-const SINT64 sw_set_db_dialect	= 0x0000000080000000L;
-const SINT64 sw_trusted_auth	= QUADCONST(0x0000000100000000);	// Byte 4, Bit 0
-const SINT64 sw_parallel_workers= QUADCONST(0x0000000200000000);
-const SINT64 sw_fetch_password	= QUADCONST(0x0000000800000000);
-const SINT64 sw_nolinger		= QUADCONST(0x0000001000000000);
-const SINT64 sw_icu				= QUADCONST(0x0000002000000000);
-const SINT64 sw_role			= QUADCONST(0x0000004000000000);
-const SINT64 sw_replica			= QUADCONST(0x0000008000000000);
-const SINT64 sw_upgrade			= QUADCONST(0x0000010000000000);
+inline constexpr SINT64 sw_list				= 0x0000000000000001L;	// Byte 0, Bit 0
+inline constexpr SINT64 sw_prompt			= 0x0000000000000002L;
+inline constexpr SINT64 sw_commit			= 0x0000000000000004L;
+inline constexpr SINT64 sw_rollback			= 0x0000000000000008L;
+inline constexpr SINT64 sw_sweep			= 0x0000000000000010L;
+inline constexpr SINT64 sw_validate			= 0x0000000000000020L;
+inline constexpr SINT64 sw_no_update		= 0x0000000000000040L;
+inline constexpr SINT64 sw_full				= 0x0000000000000080L;
+inline constexpr SINT64 sw_mend				= 0x0000000000000100L;	// Byte 1, Bit 0
+inline constexpr SINT64 sw_all				= 0x0000000000000200L;
+inline constexpr SINT64 sw_enable			= 0x0000000000000400L;
+inline constexpr SINT64 sw_disable			= 0x0000000000000800L;
+inline constexpr SINT64 sw_ignore			= 0x0000000000001000L;
+inline constexpr SINT64 sw_activate			= 0x0000000000002000L;
+inline constexpr SINT64 sw_two_phase		= 0x0000000000004000L;
+inline constexpr SINT64 sw_housekeeping		= 0x0000000000008000L;
+inline constexpr SINT64 sw_kill				= 0x0000000000010000L;	// Byte 2, Bit 0
+//inline constexpr SINT64 sw_begin_log		= 0x0000000000020000L;
+//inline constexpr SINT64 sw_quit_log		= 0x0000000000040000L;
+inline constexpr SINT64 sw_write			= 0x0000000000080000L;
+inline constexpr SINT64 sw_no_reserve		= 0x0000000000100000L;
+inline constexpr SINT64 sw_user				= 0x0000000000200000L;
+inline constexpr SINT64 sw_password			= 0x0000000000400000L;
+inline constexpr SINT64 sw_shut				= 0x0000000000800000L;
+inline constexpr SINT64 sw_online			= 0x0000000001000000L;	// Byte 3, Bit 0
+//inline constexpr SINT64 sw_cache			= 0x0000000002000000L;
+inline constexpr SINT64 sw_attach			= 0x0000000004000000L;
+inline constexpr SINT64 sw_force			= 0x0000000008000000L;
+inline constexpr SINT64 sw_tran				= 0x0000000010000000L;
+inline constexpr SINT64 sw_buffers			= 0x0000000020000000L;
+inline constexpr SINT64 sw_mode				= 0x0000000040000000L;
+inline constexpr SINT64 sw_set_db_dialect	= 0x0000000080000000L;
+inline constexpr SINT64 sw_trusted_auth		= QUADCONST(0x0000000100000000);	// Byte 4, Bit 0
+inline constexpr SINT64 sw_parallel_workers	= QUADCONST(0x0000000200000000);
+inline constexpr SINT64 sw_fetch_password	= QUADCONST(0x0000000800000000);
+inline constexpr SINT64 sw_nolinger			= QUADCONST(0x0000001000000000);
+inline constexpr SINT64 sw_icu				= QUADCONST(0x0000002000000000);
+inline constexpr SINT64 sw_role				= QUADCONST(0x0000004000000000);
+inline constexpr SINT64 sw_replica			= QUADCONST(0x0000008000000000);
+inline constexpr SINT64 sw_upgrade			= QUADCONST(0x0000010000000000);
 
 // Popular combination of compatible switches
-const SINT64 sw_auth_set		= sw_user | sw_password | sw_role | sw_fetch_password | sw_trusted_auth;
+inline constexpr SINT64 sw_auth_set = sw_user | sw_password | sw_role | sw_fetch_password | sw_trusted_auth;
 
 
 enum alice_switches
@@ -86,7 +86,7 @@ enum alice_switches
 	IN_SW_ALICE_MEND				=	9,
 	IN_SW_ALICE_ALL					=	10,
 	IN_SW_ALICE_ENABLE				=	11,
-	//IN_SW_ALICE_DISABLE				=	12,
+	//IN_SW_ALICE_DISABLE			=	12,
 	IN_SW_ALICE_IGNORE				=	13,
 	IN_SW_ALICE_ACTIVATE			=	14,
 	IN_SW_ALICE_TWO_PHASE			=	15,
@@ -131,20 +131,20 @@ enum alice_switches
 	IN_SW_ALICE_UPGRADE				=	52
 };
 
-static const char* const ALICE_SW_ASYNC	= "ASYNC";
-static const char* const ALICE_SW_SYNC	= "SYNC";
+static inline constexpr const char* ALICE_SW_ASYNC	= "ASYNC";
+static inline constexpr const char* ALICE_SW_SYNC	= "SYNC";
 
-static const char* const ALICE_SW_MODE_NONE	= "NONE";
-static const char* const ALICE_SW_MODE_RO	= "READ_ONLY";
-static const char* const ALICE_SW_MODE_RW	= "READ_WRITE";
+static inline constexpr const char* ALICE_SW_MODE_NONE	= "NONE";
+static inline constexpr const char* ALICE_SW_MODE_RO	= "READ_ONLY";
+static inline constexpr const char* ALICE_SW_MODE_RW	= "READ_WRITE";
 
-static const char* const ALICE_SW_SHUT_NORMAL	= "NORMAL";
-static const char* const ALICE_SW_SHUT_MULTI	= "MULTI";
-static const char* const ALICE_SW_SHUT_SINGLE	= "SINGLE";
-static const char* const ALICE_SW_SHUT_FULL		= "FULL";
+static inline constexpr const char* ALICE_SW_SHUT_NORMAL	= "NORMAL";
+static inline constexpr const char* ALICE_SW_SHUT_MULTI		= "MULTI";
+static inline constexpr const char* ALICE_SW_SHUT_SINGLE	= "SINGLE";
+static inline constexpr const char* ALICE_SW_SHUT_FULL		= "FULL";
 
 // Switch table
-static const Switches::in_sw_tab_t alice_in_sw_table[] =
+static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 {
 	{IN_SW_ALICE_ACTIVATE, isc_spb_prp_activate, "ACTIVATE_SHADOW", sw_activate,
 		0, ~(sw_activate | sw_auth_set | sw_nolinger), false, true, 25, 2, NULL},
@@ -321,12 +321,12 @@ static const Switches::in_sw_tab_t alice_in_sw_table[] =
      	0, 0, false, false, 0, 0, NULL}
 };
 
-static const char* alice_shut_mode_sw_table[] =
+static inline constexpr const char* alice_shut_mode_sw_table[] =
 {
 	ALICE_SW_SHUT_NORMAL, ALICE_SW_SHUT_MULTI, ALICE_SW_SHUT_SINGLE, ALICE_SW_SHUT_FULL
 };
 
-static const char* alice_repl_mode_sw_table[] =
+static inline constexpr const char* alice_repl_mode_sw_table[] =
 {
 	ALICE_SW_MODE_NONE, ALICE_SW_MODE_RO, ALICE_SW_MODE_RW
 };

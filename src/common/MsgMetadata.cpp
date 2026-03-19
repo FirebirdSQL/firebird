@@ -298,7 +298,7 @@ IMessageMetadata* MetadataBuilder::getMetadata(CheckStatusWrapper* status)
 
 		metadataError("getMetadata");
 
-		unsigned i = msgMetadata->makeOffsets();
+		const unsigned i = msgMetadata->makeOffsets();
 		if (i != ~0u)
 		{
 			(Arg::Gds(isc_item_finish) << Arg::Num(i)).raise();
@@ -413,7 +413,7 @@ void MsgMetadata::assign(IMessageMetadata* from)
 	LocalStatus ls;
 	CheckStatusWrapper status(&ls);
 
-	unsigned count = from->getCount(&status);
+	const unsigned count = from->getCount(&status);
 	check(&status);
 	items.resize(count);
 

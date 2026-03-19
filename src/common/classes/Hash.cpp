@@ -34,13 +34,13 @@
 
 using namespace Firebird;
 
-unsigned int CRC32C(unsigned int length, const unsigned char* value);
+unsigned int CRC32C(unsigned int length, const unsigned char* value) noexcept;
 
 namespace
 {
 	typedef unsigned int (*hash_func_t)(unsigned int length, const UCHAR* value);
 
-	unsigned int basicHash(unsigned int length, const UCHAR* value)
+	unsigned int basicHash(unsigned int length, const UCHAR* value) noexcept
 	{
 		unsigned int hash_value = 0;
 
@@ -75,17 +75,17 @@ namespace
 
 #if defined(_M_IX86) || defined(_M_X64) || defined(__x86_64__) || defined(__i386__)
 
-	bool SSE4_2Supported()
+	bool SSE4_2Supported() noexcept
 	{
 #ifdef _MSC_VER
-		const int bit_SSE4_2 = 1 << 20;
+		constexpr int bit_SSE4_2 = 1 << 20;
 		// MS VC has its own definition of __cpuid
 		int flags[4];
 		__cpuid(flags, 1);
 		return (flags[2] & bit_SSE4_2) != 0;
 #else
 #if defined(__clang__) && !defined(bit_SSE4_2)
-		const int bit_SSE4_2 = bit_SSE42;
+		constexpr int bit_SSE4_2 = bit_SSE42;
 #endif
 
 		// GCC - its own
@@ -105,7 +105,7 @@ namespace
 
 }
 
-unsigned int InternalHash::hash(unsigned int length, const UCHAR* value)
+unsigned int InternalHash::hash(unsigned int length, const UCHAR* value) noexcept
 {
 	return internalHash(length, value);
 }

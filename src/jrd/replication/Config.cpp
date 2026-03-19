@@ -51,17 +51,17 @@ using namespace Replication;
 
 namespace
 {
-	const char* REPLICATION_CFGFILE = "replication.conf";
+	constexpr const char* REPLICATION_CFGFILE = "replication.conf";
 	constexpr const char* KEY_SUFFIX_ENV = "env";
 	constexpr const char* KEY_SUFFIX_FILE = "file";
 
-	const ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 				// 1 MB
-	const ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
-	const ULONG DEFAULT_SEGMENT_COUNT = 8;
-	const ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
-	const ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
-	const ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;				// seconds
-	const ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_BUFFER_SIZE = 1024 * 1024; 			// 1 MB
+	constexpr ULONG DEFAULT_SEGMENT_SIZE = 16 * 1024 * 1024;	// 16 MB
+	constexpr ULONG DEFAULT_SEGMENT_COUNT = 8;
+	constexpr ULONG DEFAULT_ARCHIVE_TIMEOUT = 60;				// seconds
+	constexpr ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
+	constexpr ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;			// seconds
+	constexpr ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;			// seconds
 
 	void parseLong(const string& input, ULONG& output)
 	{

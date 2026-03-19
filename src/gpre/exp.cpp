@@ -43,8 +43,8 @@
 #include "../gpre/sqe_proto.h"
 #include "../gpre/sql_proto.h"
 
-const int ZERO_BASED	= 0;
-const int ONE_BASED		= 1;
+constexpr int ZERO_BASED	= 0;
+constexpr int ONE_BASED		= 1;
 
 static bool check_relation();
 static gpre_nod* lookup_field(gpre_ctx*);
@@ -149,11 +149,11 @@ gpre_fld* EXP_cast(gpre_fld* field)
 	{
 	case dtype_varying:
 		cast->fld_length++;
-		// fall back
+		[[fallthrough]];
 
 	case dtype_cstring:
 		cast->fld_length++;
-		// fall back
+		[[fallthrough]];
 
 	case dtype_text:
 		if (gpreGlob.sw_cstring && !(cast->fld_dtype == dtype_cstring))
@@ -361,7 +361,10 @@ gpre_nod* EXP_literal()
 	case KW_TIMESTAMP:
 		reference->ref_flags |= REF_timestamp;
 		break;
-		// Do not put a default here
+
+	default:
+		// not a datetime
+		break;
 	}
 	// End date/time/timestamp
 
@@ -1138,6 +1141,10 @@ static gpre_nod* par_array(gpre_req* request, gpre_fld* field, bool subscript_fl
 			case lang_cobol:
 				index_node->nod_arg[0] = normalize_index(dimension, index_node->nod_arg[0], ONE_BASED);
 				break;
+
+			default:
+				// No normalization needed
+				break;
 			}
 
 			// Error checking of constants being out of range will be here in the future.
@@ -1378,18 +1385,18 @@ static gpre_nod* par_over( gpre_ctx* context)
 		gpre_nod* field1 = lookup_field(context);
 		if (!field1)
 		{
-			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		gpre_nod* field2 = NULL;
 		for (gpre_ctx* next = context->ctx_next; next; next = next->ctx_next)
 		{
-			if (field2 = lookup_field(next))
+			if ((field2 = lookup_field(next)))
 				break;
 		}
 		if (!field2)
 		{
-			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		boolean = make_and(boolean, MSC_binary(nod_eq, field1, field2));

@@ -93,7 +93,7 @@ DATABASE DB = STATIC FILENAME "yachts.lnk";
 namespace // unnamed, private
 {
 
-const int DEFERRED_ACTIVE		= 3;	// RDB$INDEX_INACTIVE setting for Foreign Keys
+constexpr int DEFERRED_ACTIVE	= 3;	// RDB$INDEX_INACTIVE setting for Foreign Keys
 										// This setting is used temporarily while
 										// restoring a database. This was required
 										// in order to differentiate a partial
@@ -132,7 +132,7 @@ bool	get_collation(BurpGlobals* tdgbl);
 SLONG	get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length);
 void	get_data(BurpGlobals* tdgbl, burp_rel*, WriteRelationReq* req);
 bool	get_exception(BurpGlobals* tdgbl);
-burp_fld*	get_field(BurpGlobals* tdgbl, burp_rel*);
+burp_fld*	get_field(BurpGlobals* tdgbl, burp_rel*, USHORT id);
 bool	get_field_dimensions(BurpGlobals* tdgbl);
 bool	get_files(BurpGlobals* tdgbl);
 bool	get_filter(BurpGlobals* tdgbl);
@@ -193,7 +193,7 @@ UCHAR	debug_on = 0;   // able to turn this on in the debugger
 #endif
 
 #ifdef sparc
-const SSHORT old_sparcs[] =
+constexpr SSHORT old_sparcs[] =
     {0, 0, 0, 2, 0, 0, 0, 0, 2, 4, 4, 4, 8, 8, 0, 0, 8, 8, 8};
 #endif
 
@@ -258,14 +258,14 @@ static inline void skip_scan(scan_attr_t* scan_next_attr)
 
 // User Privilege Flags
 
-const int USER_PRIV_USER			= 1;
-const int USER_PRIV_GRANTOR			= 2;
-const int USER_PRIV_PRIVILEGE		= 4;
-const int USER_PRIV_GRANT_OPTION	= 8;
-const int USER_PRIV_OBJECT_NAME		= 16;
-const int USER_PRIV_FIELD_NAME		= 32;
-const int USER_PRIV_USER_TYPE		= 64;
-const int USER_PRIV_OBJECT_TYPE		= 128;
+constexpr int USER_PRIV_USER			= 1;
+constexpr int USER_PRIV_GRANTOR			= 2;
+constexpr int USER_PRIV_PRIVILEGE		= 4;
+constexpr int USER_PRIV_GRANT_OPTION	= 8;
+constexpr int USER_PRIV_OBJECT_NAME		= 16;
+constexpr int USER_PRIV_FIELD_NAME		= 32;
+constexpr int USER_PRIV_USER_TYPE		= 64;
+constexpr int USER_PRIV_OBJECT_TYPE		= 128;
 
 static inline void collect_missing_privs(BurpGlobals* tdgbl, USHORT type, const QualifiedMetaString& name,
 	bool hasSecClass)
@@ -298,13 +298,19 @@ void activateIndex(BurpGlobals* tdgbl, const QualifiedMetaString& indexName)
 	{
 		MODIFY IND1 USING
 			IND1.RDB$INDEX_INACTIVE = FALSE;
-		END_MODIFY
+		END_MODIFY;
+		ON_ERROR
+			fError = true;
+			fb_utils::copyStatus(&local_status_vector, isc_status);
+		END_ERROR;
 	}
-	END_FOR
+	END_FOR;
+
 	ON_ERROR
+		if (!fError)
+			fb_utils::copyStatus(&local_status_vector, isc_status);
 		fError = true;
-		fb_utils::copyStatus(&local_status_vector, isc_status);
-	END_ERROR
+	END_ERROR;
 
 	if (!fError)
 	{
@@ -361,7 +367,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		// don't throw away the database just because an index
 		// could not be made
 		long error_code;
-		while (error_code = tdgbl->status_vector[1])
+		while ((error_code = tdgbl->status_vector[1]) != 0L)
 		{
 			switch (error_code)
 			{
@@ -1332,7 +1338,7 @@ SLONG get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length)
 				// msg 202: adjusting a decompression length error: invalid length %d was adjusted to %d
 				count = -length;
 			}
-			const UCHAR c = *p = get(tdgbl);
+			*p = get(tdgbl);
 			++p;
 			length -= -count;
 		}
@@ -1564,7 +1570,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
  *
  **************************************/
 
-	static const UCHAR blr_items[] =
+	static constexpr UCHAR blr_items[] =
 	{
 		isc_info_blob_max_segment,
 		isc_info_blob_total_length,
@@ -3193,7 +3199,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 		tdgbl->flag_on_line = false;
 
 		ISC_STATUS error_code;
-		while (error_code = tdgbl->status_vector[1])
+		while ((error_code = tdgbl->status_vector[1]) != 0)
 		{
 			Firebird::IRequest* req_handle = 0;
 			QualifiedMetaString indexName;
@@ -3276,7 +3282,7 @@ void fix_exception(BurpGlobals* tdgbl, const QualifiedMetaString& name, scan_att
 
 		// Notice we use 1021 instead of 1023 because this is the maximum length
 		// for this field in v2.0 and v2.1 and they produce the corrupt backups.
-		const unsigned int FIELD_LIMIT = 1021;
+		constexpr unsigned int FIELD_LIMIT = 1021;
 
 		if (FIELD_LIMIT < l2 + 1) // not enough space
 		{
@@ -3806,7 +3812,7 @@ bool get_exception(BurpGlobals* tdgbl)
 }
 
 
-burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
+burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 {
 /**************************************
  *
@@ -3864,6 +3870,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			X.RDB$IDENTITY_TYPE.NULL = TRUE;
 			// ODS 14
 			X.RDB$FIELD_SOURCE_SCHEMA_NAME.NULL = TRUE;
+
+			X.RDB$FIELD_ID.NULL = FALSE;
+			X.RDB$FIELD_ID = id;
 
 			if (relation->rel_name.schema.hasData())
 			{
@@ -4026,11 +4035,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 					break;
 
 				case att_field_character_set:
-					field->fld_character_set_id = (USHORT) get_int32(tdgbl);
+					field->fld_character_set_id = CSetId(get_int32(tdgbl));
 					break;
 
 				case att_field_collation_id:
-					field->fld_collation_id = (USHORT) get_int32(tdgbl);
+					field->fld_collation_id = CollId(get_int32(tdgbl));
 					X.RDB$COLLATION_ID.NULL = FALSE;
 					X.RDB$COLLATION_ID = field->fld_collation_id;
 					break;
@@ -4083,6 +4092,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 			X.RDB$DEFAULT_VALUE.NULL = TRUE;
 			X.RDB$NULL_FLAG.NULL = TRUE;
 			X.RDB$COLLATION_ID.NULL = TRUE;
+
+			X.RDB$FIELD_ID.NULL = FALSE;
+			X.RDB$FIELD_ID = id;
 
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
@@ -4230,11 +4242,11 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation)
 					break;
 
 				case att_field_character_set:
-					field->fld_character_set_id = (USHORT) get_int32(tdgbl);
+					field->fld_character_set_id = CSetId(get_int32(tdgbl));
 					break;
 
 				case att_field_collation_id:
-					field->fld_collation_id = (USHORT) get_int32(tdgbl);
+					field->fld_collation_id = CollId(get_int32(tdgbl));
 					X.RDB$COLLATION_ID.NULL = FALSE;
 					X.RDB$COLLATION_ID = field->fld_collation_id;
 					break;
@@ -5954,7 +5966,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
 				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
-				if (l = type_lengths[l])
+				if ((l = type_lengths[l]) != 0)
 					X.RDB$FIELD_LENGTH = l;
 			}
 
@@ -6305,7 +6317,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
 				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
-				if (l = type_lengths[l])
+				if ((l = type_lengths[l]) != 0)
 					X.RDB$FIELD_LENGTH = l;
 			}
 
@@ -6651,7 +6663,7 @@ bool get_global_field(BurpGlobals* tdgbl)
 			if (X.RDB$FIELD_TYPE <= DTYPE_BLR_MAX)
 			{
 				SSHORT l = gds_cvt_blr_dtype[X.RDB$FIELD_TYPE];
-				if (l = type_lengths[l])
+				if ((l = type_lengths[l]) != 0)
 					X.RDB$FIELD_LENGTH = l;
 			}
 
@@ -8249,6 +8261,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	// Eat up misc. records
 	burp_fld* field = NULL;
 	burp_fld** ptr = &relation->rel_fields;
+	USHORT id = 0;
 
 	rec_type record;
 	while (get_record(&record, tdgbl) != rec_data)
@@ -8277,7 +8290,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			return true;
 
 		case rec_field:
-			*ptr = field = get_field (tdgbl, relation);
+			*ptr = field = get_field(tdgbl, relation, id++);
 			if (!field)
 				return false;
 			ptr = &field->fld_next;
@@ -8568,9 +8581,8 @@ bool get_schema(BurpGlobals* tdgbl)
 
 	QualifiedMetaString name;
 	bool securityClass = false;
-	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
-	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_schema_req_handle1)
+	STORE (REQUEST_HANDLE tdgbl->handles_get_schema_req_handle1)
 		X IN RDB$SCHEMAS
 	{
 		X.RDB$SCHEMA_NAME.NULL = TRUE;
@@ -8933,13 +8945,13 @@ bool get_mapping(BurpGlobals* tdgbl)
 	else
 	{
 		int match = 0;
-		const unsigned MATCH_FROM = 0x01;
-		const unsigned MATCH_FROM_TYPE = 0x02;
-		const unsigned MATCH_USING = 0x04;
-		const unsigned MATCH_PLUGIN = 0x08;
-		const unsigned MATCH_TO_TYPE = 0x10;
-		const unsigned MATCH_TO = 0x20;
-		const unsigned MATCH_ALL = 0x3f;
+		constexpr unsigned MATCH_FROM = 0x01;
+		constexpr unsigned MATCH_FROM_TYPE = 0x02;
+		constexpr unsigned MATCH_USING = 0x04;
+		constexpr unsigned MATCH_PLUGIN = 0x08;
+		constexpr unsigned MATCH_TO_TYPE = 0x10;
+		constexpr unsigned MATCH_TO = 0x20;
+		constexpr unsigned MATCH_ALL = 0x3f;
 		Firebird::NoCaseString txt;
 
 		skip_init(&scan_next_attr);
@@ -8994,6 +9006,8 @@ bool get_mapping(BurpGlobals* tdgbl)
 						match |= MATCH_TO;
 					break;
 
+				default:
+					break;
 				}
 				break;
 
@@ -9301,7 +9315,7 @@ void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans)
 	while (length > 0)
 	{
 		UCHAR* p = buffer;
-		while (*p++ = get(tdgbl))
+		while ((*p++ = get(tdgbl)))
 			length--;
 		--p;
 		--length; // -- or ++ ??? p is decremented, will have to test.
@@ -12174,7 +12188,7 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 	}
 }
 
-static const FixGenerator genToFix[] =
+static constexpr FixGenerator genToFix[] =
 {
 	{ "RDB$CONSTRAINT_NAME",	"RDB$RELATION_CONSTRAINTS",	"RDB$CONSTRAINT_NAME",	"INTEG_" 		, DB_VERSION_DDL8 },
 	{ "RDB$FIELD_NAME",			"RDB$FIELDS",				"RDB$FIELD_NAME",		"RDB$"			, DB_VERSION_DDL8 },
@@ -13242,7 +13256,7 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 		// determine batch parameters
 		m_batchInlineBlobLimit = 0;
 
-		const UCHAR items[] = {
+		constexpr UCHAR items[] = {
 			IBatch::INF_BUFFER_BYTES_SIZE,
 			IBatch::INF_BLOB_ALIGNMENT,
 			IBatch::INF_BLOB_HEADER
@@ -13376,13 +13390,13 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 			SLONG sqlLength, sqlSubType, sqlScale, sqlType;
 			desc.getSqlInfo(&sqlLength, &sqlSubType, &sqlScale, &sqlType);
-			SLONG characterSetId = field->fld_character_set_id;
+			CSetId characterSetId = field->fld_character_set_id;
 
 			if (tdgbl->gbl_sw_fix_fss_data && field->fld_character_set_id == CS_UNICODE_FSS &&
 				((sqlType == SQL_BLOB && field->fld_sub_type == isc_blob_text && !(field->fld_flags & FLD_array)) ||
 				sqlType == SQL_TEXT || sqlType == SQL_VARYING))
 			{
-				characterSetId = tdgbl->gbl_sw_fix_fss_data_id;
+				characterSetId = CSetId(tdgbl->gbl_sw_fix_fss_data_id);
 			}
 			else if (field->fld_flags & FLD_array)
 			{
@@ -13498,26 +13512,26 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 
 		// arrays are of various fld_types but are really blobs
 
-		SSHORT dtype = field->fld_type;
+		auto blrType = field->fld_type;
 		length = field->fld_length;
 		SSHORT alignment = 4;
 
 		if (field->fld_flags & FLD_array)
-			dtype = blr_blob;
+			blrType = blr_blob;
 
-		if (dtype <= DTYPE_BLR_MAX)
+		if (blrType <= DTYPE_BLR_MAX)
 		{
-			USHORT l = gds_cvt_blr_dtype[dtype];
-			alignment = type_alignments[l];
-			if (l = type_lengths[l])
-				length = l;
+			const auto dtype = gds_cvt_blr_dtype[blrType];
+			alignment = type_alignments[dtype];
+			if (const auto len = type_lengths[dtype])
+				length = len;
 		}
 
-		switch (dtype)
+		switch (blrType)
 		{
 		case blr_text:
 		case blr_varying:
-			if (dtype == blr_text)
+			if (blrType == blr_text)
 				add_byte(blr, blr_text2);
 			else
 				add_byte(blr, blr_varying2);
@@ -13528,7 +13542,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_word(blr, field->fld_character_set_id);
 
 			add_word(blr, field->fld_length);
-			if (dtype == blr_varying)
+			if (blrType == blr_varying)
 				length += sizeof(USHORT);
 			break;
 
@@ -13548,6 +13562,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 		case blr_sql_time:
 		case blr_sql_time_tz:
 		case blr_sql_date:
+		case blr_bool:
 		case blr_dec64:
 		case blr_dec128:
 			add_byte(blr, field->fld_type);
@@ -13569,11 +13584,6 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 				add_byte(blr, blr_quad);
 				add_byte(blr, 0);
 			}
-
-			break;
-
-		case blr_bool:
-			add_byte(blr, field->fld_type);
 			break;
 
 		default:
@@ -13581,8 +13591,10 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 			// msg 26 datatype %ld not understood
 			break;
 		}
+
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;
@@ -14033,7 +14045,7 @@ IOBuffer* RestoreRelationTask::read_blob(BurpGlobals* tdgbl, IOBuffer* ioBuf)
 				segments = value;
 
 			// for simplicity, don't split put attribute between buffers
-			const FB_SIZE_T attrLen = (sizeof(SLONG) + 2);
+			constexpr FB_SIZE_T attrLen = (sizeof(SLONG) + 2);
 			checkSpace(&ioBuf, attrLen, &buf, &space);
 
 			*buf++ = attribute;

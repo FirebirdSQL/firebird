@@ -49,9 +49,13 @@
 #ifndef _SHA2_H
 #define _SHA2_H
 
-#include <string.h>
 #ifndef NIST_COMPLIANCY_TESTS
 #include "firebird.h"
+#endif
+
+#include <string.h>
+
+#ifndef NIST_COMPLIANCY_TESTS
 #include "../../common/classes/alloc.h"
 #include "../../common/classes/array.h"
 #include "../../common/classes/fb_string.h"
@@ -59,16 +63,16 @@
 #endif
 
 
-#define SHA224_DIGEST_SIZE ( 224 / 8)
-#define SHA256_DIGEST_SIZE ( 256 / 8)
-#define SHA384_DIGEST_SIZE ( 384 / 8)
-#define SHA512_DIGEST_SIZE ( 512 / 8)
-#define SHA_MAX_DIGEST_SIZE SHA512_DIGEST_SIZE
+static inline constexpr int SHA224_DIGEST_SIZE = 224 / 8;
+static inline constexpr int SHA256_DIGEST_SIZE = 256 / 8;
+static inline constexpr int SHA384_DIGEST_SIZE = 384 / 8;
+static inline constexpr int SHA512_DIGEST_SIZE = 512 / 8;
+static inline constexpr int SHA_MAX_DIGEST_SIZE = SHA512_DIGEST_SIZE;
 
-#define SHA256_BLOCK_SIZE  ( 512 / 8)
-#define SHA512_BLOCK_SIZE  (1024 / 8)
-#define SHA384_BLOCK_SIZE  SHA512_BLOCK_SIZE
-#define SHA224_BLOCK_SIZE  SHA256_BLOCK_SIZE
+static inline constexpr int SHA256_BLOCK_SIZE = 512 / 8;
+static inline constexpr int SHA512_BLOCK_SIZE = 1024 / 8;
+static inline constexpr int SHA384_BLOCK_SIZE = SHA512_BLOCK_SIZE;
+static inline constexpr int SHA224_BLOCK_SIZE = SHA256_BLOCK_SIZE;
 
 namespace Firebird {
 
@@ -76,7 +80,7 @@ namespace Firebird {
  * digest from an arbitrary length message.
  */
 
-template<class SHA>void get_digest(const unsigned char* message, size_t len, unsigned char* digest)
+template<class SHA>void get_digest(const unsigned char* message, size_t len, unsigned char* digest) noexcept
 {
 	SHA sha;
 	sha.process(len, message);
@@ -131,10 +135,6 @@ class sha2_base : public GlobalStorage {
 #else
 class sha2_base {
 #endif
-private:
-	sha2_base(const sha2_base&);
-	sha2_base& operator = (const sha2_base&);
-
 public:
 	sha2_base()
 	{
@@ -143,28 +143,31 @@ public:
 
 	virtual ~sha2_base() {};
 
+	sha2_base(const sha2_base&) = delete;
+	sha2_base& operator= (const sha2_base&) = delete;
+
 public:
-	void reset()
+	void reset() noexcept
 	{
 		SHA_TRAITS::sha_init(&m_ctx);
 	}
 
-	void process(size_t length, const void* bytes)
+	void process(size_t length, const void* bytes) noexcept
 	{
 		SHA_TRAITS::sha_update(&m_ctx, static_cast<const unsigned char*>(bytes), length);
 	}
 
-	void process(size_t length, const unsigned char* message)
+	void process(size_t length, const unsigned char* message) noexcept
 	{
 		SHA_TRAITS::sha_update(&m_ctx, message, length);
 	}
 
-	void process(const char* str)
+	void process(const char* str) noexcept
 	{
-		SHA_TRAITS::sha_update(&m_ctx, reinterpret_cast<const unsigned char*>(str), strlen(str));
+		SHA_TRAITS::sha_update(&m_ctx, reinterpret_cast<const unsigned char*>(str), fb_strlen(str));
 	}
 
-	void getHash(unsigned char* digest)
+	void getHash(unsigned char* digest) noexcept
 	{
 		SHA_TRAITS::sha_final(&m_ctx, digest);
 		SHA_TRAITS::sha_init(&m_ctx);
@@ -176,7 +179,7 @@ public:
 		SHA_TRAITS::sha_update(&m_ctx, bytes.begin(), bytes.getCount());
 	}
 
-	void getHash(UCharBuffer& h)
+	void getHash(UCharBuffer& h) noexcept
 	{
 		SHA_TRAITS::sha_final(&m_ctx, h.getBuffer(SHA_TRAITS::get_DigestSize()));
 		SHA_TRAITS::sha_init(&m_ctx);
@@ -198,7 +201,7 @@ struct sha256_ctx {
 	unsigned char block[2 * SHA256_BLOCK_SIZE];
 	sha2_types::uint32 h[8];
 
-	void transf(const unsigned char* message, unsigned int block_nb);
+	void transf(const unsigned char* message, unsigned int block_nb) noexcept;
 };
 
 class sha256_traits: private sha2_types {
@@ -206,13 +209,13 @@ public:
 	typedef sha256_ctx sha_ctx;
 
 public:
-	static unsigned int get_DigestSize() {return SHA256_DIGEST_SIZE;};
+	static inline constexpr unsigned int get_DigestSize() {return SHA256_DIGEST_SIZE;}
 
-	static void sha_init(sha_ctx* ctx);
+	static void sha_init(sha_ctx* ctx) noexcept;
 
-	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len);
+	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len) noexcept;
 
-	static void sha_final(sha_ctx *ctx, unsigned char* digest);
+	static void sha_final(sha_ctx *ctx, unsigned char* digest) noexcept;
 };
 
 class sha224_traits: private sha2_types {
@@ -220,13 +223,13 @@ public:
 	typedef sha256_ctx sha_ctx;
 
 public:
-	static unsigned int get_DigestSize() {return SHA224_DIGEST_SIZE;};
+	static inline constexpr unsigned int get_DigestSize() {return SHA224_DIGEST_SIZE;}
 
-	static void sha_init(sha_ctx* ctx);
+	static void sha_init(sha_ctx* ctx) noexcept;
 
-	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len);
+	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len) noexcept;
 
-	static void sha_final(sha_ctx* ctx, unsigned char* digest);
+	static void sha_final(sha_ctx* ctx, unsigned char* digest) noexcept;
 };
 
 struct sha512_ctx{
@@ -235,7 +238,7 @@ struct sha512_ctx{
 	unsigned char block[2 * SHA512_BLOCK_SIZE];
 	sha2_types::uint64 h[8];
 
-	void transf(const unsigned char* message, unsigned int block_nb);
+	void transf(const unsigned char* message, unsigned int block_nb) noexcept;
 
 };
 
@@ -244,13 +247,13 @@ public:
 	typedef sha512_ctx sha_ctx;
 
 public:
-	static unsigned int get_DigestSize() {return SHA512_DIGEST_SIZE;};
+	static inline constexpr unsigned int get_DigestSize() {return SHA512_DIGEST_SIZE;}
 
-	static void sha_init(sha_ctx* ctx);
+	static void sha_init(sha_ctx* ctx) noexcept;
 
-	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len);
+	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len) noexcept;
 
-	static void sha_final(sha_ctx* ctx, unsigned char* digest);
+	static void sha_final(sha_ctx* ctx, unsigned char* digest) noexcept;
 };
 
 class sha384_traits: private sha2_types {
@@ -258,13 +261,13 @@ public:
 	typedef sha512_ctx sha_ctx;
 
 public:
-	static unsigned int get_DigestSize() {return SHA384_DIGEST_SIZE;};
+	static inline constexpr unsigned int get_DigestSize() {return SHA384_DIGEST_SIZE;}
 
-	static void sha_init(sha_ctx* ctx);
+	static void sha_init(sha_ctx* ctx) noexcept;
 
-	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len);
+	static void sha_update(sha_ctx* ctx, const unsigned char* message, unsigned int len) noexcept;
 
-	static void sha_final(sha_ctx* ctx, unsigned char* digest);
+	static void sha_final(sha_ctx* ctx, unsigned char* digest) noexcept;
 };
 
 } //Firebird

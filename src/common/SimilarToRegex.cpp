@@ -28,7 +28,7 @@ using namespace Firebird;
 
 namespace
 {
-	bool hasChar(unsigned len, unsigned pos)
+	inline bool hasChar(unsigned len, unsigned pos) noexcept
 	{
 		return pos < len;
 	}
@@ -112,14 +112,14 @@ namespace
 			options.set_case_sensitive(!(flags & COMP_FLAG_CASE_INSENSITIVE));
 			options.set_encoding(flags & COMP_FLAG_LATIN ? RE2::Options::EncodingLatin1 : RE2::Options::EncodingUTF8);
 
-			re2::StringPiece sp((const char*) re2PatternStr.c_str(), re2PatternStr.length());
+			const re2::StringPiece sp((const char*) re2PatternStr.c_str(), re2PatternStr.length());
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
 
 			if (!regexp->ok())
 				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
 		}
 
-		bool hasPatternChar()
+		inline bool hasPatternChar() const noexcept
 		{
 			return patternPos < patternLen;
 		}
@@ -131,18 +131,18 @@ namespace
 
 		UChar32 peekPatternChar()
 		{
-			auto savePos = patternPos;
+			const auto savePos = patternPos;
 			auto c = getPatternChar();
 			patternPos = savePos;
 			return c;
 		}
 
-		bool isRep(UChar32 c) const
+		inline bool isRep(UChar32 c) const noexcept
 		{
 			return c == '*' || c == '+' || c == '?' || c == '{';
 		}
 
-		bool isRe2Special(UChar32 c)
+		inline bool isRe2Special(UChar32 c) noexcept
 		{
 			switch (c)
 			{
@@ -178,7 +178,7 @@ namespace
 				*parseFlagOut &= ~(~parseFlags & PARSE_FLAG_NOT_EMPTY);
 				*parseFlagOut |= parseFlags;
 
-				auto savePos = patternPos;
+				const auto savePos = patternPos;
 				UChar32 c;
 
 				if (!hasPatternChar() || (c = getPatternChar()) != '|')
@@ -199,7 +199,7 @@ namespace
 
 			while (hasPatternChar())
 			{
-				auto c = peekPatternChar();
+				const auto c = peekPatternChar();
 
 				if (c != '|' && c != ')')
 				{
@@ -267,7 +267,7 @@ namespace
 					if (!hasPatternChar())
 						status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
 
-					UChar32 c = getPatternChar();
+					const UChar32 c = getPatternChar();
 
 					if (c == '}')
 					{
@@ -313,7 +313,7 @@ namespace
 			*parseFlagOut = 0;
 
 			fb_assert(hasPatternChar());
-			auto savePos = patternPos;
+			const auto savePos = patternPos;
 			auto op = getPatternChar();
 
 			if (op == '_')
@@ -452,10 +452,10 @@ namespace
 							item.lastEnd = patternPos;
 
 							unsigned cPos = item.firstStart;
-							UChar32 c1 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
+							const UChar32 c1 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							cPos = item.lastStart;
-							UChar32 c2 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
+							const UChar32 c2 = getChar(flags & COMP_FLAG_LATIN, patternStr, patternLen, cPos);
 
 							strip = c1 > c2;
 						}
@@ -640,7 +640,7 @@ namespace
 			}
 		}
 
-		const string& getRe2PatternStr() const
+		const string& getRe2PatternStr() const noexcept
 		{
 			return re2PatternStr;
 		}
@@ -737,14 +737,14 @@ namespace
 			options.set_case_sensitive(!(flags & COMP_FLAG_CASE_INSENSITIVE));
 			options.set_encoding(flags & COMP_FLAG_LATIN ? RE2::Options::EncodingLatin1 : RE2::Options::EncodingUTF8);
 
-			re2::StringPiece sp((const char*) finalRe2Pattern.c_str(), finalRe2Pattern.length());
+			const re2::StringPiece sp((const char*) finalRe2Pattern.c_str(), finalRe2Pattern.length());
 			regexp = FB_NEW_POOL(pool) RE2(sp, options);
 
 			if (!regexp->ok())
 				status_exception::raise(Arg::Gds(isc_invalid_similar_pattern));
 		}
 
-		bool hasPatternChar()
+		inline bool hasPatternChar() const noexcept
 		{
 			return patternPos < patternLen;
 		}
@@ -756,7 +756,7 @@ namespace
 
 		UChar32 peekPatternChar()
 		{
-			auto savePos = patternPos;
+			const auto savePos = patternPos;
 			auto c = getPatternChar();
 			patternPos = savePos;
 			return c;
@@ -800,7 +800,7 @@ void SimilarToRegex::finalize(SimilarToRegex* self)
 
 bool SimilarToRegex::matches(const char* buffer, unsigned bufferLen, Array<MatchPos>* matchPosArray)
 {
-	re2::StringPiece sp(buffer, bufferLen);
+	const re2::StringPiece sp(buffer, bufferLen);
 
 	if (matchPosArray)
 	{
@@ -851,7 +851,7 @@ SubstringSimilarRegex::SubstringSimilarRegex(MemoryPool& pool, unsigned flags,
 		const char* patternStr, unsigned patternLen, const char* escapeStr, unsigned escapeLen)
 	: PermanentStorage(pool)
 {
-	SubstringSimilarCompiler compiler(pool, regexp,
+	const SubstringSimilarCompiler compiler(pool, regexp,
 		((flags & SimilarToFlag::CASE_INSENSITIVE) ? COMP_FLAG_CASE_INSENSITIVE : 0) |
 			((flags & SimilarToFlag::LATIN) ? COMP_FLAG_LATIN : 0) |
 			((flags & SimilarToFlag::WELLFORMED) ? COMP_FLAG_WELLFORMED : 0),
@@ -873,7 +873,7 @@ void SubstringSimilarRegex::finalize(SubstringSimilarRegex* self)
 bool SubstringSimilarRegex::matches(const char* buffer, unsigned bufferLen,
 	unsigned* resultStart, unsigned* resultLength)
 {
-	re2::StringPiece sp(buffer, bufferLen);
+	const re2::StringPiece sp(buffer, bufferLen);
 
 	re2::StringPiece spResult;
 

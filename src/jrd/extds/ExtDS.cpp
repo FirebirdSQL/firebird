@@ -231,7 +231,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 		CryptHash ch(att->att_crypt_callback);
 		hash = DefaultHash<UCHAR>::hash(dbName.c_str(), dbName.length(), MAX_ULONG) +
 			   DefaultHash<UCHAR>::hash(dpb.getBuffer(), dpb.getBufferLength(), MAX_ULONG) +
-			   DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG);
+			   (ch.isValid() ? DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG) : 0);
 
 		while (true)
 		{
@@ -297,8 +297,7 @@ int Manager::shutdown()
 
 Provider::Provider(const char* prvName) :
 	m_name(getPool()),
-	m_connections(getPool()),
-	m_flags(0)
+	m_connections(getPool())
 {
 	m_name = prvName;
 }
@@ -342,7 +341,7 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 		attachment->att_user->populateDpb(dpb, false);
 	}
 
-	CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
+	const CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
 	if (cs) {
 		dpb.insertString(isc_dpb_lc_ctype, cs->getName());
 	}
@@ -395,7 +394,6 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 	const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
 	TraScope tra_scope, bool isCurrentAtt)
 {
-	Database* dbb = tdbb->getDatabase();
 	Attachment* att = tdbb->getAttachment();
 	CryptHash ch;
 	if (!isCurrentAtt)
@@ -517,6 +515,7 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 				}
 			}
 		}
+		status->init();
 	}
 
 	if (inPool)
@@ -842,7 +841,7 @@ void Connection::raise(const FbStatusVector* status, thread_db* /*tdbb*/, const 
 }
 
 
-bool Connection::getWrapErrors(const ISC_STATUS* status)
+bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 {
 	// Detect if connection is broken
 	switch (status[1])
@@ -868,8 +867,7 @@ bool Connection::getWrapErrors(const ISC_STATUS* status)
 /// ConnectionsPool
 
 ConnectionsPool::ConnectionsPool(MemoryPool& pool)
-	: m_pool(pool),
-	  m_idleArray(pool),
+	: m_idleArray(pool),
 	  m_idleList(NULL),
 	  m_activeList(NULL),
 	  m_allCount(0),
@@ -1827,6 +1825,27 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	m_sql = sql;
 	m_sql.trim();
 	m_preparedByReq = m_callerPrivileges ? tdbb->getRequest() : NULL;
+
+	if (m_sqlParamNames.isEmpty() && getInputs() > 0)
+	{
+		fb_assert(m_sqlParamsMap.isEmpty());
+
+		// Populate parameters from metadata if preprocessing was skipped
+
+		const unsigned count = getInputs();
+		const MetaString empty;
+
+		for (unsigned i = 0; i < count; ++i)
+		{
+			const MetaString parameterName(getParameterName(i));
+			FB_SIZE_T n = 0;
+
+			if (!m_sqlParamNames.find(parameterName, n))
+				n = m_sqlParamNames.add(parameterName);
+
+			m_sqlParamsMap.add(&m_sqlParamNames[n]);
+		}
+	}
 }
 
 void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
@@ -1989,7 +2008,7 @@ void Statement::deallocate(thread_db* tdbb)
 
 enum TokenType {ttNone, ttWhite, ttComment, ttBrokenComment, ttString, ttParamMark, ttIdent, ttOther};
 
-static TokenType getToken(const char** begin, const char* end)
+static TokenType getToken(const char** begin, const char* end) noexcept
 {
 	TokenType ret = ttNone;
 	const char* p = *begin;
@@ -2263,7 +2282,9 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 		}
 	}
 
-	if (sqlCount || names && count > 0)
+	// When names is provided (named parameters), do named matching
+	// When names is nullptr (unnamed parameters), do positional matching even if SQL has named parameters
+	if (names && count > 0 && sqlCount)
 	{
 		const unsigned int mapCount = m_sqlParamsMap.getCount();
 		// Here NestConst plays against its objective. It temporary unconstifies the values.
@@ -2327,12 +2348,7 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaStr
 			paramDescs.put(*jrdVar, src);
 
 			if (src)
-			{
-				if (request->req_flags & req_null)
-					src->setNull();
-				else
-					src->clearNull();
-			}
+				src->clearNull();
 		}
 
 		const bool srcNull = !src || src->isNull();
@@ -2415,7 +2431,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 		}
 
 		// and assign to the target
-		EXE_assignment(tdbb, *jrdVar, local, srcNull, NULL, NULL);
+		EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
 	}
 }
 

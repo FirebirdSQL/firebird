@@ -4,7 +4,7 @@
 
 ## Procedure `EXPLAIN`
 
-`RDB$SQL.EXPLAIN` returns tabular information of a query's plan, without execute the query.
+`RDB$SQL.EXPLAIN` returns tabular information of a query's plan, without executing the query.
 
 Since `SQL` text generally is multi-line string and have quotes, you may use `<alternate string literal>`
 (strings prefixed by `Q`) as a way to make escape easy.
@@ -48,6 +48,12 @@ select *
 `RDB$SQL.PARSE_UNQUALIFIED_NAMES` is a selectable procedure that parses a list of unqualified SQL names and returns
 one row for each name. The input must follow parse rules for names and the output of unquoted names are uppercased.
 
+Input parameters:
+- `NAMES` type `RDB$TEXT_MAX` - list of names
+
+Output parameters
+- `NAME` type `RDB$RELATION_NAME` - a single name, normalised to how identifiers are stored in the metadata tables
+
 ```sql
 select *
   from rdb$sql.parse_unqualified_names('schema1, schema2, "schema3", "schema 4", "schema ""5"""');
@@ -55,8 +61,8 @@ select *
 -- SCHEMA1
 -- SCHEMA2
 -- schema3
--- "schema 4"
--- "schema "5"
+-- schema 4
+-- schema "5"
 ```
 
 # Authors

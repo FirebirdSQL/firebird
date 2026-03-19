@@ -32,9 +32,12 @@
 #include "../include/fb_blk.h"
 
 #include "../jrd/err_proto.h"    // Index error types
+#include "../jrd/Resources.h"
 #include "../jrd/RecordNumber.h"
 #include "../jrd/sbm.h"
 #include "../jrd/lck.h"
+#include "../jrd/pag.h"
+#include "../jrd/val.h"
 
 struct dsc;
 
@@ -51,25 +54,51 @@ class Sort;
 class PartitionedSort;
 struct sort_key_def;
 
+enum class IdxCreate {AtOnce, ForRollback};
+
+// Dependencies from/to foreign references
+
+struct dep
+{
+	int dep_reference_id;
+	int dep_relation;
+	int dep_index;
+
+	dep() = default;
+
+	void clear()
+	{
+		dep_reference_id = -1;
+	}
+};
+
+// Primary dependencies from all foreign references to relation's
+// primary/unique keys
+
+typedef Firebird::HalfStaticArray<dep, 8> PrimaryDeps;
+
+// Foreign references to other relations' primary/unique keys
+
+typedef Firebird::HalfStaticArray<dep, 8> ForeignRefs;
+
+
 // Index descriptor block -- used to hold info from index root page
 
 struct index_desc
 {
 	ULONG	idx_root;						// Index root
 	float	idx_selectivity;				// selectivity of index
-	USHORT	idx_id;
+	MetaId	idx_id;
 	USHORT	idx_flags;
 	UCHAR	idx_runtime_flags;				// flags used at runtime, not stored on disk
-	USHORT	idx_primary_index;				// id for primary key partner index
-	USHORT	idx_primary_relation;			// id for primary key partner relation
+	MetaId	idx_primary_index;				// id for primary key partner index
+	MetaId	idx_primary_relation;			// id for primary key partner relation
 	USHORT	idx_count;						// number of keys
-	vec<int>*	idx_foreign_primaries;		// ids for primary/unique indexes with partners
-	vec<int>*	idx_foreign_relations;		// ids for foreign key partner relations
-	vec<int>*	idx_foreign_indexes;		// ids for foreign key partner indexes
-	ValueExprNode* idx_expression;			// node tree for indexed expression
+	dep		idx_foreign_dep;				// foreign key partner
+	ValueExprNode* idx_expression_node;		// node tree for indexed expression
 	dsc		idx_expression_desc;			// descriptor for expression result
 	Statement* idx_expression_statement;	// stored statement for expression evaluation
-	BoolExprNode* idx_condition;			// node tree for index condition
+	BoolExprNode* idx_condition_node;		// node tree for index condition
 	Statement* idx_condition_statement;		// stored statement for index condition
 	float idx_fraction;						// fraction of keys included in the index
 	// This structure should exactly match IRTD structure for current ODS
@@ -83,50 +112,49 @@ struct index_desc
 
 typedef Firebird::HalfStaticArray<index_desc, 16> IndexDescList;
 
-const USHORT idx_invalid = USHORT(~0);		// Applies to idx_id as special value
+inline constexpr USHORT idx_invalid = USHORT(~0);		// Applies to idx_id as special value
 
 // index types and flags
 
 // See jrd/intl.h for notes on idx_itype and dsc_sub_type considerations
 // idx_numeric .. idx_byte_array values are compatible with VMS values
 
-const int idx_numeric		= 0;
-const int idx_string		= 1;
+inline constexpr int idx_numeric		= 0;
+inline constexpr int idx_string			= 1;
 // value of 2 was used in ODS < 10
-const int idx_byte_array	= 3;
-const int idx_metadata		= 4;
-const int idx_sql_date		= 5;
-const int idx_sql_time		= 6;
-const int idx_timestamp		= 7;
-const int idx_numeric2		= 8;	// Introduced for 64-bit Integer support
-const int idx_boolean		= 9;
-const int idx_decimal		= 10;
-const int idx_sql_time_tz	= 11;
-const int idx_timestamp_tz	= 12;
-const int idx_bcd			= 13;	// 128-bit Integer support
+inline constexpr int idx_byte_array		= 3;
+inline constexpr int idx_metadata		= 4;
+inline constexpr int idx_sql_date		= 5;
+inline constexpr int idx_sql_time		= 6;
+inline constexpr int idx_timestamp		= 7;
+inline constexpr int idx_numeric2		= 8;	// Introduced for 64-bit Integer support
+inline constexpr int idx_boolean		= 9;
+inline constexpr int idx_decimal		= 10;
+inline constexpr int idx_sql_time_tz	= 11;
+inline constexpr int idx_timestamp_tz	= 12;
+inline constexpr int idx_bcd			= 13;	// 128-bit Integer support
 
 // idx_itype space for future expansion
-const int idx_first_intl_string	= 64;	// .. MAX (short) Range of computed key strings
+inline constexpr int idx_first_intl_string	= 64;	// .. MAX (short) Range of computed key strings
 
-const int idx_offset_intl_range	= (0x7FFF + idx_first_intl_string);
+inline constexpr int idx_offset_intl_range	= (0x7FFF + idx_first_intl_string);
 
-// these flags must match the irt_flags (see ods.h)
+// these flags match the irt_flags in ods.h
 
-const int idx_unique		= 1;
-const int idx_descending	= 2;
-const int idx_in_progress	= 4;
-const int idx_foreign		= 8;
-const int idx_primary		= 16;
-const int idx_expression	= 32;
-const int idx_condition		= 64;
+inline constexpr int idx_unique			= 1;
+inline constexpr int idx_descending		= 2;
+inline constexpr int idx_foreign		= 4;
+inline constexpr int idx_primary		= 8;
+inline constexpr int idx_expression		= 16;
+inline constexpr int idx_condition		= 32;
 
 // these flags are for idx_runtime_flags
 
-const int idx_plan_dont_use	= 1;	// index is not mentioned in user-specified access plan
-const int idx_plan_navigate	= 2;	// plan specifies index to be used for ordering
-const int idx_used 			= 4;	// index was in fact selected for retrieval
-const int idx_navigate		= 8;	// index was in fact selected for navigation
-const int idx_marker		= 16;	// marker used in procedure sort_indices
+inline constexpr int idx_plan_dont_use	= 1;	// index is not mentioned in user-specified access plan
+inline constexpr int idx_plan_navigate	= 2;	// plan specifies index to be used for ordering
+inline constexpr int idx_used 			= 4;	// index was in fact selected for retrieval
+inline constexpr int idx_navigate		= 8;	// index was in fact selected for navigation
+inline constexpr int idx_marker			= 16;	// marker used in procedure sort_indices
 
 // Index insertion block -- parameter block for index insertions
 
@@ -146,17 +174,21 @@ struct index_insertion
 
 // these flags are for the key_flags
 
-const int key_empty		= 1;	// Key contains empty data / empty string
+inline constexpr int key_empty		= 1;	// Key contains empty data / empty string
 
 // Temporary key block
 
-struct temporary_key
+struct temporary_mini_key
 {
 	USHORT key_length;
 	UCHAR key_data[MAX_KEY + 1];
 	UCHAR key_flags;
 	USHORT key_nulls;	// bitmap of encountered null segments,
 						// USHORT is enough to store MAX_INDEX_SEGMENTS bits
+};
+
+struct temporary_key : public temporary_mini_key
+{
 	Firebird::AutoPtr<temporary_key> key_next;	// next key (INTL_KEY_MULTI_STARTING)
 };
 
@@ -177,8 +209,8 @@ struct index_sort_record
 };
 #pragma pack()
 
-const int ISR_secondary	= 1;	// Record is secondary version
-const int ISR_null		= 2;	// Record consists of NULL values only
+inline constexpr int ISR_secondary	= 1;	// Record is secondary version
+inline constexpr int ISR_null		= 2;	// Record consists of NULL values only
 
 
 
@@ -188,16 +220,16 @@ class IndexRetrieval final
 {
 public:
 	IndexRetrieval(jrd_rel* relation, const index_desc* idx, USHORT count, temporary_key* key)
-		: irb_relation(relation), irb_index(idx->idx_id),
+		: irb_rsc_relation(), irb_jrd_relation(relation), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(count), irb_upper_count(count), irb_key(key),
 		  irb_name(nullptr), irb_value(nullptr), irb_list(nullptr), irb_scale(nullptr)
 	{
 		memcpy(&irb_desc, idx, sizeof(irb_desc));
 	}
 
-	IndexRetrieval(MemoryPool& pool, jrd_rel* relation, const index_desc* idx,
+	IndexRetrieval(MemoryPool& pool, Rsc::Rel relation, const index_desc* idx,
 				   const QualifiedName& name)
-		: irb_relation(relation), irb_index(idx->idx_id),
+		: irb_rsc_relation(relation), irb_jrd_relation(nullptr), irb_index(idx->idx_id),
 		  irb_generic(0), irb_lower_count(0), irb_upper_count(0), irb_key(NULL),
 		  irb_name(FB_NEW_POOL(pool) QualifiedName(name)),
 		  irb_value(FB_NEW_POOL(pool) ValueExprNode*[idx->idx_count * 2]),
@@ -213,8 +245,16 @@ public:
 		delete[] irb_scale;
 	}
 
+	jrd_rel* getRelation(thread_db* tdbb) const;
+	Cached::Relation* getPermRelation() const;
+
 	index_desc irb_desc;			// Index descriptor
-	jrd_rel* irb_relation;			// Relation for retrieval
+
+private:
+	Rsc::Rel irb_rsc_relation;		// Relation for retrieval
+	jrd_rel* irb_jrd_relation;		// when used in different contexts
+
+public:
 	USHORT irb_index;				// Index id
 	USHORT irb_generic;				// Flags for generic search
 	USHORT irb_lower_count;			// Number of segments for retrieval
@@ -227,21 +267,21 @@ public:
 };
 
 // Flag values for irb_generic
-const int irb_partial	= 1;				// Partial match: not all segments or starting of key only
-const int irb_starting	= 2;				// Only compute "starting with" key for index segment
-const int irb_equality	= 4;				// Probing index for equality match
-const int irb_ignore_null_value_key  = 8;	// if lower bound is specified and upper bound unspecified,
-											// ignore looking at null value keys
-const int irb_descending	= 16;			// Base index uses descending order
-const int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning index
-const int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
-const int irb_multi_starting	= 128;		// Use INTL_KEY_MULTI_STARTING
-const int irb_root_list_scan	= 256;		// Locate list items from the root
-const int irb_unique	= 512;				// Unique match (currently used only for plan output)
+inline constexpr int irb_partial	= 1;				// Partial match: not all segments or starting of key only
+inline constexpr int irb_starting	= 2;				// Only compute "starting with" key for index segment
+inline constexpr int irb_equality	= 4;				// Probing index for equality match
+inline constexpr int irb_ignore_null_value_key  = 8;	// if lower bound is specified and upper bound unspecified,
+														// ignore looking at null value keys
+inline constexpr int irb_descending	= 16;				// Base index uses descending order
+inline constexpr int irb_exclude_lower	= 32;			// exclude lower bound keys while scanning index
+inline constexpr int irb_exclude_upper	= 64;			// exclude upper bound keys while scanning index
+inline constexpr int irb_multi_starting	= 128;			// Use INTL_KEY_MULTI_STARTING
+inline constexpr int irb_root_list_scan	= 256;			// Locate list items from the root
+inline constexpr int irb_unique		= 512;				// Unique match (currently used only for plan output)
 
 // Force include flags - always include appropriate key while scanning index
-const int irb_force_lower	= irb_exclude_lower;
-const int irb_force_upper	= irb_exclude_upper;
+inline constexpr int irb_force_lower	= irb_exclude_lower;
+inline constexpr int irb_force_upper	= irb_exclude_upper;
 
 typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
 
@@ -303,6 +343,7 @@ struct IndexCreation
 	USHORT nullIndLen;
 	SINT64 dup_recno;
 	Firebird::AtomicCounter duplicates;
+	IdxCreate forRollback;
 };
 
 // Class used to report any index related errors
@@ -337,6 +378,27 @@ private:
 	bool isLocationDefined = false;
 };
 
+
+// Index construction lock holder
+
+class IndexCreateLock : public Firebird::AutoStorage
+{
+public:
+	IndexCreateLock(thread_db* tdbb, MetaId relId);
+	~IndexCreateLock();
+
+	void exclusive(MetaId indexId);
+	void shared(MetaId indexId);
+
+private:
+	thread_db* tdbb;	// may be stored here cause IndexCreateLock is always on stack
+	MetaId relId;
+	Lock* lck = nullptr;
+
+	void makeLock(MetaId indexId);
+};
+
+
 // Helper classes to allow efficient evaluation of index conditions/expressions
 
 class IndexCondition
@@ -357,7 +419,7 @@ private:
 	BoolExprNode* m_condition = nullptr;
 	Request* m_request = nullptr;
 
-	bool evaluate(Record* record) const;
+	Firebird::TriState evaluate(Record* record) const;
 };
 
 class IndexExpression

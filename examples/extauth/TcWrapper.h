@@ -46,8 +46,8 @@ public:
 	void fini();
 	const PrngDescriptor* getDsc();
 
-	int index;
-	prng_state state;
+	int index = 0;
+	prng_state state{};
 };
 
 class Hash

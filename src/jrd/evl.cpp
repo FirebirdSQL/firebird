@@ -69,6 +69,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/val.h"
 #include "../jrd/req.h"
+#include "../jrd/Statement.h"
 #include "../jrd/exe.h"
 #include "../jrd/sbm.h"
 #include "../jrd/blb.h"
@@ -81,6 +82,7 @@
 #include "../jrd/sort.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/timestamp.h"
@@ -96,7 +98,7 @@
 #include "../jrd/exe_proto.h"
 #include "../jrd/fun_proto.h"
 #include "../jrd/intl_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/pag_proto.h"
@@ -248,8 +250,7 @@ RecordBitmap** EVL_bitmap(thread_db* tdbb, const InversionNode* node, RecordBitm
 			RecordBitmap::reset(impure->inv_bitmap);
 			const dsc* const desc = EVL_expr(tdbb, request, node->value);
 
-			if (!(tdbb->getRequest()->req_flags & req_null) &&
-				(desc->isText() || desc->isDbKey()))
+			if (desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const int length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -311,8 +312,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 		{
 			const auto desc = EVL_expr(tdbb, request, node->lower);
 
-			if (!(request->req_flags & req_null) &&
-				desc && (desc->isText() || desc->isDbKey()))
+			if (desc && desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const auto length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -322,7 +322,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 					Aligner<RecordNumber::Packed> alignedNumber(ptr, length);
 					const auto dbkey = (const RecordNumber::Packed*) alignedNumber;
 
-					if (dbkey->bid_relation_id == relation->rel_id)
+					if (dbkey->bid_relation_id == relation->getId())
 					{
 						RecordNumber recno;
 						recno.bid_decode(dbkey);
@@ -344,8 +344,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 		{
 			const auto desc = EVL_expr(tdbb, request, node->upper);
 
-			if (!(request->req_flags & req_null) &&
-				desc && (desc->isText() || desc->isDbKey()))
+			if (desc && (desc->isText() || desc->isDbKey()))
 			{
 				UCHAR* ptr = NULL;
 				const auto length = MOV_get_string(tdbb, desc, &ptr, NULL, 0);
@@ -355,7 +354,7 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 					Aligner<RecordNumber::Packed> alignedNumber(ptr, length);
 					const auto dbkey = (const RecordNumber::Packed*) alignedNumber;
 
-					if (dbkey->bid_relation_id == relation->rel_id)
+					if (dbkey->bid_relation_id == relation->getId())
 					{
 						RecordNumber recno;
 						recno.bid_decode(dbkey);
@@ -416,7 +415,7 @@ bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 
-			const Format* const currentFormat = MET_current(tdbb, relation);
+			const Format* const currentFormat = relation->currentFormat(tdbb);
 
 			while (id >= format->fmt_defaults.getCount() ||
 				 format->fmt_defaults[id].vlu_desc.isUnknown())
@@ -427,7 +426,7 @@ bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
 					break;
 				}
 
-				format = MET_format(tdbb, relation, format->fmt_version + 1);
+				format = MET_format(tdbb, relation->getPermanent(), format->fmt_version + 1);
 				fb_assert(format);
 			}
 
@@ -563,7 +562,7 @@ void EVL_make_value(thread_db* tdbb, const dsc* desc, impure_value* value, Memor
 
 	VaryStr<TEMP_STR_LENGTH> temp;
 	UCHAR* address;
-	USHORT ttype;
+	TTypeId ttype;
 
 	// Get string.  If necessary, get_string will convert the string into a
 	// temporary buffer.  Since this will always be the result of a conversion,
@@ -634,7 +633,7 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		request->req_domain_validation = desc;
 		const ULONG flags = request->req_flags;
 
-		if (!fieldInfo.validationExpr->execute(tdbb, request) && !(request->req_flags & req_null))
+		if (fieldInfo.validationExpr->execute(tdbb, request) == TriState(false))
 		{
 			const USHORT length = desc_is_null ? 0 :
 				MOV_make_string(tdbb, desc, ttype_dynamic, &value, &temp, sizeof(temp) - 1);

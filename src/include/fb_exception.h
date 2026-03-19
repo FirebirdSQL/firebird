@@ -97,14 +97,16 @@ public:
 
 	virtual ~status_exception() noexcept;
 
+	status_exception& operator=(const status_exception&) = delete;
+
 	virtual void stuffByException(StaticStatusVector& status_vector) const noexcept;
 	virtual const char* what() const noexcept;
 
 	const ISC_STATUS* value() const noexcept { return m_status_vector; }
 
-	[[noreturn]] static void raise(const ISC_STATUS* status_vector);
-	[[noreturn]] static void raise(const Arg::StatusVector& statusVector);
-	[[noreturn]] static void raise(const IStatus* status);
+	[[noreturn]] static void raise (const ISC_STATUS* status_vector);
+	[[noreturn]] static void raise (const Arg::StatusVector& statusVector);
+	[[noreturn]] static void raise (const IStatus* status);
 
 protected:
 	// Create exception with undefined status vector, this constructor allows
@@ -116,8 +118,6 @@ protected:
 private:
 	ISC_STATUS* m_status_vector;
 	ISC_STATUS_ARRAY m_buffer;
-
-	status_exception& operator=(const status_exception&);
 };
 
 // Parameter syscall later in both system_error & system_call_failed

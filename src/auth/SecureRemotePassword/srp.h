@@ -103,9 +103,9 @@ public:
 	virtual ~RemotePassword();
 
 	static const char* plugName;
-	static const unsigned SRP_KEY_SIZE = 128;
-	static const unsigned SRP_VERIFIER_SIZE = SRP_KEY_SIZE;
-	static const unsigned SRP_SALT_SIZE = 32;
+	static constexpr unsigned SRP_KEY_SIZE = 128;
+	static constexpr unsigned SRP_VERIFIER_SIZE = SRP_KEY_SIZE;
+	static constexpr unsigned SRP_SALT_SIZE = 32;
 
 	static Firebird::string pluginName(unsigned bits);
 

@@ -43,7 +43,7 @@ RUN `
     `
     choco install --no-progress --yes git --version=2.33.1 && `
     choco install --no-progress --yes 7zip.install --version=19.0 && `
-    choco install --no-progress --yes innosetup --version=6.1.2 && `
+    choco install --no-progress --yes innosetup --version=6.4.0 && `
     choco install --no-progress --yes wixtoolset --version=3.11.2 && `
     `
     refreshenv && `

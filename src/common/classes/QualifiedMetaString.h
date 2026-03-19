@@ -32,6 +32,14 @@
 namespace Firebird {
 
 template <typename T>
+concept IsQualifiedName = requires(T t)
+{
+	{ t.schema };
+	{ t.object };
+	{ t.package };
+};
+
+template <typename T>
 class BaseQualifiedName
 {
 public:
@@ -58,13 +66,7 @@ public:
 	{
 	}
 
-	BaseQualifiedName(const BaseQualifiedName& src)
-		: object(src.object),
-		  schema(src.schema),
-		  package(src.package),
-		  unambiguous(src.isUnambiguous())
-	{
-	}
+	BaseQualifiedName(const BaseQualifiedName& src) = default;
 
 	template <typename TT>
 	BaseQualifiedName(const BaseQualifiedName<TT>& src)
@@ -277,26 +279,30 @@ public:
 	}
 
 public:
-	bool operator<(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator<(const U& m) const
 	{
 		return schema < m.schema ||
 			(schema == m.schema && object < m.object) ||
 			(schema == m.schema && object == m.object && package < m.package);
 	}
 
-	bool operator>(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator>(const U& m) const
 	{
 		return schema > m.schema ||
 			(schema == m.schema && object > m.object) ||
 			(schema == m.schema && object == m.object && package > m.package);
 	}
 
-	bool operator==(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator==(const U& m) const
 	{
 		return schema == m.schema && object == m.object && package == m.package;
 	}
 
-	bool operator!=(const BaseQualifiedName& m) const
+	template <IsQualifiedName U>
+	bool operator!=(const U& m) const
 	{
 		return !(*this == m);
 	}
@@ -322,6 +328,16 @@ public:
 		object = {};
 		schema = {};
 		package = {};
+	}
+
+	bool hasData() const
+	{
+		return object.hasData();
+	}
+
+	bool isEmpty() const
+	{
+		return object.isEmpty();
 	}
 
 	Firebird::string toQuotedString() const

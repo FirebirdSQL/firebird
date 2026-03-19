@@ -88,7 +88,13 @@ namespace Replication
 				m_changeLog->forceSwitch();
 		}
 
-		const Replication::Config* getConfig() const
+		void journalCleanup()
+		{
+			if (m_changeLog)
+				m_changeLog->cleanup();
+		}
+
+		const Replication::Config* getConfig() const noexcept
 		{
 			return m_config;
 		}

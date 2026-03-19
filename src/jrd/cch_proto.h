@@ -158,11 +158,11 @@ inline void CCH_PREFETCH(Jrd::thread_db* tdbb, SLONG* pages, SSHORT count)
 
 // Flush flags
 
-const USHORT FLUSH_ALL		= 1;		// flush all dirty buffers in cache
-const USHORT FLUSH_RLSE		= 2;		// release page locks after flush
-const USHORT FLUSH_TRAN		= 4;		// flush transaction dirty buffers from dirty btree
-const USHORT FLUSH_SWEEP	= 8;		// flush dirty buffers from garbage collection
-const USHORT FLUSH_SYSTEM	= 16;		// flush system transaction only from dirty btree
-const USHORT FLUSH_FINI		= (FLUSH_ALL | FLUSH_RLSE);
+inline constexpr USHORT FLUSH_ALL		= 1;		// flush all dirty buffers in cache
+inline constexpr USHORT FLUSH_RLSE		= 2;		// release page locks after flush
+inline constexpr USHORT FLUSH_TRAN		= 4;		// flush transaction dirty buffers from dirty btree
+inline constexpr USHORT FLUSH_SWEEP		= 8;		// flush dirty buffers from garbage collection
+inline constexpr USHORT FLUSH_SYSTEM	= 16;		// flush system transaction only from dirty btree
+inline constexpr USHORT FLUSH_FINI		= (FLUSH_ALL | FLUSH_RLSE);
 
 #endif // JRD_CCH_PROTO_H

@@ -74,7 +74,7 @@ public:
 	in_sw_tab_t* findSwitchMod(Firebird::string& sw, bool* invalidSwitchInd = 0);
 
 	// Get the same unmodifiable table that was passed as parameter to the constructor.
-	const in_sw_tab_t* getTable() const;
+	const in_sw_tab_t* getTable() const noexcept;
 
 	// Retrieve the modifiable copy of the table that was passed as parameter to the constructor.
 	// It throws system_call_failed if "copy" was false in the constructor.

@@ -34,10 +34,11 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../jrd/jrd.h"
 #include "../jrd/ini_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/status.h"
+#include "../jrd/Monitoring.h"
 
 
 using namespace Firebird;
@@ -45,7 +46,7 @@ using namespace Firebird;
 namespace Jrd {
 
 
-const unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute
+constexpr unsigned WORKER_IDLE_TIMEOUT = 60;	// 1 minute
 
 /// class WorkerStableAttachment
 
@@ -121,15 +122,16 @@ void WorkerStableAttachment::fini()
 		Database* dbb = attachment->att_database;
 
 		FbLocalStatus status_vector;
-		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
+		ThreadContextHolder tdbb(dbb, attachment, &status_vector);
+		DatabaseContextHolder dbHolder(tdbb);
 
 		Monitoring::cleanupAttachment(tdbb);
 		dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 
+		attachment->rollbackMetaTransaction(tdbb);
+
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
-
-		attachment->releaseRelations(tdbb);
 	}
 
 	destroy(attachment);
@@ -440,7 +442,7 @@ bool WorkerAttachment::detachIdle(StableAttachmentPart* sAtt)
 	{	// scope
 		AttSyncLockGuard attGuard(sAtt->getSync(), FB_FUNCTION);
 
-		Attachment* att = sAtt->getHandle();
+		const Attachment* att = sAtt->getHandle();
 		if (!att || att->att_use_count > 0)
 			return false;
 

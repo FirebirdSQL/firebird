@@ -408,6 +408,9 @@
     <ClCompile Include="..\..\..\src\jrd\validation.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\vec.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\vio.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -547,6 +550,15 @@
       <Filter>Optimizer</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\WorkerAttachment.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\CacheVector.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\CharSetContainer.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\Resources.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -708,9 +720,6 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\blp.h">
-      <Filter>Header files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\src\jrd\blr.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\btn.h">
@@ -1138,6 +1147,15 @@
       <Filter>Replication\Headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\validation.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\firebird\impl\blr.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\os\pio.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -59,8 +59,8 @@ public:
 	};
 
 	// Statement flags.
-	static const unsigned FLAG_NO_BATCH		= 0x01;
-	static const unsigned FLAG_SELECTABLE	= 0x02;
+	static inline constexpr unsigned FLAG_NO_BATCH		= 0x01;
+	static inline constexpr unsigned FLAG_SELECTABLE	= 0x02;
 
 	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
 
@@ -87,9 +87,9 @@ public:
 			case TYPE_SELECT_UPD:
 			case TYPE_RETURNING_CURSOR:
 				return true;
+			default:
+				return false;
 		}
-
-		return false;
 	}
 
 	Type getType() const { return type; }

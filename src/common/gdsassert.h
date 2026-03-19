@@ -35,9 +35,9 @@
 #include <unistd.h>		// isatty()
 #endif
 
-inline void fb_assert_impl(const char* msg, const char* file, int line, bool do_abort)
+inline void fb_assert_impl(const char* msg, const char* file, int line, bool do_abort) noexcept
 {
-	const char* const ASSERT_FAILURE_STRING = "Assertion (%s) failure: %s %" LINEFORMAT"\n";
+	static constexpr const char* ASSERT_FAILURE_STRING = "Assertion (%s) failure: %s %" LINEFORMAT"\n";
 
 	if (isatty(2))
 		fprintf(stderr, ASSERT_FAILURE_STRING, msg, file, line);
@@ -69,7 +69,7 @@ inline void fb_assert_impl(const char* msg, const char* file, int line, bool do_
 #endif	// DEV_BUILD
 
 namespace DtorException {
-	inline void devHalt()
+	inline void devHalt() noexcept
 	{
 		// If any guard's dtor is executed during exception processing,
 		// (remember - this guards live on the stack), exception

@@ -249,7 +249,7 @@ checkLibraries() {
 grepProcess() {
 	processList=$1
 	eol=\$
-	ps $psOptions | egrep "\<($processList)($eol|[[:space:]])" | grep -v grep | grep -v -w '\-path'
+	ps $psOptions | grep -E "\<($processList)($eol|[[:space:]])" | grep -v grep | grep -v -w '\-path'
 }
 
 

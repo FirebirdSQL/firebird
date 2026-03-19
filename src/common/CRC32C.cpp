@@ -33,7 +33,7 @@
 
 #include <nmmintrin.h>
 
-unsigned int CRC32C(unsigned int length, const unsigned char* value)
+unsigned int CRC32C(unsigned int length, const unsigned char* value) noexcept
 {
 	unsigned int hash_value = 0;
 

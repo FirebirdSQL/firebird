@@ -36,6 +36,11 @@
 #include "../jrd/evl_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/idx_proto.h"
+#include "../jrd/dfw_proto.h"
+#include "../dsql/DdlNodes.h"
+#include "../jrd/met.h"
+#include "../jrd/IntlManager.h"
 
 
 DATABASE DB = FILENAME "ODS.RDB";
@@ -170,32 +175,6 @@ void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* new
 	END_FOR
 }
 
-void beforeDeleteIndex(thread_db* tdbb, Record* record)
-{
-	const auto transaction = tdbb->getTransaction();
-	dsc desc;
-
-	MetaName schemaName;
-	if (EVL_field(nullptr, record, f_idx_schema, &desc))
-		MOV_get_metaname(tdbb, &desc, schemaName);
-
-	MetaName indexName;
-	if (EVL_field(nullptr, record, f_idx_name, &desc))
-		MOV_get_metaname(tdbb, &desc, indexName);
-
-	static const CachedRequestId requestCacheId;
-	AutoCacheRequest request(tdbb, requestCacheId);
-
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
-			 RLC.RDB$INDEX_NAME EQ indexName.c_str()
-	{
-		ERR_post(Arg::Gds(isc_integ_index_del));
-	}
-	END_FOR
-}
-
 void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
@@ -309,6 +288,35 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 				ERR_post(Arg::Gds(isc_integ_deactivate_primary));
 		}
 		END_FOR
+	}
+}
+
+void afterUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	dsc desc;
+
+	if (EVL_field(nullptr, orgRecord, f_idx_inactive, &desc) &&
+		MOV_get_long(tdbb, &desc, 0) == MET_index_deferred_active &&
+		(!EVL_field(nullptr, newRecord, f_idx_inactive, &desc) ||
+			MOV_get_long(tdbb, &desc, 0) == MET_index_active))
+	{
+		MetaName iName, rName, schemaName;
+		if (EVL_field(nullptr, newRecord, f_idx_name, &desc))
+			MOV_get_metaname(tdbb, &desc, iName);
+		if (EVL_field(nullptr, newRecord, f_idx_relation, &desc))
+			MOV_get_metaname(tdbb, &desc, rName);
+		if (EVL_field(nullptr, newRecord, f_idx_schema, &desc))
+			MOV_get_metaname(tdbb, &desc, schemaName);
+		QualifiedName relName(rName, schemaName);
+		QualifiedName indexName(iName, schemaName);
+		bool expressionIndex = EVL_field(nullptr, newRecord, f_idx_exp_blr, &desc);
+
+		MemoryPool& pool = *MemoryPool::getContextPool();
+
+		ModifyIndexList oneItemList(pool);
+		oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, expressionIndex));
+		auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
+		oneItemList.exec(tdbb, relation, tdbb->getTransaction());
 	}
 }
 
@@ -679,25 +687,25 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 	{
 		static const CachedRequestId request3CacheId;
 		AutoCacheRequest request3(tdbb, request3CacheId);
+		auto* rel = MetadataCache::getPerm<Cached::Relation>(tdbb, QualifiedName(relationName, schemaName), 0);
 
 		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 			IND IN RDB$INDICES
 			WITH IND.RDB$SCHEMA_NAME = schemaName.c_str() AND
 				 IND.RDB$INDEX_NAME = indexName.c_str()
 		{
-			ERASE IND;
-
-			static const CachedRequestId request4CacheId;
-			AutoCacheRequest request4(tdbb, request4CacheId);
-
-			FOR (REQUEST_HANDLE request4 TRANSACTION_HANDLE transaction)
-				IDS IN RDB$INDEX_SEGMENTS
-				WITH IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
-					 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME
+			fb_assert(rel);
+			MetaId idxId = IND.RDB$INDEX_ID - 1;
+			if (rel && rel->oldIndexVersion(tdbb, idxId, CacheFlag::OLD_DROP))
 			{
-				ERASE IDS;
+				MODIFY IND
+					IND.RDB$INDEX_INACTIVE.NULL = FALSE;
+					IND.RDB$INDEX_INACTIVE = MET_index_deferred_drop;
+				END_MODIFY
+
+				IDX_mark_index(tdbb, rel, idxId);
+				rel->eraseIndex(tdbb, idxId);
 			}
-			END_FOR
 		}
 		END_FOR
 	}
@@ -1010,7 +1018,7 @@ void beforeInsertSchema(thread_db* tdbb, Record* record)
 	if (!EVL_field(nullptr, record, f_sch_schema, &desc))
 		return;;
 
-	USHORT ttype;
+	TTypeId ttype;
 	UCHAR* schemaStr;
 	const auto schemaByteLen = CVT_get_string_ptr(&desc, &ttype, &schemaStr, nullptr, 0, 0);
 
@@ -1530,19 +1538,195 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 	}
 }
 
+void beforeInsertRelation(thread_db* tdbb, Record* record)
+{
+	// Relation lock for id == -1 is taken in CreateRelationNode in order to protect
+	// relation ID generation. GBAK currently works w/o lock - it's nature guarantees
+	// serial operation. If one decides to support parallel relations restore
+	// care about a kind of appropriate locking to be taken by GBAK.
+
+	dsc desc;
+	bool idSet = EVL_field(nullptr, record, f_rel_id, &desc);
+	fb_assert(!idSet);
+	if (idSet)			// How can it be?
+		return;
+
+	dsc desc2;
+	bool nameSet = EVL_field(nullptr, record, f_rel_name, &desc2);
+	if (!nameSet)
+		return;
+	MetaName name;
+	MOV_get_metaname(tdbb, &desc2, name);
+
+	// Use datatype that satisfies dsc::makeShort()
+	short rel_id = RelationNode::generateRelId(tdbb, name);
+
+	desc2.makeShort(0, &rel_id);
+	MOV_move(tdbb, &desc2, &desc);
+	record->clearNull(f_rel_id);
+
+	auto* rel = MetadataCache::newVersion<Cached::Relation>(tdbb, rel_id);
+	fb_assert(rel);
+	if (rel)
+		rel->rel_flags |= REL_get_dependencies;
+}
+
+void afterInsertRelation(thread_db* tdbb, Record* record)
+{
+	if (tdbb->getAttachment()->isRWGbak())
+	{
+		dsc desc;
+		bool idSet = EVL_field(nullptr, record, f_rel_id, &desc);
+		fb_assert(idSet);
+		if (!idSet)			// How can it be?
+			return;
+
+		MetaId id = MetaId(MOV_get_long(tdbb, &desc, 0));
+		fb_assert(id > 127);
+
+		// Here minor optimization is possible - do it in single cache call
+		MetadataCache::newVersion<Cached::Relation>(tdbb, id);
+		auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, id, CacheFlag::MINISCAN);
+
+		// Do not access external file info from cache - it may be not usable yet
+		// On contrary rel_flags (and therefore check for view) are OK
+		if (relation && !EVL_field(nullptr, record, f_rel_ext_file, &desc) &&
+			!relation->isView())
+		{
+			// create the table
+			DPM_create_relation(tdbb, relation);
+		}
+
+		relation->rel_flags |= REL_get_dependencies;
+	}
+
+}
+
+void afterInsertProcedure(thread_db* tdbb, Record* record)
+{
+	if (tdbb->getAttachment()->isRWGbak())
+	{
+		dsc desc;
+		bool idSet = EVL_field(nullptr, record, f_prc_id, &desc);
+		fb_assert(idSet);
+		if (!idSet)
+			return;
+
+		MetaId id = MetaId(MOV_get_long(tdbb, &desc, 0));
+		MetadataCache::newVersion<Cached::Procedure>(tdbb, id);
+	}
+}
+
+void afterUpdateProcedure(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	afterInsertProcedure(tdbb, newRecord);
+}
+
+void afterInsertFunction(thread_db* tdbb, Record* record)
+{
+	if (tdbb->getAttachment()->isRWGbak())
+	{
+		dsc desc;
+		bool idSet = EVL_field(nullptr, record, f_fun_id, &desc);
+		fb_assert(idSet);
+		if (!idSet)
+			return;
+
+		MetaId id = MetaId(MOV_get_long(tdbb, &desc, 0));
+		MetadataCache::newVersion<Cached::Function>(tdbb, id);
+	}
+}
+
+void afterUpdateFunction(thread_db* tdbb, Record* orgRecord, Record* newRecord)
+{
+	afterInsertFunction(tdbb, newRecord);
+}
+
+void beforeInsertCollation(thread_db* tdbb, Record* record, jrd_rel* relation)
+{
+	if (tdbb->getAttachment()->isRWGbak())
+	{
+		// fix ICU information
+		dsc desc1, desc2;
+
+		// charset ID
+		bool idSet = EVL_field(nullptr, record, f_coll_cs_id, &desc1);
+		fb_assert(idSet);
+		if (!idSet)
+			return;
+		CSetId csId = CSetId(MOV_get_long(tdbb, &desc1, 0));
+
+		// charset name
+		QualifiedName charsetName;
+		AUTO_HANDLE(request);
+		FOR (REQUEST_HANDLE request TRANSACTION_HANDLE tdbb->getTransaction())
+			CS IN RDB$CHARACTER_SETS
+			WITH CS.RDB$CHARACTER_SET_ID EQ csId
+		{
+			charsetName = QualifiedName(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME);
+		}
+		END_FOR
+
+		// attributes
+		SLONG length = 0;
+		HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+		if (EVL_field(nullptr, record, f_coll_specific_attr, &desc2))
+		{
+			blb* blob = blb::open(tdbb, tdbb->getTransaction(), (bid*) desc2.dsc_address);
+			length = blob->blb_length + 10;
+			length = blob->BLB_get_data(tdbb, buffer.getBuffer(length), length);
+		}
+		const string specificAttributes((const char*) buffer.begin(), length);
+		string icuLessAttributes = DFW_remove_icu_info_from_attributes(charsetName, specificAttributes);
+
+		// collation name
+		if (!EVL_field(nullptr, record, f_coll_base_collation_name, &desc1))
+			EVL_field(nullptr, record, f_coll_name, &desc1);
+		MetaName collName;
+		MOV_get_metaname(tdbb, &desc1, collName);
+
+		// new attributes
+		string newSpecificAttributes;
+		if (IntlManager::setupCollationAttributes(collName, charsetName, icuLessAttributes,
+				newSpecificAttributes) &&
+			newSpecificAttributes != specificAttributes) // if nothing changed, we do nothing
+		{
+			if (newSpecificAttributes.isEmpty())
+				record->setNull(f_coll_specific_attr);
+			else
+			{
+				desc1.makeText(newSpecificAttributes.length(), ttype_metadata,
+					(UCHAR*)(newSpecificAttributes.c_str()));
+				blb::move(tdbb, &desc1, &desc2, relation, record, f_coll_specific_attr);
+			}
+		}
+	}
+}
+
+void afterInsertCollation(thread_db* tdbb, Record* record)
+{
+	if (tdbb->getAttachment()->isRWGbak())
+	{
+		dsc desc;
+		bool idSet = EVL_field(nullptr, record, f_coll_cs_id, &desc);
+		fb_assert(idSet);
+		if (!idSet)
+			return;
+
+		CSetId csId = CSetId(MOV_get_long(tdbb, &desc, 0));
+		MetadataCache::newVersion<Cached::CharSet>(tdbb, csId);
+	}
+}
+
 }	// anonymous
 
 
 void SystemTriggers::executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
 {
-	switch ((RIDS) relation->rel_id)
+	switch ((RIDS) relation->getId())
 	{
 		case rel_ccon:
 			beforeDeleteCheckConstraint(tdbb, record);
-			break;
-
-		case rel_indices:
-			beforeDeleteIndex(tdbb, record);
 			break;
 
 		case rel_priv:
@@ -1569,7 +1753,7 @@ void SystemTriggers::executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relat
 
 void SystemTriggers::executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
 {
-	switch ((RIDS) relation->rel_id)
+	switch ((RIDS) relation->getId())
 	{
 		case rel_ccon:
 			afterDeleteCheckConstraint(tdbb, record);
@@ -1587,8 +1771,12 @@ void SystemTriggers::executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relati
 
 void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
 {
-	switch ((RIDS) relation->rel_id)
+	switch ((RIDS) relation->getId())
 	{
+		case rel_relations:
+			beforeInsertRelation(tdbb, record);
+			break;
+
 		case rel_priv:
 			beforeInsertUserPrivilege(tdbb, record);
 			break;
@@ -1604,12 +1792,38 @@ void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relat
 		case rel_schemas:
 			beforeInsertSchema(tdbb, record);
 			break;
+
+		case rel_collations:
+			beforeInsertCollation(tdbb, record, relation);
+			break;
+	}
+}
+
+void SystemTriggers::executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record)
+{
+	switch ((RIDS) relation->getId())
+	{
+		case rel_relations:
+			afterInsertRelation(tdbb, record);
+			break;
+
+		case rel_collations:
+			afterInsertCollation(tdbb, record);
+			break;
+
+		case rel_procedures:
+			afterInsertProcedure(tdbb, record);
+			break;
+
+		case rel_funs:
+			afterInsertFunction(tdbb, record);
+			break;
 	}
 }
 
 void SystemTriggers::executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord)
 {
-	switch ((RIDS) relation->rel_id)
+	switch ((RIDS) relation->getId())
 	{
 		case rel_ccon:
 			beforeUpdateCheckConstraint(tdbb, orgRecord, newRecord);
@@ -1636,3 +1850,22 @@ void SystemTriggers::executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relat
 			break;
 	}
 }
+
+void SystemTriggers::executeAfterUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord)
+{
+	switch ((RIDS) relation->getId())
+	{
+		case rel_procedures:
+			afterUpdateProcedure(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_funs:
+			afterUpdateFunction(tdbb, orgRecord, newRecord);
+			break;
+
+		case rel_indices:
+			afterUpdateIndex(tdbb, orgRecord, newRecord);
+			break;
+	}
+}
+

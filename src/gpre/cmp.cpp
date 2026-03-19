@@ -84,7 +84,7 @@ static ULONG next_ident;
 //#define STUFF_LONG(blr) {STUFF (blr); STUFF ((blr) >> 8); STUFF ((blr) >>16); STUFF ((blr) >> 24);}
 //#define STUFF_INT(blr)	STUFF (blr); STUFF ((blr) >> 8); STUFF ((blr) >> 16); STUFF ((blr) >> 24)
 
-const int MAX_TPB = 4000;
+constexpr int MAX_TPB = 4000;
 
 //____________________________________________________________
 //
@@ -185,6 +185,9 @@ void CMP_compile_request( gpre_req* request)
 	case REQ_procedure:
 		cmp_procedure(request);
 		return;
+
+	default:
+		break;
 	}
 	// expand any incomplete references or values
 
@@ -273,6 +276,9 @@ void CMP_compile_request( gpre_req* request)
 		case ACT_loop:
 		case ACT_insert:
 			cmp_fetch(action);
+			break;
+		default:
+			// action not "interesting"
 			break;
 		}
 	}
@@ -385,7 +391,9 @@ void CMP_stuff_symbol( gpre_req* request, const gpre_sym* symbol)
 void CMP_t_start( gpre_tra* trans)
 {
 	char rrl_buffer[MAX_TPB];
+	rrl_buffer[0] = 0;
 	char tpb_buffer[MAX_TRA_OPTIONS + 1];
+	tpb_buffer[0] = 0;
 
 	// fill out a standard tpb buffer ahead of time so we know
 	// how large it is
@@ -908,6 +916,8 @@ static void cmp_for( gpre_req* request)
 		case ACT_erase:
 			updates = true;
 			break;
+		default:
+			break;
 		}
 	}
 
@@ -973,6 +983,8 @@ static void cmp_for( gpre_req* request)
 				break;
 			case ACT_erase:
 				cmp_erase(action, request);
+				break;
+			default:
 				break;
 			}
 		}
@@ -1401,6 +1413,9 @@ static void cmp_sdl_fudge( gpre_req* request, SLONG lower_bound)
 		request->add_byte(isc_sdl_add);
 		cmp_sdl_number(request, lower_bound - 1);
 		break;
+
+	default:
+		break;
 	}
 }
 
@@ -1752,7 +1767,7 @@ static gpre_port* make_port( gpre_req* request, ref* reference)
 	}
 
 	for (int i = 0; i <= 2; i++)
-		while (reference = alignments[i])
+		while ((reference = alignments[i]))
 		{
 			alignments[i] = reference->ref_next;
 			reference->ref_next = misc;

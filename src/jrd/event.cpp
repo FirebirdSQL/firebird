@@ -267,7 +267,7 @@ SLONG EventManager::queEvents(SLONG session_id,
 		const SLONG event_offset = SRQ_REL_PTR(event);
 
 		req_int* interest, *prior;
-		if (interest = historical_interest(session, event_offset))
+		if ((interest = historical_interest(session, event_offset)))
 		{
 			for (SRQ_PTR* ptr2 = &session->ses_interests;
 				 *ptr2 && (prior = (req_int*) SRQ_ABS_PTR(*ptr2));
@@ -534,8 +534,10 @@ frb* EventManager::alloc_global(UCHAR type, ULONG length, bool recurse)
 #ifdef HAVE_OBJECT_MAP
 	if (!best && !recurse)
 	{
+		fb_assert(length <= m_sharedMemory->sh_mem_increment);
+
 		const ULONG old_length = m_sharedMemory->sh_mem_length_mapped;
-		const ULONG ev_length = old_length + m_config->getEventMemSize();
+		const ULONG ev_length = old_length + m_sharedMemory->sh_mem_increment;
 
 		LocalStatus ls;
 		CheckStatusWrapper localStatus(&ls);

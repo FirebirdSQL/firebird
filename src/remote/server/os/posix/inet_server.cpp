@@ -96,10 +96,10 @@
 #include "../auth/trusted/AuthSspi.h"
 #include "../auth/SecureRemotePassword/server/SrpServer.h"
 
-#ifdef HAVE_SYS_SIGNAL_H
-#include <sys/signal.h>
-#else
+#if defined(HAVE_SIGNAL_H)
 #include <signal.h>
+#elif defined(HAVE_SYS_SIGNAL_H)
+#include <sys/signal.h>
 #endif
 
 #ifdef HAVE_SYS_RESOURCE_H

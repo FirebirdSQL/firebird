@@ -42,21 +42,21 @@ public:
 
 // sdw_flags
 
-const USHORT SDW_dumped	= 1;			// bit set when file has been copied
-const USHORT SDW_shutdown	= 2;		// stop shadowing on next cache flush
-const USHORT SDW_manual	= 4;			// shadow is a manual shadow--don't delete
-const USHORT SDW_delete	= 8;			// delete the shadow at the next shutdown
-const USHORT SDW_found		= 16;		// flag to mark shadow found in database
-const USHORT SDW_rollover	= 32;		// this shadow was rolled over to when the main db file went away
-const USHORT SDW_conditional	= 64;	// shadow to be used if another shadow becomes unavailable
+inline constexpr USHORT SDW_dumped		= 1;	// bit set when file has been copied
+inline constexpr USHORT SDW_shutdown	= 2;	// stop shadowing on next cache flush
+inline constexpr USHORT SDW_manual		= 4;	// shadow is a manual shadow--don't delete
+inline constexpr USHORT SDW_delete		= 8;	// delete the shadow at the next shutdown
+inline constexpr USHORT SDW_found		= 16;	// flag to mark shadow found in database
+inline constexpr USHORT SDW_rollover	= 32;	// this shadow was rolled over to when the main db file went away
+inline constexpr USHORT SDW_conditional	= 64;	// shadow to be used if another shadow becomes unavailable
 
-/* these macros are a convenient combination of switches:
+/* these constants are a convenient combination of switches:
    the first specifies the shadow is invalid for writing to;
    the second specifies that the shadow no SLONGer exists and the
    shadow block simply hasn't been cleared out yet */
 
-const USHORT SDW_INVALID	= (SDW_shutdown | SDW_delete | SDW_rollover | SDW_conditional);
-const USHORT SDW_IGNORE	= (SDW_shutdown | SDW_delete);
+inline constexpr USHORT SDW_INVALID	= (SDW_shutdown | SDW_delete | SDW_rollover | SDW_conditional);
+inline constexpr USHORT SDW_IGNORE	= (SDW_shutdown | SDW_delete);
 
 } //namespace Jrd
 

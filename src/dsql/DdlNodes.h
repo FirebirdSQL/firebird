@@ -36,6 +36,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/TriState.h"
+#include "../jrd/Relation.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
@@ -49,6 +50,7 @@ enum SqlSecurity
 };
 
 class LocalDeclarationsNode;
+class LocalTemporaryTable;
 class RelationSourceNode;
 class ValueListNode;
 class SecDbContext;
@@ -228,6 +230,11 @@ public:
 		createNode->dsqlPass(dsqlScratch);
 		dropNode.dsqlPass(dsqlScratch);
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return createNode->disallowedInReadOnlyDatabase();
 	}
 
 protected:
@@ -435,7 +442,7 @@ private:
 
 	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		bool secondPass, bool runTriggers);
+		bool create, bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 
@@ -464,6 +471,9 @@ public:
 	bool preserveDefaults;
 	SLONG udfReturnPos;
 	std::optional<SqlSecurity> ssDefiner;
+
+private:
+	MetaId id = 0;
 };
 
 
@@ -580,7 +590,7 @@ protected:
 private:
 	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		bool secondPass, bool runTriggers);
+		bool create, bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 
@@ -607,6 +617,9 @@ public:
 	bool privateScope;
 	bool preserveDefaults;
 	std::optional<SqlSecurity> ssDefiner;
+
+private:
+	MetaId id = 0;
 };
 
 
@@ -747,7 +760,7 @@ private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
 
-	static inline bool hasOldContext(const unsigned value)
+	static inline bool hasOldContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -755,7 +768,7 @@ private:
 		return (val1 && val1 != 1) || (val2 && val2 != 1) || (val3 && val3 != 1);
 	}
 
-	static inline bool hasNewContext(const unsigned value)
+	static inline bool hasNewContext(const unsigned value) noexcept
 	{
 		const unsigned val1 = ((value + 1) >> 1) & 3;
 		const unsigned val2 = ((value + 1) >> 3) & 3;
@@ -888,8 +901,8 @@ public:
 private:
 	USHORT attributesOn;
 	USHORT attributesOff;
-	USHORT forCharSetId;
-	USHORT fromCollationId;
+	CSetId forCharSetId;
+	CollId fromCollationId;
 };
 
 
@@ -983,7 +996,7 @@ public:
 
 public:
 	static void checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld);
-	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld);
+	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld) noexcept;
 	static void getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld);
 	static void modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName,
@@ -1282,6 +1295,41 @@ typedef RecreateNode<CreateAlterSequenceNode, DropSequenceNode, isc_dsql_recreat
 	RecreateSequenceNode;
 
 
+// forward
+enum rsr_t : UCHAR;
+class TemporaryField;
+class TrigArray;
+class ModifyIndexNode;
+
+
+// Collects indices to be created after table was actuallly created
+
+class ModifyIndexList
+{
+public:
+	ModifyIndexList(MemoryPool& p)
+		: nodes(p)
+	{
+	}
+
+	void push(ModifyIndexNode* node)
+	{
+		nodes.push(node);
+	}
+
+	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+	void erase(thread_db* tdbb, MetaName indexName);
+
+	MemoryPool& getPool()
+	{
+		return nodes.getPool();
+	}
+
+private:
+	Firebird::HalfStaticArray<ModifyIndexNode*, 8> nodes;
+};
+
+
 class RelationNode : public DdlNode
 {
 public:
@@ -1307,7 +1355,7 @@ public:
 		QualifiedName fieldSource;
 		QualifiedName identitySequence;
 		std::optional<IdentityType> identityType;
-		std::optional<USHORT> collationId;
+		std::optional<CollId> collationId;
 		Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
 		std::optional<USHORT> position;
 		Firebird::string defaultSource;
@@ -1411,7 +1459,7 @@ public:
 			TYPE_ALTER_PUBLICATION
 		};
 
-		explicit Clause(MemoryPool& p, Type aType)
+		explicit Clause(MemoryPool& p, Type aType) noexcept
 			: type(aType)
 		{
 		}
@@ -1421,12 +1469,12 @@ public:
 
 	struct RefActionClause
 	{
-		static const unsigned ACTION_CASCADE		= 1;
-		static const unsigned ACTION_SET_DEFAULT	= 2;
-		static const unsigned ACTION_SET_NULL		= 3;
-		static const unsigned ACTION_NONE			= 4;
+		static constexpr unsigned ACTION_CASCADE		= 1;
+		static constexpr unsigned ACTION_SET_DEFAULT	= 2;
+		static constexpr unsigned ACTION_SET_NULL		= 3;
+		static constexpr unsigned ACTION_NONE			= 4;
 
-		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction)
+		RefActionClause(MemoryPool& p, unsigned aUpdateAction, unsigned aDeleteAction) noexcept
 			: updateAction(aUpdateAction),
 			  deleteAction(aDeleteAction)
 		{
@@ -1473,13 +1521,13 @@ public:
 
 	struct IdentityOptions
 	{
-		IdentityOptions(MemoryPool&, IdentityType aType)
+		IdentityOptions(MemoryPool&, IdentityType aType) noexcept
 			: type(aType),
 			  restart(false)
 		{
 		}
 
-		IdentityOptions(MemoryPool&)
+		IdentityOptions(MemoryPool&) noexcept
 			: restart(false)
 		{
 		}
@@ -1601,6 +1649,12 @@ public:
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
 
+	static MetaId generateRelId(thread_db* tdbb, MetaName name);
+	static bool checkDeletedId(thread_db* tdbb, MetaId& relId);
+	static bool checkIdRange(thread_db* tdbb, MetaId& relId, const MetaId existingRelationId);
+
+	USHORT calcDbKeyLength(thread_db* tdbb);
+
 	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName, bool silent,
 		std::function<void()> preChangeHandler = {});
@@ -1614,6 +1668,8 @@ public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
+	static void validateLttColumnClause(const AddColumnClause* addColumnClause);
+
 	Firebird::string internalPrint(NodePrinter& printer) const override
 	{
 		DdlNode::internalPrint(printer);
@@ -1652,11 +1708,31 @@ protected:
 	void stuffTriggerFiringCondition(const Constraint& constraint, BlrDebugWriter& blrWriter);
 
 public:
+	static void makeVersion(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relName);
+	static void raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name);
+	static Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
+		USHORT* version, TemporaryField* stack);
+
+private:
+	static blb* setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
+		TrigArray* triggers, blb* blob);
+	static void setupTriggerDetails(thread_db* tdbb, jrd_rel* relation, blb* blob, TrigArray* triggers,
+		const QualifiedName& trigger_name, bool null_view);
+	static void putSummaryRecord(thread_db* tdbb, blb* blob, rsr_t type, const UCHAR* data, ULONG length);
+	static void putSummaryBlob(thread_db* tdbb, blb* blob, rsr_t type, bid* blob_id, jrd_tra* transaction);
+	static bool validateTextType(thread_db* tdbb, const TemporaryField* tfb);
+	static void setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name, USHORT n, TemporaryField* tfb);
+	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc);
+
+public:
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
 	Firebird::Array<NestConst<Clause> > clauses;
+	std::optional<ULONG> tempFlag;	// REL_temp_gtt, REL_temp_ltt
+	std::optional<ULONG> tempRowsFlag;	// REL_temp_tran, REL_temp_conn
 	Firebird::TriState ssDefiner;
 	Firebird::TriState replicationState;
+	ModifyIndexList indexList;
 };
 
 
@@ -1684,6 +1760,11 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return tempFlag != REL_temp_ltt;
+	}
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
@@ -1692,12 +1773,10 @@ protected:
 
 private:
 	const Firebird::ObjectsArray<MetaName>* findPkColumns();
+	void defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	const Firebird::string* externalFile;
-	std::optional<rel_t> relationType = rel_persistent;
-	bool preserveRowsOpt;
-	bool deleteRowsOpt;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -1719,6 +1798,11 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
@@ -1733,6 +1817,7 @@ protected:
 private:
 	void modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		AlterColTypeClause* clause);
+	void alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 };
 
 
@@ -1765,6 +1850,11 @@ public:
 		dsqlScratch->ddlSchema = name.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
 protected:
@@ -1845,6 +1935,40 @@ public:
 };
 
 
+// Performs 2-pass index create/drop
+
+class ModifyIndexNode
+{
+public:
+	ModifyIndexNode(const QualifiedName& indexName, bool create)
+		: indexName(indexName),
+		  create(create)
+	{
+	}
+
+	virtual ~ModifyIndexNode()
+	{
+	}
+
+	bool modify(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+
+	bool check(thread_db*, MetaName iName)
+	{
+		return create && (indexName.object == iName);
+	}
+
+	virtual bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
+
+protected:
+	Firebird::string print(NodePrinter& printer) const;
+	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
+
+public:
+	QualifiedName indexName;
+	bool create;
+};
+
+
 class CreateIndexNode final : public DdlNode
 {
 public:
@@ -1859,6 +1983,7 @@ public:
 			conditionSource.clear();
 		}
 
+		QualifiedName index;
 		QualifiedName relation;
 		Firebird::ObjectsArray<MetaName> columns;
 		Firebird::TriState unique;
@@ -1881,14 +2006,23 @@ public:
 	}
 
 public:
-	static void store(thread_db* tdbb, jrd_tra* transaction, QualifiedName& name,
-		const Definition& definition, QualifiedName* referredIndexName = nullptr);
+	static ModifyIndexNode* store(thread_db* tdbb, MemoryPool& p, jrd_tra* transaction, QualifiedName& name,
+		Definition& definition, QualifiedName* referredIndexName = nullptr);
 
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt);
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
@@ -1909,13 +2043,32 @@ public:
 };
 
 
-class AlterIndexNode final : public DdlNode
+class StoreIndexNode final : public ModifyIndexNode
 {
 public:
-	AlterIndexNode(MemoryPool& p, const QualifiedName& aName, bool aActive)
-		: DdlNode(p),
-		  name(p, aName),
-		  active(aActive)
+	StoreIndexNode(const QualifiedName& indexName, bool expressionIndex)
+		: ModifyIndexNode(indexName, true),
+		  expressionIndex(expressionIndex)
+	{ }
+
+public:
+	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+
+private:
+	MetaId create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+	MetaId createExpression(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+
+private:
+	bool expressionIndex = false;
+};
+
+
+class AlterIndexNode final : public ModifyIndexNode, public DdlNode
+{
+public:
+	AlterIndexNode(MemoryPool& p, const QualifiedName& name, bool active)
+		: ModifyIndexNode(name, active),
+		  DdlNode(p)
 	{
 	}
 
@@ -1926,21 +2079,30 @@ public:
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		dsqlScratch->qualifyExistingName(name, obj_index);
-		dsqlScratch->ddlSchema = name.schema;
+		dsqlScratch->qualifyExistingName(indexName, obj_index);
+		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
+	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name.toQuotedString();
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
-	QualifiedName name;
-	bool active;
+	std::optional<MetaId> idxId;
 };
 
 
@@ -1949,7 +2111,7 @@ class SetStatisticsNode final : public DdlNode
 public:
 	SetStatisticsNode(MemoryPool& p, const QualifiedName& aName)
 		: DdlNode(p),
-		  name(p, aName)
+		  indexName(p, aName)
 	{
 	}
 
@@ -1960,57 +2122,73 @@ public:
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		dsqlScratch->qualifyExistingName(name, obj_index);
-		dsqlScratch->ddlSchema = name.schema;
+		dsqlScratch->qualifyExistingName(indexName, obj_index);
+		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
+
+private:
+	void setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		// ASF: using ALTER INDEX's code.
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << name.toQuotedString();
+		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
-	QualifiedName name;
+	QualifiedName indexName;
 };
 
 
-class DropIndexNode final : public DdlNode
+class DropIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
-	DropIndexNode(MemoryPool& p, const QualifiedName& aName)
-		: DdlNode(p),
-		  name(p, aName)
-	{
-	}
+	DropIndexNode(MemoryPool& p, const QualifiedName& aName);
 
 	static bool deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
+	static void clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId);
+	static void clearId(thread_db* tdbb, MetaId relId, MetaId indexId);
 
 public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+	Cached::Relation* drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+	    ModifyIndexList& list, bool runTriggers);
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		dsqlScratch->qualifyExistingName(name, obj_index);
-		dsqlScratch->ddlSchema = name.schema;
+		dsqlScratch->qualifyExistingName(indexName, obj_index);
+		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
 
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
+	}
+
+private:
+	void dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
+	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << name.toQuotedString();
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << indexName.toQuotedString();
 	}
 
 public:
-	QualifiedName name;
 	bool silent = false;
+
+private:
+	MetaId idxId = MAX_META_ID;
 };
 
 
@@ -2072,6 +2250,7 @@ public:
 	NestConst<NameNumber> outputFilter;
 	Firebird::string entryPoint;
 	Firebird::string moduleName;
+	bool createIfNotExistsOnly = false;
 };
 
 
@@ -2580,7 +2759,7 @@ private:
 		const QualifiedName& relation, const MetaName& field);
 
 	// Diagnostics print helper.
-	static const char* privilegeName(char symbol)
+	static constexpr const char* privilegeName(char symbol) noexcept
 	{
 		switch (UPPER7(symbol))
 		{
@@ -2597,9 +2776,8 @@ private:
 			case 'C': return "CREATE";
 			case 'L': return "ALTER";
 			case 'O': return "DROP";
+			default: return "<Unknown>";
 		}
-
-		return "<Unknown>";
 	}
 
 	struct CreateDbJob
@@ -2632,16 +2810,16 @@ public:
 class AlterDatabaseNode final : public DdlNode
 {
 public:
-	static const unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
-	static const unsigned CLAUSE_END_BACKUP			= 0x02;
-	static const unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
-	static const unsigned CLAUSE_CRYPT				= 0x08;
-	static const unsigned CLAUSE_ENABLE_PUB			= 0x10;
-	static const unsigned CLAUSE_DISABLE_PUB		= 0x20;
-	static const unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
-	static const unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
+	static constexpr unsigned CLAUSE_BEGIN_BACKUP		= 0x01;
+	static constexpr unsigned CLAUSE_END_BACKUP			= 0x02;
+	static constexpr unsigned CLAUSE_DROP_DIFFERENCE	= 0x04;
+	static constexpr unsigned CLAUSE_CRYPT				= 0x08;
+	static constexpr unsigned CLAUSE_ENABLE_PUB			= 0x10;
+	static constexpr unsigned CLAUSE_DISABLE_PUB		= 0x20;
+	static constexpr unsigned CLAUSE_PUB_INCL_TABLE		= 0x40;
+	static constexpr unsigned CLAUSE_PUB_EXCL_TABLE		= 0x80;
 
-	static const unsigned RDB_DATABASE_MASK =
+	static constexpr unsigned RDB_DATABASE_MASK =
 		CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP | CLAUSE_DROP_DIFFERENCE;
 
 public:
@@ -2765,7 +2943,7 @@ protected:
 
 private:
 	bool collectObjects(thread_db* tdbb, jrd_tra* transaction,
-		Firebird::Array<Firebird::RightPooledPair<ObjectType, MetaName>>* objects = nullptr);
+		Firebird::Array<Firebird::NonPooledPair<ObjectType, MetaName>>* objects = nullptr);
 
 public:
 	MetaName name;

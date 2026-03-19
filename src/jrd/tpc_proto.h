@@ -28,6 +28,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/SyncObject.h"
+#include "../jrd/tra.h"
 
 namespace Ods {
 
@@ -43,7 +44,7 @@ class TipCache;
 class ActiveSnapshots;
 
 // Special values of CommitNumber reserved for uncommitted transaction states
-const CommitNumber
+inline constexpr CommitNumber
 	CN_PREHISTORIC = 1,
 	CN_ACTIVE = 0,
 	CN_LIMBO = static_cast<CommitNumber>(-1),
@@ -159,6 +160,40 @@ public:
 		return m_tpcHeader->getHeader()->monitor_generation++ + 1;
 	}
 
+	static int cacheState(thread_db* tdbb, TraNumber number)
+	{
+		auto* tipCache = tdbb->getDatabase()->dbb_tip_cache;
+		if (!tipCache)
+			return tra_unknown;
+
+		CommitNumber stateCn = tipCache->cacheState(number);
+
+		switch (stateCn)
+		{
+		case CN_ACTIVE:	return tra_active;
+		case CN_LIMBO:	return tra_limbo;
+		case CN_DEAD:	return tra_dead;
+		default:		return tra_committed;
+		}
+	}
+
+	// check state of transaction in which some object was created or dropped
+	template <typename PRESENCE>
+	static int traState(thread_db* tdbb, TraNumber traNum, PRESENCE&& objPresenceFunc, bool created)
+	{
+		int rc = cacheState(tdbb, traNum);
+		if (rc == tra_committed)		// too old dead transaction may be reported as committed
+		{
+			// check presence of record for an object created in traNum
+			// if object really created => record should be present
+			// if object really dropped => record should be missing
+			// otherwise transaction is dead, not committed
+			if (objPresenceFunc() != created)
+				return tra_dead;
+		}
+		return rc;
+	}
+
 private:
 	class GlobalTpcHeader : public Firebird::MemoryHeader
 	{
@@ -229,7 +264,7 @@ private:
 		TipCache* cache;
 		bool acceptAst;
 
-		inline static TpcBlockNumber& generate(const void* /*sender*/, StatusBlockData* item)
+		inline static TpcBlockNumber& generate(const void* /*sender*/, StatusBlockData* item) noexcept
 		{
 			return item->blockNumber;
 		}
@@ -242,37 +277,37 @@ private:
 	class MemoryInitializer : public Firebird::IpcObject
 	{
 	public:
-		explicit MemoryInitializer(TipCache *cache) : m_cache(cache) {}
+		explicit MemoryInitializer(TipCache *cache) noexcept : m_cache(cache) {}
 		void mutexBug(int osErrorCode, const char* text) override;
 		USHORT getVersion() const override { return TPC_VERSION; }
 	protected:
 		TipCache* m_cache;
 	};
 
-	class GlobalTpcInitializer : public MemoryInitializer
+	class GlobalTpcInitializer final : public MemoryInitializer
 	{
 	public:
-		explicit GlobalTpcInitializer(TipCache *cache) : MemoryInitializer(cache) {}
+		explicit GlobalTpcInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
 		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
 
 		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_HEADER; }
 		const char* getName() const override { return "TipCache:Global"; }
 	};
 
-	class SnapshotsInitializer : public MemoryInitializer
+	class SnapshotsInitializer final : public MemoryInitializer
 	{
 	public:
-		explicit SnapshotsInitializer(TipCache *cache) : MemoryInitializer(cache) {}
+		explicit SnapshotsInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
 		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
 
 		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_SNAPSHOTS; }
 		const char* getName() const override { return "TipCache:Snapshots"; }
 	};
 
-	class MemBlockInitializer : public MemoryInitializer
+	class MemBlockInitializer final : public MemoryInitializer
 	{
 	public:
-		explicit MemBlockInitializer(TipCache *cache) : MemoryInitializer(cache) {}
+		explicit MemBlockInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
 		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
 
 		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_BLOCK; }
@@ -281,8 +316,8 @@ private:
 
 	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
 
-	static const ULONG TPC_VERSION = 2;
-	static const int SAFETY_GAP_BLOCKS = 1;
+	static constexpr ULONG TPC_VERSION = 2;
+	static constexpr int SAFETY_GAP_BLOCKS = 1;
 
 	Firebird::SharedMemory<GlobalTpcHeader>* m_tpcHeader; // final
 	Firebird::SharedMemory<SnapshotList>* m_snapshots; // final
@@ -307,13 +342,13 @@ private:
 	// concurrent use of object being initialized.
 	void initializeTpc(thread_db *tdbb);
 
-	void initTransactionsPerBlock(ULONG blockSize);
+	void initTransactionsPerBlock(ULONG blockSize) noexcept;
 
 	// Returns block holding transaction state.
 	// Returns NULL if requested block is too old and is no longer cached.
 	// Sync should be bound to m_sync_status. On enter, sync must be unlocked.
 	// If returns not NULL then sync remains locked.
-	TransactionStatusBlock* getTransactionStatusBlock(GlobalTpcHeader* header, TpcBlockNumber blockNumber, Firebird::Sync& sync);
+	TransactionStatusBlock* getTransactionStatusBlock(const GlobalTpcHeader* header, TpcBlockNumber blockNumber, Firebird::Sync& sync);
 
 	// Map shared memory for a block.
 	// Assume exclusive lock of m_sync_status.
@@ -327,7 +362,7 @@ private:
 	// Populate TIP cache from disk
 	void loadInventoryPages(thread_db *tdbb, GlobalTpcHeader* header);
 	// Init mapping for existing TIP blocks
-	void mapInventoryPages(GlobalTpcHeader* header);
+	void mapInventoryPages(const GlobalTpcHeader* header);
 
 	static int tpc_block_blocking_ast(void* arg);
 
@@ -339,14 +374,7 @@ private:
 
 inline int TPC_cache_state(thread_db* tdbb, TraNumber number)
 {
-	CommitNumber stateCn = tdbb->getDatabase()->dbb_tip_cache->cacheState(number);
-	switch (stateCn)
-	{
-	case CN_ACTIVE:	return tra_active;
-	case CN_LIMBO:	return tra_limbo;
-	case CN_DEAD:	return tra_dead;
-	default:		return tra_committed;
-	}
+	return TipCache::cacheState(tdbb, number);
 }
 
 inline TraNumber TPC_find_states(thread_db* tdbb, TraNumber minNumber, TraNumber maxNumber,

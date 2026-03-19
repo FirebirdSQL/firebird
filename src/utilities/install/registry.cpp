@@ -55,12 +55,12 @@ USHORT REGISTRY_install(HKEY hkey_rootnode, const TEXT* directory, pfnRegError e
 	SLONG status = RegCreateKeyEx(hkey_rootnode,
 			REG_KEY_ROOT_INSTANCES,
 			0,
-			"",
+			nullptr,
 			REG_OPTION_NON_VOLATILE,
 			KEY_WRITE,
-			NULL, &hkey_instances, &disp);
+			nullptr, &hkey_instances, &disp);
 	if (status != ERROR_SUCCESS) {
-		return (*err_handler) (status, "RegCreateKeyEx", NULL);
+		return (*err_handler)(status, "RegCreateKeyEx", nullptr);
 	}
 
 	TEXT path_name[MAXPATHLEN];

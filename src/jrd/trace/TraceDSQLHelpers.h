@@ -31,6 +31,8 @@
 #include "../../jrd/trace/TraceManager.h"
 #include "../../jrd/trace/TraceObjects.h"
 
+#include <string_view>
+
 namespace Jrd {
 
 using Firebird::ITracePlugin;
@@ -53,11 +55,13 @@ public:
 
 		m_start_clock = fb_utils::query_performance_counter();
 
-		static const char empty_string[] = "";
-		if (!m_string_len || !string)
+		if (m_string == nullptr)
+			traceEmptyStatement();
+		else if (m_string_len == 0)
 		{
-			m_string = empty_string;
-			m_string_len = 0;
+			m_string_len = fb_strlen(m_string);
+			if (m_string_len == 0)
+				traceEmptyStatement();
 		}
 	}
 
@@ -103,6 +107,13 @@ public:
 	}
 
 private:
+	void traceEmptyStatement()
+	{
+		static constexpr std::string_view empty_string = "<empty statement>";
+		m_string = empty_string.data();
+		m_string_len = empty_string.length();
+	}
+
 	bool m_need_trace;
 	Attachment* m_attachment;
 	jrd_tra* const m_transaction;
@@ -162,7 +173,7 @@ public:
 			fb_utils::query_performance_counter() - m_start_clock,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), m_data);
+		TraceSQLStatementImpl stmt(m_dsqlRequest, &stats, m_data);
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction, &stmt, false, result);
 
 		m_dsqlRequest->req_fetch_baseline = NULL;
@@ -222,7 +233,7 @@ public:
 			&m_dsqlRequest->getRequest()->req_stats, m_dsqlRequest->req_fetch_elapsed,
 			m_dsqlRequest->req_fetch_rowcount);
 
-		TraceSQLStatementImpl stmt(m_dsqlRequest, stats.getPerf(), nullptr);
+		TraceSQLStatementImpl stmt(m_dsqlRequest, &stats, nullptr);
 
 		TraceManager::event_dsql_execute(m_attachment, m_dsqlRequest->req_transaction,
 			&stmt, false, result);

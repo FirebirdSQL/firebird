@@ -30,27 +30,27 @@
 class UserBlob
 {
 public:
-	explicit UserBlob(ISC_STATUS* status);
+	explicit UserBlob(ISC_STATUS* status) noexcept;
 	~UserBlob();
-	bool open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid);
+	bool open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid) noexcept;
 	bool open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
-				USHORT bpb_len, const UCHAR* bpb);
-	bool create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid);
+				USHORT bpb_len, const UCHAR* bpb) noexcept;
+	bool create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid) noexcept;
 	bool create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
-				USHORT bpb_len, const UCHAR* bpb);
-	bool close(bool force_internal_SV = false);
-	bool getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len);
-	bool getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len);
-	bool getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len, bool use_sep, const UCHAR separator);
-	bool putSegment(FB_SIZE_T len, const void* buffer);
-	bool putSegment(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len);
-	bool putData(FB_SIZE_T len, const void* buffer);
-	bool putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len);
-	bool isOpen() const;
-	ISC_STATUS getCode() const;
+				USHORT bpb_len, const UCHAR* bpb) noexcept;
+	bool close(bool force_internal_SV = false) noexcept;
+	bool getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len) noexcept;
+	bool getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len) noexcept;
+	bool getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len, bool use_sep, const UCHAR separator) noexcept;
+	bool putSegment(FB_SIZE_T len, const void* buffer) noexcept;
+	bool putSegment(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len) noexcept;
+	bool putData(FB_SIZE_T len, const void* buffer) noexcept;
+	bool putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len) noexcept;
+	bool isOpen() const noexcept;
+	ISC_STATUS getCode() const noexcept;
 //	FB_API_HANDLE& getHandle();
-	bool getInfo(FB_SIZE_T items_size, const UCHAR* items, FB_SIZE_T info_size, UCHAR* blob_info) const;
-	static bool blobIsNull(const ISC_QUAD& blobid);
+	bool getInfo(FB_SIZE_T items_size, const UCHAR* items, FB_SIZE_T info_size, UCHAR* blob_info) const noexcept;
+	static bool blobIsNull(const ISC_QUAD& blobid) noexcept;
 private:
 	enum b_direction
 	{
@@ -59,16 +59,15 @@ private:
 		dir_write
 	};
 	ISC_STATUS* const m_status;
-	FB_API_HANDLE m_blob;
-	b_direction m_direction;
-	ISC_STATUS_ARRAY m_default_status;
+	FB_API_HANDLE m_blob = 0;
+	b_direction m_direction = dir_none;
+	ISC_STATUS_ARRAY m_default_status{};
 };
 
 
-inline UserBlob::UserBlob(ISC_STATUS* status)
-	: m_status(status ? status : m_default_status), m_blob(0), m_direction(dir_none)
+inline UserBlob::UserBlob(ISC_STATUS* status) noexcept
+	: m_status(status ? status : m_default_status)
 {
-	memset(m_default_status, 0, sizeof(m_default_status));
 }
 
 inline UserBlob::~UserBlob()
@@ -76,13 +75,13 @@ inline UserBlob::~UserBlob()
 	close(true);
 }
 
-inline bool UserBlob::isOpen() const
+inline bool UserBlob::isOpen() const noexcept
 {
 	return m_blob != 0 && m_direction != dir_none;
 }
 
 // Do not call it after close(true) unless you did open() or create() again!!!
-inline ISC_STATUS UserBlob::getCode() const
+inline ISC_STATUS UserBlob::getCode() const noexcept
 {
 	return m_status[1];
 }
@@ -92,18 +91,18 @@ inline ISC_STATUS UserBlob::getCode() const
 //	return m_blob;
 //}
 
-inline bool UserBlob::blobIsNull(const ISC_QUAD& blobid)
+inline bool UserBlob::blobIsNull(const ISC_QUAD& blobid) noexcept
 {
 	return blobid.gds_quad_high == 0 && blobid.gds_quad_low == 0;
 }
 
-inline bool UserBlob::putData(FB_SIZE_T len, const void* buffer)
+inline bool UserBlob::putData(FB_SIZE_T len, const void* buffer) noexcept
 {
 	FB_SIZE_T dummy;
 	return putData(len, buffer, dummy);
 }
 
-inline bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
+inline bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len) noexcept
 {
 	return getData(len, buffer, real_len, false, '\0');
 }

@@ -188,7 +188,7 @@ ISC_STATUS filter_acl(USHORT action, BlobControl* control)
 
         bool all_wild;
 		UCHAR c;
-		while (c = *p++)
+		while ((c = *p++))
 		{
 			switch (c)
 			{
@@ -820,7 +820,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 	BlobControl* source;
 	ISC_STATUS status;
 	ULONG err_position;
-	SSHORT source_cs, dest_cs;
+	TTypeId source_cs, dest_cs;
 	USHORT result_length;
 
 	switch (action)
@@ -834,8 +834,8 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 		source = control->ctl_handle;
 		control->ctl_number_segments = source->ctl_number_segments;
 
-		source_cs = control->ctl_from_sub_type;
-		dest_cs = control->ctl_to_sub_type;
+		source_cs = TTypeId(control->ctl_from_sub_type);
+		dest_cs = TTypeId(control->ctl_to_sub_type);
 
 		aux = (ctlaux*) gds__alloc((SLONG) sizeof(*aux));
 		// FREE: on isc_blob_filter_close in this routine
@@ -1330,7 +1330,7 @@ static ISC_STATUS string_filter(USHORT action, BlobControl* control)
 	switch (action)
 	{
 	case isc_blob_filter_close:
-		while (string = (filter_tmp*) control->ctl_data[0])
+		while ((string = (filter_tmp*) control->ctl_data[0]))
 		{
 			control->ctl_data[0] = (IPTR) string->tmp_next;
 			gds__free(string);

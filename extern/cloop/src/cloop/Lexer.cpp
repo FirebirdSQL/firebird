@@ -20,8 +20,10 @@
  */
 
 #include "Lexer.h"
+#include <format>
 #include <stdexcept>
 
+using std::format;
 using std::runtime_error;
 using std::string;
 
@@ -30,9 +32,7 @@ using std::string;
 
 
 Lexer::Lexer(const string& filename)
-	: filename(filename),
-	  line(1),
-	  column(1)
+	: filename(filename)
 {
 	in = fopen(filename.c_str(), "r");
 
@@ -64,15 +64,15 @@ Token& Lexer::getToken(Token& token)
 
 	if (ch.c == -1)
 	{
-		token.type = Token::TYPE_EOF;
+		token.type = Token::Type::END_OF_FILE;
 		return token;
 	}
 	else if ((ch.c >= 'a' && ch.c <= 'z') || (ch.c >= 'A' && ch.c <= 'Z') || ch.c == '_')
 	{
-		while ((ch.c >= 'a' && ch.c <= 'z') || (ch.c >= 'A' && ch.c <= 'Z') || ch.c == '_' ||
-			   (ch.c >= '0' && ch.c <= '9'))
+		while (
+			(ch.c >= 'a' && ch.c <= 'z') || (ch.c >= 'A' && ch.c <= 'Z') || ch.c == '_' || (ch.c >= '0' && ch.c <= '9'))
 		{
-			token.text += ch.c;
+			token.text += static_cast<char>(ch.c);
 			getChar(ch);
 		}
 
@@ -80,83 +80,79 @@ Token& Lexer::getToken(Token& token)
 
 		// literals
 		if (token.text == "false" || token.text == "true")
-			token.type = Token::TYPE_BOOLEAN_LITERAL;
+			token.type = Token::Type::BOOLEAN_LITERAL;
 		// keywords
 		else if (token.text == "const")
-			token.type = Token::TYPE_CONST;
+			token.type = Token::Type::CONST;
 		else if (token.text == "exception")
-			token.type = Token::TYPE_EXCEPTION;
+			token.type = Token::Type::EXCEPTION;
 		else if (token.text == "interface")
-			token.type = Token::TYPE_INTERFACE;
+			token.type = Token::Type::INTERFACE;
 		else if (token.text == "notImplemented")
-			token.type = Token::TYPE_NOT_IMPLEMENTED;
+			token.type = Token::Type::NOT_IMPLEMENTED;
 		else if (token.text == "notImplementedAction")
-			token.type = Token::TYPE_NOT_IMPLEMENTED_ACTION;
+			token.type = Token::Type::NOT_IMPLEMENTED_ACTION;
 		else if (token.text == "struct")
-			token.type = Token::TYPE_STRUCT;
+			token.type = Token::Type::STRUCT;
 		else if (token.text == "typedef")
-			token.type = Token::TYPE_TYPEDEF;
+			token.type = Token::Type::TYPEDEF;
 		else if (token.text == "version")
-			token.type = Token::TYPE_VERSION;
+			token.type = Token::Type::VERSION;
 		else if (token.text == "onError")
-			token.type = Token::TYPE_ON_ERROR;
+			token.type = Token::Type::ON_ERROR;
 		else if (token.text == "if")
-			token.type = Token::TYPE_IF;
+			token.type = Token::Type::IF;
 		else if (token.text == "then")
-			token.type = Token::TYPE_THEN;
+			token.type = Token::Type::THEN;
 		else if (token.text == "else")
-			token.type = Token::TYPE_ELSE;
+			token.type = Token::Type::ELSE;
 		else if (token.text == "endif")
-			token.type = Token::TYPE_ENDIF;
+			token.type = Token::Type::ENDIF;
 		else if (token.text == "call")
-			token.type = Token::TYPE_CALL;
+			token.type = Token::Type::CALL;
 		else if (token.text == "defaultAction")
-			token.type = Token::TYPE_DEFAULT_ACTION;
+			token.type = Token::Type::DEFAULT_ACTION;
 		else if (token.text == "stub")
-			token.type = Token::TYPE_STUB;
+			token.type = Token::Type::STUB;
 		// types
 		else if (token.text == "void")
-			token.type = Token::TYPE_VOID;
+			token.type = Token::Type::VOID;
 		else if (token.text == "boolean")
-			token.type = Token::TYPE_BOOLEAN;
+			token.type = Token::Type::BOOLEAN;
 		else if (token.text == "int")
-			token.type = Token::TYPE_INT;
+			token.type = Token::Type::INT;
 		else if (token.text == "int64")
-			token.type = Token::TYPE_INT64;
+			token.type = Token::Type::INT64;
 		else if (token.text == "intptr")
-			token.type = Token::TYPE_INTPTR;
+			token.type = Token::Type::INTPTR;
 		else if (token.text == "string")
-			token.type = Token::TYPE_STRING;
+			token.type = Token::Type::STRING;
 		else if (token.text == "uchar")
-			token.type = Token::TYPE_UCHAR;
+			token.type = Token::Type::UCHAR;
 		else if (token.text == "uint")
-			token.type = Token::TYPE_UINT;
+			token.type = Token::Type::UINT;
 		else if (token.text == "uint64")
-			token.type = Token::TYPE_UINT64;
+			token.type = Token::Type::UINT64;
 		else
-			token.type = Token::TYPE_IDENTIFIER;
+			token.type = Token::Type::IDENTIFIER;
 	}
 	else if (ch.c >= '0' && ch.c <= '9')
 	{
-		token.type = Token::TYPE_INT_LITERAL;
-		token.text += ch.c;
+		token.type = Token::Type::INT_LITERAL;
+		token.text += static_cast<char>(ch.c);
 
 		if ((getChar(ch).c == 'x' || ch.c == 'X') && token.text[0] == '0')
 		{
-			token.text += ch.c;
+			token.text += static_cast<char>(ch.c);
 
-			while ((getChar(ch).c >= '0' && ch.c <= '9') ||
-				(tolower(ch.c) >= 'a' && tolower(ch.c) <= 'f'))
+			while ((getChar(ch).c >= '0' && ch.c <= '9') || (tolower(ch.c) >= 'a' && tolower(ch.c) <= 'f'))
 			{
-				token.text += ch.c;
+				token.text += static_cast<char>(ch.c);
 			}
 
 			if (token.text.length() == 2)
 			{
-				char buffer[1024];
-				sprintf(buffer, "%s:%i:%i: error: Invalid hexadecimal prefix.",
-					filename.c_str(), line, column);
-				throw runtime_error(buffer);
+				throw runtime_error(format("{}:{}:{}: error: Invalid hexadecimal prefix.", filename, line, column));
 			}
 		}
 		else
@@ -164,7 +160,7 @@ Token& Lexer::getToken(Token& token)
 			ungetChar(ch);
 
 			while (getChar(ch).c >= '0' && ch.c <= '9')
-				token.text += ch.c;
+				token.text += static_cast<char>(ch.c);
 		}
 
 		ungetChar(ch);
@@ -172,12 +168,12 @@ Token& Lexer::getToken(Token& token)
 	else
 	{
 		token.type = static_cast<Token::Type>(ch.c);
-		token.text = ch.c;
+		token.text = static_cast<char>(ch.c);
 
 		if (getChar(ch).c == ':')
 		{
-			token.type = Token::TYPE_DOUBLE_COLON;
-			token.text += ch.c;
+			token.type = Token::Type::DOUBLE_COLON;
+			token.text += static_cast<char>(ch.c);
 		}
 		else
 			ungetChar(ch);
@@ -191,7 +187,7 @@ void Lexer::pushToken(const Token& token)
 	tokens.push(token);
 }
 
-void Lexer::skip(Char& ch)	// skip spaces and comments
+void Lexer::skip(Char& ch)  // skip spaces and comments
 {
 	while (true)
 	{
@@ -219,11 +215,8 @@ void Lexer::skip(Char& ch)	// skip spaces and comments
 
 					if (ch.c == -1)
 					{
-						char buffer[1024];
-						sprintf(buffer, "%s:%i:%i: error: Unterminated comment.",
-							filename.c_str(),
-							firstCh.line, firstCh.column);
-						throw runtime_error(buffer);
+						throw runtime_error(
+							format("{}:{}:{}: error: Unterminated comment.", filename, firstCh.line, firstCh.column));
 					}
 					else
 					{
@@ -245,9 +238,10 @@ void Lexer::skip(Char& ch)	// skip spaces and comments
 
 				break;
 
-			default:	// not a comment
+			default:  // not a comment
+				ungetChar(ch);
 				ch = firstCh;
-				break;
+				return;
 		}
 	}
 

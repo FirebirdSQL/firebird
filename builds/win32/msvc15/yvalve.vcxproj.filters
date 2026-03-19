@@ -137,6 +137,9 @@
     <ClInclude Include="..\..\..\src\remote\client\BlrFromMessage.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h">
+      <Filter>headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc">

@@ -58,14 +58,14 @@ SINT64 ticksToNanoseconds(FB_UINT64 ticks)
 	return CInt128((SINT64) ticks).mul(ONE_SECOND_IN_NS).div(ticksFrequency, 0).toInt64(0);
 }
 
-auto& defaultPool()
+auto& defaultPool() noexcept
 {
 	return *getDefaultMemoryPool();
 }
 
 void quote(string& name)
 {
-	const char QUOTE = '"';
+	constexpr char QUOTE = '"';
 
 	for (unsigned p = 0; p < name.length(); ++p)
 	{
@@ -82,7 +82,7 @@ void quote(string& name)
 
 struct Stats
 {
-	void hit(FB_UINT64 elapsedTicks)
+	void hit(FB_UINT64 elapsedTicks) noexcept
 	{
 		if (counter == 0 || elapsedTicks < minElapsedTicks)
 			minElapsedTicks = elapsedTicks;
@@ -103,14 +103,14 @@ struct Stats
 struct Cursor
 {
 	MetaString name{defaultPool()};
-	unsigned line;
-	unsigned column;
+	unsigned line = 0;
+	unsigned column = 0;
 };
 
 struct RecordSource
 {
 	std::optional<ULONG> parentId;
-	unsigned level;
+	unsigned level = 0;
 	string accessPath{defaultPool()};
 };
 
@@ -127,7 +127,7 @@ struct Statement
 	MetaString schemaName{defaultPool()};
 	MetaString packageName{defaultPool()};
 	MetaString routineName{defaultPool()};
-	SINT64 parentStatementId;
+	SINT64 parentStatementId = 0;
 	string sqlText{defaultPool()};
 };
 
@@ -138,10 +138,10 @@ struct Request
 {
 	bool dirty = true;
 	unsigned level = 0;
-	SINT64 statementId;
+	SINT64 statementId = 0;
 	SINT64 callerStatementId = 0;
 	SINT64 callerRequestId = 0;
-	ISC_TIMESTAMP_TZ startTimestamp;
+	ISC_TIMESTAMP_TZ startTimestamp{};
 	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
 	std::optional<FB_UINT64> totalElapsedTicks;
 	NonPooledMap<CursorRecSourceKey, RecordSourceStats> recordSourcesStats{defaultPool()};

@@ -28,6 +28,7 @@
 #include "../dsql/Visitors.h"
 #include "../common/classes/array.h"
 #include "../common/classes/NestConst.h"
+#include "../common/classes/TriState.h"
 #include <functional>
 #include <initializer_list>
 #include <type_traits>
@@ -49,20 +50,21 @@ class RseNode;
 class SlidingWindow;
 class TypeClause;
 class ValueExprNode;
+class SortNode;
 
 
 // Must be less then MAX_SSHORT. Not used for static arrays.
-const unsigned MAX_CONJUNCTS = 32000;
+inline constexpr unsigned MAX_CONJUNCTS = 32000;
 
 // New: MAX_STREAMS should be a multiple of BITS_PER_LONG (32 and hard to believe it will change)
 
-const StreamType INVALID_STREAM = ~StreamType(0);
-const StreamType MAX_STREAMS = 4096;
+inline constexpr StreamType INVALID_STREAM = ~StreamType(0);
+inline constexpr StreamType MAX_STREAMS = 4096;
 
-const StreamType STREAM_MAP_LENGTH = MAX_STREAMS + 2;
+inline constexpr StreamType STREAM_MAP_LENGTH = MAX_STREAMS + 2;
 
 // New formula is simply MAX_STREAMS / BITS_PER_LONG
-const int OPT_STREAM_BITS = MAX_STREAMS / BITS_PER_LONG; // 128 with 4096 streams
+inline constexpr int OPT_STREAM_BITS = MAX_STREAMS / BITS_PER_LONG; // 128 with 4096 streams
 
 typedef Firebird::HalfStaticArray<StreamType, OPT_STATIC_STREAMS> StreamList;
 typedef Firebird::SortedArray<StreamType> SortedStreamList;
@@ -270,6 +272,11 @@ public:
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) = 0;
 
 	virtual bool mustBeReplicated() const
+	{
+		return true;
+	}
+
+	virtual bool disallowedInReadOnlyDatabase() const
 	{
 		return true;
 	}
@@ -538,19 +545,19 @@ public:
 	};
 
 	// Generic flags.
-	static const USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
-	static const USHORT FLAG_PATTERN_MATCHER_CACHE	= 0x02;
+	static constexpr USHORT FLAG_INVARIANT	= 0x01;	// Node is recognized as being invariant.
+	static constexpr USHORT FLAG_PATTERN_MATCHER_CACHE	= 0x02;
 
 	// Boolean flags.
-	static const USHORT FLAG_DEOPTIMIZE	= 0x04;	// Boolean which requires deoptimization.
-	static const USHORT FLAG_RESIDUAL	= 0x08;	// Boolean which must remain residual.
-	static const USHORT FLAG_ANSI_NOT	= 0x10;	// ANY/ALL predicate is prefixed with a NOT one.
+	static constexpr USHORT FLAG_DEOPTIMIZE	= 0x04;	// Boolean which requires deoptimization.
+	static constexpr USHORT FLAG_RESIDUAL	= 0x08;	// Boolean which must remain residual.
+	static constexpr USHORT FLAG_ANSI_NOT	= 0x10;	// ANY/ALL predicate is prefixed with a NOT one.
 
 	// Value flags.
-	static const USHORT FLAG_DOUBLE		= 0x20;
-	static const USHORT FLAG_DATE		= 0x40;
-	static const USHORT FLAG_DECFLOAT	= 0x80;
-	static const USHORT FLAG_INT128		= 0x100;
+	static constexpr USHORT FLAG_DOUBLE		= 0x20;
+	static constexpr USHORT FLAG_DATE		= 0x40;
+	static constexpr USHORT FLAG_DECFLOAT	= 0x80;
+	static constexpr USHORT FLAG_INT128		= 0x100;
 
 	explicit ExprNode(Type aType, MemoryPool& pool)
 		: DmlNode(pool),
@@ -670,7 +677,7 @@ public:
 	}
 
 	// Check if expression returns deterministic result
-	virtual bool deterministic() const;
+	virtual bool deterministic(thread_db* tdbb) const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
@@ -785,7 +792,7 @@ public:
 	}
 
 	BoolExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override = 0;
-	virtual bool execute(thread_db* tdbb, Request* request) const = 0;
+	virtual Firebird::TriState execute(thread_db* tdbb, Request* request) const = 0;
 };
 
 class ValueExprNode : public ExprNode
@@ -934,13 +941,13 @@ class AggNode : public TypedNode<ValueExprNode, ExprNode::TYPE_AGGREGATE>
 public:
 	// Capabilities
 	// works in a window frame
-	static const unsigned CAP_SUPPORTS_WINDOW_FRAME	= 0x01;
+	static constexpr unsigned CAP_SUPPORTS_WINDOW_FRAME	= 0x01;
 	// respects window frame boundaries
-	static const unsigned CAP_RESPECTS_WINDOW_FRAME	= 0x02 | CAP_SUPPORTS_WINDOW_FRAME;
+	static constexpr unsigned CAP_RESPECTS_WINDOW_FRAME	= 0x02 | CAP_SUPPORTS_WINDOW_FRAME;
 	// wants aggPass/aggExecute calls in a window
-	static const unsigned CAP_WANTS_AGG_CALLS		= 0x04;
+	static constexpr unsigned CAP_WANTS_AGG_CALLS		= 0x04;
 	// wants winPass call in a window
-	static const unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
+	static constexpr unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
 
 protected:
 	struct AggInfo
@@ -1090,6 +1097,8 @@ public:
 		return NULL;
 	}
 
+	virtual void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+
 	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, Request* request) const;
 	virtual bool aggPass(thread_db* tdbb, Request* request) const;
@@ -1113,6 +1122,7 @@ public:
 	const AggInfo& aggInfo;
 	NestConst<ValueExprNode> arg;
 	const AggregateSort* asb;
+	NestConst<SortNode> sort;
 	bool distinct;
 	bool dialect1;
 	bool indexed;
@@ -1143,16 +1153,16 @@ public:
 class RecordSourceNode : public ExprNode
 {
 public:
-	static const USHORT DFLAG_SINGLETON					= 0x01;
-	static const USHORT DFLAG_VALUE						= 0x02;
-	static const USHORT DFLAG_RECURSIVE					= 0x04;	// recursive member of recursive CTE
-	static const USHORT DFLAG_DERIVED					= 0x08;
-	static const USHORT DFLAG_DT_IGNORE_COLUMN_CHECK	= 0x10;
-	static const USHORT DFLAG_DT_CTE_USED				= 0x20;
-	static const USHORT DFLAG_CURSOR					= 0x40;
-	static const USHORT DFLAG_LATERAL					= 0x80;
-	static const USHORT DFLAG_PLAN_ITEM					= 0x100;
-	static const USHORT DFLAG_BODY_WRAPPER				= 0x200;
+	static constexpr USHORT DFLAG_SINGLETON					= 0x01;
+	static constexpr USHORT DFLAG_VALUE						= 0x02;
+	static constexpr USHORT DFLAG_RECURSIVE					= 0x04;	// recursive member of recursive CTE
+	static constexpr USHORT DFLAG_DERIVED					= 0x08;
+	static constexpr USHORT DFLAG_DT_IGNORE_COLUMN_CHECK	= 0x10;
+	static constexpr USHORT DFLAG_DT_CTE_USED				= 0x20;
+	static constexpr USHORT DFLAG_CURSOR					= 0x40;
+	static constexpr USHORT DFLAG_LATERAL					= 0x80;
+	static constexpr USHORT DFLAG_PLAN_ITEM					= 0x100;
+	static constexpr USHORT DFLAG_BODY_WRAPPER				= 0x200;
 
 	RecordSourceNode(Type aType, MemoryPool& pool)
 		: ExprNode(aType, pool),
@@ -1380,7 +1390,7 @@ public:
 	NestValueArray items;
 
 private:
-	static const unsigned INITIAL_CAPACITY = 4;
+	static constexpr unsigned INITIAL_CAPACITY = 4;
 };
 
 // Container for a list of record source expressions.
@@ -1487,6 +1497,7 @@ public:
 		TYPE_SUSPEND,
 		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
+		TYPE_USING,
 
 		TYPE_EXT_INIT_PARAMETERS,
 		TYPE_EXT_TRIGGER
@@ -1500,11 +1511,11 @@ public:
 	};
 
 	// Marks used by EraseNode, ModifyNode, StoreNode and ForNode
-	static const unsigned MARK_POSITIONED		= 0x01;	// Erase|Modify node is positioned at explicit cursor
-	static const unsigned MARK_MERGE			= 0x02;	// node is part of MERGE statement
-	static const unsigned MARK_FOR_UPDATE		= 0x04;	// implicit cursor used in UPDATE\DELETE\MERGE statement
-	static const unsigned MARK_AVOID_COUNTERS	= 0x08;	// do not touch record counters
-	static const unsigned MARK_BULK_INSERT		= 0x10; // StoreNode is used for bulk operation
+	static constexpr unsigned MARK_POSITIONED		= 0x01;	// Erase|Modify node is positioned at explicit cursor
+	static constexpr unsigned MARK_MERGE			= 0x02;	// node is part of MERGE statement
+	static constexpr unsigned MARK_FOR_UPDATE		= 0x04;	// implicit cursor used in UPDATE\DELETE\MERGE statement
+	static constexpr unsigned MARK_AVOID_COUNTERS	= 0x08;	// do not touch record counters
+	static constexpr unsigned MARK_BULK_INSERT		= 0x10; // StoreNode is used for bulk operation
 
 	struct ExeState
 	{

@@ -107,7 +107,7 @@ getInitScriptLocation() {
 #  stop super server if it is running
 
 stopSuperServerIfRunning() {
-    checkString=`ps -af | egrep "\b(fbserver|fbguard|fb_smp_server)\b" |grep -v grep`
+    checkString=`ps -af | grep -E "\b(fbserver|fbguard|fb_smp_server)\b" |grep -v grep`
 
     if [ ! -z "$checkString" ]
     then
@@ -120,7 +120,7 @@ stopSuperServerIfRunning() {
 			do
        	    	$init_d stop
 				sleep 1
-				checkString=`ps -eaf | egrep "\b(fbserver|fbguard|fb_smp_server)\b" |grep -v grep`
+				checkString=`ps -eaf | grep -E "\b(fbserver|fbguard|fb_smp_server)\b" |grep -v grep`
 				if [ -z "$checkString" ]
 				then
 					return
@@ -211,7 +211,7 @@ startService() {
     then
 		"$InitFile" start
 
-		checkString=`ps -af | egrep "\b(fbserver|fb_smp_server)\b" |grep -v grep`
+		checkString=`ps -af | grep -E "\b(fbserver|fb_smp_server)\b" |grep -v grep`
 		if [ -z "$checkString" ]
 		then
 			# server didn't start - possible reason bad shell /bin/false for user "firebird"

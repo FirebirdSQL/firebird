@@ -172,18 +172,18 @@ void SBlock::putData(CheckStatusWrapper* status, unsigned int length, const void
 
 namespace EDS {
 
-void validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
+bool validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb)
 {
 	// Preliminary checks - should we really validate the password ourselves
 	if (!dpb.find(isc_dpb_user_name))		// check for user name presence
-		return;
+		return false;
 	if (ISC_check_if_remote(file, false))	// check for remote connection
-		return;
+		return false;
 	UserId* usr = tdbb->getAttachment()->att_user;
 	if (!usr)
-		return;
+		return false;
 	if (!usr->usr_auth_block.hasData())		// check for embedded attachment
-		return;
+		return false;
 
 	Arg::Gds loginError(isc_login_error);
 
@@ -264,10 +264,13 @@ void validatePassword(thread_db* tdbb, const PathName& file, ClumpletWriter& dpb
 			switch (server.plugin()->authenticate(&s, &sBlock, &writer))
 			{
 			case IAuth::AUTH_SUCCESS:
+				// remove isc_dpb_user_name cause it has precedence over isc_dpb_auth_block
 				dpb.deleteWithTag(isc_dpb_user_name);
+				// isc_dpb_password makes no sense w/o isc_dpb_user_name
 				dpb.deleteWithTag(isc_dpb_password);
+				// save built by this routine isc_dpb_auth_block
 				writer.store(&dpb, isc_dpb_auth_block);
-				return;
+				return true;
 
 			case IAuth::AUTH_CONTINUE:
 				limit = MAXLIMIT;

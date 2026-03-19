@@ -300,7 +300,7 @@ const char* fatal_exception::what() const noexcept
 	va_list args;
 	va_start(args, format);
 	char buffer[1024];
-	VSNPRINTF(buffer, sizeof(buffer), format, args);
+	vsnprintf(buffer, sizeof(buffer), format, args);
 	buffer[sizeof(buffer) - 1] = 0;
 	va_end(args);
 	throw fatal_exception(buffer);

@@ -23,8 +23,12 @@
 
 #include "../include/fb_blk.h"
 #include "../jrd/exe.h"
+#include "../jrd/req.h"
 #include "../jrd/EngineInterface.h"
+#include "../jrd/SharedReadVector.h"
+#include "../jrd/intl.h"
 #include <functional>
+#include "../common/sha2/sha2.h"
 
 namespace Jrd {
 
@@ -33,6 +37,8 @@ class PlanEntry;
 // Compiled statement.
 class Statement : public pool_alloc<type_req>
 {
+	typedef SharedReadVector<Request*, 16> Requests;
+
 public:
 	static const unsigned FLAG_SYS_TRIGGER	= 0x01;
 	static const unsigned FLAG_INTERNAL		= 0x02;
@@ -46,6 +52,7 @@ public:
 
 private:
 	Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb);
+	Request* getRequest(thread_db* tdbb, const Requests::ReadAccessor& g, USHORT level);
 
 public:
 	static Statement* makeStatement(thread_db* tdbb, CompilerScratch* csb, bool internalFlag,
@@ -58,6 +65,15 @@ public:
 		CompilerScratch* csb, bool internalFlag);
 
 	static Request* makeRequest(thread_db* tdbb, CompilerScratch* csb, bool internalFlag);
+
+	Request* makeRootRequest(thread_db* tdbb)
+	{
+		auto g = requests.readAccessor();
+		if (g->getCount())
+			return g->value(0);
+
+		return getRequest(tdbb, g, 0);
+	}
 
 	StmtNumber getStatementId() const
 	{
@@ -72,24 +88,39 @@ public:
 	}
 
 	const Routine* getRoutine() const;
-	bool isActive() const;
+	//bool isActive() const;
 
 	Request* findRequest(thread_db* tdbb, bool unique = false);
-	Request* getRequest(thread_db* tdbb, USHORT level);
+	Request* getUserRequest(thread_db* tdbb, USHORT level);
+
+	Request* rootRequest()
+	{
+		auto g = requests.readAccessor();
+		return g->getCount() == 0 ? nullptr : g->value(0);
+	}
+
+	void restartRequests(thread_db* tdbb, jrd_tra* trans);
+
 	void verifyAccess(thread_db* tdbb);
+	Request* verifyRequestSynchronization(USHORT level);
 	void release(thread_db* tdbb);
 
 	Firebird::string getPlan(thread_db* tdbb, bool detailed) const;
 	void getPlan(thread_db* tdbb, PlanEntry& planEntry) const;
 
+	const Resources* getResources()
+	{
+		return resources;
+	}
 	MessageNode* getMessage(USHORT messageNumber) const;
 
 private:
-	static void verifyTriggerAccess(thread_db* tdbb, jrd_rel* ownerRelation, TrigVector* triggers,
+	static void verifyTriggerAccess(thread_db* tdbb, const jrd_rel* ownerRelation, const Triggers& triggers,
 		MetaName userName);
-	static void triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list, TrigVector* tvec, const MetaName &user);
-
+	static void triggersExternalAccess(thread_db* tdbb, ExternalAccessList& list, const Triggers& tvec, const MetaName &user);
 	void buildExternalAccess(thread_db* tdbb, ExternalAccessList& list, const MetaName& user);
+
+	void loadResources(thread_db* tdbb, Request* req, bool withLock);
 
 public:
 	MemoryPool* pool;
@@ -97,12 +128,16 @@ public:
 	unsigned blrVersion;
 	ULONG impureSize;					// Size of impure area
 	mutable StmtNumber id;				// statement identifier
-	USHORT charSetId;					// client character set (CS_METADATA for internal statements)
-	Firebird::Array<record_param> rpbsSetup;
-	Firebird::Array<Request*> requests;	// vector of requests
+	CSetId charSetId;					// client character set (CS_METADATA for internal statements)
+	Request::RecordParameters rpbsSetup;
+
+private:
+	Requests requests;					// vector of requests
+	Firebird::Mutex requestsGrow;		// requests' vector protection when adding new element
+
+public:
 	ExternalAccessList externalList;	// Access to procedures/triggers to be checked
 	AccessItemList accessList;			// Access items to be checked
-	ResourceList resources;				// Resources (relations and indices)
 	const jrd_prc* procedure;			// procedure, if any
 	const Function* function;			// function, if any
 	QualifiedName triggerName;		// name of request (trigger), if any
@@ -118,6 +153,9 @@ public:
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
 
 private:
+	Resources* resources;				// Resources (relations, routines, etc.)
+	Firebird::RefPtr<VersionedObjects> latestVer;
+	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
 	Firebird::Array<MessageNode*> messages;	// Input/output messages
 };
 

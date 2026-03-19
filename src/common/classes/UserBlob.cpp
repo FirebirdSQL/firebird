@@ -25,11 +25,10 @@
 #include "ibase.h"
 #include "../yvalve/gds_proto.h"
 
-static const USHORT SEGMENT_LIMIT = 65535;
-//static SLONG fb_vax_integer(const UCHAR* ptr, int length);
+static constexpr USHORT SEGMENT_LIMIT = 65535;
 
 
-bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid)
+bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid) noexcept
 {
 	if (m_direction != dir_none)
 		return false;
@@ -43,7 +42,7 @@ bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid)
 }
 
 bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
-					USHORT bpb_len, const UCHAR* bpb)
+					USHORT bpb_len, const UCHAR* bpb) noexcept
 {
 	if (m_direction != dir_none)
 		return false;
@@ -59,7 +58,7 @@ bool UserBlob::open(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
 	return false;
 }
 
-bool UserBlob::create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid)
+bool UserBlob::create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid) noexcept
 {
 	if (m_direction != dir_none)
 		return false;
@@ -74,7 +73,7 @@ bool UserBlob::create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid)
 }
 
 bool UserBlob::create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
-			USHORT bpb_len, const UCHAR* bpb)
+			USHORT bpb_len, const UCHAR* bpb) noexcept
 {
 	if (m_direction != dir_none)
 		return false;
@@ -92,7 +91,7 @@ bool UserBlob::create(FB_API_HANDLE& db, FB_API_HANDLE& trans, ISC_QUAD& blobid,
 	return false;
 }
 
-bool UserBlob::close(bool force_internal_SV)
+bool UserBlob::close(bool force_internal_SV) noexcept
 {
 	bool rc = false;
 	if (m_blob)
@@ -104,7 +103,7 @@ bool UserBlob::close(bool force_internal_SV)
 	return rc;
 }
 
-bool UserBlob::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
+bool UserBlob::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len) noexcept
 {
 	real_len = 0;
 
@@ -117,7 +116,7 @@ bool UserBlob::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 #endif
 
 	USHORT olen = 0;
-	USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+	const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 	char* buf2 = static_cast<char*>(buffer);
 	if (!isc_get_segment(m_status, &m_blob, &olen, ilen, buf2) || m_status[1] == isc_segment)
 	{
@@ -128,7 +127,7 @@ bool UserBlob::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 }
 
 bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
-						bool use_sep, const UCHAR separator)
+						bool use_sep, const UCHAR separator) noexcept
 {
 	if (!m_blob || m_direction == dir_write)
 		return false;
@@ -142,7 +141,7 @@ bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	while (len)
 	{
 		USHORT olen = 0;
-		USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+		const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 		if (!isc_get_segment(m_status, &m_blob, &olen, ilen, buf2) || m_status[1] == isc_segment)
 		{
 			len -= olen;
@@ -162,7 +161,7 @@ bool UserBlob::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	return rc;
 }
 
-bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer)
+bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer) noexcept
 {
 #ifdef DEV_BUILD
 	if (!m_blob || m_direction == dir_read)
@@ -172,12 +171,12 @@ bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer)
 		return false;
 #endif
 
-	USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
+	const USHORT ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<USHORT>(len);
 	const char* buf2 = static_cast<const char*>(buffer);
 	return !isc_put_segment(m_status, &m_blob, ilen, buf2);
 }
 
-bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len)
+bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len) noexcept
 {
 #ifdef DEV_BUILD
 	if (!m_blob || m_direction == dir_read)
@@ -197,7 +196,7 @@ bool UserBlob::putSegment(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len
 	return true;
 }
 
-bool UserBlob::putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len)
+bool UserBlob::putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len) noexcept
 {
 	if (!m_blob || m_direction == dir_read)
 		return false;
@@ -221,14 +220,14 @@ bool UserBlob::putData(FB_SIZE_T len, const void* buffer, FB_SIZE_T& real_len)
 }
 
 bool UserBlob::getInfo(FB_SIZE_T items_size, const UCHAR* items,
-						FB_SIZE_T info_size, UCHAR* blob_info) const
+						FB_SIZE_T info_size, UCHAR* blob_info) const noexcept
 {
 	if (!m_blob || m_direction != dir_read)
 		return false;
 
 	// We have to cater for the API limitations.
-	SSHORT in_len = items_size > MAX_SSHORT ? MAX_SSHORT : static_cast<SSHORT>(items_size);
-	SSHORT out_len = info_size > MAX_SSHORT ? MAX_SSHORT : static_cast<SSHORT>(info_size);
+	const SSHORT in_len = static_cast<SSHORT>(MIN(items_size, MAX_SSHORT));
+	const SSHORT out_len = static_cast<SSHORT>(MIN(info_size, MAX_SSHORT));
 	// That the API declares the second param as non const is a bug.
 	FB_API_HANDLE blob = m_blob;
 	return !isc_blob_info(m_status, &blob,

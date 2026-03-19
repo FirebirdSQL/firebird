@@ -52,7 +52,7 @@ public:
 	~SimilarToRegex();
 
 public:
-	static bool isSpecialChar(ULONG c)
+	static bool isSpecialChar(ULONG c) noexcept
 	{
 		switch (c)
 		{
