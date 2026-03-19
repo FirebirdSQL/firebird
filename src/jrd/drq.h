@@ -242,6 +242,7 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
+	drq_g_nxt_const_id,			// lookup next constant ID
 
 	drq_MAX
 };

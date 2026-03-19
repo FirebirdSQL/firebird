@@ -234,6 +234,18 @@ public:
 		DdlTriggerWhen when, int action, const QualifiedName& objectName,
 		const QualifiedName& oldNewObjectName, const Firebird::string& sqlText);
 
+	// Update RDB$FIELDS received by reference.
+	static void updateRdbFields(const Jrd::TypeClause* type,
+		SSHORT& fieldType,
+		SSHORT& fieldLength,
+		SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
+		SSHORT& fieldScaleNull, SSHORT& fieldScale,
+		SSHORT& characterSetIdNull, SSHORT& characterSetId,
+		SSHORT& characterLengthNull, SSHORT& characterLength,
+		SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
+		SSHORT& collationIdNull, SSHORT& collationId,
+		SSHORT& segmentLengthNull, SSHORT& segmentLength);
+
 protected:
 	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
 	typedef Firebird::GenericMap<MetaNameBidPair> MetaNameBidMap;
@@ -519,6 +531,7 @@ public:
 		TYPE_WINDOW_CLAUSE,
 		TYPE_WINDOW_CLAUSE_FRAME,
 		TYPE_WINDOW_CLAUSE_FRAME_EXTENT,
+		TYPE_REFERENCE,
 
 		// Bool types
 		TYPE_BINARY_BOOL,
@@ -677,6 +690,9 @@ public:
 	}
 
 	// Check if expression returns deterministic result
+	// Determinate whether the node is volatile (or not) in the current execution context.
+	// A DBKEY is deterministic (it cannot change for an already fetched row)
+	// but it's not constant (and thus cannot be used as an initializer expression).
 	virtual bool deterministic(thread_db* tdbb) const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
@@ -688,8 +704,17 @@ public:
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
+	// Check if expression returns constant result
+	// The result true means the value does not change after recompilation
+	virtual bool constant() const
+	{
+		return false;
+	}
+
 	// Return all streams referenced by the expression.
 	virtual void collectStreams(SortedStreamList& streamList) const;
+
+	bool isChildrenConstant() const;
 
 	bool containsStream(StreamType stream, bool only = false) const
 	{
@@ -1339,6 +1364,17 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+
+	virtual bool constant() const override
+	{
+		for (auto& child : items)
+		{
+			if (!child->constant())
+				return false;
+		}
+
+		return true;
+	}
 
 	ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{

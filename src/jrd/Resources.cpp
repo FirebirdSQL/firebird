@@ -32,6 +32,7 @@ void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
 	gotHash += functions.transfer(tdbb, to, internal, digest);
 	gotHash += triggers.transfer(tdbb, to, internal, digest);
 	gotHash += indices.transfer(tdbb, to, internal, digest);
+	gotHash += constants.transfer(tdbb, to, internal, digest);
 
 	if (hasHash)
 	{

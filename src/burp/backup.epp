@@ -156,6 +156,7 @@ void write_triggers();
 void write_trigger_messages();
 void write_types();
 void write_user_privileges();
+void write_constants();
 void general_on_error();
 
 
@@ -503,6 +504,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 
 		write_publications();
 		write_pub_tables();
+	}
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write constants
+		BURP_verbose(USHORT(isc_gbak_writing_constants));	// writing constants
+		write_constants();
 	}
 
 	// Finish up
@@ -4824,6 +4832,60 @@ void write_user_privileges()
 		put(tdgbl, att_end);
 	}
 	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR;
+
+	MISC_release_request_silent(req_handle1);
+}
+
+void write_constants()
+{
+	Firebird::IRequest* req_handle1 = nullptr;
+
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle1)
+		CONST IN RDB$CONSTANTS
+	{
+		QualifiedMetaString name(CONST.RDB$CONSTANT_NAME);
+
+		put(tdgbl, rec_constants);
+		PUT_TEXT(att_constant_name, CONST.RDB$CONSTANT_NAME);
+
+		if (!CONST.RDB$PACKAGE_NAME.NULL)
+		{
+			PUT_TEXT(att_constant_package, CONST.RDB$PACKAGE_NAME);
+			name.package = CONST.RDB$PACKAGE_NAME;
+		}
+
+		PUT_TEXT(att_constant_field_source, CONST.RDB$FIELD_SOURCE);
+
+		if (!CONST.RDB$PRIVATE_FLAG.NULL)
+			put_int32(att_constant_private_flag, CONST.RDB$PRIVATE_FLAG);
+
+		if (!CONST.RDB$CONSTANT_BLR.NULL)
+			put_blr_blob(att_constant_blr, CONST.RDB$CONSTANT_BLR);
+
+		if (!CONST.RDB$CONSTANT_SOURCE.NULL)
+			put_source_blob(att_constant_source, att_constant_source, CONST.RDB$CONSTANT_SOURCE);
+
+		if (!CONST.RDB$SCHEMA_NAME.NULL)
+		{
+			PUT_TEXT(att_constant_schema_name, CONST.RDB$SCHEMA_NAME);
+			name.schema = CONST.RDB$SCHEMA_NAME;
+		}
+
+		if (!CONST.RDB$DESCRIPTION.NULL)
+		{
+			put_source_blob (att_constant_description, att_constant_description, CONST.RDB$DESCRIPTION);
+		}
+
+		// writing constant %s
+		BURP_verbose(USHORT(isc_gbak_writing_constant), SafeArg() << name.toQuotedString().data());
+		put(tdgbl, att_end);
+	}
+	END_FOR;
 	ON_ERROR
 		general_on_error();
 	END_ERROR;

@@ -58,6 +58,7 @@
 #include "../common/os/guid.h"
 #include "../jrd/sbm.h"
 #include "../jrd/scl.h"
+#include "../jrd/Constant.h"
 #include "../jrd/Routine.h"
 #include "../jrd/ExtEngineManager.h"
 #include "../jrd/Attachment.h"

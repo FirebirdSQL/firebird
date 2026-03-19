@@ -167,6 +167,7 @@ bool	get_trigger_old (BurpGlobals* tdgbl, burp_rel*);
 bool	get_type(BurpGlobals* tdgbl);
 bool	get_user_privilege(BurpGlobals* tdgbl);
 bool	get_view(BurpGlobals* tdgbl, burp_rel*);
+bool	get_constants_table(BurpGlobals* tdgbl);
 void	ignore_array(BurpGlobals* tdgbl, burp_rel*);
 void	ignore_blob(BurpGlobals* tdgbl);
 rec_type	ignore_data(BurpGlobals* tdgbl, burp_rel*);
@@ -10534,6 +10535,85 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 	return true;
 }
 
+bool get_constants_table(BurpGlobals* tdgbl)
+{
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)	// FB6
+		return false;
+
+	QualifiedMetaString name;
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans
+			REQUEST_HANDLE tdgbl->handles_get_type_req_handle1)
+		CONST IN RDB$CONSTANTS
+	{
+		skip_init(&scan_next_attr);
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+			case att_constant_name:
+				CONST.RDB$CONSTANT_NAME.NULL = FALSE;
+				GET_TEXT(CONST.RDB$CONSTANT_NAME);
+				name.object = CONST.RDB$CONSTANT_NAME;
+				break;
+
+			case att_constant_package:
+				CONST.RDB$PACKAGE_NAME.NULL = FALSE;
+				GET_TEXT(CONST.RDB$PACKAGE_NAME);
+				name.package = CONST.RDB$PACKAGE_NAME;
+				break;
+
+			case att_constant_field_source:
+				CONST.RDB$FIELD_SOURCE.NULL = FALSE;
+				GET_TEXT(CONST.RDB$FIELD_SOURCE);
+				break;
+
+			case att_constant_private_flag:
+				CONST.RDB$PRIVATE_FLAG.NULL = FALSE;
+				CONST.RDB$PRIVATE_FLAG = (USHORT) get_int32(tdgbl);
+				break;
+
+			case att_constant_blr:
+				CONST.RDB$CONSTANT_BLR.NULL = FALSE;
+				get_blr_blob(tdgbl, CONST.RDB$CONSTANT_BLR, true);
+				break;
+
+			case att_constant_source:
+				CONST.RDB$CONSTANT_SOURCE.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$CONSTANT_SOURCE, true);
+				break;
+
+			case att_constant_schema_name:
+				CONST.RDB$SCHEMA_NAME.NULL = FALSE;
+				GET_TEXT(CONST.RDB$SCHEMA_NAME);
+				name.schema = CONST.RDB$SCHEMA_NAME;
+				break;
+
+			case att_constant_description:
+				CONST.RDB$DESCRIPTION.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$DESCRIPTION, true);
+				break;
+			default:
+				bad_attribute(scan_next_attr, attribute, USHORT(isc_gbak_constant));
+				break;
+			}
+		}
+
+		BURP_verbose(USHORT(isc_gbak_restoring_constant), SafeArg() << name.toQuotedString().data());
+	}
+	END_STORE;
+	ON_ERROR
+		general_on_error();
+	END_ERROR;
+
+	return true;
+}
+
 void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 {
 /**************************************
@@ -11363,6 +11443,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		case rec_pub_table:
 			if (!get_pub_table(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_constants:
+			if (!get_constants_table(tdgbl))
 				return false;
 			flag = true;
 			break;

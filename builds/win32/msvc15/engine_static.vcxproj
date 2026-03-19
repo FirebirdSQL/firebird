@@ -41,6 +41,7 @@
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp" />
     <ClCompile Include="..\..\..\gen\utilities\gstat\dba.cpp" />
+    <ClCompile Include="..\..\..\gen\jrd\Constant.cpp" />
     <ClCompile Include="..\..\..\src\dsql\AggNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BlrDebugWriter.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BoolNodes.cpp" />

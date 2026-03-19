@@ -42,6 +42,8 @@ class DbTriggers;
 class CharSetVers;
 class IndexPermanent;
 class IndexVersion;
+class Constant;
+class ConstantPermanent;
 
 namespace Cached
 {
@@ -52,6 +54,7 @@ namespace Cached
 	typedef CacheElement<Function, RoutinePermanent> Function;
 	typedef CacheElement<DbTriggers, DbTriggersHeader> Triggers;
 	typedef CacheElement<IndexVersion, IndexPermanent> Index;
+	typedef CacheElement<Constant, ConstantPermanent> Constant;
 }
 
 class Resources;
@@ -66,6 +69,7 @@ union VersionedPartPtr
 	CharSetVers* charset;
 	DbTriggers* triggers;
 	IndexVersion* index;
+	Constant* constant;
 };
 
 class VersionedObjects : public pool_alloc_rpt<VersionedPartPtr>,
@@ -120,6 +124,7 @@ template <> inline jrd_rel*& VersionedObjects::object<jrd_rel>(FB_SIZE_T n) { re
 template <> inline CharSetVers*& VersionedObjects::object<CharSetVers>(FB_SIZE_T n) { return data[n].charset; }
 template <> inline DbTriggers*& VersionedObjects::object<DbTriggers>(FB_SIZE_T n) { return data[n].triggers; }
 template <> inline IndexVersion*& VersionedObjects::object<IndexVersion>(FB_SIZE_T n) { return data[n].index; }
+template <> inline Constant*& VersionedObjects::object<Constant>(FB_SIZE_T n) { return data[n].constant; }
 
 template <> inline Function* VersionedObjects::object<Function>(FB_SIZE_T n) const { return data[n].function; }
 template <> inline jrd_prc* VersionedObjects::object<jrd_prc>(FB_SIZE_T n) const { return data[n].procedure; }
@@ -127,6 +132,7 @@ template <> inline jrd_rel* VersionedObjects::object<jrd_rel>(FB_SIZE_T n) const
 template <> inline CharSetVers* VersionedObjects::object<CharSetVers>(FB_SIZE_T n) const { return data[n].charset; }
 template <> inline DbTriggers* VersionedObjects::object<DbTriggers>(FB_SIZE_T n) const { return data[n].triggers; }
 template <> inline IndexVersion* VersionedObjects::object<IndexVersion>(FB_SIZE_T n) const { return data[n].index; }
+template <> inline Constant* VersionedObjects::object<Constant>(FB_SIZE_T n) const { return data[n].constant; }
 
 
 template <class OBJ, class PERM>
@@ -283,7 +289,8 @@ public:
 		  procedures(p, versionCurrentPosition),
 		  functions(p, versionCurrentPosition),
 		  triggers(p, versionCurrentPosition),
-		  indices(p, versionCurrentPosition)
+		  indices(p, versionCurrentPosition),
+		  constants(p, versionCurrentPosition)
 	{ }
 
 	~Resources();
@@ -294,6 +301,13 @@ public:
 	RscArray<Function, RoutinePermanent> functions;
 	RscArray<DbTriggers, DbTriggersHeader> triggers;
 	RscArray<IndexVersion, IndexPermanent> indices;
+	RscArray<Constant, ConstantPermanent> constants;
+
+	inline FB_SIZE_T countVersionedObjects() const noexcept
+	{
+		return charSets.getCount() + relations.getCount() + procedures.getCount() +
+				functions.getCount() + triggers.getCount() + constants.getCount(); //? + indices.getCount() ?
+	}
 };
 
 // specialization
@@ -303,6 +317,7 @@ template <> inline const Resources::RscArray<Function, RoutinePermanent>& Resour
 template <> inline const Resources::RscArray<CharSetVers, CharSetContainer>& Resources::objects() const { return charSets; }
 template <> inline const Resources::RscArray<DbTriggers, DbTriggersHeader>& Resources::objects() const { return triggers; }
 template <> inline const Resources::RscArray<IndexVersion, IndexPermanent>& Resources::objects() const { return indices; }
+template <> inline const Resources::RscArray<Constant, ConstantPermanent>& Resources::objects() const { return constants; }
 
 namespace Rsc
 {
@@ -312,6 +327,7 @@ namespace Rsc
 	typedef CachedResource<CharSetVers, CharSetContainer> CSet;
 	typedef CachedResource<DbTriggers, DbTriggersHeader> Trig;
 	typedef CachedResource<IndexVersion, IndexPermanent> Idx;
+	typedef CachedResource<Constant, ConstantPermanent> Const;
 }; //namespace Rsc
 
 

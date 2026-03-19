@@ -67,6 +67,8 @@
 #include "../jrd/trace/TraceObjects.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 
+#include "../dsql/PackageNodes.h"
+
 using namespace Firebird;
 using namespace Jrd;
 
@@ -464,6 +466,23 @@ void ExprNode::collectStreams(SortedStreamList& streamList) const
 		if (*i)
 			(*i)->collectStreams(streamList);
 	}
+}
+
+bool ExprNode::isChildrenConstant() const
+{
+	NodeRefsHolder holder;
+	getChildren(holder, false);
+
+	for (auto i : holder.refs)
+	{
+		if (*i == nullptr)
+			continue;
+
+		if (!(*i)->constant())
+			return false;
+	}
+
+	return true;
 }
 
 bool ExprNode::computable(CompilerScratch* csb, StreamType stream,
@@ -6445,6 +6464,28 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 					break;
 				}
 			}
+		}
+	}
+
+	// Use context to check conflicts beween <relation>.<field> and <package>.<constant>
+	dsql_ctx packageContext(dsqlScratch->getPool());
+	{ // Consatnts
+
+		const QualifiedName constantName(dsqlName,
+			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : (dsqlScratch->package.schema.hasData() ? dsqlScratch->package.schema : PUBLIC_SCHEMA),
+			dsqlQualifier.object.hasData() ? dsqlQualifier.object : dsqlScratch->package.object);
+
+		if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantName))
+		{
+			packageContext.ctx_relation = nullptr;
+			packageContext.ctx_procedure = nullptr;
+			// Alias is a package name, not a constant
+			packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
+			packageContext.ctx_flags |= CTX_package;
+			ambiguousCtxStack.push(&packageContext);
+
+			MemoryPool& pool = dsqlScratch->getPool();
+			node = FB_NEW_POOL(pool) PackageReferenceNode(pool, constantName);
 		}
 	}
 
@@ -12462,7 +12503,12 @@ void SysFuncCallNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 bool SysFuncCallNode::deterministic(thread_db* tdbb) const
 {
-	return ExprNode::deterministic(tdbb) && function->deterministic;
+	return ExprNode::deterministic(tdbb) && function->isDeterministic();
+}
+
+bool SysFuncCallNode::constant() const
+{
+	return ExprNode::isChildrenConstant() && function->isConstant();
 }
 
 void SysFuncCallNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
@@ -14149,6 +14195,17 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (!node->dsqlVar ||
 		(node->dsqlVar->type == dsql_var::TYPE_LOCAL && !node->dsqlVar->initialized && !dsqlScratch->mainScratch))
 	{
+		if (dsqlScratch->package.object.hasData())
+		{
+			thread_db* tdbb = JRD_get_thread_data();
+			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
+			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName))
+			{
+				delete node;
+				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(), constantFullName);
+			}
+		}
+
 		PASS1_field_unknown(NULL, dsqlName.toQuotedString().c_str(), this);
 	}
 

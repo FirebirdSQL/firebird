@@ -532,4 +532,10 @@
 
 #define blr_within_group_order		(unsigned char) 235
 
+// Package const
+#define blr_package_reference			(unsigned char) 236
+
+// Subcodes of blr_package_reference
+#define blr_pkg_ref_item_const			(unsigned char) 1
+
 #endif // FIREBIRD_IMPL_BLR_H
