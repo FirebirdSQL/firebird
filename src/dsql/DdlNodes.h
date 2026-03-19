@@ -1429,6 +1429,7 @@ public:
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
 		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		bool enforced = true;
 	};
 
 	struct CreateDropConstraint
@@ -1453,6 +1454,7 @@ public:
 			TYPE_ALTER_COL_NULL,
 			TYPE_ALTER_COL_POS,
 			TYPE_ALTER_COL_TYPE,
+			TYPE_ALTER_CONSTRAINT,
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
@@ -1517,6 +1519,7 @@ public:
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 		bool createIfNotExistsOnly = false;
+		bool enforced = true;
 	};
 
 	struct IdentityOptions
@@ -1645,6 +1648,18 @@ public:
 
 		MetaName name;
 		bool silent = false;
+	};
+
+	struct AlterConstraintClause : public Clause
+	{
+		explicit AlterConstraintClause(MemoryPool& p)
+			: Clause(p, TYPE_ALTER_CONSTRAINT),
+			  name(p)
+		{
+		}
+
+		MetaName name;
+		bool enforced = false;
 	};
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
