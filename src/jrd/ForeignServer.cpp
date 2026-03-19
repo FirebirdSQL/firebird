@@ -123,40 +123,30 @@ ForeignTableConnection* ForeignTableProvider::createForeignConnection(thread_db*
 	const string& currentUser = attachment->getEffectiveUserName().c_str();
 	const string& fServer = server->getServerName().c_str();
 
-	string connectionString;
-	string user;
-	string password;
-	string role;
-
 	// If there is mapping for user and foreign server,
 	// get a map of the connection parameters.
 	Mapping mapping(Mapping::MAP_NO_FLAGS, NULL);
 	GenericMap<MetaStringOptionPair>* foreignMap;
-	ForeignOption option(*tdbb->getAttachment()->att_pool);
-	if (mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap))
-	{
-		if (foreignMap->get(FOREIGN_SERVER_CONNECTION_STRING, option))
-			connectionString = option.getActualValue();
-		if (foreignMap->get(FOREIGN_SERVER_USER, option))
-			user = option.getActualValue();
-		if (foreignMap->get(FOREIGN_SERVER_PASSWORD, option))
-			password = option.getActualValue();
-		if (foreignMap->get(FOREIGN_SERVER_ROLE, option))
-			role = option.getActualValue();
-	}
+	mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap);
 
 	// If there was no mapping for user and server,
 	// or any properties were not specified in it, use server options.
 	const auto& options = server->getOptions();
 
-	if (connectionString.isEmpty() && options.get(FOREIGN_SERVER_CONNECTION_STRING, option))
-		connectionString = option.getActualValue();
-	if (user.isEmpty() && options.get(FOREIGN_SERVER_USER, option))
-		user = option.getActualValue();
-	if (password.isEmpty() && options.get(FOREIGN_SERVER_PASSWORD, option))
-		password = option.getActualValue();
-	if (role.isEmpty() && options.get(FOREIGN_SERVER_ROLE, option))
-		role = option.getActualValue();
+	auto getOption = [&](const char* optionName) -> string
+	{
+		ForeignOption option(*tdbb->getAttachment()->att_pool);
+		if (foreignMap && foreignMap->get(optionName, option))
+			return option.getActualValue();
+		if (options.get(optionName, option))
+			return option.getActualValue();
+		return "";
+	};
+
+	string connectionString = getOption(FOREIGN_SERVER_CONNECTION_STRING);
+	string user = getOption(FOREIGN_SERVER_USER);
+	string password = getOption(FOREIGN_SERVER_PASSWORD);
+	string role = getOption(FOREIGN_SERVER_ROLE);
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	generateDPB(tdbb, dpb, user, password, role);
@@ -209,13 +199,8 @@ void ForeignTableProvider::fillOptionsDPB(const Firebird::GenericMap<MetaStringO
 // Check if the option is generic, i.e. it has a separate isc tag
 bool ForeignTableProvider::isGenericOption(const MetaName& option)
 {
-	for (const auto value : FOREIGN_GENERAL_OPTIONS)
-	{
-		if (strcmp(value, option.c_str()) == 0)
-			return true;
-	}
-
-	return false;
+	return std::any_of(std::begin(FOREIGN_GENERAL_OPTIONS), std::end(FOREIGN_GENERAL_OPTIONS),
+		[&](const char* value) { return strcmp(value, option.c_str()) == 0; });
 }
 
 void ForeignTableConnection::getProviderInfo(thread_db* tdbb)

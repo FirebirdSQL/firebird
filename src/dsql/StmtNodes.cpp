@@ -4580,35 +4580,29 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 			// If there is mapping for user and foreign server,
 			// get a map of the connection parameters, skipping the explicitly specified properties earlier.
 			GenericMap<MetaStringOptionPair>* foreignMap;
-			ForeignOption option(*getDefaultMemoryPool());
-			if (mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap))
-			{
-				if (sDataSrc.isEmpty() && foreignMap->get(FOREIGN_SERVER_CONNECTION_STRING, option))
-					sDataSrc = option.getActualValue();
-
-				if (sUser.isEmpty() && foreignMap->get(FOREIGN_SERVER_USER, option))
-					sUser = option.getActualValue();
-
-				if (sPwd.isEmpty() && foreignMap->get(FOREIGN_SERVER_PASSWORD, option))
-					sPwd = option.getActualValue();
-
-				if (sRole.isEmpty() && foreignMap->get(FOREIGN_SERVER_ROLE, option))
-					sRole = option.getActualValue();
-			}
+			mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap);
 
 			// The connection properties specified in foreign server options have the lowest priority.
 			const auto& options = foreignServer.get()->getOptions();
-			if (sDataSrc.isEmpty() && options.get(MetaName(FOREIGN_SERVER_CONNECTION_STRING), option))
-				sDataSrc = option.getActualValue();
 
-			if (sUser.isEmpty() && options.get(MetaName(FOREIGN_SERVER_USER), option))
-				sUser = option.getActualValue();
+			auto getOption = [&](const char* optionName) -> string
+			{
+				ForeignOption option(*tdbb->getAttachment()->att_pool);
+				if (foreignMap && foreignMap->get(optionName, option))
+					return option.getActualValue();
+				if (options.get(optionName, option))
+					return option.getActualValue();
+				return "";
+			};
 
-			if (sPwd.isEmpty() && options.get(MetaName(FOREIGN_SERVER_PASSWORD), option))
-				sPwd = option.getActualValue();
-
-			if (sRole.isEmpty() && options.get(MetaName(FOREIGN_SERVER_ROLE), option))
-				sRole = option.getActualValue();
+			if (sDataSrc.isEmpty())
+				sDataSrc = getOption(FOREIGN_SERVER_CONNECTION_STRING);
+			if (sUser.isEmpty())
+				sUser = getOption(FOREIGN_SERVER_USER);
+			if (sPwd.isEmpty())
+				sPwd = getOption(FOREIGN_SERVER_PASSWORD);
+			if (sRole.isEmpty())
+				sRole = getOption(FOREIGN_SERVER_ROLE);
 
 			if (!foreignServer.get()->getPluginName().isEmpty())
 			{
