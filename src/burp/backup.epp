@@ -295,7 +295,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		IStatement* stmt = DB->prepare(fbStatus, gds_trans, 0, sql, 3, 0);
 		if (fbStatus->getState() & IStatus::RESULT_ERROR)
 		{
-			// BURP_print_status(false, isc_status);
+			// BURP_print_status(isc_status);
 			tdgbl->gbl_sw_par_workers = 1;
 		}
 		if (stmt)
@@ -736,10 +736,11 @@ burp_fld* get_fields( burp_rel* relation)
 			{
 				field->fld_flags |= FLD_array;
 				field->fld_dimensions = Y.RDB$DIMENSIONS;
-				if (field->fld_dimensions < 0) {
-					BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+				if (field->fld_dimensions < 0)
+				{
+					BURP_error(52, true, SafeArg() << field->fld_name);
+					// msg 52 array dimension for field %s is invalid
 				}
-				// msg 52 array dimension for field %s is invalid
 				get_ranges (field);
 			}
 
@@ -855,10 +856,11 @@ burp_fld* get_fields( burp_rel* relation)
 			{
 				field->fld_flags |= FLD_array;
 				field->fld_dimensions = Y.RDB$DIMENSIONS;
-				if (field->fld_dimensions < 0) {
-					BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+				if (field->fld_dimensions < 0)
+				{
+					BURP_error(52, true, SafeArg() << field->fld_name);
+					// msg 52 array dimension for field %s is invalid
 				}
-				// msg 52 array dimension for field %s is invalid
 				get_ranges (field);
 			}
 
@@ -989,8 +991,10 @@ void get_ranges( burp_fld* field)
 		SORTED BY X.RDB$DIMENSION
 	{
 		if (count != X.RDB$DIMENSION)
-			BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+		{
+			BURP_error(52, true, SafeArg() << field->fld_name);
 			// msg 52 array dimension for field %s is invalid
+		}
 		*rp++ = X.RDB$LOWER_BOUND;
 		*rp++ = X.RDB$UPPER_BOUND;
 		count++;
@@ -1001,8 +1005,10 @@ void get_ranges( burp_fld* field)
 	END_ERROR
 
 	if (count != field->fld_dimensions)
-		BURP_error_redirect(NULL, 52, SafeArg() << field->fld_name);
+	{
+		BURP_error(52, true, SafeArg() << field->fld_name);
 		// msg 52 array dimension for field %s is invalid
+	}
 }
 
 
@@ -1130,9 +1136,9 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	if (!status_vector.isSuccess())
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
-		BURP_print_status(false, &status_vector);
+		BURP_print_status(&status_vector);
 #ifdef DEBUG
 		PRETTY_print_sdl(blr_buffer, NULL, NULL, 0);
 #endif
@@ -1235,7 +1241,7 @@ void put_asciz( const att_type attribute, const TEXT* string)
 	// We can't honor operating systems that allow longer file names.
 	if (len >= MAX_FILE_NAME_SIZE)
 	{
-		BURP_print(false, 343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
+		BURP_print(343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		len = MAX_FILE_NAME_SIZE - 1;
 	}
@@ -1276,9 +1282,9 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	if (!blob.open(DB, gds_trans, blob_id))
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
-		BURP_print_status(false, &status_vector);
+		BURP_print_status(&status_vector);
 		return;
 	}
 
@@ -1325,7 +1331,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 			break;
 
 		default:
-			BURP_error_redirect(NULL, 21, SafeArg() << int(item));
+			BURP_error(21, true, SafeArg() << int(item));
 			// msg 21 don't understand blob info item %ld
 		}
 	}
@@ -1372,8 +1378,10 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	}
 
 	if (!blob.close())
+	{
 		BURP_error_redirect(&status_vector, 23);
 		// msg 23 isc_close_blob failed
+	}
 
 	if (buffer != static_buffer)
 		BURP_free(buffer);
@@ -1441,11 +1449,13 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 			break;
 
 		default:
-			BURP_print(true, 79, SafeArg() << int(item));
+			BURP_print(79, SafeArg() << int(item));
 			// msg 79 don't understand blob info item %ld
 			if (!blob.close())
+			{
 				BURP_error_redirect(&status_vector, 23);
 				// msg 23 isc_close_blob failed
+			}
 			return false;
 		}
 	}
@@ -1453,8 +1463,10 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 	if (!length || length > MAX_ULONG)
 	{
 		if (!blob.close())
+		{
 			BURP_error_redirect(&status_vector, 23);
 			// msg 23 isc_close_blob failed
+		}
 		return false;
 	}
 
@@ -1669,7 +1681,7 @@ void put_index( burp_rel* relation)
 
 			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
 			{
-				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				BURP_print(180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
 				continue;
 			}
 
@@ -1750,7 +1762,7 @@ void put_index( burp_rel* relation)
 
 			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
 			{
-				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				BURP_print(180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
 				continue;
 			}
 
@@ -2226,7 +2238,7 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 			break;
 
 		default:
-			BURP_print(true, 79, SafeArg() << int(item));
+			BURP_print(79, SafeArg() << int(item));
 			// msg 79 don't understand blob info item %ld
 			if (!blob.close())
 			{
@@ -2276,8 +2288,10 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 	}
 
 	if (!blob.close())
+	{
 		BURP_error_redirect(&status_vector, 23);
-	// msg 23 isc_close_blob failed
+		// msg 23 isc_close_blob failed
+	}
 
 	if (buffer != static_buffer)
 		BURP_free(buffer);
@@ -2309,7 +2323,7 @@ int put_text(att_type attribute, const TEXT* text, SSHORT size_len)
 	fb_assert(l <= MAX_UCHAR);
 	if (l > MAX_UCHAR)
 	{
-		BURP_print(true, 343, SafeArg() << int(attribute) << "put_text()" << MAX_UCHAR);
+		BURP_print(343, SafeArg() << int(attribute) << "put_text()" << MAX_UCHAR);
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		l = MAX_UCHAR;
 	}
@@ -4954,7 +4968,7 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 			break;
 
 		default:
-			BURP_error_redirect(NULL, 26, SafeArg() << field->fld_type);
+			BURP_error(26, true, SafeArg() << field->fld_type);
 			// msg 26 datatype %ld not understood
 			break;
 		}

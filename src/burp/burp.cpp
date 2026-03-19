@@ -391,8 +391,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 			spb.getBufferLength(), spb.getBuffer());
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status, 83);
-				// msg 83 Exiting before completion due to errors
+			BURP_print_status(&status, true, 83);
+			// msg 83 Exiting before completion due to errors
 			return FINI_ERROR;
 		}
 
@@ -425,8 +425,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		svc_handle->start(&status, thdlen, thd);
 		if (!status.isSuccess())
 		{
-			BURP_print_status(true, &status, 83);
-				// msg 83 Exiting before completion due to errors
+			BURP_print_status(&status, true, 83);
+			// msg 83 Exiting before completion due to errors
 			svc_handle->release();
 			return FINI_ERROR;
 		}
@@ -456,8 +456,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 							  sizeof(respbuf), respbuf);
 			if (!status.isSuccess())
 			{
-				BURP_print_status(true, &status, 83);
-					// msg 83 Exiting before completion due to errors
+				BURP_print_status(&status, true, 83);
+				// msg 83 Exiting before completion due to errors
 				svc_handle->release();
 				return FINI_ERROR;
 			}
@@ -506,8 +506,8 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 	{
 		FbLocalStatus s;
 		e.stuffException(&s);
-		BURP_print_status(true, &s, 83);
-			// msg 83 Exiting before completion due to errors
+		BURP_print_status(&s, true, 83);
+		// msg 83 Exiting before completion due to errors
 		if (svc_handle)
 			svc_handle->release();
 		return FINI_ERROR;
@@ -538,7 +538,7 @@ static Switches::in_sw_tab_t* findSwitchOrThrow(Firebird::UtilSvc* uSvc, Switche
 	{
 		if (! uSvc->isService())
 		{
-			BURP_print(true, 137, sw.c_str());
+			BURP_print(137, sw.c_str());
 			// msg 137  unknown switch %s
 			burp_usage(switches);
 			BURP_error(1, true);
@@ -1284,7 +1284,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 #endif
 
 		case IN_SW_BURP_Z:
-			BURP_print(false, 91, FB_VERSION);
+			BURP_message(91, SafeArg() << FB_VERSION);
 			// msg 91 gbak version %s
 			tdgbl->gbl_sw_version = true;
 			break;
@@ -1329,7 +1329,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		}
 		if (temp != tdgbl->gbl_sw_page_size)
 		{
-			BURP_print(false, 103, SafeArg() << tdgbl->gbl_sw_page_size << temp);
+			BURP_print(103, SafeArg() << tdgbl->gbl_sw_page_size << temp);
 			// msg 103 page size specified (%ld bytes) rounded up to %ld bytes
 			tdgbl->gbl_sw_page_size = temp;
 		}
@@ -1486,10 +1486,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 		// Non-burp exception was caught
 		tdgbl->burp_throw = false;
 		e.stuffException(&tdgbl->status_vector);
-		BURP_print_status(true, &tdgbl->status_vector);
+		BURP_print_status(&tdgbl->status_vector, true);
 		if (! tdgbl->uSvc->isService())
 		{
-			BURP_print(true, 83);	// msg 83 Exiting before completion due to errors
+			BURP_print(83);
+			// msg 83 Exiting before completion due to errors
 		}
 		exit_code = FINI_ERROR;
 	}
@@ -1521,7 +1522,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		tdgbl->db_handle->detach(&tdgbl->status_vector);
 
 		if (tdgbl->status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
-			BURP_print_status(true, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector, true);
 		else
 			tdgbl->db_handle = NULL;
 	}
@@ -1563,13 +1564,13 @@ void BURP_abort(const Firebird::IStatus* status)
 	UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
 
 	if (status)
-		BURP_print_status(true, status, code);
+		BURP_print_status(status, true, code);
 	else
 	{
 		sa.setServiceStatus(burp_msg_fac, code, SafeArg());
 
 		if (!tdgbl->uSvc->isService())
-			BURP_print(true, code);
+			BURP_print(code);
 	}
 
 	tdgbl->uSvc->started();
@@ -1585,6 +1586,7 @@ void BURP_error(USHORT errcode, bool abort, const SafeArg& arg)
  **************************************
  *
  * Functional description
+ *	Format and print an error message, then punt.
  *
  **************************************/
 	BurpMaster master;
@@ -1617,7 +1619,7 @@ void BURP_error(USHORT errcode, bool abort, const char* str)
  **************************************
  *
  * Functional description
- *	Format and print an error message, then punt.
+ *	Shortcut for text argument
  *
  **************************************/
 
@@ -1642,7 +1644,7 @@ void BURP_error_redirect(const Firebird::IStatus* status_vector, USHORT errcode,
 	// StatusAccessor is used only as RAII holder here
 	UtilSvc::StatusAccessor sa = master.get()->uSvc->getStatusAccessor();
 
-	BURP_print_status(true, status_vector);
+	BURP_print_status(status_vector, true);
 	BURP_error(errcode, true, arg);
 }
 
@@ -1735,28 +1737,32 @@ void OutputVersion::callback(Firebird::CheckStatusWrapper* status, const char* t
 	burp_output(false, format, text);
 }
 
-void BURP_print(bool err, USHORT number, const SafeArg& arg)
+
+void BURP_message(USHORT number, const SafeArg& arg, bool totals)
 {
 /**************************************
  *
- *	B U R P _ p r i n t
+ *	B U R P _ m e s s a g e
  *
  **************************************
  *
  * Functional description
- *	Display a formatted error message
- *	in a way that civilized systems
- *	will accept.
+ *	Calls BURP_msg for formatting & displaying a message.
  *
  **************************************/
 	BurpMaster master;
+	BurpGlobals* tdgbl = master.get();
 
-	BURP_msg_partial(err, 169);	// msg 169: gbak:
-	BURP_msg_put(err, number, arg);
+	if (totals)
+		tdgbl->print_stats_header();
+	BURP_msg_partial(false, 169);	// msg 169: gbak:
+	if (totals)
+		tdgbl->print_stats(number);
+	BURP_msg_put(false, number, arg);
 }
 
 
-void BURP_print(bool err, USHORT number, const char* str)
+void BURP_print(USHORT number, const SafeArg& arg)
 {
 /**************************************
  *
@@ -1773,12 +1779,28 @@ void BURP_print(bool err, USHORT number, const char* str)
 	BurpMaster master;
 
 	static const SafeArg dummy;
-	BURP_msg_partial(err, 169, dummy);	// msg 169: gbak:
-	BURP_msg_put(err, number, SafeArg() << str);
+	BURP_msg_partial(true, 169, dummy);	// msg 169: gbak:
+	BURP_msg_put(true, number, arg);
 }
 
 
-void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT secondNumber)
+void BURP_print(USHORT number, const char* str)
+{
+/**************************************
+ *
+ *	B U R P _ p r i n t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Shortcut for text argument
+ *
+ **************************************/
+	BURP_print(number, SafeArg() << str);
+}
+
+
+void BURP_print_status(const Firebird::IStatus* status_vector, bool serviceFlag, USHORT secondNumber)
 {
 /**************************************
  *
@@ -1797,7 +1819,7 @@ void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT 
 		BurpGlobals* tdgbl = master.get();
 
 		const ISC_STATUS* vector = status_vector->getErrors();
-		if (err)
+		if (serviceFlag)
 		{
 			UtilSvc::StatusAccessor sa = tdgbl->uSvc->getStatusAccessor();
 			sa.setServiceStatus(vector);
@@ -1814,19 +1836,19 @@ void BURP_print_status(bool err, const Firebird::IStatus* status_vector, USHORT 
         SCHAR s[1024];
 		if (fb_interpret(s, sizeof(s), &vector))
 		{
-			BURP_msg_partial(err, 256); // msg 256: gbak: ERROR:
-			burp_output(err, "%s\n", s);
+			BURP_msg_partial(true, 256); // msg 256: gbak: ERROR:
+			burp_output(true, "%s\n", s);
 
 			while (fb_interpret(s, sizeof(s), &vector))
 			{
-				BURP_msg_partial(err, 256); // msg 256: gbak: ERROR:
-				burp_output(err, "    %s\n", s);
+				BURP_msg_partial(true, 256); // msg 256: gbak: ERROR:
+				burp_output(true, "    %s\n", s);
 			}
 		}
 
 		if (secondNumber)
 		{
-			BURP_msg_partial(err, 169);	// msg 169: gbak:
+			BURP_msg_partial(true, 169);	// msg 169: gbak:
 			BURP_msg_put(true, secondNumber, SafeArg());
 		}
 	}
@@ -1868,13 +1890,13 @@ void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarnin
 
 	if (fb_interpret(s, sizeof(s), &vector))
 	{
-		BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-		burp_output(false, "%s\n", s);
+		BURP_msg_partial(true, 255); // msg 255: gbak: WARNING:
+		burp_output(true, "%s\n", s);
 
 		while (fb_interpret(s, sizeof(s), &vector))
 		{
-			BURP_msg_partial(false, 255); // msg 255: gbak: WARNING:
-			burp_output(false, "    %s\n", s);
+			BURP_msg_partial(true, 255); // msg 255: gbak: WARNING:
+			burp_output(true, "    %s\n", s);
 		}
 	}
 }
@@ -1900,30 +1922,6 @@ void BURP_verbose(USHORT number, const SafeArg& arg)
 		BURP_message(number, arg, true);
 	else
 		burp_output(false, "%s", "");
-}
-
-
-void BURP_message(USHORT number, const MsgFormat::SafeArg& arg, bool totals)
-{
-/**************************************
- *
- *	B U R P _ m e s s a g e
- *
- **************************************
- *
- * Functional description
- *	Calls BURP_msg for formatting & displaying a message.
- *
- **************************************/
-	BurpMaster master;
-	BurpGlobals* tdgbl = master.get();
-
-	if (totals)
-		tdgbl->print_stats_header();
-	BURP_msg_partial(false, 169);	// msg 169: gbak:
-	if (totals)
-		tdgbl->print_stats(number);
-	BURP_msg_put(false, number, arg);
 }
 
 
@@ -1973,7 +1971,7 @@ static void close_out_transaction(gbak_action action, Firebird::ITransaction** t
 				// we can detach from the database.
 				(*tPtr)->rollback(&status_vector);
 				if (!status_vector.isSuccess())
-					BURP_print_status(false, &status_vector);
+					BURP_print_status(&status_vector);
 				else
 					*tPtr = nullptr;
 			}
@@ -1987,7 +1985,7 @@ static void close_out_transaction(gbak_action action, Firebird::ITransaction** t
 			// ensure it by doing a rollback
 			(*tPtr)->rollback(&status_vector);
 			if (!status_vector.isSuccess())
-				BURP_print_status(false, &status_vector);
+				BURP_print_status(&status_vector);
 			else
 				*tPtr = nullptr;
 		}
@@ -2058,7 +2056,7 @@ static gbak_action open_files(const TEXT* file1,
 
 			if (!status_vector.isSuccess())
 			{
-				BURP_print_status(true, &status_vector);
+				BURP_print_status(&status_vector, true);
 				return QUIT;
 			}
 		}
@@ -2075,7 +2073,7 @@ static gbak_action open_files(const TEXT* file1,
 				tdgbl->db_handle->detach(&status_vector);
 
 				if (status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
-					BURP_print_status(true, &status_vector);
+					BURP_print_status(&status_vector, true);
 				else
 					tdgbl->db_handle = NULL;
 
@@ -2083,8 +2081,8 @@ static gbak_action open_files(const TEXT* file1,
 			}
 			if (tdgbl->gbl_sw_version)
 			{
+				BURP_message(139, SafeArg() << file1);
 				// msg 139 Version(s) for database "%s"
-				BURP_print(false, 139, file1);
 				OutputVersion outputVersion("\t%s\n");
 				Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, tdgbl->db_handle, &outputVersion);
 			}
@@ -2138,7 +2136,7 @@ static gbak_action open_files(const TEXT* file1,
 		else if (sw_replace == IN_SW_BURP_B ||
 			(status_vector->getErrors()[1] != isc_io_error && status_vector->getErrors()[1] != isc_bad_db_format))
 		{
-			BURP_print_status(true, &status_vector);
+			BURP_print_status(&status_vector, true);
 			return QUIT;
 		}
 	}
@@ -2264,7 +2262,7 @@ static gbak_action open_files(const TEXT* file1,
 			tdgbl->db_handle->detach(&status_vector);
 
 			if (status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
-				BURP_print_status(true, &status_vector);
+				BURP_print_status(&status_vector, true);
 			else
 				tdgbl->db_handle = NULL;
 		}
@@ -2449,7 +2447,7 @@ static gbak_action open_files(const TEXT* file1,
 			provider->setDbCryptCallback(&status_vector, MVOL_get_crypt(tdgbl));
 			if (!status_vector.isSuccess())
 			{
-				BURP_print_status(true, &status_vector);
+				BURP_print_status(&status_vector, true);
 				return QUIT;
 			}
 		}
@@ -2464,7 +2462,7 @@ static gbak_action open_files(const TEXT* file1,
 				tdgbl->db_handle->detach(&status_vector);
 
 				if (status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
-					BURP_print_status(true, &status_vector);
+					BURP_print_status(&status_vector, true);
 				else
 					tdgbl->db_handle = NULL;
 
@@ -2481,7 +2479,7 @@ static gbak_action open_files(const TEXT* file1,
 					tdgbl->db_handle->detach(&status2);
 
 					if (status2->getState() & Firebird::IStatus::STATE_ERRORS)
-						BURP_print_status(true, &status2);
+						BURP_print_status(&status2, true);
 					else
 						tdgbl->db_handle = NULL;
 
@@ -2571,11 +2569,11 @@ static void burp_usage(const Switches& switches)
 	const SafeArg sa(SafeArg() << switch_char);
 	const SafeArg dummy;
 
-	BURP_print(true, 317); // usage
+	BURP_print(317); // usage
 	for (int i = 318; i < 323; ++i)
 		BURP_msg_put(true, i, dummy); // usage
 
-	BURP_print(true, 95); // msg 95  legal switches are
+	BURP_print(95); // msg 95  legal switches are
 	const Switches::in_sw_tab_t* const base = switches.getTable();
 	for (const Switches::in_sw_tab_t* p = base; p->in_sw; ++p)
 	{
@@ -2583,28 +2581,28 @@ static void burp_usage(const Switches& switches)
 			BURP_msg_put(true, p->in_sw_msg, sa);
 	}
 
-	BURP_print(true, 323); // backup options are
+	BURP_print(323); // backup options are
 	for (const Switches::in_sw_tab_t* p = base; p->in_sw; ++p)
 	{
 		if (p->in_sw_msg && p->in_sw_optype == boBackup)
 			BURP_msg_put(true, p->in_sw_msg, sa);
 	}
 
-	BURP_print(true, 324); // restore options are
+	BURP_print(324); // restore options are
 	for (const Switches::in_sw_tab_t* p = base; p->in_sw; ++p)
 	{
 		if (p->in_sw_msg && p->in_sw_optype == boRestore)
 			BURP_msg_put(true, p->in_sw_msg, sa);
 	}
 
-	BURP_print(true, 325); // general options are
+	BURP_print(325); // general options are
 	for (const Switches::in_sw_tab_t* p = base; p->in_sw; ++p)
 	{
 		if (p->in_sw_msg && p->in_sw_optype == boGeneral)
 			BURP_msg_put(true, p->in_sw_msg, sa);
 	}
 
-	BURP_print(true, 132); // msg 132 switches can be abbreviated to the unparenthesized characters
+	BURP_print(132); // msg 132 switches can be abbreviated to the unparenthesized characters
 }
 
 

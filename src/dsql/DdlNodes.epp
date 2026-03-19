@@ -14163,62 +14163,89 @@ void DropIndexNode::clearId(thread_db* tdbb, MetaId relId, MetaId indexId)
 	auto rel = MetadataCache::getPerm<Cached::Relation>(tdbb, relId, 0);
 
 	// cleanup NOT related to current transaction
-	auto* transaction = attachment->getSysTransaction();
-	AutoSetRestore2<jrd_tra*, thread_db> autoTrans(tdbb, &thread_db::getTransaction, &thread_db::setTransaction,
-		transaction);
+	// cleanup can NOT be done using system transaction (due to backout logic in erase)
+	// start separate transaction for cleanup
+	auto* transaction = TRA_start(tdbb, 0u, DEFAULT_LOCK_TIMEOUT);
 
-	AutoCacheRequest handle(tdbb, irq_index_id_erase, IRQ_REQUESTS);
-	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-		IND IN RDB$INDICES
-		CROSS REL IN RDB$RELATIONS
-			OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
-		WITH IND.RDB$INDEX_ID EQ indexId + 1
-			AND REL.RDB$RELATION_ID EQ relId
+	try
 	{
-		indexName = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
-		fb_assert (!indexName.isEmpty());
+		AutoSetRestore2<jrd_tra*, thread_db> autoTrans(tdbb, &thread_db::getTransaction, &thread_db::setTransaction,
+			transaction);
 
-		if (!IND.RDB$FOREIGN_KEY.NULL)
-			partnerIdxName = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
-
-		switch (MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE))
+		AutoCacheRequest handle(tdbb, irq_index_id_erase, IRQ_REQUESTS);
+		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+			IND IN RDB$INDICES
+			CROSS REL IN RDB$RELATIONS
+				OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
+			WITH IND.RDB$INDEX_ID EQ indexId + 1
+				AND REL.RDB$RELATION_ID EQ relId
 		{
-		case MET_index_active:				// handle table creation error
-		case MET_index_deferred_drop:		// drop index
-			ERASE IND;
-			deleteSegmentRecords(tdbb, transaction, indexName);
-			break;
+			indexName = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
+			fb_assert (!indexName.isEmpty());
 
-		case MET_index_inactive:			// alter index inactive
-			MODIFY IND
-				IND.RDB$INDEX_ID = 0;
-				IND.RDB$INDEX_ID.NULL = TRUE;
-			END_MODIFY
-			break;
+			if (!IND.RDB$FOREIGN_KEY.NULL)
+				partnerIdxName = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
 
-		default:
-			fb_assert(false);
+			switch (MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE))
+			{
+			case MET_index_active:				// handle table creation error
+			case MET_index_deferred_drop:		// drop index
+				ERASE IND;
+				deleteSegmentRecords(tdbb, transaction, indexName);
+				break;
+
+			case MET_index_inactive:			// alter index inactive
+				MODIFY IND
+					IND.RDB$INDEX_ID = 0;
+					IND.RDB$INDEX_ID.NULL = TRUE;
+				END_MODIFY
+				break;
+
+			default:
+				fb_assert(false);
+			}
 		}
-	}
-	END_FOR
+		END_FOR
 
-	if (indexName.hasData())
-	{
-		MET_delete_dependencies(tdbb, indexName, obj_index_expression);
-		MET_delete_dependencies(tdbb, indexName, obj_index_condition);
-	}
-
-	if (partnerIdxName.hasData())
-	{
-		auto partner = getRelByIndex(tdbb, partnerIdxName, transaction);
-
-		if (rel && partner)
+		if (indexName.hasData())
 		{
-			rel->checkPartners(tdbb);
-
-			if (rel != partner)
-				partner->checkPartners(tdbb);
+			MET_delete_dependencies(tdbb, indexName, obj_index_expression);
+			MET_delete_dependencies(tdbb, indexName, obj_index_condition);
 		}
+
+		if (partnerIdxName.hasData())
+		{
+			auto partner = getRelByIndex(tdbb, partnerIdxName, transaction);
+
+			if (rel && partner)
+			{
+				rel->checkPartners(tdbb);
+
+				if (rel != partner)
+					partner->checkPartners(tdbb);
+			}
+		}
+
+		auto* tra = transaction;
+		transaction = nullptr;
+		TRA_commit(tdbb, tra, false);
+	}
+	catch(const Exception& ex)
+	{
+		iscLogException("DropIndexNode::clearId() failed", ex);
+
+		try
+		{
+			if (transaction)
+				TRA_rollback(tdbb, transaction, false, true);
+		}
+		catch(const Exception& ex)
+		{
+			iscLogException("Rollback in DropIndexNode::clearId() failed", ex);
+		}
+
+		// Under no circumstances affect status of user's call to engine
+		tdbb->tdbb_status_vector->init();
 	}
 }
 

@@ -1609,7 +1609,7 @@ void Optimizer::generateAggregateSort(AggNode* aggNode)
 	fb_assert(prevKey);
 	ULONG length = prevKey ? ROUNDUP(prevKey->getSkdOffset() + prevKey->getSkdLength(), sizeof(SLONG)) : 0;
 
-	aggNode->arg->getDesc(tdbb, csb, desc);
+	aggNode->makeSortDesc(tdbb, csb, desc);
 
 	if (desc->dsc_dtype >= dtype_aligned)
 		length = FB_ALIGN(length, type_alignments[desc->dsc_dtype]);
@@ -2587,6 +2587,9 @@ bool Optimizer::joinDependentStreams(StreamList& joinStreams, RiverList& rivers,
 
 			// Make rivers from the dependent streams
 			generateInnerJoin(dependentStreams, rivers, sort, rse->rse_plan);
+
+			for (const auto depStream : dependentStreams)
+				csb->csb_rpt[depStream].activate();
 		}
 		else
 		{
@@ -2939,7 +2942,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 //	then form streams into rivers (combinations of streams)
 //
 
-void Optimizer::generateInnerJoin(StreamList& streams,
+void Optimizer::generateInnerJoin(const StreamList& streams,
 								  RiverList& rivers,
 								  SortNode** sortClause,
 								  const PlanNode* planClause)
@@ -2961,16 +2964,6 @@ void Optimizer::generateInnerJoin(StreamList& streams,
 	{
 		const auto river = innerJoin.formRiver();
 		rivers.add(river);
-
-		// Remove already consumed streams from the source stream list
-		for (const auto stream : river->getStreams())
-		{
-			FB_SIZE_T pos;
-			if (streams.find(stream, pos))
-				streams.remove(pos);
-			else
-				fb_assert(false);
-		}
 	}
 }
 

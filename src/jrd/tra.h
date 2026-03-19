@@ -148,7 +148,7 @@ struct CallerName
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
 
-inline constexpr int DEFAULT_LOCK_TIMEOUT = -1; // infinite
+inline constexpr SSHORT DEFAULT_LOCK_TIMEOUT = -1; // infinite
 inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
 inline constexpr const char* TRA_UNDO_SPACE = "fb_undo_";
 inline constexpr ULONG MAX_TEMP_BLOBS = 1000;
