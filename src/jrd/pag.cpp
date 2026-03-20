@@ -1824,27 +1824,30 @@ ULONG PageSpace::lastUsedPage()
 
 	const page_inv_page* pip = (page_inv_page*) window.win_buffer;
 
-	int last_bit = pip->pip_used;
-	int byte_num = last_bit / 8;
-	UCHAR mask = 1 << (last_bit % 8);
-	while (last_bit >= 0 && (pip->pip_bits[byte_num] & mask))
+	int last_bit = pip->pip_used - 1;
+	if (pip->pip_used > 0)
 	{
-		if (mask == 1)
+		int byte_num = last_bit / 8;
+		UCHAR mask = 1 << (last_bit % 8);
+		while (last_bit >= 0 && (pip->pip_bits[byte_num] & mask))
 		{
-			mask = 0x80;
-			byte_num--;
-			//fb_assert(byte_num > -1); ???
-		}
-		else
-			mask >>= 1;
+			if (mask == 1)
+			{
+				mask = 0x80;
+				byte_num--;
+				//fb_assert(byte_num > -1); ???
+			}
+			else
+				mask >>= 1;
 
-		last_bit--;
+			last_bit--;
+		}
 	}
 
 	CCH_RELEASE(tdbb, &window);
 	pipMaxKnown = pipLast;
 
-	return last_bit + (pipLast == pipFirst ? 0 : pipLast);
+	return last_bit + 1 + (pipLast == pipFirst ? 0 : pipLast);
 }
 
 ULONG PageSpace::lastUsedPage(const Database* dbb)
