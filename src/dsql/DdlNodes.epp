@@ -2372,8 +2372,8 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 		if (!isUdf())
 		{
 			ARG.RDB$ARGUMENT_MECHANISM.NULL = FALSE;
-			ARG.RDB$ARGUMENT_MECHANISM = (USHORT) (type->fullDomain || type->typeOfName.object.isEmpty() ?
-				prm_mech_normal : prm_mech_type_of);
+			fb_assert(type->mechanism == prm_mech_normal || !type->typeOfName.object.isEmpty());
+			ARG.RDB$ARGUMENT_MECHANISM = type->mechanism;
 		}
 
 		if (type->notNull)
@@ -2563,7 +2563,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 		{
 			ParameterClause* parameter = parameters[i];
 
-			if (parameter->type->fullDomain || parameter->type->notNull)
+			if (parameter->type->mechanism == prm_mech_normal || parameter->type->notNull)
 			{
 				// ASF: To validate input parameters we need only to read its value.
 				// Assigning it to null is an easy way to do this.
@@ -3399,8 +3399,8 @@ void CreateAlterProcedureNode::storeParameter(thread_db* tdbb, DsqlCompilerScrat
 		PRM.RDB$PARAMETER_TYPE = parameterType;
 
 		PRM.RDB$PARAMETER_MECHANISM.NULL = FALSE;
-		PRM.RDB$PARAMETER_MECHANISM = (USHORT) (type->fullDomain || type->typeOfName.object.isEmpty() ?
-			prm_mech_normal : prm_mech_type_of);
+		fb_assert(type->mechanism == prm_mech_normal || !type->typeOfName.object.isEmpty());
+		PRM.RDB$PARAMETER_MECHANISM = type->mechanism;
 
 		PRM.RDB$NULL_FLAG.NULL = !type->notNull;
 		PRM.RDB$NULL_FLAG = type->notNull;
@@ -3533,7 +3533,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 	{
 		ParameterClause* parameter = parameters[i];
 
-		if (parameter->type->fullDomain || parameter->type->notNull)
+		if (parameter->type->mechanism == prm_mech_normal || parameter->type->notNull)
 		{
 			// ASF: To validate an input parameter we need only to read its value.
 			// Assigning it to null is an easy way to do this.

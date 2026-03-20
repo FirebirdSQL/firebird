@@ -154,62 +154,7 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 
 	if (field->typeOfName.object.hasData())
 	{
-		if (field->typeOfTable.object.hasData())
-		{
-			dsqlScratch->qualifyExistingName(field->typeOfTable, obj_relation);
-
-			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, field->typeOfTable);
-			const dsql_fld* fld = NULL;
-
-			if (relation)
-			{
-				const MetaName fieldName(field->typeOfName.object);
-
-				for (fld = relation->rel_fields; fld; fld = fld->fld_next)
-				{
-					if (fieldName == fld->fld_name)
-					{
-						field->dimensions = fld->dimensions;
-						field->fieldSource = fld->fieldSource;
-						field->length = fld->length;
-						field->scale = fld->scale;
-						field->subType = fld->subType;
-						field->charSetId = fld->charSetId;
-						field->collationId = fld->collationId;
-						field->charLength = fld->charLength;
-						field->flags = fld->flags;
-						field->dtype = fld->dtype;
-						field->segLength = fld->segLength;
-						break;
-					}
-				}
-			}
-
-			if (!fld)
-			{
-				// column @1 does not exist in table/view @2
-				post_607(Arg::Gds(isc_dyn_column_does_not_exist) <<
-						 		field->typeOfName.toQuotedString() <<
-								field->typeOfTable.toQuotedString());
-			}
-		}
-		else
-		{
-			dsqlScratch->qualifyExistingName(field->typeOfName, obj_field);
-
-			if (!METD_get_domain(dsqlScratch->getTransaction(), field, field->typeOfName))
-			{
-				// Specified domain or source field does not exist
-				post_607(Arg::Gds(isc_dsql_domain_not_found) << field->typeOfName.toQuotedString());
-			}
-		}
-
-		if (field->dimensions != 0)
-		{
-			ERRD_post(Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) <<
-				Arg::Str("Usage of domain or TYPE OF COLUMN of array type in PSQL"));
-		}
+		Metadata::resolveType(dsqlScratch, field->typeOfTable, field->typeOfName, *field);
 
 		if (field->dtype <= dtype_any_text ||
 			(field->dtype == dtype_blob && field->subType == isc_blob_text))
