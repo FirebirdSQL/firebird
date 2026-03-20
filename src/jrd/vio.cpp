@@ -778,6 +778,8 @@ inline void clearRecordStack(RecordStack& stack)
 		// records from undo log must not be deleted
 		if (!r->isTempActive())
 			delete r;
+		else
+			r->releaseTempActive();
 	}
 }
 
