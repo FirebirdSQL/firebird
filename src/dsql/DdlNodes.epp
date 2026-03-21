@@ -99,6 +99,7 @@ static const UCHAR nonnull_validation_blr[] =
 	blr_eoc
 };
 
+static void checkDeferredDdlInReadOnlyReplica(thread_db* tdbb);
 static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName&	childRelName, const QualifiedName& masterIndexName);
 static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt);
@@ -208,6 +209,16 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 
 //----------------------
 
+
+// Check if we are trying to execute prohibited DDL in read-only replica and raise an error if so.
+static void checkDeferredDdlInReadOnlyReplica(thread_db* tdbb)
+{
+	if (tdbb->getDatabase()->isReplica(REPLICA_READ_ONLY) &&
+		!(tdbb->tdbb_flags & TDBB_replicator))
+	{
+		ERRD_post(Arg::Gds(isc_read_only_trans));
+	}
+}
 
 // Check temporary table reference rules between given child relation and master
 // relation (owner of given PK/UK index).
@@ -9232,6 +9243,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	if (tempFlag == REL_temp_ltt)
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		defineLocalTempTable(tdbb, dsqlScratch, transaction);
 
 		dsqlScratch->relation->rel_flags &= ~REL_creating;
@@ -9618,6 +9630,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	// Handle Local Temporary Tables differently
 	if (relation->rel_flags & REL_ltt_created)
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		alterLocalTempTable(tdbb, dsqlScratch, transaction);
 
 		// Update DSQL cache
@@ -9625,6 +9638,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		return;
 	}
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	bool beforeTriggerWasExecuted = false;
 
@@ -10939,6 +10954,8 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	if (const auto lttIt = attachment->att_local_temporary_tables.get(name))
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
+
 		if (view)
 		{
 			status_exception::raise(
@@ -10975,6 +10992,8 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	auto* rel = MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
 	if (!rel && silent)
 		return;
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
@@ -13195,10 +13214,13 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	// Check if target relation is a Local Temporary Table
 	if (const auto lttPtr = attachment->att_local_temporary_tables.get(relation->dsqlName))
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		defineLocalTempIndex(tdbb, dsqlScratch, transaction, *lttPtr);
 		savePoint.release();	// everything is ok
 		return;
 	}
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
@@ -13428,10 +13450,13 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 
 	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		alterLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
 		savePoint.release();	// everything is ok
 		return;
 	}
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
@@ -13627,10 +13652,13 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		setStatisticsLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
 		savePoint.release();	// everything is ok
 		return;
 	}
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	AutoCacheRequest request(tdbb, drq_m_set_statistics, DYN_REQUESTS);
 	bool found = false;
@@ -13742,10 +13770,13 @@ void DropIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 
 	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
 	{
+		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		dropLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
 		savePoint.release();	// everything is ok
 		return;
 	}
+
+	checkDeferredDdlInReadOnlyReplica(tdbb);
 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
