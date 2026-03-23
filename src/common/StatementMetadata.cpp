@@ -34,7 +34,7 @@
 namespace Firebird {
 
 
-static const UCHAR DESCRIBE_VARS[] =
+static constexpr UCHAR DESCRIBE_VARS[] =
 {
 	isc_info_sql_describe_vars,
 	isc_info_sql_sqlda_seq,
@@ -43,18 +43,20 @@ static const UCHAR DESCRIBE_VARS[] =
 	isc_info_sql_scale,
 	isc_info_sql_length,
 	isc_info_sql_field,
+	isc_info_sql_relation_schema,
 	isc_info_sql_relation,
 	isc_info_sql_owner,
 	isc_info_sql_alias,
 	isc_info_sql_describe_end
 };
 
-static const unsigned INFO_BUFFER_SIZE = MemoryPool::MAX_MEDIUM_BLOCK_SIZE;
+static constexpr unsigned INFO_BUFFER_SIZE = MemoryPool::MAX_MEDIUM_BLOCK_SIZE;
 
 
 static USHORT getLen(const UCHAR** ptr, const UCHAR* bufferEnd);
 static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd);
 static void getStringInfo(const UCHAR** ptr, const UCHAR* bufferEnd, string* str);
+static ISC_STATUS getErrorInfo(const UCHAR** ptr, const UCHAR* bufferEnd, UCHAR* item = nullptr);
 
 
 // Build a list of info codes based on a prepare flags bitmask.
@@ -91,7 +93,7 @@ unsigned StatementMetadata::buildInfoItems(Array<UCHAR>& items, unsigned flags)
 }
 
 // Build a prepare flags bitmask based on a list of info codes.
-unsigned StatementMetadata::buildInfoFlags(unsigned itemsLength, const UCHAR* items)
+unsigned StatementMetadata::buildInfoFlags(unsigned itemsLength, const UCHAR* items) noexcept
 {
 	unsigned flags = 0;
 	const UCHAR* end = items + itemsLength;
@@ -135,7 +137,7 @@ unsigned StatementMetadata::getType()
 {
 	if (!type.has_value())
 	{
-		UCHAR info[] = {isc_info_sql_stmt_type};
+		constexpr UCHAR info[] = {isc_info_sql_stmt_type};
 		UCHAR result[16];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
@@ -150,7 +152,7 @@ unsigned StatementMetadata::getFlags()
 {
 	if (!flags.has_value())
 	{
-		UCHAR info[] = {isc_info_sql_stmt_flags};
+		constexpr UCHAR info[] = {isc_info_sql_stmt_flags};
 		UCHAR result[16];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
@@ -164,11 +166,11 @@ unsigned StatementMetadata::getFlags()
 // Get statement plan.
 const char* StatementMetadata::getPlan(bool detailed)
 {
-	string* plan = detailed ? &detailedPlan : &legacyPlan;
+	const string* plan = detailed ? &detailedPlan : &legacyPlan;
 
 	if (plan->isEmpty())
 	{
-		UCHAR info[] = {UCHAR(detailed ? isc_info_sql_explain_plan : isc_info_sql_get_plan)};
+		const UCHAR info[] = {UCHAR(detailed ? isc_info_sql_explain_plan : isc_info_sql_get_plan)};
 		UCHAR result[INFO_BUFFER_SIZE];
 
 		getAndParse(sizeof(info), info, sizeof(result), result);
@@ -200,7 +202,7 @@ IMessageMetadata* StatementMetadata::getOutputMetadata()
 // Get number of records affected by the statement execution.
 ISC_UINT64 StatementMetadata::getAffectedRecords()
 {
-	UCHAR info[] = {isc_info_sql_records};
+	constexpr UCHAR info[] = {isc_info_sql_records};
 	UCHAR result[33];
 
 	getAndParse(sizeof(info), info, sizeof(result), result);
@@ -213,7 +215,7 @@ ISC_UINT64 StatementMetadata::getAffectedRecords()
 
 		while (*p != isc_info_end)
 		{
-			UCHAR counter = *p++;
+			const UCHAR counter = *p++;
 			const SSHORT len = gds__vax_integer(p, 2);
 			p += 2;
 			if (counter != isc_info_req_select_count)
@@ -306,7 +308,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 						case isc_info_sql_sqlda_seq:
 							if (!parameters->fetched)
 							{
-								unsigned num = getNumericInfo(&buffer, bufferEnd);
+								const unsigned num = getNumericInfo(&buffer, bufferEnd);
 
 								while (parameters->items.getCount() < num)
 									parameters->items.add();
@@ -337,6 +339,10 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 							getStringInfo(&buffer, bufferEnd, &param->field);
 							break;
 
+						case isc_info_sql_relation_schema:
+							getStringInfo(&buffer, bufferEnd, &param->schema);
+							break;
+
 						case isc_info_sql_relation:
 							getStringInfo(&buffer, bufferEnd, &param->relation);
 							break;
@@ -354,6 +360,14 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 							finishDescribe = true;
 							break;
 
+						case isc_info_error:
+						{
+							const ISC_STATUS errorCode = getErrorInfo(&buffer, bufferEnd);
+							if (errorCode != isc_infunk)
+								Arg::Gds(errorCode).raise();
+							break;
+						}
+
 						default:
 							--buffer;
 							finishDescribe = true;
@@ -365,7 +379,7 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 
 							for (unsigned n = 0; n < parameters->items.getCount(); ++n)
 							{
-								Parameters::Item* param = &parameters->items[n];
+								const Parameters::Item* param = &parameters->items[n];
 
 								if (!param->finished)
 								{
@@ -401,6 +415,14 @@ void StatementMetadata::parse(unsigned bufferLength, const UCHAR* buffer)
 					}
 				}
 
+				break;
+			}
+
+			case isc_info_error:
+			{
+				const ISC_STATUS errorCode = getErrorInfo(&buffer, bufferEnd);
+				if (errorCode != isc_infunk)
+					Arg::Gds(errorCode).raise();
 				break;
 			}
 
@@ -510,7 +532,7 @@ static USHORT getLen(const UCHAR** ptr, const UCHAR* bufferEnd)
 static int getNumericInfo(const UCHAR** ptr, const UCHAR* bufferEnd)
 {
 	const USHORT len = getLen(ptr, bufferEnd);
-	int item = gds__vax_integer(*ptr, len);
+	const int item = gds__vax_integer(*ptr, len);
 	*ptr += len;
 	return item;
 }
@@ -523,5 +545,27 @@ static void getStringInfo(const UCHAR** ptr, const UCHAR* bufferEnd, string* str
 	*ptr += len;
 }
 
+// Get error code and, optional, info item that caused the error.
+static ISC_STATUS getErrorInfo(const UCHAR** ptr, const UCHAR* bufferEnd, UCHAR* item)
+{
+	// Expected error code in the buffer encoded as follows:
+	// (short) clumplet lenght, (byte) item code, (long) error code
+
+	const USHORT len = getLen(ptr, bufferEnd);
+
+	if (len != 1 + sizeof(ULONG))
+		fatal_exception::raiseFmt("Invalid info structure - expected error info length %d, actual %d",
+			1 + sizeof(ULONG), len);
+
+	if (item)
+		*item = **ptr;
+
+	(*ptr)++;
+
+	const ISC_STATUS err = gds__vax_integer(*ptr, sizeof(ULONG));
+	*ptr += sizeof(ULONG);
+
+	return err;
+}
 
 }	// namespace Firebird

@@ -33,7 +33,7 @@ parameters specified in the TPB block.
 
 TPB mode                      Behavior
 -------------------------------------------------------------
-isc_tpb_consistency           Explicit locks are overriden by
+isc_tpb_consistency           Explicit locks are overridden by
                               implicit or explicit table-level locks
 							  and are ignored
 							  
@@ -41,7 +41,7 @@ isc_tpb_concurrency +         If record is modified by any committed
 isc_tpb_nowait                transaction since transaction attempting
                               to get explicit lock started or there is 
 							  active transaction that performed 
-							  modifiction of this record, update 
+							  modification of this record, update
 							  conflict exception is raised immediately
 							  
 isc_tpb_concurrency +         If record is modified by any committed
@@ -51,7 +51,7 @@ isc_tpb_wait                  transaction since transaction attempting
 							  If there is active transaction holding ownership 
 							  on this record (via explicit lock or normal update)
 							  locking transaction waits for outcome of 
-							  blocking transation and when it finishes
+							  blocking transaction and when it finishes
 							  attempts to get lock on record again.
 							  This means that if blocking transaction
 							  commits modification of this record,
@@ -64,7 +64,7 @@ isc_tpb_nowait				  on this record (via explicit lock or normal update),
 isc_tpb_read_committed +      If there is active transaction holding ownership 
 isc_tpb_wait				  on this record (via explicit lock or normal update),
 							  locking transaction waits for outcome of 
-							  blocking transation and when it finishes 
+							  blocking transaction and when it finishes
 							  attempts to get lock on record again.
 							  Update conflict exceptions can never be raised
 							  by this kind of explicit lock statement.

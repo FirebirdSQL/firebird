@@ -163,7 +163,7 @@ if "%FB2_SNAPSHOT%"=="1" (
 )
 
 :: Set up our final destination
-set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
+@set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @if not exist "%FBBUILD_INSTALL_IMAGES%" ( mkdir "%FBBUILD_INSTALL_IMAGES%" )
 
 :: Determine Product Status
@@ -176,7 +176,11 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @if "%FB_TARGET_PLATFORM%"=="x64" (
   set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x64
 ) else (
-  set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
+  @if "%FB_TARGET_PLATFORM%"=="arm64" (
+    set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-arm64
+  ) else (
+    set FBBUILD_FILE_ID=%PRODUCT_VER_STRING%-%FBBUILD_PACKAGE_NUMBER%%FBBUILD_FILENAME_SUFFIX%-windows-x86
+  )
 )
 
 @setlocal
@@ -219,6 +223,7 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 @if not exist %FB_OUTPUT_DIR%\system32 (
   mkdir %FB_OUTPUT_DIR%\system32
 )
+
 :: Note the confusion of RT library numbers here! These notes, as of time of
 :: writing 2021-12-21, are accurate for current versions of Visual Studio
 :: - 2017, 2019, 2022. Basic MS runtime version is v140. Except that is only
@@ -227,13 +232,17 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
 :: these version numbers. %MSVC_RUNTIME_FILE_VERSION% should represent 140.
 :: %MSVC_RUNTIME_LIBRARY_VERSION% is based on the Visual Studio version used.
 :: These variables are set in setenvvar.bat.
-@for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll  ) do (
+:: Note 2: 32-bit vcruntime140_1.dll does not exist, hence the test for file existence
+@for %%f in ( msvcp%MSVC_RUNTIME_FILE_VERSION%.dll msvcp%MSVC_RUNTIME_FILE_VERSION%_1.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%.dll vcruntime%MSVC_RUNTIME_FILE_VERSION%_1.dll ) do (
+  if exist "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" (
     echo   Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f"
     copy  "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" %FB_OUTPUT_DIR%\ >nul
     if ERRORLEVEL 1 (
-    call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV%  & goto :EOF
+      call :ERROR Copying "%VCToolsRedistDir%\%VSCMD_ARG_TGT_ARCH%\Microsoft.VC%MSVC_RUNTIME_LIBRARY_VERSION%.CRT\%%f" failed with error %ERRLEV%  & goto :EOF
     )
+  )
 )
+
 
 @if "%VSCMD_ARG_TGT_ARCH%"=="x86" (
   echo     Generating fbclient_bor.lib
@@ -245,19 +254,31 @@ set FBBUILD_INSTALL_IMAGES=%FB_ROOT_PATH%\builds\install_images
   )
 )
 
+
 @if "%FBBUILD_SHIP_PDB%"=="ship_pdb" (
   echo   Copying pdb files...
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbserver\firebird.pdb %FB_OUTPUT_DIR%\ > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\burp\burp.pdb %FB_OUTPUT_DIR%\gbak.pdb > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gfix\gfix.pdb %FB_OUTPUT_DIR%\ > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\isql\isql.pdb %FB_OUTPUT_DIR%\ > nul
-  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\yvalve\fbclient.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\chacha\chacha.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\default_profiler\default_profiler.pdb %FB_OUTPUT_DIR%\plugins\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\engine\engine*.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fb_lock_print\fb_lock_print.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbserver\firebird.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbsvcmgr\fbsvcmgr.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbtrace\fbtrace.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\fbtracemgr\fbtracemgr.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gbak\gbak.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gfix\gfix.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\gstat\gstat.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\ib_util\ib_util.pdb %FB_OUTPUT_DIR%\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\intl\fbintl.pdb %FB_OUTPUT_DIR%\intl\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\isql\isql.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\legacy_auth\legacy_auth.pdb %FB_OUTPUT_DIR%\plugins\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\legacy_usermanager\legacy_usermanager.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\nbackup\nbackup.pdb %FB_OUTPUT_DIR%\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\srp\srp.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\udf_compat\udf_compat.pdb %FB_OUTPUT_DIR%\plugins\udr\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\udrcpp_example\udrcpp_example.pdb %FB_OUTPUT_DIR%\plugins\udr\ > nul
   copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\udr_engine\udr_engine.pdb %FB_OUTPUT_DIR%\plugins\ > nul
+  copy %FB_TEMP_DIR%\%FBBUILD_BUILDTYPE%\yvalve\fbclient.pdb %FB_OUTPUT_DIR%\ > nul
 )
 
 @echo   Started copying docs...
@@ -375,10 +396,12 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
   if not exist %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi (
     "%WIX%\bin\candle.exe" -v -sw1091 %FB_ROOT_PATH%\builds\win32\msvc%MSVC_VERSION%\VCCRT_%FB_TARGET_PLATFORM%.wxs -out %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj
     if ERRORLEVEL 1 (
-        ( call :ERROR Could not generate wixobj for MSVC Runtime MSI ) & ( goto :EOF )
+      call :ERROR Could not generate wixobj for MSVC Runtime MSI %MSVC_RUNTIME_LIBRARY_VERSION%  &  goto :EOF
     ) else (
-        "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi
-        if ERRORLEVEL 1 ( ( call :ERROR Could not generate MSVCC Runtime MSI %MSVC_RUNTIME_LIBRARY_VERSION% ) & ( goto :EOF ) )
+      "%WIX%\bin\light.exe" -sw1076 %FB_GEN_DIR%\vccrt_%FB_TARGET_PLATFORM%.wixobj -out %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi
+      if ERRORLEVEL 1 (
+        call :ERROR Could not generate MSVCC Runtime MSI %MSVC_RUNTIME_LIBRARY_VERSION% & goto :EOF
+      )
     )
   ) else (
     echo   Using an existing build of %FB_OUTPUT_DIR%\system32\vccrt%MSVC_RUNTIME_LIBRARY_VERSION%_%FB_TARGET_PLATFORM%.msi
@@ -489,7 +512,11 @@ for %%v in (IPLicense.txt IDPLicense.txt ) do (
 ::
 ::=================================================
 @echo.
-@call %ISCC_COMMAND% %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+if "%FB_TARGET_PLATFORM%"=="arm64" (
+  @call %ISCC_COMMAND% /DPlatformTarget=arm64 %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+) else (
+  @call %ISCC_COMMAND% %FB_ROOT_PATH%\builds\install\arch-specific\win32\FirebirdInstall.iss
+)
 @echo.
 
 ::End of ISX_PACK

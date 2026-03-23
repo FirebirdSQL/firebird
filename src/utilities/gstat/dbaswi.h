@@ -31,28 +31,29 @@
 // switch constants refer to data items.  The remaining switch constants
 // refer to actual switches.
 
-const int IN_SW_DBA_0				= 0;	// not a known switch
-const int IN_SW_DBA_SYSTEM			= 1;	// analyze system relations
-const int IN_SW_DBA_DATA			= 2;	// analyze data pages
-const int IN_SW_DBA_INDEX			= 3;	// analyze index leaf pages
-const int IN_SW_DBA_VERSION			= 4;	// display version number
-const int IN_SW_DBA_HEADER			= 5;	// analyze header page
-//const int IN_SW_DBA_LOG			= 6;	// analze log pages
-const int IN_SW_DBA_DATAIDX			= 7;	// analyze data and index pages
-const int IN_SW_DBA_USERNAME		= 8;	// username
-const int IN_SW_DBA_PASSWORD		= 9;	// password
-const int IN_SW_DBA_RECORD			= 10;	// analyze record versions
-const int IN_SW_DBA_RELATION		= 11;	// analyze specific relations
-const int IN_SW_DBA_NOCREATION		= 12;	// don't print creation date
+inline constexpr int IN_SW_DBA_0			= 0;	// not a known switch
+inline constexpr int IN_SW_DBA_SYSTEM		= 1;	// analyze system relations
+inline constexpr int IN_SW_DBA_DATA			= 2;	// analyze data pages
+inline constexpr int IN_SW_DBA_INDEX		= 3;	// analyze index leaf pages
+inline constexpr int IN_SW_DBA_VERSION		= 4;	// display version number
+inline constexpr int IN_SW_DBA_HEADER		= 5;	// analyze header page
+//inline constexpr int IN_SW_DBA_LOG		= 6;	// analze log pages
+inline constexpr int IN_SW_DBA_DATAIDX		= 7;	// analyze data and index pages
+inline constexpr int IN_SW_DBA_USERNAME		= 8;	// username
+inline constexpr int IN_SW_DBA_PASSWORD		= 9;	// password
+inline constexpr int IN_SW_DBA_RECORD		= 10;	// analyze record versions
+inline constexpr int IN_SW_DBA_RELATION		= 11;	// analyze specific relations
+inline constexpr int IN_SW_DBA_NOCREATION	= 12;	// don't print creation date
 #ifdef TRUSTED_AUTH
-const int IN_SW_DBA_TRUSTEDAUTH		= 13;	// trusted user name
+inline constexpr int IN_SW_DBA_TRUSTEDAUTH	= 13;	// trusted user name
 #endif
-const int IN_SW_DBA_FETCH_PASS		= 14;	// fetch password from file
-const int IN_SW_DBA_ENCRYPTION		= 15;	// analyze pages encryption
-const int IN_SW_DBA_HELP			= 16;	// show help
-const int IN_SW_DBA_ROLE			= 17;	// SQL role
+inline constexpr int IN_SW_DBA_FETCH_PASS	= 14;	// fetch password from file
+inline constexpr int IN_SW_DBA_ENCRYPTION	= 15;	// analyze pages encryption
+inline constexpr int IN_SW_DBA_HELP			= 16;	// show help
+inline constexpr int IN_SW_DBA_ROLE			= 17;	// SQL role
+inline constexpr int IN_SW_DBA_SCHEMA		= 18;	// analyze specific schemas
 
-const static struct Switches::in_sw_tab_t dba_in_sw_table[] =
+inline constexpr static struct Switches::in_sw_tab_t dba_in_sw_table[] =
 {
     {IN_SW_DBA_DATAIDX,			0,							"ALL",		0,0,0,	false,	false,	22,	1, NULL},	// msg 22: -a      analyze data and index pages
     {IN_SW_DBA_DATA,			isc_spb_sts_data_pages,		"DATA",		0,0,0,	false,	true,	23,	1, NULL},	// msg 23: -d      analyze data pages
@@ -65,6 +66,7 @@ const static struct Switches::in_sw_tab_t dba_in_sw_table[] =
     {IN_SW_DBA_PASSWORD,		0,							"PASSWORD",	0,0,0,	false,	false,	33,	1, NULL},	// msg 33: -p      password
     {IN_SW_DBA_FETCH_PASS,		0,					"FETCH_PASSWORD",	0,0,0,	false,	false,	37,	2, NULL},	// msg 37: -fetch  fetch password from file
     {IN_SW_DBA_RECORD,			isc_spb_sts_record_versions,"RECORD",	0,0,0,	false,	true,	34,	1, NULL},	// msg 34: -r      analyze average record and version length
+    {IN_SW_DBA_SCHEMA,			isc_spb_sts_schema,			"SCHEMA",	0,0,0,	false,	false,	65,	1, NULL},	// msg 65: -sch    schemaname (case sensitive)
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	false,	35,	1, NULL},	// msg 35: -t      tablename
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	true,	0,	1, NULL},	// no msg: let run old buggy code
     {IN_SW_DBA_ROLE,			0,							"ROLE",		0,0,0,	false,	false,	57,	1, NULL},	// msg 57: -role   SQL role name

@@ -135,7 +135,7 @@ int main (int argc, char** argv)
     }       
 
     /*
-     *  Change all corresponding occurences of the string in database 2.
+     *  Change all corresponding occurrences of the string in database 2.
      */
 
     sprintf(buf, "UPDATE cross_rate SET from_currency = '%s' WHERE \

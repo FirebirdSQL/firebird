@@ -45,6 +45,7 @@ namespace
 		{"RDB$ROLES",			0,	DB_VERSION_DDL9},	// IB5
 		{"RDB$PACKAGES",		0,	DB_VERSION_DDL12},	// FB3
 		{"RDB$PUBLICATIONS",	0,	DB_VERSION_DDL13},	// FB4
+		{"RDB$SCHEMAS",			0,	DB_VERSION_DDL14},	// FB6
 		{0, 0, 0}
 	};
 
@@ -102,13 +103,16 @@ void detectRuntimeODS()
 	Firebird::IRequest* req_handle = nullptr;
 	FOR (REQUEST_HANDLE req_handle)
 		RFR IN RDB$RELATION_FIELDS
-		WITH (RFR.RDB$RELATION_NAME = 'RDB$RELATIONS' OR RFR.RDB$RELATION_NAME = 'RDB$RELATION_FIELDS')
-		AND RFR.RDB$FIELD_NAME = 'RDB$SYSTEM_FLAG'
+		WITH (RFR.RDB$RELATION_NAME = 'RDB$RELATIONS' OR RFR.RDB$RELATION_NAME = 'RDB$RELATION_FIELDS') AND
+			 RFR.RDB$FIELD_NAME = 'RDB$SYSTEM_FLAG' AND
+			 (RFR.RDB$SCHEMA_NAME MISSING OR RFR.RDB$SCHEMA_NAME = SYSTEM_SCHEMA)
+	{
 		++count;
-	END_FOR;
+	}
+	END_FOR
 	ON_ERROR
 		general_on_error();
-	END_ERROR;
+	END_ERROR
 	MISC_release_request_silent(req_handle);
 
 	if (count != 2)
@@ -119,14 +123,17 @@ void detectRuntimeODS()
 	{
 		FOR (REQUEST_HANDLE req_handle2)
 			FIRST 1 X IN RDB$RELATIONS
-			WITH X.RDB$RELATION_NAME = rel->relation
-			AND X.RDB$SYSTEM_FLAG = 1
+			WITH X.RDB$RELATION_NAME = rel->relation AND
+				 X.RDB$SYSTEM_FLAG = 1 AND
+				 (X.RDB$SCHEMA_NAME MISSING OR X.RDB$SCHEMA_NAME = SYSTEM_SCHEMA)
+		{
 			if (tdgbl->runtimeODS < rel->ods_version)
 				tdgbl->runtimeODS = rel->ods_version;
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	MISC_release_request_silent(req_handle2);
 
@@ -138,15 +145,18 @@ void detectRuntimeODS()
 	{
 		FOR (REQUEST_HANDLE req_handle3)
 			FIRST 1 X2 IN RDB$RELATION_FIELDS
-			WITH X2.RDB$RELATION_NAME = rf->relation
-			AND X2.RDB$FIELD_NAME = rf->field
-			AND X2.RDB$SYSTEM_FLAG = 1
+			WITH X2.RDB$RELATION_NAME = rf->relation AND
+				 X2.RDB$FIELD_NAME = rf->field AND
+				 X2.RDB$SYSTEM_FLAG = 1 AND
+				 (X2.RDB$SCHEMA_NAME MISSING OR X2.RDB$SCHEMA_NAME = SYSTEM_SCHEMA)
+		{
 			if (tdgbl->runtimeODS < rf->ods_version)
 				tdgbl->runtimeODS = rf->ods_version;
-		END_FOR;
+		}
+		END_FOR
 		ON_ERROR
 			general_on_error();
-		END_ERROR;
+		END_ERROR
 	}
 	MISC_release_request_silent(req_handle3);
 }

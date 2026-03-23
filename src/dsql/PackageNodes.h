@@ -68,7 +68,7 @@ public:
 	};
 
 public:
-	CreateAlterPackageNode(MemoryPool& pool, const MetaName& aName)
+	CreateAlterPackageNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  create(true),
@@ -82,19 +82,19 @@ public:
 	}
 
 public:
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
 			Firebird::Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_pack_failed, isc_dsql_alter_pack_failed,
 					isc_dsql_create_alter_pack_failed)) <<
-				name;
+				name.toQuotedString();
 	}
 
 private:
@@ -104,7 +104,7 @@ private:
 	void executeItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	MetaName name;
+	QualifiedName name;
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
@@ -122,27 +122,40 @@ private:
 class DropPackageNode : public DdlNode
 {
 public:
-	DropPackageNode(MemoryPool& pool, const MetaName& aName)
+	DropPackageNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
-		  name(pool, aName),
-		  silent(false)
+		  name(pool, aName)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		if (recreate)
+			dsqlScratch->qualifyNewName(name);
+		else
+			dsqlScratch->qualifyExistingName(name, obj_package_header);
+
+		protectSystemSchema(name.schema, obj_package_header);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
-	bool silent;
+	QualifiedName name;
+	bool silent = false;
+	bool recreate = false;
 };
 
 
@@ -153,7 +166,7 @@ typedef RecreateNode<CreateAlterPackageNode, DropPackageNode, isc_dsql_recreate_
 class CreatePackageBodyNode : public DdlNode
 {
 public:
-	CreatePackageBodyNode(MemoryPool& pool, const MetaName& aName)
+	CreatePackageBodyNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
 		  source(pool),
@@ -164,19 +177,19 @@ public:
 	}
 
 public:
-	virtual DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_pack_body_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_create_pack_body_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
+	QualifiedName name;
 	Firebird::string source;
 	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
 	Firebird::Array<CreateAlterPackageNode::Item>* items;
@@ -190,27 +203,36 @@ private:
 class DropPackageBodyNode : public DdlNode
 {
 public:
-	DropPackageBodyNode(MemoryPool& pool, const MetaName& aName)
+	DropPackageBodyNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
-		  name(pool, aName),
-		  silent(false)
+		  name(pool, aName)
 	{
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+
+	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		dsqlScratch->qualifyExistingName(name, obj_package_header);
+		protectSystemSchema(name.schema, obj_package_header);
+		dsqlScratch->ddlSchema = name.schema;
+
+		return DdlNode::dsqlPass(dsqlScratch);
+	}
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_body_failed) << name;
+		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_body_failed) << name.toQuotedString();
 	}
 
 public:
-	MetaName name;
-	bool silent;	// Unused. Just to please RecreateNode template.
+	QualifiedName name;
+	bool silent = false;	// Unused. Just to please RecreateNode template.
+	bool recreate = false;
 };
 
 

@@ -28,6 +28,6 @@
 void	xdr_debug_memory (RemoteXdr*, enum xdr_op, const void*, const void*, ULONG);
 #endif
 bool_t	xdr_protocol (RemoteXdr*, struct packet*);
-ULONG	xdr_protocol_overhead (P_OP);
+ULONG	xdr_protocol_overhead (P_OP) noexcept;
 
 #endif	//  REMOTE_PROTO_PROTO_H

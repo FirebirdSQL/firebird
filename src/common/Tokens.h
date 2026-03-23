@@ -54,34 +54,34 @@ public:
 
 	Tokens();
 
-	void spaces(const char* s)
+	void spaces(const char* s) noexcept
 	{
 		wsps = s;
 	}
 
-	void quotes(const char* s)
+	void quotes(const char* s) noexcept
 	{
 		qs = s;
 	}
 
-	void comments(const Comment* ptr)
+	void comments(const Comment* ptr) noexcept
 	{
 		comms = ptr;
 	}
 
-	void separators(const char* s)
+	void separators(const char* s) noexcept
 	{
 		seps = s;
 	}
 
 	void parse(FB_SIZE_T length, const char* string);
 
-	const Tok& operator[](FB_SIZE_T pos) const
+	const Tok& operator[](FB_SIZE_T pos) const noexcept
 	{
 		return tokens[pos];
 	}
 
-	FB_SIZE_T getCount() const
+	FB_SIZE_T getCount() const noexcept
 	{
 		return tokens.getCount();
 	}

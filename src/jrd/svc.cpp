@@ -123,16 +123,16 @@ int main_gstat(Firebird::UtilSvc* uSvc);
 using namespace Firebird;
 using namespace Jrd;
 
-const int SVC_user_dba			= 2;
-const int SVC_user_any			= 1;
-const int SVC_user_none			= 0;
+inline constexpr int SVC_user_dba	= 2;
+inline constexpr int SVC_user_any	= 1;
+inline constexpr int SVC_user_none	= 0;
 
-const int GET_LINE		= 1;
-const int GET_EOF		= 2;
-const int GET_BINARY	= 4;
-const int GET_ONCE		= 8;
+inline constexpr int GET_LINE		= 1;
+inline constexpr int GET_EOF		= 2;
+inline constexpr int GET_BINARY		= 4;
+inline constexpr int GET_ONCE		= 8;
 
-const char* const SPB_SEC_USERNAME = "isc_spb_sec_username";
+inline constexpr const char* SPB_SEC_USERNAME = "isc_spb_sec_username";
 
 namespace {
 
@@ -155,7 +155,7 @@ namespace {
 
 
 namespace {
-const serv_entry services[] =
+inline constexpr serv_entry services[] =
 {
 	{ isc_action_svc_backup, "Backup Database", BURP_main },
 	{ isc_action_svc_restore, "Restore Database", BURP_main },
@@ -405,7 +405,7 @@ void Service::outputVerbose(const char* text)
 {
 	if (!usvcDataMode)
 	{
-		ULONG len = static_cast<ULONG>(strlen(text));
+		const ULONG len = static_cast<ULONG>(strlen(text));
 		enqueue(reinterpret_cast<const UCHAR*>(text), len);
 	}
 }
@@ -639,12 +639,12 @@ Firebird::ICryptKeyCallback* Service::getCryptCallback()
 	return svc_crypt_callback;
 }
 
-void Service::need_admin_privs(Arg::StatusVector& status, const char* message)
+void Service::need_admin_privs(Arg::StatusVector& status, const char* message) noexcept
 {
 	status << Arg::Gds(isc_insufficient_svc_privileges) << Arg::Str(message);
 }
 
-bool Service::ck_space_for_numeric(UCHAR*& info, const UCHAR* const end)
+bool Service::ck_space_for_numeric(UCHAR*& info, const UCHAR* const end) noexcept
 {
 	if ((info + 1 + sizeof(ULONG)) > end)
 	{
@@ -703,7 +703,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
 	svc_stdin_size_requested(0), svc_stdin_buffer(NULL), svc_stdin_size_preload(0),
-	svc_stdin_preload_requested(0), svc_stdin_user_size(0), svc_thread(0)
+	svc_stdin_preload_requested(0), svc_stdin_user_size(0)
 #ifdef DEV_BUILD
 	, svc_debug(false)
 #endif
@@ -974,7 +974,7 @@ bool Service::checkForShutdown()
 }
 
 
-bool Service::checkForFailedStart()
+bool Service::checkForFailedStart() noexcept
 {
 	if ((svc_flags & SVC_evnt_fired) == 0)
 	{
@@ -1494,7 +1494,7 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 		memmove(start_info + 7, start_info, number);
 		if (stdin_request_notification)
 			stdin_request_notification += 7;
-		USHORT length2 = INF_convert(number, buffer);
+		const USHORT length2 = INF_convert(number, buffer);
 		fb_assert(length2 == 4); // We only accept SLONG
 		INF_put_item(isc_info_length, length2, buffer, start_info, end, true);
 	}
@@ -1695,7 +1695,7 @@ void Service::query(USHORT			send_item_length,
 				// Note: it is safe to use strlen to get a length of "buffer"
 				// because gds_prefix[_lock|_msg] return a zero-terminated
 				// string.
-				if (!(info = INF_put_item(item, strlen(pathBuffer), pathBuffer, info, end)))
+				if (!(info = INF_put_item(item, fb_strlen(pathBuffer), pathBuffer, info, end)))
 					return;
 			}
 			// Can not return error for service v.1 => simply ignore request
@@ -1946,12 +1946,13 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
-		Thread::Handle thrHandle = svc->svc_thread;
+		Thread svcThread(std::move(svc->svc_thread));
+
 		svc->started();
 		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->ending(thrHandle);
+		threadCollect->ending(std::move(svcThread));
 	}
 	catch (const Exception& ex)
 	{
@@ -2203,11 +2204,11 @@ void Service::readFbLog()
 			svc_started = true;
 			TEXT buffer[100];
 			setDataMode(true);
-			int n;
+			size_t n;
 
 			while ((n = fread(buffer, sizeof(buffer[0]), FB_NELEM(buffer), file)) > 0)
 			{
-				outputData(buffer, n);
+				outputData(buffer, static_cast<FB_SIZE_T>(n));
 				if (checkForShutdown())
 					break;
 			}
@@ -2251,25 +2252,25 @@ void Service::start(const serv_entry* service_run)
 }
 
 
-ULONG Service::add_one(ULONG i)
+ULONG Service::add_one(ULONG i) noexcept
 {
 	return (i + 1) % SVC_STDOUT_BUFFER_SIZE;
 }
 
 
-ULONG Service::add_val(ULONG i, ULONG val)
+ULONG Service::add_val(ULONG i, ULONG val) noexcept
 {
 	return (i + val) % SVC_STDOUT_BUFFER_SIZE;
 }
 
 
-bool Service::empty(ULONG head) const
+bool Service::empty(ULONG head) const noexcept
 {
 	return svc_stdout_tail == head;
 }
 
 
-bool Service::full() const
+bool Service::full() const noexcept
 {
 	return add_one(svc_stdout_tail) == svc_stdout_head;
 }
@@ -2451,7 +2452,7 @@ ULONG Service::put(const UCHAR* buffer, ULONG length)
 		svc_stdin_user_size = MIN(length, svc_stdin_size_requested);
 		memcpy(svc_stdin_buffer, buffer, svc_stdin_user_size);
 		// reset satisfied request
-		ULONG blockSize = svc_stdin_size_requested;
+		const ULONG blockSize = svc_stdin_size_requested;
 		svc_stdin_size_requested = 0;
 		// let data be used
 		svc_stdin_semaphore.release();
@@ -2605,14 +2606,15 @@ const TEXT* Service::find_switch(int in_spb_sw, const Switches::in_sw_tab_t* tab
 }
 
 
-bool Service::actionNeedsArg(UCHAR action)
+bool Service::actionNeedsArg(UCHAR action) noexcept
 {
 	switch (action)
 	{
 	case isc_action_svc_get_fb_log:
 		return false;
+	default:
+		return true;
 	}
-	return true;
 }
 
 
@@ -2899,11 +2901,12 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			switch (spb.getClumpTag())
 			{
 			case isc_spb_sts_table:
+			case isc_spb_sts_schema:
 				if (!get_action_svc_parameter(spb.getClumpTag(), dba_in_sw_table, switches))
 				{
 					return false;
 				}
-				// fall through ....
+				[[fallthrough]];
 			case isc_spb_dbname:
 				get_action_svc_string(spb, switches);
 				break;
@@ -2996,7 +2999,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_res_replica_mode:
 				if (get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
 				{
-					unsigned int val = spb.getInt();
+					const unsigned int val = spb.getInt();
 					if (val >= FB_NELEM(burp_repl_mode_sw_table))
 					{
 						return false;
@@ -3048,7 +3051,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_rpr_rollback_trans_64:
 			case isc_spb_rpr_recover_two_phase_64:
 				bigint = true;
-				// fall into
+				[[fallthrough]];
 			case isc_spb_prp_page_buffers:
 			case isc_spb_prp_sweep_interval:
 			case isc_spb_prp_shutdown_db:
@@ -3080,7 +3083,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_prp_online_mode:
 				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
 				{
-					unsigned int val = spb.getInt();
+					const unsigned int val = spb.getInt();
 					if (val >= FB_NELEM(alice_shut_mode_sw_table))
 					{
 						return false;
@@ -3093,7 +3096,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			case isc_spb_prp_replica_mode:
 				if (get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
 				{
-					unsigned int val = spb.getInt();
+					const unsigned int val = spb.getInt();
 					if (val >= FB_NELEM(alice_repl_mode_sw_table))
 					{
 						return false;
@@ -3132,6 +3135,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_trc_cfg:
 			case isc_spb_trc_name:
+			case isc_spb_trc_plugins:
 				get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_trc_id:
@@ -3154,7 +3158,9 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					(Arg::Gds(isc_unexp_spb_form) << Arg::Str("only one isc_spb_dbname")).raise();
 				}
 				val_database = true;
-				// fall thru
+				[[fallthrough]];
+			case isc_spb_val_sch_incl:
+			case isc_spb_val_sch_excl:
 			case isc_spb_val_tab_incl:
 			case isc_spb_val_tab_excl:
 			case isc_spb_val_idx_incl:
@@ -3339,17 +3345,17 @@ bool Service::get_action_svc_parameter(UCHAR action,
 	return true;
 }
 
-const char* Service::getServiceMgr() const
+const char* Service::getServiceMgr() const noexcept
 {
 	return "service_mgr";
 }
 
-const char* Service::getServiceName() const
+const char* Service::getServiceName() const noexcept
 {
 	return svc_service_run ? svc_service_run->serv_name : NULL;
 }
 
-bool Service::getUserAdminFlag() const
+bool Service::getUserAdminFlag() const noexcept
 {
 	return (svc_user_flag & SVC_user_dba);
 }

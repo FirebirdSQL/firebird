@@ -1,0 +1,118 @@
+SQL Language Extension: UNLIST
+
+Function:
+	The function splits the input string by the specified separator (comma "," is used by default) and returns
+	the identified substrings as discrete rows with a single column. Additionally, the desired type of the returned
+	field can be specified. If the specified data type conversion is not possible, an error is raised at runtime.
+
+Author:
+	Chudaykin Alex <chudaykinalex@gmail.com>
+
+Format
+	<unlist> ::=
+	  UNLIST ( <input> [, <separator>] [<type-conversion>] )
+	    [AS] <correlation-name> [ ( <column-name> ) ]
+
+	<input> ::= <value>
+
+	<separator> ::= <value>
+
+	<type-conversion> ::= RETURNING <data-type>
+
+Syntax Rules:
+
+1) <input>: any value expression that returns a string/blob of characters (or may be converted to a string), including
+   string literals, table columns, constants, variables, expressions, etc. This parameter is mandatory.
+2) <separator>: optional value expression that returns a string which is used as a delimiter (i.e. it separates one
+   value from another inside the input string). It may also be a BLOB TEXT value, limited to 32KB. If an empty string is
+   specified, the output will be just one record containing the input string. If omitted, the comma character is used as
+   a delimiter.
+2) <data-type>: target data type or domain to convert the output values into. If omitted, VARCHAR(32) is used.
+3) <correlation-name>: alias of the record set returned by the UNLIST function. It is a mandatory parameter.
+4) <column-name>: optional alias of the column returned by the UNLIST function. If omitted, UNLIST is used as an alias.
+
+Example:
+A)
+	SELECT * FROM UNLIST('1,2,3,4,5') AS U;
+
+B)
+	SELECT * FROM UNLIST('100:200:300:400:500', ':' RETURNING INT) AS U;
+
+C)
+	SELECT U.* FROM UNLIST('text1, text2, text3') AS U;
+
+D)
+	SELECT C0 FROM UNLIST('text1, text2, text3') AS U(C0);
+
+E)
+	SELECT U.C0 FROM UNLIST('text1, text2, text3') AS U(C0);
+
+F)
+	SET TERM ^ ;
+	RECREATE PROCEDURE TEST_PROC RETURNS (PROC_RETURN_INT INT)
+	AS
+	DECLARE VARIABLE text VARCHAR(11);
+	BEGIN
+		text = '123:123:123';
+		FOR SELECT * FROM UNLIST( :text, ':' RETURNING INT) AS A INTO :PROC_RETURN_INT DO
+		SUSPEND;
+	END^
+	SET TERM ; ^
+	SELECT * FROM TEST_PROC;
+
+G)
+	CREATE DOMAIN D1 AS INT;
+	SELECT TEST_DOMAIN FROM UNLIST('1,2,3,4' RETURNING D1) AS A(TEST_DOMAIN);
+
+	CREATE TABLE TABLE_TEST (COL1 INT);
+	SELECT TEST_TYPE_OF FROM UNLIST('1,2,3,4' RETURNING TYPE OF COLUMN TABLE_TEST.COL1) AS A(TEST_TYPE_OF);
+H)
+	CREATE VIEW TEST_VIEW AS SELECT * FROM UNLIST('1,2,3,4') AS A(B);
+	SELECT B FROM TEST_VIEW;
+
+Unacceptable behavior:
+	SELECT UNLIST FROM UNLIST('UNLIST,A,S,A') AS A;
+
+
+Short syntax for UNLIST with IN operator:
+	UNLIST can be used directly with the IN operator without requiring a full subquery.
+	Instead of writing IN (SELECT * FROM UNLIST(...) AS U), you can use the shorter syntax IN UNLIST(...).
+
+Syntax:
+	<in predicate> ::=
+		<value> [NOT] IN <table value function unlist short>
+
+	<table value function unlist short> ::=
+		UNLIST ( <input> [, <separator>] [<type-conversion>] )
+
+Examples:
+
+A)
+	SELECT * FROM EMPLOYEE WHERE EMP_NO IN UNLIST('2,4,5,7,11');
+B)
+	SELECT * FROM EMPLOYEE WHERE JOB_COUNTRY IN UNLIST('France,Italy,England');
+C)
+	SELECT EMP_NO FROM EMPLOYEE	WHERE JOB_COUNTRY NOT IN UNLIST('USA');
+D)
+	SELECT * FROM EMPLOYEE WHERE DEPT_NO IN UNLIST('100:110:115:120', ':' RETURNING INT);
+E)
+	SET AUTOTERM;
+	RECREATE PROCEDURE GET_EMPLOYEES_BY_PHONE_EXT (PHONE VARCHAR(1000))
+	RETURNS (EMPLOYEE_NAME VARCHAR(100))
+	AS
+	BEGIN
+		FOR
+			SELECT FIRST_NAME FROM EMPLOYEE
+			WHERE PHONE_EXT IN UNLIST(:PHONE, ',' RETURNING INT)
+			INTO :EMPLOYEE_NAME
+		DO
+			SUSPEND;
+	END;
+
+	SELECT A.EMPLOYEE_NAME FROM GET_EMPLOYEES_BY_PHONE_EXT('2,3,7') AS A;
+
+Note:
+	The short syntax automatically provides the correlation name and column name,
+	so they cannot be specified explicitly when using this form.
+
+

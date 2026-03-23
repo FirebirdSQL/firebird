@@ -69,7 +69,7 @@
 		pin_records_fetched	: Int64;
 	end;
 
-	Dsc = Record
+	ParamDsc = Record
 		dsc_dtype, dsc_scale: Byte;
 		dsc_length, dsc_sub_type, dsc_flags: Int16;
 		dsc_address: ^Byte;

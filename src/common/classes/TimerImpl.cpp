@@ -53,7 +53,7 @@ void TimerImpl::handler()
 		m_expTime = 0;
 
 		if (m_onTimer)
-			m_handlerTid = Thread::getId();
+			m_handlerTid = Thread::getCurrentThreadId();
 	}
 
 	if (!m_onTimer)
@@ -97,7 +97,7 @@ void TimerImpl::reset(unsigned int timeout)
 	m_fireTime = m_expTime;
 
 	// new ITimer timeout, ms
-	SINT64 tout = (m_expTime - curTime) * (1000 * 1000);
+	const SINT64 tout = (m_expTime - curTime) * (1000 * 1000);
 
 	timerCtrl->start(&s, this, tout);
 	check(&s);
@@ -108,7 +108,7 @@ void TimerImpl::stop()
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 	// Allow handler() to call stop()
-	if (m_handlerTid == Thread::getId())
+	if (m_handlerTid == Thread::getCurrentThreadId())
 		return;
 
 	// hvlad: it could be replaced by condition variable when we have good one for Windows

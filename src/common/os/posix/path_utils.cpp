@@ -32,17 +32,18 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <string>
 
 using namespace Firebird;
 
 /// The POSIX implementation of the path_utils abstraction.
 
 const char PathUtils::dir_sep = '/';
-const char* PathUtils::curr_dir_link = ".";
-const char* PathUtils::up_dir_link = "..";
+const char* const PathUtils::curr_dir_link = ".";
+const char* const PathUtils::up_dir_link = "..";
 const char PathUtils::dir_list_sep = ':';
-const size_t PathUtils::curr_dir_link_len = strlen(curr_dir_link);
-const size_t PathUtils::up_dir_link_len = strlen(up_dir_link);
+const size_t PathUtils::curr_dir_link_len = std::char_traits<char>::length(curr_dir_link);
+const size_t PathUtils::up_dir_link_len = std::char_traits<char>::length(up_dir_link);
 
 class PosixDirIterator : public PathUtils::DirIterator
 {
@@ -61,9 +62,9 @@ public:
 
 	~PosixDirIterator();
 
-	const PosixDirIterator& operator++();
-	const PathName& operator*() { return file; }
-	operator bool() { return !done; }
+	const PosixDirIterator& operator++() override;
+	const PathName& operator*() noexcept override { return file; }
+	operator bool() noexcept override { return !done; }
 
 private:
 	DIR* dir;
@@ -220,7 +221,7 @@ void PathUtils::ensureSeparator(PathName& in_out)
 		in_out += PathUtils::dir_sep;
 }
 
-void PathUtils::fixupSeparators(char* path)
+void PathUtils::fixupSeparators(char* path) noexcept
 {
 	for (; *path; ++path)
 	{

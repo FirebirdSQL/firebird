@@ -73,5 +73,11 @@
     <ClInclude Include="..\..\..\src\auth\SecureRemotePassword\Message.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\remote\remote_def.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\remote\SockAddr.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

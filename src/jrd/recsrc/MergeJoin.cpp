@@ -38,32 +38,21 @@ static const char* const SCRATCH = "fb_merge_";
 
 MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
 					 SortedStream* const* args, const NestValueArray* const* keys)
-	: RecordSource(csb),
-	  m_args(csb->csb_pool),
-	  m_keys(csb->csb_pool)
+	: Join(csb, count, JoinType::INNER),
+	  m_keys(csb->csb_pool, count)
 {
 	const size_t size = sizeof(struct Impure) + count * sizeof(Impure::irsb_mrg_repeat);
 	m_impure = csb->allocImpure(FB_ALIGNMENT, static_cast<ULONG>(size));
 	m_cardinality = MINIMUM_CARDINALITY;
 
-	m_args.resize(count);
-	m_keys.resize(count);
-
 	for (FB_SIZE_T i = 0; i < count; i++)
 	{
-		fb_assert(args[i]);
-		m_args[i] = args[i];
-
-		m_cardinality *= args[i]->getCardinality();
-		if (i)
-		{
-			for (auto keyCount = keys[i]->getCount(); keyCount; keyCount--)
-				m_cardinality *= REDUCE_SELECTIVITY_FACTOR_EQUALITY;
-		}
-
-		fb_assert(keys[i]);
-		m_keys[i] = keys[i];
+		m_args.add(args[i]);
+		m_cardinality *= args[i]->getCardinality() *
+			pow(REDUCE_SELECTIVITY_FACTOR_EQUALITY, keys[i]->getCount());
 	}
+
+	m_keys.add(keys, count);
 }
 
 void MergeJoin::internalOpen(thread_db* tdbb) const
@@ -114,13 +103,11 @@ void MergeJoin::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 
+		Join::close(tdbb);
+
 		for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
 		{
 			Impure::irsb_mrg_repeat* const tail = &impure->irsb_mrg_rpt[i];
-
-			// close all the substreams for the sort-merge
-
-			m_args[i]->close(tdbb);
 
 			// Release memory associated with the merge file block and the sort file block.
 			// Also delete the merge file if one exists.
@@ -335,27 +322,11 @@ bool MergeJoin::internalGetRecord(thread_db* tdbb) const
 	return true;
 }
 
-bool MergeJoin::refetchRecord(thread_db* /*tdbb*/) const
-{
-	return true;
-}
-
-WriteLockResult MergeJoin::lockRecord(thread_db* /*tdbb*/) const
-{
-	status_exception::raise(Arg::Gds(isc_record_lock_not_supp));
-}
-
 void MergeJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
 {
 	level++;
 	plan += "MERGE (";
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-	{
-		if (i)
-			plan += ", ";
-
-		m_args[i]->getLegacyPlan(tdbb, plan, level);
-	}
+	Join::getLegacyPlan(tdbb, plan, level);
 	plan += ")";
 }
 
@@ -363,73 +334,41 @@ void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned 
 {
 	planEntry.className = "MergeJoin";
 
+	planEntry.lines.add().text = "Merge Join " + printType();
+
 	string extras;
 	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
 				  m_keys[0]->getCount(), m_args[0]->getKeyLength());
 
-	planEntry.lines.add().text = "Merge Join (inner)" + extras;
+	planEntry.lines.back().text += extras;
+
 	printOptInfo(planEntry.lines);
 
-	if (recurse)
-	{
-		++level;
-
-		for (const auto arg : m_args)
-			arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
-	}
-}
-
-void MergeJoin::markRecursive()
-{
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->markRecursive();
-}
-
-void MergeJoin::findUsedStreams(StreamList& streams, bool expandAll) const
-{
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->findUsedStreams(streams, expandAll);
-}
-
-void MergeJoin::invalidateRecords(Request* request) const
-{
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->invalidateRecords(request);
-}
-
-void MergeJoin::nullRecords(thread_db* tdbb) const
-{
-	for (FB_SIZE_T i = 0; i < m_args.getCount(); i++)
-		m_args[i]->nullRecords(tdbb);
+	Join::internalGetPlan(tdbb, planEntry, level, recurse);
 }
 
 int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
 	const NestValueArray* node2) const
 {
-	Request* const request = tdbb->getRequest();
+	const auto request = tdbb->getRequest();
 
 	const NestConst<ValueExprNode>* ptr1 = node1->begin();
 	const NestConst<ValueExprNode>* ptr2 = node2->begin();
 
 	for (const NestConst<ValueExprNode>* const end = node1->end(); ptr1 != end; ++ptr1, ++ptr2)
 	{
-		const dsc* const desc1 = EVL_expr(tdbb, request, *ptr1);
-		const bool null1 = (request->req_flags & req_null);
+		const auto desc1 = EVL_expr(tdbb, request, *ptr1);
+		const auto desc2 = EVL_expr(tdbb, request, *ptr2);
 
-		const dsc* const desc2 = EVL_expr(tdbb, request, *ptr2);
-		const bool null2 = (request->req_flags & req_null);
-
-		if (null1 && !null2)
+		if (!desc1 && desc2)
 			return -1;
 
-		if (null2 && !null1)
+		if (desc1 && !desc2)
 			return 1;
 
-		if (!null1 && !null2)
+		if (desc1 && desc2)
 		{
-			const int result = MOV_compare(tdbb, desc1, desc2);
-
-			if (result != 0)
+			if (const int result = MOV_compare(tdbb, desc1, desc2))
 				return result;
 		}
 	}

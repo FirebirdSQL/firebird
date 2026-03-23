@@ -89,6 +89,12 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
    #define LTC_FAST
 #endif
 
+/* detect arm64 */
+#if defined(_M_ARM64)
+   #define ENDIAN_LITTLE
+   #define ENDIAN_64BITWORD
+#endif
+
 /* detect PPC32 */
 #if defined(LTC_PPC32)
    #define ENDIAN_BIG

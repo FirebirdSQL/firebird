@@ -204,15 +204,16 @@ if (MINGW)
     set(CMAKE_SHARED_MODULE_PREFIX)
     set(CMAKE_STATIC_LIBRARY_PREFIX)
 
-    add_definitions(-D_WIN32_WINNT=0x0600)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++17")
+    # 0x0601 is Windows 7 - see also comments in autoconfig_msvc.h
+    add_definitions(-D_WIN32_WINNT=0x0601)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++20")
 endif()
 
 if (UNIX)
     set(OS_DIR posix)
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4 -std=c++17")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4 -std=c++20")
 
     if (NOT CMAKE_CROSSCOMPILING)
         set(LIB_readline readline)

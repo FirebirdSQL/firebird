@@ -36,7 +36,9 @@
 #include "../dsql/gen_proto.h"
 #include "../dsql/metd_proto.h"
 #include "../dsql/pass1_proto.h"
+#include "../jrd/met.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../dsql/DSqlDataTypeUtil.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -54,6 +56,185 @@ static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const 
 
 namespace
 {
+	struct SpecialJoinItem
+	{
+		RseNode* rse;
+		bool semiJoin;
+		BoolExprNode* boolean;
+	};
+
+	typedef HalfStaticArray<SpecialJoinItem, 4> SpecialJoinList;
+
+	void appendContextAlias(DsqlCompilerScratch* dsqlScratch, const string& alias)
+	{
+		const auto len = alias.length();
+		if (len <= MAX_UCHAR)
+			dsqlScratch->appendMetaString(alias.c_str());
+		else
+		{
+			string truncatedAlias(alias);
+			truncatedAlias.resize(MAX_UCHAR - 3);
+			truncatedAlias += "...";
+			dsqlScratch->appendMetaString(truncatedAlias.c_str());
+		}
+	}
+
+	// Search through the list of ANDed booleans to find comparisons
+	// referring streams of parent select expressions.
+	// Extract those booleans and return them to the caller.
+
+	bool findDependentBooleans(CompilerScratch* csb,
+							   const StreamList& rseStreams,
+							   BoolExprNode** parentBoolean,
+							   BoolExprNodeStack& booleanStack)
+	{
+		const auto boolean = *parentBoolean;
+
+		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
+		if (binaryNode && binaryNode->blrOp == blr_and)
+		{
+			const bool found1 = findDependentBooleans(csb, rseStreams,
+				binaryNode->arg1.getAddress(), booleanStack);
+			const bool found2 = findDependentBooleans(csb, rseStreams,
+				binaryNode->arg2.getAddress(), booleanStack);
+
+			if (!binaryNode->arg1 && !binaryNode->arg2)
+				*parentBoolean = nullptr;
+			else if (!binaryNode->arg1)
+				*parentBoolean = binaryNode->arg2;
+			else if (!binaryNode->arg2)
+				*parentBoolean = binaryNode->arg1;
+
+			return (found1 || found2);
+		}
+
+		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean))
+		{
+			if (cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv)
+			{
+				SortedStreamList streams;
+				cmpNode->collectStreams(streams);
+
+				for (const auto stream : streams)
+				{
+					if (rseStreams.exist(stream))
+					{
+						booleanStack.push(boolean);
+						*parentBoolean = nullptr;
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	// Search through the list of ANDed booleans to find correlated EXISTS/IN sub-queries.
+	// They are candidates to be converted into semi- or anti-joins.
+
+	bool findPossibleJoins(CompilerScratch* csb,
+						   const StreamList& rseStreams,
+						   BoolExprNode** parentBoolean,
+						   SpecialJoinList& result)
+	{
+		auto boolNode = *parentBoolean;
+
+		const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode);
+		if (binaryNode && binaryNode->blrOp == blr_and)
+		{
+			const bool found1 = findPossibleJoins(csb, rseStreams,
+				binaryNode->arg1.getAddress(), result);
+			const bool found2 = findPossibleJoins(csb, rseStreams,
+				binaryNode->arg2.getAddress(), result);
+
+			if (!binaryNode->arg1 && !binaryNode->arg2)
+				*parentBoolean = nullptr;
+			else if (!binaryNode->arg1)
+				*parentBoolean = binaryNode->arg2;
+			else if (!binaryNode->arg2)
+				*parentBoolean = binaryNode->arg1;
+
+			return (found1 || found2);
+		}
+
+		const auto rseNode = nodeAs<RseBoolNode>(boolNode);
+		// Both EXISTS (blr_any) and IN (blr_ansi_any) sub-queries are handled
+		if (rseNode && (rseNode->blrOp == blr_any || rseNode->blrOp == blr_ansi_any))
+		{
+			auto rse = rseNode->rse;
+			fb_assert(rse && (rse->flags & RseNode::FLAG_SUB_QUERY));
+
+			if (rse->rse_boolean && rse->isInnerJoin() &&
+				!rse->rse_first && !rse->rse_skip && !rse->rse_plan)
+			{
+				// Find booleans convertable into semi-joins
+
+				StreamList streams;
+				rse->computeRseStreams(streams);
+
+				BoolExprNodeStack booleans;
+				if (findDependentBooleans(csb, rseStreams,
+										  rse->rse_boolean.getAddress(),
+										  booleans))
+				{
+					// Compose the conjunct boolean
+
+					fb_assert(booleans.hasData());
+					auto boolean = booleans.pop();
+					while (booleans.hasData())
+					{
+						const auto andNode = FB_NEW_POOL(csb->csb_pool)
+							BinaryBoolNode(csb->csb_pool, blr_and);
+						andNode->arg1 = boolean;
+						andNode->arg2 = booleans.pop();
+						boolean = andNode;
+					}
+
+					// Ensure that no external references are left inside the subquery.
+					// If so, mark the RSE as joined and add it to the stack.
+
+					SortedStreamList streams;
+					rse->collectStreams(streams);
+
+					bool dependent = false;
+					for (const auto stream : streams)
+					{
+						if (rseStreams.exist(stream))
+						{
+							dependent = true;
+							break;
+						}
+					}
+
+					if (!dependent)
+					{
+						rse->flags &= ~RseNode::FLAG_SUB_QUERY;
+						result.push({rse, true, boolean});
+						*parentBoolean = nullptr;
+						return true;
+					}
+
+					// Otherwise, restore the original sub-query by adding
+					// the collected booleans back to the RSE.
+
+					if (rse->rse_boolean)
+					{
+						const auto andNode = FB_NEW_POOL(csb->csb_pool)
+							BinaryBoolNode(csb->csb_pool, blr_and);
+						andNode->arg1 = boolean;
+						andNode->arg2 = rse->rse_boolean;
+						boolean = andNode;
+					}
+
+					rse->rse_boolean = boolean;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	class AutoActivateResetStreams : public AutoStorage
 	{
 	public:
@@ -226,7 +407,7 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (dsqlNames)
 	{
-		node->dsqlNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+		node->dsqlNames = FB_NEW_POOL(pool) ObjectsArray<QualifiedName>(pool);
 		*node->dsqlNames = *dsqlNames;
 
 		dsql_ctx* context = dsqlPassAliasList(dsqlScratch);
@@ -242,6 +423,12 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			ProcedureSourceNode* procNode = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 			procNode->dsqlContext = context;
 			node->recordSourceNode = procNode;
+		}
+		else if (context->ctx_table_value_fun)
+		{
+			auto tableValueFunctionNode = FB_NEW_POOL(pool) TableValueFunctionSourceNode(pool);
+			tableValueFunctionNode->dsqlContext = context;
+			node->recordSourceNode = tableValueFunctionNode;
 		}
 		//// TODO: LocalTableSourceNode
 
@@ -264,8 +451,8 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 {
 	DEV_BLKCHK(dsqlScratch, dsql_type_req);
 
-	ObjectsArray<MetaName>::iterator arg = dsqlNames->begin();
-	ObjectsArray<MetaName>::iterator end = dsqlNames->end();
+	auto arg = dsqlNames->begin();
+	const auto end = dsqlNames->end();
 
 	// Loop through every alias and find the context for that alias.
 	// All aliases should have a corresponding context.
@@ -285,7 +472,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 			else if (context->ctx_relation)
 			{
 				// This must be a VIEW
-				ObjectsArray<MetaName>::iterator startArg = arg;
+				const auto startArg = arg;
 				dsql_rel* viewRelation = context->ctx_relation;
 
 				dsql_rel* relation = nullptr;
@@ -296,8 +483,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 				for (; arg != end; ++arg)
 				{
 					if (!METD_get_view_relation(dsqlScratch->getTransaction(),
-						dsqlScratch, viewRelation->rel_name, *arg,
-						relation, procedure))
+							dsqlScratch, viewRelation->rel_name, *arg, relation, procedure))
 					{
 						break;
 					};
@@ -319,20 +505,10 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 					newContext->ctx_procedure = procedure;
 
 					// Concatenate all the contexts to form the alias name.
-					// Calculate the length leaving room for spaces.
-					USHORT aliasLength = dsqlNames->getCount();
-					ObjectsArray<MetaName>::iterator aliasArg = startArg;
-					for (; aliasArg != end; ++aliasArg)
-						aliasLength += aliasArg->length();
-
-					newContext->ctx_alias.reserve(aliasLength);
+					auto aliasArg = startArg;
 
 					for (aliasArg = startArg; aliasArg != end; ++aliasArg)
-					{
-						if (aliasArg != startArg)
-							newContext->ctx_alias.append(" ", 1);
-						newContext->ctx_alias.append(aliasArg->c_str(), aliasArg->length());
-					}
+						newContext->ctx_alias.add(*aliasArg);
 
 					context = newContext;
 				}
@@ -359,7 +535,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 		// there is no alias or table named %s at this scope level.
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  Arg::Gds(isc_dsql_command_err) <<
-				  Arg::Gds(isc_dsql_no_relation_alias) << *arg);
+				  Arg::Gds(isc_dsql_no_relation_alias) << arg->toQuotedString());
 	}
 
 	return context;
@@ -368,7 +544,7 @@ dsql_ctx* PlanNode::dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch)
 // The passed relation or alias represents a context which was previously specified in the from
 // list. Find and return the proper context.
 dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextStack& stack,
-	const MetaName& alias)
+	const QualifiedName& alias)
 {
 	dsql_ctx* result_context = nullptr;
 
@@ -384,30 +560,30 @@ dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextS
 			continue;
 
 		// check for matching alias.
-		if (context->ctx_internal_alias.hasData())
+		if (context->ctx_internal_alias.object.hasData())
 		{
-			if (context->ctx_internal_alias == alias.c_str())
+			if (context->ctx_internal_alias == alias)
 				return context;
 
 			continue;
 		}
 
 		// If an unnamed derived table and empty alias.
-		if (context->ctx_rse && !context->ctx_relation && !context->ctx_procedure && alias.isEmpty())
+		if (context->ctx_rse && !context->ctx_relation && !context->ctx_procedure && alias.object.isEmpty())
 			result_context = context;
 
 		// Check for matching relation name; aliases take priority so
 		// save the context in case there is an alias of the same name.
 		// Also to check that there is no self-join in the query.
-		if ((context->ctx_relation && context->ctx_relation->rel_name == alias) ||
-			(context->ctx_procedure && context->ctx_procedure->prc_name.identifier == alias))
+		if ((context->ctx_relation && PASS1_compare_alias(context->ctx_relation->rel_name, alias)) ||
+			(context->ctx_procedure && PASS1_compare_alias(context->ctx_procedure->prc_name, alias)))
 		{
 			if (result_context)
 			{
 				// the table %s is referenced twice; use aliases to differentiate
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 						  Arg::Gds(isc_dsql_command_err) <<
-						  Arg::Gds(isc_dsql_self_join) << alias);
+						  Arg::Gds(isc_dsql_self_join) << alias.toQuotedString());
 			}
 
 			result_context = context;
@@ -522,7 +698,7 @@ void LocalTableSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_local_table_id);
 	dsqlScratch->appendUShort(tableNumber);
-	dsqlScratch->appendMetaString(alias.c_str());	// dsqlContext->ctx_alias?
+	appendContextAlias(dsqlScratch, alias); // dsqlContext->ctx_alias?
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
 }
@@ -560,7 +736,7 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 void LocalTableSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* /*rse*/,
 	BoolExprNode** /*boolean*/, RecordSourceNodeStack& stack)
 {
-	fb_assert(!csb->csb_view);	// local tables cannot be inside a view
+	fb_assert(!csb->csb_view.isSet());	// local tables cannot be inside a view
 
 	stack.push(this);	// Assume that the source will be used. Push it on the final stream stack.
 
@@ -603,7 +779,8 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 
 	// Find relation either by id or by name
 	AutoPtr<string> aliasString;
-	MetaName name;
+	Cached::Relation* rel = nullptr;
+	QualifiedName name;
 
 	switch (blrOp)
 	{
@@ -618,24 +795,31 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 				csb->csb_blr_reader.getString(*aliasString);
 			}
 
-			if (!(node->relation = MET_lookup_relation_id(tdbb, id, false)))
-				name.printf("id %d", id);
+			rel = MetadataCache::getPerm<Cached::Relation>(tdbb, id,
+				CacheFlag::AUTOCREATE | (csb->csb_g_flags & csb_internal ? CacheFlag::NOSCAN : 0));
+			if (!rel)
+				name.object.printf("id %d", id);
 
 			break;
 		}
 
+		case blr_relation3:
+			csb->csb_blr_reader.getMetaName(name.schema);
+			[[fallthrough]];
+
 		case blr_relation:
 		case blr_relation2:
 		{
-			csb->csb_blr_reader.getMetaName(name);
+			csb->csb_blr_reader.getMetaName(name.object);
+			csb->qualifyExistingName(tdbb, name, obj_relation);
 
-			if (blrOp == blr_relation2)
+			if (blrOp == blr_relation2 || blrOp == blr_relation3)
 			{
 				aliasString = FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool);
 				csb->csb_blr_reader.getString(*aliasString);
 			}
 
-			node->relation = MET_lookup_relation(tdbb, name);
+			rel = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
 			break;
 		}
 
@@ -643,22 +827,17 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 			fb_assert(false);
 	}
 
-	if (!node->relation)
-		PAR_error(csb, Arg::Gds(isc_relnotdef) << Arg::Str(name), false);
+	if (!rel)
+		PAR_error(csb, Arg::Gds(isc_relnotdef) << name.toQuotedString(), false);
+
+	// Store relation in CSB resources and after it - in the node
+
+	node->relation = csb->csb_resources->relations.registerResource(rel);
 
 	// if an alias was passed, store with the relation
 
 	if (aliasString)
 		node->alias = *aliasString;
-
-	// Scan the relation if it hasn't already been scanned for meta data
-
-	if ((!(node->relation->rel_flags & REL_scanned) ||
-		(node->relation->rel_flags & REL_being_scanned)) &&
-		!(csb->csb_g_flags & csb_internal))
-	{
-		MET_scan_relation(tdbb, node->relation);
-	}
 
 	// generate a stream for the relation reference, assuming it is a real reference
 
@@ -683,8 +862,8 @@ string RelationSourceNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlName);
 	NODE_PRINT(printer, alias);
 	NODE_PRINT(printer, context);
-	if (relation)
-		printer.print("rel_name", relation->rel_name);
+	if (relation.isSet())
+		printer.print("rel_name", relation(JRD_get_thread_data())->getName());
 
 	return "RelationSourceNode";
 }
@@ -708,19 +887,33 @@ void RelationSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// if this is a trigger or procedure, don't want relation id used
 
-	if (DDL_ids(dsqlScratch))
+	if (DDL_ids(dsqlScratch) && !(relation->rel_flags & REL_ltt_created))
 	{
 		dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_rid2 : blr_rid);
 		dsqlScratch->appendUShort(relation->rel_id);
 	}
 	else
 	{
-		dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_relation2 : blr_relation);
-		dsqlScratch->appendMetaString(relation->rel_name.c_str());
+		if (relation->rel_name.schema != dsqlScratch->ddlSchema)
+		{
+			dsqlScratch->appendUChar(blr_relation3);
+			dsqlScratch->appendMetaString(relation->rel_name.schema.c_str());
+			dsqlScratch->appendMetaString(relation->rel_name.object.c_str());
+			if (dsqlContext->ctx_alias.isEmpty())
+				dsqlScratch->appendMetaString("");
+		}
+		else
+		{
+			dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_relation2 : blr_relation);
+			dsqlScratch->appendMetaString(relation->rel_name.object.c_str());
+		}
 	}
 
 	if (dsqlContext->ctx_alias.hasData())
-		dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+	{
+		const auto& contextAliases = dsqlContext->getConcatenatedAlias();
+		appendContextAlias(dsqlScratch, contextAliases);
+	}
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
 }
@@ -737,8 +930,10 @@ RelationSourceNode* RelationSourceNode::copy(thread_db* tdbb, NodeCopier& copier
 	copier.remap[stream] = newSource->stream;
 
 	newSource->context = context;
-	newSource->relation = relation;
-	newSource->view = view;
+	if (relation)
+		newSource->relation = copier.csb->csb_resources->relations.registerResource(relation());
+	if (view)
+		newSource->view = copier.csb->csb_resources->relations.registerResource(view());
 
 	CompilerScratch::csb_repeat* element = CMP_csb_element(copier.csb, newSource->stream);
 	element->csb_relation = newSource->relation;
@@ -759,12 +954,19 @@ RecordSourceNode* RelationSourceNode::pass1(thread_db* tdbb, CompilerScratch* cs
 	const auto tail = &csb->csb_rpt[stream];
 	const auto relation = tail->csb_relation;
 
-	if (relation && !csb->csb_implicit_cursor)
+	if (relation.isSet() && !csb->csb_implicit_cursor)
 	{
-		const SLONG ssRelationId = tail->csb_view ? tail->csb_view->rel_id :
-			view ? view->rel_id : csb->csb_view ? csb->csb_view->rel_id : 0;
-		CMP_post_access(tdbb, csb, relation->rel_security_name, ssRelationId,
-			SCL_select, obj_relations, relation->rel_name);
+		const RelationPermanent* r = relation();
+		const SLONG ssRelationId = tail->csb_view.isSet() ?
+			tail->csb_view()->getId() : view.isSet() ?
+			view()->getId() : csb->csb_view.isSet() ?
+			csb->csb_view()->getId() : 0;
+
+		CMP_post_access(tdbb, csb, r->rel_security_name.schema, ssRelationId,
+			SCL_usage, obj_schemas, QualifiedName(r->getName().schema));
+
+		CMP_post_access(tdbb, csb, r->rel_security_name.object, ssRelationId,
+			SCL_select, obj_relations, r->getName());
 	}
 
 	return this;
@@ -781,11 +983,10 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 	// prepare to check protection of relation when a field in the stream of the
 	// relation is accessed.
 
-	jrd_rel* const parentView = csb->csb_view;
+	Rsc::Rel const parentView = csb->csb_view;
 	const StreamType viewStream = csb->csb_view_stream;
 
-	jrd_rel* relationView = relation;
-	CMP_post_resource(&csb->csb_resources, relationView, Resource::rsc_relation, relationView->rel_id);
+	Rsc::Rel relationView = relation;
 	view = parentView;
 
 	CompilerScratch::csb_repeat* const element = CMP_csb_element(csb, stream);
@@ -794,9 +995,9 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	// in the case where there is a parent view, find the context name
 
-	if (parentView)
+	if (parentView.isSet())
 	{
-		const ViewContexts& ctx = parentView->rel_view_contexts;
+		const ViewContexts& ctx = parentView(tdbb)->rel_view_contexts;
 		const USHORT key = context;
 		FB_SIZE_T pos;
 
@@ -807,9 +1008,18 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 		}
 	}
 
+	// make sure we can access active relation's version
+
+	jrd_rel* jrdRel = relationView(tdbb);
+	if (!jrdRel)
+	{
+		fatal_exception::raiseFmt("Relation '%s' unavailable",
+			relationView ? relationView()->getName().toQuotedString().c_str() : "<noname>");
+	}
+
 	// check for a view - if not, nothing more to do
 
-	RseNode* viewRse = relationView->rel_view_rse;
+	RseNode* viewRse = jrdRel->rel_view_rse;
 	if (!viewRse)
 		return;
 
@@ -820,14 +1030,14 @@ void RelationSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseN
 
 	AutoSetRestore<USHORT> autoRemapVariable(&csb->csb_remap_variable,
 		(csb->csb_variables ? csb->csb_variables->count() : 0) + 1);
-	AutoSetRestore<jrd_rel*> autoView(&csb->csb_view, relationView);
+	AutoSetRestore<Rsc::Rel> autoView(&csb->csb_view, relationView);
 	AutoSetRestore<StreamType> autoViewStream(&csb->csb_view_stream, stream);
 
 	// We don't expand the view in two cases:
 	// 1) If the view has a projection, sort, first/skip or explicit plan.
 	// 2) If it's part of an outer join.
 
-	if (rse->rse_jointype != blr_inner || // viewRse->rse_jointype != blr_inner || ???
+	if (!rse->isInnerJoin() || // !viewRse->isInnerJoin() || ???
 		viewRse->rse_sorted || viewRse->rse_projection || viewRse->rse_first ||
 		viewRse->rse_skip || viewRse->rse_plan)
 	{
@@ -944,6 +1154,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 	ObjectsArray<MetaName>* inArgNames = nullptr;
 	USHORT inArgCount = 0;
 	QualifiedName name;
+	SubRoutine<jrd_prc> nodeProc;
 
 	const auto node = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 
@@ -958,44 +1169,59 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			{
 				switch (subCode)
 				{
-					case blr_invsel_procedure_type:
+					case blr_invsel_procedure_id:
 					{
-						UCHAR procedureType = blrReader.getByte();
+						bool isSub = false;
+						UCHAR procedureIdCode;
 
-						switch (procedureType)
+						while ((procedureIdCode = blrReader.getByte()) != blr_end)
 						{
-							case blr_invsel_procedure_type_packaged:
-								blrReader.getMetaName(name.package);
-								break;
+							switch (procedureIdCode)
+							{
+								case blr_invsel_procedure_id_schema:
+									blrReader.getMetaName(name.schema);
+									break;
 
-							case blr_invsel_procedure_type_standalone:
-							case blr_invsel_procedure_type_sub:
-								break;
+								case blr_invsel_procedure_id_package:
+									blrReader.getMetaName(name.package);
+									break;
 
-							default:
-								PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_type");
-								break;
+								case blr_invsel_procedure_id_name:
+									blrReader.getMetaName(name.object);
+									break;
+
+								case blr_invsel_procedure_id_sub:
+									isSub = true;
+									break;
+
+								default:
+									PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
+									break;
+							}
 						}
 
-						blrReader.getMetaName(name.identifier);
-
-						if (procedureType == blr_invsel_procedure_type_sub)
+						if (isSub)
 						{
 							for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
 							{
-								if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+								if (const auto declareNode = curCsb->subProcedures.get(name.object))
 									node->procedure = (*declareNode)->routine;
 							}
 						}
 						else if (!node->procedure)
-							node->procedure = MET_lookup_procedure(tdbb, name, false);
+						{
+							csb->qualifyExistingName(tdbb, name, obj_procedure);
+							auto* proc = MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE);
+							if (proc)
+								node->procedure = csb->csb_resources->procedures.registerResource(proc);
+						}
 
 						break;
 					}
 
 					case blr_invsel_procedure_in_arg_names:
 					{
-						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_in_arg_names");
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_in_arg_names");
 						predateCheck(!node->inputSources, "blr_invsel_procedure_in_arg_names", "blr_invsel_procedure_in_args");
 
 						inArgNamesPos = blrReader.getPos();
@@ -1014,11 +1240,11 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 					}
 
 					case blr_invsel_procedure_in_args:
-						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_in_args");
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_in_args");
 
 						inArgCount = blrReader.getWord();
 						node->inputSources = PAR_args(tdbb, csb, inArgCount,
-							MAX(inArgCount, node->procedure->getInputFields().getCount()));
+							MAX(inArgCount, node->procedure(tdbb)->getInputFields().getCount()));
 						break;
 
 					case blr_invsel_procedure_context:
@@ -1029,7 +1255,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 								"blr_invsel_procedure_context not expected inside plan clauses");
 						}
 
-						predateCheck(node->procedure, "blr_invsel_procedure_type", "blr_invsel_procedure_context");
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_context");
 						node->stream = PAR_context2(csb, &node->context);
 						csbTail = &csb->csb_rpt[node->stream];
 						csbTail->csb_procedure = node->procedure;
@@ -1059,13 +1285,19 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		case blr_pid:
 		case blr_pid2:
 		{
-			const SSHORT pid = blrReader.getWord();
+			const SSHORT procId = blrReader.getWord();
 
 			if (blrOp == blr_pid2)
 				blrReader.getString(node->alias);
 
-			if (!(node->procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
-				name.identifier.printf("id %d", pid);
+			auto* proc = MetadataCache::getPerm<Cached::Procedure>(tdbb, procId, CacheFlag::AUTOCREATE);
+			if (proc)
+			{
+				fb_assert(!node->procedure);
+				node->procedure = csb->csb_resources->procedures.registerResource(proc);
+			}
+			else
+				name.object.printf("id %d", procId);
 
 			break;
 		}
@@ -1078,7 +1310,7 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			if (blrOp == blr_procedure3 || blrOp == blr_procedure4)
 				blrReader.getMetaName(name.package);
 
-			blrReader.getMetaName(name.identifier);
+			blrReader.getMetaName(name.object);
 
 			if (blrOp == blr_procedure2 || blrOp == blr_procedure4 || blrOp == blr_subproc)
 				blrReader.getString(node->alias);
@@ -1087,12 +1319,20 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			{
 				for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
 				{
-					if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+					if (const auto declareNode = curCsb->subProcedures.get(name.object))
 						node->procedure = (*declareNode)->routine;
 				}
 			}
 			else
-				node->procedure = MET_lookup_procedure(tdbb, name, false);
+			{
+				csb->qualifyExistingName(tdbb, name, obj_procedure);
+				auto* proc = MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE);
+				if (proc)
+				{
+					fb_assert(!node->procedure);
+					node->procedure = csb->csb_resources->procedures.registerResource(proc);
+				}
+			}
 
 			break;
 
@@ -1108,36 +1348,37 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			"blr_invsel_procedure_in_arg_names count cannot be greater than blr_invsel_procedure_in_args");
 	}
 
-	if (!node->procedure)
+	fb_assert(node->procedure);
+	jrd_prc* procedure = node->procedure(tdbb);
+	if (!procedure)
 	{
 		blrReader.setPos(blrStartPos);
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toString());
+		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toQuotedString());
 	}
 
-	if (node->procedure->prc_type == prc_executable)
+	if (procedure->prc_type == prc_executable)
 	{
 		if (tdbb->getAttachment()->isGbak())
-			PAR_warning(Arg::Warning(isc_illegal_prc_type) << node->procedure->getName().toString());
+			PAR_warning(Arg::Warning(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
 		else
-			PAR_error(csb, Arg::Gds(isc_illegal_prc_type) << node->procedure->getName().toString());
+			PAR_error(csb, Arg::Gds(isc_illegal_prc_type) << node->procedure()->getName().toQuotedString());
 	}
 
-	node->isSubRoutine = node->procedure->isSubRoutine();
-	node->procedureId = node->isSubRoutine ? 0 : node->procedure->getId();
+	node->procedureId = node->procedure.isSubRoutine() ? 0 : node->procedure()->getId();
 
-	if (node->procedure->isImplemented() && !node->procedure->isDefined())
+	if (procedure->isImplemented() && !procedure->isDefined())
 	{
 		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
 		{
 			PAR_warning(
-				Arg::Warning(isc_prcnotdef) << name.toString() <<
+				Arg::Warning(isc_prcnotdef) << name.toQuotedString() <<
 				Arg::Warning(isc_modnotfound));
 		}
 		else
 		{
 			blrReader.setPos(blrStartPos);
 			PAR_error(csb,
-				Arg::Gds(isc_prcnotdef) << name.toString() <<
+				Arg::Gds(isc_prcnotdef) << name.toQuotedString() <<
 				Arg::Gds(isc_modnotfound));
 		}
 	}
@@ -1159,14 +1400,14 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 		if (!node->inputSources)
 			node->inputSources = FB_NEW_POOL(pool) ValueListNode(pool);
 
-		node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
+		node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, procedure->getInputFields().getCount());
 
 		Arg::StatusVector mismatchStatus;
 
 		if (!CMP_procedure_arguments(
 			tdbb,
 			csb,
-			node->procedure,
+			procedure,
 			true,
 			inArgCount,
 			inArgNames,
@@ -1176,14 +1417,14 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			mismatchStatus))
 		{
 			status_exception::raise(Arg::Gds(isc_prcmismat) <<
-				node->procedure->getName().toString() << mismatchStatus);
+				node->procedure()->getName().toQuotedString() << mismatchStatus);
 		}
 
-		if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
+		if (csb->collectingDependencies() && !node->procedure.isSubRoutine())
 		{
 			{	// scope
-				CompilerScratch::Dependency dependency(obj_procedure);
-				dependency.procedure = node->procedure;
+				Dependency dependency(obj_procedure);
+				dependency.procedure = node->procedure();
 				csb->addDependency(dependency);
 			}
 
@@ -1191,9 +1432,9 @@ ProcedureSourceNode* ProcedureSourceNode::parse(thread_db* tdbb, CompilerScratch
 			{
 				for (const auto& argName : *inArgNames)
 				{
-					CompilerScratch::Dependency dependency(obj_procedure);
-					dependency.procedure = node->procedure;
-					dependency.subName = &argName;
+					Dependency dependency(obj_procedure);
+					dependency.procedure = node->procedure();
+					dependency.subName = argName;
 					csb->addDependency(dependency);
 				}
 			}
@@ -1295,24 +1536,32 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	const dsql_prc* dsqlProcedure = dsqlContext->ctx_procedure;
 
-	if (dsqlInputArgNames)
+	if (dsqlInputArgNames || dsqlName.schema != dsqlScratch->ddlSchema)
 	{
 		dsqlScratch->appendUChar(blr_select_procedure);
 
-		dsqlScratch->appendUChar(blr_invsel_procedure_type);
+		dsqlScratch->appendUChar(blr_invsel_procedure_id);
 
-		if (dsqlName.package.hasData())
-		{
-			dsqlScratch->appendUChar(blr_invsel_procedure_type_packaged);
-			dsqlScratch->appendMetaString(dsqlName.package.c_str());
-		}
+		if (dsqlProcedure->prc_flags & PRC_subproc)
+			dsqlScratch->appendUChar(blr_invsel_procedure_id_sub);
 		else
 		{
-			dsqlScratch->appendUChar((dsqlProcedure->prc_flags & PRC_subproc) ?
-				blr_invsel_procedure_type_sub : blr_invsel_procedure_type_standalone);
+			if (dsqlName.schema != dsqlScratch->ddlSchema)
+			{
+				dsqlScratch->appendUChar(blr_invsel_procedure_id_schema);
+				dsqlScratch->appendMetaString(dsqlName.schema.c_str());
+			}
+
+			if (dsqlName.package.hasData())
+			{
+				dsqlScratch->appendUChar(blr_invsel_procedure_id_package);
+				dsqlScratch->appendMetaString(dsqlName.package.c_str());
+			}
 		}
 
-		dsqlScratch->appendMetaString(dsqlName.identifier.c_str());
+		dsqlScratch->appendUChar(blr_invsel_procedure_id_name);
+		dsqlScratch->appendMetaString(dsqlName.object.c_str());
+		dsqlScratch->appendUChar(blr_end);
 
 		// Input parameters.
 		if (inputSources)
@@ -1342,7 +1591,9 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		if (dsqlContext->ctx_alias.hasData())
 		{
 			dsqlScratch->appendUChar(blr_invsel_procedure_alias);
-			dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+
+			const auto& contextAliases = dsqlContext->getConcatenatedAlias();
+			appendContextAlias(dsqlScratch, contextAliases);
 		}
 
 		dsqlScratch->appendUChar(blr_end);
@@ -1353,8 +1604,10 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlProcedure->prc_flags & PRC_subproc)
 	{
 		dsqlScratch->appendUChar(blr_subproc);
-		dsqlScratch->appendMetaString(dsqlProcedure->prc_name.identifier.c_str());
-		dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+		dsqlScratch->appendMetaString(dsqlProcedure->prc_name.object.c_str());
+
+		const auto& contextAliases = dsqlContext->getConcatenatedAlias();
+		appendContextAlias(dsqlScratch, contextAliases);
 	}
 	else
 	{
@@ -1371,17 +1624,20 @@ void ProcedureSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			{
 				dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_procedure4 : blr_procedure3);
 				dsqlScratch->appendMetaString(dsqlProcedure->prc_name.package.c_str());
-				dsqlScratch->appendMetaString(dsqlProcedure->prc_name.identifier.c_str());
+				dsqlScratch->appendMetaString(dsqlProcedure->prc_name.object.c_str());
 			}
 			else
 			{
 				dsqlScratch->appendUChar(dsqlContext->ctx_alias.hasData() ? blr_procedure2 : blr_procedure);
-				dsqlScratch->appendMetaString(dsqlProcedure->prc_name.identifier.c_str());
+				dsqlScratch->appendMetaString(dsqlProcedure->prc_name.object.c_str());
 			}
 		}
 
 		if (dsqlContext->ctx_alias.hasData())
-			dsqlScratch->appendMetaString(dsqlContext->ctx_alias.c_str());
+		{
+			const auto& contextAliases = dsqlContext->getConcatenatedAlias();
+			appendContextAlias(dsqlScratch, contextAliases);
+		}
 	}
 
 	GEN_stuff_context(dsqlScratch, dsqlContext);
@@ -1402,21 +1658,22 @@ ProcedureSourceNode* ProcedureSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 	if (!copier.remap)
 		BUGCHECK(221);	// msg 221 (CMP) copy: cannot remap
 
-	ProcedureSourceNode* newSource = FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureSourceNode(
-		*tdbb->getDefaultPool());
+	ProcedureSourceNode* newSource = FB_NEW_POOL(*tdbb->getDefaultPool())
+		ProcedureSourceNode(*tdbb->getDefaultPool());
 
-	if (isSubRoutine)
+	if (procedure.isSubRoutine())
 		newSource->procedure = procedure;
 	else
 	{
-		newSource->procedure = MET_lookup_procedure_id(tdbb, procedureId, false, false, 0);
-		if (!newSource->procedure)
+		auto proc = MetadataCache::getPerm<Cached::Procedure>(tdbb, procedureId, CacheFlag::AUTOCREATE);
+		if (!proc)
 		{
 			string name;
 			name.printf("id %d", procedureId);
 			delete newSource;
 			ERR_post(Arg::Gds(isc_prcnotdef) << name);
 		}
+		newSource->procedure = copier.csb->csb_resources->procedures.registerResource(proc);
 	}
 
 	// dimitr: See the appropriate code and comment in NodeCopier (in nod_argument).
@@ -1433,9 +1690,9 @@ ProcedureSourceNode* ProcedureSourceNode::copy(thread_db* tdbb, NodeCopier& copi
 	newSource->stream = copier.csb->nextStream();
 	copier.remap[stream] = newSource->stream;
 	newSource->context = context;
-	newSource->isSubRoutine = isSubRoutine;
 	newSource->procedureId = procedureId;
-	newSource->view = view;
+	if (view)
+		newSource->view = copier.csb->csb_resources->relations.registerResource(view());
 
 	CompilerScratch::csb_repeat* element = CMP_csb_element(copier.csb, newSource->stream);
 	element->csb_procedure = newSource->procedure;
@@ -1466,13 +1723,10 @@ void ProcedureSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, Rse
 
 	pass1(tdbb, csb);
 
-	if (!isSubRoutine)
-	{
-		CMP_post_procedure_access(tdbb, csb, procedure);
-		CMP_post_resource(&csb->csb_resources, procedure, Resource::rsc_procedure, procedureId);
-	}
+	if (!procedure.isSubRoutine())
+		CMP_post_procedure_access(tdbb, csb, procedure());
 
-	jrd_rel* const parentView = csb->csb_view;
+	Rsc::Rel const parentView = csb->csb_view;
 	const StreamType viewStream = csb->csb_view_stream;
 	view = parentView;
 
@@ -1484,7 +1738,7 @@ void ProcedureSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, Rse
 
 	if (parentView)
 	{
-		const ViewContexts& ctx = parentView->rel_view_contexts;
+		const ViewContexts& ctx = parentView(tdbb)->rel_view_contexts;
 		const USHORT key = context;
 		FB_SIZE_T pos;
 
@@ -1516,7 +1770,7 @@ RecordSource* ProcedureSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool
 	const auto csb = opt->getCompilerScratch();
 	const string alias = opt->makeAlias(stream);
 
-	return FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureScan(csb, alias, stream, procedure,
+	return FB_NEW_POOL(*tdbb->getDefaultPool()) ProcedureScan(tdbb, csb, alias, stream, procedure,
 		inputSources, inputTargets, inputMessage);
 }
 
@@ -1808,7 +2062,7 @@ void AggregateSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, Rse
 
 	pass1(tdbb, csb);
 
-	jrd_rel* const parentView = csb->csb_view;
+	Rsc::Rel const parentView = csb->csb_view;
 	const StreamType viewStream = csb->csb_view_stream;
 
 	CompilerScratch::csb_repeat* const element = CMP_csb_element(csb, stream);
@@ -2112,7 +2366,7 @@ void UnionSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode
 		doPass1(tdbb, csb, ptr2->getAddress());
 	}
 
-	jrd_rel* const parentView = csb->csb_view;
+	Rsc::Rel const parentView = csb->csb_view;
 	const StreamType viewStream = csb->csb_view_stream;
 
 	CompilerScratch::csb_repeat* const element = CMP_csb_element(csb, stream);
@@ -2228,21 +2482,29 @@ RecordSource* UnionSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*i
 // Identify all of the streams for which a dbkey may need to be carried through a sort.
 void UnionSourceNode::computeDbKeyStreams(StreamList& streamList) const
 {
-	const NestConst<RseNode>* ptr = clauses.begin();
-
-	for (const NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
-		(*ptr)->computeDbKeyStreams(streamList);
+	for (const auto& clause : clauses)
+		clause->computeDbKeyStreams(streamList);
 }
 
 bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
-	NestConst<RseNode>* ptr = clauses.begin();
-
-	for (NestConst<RseNode>* const end = clauses.end(); ptr != end; ++ptr)
+	for (auto& clause : clauses)
 	{
-		if (!(*ptr)->computable(csb, stream, allowOnlyCurrentStream, NULL))
+		if (!clause->computable(csb, stream, allowOnlyCurrentStream, NULL))
 			return false;
+	}
+
+	for (auto& map : maps)
+	{
+		for (auto& source : map->sourceList)
+		{
+			if (!source->computable(csb, stream, allowOnlyCurrentStream, NULL))
+				return false;
+		}
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the union stream
 	}
 
 	return true;
@@ -2251,8 +2513,17 @@ bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 void UnionSourceNode::findDependentFromStreams(const CompilerScratch* csb,
 	StreamType currentStream, SortedStreamList* streamList)
 {
-	for (auto clause : clauses)
+	for (auto& clause : clauses)
 		clause->findDependentFromStreams(csb, currentStream, streamList);
+
+	for (auto& map : maps)
+	{
+		for (auto& source : map->sourceList)
+			source->findDependentFromStreams(csb, currentStream, streamList);
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the union stream
+	}
 }
 
 
@@ -2512,7 +2783,7 @@ void WindowSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNod
 
 	pass1(tdbb, csb);
 
-	jrd_rel* const parentView = csb->csb_view;
+	Rsc::Rel const parentView = csb->csb_view;
 	const StreamType viewStream = csb->csb_view_stream;
 
 	for (ObjectsArray<Window>::iterator window = windows.begin();
@@ -2594,8 +2865,6 @@ void WindowSourceNode::collectStreams(SortedStreamList& streamList) const
 
 RecordSource* WindowSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
 {
-	const auto csb = opt->getCompilerScratch();
-
 	return FB_NEW_POOL(*tdbb->getDefaultPool()) WindowedStream(tdbb, opt,
 		windows, opt->compile(rse, NULL));
 }
@@ -2659,14 +2928,14 @@ string RseNode::internalPrint(NodePrinter& printer) const
 bool RseNode::dsqlAggregateFinder(AggregateFinder& visitor)
 {
 	AutoSetRestore<USHORT> autoValidateExpr(&visitor.currentLevel, visitor.currentLevel + 1);
-	return visitor.visit(dsqlStreams) | visitor.visit(dsqlWhere) | visitor.visit(dsqlSelectList);
+	return visitor.visit(dsqlStreams) || visitor.visit(dsqlWhere) || visitor.visit(dsqlSelectList);
 }
 
 bool RseNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 {
 	AutoSetRestore<bool> autoCurrentScopeLevelEqual(&visitor.currentScopeLevelEqual, false);
 	// Pass dsqlWhere, dsqlSelectList and dsqlStreams.
-	return visitor.visit(dsqlWhere) | visitor.visit(dsqlSelectList) | visitor.visit(dsqlStreams);
+	return visitor.visit(dsqlWhere) || visitor.visit(dsqlSelectList) || visitor.visit(dsqlStreams);
 }
 
 bool RseNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
@@ -2683,7 +2952,7 @@ bool RseNode::dsqlSubSelectFinder(SubSelectFinder& visitor)
 bool RseNode::dsqlFieldFinder(FieldFinder& visitor)
 {
 	// Pass dsqlWhere and dsqlSelectList and dsqlStreams.
-	return visitor.visit(dsqlWhere) | visitor.visit(dsqlSelectList) | visitor.visit(dsqlStreams);
+	return visitor.visit(dsqlWhere) || visitor.visit(dsqlSelectList) || visitor.visit(dsqlStreams);
 }
 
 RseNode* RseNode::dsqlFieldRemapper(FieldRemapper& visitor)
@@ -2747,19 +3016,19 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	switch (rse_jointype)
 	{
-		case blr_inner:
+		case INNER_JOIN:
 			streamList->items[0] = doDsqlPass(dsqlScratch, fromList->items[0]);
 			streamList->items[1] = doDsqlPass(dsqlScratch, fromList->items[1]);
 			break;
 
-		case blr_left:
+		case LEFT_JOIN:
 			streamList->items[0] = doDsqlPass(dsqlScratch, fromList->items[0]);
 			++dsqlScratch->inOuterJoin;
 			streamList->items[1] = doDsqlPass(dsqlScratch, fromList->items[1]);
 			--dsqlScratch->inOuterJoin;
 			break;
 
-		case blr_right:
+		case RIGHT_JOIN:
 			++dsqlScratch->inOuterJoin;
 			streamList->items[0] = doDsqlPass(dsqlScratch, fromList->items[0]);
 			--dsqlScratch->inOuterJoin;
@@ -2770,7 +3039,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			streamList->items[1] = doDsqlPass(dsqlScratch, fromList->items[1]);
 			break;
 
-		case blr_full:
+		case FULL_JOIN:
 			++dsqlScratch->inOuterJoin;
 			streamList->items[0] = doDsqlPass(dsqlScratch, fromList->items[0]);
 			// Temporarily remove just created context(s) from the stack,
@@ -2842,7 +3111,7 @@ RseNode* RseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			if (matched->items.isEmpty())
 			{
 				// There is no match. Transform to CROSS JOIN.
-				node->rse_jointype = blr_inner;
+				node->rse_jointype = INNER_JOIN;
 				usingList = NULL;
 
 				delete matched;
@@ -3025,6 +3294,9 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 {
 	SET_TDBB(tdbb);
 
+	if (const auto newRse = processPossibleJoins(tdbb, csb))
+		return newRse->pass1(tdbb, csb);
+
 	// for scoping purposes, maintain a stack of RseNode's which are
 	// currently being parsed; if there are none on the stack as
 	// yet, mark the RseNode as variant to make sure that statement-
@@ -3054,14 +3326,14 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 	ValueExprNode* skip = rse_skip;
 	PlanNode* plan = rse_plan;
 
-	if (rse_jointype == blr_inner)
+	if (isInnerJoin())
 		csb->csb_inner_booleans.push(rse_boolean);
 
 	// zip thru RseNode expanding views and inner joins
 	for (auto sub : rse_relations)
 		processSource(tdbb, csb, this, sub, &boolean, stack);
 
-	if (rse_jointype == blr_inner)
+	if (isInnerJoin())
 		csb->csb_inner_booleans.pop();
 
 	// Now, rebuild the RseNode block.
@@ -3130,7 +3402,13 @@ RseNode* RseNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	BoolExprNode** boolean, RecordSourceNodeStack& stack)
 {
-	if (rse_jointype != blr_inner)
+	if (const auto newRse = processPossibleJoins(tdbb, csb))
+	{
+		newRse->pass1Source(tdbb, csb, rse, boolean, stack);
+		return;
+	}
+
+	if (isOuterJoin())
 	{
 		// Check whether any of the upper level booleans (those belonging to the WHERE clause)
 		// is able to filter out rows from the "inner" streams. If this is the case,
@@ -3145,7 +3423,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		StreamList streams;
 
 		// First check the left stream of the full outer join
-		if (rse_jointype == blr_full)
+		if (isFullJoin())
 		{
 			rse1->computeRseStreams(streams);
 
@@ -3153,7 +3431,7 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 			{
 				if (boolean && boolean->ignoreNulls(streams))
 				{
-					rse_jointype = blr_left;
+					rse_jointype = LEFT_JOIN;
 					break;
 				}
 			}
@@ -3167,23 +3445,23 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 		{
 			if (boolean && boolean->ignoreNulls(streams))
 			{
-				if (rse_jointype == blr_full)
+				if (isFullJoin())
 				{
 					// We should transform FULL join to RIGHT join,
 					// but as we don't allow them inside the engine
 					// just swap the sides and insist it's LEFT join
 					std::swap(rse_relations[0], rse_relations[1]);
-					rse_jointype = blr_left;
+					rse_jointype = LEFT_JOIN;
 				}
 				else
-					rse_jointype = blr_inner;
+					rse_jointype = INNER_JOIN;
 
 				break;
 			}
 		}
 	}
 
-	// in the case of an RseNode, it is possible that a new RseNode will be generated,
+	// In the case of an RseNode, it is possible that a new RseNode will be generated,
 	// so wait to process the source before we push it on the stack (bug 8039)
 
 	// The addition of the JOIN syntax for specifying inner joins causes an
@@ -3192,10 +3470,8 @@ void RseNode::pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
 	// try to flatten the tree out before we go any further.
 
 	if (!isLateral() &&
-		rse->rse_jointype == blr_inner &&
-		rse_jointype == blr_inner &&
-		!rse_sorted && !rse_projection &&
-		!rse_first && !rse_skip && !rse_plan)
+		rse->isInnerJoin() && isInnerJoin() &&
+		!rse_sorted && !rse_projection && !rse_first && !rse_skip && !rse_plan)
 	{
 		for (auto sub : rse_relations)
 			processSource(tdbb, csb, rse, sub, boolean, stack);
@@ -3252,8 +3528,8 @@ void RseNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 
 	if (rse_plan)
 	{
-		planSet(csb, rse_plan);
-		planCheck(csb);
+		planSet(tdbb, csb, rse_plan);
+		planCheck(tdbb, csb);
 	}
 
 	csb->csb_current_nodes.pop();
@@ -3282,11 +3558,15 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 
 	const auto csb = opt->getCompilerScratch();
 
-	BoolExprNodeStack conjunctStack;
+	StreamList rseStreams;
+	computeRseStreams(rseStreams);
 
-	// pass RseNode boolean only to inner substreams because join condition
+	BoolExprNodeStack conjunctStack;
+	StreamStateHolder stateHolder(csb, opt->getOuterStreams());
+
+	// Pass RseNode boolean only to inner substreams because join condition
 	// should never exclude records from outer substreams
-	if (opt->isInnerJoin() || (opt->isLeftJoin() && innerSubStream))
+	if (opt->isInnerJoin() || innerSubStream)
 	{
 		// AB: For an (X LEFT JOIN Y) mark the outer-streams (X) as
 		// active because the inner-streams (Y) are always "dependent"
@@ -3294,38 +3574,118 @@ RecordSource* RseNode::compile(thread_db* tdbb, Optimizer* opt, bool innerSubStr
 		//
 		// dimitr: the same for lateral derived tables in inner joins
 
-		StreamStateHolder stateHolder(csb, opt->getOuterStreams());
-
-		if (opt->isLeftJoin() || isLateral())
-		{
+		if (!opt->isInnerJoin() || isLateral())
 			stateHolder.activate();
 
-			if (opt->isLeftJoin())
-			{
-				// Push all conjuncts except "missing" ones (e.g. IS NULL)
-				for (auto iter = opt->getConjuncts(false, true); iter.hasData(); ++iter)
-					conjunctStack.push(iter);
-			}
-		}
-		else
+		// For the LEFT JOIN, push all conjuncts except "missing" ones (e.g. IS NULL)
+		for (auto iter = opt->getConjuncts(false, opt->isOuterJoin()); iter.hasData(); ++iter)
 		{
-			for (auto iter = opt->getConjuncts(); iter.hasData(); ++iter)
+			if (iter->containsAnyStream(rseStreams))
 				conjunctStack.push(iter);
 		}
 
-		return opt->compile(this, &conjunctStack);
+		if (opt->isSpecialJoin() && !opt->deliverJoinConjuncts(this, conjunctStack))
+		{
+			conjunctStack.clear();
+			firstRows = false;
+		}
 	}
-
-	// Push only parent conjuncts to the outer stream
-	for (auto iter = opt->getConjuncts(true, false); iter.hasData(); ++iter)
-		conjunctStack.push(iter);
+	else
+	{
+		// Push only parent conjuncts to the outer stream
+		for (auto iter = opt->getConjuncts(true, false); iter.hasData(); ++iter)
+		{
+			if (iter->containsAnyStream(rseStreams))
+				conjunctStack.push(iter);
+		}
+	}
 
 	return opt->compile(this, &conjunctStack);
 }
 
+RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (!isInnerJoin() || !rse_boolean || rse_plan)
+		return nullptr;
+
+	// If the sub-query is nested inside the other sub-query which wasn't converted into semi-join,
+	// it makes no sense to apply a semi-join at the deeper levels, as a sub-query is expected
+	// to be executed repeatedly.
+	// This is a temporary fix until nested loop semi-joins are allowed by the optimizer.
+
+	if (flags & FLAG_SUB_QUERY)
+		return nullptr;
+
+	for (const auto node : csb->csb_current_nodes)
+	{
+		if (const auto rse = nodeAs<RseNode>(node))
+		{
+			if (rse->flags & FLAG_SUB_QUERY)
+				return nullptr;
+		}
+	}
+
+	// Find possibly joinable sub-queries
+
+	StreamList rseStreams;
+	computeRseStreams(rseStreams);
+	SpecialJoinList specialJoins;
+
+	if (!findPossibleJoins(csb, rseStreams, rse_boolean.getAddress(), specialJoins))
+		return nullptr;
+
+	fb_assert(specialJoins.hasData());
+
+	// Create joins between the original node and detected joinable nodes.
+	// Preserve FIRST/SKIP nodes at their original position, i.e. outside semi-joins.
+
+	const auto first = rse_first;
+	rse_first = nullptr;
+
+	const auto skip = rse_skip;
+	rse_skip = nullptr;
+
+	const auto orgFlags = flags;
+	flags = 0;
+
+	auto rse = this;
+	while (specialJoins.hasData())
+	{
+		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
+			RseNode(*tdbb->getDefaultPool());
+
+		const auto item = specialJoins.pop();
+
+		newRse->rse_relations.add(rse);
+		newRse->rse_relations.add(item.rse);
+
+		newRse->rse_jointype = item.semiJoin ? SEMI_JOIN : ANTI_JOIN;
+		newRse->rse_boolean = item.boolean;
+
+		rse = newRse;
+	}
+
+	if (first || skip)
+	{
+		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
+			RseNode(*tdbb->getDefaultPool());
+
+		newRse->rse_relations.add(rse);
+		newRse->rse_jointype = INNER_JOIN;
+		newRse->rse_first = first;
+		newRse->rse_skip = skip;
+
+		rse = newRse;
+	}
+
+	rse->flags = orgFlags;
+
+	return rse;
+}
+
 // Check that all streams in the RseNode have a plan specified for them.
 // If they are not, there are streams in the RseNode which were not mentioned in the plan.
-void RseNode::planCheck(const CompilerScratch* csb) const
+void RseNode::planCheck(thread_db* tdbb, const CompilerScratch* csb) const
 {
 	// if any streams are not marked with a plan, give an error
 
@@ -3335,32 +3695,27 @@ void RseNode::planCheck(const CompilerScratch* csb) const
 		{
 			const auto stream = node->getStream();
 
-			const auto relation = csb->csb_rpt[stream].csb_relation;
-			const auto procedure = csb->csb_rpt[stream].csb_procedure;
-			fb_assert(relation || procedure);
-
 			if (!csb->csb_rpt[stream].csb_plan)
 			{
-				const auto name = relation ? relation->rel_name :
-					procedure ? procedure->getName().toString() : "";
-
+				const auto name = csb->csb_rpt[stream].getName(false).toQuotedString();
 				ERR_post(Arg::Gds(isc_no_stream_plan) << Arg::Str(name));
 			}
 		}
 		else if (const auto rse = nodeAs<RseNode>(node))
-			rse->planCheck(csb);
+			rse->planCheck(tdbb, csb);
 	}
 }
+
 
 // Go through the streams in the plan, find the corresponding streams in the RseNode and store the
 // plan for that stream. Do it once and only once to make sure there is a one-to-one correspondence
 // between streams in the query and streams in the plan.
-void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
+void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 {
 	if (plan->type == PlanNode::TYPE_JOIN)
 	{
 		for (auto planNode : plan->subNodes)
-			planSet(csb, planNode);
+			planSet(tdbb, csb, planNode);
 	}
 
 	if (plan->type != PlanNode::TYPE_RETRIEVE)
@@ -3373,52 +3728,83 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 
 	string planAlias;
 
-	jrd_rel* planRelation = nullptr;
+	RelationPermanent* planRelation = nullptr;
 	if (const auto relationNode = nodeAs<RelationSourceNode>(plan->recordSourceNode))
 	{
-		planRelation = relationNode->relation;
+		planRelation = relationNode->relation();
 		planAlias = relationNode->alias;
 	}
 
-	jrd_prc* planProcedure = nullptr;
+	RoutinePermanent* planProcedure = nullptr;
 	if (const auto procedureNode = nodeAs<ProcedureSourceNode>(plan->recordSourceNode))
 	{
-		planProcedure = procedureNode->procedure;
+		planProcedure = procedureNode->procedure();
 		planAlias = procedureNode->alias;
 	}
 
 	fb_assert(planRelation || planProcedure);
 
-	const auto name = planRelation ? planRelation->rel_name :
-		planProcedure ? planProcedure->getName().toString() : "";
+	ObjectsArray<QualifiedMetaString> planAliasList;
+	if (planAlias.hasData())
+		QualifiedMetaString::parseSchemaObjectListNoSep(planAlias, planAliasList);
+
+	const auto name = planRelation ? planRelation->getName() :
+		planProcedure ? planProcedure->getName() :
+		QualifiedName();
 
 	// If the plan references a view, find the real base relation
 	// we are interested in by searching the view map
 	StreamType* map = nullptr;
-	jrd_rel* viewRelation = nullptr;
-	jrd_prc* viewProcedure = nullptr;
+	RelationPermanent* viewRelation = nullptr;
+	RoutinePermanent* viewProcedure = nullptr;
 
 	if (tail->csb_map)
 	{
-		auto tailName = tail->csb_relation ? tail->csb_relation->rel_name :
-			tail->csb_procedure ? tail->csb_procedure->getName().toString() : "";
+		auto tailName = tail->getName();
 
 		// If the user has specified an alias, skip past it to find the alias
 		// for the base table (if multiple aliases are specified)
 
 		auto tailAlias = tail->csb_alias ? *tail->csb_alias : "";
 
-		if (planAlias.hasData())
+		const auto matchAlias = [&]() -> bool
 		{
-			const auto spacePos = planAlias.find_first_of(' ');
-			const auto subAlias = planAlias.substr(0, spacePos);
-
-			if (tailName == subAlias || tailAlias == subAlias)
+			if (planAliasList.front() == tailName ||
+				(planAliasList.front().schema.isEmpty() && planAliasList.front().object == tailName.object))
 			{
-				planAlias = planAlias.substr(spacePos);
-				planAlias.ltrim();
+				planAliasList.remove(0);
+				return true;
 			}
-		}
+
+			if (tailAlias.hasData())
+			{
+				ObjectsArray<QualifiedMetaString> tailAliasList;
+				QualifiedMetaString::parseSchemaObjectListNoSep(tailAlias, tailAliasList);
+
+				if (planAliasList.getCount() == tailAliasList.getCount())
+				{
+					auto planIt = planAliasList.begin();
+					auto tailIt = tailAliasList.begin();
+
+					for (; planIt != planAliasList.end(); ++planIt, ++tailIt)
+					{
+						if (*planIt != *tailIt &&
+							!(planIt->schema.isEmpty() && planIt->object == tailIt->object))
+						{
+							return false;
+						}
+					}
+
+					planAliasList.remove(0);
+					return true;
+				}
+			}
+
+			return false;
+		};
+
+		if (planAlias.hasData())
+			matchAlias();
 
 		// Loop through potentially a stack of views to find the appropriate base table
 		StreamType* mapBase;
@@ -3426,15 +3812,15 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 		{
 			map = mapBase;
 			tail = &csb->csb_rpt[*map];
-			viewRelation = tail->csb_relation;
-			viewProcedure = tail->csb_procedure;
+			viewRelation = tail->csb_relation();
+			viewProcedure = tail->csb_procedure();
 
 			// If the plan references the view itself, make sure that
 			// the view is on a single table. If it is, fix up the plan
 			// to point to the base relation.
 
 			if ((viewRelation && planRelation &&
-				viewRelation->rel_id == planRelation->rel_id) ||
+				viewRelation->getId() == planRelation->getId()) ||
 				(viewProcedure && planProcedure &&
 				viewProcedure->getId() == planProcedure->getId()))
 			{
@@ -3446,7 +3832,7 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 				else
 				{
 					// view %s has more than one base relation; use aliases to distinguish
-					ERR_post(Arg::Gds(isc_view_alias) << Arg::Str(name));
+					ERR_post(Arg::Gds(isc_view_alias) << name.toQuotedString());
 				}
 
 				break;
@@ -3462,31 +3848,31 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 			if (planAlias.isEmpty())
 			{
 				auto duplicateMap = mapBase;
-				MetaName duplicateName;
+				QualifiedName duplicateName;
 
 				map = nullptr;
 
 				for (duplicateMap++; *duplicateMap; ++duplicateMap)
 				{
 					const auto duplicateTail = &csb->csb_rpt[*duplicateMap];
-					const auto relation = duplicateTail->csb_relation;
-					const auto procedure = duplicateTail->csb_procedure;
+					const auto relation = duplicateTail->csb_relation();
+					const auto procedure = duplicateTail->csb_procedure();
 
 					if ((relation && planRelation &&
-						relation->rel_id == planRelation->rel_id) ||
+						relation->getId() == planRelation->getId()) ||
 						(procedure && planProcedure &&
 						procedure->getId() == planProcedure->getId()))
 					{
-						if (duplicateName.hasData())
+						if (duplicateName.object.hasData())
 						{
 							// table %s is referenced twice in view; use an alias to distinguish
 							ERR_post(Arg::Gds(isc_duplicate_base_table) <<
-								Arg::Str(duplicateName));
+								duplicateName.toQuotedString());
 						}
 						else
 						{
-							duplicateName = relation ? relation->rel_name :
-								procedure ? procedure->getName().toString() : "";
+							duplicateName = duplicateTail->getName();
+
 							map = duplicateMap;
 							tail = duplicateTail;
 						}
@@ -3503,8 +3889,8 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 			{
 				tail = &csb->csb_rpt[*map];
 
-				tailName = tail->csb_relation ? tail->csb_relation->rel_name :
-					tail->csb_procedure ? tail->csb_procedure->getName().toString() : "";
+				tailName = tail->csb_relation ? tail->csb_relation()->getName() :
+					tail->csb_procedure ? tail->csb_procedure()->getName() : QualifiedName();
 
 				// Match the user-supplied alias with the alias supplied
 				// with the view definition. Failing that, try the base
@@ -3512,22 +3898,14 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 
 				tailAlias = tail->csb_alias ? *tail->csb_alias : "";
 
-				const auto spacePos = planAlias.find_first_of(' ');
-				const auto subAlias = planAlias.substr(0, spacePos);
-
-				if (tailName == subAlias || tailAlias == subAlias)
-				{
-					// Skip past the alias
-					planAlias = planAlias.substr(spacePos);
-					planAlias.ltrim();
+				if (matchAlias())
 					break;
-				}
 			}
 
 			if (!*map)
 			{
 				// table or procedure %s is referenced in the plan but not the from list
-				ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
+				ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 			}
 		}
 
@@ -3536,7 +3914,7 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 		if (!map || !*map)
 		{
 			// table or procedure %s is referenced in the plan but not the from list
-			ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
+			ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 		}
 
 		plan->recordSourceNode->setStream(*map);
@@ -3547,16 +3925,16 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 	if (!tail->csb_relation && !tail->csb_procedure)
 	{
 		// table or procedure %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
+		ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 	}
 
 	if ((tail->csb_relation && planRelation &&
-		tail->csb_relation->rel_id != planRelation->rel_id && !viewRelation) ||
+		tail->csb_relation()->getId() != planRelation->getId() && !viewRelation) ||
 		(tail->csb_procedure && planProcedure &&
-		tail->csb_procedure->getId() != planProcedure->getId() && !viewProcedure))
+		tail->csb_procedure()->getId() != planProcedure->getId() && !viewProcedure))
 	{
 		// table or procedure %s is referenced in the plan but not the from list
-		ERR_post(Arg::Gds(isc_stream_not_found) << Arg::Str(name));
+		ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
 	}
 
 	// Check if we already have a plan for this stream
@@ -3564,7 +3942,7 @@ void RseNode::planSet(CompilerScratch* csb, PlanNode* plan)
 	if (tail->csb_plan)
 	{
 		// table or procedure %s is referenced more than once in plan; use aliases to distinguish
-		ERR_post(Arg::Gds(isc_stream_twice) << Arg::Str(name));
+		ERR_post(Arg::Gds(isc_stream_twice) << name.toQuotedString());
 	}
 
 	tail->csb_plan = plan;
@@ -3681,6 +4059,445 @@ RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return PASS1_derived_table(dsqlScratch, this, NULL);
 }
 
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::parse(thread_db* tdbb,
+																  CompilerScratch* csb,
+																  const SSHORT blrOp)
+{
+	fb_assert(blrOp == blr_table_value_fun);
+
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	const auto funcId = csb->csb_blr_reader.getByte();
+	const auto node = TableValueFunctionSourceNode::parseFunction(tdbb, csb, funcId);
+
+	node->stream = PAR_context(csb, nullptr);
+
+	CompilerScratch::csb_repeat& element = csb->csb_rpt[node->stream];
+	const auto tableValueFunctionCsb = node->m_csbTableValueFun = FB_NEW_POOL(pool) jrd_table_value_fun(pool);
+
+	tableValueFunctionCsb->funcId = funcId;
+	tableValueFunctionCsb->name = node->getName();
+
+	AutoPtr<string> aliasString(FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool));
+	csb->csb_blr_reader.getString(*aliasString);
+
+	if (aliasString->hasData())
+		node->alias = *aliasString;
+	else
+		fb_assert(false);
+
+	auto count = csb->csb_blr_reader.getWord();
+	node->inputList = FB_NEW_POOL(pool) ValueListNode(pool, 0U);
+	while (count--)
+		node->inputList->add(PAR_parse_value(tdbb, csb));
+
+	count = csb->csb_blr_reader.getWord();
+
+	const auto recordFormat = Format::newFormat(pool, count);
+	ULONG& offset = recordFormat->fmt_length = FLAG_BYTES(recordFormat->fmt_count);
+	Format::fmt_desc_iterator descIt = recordFormat->fmt_desc.begin();
+	SSHORT fieldId = 0;
+	while (count--)
+	{
+		PAR_desc(tdbb, csb, descIt, nullptr);
+
+		const USHORT align = type_alignments[descIt->dsc_dtype];
+		if (align)
+			offset = FB_ALIGN(offset, align);
+		descIt->dsc_address = (UCHAR*)(IPTR)offset;
+		offset += descIt->dsc_length;
+		descIt++;
+
+		string columnString;
+		csb->csb_blr_reader.getString(columnString);
+		fb_assert(columnString.hasData());
+
+		tableValueFunctionCsb->fields.put(columnString, fieldId++);
+	}
+
+	element.csb_format = tableValueFunctionCsb->recordFormat = recordFormat;
+	element.csb_table_value_fun = tableValueFunctionCsb;
+	element.csb_alias = aliasString.release();
+
+	return node;
+}
+
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::parseFunction(thread_db* tdbb,
+																		  CompilerScratch* csb,
+																		  const SSHORT blrOp)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	TableValueFunctionSourceNode* node = nullptr;
+
+	switch (blrOp)
+	{
+		case blr_table_value_fun_unlist:
+			node = FB_NEW_POOL(pool) UnlistFunctionSourceNode(pool);
+			break;
+
+		case blr_table_value_fun_gen_series:
+			node = FB_NEW_POOL(pool) GenSeriesFunctionSourceNode(pool);
+			break;
+
+		default:
+			PAR_syntax_error(csb, "blr_table_value_fun");
+	}
+
+	return node;
+}
+
+Firebird::string TableValueFunctionSourceNode::internalPrint(NodePrinter& printer) const
+{
+	RecordSourceNode::internalPrint(printer);
+
+	NODE_PRINT(printer, dsqlName);
+	NODE_PRINT(printer, inputList);
+	NODE_PRINT(printer, dsqlField);
+	NODE_PRINT(printer, alias);
+	NODE_PRINT(printer, dsqlNameColumns);
+
+	return "TableValueFunctionsSourceNode";
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	return dsqlPassRelProc(dsqlScratch, this);
+}
+
+bool TableValueFunctionSourceNode::dsqlMatch(DsqlCompilerScratch* /*dsqlScratch*/,
+											 const ExprNode* other, bool /*ignoreMapCast*/) const
+{
+	const auto o = nodeAs<TableValueFunctionSourceNode>(other);
+	return o && dsqlContext == o->dsqlContext;
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	doPass1(tdbb, csb, inputList.getAddress());
+	return this;
+}
+
+RecordSourceNode* TableValueFunctionSourceNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ExprNode::doPass2(tdbb, csb, inputList.getAddress());
+	return this;
+}
+
+void TableValueFunctionSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_table_value_fun);
+
+	const auto tableValueFunctionContext = dsqlContext->ctx_table_value_fun;
+
+	if (tableValueFunctionContext->funName == UnlistFunctionSourceNode::FUNC_NAME)
+		dsqlScratch->appendUChar(blr_table_value_fun_unlist);
+	else if (tableValueFunctionContext->funName == GenSeriesFunctionSourceNode::FUNC_NAME)
+		dsqlScratch->appendUChar(blr_table_value_fun_gen_series);
+	else
+		fb_assert(false);
+
+	GEN_stuff_context(dsqlScratch, dsqlContext);
+
+	const auto& contextAliases = dsqlContext->getConcatenatedAlias();
+	appendContextAlias(dsqlScratch, contextAliases);
+
+	dsqlScratch->appendUShort(dsqlContext->ctx_proc_inputs->items.getCount());
+	for (auto& arg : dsqlContext->ctx_proc_inputs->items)
+		GEN_expr(dsqlScratch, arg);
+
+	Array<const dsql_fld*> arrayFld;
+	for (const auto* field = tableValueFunctionContext->outputField; field; field = field->fld_next)
+		arrayFld.add(field);
+
+	dsqlScratch->appendUShort(arrayFld.getCount());
+
+	for (const auto& fld : arrayFld)
+	{
+		dsqlScratch->putType(fld, true);
+		dsqlScratch->appendMetaString(fld->fld_name.c_str());
+	}
+}
+
+TableValueFunctionSourceNode* TableValueFunctionSourceNode::copy(thread_db* tdbb,
+																 NodeCopier& copier) const
+{
+	if (!copier.remap)
+		BUGCHECK(221); // msg 221 (CMP) copy: cannot remap
+
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	const auto newStream = copier.csb->nextStream();
+	copier.remap[stream] = newStream;
+
+	const auto element = CMP_csb_element(copier.csb, newStream);
+	element->csb_view_stream = copier.remap[0];
+	element->csb_format = m_csbTableValueFun->recordFormat;
+	element->csb_table_value_fun = m_csbTableValueFun;
+	if (alias.hasData())
+		element->csb_alias = FB_NEW_POOL(pool) string(pool, alias.c_str());
+
+	const auto newSource = TableValueFunctionSourceNode::parseFunction(
+		tdbb, copier.csb, m_csbTableValueFun->funcId);
+
+	newSource->inputList = copier.copy(tdbb, inputList);
+	newSource->m_csbTableValueFun = m_csbTableValueFun;
+	newSource->stream = newStream;
+
+	return newSource;
+}
+
+void TableValueFunctionSourceNode::pass1Source(thread_db* tdbb, CompilerScratch* csb,
+											   RseNode* /*rse*/, BoolExprNode** /*boolean*/,
+											   RecordSourceNodeStack& stack)
+{
+	stack.push(this); // Assume that the source will be used. Push it on the final stream stack.
+
+	pass1(tdbb, csb);
+
+	auto const parentView = csb->csb_view;
+	const StreamType viewStream = csb->csb_view_stream;
+
+	const auto element = CMP_csb_element(csb, stream);
+	element->csb_view = parentView;
+	element->csb_view_stream = viewStream;
+
+	// in the case where there is a parent view, find the context name
+
+	if (parentView)
+	{
+		const ViewContexts& ctx = parentView(tdbb)->rel_view_contexts;
+		const USHORT key = stream;
+		FB_SIZE_T pos;
+
+		if (ctx.find(key, pos))
+		{
+			element->csb_alias =
+				FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool, ctx[pos]->vcx_context_name);
+		}
+	}
+}
+
+void TableValueFunctionSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
+{
+	csb->csb_rpt[stream].activate();
+
+	pass2(tdbb, csb);
+}
+
+bool TableValueFunctionSourceNode::containsStream(StreamType checkStream) const
+{
+	return checkStream == stream;
+}
+
+void TableValueFunctionSourceNode::computeDbKeyStreams(StreamList& /*streamList*/) const
+{
+}
+
+RecordSource* TableValueFunctionSourceNode::compile(thread_db* /*tdbb*/, Optimizer* /*opt*/,
+													bool /*innerSubStream*/)
+{
+	fb_assert(false); //
+	return nullptr;
+}
+
+bool TableValueFunctionSourceNode::computable(CompilerScratch* csb, StreamType stream,
+											  bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
+{
+	if (inputList && !inputList->computable(csb, stream, allowOnlyCurrentStream))
+		return false;
+
+	return true;
+}
+
+void TableValueFunctionSourceNode::findDependentFromStreams(const CompilerScratch* csb,
+															StreamType currentStream,
+															SortedStreamList* streamList)
+{
+	if (inputList)
+		inputList->findDependentFromStreams(csb, currentStream, streamList);
+}
+
+void TableValueFunctionSourceNode::collectStreams(SortedStreamList& streamList) const
+{
+	RecordSourceNode::collectStreams(streamList);
+
+	if (inputList)
+		inputList->collectStreams(streamList);
+}
+
+dsql_fld* TableValueFunctionSourceNode::makeField(DsqlCompilerScratch* /*dsqlScratch*/)
+{
+	fb_assert(false);
+	return nullptr;
+}
+
+void TableValueFunctionSourceNode::setDefaultNameField(DsqlCompilerScratch* /*dsqlScratch*/)
+{
+	if (const auto tableValueFunctionContext = dsqlContext->ctx_table_value_fun)
+	{
+		const auto nameFunc = tableValueFunctionContext->funName;
+
+		if ((nameFunc == UnlistFunctionSourceNode::FUNC_NAME) ||
+			(nameFunc == GenSeriesFunctionSourceNode::FUNC_NAME))
+		{
+			dsql_fld* field = tableValueFunctionContext->outputField;
+			if (field->fld_name.isEmpty())
+				field->fld_name = nameFunc;
+		}
+		else
+			fb_assert(false);
+	}
+	else
+		fb_assert(false);
+}
+
+//--------------------
+
+RecordSource* UnlistFunctionSourceNode::compile(thread_db* tdbb, Optimizer* opt,
+												bool /*innerSubStream*/)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	const auto csb = opt->getCompilerScratch();
+	const auto alias = opt->makeAlias(stream);
+
+	return FB_NEW_POOL(pool) UnlistFunctionScan(csb, stream, alias, inputList);
+}
+
+dsql_fld* UnlistFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
+{
+	if (inputList)
+		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
+
+	const auto inputItem = inputList->items.begin()->getObject();
+	inputItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeVarying(1024, CS_dynamic); }, false);
+
+	dsql_fld* field = dsqlField;
+
+	if (!field)
+	{
+		const auto newField = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+		field = newField;
+
+		dsc desc;
+		if (dsqlAutoTypeFromValue)
+		{
+			dsqlAutoTypeFromValue = Node::doDsqlPass(dsqlScratch, dsqlAutoTypeFromValue, false);
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, dsqlAutoTypeFromValue);
+		}
+		else
+		{
+			DsqlDescMaker::fromNode(dsqlScratch, &desc, inputItem);
+			auto ttype = desc.getCharSet();
+
+			if (ttype == CS_NONE && !desc.isText() && !desc.isBlob())
+				ttype = CS_ASCII;
+
+			const auto bytesPerChar = DSqlDataTypeUtil(dsqlScratch).maxBytesPerChar(ttype);
+			desc.makeVarying(bytesPerChar * DEFAULT_UNLIST_TEXT_LENGTH, ttype);
+		}
+		MAKE_field(newField, &desc);
+		newField->fld_id = 0;
+	}
+
+	if (dsqlNameColumns.hasData())
+	{
+		if (dsqlNameColumns.getCount() > 1)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
+										   << Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Arg::Str(UnlistFunctionSourceNode::FUNC_NAME)
+										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+		}
+
+		field->fld_name = dsqlNameColumns[0];
+	}
+
+	field->resolve(dsqlScratch);
+	return field;
+}
+
+//--------------------
+
+RecordSource* GenSeriesFunctionSourceNode::compile(thread_db* tdbb, Optimizer* opt,
+												bool /*innerSubStream*/)
+{
+	MemoryPool& pool = *tdbb->getDefaultPool();
+	const auto csb = opt->getCompilerScratch();
+	const auto alias = opt->makeAlias(stream);
+
+	return FB_NEW_POOL(pool) GenSeriesFunctionScan(csb, stream, alias, inputList);
+}
+
+dsql_fld* GenSeriesFunctionSourceNode::makeField(DsqlCompilerScratch* dsqlScratch)
+{
+	if (inputList)
+		inputList = Node::doDsqlPass(dsqlScratch, inputList, false);
+
+	const auto startItem = inputList->items[0].getObject();
+	startItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	const auto finishItem = inputList->items[1].getObject();
+	finishItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	const auto stepItem = inputList->items[2].getObject();
+	stepItem->setParameterType(
+		dsqlScratch, [](dsc* desc) { desc->makeInt64(0); }, false);
+
+	dsc startDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &startDesc, startItem, true);
+	if (!startDesc.isExact() && !startDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	dsc finishDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &finishDesc, finishItem, true);
+	if (!finishDesc.isExact() && !finishDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	dsc stepDesc;
+	DsqlDescMaker::fromNode(dsqlScratch, &stepDesc, stepItem, true);
+	if (!stepDesc.isExact() && !stepDesc.isNull())
+		status_exception::raise(Arg::Gds(isc_argmustbe_exact_function) << Arg::Str(getName()));
+
+	// common scale
+	const auto scale = MIN(MIN(startDesc.dsc_scale, finishDesc.dsc_scale), stepDesc.dsc_scale);
+	// common type
+	const auto dtype = MAX(MAX(startDesc.dsc_dtype, finishDesc.dsc_dtype), stepDesc.dsc_dtype);
+
+	dsql_fld* field = dsqlField;
+
+	if (!field)
+	{
+		field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		dsc desc;
+		if (dtype == dtype_int128)
+			desc.makeInt128(scale);
+		else
+			desc.makeInt64(scale);
+
+		MAKE_field(field, &desc);
+		field->fld_id = 0;
+	}
+
+	if (dsqlNameColumns.hasData())
+	{
+		if (dsqlNameColumns.getCount() > 1)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::Gds(isc_dsql_command_err)
+										   << Arg::Gds(isc_dsql_table_value_many_columns)
+										   << Arg::Str(getName())
+										   << Arg::Num(1) << Arg::Num(dsqlNameColumns.getCount()));
+		}
+
+		field->fld_name = dsqlNameColumns[0];
+	}
+
+	field->resolve(dsqlScratch);
+	return field;
+}
 
 //--------------------
 
@@ -3688,12 +4505,12 @@ RseNode* SelectExprNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, RecordSourceNode* source)
 {
 	bool couldBeCte = true;
-	MetaName relName;
+	QualifiedName relName;
 	string relAlias;
 
 	if (const auto procNode = nodeAs<ProcedureSourceNode>(source))
 	{
-		relName = procNode->dsqlName.identifier;
+		relName = procNode->dsqlName;
 		relAlias = procNode->alias;
 		couldBeCte = !procNode->inputSources && procNode->dsqlName.package.isEmpty();
 	}
@@ -3702,14 +4519,21 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		relName = relNode->dsqlName;
 		relAlias = relNode->alias;
 	}
+	else if (const auto tblBasedFunNode = nodeAs<TableValueFunctionSourceNode>(source))
+	{
+		relName.object = tblBasedFunNode->dsqlName;
+		relAlias = tblBasedFunNode->alias.c_str();
+	}
 	//// TODO: LocalTableSourceNode
 	else
 		fb_assert(false);
 
-	if (relAlias.isEmpty())
-		relAlias = relName.c_str();
+	couldBeCte = couldBeCte && relName.schema.isEmpty() && relName.package.isEmpty();
 
-	SelectExprNode* cte = couldBeCte ? dsqlScratch->findCTE(relName) : NULL;
+	if (relAlias.isEmpty())
+		relAlias = relName.object.c_str();
+
+	SelectExprNode* cte = couldBeCte ? dsqlScratch->findCTE(relName.object) : NULL;
 
 	if (!cte)
 		return PASS1_relation(dsqlScratch, source);
@@ -3722,7 +4546,7 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 				  // Recursive CTE member (%s) can refer itself only in FROM clause
-				  Arg::Gds(isc_dsql_cte_wrong_reference) << relName);
+				  Arg::Gds(isc_dsql_cte_wrong_reference) << relName.toQuotedString());
 	}
 
 	for (Stack<SelectExprNode*>::const_iterator stack(dsqlScratch->currCtes); stack.hasData(); ++stack)
@@ -3732,7 +4556,7 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  // CTE %s has cyclic dependencies
-					  Arg::Gds(isc_dsql_cte_cycle) << relName);
+					  Arg::Gds(isc_dsql_cte_cycle) << relName.toQuotedString());
 		}
 	}
 
@@ -3829,8 +4653,8 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 			*desc = desc2;
 		else if (max == dtype_blob)
 		{
-			USHORT subtype = DataTypeUtil::getResultBlobSubType(desc, &desc2);
-			USHORT ttype = DataTypeUtil::getResultTextType(desc, &desc2);
+			auto subtype = DataTypeUtil::getResultBlobSubType(desc, &desc2);
+			auto ttype = DataTypeUtil::getResultTextType(desc, &desc2);
 			desc->makeBlob(subtype, ttype);
 		}
 		else if (min <= dtype_any_text)
@@ -3844,7 +4668,7 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 			// pick the max text type, so any transparent casts from ints are
 			// not left in ASCII format, but converted to the richer text format
 
-			desc->setTextType(MAX(INTL_TEXT_TYPE(*desc), INTL_TEXT_TYPE(desc2)));
+			desc->setTextType(MAX(desc->getTextType(), desc2.getTextType()));
 			desc->dsc_scale = 0;
 			desc->dsc_flags = 0;
 		}
@@ -3852,7 +4676,7 @@ static void processMap(thread_db* tdbb, CompilerScratch* csb, MapNode* map, Form
 		{
 			desc->dsc_dtype = dtype_varying;
 			desc->dsc_length = DSC_convert_to_text_length(max) + sizeof(USHORT);
-			desc->dsc_ttype() = ttype_ascii;
+			desc->setTextType(ttype_ascii);
 			desc->dsc_scale = 0;
 			desc->dsc_flags = 0;
 		}
@@ -4086,7 +4910,7 @@ static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const 
 	{
 		string qualifier;
 		qualifier.printf("<%s side of USING>", side);
-		PASS1_field_unknown(qualifier.c_str(), name.c_str(), flawedNode);
+		PASS1_field_unknown(qualifier.c_str(), name.toQuotedString().c_str(), flawedNode);
 	}
 
 	DsqlAliasNode* aliasNode;

@@ -40,7 +40,7 @@
 #include <unistd.h>
 #endif
 
-const int max_levels = 4;
+constexpr int max_levels = 4;
 typedef msgnod* msgnod_ptr_array[max_levels];
 
 static char* copy_terminate(char* dest, const char* src, size_t bufsize);
@@ -342,20 +342,20 @@ static USHORT do_msgs(const TEXT* filename)
 
 		if (leaf_node->msgrec_code <= prior_code && prior_code != 0)
 		{
-			fprintf(stderr, "Out of order messages (src/include/firebird/impl/msg/*.h): %d x %d\n",
+			fprintf(stderr, "Out of order messages (src/include/firebird/impl/msg/*.h): %" ULONGFORMAT " x %" ULONGFORMAT "\n",
 				leaf_node->msgrec_code, prior_code);
 			exit(FINI_ERROR);
 		}
 
 		prior_code = leaf_node->msgrec_code;
 
-		leaf_node->msgrec_length = textLen;
+		leaf_node->msgrec_length = static_cast<USHORT>(textLen);
 		// Let's not store trash in flags.
 		leaf_node->msgrec_flags = 0;
 		//n = offsetof(msgrec, msgrec_text) + textLen; // useless? See assignment below.
 		TEXT* p = leaf_node->msgrec_text;
 		memcpy(p, message.text, textLen);
-		n = p + textLen - (SCHAR*) leaf; // For the next iteration.
+		n = static_cast<USHORT>(p + textLen - (SCHAR*) leaf); // For the next iteration.
 		leaf_node = leaf_node->next();
 	}
 
@@ -465,7 +465,7 @@ static SLONG write_bucket(const msgnod* bucket, USHORT length)
 		exit(FINI_ERROR);
 	}
 
-	const SLONG zero_bytes = 0;
+	constexpr SLONG zero_bytes = 0;
 	n = write(global_file, &zero_bytes, padded_length - length);
 	if (n == -1)
 	{

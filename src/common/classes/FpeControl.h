@@ -83,7 +83,7 @@ public:
 	{
 		_clearfp(); // always call _clearfp() before setting control word
 
-#ifdef AMD64
+#if defined(AMD64) || defined(ARM64)
 		_controlfp(_CW_DEFAULT, _MCW_EM);
 #else
 		Mask cw;
@@ -102,7 +102,7 @@ private:
 
 	static void getCurrentMask(Mask& m) noexcept
 	{
-#ifdef AMD64
+#if defined(AMD64) || defined(ARM64)
 		m = _controlfp(0, 0);
 #else
 		__control87_2(0, 0, &m, NULL);
@@ -113,7 +113,7 @@ private:
 	{
 		_clearfp(); // always call _clearfp() before setting control word
 
-#ifdef AMD64
+#if defined(AMD64) || defined(ARM64)
 		_controlfp(savedMask, _MCW_EM); // restore saved
 #else
 		Mask cw;

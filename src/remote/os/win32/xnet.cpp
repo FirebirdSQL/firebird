@@ -731,7 +731,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* /*packet*/)
  *
  * Functional description
  *	Try to establish an alternative connection for handling events.
- *  Somebody has already done a successfull connect request.
+ *  Somebody has already done a successful connect request.
  *  This uses the existing xcc for the parent port to more
  *  or less duplicate a new xcc for the new aux port pointing
  *  to the event stuff in the map.
@@ -1071,12 +1071,12 @@ static void cleanup_port(rem_port* port)
  *
  **************************************/
 
-	if (port->port_thread_guard && port->port_events_thread && !port->port_events_threadId.isCurrent())
+	if (port->port_thread_guard && port->port_events_thread.isCurrent())
 	{
 		//port->port_thread_guard->setWait(port->port_events_thread);
 
 		// Do not release XNET structures while event's thread working
-		Thread::waitForCompletion(port->port_events_thread);
+		port->port_events_thread.waitForCompletion();
 	}
 
 	if (port->port_xcc)

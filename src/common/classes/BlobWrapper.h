@@ -68,7 +68,7 @@ public:
 	}
 
 	bool getInfo(FB_SIZE_T items_size, const UCHAR* items, FB_SIZE_T info_size, UCHAR* blob_info) const;
-	bool getSize(SLONG* size, SLONG* seg_count, SLONG* max_seg) const;
+	bool getSize(FB_UINT64* size, ULONG* seg_count, USHORT* max_seg) const;
 
 	static bool blobIsNull(const ISC_QUAD& blobid)
 	{

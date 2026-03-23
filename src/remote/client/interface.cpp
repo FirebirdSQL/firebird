@@ -104,7 +104,7 @@ const char* const INET_LOCALHOST = "localhost";
 using namespace Firebird;
 
 namespace {
-	void handle_error(ISC_STATUS code)
+	[[noreturn]] void handle_error(ISC_STATUS code)
 	{
 		Arg::Gds(code).raise();
 	}
@@ -215,6 +215,8 @@ private:
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
 	void internalCancel(CheckStatusWrapper* status);
 	void internalClose(CheckStatusWrapper* status);
+	// seek in cached blob
+	int seekCached(int mode, int offset);
 
 	Rbl* blob;
 };
@@ -423,7 +425,7 @@ private:
 	{
 		fb_assert(messageStreamBuffer);
 
-		const UCHAR* ptr = reinterpret_cast<const UCHAR*>(p);
+		const UCHAR* ptr = static_cast<const UCHAR*>(p);
 
 		while(count)
 		{
@@ -482,7 +484,7 @@ private:
 	{
 		fb_assert(blobStreamBuffer);
 
-		const UCHAR* ptr = reinterpret_cast<const UCHAR*>(p);
+		const UCHAR* ptr = static_cast<const UCHAR*>(p);
 
 		while(size)
 		{
@@ -884,9 +886,9 @@ public:
 	void executeDyn(CheckStatusWrapper* status, ITransaction* transaction, unsigned int length,
 		const unsigned char* dyn) override;
 	Statement* prepare(CheckStatusWrapper* status, ITransaction* transaction,
-		unsigned int stmtLength, const char* sqlStmt, unsigned dialect, unsigned int flags) override;
+		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect, unsigned int flags) override;
 	ITransaction* execute(CheckStatusWrapper* status, ITransaction* transaction,
-		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
+		unsigned int stmtLength, const char* sqlStmt, unsigned int dialect,
 		IMessageMetadata* inMetadata, void* inBuffer, IMessageMetadata* outMetadata, void* outBuffer) override;
 	IResultSet* openCursor(CheckStatusWrapper* status, ITransaction* transaction,
 		unsigned int stmtLength, const char* sqlStmt, unsigned dialect,
@@ -1136,7 +1138,7 @@ static bool init(CheckStatusWrapper*, ClntAuthBlock&, rem_port*, P_OP, PathName&
 	ClumpletWriter&, IntlParametersBlock&, ICryptKeyCallback* cryptCallback);
 static Rtr* make_transaction(Rdb*, USHORT);
 static void mov_dsql_message(const UCHAR*, const rem_fmt*, UCHAR*, const rem_fmt*);
-static void move_error(const Arg::StatusVector& v);
+[[noreturn]] static void move_error(const Arg::StatusVector& v);
 static void receive_after_start(Rrq*, USHORT);
 static void receive_packet(rem_port*, PACKET *);
 static void receive_packet_noqueue(rem_port*, PACKET *);
@@ -1165,10 +1167,10 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& authItr, rem_por
 
 static AtomicCounter remote_event_id;
 
-static const unsigned ANALYZE_USER_VFY =	0x01;
-static const unsigned ANALYZE_LOOPBACK =	0x02;
-static const unsigned ANALYZE_MOUNTS =		0x04;
-static const unsigned ANALYZE_EMP_NAME =	0x08;
+static constexpr unsigned ANALYZE_USER_VFY	= 0x01;
+static constexpr unsigned ANALYZE_LOOPBACK	= 0x02;
+static constexpr unsigned ANALYZE_MOUNTS	= 0x04;
+static constexpr unsigned ANALYZE_EMP_NAME	= 0x08;
 
 inline static void reset(IStatus* status) noexcept
 {
@@ -1905,8 +1907,7 @@ IAttachment* RProvider::create(CheckStatusWrapper* status, const char* filename,
 	{
 		reset(status);
 
-		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE,
-			reinterpret_cast<const UCHAR*>(dpb), dpb_length);
+		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
 
 		if (get_new_dpb(newDpb, dpbParam, loopback))
@@ -3331,8 +3332,8 @@ void Batch::cancel(CheckStatusWrapper* status)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_cancel;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		send_and_receive(status, rdb, packet);
 
@@ -3365,8 +3366,8 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 		PACKET* packet = &rdb->rdb_packet;
 		packet->p_operation = op_batch_rls;
 
-		P_BATCH_FREE_CANCEL* batch = &packet->p_batch_free_cancel;
-		batch->p_batch_statement = statement->rsr_id;
+		P_RLSE* batch = &packet->p_rlse;
+		batch->p_rlse_object = statement->rsr_id;
 
 		if (rdb->rdb_port->port_flags & PORT_lazy)
 		{
@@ -5026,8 +5027,6 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 		if (relative && adjustment)
 		{
-			const bool isAhead = (statement->rsr_fetch_operation == fetch_next);
-
 			PACKET* packet = &rdb->rdb_packet;
 			packet->p_operation = op_fetch_scroll;
 			P_SQLDATA* sqldata = &packet->p_sqldata;
@@ -5897,18 +5896,30 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
 		Rtr* transaction = remoteTransaction(apiTra);
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
-		if (transaction->rtr_blobs.locate(*id))
+		for (Rbl* blob = transaction->rtr_blobs.locate(*id); blob;
+			 blob = transaction->rtr_blobs.getNext())
 		{
-			Rbl* blob = transaction->rtr_blobs.current();
+			if (blob->rbl_blob_id != *id)
+				break;
 
-			if (!bpb_length)
+			if (!(blob->rbl_flags & Rbl::CACHED))
+				continue;
+
+			if (bpb_length)
 			{
-				Blob* iBlob = FB_NEW Blob(blob);
-				iBlob->addRef();
-				return iBlob;
+				if (!(blob->rbl_flags & Rbl::USED))
+					release_blob(blob);
+				break;
 			}
 
-			release_blob(blob);
+			if (blob->rbl_flags & Rbl::USED)
+				break;
+
+			blob->rbl_flags |= Rbl::USED;
+
+			Blob* iBlob = FB_NEW Blob(blob);
+			iBlob->addRef();
+			return iBlob;
 		}
 
 		// Validate data length
@@ -6300,8 +6311,7 @@ IEvents* Attachment::queEvents(CheckStatusWrapper* status, IEventCallback* callb
 			port->connect(packet);
 
 			rem_port* port_async = port->port_async;
-			port_async->port_events_threadId =
-				Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
+			Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
 
 			port_async->port_context = rdb;
 		}
@@ -6863,9 +6873,7 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
 
 		if (blob->isCached())
-		{
-			Arg::Gds(isc_wish_list).raise();
-		}
+			return seekCached(mode, offset);
 
 		Rdb* rdb = blob->rbl_rdb;
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
@@ -6901,6 +6909,57 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
 	return 0;
 }
 
+
+int Blob::seekCached(int mode, int offset)
+{
+	// Segmented blobs does not support seek
+	if (blob->rbl_info.blob_type == 0)
+		Arg::Gds(isc_bad_segstr_type).raise();
+
+	if (mode == 1)						// seek from current position
+		offset += blob->rbl_offset;
+	else if (mode == 2)					// seek from end of blob
+		offset = blob->rbl_info.total_length + offset;
+
+	if (offset < 0)
+		offset = 0;
+
+	// Engine allows to set seek position to the total length of the blob,
+	// but it's not documented and seems to be wrong. See blb::BLB_lseek().
+	// Here this behavior is supported for compatibility with the engine.
+	if (offset > blob->rbl_info.total_length)
+		offset = blob->rbl_info.total_length;
+
+	fb_assert(blob->rbl_info.total_length <= MAX_USHORT);
+
+	blob->rbl_offset = offset;
+	if (!blob->rbl_data.isEmpty())
+	{
+		if (offset == blob->rbl_info.total_length)
+		{
+			blob->rbl_ptr = blob->rbl_data.end();
+			blob->rbl_fragment_length = blob->rbl_length = 0;
+		}
+		else
+		{
+			const auto seg = offset / blob->rbl_info.max_segment + 1;
+			fb_assert(seg <= blob->rbl_info.num_segments);
+
+			blob->rbl_ptr = blob->rbl_buffer + offset + 2 * seg;
+			fb_assert(blob->rbl_ptr < blob->rbl_data.end());
+
+			blob->rbl_length = blob->rbl_data.end() - blob->rbl_ptr;
+
+			if (seg < blob->rbl_info.num_segments)
+				blob->rbl_fragment_length = blob->rbl_info.max_segment - offset % blob->rbl_info.max_segment;
+			else
+				blob->rbl_fragment_length = blob->rbl_length;
+		}
+	}
+
+	blob->rbl_flags &= ~(Rbl::EOF_SET | Rbl::SEGMENT);
+	return blob->rbl_offset;
+}
 
 void Request::send(CheckStatusWrapper* status, int level, unsigned int msg_type,
 				   unsigned int /*length*/, const void* msg)
@@ -8624,8 +8683,7 @@ static bool get_new_dpb(ClumpletWriter& dpb, const ParametersSet& par, bool loop
  *	Analyze and prepare dpb for attachment to remote server.
  *
  **************************************/
-	bool redirection = Config::getRedirection();
-    if (((loopback || !redirection) && dpb.find(par.address_path)) || dpb.find(par.map_attach))
+    if (dpb.find(par.address_path) || dpb.find(par.map_attach))
 	{
 		status_exception::raise(Arg::Gds(isc_unavailable));
 	}
@@ -9053,7 +9111,7 @@ static void mov_dsql_message(const UCHAR* from_msg,
 }
 
 
-static void move_error(const Arg::StatusVector& v)
+[[noreturn]] static void move_error(const Arg::StatusVector& v)
 {
 /**************************************
  *
@@ -9323,6 +9381,10 @@ static void receive_packet_noqueue(rem_port* port, PACKET* packet)
 				stmt_id = p->packet.p_batch_regblob.p_batch_statement;
 				bCheckResponse = true;
 				break;
+
+			default:
+				// no special work needed
+				break;
 			}
 
 			receive_packet_with_callback(port, &p->packet);
@@ -9501,9 +9563,7 @@ static void release_blob( Rbl* blob)
 	else
 		rdb->rdb_port->releaseObject(blob->rbl_id);
 
-	if (transaction->rtr_blobs.locate(blob->rbl_blob_id))
-		transaction->rtr_blobs.fastRemove();
-
+	transaction->rtr_blobs.remove(blob);
 	delete blob;
 }
 
@@ -9660,8 +9720,8 @@ static void release_transaction( Rtr* transaction)
 	Rdb* rdb = transaction->rtr_rdb;
 	rdb->rdb_port->releaseObject(transaction->rtr_id);
 
-	while (transaction->rtr_blobs.getFirst())
-		release_blob(transaction->rtr_blobs.current());
+	while (Rbl* blob = transaction->rtr_blobs.getFirst())
+		release_blob(blob);
 
 	for (Rtr** p = &rdb->rdb_transactions; *p; p = &(*p)->rtr_next)
 	{
@@ -10035,7 +10095,7 @@ Transaction* Attachment::remoteTransactionInterface(ITransaction* apiTra)
 	if (!valid)
 		return NULL;
 
-	// If validation is successfull, this means that this attachment and valid transaction
+	// If validation is successful, this means that this attachment and valid transaction
 	// use same provider. I.e. the following cast is safe.
 	return static_cast<Transaction*>(valid);
 }

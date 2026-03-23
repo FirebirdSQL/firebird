@@ -23,7 +23,7 @@
 #
 
 #  UnInstall script for FirebirdSQL database engine
-#  http://www.firebirdsql.org
+#  https://www.firebirdsql.org
 
 parseArgs ${*}
 
@@ -77,7 +77,7 @@ fi
 
 reconfigDynamicLoader
 
-removeInstalledFiles  # Remove installed files 
+removeInstalledFiles  # Remove installed files
 removeUninstallFiles  # Remove the 'uninstall' utility files
 removeEmptyDirs       # Remove empty directories
 

@@ -70,7 +70,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"
 #include "../common/os/isc_i_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/os/pio_proto.h"
@@ -299,7 +299,17 @@ bool PIO_expand(const TEXT* file_name, USHORT file_length, TEXT* expanded_name, 
 }
 
 
-void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
+bool PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept
+{
+#if defined(HAVE_LINUX_FALLOC_H) && defined(HAVE_FALLOCATE)
+	return !(file.fil_flags & FIL_no_fast_extend);
+#else
+	return false;
+#endif
+}
+
+
+bool PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USHORT pageSize)
 {
 /**************************************
  *
@@ -317,16 +327,19 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 
 	EngineCheckout cout(tdbb, FB_FUNCTION, EngineCheckout::UNNECESSARY);
 
-	if (file->fil_flags & FIL_no_fast_extend)
-		return;
+	if (!PIO_fast_extension_is_supported(*file))
+		return false;
 
 	const ULONG filePages = PIO_get_number_of_pages(file, pageSize);
 	const ULONG extendBy = MIN(MAX_ULONG - filePages, extPages);
 
+	const off_t offset = static_cast<off_t>(filePages) * pageSize;
+	const off_t length = static_cast<off_t>(extendBy) * pageSize;
+
 	int r;
 	for (r = 0; r < IO_RETRY; r++)
 	{
-		int err = fallocate(file->fil_desc, 0, filePages * pageSize, extendBy * pageSize);
+		int err = fallocate(file->fil_desc, 0, offset, length);
 		if (err == 0)
 			break;
 
@@ -338,7 +351,7 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 			unix_error("fallocate", file, isc_io_write_err);
 
 		file->fil_flags |= FIL_no_fast_extend;
-		return;
+		return false;
 	}
 
 	if (r == IO_RETRY)
@@ -349,12 +362,12 @@ void PIO_extend(thread_db* tdbb, jrd_file* file, const ULONG extPages, const USH
 #endif
 		unix_error("fallocate_retry", file, isc_io_write_err);
 	}
+
+	return true;
 #else
 	file->fil_flags |= FIL_no_fast_extend;
+	return false;
 #endif // fallocate present
-
-	// not implemented
-	return;
 }
 
 
@@ -406,8 +419,6 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 
 	if (forceWrite != oldForce)
 	{
-		const int control = forceWrite ? SYNC : 0;
-
 #ifdef FCNTL_SYNC_BROKEN
 
 		maybeCloseFile(file->fil_desc);
@@ -457,7 +468,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
  **************************************
  *
  * Functional description
- *	Compute number of pages in file, based only on file size.
+ *	Compute number of full-size pages in file, based only on file size.
  *
  **************************************/
 
@@ -507,7 +518,7 @@ error: Raw device support for your OS is missing. Fix it or turn off raw device 
 }
 
 
-void PIO_header(thread_db* tdbb, UCHAR* address, int length)
+bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 {
 /**************************************
  *
@@ -519,13 +530,13 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
  *	Read the page header.
  *
  **************************************/
-	Database* const dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
-	int i;
+	unsigned i;
 	SINT64 bytes;
 
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	jrd_file* file = pageSpace->file;
+	PageSpace* const pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	jrd_file* const file = pageSpace->file;
 
 	if (file->fil_desc == -1)
 		unix_error("PIO_header", file, isc_io_read_err);
@@ -537,7 +548,11 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 		if (bytes < 0 && !SYSCALL_INTERRUPTED(errno))
 			unix_error("read", file, isc_io_read_err);
 		if (bytes >= 0)
-			block_size_error(file, bytes);
+		{
+			FbLocalStatus tempStatus;
+			if (!block_size_error(file, bytes, &tempStatus))
+				return false;
+		}
 	}
 
 	if (i == IO_RETRY)
@@ -558,6 +573,8 @@ void PIO_header(thread_db* tdbb, UCHAR* address, int length)
 			unix_error("read_retry", file, isc_io_read_err);
 		}
 	}
+
+	return true;
 }
 
 // we need a class here only to return memory on shutdown and avoid

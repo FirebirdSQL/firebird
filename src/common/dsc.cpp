@@ -41,7 +41,7 @@ using namespace Firebird;
 // When converting non-text values to text, how many bytes to allocate
 // for holding the text image of the value.
 
-static const USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
+static constexpr USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
 {
 	0,							// dtype_unknown
 	0,							// dtype_text
@@ -77,7 +77,7 @@ static const USHORT _DSC_convert_to_text_length[DTYPE_TYPE_MAX] =
 
 // Unimplemented names are in lowercase & <brackets>
 // Datatypes that represent a range of SQL datatypes are in lowercase
-static const TEXT* const DSC_dtype_names[] =
+static constexpr const TEXT* DSC_dtype_names[] =
 {
 	"<dtype_unknown>",
 	"CHAR",
@@ -1351,12 +1351,12 @@ const BYTE DSC_multiply_blr4_result[DTYPE_TYPE_MAX][DTYPE_TYPE_MAX] =
 };
 
 #ifdef DEV_BUILD
-static bool validate_dsc_tables();
+static bool validate_dsc_tables() noexcept;
 #endif
 
 
 
-USHORT dsc::getStringLength() const
+USHORT dsc::getStringLength() const noexcept
 {
 	return DSC_string_length(this);
 }
@@ -1376,8 +1376,8 @@ bool DSC_make_descriptor(DSC* desc,
 						SSHORT scale,
 						USHORT length,
 						SSHORT sub_type,
-						SSHORT charset,
-						SSHORT collation)
+						CSetId charset,
+						CollId collation)
 {
 /**************************************
  *
@@ -1412,13 +1412,13 @@ bool DSC_make_descriptor(DSC* desc,
 	{
 	case blr_text:
 		desc->dsc_dtype = dtype_text;
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_varying:
 		desc->dsc_dtype = dtype_varying;
 		desc->dsc_length += sizeof(USHORT);
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_short:
@@ -1507,15 +1507,15 @@ bool DSC_make_descriptor(DSC* desc,
 		desc->dsc_dtype = dtype_blob;
 		if (sub_type == isc_blob_text)
 		{
-			fb_assert(charset <= MAX_SCHAR);
-			desc->dsc_scale = (SCHAR) charset;
-			desc->dsc_flags = collation << 8;	// collation of blob
+			fb_assert(USHORT(charset) <= MAX_SCHAR);
+			desc->dsc_scale = (SCHAR) USHORT(charset);
+			desc->dsc_flags =  USHORT(collation) << 8;	// collation of blob
 		}
 		break;
 
 	case blr_cstring:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_bool:
@@ -1533,7 +1533,7 @@ bool DSC_make_descriptor(DSC* desc,
 }
 
 
-USHORT DSC_string_length(const dsc* desc)
+USHORT DSC_string_length(const dsc* desc) noexcept
 {
 /**************************************
  *
@@ -1569,7 +1569,7 @@ USHORT DSC_string_length(const dsc* desc)
 }
 
 
-const TEXT *DSC_dtype_tostring(UCHAR dtype)
+const TEXT* DSC_dtype_tostring(UCHAR dtype) noexcept
 {
 /**************************************
  *
@@ -1604,7 +1604,7 @@ void DSC_get_dtype_name(const dsc* desc, TEXT * buffer, USHORT len)
 }
 
 
-const char* dsc::typeToText() const
+const char* dsc::typeToText() const noexcept
 {
 	switch (dsc_dtype)
 	{
@@ -1805,13 +1805,13 @@ void dsc::address32bit() const
  *
  **************************************/
 #if SIZEOF_VOID_P > 4
-	FB_UINT64 addr = (FB_UINT64)(IPTR) dsc_address;
+	const FB_UINT64 addr = (FB_UINT64)(IPTR) dsc_address;
 	fb_assert(addr == (addr & 0xFFFFFFFF));
 #endif
 }
 
 
-static bool validate_dsc_tables()
+static bool validate_dsc_tables() noexcept
 {
 /**************************************
  *

@@ -27,7 +27,7 @@
 #include "ibase.h"
 #include "firebird/Interface.h"
 
-static const USHORT SEGMENT_LIMIT = 65535;
+static constexpr USHORT SEGMENT_LIMIT = 65535;
 
 using namespace Firebird;
 
@@ -92,9 +92,9 @@ bool BlobWrapper::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 	if (len && !buffer)
 		return false;
 
-	unsigned ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<unsigned>(len);
+	const unsigned ilen = MIN(len, SEGMENT_LIMIT);
 	unsigned olen = 0;
-	bool eof = m_blob->getSegment(m_status, ilen, buffer, &olen) == Firebird::IStatus::RESULT_NO_DATA;
+	const bool eof = m_blob->getSegment(m_status, ilen, buffer, &olen) == Firebird::IStatus::RESULT_NO_DATA;
 	if (m_status->isEmpty() && !eof)
 	{
 		real_len = olen;
@@ -120,8 +120,8 @@ bool BlobWrapper::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	while (len)
 	{
 		unsigned olen = 0;
-		unsigned ilen = MIN(len, SEGMENT_LIMIT);
-		bool eof = m_blob->getSegment(m_status, ilen, buf2, &olen) == Firebird::IStatus::RESULT_NO_DATA;
+		const unsigned ilen = MIN(len, SEGMENT_LIMIT);
+		const bool eof = m_blob->getSegment(m_status, ilen, buf2, &olen) == Firebird::IStatus::RESULT_NO_DATA;
 		if (m_status->isEmpty() && !eof)
 		{
 			len -= olen;
@@ -154,7 +154,7 @@ bool BlobWrapper::putSegment(FB_SIZE_T len, const void* buffer)
 		return false;
 #endif
 
-	unsigned ilen = len > SEGMENT_LIMIT ? SEGMENT_LIMIT : static_cast<unsigned>(len);
+	const unsigned ilen = MIN(len, SEGMENT_LIMIT);
 	m_blob->putSegment(m_status, ilen, buffer);
 	return m_status->isEmpty();
 }
@@ -217,7 +217,7 @@ bool BlobWrapper::getInfo(FB_SIZE_T items_size, const UCHAR* items,
 	return m_status->isEmpty();
 }
 
-bool BlobWrapper::getSize(SLONG* size, SLONG* seg_count, SLONG* max_seg) const
+bool BlobWrapper::getSize(FB_UINT64* size, ULONG* seg_count, USHORT* max_seg) const
 {
 /**************************************
  *
@@ -249,26 +249,26 @@ bool BlobWrapper::getSize(SLONG* size, SLONG* seg_count, SLONG* max_seg) const
 
 	for (UCHAR item = *p++; item != isc_info_end && p < end; item = *p++)
 	{
-		const USHORT l = gds__vax_integer(p, 2);
+		const auto l = gds__vax_integer(p, 2);
 		p += 2;
-		const SLONG n = gds__vax_integer(p, l);
+		const auto n = isc_portable_integer(p, l);
 		p += l;
 
 		switch (item)
 		{
 		case isc_info_blob_max_segment:
 			if (max_seg)
-				*max_seg = n;
+				*max_seg = (USHORT) n;
 			break;
 
 		case isc_info_blob_num_segments:
 			if (seg_count)
-				*seg_count = n;
+				*seg_count = (ULONG) n;
 			break;
 
 		case isc_info_blob_total_length:
 			if (size)
-				*size = n;
+				*size = (FB_UINT64) n;
 			break;
 
 		default:

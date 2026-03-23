@@ -27,6 +27,9 @@
 
 
 #include "firebird.h"
+
+#ifndef CDS_UNAVAILABLE
+
 #include "../common/classes/array.h"
 #include "../common/classes/init.h"
 #include "../common/classes/locks.h"
@@ -61,35 +64,37 @@ InitCDS::~InitCDS()
 {
 	cds::gc::dhp::smr::destruct(true);
 
-	char str[512];
-
 // CDS_ENABLE_HPSTAT is not defined by default.
 // Rebuild of libcds after change is required.
 
 #ifdef CDS_ENABLE_HPSTAT
-	cds::gc::DHP::stat const& st = cds::gc::DHP::postmortem_statistics();
+	{
+		char str[512];
+		cds::gc::DHP::stat const& st = cds::gc::DHP::postmortem_statistics();
 
-	sprintf(str, "DHP statistics:\n"
-		"  thread count              = %llu\n"
-		"  guard allocated           = %llu\n"
-		"  guard freed               = %llu\n"
-		"  retired data count        = %llu\n"
-		"  free data count           = %llu\n"
-		"  HP blocks allocated       = %llu\n"
-		"  retired blocks allocated  = %llu\n"
-		"  hp array extend() calls   = %llu\n"
-		"  retired array extend()    = %llu\n"
-		"  scan() call count         = %llu\n"
-		"  help_scan() call count    = %llu\n"
-		"\n",
-		st.thread_rec_count,
-		st.guard_allocated, st.guard_freed,
-		st.retired_count, st.free_count,
-		st.hp_block_count, st.retired_block_count,
-		st.hp_extend_count, st.retired_extend_count,
-		st.scan_count, st.help_scan_count
-	);
-	gds__log(str);
+		snprintf(str, sizeof(str),
+			"DHP statistics:\n"
+			"  thread count              = %llu\n"
+			"  guard allocated           = %llu\n"
+			"  guard freed               = %llu\n"
+			"  retired data count        = %llu\n"
+			"  free data count           = %llu\n"
+			"  HP blocks allocated       = %llu\n"
+			"  retired blocks allocated  = %llu\n"
+			"  hp array extend() calls   = %llu\n"
+			"  retired array extend()    = %llu\n"
+			"  scan() call count         = %llu\n"
+			"  help_scan() call count    = %llu\n"
+			"\n",
+			st.thread_rec_count,
+			st.guard_allocated, st.guard_freed,
+			st.retired_count, st.free_count,
+			st.hp_block_count, st.retired_block_count,
+			st.hp_extend_count, st.retired_extend_count,
+			st.scan_count, st.help_scan_count
+		);
+		gds__log(str);
+	}
 #endif
 	cds::Terminate();
 
@@ -104,19 +109,23 @@ InitCDS::~InitCDS()
 	MemoryPool::deletePool(m_pool);
 
 #ifdef DEBUG_CDS_MEMORY
-	sprintf(str, "DHP pool stats:\n"
-		"  usage         = %llu\n"
-		"  mapping       = %llu\n"
-		"  max usage     = %llu\n"
-		"  max mapping   = %llu\n"
-		"\n",
-		m_stats.getCurrentUsage(),
-		m_stats.getCurrentMapping(),
-		m_stats.getMaximumUsage(),
-		m_stats.getMaximumMapping()
-	);
+	{
+		char str[512];
+		snprintf(str, sizeof(str),
+			"DHP pool stats:\n"
+			"  usage         = %llu\n"
+			"  mapping       = %llu\n"
+			"  max usage     = %llu\n"
+			"  max mapping   = %llu\n"
+			"\n",
+			m_stats.getCurrentUsage(),
+			m_stats.getCurrentMapping(),
+			m_stats.getMaximumUsage(),
+			m_stats.getMaximumMapping()
+		);
 
-	gds__log(str);
+		gds__log(str);
+	}
 #endif
 }
 
@@ -134,3 +143,5 @@ MemoryPool* InitCDS::createPool()
 }
 
 } // namespace Jrd
+
+#endif	// CDS_UNAVAILABLE

@@ -54,6 +54,7 @@
 #include <math.h>
 #include <ctype.h>
 #include <errno.h>
+#include <optional>
 #include "../isql/FrontendLexer.h"
 #include "../isql/FrontendParser.h"
 #include "../common/StdHelper.h"
@@ -102,6 +103,7 @@ enum literal_string_type
 
 #if defined(WIN_NT)
 #include <windows.h>
+#include <VersionHelpers.h>
 #endif
 #include "ibase.h"
 #include "../isql/isql.h"
@@ -124,7 +126,7 @@ enum literal_string_type
 #include "../isql/PtrSentry.h"
 #include "../common/classes/UserBlob.h"
 #include "../common/classes/MsgPrint.h"
-#include "../common/classes/array.h"
+#include "../remote/protocol.h"
 
 using namespace Firebird;
 using MsgFormat::SafeArg;
@@ -150,33 +152,29 @@ IsqlGlobals isqlGlob;
 
 //  Print lengths of numeric values
 
-const size_t MAXCHARSET_SIZE	= 32;	// CHARSET names
-const int SHORT_LEN		= 7;	// NUMERIC (4,2) = -327.68
-const int LONG_LEN		= 12;	// NUMERIC (9,2) = -21474836.48
-const int INT64_LEN		= 21;	// NUMERIC(18,2) = -92233720368547758.08
-//const int QUAD_LEN		= 19;
-const int FLOAT_LEN		= 14;	// -1.2345678E+38
-const int DOUBLE_LEN		= 23;	// -1.234567890123456E+300
-const int DATE_LEN		= 11;	// 11 for date only
-const int DATETIME_LEN		= 25;	// 25 for date-time
-const int DATETIME_TZ_LEN	= DATETIME_LEN - 1 + 1 + TimeZoneUtil::MAX_LEN;	// DATETIME_LEN should be 24
-const int TIME_ONLY_LEN		= 13;	// 13 for time only
-const int TIME_TZ_ONLY_LEN	= TIME_ONLY_LEN + 1 + TimeZoneUtil::MAX_LEN;
-const int DATE_ONLY_LEN		= 11;
-const int BOOLEAN_LEN		= 7;	// <false>
-const int UNKNOWN_LEN		= 20;	// Unknown type: %d
+constexpr int SHORT_LEN			= 7;	// NUMERIC (4,2) = -327.68
+constexpr int LONG_LEN			= 12;	// NUMERIC (9,2) = -21474836.48
+constexpr int INT64_LEN			= 21;	// NUMERIC(18,2) = -92233720368547758.08
+//constexpr int QUAD_LEN		= 19;
+constexpr int FLOAT_LEN			= 14;	// -1.2345678E+38
+constexpr int DOUBLE_LEN		= 23;	// -1.234567890123456E+300
+constexpr int DATETIME_LEN		= 25;	// 25 for date-time
+constexpr int DATETIME_TZ_LEN	= DATETIME_LEN - 1 + 1 + TimeZoneUtil::MAX_LEN;	// DATETIME_LEN should be 24
+constexpr int TIME_ONLY_LEN		= 13;	// 13 for time only
+constexpr int TIME_TZ_ONLY_LEN	= TIME_ONLY_LEN + 1 + TimeZoneUtil::MAX_LEN;
+constexpr int DATE_ONLY_LEN		= 11;
+constexpr int BOOLEAN_LEN		= 7;	// <false>
+constexpr int UNKNOWN_LEN		= 20;	// Unknown type: %d
 
-const int MAX_TERMS		= 10;	// max # of terms in an interactive cmd
+constexpr const char* ISQL_COUNTERS_SET = "CurrentMemory, MaxMemory, RealTime, UserTime, Buffers, Reads, Writes, Fetches";
+constexpr int ISQL_COUNTERS = 8;
 
-const char* ISQL_COUNTERS_SET = "CurrentMemory, MaxMemory, RealTime, UserTime, Buffers, Reads, Writes, Fetches";
-const int ISQL_COUNTERS = 8;
-
-const char* UNKNOWN = "*unknown*";
+constexpr const char* UNKNOWN = "*unknown*";
 
 namespace IcuUtil
 {
 	// Duplicate from ICU to not need to link ISQL with it. It's used by U8_NEXT_UNSAFE.
-	static const uint8_t utf8_countTrailBytes[256] = {
+	[[maybe_unused]] static constexpr uint8_t utf8_countTrailBytes[256] = {
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -204,10 +202,8 @@ namespace IcuUtil
 	};
 
 	// Return the number of characters of a string.
-	static unsigned charLength(SSHORT charset, unsigned len, const char* str)
+	static unsigned charLength(CSetId charset, unsigned len, const char* str)
 	{
-		charset = TTYPE_TO_CHARSET(charset);
-
 		if (charset != CS_UNICODE_FSS && charset != CS_UTF8)
 			return len;
 
@@ -225,11 +221,9 @@ namespace IcuUtil
 	}
 
 	// Pads a string to a specified column width.
-	static void pad(char* buffer, SSHORT charset, unsigned len, const char* str, unsigned width,
+	static void pad(char* buffer, CSetId charset, unsigned len, const char* str, unsigned width,
 		bool right)
 	{
-		charset = TTYPE_TO_CHARSET(charset);
-
 		if (charset != CS_UNICODE_FSS && charset != CS_UTF8)
 		{
 			// Truncate if necessary.
@@ -304,16 +298,17 @@ static inline int fb_isdigit(const char c)
 	return isdigit((int)(UCHAR)c);
 }
 
+typedef Array<char> CharBuffer;
+GlobalPtr<CharBuffer> charBuffer;
+
+static bool sigTstp = false;
 
 #ifdef WIN_NT
-// This function is highly based on code written by https://github.com/xenu
-// He permitted our usage here: https://github.com/Perl/perl5/pull/18702#issuecomment-1156050577
-static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
+
+GlobalPtr<Array<WCHAR>> wideBuffer;
+
+static int win32ReadConsole(FILE* file, CharBuffer& mbBuffer)
 {
-	// This function is a workaround for a bug in Windows:
-	// https://github.com/microsoft/terminal/issues/4551
-	// tl;dr: ReadFile() and ReadConsoleA() return garbage when reading
-	// non-ASCII characters from the console with the 65001 codepage.
 	auto handle = (HANDLE) _get_osfhandle(fileno(file));
 
 	if (handle == INVALID_HANDLE_VALUE)
@@ -322,94 +317,57 @@ static int win32ReadConsole(FILE* file, char* buffer, size_t bufferSize)
 		return -1;
 	}
 
-	DWORD mode;
-	if (!GetConsoleMode(handle, &mode))
+	DWORD oldMode, newMode;
+	if (GetConsoleMode(handle, &oldMode))
+	{
+		newMode = oldMode | (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+		if (newMode != oldMode)
+			SetConsoleMode(handle, oldMode);
+	}
+	else
 	{
 		fb_assert(false);
-		return -1;
+		newMode = oldMode = 0;
 	}
 
-	size_t leftToRead = bufferSize;
+	Cleanup	consoleMode([&] {
+		if (oldMode != newMode)
+			SetConsoleMode(handle, oldMode);
+	});
 
-	while (leftToRead)
+	// Before Windows 10, ReadConsole() can't work with relatively large input
+	// buffers and set ERROR_NOT_ENOUGH_MEMORY error. Thus, use initial buffer size
+	// twice less than for Windows 10 and handle error by reducing the buffer size.
+
+	static DWORD maxLineLength = IsWindows10OrGreater() ? MAX_USHORT : MAX_SSHORT;
+	WCHAR* wideBuf = wideBuffer->getBuffer(maxLineLength, false);
+
+	DWORD charsRead;
+	while (!ReadConsoleW(handle, wideBuf, maxLineLength, &charsRead, NULL))
 	{
-		// The purpose of convertedBuf is to preserve partial UTF-8 (or of any
-		// other multibyte encoding) code points between read() calls. Since
-		// there's only one console, the buffer is global. It's needed because
-		// ReadConsoleW() returns a string of UTF-16 code units and its result,
-		// after conversion to the current console codepage, may not fit in the
-		// return buffer.
-		//
-		// The buffer's size is 8 because it will contain at most two UTF-8 code
-		// points.
-		static char convertedBuf[8];
-		static size_t convertedBufLen = 0;
-
-		if (convertedBufLen)
-		{
-			bool newline = false;
-			const size_t toWrite = MIN(convertedBufLen, leftToRead);
-
-			// Don't read anything if the *first* character is ^Z and
-			// ENABLE_PROCESSED_INPUT is enabled. On some versions of Windows,
-			// ReadFile() ignores ENABLE_PROCESSED_INPUT, but apparently it's a
-			// bug: https://github.com/microsoft/terminal/issues/4958
-			if (leftToRead == bufferSize && (mode & ENABLE_PROCESSED_INPUT) && convertedBuf[0] == 0x1A)
-				break;
-
-			// Are we returning a newline?
-			if (memchr(convertedBuf, '\n', toWrite) != 0)
-				newline = true;
-
-			memcpy(buffer, convertedBuf, toWrite);
-			buffer += toWrite;
-
-			// If there's anything left in convertedBuf, move it to the beginning of the buffer.
-			convertedBufLen -= toWrite;
-
-			if (convertedBufLen)
-				memmove(convertedBuf, convertedBuf + toWrite, convertedBufLen);
-
-			leftToRead -= toWrite;
-
-			// With ENABLE_LINE_INPUT enabled, we stop reading after the first
-			// newline, otherwise we stop reading after the first character.
-			if (!leftToRead || newline || (mode & ENABLE_LINE_INPUT) == 0)
-				break;
-		}
-
-		WCHAR wideBuf[2];
-		DWORD charsRead;
-
-		// Reading one code unit at a time is inefficient, but since this code
-		// is used only for the interactive console, that shouldn't matter.
-		if (!ReadConsoleW(handle, wideBuf, 1, &charsRead, 0))
-			return -1;
-
-		if (!charsRead)
-			break;
-
-		DWORD wideBufLen = 1;
-
-		if (wideBuf[0] >= 0xD800 && wideBuf[0] <= 0xDBFF)
-		{
-			// High surrogate, read one more code unit.
-			if (!ReadConsoleW(handle, wideBuf + 1, 1, &charsRead, 0))
-				return -1;
-
-			if (charsRead)
-				++wideBufLen;
-		}
-
-		convertedBufLen = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, wideBufLen,
-			convertedBuf, sizeof(convertedBuf), NULL, NULL);
-
-		if (!convertedBufLen)
-			return -1;
+		const DWORD error = GetLastError();
+		if (error == ERROR_NOT_ENOUGH_MEMORY && maxLineLength > 256)
+			maxLineLength -= 256;
+		else
+			system_error::raise("ReadConsoleW", error);
 	}
 
-	return bufferSize - leftToRead;
+	constexpr WCHAR CtrlZ = 0x1a;
+	if (!charsRead || (wideBuf[0] == CtrlZ))
+		return 0;
+
+	int mbLength = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, charsRead,
+		NULL, 0, NULL, NULL);
+
+	if (!mbLength)
+		return -1;
+
+	mbLength = WideCharToMultiByte(GetConsoleCP(), 0, wideBuf, charsRead,
+		mbBuffer.getBuffer(mbLength, false), mbLength, NULL, NULL);
+
+	return mbLength;
 }
+
 #endif
 
 
@@ -452,7 +410,7 @@ struct ri_actions
 	const SCHAR* ri_action_print_mixed;
 };
 
-static processing_state add_row(const MetaString&);
+static processing_state add_row(const QualifiedMetaString&);
 static processing_state blobedit(ISC_QUAD, const char*);
 static processing_state bulk_insert_hack(const char* command);
 static bool bulk_insert_retriever(const char* prompt);
@@ -460,8 +418,8 @@ static void check_autoterm();
 static bool check_date(const tm& times);
 static bool check_time(const tm& times);
 static bool check_timestamp(const tm& times, const int msec);
-static void col_check(const MetaString&, unsigned*);
-static processing_state copy_table(const MetaString&, const MetaString&, const TEXT*);
+static void col_check(const QualifiedMetaString&, unsigned*);
+static processing_state copy_table(const QualifiedMetaString&, const QualifiedMetaString&, const TEXT*);
 static processing_state create_db(const FrontendParser::CreateDatabaseNode& node);
 static void do_isql();
 static processing_state drop_db();
@@ -472,7 +430,7 @@ static processing_state execSetDebugCommand();
 static processing_state frontend(const std::string&);
 static processing_state do_set_command(const TEXT*, bool*);
 static processing_state get_dialect(const char* const dialect_str,
-	char* const bad_dialect_buf, bool& bad_dialect);
+	char* const bad_dialect_buf, size_t sz, bool& bad_dialect);
 static bool get_numeric(const UCHAR*, USHORT, SSHORT*, SINT64*);
 static void print_set(const char* str, bool v);
 static processing_state print_sets();
@@ -485,7 +443,7 @@ static processing_state newoutput(const TEXT*);
 static processing_state newsize(const TEXT*, const TEXT*);
 static processing_state newMaxRows(const TEXT* newMaxRowsStr);
 static processing_state newtrans(const TEXT*);
-static processing_state parse_arg(int, SCHAR**, SCHAR*); //, FILE**);
+static processing_state parse_arg(int, SCHAR**, QualifiedMetaString&); //, FILE**);
 static unsigned print_item(TEXT**, const IsqlVar*, const unsigned);
 static void print_item_numeric(SINT64, int, int, TEXT*);
 static processing_state print_line(Firebird::IMessageMetadata*, UCHAR*, const unsigned pad[], TEXT line[]);
@@ -505,7 +463,7 @@ static int query_abort(const int, const int, void*);
 static bool stdin_redirected();
 static void strip_quotes(const TEXT*, TEXT*);
 static const char* sqltype_to_string(unsigned);
-static const char* charset_to_string(unsigned);
+static const QualifiedMetaString& charset_to_string(CSetId);
 
 // The dialect spoken by the database, should be 0 when no database is connected.
 USHORT global_dialect_spoken = 0;
@@ -522,8 +480,7 @@ static Firebird::ITransaction* D__trans = NULL;
 static Firebird::ITransaction* M__trans = NULL;
 static int global_numbufs;	// # of cache buffers on connect
 static Firebird::IStatement* global_Stmt = NULL;
-static SCHAR Password[128];
-static SCHAR Charset[128];
+static SCHAR Password[PASSWORD_LENGTH];
 static bool Merge_stderr;
 
 static Firebird::GlobalPtr<Firebird::UCharBuffer> global_Buffer;
@@ -566,7 +523,6 @@ public:
 		Heading = true;
 		BailOnError = false;
 		StmtTimeout = 0;
-		ISQL_charset[0] = 0;
 		KeepTranParams = true;
 		TranParams->assign(DEFAULT_DML_TRANS_SQL);
 		PerTableStats = false;
@@ -594,7 +550,7 @@ public:
 	bool Heading;
 	bool BailOnError;
 	unsigned int StmtTimeout;
-	SCHAR ISQL_charset[MAXCHARSET_SIZE];
+	std::optional<QualifiedMetaString> ISQL_charset;
 	bool KeepTranParams;
 	bool PerTableStats;
 	bool WireStats;
@@ -617,6 +573,7 @@ static const char FORBIDDEN_TERM_CHARS_DISPLAY[] = "<ENTER>, -, *, /, SINGLE_QUO
 static bool global_psw = false;
 static bool global_usr = false;
 static bool global_role = false;
+static bool global_search_path = false;
 static bool has_global_numbufs = false;
 static bool have_trans = false; // translation of word "Yes"
 static TEXT yesword[BUFFER_LENGTH128];
@@ -696,7 +653,7 @@ private:
 
 	bool m_initialized;		// initial (before) stats loaded OK
 	StatArray m_stat;
-	Firebird::GenericMap<Firebird::Right<USHORT, string>> m_relNames;
+	RightPooledMap<USHORT, string> m_relNames;
 
 	static const unsigned ITEM_COUNT = 8;
 	static const unsigned char m_items[ITEM_COUNT + 1];
@@ -834,19 +791,20 @@ int ISQL_main(int argc, char* argv[])
  *
  **************************************/
 
+	os_utils::StopHandler stopHandler(&sigTstp);
+
 #if defined(HAVE_EDITLINE_H) && defined(HAVE_LOCALE_H)
 	setlocale(LC_CTYPE, "");
 #endif
 	atexit(&atexit_fb_shutdown);
 
-	TEXT tabname[MAX_SQL_IDENTIFIER_SIZE];
-	tabname[0] = '\0';
+	QualifiedMetaString tabname;
 
 	// Initialize globals
 	isqlGlob.major_ods = 0;
 	isqlGlob.minor_ods = 0;
 	isqlGlob.db_SQL_dialect = 0;
-	isqlGlob.att_charset = 0;
+	isqlGlob.att_charset = CS_NONE;
 
 	// Output goes to stdout by default
 	isqlGlob.Out = stdout;
@@ -869,7 +827,6 @@ int ISQL_main(int argc, char* argv[])
 	if (Merge_stderr)
 		isqlGlob.Errfp = isqlGlob.Out;
 
-	IUTILS_make_upper(tabname);
 	switch (ret)
 	{
 	case EXTRACT:
@@ -920,7 +877,7 @@ int ISQL_main(int argc, char* argv[])
 	// As ISQL can run under windows, all memory should be freed before
 	// returning.  In debug mode this call will report unfreed blocks.
 
-	//gds_alloc_report(0 ALLOC_ARGS);
+	//gds_alloc_report(0, __FILE__, __LINE__);
 	char fn[] = __FILE__;
 	fn[strlen(fn) - 8] = 0; // all isql files in gen dir
 	gds_alloc_report(0, fn, 0);
@@ -930,7 +887,7 @@ int ISQL_main(int argc, char* argv[])
 }
 
 
-void ISQL_array_dimensions(const TEXT* fieldname)
+void ISQL_array_dimensions(const QualifiedMetaString& fieldname)
 {
 /**************************************
  *
@@ -950,10 +907,11 @@ void ISQL_array_dimensions(const TEXT* fieldname)
 	if (!frontendTransaction())
 		return;
 
-	FOR FDIM IN RDB$FIELD_DIMENSIONS WITH
-	   FDIM.RDB$FIELD_NAME EQ fieldname
-	   SORTED BY FDIM.RDB$DIMENSION
-
+	FOR FDIM IN RDB$FIELD_DIMENSIONS
+		WITH FDIM.RDB$SCHEMA_NAME EQUIV NULLIF(fieldname.schema.c_str(), '') AND
+			 FDIM.RDB$FIELD_NAME EQ fieldname.object.c_str()
+		SORTED BY FDIM.RDB$DIMENSION
+	{
 		// Format is [lower:upper, lower:upper,..]
 		// When lower == 1 no need to print a range. Done.
 		// When upper == 1 no need to print a range either, but it's confusing. Not done.
@@ -965,12 +923,12 @@ void ISQL_array_dimensions(const TEXT* fieldname)
 			isqlGlob.printf("%ld", FDIM.RDB$UPPER_BOUND);
 		else
 			isqlGlob.printf("%ld:%ld", FDIM.RDB$LOWER_BOUND, FDIM.RDB$UPPER_BOUND);
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return;
-	END_ERROR;
+	END_ERROR
 
 	isqlGlob.printf("]");
 }
@@ -1069,7 +1027,22 @@ static void readNextInputLine(const char* prompt)
 		// CVC: On 2005-04-02, use an empty prompt when not working in
 		// interactive mode to behave like @@@ below at request by Pavel.
 		const char* new_prompt = Interactive ? prompt : "";
-		lastInputLine = readline(new_prompt);
+		for(;;)
+		{
+			lastInputLine = readline(new_prompt);
+
+			// In a case of ignored SIGTSTP (ctrl-Z typically) readline return NULL -
+			// same as for EOF case, causing normal termination. Let's avoid it.
+			if (!lastInputLine)
+			{
+				if (!sigTstp)
+					break;
+				sigTstp = false;
+				new_prompt = "";
+			}
+			else
+				break;
+		}
 
 		if (lastInputLine != NULL && strlen(lastInputLine) != 0) {
 			add_history(lastInputLine);
@@ -1095,17 +1068,21 @@ static void readNextInputLine(const char* prompt)
 	do
 	{
 		// Read the line
-		char buffer[MAX_USHORT];
+		char* buffer;
 		int lineSize;
 
 #ifdef WIN_NT
 		if (!Input_file && isatty(fileno(Filelist->Ifp().indev_fpointer)))
-			lineSize = win32ReadConsole(Filelist->Ifp().indev_fpointer, buffer, sizeof(buffer));
+		{
+			lineSize = win32ReadConsole(Filelist->Ifp().indev_fpointer, charBuffer);
+			buffer = charBuffer->begin();
+		}
 		else
 #endif
 		{
-			if (fgets(buffer, sizeof(buffer), Filelist->Ifp().indev_fpointer) != NULL)
-				lineSize = strlen(buffer);
+			buffer = charBuffer->getBuffer(MAX_USHORT);
+			if (fgets(buffer, charBuffer->getCapacity(), Filelist->Ifp().indev_fpointer) != NULL)
+				lineSize = static_cast<int>(strlen(buffer));
 			else
 				lineSize = -1;
 		}
@@ -1307,7 +1284,7 @@ void ISQL_warning(Firebird::IStatus* st)
  *
  **************************************
  *
- * Functional desription
+ * Functional description
  *	Report warning
  *	Simulate isc_print_status exactly, to control stderr
  **************************************/
@@ -1376,7 +1353,7 @@ SSHORT ISQL_get_default_char_set_id()
 }
 
 
-SSHORT ISQL_get_field_length(const TEXT* field_name)
+SSHORT ISQL_get_field_length(const QualifiedMetaString& field_name)
 {
 /**************************************
  *
@@ -1392,18 +1369,21 @@ SSHORT ISQL_get_field_length(const TEXT* field_name)
 		return 0;
 
 	SSHORT l = 0;
-	FOR FLD IN RDB$FIELDS WITH
-		FLD.RDB$FIELD_NAME EQ field_name
 
+	FOR FLD IN RDB$FIELDS
+		WITH FLD.RDB$SCHEMA_NAME EQUIV NULLIF(field_name.schema.c_str(), '') AND
+			 FLD.RDB$FIELD_NAME EQ field_name.object.c_str()
+	{
 		if (FLD.RDB$CHARACTER_LENGTH.NULL)
 			l = FLD.RDB$FIELD_LENGTH;
 		else
 			l = FLD.RDB$CHARACTER_LENGTH;
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		return 0;
-	END_ERROR;
+	END_ERROR
 
 	return l;
 }
@@ -1437,9 +1417,9 @@ SSHORT ISQL_get_char_length(
 }
 
 
-void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
+bool ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 							 SSHORT default_char_set_id, Get what,
-							 bool not_null, bool quote, TEXT* string)
+							 bool not_null, string& text)
 {
 /**************************************
  *
@@ -1455,41 +1435,30 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 #endif
 
 	const char* notNullStr = not_null ? " NOT NULL" : "";
-	string[0] = 0;
+	text.clear();
 
 	if (!frontendTransaction())
-		return;
+		return false;
 
-	FOR FIRST 1 COL IN RDB$COLLATIONS CROSS
-		CST IN RDB$CHARACTER_SETS WITH
-		COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
-		COL.RDB$COLLATION_ID EQ collation AND
-		CST.RDB$CHARACTER_SET_ID EQ char_set_id
+	FOR FIRST 1
+		COL IN RDB$COLLATIONS CROSS
+		CST IN RDB$CHARACTER_SETS
+		WITH COL.RDB$CHARACTER_SET_ID EQ CST.RDB$CHARACTER_SET_ID AND
+			 COL.RDB$COLLATION_ID EQ collation AND
+			 CST.RDB$CHARACTER_SET_ID EQ char_set_id
 		SORTED BY COL.RDB$COLLATION_NAME, CST.RDB$CHARACTER_SET_NAME
-
+	{
 #ifdef DEV_BUILD
 		found = true;
 #endif
-		fb_utils::exact_name(CST.RDB$CHARACTER_SET_NAME);
-		fb_utils::exact_name(COL.RDB$COLLATION_NAME);
-		fb_utils::exact_name(CST.RDB$DEFAULT_COLLATE_NAME);
 
-		char charSetName[QUOTED_NAME_SIZE];
-		char collateName[QUOTED_NAME_SIZE];
+		const QualifiedMetaString charSetName(CST.RDB$CHARACTER_SET_NAME, CST.RDB$SCHEMA_NAME);
+		const QualifiedMetaString collationName(COL.RDB$COLLATION_NAME, COL.RDB$SCHEMA_NAME);
+		const QualifiedMetaString defaultCollateName(
+			CST.RDB$DEFAULT_COLLATE_NAME, CST.RDB$DEFAULT_COLLATE_SCHEMA_NAME);
 
-		if (quote && isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION)
-		{
-			IUTILS_copy_SQL_id(CST.RDB$CHARACTER_SET_NAME, charSetName, DBL_QUOTE);
-			IUTILS_copy_SQL_id(COL.RDB$COLLATION_NAME, collateName, DBL_QUOTE);
-		}
-		else
-		{
-			strcpy(charSetName, CST.RDB$CHARACTER_SET_NAME);
-			strcpy(collateName, COL.RDB$COLLATION_NAME);
-		}
-
-		bool charsetIsDefault = char_set_id == default_char_set_id;
-		bool collationIsDefault = strcmp(CST.RDB$DEFAULT_COLLATE_NAME, COL.RDB$COLLATION_NAME) == 0;
+		const bool charsetIsDefault = char_set_id == default_char_set_id;
+		const bool collationIsDefault = defaultCollateName == collationName;
 
 		switch (what)
 		{
@@ -1500,8 +1469,8 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			// if global default charset has been changed.
 			if (!charsetIsDefault || !collationIsDefault)
 			{
-				sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
-				return;
+				text.printf(" CHARACTER SET %s%s", IUTILS_name_to_string(charSetName).c_str(), notNullStr);
+				return true;
 			}
 			break;
 
@@ -1509,44 +1478,51 @@ void ISQL_get_character_sets(SSHORT char_set_id, SSHORT collation,
 			// Default colation is not printed to allow easy global change
 			if (!collationIsDefault)
 			{
-				sprintf(string, "%s COLLATE %s", notNullStr, collateName);
-				return;
+				text.printf("%s COLLATE %s", notNullStr, IUTILS_name_to_string(collationName).c_str());
+				return true;
 			}
 			break;
 
 		case Get::BOTH:
-			// If they both are default - supress output completely
+			// If they both are default - suppress output completely
 			if (!charsetIsDefault || !collationIsDefault)
 			{
 				if (collationIsDefault) // Suppress collation only
-					sprintf(string, " CHARACTER SET %s%s", charSetName, notNullStr);
+					text.printf(" CHARACTER SET %s%s", IUTILS_name_to_string(charSetName).c_str(), notNullStr);
 				else
-					sprintf(string, " CHARACTER SET %s%s COLLATE %s", charSetName, notNullStr, collateName);
-				return;
+				{
+					text.printf(
+						" CHARACTER SET %s%s COLLATE %s",
+						IUTILS_name_to_string(charSetName).c_str(),
+						notNullStr,
+						IUTILS_name_to_string(collationName).c_str());
+				}
+				return true;
 			}
 			break;
-
 		}
+
 		// No need to write charset or collation but still must print "NOT NULL"
 		if (not_null)
-		{
-			sprintf(string, "%s", notNullStr);
-		}
+			text.printf("%s", notNullStr);
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
-		return;
-	END_ERROR;
+		return text.hasData();
+	END_ERROR
+
 #ifdef DEV_BUILD
 	if (!found)
 	{
 		TEXT Print_buffer[PRINT_BUFFER_LENGTH];
-		sprintf(Print_buffer,
-				"ISQL_get_character_set: charset %d collation %d not found.\n",
-				char_set_id, collation);
+		snprintf(Print_buffer, sizeof(Print_buffer),
+			"ISQL_get_character_set: charset %d collation %d not found.\n", char_set_id, collation);
 		STDERROUT(Print_buffer);
 	}
 #endif
+
+	return text.hasData();
 }
 
 
@@ -1567,16 +1543,16 @@ processing_state ISQL_fill_var(IsqlVar* var,
 							   unsigned index,
 							   UCHAR* buf)
 {
-	var->field = msg->getField(fbStatus, index);		if (failed()) return ps_ERR;
-	var->relation = msg->getRelation(fbStatus, index);	if (failed()) return ps_ERR;
-	var->owner = msg->getOwner(fbStatus, index);		if (failed()) return ps_ERR;
-	var->alias = msg->getAlias(fbStatus, index);		if (failed()) return ps_ERR;
-	var->subType = msg->getSubType(fbStatus, index);	if (failed()) return ps_ERR;
-	var->scale = msg->getScale(fbStatus, index);		if (failed()) return ps_ERR;
-	var->type = msg->getType(fbStatus, index);			if (failed()) return ps_ERR;
-	var->length = msg->getLength(fbStatus, index);		if (failed()) return ps_ERR;
-	var->charSet = msg->getCharSet(fbStatus, index);	if (failed()) return ps_ERR;
-	var->nullable = msg->isNullable(fbStatus, index);	if (failed()) return ps_ERR;
+	var->field = msg->getField(fbStatus, index);				if (failed()) return ps_ERR;
+	var->relation = msg->getRelation(fbStatus, index);			if (failed()) return ps_ERR;
+	var->owner = msg->getOwner(fbStatus, index);				if (failed()) return ps_ERR;
+	var->alias = msg->getAlias(fbStatus, index);				if (failed()) return ps_ERR;
+	var->subType = msg->getSubType(fbStatus, index);			if (failed()) return ps_ERR;
+	var->scale = msg->getScale(fbStatus, index);				if (failed()) return ps_ERR;
+	var->type = msg->getType(fbStatus, index);					if (failed()) return ps_ERR;
+	var->length = msg->getLength(fbStatus, index);				if (failed()) return ps_ERR;
+	var->charSet = CSetId(msg->getCharSet(fbStatus, index));	if (failed()) return ps_ERR;
+	var->nullable = msg->isNullable(fbStatus, index);			if (failed()) return ps_ERR;
 
 	if (buf)
 	{
@@ -1683,6 +1659,9 @@ bool ISQL_statement_ends_in_comment(const char* statement)
 						if (!altQuoteChar || lastChar == altQuoteChar)
 							state = normal;
 						break;
+
+					default:
+						break;
 				}
 				break;
 
@@ -1694,6 +1673,8 @@ bool ISQL_statement_ends_in_comment(const char* statement)
 						break;
 					case in_double_quoted_string:
 						state = normal;
+						break;
+					default:
 						break;
 				}
 				break;
@@ -1707,72 +1688,41 @@ bool ISQL_statement_ends_in_comment(const char* statement)
 }
 
 
-void ISQL_get_default_source(const TEXT* rel_name,
-							 TEXT* field_name,
-							 ISC_QUAD* blob_id)
+void ISQL_get_domain_default_source(const QualifiedMetaString& fieldName, ISC_QUAD* blobId)
 {
 /**************************************
  *
- *	I S Q L _ g e t _ d e f a u l t _ s o u r c e
+ *	I S Q L _ g e t _ d o m a i n _ d e f a u l t _ s o u r c e
  *
  **************************************
  *
  *	Retrieve the default source of a field.
- *	Relation_fields takes precedence over fields if both
- *	are present
  *
- *	For a domain, a NULL is passed for rel_name
  **************************************/
 
-	fb_utils::exact_name(field_name);
-
-	*blob_id = fbBlobNull;
+	*blobId = fbBlobNull;
 
 	if (!frontendTransaction())
 		return;
 
-	if (rel_name)
+	FOR FLD IN RDB$FIELDS
+		WITH FLD.RDB$SCHEMA_NAME EQUIV NULLIF(fieldName.schema.c_str(), '') AND
+			 FLD.RDB$FIELD_NAME EQ fieldName.object.c_str()
 	{
-		// This is default for a column of a table
-		FOR FLD IN RDB$FIELDS CROSS
-			RFR IN RDB$RELATION_FIELDS WITH
-			RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-			RFR.RDB$RELATION_NAME EQ rel_name AND
-			FLD.RDB$FIELD_NAME EQ field_name
-
-			if (!RFR.RDB$DEFAULT_SOURCE.NULL)
-				*blob_id = RFR.RDB$DEFAULT_SOURCE;
-			else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
-				*blob_id = FLD.RDB$DEFAULT_SOURCE;
-
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
+		if (!FLD.RDB$DEFAULT_SOURCE.NULL)
+			*blobId = FLD.RDB$DEFAULT_SOURCE;
 	}
-	else
-	{
-		// Default for a domain
-		FOR FLD IN RDB$FIELDS WITH
-			FLD.RDB$FIELD_NAME EQ field_name
-
-			if (!FLD.RDB$DEFAULT_SOURCE.NULL)
-				*blob_id = FLD.RDB$DEFAULT_SOURCE;
-
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return;
-		END_ERROR;
-	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return;
+	END_ERROR
 }
 
 
 SLONG ISQL_get_index_segments(TEXT* segs,
 								const size_t buf_size,
-								const TEXT* indexname,
-								bool delimited_yes)
+								const QualifiedMetaString& indexname)
 {
 /**************************************
  *
@@ -1784,8 +1734,6 @@ SLONG ISQL_get_index_segments(TEXT* segs,
  *	returns the list of columns in an index.
  *
  **************************************/
-	TEXT SQL_identifier[BUFFER_LENGTH256];
-
 	*segs = '\0';
 
 	if (!frontendTransaction())
@@ -1796,35 +1744,29 @@ SLONG ISQL_get_index_segments(TEXT* segs,
 	SLONG n = 0;
 	bool count_only = false;
 
-	FOR SEG IN RDB$INDEX_SEGMENTS WITH
-		SEG.RDB$INDEX_NAME EQ indexname
+	FOR SEG IN RDB$INDEX_SEGMENTS
+		WITH SEG.RDB$SCHEMA_NAME EQUIV NULLIF(indexname.schema.c_str(), '') AND
+			 SEG.RDB$INDEX_NAME EQ indexname.object.c_str()
 		SORTED BY SEG.RDB$FIELD_POSITION
-
+	{
 		++n;
 		if (count_only)
 			continue;
 
 		// Place a comma and a blank between each segment column name
 
-		fb_utils::exact_name(SEG.RDB$FIELD_NAME);
-		if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes) {
-			IUTILS_copy_SQL_id (SEG.RDB$FIELD_NAME, SQL_identifier, DBL_QUOTE);
-		}
-		else {
-			strcpy (SQL_identifier, SEG.RDB$FIELD_NAME);
-		}
-
-		const size_t len = strlen(SQL_identifier);
+		const auto fieldNameStr = IUTILS_name_to_string(SEG.RDB$FIELD_NAME);
+		const auto fieldNameStrLen = fieldNameStr.length();
 
 		if (n == 1)
 		{
 			// We assume the buffer is at least size(metadata name), so no initial check.
-			strcpy(segs, SQL_identifier);
-			segs += len;
+			strcpy(segs, fieldNameStr.c_str());
+			segs += fieldNameStrLen;
 		}
 		else
 		{
-			if (segs + len + 2 >= segs_end)
+			if (segs + fieldNameStrLen + 2 >= segs_end)
 			{
 				strncpy(segs, ", ...", segs_end - segs);
 				*segs_end = '\0';
@@ -1832,25 +1774,25 @@ SLONG ISQL_get_index_segments(TEXT* segs,
 			}
 			else
 			{
-				sprintf (segs, ", %s", SQL_identifier);
-				segs += len + 2;
+				snprintf(segs, segs_end - segs + 1, ", %s", fieldNameStr.c_str());
+				segs += fieldNameStrLen + 2;
 			}
 		}
-
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
 		ROLLBACK;
 		return 0;
-	END_ERROR;
+	END_ERROR
 
 	return n;
 }
 
 
-bool ISQL_get_base_column_null_flag(const TEXT* view_name,
+bool ISQL_get_base_column_null_flag(const QualifiedMetaString& view_name,
 									const SSHORT view_context,
-									const TEXT* base_field)
+									const MetaString& base_field)
 {
 /**************************************
  *
@@ -1863,13 +1805,10 @@ bool ISQL_get_base_column_null_flag(const TEXT* view_name,
  *	view_context and the base_field of the view column.
  *
  **************************************/
-	BASED_ON RDB$RELATION_FIELDS.RDB$RELATION_NAME save_view_name,
-		save_base_field;
+	QualifiedMetaString save_view_name(view_name);
+	MetaString save_base_field(base_field);
 
-	strcpy(save_view_name, view_name);
-	strcpy(save_base_field, base_field);
 	SSHORT save_view_context = view_context;
-
 
 	if (!frontendTransaction())
 		return false;
@@ -1887,17 +1826,17 @@ bool ISQL_get_base_column_null_flag(const TEXT* view_name,
 	bool error = false;
 	while (!done && !error)
 	{
-		fb_utils::exact_name(save_view_name);
-		fb_utils::exact_name(save_base_field);
 		bool found = false;
 		FOR FIRST 1
 			VR IN RDB$VIEW_RELATIONS
-			CROSS NEWRFR IN RDB$RELATION_FIELDS WITH
-			VR.RDB$VIEW_NAME EQ save_view_name AND
-			VR.RDB$VIEW_CONTEXT EQ save_view_context AND
-			NEWRFR.RDB$RELATION_NAME = VR.RDB$RELATION_NAME AND
-			NEWRFR.RDB$FIELD_NAME = save_base_field
-
+			CROSS NEWRFR IN RDB$RELATION_FIELDS
+			WITH VR.RDB$SCHEMA_NAME EQUIV NULLIF(save_view_name.schema.c_str(), '') AND
+				 VR.RDB$VIEW_NAME EQ save_view_name.object.c_str() AND
+				 VR.RDB$VIEW_CONTEXT EQ save_view_context AND
+				 NEWRFR.RDB$SCHEMA_NAME EQUIV VR.RDB$RELATION_SCHEMA_NAME AND
+				 NEWRFR.RDB$RELATION_NAME = VR.RDB$RELATION_NAME AND
+				 NEWRFR.RDB$FIELD_NAME = save_base_field.c_str()
+		{
 			found = true;
 			if (NEWRFR.RDB$BASE_FIELD.NULL)
 			{
@@ -1908,14 +1847,15 @@ bool ISQL_get_base_column_null_flag(const TEXT* view_name,
 			}
 			else
 			{
-				strcpy (save_view_name, NEWRFR.RDB$RELATION_NAME);
+				save_view_name = QualifiedMetaString(NEWRFR.RDB$RELATION_NAME, NEWRFR.RDB$SCHEMA_NAME);
 				save_view_context = NEWRFR.RDB$VIEW_CONTEXT;
-				strcpy (save_base_field, NEWRFR.RDB$BASE_FIELD);
+				save_base_field = NEWRFR.RDB$BASE_FIELD;
 			}
+		}
 		END_FOR
 		ON_ERROR
 			error = true;
-		END_ERROR;
+		END_ERROR
 
 		if (!found)
 		{
@@ -1924,45 +1864,51 @@ bool ISQL_get_base_column_null_flag(const TEXT* view_name,
 				// Copy/paste from DYN_UTIL_find_field_source
 				FOR FIRST 1
 					VRL IN RDB$VIEW_RELATIONS CROSS
-						PPR IN RDB$PROCEDURE_PARAMETERS
-						WITH VRL.RDB$RELATION_NAME EQ PPR.RDB$PROCEDURE_NAME AND
-						VRL.RDB$VIEW_NAME EQ save_view_name AND
-						VRL.RDB$VIEW_CONTEXT EQ save_view_context AND
-						VRL.RDB$CONTEXT_TYPE EQ VCT_PROCEDURE AND
-						PPR.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
-						PPR.RDB$PARAMETER_NAME EQ save_base_field AND
-						PPR.RDB$PARAMETER_TYPE = 1 // output
-
+					PPR IN RDB$PROCEDURE_PARAMETERS
+					WITH VRL.RDB$RELATION_SCHEMA_NAME EQUIV PPR.RDB$SCHEMA_NAME AND
+						 VRL.RDB$RELATION_NAME EQ PPR.RDB$PROCEDURE_NAME AND
+						 VRL.RDB$SCHEMA_NAME EQUIV NULLIF(save_view_name.schema.c_str(), '') AND
+						 VRL.RDB$VIEW_NAME EQ save_view_name.object.c_str() AND
+						 VRL.RDB$VIEW_CONTEXT EQ save_view_context AND
+						 VRL.RDB$CONTEXT_TYPE EQ VCT_PROCEDURE AND
+						 PPR.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
+						 PPR.RDB$PARAMETER_NAME EQ save_base_field.c_str() AND
+						 PPR.RDB$PARAMETER_TYPE = 1 // output
+				{
 					found = true;
 					if (!PPR.RDB$NULL_FLAG.NULL && PPR.RDB$NULL_FLAG == 1)
 						null_flag = false;
 
 					done = true;
+				}
 				END_FOR
 				ON_ERROR
 					error = true;
-				END_ERROR;
+				END_ERROR
 			}
 			else if (ENCODE_ODS(isqlGlob.major_ods, isqlGlob.minor_ods) >= ODS_11_2)
 			{
 				FOR FIRST 1
 					VR IN RDB$VIEW_RELATIONS
-					CROSS NEWPP IN RDB$PROCEDURE_PARAMETERS WITH
-					VR.RDB$VIEW_NAME EQ save_view_name AND
-					VR.RDB$VIEW_CONTEXT EQ save_view_context AND
-					NEWPP.RDB$PROCEDURE_NAME = VR.RDB$RELATION_NAME AND
-					NEWPP.RDB$PARAMETER_NAME = save_base_field AND
-					NEWPP.RDB$PARAMETER_TYPE = 1 // output param
-
+					CROSS NEWPP IN RDB$PROCEDURE_PARAMETERS
+					WITH VR.RDB$SCHEMA_NAME EQUIV NULLIF(save_view_name.schema.c_str(), '') AND
+						 VR.RDB$VIEW_NAME EQ save_view_name.object.c_str() AND
+						 VR.RDB$VIEW_CONTEXT EQ save_view_context AND
+						 NEWPP.RDB$SCHEMA_NAME EQUIV VR.RDB$RELATION_SCHEMA_NAME AND
+						 NEWPP.RDB$PROCEDURE_NAME = VR.RDB$RELATION_NAME AND
+						 NEWPP.RDB$PARAMETER_NAME = save_base_field.c_str() AND
+						 NEWPP.RDB$PARAMETER_TYPE = 1 // output param
+				{
 					found = true;
 					if (!NEWPP.RDB$NULL_FLAG.NULL && NEWPP.RDB$NULL_FLAG == 1)
 						null_flag = false;
 
 					done = true;
+				}
 				END_FOR
 				ON_ERROR
 					error = true;
-				END_ERROR;
+				END_ERROR
 			}
 		}
 
@@ -1974,8 +1920,8 @@ bool ISQL_get_base_column_null_flag(const TEXT* view_name,
 	return null_flag;
 }
 
-bool ISQL_get_null_flag(const TEXT* rel_name,
-						TEXT* field_name)
+bool ISQL_get_null_flag(const QualifiedMetaString& rel_name,
+						const MetaString& field_name)
 {
 /**************************************
  *
@@ -1989,64 +1935,46 @@ bool ISQL_get_null_flag(const TEXT* rel_name,
  *	We are passed the relation name and the relation_field name
  *  	For domains, the relation name is null.
  **************************************/
-	fb_utils::exact_name(field_name);
-
 	bool null_flag = true;
 
 	if (!frontendTransaction())
 		return false;
 
-	if (rel_name)
+	FOR FLD IN RDB$FIELDS CROSS
+		RFR IN RDB$RELATION_FIELDS
+		WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV FLD.RDB$SCHEMA_NAME AND
+			 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
+			 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(rel_name.schema.c_str(), '') AND
+			 RFR.RDB$RELATION_NAME EQ rel_name.object.c_str() AND
+			 RFR.RDB$FIELD_NAME EQ field_name.c_str()
 	{
-		FOR FLD IN RDB$FIELDS CROSS
-			RFR IN RDB$RELATION_FIELDS WITH
-			RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
-			RFR.RDB$RELATION_NAME EQ rel_name AND
-			RFR.RDB$FIELD_NAME EQ field_name
+		if (!FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 1)
+			null_flag = false;
+		else
+		{
 
-			if (!FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 1)
-				null_flag = false;
-			else
+			// If RDB$BASE_FIELD is not null then it is a view column
+
+			if (RFR.RDB$BASE_FIELD.NULL)
 			{
 
-				// If RDB$BASE_FIELD is not null then it is a view column
+				// Simple column. Did user define it not null?
 
-				if (RFR.RDB$BASE_FIELD.NULL)
-				{
-
-					// Simple column. Did user define it not null?
-
-					if (!RFR.RDB$NULL_FLAG.NULL && RFR.RDB$NULL_FLAG == 1)
-						null_flag = false;
-				}
-				else
-				{
-					null_flag = ISQL_get_base_column_null_flag (rel_name,
-						RFR.RDB$VIEW_CONTEXT, RFR.RDB$BASE_FIELD);
-				}
+				if (!RFR.RDB$NULL_FLAG.NULL && RFR.RDB$NULL_FLAG == 1)
+					null_flag = false;
 			}
-
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return null_flag;
-		END_ERROR;
+			else
+			{
+				null_flag = ISQL_get_base_column_null_flag(rel_name,
+					RFR.RDB$VIEW_CONTEXT, RFR.RDB$BASE_FIELD);
+			}
+		}
 	}
-	else
-	{
-		// Domains have only field entries to worry about
-		FOR FLD IN RDB$FIELDS WITH
-			FLD.RDB$FIELD_NAME EQ field_name
-
-			if (FLD.RDB$NULL_FLAG == 1)
-				null_flag = false;
-
-		END_FOR
-		ON_ERROR
-			ISQL_errmsg(fbStatus);
-			return null_flag;
-		END_ERROR;
-	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg(fbStatus);
+		return null_flag;
+	END_ERROR
 
 	return null_flag;
 }
@@ -2123,45 +2051,9 @@ void ISQL_disconnect_database(bool nQuietMode)
 }
 
 
-#ifdef NOT_USED_OR_REPLACED
-bool ISQL_is_domain(const TEXT* field_name)
-{
-/**************************************
- *
- *	I S Q L _ i s _ d o m a i n
- *
- **************************************
- *
- *	Determine if a field in rdb$fields is a domain,
- *
- **************************************/
-	bool is_domain = false;
-
-	if (!frontendTransaction())
-		return false;
-
-	FOR FLD IN RDB$FIELDS WITH
-		FLD.RDB$FIELD_NAME EQ field_name
-
-		if (!(implicit_domain(FLD.RDB$FIELD_NAME) && FLD.RDB$SYSTEM_FLAG != 1))
-		{
-			is_domain = true;
-		}
-
-	END_FOR
-	ON_ERROR
-		ISQL_errmsg(fbStatus);
-		return is_domain;
-	END_ERROR;
-
-	return is_domain;
-}
-#endif
-
-
 // Print the numeric type as accurately as possible, depending on the ODS.
 // If it isn't numeric/decimal or is another non-numeric data type, print only the type.
-bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int fieldSubType,
+bool ISQL_printNumericType(const QualifiedMetaString& fieldName, const int fieldType, const int fieldSubType,
 	const int fieldPrecision, const int fieldScale)
 {
 	// Look through types array
@@ -2172,7 +2064,9 @@ bool ISQL_printNumericType(const char* fieldName, const int fieldType, const int
 	fb_assert(Column_types[i].type != 0);
 	if (Column_types[i].type == 0)
 	{
-		isqlGlob.printf("Unknown data type %d for field name %s%s", fieldType, fieldName, NEWLINE);
+		isqlGlob.printf("Unknown data type %d for field name %s%s", fieldType,
+			IUTILS_name_to_string(fieldName).c_str(),
+			NEWLINE);
 		return false;
 	}
 
@@ -2381,7 +2275,7 @@ static string get_numeric_value(const char* fromStr)
 }
 
 
-static processing_state add_row(const MetaString& tabname)
+static processing_state add_row(const QualifiedMetaString& tabname)
 {
 /**************************************
  *
@@ -2400,7 +2294,7 @@ static processing_state add_row(const MetaString& tabname)
  *	tabname -- Name of table to insert into
  *
  **************************************/
-	if (tabname.isEmpty())
+	if (tabname.object.isEmpty())
 		return (ps_ERR);
 
 	if (!Interactive)
@@ -2453,7 +2347,12 @@ static processing_state add_row(const MetaString& tabname)
 	// Array for storing select/insert column mapping, colcheck sets it up
 	Firebird::Array<unsigned> coln;
 	unsigned* colnumber = coln.getBuffer(n_cols);
-	col_check(tabname, colnumber);
+
+	auto fixedTabName = tabname;
+	if (fixedTabName.schema.isEmpty() && isqlGlob.major_ods >= ODS_VERSION14)
+		fixedTabName.schema = msg->getSchema(fbStatus, 0);
+
+	col_check(fixedTabName, colnumber);
 
 	// Create the new INSERT statement from the sqlda info
 
@@ -2464,35 +2363,21 @@ static processing_state add_row(const MetaString& tabname)
 	insertstring.printf("INSERT INTO %s (", IUTILS_name_to_string(tabname).c_str());
 
 	unsigned i_cols = 0;
-	{ // scope
-		char fldfixed[QUOTED_NAME_SIZE];
-		int i = 0;
-		for (unsigned i = 0; i < n_cols; ++i)
+	for (unsigned i = 0; i < n_cols; ++i)
+	{
+		// Skip columns that are computed
+		if (colnumber[i] != ~0u)
 		{
-			// Skip columns that are computed
-			if (colnumber[i] != ~0u)
-			{
-				const char* fldname = msg->getField(fbStatus, i);
-				if (ISQL_errmsg(fbStatus))
-					return (SKIP);
-				const bool delimited_yes = fldname[0] == DBL_QUOTE;
-				if (isqlGlob.db_SQL_dialect > SQL_DIALECT_V6_TRANSITION && delimited_yes)
-				{
-					IUTILS_copy_SQL_id(fldname, fldfixed, DBL_QUOTE);
-				}
-				else
-				{
-					strcpy(fldfixed, fldname);
-					IUTILS_make_upper(fldfixed);
-				}
+			const auto fieldNameStr = IUTILS_name_to_string(msg->getField(fbStatus, i));
+			if (ISQL_errmsg(fbStatus))
+				return (SKIP);
 
-				// Set i_cols to the number of insert columns
-				if (i_cols++)
-					insertstring += ',';
-				insertstring += fldfixed;
-			}
+			// Set i_cols to the number of insert columns
+			if (i_cols++)
+				insertstring += ',';
+			insertstring += fieldNameStr;
 		}
-	} // scope
+	}
 
 	insertstring += ") VALUES (";
 
@@ -2559,7 +2444,6 @@ static processing_state add_row(const MetaString& tabname)
 			unsigned type = msg->getType(fbStatus, i);
 			if (ISQL_errmsg(fbStatus))
 				return (SKIP);
-			const bool nullable = msg->isNullable(fbStatus, i);
 			if (ISQL_errmsg(fbStatus))
 				return (SKIP);
 			unsigned varLength;
@@ -2908,9 +2792,9 @@ static processing_state add_row(const MetaString& tabname)
 							if (dscale > 0)
 							{
 								TEXT err_buf[256];
-								sprintf(err_buf,
-										"input error: input scale %d exceeds the field's scale %d",
-										-lscale, -scale);
+								snprintf(err_buf, sizeof(err_buf),
+									"input error: input scale %d exceeds the field's scale %d",
+									-lscale, -scale);
 								STDERROUT(err_buf);
 								done = true;
 							}
@@ -3272,7 +3156,7 @@ static processing_state bulk_insert_hack(const char* command)
 		const char* lastPos = insert;
 		Extender extender; // Used only for multi-line tuples.
 
-		for (unsigned i = 0, textFieldIter = 0; i < n_cols && !done; ++i)
+		for (unsigned i = 0; i < n_cols && !done; ++i)
 		{
 			unsigned offset = message->getNullOffset(fbStatus, i);
 			if (ISQL_errmsg(fbStatus))
@@ -3287,7 +3171,6 @@ static processing_state bulk_insert_hack(const char* command)
 			unsigned type = message->getType(fbStatus, i);
 			if (ISQL_errmsg(fbStatus))
 				return (SKIP);
-			const bool nullable = message->isNullable(fbStatus, i);
 			if (ISQL_errmsg(fbStatus))
 				return (SKIP);
 
@@ -3731,9 +3614,9 @@ static processing_state bulk_insert_hack(const char* command)
 							if (dscale > 0)
 							{
 								TEXT err_buf[256];
-								sprintf(err_buf,
-										"Input error: input scale %d exceeds the field's scale %d",
-										-lscale, -scale);
+								snprintf(err_buf, sizeof(err_buf),
+									"Input error: input scale %d exceeds the field's scale %d",
+									-lscale, -scale);
 								STDERROUT(err_buf);
 								done = true;
 							}
@@ -3915,7 +3798,7 @@ static processing_state bulk_insert_hack(const char* command)
 		}
 
 		TEXT errbuf[MSG_LENGTH];
-		sprintf(errbuf, "Stopped prematurely due to error in line %d with text:",
+		snprintf(errbuf, sizeof(errbuf), "Stopped prematurely due to error in line %d with text:",
 			Filelist->Ifp().indev_aux);
 		STDERROUT(errbuf);
 		STDERROUT(lastInputLine);
@@ -4008,8 +3891,8 @@ static void check_autoterm()
 		}
 	}
 
-	if (!(protocolVersion == 0 || protocolVersion >= 19) &&	// PROTOCOL_VERSION19
-		  isqlGlob.major_ods >= ODS_VERSION14)
+	if (!(protocolVersion == 0 || protocolVersion >= (PROTOCOL_PREPARE_FLAG & FB_PROTOCOL_MASK)) &&
+		isqlGlob.major_ods >= ODS_VERSION14)
 	{
 		setValues.AutoTerm = false;
 
@@ -4068,7 +3951,7 @@ static bool check_timestamp(const tm& times, const int msec)
 }
 
 
-static void col_check(const MetaString& tabname, unsigned* colnumber)
+static void col_check(const QualifiedMetaString& tabname, unsigned* colnumber)
 {
 /**************************************
  *
@@ -4087,24 +3970,28 @@ static void col_check(const MetaString& tabname, unsigned* colnumber)
 	// Query to get array info and computed source not available in the sqlda
 	int i = 0, j = 0;
 	FOR F IN RDB$FIELDS CROSS
-		R IN RDB$RELATION_FIELDS WITH
-		F.RDB$FIELD_NAME = R.RDB$FIELD_SOURCE AND
-		R.RDB$RELATION_NAME EQ tabname.c_str()
+		R IN RDB$RELATION_FIELDS
+		WITH F.RDB$SCHEMA_NAME EQUIV R.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+			 F.RDB$FIELD_NAME = R.RDB$FIELD_SOURCE AND
+			 R.RDB$SCHEMA_NAME EQUIV NULLIF(tabname.schema.c_str(), '') AND
+			 R.RDB$RELATION_NAME EQ tabname.object.c_str()
 		SORTED BY R.RDB$FIELD_POSITION, R.RDB$FIELD_NAME
-
+	{
 		if ((!F.RDB$DIMENSIONS.NULL && F.RDB$DIMENSIONS) || (!F.RDB$COMPUTED_BLR.NULL))
 			colnumber[i] = ~0u;
 		else
 			colnumber[i] = j++;
 		++i;
+	}
 	END_FOR
 	ON_ERROR
 		ISQL_errmsg(fbStatus);
-	END_ERROR;
+	END_ERROR
 }
 
 
-static processing_state copy_table(const MetaString& source, const MetaString& destination, const TEXT* otherdb)
+static processing_state copy_table(const QualifiedMetaString& source, const QualifiedMetaString& destination,
+	const TEXT* otherdb)
 {
 /**************************************
  *
@@ -4119,7 +4006,7 @@ static processing_state copy_table(const MetaString& source, const MetaString& d
  *			 destination == name of newly created table
  *
  **************************************/
-	if (source.isEmpty() || destination.isEmpty())
+	if (source.object.isEmpty() || destination.object.isEmpty())
 	{
 		STDERROUT("Either source or destination tables are missing");
 		return SKIP;
@@ -4148,9 +4035,9 @@ static processing_state copy_table(const MetaString& source, const MetaString& d
 		return END;
 	}
 
-	if (EXTRACT_list_table(source.c_str(), destination.c_str(), domain_flag, -1))
+	if (EXTRACT_list_table(source, destination, domain_flag, [](auto&&) { return -1; }))
 	{
-		IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << source.c_str());
+		IUTILS_msg_get(NOT_FOUND, errbuf, SafeArg() << IUTILS_name_to_string(source).c_str());
 		STDERROUT(errbuf);
 		fclose(isqlGlob.Out);
 	}
@@ -4163,10 +4050,10 @@ static processing_state copy_table(const MetaString& source, const MetaString& d
 		if (*otherdb)
 			altdb = otherdb;
 		TEXT cmd[MAXPATHLEN * 2 + 20];
-		sprintf(cmd, "isql -q %s -i %s", altdb, ftmp.c_str());
+		snprintf(cmd, sizeof(cmd), "isql -q %s -i %s", altdb, ftmp.c_str());
 		if (system(cmd))
 		{
-			IUTILS_msg_get(COPY_ERR, errbuf, SafeArg() << destination.c_str() << altdb);
+			IUTILS_msg_get(COPY_ERR, errbuf, SafeArg() << IUTILS_name_to_string(destination).c_str() << altdb);
 			STDERROUT(errbuf);
 		}
 	}
@@ -4216,8 +4103,13 @@ static processing_state create_db(const FrontendParser::CreateDatabaseNode& node
 		if (global_role && createWithRole)
 			statement += std::string(" ROLE ") + isqlGlob.Role;
 
-		if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET) != 0)
-			statement += std::string(" SET NAMES '") + setValues.ISQL_charset + "'";
+		if (setValues.ISQL_charset)
+		{
+			if (setValues.ISQL_charset->schema.isEmpty())
+				statement += std::string(" SET NAMES '") + setValues.ISQL_charset->object.c_str() + "'";
+			else
+				statement += std::string(" SET NAMES '") + setValues.ISQL_charset->toQuotedString().c_str() + "'";
+		}
 
 		for (std::size_t i = 1; i < node.args.size(); ++i)
 			statement += std::string(" ") + node.args[i].rawText;
@@ -4229,8 +4121,17 @@ static processing_state create_db(const FrontendParser::CreateDatabaseNode& node
 			(isqlGlob.SQL_dialect == 0 || isqlGlob.SQL_dialect == SQL_DIALECT_V6_TRANSITION) ?
 				requested_SQL_dialect : isqlGlob.SQL_dialect;
 
-		DB = Firebird::UtilInterfacePtr()->executeCreateDatabase(fbStatus, statement.length(),
-			statement.c_str(), dialect, nullptr);
+		// Build up a dpb
+		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
+
+		if (global_search_path && isqlGlob.SearchPath[0])
+			dpb.insertString(isc_dpb_search_path, isqlGlob.SearchPath);
+
+		dpb.insertString(isc_dpb_blr_request_search_path, SYSTEM_SCHEMA);
+
+		DB = UtilInterfacePtr()->executeCreateDatabase2(fbStatus,
+			static_cast<unsigned>(statement.length()), statement.c_str(), dialect,
+			dpb.getBufferLength(), dpb.getBuffer(), nullptr);
 
 		if (!DB && createWithRole && fbStatus->getErrors()[1] == isc_dsql_error)
 		{
@@ -4271,7 +4172,6 @@ static processing_state create_db(const FrontendParser::CreateDatabaseNode& node
 			if (setValues.Autocommit)
 				D_Transaction();
 		}
-
 	}
 
 	return (ret);
@@ -5192,14 +5092,7 @@ static processing_state frontend(const std::string& statement)
 
 				[](const FrontendParser::SetNamesNode& node)
 				{
-					const auto setNames = node.name ? node.name->c_str() : DEFCHARSET;
-
-					const size_t lgth = strlen(setNames);
-					if (lgth < MAXCHARSET_SIZE)
-						strcpy(setValues.ISQL_charset, setNames);
-					else
-						fb_utils::copy_terminate(setValues.ISQL_charset, setNames, MAXCHARSET_SIZE);
-
+					setValues.ISQL_charset = node.name;
 					return SKIP;
 				},
 
@@ -5234,7 +5127,7 @@ static processing_state frontend(const std::string& statement)
 
 				[&](const FrontendParser::SetSqlDialectNode& node)
 				{
-					return get_dialect(node.arg.c_str(), bad_dialect_buf, bad_dialect);
+					return get_dialect(node.arg.c_str(), bad_dialect_buf, sizeof(bad_dialect_buf), bad_dialect);
 				},
 
 				[](const FrontendParser::SetStatsNode& node)
@@ -5380,7 +5273,7 @@ static processing_state do_set_command(const TEXT* parm, bool* global_flag)
 // *********************
 // Validates SET SQL DIALECT command according to the target db.
 static processing_state get_dialect(const char* const dialect_str,
-	char* const bad_dialect_buf, bool& bad_dialect)
+	char* const bad_dialect_buf, size_t sz, bool& bad_dialect)
 {
 	processing_state ret = SKIP;
 	bool print_warning = false;
@@ -5391,8 +5284,7 @@ static processing_state get_dialect(const char* const dialect_str,
 			isqlGlob.SQL_dialect > SQL_DIALECT_V6)
 		{
 			bad_dialect = true;
-			sprintf(bad_dialect_buf, "%s%s",
-					"invalid SQL dialect ", dialect_str);
+			snprintf(bad_dialect_buf, sz, "invalid SQL dialect %s", dialect_str);
 			isqlGlob.SQL_dialect = old_SQL_dialect;	// restore SQL dialect
 			ret = ps_ERR;
 		}
@@ -5406,25 +5298,18 @@ static processing_state get_dialect(const char* const dialect_str,
 					{
 						if (global_dialect_spoken)
 						{
-							sprintf(bad_dialect_buf,
-									"%s%d%s%s%s%d%s",
-									"ERROR: Database SQL dialect ",
-									global_dialect_spoken,
-									" database does not accept Client SQL dialect ",
-									dialect_str,
-									" setting. Client SQL dialect still remains ",
-									old_SQL_dialect, NEWLINE);
+							snprintf(bad_dialect_buf, sz,
+								"ERROR: Database SQL dialect %d database does not accept Client "
+								"SQL dialect %s setting. Client SQL dialect still remains %d\n",
+								global_dialect_spoken, dialect_str, old_SQL_dialect);
 						}
 						else
 						{
-							sprintf(bad_dialect_buf,
-									"%s%s%s%s%s%s",
-									"ERROR: Pre IB V6 database only speaks ",
-									"Database SQL dialect 1 and ",
-									"does not accept Client SQL dialect ",
-									dialect_str,
-									" setting. Client SQL dialect still remains 1.",
-									NEWLINE);
+							snprintf(bad_dialect_buf, sz,
+								"ERROR: Pre IB V6 database only speaks Database SQL dialect 1 "
+								"and does not accept Client SQL dialect %s setting. Client SQL "
+								"dialect still remains 1.\n",
+								dialect_str);
 						}
 						isqlGlob.SQL_dialect = old_SQL_dialect;	// restore SQL dialect
 						isqlGlob.prints(bad_dialect_buf);
@@ -5457,13 +5342,10 @@ static processing_state get_dialect(const char* const dialect_str,
 					}
 					if (print_warning && setValues.Warnings)
 					{
-						//print_warning = false;
-						sprintf(bad_dialect_buf, "%s%d%s%d%s%s",
-								"WARNING: Client SQL dialect has been set to ",
-								isqlGlob.SQL_dialect,
-								" when connecting to Database SQL dialect ",
-								global_dialect_spoken,
-								" database. ", NEWLINE);
+						snprintf(bad_dialect_buf, sz,
+							"WARNING: Client SQL dialect has been set to %d when connecting to "
+							"Database SQL dialect %d database.\n",
+							isqlGlob.SQL_dialect, global_dialect_spoken);
 						isqlGlob.prints(bad_dialect_buf);
 					}
 				}
@@ -5475,8 +5357,7 @@ static processing_state get_dialect(const char* const dialect_str,
 		// handle non numeric invalid "set sql dialect" case
 		isqlGlob.SQL_dialect = old_SQL_dialect;	// restore SQL dialect
 		bad_dialect = true;
-		sprintf(bad_dialect_buf, "%s%s", "invalid SQL dialect ",
-				dialect_str);
+		snprintf(bad_dialect_buf, sz, "invalid SQL dialect %s", dialect_str);
 		ret = ps_ERR;
 	}
 	return ret;
@@ -5674,12 +5555,10 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5 && setValues.Warnings)
 				{
 					isqlGlob.printf(NEWLINE);
-					sprintf(bad_dialect_buf, "%s%s%s%d%s%s",
-							"WARNING: Pre IB V6 database only speaks",
-							" SQL dialect 1 and ",
-							"does not accept Client SQL dialect ",
-							isqlGlob.SQL_dialect,
-							" . Client SQL dialect is reset to 1.", NEWLINE);
+					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+						"WARNING: Pre IB V6 database only speaks SQL dialect 1 and does not accept "
+						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
+						isqlGlob.SQL_dialect);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -5705,11 +5584,9 @@ void ISQL_get_version(bool call_by_create_db)
 				{
 					print_warning = false;
 					isqlGlob.printf(NEWLINE);
-					sprintf(bad_dialect_buf, "%s%d%s%d%s%s",
-							"WARNING: This database speaks SQL dialect ",
-							global_dialect_spoken,
-							" but Client SQL dialect was set to ",
-							isqlGlob.SQL_dialect, " .", NEWLINE);
+					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+						"WARNING: This database speaks SQL dialect %d but Client SQL dialect was "
+						"set to %d .\n", global_dialect_spoken, isqlGlob.SQL_dialect);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -5726,19 +5603,17 @@ void ISQL_get_version(bool call_by_create_db)
 			{
 				isqlGlob.printf(NEWLINE);
 				if (call_by_create_db)
-					sprintf(bad_dialect_buf, "%s%s%d%s%s",
-							"WARNING: Pre IB V6 server only speaks SQL dialect 1",
-							" and does not accept Client SQL dialect ",
-							isqlGlob.SQL_dialect,
-							" . Client SQL dialect is reset to 1.", NEWLINE);
+					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+						"WARNING: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
+						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
+						isqlGlob.SQL_dialect);
 				else
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					sprintf(bad_dialect_buf, "%s%s%d%s%s",
-							"ERROR: Pre IB V6 server only speaks SQL dialect 1",
-							" and does not accept Client SQL dialect ",
-							isqlGlob.SQL_dialect,
-							" . Client SQL dialect is reset to 1.", NEWLINE);
+					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
+						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
+						isqlGlob.SQL_dialect);
 				}
 				isqlGlob.prints(bad_dialect_buf);
 			}
@@ -5747,11 +5622,10 @@ void ISQL_get_version(bool call_by_create_db)
 				if (isqlGlob.SQL_dialect == 0)
 				{
 					//connecting_to_pre_v6_server = true; Not used anywhere.
-					sprintf(bad_dialect_buf, "%s%s%d%s%s",
-							"ERROR: Pre IB V6 server only speaks SQL dialect 1",
-							" and does not accept Client SQL dialect ",
-							isqlGlob.SQL_dialect,
-							" . Client SQL dialect is reset to 1.", NEWLINE);
+					snprintf(bad_dialect_buf, sizeof(bad_dialect_buf),
+						"ERROR: Pre IB V6 server only speaks SQL dialect 1 and does not accept "
+						"Client SQL dialect %d . Client SQL dialect is reset to 1.\n",
+						isqlGlob.SQL_dialect);
 					isqlGlob.prints(bad_dialect_buf);
 				}
 			}
@@ -5778,7 +5652,7 @@ void ISQL_get_version(bool call_by_create_db)
 			break;
 
 		case frb_info_att_charset:
-			isqlGlob.att_charset = p.getInt();
+			isqlGlob.att_charset = CSetId(p.getInt());
 			break;
 
 		default:
@@ -5980,8 +5854,13 @@ static processing_state print_sets()
 	}
 	isqlGlob.printf(NEWLINE);
 
-	if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)) {
-		isqlGlob.printf("%-25s%s%s", "Set names:", setValues.ISQL_charset, NEWLINE);
+	if (setValues.ISQL_charset)
+	{
+		isqlGlob.printf(
+			"%-25s%s%s",
+			"Set names:",
+			IUTILS_name_to_string(setValues.ISQL_charset.value()).c_str(),
+			NEWLINE);
 	}
 
 	print_set("Column headings:", setValues.Heading);
@@ -6150,7 +6029,7 @@ static bool isyesno(const TEXT* buffer)
 
 static bool printUser(const char* dbName)
 {
-	unsigned char info[] = {fb_info_username, fb_info_sqlrole};
+	constexpr unsigned char info[] = {fb_info_username, fb_info_sqlrole};
 	unsigned char buffer[(1 + 2 + MAX_SQL_IDENTIFIER_SIZE) * 2 + 2];
 	string login, role;
 
@@ -6229,10 +6108,13 @@ static bool printUser(const char* dbName)
 	};
 	FbTransCommit fbTransCommit;
 
-	const char* sql = "SELECT CURRENT_USER, CURRENT_ROLE FROM RDB$DATABASE";
+	string sql;
+	sql.printf(
+		"SELECT CURRENT_USER, CURRENT_ROLE FROM %sRDB$DATABASE",
+		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""));
 
 	Firebird::RefPtr<Firebird::IStatement> st(Firebird::REF_NO_INCR,
-		DB->prepare(fbStatus, fbTrans, 0, sql, 3, Firebird::IStatement::PREPARE_PREFETCH_METADATA));
+		DB->prepare(fbStatus, fbTrans, 0, sql.c_str(), 3, Firebird::IStatement::PREPARE_PREFETCH_METADATA));
 	if (failed())
 		return false;
 	Firebird::RefPtr<Firebird::IMessageMetadata> m(Firebird::REF_NO_INCR,
@@ -6253,7 +6135,7 @@ static bool printUser(const char* dbName)
 		const char* text;
 		const char* skip;
 	};
-	FieldInfo fieldInfo[2] = {
+	constexpr FieldInfo fieldInfo[2] = {
 		{"User", NULL},
 		{"Role", "NONE"}
 	};
@@ -6331,8 +6213,8 @@ static processing_state newdb(const TEXT* dbname,
 	// out.  We will restore it after the disconnect.  The save_database buffer
 	// will also be used to translate dbname to the proper character set.
 
-	const SLONG len = strnlen(dbname, MAXPATHLEN - 1);
-	SCHAR* save_database = (SCHAR*) ISQL_ALLOC(len + 1);
+	const size_t len = strnlen(dbname, MAXPATHLEN - 1);
+	SCHAR* save_database = (SCHAR*) ISQL_ALLOC(static_cast<SLONG>(len + 1));
 	if (!save_database)
 		return ps_ERR;
 
@@ -6343,7 +6225,7 @@ static processing_state newdb(const TEXT* dbname,
 	dbname = isqlGlob.global_Db_name;
 	ISQL_FREE(save_database);
 
-	TEXT local_psw[BUFFER_LENGTH256];
+	TEXT local_psw[PASSWORD_LENGTH];
 	TEXT local_usr[BUFFER_LENGTH256];
 	TEXT local_sql_role[BUFFER_LENGTH256];
 
@@ -6381,8 +6263,10 @@ static processing_state newdb(const TEXT* dbname,
 	// Build up a dpb
 	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 
-	if (*setValues.ISQL_charset && strcmp(setValues.ISQL_charset, DEFCHARSET)) {
-		dpb.insertString(isc_dpb_lc_ctype, setValues.ISQL_charset, fb_strlen(setValues.ISQL_charset));
+	if (setValues.ISQL_charset)
+	{
+		const auto charSet = IUTILS_name_to_string(setValues.ISQL_charset.value());
+		dpb.insertString(isc_dpb_lc_ctype, charSet.c_str(), charSet.length());
 	}
 
     FB_SIZE_T l;
@@ -6399,6 +6283,11 @@ static processing_state newdb(const TEXT* dbname,
 		dpb.insertInt(isc_dpb_sql_dialect, isqlGlob.SQL_dialect);
 		dpb.insertString(isc_dpb_sql_role_name, local_sql_role, l);
 	}
+
+	if (global_search_path && (l = fb_strlen(isqlGlob.SearchPath)))
+		dpb.insertString(isc_dpb_search_path, isqlGlob.SearchPath, l);
+
+	dpb.insertString(isc_dpb_blr_request_search_path, SYSTEM_SCHEMA);
 
 	if (local_numbufs > 0) {
 		dpb.insertInt(isc_dpb_num_buffers, local_numbufs);
@@ -6756,7 +6645,7 @@ static processing_state newtrans(const TEXT* statement)
 }
 
 
-static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
+static processing_state parse_arg(int argc, SCHAR** argv, QualifiedMetaString& tabname)
 //	, FILE** sess) Last param was for wisql
 {
 /**************************************
@@ -6793,13 +6682,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 	Merge_stderr = false;
 	Merge_diagnostic =  false;
 
-	{ // scope
-		const size_t lgth = strlen(DEFCHARSET);
-		if (lgth < MAXCHARSET_SIZE)
-			strcpy(setValues.ISQL_charset, DEFCHARSET);
-		else
-			fb_utils::copy_terminate(setValues.ISQL_charset, DEFCHARSET, MAXCHARSET_SIZE);
-	} // scope
+	setValues.ISQL_charset.reset();
 
 	// redirected stdin means act like -i was set
 
@@ -6822,7 +6705,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 
 	// Interpret each command line argument
 
-	const SCHAR switchchar = '-';
+	constexpr SCHAR switchchar = '-';
 
 #ifdef	DEV_BUILD
 	bool istable = false;
@@ -7046,6 +6929,11 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 					global_role = true;
 					break;
 
+				case IN_SW_ISQL_SEARCH_PATH:
+					fb_utils::copy_terminate(isqlGlob.SearchPath, swarg_str, sizeof(isqlGlob.SearchPath));
+					global_search_path = true;
+					break;
+
 				case IN_SW_ISQL_CACHE:
 					if (swarg_int <= 0)
 					{
@@ -7058,14 +6946,16 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 					break;
 
 				case IN_SW_ISQL_CHARSET:
+					try
 					{
-						fb_utils::copy_terminate(Charset, swarg_str, sizeof(Charset));
-						const size_t lgth = strlen(Charset);
-						if (lgth < MAXCHARSET_SIZE) {
-							strcpy(setValues.ISQL_charset, Charset);
-						}
-						else
-							fb_utils::copy_terminate(setValues.ISQL_charset, Charset, MAXCHARSET_SIZE);
+						setValues.ISQL_charset = QualifiedMetaString::parseSchemaObject(swarg_str);
+					}
+					catch (const status_exception&)
+					{
+						// hack for aliases like utf-8
+						string str(swarg_str);
+						str.upper();
+						setValues.ISQL_charset = QualifiedMetaString(str);
 					}
 					break;
 
@@ -7138,7 +7028,7 @@ static processing_state parse_arg(int argc, SCHAR** argv, SCHAR* tabname)
 #ifdef DEV_BUILD
 				// If there is a table name, it follows
 				if (istable && (++i < argc) && (s = argv[i]) && *s)
-					fb_utils::copy_terminate(tabname, s, MAX_SQL_IDENTIFIER_SIZE);
+					tabname = QualifiedMetaString::parseSchemaObject(s);
 #endif
 			}
 		}
@@ -7170,7 +7060,6 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
  *
  * Functional description
  *	Special case - Nan and Infinity.
- *	Some libraries (SFIO) work wrong with them.
  *
  **************************************/
 	const TEXT* t = NULL;
@@ -7184,7 +7073,11 @@ static bool checkSpecial(TEXT* const p, const int length, const double value)
 	if (setValues.List) {
 		isqlGlob.printf("%s%s", t, NEWLINE);
 	}
-	sprintf(p, "%*.*s ", length, length, t);
+	// We're working under the assumption that length is the maximum number of characters to
+	// produce of the value, and that the available buffer is at least 2 bytes longer for
+	// a space (column separator) and nul-termination.
+	const size_t bufSize = static_cast<size_t>(length) + 2;
+	snprintf(p, bufSize, "%*.*s ", length, length, t);
 
 	return true;
 }
@@ -7202,6 +7095,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
  *	Print an SQL data item as described.
  *
  **************************************/
+	// We're working under the assumption that length is the maximum number of characters to
+	// produce of the value, and that the available buffer is at least 2 bytes longer for
+	// a space (column separator) and nul-termination.
+	const size_t bufSize = static_cast<size_t>(length) + 2;
 	const char* convErr = "Conversion error";
 	TEXT d[64];
 	TEXT* p = *s;
@@ -7223,9 +7120,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 		}
 
 		if (dtype == SQL_TEXT || dtype == SQL_VARYING || dtype == SQL_BOOLEAN)
-			sprintf(p, "%-*.*s ", length, length, "<null>");
+			snprintf(p, bufSize, "%-*.*s ", length, length, "<null>");
 		else
-			sprintf(p, "%*.*s ", length, length, "<null>");
+			snprintf(p, bufSize, "%*.*s ", length, length, "<null>");
 	}
 	else if (!strncmp(var->field, "DB_KEY", 6))
 	{
@@ -7240,7 +7137,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			}
 			else
 			{
-				sprintf(d, "%02X", (unsigned int) (UCHAR) *t);
+				snprintf(d, sizeof(d), "%02X", (unsigned int)(UCHAR)*t);
 				strcat(p, d);
 			}
 		}
@@ -7263,9 +7160,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			// Print blob-ids only here
 
 			blobid = var->value.blobid;
-			sprintf(blobbuf, "%" xLONGFORMAT":%" xLONGFORMAT, blobid->gds_quad_high,
-					blobid->gds_quad_low);
-			sprintf(p, "%*s ", MAX(17, length), blobbuf);
+			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+				blobid->gds_quad_high, blobid->gds_quad_low);
+			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			break;
 
 		case SQL_BLOB:
@@ -7273,9 +7170,9 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 			// Print blob-ids only here
 
 			blobid = var->value.blobid;
-			sprintf(blobbuf, "%" xLONGFORMAT":%" xLONGFORMAT, blobid->gds_quad_high,
-					blobid->gds_quad_low);
-			sprintf(p, "%*s ", MAX(17, length), blobbuf);
+			snprintf(blobbuf, sizeof(blobbuf), "%" xLONGFORMAT":%" xLONGFORMAT,
+				blobid->gds_quad_high, blobid->gds_quad_low);
+			snprintf(p, bufSize, "%*s ", MAX(17, length), blobbuf);
 			if (setValues.List)
 			{
 				isqlGlob.printf("%s%s", blobbuf, NEWLINE);
@@ -7305,7 +7202,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				string str_buf;
 				print_item_numeric(value, length, dscale, str_buf.getBuffer(length));
-				sprintf(p, "%s ", str_buf.c_str());
+				snprintf(p, bufSize, "%s ", str_buf.c_str());
 				if (setValues.List)
 				{
 					str_buf.ltrim(); // Added 1999-03-23 to left-justify in LIST ON mode
@@ -7332,20 +7229,20 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 #if defined(MINGW)
 				if (value == 0)
 				{
-					sprintf(p, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
+					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6 -1, value, NEWLINE);
 					}
 				}
 				else
 				{
-					sprintf(p, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 					}
 				}
 #else
-				sprintf(p, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
+				snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
 				if (setValues.List) {
 					isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 				}
@@ -7397,7 +7294,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 						precision = -dscale;
 					}
 
-					sprintf(p, "%*.*f ", length, precision, value);
+					snprintf(p, bufSize, "%*.*f ", length, precision, value);
 
 					if (setValues.List) {
 						isqlGlob.printf("%.*f%s", precision, /*dscale,*/ value, NEWLINE);
@@ -7408,20 +7305,22 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 #if defined(MINGW)
 					if (value == 0)
 					{
-						sprintf(p, "% #*.*g ", length, (int) MIN(16, (length - 7)) - 1, value);
+						snprintf(p, bufSize, "% #*.*g ", length,
+							(int) MIN(16, (length - 7)) - 1, value);
 						if (setValues.List) {
 							isqlGlob.printf("%#.*g%s", DOUBLE_LEN - 7 - 1, value, NEWLINE);
 						}
 					}
 					else
 					{
-						sprintf(p, "% #*.*g ", length, (int) MIN(16, (length - 7)), value);
+						snprintf(p, bufSize, "% #*.*g ", length,
+							(int) MIN(16, (length - 7)), value);
 						if (setValues.List) {
 							isqlGlob.printf("%#.*g%s", DOUBLE_LEN - 7, value, NEWLINE);
 						}
 					}
 #else
-					sprintf(p, "% #*.*g ", length, (int) MIN(16, (length - 7)), value);
+					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(16, (length - 7)), value);
 					if (setValues.List) {
 						isqlGlob.printf("%#.*g%s", DOUBLE_LEN - 7, value, NEWLINE);
 					}
@@ -7445,7 +7344,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				if (setValues.List)
 					isqlGlob.printf("%*.*s%s", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1), decStr, NEWLINE);
 				else
-					sprintf(p, "%*.*s ", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1), decStr);
+					snprintf(p, bufSize, "%*.*s ", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1), decStr);
 			}
 			break;
 
@@ -7467,7 +7366,8 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 						decStr, NEWLINE);
 				}
 				else
-					sprintf(p, "%*.*s ", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1), decStr);
+					snprintf(p, bufSize, "%*.*s ", int(sizeof(decStr) - 1), int(sizeof(decStr) - 1),
+						decStr);
 			}
 			break;
 
@@ -7489,28 +7389,29 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 						intStr, NEWLINE);
 				}
 				else
-					sprintf(p, "%*.*s ", int(sizeof(intStr) - 1), int(sizeof(intStr) - 1), intStr);
+					snprintf(p, bufSize, "%*.*s ", int(sizeof(intStr) - 1), int(sizeof(intStr) - 1),
+						intStr);
 			}
 			break;
 
 		case SQL_TEXT:
 			str2 = var->value.asChar;
 			// See if it is character set OCTETS
-			if (var->charSet == 1)
+			if (var->charSet == CS_BINARY)
 			{
-				const ULONG hex_len = 2 * var->length;
-				TEXT* buff2 = (TEXT*) ISQL_ALLOC(hex_len + 1);
+				string hexStr;
+				hexStr.reserve(2 * static_cast<FB_SIZE_T>(var->length));
+				char hex[3];
 				// Convert the string to hex digits
 				for (unsigned i = 0; i < var->length; i++) {
-					sprintf(&buff2[i * 2], "%02X", (UCHAR)str2[i]);
+					snprintf(hex, sizeof(hex), "%02X", (UCHAR)str2[i]);
+					hexStr.append(hex);
 				}
-				buff2[hex_len] = 0;
 				if (setValues.List) {
-					isqlGlob.printf("%-*s%s", var->length, buff2, NEWLINE);
+					isqlGlob.printf("%-*s%s", var->length, hexStr.c_str(), NEWLINE);
 				}
 				else
-					sprintf(p, "%-*s ", length, buff2);
-				ISQL_FREE(buff2);
+					snprintf(p, bufSize, "%-*s ", length, hexStr.c_str());
 			}
 			else if (setValues.List)
 				isqlGlob.printf("%-*.*s%s", var->length, var->length, str2, NEWLINE);
@@ -7528,29 +7429,29 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				vary* avary = var->value.asVary;
 
 				// If CHARACTER SET OCTETS, print two hex digits per octet
-				if (var->charSet == 1)
+				if (var->charSet == CS_BINARY)
 				{
-					const ULONG hex_len = 2 * avary->vary_length;
-					char* buff2 = static_cast<char*>(ISQL_ALLOC(hex_len + 1));
-					char* bp = buff2;
-
-					for (unsigned i = 0; i < avary->vary_length; i++, bp += 2)
+					string hexStr;
+					hexStr.reserve(2 * static_cast<FB_SIZE_T>(avary->vary_length));
+					char hex[3];
+					for (unsigned i = 0; i < avary->vary_length; i++)
 					{
-						sprintf(bp, "%02X",
-						static_cast<UCHAR>(avary->vary_string[i]));
+						snprintf(hex, sizeof(hex), "%02X",
+							static_cast<UCHAR>(avary->vary_string[i]));
+						hexStr.append(hex);
 					}
-					buff2[hex_len] = '\0'; // there is an extra byte for terminator
 
 					if (setValues.List)
 					{
-						isqlGlob.printf("%s%s", buff2, NEWLINE);
+						isqlGlob.printf("%s%s", hexStr.c_str(), NEWLINE);
 					}
 					else
 					{
 						// Truncate if necessary
-						sprintf(p, "%-*.*s ", length, static_cast<unsigned int>(MIN(length, hex_len)), buff2);
+						snprintf(p, bufSize, "%-*.*s ", length,
+							static_cast<unsigned int>(MIN(length, hexStr.length())),
+							hexStr.c_str());
 					}
-					ISQL_FREE(buff2);
 				}
 				else if (setValues.List)
 					isqlGlob.printf("%-*.*s%s", avary->vary_length, avary->vary_length, avary->vary_string, NEWLINE);
@@ -7569,26 +7470,22 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 				if (isqlGlob.SQL_dialect > SQL_DIALECT_V5)
 				{
-					sprintf(d, "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
-							times.tm_year + 1900, (times.tm_mon + 1),
-							times.tm_mday, times.tm_hour, times.tm_min,
-							times.tm_sec,
-							fractions);
+					snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
+						times.tm_year + 1900, (times.tm_mon + 1), times.tm_mday,
+						times.tm_hour, times.tm_min, times.tm_sec, fractions);
 				}
 				else
 				{
 					if (setValues.Time_display)
-						sprintf(d, "%2.2d-%s-%4.4d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
-								times.tm_mday, alpha_months[times.tm_mon],
-								times.tm_year + 1900, times.tm_hour, times.tm_min,
-								times.tm_sec,
-								fractions);
+						snprintf(d, sizeof(d), "%2.2d-%s-%4.4d %2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
+							times.tm_mday, alpha_months[times.tm_mon], times.tm_year + 1900,
+							times.tm_hour, times.tm_min, times.tm_sec, fractions);
 					else
-						sprintf(d, "%2.2d-%s-%4.4d", times.tm_mday,
-								alpha_months[times.tm_mon], times.tm_year + 1900);
+						snprintf(d, sizeof(d), "%2.2d-%s-%4.4d",
+							times.tm_mday, alpha_months[times.tm_mon], times.tm_year + 1900);
 				}
 
-				sprintf(p, "%-*.*s ", length, length, d);
+				snprintf(p, bufSize, "%-*.*s ", length, length, d);
 
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7616,10 +7513,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				if (ISQL_errmsg(fbStatus))
 					return ps_ERR;
 
-				sprintf(d, "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4d %s",
-						year, month, day, hours, minutes, seconds, fractions, timeZone);
+				snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d %2.2d:%2.2d:%2.2d.%4.4d %s",
+					year, month, day, hours, minutes, seconds, fractions, timeZone);
 
-				sprintf(p, "%-*.*s ", length, length, d);
+				snprintf(p, bufSize, "%-*.*s ", length, length, d);
 
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7632,11 +7529,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				isc_decode_sql_time(var->value.asTime, &times);
 				ULONG fractions = (*var->value.asTime) % ISC_TIME_SECONDS_PRECISION;
 
-				sprintf(d, "%2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
-						times.tm_hour, times.tm_min, times.tm_sec,
-						fractions);
+				snprintf(d, sizeof(d), "%2.2d:%2.2d:%2.2d.%4.4" ULONGFORMAT,
+					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 
-				sprintf(p, "%-*.*s ", length, length, d);
+				snprintf(p, bufSize, "%-*.*s ", length, length, d);
 
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7664,9 +7560,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				if (ISQL_errmsg(fbStatus))
 					return ps_ERR;
 
-				sprintf(d, "%2.2d:%2.2d:%2.2d.%4.4d %s", hours, minutes, seconds, fractions, timeZone);
+				snprintf(d, sizeof(d), "%2.2d:%2.2d:%2.2d.%4.4d %s",
+					hours, minutes, seconds, fractions, timeZone);
 
-				sprintf(p, "%-*.*s ", length, length, d);
+				snprintf(p, bufSize, "%-*.*s ", length, length, d);
 
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
@@ -7676,10 +7573,10 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 		case SQL_TYPE_DATE:
 			isc_decode_sql_date(var->value.asDate, &times);
-			sprintf(d, "%4.4d-%2.2d-%2.2d", times.tm_year + 1900,
-					(times.tm_mon + 1), times.tm_mday);
+			snprintf(d, sizeof(d), "%4.4d-%2.2d-%2.2d",
+				times.tm_year + 1900, (times.tm_mon + 1), times.tm_mday);
 
-			sprintf(p, "%-*.*s ", length, length, d);
+			snprintf(p, bufSize, "%-*.*s ", length, length, d);
 			if (setValues.List) {
 				isqlGlob.printf("%s%s", d, NEWLINE);
 			}
@@ -7687,14 +7584,14 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 
 		case SQL_BOOLEAN:
 			strcpy(d, (*var->value.asBoolean ? "<true>" : "<false>"));
-			sprintf(p, "%-*.*s ", length, length, d);
+			snprintf(p, bufSize, "%-*.*s ", length, length, d);
 			if (setValues.List)
 				isqlGlob.printf("%s%s", d, NEWLINE);
 			break;
 
 		default:
-			sprintf(d, "Unknown type: %d", dtype);
-			sprintf(p, "%-*s ", length, d);
+			snprintf(d, sizeof(d), "Unknown type: %d", dtype);
+			snprintf(p, bufSize, "%-*s ", length, d);
 			if (setValues.List) {
 				isqlGlob.printf("%s%s", d, NEWLINE);
 			}
@@ -7842,12 +7739,16 @@ static void print_item_numeric(SINT64 value, int length, int scale, TEXT* buf)
  *	decimal point '.' for scale notation
  *
  **************************************/
+	// We're working under the assumption that length is the maximum number of characters to
+	// produce, and that the available buffer is at least 1 byte longer for nul-termination.
+	// Contrary to elsewhere, here we don't need to add one byte for a column separator.
+	const size_t bufSize = static_cast<size_t>(length) + 1;
 	// Handle special case of no negative scale, no '.' required!
 	if (scale >= 0)
 	{
 		if (scale > 0)
 			value *= (SINT64) pow(10.0, (double) scale);
-		sprintf(buf, "%*" SQUADFORMAT, length, value);
+		snprintf(buf, bufSize, "%*" SQUADFORMAT, length, value);
 		return;
 	}
 
@@ -7855,7 +7756,7 @@ static void print_item_numeric(SINT64 value, int length, int scale, TEXT* buf)
 
 	// Use one less space than allowed, to leave room for '.'
 	length--;
-	sprintf(buf, "%*" SQUADFORMAT, length, value);
+	snprintf(buf, bufSize, "%*" SQUADFORMAT, length, value);
 
 	// start from LSByte towards MSByte
 	int from = length - 1;
@@ -7903,7 +7804,7 @@ static processing_state print_line(Firebird::IMessageMetadata* message, UCHAR* b
  *		line = pointer to the line buffer.
  *
  **************************************/
-	const unsigned maxblob = 20;
+	constexpr unsigned maxblob = 20;
 	IsqlVar varlist[maxblob]; // No more than 20 blobs per line
 	unsigned varnum = 0;
 
@@ -8069,7 +7970,7 @@ static void print_message(Firebird::IMessageMetadata* msg, const char* dir)
 	{
 		unsigned type = msg->getType(fbStatus, i);
 		unsigned subtype = msg->getSubType(fbStatus, i);
-		unsigned cs;
+		CSetId cs;
 		isqlGlob.printf("%02d: sqltype: %d %s %sscale: %d subtype: %d len: %d",
 				i + 1, type, sqltype_to_string(type), msg->isNullable(fbStatus, i) ? "Nullable " : "",
 				msg->getScale(fbStatus, i), subtype, msg->getLength(fbStatus, i));
@@ -8082,16 +7983,19 @@ static void print_message(Firebird::IMessageMetadata* msg, const char* dir)
 
 		case SQL_TEXT:
 		case SQL_VARYING:
-			cs = msg->getCharSet(fbStatus, i);
-			isqlGlob.printf(" charset: %d %s", cs, charset_to_string(cs));
+			cs = CSetId(msg->getCharSet(fbStatus, i));
+			isqlGlob.printf(" charset: %d %s", cs, IUTILS_name_to_string(charset_to_string(cs)).c_str());
 			break;
 		}
+
+		const auto schema = isqlGlob.major_ods >= ODS_VERSION14 ?
+			msg->getSchema(fbStatus, i) : "";
 
 		isqlGlob.printf("\n");
 		isqlGlob.printf("  :  name: %s  alias: %s\n",
 				msg->getField(fbStatus, i), msg->getAlias(fbStatus, i));
-		isqlGlob.printf("  : table: %s  owner: %s\n",
-				msg->getRelation(fbStatus, i), msg->getOwner(fbStatus, i));
+		isqlGlob.printf("  : table: %s  schema: %s  owner: %s\n",
+				msg->getRelation(fbStatus, i), schema, msg->getOwner(fbStatus, i));
 	}
 }
 
@@ -8308,7 +8212,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 			namelength = NULL_DISP_LEN;
 
 		const unsigned type = var.type;
-		const SSHORT charSet = TTYPE_TO_CHARSET(var.charSet);
+		const auto charSet = var.charSet;
 
 		switch (type)
 		{
@@ -8422,7 +8326,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		else if (isqlGlob.att_charset == CS_UTF8)
 			disp_length = MAX(disp_length, namelength * 4);
 
-		// The total line length
+		// The total line length (display length of value + space, i.e. column separator)
 		linelength += disp_length + 1;
 	}
 
@@ -9148,7 +9052,7 @@ static const char* sqltype_to_string(unsigned sqltype)
 }
 
 
-static const char* charset_to_string(unsigned charset)
+static const QualifiedMetaString& charset_to_string(CSetId charset)
 {
 /**************************************
  *
@@ -9160,27 +9064,24 @@ static const char* charset_to_string(unsigned charset)
  *	Return a more readable version of SQLDA.sqltype
  *
  **************************************/
-	static Firebird::GlobalPtr<Firebird::GenericMap<Firebird::Pair<Firebird::Right<unsigned, string> > > > csMap;
+	static GlobalPtr<RightPooledMap<unsigned, QualifiedMetaString>> csMap;
+	static const QualifiedMetaString UNKNOWN_CS("*unknown*");
 
-	charset = TTYPE_TO_CHARSET(charset);
-
-	string* text = csMap->get(charset);
-	if (text)
-		return text->c_str();
+	if (const auto name = csMap->get(charset))
+		return *name;
 
 	csMap->clear();
 	bool err = false;
 
 	if (!frontendTransaction())
-		return UNKNOWN;
+		return UNKNOWN_CS;
 
 	FOR CS IN RDB$CHARACTER_SETS
 		if (!err)
 		{
 			try
 			{
-				fb_utils::exact_name(CS.RDB$CHARACTER_SET_NAME);
-				csMap->put(CS.RDB$CHARACTER_SET_ID, CS.RDB$CHARACTER_SET_NAME);
+				csMap->put(CS.RDB$CHARACTER_SET_ID, QualifiedMetaString(CS.RDB$CHARACTER_SET_NAME, CS.RDB$SCHEMA_NAME));
 			}
 			catch (const Firebird::Exception& ex)
 			{
@@ -9194,11 +9095,10 @@ static const char* charset_to_string(unsigned charset)
 		ISQL_errmsg(fbStatus);
 	END_ERROR;
 
-	text = csMap->get(charset);
-	if (text)
-		return text->c_str();
+	if (const auto name = csMap->get(charset))
+		return *name;
 
-	return UNKNOWN;
+	return UNKNOWN_CS;
 }
 
 
@@ -9299,8 +9199,8 @@ void PerTableStats::printStats(Firebird::IAttachment* att)
 
 	string h;
 
-	unsigned lenTable = maxTabLen < 32 ? 32 : FB_ALIGN(maxTabLen, 4);
-	unsigned lenValue = 9;
+	const unsigned lenTable = maxTabLen < 32 ? 32 : FB_ALIGN(maxTabLen, 4);
+	constexpr unsigned lenValue = 9;
 
 	h.append(lenTable, '-');
 	h.append(1, '+');
@@ -9336,7 +9236,7 @@ void PerTableStats::printStats(Firebird::IAttachment* att)
 
 			relId = item.relId;
 
-			if (string* relName = m_relNames.get(relId))
+			if (const auto relName = m_relNames.get(relId))
 			{
 				IcuUtil::pad(s.getBuffer(lenTable * 4 + 1), isqlGlob.att_charset,
 							 relName->length(), relName->c_str(),
@@ -9380,6 +9280,7 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 {
 	string sIds;
 
+	size_t lookupCount = 0;
 	unsigned maxLen = 0;
 	USHORT relId = MAX_USHORT;
 	for (StatItem* item = m_stat.begin(); item < m_stat.end(); item++)
@@ -9389,10 +9290,9 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 
 		relId = item->relId;
 
-		if (m_relNames.exist(relId))
+		if (const auto nameStr = m_relNames.get(relId))
 		{
-			const auto str = m_relNames.get(relId);
-			const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, str->length(), str->c_str());
+			const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, nameStr->length(), nameStr->c_str());
 			if (maxLen < len)
 				maxLen = len;
 
@@ -9405,6 +9305,7 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 		if (!sIds.isEmpty())
 			sIds.append(", ");
 		sIds.append(s);
+		++lookupCount;
 	}
 
 	if (sIds.isEmpty())
@@ -9413,50 +9314,80 @@ unsigned PerTableStats::loadRelNames(Firebird::IAttachment* att)
 	if (!frontendTransaction())
 		return maxLen; // ?
 
-	string sql;
-	sql.printf("SELECT RDB$RELATION_ID, RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$RELATION_ID IN (%s)",
-				sIds.c_str());
+	const size_t initialCount = m_relNames.count();
 
-	Firebird::IResultSet* rs = att->openCursor(fbStatus, fbTrans,
-		sql.length(), sql.c_str(), SQL_DIALECT_CURRENT,
-		NULL, NULL, NULL, NULL,
-		Firebird::IStatement::PREPARE_PREFETCH_METADATA);
-
-	Firebird::IMessageMetadata* outMeta = rs->getMetadata(fbStatus);
-
-	unsigned msgLen = outMeta->getMessageLength(fbStatus);
-	Firebird::HalfStaticArray<char, 512> buff(msgLen);
-
-	char* msg = buff.getBuffer(msgLen);
-
-	if (outMeta->getType(fbStatus, 0) != SQL_SHORT)
-		return maxLen;
-	if (outMeta->getType(fbStatus, 1) != SQL_TEXT)
-		return maxLen;
-
-	SSHORT* pRelID = (SSHORT*) (msg + outMeta->getOffset(fbStatus, 0));
-	SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
-
-	char* pRelName = msg + outMeta->getOffset(fbStatus, 1);
-	SSHORT* pRelName_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 1));
-	const unsigned relNameSize = outMeta->getLength(fbStatus, 1);
-
-	while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+	const auto fetchNames = [&](const string& sql, bool checkSchema)
 	{
-		if (*pRelID_Null == FB_TRUE || *pRelName_Null == FB_TRUE)
-			continue;
+		IResultSet* rs = att->openCursor(fbStatus, fbTrans,
+			sql.length(), sql.c_str(), SQL_DIALECT_CURRENT,
+			NULL, NULL, NULL, NULL,
+			IStatement::PREPARE_PREFETCH_METADATA);
 
-		pRelName[relNameSize] = 0;
-		char* name = fb_utils::exact_name(pRelName);
-		const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, strlen(name), pRelName);
-		if (maxLen < len)
-			maxLen = len;
+		IMessageMetadata* outMeta = rs->getMetadata(fbStatus);
 
-		m_relNames.put(*pRelID, name);
+		unsigned msgLen = outMeta->getMessageLength(fbStatus);
+		HalfStaticArray<char, 512> buff(msgLen);
+
+		char* msg = buff.getBuffer(msgLen);
+
+		const unsigned idType = outMeta->getType(fbStatus, 0);
+
+		if ((idType != SQL_SHORT && idType != SQL_LONG) ||
+			outMeta->getType(fbStatus, 1) != SQL_TEXT)
+		{
+			fb_assert(false);
+			outMeta->release();
+			rs->release();
+			return;
+		}
+
+		SSHORT* pRelID_Null = (SSHORT*)(msg + outMeta->getNullOffset(fbStatus, 0));
+
+		while (rs->fetchNext(fbStatus, msg) != Firebird::IStatus::RESULT_NO_DATA)
+		{
+			if (*pRelID_Null == FB_TRUE)
+				continue;
+
+			USHORT idVal = static_cast<USHORT>(isc_portable_integer(
+				(UCHAR*) msg + outMeta->getOffset(fbStatus, 0), outMeta->getLength(fbStatus, 0)));
+
+			const MetaString relName(msg + outMeta->getOffset(fbStatus, 1), outMeta->getLength(fbStatus, 1));
+			const MetaString relSchema(
+				(checkSchema ? msg + outMeta->getOffset(fbStatus, 2) : nullptr),
+				(checkSchema ? outMeta->getLength(fbStatus, 2) : 0)
+			);
+
+			const auto nameStr = IUTILS_name_to_string(QualifiedMetaString(relName, relSchema));
+
+			const unsigned len = IcuUtil::charLength(isqlGlob.att_charset, nameStr.length(), nameStr.c_str());
+			if (maxLen < len)
+				maxLen = len;
+
+			m_relNames.put(idVal, nameStr);
+		}
+
+		outMeta->release();
+		rs->release();
+	};
+
+	string sql;
+	sql.printf(
+		"SELECT RDB$RELATION_ID, RDB$RELATION_NAME%s FROM %sRDB$RELATIONS WHERE RDB$RELATION_ID IN (%s)",
+		(isqlGlob.major_ods >= ODS_VERSION14 ? ", RDB$SCHEMA_NAME" : ""),
+		(isqlGlob.major_ods >= ODS_VERSION14 ? "SYSTEM." : ""),
+		sIds.c_str());
+
+	fetchNames(sql, isqlGlob.major_ods >= ODS_VERSION14);
+
+	if (m_relNames.count() < initialCount + lookupCount &&
+		isqlGlob.major_ods >= ODS_VERSION14)
+	{
+		sql.printf(
+			"SELECT MON$TABLE_ID, MON$TABLE_NAME, MON$SCHEMA_NAME "
+			"FROM MON$LOCAL_TEMPORARY_TABLES WHERE MON$ATTACHMENT_ID = CURRENT_CONNECTION AND MON$TABLE_ID IN (%s)",
+			sIds.c_str());
+		fetchNames(sql, true);
 	}
-
-	outMeta->release();
-	rs->release();
 
 	return maxLen;
 }

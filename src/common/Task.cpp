@@ -42,7 +42,7 @@ WorkerThread* WorkerThread::start(Coordinator* coordinator)
 {
 	AutoPtr<WorkerThread> thd = FB_NEW WorkerThread(coordinator);
 
-	Thread::start(workerThreadRoutine, thd, THREAD_medium, &thd->m_thdHandle);
+	Thread::start(workerThreadRoutine, thd, THREAD_medium, &thd->m_thread);
 
 	return thd.release();
 }
@@ -122,7 +122,7 @@ void WorkerThread::shutdown(bool wait)
 
 	if (wait)
 	{
-		Thread::waitForCompletion(m_thdHandle);
+		m_thread.waitForCompletion();
 		m_state = SHUTDOWN;
 	}
 }
@@ -240,7 +240,7 @@ void Coordinator::runSync(Task* task)
 	syncWorker->setTask(task);
 	syncWorker->work(NULL);
 
-	// wait for all workes
+	// wait for all workers
 	for (int i = 0; i < cntWorkers; i++)
 	{
 		WorkerAndThd& wt = taskWorkers[i];

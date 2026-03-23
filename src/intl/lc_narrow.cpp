@@ -44,7 +44,6 @@ static ULONG fam2_str_to_lower(texttype* obj, ULONG iLen, const BYTE* pStr, ULON
 
 
 const USHORT LANGFAM2_MAX_KEY	= MAX_KEY;
-const BYTE ASCII_SPACE			= 32;
 const UINT16 NULL_WEIGHT		= 0;
 const UINT16 NULL_SECONDARY		= 0;
 const UINT16 NULL_TERTIARY		= 0;
@@ -718,7 +717,7 @@ static SSHORT old_fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,
 
 /*
  * Debugging only
- * Routine used for comparing results from comparision algorithm
+ * Routine used for comparing results from comparison algorithm
  * to results from key creation algorithm
  */
 static SSHORT fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,

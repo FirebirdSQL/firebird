@@ -342,7 +342,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 					return LINE_INCLUDE;
 				}
 			}
-			// fall down ...
+			[[fallthrough]];
 		case '\r':
 			break;
 
@@ -375,7 +375,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
 				}
 				break;
 			}
-			// fall through ....
+			[[fallthrough]];
 
 		default:
 			if (inString >= 2)		// Something after the end of line
@@ -414,7 +414,7 @@ ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& i
  *	Substitute macro values in a string
  */
 
-unsigned ConfigFile::getDirSeparatorLength(const String& value, size_t separatorPosition) const
+unsigned ConfigFile::getDirSeparatorLength(const String& value, String::size_type separatorPosition) const
 {
 	if (separatorPosition >= value.length())
 		return 0;
@@ -481,7 +481,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
 
 		if (flags & REGEXP_SUPPORT)
 		{
-			size_t pos = 0;
+			String::size_type pos = 0;
 			while ((pos = macro.find('\\', pos)) != String::npos)
 			{
 				macro.insert(pos, "\\");
@@ -567,7 +567,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 {
 	using namespace fb_utils;
 
-	struct Dir {
+	constexpr struct Dir {
 		unsigned code;
 		const char* name;
 	} dirs[] = {
@@ -669,14 +669,10 @@ void ConfigFile::parse(Stream* stream)
 		case LINE_END_SUB:
 		case LINE_BAD:
 			badLine(streamName, inputLine);
-			return;
 
 		case LINE_REGULAR:
 			if (current.name.isEmpty())
-			{
 				badLine(streamName, inputLine);
-				return;
-			}
 
 			previous = &parameters[parameters.add(current)];
 			break;
@@ -691,6 +687,9 @@ void ConfigFile::parse(Stream* stream)
 				FB_SIZE_T n = parameters.add(current);
 				previous = &parameters[n];
 			}
+
+			if (!previous)
+				badLine(streamName, "master parameter is missing before subconfig start '{'");
 
 			{ // subconf scope
 				SubStream subStream(stream->getFileName());
@@ -725,7 +724,6 @@ void ConfigFile::parse(Stream* stream)
 
 					case LINE_BAD:
 						badLine(streamName, inputLine);
-						return;
 
 					default:
 						subStream.putLine(inputLine, line);
@@ -735,7 +733,7 @@ void ConfigFile::parse(Stream* stream)
 				}
 
 				if (level > 0)
-					badLine(streamName, "< missed closing bracket '}' >");
+					badLine(streamName, "missed closing bracket '}'");
 
 				previous->sub = FB_NEW_POOL(getPool())
 					ConfigFile(getPool(), &subStream, flags);
@@ -961,3 +959,4 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("yes") ||
 		value.equalsNoCase("y");
 }
+

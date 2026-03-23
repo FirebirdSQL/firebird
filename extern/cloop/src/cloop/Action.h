@@ -24,6 +24,7 @@
 
 #include "Expr.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 #include <stdio.h>
@@ -31,50 +32,41 @@
 class Method;
 class Interface;
 
-struct ActionParametersBlock
+struct ActionParametersBlock final
 {
-	FILE* out;
+	FILE* out = nullptr;
 	Language language;
 	const std::string& prefix;
 	const std::string& exceptionClass;
-	Interface* interface;
-	Method* method;
+	const Interface* interface = nullptr;
+	const Method* method = nullptr;
 };
 
 class Action
 {
 public:
-	virtual ~Action()
-	{ }
+	virtual ~Action() = default;
 
+public:
 	virtual void generate(const ActionParametersBlock& apb, unsigned ident) = 0;
 };
 
 
-class IfThenElseAction : public Action
+class IfThenElseAction final : public Action
 {
 public:
-	IfThenElseAction()
-		: exprIf(nullptr), actThen(nullptr), actElse(nullptr)
-	{ }
-
-	IfThenElseAction(const IfThenElseAction&) = default;
-
 	void generate(const ActionParametersBlock& apb, unsigned ident) override;
 
-	Expr* exprIf;
-	Action* actThen;
-	Action* actElse;
+public:
+	std::unique_ptr<Expr> exprIf;
+	std::unique_ptr<Action> actThen;
+	std::unique_ptr<Action> actElse;
 };
 
 
-class CallAction : public Action
+class CallAction final : public Action
 {
 public:
-	CallAction() = default;
-
-	CallAction(const CallAction&) = default;
-
 	void generate(const ActionParametersBlock& apb, unsigned ident) override;
 
 	void addParam(const std::string& parName)
@@ -82,23 +74,32 @@ public:
 		parameters.push_back(parName);
 	}
 
+public:
 	std::string name;
 	std::vector<std::string> parameters;
 };
 
 
-class DefAction : public Action
+class DefAction final : public Action
 {
 public:
-	enum DefType { DEF_NOT_IMPLEMENTED, DEF_IGNORE };
+	enum class DefType
+	{
+		NOT_IMPLEMENTED,
+		IGNORE,
+	};
 
-	DefAction(DefType dt)
+public:
+	explicit DefAction(DefType dt)
 		: defType(dt)
-	{ }
+	{
+	}
 
+public:
 	void generate(const ActionParametersBlock& apb, unsigned ident) override;
 
+public:
 	DefType defType;
 };
 
-#endif //CLOOP_ACTION_H
+#endif  // CLOOP_ACTION_H

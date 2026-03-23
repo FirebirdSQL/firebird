@@ -9,7 +9,7 @@ BuildType=T
 MajorVer=6
 MinorVer=0
 RevNo=0
-BuildNum=656
+BuildNum=1848
 
 NowAt=`pwd`
 cd `dirname $0`
@@ -45,8 +45,9 @@ then
  headerFile=$2
  tempfile=$3;
 else
- tempfile=gen/test.header.txt
- headerFile=src/jrd/build_no.h;
+ TmpDir="${TMPDIR:-/tmp}"
+ tempfile=$TmpDir/test.header.txt
+ headerFile=$Root/src/jrd/build_no.h;
 fi
 
 #______________________________________________________________________________
@@ -112,7 +113,7 @@ eof
 
 [ -z "$CXX" ] && CXX=g++
 
-$CXX -std=c++17 $TestCpp -o $AOut
+$CXX -std=c++20 $TestCpp -o $AOut
 if [ -x $AOut ]
 then
 	$AOut

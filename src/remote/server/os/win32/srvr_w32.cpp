@@ -708,8 +708,6 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 					break;
 
 				case 'Z':
-					// CVC: printf doesn't work because we don't have a console attached.
-					//printf("Firebird remote server version %s\n",  FB_VERSION);
 					MessageBox(NULL, FB_VERSION, "Firebird server version",
 						MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_DEFAULT_DESKTOP_ONLY);
 					exit(FINI_OK);

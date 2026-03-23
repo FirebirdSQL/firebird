@@ -30,7 +30,9 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/alloc.h"
+#include <initializer_list>
 #include <optional>
+#include <variant>
 
 namespace Jrd
 {
@@ -51,7 +53,10 @@ typedef Firebird::Pair<
 	Firebird::NonPooled<NestConst<ValueListNode>, NestConst<ValueListNode>>> ReturningClause;
 
 
-// DSQL Compiler scratch block - may be discarded after compilation in the future.
+// DSQL Compiler scratch block.
+// Contains any kind of objects used during DsqlStatement compilation
+// Is deleted with its pool as soon as DsqlStatement is fully formed in prepareStatement()
+// or with the statement itself (if the statement reqested it returning true from shouldPreserveScratch())
 class DsqlCompilerScratch : public BlrDebugWriter
 {
 public:
@@ -70,6 +75,9 @@ public:
 	static const unsigned FLAG_DDL					= 0x2000;
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
+	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
+	static const unsigned FLAG_ALLOW_LTT_REFERENCES	= 0x020000;
+	static const unsigned FLAG_USING_STATEMENT		= 0x040000;
 
 	static const unsigned MAX_NESTING = 512;
 
@@ -96,16 +104,19 @@ public:
 		  mainScratch(aMainScratch),
 		  outerMessagesMap(p),
 		  outerVarsMap(p),
+		  ddlSchema(p),
 		  ctes(p),
 		  cteAliases(p),
 		  subFunctions(p),
-		  subProcedures(p)
+		  subProcedures(p),
+		  procedures(p),
+		  functions(p)
 	{
 	}
 
 protected:
 	// DsqlCompilerScratch should never be destroyed using delete.
-	// It dies together with it's pool in release_request().
+	// It dies together with it's pool.
 	~DsqlCompilerScratch()
 	{
 	}
@@ -151,16 +162,34 @@ public:
 		dsqlStatement = aDsqlStatement;
 	}
 
+	void qualifyNewName(QualifiedName& name) const;
+	void qualifyExistingName(QualifiedName& name, std::initializer_list<ObjectType> objectTypes);
+
+	void qualifyExistingName(QualifiedName& name, ObjectType objectType)
+	{
+		qualifyExistingName(name, {objectType});
+	}
+
+	std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> resolveRoutineOrRelation(QualifiedName& name,
+		std::initializer_list<ObjectType> objectTypes);
+
 	void putBlrMarkers(ULONG marks);
-	void putDtype(const TypeClause* field, bool useSubType);
+	void putType(const dsql_fld* field, bool useSubType);
+
+	// * Generate TypeClause blr and put it to this Scratch
+	// Depends on: typeOfName, typeOfTable and schema:
+	// blr_column_name3/blr_domain_name3 for field with schema
+	// blr_column_name2/blr_domain_name2 for explicit collate
+	// blr_column_name/blr_domain_name for regular field
 	void putType(const TypeClause* type, bool useSubType);
-	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName);
+	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 
-	void putLocalVariable(dsql_var* variable, DeclareVariableNode* hostParam, const MetaName& collationName)
+	void putLocalVariable(dsql_var* variable)
 	{
-		putLocalVariableDecl(variable, hostParam, collationName);
-		putLocalVariableInit(variable, hostParam);
+		QualifiedName dummyCollationName;
+		putLocalVariableDecl(variable, nullptr, dummyCollationName);
+		putLocalVariableInit(variable, nullptr);
 	}
 
 	void putOuterMaps();
@@ -193,21 +222,7 @@ public:
 	SelectExprNode* findCTE(const MetaName& name);
 	void clearCTEs();
 	void checkUnusedCTEs();
-
-	// hvlad: each member of recursive CTE can refer to CTE itself (only once) via
-	// CTE name or via alias. We need to substitute this aliases when processing CTE
-	// member to resolve field names. Therefore we store all aliases in order of
-	// occurrence and later use it in backward order (since our parser is right-to-left).
-	// Also we put CTE name after all such aliases to distinguish aliases for
-	// different CTE's.
-	// We also need to repeat this process if main select expression contains union with
-	// recursive CTE
-	void addCTEAlias(const Firebird::string& alias)
-	{
-		thread_db* tdbb = JRD_get_thread_data();
-		fb_assert(currCteAlias == NULL);
-		cteAliases.add(FB_NEW_POOL(*tdbb->getDefaultPool()) Firebird::string(*tdbb->getDefaultPool(), alias));
-	}
+	void addCTEAlias(const Firebird::string& alias);
 
 	const Firebird::string* getNextCTEAlias()
 	{
@@ -270,6 +285,13 @@ private:
 	bool pass1RelProcIsRecursive(RecordSourceNode* input);
 	BoolExprNode* pass1JoinIsRecursive(RecordSourceNode*& input);
 
+	void putType(const TypeClause& type, bool useSubType, bool useExplicitCollate);
+
+	template<bool THasTableName>
+	void putTypeName(const TypeClause& type, const bool useExplicitCollate);
+
+	void putDtype(const TypeClause& type, const bool useSubType);
+
 	dsql_dbb* dbb = nullptr;				// DSQL attachment
 	jrd_tra* transaction = nullptr;			// Transaction
 	DsqlStatement* dsqlStatement = nullptr;	// DSQL statement
@@ -301,8 +323,8 @@ public:
 	USHORT errorHandlers = 0;				// count of active error handlers
 	USHORT clientDialect = 0;				// dialect passed into the API call
 	USHORT inOuterJoin = 0;					// processing inside outer-join part
-	Firebird::string aliasRelationPrefix;	// prefix for every relation-alias.
-	MetaName package;						// package being defined
+	Firebird::ObjectsArray<QualifiedName> aliasRelationPrefix;	// prefix for every relation-alias.
+	QualifiedName package;				// package being defined
 	Firebird::Stack<SelectExprNode*> currCtes;	// current processing CTE's
 	dsql_ctx* recursiveCtx = nullptr;		// context of recursive CTE
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
@@ -317,6 +339,9 @@ public:
 	DsqlCompilerScratch* mainScratch = nullptr;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	MetaName ddlSchema;
+	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
+	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML
 
 private:
 	Firebird::HalfStaticArray<SelectExprNode*, 4> ctes; // common table expressions
@@ -325,6 +350,11 @@ private:
 	bool psql = false;
 	Firebird::LeftPooledMap<MetaName, DeclareSubFuncNode*> subFunctions;
 	Firebird::LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
+
+public:
+	Firebird::LeftPooledMap<QualifiedName, class dsql_prc*>	procedures;	// known procedures
+	Firebird::LeftPooledMap<QualifiedName, class dsql_udf*>	functions;	// known functions
+	bool regularCacheValid = false;										// flag for relations cache
 };
 
 class PsqlChanger

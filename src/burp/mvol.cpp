@@ -72,14 +72,14 @@ using MsgFormat::SafeArg;
 using Firebird::FbLocalStatus;
 using namespace Burp;
 
-const int open_mask	= 0666;
+inline constexpr int open_mask	= 0666;
 
 #ifdef WIN_NT
-const char* TERM_INPUT	= "CONIN$";
-const char* TERM_OUTPUT	= "CONOUT$";
+inline constexpr const char* TERM_INPUT		= "CONIN$";
+inline constexpr const char* TERM_OUTPUT	= "CONOUT$";
 #else
-const char* TERM_INPUT	= "/dev/tty";
-const char* TERM_OUTPUT	= "/dev/tty";
+inline constexpr const char* TERM_INPUT		= "/dev/tty";
+inline constexpr const char* TERM_OUTPUT	= "/dev/tty";
 #endif
 
 static int	 mvol_read(int*, UCHAR**);
@@ -91,8 +91,8 @@ static FB_UINT64 mvol_fini_write(BurpGlobals*, int*, UCHAR**);
 static void	 mvol_init_write(BurpGlobals*, const char*, int*, UCHAR**);
 static void	 brio_fini(BurpGlobals*);
 
-static const int MAX_HEADER_SIZE		= 512;
-static const int ZC_BUFSIZE				= IO_BUFFER_SIZE;
+static inline constexpr int MAX_HEADER_SIZE	= 512;
+static inline constexpr int ZC_BUFSIZE		= IO_BUFFER_SIZE;
 
 static inline int get(BurpGlobals* tdgbl)
 {
@@ -101,7 +101,7 @@ static inline int get(BurpGlobals* tdgbl)
 	return (--tdgbl->mvol_io_cnt >= 0 ? *tdgbl->mvol_io_ptr++ : 255);
 }
 
-static inline void put(BurpGlobals* tdgbl, UCHAR c)
+static inline void put(BurpGlobals* tdgbl, UCHAR c) noexcept
 {
 	--tdgbl->mvol_io_cnt;
 	*tdgbl->mvol_io_ptr++ = c;
@@ -132,7 +132,7 @@ static void	 zip_write_block(BurpGlobals*, const UCHAR*, FB_SIZE_T, bool);
 static ULONG unzip_read_block(BurpGlobals*, UCHAR*, FB_SIZE_T);
 
 // Portion of data passed to crypt plugin
-const ULONG CRYPT_STEP = 256;
+inline constexpr ULONG CRYPT_STEP = 256;
 
 class DbInfo final : public Firebird::RefCntIface<Firebird::IDbCryptInfoImpl<DbInfo, Firebird::CheckStatusWrapper> >
 {
@@ -859,7 +859,7 @@ int mvol_read(int* cnt, UCHAR** ptr)
 		tdgbl->mvol_io_cnt = tdgbl->uSvc->getBytes(tdgbl->mvol_io_buffer, tdgbl->mvol_io_buffer_size);
 		if (!tdgbl->mvol_io_cnt)
 		{
-			BURP_error_redirect(0, 220);
+			BURP_error(220, true);
 			// msg 220 Unexpected I/O error while reading from backup file
 		}
 		tdgbl->mvol_io_ptr = tdgbl->mvol_io_buffer;
@@ -913,12 +913,12 @@ static void os_read(int* cnt, UCHAR** ptr)
 		{
 			if (cnt)
 			{
-				BURP_error_redirect(0, 220);
+				BURP_error(220, true);
 				// msg 220 Unexpected I/O error while reading from backup file
 			}
 			else
 			{
-				BURP_error_redirect(0, 50);
+				BURP_error(50, true);
 				// msg 50 unexpected end of file on backup file
 			}
 		}
@@ -957,11 +957,15 @@ static void os_read(int* cnt, UCHAR** ptr)
 		else if (GetLastError() != ERROR_HANDLE_EOF)
 		{
 			if (cnt)
-				BURP_error_redirect(NULL, 220);
+			{
+				BURP_error(220, true);
 				// msg 220 Unexpected I/O error while reading from backup file
+			}
 			else
-				BURP_error_redirect(NULL, 50);
+			{
+				BURP_error(50, true);
 				// msg 50 unexpected end of file on backup file
+			}
 		}
 	}
 }
@@ -1241,7 +1245,7 @@ UCHAR mvol_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 							}
 
 							tdgbl->action->act_file->fil_fd = INVALID_HANDLE_VALUE;
-							BURP_print(true, 272, SafeArg() <<
+							BURP_print(272, SafeArg() <<
 										tdgbl->action->act_file->fil_name.c_str() <<
 										tdgbl->action->act_file->fil_length <<
 										tdgbl->action->act_file->fil_next->fil_name.c_str());
@@ -1302,7 +1306,7 @@ UCHAR mvol_write(const UCHAR c, int* io_cnt, UCHAR** io_ptr)
 				}
 				else if (!SYSCALL_INTERRUPTED(errno))
 				{
-					BURP_error_redirect(0, 221);
+					BURP_error(221, true);
 					// msg 221 Unexpected I/O error while writing to backup file
 				}
 			}
@@ -1425,7 +1429,7 @@ static void bad_attribute(int attribute, USHORT type)
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 	static const SafeArg dummy;
 	fb_msg_format(NULL, burp_msg_fac, type, sizeof(name), name, dummy);
-	BURP_print(true, 80, SafeArg() << name << attribute);
+	BURP_print(80, SafeArg() << name << attribute);
 	// msg 80  don't recognize %s attribute %ld -- continuing
 	for (int l = get(tdgbl); l; --l)
 		get(tdgbl);
@@ -1471,7 +1475,7 @@ static int get_text(UCHAR* text, SSHORT length)
 
 	if (length < 0)
 	{
-		BURP_error_redirect(0, 46);	// msg 46 string truncated
+		BURP_error(46, true);	// msg 46 string truncated
 	}
 
 	if (len)
@@ -1518,7 +1522,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 			return tdgbl->action->act_file->fil_fd;
 		}
 
-		BURP_error_redirect(0, 50);	// msg 50 unexpected end of file on backup file
+		BURP_error(50, true);	// msg 50 unexpected end of file on backup file
 	}
 
 	// If we got here, we've got a live one... Up the volume number unless
@@ -1559,7 +1563,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		if (new_desc < 0)
 #endif // WIN_NT
 		{
-			BURP_print(true, 222, new_file);
+			BURP_print(222, new_file);
 			// msg 222 \n\nCould not open file name \"%s\"\n
 			continue;
 		}
@@ -1574,7 +1578,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		{
 			if (!write_header(new_desc, 0L, full_buffer))
 			{
-				BURP_print(true, 223, new_file);
+				BURP_print(223, new_file);
 				// msg223 \n\nCould not write to file \"%s\"\n
 				continue;
 			}
@@ -1593,7 +1597,7 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 			USHORT format;
 			if (!read_header(new_desc, &temp_buffer_size, &format, false))
 			{
-				BURP_print(true, 224, new_file);
+				BURP_print(224, new_file);
 				continue;
 			}
 			else
@@ -1706,14 +1710,14 @@ static void prompt_for_name(SCHAR* name, int length)
 //
 // Write an attribute starting with a null terminated string.
 //
-static void put_asciz( SCHAR attribute, const TEXT* str)
+static void put_asciz(SCHAR attribute, const TEXT* str)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-	USHORT l = strlen(str);
+	USHORT l = static_cast<USHORT>(strlen(str));
 	if (l > MAX_UCHAR)
 	{
-		BURP_print(false, 343, SafeArg() << int(attribute) << "put_asciz()" << USHORT(MAX_UCHAR));
+		BURP_print(343, SafeArg() << int(attribute) << "put_asciz()" << USHORT(MAX_UCHAR));
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		l = MAX_UCHAR;
 	}
@@ -1774,13 +1778,13 @@ static bool read_header(DESC handle, ULONG* buffer_size, USHORT* format, bool in
 #endif
 	}
 	if (!tdgbl->mvol_io_cnt)
-		BURP_error_redirect(0, 45); // maybe there's a better message
+		BURP_error(45, true); // maybe there's a better message
 
 	tdgbl->mvol_io_ptr = tdgbl->mvol_io_buffer;
 
 	int attribute = get(tdgbl);
 	if (attribute != rec_burp)
-		BURP_error_redirect(0, 45);
+		BURP_error(45, true);
 		// msg 45 expected backup description record
 
 	int l, maxlen;
@@ -2119,7 +2123,7 @@ bool MVOL_split_hdr_write()
 	time_t seconds = time(NULL);
 
 	Firebird::string nm = tdgbl->toSystem(tdgbl->action->act_file->fil_name);
-	sprintf(buffer, "%s%.24s      , file No. %4d of %4d, %-27.27s",
+	snprintf(buffer, sizeof(buffer), "%s%.24s      , file No. %4d of %4d, %-27.27s",
 			HDR_SPLIT_TAG, ctime(&seconds), tdgbl->action->act_file->fil_seq,
 			tdgbl->action->act_total, nm.c_str());
 

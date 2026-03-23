@@ -149,6 +149,21 @@ void MetadataBuilder::setField(CheckStatusWrapper* status, unsigned index, const
 	}
 }
 
+void MetadataBuilder::setSchema(CheckStatusWrapper* status, unsigned index, const char* schema)
+{
+	try
+	{
+		MutexLockGuard g(mtx, FB_FUNCTION);
+
+		indexError(index, "setSchema");
+		msgMetadata->items[index].schema = schema;
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
 void MetadataBuilder::setRelation(CheckStatusWrapper* status, unsigned index, const char* relation)
 {
 	try
@@ -283,7 +298,7 @@ IMessageMetadata* MetadataBuilder::getMetadata(CheckStatusWrapper* status)
 
 		metadataError("getMetadata");
 
-		unsigned i = msgMetadata->makeOffsets();
+		const unsigned i = msgMetadata->makeOffsets();
 		if (i != ~0u)
 		{
 			(Arg::Gds(isc_item_finish) << Arg::Num(i)).raise();
@@ -398,13 +413,16 @@ void MsgMetadata::assign(IMessageMetadata* from)
 	LocalStatus ls;
 	CheckStatusWrapper status(&ls);
 
-	unsigned count = from->getCount(&status);
+	const unsigned count = from->getCount(&status);
 	check(&status);
 	items.resize(count);
 
 	for (unsigned index = 0; index < count; ++index)
 	{
 		items[index].field = from->getField(&status, index);
+		check(&status);
+
+		items[index].schema = from->getSchema(&status, index);
 		check(&status);
 
 		items[index].relation = from->getRelation(&status, index);

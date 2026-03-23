@@ -147,7 +147,7 @@ public:
 
 		SLONG relationId;
 		SLONG indexId;
-		MetaName indexName;
+		QualifiedName indexName;
 	};
 
 	struct AccessType
@@ -192,14 +192,14 @@ public:
 private:
 	dsql_ctx* dsqlPassAliasList(DsqlCompilerScratch* dsqlScratch);
 	static dsql_ctx* dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextStack& stack,
-		const MetaName& alias);
+		const QualifiedName& alias);
 
 public:
 	Type const type;
 	AccessType* accessType;
 	RecordSourceNode* recordSourceNode;
 	Firebird::Array<NestConst<PlanNode> > subNodes;
-	Firebird::ObjectsArray<MetaName>* dsqlNames;
+	Firebird::ObjectsArray<QualifiedName>* dsqlNames;
 };
 
 class InversionNode
@@ -354,12 +354,10 @@ public:
 class RelationSourceNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>
 {
 public:
-	explicit RelationSourceNode(MemoryPool& pool, const MetaName& aDsqlName = NULL)
+	explicit RelationSourceNode(MemoryPool& pool, const QualifiedName& aDsqlName = {})
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RELATION>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool),
-		  relation(NULL),
-		  view(NULL),
 		  context(0)
 	{
 	}
@@ -416,12 +414,12 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 public:
-	MetaName dsqlName;
+	QualifiedName dsqlName;
 	Firebird::string alias;	// SQL alias for the relation
-	jrd_rel* relation;
+	Rsc::Rel relation;
 
 private:
-	jrd_rel* view;		// parent view for posting access
+	Rsc::Rel view;		// parent view for posting access
 
 public:
 	SSHORT context;			// user-specified context number for the relation reference
@@ -431,7 +429,7 @@ class ProcedureSourceNode final : public TypedNode<RecordSourceNode, RecordSourc
 {
 public:
 	explicit ProcedureSourceNode(MemoryPool& pool,
-			const QualifiedName& aDsqlName = QualifiedName())
+			const QualifiedName& aDsqlName = {})
 		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_PROCEDURE>(pool),
 		  dsqlName(pool, aDsqlName),
 		  alias(pool)
@@ -442,49 +440,49 @@ public:
 		bool parseContext);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual bool dsqlAggregateFinder(AggregateFinder& visitor);
-	virtual bool dsqlAggregate2Finder(Aggregate2Finder& visitor);
-	virtual bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor);
-	virtual bool dsqlSubSelectFinder(SubSelectFinder& visitor);
-	virtual bool dsqlFieldFinder(FieldFinder& visitor);
-	virtual RecordSourceNode* dsqlFieldRemapper(FieldRemapper& visitor);
+	bool dsqlAggregateFinder(AggregateFinder& visitor) override;
+	bool dsqlAggregate2Finder(Aggregate2Finder& visitor) override;
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+	bool dsqlSubSelectFinder(SubSelectFinder& visitor) override;
+	bool dsqlFieldFinder(FieldFinder& visitor) override;
+	RecordSourceNode* dsqlFieldRemapper(FieldRemapper& visitor) override;
 
-	virtual bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const;
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	virtual ProcedureSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	ProcedureSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb);
-	virtual void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
-		BoolExprNode** boolean, RecordSourceNodeStack& stack);
-	virtual RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb);
-	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb);
+	RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse,
+		BoolExprNode** boolean, RecordSourceNodeStack& stack) override;
+	RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	void pass2Rse(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual bool containsStream(StreamType checkStream) const
+	bool containsStream(StreamType checkStream) const override
 	{
 		return checkStream == stream;
 	}
 
-	virtual void computeDbKeyStreams(StreamList& /*streamList*/) const
+	void computeDbKeyStreams(StreamList& /*streamList*/) const override
 	{
 	}
 
-	virtual bool deterministic() const
+	bool deterministic(thread_db* /*tdbb*/) const override
 	{
 		return false;
 	}
 
-	virtual bool computable(CompilerScratch* csb, StreamType stream,
-		bool allowOnlyCurrentStream, ValueExprNode* value);
-	virtual void findDependentFromStreams(const CompilerScratch* csb,
-		StreamType currentStream, SortedStreamList* streamList);
+	bool computable(CompilerScratch* csb, StreamType stream,
+		bool allowOnlyCurrentStream, ValueExprNode* value) override;
+	void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList) override;
 
-	virtual void collectStreams(SortedStreamList& streamList) const;
+	void collectStreams(SortedStreamList& streamList) const override;
 
-	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
 
 public:
 	QualifiedName dsqlName;
@@ -508,18 +506,16 @@ public:
 			cache management policies yet, so I leave it for the other day.
 	***/
 
-	jrd_prc* procedure = nullptr;
+	SubRoutine<jrd_prc> procedure;
 	NestConst<ValueListNode> inputSources;
 	NestConst<ValueListNode> inputTargets;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlInputArgNames;
 
 private:
 	NestConst<MessageNode> inputMessage;
-
-	jrd_rel* view = nullptr;
+	Rsc::Rel view;
 	USHORT procedureId = 0;
 	SSHORT context = 0;
-	bool isSubRoutine = false;
 };
 
 class AggregateSourceNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_AGGREGATE_SOURCE>
@@ -715,18 +711,54 @@ private:
 
 class RseNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_RSE>
 {
+	enum : UCHAR							// storage is BLR-compatible
+	{
+		INNER_JOIN	= blr_inner,
+		LEFT_JOIN	= blr_left,
+		RIGHT_JOIN	= blr_right,
+		FULL_JOIN	= blr_full,
+		SEMI_JOIN,
+		ANTI_JOIN
+	};
+
 public:
 	enum : USHORT
 	{
-		FLAG_VARIANT			= 0x01,	// variant (not invariant?)
-		FLAG_SINGULAR			= 0x02,	// singleton select
-		FLAG_WRITELOCK			= 0x04,	// locked for write
-		FLAG_SCROLLABLE			= 0x08,	// scrollable cursor
-		FLAG_DSQL_COMPARATIVE	= 0x10,	// transformed from DSQL ComparativeBoolNode
-		FLAG_LATERAL			= 0x20,	// lateral derived table
-		FLAG_SKIP_LOCKED		= 0x40,	// skip locked
-		FLAG_SUB_QUERY			= 0x80	// sub-query
+		FLAG_VARIANT			= 0x01,		// variant (not invariant?)
+		FLAG_SINGULAR			= 0x02,		// singleton select
+		FLAG_WRITELOCK			= 0x04,		// locked for write
+		FLAG_SCROLLABLE			= 0x08,		// scrollable cursor
+		FLAG_DSQL_COMPARATIVE	= 0x10,		// transformed from DSQL ComparativeBoolNode
+		FLAG_LATERAL			= 0x20,		// lateral derived table
+		FLAG_SKIP_LOCKED		= 0x40,		// skip locked
+		FLAG_SUB_QUERY			= 0x80		// sub-query
 	};
+
+	bool isInnerJoin() const
+	{
+		return (rse_jointype == INNER_JOIN);
+	}
+
+	bool isOuterJoin() const
+	{
+		return (rse_jointype == LEFT_JOIN || rse_jointype == RIGHT_JOIN || rse_jointype == FULL_JOIN);
+	}
+
+	bool isFullJoin() const
+	{
+		return (rse_jointype == FULL_JOIN);
+	}
+
+	bool isSpecialJoin() const
+	{
+		return (rse_jointype == SEMI_JOIN || rse_jointype == ANTI_JOIN);
+	}
+
+	bool isSemiJoin() const
+	{
+		fb_assert(isSpecialJoin());
+		return (rse_jointype == SEMI_JOIN);
+	}
 
 	bool isInvariant() const
 	{
@@ -855,8 +887,9 @@ public:
 	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
 private:
-	void planCheck(const CompilerScratch* csb) const;
-	static void planSet(CompilerScratch* csb, PlanNode* plan);
+	void planCheck(thread_db* tdbb, const CompilerScratch* csb) const;
+	static void planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan);
+	RseNode* processPossibleJoins(thread_db* tdbb, CompilerScratch* csb);
 
 public:
 	NestConst<ValueExprNode> dsqlFirst;
@@ -882,8 +915,8 @@ public:
 	NestConst<VarInvariantArray> rse_invariants; // Invariant nodes bound to top-level RSE
 	Firebird::Array<NestConst<RecordSourceNode> > rse_relations;
 	USHORT flags = 0;
-	USHORT rse_jointype = blr_inner;	// inner, left, full
-	Firebird::TriState firstRows;					// optimize for first rows
+	UCHAR rse_jointype = INNER_JOIN;
+	Firebird::TriState firstRows;		// optimize for first rows
 };
 
 class SelectExprNode final : public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_SELECT_EXPR>
@@ -963,6 +996,103 @@ public:
 	Firebird::ObjectsArray<MetaName>* columns;
 };
 
+class TableValueFunctionSourceNode
+	: public TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>
+{
+public:
+	explicit TableValueFunctionSourceNode(MemoryPool& pool)
+		: TypedNode<RecordSourceNode, RecordSourceNode::TYPE_TABLE_VALUE_FUNCTION>(pool),
+		  dsqlName(pool), alias(pool), dsqlField(nullptr), dsqlNameColumns(pool),
+		  m_csbTableValueFun(nullptr)
+	{
+	}
+	static TableValueFunctionSourceNode* parse(thread_db* tdbb, CompilerScratch* csb,
+											   const SSHORT blrOp);
+	static TableValueFunctionSourceNode* parseFunction(thread_db* tdbb,
+													   CompilerScratch* csb,
+													   const SSHORT blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	RecordSourceNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+				   bool ignoreMapCast) const override;
+	RecordSourceNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	RecordSourceNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	TableValueFunctionSourceNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void pass1Source(thread_db* tdbb, CompilerScratch* csb, RseNode* rse, BoolExprNode** boolean,
+					 RecordSourceNodeStack& stack) override;
+	void pass2Rse(thread_db* tdbb, CompilerScratch* csb) override;
+	bool containsStream(StreamType checkStream) const override;
+	void computeDbKeyStreams(StreamList& streamList) const override;
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+
+	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream,
+					ValueExprNode* value) override;
+	void findDependentFromStreams(const CompilerScratch* csb, StreamType currentStream,
+								  SortedStreamList* streamList) override;
+
+	void collectStreams(SortedStreamList& streamList) const override;
+
+	virtual dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch);
+	void setDefaultNameField(DsqlCompilerScratch* dsqlScratch);
+
+	virtual const char* getName() const
+	{
+		return nullptr;
+	}
+
+public:
+	MetaName dsqlName;
+	MetaName alias;
+	NestConst<ValueListNode> inputList;
+	dsql_fld* dsqlField;
+	Firebird::ObjectsArray<Jrd::MetaName> dsqlNameColumns;
+
+private:
+	jrd_table_value_fun* m_csbTableValueFun;
+};
+
+class UnlistFunctionSourceNode : public TableValueFunctionSourceNode
+{
+public:
+	explicit UnlistFunctionSourceNode(MemoryPool& pool) : TableValueFunctionSourceNode(pool)
+	{
+	}
+
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) final;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) final;
+
+	static constexpr char const* FUNC_NAME = "UNLIST";
+	static constexpr USHORT DEFAULT_UNLIST_TEXT_LENGTH = 32;
+
+	const char* getName() const override
+	{
+		return FUNC_NAME;
+	}
+
+public:
+	NestConst<ValueExprNode> dsqlAutoTypeFromValue;
+};
+
+class GenSeriesFunctionSourceNode final : public TableValueFunctionSourceNode
+{
+public:
+	explicit GenSeriesFunctionSourceNode(MemoryPool& pool)
+		: TableValueFunctionSourceNode(pool)
+	{
+	}
+
+	RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream) override;
+	dsql_fld* makeField(DsqlCompilerScratch* dsqlScratch) override;
+
+	static constexpr char const* FUNC_NAME = "GENERATE_SERIES";
+
+	const char* getName() const override
+	{
+		return FUNC_NAME;
+	}
+};
 
 } // namespace Jrd
 

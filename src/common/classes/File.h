@@ -39,15 +39,15 @@ public:
 	virtual FB_SIZE_T read(offset_t, void*, FB_SIZE_T) = 0;
 	virtual FB_SIZE_T write(offset_t, const void*, FB_SIZE_T) = 0;
 
-	virtual void unlink() = 0;
+	virtual void unlink() noexcept = 0;
 
-	virtual offset_t getSize() const = 0;
+	virtual offset_t getSize() const noexcept = 0;
 };
 
 class ZeroBuffer
 {
-	static const FB_SIZE_T DEFAULT_SIZE = 1024 * 256;
-	static const FB_SIZE_T SYS_PAGE_SIZE = 1024 * 4;
+	static constexpr FB_SIZE_T DEFAULT_SIZE = 1024 * 256;
+	static constexpr FB_SIZE_T SYS_PAGE_SIZE = 1024 * 4;
 
 public:
 	explicit ZeroBuffer(MemoryPool& p, FB_SIZE_T size = DEFAULT_SIZE)
@@ -59,8 +59,8 @@ public:
 		memset(bufAligned, 0, size);
 	}
 
-	const char* getBuffer() const { return bufAligned; }
-	FB_SIZE_T getSize() const { return bufSize; }
+	const char* getBuffer() const noexcept { return bufAligned; }
+	FB_SIZE_T getSize() const noexcept { return bufSize; }
 
 private:
 	Firebird::Array<char> buffer;

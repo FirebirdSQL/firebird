@@ -23,7 +23,7 @@
 #
 
 #  Install script for FirebirdSQL database engine
-#  http://www.firebirdsql.org
+#  https://www.firebirdsql.org
 
 parseArgs ${*}
 

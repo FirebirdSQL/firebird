@@ -199,7 +199,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 			switch (map.map_type)
 			{
 			case FieldMap::REGULAR_FIELD:
-				MOV_move(tdbb, &from, &to);
+				MOV_move(tdbb, &from, &to, true);
 				break;
 
 			case FieldMap::TRANSACTION_ID:
@@ -241,8 +241,8 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
 			if (relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
+				!relation->getExtFile() &&
+				!relation->isView() &&
 				!relation->isVirtual())
 			{
 				rpb->rpb_runtime_flags |= RPB_refetch;
@@ -256,7 +256,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 				// to upgrade the record format
 
 				if (relation && !rpb->rpb_number.isValid())
-					VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+					VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 			}
 
 			const bool isNull = !EVL_field(relation, buffer_record, (USHORT) i, &from);
@@ -271,7 +271,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 				else
 				{
 					EVL_field(relation, record, map.map_id, &to);
-					MOV_move(tdbb, &from, &to);
+					MOV_move(tdbb, &from, &to, true);
 					record->clearNull(map.map_id);
 				}
 
@@ -343,6 +343,11 @@ void BufferedStream::markRecursive()
 void BufferedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool BufferedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
 }
 
 void BufferedStream::invalidateRecords(Request* request) const

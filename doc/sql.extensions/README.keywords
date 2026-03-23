@@ -4,7 +4,7 @@ SQL keywords introduced in different server versions
 
 Deviations from the standard:
  *  : keyword does not exist in the SQL:2016 specification and should be
-      considered a non-standard language extention.
+      considered a non-standard language extension.
 (1) : reserved word in SQL:2016, non-reserved in Firebird
 (2) : non-reserved word in SQL:2016, reserved word in Firebird
 
@@ -396,6 +396,8 @@ Firebird 6.0
   Added as reserved words:
 
 	CALL
+    GREATEST
+    LEAST
 
   Added as non-reserved words:
 

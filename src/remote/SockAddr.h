@@ -68,7 +68,7 @@ private:
 		SockAddrPrefixMacOs macOsPrefix;
 	} data;
 	socklen_t len;
-	static const unsigned MAX_LEN = sizeof(sa_data);
+	static constexpr unsigned MAX_LEN = sizeof(sa_data);
 
 	void checkAndFixFamily();
 
@@ -200,7 +200,7 @@ inline int SockAddr::accept(SOCKET s)
 inline int SockAddr::getsockname(SOCKET s)
 {
 	len = MAX_LEN;
-	int R = ::getsockname(s, ptr(), &len);
+	const int R = ::getsockname(s, ptr(), &len);
 	if (R < 0)
 		clear();
 	return R;
@@ -210,7 +210,7 @@ inline int SockAddr::getsockname(SOCKET s)
 inline int SockAddr::getpeername(SOCKET s)
 {
 	len = MAX_LEN;
-	int R = ::getpeername(s, ptr(), &len);
+	const int R = ::getpeername(s, ptr(), &len);
 	if (R < 0)
 		clear();
 	return R;
@@ -231,8 +231,9 @@ inline unsigned short SockAddr::port() const
 		return ntohs(data.inet.sin_port);
 	case AF_INET6:
 		return ntohs(data.inet6.sin6_port);
+	default:
+		return 0; // exception?
 	}
-	return 0; // exception?
 }
 
 
@@ -246,8 +247,9 @@ inline void SockAddr::setPort(unsigned short x)
 	case AF_INET6:
 		data.inet6.sin6_port = htons(x);
 		return;
+	default:
+		return; // exception?
 	}
-	// exception?
 }
 
 
@@ -258,12 +260,12 @@ inline void SockAddr::unmapV4()
 		return;
 
 	// IPv6 mapped IPv4 addresses are ::ffff:0:0/32
-	static const unsigned char v4mapped_pfx[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+	static constexpr unsigned char v4mapped_pfx[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
 	if (memcmp(data.inet6.sin6_addr.s6_addr, v4mapped_pfx, sizeof(v4mapped_pfx)) != 0)
 		return;
 
-	unsigned short port = ntohs(data.inet6.sin6_port);
+	const unsigned short port = ntohs(data.inet6.sin6_port);
 	struct in_addr addr;
 	memcpy(&addr, (char*)(&data.inet6.sin6_addr.s6_addr) + sizeof(v4mapped_pfx), sizeof(addr));
 

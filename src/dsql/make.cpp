@@ -128,8 +128,8 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 								SSHORT scale,
 								SSHORT subType,
 								FLD_LENGTH length,
-								SSHORT charsetId,
-								SSHORT collationId,
+								CSetId charsetId,
+								CollId collationId,
 								bool nullable)
 {
 	desc->clear();
@@ -139,8 +139,7 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 	desc->dsc_length = length;
 	desc->dsc_flags = nullable ? DSC_nullable : 0;
 
-	if (desc->isText() || desc->isBlob())
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charsetId, collationId));
+	desc->setTextType(TTypeId(charsetId, collationId));
 }
 
 
@@ -256,7 +255,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 			tmp.dsc_dtype = dtype_text;
 			tmp.dsc_scale = 0;
 			tmp.dsc_flags = 0;
-			tmp.dsc_ttype() = ttype_ascii;
+			tmp.setTextType(ttype_ascii);
 			tmp.dsc_length = static_cast<USHORT>(strlen(str));
 			tmp.dsc_address = (UCHAR*) str;
 
@@ -282,6 +281,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 				case CONSTANT_TIMESTAMP:
 					literal->litDesc.dsc_dtype = tz ? dtype_timestamp_tz : dtype_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			literal->litDesc.dsc_sub_type = 0;
@@ -312,6 +315,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 					else
 						*(ISC_TIMESTAMP*) literal->litDesc.dsc_address = ts.utc_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			break;
@@ -342,7 +349,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
     @param character_set
 
  **/
-LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
+LiteralNode* MAKE_str_constant(IntlString* constant, CSetId character_set)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -354,7 +361,7 @@ LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
 	literal->litDesc.dsc_scale = 0;
 	literal->litDesc.dsc_length = static_cast<USHORT>(str.length());
 	literal->litDesc.dsc_address = (UCHAR*) str.c_str();
-	literal->litDesc.dsc_ttype() = character_set;
+	literal->litDesc.setTextType(character_set);
 
 	literal->dsqlStr = constant;
 
@@ -425,6 +432,37 @@ FieldNode* MAKE_field(dsql_ctx* context, dsql_fld* field, ValueListNode* indices
 
 /**
 
+	MAKE_field
+
+	@brief	Make up a dsql_fld from descriptor.
+
+
+	@param field
+	@param desc
+
+ **/
+void MAKE_field(dsql_fld* field, const dsc* desc)
+{
+	DEV_BLKCHK(field, dsql_type_fld);
+
+	field->dtype = desc->dsc_dtype;
+	field->scale = desc->dsc_scale;
+	field->subType = desc->dsc_sub_type;
+	field->length = desc->dsc_length;
+
+	if (desc->dsc_dtype <= dtype_any_text || desc->dsc_dtype == dtype_blob)
+	{
+		field->charSetId = desc->getCharSet();
+		field->collationId = desc->getCollation();
+	}
+
+	if (desc->dsc_flags & DSC_nullable)
+		field->flags |= FLD_nullable;
+}
+
+
+/**
+
  	MAKE_field_name
 
     @brief	Make up a field name node.
@@ -478,8 +516,6 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 		}
 	}
 
-	thread_db* tdbb = JRD_get_thread_data();
-
 	if (message->msg_parameter == MAX_USHORT)
 	{
 		string msg;
@@ -495,9 +531,9 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	message->msg_parameters.insert(0, parameter);
 	parameter->par_parameter = message->msg_parameter++;
 
-	parameter->par_rel_name = NULL;
-	parameter->par_owner_name = NULL;
-	parameter->par_rel_alias = NULL;
+	parameter->par_rel_name.clear();
+	parameter->par_owner_name = nullptr;
+	parameter->par_rel_alias = nullptr;
 
 	if (node)
 		MAKE_parameter_names(parameter, node);

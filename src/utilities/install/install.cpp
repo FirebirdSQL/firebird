@@ -32,10 +32,10 @@
 #include "../utilities/install/install_nt.h"
 #include "../utilities/install/install_proto.h"
 
-const DWORD GDSVER_MAJOR	= 6;
-const DWORD GDSVER_MINOR	= 3;
+constexpr DWORD GDSVER_MAJOR = 6;
+constexpr DWORD GDSVER_MINOR = 3;
 
-const char* SHARED_KEY	= "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SharedDLLs";
+constexpr const char* SHARED_KEY = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SharedDLLs";
 
 namespace
 {
@@ -78,7 +78,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 
 	// Get Windows System Directory
 	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	const int len = GetSystemDirectory(sysdir, sizeof(sysdir));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
@@ -172,12 +172,14 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 	// Move _FBCLIENT.DLL as the final target
 	if (MoveFile(workfile, target) == 0)
 	{
-		// MoveFile failed, this is expected if target already exists
-		ULONG werr = GetLastError();
-		if (werr != ERROR_ALREADY_EXISTS)
 		{
-			DeleteFile(workfile);
-			return (*err_handler) (werr, "MoveFile(_FBCLIENT.DLL, 'target')");
+			// MoveFile failed, this is expected if target already exists
+			const ULONG werr = GetLastError();
+			if (werr != ERROR_ALREADY_EXISTS)
+			{
+				DeleteFile(workfile);
+				return (*err_handler) (werr, "MoveFile(_FBCLIENT.DLL, 'target')");
+			}
 		}
 
 		// Failed moving because a destination target file already exists
@@ -187,7 +189,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 			// Success deleting the target, MoveFile should now succeed.
 			if (MoveFile(workfile, target) != 0)
 			{
-				// Successfull !
+				// Successful !
 				IncrementSharedCount(target, err_handler);
 				return FB_SUCCESS;
 			}
@@ -207,7 +209,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 
 				if ((*ntmove) (target, 0, MOVEFILE_DELAY_UNTIL_REBOOT) == 0)
 				{
-					ULONG werr = GetLastError();
+					const ULONG werr = GetLastError();
 					FreeLibrary(kernel32);
 					DeleteFile(workfile);
 					return (*err_handler) (werr, "MoveFileEx(delete 'target')");
@@ -215,7 +217,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 
 				if ((*ntmove) (workfile, target, MOVEFILE_DELAY_UNTIL_REBOOT) == 0)
 				{
-					ULONG werr = GetLastError();
+					const ULONG werr = GetLastError();
 					FreeLibrary(kernel32);
 					DeleteFile(workfile);
 					return (*err_handler) (werr, "MoveFileEx(replace 'target')");
@@ -250,7 +252,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 		if (WritePrivateProfileString("rename", "NUL", starget,
 				"WININIT.INI") == 0)
 		{
-			ULONG werr = GetLastError();
+			const ULONG werr = GetLastError();
 			DeleteFile(workfile);
 			return (*err_handler) (werr, "WritePrivateProfileString(delete 'target')");
 		}
@@ -258,7 +260,7 @@ USHORT CLIENT_install(const TEXT * rootdir, USHORT client, bool sw_force, err_ha
 		if (WritePrivateProfileString("rename", starget, sworkfile,
 				"WININIT.INI") == 0)
 		{
-			ULONG werr = GetLastError();
+			const ULONG werr = GetLastError();
 			DeleteFile(workfile);
 			return (*err_handler) (werr, "WritePrivateProfileString(replace 'target')");
 		}
@@ -301,7 +303,7 @@ USHORT CLIENT_remove(const TEXT* rootdir, USHORT client, bool sw_force, err_hand
 
 	// Get Windows System Directory
 	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	const int len = GetSystemDirectory(sysdir, sizeof(sysdir));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
@@ -370,7 +372,7 @@ USHORT CLIENT_query(USHORT client, ULONG& verMS, ULONG& verLS, ULONG& sharedCoun
 
 	// Get Windows System Directory
 	TEXT sysdir[MAXPATHLEN];
-	int len = GetSystemDirectory(sysdir, sizeof(sysdir));
+	const int len = GetSystemDirectory(sysdir, sizeof(sysdir));
 	if (len == 0)
 		return (*err_handler) (GetLastError(), "GetSystemDirectory()");
 
@@ -380,13 +382,12 @@ USHORT CLIENT_query(USHORT client, ULONG& verMS, ULONG& verLS, ULONG& sharedCoun
 	lstrcat(target, client == CLIENT_GDS ? GDS32_NAME : FBCLIENT_NAME);
 
 	verMS = verLS = sharedCount = 0;
-	USHORT status = GetVersion(target, verMS, verLS, err_handler);
+	const USHORT status = GetVersion(target, verMS, verLS, err_handler);
 	if (status != FB_SUCCESS)
 		return status;	// FB_FAILURE or FB_INSTALL_FILE_NOT_FOUND
 
 	HKEY hkey;
-	LONG keystatus = RegOpenKeyEx(HKEY_LOCAL_MACHINE, SHARED_KEY, 0,
-		KEY_READ, &hkey);
+	const LONG keystatus = RegOpenKeyEx(HKEY_LOCAL_MACHINE, SHARED_KEY, 0, KEY_READ, &hkey);
 	if (keystatus != ERROR_SUCCESS)
 		return (*err_handler) (keystatus, "RegOpenKeyEx");
 
@@ -428,18 +429,18 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
 	// can't be deleted between check for existence and version read.
 
 	DWORD dwUnused;
-	DWORD rsize = GetFileVersionInfoSize(const_cast<TEXT*>(filename), &dwUnused);
+	const DWORD rsize = GetFileVersionInfoSize(filename, &dwUnused);
 	if (rsize == 0)
 	{
-		ULONG werr = GetLastError();
+		const ULONG werr = GetLastError();
 		CloseHandle(hfile);
 		return (*err_handler) (werr, "GetFileVersionInfoSize()");
 	}
 
 	BYTE* hver = new BYTE[rsize];
-	if (! GetFileVersionInfo(const_cast<TEXT*>(filename), 0, rsize, hver))
+	if (!GetFileVersionInfo(filename, 0, rsize, hver))
 	{
-		ULONG werr = GetLastError();
+		const ULONG werr = GetLastError();
 		delete[] hver;
 		CloseHandle(hfile);
 		return (*err_handler) (werr, "GetFileVersionInfo()");
@@ -450,7 +451,7 @@ USHORT GetVersion(const TEXT* filename, DWORD& verMS, DWORD& verLS, err_handler_
 	UINT uiUnused;
 	if (! VerQueryValue(hver, "\\", (void**)&ffi, &uiUnused))
 	{
-		ULONG werr = GetLastError();
+		const ULONG werr = GetLastError();
 		delete[] hver;
 		return (*err_handler) (werr, "VerQueryValue()");
 	}
@@ -495,13 +496,13 @@ USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler
 	if (hfile == INVALID_HANDLE_VALUE)
 		return (*err_handler) (GetLastError(), "CreateFile()");
 
-	DWORD fsize = GetFileSize(hfile, 0);
+	const DWORD fsize = GetFileSize(hfile, 0);
 
 	HANDLE hmap = CreateFileMapping(hfile, 0,
 		PAGE_READWRITE | SEC_COMMIT, 0, 0, 0);
 	if (hmap == 0)
 	{
-		ULONG werr = GetLastError();
+		const ULONG werr = GetLastError();
 		CloseHandle(hfile);
 		return (*err_handler) (werr, "CreateFileMapping()");
 	}
@@ -510,7 +511,7 @@ USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler
 		FILE_MAP_WRITE, 0, 0, 0));
 	if (mem == 0)
 	{
-		ULONG werr = GetLastError();
+		const ULONG werr = GetLastError();
 		CloseHandle(hmap);
 		CloseHandle(hfile);
 		return (*err_handler) (werr, "MapViewOfFile()");
@@ -518,14 +519,14 @@ USHORT PatchVersion(const TEXT* filename, DWORD verMS, err_handler_t err_handler
 
 	// This is a "magic value" that will allow locating the version info.
 	// Windows itself does something equivalent internally.
-	const BYTE lookup[] =
+	constexpr BYTE lookup[] =
 	{
 		'V', 0, 'S', 0, '_', 0,
 		'V', 0, 'E', 0, 'R', 0, 'S', 0, 'I', 0, 'O', 0, 'N', 0, '_', 0,
 		'I', 0, 'N', 0, 'F', 0, 'O', 0, 0, 0, 0, 0, 0xbd, 0x04, 0xef, 0xfe
 	};
-	BYTE* p = mem;				// First byte of mapped file
-	BYTE* end = mem + fsize;	// Last byte + 1 of mapped file
+	BYTE* p = mem;					// First byte of mapped file
+	const BYTE* end = mem + fsize;	// Last byte + 1 of mapped file
 
 	int i = 0;
 	while (p < end)
@@ -665,9 +666,9 @@ USHORT IncrementSharedCount(const TEXT* filename, err_handler_t err_handler)
 
 	HKEY hkey;
 	LONG status = RegCreateKeyEx(HKEY_LOCAL_MACHINE, SHARED_KEY,
-		0, "", REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, 0, &hkey, 0);
+		0, nullptr, REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, 0, &hkey, 0);
 	if (status != ERROR_SUCCESS)
-		return (*err_handler) (status, "RegCreateKeyEx");
+		return (*err_handler)(status, "RegCreateKeyEx");
 
 	DWORD count = 0;
 	DWORD type, size = sizeof(count);
@@ -714,9 +715,9 @@ USHORT DecrementSharedCount(const TEXT* filename, bool sw_force, err_handler_t e
 	HKEY hkey;
 	DWORD disp;
 	LONG status = RegCreateKeyEx(HKEY_LOCAL_MACHINE, SHARED_KEY,
-		0, "", REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, NULL, &hkey, &disp);
+		0, nullptr, REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, nullptr, &hkey, &disp);
 	if (status != ERROR_SUCCESS)
-		return (*err_handler) (status, "RegCreateKeyEx");
+		return (*err_handler)(status, "RegCreateKeyEx");
 
 	LONG count = 0;
 	if (! sw_force)

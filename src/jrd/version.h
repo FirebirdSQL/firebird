@@ -156,6 +156,8 @@
 
 #ifdef RC_ARH_x64
 #define VER_ARCH "64-bit"
+#elif defined(RC_ARH_arm64)
+#define VER_ARCH "ARM64"
 #else
 #define VER_ARCH "32-bit"
 #endif

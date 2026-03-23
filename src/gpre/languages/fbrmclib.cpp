@@ -1510,32 +1510,32 @@ EXPORT RM_ENTRY(rmc_ctod)
 
 	if (fmt.yr_start != -1)
 	{
-		sprintf(stemp, "%*.*d", fmt.yr_len, fmt.yr_len, tim.tm_year + 1900);
+		snprintf(stemp, sizeof(stemp), "%*.*d", fmt.yr_len, fmt.yr_len, tim.tm_year + 1900);
 		memmove(dt + fmt.yr_start, stemp, fmt.yr_len);
 	}
 	if (fmt.mon_start != -1)
 	{
-		sprintf(stemp, "%2.2d", tim.tm_mon + 1);
+		snprintf(stemp, sizeof(stemp), "%2.2d", tim.tm_mon + 1);
 		memmove(dt + fmt.mon_start, stemp, 2);
 	}
 	if (fmt.day_start != -1)
 	{
-		sprintf(stemp, "%2.2d", tim.tm_mday);
+		snprintf(stemp, sizeof(stemp), "%2.2d", tim.tm_mday);
 		memmove(dt + fmt.day_start, stemp, 2);
 	}
 	if (fmt.hr_start != -1)
 	{
-		sprintf(stemp, "%2.2d", tim.tm_hour);
+		snprintf(stemp, sizeof(stemp), "%2.2d", tim.tm_hour);
 		memmove(dt + fmt.hr_start, stemp, 2);
 	}
 	if (fmt.min_start != -1)
 	{
-		sprintf(stemp, "%2.2d", tim.tm_min);
+		snprintf(stemp, sizeof(stemp), "%2.2d", tim.tm_min);
 		memmove(dt + fmt.min_start, stemp, 2);
 	}
 	if (fmt.sec_start != -1)
 	{
-		sprintf(stemp, "%2.2d", tim.tm_sec);
+		snprintf(stemp, sizeof(stemp), "%2.2d", tim.tm_sec);
 		memmove(dt + fmt.sec_start, stemp, 2);
 	}
 	StringToCobol(&arg_vector[0], dt);

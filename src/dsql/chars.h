@@ -21,17 +21,17 @@
  * Contributor(s): ______________________________________.
  */
 
-const SCHAR CHR_LETTER		= 1;
-const SCHAR CHR_DIGIT		= 2;
-const SCHAR CHR_IDENT		= 4;
-const SCHAR CHR_QUOTE		= 8;
-const SCHAR CHR_WHITE		= 16;
-const SCHAR CHR_HEX			= 32;
-const SCHAR CHR_INTRODUCER	= 64;
+inline constexpr SCHAR CHR_LETTER		= 1;
+inline constexpr SCHAR CHR_DIGIT		= 2;
+inline constexpr SCHAR CHR_IDENT		= 4;
+inline constexpr SCHAR CHR_QUOTE		= 8;
+inline constexpr SCHAR CHR_WHITE		= 16;
+inline constexpr SCHAR CHR_HEX			= 32;
+inline constexpr SCHAR CHR_INTRODUCER	= 64;
 
 // Use the functions at the end of this file; do not reference the array directly.
 
-static const SCHAR classes_array[] = {
+static inline constexpr SCHAR classes_array[] = {
 /* 000     */ 0,
 /* 001     */ 0,
 /* 002     */ 0,
@@ -290,12 +290,12 @@ static const SCHAR classes_array[] = {
 /* 255     */ 0
 };
 
-inline SCHAR classes(int idx)
+inline SCHAR classes(int idx) noexcept
 {
 	return classes_array[(UCHAR) idx];
 }
 
-inline SCHAR classes(UCHAR idx)
+inline SCHAR classes(UCHAR idx) noexcept
 {
 	return classes_array[idx];
 }

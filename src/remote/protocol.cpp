@@ -69,21 +69,21 @@ inline void DEBUG_XDR_FREE(RemoteXdr* xdrs, const void* xdrvar, const void* addr
 	xdr_debug_memory(xdrs, XDR_DECODE, xdrvar, addr, len);
 }
 #else
-inline bool_t P_TRUE(RemoteXdr*, PACKET*)
+inline bool_t P_TRUE(RemoteXdr*, PACKET*) noexcept
 {
 	return TRUE;
 }
-inline bool_t P_FALSE(RemoteXdr* xdrs, PACKET*)
+inline bool_t P_FALSE(RemoteXdr* xdrs, PACKET*) noexcept
 {
 	return FALSE;
 }
-inline void DEBUG_XDR_PACKET(RemoteXdr*, PACKET*)
+inline void DEBUG_XDR_PACKET(RemoteXdr*, PACKET*) noexcept
 {
 }
-inline void DEBUG_XDR_ALLOC(RemoteXdr*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_ALLOC(RemoteXdr*, const void*, const void*, ULONG) noexcept
 {
 }
-inline void DEBUG_XDR_FREE(RemoteXdr*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_FREE(RemoteXdr*, const void*, const void*, ULONG) noexcept
 {
 }
 #endif // DEBUG_XDR_MEMORY
@@ -91,7 +91,7 @@ inline void DEBUG_XDR_FREE(RemoteXdr*, const void*, const void*, ULONG)
 #define P_CHECK(xdr, p, st) if (st.getState() & IStatus::STATE_ERRORS) return P_FALSE(xdr, p)
 
 #define MAP(routine, ptr)	if (!routine (xdrs, &ptr)) return P_FALSE(xdrs, p);
-const ULONG MAX_OPAQUE		= 32768;
+constexpr ULONG MAX_OPAQUE = 32768;
 
 enum SQL_STMT_TYPE
 {
@@ -125,7 +125,7 @@ static Rsr* getStatement(RemoteXdr*, USHORT);
 static Rtr* getTransaction(RemoteXdr*, USHORT);
 
 
-inline void fixupLength(const RemoteXdr* xdrs, ULONG& length)
+inline void fixupLength(const RemoteXdr* xdrs, ULONG& length) noexcept
 {
 	// If the short (16-bit) value >= 32KB is being transmitted,
 	// it gets expanded to long (32-bit) with a sign bit propagated.
@@ -133,14 +133,14 @@ inline void fixupLength(const RemoteXdr* xdrs, ULONG& length)
 	// let's detect and fix unexpected overflows. Here we assume
 	// that real longs will never have the highest 16 bits set.
 
-	if (xdrs->x_op == XDR_DECODE && length >> 16 == (ULONG) 0xFFFF)
-		length &= (ULONG) 0xFFFF;
+	if (xdrs->x_op == XDR_DECODE && length >> 16 == ULONG{ 0xFFFF })
+		length &= ULONG{ 0xFFFF };
 }
 
 
 #ifdef DEBUG
 static ULONG xdr_save_size = 0;
-inline void DEBUG_PRINTSIZE(RemoteXdr* xdrs, P_OP p)
+inline void DEBUG_PRINTSIZE(RemoteXdr* xdrs, P_OP p) noexcept
 {
 	fprintf (stderr, "xdr_protocol: %s op %d size %lu\n",
 		((xdrs->x_op == XDR_FREE)   ? "free" :
@@ -150,7 +150,7 @@ inline void DEBUG_PRINTSIZE(RemoteXdr* xdrs, P_OP p)
 			(xdrs->x_handy - xdr_save_size) : (xdr_save_size - xdrs->x_handy)));
 }
 #else
-inline void DEBUG_PRINTSIZE(RemoteXdr*, P_OP)
+inline void DEBUG_PRINTSIZE(RemoteXdr*, P_OP) noexcept
 {
 }
 #endif
@@ -467,7 +467,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_create_blob2:
 		blob = &p->p_blob;
 		MAP(xdr_cstring_const, blob->p_blob_bpb);
-		// fall into:
+		[[fallthrough]];
 
 	case op_open_blob:
 	case op_create_blob:
@@ -544,9 +544,15 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_commit_retaining:
 	case op_rollback_retaining:
 	case op_allocate_statement:
+	case op_batch_rls:
+	case op_batch_cancel:
 		release = &p->p_rlse;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(release->p_rlse_object));
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
+#ifdef NEVERDEF
+		if (xdrs->x_op != XDR_FREE && (p->p_operation == op_batch_rls || p->p_operation == op_batch_cancel))
+			DEB_RBATCH(fprintf(stderr, "BatRem: xdr release/cancel %d\n", p->p_operation));
+#endif
 		return P_TRUE(xdrs, p);
 
 	case op_prepare2:
@@ -696,7 +702,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 		if (port->port_protocol >= PROTOCOL_INLINE_BLOB)
 			MAP(xdr_u_long, prep_stmt->p_sqlst_inline_blob_size);
 
-		// Fall into ...
+		[[fallthrough]];
 
 	case op_exec_immediate:
 	case op_prepare_statement:
@@ -876,7 +882,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 				return P_TRUE(xdrs, p);
 			}
 
-			SSHORT statement_id = b->p_batch_statement;
+			const SSHORT statement_id = b->p_batch_statement;
 			Rsr* statement;
 			if (statement_id >= 0)
 			{
@@ -954,7 +960,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			if (xdrs->x_op == XDR_FREE)
 				return P_TRUE(xdrs, p);
 
-			SSHORT statement_id = b->p_batch_statement;
+			const SSHORT statement_id = b->p_batch_statement;
 			DEB_RBATCH(fprintf(stderr, "BatRem: xdr CS %d\n", statement_id));
 			Rsr* statement;
 
@@ -1081,18 +1087,6 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			return P_TRUE(xdrs, p);
 		}
 
-	case op_batch_rls:
-	case op_batch_cancel:
-		{
-			P_BATCH_FREE_CANCEL* b = &p->p_batch_free_cancel;
-			MAP(xdr_short, reinterpret_cast<SSHORT&>(b->p_batch_statement));
-
-			if (xdrs->x_op != XDR_FREE)
-				DEB_RBATCH(fprintf(stderr, "BatRem: xdr release/cancel %d\n", p->p_operation));
-
-			return P_TRUE(xdrs, p);
-		}
-
 	case op_batch_sync:
 		{
 			return P_TRUE(xdrs, p);
@@ -1103,6 +1097,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			P_BATCH_SETBPB* b = &p->p_batch_setbpb;
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(b->p_batch_statement));
 			MAP(xdr_cstring_const, b->p_batch_blob_bpb);
+
+			if (xdrs->x_op == XDR_FREE)
+				return P_TRUE(xdrs, p);
 
 			Rsr* statement = getStatement(xdrs, b->p_batch_statement);
 			if (!statement)
@@ -1198,21 +1195,18 @@ static bool_t xdr_bytes(RemoteXdr* xdrs, void* bytes, ULONG size)
 	switch (xdrs->x_op)
 	{
 	case XDR_ENCODE:
-		if (!xdrs->x_putbytes(reinterpret_cast<const SCHAR*>(bytes), size))
-			return FALSE;
-		break;
+		return xdrs->x_putbytes(static_cast<const SCHAR*>(bytes), size);
 
 	case XDR_DECODE:
-		if (!xdrs->x_getbytes(reinterpret_cast<SCHAR*>(bytes), size))
-			return FALSE;
-		break;
-	}
+		return xdrs->x_getbytes(static_cast<SCHAR*>(bytes), size);
 
-	return TRUE;
+	default:
+		return TRUE;
+	}
 }
 
 
-ULONG xdr_protocol_overhead(P_OP op)
+ULONG xdr_protocol_overhead(P_OP op) noexcept
 {
 /**************************************
  *
@@ -1316,7 +1310,7 @@ static bool alloc_cstring(RemoteXdr* xdrs, CSTRING* cstring)
 }
 
 
-void CSTRING::free(RemoteXdr* xdrs)
+void CSTRING::free(RemoteXdr* xdrs) noexcept
 {
 /**************************************
  *
@@ -1341,7 +1335,7 @@ void CSTRING::free(RemoteXdr* xdrs)
 }
 
 
-static bool xdr_is_client(RemoteXdr* xdrs)
+static bool xdr_is_client(const RemoteXdr* xdrs) noexcept
 {
 	const rem_port* port = xdrs->x_public;
 	return !(port->port_flags & PORT_server);
@@ -1379,7 +1373,7 @@ static inline bool_t xdr_response(RemoteXdr* xdrs, CSTRING* cstring)
 {
 	if (xdr_is_client(xdrs) && xdrs->x_op == XDR_DECODE && cstring->cstr_allocated)
 	{
-		ULONG limit = cstring->cstr_allocated;
+		const ULONG limit = cstring->cstr_allocated;
 		cstring->cstr_allocated = 0;
 		return xdr_cstring_with_limit(xdrs, cstring, limit);
 	}
@@ -1583,7 +1577,7 @@ static bool_t xdr_message( RemoteXdr* xdrs, RMessage* message, const rem_fmt* fo
 	if (xdrs->x_op == XDR_FREE)
 		return TRUE;
 
-	rem_port* port = xdrs->x_public;
+	const rem_port* port = xdrs->x_public;
 
 	if (!message || !format)
 		return FALSE;
@@ -1644,17 +1638,17 @@ static bool_t xdr_packed_message( RemoteXdr* xdrs, RMessage* message, const rem_
 			resize(size);
 		}
 
-		void setNull(USHORT id)
+		void setNull(USHORT id) noexcept
 		{
 			data[id >> 3] |= (1 << (id & 7));
 		}
 
-		bool isNull(USHORT id) const
+		bool isNull(USHORT id) const noexcept
 		{
 			return data[id >> 3] & (1 << (id & 7));
 		}
 
-		UCHAR* getData()
+		UCHAR* getData() noexcept
 		{
 			return data;
 		}
@@ -1811,6 +1805,9 @@ static bool_t xdr_slice(RemoteXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ 
  *
  **************************************/
 	if (!xdr_long(xdrs, reinterpret_cast<SLONG*>(&slice->lstr_length)))
+		return FALSE;
+
+	if ((xdrs->x_op != XDR_FREE) && !sdl)
 		return FALSE;
 
 	// Handle operation specific stuff, particularly memory allocation/deallocation
@@ -2249,6 +2246,10 @@ static bool_t xdr_trrq_message( RemoteXdr* xdrs, USHORT msg_type)
 	rem_port* port = xdrs->x_public;
 	Rpr* procedure = port->port_rpr;
 
+	// normally that never happens
+	if (!procedure)
+		return false;
+
 	if (msg_type == 1)
 		return xdr_message(xdrs, procedure->rpr_out_msg, procedure->rpr_out_format);
 
@@ -2353,37 +2354,37 @@ static bool_t xdr_blob_stream(RemoteXdr* xdrs, SSHORT statement_id, CSTRING* str
 		ULONG& bpbSize;
 		ULONG& segSize;
 
-		BlobFlow(Rsr::BatchStream* bs)
+		BlobFlow(Rsr::BatchStream* bs) noexcept
 			: remains(0), streamPtr(NULL),
 			  blobSize(bs->blobRemaining), bpbSize(bs->bpbRemaining), segSize(bs->segRemaining)
 		{ }
 
-		void newBlob(ULONG totalSize, ULONG parSize)
+		void newBlob(ULONG totalSize, ULONG parSize) noexcept
 		{
 			blobSize = totalSize;
 			bpbSize = parSize;
 			segSize = 0;
 		}
 
-		void move(ULONG step)
+		void move(ULONG step) noexcept
 		{
 			move2(step);
 			blobSize -= step;
 		}
 
-		void moveBpb(ULONG step)
+		void moveBpb(ULONG step) noexcept
 		{
 			move(step);
 			bpbSize -= step;
 		}
 
-		void moveSeg(ULONG step)
+		void moveSeg(ULONG step) noexcept
 		{
 			move(step);
 			segSize -= step;
 		}
 
-		bool align(ULONG alignment)
+		bool align(ULONG alignment) noexcept
 		{
 			ULONG a = IPTR(streamPtr) % alignment;
 			if (a)
@@ -2397,7 +2398,7 @@ static bool_t xdr_blob_stream(RemoteXdr* xdrs, SSHORT statement_id, CSTRING* str
 		}
 
 private:
-		void move2(ULONG step)
+		void move2(ULONG step) noexcept
 		{
 			streamPtr += step;
 			remains -= step;
@@ -2489,7 +2490,7 @@ private:
 		// process BPB
 		if (flow.bpbSize)
 		{
-			ULONG size = MIN(flow.bpbSize, flow.remains);
+			const ULONG size = std::min(flow.bpbSize, flow.remains);
 			if (!xdr_bytes(xdrs, flow.streamPtr, size))
 				return FALSE;
 			localStrm.curBpb.add(flow.streamPtr, size);

@@ -45,6 +45,8 @@
 #include "../common/classes/ParsedList.h"
 #include "firebird/Interface.h"
 
+using namespace Firebird;
+
 // Here we use version-independent symbolic link (or copy) of actual database
 DATABASE database = STATIC FILENAME "security.fdb";
 
@@ -129,6 +131,10 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		dpb.insertByte(isc_dpb_sec_attach, TRUE);
 		dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
+
+		string schemaSearchPath;
+		schemaSearchPath.printf("%s, %s", PLG_LEGACY_SEC_SCHEMA, SYSTEM_SCHEMA);
+		dpb.insertString(isc_dpb_search_path, schemaSearchPath.c_str(), fb_strlen(schemaSearchPath.c_str()));
 
 		unsigned int authBlockSize;
 		const unsigned char* authBlock = logonInfo->authBlock(&authBlockSize);
@@ -225,11 +231,11 @@ int SecurityDatabaseManagement::release()
 
 #define STR_STORE(to, from) fb_utils::copy_terminate(to, from, sizeof(to))
 #define STR_VSTORE(to, from) string2vary(&to, from, sizeof(to))
-static void string2vary(void* to, Firebird::string& from, size_t to_size)
+static void string2vary(void* to, const Firebird::string& from, size_t to_size)
 {
-	size_t len = MIN(to_size - sizeof(USHORT), from.size());
+	const size_t len = MIN(to_size - sizeof(USHORT), from.size());
 	paramvary* v = reinterpret_cast<paramvary*>(to);
-	v->vary_length = len;
+	v->vary_length = static_cast<ISC_USHORT>(len);
 	memcpy(v->vary_string, from.c_str(), len);
 }
 

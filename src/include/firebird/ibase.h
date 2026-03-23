@@ -255,13 +255,13 @@ ISC_STATUS ISC_EXPORT isc_attach_database(ISC_STATUS*,
 										  short,
 										  const ISC_SCHAR*);
 
-ISC_STATUS ISC_EXPORT isc_array_gen_sdl(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_gen_sdl(ISC_STATUS*,
 										const ISC_ARRAY_DESC*,
 										ISC_SHORT*,
 										ISC_UCHAR*,
 										ISC_SHORT*);
 
-ISC_STATUS ISC_EXPORT isc_array_get_slice(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_get_slice(ISC_STATUS*,
 										  isc_db_handle*,
 										  isc_tr_handle*,
 										  ISC_QUAD*,
@@ -269,21 +269,21 @@ ISC_STATUS ISC_EXPORT isc_array_get_slice(ISC_STATUS*,
 										  void*,
 										  ISC_LONG*);
 
-ISC_STATUS ISC_EXPORT isc_array_lookup_bounds(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_lookup_bounds(ISC_STATUS*,
 											  isc_db_handle*,
 											  isc_tr_handle*,
 											  const ISC_SCHAR*,
 											  const ISC_SCHAR*,
 											  ISC_ARRAY_DESC*);
 
-ISC_STATUS ISC_EXPORT isc_array_lookup_desc(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_lookup_desc(ISC_STATUS*,
 											isc_db_handle*,
 											isc_tr_handle*,
 											const ISC_SCHAR*,
 											const ISC_SCHAR*,
 											ISC_ARRAY_DESC*);
 
-ISC_STATUS ISC_EXPORT isc_array_set_desc(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_set_desc(ISC_STATUS*,
 										 const ISC_SCHAR*,
 										 const ISC_SCHAR*,
 										 const short*,
@@ -291,7 +291,7 @@ ISC_STATUS ISC_EXPORT isc_array_set_desc(ISC_STATUS*,
 										 const short*,
 										 ISC_ARRAY_DESC*);
 
-ISC_STATUS ISC_EXPORT isc_array_put_slice(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_array_put_slice(ISC_STATUS*,
 										  isc_db_handle*,
 										  isc_tr_handle*,
 										  ISC_QUAD*,
@@ -317,7 +317,7 @@ ISC_STATUS ISC_EXPORT isc_blob_info(ISC_STATUS*,
 									short,
 									ISC_SCHAR*);
 
-ISC_STATUS ISC_EXPORT isc_blob_lookup_desc(ISC_STATUS*,
+ISC_STATUS FB_API_DEPRECATED ISC_EXPORT isc_blob_lookup_desc(ISC_STATUS*,
 										   isc_db_handle*,
 										   isc_tr_handle*,
 										   const ISC_UCHAR*,

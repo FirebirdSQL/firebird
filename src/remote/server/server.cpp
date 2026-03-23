@@ -178,7 +178,7 @@ public:
 
 	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
 	{
-		ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+		constexpr ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 		status->setErrors2(FB_NELEM(err), err);
 	}
 
@@ -307,7 +307,7 @@ public:
 
 		if (!networkCallback.isStopped())
 		{
-			ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
+			constexpr ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 			status->setErrors2(FB_NELEM(err), err);
 		}
 	}
@@ -396,9 +396,9 @@ public:
 	}
 };
 
-const size_t MAX_CONCURRENT_FAILURES = 16;
-const int MAX_FAILED_ATTEMPTS = 4;
-const int FAILURE_DELAY = 8; // seconds
+constexpr size_t MAX_CONCURRENT_FAILURES = 16;
+constexpr int MAX_FAILED_ATTEMPTS = 4;
+constexpr int FAILURE_DELAY = 8; // seconds
 
 class FailedLogins : private SortedObjectsArray<FailedLogin,
 	InlineStorage<FailedLogin*, MAX_CONCURRENT_FAILURES>,
@@ -508,6 +508,7 @@ void loginSuccess(const string& login, const string& remId)
 	remoteFailedLogins->loginSuccess(remId);
 }
 
+static constexpr unsigned SEGMENT_DATA_SIZE = 254;
 
 template <typename T>
 static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR param)
@@ -537,9 +538,10 @@ static void getMultiPartConnectParameter(T& putTo, ClumpletReader& id, UCHAR par
 				}
 				checkBytes[offset] = 1;
 
-				offset *= 254;
+				offset *= SEGMENT_DATA_SIZE;
 				++specData;
-				putTo.grow(offset + len);
+				if (offset + len > putTo.getCount())
+					putTo.grow(offset + len);
 				memcpy(&putTo[offset], specData, len);
 			}
 		}
@@ -1078,8 +1080,6 @@ private:
     class CryptKeyType;
 
 public:
-	static const unsigned BITS64 = sizeof(FB_UINT64) * 8u;
-
 	class SpecificPlugins
 	{
 	public:
@@ -1275,10 +1275,10 @@ static void		addClumplets(ClumpletWriter*, const ParametersSet&, const rem_port*
 
 static void		cancel_operation(rem_port*, USHORT);
 
-static bool		check_request(Rrq*, USHORT, USHORT);
+static bool		check_request(Rrq* request, USHORT incarnation, USHORT msg_number, CheckStatusWrapper* status);
 static USHORT	check_statement_type(Rsr*);
 
-static bool		get_next_msg_no(Rrq*, USHORT, USHORT*);
+static bool		get_next_msg_no(Rrq* request, USHORT incarnation, USHORT* msg_number, CheckStatusWrapper* status);
 static Rtr*		make_transaction(Rdb*, ITransaction*);
 static void		ping_connection(rem_port*, PACKET*);
 static bool		process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_port** result);
@@ -1701,7 +1701,7 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 	{
 		set_server(main_port, flags);
 
-		const size_t MAX_PACKET_SIZE = MAX_SSHORT;
+		constexpr size_t MAX_PACKET_SIZE = MAX_SSHORT;
 		const SSHORT bufSize = MIN(main_port->port_buff_size, MAX_PACKET_SIZE);
 		UCharBuffer packet_buffer;
 		UCHAR* const buffer = packet_buffer.getBuffer(bufSize);
@@ -2259,7 +2259,7 @@ void ConnectAuth::accept(PACKET* send, Auth::WriterImplementation*)
 	{
 		CSTRING* const s = &send->p_resp.p_resp_data;
 		authPort->extractNewKeys(s);
-		ISC_STATUS sv[] = {1, 0, 0};
+		constexpr ISC_STATUS sv[] = { isc_arg_gds, 0, isc_arg_end };
 		authPort->send_response(send, 0, s->cstr_length, sv, false);
 	}
 	else
@@ -2327,7 +2327,7 @@ static ISC_STATUS allocate_statement( rem_port* port, /*P_RLSE* allocate,*/ PACK
 	statement->rsr_rdb = rdb;
 	statement->rsr_iface = NULL;
 
-	if (statement->rsr_id = port->get_id(statement))
+	if ((statement->rsr_id = port->get_id(statement)))
 	{
 		object = statement->rsr_id;
 		statement->rsr_next = rdb->rdb_sql_requests;
@@ -2819,7 +2819,7 @@ static void cancel_operation(rem_port* port, USHORT kind)
 }
 
 
-static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number)
+static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number, CheckStatusWrapper* status)
 {
 /**************************************
  *
@@ -2834,7 +2834,7 @@ static bool check_request(Rrq* request, USHORT incarnation, USHORT msg_number)
  **************************************/
 	USHORT n;
 
-	if (!get_next_msg_no(request, incarnation, &n))
+	if (!get_next_msg_no(request, incarnation, &n, status))
 		return false;
 
 	return msg_number == n;
@@ -2857,7 +2857,6 @@ static USHORT check_statement_type( Rsr* statement)
 	LocalStatus ls;
 	CheckStatusWrapper local_status(&ls);
 	USHORT ret = 0;
-	bool done = false;
 
 	fb_assert(statement->rsr_iface);
 	statement->checkIface();		// this should not happen but...
@@ -2947,7 +2946,7 @@ ISC_STATUS rem_port::compile(P_CMPL* compileL, PACKET* sendL)
 	requestL->rrq_max_msg = max_msg;
 	OBJCT object = 0;
 
-	if (requestL->rrq_id = this->get_id(requestL))
+	if ((requestL->rrq_id = this->get_id(requestL)))
 	{
 		object = requestL->rrq_id;
 		requestL->rrq_next = rdb->rdb_requests;
@@ -3084,7 +3083,7 @@ void rem_port::disconnect(PACKET* sendL, PACKET* receiveL)
 
 		Rtr* transaction;
 
-		while (transaction = rdb->rdb_transactions)
+		while ((transaction = rdb->rdb_transactions))
 		{
 			if (!transaction->rtr_limbo)
 				transaction->rtr_iface->rollback(&status_vector);
@@ -3456,6 +3455,10 @@ ISC_STATUS rem_port::end_transaction(P_OP operation, P_RLSE * release, PACKET* s
 		if (!(status_vector.getState() & IStatus::STATE_ERRORS))
 			transaction->rtr_limbo = true;
 		break;
+
+	default:
+		// not a transaction operation - ignore
+		break;
 	}
 
 	if (!(status_vector.getState() & IStatus::STATE_ERRORS))
@@ -3810,13 +3813,13 @@ void rem_port::batch_exec(P_BATCH_EXEC* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+void rem_port::batch_rls(P_RLSE* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
 
 	Rsr* statement;
-	getHandle(statement, batch->p_batch_statement);
+	getHandle(statement, batch->p_rlse_object);
 	statement->checkIface();
 	statement->checkBatch();
 
@@ -3827,13 +3830,13 @@ void rem_port::batch_rls(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
 }
 
 
-void rem_port::batch_cancel(P_BATCH_FREE_CANCEL* batch, PACKET* sendL)
+void rem_port::batch_cancel(P_RLSE* batch, PACKET* sendL)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
 
 	Rsr* statement;
-	getHandle(statement, batch->p_batch_statement);
+	getHandle(statement, batch->p_rlse_object);
 	statement->checkIface();
 	statement->checkBatch();
 
@@ -4430,7 +4433,7 @@ ISC_STATUS rem_port::fetch(P_SQLDATA * sqldata, PACKET* sendL, bool scroll)
 }
 
 
-static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_number)
+static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_number, CheckStatusWrapper* status)
 {
 /**************************************
  *
@@ -4443,14 +4446,12 @@ static bool get_next_msg_no(Rrq* request, USHORT incarnation, USHORT * msg_numbe
  *	in the request.
  *
  **************************************/
-	LocalStatus ls;
-	CheckStatusWrapper status_vector(&ls);
 	UCHAR info_buffer[128];
 
-	request->rrq_iface->getInfo(&status_vector, incarnation,
+	request->rrq_iface->getInfo(status, incarnation,
 		sizeof(request_info), request_info, sizeof(info_buffer), info_buffer);
 
-	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return false;
 
 	bool result = false;
@@ -4648,7 +4649,6 @@ void rem_port::info(P_OP op, P_INFO* stuff, PACKET* sendL)
 	// Make sure there is a suitable temporary blob buffer
 	Array<UCHAR> buf;
 	UCHAR* const buffer = buffer_length ? buf.getBuffer(buffer_length) : NULL;
-	memset(buffer, 0, buffer_length);
 
 	HalfStaticArray<UCHAR, 1024> info;
 	UCHAR* info_buffer = NULL;
@@ -4798,7 +4798,7 @@ static Rtr* make_transaction (Rdb* rdb, ITransaction* iface)
 	Rtr* transaction = FB_NEW Rtr;
 	transaction->rtr_rdb = rdb;
 	transaction->rtr_iface = iface;
-	if (transaction->rtr_id = rdb->rdb_port->get_id(transaction))
+	if ((transaction->rtr_id = rdb->rdb_port->get_id(transaction)))
 	{
 		transaction->rtr_next = rdb->rdb_transactions;
 		rdb->rdb_transactions = transaction;
@@ -4885,7 +4885,7 @@ ISC_STATUS rem_port::open_blob(P_OP op, P_BLOB* stuff, PACKET* sendL)
 		blob->rbl_blob_id = stuff->p_blob_id;
 		blob->rbl_iface = iface;
 		blob->rbl_rdb = rdb;
-		if (blob->rbl_id = this->get_id(blob))
+		if ((blob->rbl_id = this->get_id(blob)))
 		{
 			object = blob->rbl_id;
 			blob->rbl_rtr = transaction;
@@ -5324,11 +5324,11 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 			break;
 
 		case op_batch_rls:
-			port->batch_rls(&receive->p_batch_free_cancel, sendL);
+			port->batch_rls(&receive->p_rlse, sendL);
 			break;
 
 		case op_batch_cancel:
-			port->batch_cancel(&receive->p_batch_free_cancel, sendL);
+			port->batch_cancel(&receive->p_rlse, sendL);
 			break;
 
 		case op_batch_sync:
@@ -5615,7 +5615,7 @@ ISC_STATUS rem_port::que_events(P_EVENT * stuff, PACKET* sendL)
 }
 
 
-ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, IStatus* status_vector)
+ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, CheckStatusWrapper* status_vector)
 {
 /**************************************
  *
@@ -5637,7 +5637,7 @@ ISC_STATUS rem_port::receive_after_start(P_DATA* data, PACKET* sendL, IStatus* s
 	// Figure out the number of the message that we're stalled on.
 
 	USHORT msg_number;
-	if (!get_next_msg_no(requestL, level, &msg_number))
+	if (!get_next_msg_no(requestL, level, &msg_number, status_vector))
 		return this->send_response(sendL, 0, 0, status_vector, false);
 
 	sendL->p_operation = op_response_piggyback;
@@ -5752,9 +5752,12 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 		RMessage* next = message->msg_next;
 
 		if ((next == message || !next->msg_address) &&
-			!check_request(requestL, data->p_data_incarnation, msg_number))
+			!check_request(requestL, data->p_data_incarnation, msg_number, &status_vector))
 		{
-			// We've reached the end of the RSE - don't prefetch and flush
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
+				return this->send_response(sendL, 0, 0, &status_vector, false);
+
+			// We've reached the end of the RSE or ReceiveNode/SelectMessageNode - don't prefetch and flush
 			// everything we've buffered so far
 
 			count2 = 0;
@@ -5785,8 +5788,21 @@ ISC_STATUS rem_port::receive_msg(P_DATA * data, PACKET* sendL)
 	while (message->msg_address && message->msg_next != tail->rrq_xdr)
 		message = message->msg_next;
 
-	for (; count2 && check_request(requestL, data->p_data_incarnation, msg_number); --count2)
+	for (; count2; --count2)
 	{
+		if (!check_request(requestL, data->p_data_incarnation, msg_number, &status_vector))
+		{
+			if (status_vector.getState() & IStatus::STATE_ERRORS)
+			{
+				// If already have an error queued, don't overwrite it
+
+				if (requestL->rrqStatus.isSuccess())
+					requestL->rrqStatus.save(&status_vector);
+			}
+
+			break;
+		}
+
 		if (message->msg_address)
 		{
 			if (!prior)
@@ -5852,8 +5868,7 @@ static void release_blob(Rbl* blob)
 
 	rdb->rdb_port->releaseObject(blob->rbl_id);
 
-	if (transaction->rtr_blobs.locate(blob->rbl_blob_id))
-		transaction->rtr_blobs.fastRemove();
+	transaction->rtr_blobs.remove(blob);
 
 #ifdef DEBUG_REMOTE_MEMORY
 	printf("release_blob(server)      free blob        %x\n", blob);
@@ -5999,8 +6014,8 @@ static void release_transaction( Rtr* transaction)
 	Rdb* rdb = transaction->rtr_rdb;
 	rdb->rdb_port->releaseObject(transaction->rtr_id);
 
-	while (transaction->rtr_blobs.getFirst())
-		release_blob(transaction->rtr_blobs.current());
+	while (Rbl* blob = transaction->rtr_blobs.getFirst())
+		release_blob(blob);
 
 	while (transaction->rtr_cursors.hasData())
 	{
@@ -6094,7 +6109,8 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 
 	ServAttachment att = port_context->rdb_iface;
 
-	ServBlob blob(att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
+	// openBlob() returns an IBlob with a reference count set to 1, no need to increment it.
+	ServBlob blob(REF_NO_INCR, att->openBlob(&status, rtr->rtr_iface, &blobId, 0, nullptr));
 	if (status.getState() & IStatus::STATE_ERRORS)
 		return false;
 
@@ -6113,10 +6129,10 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 	if (status.getState() & IStatus::STATE_ERRORS)
 		return false;
 
-	bool	segmented;
-	ULONG	num_segments;
-	ULONG	max_segment;
-	ULONG	total_length;
+	bool segmented;
+	ULONG num_segments;
+	ULONG max_segment;
+	FB_UINT64 total_length;
 
 	ClumpletReader p(ClumpletReader::InfoResponse, info, sizeof(info));
 	for (; !p.isEof(); p.moveNext())
@@ -6130,7 +6146,7 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 			max_segment = p.getInt();
 			break;
 		case isc_info_blob_total_length:
-			total_length = p.getInt();
+			total_length = p.getBigInt();
 			break;
 		case isc_info_blob_type:
 			segmented = (p.getInt() == 0);
@@ -6151,7 +6167,7 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 		if (!segmented)
 			num_segments = (total_length + max_segment - 1) / max_segment;
 
-		const ULONG dataLen = total_length + num_segments * 2;
+		const FB_UINT64 dataLen = total_length + num_segments * 2;
 
 		fb_assert(maxSize <= MAX_INLINE_BLOB_SIZE);
 		if (maxSize > MAX_INLINE_BLOB_SIZE)
@@ -6181,6 +6197,7 @@ bool rem_port::sendInlineBlob(PACKET* sendL, Rtr* rtr, SQUAD blobId, ULONG maxSi
 	}
 
 	blob->close(&status);
+	blob.clear();
 
 	p_blob->p_blob_info.cstr_address = info;
 	p_blob->p_blob_data = &buff;
@@ -7178,11 +7195,14 @@ SSHORT rem_port::asyncReceive(PACKET* asyncPacket, const UCHAR* buffer, SSHORT d
 			port_async->abort_aux_connection();
 		break;
 	case op_crypt_key_callback:
-		port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
-			asyncPacket->p_cc.p_cc_data.cstr_address);
+		if (port_server_crypt_callback)
+		{
+			port_server_crypt_callback->wakeup(asyncPacket->p_cc.p_cc_data.cstr_length,
+				asyncPacket->p_cc.p_cc_data.cstr_address);
+		}
 		break;
 	case op_partial:
-		if (original_op == op_crypt_key_callback)
+		if (port_server_crypt_callback && original_op == op_crypt_key_callback)
 			port_server_crypt_callback->wakeup(0, NULL);
 		break;
 	default:

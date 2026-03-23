@@ -31,7 +31,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/err_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/rlck_proto.h"
 #include "../jrd/shut_proto.h"
 #include "../jrd/tra_proto.h"
@@ -39,8 +39,6 @@
 
 using namespace Jrd;
 using namespace Firebird;
-
-const SSHORT SHUT_WAIT_TIME	= 5;
 
 // Shutdown lock data
 union shutdown_data
@@ -52,19 +50,23 @@ union shutdown_data
 	SLONG data_long;
 };
 
+// Low byte of shutdown_data::flag used by shutdown modes, see isc_dpb_shut_XXX
+// High byte used for additional flags
+
+constexpr SSHORT SHUT_flag_restoring = 0x0100;		// database restore is in progress
 
 // Define this to true if you need to allow no-op behavior when requested shutdown mode
 // matches current. Logic of jrd8_create_database may need attention in this case too
-const bool IGNORE_SAME_MODE = false;
+constexpr bool IGNORE_SAME_MODE = false;
 
-static void bad_mode(Database* dbb)
+[[noreturn]] static void bad_mode(const Database* dbb)
 {
 	ERR_post(Arg::Gds(isc_bad_shutdown_mode) << Arg::Str(dbb->dbb_database_name));
 }
 
-static void same_mode(Database* dbb)
+static void same_mode(const Database* dbb)
 {
-	if (!IGNORE_SAME_MODE)
+	if constexpr (!IGNORE_SAME_MODE)
 		bad_mode(dbb);
 }
 
@@ -121,6 +123,9 @@ bool SHUT_blocking_ast(thread_db* tdbb, bool ast)
 		dbb->dbb_shutdown_mode.store(shutMode, std::memory_order_relaxed);
 		return false;
 	}
+
+	if (flag & SHUT_flag_restoring)
+		dbb->setRestoring(true);
 
 	if ((flag & isc_dpb_shut_force) && !delay)
 		return shutdown(tdbb, flag, ast);
@@ -337,8 +342,8 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* const attachment = tdbb->getAttachment();
+	const Database* const dbb = tdbb->getDatabase();
+	const Jrd::Attachment* const attachment = tdbb->getAttachment();
 
 	// Only platform's user locksmith can shutdown or bring online a database
 
@@ -440,7 +445,7 @@ void SHUT_online(thread_db* tdbb, SSHORT flag, Sync* guard)
 
 static void check_backup_state(thread_db* tdbb)
 {
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
 	BackupManager::StateReadGuard stateGuard(tdbb);
 
@@ -471,6 +476,9 @@ static bool notify_shutdown(thread_db* tdbb, SSHORT flag, SSHORT delay, Sync* gu
 	shutdown_data data;
 	data.data_items.flag = flag;
 	data.data_items.delay = delay;
+
+	if (dbb->isRestoring())
+		data.data_items.flag |= SHUT_flag_restoring;
 
 	LCK_write_data(tdbb, dbb->dbb_lock, data.data_long);
 

@@ -287,7 +287,7 @@ void SRVRMGR_msg_get( USHORT number, TEXT * msg)
 		rs = "Failed to print pool info";
 		break;
 	case MSG_PRPOOLOK:
-		rs = "Print pool Successfull";
+		rs = "Print pool Successful";
 		break;
 	case MSG_FLNMTOOLONG:
 		rs = "File name too long";

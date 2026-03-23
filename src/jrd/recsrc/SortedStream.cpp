@@ -170,6 +170,11 @@ void SortedStream::findUsedStreams(StreamList& streams, bool expandAll) const
 	m_next->findUsedStreams(streams, expandAll);
 }
 
+bool SortedStream::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
+}
+
 void SortedStream::invalidateRecords(Request* request) const
 {
 	m_next->invalidateRecords(request);
@@ -227,7 +232,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 			if (item->node)
 			{
 				from = EVL_expr(tdbb, request, item->node);
-				if (request->req_flags & req_null)
+				if (!from)
 					flag = true;
 			}
 			else
@@ -273,7 +278,7 @@ Sort* SortedStream::init(thread_db* tdbb) const
 				}
 				else
 				{
-					MOV_move(tdbb, from, &to);
+					MOV_move(tdbb, from, &to, true);
 				}
 			}
 		}
@@ -388,8 +393,8 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			const auto refetch = (id == ID_TRANS);
 
 			if (refetch && relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
+				!relation->getExtFile() &&
+				!relation->isView() &&
 				!relation->isVirtual())
 			{
 				if (m_map->flags & FLAG_REFETCH)
@@ -422,7 +427,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			// BEWARE:	This check depends on the fact that ID_DBKEY_VALID flags are stored
 			//			*after* real fields and ID_TRANS / ID_DBKEY values.
 			if (relation && !rpb->rpb_number.isValid())
-				VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+				VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 		}
 
 		const auto record = rpb->rpb_record;
@@ -433,7 +438,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		else
 		{
 			EVL_field(relation, record, id, &to);
-			MOV_move(tdbb, &from, &to);
+			MOV_move(tdbb, &from, &to, true);
 			record->clearNull(id);
 		}
 	}
@@ -451,7 +456,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 
 		// Ensure the record is still in the most recent format
 		const auto record =
-			VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+			VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 
 		// Set all fields to NULL if the stream was originally marked as invalid
 		if (!rpb->rpb_number.isValid())
@@ -482,7 +487,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		if (!DPM_get(tdbb, &temp, LCK_read))
 			Arg::Gds(isc_no_cur_rec).raise();
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_RPT_READS, relation->rel_id);
+		tdbb->bumpStats(RecordStatType::RPT_READS, relation->getId());
 
 		if (VIO_chase_record_version(tdbb, &temp, transaction, tdbb->getDefaultPool(), false, false))
 		{
@@ -586,8 +591,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		// We have to find the original record version, sigh.
 		// Scan version chain backwards until it's done.
 
-		RuntimeStatistics::Accumulator backversions(tdbb, relation,
-													RuntimeStatistics::RECORD_BACKVERSION_READS);
+		RuntimeStatistics::Accumulator backversions(tdbb, relation, RecordStatType::BACK_READS);
 
 		while (temp.rpb_transaction_nr != orgTraNum)
 		{

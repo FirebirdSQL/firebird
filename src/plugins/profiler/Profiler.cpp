@@ -58,14 +58,14 @@ SINT64 ticksToNanoseconds(FB_UINT64 ticks)
 	return CInt128((SINT64) ticks).mul(ONE_SECOND_IN_NS).div(ticksFrequency, 0).toInt64(0);
 }
 
-auto& defaultPool()
+auto& defaultPool() noexcept
 {
 	return *getDefaultMemoryPool();
 }
 
 void quote(string& name)
 {
-	const char QUOTE = '"';
+	constexpr char QUOTE = '"';
 
 	for (unsigned p = 0; p < name.length(); ++p)
 	{
@@ -82,7 +82,7 @@ void quote(string& name)
 
 struct Stats
 {
-	void hit(FB_UINT64 elapsedTicks)
+	void hit(FB_UINT64 elapsedTicks) noexcept
 	{
 		if (counter == 0 || elapsedTicks < minElapsedTicks)
 			minElapsedTicks = elapsedTicks;
@@ -103,14 +103,14 @@ struct Stats
 struct Cursor
 {
 	MetaString name{defaultPool()};
-	unsigned line;
-	unsigned column;
+	unsigned line = 0;
+	unsigned column = 0;
 };
 
 struct RecordSource
 {
 	std::optional<ULONG> parentId;
-	unsigned level;
+	unsigned level = 0;
 	string accessPath{defaultPool()};
 };
 
@@ -124,9 +124,10 @@ struct Statement
 {
 	unsigned level = 0;
 	string type{defaultPool()};
+	MetaString schemaName{defaultPool()};
 	MetaString packageName{defaultPool()};
 	MetaString routineName{defaultPool()};
-	SINT64 parentStatementId;
+	SINT64 parentStatementId = 0;
 	string sqlText{defaultPool()};
 };
 
@@ -137,10 +138,10 @@ struct Request
 {
 	bool dirty = true;
 	unsigned level = 0;
-	SINT64 statementId;
+	SINT64 statementId = 0;
 	SINT64 callerStatementId = 0;
 	SINT64 callerRequestId = 0;
-	ISC_TIMESTAMP_TZ startTimestamp;
+	ISC_TIMESTAMP_TZ startTimestamp{};
 	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
 	std::optional<FB_UINT64> totalElapsedTicks;
 	NonPooledMap<CursorRecSourceKey, RecordSourceStats> recordSourcesStats{defaultPool()};
@@ -180,8 +181,11 @@ public:
 
 	void finish(ThrowStatusExceptionWrapper* status, ISC_TIMESTAMP_TZ timestamp) override;
 
-	void defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
-		const char* type, const char* packageName, const char* routineName, const char* sqlText) override;
+	void deprecatedDefineStatement(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
+		const char* type, const char* packageName, const char* routineName, const char* sqlText) override
+	{
+		defineStatement2(status, statementId, parentStatementId, type, nullptr, packageName, routineName, sqlText);
+	}
 
 	void defineCursor(SINT64 statementId, unsigned cursorId, const char* name, unsigned line, unsigned column) override;
 
@@ -215,6 +219,10 @@ public:
 
 	void afterRecordSourceGetRecord(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
 		IProfilerStats* stats) override;
+
+	void defineStatement2(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
+		const char* type, const char* schemaName, const char* packageName, const char* routineName,
+		const char* sqlText) override;
 
 private:
 	Request* getRequest(SINT64 statementId, SINT64 requestId)
@@ -251,7 +259,9 @@ public:
 	void flush(ThrowStatusExceptionWrapper* status) override;
 
 private:
-	void createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+	void createInitialMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+		RefPtr<ITransaction> transaction);
+	void recreateViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 		RefPtr<ITransaction> transaction);
 
 	void loadMetadata(ThrowStatusExceptionWrapper* status);
@@ -271,17 +281,20 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 	constexpr auto sql = R"""(
 		select exists(
 		           select true
-		               from rdb$roles
-		               where rdb$role_name = 'PLG$PROFILER'
+		               from system.rdb$relation_fields
+		               where rdb$schema_name = 'PLG$PROFILER' and
+		                     rdb$relation_name = 'PLG$PROF_STATEMENTS' and
+		                     rdb$field_name = 'SCHEMA_NAME'
 		       ) metadata_created,
 		       rdb$get_context('SYSTEM', 'DB_NAME') db_name,
 		       (select rdb$owner_name
-		            from rdb$relations
-		            where rdb$relation_name = 'RDB$DATABASE'
+		            from system.rdb$relations
+		            where rdb$schema_name = 'SYSTEM' and
+		                  rdb$relation_name = 'RDB$DATABASE'
 		       ) owner_name,
 		       current_role,
 		       rdb$role_in_use('PLG$PROFILER') role_in_use
-		    from rdb$database
+		    from system.rdb$database
 	)""";
 
 	FB_MESSAGE(message, ThrowStatusExceptionWrapper,
@@ -340,7 +353,7 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 	}
 
 	if (!message->metadataCreated)
-		createMetadata(status, refAttachment, refTransaction);
+		createInitialMetadata(status, refAttachment, refTransaction);
 
 	if (!roleInUse)
 	{
@@ -394,7 +407,7 @@ IProfilerSession* ProfilerPlugin::startSession(ThrowStatusExceptionWrapper* stat
 void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 {
 	constexpr auto sessionSql = R"""(
-		update or insert into plg$prof_sessions
+		update or insert into plg$profiler.plg$prof_sessions
 		    (profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp)
 		    values (?, current_connection, current_user, ?, ?, ?)
 		    matching (profile_id)
@@ -409,9 +422,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	sessionMessage.clear();
 
 	constexpr auto statementSql = R"""(
-		update or insert into plg$prof_statements
-		    (profile_id, statement_id, parent_statement_id, statement_type, package_name, routine_name, sql_text)
-		    values (?, ?, ?, ?, ?, ?, ?)
+		update or insert into plg$profiler.plg$prof_statements
+		    (profile_id, statement_id, parent_statement_id, statement_type, schema_name, package_name, routine_name,
+		     sql_text)
+		    values (?, ?, ?, ?, ?, ?, ?, ?)
 		    matching (profile_id, statement_id)
 	)""";
 
@@ -420,6 +434,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_BIGINT, statementId)
 		(FB_BIGINT, parentStatementId)
 		(FB_INTL_VARCHAR(20 * 4, CS_UTF8), statementType)
+		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * 4, CS_UTF8), schemaName)
 		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * 4, CS_UTF8), packageName)
 		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * 4, CS_UTF8), routineName)
 		(FB_BLOB, sqlText)
@@ -427,7 +442,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	statementMessage.clear();
 
 	constexpr auto cursorSql = R"""(
-		update or insert into plg$prof_cursors
+		update or insert into plg$profiler.plg$prof_cursors
 		    (profile_id, statement_id, cursor_id, name, line_num, column_num)
 		    values (?, ?, ?, ?, ?, ?)
 		    matching (profile_id, statement_id, cursor_id)
@@ -444,7 +459,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	cursorMessage.clear();
 
 	constexpr auto recSrcSql = R"""(
-		update or insert into plg$prof_record_sources
+		update or insert into plg$profiler.plg$prof_record_sources
 		    (profile_id, statement_id, cursor_id, record_source_id,
 		     parent_record_source_id, level, access_path)
 		    values (?, ?, ?, ?, ?, ?, ?)
@@ -463,7 +478,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	recSrcMessage.clear();
 
 	constexpr auto requestSql = R"""(
-		update or insert into plg$prof_requests
+		update or insert into plg$profiler.plg$prof_requests
 		    (profile_id, statement_id, request_id, caller_statement_id, caller_request_id, start_timestamp,
 		     finish_timestamp, total_elapsed_time)
 		    values (?, ?, ?, ?, ?, ?, ?, ?)
@@ -484,24 +499,24 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 	constexpr auto recSrcStatSql = R"""(
 		execute block (
-		    profile_id type of column plg$prof_record_source_stats.profile_id = ?,
-		    statement_id type of column plg$prof_record_source_stats.statement_id = ?,
-		    request_id type of column plg$prof_record_source_stats.request_id = ?,
-		    cursor_id type of column plg$prof_record_source_stats.cursor_id = ?,
-		    record_source_id type of column plg$prof_record_source_stats.record_source_id = ?,
-		    open_counter type of column plg$prof_record_source_stats.open_counter = ?,
-		    open_min_elapsed_time type of column plg$prof_record_source_stats.open_min_elapsed_time = ?,
-		    open_max_elapsed_time type of column plg$prof_record_source_stats.open_max_elapsed_time = ?,
-		    open_total_elapsed_time type of column plg$prof_record_source_stats.open_total_elapsed_time = ?,
-		    fetch_counter type of column plg$prof_record_source_stats.fetch_counter = ?,
-		    fetch_min_elapsed_time type of column plg$prof_record_source_stats.fetch_min_elapsed_time = ?,
-		    fetch_max_elapsed_time type of column plg$prof_record_source_stats.fetch_max_elapsed_time = ?,
-		    fetch_total_elapsed_time type of column plg$prof_record_source_stats.fetch_total_elapsed_time = ?
+		    profile_id type of column plg$profiler.plg$prof_record_source_stats.profile_id = ?,
+		    statement_id type of column plg$profiler.plg$prof_record_source_stats.statement_id = ?,
+		    request_id type of column plg$profiler.plg$prof_record_source_stats.request_id = ?,
+		    cursor_id type of column plg$profiler.plg$prof_record_source_stats.cursor_id = ?,
+		    record_source_id type of column plg$profiler.plg$prof_record_source_stats.record_source_id = ?,
+		    open_counter type of column plg$profiler.plg$prof_record_source_stats.open_counter = ?,
+		    open_min_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.open_min_elapsed_time = ?,
+		    open_max_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.open_max_elapsed_time = ?,
+		    open_total_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.open_total_elapsed_time = ?,
+		    fetch_counter type of column plg$profiler.plg$prof_record_source_stats.fetch_counter = ?,
+		    fetch_min_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.fetch_min_elapsed_time = ?,
+		    fetch_max_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.fetch_max_elapsed_time = ?,
+		    fetch_total_elapsed_time type of column plg$profiler.plg$prof_record_source_stats.fetch_total_elapsed_time = ?
 		)
 		as
 		begin
-		    merge into plg$prof_record_source_stats
-		        using rdb$database on
+		    merge into plg$profiler.plg$prof_record_source_stats
+		        using system.rdb$database on
 		            profile_id = :profile_id and
 		            statement_id = :statement_id and
 		            request_id = :request_id and
@@ -546,20 +561,20 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 	constexpr auto psqlStatSql = R"""(
 		execute block (
-		    profile_id type of column plg$prof_psql_stats.profile_id = ?,
-		    statement_id type of column plg$prof_psql_stats.statement_id = ?,
-		    request_id type of column plg$prof_psql_stats.request_id = ?,
-		    line_num type of column plg$prof_psql_stats.line_num = ?,
-		    column_num type of column plg$prof_psql_stats.column_num = ?,
-		    counter type of column plg$prof_psql_stats.counter = ?,
-		    min_elapsed_time type of column plg$prof_psql_stats.min_elapsed_time = ?,
-		    max_elapsed_time type of column plg$prof_psql_stats.max_elapsed_time = ?,
-		    total_elapsed_time type of column plg$prof_psql_stats.total_elapsed_time = ?
+		    profile_id type of column plg$profiler.plg$prof_psql_stats.profile_id = ?,
+		    statement_id type of column plg$profiler.plg$prof_psql_stats.statement_id = ?,
+		    request_id type of column plg$profiler.plg$prof_psql_stats.request_id = ?,
+		    line_num type of column plg$profiler.plg$prof_psql_stats.line_num = ?,
+		    column_num type of column plg$profiler.plg$prof_psql_stats.column_num = ?,
+		    counter type of column plg$profiler.plg$prof_psql_stats.counter = ?,
+		    min_elapsed_time type of column plg$profiler.plg$prof_psql_stats.min_elapsed_time = ?,
+		    max_elapsed_time type of column plg$profiler.plg$prof_psql_stats.max_elapsed_time = ?,
+		    total_elapsed_time type of column plg$profiler.plg$prof_psql_stats.total_elapsed_time = ?
 		)
 		as
 		begin
-		    merge into plg$prof_psql_stats
-		        using rdb$database on
+		    merge into plg$profiler.plg$prof_psql_stats
+		        using system.rdb$database on
 		            profile_id = :profile_id and
 		            statement_id = :statement_id and
 		            request_id = :request_id and
@@ -707,6 +722,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 				statementMessage->statementTypeNull = FB_FALSE;
 				statementMessage->statementType.set(profileStatement.type.c_str());
+
+				statementMessage->schemaNameNull = profileStatement.schemaName.isEmpty();
+				statementMessage->schemaName.set(profileStatement.schemaName.c_str());
 
 				statementMessage->packageNameNull = profileStatement.packageName.isEmpty();
 				statementMessage->packageName.set(profileStatement.packageName.c_str());
@@ -970,7 +988,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 	transaction.clear();
 }
 
-void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+void ProfilerPlugin::createInitialMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 	RefPtr<ITransaction> transaction)
 {
 	constexpr const char* createSqlStaments[] = {
@@ -978,12 +996,16 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 
 		"grant default plg$profiler to public",
 
-		"create sequence plg$prof_profile_id",
+		"create schema plg$profiler default character set utf8",
 
-		"grant usage on sequence plg$prof_profile_id to plg$profiler",
+		"grant usage on schema plg$profiler to plg$profiler",
+
+		"create sequence plg$profiler.plg$prof_profile_id",
+
+		"grant usage on sequence plg$profiler.plg$prof_profile_id to plg$profiler",
 
 		R"""(
-		create table plg$prof_sessions (
+		create table plg$profiler.plg$prof_sessions (
 		    profile_id bigint not null
 		        constraint plg$prof_sessions_pk
 		            primary key
@@ -995,18 +1017,19 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		    finish_timestamp timestamp with time zone
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_sessions to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_sessions to plg$profiler",
 
 		R"""(
-		create table plg$prof_statements (
+		create table plg$profiler.plg$prof_statements (
 		    profile_id bigint not null
 		        constraint plg$prof_statements_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_statements_profile,
 		    statement_id bigint not null,
 		    parent_statement_id bigint,
 		    statement_type varchar(20) character set utf8 not null,
+		    schema_name char(63) character set utf8,
 		    package_name char(63) character set utf8,
 		    routine_name char(63) character set utf8,
 		    sql_text blob sub_type text character set utf8,
@@ -1014,18 +1037,19 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id)
 		        using index plg$prof_statements_profile_statement,
 		    constraint plg$prof_statements_parent_statement_fk
-		        foreign key (profile_id, parent_statement_id) references plg$prof_statements (profile_id, statement_id)
+		        foreign key (profile_id, parent_statement_id)
+		        references plg$profiler.plg$prof_statements (profile_id, statement_id)
 		        on delete cascade
 		        using index plg$prof_statements_parent_statement
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_statements to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_statements to plg$profiler",
 
 		R"""(
-		create table plg$prof_cursors (
+		create table plg$profiler.plg$prof_cursors (
 		    profile_id bigint not null
 		        constraint plg$prof_cursors_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_cursors_profile,
 		    statement_id bigint not null,
@@ -1037,18 +1061,18 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id, cursor_id)
 		        using index plg$prof_cursors_profile_statement_cursor,
 		    constraint plg$prof_cursors_statement_fk
-		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_cursors_profile_statement
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_cursors to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_cursors to plg$profiler",
 
 		R"""(
-		create table plg$prof_record_sources (
+		create table plg$profiler.plg$prof_record_sources (
 		    profile_id bigint not null
 		        constraint plg$prof_record_sources_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_record_sources_profile,
 		    statement_id bigint not null,
@@ -1061,27 +1085,27 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id, cursor_id, record_source_id)
 		        using index plg$prof_record_sources_profile_statement_cursor_recsource,
 		    constraint plg$prof_record_sources_statement_fk
-		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_record_sources_profile_statement,
 		    constraint plg$prof_record_sources_cursor_fk
-		        foreign key (profile_id, statement_id, cursor_id) references plg$prof_cursors
+		        foreign key (profile_id, statement_id, cursor_id) references plg$profiler.plg$prof_cursors
 		        on delete cascade
 		        using index plg$prof_record_sources_profile_statement_cursor,
 		    constraint plg$prof_record_sources_parent_record_source_fk
 		        foreign key (profile_id, statement_id, cursor_id, parent_record_source_id)
-		        references plg$prof_record_sources (profile_id, statement_id, cursor_id, record_source_id)
+		        references plg$profiler.plg$prof_record_sources (profile_id, statement_id, cursor_id, record_source_id)
 		        on delete cascade
 		        using index plg$prof_record_sources_profile_statement_cursor_parent_rec_src
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_record_sources to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_record_sources to plg$profiler",
 
 		R"""(
-		create table plg$prof_requests (
+		create table plg$profiler.plg$prof_requests (
 		    profile_id bigint not null
 		        constraint plg$prof_requests_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_requests_profile,
 		    statement_id bigint not null,
@@ -1095,27 +1119,27 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id, request_id)
 		        using index plg$prof_requests_profile_request_statement,
 		    constraint plg$prof_requests_statement_fk
-		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_requests_profile_statement,
 		    constraint plg$prof_requests_caller_statement_fk
-		        foreign key (profile_id, caller_statement_id) references plg$prof_statements
+		        foreign key (profile_id, caller_statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_requests_profile_caller_statement,
 		    constraint plg$prof_requests_caller_request_fk
 		        foreign key (profile_id, caller_statement_id, caller_request_id)
-		            references plg$prof_requests (profile_id, statement_id, request_id)
+		        references plg$profiler.plg$prof_requests (profile_id, statement_id, request_id)
 		        on delete cascade
 		        using index plg$prof_requests_profile_caller_statement_caller_request
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_requests to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_requests to plg$profiler",
 
 		R"""(
-		create table plg$prof_psql_stats (
+		create table plg$profiler.plg$prof_psql_stats (
 		    profile_id bigint not null
 		        constraint plg$prof_psql_stats_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_psql_stats_profile,
 		    statement_id bigint not null,
@@ -1130,22 +1154,22 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id, request_id, line_num, column_num)
 		        using index plg$prof_psql_stats_profile_statement_request_line_column,
 		    constraint plg$prof_psql_stats_request_fk
-		        foreign key (profile_id, statement_id, request_id) references plg$prof_requests
+		        foreign key (profile_id, statement_id, request_id) references plg$profiler.plg$prof_requests
 		        on delete cascade
 		        using index plg$prof_psql_stats_profile_request,
 		    constraint plg$prof_psql_stats_statement_fk
-		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_psql_stats_profile_statement
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_psql_stats to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_psql_stats to plg$profiler",
 
 		R"""(
-		create table plg$prof_record_source_stats (
+		create table plg$profiler.plg$prof_record_source_stats (
 		    profile_id bigint not null
 		        constraint plg$prof_record_source_stats_session_fk
-		            references plg$prof_sessions
+		            references plg$profiler.plg$prof_sessions
 		            on delete cascade
 		            using index plg$prof_record_source_stats_profile_id,
 		    statement_id bigint not null,
@@ -1164,38 +1188,57 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		        primary key (profile_id, statement_id, request_id, cursor_id, record_source_id)
 		        using index plg$prof_record_source_stats_profile_stat_req_cur_recsource,
 		    constraint plg$prof_record_source_stats_request_fk
-		        foreign key (profile_id, statement_id, request_id) references plg$prof_requests
+		        foreign key (profile_id, statement_id, request_id) references plg$profiler.plg$prof_requests
 		        on delete cascade
 		        using index plg$prof_record_source_stats_profile_request,
 		    constraint plg$prof_record_source_stats_statement_fk
-		        foreign key (profile_id, statement_id) references plg$prof_statements
+		        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 		        on delete cascade
 		        using index plg$prof_record_source_stats_profile_statement,
 		    constraint plg$prof_record_source_stats_cursor_fk
-		        foreign key (profile_id, statement_id, cursor_id) references plg$prof_cursors
+		        foreign key (profile_id, statement_id, cursor_id) references plg$profiler.plg$prof_cursors
 		        on delete cascade
 		        using index plg$prof_record_source_stats_statement_cursor,
 		    constraint plg$prof_record_source_stats_record_source_fk
-		        foreign key (profile_id, statement_id, cursor_id, record_source_id) references plg$prof_record_sources
+		        foreign key (profile_id, statement_id, cursor_id, record_source_id)
+		        references plg$profiler.plg$prof_record_sources
 		        on delete cascade
 		        using index plg$prof_record_source_stats_statement_cursor_record_source
 		))""",
 
-		"grant select, update, insert, delete on table plg$prof_record_source_stats to plg$profiler",
+		"grant select, update, insert, delete on table plg$profiler.plg$prof_record_source_stats to plg$profiler"
+	};
 
+	for (const auto createSql : createSqlStaments)
+	{
+		attachment->execute(status, transaction, 0, createSql, SQL_DIALECT_CURRENT,
+			nullptr, nullptr, nullptr, nullptr);
+	}
+
+	recreateViews(status, attachment, transaction);
+
+	transaction->commit(status);
+	transaction.clear();
+}
+
+void ProfilerPlugin::recreateViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+	RefPtr<ITransaction> transaction)
+{
+	constexpr const char* sqlStaments[] = {
 		R"""(
-		create view plg$prof_statement_stats_view
+		recreate view plg$profiler.plg$prof_statement_stats_view
 		as
 		select req.profile_id,
 		       req.statement_id,
 		       sta.statement_type,
+		       sta.schema_name,
 		       sta.package_name,
 		       sta.routine_name,
 		       sta.parent_statement_id,
 		       sta_parent.statement_type parent_statement_type,
 		       sta_parent.routine_name parent_routine_name,
 		       (select sql_text
-		          from plg$prof_statements
+		          from plg$profiler.plg$prof_statements
 		          where profile_id = req.profile_id and
 		                statement_id = coalesce(sta.parent_statement_id, req.statement_id)
 		       ) sql_text,
@@ -1204,16 +1247,17 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		       max(req.total_elapsed_time) max_elapsed_time,
 		       cast(sum(req.total_elapsed_time) as bigint) total_elapsed_time,
 		       cast(sum(req.total_elapsed_time) / count(*) as bigint) avg_elapsed_time
-		  from plg$prof_requests req
-		  join plg$prof_statements sta
+		  from plg$profiler.plg$prof_requests req
+		  join plg$profiler.plg$prof_statements sta
 		    on sta.profile_id = req.profile_id and
 		       sta.statement_id = req.statement_id
-		  left join plg$prof_statements sta_parent
+		  left join plg$profiler.plg$prof_statements sta_parent
 		    on sta_parent.profile_id = sta.profile_id and
 		       sta_parent.statement_id = sta.parent_statement_id
 		  group by req.profile_id,
 		           req.statement_id,
 		           sta.statement_type,
+		           sta.schema_name,
 		           sta.package_name,
 		           sta.routine_name,
 		           sta.parent_statement_id,
@@ -1222,21 +1266,22 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		  order by sum(req.total_elapsed_time) desc
 		)""",
 
-		"grant select on table plg$prof_statement_stats_view to plg$profiler",
+		"grant select on table plg$profiler.plg$prof_statement_stats_view to plg$profiler",
 
 		R"""(
-		create view plg$prof_psql_stats_view
+		recreate view plg$profiler.plg$prof_psql_stats_view
 		as
 		select pstat.profile_id,
 		       pstat.statement_id,
 		       sta.statement_type,
+		       sta.schema_name,
 		       sta.package_name,
 		       sta.routine_name,
 		       sta.parent_statement_id,
 		       sta_parent.statement_type parent_statement_type,
 		       sta_parent.routine_name parent_routine_name,
 		       (select sql_text
-		          from plg$prof_statements
+		          from plg$profiler.plg$prof_statements
 		          where profile_id = pstat.profile_id and
 		                statement_id = coalesce(sta.parent_statement_id, pstat.statement_id)
 		       ) sql_text,
@@ -1247,16 +1292,17 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		       max(pstat.max_elapsed_time) max_elapsed_time,
 		       cast(sum(pstat.total_elapsed_time) as bigint) total_elapsed_time,
 		       cast(sum(pstat.total_elapsed_time) / nullif(sum(pstat.counter), 0) as bigint) avg_elapsed_time
-		  from plg$prof_psql_stats pstat
-		  join plg$prof_statements sta
+		  from plg$profiler.plg$prof_psql_stats pstat
+		  join plg$profiler.plg$prof_statements sta
 		    on sta.profile_id = pstat.profile_id and
 		       sta.statement_id = pstat.statement_id
-		  left join plg$prof_statements sta_parent
+		  left join plg$profiler.plg$prof_statements sta_parent
 		    on sta_parent.profile_id = sta.profile_id and
 		       sta_parent.statement_id = sta.parent_statement_id
 		  group by pstat.profile_id,
 		           pstat.statement_id,
 		           sta.statement_type,
+		           sta.schema_name,
 		           sta.package_name,
 		           sta.routine_name,
 		           sta.parent_statement_id,
@@ -1267,21 +1313,22 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		  order by sum(pstat.total_elapsed_time) desc
 		)""",
 
-		"grant select on table plg$prof_psql_stats_view to plg$profiler",
+		"grant select on table plg$profiler.plg$prof_psql_stats_view to plg$profiler",
 
 		R"""(
-		create view plg$prof_record_source_stats_view
+		recreate view plg$profiler.plg$prof_record_source_stats_view
 		as
 		select rstat.profile_id,
 		       rstat.statement_id,
 		       sta.statement_type,
+		       sta.schema_name,
 		       sta.package_name,
 		       sta.routine_name,
 		       sta.parent_statement_id,
 		       sta_parent.statement_type parent_statement_type,
 		       sta_parent.routine_name parent_routine_name,
 		       (select sql_text
-		          from plg$prof_statements
+		          from plg$profiler.plg$prof_statements
 		          where profile_id = rstat.profile_id and
 		                statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
 		       ) sql_text,
@@ -1304,25 +1351,26 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		       cast(sum(rstat.fetch_total_elapsed_time) as bigint) fetch_total_elapsed_time,
 		       cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
 		       cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
-		  from plg$prof_record_source_stats rstat
-		  join plg$prof_cursors cur
+		  from plg$profiler.plg$prof_record_source_stats rstat
+		  join plg$profiler.plg$prof_cursors cur
 		    on cur.profile_id = rstat.profile_id and
 		       cur.statement_id = rstat.statement_id and
 		       cur.cursor_id = rstat.cursor_id
-		  join plg$prof_record_sources recsrc
+		  join plg$profiler.plg$prof_record_sources recsrc
 		    on recsrc.profile_id = rstat.profile_id and
 		       recsrc.statement_id = rstat.statement_id and
 		       recsrc.cursor_id = rstat.cursor_id and
 		       recsrc.record_source_id = rstat.record_source_id
-		  join plg$prof_statements sta
+		  join plg$profiler.plg$prof_statements sta
 		    on sta.profile_id = rstat.profile_id and
 		       sta.statement_id = rstat.statement_id
-		  left join plg$prof_statements sta_parent
+		  left join plg$profiler.plg$prof_statements sta_parent
 		    on sta_parent.profile_id = sta.profile_id and
 		       sta_parent.statement_id = sta.parent_statement_id
 		  group by rstat.profile_id,
 		           rstat.statement_id,
 		           sta.statement_type,
+		           sta.schema_name,
 		           sta.package_name,
 		           sta.routine_name,
 		           sta.parent_statement_id,
@@ -1339,17 +1387,14 @@ void ProfilerPlugin::createMetadata(ThrowStatusExceptionWrapper* status, RefPtr<
 		  order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
 		)""",
 
-		"grant select on table plg$prof_record_source_stats_view to plg$profiler"
+		"grant select on table plg$profiler.plg$prof_record_source_stats_view to plg$profiler"
 	};
 
-	for (const auto createSql : createSqlStaments)
+	for (const auto sqlStatement : sqlStaments)
 	{
-		attachment->execute(status, transaction, 0, createSql, SQL_DIALECT_CURRENT,
+		attachment->execute(status, transaction, 0, sqlStatement, SQL_DIALECT_CURRENT,
 			nullptr, nullptr, nullptr, nullptr);
 	}
-
-	transaction->commit(status);
-	transaction.clear();
 }
 
 // Load objects in engine caches so they can be used in the user's transaction.
@@ -1358,13 +1403,13 @@ void ProfilerPlugin::loadMetadata(ThrowStatusExceptionWrapper* status)
 	constexpr auto loadObjectsSql =
 		R"""(
 		select *
-		    from plg$prof_sessions
-		    cross join plg$prof_statements
-		    cross join plg$prof_record_sources
-		    cross join plg$prof_requests
-		    cross join plg$prof_psql_stats
-		    cross join plg$prof_record_source_stats
-		    where next value for plg$prof_profile_id = 0
+		    from plg$profiler%schema.plg$prof_sessions
+		    cross join plg$profiler%schema.plg$prof_statements
+		    cross join plg$profiler%schema.plg$prof_record_sources
+		    cross join plg$profiler%schema.plg$prof_requests
+		    cross join plg$profiler%schema.plg$prof_psql_stats
+		    cross join plg$profiler%schema.plg$prof_record_source_stats
+		    where next value for plg$profiler.plg$prof_profile_id = 0
 		)""";
 
 	auto transaction = makeNoIncRef(userAttachment->startTransaction(status, 0, nullptr));
@@ -1388,7 +1433,7 @@ Session::Session(ThrowStatusExceptionWrapper* status, ProfilerPlugin* aPlugin,
 	) sequenceMessage(status, MasterInterfacePtr());
 	sequenceMessage.clear();
 
-	constexpr auto sequenceSql = "select next value for plg$prof_profile_id from rdb$database";
+	constexpr auto sequenceSql = "select next value for plg$profiler.plg$prof_profile_id from system.rdb$database";
 
 	auto transaction = makeNoIncRef(plugin->userAttachment->startTransaction(status, 0, nullptr));
 
@@ -1427,8 +1472,8 @@ void Session::finish(ThrowStatusExceptionWrapper* status, ISC_TIMESTAMP_TZ times
 	finishTimestamp = timestamp;
 }
 
-void Session::defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
-	const char* type, const char* packageName, const char* routineName, const char* sqlText)
+void Session::defineStatement2(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 parentStatementId,
+	const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText)
 {
 	const auto statement = statements.put(statementId);
 	fb_assert(statement);
@@ -1437,6 +1482,7 @@ void Session::defineStatement(ThrowStatusExceptionWrapper* status, SINT64 statem
 		return;
 
 	statement->type = type;
+	statement->schemaName = schemaName;
 	statement->packageName = packageName;
 	statement->routineName = routineName;
 	statement->parentStatementId = parentStatementId;

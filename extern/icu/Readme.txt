@@ -1,14 +1,20 @@
-icu.exe is a self-extract pre-built (by us) IBM ICU 63.1 library.
+icu_windows.zip is a pre-built (by us) IBM ICU 77.1 library.
 
-The sources was downloaded from http://site.icu-project.org/download.
+The sources was downloaded from https://github.com/unicode-org/icu/releases/tag/release-77-1.
 
-The simple fix for bug ICU-20302 (Windows 7: timezone detection on Windows
-is broken) is applyed, see:
+The build was done using VS 2022 (17.13.6) in a way that ICU data was not included in icudt DLL.
 
-https://unicode-org.atlassian.net/browse/ICU-20302
-https://github.com/unicode-org/icu/pull/315
+To do it, follow these steps:
+- Download icu4c-77_1-src.zip and icu4c-77_1-data.zip
+- Unzip icu4c-77_1-src.zip
+- Delete source\data directory from the extracted icu4c-77_1-src.zip
+- Unzip data from icu4c-77_1-data.zip into source\data from the extracted icu4c-77_1-src.zip
+- Create a file named filter.json with the content: {"strategy": "additive"}
+- Set environment variable ICU_DATA_FILTER_FILE to full path of created filter.json file
+- Open Visual Studio with the environment variable set
+- Build solution
 
-The build was done using VS 2017 (15.9).
+To update data, download icu4c-77_1-data-bin-l.zip, extract it and add the data file to icudt.zip.
 
 ---
 

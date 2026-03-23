@@ -106,7 +106,7 @@ public:
 
 	constexpr FB_SIZE_T getCount() const noexcept
 	{
-		return stdList.size();
+		return static_cast<FB_SIZE_T>(stdList.size());
 	}
 
 	constexpr bool isEmpty() const noexcept

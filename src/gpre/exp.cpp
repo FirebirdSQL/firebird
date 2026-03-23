@@ -43,8 +43,8 @@
 #include "../gpre/sqe_proto.h"
 #include "../gpre/sql_proto.h"
 
-const int ZERO_BASED	= 0;
-const int ONE_BASED		= 1;
+constexpr int ZERO_BASED	= 0;
+constexpr int ONE_BASED		= 1;
 
 static bool check_relation();
 static gpre_nod* lookup_field(gpre_ctx*);
@@ -149,11 +149,11 @@ gpre_fld* EXP_cast(gpre_fld* field)
 	{
 	case dtype_varying:
 		cast->fld_length++;
-		// fall back
+		[[fallthrough]];
 
 	case dtype_cstring:
 		cast->fld_length++;
-		// fall back
+		[[fallthrough]];
 
 	case dtype_text:
 		if (gpreGlob.sw_cstring && !(cast->fld_dtype == dtype_cstring))
@@ -361,7 +361,10 @@ gpre_nod* EXP_literal()
 	case KW_TIMESTAMP:
 		reference->ref_flags |= REF_timestamp;
 		break;
-		// Do not put a default here
+
+	default:
+		// not a datetime
+		break;
 	}
 	// End date/time/timestamp
 
@@ -402,7 +405,7 @@ SINT64 EXP_SINT64_ordinal(bool advance_flag)
 	sscanf(gpreGlob.token_global.tok_string, format, &n);
 
 	char buffer[64];
-	sprintf(buffer, format, n);
+	snprintf(buffer, sizeof(buffer), format, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -427,7 +430,7 @@ SLONG EXP_SLONG_ordinal(bool advance_flag)
 
 	const SLONG n = atoi(gpreGlob.token_global.tok_string);
 	char buffer[32];
-	sprintf(buffer, "%" SLONGFORMAT, n);
+	snprintf(buffer, sizeof(buffer), "%" SLONGFORMAT, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -477,7 +480,7 @@ ULONG EXP_ULONG_ordinal(bool advance_flag)
 
 	const ULONG n = atoi(gpreGlob.token_global.tok_string);
 	char buffer[32];
-	sprintf(buffer, "%" ULONGFORMAT, n);
+	snprintf(buffer, sizeof(buffer), "%" ULONGFORMAT, n);
 	if (strcmp(buffer, gpreGlob.token_global.tok_string) != 0)
 		PAR_error("Numeric value out of range");
 
@@ -569,8 +572,6 @@ void EXP_post_array( ref* reference)
 
 ref* EXP_post_field(gpre_fld* field, gpre_ctx* context, bool null_flag)
 {
-	TEXT s[128];
-
 	gpre_req* request = context->ctx_request;
 
 	// If the reference is already posted, return the reference
@@ -593,7 +594,9 @@ ref* EXP_post_field(gpre_fld* field, gpre_ctx* context, bool null_flag)
 						reference->ref_field = field;
 					else
 					{
-						sprintf(s, "field %s is inconsistently cast", field->fld_symbol->sym_string);
+						TEXT s[BUFFER_MEDIUM];
+						snprintf(s, sizeof(s), "field %s is inconsistently cast",
+							field->fld_symbol->sym_string);
 						PAR_error(s);
 					}
 				}
@@ -1026,13 +1029,13 @@ static gpre_nod* normalize_index( dim* dimension, gpre_nod* user_index, USHORT a
 	case ZERO_BASED:
 		if (dimension->dim_lower < 0)
 			negate = true;
-		sprintf(string, "%d", abs(dimension->dim_lower));
+		snprintf(string, sizeof(string), "%d", abs(dimension->dim_lower));
 		break;
 
 	case ONE_BASED:
 		if (dimension->dim_lower - 1 < 0)
 			negate = true;
-		sprintf(string, "%d", abs(dimension->dim_lower - 1));
+		snprintf(string, sizeof(string), "%d", abs(dimension->dim_lower - 1));
 		break;
 
 	default:
@@ -1125,7 +1128,7 @@ static gpre_nod* par_array(gpre_req* request, gpre_fld* field, bool subscript_fl
 			gpre_nod* index_node = MSC_unary(nod_index, node);
 
 			// Languages which can't handle negative or non-positive bounds need to
-			// be accomodated with normalization of the indices.
+			// be accommodated with normalization of the indices.
 
 			switch (gpreGlob.sw_language)
 			{
@@ -1138,11 +1141,15 @@ static gpre_nod* par_array(gpre_req* request, gpre_fld* field, bool subscript_fl
 			case lang_cobol:
 				index_node->nod_arg[0] = normalize_index(dimension, index_node->nod_arg[0], ONE_BASED);
 				break;
+
+			default:
+				// No normalization needed
+				break;
 			}
 
 			// Error checking of constants being out of range will be here in the future.
 
-			// Good ole Fortran's column major order needs to be accomodated.
+			// Good ole Fortran's column major order needs to be accommodated.
 
 			if (gpreGlob.sw_language == lang_fortran)
 				array_node->nod_arg[fortran_adjustment - i] = index_node;
@@ -1304,8 +1311,6 @@ static gpre_nod* par_multiply( gpre_req* request, gpre_fld* field)
 
 static gpre_nod* par_native_value( gpre_req* request, gpre_fld* field)
 {
-	TEXT s[64];
-
 	// Special case literals
 
 	if (gpreGlob.token_global.tok_type == tok_number ||
@@ -1327,7 +1332,8 @@ static gpre_nod* par_native_value( gpre_req* request, gpre_fld* field)
 
 	if (!field)
 	{
-		sprintf(s, "no reference field for %s", reference->ref_value);
+		TEXT s[64];
+		snprintf(s, sizeof(s), "no reference field for %s", reference->ref_value);
 		PAR_error(s);
 	}
 
@@ -1379,18 +1385,18 @@ static gpre_nod* par_over( gpre_ctx* context)
 		gpre_nod* field1 = lookup_field(context);
 		if (!field1)
 		{
-			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		gpre_nod* field2 = NULL;
 		for (gpre_ctx* next = context->ctx_next; next; next = next->ctx_next)
 		{
-			if (field2 = lookup_field(next))
+			if ((field2 = lookup_field(next)))
 				break;
 		}
 		if (!field2)
 		{
-			fb_utils::snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
+			snprintf(s, sizeof(s), "OVER field %s undefined", gpreGlob.token_global.tok_string);
 			PAR_error(s);
 		}
 		boolean = make_and(boolean, MSC_binary(nod_eq, field1, field2));

@@ -13,7 +13,7 @@ m4_ifdef([AC_CONFIG_MACRO_DIR],
          [m4_define([AC_CONFIG_MACRO_DIR], [])])
 AC_CONFIG_MACRO_DIR(m4)
 
-AC_CONFIG_HEADER(src/include/gen/autoconfig.auto:builds/make.new/config/config.h.in)
+AC_CONFIG_HEADER(gen/autoconfig.auto:builds/make.new/config/config.h.in)
 
 dnl XE_APPEND(value, varname)
 define([XE_APPEND],[[$2]="$[$2] [$1]"])
@@ -73,11 +73,11 @@ sinclude(binreloc.m4)
 
 dnl ############################# ADD TESTS BELOW ##############################
 
-AC_CANONICAL_BUILD
-CPU_TYPE=$build_cpu
+AC_CANONICAL_HOST
+CPU_TYPE=$host_cpu
 AC_SUBST(CPU_TYPE)
 
-case "$build" in
+case "$host" in
   aarch64-*-darwin*)
     VCPKG_TRIPLET=fb-arm64-osx
     ;;
@@ -98,7 +98,7 @@ if test "x$VCPKG_TRIPLET" != "x" ; then
   AC_SUBST(VCPKG_INSTALLED)
 fi
 
-dnl EKU: set appropiate defaults for each platform
+dnl EKU: set appropriate defaults for each platform
 dnl      EDITLINE_FLG     : support fancy command line editing in isql
 dnl      SHRLIB_EXT       : suffix of shared library files
 
@@ -118,7 +118,7 @@ STD_EDITLINE=false
 dnl Test for special ar options?
 AR_OPT_CHECK=false
 
-case "$build" in
+case "$host" in
   aarch64-*-darwin*)
     MAKEFILE_PREFIX=darwin_aarch64
     MAKEFILE_POSTFIX=darwin
@@ -174,28 +174,9 @@ dnl CPU_TYPE=ppc64
 	EXPORT_SYMBOLS_STYLE=darwin
     ;;
 
-  powerpc-*-aix*)
-    dnl ibm xlC has many invocations, like xlC, xlc++, or xlc_r7
-    comp=`echo "$CXX" | cut -c1-3 | dd conv=lcase 2>/dev/null`
-    if test "$comp" = "xlc"; then
-        AR_OPT_CHECK=true
-        TLS_OPTIONS="-qtls=default"
-        MAKEFILE_PREFIX=aix_powerpc_xlc
-    else
-        MAKEFILE_PREFIX=aix_powerpc
-    fi
-    MAKEFILE_POSTFIX=aix
-    PLATFORM=AIX
-    INSTALL_PREFIX=aix
-    AC_DEFINE(AIX, 1, [Define this if OS is AIX])
-    EDITLINE_FLG=N
-    SHRLIB_EXT=so
-	EXPORT_SYMBOLS_STYLE=aix
-    ;;
-
   amd64-*-freebsd* | x86_64*-*-freebsd* | x86_64*-*-k*bsd*-gnu)
     MAKEFILE_PREFIX=freebsd_amd64
-    case "$build" in
+    case "$host" in
         x86_64*-*-k*bsd-gnu)      # Debian/kFreeBSD
             PLATFORM=GENTOOFREEBSD
             INSTALL_PREFIX=linux
@@ -251,7 +232,7 @@ dnl CPU_TYPE=ppc64
 
   *-*-freebsd* | *-*-k*bsd*-gnu)
     MAKEFILE_PREFIX=freebsd
-    case "$build" in
+    case "$host" in
         *-*-k*bsd-gnu)      # Debian/kFreeBSD
             PLATFORM=GENTOOFREEBSD
             INSTALL_PREFIX=linux
@@ -542,51 +523,6 @@ dnl CPU_TYPE=ppc64
 	EXPORT_SYMBOLS_STYLE=hpux
     ;;
 
-  i386-pc-solaris*)
-    dnl detect native compiler, Sun Studio Pro
-    comp=`echo "$CXX" | cut -c1-2`
-    case $comp in
-       CC) MAKEFILE_PREFIX=solaris
-           PTHREAD_CFLAGS=-mt
-           PTHREAD_LIBS=-lpthread
-           ;;
-       *)  MAKEFILE_PREFIX=solx86gcc ;
-           PTHREAD_CFLAGS=-pthreads ;;
-    esac
-    dnl if this is amd64 system, we should install our libraries in /usr/lib/amd64
-    isa=`isainfo -k`
-    if test "$isa" = "amd64"; then
-        libdir=/usr/lib/amd64
-    fi
-    CAS_OPTIONS=`pwd`"/src/common/classes/fb_cas_sax.il";
-    INSTALL_PREFIX=solaris
-    PLATFORM=solx86
-    AC_DEFINE(solx86, 1, [Define this if OS is Solarix x86])
-    EDITLINE_FLG=Y
-    SHRLIB_EXT=so
-    ;;
-
-  sparc-sun-solaris*)
-    dnl detect native compiler, Sun Studio Pro
-    comp=`echo "$CXX" | cut -c1-3`
-    case $comp in
-       CC)
-           MAKEFILE_PREFIX=solaris
-           PTHREAD_CFLAGS=-mt
-           PTHREAD_LIBS=-lpthread
-           ;;
-       *)
-           MAKEFILE_PREFIX=solaris-64gcc
-           ;;
-    esac
-    CAS_OPTIONS=`pwd`"/src/common/classes/fb_cas.il";
-    INSTALL_PREFIX=solaris
-    PLATFORM=SOLARIS
-    AC_DEFINE(SOLARIS, 1, [Define this if OS is Solaris Sparc])
-    EDITLINE_FLG=Y
-    SHRLIB_EXT=so
-    ;;
-
   *-*-mingw*)
     MAKEFILE_PREFIX=mingw
     PLATFORM=win32
@@ -598,7 +534,7 @@ dnl CPU_TYPE=ppc64
     ;;
 
   *)
-    AC_MSG_ERROR(unsupported platform ${build})
+    AC_MSG_ERROR(unsupported platform ${host})
     ;;
 esac
 
@@ -715,11 +651,11 @@ CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
 
-case "$build" in
+case "$host" in
   *-*-darwin*)
     CFLAGS="$CFLAGS -I${VCPKG_INSTALLED}/include"
     CXXFLAGS="$CXXFLAGS -nostdinc++ -isystem ${VCPKG_INSTALLED}/include/c++/v1 -I${VCPKG_INSTALLED}/include"
-    LDFLAGS="$LDFLAGS -nostdlib++ -stdlib=libc++ -L${VCPKG_INSTALLED}/lib -lc++"
+    LDFLAGS="$LDFLAGS -nostdlib++ -L${VCPKG_INSTALLED}/lib -lc++"
     ;;
 esac
 
@@ -879,7 +815,7 @@ AC_SUBST(GPRE_LANGUAGE_MODULES)
 dnl Compression switch
 COMPRESSION=Y
 AC_ARG_WITH(wire-compress,
-  [  --with-wire-compress    support compression of data, transfered over the wire (default=yes)],
+  [  --with-wire-compress    support compression of data, transferred over the wire (default=yes)],
   [case "$withval" in
      yes) ;;
      no)  COMPRESSION=N;;
@@ -1078,7 +1014,7 @@ dnl if 64-bit mode, then archive tool, ar, needs -X64 option
 fi
 
 XE_SAVE_ENV()
-CXXFLAGS="$CXXFLAGS -std=c++17"
+CXXFLAGS="$CXXFLAGS -std=c++20"
 AC_CACHE_CHECK([whether the C++ compiler understands noexcept], [ac_cv_cxx_noexcept], [
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[int f(int x) noexcept { return x + 1; }]], [[]])],
 	[ac_cv_cxx_noexcept=yes], [ac_cv_cxx_noexcept=no])])
@@ -1173,9 +1109,10 @@ AC_CHECK_FUNCS(clock_gettime)
 
 dnl Checks for pthread functions
 AC_CHECK_FUNCS(pthread_mutexattr_setprotocol)
-AC_CHECK_FUNCS(pthread_mutexattr_setrobust_np)
-AC_CHECK_FUNCS(pthread_mutex_consistent_np)
-AC_CHECK_FUNCS(pthread_rwlockattr_setkind_np)
+AC_CHECK_FUNCS(pthread_mutexattr_setrobust)
+AC_CHECK_FUNCS(pthread_mutex_consistent)
+AC_CHECK_FUNCS(pthread_mutex_timedlock)
+AC_CHECK_FUNCS(pthread_rwlockattr_setkind)
 AC_CHECK_FUNCS(pthread_cancel)
 AC_CHECK_FUNCS(pthread_atfork)
 AC_CHECK_FUNCS(sigset)
@@ -1313,36 +1250,6 @@ case "$PLATFORM" in
        #include <sys/socket.h>]], [[socklen_t s;]])],[AC_DEFINE(HAVE_SOCKLEN_T) AC_MSG_RESULT(yes)],[AC_MSG_RESULT(no)])
     ;;
 
-  SOLARIS|solx86)
-    if test "$EDITLINE_FLG" = "Y"; then
-       AC_CHECK_LIB(termcap, main, XE_APPEND(-ltermcap,EDITLINE_A))
-    fi
-
-    AC_CHECK_TYPES([caddr_t])
-
-    AC_ARG_WITH(sfio,
-      AS_HELP_STRING([--with-sfio=PATH],[use sfio (replacement stdio on Solaris) (default=no)]),
-		[ac_cv_use_sfio=$withval],[ac_cv_use_sfio=no])
-
-    if test "$ac_cv_use_sfio" = "no"; then
-      SFIO_DIR=""
-      SFIO_FLAGS=""
-      SFIO_LDFLAGS=""
-    else
-      AC_CHECK_LIB(sfio, main)
-      dnl Kkuznetsov: using sfio-mt looks like double protecting of FILE*
-      dnl and I avoid to use vthread based on posix threading
-      #AC_CHECK_LIB(sfio-mt, main,,
-      #AC_MSG_ERROR([sfio library not found]),-lvthread)
-      #XE_PREPEND(-lvthread,LIBS)
-
-      SFIO_DIR="$ac_cv_use_sfio"
-      SFIO_FLAGS="-DSFIO -I$ac_cv_use_sfio/include"
-      SFIO_LDFLAGS="-L$ac_cv_use_sfio/lib"
-      SFIO_EXAMPLES="Y"
-    fi
-    ;;
-
   win32)
     XE_PREPEND( -mthreads -lmpr -lversion -lws2_32 -lole32,LIBS)
     ;;
@@ -1364,20 +1271,15 @@ AC_SUBST(CAS_OPTIONS)
 
 dnl ##################### DO NOT ADD ANY TESTS BELOW ###########################
 
-AC_SUBST(SFIO_DIR)
-AC_SUBST(SFIO_FLAGS)
-AC_SUBST(SFIO_LDFLAGS)
-AC_SUBST(SFIO_EXAMPLES)
-
 dnl The following file defines the version number strings. Specially for install/uninstall routines
-CXX="$CXX" . ./src/misc/writeBuildNum.sh
+CXX="$CXX" . "$srcdir/src/misc/writeBuildNum.sh"
 
 AC_SUBST(FIREBIRD_VERSION)
 AC_SUBST(FIREBIRD_PACKAGE_VERSION)
 AC_SUBST(FB_BUILD_NUM, $BuildNum)
 
 BUILD_ROOT_DIR=`pwd`
-SRC_ROOT=$BUILD_ROOT_DIR/src
+SRC_ROOT=$srcdir/src
 GEN_ROOT=$BUILD_ROOT_DIR/gen
 NEW_FIREBIRD_DIR=$GEN_ROOT/firebird
 
@@ -1391,6 +1293,9 @@ FB_TARGETS="Debug Release"
 test "x$CROSS" = "x" || FB_TARGETS="$FB_TARGETS Native"
 
 AC_CONFIG_COMMANDS(,,[
+
+mkdir -p src/dsql
+mkdir -p src/include/gen
 
 FB_TARGETS="$FB_TARGETS"
 for fb_tgt in \$FB_TARGETS; do
@@ -1428,32 +1333,32 @@ dnl # output
 		fi
 	fi
 
-  case "$build" in
+  case "$host" in
     *-*-darwin*)
       cp -a $VCPKG_INSTALLED/lib/libicu* gen/\$fb_tgt/firebird/lib/
       install_name_tool -id @rpath/lib/libicuuc.dylib gen/\$fb_tgt/firebird/lib/libicuuc.dylib
       install_name_tool -id @rpath/lib/libicui18n.dylib gen/\$fb_tgt/firebird/lib/libicui18n.dylib
       install_name_tool -id @rpath/lib/libicudata.dylib gen/\$fb_tgt/firebird/lib/libicudata.dylib
-      install_name_tool -change @rpath/libicudata.71.dylib @loader_path/libicudata.71.dylib gen/\$fb_tgt/firebird/lib/libicuuc.71.dylib
-      install_name_tool -change @rpath/libicudata.71.dylib @loader_path/libicudata.71.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.dylib
-      install_name_tool -change @rpath/libicuuc.71.dylib @loader_path/libicuuc.71.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.dylib
+      install_name_tool -change @rpath/libicudata.71.1.dylib @loader_path/libicudata.71.1.dylib gen/\$fb_tgt/firebird/lib/libicuuc.71.1.dylib
+      install_name_tool -change @rpath/libicudata.71.1.dylib @loader_path/libicudata.71.1.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.1.dylib
+      install_name_tool -change @rpath/libicuuc.71.1.dylib @loader_path/libicuuc.71.1.dylib gen/\$fb_tgt/firebird/lib/libicui18n.71.1.dylib
       ;;
   esac
 
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
-	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
+	for src_dir in `cd "$srcdir/src"; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
     	mkdir -p temp/\$fb_tgt/\$src_dir
 	done
 
-	for src_dir in `ls -R -1 examples | grep : | tr -d : | tr "\n" " "`; do
+	for src_dir in `cd "$srcdir/examples"; ls -R -1 * | grep : | tr -d : | tr "\n" " "`; do
    		mkdir -p temp/\$fb_tgt/\$src_dir
 	done
 
-	src/misc/writeBuildNum.sh createMakeVersion gen/Make.Version
+	"$srcdir/src/misc/writeBuildNum.sh" createMakeVersion gen/Make.Version
 done
 
 dnl # rebuild version header if needed
-./src/misc/writeBuildNum.sh rebuildHeader
+"$srcdir/src/misc/writeBuildNum.sh" rebuildHeader
 
 ])
 
@@ -1552,26 +1457,6 @@ case "$PLATFORM" in
     [chmod a+x gen/install/*.sh 2>/dev/null])
     ;;
 
-  AIX)
-    AIX_INSTALL_SRC_DIR=builds/install/arch-specific/aix
-    AC_CONFIG_FILES([gen/install/makeInstallImage.aix.sh:${AIX_INSTALL_SRC_DIR}/makeInstallImage.sh.in
-    gen/firebird/bin/preinstall.aix.sh:builds/install/arch-specific/aix/misc/preinstall.sh.in
-    gen/firebird/bin/tarinstall.aix.sh:builds/install/arch-specific/aix/misc/tarinstall.sh.in
-    gen/firebird/bin/tarmaininstall.aix.sh:builds/install/arch-specific/aix/misc/tarmaininstall.sh.in
-    gen/firebird/bin/taruninstall.aix.sh:builds/install/arch-specific/aix/misc/taruninstall.sh.in
-    gen/firebird/bin/tarmainuninstall.aix.sh:builds/install/arch-specific/aix/misc/tarmainuninstall.sh.in
-    gen/firebird/bin/postinstall.aix.sh:builds/install/arch-specific/aix/misc/postinstall.sh.in
-    gen/firebird/bin/preuninstall.aix.sh:builds/install/arch-specific/aix/misc/preuninstall.sh.in
-    gen/firebird/bin/postuninstall.aix.sh:builds/install/arch-specific/aix/misc/postuninstall.sh.in
-    gen/install/misc/firebird.init.d.aix:builds/install/arch-specific/aix/misc/firebird.init.d.aix.in
-    gen/install/misc/rc.config.firebird.aix:builds/install/arch-specific/aix/misc/rc.config.firebird.aix.in
-    gen/firebird/bin/changedbapassword.aix.sh:builds/install/misc/changeDBAPassword.sh.in
-    gen/firebird/bin/changemulticonnectmode.aix.sh:builds/install/misc/changeServerMode.sh.in
-    gen/firebird/bin/changegdslibrarycompatiblelink.aix.sh:builds/install/misc/changeGdsLibraryCompatibleLink.sh.in
-    gen/firebird/bin/createaliasdb.aix.sh:builds/install/misc/createAliasDB.sh.in
-    gen/firebird/bin/aixLibrary.sh:builds/install/arch-specific/aix/misc/aixLibrary.sh.in],
-    [chmod a+x gen/install/*.sh 2>/dev/null])
-    ;;
   FREEBSD)
     AC_CONFIG_FILES([gen/install/install.sh:builds/install/arch-specific/freebsd/install.sh.in
                      gen/firebird/bin/freebsdLibrary.sh:builds/install/arch-specific/freebsd/freebsdLibrary.sh.in]
@@ -1582,18 +1467,6 @@ case "$PLATFORM" in
   NETBSD)
     AC_CONFIG_FILES([gen/install/install.netbsd.sh:builds/install/arch-specific/netbsd/install.sh.in]
       ,[chmod a+x gen/install/install.netbsd.sh 2>/dev/null])
-    ;;
-
-
-  solx86|SOLARIS)
-    AC_CONFIG_FILES([gen/install/Pkginfo:builds/install/arch-specific/solaris/pkginfo.in
-                     gen/install/prototype.main:builds/install/arch-specific/solaris/prototype.in
-                     gen/install/Preinstall:builds/install/arch-specific/solaris/preinstall.in
-                     gen/install/Postinstall:builds/install/arch-specific/solaris/postinstall.in
-                     gen/install/Postremove:builds/install/arch-specific/solaris/postremove.in
-                     gen/install/prototypelg:builds/install/arch-specific/solaris/libgcc/prototypelg.in
-                     gen/install/pkginfolg:builds/install/arch-specific/solaris/libgcc/pkginfolg.in
-      ],[chmod a+x gen/install/Pre* gen/install/Post* 2>/dev/null])
     ;;
 
   DARWIN)
@@ -1626,14 +1499,6 @@ if test "$STD_EDITLINE" = "false"; then
   AC_CONFIG_FILES(gen/Makefile.extern.editline:${MAKE_SRC_DIR}/Makefile.in.extern.editline)
 fi
 
-
-case "$PLATFORM" in
-  SOLARIS | solx86 )
-AC_CONFIG_FILES(
-gen/make.platform.solaris.examples:${MAKE_SRC_DIR}/make.platform.solaris.examples
-)
-;;
-esac
 
 # Fix problem with autoconf 2.72 inserting -std in CXX.
 CXX=`echo "$CXX" | sed -e 's/\(-std=c++11\)//g' -e 's/\(-std=gnu++11\)//g'`

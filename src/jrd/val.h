@@ -31,11 +31,13 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
+#include "../common/classes/TriState.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
-#include "../jrd/QualifiedName.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/dsc.h"
+#include "../jrd/align.h"
+#include "../common/sha2/sha2.h"
 
 #define FLAG_BYTES(n)	(((n + BITS_PER_LONG) & ~((ULONG)BITS_PER_LONG - 1)) >> 3)
 
@@ -49,7 +51,7 @@ public:
 	UCHAR str_data[2];			// one byte for ALLOC and one for the NULL
 };
 
-const ULONG MAX_RECORD_SIZE	= 65535;
+inline constexpr ULONG MAX_RECORD_SIZE	= 1048576; // 1 MB -- just to protect from possible misuse
 
 namespace Jrd {
 
@@ -101,9 +103,7 @@ public:
 	ValueExprNode** end() { return m_values.end(); }
 
 	const SortedValueList* init(thread_db* tdbb, Request* request) const;
-
-	bool find(thread_db* tdbb, Request* request,
-			  const ValueExprNode* value, const dsc* desc) const;
+	Firebird::TriState find(thread_db* tdbb, Request* request, const ValueExprNode* value, const dsc* desc) const;
 
 private:
 	Firebird::HalfStaticArray<ValueExprNode*, 4> m_values;
@@ -169,6 +169,13 @@ struct impure_value
 	void make_double(const double val);
 	void make_decimal128(const Firebird::Decimal128 val);
 	void make_decimal_fixed(const Firebird::Int128 val, const signed char scale);
+
+	template<class T>
+	VaryingString* getString(MemoryPool& pool, const T length) = delete; // Prevent dangerous length shrink
+	VaryingString* getString(MemoryPool& pool, const USHORT length);
+
+	void makeValueAddress(MemoryPool& pool);
+	void makeTextValueAddress(MemoryPool& pool);
 };
 
 // Do not use these methods where dsc_sub_type is not explicitly set to zero.
@@ -222,16 +229,50 @@ inline void impure_value::make_decimal_fixed(const Firebird::Int128 val, const s
 	this->vlu_desc.dsc_address = reinterpret_cast<UCHAR*>(&this->vlu_misc.vlu_int128);
 }
 
+inline VaryingString* impure_value::getString(MemoryPool& pool, const USHORT length)
+{
+	if (vlu_string && vlu_string->str_length < length)
+	{
+		delete vlu_string;
+		vlu_string = nullptr;
+	}
+
+	if (!vlu_string)
+	{
+		vlu_string = FB_NEW_RPT(pool, length) VaryingString();
+		vlu_string->str_length = length;
+	}
+
+	return vlu_string;
+}
+
+inline void impure_value::makeValueAddress(MemoryPool& pool)
+{
+	if (type_lengths[vlu_desc.dsc_dtype] == 0)
+	{
+		// If the data type is any of the string types, allocate space to hold value.
+		makeTextValueAddress(pool);
+	}
+	else
+		vlu_desc.dsc_address = (UCHAR*) &vlu_misc;
+}
+
+inline void impure_value::makeTextValueAddress(MemoryPool& pool)
+{
+	vlu_desc.dsc_address = getString(pool, vlu_desc.dsc_length)->str_data;
+}
+
+
 struct impure_value_ex : public impure_value
 {
 	SINT64 vlux_count;
 	blb* vlu_blob;
 };
 
-const int VLU_computed		= 1;	// An invariant sub-query has been computed
-const int VLU_null			= 2;	// An invariant sub-query computed to null
-const int VLU_checked		= 4;	// Constraint already checked in first read or assignment to argument/variable
-const int VLU_initialized	= 8;	// Variable initialized
+inline constexpr int VLU_computed		= 1;	// An invariant sub-query has been computed
+inline constexpr int VLU_null			= 2;	// An invariant sub-query computed to null
+inline constexpr int VLU_checked		= 4;	// Constraint already checked in first read or assignment to argument/variable
+inline constexpr int VLU_initialized	= 8;	// Variable initialized
 
 
 class Format : public pool_alloc<type_fmt>
@@ -264,6 +305,16 @@ public:
 	{
 		return FB_NEW_POOL(p) Format(p, len);
 	}
+
+	bool operator==(const Format& v) const
+	{
+		if ((fmt_length != v.fmt_length) || (fmt_count != v.fmt_count))
+			return false;
+
+		return fmt_desc == v.fmt_desc;
+	}
+
+	void hash(Firebird::sha512& digest) const;
 
 	ULONG fmt_length;
 	USHORT fmt_count;

@@ -407,8 +407,11 @@ static bool snarf_blob(ISC_QUAD* blob_id, TextBuffer& buffer)
 	if (!blob.open(DB, gds_trans, *blob_id))
 		return false;
 
-	SLONG blob_size;
+	FB_UINT64 blob_size;
 	if (!getBlobSize(blob, &blob_size, NULL, NULL))
+		return false;
+
+	if (blob_size > MAX_ULONG)
 		return false;
 
 	FB_SIZE_T len = blob_size;

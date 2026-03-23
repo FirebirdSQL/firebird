@@ -35,9 +35,9 @@
 #include "../utilities/install/install_proto.h"
 
 static USHORT inst_error(ULONG, const TEXT*);
-static void usage_exit();
+[[noreturn]] static void usage_exit();
 
-static const struct
+static constexpr struct
 {
 	const TEXT* name;
 	USHORT abbrev;
@@ -50,7 +50,7 @@ static const struct
 	{NULL, 0, 0}
 };
 
-static const struct
+static constexpr struct
 {
 	const TEXT* name;
 	USHORT abbrev;
@@ -242,7 +242,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 					if (sharedCount)
 					{
 						printf("Installed %s version : %u.%u.%u.%u "
-							"(shared DLL count %d)\n",
+							"(shared DLL count %u)\n",
 							clientname,
 							verMS >> 16, verMS & 0x0000ffff,
 							verLS >> 16, verLS & 0x0000ffff,
@@ -302,7 +302,7 @@ static USHORT inst_error(ULONG status, const TEXT* string)
 								sizeof(buffer),
 								NULL))
 		{
-			printf("Windows NT error %" SLONGFORMAT"\n", status);
+			printf("Windows NT error %u\n", status);
 		}
 		else
 		{
@@ -313,7 +313,7 @@ static USHORT inst_error(ULONG status, const TEXT* string)
 	return FB_FAILURE;
 }
 
-static void usage_exit()
+[[noreturn]] static void usage_exit()
 {
 /**************************************
  *

@@ -25,30 +25,30 @@
 #ifndef COMMON_STUFF_H
 #define COMMON_STUFF_H
 
-inline void add_byte(UCHAR* &blr, const int byte)
+inline void add_byte(UCHAR* &blr, const int byte) noexcept
 {
 	*blr++ = (SCHAR) (byte);
 }
 
-inline void add_word(UCHAR* &blr, const int word)
+inline void add_word(UCHAR* &blr, const int word) noexcept
 {
 	add_byte(blr, word);
 	add_byte(blr, (word) >> 8);
 }
 
-inline void add_long(UCHAR* &blr, const SLONG lg)
+inline void add_long(UCHAR* &blr, const SLONG lg) noexcept
 {
 	add_word(blr, lg);
 	add_word(blr, (lg) >> 16);
 }
 
-inline void add_int64(UCHAR* &blr, const SINT64 i64)
+inline void add_int64(UCHAR* &blr, const SINT64 i64) noexcept
 {
 	add_long(blr, i64);
 	add_long(blr, (i64) >> 32);
 }
 
-inline void add_string(UCHAR* &blr, const TEXT* string)
+inline void add_string(UCHAR* &blr, const TEXT* string) noexcept
 {
 	add_byte(blr, static_cast<int>(strlen(string)));
 	while (*string)

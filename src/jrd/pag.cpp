@@ -78,12 +78,13 @@
 #include "../jrd/cch.h"
 #include "../jrd/nbak.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "../jrd/vio_debug.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
 #include "../yvalve/gds_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ods_proto.h"
@@ -101,12 +102,12 @@ using namespace Firebird;
 
 namespace
 {
-	const char* const SCRATCH = "fb_table_";
-	const int MIN_EXTEND_BYTES = 128 * 1024;	// 128KB
+	constexpr const char* const SCRATCH = "fb_table_";
+	constexpr ULONG MIN_EXTEND_BYTES = 128 * 1024;	// 128KiB
 
 	inline void ensureDbWritable(thread_db* tdbb)
 	{
-		const auto dbb = tdbb->getDatabase();
+		const auto* dbb = tdbb->getDatabase();
 
 		if (dbb->readOnly())
 			ERR_post(Arg::Gds(isc_read_only_database));
@@ -115,11 +116,11 @@ namespace
 	class HeaderClumplet
 	{
 	public:
-		HeaderClumplet(header_page* header, USHORT type)
+		HeaderClumplet(header_page* header, USHORT type) noexcept
 			: m_header(header), m_type(type)
 		{}
 
-		UCHAR* find(const UCHAR** clump_end = nullptr) const
+		UCHAR* find(const UCHAR** clump_end = nullptr) const noexcept
 		{
 			UCHAR* p = m_header->hdr_data;
 			UCHAR* q = nullptr;
@@ -136,7 +137,7 @@ namespace
 			return q;
 		}
 
-		bool checkSpace(USHORT length) const
+		bool checkSpace(USHORT length) const noexcept
 		{
 			const auto freeSpace = m_header->hdr_page_size - m_header->hdr_end;
 			if (freeSpace > 2 + length)
@@ -266,99 +267,92 @@ namespace
 		CCH_RELEASE(tdbb, &window);
 	}
 
-	ULONG ensureDiskSpace(thread_db* tdbb, WIN* pip_window, const PageNumber pageNum, ULONG pipUsed)
+	ULONG ensureDiskSpace(thread_db* tdbb, WIN* pipWindow, const PageNumber pageNum, const ULONG pipUsed)
 	{
-		const auto dbb = tdbb->getDatabase();
-		PageManager& pageMgr = dbb->dbb_page_manager;
+		const auto* dbb = tdbb->getDatabase();
+		const PageManager& pageMgr = dbb->dbb_page_manager;
 		PageSpace* const pageSpace = pageMgr.findPageSpace(pageNum.getPageSpaceID());
 
-		ULONG newUsed = pipUsed;
 		const ULONG sequence = pageNum.getPageNum() / pageMgr.pagesPerPIP;
-		const ULONG relative_bit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
+		const ULONG relativeBit = pageNum.getPageNum() - sequence * pageMgr.pagesPerPIP;
+
+		if (relativeBit < pipUsed)
+			return pipUsed;
 
 		BackupManager::StateReadGuard stateGuard(tdbb);
-		const bool nbak_stalled = dbb->dbb_backup_manager->getState() == Ods::hdr_nbak_stalled;
 
-		USHORT next_init_pages = 1;
-		// ensure there are space on disk for faked page
-		if (relative_bit + 1 > pipUsed)
+		if (dbb->dbb_backup_manager->getState() == Ods::hdr_nbak_stalled)
 		{
-			fb_assert(relative_bit >= pipUsed);
-
-			USHORT init_pages = 0;
-			if (!nbak_stalled)
-			{
-				init_pages = 1;
-				if (!(dbb->dbb_flags & DBB_no_reserve))
-				{
-					const int minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
-
-					init_pages = sequence ? 64 : MIN(pipUsed / 16, 64);
-
-					// don't touch pages belongs to the next PIP
-					init_pages = MIN(init_pages, pageMgr.pagesPerPIP - pipUsed);
-
-					if (init_pages < minExtendPages)
-						init_pages = 1;
-				}
-
-				if (init_pages < relative_bit + 1 - pipUsed)
-					init_pages = relative_bit + 1 - pipUsed;
-
-				//init_pages = FB_ALIGN(init_pages, PAGES_IN_EXTENT);
-
-				next_init_pages = init_pages;
-
-				FbLocalStatus status;
-				const ULONG start = sequence * pageMgr.pagesPerPIP + pipUsed;
-
-				init_pages = PIO_init_data(tdbb, pageSpace->file, &status, start, init_pages);
-			}
-
-			if (init_pages)
-			{
-				newUsed += init_pages;
-			}
-			else
-			{
-				// PIO_init_data returns zero - perhaps it is not supported,
-				// no space left on disk or IO error occurred. Try to write
-				// one page and handle IO errors if any.
-				WIN window(pageNum);
-				CCH_fake(tdbb, &window, 1);
-				CCH_must_write(tdbb, &window);
-				try
-				{
-					CCH_RELEASE(tdbb, &window);
-				}
-				catch (const status_exception&)
-				{
-					// forget about this page as if we never tried to fake it
-					CCH_forget_page(tdbb, &window);
-
-					// normally all page buffers now released by CCH_unwind
-					// only exception is when TDBB_no_cache_unwind flag is set
-					if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-						CCH_RELEASE(tdbb, pip_window);
-
-					throw;
-				}
-
-				newUsed = relative_bit + 1;
-			}
+			// Our file is locked, so we can't extend it anyway.
+			// Delta will be extended via simple `write` syscalls.
+			return relativeBit + 1;
 		}
 
-		if (!(dbb->dbb_flags & DBB_no_reserve) && !nbak_stalled)
-		{
-			const ULONG initialized = sequence * pageMgr.pagesPerPIP + pipUsed;
+		USHORT initPages = 1;
 
-			// At this point we ensure database has at least "initialized" pages
-			// allocated. To avoid file growth by few pages when all this space
-			// will be used, extend file up to initialized + next_init_pages now
-			pageSpace->extend(tdbb, initialized + next_init_pages, false);
+		if (!(dbb->dbb_flags & DBB_no_reserve))
+		{
+			const unsigned minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
+
+			constexpr ULONG MAX_PAGES_IN_EXTENT = 64;
+			initPages = sequence ? MAX_PAGES_IN_EXTENT : MIN(pipUsed / 16, MAX_PAGES_IN_EXTENT);
+
+			// don't touch pages belongs to the next PIP
+			initPages = MIN(initPages, pageMgr.pagesPerPIP - pipUsed);
+
+			if (initPages < minExtendPages)
+				initPages = 1;
 		}
 
-		return newUsed;
+		if (initPages < relativeBit + 1 - pipUsed)
+			initPages = relativeBit + 1 - pipUsed;
+
+		// init_pages = FB_ALIGN(init_pages, PAGES_IN_EXTENT);
+
+		FbLocalStatus status;
+		const ULONG usedPages = sequence * pageMgr.pagesPerPIP + pipUsed;
+
+		const bool allocateExactNumberOfPages = dbb->dbb_flags & DBB_no_reserve;
+		if (const auto allocatedPages = pageSpace->extend(tdbb, usedPages + initPages, allocateExactNumberOfPages))
+			initPages = allocatedPages;
+		else
+		{
+			// For some reason fast file extension failed, maybe it is not supported by filesystem, or
+			// there is not enough space. Try the old way with writing zeroes to extend file.
+			initPages = PIO_init_data(tdbb, pageSpace->file, &status, usedPages, initPages);
+		}
+
+		if (!initPages)
+		{
+			// Zero pages was allocated - perhaps it is not supported,
+			// no space left on disk or IO error occurred. Try to write
+			// one page and handle IO errors if any.
+			WIN window(pageNum);
+			CCH_fake(tdbb, &window, 1);
+			CCH_must_write(tdbb, &window);
+			try
+			{
+				CCH_RELEASE(tdbb, &window);
+			}
+			catch (const status_exception&)
+			{
+				// forget about this page as if we never tried to fake it
+				CCH_forget_page(tdbb, &window);
+
+				// normally all page buffers now released by CCH_unwind
+				// only exception is when TDBB_no_cache_unwind flag is set
+				if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
+					CCH_RELEASE(tdbb, pipWindow);
+
+				throw;
+			}
+
+			return relativeBit + 1;
+		}
+
+		// We can allocate more pages than we requested, so don't return value bigger
+		// than PIP can handle (`pagesPerPIP` is limit)
+		return MIN(pipUsed + initPages, pageMgr.pagesPerPIP);
 	}
 
 } // namespace
@@ -449,9 +443,9 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
  *
  **************************************/
 	SET_TDBB(tdbb);
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
-	PageManager& pageMgr = dbb->dbb_page_manager;
+	const PageManager& pageMgr = dbb->dbb_page_manager;
 	PageSpace* const pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
 	fb_assert(pageSpace);
 
@@ -659,6 +653,7 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 
 			pip_page->pip_min = pipMin;
 			pip_page->pip_extent = pipExtent;
+			fb_assert(pipUsed <= pageMgr.pagesPerPIP);
 			pip_page->pip_used = pipUsed;
 
 			for (const ULONG *bit = extraPages.begin(); bit < extraPages.end(); bit++)
@@ -838,7 +833,7 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
 	// Initialize first SCN's Page
 	pageSpace.scnFirst = 0;
@@ -865,7 +860,7 @@ void PAG_format_pip(thread_db* tdbb, PageSpace& pageSpace)
 		pages->pip_header.pag_type = pag_pages;
 		pages->pip_used = (pageSpace.scnFirst ? pageSpace.scnFirst : pageSpace.pipFirst) + 1;
 		pages->pip_min = pages->pip_used;
-		int count = dbb->dbb_page_size - static_cast<int>(offsetof(page_inv_page, pip_bits[0]));
+		const int count = dbb->dbb_page_size - static_cast<int>(offsetof(page_inv_page, pip_bits[0]));
 
 		memset(pages->pip_bits, 0xFF, count);
 
@@ -943,7 +938,7 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 
-	const auto attachment = tdbb->getAttachment();
+	const auto* attachment = tdbb->getAttachment();
 	fb_assert(attachment);
 
 	WIN window(HEADER_PAGE_NUMBER);
@@ -969,13 +964,13 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	jrd_rel* relation = MET_relation(tdbb, 0);
+	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, 0u, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 	RelationPages* relPages = relation->getBasePages();
 	if (!relPages->rel_pages)
 	{
 		// NS: There's no need to reassign first page for RDB$PAGES relation since
 		// current code cannot change its location after database creation.
-		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
+		vcl* vector = vcl::newVector(relation->getPool(), 1);
 		relPages->rel_pages = vector;
 		(*vector)[0] = header->hdr_PAGES;
 	}
@@ -1097,7 +1092,7 @@ void PAG_header_init(thread_db* tdbb)
 	SET_TDBB(tdbb);
 	const auto dbb = tdbb->getDatabase();
 
-	const auto attachment = tdbb->getAttachment();
+	const auto* attachment = tdbb->getAttachment();
 	fb_assert(attachment);
 
 	// Allocate a spare buffer which is large enough,
@@ -1115,10 +1110,15 @@ void PAG_header_init(thread_db* tdbb)
 	HalfStaticArray<UCHAR, RAW_HEADER_SIZE + PAGE_ALIGNMENT> temp;
 	UCHAR* const temp_page = temp.getAlignedBuffer(headerSize, ioBlockSize);
 
-	PIO_header(tdbb, temp_page, headerSize);
-	const header_page* header = (header_page*) temp_page;
+	if (!PIO_header(tdbb, temp_page, headerSize))
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
-	if (header->hdr_header.pag_type != pag_header)
+	const auto* header = (header_page*) temp_page;
+
+	if (header->hdr_header.pag_type != pag_header || header->hdr_header.pag_pageno != HEADER_PAGE)
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
+	if (header->hdr_page_size < PAGE_SIZE_BASE || header->hdr_page_size % PAGE_SIZE_BASE != 0)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
 	const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
@@ -1150,6 +1150,16 @@ void PAG_header_init(thread_db* tdbb)
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
 	if (header->hdr_page_size < MIN_PAGE_SIZE || header->hdr_page_size > MAX_PAGE_SIZE)
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
+	if (header->hdr_page_size % MIN_PAGE_SIZE != 0)
+		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
+
+	// Pagespace is already created at this point, so validate the database file
+	// to contain at least one full page
+	const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+	fb_assert(pageSpace && pageSpace->file);
+	if (!PIO_get_number_of_pages(pageSpace->file, header->hdr_page_size))
 		ERR_post(Arg::Gds(isc_bad_db_format) << Arg::Str(attachment->att_filename));
 
 	dbb->dbb_ods_version = ods_version;
@@ -1221,7 +1231,7 @@ void PAG_init2(thread_db* tdbb)
 	const auto dbb = tdbb->getDatabase();
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const auto* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 
 	for (const UCHAR* p = header->hdr_data; *p != HDR_end; p += 2 + p[1])
 	{
@@ -1260,7 +1270,7 @@ SLONG PAG_last_page(thread_db* tdbb)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
 	return PageSpace::lastUsedPage(dbb);
 }
@@ -1300,10 +1310,16 @@ void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
  *	Release a few pages to the free page page.
  *
  **************************************/
+	if (cntRelease <= 0)
+	{
+		// nothing to release
+		fb_assert(false);
+		return;
+	}
 	SET_TDBB(tdbb);
-	const auto dbb = tdbb->getDatabase();
+	const auto* dbb = tdbb->getDatabase();
 
-	PageManager& pageMgr = dbb->dbb_page_manager;
+	const PageManager& pageMgr = dbb->dbb_page_manager;
 	PageSpace* const pageSpace = pageMgr.findPageSpace(pageSpaceID);
 	fb_assert(pageSpace);
 
@@ -1516,7 +1532,7 @@ void PAG_set_db_readonly(thread_db* tdbb, bool flag)
 		// Take into account current attachment ID, else next attachment
 		// (cache writer, for examle) will get the same att ID and wait
 		// for att lock indefinitely.
-		Attachment* att = tdbb->getAttachment();
+		const Attachment* att = tdbb->getAttachment();
 		if (att->att_attachment_id)
 			header->hdr_attachment_id = att->att_attachment_id;
 
@@ -1751,7 +1767,7 @@ ULONG PageSpace::maxAlloc(const Database* dbb)
 	return pgSpace->maxAlloc();
 }
 
-bool PageSpace::onRawDevice() const
+bool PageSpace::onRawDevice() const noexcept
 {
 	return (file->fil_flags & FIL_raw_device) != 0;
 }
@@ -1777,18 +1793,18 @@ ULONG PageSpace::lastUsedPage()
 
 	while (true)
 	{
-		pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+		const pag* page = CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
 
 		if (moveUp)
 		{
 			fb_assert(page->pag_type == pag_pages);
 
-			page_inv_page* pip = (page_inv_page*) page;
+			const page_inv_page* pip = (page_inv_page*) page;
 
 			if (pip->pip_used != pageMgr.pagesPerPIP)
 				break;
 
-			UCHAR lastByte = pip->pip_bits[pageMgr.bytesBitPIP - 1];
+			const UCHAR lastByte = pip->pip_bits[pageMgr.bytesBitPIP - 1];
 			if (lastByte & 0x80)
 				break;
 		}
@@ -1817,29 +1833,32 @@ ULONG PageSpace::lastUsedPage()
 		window.win_page = pipLast;
 	}
 
-	page_inv_page* pip = (page_inv_page*) window.win_buffer;
+	const page_inv_page* pip = (page_inv_page*) window.win_buffer;
 
-	int last_bit = pip->pip_used;
-	int byte_num = last_bit / 8;
-	UCHAR mask = 1 << (last_bit % 8);
-	while (last_bit >= 0 && (pip->pip_bits[byte_num] & mask))
+	int last_bit = pip->pip_used - 1;
+	if (pip->pip_used > 0)
 	{
-		if (mask == 1)
+		int byte_num = last_bit / 8;
+		UCHAR mask = 1 << (last_bit % 8);
+		while (last_bit >= 0 && (pip->pip_bits[byte_num] & mask))
 		{
-			mask = 0x80;
-			byte_num--;
-			//fb_assert(byte_num > -1); ???
-		}
-		else
-			mask >>= 1;
+			if (mask == 1)
+			{
+				mask = 0x80;
+				byte_num--;
+				//fb_assert(byte_num > -1); ???
+			}
+			else
+				mask >>= 1;
 
-		last_bit--;
+			last_bit--;
+		}
 	}
 
 	CCH_RELEASE(tdbb, &window);
 	pipMaxKnown = pipLast;
 
-	return last_bit + (pipLast == pipFirst ? 0 : pipLast);
+	return last_bit + 1 + (pipLast == pipFirst ? 0 : pipLast);
 }
 
 ULONG PageSpace::lastUsedPage(const Database* dbb)
@@ -1898,7 +1917,7 @@ ULONG PageSpace::usedPages()
 
 	while (true)
 	{
-		page_inv_page* pip = (page_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+		const page_inv_page* pip = (page_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
 		if (pip->pip_header.pag_type != pag_pages)
 		{
 			CCH_RELEASE(tdbb, &window);
@@ -1932,7 +1951,7 @@ ULONG PageSpace::usedPages(const Database* dbb)
 	return pgSpace->usedPages();
 }
 
-bool PageSpace::extend(thread_db* tdbb, const ULONG pageNum, const bool forceSize)
+ULONG PageSpace::extend(thread_db* tdbb, const ULONG pageNum, bool forceSize)
 {
 /**************************************
  *
@@ -1941,67 +1960,79 @@ bool PageSpace::extend(thread_db* tdbb, const ULONG pageNum, const bool forceSiz
  *	extend can't be less than hardcoded value MIN_EXTEND_BYTES and more than
  *	configured value "DatabaseGrowthIncrement" (both values in bytes).
  *
- *	If "DatabaseGrowthIncrement" is less than MIN_EXTEND_BYTES then don't
- *	extend file(s)
- *
- *  If forceSize is true, extend file up to pageNum pages (despite of value
+ *  If `forceSize` is true, extend file up to pageNum pages (despite of value
  *  of "DatabaseGrowthIncrement") and don't make attempts to extend by less
  *	pages.
+ *
+ *	If "DatabaseGrowthIncrement" is less than MIN_EXTEND_BYTES, then treat
+ *	it as if `forceSize` is true.
  *
  **************************************/
 	fb_assert(dbb == tdbb->getDatabase());
 
-	const int MAX_EXTEND_BYTES = dbb->dbb_config->getDatabaseGrowthIncrement();
+	if (!PIO_fast_extension_is_supported(*file))
+		return 0;
 
-	if (pageNum < maxPageNumber || MAX_EXTEND_BYTES < MIN_EXTEND_BYTES && !forceSize)
-		return true;
+	// First, check it with the cached `maxPageNumber` value.
+	if (pageNum < maxPageNumber || pageNum < maxAlloc())
+		return maxPageNumber - pageNum;
 
-	if (pageNum >= maxAlloc())
+	const ULONG MAX_EXTEND_BYTES = static_cast<ULONG>(dbb->dbb_config->getDatabaseGrowthIncrement());
+	if (MAX_EXTEND_BYTES < MIN_EXTEND_BYTES)
 	{
+		// Preallocation by extent is disabled, so only allocate the requested size.
+		forceSize = true;
+	}
+
+	const ULONG reqPages = pageNum - maxPageNumber + 1;
+
+	ULONG extPages = reqPages;
+	if (!forceSize)
+	{
+		// We can extend the file more than we requested, according to our extension rules.
 		const ULONG minExtendPages = MIN_EXTEND_BYTES / dbb->dbb_page_size;
 		const ULONG maxExtendPages = MAX_EXTEND_BYTES / dbb->dbb_page_size;
-		const ULONG reqPages = pageNum - maxPageNumber + 1;
 
-		ULONG extPages;
-		extPages = MIN(MAX(maxPageNumber / 16, minExtendPages), maxExtendPages);
-		extPages = MAX(reqPages, extPages);
+		extPages = MAX(reqPages, MIN(MAX(maxPageNumber / 16, minExtendPages), maxExtendPages));
+	}
 
-		while (true)
+	while (true)
+	{
+		const ULONG oldMaxPageNumber = maxPageNumber;
+		try
 		{
-			const ULONG oldMaxPageNumber = maxPageNumber;
-			try
+			if (!PIO_extend(tdbb, file, extPages, dbb->dbb_page_size))
+				return 0;
+
+			// File was extended, reset the cached value
+			maxPageNumber = 0;
+
+			return extPages;
+		}
+		catch (const status_exception&)
+		{
+			if (extPages > reqPages && !forceSize)
 			{
-				PIO_extend(tdbb, file, extPages, dbb->dbb_page_size);
-				break;
+				fb_utils::init_status(tdbb->tdbb_status_vector);
+
+				// if file was extended, return, else try to extend by less pages
+
+				if (const auto newMaxPageNumber = maxAlloc(); oldMaxPageNumber < newMaxPageNumber)
+					return newMaxPageNumber - oldMaxPageNumber;
+
+				extPages = MAX(reqPages, extPages / 2);
 			}
-			catch (const status_exception&)
+			else
 			{
-				if (extPages > reqPages && !forceSize)
-				{
-					fb_utils::init_status(tdbb->tdbb_status_vector);
-
-					// if file was extended, return, else try to extend by less pages
-
-					if (oldMaxPageNumber < maxAlloc())
-						return true;
-
-					extPages = MAX(reqPages, extPages / 2);
-				}
-				else
-				{
-					gds__log("Error extending file \"%s\" by %lu page(s).\nCurrently allocated %lu pages, requested page number %lu",
-						file->fil_string, extPages, maxPageNumber, pageNum);
-					return false;
-				}
+				gds__log("Error extending file \"%s\" by %lu page(s).\nCurrently allocated %lu pages, requested page number %lu",
+					file->fil_string, extPages, maxPageNumber, pageNum);
+				return 0;
 			}
 		}
-
-		maxPageNumber = 0;
 	}
-	return true;
 }
 
-ULONG PageSpace::getSCNPageNum(ULONG sequence)
+ULONG PageSpace::getSCNPageNum(ULONG sequence) noexcept
 {
 /**************************************
  *
@@ -2071,7 +2102,7 @@ void PageManager::closeAll()
 void PageManager::initTempPageSpace(thread_db* tdbb)
 {
 	SET_TDBB(tdbb);
-	Database* const dbb = tdbb->getDatabase();
+	const Database* dbb = tdbb->getDatabase();
 
 	fb_assert(tempPageSpaceID == 0);
 
@@ -2194,10 +2225,10 @@ ULONG PAG_page_count(thread_db* tdbb)
 
 void PAG_set_page_scn(thread_db* tdbb, win* window)
 {
-	Database* dbb = tdbb->getDatabase();
+	const Database* dbb = tdbb->getDatabase();
 	fb_assert(dbb->dbb_ods_version >= ODS_VERSION12);
 
-	PageManager& pageMgr = dbb->dbb_page_manager;
+	const PageManager& pageMgr = dbb->dbb_page_manager;
 	PageSpace* const pageSpace = pageMgr.findPageSpace(window->win_page.getPageSpaceID());
 
 	if (pageSpace->isTemporary())
@@ -2229,4 +2260,11 @@ void PAG_set_page_scn(thread_db* tdbb, win* window)
 
 	CCH_precedence(tdbb, window, scn_page);
 }
+
+#ifdef DEB_TDBB_BDBS
+void PageNumber::print(const char* text) const
+{
+	printf("%s %d %d\n", text, pageSpaceID, pageNum);
+}
+#endif
 

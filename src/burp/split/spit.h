@@ -25,20 +25,18 @@
  * Contributor(s): ______________________________________.
  */
 
-const char BLANK				= ' ';
-const int FILE_IS_FULL			= -9;
-//const int FILE_NM_ARR_LEN		= 20;
-//const char* GSPLIT_HDR_REC_NM	= "InterBase/Gsplit";
+inline constexpr char BLANK					= ' ';
+inline constexpr int FILE_IS_FULL			= -9;
 
-const int K_BYTES				= 1024;
-const int IO_BUFFER_SIZE		= (16 * K_BYTES);
-const int SVC_IO_BUFFER_SIZE	= (16 * (IO_BUFFER_SIZE));
-const int GBAK_IO_BUFFER_SIZE	= SVC_IO_BUFFER_SIZE;
+inline constexpr int K_BYTES				= 1024;
+inline constexpr int M_BYTES				= 1024 * K_BYTES;
+inline constexpr int G_BYTES				= 1024 * M_BYTES;
+inline constexpr int IO_BUFFER_SIZE			= 16 * K_BYTES;
+inline constexpr int SVC_IO_BUFFER_SIZE		= 16 * IO_BUFFER_SIZE;
+inline constexpr int GBAK_IO_BUFFER_SIZE	= SVC_IO_BUFFER_SIZE;
 
-const int M_BYTES				= (K_BYTES * K_BYTES);
-const int G_BYTES				= (K_BYTES * M_BYTES);
-const size_t MAX_FILE_NM_LEN	= 27;	// size of header_rec.fl_name
-const int MAX_NUM_OF_FILES		= 9999;
-const int MIN_FILE_SIZE			= M_BYTES;
-const char NEW_LINE				= '\n';
-const char TERMINAL				= '\0';
+inline constexpr size_t MAX_FILE_NM_LEN		= 27;	// size of header_rec.fl_name
+inline constexpr int MAX_NUM_OF_FILES		= 9999;
+inline constexpr int MIN_FILE_SIZE			= M_BYTES;
+inline constexpr char NEW_LINE				= '\n';
+inline constexpr char TERMINAL				= '\0';

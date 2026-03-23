@@ -14,11 +14,11 @@ easy replacement of self-made control for the connection life time.
 as few hours. By default it is not enabled.
 
   The feature works as below
-- when user API call leaves engine, special idle timer assotiated with current connection 
+- when user API call leaves engine, special idle timer associated with current connection
   is started
 - when user API call enters engine, idle timer is stopped
 - when idle time is fired engine immediately closes the connection in the same way as 
-  with asyncronous connection cancellation:
+  with asynchronous connection cancellation:
   - all active statements and cursors are closed
   - all active transactions are rolled back
   - network connection is not closed at this moment. It allows client application to get 
@@ -37,7 +37,7 @@ as few hours. By default it is not enabled.
   as:
   - if not set at connection level, look at database level
   - in any case can't be greater than value set at database level 
-  i.e. value of idle timeout could be overriden by application developer at given 
+  i.e. value of idle timeout could be overridden by application developer at given
   connection but it can't relax limit set by DBA (in config)
 - zero timeout means no timeout, i.e. idle timer will not start
 - while idle timeout is set in seconds at API level, we can't promise absolute precision. 

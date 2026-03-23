@@ -55,7 +55,7 @@ void SkipRowsStream::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open;
 
 	const dsc* desc = EVL_expr(tdbb, request, m_value);
-	const SINT64 value = (desc && !(request->req_flags & req_null)) ? MOV_get_int64(tdbb, desc, 0) : 0;
+	const SINT64 value = desc ? MOV_get_int64(tdbb, desc, 0) : 0;
 
     if (value < 0)
 	{
@@ -143,6 +143,11 @@ void SkipRowsStream::markRecursive()
 void SkipRowsStream::findUsedStreams(StreamList& streams, bool expandAll) const
 {
 	m_next->findUsedStreams(streams, expandAll);
+}
+
+bool SkipRowsStream::isDependent(const StreamList& streams) const
+{
+	return m_value->containsAnyStream(streams) || m_next->isDependent(streams);
 }
 
 void SkipRowsStream::invalidateRecords(Request* request) const

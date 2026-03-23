@@ -52,14 +52,14 @@ void RSTORE( RBDB rbdb)
 	READY
 	ON_ERROR
 		isc_print_status(gds__status);
-		printf("can't open the documentaton database\n");
+		printf("can't open the documentation database\n");
 		FINISH;
 		return;
 	END_ERROR;
 	START_TRANSACTION
 	ON_ERROR
 		isc_print_status(gds__status);
-		printf("can't start a transaction on the documentaton database\n");
+		printf("can't start a transaction on the documentation database\n");
 		FINISH;
 		return;
 	END_ERROR;
@@ -241,7 +241,7 @@ static void store_headers( RBDB rbdb)
 		END_STORE
 		ON_ERROR
 			isc_print_status(gds__status);
-			printf("can't store into the documentaton database\n");
+			printf("can't store into the documentation database\n");
 			FINISH;
 			return;
 		END_ERROR;

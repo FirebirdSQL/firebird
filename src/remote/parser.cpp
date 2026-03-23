@@ -294,7 +294,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_scale = *blr++;
 			break;
 
-		// this case cannot occur as switch paramater is char and blr_blob
+		// this case cannot occur as switch parameter is char and blr_blob
         // is 261. blob_ids are actually passed around as blr_quad.
 
 	    //case blr_blob:
@@ -314,7 +314,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 
 				USHORT textType = *blr++;
 				textType += (*blr++) << 8;
-				desc->setTextType(textType);
+				desc->setTextType(TTypeId(textType));
 
 				format->fmt_blob_idx.add(desc - begin);
 			}

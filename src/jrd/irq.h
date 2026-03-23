@@ -31,9 +31,6 @@ enum irq_type_t
 {
 	irq_s_pages,			// store PAGES
 	irq_r_pages,			// read PAGES
-	irq_l_field,			// lookup field name
-	irq_l_relation,			// lookup relation name
-	irq_c_relation,			// create new relation
 	irq_format1,			// make a new format for a record
 	irq_format2,			// make a new format for a record
 	irq_format3,			// make a new format for a record
@@ -86,8 +83,6 @@ enum irq_type_t
 	irq_l_exp_index_blr,	// lookup expression index BLR
 	irq_l_cond_index,		// lookup condition index
 
-	irq_l_rel_id,			// lookup relation id
-	irq_l_procedure,		// lookup procedure name
 	irq_l_proc_id,			// lookup procedure id
 	irq_r_params,			// scan procedure parameters
 
@@ -149,14 +144,11 @@ enum irq_type_t
 	irq_domain,				// DSQL/METD: lookup a domain
 	irq_type,				// DSQL/METD: lookup a symbolic name in RDB$TYPES
 	irq_cs_name,			// DSQL/METD: lookup a charset name
-	irq_default_cs,			// DSQL/METD: lookup the default charset
 	irq_rel_ids,			// DSQL/METD: check relation/field ids
 	irq_comp_circ_dpd,		// check computed circular dependencies
 	irq_grant10,			// process grant option (packages)
 	irq_l_procedure_pkg_class,	// lookup security class of a packaged procedure
 	irq_l_fun_id,			// lookup function by its ID
-	irq_l_fun_name,			// lookup function by its name
-	irq_f_security,			// verify security for function
 	irq_l_arg_fld,			// lookup argument's domain
 	irq_func_ret_fld,		// lookup argument's domain
 	irq_fun_validate,		// function blr validate
@@ -177,13 +169,15 @@ enum irq_type_t
 	irq_grant17,			// process grant option (database)
 	irq_grant18,			// process grant option (filters)
 	irq_grant19,			// process grant option (roles)
-	irq_l_curr_format,		// lookup table's current format
-	irq_c_relation3,		// lookup relation in phase 0 to cleanup
 	irq_linger,				// get database linger value
 	irq_dbb_ss_definer,		// get database sql security value
 	irq_proc_param_dep,		// check procedure parameter dependency
 	irq_func_param_dep,		// check function parameter dependency
 	irq_l_pub_tab_state,	// lookup publication state for a table
+	irq_index_scan,			// scan index for caching
+	irq_index_id_erase,		// cleanup index ID
+	irq_get_index_by_name,	// find appropriate index
+	irq_l_index_cnstrt,     // lookup index for constraint
 
 	irq_MAX
 };

@@ -429,7 +429,7 @@ void ADA_action( const act* action, int column)
 
 //____________________________________________________________
 //
-//		Print a statment, breaking it into
+//		Print a statement, breaking it into
 //       reasonable 120 character hunks.
 //
 
@@ -642,7 +642,7 @@ static void gen_at_end( const act* action, int column)
 static void gen_based( const act* action, int column)
 {
 	SSHORT datatype;
-	SCHAR s[512], s2[128];
+	SCHAR s[BUFFER_MEDIUM], s2[BUFFER_TINY];
 
 	bas* based_on = (bas*) action->act_object;
 	gpre_fld* field = based_on->bas_field;
@@ -652,7 +652,7 @@ static void gen_based( const act* action, int column)
 	if (field->fld_array_info)
 	{
 		datatype = field->fld_array->fld_dtype;
-		sprintf(s, "array (");
+		snprintf(s, sizeof(s), "array (");
 		for (q = s; *q; q++)
 			;
 
@@ -661,13 +661,13 @@ static void gen_based( const act* action, int column)
 		for (SSHORT i = 1; i < field->fld_array_info->ary_dimension_count;
 			 dimension = dimension->dim_next, i++)
 		{
-			sprintf(s2, "%s range %" SLONGFORMAT"..%" SLONGFORMAT",\n                            ",
+			snprintf(s2, sizeof(s2), "%s range %" SLONGFORMAT"..%" SLONGFORMAT",\n                            ",
 					LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 			for (p = s2; *p; p++, q++)
 				*q = *p;
 		}
 
-		sprintf(s2, "%s range %" SLONGFORMAT"..%" SLONGFORMAT") of ",
+		snprintf(s2, sizeof(s2), "%s range %" SLONGFORMAT"..%" SLONGFORMAT") of ",
 				LONG_DCL, dimension->dim_lower, dimension->dim_upper);
 		for (p = s2; *p; p++, q++)
 			*q = *p;
@@ -680,17 +680,17 @@ static void gen_based( const act* action, int column)
 	switch (datatype)
 	{
 	case dtype_short:
-		sprintf(s2, "%s", SHORT_DCL);
+		snprintf(s2, sizeof(s2), "%s", SHORT_DCL);
 		break;
 
 	case dtype_long:
-		sprintf(s2, "%s", LONG_DCL);
+		snprintf(s2, sizeof(s2), "%s", LONG_DCL);
 		break;
 
 	case dtype_date:
 	case dtype_blob:
 	case dtype_quad:
-		sprintf(s2, "firebird.quad");
+		snprintf(s2, sizeof(s2), "firebird.quad");
 		break;
 
 	case dtype_text:
@@ -698,26 +698,26 @@ static void gen_based( const act* action, int column)
 		if (field->fld_sub_type == 1)
 		{
 			if (length == 1)
-				sprintf(s2, "%s", BYTE_DCL);
+				snprintf(s2, sizeof(s2), "%s", BYTE_DCL);
 			else
-				sprintf(s2, "%s (1..%d)", BYTE_VECTOR_DCL, length);
+				snprintf(s2, sizeof(s2), "%s (1..%d)", BYTE_VECTOR_DCL, length);
 		}
 		else if (length == 1)
-			sprintf(s2, "firebird.isc_character");
+			snprintf(s2, sizeof(s2), "firebird.isc_character");
 		else
-			sprintf(s2, "string (1..%d)", length);
+			snprintf(s2, sizeof(s2), "string (1..%d)", length);
 		break;
 
 	case dtype_real:
-		sprintf(s2, "%s", REAL_DCL);
+		snprintf(s2, sizeof(s2), "%s", REAL_DCL);
 		break;
 
 	case dtype_double:
-		sprintf(s2, "%s", DOUBLE_DCL);
+		snprintf(s2, sizeof(s2), "%s", DOUBLE_DCL);
 		break;
 
 	default:
-		sprintf(s2, "datatype %d unknown\n", field->fld_dtype);
+		snprintf(s2, sizeof(s2), "datatype %d unknown\n", field->fld_dtype);
 		return;
 	}
 
@@ -1017,11 +1017,11 @@ static void gen_create_database( const act* action, int column)
 	gpre_req* request = ((mdbb*) action->act_object)->mdbb_dpb_request;
 	const gpre_dbb* db = (gpre_dbb*) request->req_database;
 
-	sprintf(s1, "isc_%dl", request->req_ident);
+	snprintf(s1, sizeof(s1), "isc_%dl", request->req_ident);
 
 	if (request->req_flags & REQ_extend_dpb)
 	{
-		sprintf(s2, "isc_%dp", request->req_ident);
+		snprintf(s2, sizeof(s2), "isc_%dp", request->req_ident);
 		if (request->req_length)
 			printa(column, "%s = isc_to_dpb_ptr (isc_%d'address);", s2, request->req_ident);
 		if (db->dbb_r_user)
@@ -1046,7 +1046,7 @@ static void gen_create_database( const act* action, int column)
 
 	}
 	else
-		sprintf(s2, "isc_to_dpb_ptr (isc_%d'address)", request->req_ident);
+		snprintf(s2, sizeof(s2), "isc_to_dpb_ptr (isc_%d'address)", request->req_ident);
 
 	if (request->req_length)
 		printa(column, "firebird.CREATE_DATABASE (%s %d, \"%s\", %s%s, %s, %s, 0);",
@@ -1817,7 +1817,7 @@ static void gen_event_wait( const act* action, int column)
 	if (ident < 0)
 	{
 		TEXT s[64];
-		sprintf(s, "event handle \"%s\" not found", event_name->sym_string);
+		snprintf(s, sizeof(s), "event handle \"%s\" not found", event_name->sym_string);
 		CPR_error(s);
 		return;
 	}
@@ -2124,23 +2124,21 @@ static void gen_get_or_put_slice(const act* action,
 	args.pat_value1 = reference->ref_sdl_length;	// slice descr. length
 
 	TEXT s2[25];
-	sprintf(s2, "isc_%d", reference->ref_sdl_ident);	// slice description
+	snprintf(s2, sizeof(s2), "isc_%d", reference->ref_sdl_ident);	// slice description
 	args.pat_string3 = s2;
 
 	args.pat_value2 = 0;		// parameter length
 
-	TEXT s3[25];
-	sprintf(s3, "isc_null_vector_l");	// parameter block init
-	args.pat_string4 = s3;
+	args.pat_string4 = "isc_null_vector_l";	// parameter block init
 
 	args.pat_long1 = reference->ref_field->fld_array_info->ary_size;
 	// slice size
 	TEXT s4[25];
 	if (action->act_flags & ACT_sql) {
-		sprintf(s4, "%s'address", reference->ref_value);
+		snprintf(s4, sizeof(s4), "%s'address", reference->ref_value);
 	}
 	else {
-		sprintf(s4, "isc_%d'address", reference->ref_field->fld_array_info->ary_ident);
+		snprintf(s4, sizeof(s4), "isc_%d'address", reference->ref_field->fld_array_info->ary_ident);
 	}
 	args.pat_string5 = s4;		// array name
 
@@ -2368,7 +2366,7 @@ static void gen_raw(const UCHAR* blr, const int request_length)
 	for (const UCHAR* const end = blr + request_length - 1; blr <= end; ++blr)
 	{
 		const UCHAR c = *blr;
-		sprintf(p, "%d", c);
+		snprintf(p, sizeof(buffer) - (p - buffer), "%d", c);
 		while (*p)
 			p++;
 		if (blr != end)
@@ -3054,7 +3052,7 @@ static void gen_tpb(const tpb* tpb_buffer, int column)
 	while (--length)
 	{
 		const TEXT c = *text++;
-		sprintf(p, "%d, ", c);
+		snprintf(p, sizeof(buffer) - (p - buffer), "%d, ", c);
 		while (*p)
 			p++;
 		if (p - buffer > 60)
@@ -3068,7 +3066,7 @@ static void gen_tpb(const tpb* tpb_buffer, int column)
 	// handle the last character
 
 	const TEXT c = *text++;
-	sprintf(p, "%d", c);
+	snprintf(p, sizeof(buffer) - (p - buffer), "%d", c);
 	printa(column + INDENT, "%s", buffer);
 	printa(column, ");");
 }
@@ -3449,8 +3447,8 @@ static void make_ready(const gpre_dbb* db,
 
 	if (request)
 	{
-		sprintf(s1, "isc_%dl", request->req_ident);
-		sprintf(s2, "isc_%d", request->req_ident);
+		snprintf(s1, sizeof(s1), "isc_%dl", request->req_ident);
+		snprintf(s2, sizeof(s2), "isc_%d", request->req_ident);
 
 		// if the dpb needs to be extended at runtime to include items
 		// in host variables, do so here; this assumes that there is
@@ -3458,7 +3456,7 @@ static void make_ready(const gpre_dbb* db,
 
 		if (request->req_flags & REQ_extend_dpb)
 		{
-			sprintf(s2, "isc_%dp", request->req_ident);
+			snprintf(s2, sizeof(s2), "isc_%dp", request->req_ident);
 			if (request->req_length)
 				printa(column, "%s = isc_%d;", s2, request->req_ident);
 			if (db->dbb_r_user)
@@ -3527,7 +3525,7 @@ static void printa( int column, const TEXT* string, ...)
 
 	va_start(ptr, string);
 	align(column);
-	vsprintf(output_buffer, string, ptr);
+	vsnprintf(output_buffer, sizeof(output_buffer), string, ptr);
 	va_end(ptr);
 	ADA_print_buffer(output_buffer, column);
 }
@@ -3585,7 +3583,7 @@ static void t_start_auto(const act* action,
 
 	if (gpreGlob.sw_auto)
 	{
-		TEXT buffer[256], temp[40];
+		TEXT buffer[BUFFER_SMALL], temp[40];
 		buffer[0] = 0;
 		for (const gpre_dbb* db = gpreGlob.isc_databases; db; db = db->dbb_next)
 		{
@@ -3602,7 +3600,7 @@ static void t_start_auto(const act* action,
 				endif(column);
 				if (buffer[0])
 					strcat(buffer, ") and (");
-				sprintf(temp, "%s%s /= 0", gpreGlob.ada_package, db->dbb_name->sym_string);
+				snprintf(temp, sizeof(temp), "%s%s /= 0", gpreGlob.ada_package, db->dbb_name->sym_string);
 				strcat(buffer, temp);
 			}
 		}

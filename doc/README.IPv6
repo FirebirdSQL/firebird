@@ -42,7 +42,7 @@ Server
 By default, Firebird server listens on zero IPv6 address (::) and accepts all
 incoming connections, IPv4 and IPv6. This behaviour can be changed by config
 directive IPv6V6Only. If it is set to true, server listening on zero IPv6
-address (implicitely or explicitely) will accept only IPv6 connections.
+address (implicitly or explicitly) will accept only IPv6 connections.
 
 Different listening address (IPv4 or IPv6) can be set using RemoteBindAddress
 directive. If an IPv4 address or non-zero IPv6 address is used, IPv6V6Only

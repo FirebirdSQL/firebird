@@ -265,7 +265,7 @@ namespace
 
 			PathName confName = getFileName();
 			const char* rootDir = Config::getRootDirectory();
-			const FB_SIZE_T rootLen = strlen(rootDir);
+			const FB_SIZE_T rootLen = fb_strlen(rootDir);
 
 			if ((confName.length() > rootLen) && (confName.compare(0, rootLen, rootDir, rootLen) == 0))
 				confName.erase(0, rootLen);

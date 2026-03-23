@@ -25,7 +25,9 @@
 #include "../jrd/jrd.h"
 #include "../jrd/blb.h"
 #include "../jrd/req.h"
+#include "../jrd/Statement.h"
 #include "../jrd/ini.h"
+#include "../jrd/met.h"
 #include "ibase.h"
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
@@ -33,7 +35,7 @@
 #include "../jrd/dpm_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/rlck_proto.h"
@@ -60,26 +62,6 @@ using namespace Replication;
 
 namespace
 {
-	struct NoKeyTable
-	{
-		USHORT rel_id;
-		USHORT rel_fields[8];
-	};
-
-	const auto UNDEF = MAX_USHORT;
-
-	NoKeyTable NO_KEY_TABLES[] = {
-		{ rel_segments, { f_seg_name, f_seg_field, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_args, { f_arg_fun_name, f_arg_pos, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_ccon, { f_ccon_cname, f_ccon_tname, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_vrel, { f_vrl_vname, f_vrl_context, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_msgs, { f_msg_trigger, f_msg_number, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_dims, { f_dims_fname, f_dims_dim, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_files, { f_file_name, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } },
-		{ rel_priv, { f_prv_user, f_prv_u_type, f_prv_o_type, f_prv_priv, f_prv_grant, f_prv_grantor, f_prv_rname, f_prv_fname } },
-		{ rel_db_creators, { f_crt_user, f_crt_u_type, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF, UNDEF } }
-	};
-
 	class BlockReader : public AutoStorage
 	{
 	public:
@@ -143,10 +125,29 @@ namespace
 			return value;
 		}
 
-		const MetaString& getMetaName()
+		const string& getAtomString()
 		{
 			const auto pos = getInt32();
 			return m_atoms[pos];
+		}
+
+		const MetaString getAtomMetaName()
+		{
+			const auto pos = getInt32();
+			return m_atoms[pos];
+		}
+
+		const QualifiedMetaString getAtomQualifiedName()
+		{
+			if (getProtocolVersion() < PROTOCOL_VERSION_2)
+				return QualifiedMetaString(getAtomMetaName());
+
+			const auto& schema = getAtomMetaName();
+			const auto& object = getAtomMetaName();
+
+			fb_assert(schema.hasData() && object.hasData());
+
+			return QualifiedMetaString(object, schema);
 		}
 
 		string getString()
@@ -193,7 +194,7 @@ namespace
 		const Block* const m_header;
 		const UCHAR* m_data;
 		const UCHAR* const m_end;
-		HalfStaticArray<MetaString, 64> m_atoms;
+		ObjectsArray<string> m_atoms;
 
 		static void malformed()
 		{
@@ -238,7 +239,7 @@ Applier* Applier::create(thread_db* tdbb)
 		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "REPLICATE_INTO_DATABASE");
 
 	Request* request = nullptr;
-	const auto req_pool = attachment->createPool();
+	const auto req_pool = dbb->createPool();
 
 	try
 	{
@@ -254,7 +255,7 @@ Applier* Applier::create(thread_db* tdbb)
 		if (request)
 			CMP_release(tdbb, request);
 		else
-			attachment->deletePool(req_pool);
+			dbb->deletePool(req_pool);
 
 		throw;
 	}
@@ -358,7 +359,7 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 			case opInsertRecord:
 				{
-					const auto relName = reader.getMetaName();
+					const auto& relName = reader.getAtomQualifiedName();
 					const ULONG length = reader.getInt32();
 					const auto record = reader.getBinary(length);
 					insertRecord(tdbb, traNum, relName, length, record);
@@ -367,7 +368,7 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 			case opUpdateRecord:
 				{
-					const auto relName = reader.getMetaName();
+					const auto& relName = reader.getAtomQualifiedName();
 					const ULONG orgLength = reader.getInt32();
 					const auto orgRecord = reader.getBinary(orgLength);
 					const ULONG newLength = reader.getInt32();
@@ -378,7 +379,7 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 			case opDeleteRecord:
 				{
-					const auto relName = reader.getMetaName();
+					const auto& relName = reader.getAtomQualifiedName();
 					const ULONG length = reader.getInt32();
 					const auto record = reader.getBinary(length);
 					deleteRecord(tdbb, traNum, relName, length, record);
@@ -407,17 +408,19 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 			case opExecuteSql:
 			case opExecuteSqlIntl:
 				{
-					const auto ownerName = reader.getMetaName();
-					const unsigned charset =
-						(op == opExecuteSql) ? CS_UTF8 : reader.getByte();
+					const auto& ownerName = reader.getAtomMetaName();
+					const string& schemaSearchPath = op == opExecuteSql || protocol < PROTOCOL_VERSION_2 ?
+						string() : reader.getAtomString();
+					const auto charset =
+						(op == opExecuteSql) ? CS_UTF8 : CSetId(reader.getByte());
 					const string sql = reader.getString();
-					executeSql(tdbb, traNum, charset, sql, ownerName);
+					executeSql(tdbb, traNum, charset, schemaSearchPath, sql, ownerName);
 				}
 				break;
 
 			case opSetSequence:
 				{
-					const auto genName = reader.getMetaName();
+					const auto& genName = QualifiedName(reader.getAtomQualifiedName());
 					const auto value = reader.getInt64();
 					setSequence(tdbb, genName, value);
 				}
@@ -445,8 +448,6 @@ void Applier::process(thread_db* tdbb, ULONG length, const UCHAR* data)
 
 void Applier::startTransaction(thread_db* tdbb, TraNumber traNum)
 {
-	const auto attachment = tdbb->getAttachment();
-
 	if (m_txnMap.exist(traNum))
 		raiseError("Transaction %" SQUADFORMAT" already exists", traNum);
 
@@ -540,7 +541,7 @@ void Applier::cleanupSavepoint(thread_db* tdbb, TraNumber traNum, bool undo)
 }
 
 void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
-						   const MetaName& relName,
+						   const QualifiedName& relName,
 						   ULONG length, const UCHAR* data)
 {
 	jrd_tra* transaction = NULL;
@@ -549,15 +550,16 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 
 	LocalThreadContext context(tdbb, transaction, m_request);
 	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
 
-	const auto relation = MET_lookup_relation(tdbb, relName);
-	if (!relation)
-		raiseError("Table %s is not found", relName.c_str());
+	QualifiedName qualifiedRelName(relName);
+	attachment->qualifyExistingName(tdbb, qualifiedRelName, {obj_relation});
 
-	if (!(relation->rel_flags & REL_scanned))
-		MET_scan_relation(tdbb, relation);
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, qualifiedRelName, CacheFlag::AUTOCREATE);
+	if (!relation)
+		raiseError("Table %s is not found", qualifiedRelName.toQuotedString().c_str());
 
 	const auto format = findFormat(tdbb, relation, length);
 
@@ -634,10 +636,18 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 	fb_assert(error[2] == isc_arg_string);
 	fb_assert(error[3] != 0);
 
-	const char* idxName = reinterpret_cast<const char*>(error[3]);
+	const auto nameFromErr = QualifiedName::parseSchemaObject(reinterpret_cast<const char*>(error[3]));
+	QualifiedName idxName;
+	if (error[1] == isc_no_dup)
+		idxName = nameFromErr;
+	else if (!m_constraintIndexMap.get(nameFromErr, idxName))
+	{
+		MET_lookup_index_for_cnstrt(tdbb, idxName, nameFromErr);
+		m_constraintIndexMap.put(nameFromErr, idxName);
+	}
 
 	index_desc idx;
-	const auto indexed = lookupRecord(tdbb, relation, record, idx, idxName);
+	const auto indexed = lookupRecord(tdbb, relation, record, idx, &idxName);
 
 	AutoPtr<Record> cleanup;
 
@@ -653,7 +663,10 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 				(!indexed || compareKey(tdbb, relation, idx, record, tempRpb.rpb_record)))
 			{
 				if (found)
-					raiseError("Record in table %s is ambiguously identified using the primary/unique key", relName.c_str());
+				{
+					raiseError("Record in table %s is ambiguously identified using the primary/unique key",
+						qualifiedRelName.toQuotedString().c_str());
+				}
 
 				rpb = tempRpb;
 				found = true;
@@ -666,7 +679,8 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 
 	if (found)
 	{
-		logConflict("Record being inserted into table %s already exists, updating instead", relName.c_str());
+		logConflict("Record being inserted into table %s already exists, updating instead",
+			qualifiedRelName.toQuotedString().c_str());
 
 		record_param newRpb;
 		newRpb.rpb_relation = relation;
@@ -690,7 +704,7 @@ void Applier::insertRecord(thread_db* tdbb, TraNumber traNum,
 }
 
 void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
-						   const MetaName& relName,
+						   const QualifiedName& relName,
 						   ULONG orgLength, const UCHAR* orgData,
 						   ULONG newLength, const UCHAR* newData)
 {
@@ -700,15 +714,16 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 
 	LocalThreadContext context(tdbb, transaction, m_request);
 	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
 
-	const auto relation = MET_lookup_relation(tdbb, relName);
-	if (!relation)
-		raiseError("Table %s is not found", relName.c_str());
+	QualifiedName qualifiedRelName(relName);
+	attachment->qualifyExistingName(tdbb, qualifiedRelName, {obj_relation});
 
-	if (!(relation->rel_flags & REL_scanned))
-		MET_scan_relation(tdbb, relation);
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, qualifiedRelName, CacheFlag::AUTOCREATE);
+	if (!relation)
+		raiseError("Table %s is not found", qualifiedRelName.toQuotedString().c_str());
 
 	const auto orgFormat = findFormat(tdbb, relation, orgLength);
 
@@ -757,7 +772,10 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 				(!indexed || compareKey(tdbb, relation, idx, orgRecord, tempRpb.rpb_record)))
 			{
 				if (found)
-					raiseError("Record in table %s is ambiguously identified using the primary/unique key", relName.c_str());
+				{
+					raiseError("Record in table %s is ambiguously identified using the primary/unique key",
+						qualifiedRelName.toQuotedString().c_str());
+				}
 
 				orgRpb = tempRpb;
 				found = true;
@@ -823,16 +841,17 @@ void Applier::updateRecord(thread_db* tdbb, TraNumber traNum,
 	else
 	{
 #ifdef RESOLVE_CONFLICTS
-		logConflict("Record being updated in table %s does not exist, inserting instead", relName.c_str());
+		logConflict("Record being updated in table %s does not exist, inserting instead",
+			qualifiedRelName.toQuotedString().c_str());
 		doInsert(tdbb, &newRpb, transaction);
 #else
-		raiseError("Record in table %s cannot be located via the primary/unique key", relName.c_str());
+		raiseError("Record in table %s cannot be located via the primary/unique key", qualifiedRelName.c_str());
 #endif
 	}
 }
 
 void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
-						   const MetaName& relName,
+						   const QualifiedName& relName,
 						   ULONG length, const UCHAR* data)
 {
 	jrd_tra* transaction = NULL;
@@ -841,15 +860,16 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 
 	LocalThreadContext context(tdbb, transaction, m_request);
 	Jrd::ContextPoolHolder context2(tdbb, m_request->req_pool);
+	const auto attachment = tdbb->getAttachment();
 
 	TRA_attach_request(transaction, m_request);
 
-	const auto relation = MET_lookup_relation(tdbb, relName);
-	if (!relation)
-		raiseError("Table %s is not found", relName.c_str());
+	QualifiedName qualifiedRelName(relName);
+	attachment->qualifyExistingName(tdbb, qualifiedRelName, {obj_relation});
 
-	if (!(relation->rel_flags & REL_scanned))
-		MET_scan_relation(tdbb, relation);
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, qualifiedRelName, CacheFlag::AUTOCREATE);
+	if (!relation)
+		raiseError("Table %s is not found", qualifiedRelName.toQuotedString().c_str());
 
 	const auto format = findFormat(tdbb, relation, length);
 
@@ -883,7 +903,10 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 				(!indexed || compareKey(tdbb, relation, idx, record, tempRpb.rpb_record)))
 			{
 				if (found)
-					raiseError("Record in table %s is ambiguously identified using the primary/unique key", relName.c_str());
+				{
+					raiseError("Record in table %s is ambiguously identified using the primary/unique key",
+						qualifiedRelName.toQuotedString().c_str());
+				}
 
 				rpb = tempRpb;
 				found = true;
@@ -900,27 +923,31 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 	else
 	{
 #ifdef RESOLVE_CONFLICTS
-		logConflict("Record being deleted from table %s does not exist, ignoring", relName.c_str());
+		logConflict("Record being deleted from table %s does not exist, ignoring", qualifiedRelName.toQuotedString().c_str());
 #else
-		raiseError("Record in table %s cannot be located via the primary/unique key", relName.c_str());
+		raiseError("Record in table %s cannot be located via the primary/unique key", qualifiedRelName.c_str());
 #endif
 	}
 }
 
-void Applier::setSequence(thread_db* tdbb, const MetaName& genName, SINT64 value)
+void Applier::setSequence(thread_db* tdbb, const QualifiedName& genName, SINT64 value)
 {
-	const auto attachment = tdbb->getAttachment();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();		// ??????????????//
 
-	auto gen_id = attachment->att_generators.lookup(genName);
+	QualifiedName qualifiedGenName(genName);
+	attachment->qualifyExistingName(tdbb, qualifiedGenName, {obj_generator});
+
+	auto gen_id = dbb->dbb_mdc->lookupSequence(tdbb, qualifiedGenName);
 
 	if (gen_id < 0)
 	{
-		gen_id = MET_lookup_generator(tdbb, genName);
+		gen_id = MET_lookup_generator(tdbb, qualifiedGenName);
 
 		if (gen_id < 0)
-			raiseError("Generator %s is not found", genName.c_str());
+			raiseError("Generator %s is not found", qualifiedGenName.toQuotedString().c_str());
 
-		attachment->att_generators.store(gen_id, genName);
+		dbb->dbb_mdc->setSequence(tdbb, gen_id, qualifiedGenName);
 	}
 
 	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
@@ -971,7 +998,8 @@ void Applier::storeBlob(thread_db* tdbb, TraNumber traNum, bid* blobId,
 
 void Applier::executeSql(thread_db* tdbb,
 						 TraNumber traNum,
-						 unsigned charset,
+						 CSetId charset,
+						 const string& schemaSearchPath,
 						 const string& sql,
 						 const MetaName& ownerName)
 {
@@ -987,19 +1015,35 @@ void Applier::executeSql(thread_db* tdbb,
 	const auto dialect =
 		(dbb->dbb_flags & DBB_DB_SQL_dialect_3) ? SQL_DIALECT_V6 : SQL_DIALECT_V5;
 
-	AutoSetRestore<SSHORT> autoCharset(&attachment->att_charset, charset);
+	AutoSetRestore<CSetId> autoCharset(&attachment->att_charset, charset);
 
-	UserId* const owner = attachment->getUserId(ownerName);
+	UserId* const owner = dbb->getUserId(ownerName);
 	AutoSetRestore<UserId*> autoOwner(&attachment->att_ss_user, owner);
 	AutoSetRestore<UserId*> autoUser(&attachment->att_user, owner);
 	AutoSetRestoreFlag<ULONG> noCascade(&tdbb->tdbb_flags, TDBB_repl_in_progress, !m_enableCascade);
 
-	DSQL_execute_immediate(tdbb, attachment, &transaction,
-						   0, sql.c_str(), dialect,
-						   NULL, NULL, NULL, NULL, false);
+	const string& newSearchPathStr = schemaSearchPath.hasData() ?
+		schemaSearchPath : dbb->replConfig()->schemaSearchPath;
+
+	if (newSearchPathStr.hasData())
+	{
+		auto newSearchPath = makeRef(FB_NEW AnyRef<ObjectsArray<MetaString>>(*getDefaultMemoryPool()));
+		MetaString::parseList(newSearchPathStr, *newSearchPath);
+
+		AutoSetRestore<RefPtr<AnyRef<ObjectsArray<MetaString>>>> autoSchemaSearchPath(
+			&attachment->att_schema_search_path, newSearchPath);
+
+		DSQL_execute_immediate(tdbb, attachment, &transaction, 0, sql.c_str(), dialect,
+			nullptr, nullptr, nullptr, nullptr, false);
+	}
+	else
+	{
+		DSQL_execute_immediate(tdbb, attachment, &transaction, 0, sql.c_str(), dialect,
+			nullptr, nullptr, nullptr, nullptr, false);
+	}
 }
 
-bool Applier::lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& key)
+bool Applier::lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc& key)
 {
 	RelationPages* const relPages = relation->getPages(tdbb);
 	auto page = relPages->rel_index_root;
@@ -1087,33 +1131,35 @@ bool Applier::compareKey(thread_db* tdbb, jrd_rel* relation, const index_desc& i
 
 bool Applier::lookupRecord(thread_db* tdbb,
 						   jrd_rel* relation, Record* record,
-						   index_desc& idx, const char* idxName)
+						   index_desc& idx, const QualifiedName* idxName)
 {
 	RecordBitmap::reset(m_bitmap);
 
 	// Special case: RDB$DATABASE has no keys but it's guaranteed to have only one record
-	if (relation->rel_id == rel_database)
+	if (relation->getId() == rel_database)
 	{
 		RBM_SET(tdbb->getDefaultPool(), &m_bitmap, 0);
 		return false;
 	}
 
 	bool haveIdx = false;
-	if (idxName)
+	if (idxName && idxName->object.hasData())
 	{
 		SLONG foundRelId;
-		IndexStatus idxStatus;
-		SLONG idx_id = MET_lookup_index_name(tdbb, idxName, &foundRelId, &idxStatus);
+		auto* idv = relation->getPermanent()->lookup_index(tdbb, *idxName, CacheFlag::AUTOCREATE);
 
-		fb_assert(idxStatus == MET_object_active);
-		fb_assert(foundRelId == relation->rel_id);
+		if (idv)
+		{
+			auto idxStatus = idv->getActive();
+			fb_assert(idxStatus == MET_index_active);
 
-		haveIdx = (idxStatus == MET_object_active) && (foundRelId == relation->rel_id) &&
-			BTR_lookup(tdbb, relation, idx_id, &idx, relation->getPages(tdbb));
+			haveIdx = (idxStatus == MET_index_active) &&
+				BTR_lookup(tdbb, relation->getPermanent(), idv->getId(), &idx, relation->getPages(tdbb));
+		}
 	}
 
 	if (!haveIdx)
-		haveIdx = lookupKey(tdbb, relation, idx);
+		haveIdx = lookupKey(tdbb, relation->getPermanent(), idx);
 
 	if (haveIdx)
 	{
@@ -1131,75 +1177,20 @@ bool Applier::lookupRecord(thread_db* tdbb,
 		return true;
 	}
 
-	NoKeyTable* table = NULL;
-
-	for (size_t i = 0; i < FB_NELEM(NO_KEY_TABLES); i++)
-	{
-		const auto tab = &NO_KEY_TABLES[i];
-
-		if (tab->rel_id == relation->rel_id)
-		{
-			table = tab;
-			break;
-		}
-	}
-
-	if (!table)
-		raiseError("Table %s has no unique key", relation->rel_name.c_str());
-
-	const auto transaction = tdbb->getTransaction();
-
-	RLCK_reserve_relation(tdbb, transaction, relation, false);
-
-	record_param rpb;
-	rpb.rpb_relation = relation;
-	rpb.rpb_number.setValue(BOF_NUMBER);
-
-	while (VIO_next_record(tdbb, &rpb, transaction, tdbb->getDefaultPool(), DPM_next_all))
-	{
-		const auto seq_record = rpb.rpb_record;
-		fb_assert(seq_record);
-
-		bool matched = true;
-
-		for (size_t i = 0; i < FB_NELEM(table->rel_fields); i++)
-		{
-			const USHORT field_id = table->rel_fields[i];
-
-			if (field_id == MAX_USHORT)
-				break;
-
-			dsc desc1, desc2;
-
-			const bool null1 = !EVL_field(relation, record, field_id, &desc1);
-			const bool null2 = !EVL_field(relation, seq_record, field_id, &desc2);
-
-			if (null1 != null2 || !null1 && MOV_compare(tdbb, &desc1, &desc2))
-			{
-				matched = false;
-				break;
-			}
-		}
-
-		if (matched)
-			RBM_SET(tdbb->getDefaultPool(), &m_bitmap, rpb.rpb_number.getValue());
-	}
-
-	delete rpb.rpb_record;
-	return false;
+	raiseError("Table %s has no unique key", relation->getName().toQuotedString().c_str());
 }
 
 const Format* Applier::findFormat(thread_db* tdbb, jrd_rel* relation, ULONG length)
 {
-	auto format = MET_current(tdbb, relation);
+	auto format = relation->currentFormat(tdbb);
 
 	while (format->fmt_length != length && format->fmt_version)
-		format = MET_format(tdbb, relation, format->fmt_version - 1);
+		format = MET_format(tdbb, relation->getPermanent(), format->fmt_version - 1);
 
 	if (format->fmt_length != length)
 	{
 		raiseError("Record format with length %u is not found for table %s",
-				   length, relation->rel_name.c_str());
+				   length, relation->getName().toQuotedString().c_str());
 	}
 
 	return format;
@@ -1213,7 +1204,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	const auto format = record->getFormat();
 	const auto relation = rpb->rpb_relation;
 
-	RLCK_reserve_relation(tdbb, transaction, relation, true);
+	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
 	for (USHORT id = 0; id < format->fmt_count; id++)
 	{
@@ -1239,10 +1230,9 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					{
 						const auto blob = current->bli_blob_object;
 						fb_assert(blob);
-						blob->blb_relation = relation;
 						blob->blb_sub_type = desc.getBlobSubType();
 						blob->blb_charset = desc.getCharSet();
-						blobId->set_permanent(relation->rel_id, DPM_store_blob(tdbb, blob, record));
+						blobId->set_permanent(relation->getId(), DPM_store_blob(tdbb, blob, relation, record));
 						current->bli_materialized = true;
 						current->bli_blob_id = *blobId;
 						transaction->tra_blobs->fastRemove();
@@ -1255,7 +1245,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 					const ULONG num1 = blobId->bid_quad.bid_quad_high;
 					const ULONG num2 = blobId->bid_quad.bid_quad_low;
 					raiseError("Blob %u.%u is not found for table %s",
-							   num1, num2, relation->rel_name.c_str());
+							   num1, num2, relation->getName().toQuotedString().c_str());
 				}
 			}
 		}
@@ -1281,6 +1271,9 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
+	// This allows to use RDB$RECORD_VERSION in indices.
+	rpb->rpb_record->setTransactionNumber(transaction->tra_number);
+
 	VIO_store(tdbb, rpb, transaction);
 	IDX_store(tdbb, rpb, transaction);
 	if (m_enableCascade)
@@ -1297,7 +1290,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	const auto format = newRecord->getFormat();
 	const auto relation = newRpb->rpb_relation;
 
-	RLCK_reserve_relation(tdbb, transaction, relation, true);
+	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
 	for (USHORT id = 0; id < format->fmt_count; id++)
 	{
@@ -1335,10 +1328,9 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 						{
 							const auto blob = current->bli_blob_object;
 							fb_assert(blob);
-							blob->blb_relation = relation;
 							blob->blb_sub_type = desc.getBlobSubType();
 							blob->blb_charset = desc.getCharSet();
-							dstBlobId->set_permanent(relation->rel_id, DPM_store_blob(tdbb, blob, newRecord));
+							dstBlobId->set_permanent(relation->getId(), DPM_store_blob(tdbb, blob, relation, newRecord));
 							current->bli_materialized = true;
 							current->bli_blob_id = *dstBlobId;
 							transaction->tra_blobs->fastRemove();
@@ -1351,7 +1343,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 						const ULONG num1 = dstBlobId->bid_quad.bid_quad_high;
 						const ULONG num2 = dstBlobId->bid_quad.bid_quad_low;
 						raiseError("Blob %u.%u is not found for table %s",
-								   num1, num2, relation->rel_name.c_str());
+								   num1, num2, relation->getName().toQuotedString().c_str());
 					}
 				}
 			}
@@ -1378,6 +1370,9 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
+	// This allows to use NEW.RDB$RECORD_VERSION in indices.
+	newRpb->rpb_record->setTransactionNumber(transaction->tra_number);
+
 	VIO_modify(tdbb, orgRpb, newRpb, transaction);
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
 	if (m_enableCascade)
@@ -1388,7 +1383,7 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
 	fb_assert(!(transaction->tra_flags & TRA_system));
 
-	RLCK_reserve_relation(tdbb, transaction, rpb->rpb_relation, true);
+	RLCK_reserve_relation(tdbb, transaction, getPermanent(rpb->rpb_relation), true);
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
@@ -1404,7 +1399,7 @@ void Applier::logConflict(const char* msg, ...)
 
 	va_list ptr;
 	va_start(ptr, msg);
-	vsprintf(buffer, msg, ptr);
+	vsnprintf(buffer, sizeof(buffer), msg, ptr);
 	va_end(ptr);
 
 	logReplicaWarning(m_database, buffer);

@@ -19,7 +19,7 @@
  * 2001.07.28: John Bellardo: Added skip and current_role to table.
  * Adriano dos Santos Fernandes
  */
-static const struct
+static inline constexpr struct
 {
 	const char* blr_string;
 	const UCHAR* blr_operators;
@@ -173,7 +173,7 @@ static const struct
 	{"retrieve", two},
 	{"relation2", relation2},
 	{"rid2", rid2},
-	{NULL, NULL},
+	{"relation3", relation3},
 	{NULL, NULL},
 	{"set_generator", gen_id},	// 150
 	{"ansi_any", one},
@@ -196,8 +196,8 @@ static const struct
 	{"cursor_stmt", cursor_stmt},
 	{"current_timestamp2", byte_line},
 	{"current_time2", byte_line},
-	{"agg_list", two}, // 170
-	{"agg_list_distinct", two},
+	{"agg_list", list_function}, // 170
+	{"agg_list_distinct", list_function},
 	{"modify2", modify2},
 	{"erase2", erase2},
 	// New BLR in FB1
@@ -229,7 +229,7 @@ static const struct
 	{"partition_by", partition_by},
 	{"continue_loop", byte_line},
 	{"procedure4", procedure4},
-	{"agg_function", function},
+	{"agg_function", agg_function},
 	{"substring_similar", three}, // 200
 	{"bool_as_value", one},
 	{"coalesce", byte_args},
@@ -261,5 +261,12 @@ static const struct
 	{"select_procedure", invsel_procedure},
 	{"default_arg", zero},
 	{"cast_format", cast_format},
+	{"table_value_fun", table_value_fun},
+	{"for_range", for_range},
+	{"gen_id3", gen_id3},
+	{"default2", default2},
+	{"current_schema", zero},
+	{NULL, NULL},	// flags - part of header
+	{NULL, NULL},	// blr_within_group_order - part of blr_agg_list[_distinct] and blr_agg_function
 	{0, 0}
 };

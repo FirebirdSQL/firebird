@@ -6,7 +6,7 @@
  *					how FbException is caught and handled by this code.
  *
  *					Example for the following interfaces:
- *					IMaster - main inteface to access all the rest
+ *					IMaster - main interface to access all the rest
  *					Status - returns the status of executed command
  *					Provider - main interface to access DB / service
  *					Attachment - database attachment interface

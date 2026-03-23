@@ -42,11 +42,14 @@
 #include "../common/UtilSvc.h"
 #include "../common/classes/array.h"
 #include "../common/classes/fb_pair.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/QualifiedMetaString.h"
 #include "../common/SimilarToRegex.h"
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../jrd/intl.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -65,8 +68,8 @@
 //#define COMPRESS_DEBUG 1
 #endif // WIRE_COMPRESS_SUPPORT
 
-const int GDS_NAME_LEN		= METADATA_IDENTIFIER_CHAR_LEN * 4 /* max bytes per char */ + 1;
-typedef TEXT			GDS_NAME[GDS_NAME_LEN];
+inline constexpr int GDS_NAME_LEN = METADATA_IDENTIFIER_CHAR_LEN * 4 /* max bytes per char */ + 1;
+typedef TEXT GDS_NAME[GDS_NAME_LEN];
 
 enum redirect_vals {
 	NOREDIRECT = 0,
@@ -74,7 +77,7 @@ enum redirect_vals {
 	NOOUTPUT = 2
 };
 
-static const int burp_msg_fac = 12;
+static inline constexpr int burp_msg_fac = FB_IMPL_MSG_FACILITY_GBAK;
 
 // Record types in backup file
 
@@ -120,7 +123,8 @@ enum rec_type {
 	rec_package,			// Package
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
-	rec_pub_table			// Publication table
+	rec_pub_table,			// Publication table
+	rec_schema				// Schema
 };
 
 
@@ -205,17 +209,20 @@ Version 10: FB3.0.
 
 Version 11: FB4.0.
 			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
+
+Version 12: FB6.0.
+			Schemas.
 */
 
-const int ATT_BACKUP_FORMAT		= 11;
+inline constexpr int ATT_BACKUP_FORMAT = 12;
 
 // max array dimension
 
-const int MAX_DIMENSION			= 16;
+inline constexpr int MAX_DIMENSION = 16;
 
-const int SERIES				= 1;
+inline constexpr int SERIES = 1;
 
-const USHORT MAX_UPDATE_DBKEY_RECURSION_DEPTH = 16;
+inline constexpr USHORT MAX_UPDATE_DBKEY_RECURSION_DEPTH = 16;
 
 
 enum att_type {
@@ -259,6 +266,7 @@ enum att_type {
 	att_database_sql_security,	// default sql security value
 	att_default_pub_active, // default publication status
 	att_default_pub_auto_enable,
+	att_database_dfl_charset_schema_name,	// default character set schema name
 
 	// Relation attributes
 
@@ -282,6 +290,7 @@ enum att_type {
 	att_relation_type,
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
+	att_relation_schema_name,
 
 	// Field attributes (used for both global and local fields)
 
@@ -341,6 +350,7 @@ enum att_type {
 	att_field_owner_name, // FB3.0, ODS12_0,
 	att_field_generator_name,
 	att_field_identity_type,
+	att_field_schema_name,
 
 	// Index attributes
 
@@ -357,6 +367,7 @@ enum att_type {
 	att_index_expression_blr,
 	att_index_condition_source,
 	att_index_condition_blr,
+	att_index_foreign_key_schema_name,
 
 	// Data record
 
@@ -396,7 +407,9 @@ enum att_type {
 
 	att_xdr_length = SERIES + 16,
 	att_xdr_array,
+
 	att_class_description2,
+	att_view_relation_schema_name,
 
 	// Trigger attributes
 
@@ -419,6 +432,7 @@ enum att_type {
 	att_trig_type2,
 	att_trig_sql_security_deprecated,	// can be removed later
 	att_trig_sql_security,
+	att_trig_schema_name,
 
 	// Function attributes
 
@@ -444,6 +458,7 @@ enum att_type {
 	att_function_deterministic_flag,
 	att_function_sql_security_deprecated,	// can be removed later
 	att_function_sql_security,
+	att_function_schema_name,
 
 	// Function argument attributes
 
@@ -467,6 +482,9 @@ enum att_type {
 	att_functionarg_field_name,
 	att_functionarg_relation_name,
 	att_functionarg_description,
+	att_functionarg_schema_name,
+	att_functionarg_field_source_schema_name,
+	att_functionarg_relation_schema_name,
 
 	// TYPE relation attributes
 	att_type_name = SERIES,
@@ -490,6 +508,7 @@ enum att_type {
 	att_trigmsg_name = SERIES,
 	att_trigmsg_number,
 	att_trigmsg_text,
+	att_trigmsg_schema_name,
 
 	// User privilege attributes
 	att_priv_user = SERIES,
@@ -500,6 +519,8 @@ enum att_type {
 	att_priv_field_name,
 	att_priv_user_type,
 	att_priv_obj_type,
+	att_priv_user_schema_name,
+	att_priv_object_schema_name,
 
 	// files for shadowing purposes
 	att_file_filename = SERIES,
@@ -519,6 +540,7 @@ enum att_type {
 	att_gen_sysflag,
 	att_gen_init_val,
 	att_gen_id_increment,
+	att_gen_schema_name,
 
 	// Stored procedure attributes
 
@@ -541,6 +563,7 @@ enum att_type {
 	att_procedure_private_flag,
 	att_procedure_sql_security_deprecated,	// can be removed later
 	att_procedure_sql_security,
+	att_procedure_schema_name,
 
 	// Stored procedure parameter attributes
 
@@ -557,6 +580,8 @@ enum att_type {
 	att_procedureprm_mechanism,
 	att_procedureprm_field_name,
 	att_procedureprm_relation_name,
+	att_procedureprm_field_source_schema_name,
+	att_procedureprm_relation_schema_name,
 
 	// Exception attributes
 
@@ -567,6 +592,7 @@ enum att_type {
 	att_exception_msg2,
 	att_exception_security_class, // FB3.0, ODS12_0
 	att_exception_owner_name,
+	att_exception_schema_name,	// FB6.0, ODS14_0
 
 	// Relation constraints attributes
 
@@ -576,6 +602,7 @@ enum att_type {
 	att_rel_constraint_defer,
 	att_rel_constraint_init,
 	att_rel_constraint_index,
+	att_rel_constraint_schema_name,
 
 	// Referential constraints attributes
 
@@ -584,6 +611,8 @@ enum att_type {
 	att_ref_match_option,
 	att_ref_update_rule,
 	att_ref_delete_rule,
+	att_ref_schema_name,
+	att_ref_unique_const_schema_name,
 
 	// SQL roles attributes
 	att_role_name = SERIES,
@@ -594,6 +623,7 @@ enum att_type {
 	// Check constraints attributes
 	att_chk_constraint_name = SERIES,
 	att_chk_trigger_name,
+	att_chk_schema_name,
 
 	// Character Set attributes
 	att_charset_name = SERIES,
@@ -607,6 +637,8 @@ enum att_type {
 	att_charset_bytes_char,
 	att_charset_security_class, // FB3.0, ODS12_0
 	att_charset_owner_name,
+	att_charset_schema_name,
+	att_charset_coll_schema_name,
 
 	att_coll_name = SERIES,
 	att_coll_id,
@@ -620,6 +652,7 @@ enum att_type {
 	att_coll_specific_attr,
 	att_coll_security_class, // FB3.0, ODS12_0
 	att_coll_owner_name,
+	att_coll_schema_name,
 
 	// Names mapping
 	att_map_name = SERIES,
@@ -643,6 +676,7 @@ enum att_type {
 	att_package_description,
 	att_package_sql_security_deprecated,	// can be removed later
 	att_package_sql_security,
+	att_package_schema_name,
 
 	// Database creators
 	att_dbc_user = SERIES,
@@ -656,7 +690,17 @@ enum att_type {
 
 	// Publication tables
 	att_ptab_pub_name = SERIES,
-	att_ptab_table_name
+	att_ptab_table_name,
+	att_ptab_table_schema_name,
+
+	// Schema attributes
+	att_schema_name = SERIES,
+	att_schema_charset_schema_name,
+	att_schema_charset_name,
+	att_schema_sql_security,
+	att_schema_security_class,
+	att_schema_owner_name,
+	att_schema_description,
 };
 
 
@@ -672,13 +716,13 @@ enum trig_t {
 // these types to go away when recognized by gpre as
 // <relation>.<field>.<type>  some time in the future
 
-const int TRIG_TYPE_PRE_STORE = 1;
-const int TRIG_TYPE_PRE_MODIFY = 3;
-const int TRIG_TYPE_POST_ERASE = 6;
+inline constexpr int TRIG_TYPE_PRE_STORE = 1;
+inline constexpr int TRIG_TYPE_PRE_MODIFY = 3;
+inline constexpr int TRIG_TYPE_POST_ERASE = 6;
 
 // default trigger name templates
 
-const int TRIGGER_SEQUENCE_DEFAULT	= 0;
+inline constexpr int TRIGGER_SEQUENCE_DEFAULT = 0;
 
 // common structure definitions
 
@@ -703,7 +747,7 @@ struct burp_fld
 	SSHORT		fld_system_flag;
 	SSHORT		fld_name_length;
 	TEXT		fld_name [GDS_NAME_LEN];
-	TEXT		fld_source [GDS_NAME_LEN];
+	Firebird::QualifiedMetaString fld_source;
 	TEXT		fld_base [GDS_NAME_LEN];
 	TEXT		fld_query_name [GDS_NAME_LEN];
 	TEXT		fld_security_class [GDS_NAME_LEN];
@@ -724,8 +768,8 @@ struct burp_fld
 	SSHORT		fld_null_flag;
 	ISC_QUAD	fld_default_value;
 	ISC_QUAD	fld_default_source;
-	SSHORT		fld_character_set_id;
-	SSHORT		fld_collation_id;
+	CSetId		fld_character_set_id;
+	CollId		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
 };
@@ -748,8 +792,7 @@ struct burp_rel
 	burp_fld*	rel_fields;
 	SSHORT		rel_flags;
 	SSHORT		rel_id;
-	SSHORT		rel_name_length;
-	GDS_NAME	rel_name;
+	Firebird::QualifiedMetaString rel_name;
 	GDS_NAME	rel_owner;		// relation owner, if not us
 	ULONG		rel_max_pp;		// max pointer page sequence number
 };
@@ -763,7 +806,7 @@ enum burp_rel_flags_vals {
 struct burp_pkg
 {
 	burp_pkg*	pkg_next;
-	GDS_NAME	pkg_name;
+	Firebird::QualifiedMetaString pkg_name;
 	GDS_NAME	pkg_owner;
 };
 
@@ -772,16 +815,14 @@ struct burp_pkg
 struct burp_prc
 {
 	burp_prc*	prc_next;
-	//SSHORT	prc_name_length; // Currently useless, but didn't want to delete it.
-	GDS_NAME	prc_package;
-	GDS_NAME	prc_name;
+	Firebird::QualifiedMetaString prc_name;
 	GDS_NAME	prc_owner;		// relation owner, if not us
 };
 
 
 struct gfld
 {
-	TEXT		gfld_name [GDS_NAME_LEN];
+	Firebird::QualifiedMetaString gfld_name;
 	ISC_QUAD	gfld_vb;
 	ISC_QUAD	gfld_vs;
 	ISC_QUAD	gfld_vs2;
@@ -806,13 +847,13 @@ struct burp_meta_obj
 {
 	burp_meta_obj*	obj_next;
 	USHORT			obj_type;
-	GDS_NAME		obj_name;
+	Firebird::QualifiedMetaString obj_name;
 	bool			obj_class;
 };
 
 // CVC: Could use MAXPATHLEN, but what about restoring in a different system?
 // I need to review if we tolerate different lengths for different OS's here.
-const unsigned int MAX_FILE_NAME_SIZE		= 256;
+inline constexpr unsigned int MAX_FILE_NAME_SIZE = 256;
 
 #include "../burp/std_desc.h"
 
@@ -896,9 +937,9 @@ struct burp_act
 		act_t		act_action;
 };
 
-const size_t ACT_LEN = sizeof(burp_act);
+inline constexpr size_t ACT_LEN = sizeof(burp_act);
 
-const ULONG MAX_LENGTH = ~FB_CONST64(0);	// Keep in sync with burp_fil.fil_length
+inline constexpr ULONG MAX_LENGTH = ~FB_CONST64(0);	// Keep in sync with burp_fil.fil_length
 
 // This structure has been cloned from spit.cpp
 
@@ -918,12 +959,12 @@ struct hdr_split
 // NOTE: size of the hdr_split_tag and HDR_SPLIT_TAG must be the same and equal
 // to 18. Otherwise we will not be able to join the gbk files v5.x
 
-const size_t HDR_SPLIT_SIZE	= sizeof(hdr_split);
-static const char HDR_SPLIT_TAG5[]	= "InterBase/gsplit, ";
-static const char HDR_SPLIT_TAG6[]	= "InterBase/gbak,   ";
+inline constexpr size_t HDR_SPLIT_SIZE	= sizeof(hdr_split);
+static inline constexpr char HDR_SPLIT_TAG5[]	= "InterBase/gsplit, ";
+static inline constexpr char HDR_SPLIT_TAG6[]	= "InterBase/gbak,   ";
 // CVC: Don't convert to const char* or you will have to fix the sizeof()'s!!!
 #define HDR_SPLIT_TAG HDR_SPLIT_TAG6
-const FB_UINT64 MIN_SPLIT_SIZE	= FB_CONST64(2048);		// bytes
+inline constexpr FB_UINT64 MIN_SPLIT_SIZE	= FB_CONST64(2048);		// bytes
 
 
 // Global switches and data
@@ -952,6 +993,12 @@ public:
 		if (gbl_pool != getDefaultMemoryPool())
 			Firebird::MemoryPool::deletePool(gbl_pool);
 	}
+};
+
+// forward declarations
+namespace Burp
+{
+	class BurpTaskItem;
 };
 
 class BurpGlobals : public Firebird::ThreadData, public GblPool
@@ -1144,6 +1191,7 @@ public:
 	Firebird::IRequest*	handles_get_ref_constraint_req_handle1;
 	Firebird::IRequest*	handles_get_rel_constraint_req_handle1;
 	Firebird::IRequest*	handles_get_relation_req_handle1;
+	Firebird::IRequest*	handles_get_schema_req_handle1;
 	Firebird::IRequest*	handles_get_security_class_req_handle1;
 	Firebird::IRequest*	handles_get_sql_roles_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_message_req_handle1;
@@ -1189,9 +1237,9 @@ public:
 	{
 		ThreadData::restoreSpecific();
 	}
-	void setupSkipData(const Firebird::string& regexp);
-	void setupIncludeData(const Firebird::string& regexp);
-	bool skipRelation(const char* name);
+	void setupSkipIncludePattern(const Firebird::string& regexp, USHORT alreadySetErrorCode,
+		Firebird::AutoPtr<Firebird::SimilarToRegex>& matcher);
+	bool skipRelation(const Firebird::QualifiedMetaString& name);
 
 	char veryEnd;
 	//starting after this members must be initialized in constructor explicitly
@@ -1199,19 +1247,20 @@ public:
 	Firebird::FbLocalStatus status_vector;
 	Firebird::ThrowLocalStatus throwStatus;
 
-	Firebird::Array<Firebird::Pair<Firebird::NonPooled<Firebird::MetaString, Firebird::MetaString> > >
-		defaultCollations;
-	Firebird::SortedArray<Firebird::MetaString> systemFields;
+	Firebird::NonPooledMap<Firebird::QualifiedMetaString, Firebird::QualifiedMetaString> defaultCollations;
+	Firebird::SortedArray<Firebird::QualifiedMetaString> systemFields;
 	Firebird::Array<UCHAR> gbl_dpb_data;
 	Firebird::UtilSvc* uSvc;
 	bool master;			// set for master thread only
-	void* taskItem;			// current task item, if any
+	Burp::BurpTaskItem* taskItem;			// current task item, if any.
 	ULONG verboseInterval;	// How many records should be backed up or restored before we show this message
 	bool flag_on_line;		// indicates whether we will bring the database on-line
 	bool firstMap;			// this is the first time we entered get_mapping()
 	bool firstDbc;			// this is the first time we entered get_db_creators()
 	bool stdIoMode;			// stdin or stdout is used as backup file
+	Firebird::AutoPtr<Firebird::SimilarToRegex> skipSchemaDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> includeSchemaDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
 
 public:
@@ -1237,7 +1286,7 @@ public:
 void	BURP_exit_local(int code, BurpGlobals* tdgbl);
 
 // database is not on-line due to failure to activate one or more indices
-const int FINI_DB_NOT_ONLINE		= 2;
+inline constexpr int FINI_DB_NOT_ONLINE = 2;
 
 /* Burp will always write a backup in multiples of the following number
  * of bytes.  The initial value is the smallest which ensures that writes
@@ -1248,8 +1297,8 @@ const int FINI_DB_NOT_ONLINE		= 2;
  * bit masking.
  */
 
-const int BURP_BLOCK		= 512;
-inline static ULONG BURP_UP_TO_BLOCK(const ULONG size)
+inline constexpr int BURP_BLOCK = 512;
+static inline constexpr ULONG BURP_UP_TO_BLOCK(const ULONG size)
 {
 	return (((size) + BURP_BLOCK - 1) & ~(BURP_BLOCK - 1));
 }
@@ -1258,11 +1307,11 @@ inline static ULONG BURP_UP_TO_BLOCK(const ULONG size)
 // so that other files can see them for multivolume opens
 
 #ifdef WIN_NT
-static const ULONG MODE_READ	= GENERIC_READ;
-static const ULONG MODE_WRITE	= GENERIC_WRITE;
+static inline constexpr ULONG MODE_READ = GENERIC_READ;
+static inline constexpr ULONG MODE_WRITE = GENERIC_WRITE;
 #else
-static const ULONG MODE_READ	= O_RDONLY;
-static const ULONG MODE_WRITE	= O_WRONLY | O_CREAT;
+static inline constexpr ULONG MODE_READ = O_RDONLY;
+static inline constexpr ULONG MODE_WRITE = O_WRONLY | O_CREAT;
 #endif
 
 
@@ -1337,16 +1386,16 @@ private:
 static inline UCHAR* BURP_alloc(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().allocate(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().allocate(size));
 }
 
 static inline UCHAR* BURP_alloc_zero(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().calloc(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().calloc(size));
 }
 
-static inline void BURP_free(void* block)
+static inline void BURP_free(void* block) noexcept
 {
 	MemoryPool::globalFree(block);
 }

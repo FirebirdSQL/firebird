@@ -46,11 +46,11 @@ public:
 	static const char dir_sep;
 
 	/// String used to point to current directory
-	static const char* curr_dir_link;
+	static const char* const curr_dir_link;
 	static const size_t curr_dir_link_len;
 
 	/// String used to point to parent directory
-	static const char* up_dir_link;
+	static const char* const up_dir_link;
 	static const size_t up_dir_link_len;
 
 	/// The directory list separator for the platform.
@@ -78,6 +78,13 @@ public:
 		// Destructor provided for memory cleanup
 		virtual ~DirIterator() {}
 
+		// Default constructor is not allowed
+		DirIterator() = delete;
+		// Copy constructor is not allowed
+		DirIterator(const DirIterator&) = delete;
+		// Assignment operator is not allowed
+		const DirIterator& operator=(const DirIterator&) = delete;
+
 		// The prefix increment operator (++itr) advances the iteration by
 		// one and returns a reference to itself to allow cascading operations
 		virtual const DirIterator& operator++() = 0;
@@ -86,24 +93,16 @@ public:
 		// item in the iteration.  This path is prefixed with the path of
 		// the directory.  If the last element of the path is wanted use
 		// PathUtils::splitLastComponent on the result of this function.
-		virtual const Firebird::PathName& operator*() = 0;
+		virtual const Firebird::PathName& operator*() noexcept = 0;
 
 		// Tests if the iterator has reached the end of the iteration.
 		// It is implemented in such a way to make the following loop work correctly:
 		// for (DirIterator *itr = PathUtils::newDirIterator(); *itr; ++(*itr))
-		virtual operator bool() = 0;
+		virtual operator bool() noexcept = 0;
 
 	protected:
 		// Stores the path to the directory as given in the constructor
 		const Firebird::PathName dirPrefix;
-
-	private:
-		// Default constructor is not allowed
-		DirIterator();
-		// Copy constructor is not allowed
-		DirIterator(const DirIterator&);
-		// Assignment operator is not allowed
-		const DirIterator& operator=(const DirIterator&);
 	};
 
 	/** isRelative returns true if the given path is relative, and false if not.
@@ -141,9 +140,9 @@ public:
 	static void ensureSeparator(Firebird::PathName& in_out);
 
 	// Ensure the path separators are correct for the current platform
-	static void fixupSeparators(char* path);
+	static void fixupSeparators(char* path) noexcept;
 
-	static void fixupSeparators(Firebird::PathName& path)
+	static void fixupSeparators(Firebird::PathName& path) noexcept
 	{
 		fixupSeparators(path.begin());
 	}

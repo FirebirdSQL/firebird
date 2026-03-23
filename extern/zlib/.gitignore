@@ -1,4 +1,5 @@
 zconf.h
 zlib.h
+arm64/
 win32/
 x64/

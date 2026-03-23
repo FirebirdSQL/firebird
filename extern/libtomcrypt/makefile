@@ -38,19 +38,22 @@ EXTRALIBS += -lgcov
 endif
 
 #AES comes in two flavours... enc+dec and enc
-src/ciphers/aes/aes_enc.o: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
+$(OBJDIR_PREFIX)src/ciphers/aes/aes_enc.o: src/ciphers/aes/aes.c src/ciphers/aes/aes_tab.c
+	@mkdir -p $(dir $@)
 	${silent} ${CC} ${LTC_CFLAGS} -DENCRYPT_ONLY -c $< -o $@
 
-.c.o:
+$(OBJDIR_PREFIX)%.o: %.c
 ifneq ($V,1)
 	@echo "   * ${CC} $@"
 endif
+	@mkdir -p $(dir $@)
 	${silent} ${CC} ${LTC_CFLAGS} -c $< -o $@
 
 $(LIBNAME): $(OBJECTS)
 ifneq ($V,1)
 	@echo "   * ${AR} $@"
 endif
+	@mkdir -p $(dir $@)
 	${silent} $(AR) $(ARFLAGS) $@ $(OBJECTS)
 ifneq ($V,1)
 	@echo "   * ${RANLIB} $@"
@@ -65,7 +68,7 @@ endif
 
 # build the demos from a template
 define DEMO_template
-$(1): $(call print-help,$(1),Builds the library and the '$(1)' demo) demos/$(1).o $$(LIBNAME)
+$(1): $(call print-help,$(1),Builds the library and the '$(1)' demo) $(OBJDIR_PREFIX)demos/$(1).o $$(LIBNAME)
 ifneq ($V,1)
 	@echo "   * $${CC} $$@"
 endif

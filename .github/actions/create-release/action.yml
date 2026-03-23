@@ -1,6 +1,3 @@
-# TODO: Replace asfernandes/action-gh-release@master by softprops/action-gh-release@v1
-# once https://github.com/softprops/action-gh-release/pull/343 is merged.
-
 name: Create release
 description: Create release
 
@@ -44,7 +41,7 @@ runs:
 
     - name: Release
       id: release_try1
-      uses: asfernandes/action-gh-release@master
+      uses: softprops/action-gh-release@master
       if: steps.release-info.outputs.artifacts-tag
       continue-on-error: true
       with:
@@ -65,7 +62,7 @@ runs:
         files: ${{ inputs.uploadFiles }}
 
     - name: Release (retry)
-      uses: asfernandes/action-gh-release@master
+      uses: softprops/action-gh-release@master
       if: |
         steps.release-info.outputs.artifacts-tag &&
         steps.release_try1.outcome == 'failure'

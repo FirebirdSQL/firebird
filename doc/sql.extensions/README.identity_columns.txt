@@ -35,7 +35,7 @@ Syntax rules:
     - Identity columns can't have DEFAULT or COMPUTED value.
 
 Notes:
-    - You cannot alter a identity column to normal column and vice versa.
+    - You cannot alter an identity column to normal column and vice versa.
     - Identity columns are implicitly NOT NULL.
     - Identity columns don't enforce uniqueness automatically. Use UNIQUE or PRIMARY key for that.
     - Increment value cannot be 0.
@@ -92,7 +92,7 @@ alter table objects
 Override Clause
 ---------------
 
-BY DEFAULT identity columns can be overriden in INSERT statements (INSERT, UPDATE OR INSERT, MERGE ... WHEN NOT MATCHED)
+BY DEFAULT identity columns can be overridden in INSERT statements (INSERT, UPDATE OR INSERT, MERGE ... WHEN NOT MATCHED)
 just specifying the value in the values list. However, for ALWAYS identity columns that is not allowed.
 
 To use the value passed in the INSERT statement for an ALWAYS column, you should pass OVERRIDING SYSTEM VALUE as

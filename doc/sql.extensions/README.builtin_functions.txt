@@ -13,6 +13,7 @@ Authors:
     Alexey Karyakin <aleksey.karyakin@mail.ru>
     Claudio Valderrama C. <cvalde at usa.net>
     Alexander Peshkov <peshkoff@mail.ru>
+    Alexey Chudaykin <chudaykinalex@gmail.com>
 
 
 ---
@@ -568,6 +569,23 @@ Example:
 See also: CHAR_TO_UUID and UUID_TO_CHAR
 
 
+--------
+GREATEST
+--------
+
+Function:
+    Returns the maximum value of a list of values.
+
+Format:
+    GREATEST( <value> [, <value> ...] )
+
+Example:
+    select greatest(v1, v2, 10) from x;
+
+Notes:
+    This function is a SQL-compliant alias to the MAXVALUE function. They work identically.
+
+
 ----
 HASH
 ----
@@ -628,6 +646,23 @@ Example:
     select last_day(of month from current_date) from rdb$database;
     select last_day(of year from current_timestamp) from rdb$database;
     select last_day(of week from date '2017-11-01') from rdb$database;
+
+
+-----
+LEAST
+-----
+
+Function:
+    Returns the minimum value of a list of values.
+
+Format:
+    LEAST( <value> [, <value> ...] )
+
+Example:
+    select least(v1, v2, 10) from x;
+
+Notes:
+    This function is a SQL-compliant alias to the MINVALUE function. They work identically.
 
 
 ----
@@ -751,7 +786,7 @@ Notes:
 	   If ppnum is specified, then dpnum could be negative.
 	   If ppnum is missing and dpnum is negative then NULL is returned.
     7) If any of specified arguments has NULL value, the result is also NULL.
-	8) First argument (relation) is described as INTEGER but could be overriden
+	8) First argument (relation) is described as INTEGER but could be overridden
 	   by application as VARCHAR or CHAR.
 	   recnum, dpnum and ppnum are described as BIGINT (64-bit signed integer).
 
@@ -778,6 +813,7 @@ Examples:
 		 where rdb$db_key >= make_dbkey('SOMETABLE', 0, 0, 5)
 		   and rdb$db_key <  make_dbkey('SOMETABLE', 0, 1, 5)
 
+
 --------
 MAXVALUE
 --------
@@ -791,19 +827,25 @@ Format:
 Example:
     select maxvalue(v1, v2, 10) from x;
 
+Notes:
+    This function is a legacy name for the SQL-compliant GREATEST function. They work identically.
+
 
 --------
 MINVALUE
 --------
 
 Function:
-    Returns the minimun value of a list of values.
+    Returns the minimum value of a list of values.
 
 Format:
     MINVALUE( <value> [, <value> ...] )
 
 Example:
     select minvalue(v1, v2, 10) from x;
+
+Notes:
+    This function is a legacy name for the SQL-compliant LEAST function. They work identically.
 
 
 ---
@@ -952,7 +994,7 @@ REPLACE
 -------
 
 Function:
-    REPLACE(searched, find, replacement) replaces all occurences of "find"
+    REPLACE(searched, find, replacement) replaces all occurrences of "find"
     in "searched" by "replacement".
 
 Format:
@@ -1078,7 +1120,7 @@ Function:
 
 Format:
     RSA_ENCRYPT ( <string> KEY <public key> [LPARAM <string>] [HASH <hash>] [PKCS_1_5] )
-        KEY should be a value, returhed by RSA_PUBLIC function.
+        KEY should be a value, returned by RSA_PUBLIC function.
         LPARAM is an additional system specific tag that can be applied to identify which
             system encoded the message. Default value is NULL.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
@@ -1100,7 +1142,7 @@ Function:
 
 Format:
     RSA_DECRYPT ( <string> KEY <private key> [LPARAM <string>] [HASH <hash>] [PKCS_1_5] )
-        KEY should be a value, returhed by RSA_PRIVATE function.
+        KEY should be a value, returned by RSA_PRIVATE function.
         LPARAM is the same variable passed to RSA_ENCRYPT. If it does not match
           what was used during encoding this function will not decrypt the packet.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
@@ -1122,7 +1164,7 @@ Function:
 
 Format:
     RSA_SIGN_HASH ( <string> KEY <private key> [HASH <hash>] [SALT_LENGTH <smallint>] [PKCS_1_5] )
-        KEY should be a value, returhed by RSA_PRIVATE function.
+        KEY should be a value, returned by RSA_PRIVATE function.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
         SALT_LENGTH indicates the length of the desired salt, and should typically be small.
             A good value is between 8 and 16.
@@ -1144,8 +1186,8 @@ Function:
 
 Format:
     RSA_VERIFY_HASH ( <string> SIGNATURE <string> KEY <public key> [HASH <hash>] [SALT_LENGTH <smallint>] [PKCS_1_5] )
-        SIGNATURE should be a value, returhed by RSA_SIGN function.
-        KEY should be a value, returhed by RSA_PUBLIC function.
+        SIGNATURE should be a value, returned by RSA_SIGN function.
+        KEY should be a value, returned by RSA_PUBLIC function.
         hash ::= { MD5 | SHA1 | SHA256 | SHA512 } Default is SHA256.
         SALT_LENGTH indicates the length of the desired salt, and should typically be small.
             A good value is between 8 and 16.

@@ -136,6 +136,12 @@ void BaseAggWinStream<ThisType, NextType>::findUsedStreams(StreamList& streams,
 		m_next->findUsedStreams(streams, true);
 }
 
+template <typename ThisType, typename NextType>
+bool BaseAggWinStream<ThisType, NextType>::isDependent(const StreamList& streams) const
+{
+	return m_next->isDependent(streams);
+}
+
 // Compute the next aggregated record of a value group.
 template <typename ThisType, typename NextType>
 bool BaseAggWinStream<ThisType, NextType>::evaluateGroup(thread_db* tdbb) const
@@ -335,7 +341,7 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, Request
 		dsc* desc = EVL_expr(tdbb, request, from);
 		int n;
 
-		if (request->req_flags & req_null)
+		if (!desc)
 		{
 			if (vtemp->vlu_desc.dsc_address)
 				return -1 * nullsPlacement;

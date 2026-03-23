@@ -65,7 +65,7 @@ namespace MsgFormat
 {
 
 // For now we allow 9 parameters; @1..@9 in MsgPrint.
-const FB_SIZE_T SAFEARG_MAX_ARG = 9;
+inline constexpr FB_SIZE_T SAFEARG_MAX_ARG = 9;
 
 // This is the unit that represents one parameter in the format routines.
 // The user of the routines rarely needs to be concerned with it.
@@ -142,29 +142,29 @@ class BaseStream;
 class SafeArg
 {
 public:
-	SafeArg();
-	SafeArg(const int val[], FB_SIZE_T v_size);
-	SafeArg& clear();
-	SafeArg& operator<<(char c);
-	SafeArg& operator<<(unsigned char c);
-	//SafeArg& operator<<(int16_t c);
-	SafeArg& operator<<(short c);
-	SafeArg& operator<<(unsigned short c);
-	//SafeArg& operator<<(int32_t c);
-	SafeArg& operator<<(int c);
-	SafeArg& operator<<(unsigned int c);
-	SafeArg& operator<<(long int c);
-	SafeArg& operator<<(unsigned long int c);
-	SafeArg& operator<<(SINT64 c);
-	SafeArg& operator<<(FB_UINT64 c);
-	//SafeArg& operator<<(long c);
-	SafeArg& operator<<(SINT128 c);
-	SafeArg& operator<<(double c);
-	SafeArg& operator<<(const char* c);
-	SafeArg& operator<<(const unsigned char* c);
-	SafeArg& operator<<(void* c);
-	void dump(const TEXT* target[], FB_SIZE_T v_size) const;
-	const safe_cell& getCell(FB_SIZE_T index) const;
+	SafeArg() noexcept;
+	SafeArg(const int val[], FB_SIZE_T v_size) noexcept;
+	SafeArg& clear() noexcept;
+	SafeArg& operator<<(char c) noexcept;
+	SafeArg& operator<<(unsigned char c) noexcept;
+	//SafeArg& operator<<(int16_t c) noexcept;
+	SafeArg& operator<<(short c) noexcept;
+	SafeArg& operator<<(unsigned short c) noexcept;
+	//SafeArg& operator<<(int32_t c) noexcept;
+	SafeArg& operator<<(int c) noexcept;
+	SafeArg& operator<<(unsigned int c) noexcept;
+	SafeArg& operator<<(long int c) noexcept;
+	SafeArg& operator<<(unsigned long int c) noexcept;
+	SafeArg& operator<<(SINT64 c) noexcept;
+	SafeArg& operator<<(FB_UINT64 c) noexcept;
+	//SafeArg& operator<<(long c) noexcept;
+	SafeArg& operator<<(SINT128 c) noexcept;
+	SafeArg& operator<<(double c) noexcept;
+	SafeArg& operator<<(const char* c) noexcept;
+	SafeArg& operator<<(const unsigned char* c) noexcept;
+	SafeArg& operator<<(void* c) noexcept;
+	void dump(const TEXT* target[], FB_SIZE_T v_size) const noexcept;
+	const safe_cell& getCell(FB_SIZE_T index) const noexcept;
 	FB_SIZE_T getCount() const noexcept;
 
 private:
@@ -176,12 +176,12 @@ private:
 		bool userFormatting);
 };
 
-inline SafeArg::SafeArg()
+inline SafeArg::SafeArg() noexcept
 	: m_count(0), m_extras(0)
 {
 }
 
-inline SafeArg& SafeArg::clear()
+inline SafeArg& SafeArg::clear() noexcept
 {
 	m_count = 0;
 	m_extras = 0;

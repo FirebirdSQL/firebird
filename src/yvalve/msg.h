@@ -26,11 +26,11 @@
 #define JRD_MSG_H
 
 #define MSG_NUMBER(facility, code)	((SLONG) facility * 10000 + code)
-const USHORT MSG_BUCKET			= 1024;
-const UCHAR MSG_MAJOR_VERSION	= 1;
+inline constexpr USHORT MSG_BUCKET			= 1024;
+inline constexpr UCHAR MSG_MAJOR_VERSION	= 1;
 // trick to silence the compiler when FB_MSG_MINOR_VERSION is 0
 #define FB_MSG_MINOR_VERSION	1
-const UCHAR MSG_MINOR_VERSION	= FB_MSG_MINOR_VERSION;
+inline constexpr UCHAR MSG_MINOR_VERSION	= FB_MSG_MINOR_VERSION;
 
 // Message file header block
 

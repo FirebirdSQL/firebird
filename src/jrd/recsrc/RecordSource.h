@@ -53,7 +53,7 @@ namespace Jrd
 	class BufferedStream;
 	class PlanEntry;
 
-	enum JoinType { INNER_JOIN, OUTER_JOIN, SEMI_JOIN, ANTI_JOIN };
+	enum class JoinType { INNER, OUTER, SEMI, ANTI };
 
 	// Common base for record sources, sub-queries and cursors.
 	class AccessPath
@@ -125,9 +125,8 @@ namespace Jrd
 		Firebird::ObjectsArray<Line> lines{getPool()};
 		Firebird::ObjectsArray<PlanEntry> children{getPool()};
 		std::optional<ObjectType> objectType;
-		MetaName packageName;
-		MetaName objectName;
-		MetaName alias;
+		QualifiedName objectName;
+		Firebird::string alias{getPool()};
 		const AccessPath* accessPath = nullptr;
 		ULONG recordLength = 0;
 		ULONG keyLength = 0;
@@ -147,6 +146,7 @@ namespace Jrd
 		virtual void invalidateRecords(Request* request) const = 0;
 
 		virtual void findUsedStreams(StreamList& streams, bool expandAll = false) const = 0;
+		virtual bool isDependent(const StreamList& streams) const = 0;
 		virtual void nullRecords(thread_db* tdbb) const = 0;
 
 		virtual void setAnyBoolean(BoolExprNode* /*anyBoolean*/, bool /*ansiAny*/, bool /*ansiNot*/)
@@ -178,9 +178,8 @@ namespace Jrd
 
 		RecordSource(CompilerScratch* csb);
 
-		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name, bool quote = true);
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
-										  const Firebird::string& alias);
+										  const Firebird::string& alias = {});
 
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::ObjectsArray<PlanEntry::Line>& planLines,
@@ -217,9 +216,14 @@ namespace Jrd
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
+		bool isDependent(const StreamList& /*streams*/) const override
+		{
+			return false;
+		}
+
 	protected:
 		const StreamType m_stream;
-		const Format* const m_format;
+		mutable const Format* m_format;
 	};
 
 
@@ -235,7 +239,7 @@ namespace Jrd
 
 	public:
 		FullTableScan(CompilerScratch* csb, const Firebird::string& alias,
-					  StreamType stream, jrd_rel* relation,
+					  StreamType stream, Rsc::Rel relation,
 					  const Firebird::Array<DbKeyRangeNode*>& dbkeyRanges);
 
 		void close(thread_db* tdbb) const override;
@@ -249,7 +253,7 @@ namespace Jrd
 
 	private:
 		const Firebird::string m_alias;
-		jrd_rel* const m_relation;
+		const Rsc::Rel m_relation;
 		Firebird::Array<DbKeyRangeNode*> m_dbkeyRanges;
 	};
 
@@ -262,7 +266,7 @@ namespace Jrd
 
 	public:
 		BitmapTableScan(CompilerScratch* csb, const Firebird::string& alias,
-						StreamType stream, jrd_rel* relation,
+						StreamType stream, Rsc::Rel relation,
 						InversionNode* inversion, double selectivity);
 
 		void close(thread_db* tdbb) const override;
@@ -276,7 +280,7 @@ namespace Jrd
 
 	private:
 		const Firebird::string m_alias;
-		jrd_rel* const m_relation;
+		const Rsc::Rel m_relation;
 		NestConst<InversionNode> const m_inversion;
 	};
 
@@ -303,7 +307,7 @@ namespace Jrd
 
 	public:
 		IndexTableScan(CompilerScratch* csb, const Firebird::string& alias,
-					   StreamType stream, jrd_rel* relation,
+					   StreamType stream, Rsc::Rel relation,
 					   InversionNode* index, USHORT keyLength,
 					   double selectivity);
 
@@ -336,7 +340,7 @@ namespace Jrd
 		bool setupBitmaps(thread_db* tdbb, Impure* impure) const;
 
 		const Firebird::string m_alias;
-		jrd_rel* const m_relation;
+		const Rsc::Rel m_relation;
 		NestConst<InversionNode> const m_index;
 		NestConst<InversionNode> m_inversion;
 		NestConst<BoolExprNode> m_condition;
@@ -353,7 +357,7 @@ namespace Jrd
 
 	public:
 		ExternalTableScan(CompilerScratch* csb, const Firebird::string& alias,
-						  StreamType stream, jrd_rel* relation);
+						  StreamType stream, Rsc::Rel relation);
 
 		void close(thread_db* tdbb) const override;
 
@@ -368,7 +372,7 @@ namespace Jrd
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 
 	private:
-		jrd_rel* const m_relation;
+		const Rsc::Rel m_relation;
 		const Firebird::string m_alias;
 	};
 
@@ -376,7 +380,7 @@ namespace Jrd
 	{
 	public:
 		VirtualTableScan(CompilerScratch* csb, const Firebird::string& alias,
-						 StreamType stream, jrd_rel* relation);
+						 StreamType stream, Rsc::Rel relation);
 
 		void close(thread_db* tdbb) const override;
 
@@ -390,12 +394,12 @@ namespace Jrd
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
 
-		virtual const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const = 0;
+		virtual const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const = 0;
 		virtual bool retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 									FB_UINT64 position, Record* record) const = 0;
 
 	private:
-		jrd_rel* const m_relation;
+		const Rsc::Rel m_relation;
 		const Firebird::string m_alias;
 	};
 
@@ -408,14 +412,15 @@ namespace Jrd
 		};
 
 	public:
-		ProcedureScan(CompilerScratch* csb, const Firebird::string& alias, StreamType stream,
-					  const jrd_prc* procedure, const ValueListNode* sourceList,
+		ProcedureScan(thread_db* tdbb, CompilerScratch* csb, const Firebird::string& alias,
+					  StreamType stream, const SubRoutine<jrd_prc>& procedure, const ValueListNode* sourceList,
 					  const ValueListNode* targetList, MessageNode* message);
 
 		void close(thread_db* tdbb) const override;
 
 		bool refetchRecord(thread_db* tdbb) const override;
 		WriteLockResult lockRecord(thread_db* tdbb) const override;
+		bool isDependent(const StreamList& streams) const override;
 
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
@@ -429,7 +434,7 @@ namespace Jrd
 						  const UCHAR* msg, const dsc* to_desc, SSHORT to_id, Record* record) const;
 
 		const Firebird::string m_alias;
-		const jrd_prc* const m_procedure;
+		const SubRoutine<jrd_prc> m_procedure;
 		const ValueListNode* m_sourceList;
 		const ValueListNode* m_targetList;
 		NestConst<MessageNode> const m_message;
@@ -454,6 +459,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
@@ -484,6 +490,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
@@ -516,6 +523,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
@@ -554,6 +562,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
@@ -575,7 +584,7 @@ namespace Jrd
 	{
 	public:
 		FilteredStream(CompilerScratch* csb, RecordSource* next,
-					   BoolExprNode* boolean, double selectivity = 0);
+					   BoolExprNode* boolean, double selectivity);
 
 		void close(thread_db* tdbb) const override;
 
@@ -588,6 +597,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
@@ -601,21 +611,23 @@ namespace Jrd
 		}
 
 	protected:
+		FilteredStream(CompilerScratch* csb, RecordSource* next, BoolExprNode* boolean);
+
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
 
-		bool m_invariant = false;
+		const bool m_invariant;
 
 	private:
-		bool evaluateBoolean(thread_db* tdbb) const;
+		Firebird::TriState evaluateBoolean(thread_db* tdbb) const;
 
 		NestConst<RecordSource> m_next;
 		NestConst<BoolExprNode> const m_boolean;
 		NestConst<BoolExprNode> m_anyBoolean;
-		bool m_ansiAny;
-		bool m_ansiAll;
-		bool m_ansiNot;
+		bool m_ansiAny = false;
+		bool m_ansiAll = false;
+		bool m_ansiNot = false;
 	};
 
 	class PreFilteredStream : public FilteredStream
@@ -624,9 +636,7 @@ namespace Jrd
 		PreFilteredStream(CompilerScratch* csb, RecordSource* next,
 						  BoolExprNode* boolean)
 			: FilteredStream(csb, next, boolean)
-		{
-			m_invariant = true;
-		}
+		{}
 	};
 
 	class SortedStream : public RecordSource
@@ -707,6 +717,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
@@ -864,6 +875,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 
 	protected:
 		void internalOpen(thread_db* tdbb) const override;
@@ -900,8 +912,8 @@ namespace Jrd
 
 				dsc* desc = EVL_expr(tdbb, request, from);
 
-				if (request->req_flags & req_null)
-					target->vlu_desc.dsc_address = NULL;
+				if (!desc)
+					target->vlu_desc.dsc_address = nullptr;
 				else
 				{
 					EVL_make_value(tdbb, desc, target);
@@ -957,7 +969,8 @@ namespace Jrd
 
 				void operator ()(thread_db* tdbb, impure_value* target)
 				{
-					ArithmeticNode::add2(tdbb, offsetDesc, target, arithNode, arithNode->blrOp);
+					ArithmeticNode::add(tdbb, offsetDesc, &target->vlu_desc, target, arithNode->blrOp, false,
+						arithNode->nodScale, arithNode->nodFlags);
 				}
 
 				const ArithmeticNode* arithNode;
@@ -1002,6 +1015,7 @@ namespace Jrd
 			void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
 			void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+			bool isDependent(const StreamList& streams) const override;
 			void nullRecords(thread_db* tdbb) const override;
 
 		protected:
@@ -1047,6 +1061,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
@@ -1113,6 +1128,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 		void locate(thread_db* tdbb, FB_UINT64 position) const override;
@@ -1137,25 +1153,133 @@ namespace Jrd
 
 	// Multiplexing (many -> one) access methods
 
-	class NestedLoopJoin : public RecordSource
+	template <class Arg>
+	class Join : public RecordSource
 	{
 	public:
-		NestedLoopJoin(CompilerScratch* csb, FB_SIZE_T count, RecordSource* const* args);
+		Join(CompilerScratch* csb, FB_SIZE_T count, JoinType joinType, BoolExprNode* boolean = nullptr)
+			: RecordSource(csb), m_joinType(joinType), m_boolean(boolean),
+			  m_args(csb->csb_pool, count)
+		{
+			fb_assert(!m_boolean || m_joinType == JoinType::OUTER);
+		}
+
+		void close(thread_db* tdbb) const override
+		{
+			for (const auto& arg : m_args)
+				arg->close(tdbb);
+		}
+
+		bool refetchRecord(thread_db* /*tdbb*/) const override
+		{
+			return true;
+		}
+
+		WriteLockResult lockRecord(thread_db* tdbb) const override
+		{
+			if (m_joinType == JoinType::SEMI || m_joinType == JoinType::ANTI)
+				return m_args.front()->lockRecord(tdbb);
+
+			Firebird::status_exception::raise(Firebird::Arg::Gds(isc_record_lock_not_supp));
+		}
+
+		void markRecursive() override
+		{
+			for (auto& arg : m_args)
+				arg->markRecursive();
+		}
+
+		void findUsedStreams(StreamList& streams, bool expandAll) const override
+		{
+			for (const auto& arg : m_args)
+				arg->findUsedStreams(streams, expandAll);
+		}
+
+		bool isDependent(const StreamList& streams) const override
+		{
+			for (const auto& arg : m_args)
+			{
+				if (arg->isDependent(streams))
+					return true;
+			}
+
+			return (m_boolean && m_boolean->containsAnyStream(streams));
+		}
+
+		void invalidateRecords(Request* request) const override
+		{
+			for (const auto& arg : m_args)
+				arg->invalidateRecords(request);
+		}
+
+		void nullRecords(thread_db* tdbb) const override
+		{
+			for (const auto& arg : m_args)
+				arg->nullRecords(tdbb);
+		}
+
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override
+		{
+			for (const auto& arg : m_args)
+			{
+				if (arg != m_args.front())
+					plan += ", ";
+
+				arg->getLegacyPlan(tdbb, plan, level);
+			}
+		}
+
+	protected:
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override
+		{
+			if (recurse)
+			{
+				++level;
+
+				for (const auto& arg : m_args)
+					arg->getPlan(tdbb, planEntry.children.add(), level, recurse);
+			}
+		}
+
+		const Firebird::string printType() const
+		{
+			switch (m_joinType)
+			{
+				case JoinType::INNER:
+					return "(inner)";
+
+				case JoinType::OUTER:
+					return "(outer)";
+
+				case JoinType::SEMI:
+					return "(semi)";
+
+				case JoinType::ANTI:
+					return "(anti)";
+
+				default:
+					fb_assert(false);
+			}
+
+			return "";
+		}
+
+	protected:
+		const JoinType m_joinType;
+		const NestConst<BoolExprNode> m_boolean;
+		Firebird::Array<NestConst<Arg>> m_args;
+	};
+
+	class NestedLoopJoin : public Join<RecordSource>
+	{
+	public:
+		NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
+					   FB_SIZE_T count, RecordSource* const* args);
 		NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
 					   BoolExprNode* boolean);
 
 		void close(thread_db* tdbb) const override;
-
-		bool refetchRecord(thread_db* tdbb) const override;
-		WriteLockResult lockRecord(thread_db* tdbb) const override;
-
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
-
-		void markRecursive() override;
-		void invalidateRecords(Request* request) const override;
-
-		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
-		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1164,30 +1288,16 @@ namespace Jrd
 
 	private:
 		bool fetchRecord(thread_db*, FB_SIZE_T) const;
-
-		const JoinType m_joinType;
-		Firebird::Array<NestConst<RecordSource> > m_args;
-		NestConst<BoolExprNode> const m_boolean;
 	};
 
-	class FullOuterJoin : public RecordSource
+	class FullOuterJoin : public Join<RecordSource>
 	{
 	public:
 		FullOuterJoin(CompilerScratch* csb, RecordSource* arg1, RecordSource* arg2,
 					  const StreamList& checkStreams);
 
 		void close(thread_db* tdbb) const override;
-
-		bool refetchRecord(thread_db* tdbb) const override;
-		WriteLockResult lockRecord(thread_db* tdbb) const override;
-
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
-
-		void markRecursive() override;
-		void invalidateRecords(Request* request) const override;
-
-		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
-		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1195,12 +1305,10 @@ namespace Jrd
 		bool internalGetRecord(thread_db* tdbb) const override;
 
 	private:
-		NestConst<RecordSource> m_arg1;
-		NestConst<RecordSource> m_arg2;
 		const StreamList m_checkStreams;
 	};
 
-	class HashJoin : public RecordSource
+	class HashJoin final : public Join<RecordSource>
 	{
 		class HashTable;
 
@@ -1225,24 +1333,18 @@ namespace Jrd
 		};
 
 	public:
-		HashJoin(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
+				 double selectivity = 0);
+		HashJoin(thread_db* tdbb, CompilerScratch* csb,
+				 BoolExprNode* boolean,
 				 RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 
 		void close(thread_db* tdbb) const override;
-
-		bool refetchRecord(thread_db* tdbb) const override;
-		WriteLockResult lockRecord(thread_db* tdbb) const override;
-
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
-		void markRecursive() override;
-		void invalidateRecords(Request* request) const override;
-
-		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
-		void nullRecords(thread_db* tdbb) const override;
-
-		static unsigned maxCapacity();
+		static unsigned maxCapacity() noexcept;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1250,15 +1352,18 @@ namespace Jrd
 		bool internalGetRecord(thread_db* tdbb) const override;
 
 	private:
+		void init(thread_db* tdbb, CompilerScratch* csb, FB_SIZE_T count,
+				  RecordSource* const* args, NestValueArray* const* keys,
+				  double selectivity);
 		ULONG computeHash(thread_db* tdbb, Request* request,
 						  const SubStream& sub, UCHAR* buffer) const;
 		bool fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) const;
 
 		SubStream m_leader;
-		Firebird::Array<SubStream> m_args;
+		Firebird::Array<SubStream> m_subs;
 	};
 
-	class MergeJoin : public RecordSource
+	class MergeJoin : public Join<SortedStream>
 	{
 		struct MergeFile
 		{
@@ -1294,17 +1399,7 @@ namespace Jrd
 				  const NestValueArray* const* keys);
 
 		void close(thread_db* tdbb) const override;
-
-		bool refetchRecord(thread_db* tdbb) const override;
-		WriteLockResult lockRecord(thread_db* tdbb) const override;
-
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
-
-		void markRecursive() override;
-		void invalidateRecords(Request* request) const override;
-
-		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
-		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1318,7 +1413,6 @@ namespace Jrd
 		SLONG getRecordByIndex(thread_db* tdbb, FB_SIZE_T index) const;
 		bool fetchRecord(thread_db* tdbb, FB_SIZE_T index) const;
 
-		Firebird::Array<NestConst<SortedStream> > m_args;
 		Firebird::Array<const NestValueArray*> m_keys;
 	};
 
@@ -1365,6 +1459,7 @@ namespace Jrd
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1408,6 +1503,7 @@ namespace Jrd
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1449,6 +1545,7 @@ namespace Jrd
 		void invalidateRecords(Request* request) const override;
 
 		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
 		void nullRecords(thread_db* tdbb) const override;
 
 	protected:
@@ -1460,6 +1557,102 @@ namespace Jrd
 		NestConst<RecordSource> m_first;
 		NestConst<RecordSource> m_second;
 		NestConst<BoolExprNode> const m_boolean;
+	};
+
+	class TableValueFunctionScan : public RecordStream
+	{
+	protected:
+		struct Impure : public RecordSource::Impure
+		{
+			RecordBuffer* m_recordBuffer;
+		};
+
+	public:
+		TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
+							   const Firebird::string& alias);
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+	protected:
+		bool internalGetRecord(thread_db* tdbb) const override;
+		void assignParameter(thread_db* tdbb, dsc* fromDesc, const dsc* toDesc, SSHORT toId,
+							 Record* record) const;
+
+		virtual bool nextBuffer(thread_db* tdbb) const = 0;
+
+		MetaName m_name;
+		const Firebird::string m_alias;
+	};
+
+	class UnlistFunctionScan final : public TableValueFunctionScan
+	{
+		enum UnlistTypeItemIndex : unsigned
+		{
+			UNLIST_INDEX_STRING = 0,
+			UNLIST_INDEX_SEPARATOR = 1,
+			UNLIST_INDEX_LAST = 2
+		};
+
+		struct Impure final : public TableValueFunctionScan::Impure
+		{
+			blb* m_blob;
+			Firebird::string* m_separatorStr;
+			Firebird::string* m_resultStr;
+		};
+
+	public:
+		UnlistFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void close(thread_db* tdbb) const final;
+		void internalOpen(thread_db* tdbb) const final;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const final;
+
+		bool nextBuffer(thread_db* tdbb) const final;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
+	};
+
+	class GenSeriesFunctionScan final : public TableValueFunctionScan
+	{
+		enum GenSeriesTypeItemIndex : UCHAR
+		{
+			GEN_SERIES_INDEX_START = 0,
+			GEN_SERIES_INDEX_FINISH = 1,
+			GEN_SERIES_INDEX_STEP = 2,
+			GEN_SERIES_INDEX_LAST = 3
+		};
+
+		struct Impure final : public TableValueFunctionScan::Impure
+		{
+			impure_value m_start;
+			impure_value m_finish;
+			impure_value m_step;
+			impure_value m_result;
+
+			USHORT m_flags;
+			SCHAR m_scale;
+			SCHAR m_stepSign;
+		};
+
+	public:
+		GenSeriesFunctionScan(CompilerScratch* csb, StreamType stream, const Firebird::string& alias,
+						   ValueListNode* list);
+
+	protected:
+		void close(thread_db* tdbb) const override;
+		void internalOpen(thread_db* tdbb) const override;
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+
+		bool nextBuffer(thread_db* tdbb) const override;
+
+	private:
+		NestConst<ValueListNode> m_inputList;
 	};
 
 } // namespace

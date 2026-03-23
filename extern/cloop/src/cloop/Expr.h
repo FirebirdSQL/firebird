@@ -22,79 +22,81 @@
 #ifndef CLOOP_EXPR_H
 #define CLOOP_EXPR_H
 
+#include <cstdint>
+#include <memory>
 #include <string>
 
 
 class Interface;
 
 
-enum Language
+enum class Language
 {
-	LANGUAGE_C,
-	LANGUAGE_CPP,
-	LANGUAGE_PASCAL
+	C,
+	CPP,
+	PASCAL,
+	JAVA,
+	JSON,
 };
 
 
 class Expr
 {
 public:
-	virtual ~Expr()
-	{
-	}
+	virtual ~Expr() = default;
 
 public:
 	virtual std::string generate(Language language, const std::string& prefix) = 0;
 };
 
 
-class IntLiteralExpr : public Expr
+class IntLiteralExpr final : public Expr
 {
 public:
-	IntLiteralExpr(int value, bool hex);
+	explicit IntLiteralExpr(std::int64_t value, bool hex);
 
 public:
-	virtual std::string generate(Language language, const std::string& prefix);
+	std::string generate(Language language, const std::string& prefix) override;
 
 private:
-	int value;
+	std::int64_t value;
 	bool hex;
 };
 
 
-class BooleanLiteralExpr : public Expr
+class BooleanLiteralExpr final : public Expr
 {
 public:
-	BooleanLiteralExpr(bool value);
+	explicit BooleanLiteralExpr(bool value);
 
 public:
-	virtual std::string generate(Language language, const std::string& prefix);
+	std::string generate(Language language, const std::string& prefix) override;
 
 private:
 	bool value;
 };
 
 
-class NegateExpr : public Expr
+class NegateExpr final : public Expr
 {
 public:
-	NegateExpr(Expr* expr);
+	explicit NegateExpr(std::unique_ptr<Expr> expr);
 
 public:
-	virtual std::string generate(Language language, const std::string& prefix);
+	std::string generate(Language language, const std::string& prefix) override;
 
 private:
-	Expr* expr;
+	std::unique_ptr<Expr> expr;
 };
 
 
-class ConstantExpr : public Expr
+class ConstantExpr final : public Expr
 {
 public:
-	ConstantExpr(Interface* interface, std::string name);
+	explicit ConstantExpr(Interface* interface, std::string name);
 
 public:
-	virtual std::string generate(Language language, const std::string& prefix);
+	std::string generate(Language language, const std::string& prefix) override;
 
 private:
 	Interface* interface;
@@ -102,18 +104,18 @@ private:
 };
 
 
-class BitwiseOrExpr : public Expr
+class BitwiseOrExpr final : public Expr
 {
 public:
-	BitwiseOrExpr(Expr* expr1, Expr* expr2);
+	explicit BitwiseOrExpr(std::unique_ptr<Expr> expr1, std::unique_ptr<Expr> expr2);
 
 public:
-	virtual std::string generate(Language language, const std::string& prefix);
+	std::string generate(Language language, const std::string& prefix) override;
 
 private:
-	Expr* expr1;
-	Expr* expr2;
+	std::unique_ptr<Expr> expr1;
+	std::unique_ptr<Expr> expr2;
 };
 
 
-#endif	// CLOOP_EXPR_H
+#endif  // CLOOP_EXPR_H

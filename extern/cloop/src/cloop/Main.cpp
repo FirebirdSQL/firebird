@@ -28,18 +28,20 @@
 #include <string>
 #include <stdexcept>
 
-using std::auto_ptr;
 using std::cerr;
 using std::endl;
 using std::exception;
-using std::string;
 using std::runtime_error;
+using std::string;
+using std::unique_ptr;
+
 
 static string paramError(const char* generator = nullptr, const char* perGenerator = nullptr)
 {
 	string text = "Invalid command line parameters. Required format: inputFile ";
 	text += generator ? generator : "outFormat (one of c-header, c-impl, c++, pascal)";
 	text += " outputFile";
+
 	if (perGenerator)
 	{
 		text += " ";
@@ -66,7 +68,7 @@ static void run(int argc, const char* argv[])
 	Parser parser(&lexer);
 	parser.parse();
 
-	auto_ptr<Generator> generator;
+	unique_ptr<Generator> generator;
 
 	if (outFormat == "c++")
 	{
@@ -87,6 +89,7 @@ static void run(int argc, const char* argv[])
 		string headerGuard(argv[4]);
 		string prefix(argv[5]);
 		string macro;
+
 		if (argc == 7)
 			macro = argv[6];
 
@@ -105,8 +108,12 @@ static void run(int argc, const char* argv[])
 	else if (outFormat == "pascal")
 	{
 		if (argc < 5)
-			throw runtime_error(paramError("pascal", "--uses uses --interfaceFile interfaces-file "
-				"--implementationFile implementation-file --exceptionClass class-name --prefix prefix --functionsFile functions-file"));
+		{
+			throw runtime_error(paramError("pascal",
+				"--uses uses --interfaceFile interfaces-file "
+				"--implementationFile implementation-file --exceptionClass class-name --prefix prefix --functionsFile "
+				"functions-file"));
+		}
 
 		string unitName(argv[4]);
 
@@ -115,13 +122,12 @@ static void run(int argc, const char* argv[])
 			const char* sw;
 			string val;
 		};
-		pascalSwitch sw[] = {
-			{"--uses", ""}, {"--interfaceFile", ""}, {"--implementationFile", ""},
-			{"--exceptionClass", ""}, {"--prefix", ""}, {"--functionsFile", ""},
-			{NULL, ""} };
+		pascalSwitch sw[] = {{"--uses", ""}, {"--interfaceFile", ""}, {"--implementationFile", ""},
+			{"--exceptionClass", ""}, {"--prefix", ""}, {"--functionsFile", ""}, {NULL, ""}};
 
 		argv += 5;
 		argc -= 5;
+
 		for (; argc >= 2; argc -= 2, argv += 2)
 		{
 			string key = argv[0];
@@ -141,11 +147,23 @@ static void run(int argc, const char* argv[])
 				throw runtime_error("Unknown switch " + key);
 		}
 
-		generator.reset(new PascalGenerator(outFilename, sw[4].val/*prefix*/, &parser, unitName,
-			sw[0].val/*additionalUses*/, sw[1].val/*interfaceFile*/,
-			sw[2].val/*implementationFile*/, sw[3].val/*exceptionClass*/,
-			sw[5].val/*functionsFile*/));
+		generator.reset(new PascalGenerator(outFilename, sw[4].val /*prefix*/, &parser, unitName,
+			sw[0].val /*additionalUses*/, sw[1].val /*interfaceFile*/, sw[2].val /*implementationFile*/,
+			sw[3].val /*exceptionClass*/, sw[5].val /*functionsFile*/));
 	}
+	else if (outFormat == "jna")
+	{
+		if (argc < 7)
+			throw runtime_error("Invalid command line parameters for JNA output.");
+
+		string className(argv[4]);
+		string exceptionClass(argv[5]);
+		string prefix(argv[6]);
+
+		generator.reset(new JnaGenerator(outFilename, prefix, &parser, className, exceptionClass));
+	}
+	else if (outFormat == "json")
+		generator.reset(new JsonGenerator(outFilename, &parser));
 	else
 		throw runtime_error("Invalid output format.");
 

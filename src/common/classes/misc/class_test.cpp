@@ -506,7 +506,7 @@ void testAllocator()
 	printf("Allocate %d large items: ", LARGE_ITEMS);
 	int i;
 	for (i = 0; i<LARGE_ITEMS; i++) {
-		la.add(pool->allocate(LARGE_ITEM_SIZE ALLOC_ARGS));
+		la.add(pool->allocate(LARGE_ITEM_SIZE));
 		VERIFY_POOL(pool);
 	}
 	VERIFY_POOL(pool);
@@ -518,7 +518,7 @@ void testAllocator()
 	for (i = 0; i < ALLOC_ITEMS; i++) {
 		n = n * 47163 - 57412;
 		// n = n * 45578 - 17651;
-		AllocItem temp = {n, pool->allocate((n % MAX_ITEM_SIZE + MAX_ITEM_SIZE) / 2 + 1 ALLOC_ARGS)};
+		AllocItem temp = {n, pool->allocate((n % MAX_ITEM_SIZE + MAX_ITEM_SIZE) / 2 + 1)};
 		items.add(temp);
 	}
 	printf(" DONE\n");
@@ -541,7 +541,7 @@ void testAllocator()
 	for (i = 0; i < BIG_ITEMS; i++) {
 		n = n * 47163 - 57412;
 		// n = n * 45578 - 17651;
-		AllocItem temp = {n, pool->allocate((n % BIG_SIZE + BIG_SIZE) / 2 + 1 ALLOC_ARGS)};
+		AllocItem temp = {n, pool->allocate((n % BIG_SIZE + BIG_SIZE) / 2 + 1)};
 		bigItems.add(temp);
 	}
 	printf(" DONE\n");
@@ -549,7 +549,7 @@ void testAllocator()
 	VERIFY_POOL(parent);
 
 	printf("Allocate max recommended medium buffer (%d bytes): ", MemoryPool::MAX_MEDIUM_BLOCK_SIZE);
-	void* maxMedium = pool->allocate(MemoryPool::MAX_MEDIUM_BLOCK_SIZE ALLOC_ARGS);
+	void* maxMedium = pool->allocate(MemoryPool::MAX_MEDIUM_BLOCK_SIZE);
 	printf(" DONE\n");
 	VERIFY_POOL(pool);
 	VERIFY_POOL(parent);

@@ -176,10 +176,13 @@ goto :EOF
 @echo.
 @echo Building ttmath (%FB_OBJ_DIR%)...
 @mkdir %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG% 2>nul
-if /I "%FB_CONFIG%"=="debug" (
-  @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
-) else (
-  @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+
+if not "%FB_TARGET_PLATFORM%"=="arm64" (
+  if /I "%FB_CONFIG%"=="debug" (
+    @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  ) else (
+    @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  )
 )
 if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 goto :EOF
@@ -202,6 +205,13 @@ goto :EOF
 :interfaces
 @echo.
 @echo Building CLOOP and generating interfaces...
+@mkdir %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop 2>nul
+@pushd %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop
+@cmake -G "%MSVC_CMAKE_GENERATOR%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\cloop -DCLOOP_BUILD_TESTS=OFF
+if errorlevel 1 call :boot2 interfaces
+@cmake --build %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop --target ALL_BUILD --config %FB_CONFIG% > cloop_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log
+if errorlevel 1 call :boot2 interfaces
+@popd
 @nmake /s /x interfaces_%FB_TARGET_PLATFORM%.log /f gen_helper.nmake updateCloopInterfaces
 if errorlevel 1 call :boot2 interfaces
 goto :EOF

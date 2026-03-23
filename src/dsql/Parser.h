@@ -33,10 +33,12 @@
 #include "../dsql/PackageNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
+#include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
 #include "../common/classes/stack.h"
+#include "../jrd/intl.h"
 
-#include "gen/parse.h"
+#include "parse.h"
 
 namespace Firebird {
 class CharSet;
@@ -100,7 +102,7 @@ private:
 		const TEXT* line_start;
 		const TEXT* last_token_bk;
 		const TEXT* line_start_bk;
-		SSHORT charSetId;
+		CSetId charSetId;
 		SLONG lines, lines_bk;
 		int prev_keyword;
 		USHORT param_number;
@@ -128,12 +130,12 @@ private:
 	};
 
 public:
-	static const int MAX_TOKEN_LEN = 256;
+	static inline constexpr int MAX_TOKEN_LEN = 256;
 
 public:
 	Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
 		USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
-		const TEXT* string, size_t length, SSHORT charSetId);
+		const TEXT* string, size_t length, CSetId charSetId);
 	~Parser();
 
 public:
@@ -223,6 +225,11 @@ private:
 	MetaName optName(MetaName* name)
 	{
 		return (name ? *name : MetaName());
+	}
+
+	QualifiedName optName(QualifiedName* name)
+	{
+		return (name ? *name : QualifiedName());
 	}
 
 	void transformString(const char* start, unsigned length, Firebird::string& dest);
@@ -323,6 +330,11 @@ private:
 		return clause.hasData();
 	}
 
+	bool isDuplicateClause(const QualifiedName& clause)
+	{
+		return clause.object.hasData();
+	}
+
 	bool isDuplicateClause(const Firebird::TriState& clause)
 	{
 		return clause.isAssigned();
@@ -340,7 +352,7 @@ private:
 		return clause.hasData();
 	}
 
-	void setCollate(TypeClause* fld, MetaName* name)
+	void setCollate(TypeClause* fld, QualifiedName* name)
 	{
 		if (name)
 			setClause(fld->collate, "COLLATE", *name);
@@ -370,17 +382,17 @@ private:
 	USHORT client_dialect;
 	USHORT db_dialect;
 	const bool requireSemicolon;
-	USHORT parser_version;
+	USHORT parser_version = 0;
 	Firebird::CharSet* charSet;
 
 	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
 	bool stmt_ambiguous;
-	DsqlStatement* parsedStatement;
+	DsqlStatement* parsedStatement = nullptr;
 
 	// Parser feedback for lexer
-	MetaName* introducerCharSetName = nullptr;
+	QualifiedName* introducerCharSetName = nullptr;
 
 	// These value/posn are taken from the lexer
 	YYSTYPE yylval;
@@ -388,10 +400,10 @@ private:
 
 	// These value/posn of the root non-terminal are returned to the caller
 	YYSTYPE yyretlval;
-	Position yyretposn;
+	Position yyretposn{};
 
-	int yynerrs;
-	int yym;	// ASF: moved from local variable of Parser::parseAux()
+	int yynerrs = 0;
+	int yym = 0;	// ASF: moved from local variable of Parser::parseAux()
 
 	// Current parser state
 	yyparsestate* yyps;
@@ -399,7 +411,7 @@ private:
 	yyparsestate* yypath;
 	// Base of the lexical value queue
 	YYSTYPE* yylvals;
-	// Current posistion at lexical value queue
+	// Current position at lexical value queue
 	YYSTYPE* yylvp;
 	// End position of lexical value queue
 	YYSTYPE* yylve;
@@ -407,7 +419,7 @@ private:
 	YYSTYPE* yylvlim;
 	// Base of the lexical position queue
 	Position* yylpsns;
-	// Current posistion at lexical position queue
+	// Current position at lexical position queue
 	Position* yylpp;
 	// End position of lexical position queue
 	Position* yylpe;

@@ -55,10 +55,10 @@ namespace Replication
 		FB_UINT64 hdr_length;
 	};
 
-	const char CHANGELOG_SIGNATURE[] = "FBCHANGELOG";
+	inline constexpr char CHANGELOG_SIGNATURE[] = "FBCHANGELOG";
 
-	const USHORT CHANGELOG_VERSION_1 = 1;
-	const USHORT CHANGELOG_CURRENT_VERSION = CHANGELOG_VERSION_1;
+	inline constexpr USHORT CHANGELOG_VERSION_1 = 1;
+	inline constexpr USHORT CHANGELOG_CURRENT_VERSION = CHANGELOG_VERSION_1;
 
 	class ChangeLog : protected Firebird::PermanentStorage, public Firebird::IpcObject
 	{
@@ -77,11 +77,11 @@ namespace Replication
 		};
 
 		// Shared memory layout format
-		static const USHORT STATE_VERSION = 1;
+		static inline constexpr USHORT STATE_VERSION = 1;
 		// Mapping size (not extendable for the time being)
-		static const ULONG STATE_MAPPING_SIZE = 64 * 1024;	// 64 KB
+		static inline constexpr ULONG STATE_MAPPING_SIZE = 64 * 1024;	// 64 KB
 		// Max number of processes accessing the shared state
-		static const ULONG PID_CAPACITY = (STATE_MAPPING_SIZE - offsetof(State, pids)) / sizeof(int); // ~16K
+		static inline constexpr ULONG PID_CAPACITY = (STATE_MAPPING_SIZE - offsetof(State, pids)) / sizeof(int); // ~16K
 
 		// RAII helper to lock the shared state
 
@@ -148,27 +148,27 @@ namespace Replication
 			void append(ULONG length, const UCHAR* data);
 			void copyTo(const Firebird::PathName& filename) const;
 
-			bool isEmpty() const
+			bool isEmpty() const noexcept
 			{
 				return (m_header->hdr_length == sizeof(SegmentHeader));
 			}
 
-			bool hasData() const
+			bool hasData() const noexcept
 			{
 				return (m_header->hdr_length > sizeof(SegmentHeader));
 			}
 
-			ULONG getLength() const
+			ULONG getLength() const noexcept
 			{
 				return m_header->hdr_length;
 			}
 
-			FB_UINT64 getSequence() const
+			FB_UINT64 getSequence() const noexcept
 			{
 				return m_header->hdr_sequence;
 			}
 
-			SegmentState getState() const
+			SegmentState getState() const noexcept
 			{
 				return m_header->hdr_state;
 			}
@@ -180,7 +180,7 @@ namespace Replication
 
 			Firebird::PathName getFileName() const;
 
-			const Firebird::PathName& getPathName() const
+			const Firebird::PathName& getPathName() const noexcept
 			{
 				return m_filename;
 			}
@@ -197,7 +197,7 @@ namespace Replication
 			SegmentHeader m_builtinHeader;		// used by free segments when there is no mapping
 
 	#ifdef WIN_NT
-			HANDLE m_mapping;
+			HANDLE m_mapping = 0;
 	#endif
 		};
 
@@ -213,6 +213,7 @@ namespace Replication
 		FB_UINT64 write(ULONG length, const UCHAR* data, bool sync);
 
 		void bgArchiver();
+		void cleanup();
 
 	private:
 		void initSharedFile();

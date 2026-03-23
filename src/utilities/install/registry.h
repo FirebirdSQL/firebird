@@ -25,8 +25,8 @@
 #ifndef REGISTRY_DEFINES_H
 #define REGISTRY_DEFINES_H
 
-static const char* const REG_KEY_ROOT_COMPANY	= "SOFTWARE\\Firebird Project";
-static const char* const REG_KEY_ROOT_PRODUCT	= "SOFTWARE\\Firebird Project\\Firebird Server";
-static const char* const REG_KEY_ROOT_INSTANCES	= "SOFTWARE\\Firebird Project\\Firebird Server\\Instances";
+static inline constexpr const char* REG_KEY_ROOT_COMPANY	= "SOFTWARE\\Firebird Project";
+static inline constexpr const char* REG_KEY_ROOT_PRODUCT	= "SOFTWARE\\Firebird Project\\Firebird Server";
+static inline constexpr const char* REG_KEY_ROOT_INSTANCES	= "SOFTWARE\\Firebird Project\\Firebird Server\\Instances";
 
 #endif // REGISTRY_DEFINES_H

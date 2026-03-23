@@ -48,7 +48,7 @@ class UdrPluginImpl;
 
 static GlobalPtr<ObjectsArray<PathName> > paths;
 
-class Engine : public StdPlugin<IExternalEngineImpl<Engine, ThrowStatusWrapper> >
+class Engine final : public StdPlugin<IExternalEngineImpl<Engine, ThrowStatusWrapper> >
 {
 public:
 	explicit Engine(IPluginConfig* par)
@@ -107,15 +107,15 @@ public:
 		const GenericMap<Pair<Left<string, T*> > >& nodes, const string& entryPoint);
 
 public:
-	void open(ThrowStatusWrapper* status, IExternalContext* context, char* name, unsigned nameSize);
-	void openAttachment(ThrowStatusWrapper* status, IExternalContext* context);
-	void closeAttachment(ThrowStatusWrapper* status, IExternalContext* context);
+	void open(ThrowStatusWrapper* status, IExternalContext* context, char* name, unsigned nameSize) override;
+	void openAttachment(ThrowStatusWrapper* status, IExternalContext* context) override;
+	void closeAttachment(ThrowStatusWrapper* status, IExternalContext* context) override;
 	IExternalFunction* makeFunction(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override;
 	IExternalProcedure* makeProcedure(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override;
 	IExternalTrigger* makeTrigger(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder) override;
 
 private:
 	Mutex childrenMutex;
@@ -127,7 +127,7 @@ public:
 };
 
 
-class ModulesMap : public GenericMap<Pair<Left<PathName, UdrPluginImpl*> > >
+class ModulesMap final : public GenericMap<Pair<Left<PathName, UdrPluginImpl*> > >
 {
 public:
 	explicit ModulesMap(MemoryPool& p)
@@ -149,7 +149,7 @@ static GlobalPtr<ModulesMap> modules;
 //--------------------------------------
 
 
-class UdrPluginImpl : public VersionedIface<IUdrPluginImpl<UdrPluginImpl, ThrowStatusWrapper> >
+class UdrPluginImpl final : public VersionedIface<IUdrPluginImpl<UdrPluginImpl, ThrowStatusWrapper> >
 {
 public:
 	UdrPluginImpl(const PathName& aModuleName, ModuleLoader::Module* aModule)
@@ -190,13 +190,13 @@ public:
 	}
 
 public:
-	IMaster* getMaster()
+	IMaster* getMaster() override
 	{
 		return MasterInterfacePtr();
 	}
 
 	void registerFunction(ThrowStatusWrapper* status, const char* name,
-		IUdrFunctionFactory* factory)
+		IUdrFunctionFactory* factory) override
 	{
 		if (functionsMap.exist(name))
 		{
@@ -214,7 +214,7 @@ public:
 	}
 
 	void registerProcedure(ThrowStatusWrapper* status, const char* name,
-		IUdrProcedureFactory* factory)
+		IUdrProcedureFactory* factory) override
 	{
 		if (proceduresMap.exist(name))
 		{
@@ -232,7 +232,7 @@ public:
 	}
 
 	void registerTrigger(ThrowStatusWrapper* status, const char* name,
-		IUdrTriggerFactory* factory)
+		IUdrTriggerFactory* factory) override
 	{
 		if (triggersMap.exist(name))
 		{
@@ -262,7 +262,7 @@ public:
 };
 
 
-class SharedFunction : public DisposeIface<IExternalFunctionImpl<SharedFunction, ThrowStatusWrapper> >
+class SharedFunction final : public DisposeIface<IExternalFunctionImpl<SharedFunction, ThrowStatusWrapper> >
 {
 public:
 	SharedFunction(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -290,7 +290,7 @@ public:
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -301,7 +301,7 @@ public:
 			function->getCharSet(status, context, name, nameSize);
 	}
 
-	void execute(ThrowStatusWrapper* status, IExternalContext* context, void* inMsg, void* outMsg)
+	void execute(ThrowStatusWrapper* status, IExternalContext* context, void* inMsg, void* outMsg) override
 	{
 		IExternalFunction* function = engine->getChild<IUdrFunctionFactory, IExternalFunction>(
 			status, children, this, context, engine->functions, moduleName);
@@ -324,7 +324,7 @@ public:
 //--------------------------------------
 
 
-class SharedProcedure : public DisposeIface<IExternalProcedureImpl<SharedProcedure, ThrowStatusWrapper> >
+class SharedProcedure final : public DisposeIface<IExternalProcedureImpl<SharedProcedure, ThrowStatusWrapper> >
 {
 public:
 	SharedProcedure(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -352,7 +352,7 @@ public:
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -364,7 +364,7 @@ public:
 	}
 
 	IExternalResultSet* open(ThrowStatusWrapper* status, IExternalContext* context,
-		void* inMsg, void* outMsg)
+		void* inMsg, void* outMsg) override
 	{
 		IExternalProcedure* procedure = engine->getChild<IUdrProcedureFactory, IExternalProcedure>(
 			status, children, this, context, engine->procedures, moduleName);
@@ -386,7 +386,7 @@ public:
 //--------------------------------------
 
 
-class SharedTrigger : public DisposeIface<IExternalTriggerImpl<SharedTrigger, ThrowStatusWrapper> >
+class SharedTrigger final : public DisposeIface<IExternalTriggerImpl<SharedTrigger, ThrowStatusWrapper> >
 {
 public:
 	SharedTrigger(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -413,7 +413,7 @@ public:
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -425,7 +425,7 @@ public:
 	}
 
 	void execute(ThrowStatusWrapper* status, IExternalContext* context,
-		unsigned action, void* oldMsg, void* newMsg)
+		unsigned action, void* oldMsg, void* newMsg) override
 	{
 		IExternalTrigger* trigger = engine->getChild<IUdrTriggerFactory, IExternalTrigger>(
 			status, children, this, context, engine->triggers, moduleName);
@@ -449,25 +449,25 @@ public:
 
 
 template <typename FactoryType> GenericMap<Pair<Left<string, FactoryType*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	fb_assert(false);
 }
 
 template <> GenericMap<Pair<Left<string, IUdrFunctionFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->functionsMap;
 }
 
 template <> GenericMap<Pair<Left<string, IUdrProcedureFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->proceduresMap;
 }
 
 template <> GenericMap<Pair<Left<string, IUdrTriggerFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->triggersMap;
 }
@@ -521,7 +521,7 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 
 	*entryPoint = str.substr(pos + 1);
 
-	string::size_type n = entryPoint->find('!');
+	const auto n = entryPoint->find('!');
 	*entryPoint = (n == string::npos ? *entryPoint : entryPoint->substr(0, n));
 
 	MutexLockGuard guard(modulesMutex, FB_FUNCTION);
@@ -541,8 +541,8 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 			isc_arg_string, (ISC_STATUS) "UDR module not loaded",
 			isc_arg_end
 		};
-		const unsigned ARG_TEXT = 3;	// Keep both in sync
-		const unsigned ARG_END = 4;		// with status initializer!
+		constexpr unsigned ARG_TEXT = 3;	// Keep both in sync
+		constexpr unsigned ARG_END = 4;		// with status initializer!
 
 		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(&statusArray[ARG_END], path);
 		if (!module)
@@ -592,7 +592,7 @@ template <typename NodeType, typename ObjType, typename SharedObjType> ObjType* 
 	ObjType* obj;
 	if (!children.get(context, obj))
 	{
-		GenericMap<Pair<Left<string, NodeType*> > >& nodes = getFactoryMap<NodeType>(
+		const GenericMap<Pair<Left<string, NodeType*> > >& nodes = getFactoryMap<NodeType>(
 			sharedObj->module);
 
 		NodeType* factory = findNode<NodeType>(status, nodes, sharedObj->entryPoint);
@@ -642,7 +642,7 @@ template <typename T> T* Engine::findNode(ThrowStatusWrapper* status,
 
 void Engine::open(ThrowStatusWrapper* /*status*/, IExternalContext* /*context*/, char* name, unsigned nameSize)
 {
-	strncpy(name, "UTF-8", nameSize);
+	strncpy(name, "SYSTEM.UTF8", nameSize);
 }
 
 
@@ -711,7 +711,7 @@ IExternalTrigger* Engine::makeTrigger(ThrowStatusWrapper* status, IExternalConte
 //--------------------------------------
 
 
-class IExternalEngineFactoryImpl : public SimpleFactory<Engine>
+class IExternalEngineFactoryImpl final : public SimpleFactory<Engine>
 {
 } factory;
 

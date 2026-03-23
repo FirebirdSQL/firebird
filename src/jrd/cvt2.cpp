@@ -220,12 +220,12 @@ static int cmp_numeric_string(const dsc* arg1, const dsc* arg2, Firebird::Decima
 
 	Decimal128 buffer;		// enough to fit any required data
 	SSHORT scale = 0;
-	UCHAR* text = arg2->dsc_address;
-	if (arg2->dsc_dtype == dtype_varying)
-		text += sizeof(USHORT);
+	UCHAR* text;
+	TTypeId ttype;
+	USHORT textLen = CVT_get_string_ptr(arg2, &ttype, &text, nullptr, 0, 0);
 
 	dsc num2;
-	num2.dsc_dtype = CVT_get_numeric(text, TEXT_LEN(arg2), &scale, &buffer);
+	num2.dsc_dtype = CVT_get_numeric(text, textLen, &scale, &buffer);
 	num2.dsc_address = (UCHAR*)&buffer;
 	num2.dsc_scale = scale;
 	num2.dsc_length = type_lengths[num2.dsc_dtype];
@@ -251,7 +251,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 	thread_db* tdbb = NULL;
 
 	// AB: Maybe we need a other error-message, but at least throw
-	// a message when 1 or both input paramters are empty.
+	// a message when 1 or both input parameters are empty.
 	if (!arg1 || !arg2) {
 		BUGCHECK(189);	// msg 189 comparison not supported for specified data types.
 	}
@@ -411,11 +411,11 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		 */
 
 		SET_TDBB(tdbb);
-		CHARSET_ID charset1 = INTL_TTYPE(arg1);
+		CSetId charset1 = INTL_TTYPE(arg1);
 		if (charset1 == ttype_dynamic)
 			charset1 = INTL_charset(tdbb, charset1);
 
-		CHARSET_ID charset2 = INTL_TTYPE(arg2);
+		CSetId charset2 = INTL_TTYPE(arg2);
 		if (charset2 == ttype_dynamic)
 			charset2 = INTL_charset(tdbb, charset2);
 
@@ -431,7 +431,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 
 		UCHAR* p1 = NULL;
 		UCHAR* p2 = NULL;
-		USHORT t1, t2; // unused later
+		TTypeId t1, t2; // unused later
 		USHORT length = CVT_get_string_ptr(arg1, &t1, &p1, NULL, 0, decSt);
 		USHORT length2 = CVT_get_string_ptr(arg2, &t2, &p2, NULL, 0, decSt);
 
@@ -490,6 +490,17 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 	switch (arg1->dsc_dtype)
 	{
 	case dtype_ex_timestamp_tz:
+		{
+			DSC desc;
+			MOVE_CLEAR(&desc, sizeof(desc));
+			desc.dsc_dtype = dtype_ex_timestamp_tz;
+			ISC_TIMESTAMP_TZ_EX datetime;
+			desc.dsc_length = sizeof(datetime);
+			desc.dsc_address = (UCHAR*) &datetime;
+			CVT_move(arg2, &desc, 0);
+			return CVT2_compare(arg1, &desc, 0);
+		}
+
 	case dtype_timestamp_tz:
 		{
 			DSC desc;
@@ -515,6 +526,17 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		}
 
 	case dtype_ex_time_tz:
+		{
+			DSC desc;
+			MOVE_CLEAR(&desc, sizeof(desc));
+			desc.dsc_dtype = dtype_ex_time_tz;
+			ISC_TIME_TZ_EX atime;
+			desc.dsc_length = sizeof(atime);
+			desc.dsc_address = (UCHAR*) &atime;
+			CVT_move(arg2, &desc, 0);
+			return CVT2_compare(arg1, &desc, 0);
+		}
+
 	case dtype_sql_time_tz:
 		{
 			DSC desc;
@@ -663,7 +685,7 @@ int CVT2_compare(const dsc* arg1, const dsc* arg2, Firebird::DecimalStatus decSt
 		if (arg2->isText())
 		{
 			UCHAR* p = NULL;
-			USHORT ttype;
+			TTypeId ttype;
 			const USHORT length = CVT_get_string_ptr(arg2, &ttype, &p, NULL, 0, decSt);
 
 			// Compare DBKEY with a compatible binary string with respect to
@@ -746,7 +768,6 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
  **************************************/
 
 	SLONG l1, l2;
-	USHORT ttype2;
 	int ret_val = 0;
 
 	thread_db* tdbb = NULL;
@@ -757,9 +778,9 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 	if (arg1->dsc_dtype != dtype_blob)
 		ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_datnotsup));
 
-	USHORT ttype1;
+	TTypeId ttype1, ttype2;
 	if (arg1->dsc_sub_type == isc_blob_text)
-		ttype1 = arg1->dsc_blob_ttype();       // Load blob character set and collation
+		ttype1 = arg1->getTextType();			// Load blob character set and collation
 	else
 		ttype1 = ttype_binary;
 
@@ -782,7 +803,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 		}
 
 		if (arg2->dsc_sub_type == isc_blob_text)
-			ttype2 = arg2->dsc_blob_ttype();       // Load blob character set and collation
+			ttype2 = arg2->getTextType();		 // Load blob character set and collation
 		else
 			ttype2 = ttype_binary;
 
@@ -870,7 +891,7 @@ int CVT2_blob_compare(const dsc* arg1, const dsc* arg2, DecimalStatus decSt)
 		// The second parameter should be a string.
 		if (arg2->dsc_dtype <= dtype_varying)
 		{
-			if ((ttype2 = arg2->dsc_ttype()) != ttype_binary)
+			if ((ttype2 = arg2->getTextType()) != ttype_binary)
 				ttype2 = ttype1;
 		}
 		else
@@ -936,7 +957,7 @@ void CVT2_make_metaname(const dsc* desc, MetaName& name, DecimalStatus decSt)
 }
 
 
-USHORT CVT2_make_string2(const dsc* desc, USHORT to_interp, UCHAR** address, MoveBuffer& temp, DecimalStatus decSt)
+USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, MoveBuffer& temp, DecimalStatus decSt)
 {
 /**************************************
  *
@@ -952,7 +973,7 @@ USHORT CVT2_make_string2(const dsc* desc, USHORT to_interp, UCHAR** address, Mov
  **************************************/
 	UCHAR* from_buf;
 	USHORT from_len;
-	USHORT from_interp;
+	TTypeId from_interp;
 
 	fb_assert(desc != NULL);
 	fb_assert(address != NULL);
@@ -990,8 +1011,8 @@ USHORT CVT2_make_string2(const dsc* desc, USHORT to_interp, UCHAR** address, Mov
 		}
 
 		thread_db* tdbb = JRD_get_thread_data();
-		const USHORT cs1 = INTL_charset(tdbb, to_interp);
-		const USHORT cs2 = INTL_charset(tdbb, from_interp);
+		const auto cs1 = INTL_charset(tdbb, to_interp);
+		const auto cs2 = INTL_charset(tdbb, from_interp);
 		if (cs1 == cs2)
 		{
 			*address = from_buf;

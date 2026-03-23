@@ -57,7 +57,7 @@ void ConditionalStream::internalOpen(thread_db* tdbb) const
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
-	impure->irsb_next = m_boolean->execute(tdbb, request) ? m_first : m_second;
+	impure->irsb_next = m_boolean->execute(tdbb, request).asBool() ? m_first : m_second;
 
 	impure->irsb_flags = irsb_open;
 	impure->irsb_next->open(tdbb);
@@ -155,6 +155,13 @@ void ConditionalStream::findUsedStreams(StreamList& streams, bool expandAll) con
 {
 	m_first->findUsedStreams(streams, expandAll);
 	m_second->findUsedStreams(streams, expandAll);
+}
+
+bool ConditionalStream::isDependent(const StreamList& streams) const
+{
+	return m_boolean->containsAnyStream(streams) ||
+		m_first->isDependent(streams) ||
+		m_second->isDependent(streams);
 }
 
 void ConditionalStream::invalidateRecords(Request* request) const

@@ -74,7 +74,7 @@ public:
 	in_sw_tab_t* findSwitchMod(Firebird::string& sw, bool* invalidSwitchInd = 0);
 
 	// Get the same unmodifiable table that was passed as parameter to the constructor.
-	const in_sw_tab_t* getTable() const;
+	const in_sw_tab_t* getTable() const noexcept;
 
 	// Retrieve the modifiable copy of the table that was passed as parameter to the constructor.
 	// It throws system_call_failed if "copy" was false in the constructor.
@@ -86,7 +86,7 @@ public:
 	void activate(const int in_sw);
 
 	// Checks if an item by key exists in a list of strings that represent the set of command-line
-	// arguments. This is more eficient than finding the key for each parameter and then checking
+	// arguments. This is more efficient than finding the key for each parameter and then checking
 	// if it's the one we want (we reduce loop from Nkeys*Nargs to Nkeys+Nargs in the worst case).
 	// It throws system_call_failed if the key is not found or it's negative or zero.
 	bool exists(const int in_sw, const char* const* argv, const int start, const int stop) const;

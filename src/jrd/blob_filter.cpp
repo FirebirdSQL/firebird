@@ -413,7 +413,7 @@ static void open_blob(thread_db* tdbb,
 	control->ctl_status = localStatus;
 	control->ctl_exception_message = filter->blf_exception_message;
 
-	// Two types of filtering can be occuring; either between totally
+	// Two types of filtering can be occurring; either between totally
 	// different BLOb sub_types, or between two different
 	// character sets (both source & destination subtype must be TEXT in that case).
 	// For the character set filter we use the to & from_sub_type fields

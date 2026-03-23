@@ -464,7 +464,7 @@
       <PreprocessorDefinitions>_ENABLE_ATOMIC_ALIGNMENT_FIX;_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING;CDSUNIT_ENABLE_BOOST_CONTAINER;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/bigobj %(AdditionalOptions) /Zc:inline /permissive- </AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -545,7 +545,7 @@
       <PreprocessorDefinitions>_ENABLE_ATOMIC_ALIGNMENT_FIX;_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING;CDSUNIT_ENABLE_BOOST_CONTAINER;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/bigobj %(AdditionalOptions) /Zc:inline /permissive- </AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -636,7 +636,7 @@
       <PreprocessorDefinitions>_ENABLE_ATOMIC_ALIGNMENT_FIX;_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING;CDSUNIT_ENABLE_BOOST_CONTAINER;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/bigobj %(AdditionalOptions) /Zc:inline /permissive- </AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -717,7 +717,7 @@
       <PreprocessorDefinitions>_ENABLE_ATOMIC_ALIGNMENT_FIX;_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING;CDSUNIT_ENABLE_BOOST_CONTAINER;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/bigobj %(AdditionalOptions) /Zc:inline /permissive- </AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

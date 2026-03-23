@@ -162,7 +162,7 @@ static const USHORT to_unicode_map[256] = {
 /* 87 */  0x0398 /*                    GREEK CAPITAL LETTER THETA */,
 /* 88 */  0x0399 /*                     GREEK CAPITAL LETTER IOTA */,
 /* 89 */  0x039A /*                    GREEK CAPITAL LETTER KAPPA */,
-/* 8A */  0x039B /*                    GREEK CAPITAL LETTER LAMDA */,
+/* 8A */  0x039B /*                    GREEK CAPITAL LETTER LAMBDA */,
 /* 8B */  0x039C /*                       GREEK CAPITAL LETTER MU */,
 /* 8C */  0x039D /*                       GREEK CAPITAL LETTER NU */,
 /* 8D */  0x039E /*                       GREEK CAPITAL LETTER XI */,
@@ -186,7 +186,7 @@ static const USHORT to_unicode_map[256] = {
 /* 9F */  0x03B8 /*                      GREEK SMALL LETTER THETA */,
 /* A0 */  0x03B9 /*                       GREEK SMALL LETTER IOTA */,
 /* A1 */  0x03BA /*                      GREEK SMALL LETTER KAPPA */,
-/* A2 */  0x03BB /*                      GREEK SMALL LETTER LAMDA */,
+/* A2 */  0x03BB /*                      GREEK SMALL LETTER LAMBDA */,
 /* A3 */  0x03BC /*                         GREEK SMALL LETTER MU */,
 /* A4 */  0x03BD /*                         GREEK SMALL LETTER NU */,
 /* A5 */  0x03BE /*                         GREEK SMALL LETTER XI */,
@@ -953,7 +953,7 @@ static const UCHAR from_unicode_mapping_array[] = {
 /* U+0398 */	0x87	/*                    GREEK CAPITAL LETTER THETA */,/* 664 */
 /* U+0399 */	0x88	/*                     GREEK CAPITAL LETTER IOTA */,/* 665 */
 /* U+039A */	0x89	/*                    GREEK CAPITAL LETTER KAPPA */,/* 666 */
-/* U+039B */	0x8A	/*                    GREEK CAPITAL LETTER LAMDA */,/* 667 */
+/* U+039B */	0x8A	/*                    GREEK CAPITAL LETTER LAMBDA */,/* 667 */
 /* U+039C */	0x8B	/*                       GREEK CAPITAL LETTER MU */,/* 668 */
 /* U+039D */	0x8C	/*                       GREEK CAPITAL LETTER NU */,/* 669 */
 /* U+039E */	0x8D	/*                       GREEK CAPITAL LETTER XI */,/* 670 */
@@ -985,7 +985,7 @@ static const UCHAR from_unicode_mapping_array[] = {
 /* U+03B8 */	0x9F	/*                      GREEK SMALL LETTER THETA */,/* 696 */
 /* U+03B9 */	0xA0	/*                       GREEK SMALL LETTER IOTA */,/* 697 */
 /* U+03BA */	0xA1	/*                      GREEK SMALL LETTER KAPPA */,/* 698 */
-/* U+03BB */	0xA2	/*                      GREEK SMALL LETTER LAMDA */,/* 699 */
+/* U+03BB */	0xA2	/*                      GREEK SMALL LETTER LAMBDA */,/* 699 */
 /* U+03BC */	0xA3	/*                         GREEK SMALL LETTER MU */,/* 700 */
 /* U+03BD */	0xA4	/*                         GREEK SMALL LETTER NU */,/* 701 */
 /* U+03BE */	0xA5	/*                         GREEK SMALL LETTER XI */,/* 702 */

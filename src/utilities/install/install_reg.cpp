@@ -30,9 +30,9 @@
 #include "../utilities/install/regis_proto.h"
 
 static USHORT reg_error(SLONG, const TEXT*, HKEY);
-static void usage_exit();
+[[noreturn]] static void usage_exit();
 
-static const struct
+static constexpr struct
 {
 	const TEXT* name;
 	USHORT abbrev;
@@ -200,7 +200,7 @@ static USHORT reg_error( SLONG status, const TEXT* string, HKEY hkey)
 	return FB_FAILURE;
 }
 
-static void usage_exit()
+[[noreturn]] static void usage_exit()
 {
 /**************************************
  *

@@ -200,7 +200,7 @@ private:
 			name[sizeof(name) - 1] = 0;
 		}
 
-		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+		unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 		{
 			memcpy(buffer, &key, 1);
 			return 1;
@@ -273,7 +273,7 @@ int CryptKeyHolder::keyCallback(CheckStatusWrapper* status, ICryptKeyCallback* c
 			confEntry = getEntry(status, "Key");
 			if (confEntry)
 			{
-				key = confEntry->getIntValue();
+				key = static_cast<ISC_UCHAR>(confEntry->getIntValue());
 				confEntry->release();
 			}
 			else
@@ -311,7 +311,7 @@ ICryptKeyCallback* CryptKeyHolder::keyHandle(CheckStatusWrapper* status, const c
 	IConfigEntry* confEntry = getEntry(status, kn);
 	if (confEntry)
 	{
-		int k = confEntry->getIntValue();
+		int k = static_cast<int>(confEntry->getIntValue());
 		confEntry->release();
 		if (k > 0 && k < 256)
 		{
