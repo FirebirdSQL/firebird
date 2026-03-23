@@ -401,6 +401,9 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		bool err = false;
 		for (const jrd_tra* tra = att_transactions; tra; tra = tra->tra_next)
 		{
+			if (tra == att_meta_transaction)
+				continue;
+
 			n++;
 			if (tra != oldTran && !(tra->tra_flags & TRA_prepared))
 				err = true;
@@ -959,6 +962,12 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 	{
 		att_meta_transaction = TRA_start(tdbb,
 			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version, DEFAULT_LOCK_TIMEOUT);
+
+		if (att_meta_transaction && att_meta_transaction->tra_lock)
+		{
+			LCK_release(tdbb, att_meta_transaction->tra_lock);
+			att_meta_transaction->tra_lock = nullptr;
+		}
 	}
 }
 

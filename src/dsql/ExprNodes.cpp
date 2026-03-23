@@ -5122,7 +5122,7 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 	{
 		Dependency dependency(obj_relation);
 		dependency.relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relationName, CacheFlag::AUTOCREATE);
-		dependency.subName = FB_NEW_POOL(pool) MetaName(fieldName);
+		dependency.subName = fieldName;
 		csb->addDependency(dependency);
 	}
 
@@ -13299,7 +13299,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			{
 				Dependency dependency(obj_udf);
 				dependency.function = node->function();
-				dependency.subName = &argName;
+				dependency.subName = argName;
 				csb->addDependency(dependency);
 			}
 		}

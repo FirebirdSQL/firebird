@@ -1202,14 +1202,14 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, domainName, type);
 
-		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, domainName, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, domainName, type);
 	}
 	else
 	{
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, object_name, type);
 
-		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, object_name, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, object_name, type);
 	}
 
 	if (csb_ptr)
@@ -2149,7 +2149,8 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 }
 
 
-void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_desc* idx)
+void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+	const Ods::index_root_page::irt_repeat* irt_desc)
 {
 /***********************************************
 *
@@ -2163,15 +2164,85 @@ void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_de
 **************************************/
 	SET_TDBB(tdbb);
 
-	IndexVersion* idv = relation->lookup_index(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
-	if (idv)
-	{
-		idx->idx_condition_node = idv->idv_condition;
-		idx->idx_condition_statement = idv->idv_condition_statement;
+	MutexLockGuard g(idp_code_mutex, FB_FUNCTION);
 
-		idx->idx_expression_node = idv->idv_expression;
-		idx->idx_expression_statement = idv->idv_expression_statement;
-		memcpy(&idx->idx_expression_desc, &idv->idv_expression_desc, sizeof(struct dsc));
+	if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+	{
+		Database* dbb = tdbb->getDatabase();
+		Attachment* attachment = tdbb->getAttachment();
+
+		bid expression, condition;
+		expression.clear();
+		condition.clear();
+
+		MetaId relId = relation->getId();
+
+		Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+
+		AUTO_HANDLE(handle);
+		FOR(REQUEST_HANDLE handle)		// Use system transaction
+			IND IN RDB$INDICES
+			CROSS REL IN RDB$RELATIONS
+				OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
+			WITH IND.RDB$INDEX_ID EQ getId() + 1
+				AND REL.RDB$RELATION_ID EQ relId
+		{
+			if (!IND.RDB$EXPRESSION_BLR.NULL)
+				expression = IND.RDB$EXPRESSION_BLR;
+			if (!IND.RDB$CONDITION_BLR.NULL)
+				condition = IND.RDB$CONDITION_BLR;
+		}
+		END_FOR
+
+		if ((expression.hasData() && expression != idp_expression_bid) ||
+			(condition.hasData() && condition != idp_condition_bid))
+		{
+			releaseStatements(tdbb);
+
+			idp_expression_bid = expression;
+			idp_condition_bid = condition;
+
+			if (expression.hasData())
+			{
+				MemoryPool* stmtPool = dbb->createPool();
+				try
+				{
+					Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+					CompilerScratch* csb = nullptr;
+					Cleanup cc([csb]() {delete csb;});
+					MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
+					idp_expression_statement = Statement::makeValueExpression(tdbb, idp_expression, idp_expression_desc, csb, false);
+				}
+				catch (const Exception&)
+				{
+					dbb->deletePool(stmtPool);
+					throw;
+				}
+			}
+
+			if (condition.hasData())
+			{
+				MemoryPool* stmtPool = dbb->createPool();
+				try
+				{
+					Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+					CompilerScratch* csb = nullptr;
+					Cleanup cc([csb]() {delete csb;});
+					MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
+					idp_condition_statement = Statement::makeBoolExpression(tdbb, idp_condition, csb, false);
+				}
+				catch (const Exception&)
+				{
+					dbb->deletePool(stmtPool);
+					throw;
+				}
+			}
+		}
+
+		idp_state = irt_desc->getState();
+		idp_tranum = irt_desc->getTransaction();
 	}
 }
 
@@ -3201,7 +3272,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 					csb->csb_g_flags |= csb_get_dependencies;
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
 					const QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
-					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, obj_view, trans);
+					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, obj_view);
 				}
 				else
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
@@ -3881,6 +3952,9 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		END_FOR
 	}
 
+	if (flags & CacheFlag::MINISCAN)
+		return ScanResult::REPEAT;
+
 	FOR(REQUEST_HANDLE handle2)
 		CS IN RDB$CHARACTER_SETS
 			CROSS COL IN RDB$COLLATIONS OVER RDB$CHARACTER_SET_ID
@@ -3927,34 +4001,49 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			}
 		}
 
-		AutoPtr<texttype> tt = FB_NEW_POOL(perm->getPool()) texttype;
-		memset(tt, 0, sizeof(texttype));
-		INTL_lookup_texttype(tt, &info);
-
 		if (charset_collations.getCount() <= colId)
 			charset_collations.grow(colId + 1);
 
-		fb_assert((tt->texttype_canonical_width == 0 && tt->texttype_fn_canonical == NULL) ||
-				  (tt->texttype_canonical_width != 0 && tt->texttype_fn_canonical != NULL));
-
-		if (tt->texttype_canonical_width == 0)
+		try
 		{
-			if (charset->isMultiByte())
-				tt->texttype_canonical_width = sizeof(ULONG);	// UTF-32
-			else
+			AutoPtr<texttype> tt = FB_NEW_POOL(perm->getPool()) texttype;
+			memset(tt, 0, sizeof(texttype));
+			INTL_lookup_texttype(tt, &info);
+
+			fb_assert((tt->texttype_canonical_width == 0 && tt->texttype_fn_canonical == NULL) ||
+					  (tt->texttype_canonical_width != 0 && tt->texttype_fn_canonical != NULL));
+
+			if (tt->texttype_canonical_width == 0)
 			{
-				tt->texttype_canonical_width = charset->minBytesPerChar();
-				// canonical is equal to string, then TEXTTYPE_DIRECT_MATCH can be turned on
-				tt->texttype_flags |= TEXTTYPE_DIRECT_MATCH;
+				if (charset->isMultiByte())
+					tt->texttype_canonical_width = sizeof(ULONG);	// UTF-32
+				else
+				{
+					tt->texttype_canonical_width = charset->minBytesPerChar();
+					// canonical is equal to string, then TEXTTYPE_DIRECT_MATCH can be turned on
+					tt->texttype_flags |= TEXTTYPE_DIRECT_MATCH;
+				}
 			}
+
+			Collation* collation = Collation::createInstance(perm->getPool(),
+				TTypeId(id, colId), tt, nullptr, info.attributes, charset);
+			collation->name = info.collationName;
+
+			tt.release();
+			charset_collations[colId] = collation;
 		}
+		catch (const Exception& ex)
+		{
+			AutoDispose<IStatus> error = MasterInterfacePtr()->getStatus();
+			ex.stuffException(error);
 
-		Collation* collation = Collation::createInstance(perm->getPool(),
-			TTypeId(id, colId), tt, info.attributes, charset);
-		collation->name = info.collationName;
+			Collation* collation = Collation::createInstance(perm->getPool(),
+				TTypeId(id, colId), nullptr, error, info.attributes, charset);
+			collation->name = info.collationName;
 
-		tt.release();
-		charset_collations[colId] = collation;
+			error.release();
+			charset_collations[colId] = collation;
+		}
 	}
 	END_FOR
 
@@ -4148,8 +4237,7 @@ void MET_store_dependencies(thread_db* tdbb,
 							Array<Dependency>& dependencies,
 							const jrd_rel* dep_rel,
 							const QualifiedName& object_name,
-							int dependency_type,
-							jrd_tra* transaction)
+							int dependency_type)
 {
 /**************************************
  *
@@ -4163,236 +4251,275 @@ void MET_store_dependencies(thread_db* tdbb,
  *      compilation of blr for a trigger, view, etc.
  *
  **************************************/
-	QualifiedName name;
+	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
 
 	SET_TDBB(tdbb);
 
-	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
-
-	const Trigger* t = nullptr;
-	const bool checkTableScope =
-		(dependency_type == obj_computed) ||
-		(dependency_type == obj_trigger) && dep_rel && (t = dep_rel->findTrigger(object_name)) && (t->sysTrigger);
+	auto* transaction = tdbb->getTransaction();
+	bool toTemp = !(transaction->tra_flags & TRA_deps_to_disk);
+	bool tempDeps = false;
 
 	while (dependencies.hasData())
 	{
 		Dependency dependency = dependencies.pop();
 
 		if (!dependency.relation && !dependency.function && !dependency.procedure &&
-			!dependency.name && !dependency.number)
+			!dependency.name.hasData() && !dependency.number)
 		{
 			continue;
 		}
 
-		int dpdo_type = dependency.objType;
-		Cached::Relation* relation = nullptr;
-		Cached::Procedure* procedure = nullptr;
-		const QualifiedName* dpdo_name = NULL;
-		SubtypeInfo info;
-
-		switch (dpdo_type)
+		if (toTemp)
 		{
-		case obj_relation:
-		case obj_view:
-			relation = dependency.relation;
-			dpdo_name = &relation->getName();
+			auto& wdep = transaction->tra_dependencies.add();
+			wdep.dependency = dependency;
+			wdep.dep_rel = dep_rel;
+			wdep.object_name = object_name;
+			wdep.dependency_type = dependency_type;
 
-			fb_assert(dep_rel || !checkTableScope);
+			tempDeps = true;
+		}
+		else
+			MET_store_dependency(tdbb, dependency, dep_rel, object_name, dependency_type);
+	}
 
-			if (checkTableScope &&
-				( (dep_rel->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_conn)) !=
-				  (relation->rel_flags & (REL_temp_tran | REL_temp_conn)) ))
+	if (tempDeps)
+		DFW_post_work(transaction, dfw_deps_to_disk, nullptr, nullptr, 0);
+}
+
+
+void MET_store_dependency(thread_db* tdbb,
+						  Dependency& dependency,
+						  const jrd_rel* dep_rel,
+						  const QualifiedName& object_name,
+						  int dependency_type)
+{
+/**************************************
+ *
+ *      s t o r e _ d e p e n d e n c i e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Store record in RDB$DEPENDENCIES
+ *      corresponding to the dependency passed
+ *
+ **************************************/
+	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
+
+	SET_TDBB(tdbb);
+
+	QualifiedName name;
+	auto* transaction = tdbb->getTransaction();
+
+	const Trigger* t = nullptr;
+	const bool checkTableScope =
+		(dependency_type == obj_computed) ||
+		(dependency_type == obj_trigger) && dep_rel && (t = dep_rel->findTrigger(object_name)) && (t->sysTrigger);
+
+	int dpdo_type = dependency.objType;
+	Cached::Relation* relation = nullptr;
+	Cached::Procedure* procedure = nullptr;
+	const QualifiedName* dpdo_name = NULL;
+	SubtypeInfo info;
+
+	switch (dpdo_type)
+	{
+	case obj_relation:
+	case obj_view:
+		relation = dependency.relation;
+		dpdo_name = &relation->getName();
+
+		fb_assert(dep_rel || !checkTableScope);
+
+		if (checkTableScope &&
+			( (dep_rel->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_conn)) !=
+			  (relation->rel_flags & (REL_temp_tran | REL_temp_conn)) ))
+		{
+			if ( !( // master is ON COMMIT PRESERVE, detail is ON COMMIT DELETE
+					(dep_rel->getPermanent()->rel_flags & REL_temp_tran) && (relation->rel_flags & REL_temp_conn) ||
+					// computed field of a view
+					(dependency_type == obj_computed) && dep_rel->isView()
+				   ))
 			{
-				if ( !( // master is ON COMMIT PRESERVE, detail is ON COMMIT DELETE
-						(dep_rel->getPermanent()->rel_flags & REL_temp_tran) && (relation->rel_flags & REL_temp_conn) ||
-						// computed field of a view
-						(dependency_type == obj_computed) && dep_rel->isView()
-					   ))
-				{
-					string sMaster, sChild;
+				string sMaster, sChild;
 
-					make_relation_scope_name(relation->getName(), relation->rel_flags, sMaster);
-					make_relation_scope_name(dep_rel->getName(), dep_rel->getPermanent()->rel_flags, sChild);
+				make_relation_scope_name(relation->getName(), relation->rel_flags, sMaster);
+				make_relation_scope_name(dep_rel->getName(), dep_rel->getPermanent()->rel_flags, sChild);
 
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_met_wrong_gtt_scope) << Arg::Str(sChild) <<
+				ERR_post(Arg::Gds(isc_no_meta_update) <<
+						 Arg::Gds(isc_met_wrong_gtt_scope) << Arg::Str(sChild) <<
 																  Arg::Str(sMaster));
-				}
 			}
-
-			if (relation->isView())
-				dpdo_type = obj_view;
-			break;
-
-		case obj_procedure:
-			procedure = dependency.procedure;
-			dpdo_name = &procedure->getName();
-			break;
-
-		case obj_collation:
-			{
-				const USHORT number = dependency.number;
-				MET_get_char_coll_subtype_info(tdbb, number, &info);
-				dpdo_name = &info.collationName;
-			}
-			break;
-
-		case obj_exception:
-			{
-				const SLONG number = dependency.number;
-				MET_lookup_exception(tdbb, number, name, NULL);
-				dpdo_name = &name;
-			}
-			break;
-
-		case obj_field:
-			dpdo_name = dependency.name;
-			break;
-
-		case obj_generator:
-			{
-				// CVC: Here I'm going to track those pesky things named generators and UDFs.
-				// But don't track sys gens.
-				bool sysGen = false;
-				const SLONG number = dependency.number;
-				if (number == 0 || !MET_lookup_generator_id(tdbb, number, name, &sysGen) || sysGen)
-					continue;
-				dpdo_name = &name;
-			}
-			break;
-
-		case obj_udf:
-			dpdo_name = &dependency.function->getName();
-			break;
-
-		case obj_index:
-			name = *dependency.name;
-			dpdo_name = &name;
-			break;
 		}
 
-		MetaName field_name;
+		if (relation->isView())
+			dpdo_type = obj_view;
+		break;
 
-		if (dependency.subNumber || dependency.subName)
+	case obj_procedure:
+		procedure = dependency.procedure;
+		dpdo_name = &procedure->getName();
+		break;
+
+	case obj_collation:
 		{
-			if (dependency.subNumber)
-			{
-				const SSHORT fld_id = (SSHORT) dependency.subNumber;
-				if (relation)
-				{
-					const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
-					if (field)
-						field_name = field->fld_name;
-				}
-				else if (procedure)
-				{
-					const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
-					// CVC: Setting the field var here didn't make sense alone,
-					// so I thought the missing code was to try to extract
-					// the field name that's in this case an output var from a proc.
-					if (param)
-						field_name = param->prm_name;
-				}
-			}
-			else
-				field_name = *dependency.subName;
+			const USHORT number = dependency.number;
+			MET_get_char_coll_subtype_info(tdbb, number, &info);
+			dpdo_name = &info.collationName;
 		}
+		break;
+
+	case obj_exception:
+		{
+			const SLONG number = dependency.number;
+			MET_lookup_exception(tdbb, number, name, NULL);
+			dpdo_name = &name;
+		}
+		break;
+
+	case obj_field:
+		dpdo_name = &dependency.name;
+		break;
+
+	case obj_generator:
+		{
+			// CVC: Here I'm going to track those pesky things named generators and UDFs.
+			// But don't track sys gens.
+			bool sysGen = false;
+			const SLONG number = dependency.number;
+			if (number == 0 || !MET_lookup_generator_id(tdbb, number, name, &sysGen) || sysGen)
+				return;
+			dpdo_name = &name;
+		}
+		break;
+
+	case obj_udf:
+		dpdo_name = &dependency.function->getName();
+		break;
+
+	case obj_index:
+		name = dependency.name;
+		dpdo_name = &name;
+		break;
+	}
+
+	MetaName field_name;
+
+	if (dependency.subNumber || dependency.subName.hasData())
+	{
+		if (dependency.subNumber)
+		{
+			const SSHORT fld_id = (SSHORT) dependency.subNumber;
+			if (relation)
+			{
+				const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
+				if (field)
+					field_name = field->fld_name;
+			}
+			else if (procedure)
+			{
+				const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
+				// CVC: Setting the field var here didn't make sense alone,
+				// so I thought the missing code was to try to extract
+				// the field name that's in this case an output var from a proc.
+				if (param)
+					field_name = param->prm_name;
+			}
+		}
+		else
+			field_name = dependency.subName;
+	}
+
+	bool found = false;
+	if (field_name.hasData())
+	{
+		AutoCacheRequest request(tdbb, irq_c_deps_f, IRQ_REQUESTS);
+		fb_assert(dpdo_name);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			X IN RDB$DEPENDENCIES
+			WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
+				 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
+				 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
+				 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
+				 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
+				 X.RDB$FIELD_NAME = field_name.c_str() AND
+				 X.RDB$DEPENDENT_TYPE = dependency_type
+		{
+			found = true;
+		}
+		END_FOR
+	}
+	else
+	{
+		AutoCacheRequest request(tdbb, irq_c_deps, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			X IN RDB$DEPENDENCIES
+			WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
+				 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
+				 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
+				 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
+				 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
+				 X.RDB$FIELD_NAME MISSING AND
+				 X.RDB$DEPENDENT_TYPE = dependency_type AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(dpdo_name->package.c_str(), '')
+		{
+			found = true;
+		}
+		END_FOR
+	}
+	if (found)
+		return;
+
+	AutoCacheRequest request(tdbb, irq_s_deps, IRQ_REQUESTS);
+
+	fb_assert(dpdo_name);
+
+	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction) DEP IN RDB$DEPENDENCIES
+	{
+		if (object_name.schema.hasData())
+		{
+			DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$DEPENDENT_SCHEMA_NAME, object_name.schema.c_str());
+		}
+		else
+			DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = TRUE;
+
+		strcpy(DEP.RDB$DEPENDENT_NAME, object_name.object.c_str());
+
+		DEP.RDB$DEPENDED_ON_TYPE = dpdo_type;
+
+		if (dpdo_name->schema.hasData())
+		{
+			DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$DEPENDED_ON_SCHEMA_NAME, dpdo_name->schema.c_str());
+		}
+		else
+			DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = TRUE;
+
+		strcpy(DEP.RDB$DEPENDED_ON_NAME, dpdo_name->object.c_str());
 
 		if (field_name.hasData())
 		{
-			AutoCacheRequest request(tdbb, irq_c_deps_f, IRQ_REQUESTS);
-			bool found = false;
-			fb_assert(dpdo_name);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				X IN RDB$DEPENDENCIES
-				WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
-					 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
-					 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
-					 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
-					 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
-					 X.RDB$FIELD_NAME = field_name.c_str() AND
-					 X.RDB$DEPENDENT_TYPE = dependency_type
-			{
-				found = true;
-			}
-			END_FOR
-
-			if (found)
-				continue;
+			DEP.RDB$FIELD_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$FIELD_NAME, field_name.c_str());
 		}
 		else
+			DEP.RDB$FIELD_NAME.NULL = TRUE;
+
+		if (dpdo_name->package.hasData())
 		{
-			AutoCacheRequest request(tdbb, irq_c_deps, IRQ_REQUESTS);
-			bool found = false;
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				X IN RDB$DEPENDENCIES
-				WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
-					 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
-					 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
-					 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
-					 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
-					 X.RDB$FIELD_NAME MISSING AND
-					 X.RDB$DEPENDENT_TYPE = dependency_type AND
-					 X.RDB$PACKAGE_NAME EQUIV NULLIF(dpdo_name->package.c_str(), '')
-			{
-				found = true;
-			}
-			END_FOR
-
-			if (found)
-				continue;
+			DEP.RDB$PACKAGE_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$PACKAGE_NAME, dpdo_name->package.c_str());
 		}
+		else
+			DEP.RDB$PACKAGE_NAME.NULL = TRUE;
 
-		AutoCacheRequest request(tdbb, irq_s_deps, IRQ_REQUESTS);
-
-		fb_assert(dpdo_name);
-
-		STORE(REQUEST_HANDLE request TRANSACTION_HANDLE tdbb->getTransaction()) DEP IN RDB$DEPENDENCIES
-		{
-			if (object_name.schema.hasData())
-			{
-				DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$DEPENDENT_SCHEMA_NAME, object_name.schema.c_str());
-			}
-			else
-				DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = TRUE;
-
-			strcpy(DEP.RDB$DEPENDENT_NAME, object_name.object.c_str());
-
-			DEP.RDB$DEPENDED_ON_TYPE = dpdo_type;
-
-			if (dpdo_name->schema.hasData())
-			{
-				DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$DEPENDED_ON_SCHEMA_NAME, dpdo_name->schema.c_str());
-			}
-			else
-				DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = TRUE;
-
-			strcpy(DEP.RDB$DEPENDED_ON_NAME, dpdo_name->object.c_str());
-
-			if (field_name.hasData())
-			{
-				DEP.RDB$FIELD_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$FIELD_NAME, field_name.c_str());
-			}
-			else
-				DEP.RDB$FIELD_NAME.NULL = TRUE;
-
-			if (dpdo_name->package.hasData())
-			{
-				DEP.RDB$PACKAGE_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$PACKAGE_NAME, dpdo_name->package.c_str());
-			}
-			else
-				DEP.RDB$PACKAGE_NAME.NULL = TRUE;
-
-			DEP.RDB$DEPENDENT_TYPE = dependency_type;
-		}
-		END_STORE
+		DEP.RDB$DEPENDENT_TYPE = dependency_type;
 	}
+	END_STORE
 }
 
 
@@ -4822,9 +4949,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* transaction = attachment->getMetaTransaction(tdbb);
 
-	bid expression, condition;
-	expression.clear();
-	condition.clear();
 	MetaId relId = getPermanent()->getRelation()->getId();
 	bool found = false;
 
@@ -4847,11 +4971,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		idv_foreignKey = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
 
 		idv_active = MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE);
-
-		if (!IND.RDB$EXPRESSION_BLR.NULL)
-			expression = IND.RDB$EXPRESSION_BLR;
-		if (!IND.RDB$CONDITION_BLR.NULL)
-			condition = IND.RDB$CONDITION_BLR;
 	}
 	END_FOR
 
@@ -4861,46 +4980,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		return ScanResult::MISS;
 	}
 
-	auto* relation = (expression.hasData() || condition.hasData()) ?
-		MetadataCache::getPerm<Cached::Relation>(tdbb, relId, CacheFlag::AUTOCREATE) : nullptr;
-
-	if (expression.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
-			idv_expression_statement = Statement::makeValueExpression(tdbb, idv_expression, idv_expression_desc, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
-
-	if (condition.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
-			idv_condition_statement = Statement::makeBoolExpression(tdbb, idv_condition, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
 
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }

@@ -521,7 +521,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	if (idx->idx_flags & idx_foreign)
 	{
 		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, idx->idx_primary_relation,
-			CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+			CacheFlag::AUTOCREATE);
 		partner_index_id = idx->idx_primary_index;
 	}
 

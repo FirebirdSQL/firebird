@@ -167,7 +167,7 @@ CharSetContainer* CharSetContainer::lookupCharset(thread_db* tdbb, TTypeId ttype
 	if (id == CS_dynamic)
 		id = tdbb->getCharSet();
 
-	return MetadataCache::getPerm<Cached::CharSet>(tdbb, id, CacheFlag::AUTOCREATE);
+	return MetadataCache::getPerm<Cached::CharSet>(tdbb, id, CacheFlag::AUTOCREATE | CacheFlag::MINISCAN);
 }
 
 
@@ -265,14 +265,14 @@ Collation* CharSetVers::getCollation(CollId id)
 	if (USHORT(id) >= charset_collations.getCount() || !charset_collations[id])
 		return nullptr;
 
-	return charset_collations[id];
+	return charset_collations[id]->validate();
 }
 
 Collation* CharSetVers::getCollation(const QualifiedName& name)
 {
 	FB_SIZE_T pos;
 	if (charset_collations.find([name](Collation* col) { return col->name == name; }, pos))
-		return charset_collations[pos];
+		return charset_collations[pos]->validate();
 
 	ERR_post(Arg::Gds(isc_text_subtype) << name.toQuotedString());
 }

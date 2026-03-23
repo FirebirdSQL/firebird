@@ -802,6 +802,8 @@ inline void clearRecordStack(RecordStack& stack)
 		// records from undo log must not be deleted
 		if (!r->isTempActive())
 			delete r;
+		else
+			r->releaseTempActive();
 	}
 }
 
@@ -4432,7 +4434,8 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				EVL_field(0, rpb->rpb_record, f_idx_relation, &desc);
 				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 				MOV_get_metaname(tdbb, &desc, object_name.object);
-				auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name, CacheFlag::AUTOCREATE);
+				auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name,
+					CacheFlag::AUTOCREATE | CacheFlag::MINISCAN);
 				fb_assert(irel);
 
 				EVL_field(0, rpb->rpb_record, f_idx_id, &desc);
@@ -7181,6 +7184,9 @@ static bool set_security_class(thread_db* tdbb, Record* record, USHORT field_id)
  *
  **************************************/
 	dsc desc1;
+
+	if (tdbb->tdbb_flags & TDBB_no_security_class)
+		return false;
 
 	if (!EVL_field(0, record, field_id, &desc1))
 	{

@@ -3416,7 +3416,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 			{
 				Dependency dependency(obj_procedure);
 				dependency.procedure = node->procedure();
-				dependency.subName = &argName;
+				dependency.subName = argName;
 				csb->addDependency(dependency);
 			}
 		}
@@ -3427,7 +3427,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 			{
 				Dependency dependency(obj_procedure);
 				dependency.procedure = node->procedure();
-				dependency.subName = &argName;
+				dependency.subName = argName;
 				csb->addDependency(dependency);
 			}
 		}

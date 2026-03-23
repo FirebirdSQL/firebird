@@ -553,6 +553,14 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, MetaId id, Object
 }
 
 
+Cached::Index* RelationPermanent::ensureIndex(thread_db* tdbb, MetaId id)
+{
+	auto* idp = rel_indices.ensurePermanent(tdbb, id);
+	fb_assert(idp);
+	return idp;
+}
+
+
 PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
 {
 /**************************************
@@ -618,12 +626,6 @@ IndexVersion::IndexVersion(MemoryPool& p, Cached::Index* idp)
 
 void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
 {
-	if (idv->idv_expression_statement)
-		idv->idv_expression_statement->release(tdbb);
-
-	if (idv->idv_condition_statement)
-		idv->idv_condition_statement->release(tdbb);
-
 	delete idv;
 }
 
@@ -995,6 +997,22 @@ FB_UINT64 IndexPermanent::makeLockId(MetaId relId, MetaId indexId)
 
 	const int REL_ID_KEY_OFFSET = 16;
 	return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
+}
+
+void IndexPermanent::releaseStatements(thread_db* tdbb)
+{
+	if (idp_expression_statement)
+	{
+		idp_expression_statement->release(tdbb);
+		idp_expression_statement = nullptr;
+		idp_expression = nullptr;
+	}
+	if (idp_condition_statement)
+	{
+		idp_condition_statement->release(tdbb);
+		idp_condition_statement = nullptr;
+		idp_condition = nullptr;
+	}
 }
 
 

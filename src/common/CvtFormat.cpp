@@ -241,6 +241,7 @@ namespace
 			case '.':
 			case '/':
 			case ',':
+			case '\'':
 			case ';':
 			case ':':
 			case ' ':
