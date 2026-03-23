@@ -489,6 +489,9 @@ Config* Config::get(const PathName& lookupName)
 
 			return config.release();
 		}
+
+		if (replicaSkip)
+			raiseError("All configured replicas skipped");
 	}
 	catch (const Exception& ex)
 	{
