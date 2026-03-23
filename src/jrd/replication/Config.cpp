@@ -62,6 +62,7 @@ namespace
 	constexpr ULONG DEFAULT_GROUP_FLUSH_DELAY = 0;
 	constexpr ULONG DEFAULT_APPLY_IDLE_TIMEOUT = 10;			// seconds
 	constexpr ULONG DEFAULT_APPLY_ERROR_TIMEOUT = 60;			// seconds
+	constexpr bool DEFAULT_REPORT_ERRORS = false;
 
 	void parseLong(const string& input, ULONG& output)
 	{
@@ -237,7 +238,7 @@ Config::Config()
 	  schemaSearchPath(getPool()),
 	  pluginName(getPool()),
 	  logErrors(true),
-	  reportErrors(false),
+	  reportErrors(DEFAULT_REPORT_ERRORS),
 	  disableOnError(true),
 	  cascadeReplication(false)
 {
@@ -279,6 +280,7 @@ Config* Config::get(const PathName& lookupName)
 {
 	fb_assert(lookupName.hasData());
 
+	bool reportErrors = DEFAULT_REPORT_ERRORS;
 	try
 	{
 		const PathName filename =
@@ -433,6 +435,7 @@ Config* Config::get(const PathName& lookupName)
 				else if (key == "report_errors")
 				{
 					parseBoolean(value, config->reportErrors);
+					reportErrors = config->reportErrors;
 				}
 				else if (key == "disable_on_error")
 				{
@@ -493,7 +496,8 @@ Config* Config::get(const PathName& lookupName)
 		composeError(&localStatus, ex);
 
 		logPrimaryStatus(lookupName, &localStatus);
-		localStatus.raise();
+		if (reportErrors)
+			localStatus.raise();
 	}
 
 	return nullptr;
