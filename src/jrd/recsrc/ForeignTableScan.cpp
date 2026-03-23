@@ -436,6 +436,18 @@ void ForeignTableScan::processArgument(thread_db* tdbb, string& conjunctSql, con
 		value += ".";
 		value += m_relation()->getForeignAdapter()->getOriginalFieldName(field->fld_name.c_str());
 		appendFilterValue(value, conjunctSql);
+
+		const dsc& desc = fieldNode->format->fmt_desc[fieldNode->fieldId];
+		if (desc.isText())
+		{
+			const TextType* const tt = INTL_texttype_lookup(tdbb, desc.getTextType());
+			if (tt->getType() != 0 && (tt->getType() != tt->getCharSet()->getId()))
+			{
+				MetaString collate = tt->name.object;
+				appendFilterValue(" collate ", conjunctSql);
+				appendFilterValue(collate, conjunctSql);
+			}
+		}
 	}
 	else if (const auto literalNode = nodeAs<LiteralNode>(node))
 	{
