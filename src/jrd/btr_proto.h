@@ -30,14 +30,14 @@
 #include "../jrd/exe.h"
 #include "../jrd/QualifiedName.h"
 
-void	BTR_all(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::IndexDescList&, Jrd::RelationPages*);
+void	BTR_all(Jrd::thread_db*, Jrd::Cached::Relation*, Jrd::IndexDescList&, Jrd::RelationPages*, bool sysRq = false);
 bool	BTR_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
 bool	BTR_cleanup_index(Jrd::thread_db*, const Jrd::QualifiedName&, Jrd::jrd_tra*, MetaId);
 void	BTR_complement_key(Jrd::temporary_key*);
 void	BTR_create(Jrd::thread_db*, Jrd::IndexCreation&, Jrd::SelectivityList&);
 bool	BTR_delete_index(Jrd::thread_db*, Jrd::win*, MetaId, bool);
 bool	BTR_description(Jrd::thread_db*, Jrd::Cached::Relation*, const Ods::index_root_page*, Jrd::index_desc*,
-						MetaId, bool raise = true);
+						MetaId, USHORT flags = 0);
 DSC*	BTR_eval_expression(Jrd::thread_db*, Jrd::index_desc*, Jrd::Record*);
 void	BTR_evaluate(Jrd::thread_db*, const Jrd::IndexRetrieval*, Jrd::RecordBitmap**, Jrd::RecordBitmap*);
 UCHAR*	BTR_find_leaf(Ods::btree_page*, Jrd::temporary_key*, UCHAR*, USHORT*, bool, int);
@@ -60,5 +60,8 @@ void	BTR_selectivity(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId, Jrd::Selec
 bool	BTR_types_comparable(const dsc& target, const dsc& source);
 Ods::index_root_page* BTR_fetch_root_for_update(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
 const Ods::index_root_page* BTR_fetch_root(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
+
+inline constexpr USHORT BTR_DESCRIBE_NO_THROW =		0x0001;
+inline constexpr USHORT BTR_DESCRIBE_SYSTEM_RQ =	0x0002;
 
 #endif // JRD_BTR_PROTO_H

@@ -922,6 +922,8 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(408, true, argv[itr]);
 				// msg 408 expected parallel workers, encountered "%s"
 			}
+			if (tdgbl->gbl_sw_par_workers > BURP_MAX_PARALLEL_WORKERS)
+				tdgbl->gbl_sw_par_workers = BURP_MAX_PARALLEL_WORKERS;
 			break;
 		case IN_SW_BURP_Y:
 			{

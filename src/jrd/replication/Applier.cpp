@@ -247,8 +247,8 @@ Applier* Applier::create(thread_db* tdbb)
 		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
 		request = Statement::makeRequest(tdbb, csb, true);
+		request->setAttachment(attachment);
 		request->validateTimeStamp();
-		request->req_attachment = attachment;
 	}
 	catch (const Exception&)
 	{

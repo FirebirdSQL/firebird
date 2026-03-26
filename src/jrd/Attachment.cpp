@@ -401,6 +401,9 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 		bool err = false;
 		for (const jrd_tra* tra = att_transactions; tra; tra = tra->tra_next)
 		{
+			if (tra == att_meta_transaction)
+				continue;
+
 			n++;
 			if (tra != oldTran && !(tra->tra_flags & TRA_prepared))
 				err = true;
