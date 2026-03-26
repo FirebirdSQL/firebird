@@ -178,9 +178,12 @@ Rules:
 The optional `OPTIONS` clause specifies additional foreign column options and table options. The required foreign column and table options depend on the provider \(plugin\) used to access table data. General table options are:
 * SCHEMA_NAME - the schema name where the table is located on the foreign server;
 * TABLE_NAME - name of the table on the foreign server.
+
 General column options are:
 * COLUMN_NAME - the name of the column in the foreign table;
-* PRIMARY_KEY - an identifier explicitly specifying that the column is used in the primary key.
+* PRIMARY_KEY - an identifier explicitly specifying that the column is used in the primary key;
+* READONLY - defines whether the field is a calculated field (TRUE); modifying a calculated field on the local 
+server will not affect the value of the field in the table on the foreign server.
 
 The table name should include the full schema name and the table name on the foreign server \(if not specified in the options\). The table names should match. Column names should match \(if not specified in the options\). The number of defined columns should be less than or equal to the columns in the table on the foreign server.
 
