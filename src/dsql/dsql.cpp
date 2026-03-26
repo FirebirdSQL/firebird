@@ -617,7 +617,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 				scratch->flags |= DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT;
 
 			const string& source = parser.getTransformedString();
-			string transformedText(*statementPool);
+			string transformedText(*scratchPool);
 
 			// If the attachment charset is NONE, we first try to convert data to UTF8;
 			// and if that fails, replace non-ASCII characters by question marks.

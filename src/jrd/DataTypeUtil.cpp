@@ -219,7 +219,10 @@ ULONG DataTypeUtilBase::convertLength(ULONG len, CSetId srcCharSet, CSetId dstCh
 	if (dstCharSet == CS_NONE || dstCharSet == CS_BINARY)
 		return len;
 
-	return (len / maxBytesPerChar(srcCharSet)) * maxBytesPerChar(dstCharSet);
+	const ULONG srcBPC = maxBytesPerChar(srcCharSet);
+	const ULONG dstBPC = maxBytesPerChar(dstCharSet);
+
+	return (ROUNDUP(len, srcBPC) / srcBPC) * dstBPC;
 }
 
 
@@ -390,9 +393,9 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset,
 
 		dst.resize(length);
 	}
-	catch (const status_exception& e)
+	catch (const status_exception& ex)
 	{
-		const Arg::StatusVector v(e);
+		const Arg::StatusVector v(ex);
 
 		if (charset == CS_NONE)
 		{
