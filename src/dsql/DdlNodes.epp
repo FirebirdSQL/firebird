@@ -12169,6 +12169,7 @@ void ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tr
  *	change index instance for this temporary table too. For "create index" work
  *	item create base index instance before temp index instance. For index
  *	deletion delete temp index instance first.
+ *
  **************************************/
 
 	SET_TDBB(tdbb);
@@ -12179,18 +12180,18 @@ void ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tr
 		fatal_exception::raiseFmt("Relation for creation of index %s not found", indexName.toQuotedString().c_str());
 
 	if (create)
-		exec(tdbb, relation, transaction);
+		step2(tdbb, relation, transaction);
 
 	if (relation->rel_flags & REL_temp_conn)
 	{
 		AutoSetRestoreFlag preserveFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
 
 		if (relation->getPages(tdbb, MAX_TRA_NUMBER, false))
-			exec(tdbb, relation, transaction);
+			step2(tdbb, relation, transaction);
 	}
 
 	if (!create)
-		exec(tdbb, relation, transaction);
+		step2(tdbb, relation, transaction);
 }
 
 string ModifyIndexNode::print(Jrd::NodePrinter& printer) const
@@ -12268,7 +12269,7 @@ void ModifyIndexList::erase(thread_db* tdbb, MetaName name)
 //----------------------
 
 
-void StoreIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void StoreIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 	auto id = expressionIndex ? createExpression(tdbb, rel, transaction) : create(tdbb, rel, transaction);
 	if (id < tdbb->getDatabase()->dbb_max_idx)
@@ -13400,7 +13401,7 @@ void AlterIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 	SCL_check_relation(tdbb, relationName, SCL_alter, systemIndex);
 }
 
-bool AlterIndexNode::pass1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+bool AlterIndexNode::step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	AutoCacheRequest request(tdbb, drq_m_index, DYN_REQUESTS);
 	bool found = false;
@@ -13481,7 +13482,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
-	if (pass1(tdbb, dsqlScratch, transaction))
+	if (step1(tdbb, dsqlScratch, transaction))
 	{
 		if (idxId.has_value())
 		{
@@ -13501,7 +13502,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	savePoint.release();	// system table modified OK
 }
 
-void AlterIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void AlterIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 	if (create)
 	{
@@ -13847,7 +13848,7 @@ Cached::Relation* DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsql
 }
 
 
-void DropIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void DropIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 /**************************************
  *
