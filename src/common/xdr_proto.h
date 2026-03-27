@@ -31,11 +31,32 @@ bool_t	xdr_datum(xdr_t*, const dsc*, UCHAR*);
 bool_t	xdr_double(xdr_t*, double*);
 bool_t	xdr_dec64(xdr_t*, Firebird::Decimal64*);
 bool_t	xdr_dec128(xdr_t*, Firebird::Decimal128*);
-bool_t	xdr_int128(xdr_t*, Firebird::Int128*);
-bool_t	xdr_enum(xdr_t*, xdr_op*);
 bool_t	xdr_float(xdr_t*, float*);
 bool_t	xdr_int(xdr_t*, int*);
+bool_t	xdr_int128(xdr_t*, Firebird::Int128*);
 bool_t	xdr_long(xdr_t*, SLONG*);
+
+// Template xdr_enum for type-safe enum serialization.
+// Accepts any enum type, uses static_cast to avoid UB from reinterpret_cast.
+template<typename EnumT>
+inline bool_t xdr_enum(xdr_t* xdrs, EnumT* ip)
+{
+	SLONG temp;
+	switch (xdrs->x_op)
+	{
+	case XDR_ENCODE:
+		temp = static_cast<SLONG>(*ip);
+		return xdr_long(xdrs, &temp);
+	case XDR_DECODE:
+		if (!xdr_long(xdrs, &temp))
+			return FALSE;
+		*ip = static_cast<EnumT>(temp);
+		return TRUE;
+	case XDR_FREE:
+		return TRUE;
+	}
+	return FALSE;
+}
 bool_t	xdr_opaque(xdr_t*, SCHAR*, unsigned);
 bool_t	xdr_quad(xdr_t*, SQUAD*);
 bool_t	xdr_short(xdr_t*, SSHORT*);
