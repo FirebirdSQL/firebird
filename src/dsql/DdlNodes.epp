@@ -12159,13 +12159,9 @@ void CreateAlterViewNode::createCheckTrigger(thread_db* tdbb, DsqlCompilerScratc
 
 //----------------------
 
-bool ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transaction)
+void ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transaction)
 {
-/**************************************
- *
- *	m o d i f y _ i n d e x
- *
- **************************************
+ /**************************************
  *
  * Functional description
  *	Create\drop an index or change the state of an index between active/inactive.
@@ -12182,9 +12178,8 @@ bool ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tr
 	if (!relation)
 		fatal_exception::raiseFmt("Relation for creation of index %s not found", indexName.toQuotedString().c_str());
 
-	bool rc = true;
 	if (create)
-		rc = exec(tdbb, relation, transaction);
+		exec(tdbb, relation, transaction);
 
 	if (relation->rel_flags & REL_temp_conn)
 	{
@@ -12196,8 +12191,6 @@ bool ModifyIndexNode::modify(thread_db* tdbb, Cached::Relation* relation, jrd_tr
 
 	if (!create)
 		exec(tdbb, relation, transaction);
-
-	return rc;
 }
 
 string ModifyIndexNode::print(Jrd::NodePrinter& printer) const
@@ -12240,29 +12233,23 @@ Cached::Relation* ModifyIndexNode::getRelByIndex(thread_db* tdbb, const Qualifie
 //----------------------
 
 
-bool ModifyIndexList::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void ModifyIndexList::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 	fb_assert(rel);
 	if (!rel)
-		return false;
+		return;
 
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
-	bool rc = true;
 
 	for (auto* node : nodes)
 	{
 		if (node)
 		{
-			if (!node->modify(tdbb, rel, transaction))
-			{
-				fb_assert(nodes.getCount() == 1);
-				rc = false;
-			}
+			node->modify(tdbb, rel, transaction);
 		}
 	}
 
 	nodes.clear();
-	return rc;
 }
 
 void ModifyIndexList::erase(thread_db* tdbb, MetaName name)
@@ -12281,13 +12268,11 @@ void ModifyIndexList::erase(thread_db* tdbb, MetaName name)
 //----------------------
 
 
-bool StoreIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void StoreIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 	auto id = expressionIndex ? createExpression(tdbb, rel, transaction) : create(tdbb, rel, transaction);
 	if (id < tdbb->getDatabase()->dbb_max_idx)
 		rel->newIndexVersion(tdbb, id, CacheFlag::MINISCAN);
-
-	return true;
 }
 
 
@@ -13415,6 +13400,66 @@ void AlterIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 	SCL_check_relation(tdbb, relationName, SCL_alter, systemIndex);
 }
 
+bool AlterIndexNode::pass1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	AutoCacheRequest request(tdbb, drq_m_index, DYN_REQUESTS);
+	bool found = false;
+	IndexStatus currentStatus = MET_index_state_unknown;
+	IndexStatus desiredStatus = create ? MET_index_active : MET_index_inactive;
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		IDX IN RDB$INDICES
+		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+		IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+	{
+		found = true;
+		currentStatus = MetadataCache::getIndexStatus(IDX.RDB$INDEX_INACTIVE.NULL, IDX.RDB$INDEX_INACTIVE);
+
+		if (currentStatus != desiredStatus)
+		{
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+
+			auto relName = QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			indexRelation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
+			fb_assert(indexRelation);
+
+			expressionIndex = !IDX.RDB$EXPRESSION_BLR.NULL;
+			if (!IDX.RDB$INDEX_ID.NULL)
+			{
+				fb_assert(IDX.RDB$INDEX_ID);
+				idxId = IDX.RDB$INDEX_ID - 1;
+			}
+			if (indexRelation && idxId.has_value())
+			{
+				[[maybe_unused]] auto ret = indexRelation->oldIndexVersion(tdbb, idxId.value(), CacheFlag::OLD_ALTER);
+				fb_assert(ret);
+			}
+
+			MODIFY IDX
+				IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
+				IDX.RDB$INDEX_INACTIVE = desiredStatus;
+				if (create)
+				{
+					IDX.RDB$STATISTICS.NULL = FALSE;
+					IDX.RDB$STATISTICS = -1.0;
+				}
+			END_MODIFY
+		}
+	}
+	END_FOR
+
+	if (!found)
+	{
+		// msg 48: "Index not found"
+		status_exception::raise(Arg::PrivateDyn(48) << Arg::Gds(isc_index_name) << indexName.toQuotedString());
+	}
+
+	if (currentStatus == desiredStatus) // Index is already in desired state, nothing to do
+		return false;
+
+	return currentStatus != MET_index_deferred_active;
+}
+
 void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
@@ -13436,105 +13481,18 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
-	Cached::Relation* relation = nullptr;
-	bool expressionIndex = false;
-
-	AutoCacheRequest request(tdbb, drq_m_index, DYN_REQUESTS);
-	bool found = false;
-	bool active = create;
-	bool deferred = false;
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		IDX IN RDB$INDICES
-		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+	if (pass1(tdbb, dsqlScratch, transaction))
 	{
-		found = true;
-
-		if (IDX.RDB$INDEX_INACTIVE.NULL)
-			active = true;
-		else
-		{
-			active = IDX.RDB$INDEX_INACTIVE == MET_index_active;
-			deferred = IDX.RDB$INDEX_INACTIVE == MET_index_deferred_active;
-		}
-
-		if (active != create)
-		{
-			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
-
-			auto relName = QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
-			relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
-			fb_assert(relation);
-
-			expressionIndex = !IDX.RDB$EXPRESSION_BLR.NULL;
-			if (!IDX.RDB$INDEX_ID.NULL)
-			{
-				fb_assert(IDX.RDB$INDEX_ID);
-				idxId = IDX.RDB$INDEX_ID - 1;
-			}
-			if (relation && idxId.has_value())
-			{
-				auto ret = relation->oldIndexVersion(tdbb, idxId.value(), CacheFlag::OLD_ALTER);
-				fb_assert(ret);
-			}
-
-			MODIFY IDX
-				IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
-				IDX.RDB$INDEX_INACTIVE = create ? MET_index_active : MET_index_inactive;
-				if (create)
-				{
-					IDX.RDB$STATISTICS.NULL = FALSE;
-					IDX.RDB$STATISTICS = -1.0;
-				}
-			END_MODIFY
-		}
-	}
-	END_FOR
-
-	if (!found)
-	{
-		// msg 48: "Index not found"
-		status_exception::raise(Arg::PrivateDyn(48));
-	}
-
-	if (active == create)
-		return;
-
-	if (!deferred)
-	{
-		MemoryPool& pool = *MemoryPool::getContextPool();
-		ModifyIndexList oneItemList(pool);
 		if (idxId.has_value())
 		{
-			oneItemList.push(this);
-			if (!oneItemList.exec(tdbb, relation, transaction))
-			{
-				fb_assert(create);
-
-				idxId.reset();
-
-				AUTO_HANDLE(rq1);
-				FOR(REQUEST_HANDLE rq1 TRANSACTION_HANDLE transaction)
-					IDX IN RDB$INDICES
-					WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-						 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
-				{
-					MODIFY IDX
-						IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
-						IDX.RDB$INDEX_INACTIVE = MET_index_active;
-						IDX.RDB$STATISTICS.NULL = FALSE;
-						IDX.RDB$STATISTICS = 0.0;
-						IDX.RDB$INDEX_ID.NULL = TRUE;
-					END_MODIFY
-				}
-				END_FOR
-			}
+			// Index existed before
+			modify(tdbb, indexRelation, transaction);
 		}
-		if (!idxId.has_value())
+		else
 		{
-			oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, expressionIndex));
-			oneItemList.exec(tdbb, relation, transaction);
+			// Index is a brand new
+			StoreIndexNode storeNode(indexName, expressionIndex);
+			storeNode.modify(tdbb, indexRelation, transaction);
 		}
 	}
 
@@ -13543,18 +13501,39 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	savePoint.release();	// system table modified OK
 }
 
-bool AlterIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void AlterIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 	if (create)
 	{
 		if (! IDX_activate_index(tdbb, rel, idxId.value()))
-			return false;
+		{
+			// No index to restore, create a new one from scratch
+			AUTO_HANDLE(rq1);
+			FOR(REQUEST_HANDLE rq1 TRANSACTION_HANDLE transaction)
+				IDX IN RDB$INDICES
+				WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+					 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+			{
+				MODIFY IDX
+					IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
+					IDX.RDB$INDEX_INACTIVE = MET_index_active;
+					IDX.RDB$STATISTICS.NULL = FALSE;
+					IDX.RDB$STATISTICS = 0.0;
+					IDX.RDB$INDEX_ID.NULL = TRUE;
+				END_MODIFY
+			}
+			END_FOR
+
+			StoreIndexNode storeNode(indexName, expressionIndex);
+			storeNode.modify(tdbb, rel, transaction);
+
+			return;
+		}
 	}
 	else
 		IDX_mark_index(tdbb, rel, idxId.value());
 
 	rel->newIndexVersion(tdbb, idxId.value(), CacheFlag::MINISCAN);
-	return true;
 }
 
 // Alter an index on a Local Temporary Table (ACTIVE/INACTIVE).
@@ -13687,7 +13666,7 @@ void SetStatisticsNode::setStatisticsLocalTempIndex(thread_db* tdbb, DsqlCompile
 
 
 DropIndexNode::DropIndexNode(MemoryPool& p, const QualifiedName& name)
-	: ModifyIndexNode(name, false),
+	: ModifyIndexNode(name, false, false),
 	  DdlNode(p)
 { }
 
@@ -13868,7 +13847,7 @@ Cached::Relation* DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsql
 }
 
 
-bool DropIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
+void DropIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -13885,7 +13864,7 @@ bool DropIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transa
 	// Look up the relation.  If we can't find the relation,
 	// don't worry about the index.
 	if (!rel)
-		return idxId;
+		return;
 
 	fb_assert(idxId >= 0 && idxId < dbb->dbb_max_idx);
 
@@ -13895,8 +13874,6 @@ bool DropIndexNode::exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transa
 		IDX_mark_index(tdbb, rel, idxId);
 		rel->eraseIndex(tdbb, idxId);
 	}
-
-	return true;
 }
 
 
