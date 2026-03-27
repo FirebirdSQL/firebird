@@ -147,7 +147,7 @@ char *get_line() {
   /* VM: Process %include line */
   if(strncmp(&line[0], "%include ", 9)==0) {
     int ii=0;
-    for(i=9; line[i]!='\n' && line[i]!=' '; i++, ii++) {
+    for(i=9; line[i]!='\n' && line[i]!=' ' && !(line[i] =='\r' && line[i+1]=='\n'); i++, ii++) {
       inc_file_name[ii] = line[i];
     }
     inc_file_name[ii] = 0;
