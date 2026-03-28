@@ -2335,7 +2335,6 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 					relation : MetadataCache::getPerm<Cached::Relation>(tdbb, partnerRelationName, CacheFlag::AUTOCREATE);
 
 				if (partner_relation &&
-					MetadataCache::getIndexActive(IDX.RDB$INDEX_INACTIVE.NULL, IDX.RDB$INDEX_INACTIVE) &&
 					MetadataCache::getIndexActive(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE))
 				{
 					idx->idx_primary_relation = partner_relation->getId();
