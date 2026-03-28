@@ -13506,6 +13506,14 @@ void AlterIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* tran
 {
 	if (create)
 	{
+		if (!idxId.has_value())
+		{
+			// Index was just created, finalize it
+			StoreIndexNode storeNode(indexName, expressionIndex);
+			storeNode.modify(tdbb, rel, transaction);
+			return;
+		}
+
 		if (! IDX_activate_index(tdbb, rel, idxId.value()))
 		{
 			// No index to restore, create a new one from scratch
@@ -13527,7 +13535,6 @@ void AlterIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* tran
 
 			StoreIndexNode storeNode(indexName, expressionIndex);
 			storeNode.modify(tdbb, rel, transaction);
-
 			return;
 		}
 	}
