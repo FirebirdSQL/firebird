@@ -237,6 +237,11 @@ public:
 		return createNode->disallowedInReadOnlyDatabase();
 	}
 
+	bool mustBeReplicated() const override
+	{
+		return createNode->mustBeReplicated();
+	}
+
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
 	{
@@ -1760,6 +1765,11 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
+	bool mustBeReplicated() const override
+	{
+		return tempFlag != REL_temp_ltt;
+	}
+
 	bool disallowedInReadOnlyDatabase() const override
 	{
 		return tempFlag != REL_temp_ltt;
@@ -2126,6 +2136,11 @@ public:
 		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
 private:
