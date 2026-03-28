@@ -5255,18 +5255,20 @@ domain_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$3;
+			$$->mechanism = prm_mech_type_of;
 		}
-	| TYPE OF COLUMN symbol_domain_name '.' symbol_column_name
+	| TYPE OF COLUMN symbol_domain_name '.' valid_column_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = QualifiedName(*$6);
 			$$->typeOfTable = *$4;
+			$$->mechanism = prm_mech_type_of;
 		}
 	| symbol_domain_name
 		{
 			$$ = newNode<dsql_fld>();
 			$$->typeOfName = *$1;
-			$$->fullDomain = true;
+			$$->mechanism = prm_mech_normal;
 		}
 	;
 
@@ -9865,6 +9867,19 @@ symbol_schema_name
 symbol_window_name
 	: valid_symbol_name
 	;
+
+%type <metaNamePtr> valid_column_name
+valid_column_name
+	: symbol_column_name
+	| pseudocolumn
+	;
+
+%type <metaNamePtr> pseudocolumn
+pseudocolumn
+	: DB_KEY
+	| RDB_RECORD_VERSION
+	;
+
 
 // symbols
 

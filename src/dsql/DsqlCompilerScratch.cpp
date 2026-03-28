@@ -368,7 +368,7 @@ void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExpl
 	else
 		differentSchema = type.typeOfName.schema != ddlSchema;
 
-	const UCHAR domainBlr = type.fullDomain ? blr_domain_full : blr_domain_type_of;
+	const UCHAR domainBlr = type.mechanism == prm_mech_normal ? blr_domain_full : blr_domain_type_of;
 	if (differentSchema)
 	{
 		appendUChar(blrSet.name3);
@@ -454,7 +454,7 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 		appendUChar(blr_variable);
 		appendUShort(variable->number);
 	}
-	else if (node || (!field->fullDomain && !field->notNull))
+	else if (node || (field->mechanism != prm_mech_normal && !field->notNull))
 	{
 		appendUChar(blr_assignment);
 
