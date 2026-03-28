@@ -1302,7 +1302,7 @@ class TrigArray;
 class ModifyIndexNode;
 
 
-// Collects indices to be created after table was actuallly created
+// Collects indices for performing second step of index creation after table was actually created
 
 class ModifyIndexList
 {
@@ -1317,7 +1317,7 @@ public:
 		nodes.push(node);
 	}
 
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+	void exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
 	void erase(thread_db* tdbb, MetaName indexName);
 
 	MemoryPool& getPool()
@@ -1935,14 +1935,15 @@ public:
 };
 
 
-// Performs 2-pass index create/drop
+// Performs 2-step index create/drop/alter
 
 class ModifyIndexNode
 {
 public:
-	ModifyIndexNode(const QualifiedName& indexName, bool create)
+	ModifyIndexNode(const QualifiedName& indexName, bool create, bool expression)
 		: indexName(indexName),
-		  create(create)
+		  create(create),
+		  expressionIndex(expression)
 	{
 	}
 
@@ -1950,22 +1951,25 @@ public:
 	{
 	}
 
-	bool modify(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
-
 	bool check(thread_db*, MetaName iName)
 	{
 		return create && (indexName.object == iName);
 	}
 
-	virtual bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
+	// Performs second step by calling step2() (twice for temporary tables)
+	void modify(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+
+private: // to make sure nobody but modify() can call it
+	virtual void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
 
 protected:
 	Firebird::string print(NodePrinter& printer) const;
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
 
-public:
 	QualifiedName indexName;
+	Cached::Relation* indexRelation = nullptr;
 	bool create;
+	bool expressionIndex;
 };
 
 
@@ -2046,20 +2050,14 @@ public:
 class StoreIndexNode final : public ModifyIndexNode
 {
 public:
-	StoreIndexNode(const QualifiedName& indexName, bool expressionIndex)
-		: ModifyIndexNode(indexName, true),
-		  expressionIndex(expressionIndex)
+	StoreIndexNode(const QualifiedName& indexName, bool expression)
+		: ModifyIndexNode(indexName, true, expression)
 	{ }
-
-public:
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 private:
 	MetaId create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
 	MetaId createExpression(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
-
-private:
-	bool expressionIndex = false;
+	void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 };
 
 
@@ -2067,7 +2065,7 @@ class AlterIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
 	AlterIndexNode(MemoryPool& p, const QualifiedName& name, bool active)
-		: ModifyIndexNode(name, active),
+		: ModifyIndexNode(name, active, false),
 		  DdlNode(p)
 	{
 	}
@@ -2076,6 +2074,8 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+	// First step of index alteration. Returns true if second step is needed
+	bool step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -2093,7 +2093,8 @@ public:
 private:
 	void alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	// Second step of index alteration
+	void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
@@ -2101,7 +2102,6 @@ protected:
 		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
-public:
 	std::optional<MetaId> idxId;
 };
 
@@ -2176,7 +2176,7 @@ public:
 private:
 	void dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
