@@ -6617,31 +6617,31 @@ static void refresh_fk_fields(thread_db* tdbb, Record* old_rec, record_param* cu
  * Functional description
  *	Update new_rpb with foreign key fields values changed by cascade triggers.
  *  Consider self-referenced foreign keys only.
+ *  Also, if UpdateOverwriteMode is set to 1, raise error when foreign key fields
+ *  were changed by user triggers.
  *
  *  old_rec - old record before modify
- *  cur_rpb - just read record with possibly changed FK fields
+ *  cur_rpb - just read record with possibly changed fields
  *  new_rpb - new record evaluated by modify statement and before-triggers
  *
  **************************************/
+	const Database* dbb = tdbb->getDatabase();
+	const auto overwriteMode = dbb->dbb_config->getUpdateOverwriteMode();
+
 	jrd_rel* relation = cur_rpb->rpb_relation;
 
 	MET_scan_partners(tdbb, relation);
 
-	if (!(relation->rel_foreign_refs.frgn_relations))
-		return;
-
-	const FB_SIZE_T frgnCount = relation->rel_foreign_refs.frgn_relations->count();
-	if (!frgnCount)
-		return;
+	const FB_SIZE_T frgnCount = relation->rel_foreign_refs.frgn_relations ?
+		relation->rel_foreign_refs.frgn_relations->count() : 0;
 
 	RelationPages* relPages = cur_rpb->rpb_relation->getPages(tdbb);
 
-	// Collect all fields of all foreign keys
+	// Collect all fields of self-referenced foreign keys
 	SortedArray<int, InlineStorage<int, 16> > fields;
 
 	for (FB_SIZE_T i = 0; i < frgnCount; i++)
 	{
-		// We need self-referenced FK's only
 		if ((*relation->rel_foreign_refs.frgn_relations)[i] == relation->rel_id)
 		{
 			index_desc idx;
@@ -6663,26 +6663,63 @@ static void refresh_fk_fields(thread_db* tdbb, Record* old_rec, record_param* cu
 	}
 
 	if (fields.isEmpty())
-		return;
-
-	DSC desc1, desc2;
-	for (FB_SIZE_T idx = 0; idx < fields.getCount(); idx++)
 	{
-		// Detect if user changed FK field by himself.
-		const int fld = fields[idx];
-		const bool flag_old = EVL_field(relation, old_rec, fld, &desc1);
-		const bool flag_new = EVL_field(relation, new_rpb->rpb_record, fld, &desc2);
+		if (overwriteMode == 0)
+			return;
 
-		// If field was not changed by user - pick up possible modification by
-		// system cascade trigger
-		if (flag_old == flag_new &&
-			(!flag_old || (flag_old && !MOV_compare(tdbb, &desc1, &desc2))))
+		if (cur_rpb->rpb_record->getFormat() == old_rec->getFormat())
 		{
-			const bool flag_tmp = EVL_field(relation, cur_rpb->rpb_record, fld, &desc1);
-			if (flag_tmp)
-				MOV_move(tdbb, &desc1, &desc2);
-			else
-				new_rpb->rpb_record->setNull(fld);
+			if (memcmp(cur_rpb->rpb_address, old_rec->getData(), cur_rpb->rpb_length) == 0)
+				return;
+
+			fb_assert(overwriteMode == 1);
+			ERR_post(Arg::Gds(isc_random) << "UPDATE will overwrite changes made by trigger");
+		}
+		// Else compare field-by-field
+	}
+
+	for (FB_SIZE_T fld = 0, frn = 0; fld < relation->rel_current_format->fmt_count; fld++)
+	{
+		dsc dsc_old;
+		const bool flag_old = EVL_field(relation, old_rec, fld, &dsc_old);
+
+		const bool is_fk = (frn < fields.getCount() && fields[frn] == fld);
+		if (!is_fk)
+		{
+			if (overwriteMode == 0)
+				continue;
+
+			dsc dsc_cur;
+			const bool flag_cur = EVL_field(relation, cur_rpb->rpb_record, fld, &dsc_cur);
+
+			// Check if current record differs from old record
+			if ((flag_cur != flag_old) ||
+				(flag_cur && flag_old && MOV_compare(tdbb, &dsc_old, &dsc_cur) != 0))
+			{
+				// Record was modified by trigger.
+				fb_assert(overwriteMode == 1);
+				ERR_post(Arg::Gds(isc_random) << "UPDATE will overwrite changes made by trigger");
+			}
+		}
+		else
+		{
+			dsc dsc_new;
+			const bool flag_new = EVL_field(relation, new_rpb->rpb_record, fld, &dsc_new);
+
+			// If field was not changed by user - pick up possible modification by
+			// system cascade trigger
+			if (flag_old == flag_new &&
+				(!flag_old || (flag_old && !MOV_compare(tdbb, &dsc_old, &dsc_new))))
+			{
+				dsc dsc_cur;
+				const bool flag_cur = EVL_field(relation, cur_rpb->rpb_record, fld, &dsc_cur);
+				if (flag_cur)
+					MOV_move(tdbb, &dsc_cur, &dsc_new);
+				else
+					new_rpb->rpb_record->setNull(fld);
+			}
+
+			frn++;
 		}
 	}
 }
