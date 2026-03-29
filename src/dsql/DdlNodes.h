@@ -1959,12 +1959,10 @@ public:
 	// Performs second step by calling step2() (twice for temporary tables)
 	void modify(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
 
-private: // to make sure nobody but modify() can call it
-	virtual void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
-
 protected:
 	Firebird::string print(NodePrinter& printer) const;
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
+	virtual void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
 
 	QualifiedName indexName;
 	Cached::Relation* indexRelation = nullptr;
@@ -2054,10 +2052,11 @@ public:
 		: ModifyIndexNode(indexName, true, expression)
 	{ }
 
+	void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+
 private:
 	MetaId create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
 	MetaId createExpression(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
-	void step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
 };
 
 

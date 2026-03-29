@@ -13506,35 +13506,35 @@ void AlterIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* tran
 {
 	if (create)
 	{
+		if (idxId.has_value())
+		{
+			if (! IDX_activate_index(tdbb, rel, idxId.value()))
+			{
+				// No index to restore, create a new one from scratch
+				AUTO_HANDLE(rq1);
+				FOR(REQUEST_HANDLE rq1 TRANSACTION_HANDLE transaction)
+					IDX IN RDB$INDICES
+					WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+						 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+				{
+					MODIFY IDX
+						IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
+						IDX.RDB$INDEX_INACTIVE = MET_index_active;
+						IDX.RDB$STATISTICS.NULL = FALSE;
+						IDX.RDB$STATISTICS = 0.0;
+						IDX.RDB$INDEX_ID.NULL = TRUE;
+					END_MODIFY
+				}
+				END_FOR
+
+				idxId.reset()
+			}
+		}
 		if (!idxId.has_value())
 		{
-			// Index was just created, finalize it
+			// One way or another the index was just created, finalize it
 			StoreIndexNode storeNode(indexName, expressionIndex);
-			storeNode.modify(tdbb, rel, transaction);
-			return;
-		}
-
-		if (! IDX_activate_index(tdbb, rel, idxId.value()))
-		{
-			// No index to restore, create a new one from scratch
-			AUTO_HANDLE(rq1);
-			FOR(REQUEST_HANDLE rq1 TRANSACTION_HANDLE transaction)
-				IDX IN RDB$INDICES
-				WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-					 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
-			{
-				MODIFY IDX
-					IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
-					IDX.RDB$INDEX_INACTIVE = MET_index_active;
-					IDX.RDB$STATISTICS.NULL = FALSE;
-					IDX.RDB$STATISTICS = 0.0;
-					IDX.RDB$INDEX_ID.NULL = TRUE;
-				END_MODIFY
-			}
-			END_FOR
-
-			StoreIndexNode storeNode(indexName, expressionIndex);
-			storeNode.modify(tdbb, rel, transaction);
+			storeNode.step2(tdbb, rel, transaction);
 			return;
 		}
 	}
