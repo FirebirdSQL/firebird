@@ -13527,7 +13527,7 @@ void AlterIndexNode::step2(thread_db* tdbb, Cached::Relation* rel, jrd_tra* tran
 				}
 				END_FOR
 
-				idxId.reset()
+				idxId.reset();
 			}
 		}
 		if (!idxId.has_value())
