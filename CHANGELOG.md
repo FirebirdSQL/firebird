@@ -1,9 +1,98 @@
-# v4.0.6
+# v4.0.7
+
+## New features
+
+* [#8761](https://github.com/FirebirdSQL/firebird/issues/8761): Add API method `Util::convert`  
+  Contributor(s): Adriano dos Santos Fernandes
 
 ## Improvements
 
+* [#8922](https://github.com/FirebirdSQL/firebird/issues/8922): Update Windows distributions with zlib version 1.3.2  
+  Contributor(s): Vlad Khorsun
+
 * [#8598](https://github.com/FirebirdSQL/firebird/issues/8598): Don't fire referential integrity triggers if primary or unique keys haven't changed  
   Contributor(s): Vlad Khorsun
+
+* [#8553](https://github.com/FirebirdSQL/firebird/pull/8553): Get the modification time of a config file with a higher precision to fix cases when it's not reloaded after modification/replacement  
+  Contributor(s): Ilya Eremin
+
+## Bugfixes
+
+* [#8926](https://github.com/FirebirdSQL/firebird/issues/8926): Indexes may not be used for multiple ORed conditions containing both field and non-field references  
+  Contributor(s): Dmitry Yemanov
+
+* [#8851](https://github.com/FirebirdSQL/firebird/issues/8851): 'Internal error' when calling outer procedure after deleting unused result variable from inner procedure  
+  Contributor(s): Vlad Khorsun
+
+* [#8850](https://github.com/FirebirdSQL/firebird/issues/8850): `KERNEL32.GetThreadId` import breaks Windows XP  
+  Contributor(s): Vlad Khorsun
+
+* [#8826](https://github.com/FirebirdSQL/firebird/pull/8826): Fixed potential endless loop inside `MET_scan_relation`  
+  Contributor(s): Vlad Khorsun
+
+* [#8817](https://github.com/FirebirdSQL/firebird/issues/8817): Fatal lock manager error: invalid lock id  
+  Contributor(s): Vlad Khorsun
+
+* [#8799](https://github.com/FirebirdSQL/firebird/issues/8799): BUGCHECK "decompression overran buffer (179)" when `WITH LOCK` clause is used  
+  Contributor(s): Ilya Eremin
+
+* [#8766](https://github.com/FirebirdSQL/firebird/pull/8766): File truncation errors may happen during replication in Windows CS  
+  Contributor(s): Dmitry Yemanov
+
+* [#8755](https://github.com/FirebirdSQL/firebird/issues/8755): Replicator could produce log segments with duplicated segment numbers  
+  Contributor(s): Vlad Khorsun
+
+* [#8739](https://github.com/FirebirdSQL/firebird/issues/8739): Wrong `SQLSTATE` in case of table alias conflict  
+  Contributor(s): Mark Rotteveel
+
+* [#8726](https://github.com/FirebirdSQL/firebird/issues/8726): Replication error is raised for `CREATE TABLE ... EXTERNAL` if the specified disk does not exist on the replica host  
+  Contributor(s): Dmitry Yemanov
+
+* [#8690](https://github.com/FirebirdSQL/firebird/issues/8690): On Windows 7 _isql_ exits silently right after the start  
+  Contributor(s): Vlad Khorsun
+
+* [#8674](https://github.com/FirebirdSQL/firebird/pull/8674): Fix crash during shutdown after unsuccessful `ping()` call  
+  Contributor(s): Dmitry Yemanov
+
+* [#8666](https://github.com/FirebirdSQL/firebird/pull/8666): Fixed crash after calling incorrectly parametrized request  
+  Contributor(s): Vlad Khorsun
+
+* [#8665](https://github.com/FirebirdSQL/firebird/issues/8665): `SHOW DEPENDENCIES` command terminates unexpectedly if there are packages in the dependencies  
+  Contributor(s): Adriano dos Santos Fernandes
+
+* [#8644](https://github.com/FirebirdSQL/firebird/issues/8644): Connection error via `Loopback` provider if it's the first in the `Providers` parameter  
+  Contributor(s): Alexander Peshkov
+
+* [#8541](https://github.com/FirebirdSQL/firebird/issues/8541): Deadlock update conflict on replica server  
+  Contributor(s): Vlad Khorsun
+
+* [#8105](https://github.com/FirebirdSQL/firebird/issues/8105): Master database could miss replication segments on Windows Classic Server  
+  Contributor(s): Vlad Khorsun
+
+* [GHSA-7jq3-6j3c-5cm2](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-7jq3-6j3c-5cm2): DoS via `op_response` packet from client (CVE-2026-34232)  
+  Contributor(s): Artyom Ivanov
+
+* [GHSA-89mq-229g-x47p](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-89mq-229g-x47p): Buffer overflow on parsing corrupted slice packet (CVE-2026-33337)  
+  Contributor(s): Artyom Ivanov
+
+* [GHSA-xrcw-wpjx-pr9](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-xrcw-wpjx-pr9): CryptCallback DoS (CVE-2026-28224)  
+  Contributor(s): Ev3nt
+
+* [GHSA-6crx-4g37-7j49](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-6crx-4g37-7j49): Pre-Auth DoS (CVE-2026-27890)  
+  Contributor(s): Artyom Ivanov
+
+* [GHSA-7cq5-994r-jhrf](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-7cq5-994r-jhrf): Server hangs when using specific clumplet on batch creation (CVE-2026-28214)  
+  Contributor(s): Artyom Ivanov
+
+* [GHSA-9884-9qm3-hqch](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-9884-9qm3-hqch): One packet (`op_slice`) DoS (CVE-2026-28212)  
+  Contributor(s): Alexey Mochalov
+
+* [GHSA-mfpr-9886-xjhg](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-mfpr-9886-xjhg): Information leak vulnerability in firebird3 client when used with newer (>= 4) server (CVE-2025-65104)  
+  Contributor(s): Alexander Peshkov
+
+# v4.0.6
+
+## Improvements
 
 * [#8433](https://github.com/FirebirdSQL/firebird/pull/8433): Improve code of class `BePlusTree`   
   Contributor(s): Vlad Khorsun
