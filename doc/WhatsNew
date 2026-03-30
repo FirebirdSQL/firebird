@@ -1,4 +1,73 @@
   **************************
+  * v3.0.14
+  **************************
+
+    * Improvement #8922
+        Update Windows distributions with zlib version 1.3.2  
+      Contributor(s): Vlad Khorsun
+
+    * Improvement #8553
+        Get the modification time of a config file with a higher precision to fix cases when it's not reloaded after modification/replacement  
+      Contributor(s): Ilya Eremin
+
+    * Bugfix #8926
+        Indexes may not be used for multiple ORed conditions containing both field and non-field references  
+      Contributor(s): Dmitry Yemanov
+
+    * Bugfix #8850
+        Firebird 3.0.13 Win32: KERNEL32.GetThreadId import breaks Windows XP (regression vs 3.0.12)  
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8817
+        Fatal lock manager error: invalid lock id  
+      Contributor(s): Vlad Khorsun
+
+    * Bugfix #8799
+        BUGCHECK "decompression overran buffer (179)" when WITH LOCK clause is used  
+      Contributor(s): Ilya Eremin
+
+    * Bugfix #8739
+        Wrong SQLSTATE in case of table alias conflict  
+      Contributor(s): Mark Rotteveel
+
+    * Bugfix #8665
+        SHOW DEPENDENCIES command terminates unexpectedly if there are packages in the dependencies  
+      Contributor(s): Adriano dos Santos Fernandes
+
+    * Bugfix #8644
+        Connection error via Loopback provider if it's the first in the Providers parameter  
+      Contributor(s): Alexander Peshkov
+
+    * Bugfix for vulnerability GHSA-7jq3-6j3c-5cm2
+        DoS via `op_response` packet from client (CVE-2026-34232)  
+      Contributor(s): Artyom Ivanov
+
+    * Bugfix for vulnerability GHSA-89mq-229g-x47p
+        Buffer overflow on parsing corrupted slice packet (CVE-2026-33337)    
+      Contributor(s): Artyom Ivanov
+
+    * Bugfix for vulnerability GHSA-xrcw-wpjx-pr9
+        CryptCallback DoS (CVE-2026-28224)  
+      Contributor(s): Ev3nt
+
+    * Bugfix for vulnerability GHSA-6crx-4g37-7j49
+        Pre-Auth DoS (CVE-2026-27890)  
+      Contributor(s): Artyom Ivanov
+
+    * Bugfix for vulnerability GHSA-7cq5-994r-jhrf
+        Server hangs when using specific clumplet on batch creation (CVE-2026-28214)  
+      Contributor(s): Artyom Ivanov
+
+    * Bugfix for vulnerability GHSA-9884-9qm3-hqch
+        One packet (`op_slice`) DoS (CVE-2026-28212)  
+      Contributor(s): Alexey Mochalov
+
+    * Bugfix for vulnerability GHSA-mfpr-9886-xjhg
+        Information leak vulnerability in firebird3 client when used with newer (>= 4) server (CVE-2025-65104)  
+      Contributor(s): Alexander Peshkov
+
+
+  **************************
   * v3.0.13
   **************************
 
