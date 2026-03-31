@@ -791,7 +791,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	{
 	case blr_text2:
 		desc->dsc_dtype = dtype_text;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		break;
 
 	case blr_text:
@@ -802,7 +802,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 
 	case blr_cstring2:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		break;
 
 	case blr_cstring:
@@ -813,7 +813,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 
 	case blr_varying2:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		desc->dsc_length = sizeof(USHORT);
 		break;
 

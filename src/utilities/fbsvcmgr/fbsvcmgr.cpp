@@ -70,7 +70,7 @@ struct SvcSwitches
 
 namespace
 {
-	const int SVCMGR_FACILITY = 22;
+	constexpr int SVCMGR_FACILITY = FB_IMPL_MSG_FACILITY_FBSVCMGR;
 	using MsgFormat::SafeArg;
 }
 
@@ -118,7 +118,7 @@ bool putCallback(char**& av, ClumpletWriter&, unsigned int)
 	if (! *av)
 		return false;
 
-	char* x = *av++;
+	const char* x = *av++;
 	GetPlugins<IKeyHolderPlugin> keyControl(IPluginManager::TYPE_KEY_HOLDER, x);
 	if (!keyControl.hasData())
 		(Firebird::Arg::Gds(isc_no_keyholder_plugin) << x).raise();
@@ -222,7 +222,7 @@ bool putSpecTag(char**& av, ClumpletWriter& spb, unsigned int tag,
 	return false;	// compiler warning silencer
 }
 
-const SvcSwitches amSwitch[] =
+constexpr SvcSwitches amSwitch[] =
 {
 	{"prp_am_readonly", 0, 0, isc_spb_prp_am_readonly, 0},
 	{"prp_am_readwrite", 0, 0, isc_spb_prp_am_readwrite, 0},
@@ -234,7 +234,7 @@ bool putAccessMode(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return putSpecTag(av, spb, tag, amSwitch, isc_fbsvcmgr_bad_am);
 }
 
-const SvcSwitches wmSwitch[] =
+constexpr SvcSwitches wmSwitch[] =
 {
 	{"prp_wm_async", 0, 0, isc_spb_prp_wm_async, 0},
 	{"prp_wm_sync", 0, 0, isc_spb_prp_wm_sync, 0},
@@ -246,7 +246,7 @@ bool putWriteMode(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return putSpecTag(av, spb, tag, wmSwitch, isc_fbsvcmgr_bad_wm);
 }
 
-const SvcSwitches rsSwitch[] =
+constexpr SvcSwitches rsSwitch[] =
 {
 	{"prp_res_use_full", 0, 0, isc_spb_prp_res_use_full, 0},
 	{"prp_res", 0, 0, isc_spb_prp_res, 0},
@@ -258,7 +258,7 @@ bool putReserveSpace(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return putSpecTag(av, spb, tag, rsSwitch, isc_fbsvcmgr_bad_rs);
 }
 
-const SvcSwitches shutSwitch[] =
+constexpr SvcSwitches shutSwitch[] =
 {
 	{"prp_sm_normal", 0, 0, isc_spb_prp_sm_normal, 0},
 	{"prp_sm_multi", 0, 0, isc_spb_prp_sm_multi, 0},
@@ -272,7 +272,7 @@ bool putShutdownMode(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return putSpecTag(av, spb, tag, shutSwitch, isc_fbsvcmgr_bad_sm);
 }
 
-const SvcSwitches rmSwitch[] =
+constexpr SvcSwitches rmSwitch[] =
 {
 	{"prp_rm_none", 0, 0, isc_spb_prp_rm_none, 0},
 	{"prp_rm_readonly", 0, 0, isc_spb_prp_rm_readonly, 0},
@@ -372,7 +372,7 @@ bool populateSpbFromSwitches(char**& av, ClumpletWriter& spb,
 	return false;
 }
 
-const SvcSwitches attSwitch[] =
+constexpr SvcSwitches attSwitch[] =
 {
 	{"user", putStringArgument, 0, isc_spb_user_name, 0},
 	{"user_name", putStringArgument, 0, isc_spb_user_name, 0},
@@ -386,7 +386,7 @@ const SvcSwitches attSwitch[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches infSwitch[] =
+constexpr SvcSwitches infSwitch[] =
 {
 	{"info_server_version", putSingleTag, 0, isc_info_svc_server_version, 0},
 	{"info_implementation", putSingleTag, 0, isc_info_svc_implementation, 0},
@@ -400,7 +400,7 @@ const SvcSwitches infSwitch[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches backupOptions[] =
+constexpr SvcSwitches backupOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"verbose", putSingleTag, 0, isc_spb_verbose, 0},
@@ -430,7 +430,7 @@ const SvcSwitches backupOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches restoreOptions[] =
+constexpr SvcSwitches restoreOptions[] =
 {
 	{"bkp_file", putStringArgument, 0, isc_spb_bkp_file, 0},
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
@@ -464,7 +464,7 @@ const SvcSwitches restoreOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches propertiesOptions[] =
+constexpr SvcSwitches propertiesOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"prp_page_buffers", putIntArgument, 0, isc_spb_prp_page_buffers, 0},
@@ -488,7 +488,7 @@ const SvcSwitches propertiesOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches repairOptions[] =
+constexpr SvcSwitches repairOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"rpr_commit_trans", putIntArgument, 0, isc_spb_rpr_commit_trans, 0},
@@ -511,7 +511,7 @@ const SvcSwitches repairOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches statisticsOptions[] =
+constexpr SvcSwitches statisticsOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"sts_record_versions", putOption, 0, isc_spb_sts_record_versions, 0},
@@ -526,7 +526,7 @@ const SvcSwitches statisticsOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches dispdelOptions[] =
+constexpr SvcSwitches dispdelOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"sec_username", putStringArgument, 0, isc_spb_sec_username, 0},
@@ -534,14 +534,14 @@ const SvcSwitches dispdelOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches mappingOptions[] =
+constexpr SvcSwitches mappingOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"sql_role_name", putStringArgument, 0, isc_spb_sql_role_name, 0},
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches addmodOptions[] =
+constexpr SvcSwitches addmodOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"sec_username", putStringArgument, 0, isc_spb_sec_username, 0},
@@ -557,7 +557,7 @@ const SvcSwitches addmodOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches nbackOptions[] =
+constexpr SvcSwitches nbackOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"nbk_file", putStringArgument, 0, isc_spb_nbk_file, 0},
@@ -571,7 +571,7 @@ const SvcSwitches nbackOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches nrestOptions[] =
+constexpr SvcSwitches nrestOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"nbk_file", putStringArgument, 0, isc_spb_nbk_file, 0},
@@ -580,27 +580,28 @@ const SvcSwitches nrestOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches nfixOptions[] =
+constexpr SvcSwitches nfixOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"nbk_sequence", putOption, 0, isc_spb_nbk_sequence, 0},
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches traceStartOptions[] =
+constexpr SvcSwitches traceStartOptions[] =
 {
 	{"trc_cfg", putFileFromArgument, 0, isc_spb_trc_cfg, 0},
 	{"trc_name", putStringArgument, 0, isc_spb_trc_name, 0},
+	{"trc_plugins", putStringArgument, 0, isc_spb_trc_plugins, 0},
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches traceChgStateOptions[] =
+constexpr SvcSwitches traceChgStateOptions[] =
 {
 	{"trc_id", putIntArgument, 0, isc_spb_trc_id, 0},
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches validateOptions[] =
+constexpr SvcSwitches validateOptions[] =
 {
 	{"dbname", putStringArgument, 0, isc_spb_dbname, 0},
 	{"val_sch_incl", putStringArgument, 0, isc_spb_val_sch_incl, 0},
@@ -613,7 +614,7 @@ const SvcSwitches validateOptions[] =
 	{0, 0, 0, 0, 0}
 };
 
-const SvcSwitches actionSwitch[] =
+constexpr SvcSwitches actionSwitch[] =
 {
 	{"action_backup", putSingleTag, backupOptions, isc_action_svc_backup, isc_info_svc_to_eof},
 	{"action_restore", putSingleTag, restoreOptions, isc_action_svc_restore, isc_info_svc_line},
@@ -643,7 +644,7 @@ const SvcSwitches actionSwitch[] =
 
 // print information, returned by isc_svc_query() call
 
-USHORT getShort(const char*& p)
+USHORT getShort(const char*& p) noexcept
 {
 	const USHORT num = (USHORT) isc_vax_integer(p, sizeof(USHORT));
 	p += sizeof(USHORT);
@@ -658,14 +659,14 @@ bool getLine(string& dest, const char*& p)
 	return length > 0;
 }
 
-SLONG getInt(const char*& p)
+SLONG getInt(const char*& p) noexcept
 {
 	const SLONG num = isc_vax_integer(p, sizeof(SLONG));
 	p += sizeof(SLONG);
 	return num;
 }
 
-SINT64 getInt64(const char*& p)
+SINT64 getInt64(const char*& p) noexcept
 {
 	const SINT64 num = isc_portable_integer(reinterpret_cast<const UCHAR*>(p), sizeof(SINT64));
 	p += sizeof(SINT64);
@@ -714,7 +715,7 @@ void printString(const char*& p, int num)
 
 void printMessage(int num)
 {
-	printf ("%s\n", getMessage(num).c_str());
+	printf("%s\n", getMessage(num).c_str());
 }
 
 void printMessage(USHORT number, const SafeArg& arg, bool newLine = true)
@@ -737,7 +738,7 @@ void printInt64(const char*& p, SINT64 num)
 	printf("%s: %" SQUADFORMAT"\n", getMessage(num).c_str(), getInt64(p));
 }
 
-const char* capArray[] = {
+constexpr const char* capArray[] = {
 	"WAL_SUPPORT",
 	"MULTI_CLIENT_SUPPORT",
 	"REMOTE_HOP_SUPPORT",
@@ -755,7 +756,7 @@ void printCapabilities(const char*& p)
 {
 	printMessage(57);
 
-	int caps = getInt(p);
+	const int caps = getInt(p);
 	bool print = false;
 
 	for (unsigned i = 0; capArray[i]; ++i)
@@ -1039,9 +1040,9 @@ bool printInfo(const char* p, size_t pSize, UserPrint& up, ULONG& stdinRq)
 
 // print known switches help
 
-const char* const fileTest = "test.fbsvcmgr";
+constexpr const char* fileTest = "test.fbsvcmgr";
 
-struct TypeText
+constexpr struct TypeText
 {
 	PopulateFunction* populate;
 	const char* text;
@@ -1063,11 +1064,11 @@ struct TypeText
 	{ NULL, NULL , NULL }
 };
 
-void printHelp(unsigned int offset, const SvcSwitches* sw)
+void printHelp(unsigned int offset, const SvcSwitches* sw) noexcept
 {
 	for (; sw->name; ++sw)
 	{
-		TypeText* tt = typeText;
+		const TypeText* tt = typeText;
 		for (; tt->populate; ++tt)
 		{
 			if (sw->populate == tt->populate)
@@ -1097,7 +1098,7 @@ void testSvc(isc_svc_handle* h, ClumpletWriter& spb, const SvcSwitches* sw)
 {
 	for (; sw->name; ++sw)
 	{
-		TypeText* tt = typeText;
+		const TypeText* tt = typeText;
 		for (; tt->populate; ++tt)
 		{
 			if (sw->populate == tt->populate)
@@ -1149,7 +1150,6 @@ void testServices()
 	ISC_STATUS_ARRAY status;
 
 	ClumpletWriter spbAtt(ClumpletWriter::spbList, 1024 * 1024);
-	//spbAtt.insertString(isc_spb_sql_role_name, "@@@");
 	testSvc(NULL, spbAtt, attSwitch);
 
 	isc_svc_handle svc_handle = 0;
@@ -1229,7 +1229,7 @@ int main(int ac, char** av)
 
 		ISC_STATUS_ARRAY status;
 
-		const int maxbuf = 16384;
+		constexpr int maxbuf = 16384;
 		av++;
 
 		const char* name = *av;
@@ -1337,7 +1337,7 @@ int main(int ac, char** av)
 #endif
 					}
 
-					int n = read(binIn, &sendBlock[sendSize + 1 + 2], stdinRequest);
+					const int n = read(binIn, &sendBlock[sendSize + 1 + 2], stdinRequest);
 					if (n < 0)
 					{
 						perror("stdin");

@@ -34,8 +34,14 @@ namespace Firebird {
 class TriState
 {
 public:
-	TriState() noexcept;
-	explicit TriState(bool input) noexcept;
+	static constexpr TriState empty() noexcept
+	{
+		return TriState();
+	}
+
+public:
+	constexpr TriState() noexcept;
+	explicit constexpr TriState(bool input) noexcept;
 
 	bool operator ==(const TriState& o) const noexcept
 	{
@@ -62,13 +68,13 @@ private:
 };
 
 // The var is left uninitialized.
-inline TriState::TriState() noexcept
+inline constexpr TriState::TriState() noexcept
 	: m_init(false), m_val(false)
 {
 }
 
 // The var is initialized to the explicit value.
-inline TriState::TriState(bool input) noexcept
+inline constexpr TriState::TriState(bool input) noexcept
 	: m_init(true), m_val(input)
 {
 }

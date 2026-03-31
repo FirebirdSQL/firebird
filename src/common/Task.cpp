@@ -42,7 +42,7 @@ WorkerThread* WorkerThread::start(Coordinator* coordinator)
 {
 	AutoPtr<WorkerThread> thd = FB_NEW WorkerThread(coordinator);
 
-	Thread::start(workerThreadRoutine, thd, THREAD_medium, &thd->m_thdHandle);
+	Thread::start(workerThreadRoutine, thd, THREAD_medium, &thd->m_thread);
 
 	return thd.release();
 }
@@ -122,7 +122,7 @@ void WorkerThread::shutdown(bool wait)
 
 	if (wait)
 	{
-		Thread::waitForCompletion(m_thdHandle);
+		m_thread.waitForCompletion();
 		m_state = SHUTDOWN;
 	}
 }

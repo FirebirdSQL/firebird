@@ -71,9 +71,9 @@ static constexpr TEXT val_errors[] =
 int EXE_action(const TEXT* database, const SINT64 switches)
 {
 	bool error = false;
-	Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
+	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	{
-		AliceGlobals* tdgbl = AliceGlobals::getSpecific();
+		Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
 		AliceContextPoolHolder context(tdgbl, newPool);
 
 		for (USHORT i = 0; i < MAX_VAL_ERRORS; i++)
@@ -130,7 +130,13 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 		}
 	}
 
-	return error ? FINI_ERROR : FINI_OK;
+	// It takes longer to print errors, so don't call the started() method and just return
+	if (error)
+		return FINI_ERROR;
+
+	tdgbl->uSvc->started();
+
+	return FINI_OK;
 }
 
 
@@ -141,9 +147,9 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 int EXE_two_phase(const TEXT* database, const SINT64 switches)
 {
 	bool error = false;
-	Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
+	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	{
-		AliceGlobals* tdgbl = AliceGlobals::getSpecific();
+		Firebird::AutoMemoryPool newPool(MemoryPool::createPool());
 		AliceContextPoolHolder context(tdgbl, newPool);
 
 		for (USHORT i = 0; i < MAX_VAL_ERRORS; i++)
@@ -159,8 +165,6 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 		FB_API_HANDLE handle = 0;
 		isc_attach_database(tdgbl->status, 0, database, &handle,
 			dpb.getBufferLength(), reinterpret_cast<const SCHAR*>(dpb.getBuffer()));
-
-		tdgbl->uSvc->started();
 
 		if (tdgbl->status[1])
 		{
@@ -186,7 +190,12 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 		}
 	}
 
-	return (error ? FINI_ERROR : FINI_OK);
+	if (error)
+		return FINI_ERROR;
+
+	tdgbl->uSvc->started();
+
+	return FINI_OK;
 }
 
 //____________________________________________________________

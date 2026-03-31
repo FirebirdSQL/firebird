@@ -220,7 +220,7 @@ bool BackupRelationTask::handler(WorkItem& _item)
 
 		{ // scope
 			SimpleGblHolder gbl(m_masterGbl);
-			BURP_print_status(true, &st);
+			BURP_print_status(&st, true);
 		}
 
 		m_stop = true;
@@ -743,7 +743,7 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 
 		{ // scope
 			SimpleGblHolder gbl(m_masterGbl);
-			BURP_print_status(true, &st);
+			BURP_print_status(&st, true);
 		}
 
 		m_stop = true;
@@ -957,7 +957,7 @@ bool RestoreRelationTask::freeItem(Item& item, bool commit)
 				ret = false;
 
 				// more detailed message required ?
-				BURP_print_status(false, &status);
+				BURP_print_status(&status);
 			}
 			item.m_tra = nullptr;
 		}

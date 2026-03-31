@@ -16,6 +16,7 @@
 
 struct CALC_IDisposable;
 struct CALC_IStatus;
+struct CALC_IStatusFactory;
 struct CALC_IFactory;
 struct CALC_ICalculator;
 struct CALC_ICalculator2;
@@ -67,6 +68,27 @@ CLOOP_EXTERN_C void CALC_IStatus_dispose(struct CALC_IStatus* self);
 CLOOP_EXTERN_C int CALC_IStatus_getCode(const struct CALC_IStatus* self);
 CLOOP_EXTERN_C void CALC_IStatus_setCode(struct CALC_IStatus* self, int code);
 
+#define CALC_IStatusFactory_VERSION 2
+
+struct CALC_IStatusFactory;
+
+struct CALC_IStatusFactoryVTable
+{
+	void* cloopDummy[1];
+	uintptr_t version;
+	void (*dispose)(struct CALC_IStatusFactory* self);
+	struct CALC_IStatus* (*createStatus)(struct CALC_IStatusFactory* self);
+};
+
+struct CALC_IStatusFactory
+{
+	void* cloopDummy[1];
+	struct CALC_IStatusFactoryVTable* vtable;
+};
+
+CLOOP_EXTERN_C void CALC_IStatusFactory_dispose(struct CALC_IStatusFactory* self);
+CLOOP_EXTERN_C struct CALC_IStatus* CALC_IStatusFactory_createStatus(struct CALC_IStatusFactory* self);
+
 #define CALC_IFactory_VERSION 2
 
 struct CALC_IFactory;
@@ -80,6 +102,7 @@ struct CALC_IFactoryVTable
 	struct CALC_ICalculator* (*createCalculator)(struct CALC_IFactory* self, struct CALC_IStatus* status);
 	struct CALC_ICalculator2* (*createCalculator2)(struct CALC_IFactory* self, struct CALC_IStatus* status);
 	struct CALC_ICalculator* (*createBrokenCalculator)(struct CALC_IFactory* self, struct CALC_IStatus* status);
+	void (*setStatusFactory)(struct CALC_IFactory* self, struct CALC_IStatusFactory* statusFactory);
 };
 
 struct CALC_IFactory
@@ -93,6 +116,7 @@ CLOOP_EXTERN_C struct CALC_IStatus* CALC_IFactory_createStatus(struct CALC_IFact
 CLOOP_EXTERN_C struct CALC_ICalculator* CALC_IFactory_createCalculator(struct CALC_IFactory* self, struct CALC_IStatus* status);
 CLOOP_EXTERN_C struct CALC_ICalculator2* CALC_IFactory_createCalculator2(struct CALC_IFactory* self, struct CALC_IStatus* status);
 CLOOP_EXTERN_C struct CALC_ICalculator* CALC_IFactory_createBrokenCalculator(struct CALC_IFactory* self, struct CALC_IStatus* status);
+CLOOP_EXTERN_C void CALC_IFactory_setStatusFactory(struct CALC_IFactory* self, struct CALC_IStatusFactory* statusFactory);
 
 #define CALC_ICalculator_VERSION 4
 

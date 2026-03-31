@@ -25,27 +25,11 @@
 # To avoid related problems lets have:
 TAB="	"
 
-platform_aix() {
-	echo '#!'
-
-	for i in `grep -v '#' ${1}`
-	do
-		echo "${TAB}$i"
-	done
-}
-
 platform_darwin() {
 for i in `grep -v '#' ${1}`
 do
 	echo "${TAB}_$i"
 done
-}
-
-platform_hpux() {
-	for i in `grep -v '#' ${1}`
-	do
-		echo "+e $i"
-	done
 }
 
 platform_linux() {
@@ -73,7 +57,7 @@ then
 	exit 1
 fi
 
-FROM="../builds/posix/$FILE"
+FROM="@abs_top_srcdir@/builds/posix/$FILE"
 if test ! -f "$FROM"
 then
 	echo "vers.sh: missing $FROM"

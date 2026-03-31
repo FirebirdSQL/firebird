@@ -21,27 +21,31 @@
 
 #include "Expr.h"
 #include "Parser.h"
-#include <stdio.h>
+#include <format>
+#include <utility>
 
+using std::format;
 using std::string;
 
 
 //--------------------------------------
 
 
-IntLiteralExpr::IntLiteralExpr(int value, bool hex)
-	: value(value), hex(hex)
+IntLiteralExpr::IntLiteralExpr(std::int64_t value, bool hex)
+	: value(value),
+	  hex(hex)
 {
 }
 
 string IntLiteralExpr::generate(Language language, const string& prefix)
 {
-	char buffer[64];
+	if (language == Language::JSON)  // TODO: Does json support hex constants?
+		return format("{{ \"type\": \"int-literal\", \"value\": {} }}", value);
+
 	if (hex)
-		snprintf(buffer, sizeof(buffer), "%s%x", language == LANGUAGE_PASCAL ? "$" : "0x", value);
-	else
-		snprintf(buffer, sizeof(buffer), "%d", value);
-	return buffer;
+		return format("{}{:x}", language == Language::PASCAL ? "$" : "0x", value);
+
+	return format("{}", value);
 }
 
 
@@ -53,23 +57,29 @@ BooleanLiteralExpr::BooleanLiteralExpr(bool value)
 {
 }
 
-string BooleanLiteralExpr::generate(Language language, const string& prefix)
+string BooleanLiteralExpr::generate(Language language, const string& /*prefix*/)
 {
-	return value ? "true" : "false";
+	if (language == Language::JSON)
+		return format("{{ \"type\": \"boolean-literal\", \"value\": {} }}", (value ? "true" : "false"));
+	else
+		return value ? "true" : "false";
 }
 
 
 //--------------------------------------
 
 
-NegateExpr::NegateExpr(Expr* expr)
-	: expr(expr)
+NegateExpr::NegateExpr(std::unique_ptr<Expr> expr)
+	: expr(std::move(expr))
 {
 }
 
 std::string NegateExpr::generate(Language language, const string& prefix)
 {
-	return "-" + expr->generate(language, prefix);
+	if (language == Language::JSON)
+		return "{ \"type\": \"-\", \"args\": [ " + expr->generate(language, prefix) + " ] }";
+	else
+		return "-" + expr->generate(language, prefix);
 }
 
 
@@ -90,17 +100,25 @@ string ConstantExpr::generate(Language language, const string& prefix)
 	{
 		switch (language)
 		{
-			case LANGUAGE_C:
+			case Language::C:
 				retPrefix = prefix + interface->name + "_";
 				break;
 
-			case LANGUAGE_CPP:
+			case Language::CPP:
 				retPrefix = prefix + interface->name + "::";
 				break;
 
-			case LANGUAGE_PASCAL:
+			case Language::PASCAL:
 				retPrefix = prefix + interface->name + ".";
 				break;
+
+			case Language::JAVA:
+				retPrefix = prefix + interface->name + "Intf.";
+				break;
+
+			case Language::JSON:
+				return "{ \"type\": \"constant\", \"interface\": \"" + interface->name + "\", \"name\": \"" + name +
+					"\" }";
 		}
 	}
 
@@ -111,15 +129,22 @@ string ConstantExpr::generate(Language language, const string& prefix)
 //--------------------------------------
 
 
-BitwiseOrExpr::BitwiseOrExpr(Expr* expr1, Expr* expr2)
-	: expr1(expr1),
-	  expr2(expr2)
+BitwiseOrExpr::BitwiseOrExpr(std::unique_ptr<Expr> expr1, std::unique_ptr<Expr> expr2)
+	: expr1(std::move(expr1)),
+	  expr2(std::move(expr2))
 {
 }
 
 string BitwiseOrExpr::generate(Language language, const string& prefix)
 {
-	return expr1->generate(language, prefix) +
-		(language == LANGUAGE_PASCAL ? " or " : " | ") +
-		expr2->generate(language, prefix);
+	if (language == Language::JSON)
+	{
+		return "{ \"type\": \"|\", \"args\": [ " + expr1->generate(language, prefix) + ", " +
+			expr2->generate(language, prefix) + " ] }";
+	}
+	else
+	{
+		return expr1->generate(language, prefix) + (language == Language::PASCAL ? " or " : " | ") +
+			expr2->generate(language, prefix);
+	}
 }

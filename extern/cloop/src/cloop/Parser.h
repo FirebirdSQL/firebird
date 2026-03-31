@@ -25,6 +25,7 @@
 #include "Lexer.h"
 #include "Action.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -35,23 +36,22 @@ class Expr;
 class BaseType
 {
 public:
-	enum Type
+	enum class Type
 	{
-		TYPE_INTERFACE,
-		TYPE_STRUCT,
-		TYPE_TYPEDEF,
-		TYPE_BOOLEAN
+		INTERFACE,
+		STRUCT,
+		TYPEDEF,
+		BOOLEAN,
 	};
 
 protected:
-	BaseType(Type type)
+	explicit BaseType(Type type)
 		: type(type)
 	{
 	}
 
-	virtual ~BaseType()
-	{
-	}
+public:
+	virtual ~BaseType() = default;
 
 public:
 	Type type;
@@ -59,26 +59,20 @@ public:
 };
 
 
-class TypeRef
+class TypeRef final
 {
 public:
-	TypeRef()
-		: isConst(false),
-		  isPointer(false),
-		  type(BaseType::TYPE_INTERFACE)
-	{
-	}
-
-	Token token;
-	bool isConst;
-	bool isPointer;
-	BaseType::Type type;
-
 	bool valueIsPointer();
+
+public:
+	Token token;
+	bool isConst = false;
+	bool isPointer = false;
+	BaseType::Type type = BaseType::Type::INTERFACE;
 };
 
 
-class Parameter
+class Parameter final
 {
 public:
 	std::string name;
@@ -86,92 +80,81 @@ public:
 };
 
 
-class Constant
+class Constant final
 {
 public:
 	std::string name;
 	TypeRef typeRef;
-	Expr* expr;
+	std::unique_ptr<Expr> expr;
 };
 
 
-class Method
+class Method final
 {
 public:
-	Method()
-		: notImplementedExpr(NULL),
-		  notImplementedAction(NULL),
-		  stubAction(NULL),
-		  version(0),
-		  isConst(false)
-	{
-	}
-
 	std::string name;
 	TypeRef returnTypeRef;
-	std::vector<Parameter*> parameters;
-	Expr* notImplementedExpr;
-	Action* notImplementedAction;
-	Action* stubAction;
-	unsigned version;
-	bool isConst;
+	std::vector<std::unique_ptr<Parameter>> parameters;
+	std::unique_ptr<Expr> notImplementedExpr;
+	std::unique_ptr<Action> notImplementedAction;
+	std::unique_ptr<Action> stubAction;
+	unsigned version = 0;
+	bool isConst = false;
 	std::string onErrorFunction;
 	std::string statusName;
 };
 
 
-class Interface : public BaseType
+class Interface final : public BaseType
 {
 public:
-	Interface()
-		: BaseType(TYPE_INTERFACE),
-		  super(NULL),
-		  version(1)
+	explicit Interface()
+		: BaseType(Type::INTERFACE)
 	{
 	}
 
 public:
-	Interface* super;
-	std::vector<Constant*> constants;
-	std::vector<Method*> methods;
-	unsigned version;
+	Interface* super = nullptr;
+	std::vector<std::unique_ptr<Constant>> constants;
+	std::vector<std::unique_ptr<Method>> methods;
+	unsigned version = 1;
 };
 
 
-class Struct : public BaseType
+class Struct final : public BaseType
 {
 public:
-	Struct()
-		: BaseType(TYPE_STRUCT)
-	{
-	}
-};
-
-
-class Boolean : public BaseType
-{
-public:
-	Boolean()
-		: BaseType(TYPE_BOOLEAN)
+	explicit Struct()
+		: BaseType(Type::STRUCT)
 	{
 	}
 };
 
 
-class Typedef : public BaseType
+class Boolean final : public BaseType
 {
 public:
-	Typedef()
-		: BaseType(TYPE_TYPEDEF)
+	explicit Boolean()
+		: BaseType(Type::BOOLEAN)
 	{
 	}
 };
 
 
-class Parser
+class Typedef final : public BaseType
 {
 public:
-	Parser(Lexer* lexer);
+	explicit Typedef()
+		: BaseType(Type::TYPEDEF)
+	{
+	}
+};
+
+
+class Parser final
+{
+public:
+	explicit Parser(Lexer* lexer);
 
 	void parse();
 	void parseInterface(bool exception);
@@ -180,18 +163,19 @@ public:
 	void parseBoolean();
 	void parseItem();
 	void parseConstant(const TypeRef& typeRef, const std::string& name);
-	void parseMethod(const TypeRef& returnTypeRef, const std::string& name, Expr* notImplementedExpr,
-		const std::string& onErrorFunction, Action* notImplementedAction, Action* stubAction);
+	void parseMethod(const TypeRef& returnTypeRef, const std::string& name, std::unique_ptr<Expr> notImplementedExpr,
+		const std::string& onErrorFunction, std::unique_ptr<Action> notImplementedAction,
+		std::unique_ptr<Action> stubAction);
 
-	Expr* parseExpr();
-	Expr* parseLogicalExpr();
-	Expr* parseUnaryExpr();
-	Expr* parsePrimaryExpr();
+	std::unique_ptr<Expr> parseExpr();
+	std::unique_ptr<Expr> parseLogicalExpr();
+	std::unique_ptr<Expr> parseUnaryExpr();
+	std::unique_ptr<Expr> parsePrimaryExpr();
 
-	Action* parseAction(DefAction::DefType dt);
-	Action* parseIfThenElseAction(DefAction::DefType dt);
-	Action* parseCallAction();
-	Action* parseDefAction(DefAction::DefType dt);
+	std::unique_ptr<Action> parseAction(DefAction::DefType dt);
+	std::unique_ptr<Action> parseIfThenElseAction(DefAction::DefType dt);
+	std::unique_ptr<Action> parseCallAction();
+	std::unique_ptr<Action> parseDefAction(DefAction::DefType dt);
 
 private:
 	void checkType(TypeRef& typeRef);
@@ -204,15 +188,15 @@ private:
 	[[noreturn]] void error(const Token& token, const std::string& msg);
 
 public:
-	std::vector<Interface*> interfaces;
-	std::map<std::string, BaseType*> typesByName;
-	Interface* exceptionInterface;
+	std::vector<std::shared_ptr<Interface>> interfaces;
+	std::map<std::string, std::shared_ptr<BaseType>> typesByName;
+	Interface* exceptionInterface = nullptr;
 
 private:
 	Lexer* lexer;
 	Token token;
-	Interface* interface;
+	Interface* interface = nullptr;
 };
 
 
-#endif	// CLOOP_PARSER_H
+#endif  // CLOOP_PARSER_H

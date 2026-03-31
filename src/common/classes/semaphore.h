@@ -32,10 +32,6 @@
 #include "../common/gdsassert.h"
 #include "fb_exception.h"
 
-#ifdef _AIX
-#undef HAVE_SEMAPHORE_H
-#endif
-
 #ifdef WIN_NT
 // Note: Windows does not need signal safe version of the class
 

@@ -63,6 +63,21 @@ namespace
 		printMsg(number, dummy, newLine);
 	}
 
+	struct MessageSet
+	{
+		const int range[2];
+		const std::initializer_list<int> list;
+
+		void print() const
+		{
+			for (int i = range[0]; i <= range[1]; ++i)
+				printMsg(i);
+
+			for (auto id = list.begin(); id != list.end(); ++id)
+				printMsg(*id);
+		}
+	};
+
 	[[noreturn]] void usage(UtilSvc* uSvc, const ISC_STATUS code, const char* msg1 = NULL, const char* msg2 = NULL)
 	{
 		if (uSvc->isService())
@@ -94,16 +109,14 @@ namespace
 
 		// If the items aren't contiguous, a scheme like in nbackup.cpp will have to be used.
 		// ASF: This is message codes!
-		constexpr int MAIN_USAGE[] = {3, 21};
-		constexpr int EXAMPLES[] = {22, 27};
+		const MessageSet MAIN_USAGE{{3, 21}, {41}};
+		const MessageSet EXAMPLES{{22, 27}, {42}};
 		constexpr int NOTES[] = {28, 29};
 
-		for (int i = MAIN_USAGE[0]; i <= MAIN_USAGE[1]; ++i)
-			printMsg(i);
+		MAIN_USAGE.print();
 
 		printf("\n");
-		for (int i = EXAMPLES[0]; i <= EXAMPLES[1]; ++i)
-			printMsg(i);
+		EXAMPLES.print();
 
 		printf("\n");
 		for (int i = NOTES[0]; i <= NOTES[1]; ++i)
@@ -249,6 +262,27 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 				if (!session.ses_id)
 					usage(uSvc, isc_trace_param_invalid, argv[itr], sw->in_sw_name);
 			}
+			else
+				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
+			break;
+
+		case IN_SW_TRACE_PLUGINS:
+			switch (action_sw->in_sw)
+			{
+				case IN_SW_TRACE_STOP:
+				case IN_SW_TRACE_SUSPEND:
+				case IN_SW_TRACE_RESUME:
+				case IN_SW_TRACE_LIST:
+					usage(uSvc, isc_trace_param_act_notcompat, sw->in_sw_name, action_sw->in_sw_name);
+					break;
+			}
+
+			if (!session.ses_plugins.empty())
+				usage(uSvc, isc_trace_switch_once, sw->in_sw_name);
+
+			itr++;
+			if (itr < argc && argv[itr])
+				session.ses_plugins = argv[itr];
 			else
 				usage(uSvc, isc_trace_param_val_miss, sw->in_sw_name);
 			break;

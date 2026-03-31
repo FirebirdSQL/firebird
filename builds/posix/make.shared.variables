@@ -1,9 +1,9 @@
 # Helper functions
 doObjects= $(patsubst %.m,%.o,$(patsubst %.cc,%.o,$(patsubst %.y,%.o,$(patsubst %.epp,%.o,$(patsubst %.c,%.o,$(1:.cpp=.o))))))
 makeObjects= $(addprefix $(OBJ)/$(patsubst ../%,%,$(1))/,$(call doObjects,$2))
-dirFiles= $(sort $(notdir $(wildcard ../src/$(1)/*.cpp)) $(notdir $(wildcard ../src/$(1)/*.c)) \
-		  $(notdir $(wildcard ../src/$(1)/*.epp)) $(notdir $(wildcard ../src/$(1)/*.y)) \
-		  $(notdir $(wildcard ../src/$(1)/*.cc)) $(notdir $(wildcard ../src/$(1)/*.m)))
+dirFiles= $(sort $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.cpp)) $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.c)) \
+		  $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.epp)) $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.y)) \
+		  $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.cc)) $(notdir $(wildcard $(SRC_ROOT)/$(1)/*.m)))
 dirInPath= $(call makeObjects,$(1),$(call dirFiles,$(1)))
 
 dirMaster= $(call dirInPath,$(1))
@@ -39,7 +39,8 @@ AllObjects += $(Common_Objects)
 # Common test files
 COT1:= $(call dirObjects,common/tests)
 COT2:= $(call dirObjects,common/classes/tests)
-Common_Test_Objects:= $(COT1) $(COT2) $(call makeObjects,yvalve,gds.cpp)
+COT3:= $(call dirObjects,common/ipc/tests)
+Common_Test_Objects:= $(COT1) $(COT2) $(COT3) $(call makeObjects,yvalve,gds.cpp)
 
 AllObjects += $(Common_Test_Objects)
 
@@ -91,7 +92,7 @@ Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObject
 				 $(call dirObjects,jrd/sys-packages) $(call dirObjects,jrd/trace) \
 				 $(call makeObjects,lock,lock.cpp)
 
-Engine_Test_Objects:= $(call dirObjects,jrd/tests)
+Engine_Test_Objects:= $(call dirObjects,jrd/tests) $(call dirObjects,lock/tests)
 
 AllObjects += $(Engine_Objects) $(Engine_Test_Objects)
 

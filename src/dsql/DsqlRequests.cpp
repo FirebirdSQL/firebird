@@ -275,13 +275,13 @@ DsqlDmlRequest::DsqlDmlRequest(thread_db* tdbb, MemoryPool& pool, dsql_dbb* dbb,
 		Request* request = parentRequest->getRequest();
 		fb_assert(request->req_rpb.getCount() > 0 && request->req_rpb[0].rpb_relation != nullptr);
 
-		const auto& relName = request->req_rpb[0].rpb_relation->rel_name;
+		const auto& relName = request->req_rpb[0].rpb_relation->getName();
 		bool found = false;
 		for (FB_SIZE_T i = 0; i < request->req_rpb.getCount(); ++i)
 		{
 			jrd_rel* relation = request->req_rpb[i].rpb_relation;
 
-			if (relation && relation->rel_name == relName)
+			if (relation && relation->getName() == relName)
 			{
 				if (found)
 				{
@@ -595,15 +595,20 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 			JRD_receive(tdbb, request, message->msg_number, outMsgLength, outMsg);
 
 			// if this is a singleton select that return some data, make sure there's in fact one record
-
-			if (singleton && (request->req_flags & req_active) && outMsgLength > 0)
+			if (singleton && outMsgLength > 0)
 			{
+				// No record returned though expected
+				if (!(request->req_flags & req_active))
+				{
+					status_exception::raise(Arg::Gds(isc_stream_eof));
+				}
+
 				// Create a temp message buffer and try one more receive.
 				// If it succeed then the next record exists.
 
-				std::unique_ptr<UCHAR[]> message_buffer(new UCHAR[outMsgLength]);
+				HalfStaticArray<UCHAR, BUFFER_SMALL> message_buffer(getPool(), outMsgLength);
 
-				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.get());
+				JRD_receive(tdbb, request, message->msg_number, outMsgLength, message_buffer.begin());
 
 				// Still active request means that second record exists
 				if ((request->req_flags & req_active))
@@ -850,7 +855,7 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 		checkD(&st);
 		desc.dsc_sub_type = meta->getSubType(&st, index);
 		checkD(&st);
-		unsigned textType = meta->getCharSet(&st, index);
+		const auto textType = CSetId(meta->getCharSet(&st, index));
 		checkD(&st);
 		desc.setTextType(textType);
 		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
@@ -935,7 +940,7 @@ void DsqlDmlRequest::gatherRecordKey(RecordKey* buffer) const
 		if (rpb.rpb_relation && rpb.rpb_number.isValid() && !rpb.rpb_number.isBof())
 		{
 			buffer[i].recordNumber.bid_encode(rpb.rpb_number.getValue() + 1);
-			buffer[i].recordNumber.bid_relation_id = rpb.rpb_relation->rel_id;
+			buffer[i].recordNumber.bid_relation_id = rpb.rpb_relation->getId();
 			buffer[i].recordVersion = rpb.rpb_transaction_nr;
 		}
 	}
@@ -967,16 +972,19 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		try
 		{
 			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+			internalScratch->flags &= ~DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 
 			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
-			///req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
+			/// req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
 
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 
 			const bool isInternalRequest =
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 
-			if (!isInternalRequest && node->mustBeReplicated())
+			if (!isInternalRequest &&
+				node->mustBeReplicated() &&
+				!(internalScratch->flags & DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL))
 			{
 				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
 					*getDsqlStatement()->getSchemaSearchPath());

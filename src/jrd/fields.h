@@ -237,3 +237,5 @@
 
 	FIELD(fld_sch_name		, nam_sch_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_14_0)
 	FIELD(fld_text_max		, nam_text_max		, dtype_varying, MAX_VARY_COLUMN_SIZE / METADATA_BYTES_PER_CHAR * METADATA_BYTES_PER_CHAR, dsc_text_type_metadata, NULL, true, ODS_14_0)
+
+	FIELD(fld_tab_type		, nam_mon_tab_type	, dtype_varying	, 32						, dsc_text_type_ascii		, NULL		, true		, ODS_14_0)

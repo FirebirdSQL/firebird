@@ -295,7 +295,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		IStatement* stmt = DB->prepare(fbStatus, gds_trans, 0, sql, 3, 0);
 		if (fbStatus->getState() & IStatus::RESULT_ERROR)
 		{
-			// BURP_print_status(false, isc_status);
+			// BURP_print_status(isc_status);
 			tdgbl->gbl_sw_par_workers = 1;
 		}
 		if (stmt)
@@ -736,10 +736,11 @@ burp_fld* get_fields( burp_rel* relation)
 			{
 				field->fld_flags |= FLD_array;
 				field->fld_dimensions = Y.RDB$DIMENSIONS;
-				if (field->fld_dimensions < 0) {
-					BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+				if (field->fld_dimensions < 0)
+				{
+					BURP_error(52, true, SafeArg() << field->fld_name);
+					// msg 52 array dimension for field %s is invalid
 				}
-				// msg 52 array dimension for field %s is invalid
 				get_ranges (field);
 			}
 
@@ -767,13 +768,13 @@ burp_fld* get_fields( burp_rel* relation)
 
 			if (!Y.RDB$CHARACTER_SET_ID.NULL)
 			{
-				field->fld_character_set_id = Y.RDB$CHARACTER_SET_ID;
+				field->fld_character_set_id = CSetId(Y.RDB$CHARACTER_SET_ID);
 				field->fld_flags |= FLD_charset_flag;
 			}
 
 			if (!X.RDB$COLLATION_ID.NULL)
 			{
-				field->fld_collation_id = X.RDB$COLLATION_ID;
+				field->fld_collation_id = CollId(X.RDB$COLLATION_ID);
 				field->fld_flags |= FLD_collate_flag;
 			}
 
@@ -855,10 +856,11 @@ burp_fld* get_fields( burp_rel* relation)
 			{
 				field->fld_flags |= FLD_array;
 				field->fld_dimensions = Y.RDB$DIMENSIONS;
-				if (field->fld_dimensions < 0) {
-					BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+				if (field->fld_dimensions < 0)
+				{
+					BURP_error(52, true, SafeArg() << field->fld_name);
+					// msg 52 array dimension for field %s is invalid
 				}
-				// msg 52 array dimension for field %s is invalid
 				get_ranges (field);
 			}
 
@@ -886,13 +888,13 @@ burp_fld* get_fields( burp_rel* relation)
 
 			if (!Y.RDB$CHARACTER_SET_ID.NULL)
 			{
-				field->fld_character_set_id = Y.RDB$CHARACTER_SET_ID;
+				field->fld_character_set_id = CSetId(Y.RDB$CHARACTER_SET_ID);
 				field->fld_flags |= FLD_charset_flag;
 			}
 
 			if (!X.RDB$COLLATION_ID.NULL)
 			{
-				field->fld_collation_id = X.RDB$COLLATION_ID;
+				field->fld_collation_id = CollId(X.RDB$COLLATION_ID);
 				field->fld_flags |= FLD_collate_flag;
 			}
 
@@ -989,8 +991,10 @@ void get_ranges( burp_fld* field)
 		SORTED BY X.RDB$DIMENSION
 	{
 		if (count != X.RDB$DIMENSION)
-			BURP_error_redirect (NULL, 52, SafeArg() << field->fld_name);
+		{
+			BURP_error(52, true, SafeArg() << field->fld_name);
 			// msg 52 array dimension for field %s is invalid
+		}
 		*rp++ = X.RDB$LOWER_BOUND;
 		*rp++ = X.RDB$UPPER_BOUND;
 		count++;
@@ -1001,8 +1005,10 @@ void get_ranges( burp_fld* field)
 	END_ERROR
 
 	if (count != field->fld_dimensions)
-		BURP_error_redirect(NULL, 52, SafeArg() << field->fld_name);
+	{
+		BURP_error(52, true, SafeArg() << field->fld_name);
 		// msg 52 array dimension for field %s is invalid
+	}
 }
 
 
@@ -1130,9 +1136,9 @@ void put_array( burp_fld* field, burp_rel* relation, ISC_QUAD* blob_id)
 	if (!status_vector.isSuccess())
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
-		BURP_print_status(false, &status_vector);
+		BURP_print_status(&status_vector);
 #ifdef DEBUG
 		PRETTY_print_sdl(blr_buffer, NULL, NULL, 0);
 #endif
@@ -1235,7 +1241,7 @@ void put_asciz( const att_type attribute, const TEXT* string)
 	// We can't honor operating systems that allow longer file names.
 	if (len >= MAX_FILE_NAME_SIZE)
 	{
-		BURP_print(false, 343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
+		BURP_print(343, SafeArg() << int(attribute) << "put_asciz()" << (MAX_FILE_NAME_SIZE - 1));
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		len = MAX_FILE_NAME_SIZE - 1;
 	}
@@ -1276,9 +1282,9 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	if (!blob.open(DB, gds_trans, blob_id))
 	{
 		BurpMaster master;
-		BURP_print(false, 81, field->fld_name);
+		BURP_print(81, field->fld_name);
 		// msg 81 error accessing blob field %s -- continuing
-		BURP_print_status(false, &status_vector);
+		BURP_print_status(&status_vector);
 		return;
 	}
 
@@ -1325,7 +1331,7 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 			break;
 
 		default:
-			BURP_error_redirect(NULL, 21, SafeArg() << int(item));
+			BURP_error(21, true, SafeArg() << int(item));
 			// msg 21 don't understand blob info item %ld
 		}
 	}
@@ -1372,8 +1378,10 @@ void put_blob( burp_fld* field, ISC_QUAD& blob_id)
 	}
 
 	if (!blob.close())
+	{
 		BURP_error_redirect(&status_vector, 23);
 		// msg 23 isc_close_blob failed
+	}
 
 	if (buffer != static_buffer)
 		BURP_free(buffer);
@@ -1441,11 +1449,13 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 			break;
 
 		default:
-			BURP_print(true, 79, SafeArg() << int(item));
+			BURP_print(79, SafeArg() << int(item));
 			// msg 79 don't understand blob info item %ld
 			if (!blob.close())
+			{
 				BURP_error_redirect(&status_vector, 23);
 				// msg 23 isc_close_blob failed
+			}
 			return false;
 		}
 	}
@@ -1453,8 +1463,10 @@ bool put_blr_blob( att_type attribute, ISC_QUAD& blob_id)
 	if (!length || length > MAX_ULONG)
 	{
 		if (!blob.close())
+		{
 			BURP_error_redirect(&status_vector, 23);
 			// msg 23 isc_close_blob failed
+		}
 		return false;
 	}
 
@@ -1647,14 +1659,15 @@ void put_index( burp_rel* relation)
 		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
 			X IN RDB$INDICES WITH
 			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
-			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
+			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str() AND
+			X.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
 		{
 			count = 0;
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle2)
 				I_S IN RDB$INDEX_SEGMENTS CROSS
 				RFR IN RDB$RELATION_FIELDS WITH
 				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
-				I_S.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+				I_S.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
 				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
 				RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
 				RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str()
@@ -1668,7 +1681,7 @@ void put_index( burp_rel* relation)
 
 			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
 			{
-				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				BURP_print(180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
 				continue;
 			}
 
@@ -1683,7 +1696,7 @@ void put_index( burp_rel* relation)
 
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
 				Y IN RDB$INDEX_SEGMENTS WITH
-				Y.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+				Y.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
 				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
 				SORTED BY Y.RDB$FIELD_POSITION
 			{
@@ -1749,7 +1762,7 @@ void put_index( burp_rel* relation)
 
 			if (count != (ULONG) X.RDB$SEGMENT_COUNT)
 			{
-				BURP_print(true, 180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
+				BURP_print(180, SafeArg() << X.RDB$INDEX_NAME << count << X.RDB$SEGMENT_COUNT);
 				continue;
 			}
 
@@ -1940,6 +1953,7 @@ void put_relation( burp_rel* relation)
 	burp_fld* unaligned = NULL;
 	burp_fld* aligned4 = NULL;
 	burp_fld* aligned8 = NULL;
+	burp_fld* aligned16 = NULL;
 
 	burp_fld* fields = get_fields(relation);
 
@@ -1951,7 +1965,13 @@ void put_relation( burp_rel* relation)
 		USHORT l = field->fld_length;
 		if (field->fld_type == blr_varying)
 			l += sizeof(USHORT);
-		if (!(l & 7))
+
+		if (!(l & 15))
+		{
+			field->fld_next = aligned16;
+			aligned16 = field;
+		}
+		else if (!(l & 7))
 		{
 			field->fld_next = aligned8;
 			aligned8 = field;
@@ -2001,6 +2021,13 @@ void put_relation( burp_rel* relation)
 	while ((field = aligned8))
 	{
 		aligned8 = field->fld_next;
+		field->fld_next = relation->rel_fields;
+		relation->rel_fields = field;
+	}
+
+	while ((field = aligned16))
+	{
+		aligned16 = field->fld_next;
 		field->fld_next = relation->rel_fields;
 		relation->rel_fields = field;
 	}
@@ -2211,7 +2238,7 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 			break;
 
 		default:
-			BURP_print(true, 79, SafeArg() << int(item));
+			BURP_print(79, SafeArg() << int(item));
 			// msg 79 don't understand blob info item %ld
 			if (!blob.close())
 			{
@@ -2261,8 +2288,10 @@ bool put_source_blob(att_type attribute, att_type old_attribute, ISC_QUAD& blob_
 	}
 
 	if (!blob.close())
+	{
 		BURP_error_redirect(&status_vector, 23);
-	// msg 23 isc_close_blob failed
+		// msg 23 isc_close_blob failed
+	}
 
 	if (buffer != static_buffer)
 		BURP_free(buffer);
@@ -2294,7 +2323,7 @@ int put_text(att_type attribute, const TEXT* text, SSHORT size_len)
 	fb_assert(l <= MAX_UCHAR);
 	if (l > MAX_UCHAR)
 	{
-		BURP_print(true, 343, SafeArg() << int(attribute) << "put_text()" << MAX_UCHAR);
+		BURP_print(343, SafeArg() << int(attribute) << "put_text()" << MAX_UCHAR);
 		// msg 343: text for attribute @1 is too large in @2, truncating to @3 bytes
 		l = MAX_UCHAR;
 	}
@@ -2748,7 +2777,6 @@ void write_exceptions()
  *	each exception.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2759,6 +2787,8 @@ void write_exceptions()
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_exception);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -2793,6 +2823,8 @@ void write_exceptions()
 			X IN RDB$EXCEPTIONS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_exception);
 
 			PUT_TEXT(att_exception_name, X.RDB$EXCEPTION_NAME);
@@ -2908,7 +2940,6 @@ void write_functions()
  *	each function.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -2918,6 +2949,8 @@ void write_functions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_function);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -2989,6 +3022,8 @@ void write_functions()
 		FOR (REQUEST_HANDLE req_handle1)
 			X IN RDB$FUNCTIONS WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_function);
 
 			PUT_TEXT(att_function_name, X.RDB$FUNCTION_NAME);
@@ -3189,7 +3224,6 @@ void write_generators()
  *
  **************************************/
 	Firebird::IRequest* req_handle1 = nullptr;
-	QualifiedMetaString name;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3199,6 +3233,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3251,6 +3287,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
 			name.object = X.RDB$GENERATOR_NAME;
@@ -3280,6 +3318,8 @@ void write_generators()
 			X IN RDB$GENERATORS
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_generator);
 			PUT_TEXT(att_gen_generator, X.RDB$GENERATOR_NAME);
 			name.object = X.RDB$GENERATOR_NAME;
@@ -3318,7 +3358,6 @@ void write_global_fields()
  *	each global field.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3335,6 +3374,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_global_field);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3415,6 +3456,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
+		{
+			QualifiedMetaString name;
 
 			put(tdgbl, rec_global_field);
 
@@ -3474,7 +3517,7 @@ void write_global_fields()
 				put_int32 (att_field_precision, X.RDB$FIELD_PRECISION);
 
 			put(tdgbl, att_end);
-
+		}
 		END_FOR;
 		ON_ERROR
 			general_on_error();
@@ -3486,6 +3529,8 @@ void write_global_fields()
 			X IN RDB$FIELDS WITH
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
+		{
+			QualifiedMetaString name;
 
 			put(tdgbl, rec_global_field);
 
@@ -3541,6 +3586,7 @@ void write_global_fields()
 				put_int32 (att_field_collation_id, X.RDB$COLLATION_ID);
 
 			put(tdgbl, att_end);
+		}
 		END_FOR;
 		ON_ERROR
 			general_on_error();
@@ -3564,7 +3610,6 @@ void write_packages()
  *	each package.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3574,6 +3619,8 @@ void write_packages()
 		X IN RDB$PACKAGES
 		WITH X.RDB$SYSTEM_FLAG NE 1
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_package);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3637,7 +3684,6 @@ void write_procedures()
  *	each stored procedure.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -3648,6 +3694,8 @@ void write_procedures()
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_procedure);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -3715,6 +3763,8 @@ void write_procedures()
 			X IN RDB$PROCEDURES
 			WITH X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE 1
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_procedure);
 
 			PUT_TEXT(att_procedure_name, X.RDB$PROCEDURE_NAME);
@@ -3991,7 +4041,6 @@ void write_rel_constraints()
  *	each relation constraint.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4003,6 +4052,8 @@ void write_rel_constraints()
 			 REL.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME AND
 			 (REL.RDB$SYSTEM_FLAG MISSING OR REL.RDB$SYSTEM_FLAG NE 1)
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_rel_constraint);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)
@@ -4046,7 +4097,6 @@ void write_relations()
  *	each relation.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4063,6 +4113,8 @@ void write_relations()
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
 
@@ -4141,6 +4193,8 @@ void write_relations()
 			X IN RDB$RELATIONS WITH X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			SSHORT flags = 0;
 			put(tdgbl, rec_relation);
 			PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
@@ -4523,7 +4577,6 @@ void write_triggers()
  * 	write the triggers in rdb$triggers
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4541,6 +4594,8 @@ void write_triggers()
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_trigger);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
@@ -4602,6 +4657,8 @@ void write_triggers()
 			X.RDB$SYSTEM_FLAG NE 1 OR
 			X.RDB$SYSTEM_FLAG MISSING
 		{
+			QualifiedMetaString name;
+
 			put(tdgbl, rec_trigger);
 
 			PUT_TEXT(att_trig_name, X.RDB$TRIGGER_NAME);
@@ -4648,7 +4705,6 @@ void write_trigger_messages()
  *	each trigger message.
  *
  **************************************/
-	QualifiedMetaString name;
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4660,6 +4716,8 @@ void write_trigger_messages()
 			 X.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME AND
 			 T.RDB$SYSTEM_FLAG NE 1 OR T.RDB$SYSTEM_FLAG MISSING
 	{
+		QualifiedMetaString name;
+
 		put(tdgbl, rec_trigger_message);
 
 		if (!X.RDB$SCHEMA_NAME.NULL)
@@ -4856,118 +4914,68 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 	{
 		if (field->fld_flags & FLD_computed)
 			continue;
+
 		SSHORT alignment = 4;
 		FLD_LENGTH length = field->fld_length;
-		SSHORT dtype = field->fld_type;
+		auto blrType = field->fld_type;
+
 		if (field->fld_flags & FLD_array)
+			blrType = blr_blob;
+
+		if (blrType <= DTYPE_BLR_MAX)
 		{
-			dtype = blr_blob;
-			length = 8;
+			const auto dtype = gds_cvt_blr_dtype[blrType];
+			alignment = type_alignments[dtype];
 		}
-		switch (dtype)
+
+		switch (blrType)
 		{
 		case blr_text:
-			alignment = type_alignments[dtype_text];
-			add_byte(blr, field->fld_type);
-			add_word(blr, field->fld_length);
-			break;
-
 		case blr_varying:
-			alignment = type_alignments[dtype_varying];
 			add_byte(blr, field->fld_type);
 			add_word(blr, field->fld_length);
-			length += sizeof(USHORT);
+			if (blrType == blr_varying)
+				length += sizeof(USHORT);
 			break;
 
 		case blr_short:
-			alignment = type_alignments[dtype_short];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_long:
-			alignment = type_alignments[dtype_long];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_quad:
-			alignment = type_alignments[dtype_quad];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_int64:
-			alignment = type_alignments[dtype_int64];
-			add_byte(blr, field->fld_type);
-			add_byte(blr, field->fld_scale);
-			break;
-
 		case blr_int128:
-			alignment = type_alignments[dtype_int128];
 			add_byte(blr, field->fld_type);
 			add_byte(blr, field->fld_scale);
-			break;
-
-		case blr_double:
-			alignment = type_alignments[dtype_double];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp:
-			alignment = type_alignments[dtype_timestamp];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_timestamp_tz:
-			alignment = type_alignments[dtype_timestamp_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time:
-			alignment = type_alignments[dtype_sql_time];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_time_tz:
-			alignment = type_alignments[dtype_sql_time_tz];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_sql_date:
-			alignment = type_alignments[dtype_sql_date];
-			add_byte(blr, field->fld_type);
 			break;
 
 		case blr_float:
-			alignment = type_alignments[dtype_real];
+		case blr_double:
+		case blr_timestamp:
+		case blr_timestamp_tz:
+		case blr_sql_time:
+		case blr_sql_time_tz:
+		case blr_sql_date:
+		case blr_bool:
+		case blr_dec64:
+		case blr_dec128:
 			add_byte(blr, field->fld_type);
 			break;
 
 		case blr_blob:
 			alignment = type_alignments[dtype_blob];
+			length = type_lengths[dtype_blob];
 			add_byte(blr, blr_quad);
 			add_byte(blr, 0);
 			break;
 
-		case blr_bool:
-			alignment = type_alignments[dtype_boolean];
-			add_byte(blr, field->fld_type);
-			break;
-
-		case blr_dec64:
-		case blr_dec128:
-			alignment = type_alignments[dtype];
-			add_byte(blr, field->fld_type);
-			break;
-
 		default:
-			BURP_error_redirect(NULL, 26, SafeArg() << field->fld_type);
+			BURP_error(26, true, SafeArg() << field->fld_type);
 			// msg 26 datatype %ld not understood
 			break;
 		}
+
 		if (alignment)
 			offset = FB_ALIGN(offset, alignment);
+
 		field->fld_offset = offset;
 		field->fld_parameter = count++;
 		offset += length;

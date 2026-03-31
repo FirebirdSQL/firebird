@@ -1384,45 +1384,6 @@ bool Mnt::get()
 #endif // HAVE_GETMNTENT && !SOLARIS
 
 
-#ifdef SOLARIS
-#define GET_MOUNTS
-bool Mnt::get()
-{
-/**************************************
- *
- *	g e t _ m o u n t s	( SOLARIS)
- *
- **************************************
- *
- * Functional description
- *	Get ALL mount points.
- *
- **************************************/
-
-	/* Solaris uses this because:
-	Since we had to substitute an alternative for the stdio supplied
-	with Solaris, we cannot use the getmntent() library call which
-	wants a Solaris stdio FILE* as an argument, so we parse the text-
-	type /etc/mnttab file ourselves.     - from FB1
-
-	This will still apply with SFIO on FB2.  nmcc Dec2002
-	*/
-
-	//  This code is tested on Solaris 2.6 IA
-	TEXT device[128], mount_point[128], m_type[16], opts[256], ftime[128];
-
-	const int n = fscanf(mtab, "%s %s %s %s %s ", device, mount_point, type, opts, ftime);
-	if (n < 5)
-		return false;
-
-	mount = mount_point;
-	type = m_type;
-	special = device;
-
-	return true;
-}
-#endif //Solaris
-
 #ifdef DARWIN
 #define GET_MOUNTS
 bool Mnt::get()
