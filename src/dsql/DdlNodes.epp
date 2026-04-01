@@ -9975,47 +9975,67 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					const AlterForeignColumnClause* clause =
 						static_cast<const AlterForeignColumnClause*>(i->getObject());
 
-					// Drop old options and insert the new ones
-					for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
+					AutoRequest ftRequest;
+					bool found = false;
+
+					FOR(REQUEST_HANDLE ftRequest TRANSACTION_HANDLE transaction)
+						RFL IN RDB$RELATION_FIELDS
+						WITH RFL.RDB$FIELD_NAME EQ clause->name.c_str() AND
+							 RFL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+							 RFL.RDB$RELATION_NAME EQ name.object.c_str()
 					{
-						const Option* option = &clause->options[cnt];
-						AutoCacheRequest request(tdbb, drq_drop_f_tbl_opt, DYN_REQUESTS);
+						found = true;
 
-						FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-							FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
-							WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-								FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
-								FTFOPT.RDB$FIELD_NAME EQ clause->name.c_str() AND
-								FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option->name.c_str()
+						// Drop old options and insert the new ones
+						for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
 						{
-							ERASE FTFOPT;
-						}
-						END_FOR
+							const Option* option = &clause->options[cnt];
+							AutoCacheRequest request(tdbb, drq_drop_f_tbl_opt, DYN_REQUESTS);
 
-						if (option->value.hasData())
-						{
-							request.reset(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
-							STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+							FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 								FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+								WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+									FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
+									FTFOPT.RDB$FIELD_NAME EQ clause->name.c_str() AND
+									FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option->name.c_str()
 							{
-								FTFOPT.RDB$SCHEMA_NAME.NULL = FALSE;
-								strcpy(FTFOPT.RDB$SCHEMA_NAME, name.schema.c_str());
-
-								FTFOPT.RDB$TABLE_NAME.NULL = FALSE;
-								strcpy(FTFOPT.RDB$TABLE_NAME, name.object.c_str());
-
-								FTFOPT.RDB$FIELD_NAME.NULL = FALSE;
-								strcpy(FTFOPT.RDB$FIELD_NAME, clause->name.c_str());
-
-								FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-								strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
-
-								FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-								strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+								ERASE FTFOPT;
 							}
-							END_STORE
+							END_FOR
+
+							if (option->value.hasData())
+							{
+								request.reset(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
+								STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+									FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+								{
+									FTFOPT.RDB$SCHEMA_NAME.NULL = FALSE;
+									strcpy(FTFOPT.RDB$SCHEMA_NAME, name.schema.c_str());
+
+									FTFOPT.RDB$TABLE_NAME.NULL = FALSE;
+									strcpy(FTFOPT.RDB$TABLE_NAME, name.object.c_str());
+
+									FTFOPT.RDB$FIELD_NAME.NULL = FALSE;
+									strcpy(FTFOPT.RDB$FIELD_NAME, clause->name.c_str());
+
+									FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+
+									FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+								}
+								END_STORE
+							}
 						}
 					}
+					END_FOR
+
+					if (!found)
+					{
+						// msg 176: "column %s does not exist in table/view %s"
+						status_exception::raise(Arg::PrivateDyn(176) << clause->name << name.toQuotedString());
+					}
+
 					break;
 				}
 
