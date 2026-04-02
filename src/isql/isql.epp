@@ -99,8 +99,15 @@ enum literal_string_type
 
 #if defined(WIN_NT)
 #include <windows.h>
+
+// Check if Windows SDK version is above v7
+#include <sdkddkver.h>
+#ifdef _WIN32_WINNT_WIN8
 #include <VersionHelpers.h>
 #endif
+
+#endif
+
 #include "ibase.h"
 #include "../isql/isql.h"
 #include "../yvalve/perf.h"
@@ -352,7 +359,12 @@ static int win32ReadConsole(FILE* file, CharBuffer& mbBuffer)
 	// buffers and set ERROR_NOT_ENOUGH_MEMORY error. Thus, use initial buffer size
 	// twice less than for Windows 10 and handle error by reducing the buffer size.
 
+#ifdef _WIN32_WINNT_WIN8
 	static size_t maxLineLength = IsWindows10OrGreater() ? MAX_USHORT : MAX_SSHORT;
+#else
+	static size_t maxLineLength = MAX_SSHORT;
+#endif
+
 	WCHAR* wideBuf = wideBuffer->getBuffer(maxLineLength, false);
 
 	DWORD charsRead;
