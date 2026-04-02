@@ -1434,6 +1434,7 @@ public:
 		const char* refDeleteAction;
 		Firebird::ObjectsArray<TriggerDefinition> triggers;
 		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		bool enforced = true;
 	};
 
 	struct CreateDropConstraint
@@ -1458,6 +1459,7 @@ public:
 			TYPE_ALTER_COL_NULL,
 			TYPE_ALTER_COL_POS,
 			TYPE_ALTER_COL_TYPE,
+			TYPE_ALTER_CONSTRAINT,
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
@@ -1522,6 +1524,7 @@ public:
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 		bool createIfNotExistsOnly = false;
+		bool enforced = true;
 	};
 
 	struct IdentityOptions
@@ -1650,6 +1653,18 @@ public:
 
 		MetaName name;
 		bool silent = false;
+	};
+
+	struct AlterConstraintClause : public Clause
+	{
+		explicit AlterConstraintClause(MemoryPool& p)
+			: Clause(p, TYPE_ALTER_CONSTRAINT),
+			  name(p)
+		{
+		}
+
+		MetaName name;
+		bool enforced = false;
 	};
 
 	RelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode);
@@ -2086,6 +2101,8 @@ public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+	// First pass of index alteration. Returns true if second pass is needed
+	bool pass1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -2103,7 +2120,7 @@ public:
 private:
 	void alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override; // Second pass of index alteration
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
@@ -2111,7 +2128,9 @@ protected:
 		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
-public:
+private:
+	bool expressionIndex = false;
+	Cached::Relation* relation = nullptr;
 	std::optional<MetaId> idxId;
 };
 
