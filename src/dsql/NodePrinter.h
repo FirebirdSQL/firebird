@@ -46,11 +46,16 @@ public:
 	}
 
 public:
-	void begin(const Firebird::string& s)
+	void begin(const Firebird::string& s, const char* attributes = nullptr)
 	{
 		printIndent();
 		text += "<";
 		text += s;
+		if (attributes != nullptr)
+		{
+			text += ' ';
+			text += attributes;
+		}
 		text += ">\n";
 
 		++indent;
