@@ -417,7 +417,6 @@ void Sort::sort(thread_db* tdbb)
  **************************************/
 	run_control* run;
 	merge_control* merge;
-	merge_control* merge_pool;
 
 	try
 	{
@@ -488,15 +487,8 @@ void Sort::sort(thread_db* tdbb)
 		{
 			fb_assert(!m_merge_pool);	// shouldn't have a pool
 			m_merge_pool = FB_NEW_POOL(m_owner->getPool()) merge_control[count - 1];
-			merge_pool = m_merge_pool;
+			merge_control* merge_pool = m_merge_pool;
 			memset(merge_pool, 0, (count - 1) * sizeof(merge_control));
-		}
-		else
-		{
-			// Merge of 1 or 0 runs doesn't make sense
-			fb_assert(false);				// We really shouldn't get here
-			merge = (merge_control*) *streams;	// But if we do...
-		}
 
 		// Each pass through the vector builds a level of the merge tree
 		// by condensing two runs into one.
@@ -528,16 +520,23 @@ void Sort::sort(thread_db* tdbb)
 				(*m1)->rmh_parent = merge;
 				merge->mrg_stream_b = *m1++;
 
-				merge->mrg_record_a = NULL;
-				merge->mrg_record_b = NULL;
+				merge->mrg_record_a = nullptr;
+				merge->mrg_record_b = nullptr;
 
 				*m2++ = (run_merge_hdr*) merge;
 				count -= 2;
 			}
 
 			if (count)
-				*m2++ = *m1++;
-			count = m2 - streams;
+					*m2++ = *m1++;
+				count = m2 - streams;
+			}
+		}
+		else
+		{
+			// Merge of 1 or 0 runs doesn't make sense
+			fb_assert(false);				// We really shouldn't get here
+			merge = (merge_control*) *streams;	// But if we do...
 		}
 
 		streams.reset();
@@ -1272,7 +1271,7 @@ sort_record* Sort::getMerge(merge_control* merge)
 			}
 			else if ( (record = merge->mrg_record_a) )
 			{
-				merge->mrg_record_a = NULL;
+				merge->mrg_record_a = nullptr;
 				merge = merge->mrg_header.rmh_parent;
 			}
 			else
@@ -1287,7 +1286,7 @@ sort_record* Sort::getMerge(merge_control* merge)
 		if (!merge->mrg_record_a)
 		{
 			record = merge->mrg_record_b;
-			merge->mrg_record_b = NULL;
+			merge->mrg_record_b = nullptr;
 			merge = merge->mrg_header.rmh_parent;
 			continue;
 		}
@@ -1311,7 +1310,7 @@ sort_record* Sort::getMerge(merge_control* merge)
 										  (const UCHAR*) merge->mrg_record_b,
 										  m_dup_callback_arg))
 			{
-				merge->mrg_record_a = NULL;
+				merge->mrg_record_a = nullptr;
 				diddleKey((UCHAR*) merge->mrg_record_b, true, true);
 				continue;
 			}
@@ -1330,12 +1329,12 @@ sort_record* Sort::getMerge(merge_control* merge)
 		if (p[-1] < q[-1])
 		{
 			record = merge->mrg_record_a;
-			merge->mrg_record_a = NULL;
+			merge->mrg_record_a = nullptr;
 		}
 		else
 		{
 			record = merge->mrg_record_b;
-			merge->mrg_record_b = NULL;
+			merge->mrg_record_b = nullptr;
 		}
 
 		merge = merge->mrg_header.rmh_parent;
@@ -1619,8 +1618,8 @@ void Sort::mergeRuns(USHORT n)
 			(*m1)->rmh_parent = merge;
 			merge->mrg_stream_b = *m1++;
 
-			merge->mrg_record_a = NULL;
-			merge->mrg_record_b = NULL;
+			merge->mrg_record_a = nullptr;
+			merge->mrg_record_b = nullptr;
 			*m2++ = (run_merge_hdr*) merge;
 			merge++;
 			count -= 2;
@@ -2267,8 +2266,8 @@ void PartitionedSort::buildMergeTree()
 			(*m1)->rmh_parent = m_merge;
 			m_merge->mrg_stream_b = *m1++;
 
-			m_merge->mrg_record_a = NULL;
-			m_merge->mrg_record_b = NULL;
+			m_merge->mrg_record_a = nullptr;
+			m_merge->mrg_record_b = nullptr;
 
 			*m2++ = (run_merge_hdr*)m_merge;
 			count -= 2;
@@ -2366,7 +2365,7 @@ sort_record* PartitionedSort::getMerge()
 			}
 			else if ((record = merge->mrg_record_a))
 			{
-				merge->mrg_record_a = NULL;
+				merge->mrg_record_a = nullptr;
 				merge = merge->mrg_header.rmh_parent;
 			}
 			else
@@ -2381,7 +2380,7 @@ sort_record* PartitionedSort::getMerge()
 		if (!merge->mrg_record_a)
 		{
 			record = merge->mrg_record_b;
-			merge->mrg_record_b = NULL;
+			merge->mrg_record_b = nullptr;
 			merge = merge->mrg_header.rmh_parent;
 			continue;
 		}
@@ -2408,7 +2407,7 @@ sort_record* PartitionedSort::getMerge()
 				(const UCHAR*)merge->mrg_record_b,
 				aSort->m_dup_callback_arg))
 			{
-				merge->mrg_record_a = NULL;
+				merge->mrg_record_a = nullptr;
 				aSort->diddleKey(rec_b, true, true);
 				continue;
 			}
@@ -2426,12 +2425,12 @@ sort_record* PartitionedSort::getMerge()
 		if (p[-1] < q[-1])
 		{
 			record = merge->mrg_record_a;
-			merge->mrg_record_a = NULL;
+			merge->mrg_record_a = nullptr;
 		}
 		else
 		{
 			record = merge->mrg_record_b;
-			merge->mrg_record_b = NULL;
+			merge->mrg_record_b = nullptr;
 		}
 
 		merge = merge->mrg_header.rmh_parent;
