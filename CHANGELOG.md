@@ -18,8 +18,14 @@
 
 ## Bugfixes
 
+* [#8965](https://github.com/FirebirdSQL/firebird/issues/8965): Wrong `PERCENT_RANK` computation  
+  Contributor(s): Denis Simonov
+
 * [#8926](https://github.com/FirebirdSQL/firebird/issues/8926): Indexes may not be used for multiple ORed conditions containing both field and non-field references  
   Contributor(s): Dmitry Yemanov
+
+* [#8903](https://github.com/FirebirdSQL/firebird/issues/8903): Use of some switches with parameter in _gbak_'s command line before name of database in `-SE` mode breaks access to databases with non-default security database  
+  Contributor(s): Alexander Peshkov
 
 * [#8851](https://github.com/FirebirdSQL/firebird/issues/8851): 'Internal error' when calling outer procedure after deleting unused result variable from inner procedure  
   Contributor(s): Vlad Khorsun
@@ -69,6 +75,9 @@
 * [#8105](https://github.com/FirebirdSQL/firebird/issues/8105): Master database could miss replication segments on Windows Classic Server  
   Contributor(s): Vlad Khorsun
 
+* [GHSA-g99w-prq5-29c6](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-g99w-prq5-29c6): DoS via malicious slice descriptor in the slice packet  
+  Contributor(s): Artyom Ivanov, Alexander Peshkov
+
 * [GHSA-7jq3-6j3c-5cm2](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-7jq3-6j3c-5cm2): DoS via `op_response` packet from client (CVE-2026-34232)  
   Contributor(s): Artyom Ivanov
 
@@ -108,7 +117,7 @@
 
 ## Bugfixes
 
-* [#8592](https://github.com/FirebirdSQL/firebird/issues/8592): Presence of 'ROWS <n_limit>' causes garbage in error message when string conversion problem raises  
+* [#8592](https://github.com/FirebirdSQL/firebird/issues/8592): Presence of `ROWS <n_limit>` causes garbage in error message when string conversion problem raises  
   Contributor(s): Adriano dos Santos Fernandes
 
 * [#8590](https://github.com/FirebirdSQL/firebird/issues/8590): Line "BLR to Source mapping:" may look broken when `procedures.rdb$debug_info` is queried using remote protocol  
