@@ -4758,6 +4758,12 @@ col_noise
 
 %type alter_op(<relationNode>)
 alter_op($relationNode)
+	: basic_alter_op($relationNode)
+	| computed_alter_op($relationNode)
+	;
+
+%type basic_alter_op(<relationNode>)
+basic_alter_op($relationNode)
 	: DROP col_noise if_exists_opt symbol_column_name drop_behaviour
 		{
 			RelationNode::DropColumnClause* clause = newNode<RelationNode::DropColumnClause>();
@@ -4773,7 +4779,7 @@ alter_op($relationNode)
 			clause->name = *$4;
 			$relationNode->clauses.add(clause);
 		}
-	| ADD col_noise if_not_exists_opt column_def($relationNode)
+	| ADD col_noise if_not_exists_opt basic_column_def($relationNode)
 		{
 			const auto node = $4;
 			node->createIfNotExistsOnly = $3;
@@ -4819,24 +4825,6 @@ alter_op($relationNode)
 			clause->field = $4;
 			clause->field->fld_name = *$2;
 			$relationNode->clauses.add(clause);
-		}
-	| col_opt symbol_column_name TYPE non_array_type def_computed
-		{
-			RelationNode::AlterColTypeClause* clause = newNode<RelationNode::AlterColTypeClause>();
-			clause->field = $4;
-			clause->field->fld_name = *$2;
-			clause->computed = $5;
-			$relationNode->clauses.add(clause);
-			clause->field->flags |= FLD_computed;
-		}
-	| col_opt symbol_column_name def_computed
-		{
-			RelationNode::AlterColTypeClause* clause = newNode<RelationNode::AlterColTypeClause>();
-			clause->field = newNode<dsql_fld>();
-			clause->field->fld_name = *$2;
-			clause->computed = $3;
-			$relationNode->clauses.add(clause);
-			clause->field->flags |= FLD_computed;
 		}
 	| col_opt symbol_column_name SET domain_default
 		{
@@ -4909,6 +4897,33 @@ alter_op($relationNode)
 		}
 	;
 
+%type computed_alter_op(<relationNode>)
+computed_alter_op($relationNode)
+	: ADD col_noise if_not_exists_opt computed_column_def($relationNode)
+		{
+			const auto node = $4;
+			node->createIfNotExistsOnly = $3;
+		}
+	| col_opt symbol_column_name TYPE non_array_type def_computed
+		{
+			RelationNode::AlterColTypeClause* clause = newNode<RelationNode::AlterColTypeClause>();
+			clause->field = $4;
+			clause->field->fld_name = *$2;
+			clause->computed = $5;
+			$relationNode->clauses.add(clause);
+			clause->field->flags |= FLD_computed;
+		}
+	| col_opt symbol_column_name def_computed
+		{
+			RelationNode::AlterColTypeClause* clause = newNode<RelationNode::AlterColTypeClause>();
+			clause->field = newNode<dsql_fld>();
+			clause->field->fld_name = *$2;
+			clause->computed = $3;
+			$relationNode->clauses.add(clause);
+			clause->field->flags |= FLD_computed;
+		}
+	;
+
 %type foreign_alter_ops(<relationNode>)
 foreign_alter_ops($relationNode)
 	: foreign_alter_op($relationNode)
@@ -4917,7 +4932,7 @@ foreign_alter_ops($relationNode)
 
 %type <alterForeignColumnClause> foreign_alter_op(<relationNode>)
 foreign_alter_op($relationNode)
-	: alter_op($relationNode)
+	: basic_alter_op($relationNode)
 		{
 			$$ = NULL;
 		}
@@ -4927,7 +4942,7 @@ foreign_alter_op($relationNode)
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_OPTIONS);
 			$relationNode->clauses.add(clause);
 		}
-	| ADD if_not_exists_opt column_def($relationNode) create_foreign_column_fixed_list_opt($3)
+	| ADD if_not_exists_opt basic_column_def($relationNode) create_foreign_column_fixed_list_opt($3)
 		{
 			const auto node = $3;
 			node->createIfNotExistsOnly = $2;
