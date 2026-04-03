@@ -7,7 +7,7 @@
 
 ## Improvements
 
-* [#8922](https://github.com/FirebirdSQL/firebird/issues/8922): Update Windows distributions with zlib version 1.3.2  
+* [#8922](https://github.com/FirebirdSQL/firebird/issues/8922): Update Windows distributions with _zlib_ version 1.3.2  
   Contributor(s): Vlad Khorsun
 
 * [#8598](https://github.com/FirebirdSQL/firebird/issues/8598): Don't fire referential integrity triggers if primary or unique keys haven't changed  
@@ -26,6 +26,9 @@
 
 * [#8903](https://github.com/FirebirdSQL/firebird/issues/8903): Use of some switches with parameter in _gbak_'s command line before name of database in `-SE` mode breaks access to databases with non-default security database  
   Contributor(s): Alexander Peshkov
+
+* [#8857](https://github.com/FirebirdSQL/firebird/issues/8857): Replication stops if `GRANT` was issued by non-DBA user who has the `RDB$ADMIN` role and appropriate object (table, etc) belongs to another user  
+  Contributor(s): Dmitry Yemanov
 
 * [#8851](https://github.com/FirebirdSQL/firebird/issues/8851): 'Internal error' when calling outer procedure after deleting unused result variable from inner procedure  
   Contributor(s): Vlad Khorsun
@@ -75,7 +78,7 @@
 * [#8105](https://github.com/FirebirdSQL/firebird/issues/8105): Master database could miss replication segments on Windows Classic Server  
   Contributor(s): Vlad Khorsun
 
-* [GHSA-g99w-prq5-29c6](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-g99w-prq5-29c6): DoS via malicious slice descriptor in the slice packet  
+* [GHSA-g99w-prq5-29c6](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-g99w-prq5-29c6): DoS via malicious slice descriptor in the slice packet (CVE-2026-35215)  
   Contributor(s): Artyom Ivanov, Alexander Peshkov
 
 * [GHSA-7jq3-6j3c-5cm2](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-7jq3-6j3c-5cm2): DoS via `op_response` packet from client (CVE-2026-34232)  
