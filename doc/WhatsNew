@@ -14,6 +14,10 @@
         Indexes may not be used for multiple ORed conditions containing both field and non-field references  
       Contributor(s): Dmitry Yemanov
 
+    * Bugfix #8903
+        Use of some switches with parameter in gbak's command line before name of database in '-SE' mode breaks access to databases with non-default security database  
+      Contributor(s): Alexander Peshkov
+
     * Bugfix #8850
         Firebird 3.0.13 Win32: KERNEL32.GetThreadId import breaks Windows XP (regression vs 3.0.12)  
       Contributor(s): Vlad Khorsun
@@ -37,6 +41,10 @@
     * Bugfix #8644
         Connection error via Loopback provider if it's the first in the Providers parameter  
       Contributor(s): Alexander Peshkov
+
+    * Bugfix for vulnerability GHSA-g99w-prq5-29c6
+        DoS via malicious slice descriptor in the slice packet (CVE-2026-35215)  
+      Contributor(s): Artyom Ivanov, Alexander Peshkov
 
     * Bugfix for vulnerability GHSA-7jq3-6j3c-5cm2
         DoS via `op_response` packet from client (CVE-2026-34232)  
