@@ -129,7 +129,7 @@ namespace
 	{
 	public:
 		explicit RunSort(run_control* irun) noexcept : run(irun) {}
-		RunSort() noexcept : run(NULL) {}
+		RunSort() noexcept : run(nullptr) {}
 
 		static FB_UINT64 generate(const RunSort& item) noexcept
 		{
@@ -160,9 +160,9 @@ Sort::Sort(Database* dbb,
 		   void* user_arg,
 		   FB_UINT64 max_records)
 	: m_dbb(dbb), m_owner(owner),
-	  m_last_record(NULL), m_next_pointer(NULL), m_records(0),
-	  m_runs(NULL), m_merge(NULL), m_free_runs(NULL),
-	  m_flags(0), m_merge_pool(NULL),
+	  m_last_record(nullptr), m_next_pointer(nullptr), m_records(0),
+	  m_runs(nullptr), m_merge(nullptr), m_free_runs(nullptr),
+	  m_flags(0), m_merge_pool(nullptr),
 	  m_description(m_owner->getPool(), keys)
 {
 /**************************************
@@ -302,10 +302,10 @@ void Sort::get(thread_db* tdbb, ULONG** record_address)
  *
  * Get a record from sort (in order, of course).
  * The address of the record is returned in <record_address>
- * If the stream is exhausted, SORT_get puts NULL in <record_address>.
+ * If the stream is exhausted, SORT_get puts nullptr in <record_address>.
  *
  **************************************/
-	sort_record* record = NULL;
+	sort_record* record = nullptr;
 
 	try
 	{
@@ -439,7 +439,7 @@ void Sort::sort(thread_db* tdbb)
 
 		putRun(tdbb);
 
-		CHECK_FILE(NULL);
+		CHECK_FILE(nullptr);
 
 		// Merge runs of low depth to free memory part of temp space
 		// they use and to make total runs count lower. This is fast
@@ -455,7 +455,7 @@ void Sort::sort(thread_db* tdbb)
 		if (low_depth_cnt > 1 && low_depth_cnt < run_count)
 		{
 			mergeRuns(low_depth_cnt);
-			CHECK_FILE(NULL);
+			CHECK_FILE(nullptr);
 		}
 
 		// Build a merge tree for the run_control blocks. Start by laying them all out
@@ -490,44 +490,44 @@ void Sort::sort(thread_db* tdbb)
 			merge_control* merge_pool = m_merge_pool;
 			memset(merge_pool, 0, (count - 1) * sizeof(merge_control));
 
-		// Each pass through the vector builds a level of the merge tree
-		// by condensing two runs into one.
-		// We will continue to make passes until there is a single item.
-		//
-		// See also kissing cousin of this loop in mergeRuns()
+			// Each pass through the vector builds a level of the merge tree
+			// by condensing two runs into one.
+			// We will continue to make passes until there is a single item.
+			//
+			// See also kissing cousin of this loop in mergeRuns()
 
-		while (count > 1)
-		{
-			run_merge_hdr** m2 = m1 = streams;
-
-			// "m1" is used to sequence through the runs being merged,
-			// while "m2" points at the new merged run
-
-			while (count >= 2)
+			while (count > 1)
 			{
-				merge = merge_pool++;
-				merge->mrg_header.rmh_type = RMH_TYPE_MRG;
+				run_merge_hdr** m2 = m1 = streams;
 
-				// garbage watch
-				fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
+				// "m1" is used to sequence through the runs being merged,
+				// while "m2" points at the new merged run
 
-				(*m1)->rmh_parent = merge;
-				merge->mrg_stream_a = *m1++;
+				while (count >= 2)
+				{
+					merge = merge_pool++;
+					merge->mrg_header.rmh_type = RMH_TYPE_MRG;
 
-				// garbage watch
-				fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
+					// garbage watch
+					fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
 
-				(*m1)->rmh_parent = merge;
-				merge->mrg_stream_b = *m1++;
+					(*m1)->rmh_parent = merge;
+					merge->mrg_stream_a = *m1++;
 
-				merge->mrg_record_a = nullptr;
-				merge->mrg_record_b = nullptr;
+					// garbage watch
+					fb_assert(((*m1)->rmh_type == RMH_TYPE_MRG) || ((*m1)->rmh_type == RMH_TYPE_RUN));
 
-				*m2++ = (run_merge_hdr*) merge;
-				count -= 2;
-			}
+					(*m1)->rmh_parent = merge;
+					merge->mrg_stream_b = *m1++;
 
-			if (count)
+					merge->mrg_record_a = nullptr;
+					merge->mrg_record_b = nullptr;
+
+					*m2++ = (run_merge_hdr*) merge;
+					count -= 2;
+				}
+
+				if (count)
 					*m2++ = *m1++;
 				count = m2 - streams;
 			}
@@ -541,7 +541,7 @@ void Sort::sort(thread_db* tdbb)
 
 		streams.reset();
 
-		merge->mrg_header.rmh_parent = NULL;
+		merge->mrg_header.rmh_parent = nullptr;
 		m_merge = merge;
 		m_longs -= SIZEOF_SR_BCKPTR_IN_LONGS;
 
@@ -561,7 +561,7 @@ void Sort::sort(thread_db* tdbb)
 				if (!run->run_buffer)
 				{
 					size_t mem_size = MIN(allocSize / rec_size, run->run_records) * rec_size;
-					UCHAR* mem = NULL;
+					UCHAR* mem = nullptr;
 					try
 					{
 						mem = FB_NEW_POOL(m_owner->getPool()) UCHAR[mem_size];
@@ -1186,7 +1186,7 @@ sort_record* Sort::getMerge(merge_control* merge)
 	ULONG l;
 	ULONG n;
 
-	sort_record* record = NULL;
+	sort_record* record = nullptr;
 	bool eof = false;
 
 	while (merge)
@@ -1241,12 +1241,12 @@ sort_record* Sort::getMerge(merge_control* merge)
 			if (merge->mrg_stream_a && !merge->mrg_record_a)
 			{
 				if (eof)
-					merge->mrg_stream_a = NULL;
+					merge->mrg_stream_a = nullptr;
 				else
 					merge->mrg_record_a = record;
 			}
 			else if (eof)
-				merge->mrg_stream_b = NULL;
+				merge->mrg_stream_b = nullptr;
 			else
 				merge->mrg_record_b = record;
 		}
@@ -1255,7 +1255,7 @@ sort_record* Sort::getMerge(merge_control* merge)
 		// up the record. If either stream is dry, return the record of the other.
 		// If both are dry, indicate eof for this stream.
 
-		record = NULL;
+		record = nullptr;
 		eof = false;
 
 		if (!merge->mrg_record_a && merge->mrg_stream_a)
@@ -1343,13 +1343,13 @@ sort_record* Sort::getMerge(merge_control* merge)
 	// Merge pointer is null; we're done. Return either the most
 	// recent record, or end of file, as appropriate.
 
-	return eof ? NULL : record;
+	return eof ? nullptr : record;
 }
 
 
 sort_record* Sort::getRecord()
 {
-	sort_record* record = NULL;
+	sort_record* record = nullptr;
 
 	// If there weren't any runs, everything fit in memory. Just return stuff.
 
@@ -1359,7 +1359,7 @@ sort_record* Sort::getRecord()
 		{
 			if (m_records == 0)
 			{
-				record = NULL;
+				record = nullptr;
 				break;
 			}
 			m_records--;
@@ -1458,7 +1458,7 @@ ULONG Sort::allocate(ULONG n, ULONG chunkSize, bool useFreeSpace)
 	// if some run's already in memory cache - use this memory
 	for (run = m_runs, count = 0; count < n; run = run->run_next, count++)
 	{
-		run->run_buffer = NULL;
+		run->run_buffer = nullptr;
 
 		UCHAR* const mem = m_space->inMemory(run->run_seek, run->run_size);
 
@@ -1471,7 +1471,7 @@ ULONG Sort::allocate(ULONG n, ULONG chunkSize, bool useFreeSpace)
 			allocated++;
 		}
 
-		run->run_buff_cache = (mem != NULL);
+		run->run_buff_cache = (mem != nullptr);
 	}
 
 	if (allocated == n || !useFreeSpace)
@@ -1549,9 +1549,9 @@ void Sort::mergeRuns(USHORT n)
 	// get memory for run's
 	run_control* run = m_runs;
 
-	CHECK_FILE(NULL);
+	CHECK_FILE(nullptr);
 	const USHORT allocated = allocate(n, m_max_alloc_size, (run->run_depth > 0));
-	CHECK_FILE(NULL);
+	CHECK_FILE(nullptr);
 
 	const USHORT buffers = m_size_memory / rec_size;
 	USHORT count;
@@ -1630,10 +1630,10 @@ void Sort::mergeRuns(USHORT n)
 	}
 
 	--merge;
-	merge->mrg_header.rmh_parent = NULL;
+	merge->mrg_header.rmh_parent = nullptr;
 
 	// Merge records into run
-	CHECK_FILE(NULL);
+	CHECK_FILE(nullptr);
 
 	sort_record* q = reinterpret_cast<sort_record*>(temp_run.run_buffer);
 	FB_UINT64 seek = temp_run.run_seek = m_space->allocateSpace(temp_run.run_size);
@@ -1696,7 +1696,7 @@ void Sort::mergeRuns(USHORT n)
 			delete[] run->run_buffer;
 			run->run_buff_alloc = false;
 		}
-		run->run_buffer = NULL;
+		run->run_buffer = nullptr;
 
 		// Add run descriptor to list of unused run descriptor blocks
 
@@ -1709,14 +1709,14 @@ void Sort::mergeRuns(USHORT n)
 	temp_run.run_header.rmh_type = RMH_TYPE_RUN;
 	temp_run.run_depth = run->run_depth;
 	temp_run.run_buff_cache = false;
-	temp_run.run_buffer = NULL;
+	temp_run.run_buffer = nullptr;
 	*run = temp_run;
 	++run->run_depth;
 	run->run_next = m_runs;
 	m_runs = run;
 	m_longs += SIZEOF_SR_BCKPTR_IN_LONGS;
 
-	CHECK_FILE(NULL);
+	CHECK_FILE(nullptr);
 }
 
 
@@ -1916,7 +1916,7 @@ ULONG Sort::order()
 		if (((SORTP*) output) + m_longs - 1 <= (SORTP*) lower_limit)
 		{
 			// null the bckptr for this record
-			record->sr_bckptr = NULL;
+			record->sr_bckptr = nullptr;
 			MOVE_32(length, record->sr_sort_record.sort_record_key, output);
 			output = reinterpret_cast<sort_record*>((SORTP*) output + length);
 			continue;
@@ -2120,8 +2120,8 @@ void Sort::sortBuffer(thread_db* tdbb)
 
 			if ((*m_dup_callback) ((const UCHAR*) *i, (const UCHAR*) *j, m_dup_callback_arg))
 			{
-				((SORTP***) (*i))[BACK_OFFSET] = NULL;
-				*i = NULL;
+				((SORTP***) (*i))[BACK_OFFSET] = nullptr;
+				*i = nullptr;
 			}
 			else
 			{
@@ -2217,7 +2217,7 @@ PartitionedSort::PartitionedSort(Database* dbb, SortOwner* owner) :
 	m_owner(owner),
 	m_parts(owner->getPool()),
 	m_nodes(owner->getPool()),
-	m_merge(NULL)
+	m_merge(nullptr)
 {
 }
 
@@ -2279,12 +2279,12 @@ void PartitionedSort::buildMergeTree()
 	}
 
 	if (m_merge)
-		m_merge->mrg_header.rmh_parent = NULL;
+		m_merge->mrg_header.rmh_parent = nullptr;
 }
 
 void PartitionedSort::get(thread_db* tdbb, ULONG** record_address)
 {
-	sort_record* record = NULL;
+	sort_record* record = nullptr;
 
 	if (!m_merge)
 		record = m_parts[0].srt_sort->getRecord();
@@ -2301,7 +2301,7 @@ sort_record* PartitionedSort::getMerge()
 {
 	Sort* aSort = m_parts[0].srt_sort;
 	merge_control* merge = m_merge;
-	sort_record* record = NULL;
+	sort_record* record = nullptr;
 	bool eof = false;
 
 	while (merge)
@@ -2335,12 +2335,12 @@ sort_record* PartitionedSort::getMerge()
 			if (merge->mrg_stream_a && !merge->mrg_record_a)
 			{
 				if (eof)
-					merge->mrg_stream_a = NULL;
+					merge->mrg_stream_a = nullptr;
 				else
 					merge->mrg_record_a = record;
 			}
 			else if (eof)
-				merge->mrg_stream_b = NULL;
+				merge->mrg_stream_b = nullptr;
 			else
 				merge->mrg_record_b = record;
 		}
@@ -2349,7 +2349,7 @@ sort_record* PartitionedSort::getMerge()
 		// up the record. If either stream is dry, return the record of the other.
 		// If both are dry, indicate eof for this stream.
 
-		record = NULL;
+		record = nullptr;
 		eof = false;
 
 		if (!merge->mrg_record_a && merge->mrg_stream_a)
@@ -2439,5 +2439,5 @@ sort_record* PartitionedSort::getMerge()
 	// Merge pointer is null; we're done. Return either the most
 	// recent record, or end of file, as appropriate.
 
-	return eof ? NULL : record;
+	return eof ? nullptr : record;
 }
