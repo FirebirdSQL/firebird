@@ -5027,8 +5027,6 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 		if (relative && adjustment)
 		{
-			const bool isAhead = (statement->rsr_fetch_operation == fetch_next);
-
 			PACKET* packet = &rdb->rdb_packet;
 			packet->p_operation = op_fetch_scroll;
 			P_SQLDATA* sqldata = &packet->p_sqldata;
@@ -6313,8 +6311,7 @@ IEvents* Attachment::queEvents(CheckStatusWrapper* status, IEventCallback* callb
 			port->connect(packet);
 
 			rem_port* port_async = port->port_async;
-			port_async->port_events_threadId =
-				Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
+			Thread::start(event_thread, port_async, THREAD_high, &port_async->port_events_thread);
 
 			port_async->port_context = rdb;
 		}

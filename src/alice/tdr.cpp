@@ -296,7 +296,6 @@ void TDR_list_limbo(FB_API_HANDLE handle, const TEXT* name, const SINT64 switche
 		if (item == isc_info_end)
 			break;
 
-		const USHORT length = (USHORT) p.getClumpLength();
 		switch (item)
 		{
 		case isc_info_limbo:

@@ -273,6 +273,7 @@ void Service::getOptions(ClumpletReader& spb)
 		{
 		case isc_spb_user_name:
 			spb.getString(svc_username);
+			svc_orig_username = svc_username;
 			fb_utils::dpbItemUpper(svc_username);
 			break;
 
@@ -410,9 +411,9 @@ void Service::outputVerbose(const char* text)
 	}
 }
 
-void Service::outputError(const char* /*text*/)
+void Service::outputError(const char* text)
 {
-	fb_assert(false);
+	outputVerbose(text);
 }
 
 void Service::outputData(const void* data, FB_SIZE_T len)
@@ -694,8 +695,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
 	svc_resp_len(0), svc_flags(SVC_finished), svc_user_flag(0), svc_spb_version(0),
 	svc_shutdown_server(false), svc_shutdown_request(false),
-	svc_shutdown_in_progress(false), svc_timeout(false),
-	svc_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
+	svc_shutdown_in_progress(false), svc_timeout(false), svc_username(getPool()),
+	svc_orig_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
 	svc_command_line(getPool()), svc_parallel_workers(0),
@@ -703,7 +704,7 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_remote_pid(0), svc_trace_manager(NULL), svc_crypt_callback(crypt_callback),
 	svc_existence(FB_NEW_POOL(*getDefaultMemoryPool()) SvcMutex(this)),
 	svc_stdin_size_requested(0), svc_stdin_buffer(NULL), svc_stdin_size_preload(0),
-	svc_stdin_preload_requested(0), svc_stdin_user_size(0), svc_thread(0)
+	svc_stdin_preload_requested(0), svc_stdin_user_size(0)
 #ifdef DEV_BUILD
 	, svc_debug(false)
 #endif
@@ -1946,12 +1947,13 @@ THREAD_ENTRY_DECLARE Service::run(THREAD_ENTRY_PARAM arg)
 		RefPtr<SvcMutex> ref(svc->svc_existence);
 		exit_code = svc->svc_service_run->serv_thd(svc);
 
-		Thread::Handle thrHandle = svc->svc_thread;
+		Thread svcThread(std::move(svc->svc_thread));
+
 		svc->started();
 		svc->unblockQueryGet();
 		svc->finish(SVC_finished);
 
-		threadCollect->ending(thrHandle);
+		threadCollect->ending(std::move(svcThread));
 	}
 	catch (const Exception& ex)
 	{
@@ -2066,8 +2068,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 			if (svc_username.hasData())
 			{
 				string auth = "-user ";
-				auth += svc_username;
-				auth += ' ';
+				UtilSvc::addStringWithSvcTrmntr(svc_orig_username, auth);
 				svc_switches = auth + svc_switches;
 			}
 		}
@@ -2075,8 +2076,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		if (svc_sql_role.hasData())
 		{
 			string auth = "-role ";
-			auth += svc_sql_role;
-			auth += ' ';
+			UtilSvc::addStringWithSvcTrmntr(svc_sql_role, auth);
 			svc_switches = auth + svc_switches;
 		}
 	}
@@ -2273,8 +2273,6 @@ bool Service::full() const noexcept
 {
 	return add_one(svc_stdout_tail) == svc_stdout_head;
 }
-
-#define ENQUEUE_DEQUEUE_DELAY 1
 
 void Service::enqueue(const UCHAR* s, ULONG len)
 {
@@ -3134,6 +3132,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_trc_cfg:
 			case isc_spb_trc_name:
+			case isc_spb_trc_plugins:
 				get_action_svc_string(spb, switches);
 				break;
 			case isc_spb_trc_id:

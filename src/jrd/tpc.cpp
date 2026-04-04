@@ -27,7 +27,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/pag.h"
 #include "../jrd/cch_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"
@@ -310,12 +310,6 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 	header->latest_transaction_id.store(hdr_next_transaction, std::memory_order_relaxed);
 	header->oldest_transaction.store(hdr_oldest_transaction, std::memory_order_relaxed);
 	header->latest_attachment_id.store(hdr_attachment_id, std::memory_order_relaxed);
-
-	// Check if TIP has any interesting transactions.
-	// At database creation time, it doesn't and the code below breaks
-	// if there isn't a single one transaction to care about.
-	if (hdr_oldest_transaction >= hdr_next_transaction)
-		return;
 
 	// Round down the oldest to a multiple of four, which puts the
 	// transaction in temporary buffer on a byte boundary

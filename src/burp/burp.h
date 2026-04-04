@@ -49,6 +49,7 @@
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
+#include "../jrd/intl.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -767,8 +768,8 @@ struct burp_fld
 	SSHORT		fld_null_flag;
 	ISC_QUAD	fld_default_value;
 	ISC_QUAD	fld_default_source;
-	SSHORT		fld_character_set_id;
-	SSHORT		fld_collation_id;
+	CSetId		fld_character_set_id;
+	CollId		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
 };
@@ -1385,13 +1386,13 @@ private:
 static inline UCHAR* BURP_alloc(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().allocate(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().allocate(size));
 }
 
 static inline UCHAR* BURP_alloc_zero(ULONG size)
 {
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-	return (UCHAR*)(tdgbl->getPool().calloc(size ALLOC_ARGS));
+	return (UCHAR*)(tdgbl->getPool().calloc(size));
 }
 
 static inline void BURP_free(void* block) noexcept

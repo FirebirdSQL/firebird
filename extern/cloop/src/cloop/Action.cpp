@@ -36,40 +36,45 @@ inline void identify(const ActionParametersBlock& apb, unsigned ident)
 
 void IfThenElseAction::generate(const ActionParametersBlock& apb, unsigned ident)
 {
-	switch(apb.language)
+	switch (apb.language)
 	{
-	case LANGUAGE_C:
-	case LANGUAGE_CPP:
-		identify(apb, ident);
-		fprintf(apb.out, "if (%s) {\n", exprIf->generate(apb.language, apb.prefix).c_str());
-		actThen->generate(apb, ident + 1);
-		identify(apb, ident);
-		fprintf(apb.out, "}\n");
-		if (actElse)
-		{
+		case Language::C:
+		case Language::CPP:
 			identify(apb, ident);
-			fprintf(apb.out, "else {\n");
-			actElse->generate(apb, ident + 1);
+			fprintf(apb.out, "if (%s) {\n", exprIf->generate(apb.language, apb.prefix).c_str());
+			actThen->generate(apb, ident + 1);
 			identify(apb, ident);
 			fprintf(apb.out, "}\n");
-		}
-		break;
+			if (actElse)
+			{
+				identify(apb, ident);
+				fprintf(apb.out, "else {\n");
+				actElse->generate(apb, ident + 1);
+				identify(apb, ident);
+				fprintf(apb.out, "}\n");
+			}
+			break;
 
-	case LANGUAGE_PASCAL:
-		identify(apb, ident);
-		fprintf(apb.out, "if %s then begin\n", exprIf->generate(apb.language, apb.prefix).c_str());
-		actThen->generate(apb, ident + 1);
-		identify(apb, ident);
-		fprintf(apb.out, "end\n");
-		if (actElse)
-		{
+		case Language::PASCAL:
 			identify(apb, ident);
-			fprintf(apb.out, "else begin\n");
-			actElse->generate(apb, ident + 1);
+			fprintf(apb.out, "if %s then begin\n", exprIf->generate(apb.language, apb.prefix).c_str());
+			actThen->generate(apb, ident + 1);
 			identify(apb, ident);
 			fprintf(apb.out, "end\n");
-		}
-		break;
+			if (actElse)
+			{
+				identify(apb, ident);
+				fprintf(apb.out, "else begin\n");
+				actElse->generate(apb, ident + 1);
+				identify(apb, ident);
+				fprintf(apb.out, "end\n");
+			}
+			break;
+
+		case Language::JSON:
+		case Language::JAVA:
+			// Not implemented!
+			break;
 	}
 }
 
@@ -77,11 +82,11 @@ void IfThenElseAction::generate(const ActionParametersBlock& apb, unsigned ident
 void CallAction::generate(const ActionParametersBlock& apb, unsigned ident)
 {
 	identify(apb, ident);
-	fprintf(apb.out, "%s(", (apb.language == LANGUAGE_PASCAL ? PascalGenerator::escapeName(name) : name).c_str());
+	fprintf(apb.out, "%s(", (apb.language == Language::PASCAL ? PascalGenerator::escapeName(name) : name).c_str());
 	for (auto itr = parameters.begin(); itr != parameters.end(); ++itr)
 	{
 		string parname = *itr;
-		if (apb.language == LANGUAGE_PASCAL)
+		if (apb.language == Language::PASCAL)
 			parname = PascalGenerator::escapeName(parname);
 		fprintf(apb.out, "%s%s", itr == parameters.begin() ? "" : ", ", parname.c_str());
 	}
@@ -91,91 +96,98 @@ void CallAction::generate(const ActionParametersBlock& apb, unsigned ident)
 
 void DefAction::generate(const ActionParametersBlock& apb, unsigned ident)
 {
-	switch(defType)
+	switch (defType)
 	{
-	case DEF_NOT_IMPLEMENTED:
-		switch(apb.language)
-		{
-		case LANGUAGE_C:
-			if (!apb.method->statusName.empty())
+		case DefType::NOT_IMPLEMENTED:
+			switch (apb.language)
 			{
-				identify(apb, ident);
-				fprintf(apb.out, "CLOOP_setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
-					apb.method->statusName.c_str(), apb.prefix.c_str(),
-					apb.interface->name.c_str(), apb.method->version);
-			}
-			break;
-
-		case LANGUAGE_CPP:
-			if (!apb.method->statusName.empty())
-			{
-				identify(apb, ident);
-				fprintf(apb.out, "%s::setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
-					apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
-					apb.interface->name.c_str(), apb.method->version);
-				identify(apb, ident);
-				fprintf(apb.out, "%s::checkException(%s);\n",
-					apb.exceptionClass.c_str(), apb.method->statusName.c_str());
-			}
-			break;
-
-		case LANGUAGE_PASCAL:
-			if (!apb.method->statusName.empty() && !apb.exceptionClass.empty())
-			{
-				identify(apb, ident);
-				fprintf(apb.out, "%s.setVersionError(%s, \'%s%s\', vTable.version, %d);\n",
-					apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
-					apb.interface->name.c_str(), apb.method->version);
-			}
-			break;
-		}
-		break;
-
-	case DEF_IGNORE:
-		if (apb.method->returnTypeRef.token.type != Token::TYPE_VOID ||
-			apb.method->returnTypeRef.isPointer)
-		{
-			identify(apb, ident);
-
-			switch(apb.language)
-			{
-			case LANGUAGE_C:
-			case LANGUAGE_CPP:
-				fprintf(apb.out, "return 0;\n");
-				break;
-
-			case LANGUAGE_PASCAL:
-				{
-					const char* sResult = "nil";
-					if (!apb.method->returnTypeRef.isPointer)
+				case Language::C:
+					if (!apb.method->statusName.empty())
 					{
-						switch (apb.method->returnTypeRef.token.type)
-						{
-						case Token::TYPE_STRING:
-							break;
-
-						case Token::TYPE_BOOLEAN:
-							sResult = "false";
-							break;
-
-						case Token::TYPE_IDENTIFIER:
-							if (apb.method->returnTypeRef.type == BaseType::TYPE_INTERFACE)
-								break;
-
-							// fallthru
-						default:
-							sResult = "0";
-							break;
-						}
+						identify(apb, ident);
+						fprintf(apb.out, "CLOOP_setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
+							apb.method->statusName.c_str(), apb.prefix.c_str(), apb.interface->name.c_str(),
+							apb.method->version);
 					}
+					break;
 
-					fprintf(apb.out, "Result := %s;\n", sResult);
-				}
-				break;
+				case Language::CPP:
+					if (!apb.method->statusName.empty())
+					{
+						identify(apb, ident);
+						fprintf(apb.out, "%s::setVersionError(%s, \"%s%s\", cloopVTable->version, %d);\n",
+							apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
+							apb.interface->name.c_str(), apb.method->version);
+						identify(apb, ident);
+						fprintf(apb.out, "%s::checkException(%s);\n", apb.exceptionClass.c_str(),
+							apb.method->statusName.c_str());
+					}
+					break;
+
+				case Language::PASCAL:
+					if (!apb.method->statusName.empty() && !apb.exceptionClass.empty())
+					{
+						identify(apb, ident);
+						fprintf(apb.out, "%s.setVersionError(%s, \'%s%s\', vTable.version, %d);\n",
+							apb.exceptionClass.c_str(), apb.method->statusName.c_str(), apb.prefix.c_str(),
+							apb.interface->name.c_str(), apb.method->version);
+					}
+					break;
+
+				case Language::JSON:
+				case Language::JAVA:
+					// Not implemented!
+					break;
 			}
-		}
-		break;
+			break;
+
+		case DefType::IGNORE:
+			if (apb.method->returnTypeRef.token.type != Token::Type::VOID || apb.method->returnTypeRef.isPointer)
+			{
+				identify(apb, ident);
+
+				switch (apb.language)
+				{
+					case Language::C:
+					case Language::CPP:
+						fprintf(apb.out, "return 0;\n");
+						break;
+
+					case Language::PASCAL:
+					{
+						const char* sResult = "nil";
+						if (!apb.method->returnTypeRef.isPointer)
+						{
+							switch (apb.method->returnTypeRef.token.type)
+							{
+								case Token::Type::STRING:
+									break;
+
+								case Token::Type::BOOLEAN:
+									sResult = "false";
+									break;
+
+								case Token::Type::IDENTIFIER:
+									if (apb.method->returnTypeRef.type == BaseType::Type::INTERFACE)
+										break;
+
+									// fallthru
+								default:
+									sResult = "0";
+									break;
+							}
+						}
+
+						fprintf(apb.out, "Result := %s;\n", sResult);
+					}
+					break;
+
+					case Language::JSON:
+					case Language::JAVA:
+						// Not implemented!
+						break;
+				}
+			}
+			break;
 	}
 }
-
-

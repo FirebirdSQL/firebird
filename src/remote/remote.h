@@ -159,7 +159,7 @@ extern const ParametersSet dpbParam, spbParam, connectParam;
 
 struct Svc : public Firebird::GlobalStorage
 {
-	ServService					svc_iface;		// service interface
+	ServService		svc_iface;				// service interface
 	Svc() :
 		svc_iface(NULL)
 	{ }
@@ -342,7 +342,7 @@ public:
 	static constexpr ISC_STATUS badHandle() noexcept { return isc_bad_trans_handle; }
 
 	Rbl* createInlineBlob();
-	void setupInlineBlob(P_INLINE_BLOB* p_blob);
+	void setupInlineBlob(const P_INLINE_BLOB* p_blob);
 };
 
 
@@ -913,7 +913,9 @@ class InternalCryptKey final :
 {
 public:
 	InternalCryptKey()
-		: keyName(getPool())
+		: encrypt(getPool()),
+		  decrypt(getPool()),
+		  keyName(getPool())
 	{ }
 
 	// ICryptKey implementation
@@ -926,8 +928,8 @@ public:
 	class Key : public Firebird::UCharBuffer
 	{
 	public:
-		Key()
-			: Firebird::UCharBuffer(getPool())
+		Key(MemoryPool& pool)
+			: Firebird::UCharBuffer(pool)
 		{ }
 
 		void set(unsigned keyLength, const void* key)
@@ -1155,7 +1157,7 @@ public:
 	Firebird::PathName getPluginName();
 	void tryNewKeys(rem_port*);
 	void releaseKeys(unsigned from);
-	Firebird::RefPtr<const Firebird::Config>* getConfig();
+	Firebird::RefPtr<const Firebird::Config>* getConfig() noexcept;
 	void createCryptCallback(Firebird::ICryptKeyCallback** callback);
 
 	// Firebird::IClientBlock implementation
@@ -1229,7 +1231,7 @@ public:
 	bool hasDataForPlugin();
 
 	// Firebird::IServerBlock implementation
-	const char* getLogin();
+	const char* getLogin() noexcept;
 	const unsigned char* getData(unsigned int* length);
 	void putData(Firebird::CheckStatusWrapper* status, unsigned int length, const void* data);
 	Firebird::ICryptKey* newKey(Firebird::CheckStatusWrapper* status);
@@ -1320,8 +1322,7 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	SOCKET			port_channel;		// handle for connection (from by OS)
 	struct linger	port_linger;		// linger value as defined by SO_LINGER
 	Rdb*			port_context;
-	Thread::Handle	port_events_thread;	// handle of thread, handling incoming events
-	Thread			port_events_threadId;
+	Thread			port_events_thread;	// thread handling incoming events
 	RemotePortGuard* port_thread_guard;	// will close port_events_thread in safe way
 #ifdef WIN_NT
 	HANDLE			port_pipe;			// port pipe handle
@@ -1485,7 +1486,7 @@ public:
 		port_flags(0), port_partial_data(false), port_z_data(false),
 		port_connect_timeout(0), port_dummy_packet_interval(0),
 		port_dummy_timeout(0), port_handle(INVALID_SOCKET), port_channel(INVALID_SOCKET), port_context(0),
-		port_events_thread(0), port_thread_guard(0),
+		port_thread_guard(0),
 #ifdef WIN_NT
 		port_pipe(INVALID_HANDLE_VALUE), port_event(INVALID_HANDLE_VALUE),
 #endif
@@ -1531,7 +1532,7 @@ public:
 	void initCompression();
 	static bool checkCompression();
 	void linkParent(rem_port* const parent);
-	void unlinkParent();
+	void unlinkParent() noexcept;
 	Firebird::RefPtr<const Firebird::Config> getPortConfig();
 	const Firebird::RefPtr<const Firebird::Config>& getPortConfig() const;
 	void versionInfo(Firebird::string& version) const;
@@ -1621,9 +1622,7 @@ public:
 	}
 
 public:
-	// TMN: Beginning of C++ port
-	// TMN: ugly, but at least a start
-	bool	accept(p_cnct* cnct);
+	bool	accept(const p_cnct* cnct);
 	void	disconnect();
 	void	force_close();
 	rem_port*	receive(PACKET* pckt);
@@ -1743,7 +1742,7 @@ public:
 	const Firebird::UCharBuffer* findSpecificData(const Firebird::PathName& type, const Firebird::PathName& plugin);
 	bool tryNewKey(InternalCryptKey* cryptKey);
 
-	void checkResponse(Firebird::IStatus* warning, PACKET* packet, bool checkKeys = false);
+	void checkResponse(Firebird::IStatus* warning, const PACKET* packet, bool checkKeys = false);
 
 private:
 	bool tryKeyType(const KnownServerKey& srvKey, InternalCryptKey* cryptKey);
@@ -1771,7 +1770,7 @@ private:
 		{
 			if (waitFlag)
 			{
-				Thread::waitForCompletion(waitHandle);
+				thread.waitForCompletion();
 
 				fb_assert(asyncPort);
 
@@ -1783,7 +1782,7 @@ private:
 		}
 
 		rem_port* asyncPort;
-		Thread::Handle waitHandle{};
+		Thread thread{};
 		bool waitFlag;
 	};
 
@@ -1796,9 +1795,9 @@ public:
 			wThr.asyncPort->port_thread_guard = this;
 	}
 
-	void setWait(Thread::Handle& handle) noexcept
+	void setWait(Thread&& handle) noexcept
 	{
-		wThr.waitHandle = handle;
+		wThr.thread = std::move(handle);
 		wThr.waitFlag = true;
 		fb_assert(wThr.asyncPort);
 		wThr.asyncPort->port_thread_guard = nullptr;

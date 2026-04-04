@@ -1,2 +1,2 @@
 @echo off
-docker build -t asfernandes/firebird-builder:5 -m 2GB .
+docker build -t firebirdsql/firebird-builder-windows:fb6-x86-x64-windows-v1 -m 2GB .

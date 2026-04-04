@@ -38,3 +38,5 @@ FB_IMPL_MSG(FBTRACEMGR, 37, trace_switch_user_only, -901, "00", "000", "switch \
 FB_IMPL_MSG(FBTRACEMGR, 38, trace_switch_param_miss, -901, "00", "000", "mandatory parameter \"@1\" for switch \"@2\" is missing")
 FB_IMPL_MSG(FBTRACEMGR, 39, trace_param_act_notcompat, -901, "00", "000", "parameter \"@1\" is incompatible with action \"@2\"")
 FB_IMPL_MSG(FBTRACEMGR, 40, trace_mandatory_switch_miss, -901, "00", "000", "mandatory switch \"@1\" is missing")
+FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 41, "  -P[LUGINS]  <string list>             Plugins list for use with trace session; valid list separators: <tab>, <comma>, <semicolon>")
+FB_IMPL_MSG_NO_SYMBOL(FBTRACEMGR, 42, "  fbtracemgr -SE service_mgr -START -NAME my_trace -CONFIG my_cfg.txt -PLUGINS fbtrace,custom_plugin")

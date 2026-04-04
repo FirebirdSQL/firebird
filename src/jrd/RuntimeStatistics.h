@@ -28,16 +28,11 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/init.h"
 #include "../common/classes/tree.h"
+#include "../common/classes/File.h"
+#include "../jrd/ini.h"
+#include "../jrd/pag.h"
 
-namespace Firebird
-{
-
-// declared in firebird/Interface.h
-struct TraceCounts;
-struct PerformanceInfo;
-
-} // namespace Firebird
-
+#include <algorithm>
 
 namespace Jrd {
 
@@ -46,256 +41,399 @@ class Database;
 class thread_db;
 class jrd_rel;
 
-typedef Firebird::HalfStaticArray<Firebird::TraceCounts, 5> TraceCountsArray;
 
-// Runtime statistics class
+// Runtime statistics
+
+enum class PageStatType
+{
+	FETCHES = 0,
+	READS,
+	MARKS,
+	WRITES,
+	TOTAL_ITEMS
+};
+
+enum class RecordStatType
+{
+	SEQ_READS = 0,
+	IDX_READS,
+	UPDATES,
+	INSERTS,
+	DELETES,
+	BACKOUTS,
+	PURGES,
+	EXPUNGES,
+	LOCKS,
+	WAITS,
+	CONFLICTS,
+	BACK_READS,
+	FRAGMENT_READS,
+	RPT_READS,
+	IMGC,
+	TOTAL_ITEMS
+};
 
 class RuntimeStatistics : protected Firebird::AutoStorage
 {
+	static constexpr size_t PAGE_TOTAL_ITEMS = static_cast<size_t>(PageStatType::TOTAL_ITEMS);
+	static constexpr size_t RECORD_TOTAL_ITEMS = static_cast<size_t>(RecordStatType::TOTAL_ITEMS);
+
 public:
-	enum StatType {
-		PAGE_FETCHES = 0,
-		PAGE_READS,
-		PAGE_MARKS,
-		PAGE_WRITES,
-		RECORD_FIRST_ITEM,
-		RECORD_SEQ_READS = RECORD_FIRST_ITEM,
-		RECORD_IDX_READS,
-		RECORD_UPDATES,
-		RECORD_INSERTS,
-		RECORD_DELETES,
-		RECORD_BACKOUTS,
-		RECORD_PURGES,
-		RECORD_EXPUNGES,
-		RECORD_LOCKS,
-		RECORD_WAITS,
-		RECORD_CONFLICTS,
-		RECORD_BACKVERSION_READS,
-		RECORD_FRAGMENT_READS,
-		RECORD_RPT_READS,
-		RECORD_IMGC,
-		RECORD_LAST_ITEM = RECORD_IMGC,
-		TOTAL_ITEMS		// last
-	};
+	// Number of globally counted items.
+	//
+	// dimitr:	Currently, they include page-level and record-level counters.
+	// 			However, this is not strictly required to maintain global record-level counters,
+	//			as they may be aggregated from the tableCounters array on demand. This would slow down
+	//			the retrieval of counters but save some CPU cycles inside tdbb->bumpStats().
+	//			As long as public struct PerformanceInfo don't include record-level counters,
+	//			this is not going to affect any existing applications/plugins.
+	//			So far I leave everything as is but it can be reconsidered in the future.
+	//			sumValue() method is already in place for that purpose.
+	//
+	static constexpr size_t GLOBAL_ITEMS = PAGE_TOTAL_ITEMS + RECORD_TOTAL_ITEMS;
 
 private:
-	static const size_t REL_BASE_OFFSET = RECORD_FIRST_ITEM;
-	static const size_t REL_TOTAL_ITEMS = RECORD_LAST_ITEM - REL_BASE_OFFSET + 1;
-
-	// Performance counters for individual table
-
-	class RelationCounts
+	template <typename T> class CountsVector
 	{
+		static constexpr size_t SIZE = static_cast<size_t>(T::TOTAL_ITEMS);
+
 	public:
-		explicit RelationCounts(SLONG relation_id)
-			: rlc_relation_id(relation_id)
+		CountsVector() = default;
+
+		SINT64& operator[](const T index)
 		{
-			memset(rlc_counter, 0, sizeof(rlc_counter));
+			return m_counters[static_cast<size_t>(index)];
 		}
 
-		SLONG getRelationId() const
+		const SINT64& operator[](const T index) const
 		{
-			return rlc_relation_id;
+			return m_counters[static_cast<size_t>(index)];
 		}
 
-		const SINT64* getCounterVector() const
+		CountsVector& operator+=(const CountsVector& other)
 		{
-			return rlc_counter;
+			for (size_t i = 0; i < m_counters.size(); i++)
+				m_counters[i] += other.m_counters[i];
+
+			return *this;
 		}
 
-		SINT64 getCounter(size_t index) const
+		CountsVector& operator-=(const CountsVector& other)
 		{
-			fb_assert(index >= REL_BASE_OFFSET && index < REL_BASE_OFFSET + REL_TOTAL_ITEMS);
-			return rlc_counter[index - REL_BASE_OFFSET];
+			for (size_t i = 0; i < m_counters.size(); i++)
+				m_counters[i] -= other.m_counters[i];
+
+			return *this;
 		}
 
-		void bumpCounter(size_t index, SINT64 delta = 1)
+		bool setToDiff(const CountsVector& other)
 		{
-			fb_assert(index >= REL_BASE_OFFSET && index < REL_BASE_OFFSET + REL_TOTAL_ITEMS);
-			rlc_counter[index - REL_BASE_OFFSET] += delta;
-		}
-
-		bool setToDiff(const RelationCounts& other)
-		{
-			fb_assert(rlc_relation_id == other.rlc_relation_id);
-
 			bool ret = false;
 
-			for (size_t i = 0; i < REL_TOTAL_ITEMS; i++)
+			for (size_t i = 0; i < m_counters.size(); i++)
 			{
-				if ( (rlc_counter[i] = other.rlc_counter[i] - rlc_counter[i]) )
+				if ( (m_counters[i] = other.m_counters[i] - m_counters[i]) )
 					ret = true;
 			}
 
 			return ret;
 		}
 
-		RelationCounts& operator+=(const RelationCounts& other)
+		static unsigned getVectorCapacity()
 		{
-			fb_assert(rlc_relation_id == other.rlc_relation_id);
+			return (unsigned) SIZE;
+		}
 
-			for (size_t i = 0; i < REL_TOTAL_ITEMS; i++)
-				rlc_counter[i] += other.rlc_counter[i];
+		const SINT64* getCounterVector() const
+		{
+			return m_counters.data();
+		}
 
+		bool isEmpty() const
+		{
+			return std::all_of(m_counters.begin(), m_counters.end(),
+							   [](SINT64 value) { return value == 0; });
+		}
+
+		bool hasData() const
+		{
+			return std::any_of(m_counters.begin(), m_counters.end(),
+							   [](SINT64 value) { return value != 0; });
+		}
+
+	protected:
+		std::array<SINT64, SIZE> m_counters = {};
+	};
+
+	template <class T, typename Key>
+	class CountsGroup : public CountsVector<T>
+	{
+	public:
+		typedef Key ID;
+
+		explicit CountsGroup(ID id)
+			: m_id(id)
+		{}
+
+		ID getGroupId() const
+		{
+			return m_id;
+		}
+
+		CountsGroup& operator+=(const CountsGroup& other)
+		{
+			fb_assert(m_id == other.m_id);
+			CountsVector<T>::operator+=(other);
 			return *this;
 		}
 
-		RelationCounts& operator-=(const RelationCounts& other)
+		CountsGroup& operator-=(const CountsGroup& other)
 		{
-			fb_assert(rlc_relation_id == other.rlc_relation_id);
-
-			for (size_t i = 0; i < REL_TOTAL_ITEMS; i++)
-				rlc_counter[i] -= other.rlc_counter[i];
-
+			fb_assert(m_id == other.m_id);
+			CountsVector<T>::operator-=(other);
 			return *this;
 		}
 
-		inline static const SLONG& generate(const RelationCounts& item)
+		bool setToDiff(const CountsGroup& other)
 		{
-			return item.rlc_relation_id;
+			fb_assert(m_id == other.m_id);
+			return CountsVector<T>::setToDiff(other);
+		}
+
+		inline static const ID& generate(const CountsGroup& item)
+		{
+			return item.m_id;
 		}
 
 	private:
-		SLONG rlc_relation_id;
-		SINT64 rlc_counter[REL_TOTAL_ITEMS];
+		ID m_id;
 	};
 
-	typedef Firebird::SortedArray<RelationCounts, Firebird::EmptyStorage<RelationCounts>,
-		SLONG, RelationCounts> RelCounters;
+	template <class Counts>
+	class GroupedCountsArray
+	{
+		typedef typename Counts::ID ID;
+		typedef Firebird::SortedArray<
+			Counts, Firebird::EmptyStorage<Counts>, ID, Counts> SortedCountsArray;
+		typedef typename SortedCountsArray::const_iterator ConstIterator;
+
+	public:
+		GroupedCountsArray(MemoryPool& pool, FB_SIZE_T capacity)
+			: m_counts(pool, capacity)
+		{}
+
+		GroupedCountsArray(MemoryPool& pool, const GroupedCountsArray& other)
+			: m_counts(pool, other.m_counts.getCapacity())
+		{}
+
+		Counts& operator[](ID id)
+		{
+			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id) ||
+				// if m_lastPos is mispositioned
+				m_counts.find(id, m_lastPos))
+			{
+				return m_counts[m_lastPos];
+			}
+
+			Counts counts(id);
+			m_counts.insert(m_lastPos, counts);
+			return m_counts[m_lastPos];
+		}
+
+		unsigned getCount() const
+		{
+			return m_counts.getCount();
+		}
+
+		static unsigned getVectorCapacity()
+		{
+			return Counts::getVectorCapacity();
+		}
+
+		void remove(ID id)
+		{
+			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id) ||
+				// if m_lastPos is mispositioned
+				m_counts.find(id, m_lastPos))
+			{
+				m_counts.remove(m_lastPos);
+				m_lastPos = (FB_SIZE_T) ~0;
+			}
+		}
+
+		void reset()
+		{
+			m_counts.clear();
+			m_lastPos = (FB_SIZE_T) ~0;
+		}
+
+		ConstIterator begin() const
+		{
+			return m_counts.begin();
+		}
+
+		ConstIterator end() const
+		{
+			return m_counts.end();
+		}
+
+		void adjust(const GroupedCountsArray& baseStats, const GroupedCountsArray& newStats);
+
+	private:
+		SortedCountsArray m_counts;
+		FB_SIZE_T m_lastPos = (FB_SIZE_T) ~0;
+	};
 
 public:
+	typedef GroupedCountsArray<CountsGroup<PageStatType, ULONG> > PageCounters;
+	typedef GroupedCountsArray<CountsGroup<RecordStatType, SLONG> > TableCounters;
+
 	RuntimeStatistics()
-		: Firebird::AutoStorage(), rel_counts(getPool())
+		: Firebird::AutoStorage(),
+		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
+		  tableCounters(getPool(), rel_MAX)
 	{
 		reset();
 	}
 
 	explicit RuntimeStatistics(MemoryPool& pool)
-		: Firebird::AutoStorage(pool), rel_counts(getPool())
+		: Firebird::AutoStorage(pool),
+		  pageCounters(getPool(), DB_PAGE_SPACE + 1),
+		  tableCounters(getPool(), rel_MAX)
 	{
 		reset();
 	}
 
 	RuntimeStatistics(const RuntimeStatistics& other)
-		: Firebird::AutoStorage(), rel_counts(getPool())
+		: Firebird::AutoStorage(),
+		  pageCounters(getPool(), other.pageCounters),
+		  tableCounters(getPool(), other.tableCounters)
 	{
 		memcpy(values, other.values, sizeof(values));
-		rel_counts = other.rel_counts;
+
+		pageCounters = other.pageCounters;
+		tableCounters = other.tableCounters;
 
 		allChgNumber = other.allChgNumber;
-		relChgNumber = other.relChgNumber;
+		pageChgNumber = other.pageChgNumber;
+		tabChgNumber = other.tabChgNumber;
 	}
 
 	RuntimeStatistics(MemoryPool& pool, const RuntimeStatistics& other)
-		: Firebird::AutoStorage(pool), rel_counts(getPool())
+		: Firebird::AutoStorage(pool),
+		  pageCounters(getPool(), other.pageCounters),
+		  tableCounters(getPool(), other.tableCounters)
 	{
 		memcpy(values, other.values, sizeof(values));
-		rel_counts = other.rel_counts;
+
+		pageCounters = other.pageCounters;
+		tableCounters = other.tableCounters;
 
 		allChgNumber = other.allChgNumber;
-		relChgNumber = other.relChgNumber;
+		pageChgNumber = other.pageChgNumber;
+		tabChgNumber = other.tabChgNumber;
 	}
 
-	~RuntimeStatistics() {}
+	~RuntimeStatistics() = default;
 
 	void reset()
 	{
-		memset(values, 0, sizeof values);
-		rel_counts.clear();
-		rel_last_pos = (FB_SIZE_T) ~0;
+		memset(values, 0, sizeof(values));
+
+		pageCounters.reset();
+		tableCounters.reset();
+
 		allChgNumber = 0;
-		relChgNumber = 0;
+		pageChgNumber = 0;
+		tabChgNumber = 0;
 	}
 
-	SINT64 getValue(const StatType index) const
+	const SINT64& operator[](const PageStatType type) const
 	{
+		const auto index = static_cast<size_t>(type);
 		return values[index];
 	}
 
-	void bumpValue(const StatType index, SINT64 delta = 1)
+	void bumpValue(const PageStatType type, ULONG pageSpaceId, SINT64 delta = 1)
 	{
-		values[index] += delta;
 		++allChgNumber;
+		const auto index = static_cast<size_t>(type);
+		values[index] += delta;
+
+		if (isValid()) // optimization for non-trivial data access
+		{
+			++pageChgNumber;
+			pageCounters[pageSpaceId][type] += delta;
+		}
 	}
 
-	SINT64 getRelValue(const StatType index, SLONG relation_id) const
+	const SINT64& operator[](const RecordStatType type) const
 	{
-		FB_SIZE_T pos;
-		return rel_counts.find(relation_id, pos) ? rel_counts[pos].getCounter(index) : 0;
+		const auto index = static_cast<size_t>(type);
+		return values[PAGE_TOTAL_ITEMS + index];
 	}
 
-	void bumpRelValue(const StatType index, SLONG relation_id, SINT64 delta = 1)
+	SINT64 sumValue(const RecordStatType type) const
 	{
-		fb_assert(index >= 0);
-		++relChgNumber;
+		SINT64 value = 0;
 
-		if (rel_last_pos != (FB_SIZE_T)~0 && rel_counts[rel_last_pos].getRelationId() == relation_id)
-			rel_counts[rel_last_pos].bumpCounter(index, delta);
-		else
-			findAndBumpRelValue(index, relation_id, delta);
+		for (const auto& counts : tableCounters)
+			value += counts[type];
+
+		return value;
 	}
 
-	void findAndBumpRelValue(const StatType index, SLONG relation_id, SINT64 delta);
+	void bumpValue(const RecordStatType type, SLONG relationId, SINT64 delta = 1)
+	{
+		++allChgNumber;
+		const auto index = static_cast<size_t>(type);
+		values[PAGE_TOTAL_ITEMS + index] += delta;
+
+		if (isValid()) // optimization for non-trivial data access
+		{
+			++tabChgNumber;
+			tableCounters[relationId][type] += delta;
+		}
+	}
 
 	// Calculate difference between counts stored in this object and current
 	// counts of given request. Counts stored in object are destroyed.
-	Firebird::PerformanceInfo* computeDifference(Attachment* att, const RuntimeStatistics& new_stat,
-		Firebird::PerformanceInfo& dest, TraceCountsArray& temp, Firebird::ObjectsArray<Firebird::string>& tempNames);
+	void setToDiff(const RuntimeStatistics& newStats);
 
-	// add difference between newStats and baseStats to our counters
-	// newStats and baseStats must be "in-sync"
-	void adjust(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats, bool relStatsOnly = false)
-	{
-		if (baseStats.allChgNumber != newStats.allChgNumber)
-		{
-			const size_t FIRST_ITEM = relStatsOnly ? REL_BASE_OFFSET : 0;
+	// Add difference between newStats and baseStats to our counters
+	// (newStats and baseStats must be "in-sync")
+	void adjust(const RuntimeStatistics& baseStats, const RuntimeStatistics& newStats);
 
-			allChgNumber++;
-			for (size_t i = FIRST_ITEM; i < TOTAL_ITEMS; ++i)
-				values[i] += newStats.values[i] - baseStats.values[i];
+	void adjustPageStats(RuntimeStatistics& baseStats, const RuntimeStatistics& newStats);
 
-			if (baseStats.relChgNumber != newStats.relChgNumber)
-			{
-				relChgNumber++;
-				addRelCounts(newStats.rel_counts, true);
-				addRelCounts(baseStats.rel_counts, false);
-			}
-		}
-	}
-
-	void adjustPageStats(RuntimeStatistics& baseStats, const RuntimeStatistics& newStats)
-	{
-		if (baseStats.allChgNumber != newStats.allChgNumber)
-		{
-			allChgNumber++;
-			for (size_t i = 0; i < REL_BASE_OFFSET; ++i)
-			{
-				const SINT64 delta = newStats.values[i] - baseStats.values[i];
-
-				values[i] += delta;
-				baseStats.values[i] += delta;
-			}
-		}
-	}
-
-	// copy counters values from other instance
-	// after copying both instances are "in-sync" i.e. have the same
-	// allChgNumber and relChgNumber values
+	// Copy counters values from other instance.
+	// After copying both instances are "in-sync" i.e. have the same change numbers.
 	RuntimeStatistics& assign(const RuntimeStatistics& other)
 	{
 		if (allChgNumber != other.allChgNumber)
 		{
 			memcpy(values, other.values, sizeof(values));
 			allChgNumber = other.allChgNumber;
-		}
 
-		if (relChgNumber != other.relChgNumber)
-		{
-			rel_counts = other.rel_counts;
-			relChgNumber = other.relChgNumber;
+			if (pageChgNumber != other.pageChgNumber)
+			{
+				pageCounters = other.pageCounters;
+				pageChgNumber = other.pageChgNumber;
+			}
+
+			if (tabChgNumber != other.tabChgNumber)
+			{
+				tableCounters = other.tableCounters;
+				tabChgNumber = other.tabChgNumber;
+			}
 		}
 
 		return *this;
+	}
+
+	bool isValid() const
+	{
+		return (this != &dummy);
 	}
 
 	static RuntimeStatistics* getDummy()
@@ -303,54 +441,10 @@ public:
 		return &dummy;
 	}
 
-	class Iterator
-	{
-		friend class RuntimeStatistics;
-
-		explicit Iterator(const RelationCounts* counts)
-			: m_counts(counts)
-		{}
-
-	public:
-		bool operator==(const Iterator& other) const
-		{
-			return (m_counts == other.m_counts);
-		}
-
-		bool operator!=(const Iterator& other) const
-		{
-			return (m_counts != other.m_counts);
-		}
-
-		Iterator& operator++()
-		{
-			m_counts++;
-			return *this;
-		}
-
-		const RelationCounts& operator*() const
-		{
-			return *m_counts;
-		}
-
-	private:
-		const RelationCounts* m_counts;
-	};
-
-	Iterator begin() const
-	{
-		return Iterator(rel_counts.begin());
-	}
-
-	Iterator end() const
-	{
-		return Iterator(rel_counts.end());
-	}
-
 	class Accumulator
 	{
 	public:
-		Accumulator(thread_db* tdbb, const jrd_rel* relation, StatType type);
+		Accumulator(thread_db* tdbb, const jrd_rel* relation, const RecordStatType type);
 		~Accumulator();
 
 		void operator++()
@@ -359,25 +453,34 @@ public:
 		}
 
 	private:
-		thread_db* m_tdbb;
-		StatType m_type;
-		SLONG m_id;
-		SINT64 m_counter;
+		thread_db* const m_tdbb;
+		const RecordStatType m_type;
+		const SLONG m_id;
+		SINT64 m_counter = 0;
 	};
 
+	const PageCounters& getPageCounters() const
+	{
+		return pageCounters;
+	}
+
+	const TableCounters& getTableCounters() const
+	{
+		return tableCounters;
+	}
+
 private:
-	void addRelCounts(const RelCounters& other, bool add);
+	SINT64 values[GLOBAL_ITEMS];
+	PageCounters pageCounters;
+	TableCounters tableCounters;
 
-	SINT64 values[TOTAL_ITEMS];
-	RelCounters rel_counts;
-	FB_SIZE_T rel_last_pos;
-
-	// These two numbers are used in adjust() and assign() methods as "generation"
+	// These numbers are used in adjust() and assign() methods as "generation"
 	// values in order to avoid costly operations when two instances of RuntimeStatistics
 	// contain equal counters values. This is intended to use *only* with the
 	// same pair of class instances, as in Request.
 	ULONG allChgNumber;		// incremented when any counter changes
-	ULONG relChgNumber;		// incremented when relation counter changes
+	ULONG pageChgNumber;	// incremented when page counter changes
+	ULONG tabChgNumber;		// incremented when table counter changes
 
 	// This dummy RuntimeStatistics is used instead of missing elements in tdbb,
 	// helping us to avoid conditional checks in time-critical places of code.

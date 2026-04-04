@@ -33,6 +33,8 @@
 #include "../common/classes/RefCounted.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/timestamp.h"
+#include <chrono>
+#include <optional>
 
 // Firebird platform-specific synchronization data structures
 
@@ -267,8 +269,8 @@ public:
 	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	Firebird::PathName getMapFileName();
 
-	void mutexLock();
-	bool mutexLockCond();
+	bool mutexLock(std::optional<std::chrono::milliseconds> timeout = std::nullopt);
+	bool mutexTryLock();
 	void mutexUnlock();
 
 	int eventInit(event_t* event);
@@ -276,6 +278,9 @@ public:
 	SLONG eventClear(event_t* event);
 	int eventWait(event_t* event, const SLONG value, const SLONG micro_seconds);
 	int eventPost(event_t* event);
+
+	// Used as memory allocation unit and mapping alignment
+	static ULONG getSystemPageSize(Firebird::CheckStatusWrapper* status);
 
 public:
 #ifdef UNIX
@@ -294,6 +299,7 @@ public:
 #endif
 
 	ULONG	sh_mem_length_mapped;
+	ULONG	sh_mem_increment;				// Suggested growth increment
 #ifdef WIN_NT
 	HANDLE	sh_mem_handle;					// file handle
 	HANDLE	sh_mem_object;					// file mapping
@@ -329,7 +335,8 @@ public:
 		SRAM_TPC_SNAPSHOTS = 0xF7,
 		SRAM_CHANGELOG_STATE = 0xF6,
 		SRAM_TRACE_AUDIT_MTX = 0xF5,
-		SRAM_PROFILER = 0XF4
+		SRAM_PROFILER = 0XF4,
+		SRAM_CHAT_CLIENT = 0XF3
 	};
 
 protected:
@@ -389,8 +396,8 @@ public:
 	SharedMutexGuard(const SharedMutexGuard&) = delete;
 	SharedMutexGuard& operator=(const SharedMutexGuard&) = delete;
 
-	bool tryLock() {
-		m_locked = m_shmem->mutexLockCond();
+	bool tryLock(std::optional<std::chrono::milliseconds> timeout) {
+		m_locked = m_shmem->mutexLock(timeout);
 		return m_locked;
 	}
 

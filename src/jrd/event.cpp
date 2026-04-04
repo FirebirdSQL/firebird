@@ -534,8 +534,10 @@ frb* EventManager::alloc_global(UCHAR type, ULONG length, bool recurse)
 #ifdef HAVE_OBJECT_MAP
 	if (!best && !recurse)
 	{
+		fb_assert(length <= m_sharedMemory->sh_mem_increment);
+
 		const ULONG old_length = m_sharedMemory->sh_mem_length_mapped;
-		const ULONG ev_length = old_length + m_config->getEventMemSize();
+		const ULONG ev_length = old_length + m_sharedMemory->sh_mem_increment;
 
 		LocalStatus ls;
 		CheckStatusWrapper localStatus(&ls);

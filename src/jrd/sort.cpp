@@ -2187,7 +2187,6 @@ void SortOwner::releaseBuffer(UCHAR* memory)
 	buffers.push(memory);
 }
 
-
 void SortOwner::unlinkAll()
 {
 	while (sorts.getCount())
