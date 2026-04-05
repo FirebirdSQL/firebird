@@ -9098,9 +9098,10 @@ bool get_db_creator(BurpGlobals* tdgbl)
  **************************************/
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
-	TEXT			usr[GDS_NAME_LEN];
+	TEXT			usr[GDS_NAME_LEN] = {0};
 	SSHORT			uType = 0;
-	bool			userSet, typeSet;
+	bool			userSet = false;
+	bool			typeSet = false;
 
 	userSet = typeSet = false;
 
