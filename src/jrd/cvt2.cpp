@@ -973,7 +973,7 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
  **************************************/
 	UCHAR* from_buf;
 	USHORT from_len;
-	USHORT from_interp = 0;
+	TTypeId from_interp = ttype_none;
 
 	fb_assert(desc != NULL);
 	fb_assert(address != NULL);
@@ -1004,7 +1004,7 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
 
 	if (desc->isText())
 	{
-		if (from_interp == to_interp || to_interp == ttype_none || to_interp == ttype_binary)
+		if (from_interp == ttype_none || from_interp == to_interp || to_interp == ttype_none || to_interp == ttype_binary)
 		{
 			*address = from_buf;
 			return from_len;
