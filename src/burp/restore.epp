@@ -9429,6 +9429,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 	att_type	attribute;
 	TEXT		name[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;
+	bool type_found = false;
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_trigger_old_req_handle1)
 		X IN RDB$TRIGGERS
@@ -9446,6 +9447,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 			{
 			case att_trig_type:
 				type = (enum trig_t) get_int32(tdgbl);
+				type_found = true;
 				break;
 
 			case att_trig_blr:
@@ -9468,6 +9470,12 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 				// msg 134 trigger
 				break;
 			}
+		}
+
+		if(!type_found || type == trig_none)
+		{
+			BURP_error(136, true);
+			return false;
 		}
 
 		// fill in rest of attributes unique to new trigger format
