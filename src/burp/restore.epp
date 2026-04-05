@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
 #endif
@@ -1608,7 +1609,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
 
 	ULONG length = 0;
 	UCHAR item;
-	USHORT max_segment = 0;
+	USHORT max_segment = USHRT_MAX;
 	ULONG num_segments;
 	const UCHAR* p = blob_info;
 
