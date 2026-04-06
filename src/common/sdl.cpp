@@ -883,10 +883,10 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	case dtype_cstring:
 	case dtype_varying:
 	{
-		const auto length = get_word(sdl);
+		const SSHORT length = get_word(sdl);
 		desc->dsc_length += length;
 		if (length == 0 || desc->dsc_length == 0)
-			return nullptr;
+			return NULL;
 		break;
 	}
 
