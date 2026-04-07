@@ -386,7 +386,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	else
 	{
 		const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(name,
-			((name.package.hasData() || (procNode && procNode->inputSources)) ?
+			(((procNode && procNode->inputSources)) ?
 				std::initializer_list<ObjectType>{obj_procedure} :
 				std::initializer_list<ObjectType>{obj_procedure, obj_relation}));
 
@@ -428,8 +428,19 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 
 			procNode->dsqlName = name;
 		}
-		else if (relNode)
-			relNode->dsqlName = name;
+		else if (relation)
+		{
+			if (relation->rel_private && name.getSchemaAndPackage() != dsqlScratch->package)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_private_table) <<
+					name.object.toQuotedString() <<
+					name.getSchemaAndPackage().toQuotedString());
+			}
+
+			if (relNode)
+				relNode->dsqlName = name;
+		}
 	}
 
 	// Set up context block.

@@ -118,6 +118,7 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 		RFR IN RDB$RELATION_FIELDS
 		CROSS RLC IN RDB$RELATION_CONSTRAINTS
 		WITH RFR.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 RFR.RDB$PACKAGE_NAME MISSING AND
 			 RFR.RDB$FIELD_NAME = triggerName.c_str() AND
 			 RLC.RDB$SCHEMA_NAME = RFR.RDB$SCHEMA_NAME AND
 			 RLC.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
@@ -179,6 +180,9 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	if (EVL_field(nullptr, orgRecord, f_idx_pkg_name, &desc))
+		return;
 
 	MetaName oldSchemaName;
 	if (EVL_field(nullptr, orgRecord, f_idx_schema, &desc))
@@ -325,6 +329,9 @@ void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
+	if (EVL_field(nullptr, record, f_seg_pkg_name, &desc))
+		return;
+
 	MetaName schemaName;
 	if (EVL_field(nullptr, record, f_seg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
@@ -350,6 +357,9 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	if (EVL_field(nullptr, orgRecord, f_seg_pkg_name, &desc))
+		return;
 
 	MetaName oldSchemaName;
 	if (EVL_field(nullptr, orgRecord, f_seg_schema, &desc))
@@ -459,9 +469,12 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 				CROSS IDS IN RDB$INDEX_SEGMENTS
 				WITH RFL.RDB$FIELD_SOURCE_SCHEMA_NAME = schemaName.c_str() AND
 					 RFL.RDB$FIELD_SOURCE = fieldName.c_str() AND
+					 RFL.RDB$PACKAGE_NAME MISSING AND
 					 IND.RDB$SCHEMA_NAME = RFL.RDB$SCHEMA_NAME AND
+					 IND.RDB$PACKAGE_NAME MISSING AND
 					 IND.RDB$RELATION_NAME = RFL.RDB$RELATION_NAME AND
 					 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+					 IDS.RDB$PACKAGE_NAME MISSING AND
 					 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 					 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
 					 RLC.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
@@ -600,11 +613,14 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
 				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
 				 RFL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
+				 RFL.RDB$PACKAGE_NAME MISSING AND
 				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME AND
 				 IND.RDB$SCHEMA_NAME = RFL.RDB$SCHEMA_NAME AND
+				 IND.RDB$PACKAGE_NAME MISSING AND
 				 IND.RDB$RELATION_NAME = RFL.RDB$RELATION_NAME AND
 				 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+				 IDS.RDB$PACKAGE_NAME MISSING AND
 				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS.RDB$FIELD_NAME = RFL.RDB$FIELD_NAME AND
 				 FLD.RDB$SCHEMA_NAME = RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
@@ -721,6 +737,7 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 			WITH CHK.RDB$SCHEMA_NAME = schemaName.c_str() AND
 				 CHK.RDB$CONSTRAINT_NAME = constraintName.c_str() AND
 				 RFL.RDB$SCHEMA_NAME = CHK.RDB$SCHEMA_NAME AND
+				 RFL.RDB$PACKAGE_NAME MISSING AND
 				 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 				 RFL.RDB$FIELD_NAME = CHK.RDB$TRIGGER_NAME
 		{
@@ -821,6 +838,9 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
+	if (EVL_field(nullptr, record, f_rfr_pkg_name, &desc))
+		return;
+
 	MetaName schemaName;
 	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
 		return;
@@ -844,8 +864,10 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 		CROSS RCL IN RDB$RELATION_CONSTRAINTS
 		CROSS IDS IN RDB$INDEX_SEGMENTS
 		WITH IND.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 IND.RDB$PACKAGE_NAME MISSING AND
 			 IND.RDB$RELATION_NAME = relationName.c_str() AND
 			 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+			 IDS.RDB$PACKAGE_NAME MISSING AND
 			 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 			 IDS.RDB$FIELD_NAME = fieldName.c_str() AND
 			 RCL.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
@@ -857,6 +879,7 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			IDS2 IN RDB$INDEX_SEGMENTS
 			WITH IDS2.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+				 IDS2.RDB$PACKAGE_NAME MISSING AND
 				 IDS2.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS2.RDB$FIELD_NAME != fieldName.c_str()
 		{
@@ -913,6 +936,9 @@ void afterDeleteRelationField(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
+	if (EVL_field(nullptr, record, f_rfr_pkg_name, &desc))
+		return;
+
 	MetaName schemaName;
 	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
 		return;
@@ -951,6 +977,9 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 {
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
+
+	if (EVL_field(nullptr, orgRecord, f_rfr_pkg_name, &desc))
+		return;
 
 	MetaName oldSchemaName;
 	MetaName oldRelationName;
@@ -993,8 +1022,10 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 			CROSS IDS IN RDB$INDEX_SEGMENTS
 			CROSS RLC IN RDB$RELATION_CONSTRAINTS
 			WITH IND.RDB$SCHEMA_NAME = oldSchemaName.c_str() AND
+				 IND.RDB$PACKAGE_NAME MISSING AND
 				 IND.RDB$RELATION_NAME = oldRelationName.c_str() AND
 				 IDS.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
+				 IDS.RDB$PACKAGE_NAME MISSING AND
 				 IDS.RDB$INDEX_NAME = IND.RDB$INDEX_NAME AND
 				 IDS.RDB$FIELD_NAME = oldFieldName.c_str() AND
 				 RLC.RDB$SCHEMA_NAME = IND.RDB$SCHEMA_NAME AND
@@ -1176,6 +1207,7 @@ void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 		RFL IN RDB$RELATION_FIELDS
 		CROSS SEC IN RDB$SECURITY_CLASSES
 		WITH RFL.RDB$SCHEMA_NAME = schemaName.c_str() AND
+			 RFL.RDB$PACKAGE_NAME MISSING AND
 			 RFL.RDB$RELATION_NAME = relationName.c_str() AND
 			 RFL.RDB$FIELD_NAME = fieldName.c_str() AND
 			 RFL.RDB$SECURITY_CLASS STARTING SQL_FLD_SECCLASS_PREFIX AND
@@ -1250,6 +1282,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 			FOR (REQUEST_HANDLE request1 TRANSACTION_HANDLE transaction)
 				REL IN RDB$RELATIONS
 				WITH REL.RDB$SCHEMA_NAME EQ schemaName.c_str() AND
+					 REL.RDB$PACKAGE_NAME MISSING AND
 					 REL.RDB$RELATION_NAME EQ relationName.c_str()
 			{
 				const MetaName relationOwner(REL.RDB$OWNER_NAME);
@@ -1269,13 +1302,16 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 								CROSS VRL2 IN RDB$VIEW_RELATIONS
 								CROSS REL2 IN RDB$RELATIONS
 								WITH RFL2.RDB$SCHEMA_NAME = schemaName.c_str() AND
+									 RFL2.RDB$PACKAGE_NAME MISSING AND
 									 RFL2.RDB$RELATION_NAME = relationName.c_str() AND
 									 RFL2.RDB$FIELD_NAME = fieldName.c_str() AND
 									 RFL2.RDB$BASE_FIELD NOT MISSING AND
 									 VRL2.RDB$SCHEMA_NAME = RFL2.RDB$SCHEMA_NAME AND
+									 VRL2.RDB$PACKAGE_NAME MISSING AND
 									 VRL2.RDB$VIEW_NAME = RFL2.RDB$RELATION_NAME AND
 									 VRL2.RDB$VIEW_CONTEXT = RFL2.RDB$VIEW_CONTEXT AND
 									 REL2.RDB$SCHEMA_NAME = VRL2.RDB$RELATION_SCHEMA_NAME AND
+									 REL2.RDB$PACKAGE_NAME MISSING AND
 									 REL2.RDB$RELATION_NAME = VRL2.RDB$RELATION_NAME
 							{
 								const MetaName relation2Owner(REL2.RDB$OWNER_NAME);
@@ -1317,8 +1353,10 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 								VRL4 IN RDB$VIEW_RELATIONS
 								CROSS REL4 IN RDB$RELATIONS
 								WITH VRL4.RDB$SCHEMA_NAME = schemaName.c_str() AND
+									 VRL4.RDB$PACKAGE_NAME MISSING AND
 									 VRL4.RDB$VIEW_NAME = relationName.c_str() AND
 									 REL4.RDB$SCHEMA_NAME = VRL4.RDB$RELATION_SCHEMA_NAME AND
+									 REL4.RDB$PACKAGE_NAME MISSING AND
 									 REL4.RDB$RELATION_NAME = VRL4.RDB$RELATION_NAME
 							{
 								const MetaName relation4Owner(REL4.RDB$OWNER_NAME);
@@ -1379,6 +1417,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 				FOR (REQUEST_HANDLE request6 TRANSACTION_HANDLE transaction)
 					RFL6 IN RDB$RELATION_FIELDS
 					WITH RFL6.RDB$SCHEMA_NAME = schemaName.c_str() AND
+						 RFL6.RDB$PACKAGE_NAME MISSING AND
 						 RFL6.RDB$RELATION_NAME = relationName.c_str() AND
 						 RFL6.RDB$FIELD_NAME = fieldName.c_str()
 				{
@@ -1868,4 +1907,3 @@ void SystemTriggers::executeAfterUpdateTriggers(thread_db* tdbb, jrd_rel* relati
 			break;
 	}
 }
-

@@ -663,6 +663,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	ObjectType getObjectType() const noexcept
@@ -953,6 +954,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	static int partners_ast_relation(void* ast_object);
@@ -988,6 +990,7 @@ public:
 
 	MetaName		rel_owner_name;		// ascii owner
 	QualifiedName	rel_security_name;	// security class name for relation
+	bool			rel_private = false;
 	std::atomic<ULONG>	rel_flags;		// flags
 
 	Firebird::TriState	rel_repl_state;	// replication state
@@ -1086,6 +1089,11 @@ inline bool jrd_rel::isView() const noexcept
 	return rel_perm->isView();
 }
 
+inline bool jrd_rel::isPrivate() const noexcept
+{
+	return rel_perm->isPrivate();
+}
+
 inline bool jrd_rel::isSystem() const noexcept
 {
 	return rel_perm->isSystem();
@@ -1120,6 +1128,11 @@ inline bool RelationPermanent::isVirtual() const noexcept
 inline bool RelationPermanent::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool RelationPermanent::isPrivate() const noexcept
+{
+	return rel_private;
 }
 
 inline bool RelationPermanent::isLTT() const noexcept

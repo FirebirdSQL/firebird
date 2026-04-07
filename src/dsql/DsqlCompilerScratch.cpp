@@ -141,7 +141,7 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 		}
 	}
 
-	// search packaged routine in the same package: name, same_package.name
+	// search packaged routine or declared LTT in the same package: name, same_package.name
 	if (notFound() &&
 		package.object.hasData() &&
 		name.package.isEmpty() &&
@@ -152,6 +152,9 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 
 		if (searchProcedures)
 			setObject(METD_get_procedure(getTransaction(), this, routineName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, routineName));
 
 		if (searchFunctions)
 			setObject(METD_get_function(getTransaction(), this, routineName));
@@ -174,7 +177,7 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 			setObject(METD_get_function(getTransaction(), this, qualifiedName));
 	}
 
-	// search packaged routine: name1%package.name2, name1.name2.name3
+	// search packaged routine or declared LTT: name1%package.name2, name1.name2.name3
 	if (notFound() &&
 		name.package.hasData())
 	{
@@ -184,11 +187,14 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 		if (searchProcedures)
 			setObject(METD_get_procedure(getTransaction(), this, qualifiedName));
 
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, qualifiedName));
+
 		if (searchFunctions)
 			setObject(METD_get_function(getTransaction(), this, qualifiedName));
 	}
 
-	// search packaged routine: name1.name2
+	// search packaged routine or LTT: name1.name2
 	if (notFound() &&
 		!name.isUnambiguous() &&
 		name.schema.hasData() &&
@@ -199,6 +205,9 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 
 		if (searchProcedures)
 			setObject(METD_get_procedure(getTransaction(), this, qualifiedName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, qualifiedName));
 
 		if (searchFunctions)
 			setObject(METD_get_function(getTransaction(), this, qualifiedName));

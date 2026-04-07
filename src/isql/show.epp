@@ -1091,7 +1091,8 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 		// Find the user specified relation and show its privileges
 
 		FOR FIRST 1 R IN RDB$RELATIONS
-			WITH R.RDB$RELATION_NAME EQ name->object.c_str()
+			WITH R.RDB$PACKAGE_NAME MISSING AND
+				 R.RDB$RELATION_NAME EQ name->object.c_str()
 			SORTED BY R.RDB$SCHEMA_NAME
 		{
 			if (name->schema.hasData() && name->schema != R.RDB$SCHEMA_NAME)
@@ -1107,6 +1108,7 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 					 PRV.RDB$RELATION_SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
 					 PRV.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 					 REL.RDB$SCHEMA_NAME EQUIV PRV.RDB$RELATION_SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME MISSING AND
 					 REL.RDB$RELATION_NAME EQ PRV.RDB$RELATION_NAME AND
 					 PRV.RDB$PRIVILEGE     NE 'M' AND
 					 REL.RDB$OWNER_NAME    NE PRV.RDB$USER
@@ -2644,8 +2646,8 @@ static processing_state show_all_tables(SSHORT sys_flag)
 	if (sys_flag == -1)
 	{
 		// Views
-		FOR REL IN RDB$RELATIONS WITH
-			REL.RDB$VIEW_BLR NOT MISSING
+		FOR REL IN RDB$RELATIONS
+			WITH REL.RDB$VIEW_BLR NOT MISSING
 			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
 		{
 			first = false;
@@ -2664,15 +2666,16 @@ static processing_state show_all_tables(SSHORT sys_flag)
 	{
 		// The rdb$system_flag is not always set for non-system objects... this
 		// query may potentially fail.
-		FOR REL IN RDB$RELATIONS WITH
-			(REL.RDB$SYSTEM_FLAG EQ sys_flag
-				/*OR (sys_flag == 0 AND REL.RDB$SYSTEM_FLAG MISSING)*/)
-			AND REL.RDB$VIEW_BLR MISSING
-			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
+		FOR REL IN RDB$RELATIONS
+			WITH (REL.RDB$SYSTEM_FLAG EQ sys_flag
+					/*OR (sys_flag == 0 AND REL.RDB$SYSTEM_FLAG MISSING)*/) AND
+				 REL.RDB$VIEW_BLR MISSING
+			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME, REL.RDB$RELATION_NAME
 		{
 			first = false;
 
-			const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+			const QualifiedMetaString relationName(
+				REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 
 			isqlGlob.printf("%s%s", IUTILS_name_to_string(relationName).c_str(), NEWLINE);
 		}
@@ -2999,9 +3002,9 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR RL IN RDB$RELATIONS
 		WITH RL.RDB$VIEW_BLR MISSING AND
 			 (RL.RDB$SYSTEM_FLAG EQ 0 OR RL.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY RL.RDB$SCHEMA_NAME, RL.RDB$RELATION_NAME
+		SORTED BY RL.RDB$SCHEMA_NAME, RL.RDB$PACKAGE_NAME, RL.RDB$RELATION_NAME
 	{
-		const QualifiedMetaString name(RL.RDB$RELATION_NAME, RL.RDB$SCHEMA_NAME);
+		const QualifiedMetaString name(RL.RDB$RELATION_NAME, RL.RDB$SCHEMA_NAME, RL.RDB$PACKAGE_NAME);
 
 		if (!RL.RDB$DESCRIPTION.NULL && !UserBlob::blobIsNull(RL.RDB$DESCRIPTION))
 		{
@@ -3012,6 +3015,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 
 		FOR RF IN RDB$RELATION_FIELDS
 			WITH RF.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+				 RF.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 				 RF.RDB$RELATION_NAME = RL.RDB$RELATION_NAME AND
 				 RF.RDB$DESCRIPTION NOT MISSING
 			SORTED BY RF.RDB$FIELD_POSITION
@@ -3070,7 +3074,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 
 	FOR PR IN RDB$PROCEDURES
 		WITH (PR.RDB$SYSTEM_FLAG EQ 0 OR PR.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY PR.RDB$SCHEMA_NAME, PR.RDB$PROCEDURE_NAME
+		SORTED BY PR.RDB$SCHEMA_NAME, PR.RDB$PACKAGE_NAME, PR.RDB$PROCEDURE_NAME
 	{
 		const QualifiedMetaString name(PR.RDB$PROCEDURE_NAME, PR.RDB$SCHEMA_NAME, PR.RDB$PACKAGE_NAME);
 
@@ -3123,7 +3127,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR UD IN RDB$FUNCTIONS
 		WITH UD.RDB$DESCRIPTION NOT MISSING AND
 			 (UD.RDB$SYSTEM_FLAG EQ 0 OR UD.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY UD.RDB$SCHEMA_NAME, UD.RDB$FUNCTION_NAME
+		SORTED BY UD.RDB$SCHEMA_NAME, UD.RDB$PACKAGE_NAME, UD.RDB$FUNCTION_NAME
 	{
 		// Avoid syntax error when extracting scripts due to an historical bug in gbak.
 		// See CORE-1174.
@@ -3216,9 +3220,9 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR IX IN RDB$INDICES
 		WITH IX.RDB$DESCRIPTION NOT MISSING AND
 			 (IX.RDB$SYSTEM_FLAG EQ 0 OR IX.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY IX.RDB$SCHEMA_NAME, IX.RDB$INDEX_NAME
+		SORTED BY IX.RDB$SCHEMA_NAME, IX.RDB$PACKAGE_NAME, IX.RDB$INDEX_NAME
 	{
-		const QualifiedMetaString name(IX.RDB$INDEX_NAME, IX.RDB$SCHEMA_NAME);
+		const QualifiedMetaString name(IX.RDB$INDEX_NAME, IX.RDB$SCHEMA_NAME, IX.RDB$PACKAGE_NAME);
 
 		show_comment("INDEX", name, {}, &IX.RDB$DESCRIPTION,
 			showextract, first ? banner : 0);
@@ -4705,7 +4709,7 @@ static void show_index(const QualifiedMetaString& relationName,
 		"%s%s%s INDEX ON %s",
 		IUTILS_name_to_string(indexName).c_str(),
 		(unique_flag ? " UNIQUE" : ""),
-		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName.object).c_str());
+		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName).c_str());
 
 	// Get column names
 
@@ -4741,17 +4745,18 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 	if (name)
 	{
 		FOR IDX IN RDB$INDICES
-			WITH (IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
-				 IDX.RDB$INDEX_NAME EQ name->object.c_str()) AND
+			WITH IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name->package.c_str(), '') AND
+				 (IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
+				  IDX.RDB$INDEX_NAME EQ name->object.c_str()) AND
 				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
-			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$INDEX_NAME
+			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME, IDX.RDB$INDEX_NAME
 		{
-			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			if (name->schema.hasData() && name->schema != indexName.schema)
 				continue;
 
-			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			if (IDX.RDB$INDEX_INACTIVE.NULL)
 				IDX.RDB$INDEX_INACTIVE = 0;
@@ -4792,13 +4797,14 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 		FOR IDX IN RDB$INDICES CROSS
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQUIV IDX.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IDX.RDB$PACKAGE_NAME AND
 				 REL.RDB$RELATION_NAME = IDX.RDB$RELATION_NAME AND
 				 (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
 				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
-			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
+			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
 		{
-			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
-			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
+			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			first = false;
 
@@ -6023,14 +6029,26 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 	// Query to obtain relation information
 	// REL.RDB$VIEW_BLR NOT MISSING
 
-	FOR REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ name.object.c_str()
-		SORTED BY REL.RDB$SCHEMA_NAME
-	{
-		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+	const QualifiedMetaString name1(name.object, name.schema, name.package);
+	const auto name2 = name1.package.hasData() ?
+		name1 :
+		QualifiedMetaString(name.object, "", name.schema);
 
-		if (name.schema.hasData() && name.schema != relationName.schema)
+	FOR REL IN RDB$RELATIONS
+		WITH (REL.RDB$RELATION_NAME EQ name1.object.c_str() AND
+			  REL.RDB$PACKAGE_NAME EQUIV NULLIF(name1.package.c_str(), '')) OR
+		     (REL.RDB$RELATION_NAME EQ name2.object.c_str() AND
+			  REL.RDB$PACKAGE_NAME EQUIV NULLIF(name2.package.c_str(), ''))
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME
+	{
+		const QualifiedMetaString relationName(
+			REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
+
+		if (!(name1.schema.isEmpty() || name1.schema == relationName.schema) &&
+			!(name2.schema.isEmpty() || name2.schema == relationName.schema))
+		{
 			continue;
+		}
 
 		if ((isView && REL.RDB$VIEW_BLR.NULL) || (!isView && !REL.RDB$VIEW_BLR.NULL))
 			continue;
@@ -6059,6 +6077,7 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		WITH FLD.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 			 FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE AND
 			 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
+			 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 RFR.RDB$RELATION_NAME EQ relationName.object.c_str()
 		SORTED BY RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
 	{
@@ -6200,6 +6219,9 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		isqlGlob.printf(NEWLINE);
 	}
 
+	if (relationName.package.isEmpty())
+	{	// FIXME: indent
+
 	// Handle any referential or primary constraint on this table
 
 	SCHAR collist[BUFFER_LENGTH512];
@@ -6274,6 +6296,7 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		{
 			FOR IDX IN RDB$INDICES
 			WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName1.schema.c_str(), '') AND
+				 IDX.RDB$PACKAGE_NAME MISSING AND
 				 IDX.RDB$INDEX_NAME = indexName1.object.c_str()
 			{
 				// Yes, the same RDB$... naming convention is used for both domains and indices.
@@ -6344,6 +6367,8 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 	// Do publications
 
 	show_pub_table(relationName);
+	}	// FIXME: indent end
+
 	}
 	END_FOR
 	ON_ERROR

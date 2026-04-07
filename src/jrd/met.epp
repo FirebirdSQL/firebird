@@ -582,12 +582,15 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATION_FIELDS
 		CROSS R IN RDB$RELATIONS
-		OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
-		WITH X.RDB$SCHEMA_NAME EQ schemaName->dsc_address AND
-			 X.RDB$FIELD_SOURCE EQ fieldSource->dsc_address
+		WITH X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ schemaName->dsc_address AND
+			 X.RDB$FIELD_SOURCE EQ fieldSource->dsc_address AND
+			 R.RDB$SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
+			 R.RDB$PACKAGE_NAME EQUIV X.RDB$PACKAGE_NAME AND
+			 R.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME
 	{
-		SCL_check_relation(tdbb, QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME), SCL_alter);
-		{
+		SCL_check_relation(tdbb, QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME), SCL_alter);
+
+		{	// scope
 			AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
 				&thread_db::getTransaction,
 				&thread_db::setTransaction,
@@ -595,6 +598,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 			calcFieldRelation = MetadataCache::newVersion<Cached::Relation>(tdbb, R.RDB$RELATION_ID);
 		}
+
 		DFW_post_work(transaction, dfw_commit_relation, nullptr, nullptr, R.RDB$RELATION_ID);
 
 		AutoCacheRequest request2(tdbb, irq_m_fields4, IRQ_REQUESTS);
@@ -1254,6 +1258,9 @@ bool MET_get_repl_state(Jrd::thread_db* tdbb, const QualifiedName& name)
  *      for either database or given relation.
  *
  **************************************/
+	if (name.package.hasData())
+		return false;
+
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();
 
@@ -1583,6 +1590,8 @@ void MET_lookup_index_for_cnstrt(thread_db* tdbb,
 *      index_name is output parameter.
 *
 **************************************/
+	fb_assert(constraint_name.package.isEmpty());
+
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
@@ -1621,6 +1630,10 @@ void MET_lookup_cnstrt_for_index(thread_db* tdbb,
 	Attachment* attachment = tdbb->getAttachment();
 
 	constraint_name = "";
+
+	if (index_name.package.hasData())
+		return;
+
 	AutoCacheRequest request(tdbb, irq_l_cnstrt, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request)
@@ -2126,6 +2139,7 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$INDICES
 		WITH X.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
 			 X.RDB$INDEX_NAME EQ index_name.object.c_str()
 	{
 		*status = getIndexStatus(X.RDB$INDEX_INACTIVE.NULL, X.RDB$INDEX_INACTIVE);
@@ -2136,7 +2150,9 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 		if (relationId)
 		{
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb,
-				QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME), CacheFlag::AUTOCREATE);
+				QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME),
+				CacheFlag::AUTOCREATE);
+
 			if (relation)
 				*relationId = relation->getId();
 			else
@@ -2183,9 +2199,11 @@ void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relatio
 		FOR(REQUEST_HANDLE handle)		// Use system transaction
 			IND IN RDB$INDICES
 			CROSS REL IN RDB$RELATIONS
-				OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
-			WITH IND.RDB$INDEX_ID EQ getId() + 1
-				AND REL.RDB$RELATION_ID EQ relId
+			WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
+				 REL.RDB$RELATION_ID EQ relId AND
+				 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+				 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 		{
 			if (!IND.RDB$EXPRESSION_BLR.NULL)
 				expression = IND.RDB$EXPRESSION_BLR;
@@ -2272,6 +2290,7 @@ bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const QualifiedName& index_
 	FOR(REQUEST_HANDLE request)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ index_name.object.c_str()
 	{
 		found = !IDX.RDB$EXPRESSION_BLR.NULL || !IDX.RDB$CONDITION_BLR.NULL;
@@ -2298,6 +2317,9 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
  *
  **************************************/
 
+	if (index_name.package.hasData())
+		return false;
+
 	SET_TDBB(tdbb);
 
 	fb_assert(index_name.object.isEmpty() || index_name.schema == relation->getName().schema);
@@ -2311,6 +2333,9 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 	{
 		if (index_name.object.hasData())
 		{
+			fb_assert(index_name.package.isEmpty());
+			fb_assert(relation->getName().package.isEmpty());
+
 			// Since primary key index names aren't being cached, do a long
 			// hard lookup. This is only called during index create for foreign keys.
 
@@ -2321,10 +2346,12 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 				IDX IN RDB$INDICES CROSS
 					IND IN RDB$INDICES WITH
 					IDX.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
+					IDX.RDB$PACKAGE_NAME MISSING AND
 					IDX.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
 					(IDX.RDB$INDEX_ID EQ idx->idx_id + 1 OR
 					 IDX.RDB$INDEX_NAME EQ index_name.object.c_str()) AND
 					IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
+					IND.RDB$PACKAGE_NAME MISSING AND
 					IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 					IND.RDB$UNIQUE_FLAG = 1
 			{
@@ -2468,6 +2495,7 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATIONS
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 X.RDB$RELATION_NAME EQ name.object.c_str()
 	{
 		fb_assert(!id.has_value());
@@ -3019,8 +3047,10 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			{
 				found = true;
 
-				rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+				rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 				rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
+				rel_perm->rel_private = !REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0;
+
 				if (!REL.RDB$RELATION_TYPE.NULL)
 					rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
@@ -3092,9 +3122,11 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 		found = true;
 
 		if (getName().isEmpty())
-			rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+			rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 
 		rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
+		rel_perm->rel_private = !REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0;
+
 		if (!REL.RDB$RELATION_TYPE.NULL)
 			rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
@@ -3271,8 +3303,18 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				{
 					csb->csb_g_flags |= csb_get_dependencies;
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
-					const QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
-					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, obj_view);
+
+					QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+					ObjectType depType = obj_view;
+
+					if (!REL.RDB$PACKAGE_NAME.NULL)
+					{
+						depName = QualifiedName(REL.RDB$PACKAGE_NAME, REL.RDB$SCHEMA_NAME);
+						depType = (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0) ?
+							obj_package_body : obj_package_header;
+					}
+
+					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, depType);
 				}
 				else
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
@@ -3752,7 +3794,7 @@ static void lookup_view_contexts( thread_db* tdbb, jrd_rel* view)
 		ViewContext* view_context = FB_NEW_POOL(*view->rel_pool)
 			ViewContext(*view->rel_pool,
 				V.RDB$CONTEXT_NAME,
-				QualifiedName(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME),
+				QualifiedName(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME, V.RDB$PACKAGE_NAME),
 				V.RDB$VIEW_CONTEXT,
 				(V.RDB$CONTEXT_TYPE.NULL ? VCT_TABLE : ViewContextType(V.RDB$CONTEXT_TYPE)));
 
@@ -4128,7 +4170,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
  *      scan of primary dependencies on relation's primary key.
  *
  **************************************/
-	if (rel_flags & REL_temp_ltt)
+	if ((rel_flags & REL_temp_ltt))
 		return;
 
 	Attachment* attachment = tdbb->getAttachment();
@@ -4155,8 +4197,10 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IND IN RDB$INDICES WITH
 			RC.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME MISSING AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str() AND
 			IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
+			IND.RDB$PACKAGE_NAME MISSING AND
 			IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
@@ -4201,8 +4245,10 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME MISSING AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str() AND
 			IND.RDB$FOREIGN_KEY_SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
+			IND.RDB$PACKAGE_NAME MISSING AND
 			IND.RDB$FOREIGN_KEY EQ IDX.RDB$INDEX_NAME
 		{
 			const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
@@ -4958,13 +5004,15 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		IND IN RDB$INDICES
 		CROSS REL IN RDB$RELATIONS
-			OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
-		WITH IND.RDB$INDEX_ID EQ getId() + 1
-			AND REL.RDB$RELATION_ID EQ relId
+		WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
+			 REL.RDB$RELATION_ID EQ relId AND
+			 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+			 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 	{
 		found = true;
 
-		idv_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
+		idv_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME, IND.RDB$PACKAGE_NAME);
 		idv_uniqFlag = IND.RDB$UNIQUE_FLAG;
 		idv_segmentCount = IND.RDB$SEGMENT_COUNT;
 		idv_type = IND.RDB$INDEX_TYPE;
@@ -5026,6 +5074,7 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedNa
 
 	// We need to look up the index in RDB$INDICES
 	fb_assert(getName().schema == name.schema);
+	fb_assert(getName().package == name.package);
 
 	AutoCacheRequest request(tdbb, irq_get_index_by_name, IRQ_REQUESTS);
 	IndexVersion* idv = nullptr;
@@ -5034,6 +5083,7 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedNa
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
 	{
 		if (!idv)
@@ -5070,6 +5120,7 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, const QualifiedNa
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
 	{
 		if (!idp)
@@ -5229,27 +5280,28 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 
 				case obj_index:
 				{
-					fb_assert(name.package.isEmpty());
-
-					// Check LTT indexes first
-					for (const auto& lttEntry : attachment->att_local_temporary_tables)
+					// Check Created LTT indexes first
+					if (name.package.isEmpty())
 					{
-						const auto ltt = lttEntry.second;
-
-						if (ltt->name.schema != searchSchema)
-							continue;
-
-						for (const auto& index : ltt->indexes)
+						for (const auto& lttEntry : attachment->att_local_temporary_tables)
 						{
-							if (index.name.object == name.object)
-							{
-								found = true;
-								break;
-							}
-						}
+							const auto ltt = lttEntry.second;
 
-						if (found)
-							break;
+							if (ltt->name.schema != searchSchema)
+								continue;
+
+							for (const auto& index : ltt->indexes)
+							{
+								if (index.name.object == name.object)
+								{
+									found = true;
+									break;
+								}
+							}
+
+							if (found)
+								break;
+						}
 					}
 
 					if (!found)
@@ -5260,6 +5312,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 						FOR (REQUEST_HANDLE handle)
 							IDX IN RDB$INDICES
 							WITH IDX.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+								 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 								 IDX.RDB$INDEX_NAME EQ name.object.c_str()
 						{
 							found = true;
@@ -5491,4 +5544,3 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 
 	return nullptr;
 }
-

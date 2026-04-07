@@ -238,8 +238,10 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 			 RLC_M.RDB$SCHEMA_NAME EQ masterIndexName.schema.c_str() AND
 			 RLC_M.RDB$INDEX_NAME EQ masterIndexName.object.c_str() AND
 			 REL_C.RDB$SCHEMA_NAME EQ childRelName.schema.c_str() AND
+			 REL_C.RDB$PACKAGE_NAME MISSING AND
 			 REL_C.RDB$RELATION_NAME EQ childRelName.object.c_str() AND
 			 REL_M.RDB$SCHEMA_NAME EQ RLC_M.RDB$SCHEMA_NAME AND
+			 REL_M.RDB$PACKAGE_NAME MISSING AND
 			 REL_M.RDB$RELATION_NAME EQ RLC_M.RDB$RELATION_NAME
 	{
 		fb_assert(masterRelName.object.isEmpty());
@@ -308,10 +310,13 @@ static void checkRelationTempScope(thread_db* tdbb, jrd_tra* transaction,
 			 RLC_C.RDB$SCHEMA_NAME EQ childRelName.schema.c_str() AND
 			 RLC_C.RDB$RELATION_NAME EQ childRelName.object.c_str() AND
 			 IND_C.RDB$SCHEMA_NAME EQ RLC_C.RDB$SCHEMA_NAME AND
+			 IND_C.RDB$PACKAGE_NAME MISSING AND
 			 IND_C.RDB$INDEX_NAME EQ RLC_C.RDB$INDEX_NAME AND
 			 IND_M.RDB$SCHEMA_NAME EQ IND_C.RDB$FOREIGN_KEY_SCHEMA_NAME AND
+			 IND_M.RDB$PACKAGE_NAME MISSING AND
 			 IND_M.RDB$INDEX_NAME EQ IND_C.RDB$FOREIGN_KEY AND
 			 IND_M.RDB$SCHEMA_NAME EQ REL_M.RDB$SCHEMA_NAME AND
+			 REL_M.RDB$PACKAGE_NAME MISSING AND
 			 IND_M.RDB$RELATION_NAME EQ REL_M.RDB$RELATION_NAME
 	{
 		fb_assert(masterRelName.object.isEmpty());
@@ -627,17 +632,20 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	// Check LTT indexes first
 	const auto attachment = transaction->getAttachment();
 
-	for (const auto& lttEntry : attachment->att_local_temporary_tables)
+	if (indexName.package.isEmpty())
 	{
-		const auto ltt = lttEntry.second;
-
-		if (ltt->name.schema != indexName.schema)
-			continue;
-
-		for (const auto& index : ltt->indexes)
+		for (const auto& lttEntry : attachment->att_local_temporary_tables)
 		{
-			if (index.name == indexName)
-				return ltt->name;
+			const auto ltt = lttEntry.second;
+
+			if (ltt->name.schema != indexName.schema)
+				continue;
+
+			for (const auto& index : ltt->indexes)
+			{
+				if (index.name == indexName)
+					return ltt->name;
+			}
 		}
 	}
 
@@ -646,10 +654,11 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 	{
 		systemIndex = IDX.RDB$SYSTEM_FLAG == 1;
-		return QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+		return QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 	}
 	END_FOR
 
@@ -1503,6 +1512,16 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			fb_assert(name.schema.isEmpty());
 			break;
 
+		case obj_relation:
+		{
+			// Allow relation resolution to reach execute(), which rejects created LTTs with
+			// the COMMENT ON-specific error instead of the generic persistent-metadata one.
+			AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags,
+				DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, true);
+			dsqlScratch->resolveRoutineOrRelation(name, {objType});
+			break;
+		}
+
 		case obj_procedure:
 		case obj_udf:
 			dsqlScratch->resolveRoutineOrRelation(name, {objType});
@@ -1798,7 +1817,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			sql << "and" << subColumnClause << "=" << subName;
 	}
 
-	if (objType == obj_procedure || objType == obj_udf)
+	if (objType == obj_relation || objType == obj_procedure || objType == obj_udf)
 		sql << "and rdb$package_name is not distinct from nullif(" << name.package << ", '')";
 
 	if (addWhereClause)
@@ -1831,7 +1850,7 @@ string CreateAlterFunctionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, compiled);
 	NODE_PRINT(printer, invalid);
 	NODE_PRINT(printer, packageOwner);
-	NODE_PRINT(printer, privateScope);
+	NODE_PRINT(printer, packagePrivate);
 	NODE_PRINT(printer, udfReturnPos);
 
 	return "CreateAlterFunctionNode";
@@ -2013,7 +2032,7 @@ bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 					strcpy(FUN.RDB$PACKAGE_NAME, name.package.c_str());
 
 					FUN.RDB$PRIVATE_FLAG.NULL = FALSE;
-					FUN.RDB$PRIVATE_FLAG = privateScope;
+					FUN.RDB$PRIVATE_FLAG = packagePrivate;
 
 					FUN.RDB$OWNER_NAME.NULL = FALSE;
 					strcpy(FUN.RDB$OWNER_NAME, packageOwner.c_str());
@@ -2241,7 +2260,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 			if (name.package.hasData())
 			{
 				FUN.RDB$PRIVATE_FLAG.NULL = FALSE;
-				FUN.RDB$PRIVATE_FLAG = privateScope;
+				FUN.RDB$PRIVATE_FLAG = packagePrivate;
 			}
 			else
 				FUN.RDB$PRIVATE_FLAG.NULL = TRUE;
@@ -2904,7 +2923,7 @@ string CreateAlterProcedureNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, compiled);
 	NODE_PRINT(printer, invalid);
 	NODE_PRINT(printer, packageOwner);
-	NODE_PRINT(printer, privateScope);
+	NODE_PRINT(printer, packagePrivate);
 
 	return "CreateAlterProcedureNode";
 }
@@ -3086,7 +3105,7 @@ bool CreateAlterProcedureNode::executeCreate(thread_db* tdbb, DsqlCompilerScratc
 					strcpy(P.RDB$PACKAGE_NAME, name.package.c_str());
 
 					P.RDB$PRIVATE_FLAG.NULL = FALSE;
-					P.RDB$PRIVATE_FLAG = privateScope;
+					P.RDB$PRIVATE_FLAG = packagePrivate;
 
 					strcpy(P.RDB$OWNER_NAME, packageOwner.c_str());
 				}
@@ -3182,7 +3201,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				if (name.package.hasData())
 				{
 					P.RDB$PRIVATE_FLAG.NULL = FALSE;
-					P.RDB$PRIVATE_FLAG = privateScope;
+					P.RDB$PRIVATE_FLAG = packagePrivate;
 				}
 				else
 					P.RDB$PRIVATE_FLAG.NULL = TRUE;
@@ -3291,6 +3310,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 				 VRL.RDB$PACKAGE_NAME EQUIV PRM.RDB$PACKAGE_NAME AND
 				 VRL.RDB$CONTEXT_TYPE EQ VCT_PROCEDURE AND
 				 RFR.RDB$SCHEMA_NAME EQ VRL.RDB$SCHEMA_NAME AND
+				 RFR.RDB$PACKAGE_NAME MISSING AND
 				 RFR.RDB$RELATION_NAME EQ VRL.RDB$VIEW_NAME AND
 				 RFR.RDB$VIEW_CONTEXT EQ VRL.RDB$VIEW_CONTEXT AND
 				 RFR.RDB$BASE_FIELD = PRM.RDB$PARAMETER_NAME
@@ -4290,6 +4310,8 @@ void DropTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 		requestHandle.reset(tdbb, drq_e_trg_prv3, DYN_REQUESTS);
 
+		fb_assert(relationName.package.isEmpty());
+
 		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 			FIRST 1 V IN RDB$VIEW_RELATIONS
 			CROSS F IN RDB$RELATION_FIELDS
@@ -4298,6 +4320,7 @@ void DropTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				 V.RDB$VIEW_NAME EQ relationName.object.c_str() AND
 				 F.RDB$SCHEMA_NAME EQ V.RDB$SCHEMA_NAME AND
 				 F.RDB$RELATION_NAME EQ V.RDB$VIEW_NAME AND
+				 F.RDB$PACKAGE_NAME MISSING AND
 				 T.RDB$SCHEMA_NAME EQ F.RDB$SCHEMA_NAME AND
 				 T.RDB$RELATION_NAME EQ F.RDB$RELATION_NAME
 		{
@@ -4312,7 +4335,8 @@ void DropTriggerNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				F IN RDB$RELATION_FIELDS
 				WITH F.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
-					 F.RDB$RELATION_NAME EQ relationName.object.c_str()
+					 F.RDB$RELATION_NAME EQ relationName.object.c_str() AND
+					 F.RDB$PACKAGE_NAME MISSING
 			{
 				MODIFY F USING
 					F.RDB$UPDATE_FLAG = FALSE;
@@ -4638,7 +4662,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			status_exception::raise(
 				Arg::Gds(isc_dyn_coll_used_table) <<
 				name.toQuotedString() <<
-				QualifiedName(RF.RDB$RELATION_NAME, RF.RDB$SCHEMA_NAME).toQuotedString() <<
+				QualifiedName(RF.RDB$RELATION_NAME, RF.RDB$SCHEMA_NAME, RF.RDB$PACKAGE_NAME).toQuotedString() <<
 				RF.RDB$FIELD_NAME);
 		}
 		END_FOR
@@ -5362,8 +5386,10 @@ void AlterDomainNode::modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transactio
 		IDX IN RDB$INDICES
 		CROSS SEG IN RDB$INDEX_SEGMENTS
 		WITH SEG.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
+			 SEG.RDB$PACKAGE_NAME EQUIV IDX.RDB$PACKAGE_NAME AND
 			 SEG.RDB$INDEX_NAME EQ IDX.RDB$INDEX_NAME AND
 			 IDX.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 IDX.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 SEG.RDB$FIELD_NAME EQ fieldName.c_str()
 	{
@@ -5684,8 +5710,10 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 							 RFL.RDB$FIELD_SOURCE EQ name.object.c_str() AND
 							 (RFL.RDB$NULL_FLAG MISSING OR RFL.RDB$NULL_FLAG EQ 0) AND
 							 IND.RDB$SCHEMA_NAME EQ RFL.RDB$SCHEMA_NAME AND
+							 IND.RDB$PACKAGE_NAME EQUIV RFL.RDB$PACKAGE_NAME AND
 							 IND.RDB$RELATION_NAME EQ RFL.RDB$RELATION_NAME AND
 							 INDSEG.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+							 INDSEG.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
 							 INDSEG.RDB$INDEX_NAME EQ IND.RDB$INDEX_NAME AND
 							 INDSEG.RDB$FIELD_NAME EQ RFL.RDB$FIELD_NAME AND
 							 RELCON.RDB$SCHEMA_NAME EQ INDSEG.RDB$SCHEMA_NAME AND
@@ -5694,7 +5722,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 					{
 						status_exception::raise(
 							Arg::Gds(isc_domain_primary_key_notnull) <<
-							QualifiedName(RFL.RDB$RELATION_NAME, RFL.RDB$SCHEMA_NAME).toQuotedString());
+							QualifiedName(RFL.RDB$RELATION_NAME, RFL.RDB$SCHEMA_NAME, RFL.RDB$PACKAGE_NAME).toQuotedString());
 					}
 					END_FOR
 				}
@@ -5783,7 +5811,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 						 DOM.RDB$FIELD_SOURCE EQ name.object.c_str()
 				{
 					modifyLocalFieldIndex(tdbb, transaction,
-						QualifiedName(DOM.RDB$RELATION_NAME, DOM.RDB$SCHEMA_NAME),
+						QualifiedName(DOM.RDB$RELATION_NAME, DOM.RDB$SCHEMA_NAME, DOM.RDB$PACKAGE_NAME),
 						DOM.RDB$FIELD_NAME, DOM.RDB$FIELD_NAME, indexList);
 				}
 				END_FOR
@@ -5879,7 +5907,7 @@ void AlterDomainNode::rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimen
 		END_MODIFY
 
 		modifyLocalFieldIndex(tdbb, transaction,
-			QualifiedName(RFLD.RDB$RELATION_NAME, RFLD.RDB$SCHEMA_NAME),
+			QualifiedName(RFLD.RDB$RELATION_NAME, RFLD.RDB$SCHEMA_NAME, RFLD.RDB$PACKAGE_NAME),
 			RFLD.RDB$FIELD_NAME, RFLD.RDB$FIELD_NAME, indexList);
 	}
 	END_FOR
@@ -5976,7 +6004,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 		// msg 43: "Domain %s is used in table %s (local name %s) and can not be dropped"
 		status_exception::raise(
 			Arg::PrivateDyn(43) << name.toQuotedString() <<
-			QualifiedName(Y.RDB$RELATION_NAME, Y.RDB$SCHEMA_NAME).toQuotedString() <<
+			QualifiedName(Y.RDB$RELATION_NAME, Y.RDB$SCHEMA_NAME, Y.RDB$PACKAGE_NAME).toQuotedString() <<
 			MetaName(Y.RDB$FIELD_NAME).toQuotedString());
 	}
 	END_FOR
@@ -6702,37 +6730,6 @@ MetaId RelationNode::generateRelId(thread_db* tdbb, MetaName name)
 			 Arg::Gds(isc_imp_exc));
 }
 
-// Calculate the dbkey length to include each of the base relations.
-
-USHORT RelationNode::calcDbKeyLength(thread_db* tdbb)
-{
-	const USHORT MIN_RELATION_ID = USER_DEF_REL_INIT_ID;
-	Attachment* attachment = tdbb->getAttachment();
-
-	USHORT dbKeyLength = 0;
-
-	static const CachedRequestId reqId;
-	AutoCacheRequest handle(tdbb, reqId);
-
-	FOR(REQUEST_HANDLE handle)
-		Z IN RDB$VIEW_RELATIONS CROSS
-		R IN RDB$RELATIONS
-			WITH Z.RDB$RELATION_NAME EQ R.RDB$RELATION_NAME AND
-				 Z.RDB$RELATION_SCHEMA_NAME EQ R.RDB$SCHEMA_NAME AND
-				 Z.RDB$VIEW_NAME EQ name.object.c_str() AND
-				 Z.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-				 (Z.RDB$CONTEXT_TYPE = VCT_TABLE OR
-				  Z.RDB$CONTEXT_TYPE = VCT_VIEW)
-	{
-		dbKeyLength += R.RDB$DBKEY_LENGTH;
-	}
-	END_FOR
-
-	fb_assert(dbKeyLength);
-
-	return dbKeyLength;
-}
-
 void RelationNode::FieldDefinition::modify(thread_db* tdbb, jrd_tra* transaction)
 {
 	AutoRequest request;
@@ -6740,6 +6737,7 @@ void RelationNode::FieldDefinition::modify(thread_db* tdbb, jrd_tra* transaction
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RFR IN RDB$RELATION_FIELDS
 		WITH RFR.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 RFR.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 RFR.RDB$FIELD_NAME EQ name.c_str()
 	{
@@ -6816,6 +6814,15 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 	{
 		strcpy(RFR.RDB$FIELD_NAME, name.c_str());
 		strcpy(RFR.RDB$SCHEMA_NAME, relationName.schema.c_str());
+
+		if (relationName.package.hasData())
+		{
+			RFR.RDB$PACKAGE_NAME.NULL = FALSE;
+			strcpy(RFR.RDB$PACKAGE_NAME, relationName.package.c_str());
+		}
+		else
+			RFR.RDB$PACKAGE_NAME.NULL = TRUE;
+
 		strcpy(RFR.RDB$RELATION_NAME, relationName.object.c_str());
 		strcpy(RFR.RDB$FIELD_SOURCE_SCHEMA_NAME, fieldSource.schema.c_str());
 		strcpy(RFR.RDB$FIELD_SOURCE, fieldSource.object.c_str());
@@ -6956,6 +6963,20 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_ALTER_PUBLICATION:
 				break;
 
+			case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+			{
+				auto addPackageLttIndexClause = static_cast<AddPackageLttIndexClause*>(clause.getObject());
+
+				if (!addPackageLttIndexClause->indexNode->relation)
+				{
+					addPackageLttIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+						RelationSourceNode(dsqlScratch->getPool(), name);
+				}
+
+				addPackageLttIndexClause->indexNode->dsqlPass(dsqlScratch);
+				break;
+			}
+
 			default:
 				fb_assert(false);
 				break;
@@ -7016,10 +7037,12 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		Z IN RDB$VIEW_RELATIONS
 		WITH X.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
 			 X.RDB$RELATION_NAME EQ relationName.object.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 X.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 X.RDB$FIELD_NAME EQ Y.RDB$BASE_FIELD AND
 			 X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ Y.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 			 X.RDB$FIELD_SOURCE EQ Y.RDB$FIELD_SOURCE AND
+			 Y.RDB$PACKAGE_NAME MISSING AND
 			 Y.RDB$SCHEMA_NAME EQ Z.RDB$SCHEMA_NAME AND
 			 Y.RDB$RELATION_NAME EQ Z.RDB$VIEW_NAME AND
 			 X.RDB$SCHEMA_NAME EQ Z.RDB$RELATION_SCHEMA_NAME AND
@@ -7037,6 +7060,8 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	}
 	END_FOR
 
+	if (relationName.package.isEmpty())
+	{	// FIXME: indent
 	// If the column to be dropped is being used as a foreign key
 	// and the column was not part of any compound foreign key,
 	// then we can drop the column. But we have to drop the foreign key
@@ -7049,11 +7074,13 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		IDX_SEG IN RDB$INDEX_SEGMENTS CROSS
 		REL_CONST IN RDB$RELATION_CONSTRAINTS
 		WITH IDX.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME MISSING AND
 			 IDX.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 REL_CONST.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
 			 REL_CONST.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 IDX_SEG.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 IDX.RDB$SCHEMA_NAME EQ IDX_SEG.RDB$SCHEMA_NAME AND
+			 IDX_SEG.RDB$PACKAGE_NAME MISSING AND
 			 IDX.RDB$INDEX_NAME EQ IDX_SEG.RDB$INDEX_NAME AND
 			 IDX.RDB$SCHEMA_NAME EQ REL_CONST.RDB$SCHEMA_NAME AND
 			 IDX.RDB$INDEX_NAME EQ REL_CONST.RDB$INDEX_NAME AND
@@ -7087,8 +7114,10 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		IDX IN RDB$INDICES CROSS
 		IDX_SEG IN RDB$INDEX_SEGMENTS
 		WITH IDX.RDB$SCHEMA_NAME EQ IDX_SEG.RDB$SCHEMA_NAME AND
+			 IDX.RDB$PACKAGE_NAME EQUIV IDX_SEG.RDB$PACKAGE_NAME AND
 			 IDX.RDB$INDEX_NAME EQ IDX_SEG.RDB$INDEX_NAME AND
 			 IDX.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME MISSING AND
 			 IDX.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 IDX_SEG.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 (IDX.RDB$INDEX_INACTIVE MISSING OR
@@ -7108,6 +7137,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 				MetaName(IDX.RDB$INDEX_NAME).toQuotedString());
 	}
 	END_FOR
+	}	// FIXME: indent end
 
 	// Delete the automatically created generator for Identity columns.
 
@@ -7169,6 +7199,34 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	return found;
+}
+
+void RelationNode::validateLttClauses(const Array<NestConst<Clause>>& clauses)
+{
+	for (const auto clause : clauses)
+	{
+		switch (clause->type)
+		{
+			case Clause::TYPE_ADD_COLUMN:
+				validateLttColumnClause(static_cast<const AddColumnClause*>(clause.getObject()));
+				break;
+
+			case Clause::TYPE_ADD_CONSTRAINT:
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_random) <<
+						"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
+				break;
+
+			case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+				break;
+
+			default:
+				fb_assert(false);
+				break;
+		}
+	}
 }
 
 // Validate column clause for local temporary table limitations.
@@ -7312,7 +7370,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 			field->resolve(dsqlScratch);
 
-			if (tempFlag != REL_temp_ltt)
+			if (!isCreatedLtt())
 			{
 				// Generate a domain.
 
@@ -7390,7 +7448,7 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		if (field->typeOfName.object.isEmpty() || field->collate.object.hasData())
 			fieldDefinition.collationId = field->collationId;
 
-		if (tempFlag != REL_temp_ltt)
+		if (!isCreatedLtt())
 		{
 			fieldDefinition.store(tdbb, transaction);
 
@@ -7623,6 +7681,9 @@ void RelationNode::makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, MetaName& constraintName, Constraint& constraint)
 {
+	fb_assert(name.package.isEmpty() ||
+		(constraintName.isEmpty() && constraint.type == Constraint::TYPE_NOT_NULL));
+
 	if (constraintName.isEmpty())
 	{
 		QualifiedName qualifiedConstraintName(constraintName, name.schema);
@@ -7688,7 +7749,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
 
-				QualifiedName qualifiedIndexName(constraint.index->name, name.schema);
+				QualifiedName qualifiedIndexName(constraint.index->name, name.schema, name.package);
 				indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
 					qualifiedIndexName, definition, &referredIndexName));
 				constraint.index->name = qualifiedIndexName.object;
@@ -7747,8 +7808,10 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		RFR IN RDB$RELATION_FIELDS CROSS
 		FLX IN RDB$FIELDS
 		WITH IDS.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDS.RDB$PACKAGE_NAME MISSING AND
 			 IDS.RDB$INDEX_NAME EQ constraint.index->name.c_str() AND
 			 RFR.RDB$SCHEMA_NAME EQ IDS.RDB$SCHEMA_NAME AND
+			 RFR.RDB$PACKAGE_NAME MISSING AND
 			 RFR.RDB$RELATION_NAME EQ name.object.c_str() AND
 			 RFR.RDB$FIELD_NAME EQ IDS.RDB$FIELD_NAME AND
 			 FLX.RDB$SCHEMA_NAME EQ RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
@@ -7776,6 +7839,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDS IN RDB$INDEX_SEGMENTS
 		WITH IDS.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDS.RDB$PACKAGE_NAME MISSING AND
 			 IDS.RDB$INDEX_NAME EQ constraint.index->name.c_str()
 	{
 		++allCount;
@@ -7837,6 +7901,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			IDS IN RDB$INDEX_SEGMENTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
 			WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 				 CRT.RDB$RELATION_NAME EQ name.object.c_str() AND
+				 IDS.RDB$PACKAGE_NAME MISSING AND
 				 CRT.RDB$CONSTRAINT_NAME NE constraintName.c_str() AND
 				 (CRT.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY OR
 				  CRT.RDB$CONSTRAINT_TYPE EQ UNIQUE_CNSTRT)
@@ -8155,6 +8220,7 @@ void RelationNode::defineDeleteCascadeTrigger(DsqlCompilerScratch* dsqlScratch,
 	{
 		blrWriter.appendUChar(blr_relation3);
 		blrWriter.appendMetaString(name.schema.c_str());
+		blrWriter.appendMetaString("");
 		blrWriter.appendMetaString(name.object.c_str());
 		blrWriter.appendMetaString("");
 	}
@@ -8246,6 +8312,7 @@ void RelationNode::generateUnnamedTriggerBeginning(Constraint& constraint, bool 
 	{
 		blrWriter.appendUChar(blr_relation3);
 		blrWriter.appendMetaString(name.schema.c_str());
+		blrWriter.appendMetaString("");
 		blrWriter.appendMetaString(name.object.c_str());
 		blrWriter.appendMetaString("");
 	}
@@ -8414,7 +8481,8 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 		FOR(REQUEST_HANDLE request_fmt1 TRANSACTION_HANDLE transaction)
 			REL IN RDB$RELATIONS
 				WITH REL.RDB$SCHEMA_NAME EQ relName.schema.c_str() AND
-					REL.RDB$RELATION_NAME EQ relName.object.c_str()
+					 REL.RDB$PACKAGE_NAME EQUIV NULLIF(relName.package.c_str(), '') AND
+					 REL.RDB$RELATION_NAME EQ relName.object.c_str()
 
 		{
 			relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, REL.RDB$RELATION_ID, CacheFlag::AUTOCREATE);
@@ -8445,9 +8513,10 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					RFR IN RDB$RELATION_FIELDS CROSS
 						FLD IN RDB$FIELDS
 						WITH RFR.RDB$SCHEMA_NAME EQ relName.schema.c_str() AND
-							RFR.RDB$RELATION_NAME EQ relName.object.c_str() AND
-							FLD.RDB$SCHEMA_NAME EQ RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-							FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
+							 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relName.package.c_str(), '') AND
+							 RFR.RDB$RELATION_NAME EQ relName.object.c_str() AND
+							 FLD.RDB$SCHEMA_NAME EQ RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+							 FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE
 				{
 					// Update RFR to reflect new fields id
 
@@ -8788,6 +8857,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					// update the dbkey length to include each of the base relations
 
 					REL.RDB$DBKEY_LENGTH = 0;
+					fb_assert(relName.package.isEmpty());
 
 					AutoRequest handle;
 					FOR(REQUEST_HANDLE handle)
@@ -8796,6 +8866,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 						WITH Z.RDB$SCHEMA_NAME = relName.schema.c_str() AND
 							 Z.RDB$VIEW_NAME = relName.object.c_str() AND
 							 R.RDB$SCHEMA_NAME EQ Z.RDB$RELATION_SCHEMA_NAME AND
+							 R.RDB$PACKAGE_NAME EQUIV Z.RDB$PACKAGE_NAME AND
 							 R.RDB$RELATION_NAME EQ Z.RDB$RELATION_NAME
 					{
 						REL.RDB$DBKEY_LENGTH += R.RDB$DBKEY_LENGTH;
@@ -9390,9 +9461,13 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	if (tempFlag != REL_temp_ltt)
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_TABLE, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, name, obj_relation);
+	if (name.package.isEmpty())
+		DYN_UTIL_check_unique_name(tdbb, name, obj_relation);
 
 	if (tempFlag == REL_temp_ltt)
+		validateLttClauses(clauses);
+
+	if (isCreatedLtt())
 	{
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 		defineLocalTempTable(tdbb, dsqlScratch, transaction);
@@ -9431,6 +9506,21 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		{
 			strcpy(REL.RDB$SCHEMA_NAME, name.schema.c_str());
 			strcpy(REL.RDB$RELATION_NAME, name.object.c_str());
+
+			if (name.package.hasData())
+			{
+				REL.RDB$PACKAGE_NAME.NULL = FALSE;
+				strcpy(REL.RDB$PACKAGE_NAME, name.package.c_str());
+
+				REL.RDB$PRIVATE_FLAG.NULL = FALSE;
+				REL.RDB$PRIVATE_FLAG = packagePrivate ? 1 : 0;
+			}
+			else
+			{
+				REL.RDB$PACKAGE_NAME.NULL = TRUE;
+				REL.RDB$PRIVATE_FLAG.NULL = TRUE;
+			}
+
 			REL.RDB$SYSTEM_FLAG = 0;
 			REL.RDB$FLAGS = REL_sql;
 			REL.RDB$RELATION_TYPE = relationType;
@@ -9496,7 +9586,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		// access rights
 
-		storePrivileges(tdbb, transaction, name, obj_relation, ALL_PRIVILEGES);
+		if (name.package.isEmpty())
+			storePrivileges(tdbb, transaction, name, obj_relation, ALL_PRIVILEGES);
 
 		// constraints
 
@@ -9518,6 +9609,40 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					makeConstraint(tdbb, dsqlScratch, transaction,
 						static_cast<AddConstraintClause*>(i->getObject()), constraints);
 					break;
+
+				case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+				{
+					auto addPackageLttIndexClause = static_cast<AddPackageLttIndexClause*>(i->getObject());
+					const auto indexNode = addPackageLttIndexClause->indexNode;
+
+					if (!indexNode->relation)
+					{
+						addPackageLttIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+							RelationSourceNode(dsqlScratch->getPool(), name);
+					}
+
+					CreateIndexNode::Definition definition;
+					definition.type = isc_dyn_def_idx;
+					definition.relation = indexNode->relation->dsqlName;
+					definition.unique = indexNode->unique;
+					definition.descending = indexNode->descending;
+					definition.inactive = !indexNode->active;
+
+					fb_assert(indexNode->columns);
+					fb_assert(!indexNode->computed);
+					fb_assert(!indexNode->partial);
+
+					for (const auto indexColumn : indexNode->columns->items)
+					{
+						MetaName& column = definition.columns.add();
+						column = nodeAs<FieldNode>(indexColumn)->dsqlName;
+					}
+
+					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
+						addPackageLttIndexClause->indexNode->name, definition));
+
+					break;
+				}
 
 				default:
 					fb_assert(false);
@@ -9547,7 +9672,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		dsqlScratch->relation->rel_flags &= ~REL_creating;
 
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLE, name, {});
+		if (tempFlag != REL_temp_ltt)
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLE, name, {});
 	}
 	catch (const Exception&)
 	{
@@ -9597,7 +9723,7 @@ const ObjectsArray<MetaName>* CreateRelationNode::findPkColumns()
 
 void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
-	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES, true);
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, true);
 
 	const auto attachment = tdbb->getAttachment();
 	auto& attPool = *attachment->att_pool;
@@ -9647,8 +9773,6 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 					name.toQuotedString());
 			}
 
-			validateLttColumnClause(addColumnClause);
-
 			field->resolve(dsqlScratch);
 
 			const bool notNullFlag = std::any_of(
@@ -9679,13 +9803,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 			lttField.desc.dsc_sub_type = field->subType;
 		}
 		else if (clause->type == Clause::TYPE_ADD_CONSTRAINT)
-		{
-			status_exception::raise(
-				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-				Arg::Gds(isc_dsql_command_err) <<
-				Arg::Gds(isc_random) <<
-					"Only NOT NULL constraints without names are supported on local temporary tables");
-		}
+			fb_assert(false);
 	}
 
 	attachment->att_local_temporary_tables.put(name, ltt);
@@ -9748,7 +9866,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	// Check if this is an LTT and set flag before METD_get_relation (called by saveRelation)
 	// to avoid false "LTT cannot be referenced in persistent metadata" error
-	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES,
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE,
 		attachment->att_local_temporary_tables.exist(name));
 
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
@@ -10663,9 +10781,10 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				VRL IN RDB$VIEW_RELATIONS
 				WITH VRL.RDB$RELATION_SCHEMA_NAME EQ name.schema.c_str() AND
 					 VRL.RDB$RELATION_NAME EQ name.object.c_str() AND
-					 VRL.RDB$PACKAGE_NAME MISSING AND
+					 VRL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 					 VRL.RDB$CONTEXT_TYPE EQ VCT_TABLE AND
 					 RFR2.RDB$SCHEMA_NAME EQ VRL.RDB$SCHEMA_NAME AND
+					 RFR2.RDB$PACKAGE_NAME MISSING AND
 					 RFR2.RDB$RELATION_NAME EQ VRL.RDB$VIEW_NAME AND
 					 RFR2.RDB$VIEW_CONTEXT EQ VRL.RDB$VIEW_CONTEXT AND
 					 RFR2.RDB$BASE_FIELD = field->fld_name.c_str()
@@ -10706,7 +10825,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 void AlterRelationNode::alterLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	fb_assert(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES);
+	fb_assert(dsqlScratch->flags & DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE);
 
 	const auto attachment = tdbb->getAttachment();
 	auto& attPool = *attachment->att_pool;
@@ -11185,9 +11304,11 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		R IN RDB$RELATIONS
 		WITH R.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 R.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 R.RDB$RELATION_NAME EQ name.object.c_str()
 	{
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, {});
+		if (name.package.isEmpty())
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, ddlTriggerAction, name, {});
 		found = true;
 	}
 	END_FOR
@@ -11198,40 +11319,71 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		status_exception::raise(Arg::PrivateDyn(61));
 	}
 
-	request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		CRT IN RDB$RELATION_CONSTRAINTS
-		WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 CRT.RDB$RELATION_NAME EQ name.object.c_str() AND
-			 (CRT.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY OR
-			  CRT.RDB$CONSTRAINT_TYPE EQ UNIQUE_CNSTRT OR
-			  CRT.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY)
-		SORTED BY ASCENDING CRT.RDB$CONSTRAINT_TYPE
+	if (name.package.isEmpty())
 	{
-		ERASE CRT;
+		request.reset(tdbb, drq_e_rel_con2, DYN_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			CRT IN RDB$RELATION_CONSTRAINTS
+			WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 CRT.RDB$RELATION_NAME EQ name.object.c_str() AND
+				 (CRT.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY OR
+				 CRT.RDB$CONSTRAINT_TYPE EQ UNIQUE_CNSTRT OR
+				 CRT.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY)
+			SORTED BY ASCENDING CRT.RDB$CONSTRAINT_TYPE
+		{
+			ERASE CRT;
+		}
+		END_FOR
 	}
-	END_FOR
 
 	MemoryPool& p = *MemoryPool::getContextPool();
 	ModifyIndexList indexList(p);
 
 	request.reset(tdbb, drq_e_rel_idxs, DYN_REQUESTS);
 
-
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 IDX.RDB$RELATION_NAME EQ name.object.c_str() AND
 			 IDX.RDB$INDEX_INACTIVE NE MET_index_deferred_drop
 	{
-		auto* node = FB_NEW_POOL(p) DropIndexNode(p, QualifiedName(IDX.RDB$INDEX_NAME, name.schema));
+		auto* node = FB_NEW_POOL(p) DropIndexNode(p, QualifiedName(IDX.RDB$INDEX_NAME, name.schema, name.package));
 		node->drop(tdbb, nullptr, transaction, indexList);
 	}
 	END_FOR
 
 	indexList.exec(tdbb, transaction);
 
+	request.reset(tdbb, drq_e_rel_flds, DYN_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		RFR IN RDB$RELATION_FIELDS
+		WITH RFR.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
+			 RFR.RDB$RELATION_NAME EQ name.object.c_str()
+	{
+		if (!RFR.RDB$GENERATOR_NAME.NULL)
+		{
+			DropSequenceNode::deleteIdentity(tdbb, transaction,
+				QualifiedName(RFR.RDB$GENERATOR_NAME, name.schema));
+		}
+
+		ERASE RFR;
+
+		if (!RFR.RDB$SECURITY_CLASS.NULL &&
+			!strncmp(RFR.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
+		{
+			deleteSecurityClass(tdbb, transaction, RFR.RDB$SECURITY_CLASS);
+		}
+
+		deleteGlobalField(tdbb, transaction, QualifiedName(RFR.RDB$FIELD_SOURCE, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME));
+	}
+	END_FOR
+
+	if (name.package.isEmpty())
+	{	// FIXME: indent
 	request.reset(tdbb, drq_e_trg_msgs2, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -11260,31 +11412,6 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	END_FOR
 
-	request.reset(tdbb, drq_e_rel_flds, DYN_REQUESTS);
-
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-		RFR IN RDB$RELATION_FIELDS
-		WITH RFR.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-			 RFR.RDB$RELATION_NAME EQ name.object.c_str()
-	{
-		if (!RFR.RDB$GENERATOR_NAME.NULL)
-		{
-			DropSequenceNode::deleteIdentity(tdbb, transaction,
-				QualifiedName(RFR.RDB$GENERATOR_NAME, name.schema));
-		}
-
-		ERASE RFR;
-
-		if (!RFR.RDB$SECURITY_CLASS.NULL &&
-			!strncmp(RFR.RDB$SECURITY_CLASS, SQL_SECCLASS_PREFIX, SQL_SECCLASS_PREFIX_LEN))
-		{
-			deleteSecurityClass(tdbb, transaction, RFR.RDB$SECURITY_CLASS);
-		}
-
-		deleteGlobalField(tdbb, transaction, QualifiedName(RFR.RDB$FIELD_SOURCE, RFR.RDB$FIELD_SOURCE_SCHEMA_NAME));
-	}
-	END_FOR
-
 	request.reset(tdbb, drq_e_view_rels, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -11295,12 +11422,14 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		ERASE VR;
 	}
 	END_FOR
+	}	// FIXME: indent end
 
 	request.reset(tdbb, drq_e_relation, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		R IN RDB$RELATIONS
 		WITH R.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 R.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 R.RDB$RELATION_NAME EQ name.object.c_str()
 	{
 		ERASE R;
@@ -11313,6 +11442,8 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	END_FOR
 
+	if (name.package.isEmpty())
+	{	// FIXME: indent
 	// Triggers must be deleted after check constraints
 
 	QualifiedName triggerName;
@@ -11369,6 +11500,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		ERASE PTAB;
 	}
 	END_FOR
+	}	// FIXME: indent end
 
 	bool rolledBack = false;
 
@@ -11439,10 +11571,11 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			IDX IN RDB$INDICES
 			WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 				 IDX.RDB$RELATION_NAME EQ name.object.c_str()
 		{
-			name.object = IDX.RDB$INDEX_NAME;
-			DropIndexNode::deleteSegmentRecords(tdbb, transaction, name);
+			const QualifiedName indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
+			DropIndexNode::deleteSegmentRecords(tdbb, transaction, indexName);
 			ERASE IDX;
 		}
 		END_FOR
@@ -11459,7 +11592,8 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		throw;
 	}
 
-	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, {});
+	if (name.package.isEmpty())
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, ddlTriggerAction, name, {});
 
 	// Update DSQL cache
 	METD_drop_relation(transaction, name);
@@ -11514,6 +11648,8 @@ void CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
+	fb_assert(name.package.isEmpty());
+
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
 
@@ -11683,6 +11819,11 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					VRL.RDB$PACKAGE_NAME.NULL = FALSE;
 					strcpy(VRL.RDB$PACKAGE_NAME, procedure->prc_name.package.c_str());
 				}
+				else if (relation && relation->rel_name.package.hasData())
+				{
+					VRL.RDB$PACKAGE_NAME.NULL = FALSE;
+					strcpy(VRL.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+				}
 				else
 					VRL.RDB$PACKAGE_NAME.NULL = TRUE;
 			}
@@ -11693,14 +11834,13 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// Check privileges on base tables and views.
 
 	request.reset(tdbb, drq_l_view_rels, DYN_REQUESTS);
-
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		VRL IN RDB$VIEW_RELATIONS
 		CROSS PREL IN RDB$RELATIONS
-		WITH VRL.RDB$PACKAGE_NAME MISSING AND
-			 VRL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+		WITH VRL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 VRL.RDB$VIEW_NAME EQ name.object.c_str() AND
 			 PREL.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
+			 PREL.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
 			 PREL.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME
 	{
 		// CVC: This never matches so it causes unnecessary calls to verify,
@@ -11713,7 +11853,9 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 
 			SCL_check_schema(tdbb, PREL.RDB$SCHEMA_NAME, SCL_usage);
 
-			if (const auto priv = SCL_get_mask(tdbb, QualifiedName(PREL.RDB$RELATION_NAME, PREL.RDB$SCHEMA_NAME), "");
+			const QualifiedName relationName(PREL.RDB$RELATION_NAME, PREL.RDB$SCHEMA_NAME, PREL.RDB$PACKAGE_NAME);
+
+			if (const auto priv = SCL_get_mask(tdbb, relationName, "");
 				!(priv & SCL_select)
 			)
 			{
@@ -11723,7 +11865,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					// Remember, a view may be based on a view.
 					"TABLE/VIEW" <<	//  Non-Translatable
 					// We want to print the name of the base table or view.
-					QualifiedName(PREL.RDB$RELATION_NAME, PREL.RDB$SCHEMA_NAME).toQuotedString());
+					relationName.toQuotedString());
 			}
 		}
 	}
@@ -12484,7 +12626,9 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		IDX IN RDB$INDICES CROSS
 		REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
 			WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-				 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+				 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
+				 IDX.RDB$INDEX_NAME EQ indexName.object.c_str() AND
+				 REL.RDB$PACKAGE_NAME EQUIV IDX.RDB$PACKAGE_NAME
 	{
 		active = IDX.RDB$INDEX_INACTIVE.NULL || !IDX.RDB$INDEX_INACTIVE;
 
@@ -12522,17 +12666,20 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		if (!IDX.RDB$FOREIGN_KEY.NULL)
 			idx.idx_flags |= idx_foreign;
 
-		AutoCacheRequest rc_request(tdbb, irq_c_index_rc, IRQ_REQUESTS);
-
-		FOR(REQUEST_HANDLE rc_request TRANSACTION_HANDLE transaction)
-			RC IN RDB$RELATION_CONSTRAINTS WITH
-			RC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-			RC.RDB$INDEX_NAME EQ indexName.object.c_str() AND
-			RC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
+		if (indexName.package.isEmpty())
 		{
-			idx.idx_flags |= idx_primary;
+			AutoCacheRequest rc_request(tdbb, irq_c_index_rc, IRQ_REQUESTS);
+
+			FOR(REQUEST_HANDLE rc_request TRANSACTION_HANDLE transaction)
+				RC IN RDB$RELATION_CONSTRAINTS WITH
+				RC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+				RC.RDB$INDEX_NAME EQ indexName.object.c_str() AND
+				RC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY
+			{
+				idx.idx_flags |= idx_primary;
+			}
+			END_FOR
 		}
-		END_FOR
 
 		idx.idx_condition_node = nullptr;
 		idx.idx_condition_statement = nullptr;
@@ -12578,8 +12725,10 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 			RFR IN RDB$RELATION_FIELDS CROSS
 			FLD IN RDB$FIELDS
 			WITH SEG.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+				 SEG.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
 				 SEG.RDB$INDEX_NAME EQ indexName.object.c_str() AND
 				 RFR.RDB$SCHEMA_NAME EQ SEG.RDB$SCHEMA_NAME AND
+				 RFR.RDB$PACKAGE_NAME EQUIV SEG.RDB$PACKAGE_NAME AND
 				 RFR.RDB$RELATION_NAME EQ indexRelation->getName().object.c_str() AND
 				 RFR.RDB$FIELD_NAME EQ SEG.RDB$FIELD_NAME AND
 				 FLD.RDB$SCHEMA_NAME EQ RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
@@ -12791,7 +12940,9 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
 		WITH IDX.RDB$EXPRESSION_BLR NOT MISSING AND
 			 IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
+			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str() AND
+			 REL.RDB$PACKAGE_NAME EQUIV IDX.RDB$PACKAGE_NAME
 	{
 		active = IDX.RDB$INDEX_INACTIVE.NULL || !IDX.RDB$INDEX_INACTIVE;
 
@@ -12939,6 +13090,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 	QualifiedName& idxName, Definition& definition, QualifiedName* referredIndexName)
 {
 	fb_assert(idxName.schema == definition.relation.schema);
+	fb_assert(idxName.package == definition.relation.package);
 
 	if (idxName.isEmpty())
 		DYN_UTIL_generate_index_name(tdbb, transaction, idxName, definition.type);
@@ -12963,6 +13115,15 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		IDX.RDB$RELATION_NAME.NULL = FALSE;
 		strcpy(IDX.RDB$SCHEMA_NAME, idxName.schema.c_str());
 		strcpy(IDX.RDB$INDEX_NAME, idxName.object.c_str());
+
+		if (definition.relation.package.hasData())
+		{
+			IDX.RDB$PACKAGE_NAME.NULL = FALSE;
+			strcpy(IDX.RDB$PACKAGE_NAME, definition.relation.package.c_str());
+		}
+		else
+			IDX.RDB$PACKAGE_NAME.NULL = TRUE;
+
 		strcpy(IDX.RDB$RELATION_NAME, definition.relation.object.c_str());
 		IDX.RDB$SYSTEM_FLAG = 0;
 
@@ -12973,6 +13134,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			VREL IN RDB$RELATIONS
 			WITH VREL.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
+				 VREL.RDB$PACKAGE_NAME EQUIV NULLIF(definition.relation.package.c_str(), '') AND
 				 VREL.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME
 		{
 			if (!VREL.RDB$VIEW_BLR.NULL)
@@ -13020,11 +13182,12 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 				F IN RDB$RELATION_FIELDS CROSS
 				GF IN RDB$FIELDS
-				WITH F.RDB$FIELD_NAME EQ definition.columns[i].c_str() AND
+				WITH F.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
+					 F.RDB$PACKAGE_NAME EQUIV NULLIF(definition.relation.package.c_str(), '') AND
+					 F.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME AND
+					 F.RDB$FIELD_NAME EQ definition.columns[i].c_str() AND
 					 GF.RDB$SCHEMA_NAME EQ F.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-					 GF.RDB$FIELD_NAME EQ F.RDB$FIELD_SOURCE AND
-					 IDX.RDB$SCHEMA_NAME EQ F.RDB$SCHEMA_NAME AND
-					 IDX.RDB$RELATION_NAME EQ F.RDB$RELATION_NAME
+					 GF.RDB$FIELD_NAME EQ F.RDB$FIELD_SOURCE
 			{
 				ULONG length = 0;
 
@@ -13120,6 +13283,11 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 					X IN RDB$INDEX_SEGMENTS
 				{
 					strcpy(X.RDB$SCHEMA_NAME, IDX.RDB$SCHEMA_NAME);
+
+					X.RDB$PACKAGE_NAME.NULL = IDX.RDB$PACKAGE_NAME.NULL;
+					if (!IDX.RDB$PACKAGE_NAME.NULL)
+						strcpy(X.RDB$PACKAGE_NAME, IDX.RDB$PACKAGE_NAME);
+
 					strcpy(X.RDB$INDEX_NAME, IDX.RDB$INDEX_NAME);
 					strcpy(X.RDB$FIELD_NAME, segment->c_str());
 					X.RDB$FIELD_POSITION = position++;
@@ -13135,6 +13303,8 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 		if (definition.refColumns.hasData())
 		{
+			fb_assert(definition.refRelation.package.isEmpty());
+
 			// If referring columns count <> referred columns return error.
 
 			if (definition.columns.getCount() != definition.refColumns.getCount())
@@ -13159,13 +13329,15 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				ISEG IN RDB$INDEX_SEGMENTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
 				WITH IND.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
 					 IND.RDB$RELATION_NAME EQ definition.refRelation.object.c_str() AND
+					 IND.RDB$PACKAGE_NAME MISSING AND
 					 IND.RDB$UNIQUE_FLAG NOT MISSING AND
 					 (RC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR
-					  RC.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT)
+					  RC.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT) AND
+					 ISEG.RDB$PACKAGE_NAME MISSING
 				SORTED BY IND.RDB$INDEX_NAME,
 						  DESCENDING ISEG.RDB$FIELD_POSITION
 			{
-				if (refIndexName != QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME))
+				if (refIndexName != QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME, IND.RDB$PACKAGE_NAME))
 				{
 					if (listIndex >= 0)
 						found = false;
@@ -13212,6 +13384,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				FOR(REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 					X IN RDB$RELATIONS
 					WITH X.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
+						 X.RDB$PACKAGE_NAME MISSING AND
 						 X.RDB$RELATION_NAME EQ definition.refRelation.object.c_str()
 				{
 					found = true;
@@ -13240,12 +13413,15 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		}
 		else if (definition.refRelation.object.hasData())
 		{
+			fb_assert(definition.refRelation.package.isEmpty());
+
 			request2.reset(tdbb, drq_l_primary, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 				IND IN RDB$INDICES CROSS
 				RC IN RDB$RELATION_CONSTRAINTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
 				WITH IND.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
+					 IND.RDB$PACKAGE_NAME MISSING AND
 					 IND.RDB$RELATION_NAME EQ definition.refRelation.object.c_str() AND
 					 RC.RDB$CONSTRAINT_TYPE EQ PRIMARY_KEY
 			{
@@ -13292,6 +13468,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			IDX IN RDB$INDICES
 			WITH IDX.RDB$SCHEMA_NAME EQ idxName.schema.c_str() AND
+				 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(idxName.package.c_str(), '') AND
 				 IDX.RDB$INDEX_NAME EQ idxName.object.c_str()
 		{
 			MODIFY IDX
@@ -13362,7 +13539,8 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_index))
 		return;
 
-	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_INDEX, name, {});
+	if (relation->dsqlName.package.isEmpty())
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_INDEX, name, {});
 
 	Definition definition;
 	definition.type = isc_dyn_def_idx;
@@ -13387,10 +13565,10 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		string computedSource;
 		BlrDebugWriter::BlrData computedValue;
 
-		defineComputed(dsqlScratch, relation, NULL, computed, computedSource, computedValue);
+		defineComputed(dsqlScratch, relation, NULL,
+			computed, computedSource, computedValue);
 
-		attachment->storeMetaDataBlob(tdbb, transaction, &definition.expressionSource,
-			computedSource);
+		attachment->storeMetaDataBlob(tdbb, transaction, &definition.expressionSource, computedSource);
 		attachment->storeBinaryBlob(tdbb, transaction, &definition.expressionBlr, computedValue);
 	}
 
@@ -13409,7 +13587,8 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 			&definition.conditionBlr, partialValue);
 	}
 
-	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_INDEX, name, {});
+	if (relation->dsqlName.package.isEmpty())
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_INDEX, name, {});
 
 	savePoint.release();	// everything is ok
 
@@ -13420,9 +13599,9 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 // Define an index on a Local Temporary Table.
 void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-	jrd_tra* transaction, LocalTemporaryTable* ltt)
+	jrd_tra* transaction, LocalTemporaryTable* ltt) const
 {
-	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_LTT_REFERENCES, true);
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, true);
 
 	const auto attachment = transaction->tra_attachment;
 	auto& attPool = *attachment->att_pool;
@@ -13535,6 +13714,9 @@ DdlNode* CreateIndexNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (name.schema.isEmpty())
 		name.schema = relation->dsqlName.schema;
 
+	if (name.package.isEmpty())
+		name.package = relation->dsqlName.package;
+
 	if (name.schema != relation->dsqlName.schema)
 	{
 		status_exception::raise(
@@ -13542,6 +13724,8 @@ DdlNode* CreateIndexNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			name.schema.toQuotedString() <<
 			relation->dsqlName.schema.toQuotedString());
 	}
+
+	fb_assert(name.package == relation->dsqlName.package);
 
 	dsqlScratch->ddlSchema = name.schema;
 
@@ -13606,7 +13790,8 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		}
 	}
 
-	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+	if (indexName.package.isEmpty())
+		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, indexName, {});
 
 	savePoint.release();	// system table modified OK
 }
@@ -13621,16 +13806,18 @@ bool AlterIndexNode::step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-		IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
+			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 	{
 		found = true;
 		currentStatus = MetadataCache::getIndexStatus(IDX.RDB$INDEX_INACTIVE.NULL, IDX.RDB$INDEX_INACTIVE);
 
 		if (currentStatus != desiredStatus)
 		{
-			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+			if (indexName.package.isEmpty())
+				executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
 
-			auto relName = QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			auto relName = QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 			indexRelation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
 			fb_assert(indexRelation);
 
@@ -13684,6 +13871,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 				FOR(REQUEST_HANDLE rq1 TRANSACTION_HANDLE transaction)
 					IDX IN RDB$INDICES
 					WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+						 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
 						 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 				{
 					MODIFY IDX
@@ -13797,11 +13985,13 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
 	{
 		found = true;
 
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+		if (indexName.package.isEmpty())
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_INDEX, indexName, {});
 
 		MODIFY IDX
 			// For V4 index selectivity can be set only to -1.
@@ -13812,7 +14002,10 @@ void SetStatisticsNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	END_FOR
 
 	if (found)
-		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+	{
+		if (indexName.package.isEmpty())
+			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_INDEX, indexName, {});
+	}
 	else
 	{
 		// msg 48: "Index not found"
@@ -13853,6 +14046,7 @@ bool DropIndexNode::deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction, 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDXSEG IN RDB$INDEX_SEGMENTS
 		WITH IDXSEG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDXSEG.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 IDXSEG.RDB$INDEX_NAME EQ name.object.c_str()
 	{
 		found = true;
@@ -13925,16 +14119,19 @@ static MetaName makeTempDependName(MetaId relId, MetaId indexId)
 void DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 	ModifyIndexList& list, bool dropSegments)
 {
-	AUTO_HANDLE(req1);
-
-	FOR (REQUEST_HANDLE req1 TRANSACTION_HANDLE transaction)
-		RLC IN RDB$RELATION_CONSTRAINTS
-		WITH RLC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
-			 RLC.RDB$INDEX_NAME EQ indexName.object.c_str()
+	if (indexName.package.isEmpty())
 	{
-		ERR_post(Arg::Gds(isc_integ_index_del));
+		AUTO_HANDLE(req1);
+
+		FOR (REQUEST_HANDLE req1 TRANSACTION_HANDLE transaction)
+			RLC IN RDB$RELATION_CONSTRAINTS
+			WITH RLC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+				 RLC.RDB$INDEX_NAME EQ indexName.object.c_str()
+		{
+			ERR_post(Arg::Gds(isc_integ_index_del));
+		}
+		END_FOR
 	}
-	END_FOR
 
 	AutoCacheRequest request(tdbb, drq_e_indices, DYN_REQUESTS);
 	bool addToTheList = false;
@@ -13943,15 +14140,16 @@ void DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ indexName.object.c_str() AND
 			 IDX.RDB$INDEX_INACTIVE NE MET_index_deferred_drop
 	{
 
-		auto relName = QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+		auto relName = QualifiedName(IDX.RDB$RELATION_NAME, indexName.schema, indexName.package);
 		indexRelation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
 		fb_assert(indexRelation);
 
-		if (dsqlScratch)
+		if (dsqlScratch && indexName.package.isEmpty())
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_INDEX, indexName, {});
 
 		if (indexRelation &&
@@ -13988,33 +14186,37 @@ void DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_
 
 	if (indexRelation)
 	{
-		if (dsqlScratch)
+		if (dsqlScratch && indexName.package.isEmpty())
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_DROP_INDEX, indexName, {});
+
 		if (addToTheList)
 			list.push(this);
 
-		AUTO_HANDLE(handle2);
-		FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
-			DEP IN RDB$DEPENDENCIES
-			WITH DEP.RDB$DEPENDENT_SCHEMA_NAME EQUIV NULLIF(indexName.schema.c_str(), '') AND
-				 DEP.RDB$DEPENDENT_NAME EQ indexName.object.c_str() AND
-				 (DEP.RDB$DEPENDENT_TYPE EQ obj_index_expression OR
-				  DEP.RDB$DEPENDENT_TYPE EQ obj_index_condition)
+		if (indexName.package.isEmpty())
 		{
-			if (addToTheList)
+			AUTO_HANDLE(handle2);
+			FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE transaction)
+				DEP IN RDB$DEPENDENCIES
+				WITH DEP.RDB$DEPENDENT_SCHEMA_NAME EQUIV NULLIF(indexName.schema.c_str(), '') AND
+					 DEP.RDB$DEPENDENT_NAME EQ indexName.object.c_str() AND
+					 (DEP.RDB$DEPENDENT_TYPE EQ obj_index_expression OR
+					  DEP.RDB$DEPENDENT_TYPE EQ obj_index_condition)
 			{
-				MODIFY DEP USING
+				if (addToTheList)
 				{
-					strcpy(DEP.RDB$DEPENDENT_NAME, tempName.c_str());
+					MODIFY DEP USING
+					{
+						strcpy(DEP.RDB$DEPENDENT_NAME, tempName.c_str());
+					}
+					END_MODIFY
 				}
-				END_MODIFY
+				else
+				{
+					ERASE DEP;
+				}
 			}
-			else
-			{
-				ERASE DEP;
-			}
+			END_FOR
 		}
-		END_FOR
 	}
 	else if (!silent)
 	{
@@ -14080,6 +14282,7 @@ void DropIndexNode::clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId)
 			OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
 		WITH IND.RDB$INDEX_ID EQ indexId + 1
 			AND REL.RDB$RELATION_ID EQ relId
+			AND REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME
 			AND IND.RDB$INDEX_INACTIVE NOT MISSING
 			AND IND.RDB$INDEX_INACTIVE EQ MET_index_deferred_drop
 	{
@@ -14148,8 +14351,9 @@ void DropIndexNode::clearId(thread_db* tdbb, MetaId relId, MetaId indexId)
 				OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
 			WITH IND.RDB$INDEX_ID EQ indexId + 1
 				AND REL.RDB$RELATION_ID EQ relId
+				AND REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME
 		{
-			indexName = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
+			indexName = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME, IND.RDB$PACKAGE_NAME);
 			fb_assert (!indexName.isEmpty());
 
 			if (!IND.RDB$FOREIGN_KEY.NULL)
@@ -16310,6 +16514,8 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 	const char* grantor, const char* privilege, const QualifiedName& relationName,
 	const MetaName& fieldName, bool topLevel)
 {
+	fb_assert(relationName.package.isEmpty());
+
 	const Attachment* attachment = tdbb->getAttachment();
 
 	// Verify that the input relation exists.
@@ -16493,6 +16699,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		CROSS G_VIEW IN RDB$VIEW_RELATIONS
 		WITH G_FLD.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
 			 G_FLD.RDB$RELATION_NAME = relationName.object.c_str() AND
+			 G_FLD.RDB$PACKAGE_NAME MISSING AND
 			 G_FLD.RDB$BASE_FIELD NOT MISSING AND
 			 G_VIEW.RDB$SCHEMA_NAME EQ G_FLD.RDB$SCHEMA_NAME AND
 			 G_VIEW.RDB$VIEW_NAME EQ G_FLD.RDB$RELATION_NAME AND
@@ -16503,14 +16710,16 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 			if (fieldName == G_FLD.RDB$FIELD_NAME)
 			{
 				checkGrantorCanGrantRelation(tdbb, transaction, grantor, privilege,
-					QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME),
+					QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME,
+						G_VIEW.RDB$PACKAGE_NAME),
 					G_FLD.RDB$BASE_FIELD, false);
 			}
 		}
 		else
 		{
 			checkGrantorCanGrantRelation(tdbb, transaction, grantor, privilege,
-				QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME),
+				QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME,
+					G_VIEW.RDB$PACKAGE_NAME),
 				G_FLD.RDB$BASE_FIELD, false);
 		}
 	}
