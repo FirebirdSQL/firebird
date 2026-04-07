@@ -109,6 +109,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				EREL IN RDB$RELATIONS
 				WITH EREL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EREL.RDB$PACKAGE_NAME EQUIV NULLIF(object_name.package.c_str(), '') AND
 					 EREL.RDB$RELATION_NAME EQ object_name.object.c_str()
 			{
 				*errorCode = 132;	// isc_dyn_dup_table
@@ -149,12 +150,13 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				EIDX IN RDB$INDICES
 				WITH EIDX.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+					 EIDX.RDB$PACKAGE_NAME EQUIV NULLIF(object_name.package.c_str(), '') AND
 					 EIDX.RDB$INDEX_NAME EQ object_name.object.c_str()
 			{
 				if (!(freeWhenPossible &&
 					(MetadataCache::getIndexStatus(EIDX.RDB$INDEX_INACTIVE.NULL, EIDX.RDB$INDEX_INACTIVE) ==
 						MET_index_deferred_drop) &&
-						BTR_cleanup_index(tdbb, QualifiedName(EIDX.RDB$RELATION_NAME, EIDX.RDB$SCHEMA_NAME),
+						BTR_cleanup_index(tdbb, QualifiedName(EIDX.RDB$RELATION_NAME, EIDX.RDB$SCHEMA_NAME, EIDX.RDB$PACKAGE_NAME),
 						transaction, MetaId(EIDX.RDB$INDEX_ID - 1))))
 				{
 					*errorCode = 251;	// isc_dyn_dup_index
@@ -510,6 +512,7 @@ void DYN_UTIL_generate_field_position(thread_db* tdbb, const QualifiedName& rela
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATION_FIELDS
 		WITH X.RDB$SCHEMA_NAME EQ relation_name.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(relation_name.package.c_str(), '') AND
 			 X.RDB$RELATION_NAME EQ relation_name.object.c_str()
 	{
 		if (X.RDB$FIELD_POSITION.NULL)
@@ -567,6 +570,7 @@ void DYN_UTIL_generate_index_name(thread_db* tdbb, jrd_tra* /*transaction*/,
 		FOR(REQUEST_HANDLE request)
 			FIRST 1 X IN RDB$INDICES
 			WITH X.RDB$SCHEMA_NAME EQ buffer.schema.c_str() AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(buffer.package.c_str(), '') AND
 				 X.RDB$INDEX_NAME EQ buffer.object.c_str()
 		{
 			found = true;
@@ -665,6 +669,7 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
  *
  **************************************/
 	SET_TDBB(tdbb);
+	fb_assert(view_name.package.isEmpty());
 
 	AutoCacheRequest request(tdbb, drq_l_fld_src2, DYN_REQUESTS);
 	bool found = false;
@@ -676,8 +681,8 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 			 VRL.RDB$VIEW_NAME EQ view_name.object.c_str() AND
 			 VRL.RDB$VIEW_CONTEXT EQ context AND
 			 VRL.RDB$CONTEXT_TYPE BETWEEN VCT_TABLE AND VCT_VIEW AND
-			 VRL.RDB$PACKAGE_NAME MISSING AND
 			 RFR.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
+			 RFR.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
 			 RFR.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME AND
 			 RFR.RDB$FIELD_NAME EQ local_name
 	{

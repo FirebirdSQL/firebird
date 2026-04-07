@@ -243,6 +243,7 @@ static void define_default_class(thread_db* tdbb,
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+				 REL.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 				 REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		{
             MODIFY REL USING
@@ -355,6 +356,7 @@ static void get_object_info(thread_db* tdbb,
 		FOR(REQUEST_HANDLE request)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 REL.RDB$PACKAGE_NAME EQUIV NULLIF(object_name.package.c_str(), '') AND
 				 REL.RDB$RELATION_NAME EQ object_name.object.c_str()
 		{
 			s_class = REL.RDB$SECURITY_CLASS;
@@ -749,6 +751,8 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
  *	security class to be effective.
  *
  **************************************/
+	fb_assert(relation_name.package.isEmpty());
+
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
@@ -772,9 +776,12 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 		CROSS PRV IN RDB$USER_PRIVILEGES OVER RDB$RELATION_NAME, RDB$FIELD_NAME
 		CROSS REL IN RDB$RELATIONS OVER RDB$RELATION_NAME
 		WITH PRV.RDB$RELATION_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+			 FLD.RDB$PACKAGE_NAME MISSING AND
 			 PRV.RDB$OBJECT_TYPE EQ obj_relation AND
 			 PRV.RDB$RELATION_SCHEMA_NAME EQ relation_name.schema.c_str() AND
 			 PRV.RDB$RELATION_NAME EQ relation_name.object.c_str() AND
+			 REL.RDB$SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME MISSING AND
 			 PRV.RDB$FIELD_NAME NOT MISSING AND
 			 (PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user)
 		SORTED BY PRV.RDB$FIELD_NAME, PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME
@@ -837,6 +844,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 				FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 					RFR IN RDB$RELATION_FIELDS
 					WITH RFR.RDB$SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+						 RFR.RDB$PACKAGE_NAME MISSING AND
 						 RFR.RDB$RELATION_NAME EQ FLD.RDB$RELATION_NAME AND
 						 RFR.RDB$FIELD_NAME EQ FLD.RDB$FIELD_NAME
 				{

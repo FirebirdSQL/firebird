@@ -633,8 +633,14 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 
 				return node;
 			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowTablesNode>(text, TOKEN_TABLES, 5))
-				return parsed.value();
+			else if (text.length() >= 5 && TOKEN_TABLES.find(text) == 0)
+			{
+				ShowTablesNode node;
+				node.name = parseQualifiedName(true);
+
+				if (parseEof())
+					return node;
+			}
 			else if (const auto parsed = parseShowOptQualifiedName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4))
 				return parsed.value();
 			else if (text == TOKEN_USERS)

@@ -805,13 +805,16 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 
 		case blr_relation3:
 			csb->csb_blr_reader.getMetaName(name.schema);
+			csb->csb_blr_reader.getMetaName(name.package);
 			[[fallthrough]];
 
 		case blr_relation:
 		case blr_relation2:
 		{
 			csb->csb_blr_reader.getMetaName(name.object);
-			csb->qualifyExistingName(tdbb, name, obj_relation);
+
+			if (blrOp != blr_relation3)
+				csb->qualifyExistingName(tdbb, name, obj_relation);
 
 			if (blrOp == blr_relation2 || blrOp == blr_relation3)
 			{
@@ -894,11 +897,13 @@ void RelationSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		if (relation->rel_name.schema != dsqlScratch->ddlSchema)
+		if (relation->rel_name.package.hasData() || relation->rel_name.schema != dsqlScratch->ddlSchema)
 		{
 			dsqlScratch->appendUChar(blr_relation3);
 			dsqlScratch->appendMetaString(relation->rel_name.schema.c_str());
+			dsqlScratch->appendMetaString(relation->rel_name.package.c_str());
 			dsqlScratch->appendMetaString(relation->rel_name.object.c_str());
+
 			if (dsqlContext->ctx_alias.isEmpty())
 				dsqlScratch->appendMetaString("");
 		}

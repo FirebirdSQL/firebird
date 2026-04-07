@@ -159,6 +159,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	bool rel_private = false;		// Packaged private relation
 };
 
 // rel_flags bits

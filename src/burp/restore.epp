@@ -490,6 +490,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			CROSS IDS IN RDB$INDICES WITH
 			CNST.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
 			CNST.RDB$SCHEMA_NAME EQUIV IDS.RDB$SCHEMA_NAME AND
+			IDS.RDB$PACKAGE_NAME MISSING AND
 			CNST.RDB$INDEX_NAME EQ IDS.RDB$INDEX_NAME AND
 			IDS.RDB$INDEX_INACTIVE EQ DEFERRED_ACTIVE
 		{
@@ -3862,6 +3863,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 		{
 			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			X.RDB$SCHEMA_NAME.NULL = TRUE;
+			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$FIELD_POSITION = 0;
 			X.RDB$VIEW_CONTEXT.NULL = TRUE;
 			X.RDB$BASE_FIELD.NULL = TRUE;
@@ -3892,6 +3894,12 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 			{
 				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
 				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+
+			if (relation->rel_name.package.hasData())
+			{
+				strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+				X.RDB$PACKAGE_NAME.NULL = FALSE;
 			}
 
 			skip_init(&scan_next_attr);
@@ -6746,6 +6754,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			X.RDB$INDEX_INACTIVE = TRUE;
 
 		X.RDB$SCHEMA_NAME.NULL = TRUE;
+		X.RDB$PACKAGE_NAME.NULL = TRUE;
 		X.RDB$INDEX_TYPE.NULL = TRUE;
 		X.RDB$DESCRIPTION.NULL = TRUE;
 		X.RDB$FOREIGN_KEY_SCHEMA_NAME.NULL = TRUE;
@@ -6764,6 +6773,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			X.RDB$SCHEMA_NAME.NULL = FALSE;
 		}
 
+		if (relation->rel_name.package.hasData())
+		{
+			strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+			X.RDB$PACKAGE_NAME.NULL = FALSE;
+		}
+
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
 		{
@@ -6772,7 +6787,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			case att_index_name:
 				GET_TEXT(X.RDB$INDEX_NAME);
 				strcpy(index_name, X.RDB$INDEX_NAME);
-				BURP_verbose(122, QualifiedMetaString(X.RDB$INDEX_NAME, relation->rel_name.schema).toQuotedString());
+				BURP_verbose(122, QualifiedMetaString(
+					X.RDB$INDEX_NAME, relation->rel_name.schema, relation->rel_name.package).toQuotedString());
 				break;
 
 			case att_segment_count:
@@ -6817,6 +6833,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 					Y.RDB$SCHEMA_NAME.NULL = X.RDB$SCHEMA_NAME.NULL;
 					if (!X.RDB$SCHEMA_NAME.NULL)
 						strcpy(Y.RDB$SCHEMA_NAME, X.RDB$SCHEMA_NAME);
+
+					Y.RDB$PACKAGE_NAME.NULL = X.RDB$PACKAGE_NAME.NULL;
+					if (!X.RDB$PACKAGE_NAME.NULL)
+						strcpy(Y.RDB$PACKAGE_NAME, X.RDB$PACKAGE_NAME);
 				}
 				END_STORE
 				ON_ERROR
@@ -6898,8 +6918,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			RFR IN RDB$RELATION_FIELDS
 			CROSS IDS IN RDB$INDEX_SEGMENTS
 			WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 				 RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
 				 IDS.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
+				 IDS.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 				 IDS.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
 				 IDS.RDB$INDEX_NAME = index_name
 		{
@@ -6915,6 +6937,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle4)
 				IDS IN RDB$INDEX_SEGMENTS
 				WITH IDS.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 IDS.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 					 IDS.RDB$INDEX_NAME = index_name
 			{
 				ERASE IDS;
@@ -8051,6 +8074,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 				ext_desc_null = true;
 	FB_BOOLEAN	sql_security = FB_FALSE;
 	bool		sql_security_null = true;
+	USHORT		private_flag = 0;
+	bool		private_flag_null = true;
 
 	BASED_ON RDB$RELATIONS.RDB$SECURITY_CLASS sec_class;
 	sec_class[0] = '\0';
@@ -8097,6 +8122,11 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		case att_relation_schema_name:
 			GET_TEXT(temp);
 			relation->rel_name.schema = temp;
+			break;
+
+		case att_relation_package_name:
+			GET_TEXT(temp);
+			relation->rel_name.package = temp;
 			break;
 
 		case att_relation_name:
@@ -8182,6 +8212,11 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			sql_security = get_boolean(tdgbl, attribute == att_relation_sql_security_deprecated);
 			break;
 
+		case att_relation_private_flag:
+			private_flag_null = false;
+			private_flag = (USHORT) get_int32(tdgbl);
+			break;
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
@@ -8214,6 +8249,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = FALSE;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
+			X.RDB$PACKAGE_NAME.NULL = TRUE;
+			X.RDB$PRIVATE_FLAG.NULL = private_flag_null;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -8228,12 +8265,19 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 				X.RDB$SCHEMA_NAME.NULL = FALSE;
 			}
 
+			if (relation->rel_name.package.hasData())
+			{
+				strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+				X.RDB$PACKAGE_NAME.NULL = FALSE;
+			}
+
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
 			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
+			X.RDB$PRIVATE_FLAG = private_flag;
 		}
 		END_STORE
 		ON_ERROR
@@ -8466,6 +8510,11 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 		case att_relation_schema_name:
 			GET_TEXT(temp);
 			name.schema = temp;
+			break;
+
+		case att_relation_package_name:
+			GET_TEXT(temp);
+			name.package = temp;
 			break;
 
 		case att_relation_name:
@@ -11585,6 +11634,10 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	USHORT result = 0;
+	fb_assert(current_view_name.package.isEmpty());
+
+	if (current_view_name.package.hasData())
+		return result;
 
 	FOR (REQUEST_HANDLE req_handle1)
 		V IN RDB$VIEW_RELATIONS
@@ -11593,6 +11646,7 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		  V.RDB$SCHEMA_NAME EQUIV NULLIF(current_view_name.schema.c_str(), '') AND
 		  V.RDB$VIEW_NAME EQ current_view_name.object.c_str() AND
 		  R.RDB$SCHEMA_NAME EQUIV V.RDB$RELATION_SCHEMA_NAME AND
+		  R.RDB$PACKAGE_NAME EQUIV V.RDB$PACKAGE_NAME AND
 		  R.RDB$RELATION_NAME EQ V.RDB$RELATION_NAME
 	{
 		if (R.RDB$VIEW_BLR.NULL)
@@ -11602,6 +11656,8 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		}
 		else
 		{
+			fb_assert(V.RDB$PACKAGE_NAME.NULL);
+
 			// Call recursive for VIEWS that are referenced in VIEWS
 			result += get_view_base_relation_count(tdgbl,
 				QualifiedMetaString(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME),
@@ -12001,6 +12057,7 @@ void update_ownership(BurpGlobals* tdgbl)
 			FOR (REQUEST_HANDLE req_handle2)
 				X IN RDB$RELATIONS
 				WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 X.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 					 X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 			{
 				MODIFY X
@@ -13674,6 +13731,7 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	{
 		add_byte(blr, blr_relation3);
 		add_string(blr, m_relation->rel_name.schema.c_str());
+		add_string(blr, m_relation->rel_name.package.c_str());
 		add_string(blr, m_relation->rel_name.object.c_str());
 		add_string(blr, "");
 	}

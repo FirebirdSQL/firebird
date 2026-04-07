@@ -1255,4 +1255,3 @@ GCLock::State GCLock::isGCEnabled() const
 	return State::unknown;
 }
 #endif //DEV_BUILD
-

@@ -464,9 +464,8 @@ void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR ind
 
 	// No security to check for if the index is not yet created
 
-    if ((index_name.object.length() == 0) && (index_id < 1)) {
+    if (index_name.object.isEmpty() && index_id < 1)
         return;
-    }
 
 	QualifiedName reln_name, aux_idx_name;
 	auto idx_name_ptr = &index_name;
@@ -478,15 +477,20 @@ void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR ind
 	// No need to cache this request handle, it's only used when
 	// new constraints are created
 
-    if (index_id < 1)
-    {
-        FOR(REQUEST_HANDLE request)
+	if (index_id < 1)
+	{
+		FOR(REQUEST_HANDLE request)
 			IND IN RDB$INDICES
-			CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			CROSS REL IN RDB$RELATIONS
 			WITH IND.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
-				 IND.RDB$INDEX_NAME EQ index_name.object.c_str()
+				 IND.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
+				 IND.RDB$INDEX_NAME EQ index_name.object.c_str() AND
+				 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+				 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 		{
-            reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+			reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
+
 		    if (!REL.RDB$SECURITY_CLASS.NULL)
                 s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
             if (!REL.RDB$DEFAULT_CLASS.NULL)
@@ -500,17 +504,23 @@ void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR ind
         idx_name_ptr = &aux_idx_name;
 		FOR (REQUEST_HANDLE request)
 			IND IN RDB$INDICES
-            CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			CROSS REL IN RDB$RELATIONS
 			WITH IND.RDB$SCHEMA_NAME EQ relation_name_ptr->schema.c_str() AND
+				 IND.RDB$PACKAGE_NAME EQUIV NULLIF(relation_name_ptr->package.c_str(), '') AND
 				 IND.RDB$RELATION_NAME EQ relation_name_ptr->object.c_str() AND
-				 IND.RDB$INDEX_ID EQ index_id
+				 IND.RDB$INDEX_ID EQ index_id AND
+				 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+				 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 		{
-            reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
-            aux_idx_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
+			reln_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
+			aux_idx_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME, IND.RDB$PACKAGE_NAME);
+
             if (!REL.RDB$SECURITY_CLASS.NULL)
                 s_class = SCL_get_class(tdbb, REL.RDB$SECURITY_CLASS);
             if (!REL.RDB$DEFAULT_CLASS.NULL)
                 default_s_class = SCL_get_class(tdbb, REL.RDB$DEFAULT_CLASS);
+
 			systemFlag = REL.RDB$SYSTEM_FLAG;
         }
         END_FOR
@@ -529,24 +539,46 @@ void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR ind
 	if (reln_name.object.isEmpty())
 		return;
 
+	if (reln_name.package.hasData())
+	{
+		request.reset();
+
+		FOR(REQUEST_HANDLE request)
+			PKG IN RDB$PACKAGES
+			WITH PKG.RDB$SCHEMA_NAME EQ reln_name.schema.c_str() AND
+				 PKG.RDB$PACKAGE_NAME EQ reln_name.package.c_str()
+		{
+			s_class = !PKG.RDB$SECURITY_CLASS.NULL ?
+				SCL_get_class(tdbb, PKG.RDB$SECURITY_CLASS) : nullptr;
+
+			// Packaged relations inherit relation/field fallback checks from the package.
+			default_s_class = s_class;
+		}
+		END_FOR
+	}
+
 	SCL_check_access(tdbb, s_class, 0, {}, mask, obj_relations, false, reln_name);
 
 	request.reset();
 
 	// Check if the field used in the index has the appropriate
 	// permission. If the field in question does not have a security class
-	// defined, then the default security class for the table applies for that
-	// field.
+	// defined, then the table default security class applies. For packaged
+	// relations, this fallback uses the package security class.
 
 	// No need to cache this request handle, it's only used when
 	// new constraints are created
 
+	fb_assert(reln_name.package == idx_name_ptr->package);
 	FOR(REQUEST_HANDLE request)
 		ISEG IN RDB$INDEX_SEGMENTS
-		CROSS RF IN RDB$RELATION_FIELDS OVER RDB$SCHEMA_NAME, RDB$FIELD_NAME
-		WITH RF.RDB$SCHEMA_NAME EQ reln_name.schema.c_str() AND
+		CROSS RF IN RDB$RELATION_FIELDS
+		WITH RF.RDB$SCHEMA_NAME EQ ISEG.RDB$SCHEMA_NAME AND
+			 RF.RDB$PACKAGE_NAME EQUIV ISEG.RDB$PACKAGE_NAME AND
+			 RF.RDB$FIELD_NAME EQ ISEG.RDB$FIELD_NAME AND
+			 RF.RDB$SCHEMA_NAME EQ reln_name.schema.c_str() AND
+			 RF.RDB$PACKAGE_NAME EQUIV NULLIF(reln_name.package.c_str(), '') AND
 			 RF.RDB$RELATION_NAME EQ reln_name.object.c_str() AND
-			 ISEG.RDB$SCHEMA_NAME EQ idx_name_ptr->schema.c_str() AND
 			 ISEG.RDB$INDEX_NAME EQ idx_name_ptr->object.c_str()
 	{
 		s_class = (!RF.RDB$SECURITY_CLASS.NULL) ?
@@ -728,6 +760,12 @@ void SCL_check_relation(thread_db* tdbb, const QualifiedName& name, SecurityClas
  *
  **************************************/
 	SET_TDBB(tdbb);
+
+	if (name.package.hasData())
+	{
+		SCL_check_package(tdbb, name.getSchemaAndPackage(), mask);
+		return;
+	}
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
@@ -1808,4 +1846,3 @@ static bool check_object(thread_db* tdbb,
 	}
 	return found;
 }
-

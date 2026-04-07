@@ -1357,7 +1357,8 @@ dsql_rel::dsql_rel(MemoryPool& p, jrd_rel* jrel)
 	  rel_owner(p, jrel->getOwnerName()),
 	  rel_id(jrel->getId()),
 	  rel_dbkey_length(jrel->rel_dbkey_length),
-	  rel_flags((jrel->getExtFile() ? REL_external : 0) | (jrel->isView() ? REL_view : 0))
+	  rel_flags((jrel->getExtFile() ? REL_external : 0) | (jrel->isView() ? REL_view : 0)),
+	  rel_private(jrel->isPrivate())
 {
 	if (!(jrel->rel_fields))
 		return;

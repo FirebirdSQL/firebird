@@ -1006,3 +1006,4 @@ FB_IMPL_MSG(JRD, 1003, percetile_only_one_sort_item, -833, "42", "000", "The PER
 FB_IMPL_MSG(JRD, 1004, argmustbe_const_within_group, -833, "42", "000", "Argument for @1 function must be constant within each group")
 FB_IMPL_MSG(JRD, 1005, update_overwrite, -901, "27", "000", "UPDATE will overwrite changes made by the trigger or by the another UPDATE in the same cursor")
 FB_IMPL_MSG(JRD, 1006, pman_plugin_dirname, -901, "00", "000", "Plugin @1 can not be loaded - name should not contain directory separator and path component")
+FB_IMPL_MSG(JRD, 1007, private_table, -901, "42", "000", "Table @1 is private to package @2")

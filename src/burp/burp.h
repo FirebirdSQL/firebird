@@ -212,6 +212,13 @@ Version 11: FB4.0.
 
 Version 12: FB6.0.
 			Schemas.
+
+			Packaged tables:
+			RDB$RELATIONS.RDB$PACKAGE_NAME,
+			RDB$RELATIONS.RDB$PRIVATE_FLAG,
+			RDB$RELATION_FIELDSS.RDB$PACKAGE_NAME,
+			RDB$INDICES.RDB$PACKAGE_NAME and
+			RDB$INDEX_SEGMENTS.RDB$PACKAGE_NAME.
 */
 
 inline constexpr int ATT_BACKUP_FORMAT = 12;
@@ -291,6 +298,8 @@ enum att_type {
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
 	att_relation_schema_name,
+	att_relation_package_name,
+	att_relation_private_flag,
 
 	// Field attributes (used for both global and local fields)
 
