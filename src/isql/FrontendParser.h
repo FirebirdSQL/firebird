@@ -254,7 +254,7 @@ private:
 
 	template <typename Node>
 	std::optional<AnyShowNode> parseShowOptQualifiedName(std::string_view showCommand,
-		std::string_view testCommand, unsigned testCommandMinLen = 0);
+		std::string_view testCommand, unsigned testCommandMinLen, bool allowPackage);
 
 	bool parseEof()
 	{

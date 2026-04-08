@@ -501,11 +501,11 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 		{
 			const auto& text = showCommandToken.processedText;
 
-			if (const auto parsed = parseShowOptQualifiedName<ShowChecksNode>(text, TOKEN_CHECKS, 5))
+			if (const auto parsed = parseShowOptQualifiedName<ShowChecksNode>(text, TOKEN_CHECKS, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATES, 7))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATES, 7, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATIONS, 9))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATIONS, 9, false))
 				return parsed.value();
 			else if (text.length() >= 7 && TOKEN_COMMENTS.find(text) == 0)
 			{
@@ -517,44 +517,32 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowDatabaseNode();
 			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCIES, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCIES, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCY, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCY, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowDomainsNode>(text, TOKEN_DOMAINS, 6))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDomainsNode>(text, TOKEN_DOMAINS, 6, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowExceptionsNode>(text, TOKEN_EXCEPTIONS, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowExceptionsNode>(text, TOKEN_EXCEPTIONS, 5, false))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowFiltersNode>(text, TOKEN_FILTERS, 6))
 				return parsed.value();
-			else if (text.length() >= 4 && TOKEN_FUNCTIONS.find(text) == 0)
-			{
-				ShowFunctionsNode node;
-				node.name = parseQualifiedName(true);
-
-				if (parseEof())
-					return node;
-			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDEXES, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowFunctionsNode>(text, TOKEN_FUNCTIONS, 4, true))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDICES, 0))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDEXES, 3, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_GENERATORS, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDICES, 0, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowGrantsNode>(text, TOKEN_GRANTS, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_GENERATORS, 3, false))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGrantsNode>(text, TOKEN_GRANTS, 5, false))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowMappingsNode>(text, TOKEN_MAPPINGS, 3))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptQualifiedName<ShowPackagesNode>(text, TOKEN_PACKAGES, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowPackagesNode>(text, TOKEN_PACKAGES, 4, false))
 				return parsed.value();
-			else if (text.length() >= 4 && TOKEN_PROCEDURES.find(text) == 0)
-			{
-				ShowProceduresNode node;
-				node.name = parseQualifiedName(true);
-
-				if (parseEof())
-					return node;
-			}
+			else if (const auto parsed = parseShowOptQualifiedName<ShowProceduresNode>(text, TOKEN_PROCEDURES, 4, true))
+				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowPublicationsNode>(text, TOKEN_PUBLICATIONS, 3))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowRolesNode>(text, TOKEN_ROLES, 4))
@@ -586,7 +574,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return node;
 			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_SEQUENCES, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_SEQUENCES, 3, false))
 				return parsed.value();
 			else if (text == TOKEN_SQL)
 			{
@@ -633,15 +621,9 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 
 				return node;
 			}
-			else if (text.length() >= 5 && TOKEN_TABLES.find(text) == 0)
-			{
-				ShowTablesNode node;
-				node.name = parseQualifiedName(true);
-
-				if (parseEof())
-					return node;
-			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowTablesNode>(text, TOKEN_TABLES, 5, true))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptQualifiedName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4, false))
 				return parsed.value();
 			else if (text == TOKEN_USERS)
 			{
@@ -653,7 +635,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowVersionNode();
 			}
-			else if (const auto parsed = parseShowOptQualifiedName<ShowViewsNode>(text, TOKEN_VIEWS, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowViewsNode>(text, TOKEN_VIEWS, 4, false))
 				return parsed.value();
 			else if (text.length() >= 9 && TOKEN_WIRE_STATISTICS.find(text) == 0 ||
 				text == TOKEN_WIRE_STATS)
@@ -694,14 +676,14 @@ std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptName(std:
 
 template <typename Node>
 std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptQualifiedName(std::string_view showCommand,
-	std::string_view testCommand, unsigned testCommandMinLen)
+	std::string_view testCommand, unsigned testCommandMinLen, bool allowPackage)
 {
 	if (showCommand == testCommand ||
 		(testCommandMinLen && showCommand.length() >= testCommandMinLen &&
 			std::string(testCommand).find(showCommand) == 0))
 	{
 		Node node;
-		node.name = parseQualifiedName();
+		node.name = parseQualifiedName(allowPackage);
 
 		if (!parseEof())
 			return InvalidNode();
