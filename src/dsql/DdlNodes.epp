@@ -372,15 +372,18 @@ static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 		Y IN RDB$RELATION_FIELDS CROSS
 		Z IN RDB$VIEW_RELATIONS
 		WITH X.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 X.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 X.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 X.RDB$FIELD_NAME EQ Y.RDB$BASE_FIELD AND
 			 X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ Y.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 			 X.RDB$FIELD_SOURCE EQ Y.RDB$FIELD_SOURCE AND
 			 Y.RDB$SCHEMA_NAME EQ Z.RDB$SCHEMA_NAME AND
+			 Y.RDB$PACKAGE_NAME MISSING AND
 			 Y.RDB$RELATION_NAME EQ Z.RDB$VIEW_NAME AND
 			 X.RDB$SCHEMA_NAME EQ Z.RDB$RELATION_SCHEMA_NAME AND
 			 X.RDB$RELATION_NAME EQ Z.RDB$RELATION_NAME AND
+			 X.RDB$PACKAGE_NAME EQUIV Z.RDB$PACKAGE_NAME AND
 			 Y.RDB$VIEW_CONTEXT EQ Z.RDB$VIEW_CONTEXT
 	{
 		const QualifiedName viewName(Z.RDB$VIEW_NAME, Z.RDB$SCHEMA_NAME);
@@ -588,6 +591,7 @@ static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const QualifiedNa
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		FLD IN RDB$RELATION_FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 FLD.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 FLD.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 FLD.RDB$FIELD_NAME EQ fieldName.c_str()
 	{
@@ -776,6 +780,7 @@ static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		FLD IN RDB$RELATION_FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 FLD.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 FLD.RDB$RELATION_NAME EQ relationName.object.c_str()
 		SORTED BY ASCENDING FLD.RDB$FIELD_POSITION
 	{
@@ -822,6 +827,7 @@ static void modifyLocalFieldPosition(thread_db* tdbb, jrd_tra* transaction,
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		FLD IN RDB$RELATION_FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 FLD.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 FLD.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 			 FLD.RDB$FIELD_POSITION >= MIN(newPosition, existingPosition) AND
 			 FLD.RDB$FIELD_POSITION <= MAX(newPosition, existingPosition)
@@ -7149,6 +7155,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		RFR IN RDB$RELATION_FIELDS
 		WITH RFR.RDB$FIELD_NAME EQ fieldName.c_str() AND
 			 RFR.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+			 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
 			 RFR.RDB$RELATION_NAME EQ relationName.object.c_str()
 	{
 		executePreChangeHandler();
@@ -9949,6 +9956,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 							RFL IN RDB$RELATION_FIELDS
 							WITH RFL.RDB$SCHEMA_NAME = relation->rel_name.schema.c_str() AND
+								 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 								 RFL.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
 								 RFL.RDB$FIELD_NAME = addColumnClause->field->fld_name.c_str()
 						{
@@ -9985,6 +9993,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						RFL IN RDB$RELATION_FIELDS
 						WITH RFL.RDB$FIELD_NAME EQ clause->fromName.c_str() AND
 							 RFL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+							 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 							 RFL.RDB$RELATION_NAME EQ name.object.c_str()
 					{
 						found = true;
@@ -10050,6 +10059,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						RFL IN RDB$RELATION_FIELDS
 						WITH RFL.RDB$FIELD_NAME EQ clause->name.c_str() AND
 							 RFL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+							 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 							 RFL.RDB$RELATION_NAME EQ name.object.c_str()
 					{
 						found = true;
@@ -10203,6 +10213,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 						REL IN RDB$RELATIONS
 						WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+							 REL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 							 REL.RDB$RELATION_NAME EQ name.object.c_str()
 					{
 						MODIFY REL
@@ -10392,9 +10403,11 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			REL IN RDB$RELATIONS CROSS
 			FLD IN RDB$FIELDS
 			WITH RFR.RDB$SCHEMA_NAME = name.schema.c_str() AND
+				 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 				 RFR.RDB$RELATION_NAME = name.object.c_str() AND
 				 RFR.RDB$FIELD_NAME = field->fld_name.c_str() AND
 				 REL.RDB$SCHEMA_NAME = RFR.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 				 REL.RDB$RELATION_NAME = RFR.RDB$RELATION_NAME AND
 				 FLD.RDB$SCHEMA_NAME = RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 				 FLD.RDB$FIELD_NAME = RFR.RDB$FIELD_SOURCE
@@ -12051,6 +12064,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					FLD IN RDB$FIELDS
 					WITH RFL.RDB$FIELD_NAME EQ fieldStr AND
 						 RFL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+						 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 						 RFL.RDB$RELATION_NAME EQ name.object.c_str() AND
 						 RFL.RDB$BASE_FIELD MISSING AND
 						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
@@ -12114,6 +12128,7 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 					FLD IN RDB$FIELDS
 					WITH RFL.RDB$FIELD_NAME EQ fieldStr AND
 						 RFL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+						 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 						 RFL.RDB$RELATION_NAME EQ name.object.c_str() AND
 						 RFL.RDB$BASE_FIELD MISSING AND
 						 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
@@ -12529,11 +12544,13 @@ Cached::Relation* ModifyIndexNode::getRelByIndex(thread_db* tdbb, const Qualifie
 		IDX IN RDB$INDICES
 		WITH
 			IDX.RDB$SCHEMA_NAME EQ index.schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(index.package.c_str(), '') AND
 			IDX.RDB$INDEX_NAME EQ index.object.c_str()
 	{
 		fb_assert(!relation);
 		relation = MetadataCache::getPerm<Cached::Relation>(tdbb,
-			QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME), CacheFlag::AUTOCREATE);
+			QualifiedName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME),
+			CacheFlag::AUTOCREATE);
 	}
 	END_FOR
 
@@ -15919,6 +15936,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 				X IN RDB$RELATIONS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+					 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 					 X.RDB$RELATION_NAME EQ name.object.c_str()
 			{
 				rc = (type != obj_view) || !X.RDB$VIEW_BLR.NULL;
@@ -15968,6 +15986,7 @@ static bool checkFieldExist(thread_db* tdbb, jrd_tra* transaction, const Qualifi
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		X IN RDB$RELATION_FIELDS
 		WITH X.RDB$SCHEMA_NAME EQ relation.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(relation.package.c_str(), '') AND
 			 X.RDB$RELATION_NAME EQ relation.object.c_str() AND
 			 X.RDB$FIELD_NAME EQ field.c_str()
 	{
