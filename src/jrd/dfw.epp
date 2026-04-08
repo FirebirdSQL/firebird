@@ -2147,8 +2147,7 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 	{
 	case 1:
 		{
-			// If RDB$PACKAGE_NAME IS NOT NULL or no record is found in RDB$RELATIONS,
-			// the context is a procedure;
+			// If no record is found in RDB$RELATIONS, the context is a procedure;
 			ViewContextType vct = VCT_PROCEDURE;
 
 			AutoRequest handle1;

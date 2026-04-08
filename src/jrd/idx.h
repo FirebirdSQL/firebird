@@ -459,7 +459,8 @@ static inline constexpr struct ini_idx_t indices[] =
 	// define index RDB$INDEX_84 for RDB$VIEW_RELATIONS RDB$RELATION_SCHEMA_NAME, RDB$RELATION_NAME;
 	INDEX(84, rel_vrel, 0, 2, ODS_14_0)
 		SEGMENT(f_vrl_rname_schema, idx_metadata),	// schema name
-		SEGMENT(f_vrl_rname, idx_metadata)		// base relation name
+		SEGMENT(f_vrl_pkg_name, idx_metadata),		// package name
+		SEGMENT(f_vrl_rname, idx_metadata)			// base relation name
 	}},
 	// define index RDB$INDEX_85 for RDB$TRIGGER_MESSAGES RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
 	INDEX(85, rel_msgs, 0, 2, ODS_14_0)
