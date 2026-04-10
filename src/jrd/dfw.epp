@@ -1707,6 +1707,7 @@ void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityLis
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		SEG IN RDB$INDEX_SEGMENTS
 		WITH SEG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 SEG.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 SEG.RDB$INDEX_NAME EQ name.object.c_str()
 		SORTED BY SEG.RDB$FIELD_POSITION
 	{
@@ -1721,6 +1722,7 @@ void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityLis
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ name.object.c_str()
 	{
 		MODIFY IDX USING
@@ -2145,8 +2147,7 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 	{
 	case 1:
 		{
-			// If RDB$PACKAGE_NAME IS NOT NULL or no record is found in RDB$RELATIONS,
-			// the context is a procedure;
+			// If no record is found in RDB$RELATIONS, the context is a procedure;
 			ViewContextType vct = VCT_PROCEDURE;
 
 			AutoRequest handle1;
@@ -2156,9 +2157,9 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 				WITH VRL.RDB$SCHEMA_NAME = work->dfw_schema.c_str() AND
 					 VRL.RDB$VIEW_NAME = work->dfw_name.c_str() AND
 					 VRL.RDB$VIEW_CONTEXT = work->dfw_id AND
-					 VRL.RDB$PACKAGE_NAME MISSING AND
-			 		 REL.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
-			 		 REL.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME
+					 REL.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
+					 REL.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME
 			{
 				vct = (REL.RDB$VIEW_BLR.NULL ? VCT_TABLE : VCT_VIEW);
 			}
@@ -2545,7 +2546,11 @@ void DFW_reset_icu(thread_db* tdbb)
 			           coalesce(rfl.RDB$COLLATION_ID, fld.RDB$COLLATION_ID) = coll.RDB$COLLATION_ID
 			    join SYSTEM.RDB$CHARACTER_SETS cs
 			        on coll.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID
-			    where coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' and
+			    where ind.RDB$PACKAGE_NAME is null and
+					  rel.RDB$PACKAGE_NAME is null and
+					  seg.RDB$PACKAGE_NAME is null and
+					  rfl.RDB$PACKAGE_NAME is null and
+					  coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' and
 			          coalesce(ind.RDB$INDEX_INACTIVE, 0) = 0 and
 			          coalesce(rel.RDB$RELATION_TYPE, 0) = 0  -- rel_persistent
 			    group by ind.RDB$SCHEMA_NAME,
@@ -2629,6 +2634,7 @@ void DFW_reset_icu(thread_db* tdbb)
 				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 					IDX IN RDB$INDICES
 					WITH IDX.RDB$SCHEMA_NAME EQ idx.schema.c_str() AND
+						 IDX.RDB$PACKAGE_NAME MISSING AND
 						 IDX.RDB$INDEX_NAME EQ idx.object.c_str()
 				{
 					MODIFY IDX
@@ -2830,7 +2836,8 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 			(work->dfw_type == dfw_modify_trigger && dfw_type == dfw_delete_trigger) ||
 			(work->dfw_type == dfw_modify_function && dfw_type == dfw_delete_function)) &&
 			work->dfw_schema == object_name.schema &&
-			work->dfw_name == object_name.object.c_str() && work->dfw_package.isEmpty() &&
+			work->dfw_name == object_name.object.c_str() &&
+			work->dfw_package == object_name.package &&
 			(!rel_id || rel_id == work->dfw_id))
 		{
 			if (work->dfw_type == dfw_modify_procedure || work->dfw_type == dfw_modify_function)
@@ -2846,7 +2853,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 		}
 
 		if (work->dfw_type == dfw_type && dfw_type == dfw_delete_index &&
-			QualifiedName(work->dfw_name, work->dfw_schema) == object_name)
+			QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package) == object_name)
 		{
 			return true;
 		}
@@ -2870,6 +2877,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 					 RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
 					 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
 					 REL.RDB$SCHEMA_NAME EQ RFR.RDB$SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 					 REL.RDB$RELATION_NAME EQ RFR.RDB$RELATION_NAME
 			{
 				if (!find_depend_in_dfw(tdbb, QualifiedName(RFR.RDB$FIELD_NAME), obj_computed,
@@ -3006,9 +3014,12 @@ static bool delete_field(thread_db*	tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		FOR(REQUEST_HANDLE handle)
 			RFR IN RDB$RELATION_FIELDS
-			CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			CROSS REL IN RDB$RELATIONS
 			WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-				 RFR.RDB$FIELD_SOURCE EQ work->dfw_name.c_str()
+				 RFR.RDB$FIELD_SOURCE EQ work->dfw_name.c_str() AND
+				 REL.RDB$SCHEMA_NAME EQ RFR.RDB$SCHEMA_NAME AND
+				 REL.RDB$RELATION_NAME EQ RFR.RDB$RELATION_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME
 		{
 			// If the rfr field is also being deleted, there's no dependency
 			if (!find_depend_in_dfw(tdbb, QualifiedName(RFR.RDB$FIELD_NAME), obj_computed, REL.RDB$RELATION_ID,
@@ -3076,7 +3087,10 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						 RFL.RDB$FIELD_SOURCE_SCHEMA_NAME EQ depName.schema.c_str() AND
 						 RFL.RDB$FIELD_SOURCE EQ depName.object.c_str() AND
 						 (RFL.RDB$NULL_FLAG MISSING OR RFL.RDB$NULL_FLAG = FALSE) AND
-						 REL.RDB$VIEW_BLR MISSING
+						 REL.RDB$VIEW_BLR MISSING AND
+						 // Packaged tables are temporary and dfw_check_not_null do not work for them
+						 REL.RDB$PACKAGE_NAME MISSING AND
+						 RFL.RDB$PACKAGE_NAME MISSING
 					REDUCED TO RFL.RDB$SCHEMA_NAME, RFL.RDB$RELATION_NAME, RFL.RDB$FIELD_ID
 				{
 					dsc schemaDesc;
@@ -3394,6 +3408,7 @@ static bool set_statistics(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			IDX IN RDB$INDICES
 			WITH IDX.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
+				 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '') AND
 				 IDX.RDB$INDEX_NAME EQ work->dfw_name.c_str()
 		{
 			// Request to recalculate statistics?
@@ -3621,7 +3636,8 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		FOR(REQUEST_HANDLE request)
 			X IN RDB$VIEW_RELATIONS
 			WITH X.RDB$RELATION_SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-				 X.RDB$RELATION_NAME EQ work->dfw_name.c_str()
+				 X.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '')
 		{
 			// If the view is also being deleted, there's no dependency
 			if (!find_depend_in_dfw(tdbb, QualifiedName(X.RDB$VIEW_NAME, X.RDB$SCHEMA_NAME), obj_view, 0, transaction))
@@ -3772,9 +3788,11 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			CROSS VFLD IN RDB$RELATION_FIELDS
 			WITH REL.RDB$RELATION_ID EQ work->dfw_id AND
 				 VR.RDB$RELATION_SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+				 VR.RDB$PACKAGE_NAME EQUIV REL.RDB$PACKAGE_NAME AND
 				 VR.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
 				 VFLD.RDB$VIEW_CONTEXT EQ VR.RDB$VIEW_CONTEXT AND
 				 VFLD.RDB$SCHEMA_NAME EQ VR.RDB$SCHEMA_NAME AND
+				 VFLD.RDB$PACKAGE_NAME MISSING AND
 				 VFLD.RDB$RELATION_NAME EQ VR.RDB$VIEW_NAME AND
 				 VFLD.RDB$BASE_FIELD EQ work->dfw_name.c_str()
 		{
@@ -3832,10 +3850,14 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			handle.reset();
 
 			FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-				REL IN RDB$RELATIONS CROSS
-					RFLD IN RDB$RELATION_FIELDS OVER RDB$RELATION_NAME
-					WITH REL.RDB$RELATION_ID EQ work->dfw_id
+				REL IN RDB$RELATIONS
+				CROSS RFLD IN RDB$RELATION_FIELDS
+				WITH RFLD.RDB$SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+					 RFLD.RDB$PACKAGE_NAME EQUIV REL.RDB$PACKAGE_NAME AND
+					 REL.RDB$RELATION_ID EQ work->dfw_id
+			{
 				field_count++;
+			}
 			END_FOR
 
 			if (!field_count)
@@ -4405,6 +4427,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 						FLD IN RDB$FIELDS
 						WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
 							 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+							 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '') AND
 							 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 							 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
 							 RFL.RDB$FIELD_ID EQ *itr AND

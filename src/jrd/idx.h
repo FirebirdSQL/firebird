@@ -314,9 +314,10 @@ static inline constexpr struct ini_idx_t indices[] =
 	INDEX(58, rel_schemas, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_sch_schema, idx_metadata)		// schema name
 	}},
-	// define index RDB$INDEX_59 for RDB$RELATIONS unique RDB$SCHEMA_NAME, RDB$RELATION_NAME;
-	INDEX(59, rel_relations, idx_unique, 2, ODS_14_0)
+	// define index RDB$INDEX_59 for RDB$RELATIONS unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$RELATION_NAME;
+	INDEX(59, rel_relations, idx_unique, 3, ODS_14_0)
 		SEGMENT(f_rel_schema, idx_metadata),	// schema name
+		SEGMENT(f_rel_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_rel_name, idx_metadata)		// relation name
 	}},
 	// define index RDB$INDEX_60 for RDB$FIELDS unique RDB$SCHEMA_NAME, RDB$FIELD_NAME;
@@ -329,19 +330,22 @@ static inline constexpr struct ini_idx_t indices[] =
 		SEGMENT(f_rfr_field_source_schema, idx_metadata),	// field source schema name
 		SEGMENT(f_rfr_sname, idx_metadata)		// field source name
 	}},
-	// define index RDB$INDEX_62 for RDB$RELATION_FIELDS RDB$SCHEMA_NAME, RDB$RELATION_NAME;
-	INDEX(62, rel_rfr, 0, 2, ODS_14_0)
+	// define index RDB$INDEX_62 for RDB$RELATION_FIELDS RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$RELATION_NAME;
+	INDEX(62, rel_rfr, 0, 3, ODS_14_0)
 		SEGMENT(f_rfr_schema, idx_metadata),	// schema name
+		SEGMENT(f_rfr_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_rfr_rname, idx_metadata)		// relation name in RFR
 	}},
-	// define index RDB$INDEX_63 for RDB$INDICES unique RDB$SCHEMA_NAME, RDB$INDEX_NAME;
-	INDEX(63, rel_indices, idx_unique, 2, ODS_14_0)
+	// define index RDB$INDEX_63 for RDB$INDICES unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$INDEX_NAME;
+	INDEX(63, rel_indices, idx_unique, 3, ODS_14_0)
 		SEGMENT(f_idx_schema, idx_metadata),	// schema name
+		SEGMENT(f_idx_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_idx_name, idx_metadata)		// index name
 	}},
-	// define index RDB$INDEX_64 for RDB$INDEX_SEGMENTS RDB$SCHEMA_NAME, RDB$INDEX_NAME;
-	INDEX(64, rel_segments, 0, 2, ODS_14_0)
+	// define index RDB$INDEX_64 for RDB$INDEX_SEGMENTS RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$INDEX_NAME;
+	INDEX(64, rel_segments, 0, 3, ODS_14_0)
 		SEGMENT(f_seg_schema, idx_metadata),	// schema name
+		SEGMENT(f_seg_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_seg_name, idx_metadata)		// index name in seg
 	}},
 	// define index RDB$INDEX_65 for RDB$TRIGGERS unique RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
@@ -381,10 +385,11 @@ static inline constexpr struct ini_idx_t indices[] =
 		SEGMENT(f_ccon_schema, idx_metadata),	// schema name
 		SEGMENT(f_ccon_cname, idx_metadata)		// constraint name
 	}},
-	// define index RDB$INDEX_72 for RDB$RELATION_FIELDS unique RDB$FIELD_NAME, RDB$SCHEMA_NAME, RDB$RELATION_NAME;
-	INDEX(72, rel_rfr, idx_unique, 3, ODS_14_0)
+	// define index RDB$INDEX_72 for RDB$RELATION_FIELDS unique RDB$FIELD_NAME, RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$RELATION_NAME;
+	INDEX(72, rel_rfr, idx_unique, 4, ODS_14_0)
 		SEGMENT(f_rfr_fname, idx_metadata),		// field name
 		SEGMENT(f_rfr_schema, idx_metadata),	// schema name
+		SEGMENT(f_rfr_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_rfr_rname, idx_metadata)		// relation name
 	}},
 	// define index RDB$INDEX_73 for RDB$PROCEDURE_PARAMETERS unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME,
@@ -440,9 +445,10 @@ static inline constexpr struct ini_idx_t indices[] =
 		SEGMENT(f_prv_user_schema, idx_metadata),	// granted user schema name
 		SEGMENT(f_prv_user, idx_metadata)			// granted user
 	}},
-	// define index RDB$INDEX_82 for RDB$INDICES RDB$SCHEMA_NAME, RDB$RELATION_NAME;
-	INDEX(82, rel_indices, 0, 2, ODS_14_0)
+	// define index RDB$INDEX_82 for RDB$INDICES RDB$SCHEMA_NAME, RDB$PACKAGE_NAME, RDB$RELATION_NAME;
+	INDEX(82, rel_indices, 0, 3, ODS_14_0)
 		SEGMENT(f_idx_schema, idx_metadata),	// schema name
+		SEGMENT(f_idx_pkg_name, idx_metadata),	// package name
 		SEGMENT(f_idx_relation, idx_metadata)	// indexed relation
 	}},
 	// define index RDB$INDEX_83 for RDB$VIEW_RELATIONS RDB$SCHEMA_NAME, RDB$VIEW_NAME;
@@ -453,7 +459,8 @@ static inline constexpr struct ini_idx_t indices[] =
 	// define index RDB$INDEX_84 for RDB$VIEW_RELATIONS RDB$RELATION_SCHEMA_NAME, RDB$RELATION_NAME;
 	INDEX(84, rel_vrel, 0, 2, ODS_14_0)
 		SEGMENT(f_vrl_rname_schema, idx_metadata),	// schema name
-		SEGMENT(f_vrl_rname, idx_metadata)		// base relation name
+		SEGMENT(f_vrl_pkg_name, idx_metadata),		// package name
+		SEGMENT(f_vrl_rname, idx_metadata)			// base relation name
 	}},
 	// define index RDB$INDEX_85 for RDB$TRIGGER_MESSAGES RDB$SCHEMA_NAME, RDB$TRIGGER_NAME;
 	INDEX(85, rel_msgs, 0, 2, ODS_14_0)

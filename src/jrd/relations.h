@@ -85,6 +85,7 @@ RELATION(nam_i_segments, rel_segments, ODS_8_0, rel_persistent)
 	FIELD(f_seg_position, nam_f_position, fld_f_position, 1, ODS_8_0)
 	FIELD(f_seg_statistics, nam_statistics, fld_statistics, 1, ODS_11_0)
 	FIELD(f_seg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_seg_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 4 (RDB$INDICES)
@@ -107,6 +108,7 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_foreign_schema, nam_foreign_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_format, nam_fmt, fld_format, 1, ODS_14_0)
+	FIELD(f_idx_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -134,6 +136,7 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_identity_type, nam_identity_type, fld_identity_type, 1, ODS_12_0)
 	FIELD(f_rfr_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_rfr_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 6 (RDB$RELATIONS)
@@ -157,6 +160,8 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_type, nam_r_type, fld_r_type, 0, ODS_11_1)
 	FIELD(f_rel_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 	FIELD(f_rel_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_rel_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_rel_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -750,6 +755,7 @@ RELATION(nam_mon_tab_stats, rel_mon_tab_stats, ODS_12_0, rel_virtual)
 	FIELD(f_mon_tab_rec_stat_id, nam_mon_rec_stat_id, fld_stat_id, 0, ODS_12_0)
 	FIELD(f_mon_tab_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
 	FIELD(f_mon_tab_type, nam_mon_tab_type, fld_tab_type, 0, ODS_14_0)
+	FIELD(f_mon_tab_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_14_0)
 END_RELATION
 
 // Relation 50 (RDB$TIME_ZONES)

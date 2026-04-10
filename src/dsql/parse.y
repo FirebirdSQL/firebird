@@ -2468,6 +2468,45 @@ ltt_table_clause
 			}
 	;
 
+%type <createRelationNode> package_ltt_table_clause
+package_ltt_table_clause
+	: simple_table_name
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($2) ')' ltt_subclause_opt($2) package_ltt_indexes_opt($2)
+			{
+				$$ = $2;
+			}
+	;
+
+%type package_ltt_indexes_opt(<createRelationNode>)
+package_ltt_indexes_opt($createRelationNode)
+	: /* nothing */
+	| package_ltt_indexes($createRelationNode)
+	;
+
+%type package_ltt_indexes(<createRelationNode>)
+package_ltt_indexes($createRelationNode)
+	: package_ltt_index($createRelationNode)
+	| package_ltt_indexes($createRelationNode) ',' package_ltt_index($createRelationNode)
+	;
+
+%type package_ltt_index(<createRelationNode>)
+package_ltt_index($createRelationNode)
+	: unique_opt order_direction INDEX valid_symbol_name column_parens
+		{
+			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
+			node->unique = $1;
+			node->descending = $2;
+			node->columns = $5;
+
+			auto clause = newNode<RelationNode::AddPackageLttIndexClause>(node);
+			$createRelationNode->clauses.add(clause);
+		}
+	;
+
 %type ltt_subclause_opt(<createRelationNode>)
 ltt_subclause_opt($createRelationNode)
 	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
@@ -3175,6 +3214,8 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	| PROCEDURE procedure_clause_start ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
+	| DECLARE LOCAL TEMPORARY TABLE package_ltt_table_clause ';'
+		{ $$ = CreateAlterPackageNode::Item::create($5); }
 	;
 
 %type <createAlterPackageNode> alter_package_clause
@@ -6244,11 +6285,11 @@ set_statistics
 comment
 	: COMMENT ON ddl_type0 IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, QualifiedName(), "", *$5); }
-	| COMMENT ON ddl_type1_schema symbol_ddl_name IS ddl_desc
+	| COMMENT ON ddl_type1_schema scoped_qualified_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, "", *$6); }
 	| COMMENT ON ddl_type1_noschema valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, QualifiedName(*$4), "", *$6); }
-	| COMMENT ON COLUMN symbol_ddl_name '.' valid_symbol_name IS ddl_desc
+	| COMMENT ON COLUMN scoped_qualified_name '.' valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>(obj_relation, *$4, *$6, *$8); }
 	| COMMENT ON ddl_type3 scoped_qualified_name '.' valid_symbol_name IS ddl_desc
 		{ $$ = newNode<CommentOnNode>($3, *$4, *$6, *$8); }

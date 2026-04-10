@@ -39,7 +39,6 @@ public:
 			Item item;
 			item.type = FUNCTION;
 			item.function = function;
-			item.dsqlScratch = NULL;
 			return item;
 		}
 
@@ -48,35 +47,42 @@ public:
 			Item item;
 			item.type = PROCEDURE;
 			item.procedure = procedure;
-			item.dsqlScratch = NULL;
+			return item;
+		}
+
+		static Item create(CreateRelationNode* table)
+		{
+			Item item;
+			item.type = TABLE;
+			item.table = table;
 			return item;
 		}
 
 		enum
 		{
 			FUNCTION,
-			PROCEDURE
+			PROCEDURE,
+			TABLE
 		} type;
 
 		union
 		{
 			CreateAlterFunctionNode* function;
 			CreateAlterProcedureNode* procedure;
+			CreateRelationNode* table;
 		};
 
-		DsqlCompilerScratch* dsqlScratch;
+		DsqlCompilerScratch* dsqlScratch = nullptr;
 	};
 
 public:
 	CreateAlterPackageNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
-		  create(true),
-		  alter(false),
 		  source(pool),
-		  items(NULL),
 		  functionNames(pool),
 		  procedureNames(pool),
+		  tableNames(pool),
 		  owner(pool)
 	{
 	}
@@ -105,13 +111,14 @@ private:
 
 public:
 	QualifiedName name;
-	bool create;
-	bool alter;
+	bool create = true;
+	bool alter = false;
 	bool createIfNotExistsOnly = false;
 	Firebird::string source;
-	Firebird::Array<Item>* items;
+	Firebird::Array<Item>* items = nullptr;
 	Firebird::SortedArray<MetaName> functionNames;
 	Firebird::SortedArray<MetaName> procedureNames;
+	Firebird::SortedArray<MetaName> tableNames;
 	std::optional<SqlSecurity> ssDefiner;
 
 private:

@@ -362,6 +362,7 @@ static constexpr UCHAR
 	relation3[] = { op_line, op_indent, op_byte, op_literal,
 					op_line, op_indent, op_byte, op_literal,
 					op_line, op_indent, op_byte, op_literal,
+					op_line, op_indent, op_byte, op_literal,
 					op_line, op_indent, op_byte, op_line, 0},
 	aggregate[] = { op_byte, op_line, op_verb, op_verb, op_verb, 0},
 	rid[]		= { op_word, op_byte, op_line, 0},

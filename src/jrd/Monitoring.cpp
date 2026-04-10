@@ -787,7 +787,9 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		from_desc.makeLong(0, &local_id);
 		MOV_move(tdbb, &from_desc, &to_desc);
 	}
-	else if (field.type == VALUE_TABLE_ID_OBJECT_NAME || field.type == VALUE_TABLE_ID_SCHEMA_NAME)
+	else if (field.type == VALUE_TABLE_ID_OBJECT_NAME ||
+		field.type == VALUE_TABLE_ID_SCHEMA_NAME ||
+		field.type == VALUE_TABLE_ID_PACKAGE_NAME)
 	{
 		// special case: translate relation ID into name
 		fb_assert(field.length == sizeof(SLONG));
@@ -798,8 +800,13 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		if (!relation || relation->rel_name.object.isEmpty())
 			return;
 
-		const auto& name = field.type == VALUE_TABLE_ID_OBJECT_NAME ?
-			relation->rel_name.object : relation->rel_name.schema;
+		const auto& name = field.type ==
+			VALUE_TABLE_ID_OBJECT_NAME ? relation->rel_name.object :
+			field.type == VALUE_TABLE_ID_SCHEMA_NAME ? relation->rel_name.schema :
+			relation->rel_name.package;
+
+		if (field.type == VALUE_TABLE_ID_PACKAGE_NAME && name.isEmpty())
+			return;
 
 		dsc from_desc;
 		from_desc.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
@@ -1549,15 +1556,17 @@ void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record
 
 		bool lttFound = false;
 		std::string_view tableType = "PERSISTENT";
+		const RelationPermanent* relation = nullptr;
 
 		if (stat_group != stat_database)
 		{
-			if (const auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, counts.getGroupId(),
-				CacheFlag::AUTOCREATE))
+			if ((relation = MetadataCache::getPerm<Cached::Relation>(tdbb, counts.getGroupId(),
+					CacheFlag::AUTOCREATE)))
 			{
-				if ((relation->rel_flags & REL_temp_ltt))
+				if ((relation->rel_flags & REL_temp_ltt) || relation->rel_name.package.hasData())
 				{
 					record.storeString(f_mon_tab_sch_name, relation->rel_name.schema);
+					record.storeString(f_mon_tab_pkg_name, relation->rel_name.package);
 					record.storeString(f_mon_tab_name, relation->rel_name.object);
 					lttFound = true;
 					tableType = "LOCAL TEMPORARY";
@@ -1570,8 +1579,11 @@ void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record
 		if (!lttFound)
 		{
 			record.storeTableIdSchemaName(f_mon_tab_sch_name, counts.getGroupId());
+			record.storeTableIdPackageName(f_mon_tab_pkg_name, counts.getGroupId());
 			record.storeTableIdObjectName(f_mon_tab_name, counts.getGroupId());
 		}
+		else
+			fb_assert(relation);
 
 		record.storeString(f_mon_tab_type, tableType);
 

@@ -589,6 +589,8 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 		"show table \"test\"")).name == QualifiedMetaString("test")));
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show table \"te\"\"st\"")).name == QualifiedMetaString("te\"st")));
+	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
+		"show table schema.package.name")).name == QualifiedMetaString("NAME", "SCHEMA", "PACKAGE")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show table")).name);
