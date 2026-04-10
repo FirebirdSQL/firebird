@@ -195,7 +195,8 @@ static bool isCurrentAccount(UserId* currUserID,
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
-	const string& user, const string& pwd, const string& role, const PathName& providers, TraScope tra_scope)
+	const string& user, const string& pwd, const string& role, const PathName& providers, TraScope tra_scope,
+	const string& options)
 {
 	Attachment* att = tdbb->getAttachment();
 	if (att->att_ext_call_depth >= MAX_CALLBACKS)
@@ -216,6 +217,9 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 
 	if (!providers.isEmpty())
 		dpb.insertString(isc_dpb_config, providers);
+
+	if (options.hasData())
+		dpb.insertString(isc_dpb_foreign_options, options);
 
 	return getProviderConnection(tdbb, prv, dpb, dbName.ToString(), user, pwd, role, tra_scope);
 }

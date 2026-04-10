@@ -142,12 +142,11 @@ namespace Jrd
 	{
 	public:
 		ForeignTableConnection* createForeignConnection(thread_db* tdbb, ForeignServer* server);
+		static void makeOptionsString(const Firebird::GenericMap<MetaStringOptionPair>& optionsMap, Firebird::string& options);
 
 	private:
-		// Add extra options to database parameter buffer
-		void fillOptionsDPB(const Firebird::GenericMap<MetaStringOptionPair>& options, Firebird::ClumpletWriter& dpb);
 		// Test if an option is general
-		bool isGenericOption(const MetaName& option);
+		static bool isGenericOption(const MetaName& option);
 	};
 
 	class ForeignTableStatement : public EDS::IscStatement

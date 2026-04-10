@@ -151,8 +151,13 @@ ForeignTableConnection* ForeignTableProvider::createForeignConnection(thread_db*
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	generateDPB(tdbb, dpb, user, password, role);
 
-	// Add additional server options, excluding generic ones that have specific isc tags
-	fillOptionsDPB(options, dpb);
+	string optionsString;
+	makeOptionsString(options, optionsString);
+
+	// Add server options to existing database parameter buffer,
+	// but exclude adding options that should be added with separate isc_ tags
+	if (optionsString.hasData())
+		dpb.insertString(isc_dpb_foreign_options, optionsString.c_str(), optionsString.length());
 
 	if (server->getPluginName().hasData())
 	{
@@ -175,25 +180,20 @@ ForeignTableConnection* ForeignTableProvider::createForeignConnection(thread_db*
 	return connection;
 }
 
-// Add server options to existing database parameter buffer,
-// but exclude adding options that should be added with separate isc_ tags
-void ForeignTableProvider::fillOptionsDPB(const Firebird::GenericMap<MetaStringOptionPair>& options, ClumpletWriter& dpb)
+// Make additional server options string, excluding generic ones that have specific isc tags
+void ForeignTableProvider::makeOptionsString(const Firebird::GenericMap<MetaStringOptionPair>& optionsMap, string& options)
 {
-	string buffer;
-	for (const auto& option: options)
+	for (const auto& option : optionsMap)
 	{
 		// Skip general options
 		if (isGenericOption(option.first))
 			continue;
 
-		buffer.append(option.first.c_str());
-		buffer.append(";");
-		buffer.append(option.second.getActualValue());
-		buffer.append(";");
+		options.append(option.first.c_str());
+		options.append(";");
+		options.append(option.second.getActualValue());
+		options.append(";");
 	}
-
-	if (buffer.hasData())
-		dpb.insertString(isc_dpb_foreign_options, buffer.c_str(), buffer.length());
 }
 
 // Check if the option is generic, i.e. it has a separate isc tag
@@ -288,7 +288,7 @@ void ForeignTableStatement::executeInternal(thread_db* tdbb, EDS::IscTransaction
 
 	// If the foreign provider didn't return the input parameters metadata,
 	// let's create it from the record descriptors
-	if (!m_connection.testFeature(fb_feature_prepared_input_types))
+	if (m_connection.testFeature(fb_feature_internal_input_types))
 	{
 		auto count = 0;
 

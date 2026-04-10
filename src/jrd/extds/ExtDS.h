@@ -157,7 +157,8 @@ public:
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
 		const Firebird::string& pwd, const Firebird::string& role,
-		const Firebird::PathName& providers, TraScope tra_scope);
+		const Firebird::PathName& providers, TraScope tra_scope,
+		const Firebird::string& options);
 	static Connection* getProviderConnection(Jrd::thread_db* tdbb,
 		Provider* provider, Firebird::ClumpletWriter& dpb,
 		const Firebird::string& database, const Firebird::string& user,

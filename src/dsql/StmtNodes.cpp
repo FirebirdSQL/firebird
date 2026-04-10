@@ -4566,6 +4566,7 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 		getString(tdbb, request, role, sRole);
 
 		PathName sProviders;
+		string sOptions;
 
 		if (server.hasData())
 		{
@@ -4609,9 +4610,11 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 				sProviders = foreignServer.get()->getPluginName().c_str();
 				sProviders.insert(0, "Providers=");
 			}
+
+			ForeignTableProvider::makeOptionsString(options, sOptions);
 		}
 
-		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, sProviders, traScope);
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, sProviders, traScope, sOptions);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);
