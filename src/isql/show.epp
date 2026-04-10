@@ -5217,13 +5217,10 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 
 		bool first_param = true;
 
-		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
-			FLD IN RDB$FIELDS
+		FOR PRM IN RDB$PROCEDURE_PARAMETERS
 			WITH PRM.RDB$SCHEMA_NAME EQUIV NULLIF(procedureName.schema.c_str(), '') AND
 				 PRM.RDB$PACKAGE_NAME EQUIV NULLIF(procedureName.package.c_str(), '') AND
-				 PRM.RDB$PROCEDURE_NAME EQ procedureName.object.c_str() AND
-				 PRM.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV FLD.RDB$SCHEMA_NAME AND
-				 PRM.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME
+				 PRM.RDB$PROCEDURE_NAME EQ procedureName.object.c_str()
 			SORTED BY PRM.RDB$PARAMETER_TYPE, PRM.RDB$PARAMETER_NUMBER
 		{
 			if (first_param)
@@ -5257,7 +5254,7 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 			if (!prm_collation_null)
 				collation = PRM.RDB$COLLATION_ID;
 
-			const QualifiedMetaString domainName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+			const QualifiedMetaString domainName(PRM.RDB$FIELD_SOURCE, PRM.RDB$FIELD_SOURCE_SCHEMA_NAME);
 			const QualifiedMetaString relationName(PRM.RDB$RELATION_NAME, PRM.RDB$RELATION_SCHEMA_NAME);
 			const MetaString relationField(PRM.RDB$FIELD_NAME);
 
@@ -5275,15 +5272,10 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 				END_FOR
 			}
 
-			if (prm_collation_null && !FLD.RDB$COLLATION_ID.NULL)
-				collation = FLD.RDB$COLLATION_ID;
-
 			const bool basedOnColumn = relationName.object.hasData() && relationField.hasData();
-			// Decide if this is a user-created domain
-			if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1 ||
-				basedOnColumn)
+			if (mechanism != prm_mech_normal)
 			{
-				isqlGlob.printf("(%s", (mechanism == prm_mech_type_of ? "TYPE OF " : ""));
+				isqlGlob.printf("(TYPE OF ");
 
 				if (basedOnColumn)
 				{
@@ -5296,48 +5288,66 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 					isqlGlob.printf("%s) ", IUTILS_name_to_string(domainName).c_str());
 			}
 
-			if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
-					FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+			if (domainName.object.hasData())
 			{
-				return ps_ERR;
-			}
+				FOR FLD IN RDB$FIELDS
+					WITH FLD.RDB$SCHEMA_NAME EQUIV NULLIF(domainName.schema.c_str(), '') AND
+						 FLD.RDB$FIELD_NAME = domainName.object.c_str()
+				{
+					// Decide if this is a user-created domain
+					if (mechanism == prm_mech_normal &&
+						(FLD.RDB$SYSTEM_FLAG.NULL || FLD.RDB$SYSTEM_FLAG == 0) &&
+						!fb_utils::implicit_domain(domainName.object.c_str()))
+					{
+						isqlGlob.printf("(%s) ", IUTILS_name_to_string(domainName).c_str());
+					}
 
-			// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
-			//   FSG 19.Nov.2000
-			if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-				!FLD.RDB$CHARACTER_LENGTH.NULL)
-			{
-				isqlGlob.printf("(%d)", FLD.RDB$CHARACTER_LENGTH);
-			}
+					if (prm_collation_null && !FLD.RDB$COLLATION_ID.NULL)
+						collation = FLD.RDB$COLLATION_ID;
 
-			// Show international character sets and collations
+					if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+							FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+					{
+						return ps_ERR;
+					}
 
-			if (((FLD.RDB$FIELD_TYPE == blr_text ||
-				FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
-				FLD.RDB$FIELD_TYPE == blr_blob)
-			{
-				SSHORT charset = 0;
-				if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-					charset = FLD.RDB$CHARACTER_SET_ID;
+					// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
+					//   FSG 19.Nov.2000
+					if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
+						!FLD.RDB$CHARACTER_LENGTH.NULL)
+					{
+						isqlGlob.printf("(%d)", FLD.RDB$CHARACTER_LENGTH);
+					}
 
-				show_charsets(charset, collation);
+					// Show international character sets and collations
+
+					if (((FLD.RDB$FIELD_TYPE == blr_text ||
+						FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
+						FLD.RDB$FIELD_TYPE == blr_blob)
+					{
+						SSHORT charset = 0;
+						if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+							charset = FLD.RDB$CHARACTER_SET_ID;
+
+						show_charsets(charset, collation);
+					}
+
+					if (PRM.RDB$PARAMETER_TYPE == 0 && prm_default_source_null)
+					{
+						prm_default_source_null = FLD.RDB$DEFAULT_SOURCE.NULL;
+						prm_default_source = FLD.RDB$DEFAULT_SOURCE;
+					}
+				}
+				END_FOR
 			}
 
 			if (!PRM.RDB$NULL_FLAG.NULL && PRM.RDB$NULL_FLAG)
 				isqlGlob.printf(" NOT NULL");
 
-			if (PRM.RDB$PARAMETER_TYPE == 0) // input, try to show default and make Vlad happy.
+			if (!prm_default_source_null) // try to show default and make Vlad happy.
 			{
-				if (!prm_default_source_null)
-				{
-					isqlGlob.printf(" ");
-					SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
-				}
-				else if (fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && !FLD.RDB$DEFAULT_SOURCE.NULL)
-				{
-					isqlGlob.printf(" ");
-					SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
-				}
+				isqlGlob.printf(" ");
+				SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source);
 			}
 
 			isqlGlob.printf(NEWLINE);
