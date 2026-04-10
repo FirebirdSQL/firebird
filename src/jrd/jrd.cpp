@@ -8352,7 +8352,6 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
  *
  **************************************/
 	jrd_tra* const trans_dbk = att_dbkey_trans;
-	auto* const trans_meta = att_meta_transaction;
 
 	if (force_flag)
 	{
@@ -8366,7 +8365,7 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
 	for (jrd_tra* transaction = att_transactions; transaction; transaction = next)
 	{
 		next = transaction->tra_next;
-		if (transaction != trans_dbk && transaction != trans_meta)
+		if (transaction != trans_dbk)
 		{
 			if (transaction->tra_flags & TRA_prepared)
 			{

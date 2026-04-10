@@ -2122,7 +2122,11 @@ static bool_t xdr_status_vector(RemoteXdr* xdrs, DynamicStatusVector*& vector)
 			break;
 
 		case isc_arg_number:
-		default:
+		case isc_arg_unix:
+		case isc_arg_win32:
+		case isc_arg_gds:
+		case isc_arg_warning:
+		case isc_arg_next_mach:
 			if (xdrs->x_op == XDR_ENCODE)
 				vec = *vectorEncode++;
 			if (!xdr_long(xdrs, &vec))
@@ -2130,6 +2134,9 @@ static bool_t xdr_status_vector(RemoteXdr* xdrs, DynamicStatusVector*& vector)
 			if (xdrs->x_op == XDR_DECODE)
 				vectorDecode.push((ISC_STATUS) vec);
 			break;
+
+		default:
+			goto brk;
 		}
 	}
 

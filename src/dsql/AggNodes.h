@@ -134,6 +134,69 @@ private:
 	NestConst<ValueListNode> dsqlOrderClause;
 };
 
+class PercentileAggNode final : public AggNode
+{
+public:
+	enum PercentileType : UCHAR
+	{
+		TYPE_PERCENTILE_CONT,
+		TYPE_PERCENTILE_DISC
+	};
+
+	struct PercentileImpure
+	{
+		SINT64 vlux_count;
+		double percentile;
+		double rn;
+		SINT64 crn;
+		SINT64 frn;
+	};
+
+	explicit PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg = nullptr,
+		ValueListNode* aOrderClause = nullptr);
+
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
+
+	unsigned getCapabilities() const override
+	{
+		return CAP_WANTS_AGG_CALLS;
+	}
+
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		AggNode::getChildren(holder, dsql);
+		holder.add(valueArg);
+	}
+
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+	void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
+private:
+	const PercentileType type;
+	NestConst<ValueExprNode> valueArg;
+	NestConst<ValueListNode> dsqlOrderClause;
+	ULONG percentileImpureOffset = 0;
+};
+
 class CountAggNode final : public AggNode
 {
 public:

@@ -134,10 +134,12 @@ int ElementBase::blockingAst(void* ast_object)
 			LCK_downgrade(tdbb, cacheElement->lock);
 			const bool erase = (cacheElement->lock->lck_physical < LCK_SR);
 			if (!erase)
+			{
 				LCK_release(tdbb, cacheElement->lock);
+				cacheElement->locked = false;
+			}
 
 			cacheElement->reset(tdbb, erase);
-			cacheElement->locked = false;
 		}
 	}
 	catch (const Exception&)
@@ -159,6 +161,9 @@ void ElementBase::pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, c
 {
 	if (lock)
 	{
+		if (!locked)
+			setLock(tdbb, id, family);
+
 		if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))
 		{
 			Firebird::fatal_exception::raiseFmt("Unable to obtain WRITE rescan lock for %s %d",

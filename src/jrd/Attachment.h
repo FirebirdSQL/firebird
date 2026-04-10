@@ -832,12 +832,6 @@ private:
 };
 
 
-inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
-{
-	const auto user = getEffectiveUserId();
-	return (user && user->locksmith(tdbb, sp));
-}
-
 inline jrd_tra* Attachment::getSysTransaction() noexcept
 {
 	return att_sys_transaction;

@@ -824,7 +824,8 @@ namespace Jrd
 		dbb_compatibility_index(~0U),
 		dbb_dic(*p),
 		dbb_mdc(FB_NEW_POOL(*p) MetadataCache(*p)),
-		dbb_user_ids(*p)
+		dbb_user_ids(*p),
+		dbb_del_pages(*p)
 	{
 		dbb_pools.add(p);
 
@@ -893,6 +894,58 @@ namespace Jrd
 			dbb_user_ids.put(userName, result);
 		}
 		return result;
+	}
+
+	void Database::markForDelete(RelationPermanent* relation)
+	{
+		MutexLockGuard g(dbb_del_pages_mutex, FB_FUNCTION);
+
+#ifdef DEV_BUILD
+		FB_SIZE_T dummy;
+		bool rc = dbb_del_pages.findEx([relation](const DelPagesMarker& item)->int
+			{
+				return std::greater{}(item.relation, relation);
+			},
+		dummy);
+		fb_assert(!rc);
+#endif
+
+		dbb_del_pages.add({dbb_next_transaction, relation});
+	}
+
+	void Database::clearDeleteMark(RelationPermanent* relation)
+	{
+		MutexLockGuard g(dbb_del_pages_mutex, FB_FUNCTION);
+
+		FB_SIZE_T pos;
+		bool found = dbb_del_pages.findEx([relation](const DelPagesMarker& item)->int
+			{
+				return std::greater{}(item.relation, relation);
+			},
+		pos);
+		fb_assert(found);
+
+		if (found)
+			dbb_del_pages.remove(pos);
+	}
+
+	void Database::deleteTempPages(thread_db* tdbb, TraNumber oldestActive)
+	{
+		// check for data presence is safe even w/o mutex locked
+		// normally there is no data in array
+		if (!dbb_del_pages.hasData())
+			return;
+
+		MutexLockGuard g(dbb_del_pages_mutex, FB_FUNCTION);
+		while (dbb_del_pages.hasData() && dbb_del_pages[0].tran < oldestActive)
+		{
+			auto* relation = dbb_del_pages[0].relation;
+			dbb_del_pages.remove(0u);
+
+			MutexUnlockGuard checkout(dbb_del_pages_mutex, FB_FUNCTION);
+			printf("deleteTempPages for relation %s\n", relation->getName().toQuotedString().c_str());
+			relation->freePages(tdbb);
+		}
 	}
 
 

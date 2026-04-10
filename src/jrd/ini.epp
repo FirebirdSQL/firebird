@@ -1717,6 +1717,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
 			X.RDB$INDEX_INACTIVE = 0;
+			X.RDB$FORMAT.NULL = true;
 
 			// Store each segment for the index
 			index_desc::idx_repeat* tail = idx.idx_rpt;

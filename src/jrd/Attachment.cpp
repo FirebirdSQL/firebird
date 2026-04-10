@@ -262,6 +262,15 @@ Jrd::Attachment::~Attachment()
 }
 
 
+bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
+{
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return true;
+
+	const auto user = getEffectiveUserId();
+	return (user && user->locksmith(tdbb, sp));
+}
+
 Jrd::PreparedStatement* Jrd::Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
 	const string& text, Firebird::MemoryPool* pool)
 {
@@ -965,6 +974,9 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 			LCK_release(tdbb, att_meta_transaction->tra_lock);
 			att_meta_transaction->tra_lock = nullptr;
 		}
+
+		att_meta_transaction->unlinkFromAttachment();
+		att_meta_transaction->tra_flags |= TRA_meta;
 	}
 }
 

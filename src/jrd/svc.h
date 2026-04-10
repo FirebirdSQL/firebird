@@ -323,6 +323,7 @@ private:
 	char*	svc_arg_ptr;
 
 	Firebird::string	svc_username;
+	Firebird::string	svc_orig_username;
 	Firebird::string	svc_sql_role;
 	Firebird::AuthReader::AuthBlock	svc_auth_block;
 	Firebird::PathName	svc_expected_db;

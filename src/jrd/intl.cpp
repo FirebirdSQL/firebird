@@ -271,7 +271,7 @@ Collation* CharSetVers::getCollation(CollId id)
 Collation* CharSetVers::getCollation(const QualifiedName& name)
 {
 	FB_SIZE_T pos;
-	if (charset_collations.find([name](Collation* col) { return col->name == name; }, pos))
+	if (charset_collations.findEx([name](Collation* col) { return col->name == name; }, pos))
 		return charset_collations[pos]->validate();
 
 	ERR_post(Arg::Gds(isc_text_subtype) << name.toQuotedString());

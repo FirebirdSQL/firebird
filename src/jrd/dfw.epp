@@ -627,10 +627,9 @@ namespace
 
 				case 3:
 				{
-					const bool compile = !work->findArg(dfw_arg_check_blr);
 					getDependencies(work, compile, transaction);
 
-					T* routine = lookupByName(tdbb, work->getQualifiedName(), compile);
+					T* routine = lookupByName(tdbb, work->getQualifiedName(), flag);
 					if (!routine)
 						return false;
 
@@ -643,7 +642,7 @@ namespace
 					if (!routine)
 					{
 						ERR_post(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(getErrorNotFound(routine->getObjectType())) << Arg::Num(work->dfw_id));
+							Arg::Gds(getErrorNotFound(T::Versioned::objectType())) << Arg::Num(work->dfw_id));
 					}
 
 					return true;
@@ -1688,7 +1687,7 @@ DeferredWork* DFW_post_work_arg( jrd_tra* transaction, DeferredWork* work, const
 
 
 void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityList& selectivity,
-	jrd_tra* transaction)
+	jrd_tra* transaction, jrd_rel* relation)
 {
 /**************************************
  *
@@ -1728,6 +1727,11 @@ void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityLis
 			IDX.RDB$INDEX_ID = id + 1;
 			IDX.RDB$INDEX_ID.NULL = FALSE;
 			IDX.RDB$STATISTICS = selectivity.back();
+			if (relation)
+			{
+				IDX.RDB$FORMAT = relation->rel_current_fmt;
+				IDX.RDB$FORMAT.NULL = FALSE;
+			}
 		END_MODIFY
 	}
 	END_FOR
@@ -3445,7 +3449,17 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		return true;
 
 	case 2:
+		return true;
+
 	case 3:
+		{
+			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
+			if (!relation)
+				break;
+
+			if (relation->rel_flags & REL_check_partners)
+				relation->scanPartners(tdbb);
+		}
 		return true;
 
 	case 4:
@@ -3472,9 +3486,6 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 			if (index->getForeignKey().hasData())
 			{
-				if (relation->rel_flags & REL_check_partners)
-					relation->scanPartners(tdbb);
-
 				if (relation->rel_foreign_refs)		// may be missing in a case of self-reference
 				{
 					const auto& foreign(*relation->rel_foreign_refs);
@@ -3595,6 +3606,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
 			if (relation)
 			{
+				relation->clearDropMarker(tdbb);
 				if (relation->isDropped())
 					relation->rollback(tdbb);
 			}
@@ -3641,7 +3653,18 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 	case 2:
 	case 3:
+		return true;
+
 	case 4:
+		{
+			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
+			if (!relation)
+				return false;
+
+			relation->dropTempPages(tdbb);
+		}
+		return true;
+
 	case 5:
 	case 6:
 		return true;
@@ -3649,8 +3672,10 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 7:
 		{
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
-			if (relation)
-				relation->commit(tdbb);
+			if (!relation)
+				return false;
+
+			relation->commit(tdbb);
 		}
 		break;
 	}

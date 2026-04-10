@@ -607,7 +607,7 @@ private:
 					SortNode** sortClause,
 					const PlanNode* planClause);
 	bool generateEquiJoin(RiverList& rivers, JoinType joinType);
-	void generateInnerJoin(StreamList& streams,
+	void generateInnerJoin(const StreamList& streams,
 						   RiverList& rivers,
 						   SortNode** sortClause,
 						   const PlanNode* planClause);

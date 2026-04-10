@@ -2391,6 +2391,9 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 
 void jrd_tra::unlinkFromAttachment()
 {
+	if (tra_flags & TRA_meta)
+		return;						// Unlinked on creation
+
 	for (jrd_tra** ptr = &tra_attachment->att_transactions; *ptr; ptr = &(*ptr)->tra_next)
 	{
 		if (*ptr == this)
@@ -3771,8 +3774,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			dbb->dbb_oldest_transaction, dbb->dbb_oldest_snapshot);
 
 		// Plumb remove really old objects from metadata cache
-
 		dbb->dbb_mdc->checkCleanup(tdbb, oldest);
+
+		// Also remove really old temporary pages of dropped relations
+		dbb->deleteTempPages(tdbb, trans->tra_oldest_active);
 
 		// If the transaction block is getting out of hand, force a sweep
 
@@ -4125,9 +4130,7 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 	if (!tra_blobs->locate(blob_id->bid_temp_id()) &&
 		!tra_fetched_blobs.locate(*blob_id))
 	{
-		MetadataCache* mdc = MetadataCache::get(tdbb);
-		auto* blobRelation = mdc->lookupRelationNoChecks(rel_id);	// optimization with NoChecks
-																	// correct rel definitely present
+		auto* blobRelation = MetadataCache::getPerm<Cached::Relation>(tdbb, rel_id, CacheFlag::AUTOCREATE);
 		if (blobRelation)
 		{
 			auto security_name = (fld && fld->fld_security_name.hasData()) ?

@@ -314,9 +314,9 @@ void afterUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 		MemoryPool& pool = *MemoryPool::getContextPool();
 
 		ModifyIndexList oneItemList(pool);
-		oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, expressionIndex));
 		auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
-		oneItemList.exec(tdbb, relation, tdbb->getTransaction());
+		oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, relation, expressionIndex));
+		oneItemList.exec(tdbb, tdbb->getTransaction());
 	}
 }
 

@@ -715,7 +715,7 @@ void Retrieval::applyNavigation(InversionCandidate* candidate)
 		if (optimizer->favorFirstRows())
 		{
 			// Reset the cost to represent a single record retrieval
-			navigationCost = DEFAULT_INDEX_COST;
+			navigationCost = navigationCandidate->matches.isEmpty() ? DEFAULT_INDEX_COST : 0;
 
 			// We know that some local filtering is applied, so we need
 			// to adjust the cost as we need to walk the index

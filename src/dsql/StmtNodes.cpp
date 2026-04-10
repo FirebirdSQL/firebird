@@ -2202,7 +2202,7 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 
 DeclareVariableNode* DeclareVariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	if (dsqlDef->defaultClause)
+	if (dsqlDef->defaultClause && !(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 		dsqlDef->defaultClause->value = doDsqlPass(dsqlScratch, dsqlDef->defaultClause->value);
 
 	dsql_fld* field = dsqlDef->type;
@@ -5058,7 +5058,6 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (newParam->defaultClause)
 			newParam->defaultClause->value = doDsqlPass(dsqlScratch, newParam->defaultClause->value);
-
 
 		{ // scope
 			ValueExprNode* temp = newParam->parameterExpr;

@@ -53,7 +53,8 @@ Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const ds
 	USHORT);
 Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
 	USHORT, Jrd::dfw_t);
-void DFW_update_index(const Jrd::QualifiedName&, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*);
+void DFW_update_index(const Jrd::QualifiedName&, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*,
+	Jrd::jrd_rel* relation = nullptr);
 void DFW_reset_icu(Jrd::thread_db*);
 Firebird::string DFW_remove_icu_info_from_attributes(const Jrd::QualifiedName&, const Firebird::string&);
 

@@ -106,6 +106,7 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_cond_source, nam_cond_source, fld_source, 1, ODS_13_1)
 	FIELD(f_idx_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_foreign_schema, nam_foreign_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_idx_format, nam_fmt, fld_format, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)

@@ -1275,8 +1275,11 @@ void IDX_modify(thread_db* tdbb,
 		AutoIndexExpression expression;
 		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
-		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
+		if ( (error_code = newKey.compose(new_rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
@@ -1374,8 +1377,11 @@ void IDX_modify_check_constraints(thread_db* tdbb,
 		AutoIndexExpression expression;
 		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
-		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
+		if ( (error_code = newKey.compose(new_rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
@@ -1536,8 +1542,11 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		AutoIndexExpression expression;
 		IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);
 
-		if ( (error_code = key.compose(rpb->rpb_record)) )
+		if ( (error_code = key.compose(rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, rpb->rpb_record);
 		}

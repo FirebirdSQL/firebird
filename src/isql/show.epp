@@ -4713,6 +4713,8 @@ static void show_index(const QualifiedMetaString& relationName,
 
 	if (ISQL_get_index_segments(collist, sizeof(collist), indexName))
 		isqlGlob.printf("(%s) %s%s", collist, (inactive ? "(inactive)" : ""), NEWLINE);
+	else
+		isqlGlob.printf("%s", NEWLINE);
 }
 
 
@@ -4739,8 +4741,9 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 	if (name)
 	{
 		FOR IDX IN RDB$INDICES
-			WITH IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
-				 IDX.RDB$INDEX_NAME EQ name->object.c_str()
+			WITH (IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
+				 IDX.RDB$INDEX_NAME EQ name->object.c_str()) AND
+				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
 			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$INDEX_NAME
 		{
 			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
@@ -4790,7 +4793,8 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQUIV IDX.RDB$SCHEMA_NAME AND
 				 REL.RDB$RELATION_NAME = IDX.RDB$RELATION_NAME AND
-				 (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING)
+				 (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
+				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
 			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
 		{
 			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);

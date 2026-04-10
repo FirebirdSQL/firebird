@@ -247,8 +247,8 @@ Applier* Applier::create(thread_db* tdbb)
 		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
 		request = Statement::makeRequest(tdbb, csb, true);
+		request->setAttachment(attachment);
 		request->validateTimeStamp();
-		request->req_attachment = attachment;
 	}
 	catch (const Exception&)
 	{
@@ -933,7 +933,7 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 void Applier::setSequence(thread_db* tdbb, const QualifiedName& genName, SINT64 value)
 {
 	const auto dbb = tdbb->getDatabase();
-	const auto attachment = tdbb->getAttachment();		// ??????????????//
+	const auto attachment = tdbb->getAttachment();
 
 	QualifiedName qualifiedGenName(genName);
 	attachment->qualifyExistingName(tdbb, qualifiedGenName, {obj_generator});

@@ -293,7 +293,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	else
 		inst_id = PAG_attachment_id(tdbb);
 
-	MutexLockGuard relPerm(rel_pages_mutex, FB_FUNCTION);
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		rel_pages_inst = FB_NEW_POOL(getPool()) RelationPagesInstances(getPool());
@@ -409,14 +409,18 @@ bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages*
 		pages);
 #endif
 
-	FB_SIZE_T pos;
-#ifdef DEV_BUILD
-	const bool found =
-#endif
-		rel_pages_inst->find(pages->rel_instance_id, pos);
-	fb_assert(found && ((*rel_pages_inst)[pos] == pages) );
+	{ // mutex scope
+		MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
-	rel_pages_inst->remove(pos);
+		FB_SIZE_T pos;
+#ifdef DEV_BUILD
+		const bool found =
+#endif
+			rel_pages_inst->find(pages->rel_instance_id, pos);
+		fb_assert(found && ((*rel_pages_inst)[pos] == pages) );
+
+		rel_pages_inst->remove(pos);
+	}
 
 	if (pages->rel_index_root)
 		IDX_delete_indices(tdbb, this, pages, false);
@@ -424,8 +428,30 @@ bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages*
 	if (pages->rel_pages)
 		DPM_delete_relation_pages(tdbb, this, pages);
 
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+
 	pages->free(rel_pages_free);
 	return true;
+}
+
+void RelationPermanent::freePages(thread_db* tdbb)
+{
+	if (!rel_pages_inst)
+		return;
+
+	// no need in rel_pages_mutex - it's cleanup after DROP TABLE
+	while (rel_pages_inst->hasData())
+	{
+		auto* pages = rel_pages_inst->pop();
+
+		if (pages->rel_index_root)
+			IDX_delete_indices(tdbb, this, pages, false);
+
+		if (pages->rel_pages)
+			DPM_delete_relation_pages(tdbb, this, pages);
+
+		pages->free(rel_pages_free);
+	}
 }
 
 void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber)
@@ -433,6 +459,8 @@ void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNum
 	fb_assert(rel_flags & REL_temp_tran);
 	fb_assert(oldNumber != 0);
 	fb_assert(newNumber != 0);
+
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		return;
@@ -448,6 +476,24 @@ void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNum
 
 	pages->rel_instance_id = newNumber;
 	rel_pages_inst->add(pages);
+}
+
+void RelationPermanent::dropTempPages(thread_db* tdbb)
+{
+	if (rel_flags & REL_temp_gtt)
+	{
+		Database* dbb = tdbb->getDatabase();
+		dbb->markForDelete(this);
+	}
+}
+
+void RelationPermanent::clearDropMarker(thread_db* tdbb)
+{
+	if (rel_flags & REL_temp_gtt)
+	{
+		Database* dbb = tdbb->getDatabase();
+		dbb->clearDeleteMark(this);
+	}
 }
 
 void RelationPermanent::getRelLockKey(thread_db* tdbb, UCHAR* key)
@@ -474,6 +520,8 @@ void RelationPermanent::cleanUp() noexcept
 
 void RelationPermanent::fillPagesSnapshot(RelPagesSnapshot& snapshot, const bool attachmentOnly)
 {
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+
 	if (rel_pages_inst)
 	{
 		for (FB_SIZE_T i = 0; i < rel_pages_inst->getCount(); i++)
@@ -553,6 +601,14 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, MetaId id, Object
 }
 
 
+Cached::Index* RelationPermanent::ensureIndex(thread_db* tdbb, MetaId id)
+{
+	auto* idp = rel_indices.ensurePermanent(tdbb, id);
+	fb_assert(idp);
+	return idp;
+}
+
+
 PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
 {
 /**************************************
@@ -618,12 +674,6 @@ IndexVersion::IndexVersion(MemoryPool& p, Cached::Index* idp)
 
 void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
 {
-	if (idv->idv_expression_statement)
-		idv->idv_expression_statement->release(tdbb);
-
-	if (idv->idv_condition_statement)
-		idv->idv_condition_statement->release(tdbb);
-
 	delete idv;
 }
 
@@ -995,6 +1045,22 @@ FB_UINT64 IndexPermanent::makeLockId(MetaId relId, MetaId indexId)
 
 	const int REL_ID_KEY_OFFSET = 16;
 	return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
+}
+
+void IndexPermanent::releaseStatements(thread_db* tdbb)
+{
+	if (idp_expression_statement)
+	{
+		idp_expression_statement->release(tdbb);
+		idp_expression_statement = nullptr;
+		idp_expression = nullptr;
+	}
+	if (idp_condition_statement)
+	{
+		idp_condition_statement->release(tdbb);
+		idp_condition_statement = nullptr;
+		idp_condition = nullptr;
+	}
 }
 
 
