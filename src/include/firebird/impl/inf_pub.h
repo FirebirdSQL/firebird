@@ -216,7 +216,7 @@ enum info_features // response to fb_info_features
 	fb_feature_read_consistency		= 5,	// Read consistency TIL is supported
 	fb_feature_statement_timeout	= 6,	// Statement timeout is supported
 	fb_feature_statement_long_life  = 7,    // Prepared statements are not dropped on transaction end
-	fb_feature_prepared_input_types = 8,    // Provider can return parameter types in input statement metadata
+	fb_feature_internal_input_types	= 8,    // Provider cannot return parameter types in input statement metadata, types prepared by server should be used
 
 	fb_feature_max      // Not really a feature. Keep this last.
 };

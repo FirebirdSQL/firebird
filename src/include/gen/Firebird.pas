@@ -4728,7 +4728,7 @@ const
 	fb_feature_read_consistency = byte(5);
 	fb_feature_statement_timeout = byte(6);
 	fb_feature_statement_long_life = byte(7);
-	fb_feature_prepared_input_types = byte(8);
+	fb_feature_internal_input_types = byte(8);
 	fb_feature_sql_op_concatenate = byte(1);
 	fb_feature_sql_op_equiv = byte(2);
 	fb_feature_sql_op_null_ordering = byte(3);

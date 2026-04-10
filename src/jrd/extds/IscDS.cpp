@@ -213,7 +213,6 @@ void IscConnection::attach(thread_db* tdbb)
 							m_features[fb_feature_multi_statements] = true;
 							m_features[fb_feature_multi_transactions] = true;
 							m_features[fb_feature_statement_long_life] = true;
-							m_features[fb_feature_prepared_input_types] = true;
 						}
 						break;
 					}
@@ -701,7 +700,7 @@ void IscStatement::doSetInParams(thread_db* tdbb, unsigned int count, const Meta
 {
 	// If the foreign provider didn't return the input parameters metadata,
 	// let's create it from the node descriptors
-	if (!m_connection.testFeature(fb_feature_prepared_input_types))
+	if (m_connection.testFeature(fb_feature_internal_input_types))
 	{
 		const NestConst<ValueExprNode>* jrdVar = params;
 		NonPooledMap<const ValueExprNode*, dsc*> paramDescs(getPool());

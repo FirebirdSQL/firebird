@@ -520,8 +520,7 @@ inline constexpr unsigned OPT_STATIC_STREAMS = 64;
 						 fb_feature_session_reset, \
 						 fb_feature_read_consistency, \
 						 fb_feature_statement_timeout, \
-						 fb_feature_statement_long_life, \
-						 fb_feature_prepared_input_types}
+						 fb_feature_statement_long_life}
 
 inline constexpr int WITH_GRANT_OPTION = 1;
 inline constexpr int WITH_ADMIN_OPTION = 2;
