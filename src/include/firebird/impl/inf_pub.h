@@ -196,7 +196,7 @@ enum db_info_types
 	fb_info_counts_scope_db = 162,
 
 	// Return list of SQL features supported by engine of external connection
-	fb_info_sql_features = 161,
+	fb_info_sql_features = 163,
 
 	isc_info_db_last_value   /* Leave this LAST! */
 };
