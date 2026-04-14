@@ -35,8 +35,8 @@ struct IdStorage
 	constexpr explicit IdStorage(USHORT id) : val(id) { }
 
 	constexpr operator USHORT() const { return val; }
-	bool operator==(const IdStorage& id) const { return val == id.val; }
-	bool operator!=(const IdStorage& id) const { return val != id.val; }
+	constexpr bool operator==(const IdStorage& id) const { return val == id.val; }
+	constexpr bool operator!=(const IdStorage& id) const { return val != id.val; }
 
 private:
 	USHORT val;
