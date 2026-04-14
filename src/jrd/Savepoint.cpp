@@ -19,6 +19,7 @@
 
 #include "firebird.h"
 #include "../common/gdsassert.h"
+#include "../jrd/Attachment.h"
 #include "../jrd/tra.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cch_proto.h"
@@ -26,6 +27,7 @@
 #include "../jrd/dpm_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/LocalTemporaryTable.h"
 
 #include "Savepoint.h"
 
@@ -39,8 +41,15 @@ UndoItem::UndoItem(jrd_tra* transaction, RecordNumber recordNumber, const Record
 	: m_number(recordNumber.getValue()), m_format(record->getFormat())
 {
 	fb_assert(m_format);
-	m_offset = transaction->getUndoSpace()->allocateSpace(m_format->fmt_length);
-	transaction->getUndoSpace()->write(m_offset, record->getData(), record->getLength());
+
+	// If assert below became wrong at some day, than tx number should be put
+	// into (and read from) undo space also.
+	fb_assert(transaction->tra_number == record->getTransactionNumber());
+
+	auto undoSpace = transaction->getUndoSpace();
+
+	m_offset = undoSpace->allocateSpace(m_format->fmt_length);
+	undoSpace->write(m_offset, record->getData(), record->getLength());
 }
 
 Record* UndoItem::setupRecord(jrd_tra* transaction) const
@@ -48,7 +57,11 @@ Record* UndoItem::setupRecord(jrd_tra* transaction) const
 	if (m_format)
 	{
 		Record* const record = transaction->getUndoRecord(m_format);
-		transaction->getUndoSpace()->read(m_offset, record->getData(), record->getLength());
+
+		auto undoSpace = transaction->getUndoSpace();
+		undoSpace->read(m_offset, record->getData(), record->getLength());
+
+		record->setTransactionNumber(transaction->tra_number);
 		return record;
 	}
 
@@ -393,14 +406,24 @@ VerbAction* Savepoint::createAction(jrd_rel* relation)
 }
 
 
+void Savepoint::createLttAction(LttUndoItem::UndoType type, const QualifiedName& name,
+	LocalTemporaryTable* original)
+{
+	// Create LTT undo action. For ALTER, make a copy of the original LTT state.
+	const auto item = FB_NEW_POOL(*m_transaction->tra_pool) LttUndoItem(type, name, original);
+	item->next = m_lttActions;
+	m_lttActions = item;
+}
+
+
 void Savepoint::cleanupTempData()
 {
-	// Find all global temporary tables with DELETE ROWS action
+	// Find all temporary tables with DELETE ROWS action
 	// and release their undo data
 
 	for (VerbAction* action = m_actions; action; action = action->vct_next)
 	{
-		if (action->vct_relation->rel_flags & REL_temp_tran)
+		if (action->vct_relation->getPermanent()->rel_flags & REL_temp_tran)
 		{
 			RecordBitmap::reset(action->vct_records);
 
@@ -451,6 +474,46 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 			m_actions = action->vct_next;
 			action->vct_next = m_freeActions;
 			m_freeActions = action;
+		}
+
+		// Undo LTT changes
+		const auto attachment = m_transaction->tra_attachment;
+		auto& lttMap = attachment->att_local_temporary_tables;
+
+		while (m_lttActions)
+		{
+			const auto item = m_lttActions;
+			m_lttActions = item->next;
+
+			switch (item->type)
+			{
+				case LttUndoItem::LTT_UNDO_CREATE:
+					// LTT was created in this savepoint - remove it
+					if (const auto lttPtr = lttMap.get(item->name))
+					{
+						delete (*lttPtr)->relation;
+						delete *lttPtr;
+						lttMap.remove(item->name);
+					}
+					break;
+
+				case LttUndoItem::LTT_UNDO_ALTER:
+					// LTT was altered - restore original state
+					if (const auto lttPtr = lttMap.get(item->name))
+					{
+						delete *lttPtr;
+						*lttPtr = item->original.release();
+					}
+					break;
+
+				case LttUndoItem::LTT_UNDO_DROP:
+					// LTT was dropped - restore it
+					if (!lttMap.exist(item->name))
+						lttMap.put(item->name, item->original.release());
+					break;
+			}
+
+			delete item;
 		}
 
 		tdbb->setTransaction(old_tran);
@@ -530,6 +593,95 @@ Savepoint* Savepoint::rollforward(thread_db* tdbb, Savepoint* prior)
 			m_actions = action->vct_next;
 			action->vct_next = m_freeActions;
 			m_freeActions = action;
+		}
+
+		// Merge LTT undo data to parent savepoint
+		// When releasing a savepoint, we need to keep the undo data so that
+		// rolling back a parent savepoint will also undo the LTT changes
+		if (m_next)
+		{
+			while (m_lttActions)
+			{
+				const auto item = m_lttActions;
+				m_lttActions = item->next;
+
+				// Check if parent savepoint already has an undo item for the same LTT
+				LttUndoItem* parentItem = nullptr;
+				LttUndoItem** parentItemPtr = nullptr;
+
+				for (auto lookupItemPtr = &m_next->m_lttActions;
+					 *lookupItemPtr;
+					 lookupItemPtr = &(*lookupItemPtr)->next)
+				{
+					if ((*lookupItemPtr)->name == item->name)
+					{
+						parentItem = *lookupItemPtr;
+						parentItemPtr = lookupItemPtr;
+						break;
+					}
+				}
+
+				if (parentItem)
+				{
+					// Parent already has an undo item for this LTT.
+					// Determine what to do based on the combination of types.
+					bool keepParent = true;
+
+					if (item->type == LttUndoItem::LTT_UNDO_DROP)
+					{
+						if (parentItem->type == LttUndoItem::LTT_UNDO_CREATE)
+						{
+							// CREATE followed by DROP: they cancel out - remove both
+							*parentItemPtr = parentItem->next;
+							delete parentItem;
+							delete item;
+							continue;
+						}
+						else if (parentItem->type == LttUndoItem::LTT_UNDO_ALTER)
+						{
+							// ALTER followed by DROP: replace parent's ALTER with DROP
+							// (DROP undo contains the original full LTT state)
+							*parentItemPtr = parentItem->next;
+							delete parentItem;
+							keepParent = false;
+						}
+						// DROP followed by DROP: keep parent's (shouldn't normally happen)
+					}
+					// Other cases (ALTER after CREATE, ALTER after ALTER, etc.):
+					// keep parent's undo (oldest state)
+
+					if (keepParent)
+					{
+						// In case of DROP (parent) -> CREATE (current), we must keep both
+						// to ensure that on rollback we first drop the new table and then
+						// restore the original one.
+						if (item->type == LttUndoItem::LTT_UNDO_CREATE &&
+							parentItem->type == LttUndoItem::LTT_UNDO_DROP)
+						{
+							// do nothing, fall through to add item
+						}
+						else
+						{
+							delete item;
+							continue;
+						}
+					}
+				}
+
+				// Move item to parent savepoint
+				item->next = m_next->m_lttActions;
+				m_next->m_lttActions = item;
+			}
+		}
+		else
+		{
+			// No parent savepoint - just discard undo data
+			while (m_lttActions)
+			{
+				const auto item = m_lttActions;
+				m_lttActions = item->next;
+				delete item;
+			}
 		}
 
 		tdbb->setTransaction(old_tran);

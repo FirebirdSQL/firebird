@@ -97,7 +97,7 @@ public:
 		}
 		else
 		{
-			result = pool.allocate(count ALLOC_ARGS);
+			result = pool.allocate(count);
 			chunksToFree.add(result);
 		}
 		return result;

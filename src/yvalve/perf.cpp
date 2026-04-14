@@ -79,7 +79,7 @@ static SINT64 get_parameter(const T** ptr)
 static void times(struct tms*);
 #endif
 
-static const SCHAR items[] =
+static constexpr SCHAR items[] =
 {
 	isc_info_reads,
 	isc_info_writes,
@@ -89,7 +89,7 @@ static const SCHAR items[] =
 	isc_info_current_memory, isc_info_max_memory
 };
 
-static const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
+static constexpr const SCHAR* report = "elapsed = !e cpu = !u reads = !r writes = !w fetches = !f marks = !m$";
 
 #if defined(WIN_NT) && !defined(CLOCKS_PER_SEC)
 #define TICK	100
@@ -306,8 +306,8 @@ void API_ROUTINE perf64_report(const PERF64* before, const PERF64* after, SCHAR*
 
 namespace {
 
-static const unsigned CNT_DB_INFO = 1;
-static const unsigned CNT_TIMER = 2;
+static constexpr unsigned CNT_DB_INFO = 1;
+static constexpr unsigned CNT_TIMER = 2;
 enum CntTimer {CNT_TIME_REAL, CNT_TIME_USER, CNT_TIME_SYSTEM};
 
 struct KnownCounters
@@ -315,21 +315,22 @@ struct KnownCounters
 	const char* name;
 	unsigned type;
 	unsigned code;
+	unsigned scope = 0;
 };
 
 #define TOTAL_COUNTERS 11
 
 // we use case-insensitive names, here they are written with capital letters for human readability
-KnownCounters knownCounters[TOTAL_COUNTERS] = {
+constexpr KnownCounters knownCounters[TOTAL_COUNTERS] = {
 	{"RealTime", CNT_TIMER, CNT_TIME_REAL},
 	{"UserTime", CNT_TIMER, CNT_TIME_USER},
 	{"SystemTime", CNT_TIMER, CNT_TIME_SYSTEM},
-	{"Fetches", CNT_DB_INFO, isc_info_fetches},
-	{"Marks", CNT_DB_INFO, isc_info_marks},
-	{"Reads", CNT_DB_INFO, isc_info_reads},
-	{"Writes", CNT_DB_INFO, isc_info_writes},
-	{"CurrentMemory", CNT_DB_INFO, isc_info_current_memory},
-	{"MaxMemory", CNT_DB_INFO, isc_info_max_memory},
+	{"Fetches", CNT_DB_INFO, isc_info_fetches, fb_info_counts_scope_att},
+	{"Marks", CNT_DB_INFO, isc_info_marks, fb_info_counts_scope_att},
+	{"Reads", CNT_DB_INFO, isc_info_reads, fb_info_counts_scope_att},
+	{"Writes", CNT_DB_INFO, isc_info_writes, fb_info_counts_scope_att},
+	{"CurrentMemory", CNT_DB_INFO, isc_info_current_memory, fb_info_counts_scope_db},
+	{"MaxMemory", CNT_DB_INFO, isc_info_max_memory, fb_info_counts_scope_db},
 	{"Buffers", CNT_DB_INFO, isc_info_num_buffers},
 	{"PageSize", CNT_DB_INFO, isc_info_page_size}
 };
@@ -347,11 +348,13 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 		Firebird::string dupSet(countersSet);
 		char* set = dupSet.begin();
 		char* save = NULL;
-		const char* delim = " \t,;";
+		constexpr const char* delim = " \t,;";
 		unsigned typeMask = 0;
 		unsigned n = 0;
-		UCHAR info[TOTAL_COUNTERS];		// will never use all, but do not care about few bytes
+		// We multiply by two because tags are in random order and we need to store their scope before process
+		UCHAR info[TOTAL_COUNTERS * 2];		// will never use all, but do not care about few bytes
 		UCHAR* pinfo = info;
+		unsigned lastScope = 0;
 
 #ifdef WIN_NT
 #define strtok_r strtok_s
@@ -372,7 +375,14 @@ void Why::UtilInterface::getPerfCounters(Firebird::CheckStatusWrapper* status,
 					typeMask |= knownCounters[i].type;
 
 					if (knownCounters[i].type == CNT_DB_INFO)
-						*pinfo++ = knownCounters[i].code;
+					{
+						const UCHAR tag = knownCounters[i].code;
+						const unsigned scope = knownCounters[i].scope;
+
+						if (scope && lastScope != scope) *pinfo++ = lastScope = scope;
+
+						*pinfo++ = tag;
+					}
 
 					goto found;
 				}
@@ -391,7 +401,7 @@ found:		;
 		// Fill time counters
 		if (typeMask & CNT_TIMER)
 		{
-			SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
+			const SINT64 tr = fb_utils::query_performance_counter() * 1000 / fb_utils::query_performance_frequency();
 			SINT64 uTime, sTime;
 			fb_utils::get_process_times(uTime, sTime);
 
@@ -438,10 +448,14 @@ found:		;
 			while (true)
 			{
 				SINT64 v = 0;
-				UCHAR ipb = *p++;
+				const UCHAR ipb = *p++;
 
 				switch (ipb)
 				{
+				case fb_info_counts_scope_att:
+				case fb_info_counts_scope_db:
+					continue;
+
 				case isc_info_reads:
 				case isc_info_writes:
 				case isc_info_marks:

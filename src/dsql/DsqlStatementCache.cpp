@@ -26,7 +26,6 @@
 #include "../jrd/Attachment.h"
 #include "../jrd/Statement.h"
 #include "../jrd/lck.h"
-#include "../jrd/lck_proto.h"
 
 using namespace Firebird;
 using namespace Jrd;

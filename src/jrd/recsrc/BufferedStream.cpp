@@ -241,8 +241,8 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
 			if (relation &&
-				!relation->rel_file &&
-				!relation->rel_view_rse &&
+				!relation->getExtFile() &&
+				!relation->isView() &&
 				!relation->isVirtual())
 			{
 				rpb->rpb_runtime_flags |= RPB_refetch;
@@ -256,7 +256,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 				// to upgrade the record format
 
 				if (relation && !rpb->rpb_number.isValid())
-					VIO_record(tdbb, rpb, MET_current(tdbb, relation), tdbb->getDefaultPool());
+					VIO_record(tdbb, rpb, relation->currentFormat(tdbb), tdbb->getDefaultPool());
 			}
 
 			const bool isNull = !EVL_field(relation, buffer_record, (USHORT) i, &from);

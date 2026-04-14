@@ -2244,8 +2244,8 @@ static void init_field_struct(gpre_fld* field) noexcept
 	field->fld_collate = 0;
 	field->fld_computed = 0;
 	field->fld_char_length = 0;
-	field->fld_charset_id = 0;
-	field->fld_collate_id = 0;
+	field->fld_charset_id = CS_NONE;
+	field->fld_collate_id = COLLATE_NONE;
 }
 
 

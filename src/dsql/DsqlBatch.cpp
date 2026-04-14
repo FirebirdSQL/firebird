@@ -694,7 +694,6 @@ private:
 				continue;
 			}
 
-			const bool start = startRequest;
 			if (startRequest)
 			{
 				EXE_unwind(tdbb, req);
@@ -771,7 +770,7 @@ private:
 	if (m_blobMap.count())
 	{
 		DEB_BATCH(fprintf(stderr, "BLOBs %d were not used in messages\n", m_blobMap.count()));
-		ERR_post_warning(Arg::Warning(isc_random) << "m_blobMap.count() BLOBs were not used in messages");		// !!!!!!! new warning
+		ERR_post_warning(Arg::Warning(isc_random) << "m_blobMap.count() BLOBs were not used in messages");		// !!!!!! new warning
 	}
 
 	// reset to initial state

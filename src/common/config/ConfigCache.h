@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef COMMON_CONFIG_CASHE_H
-#define COMMON_CONFIG_CASHE_H
+#ifndef COMMON_CONFIG_CACHE_H
+#define COMMON_CONFIG_CACHE_H
 
 #include "../common/classes/alloc.h"
 #include "../common/classes/fb_string.h"
@@ -48,6 +48,39 @@ protected:
 private:
 	class File : public Firebird::PermanentStorage
 	{
+		class PreciseTime
+		{
+#ifdef WIN_NT
+			using TimeType = FILETIME;
+#else
+			using TimeType = timespec;
+#endif
+
+		public:
+			PreciseTime()
+			{
+			}
+
+			PreciseTime(TimeType time)
+				: m_time(time)
+			{
+			}
+
+			bool operator==(const PreciseTime& other) const
+			{
+#ifdef WIN_NT
+				return m_time.dwLowDateTime == other.m_time.dwLowDateTime &&
+					m_time.dwHighDateTime == other.m_time.dwHighDateTime;
+#else
+				return m_time.tv_sec == other.m_time.tv_sec &&
+					m_time.tv_nsec == other.m_time.tv_nsec;
+#endif
+			}
+
+		private:
+			TimeType m_time = {};
+		};
+
 	public:
 		File(Firebird::MemoryPool& p, const Firebird::PathName& fName);
 		~File();
@@ -60,9 +93,9 @@ private:
 		Firebird::PathName fileName;
 
 	private:
-		volatile time_t fileTime;
+		PreciseTime fileTime;
 		File* next;
-		time_t getTime();
+		PreciseTime getTime();
 	};
 	File* files;
 
@@ -70,4 +103,4 @@ public:
 	Firebird::RWLock rwLock;
 };
 
-#endif // COMMON_CONFIG_CASHE_H
+#endif // COMMON_CONFIG_CACHE_H

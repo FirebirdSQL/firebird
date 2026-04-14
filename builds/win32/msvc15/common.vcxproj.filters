@@ -446,6 +446,9 @@
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\PodOptional.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -624,6 +627,15 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\include\fb_exception.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcChat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcMessage.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcNamedSignal.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>

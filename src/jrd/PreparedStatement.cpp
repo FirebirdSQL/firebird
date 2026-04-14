@@ -33,6 +33,7 @@
 #include "../jrd/Attachment.h"
 
 using namespace Firebird;
+using namespace Jrd;
 
 
 namespace
@@ -46,21 +47,28 @@ namespace
 		}
 	};
 
-	void dscToMetaItem(const dsc* desc, MsgMetadata::Item& item)
+	void dscToMetaItem(const dsql_par* par, MsgMetadata::Item& item)
 	{
 		item.finished = true;
+		item.field = par->par_name.c_str();
+		item.relation = par->par_rel_name.object.c_str();
+		item.owner = par->par_owner_name.c_str();
+		item.alias = par->par_alias.c_str();
+		item.schema = par->par_rel_name.schema.c_str();
+
+		const auto desc = &par->par_desc;
 
 		switch (desc->dsc_dtype)
 		{
 			case dtype_text:
 				item.type = SQL_TEXT;
-				item.charSet = desc->dsc_ttype();
+				item.charSet = desc->getTextType();
 				item.length = desc->dsc_length;
 				break;
 
 			case dtype_varying:
 				item.type = SQL_VARYING;
-				item.charSet = desc->dsc_ttype();
+				item.charSet = desc->getTextType();
 				fb_assert(desc->dsc_length >= sizeof(USHORT));
 				item.length = desc->dsc_length - sizeof(USHORT);
 				break;
@@ -423,7 +431,7 @@ void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* t
 	AutoSetRestore<RefPtr<AnyRef<ObjectsArray<MetaString>>>> autoSchemaSearchPath(
 		&attachment->att_schema_search_path, newSchemaSearchPath);
 
-	AutoSetRestore<SSHORT> autoAttCharset(&attachment->att_charset,
+	AutoSetRestore<CSetId> autoAttCharset(&attachment->att_charset,
 		(isInternalRequest ? CS_METADATA : attachment->att_charset));
 
 	dsqlRequest = nullptr;
@@ -546,7 +554,7 @@ void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& va
 	msgMetadata->setItemsCount(paramCount);
 
 	for (FB_SIZE_T i = 0; i < paramCount; ++i)
-		dscToMetaItem(&params[i]->par_desc, msgMetadata->getItem(i));
+		dscToMetaItem(params[i], msgMetadata->getItem(i));
 
 	msgMetadata->makeOffsets();
 	msg.resize(msgMetadata->getMessageLength());

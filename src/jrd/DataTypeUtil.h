@@ -30,6 +30,7 @@
 #include "../intl/charsets.h"
 #include "../common/classes/fb_string.h"
 #include "../jrd/err_proto.h"
+#include "../jrd/intl.h"
 
 struct dsc;
 
@@ -40,11 +41,11 @@ public:
 
 public:
 	static SSHORT getResultBlobSubType(const dsc* value1, const dsc* value2);
-	static USHORT getResultTextType(const dsc* value1, const dsc* value2);
+	static TTypeId getResultTextType(const dsc* value1, const dsc* value2);
 
 public:
 	void makeFromList(dsc* result, const char* expressionName, int argsCount, const dsc** args);
-	ULONG convertLength(ULONG len, USHORT srcCharSet, USHORT dstCharSet);
+	ULONG convertLength(ULONG len, CSetId srcCharSet, CSetId dstCharSet);
 	ULONG convertLength(const dsc* src, const dsc* dst);
 	ULONG fixLength(const dsc* desc, ULONG length);
 
@@ -55,7 +56,7 @@ private:
 	bool makeBlobOrText(dsc* result, const dsc* arg, bool force);
 
 public:
-	virtual UCHAR maxBytesPerChar(UCHAR charSet) = 0;
+	virtual UCHAR maxBytesPerChar(CSetId charSet) = 0;
 	virtual USHORT getDialect() const = 0;	// returns client dialect in DSQL and database dialect in JRD
 };
 
@@ -73,12 +74,12 @@ public:
 	}
 
 public:
-	virtual UCHAR maxBytesPerChar(UCHAR charSet);
+	virtual UCHAR maxBytesPerChar(CSetId charSet);
 	virtual USHORT getDialect() const;
 
 public:
 	static bool convertToUTF8(const Firebird::string& src, Firebird::string& dst,
-		CHARSET_ID charset = CS_dynamic, ErrorFunction err = ERR_post);
+		CSetId charset = CS_dynamic, ErrorFunction err = ERR_post);
 
 private:
 	thread_db* tdbb;

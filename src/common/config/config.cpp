@@ -624,13 +624,13 @@ bool Config::getDefaultValue(unsigned int key, string& str)
 
 #define DECLARE_GLOBAL_KEY(KEY)		\
 	static_assert(entries[KEY].is_global, "Requires global key"); \
-	const ConfigKey key = KEY;		\
-	const Config* config = getDefaultConfig();
+	[[maybe_unused]] const ConfigKey key = KEY;		\
+	[[maybe_unused]] const Config* config = getDefaultConfig();
 
 #define DECLARE_PER_DB_KEY(KEY)		\
 	static_assert(!entries[KEY].is_global, "Requires per-database key"); \
-	const ConfigKey key = KEY;		\
-	const Config* config = this;
+	[[maybe_unused]] const ConfigKey key = KEY;		\
+	[[maybe_unused]] const Config* config = this;
 
 int Config::getServerMode()
 {

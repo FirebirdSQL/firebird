@@ -163,15 +163,6 @@ void PATTERN_expand( USHORT column, const TEXT* pattern, PAT* args)
 		lang_val = "BY VALUE ";
 		valend = "";
 	}
-	else if (gpreGlob.sw_language == lang_fortran)
-	{
-#if (defined AIX || defined AIX_PPC)
-		lang_ref = "%REF(";
-		refend = ")";
-		lang_val = "%VAL(";
-		valend = ")";
-#endif
-	}
 
 	TEXT buffer[512];
 	TEXT* p = buffer;

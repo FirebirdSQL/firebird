@@ -39,6 +39,7 @@
 #include "../mov_proto.h"
 #include "../PreparedStatement.h"
 #include "../Function.h"
+#include "../Statement.h"
 
 #include "InternalDS.h"
 #include "ValidatePassword.h"
@@ -228,8 +229,6 @@ bool InternalConnection::cancelExecution(bool /*forced*/)
 
 bool InternalConnection::resetSession(thread_db* tdbb)
 {
-	fb_assert(isCurrent());
-
 	if (isCurrent())
 		return true;
 
@@ -270,7 +269,7 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 {
 	if (isCurrent())
 	{
-		const Attachment* att = m_attachment->getHandle();
+		Attachment* att = m_attachment->getHandle();
 		const MetaString& attUser = att->getUserName();
 		const MetaString& attRole = att->getSqlRole();
 

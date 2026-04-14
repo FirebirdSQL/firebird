@@ -30,6 +30,7 @@
 #include "firebird/impl/dsc_pub.h"
 #include "firebird/impl/consts_pub.h"
 #include "../jrd/ods.h"
+#include "../jrd/intl.h"
 #include "../intl/charsets.h"
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
@@ -105,9 +106,10 @@ typedef struct dsc
 	UCHAR*	dsc_address = nullptr; // Used either as offset in a message or as a pointer
 
 #ifdef __cplusplus
-	SSHORT dsc_blob_ttype() const noexcept { return dsc_scale | (dsc_flags & 0xFF00);}
-	SSHORT& dsc_ttype() noexcept { return dsc_sub_type;}
-	SSHORT dsc_ttype() const noexcept { return dsc_sub_type;}
+	TTypeId dsc_blob_ttype() const noexcept
+	{
+		return TTypeId(dsc_scale | (dsc_flags & 0xFF00));
+	}
 
 	bool isNullable() const noexcept
 	{
@@ -228,12 +230,9 @@ typedef struct dsc
 		return dsc_dtype == dtype_unknown;
 	}
 
-	SSHORT getBlobSubType() const noexcept
+	UCHAR getType() const noexcept
 	{
-		if (isBlob())
-			return dsc_sub_type;
-
-		return isc_blob_text;
+		return dsc_dtype;
 	}
 
 	SSHORT getSubType() const noexcept
@@ -244,21 +243,29 @@ typedef struct dsc
 		return 0;
 	}
 
+	SSHORT getBlobSubType() const noexcept
+	{
+		if (isBlob())
+			return dsc_sub_type;
+
+		return isc_blob_text;
+	}
+
 	void setBlobSubType(SSHORT subType) noexcept
 	{
 		if (isBlob())
 			dsc_sub_type = subType;
 	}
 
-	UCHAR getCharSet() const noexcept
+	CSetId getCharSet() const noexcept
 	{
 		if (isText())
-			return dsc_sub_type & 0xFF;
+			return CSetId(dsc_sub_type);
 
 		if (isBlob())
 		{
 			if (dsc_sub_type == isc_blob_text)
-				return dsc_scale;
+				return CSetId(dsc_scale);
 
 			return CS_BINARY;
 		}
@@ -269,39 +276,49 @@ typedef struct dsc
 		return CS_NONE;
 	}
 
-	USHORT getTextType() const noexcept
+	TTypeId getTextType() const noexcept
 	{
 		if (isText())
-			return dsc_sub_type;
+			return TTypeId(dsc_sub_type);
 
 		if (isBlob())
 		{
 			if (dsc_sub_type == isc_blob_text)
-				return dsc_scale | (dsc_flags & 0xFF00);
+				return TTypeId(CSetId(dsc_scale), CollId(dsc_flags >> 8));
 
-			return CS_BINARY;
+			return TTypeId(CS_BINARY);
 		}
 
 		if (isDbKey())
-			return CS_BINARY;
+			return TTypeId(CS_BINARY);
 
-		return CS_NONE;
+		return TTypeId(CS_NONE);
 	}
 
-	void setTextType(USHORT ttype) noexcept
+	void setTextType(TTypeId ttype) noexcept
 	{
 		if (isText())
 			dsc_sub_type = ttype;
 		else if (isBlob() && dsc_sub_type == isc_blob_text)
 		{
-			dsc_scale = ttype & 0xFF;
-			dsc_flags = (dsc_flags & 0xFF) | (ttype & 0xFF00);
+			dsc_scale = CSetId(ttype);
+			dsc_flags = (dsc_flags & 0xFF) | (CollId(ttype) << 8);
 		}
 	}
 
-	USHORT getCollation() const noexcept
+	CollId getCollation() const noexcept
 	{
-		return getTextType() >> 8;
+		return CollId(getTextType());
+	}
+
+	FLD_LENGTH getLength() const
+	{
+		return dsc_length;
+	}
+
+	SCHAR getScale() const
+	{
+		return dsc_scale;
 	}
 
 	void clear() noexcept
@@ -317,7 +334,7 @@ typedef struct dsc
 			dsc_flags = 0;
 	}
 
-	void makeBlob(SSHORT subType, USHORT ttype, ISC_QUAD* address = NULL) noexcept
+	void makeBlob(SSHORT subType, TTypeId ttype, ISC_QUAD* address = NULL) noexcept
 	{
 		clear();
 		dsc_dtype = dtype_blob;
@@ -422,7 +439,7 @@ typedef struct dsc
 		dsc_address = (UCHAR*) address;
 	}
 
-	void makeText(USHORT length, USHORT ttype, UCHAR* address = NULL) noexcept
+	void makeText(USHORT length, TTypeId ttype, UCHAR* address = NULL) noexcept
 	{
 		clear();
 		dsc_dtype = dtype_text;
@@ -485,7 +502,7 @@ typedef struct dsc
 		dsc_address = (UCHAR*) address;
 	}
 
-	void makeVarying(USHORT length, USHORT ttype, UCHAR* address = NULL) noexcept
+	void makeVarying(USHORT length, TTypeId ttype, UCHAR* address = NULL) noexcept
 	{
 		clear();
 		dsc_dtype = dtype_varying;
@@ -497,6 +514,16 @@ typedef struct dsc
 		}
 		setTextType(ttype);
 		dsc_address = address;
+	}
+
+	bool operator==(const dsc& v) const noexcept
+	{
+		return dsc_dtype == v.dsc_dtype &&
+			dsc_scale == v.dsc_scale &&
+			dsc_length == v.dsc_length &&
+			dsc_sub_type == v.dsc_sub_type &&
+			dsc_flags == v.dsc_flags &&
+			dsc_address == v.dsc_address;
 	}
 
 	USHORT getStringLength() const noexcept;
@@ -536,16 +563,6 @@ typedef struct dsc
 	void getSqlInfo(SLONG* sqlLength, SLONG* sqlSubType, SLONG* sqlScale, SLONG* sqlType) const;
 #endif	// __cpluplus
 } DSC;
-
-inline SSHORT DSC_GET_CHARSET(const dsc* desc) noexcept
-{
-	return (desc->dsc_sub_type & 0x00FF);
-}
-
-inline SSHORT DSC_GET_COLLATE(const dsc* desc) noexcept
-{
-	return (desc->dsc_sub_type >> 8);
-}
 
 struct alt_dsc
 {

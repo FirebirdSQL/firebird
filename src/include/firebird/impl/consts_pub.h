@@ -657,6 +657,7 @@
 #define isc_spb_trc_id				1
 #define isc_spb_trc_name			2
 #define isc_spb_trc_cfg				3
+#define isc_spb_trc_plugins			4
 
 /******************************************/
 /* Array slice description language (SDL) */

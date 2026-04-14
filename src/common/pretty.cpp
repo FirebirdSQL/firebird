@@ -115,21 +115,6 @@ constexpr const char *sdl_table[] =
 	NULL
 };
 
-constexpr const char *map_strings[] =
-{
-	"FIELD2",
-	"FIELD1",
-	"MESSAGE",
-	"TERMINATOR",
-	"TERMINATING_FIELD",
-	"OPAQUE",
-	"TRANSPARENT",
-	"TAG",
-	"SUB_FORM",
-	"ITEM_INDEX",
-	"SUB_FIELD"
-};
-
 //____________________________________________________________
 //
 //		Pretty print create database parameter buffer thru callback routine.

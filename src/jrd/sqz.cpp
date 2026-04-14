@@ -108,7 +108,6 @@ Compressor::Compressor(MemoryPool& pool, bool allowLongRuns, bool allowUnpacked,
 	  m_allowUnpacked(allowUnpacked)
 {
 	const auto end = data + length;
-	const auto input = data;
 
 	while (auto count = end - data)
 	{

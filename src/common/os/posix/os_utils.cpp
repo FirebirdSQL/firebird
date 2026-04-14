@@ -55,13 +55,7 @@
 #include <fcntl.h>
 #endif
 
-#ifdef AIX_PPC
-#define _UNIX95
-#endif
 #include <grp.h>
-#ifdef AIX_PPC
-#undef _UNIX95
-#endif
 
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -455,6 +449,33 @@ CtrlCHandler::~CtrlCHandler()
 void CtrlCHandler::handler(void*)
 {
 	terminated = true;
+}
+
+/// class StopHandler
+
+bool* StopHandler::stopPtr = nullptr;
+
+StopHandler::StopHandler(bool* stop)
+{
+	fb_assert(!stopPtr);
+	stopPtr = stop;
+	ISC_signal(SIGTSTP, handler, 0);
+}
+
+StopHandler::StopHandler(MemoryPool&)
+{
+	ISC_signal(SIGTSTP, handler, 0);
+}
+
+StopHandler::~StopHandler()
+{
+	ISC_signal_cancel(SIGTSTP, handler, 0);
+}
+
+void StopHandler::handler(void*)
+{
+	if (stopPtr)
+		*stopPtr = true;
 }
 
 } // namespace os_utils
