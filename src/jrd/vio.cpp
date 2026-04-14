@@ -7321,6 +7321,9 @@ void VIO_update_in_place(thread_db* tdbb,
 
 	AutoTempRecord gc_rec;
 
+	if (!DPM_get(tdbb, org_rpb, LCK_write))
+		BUGCHECK(186);	// msg 186 record disappeared
+
 	record_param temp2;
 	const Record* prior = org_rpb->rpb_prior;
 	if (prior)
@@ -7346,9 +7349,6 @@ void VIO_update_in_place(thread_db* tdbb,
 		const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
 		stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
 	}
-
-	if (!DPM_get(tdbb, org_rpb, LCK_write))
-		BUGCHECK(186);	// msg 186 record disappeared
 
 	if (prior)
 	{
