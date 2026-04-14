@@ -10,24 +10,29 @@ input parameter in multiple places), the developer is currently forced to explic
 more tediously, all output fields.
 
 The `USING` statement simplifies this workflow. It provides the ability to declare parameters, sub-routines and
-variables while allowing the engine to infer outputs automatically from the contained SQL command.
+variables, optionally execute the `DO` command in an autonomous transaction, and still allow the engine to infer
+outputs automatically from the contained SQL command.
 
 ## Syntax
 
 ```sql
 USING [ ( <input_parameter_list> ) ]
     [ <local_declarations> ]
+    [ IN AUTONOMOUS TRANSACTION ]
 DO <sql_command>
 ```
 
-**Note:** At least one of `<input_parameter_list>` or `<local_declarations>` must be present. A `USING DO ...` statement
-without parameters and without local declarations is invalid.
+**Note:** At least one of `<input_parameter_list>`, `<local_declarations>` or `IN AUTONOMOUS TRANSACTION` must be
+present. A `USING DO ...` statement without parameters, without local declarations and without `IN AUTONOMOUS
+TRANSACTION` is invalid.
 
 ### Components
 
 *  **`<input_parameter_list>`**: A strictly typed list of parameters. These can be bound to values using the `?`
    placeholder.
 *  **`<local_declarations>`**: Standard PSQL local declarations (variables, sub-functions and sub-procedures).
+*  **`IN AUTONOMOUS TRANSACTION`**: Executes the `DO` command in a separate autonomous transaction, reusing the same
+   semantics already supported by PSQL.
 *  **`<sql_command>`**: The DSQL statement to execute. Supported statements include:
    *   `SELECT`
    *   `INSERT` (with or without `RETURNING`)
@@ -121,12 +126,21 @@ begin
 end
 ```
 
+### 5. Autonomous Transaction
+
+```sql
+using in autonomous transaction
+do insert into audit_log (log_time, message)
+   values (current_timestamp, 'Entry written in autonomous transaction');
+```
+
 ## Comparison
 
-| Feature                 | Standard DSQL                   | `EXECUTE BLOCK`                               | `USING`                                                   |
-| :---------------------- | :------------------------------ | :-------------------------------------------- | :-------------------------------------------------------- |
-| **Local Declarations**  | No                              | Yes                                           | Yes                                                       |
-| **Input Declarations**  | Implicit (Positional)           | Explicit                                      | Hybrid (implicit and explicit)                            |
-| **Output Declarations** | Inferred                        | Explicit (`RETURNS`)                          | Inferred                                                  |
-| **Verbosity**           | Low                             | High                                          | Medium                                                    |
-| **Use Case**            | Simple queries                  | Complex logic, loops, no result set inference | Reusing params, variables, sub-routines, standard queries |
+| Feature                    | Standard DSQL                   | `EXECUTE BLOCK`                               | `USING`                                                   |
+| :------------------------- | :------------------------------ | :-------------------------------------------- | :-------------------------------------------------------- |
+| **Local Declarations**     | No                              | Yes                                           | Yes                                                       |
+| **Input Declarations**     | Implicit (Positional)           | Explicit                                      | Hybrid (implicit and explicit)                            |
+| **Output Declarations**    | Inferred                        | Explicit (`RETURNS`)                          | Inferred                                                  |
+| **Verbosity**              | Low                             | High                                          | Medium                                                    |
+| **Use Case**               | Simple queries                  | Complex logic, loops, no result set inference | Reusing params, variables, sub-routines, standard queries |
+| **Autonomous transaction** | No                              | Yes (without `SUSPEND`)                       | Yes                                                       |

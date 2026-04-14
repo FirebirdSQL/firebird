@@ -4188,14 +4188,31 @@ using
 			{ $<usingNode>$ = newNode<UsingNode>(); }
 			block_input_params(NOTRIAL(&$2->parameters))
 			local_declarations_opt
+			using_autonomous_opt
 			DO
 			using_dml_statement
 		{
 			const auto node = $2;
 			node->localDeclList = $4;
-			node->body = $6;
+			node->inAutonomousTransaction = $5;
+
+			if ($5)
+			{
+				const auto autoNode = newNode<InAutonomousTransactionNode>();
+				autoNode->action = $7;
+				node->body = autoNode;
+			}
+			else
+				node->body = $7;
+
 			$$ = node;
 		}
+	;
+
+%type <boolVal> using_autonomous_opt
+using_autonomous_opt
+	: /* nothing */					{ $$ = false; }
+	| IN AUTONOMOUS TRANSACTION		{ $$ = true; }
 	;
 
 %type <stmtNode> using_dml_statement
