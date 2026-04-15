@@ -19,6 +19,7 @@
 
 #include "firebird.h"
 #include "../jrd/jrd.h"
+#include "../jrd/met.h"
 #include "../jrd/intl.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -40,10 +41,10 @@ using namespace Jrd;
 // Data access: procedure scan
 // ---------------------------
 
-ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamType stream,
-							 const jrd_prc* procedure, const ValueListNode* sourceList,
+ProcedureScan::ProcedureScan(thread_db* tdbb, CompilerScratch* csb, const string& alias, StreamType stream,
+							 const SubRoutine<jrd_prc>& procedure, const ValueListNode* sourceList,
 							 const ValueListNode* targetList, MessageNode* message)
-	: RecordStream(csb, stream, procedure->prc_record_format), m_alias(csb->csb_pool, alias),
+	: RecordStream(csb, stream, procedure(tdbb)->prc_record_format), m_alias(csb->csb_pool, alias),
 	  m_procedure(procedure), m_sourceList(sourceList), m_targetList(targetList), m_message(message)
 {
 	m_impure = csb->allocImpure<Impure>();
@@ -57,23 +58,31 @@ ProcedureScan::ProcedureScan(CompilerScratch* csb, const string& alias, StreamTy
 
 void ProcedureScan::internalOpen(thread_db* tdbb) const
 {
-	if (!m_procedure->isImplemented())
+	Request* const request = tdbb->getRequest();
+	const jrd_prc* proc = m_procedure(request->getResources());
+
+	if (!proc->isImplemented())
 	{
 		status_exception::raise(
 			Arg::Gds(isc_proc_pack_not_implemented) <<
-				m_procedure->getName().object.toQuotedString() <<
-				m_procedure->getName().getSchemaAndPackage().toQuotedString());
+				m_procedure()->getName().object.toQuotedString() <<
+				m_procedure()->getName().getSchemaAndPackage().toQuotedString());
 	}
-	else if (!m_procedure->isDefined())
+	else if (!proc->isDefined())
 	{
 		status_exception::raise(
-			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure->getName().toQuotedString()) <<
+			Arg::Gds(isc_prcnotdef) << Arg::Str(m_procedure()->getName().toQuotedString()) <<
 			Arg::Gds(isc_modnotfound));
 	}
 
-	const_cast<jrd_prc*>(m_procedure)->checkReload(tdbb);
+	proc->checkReload(tdbb);
 
-	Request* const request = tdbb->getRequest();
+	// Procedure could be altered and its record format changed since current instance of
+	// ProcedureScan was created. Here it is not the right place to check if new format is
+	// compatible with caller's expectations, so we just use correct (possible new) format.
+
+	m_format = proc->prc_record_format;
+
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
 	impure->irsb_flags = irsb_open;
@@ -107,7 +116,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 		im = NULL;
 	}
 
-	Request* const proc_request = m_procedure->getStatement()->findRequest(tdbb);
+	Request* const proc_request = proc->getStatement()->findRequest(tdbb);
 	impure->irsb_req_handle = proc_request;
 
 	// req_proc_fetch flag used only when fetching rows, so
@@ -158,9 +167,10 @@ void ProcedureScan::close(thread_db* tdbb) const
 		if (proc_request)
 		{
 			EXE_unwind(tdbb, proc_request);
-			proc_request->req_flags &= ~req_in_use;
 			impure->irsb_req_handle = NULL;
 			proc_request->req_attachment = NULL;
+
+			proc_request->setUnused();
 		}
 
 		delete [] impure->irsb_message;
@@ -172,10 +182,12 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 {
 	JRD_reschedule(tdbb);
 
-	UserId* invoker = m_procedure->invoker ? m_procedure->invoker : tdbb->getAttachment()->att_ss_user;
+	Request* const request = tdbb->getRequest();
+	const jrd_prc* proc = m_procedure(request->getResources());
+
+	UserId* invoker = proc->invoker ? proc->invoker : tdbb->getAttachment()->att_ss_user;
 	AutoSetRestore<UserId*> userIdHolder(&tdbb->getAttachment()->att_ss_user, invoker);
 
-	Request* const request = tdbb->getRequest();
 	record_param* const rpb = &request->req_rpb[m_stream];
 	Impure* const impure = request->getImpure<Impure>(m_impure);
 
@@ -185,7 +197,7 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	const Format* const msg_format = m_procedure->getOutputFormat();
+	const Format* const msg_format = proc->getOutputFormat();
 	const ULONG oml = msg_format->fmt_length;
 	UCHAR* om = impure->irsb_message;
 
@@ -230,6 +242,8 @@ bool ProcedureScan::internalGetRecord(thread_db* tdbb) const
 
 	trace.fetch(false, ITracePlugin::RESULT_SUCCESS);
 
+	fb_assert(m_format == proc->prc_record_format);
+
 	for (USHORT i = 0; i < m_format->fmt_count; i++)
 	{
 		assignParams(tdbb, &msg_format->fmt_desc[2 * i], &msg_format->fmt_desc[2 * i + 1],
@@ -272,13 +286,13 @@ void ProcedureScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 	planEntry.className = "ProcedureScan";
 
 	planEntry.lines.add().text = "Procedure " +
-		printName(tdbb, m_procedure->getName().toQuotedString(), m_alias) + " Scan";
+		printName(tdbb, m_procedure()->getName().toQuotedString(), m_alias) + " Scan";
 	printOptInfo(planEntry.lines);
 
 	planEntry.objectType = obj_procedure;
-	planEntry.objectName = m_procedure->getName();
+	planEntry.objectName = m_procedure()->getName();
 
-	if (m_alias.hasData() && m_procedure->getName().toQuotedString() != m_alias)
+	if (m_alias.hasData() && m_procedure()->getName().toQuotedString() != m_alias)
 		planEntry.alias = m_alias;
 }
 
@@ -311,11 +325,11 @@ void ProcedureScan::assignParams(thread_db* tdbb,
 			/* YYY for text formats that don't have trailing spaces */
 			if (len)
 			{
-				const CHARSET_ID chid = DSC_GET_CHARSET(to_desc);
+				const CSetId chid = to_desc->getCharSet();
 				/*
 				CVC: I don't know if we have to check for dynamic-127 charset here.
 				If that is needed, the line above should be replaced by the commented code here.
-				CHARSET_ID chid = INTL_TTYPE(to_desc);
+				CSetId chid = INTL_TTYPE(to_desc);
 				if (chid == ttype_dynamic)
 					chid = INTL_charset(tdbb, chid);
 				*/

@@ -185,12 +185,12 @@ namespace Jrd
 					   ULONG length, const UCHAR* data);
 
 		void executeSql(thread_db* tdbb, TraNumber traNum,
-						unsigned charset,
+						CSetId charset,
 						const Firebird::string& schemaSearchPath,
 						const Firebird::string& sql,
 						const MetaName& owner);
 
-		bool lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& idx);
+		bool lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc& idx);
 		bool compareKey(thread_db* tdbb, jrd_rel* relation,
 						const index_desc& idx,
 						Record* record1, Record* record2);

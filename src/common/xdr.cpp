@@ -91,8 +91,6 @@ inline bool_t PUTLONG(xdr_t* xdrs, const SLONG* lp)
 	return xdrs->x_putbytes(reinterpret_cast<const char*>(&l), 4);
 }
 
-static SCHAR zeros[4] = { 0, 0, 0, 0 };
-
 
 bool_t xdr_hyper( xdr_t* xdrs, void* pi64)
 {
@@ -213,6 +211,8 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 			}
 			if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(&n)))
 				return FALSE;
+			n = MIN(n, desc->dsc_length - 1);
+
 			if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), n))
 				return FALSE;
 			if (xdrs->x_op == XDR_DECODE)

@@ -27,7 +27,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/pag.h"
 #include "../jrd/cch_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"

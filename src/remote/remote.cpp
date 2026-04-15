@@ -125,7 +125,6 @@ const ParametersSet connectParam =
 
 
 constexpr SLONG DUMMY_INTERVAL		= 60;	// seconds
-constexpr int ATTACH_FAILURE_SPACE	= 16 * 1024;	// bytes
 
 
 void REMOTE_cleanup_transaction( Rtr* transaction)

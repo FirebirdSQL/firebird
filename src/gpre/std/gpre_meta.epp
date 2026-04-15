@@ -361,12 +361,12 @@ bool MET_domain_lookup(gpre_req* request, gpre_fld* field, const char* string)
 			if (!F.RDB$CHARACTER_LENGTH.NULL)
 				field->fld_char_length = F.RDB$CHARACTER_LENGTH;
 			if (!F.RDB$CHARACTER_SET_ID.NULL)
-				field->fld_charset_id = F.RDB$CHARACTER_SET_ID;
+				field->fld_charset_id = CSetId(F.RDB$CHARACTER_SET_ID);
 			if (!F.RDB$COLLATION_ID.NULL)
-				field->fld_collate_id = F.RDB$COLLATION_ID;
+				field->fld_collate_id = CollId(F.RDB$COLLATION_ID);
 		}
 
-		field->fld_ttype = INTL_CS_COLL_TO_TTYPE(field->fld_charset_id, field->fld_collate_id);
+		field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 
 	END_FOR;
 
@@ -705,15 +705,15 @@ gpre_fld* MET_field(gpre_rel* relation, const char* string)
 		if ((field->fld_dtype <= dtype_any_text) || (field->fld_dtype == dtype_blob))
 		{
 			if (!F.RDB$CHARACTER_SET_ID.NULL)
-				field->fld_charset_id = F.RDB$CHARACTER_SET_ID;
+				field->fld_charset_id = CSetId(F.RDB$CHARACTER_SET_ID);
+
 			if (!RFR.RDB$COLLATION_ID.NULL)
-				field->fld_collate_id = RFR.RDB$COLLATION_ID;
+				field->fld_collate_id = CollId(RFR.RDB$COLLATION_ID);
 			else if (!F.RDB$COLLATION_ID.NULL)
-				field->fld_collate_id = F.RDB$COLLATION_ID;
+				field->fld_collate_id = CollId(F.RDB$COLLATION_ID);
 		}
 
-		field->fld_ttype =
-			INTL_CS_COLL_TO_TTYPE(field->fld_charset_id, field->fld_collate_id);
+		field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 		field->fld_symbol = symbol = MSC_symbol(SYM_field, name, length, (gpre_ctx*) field);
 		HSH_insert(symbol);
 		field->fld_global = symbol =
@@ -1056,18 +1056,18 @@ gpre_prc* MET_get_procedure(gpre_dbb* database, const TEXT* string, const TEXT* 
 					if (!F.RDB$CHARACTER_LENGTH.NULL)
 						field->fld_char_length = F.RDB$CHARACTER_LENGTH;
 					if (!F.RDB$CHARACTER_SET_ID.NULL)
-						field->fld_charset_id = F.RDB$CHARACTER_SET_ID;
+						field->fld_charset_id = CSetId(F.RDB$CHARACTER_SET_ID);
 					if (!F.RDB$COLLATION_ID.NULL)
-						field->fld_collate_id = F.RDB$COLLATION_ID;
-					field->fld_ttype =
-						INTL_CS_COLL_TO_TTYPE(field->fld_charset_id, field->fld_collate_id);
+						field->fld_collate_id = CollId(F.RDB$COLLATION_ID);
+					field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 					break;
 
 				case dtype_blob:
 					field->fld_flags |= FLD_blob;
 					field->fld_seg_length = F.RDB$SEGMENT_LENGTH;
 					if (!F.RDB$CHARACTER_SET_ID.NULL)
-						field->fld_charset_id = F.RDB$CHARACTER_SET_ID;
+						field->fld_charset_id = CSetId(F.RDB$CHARACTER_SET_ID);
+					field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 					break;
 				}
 				field->fld_symbol = MSC_symbol(SYM_field,
@@ -1193,14 +1193,15 @@ udf* MET_get_udf(gpre_dbb* database, const TEXT* string)
 		case dtype_cstring:
 			field->fld_flags |= FLD_text;
 			if (!UDF_ARG.RDB$CHARACTER_SET_ID.NULL)
-				field->fld_charset_id = UDF_ARG.RDB$CHARACTER_SET_ID;
-			field->fld_ttype = INTL_CS_COLL_TO_TTYPE(field->fld_charset_id, field->fld_collate_id);
+				field->fld_charset_id = CSetId(UDF_ARG.RDB$CHARACTER_SET_ID);
+			field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 			break;
 
 		case dtype_blob:
 			field->fld_flags |= FLD_blob;
 			if (!UDF_ARG.RDB$CHARACTER_SET_ID.NULL)
-				field->fld_charset_id = UDF_ARG.RDB$CHARACTER_SET_ID;
+				field->fld_charset_id = CSetId(UDF_ARG.RDB$CHARACTER_SET_ID);
+			field->fld_ttype = TTypeId(field->fld_charset_id, field->fld_collate_id);
 			break;
 		}
 	END_FOR;
@@ -1460,9 +1461,8 @@ void MET_load_hash_table(gpre_dbb* database)
 				V4ARG.RDB$PACKAGE_NAME MISSING AND
 				V4ARG.RDB$ARGUMENT_POSITION EQ ARG.RDB$ARGUMENT_POSITION;
 
-				an_udf->udf_charset_id = V4ARG.RDB$CHARACTER_SET_ID;
-				an_udf->udf_ttype =
-					INTL_CS_COLL_TO_TTYPE(an_udf->udf_charset_id, COLL.RDB$COLLATION_ID);
+				an_udf->udf_charset_id = CSetId(V4ARG.RDB$CHARACTER_SET_ID);
+				an_udf->udf_ttype = TTypeId(an_udf->udf_charset_id, CollId(COLL.RDB$COLLATION_ID));
 
 			END_FOR
 		}
@@ -1495,10 +1495,9 @@ void MET_load_hash_table(gpre_dbb* database)
 		HSH_insert(symbol);
 		iname->intlsym_type = INTLSYM_collation;
 		iname->intlsym_flags = 0;
-		iname->intlsym_charset_id = COLL.RDB$CHARACTER_SET_ID;
-		iname->intlsym_collate_id = COLL.RDB$COLLATION_ID;
-		iname->intlsym_ttype =
-			INTL_CS_COLL_TO_TTYPE(iname->intlsym_charset_id, iname->intlsym_collate_id);
+		iname->intlsym_charset_id = CSetId(COLL.RDB$CHARACTER_SET_ID);
+		iname->intlsym_collate_id = CollId(COLL.RDB$COLLATION_ID);
+		iname->intlsym_ttype = TTypeId(iname->intlsym_charset_id, iname->intlsym_collate_id);
 		iname->intlsym_bytes_per_char =
 			(CHARSET.RDB$BYTES_PER_CHARACTER.NULL) ? 1 : (CHARSET.RDB$BYTES_PER_CHARACTER);
 		iname->intlsym_next = gpreGlob.text_subtypes;
@@ -1548,10 +1547,9 @@ void MET_load_hash_table(gpre_dbb* database)
 		HSH_insert(symbol);
 		iname->intlsym_type = INTLSYM_collation;
 		iname->intlsym_flags = 0;
-		iname->intlsym_charset_id = COLL.RDB$CHARACTER_SET_ID;
-		iname->intlsym_collate_id = COLL.RDB$COLLATION_ID;
-		iname->intlsym_ttype =
-			INTL_CS_COLL_TO_TTYPE(iname->intlsym_charset_id, iname->intlsym_collate_id);
+		iname->intlsym_charset_id = CSetId(COLL.RDB$CHARACTER_SET_ID);
+		iname->intlsym_collate_id = CollId(COLL.RDB$COLLATION_ID);
+		iname->intlsym_ttype = TTypeId(iname->intlsym_charset_id, iname->intlsym_collate_id);
 		iname->intlsym_bytes_per_char =
 			(CHARSET.RDB$BYTES_PER_CHARACTER.NULL) ? 1 : (CHARSET.RDB$BYTES_PER_CHARACTER);
 

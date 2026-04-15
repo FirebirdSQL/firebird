@@ -70,7 +70,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_f_proto.h"
 #include "../common/os/isc_i_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/os/pio_proto.h"
@@ -419,8 +419,6 @@ void PIO_force_write(jrd_file* file, const bool forceWrite)
 
 	if (forceWrite != oldForce)
 	{
-		const int control = forceWrite ? SYNC : 0;
-
 #ifdef FCNTL_SYNC_BROKEN
 
 		maybeCloseFile(file->fil_desc);

@@ -281,6 +281,11 @@ public:
 	{
 		return true;
 	}
+
+	virtual bool disallowedInReadOnlyDatabase() const
+	{
+		return true;
+	}
 };
 
 
@@ -678,7 +683,7 @@ public:
 	}
 
 	// Check if expression returns deterministic result
-	virtual bool deterministic() const;
+	virtual bool deterministic(thread_db* tdbb) const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
 	virtual bool possiblyUnknown() const;
@@ -1098,6 +1103,8 @@ public:
 		return NULL;
 	}
 
+	virtual void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
+
 	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, Request* request) const;
 	virtual bool aggPass(thread_db* tdbb, Request* request) const;
@@ -1496,6 +1503,7 @@ public:
 		TYPE_SUSPEND,
 		TYPE_TRUNCATE_LOCAL_TABLE,
 		TYPE_UPDATE_OR_INSERT,
+		TYPE_USING,
 
 		TYPE_EXT_INIT_PARAMETERS,
 		TYPE_EXT_TRIGGER

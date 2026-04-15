@@ -34,10 +34,14 @@ namespace Jrd
 
 namespace Jrd::SystemTriggers
 {
+	void executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
+	void executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
+
+	void executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord);
+	void executeAfterUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord);
+
 	void executeBeforeDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
 	void executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
-	void executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relation, Record* record);
-	void executeBeforeUpdateTriggers(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Record* newRecord);
 }	// namespace Jrd::SystemTriggers
 
 #endif	// JRD_SYSTEM_TRIGGERS_H

@@ -149,8 +149,6 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 
 	GEN_statement(scratch, node);
 
-	unsigned messageNumber = 0;
-
 	// have the access method compile the statement
 
 #ifdef DSQL_DEBUG
@@ -256,14 +254,15 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		rethrowDdlException(ex, false, node);
 	}
 
-	if (dbb->readOnly())
+	if (dbb->readOnly() && node->disallowedInReadOnlyDatabase())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
 	// In read-only replica, only replicator is allowed to execute DDL.
 	// As an exception, not replicated DDL statements are also allowed.
 	if (dbb->isReplica(REPLICA_READ_ONLY) &&
 		!(tdbb->tdbb_flags & TDBB_replicator) &&
-		node->mustBeReplicated())
+		node->mustBeReplicated() &&
+		node->disallowedInReadOnlyDatabase())
 	{
 		ERRD_post(Arg::Gds(isc_read_only_trans));
 	}

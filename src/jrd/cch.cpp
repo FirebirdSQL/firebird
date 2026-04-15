@@ -42,6 +42,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/sbm.h"
 #include "../jrd/nbak.h"
+#include "../jrd/met.h"
 #include "../common/gdsassert.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/err_proto.h"
@@ -49,7 +50,7 @@
 #include "../common/isc_proto.h"
 #include "../common/isc_s_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/ods_proto.h"
 #include "../jrd/os/pio_proto.h"
@@ -2487,7 +2488,6 @@ bool CCH_write_all_shadows(thread_db* tdbb, Shadow* shadow, BufferDesc* bdb, Ods
 		if (bdb->bdb_page == HEADER_PAGE_NUMBER)
 		{
 			// fixup header for shadow file
-			jrd_file* shadow_file = sdw->sdw_file;
 			header_page* header = (header_page*) page;
 
 			PageSpace* pageSpaceID = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
@@ -2720,7 +2720,6 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id)
 	const bool all_flag = (flush_flag & FLUSH_ALL) != 0;
 	const bool sweep_flag = (flush_flag & FLUSH_SWEEP) != 0;
 	const bool release_flag = (flush_flag & FLUSH_RLSE) != 0;
-	const bool write_thru = release_flag;
 
 	{
 		Sync bcbSync(&bcb->bcb_syncObject, FB_FUNCTION);
@@ -3133,10 +3132,9 @@ void BufferControl::cache_writer(BufferControl* bcb)
 		}
 
 		Monitoring::cleanupAttachment(tdbb);
+		attachment->rollbackMetaTransaction(tdbb);
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
-
-		attachment->releaseRelations(tdbb);
 	}	// try
 	catch (const Firebird::Exception& ex)
 	{
@@ -4279,7 +4277,7 @@ static ULONG memory_init(thread_db* tdbb, BufferControl* bcb, ULONG number)
 
 				try
 				{
-					memory = (UCHAR*) bcb->bcb_bufferpool->allocate(memory_size ALLOC_ARGS);
+					memory = (UCHAR*) bcb->bcb_bufferpool->allocate(memory_size);
 					memory_end = memory + memory_size;
 					break;
 				}
@@ -5179,7 +5177,7 @@ void requeueRecentlyUsed(BufferControl* bcb)
 
 BufferControl* BufferControl::create(Database* dbb)
 {
-	MemoryPool* const pool = dbb->createPool();
+	MemoryPool* const pool = dbb->createPool(false);
 	BufferControl* const bcb = FB_NEW_POOL(*pool) BufferControl(*pool, dbb->dbb_memory_stats);
 	pool->setStatsGroup(bcb->bcb_memory_stats);
 	return bcb;
@@ -5518,49 +5516,6 @@ void BCBHashTable::remove(BufferDesc* bdb)
 
 #ifdef HASH_USE_CDS_LIST
 
-///	 class ListNodeAllocator<T>
-
-class InitPool
-{
-public:
-	explicit InitPool(MemoryPool&)
-		: m_pool(InitCDS::createPool()),
-		  m_stats(m_pool->getStatsGroup())
-	{ }
-
-	~InitPool()
-	{
-		// m_pool will be deleted by InitCDS dtor after cds termination
-		// some memory could still be not freed until that moment
-
-#ifdef DEBUG_CDS_MEMORY
-		char str[256];
-		snprintf(str, sizeof(str),
-			"CCH list's common pool stats:\n"
-			"  usage         = %llu\n"
-			"  mapping       = %llu\n"
-			"  max usage     = %llu\n"
-			"  max mapping   = %llu\n"
-			"\n",
-			m_stats.getCurrentUsage(),
-			m_stats.getCurrentMapping(),
-			m_stats.getMaximumUsage(),
-			m_stats.getMaximumMapping()
-		);
-		gds__log(str);
-#endif
-	}
-
-	void* alloc(size_t size)
-	{
-		return m_pool->allocate(size ALLOC_ARGS);
-	}
-
-private:
-	MemoryPool* m_pool;
-	MemoryStats& m_stats;
-};
-
 static InitInstance<InitPool> initPool;
 
 
@@ -5575,6 +5530,11 @@ void ListNodeAllocator<T>::deallocate(T* p, std::size_t /* n */)
 {
 	// It uses the correct pool stored within memory block itself
 	MemoryPool::globalFree(p);
+}
+
+void suspend()
+{
+	cds::backoff::pause();
 }
 
 #endif // HASH_USE_CDS_LIST

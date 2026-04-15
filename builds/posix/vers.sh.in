@@ -57,7 +57,7 @@ then
 	exit 1
 fi
 
-FROM="../builds/posix/$FILE"
+FROM="@abs_top_srcdir@/builds/posix/$FILE"
 if test ! -f "$FROM"
 then
 	echo "vers.sh: missing $FROM"

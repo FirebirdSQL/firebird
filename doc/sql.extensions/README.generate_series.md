@@ -1,13 +1,12 @@
 # GENERATE_SERIES function
 
 The `GENERATE_SERIES` function creates a series of numbers within a specified interval. 
-The interval and the step between series values ​​are defined by the user.
 
 ## Syntax
 
 ```
 <generate_series_function> ::=
-    GENERATE_SERIES(<start>, <finish> [, <step>]) [AS] <correlation name> [ ( <derived column name> ) ]
+    GENERATE_SERIES(<start>, <limit> [, <step>]) [AS] <correlation name> [ ( <derived column name> ) ]
 ```
 
 ## Arguments
@@ -15,9 +14,8 @@ The interval and the step between series values ​​are defined by the user.
 * `start` - The first value in the interval. `start` is specified as a variable, a literal, or a scalar expression of type 
 `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`.
 
-* `finish` - The last value in the interval. `finish` is specified as a variable, a literal, or a scalar expression of 
-type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`. The series stops once the last generated step value 
-exceeds the `finish` value.
+* `limit` - The last value in the interval. `limit` is specified as a variable, a literal, or a scalar expression of 
+type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`.
 
 * `step` - Indicates the number of values to increment or decrement between steps in the series. `step` is an expression 
 of type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`. 
@@ -25,16 +23,18 @@ of type `SMALLINT`, `INTEGER`, `BIGINT`, `INT128` or `NUMERIC/DECIMAL`.
 
 ## Returning type
 
-The function `GENERATE_SERIES` returns a set with `BIGINT`, `INT128` or `NUMERIC(18, x)/NUMERIC(38, x)` column, 
+The function `GENERATE_SERIES` returns a table with a `BIGINT`, `INT128` or `NUMERIC(18, x)/NUMERIC(38, x)` column, 
 where the scale is determined by the maximum of the scales of the function arguments.
 
 ## Rules
 
-* If `start > finish` and a negative `step` value is specified, an empty set is returned.
+* If `start > limit` and a positive `step` value is specified, an empty table is returned.
 
-* If `start < finish` and a positive `step` value is specified, an empty set is returned.
+* If `start < limit` and a negative `step` value is specified, an empty table is returned.
 
-* If the `step` argument is zero, an error is thrown.
+* The series stops once the last generated step value exceeds the `limit` value.
+
+* If the `step` argument is zero, an error is raised.
 
 ## Examples
 

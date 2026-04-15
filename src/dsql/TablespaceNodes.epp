@@ -39,7 +39,7 @@
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/os/pio_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 
 
 using namespace Firebird;
@@ -125,7 +125,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 	const MetaName& userName = attachment->att_user->getUserName();
 
 	if (createIfNotExistsOnly &&
-		!DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, QualifiedName(name), obj_tablespace))
+		!DYN_UTIL_check_unique_name_nothrow(tdbb, QualifiedName(name), obj_tablespace))
 	{
 		return;
 	}
@@ -133,7 +133,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 		DDL_TRIGGER_CREATE_TABLESPACE, QualifiedName(name), {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(name), obj_tablespace);
+	DYN_UTIL_check_unique_name(tdbb, QualifiedName(name), obj_tablespace);
 
 	// File with tablespace should not exist. Checking it in DFW is silent and causes
 	// cleanup of existing files at phase 0. Early checking preserves existing files.
@@ -330,19 +330,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		X IN RDB$RELATIONS
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
-		if (dropDependencies)
-		{
-			const QualifiedName relationName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME);
-			if (const auto relation = MET_lookup_relation(tdbb, relationName))
-			{
-				MET_scan_relation(tdbb, relation);
-				DropRelationNode::dropRelation(tdbb, transaction, false, relation, relationName);
-			}
-		}
-		else
-		{
-			total++;
-		}
+		total++;
 	}
 	END_FOR
 
@@ -353,21 +341,7 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		X IN RDB$INDICES
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
-		if (dropDependencies)
-		{
-			if (X.RDB$EXPRESSION_BLR.NULL &&
-				!DropIndexNode::deleteSegmentRecords(tdbb, transaction, QualifiedName(X.RDB$INDEX_NAME, X.RDB$SCHEMA_NAME)))
-			{
-				// msg 50: "No segments found for index"
-				status_exception::raise(Arg::PrivateDyn(50));
-			}
-
-			ERASE X;
-		}
-		else
-		{
-			total++;
-		}
+		total++;
 	}
 	END_FOR
 

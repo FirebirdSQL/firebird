@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
+#include "../jrd/Statement.h"
 #include "../jrd/val.h"
 #include "iberror.h"
 #include "../jrd/intl.h"
@@ -204,7 +205,7 @@ UCHAR CVT_get_numeric(const UCHAR* string, const USHORT length, SSHORT* scale, v
 
 	MOVE_CLEAR(&desc, sizeof(desc));
 	desc.dsc_dtype = dtype_text;
-	desc.dsc_ttype() = ttype_ascii;
+	desc.setTextType(ttype_ascii);
 	desc.dsc_length = length;
 	desc.dsc_address = const_cast<UCHAR*>(string);
 	// The above line allows the assignment, but "string" is treated as const
@@ -457,9 +458,9 @@ ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc* desc)
 Firebird::GlobalPtr<EngineCallbacks> EngineCallbacks::instance;
 
 
-bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CHARSET_ID& charset2)
+bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CSetId& charset2)
 {
-	CHARSET_ID charset1;
+	CSetId charset1;
 	if (INTL_TTYPE(from) == ttype_dynamic)
 		charset1 = INTL_charset(NULL, INTL_TTYPE(from));
 	else
@@ -488,7 +489,7 @@ bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CHARSET_ID& charse
 }
 
 
-CharSet* EngineCallbacks::getToCharset(CHARSET_ID charSetId)
+CharSet* EngineCallbacks::getToCharset(CSetId charSetId)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 	return INTL_charset_lookup(tdbb, charSetId);
@@ -502,7 +503,7 @@ void EngineCallbacks::validateData(CharSet* toCharSet, SLONG length, const UCHAR
 }
 
 
-ULONG EngineCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+ULONG EngineCallbacks::validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 	const USHORT size)
 {
 	fb_assert(charSet);
@@ -532,7 +533,7 @@ ULONG EngineCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, UL
 }
 
 
-ULONG TruncateCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+ULONG TruncateCallbacks::validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 	const USHORT size)
 {
 	fb_assert(charSet);
@@ -568,7 +569,7 @@ ULONG TruncateCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, 
 }
 
 
-CHARSET_ID EngineCallbacks::getChid(const dsc* to)
+CSetId EngineCallbacks::getChid(const dsc* to)
 {
 	if (INTL_TTYPE(to) == ttype_dynamic)
 		return INTL_charset(NULL, INTL_TTYPE(to));

@@ -82,12 +82,6 @@
 #define O_LARGEFILE 0
 #endif
 
-// How much we align memory when reading database header.
-// Sector alignment of memory is necessary to use unbuffered IO on Windows.
-// Actually, sectors may be bigger than 1K, but let's be consistent with
-// JRD regarding the matter for the moment.
-constexpr FB_SIZE_T SECTOR_ALIGNMENT = PAGE_ALIGNMENT;
-
 using namespace Firebird;
 
 namespace
@@ -857,6 +851,9 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 
 	if (!repl_seq)
 	{
+		// Replace existing database GUID with a regenerated one
+		Guid::generate().copyTo(header->hdr_guid);
+
 		size = page_size;
 		header = reinterpret_cast<Ods::header_page*>(header_buffer.getBuffer(size));
 

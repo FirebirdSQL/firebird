@@ -1376,8 +1376,8 @@ bool DSC_make_descriptor(DSC* desc,
 						SSHORT scale,
 						USHORT length,
 						SSHORT sub_type,
-						SSHORT charset,
-						SSHORT collation)
+						CSetId charset,
+						CollId collation)
 {
 /**************************************
  *
@@ -1412,13 +1412,13 @@ bool DSC_make_descriptor(DSC* desc,
 	{
 	case blr_text:
 		desc->dsc_dtype = dtype_text;
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_varying:
 		desc->dsc_dtype = dtype_varying;
 		desc->dsc_length += sizeof(USHORT);
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_short:
@@ -1507,15 +1507,15 @@ bool DSC_make_descriptor(DSC* desc,
 		desc->dsc_dtype = dtype_blob;
 		if (sub_type == isc_blob_text)
 		{
-			fb_assert(charset <= MAX_SCHAR);
-			desc->dsc_scale = (SCHAR) charset;
-			desc->dsc_flags = collation << 8;	// collation of blob
+			fb_assert(USHORT(charset) <= MAX_SCHAR);
+			desc->dsc_scale = (SCHAR) USHORT(charset);
+			desc->dsc_flags =  USHORT(collation) << 8;	// collation of blob
 		}
 		break;
 
 	case blr_cstring:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charset, collation));
+		desc->setTextType(TTypeId(charset, collation));
 		break;
 
 	case blr_bool:

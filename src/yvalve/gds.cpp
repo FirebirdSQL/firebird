@@ -269,11 +269,15 @@ VoidPtr API_ROUTINE gds__alloc_debug(SLONG size_request, const TEXT* filename, U
 {
 	try
 	{
-		return getDefaultMemoryPool()->allocate(size_request
 #ifdef DEBUG_GDS_ALLOC
-			, filename, lineno
+		Firebird::CustomSourceLocation location{
+			.fileName = filename,
+			.line = static_cast<int>(lineno)
+		};
+		return getDefaultMemoryPool()->allocate(size_request, location);
+#else
+		return getDefaultMemoryPool()->allocate(size_request);
 #endif
-		);
 	}
 	catch (const Firebird::Exception&)
 	{
@@ -327,6 +331,7 @@ constexpr int op_invoke_function	= 33;
 constexpr int op_invsel_procedure	= 34;
 constexpr int op_table_value_fun	= 35;
 constexpr int op_for_range		= 36;
+constexpr int op_within_group_order	= 37;
 
 static constexpr UCHAR
 	// generic print formats
@@ -433,7 +438,9 @@ static constexpr UCHAR
 	default2[] = { op_line, op_indent, op_byte, op_literal,
 				   op_line, op_indent, op_byte, op_literal,
 				   op_line, op_indent, op_byte, op_literal,
-				   op_pad, op_line, 0};
+				   op_pad, op_line, 0 },
+	list_function[] = { op_line, op_verb, op_verb, op_within_group_order, 0 },
+	agg_function[] = { op_byte, op_literal, op_byte, op_line, op_args, op_within_group_order, 0 };
 
 
 #include "../jrd/blp.h"
@@ -4432,6 +4439,20 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			break;
 		}
 
+		case op_within_group_order:
+		{
+			if (control->ctl_blr_reader.peekByte() == blr_within_group_order)
+			{
+				blr_indent(control, level);
+				blr_print_blr(control, control->ctl_blr_reader.getByte());
+				n = blr_print_byte(control);
+				blr_print_line(control, (SSHORT) offset);
+				while (--n >= 0)
+					blr_print_verb(control, level + 1);
+			}
+			break;
+		}
+
 		default:
 			fb_assert(false);
 			break;
@@ -4551,7 +4572,7 @@ VoidPtr API_ROUTINE gds__alloc(SLONG size_request)
 {
 	try
 	{
-		return getDefaultMemoryPool()->allocate(size_request ALLOC_ARGS);
+		return getDefaultMemoryPool()->allocate(size_request);
 	}
 	catch (const Firebird::Exception&)
 	{

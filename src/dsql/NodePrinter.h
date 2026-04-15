@@ -30,13 +30,17 @@
 #define NODE_PRINT(var, property)	var.print(STRINGIZE(property), property)
 #define NODE_PRINT_ENUM(var, property)	var.print(STRINGIZE(property), (int) property)
 
+//#define TRIVIAL_NODE_PRINTER
+
 namespace Jrd {
 
+
+#ifndef TRIVIAL_NODE_PRINTER
 
 class NodePrinter
 {
 public:
-	explicit NodePrinter(unsigned aIndent = 0)
+	NodePrinter(unsigned aIndent = 0)
 		: indent(aIndent)
 	{
 	}
@@ -345,9 +349,52 @@ private:
 
 private:
 	unsigned indent;
+
+private:
 	Firebird::ObjectsArray<Firebird::string> stack;
 	Firebird::string text;
 };
+
+#else // TRIVIAL_NODE_PRINTER
+
+// trivial NodePrinter class - to print only node name
+class NodePrinter
+{
+public:
+	NodePrinter(unsigned aIndent = 0)
+	{
+	}
+
+public:
+	void begin(const Firebird::string& s)
+	{
+	}
+
+	void end()
+	{
+	}
+
+	template <typename T>
+	void print(const Firebird::string& s, const T& value)
+	{
+	}
+
+	void append(const NodePrinter& subPrinter)
+	{
+	}
+
+	unsigned getIndent() const
+	{
+		return 0;
+	}
+
+	const Firebird::string getText() const
+	{
+		return "";
+	}
+};
+
+#endif // TRIVIAL_NODE_PRINTER
 
 
 }	// namespace Jrd

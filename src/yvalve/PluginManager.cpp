@@ -780,6 +780,12 @@ namespace
 
 		explicit PluginLoadInfo(const char* pluginName)
 		{
+			// check for directories in pluginName
+			PathName path, file;
+			PathUtils::splitLastComponent(path, file, pluginName);
+			if (path.hasData())
+				(Arg::Gds(isc_random) << "Plugin name should not contain directory separator and path component").raise();
+
 			// define default values for plugin ...
 			curModule = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, pluginName);
 			regName = pluginName;

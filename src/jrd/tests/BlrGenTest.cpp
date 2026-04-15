@@ -85,6 +85,8 @@ BOOST_AUTO_TEST_CASE(TestDefaultTextField)
 		scratch.getBlrData().begin(), scratch.getBlrData().end(),
 		expected.getBlrData().begin(), expected.getBlrData().end()
 	);
+
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -111,6 +113,8 @@ BOOST_AUTO_TEST_CASE(TestDefaultTextFieldSameSchema)
 		scratch.getBlrData().begin(), scratch.getBlrData().end(),
 		expected.getBlrData().begin(), expected.getBlrData().end()
 	);
+
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -159,6 +163,8 @@ BOOST_AUTO_TEST_CASE(TestFalseDomain)
 			expected.getBlrData().begin(), expected.getBlrData().end()
 		);
 	}
+
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -201,6 +207,8 @@ BOOST_AUTO_TEST_CASE(TestUseSubType)
 			expected.getBlrData().begin(), expected.getBlrData().end()
 		);
 	}
+
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -253,6 +261,7 @@ BOOST_AUTO_TEST_CASE(TestFalseExplicitCollation)
 		);
 	}
 
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -279,6 +288,8 @@ BOOST_AUTO_TEST_CASE(TestPutTypeEmptyCollate)
 		scratch.getBlrData().begin(), scratch.getBlrData().end(),
 		expected.getBlrData().begin(), expected.getBlrData().end()
 	);
+
+	Database::destroy(context->getDatabase());
 }
 
 
@@ -328,6 +339,8 @@ BOOST_AUTO_TEST_CASE(TestEmptyTypeOfTable)
 			expected.getBlrData().begin(), expected.getBlrData().end()
 		);
 	}
+
+	Database::destroy(context->getDatabase());
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// DsqlCompilerScratchTests

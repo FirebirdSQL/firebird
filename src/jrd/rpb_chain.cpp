@@ -35,10 +35,10 @@ using namespace Jrd;
 
 int traRpbList::PushRpb(record_param* value)
 {
-	if (value->rpb_relation->rel_view_rse ||	// this is view
-		value->rpb_relation->rel_file ||		// this is external file
-		value->rpb_relation->isVirtual() ||		// this is virtual table
-		value->rpb_number.isBof())				// recno is a BOF marker
+	if (value->rpb_relation->rel_view_rse ||		// this is view
+		value->rpb_relation->getExtFile() ||		// this is external file
+		value->rpb_relation->isVirtual() ||			// this is virtual table
+		value->rpb_number.isBof())					// recno is a BOF marker
 	{
 		return -1;
 	}
@@ -47,7 +47,7 @@ int traRpbList::PushRpb(record_param* value)
 	if (pos-- > 0)
 	{
 		traRpbListElement& prev = (*this)[pos];
-		if (prev.lr_rpb->rpb_relation->rel_id == value->rpb_relation->rel_id &&
+		if (prev.lr_rpb->rpb_relation->getId() == value->rpb_relation->getId() &&
 			prev.lr_rpb->rpb_number == value->rpb_number)
 		{
 			// we got the same record once more - mark for refetch

@@ -96,7 +96,7 @@ namespace
 					if (!ARG.RDB$RELATION_NAME.NULL)
 						parameter.relationName = QualifiedName(ARG.RDB$RELATION_NAME, ARG.RDB$RELATION_SCHEMA_NAME);
 					if (!ARG.RDB$COLLATION_ID.NULL)
-						parameter.collationId = ARG.RDB$COLLATION_ID;
+						parameter.collationId = CollId(ARG.RDB$COLLATION_ID);
 					if (!ARG.RDB$NULL_FLAG.NULL)
 						parameter.nullFlag = ARG.RDB$NULL_FLAG;
 
@@ -115,9 +115,9 @@ namespace
 					if (!FLD.RDB$CHARACTER_LENGTH.NULL)
 						parameter.fieldCharLength = FLD.RDB$CHARACTER_LENGTH;
 					if (!FLD.RDB$COLLATION_ID.NULL)
-						parameter.fieldCollationId = FLD.RDB$COLLATION_ID;
+						parameter.fieldCollationId = CollId(FLD.RDB$COLLATION_ID);
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-						parameter.fieldCharSetId = FLD.RDB$CHARACTER_SET_ID;
+						parameter.fieldCharSetId = CSetId(FLD.RDB$CHARACTER_SET_ID);
 					if (!FLD.RDB$FIELD_PRECISION.NULL)
 						parameter.fieldPrecision = FLD.RDB$FIELD_PRECISION;
 
@@ -164,7 +164,7 @@ namespace
 					if (!PRM.RDB$RELATION_NAME.NULL)
 						parameter.relationName = QualifiedName(PRM.RDB$RELATION_NAME, PRM.RDB$RELATION_SCHEMA_NAME);
 					if (!PRM.RDB$COLLATION_ID.NULL)
-						parameter.collationId = PRM.RDB$COLLATION_ID;
+						parameter.collationId = CollId(PRM.RDB$COLLATION_ID);
 					if (!PRM.RDB$NULL_FLAG.NULL)
 						parameter.nullFlag = PRM.RDB$NULL_FLAG;
 
@@ -183,9 +183,9 @@ namespace
 					if (!FLD.RDB$CHARACTER_LENGTH.NULL)
 						parameter.fieldCharLength = FLD.RDB$CHARACTER_LENGTH;
 					if (!FLD.RDB$COLLATION_ID.NULL)
-						parameter.fieldCollationId = FLD.RDB$COLLATION_ID;
+						parameter.fieldCollationId = CollId(FLD.RDB$COLLATION_ID);
 					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-						parameter.fieldCharSetId = FLD.RDB$CHARACTER_SET_ID;
+						parameter.fieldCharSetId = CSetId(FLD.RDB$CHARACTER_SET_ID);
 					if (!FLD.RDB$FIELD_PRECISION.NULL)
 						parameter.fieldPrecision = FLD.RDB$FIELD_PRECISION;
 
@@ -378,12 +378,12 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	Attachment* const attachment = transaction->getAttachment();
 	const MetaString& ownerName = attachment->getEffectiveUserName();
 
-	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, transaction, name, obj_package_header))
+	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_package_header))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_CREATE_PACKAGE, name, {});
 
-	DYN_UTIL_check_unique_name(tdbb, transaction, name, obj_package_header);
+	DYN_UTIL_check_unique_name(tdbb, name, obj_package_header);
 
 	AutoCacheRequest requestHandle(tdbb, drq_s_pkg, DYN_REQUESTS);
 

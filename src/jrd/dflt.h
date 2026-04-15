@@ -24,6 +24,8 @@
 #ifndef JRD_DFLT_H
 #define JRD_DFLT_H
 
+#include "firebird/impl/blr.h"
+
 /* This file contains the blr for the default values for fields
    in system relations.  The GDEF source for these fields is in
    DFLT.GDL in the JRD component.  When modifying a system field default value,

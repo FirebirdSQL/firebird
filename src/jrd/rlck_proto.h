@@ -26,15 +26,16 @@
 
 namespace Jrd {
 	class Lock;
-	class jrd_rel;
 	class jrd_tra;
 	struct record_param;
 	class Attachment;
 	class thread_db;
 }
 
-Jrd::Lock* RLCK_reserve_relation(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::jrd_rel*, bool);
-Jrd::Lock* RLCK_transaction_relation_lock(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::jrd_rel*);
+#include "../jrd/Resources.h"
+
+Jrd::Lock* RLCK_reserve_relation(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::Cached::Relation*, bool);
+Jrd::Lock* RLCK_transaction_relation_lock(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::Cached::Relation*);
 
 #endif // JRD_RLCK_PROTO_H
 

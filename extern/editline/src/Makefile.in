@@ -34,19 +34,21 @@ SOURCES_DIST = chared.c common.c el.c emacs.c hist.c \
 	filecomplete.h editline/readline.h strlcpy.c strlcat.c vis.c \
 	unvis.c eln.c
 
-@HAVE_STRLCPY_FALSE@objects_1 = strlcpy.o
-@HAVE_STRLCAT_FALSE@objects_2 = strlcat.o
-@HAVE_VIS_FALSE@objects_3 = vis.o
-@HAVE_UNVIS_FALSE@objects_4 = unvis.o
-@WIDECHAR_TRUE@objects_5 = eln.o
-OBJECTS1 = chared.o common.o el.o emacs.o hist.o \
-	keymacro.o map.o chartype.o parse.o prompt.o read.o \
-	refresh.o search.o sig.o terminal.o tty.o vi.o fgetln.o \
-	wcsdup.o tokenizer.o history.o filecomplete.o readline.o \
+@HAVE_STRLCPY_FALSE@objects_1 = $(OBJ_DIR)/strlcpy.o
+@HAVE_STRLCAT_FALSE@objects_2 = $(OBJ_DIR)/strlcat.o
+OBJ_DIR = ../../../temp/extern/editline
+
+@HAVE_VIS_FALSE@objects_3 = $(OBJ_DIR)/vis.o
+@HAVE_UNVIS_FALSE@objects_4 = $(OBJ_DIR)/unvis.o
+@WIDECHAR_TRUE@objects_5 = $(OBJ_DIR)/eln.o
+OBJECTS1 = $(OBJ_DIR)/chared.o $(OBJ_DIR)/common.o $(OBJ_DIR)/el.o $(OBJ_DIR)/emacs.o $(OBJ_DIR)/hist.o \
+	$(OBJ_DIR)/keymacro.o $(OBJ_DIR)/map.o $(OBJ_DIR)/chartype.o $(OBJ_DIR)/parse.o $(OBJ_DIR)/prompt.o $(OBJ_DIR)/read.o \
+	$(OBJ_DIR)/refresh.o $(OBJ_DIR)/search.o $(OBJ_DIR)/sig.o $(OBJ_DIR)/terminal.o $(OBJ_DIR)/tty.o $(OBJ_DIR)/vi.o $(OBJ_DIR)/fgetln.o \
+	$(OBJ_DIR)/wcsdup.o $(OBJ_DIR)/tokenizer.o $(OBJ_DIR)/history.o $(OBJ_DIR)/filecomplete.o $(OBJ_DIR)/readline.o \
 	$(objects_1) $(objects_2) $(objects_3) \
 	$(objects_4) $(objects_5)
-@WIDECHAR_TRUE@objects_6 = tokenizern.o historyn.o
-objects_7 = fcns.o help.o $(objects_6)
+@WIDECHAR_TRUE@objects_6 = $(OBJ_DIR)/tokenizern.o $(OBJ_DIR)/historyn.o
+objects_7 = $(OBJ_DIR)/fcns.o $(OBJ_DIR)/help.o $(objects_6)
 OBJECTS2 = $(objects_7)
 OBJECTS = $(OBJECTS1) $(OBJECTS2)
 
@@ -98,7 +100,7 @@ BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h fcns.c help.c \
 AHDR = vi.h emacs.h common.h
 ASRC = $(srcdir)/vi.c $(srcdir)/emacs.c $(srcdir)/common.c
 CLEANFILES = $(BUILT_SOURCES)
-LIBRARY = libedit.a
+LIBRARY = ../../../gen/extern/editline/libedit.a
 libedit_la_SOURCES = chared.c common.c el.c emacs.c hist.c keymacro.c \
 	map.c chartype.c parse.c prompt.c read.c refresh.c search.c \
 	sig.c terminal.c tty.c vi.c fgetln.c wcsdup.c tokenizer.c \
@@ -115,20 +117,24 @@ nodist_libedit_la_SOURCES = $(BUILT_SOURCES)
 editlinelibrary:	all
 
 all: $(BUILT_SOURCES)
-	$(MAKE) libedit.a
+	$(MAKE) $(LIBRARY)
 
 .SUFFIXES:
 .SUFFIXES: .c .o
 
 $(LIBRARY): $(OBJECTS)
+	mkdir -p $(dir $@)
 	-$(RM) $@
 	$(STATICLIB_LINK) $@ $^
 
-.c.o:
+$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
 	$(COMPILE) $(DEPFLAGS) $(OPTFLAGS) -c $< -o $@
 
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
 clean:
-	rm -f $(CLEANFILES) $(OBJECTS) *.d
+	rm -f $(CLEANFILES) $(OBJECTS) $(Dependencies)
 
 distclean:	clean
 	rm -f $(LIBRARY) Makefile ../Makefile

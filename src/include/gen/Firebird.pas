@@ -572,8 +572,8 @@ type
 	IUtil_getInt128Ptr = function(this: IUtil; status: IStatus): IInt128; cdecl;
 	IUtil_decodeTimeTzExPtr = procedure(this: IUtil; status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
 	IUtil_decodeTimeStampTzExPtr = procedure(this: IUtil; status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); cdecl;
-	IUtil_executeCreateDatabase2Ptr = function(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
 	IUtil_convertPtr = procedure(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
+	IUtil_executeCreateDatabase2Ptr = function(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
 	IOffsetsCallback_setOffsetPtr = procedure(this: IOffsetsCallback; status: IStatus; index: Cardinal; offset: Cardinal; nullOffset: Cardinal); cdecl;
 	IXpbBuilder_clearPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
 	IXpbBuilder_removeCurrentPtr = procedure(this: IXpbBuilder; status: IStatus); cdecl;
@@ -2827,8 +2827,8 @@ type
 		getInt128: IUtil_getInt128Ptr;
 		decodeTimeTzEx: IUtil_decodeTimeTzExPtr;
 		decodeTimeStampTzEx: IUtil_decodeTimeStampTzExPtr;
-		executeCreateDatabase2: IUtil_executeCreateDatabase2Ptr;
 		convert: IUtil_convertPtr;
+		executeCreateDatabase2: IUtil_executeCreateDatabase2Ptr;
 	end;
 
 	IUtil = class(IVersioned)
@@ -2856,8 +2856,8 @@ type
 		function getInt128(status: IStatus): IInt128;
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar);
-		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
 		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
+		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
 	end;
 
 	IUtilImpl = class(IUtil)
@@ -2885,8 +2885,8 @@ type
 		function getInt128(status: IStatus): IInt128; virtual; abstract;
 		procedure decodeTimeTzEx(status: IStatus; timeTz: ISC_TIME_TZ_EXPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
 		procedure decodeTimeStampTzEx(status: IStatus; timeStampTz: ISC_TIMESTAMP_TZ_EXPtr; year: CardinalPtr; month: CardinalPtr; day: CardinalPtr; hours: CardinalPtr; minutes: CardinalPtr; seconds: CardinalPtr; fractions: CardinalPtr; timeZoneBufferLength: Cardinal; timeZoneBuffer: PAnsiChar); virtual; abstract;
-		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; virtual; abstract;
 		procedure convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); virtual; abstract;
+		function executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; virtual; abstract;
 	end;
 
 	OffsetsCallbackVTable = class(VersionedVTable)
@@ -5955,10 +5955,15 @@ const
 	 isc_no_user_att_while_restore = 335545318;
 	 isc_genseq_stepmustbe_nonzero = 335545319;
 	 isc_argmustbe_exact_function = 335545320;
-	 isc_ts_file_exists = 335545321;
-	 isc_tablespace_name = 335545322;
-	 isc_ts_file_not_exists = 335545323;
-	 isc_ts_file_dup = 335545324;
+	 isc_sysf_argmustbe_range_inc0_1 = 335545321;
+	 isc_argmustbe_numeric_function = 335545322;
+	 isc_percetile_only_one_sort_item = 335545323;
+	 isc_argmustbe_const_within_group = 335545324;
+	 isc_update_overwrite = 335545325;
+	 isc_ts_file_exists = 335545326;
+	 isc_tablespace_name = 335545327;
+	 isc_ts_file_not_exists = 335545328;
+	 isc_ts_file_dup = 335545329;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6026,6 +6031,8 @@ const
 	 isc_dsql_wrong_param_num = 336003111;
 	 isc_dsql_invalid_drop_ss_clause = 336003112;
 	 isc_upd_ins_cannot_default = 336003113;
+	 isc_dsql_ltt_invalid_reference = 336003114;
+	 isc_dsql_using_requires_params_subroutines = 336003115;
 	 isc_dyn_filter_not_found = 336068645;
 	 isc_dyn_func_not_found = 336068649;
 	 isc_dyn_index_not_found = 336068656;
@@ -6122,11 +6129,12 @@ const
 	 isc_dyn_cannot_mod_obj_sys_schema = 336068927;
 	 isc_dyn_cannot_create_reserved_schema = 336068928;
 	 isc_dyn_cannot_infer_schema = 336068929;
-	 isc_dyn_ts_not_found = 336068931;
-	 isc_dyn_cant_set_ts_table = 336068932;
-	 isc_dyn_cant_set_ts_index = 336068933;
-	 isc_dyn_dup_tablespace = 336068934;
-	 isc_dyn_cannot_mod_sys_ts = 336068935;
+	 isc_dyn_column_name_exists = 336068931;
+	 isc_dyn_ts_not_found = 336068932;
+	 isc_dyn_cant_set_ts_table = 336068933;
+	 isc_dyn_cant_set_ts_index = 336068934;
+	 isc_dyn_dup_tablespace = 336068935;
+	 isc_dyn_cannot_mod_sys_ts = 336068936;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -8972,25 +8980,25 @@ begin
 	FbException.checkException(status);
 end;
 
-function IUtil.executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
+procedure IUtil.convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
 begin
 	if (vTable.version < 5) then begin
 		FbException.setVersionError(status, 'IUtil', vTable.version, 5);
-		Result := nil;
 	end
 	else begin
-		Result := UtilVTable(vTable).executeCreateDatabase2(Self, status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
+		UtilVTable(vTable).convert(Self, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
 	end;
 	FbException.checkException(status);
 end;
 
-procedure IUtil.convert(status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer);
+function IUtil.executeCreateDatabase2(status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment;
 begin
 	if (vTable.version < 6) then begin
 		FbException.setVersionError(status, 'IUtil', vTable.version, 6);
+		Result := nil;
 	end
 	else begin
-		UtilVTable(vTable).convert(Self, status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+		Result := UtilVTable(vTable).executeCreateDatabase2(Self, status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
 	end;
 	FbException.checkException(status);
 end;
@@ -15111,20 +15119,20 @@ begin
 	end
 end;
 
-function IUtilImpl_executeCreateDatabase2Dispatcher(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
+procedure IUtilImpl_convertDispatcher(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
 begin
-	Result := nil;
 	try
-		Result := IUtilImpl(this).executeCreateDatabase2(status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
+		IUtilImpl(this).convert(status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
 end;
 
-procedure IUtilImpl_convertDispatcher(this: IUtil; status: IStatus; sourceType: Cardinal; sourceScale: Cardinal; sourceLength: Cardinal; source: Pointer; targetType: Cardinal; targetScale: Cardinal; targetLength: Cardinal; target: Pointer); cdecl;
+function IUtilImpl_executeCreateDatabase2Dispatcher(this: IUtil; status: IStatus; stmtLength: Cardinal; creatDBstatement: PAnsiChar; dialect: Cardinal; dpbLength: Cardinal; dpb: BytePtr; stmtIsCreateDb: BooleanPtr): IAttachment; cdecl;
 begin
+	Result := nil;
 	try
-		IUtilImpl(this).convert(status, sourceType, sourceScale, sourceLength, source, targetType, targetScale, targetLength, target);
+		Result := IUtilImpl(this).executeCreateDatabase2(status, stmtLength, creatDBstatement, dialect, dpbLength, dpb, stmtIsCreateDb);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -18647,8 +18655,8 @@ initialization
 	IUtilImpl_vTable.getInt128 := @IUtilImpl_getInt128Dispatcher;
 	IUtilImpl_vTable.decodeTimeTzEx := @IUtilImpl_decodeTimeTzExDispatcher;
 	IUtilImpl_vTable.decodeTimeStampTzEx := @IUtilImpl_decodeTimeStampTzExDispatcher;
-	IUtilImpl_vTable.executeCreateDatabase2 := @IUtilImpl_executeCreateDatabase2Dispatcher;
 	IUtilImpl_vTable.convert := @IUtilImpl_convertDispatcher;
+	IUtilImpl_vTable.executeCreateDatabase2 := @IUtilImpl_executeCreateDatabase2Dispatcher;
 
 	IOffsetsCallbackImpl_vTable := OffsetsCallbackVTable.create;
 	IOffsetsCallbackImpl_vTable.version := 2;

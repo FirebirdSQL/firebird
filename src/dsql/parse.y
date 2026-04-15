@@ -717,12 +717,15 @@ using namespace Firebird;
 %token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> PERCENTILE_CONT
+%token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
+%token <metaNamePtr> RDB_RESET_CONTEXT
 
 // tablespaces
 %token <metaNamePtr> INCLUDING
@@ -859,6 +862,7 @@ using namespace Firebird;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
 	Jrd::UpdateOrInsertNode* updInsNode;
+	Jrd::UsingNode* usingNode;
 	Jrd::AggNode* aggNode;
 	Jrd::SysFuncCallNode* sysFuncCallNode;
 	Jrd::ValueIfNode* valueIfNode;
@@ -937,6 +941,7 @@ dml_statement
 	| select									{ $$ = $1; }
 	| update									{ $$ = $1; }
 	| update_or_insert							{ $$ = $1; }
+	| using										{ $$ = $1; }
 	;
 
 %type <ddlNode> ddl_statement
@@ -1675,6 +1680,12 @@ create_clause
 			node->createIfNotExistsOnly = $4;
 			$$ = node;
 		}
+	| LOCAL TEMPORARY TABLE if_not_exists_opt ltt_table_clause
+		{
+			const auto node = $5;
+			node->createIfNotExistsOnly = $4;
+			$$ = node;
+		}
 	| TRIGGER if_not_exists_opt trigger_clause
 		{
 			const auto node = $3;
@@ -1784,6 +1795,8 @@ recreate_clause
 	| TABLE table_clause
 		{ $$ = newNode<RecreateTableNode>($2); }
 	| GLOBAL TEMPORARY TABLE gtt_table_clause
+		{ $$ = newNode<RecreateTableNode>($4); }
+	| LOCAL TEMPORARY TABLE ltt_table_clause
 		{ $$ = newNode<RecreateTableNode>($4); }
 	| VIEW view_clause
 		{ $$ = newNode<RecreateViewNode>($2); }
@@ -2345,7 +2358,7 @@ db_initial_desc($alterDatabaseNode)
 	| db_initial_desc db_initial_option($alterDatabaseNode)
 	;
 
-// With the exception of LENGTH, all clauses here are handled only at the client.
+// All clauses here are handled only at the client.
 %type db_initial_option(<alterDatabaseNode>)
 db_initial_option($alterDatabaseNode)
 	: PAGE_SIZE equals u_numeric_constant
@@ -2421,12 +2434,6 @@ sql_security_clause
 	| SQL SECURITY INVOKER		{ $$ = false; }
 	;
 
-%type <triState> sql_security_clause_opt
-sql_security_clause_opt
-	: /* nothing */				{ $$ = TriState::empty(); }
-	| sql_security_clause		{ $$ = $1; }
-	;
-
 %type <boolVal> publication_state
 publication_state
 	: ENABLE PUBLICATION		{ $$ = true; }
@@ -2438,31 +2445,58 @@ gtt_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-				$<createRelationNode>$->relationType = std::nullopt;
+				$<createRelationNode>$->tempFlag = REL_temp_gtt;
 			}
-		'(' table_elements($2) ')' gtt_ops($2)
+		'(' table_elements($2) ')' gtt_subclauses_opt($2)
 			{
 				$$ = $2;
-				if (!$$->relationType.has_value())
-					$$->relationType = rel_global_temp_delete;
 			}
 	;
 
-%type gtt_ops(<createRelationNode>)
-gtt_ops($createRelationNode)
-	: gtt_op($createRelationNode)
-	| gtt_ops ',' gtt_op($createRelationNode)
+%type gtt_subclauses_opt(<createRelationNode>)
+gtt_subclauses_opt($createRelationNode)
+	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
+	| gtt_subclauses($createRelationNode)
 	;
 
-%type gtt_op(<createRelationNode>)
-gtt_op($createRelationNode)
-	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
-	| sql_security_clause_opt
+%type gtt_subclauses(<createRelationNode>)
+gtt_subclauses($createRelationNode)
+	: gtt_subclause($createRelationNode)
+	| gtt_subclauses ',' gtt_subclause($createRelationNode)
+	;
+
+%type gtt_subclause(<createRelationNode>)
+gtt_subclause($createRelationNode)
+	: sql_security_clause
 		{ setClause($createRelationNode->ssDefiner, "SQL SECURITY", $1); }
-	| ON COMMIT DELETE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT DELETE ROWS", rel_global_temp_delete); }
+	| temp_table_rows_type($createRelationNode)
+	;
+
+%type temp_table_rows_type(<createRelationNode>)
+temp_table_rows_type($createRelationNode)
+	: ON COMMIT DELETE ROWS
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT DELETE ROWS", REL_temp_tran); }
 	| ON COMMIT PRESERVE ROWS
-		{ setClause($createRelationNode->relationType, "ON COMMIT PRESERVE ROWS", rel_global_temp_preserve); }
+		{ setClause($createRelationNode->tempRowsFlag, "ON COMMIT PRESERVE ROWS", REL_temp_conn); }
+	;
+
+%type <createRelationNode> ltt_table_clause
+ltt_table_clause
+	: simple_table_name
+			{
+				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($2) ')' ltt_subclause_opt($2)
+			{
+				$$ = $2;
+			}
+	;
+
+%type ltt_subclause_opt(<createRelationNode>)
+ltt_subclause_opt($createRelationNode)
+	: // nothing by default. Will be set "on commit delete rows" in dsqlPass
+	| temp_table_rows_type($createRelationNode)
 	;
 
 %type <stringPtr> external_file
@@ -4189,6 +4223,36 @@ block_parameter($parameters)
 		}
 	;
 
+// USING
+
+%type <usingNode> using
+using
+	: USING
+			{ $<usingNode>$ = newNode<UsingNode>(); }
+			block_input_params(NOTRIAL(&$2->parameters))
+			local_declarations_opt
+			DO
+			using_dml_statement
+		{
+			const auto node = $2;
+			node->localDeclList = $4;
+			node->body = $6;
+			$$ = node;
+		}
+	;
+
+%type <stmtNode> using_dml_statement
+using_dml_statement
+	: call				{ $$ = $1; }
+	| delete			{ $$ = $1; }
+	| insert			{ $$ = $1; }
+	| merge				{ $$ = $1; }
+	| exec_procedure	{ $$ = $1; }
+	| select			{ $$ = $1; }
+	| update			{ $$ = $1; }
+	| update_or_insert	{ $$ = $1; }
+	;
+
 // CREATE VIEW
 
 %type <createAlterViewNode> view_clause
@@ -4775,13 +4839,15 @@ keyword_or_column
 	| BTRIM					// added in FB 6.0
 	| CALL
 	| CURRENT_SCHEMA
-	| LTRIM
-	| RTRIM
 	| GREATEST
 	| LEAST
-	| WITHIN
 	| LISTAGG
+	| LTRIM
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
+	| RTRIM
 	| TRUNCATE
+	| WITHIN
 	;
 
 col_opt
@@ -5499,7 +5565,7 @@ national_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 			$$->flags |= FLD_national;
 		}
 	| national_character_keyword VARYING '(' pos_short_integer ')'
@@ -5508,6 +5574,13 @@ national_character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $4;
 			$$->flags |= (FLD_national | FLD_has_len);
+		}
+	| national_character_keyword VARYING
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
+			$$->flags |= FLD_national;
 		}
 	;
 
@@ -5528,8 +5601,8 @@ binary_character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
-			$$->length = 1;
+			$$->charLength = DEFAULT_BINARY_LENGTH;
+			$$->length = DEFAULT_BINARY_LENGTH;
 			$$->textType = ttype_binary;
 			$$->charSetId = CS_BINARY;
 			$$->subType = fb_text_subtype_binary;
@@ -5546,6 +5619,17 @@ binary_character_type
 			$$->subType = fb_text_subtype_binary;
 			$$->flags |= (FLD_has_len | FLD_has_chset);
 		}
+	| varbinary_character_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARBINARY_LENGTH;
+			$$->length = DEFAULT_VARBINARY_LENGTH + sizeof(USHORT);
+			$$->textType = ttype_binary;
+			$$->charSetId = CS_BINARY;
+			$$->subType = fb_text_subtype_binary;
+			$$->flags |= FLD_has_chset;
+		}
 	;
 
 %type <legacyField> character_type
@@ -5561,7 +5645,7 @@ character_type
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_text;
-			$$->charLength = 1;
+			$$->charLength = DEFAULT_CHAR_LENGTH;
 		}
 	| varying_keyword '(' pos_short_integer ')'
 		{
@@ -5569,6 +5653,12 @@ character_type
 			$$->dtype = dtype_varying;
 			$$->charLength = (USHORT) $3;
 			$$->flags |= FLD_has_len;
+		}
+	| varying_keyword
+		{
+			$$ = newNode<dsql_fld>();
+			$$->dtype = dtype_varying;
+			$$->charLength = DEFAULT_VARCHAR_LENGTH;
 		}
 	;
 
@@ -5949,7 +6039,7 @@ set_bind
 
 %type <legacyField> set_bind_from
 set_bind_from
-	: bind_type
+	: non_array_type
 	| TIME ZONE
 		{
 			$$ = newNode<dsql_fld>();
@@ -5958,20 +6048,9 @@ set_bind_from
 		}
 	;
 
-%type <legacyField> bind_type
-bind_type
-	: non_array_type
-	| varying_keyword
-		{
-			$$ = newNode<dsql_fld>();
-			$$->dtype = dtype_varying;
-			$$->charLength = 0;
-		}
-	;
-
 %type <legacyField> set_bind_to
 set_bind_to
-	: bind_type
+	: non_array_type
 		{
 			$$ = $1;
 		}
@@ -7804,6 +7883,38 @@ in_predicate
 				ComparativeBoolNode::DFLAG_ANSI_ANY, $4);
 			$$ = newNode<NotBoolNode>(node);
 		}
+	| value IN table_value_function_unlist_short(NOTRIAL($1))
+		{
+			$$ = newNode<ComparativeBoolNode>(blr_eql, $1,
+				ComparativeBoolNode::DFLAG_ANSI_ANY, $3);
+		}
+	| value NOT IN table_value_function_unlist_short(NOTRIAL($1))
+		{
+			const auto node = newNode<ComparativeBoolNode>(blr_eql, $1,
+				ComparativeBoolNode::DFLAG_ANSI_ANY, $4);
+			$$ = newNode<NotBoolNode>(node);
+		}
+	;
+
+%type <exprNode> table_value_function_unlist_short(<valueExprNode>)
+table_value_function_unlist_short($autoTypeFromValue)
+	: table_value_function_unlist
+		{
+			const auto unlistNode = nodeAs<UnlistFunctionSourceNode>($1);
+			unlistNode->alias = UnlistFunctionSourceNode::FUNC_NAME;
+
+			if (unlistNode->dsqlField == nullptr)
+				unlistNode->dsqlAutoTypeFromValue = $autoTypeFromValue;
+
+			const auto rseNode = newNode<RseNode>();
+			rseNode->dsqlFlags |= RecordSourceNode::DFLAG_BODY_WRAPPER;
+			rseNode->dsqlFrom = newNode<RecSourceListNode>(unlistNode);
+
+			const auto selectNode = newNode<SelectExprNode>();
+			selectNode->querySpec = rseNode;
+
+			$$ = selectNode;
+		}
 	;
 
 %type <boolExprNode> exists_predicate
@@ -8244,12 +8355,14 @@ drop_tablespace_clause
 			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
 			$$ = node;
 		}
-//	| symbol_tablespace_name INCLUDING CONTENTS
-//		{
-//			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
-//			node->dropDependencies = true;
-//			$$ = node;
-//		}
+/*
+	| symbol_tablespace_name INCLUDING CONTENTS
+		{
+			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
+			node->dropDependencies = true;
+			$$ = node;
+		}
+*/
 	;
 
 // value types
@@ -8793,6 +8906,10 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
+	| PERCENTILE_CONT '(' value ')' within_group_specification
+		{ $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_CONT, $3, $5); }
+	| PERCENTILE_DISC '(' value ')' within_group_specification
+		{ $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_DISC, $3, $5); }
 	;
 
 %type <aggNode> listagg_set_function
@@ -8858,7 +8975,7 @@ listagg_count_indication
 
 %type <valueListNode> within_group_specification_opt
 within_group_specification_opt
-	: /* nothing */					{ $$ = newNode<ValueListNode>(0); }
+	: /* nothing */					{ $$ = nullptr; }
 	| within_group_specification	{ $$ = $1; }
 	;
 
@@ -9114,6 +9231,7 @@ system_function_std_syntax
 	| RAND
 	| RDB_GET_CONTEXT
 	| RDB_GET_TRANSACTION_CN
+	| RDB_RESET_CONTEXT
 	| RDB_ROLE_IN_USE
 	| RDB_SET_CONTEXT
 	| REPLACE

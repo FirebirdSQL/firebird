@@ -602,8 +602,6 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 			return NULL;
 		}
 
-		bool v3Error = false;
-
 		if (!stmtEaten)
 		{
 			att->execute(status, crdbTrans, statement.length(), statement.c_str(), dialect, NULL, NULL, NULL, NULL);
@@ -2975,7 +2973,14 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 	int rc = 0;
 	try
 	{
-		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, (Thread::Handle*) thd_id);
+		Thread thread;
+		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, &thread);
+
+		if (thd_id)
+		{
+			*static_cast<Thread::Handle*>(thd_id) = thread.getHandle();
+			thread.detach(false);
+		}
 	}
 	catch (const status_exception& status)
 	{
@@ -3211,6 +3216,10 @@ void setLogin(ClumpletWriter& dpb, bool spbFlag)
 	const UCHAR utf8Tag = spbFlag ? isc_spb_utf8_filename : isc_dpb_utf8_filename;
 	// username and password tags match for both SPB and DPB
 
+	// We should not use environment variables when user explicitly requested
+	// trusted authentication (trusted_auth), on network server (address_path)
+	// and when authentication block is present (auth_block). The latter
+	// typically happens only on network server but extra protection won't hurt.
 	if (!(dpb.find(trusted_auth) || dpb.find(address_path) || dpb.find(auth_block)))
 	{
 		bool utf8 = dpb.find(utf8Tag);

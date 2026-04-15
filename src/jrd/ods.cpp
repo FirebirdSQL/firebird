@@ -26,14 +26,6 @@
 
 using namespace Firebird;
 
-namespace
-{
-	constexpr FB_SIZE_T NEXT_INDEX = 0;
-	constexpr FB_SIZE_T OIT_INDEX = 1;
-	constexpr FB_SIZE_T OAT_INDEX = 2;
-	constexpr FB_SIZE_T OST_INDEX = 3;
-}
-
 namespace Ods {
 
 bool isSupported(const header_page* hdr) noexcept

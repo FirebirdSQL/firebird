@@ -62,6 +62,7 @@
 #include "../common/classes/FpeControl.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/align.h"
+#include "../jrd/met.h"
 #include "firebird/impl/types_pub.h"
 
 #include <functional>
@@ -223,7 +224,7 @@ void setParamsInt64(DataTypeUtilBase* dataTypeUtil, const SysFunction* function,
 void setParamsSecondInteger(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 
 // helper functions for setParams
-void setParamVarying(dsc* param, USHORT textType, bool condition = false);
+void setParamVarying(dsc* param, TTypeId textType, bool condition = false);
 bool dscHasData(const dsc* param) noexcept;
 
 // specific setParams functions
@@ -236,6 +237,7 @@ void setParamsDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* functi
 void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsFirstLastDay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsResetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsHash(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsMakeDbkey(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -328,6 +330,7 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction* function, const NestValueArray
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlGetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlSetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlResetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLeft(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -359,7 +362,8 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 // System context function names
 constexpr char
 	RDB_GET_CONTEXT[] = "RDB$GET_CONTEXT",
-	RDB_SET_CONTEXT[] = "RDB$SET_CONTEXT";
+	RDB_SET_CONTEXT[] = "RDB$SET_CONTEXT",
+	RDB_RESET_CONTEXT[] = "RDB$RESET_CONTEXT";
 
 // Context namespace names
 constexpr char
@@ -700,7 +704,7 @@ void setParamsUnicodeVal(DataTypeUtilBase*, const SysFunction*, int argsCount, d
 }
 
 
-void setParamVarying(dsc* param, USHORT textType, bool condition)
+void setParamVarying(dsc* param, TTypeId textType, bool condition)
 {
 	if (!param)
 		return;
@@ -858,6 +862,18 @@ void setParamsGetSetContext(DataTypeUtilBase*, const SysFunction*, int argsCount
 	{
 		args[2]->makeVarying(MAX_CTX_VAR_SIZE, ttype_none);
 		args[2]->setNullable(true);
+	}
+}
+
+
+void setParamsResetContext(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == 1);
+
+	if (args[0]->isUnknown())
+	{
+		args[0]->makeVarying(80, ttype_none);
+		args[0]->setNullable(true);
 	}
 }
 
@@ -1292,7 +1308,7 @@ bool makeBlobAppendBlob(dsc* result, const dsc* arg, bid* blob_id = nullptr)
 
 	if (arg->isText())
 	{
-		const USHORT ttype = arg->getTextType();
+		auto ttype = arg->getTextType();
 		if (ttype == ttype_binary)
 			result->makeBlob(isc_blob_untyped, ttype_binary, ptr);
 		else
@@ -3738,7 +3754,7 @@ dsc* evlEncodeDecodeHex(thread_db* tdbb, bool encodeFlag, const SysFunction* fun
 	}
 	else
 	{
-		if (encodeFlag && arg->getStringLength() * 2 > MAX_VARY_COLUMN_SIZE)
+		if (encodeFlag && arg->getStringLength() * 2 > int(MAX_VARY_COLUMN_SIZE))
 		{
 			outBlob.reset(blb::create2(tdbb, tdbb->getRequest()->req_transaction,
 				&impure->vlu_misc.vlu_bid, sizeof(streamBpb), streamBpb));
@@ -4588,7 +4604,7 @@ dsc* evlGetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 	const string nameStr(MOV_make_string2(tdbb, name, ttype_none));
 
 	string resultStr;
-	USHORT resultType = ttype_none;
+	auto resultType = ttype_none;
 
 	if (nameSpaceStr == SYSTEM_NAMESPACE)	// Handle system variables
 	{
@@ -5004,6 +5020,58 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 }
 
 
+dsc* evlResetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	fb_assert(args.getCount() == 1);
+
+	Attachment* const attachment = tdbb->getAttachment();
+	jrd_tra* const transaction = tdbb->getTransaction();
+	Request* request = tdbb->getRequest();
+
+	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
+	if (!nameSpace)	// Complain if namespace is null
+		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_RESET_CONTEXT));
+
+	const string nameSpaceStr(MOV_make_string2(tdbb, nameSpace, ttype_none));
+
+	StringMap* contextVars = nullptr;
+
+	if (nameSpaceStr == USER_SESSION_NAMESPACE)
+	{
+		if (!attachment)
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
+		contextVars = &attachment->att_context_vars;
+	}
+	else if (nameSpaceStr == USER_TRANSACTION_NAMESPACE)
+	{
+		if (!transaction)
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
+		contextVars = &transaction->tra_context_vars;
+	}
+	else
+	{
+		// "Invalid namespace name %s passed to %s"
+		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
+			Arg::Str(nameSpaceStr) << Arg::Str(RDB_RESET_CONTEXT));
+	}
+
+	impure->vlu_desc.makeLong(0, &impure->vlu_misc.vlu_long);
+	impure->vlu_misc.vlu_long = (SLONG) contextVars->count();
+
+	contextVars->clear();
+
+	return &impure->vlu_desc;
+}
+
+
 dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure)
 {
@@ -5414,11 +5482,11 @@ dsc* evlMakeDbkey(Jrd::thread_db* tdbb, const SysFunction* function, const NestV
 		auto relName = QualifiedName::parseSchemaObject(string((const char*) argPtr, len));
 		attachment->qualifyExistingName(tdbb, relName, {obj_relation});
 
-		const jrd_rel* const relation = MET_lookup_relation(tdbb, relName);
+		jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
 		if (!relation)
 			(Arg::Gds(isc_relnotdef) << relName.toQuotedString()).raise();
 
-		relId = relation->rel_id;
+		relId = relation->getId();
 	}
 	else
 	{
@@ -5660,7 +5728,7 @@ dsc* evlOverlay(thread_db* tdbb, const SysFunction* function, const NestValueArr
 										Arg::Str(function->name));
 	}
 
-	const USHORT resultTextType = DataTypeUtil::getResultTextType(value, placing);
+	const auto resultTextType = DataTypeUtil::getResultTextType(value, placing);
 	const CharSet* cs = INTL_charset_lookup(tdbb, resultTextType);
 
 	MoveBuffer temp1;
@@ -5827,7 +5895,7 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 			return NULL;
 	}
 
-	const USHORT ttype = value1->getTextType();
+	const auto ttype = value1->getTextType();
 	const CharSet* cs = INTL_charset_lookup(tdbb, ttype);
 
 	MoveBuffer buffer1;
@@ -6005,7 +6073,7 @@ dsc* evlPosition(thread_db* tdbb, const SysFunction* function, const NestValueAr
 	impure->vlu_desc.makeLong(0, &impure->vlu_misc.vlu_long);
 
 	// we'll use the collation from the second string
-	const USHORT ttype = value2->getTextType();
+	const auto ttype = value2->getTextType();
 	TextType* tt = INTL_texttype_lookup(tdbb, ttype);
 	const CharSet* cs = tt->getCharSet();
 	const UCHAR canonicalWidth = tt->getCanonicalWidth();
@@ -6189,7 +6257,7 @@ dsc* evlReplace(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 			firstBlob = values[i];
 	}
 
-	const USHORT ttype = values[0]->getTextType();
+	const auto ttype = values[0]->getTextType();
 	TextType* tt = INTL_texttype_lookup(tdbb, ttype);
 	const CharSet* cs = tt->getCharSet();
 	const UCHAR canonicalWidth = tt->getCanonicalWidth();
@@ -6975,6 +7043,7 @@ const SysFunction SysFunction::functions[] =
 		{RDB_GET_CONTEXT, 2, 2, true, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
 		{"RDB$GET_TRANSACTION_CN", 1, 1, false, setParamsInt64, makeGetTranCN, evlGetTranCN, NULL},
 		{"RDB$ROLE_IN_USE", 1, 1, true, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
+		{RDB_RESET_CONTEXT, 1, 1, false, setParamsResetContext, makeLongResult, evlResetContext, NULL},
 		{RDB_SET_CONTEXT, 3, 3, false, setParamsGetSetContext, makeGetSetContext, evlSetContext, NULL},
 		{"RDB$SYSTEM_PRIVILEGE", 1, 1, true, NULL, makeBooleanResult, evlSystemPrivilege, NULL},
 		{"REPLACE", 3, 3, true, setParamsFromList, makeReplace, evlReplace, NULL},

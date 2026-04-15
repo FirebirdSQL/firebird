@@ -5,7 +5,9 @@ gcc -v
 ld -v
 make -v
 
-./autogen.sh \
+cd /home/ctng/firebird-build
+
+/firebird/autogen.sh \
 	--host=$BUILD_ARCH \
 	--prefix=/opt/firebird \
 	--enable-binreloc \

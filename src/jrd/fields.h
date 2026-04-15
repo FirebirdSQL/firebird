@@ -243,3 +243,5 @@
 
 	FIELD(fld_pp_number		, nam_pp_number		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
 	FIELD(fld_idx_number	, nam_idx_number	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
+
+	FIELD(fld_tab_type		, nam_mon_tab_type	, dtype_varying	, 32						, dsc_text_type_ascii		, NULL		, true		, ODS_14_0)

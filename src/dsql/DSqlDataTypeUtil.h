@@ -40,8 +40,8 @@ namespace Jrd {
 		}
 
 	public:
-		virtual UCHAR maxBytesPerChar(UCHAR charSet);
-		virtual USHORT getDialect() const;
+		UCHAR maxBytesPerChar(CSetId charSet) override;
+		USHORT getDialect() const override;
 
 	private:
 		DsqlCompilerScratch* dsqlScratch;

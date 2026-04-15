@@ -31,7 +31,7 @@
 #include "../jrd/cmp_proto.h"
 #include "../jrd/err_proto.h"
 
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/rlck_proto.h"
 #include "../jrd/shut_proto.h"
 #include "../jrd/tra_proto.h"
@@ -39,8 +39,6 @@
 
 using namespace Jrd;
 using namespace Firebird;
-
-constexpr SSHORT SHUT_WAIT_TIME	= 5;
 
 // Shutdown lock data
 union shutdown_data

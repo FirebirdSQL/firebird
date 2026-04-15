@@ -1,7 +1,9 @@
 #!/bin/sh
 set -e
 
-./autogen.sh \
+cd /home/ctng/firebird-build
+
+/firebird/autogen.sh \
 	--host=$BUILD_ARCH \
 	--prefix=/opt/firebird \
 	--enable-binreloc \

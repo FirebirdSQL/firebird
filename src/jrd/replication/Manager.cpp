@@ -184,6 +184,8 @@ Manager::Manager(const string& dbId,
 		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
 			logPrimaryStatus(m_config->dbName, &localStatus);
+			if (m_config->reportErrors)
+				(Arg::Gds(isc_repl_error) << Arg::StatusVector(&localStatus)).raise();
 			continue;
 		}
 
@@ -192,13 +194,15 @@ Manager::Manager(const string& dbId,
 		{
 			logPrimaryStatus(m_config->dbName, &localStatus);
 			attachment->detach(&localStatus);
+			if (m_config->reportErrors)
+				(Arg::Gds(isc_repl_error) << Arg::StatusVector(&localStatus)).raise();
 			continue;
 		}
 
 		m_replicas.add(FB_NEW_POOL(getPool()) SyncReplica(getPool(), attachment, replicator));
 	}
 
-	Thread::start(writer_thread, this, THREAD_medium, 0);
+	Thread::start(writer_thread, this, THREAD_medium);
 	m_startupSemaphore.enter();
 }
 

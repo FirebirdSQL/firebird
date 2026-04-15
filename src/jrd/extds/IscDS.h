@@ -590,6 +590,19 @@ protected:
 	virtual bool doFetch(Jrd::thread_db* tdbb);
 	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
 
+	const char* getParameterName(unsigned index) const override
+	{
+		if (m_in_xsqlda && index < m_in_xsqlda->sqld)
+		{
+			const auto& var = m_in_xsqlda->sqlvar[index];
+
+			if (var.sqlname_length > 0)
+				return var.sqlname;
+		}
+
+		return nullptr;
+	}
+
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
 		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 

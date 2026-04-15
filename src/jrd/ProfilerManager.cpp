@@ -31,10 +31,11 @@
 #include "../jrd/recsrc/Cursor.h"
 #include "../dsql/BoolNodes.h"
 #include "../jrd/dpm_proto.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/pag_proto.h"
 #include "../jrd/tra_proto.h"
+#include "../jrd/Statement.h"
 #include <variant>
 
 using namespace Jrd;
@@ -258,7 +259,6 @@ IExternalResultSet* ProfilerPackage::cancelSessionProcedure(ThrowStatusException
 		return nullptr;
 	}
 
-	const auto* transaction = tdbb->getTransaction();
 	const auto profilerManager = attachment->getProfilerManager(tdbb);
 
 	profilerManager->cancelSession();

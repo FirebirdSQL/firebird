@@ -32,10 +32,10 @@
 
 
 # Please don't use compiler/platform specific flags here - nmcc 02-Nov-2002
-WFLAGS =-I$(SRC_ROOT)/include/gen -I$(SRC_ROOT)/include $(CPPFLAGS) $(LTCSOURCE)
+WFLAGS =-I$(ROOT)/src/include -I$(ROOT)/src/include/gen -I$(TMP_ROOT)/include/gen -I$(SRC_ROOT)/include/gen -I$(SRC_ROOT)/include $(CPPFLAGS) $(LTCSOURCE)
 
 ifneq ($(SYSTEM_BOOST_FLG),Y)
-  WFLAGS += -I$(ROOT)/extern/boost
+  WFLAGS += -I$(SRCDIR)/extern/boost
 endif
 
 WFLAGS += -I$(LIBCDS_INC) -D$(LIBCDS_DEF)
@@ -49,11 +49,11 @@ ifeq ($(TOMCRYPT_BUILD_FLG),Y)
 endif
 
 ifeq ($(RE2_BUILD_FLG),Y)
- WFLAGS += -I$(ROOT)/extern/re2
+ WFLAGS += -I$(SRCDIR)/extern/re2
 endif
 
 ifeq ($(ABSEIL_BUILD_FLG),Y)
- WFLAGS += -I$(ROOT)/extern/int128
+ WFLAGS += -I$(SRCDIR)/extern/int128
 endif
 
 ifeq ($(LSB_FLG),Y)
@@ -125,22 +125,27 @@ $(OBJ)/%.cpp: $(SRC_ROOT)/%.epp
 	$(CXX) $(WCFLAGS) -c $(firstword $<) -o $@
 
 $(OBJ)/%.o: $(SRC_ROOT)/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 $(OBJ)/%.o: $(SRC_ROOT)/%.m
+	@mkdir -p $(dir $@)
 	$(CC) $(WCFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 $(OBJ)/%.o: $(OBJ)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(WCXXFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 $(OBJ)/%.o: $(SRC_ROOT)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(WCXXFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 
 $(OBJ)/%.o: $(ROOT)/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(WCFLAGS) -c $(firstword $<) -o $@
 	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
 

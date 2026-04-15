@@ -26,7 +26,7 @@
 #include "../common/Token.h"
 
 #define _yacc_defines_yystype
-#include "gen/parse.h"
+#include "parse.h"
 
 using namespace Firebird;
 using namespace Jrd;

@@ -53,8 +53,9 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 
 	for (int pos = 1; pos >= 0; pos--)
 	{
-		const auto node = rse->rse_relations[pos];
+		auto node = rse->rse_relations[pos];
 		auto& joinStream = joinStreams[pos];
+		joinStream.node = node;
 
 		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
 		{
@@ -64,8 +65,7 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 		}
 		else
 		{
-			const auto river = rivers.pop();
-			joinStream.rsb = river->getRecordSource();
+			joinStream.river = rivers.pop();
 		}
 	};
 
@@ -74,14 +74,14 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 	// Determine which stream should be outer and which is inner.
 	// In the case of a left join, the syntactically left stream is the outer,
 	// and the right stream is the inner. For a right join, just swap the sides.
-	// For a full join, order does not matter, but historically it has been reversed,
-	// so let's preserve this for the time being.
+	// For a full join, the order does not matter, but given the first outer join
+	// is already compiled, let's better preserve the original order.
 
-	if (rse->rse_jointype != blr_left)
+	if (rse->rse_jointype == blr_right)
 	{
 		// RIGHT JOIN is converted into LEFT JOIN by the BLR parser,
 		// so it should never appear here
-		fb_assert(rse->rse_jointype == blr_full);
+		fb_assert(false);
 		std::swap(joinStreams[0], joinStreams[1]);
 	}
 }
@@ -94,14 +94,17 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 
 RecordSource* OuterJoin::generate()
 {
-	if (!optimizer->isFullJoin())
-	{
-		fb_assert(optimizer->isLeftJoin());
-		return process();
-	}
+	const auto outerJoinRsb = process();
 
-	StreamList outerStreams;
-	const auto outerJoinRsb = process(&outerStreams);
+	if (!optimizer->isFullJoin())
+		return outerJoinRsb;
+
+	auto& outer = joinStreams[0];
+	auto& inner = joinStreams[1];
+
+	StreamList outerStreams, innerStreams;
+	outer.getStreams(outerStreams);
+	inner.getStreams(innerStreams);
 
 	// A FULL JOIN B is currently implemented similar to:
 	//
@@ -112,33 +115,23 @@ RecordSource* OuterJoin::generate()
 	// See also FullOuterJoin class implementation.
 	//
 	// At this point we already have the first part -- (A LEFT JOIN B) -- ready,
-	// so just swap the sides and make the second (inverted) join.
+	// so just swap the sides and make the second (reversed) join.
 
-	auto& outerStream = joinStreams[0];
-	auto& innerStream = joinStreams[1];
-
-	// Collect the outer streams to be used in the full outer join algorithm
-
-	StreamList checkStreams;
-	outerStream.rsb->findUsedStreams(checkStreams);
-
-	std::swap(outerStream, innerStream);
+	std::swap(outer, inner);
 
 	// Reset both streams to their original states
 
-	if (outerStream.number != INVALID_STREAM)
-	{
-		outerStream.rsb = nullptr;
-		csb->csb_rpt[outerStream.number].deactivate();
-	}
+	for (const auto stream : outerStreams)
+		csb->csb_rpt[stream].deactivate();
 
-	if (innerStream.number != INVALID_STREAM)
-	{
-		innerStream.rsb = nullptr;
-		csb->csb_rpt[innerStream.number].deactivate();
-	}
+	outer.river = nullptr;
 
-	// Clone the booleans to make them re-usable for an anti-join
+	for (const auto stream : innerStreams)
+		csb->csb_rpt[stream].deactivate();
+
+	inner.river = nullptr;
+
+	// Clone the booleans to make them re-usable for a reversed join
 
 	for (auto iter = optimizer->getConjuncts(); iter.hasData(); ++iter)
 	{
@@ -146,66 +139,81 @@ RecordSource* OuterJoin::generate()
 			iter.reset(CMP_clone_node_opt(tdbb, csb, iter));
 	}
 
-	const auto antiJoinRsb = process();
+	const auto reversedJoinRsb = process();
 
 	// Allocate and return the final join record source
 
-	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, outerJoinRsb, antiJoinRsb, outerStreams);
+	return FB_NEW_POOL(getPool()) FullOuterJoin(csb, outerJoinRsb, reversedJoinRsb, outerStreams);
 }
 
 
-RecordSource* OuterJoin::process(StreamList* outerStreams)
+RecordSource* OuterJoin::process()
 {
 	BoolExprNode* boolean = nullptr;
 
-	auto& outerStream = joinStreams[0];
-	auto& innerStream = joinStreams[1];
+	auto& outer = joinStreams[0];
+	auto& inner = joinStreams[1];
 
 	// Generate record sources for the sub-streams.
 	// For the outer sub-stream we also will get a boolean back.
 
-	if (outerStream.number != INVALID_STREAM)
+	RecordSource* outerRsb = nullptr;
+	RecordSource* innerRsb = nullptr;
+
+	if (outer.number != INVALID_STREAM)
 	{
-		fb_assert(!outerStream.rsb);
-		outerStream.rsb = optimizer->generateRetrieval(outerStream.number,
+		outerRsb = optimizer->generateRetrieval(outer.number,
 			optimizer->isFullJoin() ? nullptr : sortPtr, true, false, &boolean);
 	}
 	else
 	{
-		// Ensure the inner streams are inactive
+		if (outer.river)
+			outerRsb = outer.river->getRecordSource();
+		else
+		{
+			fb_assert(optimizer->isFullJoin());
 
-		StreamList streams;
-
-		if (innerStream.rsb)
-			innerStream.rsb->findUsedStreams(streams);
-
-		StreamStateHolder stateHolder(csb, streams);
-		stateHolder.deactivate();
+			outerRsb = outer.node->compile(tdbb, optimizer, false);
+		}
 
 		// Collect booleans computable for the outer sub-stream, it must be active now
-
 		boolean = optimizer->composeBoolean();
 	}
 
-	if (outerStreams)
-		outerStream.rsb->findUsedStreams(*outerStreams);
+	fb_assert(outerRsb);
 
-	if (innerStream.number != INVALID_STREAM)
+	if (inner.number != INVALID_STREAM)
 	{
-		fb_assert(!innerStream.rsb);
 		// AB: the sort clause for the inner stream of an OUTER JOIN
 		//	   should never be used for the index retrieval
-		innerStream.rsb = optimizer->generateRetrieval(innerStream.number, nullptr, false, true);
+		innerRsb = optimizer->generateRetrieval(inner.number, nullptr, false, true);
 	}
+	else
+	{
+		if (inner.river)
+			innerRsb = inner.river->getRecordSource();
+		else
+		{
+			fb_assert(optimizer->isFullJoin());
+
+			StreamList outerStreams;
+			outerRsb->findUsedStreams(outerStreams);
+			optimizer->setOuterStreams(outerStreams);
+
+			innerRsb = inner.node->compile(tdbb, optimizer, true);
+		}
+	}
+
+	fb_assert(innerRsb);
 
 	// Generate a parent filter record source for any remaining booleans that
 	// were not satisfied via an index lookup
 
-	const auto innerRsb = optimizer->applyResidualBoolean(innerStream.rsb);
+	innerRsb = optimizer->applyResidualBoolean(innerRsb);
 
 	// Allocate and return the join record source
 
-	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerStream.rsb, innerRsb, boolean);
+	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
 };
 
 

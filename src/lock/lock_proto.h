@@ -53,7 +53,7 @@ typedef SINT64 LOCK_DATA_T;
 
 // Maximum lock series for gathering statistics and querying data
 
-inline constexpr int LCK_MAX_SERIES	= 7;
+inline constexpr unsigned LCK_MAX_SERIES = 6; // LCK_attachment + 1
 
 // Lock query data aggregates
 
@@ -93,7 +93,7 @@ inline constexpr UCHAR type_lpr		= 7;
 
 // Version number of the lock table.
 // Must be increased every time the shmem layout is changed.
-inline constexpr USHORT BASE_LHB_VERSION = 19;
+inline constexpr USHORT BASE_LHB_VERSION = 20;
 inline constexpr USHORT PLATFORM_LHB_VERSION = 128;	// 64-bit target
 
 #if SIZEOF_VOID_P == 8
@@ -507,7 +507,8 @@ private:
 
 	// configurations parameters - cached values
 	const ULONG m_acquireSpins;
-	const ULONG m_memorySize;
+	ULONG m_memorySize;
+	USHORT m_hashSlots;
 	const bool m_useBlockingThread;
 
 #ifdef USE_SHMEM_EXT

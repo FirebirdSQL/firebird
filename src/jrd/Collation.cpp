@@ -97,7 +97,8 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_string.h"
 #include "../jrd/intl_classes.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
+#include "../jrd/intl_classes.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/Collation.h"
 #include "../common/TextType.h"
@@ -989,7 +990,7 @@ template <
 class CollationImpl : public Collation
 {
 public:
-	CollationImpl(TTYPE_ID a_type, texttype* a_tt, USHORT a_attributes, CharSet* a_cs)
+	CollationImpl(TTypeId a_type, texttype* a_tt, USHORT a_attributes, CharSet* a_cs)
 		: Collation(a_type, a_tt, a_attributes, a_cs)
 	{
 	}
@@ -1067,10 +1068,8 @@ public:
 };
 
 template <typename T>
-Collation* newCollation(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs)
+Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
-	using namespace Firebird;
-
 	typedef StartsMatcher<UCHAR, NullStrConverter> StartsMatcherUCharDirect;
 	typedef StartsMatcher<UCHAR, CanonicalConverter<> > StartsMatcherUCharCanonical;
 	typedef ContainsMatcher<UCHAR, UpcaseConverter<> > ContainsMatcherUCharDirect;
@@ -1091,6 +1090,9 @@ Collation* newCollation(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attr
 		SleuthMatcher<T>
 	> NonDirectImpl;
 
+	if (!tt)
+		return FB_NEW_POOL(pool) DirectImpl(id, nullptr, attributes, cs);
+
 	if (tt->texttype_flags & TEXTTYPE_DIRECT_MATCH)
 		return FB_NEW_POOL(pool) DirectImpl(id, tt, attributes, cs);
 	else
@@ -1106,8 +1108,17 @@ Collation* newCollation(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attr
 namespace Jrd {
 
 
-Collation* Collation::createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt, USHORT attributes, CharSet* cs)
+Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, Firebird::IStatus* error, USHORT attributes, CharSet* cs)
 {
+	if (!tt)
+	{
+		fb_assert(error);
+		auto coll = newCollation<UCHAR>(pool, id, tt, attributes, cs);
+		coll->error = error;
+
+		return coll;
+	}
+
 	switch (tt->texttype_canonical_width)
 	{
 		case 1:
@@ -1125,55 +1136,26 @@ Collation* Collation::createInstance(MemoryPool& pool, TTYPE_ID id, texttype* tt
 	}
 }
 
-void Collation::release(thread_db* tdbb)
-{
-	fb_assert(useCount >= 0);
-
-	if (existenceLock)
-		LCK_release(tdbb, existenceLock);
-
-	useCount = 0;
-}
-
 void Collation::destroy(thread_db* tdbb)
 {
-	fb_assert(useCount == 0);
-
-	if (tt->texttype_fn_destroy)
-		tt->texttype_fn_destroy(tt);
-
-	delete tt;
-
-	release(tdbb);
-
-	delete existenceLock;
-	existenceLock = NULL;
-}
-
-void Collation::incUseCount(thread_db* /*tdbb*/)
-{
-	fb_assert(!obsolete);
-	fb_assert(useCount >= 0);
-
-	++useCount;
-}
-
-void Collation::decUseCount(thread_db* tdbb)
-{
-	fb_assert(useCount >= 0);
-
-	if (useCount > 0)
+	if (tt)
 	{
-		useCount--;
+		if (tt->texttype_fn_destroy)
+			tt->texttype_fn_destroy(tt);
 
-		if (!useCount)
-		{
-			fb_assert(existenceLock);
-			if (obsolete)
-				LCK_re_post(tdbb, existenceLock);
-		}
+		delete tt;
 	}
+
+	if (error)
+		error->dispose();
+
+	delete this;
 }
 
+[[noreturn]] void Collation::raiseError()
+{
+	fb_assert(error);
+	status_exception::raise(error);
+}
 
 }	// namespace Jrd

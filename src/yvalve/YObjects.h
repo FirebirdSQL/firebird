@@ -145,7 +145,7 @@ public:
 	int release() override
 	{
 		int rc = --this->refCounter;
-		this->refCntDPrt('-');
+//		this->refCntDPrt('-');
 		if (rc == 0)
 		{
 			if (next)

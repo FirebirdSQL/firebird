@@ -1807,6 +1807,9 @@ static bool_t xdr_slice(RemoteXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ 
 	if (!xdr_long(xdrs, reinterpret_cast<SLONG*>(&slice->lstr_length)))
 		return FALSE;
 
+	if ((xdrs->x_op != XDR_FREE) && !sdl)
+		return FALSE;
+
 	// Handle operation specific stuff, particularly memory allocation/deallocation
 
 	switch (xdrs->x_op)
@@ -2119,7 +2122,11 @@ static bool_t xdr_status_vector(RemoteXdr* xdrs, DynamicStatusVector*& vector)
 			break;
 
 		case isc_arg_number:
-		default:
+		case isc_arg_unix:
+		case isc_arg_win32:
+		case isc_arg_gds:
+		case isc_arg_warning:
+		case isc_arg_next_mach:
 			if (xdrs->x_op == XDR_ENCODE)
 				vec = *vectorEncode++;
 			if (!xdr_long(xdrs, &vec))
@@ -2127,6 +2134,9 @@ static bool_t xdr_status_vector(RemoteXdr* xdrs, DynamicStatusVector*& vector)
 			if (xdrs->x_op == XDR_DECODE)
 				vectorDecode.push((ISC_STATUS) vec);
 			break;
+
+		default:
+			goto brk;
 		}
 	}
 
@@ -2244,7 +2254,6 @@ static bool_t xdr_trrq_message( RemoteXdr* xdrs, USHORT msg_type)
 	Rpr* procedure = port->port_rpr;
 
 	// normally that never happens
-	fb_assert(procedure);
 	if (!procedure)
 		return false;
 

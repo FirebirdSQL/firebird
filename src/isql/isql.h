@@ -35,6 +35,7 @@
 
 #include "../jrd/flags.h"
 #include "../jrd/constants.h"
+#include "../jrd/intl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <firebird/Interface.h>
@@ -45,7 +46,7 @@
 inline constexpr int PRINT_BUFFER_LENGTH	= 1024;
 inline constexpr int MAXTERM_SIZE			= 32;	// SQL termination character
 inline constexpr int USER_LENGTH 			= 128;
-inline constexpr int PASSWORD_LENGTH		= 128;
+inline constexpr int PASSWORD_LENGTH		= 8192;
 inline constexpr int ROLE_LENGTH			= 128;
 
 /* these constants are purely idiotic; there's no point in having
@@ -239,7 +240,7 @@ public:
 	// from isql.epp
 	USHORT major_ods;
 	USHORT minor_ods;
-	USHORT att_charset;
+	CSetId att_charset;
 	Firebird::IDecFloat16* df16;
 	Firebird::IDecFloat34* df34;
 	Firebird::IInt128* i128;
@@ -282,7 +283,8 @@ struct IsqlVar
 	const char* owner;
 	const char* alias;
 	int subType, scale;
-	unsigned type, length, charSet;
+	unsigned type, length;
+	CSetId charSet;
 	bool nullable;
 	short* nullInd;
 

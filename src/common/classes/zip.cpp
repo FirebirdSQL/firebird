@@ -60,7 +60,7 @@ void* ZLib::allocFunc(void*, uInt items, uInt size)
 {
 	try
 	{
-		return MemoryPool::globalAlloc(items * size ALLOC_ARGS);
+		return MemoryPool::globalAlloc(items * size);
 	}
 	catch (const Exception&)
 	{

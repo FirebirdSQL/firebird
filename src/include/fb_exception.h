@@ -104,9 +104,9 @@ public:
 
 	const ISC_STATUS* value() const noexcept { return m_status_vector; }
 
-	[[noreturn]] static void raise(const ISC_STATUS* status_vector);
-	[[noreturn]] static void raise(const Arg::StatusVector& statusVector);
-	[[noreturn]] static void raise(const IStatus* status);
+	[[noreturn]] static void raise (const ISC_STATUS* status_vector);
+	[[noreturn]] static void raise (const Arg::StatusVector& statusVector);
+	[[noreturn]] static void raise (const IStatus* status);
 
 protected:
 	// Create exception with undefined status vector, this constructor allows

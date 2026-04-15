@@ -85,7 +85,7 @@ public:
 	MetaString() noexcept { init(); count = 0; }
 	MetaString(const char* s) noexcept { assign(s); }
 	MetaString(const char* s, FB_SIZE_T l) noexcept { assign(s, l); }
-	MetaString(const MetaString& m) noexcept { set(m); }
+	MetaString(const MetaString& m) noexcept  = default;
 	MetaString(const AbstractString& s) noexcept { assign(s.c_str(), s.length()); }
 	explicit MetaString(MemoryPool&) noexcept { init(); count = 0; }
 	MetaString(MemoryPool&, const char* s) noexcept { assign(s); }
@@ -214,7 +214,7 @@ public:
 	MetaString& clear() noexcept { return assign(nullptr, 0); }
 	MetaString& operator=(const char* s) noexcept { return assign(s); }
 	MetaString& operator=(const AbstractString& s) noexcept { return assign(s.c_str(), s.length()); }
-	MetaString& operator=(const MetaString& m) noexcept { return set(m); }
+	MetaString& operator=(const MetaString& m) noexcept = default;
 	char* getBuffer(const FB_SIZE_T l) noexcept;
 
 	FB_SIZE_T length() const noexcept { return count; }

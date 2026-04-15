@@ -36,16 +36,16 @@ ConfigTable::ConfigTable(MemoryPool& pool, const Config* conf) :
 {
 }
 
-RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, jrd_rel* relation)
+RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, RelationPermanent* relation)
 {
 	fb_assert(relation);
-	fb_assert(relation->rel_id == rel_config);
+	fb_assert(relation->getId() == rel_config);
 
 	RecordBuffer* recordBuffer = getData(relation);
 	if (recordBuffer)
 		return recordBuffer;
 
-	recordBuffer = allocBuffer(tdbb, *tdbb->getDefaultPool(), relation->rel_id);
+	recordBuffer = allocBuffer(tdbb, *tdbb->getDefaultPool(), relation->getId());
 
 	// Check privileges to see RDB$CONFIG
 	const Attachment* att = tdbb->getAttachment();
@@ -97,7 +97,7 @@ void ConfigTableScan::close(thread_db* tdbb) const
 	VirtualTableScan::close(tdbb);
 }
 
-const Format* ConfigTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* ConfigTableScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	RecordBuffer* records = getRecords(tdbb, relation);
 	return records->getFormat();
@@ -106,11 +106,11 @@ const Format* ConfigTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) con
 bool ConfigTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 	FB_UINT64 position, Record* record) const
 {
-	RecordBuffer* records = getRecords(tdbb, relation);
+	RecordBuffer* records = getRecords(tdbb, getPermanent(relation));
 	return records->fetch(position, record);
 }
 
-RecordBuffer* ConfigTableScan::getRecords(thread_db* tdbb, jrd_rel* relation) const
+RecordBuffer* ConfigTableScan::getRecords(thread_db* tdbb, RelationPermanent* relation) const
 {
 	Request* const request = tdbb->getRequest();
 	Impure* const impure = request->getImpure<Impure>(m_impure);

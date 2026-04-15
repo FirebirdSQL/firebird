@@ -42,6 +42,14 @@ namespace Replication
 		typedef Firebird::ObjectsArray<Firebird::string> NameCache;
 		typedef Firebird::HalfStaticArray<SavNumber, 16> SavepointStack;
 
+		struct GeneratorValue
+		{
+			Jrd::QualifiedName name;
+			SINT64 value = 0;
+		};
+
+		typedef Firebird::Array<GeneratorValue> GeneratorCache;
+
 		struct BatchBlock
 		{
 			Block header{};
@@ -134,6 +142,21 @@ namespace Replication
 			void putBinary(ULONG length, const UCHAR* data)
 			{
 				buffer->add(data, length);
+			}
+
+			void putGenerators(const GeneratorCache& generators)
+			{
+				for (const auto& generator : generators)
+				{
+					fb_assert(generator.name.object.hasData() && generator.name.schema.hasData());
+
+					const auto [schemaAtom, objectAtom] = defineQualifiedAtom(generator.name);
+
+					putTag(opSetSequence);
+					putInt32(schemaAtom);
+					putInt32(objectAtom);
+					putInt64(generator.value);
+				}
 			}
 		};
 
@@ -254,14 +277,6 @@ namespace Replication
 			Firebird::RefPtr<Firebird::ITransaction> m_transaction;
 			BatchBlock m_data;
 		};
-
-		struct GeneratorValue
-		{
-			Jrd::QualifiedName name;
-			SINT64 value = 0;
-		};
-
-		typedef Firebird::Array<GeneratorValue> GeneratorCache;
 
 		enum FlushReason
 		{

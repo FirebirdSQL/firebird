@@ -19,18 +19,21 @@ RPL_AWK_SRC=$(MISC)\def_awk.c
 RPL_GREP=$(FB_GEN_DIR)\isc_grep.exe
 RPL_GREP_SRC=$(MISC)\isc_grep.c
 # These utils are platform and build independent, use fixed temporary dir.
+UTL_TMP_DIR=$(FB_TEMP_DIR)\Release\misc
 
 updateCloopInterfaces: $(API_H_FILE) $(API_PAS_FILE)
 
+$(UTL_TMP_DIR):
+	-mkdir $@ 2>nul
 
 $(API_H_FILE): $(IDL_FILE)
 	$(CLOOP) $(IDL_FILE) c++ $@ IDL_FB_INTERFACES_H Firebird I
 
-$(RPL_AWK):	$(RPL_AWK_SRC)
+$(RPL_AWK):	$(RPL_AWK_SRC) $(UTL_TMP_DIR)
 # NMAKE strips trailing backslash during macro substitution that's why it is here and not in definition.
 	$(CPP) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(RPL_AWK_SRC)
 
-$(RPL_GREP): $(RPL_GREP_SRC)
+$(RPL_GREP): $(RPL_GREP_SRC) $(UTL_TMP_DIR)
 	$(CPP) /Fe$@ /Fo$(UTL_TMP_DIR)\ $(RPL_GREP_SRC)
 
 $(FB_GEN_DIR)\iberror.pas: $(ERR_CONSTS_PAS) $(FB_ROOT_PATH)\src\include\firebird\impl\msg\*.h

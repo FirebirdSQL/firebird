@@ -22,12 +22,11 @@
 
 #include "firebird.h"
 #include "../jrd/Tablespace.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 
 using namespace Firebird;
+using namespace Jrd;
 
-
-namespace Jrd {
 
 Tablespace::~Tablespace()
 {
@@ -53,6 +52,3 @@ void Tablespace::release(thread_db *tdbb)
 	}*/
 	useCount--;
 }
-
-
-}	// namespace Jrd

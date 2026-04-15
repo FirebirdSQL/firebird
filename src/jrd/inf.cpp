@@ -569,7 +569,7 @@ void INF_database_info(thread_db* tdbb,
 			for (TraNumber id = transaction->tra_oldest; id < transaction->tra_number; id++)
 			{
 				if (TRA_snapshot_state(tdbb, transaction, id) == tra_limbo &&
-					TRA_wait(tdbb, transaction, id, jrd_tra::tra_wait) == tra_limbo)
+					TRA_wait(tdbb, transaction, id, tra_wait) == tra_limbo)
 				{
 					length = INF_convert(id, buffer);
 					if (!(info = INF_put_item(item, length, buffer, info, end)))

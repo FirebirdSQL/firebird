@@ -380,7 +380,7 @@ ChangeLog::ChangeLog(MemoryPool& pool,
 		linkSelf();
 	}
 
-	Thread::start(archiver_thread, this, THREAD_medium, 0);
+	Thread::start(archiver_thread, this, THREAD_medium);
 	m_startupSemaphore.enter();
 	m_workingSemaphore.release();
 }

@@ -216,9 +216,7 @@ public:
 		: pageNum(0), pageSpaceID(INVALID_PAGE_SPACE)
 	{ }
 
-	inline PageNumber(const PageNumber& from) noexcept
-		: pageNum(from.pageNum), pageSpaceID(from.pageSpaceID)
-	{ }
+	inline PageNumber(const PageNumber& from) = default;
 
 	inline ULONG getPageNum() const noexcept
 	{
@@ -260,13 +258,7 @@ public:
 		memcpy(str, &val, sizeof(ULONG));
 	}
 
-	inline PageNumber& operator=(const PageNumber& from) noexcept
-	{
-		pageSpaceID = from.pageSpaceID;
-		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
-		pageNum	= from.pageNum;
-		return *this;
-	}
+	inline PageNumber& operator=(const PageNumber& from) = default;
 
 	inline ULONG operator=(const ULONG from) noexcept
 	{
@@ -317,6 +309,10 @@ public:
 		return pageNum;
 	}
 	*/
+
+#ifdef DEB_TDBB_BDBS
+	void print(const char* text) const;
+#endif
 
 private:
 	ULONG	pageNum;

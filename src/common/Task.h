@@ -168,11 +168,6 @@ public:
 	~WorkerThread()
 	{
 		shutdown(true);
-
-#ifdef WIN_NT
-		if (m_thdHandle != INVALID_HANDLE_VALUE)
-			CloseHandle(m_thdHandle);
-#endif
 	}
 
 	static WorkerThread* start(Coordinator*);
@@ -196,7 +191,7 @@ private:
 	Semaphore m_waitSem;		// idle thread waits on this semaphore to start work or go out
 	Semaphore m_signalSem;	// semaphore is released when thread going idle
 	STATE m_state;
-	Thread::Handle m_thdHandle;
+	Thread m_thread;
 };
 
 } // namespace Jrd

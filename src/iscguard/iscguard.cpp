@@ -92,8 +92,8 @@ static Firebird::GlobalPtr<Firebird::string> remote_name;
 static Firebird::GlobalPtr<Firebird::string> mutex_name;
 // unsigned short shutdown_flag = FALSE;
 static log_info* log_entry;
-static Thread::Handle watcher_thd = 0;
-static Thread::Handle swap_icons_thd = 0;
+static Thread watcher_thd;
+static Thread swap_icons_thd;
 
 int WINAPI WinMain(HINSTANCE hInstance,
 				   HINSTANCE /*hPrevInstance*/, LPSTR lpszCmdLine, int /*nCmdShow*/)
@@ -147,11 +147,8 @@ int WINAPI WinMain(HINSTANCE hInstance,
 				CNTL_shutdown_service("StartServiceCtrlDispatcher failed");
 		}
 
-		if (watcher_thd)
-		{
-			WaitForSingleObject(watcher_thd, 5000);
-			CloseHandle(watcher_thd);
-		}
+		if (watcher_thd.isValid())
+			watcher_thd.waitFor(5000);
 	}
 	else {
 		return WINDOW_main(0);
@@ -322,7 +319,7 @@ static THREAD_ENTRY_DECLARE WINDOW_main(THREAD_ENTRY_PARAM)
 	// begin a new thread for calling the start_and_watch_server
 	try
 	{
-		Thread::start(start_and_watch_server, 0, THREAD_medium, NULL);
+		Thread::start(start_and_watch_server, 0, THREAD_medium);
 	}
 	catch (const Firebird::Exception&)
 	{
@@ -352,11 +349,6 @@ static THREAD_ENTRY_DECLARE WINDOW_main(THREAD_ENTRY_PARAM)
 			{
 				DestroyWindow(hPSDlg);
 				hPSDlg = NULL;
-				if (swap_icons_thd)
-				{
-					CloseHandle(swap_icons_thd);
-					swap_icons_thd = 0;
-				};
 			}
 			if (bPSMsg)
 				continue;
@@ -466,13 +458,19 @@ static LRESULT CALLBACK WindowFunc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 	case WM_SWITCHICONS:
 		nRestarts++;
 		{ // scope
-			DWORD thr_exit = 0;
-			if (swap_icons_thd == 0 ||
-				!GetExitCodeThread(swap_icons_thd, &thr_exit) ||
-				thr_exit != STILL_ACTIVE)
+
+			if (swap_icons_thd.isValid())
 			{
-				Thread::start(swap_icons, hWnd, THREAD_medium, &swap_icons_thd);
+				DWORD thr_exit = 0;
+				if (!GetExitCodeThread(swap_icons_thd.getHandle(), &thr_exit) ||
+					thr_exit != STILL_ACTIVE)
+				{
+					swap_icons_thd.detach();
+				}
 			}
+
+			if (!swap_icons_thd.isValid())
+				Thread::start(swap_icons, hWnd, THREAD_medium, &swap_icons_thd);
 		} // scope
 		break;
 

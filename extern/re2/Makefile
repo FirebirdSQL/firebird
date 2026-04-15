@@ -24,6 +24,8 @@ ARFLAGS?=rsc
 NM?=nm
 NMFLAGS?=-p
 
+OBJ_DIR?=obj
+
 # Variables mandated by GNU, the arbiter of all good taste on the internet.
 # http://www.gnu.org/prep/standards/standards.html
 prefix=/usr/local
@@ -69,7 +71,7 @@ MAKE_SHARED_LIBRARY=$(CXX) -shared -Wl,-soname,libre2.$(SOEXTVER),--version-scri
 endif
 
 .PHONY: all
-all: obj/libre2.a obj/so/libre2.$(SOEXT)
+all: $(OBJ_DIR)/libre2.a $(OBJ_DIR)/so/libre2.$(SOEXT)
 
 INSTALL_HFILES=\
 	re2/filtered_re2.h\
@@ -110,133 +112,133 @@ HFILES=\
 	re2/walker-inl.h\
 
 OFILES=\
-	obj/util/rune.o\
-	obj/util/strutil.o\
-	obj/re2/bitstate.o\
-	obj/re2/compile.o\
-	obj/re2/dfa.o\
-	obj/re2/filtered_re2.o\
-	obj/re2/mimics_pcre.o\
-	obj/re2/nfa.o\
-	obj/re2/onepass.o\
-	obj/re2/parse.o\
-	obj/re2/perl_groups.o\
-	obj/re2/prefilter.o\
-	obj/re2/prefilter_tree.o\
-	obj/re2/prog.o\
-	obj/re2/re2.o\
-	obj/re2/regexp.o\
-	obj/re2/set.o\
-	obj/re2/simplify.o\
-	obj/re2/stringpiece.o\
-	obj/re2/tostring.o\
-	obj/re2/unicode_casefold.o\
-	obj/re2/unicode_groups.o\
+	$(OBJ_DIR)/util/rune.o\
+	$(OBJ_DIR)/util/strutil.o\
+	$(OBJ_DIR)/re2/bitstate.o\
+	$(OBJ_DIR)/re2/compile.o\
+	$(OBJ_DIR)/re2/dfa.o\
+	$(OBJ_DIR)/re2/filtered_re2.o\
+	$(OBJ_DIR)/re2/mimics_pcre.o\
+	$(OBJ_DIR)/re2/nfa.o\
+	$(OBJ_DIR)/re2/onepass.o\
+	$(OBJ_DIR)/re2/parse.o\
+	$(OBJ_DIR)/re2/perl_groups.o\
+	$(OBJ_DIR)/re2/prefilter.o\
+	$(OBJ_DIR)/re2/prefilter_tree.o\
+	$(OBJ_DIR)/re2/prog.o\
+	$(OBJ_DIR)/re2/re2.o\
+	$(OBJ_DIR)/re2/regexp.o\
+	$(OBJ_DIR)/re2/set.o\
+	$(OBJ_DIR)/re2/simplify.o\
+	$(OBJ_DIR)/re2/stringpiece.o\
+	$(OBJ_DIR)/re2/tostring.o\
+	$(OBJ_DIR)/re2/unicode_casefold.o\
+	$(OBJ_DIR)/re2/unicode_groups.o\
 
 TESTOFILES=\
-	obj/util/pcre.o\
-	obj/re2/testing/backtrack.o\
-	obj/re2/testing/dump.o\
-	obj/re2/testing/exhaustive_tester.o\
-	obj/re2/testing/null_walker.o\
-	obj/re2/testing/regexp_generator.o\
-	obj/re2/testing/string_generator.o\
-	obj/re2/testing/tester.o\
+	$(OBJ_DIR)/util/pcre.o\
+	$(OBJ_DIR)/re2/testing/backtrack.o\
+	$(OBJ_DIR)/re2/testing/dump.o\
+	$(OBJ_DIR)/re2/testing/exhaustive_tester.o\
+	$(OBJ_DIR)/re2/testing/null_walker.o\
+	$(OBJ_DIR)/re2/testing/regexp_generator.o\
+	$(OBJ_DIR)/re2/testing/string_generator.o\
+	$(OBJ_DIR)/re2/testing/tester.o\
 
 TESTS=\
-	obj/test/charclass_test\
-	obj/test/compile_test\
-	obj/test/filtered_re2_test\
-	obj/test/mimics_pcre_test\
-	obj/test/parse_test\
-	obj/test/possible_match_test\
-	obj/test/re2_test\
-	obj/test/re2_arg_test\
-	obj/test/regexp_test\
-	obj/test/required_prefix_test\
-	obj/test/search_test\
-	obj/test/set_test\
-	obj/test/simplify_test\
-	obj/test/string_generator_test\
+	$(OBJ_DIR)/test/charclass_test\
+	$(OBJ_DIR)/test/compile_test\
+	$(OBJ_DIR)/test/filtered_re2_test\
+	$(OBJ_DIR)/test/mimics_pcre_test\
+	$(OBJ_DIR)/test/parse_test\
+	$(OBJ_DIR)/test/possible_match_test\
+	$(OBJ_DIR)/test/re2_test\
+	$(OBJ_DIR)/test/re2_arg_test\
+	$(OBJ_DIR)/test/regexp_test\
+	$(OBJ_DIR)/test/required_prefix_test\
+	$(OBJ_DIR)/test/search_test\
+	$(OBJ_DIR)/test/set_test\
+	$(OBJ_DIR)/test/simplify_test\
+	$(OBJ_DIR)/test/string_generator_test\
 
 BIGTESTS=\
-	obj/test/dfa_test\
-	obj/test/exhaustive1_test\
-	obj/test/exhaustive2_test\
-	obj/test/exhaustive3_test\
-	obj/test/exhaustive_test\
-	obj/test/random_test\
+	$(OBJ_DIR)/test/dfa_test\
+	$(OBJ_DIR)/test/exhaustive1_test\
+	$(OBJ_DIR)/test/exhaustive2_test\
+	$(OBJ_DIR)/test/exhaustive3_test\
+	$(OBJ_DIR)/test/exhaustive_test\
+	$(OBJ_DIR)/test/random_test\
 
-SOFILES=$(patsubst obj/%,obj/so/%,$(OFILES))
+SOFILES=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/so/%,$(OFILES))
 # We use TESTOFILES for testing the shared lib, only it is built differently.
-STESTS=$(patsubst obj/%,obj/so/%,$(TESTS))
-SBIGTESTS=$(patsubst obj/%,obj/so/%,$(BIGTESTS))
+STESTS=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/so/%,$(TESTS))
+SBIGTESTS=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/so/%,$(BIGTESTS))
 
-DOFILES=$(patsubst obj/%,obj/dbg/%,$(OFILES))
-DTESTOFILES=$(patsubst obj/%,obj/dbg/%,$(TESTOFILES))
-DTESTS=$(patsubst obj/%,obj/dbg/%,$(TESTS))
-DBIGTESTS=$(patsubst obj/%,obj/dbg/%,$(BIGTESTS))
+DOFILES=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/dbg/%,$(OFILES))
+DTESTOFILES=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/dbg/%,$(TESTOFILES))
+DTESTS=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/dbg/%,$(TESTS))
+DBIGTESTS=$(patsubst $(OBJ_DIR)/%,$(OBJ_DIR)/dbg/%,$(BIGTESTS))
 
-.PRECIOUS: obj/%.o
-obj/%.o: %.cc $(HFILES)
+.PRECIOUS: $(OBJ_DIR)/%.o
+$(OBJ_DIR)/%.o: %.cc $(HFILES)
 	@mkdir -p $$(dirname $@)
 	$(CXX) -c -o $@ $(CPPFLAGS) $(RE2_CXXFLAGS) $(CXXFLAGS) -DNDEBUG $*.cc
 
-.PRECIOUS: obj/dbg/%.o
-obj/dbg/%.o: %.cc $(HFILES)
+.PRECIOUS: $(OBJ_DIR)/dbg/%.o
+$(OBJ_DIR)/dbg/%.o: %.cc $(HFILES)
 	@mkdir -p $$(dirname $@)
 	$(CXX) -c -o $@ $(CPPFLAGS) $(RE2_CXXFLAGS) $(CXXFLAGS) $*.cc
 
-.PRECIOUS: obj/so/%.o
-obj/so/%.o: %.cc $(HFILES)
+.PRECIOUS: $(OBJ_DIR)/so/%.o
+$(OBJ_DIR)/so/%.o: %.cc $(HFILES)
 	@mkdir -p $$(dirname $@)
 	$(CXX) -c -o $@ -fPIC $(CPPFLAGS) $(RE2_CXXFLAGS) $(CXXFLAGS) -DNDEBUG $*.cc
 
-.PRECIOUS: obj/libre2.a
-obj/libre2.a: $(OFILES)
-	@mkdir -p obj
-	$(AR) $(ARFLAGS) obj/libre2.a $(OFILES)
+.PRECIOUS: $(OBJ_DIR)/libre2.a
+$(OBJ_DIR)/libre2.a: $(OFILES)
+	@mkdir -p $(OBJ_DIR)
+	$(AR) $(ARFLAGS) $(OBJ_DIR)/libre2.a $(OFILES)
 
-.PRECIOUS: obj/dbg/libre2.a
-obj/dbg/libre2.a: $(DOFILES)
-	@mkdir -p obj/dbg
-	$(AR) $(ARFLAGS) obj/dbg/libre2.a $(DOFILES)
+.PRECIOUS: $(OBJ_DIR)/dbg/libre2.a
+$(OBJ_DIR)/dbg/libre2.a: $(DOFILES)
+	@mkdir -p $(OBJ_DIR)/dbg
+	$(AR) $(ARFLAGS) $(OBJ_DIR)/dbg/libre2.a $(DOFILES)
 
-.PRECIOUS: obj/so/libre2.$(SOEXT)
-obj/so/libre2.$(SOEXT): $(SOFILES) libre2.symbols libre2.symbols.darwin
-	@mkdir -p obj/so
-	$(MAKE_SHARED_LIBRARY) -o obj/so/libre2.$(SOEXTVER) $(SOFILES)
+.PRECIOUS: $(OBJ_DIR)/so/libre2.$(SOEXT)
+$(OBJ_DIR)/so/libre2.$(SOEXT): $(SOFILES) libre2.symbols libre2.symbols.darwin
+	@mkdir -p $(OBJ_DIR)/so
+	$(MAKE_SHARED_LIBRARY) -o $(OBJ_DIR)/so/libre2.$(SOEXTVER) $(SOFILES)
 	ln -sf libre2.$(SOEXTVER) $@
 
-.PRECIOUS: obj/dbg/test/%
-obj/dbg/test/%: obj/dbg/libre2.a obj/dbg/re2/testing/%.o $(DTESTOFILES) obj/dbg/util/test.o
-	@mkdir -p obj/dbg/test
-	$(CXX) -o $@ obj/dbg/re2/testing/$*.o $(DTESTOFILES) obj/dbg/util/test.o obj/dbg/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
+.PRECIOUS: $(OBJ_DIR)/dbg/test/%
+$(OBJ_DIR)/dbg/test/%: $(OBJ_DIR)/dbg/libre2.a $(OBJ_DIR)/dbg/re2/testing/%.o $(DTESTOFILES) $(OBJ_DIR)/dbg/util/test.o
+	@mkdir -p $(OBJ_DIR)/dbg/test
+	$(CXX) -o $@ $(OBJ_DIR)/dbg/re2/testing/$*.o $(DTESTOFILES) $(OBJ_DIR)/dbg/util/test.o $(OBJ_DIR)/dbg/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
 
-.PRECIOUS: obj/test/%
-obj/test/%: obj/libre2.a obj/re2/testing/%.o $(TESTOFILES) obj/util/test.o
-	@mkdir -p obj/test
-	$(CXX) -o $@ obj/re2/testing/$*.o $(TESTOFILES) obj/util/test.o obj/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
+.PRECIOUS: $(OBJ_DIR)/test/%
+$(OBJ_DIR)/test/%: $(OBJ_DIR)/libre2.a $(OBJ_DIR)/re2/testing/%.o $(TESTOFILES) $(OBJ_DIR)/util/test.o
+	@mkdir -p $(OBJ_DIR)/test
+	$(CXX) -o $@ $(OBJ_DIR)/re2/testing/$*.o $(TESTOFILES) $(OBJ_DIR)/util/test.o $(OBJ_DIR)/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
 
 # Test the shared lib, falling back to the static lib for private symbols
-.PRECIOUS: obj/so/test/%
-obj/so/test/%: obj/so/libre2.$(SOEXT) obj/libre2.a obj/re2/testing/%.o $(TESTOFILES) obj/util/test.o
-	@mkdir -p obj/so/test
-	$(CXX) -o $@ obj/re2/testing/$*.o $(TESTOFILES) obj/util/test.o -Lobj/so -lre2 obj/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
+.PRECIOUS: $(OBJ_DIR)/so/test/%
+$(OBJ_DIR)/so/test/%: $(OBJ_DIR)/so/libre2.$(SOEXT) $(OBJ_DIR)/libre2.a $(OBJ_DIR)/re2/testing/%.o $(TESTOFILES) $(OBJ_DIR)/util/test.o
+	@mkdir -p $(OBJ_DIR)/so/test
+	$(CXX) -o $@ $(OBJ_DIR)/re2/testing/$*.o $(TESTOFILES) $(OBJ_DIR)/util/test.o -L$(OBJ_DIR)/so -lre2 $(OBJ_DIR)/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
 
 # Filter out dump.o because testing::TempDir() isn't available for it.
-obj/test/regexp_benchmark: obj/libre2.a obj/re2/testing/regexp_benchmark.o $(TESTOFILES) obj/util/benchmark.o
-	@mkdir -p obj/test
-	$(CXX) -o $@ obj/re2/testing/regexp_benchmark.o $(filter-out obj/re2/testing/dump.o, $(TESTOFILES)) obj/util/benchmark.o obj/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
+$(OBJ_DIR)/test/regexp_benchmark: $(OBJ_DIR)/libre2.a $(OBJ_DIR)/re2/testing/regexp_benchmark.o $(TESTOFILES) $(OBJ_DIR)/util/benchmark.o
+	@mkdir -p $(OBJ_DIR)/test
+	$(CXX) -o $@ $(OBJ_DIR)/re2/testing/regexp_benchmark.o $(filter-out $(OBJ_DIR)/re2/testing/dump.o, $(TESTOFILES)) $(OBJ_DIR)/util/benchmark.o $(OBJ_DIR)/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
 
 # re2_fuzzer is a target for fuzzers like libFuzzer and AFL. This fake fuzzing
 # is simply a way to check that the target builds and then to run it against a
 # fixed set of inputs. To perform real fuzzing, refer to the documentation for
 # libFuzzer (llvm.org/docs/LibFuzzer.html) and AFL (lcamtuf.coredump.cx/afl/).
-obj/test/re2_fuzzer: CXXFLAGS:=-I./re2/fuzzing/compiler-rt/include $(CXXFLAGS)
-obj/test/re2_fuzzer: obj/libre2.a obj/re2/fuzzing/re2_fuzzer.o obj/util/fuzz.o
-	@mkdir -p obj/test
-	$(CXX) -o $@ obj/re2/fuzzing/re2_fuzzer.o obj/util/fuzz.o obj/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
+$(OBJ_DIR)/test/re2_fuzzer: CXXFLAGS:=-I./re2/fuzzing/compiler-rt/include $(CXXFLAGS)
+$(OBJ_DIR)/test/re2_fuzzer: $(OBJ_DIR)/libre2.a $(OBJ_DIR)/re2/fuzzing/re2_fuzzer.o $(OBJ_DIR)/util/fuzz.o
+	@mkdir -p $(OBJ_DIR)/test
+	$(CXX) -o $@ $(OBJ_DIR)/re2/fuzzing/re2_fuzzer.o $(OBJ_DIR)/util/fuzz.o $(OBJ_DIR)/libre2.a $(RE2_LDFLAGS) $(LDFLAGS)
 
 ifdef REBUILD_TABLES
 .PRECIOUS: re2/perl_groups.cc
@@ -254,7 +256,7 @@ distclean: clean
 
 .PHONY: clean
 clean:
-	rm -rf obj
+	rm -rf $(OBJ_DIR)
 	rm -f re2/*.pyc
 
 .PHONY: testofiles
@@ -273,7 +275,7 @@ static-test: $(TESTS)
 
 .PHONY: shared-test
 shared-test: $(STESTS)
-	@./runtests -shared-library-path obj/so $(STESTS)
+	@./runtests -shared-library-path $(OBJ_DIR)/so $(STESTS)
 
 .PHONY: debug-bigtest
 debug-bigtest: $(DTESTS) $(DBIGTESTS)
@@ -285,30 +287,30 @@ static-bigtest: $(TESTS) $(BIGTESTS)
 
 .PHONY: shared-bigtest
 shared-bigtest: $(STESTS) $(SBIGTESTS)
-	@./runtests -shared-library-path obj/so $(STESTS) $(SBIGTESTS)
+	@./runtests -shared-library-path $(OBJ_DIR)/so $(STESTS) $(SBIGTESTS)
 
 .PHONY: benchmark
-benchmark: obj/test/regexp_benchmark
+benchmark: $(OBJ_DIR)/test/regexp_benchmark
 
 .PHONY: fuzz
-fuzz: obj/test/re2_fuzzer
+fuzz: $(OBJ_DIR)/test/re2_fuzzer
 
 .PHONY: install
 install: static-install shared-install
 
 .PHONY: static
-static: obj/libre2.a
+static: $(OBJ_DIR)/libre2.a
 
 .PHONY: static-install
-static-install: obj/libre2.a common-install
-	$(INSTALL) obj/libre2.a $(DESTDIR)$(libdir)/libre2.a
+static-install: $(OBJ_DIR)/libre2.a common-install
+	$(INSTALL) $(OBJ_DIR)/libre2.a $(DESTDIR)$(libdir)/libre2.a
 
 .PHONY: shared
-shared: obj/so/libre2.$(SOEXT)
+shared: $(OBJ_DIR)/so/libre2.$(SOEXT)
 
 .PHONY: shared-install
-shared-install: obj/so/libre2.$(SOEXT) common-install
-	$(INSTALL) obj/so/libre2.$(SOEXT) $(DESTDIR)$(libdir)/libre2.$(SOEXTVER00)
+shared-install: $(OBJ_DIR)/so/libre2.$(SOEXT) common-install
+	$(INSTALL) $(OBJ_DIR)/so/libre2.$(SOEXT) $(DESTDIR)$(libdir)/libre2.$(SOEXTVER00)
 	ln -sf libre2.$(SOEXTVER00) $(DESTDIR)$(libdir)/libre2.$(SOEXTVER)
 	ln -sf libre2.$(SOEXTVER00) $(DESTDIR)$(libdir)/libre2.$(SOEXT)
 
@@ -330,50 +332,50 @@ testinstall: static-testinstall shared-testinstall
 static-testinstall: CXXFLAGS:=-std=c++11 -pthread -I$(DESTDIR)$(includedir) $(CXXFLAGS)
 static-testinstall: LDFLAGS:=-pthread -L$(DESTDIR)$(libdir) -l:libre2.a $(LDICU) $(LDFLAGS)
 static-testinstall:
-	@mkdir -p obj
-	@cp testinstall.cc obj
+	@mkdir -p $(OBJ_DIR)
+	@cp testinstall.cc $(OBJ_DIR)
 ifeq ($(shell uname),Darwin)
 	@echo Skipping test for libre2.a on Darwin.
 else ifeq ($(shell uname),SunOS)
 	@echo Skipping test for libre2.a on SunOS.
 else
-	(cd obj && $(CXX) testinstall.cc -o testinstall $(CXXFLAGS) $(LDFLAGS))
-	obj/testinstall
+	(cd $(OBJ_DIR) && $(CXX) testinstall.cc -o testinstall $(CXXFLAGS) $(LDFLAGS))
+	$(OBJ_DIR)/testinstall
 endif
 
 .PHONY: shared-testinstall
 shared-testinstall: CXXFLAGS:=-std=c++11 -pthread -I$(DESTDIR)$(includedir) $(CXXFLAGS)
 shared-testinstall: LDFLAGS:=-pthread -L$(DESTDIR)$(libdir) -lre2 $(LDICU) $(LDFLAGS)
 shared-testinstall:
-	@mkdir -p obj
-	@cp testinstall.cc obj
-	(cd obj && $(CXX) testinstall.cc -o testinstall $(CXXFLAGS) $(LDFLAGS))
+	@mkdir -p $(OBJ_DIR)
+	@cp testinstall.cc $(OBJ_DIR)
+	(cd $(OBJ_DIR) && $(CXX) testinstall.cc -o testinstall $(CXXFLAGS) $(LDFLAGS))
 ifeq ($(shell uname),Darwin)
-	DYLD_LIBRARY_PATH="$(DESTDIR)$(libdir):$(DYLD_LIBRARY_PATH)" obj/testinstall
+	DYLD_LIBRARY_PATH="$(DESTDIR)$(libdir):$(DYLD_LIBRARY_PATH)" $(OBJ_DIR)/testinstall
 else
-	LD_LIBRARY_PATH="$(DESTDIR)$(libdir):$(LD_LIBRARY_PATH)" obj/testinstall
+	LD_LIBRARY_PATH="$(DESTDIR)$(libdir):$(LD_LIBRARY_PATH)" $(OBJ_DIR)/testinstall
 endif
 
 .PHONY: benchlog
-benchlog: obj/test/regexp_benchmark
+benchlog: $(OBJ_DIR)/test/regexp_benchmark
 	(echo '==BENCHMARK==' `hostname` `date`; \
-	  (uname -a; $(CXX) --version; git rev-parse --short HEAD; file obj/test/regexp_benchmark) | sed 's/^/# /'; \
+	  (uname -a; $(CXX) --version; git rev-parse --short HEAD; file $(OBJ_DIR)/test/regexp_benchmark) | sed 's/^/# /'; \
 	  echo; \
-	  ./obj/test/regexp_benchmark 'PCRE|RE2') | tee -a benchlog.$$(hostname | sed 's/\..*//')
+	  ./$(OBJ_DIR)/test/regexp_benchmark 'PCRE|RE2') | tee -a benchlog.$$(hostname | sed 's/\..*//')
 
 .PHONY: log
 log:
 	$(MAKE) clean
 	$(MAKE) CXXFLAGS="$(CXXFLAGS) -DLOGGING=1" \
-		$(filter obj/test/exhaustive%_test,$(BIGTESTS))
+		$(filter $(OBJ_DIR)/test/exhaustive%_test,$(BIGTESTS))
 	echo '#' RE2 exhaustive tests built by make log >re2-exhaustive.txt
 	echo '#' $$(date) >>re2-exhaustive.txt
-	obj/test/exhaustive_test |grep -v '^PASS$$' >>re2-exhaustive.txt
-	obj/test/exhaustive1_test |grep -v '^PASS$$' >>re2-exhaustive.txt
-	obj/test/exhaustive2_test |grep -v '^PASS$$' >>re2-exhaustive.txt
-	obj/test/exhaustive3_test |grep -v '^PASS$$' >>re2-exhaustive.txt
+	$(OBJ_DIR)/test/exhaustive_test |grep -v '^PASS$$' >>re2-exhaustive.txt
+	$(OBJ_DIR)/test/exhaustive1_test |grep -v '^PASS$$' >>re2-exhaustive.txt
+	$(OBJ_DIR)/test/exhaustive2_test |grep -v '^PASS$$' >>re2-exhaustive.txt
+	$(OBJ_DIR)/test/exhaustive3_test |grep -v '^PASS$$' >>re2-exhaustive.txt
 
-	$(MAKE) CXXFLAGS="$(CXXFLAGS) -DLOGGING=1" obj/test/search_test
+	$(MAKE) CXXFLAGS="$(CXXFLAGS) -DLOGGING=1" $(OBJ_DIR)/test/search_test
 	echo '#' RE2 basic search tests built by make $@ >re2-search.txt
 	echo '#' $$(date) >>re2-search.txt
-	obj/test/search_test |grep -v '^PASS$$' >>re2-search.txt
+	$(OBJ_DIR)/test/search_test |grep -v '^PASS$$' >>re2-search.txt

@@ -43,11 +43,6 @@
 
 using namespace Firebird;
 
-namespace
-{
-	static const char* const NTRACE_PREFIX = "fbtrace";
-}
-
 namespace Jrd {
 
 GlobalPtr<StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;

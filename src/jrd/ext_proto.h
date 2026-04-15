@@ -21,29 +21,78 @@
  * Contributor(s): ______________________________________.
  */
 
+#include <stdio.h>
+#include <string.h>
+
+#include "fb_blk.h"
+#include "../common/classes/alloc.h"
+#include "../common/classes/locks.h"
+
 #ifndef JRD_EXT_PROTO_H
 #define JRD_EXT_PROTO_H
 
 namespace Jrd {
-	class ExternalFile;
-	class jrd_tra;
-	class RecordSource;
-	class jrd_rel;
-	struct record_param;
-	struct bid;
-}
 
-double	EXT_cardinality(Jrd::thread_db*, Jrd::jrd_rel*);
-void	EXT_erase(Jrd::record_param*, Jrd::jrd_tra*);
-Jrd::ExternalFile*	EXT_file(Jrd::jrd_rel*, const TEXT*); //, Jrd::bid*);
-void	EXT_fini(Jrd::jrd_rel*, bool);
-bool	EXT_get(Jrd::thread_db*, Jrd::record_param*, FB_UINT64&);
-void	EXT_modify(Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
+class jrd_tra;
+class RecordSource;
+class jrd_rel;
+struct record_param;
+struct bid;
+class Database;
+class thread_db;
 
-void	EXT_open(Jrd::Database*, Jrd::ExternalFile*);
-void	EXT_store(Jrd::thread_db*, Jrd::record_param*);
+// External file access block
 
-void EXT_tra_attach(Jrd::ExternalFile*, Jrd::jrd_tra*);
-void EXT_tra_detach(Jrd::ExternalFile*, Jrd::jrd_tra*);
+class ExternalFile : public pool_alloc_rpt<SCHAR, type_ext>
+{
+private:
+	ExternalFile()
+		: ext_flags(0), ext_tra_cnt(0), ext_ifi(nullptr)
+	{ }
+
+	void open(Database* dbb);
+	void checkOpened();
+
+public:
+	static ExternalFile* create(MemoryPool& pool, const char* name)
+	{
+		ExternalFile* file = FB_NEW_RPT(pool, (strlen(name) + 1)) ExternalFile();
+		strcpy(file->ext_filename, name);
+		return file;
+	}
+
+	~ExternalFile()
+	{
+		fb_assert(!ext_ifi);
+	}
+
+	FILE* getFile()
+	{
+		return ext_ifi;
+	}
+
+	void traAttach(thread_db* tdbb);
+	void traDetach() noexcept;
+	double getCardinality(thread_db* tdbb, jrd_rel* relation) noexcept;
+	void erase(record_param*, jrd_tra*);
+	bool get(thread_db* tdbb, record_param* rpb, FB_UINT64& position);
+	void modify(record_param*, record_param*, jrd_tra*);
+	void store(thread_db*, record_param*);
+	void release();
+
+private:
+	Firebird::Mutex	ext_sync;
+	USHORT			ext_flags;		// Misc and cruddy flags
+	USHORT			ext_tra_cnt;	// How many transactions used the file
+	FILE*			ext_ifi;		// Internal file identifier
+	char			ext_filename[1];
+};
+
+// ext_flags
+const USHORT EXT_readonly	= 1;	// File could only be opened for read
+const USHORT EXT_last_read	= 2;	// last operation was read
+const USHORT EXT_last_write	= 4;	// last operation was write
+
+} //namespace Jrd
 
 #endif // JRD_EXT_PROTO_H

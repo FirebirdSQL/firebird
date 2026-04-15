@@ -76,7 +76,6 @@ MetadataFromBlr::MetadataFromBlr(unsigned aBlrLength, const unsigned char* aBlr,
 	fb_assert(!(count & 1));
 	count /= 2;
 
-	unsigned offset = 0;
 	items.grow(count);
 
 	for (unsigned index = 0; index < count; index++)

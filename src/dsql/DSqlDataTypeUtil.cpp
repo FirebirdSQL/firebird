@@ -27,7 +27,7 @@
 #include "../dsql/DsqlCompilerScratch.h"
 #include "../dsql/metd_proto.h"
 
-UCHAR Jrd::DSqlDataTypeUtil::maxBytesPerChar(UCHAR charSet)
+UCHAR Jrd::DSqlDataTypeUtil::maxBytesPerChar(CSetId charSet)
 {
 	return METD_get_charset_bpc(dsqlScratch->getTransaction(), charSet);
 }

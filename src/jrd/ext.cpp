@@ -38,17 +38,18 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#include "../jrd/ext_proto.h"
+
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
 #include "../jrd/val.h"
 #include "../jrd/exe.h"
-#include "../jrd/ext.h"
 #include "../jrd/tra.h"
 #include "../dsql/ExprNodes.h"
 #include "iberror.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/err_proto.h"
-#include "../jrd/ext_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
@@ -118,47 +119,47 @@ namespace {
 
 #ifdef WIN_NT
 	static const char* const FOPEN_TYPE			= "a+b";
+	static const char* const FOPEN_READ_ONLY	= "rb";
 #else
 	static const char* const FOPEN_TYPE			= "a+";
+	static const char* const FOPEN_READ_ONLY	= "r";
 #endif
-	static const char* const FOPEN_READ_ONLY	= "rb";
 
-	FILE* ext_fopen(Database* dbb, ExternalFile* ext_file)
-	{
-		const char* file_name = ext_file->ext_filename;
-
-		ExternalFileDirectoryList::create(dbb);
-		if (!dbb->dbb_external_file_directory_list->isPathInList(file_name))
-		{
-			ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("external file") <<
-														 Arg::Str(file_name));
-		}
-
-		// If the database is updateable, then try opening the external files in
-		// RW mode. If the DB is ReadOnly, then open the external files only in
-		// ReadOnly mode, thus being consistent.
-		if (!dbb->readOnly())
-			ext_file->ext_ifi = os_utils::fopen(file_name, FOPEN_TYPE);
-
-		if (!ext_file->ext_ifi)
-		{
-			// could not open the file as read write attempt as read only
-			if (!(ext_file->ext_ifi = os_utils::fopen(file_name, FOPEN_READ_ONLY)))
-			{
-				ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(file_name) <<
-						 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
-			}
-			else {
-				ext_file->ext_flags |= EXT_readonly;
-			}
-		}
-
-		return ext_file->ext_ifi;
-	}
 } // namespace
 
+void ExternalFile::open(Database* dbb)
+{
+	fb_assert(ext_sync.locked());
 
-double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
+	ExternalFileDirectoryList::create(dbb);
+
+	if (!dbb->dbb_external_file_directory_list->isPathInList(ext_filename))
+	{
+		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("external file") <<
+													 Arg::Str(ext_filename));
+	}
+
+	// If the database is updateable then try opening the external files in RW mode.
+	ext_flags = 0;
+	if (!dbb->readOnly())
+		ext_ifi = os_utils::fopen(ext_filename, FOPEN_TYPE);
+
+	// If the DB is ReadOnly or RW access failed then open the external files only in ReadOnly mode.
+	if (!ext_ifi)
+	{
+		if (!(ext_ifi = os_utils::fopen(ext_filename, FOPEN_READ_ONLY)))
+		{
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fopen") << Arg::Str(ext_filename) <<
+					 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+		}
+		else {
+			ext_flags |= EXT_readonly;
+		}
+	}
+}
+
+
+double ExternalFile::getCardinality(thread_db* tdbb, jrd_rel* relation) noexcept
 {
 /**************************************
  *
@@ -170,38 +171,29 @@ double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
  *	Return cardinality for the external file.
  *
  **************************************/
-	ExternalFile* const file = relation->rel_file;
-	fb_assert(file);
-
 	try
 	{
-		bool must_close = false;
-		if (!file->ext_ifi)
-		{
-			ext_fopen(tdbb->getDatabase(), file);
-			must_close = true;
-		}
-
 		FB_UINT64 file_size = 0;
 
+		// no need locking mutex here
+		traAttach(tdbb);
+		{ // scope
+			Cleanup clean([this]() { traDetach(); });
+
+			checkOpened();
 #ifdef WIN_NT
-		struct __stat64 statistics;
-		if (!_fstat64(_fileno(file->ext_ifi), &statistics))
+			struct __stat64 statistics;
+			if (!_fstat64(_fileno(ext_ifi), &statistics))
 #else
-		struct STAT statistics;
-		if (!os_utils::fstat(fileno(file->ext_ifi), &statistics))
+			struct STAT statistics;
+			if (!os_utils::fstat(fileno(ext_ifi), &statistics))
 #endif
-		{
-			file_size = statistics.st_size;
+			{
+				file_size = statistics.st_size;
+			}
 		}
 
-		if (must_close)
-		{
-			fclose(file->ext_ifi);
-			file->ext_ifi = NULL;
-		}
-
-		const Format* const format = MET_current(tdbb, relation);
+		const Format* const format = relation->currentFormat(tdbb);
 		fb_assert(format && format->fmt_length);
 		const USHORT offset = (USHORT)(IPTR) format->fmt_desc[0].dsc_address;
 		const ULONG record_length = format->fmt_length - offset;
@@ -217,7 +209,7 @@ double EXT_cardinality(thread_db* tdbb, jrd_rel* relation)
 }
 
 
-void EXT_erase(record_param*, jrd_tra*)
+void ExternalFile::erase(record_param*, jrd_tra*)
 {
 /**************************************
  *
@@ -234,8 +226,7 @@ void EXT_erase(record_param*, jrd_tra*)
 }
 
 
-// Third param is unused.
-ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* description)
+void RelationPermanent::extFile(thread_db* tdbb, const TEXT* file_name)
 {
 /**************************************
  *
@@ -250,11 +241,7 @@ ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* descri
 	Database* dbb = GET_DBB();
 	CHECK_DBB(dbb);
 
-	// if we already have a external file associated with this relation just
-	// return the file structure
-	if (relation->rel_file) {
-		EXT_fini(relation, false);
-	}
+	fb_assert(!rel_file);
 
 #ifdef WIN_NT
 	// Default number of file handles stdio.h on Windows is 512, use this
@@ -304,48 +291,11 @@ ExternalFile* EXT_file(jrd_rel* relation, const TEXT* file_name) //, bid* descri
 
 	paths.clear();
 
-	ExternalFile* file = FB_NEW_RPT(*relation->rel_pool, (strlen(file_name) + 1)) ExternalFile();
-	relation->rel_file = file;
-	strcpy(file->ext_filename, file_name);
-	file->ext_flags = 0;
-	file->ext_ifi = NULL;
-
-	return file;
+	rel_file = ExternalFile::create(getPool(), file_name);
 }
 
 
-void EXT_fini(jrd_rel* relation, bool close_only)
-{
-/**************************************
- *
- *	E X T _ f i n i
- *
- **************************************
- *
- * Functional description
- *	Close the file associated with a relation.
- *
- **************************************/
-	if (relation->rel_file)
-	{
-		ExternalFile* file = relation->rel_file;
-		if (file->ext_ifi)
-		{
-			fclose(file->ext_ifi);
-			file->ext_ifi = NULL;
-		}
-
-		// before zeroing out the rel_file we need to deallocate the memory
-		if (!close_only)
-		{
-			delete file;
-			relation->rel_file = NULL;
-		}
-	}
-}
-
-
-bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
+bool ExternalFile::get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 {
 /**************************************
  *
@@ -358,8 +308,6 @@ bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
  *
  **************************************/
 	jrd_rel* const relation = rpb->rpb_relation;
-	ExternalFile* const file = relation->rel_file;
-	fb_assert(file->ext_ifi);
 
 	Record* const record = rpb->rpb_record;
 	const Format* const format = record->getFormat();
@@ -368,52 +316,52 @@ bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 	UCHAR* p = record->getData() + offset;
 	const ULONG l = record->getLength() - offset;
 
-	if (file->ext_ifi == NULL)
-	{
-		ERR_post(Arg::Gds(isc_io_error) << "fseek" << Arg::Str(file->ext_filename) <<
-				 Arg::Gds(isc_io_open_err) << Arg::Unix(EBADF) <<
-				 Arg::Gds(isc_random) << "File not opened");
-	}
+	{ //scope
+		MutexLockGuard g(ext_sync, FB_FUNCTION);
 
-	// hvlad: fseek will flush file buffer and degrade performance, so don't
-	// call it if it is not necessary. Note that we must flush file buffer if we
-	// do read after write
+		checkOpened();
 
-	bool doSeek = false;
-	if (!(file->ext_flags & EXT_last_read))
-	{
-		doSeek = true;
-	}
-	else
-	{
-		SINT64 offset = FTELL64(file->ext_ifi);
-		if (offset < 0)
+		// hvlad: fseek will flush file buffer and degrade performance, so don't
+		// call it if it is not necessary. Note that we must flush file buffer if we
+		// do read after write
+
+		bool doSeek = false;
+		if (!(ext_flags & EXT_last_read))
 		{
-			ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FTELL64) << Arg::Str(file->ext_filename) <<
-					 Arg::Gds(isc_io_read_err) << SYS_ERR(errno));
+			doSeek = true;
 		}
-		doSeek = (static_cast<FB_UINT64>(offset) != position);
-	}
-
-	// reset both flags cause we are going to move the file pointer
-	file->ext_flags &= ~(EXT_last_write | EXT_last_read);
-
-	if (doSeek)
-	{
-		if (FSEEK64(file->ext_ifi, position, SEEK_SET) != 0)
+		else
 		{
-			ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FSEEK64) << Arg::Str(file->ext_filename) <<
-					 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+			SINT64 offset = FTELL64(ext_ifi);
+			if (offset < 0)
+			{
+				ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FTELL64) << Arg::Str(ext_filename) <<
+						 Arg::Gds(isc_io_read_err) << SYS_ERR(errno));
+			}
+			doSeek = (static_cast<FB_UINT64>(offset) != position);
 		}
-	}
 
-	if (!fread(p, l, 1, file->ext_ifi))
-	{
-		return false;
+		// reset both flags cause we are going to move the file pointer
+		ext_flags &= ~(EXT_last_write | EXT_last_read);
+
+		if (doSeek)
+		{
+			if (FSEEK64(ext_ifi, position, SEEK_SET) != 0)
+			{
+				ERR_post(Arg::Gds(isc_io_error) << STRINGIZE(FSEEK64) << Arg::Str(ext_filename) <<
+						 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
+			}
+		}
+
+		if (!fread(p, l, 1, ext_ifi))
+		{
+			return false;
+		}
+
+		ext_flags |= EXT_last_read;
 	}
 
 	position += l;
-	file->ext_flags |= EXT_last_read;
 
 	// Loop thru fields setting missing fields to either blanks/zeros or the missing value
 
@@ -449,7 +397,7 @@ bool EXT_get(thread_db* tdbb, record_param* rpb, FB_UINT64& position)
 }
 
 
-void EXT_modify(record_param* /*old_rpb*/, record_param* /*new_rpb*/, jrd_tra* /*transaction*/)
+void ExternalFile::modify(record_param* /*old_rpb*/, record_param* /*new_rpb*/, jrd_tra* /*transaction*/)
 {
 /**************************************
  *
@@ -466,25 +414,7 @@ void EXT_modify(record_param* /*old_rpb*/, record_param* /*new_rpb*/, jrd_tra* /
 }
 
 
-void EXT_open(Database* dbb, ExternalFile* file)
-{
-/**************************************
- *
- *	E X T _ o p e n
- *
- **************************************
- *
- * Functional description
- *	Open a record stream for an external file.
- *
- **************************************/
-	if (!file->ext_ifi) {
-		ext_fopen(dbb, file);
-	}
-}
-
-
-void EXT_store(thread_db* tdbb, record_param* rpb)
+void ExternalFile::store(thread_db* tdbb, record_param* rpb)
 {
 /**************************************
  *
@@ -497,18 +427,15 @@ void EXT_store(thread_db* tdbb, record_param* rpb)
  *
  **************************************/
 	jrd_rel* relation = rpb->rpb_relation;
-	ExternalFile* file = relation->rel_file;
 	Record* record = rpb->rpb_record;
 	const Format* const format = record->getFormat();
 
-	if (!file->ext_ifi) {
-		ext_fopen(tdbb->getDatabase(), file);
-	}
+	checkOpened();
 
 	// Loop thru fields setting missing fields to either blanks/zeros or the missing value
 
 	// check if file is read only if read only then post error we cannot write to this file
-	if (file->ext_flags & EXT_readonly)
+	if (ext_flags & EXT_readonly)
 	{
 		Database* dbb = tdbb->getDatabase();
 		CHECK_DBB(dbb);
@@ -517,7 +444,7 @@ void EXT_store(thread_db* tdbb, record_param* rpb)
 			ERR_post(Arg::Gds(isc_read_only_database));
 		else
 		{
-			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("insert") << Arg::Str(file->ext_filename) <<
+			ERR_post(Arg::Gds(isc_io_error) << Arg::Str("insert") << Arg::Str(ext_filename) <<
 					 Arg::Gds(isc_io_write_err) <<
 					 Arg::Gds(isc_ext_readonly_err));
 		}
@@ -553,31 +480,31 @@ void EXT_store(thread_db* tdbb, record_param* rpb)
 	const UCHAR* p = record->getData() + offset;
 	const ULONG l = record->getLength() - offset;
 
+	MutexLockGuard g(ext_sync, FB_FUNCTION);
+
 	// hvlad: fseek will flush file buffer and degrade performance, so don't
 	// call it if it is not necessary.	Note that we must flush file buffer if we
 	// do write after read
-	file->ext_flags &= ~EXT_last_read;
-	if (file->ext_ifi == NULL ||
-		(!(file->ext_flags & EXT_last_write) && FSEEK64(file->ext_ifi, (SINT64) 0, SEEK_END) != 0) )
+	ext_flags &= ~EXT_last_read;
+	if ( (!(ext_flags & EXT_last_write) && FSEEK64(ext_ifi, (SINT64) 0, SEEK_END) != 0) )
 	{
-		file->ext_flags &= ~EXT_last_write;
-		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fseek") << Arg::Str(file->ext_filename) <<
+		ext_flags &= ~EXT_last_write;
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fseek") << Arg::Str(ext_filename) <<
 				 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 	}
 
-	if (!fwrite(p, l, 1, file->ext_ifi))
+	if (!fwrite(p, l, 1, ext_ifi))
 	{
-		file->ext_flags &= ~EXT_last_write;
-		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fwrite") << Arg::Str(file->ext_filename) <<
+		ext_flags &= ~EXT_last_write;
+		ERR_post(Arg::Gds(isc_io_error) << Arg::Str("fwrite") << Arg::Str(ext_filename) <<
 				 Arg::Gds(isc_io_open_err) << SYS_ERR(errno));
 	}
 
-	// fflush(file->ext_ifi);
-	file->ext_flags |= EXT_last_write;
+	ext_flags |= EXT_last_write;
 }
 
 
-void EXT_tra_attach(ExternalFile* file, jrd_tra*)
+void ExternalFile::traAttach(thread_db* tdbb)
 {
 /**************************************
  *
@@ -590,11 +517,18 @@ void EXT_tra_attach(ExternalFile* file, jrd_tra*)
  *  Increment transactions use count.
  *
  **************************************/
+	MutexLockGuard g(ext_sync, FB_FUNCTION);
 
-	file->ext_tra_cnt++;
+	if (ext_tra_cnt++ == 0)
+	{
+		fb_assert(!ext_ifi);
+		Database* dbb = tdbb->getDatabase();
+		open(dbb);
+		fb_assert(ext_ifi);
+	}
 }
 
-void EXT_tra_detach(ExternalFile* file, jrd_tra*)
+void ExternalFile::traDetach() noexcept
 {
 /**************************************
  *
@@ -608,11 +542,28 @@ void EXT_tra_detach(ExternalFile* file, jrd_tra*)
  *  external file if count is zero.
  *
  **************************************/
+	MutexLockGuard g(ext_sync, FB_FUNCTION);
 
-	file->ext_tra_cnt--;
-	if (!file->ext_tra_cnt && file->ext_ifi)
+	if (--ext_tra_cnt == 0)
 	{
-		fclose(file->ext_ifi);
-		file->ext_ifi = NULL;
+		if (ext_ifi)
+			fclose(ext_ifi);
+		ext_ifi = NULL;
 	}
+}
+
+void ExternalFile::release()
+{
+	// lock not needed, closing
+	if (ext_ifi)
+	{
+		fclose(ext_ifi);
+		ext_ifi = NULL;
+	}
+}
+
+void ExternalFile::checkOpened()
+{
+	if (!ext_ifi)
+		ERR_post(Arg::Gds(isc_random) << "Error accessing external table's file");
 }

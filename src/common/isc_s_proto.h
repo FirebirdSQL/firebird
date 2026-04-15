@@ -279,6 +279,9 @@ public:
 	int eventWait(event_t* event, const SLONG value, const SLONG micro_seconds);
 	int eventPost(event_t* event);
 
+	// Used as memory allocation unit and mapping alignment
+	static ULONG getSystemPageSize(Firebird::CheckStatusWrapper* status);
+
 public:
 #ifdef UNIX
 	Firebird::AutoPtr<FileLock> mainLock;
@@ -296,6 +299,7 @@ public:
 #endif
 
 	ULONG	sh_mem_length_mapped;
+	ULONG	sh_mem_increment;				// Suggested growth increment
 #ifdef WIN_NT
 	HANDLE	sh_mem_handle;					// file handle
 	HANDLE	sh_mem_object;					// file mapping

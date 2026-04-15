@@ -1,0 +1,109 @@
+# MAKEFILE for MS Windows (mingw + gcc + gmake)
+#
+# BEWARE: variable OBJECTS is updated via helper.pl
+
+### USAGE:
+# Open a command prompt with gcc + gmake in PATH and start:
+#
+# gmake -f makefile.mingw all
+# test.exe
+# gmake -f makefile.mingw PREFIX=c:\devel\libtom install
+
+#The following can be overridden from command line e.g. make -f makefile.mingw CC=gcc ARFLAGS=rcs
+PREFIX    = c:\mingw
+CC        = gcc
+AR        = ar
+ARFLAGS   = r
+RANLIB    = ranlib
+STRIP     = strip
+CFLAGS    = -O2
+LDFLAGS   =
+
+#Compilation flags
+LTM_CFLAGS  = -I. $(CFLAGS)
+LTM_LDFLAGS = $(LDFLAGS) -static-libgcc
+
+#Libraries to be created
+LIBMAIN_S =libtommath.a
+LIBMAIN_I =libtommath.dll.a
+LIBMAIN_D =libtommath.dll
+
+#List of objects to compile (all goes to libtommath.a)
+OBJECTS=bn_cutoffs.o bn_deprecated.o bn_mp_2expt.o bn_mp_abs.o bn_mp_add.o bn_mp_add_d.o bn_mp_addmod.o \
+bn_mp_and.o bn_mp_clamp.o bn_mp_clear.o bn_mp_clear_multi.o bn_mp_cmp.o bn_mp_cmp_d.o bn_mp_cmp_mag.o \
+bn_mp_cnt_lsb.o bn_mp_complement.o bn_mp_copy.o bn_mp_count_bits.o bn_mp_decr.o bn_mp_div.o bn_mp_div_2.o \
+bn_mp_div_2d.o bn_mp_div_d.o bn_mp_dr_is_modulus.o bn_mp_dr_reduce.o bn_mp_dr_setup.o \
+bn_mp_error_to_string.o bn_mp_exch.o bn_mp_expt_n.o bn_mp_exptmod.o bn_mp_exteuclid.o bn_mp_fread.o \
+bn_mp_from_sbin.o bn_mp_from_ubin.o bn_mp_fwrite.o bn_mp_gcd.o bn_mp_get_double.o bn_mp_get_i32.o \
+bn_mp_get_i64.o bn_mp_get_l.o bn_mp_get_mag_u32.o bn_mp_get_mag_u64.o bn_mp_get_mag_ul.o bn_mp_grow.o \
+bn_mp_incr.o bn_mp_init.o bn_mp_init_copy.o bn_mp_init_i32.o bn_mp_init_i64.o bn_mp_init_l.o \
+bn_mp_init_multi.o bn_mp_init_set.o bn_mp_init_size.o bn_mp_init_u32.o bn_mp_init_u64.o bn_mp_init_ul.o \
+bn_mp_invmod.o bn_mp_is_square.o bn_mp_iseven.o bn_mp_isodd.o bn_mp_kronecker.o bn_mp_lcm.o bn_mp_log_n.o \
+bn_mp_lshd.o bn_mp_mod.o bn_mp_mod_2d.o bn_mp_mod_d.o bn_mp_montgomery_calc_normalization.o \
+bn_mp_montgomery_reduce.o bn_mp_montgomery_setup.o bn_mp_mul.o bn_mp_mul_2.o bn_mp_mul_2d.o bn_mp_mul_d.o \
+bn_mp_mulmod.o bn_mp_neg.o bn_mp_or.o bn_mp_pack.o bn_mp_pack_count.o bn_mp_prime_fermat.o \
+bn_mp_prime_frobenius_underwood.o bn_mp_prime_is_prime.o bn_mp_prime_miller_rabin.o \
+bn_mp_prime_next_prime.o bn_mp_prime_rabin_miller_trials.o bn_mp_prime_rand.o \
+bn_mp_prime_strong_lucas_selfridge.o bn_mp_radix_size.o bn_mp_radix_smap.o bn_mp_rand.o \
+bn_mp_read_radix.o bn_mp_reduce.o bn_mp_reduce_2k.o bn_mp_reduce_2k_l.o bn_mp_reduce_2k_setup.o \
+bn_mp_reduce_2k_setup_l.o bn_mp_reduce_is_2k.o bn_mp_reduce_is_2k_l.o bn_mp_reduce_setup.o \
+bn_mp_root_n.o bn_mp_rshd.o bn_mp_sbin_size.o bn_mp_set.o bn_mp_set_double.o bn_mp_set_i32.o \
+bn_mp_set_i64.o bn_mp_set_l.o bn_mp_set_u32.o bn_mp_set_u64.o bn_mp_set_ul.o bn_mp_shrink.o \
+bn_mp_signed_rsh.o bn_mp_sqr.o bn_mp_sqrmod.o bn_mp_sqrt.o bn_mp_sqrtmod_prime.o bn_mp_sub.o bn_mp_sub_d.o \
+bn_mp_submod.o bn_mp_to_radix.o bn_mp_to_sbin.o bn_mp_to_ubin.o bn_mp_ubin_size.o bn_mp_unpack.o \
+bn_mp_xor.o bn_mp_zero.o bn_prime_tab.o bn_s_mp_add.o bn_s_mp_balance_mul.o bn_s_mp_div_3.o \
+bn_s_mp_exptmod.o bn_s_mp_exptmod_fast.o bn_s_mp_get_bit.o bn_s_mp_invmod_fast.o bn_s_mp_invmod_slow.o \
+bn_s_mp_karatsuba_mul.o bn_s_mp_karatsuba_sqr.o bn_s_mp_log.o bn_s_mp_log_2expt.o bn_s_mp_log_d.o \
+bn_s_mp_montgomery_reduce_fast.o bn_s_mp_mul_digs.o bn_s_mp_mul_digs_fast.o bn_s_mp_mul_high_digs.o \
+bn_s_mp_mul_high_digs_fast.o bn_s_mp_prime_is_divisible.o bn_s_mp_rand_jenkins.o \
+bn_s_mp_rand_platform.o bn_s_mp_reverse.o bn_s_mp_sqr.o bn_s_mp_sqr_fast.o bn_s_mp_sub.o \
+bn_s_mp_toom_mul.o bn_s_mp_toom_sqr.o
+
+HEADERS_PUB=tommath.h
+HEADERS=tommath_private.h tommath_class.h tommath_superclass.h tommath_cutoffs.h $(HEADERS_PUB)
+
+#The default rule for make builds the libtommath.a library (static)
+default: $(LIBMAIN_S)
+
+#Dependencies on *.h
+$(OBJECTS): $(HEADERS)
+
+.c.o:
+	$(CC) $(LTM_CFLAGS) -c $< -o $@
+
+#Create libtommath.a
+$(LIBMAIN_S): $(OBJECTS)
+	$(AR) $(ARFLAGS) $@ $(OBJECTS)
+	$(RANLIB) $@
+
+#Create DLL + import library libtommath.dll.a
+$(LIBMAIN_D) $(LIBMAIN_I): $(OBJECTS)
+	$(CC) -s -shared -o $(LIBMAIN_D) $^ -Wl,--enable-auto-import,--export-all -Wl,--out-implib=$(LIBMAIN_I) $(LTM_LDFLAGS)
+	$(STRIP) -S $(LIBMAIN_D)
+
+#Build test suite
+test.exe: demo/shared.o demo/test.o $(LIBMAIN_S)
+	$(CC) $(LTM_CFLAGS) $(LTM_LDFLAGS) $^ -o $@
+	@echo NOTICE: start the tests by launching test.exe
+
+test_standalone: test.exe
+	@echo test_standalone is deprecated, please use make-target 'test.exe'
+
+all: $(LIBMAIN_S) test.exe
+
+tune: $(LIBNAME_S)
+	$(MAKE) -C etc tune
+	$(MAKE)
+
+clean:
+	@-cmd /c del /Q /S *.o *.a *.exe *.dll 2>nul
+
+#Install the library + headers
+install: $(LIBMAIN_S) $(LIBMAIN_I) $(LIBMAIN_D)
+	cmd /c if not exist "$(PREFIX)\bin" mkdir "$(PREFIX)\bin"
+	cmd /c if not exist "$(PREFIX)\lib" mkdir "$(PREFIX)\lib"
+	cmd /c if not exist "$(PREFIX)\include" mkdir "$(PREFIX)\include"
+	copy /Y $(LIBMAIN_S) "$(PREFIX)\lib"
+	copy /Y $(LIBMAIN_I) "$(PREFIX)\lib"
+	copy /Y $(LIBMAIN_D) "$(PREFIX)\bin"
+	copy /Y tommath*.h "$(PREFIX)\include"

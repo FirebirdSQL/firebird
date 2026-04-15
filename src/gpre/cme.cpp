@@ -513,9 +513,9 @@ void CME_get_dtype(const gpre_nod* node, gpre_fld* f)
 	f->fld_length = 0;
 	f->fld_scale = 0;
 	f->fld_sub_type = 0;
-	f->fld_charset_id = 0;
-	f->fld_collate_id = 0;
-	f->fld_ttype = 0;
+	f->fld_charset_id = CS_NONE;
+	f->fld_collate_id = COLLATE_NONE;
+	f->fld_ttype = CS_NONE;;
 
 	switch (node->nod_type)
 	{
@@ -2198,7 +2198,8 @@ static void get_dtype_of_list(const gpre_nod* node, gpre_fld* f)
 	UCHAR max_dtype = 0;
 	SCHAR max_scale = 0;
 	USHORT max_length = 0, max_dtype_length = 0, maxtextlength = 0, max_significant_digits = 0;
-	SSHORT max_sub_type = 0, first_sub_type = -1, ttype = ttype_ascii; // default type if all nodes are nod_null.
+	SSHORT max_sub_type = 0, first_sub_type = -1;
+	TTypeId ttype = ttype_ascii; // default type if all nodes are nod_null.
 	SSHORT max_numeric_sub_type = 0;
 	bool firstarg = true, all_same_sub_type = true, all_equal = true; //, all_nulls = true;
 	bool all_numeric = true, any_numeric = false, any_approx = false, any_float = false;

@@ -13,7 +13,7 @@ m4_ifdef([AC_CONFIG_MACRO_DIR],
          [m4_define([AC_CONFIG_MACRO_DIR], [])])
 AC_CONFIG_MACRO_DIR(m4)
 
-AC_CONFIG_HEADER(src/include/gen/autoconfig.auto:builds/make.new/config/config.h.in)
+AC_CONFIG_HEADER(gen/autoconfig.auto:builds/make.new/config/config.h.in)
 
 dnl XE_APPEND(value, varname)
 define([XE_APPEND],[[$2]="$[$2] [$1]"])
@@ -73,11 +73,11 @@ sinclude(binreloc.m4)
 
 dnl ############################# ADD TESTS BELOW ##############################
 
-AC_CANONICAL_BUILD
-CPU_TYPE=$build_cpu
+AC_CANONICAL_HOST
+CPU_TYPE=$host_cpu
 AC_SUBST(CPU_TYPE)
 
-case "$build" in
+case "$host" in
   aarch64-*-darwin*)
     VCPKG_TRIPLET=fb-arm64-osx
     ;;
@@ -118,7 +118,7 @@ STD_EDITLINE=false
 dnl Test for special ar options?
 AR_OPT_CHECK=false
 
-case "$build" in
+case "$host" in
   aarch64-*-darwin*)
     MAKEFILE_PREFIX=darwin_aarch64
     MAKEFILE_POSTFIX=darwin
@@ -176,7 +176,7 @@ dnl CPU_TYPE=ppc64
 
   amd64-*-freebsd* | x86_64*-*-freebsd* | x86_64*-*-k*bsd*-gnu)
     MAKEFILE_PREFIX=freebsd_amd64
-    case "$build" in
+    case "$host" in
         x86_64*-*-k*bsd-gnu)      # Debian/kFreeBSD
             PLATFORM=GENTOOFREEBSD
             INSTALL_PREFIX=linux
@@ -232,7 +232,7 @@ dnl CPU_TYPE=ppc64
 
   *-*-freebsd* | *-*-k*bsd*-gnu)
     MAKEFILE_PREFIX=freebsd
-    case "$build" in
+    case "$host" in
         *-*-k*bsd-gnu)      # Debian/kFreeBSD
             PLATFORM=GENTOOFREEBSD
             INSTALL_PREFIX=linux
@@ -534,7 +534,7 @@ dnl CPU_TYPE=ppc64
     ;;
 
   *)
-    AC_MSG_ERROR(unsupported platform ${build})
+    AC_MSG_ERROR(unsupported platform ${host})
     ;;
 esac
 
@@ -651,7 +651,7 @@ CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
 LIBS="$LIBS $PTHREAD_LIBS"
 
-case "$build" in
+case "$host" in
   *-*-darwin*)
     CFLAGS="$CFLAGS -I${VCPKG_INSTALLED}/include"
     CXXFLAGS="$CXXFLAGS -nostdinc++ -isystem ${VCPKG_INSTALLED}/include/c++/v1 -I${VCPKG_INSTALLED}/include"
@@ -1272,14 +1272,14 @@ AC_SUBST(CAS_OPTIONS)
 dnl ##################### DO NOT ADD ANY TESTS BELOW ###########################
 
 dnl The following file defines the version number strings. Specially for install/uninstall routines
-CXX="$CXX" . ./src/misc/writeBuildNum.sh
+CXX="$CXX" . "$srcdir/src/misc/writeBuildNum.sh"
 
 AC_SUBST(FIREBIRD_VERSION)
 AC_SUBST(FIREBIRD_PACKAGE_VERSION)
 AC_SUBST(FB_BUILD_NUM, $BuildNum)
 
 BUILD_ROOT_DIR=`pwd`
-SRC_ROOT=$BUILD_ROOT_DIR/src
+SRC_ROOT=$srcdir/src
 GEN_ROOT=$BUILD_ROOT_DIR/gen
 NEW_FIREBIRD_DIR=$GEN_ROOT/firebird
 
@@ -1293,6 +1293,9 @@ FB_TARGETS="Debug Release"
 test "x$CROSS" = "x" || FB_TARGETS="$FB_TARGETS Native"
 
 AC_CONFIG_COMMANDS(,,[
+
+mkdir -p src/dsql
+mkdir -p src/include/gen
 
 FB_TARGETS="$FB_TARGETS"
 for fb_tgt in \$FB_TARGETS; do
@@ -1330,7 +1333,7 @@ dnl # output
 		fi
 	fi
 
-  case "$build" in
+  case "$host" in
     *-*-darwin*)
       cp -a $VCPKG_INSTALLED/lib/libicu* gen/\$fb_tgt/firebird/lib/
       install_name_tool -id @rpath/lib/libicuuc.dylib gen/\$fb_tgt/firebird/lib/libicuuc.dylib
@@ -1343,19 +1346,19 @@ dnl # output
   esac
 
 dnl ### TEMP ### directories for generated .cpp, .o and .d by module name
-	for src_dir in `cd src; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
+	for src_dir in `cd "$srcdir/src"; ls -R -1 * | grep : | tr -d : | tr "\n" " "; cd ..`; do
     	mkdir -p temp/\$fb_tgt/\$src_dir
 	done
 
-	for src_dir in `ls -R -1 examples | grep : | tr -d : | tr "\n" " "`; do
+	for src_dir in `cd "$srcdir/examples"; ls -R -1 * | grep : | tr -d : | tr "\n" " "`; do
    		mkdir -p temp/\$fb_tgt/\$src_dir
 	done
 
-	src/misc/writeBuildNum.sh createMakeVersion gen/Make.Version
+	"$srcdir/src/misc/writeBuildNum.sh" createMakeVersion gen/Make.Version
 done
 
 dnl # rebuild version header if needed
-./src/misc/writeBuildNum.sh rebuildHeader
+"$srcdir/src/misc/writeBuildNum.sh" rebuildHeader
 
 ])
 

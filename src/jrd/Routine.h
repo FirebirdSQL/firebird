@@ -26,8 +26,13 @@
 #include "../common/classes/BlrReader.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"
+#include "../jrd/CacheVector.h"
+#include "../jrd/Resources.h"
 #include "../common/classes/NestConst.h"
 #include "../common/MsgMetadata.h"
+#include "../common/classes/auto.h"
+#include "../common/ThreadStart.h"
+#include "../common/sha2/sha2.h"
 
 namespace Jrd
 {
@@ -39,28 +44,60 @@ namespace Jrd
 	class Parameter;
 	class UserId;
 
-	class Routine : public Firebird::PermanentStorage
+	class RoutinePermanent : public Firebird::PermanentStorage
+	{
+	public:
+		explicit RoutinePermanent(thread_db* tdbb, MemoryPool& p, MetaId metaId, NoData);
+
+		explicit RoutinePermanent(MemoryPool& p)
+			: PermanentStorage(p),
+			  id(~0),
+			  name(p),
+			  securityName(p),
+			  subRoutine(true)
+		{ }
+
+		MetaId getId() const
+		{
+			fb_assert(!subRoutine);
+			return id;
+		}
+
+		static bool destroy(thread_db* tdbb, RoutinePermanent* routine);
+		void releaseLock(thread_db*) { }
+
+		const QualifiedName& getName() const noexcept { return name; }
+		void setName(const QualifiedName& value) { name = value; }
+
+		const QualifiedName& getSecurityName() const noexcept { return securityName; }
+		void setSecurityName(const QualifiedName& value) { securityName = value; }
+
+		bool hasData() const { return name.hasData(); }
+
+		bool isSubRoutine() const { return subRoutine; }
+		void setSubRoutine(bool value) { subRoutine = value; }
+
+	public:
+		MetaId id;							// routine ID
+		QualifiedName name;					// routine name
+		QualifiedName securityName;				// security class name
+		bool subRoutine;                    // Is this a subroutine?
+		MetaName owner;
+	};
+
+	class Routine : public ObjectBase
 	{
 	protected:
 		explicit Routine(MemoryPool& p)
-			: PermanentStorage(p),
-			  id(0),
-			  name(p),
-			  securityName(p),
-			  statement(NULL),
-			  subRoutine(false),
-			  implemented(true),
+			: statement(NULL),
+			  implemented(false),
 			  defined(true),
 			  defaultCount(0),
 			  inputFormat(NULL),
 			  outputFormat(NULL),
 			  inputFields(p),
 			  outputFields(p),
-			  flags(0),
-			  useCount(0),
-			  intUseCount(0),
-			  alterCount(0),
-			  existenceLock(NULL),
+			  flReload(false),
 			  invoker(NULL)
 		{
 		}
@@ -71,44 +108,18 @@ namespace Jrd
 		}
 
 	public:
-		static constexpr USHORT FLAG_SCANNED			= 1;	// Field expressions scanned
-		static constexpr USHORT FLAG_OBSOLETE			= 2;	// Procedure known gonzo
-		static constexpr USHORT FLAG_BEING_SCANNED		= 4;	// New procedure needs dependencies during scan
-		static constexpr USHORT FLAG_BEING_ALTERED		= 8;	// Procedure is getting altered
-															// This flag is used to make sure that MET_remove_routine
-															// does not delete and remove procedure block from cache
-															// so dfw.epp:modify_procedure() can flip procedure body without
-															// invalidating procedure pointers from other parts of metadata cache
-		static constexpr USHORT FLAG_CHECK_EXISTENCE	= 16;	// Existence lock released
-		static constexpr USHORT FLAG_RELOAD		 		= 32;	// Recompile before execution
-		static constexpr USHORT FLAG_CLEARED			= 64;	// Routine cleared but not removed from cache
-
-		static constexpr USHORT MAX_ALTER_COUNT = 64;	// Number of times an in-cache routine can be altered
-
 		static Firebird::MsgMetadata* createMetadata(
 			const Firebird::Array<NestConst<Parameter> >& parameters, bool isExtern);
 		static Format* createFormat(MemoryPool& pool, Firebird::IMessageMetadata* params, bool addEof);
 
 	public:
-		USHORT getId() const noexcept
-		{
-			fb_assert(!subRoutine);
-			return id;
-		}
+		static void destroy(thread_db* tdbb, Routine* routine);
 
-		void setId(USHORT value) noexcept { id = value; }
-
-		const QualifiedName& getName() const noexcept { return name; }
-		void setName(const QualifiedName& value) { name = value; }
-
-		const QualifiedName& getSecurityName() const noexcept { return securityName; }
-		void setSecurityName(const QualifiedName& value) { securityName = value; }
+		const QualifiedName& getName() const noexcept { return getPermanent()->getName(); }
+		MetaId getId() const noexcept { return getPermanent()->getId(); }
 
 		/*const*/ Statement* getStatement() const noexcept { return statement; }
 		void setStatement(Statement* value);
-
-		bool isSubRoutine() const noexcept { return subRoutine; }
-		void setSubRoutine(bool value) noexcept { subRoutine = value; }
 
 		bool isImplemented() const noexcept { return implemented; }
 		void setImplemented(bool value) noexcept { implemented = value; }
@@ -116,7 +127,7 @@ namespace Jrd
 		bool isDefined() const noexcept { return defined; }
 		void setDefined(bool value) noexcept { defined = value; }
 
-		void checkReload(thread_db* tdbb);
+		virtual void checkReload(thread_db* tdbb) const = 0;
 
 		USHORT getDefaultCount() const noexcept { return defaultCount; }
 		void setDefaultCount(USHORT value) noexcept { defaultCount = value; }
@@ -126,6 +137,8 @@ namespace Jrd
 
 		const Format* getOutputFormat() const noexcept { return outputFormat; }
 		void setOutputFormat(const Format* value) noexcept { outputFormat = value; }
+
+		bool hash(thread_db* tdbb, Firebird::sha512& digest);
 
 		const Firebird::Array<NestConst<Parameter> >& getInputFields() const noexcept
 		{
@@ -142,62 +155,112 @@ namespace Jrd
 		void parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id, bid* blobDbg);
 		void parseMessages(thread_db* tdbb, CompilerScratch* csb, Firebird::BlrReader blrReader);
 
-		bool isUsed() const noexcept
-		{
-			return useCount != 0;
-		}
-
-		void addRef() noexcept
-		{
-			++useCount;
-		}
-
 		virtual void releaseFormat()
 		{
 		}
 
-		void release(thread_db* tdbb);
+		void afterDecrement(Jrd::thread_db*);
 		void releaseStatement(thread_db* tdbb);
-		void remove(thread_db* tdbb);
-		virtual void releaseExternal() {};
+		//void remove(thread_db* tdbb);
+		virtual void releaseExternal()
+		{
+		}
+
+		void sharedCheckUnlock(thread_db* tdbb);
 
 	public:
+		virtual RoutinePermanent* getPermanent() const noexcept = 0;	// Permanent part of data
 		virtual int getObjectType() const noexcept = 0;
 		virtual SLONG getSclType() const noexcept = 0;
-		virtual bool checkCache(thread_db* tdbb) const = 0;
-		virtual void clearCache(thread_db* tdbb) = 0;
 
 	private:
-		USHORT id;							// routine ID
-		QualifiedName name;				// routine name
-		QualifiedName securityName;		// security class name
-		Statement* statement;			// compiled routine statement
-		bool subRoutine;					// Is this a subroutine?
-		bool implemented;					// Is the packaged routine missing the body/entrypoint?
-		bool defined;						// UDF has its implementation module available
-		USHORT defaultCount;				// default input arguments
-		const Format* inputFormat;			// input format
-		const Format* outputFormat;			// output format
+		USHORT id;					// routine ID
+		Statement* statement;		// compiled routine statement
+		bool implemented;			// Is the packaged routine missing the body/entrypoint?
+		bool defined;				// UDF has its implementation module available
+		USHORT defaultCount;		// default input arguments
+		const Format* inputFormat;	// input format
+		const Format* outputFormat;	// output format
 		Firebird::Array<NestConst<Parameter> > inputFields;		// array of field blocks
 		Firebird::Array<NestConst<Parameter> > outputFields;	// array of field blocks
 
-	protected:
-
-		virtual bool reload(thread_db* tdbb) = 0;
+	public:
+		bool flReload;
+		bool compiling = false;		// Do not try to load routine's BLR in scan/reload during compile
 
 	public:
-		USHORT flags;
-		USHORT useCount;		// requests compiled with routine
-		SSHORT intUseCount;		// number of routines compiled with routine, set and
-								// used internally in the MET_clear_cache routine
-								// no code should rely on value of this field
-								// (it will usually be 0)
-		USHORT alterCount;		// No. of times the routine was altered
-		Lock* existenceLock;	// existence lock, if any
-
-		MetaName owner;
 		Jrd::UserId* invoker;		// Invoker ID
 	};
+
+
+	template <class R>
+	class SubRoutine				// supports NestConst logic
+	{
+	public:
+		SubRoutine()
+			: routine(), subroutine(nullptr)
+		{ }
+
+		SubRoutine(const CachedResource<R, RoutinePermanent>& r)
+			: routine(r), subroutine(nullptr)
+		{ }
+
+		SubRoutine(R* r)
+			: routine(), subroutine(r)
+		{ }
+
+		SubRoutine& operator=(const CachedResource<R, RoutinePermanent>& r)
+		{
+			routine = r;
+			subroutine = nullptr;
+			return *this;
+		}
+
+		SubRoutine& operator=(R* r)
+		{
+			routine.clear();
+			subroutine = r;
+			return *this;
+		}
+
+		template <typename T>
+		R* operator()(T t)
+		{
+			return isSubRoutine() ? subroutine : routine.isSet() ? routine(t) : nullptr;
+		}
+
+		template <typename T>
+		const R* operator()(T t) const
+		{
+			return isSubRoutine() ? subroutine : routine.isSet() ? routine(t) : nullptr;
+		}
+
+		CacheElement<R, RoutinePermanent>* operator()()
+		{
+			return isSubRoutine() ? subroutine->getPermanent() : routine.isSet() ? routine() : nullptr;
+		}
+
+		const CacheElement<R, RoutinePermanent>* operator()() const
+		{
+			return isSubRoutine() ? subroutine->getPermanent() : routine.isSet() ? routine() : nullptr;
+		}
+
+		bool isSubRoutine() const
+		{
+			return subroutine != nullptr;
+		}
+
+		operator bool() const
+		{
+			fb_assert((routine.isSet() ? 1 : 0) + (subroutine ? 1 : 0) < 2);
+			return routine.isSet() || subroutine;
+		}
+
+	private:
+		CachedResource<R, RoutinePermanent> routine;
+		R* subroutine;
+	};
+
 }
 
 #endif // JRD_ROUTINE_H

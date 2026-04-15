@@ -33,6 +33,7 @@ fb_install_prefix=@prefix@
 # Making an assumption that this program is being run in the gen directory
 BuildRootDir=..
 BuiltFBDir=Release/firebird  # Where the just build fb exists.
+BuildTarget=$(basename "$(dirname "$BuiltFBDir")")
 TargetDir=buildroot    # Where we want to build the install image
 SecurityDatabase=security6.fdb
 TomMathBuild="@TOMMATH_BUILD@"
@@ -264,11 +265,11 @@ copyFiles() {
 
 	if [ "$TomMathBuild" = "Y" ]; then
 		makeDirs @FB_LIBDIR@/.tm
-		cp -df $BuildRootDir/extern/libtommath/.libs/libtommath.so* ${TargetDir}@FB_LIBDIR@/.tm
+		cp -df $BuildRootDir/temp/extern/libtommath/$BuildTarget/.libs/libtommath.so* ${TargetDir}@FB_LIBDIR@/.tm
 	fi
 
 	if [ "$TomCryptBuild" = "Y" ]; then
-		cp -df $BuildRootDir/extern/libtomcrypt/.libs/libtomcrypt.so* ${TargetDir}@FB_LIBDIR@
+		cp -df $BuildRootDir/temp/extern/libtomcrypt/$BuildTarget/.libs/libtomcrypt.so* ${TargetDir}@FB_LIBDIR@
 	fi
 
 	chmod 0755 ${TargetDir}@FB_LIBDIR@/*.so*
