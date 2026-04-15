@@ -65,6 +65,7 @@
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../dsql/DsqlStatementCache.h"
+#include "../jrd/BulkInsert.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -773,6 +774,349 @@ bool BlockNode::testAndFixupError(thread_db* tdbb, Request* request, const Excep
     }
 
 	return found;
+}
+
+
+//--------------------
+
+
+static RegisterNode<BulkInsertNode> regBulkInsertNode({blr_bulk_insert});
+
+DmlNode* BulkInsertNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
+{
+	auto node = FB_NEW_POOL(pool) BulkInsertNode(pool);
+
+	if (csb->csb_blr_reader.peekByte() == blr_marks)
+		/*node->marks |= */PAR_marks(csb);
+
+	// Should be enough for cursor stability
+	AutoSetRestore<StmtNode*> autoCurrentDMLNode(&csb->csb_currentDMLNode, node);
+
+	//AutoSetRestore<ForNode*> autoCurrentForNode(&csb->csb_currentForNode, node);
+
+	const auto rseBlr = csb->csb_blr_reader.peekByte();
+
+	switch (rseBlr)
+	{
+	case blr_null:
+		csb->csb_blr_reader.getByte();
+		break;		// no RSE
+
+	case blr_rse:
+	case blr_lateral_rse:
+	case blr_singular:
+	case blr_scrollable:
+		node->rse = PAR_rse(tdbb, csb);
+		break;
+
+	default:
+		node->rse = PAR_rse(tdbb, csb, blrOp);
+		break;
+	}
+
+	const UCHAR* blrPos = csb->csb_blr_reader.getPos();
+
+	node->target = PAR_parseRecordSource(tdbb, csb);
+
+	if (!nodeIs<RelationSourceNode>(node->target) &&
+		!nodeIs<LocalTableSourceNode>(node->target))
+	{
+		csb->csb_blr_reader.setPos(blrPos);
+		PAR_syntax_error(csb, "relation source");
+	}
+
+	node->statement = PAR_parse_stmt(tdbb, csb);
+
+	return node;
+}
+
+string BulkInsertNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, rse);
+	NODE_PRINT(printer, target);
+	NODE_PRINT(printer, statement);
+	NODE_PRINT(printer, cursor);
+
+	return "BulkInsertNode";
+}
+
+BulkInsertNode* BulkInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(false); // not implemented
+	return nullptr;
+}
+
+void BulkInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(false); // not implemented
+}
+
+BulkInsertNode* BulkInsertNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (rse)
+	{
+		AutoSetRestore<bool> autoImplicitCursor(&csb->csb_implicit_cursor, true);
+		doPass1(tdbb, csb, rse.getAddress());
+	}
+
+	preprocessAssignments(tdbb, csb, target->getStream(), nodeAs<CompoundStmtNode>(statement), nullptr);
+	doPass1(tdbb, csb, statement.getAddress());
+
+	const StreamType stream = target->getStream();
+	auto& tail = csb->csb_rpt[stream];
+	tail.csb_flags |= csb_store;
+
+	jrd_rel* const relation = tail.csb_relation(tdbb);
+	if (relation)
+	{
+		pass1Update(tdbb, csb, relation,
+			relation->rel_triggers[TRIGGER_PRE_STORE],	// unused inside pass1Update
+			stream, stream, SCL_insert, nullptr, 0, 0);
+	}
+
+	return this;
+}
+
+BulkInsertNode* BulkInsertNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (rse)
+	{
+		AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+
+		StreamList streams;
+		streams.add(target->getStream());
+
+		StreamStateHolder stateHolder(csb, streams);
+		stateHolder.activate();
+
+		rse->pass2Rse(tdbb, csb);
+		doPass2(tdbb, csb, statement.getAddress(), this);
+
+		RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse.getObject());
+
+		cursor = FB_NEW_POOL(*tdbb->getDefaultPool())
+			Cursor(csb, rsb, rse, true, line, column, "");
+
+		csb->csb_fors.add(cursor);
+	}
+	else
+		doPass2(tdbb, csb, statement.getAddress(), this);
+
+	impureOffset = csb->allocImpure<Impure>();
+
+	return this;
+}
+
+const StmtNode* BulkInsertNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+{
+	if (request->req_operation == Request::req_evaluate)
+	{
+		if (cursor)
+			fromCursor(tdbb, request);
+		else
+			fromMessage(tdbb, request);
+
+		request->req_operation = Request::req_return;
+	}
+
+	return parentStmt;
+}
+
+void BulkInsertNode::fromCursor(thread_db* tdbb, Request* request) const
+{
+	jrd_tra* transaction = request->req_transaction;
+
+	const StreamType stream = target->getStream();
+	record_param* rpb = &request->req_rpb[stream];
+	jrd_rel* relation = rpb->rpb_relation;
+	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+
+	const Format* format = relation->currentFormat(tdbb);
+	auto record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+
+	rpb->rpb_address = record->getData();
+	rpb->rpb_length = format->fmt_length;
+	rpb->rpb_format_number = format->fmt_version;
+
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+
+	HalfStaticArray<dsc, 16> toDescs(*tdbb->getDefaultPool(), compound->statements.getCount());
+	prepareTarget(tdbb, request, toDescs.begin());
+
+	cursor->open(tdbb);
+	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
+	fb_assert(bulk);
+
+	Cleanup clean([&] {
+		cursor->close(tdbb);
+		transaction->finiBulkInsert(tdbb, false);
+	});
+
+	while (cursor->fetchNext(tdbb))
+	{
+		rpb->rpb_number.setValue(BOF_NUMBER);
+		record->nullify();
+		record->setTransactionNumber(transaction->tra_number);
+
+		assignValues(tdbb, request, relation, record, toDescs.begin());
+		cleanupRpb(tdbb, rpb);
+
+		bulk->putRecord(tdbb, rpb, transaction);
+		REPL_store(tdbb, rpb, transaction);
+
+		JRD_reschedule(tdbb);
+	}
+
+	transaction->finiBulkInsert(tdbb, true);
+}
+
+void BulkInsertNode::fromMessage(thread_db* tdbb, Request* request) const
+{
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	jrd_tra* transaction = request->req_transaction;
+
+	const StreamType stream = target->getStream();
+	record_param* rpb = &request->req_rpb[stream];
+
+	jrd_rel* relation = rpb->rpb_relation;
+
+	const Format* format = relation->currentFormat(tdbb);
+	auto record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+
+	rpb->rpb_address = record->getData();
+	rpb->rpb_length = format->fmt_length;
+	rpb->rpb_format_number = format->fmt_version;
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	record->nullify();
+	record->setTransactionNumber(transaction->tra_number);
+
+	if (!(impure->flags & INIT_DONE))
+	{
+		RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+
+		auto compound = nodeAs<CompoundStmtNode>(statement);
+		const auto count = compound->statements.getCount();
+
+		impure->flags = INIT_DONE;
+		impure->descs = FB_NEW_POOL(*request->req_pool) Array<dsc>(*request->req_pool, count);
+
+		prepareTarget(tdbb, request, impure->descs->getBuffer(count));
+	}
+	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
+	assignValues(tdbb, request, relation, record, impure->descs->begin());
+	cleanupRpb(tdbb, rpb);
+
+	bulk->putRecord(tdbb, rpb, transaction);
+	REPL_store(tdbb, rpb, transaction);
+}
+
+void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const
+{
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+	fb_assert(compound->onlyAssignments);
+
+	dsc* toDesc = descs;
+	for (auto stmt : compound->statements)
+	{
+		auto assign = nodeAs<AssignmentNode>(stmt);
+
+		// Get descriptor of target field
+		const auto* toField = nodeAs<FieldNode>(assign->asgnTo);
+		*toDesc = *EVL_assign_to(tdbb, toField);
+		toDesc++;
+	}
+}
+
+void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const
+{
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+
+	// assignments
+	for (auto stmt : compound->statements)
+	{
+		auto assign = nodeAs<AssignmentNode>(stmt);
+		//EXE_assignment(tdbb, assign);
+
+		if (assign->hasLineColumn)
+		{
+			request->req_src_line = assign->line;
+			request->req_src_column = assign->column;
+		}
+
+		const FieldNode* toField = nodeAs<FieldNode>(assign->asgnTo);
+
+		fb_assert(record == request->req_rpb[toField->fieldStream].rpb_record);
+
+		dsc* from_desc = EVL_expr(tdbb, request, assign->asgnFrom);
+
+		if (!from_desc)
+		{
+			const auto relField = (*relation->rel_fields)[toField->fieldId];
+			if (relField->fld_not_null)
+			{
+				string name;
+				auto& rel_name = relation->getName();
+
+				if (!rel_name.isEmpty())
+					name.printf("%s.\"%s\"", rel_name.toQuotedString(), relField->fld_name.c_str());
+				else
+					name = relField->fld_name.toQuotedString();
+
+				if (name.isEmpty())
+					name = UNKNOWN_STRING_MARK;
+
+				// validation error for column @1, value \"@2\"
+				ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(name) << Arg::Str(NULL_STRING_MARK));
+			}
+
+			record->setNull(toField->fieldId);
+			to_desc->dsc_flags |= DSC_null;
+		}
+		else
+		{
+			record->clearNull(toField->fieldId);
+
+			if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+			{
+				// ASF: Don't let MOV_move call blb::move because MOV
+				// will not pass the destination field to blb::move.
+
+				blb::move(tdbb, from_desc, to_desc, relation, record, toField->fieldId, true);
+			}
+			else if (!DSC_EQUIV(from_desc, to_desc, false))
+			{
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
+			{
+				// Force slow move to properly handle the case when source string is provided with real length instead of padded length
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (from_desc->dsc_dtype == dtype_short)
+			{
+				*((SSHORT*) to_desc->dsc_address) = *((SSHORT*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_long)
+			{
+				*((SLONG*) to_desc->dsc_address) = *((SLONG*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_int64)
+			{
+				*((SINT64*) to_desc->dsc_address) = *((SINT64*) from_desc->dsc_address);
+			}
+			else
+			{
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+			}
+
+			to_desc->dsc_flags &= ~DSC_null;
+		}
+
+		to_desc++;
+	}
 }
 
 

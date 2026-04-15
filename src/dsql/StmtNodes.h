@@ -44,6 +44,7 @@ class RecordBuffer;
 class RelationSourceNode;
 class SelectNode;
 class GeneratorItem;
+class BulkInsert;
 
 
 class ExceptionItem final : public Firebird::PermanentStorage, public Printable
@@ -178,6 +179,48 @@ private:
 public:
 	NestConst<StmtNode> action;
 	NestConst<CompoundStmtNode> handlers;
+};
+
+
+class BulkInsertNode : public TypedNode<StmtNode, StmtNode::TYPE_BULK_INSERT>
+{
+public:
+	explicit BulkInsertNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_BULK_INSERT>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BulkInsertNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	BulkInsertNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	BulkInsertNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
+
+public:
+	NestConst<RseNode> rse = nullptr;					// source RSE
+	NestConst<RecordSourceNode> target = nullptr;		// target relation
+	NestConst<StmtNode> statement = nullptr;			// assignments: field = value [, ...]
+	NestConst<Cursor> cursor = nullptr;					// source cursor
+
+private:
+	// Impure flags
+	static constexpr int INIT_DONE = 0x01;
+
+	struct Impure
+	{
+		Firebird::Array<dsc>* descs;
+		int flags;
+	};
+
+	void fromCursor(thread_db* tdbb, Request* request) const;
+	void fromMessage(thread_db* tdbb, Request* request) const;
+
+	void prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const;
+	void assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const;
 };
 
 
