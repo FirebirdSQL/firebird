@@ -1061,7 +1061,7 @@ void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* re
 				auto& rel_name = relation->getName();
 
 				if (!rel_name.isEmpty())
-					name.printf("%s.\"%s\"", rel_name.toQuotedString(), relField->fld_name.c_str());
+					name.printf("%s.\"%s\"", rel_name.toQuotedString().c_str(), relField->fld_name.c_str());
 				else
 					name = relField->fld_name.toQuotedString();
 
