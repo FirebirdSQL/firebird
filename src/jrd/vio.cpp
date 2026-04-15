@@ -7330,10 +7330,8 @@ void VIO_update_in_place(thread_db* tdbb,
 	{
 		temp2 = *org_rpb;
 		temp2.rpb_record = gc_rec = relation->getGCRecord(tdbb);
-		temp2.rpb_page = org_rpb->rpb_b_page;
-		temp2.rpb_line = org_rpb->rpb_b_line;
 
-		if (!DPM_fetch(tdbb, &temp2, LCK_read))
+		if (!DPM_fetch_back(tdbb, &temp2, LCK_read, -1))
 			BUGCHECK(291);	 // msg 291 cannot find record back version
 
 		VIO_data(tdbb, &temp2, relation->rel_pool);
@@ -7343,11 +7341,13 @@ void VIO_update_in_place(thread_db* tdbb,
 		if (temp2.rpb_prior)
 			temp2.rpb_flags |= rpb_delta;
 
-		temp2.rpb_number = org_rpb->rpb_number;
 		DPM_store(tdbb, &temp2, *stack, DPM_secondary);
 
 		const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
 		stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
+
+		if (!DPM_get(tdbb, org_rpb, LCK_write))
+			BUGCHECK(186);	// msg 186 record disappeared
 	}
 
 	if (prior)
