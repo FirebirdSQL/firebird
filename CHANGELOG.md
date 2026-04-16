@@ -78,6 +78,9 @@
 * [#8105](https://github.com/FirebirdSQL/firebird/issues/8105): Master database could miss replication segments on Windows Classic Server  
   Contributor(s): Vlad Khorsun
 
+* [GHSA-7pxc-h3rv-r257](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-7pxc-h3rv-r257): Path traversal when declaring external routine (CVE-2026-40342)  
+  Contributor(s): VladimirEliTokarev, Alexander Peshkov
+
 * [GHSA-g99w-prq5-29c6](https://github.com/FirebirdSQL/firebird/security/advisories/GHSA-g99w-prq5-29c6): DoS via malicious slice descriptor in the slice packet (CVE-2026-35215)  
   Contributor(s): Artyom Ivanov, Alexander Peshkov
 
