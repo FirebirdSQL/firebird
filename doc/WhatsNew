@@ -42,6 +42,10 @@
         Connection error via Loopback provider if it's the first in the Providers parameter  
       Contributor(s): Alexander Peshkov
 
+    * Bugfix for vulnerability GHSA-7pxc-h3rv-r257
+        Path traversal when declaring external routine (CVE-2026-40342)  
+      Contributor(s): VladimirEliTokarev, Alexander Peshkov
+
     * Bugfix for vulnerability GHSA-g99w-prq5-29c6
         DoS via malicious slice descriptor in the slice packet (CVE-2026-35215)  
       Contributor(s): Artyom Ivanov, Alexander Peshkov
