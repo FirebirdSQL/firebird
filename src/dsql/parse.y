@@ -7975,7 +7975,7 @@ update_searched
 			ModifyNode* node = $$ = newNode<ModifyNode>();
 			node->dsqlRelation = $2;
 		}
-			SET ins_column_parens_opt(NOTRIAL(&$3->targetList))
+			SET ins_column_parens(NOTRIAL(&$3->targetList))
 			'=' value_or_default
 			where_clause
 			plan_clause
