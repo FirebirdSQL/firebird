@@ -140,6 +140,7 @@
 #define blr_receive_batch	(unsigned char)32
 
 // unused code: 33
+#define blr_bulk_insert	(unsigned char)33
 
 #define blr_add			(unsigned char)34
 #define blr_subtract		(unsigned char)35

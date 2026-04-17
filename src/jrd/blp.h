@@ -58,7 +58,7 @@ static inline constexpr struct
 	{"minimum", two},	// 30
 	{"total", two},
 	{"receive_batch", byte_verb},
-	{NULL, NULL},
+	{"bulk_insert", three},
 	{"add", two},
 	{"subtract", two},
 	{"multiply", two},

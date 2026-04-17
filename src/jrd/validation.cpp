@@ -651,6 +651,13 @@ static void explain_pp_bits(const UCHAR bits, Firebird::string& names)
 			names.append(", ");
 		names.append("empty");
 	}
+
+	if (bits & ppg_dp_reserved)
+	{
+		if (!names.empty())
+			names.append(", ");
+		names.append("reserved");
+	}
 }
 
 
