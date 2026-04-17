@@ -124,7 +124,8 @@ enum rec_type {
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
 	rec_pub_table,			// Publication table
-	rec_schema				// Schema
+	rec_schema,				// Schema
+	rec_constants			// Constants
 };
 
 
@@ -701,6 +702,16 @@ enum att_type {
 	att_schema_security_class,
 	att_schema_owner_name,
 	att_schema_description,
+
+	// Constants
+	att_constant_name = SERIES,
+	att_constant_package,
+	att_constant_field_source,
+	att_constant_private_flag,
+	att_constant_blr,
+	att_constant_source,
+	att_constant_schema_name,
+	att_constant_description,
 };
 
 

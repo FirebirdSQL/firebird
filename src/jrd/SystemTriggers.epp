@@ -1606,19 +1606,26 @@ void afterInsertRelation(thread_db* tdbb, Record* record)
 
 }
 
+template<USHORT Field, class CachedType, class IdType = MetaId>
+void populateCache(thread_db* tdbb, Record* record)
+{
+	if (!tdbb->getAttachment()->isRWGbak())
+		return;
+
+	dsc desc;
+	const bool idSet = EVL_field(nullptr, record, Field, &desc);
+	fb_assert(idSet);
+	if (!idSet)
+		return;
+
+	const IdType id = IdType(MOV_get_long(tdbb, &desc, 0));
+	MetadataCache::newVersion<CachedType>(tdbb, id);
+}
+
+
 void afterInsertProcedure(thread_db* tdbb, Record* record)
 {
-	if (tdbb->getAttachment()->isRWGbak())
-	{
-		dsc desc;
-		bool idSet = EVL_field(nullptr, record, f_prc_id, &desc);
-		fb_assert(idSet);
-		if (!idSet)
-			return;
-
-		MetaId id = MetaId(MOV_get_long(tdbb, &desc, 0));
-		MetadataCache::newVersion<Cached::Procedure>(tdbb, id);
-	}
+	populateCache<f_prc_id, Cached::Procedure>(tdbb, record);
 }
 
 void afterUpdateProcedure(thread_db* tdbb, Record* orgRecord, Record* newRecord)
@@ -1628,17 +1635,7 @@ void afterUpdateProcedure(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 
 void afterInsertFunction(thread_db* tdbb, Record* record)
 {
-	if (tdbb->getAttachment()->isRWGbak())
-	{
-		dsc desc;
-		bool idSet = EVL_field(nullptr, record, f_fun_id, &desc);
-		fb_assert(idSet);
-		if (!idSet)
-			return;
-
-		MetaId id = MetaId(MOV_get_long(tdbb, &desc, 0));
-		MetadataCache::newVersion<Cached::Function>(tdbb, id);
-	}
+	populateCache<f_fun_id, Cached::Function>(tdbb, record);
 }
 
 void afterUpdateFunction(thread_db* tdbb, Record* orgRecord, Record* newRecord)
@@ -1709,17 +1706,7 @@ void beforeInsertCollation(thread_db* tdbb, Record* record, jrd_rel* relation)
 
 void afterInsertCollation(thread_db* tdbb, Record* record)
 {
-	if (tdbb->getAttachment()->isRWGbak())
-	{
-		dsc desc;
-		bool idSet = EVL_field(nullptr, record, f_coll_cs_id, &desc);
-		fb_assert(idSet);
-		if (!idSet)
-			return;
-
-		CSetId csId = CSetId(MOV_get_long(tdbb, &desc, 0));
-		MetadataCache::newVersion<Cached::CharSet>(tdbb, csId);
-	}
+	populateCache<f_coll_cs_id, Cached::CharSet, CSetId>(tdbb, record);
 }
 
 }	// anonymous
@@ -1821,6 +1808,10 @@ void SystemTriggers::executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relati
 
 		case rel_funs:
 			afterInsertFunction(tdbb, record);
+			break;
+
+		case rel_packages:
+			populateCache<f_pkg_id, Cached::Package>(tdbb, record);
 			break;
 	}
 }

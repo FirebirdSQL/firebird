@@ -491,6 +491,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_VIEWS("VIEWS");
 	static constexpr std::string_view TOKEN_WIRE_STATISTICS("WIRE_STATISTICS");
 	static constexpr std::string_view TOKEN_WIRE_STATS("WIRE_STATS");
+	static constexpr std::string_view TOKEN_CONSTANTS("CONSTANTS");
 
 	switch (const auto showCommandToken = lexer.getToken(); showCommandToken.type)
 	{
@@ -654,6 +655,22 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 			{
 				if (parseEof())
 					return ShowWireStatsNode();
+			}
+			else if (text.length() >= 4 && TOKEN_CONSTANTS.find(text) == 0)
+			{
+				ShowConstantsNode node;
+				node.name = parseQualifiedName(true);
+				if (node.name->package.isEmpty())
+				{
+					// It is expecting to get package = <PACKAGE> and object =<CONSTANT>
+					// But it is getting package = <SCHEMA> and object = <CONSTANT>
+					// Fix the name
+					node.name->package = node.name->schema;
+					node.name->schema = "";
+				}
+
+				if (parseEof())
+					return node;
 			}
 
 			break;

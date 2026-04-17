@@ -554,7 +554,14 @@ enum dfw_t : int {
 	dfw_set_linger,			// set database linger
 	dfw_clear_cache,		// clear user mapping cache
 	dfw_set_statistics,		// set statistics support
-	dfw_deps_to_disk		// store saved deps to disk
+	dfw_deps_to_disk,		// store saved deps to disk
+
+	// Constant
+	dfw_modify_package_constant,
+	dfw_delete_package_constant,
+
+	// Package
+	dfw_create_package
 };
 
 } //namespace Jrd

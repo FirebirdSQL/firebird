@@ -80,6 +80,7 @@
 #include "../jrd/ini.h"
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/ProtectRelations.h"
+#include "../dsql/PackageNodes.h"
 
 namespace Jrd {
 
@@ -131,16 +132,6 @@ static rel_t relationType(SSHORT relationTypeNull, SSHORT relationType) noexcept
 static void saveField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const MetaName& fieldName);
 static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	const QualifiedName& relationName, bool view, bool creating);
-static void updateRdbFields(const TypeClause* type,
-	SSHORT& fieldType,
-	SSHORT& fieldLength,
-	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
-	SSHORT& fieldScaleNull, SSHORT& fieldScale,
-	SSHORT& characterSetIdNull, SSHORT& characterSetId,
-	SSHORT& characterLengthNull, SSHORT& characterLength,
-	SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
-	SSHORT& collationIdNull, SSHORT& collationId,
-	SSHORT& segmentLengthNull, SSHORT& segmentLength);
 static ISC_STATUS getErrorCodeByObjectType(int obj_type);
 
 static constexpr const char* CHECK_CONSTRAINT_EXCEPTION = "check_constraint";
@@ -900,7 +891,7 @@ static dsql_rel* saveRelation(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 }
 
 // Update RDB$FIELDS received by reference.
-static void updateRdbFields(const TypeClause* type,
+void DdlNode::updateRdbFields(const TypeClause* type,
 	SSHORT& fieldType,
 	SSHORT& fieldLength,
 	SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
@@ -1508,6 +1499,19 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->resolveRoutineOrRelation(name, {objType});
 			break;
 
+		case obj_package_constant:
+		{
+			QualifiedName constantName(subName, name.schema, name.object); // name is a package
+			dsqlScratch->qualifyNewName(constantName); // Search for a schema
+
+			if (!PackageReferenceNode::constantExists(tdbb, transaction, constantName))
+			{
+				status_exception::raise(Arg::Gds(isc_bad_constant_name) << constantName.toQuotedString());
+			}
+			name = constantName;
+			break;
+		}
+
 		default:
 			dsqlScratch->qualifyExistingName(name, objType);
 			break;
@@ -1610,6 +1614,10 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 		case obj_package_header:
 			SCL_check_package(tdbb, name, SCL_alter);
+			break;
+
+		case obj_package_constant:
+			SCL_check_package(tdbb, name.getSchemaAndPackage(), SCL_alter);
 			break;
 
 		default:
@@ -1775,6 +1783,12 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
 			break;
 
+		case obj_package_constant:
+			tableClause = "rdb$constants";
+			columnClause = "rdb$constant_name";
+			status << Arg::Gds(isc_bad_constant_name) << Arg::Str(objNameStr);
+			break;
+
 		default:
 			fb_assert(false);
 			return;
@@ -1798,7 +1812,7 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			sql << "and" << subColumnClause << "=" << subName;
 	}
 
-	if (objType == obj_procedure || objType == obj_udf)
+	if (objType == obj_procedure || objType == obj_udf || objType == obj_package_constant)
 		sql << "and rdb$package_name is not distinct from nullif(" << name.package << ", '')";
 
 	if (addWhereClause)
@@ -11771,11 +11785,13 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		ValueExprNode* nameNode = fieldNode;
 		const char* aliasName = NULL;
 
-		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode))
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) || nodeIs<DsqlMapNode>(nameNode) ||
+			nodeAs<PackageReferenceNode>(nameNode))
 		{
 			DsqlAliasNode* aliasNode;
 			DsqlMapNode* mapNode;
 			DerivedFieldNode* derivedField;
+			PackageReferenceNode* referenceNode;
 
 			if ((aliasNode = nodeAs<DsqlAliasNode>(nameNode)))
 			{
@@ -11790,6 +11806,13 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				if (!aliasName)
 					aliasName = derivedField->name.c_str();
 				nameNode = derivedField->value;
+			}
+			else if ((referenceNode = nodeAs<PackageReferenceNode>(nameNode)))
+			{
+				if (!aliasName)
+					aliasName = referenceNode->getName();
+
+				nameNode = nullptr;
 			}
 		}
 
@@ -15759,6 +15782,21 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 			END_FOR
 			break;
 		}
+		case obj_package_constant:
+		{
+			static const CachedRequestId requestId;
+			AutoCacheRequest request(tdbb, requestId);
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				X IN RDB$CONSTANTS
+				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+					 X.RDB$PACKAGE_NAME EQ name.package.c_str() AND
+					 X.RDB$CONSTANT_NAME EQ name.object.c_str()
+			{
+				rc = true;
+			}
+			END_FOR
+			break;
+		}
 	}
 
 	return rc;
@@ -15970,6 +16008,11 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			if (!checkObjectExist(tdbb, transaction, QualifiedName(objName.schema), obj_schema))
 				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
 
+		case obj_package_constant:
+			if (!checkObjectExist(tdbb, transaction, objName, objType))
+				status_exception::raise(Arg::Gds(isc_dyn_constant_not_found) << objName.toQuotedString());
+			break;
+
 		default:
 			fb_assert(object == NULL || isDdlObject(objType));
 	}
@@ -16177,6 +16220,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					case obj_generator:
 					case obj_package_header:
 					case obj_schema:
+					case obj_package_constant:
 					{
 						checkGrantorCanGrantObject(tdbb, transaction, currentUser.c_str(), priv, objName, objType);
 						break;
@@ -17194,6 +17238,9 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_header:
 	case obj_package_body:
 		err_code = isc_package_name;
+		break;
+	case obj_package_constant:
+		err_code = isc_const_name;
 		break;
 	default:
 		fb_assert(false);

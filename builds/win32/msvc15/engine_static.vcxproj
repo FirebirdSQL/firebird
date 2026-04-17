@@ -41,6 +41,7 @@
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\SystemTriggers.cpp" />
     <ClCompile Include="..\..\..\gen\utilities\gstat\dba.cpp" />
+    <ClCompile Include="..\..\..\gen\jrd\Package.cpp" />
     <ClCompile Include="..\..\..\src\dsql\AggNodes.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BlrDebugWriter.cpp" />
     <ClCompile Include="..\..\..\src\dsql\BoolNodes.cpp" />
@@ -417,6 +418,7 @@
     <None Include="..\..\..\src\jrd\met.epp" />
     <None Include="..\..\..\src\jrd\scl.epp" />
     <None Include="..\..\..\src\jrd\SystemTriggers.epp" />
+    <None Include="..\..\..\src\jrd\Package.epp" />
     <None Include="..\..\..\src\utilities\gstat\dba.epp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
