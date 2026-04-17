@@ -606,13 +606,14 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					}
 					break;
 				}
-				case blr_rt_packaged_type:
+				case blr_rt_packaged_type_full:
 				// package type
 				{
 					if (itemInfo)
 						itemInfo->fullDomain = true;
 				}
 				// fall through
+				case blr_rt_packaged_type:
 				case blr_rt_type_of_table:
 				// type of table
 				{

@@ -688,7 +688,6 @@ bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const Quali
 		AND FLX.RDB$FIELD_NAME EQ PKGT.RDB$FIELD_SOURCE
 	{
 		found = true;
-		field->fullDomain = true;
 		field->length = FLX.RDB$FIELD_LENGTH;
 		field->scale = FLX.RDB$FIELD_SCALE;
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;

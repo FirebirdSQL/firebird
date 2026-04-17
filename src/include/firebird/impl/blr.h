@@ -81,8 +81,9 @@
 // rowtype subparameter codes
 #define blr_rt_full				(unsigned char)0	// fully described type
 #define blr_rt_packaged_type	(unsigned char)1	// package type
-#define blr_rt_type_of_table	(unsigned char)2	// type of table
-#define blr_rt_local_type		(unsigned char)3	// local type
+#define blr_rt_packaged_type_full	(unsigned char)2	// package type with constraints
+#define blr_rt_type_of_table	(unsigned char)3	// type of table
+#define blr_rt_local_type		(unsigned char)4	// local type
 
 // first sub parameter for blr_column_name* and blr_domain_name*
 #define blr_domain_type_of	(unsigned char)0
