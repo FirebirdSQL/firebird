@@ -418,3 +418,4 @@ FB_IMPL_MSG_NO_SYMBOL(GBAK, 419, "regular expression to skip schemas was already
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 420, "regular expression to include schemas was already set")
 FB_IMPL_MSG_SYMBOL(GBAK, 421, gbak_plugin_schema_migration, "migrating @1 plugin objects to schema @2")
 FB_IMPL_MSG_SYMBOL(GBAK, 422, gbak_plugin_schema_migration_err, "error migrating @1 plugin objects to schema @2. Plugin objects will be in inconsistent state:")
+FB_IMPL_MSG(GBAK, 423, gbak_backup_file_exists, -901, "00", "000", "backup file @1 already exists, use OVERWRITE to replace")
