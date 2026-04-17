@@ -3147,22 +3147,43 @@ package_type_subfield_definitions($parameters)
 
 %type <parameterClause> package_type_subfield_definition(<parametersClause>)
 package_type_subfield_definition($parameters)
-	: column_domain_or_non_array_type collate_clause default_par_opt
+	: package_type_subfield_type default_par_opt
 		{
 			// special processing for row value expressions as default parameter values
-			if ($3 && nodeAs<RowValueExpressionNode>($3->value))
-				nodeAs<RowValueExpressionNode>($3->value)->setDefaultSource($1);
+			if ($2 && nodeAs<RowValueExpressionNode>($2->value))
+				nodeAs<RowValueExpressionNode>($2->value)->setDefaultSource($1);
 
-			setCollate($1, $2);
-			$$ = newNode<ParameterClause>($1, $3);
+			$$ = newNode<ParameterClause>($1, $2);
 			$parameters->add($$);
 		}
-		package_type_fields_constraint($4)
+		package_type_fields_constraint($3) collate_clause
+		{
+			setCollate($1, $5);
+			$$ = $3;
+		}
+	;
+
+%type <legacyField> package_type_subfield_type
+package_type_subfield_type
+	: symbol_column_name domain_or_non_array_type_name
+		{
+			$$ = $2;
+			$$->fld_name = *$1;
+		}
 	;
 
 %type package_type_fields_constraint(<parameterClause>)
 package_type_fields_constraint($parameterClause)
 	: // nothing
+	| package_type_fields_constraint package_type_field_constraint($parameterClause)
+	;
+
+%type package_type_field_constraint(<parameterClause>)
+package_type_field_constraint($parameterClause)
+	: null_constraint
+		{
+			setClause($parameterClause->type->notNull, "NOT NULL");
+		}
 	| check_constraint
 		{
 			setClause($parameterClause->checkClause, "PACKAGED TYPE FIELD CHECK CONSTRAINT", $1);
