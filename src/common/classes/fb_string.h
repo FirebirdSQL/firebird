@@ -691,28 +691,28 @@ namespace Firebird
 		}
 	public:
 		StringBase() noexcept : AbstractString(Comparator::getMaxLength()) {}
-    StringBase(const StringType& v) : AbstractString(Comparator::getMaxLength(), v) {}
-    StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
-    StringBase(const_pointer s) :
-        AbstractString(Comparator::getMaxLength(), s ? length(s) : 0, s) {}
-    StringBase(std::string_view sv) :
-        AbstractString(Comparator::getMaxLength(), static_cast<size_type>(sv.length()), sv.data()) {}
+    	StringBase(const StringType& v) : AbstractString(Comparator::getMaxLength(), v) {}
+    	StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
+    	StringBase(const_pointer s) :
+        	AbstractString(Comparator::getMaxLength(), s ? length(s) : 0, s) {}
+    	StringBase(std::string_view sv) :
+        	AbstractString(Comparator::getMaxLength(), static_cast<size_type>(sv.length()), sv.data()) {}
     explicit StringBase(const unsigned char* s) :
-        AbstractString(Comparator::getMaxLength(), length((char*) s), (char*) s) {}
-    StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
-    StringBase(size_type n, char_type c) : AbstractString(Comparator::getMaxLength(), n, c) {}
-    StringBase(const_iterator first, const_iterator last) :
-        AbstractString(Comparator::getMaxLength(), last - first, first) {}
+        	AbstractString(Comparator::getMaxLength(), length((char*) s), (char*) s) {}
+    	StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
+    	StringBase(size_type n, char_type c) : AbstractString(Comparator::getMaxLength(), n, c) {}
+    	StringBase(const_iterator first, const_iterator last) :
+        	AbstractString(Comparator::getMaxLength(), last - first, first) {}
     explicit StringBase(MemoryPool& p) noexcept : AbstractString(Comparator::getMaxLength(), p) {}
-    StringBase(MemoryPool& p, const AbstractString& v) : AbstractString(Comparator::getMaxLength(), p, v) {}
-    StringBase(MemoryPool& p, const_pointer s) :
-        AbstractString(Comparator::getMaxLength(), p, s, s ? length(s) : 0) {}
-    StringBase(MemoryPool& p, const char_type* s, size_type l) :
-        AbstractString(Comparator::getMaxLength(), p, s, l) {}
-    StringBase(StringType&& rhs) :
-        AbstractString(Comparator::getMaxLength(), std::forward<AbstractString>(rhs)) {}
-    StringBase(MemoryPool& p, StringType&& rhs) :
-        AbstractString(Comparator::getMaxLength(), p, std::forward<AbstractString>(rhs)) {}
+    	StringBase(MemoryPool& p, const AbstractString& v) : AbstractString(Comparator::getMaxLength(), p, v) {}
+    	StringBase(MemoryPool& p, const_pointer s) :
+        	AbstractString(Comparator::getMaxLength(), p, s, s ? length(s) : 0) {}
+    	StringBase(MemoryPool& p, const char_type* s, size_type l) :
+        	AbstractString(Comparator::getMaxLength(), p, s, l) {}
+    	StringBase(StringType&& rhs) :
+        	AbstractString(Comparator::getMaxLength(), std::forward<AbstractString>(rhs)) {}
+    	StringBase(MemoryPool& p, StringType&& rhs) :
+        	AbstractString(Comparator::getMaxLength(), p, std::forward<AbstractString>(rhs)) {}
 
 		static size_type max_length() noexcept
 		{
