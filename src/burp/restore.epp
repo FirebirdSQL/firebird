@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
 #endif
@@ -1608,7 +1609,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
 
 	ULONG length = 0;
 	UCHAR item;
-	USHORT max_segment;
+	USHORT max_segment = USHRT_MAX;
 	ULONG num_segments;
 	const UCHAR* p = blob_info;
 
@@ -1783,7 +1784,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG		fld_ranges[2 * MAX_DIMENSION];
 	SLONG       slice_length = 0;
 	SLONG       *range;
-	const SLONG* end_ranges;
+	const SLONG* end_ranges = fld_ranges;
 	scan_attr_t scan_next_attr;
 	skip_init(&scan_next_attr);
 	att_type	attribute;
@@ -1851,7 +1852,6 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	SLONG last_element_dim[MAX_DIMENSION];
 	if (return_length != slice_length)
 	{
-		int upper, lower;
 		//
 		// Ugh!  The full array wasn't returned and versions of gbak prior to
 		// V3.2I don't explicitly signal this.  We must recompute the top
@@ -1974,6 +1974,8 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 			// dims were (1,2), we would just do a isc_put_slice(1..1, 1..2).
 			// This is applied for any number of dimensions.
 			//
+
+			int upper = 0, lower = 0;
 			for (range = field->fld_ranges, count = 0; range < end_ranges; range += 2, count++)
 			{
 				add_byte(blr, isc_sdl_do2);
@@ -3386,7 +3388,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 					}
 				}
 
-				UCHAR* p;
+				UCHAR* p = nullptr;
 				if (tdgbl->gbl_sw_transportable)
 				{
 					if (get(tdgbl) != att_xdr_length)
@@ -9097,9 +9099,10 @@ bool get_db_creator(BurpGlobals* tdgbl)
  **************************************/
 	att_type		attribute;
 	scan_attr_t		scan_next_attr;
-	TEXT			usr[GDS_NAME_LEN];
-	SSHORT			uType;
-	bool			userSet, typeSet;
+	TEXT			usr[GDS_NAME_LEN] = {0};
+	SSHORT			uType = 0;
+	bool			userSet = false;
+	bool			typeSet = false;
 
 	userSet = typeSet = false;
 
@@ -9423,7 +9426,7 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
  *	Get a trigger definition for a relation.
  *
  **************************************/
-	enum trig_t	type;
+	enum trig_t	type = trig_none;
 	att_type	attribute;
 	TEXT		name[GDS_NAME_LEN];
 	scan_attr_t		scan_next_attr;

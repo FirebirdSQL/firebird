@@ -227,7 +227,8 @@ static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
 {
 	AutoCacheRequest request(tdbb, drq_l_rel_info, DYN_REQUESTS);
 	QualifiedName masterRelName;
-	rel_t masterType, childType;
+	rel_t masterType = rel_persistent;
+	rel_t childType = rel_persistent;
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		RLC_M IN RDB$RELATION_CONSTRAINTS CROSS
