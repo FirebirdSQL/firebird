@@ -52,9 +52,9 @@ class Engine : public StdPlugin<IExternalEngineImpl<Engine, ThrowStatusWrapper> 
 {
 public:
 	explicit Engine(IPluginConfig* par)
-		: functionsMap(getPool()),
-		  proceduresMap(getPool()),
-		  triggersMap(getPool())
+		: functions(getPool()),
+		  procedures(getPool()),
+		  triggers(getPool())
 	{
 		LocalStatus ls;
 		CheckStatusWrapper s(&ls);
@@ -98,7 +98,7 @@ public:
 		ThrowStatusWrapper* status,
 		GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >& children,
 		SharedObjType* sharedObj, IExternalContext* context,
-		GenericMap<RightPooledPair<IAttachment*, SortedArray<SharedObjType*> > >& sharedObjs, const PathName& moduleName);
+		SortedArray<SharedObjType*>& sharedObjs, const PathName& moduleName);
 
 	template <typename ObjType> void deleteChildren(
 		GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >& children);
@@ -121,9 +121,9 @@ private:
 	Mutex childrenMutex;
 
 public:
-	GenericMap<RightPooledPair<IAttachment*, SortedArray<class SharedFunction*>>>  functionsMap;
-	GenericMap<RightPooledPair<IAttachment*, SortedArray<class SharedProcedure*>>> proceduresMap;
-	GenericMap<RightPooledPair<IAttachment*, SortedArray<class SharedTrigger*>>>   triggersMap;
+	SortedArray<class SharedFunction*> functions;
+	SortedArray<class SharedProcedure*> procedures;
+	SortedArray<class SharedTrigger*> triggers;
 };
 
 
@@ -293,8 +293,9 @@ public:
 		char* name, unsigned nameSize)
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
+
 		IExternalFunction* function = engine->getChild<IUdrFunctionFactory, IExternalFunction>(
-			status, children, this, context, engine->functionsMap, moduleName);
+			status, children, this, context, engine->functions, moduleName);
 
 		if (function)
 			function->getCharSet(status, context, name, nameSize);
@@ -303,7 +304,7 @@ public:
 	void execute(ThrowStatusWrapper* status, IExternalContext* context, void* inMsg, void* outMsg)
 	{
 		IExternalFunction* function = engine->getChild<IUdrFunctionFactory, IExternalFunction>(
-			status, children, this, context, engine->functionsMap, moduleName);
+			status, children, this, context, engine->functions, moduleName);
 
 		if (function)
 			function->execute(status, context, inMsg, outMsg);
@@ -356,7 +357,7 @@ public:
 		strncpy(name, context->getClientCharSet(), nameSize);
 
 		IExternalProcedure* procedure = engine->getChild<IUdrProcedureFactory, IExternalProcedure>(
-			status, children, this, context, engine->proceduresMap, moduleName);
+			status, children, this, context, engine->procedures, moduleName);
 
 		if (procedure)
 			procedure->getCharSet(status, context, name, nameSize);
@@ -366,7 +367,7 @@ public:
 		void* inMsg, void* outMsg)
 	{
 		IExternalProcedure* procedure = engine->getChild<IUdrProcedureFactory, IExternalProcedure>(
-			status, children, this, context, engine->proceduresMap, moduleName);
+			status, children, this, context, engine->procedures, moduleName);
 
 		return procedure ? procedure->open(status, context, inMsg, outMsg) : NULL;
 	}
@@ -417,7 +418,7 @@ public:
 		strncpy(name, context->getClientCharSet(), nameSize);
 
 		IExternalTrigger* trigger = engine->getChild<IUdrTriggerFactory, IExternalTrigger>(
-			status, children, this, context, engine->triggersMap, moduleName);
+			status, children, this, context, engine->triggers, moduleName);
 
 		if (trigger)
 			trigger->getCharSet(status, context, name, nameSize);
@@ -427,7 +428,7 @@ public:
 		unsigned action, void* oldMsg, void* newMsg)
 	{
 		IExternalTrigger* trigger = engine->getChild<IUdrTriggerFactory, IExternalTrigger>(
-			status, children, this, context, engine->triggersMap, moduleName);
+			status, children, this, context, engine->triggers, moduleName);
 
 		if (trigger)
 			trigger->execute(status, context, action, oldMsg, newMsg);
@@ -581,13 +582,12 @@ template <typename NodeType, typename ObjType, typename SharedObjType> ObjType* 
 	ThrowStatusWrapper* status,
 	GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >& children, SharedObjType* sharedObj,
 	IExternalContext* context,
-	GenericMap<RightPooledPair<IAttachment*, SortedArray<SharedObjType*> > >& sharedObjsMap, const PathName& moduleName)
+	SortedArray<SharedObjType*>& sharedObjs, const PathName& moduleName)
 {
 	MutexLockGuard guard(childrenMutex, FB_FUNCTION);
 
-	auto sharedObjs = sharedObjsMap.getOrPut(context->getAttachment(status));
-	if (!sharedObjs->exist(sharedObj))
-		sharedObjs->add(sharedObj);
+	if (!sharedObjs.exist(sharedObj))
+		sharedObjs.add(sharedObj);
 
 	ObjType* obj;
 	if (!children.get(context, obj))
@@ -651,15 +651,39 @@ void Engine::openAttachment(ThrowStatusWrapper* /*status*/, IExternalContext* /*
 }
 
 
-void Engine::closeAttachment(ThrowStatusWrapper* status, IExternalContext* context)
+void Engine::closeAttachment(ThrowStatusWrapper* /*status*/, IExternalContext* context)
 {
 	MutexLockGuard guard(childrenMutex, FB_FUNCTION);
 
-	auto attachment = context->getAttachment(status);
+	for (SortedArray<SharedFunction*>::iterator i = functions.begin(); i != functions.end(); ++i)
+	{
+		IExternalFunction* function;
+		if ((*i)->children.get(context, function))
+		{
+			function->dispose();
+			(*i)->children.remove(context);
+		}
+	}
 
-	functionsMap.remove(attachment);
-	proceduresMap.remove(attachment);
-	triggersMap.remove(attachment);
+	for (SortedArray<SharedProcedure*>::iterator i = procedures.begin(); i != procedures.end(); ++i)
+	{
+		IExternalProcedure* procedure;
+		if ((*i)->children.get(context, procedure))
+		{
+			procedure->dispose();
+			(*i)->children.remove(context);
+		}
+	}
+
+	for (SortedArray<SharedTrigger*>::iterator i = triggers.begin(); i != triggers.end(); ++i)
+	{
+		IExternalTrigger* trigger;
+		if ((*i)->children.get(context, trigger))
+		{
+			trigger->dispose();
+			(*i)->children.remove(context);
+		}
+	}
 }
 
 
