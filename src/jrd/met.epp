@@ -5419,6 +5419,23 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					break;
 				}
 
+				case obj_foreign_server:
+				{
+					static const CachedRequestId foreignServerHandleId;
+					handle.reset(tdbb, foreignServerHandleId);
+
+					FOR (REQUEST_HANDLE handle)
+						SVR IN RDB$FOREIGN_SERVERS
+						WITH SVR.RDB$FOREIGN_SERVER_NAME EQ name.object.c_str()
+					{
+						found = true;
+						break;
+					}
+					END_FOR
+
+					break;
+				}
+
 				default:
 					fb_assert(false);
 			}

@@ -89,6 +89,12 @@ FROM <grantee_list>
 [{GRANTED BY | AS} [USER] <grantor>];
 ```
 
+#### COMMENT ON SERVER definition
+
+```sql
+COMMENT ON SERVER <foreign server name> IS {'text' | NULL};
+```
+
 ### User mappings
 
 User mappings for foreign connections define the connection parameters to be used by the specified user when accessing a foreign server. The user mapping provides security and access control by specifying the credentials to connect to the foreign server. User mapping maps local user accounts to remote server credentials and defines the login and password for the connection.
@@ -126,6 +132,13 @@ The `ALTER USER MAPPING FOR` statement can be executed by administrators and dat
 DROP USER MAPPING FOR <user name> SERVER <server name>
 ```
 The `DROP USER MAPPING FOR` statement can be executed by administrators and database owner.
+
+
+#### COMMENT ON USER MAPPING definition
+
+```sql
+COMMENT ON USER MAPPING FOR <user> SERVER <foreign server name> IS {'text' | NULL};
+```
 
 ### Access to foreign data
 

@@ -1505,6 +1505,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		case obj_schema:
 		case obj_blob_filter:
 		case obj_sql_role:
+		case obj_foreign_server:
 			fb_assert(name.schema.isEmpty());
 			break;
 
@@ -1782,6 +1783,13 @@ void CommentOnNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, j
 			tableClause = "rdb$packages";
 			columnClause = "rdb$package_name";
 			status << Arg::Gds(isc_dyn_package_not_found) << Arg::Str(objNameStr);
+			break;
+
+		case obj_foreign_server:
+			tableClause = "rdb$foreign_servers";
+			columnClause = "rdb$foreign_server_name";
+			useSchemaClause = false;
+			status << Arg::Gds(isc_dyn_foreign_server_not_found) << Arg::Str(objNameStr);
 			break;
 
 		default:
@@ -16006,51 +16014,55 @@ void DropForeignServerNode::dropOptions(thread_db* tdbb, jrd_tra* transaction,
 //----------------------
 
 
-string CreateAlterUserMappingNode::internalPrint(NodePrinter& printer) const
+string UserMappingNode::internalPrint(NodePrinter& printer) const
 {
 	DdlNode::internalPrint(printer);
 
 	NODE_PRINT(printer, user);
 	NODE_PRINT(printer, server);
-	NODE_PRINT(printer, create);
-	NODE_PRINT(printer, alter);
+	NODE_PRINT(printer, silent);
+	NODE_PRINT(printer, comment);
 	// NODE_PRINT(printer, options);
 
-	return "CreateAlterUserMappingNode";
+	return "UserMappingNode";
 }
 
 
-void CreateAlterUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void UserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
 	SCL_check_foreign_server(tdbb, server, SCL_usage);
 }
 
 
-void CreateAlterUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+void UserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
-	fb_assert(create || alter);
-
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
 
-	if (alter)
+	switch (op)
 	{
-		if (!executeAlter(tdbb, dsqlScratch, transaction))
-		{
-			if (create)	// create or alter
-				executeCreate(tdbb, dsqlScratch, transaction);
-			else
+		case UMAP_ADD:
+			executeCreate(tdbb, dsqlScratch, transaction);
+			break;
+		case UMAP_MOD:
+		case UMAP_COMMENT:
+			if (!executeAlter(tdbb, dsqlScratch, transaction))
 				status_exception::raise(Arg::Gds(isc_dyn_user_mapping_not_found) << Arg::Str(user) << Arg::Str(server));
-		}
+			break;
+		case UMAP_RPL:
+			if (!executeAlter(tdbb, dsqlScratch, transaction))
+				executeCreate(tdbb, dsqlScratch, transaction);
+			break;
+		case UMAP_DROP:
+			executeDrop(tdbb, dsqlScratch, transaction);
+			break;
 	}
-	else
-		executeCreate(tdbb, dsqlScratch, transaction);
 
 	savePoint.release();	// everything is ok
 }
 
 
-void CreateAlterUserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+void UserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
@@ -16094,7 +16106,7 @@ void CreateAlterUserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScra
 }
 
 
-bool CreateAlterUserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+bool UserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->getAttachment();
@@ -16123,15 +16135,45 @@ bool CreateAlterUserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScrat
 	if (!found)
 		return found;
 
-	// Drop old options and insert the new ones
-	for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+	switch (op)
 	{
-		if (DropUserMappingNode::dropOption(tdbb, transaction, user, server, options[cnt].name))
-			modified = true;
-
-		if (options[cnt].value.hasData())
+		case UMAP_MOD:
+		case UMAP_RPL:
 		{
-			storeOption(tdbb, transaction, &options[cnt]);
+			// Drop old options and insert the new ones
+			for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+			{
+				if (dropOption(tdbb, transaction, user, server, options[cnt].name))
+					modified = true;
+
+				if (options[cnt].value.hasData())
+				{
+					storeOption(tdbb, transaction, &options[cnt]);
+
+					modified = true;
+				}
+			}
+
+			break;
+		}
+		case UMAP_COMMENT:
+		{
+			requestHandle.reset(tdbb, drq_m_u_mapping_comment, DYN_REQUESTS);
+			FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				FUM IN RDB$FOREIGN_USER_MAPPINGS
+				WITH FUM.RDB$USER EQ user.c_str() AND
+				FUM.RDB$FOREIGN_SERVER_NAME EQ server.c_str()
+			{
+				MODIFY FUM
+					FUM.RDB$DESCRIPTION.NULL = !comment.hasData();
+					if (!FUM.RDB$DESCRIPTION.NULL)
+					{
+						AutoBlb b(tdbb, blb::create(tdbb, transaction, &FUM.RDB$DESCRIPTION));
+						b->BLB_put_data(tdbb, (const UCHAR*)(comment.c_str()), comment.length());
+					}
+				END_MODIFY
+			}
+			END_FOR
 
 			modified = true;
 		}
@@ -16149,7 +16191,7 @@ bool CreateAlterUserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScrat
 }
 
 
-void CreateAlterUserMappingNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option)
+void UserMappingNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option)
 {
 	Attachment* const attachment = transaction->getAttachment();
 
@@ -16181,26 +16223,7 @@ void CreateAlterUserMappingNode::storeOption(thread_db* tdbb, jrd_tra* transacti
 	END_STORE
 }
 
-//----------------------
-
-
-string DropUserMappingNode::internalPrint(NodePrinter& printer) const
-{
-	DdlNode::internalPrint(printer);
-
-	NODE_PRINT(printer, user);
-	NODE_PRINT(printer, server);
-	NODE_PRINT(printer, silent);
-
-	return "DropUserMappingNode";
-}
-
-void DropUserMappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
-{
-	SCL_check_foreign_server(tdbb, server, SCL_usage);
-}
-
-void DropUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+void UserMappingNode::executeDrop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -16222,7 +16245,6 @@ void DropUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		WITH FUM.RDB$USER EQ user.c_str() AND
 		FUM.RDB$FOREIGN_SERVER_NAME EQ server.c_str()
 	{
-
 		ERASE FUM;
 
 		found = true;
@@ -16244,7 +16266,7 @@ void DropUserMappingNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 }
 
 
-bool DropUserMappingNode::dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
+bool UserMappingNode::dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
 	const MetaName& server, const MetaName& optionName)
 {
 	AutoCacheRequest requestHandle(tdbb, drq_drop_u_mapping_opt, DYN_REQUESTS);
@@ -16266,7 +16288,7 @@ bool DropUserMappingNode::dropOption(thread_db* tdbb, jrd_tra* transaction, cons
 }
 
 
-void DropUserMappingNode::dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
+void UserMappingNode::dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& user,
 	const MetaName& server)
 {
 	AutoCacheRequest requestHandle(tdbb, drq_drop_u_m_opts, DYN_REQUESTS);

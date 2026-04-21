@@ -6385,11 +6385,12 @@ const
 	 isc_dsql_create_alter_user_mapping_failed = 336397348;
 	 isc_dsql_recreate_user_mapping_failed = 336397349;
 	 isc_dsql_drop_user_mapping_failed = 336397350;
-	 isc_dsql_foreign_table_not_found = 336397351;
-	 isc_dsql_create_foreign_table_failed = 336397352;
-	 isc_dsql_alter_foreign_table_failed = 336397353;
-	 isc_dsql_drop_foreign_table_failed = 336397354;
-	 isc_dsql_recreate_foreign_table_failed = 336397355;
+	 isc_dsql_comment_on_user_mapping_failed = 336397351;
+	 isc_dsql_foreign_table_not_found = 336397352;
+	 isc_dsql_create_foreign_table_failed = 336397353;
+	 isc_dsql_alter_foreign_table_failed = 336397354;
+	 isc_dsql_drop_foreign_table_failed = 336397355;
+	 isc_dsql_recreate_foreign_table_failed = 336397356;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

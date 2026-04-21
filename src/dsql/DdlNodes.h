@@ -2920,17 +2920,19 @@ typedef RecreateNode<CreateAlterForeignServerNode, DropForeignServerNode, isc_ds
 	RecreateForeignServerNode;
 
 
-class CreateAlterUserMappingNode : public DdlNode
+class UserMappingNode final : public DdlNode
 {
 public:
+	enum OP {UMAP_ADD, UMAP_MOD, UMAP_RPL, UMAP_DROP, UMAP_COMMENT};
 
-	CreateAlterUserMappingNode(MemoryPool& p, const MetaName& aUser, const MetaName& aServer)
+	UserMappingNode(MemoryPool& p, OP o, const MetaName& aUser, const MetaName& aServer)
 		: DdlNode(p),
+		  op(o),
 		  user(p, aUser),
 		  server(p, aServer),
-		  create(true),
-		  alter(false),
-		  options(p)
+		  silent(false),
+		  options(p),
+		  comment(p)
 	{ }
 
 public:
@@ -2942,18 +2944,19 @@ protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
-					isc_dsql_create_user_mapping_failed, isc_dsql_alter_user_mapping_failed,
-					isc_dsql_create_alter_user_mapping_failed)) <<
+			Firebird::Arg::Gds(op == UMAP_ADD ? isc_dsql_create_user_mapping_failed : op == UMAP_MOD ?
+					isc_dsql_alter_user_mapping_failed : op == UMAP_RPL ? isc_dsql_create_alter_user_mapping_failed :
+					op == UMAP_DROP ? isc_dsql_drop_user_mapping_failed : isc_dsql_comment_on_user_mapping_failed) <<
 				user << server;
 	}
 
 public:
+	OP op;
 	const MetaName user;
 	const MetaName server;
-	bool create;
-	bool alter;
+	bool silent;
 	Firebird::ObjectsArray<Option> options;
+	Firebird::string comment;
 
 	void addOption(MetaName* name, Firebird::string* value = NULL,
 		SSHORT type = ExternalValueType::TYPE_STRING)
@@ -2972,52 +2975,13 @@ public:
 private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	void executeDrop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 	void storeOption(thread_db* tdbb, jrd_tra* transaction, Option* option);
-
-	const MetaName getUniqueName() const
-	{
-		MetaName s;
-		s.printf("%s%s", user.c_str(), server.c_str());
-		return s;
-	};
-};
-
-
-class DropUserMappingNode : public DdlNode
-{
-public:
-	DropUserMappingNode(MemoryPool& p, const MetaName& aUser, const MetaName& aServer)
-		: DdlNode(p),
-		  user(p, aUser),
-		  server(p, aServer),
-		  silent(false)
-
-	{ }
-
-public:
 	static bool dropOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& user, const MetaName& server,
-		const MetaName& optionName);
-
-public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
-
+ 		const MetaName& optionName);
 	void dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& user, const MetaName& server);
 
-protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
-	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_user_mapping_failed) << user << server;
-	}
-
-public:
-	const MetaName user;
-	const MetaName server;
-	bool silent;
-
-private:
 	const Firebird::string getUniqueName() const
 	{
 		Firebird::string s;

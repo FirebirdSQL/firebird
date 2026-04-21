@@ -848,6 +848,7 @@ RELATION(nam_foreign_servers, rel_foreign_servers, ODS_14_0, rel_persistent)
 	FIELD(f_fs_data_wrapper_name, nam_fs_wrapper_name, fld_fs_data_wrapper_name, 1, ODS_14_0)
 	FIELD(f_fs_class, nam_class, fld_class, 1, ODS_14_0)
 	FIELD(f_fs_owner, nam_owner, fld_user, 1, ODS_14_0)
+	FIELD(f_fs_desc, nam_description, fld_description, 1, ODS_14_0)
 END_RELATION
 
 // Relation 61 (RDB$FOREIGN_SERVER_OPTIONS)
@@ -870,6 +871,7 @@ END_RELATION
 RELATION(nam_foreign_user_mappings, rel_foreign_user_mappings, ODS_14_0, rel_persistent)
 	FIELD(f_fum_user, nam_user, fld_user, 1, ODS_14_0)
 	FIELD(f_fum_server_name, nam_fs_name, fld_fs_name, 1, ODS_14_0)
+	FIELD(f_fum_desc, nam_description, fld_description, 1, ODS_14_0)
 END_RELATION
 
 // Relation 64 (RDB$FOREIGN_MAPPING_OPTIONS)

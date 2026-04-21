@@ -254,10 +254,11 @@ enum drq_type_t
 	drq_drop_f_tbl_opt,		// drop foreign table option
 	drq_drop_f_tbl_opts,		// drop foreign table options
 	drq_u_mapping_exist,		// check if user mapping exists
-	drq_s_u_mapping,		// store user mapping (CreateAlterUserMappingNode)
-	drq_m_u_mapping,		// modify user mapping (CreateAlterUserMappingNode)
-	drq_drop_u_mapping,		// drop user mapping
-	drq_s_u_mapping_opt,		// store user mapping options (CreateAlterUserMappingNode)
+	drq_s_u_mapping,		// store user mapping (UserMappingNode)
+	drq_m_u_mapping,		// modify user mapping (UserMappingNode)
+	drq_drop_u_mapping,		// drop user mapping (UserMappingNode)
+	drq_s_u_mapping_opt,		// store user mapping options (UserMappingNode)
+	drq_m_u_mapping_comment,// modify user mapping comment (UserMappingNode)
 	drq_drop_u_mapping_opt,		// drop user mapping option
 	drq_drop_u_m_opts,		// drop user mapping options
 	drq_s_f_tbl_f_opt,		// store foreign field option (RelationNode)

@@ -892,7 +892,7 @@ using namespace Firebird;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
 	Jrd::CreateAlterForeignServerNode* createAlterForeignServerNode;
-	Jrd::CreateAlterUserMappingNode* createAlterUserMappingNode;
+	Jrd::UserMappingNode* userMappingNode;
 	ExternalValueType extValueType;
 }
 
@@ -1859,6 +1859,7 @@ replace_clause
 	| MAPPING replace_map_clause(false)			{ $$ = $2; }
 	| GLOBAL MAPPING replace_map_clause(true)	{ $$ = $3; }
 	| SCHEMA replace_schema_clause				{ $$ = $2; }
+	| USER MAPPING FOR replace_user_map_clause	{ $$ = $4; }
 	;
 
 
@@ -5520,7 +5521,7 @@ drop_clause
 		}
 	| USER MAPPING FOR if_exists_opt symbol_user_name SERVER symbol_foreign_server_name
 		{
-			const auto node = newNode<DropUserMappingNode>(*$5, *$7);
+			const auto node = newNode<UserMappingNode>(UserMappingNode::OP::UMAP_DROP, *$5, *$7);
 			node->silent = $4;
 			$$ = node;
 		}
@@ -6577,6 +6578,8 @@ comment
 	| comment_on_user
 		{ $$ = $1; }
 	| comment_on_mapping
+		{ $$ = $1; }
+	| comment_on_user_mapping
 		{ $$ = $1; }
 	;
 
@@ -8632,66 +8635,54 @@ alter_foreign_server_var_option($node)
 
 // USER MAPPING
 
-%type <createAlterUserMappingNode> foreign_user_mapping_clause
-foreign_user_mapping_clause
+%type <userMappingNode> create_foreign_user_mapping_clause
+create_foreign_user_mapping_clause
 	: symbol_user_name SERVER symbol_foreign_server_name
  		{
-			$$ = newNode<CreateAlterUserMappingNode>(*$1, *$3);
+			$$ = newNode<UserMappingNode>(UserMappingNode::OP::UMAP_ADD, *$1, *$3);
 		}
-	;
-
-%type <createAlterUserMappingNode> create_foreign_user_mapping_clause
-create_foreign_user_mapping_clause
-	: foreign_user_mapping_clause
- 		{
-			$$ = $1;
-			$$->create = true;
-			$$->alter = false;
-		}
-	create_user_mapping_fixed_list_opt($2)
+	create_user_mapping_fixed_list_opt($4)
 		{
-			$$ = $2;
+			$$ = $4;
 		}
 	;
 
-%type <createAlterUserMappingNode> alter_foreign_user_mapping_clause
+%type <userMappingNode> alter_foreign_user_mapping_clause
 alter_foreign_user_mapping_clause
-	: foreign_user_mapping_clause
+	: symbol_user_name SERVER symbol_foreign_server_name
 		{
-			$$ = $1;
-			$$->create = false;
-			$$->alter = true;
+			$$ = newNode<UserMappingNode>(UserMappingNode::OP::UMAP_MOD, *$1, *$3);
 		}
-	alter_user_mapping_fixed_list_opt($2)
+	alter_user_mapping_fixed_list_opt($4)
 		{
-			$$ = $2;
+			$$ = $4;
 		}
 	;
 
-%type create_user_mapping_fixed_list_opt(<createAlterUserMappingNode>)
+%type create_user_mapping_fixed_list_opt(<userMappingNode>)
 create_user_mapping_fixed_list_opt($node)
 	: // nothing
 	| create_user_mapping_fixed_list($node)
 	;
 
-%type create_user_mapping_fixed_list(<createAlterUserMappingNode>)
+%type create_user_mapping_fixed_list(<userMappingNode>)
 create_user_mapping_fixed_list($node)
 	: create_user_mapping_fixed_option($node)
 	| create_user_mapping_fixed_list create_user_mapping_fixed_option($node)
 	;
 
-%type create_user_mapping_fixed_option(<createAlterUserMappingNode>)
+%type create_user_mapping_fixed_option(<userMappingNode>)
 create_user_mapping_fixed_option($node)
 	: OPTIONS '(' create_user_mapping_var_list($node) ')'
 	;
 
-%type create_user_mapping_var_list(<createAlterUserMappingNode>)
+%type create_user_mapping_var_list(<userMappingNode>)
 create_user_mapping_var_list($node)
 	: user_mapping_var_option($node)
 	| create_user_mapping_var_list ',' user_mapping_var_option($node)
 	;
 
-%type user_mapping_var_option(<createAlterUserMappingNode>)
+%type user_mapping_var_option(<userMappingNode>)
 user_mapping_var_option($node)
 	: symbol_foreign_option_name '=' utf_string
 		{
@@ -8703,30 +8694,30 @@ user_mapping_var_option($node)
 		}
 	;
 
-%type alter_user_mapping_fixed_list_opt(<createAlterUserMappingNode>)
+%type alter_user_mapping_fixed_list_opt(<userMappingNode>)
 alter_user_mapping_fixed_list_opt($node)
 	: // nothing
 	| alter_user_mapping_fixed_list($node)
 	;
 
-%type alter_user_mapping_fixed_list(<createAlterUserMappingNode>)
+%type alter_user_mapping_fixed_list(<userMappingNode>)
 alter_user_mapping_fixed_list($node)
 	: alter_user_mapping_fixed_option($node)
 	| alter_user_mapping_fixed_list alter_user_mapping_fixed_option($node)
 	;
 
-%type alter_user_mapping_fixed_option(<createAlterUserMappingNode>)
+%type alter_user_mapping_fixed_option(<userMappingNode>)
 alter_user_mapping_fixed_option($node)
 	: OPTIONS '(' alter_user_mapping_var_list($node) ')'
 	;
 
-%type alter_user_mapping_var_list(<createAlterUserMappingNode>)
+%type alter_user_mapping_var_list(<userMappingNode>)
 alter_user_mapping_var_list($node)
 	: alter_user_mapping_var_option($node)
 	| alter_user_mapping_var_list ',' alter_user_mapping_var_option($node)
 	;
 
-%type alter_user_mapping_var_option(<createAlterUserMappingNode>)
+%type alter_user_mapping_var_option(<userMappingNode>)
 alter_user_mapping_var_option($node)
 	: user_mapping_var_option($node)
 	| DROP symbol_foreign_option_name
@@ -8742,6 +8733,26 @@ value_storage_type_opt
 	| FILE { $$ = ExternalValueType::TYPE_FILE; }
 	;
 
+%type <userMappingNode> replace_user_map_clause
+replace_user_map_clause
+	: symbol_user_name SERVER symbol_foreign_server_name
+			{
+				$$ = newNode<UserMappingNode>(UserMappingNode::OP::UMAP_RPL, *$1, *$3);
+			}
+		create_user_mapping_fixed_list_opt($4)
+			{
+				$$ = $4;
+			}
+	;
+
+%type <userMappingNode> comment_on_user_mapping
+comment_on_user_mapping
+	: COMMENT ON USER MAPPING FOR symbol_user_name SERVER symbol_foreign_server_name IS ddl_desc
+			{
+				$$ = newNode<UserMappingNode>(UserMappingNode::OP::UMAP_COMMENT, *$6, *$8);
+				$$->comment = *$10;
+			}
+	;
 
 // value types
 
