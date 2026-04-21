@@ -83,7 +83,7 @@ Syntax:
 		<value> [NOT] IN <table value function unlist short>
 
 	<table value function unlist short> ::=
-		UNLIST ( <input> [, <separator>] [, <data type conversion>] )
+		UNLIST ( <input> [, <separator>] [<type-conversion>] )
 
 Examples:
 

@@ -116,6 +116,12 @@ void Parser::parse()
 	}
 }
 
+static bool hasVersionedMethods(const Interface& interface)
+{
+	const auto& methods = interface.methods;
+	return methods.size() >= 2 && methods.front()->version != methods.back()->version;
+}
+
 void Parser::parseInterface(bool exception)
 {
 	auto newInterface = std::make_shared<Interface>();
@@ -140,6 +146,9 @@ void Parser::parseInterface(bool exception)
 			error(token, string("Super interface '") + superName + "' not found.");
 
 		interface->super = static_cast<Interface*>(superIt->second.get());
+		if (hasVersionedMethods(*interface->super))
+			error(token, string("Inheriting from the interface '" + superName + "' is not possible because it contains versioned methods."));
+
 		interface->version = interface->super->version + 1;
 	}
 	else

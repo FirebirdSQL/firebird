@@ -486,7 +486,7 @@ public:
 	{
 	}
 
-	idx_e compose(Record* record);
+	idx_e compose(Record* record, bool skipNewFormat = false);
 
 	operator temporary_key*()
 	{

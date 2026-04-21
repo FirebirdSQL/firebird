@@ -1567,6 +1567,14 @@ public:
 
 	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force = false);
 
+private:
+	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
+		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
+		  statement(stmt)
+	{
+	}
+
+public:
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	SavepointEncloseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
@@ -1576,13 +1584,7 @@ public:
 
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
-private:
-	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
-		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
-		  statement(stmt)
-	{
-	}
-
+public:
 	NestConst<StmtNode> statement;
 };
 
@@ -2139,6 +2141,7 @@ public:
 	Firebird::Array<NestConst<ParameterClause>> parameters;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
+	bool inAutonomousTransaction = false;
 };
 
 

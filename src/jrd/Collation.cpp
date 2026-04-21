@@ -1070,8 +1070,6 @@ public:
 template <typename T>
 Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
 {
-	using namespace Firebird;
-
 	typedef StartsMatcher<UCHAR, NullStrConverter> StartsMatcherUCharDirect;
 	typedef StartsMatcher<UCHAR, CanonicalConverter<> > StartsMatcherUCharCanonical;
 	typedef ContainsMatcher<UCHAR, UpcaseConverter<> > ContainsMatcherUCharDirect;
@@ -1092,6 +1090,9 @@ Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attri
 		SleuthMatcher<T>
 	> NonDirectImpl;
 
+	if (!tt)
+		return FB_NEW_POOL(pool) DirectImpl(id, nullptr, attributes, cs);
+
 	if (tt->texttype_flags & TEXTTYPE_DIRECT_MATCH)
 		return FB_NEW_POOL(pool) DirectImpl(id, tt, attributes, cs);
 	else
@@ -1107,8 +1108,17 @@ Collation* newCollation(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attri
 namespace Jrd {
 
 
-Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, USHORT attributes, CharSet* cs)
+Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt, Firebird::IStatus* error, USHORT attributes, CharSet* cs)
 {
+	if (!tt)
+	{
+		fb_assert(error);
+		auto coll = newCollation<UCHAR>(pool, id, tt, attributes, cs);
+		coll->error = error;
+
+		return coll;
+	}
+
 	switch (tt->texttype_canonical_width)
 	{
 		case 1:
@@ -1128,12 +1138,24 @@ Collation* Collation::createInstance(MemoryPool& pool, TTypeId id, texttype* tt,
 
 void Collation::destroy(thread_db* tdbb)
 {
-	if (tt->texttype_fn_destroy)
-		tt->texttype_fn_destroy(tt);
+	if (tt)
+	{
+		if (tt->texttype_fn_destroy)
+			tt->texttype_fn_destroy(tt);
 
-	delete tt;
+		delete tt;
+	}
+
+	if (error)
+		error->dispose();
 
 	delete this;
+}
+
+[[noreturn]] void Collation::raiseError()
+{
+	fb_assert(error);
+	status_exception::raise(error);
 }
 
 }	// namespace Jrd

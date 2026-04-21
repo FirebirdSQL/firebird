@@ -273,6 +273,7 @@ void Service::getOptions(ClumpletReader& spb)
 		{
 		case isc_spb_user_name:
 			spb.getString(svc_username);
+			svc_orig_username = svc_username;
 			fb_utils::dpbItemUpper(svc_username);
 			break;
 
@@ -410,9 +411,9 @@ void Service::outputVerbose(const char* text)
 	}
 }
 
-void Service::outputError(const char* /*text*/)
+void Service::outputError(const char* text)
 {
-	fb_assert(false);
+	outputVerbose(text);
 }
 
 void Service::outputData(const void* data, FB_SIZE_T len)
@@ -694,8 +695,8 @@ Service::Service(const TEXT* service_name, USHORT spb_length, const UCHAR* spb_d
 	svc_resp_alloc(getPool()), svc_resp_buf(0), svc_resp_ptr(0), svc_resp_buf_len(0),
 	svc_resp_len(0), svc_flags(SVC_finished), svc_user_flag(0), svc_spb_version(0),
 	svc_shutdown_server(false), svc_shutdown_request(false),
-	svc_shutdown_in_progress(false), svc_timeout(false),
-	svc_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
+	svc_shutdown_in_progress(false), svc_timeout(false), svc_username(getPool()),
+	svc_orig_username(getPool()), svc_sql_role(getPool()), svc_auth_block(getPool()),
 	svc_expected_db(getPool()), svc_trusted_role(false), svc_utf8(false),
 	svc_switches(getPool()), svc_perm_sw(getPool()), svc_address_path(getPool()),
 	svc_command_line(getPool()), svc_parallel_workers(0),
@@ -2067,8 +2068,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 			if (svc_username.hasData())
 			{
 				string auth = "-user ";
-				auth += svc_username;
-				auth += ' ';
+				UtilSvc::addStringWithSvcTrmntr(svc_orig_username, auth);
 				svc_switches = auth + svc_switches;
 			}
 		}
@@ -2076,8 +2076,7 @@ void Service::start(USHORT spb_length, const UCHAR* spb_data)
 		if (svc_sql_role.hasData())
 		{
 			string auth = "-role ";
-			auth += svc_sql_role;
-			auth += ' ';
+			UtilSvc::addStringWithSvcTrmntr(svc_sql_role, auth);
 			svc_switches = auth + svc_switches;
 		}
 	}
@@ -2274,8 +2273,6 @@ bool Service::full() const noexcept
 {
 	return add_one(svc_stdout_tail) == svc_stdout_head;
 }
-
-#define ENQUEUE_DEQUEUE_DELAY 1
 
 void Service::enqueue(const UCHAR* s, ULONG len)
 {

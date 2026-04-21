@@ -237,6 +237,7 @@ void setParamsDateDiff(DataTypeUtilBase* dataTypeUtil, const SysFunction* functi
 void setParamsEncrypt(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsFirstLastDay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsGetSetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
+void setParamsResetContext(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsHash(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args);
 void setParamsMakeDbkey(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
 void setParamsOverlay(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int argsCount, dsc** args);
@@ -329,6 +330,7 @@ dsc* evlFloor(thread_db* tdbb, const SysFunction* function, const NestValueArray
 dsc* evlGenUuid(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlGetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlSetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
+dsc* evlResetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlHash(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
 dsc* evlLeft(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure);
@@ -360,7 +362,8 @@ dsc* evlUuidToChar(thread_db* tdbb, const SysFunction* function, const NestValue
 // System context function names
 constexpr char
 	RDB_GET_CONTEXT[] = "RDB$GET_CONTEXT",
-	RDB_SET_CONTEXT[] = "RDB$SET_CONTEXT";
+	RDB_SET_CONTEXT[] = "RDB$SET_CONTEXT",
+	RDB_RESET_CONTEXT[] = "RDB$RESET_CONTEXT";
 
 // Context namespace names
 constexpr char
@@ -859,6 +862,18 @@ void setParamsGetSetContext(DataTypeUtilBase*, const SysFunction*, int argsCount
 	{
 		args[2]->makeVarying(MAX_CTX_VAR_SIZE, ttype_none);
 		args[2]->setNullable(true);
+	}
+}
+
+
+void setParamsResetContext(DataTypeUtilBase*, const SysFunction*, int argsCount, dsc** args)
+{
+	fb_assert(argsCount == 1);
+
+	if (args[0]->isUnknown())
+	{
+		args[0]->makeVarying(80, ttype_none);
+		args[0]->setNullable(true);
 	}
 }
 
@@ -5005,6 +5020,58 @@ dsc* evlSetContext(thread_db* tdbb, const SysFunction*, const NestValueArray& ar
 }
 
 
+dsc* evlResetContext(thread_db* tdbb, const SysFunction* function, const NestValueArray& args, impure_value* impure)
+{
+	fb_assert(args.getCount() == 1);
+
+	Attachment* const attachment = tdbb->getAttachment();
+	jrd_tra* const transaction = tdbb->getTransaction();
+	Request* request = tdbb->getRequest();
+
+	const dsc* nameSpace = EVL_expr(tdbb, request, args[0]);
+	if (!nameSpace)	// Complain if namespace is null
+		ERR_post(Arg::Gds(isc_ctx_bad_argument) << Arg::Str(RDB_RESET_CONTEXT));
+
+	const string nameSpaceStr(MOV_make_string2(tdbb, nameSpace, ttype_none));
+
+	StringMap* contextVars = nullptr;
+
+	if (nameSpaceStr == USER_SESSION_NAMESPACE)
+	{
+		if (!attachment)
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
+		contextVars = &attachment->att_context_vars;
+	}
+	else if (nameSpaceStr == USER_TRANSACTION_NAMESPACE)
+	{
+		if (!transaction)
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
+		contextVars = &transaction->tra_context_vars;
+	}
+	else
+	{
+		// "Invalid namespace name %s passed to %s"
+		ERR_post(Arg::Gds(isc_ctx_namespace_invalid) <<
+			Arg::Str(nameSpaceStr) << Arg::Str(RDB_RESET_CONTEXT));
+	}
+
+	impure->vlu_desc.makeLong(0, &impure->vlu_misc.vlu_long);
+	impure->vlu_misc.vlu_long = (SLONG) contextVars->count();
+
+	contextVars->clear();
+
+	return &impure->vlu_desc;
+}
+
+
 dsc* evlGetTranCN(thread_db* tdbb, const SysFunction* function, const NestValueArray& args,
 	impure_value* impure)
 {
@@ -6976,6 +7043,7 @@ const SysFunction SysFunction::functions[] =
 		{RDB_GET_CONTEXT, 2, 2, true, setParamsGetSetContext, makeGetSetContext, evlGetContext, NULL},
 		{"RDB$GET_TRANSACTION_CN", 1, 1, false, setParamsInt64, makeGetTranCN, evlGetTranCN, NULL},
 		{"RDB$ROLE_IN_USE", 1, 1, true, setParamsAsciiVal, makeBooleanResult, evlRoleInUse, NULL},
+		{RDB_RESET_CONTEXT, 1, 1, false, setParamsResetContext, makeLongResult, evlResetContext, NULL},
 		{RDB_SET_CONTEXT, 3, 3, false, setParamsGetSetContext, makeGetSetContext, evlSetContext, NULL},
 		{"RDB$SYSTEM_PRIVILEGE", 1, 1, true, NULL, makeBooleanResult, evlSystemPrivilege, NULL},
 		{"REPLACE", 3, 3, true, setParamsFromList, makeReplace, evlReplace, NULL},

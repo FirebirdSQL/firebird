@@ -717,12 +717,15 @@ using namespace Firebird;
 %token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> PERCENTILE_CONT
+%token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
+%token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> SERVER
 %token <metaNamePtr> OPTIONS
 %token <metaNamePtr> ENV
@@ -4407,14 +4410,31 @@ using
 			{ $<usingNode>$ = newNode<UsingNode>(); }
 			block_input_params(NOTRIAL(&$2->parameters))
 			local_declarations_opt
+			using_autonomous_opt
 			DO
 			using_dml_statement
 		{
 			const auto node = $2;
 			node->localDeclList = $4;
-			node->body = $6;
+			node->inAutonomousTransaction = $5;
+
+			if ($5)
+			{
+				const auto autoNode = newNode<InAutonomousTransactionNode>();
+				autoNode->action = $7;
+				node->body = autoNode;
+			}
+			else
+				node->body = $7;
+
 			$$ = node;
 		}
+	;
+
+%type <boolVal> using_autonomous_opt
+using_autonomous_opt
+	: /* nothing */					{ $$ = false; }
+	| IN AUTONOMOUS TRANSACTION		{ $$ = true; }
 	;
 
 %type <stmtNode> using_dml_statement
@@ -5067,13 +5087,15 @@ keyword_or_column
 	| BTRIM					// added in FB 6.0
 	| CALL
 	| CURRENT_SCHEMA
-	| LTRIM
-	| RTRIM
 	| GREATEST
 	| LEAST
-	| WITHIN
 	| LISTAGG
+	| LTRIM
+	| PERCENTILE_CONT
+	| PERCENTILE_DISC
+	| RTRIM
 	| TRUNCATE
+	| WITHIN
 	;
 
 col_opt
@@ -9262,6 +9284,10 @@ aggregate_function_prefix
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR, $4); }
 	| BIN_XOR_AGG '(' DISTINCT value ')'
 		{ $$ = newNode<BinAggNode>(BinAggNode::TYPE_BIN_XOR_DISTINCT, $4); }
+	| PERCENTILE_CONT '(' value ')' within_group_specification
+		{ $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_CONT, $3, $5); }
+	| PERCENTILE_DISC '(' value ')' within_group_specification
+		{ $$ = newNode<PercentileAggNode>(PercentileAggNode::TYPE_PERCENTILE_DISC, $3, $5); }
 	;
 
 %type <aggNode> listagg_set_function
@@ -9583,6 +9609,7 @@ system_function_std_syntax
 	| RAND
 	| RDB_GET_CONTEXT
 	| RDB_GET_TRANSACTION_CN
+	| RDB_RESET_CONTEXT
 	| RDB_ROLE_IN_USE
 	| RDB_SET_CONTEXT
 	| REPLACE

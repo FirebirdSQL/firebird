@@ -1382,9 +1382,6 @@ interface TraceStatement : Versioned
 {
 	int64 getStmtID();
 	PerformanceInfo* getPerf();
-
-version: // 5.0 -> 6.0
-	PerformanceStats getPerfStats();
 }
 
 interface TraceSQLStatement : TraceStatement
@@ -1394,6 +1391,9 @@ interface TraceSQLStatement : TraceStatement
 	TraceParams getInputs();
 	const string getTextUTF8();
 	const string getExplainedPlan();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceBLRStatement : TraceStatement
@@ -1401,6 +1401,9 @@ interface TraceBLRStatement : TraceStatement
 	const uchar* getData();
 	uint getDataLength();
 	const string getText();
+
+version: // 5.0 -> 6.0
+	PerformanceStats getPerfStats();
 }
 
 interface TraceDYNRequest : Versioned

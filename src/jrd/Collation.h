@@ -52,13 +52,12 @@ class PatternMatcher;
 class Collation : public Firebird::TextType
 {
 public:
-	static Collation* createInstance(MemoryPool& pool, TTypeId id, texttype* tt,
+	static Collation* createInstance(MemoryPool& pool, TTypeId id, texttype* tt, Firebird::IStatus* error,
 		USHORT attributes, Firebird::CharSet* cs);
 
 protected:
 	Collation(TTypeId id, texttype *a_tt, USHORT a_attributes, Firebird::CharSet* a_cs)
-		: TextType(id, a_tt, a_attributes, a_cs),
-		  obsolete(false)
+		: TextType(id, a_tt, a_attributes, a_cs)
 	{
 	}
 
@@ -91,8 +90,17 @@ public:
 	void incUseCount(thread_db* tdbb);
 	void decUseCount(thread_db* tdbb);
 
-public:
-	bool obsolete;
+	Collation* validate()
+	{
+		if (tt)
+			return this;
+
+		raiseError();
+	}
+
+private:
+	Firebird::IStatus* error = nullptr;
+	[[noreturn]] void raiseError();
 };
 
 }	// namespace Jrd

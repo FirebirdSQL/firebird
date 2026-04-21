@@ -301,7 +301,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	else
 		inst_id = PAG_attachment_id(tdbb);
 
-	MutexLockGuard relPerm(rel_pages_mutex, FB_FUNCTION);
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		rel_pages_inst = FB_NEW_POOL(getPool()) RelationPagesInstances(getPool());
@@ -357,10 +357,11 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		jrd_rel* rel = MetadataCache::getVersioned<Cached::Relation>(tdbb, getId(), CacheFlag::AUTOCREATE);
 		fb_assert(rel);
 
-		IndexDescList indices;
-		BTR_all(tdbb, getPermanent(rel), indices, &rel_pages_base);
+		WIN window(rel_pages_base.rel_pg_space_id, -1);
+		index_desc idx;
+		idx.idx_id = idx_invalid;
 
-		for (auto& idx : indices)
+		while (BTR_next_index(tdbb, rel->getPermanent(), idxTran, &idx, &window, &rel_pages_base))
 		{
 			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			QualifiedName idx_name;
@@ -394,6 +395,24 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	return pages;
 }
 
+RelationPages* RelationPermanent::getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id)
+{
+	fb_assert(!(rel_flags & REL_temp_tran));
+
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+
+	if (!rel_pages_inst)
+		return nullptr;
+
+	FB_SIZE_T pos;
+	if (!rel_pages_inst->find(inst_id, pos))
+		return nullptr;
+
+	RelationPages* pages = (*rel_pages_inst)[pos];
+	fb_assert(pages->rel_instance_id == inst_id);
+	return pages;
+}
+
 bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
 {
 	RelationPages* pages = aPages ? aPages : getPages(tdbb, tran, false);
@@ -417,14 +436,18 @@ bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages*
 		pages);
 #endif
 
-	FB_SIZE_T pos;
-#ifdef DEV_BUILD
-	const bool found =
-#endif
-		rel_pages_inst->find(pages->rel_instance_id, pos);
-	fb_assert(found && ((*rel_pages_inst)[pos] == pages) );
+	{ // mutex scope
+		MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
-	rel_pages_inst->remove(pos);
+		FB_SIZE_T pos;
+#ifdef DEV_BUILD
+		const bool found =
+#endif
+			rel_pages_inst->find(pages->rel_instance_id, pos);
+		fb_assert(found && ((*rel_pages_inst)[pos] == pages) );
+
+		rel_pages_inst->remove(pos);
+	}
 
 	if (pages->rel_index_root)
 		IDX_delete_indices(tdbb, this, pages, false);
@@ -432,8 +455,30 @@ bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages*
 	if (pages->rel_pages)
 		DPM_delete_relation_pages(tdbb, this, pages);
 
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+
 	pages->free(rel_pages_free);
 	return true;
+}
+
+void RelationPermanent::freePages(thread_db* tdbb)
+{
+	if (!rel_pages_inst)
+		return;
+
+	// no need in rel_pages_mutex - it's cleanup after DROP TABLE
+	while (rel_pages_inst->hasData())
+	{
+		auto* pages = rel_pages_inst->pop();
+
+		if (pages->rel_index_root)
+			IDX_delete_indices(tdbb, this, pages, false);
+
+		if (pages->rel_pages)
+			DPM_delete_relation_pages(tdbb, this, pages);
+
+		pages->free(rel_pages_free);
+	}
 }
 
 void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber)
@@ -441,6 +486,8 @@ void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNum
 	fb_assert(rel_flags & REL_temp_tran);
 	fb_assert(oldNumber != 0);
 	fb_assert(newNumber != 0);
+
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		return;
@@ -456,6 +503,24 @@ void RelationPermanent::retainPages(thread_db* tdbb, TraNumber oldNumber, TraNum
 
 	pages->rel_instance_id = newNumber;
 	rel_pages_inst->add(pages);
+}
+
+void RelationPermanent::dropTempPages(thread_db* tdbb)
+{
+	if (rel_flags & REL_temp_gtt)
+	{
+		Database* dbb = tdbb->getDatabase();
+		dbb->markForDelete(this);
+	}
+}
+
+void RelationPermanent::clearDropMarker(thread_db* tdbb)
+{
+	if (rel_flags & REL_temp_gtt)
+	{
+		Database* dbb = tdbb->getDatabase();
+		dbb->clearDeleteMark(this);
+	}
 }
 
 void RelationPermanent::getRelLockKey(thread_db* tdbb, UCHAR* key)
@@ -482,6 +547,8 @@ void RelationPermanent::cleanUp() noexcept
 
 void RelationPermanent::fillPagesSnapshot(RelPagesSnapshot& snapshot, const bool attachmentOnly)
 {
+	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+
 	if (rel_pages_inst)
 	{
 		for (FB_SIZE_T i = 0; i < rel_pages_inst->getCount(); i++)
@@ -561,6 +628,14 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, MetaId id, Object
 }
 
 
+Cached::Index* RelationPermanent::ensureIndex(thread_db* tdbb, MetaId id)
+{
+	auto* idp = rel_indices.ensurePermanent(tdbb, id);
+	fb_assert(idp);
+	return idp;
+}
+
+
 PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
 {
 /**************************************
@@ -626,12 +701,6 @@ IndexVersion::IndexVersion(MemoryPool& p, Cached::Index* idp)
 
 void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
 {
-	if (idv->idv_expression_statement)
-		idv->idv_expression_statement->release(tdbb);
-
-	if (idv->idv_condition_statement)
-		idv->idv_condition_statement->release(tdbb);
-
 	delete idv;
 }
 
@@ -1003,6 +1072,29 @@ FB_UINT64 IndexPermanent::makeLockId(MetaId relId, MetaId indexId)
 
 	const int REL_ID_KEY_OFFSET = 16;
 	return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
+}
+
+void IndexPermanent::releaseStatements(thread_db* tdbb)
+{
+	if (idp_expression_statement)
+	{
+		idp_expression_statement->release(tdbb);
+		idp_expression_statement = nullptr;
+		idp_expression = nullptr;
+	}
+	if (idp_condition_statement)
+	{
+		idp_condition_statement->release(tdbb);
+		idp_condition_statement = nullptr;
+		idp_condition = nullptr;
+	}
+}
+
+void IndexPermanent::reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
+{
+	// we need to special handle temp tables with ON PRESERVE ROWS only
+	if (erase && (idp_relation->rel_flags & REL_temp_conn))
+		IDX_mark_temp(tdbb, idp_relation, idp_id, nullptr, tran);
 }
 
 

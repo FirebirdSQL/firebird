@@ -972,6 +972,7 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 		try
 		{
 			AutoSetRestoreFlag<ULONG> execDdl(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
+			internalScratch->flags &= ~DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL;
 
 			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
 			/// req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
@@ -981,7 +982,9 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 			const bool isInternalRequest =
 				(internalScratch->flags & DsqlCompilerScratch::FLAG_INTERNAL_REQUEST);
 
-			if (!isInternalRequest && node->mustBeReplicated())
+			if (!isInternalRequest &&
+				node->mustBeReplicated() &&
+				!(internalScratch->flags & DsqlCompilerScratch::FLAG_ACTUAL_LTT_DDL))
 			{
 				REPL_exec_sql(tdbb, req_transaction, getDsqlStatement()->getOrgText(),
 					*getDsqlStatement()->getSchemaSearchPath());

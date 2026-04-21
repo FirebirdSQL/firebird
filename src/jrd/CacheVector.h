@@ -69,7 +69,7 @@ public:
 	{ }
 
 private:
-	virtual void reset(thread_db* tdbb, bool erase) = 0;
+	virtual void reset(thread_db* tdbb, TraNumber tran, bool erase) = 0;
 	static int blockingAst(void* ast_object);
 
 public:
@@ -785,14 +785,15 @@ public:
 		return list || hasLock();
 	}
 
-	StoreResult storeObject(thread_db* tdbb, Versioned* obj, ObjectBase::Flag fl)
+	StoreResult storeObject(thread_db* tdbb, Versioned* obj, ObjectBase::Flag fl, TraNumber cur = 0)
 	{
 		TraNumber oldest = TransactionNumber::oldestActive(tdbb);
 		TraNumber oldResetAt = resetAt.load(atomics::memory_order_acquire);
 		if (oldResetAt && oldResetAt < oldest)
 			setNewResetAt(oldResetAt, ListEntry<Versioned>::gc(tdbb, &list, oldest));
 
-		TraNumber cur = TransactionNumber::current(tdbb);
+		if (!cur)
+			cur = TransactionNumber::current(tdbb);
 		ListEntry<Versioned>* newEntry = FB_NEW_POOL(*getDefaultMemoryPool()) ListEntry<Versioned>(obj, cur, fl);
 		if (!ListEntry<Versioned>::add(tdbb, list, newEntry))
 		{
@@ -820,7 +821,7 @@ public:
 		}
 
 		if (!(fl & CacheFlag::NOCOMMIT))
-			commit(tdbb);
+			commit(tdbb, cur);
 
 		return rc;
 	}
@@ -848,12 +849,15 @@ public:
 		return nullptr;
 	}
 
-	void commit(thread_db* tdbb)
+	void commit(thread_db* tdbb, TraNumber cur = 0)
 	{
 		HazardPtr<ListEntry<Versioned>> current(list);
 		if (current)
 		{
-			auto flags = current->commit(tdbb, TransactionNumber::current(tdbb), TransactionNumber::next(tdbb));
+			if (!cur)
+				cur = TransactionNumber::current(tdbb);
+
+			auto flags = current->commit(tdbb, cur, TransactionNumber::next(tdbb));
 
 			if (flags & CacheFlag::NOCOMMIT)	// Committed newly created version in cache
 				pingLock(tdbb, flags, this->getId(), Versioned::objectFamily(this));
@@ -878,9 +882,10 @@ public:
 
 private:
 	// called by AST handler
-	void reset(thread_db* tdbb, bool erase) override
+	void reset(thread_db* tdbb, TraNumber tran, bool erase) override
 	{
-		storeObject(tdbb, nullptr, erase ? CacheFlag::ERASED : 0);
+		storeObject(tdbb, nullptr, erase ? CacheFlag::ERASED : 0, tran);
+		Permanent::reloadAst(tdbb, tran, erase);
 	}
 
 public:

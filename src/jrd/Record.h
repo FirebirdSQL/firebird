@@ -31,8 +31,6 @@ namespace Jrd
 {
 	class Record
 	{
-		friend class AutoTempRecord;
-
 	public:
 		Record(MemoryPool& p, const Format* format, const bool temp_active = false)
 			: m_precedence(p), m_data(p), m_fake_nulls(false), m_temp_active(temp_active)
@@ -164,6 +162,11 @@ namespace Jrd
 			m_temp_active = true;
 		}
 
+		void releaseTempActive()
+		{
+			m_temp_active = false;
+		}
+
 		TraNumber getTransactionNumber() const
 		{
 		    return m_transaction_nr;
@@ -188,11 +191,11 @@ namespace Jrd
 	class AutoTempRecord
 	{
 	public:
-		explicit AutoTempRecord(Record* record = NULL)
+		explicit AutoTempRecord(Record* record = nullptr)
 			: m_record(record)
 		{
 			// validate record and its flag
-			fb_assert(!record || record->m_temp_active);
+			fb_assert(!record || record->isTempActive());
 		}
 
 		~AutoTempRecord()
@@ -205,7 +208,7 @@ namespace Jrd
 			// class object can be initialized just once
 			fb_assert(!m_record);
 			// validate record and its flag
-			fb_assert(!record || record->m_temp_active);
+			fb_assert(!record || record->isTempActive());
 
 			m_record = record;
 			return m_record;
@@ -215,9 +218,9 @@ namespace Jrd
 		{
 			if (m_record)
 			{
-				fb_assert(m_record->m_temp_active);
-				m_record->m_temp_active = false;
-				m_record = NULL;
+				fb_assert(m_record->isTempActive());
+				m_record->releaseTempActive();
+				m_record = nullptr;
 			}
 		}
 

@@ -329,8 +329,8 @@ void activateIndex(BurpGlobals* tdgbl, const QualifiedMetaString& indexName)
 
 	if (fError)
 	{
-		BURP_print(false, 173, indexName.toQuotedString().c_str());
-		BURP_print_status(false, &local_status_vector);
+		BURP_print(173, indexName.toQuotedString().c_str());
+		BURP_print_status(&local_status_vector);
 		tdgbl->flag_on_line = false;
 
 		ROLLBACK activateIndexTran;
@@ -380,7 +380,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 				case isc_sort_mem_err:
 				case isc_no_dup:
 					indexName = QualifiedMetaString::parseSchemaObject((TEXT*) tdgbl->status_vector[3]);
-					BURP_print_status(false, &tdgbl->status_vector);
+					BURP_print_status(&tdgbl->status_vector);
 					FOR (REQUEST_HANDLE req_handle3)
 						IDX IN RDB$INDICES
 						WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName.schema.c_str(), '') AND
@@ -390,25 +390,25 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 						MODIFY IDX USING
 							IDX.RDB$INDEX_INACTIVE = TRUE;
 						END_MODIFY;
-						BURP_print(false, 240, indexName.toQuotedString().c_str());
+						BURP_print(240, indexName.toQuotedString().c_str());
 						// msg 240 Index \"%s\" failed to activate because:
 
 						if (error_code == isc_no_dup)
 						{
-							BURP_print(false, 241);
+							BURP_print(241);
 							// msg 241 The unique index has duplicate values or NULLs
-							BURP_print(false, 242);
+							BURP_print(242);
 							// msg 242 Delete or Update duplicate values or NULLs, and activate index with
 						}
 						else
 						{
-							BURP_print(false, 244);
+							BURP_print(244);
 							// msg 244 Not enough disk space to create the sort file for an index
-							BURP_print(false, 245);
+							BURP_print(245);
 							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
 						}
 
-						BURP_print(false, 243, indexName.toQuotedString().c_str());
+						BURP_print(243, indexName.toQuotedString().c_str());
 						// msg 243 ALTER INDEX \"%s\" ACTIVE;
 					}
 					END_FOR
@@ -657,7 +657,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		(Arg::Gds(ENCODE_ISC_MSG(246, burp_msg_fac)) << Arg::Gds(ENCODE_ISC_MSG(247, burp_msg_fac))).copyTo(&st);
 			// msg 246 Database is not online due to failure to activate one or more indices.
 			// msg 247 Run gfix -online to bring database online without active indices.
-		BURP_print_status(true, &st);
+		BURP_print_status(&st, true);
 
 		return FINI_DB_NOT_ONLINE;
 	}
@@ -761,7 +761,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 			file->fil_length -= start - 1;
 		else
 		{
-			BURP_print (false, 96, SafeArg() << file->fil_length << (start - 1));
+			BURP_print(96, SafeArg() << file->fil_length << (start - 1));
 			// msg 96  length given for initial file (%ld) is less than minimum (%ld)
 			file->fil_length = 0;
 		}
@@ -777,9 +777,9 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print (false, 174);
+			BURP_print(174);
 			// msg 174 cannot commit files
-			BURP_print_status (false, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector);
 			ROLLBACK;
 			ON_ERROR
 				general_on_error ();
@@ -814,7 +814,7 @@ void bad_attribute(scan_attr_t scan_next_attr, att_type bad_attr, USHORT type)
 		static const SafeArg dummy;
 		TEXT t_name[128];
 		fb_msg_format(NULL, burp_msg_fac, type, sizeof(t_name), t_name, dummy);
-		BURP_print (false, 80, SafeArg() << t_name << int(bad_attr));
+		BURP_print(80, SafeArg() << t_name << int(bad_attr));
 		// msg 80  don't recognize %s attribute %ld -- continuing
 		int skip_l = get(tdgbl);
 		if (skip_l)
@@ -826,13 +826,13 @@ void bad_attribute(scan_attr_t scan_next_attr, att_type bad_attr, USHORT type)
 		{
 			skip_count = tdgbl->gbl_sw_skip_count;
 			get_skip(tdgbl, skip_count);
-			BURP_print (false, 203, SafeArg() << skip_count << int(bad_attr));
+			BURP_print(203, SafeArg() << skip_count << int(bad_attr));
 			// msg 203: skipped %d bytes after reading a bad attribute %d
 		}
 		else
 		{
 			++skip_count;
-			BURP_print (false, 205, SafeArg() << skip_count << int(bad_attr));
+			BURP_print(205, SafeArg() << skip_count << int(bad_attr));
 			// msg 205: skipped %d bytes looking for next valid attribute, encountered attribute %d
 		}
 		scan_next_attr = AFTER_SKIP;
@@ -980,14 +980,16 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	}
 
 	if (record != rec_database)
-		BURP_error_redirect(NULL, 32);
+	{
+		BURP_error(32, true);
 		// msg 32 Expected database description record
+	}
 
 	if (tdgbl->gbl_sw_page_size)
 	{
 		if (tdgbl->gbl_sw_page_size < page_size)
 		{
-			BURP_print (false, 110, SafeArg() << page_size << tdgbl->gbl_sw_page_size);
+			BURP_print(110, SafeArg() << page_size << tdgbl->gbl_sw_page_size);
 			// msg 110 Reducing the database page size from %ld bytes to %ld bytes
 		}
 		page_size = tdgbl->gbl_sw_page_size;
@@ -1108,7 +1110,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		provider->setDbCryptCallback(&status_vector, MVOL_get_crypt(tdgbl));
 		if (!status_vector.isSuccess())
 		{
-			BURP_print_status(true, &status_vector);
+			BURP_print_status(&status_vector, true);
 			BURP_exit_local(FINI_ERROR, tdgbl);
 		}
 	}
@@ -1138,7 +1140,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 
 	if (tdgbl->gbl_sw_version && !tdgbl->uSvc->isService())
 	{
-		BURP_print(false, 139, file_name);
+		BURP_message(139, SafeArg() << file_name);
 		// msg 139 Version(s) for database "%s"
 		OutputVersion outputVersion("\t%s\n");
 		Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, DB, &outputVersion);
@@ -1278,7 +1280,7 @@ void decompress(BurpGlobals* tdgbl, UCHAR* buffer, ULONG length)
 		{
 			if (end - p < count)
 			{
-				BURP_print (false, 202, SafeArg() << count << (end - p));
+				BURP_print(202, SafeArg() << count << (end - p));
 				// msg 202: adjusting a decompression length error: invalid length  %d was adjusted to %d
 				count = end - p;
 			}
@@ -1288,7 +1290,7 @@ void decompress(BurpGlobals* tdgbl, UCHAR* buffer, ULONG length)
 		{
 			if (end + count < p)
 			{
-				BURP_print(false, 202, SafeArg() << count << (p - end));
+				BURP_print(202, SafeArg() << count << (p - end));
 				// msg 202: adjusting a decompression length error: invalid length %d was adjusted to %d
 				count = p - end;
 			}
@@ -1298,8 +1300,10 @@ void decompress(BurpGlobals* tdgbl, UCHAR* buffer, ULONG length)
 		}
 	}
 
-	if (p > end) {
-		BURP_error_redirect(NULL, 34); // msg 34 RESTORE: decompression length error
+	if (p > end)
+	{
+		BURP_error(34, true);
+		// msg 34 RESTORE: decompression length error
 	}
 }
 
@@ -1329,7 +1333,7 @@ SLONG get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length)
 		{
 			if (length < count)
 			{
-				//BURP_print(false, 202, SafeArg() << count << length);
+				//BURP_print(202, SafeArg() << count << length);
 				// msg 202: adjusting a decompression length error: invalid length  %d was adjusted to %d
 				count = length;
 			}
@@ -1340,7 +1344,7 @@ SLONG get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length)
 		{
 			if (length < -count)
 			{
-				//BURP_print(false, 202, SafeArg() << count << -length);
+				//BURP_print(202, SafeArg() << count << -length);
 				// msg 202: adjusting a decompression length error: invalid length %d was adjusted to %d
 				count = -length;
 			}
@@ -1350,8 +1354,10 @@ SLONG get_compressed(BurpGlobals* tdgbl, UCHAR* buffer, SLONG length)
 		}
 	}
 
-	if (length < 0) {
-		BURP_error_redirect(NULL, 34); // msg 34 RESTORE: decompression length error
+	if (length < 0)
+	{
+		BURP_error(34, true);
+		// msg 34 RESTORE: decompression length error
 	}
 
 	return p - buffer;
@@ -1421,7 +1427,7 @@ burp_rel* find_relation(BurpGlobals* tdgbl, const QualifiedMetaString& name)
 			return relation;
 	}
 
-	BURP_error_redirect(NULL, 35, SafeArg() << name.toQuotedString().c_str());
+	BURP_error(35, true, SafeArg() << name.toQuotedString().c_str());
 	// msg 35 can't find relation %s
 
 	return NULL;
@@ -1643,7 +1649,7 @@ bool get_acl(BurpGlobals* tdgbl, const TEXT* owner_nm, ISC_QUAD* blob_id, ISC_QU
 
 		default:
 			// msg 79 don't understand blob info item %ld
-			BURP_print (false, 79, SafeArg() << int(item));
+			BURP_print(79, SafeArg() << int(item));
 			// CVC: do you return, without closing the blob, dear function???
 			if (!blob.close())
 			{
@@ -1798,8 +1804,10 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 				if (field->fld_number == field_number)
 					break;
 			}
-			if (!field) {
-				BURP_error_redirect(NULL, 36);	// msg 36 Can't find field for blob
+			if (!field)
+			{
+				BURP_error(36, true);
+				// msg 36 Can't find field for blob
 			}
 
 			field_length = field->fld_length;
@@ -2091,7 +2099,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 					if (get_attribute(&attribute, tdgbl) != att_xdr_array)
 					{
 						// msg 55 Expected XDR record length
-						BURP_error_redirect(NULL, 55);
+						BURP_error(55, true);
 					}
 					else
 					{
@@ -2128,9 +2136,9 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 						 elements_written * field->fld_length, (*buffer) + data_at);
 			if (status_vector->hasData())
 			{
-				BURP_print (false, 81, field->fld_name);
+				BURP_print(81, field->fld_name);
 				// msg 81 error accessing blob field %s -- continuing
-				BURP_print_status (true, &status_vector);
+				BURP_print_status(&status_vector);
 #ifdef DEBUG
 				PRETTY_print_sdl (blr_buffer, NULL, NULL, 0);
 #endif
@@ -2226,7 +2234,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 		{
 			if (get_attribute(&attribute, tdgbl) != att_xdr_array)
 			{
-				BURP_error_redirect(NULL, 55);
+				BURP_error(55, true);
 				// msg 55 Expected XDR record length
 			}
 			else
@@ -2263,9 +2271,9 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 					 return_length, *buffer);
 		if (status_vector->hasData())
 		{
-			BURP_print (false, 81, field->fld_name);
+			BURP_print(81, field->fld_name);
 			// msg 81 error accessing blob field %s -- continuing
-			BURP_print_status (false, &status_vector);
+			BURP_print_status(&status_vector);
 #ifdef DEBUG
 			PRETTY_print_sdl (blr_buffer, NULL, NULL, 0);
 #endif
@@ -2336,7 +2344,7 @@ void get_blob(BurpGlobals* tdgbl, IBatch* batch, const burp_fld* fields, UCHAR* 
 
 	if (!field)
 	{
-		BURP_error_redirect(NULL, 36);
+		BURP_error(36, true);
 		// msg 36 Can't find field for blob
 	}
 
@@ -3155,9 +3163,9 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental)
 		{
-			BURP_print(false, 138, relation->rel_name.toQuotedString().c_str());
+			BURP_print(138, relation->rel_name.toQuotedString().c_str());
 			// msg 138 validation error on field in relation %s
-			BURP_print_status (false, status_vector);
+			BURP_print_status(status_vector);
 		}
 		else
 			BURP_error_redirect(status_vector, 47);
@@ -3167,10 +3175,9 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental)
 		{
+			BURP_print(114, relation->rel_name.toQuotedString().c_str());
 			// msg 114 restore failed for record in relation %s
-			BURP_print(false, 114, relation->rel_name.toQuotedString().c_str());
-
-			BURP_print_status(false, status_vector, 342);	// isc_gbak_invalid_data
+			BURP_print_status(status_vector, false, 342);	// isc_gbak_invalid_data
 		}
 		else
 			BURP_error_redirect(status_vector, 342);	// isc_gbak_invalid_data
@@ -3179,9 +3186,9 @@ static void check_data_error(BurpGlobals* tdgbl, IStatus* status_vector, const b
 	{
 		if (tdgbl->gbl_sw_incremental && isc_sqlcode(status_vector->getErrors()) != -902)
 		{
-			BURP_print (false, 114, relation->rel_name.toQuotedString().c_str());
+			BURP_print(114, relation->rel_name.toQuotedString().c_str());
 			// msg 114 restore failed for record in relation %s
-			BURP_print_status(false, status_vector);
+			BURP_print_status(status_vector);
 		}
 		else
 			BURP_error_redirect(status_vector, 48);
@@ -3215,7 +3222,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 			case isc_sort_mem_err:
 			case isc_no_dup:
 				indexName = QualifiedMetaString::parseSchemaObject((TEXT*) tdgbl->status_vector[3]);
-				BURP_print_status(false, &tdgbl->status_vector);
+				BURP_print_status(&tdgbl->status_vector);
 
 				FOR(REQUEST_HANDLE req_handle)
 					IDX IN RDB$INDICES
@@ -3226,25 +3233,25 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 					{
 						IDX.RDB$INDEX_INACTIVE = TRUE;
 
-						BURP_print(false, 240, indexName.toQuotedString().c_str());
+						BURP_print(240, indexName.toQuotedString().c_str());
 						// msg 240 Index \"%s\" failed to activate because:
 
 						if (error_code == isc_no_dup)
 						{
-							BURP_print(false, 241);
+							BURP_print(241);
 							// msg 241 The unique index has duplicate values or NULLs
-							BURP_print(false, 242);
+							BURP_print(242);
 							// msg 242 Delete or Update duplicate values or NULLs, and activate index with
 						}
 						else
 						{
-							BURP_print(false, 244);
+							BURP_print(244);
 							// msg 244 Not enough disk space to create the sort file for an index
-							BURP_print(false, 245);
+							BURP_print(245);
 							// msg 245 Set the TMP environment variable to a directory on a filesystem that does have enough space, and activate index with
 						}
 
-						BURP_print(false, 243, indexName.toQuotedString().c_str());
+						BURP_print(243, indexName.toQuotedString().c_str());
 						// msg 243 ALTER INDEX \"%s\" ACTIVE
 					}
 					END_MODIFY
@@ -3258,9 +3265,9 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 				break;
 
 			default:
-				BURP_print(false, 69, relation->rel_name.toQuotedString().c_str());
+				BURP_print(69, relation->rel_name.toQuotedString().c_str());
 				// msg 69 commit failed on relation %s
-				BURP_print_status(false, &tdgbl->status_vector);
+				BURP_print_status(&tdgbl->status_vector);
 				ROLLBACK;
 				ON_ERROR
 					general_on_error();
@@ -3283,7 +3290,8 @@ void fix_exception(BurpGlobals* tdgbl, const QualifiedMetaString& name, scan_att
 		if (!failed_attrib)
 		{
 			failed_attrib = attribute;
-			BURP_print(false, 313, SafeArg() << failed_attrib << name.toQuotedString().c_str());
+			BURP_print(313, SafeArg() << failed_attrib << name.toQuotedString().c_str());
+			// msg 313 Trying to recover from unexpected attribute @1 due to wrong message length for exception @2
 		}
 
 		// Notice we use 1021 instead of 1023 because this is the maximum length
@@ -3364,7 +3372,10 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 			while (!task->isStopped())
 			{
 				if (get(tdgbl) != att_data_length)
-					BURP_error_redirect(NULL, 39); // msg 39 expected record length
+				{
+					BURP_error(39, true);
+					// msg 39 expected record length
+				}
 
 				RCRD_LENGTH len = get_int32(tdgbl);
 
@@ -3386,7 +3397,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 				{
 					if (get(tdgbl) != att_xdr_length)
 					{
-						BURP_error_redirect(NULL, 55);
+						BURP_error(55, true);
 						// msg 55 Expected XDR record length
 					}
 					else
@@ -3406,7 +3417,10 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 					p = buffer;
 
 				if (get(tdgbl) != att_data_data)
-					BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
+				{
+					BURP_error(41, true);
+					// msg 41 expected data attribute
+				}
 
 				if (tdgbl->gbl_sw_compress)
 					decompress(tdgbl, p, len);
@@ -3581,7 +3595,7 @@ bool get_exception(BurpGlobals* tdgbl)
 					else if (!X.RDB$MESSAGE.NULL)
 					{
 						msg_seen = true;
-						BURP_print(false, 312, SafeArg() << attribute << name.toQuotedString().c_str());
+						BURP_print(312, SafeArg() << attribute << name.toQuotedString().c_str());
 						eat_text(tdgbl);
 					}
 					else
@@ -3598,7 +3612,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						BURP_error(311, true, SafeArg() << attribute << name.toQuotedString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
-						BURP_print(false, 312, SafeArg() << attribute << name.toQuotedString().c_str());
+						BURP_print(312, SafeArg() << attribute << name.toQuotedString().c_str());
 						eat_text2(tdgbl);
 					}
 					else
@@ -3730,7 +3744,7 @@ bool get_exception(BurpGlobals* tdgbl)
 					else if (!X.RDB$MESSAGE.NULL)
 					{
 						msg_seen = true;
-						BURP_print(false, 312, SafeArg() << attribute << name.toQuotedString().c_str());
+						BURP_print(312, SafeArg() << attribute << name.toQuotedString().c_str());
 						eat_text(tdgbl);
 					}
 					else
@@ -3747,7 +3761,7 @@ bool get_exception(BurpGlobals* tdgbl)
 						BURP_error(311, true, SafeArg() << attribute << name.toQuotedString().c_str());
 					else if (!X.RDB$MESSAGE.NULL)
 					{
-						BURP_print(false, 312, SafeArg() << attribute << name.toQuotedString().c_str());
+						BURP_print(312, SafeArg() << attribute << name.toQuotedString().c_str());
 						eat_text2(tdgbl);
 					}
 					else
@@ -6748,6 +6762,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$CONDITION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
+		X.RDB$FORMAT.NULL = TRUE;
 
 		if (relation->rel_name.schema.hasData())
 		{
@@ -8294,9 +8309,9 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 				COMMIT
 				// existing ON_ERROR continues past error, beck
 				ON_ERROR
-					BURP_print(false, 171, relation->rel_name.toQuotedString().c_str());
+					BURP_print(171, relation->rel_name.toQuotedString().c_str());
 					// msg 171: error committing metadata for relation %s
-					BURP_print_status (false, &tdgbl->status_vector);
+					BURP_print_status(&tdgbl->status_vector);
 					ROLLBACK;
 					ON_ERROR
 						general_on_error ();
@@ -8489,8 +8504,10 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 	}
 
 	if (!relation)
-		BURP_error_redirect(NULL, 49);
-	// msg 49 no relation name for data
+	{
+		BURP_error(49, true);
+		// msg 49 no relation name for data
+	}
 
 	// Eat up misc. records
 	rec_type record;
@@ -8734,7 +8751,10 @@ bool get_sql_roles(BurpGlobals* tdgbl)
 					{
 						const ULONG l = get(tdgbl);
 						if (l > sizeof(X.RDB$SYSTEM_PRIVILEGES))
-							BURP_error_redirect(NULL, 46);	// msg 46 string truncated
+						{
+							BURP_error(46, true);
+							// msg 46 string truncated
+						}
 
 						if (l)
 							get_block(tdgbl, (UCHAR*) (X.RDB$SYSTEM_PRIVILEGES), l);
@@ -9141,7 +9161,7 @@ bool get_db_creator(BurpGlobals* tdgbl)
 
 			BURP_verbose(393, MetaString(usr).toQuotedString());
 			if (strlen(usr) > sizeof(C.RDB$USER))
-				BURP_error_redirect(NULL, 46);
+				BURP_error(46, true);
 
 			C.RDB$USER.NULL = userSet ? FALSE : TRUE;
 			if (userSet)
@@ -9225,7 +9245,7 @@ bool get_security_class(BurpGlobals* tdgbl)
 				is_valid_sec_class = is_ascii_name(X.RDB$SECURITY_CLASS, name.length());
 				if (!is_valid_sec_class)
 				{
-					BURP_print(false, 234, name.toQuotedString().c_str());
+					BURP_print(234, name.toQuotedString().c_str());
 					// msg 234   Skipped bad security class entry: %s
 					break;
 				}
@@ -9370,8 +9390,10 @@ USHORT get_text(BurpGlobals* tdgbl, TEXT* text, ULONG length)
 	const ULONG l = get(tdgbl);
 
 	if (length <= l)
-		BURP_error_redirect(NULL, 46);
+	{
+		BURP_error(46, true);
 		// msg 46 string truncated
+	}
 
 	if (l)
 		text = (TEXT*) get_block(tdgbl, (UCHAR*) text, l);
@@ -9399,7 +9421,7 @@ USHORT get_text2(BurpGlobals* tdgbl, TEXT* text, ULONG length)
 
 	if (length <= len)
 	{
-		BURP_error_redirect(NULL, 46);
+		BURP_error(46, true);
 		// msg 46 string truncated
 	}
 
@@ -9517,9 +9539,9 @@ bool get_trigger_old (BurpGlobals* tdgbl, burp_rel* relation)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print (false, 94, name);
+			BURP_print(94, name);
 			// msg 94 trigger %s is invalid
-			BURP_print_status(false, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector);
 			ROLLBACK;
 			ON_ERROR
 				general_on_error ();
@@ -9896,9 +9918,9 @@ bool get_trigger(BurpGlobals* tdgbl)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print(false, 94, name.toQuotedString().c_str());
+			BURP_print(94, name.toQuotedString().c_str());
 			// msg 94 trigger %s is invalid
-			BURP_print_status(false, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector);
 			ROLLBACK;
 			ON_ERROR
 				general_on_error ();
@@ -10014,9 +10036,9 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 		COMMIT
 		// existing ON_ERROR continues past error, beck
 		ON_ERROR
-			BURP_print(false, 94, name.toQuotedString().c_str());
+			BURP_print(94, name.toQuotedString().c_str());
 			// msg 94 trigger %s is invalid
-			BURP_print_status(false, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector);
 			ROLLBACK;
 			ON_ERROR
 				general_on_error ();
@@ -10388,7 +10410,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		ON_ERROR
 			if (tdgbl->status_vector->getErrors()[1] == isc_integ_fail)
 			{
-				BURP_print_status(false, &tdgbl->status_vector);
+				BURP_print_status(&tdgbl->status_vector);
 				tdgbl->flag_on_line = false;
 				return true;
 			}
@@ -11228,8 +11250,10 @@ void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 					break;
 			}
 			if (!field)
-				BURP_error_redirect(NULL, 36);
+			{
+				BURP_error(36, true);
 				// msg 36 Can't find field for blob
+			}
 			break;
 
 		case att_array_dimensions:
@@ -11266,8 +11290,10 @@ void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 	if (tdgbl->gbl_sw_transportable)
 	{
 		if (get_attribute(&attribute, tdgbl) != att_xdr_array)
-			BURP_error_redirect(NULL, 55);
+		{
+			BURP_error(55, true);
 			// msg 55 Expected XDR record length
+		}
 		else
 		{
 			lcount = get(tdgbl);
@@ -11363,20 +11389,26 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
 		while (true)
 		{
 			if (get(tdgbl) != att_data_length)
-				BURP_error_redirect(NULL, 39);
+			{
+				BURP_error(39, true);
 				// msg 39 expected record length
+			}
 			USHORT len = (USHORT) get_int32(tdgbl);
 			if (tdgbl->gbl_sw_transportable)
 			{
 				if (get(tdgbl) != att_xdr_length)
-					BURP_error_redirect(NULL, 55);
+				{
+					BURP_error(55, true);
 					// msg 55 Expected XDR record length
+				}
 				else
 					len = (USHORT) get_int32(tdgbl);
 			}
 			if (get(tdgbl) != att_data_data)
-				BURP_error_redirect(NULL, 41);
+			{
+				BURP_error(41, true);
 				// msg 41 expected data attribute
+			}
 			if (len)
 			{
 				if (tdgbl->gbl_sw_compress)
@@ -12456,14 +12488,16 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const QualifiedMetaString& gen_name, S
 	if (status_vector->hasData())
 	{
 		fb_print_blr(blr_buffer, blr_length, NULL, NULL, 0);
-		BURP_error_redirect(&status_vector, 42); // msg 42 Failed in store_blr_gen_id
+		BURP_error_redirect(&status_vector, 42);
+		// msg 42 Failed in store_blr_gen_id
 	}
 
 	gen_id_reqh->start(&status_vector, gds_trans, 0);
 	if (status_vector->hasData())
 	{
 		fb_print_blr(blr_buffer, blr_length, NULL, NULL, 0);
-		BURP_error_redirect(&status_vector, 42); // msg 42 Failed in store_blr_gen_id
+		BURP_error_redirect(&status_vector, 42);
+		// msg 42 Failed in store_blr_gen_id
 	}
 
 	BURP_verbose (185, SafeArg() << gen_name.toQuotedString().c_str() << value);
@@ -12869,7 +12903,7 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 
 		if (tdgbl->status_vector->getErrors()[1] == isc_dsql_error)
 		{
-			BURP_print_status(false, &tdgbl->status_vector);
+			BURP_print_status(&tdgbl->status_vector);
 			tdgbl->flag_on_line = false;
 		}
 		else
@@ -13938,7 +13972,7 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 	if (fbStatus->hasData())
 	{
 		if (m_batchOk)
-			BURP_print_status(true, fbStatus);
+			BURP_print_status(fbStatus, true);
 	}
 	else if (!m_batchOk)
 	{
@@ -14011,7 +14045,7 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 	BURP_verbose(371, m_relation->rel_name.toQuotedString());
 	// msg 371 could not start batch when restoring table @1, trying old way
 
-	//BURP_print_status(false, fbStatus);
+	//BURP_print_status(fbStatus);
 
 	// Possible reason of fail - use of keywords as fields in old backup of dialect1 DB
 	// Try to roll back to use of old version (fieldnames independent)
@@ -14543,7 +14577,7 @@ bool RestoreRelationTask::fileReader(Item& item)
 		//	<att_data_data> <data>
 
 		if (get(tdgbl) != att_data_length)
-			BURP_error_redirect(NULL, 39); // msg 39 expected record length
+			BURP_error(39, true); // msg 39 expected record length
 
 		RCRD_LENGTH len = get_int32(tdgbl);
 
@@ -14556,14 +14590,16 @@ bool RestoreRelationTask::fileReader(Item& item)
 		if (tdgbl->gbl_sw_transportable)
 		{
 			if (get(tdgbl) != att_xdr_length)
-				BURP_error_redirect(NULL, 55);
+			{
+				BURP_error(55, true);
 				// msg 55 Expected XDR record length
+			}
 			else
 				len = get_int32(tdgbl);
 		}
 
 		if (get(tdgbl) != att_data_data)
-			BURP_error_redirect(NULL, 41); // msg 41 expected data attribute
+			BURP_error(41, true); // msg 41 expected data attribute
 
 		// check if record fits into current buffer and get a new one if needed
 		// note, non-compressible record takes 1 additional byte per every 127 bytes
@@ -14572,7 +14608,10 @@ bool RestoreRelationTask::fileReader(Item& item)
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
 		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
 
-		if (static_cast<FB_SSIZE_T>(len) + attLen + overhead > space)
+		// Reserve space for the after payload rec_* marker: rec_data or rec_relation_end.
+		const FB_SSIZE_T nextRecordMarker = 1;
+
+		if ((static_cast<FB_SSIZE_T>(len) + attLen + overhead + nextRecordMarker) > space)
 		{
 			if (ioBuf)
 			{
@@ -14871,7 +14910,7 @@ IOBuffer* RestoreRelationTask::read_array(BurpGlobals* tdgbl, IOBuffer* ioBuf)
 		if (get_attribute(&attribute, tdgbl) != att_xdr_array)
 		{
 			// msg 55 Expected XDR record length
-			BURP_error_redirect(NULL, 55);
+			BURP_error(55, true);
 		}
 		else
 		{

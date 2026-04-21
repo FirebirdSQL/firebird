@@ -43,6 +43,8 @@
 #include "../jrd/Statement.h"
 #include "../jrd/recsrc/RecordSource.h"
 
+#include <cmath>
+
 namespace Jrd {
 
 // AB: 2005-11-05
@@ -83,6 +85,9 @@ class PlanNode;
 class SortNode;
 class River;
 class SortedStream;
+
+// List of booleans
+typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> BooleanList;
 
 
 //
@@ -275,7 +280,7 @@ public:
 	{
 		// Conjunctions and their options
 		BoolExprNode* node;
-		unsigned flags;
+		unsigned flags = 0;
 	};
 
 	static constexpr unsigned CONJUNCT_USED		= 1;	// conjunct is used
@@ -445,23 +450,13 @@ public:
 			}
 		}
 
-		// dimitr:
-		//
-		// Adjust to values similar to those used when the index selectivity is missing.
-		// The final value will be in the range [0.1 .. 0.5] that also matches the v3/v4 logic.
-		// This estimation is quite pessimistic but it seems to work better in practice,
-		// especially when multiple unmatchable booleans are used.
+		if (!factor)
+			factor = DEFAULT_SELECTIVITY;
 
-		constexpr auto adjustment = DEFAULT_SELECTIVITY / REDUCE_SELECTIVITY_FACTOR_EQUALITY;
-		const auto selectivity = factor * adjustment;
-
-		return MIN(selectivity, MAXIMUM_SELECTIVITY / 2);
+		return MIN(factor, MAXIMUM_SELECTIVITY);
 	}
 
-	static void adjustSelectivity(double& selectivity, double factor) noexcept
-	{
-		selectivity = MIN(selectivity * factor, MAXIMUM_SELECTIVITY);
-	}
+	static double estimateSelectivity(const BooleanList& filters, double cardinality = 0, unsigned priorConjuncts = 0);
 
 	double getDependentSelectivity();
 
@@ -483,6 +478,14 @@ public:
 		}
 
 		return false;
+	}
+
+	static double applyBackoff(double selectivity, unsigned priorConjuncts)
+	{
+		for (unsigned i = 0; i < priorConjuncts; i++)
+			selectivity = std::sqrt(selectivity);
+
+		return selectivity;
 	}
 
 	static RecordSource* compile(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
@@ -565,13 +568,13 @@ public:
 									ConjunctIterator& iter);
 	RecordSource* applyResidualBoolean(RecordSource* rsb);
 
-	BoolExprNode* composeBoolean(ConjunctIterator& iter,
-								 double* selectivity = nullptr);
+	BoolExprNode* composeBoolean(ConjunctIterator& iter, BooleanList& filters);
 
-	BoolExprNode* composeBoolean(double* selectivity = nullptr)
+	BoolExprNode* composeBoolean()
 	{
+		BooleanList filters;
 		auto iter = getBaseConjuncts();
-		return composeBoolean(iter, selectivity);
+		return composeBoolean(iter, filters);
 	}
 
 	bool checkEquiJoin(BoolExprNode* boolean);
@@ -609,7 +612,7 @@ private:
 					SortNode** sortClause,
 					const PlanNode* planClause);
 	bool generateEquiJoin(RiverList& rivers, JoinType joinType);
-	void generateInnerJoin(StreamList& streams,
+	void generateInnerJoin(const StreamList& streams,
 						   RiverList& rivers,
 						   SortNode** sortClause,
 						   const PlanNode* planClause);
@@ -657,8 +660,6 @@ enum segmentScanType {
 	segmentScanStarting,
 	segmentScanList
 };
-
-typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> BooleanList;
 
 struct IndexScratchSegment
 {
@@ -719,11 +720,12 @@ typedef Firebird::ObjectsArray<IndexScratch> IndexScratchList;
 struct InversionCandidate
 {
 	explicit InversionCandidate(MemoryPool& p)
-		: conjuncts(p), matches(p), dbkeyRanges(p), dependentFromStreams(p)
+		: matches(p), filters(p), dbkeyRanges(p), dependentFromStreams(p)
 	{}
 
 	double selectivity = MAXIMUM_SELECTIVITY;
 	double matchSelectivity = MAXIMUM_SELECTIVITY;
+	double filterSelectivity = MAXIMUM_SELECTIVITY;
 	double cost = 0;
 	unsigned nonFullMatchedSegments = MAX_INDEX_SEGMENTS + 1;
 	unsigned matchedSegments = 0;
@@ -737,10 +739,19 @@ struct InversionCandidate
 	bool unique = false;
 	bool navigated = false;
 
-	BooleanList conjuncts;							// booleans referring our stream
 	BooleanList matches;							// booleans matched to any index
+	BooleanList filters;							// unmatched booleans referring our stream
 	Firebird::Array<DbKeyRangeNode*> dbkeyRanges;
 	SortedStreamList dependentFromStreams;
+
+	void applyFilters(double cardinality)
+	{
+		fb_assert(selectivity == matchSelectivity);
+		fb_assert(filterSelectivity == MAXIMUM_SELECTIVITY);
+		const auto matchCount = (unsigned) matches.getCount();
+		filterSelectivity = Optimizer::estimateSelectivity(filters, cardinality, matchCount);
+		selectivity *= filterSelectivity;
+	}
 };
 
 typedef Firebird::HalfStaticArray<InversionCandidate*, OPT_STATIC_ITEMS> InversionCandidateList;
@@ -870,7 +881,7 @@ class InnerJoin final : private Firebird::PermanentStorage
 	{
 	public:
 		StreamInfo(MemoryPool& p, StreamType num)
-			: number(num), baseConjuncts(p), indexedRelationships(p)
+			: number(num), indexedRelationships(p)
 		{}
 
 		bool isIndependent() const noexcept
@@ -917,7 +928,6 @@ class InnerJoin final : private Firebird::PermanentStorage
 		bool used = false;
 		unsigned previousExpectedStreams = 0;
 
-		BooleanList baseConjuncts;
 		IndexedRelationships indexedRelationships;
 	};
 

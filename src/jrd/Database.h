@@ -96,6 +96,7 @@ class CryptoManager;
 class KeywordsMap;
 class MetadataCache;
 class ExtEngineManager;
+class RelationPermanent;
 
 // Flags to indicate normal internal requests vs. dyn internal requests
 // IRQ_REQUESTS & DYN_REQUESTS are depecated
@@ -292,6 +293,17 @@ public:
 		bool active;
 	};
 
+	struct DelPagesMarker
+	{
+		TraNumber			tran;
+		RelationPermanent*	relation;
+
+		static TraNumber generate(const DelPagesMarker& item)
+		{
+			return item.tran;
+		}
+	};
+
 	static Database* create(Firebird::IPluginConfig* pConf, bool shared)
 	{
 		Firebird::MemoryStats temp_stats;
@@ -459,6 +471,10 @@ private:
 	Firebird::GenericMap<Firebird::Pair<Firebird::Left<
 		Firebird::MetaString, UserId*> > > dbb_user_ids;	// set of used UserIds
 
+	Firebird::SortedArray<DelPagesMarker, Firebird::EmptyStorage<DelPagesMarker>,
+		TraNumber, DelPagesMarker> dbb_del_pages;
+	Firebird::Mutex  dbb_del_pages_mutex;
+
 public:
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -468,6 +484,11 @@ public:
 
 	// returns the minimum IO block size
 	ULONG getIOBlockSize() const;
+
+	// control temporary pages cleanup
+	void markForDelete(RelationPermanent* relation);
+	void clearDeleteMark(RelationPermanent* relation);
+	void deleteTempPages(thread_db* tdbb, TraNumber oldestActive);
 
 #ifdef DEV_BUILD
 	// returns true if main lock is in exclusive state

@@ -178,7 +178,7 @@ static void protect_system_table_delupd(thread_db* tdbb, const jrd_rel* relation
 	bool force_flag = false);
 static void purge(thread_db*, record_param*);
 static void replace_record(thread_db*, record_param*, PageStack*, const jrd_tra*);
-static void refresh_fk_fields(thread_db*, Record*, record_param*, record_param*);
+static void refresh_changed_fields(thread_db*, Record*, record_param*, record_param*);
 static SSHORT set_metadata_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
 static void set_nbackup_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
 static void set_owner_name(thread_db*, Record*, USHORT);
@@ -802,6 +802,8 @@ inline void clearRecordStack(RecordStack& stack)
 		// records from undo log must not be deleted
 		if (!r->isTempActive())
 			delete r;
+		else
+			r->releaseTempActive();
 	}
 }
 
@@ -3262,14 +3264,14 @@ void VIO_init(thread_db* tdbb)
 	}
 }
 
-static void indexDfw(jrd_tra* transaction, enum dfw_t task, dsc& nameDsc, dsc& schemaDesc, int relId, int idxId)
+static void indexDfw(jrd_tra* tran, enum dfw_t task, dsc& nameDsc, dsc& schemaDesc, Cached::Relation* rel, int idxId)
 {
 	// AP:	In index-related DFW dfw_id is relation id,
 	//		dfw_name is index name, dfw_ids[0] is index id
 
 	if (idxId-- == 0)
 		return;
-	auto* work = DFW_post_work(transaction, task, &nameDsc, &schemaDesc, relId);
+	auto* work = DFW_post_work(tran, task, &nameDsc, &schemaDesc, rel->getId());
 	auto& ids = DFW_get_ids(work);
 	fb_assert((ids.getCount() == 0) || ((ids.getCount() == 1) && (ids[0] == idxId)));
 	if (ids.getCount() == 0)
@@ -3333,7 +3335,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		fb_assert(!(org_rpb->rpb_runtime_flags & RPB_undo_read));
 
 		if (undo_read)
-			refresh_fk_fields(tdbb, old_record, org_rpb, new_rpb);
+			refresh_changed_fields(tdbb, old_record, org_rpb, new_rpb);
 	}
 
 	// If we're the system transaction, modify stuff in place.  This saves
@@ -3644,7 +3646,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 				if (EVL_field(0, new_rpb->rpb_record, f_idx_statistics, &desc2) &&
 					MOV_get_double(tdbb, &desc2) < 0)
 				{
-					indexDfw(transaction, dfw_set_statistics, desc1, schemaDesc, irel->getId(), idxId);
+					indexDfw(transaction, dfw_set_statistics, desc1, schemaDesc, irel, idxId);
 				}
 				else
 				{
@@ -3655,10 +3657,10 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 						nullFl = !EVL_field(0, org_rpb->rpb_record, f_idx_inactive, &desc2);
 						auto oldStat = nullFl ? 0 : MOV_get_long(tdbb, &desc2, 0);
 						if (newStat != oldStat)
-							indexDfw(transaction, dfw_delete_index, desc1, schemaDesc, irel->getId(), idxId);
+							indexDfw(transaction, dfw_delete_index, desc1, schemaDesc, irel, idxId);
 					}
 					else
-						indexDfw(transaction, dfw_create_index, desc1, schemaDesc, irel->getId(), idxId);
+						indexDfw(transaction, dfw_create_index, desc1, schemaDesc, irel, idxId);
 				}
 			}
 			break;
@@ -4471,7 +4473,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				EVL_field(0, rpb->rpb_record, f_idx_id, &desc);
 				int idxId = MOV_get_long(tdbb, &desc, 0);
 				EVL_field(0, rpb->rpb_record, f_idx_name, &desc);
-				indexDfw(transaction, dfw_create_index, desc, schemaDesc, irel->getId(), idxId);
+				indexDfw(transaction, dfw_create_index, desc, schemaDesc, irel, idxId);
 			}
 
 			set_system_flag(tdbb, rpb->rpb_record, f_idx_sys_flag);
@@ -7061,83 +7063,118 @@ static void replace_record(thread_db*		tdbb,
 }
 
 
-static void refresh_fk_fields(thread_db* tdbb, Record* old_rec, record_param* cur_rpb,
+static void refresh_changed_fields(thread_db* tdbb, Record* old_rec, record_param* cur_rpb,
 	record_param* new_rpb)
 {
 /**************************************
  *
- *	r e f r e s h _ f k _ f i e l d s
+ *	r e f r e s h _ c h a n g e d _ f i e l d s
  *
  **************************************
  *
  * Functional description
  *	Update new_rpb with foreign key fields values changed by cascade triggers.
  *  Consider self-referenced foreign keys only.
+ *  Also, if AllowUpdateOverwrite is set to false, raise error when non
+ *  self-referenced foreign key fields were changed by user triggers.
  *
  *  old_rec - old record before modify
- *  cur_rpb - just read record with possibly changed FK fields
+ *  cur_rpb - just read record with possibly changed fields
  *  new_rpb - new record evaluated by modify statement and before-triggers
  *
  **************************************/
-	auto* relation = cur_rpb->rpb_relation->getPermanent();
+	const Database* dbb = tdbb->getDatabase();
+	const auto allowOverwrite = dbb->dbb_config->getAllowUpdateOverwrite();
 
-	relation->scanPartners(tdbb);
+	jrd_rel* relation = cur_rpb->rpb_relation;
+	auto* relPerm = relation->getPermanent();
 
-	const auto* frgn = relation->rel_foreign_refs;
-	if (!frgn)
-		return;
+	relPerm->scanPartners(tdbb);
 
-	if (!frgn->getCount())
-		return;
-
-	RelationPages* relPages = cur_rpb->rpb_relation->getPages(tdbb);
-
-	// Collect all fields of all foreign keys
+	// Collect all fields of self-referenced foreign keys
 	SortedArray<int, InlineStorage<int, 16> > fields;
 
-	for (auto& dep : *frgn)
+	if (const auto* frgn = relPerm->rel_foreign_refs)
 	{
-		// We need self-referenced FK's only
-		if (dep.dep_relation == relation->getId())
+		RelationPages* relPages = relation->getPages(tdbb);
+		for (auto& dep : *frgn)
 		{
-			index_desc idx;
-			idx.idx_id = idx_invalid;
-
-			if (BTR_lookup(tdbb, relation, dep.dep_reference_id, &idx, relPages))
+			if (dep.dep_relation == relPerm->getId())
 			{
-				fb_assert(idx.idx_flags & idx_foreign);
+				index_desc idx;
+				idx.idx_id = idx_invalid;
 
-				for (int fld = 0; fld < idx.idx_count; fld++)
+				if (BTR_lookup(tdbb, relPerm, dep.dep_reference_id, &idx, relPages))
 				{
-					const int fldNum = idx.idx_rpt[fld].idx_field;
-					if (!fields.exist(fldNum))
-						fields.add(fldNum);
+					fb_assert(idx.idx_flags & idx_foreign);
+
+					for (int fld = 0; fld < idx.idx_count; fld++)
+					{
+						const int fldNum = idx.idx_rpt[fld].idx_field;
+						if (!fields.exist(fldNum))
+							fields.add(fldNum);
+					}
 				}
 			}
 		}
 	}
 
 	if (fields.isEmpty())
-		return;
-
-	DSC desc1, desc2;
-	for (FB_SIZE_T idx = 0; idx < fields.getCount(); idx++)
 	{
-		// Detect if user changed FK field by himself.
-		const int fld = fields[idx];
-		const bool flag_old = EVL_field(cur_rpb->rpb_relation, old_rec, fld, &desc1);
-		const bool flag_new = EVL_field(cur_rpb->rpb_relation, new_rpb->rpb_record, fld, &desc2);
+		if (allowOverwrite)
+			return;
 
-		// If field was not changed by user - pick up possible modification by
-		// system cascade trigger
-		if (flag_old == flag_new &&
-			(!flag_old || (flag_old && !MOV_compare(tdbb, &desc1, &desc2))))
+		if (cur_rpb->rpb_record->getFormat()->fmt_version == old_rec->getFormat()->fmt_version)
 		{
-			const bool flag_tmp = EVL_field(cur_rpb->rpb_relation, cur_rpb->rpb_record, fld, &desc1);
-			if (flag_tmp)
-				MOV_move(tdbb, &desc1, &desc2);
-			else
-				new_rpb->rpb_record->setNull(fld);
+			if (memcmp(cur_rpb->rpb_address, old_rec->getData(), cur_rpb->rpb_length) == 0)
+				return;
+
+			ERR_post(Arg::Gds(isc_update_overwrite));		// UPDATE will overwrite changes made by the trigger or by another UPDATE in the same cursor
+		}
+		// Else compare field-by-field
+	}
+
+	for (FB_SIZE_T fld = 0, frn = 0; fld < relation->rel_current_format->fmt_count; fld++)
+	{
+		dsc dsc_old;
+		const bool flag_old = EVL_field(relation, old_rec, fld, &dsc_old);
+
+		const bool is_fk = (frn < fields.getCount() && fields[frn] == fld);
+		if (!is_fk)
+		{
+			if (allowOverwrite)
+				continue;
+
+			dsc dsc_cur;
+			const bool flag_cur = EVL_field(relation, cur_rpb->rpb_record, fld, &dsc_cur);
+
+			// Check if current record differs from old record
+			if ((flag_cur != flag_old) ||
+				(flag_cur && flag_old && MOV_compare(tdbb, &dsc_old, &dsc_cur) != 0))
+			{
+				// Record was modified by trigger.
+				ERR_post(Arg::Gds(isc_update_overwrite));		// UPDATE will overwrite changes made by the trigger or by another UPDATE in the same cursor
+			}
+		}
+		else
+		{
+			dsc dsc_new;
+			const bool flag_new = EVL_field(relation, new_rpb->rpb_record, fld, &dsc_new);
+
+			// If field was not changed by user - pick up possible modification by
+			// system cascade trigger
+			if (flag_old == flag_new &&
+				(!flag_old || (flag_old && !MOV_compare(tdbb, &dsc_old, &dsc_new))))
+			{
+				dsc dsc_cur;
+				const bool flag_cur = EVL_field(relation, cur_rpb->rpb_record, fld, &dsc_cur);
+				if (flag_cur)
+					MOV_move(tdbb, &dsc_cur, &dsc_new);
+				else
+					new_rpb->rpb_record->setNull(fld);
+			}
+
+			frn++;
 		}
 	}
 }
@@ -7231,6 +7268,9 @@ static bool set_security_class(thread_db* tdbb, Record* record, USHORT field_id)
  *
  **************************************/
 	dsc desc1;
+
+	if (tdbb->tdbb_flags & TDBB_no_security_class)
+		return false;
 
 	if (!EVL_field(0, record, field_id, &desc1))
 	{

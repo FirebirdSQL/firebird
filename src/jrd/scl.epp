@@ -159,10 +159,6 @@ void SCL_check_access(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	// Allow the replicator any access to database, its permissions are already validated
-	if (tdbb->tdbb_flags & TDBB_replicator)
-		return;
-
 	const MetaName& userName = s_class->sclClassUser.second;
 
 	if (s_class && (s_class->scl_flags & SCL_corrupt))
@@ -221,10 +217,6 @@ void SCL_check_create_access(thread_db* tdbb, ObjectType type, const MetaName& s
  *
  **************************************/
 	SET_TDBB(tdbb);
-
-	// Allow the replicator any access to database, its permissions are already validated
-	if (tdbb->tdbb_flags & TDBB_replicator)
-		return;
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 

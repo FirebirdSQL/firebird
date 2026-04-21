@@ -1804,7 +1804,7 @@ static void disconnect(rem_port* port)
 		SOCLOSE(port->port_channel);
 	}
 
-	if (port->port_thread_guard && port->port_events_thread.isCurrent())
+	if (port->port_thread_guard && !port->port_events_thread.isCurrent())
 		port->port_thread_guard->setWait(std::move(port->port_events_thread));
 	else
 		port->releasePort();

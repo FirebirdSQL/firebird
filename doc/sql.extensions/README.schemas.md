@@ -247,10 +247,10 @@ ALTER SCHEMA <schema name>
     <alter schema option>...
 
 <alter schema option> ::=
-    SET DEFAULT CHARACTER SET <character set name> |
-    SET DEFAULT SQL SECURITY {DEFINER | INVOKER} |
-    DROP DEFAULT CHARACTER SET |
-    DROP DEFAULT SQL SECURITY
+    SET DEFAULT CHARACTER SET <character set name>
+  | SET DEFAULT SQL SECURITY {DEFINER | INVOKER}
+  | DROP DEFAULT CHARACTER SET
+  | DROP DEFAULT SQL SECURITY
 ```
 
 ### DROP SCHEMA
@@ -388,7 +388,7 @@ path for a session.
 
 ### `isc_tpb_lock_table_schema`
 
-`isc_tpb_lock_table_schema` could be used with `isc_tpb_lock_read` and `isc_tpb_lock_write`, after the table name and 
+`isc_tpb_lock_table_schema` can be used with `isc_tpb_lock_read` and `isc_tpb_lock_write`, after the table name and 
 before `isc_tpb_shared`, `isc_tpb_protected` or `isc_tpb_exclusive`. The format of `isc_tpb_lock_table_schema` is 
 a single byte length followed by the schema name.
 
