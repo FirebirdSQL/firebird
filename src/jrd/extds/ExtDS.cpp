@@ -707,15 +707,26 @@ void Transaction::rollback(thread_db* tdbb, bool retain)
 	FbLocalStatus status;
 	doRollback(&status, tdbb, retain);
 
-	Connection& conn = m_connection;
+	try
+	{
+		if (status->getState() & IStatus::STATE_ERRORS) {
+			m_connection.raise(&status, tdbb, "transaction rollback");
+		}
+	}
+	catch (const Exception&)
+	{
+		if (!retain)
+		{
+			detachFromJrdTran();
+			m_connection.deleteTransaction(tdbb, this);
+		}
+		throw;
+	}
+
 	if (!retain)
 	{
 		detachFromJrdTran();
 		m_connection.deleteTransaction(tdbb, this);
-	}
-
-	if (status->getState() & IStatus::STATE_ERRORS) {
-		conn.raise(&status, tdbb, "transaction rollback");
 	}
 }
 
