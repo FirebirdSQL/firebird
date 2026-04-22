@@ -112,7 +112,7 @@ void ForeignServer::addOption(const MetaName& name, const string& value, Externa
 	option->m_type = type;
 }
 
-const Firebird::GenericMap<MetaStringOptionPair>& ForeignServer::getOptions() const
+const GenericMap<MetaStringOptionPair>& ForeignServer::getOptions() const
 {
 	return options;
 }
@@ -181,7 +181,7 @@ ForeignTableConnection* ForeignTableProvider::createForeignConnection(thread_db*
 }
 
 // Make additional server options string, excluding generic ones that have specific isc tags
-void ForeignTableProvider::makeOptionsString(const Firebird::GenericMap<MetaStringOptionPair>& optionsMap, string& options)
+void ForeignTableProvider::makeOptionsString(const GenericMap<MetaStringOptionPair>& optionsMap, string& options)
 {
 	for (const auto& option : optionsMap)
 	{
@@ -788,7 +788,7 @@ const string ForeignTableAdapter::getOriginalFieldName(const MetaName& name) con
 	m_foreignFields.get(name, field);
 	if (field)
 	{
-		Firebird::GenericMap<MetaStringOptionPair>::Accessor accessor(&field->options);
+		GenericMap<MetaStringOptionPair>::Accessor accessor(&field->options);
 		for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 		{
 			if (accessor.current()->second.m_name == FOREIGN_TABLE_COLUMN_NAME)

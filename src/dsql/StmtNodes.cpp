@@ -4627,7 +4627,8 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 			ForeignTableProvider::makeOptionsString(options, sOptions);
 		}
 
-		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, sProviders, traScope, sOptions);
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, sProviders, traScope,
+			sOptions);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);
