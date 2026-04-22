@@ -655,7 +655,7 @@ void Engine::sharedObjectCleanup(SharedObjType* sharedObj, SortedArray<SharedObj
 {
 	MutexLockGuard guard(childrenMutex, FB_FUNCTION);
 
-	SharedObjType::ChildsMap::Accessor accessor(&sharedObj->children);
+	typename SharedObjType::ChildsMap::Accessor accessor(&sharedObj->children);
 	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 		accessor.current()->second->dispose();
 
