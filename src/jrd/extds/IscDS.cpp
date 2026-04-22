@@ -771,6 +771,13 @@ void IscStatement::remakeInputSQLDA(thread_db* tdbb, FB_SIZE_T count, const dsc*
 		SLONG sqlLen, sqlSubType, sqlScale, sqlType;
 		src.getSqlInfo(&sqlLen, &sqlSubType, &sqlScale, &sqlType);
 
+		if (src.isText())
+		{
+			const CharSet* charSet = INTL_charset_lookup(tdbb, src.getCharSet());
+			if (charSet->isMultiByte())
+				sqlLen *= charSet->maxBytesPerChar();
+		}
+
 		xVar->sqllen = sqlLen;
 		xVar->sqlsubtype = sqlSubType;
 		xVar->sqlscale = sqlScale;
