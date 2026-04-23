@@ -10589,8 +10589,11 @@ dsc* RecordKeyNode::execute(thread_db* /*tdbb*/, Request* request) const
 		const jrd_rel* relation = rpb->rpb_relation;
 
 		// If it doesn't point to a valid record, return NULL.
-		if (!rpb->rpb_number.isValid() || !relation || relation->isVirtual() || relation->getExtFile())
+		if (!rpb->rpb_number.isValid() || !relation || relation->isVirtual() || relation->getExtFile() ||
+			relation->getForeignAdapter())
+		{
 			return nullptr;
+		}
 
 		impure->vlu_misc.vlu_int64 = rpb->rpb_transaction_nr;
 		impure->vlu_desc.makeInt64(0, &impure->vlu_misc.vlu_int64);

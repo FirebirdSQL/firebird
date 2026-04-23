@@ -557,6 +557,11 @@ public:
 		return firstRows;
 	}
 
+	SortNode** getSortAddress() const
+	{
+		return rse->rse_sorted.getAddress();
+	}
+
 	RecordSource* applyBoolean(RecordSource* rsb, ConjunctIterator& iter);
 	RecordSource* applyLocalBoolean(RecordSource* rsb,
 									const StreamList& streams,

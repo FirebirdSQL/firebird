@@ -94,6 +94,7 @@
     <ClCompile Include="..\..\..\src\jrd\extds\IscDS.cpp" />
     <ClCompile Include="..\..\..\src\jrd\extds\ValidatePassword.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ExtEngineManager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\ForeignServer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\filters.cpp" />
     <ClCompile Include="..\..\..\src\jrd\flu.cpp" />
     <ClCompile Include="..\..\..\src\jrd\GarbageCollector.cpp" />
@@ -134,6 +135,7 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\ExternalTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\FilteredStream.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\FirstRowsStream.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\recsrc\ForeignTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\FullOuterJoin.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\FullTableScan.cpp" />
     <ClCompile Include="..\..\..\src\jrd\recsrc\HashJoin.cpp" />
@@ -285,6 +287,7 @@
     <ClInclude Include="..\..\..\src\jrd\flags.h" />
     <ClInclude Include="..\..\..\src\jrd\flu.h" />
     <ClInclude Include="..\..\..\src\jrd\flu_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\ForeignServer.h" />
     <ClInclude Include="..\..\..\src\jrd\Function.h" />
     <ClInclude Include="..\..\..\src\jrd\fun_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\GarbageCollector.h" />

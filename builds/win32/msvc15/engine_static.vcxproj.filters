@@ -72,6 +72,9 @@
     <ClCompile Include="..\..\..\src\jrd\recsrc\FirstRowsStream.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\recsrc\ForeignTableScan.cpp">
+      <Filter>JRD files\Data Access</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\recsrc\FullOuterJoin.cpp">
       <Filter>JRD files\Data Access</Filter>
     </ClCompile>
@@ -280,6 +283,9 @@
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\ExtEngineManager.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\ForeignServer.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\filters.cpp">
@@ -816,6 +822,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\ExtEngineManager.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\ForeignServer.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\fields.h">

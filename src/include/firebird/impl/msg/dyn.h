@@ -313,3 +313,7 @@ FB_IMPL_MSG(DYN, 320, dyn_cannot_create_reserved_schema, -607, "HY", "000", "Sch
 FB_IMPL_MSG(DYN, 321, dyn_cannot_infer_schema, -901, "42", "000", "Cannot infer schema name as there is no valid schema in the search path")
 FB_IMPL_MSG_SYMBOL(DYN, 322, dyn_dup_blob_filter, "Blob filter @1 already exists")
 FB_IMPL_MSG(DYN, 323, dyn_column_name_exists, -612, "42", "000", "Column @1 already exists in table @2")
+FB_IMPL_MSG(DYN, 324, dyn_foreign_server_not_found, -901, "42", "000", "Foreign server @1 not found")
+FB_IMPL_MSG(DYN, 325, dyn_user_mapping_not_found, -901, "42", "000", "User mapping for user @1 and server @2 not found")
+FB_IMPL_MSG(DYN, 326, dyn_foreign_server_already_exists, -901, "42", "000", "Foreign server @1 already exists")
+FB_IMPL_MSG(DYN, 327, dyn_foreign_server_not_exist, -901, "42", "000", "Foreign server @1 does not exist")

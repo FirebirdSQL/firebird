@@ -96,6 +96,7 @@
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "../jrd/ForeignServer.h"
 #include "firebird/impl/msg_helper.h"
 #include "../jrd/LocalTemporaryTable.h"
 
@@ -3155,6 +3156,26 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			rel_perm->setExtFile(ExternalFile::create(getPool(), REL.RDB$EXTERNAL_FILE));
 		}
 
+		if (!REL.RDB$FOREIGN_SERVER_NAME.NULL && REL.RDB$FOREIGN_SERVER_NAME[0] && !rel_perm->getForeignAdapter())
+		{
+			const MetaName foreignServerName(REL.RDB$FOREIGN_SERVER_NAME);
+			const QualifiedName serverName(foreignServerName);
+
+			ForeignServer* server = MET_get_foreign_server(tdbb, foreignServerName);
+			rel_perm->setForeignAdapter(FB_NEW_POOL(*rel_pool) ForeignTableAdapter(*rel_pool, this, server));
+
+			if (dependencies)
+			{
+				Array<Dependency> dependencies;
+				Dependency dependency(obj_foreign_server);
+				dependency.name = serverName;
+				dependencies.push(dependency);
+
+				const QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+				MET_store_dependencies(tdbb, dependencies, nullptr, depName, obj_view);
+			}
+		}
+
 		if (!REL.RDB$RELATION_TYPE.NULL)
 		{
 			switch (REL.RDB$RELATION_TYPE)
@@ -3180,6 +3201,10 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				case rel_temp_delete:
 					fb_assert((rel_perm->rel_flags & (REL_temp_tran | REL_temp_gtt)) == (REL_temp_tran | REL_temp_gtt));
 					rel_perm->rel_flags |= REL_temp_tran | REL_temp_gtt;
+					break;
+				case rel_foreign:
+					if (!attachment->isGbak())
+						fb_assert(getForeignAdapter());
 					break;
 				default:
 					fb_assert(false);
@@ -3386,6 +3411,13 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				break;
 			}
 		}
+
+		if (rel_perm->getForeignAdapter())
+		{
+			// Load table options table field options if present
+			MET_load_table_options(tdbb, this);
+		}
+
 		blob->BLB_close(tdbb);
 		blob = nullptr;
 
@@ -3625,6 +3657,8 @@ ULONG MET_get_rel_flags_from_TYPE(USHORT type)
 		case rel_persistent:
 			break;
 		case rel_external:
+			break;
+		case rel_foreign:
 			break;
 		case rel_view:
 			ret |= REL_jrd_view;
@@ -4399,6 +4433,7 @@ void MET_store_dependency(thread_db* tdbb,
 		break;
 
 	case obj_index:
+	case obj_foreign_server:
 		name = dependency.name;
 		dpdo_name = &name;
 		break;
@@ -5384,6 +5419,23 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					break;
 				}
 
+				case obj_foreign_server:
+				{
+					static const CachedRequestId foreignServerHandleId;
+					handle.reset(tdbb, foreignServerHandleId);
+
+					FOR (REQUEST_HANDLE handle)
+						SVR IN RDB$FOREIGN_SERVERS
+						WITH SVR.RDB$FOREIGN_SERVER_NAME EQ name.object.c_str()
+					{
+						found = true;
+						break;
+					}
+					END_FOR
+
+					break;
+				}
+
 				default:
 					fb_assert(false);
 			}
@@ -5490,5 +5542,131 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 		return (*lttPtr)->relation;
 
 	return nullptr;
+}
+
+ForeignServer* MET_get_foreign_server(thread_db* tdbb, const MetaName& foreignServerName)
+{
+/**************************************
+ *
+ *	M E T _ g e t _ f o r e i g n _ s e r v e r
+ *
+ **************************************
+ *
+ * Functional description
+ *      Find foreign server by its name in RDB$FOREIGN_SERVERS.
+ *      If not found return NULL.
+ *
+ *      Return a pointer to the foreign server.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	CHECK_DBB(dbb);
+
+	Attachment* attachment = tdbb->getAttachment();
+
+	// Find foreign server in system table
+	AutoCacheRequest reqFS(tdbb, irq_find_f_server, IRQ_REQUESTS);
+
+	bool found = false;
+	MetaName foreignServerPlugin;
+	MetaName securityClass;
+
+	FOR(REQUEST_HANDLE reqFS)
+		FSER IN RDB$FOREIGN_SERVERS
+		WITH FSER.RDB$FOREIGN_SERVER_NAME EQ foreignServerName.c_str()
+	{
+		foreignServerPlugin = FSER.RDB$FOREIGN_SERVER_WRAPPER;
+		securityClass = FSER.RDB$SECURITY_CLASS;
+
+		found = true;
+	}
+	END_FOR
+
+	if (!found)
+		status_exception::raise(Arg::Gds(isc_dyn_foreign_server_not_found) << Arg::Str(foreignServerName));
+
+	MemoryPool& pool = dbb->dbb_mdc->getPool();
+	ForeignServer* foreignServer = FB_NEW_POOL(pool) ForeignServer(pool, foreignServerName, foreignServerPlugin,
+		securityClass);
+
+	// Find foreign server options in system table
+	AutoCacheRequest reqFSOpt(tdbb, irq_find_f_s_opt, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE reqFSOpt)
+		FSOPT IN RDB$FOREIGN_SERVER_OPTIONS
+		WITH FSOPT.RDB$FOREIGN_SERVER_NAME EQ foreignServerName.c_str()
+	{
+		const MetaName optionName(FSOPT.RDB$FOREIGN_OPTION_NAME);
+		const string option = FSOPT.RDB$FOREIGN_OPTION_VALUE;
+		ExternalValueType type = ExternalValueType::TYPE_STRING;
+		if (!FSOPT.RDB$FOREIGN_OPTION_TYPE.NULL)
+			type = ExternalValueType(FSOPT.RDB$FOREIGN_OPTION_TYPE);
+		foreignServer->addOption(optionName, option, type);
+	}
+	END_FOR
+
+	return foreignServer;
+}
+
+void MET_load_table_options(thread_db* tdbb, jrd_rel* relation)
+{
+/**************************************
+ *
+ *	M E T _ l o a d _ t a b l e _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Find the foreign table options and foreign field options by table name
+ *      and add to an existing relation object.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	CHECK_DBB(dbb);
+
+	Attachment* attachment = tdbb->getAttachment();
+
+	// Find foreign table options in system table
+	AutoCacheRequest request(tdbb, irq_find_f_tbl_opt, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request)
+		FTOPT IN RDB$FOREIGN_TABLE_OPTIONS
+		WITH FTOPT.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
+			FTOPT.RDB$TABLE_NAME EQ relation->getName().object.c_str()
+	{
+		const MetaName optionName(FTOPT.RDB$FOREIGN_OPTION_NAME);
+		const string option = FTOPT.RDB$FOREIGN_OPTION_VALUE;
+		relation->getForeignAdapter()->addTableOption(optionName, option, ExternalValueType::TYPE_STRING);
+	}
+	END_FOR
+
+	vec<jrd_fld*>* vector = relation->rel_fields;
+
+	if (vector)
+	{
+		for (const auto field : *vector)
+		{
+			if (field)
+			{
+				// Find foreign field options in system table
+				AutoCacheRequest request(tdbb, irq_find_f_tbl_f_opt, IRQ_REQUESTS);
+
+				FOR(REQUEST_HANDLE request)
+					FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
+					WITH FTFOPT.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str()AND
+						FTFOPT.RDB$TABLE_NAME EQ relation->getName().object.c_str() AND
+						FTFOPT.RDB$FIELD_NAME EQ field->fld_name.c_str()
+				{
+					const MetaName name(FTFOPT.RDB$FOREIGN_OPTION_NAME);
+					const string value = FTFOPT.RDB$FOREIGN_OPTION_VALUE;
+					relation->getForeignAdapter()->addTableField(field->fld_name, name, value,
+						ExternalValueType::TYPE_STRING);
+				}
+				END_FOR
+			}
+		}
+	}
 }
 

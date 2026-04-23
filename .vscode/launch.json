@@ -2,6 +2,26 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "firebird - launch",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/firebird",
+			"args": [],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": false,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},
+		{
 			"name": "isql - launch",
 			"type": "cppdbg",
 			"request": "launch",

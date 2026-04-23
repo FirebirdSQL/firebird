@@ -524,6 +524,39 @@ static inline constexpr struct ini_idx_t indices[] =
 		SEGMENT(f_pubtab_tab_schema, idx_metadata),	// table schema name
 		SEGMENT(f_pubtab_tab_name, idx_metadata),	// table name
 		SEGMENT(f_pubtab_pub_name, idx_metadata)	// publication name
+	}},
+	// define index RDB$INDEX_98 for RDB$FOREIGN_SERVERS RDB$FOREIGN_SERVER_NAME;
+	INDEX(98, rel_foreign_servers, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_fs_name, idx_metadata),	// foreign server name
+	}},
+	// define index RDB$INDEX_99 for RDB$FOREIGN_SERVERS_OPTIONS RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(99, rel_foreign_server_options, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_fso_server_name, idx_metadata),	// foreign server name
+		SEGMENT(f_fso_name, idx_metadata),	// foreign server option name
+	}},
+	// define index RDB$INDEX_100 for RDB$FOREIGN_TABLE_OPTIONS RDB$TABLE_NAME, RDB$FOREIGN_TABLE_OPTION;
+	INDEX(100, rel_foreign_tbl_options, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_fto_sch_name, idx_metadata),	// foreign table schema
+		SEGMENT(f_fto_tbl_name, idx_metadata),	// foreign table name
+		SEGMENT(f_fto_name, idx_metadata),	// foreign table option name
+	}},
+	// define index RDB$INDEX_101 for RDB$FOREIGN_USER_MAPPINGS RDB$USER, RDB$FOREIGN_SERVER_NAME;
+	INDEX(101, rel_foreign_user_mappings, idx_unique, 2, ODS_14_0)
+		SEGMENT(f_fum_user, idx_metadata),	// user
+		SEGMENT(f_fum_server_name, idx_metadata),	// foreign server name
+	}},
+	// define index RDB$INDEX_102 for RDB$FOREIGN_MAPPING_OPTIONS RDB$USER, RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(102, rel_foreign_mapping_options, idx_unique, 3, ODS_14_0)
+		SEGMENT(f_fmo_user, idx_metadata),	// user
+		SEGMENT(f_fmo_server_name, idx_metadata),	// foreign server name
+		SEGMENT(f_fmo_name, idx_metadata),	// user mapping option name
+	}},
+	// define index RDB$INDEX_103 for RDB$FOREIGN_TABLE_FIELD_OPTIONS RDB$TABLE_NAME, RDB$FIELD_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(103, rel_foreign_tbl_f_options, idx_unique, 4, ODS_14_0)
+		SEGMENT(f_ftfo_sch_name, idx_metadata),	// foreign table schema
+		SEGMENT(f_ftfo_tbl_name, idx_metadata),	// foreign table name
+		SEGMENT(f_ftfo_fld_name, idx_metadata),	// foreign table field name
+		SEGMENT(f_ftfo_name, idx_metadata),	// foreign option name
 	}}
 };
 

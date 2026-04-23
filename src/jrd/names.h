@@ -505,3 +505,20 @@ NAME("MON$FIELD_PRECISION", nam_mon_f_precision)
 NAME("MON$FIELD_SUB_TYPE", nam_mon_f_sub_type)
 NAME("MON$CHAR_LENGTH", nam_mon_char_length)
 NAME("MON$COLLATION_ID", nam_mon_collate_id)
+
+NAME("RDB$FOREIGN_SERVERS", nam_foreign_servers)
+NAME("RDB$FOREIGN_SERVER_NAME", nam_fs_name)
+NAME("RDB$FOREIGN_SERVER_WRAPPER", nam_fs_wrapper_name)
+
+NAME("RDB$FOREIGN_SERVER_OPTIONS", nam_foreign_server_options)
+NAME("RDB$FOREIGN_OPTION_NAME", nam_fo_name)
+NAME("RDB$FOREIGN_OPTION_VALUE", nam_fo_value)
+NAME("RDB$FOREIGN_OPTION_TYPE", nam_fo_type)
+
+NAME("RDB$FOREIGN_TABLE_OPTIONS", nam_foreign_tbl_options)
+
+NAME("RDB$FOREIGN_USER_MAPPINGS", nam_foreign_user_mappings)
+
+NAME("RDB$FOREIGN_MAPPING_OPTIONS", nam_foreign_mapping_options)
+
+NAME("RDB$FOREIGN_TABLE_FIELD_OPTIONS", nam_foreign_tbl_f_options)
