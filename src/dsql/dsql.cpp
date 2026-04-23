@@ -594,8 +594,6 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 		const auto charSetId = database->dbb_attachment->att_charset;
 
-		string transformedText;
-
 		{	// scope to delete parser before the scratch pool is gone
 			Jrd::ContextPoolHolder scratchContext(tdbb, scratchPool);
 
@@ -618,41 +616,16 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 			if (parser.isStmtAmbiguous())
 				scratch->flags |= DsqlCompilerScratch::FLAG_AMBIGUOUS_STMT;
 
-			transformedText = parser.getTransformedString();
+			const string& source = parser.getTransformedString();
+			string transformedText(*scratchPool);
+
+			// If the attachment charset is NONE, we first try to convert data to UTF8;
+			// and if that fails, replace non-ASCII characters by question marks.
+			static_assert(CS_METADATA == CS_UTF8);
+			const bool isConverted = DataTypeUtil::convertToUTF8(source, transformedText, charSetId, ERRD_post);
+			dsqlStatement->setSqlText(FB_NEW_POOL(*statementPool) RefString(*statementPool,
+				isConverted ? transformedText : source));
 		}
-
-		// If the attachment charset is NONE, replace non-ASCII characters by question marks, so
-		// that engine internals doesn't receive non-mappeable data to UTF8. If an attachment
-		// charset is used, validate the string.
-		if (charSetId == CS_NONE)
-		{
-			for (char* p = transformedText.begin(), *end = transformedText.end(); p < end; ++p)
-			{
-				if (UCHAR(*p) > 0x7F)
-					*p = '?';
-			}
-		}
-		else
-		{
-			CharSet* charSet = INTL_charset_lookup(tdbb, charSetId);
-
-			if (!charSet->wellFormed(transformedText.length(),
-					(const UCHAR*) transformedText.begin(), NULL))
-			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-						  Arg::Gds(isc_malformed_string));
-			}
-
-			UCharBuffer temp;
-
-			CsConvert conversor(charSet->getStruct(),
-				INTL_charset_lookup(tdbb, CS_METADATA)->getStruct());
-			conversor.convert(transformedText.length(), (const UCHAR*) transformedText.c_str(), temp);
-
-			transformedText.assign(temp.begin(), temp.getCount());
-		}
-
-		dsqlStatement->setSqlText(FB_NEW_POOL(*statementPool) RefString(*statementPool, transformedText));
 
 		// allocate the send and receive messages
 

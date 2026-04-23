@@ -219,7 +219,10 @@ ULONG DataTypeUtilBase::convertLength(ULONG len, CSetId srcCharSet, CSetId dstCh
 	if (dstCharSet == CS_NONE || dstCharSet == CS_BINARY)
 		return len;
 
-	return (len / maxBytesPerChar(srcCharSet)) * maxBytesPerChar(dstCharSet);
+	const ULONG srcBPC = maxBytesPerChar(srcCharSet);
+	const ULONG dstBPC = maxBytesPerChar(dstCharSet);
+
+	return (ROUNDUP(len, srcBPC) / srcBPC) * dstBPC;
 }
 
 
@@ -376,17 +379,9 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset,
 	if (charset == CS_UTF8 || charset == CS_UNICODE_FSS)
 		return false;
 
-	if (charset == CS_NONE)
-	{
-		const FB_SIZE_T length = src.length();
-
-		const char* s = src.c_str();
-		char* p = dst.getBuffer(length);
-
-		for (const char* end = src.end(); s < end; ++p, ++s)
-			*p = (*s < 0 ? '?' : *s);
-	}
-	else // charset != CS_UTF8
+	// We throw a status_exception exception to catch it and check charset again.
+	// If charset is NONE, we re-throw the exception through err().
+	try
 	{
 		DataTypeUtil dtUtil(tdbb);
 		ULONG length = dtUtil.convertLength(src.length(), charset, CS_UTF8);
@@ -394,9 +389,26 @@ bool DataTypeUtil::convertToUTF8(const string& src, string& dst, CSetId charset,
 		length = INTL_convert_bytes(tdbb,
 			CS_UTF8, (UCHAR*) dst.getBuffer(length), length,
 			charset, (const BYTE*) src.begin(), src.length(),
-			err);
+			status_exception::raise);
 
 		dst.resize(length);
+	}
+	catch (const status_exception& ex)
+	{
+		const Arg::StatusVector v(ex);
+
+		if (charset == CS_NONE)
+		{
+			const FB_SIZE_T length = src.length();
+
+			const char* s = src.c_str();
+			char* p = dst.getBuffer(length);
+
+			for (const char* end = src.end(); s < end; ++p, ++s)
+				*p = (*s < ASCII_SPACE ? '?' : *s);
+		}
+		else
+			err(v);
 	}
 
 	return true;
