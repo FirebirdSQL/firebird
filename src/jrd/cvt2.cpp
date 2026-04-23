@@ -973,7 +973,7 @@ USHORT CVT2_make_string2(const dsc* desc, TTypeId to_interp, UCHAR** address, Mo
  **************************************/
 	UCHAR* from_buf;
 	USHORT from_len;
-	TTypeId from_interp;
+	TTypeId from_interp = ttype_none;
 
 	fb_assert(desc != NULL);
 	fb_assert(address != NULL);
