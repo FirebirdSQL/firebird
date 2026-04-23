@@ -730,11 +730,8 @@ static void get_procedure_args(const QualifiedMetaString& proc_name,
 	{
 		bool first_time = true;
 
-		FOR PRM IN RDB$PROCEDURE_PARAMETERS CROSS
-			FLD IN RDB$FIELDS
-			WITH FLD.RDB$SCHEMA_NAME EQUIV PRM.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-				 FLD.RDB$FIELD_NAME EQ PRM.RDB$FIELD_SOURCE AND
-				 PRM.RDB$SCHEMA_NAME EQUIV NULLIF(proc_name.schema.c_str(), '') AND
+		FOR PRM IN RDB$PROCEDURE_PARAMETERS
+			WITH PRM.RDB$SCHEMA_NAME EQUIV NULLIF(proc_name.schema.c_str(), '') AND
 				 PRM.RDB$PROCEDURE_NAME = proc_name.object.c_str() AND
 				 PRM.RDB$PARAMETER_TYPE = ptype AND
 				 PRM.RDB$PACKAGE_NAME MISSING
@@ -775,17 +772,18 @@ static void get_procedure_args(const QualifiedMetaString& proc_name,
 				isqlGlob.printf(",%s", NEWLINE);
 
 			const MetaString parameterName(PRM.RDB$PARAMETER_NAME);
-			const QualifiedMetaString fieldName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+			const QualifiedMetaString fieldName(PRM.RDB$FIELD_SOURCE, PRM.RDB$FIELD_SOURCE_SCHEMA_NAME);
 
 			isqlGlob.printf("%s ", IUTILS_name_to_string(parameterName).c_str());
 
-			const bool basedOnColumn = relationName.object.hasData() && relationField.hasData();
-			if (!fb_utils::implicit_domain(fieldName.object.c_str()) || FLD.RDB$SYSTEM_FLAG == 1 ||
-				basedOnColumn)
+			if (prm_mech == prm_mech_type_of ||
+				!fb_utils::implicit_domain(fieldName.object.c_str()))
 			{
+				// Print only type name
 				if (prm_mech == prm_mech_type_of)
 					isqlGlob.printf("TYPE OF ");
 
+				const bool basedOnColumn = relationName.object.hasData() && relationField.hasData();
 				if (basedOnColumn)
 				{
 					isqlGlob.printf(
@@ -798,87 +796,90 @@ static void get_procedure_args(const QualifiedMetaString& proc_name,
 
 				// International character sets
 				// Print only the collation
-				if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
-					!prm_collation_id_null)
+				if (!prm_collation_id_null)
 				{
-					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id,
-							getDefaultCharSetForSchemaFunc(proc_name.schema),
-							Get::COLLATE_ONLY, !prm_null_flag_null && prm_null_flag, char_sets))
+					FOR FLD IN RDB$FIELDS
+						WITH FLD.RDB$SCHEMA_NAME EQUIV NULLIF(fieldName.schema.c_str(), '') AND
+							 FLD.RDB$FIELD_NAME EQ fieldName.object.c_str()
 					{
-						isqlGlob.prints(char_sets.c_str());
+						if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, prm_collation_id,
+								getDefaultCharSetForSchemaFunc(proc_name.schema),
+								Get::COLLATE_ONLY, !prm_null_flag_null && prm_null_flag, char_sets))
+						{
+							isqlGlob.prints(char_sets.c_str());
+						}
 					}
+					END_FOR
 				}
 				else if (!prm_null_flag_null && prm_null_flag)
 					isqlGlob.printf(" NOT NULL");
-
-				if (ptype == 0) // input, try to extract default and make Vlad happy.
-				{
-					if (!prm_default_source_null)
-					{
-						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
-					}
-				}
 			}
 			else
 			{
-				if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
-						FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+				FOR FLD IN RDB$FIELDS
+					WITH FLD.RDB$SCHEMA_NAME EQUIV NULLIF(fieldName.schema.c_str(), '') AND
+						 FLD.RDB$FIELD_NAME EQ fieldName.object.c_str()
 				{
-					return; // ps_ERR;
-				}
-
-				// Changed this to return RDB$CHARACTER_LENGTH if available
-				// Fix for Bug #122563
-				//   FSG 18.Nov.2000
-				if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
-				{
-					isqlGlob.printf("(%d)",
-						ISQL_get_char_length(
-							FLD.RDB$FIELD_LENGTH,
-							FLD.RDB$CHARACTER_LENGTH.NULL, FLD.RDB$CHARACTER_LENGTH,
-							FLD.RDB$CHARACTER_SET_ID.NULL, FLD.RDB$CHARACTER_SET_ID
-						)
-					);
-				}
-
-				// Show international character sets and collations
-				if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
-					!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
-					  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
-				{
-					SSHORT collation = 0;
-
-					if (!prm_collation_id_null)
-						collation = prm_collation_id;
-					else if (!FLD.RDB$COLLATION_ID.NULL)
-						collation = FLD.RDB$COLLATION_ID;
-
-					if (FLD.RDB$CHARACTER_SET_ID.NULL)
-						FLD.RDB$CHARACTER_SET_ID = 0;
-
-					if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation,
-							getDefaultCharSetForSchemaFunc(proc_name.schema),
-							Get::BOTH, !prm_null_flag_null && prm_null_flag, char_sets))
+					if (!ISQL_printNumericType(fieldName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+							FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
 					{
-						isqlGlob.prints(char_sets.c_str());
+						return; // ps_ERR;
+					}
+
+					// Changed this to return RDB$CHARACTER_LENGTH if available
+					// Fix for Bug #122563
+					//   FSG 18.Nov.2000
+					if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
+					{
+						isqlGlob.printf("(%d)",
+							ISQL_get_char_length(
+								FLD.RDB$FIELD_LENGTH,
+								FLD.RDB$CHARACTER_LENGTH.NULL, FLD.RDB$CHARACTER_LENGTH,
+								FLD.RDB$CHARACTER_SET_ID.NULL, FLD.RDB$CHARACTER_SET_ID
+							)
+						);
+					}
+
+					// Show international character sets and collations
+					if ((!FLD.RDB$COLLATION_ID.NULL || !FLD.RDB$CHARACTER_SET_ID.NULL) &&
+						!(((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying)) &&
+						  FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_text))
+					{
+						SSHORT collation = 0;
+
+						if (!prm_collation_id_null)
+							collation = prm_collation_id;
+						else if (!FLD.RDB$COLLATION_ID.NULL)
+							collation = FLD.RDB$COLLATION_ID;
+
+						if (FLD.RDB$CHARACTER_SET_ID.NULL)
+							FLD.RDB$CHARACTER_SET_ID = 0;
+
+						if (ISQL_get_character_sets(FLD.RDB$CHARACTER_SET_ID, collation,
+								getDefaultCharSetForSchemaFunc(proc_name.schema),
+								Get::BOTH, !prm_null_flag_null && prm_null_flag, char_sets))
+						{
+							isqlGlob.prints(char_sets.c_str());
+						}
+					}
+					else if (!prm_null_flag_null && prm_null_flag)
+						isqlGlob.printf(" NOT NULL");
+
+					if (prm_default_source_null)
+					{
+						prm_default_source_null = FLD.RDB$DEFAULT_SOURCE.NULL;
+						prm_default_source = FLD.RDB$DEFAULT_SOURCE;
 					}
 				}
-				else if (!prm_null_flag_null && prm_null_flag)
-					isqlGlob.printf(" NOT NULL");
+				END_FOR
+			}
 
-				if (ptype == 0) // input, try to extract default and make Vlad happy.
+			if (ptype == 0) // input, try to extract default and make Vlad happy.
+			{
+				if (!prm_default_source_null)
 				{
-					if (!prm_default_source_null)
-					{
-						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
-					}
-					else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
-					{
-						isqlGlob.printf(" ");
-						SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE, false, true);
-					}
+					isqlGlob.printf(" ");
+					SHOW_print_metadata_text_blob(isqlGlob.Out, &prm_default_source, false, true);
 				}
 			}
 		}

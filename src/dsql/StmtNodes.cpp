@@ -5226,7 +5226,7 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			const dsql_var* variable = dsqlScratch->variables[i];
 			const TypeClause* field = variable->field;
 
-			if (field->fullDomain || field->notNull)
+			if (field->mechanism == prm_mech_normal || field->notNull)
 			{
 				dsqlScratch->appendUChar(blr_assignment);
 				dsqlScratch->appendUChar(blr_parameter2);

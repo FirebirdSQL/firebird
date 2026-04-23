@@ -79,6 +79,93 @@ namespace
 }
 
 
+namespace Metadata
+{
+	void resolveType(DsqlCompilerScratch* dsqlScratch, Jrd::QualifiedName& relationName, Jrd::QualifiedName& fieldOrDomainName, TypeClause& type)
+	{
+		if (relationName.object.hasData())
+		{
+			dsqlScratch->qualifyExistingName(relationName, obj_relation);
+
+			dsql_rel* relation = METD_get_relation(dsqlScratch->getTransaction(), dsqlScratch, relationName);
+			if (relation)
+			{
+				const MetaName fieldName(fieldOrDomainName.object);
+				const dsql_fld* fld = nullptr;
+
+				for (fld = relation->rel_fields; fld; fld = fld->fld_next)
+				{
+					if (fieldName == fld->fld_name)
+					{
+						type.dimensions = fld->dimensions;
+						type.fieldSource = fld->fieldSource;
+						type.length = fld->length;
+						type.scale = fld->scale;
+						type.subType = fld->subType;
+						type.charSetId = fld->charSetId;
+						type.collationId = fld->collationId;
+						type.charLength = fld->charLength;
+						type.flags = fld->flags;
+						type.dtype = fld->dtype;
+						type.segLength = fld->segLength;
+						break;
+					}
+				}
+
+				if (!fld)
+				{
+					if (fieldOrDomainName.object == RDB_DB_KEY_NAME)
+					{
+						type.dimensions = 0;
+						type.length = relation->rel_dbkey_length;
+						type.scale = 0;
+						type.subType = fb_text_subtype_binary;
+						type.charSetId = CS_BINARY;
+						type.collationId = CollId();
+						type.charLength = relation->rel_dbkey_length;
+						type.flags = FLD_has_len | FLD_has_chset;
+						type.dtype = dtype_text;
+						type.segLength = 0;
+					}
+					else
+					{
+						// column @1 does not exist in table/view @2
+						ERRD_post(Arg::Gds(isc_dsql_command_err) <<
+							Arg::Gds(isc_dyn_column_does_not_exist) <<
+							fieldOrDomainName.toQuotedString() <<
+							relationName.toQuotedString());
+					}
+				}
+			}
+			else
+			{
+				ERRD_post(Arg::Gds(isc_dsql_command_err) <<
+					Arg::PrivateDyn(175) <<
+					relationName.toQuotedString());
+			}
+		}
+		else
+		{
+			dsqlScratch->qualifyExistingName(fieldOrDomainName, obj_field);
+
+			if (!METD_get_domain(dsqlScratch->getTransaction(), &type, fieldOrDomainName))
+			{
+				// Specified domain or source column @1 does not exist
+				ERRD_post(Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_dsql_domain_not_found) << fieldOrDomainName.toQuotedString());
+			}
+		}
+
+		if (type.dimensions != 0)
+		{
+			ERRD_post(Arg::Gds(isc_wish_list) <<
+				Arg::Gds(isc_random) <<
+				Arg::Str("Usage of domain or TYPE OF COLUMN of array type in PSQL"));
+		}
+	}
+}
+
+
 void METD_drop_charset(jrd_tra* transaction, const QualifiedName& metaName)
 {
 /**************************************

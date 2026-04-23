@@ -261,6 +261,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\jrd\tests\BlrGenTest.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tests\CompressorTest.cpp" />
   </ItemGroup>
   <ItemGroup>
