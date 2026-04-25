@@ -1267,6 +1267,10 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 	}
 
 	request->req_sorts.unlinkAll();
+
+	if (request->req_transaction)
+		request->req_transaction->finiBulkInsert(tdbb, request);
+
 	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
 

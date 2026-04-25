@@ -13503,6 +13503,8 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 {
+	const bool use_bulk_insert = (tdgbl->runtimeODS >= DB_VERSION_DDL14);
+
 	m_batchMode = false;
 	m_inMgsNum = 0;
 
@@ -13657,18 +13659,27 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	add_byte(blr, blr_loop);
 	add_byte(blr, blr_receive);
 	add_byte(blr, 0);
-	if (identity_type == IDENT_TYPE_ALWAYS)
+
+	if (!use_bulk_insert)
 	{
-		add_byte(blr, blr_store3);
-		add_byte(blr, blr_store_override_system);
+		if (identity_type == IDENT_TYPE_ALWAYS)
+		{
+			add_byte(blr, blr_store3);
+			add_byte(blr, blr_store_override_system);
+		}
+		else
+			add_byte(blr, blr_store);
+
+		// Mark this store operation as bulk one
+		add_byte(blr, blr_marks);
+		add_byte(blr, 1);
+		add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
 	}
 	else
-		add_byte(blr, blr_store);
-
-	// Mark this store operation as bulk one
-	add_byte(blr, blr_marks);
-	add_byte(blr, 1);
-	add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
+	{
+		add_byte(blr, blr_bulk_insert);
+		add_byte(blr, blr_null);		// no source RSE
+	}
 
 	if (m_relation->rel_name.schema.hasData())
 	{
@@ -13710,8 +13721,11 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	}
 
 	add_byte(blr, blr_end);
-	if (identity_type == IDENT_TYPE_ALWAYS)
-		add_byte(blr, blr_null);
+	if (!use_bulk_insert)
+	{
+		if (identity_type == IDENT_TYPE_ALWAYS)
+			add_byte(blr, blr_null);
+	}
 	add_byte(blr, blr_end);
 	add_byte(blr, blr_eoc);
 
@@ -13811,7 +13825,7 @@ void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec
 		// memory when there are blobs and arrays fields - CORE-3802.
 
 		FbLocalStatus status;
-		if (m_resync || m_recs % 1000 == 1)
+		if (m_resync || ((m_recs % 1000 == 1) && !tdgbl->gbl_use_auto_release_temp_blobid))
 			m_request->startAndSend(&status, tran, 0, 0, m_inMsg.getCount(), m_inMsg.begin());
 		else
 			m_request->send(&status, 0, 0, m_inMsg.getCount(), m_inMsg.begin());

@@ -85,7 +85,7 @@ static void check_swept(thread_db*, record_param*);
 static USHORT compress(thread_db*, data_page*);
 static void delete_tail(thread_db*, rhdf*, const USHORT, USHORT);
 static void fragment(thread_db*, record_param*, SSHORT, Compressor&, SSHORT, const jrd_tra*);
-static void extend_relation(thread_db*, Cached::Relation*, WIN*, const Jrd::RecordStorageType type);
+static USHORT extend_relation(thread_db*, Cached::Relation*, WIN*, const Jrd::RecordStorageType type, bool reserve);
 static UCHAR* find_space(thread_db*, record_param*, SSHORT, PageStack&, Record*, const Jrd::RecordStorageType type);
 static bool get_header(WIN*, USHORT, record_param*);
 static pointer_page* get_pointer_page(thread_db*, RelationPermanent*, RelationPages*, WIN*, ULONG, USHORT);
@@ -1201,6 +1201,13 @@ void DPM_delete_relation_pages(Jrd::thread_db* tdbb, Jrd::RelationPermanent* rel
 	relPages->rel_index_root = 0;
 }
 
+// Reserve pages for bulk insert, return count of reserved pages.
+// window points to the first reserved page locked for write.
+USHORT DPM_reserve_pages(thread_db* tdbb, jrd_rel* relation, WIN* window)
+{
+	return extend_relation(tdbb, relation->getPermanent(), window, DPM_primary, true);
+}
+
 bool DPM_fetch(thread_db* tdbb, record_param* rpb, USHORT lock)
 {
 /**************************************
@@ -1868,6 +1875,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 			const UCHAR* bits = (UCHAR*) (ppage->ppg_page + dbb->dbb_dp_per_pp);
 			if (page_number && !PPG_DP_BIT_TEST(bits, slot, ppg_dp_secondary) &&
 				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_empty) &&
+				!PPG_DP_BIT_TEST(bits, slot, ppg_dp_reserved) &&
 				(!sweeper || !PPG_DP_BIT_TEST(bits, slot, ppg_dp_swept)) )
 			{
 #ifdef SUPERSERVER_V2
@@ -3138,7 +3146,8 @@ static void fragment(thread_db* tdbb,
 }
 
 
-static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* window, const Jrd::RecordStorageType type)
+static USHORT extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* window,
+	RecordStorageType type, bool reserve)
 {
 /**************************************
  *
@@ -3240,6 +3249,8 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 	// - next PAGES_IN_EXTENT-1 slots also empty
 	if ((slot % PAGES_IN_EXTENT == 0) && (ppage->ppg_count >= PAGES_IN_EXTENT || pp_sequence))
 	{
+		fb_assert(slot + PAGES_IN_EXTENT <= dbb->dbb_dp_per_pp);
+
 		cntAlloc = PAGES_IN_EXTENT;
 
 		for (USHORT i = 0; i < PAGES_IN_EXTENT; i++)
@@ -3295,6 +3306,9 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 	else
 		PPG_DP_BIT_SET(bits, slot, ppg_dp_secondary);
 
+	if (reserve)
+		PPG_DP_BIT_SET(bits, slot, ppg_dp_reserved);
+
 	for (unsigned i = 1; i < cntAlloc; i++)
 	{
 		fb_assert(ppage->ppg_page[slot + i] == 0);
@@ -3302,17 +3316,23 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 
 		PPG_DP_BIT_CLEAR(bits, slot + i, PPG_DP_ALL_BITS);
 		PPG_DP_BIT_SET(bits, slot + i, ppg_dp_empty);
+
+		if (reserve)
+			PPG_DP_BIT_SET(bits, slot + i, ppg_dp_reserved);
 	}
 
-	if (type == DPM_primary)
+	if (!reserve)
 	{
-		relPages->rel_pri_data_space = pp_sequence;
-		relPages->rel_sec_data_space = MIN(pp_sequence, relPages->rel_sec_data_space);
-	}
-	else
-	{
-		relPages->rel_sec_data_space = pp_sequence;
-		relPages->rel_pri_data_space = MIN(pp_sequence, relPages->rel_pri_data_space);
+		if (type == DPM_primary)
+		{
+			relPages->rel_pri_data_space = pp_sequence;
+			relPages->rel_sec_data_space = MIN(pp_sequence, relPages->rel_sec_data_space);
+		}
+		else
+		{
+			relPages->rel_sec_data_space = pp_sequence;
+			relPages->rel_pri_data_space = MIN(pp_sequence, relPages->rel_pri_data_space);
+		}
 	}
 
 	relPages->rel_data_pages += cntAlloc;
@@ -3325,6 +3345,7 @@ static void extend_relation(thread_db* tdbb, Cached::Relation* relation, WIN* wi
 		"   extended_relation (relation %d, window_page %" ULONGFORMAT")\n",
 		relation->getId(), window->win_page.getPageNum());
 #endif
+	return cntAlloc;
 }
 
 
@@ -3447,7 +3468,7 @@ static UCHAR* find_space(thread_db*	tdbb,
 	rpb->rpb_number.setValue(((SINT64) page->dpg_sequence) * dbb->dbb_max_records + slot);
 
 	if (record)
-		record->pushPrecedence(PageNumber(DB_PAGE_SPACE, rpb->rpb_page));
+		record->pushPrecedence(rpb->getWindow(tdbb).win_page);
 
 	if (page->dpg_count == 1)
 	{
@@ -3703,6 +3724,9 @@ static rhd* locate_space(thread_db* tdbb,
 			if (PPG_DP_BIT_TEST(bits, slot, ppg_dp_full))
 				continue;
 
+			if (PPG_DP_BIT_TEST(bits, slot, ppg_dp_reserved))
+				continue;
+
 			// hvlad: avoid creating circle in precedence graph, if possible
 			if (type == DPM_secondary && lowPages.exist(dp_number))
 				continue;
@@ -3807,7 +3831,7 @@ static rhd* locate_space(thread_db* tdbb,
 	int i;
 	for (i = 0; i < 20; ++i)
 	{
-		extend_relation(tdbb, relation, window, type);
+		extend_relation(tdbb, relation, window, type, false);
 		space = find_space(tdbb, rpb, size, stack, record, type);
 
 		if (space)

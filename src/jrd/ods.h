@@ -845,6 +845,7 @@ inline constexpr UCHAR ppg_dp_large			= 0x02;		// Large object is on data page
 inline constexpr UCHAR ppg_dp_swept			= 0x04;		// Sweep has nothing to do on data page
 inline constexpr UCHAR ppg_dp_secondary		= 0x08;		// Primary record versions not stored on data page
 inline constexpr UCHAR ppg_dp_empty			= 0x10;		// Data page is empty
+inline constexpr UCHAR ppg_dp_reserved		= 0x20;		// Slot is reserved for bulk insert
 
 inline constexpr UCHAR PPG_DP_ALL_BITS	= (1 << PPG_DP_BITS_NUM) - 1;
 
