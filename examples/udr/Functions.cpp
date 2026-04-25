@@ -173,7 +173,8 @@ FB_UDR_BEGIN_FUNCTION(mult)
 		outOffset = outMetadata->getOffset(status, 0);
 		outNullOffset = outMetadata->getNullOffset(status, 0);
 
-		df34 = master->getUtilInterface()->getDecFloat34(status);
+		util = master->getUtilInterface();
+		df34 = util->getDecFloat34(status);
 	}
 
 	// This function requires the INTEGER parameters and return value, otherwise it will crash.
@@ -185,20 +186,26 @@ FB_UDR_BEGIN_FUNCTION(mult)
 			unsigned char bcd[IDecFloat34::BCD_SIZE];
 			int sign, exp;
 
-			void load(void* from, IDecFloat34* df34)
+			void load(ThrowStatusWrapper* status, int* from, IUtil* util, IDecFloat34* df34)
 			{
-				df34->toBcd((FB_DEC34*) from, &sign, bcd, &exp);
+				FB_DEC34 temp;
+				util->convert(status, SQL_LONG,  0, sizeof(int)     , from,
+									  SQL_DEC34, 0, sizeof(FB_DEC34), &temp);
+				df34->toBcd(&temp, &sign, bcd, &exp);
 			}
 
-			void store(void* to, IDecFloat34* df34) const
+			void store(ThrowStatusWrapper* status, int* to, IUtil* util, IDecFloat34* df34) const
 			{
-				df34->fromBcd(sign, bcd, exp, (FB_DEC34*) to);
+				FB_DEC34 temp;
+				df34->fromBcd(sign, bcd, exp, &temp);
+				util->convert(status, SQL_DEC34, 0, sizeof(FB_DEC34), &temp,
+									  SQL_LONG,  0, sizeof(int)     , to);
 			}
 		};
 
 		ExampleBCD a, b, rc;
-		a.load(in + aOffset, df34);
-		b.load(in + bOffset, df34);
+		a.load(status, reinterpret_cast<int*>(in + aOffset), util, df34);
+		b.load(status, reinterpret_cast<int*>(in + bOffset), util, df34);
 
 		// multiply (trivial example - a lot of features are missing)
 		rc.sign = a.sign ^ b.sign;
@@ -228,12 +235,13 @@ FB_UDR_BEGIN_FUNCTION(mult)
 		memcpy(rc.bcd, buf + offset, sizeof rc.bcd);
 		rc.exp += (IDecFloat34::BCD_SIZE - offset);
 
-		rc.store(out + outOffset, df34);
+		rc.store(status, reinterpret_cast<int*>(out + outOffset), util, df34);
 		*(ISC_SHORT*) (out + outNullOffset) = FB_FALSE;
 	}
 
 	unsigned aOffset, bOffset, outOffset, outNullOffset;
 	IDecFloat34* df34;
+	IUtil* util;
 FB_UDR_END_FUNCTION
 
 
