@@ -444,6 +444,297 @@ private:
 	ULONG m_nextPP;
 };
 
+
+class IndexKeyScanSink
+{
+public:
+	virtual ~IndexKeyScanSink()
+	{}
+
+	virtual idx_e handleKey(thread_db* tdbb, Record* record, const RecordNumber& recordNumber,
+		IndexKey& key, bool secondary, bool deleted, bool& stopScan) = 0;
+
+	virtual bool shouldStopScan() const
+	{
+		return false;
+	}
+};
+
+static Record* cleanupIndexKeyScanRecords(RecordStack& stack, Record* record, Record* gcRecord)
+{
+	do {
+		if (record != gcRecord)
+			delete record;
+	} while (stack.hasData() && (record = stack.pop()));
+
+	return record;
+}
+
+class IndexKeyScanner
+{
+public:
+	IndexKeyScanner(Database* dbb, jrd_rel* relation, index_desc* idx, jrd_tra* transaction,
+		ULONG ppSequence, bool largeScan, volatile bool& stop, IndexErrorContext& context)
+		: m_dbb(dbb),
+		  m_relation(relation),
+		  m_idx(idx),
+		  m_transaction(transaction),
+		  m_ppSequence(ppSequence),
+		  m_largeScan(largeScan),
+		  m_stop(stop),
+		  m_context(context)
+	{
+	}
+
+	void scan(thread_db* tdbb, IndexKeyScanSink& sink)
+	{
+		RecordStack stack;
+		record_param primary, secondary;
+
+		secondary.rpb_relation = m_relation;
+		primary.rpb_relation = m_relation;
+		//primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = 0; redundant
+
+		// Checkout a garbage collect record block for fetching data.
+
+		AutoTempRecord gc_record(m_relation->getGCRecord(tdbb));
+		Record* const gcRecord = gc_record;
+
+		if (m_largeScan)
+		{
+			primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = WIN_large_scan;
+			primary.rpb_org_scans = secondary.rpb_org_scans = getPermanent(m_relation)->rel_scan_count++;
+		}
+
+		primary.rpb_number.compose(m_dbb->dbb_max_records, m_dbb->dbb_dp_per_pp, 0, 0, m_ppSequence);
+		primary.rpb_number.decrement();
+
+		RecordNumber lastRecNo;
+		lastRecNo.compose(m_dbb->dbb_max_records, m_dbb->dbb_dp_per_pp, 0, 0, m_ppSequence + 1);
+		lastRecNo.decrement();
+
+		IndexKey key(tdbb, m_relation, m_idx);
+		IndexCondition condition(tdbb, m_idx);
+
+		// Loop thru the relation computing index keys. If there are old versions, find them, too.
+		while (DPM_next(tdbb, &primary, LCK_read, DPM_next_pointer_page))
+		{
+			if (primary.rpb_number >= lastRecNo)
+			{
+				CCH_RELEASE(tdbb, &primary.getWindow(tdbb));
+				break;
+			}
+
+			if (!VIO_garbage_collect(tdbb, &primary, m_transaction))
+				continue;
+
+			// If there are any back-versions left make an attempt at intermediate GC.
+			if (primary.rpb_b_page)
+			{
+				VIO_intermediate_gc(tdbb, &primary, m_transaction);
+
+				if (!DPM_get(tdbb, &primary, LCK_read))
+					continue;
+			}
+
+			const bool deleted = primary.rpb_flags & rpb_deleted;
+			if (deleted)
+				CCH_RELEASE(tdbb, &primary.getWindow(tdbb));
+			else
+			{
+				primary.rpb_record = gc_record;
+				VIO_data(tdbb, &primary, m_relation->rel_pool);
+				stack.push(primary.rpb_record);
+			}
+
+			secondary.rpb_page = primary.rpb_b_page;
+			secondary.rpb_line = primary.rpb_b_line;
+			secondary.rpb_prior = primary.rpb_prior;
+
+			while (!m_stop && secondary.rpb_page)
+			{
+				if (!DPM_fetch(tdbb, &secondary, LCK_read))
+					break;			// must be garbage collected
+
+				secondary.rpb_record = NULL;
+				VIO_data(tdbb, &secondary, m_relation->rel_pool);
+				stack.push(secondary.rpb_record);
+				secondary.rpb_page = secondary.rpb_b_page;
+				secondary.rpb_line = secondary.rpb_b_line;
+			}
+
+			bool stopScan = false;
+
+			while (!m_stop && !stopScan && stack.hasData())
+			{
+				Record* record = stack.pop();
+				idx_e result = idx_e_ok;
+
+				const auto checkResult = condition.check(record, &result);
+
+				if (result == idx_e_ok)
+				{
+					fb_assert(checkResult.isAssigned());
+					if (!checkResult.asBool())
+						continue;
+
+					result = key.compose(record);
+				}
+
+				if (result == idx_e_ok)
+				{
+					const bool secondaryRecord = stack.hasData();
+					result = sink.handleKey(tdbb, record, primary.rpb_number, key,
+						secondaryRecord, deleted, stopScan);
+				}
+
+				if (result != idx_e_ok)
+				{
+					record = cleanupIndexKeyScanRecords(stack, record, gcRecord);
+
+					if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
+						--getPermanent(m_relation)->rel_scan_count;
+
+					m_context.raise(tdbb, result, record);
+				}
+
+				if (stopScan)
+				{
+					cleanupIndexKeyScanRecords(stack, record, gcRecord);
+					break;
+				}
+
+				if (record != gcRecord)
+					delete record;
+			}
+
+			if (m_stop || stopScan || sink.shouldStopScan())
+				break;
+
+			JRD_reschedule(tdbb);
+		}
+
+		gc_record.release();
+
+		if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
+			--getPermanent(m_relation)->rel_scan_count;
+	}
+
+private:
+	Database* const m_dbb;
+	jrd_rel* const m_relation;
+	index_desc* const m_idx;
+	jrd_tra* const m_transaction;
+	const ULONG m_ppSequence;
+	const bool m_largeScan;
+	volatile bool& m_stop;
+	IndexErrorContext& m_context;
+};
+
+class IndexBuildSink : public IndexKeyScanSink
+{
+public:
+	IndexBuildSink(IndexCreation* creation, Sort* sort, jrd_rel* relation, index_desc* idx,
+		jrd_tra* transaction, UCHAR pad, bool isPrimary, bool isForeign,
+		jrd_rel* partnerRelation, USHORT partnerIndexId)
+		: m_creation(creation),
+		  m_sort(sort),
+		  m_relation(relation),
+		  m_idx(idx),
+		  m_transaction(transaction),
+		  m_pad(pad),
+		  m_isPrimary(isPrimary),
+		  m_isForeign(isForeign),
+		  m_partnerRelation(partnerRelation),
+		  m_partnerIndexId(partnerIndexId)
+	{
+	}
+
+	idx_e handleKey(thread_db* tdbb, Record* record, const RecordNumber& recordNumber,
+		IndexKey& key, bool secondary, bool deleted, bool& stopScan)
+	{
+		if (m_isPrimary && key->key_nulls != 0)
+		{
+			const auto key_null_segment = key.getNullSegment();
+			fb_assert(key_null_segment < m_idx->idx_count);
+			const auto bad_id = m_idx->idx_rpt[key_null_segment].idx_field;
+			const jrd_fld *bad_fld = MET_get_field(m_relation, bad_id);
+
+			ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(bad_fld->fld_name) <<
+													Arg::Str(NULL_STRING_MARK));
+		}
+
+		// If foreign key index is being defined, make sure foreign
+		// key definition will not be violated
+
+		if (m_isForeign && key->key_nulls == 0)
+		{
+			const idx_e result = check_partner_index(tdbb, m_relation, record, m_transaction, m_idx,
+				m_partnerRelation, m_partnerIndexId);
+
+			if (result != idx_e_ok)
+				return result;
+		}
+
+		if (key->key_length > m_creation->key_length)
+			return idx_e_keytoobig;
+
+		UCHAR* p;
+		m_sort->put(tdbb, reinterpret_cast<ULONG**>(&p));
+
+		// try to catch duplicates early
+
+		if (m_creation->duplicates.value() > 0)
+		{
+			stopScan = true;
+			return idx_e_ok;
+		}
+
+		if (m_creation->nullIndLen)
+			*p++ = (key->key_length == 0) ? 0 : 1;
+
+		if (key->key_length > 0)
+		{
+			memcpy(p, key->key_data, key->key_length);
+			p += key->key_length;
+		}
+
+		int l = int(m_creation->key_length) - m_creation->nullIndLen - key->key_length;	// must be signed
+
+		if (l > 0)
+		{
+			memset(p, m_pad, l);
+			p += l;
+		}
+
+		const bool key_is_null = (key->key_nulls == (1 << m_idx->idx_count) - 1);
+
+		index_sort_record* isr = (index_sort_record*) p;
+		isr->isr_record_number = recordNumber.getValue();
+		isr->isr_key_length = key->key_length;
+		isr->isr_flags = ((secondary || deleted) ? ISR_secondary : 0) | (key_is_null ? ISR_null : 0);
+
+		return idx_e_ok;
+	}
+
+	bool shouldStopScan() const
+	{
+		return m_creation->duplicates.value() > 0;
+	}
+
+private:
+	IndexCreation* const m_creation;
+	Sort* const m_sort;
+	jrd_rel* const m_relation;
+	index_desc* const m_idx;
+	jrd_tra* const m_transaction;
+	const UCHAR m_pad;
+	const bool m_isPrimary;
+	const bool m_isForeign;
+	jrd_rel* const m_partnerRelation;
+	const USHORT m_partnerIndexId;
+};
+
 bool IndexCreateTask::handler(WorkItem& _item)
 {
 	Item* item = reinterpret_cast<Item*>(&_item);
@@ -469,12 +760,9 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	jrd_tra* transaction = item->m_tra ? item->m_tra : m_creation->transaction;
 	Sort* scb = item->m_sort;
 
-	RecordStack stack;
-	record_param primary, secondary;
-	secondary.rpb_relation = relation;
-	primary.rpb_relation   = relation;
+	record_param primary;
+	primary.rpb_relation = relation;
 	primary.rpb_number.setValue(BOF_NUMBER);
-	//primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = 0; redundant
 
 	IndexErrorContext context(relation, idx, m_creation->index_name);
 
@@ -551,198 +839,18 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		delete csb;
 	}
 
-	// Checkout a garbage collect record block for fetching data.
-
-	AutoTempRecord gc_record(relation->getGCRecord(tdbb));
-
-	if (m_flags & IS_LARGE_SCAN)
-	{
-		primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = WIN_large_scan;
-		primary.rpb_org_scans = secondary.rpb_org_scans = getPermanent(relation)->rel_scan_count++;
-	}
-
 	const bool isDescending = (idx->idx_flags & idx_descending);
 	const bool isPrimary = (idx->idx_flags & idx_primary);
 	const bool isForeign = (idx->idx_flags & idx_foreign);
 	const UCHAR pad = isDescending ? -1 : 0;
 
-	primary.rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_ppSequence);
-	primary.rpb_number.decrement();
+	IndexBuildSink sink(m_creation, scb, relation, idx, transaction, pad,
+		isPrimary, isForeign, partner_relation, partner_index_id);
 
-	RecordNumber lastRecNo;
-	lastRecNo.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_ppSequence + 1);
-	lastRecNo.decrement();
+	IndexKeyScanner scanner(dbb, relation, idx, transaction, item->m_ppSequence,
+		(m_flags & IS_LARGE_SCAN), m_stop, context);
 
-	IndexKey key(tdbb, relation, idx);
-	IndexCondition condition(tdbb, idx);
-
-	// Loop thru the relation computing index keys.  If there are old versions, find them, too.
-	while (DPM_next(tdbb, &primary, LCK_read, DPM_next_pointer_page))
-	{
-		if (primary.rpb_number >= lastRecNo)
-		{
-			CCH_RELEASE(tdbb, &primary.getWindow(tdbb));
-			break;
-		}
-
-		if (!VIO_garbage_collect(tdbb, &primary, transaction))
-			continue;
-
-		// If there are any back-versions left make an attempt at intermediate GC.
-		if (primary.rpb_b_page)
-		{
-			VIO_intermediate_gc(tdbb, &primary, transaction);
-
-			if (!DPM_get(tdbb, &primary, LCK_read))
-				continue;
-		}
-
-		const bool deleted = primary.rpb_flags & rpb_deleted;
-		if (deleted)
-			CCH_RELEASE(tdbb, &primary.getWindow(tdbb));
-		else
-		{
-			primary.rpb_record = gc_record;
-			VIO_data(tdbb, &primary, relation->rel_pool);
-			stack.push(primary.rpb_record);
-		}
-
-		secondary.rpb_page = primary.rpb_b_page;
-		secondary.rpb_line = primary.rpb_b_line;
-		secondary.rpb_prior = primary.rpb_prior;
-
-		while (!m_stop && secondary.rpb_page)
-		{
-			if (!DPM_fetch(tdbb, &secondary, LCK_read))
-				break;			// must be garbage collected
-
-			secondary.rpb_record = NULL;
-			VIO_data(tdbb, &secondary, relation->rel_pool);
-			stack.push(secondary.rpb_record);
-			secondary.rpb_page = secondary.rpb_b_page;
-			secondary.rpb_line = secondary.rpb_b_line;
-		}
-
-		while (!m_stop && stack.hasData())
-		{
-			Record* record = stack.pop();
-			idx_e result = idx_e_ok;
-
-			const auto checkResult = condition.check(record, &result);
-
-			if (result == idx_e_ok)
-			{
-				fb_assert(checkResult.isAssigned());
-				if (!checkResult.asBool())
-					continue;
-
-				result = key.compose(record);
-
-				if (result == idx_e_ok)
-				{
-					if (isPrimary && key->key_nulls != 0)
-					{
-						const auto key_null_segment = key.getNullSegment();
-						fb_assert(key_null_segment < idx->idx_count);
-						const auto bad_id = idx->idx_rpt[key_null_segment].idx_field;
-						const jrd_fld *bad_fld = MET_get_field(relation, bad_id);
-
-						ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(bad_fld->fld_name) <<
-															Arg::Str(NULL_STRING_MARK));
-					}
-
-					// If foreign key index is being defined, make sure foreign
-					// key definition will not be violated
-
-					if (isForeign && key->key_nulls == 0)
-					{
-						result = check_partner_index(tdbb, relation, record, transaction, idx,
-													 partner_relation, partner_index_id);
-					}
-				}
-			}
-
-			if (result != idx_e_ok)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
-
-				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
-
-				context.raise(tdbb, result, record);
-			}
-
-			if (key->key_length > m_creation->key_length)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
-
-				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
-
-				context.raise(tdbb, idx_e_keytoobig, record);
-			}
-
-			UCHAR* p;
-			scb->put(tdbb, reinterpret_cast<ULONG**>(&p));
-
-			// try to catch duplicates early
-
-			if (m_creation->duplicates.value() > 0)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
-
-				break;
-			}
-
-			if (m_creation->nullIndLen)
-				*p++ = (key->key_length == 0) ? 0 : 1;
-
-			if (key->key_length > 0)
-			{
-				memcpy(p, key->key_data, key->key_length);
-				p += key->key_length;
-			}
-
-			int l = int(m_creation->key_length) - m_creation->nullIndLen - key->key_length;	// must be signed
-
-			if (l > 0)
-			{
-				memset(p, pad, l);
-				p += l;
-			}
-
-			const bool key_is_null = (key->key_nulls == (1 << idx->idx_count) - 1);
-
-			index_sort_record* isr = (index_sort_record*) p;
-			isr->isr_record_number = primary.rpb_number.getValue();
-			isr->isr_key_length = key->key_length;
-			isr->isr_flags = ((stack.hasData() || deleted) ? ISR_secondary : 0) | (key_is_null ? ISR_null : 0);
-			if (record != gc_record)
-				delete record;
-		}
-
-		if (m_stop)
-			break;
-
-		if (m_creation->duplicates.value() > 0)
-			break;
-
-		JRD_reschedule(tdbb);
-	}
-
-	gc_record.release();
-
-	if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-		--getPermanent(relation)->rel_scan_count;
+	scanner.scan(tdbb, sink);
 	}
 	catch (const Exception& ex)
 	{
