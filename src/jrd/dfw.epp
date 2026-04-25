@@ -133,6 +133,8 @@
 #include "../jrd/shut_proto.h"
 #include "../jrd/ProtectRelations.h"
 
+#include "../jrd/Package.h"
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -407,6 +409,7 @@ static bool end_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool check_not_null(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool store_view_context_type(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool user_management(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool createPackage(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction);
 static bool drop_package_header(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_package_header(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool drop_package_body(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -466,6 +469,9 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_body:
 		err_code = isc_package_name;
 		break;
+	case obj_package_constant:
+		err_code = isc_const_name;
+		break;
 	default:
 		fb_assert(false);
 	}
@@ -484,6 +490,9 @@ static ISC_STATUS getErrorNotFound(int obj_type)
 		break;
 	case obj_udf:
 		err_code = isc_dyn_func_not_found;
+		break;
+	case obj_package_constant:
+		err_code = isc_dyn_constant_not_found;
 		break;
 	default:
 		fb_assert(false);
@@ -1116,6 +1125,85 @@ namespace
 			ERR_post(status);
 		}
 	}
+
+	static bool createOrAlterConstant(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+	{
+		fb_assert(!work->dfw_package.isEmpty());
+
+		SET_TDBB(tdbb);
+
+		switch (phase)
+		{
+		case 0:
+			return false;
+
+		case 1:
+		case 2:
+		case 3:
+			return true;
+
+		case 4:
+		{
+			const QualifiedName constantName = work->getQualifiedName();
+			const QualifiedName packageName = constantName.getSchemaAndPackage();
+
+			auto* package = MetadataCache::getVersioned<Cached::Package>(tdbb, packageName,
+				CacheFlag::AUTOCREATE);
+
+			fb_assert(package);
+			if (package == nullptr)
+				return false;
+
+			auto constant = package->findConstant(constantName);
+			fb_assert(constant);
+			if (constant == nullptr)
+				return false;
+
+			bid blobId = constant->getBlobId(tdbb);
+
+			Jrd::Database* dbb = tdbb->getDatabase();
+			MemoryPool* new_pool = dbb->createPool();
+			// block is used to ensure verify_cache()
+			// works in not deleted context
+			{
+				Jrd::ContextPoolHolder context(tdbb, new_pool);
+				// Store constant dependencies as a package dependencies
+				MET_get_dependencies(tdbb, nullptr, nullptr, 0, nullptr, &blobId,
+					nullptr,
+					nullptr,
+					packageName, obj_package_header,
+					0, transaction);
+
+				dbb->deletePool(new_pool);
+			}
+
+			return false;
+		} // case
+		} //
+
+		return false;
+	}
+
+	static bool deleteConstant(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+	{
+		fb_assert(!work->dfw_package.isEmpty());
+
+		SET_TDBB(tdbb);
+		//! Put Package as a dependency because RDB$DEPENDENCIES only tracks object and schema
+		const QualifiedName packageDependency(work->dfw_package, work->dfw_schema);
+		switch (phase)
+		{
+		case 0:
+			return false;
+
+		case 1:
+			check_dependencies(tdbb, work->getQualifiedName(), nullptr, obj_package_constant, transaction);
+			return false;
+		}
+
+		return false;
+	}
+
 } // namespace
 
 static inline constexpr deferred_task task_table[] =
@@ -1170,6 +1258,11 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
 	{ dfw_set_statistics, set_statistics },
+	{ dfw_create_package_constant, createOrAlterConstant },
+	{ dfw_modify_package_constant, createOrAlterConstant },
+	{ dfw_delete_package_constant, deleteConstant },
+	{ dfw_create_package, createPackage },
+
 	{ dfw_null, NULL }
 };
 
@@ -2218,17 +2311,75 @@ static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* wor
 	return false;
 }
 
+static bool createPackage(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	fb_assert(work->dfw_id != 0);
+
+	SET_TDBB(tdbb);
+
+	Cached::Package* routine = nullptr;
+	switch (phase)
+	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
+	}
+
+	return false;
+}
+
 // Drop dependencies of a package header.
 static bool drop_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
+	fb_assert(work->dfw_id != 0);
+
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine = nullptr;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
+
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_body);
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_header);
-		break;
+		return true;
+
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::ERASED | CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
 	}
 
 	return false;
@@ -2239,11 +2390,36 @@ static bool modify_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* w
 {
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine = nullptr;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_header);
-		break;
+		return true;
+	case 2:
+	case 3:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::MINISCAN);
+		if (!routine)
+			return false;
+
+		return true;
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
 	}
 
 	return false;
@@ -2252,13 +2428,34 @@ static bool modify_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* w
 // Drop dependencies of a package body.
 static bool drop_package_body(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
+	fb_assert(work->dfw_id != 0);
+
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_body);
-		break;
+		return true;
+
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::ERASED | CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
 	}
 
 	return false;
@@ -2815,6 +3012,9 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 	case obj_udf:
 		dfw_type = dfw_delete_function;
 		break;
+	case obj_package_constant:
+		dfw_type = dfw_delete_package_constant;
+		break;
 	default:
 		fb_assert(false);
 		break;
@@ -2828,6 +3028,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 			(work->dfw_type == dfw_modify_procedure && dfw_type == dfw_delete_procedure) ||
 			(work->dfw_type == dfw_modify_field && dfw_type == dfw_delete_global) ||
 			(work->dfw_type == dfw_modify_trigger && dfw_type == dfw_delete_trigger) ||
+			(work->dfw_type == dfw_modify_package_constant && dfw_type == dfw_delete_package_constant) ||
 			(work->dfw_type == dfw_modify_function && dfw_type == dfw_delete_function)) &&
 			work->dfw_schema == object_name.schema &&
 			work->dfw_name == object_name.object.c_str() && work->dfw_package.isEmpty() &&

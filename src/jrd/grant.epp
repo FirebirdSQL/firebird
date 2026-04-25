@@ -139,6 +139,7 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 		case obj_charset:
 		case obj_collation:
 		case obj_schema:
+		case obj_package_constant:
 			priv |= SCL_usage;
 			break;
 

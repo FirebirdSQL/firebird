@@ -1199,6 +1199,9 @@
     <None Include="..\..\..\src\jrd\SystemTriggers.epp">
       <Filter>JRD files\GPRE files</Filter>
     </None>
+    <None Include="..\..\..\src\jrd\Package.epp">
+      <Filter>JRD files\GPRE files</Filter>
+    </None>
     <None Include="..\..\..\src\utilities\gstat\dba.epp">
       <Filter>Services</Filter>
     </None>

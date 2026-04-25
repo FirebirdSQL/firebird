@@ -1966,8 +1966,10 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 
 	AutoRequest packageHandle, procedureHandle, procedureParameterHandle;
 	AutoRequest functionHandle, functionReturnHandle, functionArgumentHandle;
+	AutoRequest constantHandle;
 	const SLONG procGen = lookupGenerator(PROCEDURES_GENERATOR);
 	const SLONG funcGen = lookupGenerator(FUNCTIONS_GENERATOR);
+	const SLONG packageGen = lookupGenerator(PACKAGES_GENERATOR);
 
 	for (const auto& systemPackage : SystemPackage::get())
 	{
@@ -1990,6 +1992,8 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 
 			PKG.RDB$SYSTEM_FLAG = RDB_system;
 			PKG.RDB$VALID_BODY_FLAG = TRUE;
+
+			PKG.RDB$PACKAGE_ID = DPM_gen_id(tdbb, packageGen, false, 1);
 		}
 		END_STORE
 
@@ -2157,6 +2161,46 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 				}
 				END_STORE
 			}
+		}
+
+		for (const auto& constant : systemPackage.constants)
+		{
+			STORE (REQUEST_HANDLE constantHandle TRANSACTION_HANDLE transaction)
+				CONST IN RDB$CONSTANTS
+			{
+				// Constant name
+				PAD(constant.name, CONST.RDB$CONSTANT_NAME);
+
+				// Description (filed) name
+				PAD(names[gfields[constant.fieldId].gfld_name], CONST.RDB$FIELD_SOURCE);
+
+				// Put the blr
+				Array<UCHAR> blrData(1 + constant.valueBlr.getCount() + 1);
+				blrData.push(blr_version5);
+				blrData.append(constant.valueBlr);
+				blrData.push(blr_eoc);
+				attachment->storeBinaryBlob(tdbb, transaction, &CONST.RDB$CONSTANT_BLR, blrData);
+				CONST.RDB$CONSTANT_BLR.NULL = FALSE;
+
+				// Parent package
+				PAD(systemPackage.name, CONST.RDB$PACKAGE_NAME);
+
+				// Schema of the parent package
+				PAD(SYSTEM_SCHEMA, CONST.RDB$SCHEMA_NAME);
+
+				// Type
+				CONST.RDB$PRIVATE_FLAG.NULL = FALSE;
+				CONST.RDB$PRIVATE_FLAG = false;
+
+				if (constant.valueSource != nullptr)
+				{
+					CONST.RDB$CONSTANT_SOURCE.NULL = FALSE;
+					attachment->storeMetaDataBlob(tdbb, transaction, &CONST.RDB$CONSTANT_SOURCE, constant.valueSource);
+				}
+				else
+					CONST.RDB$CONSTANT_SOURCE.NULL = TRUE;
+			}
+			END_STORE
 		}
 	}
 }
