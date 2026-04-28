@@ -327,8 +327,27 @@ FrontendParser::AnySetNode FrontendParser::parseSet()
 				return parsed.value();
 			else if (const auto parsed = parseSet<SetEchoNode>(text, TOKEN_ECHO))
 				return parsed.value();
-			else if (const auto parsed = parseSet<SetExecPathDisplayNode>(text, TOKEN_EXEC_PATH_DISPLAY))
-				return parsed.value();
+			else if (text == TOKEN_EXEC_PATH_DISPLAY)
+			{
+				if (const auto arg = lexer.getToken(); arg.type != Token::TYPE_EOF)
+				{
+					SetExecPathDisplayNode node;
+					node.arg = arg.processedText;
+
+					if (node.arg == "LIMIT")
+					{
+						const auto value = lexer.getToken();
+						if (value.type != Token::TYPE_OTHER)
+						{
+							return InvalidNode();
+						}
+						node.value = atoi(value.rawText.c_str());
+					}
+
+					if (parseEof())
+						return node;
+				}
+			}
 			else if (const auto parsed = parseSet<SetExplainNode>(text, TOKEN_EXPLAIN))
 				return parsed.value();
 			else if (const auto parsed = parseSet<SetHeadingNode>(text, TOKEN_HEADING))

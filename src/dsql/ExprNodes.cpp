@@ -307,7 +307,11 @@ void Printable::print(NodePrinter& printer) const
 {
 	NodePrinter subPrinter(printer.getIndent() + 1);
 	Firebird::string tag(internalPrint(subPrinter));
-	printer.begin(tag);
+	Firebird::string attr;
+#ifdef DEV_BUILD
+	attr.printf("addr=\"%p\"", this);
+#endif
+	printer.begin(tag, attr.c_str());
 	printer.append(subPrinter);
 	printer.end();
 }
