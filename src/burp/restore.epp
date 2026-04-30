@@ -14194,7 +14194,10 @@ bool RestoreRelationTask::fileReader(Item& item)
 		const FB_SSIZE_T attLen = 1 + (tdgbl->gbl_sw_transportable ? 12 : 6);
 		const FB_SSIZE_T overhead = tdgbl->gbl_sw_compress ? (len / 127 + 1) : 0;
 
-		if (static_cast<FB_SSIZE_T>(len) + attLen + overhead > space)
+		// Reserve space for the after payload rec_* marker: rec_data or rec_relation_end.
+		const FB_SSIZE_T nextRecordMarker = 1;
+
+		if ((static_cast<FB_SSIZE_T>(len) + attLen + overhead + nextRecordMarker) > space)
 		{
 			if (ioBuf)
 			{

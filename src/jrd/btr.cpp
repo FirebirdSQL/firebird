@@ -203,7 +203,7 @@ namespace
 		return TipCache::traState(tdbb, descTrans, checkPresence, creating);
 	}
 
-	inline int transactionState(thread_db* tdbb, TraNumber descTrans, Cached::Relation* rel, MetaId idxId, bool creating)
+	inline int transactionState(thread_db* tdbb, TraNumber descTrans, RelationPermanent* rel, MetaId idxId, bool creating)
 	{
 		auto checkPresence = [tdbb, rel, idxId]()->bool
 		{
@@ -315,9 +315,9 @@ void dumpIndexRoot(...) { }
 }
 
 static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* irt_desc,
-	Cached::Relation* relation, WIN* window, MetaId indexId);
+	RelationPermanent* relation, WIN* window, MetaId indexId);
 static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::irt_repeat* irt_desc,
-	Cached::Relation* relation, WIN* window, MetaId indexId, bool fromActivate = false);
+	RelationPermanent* relation, WIN* window, MetaId indexId, bool fromActivate = false);
 
 index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, WIN* window)
 {
@@ -1174,9 +1174,9 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, MetaId id, bool withCleanup)
 }
 
 
-static void checkTransactionNumber(const index_root_page::irt_repeat* irt_desc, jrd_tra* tra, const char* msg)
+static void checkTransactionNumber(const index_root_page::irt_repeat* irt_desc, TraNumber tran, const char* msg)
 {
-	if (irt_desc->getTransaction() != tra->tra_number)
+	if (irt_desc->getTransaction() != tran)
 	{
 		fb_assert(false);
 		fatal_exception::raiseFmt("Index root transaction number doesn't match when %s", msg);
@@ -1191,7 +1191,8 @@ static void checkTransactionNumber(const index_root_page::irt_repeat* irt_desc, 
 }
 
 
-void BTR_mark_index_for_delete(thread_db* tdbb, Cached::Relation* rel, MetaId id, WIN* window, index_root_page* root)
+void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId id, WIN* window, index_root_page* root,
+	TraNumber tran)
 {
 /***********************************************************
  *
@@ -1207,15 +1208,26 @@ void BTR_mark_index_for_delete(thread_db* tdbb, Cached::Relation* rel, MetaId id
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
+	Cleanup releaseWindow([&] ()
+	{
+		CCH_RELEASE(tdbb, window);
+	});
+
 	// Get index descriptor.  If index doesn't exist, just leave.
 	if (id < root->irt_count)
 	{
 		auto* irt_desc = root->irt_rpt + id;
 
-		jrd_tra* tra = tdbb->getTransaction();
-		fb_assert(tra);
+		if (!tran)
+		{
+			jrd_tra* tra = tdbb->getTransaction();
+			fb_assert(tra);
+			if (tra)
+				tran = tra->tra_number;
+		}
+		fb_assert(tran);
 
-		if (tra)
+		if (tran)
 		{
 			bool marked = false;
 
@@ -1247,7 +1259,7 @@ void BTR_mark_index_for_delete(thread_db* tdbb, Cached::Relation* rel, MetaId id
 				break;
 
 			case irt_commit:
-				if (tra->tra_number == irt_desc->getTransaction())
+				if (tran == irt_desc->getTransaction())
 					break;	// already marked in current transaction
 				[[fallthrough]];
 
@@ -1256,22 +1268,20 @@ void BTR_mark_index_for_delete(thread_db* tdbb, Cached::Relation* rel, MetaId id
 				badState(irt_desc, "not irt_rollback/irt_normal", msg);
 
 			case irt_rollback:			// created not long ago
-				checkTransactionNumber(irt_desc, tra, msg);
+				checkTransactionNumber(irt_desc, tran, msg);
 				if (!marked)
 					CCH_MARK(tdbb, window);
-				irt_desc->setKill(tra->tra_number);
+				irt_desc->setKill(tran);
 				break;
 
 			case irt_normal:
 				if (!marked)
 					CCH_MARK(tdbb, window);
-				irt_desc->setCommit(tra->tra_number);
+				irt_desc->setCommit(tran);
 				break;
 			}
 		}
 	}
-
-	CCH_RELEASE(tdbb, window);
 }
 
 
@@ -1341,7 +1351,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 				badState(irt_desc, "irt_in_progress/irt_rollback/irt_normal", msg);
 
 			case irt_commit:		// removed not long ago
-				checkTransactionNumber(irt_desc, tra, msg);
+				checkTransactionNumber(irt_desc, tra->tra_number, msg);
 				if (!marked)
 					CCH_MARK(tdbb, &window);
 				irt_desc->setNormal();
@@ -1349,7 +1359,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 				break;
 
 			case irt_kill:
-				checkTransactionNumber(irt_desc, tra, msg);
+				checkTransactionNumber(irt_desc, tra->tra_number, msg);
 				if (!marked)
 					CCH_MARK(tdbb, &window);
 				irt_desc->setRollback(tra->tra_number);
@@ -2550,7 +2560,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 // if yes - we release index root window
 
 static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* irt_desc,
-	Cached::Relation* relation, WIN* window, MetaId indexId)
+	RelationPermanent* relation, WIN* window, MetaId indexId)
 {
 	const TraNumber irtTrans = irt_desc->getTransaction();
 	const TraNumber oldestActive = tdbb->getDatabase()->dbb_oldest_active;
@@ -2609,7 +2619,7 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 // if yes - modifies it up to index deletion
 
 static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::irt_repeat* irt_desc,
-	Cached::Relation* relation, WIN* window, MetaId indexId, bool fromActivate)
+	RelationPermanent* relation, WIN* window, MetaId indexId, bool fromActivate)
 {
 	const TraNumber irtTrans = irt_desc->getTransaction();
 	const TraNumber oldestActive = tdbb->getDatabase()->dbb_oldest_active;
@@ -2699,7 +2709,8 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 }
 
 
-bool BTR_next_index(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transaction, index_desc* idx, WIN* window)
+bool BTR_next_index(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transaction, index_desc* idx,
+					WIN* window, RelationPages* relPages)
 {
 /**************************************
  *
@@ -2728,8 +2739,8 @@ bool BTR_next_index(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transa
 		root = (const index_root_page*) window->win_buffer;
 	else
 	{
-		RelationPages* const relPages = transaction ?
-			relation->getPages(tdbb, transaction->tra_number) : relation->getPages(tdbb);
+		if (!relPages)
+			relPages = transaction ? relation->getPages(tdbb, transaction->tra_number) : relation->getPages(tdbb);
 
 		if (!(root = fetch_root(tdbb, window, relation, relPages)))
 			return false;

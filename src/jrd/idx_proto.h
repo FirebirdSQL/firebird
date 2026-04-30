@@ -41,9 +41,11 @@ namespace Jrd
 bool IDX_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
 void IDX_check_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::Cached::Relation*, Jrd::Cached::Relation*);
 bool IDX_check_master_types (Jrd::thread_db*, Jrd::index_desc&, Jrd::Cached::Relation*, int&);
-void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*, const Jrd::QualifiedName&,
-					  USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
+void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*,
+					  const Jrd::QualifiedName&, USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
 void IDX_mark_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
+void IDX_mark_temp(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, MetaId id, Jrd::Attachment* current,
+				   TraNumber tran);
 void IDX_delete_indices(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*, bool);
 void IDX_mark_indices(Jrd::thread_db*, Jrd::Cached::Relation*);
 void IDX_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);

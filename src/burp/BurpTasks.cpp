@@ -641,6 +641,7 @@ RestoreRelationTask::RestoreRelationTask(BurpGlobals* tdgbl) : BurpTask(tdgbl),
 	m_relation(NULL),
 	m_lastRecord(rec_relation_data),
 	m_writers(0),
+	m_waiters(0),
 	m_readDone(false),
 	m_stop(false),
 	m_error(false),
@@ -1008,7 +1009,7 @@ IOBuffer* RestoreRelationTask::getCleanBuffer()
 void RestoreRelationTask::putDirtyBuffer(IOBuffer* buf)
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
-	if (m_dirtyBuffers.isEmpty())
+	if (m_dirtyBuffers.isEmpty() || m_waiters)
 		m_dirtyCond.notifyOne();
 	buf->unlock();
 	m_dirtyBuffers.push(buf);
@@ -1083,7 +1084,11 @@ IOBuffer* RestoreRelationTask::getDirtyBuffer()
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		while (!m_dirtyBuffers.hasData() && !m_readDone && !m_stop)
+		{
+			m_waiters++;
 			m_dirtyCond.wait(m_mutex);
+			m_waiters--;
+		}
 
 		if (m_stop)
 			return NULL;

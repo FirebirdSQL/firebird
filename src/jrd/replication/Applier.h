@@ -124,17 +124,14 @@ namespace Jrd
 			jrd_tra* const m_transaction;
 		};
 */
-	public:
+	private:
 		Applier(Firebird::MemoryPool& pool,
 				const Firebird::PathName& database,
-				Request* request, bool cascade)
-			: PermanentStorage(pool),
-			  m_txnMap(pool), m_database(pool, database),
-			  m_request(request), m_enableCascade(cascade),
-			  m_constraintIndexMap(pool)
-		{}
+				Request* request, bool cascade);
 
+	public:
 		static Applier* create(thread_db* tdbb);
+		~Applier();
 
 		void process(thread_db* tdbb, ULONG length, const UCHAR* data);
 		void cleanupTransactions(thread_db* tdbb);

@@ -679,20 +679,37 @@ RecordSource* Optimizer::compile(RseNode* subRse, BoolExprNodeStack* parentStack
 	Optimizer subOpt(tdbb, csb, subRse, subFirstRows);
 	const auto rsb = subOpt.compile(parentStack);
 
-	if (parentStack && subOpt.isInnerJoin())
+	if (parentStack && !subRse->isFullJoin())
 	{
 		// If any parent conjunct was utilized, update our copy of its flags.
-		// Currently used for inner joins only, although could also be applied
-		// to conjuncts utilized for outer streams of outer joins.
+		// Except those utilized for inner streams of outer joins, they must be re-checked.
 
 		for (auto subIter = subOpt.getParentConjuncts(); subIter.hasData(); ++subIter)
 		{
-			for (auto selfIter = getConjuncts(); selfIter.hasData(); ++selfIter)
+			if (subIter & CONJUNCT_USED)
 			{
-				if (*selfIter == *subIter)
+				for (auto selfIter = getConjuncts(); selfIter.hasData(); ++selfIter)
 				{
-					selfIter |= subIter.getFlags();
-					break;
+					if (*selfIter == *subIter)
+					{
+						if (subRse->isInnerJoin())
+						{
+							selfIter |= subIter.getFlags();
+						}
+						else if (subRse->isOuterJoin())
+						{
+							const auto innerSubRse = subRse->rse_relations[1];
+							StreamList innerSubStreams;
+							innerSubRse->computeRseStreams(innerSubStreams);
+
+							if (!subIter->containsAnyStream(innerSubStreams))
+							{
+								selfIter |= subIter.getFlags();
+							}
+						}
+
+						break;
+					}
 				}
 			}
 		}

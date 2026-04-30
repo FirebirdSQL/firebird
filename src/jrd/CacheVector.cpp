@@ -131,6 +131,9 @@ int ElementBase::blockingAst(void* ast_object)
 
 			AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
+			TraNumber tran = LCK_read_data(tdbb, cacheElement->lock);
+			fb_assert(tran);
+
 			LCK_downgrade(tdbb, cacheElement->lock);
 			const bool erase = (cacheElement->lock->lck_physical < LCK_SR);
 			if (!erase)
@@ -139,7 +142,7 @@ int ElementBase::blockingAst(void* ast_object)
 				cacheElement->locked = false;
 			}
 
-			cacheElement->reset(tdbb, erase);
+			cacheElement->reset(tdbb, tran, erase);
 		}
 	}
 	catch (const Exception&)
@@ -163,6 +166,17 @@ void ElementBase::pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, c
 	{
 		if (!locked)
 			setLock(tdbb, id, family);
+
+		auto tra = tdbb->getTransaction();
+		fb_assert(tra);
+		if (tra)
+		{
+			auto tran = tra->tra_number;
+			if (!tran)	// called from system transaction
+				return;
+
+			LCK_write_data(tdbb, lock, tran);
+		}
 
 		if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))
 		{

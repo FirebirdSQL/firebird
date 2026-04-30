@@ -451,6 +451,7 @@ inline constexpr ULONG TRA_replicating			= 0x100000L;	// transaction is allowed 
 inline constexpr ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
 inline constexpr ULONG TRA_auto_release_temp_blobid = 0x400000L;// remove temp ids of materialized user blobs from tra_blobs
 inline constexpr ULONG TRA_deps_to_disk			= 0x800000L;	// store dependencies to RDB$DEPENDENCIES
+inline constexpr ULONG TRA_meta					= 0x1000000L;	// transaction is used to load metadata
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |

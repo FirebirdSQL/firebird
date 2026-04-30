@@ -1590,14 +1590,18 @@ void afterInsertRelation(thread_db* tdbb, Record* record)
 
 		// Do not access external file info from cache - it may be not usable yet
 		// On contrary rel_flags (and therefore check for view) are OK
-		if (relation && !EVL_field(nullptr, record, f_rel_ext_file, &desc) &&
-			!relation->isView())
+		fb_assert(relation);
+		if (relation)
 		{
-			// create the table
-			DPM_create_relation(tdbb, relation);
-		}
+			if (!EVL_field(nullptr, record, f_rel_ext_file, &desc) &&
+				!relation->isView())
+			{
+				// create the table
+				DPM_create_relation(tdbb, relation);
+			}
 
-		relation->rel_flags |= REL_get_dependencies;
+			relation->rel_flags |= REL_get_dependencies;
+		}
 	}
 
 }

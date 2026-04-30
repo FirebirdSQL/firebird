@@ -1821,8 +1821,7 @@ private:
 	MemPool* child;
 
 #ifdef DEBUG_LOST_POOLS
-	const char* fileName;
-	int lineNum;
+	CustomSourceLocation location;
 
 	int seq = -1;
 #endif

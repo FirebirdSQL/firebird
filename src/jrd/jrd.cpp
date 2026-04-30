@@ -8163,6 +8163,10 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	// Since that moment dbb becomes not reusable
 	dbb->dbb_init_fini->destroy();
 
+	// Reset linger in order to avoid second parallel shutdown in case this one takes really long time
+	if (dbb->dbb_linger_timer)
+		dbb->dbb_linger_timer->reset();
+
 	fb_assert(!dbb->locked());
 
 	WorkerAttachment::shutdownDbb(dbb);
@@ -8210,8 +8214,11 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->shutdown(tdbb);
 
-	if (dbb->dbb_repl_lock)
-		LCK_release(tdbb, dbb->dbb_repl_lock);
+	if (dbb->dbb_repl_set_lock)
+		LCK_release(tdbb, dbb->dbb_repl_set_lock);
+
+	if (dbb->dbb_repl_state_lock)
+		LCK_release(tdbb, dbb->dbb_repl_state_lock);
 
 	if (dbb->dbb_shadow_lock)
 		LCK_release(tdbb, dbb->dbb_shadow_lock);
@@ -8392,7 +8399,6 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
  *
  **************************************/
 	jrd_tra* const trans_dbk = att_dbkey_trans;
-	auto* const trans_meta = att_meta_transaction;
 
 	if (force_flag)
 	{
@@ -8406,7 +8412,7 @@ void Attachment::purgeTransactions(thread_db* tdbb, const bool force_flag)
 	for (jrd_tra* transaction = att_transactions; transaction; transaction = next)
 	{
 		next = transaction->tra_next;
-		if (transaction != trans_dbk && transaction != trans_meta)
+		if (transaction != trans_dbk)
 		{
 			if (transaction->tra_flags & TRA_prepared)
 			{

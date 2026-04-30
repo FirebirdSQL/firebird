@@ -481,25 +481,6 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	return err_code;
 }
 
-static ISC_STATUS getErrorNotFound(int obj_type)
-{
-	ISC_STATUS err_code = 0;
-
-	switch (obj_type)
-	{
-	case obj_procedure:
-		err_code = isc_dyn_proc_not_found;
-		break;
-	case obj_udf:
-		err_code = isc_dyn_func_not_found;
-		break;
-	default:
-		fb_assert(false);
-	}
-
-	return err_code;
-}
-
 static void raiseDatabaseInUseError(bool timeout)
 {
 	if (timeout)
@@ -648,10 +629,7 @@ namespace
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, flag);
 					if (!routine)
-					{
-						ERR_post(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(getErrorNotFound(T::Versioned::objectType())) << Arg::Num(work->dfw_id));
-					}
+						return false;		// Happens when DROP after CREATE in same transaction
 
 					return true;
 				}
@@ -663,7 +641,6 @@ namespace
 				case 7:
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, flag);
-					fb_assert(routine);
 					if (routine)
 						routine->commit(tdbb);
 
@@ -753,7 +730,6 @@ namespace
 				case 7:
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, CacheFlag::NOSCAN);
-					fb_assert(routine);
 					if (routine)
 						routine->commit(tdbb);
 
@@ -2339,7 +2315,6 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
-	Attachment* const attachment = tdbb->getAttachment();
 
 	switch (phase)
 	{
@@ -2357,7 +2332,7 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 		else
 		{
 			// replication set is changed
-			attachment->invalidateReplSet(tdbb, true);
+			dbb->invalidateReplSet(tdbb, true);
 		}
 		break;
 	}
@@ -3529,21 +3504,15 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			if (!relation)
 				break;
 
-			RelationPages* relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
-			if (!relPages)
-				break;
-
-			// we need to special handle temp tables with ON PRESERVE ROWS only
-			const bool isTempIndex = (relation->rel_flags & REL_temp_conn) &&
-				(relPages->rel_instance_id != 0);
-			if (isTempIndex)
-				return true;
-
 			fb_assert(work->dfw_ids.getCount() == 1);
 			auto* index = relation->lookup_index(tdbb, work->dfw_ids[0], CacheFlag::NOERASED);
 			fb_assert(index);
 			if (!index)
 				break;
+
+			// we need to special handle temp tables with ON PRESERVE ROWS only
+			if (relation->rel_flags & REL_temp_conn)
+				IDX_mark_temp(tdbb, relation, index->getId(), tdbb->getAttachment(), transaction->tra_number);
 
 			if (index->getForeignKey().hasData())
 			{
@@ -3652,9 +3621,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
  *
  **************************************/
 	AutoRequest request;
-	jrd_rel* relation;
 	USHORT view_count;
-	bool adjusted;
 
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -3667,6 +3634,7 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
 			if (relation)
 			{
+				relation->clearDropMarker(tdbb);
 				if (relation->isDropped())
 					relation->rollback(tdbb);
 			}
@@ -3713,7 +3681,18 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 
 	case 2:
 	case 3:
+		return true;
+
 	case 4:
+		{
+			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
+			if (!relation)
+				return false;
+
+			relation->dropTempPages(tdbb);
+		}
+		return true;
+
 	case 5:
 	case 6:
 		return true;
@@ -3721,8 +3700,10 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 	case 7:
 		{
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
-			if (relation)
-				relation->commit(tdbb);
+			if (!relation)
+				return false;
+
+			relation->commit(tdbb);
 		}
 		break;
 	}

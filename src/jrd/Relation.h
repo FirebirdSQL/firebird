@@ -206,7 +206,8 @@ public:
 	const QualifiedName& getName() const noexcept;
 
 	static bool destroy(thread_db* tdbb, DbTriggersHeader* trigs);
-	void releaseLock(thread_db*) { }
+	void releaseLock(thread_db* tdbb) { }
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase) { }
 
 private:
 	MetaId type;
@@ -504,7 +505,8 @@ public:
 		return idp_id;
 	}
 
-	void releaseLock(thread_db*) { }
+	void releaseLock(thread_db* tdbb) { }
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase);
 
 	RelationPermanent* getRelation() noexcept
 	{
@@ -677,7 +679,6 @@ public:
 	TrigArray			rel_triggers;
 
 	Firebird::TriState	rel_ss_definer;
-	Firebird::TriState	rel_repl_state;		// replication state
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
@@ -862,6 +863,12 @@ public:
 	~RelationPermanent();
 	static bool destroy(thread_db* tdbb, RelationPermanent* rel);
 
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
+	{
+		if (erase)
+			dropTempPages(tdbb);
+	}
+
 	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
 	static constexpr USHORT getRelLockKeyLength() noexcept;
 	Lock* createLock(thread_db* tdbb, lck_t, bool);
@@ -934,7 +941,9 @@ public:
 	};
 
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
+	void	freePages(thread_db* tdbb);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 	void	cleanUp() noexcept;
 	void	fillPagesSnapshot(RelPagesSnapshot&, const bool AttachmentOnly = false);
@@ -1002,6 +1011,10 @@ public:
 	// Relation must be updated on next use or commit
 	static Cached::Relation* newVersion(thread_db* tdbb, const QualifiedName& name);
 
+	// Relation is in process of remove - mark it with current transaction
+	void dropTempPages(thread_db* tdbb);
+	void clearDropMarker(thread_db* tdbb);
+
 	// Lists of FK partners should be updated on next update
 	void checkPartners(thread_db* tdbb);
 
@@ -1032,13 +1045,14 @@ public:
 	QualifiedName	rel_security_name;	// security class name for relation
 	std::atomic<ULONG>	rel_flags;		// flags
 
-	Firebird::TriState	rel_repl_state;	// replication state
+	enum class Bool3State {Unknown, False, True};
+	std::atomic<Bool3State>	rel_repl_state;			// replication state
 
 	PrimaryDeps*	rel_primary_dpnds = nullptr;	// foreign dependencies on this relation's primary key
 	ForeignRefs*	rel_foreign_refs = nullptr;		// foreign references to other relations' primary keys
 
 private:
-	Firebird::Mutex			rel_pages_mutex;
+	Firebird::Mutex	rel_pages_mutex;	// protects rel_pages_inst and rel_pages_free
 
 	typedef Firebird::SortedArray<
 				RelationPages*,
@@ -1060,12 +1074,20 @@ private:
 };
 
 
-// specialization
+// specialization for LTT
 template <> template <>
 inline FB_UINT64 CacheElement<IndexVersion, IndexPermanent>::makeId<RelationPermanent*>(MetaId id,
 	RelationPermanent* rel)
 {
 	return IndexPermanent::makeLockId(rel->getId(), id);
+}
+
+
+// specialization for system relations
+template <> template <>
+inline FB_UINT64 CacheElement<jrd_rel, RelationPermanent>::makeId<NoData>(MetaId id, NoData)
+{
+	return id < USER_DEF_REL_INIT_ID ? NO_METALOCK : id;
 }
 
 

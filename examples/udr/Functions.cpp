@@ -176,7 +176,7 @@ FB_UDR_BEGIN_FUNCTION(mult)
 		df34 = master->getUtilInterface()->getDecFloat34(status);
 	}
 
-	// This function requires the INTEGER parameters and return value, otherwise it will crash.
+	// This function requires the DECFLOAT(34) parameters and return value, otherwise it will crash.
 	// Metadata is inspected dynamically (in execute). This is not the fastest method.
 	FB_UDR_EXECUTE_FUNCTION
 	{

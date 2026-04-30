@@ -784,7 +784,7 @@ namespace
 			PathName path, file;
 			PathUtils::splitLastComponent(path, file, pluginName);
 			if (path.hasData())
-				(Arg::Gds(isc_random) << "Plugin name should not contain directory separator and path component").raise();
+				(Arg::Gds(isc_pman_plugin_dirname) << pluginName).raise();
 
 			// define default values for plugin ...
 			curModule = fb_utils::getPrefix(IConfigManager::DIR_PLUGINS, pluginName);

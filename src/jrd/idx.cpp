@@ -991,10 +991,60 @@ void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
+	BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
+}
 
-	BTR_mark_index_for_delete(tdbb, relation, id, &window, root);
+void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current, TraNumber tran)
+{
+/**************************************
+ *
+ *	I D X _ m a r k _ t e m p
+ *
+ **************************************
+ *
+ * Functional description
+ *	Mark GTT (preserve rows) index
+ *	in all pagespaces
+ *
+ **************************************/
+	Database* dbb = tdbb->getDatabase();
+	AttachmentsRefHolder attachments;
+
+	{
+		Sync guard(&dbb->dbb_sync, "JRD_shutdown_attachments");
+		if (!dbb->dbb_sync.ourExclusiveLock())
+			guard.lock(SYNC_SHARED);
+
+		for (Attachment* attachment = dbb->dbb_attachments;
+			 attachment;
+			 attachment = attachment->att_next)
+		{
+			if (attachment != current)
+			{
+				fb_assert(attachment->getStable());
+				attachments.add(attachment->getStable());
+			}
+		}
+	}
+
+	for (AttachmentsRefHolder::Iterator iter(attachments); *iter; ++iter)
+	{
+		StableAttachmentPart* const sAtt = *iter;
+
+		AttSyncLockGuard guard(*(sAtt->getSync(true)), FB_FUNCTION);
+		Attachment* attachment = sAtt->getHandle();
+
+		if (attachment)
+		{
+			auto* pages = relation->getAttPages(tdbb, attachment->att_attachment_id);
+			if (pages && pages->rel_index_root)
+			{
+				WIN window(pages->rel_pg_space_id, pages->rel_index_root);
+				auto* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+				BTR_mark_index_for_delete(tdbb, relation, id, &window, root, tran);
+			}
+		}
+	}
 }
 
 
@@ -1056,7 +1106,7 @@ void IDX_mark_indices(thread_db* tdbb, Cached::Relation* relation)
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		BTR_mark_index_for_delete(tdbb, relation, i, &window, root);
+		BTR_mark_index_for_delete(tdbb, relation, i, &window, root, 0);
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	}
 

@@ -482,7 +482,8 @@ public:
 		return false;
 	}
 
-	bool find(const std::function<int(const T& item)>& compare, size_type& pos) const
+	template <typename F>
+	bool findEx(F&& compare, size_type& pos) const
 	{
 		for (size_type i = 0; i < count; i++)
 		{

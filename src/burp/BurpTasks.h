@@ -511,6 +511,7 @@ private:
 	rec_type	m_lastRecord;				// last backup record read for relation, usually rec_relation_end
 	WriteRelationMeta m_metadata;
 	int m_writers;			// number of active writers, could be less than items allocated
+	int m_waiters;			// number of writers waiting for the dirty buffer
 	bool m_readDone;		// all records was read
 
 	Firebird::Mutex m_mutex;

@@ -2410,6 +2410,9 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
 
 	std::optional<USHORT> tableNumber;
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty();
 
 	const bool skipLocked = dsqlRse && dsqlRse->hasSkipLocked();
 
@@ -2428,6 +2431,13 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -2460,6 +2470,9 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 		{
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value());
 
 			if (!skipLocked)
@@ -4713,15 +4726,11 @@ DmlNode* InAutonomousTransactionNode::parse(thread_db* tdbb, MemoryPool& pool, C
 
 InAutonomousTransactionNode* InAutonomousTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	const bool autoTrans = dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
+	AutoSetRestoreFlag autoTrans(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK, true);
 
 	InAutonomousTransactionNode* node = FB_NEW_POOL(dsqlScratch->getPool()) InAutonomousTransactionNode(
 		dsqlScratch->getPool());
 	node->action = action->dsqlPass(dsqlScratch);
-
-	if (!autoTrans)
-		dsqlScratch->flags &= ~DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
 
 	return node;
 }
@@ -4737,9 +4746,33 @@ string InAutonomousTransactionNode::internalPrint(NodePrinter& printer) const
 
 void InAutonomousTransactionNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_auto_trans);
-	dsqlScratch->appendUChar(0);	// to extend syntax in the future
-	action->genBlr(dsqlScratch);
+	bool useInternalAutoTrans = false;
+
+	if (dsqlScratch && !dsqlScratch->isPsql())
+	{
+		if (const auto modifyNode = nodeAs<ModifyNode>(action))
+			useInternalAutoTrans = modifyNode->dsqlReturning && modifyNode->dsqlCursorName.isEmpty();
+		else if (const auto eraseNode = nodeAs<EraseNode>(action))
+			useInternalAutoTrans = eraseNode->dsqlReturning && eraseNode->dsqlCursorName.isEmpty();
+		else if (const auto storeNode = nodeAs<StoreNode>(action))
+			useInternalAutoTrans = storeNode->dsqlReturning != nullptr;
+		else if (const auto updateOrInsertNode = nodeAs<UpdateOrInsertNode>(action))
+			useInternalAutoTrans = updateOrInsertNode->returning != nullptr;
+		else if (const auto mergeNode = nodeAs<MergeNode>(action))
+			useInternalAutoTrans = mergeNode->returning != nullptr;
+	}
+
+	if (useInternalAutoTrans)
+	{
+		AutoSetRestoreFlag autoTrans(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK, true);
+		action->genBlr(dsqlScratch);
+	}
+	else
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);	// to extend syntax in the future
+		action->genBlr(dsqlScratch);
+	}
 }
 
 InAutonomousTransactionNode* InAutonomousTransactionNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -7246,6 +7279,9 @@ string MergeNode::internalPrint(NodePrinter& printer) const
 void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	std::optional<USHORT> tableNumber;
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		returning && !dsqlScratch->isPsql();
 
 	if (returning && !dsqlScratch->isPsql())
 	{
@@ -7253,6 +7289,13 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		tableNumber = dsqlScratch->localTableNumber++;
 		dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	// Put src info for blr_for.
@@ -7492,6 +7535,9 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(blr_end);
 	}
+
+	if (useInternalAutoTrans)
+		dsqlScratch->appendUChar(blr_end);
 
 	if (returning && !dsqlScratch->isPsql())
 	{
@@ -7949,6 +7995,15 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 
 void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty() &&
+		dsqlReturningLocalTableNumber.has_value() &&
+		!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT);
+	const bool deferUpdateOrInsertLocalTableDecl =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK);
+
 	if (dsqlScratch->recordKeyMessage)
 	{
 		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
@@ -7957,12 +8012,22 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
-			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
+		{
+			if (!deferUpdateOrInsertLocalTableDecl)
+				dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
+		}
 		else
 		{
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -8002,6 +8067,9 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
 			dsqlCursorName.isEmpty())
 		{
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
@@ -9002,6 +9070,11 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 
 void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlReturningLocalTableNumber.has_value() &&
+		!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT);
+
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlRse)
@@ -9011,6 +9084,13 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -9035,10 +9115,18 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (dsqlReturningLocalTableNumber.has_value())
 		{
+			const bool deferUpdateOrInsertCursor =
+				(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
+				(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK);
+
 			if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT)
 				dsqlScratch->appendUChar(blr_end);	// close blr_if (blr_eql, blr_internal_info)
 
-			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
+			if (!deferUpdateOrInsertCursor)
+				dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
 	else if (overrideClause.has_value())
@@ -10745,6 +10833,19 @@ string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
 
 void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		storeNode->dsqlReturningLocalTableNumber.has_value() && !dsqlScratch->isPsql();
+
+	if (useInternalAutoTrans)
+	{
+		dsqlGenReturningLocalTableDecl(dsqlScratch, storeNode->dsqlReturningLocalTableNumber.value());
+
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
+	}
+
 	dsqlScratch->appendUChar(blr_begin);
 
 	for (auto& varAssign : varAssignments)
@@ -10777,6 +10878,13 @@ void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(blr_end);	// blr_if
 
 	dsqlScratch->appendUChar(blr_end);
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_end);
+		dsqlGenReturningLocalTableCursor(dsqlScratch, storeNode->dsqlReturning,
+			storeNode->dsqlReturningLocalTableNumber.value());
+	}
 }
 
 
@@ -10959,14 +11067,15 @@ void UserSavepointNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra**
 
 StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	// USING without parameters and subroutines is useless
-	if (parameters.isEmpty() && !localDeclList)
+	// USING without parameters, subroutines or autonomous transaction is useless
+	if (parameters.isEmpty() && !localDeclList && !inAutonomousTransaction)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_using_requires_params_subroutines));
+				  Arg::Gds(isc_dsql_using_statement_must_contain_clause));
 	}
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_USING_STATEMENT;
+	dsqlScratch->reserveInitialVarNumbers(parameters.getCount());
 
 	const auto statement = dsqlScratch->getDsqlStatement();
 	unsigned index = 0;
@@ -10974,6 +11083,7 @@ StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) UsingNode(dsqlScratch->getPool());
 
 	node->parameters = parameters;
+	node->inAutonomousTransaction = inAutonomousTransaction;
 
 	for (auto newParam : node->parameters)
 	{
@@ -11036,6 +11146,7 @@ string UsingNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, parameters);
 	NODE_PRINT(printer, localDeclList);
 	NODE_PRINT(printer, body);
+	NODE_PRINT(printer, inAutonomousTransaction);
 
 	return "UsingNode";
 }

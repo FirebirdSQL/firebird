@@ -692,9 +692,9 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 
 		m_tableCounters.reset(&baseline->getTableCounters(), getTableName);
 
-		m_info.pin_count = m_tableCounters.getObjectCount();
-		m_legacyCounts.resize(m_info.pin_count);
+		m_legacyCounts.resize(m_tableCounters.getObjectCount());
 		m_info.pin_tables = m_legacyCounts.begin();
+		m_info.pin_count = m_legacyCounts.getCount();
 
 		for (MetaId i = 0; i < m_info.pin_count; i++)
 		{

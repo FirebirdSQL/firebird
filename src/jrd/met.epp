@@ -4774,10 +4774,10 @@ void MetadataCache::releaseLocks(thread_db* tdbb)
 
 void MetadataCache::invalidateReplSet(thread_db* tdbb)
 {
-	for (auto relation : mdc_relations)
+	for (auto* relation : mdc_relations)
 	{
 		if (relation)
-			relation->rel_repl_state.reset();
+			relation->rel_repl_state = RelationPermanent::Bool3State::Unknown;
 	}
 }
 
@@ -5073,7 +5073,7 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, const QualifiedNa
 
 	// See if we already know the relation by name
 	auto* idp = rel_indices.lookup(tdbb,
-		[tdbb, name, flags](Cached::Index* idp)
+		[name](Cached::Index* idp)
 		{
 			return idp->getName() == name ? idp : nullptr;
 		},

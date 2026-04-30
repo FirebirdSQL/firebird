@@ -173,7 +173,7 @@ public:
 		void storeString(int field_id, const std::string_view value)
 		{
 			if (!value.empty())
-				storeField(field_id, VALUE_STRING, value.length(), value.data());
+				storeField(field_id, VALUE_STRING, static_cast<FB_SIZE_T>(value.length()), value.data());
 		}
 
 		void storeBoolean(int field_id, bool value)

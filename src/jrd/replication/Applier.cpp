@@ -226,6 +226,24 @@ namespace
 } // namespace
 
 
+Applier::Applier(Firebird::MemoryPool& pool,
+				 const Firebird::PathName& database,
+				 Request* request, bool cascade)
+	: PermanentStorage(pool),
+	  m_txnMap(pool), m_database(pool, database),
+	  m_request(request), m_enableCascade(cascade),
+	  m_constraintIndexMap(pool)
+{
+	bool setUsed = m_request->setUsed();
+	fb_assert(setUsed);
+}
+
+Applier::~Applier()
+{
+	if (m_request)
+		m_request->setUnused();
+}
+
 Applier* Applier::create(thread_db* tdbb)
 {
 	const auto dbb = tdbb->getDatabase();
@@ -279,6 +297,7 @@ void Applier::shutdown(thread_db* tdbb)
 	if (!(dbb->dbb_flags & DBB_bugcheck))
 	{
 		cleanupTransactions(tdbb);
+		m_request->setUnused();
 		CMP_release(tdbb, m_request);
 	}
 	m_request = nullptr;	// already deleted by pool
@@ -1145,7 +1164,6 @@ bool Applier::lookupRecord(thread_db* tdbb,
 	bool haveIdx = false;
 	if (idxName && idxName->object.hasData())
 	{
-		SLONG foundRelId;
 		auto* idv = relation->getPermanent()->lookup_index(tdbb, *idxName, CacheFlag::AUTOCREATE);
 
 		if (idv)

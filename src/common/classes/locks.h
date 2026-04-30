@@ -56,6 +56,8 @@ class Exception;	// Needed for catch
 
 class Mutex : public Reasons
 {
+friend class Condition;
+
 protected:
 	CRITICAL_SECTION spinlock;
 #ifdef DEV_BUILD

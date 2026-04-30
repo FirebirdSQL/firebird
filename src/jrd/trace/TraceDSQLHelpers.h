@@ -111,7 +111,7 @@ private:
 	{
 		static constexpr std::string_view empty_string = "<empty statement>";
 		m_string = empty_string.data();
-		m_string_len = empty_string.length();
+		m_string_len = static_cast<FB_SIZE_T>(empty_string.length());
 	}
 
 	bool m_need_trace;
