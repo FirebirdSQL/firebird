@@ -5392,7 +5392,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ITRACE_TRANSACTION_VERSION 3u
+#define FIREBIRD_ITRACE_TRANSACTION_VERSION 4u
 
 	class ITraceTransaction : public IVersioned
 	{
@@ -5406,6 +5406,9 @@ namespace Firebird
 			PerformanceInfo* (CLOOP_CARG *getPerf)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 			ISC_INT64 (CLOOP_CARG *getInitialID)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 			ISC_INT64 (CLOOP_CARG *getPreviousID)(ITraceTransaction* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getStartTime)(ITraceTransaction* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getCommitNumber)(ITraceTransaction* self) CLOOP_NOEXCEPT;
+			ISC_INT64 (CLOOP_CARG *getSnapshotNumber)(ITraceTransaction* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -5474,6 +5477,36 @@ namespace Firebird
 				return 0;
 			}
 			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getPreviousID(this);
+			return ret;
+		}
+
+		ISC_INT64 getStartTime()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getStartTime(this);
+			return ret;
+		}
+
+		ISC_INT64 getCommitNumber()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getCommitNumber(this);
+			return ret;
+		}
+
+		ISC_INT64 getSnapshotNumber()
+		{
+			if (cloopVTable->version < 4)
+			{
+				return 0;
+			}
+			ISC_INT64 ret = static_cast<VTable*>(this->cloopVTable)->getSnapshotNumber(this);
 			return ret;
 		}
 	};
@@ -17419,6 +17452,9 @@ namespace Firebird
 					this->getPerf = &Name::cloopgetPerfDispatcher;
 					this->getInitialID = &Name::cloopgetInitialIDDispatcher;
 					this->getPreviousID = &Name::cloopgetPreviousIDDispatcher;
+					this->getStartTime = &Name::cloopgetStartTimeDispatcher;
+					this->getCommitNumber = &Name::cloopgetCommitNumberDispatcher;
+					this->getSnapshotNumber = &Name::cloopgetSnapshotNumberDispatcher;
 				}
 			} vTable;
 
@@ -17515,6 +17551,45 @@ namespace Firebird
 				return static_cast<ISC_INT64>(0);
 			}
 		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetStartTimeDispatcher(ITraceTransaction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getStartTime();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetCommitNumberDispatcher(ITraceTransaction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getCommitNumber();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
+
+		static ISC_INT64 CLOOP_CARG cloopgetSnapshotNumberDispatcher(ITraceTransaction* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getSnapshotNumber();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<ISC_INT64>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceTransaction> > >
@@ -17537,6 +17612,9 @@ namespace Firebird
 		virtual PerformanceInfo* getPerf() = 0;
 		virtual ISC_INT64 getInitialID() = 0;
 		virtual ISC_INT64 getPreviousID() = 0;
+		virtual ISC_INT64 getStartTime() = 0;
+		virtual ISC_INT64 getCommitNumber() = 0;
+		virtual ISC_INT64 getSnapshotNumber() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

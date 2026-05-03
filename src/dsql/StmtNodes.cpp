@@ -11091,9 +11091,11 @@ static void restartRequest(const Request* request, jrd_tra* transaction)
 
 	transaction->tra_flags |= TRA_ex_restart;
 
-	ERR_post(Arg::Gds(isc_deadlock) <<
-		Arg::Gds(isc_update_conflict) <<
-		Arg::Gds(isc_concurrent_transaction) << Arg::Int64(top_request->req_conflict_txn));
+	//ERR_post(Arg::Gds(isc_deadlock) <<
+	//	Arg::Gds(isc_update_conflict) <<
+	//	Arg::Gds(isc_concurrent_transaction) << Arg::Int64(top_request->req_conflict_txn));
+
+	ERR_updateConflict(top_request->req_conflict_txn);
 }
 
 // Execute a list of validation expressions.

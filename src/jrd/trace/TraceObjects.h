@@ -142,6 +142,10 @@ public:
 	ISC_INT64 getInitialID();
 	ISC_INT64 getPreviousID()	{ return m_prevID; }
 
+	ISC_INT64 getStartTime();
+	ISC_INT64 getCommitNumber();
+	ISC_INT64 getSnapshotNumber();
+
 private:
 	const jrd_tra* const m_tran;
 	Firebird::PerformanceInfo* const m_perf;

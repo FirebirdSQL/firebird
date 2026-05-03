@@ -46,6 +46,7 @@
 #include "../../jrd/optimizer/Optimizer.h"
 #include "../../common/os/path_utils.h"
 #include "../../dsql/dsql_proto.h"
+#include "../../jrd/tpc_proto.h"
 
 #ifdef WIN_NT
 #include <process.h>
@@ -231,6 +232,33 @@ ISC_INT64 TraceTransactionImpl::getInitialID()
 {
 	return m_tran->tra_initial_number;
 }
+
+ISC_INT64 TraceTransactionImpl::getStartTime()
+{
+	union
+	{
+		ISC_INT64 iVal;
+		ISC_TIMESTAMP tsVal;
+	} ts;
+
+	ts.tsVal = TimeZoneUtil::timeStampTzToTimeStamp(m_tran->tra_timestamp,
+		m_tran->tra_timestamp.time_zone);
+
+	return ts.iVal;
+}
+
+ISC_INT64 TraceTransactionImpl::getCommitNumber()
+{
+	const thread_db* tdbb = JRD_get_thread_data();
+	const Database* dbb = tdbb->getDatabase();
+	return dbb->dbb_tip_cache->cacheState(m_prevID ? m_prevID : m_tran->tra_number);
+}
+
+ISC_INT64 TraceTransactionImpl::getSnapshotNumber()
+{
+	return m_tran->tra_snapshot_number;
+}
+
 
 /// TraceSQLStatementImpl
 

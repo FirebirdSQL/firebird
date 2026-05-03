@@ -1468,6 +1468,37 @@ void TracePluginImpl::log_event_transaction_start(ITraceDatabaseConnection* conn
 				event_type = "Unknown event in START_TRANSACTION";
 				break;
 		}
+
+		if (transaction && tra_result == ITracePlugin::RESULT_SUCCESS)
+		{
+			union
+			{
+				ISC_INT64 iVal;
+				ISC_TIMESTAMP tsVal;
+			} value;
+
+			value.iVal = transaction->getStartTime();
+
+			TimeStamp ts(value.tsVal);
+			struct tm times;
+
+			ts.decode(&times);
+
+			string temp;
+			temp.printf("\tStarted at %04d-%02d-%02dT%02d:%02d:%02d.%04d" NEWLINE,
+				times.tm_year + 1900, times.tm_mon + 1, times.tm_mday,
+				times.tm_hour, times.tm_min, times.tm_sec,
+				ts.value().timestamp_time % ISC_TIME_SECONDS_PRECISION);
+
+			record.append(temp);
+
+			if (auto sn = transaction->getSnapshotNumber())
+			{
+				temp.printf("\tSnapshot number: %" SQUADFORMAT NEWLINE, sn);
+				record.append(temp);
+			}
+		}
+
 		logRecordTrans(event_type, connection, transaction);
 	}
 }
@@ -1478,6 +1509,13 @@ void TracePluginImpl::log_event_transaction_end(ITraceDatabaseConnection* connec
 {
 	if (config.log_transactions)
 	{
+		if (commit)
+		{
+			string temp;
+			temp.printf("\tCommit number %" SQUADFORMAT NEWLINE, transaction->getCommitNumber());
+			record.append(temp);
+		}
+
 		if (retain_context || transaction->getInitialID() != transaction->getTransactionID())
 		{
 			string temp;

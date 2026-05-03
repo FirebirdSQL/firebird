@@ -607,6 +607,9 @@ type
 	ITraceTransaction_getPerfPtr = function(this: ITraceTransaction): PerformanceInfoPtr; cdecl;
 	ITraceTransaction_getInitialIDPtr = function(this: ITraceTransaction): Int64; cdecl;
 	ITraceTransaction_getPreviousIDPtr = function(this: ITraceTransaction): Int64; cdecl;
+	ITraceTransaction_getStartTimePtr = function(this: ITraceTransaction): Int64; cdecl;
+	ITraceTransaction_getCommitNumberPtr = function(this: ITraceTransaction): Int64; cdecl;
+	ITraceTransaction_getSnapshotNumberPtr = function(this: ITraceTransaction): Int64; cdecl;
 	ITraceParams_getCountPtr = function(this: ITraceParams): Cardinal; cdecl;
 	ITraceParams_getParamPtr = function(this: ITraceParams; idx: Cardinal): dscPtr; cdecl;
 	ITraceParams_getTextUTF8Ptr = function(this: ITraceParams; status: IStatus; idx: Cardinal): PAnsiChar; cdecl;
@@ -3027,10 +3030,13 @@ type
 		getPerf: ITraceTransaction_getPerfPtr;
 		getInitialID: ITraceTransaction_getInitialIDPtr;
 		getPreviousID: ITraceTransaction_getPreviousIDPtr;
+		getStartTime: ITraceTransaction_getStartTimePtr;
+		getCommitNumber: ITraceTransaction_getCommitNumberPtr;
+		getSnapshotNumber: ITraceTransaction_getSnapshotNumberPtr;
 	end;
 
 	ITraceTransaction = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 		const ISOLATION_CONSISTENCY = Cardinal(1);
 		const ISOLATION_CONCURRENCY = Cardinal(2);
 		const ISOLATION_READ_COMMITTED_RECVER = Cardinal(3);
@@ -3044,6 +3050,9 @@ type
 		function getPerf(): PerformanceInfoPtr;
 		function getInitialID(): Int64;
 		function getPreviousID(): Int64;
+		function getStartTime(): Int64;
+		function getCommitNumber(): Int64;
+		function getSnapshotNumber(): Int64;
 	end;
 
 	ITraceTransactionImpl = class(ITraceTransaction)
@@ -3056,6 +3065,9 @@ type
 		function getPerf(): PerformanceInfoPtr; virtual; abstract;
 		function getInitialID(): Int64; virtual; abstract;
 		function getPreviousID(): Int64; virtual; abstract;
+		function getStartTime(): Int64; virtual; abstract;
+		function getCommitNumber(): Int64; virtual; abstract;
+		function getSnapshotNumber(): Int64; virtual; abstract;
 	end;
 
 	TraceParamsVTable = class(VersionedVTable)
@@ -8953,6 +8965,36 @@ begin
 	end
 	else begin
 		Result := TraceTransactionVTable(vTable).getPreviousID(Self);
+	end;
+end;
+
+function ITraceTransaction.getStartTime(): Int64;
+begin
+	if (vTable.version < 4) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getStartTime(Self);
+	end;
+end;
+
+function ITraceTransaction.getCommitNumber(): Int64;
+begin
+	if (vTable.version < 4) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getCommitNumber(Self);
+	end;
+end;
+
+function ITraceTransaction.getSnapshotNumber(): Int64;
+begin
+	if (vTable.version < 4) then begin
+		Result := 0;
+	end
+	else begin
+		Result := TraceTransactionVTable(vTable).getSnapshotNumber(Self);
 	end;
 end;
 
@@ -15177,6 +15219,36 @@ begin
 	end
 end;
 
+function ITraceTransactionImpl_getStartTimeDispatcher(this: ITraceTransaction): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceTransactionImpl(this).getStartTime();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTransactionImpl_getCommitNumberDispatcher(this: ITraceTransaction): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceTransactionImpl(this).getCommitNumber();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function ITraceTransactionImpl_getSnapshotNumberDispatcher(this: ITraceTransaction): Int64; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceTransactionImpl(this).getSnapshotNumber();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceTransactionImpl_vTable: TraceTransactionVTable;
 
@@ -17999,7 +18071,7 @@ initialization
 	ITraceDatabaseConnectionImpl_vTable.getDatabaseName := @ITraceDatabaseConnectionImpl_getDatabaseNameDispatcher;
 
 	ITraceTransactionImpl_vTable := TraceTransactionVTable.create;
-	ITraceTransactionImpl_vTable.version := 3;
+	ITraceTransactionImpl_vTable.version := 4;
 	ITraceTransactionImpl_vTable.getTransactionID := @ITraceTransactionImpl_getTransactionIDDispatcher;
 	ITraceTransactionImpl_vTable.getReadOnly := @ITraceTransactionImpl_getReadOnlyDispatcher;
 	ITraceTransactionImpl_vTable.getWait := @ITraceTransactionImpl_getWaitDispatcher;
@@ -18007,6 +18079,9 @@ initialization
 	ITraceTransactionImpl_vTable.getPerf := @ITraceTransactionImpl_getPerfDispatcher;
 	ITraceTransactionImpl_vTable.getInitialID := @ITraceTransactionImpl_getInitialIDDispatcher;
 	ITraceTransactionImpl_vTable.getPreviousID := @ITraceTransactionImpl_getPreviousIDDispatcher;
+	ITraceTransactionImpl_vTable.getStartTime := @ITraceTransactionImpl_getStartTimeDispatcher;
+	ITraceTransactionImpl_vTable.getCommitNumber := @ITraceTransactionImpl_getCommitNumberDispatcher;
+	ITraceTransactionImpl_vTable.getSnapshotNumber := @ITraceTransactionImpl_getSnapshotNumberDispatcher;
 
 	ITraceParamsImpl_vTable := TraceParamsVTable.create;
 	ITraceParamsImpl_vTable.version := 3;

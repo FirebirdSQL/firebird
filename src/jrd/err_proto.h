@@ -62,4 +62,6 @@ void	ERR_log(int, int, const TEXT*);
 void	ERR_append_status(Jrd::FbStatusVector*, const Firebird::Arg::StatusVector& v);
 void	ERR_build_status(Jrd::FbStatusVector*, const Firebird::Arg::StatusVector& v);
 
+void	ERR_updateConflict(TraNumber concurrTra);	// see vio.cpp
+
 #endif // JRD_ERR_PROTO_H

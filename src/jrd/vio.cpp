@@ -1890,6 +1890,46 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 }
 
 
+void ERR_updateConflict(TraNumber concurrTra)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	const jrd_tra* transaction = tdbb->getTransaction();
+	CommitNumber snapshot = 0;
+
+	if (!(transaction->tra_flags & TRA_read_committed))
+		snapshot = transaction->tra_snapshot_number;
+	else if ((transaction->tra_flags & TRA_read_committed) &&
+		(transaction->tra_flags & TRA_read_consistency))
+	{
+		const Request* request = tdbb->getRequest();
+		if (request)
+		{
+			const Request* snapshot_req = request->req_snapshot.m_owner;
+			if (snapshot_req)
+				snapshot = snapshot_req->req_snapshot.m_number;
+		}
+	}
+
+	if (snapshot)
+	{
+		const Database* dbb = tdbb->getDatabase();
+		CommitNumber concurCN = dbb->dbb_tip_cache->snapshotState(tdbb, concurrTra);
+
+		string str;
+		str.printf("Current snapshot %" SQUADFORMAT ", concurrent CN %" SQUADFORMAT, snapshot, concurCN);
+
+		ERR_post(Arg::Gds(isc_deadlock) <<
+			Arg::Gds(isc_update_conflict) <<
+			Arg::Gds(isc_concurrent_transaction) << Arg::Int64(concurrTra) <<
+			Arg::Gds(isc_random) << str
+		);
+	}
+
+	ERR_post(Arg::Gds(isc_deadlock) <<
+		Arg::Gds(isc_update_conflict) <<
+		Arg::Gds(isc_concurrent_transaction) << Arg::Int64(concurrTra));
+}
+
 static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transaction,
 	Request* request, record_param* rpb)
 {
@@ -1933,9 +1973,11 @@ static bool check_prepare_result(PrepareResult prepare_result, jrd_tra* transact
 		if (secondary)
 			transaction->tra_flags |= TRA_ex_restart;
 
-		ERR_post(Arg::Gds(isc_deadlock) <<
-			Arg::Gds(isc_update_conflict) <<
-			Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
+		//ERR_post(Arg::Gds(isc_deadlock) <<
+		//	Arg::Gds(isc_update_conflict) <<
+		//	Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
+
+		ERR_updateConflict(rpb->rpb_transaction_nr);
 	}
 
 	if (top_request)
@@ -3957,9 +3999,11 @@ bool VIO_refetch_record(thread_db* tdbb, record_param* rpb, jrd_tra* transaction
 		tdbb->bumpRelStats(RuntimeStatistics::RECORD_CONFLICTS, rpb->rpb_relation->rel_id);
 
 		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
-		ERR_post(Arg::Gds(isc_deadlock) <<
-				 Arg::Gds(isc_update_conflict) <<
-				 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
+		//ERR_post(Arg::Gds(isc_deadlock) <<
+		//		 Arg::Gds(isc_update_conflict) <<
+		//		 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(rpb->rpb_transaction_nr));
+
+		ERR_updateConflict(rpb->rpb_transaction_nr);
 	}
 
 	return true;
@@ -4614,9 +4658,11 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 				{
 					if (!(top_request->req_flags & req_restart_ready))
 					{
-						ERR_post(Arg::Gds(isc_deadlock) <<
-								 Arg::Gds(isc_update_conflict) <<
-								 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
+						//ERR_post(Arg::Gds(isc_deadlock) <<
+						//		 Arg::Gds(isc_update_conflict) <<
+						//		 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
+
+						ERR_updateConflict(org_rpb->rpb_transaction_nr);
 					}
 
 					top_request->req_flags |= req_update_conflict;
@@ -4638,9 +4684,11 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 			// hvlad: we have no details as TRA_wait has already cleared the status vector
 
 			// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
-			ERR_post(Arg::Gds(isc_deadlock) <<
-						Arg::Gds(isc_update_conflict) <<
-						Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
+			//ERR_post(Arg::Gds(isc_deadlock) <<
+			//			Arg::Gds(isc_update_conflict) <<
+			//			Arg::Gds(isc_concurrent_transaction) << Arg::Int64(org_rpb->rpb_transaction_nr));
+
+			ERR_updateConflict(org_rpb->rpb_transaction_nr);
 	}
 
 	// Old record was restored and re-fetched for write.  Now replace it.
@@ -6375,9 +6423,11 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 						return PrepareResult::SKIP_LOCKED;
 
 					// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
-					ERR_post(Arg::Gds(isc_deadlock) <<
-							 Arg::Gds(isc_update_conflict) <<
-							 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(update_conflict_trans));
+					//ERR_post(Arg::Gds(isc_deadlock) <<
+					//		 Arg::Gds(isc_update_conflict) <<
+					//		 Arg::Gds(isc_concurrent_transaction) << Arg::Int64(update_conflict_trans));
+
+					ERR_updateConflict(update_conflict_trans);
 				}
 				return PrepareResult::CONFLICT;
 

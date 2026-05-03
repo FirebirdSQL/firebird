@@ -1344,6 +1344,11 @@ interface TraceTransaction : Versioned
 version: // 3.0.4 -> 3.0.5
 	int64 getInitialID();
 	int64 getPreviousID();
+
+version: // 5.0.5
+	int64 getStartTime();
+	int64 getCommitNumber();
+	int64 getSnapshotNumber();
 }
 
 interface TraceParams : Versioned
