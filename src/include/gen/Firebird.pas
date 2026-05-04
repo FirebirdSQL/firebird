@@ -5963,7 +5963,7 @@ const
 	 isc_argmustbe_const_within_group = 335545324;
 	 isc_update_overwrite = 335545325;
 	 isc_pman_plugin_dirname = 335545326;
-	 isc_private_table = 335545326;
+	 isc_private_table = 335545327;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
