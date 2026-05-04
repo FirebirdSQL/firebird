@@ -3056,7 +3056,8 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 				rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 				rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
-				rel_perm->rel_private = !REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0;
+				if (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0)
+					rel_perm->rel_flags |= REL_private;
 
 				if (!REL.RDB$RELATION_TYPE.NULL)
 					rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
@@ -3132,7 +3133,8 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 
 		rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
-		rel_perm->rel_private = !REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0;
+		if (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0)
+			rel_perm->rel_flags |= REL_private;
 
 		if (!REL.RDB$RELATION_TYPE.NULL)
 			rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);

@@ -719,6 +719,7 @@ inline constexpr ULONG REL_virtual				= 0x0040;	// relation is virtual
 inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
+inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
 
 class GCLock
 {
@@ -1004,7 +1005,6 @@ public:
 
 	MetaName		rel_owner_name;		// ascii owner
 	QualifiedName	rel_security_name;	// security class name for relation
-	bool			rel_private = false;
 	std::atomic<ULONG>	rel_flags;		// flags
 
 	enum class Bool3State {Unknown, False, True};
@@ -1155,7 +1155,7 @@ inline bool RelationPermanent::isView() const noexcept
 
 inline bool RelationPermanent::isPrivate() const noexcept
 {
-	return rel_private;
+	return (rel_flags & REL_private);
 }
 
 inline bool RelationPermanent::isLTT() const noexcept
