@@ -3214,8 +3214,8 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	| PROCEDURE procedure_clause_start ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
-	| DECLARE LOCAL TEMPORARY TABLE package_ltt_table_clause ';'
-		{ $$ = CreateAlterPackageNode::Item::create($5); }
+	| TEMPORARY TABLE package_ltt_table_clause ';'
+		{ $$ = CreateAlterPackageNode::Item::create($3); }
 	;
 
 %type <createAlterPackageNode> alter_package_clause

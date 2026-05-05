@@ -1,14 +1,14 @@
-# Declared Local Temporary Tables in Packages (FB 6.0)
+# Packaged Temporary Tables (FB 6.0)
 
-Firebird 6.0 supports declaring local temporary tables in SQL packages.
+Firebird 6.0 supports declaring temporary tables in SQL packages.
 
-These tables are declared in package metadata. Internally, they are stored as package-owned persistent temporary table
-metadata, identified through `RDB$PACKAGE_NAME`. Their data remains temporary: transaction-local for
-`ON COMMIT DELETE ROWS` and connection-local for `ON COMMIT PRESERVE ROWS`.
+Internally, they are stored as package-owned persistent temporary table metadata, identified through `RDB$PACKAGE_NAME`.
+Their data remains temporary: transaction-local for `ON COMMIT DELETE ROWS` and connection-local for
+`ON COMMIT PRESERVE ROWS`.
 
 ## Syntax
 
-Declared local temporary tables can be used in package declarations.
+Packaged temporary tables can be used in package header and body.
 
 ```sql
 CREATE PACKAGE <package_name>
@@ -18,20 +18,18 @@ BEGIN
 END
 
 <package_item> ::=
-    <declared_local_temporary_table> |
+    <package_temporary_table_declaration> |
     <package_procedure_declaration> |
     <package_function_declaration>
 
-<declared_local_temporary_table> ::=
-    DECLARE LOCAL TEMPORARY TABLE <table_name>
+<package_temporary_table_declaration> ::=
+    TEMPORARY TABLE <table_name>
     (
         <column_definition> [, ...]
     )
     [ON COMMIT {DELETE | PRESERVE} ROWS]
     [{[UNIQUE] [ASC | DESC] INDEX <index_name> (<column_name>)}...]
 ```
-
-They can also appear in the declaration section of `CREATE PACKAGE BODY`.
 
 ```sql
 CREATE PACKAGE BODY <package_name>
@@ -41,7 +39,7 @@ BEGIN
 END
 
 <package_body_item> ::=
-    <declared_local_temporary_table> |
+    <package_temporary_table_declaration> |
     <package_procedure_definition> |
     <package_function_definition>
 ```
@@ -69,13 +67,13 @@ External SQL access rules:
 
 Index DDL rules:
 
-- Packaged declared local temporary table indexes must be declared inline in `DECLARE LOCAL TEMPORARY TABLE`.
+- Packaged temporary table indexes must be declared inline in `TEMPORARY TABLE`.
 - Standalone index DDL commands are not allowed for packaged tables:
   `CREATE INDEX`, `ALTER INDEX`, `DROP INDEX`, `SET STATISTICS INDEX`.
 
 ## Name Isolation
 
-Declared local temporary table names are isolated by package context.
+The table names are isolated by package context.
 
 - Different packages may declare tables with the same name.
 - A package table name may also match a regular table name in the same schema.
@@ -84,29 +82,28 @@ Resolution inside package routines prefers the package-local declaration.
 
 ## Dependencies and DDL lifecycle
 
-Declared local temporary tables participate in package dependency handling.
+`DROP PACKAGE` removes package body/header dependencies and package members (routines and declared tables) in package
+scope.
 
-- Package routines depending on declared table columns are tracked as package dependencies.
-- `DROP PACKAGE` removes package body/header dependencies and package members (routines and declared tables) in package
-  scope.
-- `ALTER PACKAGE` and `CREATE OR ALTER PACKAGE` recreate packaged declared local temporary tables that belong to the
-  package header.
-- `RECREATE PACKAGE BODY` and `CREATE OR ALTER PACKAGE BODY` recreate packaged declared local temporary tables that
-  belong to the package body.
+`ALTER PACKAGE` and `CREATE OR ALTER PACKAGE` recreate packaged declared local temporary tables that belong to the
+package header.
+
+`RECREATE PACKAGE BODY` and `CREATE OR ALTER PACKAGE BODY` recreate packaged declared local temporary tables that
+belong to the package body.
 
 ## System metadata changes
 
-Packaged declared local temporary tables add package ownership and visibility information to system metadata. Tools
-that inspect metadata should use these columns when present.
+Packaged temporary tables add package ownership and visibility information to system metadata.
+Tools that inspect metadata should use these columns when present.
 
-| Table                | Column             | Meaning                                                         |
-|----------------------|--------------------|-----------------------------------------------------------------|
-| `RDB$RELATIONS`      | `RDB$PACKAGE_NAME` | Owning package of the declared temporary table                  |
+| Table                | Column             | Meaning                                                           |
+|----------------------|--------------------|-------------------------------------------------------------------|
+| `RDB$RELATIONS`      | `RDB$PACKAGE_NAME` | Owning package of the declared temporary table                    |
 | `RDB$RELATIONS`      | `RDB$PRIVATE_FLAG` | `PUBLIC` (`0`) for header tables, `PRIVATE` (`1`) for body tables |
-| `RDB$RELATION_FIELDS`| `RDB$PACKAGE_NAME` | Owning package of the declared temporary table columns          |
-| `RDB$INDICES`        | `RDB$PACKAGE_NAME` | Owning package of inline indexes declared for packaged tables   |
-| `RDB$INDEX_SEGMENTS` | `RDB$PACKAGE_NAME` | Owning package of the packaged table index segments             |
-| `MON$TABLE_STATS`    | `MON$PACKAGE_NAME` | Owning package reported in runtime table statistics             |
+| `RDB$RELATION_FIELDS`| `RDB$PACKAGE_NAME` | Owning package of the declared temporary table columns            |
+| `RDB$INDICES`        | `RDB$PACKAGE_NAME` | Owning package of inline indexes declared for packaged tables     |
+| `RDB$INDEX_SEGMENTS` | `RDB$PACKAGE_NAME` | Owning package of the packaged table index segments               |
+| `MON$TABLE_STATS`    | `MON$PACKAGE_NAME` | Owning package reported in runtime table statistics               |
 
 ## Example
 
@@ -116,7 +113,7 @@ set term !;
 recreate package pkg
 as
 begin
-    declare local temporary table t_pub(
+    temporary table t_pub(
         id integer
     ) on commit preserve rows
       index idx_t_pub_id (id);
@@ -128,7 +125,7 @@ end!
 create package body pkg
 as
 begin
-    declare local temporary table t_priv(
+    temporary table t_priv(
         id integer
     ) on commit preserve rows
       unique index uq_t_priv_id (id);
@@ -170,7 +167,6 @@ select * from pkg.t_pub;
 
 - This feature is distinct from SQL-created local temporary tables (`CREATE LOCAL TEMPORARY TABLE ...`), which are
   attachment-private DDL objects.
-- Packaged declared temporary tables are not attachment-private created LTTs. They use persistent temporary-table
-  metadata associated with the package through `RDB$PACKAGE_NAME`.
-- Declared package temporary tables are package DDL items and follow package compilation, visibility, and dependency
-  rules.
+- Packaged temporary tables are not attachment-private created LTTs. They use persistent temporary-table metadata
+  associated with the package through `RDB$PACKAGE_NAME`.
+- Packaged temporary tables follow package compilation, visibility, and dependency rules.
