@@ -461,7 +461,8 @@ static decFloat * decFinalize(decFloat *df, bcdnum *num,
           uByte *t=buffer;              // safe target
           uByte *tlsd=buffer+(ulsd-umsd)+shift; // target LSD
           // printf("folddown shift=%ld\n", (LI)shift);
-          for (; s<=ulsd; s+=4, t+=4) UBFROMUI(t, UBTOUI(s));
+          for (; s+3<=ulsd; s+=4, t+=4) UBFROMUI(t, UBTOUI(s));
+          for (; s<=ulsd; s++, t++) *t=*s;
           for (t=tlsd-shift+1; t<=tlsd; t+=4) UBFROMUI(t, 0);  // pad 0s
           num->exponent-=shift;
           umsd=buffer;
