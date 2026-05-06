@@ -263,6 +263,7 @@ enum drq_type_t
 	drq_drop_u_m_opts,		// drop user mapping options
 	drq_s_f_tbl_f_opt,		// store foreign field option (RelationNode)
 	drq_drop_f_tbl_f_opt,		// drop foreign field option
+	drq_drop_f_tbl_f_opts,	// drop foreign field options
 
 	drq_MAX
 };

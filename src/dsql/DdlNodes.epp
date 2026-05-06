@@ -11637,7 +11637,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	// Drop foreign field options
 
-	request.reset(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
+	request.reset(tdbb, drq_drop_f_tbl_f_opts, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
