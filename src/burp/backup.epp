@@ -3115,6 +3115,12 @@ void write_foreign_user_mappings()
 
 		PUT_TEXT(att_foreign_user_mapping_server_name, X.RDB$FOREIGN_SERVER_NAME);
 
+		if (!X.RDB$DESCRIPTION.NULL)
+		{
+			put_source_blob(att_foreign_user_mapping_description, att_foreign_user_mapping_description,
+				X.RDB$DESCRIPTION);
+		}
+
 		put(tdgbl, att_end);
 
 		write_foreign_mapping_options(MetaString(X.RDB$USER), MetaString(X.RDB$FOREIGN_SERVER_NAME));
@@ -4561,6 +4567,9 @@ void write_foreign_servers()
 
 		if (!X.RDB$OWNER_NAME.NULL)
 			PUT_TEXT(att_foreign_server_owner_name, X.RDB$OWNER_NAME);
+
+		if (!X.RDB$DESCRIPTION.NULL)
+			put_source_blob(att_foreign_server_description, att_foreign_server_description, X.RDB$DESCRIPTION);
 
 		put(tdgbl, att_end);
 

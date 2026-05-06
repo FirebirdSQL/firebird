@@ -714,6 +714,7 @@ enum att_type {
 	att_foreign_server_data_wrapper_name,
 	att_foreign_server_security_class,
 	att_foreign_server_owner_name,
+	att_foreign_server_description,
 
 	// Foreign server option attributes
 	att_foreign_server_option_server_name = SERIES,
@@ -740,6 +741,7 @@ enum att_type {
 
 	att_foreign_user_mapping_user = SERIES,
 	att_foreign_user_mapping_server_name,
+	att_foreign_user_mapping_description,
 
 	// Foreign mapping option attributes
 

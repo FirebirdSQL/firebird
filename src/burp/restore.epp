@@ -10618,6 +10618,10 @@ bool get_foreign_server(BurpGlobals* tdgbl)
 					eat_text(tdgbl);
 					break;
 
+				case att_foreign_server_description:
+					eat_blob(tdgbl);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 426);	// msg 426 foreign server
 					break;
@@ -10667,6 +10671,11 @@ bool get_foreign_server(BurpGlobals* tdgbl)
 				case att_foreign_server_owner_name:
 					GET_TEXT(X.RDB$OWNER_NAME);
 					X.RDB$OWNER_NAME.NULL = FALSE;
+					break;
+
+				case att_foreign_server_description:
+					X.RDB$DESCRIPTION.NULL = FALSE;
+					get_misc_blob (tdgbl, X.RDB$DESCRIPTION, true);
 					break;
 
 				default:
@@ -11046,6 +11055,10 @@ bool get_foreign_user_mapping(BurpGlobals* tdgbl)
 					eat_text(tdgbl);
 					break;
 
+				case att_foreign_user_mapping_description:
+					eat_blob(tdgbl);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 439);	// msg 439 foreign user mapping
 					break;
@@ -11084,6 +11097,11 @@ bool get_foreign_user_mapping(BurpGlobals* tdgbl)
 					// msg 438 restoring foreign user mapping for user %s and server %s
 					BURP_verbose(438, SafeArg() << user.object.toQuotedString().c_str() <<
 						server.object.toQuotedString().c_str());
+					break;
+
+				case att_foreign_user_mapping_description:
+					X.RDB$DESCRIPTION.NULL = FALSE;
+					get_misc_blob (tdgbl, X.RDB$DESCRIPTION, true);
 					break;
 
 				default:

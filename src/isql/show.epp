@@ -3400,6 +3400,42 @@ static processing_state show_comments(const commentMode showextract, const char*
 			ISQL_errmsg(fbStatus);
 			return ps_ERR;
 		END_ERROR
+
+		FOR SRV IN RDB$FOREIGN_SERVERS
+			WITH SRV.RDB$DESCRIPTION NOT MISSING
+			SORTED BY SRV.RDB$FOREIGN_SERVER_NAME
+		{
+			const QualifiedMetaString name(SRV.RDB$FOREIGN_SERVER_NAME);
+
+			show_comment("SERVER", name, {}, &SRV.RDB$DESCRIPTION,
+				showextract, first ? banner : nullptr);
+			first = false;
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		FOR FUM IN RDB$FOREIGN_USER_MAPPINGS
+			WITH FUM.RDB$DESCRIPTION NOT MISSING
+			SORTED BY FUM.RDB$USER, FUM.RDB$FOREIGN_SERVER_NAME
+		{
+			const QualifiedMetaString server(FUM.RDB$FOREIGN_SERVER_NAME);
+			const MetaString user(FUM.RDB$USER);
+
+			string userMappingForUser;
+			userMappingForUser.printf("USER MAPPING FOR %s SERVER", user.c_str());
+
+			show_comment(userMappingForUser.c_str(), server, {}, &FUM.RDB$DESCRIPTION,
+				showextract, first ? banner : nullptr);
+			first = false;
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
 	}
 
 	return first ? OBJECT_NOT_FOUND : SKIP;
