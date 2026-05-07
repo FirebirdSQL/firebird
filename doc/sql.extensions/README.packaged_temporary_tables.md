@@ -62,14 +62,28 @@ Visibility depends on where the table is declared:
 
 External SQL access rules:
 
-- Header tables can be accessed externally as `[{schema_name}.package_name.table_name` (for example, `pkg.t_pub`).
-- Body tables cannot be accessed externally and are only valid inside routines of the same package body.
+- Header tables can be accessed externally as `package_name.table_name` or `package_name%package.table_name`
+  (for example, `pkg.t_pub` or `pkg%package.t_pub`).
+- Schema-qualified packaged table access uses the three-part form `{schema_name}.package_name.table_name`.
+- Body tables cannot be accessed externally and are only valid inside routines of the same package body, including
+  when using `%package`.
 
 Index DDL rules:
 
 - Packaged temporary table indexes must be declared inline in `TEMPORARY TABLE`.
 - Standalone index DDL commands are not allowed for packaged tables:
   `CREATE INDEX`, `ALTER INDEX`, `DROP INDEX`, `SET STATISTICS INDEX`.
+
+`COMMENT ON` support:
+
+- `COMMENT ON TABLE package_name.table_name IS ...` is supported for packaged temporary tables.
+- `COMMENT ON TABLE package_name%package.table_name IS ...` is also supported.
+- `COMMENT ON COLUMN package_name.table_name.column_name IS ...` is supported for columns of packaged
+  temporary tables.
+- `COMMENT ON COLUMN package_name%package.table_name.column_name IS ...` is also supported.
+- This applies to both header-declared public tables and body-declared private tables.
+- Descriptions are stored in the regular metadata fields
+  `RDB$RELATIONS.RDB$DESCRIPTION` and `RDB$RELATION_FIELDS.RDB$DESCRIPTION`.
 
 ## Name Isolation
 
@@ -153,9 +167,20 @@ select * from pkg.p2;
 
 -- header-declared table: allowed
 select * from pkg.t_pub;
+select * from pkg%package.t_pub;
 
 -- body-declared table: not allowed
 -- select * from pkg.t_priv;
+-- select * from pkg%package.t_priv;
+
+comment on table pkg.t_pub is 'Public packaged temporary table';
+comment on column pkg.t_pub.id is 'Identifier in public packaged temporary table';
+comment on table pkg.t_priv is 'Private packaged temporary table';
+comment on column pkg.t_priv.id is 'Identifier in private packaged temporary table';
+comment on table pkg%package.t_pub is 'Public packaged temporary table via %package';
+comment on column pkg%package.t_pub.id is 'Identifier via %package';
+comment on table pkg%package.t_priv is 'Private packaged temporary table via %package';
+comment on column pkg%package.t_priv.id is 'Identifier in private table via %package';
 
 -- not allowed for packaged tables:
 -- create index idx_cmd on pkg.t_pub(id);
