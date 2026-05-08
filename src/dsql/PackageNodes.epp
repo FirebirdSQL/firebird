@@ -22,6 +22,7 @@
 
 #include "firebird.h"
 #include "../dsql/PackageNodes.h"
+#include "../dsql/metd_proto.h"
 #include "../jrd/dyn.h"
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
@@ -55,7 +56,7 @@ namespace
 {
 	// Return function and procedure names (in the user charset) and optionally its details for a
 	// given package.
-	void collectPackagedItems(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& packageName,
+	void collectPackagedItems(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction, const QualifiedName& packageName,
 		SortedObjectsArray<Signature>& functions,
 		SortedObjectsArray<Signature>& procedures, bool details)
 	{
@@ -89,12 +90,12 @@ namespace
 					parameter.number = ARG.RDB$ARGUMENT_POSITION;
 					parameter.name = ARG.RDB$ARGUMENT_NAME;
 					parameter.fieldSource = QualifiedName(ARG.RDB$FIELD_SOURCE, ARG.RDB$FIELD_SOURCE_SCHEMA_NAME);
-					parameter.mechanism = ARG.RDB$ARGUMENT_MECHANISM;
+					parameter.mechanism = static_cast<prm_mech_t>(ARG.RDB$ARGUMENT_MECHANISM);
 
 					if (!ARG.RDB$FIELD_NAME.NULL)
-						parameter.fieldName = QualifiedName(ARG.RDB$FIELD_NAME);
+						parameter.typeOfName = QualifiedName(ARG.RDB$FIELD_NAME);
 					if (!ARG.RDB$RELATION_NAME.NULL)
-						parameter.relationName = QualifiedName(ARG.RDB$RELATION_NAME, ARG.RDB$RELATION_SCHEMA_NAME);
+						parameter.typeOfTable = QualifiedName(ARG.RDB$RELATION_NAME, ARG.RDB$RELATION_SCHEMA_NAME);
 					if (!ARG.RDB$COLLATION_ID.NULL)
 						parameter.collationId = CollId(ARG.RDB$COLLATION_ID);
 					if (!ARG.RDB$NULL_FLAG.NULL)
@@ -144,50 +145,31 @@ namespace
 			if (details)
 			{
 				FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE transaction)
-					PRM IN RDB$PROCEDURE_PARAMETERS CROSS
-					FLD IN RDB$FIELDS
+					PRM IN RDB$PROCEDURE_PARAMETERS
 					WITH PRM.RDB$SCHEMA_NAME EQ PRC.RDB$SCHEMA_NAME AND
 						 PRM.RDB$PACKAGE_NAME EQ PRC.RDB$PACKAGE_NAME AND
-						 PRM.RDB$PROCEDURE_NAME EQ PRC.RDB$PROCEDURE_NAME AND
-						 FLD.RDB$SCHEMA_NAME EQUIV PRM.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-						 FLD.RDB$FIELD_NAME EQ PRM.RDB$FIELD_SOURCE
+						 PRM.RDB$PROCEDURE_NAME EQ PRC.RDB$PROCEDURE_NAME
 				{
 					SignatureParameter parameter(*getDefaultMemoryPool());
 					parameter.type = PRM.RDB$PARAMETER_TYPE;
 					parameter.number = PRM.RDB$PARAMETER_NUMBER;
 					parameter.name = PRM.RDB$PARAMETER_NAME;
 					parameter.fieldSource = QualifiedName(PRM.RDB$FIELD_SOURCE, PRM.RDB$FIELD_SOURCE_SCHEMA_NAME);
-					parameter.mechanism = PRM.RDB$PARAMETER_MECHANISM;
+					parameter.mechanism = static_cast<prm_mech_t>(PRM.RDB$PARAMETER_MECHANISM);
 
 					if (!PRM.RDB$FIELD_NAME.NULL)
-						parameter.fieldName = QualifiedName(PRM.RDB$FIELD_NAME);
+						parameter.typeOfName = QualifiedName(PRM.RDB$FIELD_NAME);
 					if (!PRM.RDB$RELATION_NAME.NULL)
-						parameter.relationName = QualifiedName(PRM.RDB$RELATION_NAME, PRM.RDB$RELATION_SCHEMA_NAME);
+						parameter.typeOfTable = QualifiedName(PRM.RDB$RELATION_NAME, PRM.RDB$RELATION_SCHEMA_NAME);
 					if (!PRM.RDB$COLLATION_ID.NULL)
 						parameter.collationId = CollId(PRM.RDB$COLLATION_ID);
 					if (!PRM.RDB$NULL_FLAG.NULL)
 						parameter.nullFlag = PRM.RDB$NULL_FLAG;
 
-					if (!FLD.RDB$FIELD_LENGTH.NULL)
-						parameter.fieldLength = FLD.RDB$FIELD_LENGTH;
-					if (!FLD.RDB$FIELD_SCALE.NULL)
-						parameter.fieldScale = FLD.RDB$FIELD_SCALE;
-					if (!FLD.RDB$FIELD_TYPE.NULL)
-						parameter.fieldType = FLD.RDB$FIELD_TYPE;
-					if (!FLD.RDB$FIELD_SUB_TYPE.NULL)
-						parameter.fieldSubType = FLD.RDB$FIELD_SUB_TYPE;
-					if (!FLD.RDB$SEGMENT_LENGTH.NULL)
-						parameter.fieldSegmentLength = FLD.RDB$SEGMENT_LENGTH;
-					if (!FLD.RDB$NULL_FLAG.NULL)
-						parameter.fieldNullFlag = FLD.RDB$NULL_FLAG;
-					if (!FLD.RDB$CHARACTER_LENGTH.NULL)
-						parameter.fieldCharLength = FLD.RDB$CHARACTER_LENGTH;
-					if (!FLD.RDB$COLLATION_ID.NULL)
-						parameter.fieldCollationId = CollId(FLD.RDB$COLLATION_ID);
-					if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-						parameter.fieldCharSetId = CSetId(FLD.RDB$CHARACTER_SET_ID);
-					if (!FLD.RDB$FIELD_PRECISION.NULL)
-						parameter.fieldPrecision = FLD.RDB$FIELD_PRECISION;
+					if (parameter.typeOfName.object.hasData())
+					{
+						Metadata::resolveType(dsqlScratch, parameter.typeOfTable, parameter.typeOfName, parameter);
+					}
 
 					procedure.parameters.add(parameter);
 				}
@@ -444,7 +426,7 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 
 		SortedObjectsArray<Signature> existingFuncs(pool);
 		SortedObjectsArray<Signature> existingProcs(pool);
-		collectPackagedItems(tdbb, transaction, name, existingFuncs, existingProcs, false);
+		collectPackagedItems(tdbb, dsqlScratch, transaction, name, existingFuncs, existingProcs, false);
 
 		for (SortedObjectsArray<Signature>::iterator i = existingFuncs.begin();
 			 i != existingFuncs.end(); ++i)
@@ -621,7 +603,7 @@ void DropPackageNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 	SortedObjectsArray<Signature> existingFuncs(pool);
 	SortedObjectsArray<Signature> existingProcs(pool);
-	collectPackagedItems(tdbb, transaction, name, existingFuncs, existingProcs, false);
+	collectPackagedItems(tdbb, dsqlScratch, transaction, name, existingFuncs, existingProcs, false);
 
 	for (SortedObjectsArray<Signature>::iterator i = existingFuncs.begin();
 		 i != existingFuncs.end(); ++i)
@@ -839,7 +821,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 
 	SortedObjectsArray<Signature> headerFuncs(pool);
 	SortedObjectsArray<Signature> headerProcs(pool);
-	collectPackagedItems(tdbb, transaction, name, headerFuncs, headerProcs, false);
+	collectPackagedItems(tdbb, dsqlScratch, transaction, name, headerFuncs, headerProcs, false);
 
 	SortedObjectsArray<Signature> existingFuncs(pool);
 	SortedObjectsArray<Signature> existingProcs(pool);
@@ -858,7 +840,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			existingProcs.clear();
 		}
 
-		collectPackagedItems(tdbb, transaction, name, existingFuncs, existingProcs, true);
+		collectPackagedItems(tdbb, dsqlScratch, transaction, name, existingFuncs, existingProcs, true);
 
 		for (unsigned j = 0; j < arrays[i]->getCount(); ++j)
 		{
@@ -913,7 +895,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 
 	SortedObjectsArray<Signature> newFuncs(pool);
 	SortedObjectsArray<Signature> newProcs(pool);
-	collectPackagedItems(tdbb, transaction, name, newFuncs, newProcs, true);
+	collectPackagedItems(tdbb, dsqlScratch, transaction, name, newFuncs, newProcs, true);
 
 	for (SortedObjectsArray<Signature>::iterator i = existingFuncs.begin();
 		 i != existingFuncs.end(); ++i)

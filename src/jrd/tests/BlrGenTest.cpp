@@ -43,7 +43,7 @@ Jrd::dsql_fld genDefaultFiled(MemoryPool& pool)
 	field.typeOfName.package = typeOfNamePackage.data();
 	field.typeOfName.schema = typeOfNameSchema.data();
 
-	field.fullDomain = true;
+	field.mechanism = prm_mech_normal;
 	field.textType = ttype_utf8;
 	field.notNull = false;
 	field.explicitCollation = true;
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(TestFalseDomain)
 	// Test domain false with different schema
 	{
 		Jrd::TypeClause field = genDefaultFiled(pool);
-		field.fullDomain = false;
+		field.mechanism = prm_mech_type_of;
 
 		DsqlCompilerScratch& scratch = *makeScratch();
 		scratch.putType(&field, true);
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(TestFalseDomain)
 	// Test domain false with same schema
 	{
 		Jrd::TypeClause field = genDefaultFiled(pool);
-		field.fullDomain = false;
+		field.mechanism = prm_mech_type_of;
 
 		DsqlCompilerScratch& scratch = *makeScratch();
 		scratch.putType(&field, true);

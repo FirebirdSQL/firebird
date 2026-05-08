@@ -84,7 +84,6 @@ enum irq_type_t
 	irq_l_cond_index,		// lookup condition index
 
 	irq_l_proc_id,			// lookup procedure id
-	irq_r_params,			// scan procedure parameters
 
 	irq_r_procedure,		// scan procedure
 	irq_r_proc_blr,			// look for procedure's BLR and debug info

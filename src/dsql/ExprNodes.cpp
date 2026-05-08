@@ -3578,7 +3578,7 @@ bool CastNode::setParameterType(DsqlCompilerScratch* /*dsqlScratch*/,
 		{
 			parameter->par_node = source;
 			DsqlDescMaker::fromField(&parameter->par_desc, dsqlField);
-			if (!dsqlField->fullDomain)
+			if (dsqlField->mechanism != prm_mech_normal)
 				parameter->par_desc.setNullable(true);
 			return true;
 		}
