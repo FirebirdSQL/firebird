@@ -3147,8 +3147,27 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 		rel_current_fmt = REL.RDB$FORMAT;
 		rel_fields = vec<jrd_fld*>::newVector(*rel_pool, rel_fields, REL.RDB$FIELD_ID);
-		if (rel_perm->rel_security_name.isEmpty() && !REL.RDB$SECURITY_CLASS.NULL)
-			rel_perm->rel_security_name = QualifiedName(REL.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+
+		if (rel_perm->rel_security_name.isEmpty())
+		{
+			if (!REL.RDB$SECURITY_CLASS.NULL)
+				rel_perm->rel_security_name = QualifiedName(REL.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+			else if (!REL.RDB$PACKAGE_NAME.NULL)
+			{
+				static const CachedRequestId packageClassRequestId;
+				AutoCacheRequest packageClassRequest(tdbb, packageClassRequestId);
+
+				FOR (REQUEST_HANDLE packageClassRequest TRANSACTION_HANDLE trans)
+					PKG IN RDB$PACKAGES
+					WITH PKG.RDB$SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+						 PKG.RDB$PACKAGE_NAME EQ REL.RDB$PACKAGE_NAME
+				{
+					if (!PKG.RDB$SECURITY_CLASS.NULL)
+						rel_perm->rel_security_name = QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+				}
+				END_FOR
+			}
+		}
 
 		rel_perm->rel_owner_name = REL.RDB$OWNER_NAME;
 
@@ -5548,8 +5567,11 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 {
 	Attachment* attachment = tdbb->getAttachment();
 
-	if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
-		return (*lttPtr)->relation;
+	if (name.package.isEmpty())
+	{
+		if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
+			return (*lttPtr)->relation;
+	}
 
 	return nullptr;
 }

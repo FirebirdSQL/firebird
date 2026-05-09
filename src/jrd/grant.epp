@@ -70,6 +70,7 @@ DATABASE DB = STATIC "yachts.lnk";
 
 static void define_default_class(thread_db*, const QualifiedName&, MetaName&, const Acl&,
 							jrd_tra*);
+static void ensure_relation_reload(thread_db*, MetaId, jrd_tra*);
 static void finish_security_class(Acl&, SecurityClass::flags_t);
 static void get_object_info(thread_db*, const QualifiedName&, ObjectType,
 							MetaName&, MetaName&, MetaName&, bool&);
@@ -129,8 +130,11 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 
 		case obj_procedure:
 		case obj_udf:
-		case obj_package_header:
 			priv |= SCL_execute;
+			break;
+
+		case obj_package_header:
+			priv |= SCL_execute | SCL_select | SCL_insert | SCL_update | SCL_delete;
 			break;
 
 		case obj_field:
@@ -172,6 +176,10 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 		finish_security_class(acl, aggregate_public);
 
 		save_security_class(tdbb, s_class, acl, transaction);
+
+		ensure_relation_reload(tdbb,
+			MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE)->getId(),
+			transaction);
 
 		if (acl.getCount() != default_acl.getCount())	// relation privs were added?
 			restrct = true;
@@ -238,12 +246,14 @@ static void define_default_class(thread_db* tdbb,
 		default_class.printf("%s%" SQUADFORMAT, DEFAULT_CLASS,
 			DPM_gen_id(tdbb, MET_lookup_generator(tdbb, QualifiedName(DEFAULT_CLASS, SYSTEM_SCHEMA)), false, 1));
 
+		fb_assert(relationName.package.isEmpty());
+
 		AutoCacheRequest request(tdbb, irq_grant7, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
-				 REL.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
+				 REL.RDB$PACKAGE_NAME MISSING AND
 				 REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		{
             MODIFY REL USING

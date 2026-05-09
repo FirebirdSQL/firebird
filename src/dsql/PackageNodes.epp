@@ -443,7 +443,7 @@ void CreateAlterPackageNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch*
 	}
 	END_STORE
 
-	storePrivileges(tdbb, transaction, name, obj_package_header, EXEC_PRIVILEGES);
+	storePrivileges(tdbb, transaction, name, obj_package_header, PACKAGE_PRIVILEGES);
 
 	owner = ownerName;
 

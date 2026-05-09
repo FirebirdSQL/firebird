@@ -16024,7 +16024,16 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	strcpy(privileges, privs ? privs : "");
 
 	if (strcmp(privileges, "A") == 0)
-		strcpy(privileges, ALL_PRIVILEGES);
+		strcpy(privileges, objType == obj_package_header ? PACKAGE_PRIVILEGES : ALL_PRIVILEGES);
+
+	if (objType == obj_package_header && (field.hasData() || strchr(privileges, 'R')))
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(isc_random) <<
+				"Column-level and REFERENCES grants are not supported on packages");
+	}
 
 	char* cPtr = strchr(privileges, 'C');
 
@@ -16558,6 +16567,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
+			 REL.RDB$PACKAGE_NAME MISSING AND
 			 REL.RDB$RELATION_NAME = relationName.object.c_str()
 	{
 		relationExists = true;
@@ -16583,6 +16593,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			G_FLD IN RDB$RELATION_FIELDS
 			WITH G_FLD.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
+				 G_FLD.RDB$PACKAGE_NAME MISSING AND
 				 G_FLD.RDB$RELATION_NAME = relationName.object.c_str() AND
 				 G_FLD.RDB$FIELD_NAME = fieldName.c_str()
 		{
@@ -16614,6 +16625,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
+			 REL.RDB$PACKAGE_NAME MISSING AND
 			 REL.RDB$RELATION_NAME = relationName.object.c_str() AND
 			 REL.RDB$OWNER_NAME = UPPERCASE(grantor)
 	{
@@ -16984,6 +16996,7 @@ void GrantRevokeNode::setFieldClassName(thread_db* tdbb, jrd_tra* transaction,
 		RFR IN RDB$RELATION_FIELDS
 		WITH RFR.RDB$FIELD_NAME = field.c_str() AND
 			 RFR.RDB$SCHEMA_NAME = relation.schema.c_str() AND
+			 RFR.RDB$PACKAGE_NAME MISSING AND
 			 RFR.RDB$RELATION_NAME = relation.object.c_str() AND
 			 RFR.RDB$SECURITY_CLASS MISSING
 	{

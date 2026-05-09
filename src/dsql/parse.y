@@ -1012,6 +1012,13 @@ grant0($node)
 			$node->grantAdminOption = $7;
 			$node->grantor = $8;
 		}
+	| privileges(NOTRIAL(&$node->privileges)) ON PACKAGE symbol_package_name
+			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_package_header, *$4);
+			$node->grantAdminOption = $7;
+			$node->grantor = $8;
+		}
 	| usage_privilege(NOTRIAL(&$node->privileges)) ON EXCEPTION symbol_exception_name
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
@@ -1152,6 +1159,7 @@ execute_privilege($privilegeArray)
 %type usage_privilege(<privilegeArray>)
 usage_privilege($privilegeArray)
 	: USAGE							{ $privilegeArray->add(PrivilegeClause('G', NULL)); }
+	;
 
 %type privilege(<privilegeArray>)
 privilege($privilegeArray)
@@ -1300,6 +1308,13 @@ revoke0($node)
 			$node->grantor = $8;
 		}
 	| rev_grant_option execute_privilege(NOTRIAL(&$node->privileges)) ON PACKAGE symbol_package_name
+			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_package_header, *$5);
+			$node->grantAdminOption = $1;
+			$node->grantor = $8;
+		}
+	| rev_grant_option privileges(NOTRIAL(&$node->privileges)) ON PACKAGE symbol_package_name
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
 			$node->object = newNode<GranteeClause>(obj_package_header, *$5);

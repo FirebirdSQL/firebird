@@ -68,6 +68,20 @@ External SQL access rules:
 - Body tables cannot be accessed externally and are only valid inside routines of the same package body, including
   when using `%package`.
 
+Permissions:
+
+- Packaged temporary table permissions are attached to the package, not to individual packaged tables.
+- Direct access to public header tables requires the appropriate package privilege for the requested operation, such
+  as `SELECT`, `INSERT`, `UPDATE` or `DELETE`.
+- Private body tables cannot be made externally accessible with package grants.
+- If the package is created in a non-public schema, the caller also needs `USAGE` on that schema.
+
+Example:
+
+```sql
+grant select, insert on package pkg to user some_user;
+```
+
 Index DDL rules:
 
 - Packaged temporary table indexes must be declared inline in `TEMPORARY TABLE`.
