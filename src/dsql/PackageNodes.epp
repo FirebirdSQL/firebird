@@ -890,6 +890,21 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 			Arg::Gds(isc_dyn_package_not_found) << name.toQuotedString());
 	}
 
+	static const CachedRequestId requestTableCacheId;
+	AutoCacheRequest requestTable(tdbb, requestTableCacheId);
+
+	FOR (REQUEST_HANDLE requestTable TRANSACTION_HANDLE transaction)
+		REL IN RDB$RELATIONS
+		WITH REL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 REL.RDB$PACKAGE_NAME EQ name.object.c_str() AND
+			 REL.RDB$PRIVATE_FLAG != 0
+	{
+		DropRelationNode dropNode(pool, QualifiedName(REL.RDB$RELATION_NAME, name.schema, name.object));
+		dropNode.dsqlPass(dsqlScratch);
+		dropNode.executeDdl(tdbb, dsqlScratch, transaction, true);
+	}
+	END_FOR
+
 	SortedObjectsArray<Signature> headerFuncs(pool);
 	SortedObjectsArray<Signature> headerProcs(pool);
 	SortedObjectsArray<MetaName> headerTables(pool);
