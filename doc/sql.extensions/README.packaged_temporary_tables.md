@@ -115,9 +115,11 @@ scope.
 
 `ALTER PACKAGE` and `CREATE OR ALTER PACKAGE` recreate packaged declared local temporary tables that belong to the
 package header.
+Existing private packaged tables from the body definition are dropped.
 
 `RECREATE PACKAGE BODY` and `CREATE OR ALTER PACKAGE BODY` recreate packaged declared local temporary tables that
 belong to the package body.
+Existing private packaged tables from the previous body definition are dropped before the new body tables are created.
 
 ## System metadata changes
 
@@ -132,6 +134,8 @@ Tools that inspect metadata should use these columns when present.
 | `RDB$INDICES`        | `RDB$PACKAGE_NAME` | Owning package of inline indexes declared for packaged tables     |
 | `RDB$INDEX_SEGMENTS` | `RDB$PACKAGE_NAME` | Owning package of the packaged table index segments               |
 | `MON$TABLE_STATS`    | `MON$PACKAGE_NAME` | Owning package reported in runtime table statistics               |
+
+In monitoring, packaged temporary tables are reported as `GLOBAL TEMPORARY` in `MON$TABLE_STATS.MON$TABLE_TYPE`.
 
 ## Example
 
