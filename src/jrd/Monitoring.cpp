@@ -1563,7 +1563,7 @@ void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record
 			if ((relation = MetadataCache::getPerm<Cached::Relation>(tdbb, counts.getGroupId(),
 					CacheFlag::AUTOCREATE)))
 			{
-				if ((relation->rel_flags & REL_temp_ltt) || relation->rel_name.package.hasData())
+				if ((relation->rel_flags & REL_temp_ltt) && relation->rel_name.package.isEmpty())
 				{
 					record.storeString(f_mon_tab_sch_name, relation->rel_name.schema);
 					record.storeString(f_mon_tab_pkg_name, relation->rel_name.package);
