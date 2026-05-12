@@ -11564,7 +11564,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	}
 	else
 	{
-		if (!relation || (relation->isView() && relation->getForeignAdapter()))
+		if (!relation || (relation && (relation->isView() || relation->getForeignAdapter())))
 			dsqlError = isc_dsql_table_not_found;
 	}
 
