@@ -589,6 +589,8 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 		"show table \"test\"")).name == QualifiedMetaString("test")));
 	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show table \"te\"\"st\"")).name == QualifiedMetaString("te\"st")));
+	BOOST_TEST((std::get<FrontendParser::ShowTablesNode>(parseShow(
+		"show table schema.package.name")).name == QualifiedMetaString("NAME", "SCHEMA", "PACKAGE")));
 
 	BOOST_TEST(!std::get<FrontendParser::ShowTablesNode>(parseShow(
 		"show table")).name);
@@ -609,6 +611,19 @@ BOOST_AUTO_TEST_CASE(ParseShowTest)
 		"show wire_stat")));
 	BOOST_TEST(std::holds_alternative<FrontendParser::ShowWireStatsNode>(parseShow(
 		"show wire_statistics")));
+
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show const")));
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constant")));
+	BOOST_TEST(std::holds_alternative<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constants")));
+
+	BOOST_TEST((std::get<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constants MY_PACKAGE.C1")).name == QualifiedMetaString("C1", "", "MY_PACKAGE")));
+
+	BOOST_TEST((std::get<FrontendParser::ShowConstantsNode>(parseShow(
+		"show constants SYSTEM.MY_PACKAGE.C1")).name == QualifiedMetaString("C1", "SYSTEM", "MY_PACKAGE")));
 }
 
 

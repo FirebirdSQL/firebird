@@ -64,6 +64,7 @@ void	DPM_create_relation(Jrd::thread_db*, Jrd::Cached::Relation*);
 ULONG	DPM_data_pages(Jrd::thread_db*, Jrd::Cached::Relation*);
 void	DPM_delete(Jrd::thread_db*, Jrd::record_param*, ULONG);
 void	DPM_delete_relation(Jrd::thread_db*, Jrd::RelationPermanent*);
+USHORT	DPM_reserve_pages(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::win*);
 bool	DPM_fetch(Jrd::thread_db*, Jrd::record_param*, USHORT);
 bool	DPM_fetch_back(Jrd::thread_db*, Jrd::record_param*, USHORT, SSHORT);
 void	DPM_fetch_fragment(Jrd::thread_db*, Jrd::record_param*, USHORT);

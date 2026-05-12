@@ -142,6 +142,7 @@ inline constexpr ULONG DBB_assert_locks	= 0x4L;		// Locks are to be asserted
 inline constexpr ULONG DBB_shut_attach	= 0x8L;		// No new attachments accepted
 inline constexpr ULONG DBB_shut_tran	= 0x10L;	// No new transactions accepted
 inline constexpr ULONG DBB_shut_force	= 0x20L;	// Forced shutdown in progress
+inline constexpr ULONG DBB_repl_reset	= 0x40L;	// Replication set has been reset
 
 class Database : public pool_alloc<type_dbb>
 {
@@ -456,7 +457,8 @@ public:
 	Firebird::RefPtr<Firebird::IPluginConfig> dbb_plugin_config;
 
 	Firebird::TriState dbb_repl_state;	// replication state
-	Lock* dbb_repl_lock;				// replication state lock
+	Lock* dbb_repl_state_lock;			// replication state lock
+	Lock* dbb_repl_set_lock;			// replication set lock
 	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
 	std::atomic<ReplicaMode> dbb_replica_mode;		// replica access mode
@@ -577,6 +579,9 @@ public:
 	bool isReplicating(thread_db* tdbb);
 	void invalidateReplState(thread_db* tdbb, bool broadcast);
 	static int replStateAst(void*);
+	void checkReplSetLock(thread_db* tdbb);
+	void invalidateReplSet(thread_db* tdbb, bool broadcast);
+	static int blockingAstReplSet(void*);
 
 	const CoercionArray *getBindings() const;
 

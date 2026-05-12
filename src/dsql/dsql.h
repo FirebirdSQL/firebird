@@ -159,6 +159,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	bool rel_private = false;		// Packaged private relation
 };
 
 // rel_flags bits
@@ -562,6 +563,7 @@ inline constexpr USHORT CTX_view_with_check_modify	= 0x40;		// Context of WITH C
 inline constexpr USHORT CTX_cursor					= 0x80;		// Context is a cursor
 inline constexpr USHORT CTX_lateral					= 0x100;	// Context is a lateral derived table
 inline constexpr USHORT CTX_blr_fields				= 0x200;	// Fields of the context are defined inside BLR
+inline constexpr USHORT CTX_package					= 0x400;	// The context is related to a package
 
 //! Aggregate/union map block to map virtual fields to their base
 //! TMN: NOTE! This datatype should definitely be renamed!

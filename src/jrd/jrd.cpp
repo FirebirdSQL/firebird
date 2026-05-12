@@ -8174,8 +8174,11 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	if (dbb->dbb_crypto_manager)
 		dbb->dbb_crypto_manager->shutdown(tdbb);
 
-	if (dbb->dbb_repl_lock)
-		LCK_release(tdbb, dbb->dbb_repl_lock);
+	if (dbb->dbb_repl_set_lock)
+		LCK_release(tdbb, dbb->dbb_repl_set_lock);
+
+	if (dbb->dbb_repl_state_lock)
+		LCK_release(tdbb, dbb->dbb_repl_state_lock);
 
 	if (dbb->dbb_shadow_lock)
 		LCK_release(tdbb, dbb->dbb_shadow_lock);

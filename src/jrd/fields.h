@@ -240,6 +240,12 @@
 
 	FIELD(fld_tab_type		, nam_mon_tab_type	, dtype_varying	, 32						, dsc_text_type_ascii		, NULL		, true		, ODS_14_0)
 
+	FIELD(fld_pkg_id		, nam_pkg_id		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
+
+	FIELD(fld_const_name	, nam_const_name	, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false		, ODS_14_0)
+	FIELD(fld_const_blr		, nam_const_blr		, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_14_0)
+	FIELD(fld_const_source	, nam_const_source	, dtype_blob	, BLOB_SIZE					, isc_blob_text				, NULL		, true		, ODS_14_0)
+
 	FIELD(fld_fs_name				, nam_fs_name			, dtype_text, 		MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata, NULL, true	, ODS_14_0)
 	FIELD(fld_fs_data_wrapper_name	, nam_fs_wrapper_name	, dtype_varying,	MAX_SQL_IDENTIFIER_LEN	, 0						, NULL, true	, ODS_14_0)
 

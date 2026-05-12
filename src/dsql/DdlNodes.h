@@ -53,6 +53,7 @@ enum SqlSecurity
 class LocalDeclarationsNode;
 class LocalTemporaryTable;
 class RelationSourceNode;
+class CreateIndexNode;
 class ValueListNode;
 class SecDbContext;
 class ModifyIndexList;
@@ -419,7 +420,7 @@ public:
 		  compiled(false),
 		  invalid(false),
 		  packageOwner(pool),
-		  privateScope(false),
+		  packagePrivate(false),
 		  preserveDefaults(false),
 		  udfReturnPos(0)
 	{
@@ -474,7 +475,7 @@ public:
 	bool compiled;
 	bool invalid;
 	MetaName packageOwner;
-	bool privateScope;
+	bool packagePrivate;
 	bool preserveDefaults;
 	SLONG udfReturnPos;
 	std::optional<SqlSecurity> ssDefiner;
@@ -573,7 +574,7 @@ public:
 		  compiled(false),
 		  invalid(false),
 		  packageOwner(pool),
-		  privateScope(false),
+		  packagePrivate(false),
 		  preserveDefaults(false)
 	{
 	}
@@ -621,7 +622,7 @@ public:
 	bool compiled;
 	bool invalid;
 	MetaName packageOwner;
-	bool privateScope;
+	bool packagePrivate;
 	bool preserveDefaults;
 	std::optional<SqlSecurity> ssDefiner;
 
@@ -1476,6 +1477,7 @@ public:
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
 			TYPE_ALTER_PUBLICATION,
+			TYPE_ADD_PACKAGED_TABLE_INDEX,
 			TYPE_ALTER_OPTIONS
 		};
 
@@ -1502,6 +1504,17 @@ public:
 
 		unsigned updateAction;
 		unsigned deleteAction;
+	};
+
+	struct AddPackagedTableIndexClause : public Clause
+	{
+		explicit AddPackagedTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
+			: Clause(p, TYPE_ADD_PACKAGED_TABLE_INDEX),
+			  indexNode(aIndexNode)
+		{
+		}
+
+		NestConst<CreateIndexNode> indexNode;
 	};
 
 	struct AddConstraintClause : public Clause
@@ -1712,8 +1725,6 @@ public:
 	static bool checkDeletedId(thread_db* tdbb, MetaId& relId);
 	static bool checkIdRange(thread_db* tdbb, MetaId& relId, const MetaId existingRelationId);
 
-	USHORT calcDbKeyLength(thread_db* tdbb);
-
 	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName, bool silent,
 		std::function<void()> preChangeHandler = {});
@@ -1727,6 +1738,7 @@ public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
+	static void validateLttClauses(const Firebird::Array<NestConst<Clause>>& clauses);
 	static void validateLttColumnClause(const AddColumnClause* addColumnClause);
 
 	Firebird::string internalPrint(NodePrinter& printer) const override
@@ -1770,7 +1782,7 @@ protected:
 public:
 	static void makeVersion(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relName);
 	static void raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name);
-	static Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
+	static const Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
 		USHORT* version, TemporaryField* stack);
 
 	void addOption(MetaName* name, Firebird::string* value = NULL)
@@ -1797,6 +1809,11 @@ private:
 	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc);
 
 public:
+	bool isCreatedLtt() const
+	{
+		return tempFlag == REL_temp_ltt && name.package.isEmpty();
+	}
+
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
 	Firebird::Array<NestConst<Clause> > clauses;
@@ -1843,7 +1860,7 @@ public:
 
 	bool disallowedInReadOnlyDatabase() const override
 	{
-		return tempFlag != REL_temp_ltt;
+		return !isCreatedLtt();
 	}
 
 protected:
@@ -1860,6 +1877,7 @@ public:
 	const Firebird::string* externalFile;
 	MetaName foreignServer;
 	bool createIfNotExistsOnly = false;
+	bool packagePrivate = false;
 };
 
 
@@ -2184,9 +2202,8 @@ public:
 		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
-private:
 	void defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-		jrd_tra* transaction, LocalTemporaryTable* ltt);
+		jrd_tra* transaction, LocalTemporaryTable* ltt) const;
 
 protected:
 	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override

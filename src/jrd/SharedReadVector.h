@@ -34,19 +34,9 @@
 #define JRD_SHAREDREADVECTOR_H
 
 #include "../jrd/HazardPtr.h"
-
-/*
 #include "../common/classes/alloc.h"
 #include "../common/classes/array.h"
-#include "../common/classes/auto.h"
-*/
 #include "fb_blk.h"
-/*
-#include <utility>
-
-#include "../jrd/tdbb.h"
-#include "../jrd/Database.h"
-*/
 
 namespace Jrd {
 

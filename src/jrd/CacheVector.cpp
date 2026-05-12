@@ -175,7 +175,7 @@ void ElementBase::pingLock(thread_db* tdbb, ObjectBase::Flag flags, MetaId id, c
 			if (!tran)	// called from system transaction
 				return;
 
-			lock->lck_data = tran;
+			LCK_write_data(tdbb, lock, tran);
 		}
 
 		if (!LCK_lock(tdbb, lock, (flags & CacheFlag::ERASED) ? LCK_EX : LCK_PW, LCK_WAIT))

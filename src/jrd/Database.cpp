@@ -437,16 +437,16 @@ namespace Jrd
 
 			if (dbb_repl_state.isUnknown())
 			{
-				if (!dbb_repl_lock)
+				if (!dbb_repl_state_lock)
 				{
-					dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
+					dbb_repl_state_lock = FB_NEW_RPT(*dbb_permanent, 0)
 						Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 				}
 
 				dbb_repl_state = MET_get_repl_state(tdbb, {});
 
-				fb_assert(dbb_repl_lock->lck_logical == LCK_none);
-				LCK_lock(tdbb, dbb_repl_lock, LCK_SR, LCK_WAIT);
+				fb_assert(dbb_repl_state_lock->lck_logical == LCK_none);
+				LCK_lock(tdbb, dbb_repl_state_lock, LCK_SR, LCK_WAIT);
 			}
 		}
 
@@ -459,22 +459,23 @@ namespace Jrd
 
 		dbb_repl_state.reset();
 
-		if (broadcast)
+		if (!dbb_repl_state_lock)
 		{
-			if (!dbb_repl_lock)
-			{
-				dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
-					Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
-			}
-
-			// Signal other processes about the changed state
-			if (dbb_repl_lock->lck_logical == LCK_none)
-				LCK_lock(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
-			else
-				LCK_convert(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
+			dbb_repl_state_lock = FB_NEW_RPT(*dbb_permanent, 0)
+				Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 		}
 
-		LCK_release(tdbb, dbb_repl_lock);
+		LCK_release(tdbb, dbb_repl_state_lock);
+
+		if (broadcast)
+		{
+			// Signal other processes about the changed state
+			ThreadStatusGuard temp_status(tdbb);
+
+			Lock tempLock(tdbb, 0, LCK_repl_state);
+			LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tempLock);
+		}
 	}
 
 	int Database::replStateAst(void* ast_object)
@@ -486,6 +487,62 @@ namespace Jrd
 			AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
 			dbb->invalidateReplState(tdbb, false);
+		}
+		catch (const Exception&)
+		{} // no-op
+
+		return 0;
+	}
+
+	void Database::checkReplSetLock(thread_db* tdbb)
+	{
+		if (dbb_ast_flags & DBB_repl_reset)
+		{
+			fb_assert(dbb_repl_set_lock->lck_logical == LCK_none);
+			LCK_lock(tdbb, dbb_repl_set_lock, LCK_SR, LCK_WAIT);
+			dbb_ast_flags &= ~DBB_repl_reset;
+		}
+	}
+
+	void Database::invalidateReplSet(thread_db* tdbb, bool broadcast)
+	{
+		SyncLockGuard guard(&dbb_repl_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		if (!dbb_repl_set_lock)
+		{
+			dbb_repl_set_lock = FB_NEW_RPT(*dbb_permanent, 0)
+				Lock(tdbb, 0, LCK_repl_tables, this, blockingAstReplSet);
+		}
+
+		if (!(dbb_ast_flags & DBB_repl_reset))
+		{
+			dbb_ast_flags |= DBB_repl_reset;
+			dbb_mdc->invalidateReplSet(tdbb);
+			LCK_release(tdbb, dbb_repl_set_lock);
+		}
+
+		if (broadcast)
+		{
+			fb_assert(dbb_repl_set_lock->lck_logical == LCK_none);
+
+			// Signal others about the changed state
+			ThreadStatusGuard temp_status(tdbb);
+
+			Lock tempLock(tdbb, 0, LCK_repl_tables);
+			LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tempLock);
+		}
+	}
+
+	int Database::blockingAstReplSet(void* ast_object)
+	{
+		Database* const dbb = static_cast<Database*>(ast_object);
+
+		try
+		{
+			AsyncContextHolder tdbb(dbb, FB_FUNCTION, dbb->dbb_repl_set_lock);
+
+			dbb->invalidateReplSet(tdbb, false);
 		}
 		catch (const Exception&)
 		{} // no-op

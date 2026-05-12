@@ -646,7 +646,7 @@ private:
 
 public:
 	USHORT				rel_current_fmt;	// Current format number
-	Format*				rel_current_format;	// Current record format
+	const Format*		rel_current_format;	// Current record format
 	USHORT				rel_dbkey_length;	// RDB$DBKEY length
 
 	vec<jrd_fld*>*		rel_fields;			// vector of field blocks
@@ -656,7 +656,6 @@ public:
 	TrigArray			rel_triggers;
 
 	Firebird::TriState	rel_ss_definer;
-	Firebird::TriState	rel_repl_state;		// replication state
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
@@ -666,6 +665,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	bool isPageBased() const noexcept;
@@ -723,6 +723,7 @@ inline constexpr ULONG REL_virtual				= 0x0040;	// relation is virtual
 inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
+inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
 
 class GCLock
 {
@@ -978,6 +979,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 	bool isPageBased() const noexcept;
 
@@ -1001,7 +1003,7 @@ public:
 	typedef SharedReadVector<Format*, 16> Formats;
 
 private:
-	SharedReadVector<Format*, 16> rel_formats;	// Known record formats
+	Formats rel_formats;				// Known record formats
 	Firebird::Mutex rel_formats_grow;	// Mutex to grow rel_formats
 
 public:
@@ -1011,6 +1013,7 @@ public:
 	}
 
 	void addFormat(Format* fmt);
+	const Format* getFormat(thread_db* tdbb, USHORT );
 
 	Indices			rel_indices;		// Active indices
 	QualifiedName	rel_name;			// ascii relation name
@@ -1020,7 +1023,8 @@ public:
 	QualifiedName	rel_security_name;	// security class name for relation
 	std::atomic<ULONG>	rel_flags;		// flags
 
-	Firebird::TriState	rel_repl_state;	// replication state
+	enum class Bool3State {Unknown, False, True};
+	std::atomic<Bool3State>	rel_repl_state;			// replication state
 
 	PrimaryDeps*	rel_primary_dpnds = nullptr;	// foreign dependencies on this relation's primary key
 	ForeignRefs*	rel_foreign_refs = nullptr;		// foreign references to other relations' primary keys
@@ -1130,6 +1134,11 @@ inline bool jrd_rel::isView() const noexcept
 	return rel_perm->isView();
 }
 
+inline bool jrd_rel::isPrivate() const noexcept
+{
+	return rel_perm->isPrivate();
+}
+
 inline bool jrd_rel::isSystem() const noexcept
 {
 	return rel_perm->isSystem();
@@ -1168,6 +1177,11 @@ inline bool RelationPermanent::isVirtual() const noexcept
 inline bool RelationPermanent::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool RelationPermanent::isPrivate() const noexcept
+{
+	return (rel_flags & REL_private);
 }
 
 inline bool RelationPermanent::isLTT() const noexcept

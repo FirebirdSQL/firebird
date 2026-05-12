@@ -132,6 +132,8 @@
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
 #include "../jrd/ProtectRelations.h"
+
+#include "../jrd/Package.h"
 #include "../jrd/ForeignServer.h"
 
 #ifdef HAVE_UNISTD_H
@@ -408,6 +410,7 @@ static bool end_backup(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool check_not_null(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool store_view_context_type(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool user_management(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool createPackage(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction);
 static bool drop_package_header(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_package_header(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool drop_package_body(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -468,6 +471,8 @@ static ISC_STATUS getErrorCodeByObjectType(int obj_type)
 	case obj_package_body:
 		err_code = isc_package_name;
 		break;
+	case obj_package_constant:
+		err_code = isc_const_name;
 	case obj_foreign_server:
 		err_code = isc_foreign_server;
 		break;
@@ -645,10 +650,7 @@ namespace
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, flag);
 					if (!routine)
-					{
-						ERR_post(Arg::Gds(isc_no_meta_update) <<
-							Arg::Gds(getErrorNotFound(T::Versioned::objectType())) << Arg::Num(work->dfw_id));
-					}
+						return false;		// Happens when DROP after CREATE in same transaction
 
 					return true;
 				}
@@ -660,7 +662,6 @@ namespace
 				case 7:
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, flag);
-					fb_assert(routine);
 					if (routine)
 						routine->commit(tdbb);
 
@@ -750,7 +751,6 @@ namespace
 				case 7:
 				{
 					T* routine = lookupById(tdbb, work->dfw_id, CacheFlag::NOSCAN);
-					fb_assert(routine);
 					if (routine)
 						routine->commit(tdbb);
 
@@ -1121,6 +1121,85 @@ namespace
 			ERR_post(status);
 		}
 	}
+
+	static bool createOrAlterConstant(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+	{
+		fb_assert(!work->dfw_package.isEmpty());
+
+		SET_TDBB(tdbb);
+
+		switch (phase)
+		{
+			case 0:
+				return false;
+
+			case 1:
+			case 2:
+			case 3:
+				return true;
+
+			case 4:
+			{
+				const QualifiedName constantName = work->getQualifiedName();
+				const QualifiedName packageName = constantName.getSchemaAndPackage();
+
+				auto* package = MetadataCache::getVersioned<Cached::Package>(tdbb, packageName,
+					CacheFlag::AUTOCREATE);
+
+				fb_assert(package);
+				if (package == nullptr)
+					return false;
+
+				auto constant = package->findConstant(constantName);
+				fb_assert(constant);
+				if (constant == nullptr)
+					return false;
+
+				bid blobId = constant->getBlobId(tdbb);
+
+				Jrd::Database* dbb = tdbb->getDatabase();
+				MemoryPool* new_pool = dbb->createPool();
+				// block is used to ensure verify_cache()
+				// works in not deleted context
+				{
+					Jrd::ContextPoolHolder context(tdbb, new_pool);
+					// Store constant dependencies as a package dependencies
+					MET_get_dependencies(tdbb, nullptr, nullptr, 0, nullptr, &blobId,
+						nullptr,
+						nullptr,
+						packageName, obj_package_header,
+						0, transaction);
+
+					dbb->deletePool(new_pool);
+				}
+
+				return false;
+			} // case
+		} // switch
+
+		return false;
+	}
+
+	static bool deleteConstant(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+	{
+		fb_assert(!work->dfw_package.isEmpty());
+
+		SET_TDBB(tdbb);
+		//! Put Package as a dependency because RDB$DEPENDENCIES only tracks object and schema
+		const QualifiedName packageDependency(work->dfw_package, work->dfw_schema);
+		switch (phase)
+		{
+		case 0:
+			return false;
+
+		case 1:
+			check_dependencies(tdbb, work->getQualifiedName(), nullptr, obj_package_constant, transaction);
+			return false;
+		}
+
+		return false;
+	}
+
 } // namespace
 
 static inline constexpr deferred_task task_table[] =
@@ -1175,6 +1254,11 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
 	{ dfw_set_statistics, set_statistics },
+	{ dfw_create_package_constant, createOrAlterConstant },
+	{ dfw_modify_package_constant, createOrAlterConstant },
+	{ dfw_delete_package_constant, deleteConstant },
+	{ dfw_create_package, createPackage },
+
 	{ dfw_delete_foreign_server, delete_foreign_server },
 	{ dfw_null, NULL }
 };
@@ -1713,6 +1797,7 @@ void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityLis
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		SEG IN RDB$INDEX_SEGMENTS
 		WITH SEG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 SEG.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 SEG.RDB$INDEX_NAME EQ name.object.c_str()
 		SORTED BY SEG.RDB$FIELD_POSITION
 	{
@@ -1727,6 +1812,7 @@ void DFW_update_index(const QualifiedName& name, USHORT id, const SelectivityLis
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ name.object.c_str()
 	{
 		MODIFY IDX USING
@@ -2151,8 +2237,7 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 	{
 	case 1:
 		{
-			// If RDB$PACKAGE_NAME IS NOT NULL or no record is found in RDB$RELATIONS,
-			// the context is a procedure;
+			// If no record is found in RDB$RELATIONS, the context is a procedure;
 			ViewContextType vct = VCT_PROCEDURE;
 
 			AutoRequest handle1;
@@ -2162,9 +2247,9 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 				WITH VRL.RDB$SCHEMA_NAME = work->dfw_schema.c_str() AND
 					 VRL.RDB$VIEW_NAME = work->dfw_name.c_str() AND
 					 VRL.RDB$VIEW_CONTEXT = work->dfw_id AND
-					 VRL.RDB$PACKAGE_NAME MISSING AND
-			 		 REL.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
-			 		 REL.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME
+					 REL.RDB$SCHEMA_NAME EQ VRL.RDB$RELATION_SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME EQUIV VRL.RDB$PACKAGE_NAME AND
+					 REL.RDB$RELATION_NAME EQ VRL.RDB$RELATION_NAME
 			{
 				vct = (REL.RDB$VIEW_BLR.NULL ? VCT_TABLE : VCT_VIEW);
 			}
@@ -2224,17 +2309,75 @@ static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* wor
 	return false;
 }
 
+static bool createPackage(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+	fb_assert(work->dfw_id != 0);
+
+	SET_TDBB(tdbb);
+
+	Cached::Package* routine = nullptr;
+	switch (phase)
+	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
+	}
+
+	return false;
+}
+
 // Drop dependencies of a package header.
 static bool drop_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
+	fb_assert(work->dfw_id != 0);
+
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine = nullptr;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
+
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_body);
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_header);
-		break;
+		return true;
+
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::ERASED | CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
 	}
 
 	return false;
@@ -2245,11 +2388,36 @@ static bool modify_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* w
 {
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine = nullptr;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_header);
-		break;
+		return true;
+	case 2:
+	case 3:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::MINISCAN);
+		if (!routine)
+			return false;
+
+		return true;
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
+
+		return false;
 	}
 
 	return false;
@@ -2258,13 +2426,34 @@ static bool modify_package_header(thread_db* tdbb, SSHORT phase, DeferredWork* w
 // Drop dependencies of a package body.
 static bool drop_package_body(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
+	fb_assert(work->dfw_id != 0);
+
 	SET_TDBB(tdbb);
 
+	Cached::Package* routine;
 	switch (phase)
 	{
+	case 0:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
+		if (routine)
+			routine->rollback(tdbb);
+
+		return false;
 	case 1:
 		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_package_body);
-		break;
+		return true;
+
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+	case 7:
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::ERASED | CacheFlag::NOSCAN);
+		fb_assert(routine);
+		if (routine)
+			routine->commit(tdbb);
 	}
 
 	return false;
@@ -2284,7 +2473,6 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
-	Attachment* const attachment = tdbb->getAttachment();
 
 	switch (phase)
 	{
@@ -2302,7 +2490,7 @@ static bool change_repl_state(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 		else
 		{
 			// replication set is changed
-			attachment->invalidateReplSet(tdbb, true);
+			dbb->invalidateReplSet(tdbb, true);
 		}
 		break;
 	}
@@ -2551,7 +2739,11 @@ void DFW_reset_icu(thread_db* tdbb)
 			           coalesce(rfl.RDB$COLLATION_ID, fld.RDB$COLLATION_ID) = coll.RDB$COLLATION_ID
 			    join SYSTEM.RDB$CHARACTER_SETS cs
 			        on coll.RDB$CHARACTER_SET_ID = cs.RDB$CHARACTER_SET_ID
-			    where coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' and
+			    where ind.RDB$PACKAGE_NAME is null and
+					  rel.RDB$PACKAGE_NAME is null and
+					  seg.RDB$PACKAGE_NAME is null and
+					  rfl.RDB$PACKAGE_NAME is null and
+					  coll.RDB$SPECIFIC_ATTRIBUTES like '%COLL-VERSION=%' and
 			          coalesce(ind.RDB$INDEX_INACTIVE, 0) = 0 and
 			          coalesce(rel.RDB$RELATION_TYPE, 0) = 0  -- rel_persistent
 			    group by ind.RDB$SCHEMA_NAME,
@@ -2635,6 +2827,7 @@ void DFW_reset_icu(thread_db* tdbb)
 				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 					IDX IN RDB$INDICES
 					WITH IDX.RDB$SCHEMA_NAME EQ idx.schema.c_str() AND
+						 IDX.RDB$PACKAGE_NAME MISSING AND
 						 IDX.RDB$INDEX_NAME EQ idx.object.c_str()
 				{
 					MODIFY IDX
@@ -2821,6 +3014,9 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 	case obj_udf:
 		dfw_type = dfw_delete_function;
 		break;
+	case obj_package_constant:
+		dfw_type = dfw_delete_package_constant;
+		break;
 	default:
 		fb_assert(false);
 		break;
@@ -2831,12 +3027,15 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 	for (const DeferredWork* work = transaction->tra_deferred_job->work; work; work = work->getNext())
 	{
 		if ((work->dfw_type == dfw_type ||
+			(work->dfw_type == dfw_drop_package_header && dfw_type == dfw_drop_package_body) ||
 			(work->dfw_type == dfw_modify_procedure && dfw_type == dfw_delete_procedure) ||
 			(work->dfw_type == dfw_modify_field && dfw_type == dfw_delete_global) ||
 			(work->dfw_type == dfw_modify_trigger && dfw_type == dfw_delete_trigger) ||
+			(work->dfw_type == dfw_modify_package_constant && dfw_type == dfw_delete_package_constant) ||
 			(work->dfw_type == dfw_modify_function && dfw_type == dfw_delete_function)) &&
 			work->dfw_schema == object_name.schema &&
-			work->dfw_name == object_name.object.c_str() && work->dfw_package.isEmpty() &&
+			work->dfw_name == object_name.object.c_str() &&
+			work->dfw_package == object_name.package &&
 			(!rel_id || rel_id == work->dfw_id))
 		{
 			if (work->dfw_type == dfw_modify_procedure || work->dfw_type == dfw_modify_function)
@@ -2852,7 +3051,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 		}
 
 		if (work->dfw_type == dfw_type && dfw_type == dfw_delete_index &&
-			QualifiedName(work->dfw_name, work->dfw_schema) == object_name)
+			QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package) == object_name)
 		{
 			return true;
 		}
@@ -2876,6 +3075,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 					 RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
 					 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
 					 REL.RDB$SCHEMA_NAME EQ RFR.RDB$SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 					 REL.RDB$RELATION_NAME EQ RFR.RDB$RELATION_NAME
 			{
 				if (!find_depend_in_dfw(tdbb, QualifiedName(RFR.RDB$FIELD_NAME), obj_computed,
@@ -3012,9 +3212,12 @@ static bool delete_field(thread_db*	tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 		FOR(REQUEST_HANDLE handle)
 			RFR IN RDB$RELATION_FIELDS
-			CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
+			CROSS REL IN RDB$RELATIONS
 			WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-				 RFR.RDB$FIELD_SOURCE EQ work->dfw_name.c_str()
+				 RFR.RDB$FIELD_SOURCE EQ work->dfw_name.c_str() AND
+				 REL.RDB$SCHEMA_NAME EQ RFR.RDB$SCHEMA_NAME AND
+				 REL.RDB$RELATION_NAME EQ RFR.RDB$RELATION_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME
 		{
 			// If the rfr field is also being deleted, there's no dependency
 			if (!find_depend_in_dfw(tdbb, QualifiedName(RFR.RDB$FIELD_NAME), obj_computed, REL.RDB$RELATION_ID,
@@ -3082,7 +3285,10 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						 RFL.RDB$FIELD_SOURCE_SCHEMA_NAME EQ depName.schema.c_str() AND
 						 RFL.RDB$FIELD_SOURCE EQ depName.object.c_str() AND
 						 (RFL.RDB$NULL_FLAG MISSING OR RFL.RDB$NULL_FLAG = FALSE) AND
-						 REL.RDB$VIEW_BLR MISSING
+						 REL.RDB$VIEW_BLR MISSING AND
+						 // Packaged tables are temporary and dfw_check_not_null do not work for them
+						 REL.RDB$PACKAGE_NAME MISSING AND
+						 RFL.RDB$PACKAGE_NAME MISSING
 					REDUCED TO RFL.RDB$SCHEMA_NAME, RFL.RDB$RELATION_NAME, RFL.RDB$FIELD_ID
 				{
 					dsc schemaDesc;
@@ -3400,6 +3606,7 @@ static bool set_statistics(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			IDX IN RDB$INDICES
 			WITH IDX.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
+				 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '') AND
 				 IDX.RDB$INDEX_NAME EQ work->dfw_name.c_str()
 		{
 			// Request to recalculate statistics?
@@ -3620,7 +3827,8 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 		FOR(REQUEST_HANDLE request)
 			X IN RDB$VIEW_RELATIONS
 			WITH X.RDB$RELATION_SCHEMA_NAME EQ work->dfw_schema.c_str() AND
-				 X.RDB$RELATION_NAME EQ work->dfw_name.c_str()
+				 X.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '')
 		{
 			// If the view is also being deleted, there's no dependency
 			if (!find_depend_in_dfw(tdbb, QualifiedName(X.RDB$VIEW_NAME, X.RDB$SCHEMA_NAME), obj_view, 0, transaction))
@@ -3660,6 +3868,16 @@ static bool delete_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 				return false;
 
 			relation->dropTempPages(tdbb);
+
+			// Erase formats associated with relation
+			request.reset();
+
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction) X IN RDB$FORMATS WITH
+				X.RDB$RELATION_ID EQ work->dfw_id
+			{
+				ERASE X;
+			}
+			END_FOR
 		}
 		return true;
 
@@ -3784,9 +4002,11 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			CROSS VFLD IN RDB$RELATION_FIELDS
 			WITH REL.RDB$RELATION_ID EQ work->dfw_id AND
 				 VR.RDB$RELATION_SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+				 VR.RDB$PACKAGE_NAME EQUIV REL.RDB$PACKAGE_NAME AND
 				 VR.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
 				 VFLD.RDB$VIEW_CONTEXT EQ VR.RDB$VIEW_CONTEXT AND
 				 VFLD.RDB$SCHEMA_NAME EQ VR.RDB$SCHEMA_NAME AND
+				 VFLD.RDB$PACKAGE_NAME MISSING AND
 				 VFLD.RDB$RELATION_NAME EQ VR.RDB$VIEW_NAME AND
 				 VFLD.RDB$BASE_FIELD EQ work->dfw_name.c_str()
 		{
@@ -3844,10 +4064,14 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 			handle.reset();
 
 			FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-				REL IN RDB$RELATIONS CROSS
-					RFLD IN RDB$RELATION_FIELDS OVER RDB$RELATION_NAME
-					WITH REL.RDB$RELATION_ID EQ work->dfw_id
+				REL IN RDB$RELATIONS
+				CROSS RFLD IN RDB$RELATION_FIELDS
+				WITH RFLD.RDB$SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+					 RFLD.RDB$PACKAGE_NAME EQUIV REL.RDB$PACKAGE_NAME AND
+					 REL.RDB$RELATION_ID EQ work->dfw_id
+			{
 				field_count++;
+			}
 			END_FOR
 
 			if (!field_count)
@@ -4417,6 +4641,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 						FLD IN RDB$FIELDS
 						WITH RFL.RDB$SCHEMA_NAME EQ work->dfw_schema.c_str() AND
 							 RFL.RDB$RELATION_NAME EQ work->dfw_name.c_str() AND
+							 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(work->dfw_package.c_str(), '') AND
 							 FLD.RDB$SCHEMA_NAME EQ RFL.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 							 FLD.RDB$FIELD_NAME EQ RFL.RDB$FIELD_SOURCE AND
 							 RFL.RDB$FIELD_ID EQ *itr AND

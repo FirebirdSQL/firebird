@@ -289,6 +289,12 @@ jobs:
         platform: [x64, x86]
 
     steps:
+      - name: Reclaim disk space in the runner
+        if: ${{ runner.environment == 'github-hosted' }}
+        shell: cmd
+        run: |
+          rd "C:\Program Files\Microsoft Visual Studio\2022" /s /q
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -314,12 +320,6 @@ jobs:
         if: ${{ steps.dockerhub-login.outcome == 'success' }}
         run: |
           docker pull firebirdsql/firebird-builder-windows:fb6-x86-x64-windows-v1
-
-      - name: Reclaim disk space in the runner to build the image
-        if: ${{ runner.environment == 'github-hosted' && steps.dockerhub-login.outcome != 'success' }}
-        shell: cmd
-        run: |
-          rd "C:\Program Files\Microsoft Visual Studio\2022" /s /q
 
       - name: Build firebird-builder-windows image (fallback)
         shell: cmd

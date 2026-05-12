@@ -651,6 +651,13 @@ static void explain_pp_bits(const UCHAR bits, Firebird::string& names)
 			names.append(", ");
 		names.append("empty");
 	}
+
+	if (bits & ppg_dp_reserved)
+	{
+		if (!names.empty())
+			names.append(", ");
+		names.append("reserved");
+	}
 }
 
 
@@ -2791,7 +2798,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 		length -= RHD_SIZE;
 	}
 
-	const auto format = MET_format(vdr_tdbb, getPermanent(relation), header->rhd_format);
+	const auto format = relation->getPermanent()->getFormat(vdr_tdbb, header->rhd_format);
 	auto remainingLength = format->fmt_length;
 
 	auto calculateLength = [remainingLength](ULONG length, const UCHAR* data, bool notPacked)

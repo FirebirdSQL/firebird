@@ -36,8 +36,6 @@
 
 #include <type_traits>
 
-extern atomics::atomic<int> totHaz;
-
 namespace Jrd {
 
 class HazardObject

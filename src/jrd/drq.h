@@ -242,6 +242,7 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
+	drq_g_nxt_package_id,	// lookup next package ID
 	drq_l_f_server_name,		// lookup foreign server name
 	drq_f_server_exist,		// check if foreign server exists
 	drq_s_f_server,			// store foreign server (CreateAlterForeignServerNode)

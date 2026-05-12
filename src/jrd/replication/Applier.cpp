@@ -1203,7 +1203,7 @@ const Format* Applier::findFormat(thread_db* tdbb, jrd_rel* relation, ULONG leng
 	auto format = relation->currentFormat(tdbb);
 
 	while (format->fmt_length != length && format->fmt_version)
-		format = MET_format(tdbb, relation->getPermanent(), format->fmt_version - 1);
+		format = relation->getPermanent()->getFormat(tdbb, format->fmt_version - 1);
 
 	if (format->fmt_length != length)
 	{

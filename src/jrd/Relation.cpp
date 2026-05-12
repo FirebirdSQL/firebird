@@ -268,13 +268,20 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	if (!dbb->isReplicating(tdbb))
 		return false;
 
-	Attachment* const attachment = tdbb->getAttachment();		// Database? !!!!!!!!!!!!!!!!!!!!!!
-	attachment->checkReplSetLock(tdbb);
+	dbb->checkReplSetLock(tdbb);
 
-	if (rel_repl_state.isUnknown())
-		rel_repl_state = MET_get_repl_state(tdbb, getName());
+	auto oldState = rel_repl_state.load();
+	while (oldState == Bool3State::Unknown)
+	{
+		Bool3State state = MET_get_repl_state(tdbb, getName()) ? Bool3State::True : Bool3State::False;
+		if (rel_repl_state.compare_exchange_strong(oldState, state))
+		{
+			oldState = state;
+			break;
+		}
+	}
 
-	return rel_repl_state.asBool();
+	return oldState == Bool3State::True;
 }
 
 RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
@@ -766,7 +773,7 @@ Lock* RelationPermanent::createLock(thread_db* tdbb, MemoryPool& pool, lck_t lck
 
 void RelationPermanent::addFormat(Format* fmt)
 {
-	MutexLockGuard g(rel_formats_grow, FB_FUNCTION);
+	MutexLockGuard guard(rel_formats_grow, FB_FUNCTION);
 
 	rel_formats.grow(fmt->fmt_version + 1, true);
 	rel_formats.writeAccessor()->value(fmt->fmt_version) = fmt;
@@ -1154,7 +1161,7 @@ const Format* jrd_rel::currentFormat(thread_db* tdbb)
 	if (!tdbb)
 		tdbb = JRD_get_thread_data();
 
-	rel_current_format = MET_format(tdbb, getPermanent(), rel_current_fmt);
+	rel_current_format = getPermanent()->getFormat(tdbb, rel_current_fmt);
 
 	return rel_current_format;
 }
@@ -1256,4 +1263,3 @@ GCLock::State GCLock::isGCEnabled() const
 	return State::unknown;
 }
 #endif //DEV_BUILD
-
