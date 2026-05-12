@@ -2499,33 +2499,33 @@ ltt_table_clause
 			}
 	;
 
-%type <createRelationNode> package_ltt_table_clause
-package_ltt_table_clause
+%type <createRelationNode> packaged_table_clause
+packaged_table_clause
 	: simple_table_name
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($2) ')' ltt_subclause_opt($2) package_ltt_indexes_opt($2)
+		'(' table_elements($2) ')' ltt_subclause_opt($2) packaged_table_indexes_opt($2)
 			{
 				$$ = $2;
 			}
 	;
 
-%type package_ltt_indexes_opt(<createRelationNode>)
-package_ltt_indexes_opt($createRelationNode)
+%type packaged_table_indexes_opt(<createRelationNode>)
+packaged_table_indexes_opt($createRelationNode)
 	: /* nothing */
-	| package_ltt_indexes($createRelationNode)
+	| packaged_table_indexes($createRelationNode)
 	;
 
-%type package_ltt_indexes(<createRelationNode>)
-package_ltt_indexes($createRelationNode)
-	: package_ltt_index($createRelationNode)
-	| package_ltt_indexes($createRelationNode) ',' package_ltt_index($createRelationNode)
+%type packaged_table_indexes(<createRelationNode>)
+packaged_table_indexes($createRelationNode)
+	: packaged_table_index($createRelationNode)
+	| packaged_table_indexes($createRelationNode) ',' packaged_table_index($createRelationNode)
 	;
 
-%type package_ltt_index(<createRelationNode>)
-package_ltt_index($createRelationNode)
+%type packaged_table_index(<createRelationNode>)
+packaged_table_index($createRelationNode)
 	: unique_opt order_direction INDEX valid_symbol_name column_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
@@ -2533,7 +2533,7 @@ package_ltt_index($createRelationNode)
 			node->descending = $2;
 			node->columns = $5;
 
-			auto clause = newNode<RelationNode::AddPackageLttIndexClause>(node);
+			auto clause = newNode<RelationNode::AddPackagedTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);
 		}
 	;
@@ -3245,7 +3245,7 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	| PROCEDURE procedure_clause_start ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
-	| TEMPORARY TABLE package_ltt_table_clause ';'
+	| TEMPORARY TABLE packaged_table_clause ';'
 		{ $$ = CreateAlterPackageNode::Item::create($3); }
 	| CONSTANT package_const_item ';'
 		{ $$ = CreateAlterPackageNode::Item::create($2); }

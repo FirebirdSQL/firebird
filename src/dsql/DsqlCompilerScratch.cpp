@@ -141,7 +141,7 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 		}
 	}
 
-	// search packaged routine or declared LTT in the same package: name, same_package.name
+	// search packaged routine or packaged table in the same package: name, same_package.name
 	if (notFound() &&
 		package.object.hasData() &&
 		name.package.isEmpty() &&
@@ -177,7 +177,7 @@ std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratc
 			setObject(METD_get_function(getTransaction(), this, qualifiedName));
 	}
 
-	// search packaged routine or declared LTT: name1%package.name2, name1.name2.name3
+	// search packaged routine or packaged table: name1%package.name2, name1.name2.name3
 	if (notFound() &&
 		name.package.hasData())
 	{

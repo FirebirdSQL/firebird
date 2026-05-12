@@ -7002,17 +7002,17 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_ALTER_PUBLICATION:
 				break;
 
-			case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
 			{
-				auto addPackageLttIndexClause = static_cast<AddPackageLttIndexClause*>(clause.getObject());
+				auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(clause.getObject());
 
-				if (!addPackageLttIndexClause->indexNode->relation)
+				if (!addPackagedTableIndexClause->indexNode->relation)
 				{
-					addPackageLttIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+					addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 						RelationSourceNode(dsqlScratch->getPool(), name);
 				}
 
-				addPackageLttIndexClause->indexNode->dsqlPass(dsqlScratch);
+				addPackagedTableIndexClause->indexNode->dsqlPass(dsqlScratch);
 				break;
 			}
 
@@ -7259,7 +7259,7 @@ void RelationNode::validateLttClauses(const Array<NestConst<Clause>>& clauses)
 						"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
 				break;
 
-			case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
 				break;
 
 			default:
@@ -9652,14 +9652,14 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 						static_cast<AddConstraintClause*>(i->getObject()), constraints);
 					break;
 
-				case Clause::TYPE_ADD_PACKAGE_LTT_INDEX:
+				case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
 				{
-					auto addPackageLttIndexClause = static_cast<AddPackageLttIndexClause*>(i->getObject());
-					const auto indexNode = addPackageLttIndexClause->indexNode;
+					auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(i->getObject());
+					const auto indexNode = addPackagedTableIndexClause->indexNode;
 
 					if (!indexNode->relation)
 					{
-						addPackageLttIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+						addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 							RelationSourceNode(dsqlScratch->getPool(), name);
 					}
 
@@ -9681,7 +9681,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					}
 
 					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
-						addPackageLttIndexClause->indexNode->name, definition));
+						addPackagedTableIndexClause->indexNode->name, definition));
 
 					break;
 				}
