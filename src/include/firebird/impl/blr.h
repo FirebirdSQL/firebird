@@ -138,9 +138,7 @@
 #define blr_minimum		(unsigned char)30
 #define blr_total		(unsigned char)31
 #define blr_receive_batch	(unsigned char)32
-
-// unused code: 33
-
+#define blr_bulk_insert	(unsigned char)33
 #define blr_add			(unsigned char)34
 #define blr_subtract		(unsigned char)35
 #define blr_multiply		(unsigned char)36
@@ -531,5 +529,11 @@
 #define blr_flags_search_system_schema	(unsigned char) 1
 
 #define blr_within_group_order		(unsigned char) 235
+
+// Package const
+#define blr_package_reference			(unsigned char) 236
+
+// Subcodes of blr_package_reference
+#define blr_pkg_reference_to_constant			(unsigned char) 1
 
 #endif // FIREBIRD_IMPL_BLR_H

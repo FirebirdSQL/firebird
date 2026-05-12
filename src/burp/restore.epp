@@ -167,6 +167,7 @@ bool	get_trigger_old (BurpGlobals* tdgbl, burp_rel*);
 bool	get_type(BurpGlobals* tdgbl);
 bool	get_user_privilege(BurpGlobals* tdgbl);
 bool	get_view(BurpGlobals* tdgbl, burp_rel*);
+bool	get_constants(BurpGlobals* tdgbl);
 void	ignore_array(BurpGlobals* tdgbl, burp_rel*);
 void	ignore_blob(BurpGlobals* tdgbl);
 rec_type	ignore_data(BurpGlobals* tdgbl, burp_rel*);
@@ -10605,6 +10606,89 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 	return true;
 }
 
+bool get_constants(BurpGlobals* tdgbl)
+{
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)	// FB6
+		return false;
+
+	QualifiedMetaString name;
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans
+			REQUEST_HANDLE tdgbl->handles_get_type_req_handle1)
+		CONST IN RDB$CONSTANTS
+	{
+		CONST.RDB$PACKAGE_NAME.NULL = TRUE;
+		CONST.RDB$CONSTANT_SOURCE.NULL = TRUE;
+		CONST.RDB$DESCRIPTION.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+			case att_constant_name:
+				GET_TEXT(CONST.RDB$CONSTANT_NAME);
+				name.object = CONST.RDB$CONSTANT_NAME;
+				break;
+
+			case att_constant_package:
+				CONST.RDB$PACKAGE_NAME.NULL = FALSE;
+				GET_TEXT(CONST.RDB$PACKAGE_NAME);
+				name.package = CONST.RDB$PACKAGE_NAME;
+				break;
+
+			case att_constant_field_source:
+				GET_TEXT(CONST.RDB$FIELD_SOURCE);
+				break;
+
+			case att_constant_field_source_schema:
+				GET_TEXT(CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+				break;
+
+			case att_constant_private_flag:
+				CONST.RDB$PRIVATE_FLAG = (USHORT) get_int32(tdgbl);
+				break;
+
+			case att_constant_blr:
+				get_blr_blob(tdgbl, CONST.RDB$CONSTANT_BLR, true);
+				break;
+
+			case att_constant_source:
+				CONST.RDB$CONSTANT_SOURCE.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$CONSTANT_SOURCE, true);
+				break;
+
+			case att_constant_schema_name:
+				GET_TEXT(CONST.RDB$SCHEMA_NAME);
+				name.schema = CONST.RDB$SCHEMA_NAME;
+				break;
+
+			case att_constant_description:
+				CONST.RDB$DESCRIPTION.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$DESCRIPTION, true);
+				break;
+
+			default:
+				bad_attribute(scan_next_attr, attribute, USHORT(isc_gbak_constant));
+				break;
+			}
+		}
+
+		BURP_verbose(USHORT(isc_gbak_restoring_constant), SafeArg() << name.toQuotedString().data());
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
 void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 {
 /**************************************
@@ -11444,6 +11528,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 		case rec_pub_table:
 			if (!get_pub_table(tdgbl))
+				return false;
+			flag = true;
+			break;
+
+		case rec_constants:
+			if (!get_constants(tdgbl))
 				return false;
 			flag = true;
 			break;
@@ -13560,6 +13650,8 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 {
+	const bool use_bulk_insert = (tdgbl->runtimeODS >= DB_VERSION_DDL14);
+
 	m_batchMode = false;
 	m_inMgsNum = 0;
 
@@ -13714,18 +13806,27 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	add_byte(blr, blr_loop);
 	add_byte(blr, blr_receive);
 	add_byte(blr, 0);
-	if (identity_type == IDENT_TYPE_ALWAYS)
+
+	if (!use_bulk_insert)
 	{
-		add_byte(blr, blr_store3);
-		add_byte(blr, blr_store_override_system);
+		if (identity_type == IDENT_TYPE_ALWAYS)
+		{
+			add_byte(blr, blr_store3);
+			add_byte(blr, blr_store_override_system);
+		}
+		else
+			add_byte(blr, blr_store);
+
+		// Mark this store operation as bulk one
+		add_byte(blr, blr_marks);
+		add_byte(blr, 1);
+		add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
 	}
 	else
-		add_byte(blr, blr_store);
-
-	// Mark this store operation as bulk one
-	add_byte(blr, blr_marks);
-	add_byte(blr, 1);
-	add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
+	{
+		add_byte(blr, blr_bulk_insert);
+		add_byte(blr, blr_null);		// no source RSE
+	}
 
 	if (m_relation->rel_name.schema.hasData())
 	{
@@ -13768,8 +13869,11 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	}
 
 	add_byte(blr, blr_end);
-	if (identity_type == IDENT_TYPE_ALWAYS)
-		add_byte(blr, blr_null);
+	if (!use_bulk_insert)
+	{
+		if (identity_type == IDENT_TYPE_ALWAYS)
+			add_byte(blr, blr_null);
+	}
 	add_byte(blr, blr_end);
 	add_byte(blr, blr_eoc);
 
@@ -13869,7 +13973,7 @@ void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec
 		// memory when there are blobs and arrays fields - CORE-3802.
 
 		FbLocalStatus status;
-		if (m_resync || m_recs % 1000 == 1)
+		if (m_resync || ((m_recs % 1000 == 1) && !tdgbl->gbl_use_auto_release_temp_blobid))
 			m_request->startAndSend(&status, tran, 0, 0, m_inMsg.getCount(), m_inMsg.begin());
 		else
 			m_request->send(&status, 0, 0, m_inMsg.getCount(), m_inMsg.begin());

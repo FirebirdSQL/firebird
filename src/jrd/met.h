@@ -238,6 +238,7 @@ public:
 		  mdc_procedures(getPool()),
 		  mdc_functions(getPool()),
 		  mdc_charsets(getPool()),
+		  mdc_packages(getPool()),
 		  mdc_cleanup_queue(pool)
 	{
 		memset(mdc_triggers, 0, sizeof(mdc_triggers));
@@ -500,6 +501,16 @@ private:
 		}
 	};
 
+	template <typename Dummy>
+	class Vector<Cached::Package, Dummy>
+	{
+	public:
+		static CacheVector<Cached::Package>& get(MetadataCache* mdc)
+		{
+			return mdc->mdc_packages;
+		}
+	};
+
 	static MetadataCache* getCache(thread_db* tdbb) noexcept;
 
 	class GeneratorFinder
@@ -605,6 +616,7 @@ private:
 	CacheVector<Cached::Procedure>		mdc_procedures;
 	CacheVector<Cached::Function>		mdc_functions;	// User defined functions
 	CacheVector<Cached::CharSet>		mdc_charsets;	// intl character set descriptions
+	CacheVector<Cached::Package>		mdc_packages;	// Package Constants
 	TriggersSet							mdc_triggers[DB_TRIGGERS_COUNT];
 	// Two numbers are required because commit into cache is not atomic event.
 	// Front value is incremented before commit, back - after commit.

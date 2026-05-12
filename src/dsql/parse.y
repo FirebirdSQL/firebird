@@ -726,6 +726,7 @@ using namespace Firebird;
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
 %token <metaNamePtr> RDB_RESET_CONTEXT
+%token <metaNamePtr> CONSTANT
 
 // precedence declarations for expression evaluation
 
@@ -886,6 +887,7 @@ using namespace Firebird;
 	Jrd::SetBindNode* setBindNode;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
+	Jrd::CreatePackageConstantNode* createPackageConstantNode;
 }
 
 %include types.y
@@ -1044,6 +1046,13 @@ grant0($node)
 			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
 		{
 			$node->object = newNode<GranteeClause>(obj_schema, QualifiedName(*$4));
+			$node->grantAdminOption = $7;
+			$node->grantor = $8;
+		}
+	| usage_privilege(NOTRIAL(&$node->privileges)) ON PACKAGE symbol_package_name
+			TO non_role_grantee_list(NOTRIAL(&$node->users)) grant_option granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_package_header, *$4);
 			$node->grantAdminOption = $7;
 			$node->grantor = $8;
 		}
@@ -1346,6 +1355,13 @@ revoke0($node)
 			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
 		{
 			$node->object = newNode<GranteeClause>(obj_schema, QualifiedName(*$5));
+			$node->grantAdminOption = $1;
+			$node->grantor = $8;
+		}
+	| rev_grant_option usage_privilege(NOTRIAL(&$node->privileges)) ON PACKAGE symbol_package_name
+			FROM non_role_grantee_list(NOTRIAL(&$node->users)) granted_by
+		{
+			$node->object = newNode<GranteeClause>(obj_package_header, QualifiedName(*$5));
 			$node->grantAdminOption = $1;
 			$node->grantor = $8;
 		}
@@ -3231,6 +3247,8 @@ package_item
 		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	| TEMPORARY TABLE package_ltt_table_clause ';'
 		{ $$ = CreateAlterPackageNode::Item::create($3); }
+	| CONSTANT package_const_item ';'
+		{ $$ = CreateAlterPackageNode::Item::create($2); }
 	;
 
 %type <createAlterPackageNode> alter_package_clause
@@ -3318,6 +3336,13 @@ replace_package_body_clause
 		{ $$ = newNode<RecreatePackageBodyNode>($1); }
 	;
 
+%type <createPackageConstantNode> package_const_item
+package_const_item
+	: symbol_package_const_name data_type_descriptor '=' value
+		{
+			$$ = newNode<CreatePackageConstantNode>(*$1, $2, $4);
+		}
+	;
 
 %type <createAlterSchemaNode> replace_schema_clause
 replace_schema_clause
@@ -6385,6 +6410,7 @@ ddl_type3
 	: PARAMETER				{ $$ = obj_parameter; }
 	| PROCEDURE PARAMETER	{ $$ = obj_procedure; }
 	| FUNCTION PARAMETER	{ $$ = obj_udf; }
+	| CONSTANT				{ $$ = obj_package_constant; }
 	;
 
 %type <intVal> ddl_type4
@@ -9939,6 +9965,11 @@ symbol_window_name
 	: valid_symbol_name
 	;
 
+%type <metaNamePtr> symbol_package_const_name
+symbol_package_const_name
+	: valid_symbol_name
+	;
+
 // symbols
 
 %type <qualifiedNamePtr> schema_opt_qualified_name
@@ -10259,6 +10290,7 @@ non_reserved_word
 	| SCHEMA
 	| UNLIST
 	| ERROR
+	| CONSTANT
 	;
 
 %%

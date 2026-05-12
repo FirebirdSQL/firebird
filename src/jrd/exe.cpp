@@ -473,7 +473,6 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			jrd_rel* relation = nullptr;
 			Record* record = nullptr;
 			USHORT fieldId = 0;
-			bool bulk = false;
 
 			if (to)
 			{
@@ -484,13 +483,12 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 					relation = rpb->rpb_relation;
 					record = rpb->rpb_record;
 					fieldId = toField->fieldId;
-					bulk = rpb->rpb_stream_flags & RPB_s_bulk;
 				}
 				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
 					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId, bulk);
+			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
@@ -1267,6 +1265,10 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 	}
 
 	request->req_sorts.unlinkAll();
+
+	if (request->req_transaction)
+		request->req_transaction->finiBulkInsert(tdbb, request);
+
 	TRA_release_request_snapshot(tdbb, request);
 	TRA_detach_request(request);
 

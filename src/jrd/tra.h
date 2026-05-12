@@ -69,6 +69,7 @@ class MappingList;
 class DbCreatorsList;
 class thread_db;
 class Resources;
+class BulkInsert;
 
 class SecDbContext
 {
@@ -330,6 +331,7 @@ private:
 	MemoryPool* tra_autonomous_pool;
 	USHORT tra_autonomous_cnt;
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
+	BulkInsert* tra_bulkInsert = nullptr;
 
 public:
 	Firebird::Array<WildDependency> tra_dependencies;
@@ -418,6 +420,15 @@ public:
 
 		return tra_gen_ids;
 	}
+
+	// Get existing or create new BulkInsert for the relation.
+	BulkInsert* getBulkInsert(thread_db* tdbb, jrd_rel* relation, bool create);
+
+	// Finish and delete BulkInsert, if exists.
+	void finiBulkInsert(thread_db* tdbb, bool commit);
+
+	// Finish and delete BulkInsert that belongs to the request
+	void finiBulkInsert(thread_db* tdbb, Request* request);
 };
 
 // System transaction is always transaction 0.
@@ -554,7 +565,15 @@ enum dfw_t : int {
 	dfw_set_linger,			// set database linger
 	dfw_clear_cache,		// clear user mapping cache
 	dfw_set_statistics,		// set statistics support
-	dfw_deps_to_disk		// store saved deps to disk
+	dfw_deps_to_disk,		// store saved deps to disk
+
+	// Constant
+	dfw_create_package_constant,
+	dfw_modify_package_constant,
+	dfw_delete_package_constant,
+
+	// Package
+	dfw_create_package
 };
 
 } //namespace Jrd

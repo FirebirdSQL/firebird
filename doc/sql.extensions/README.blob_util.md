@@ -56,7 +56,8 @@ Return type: `VARBINARY(32767)`.
 
 `RDB$BLOB_UTIL.SEEK` is used to set the position for the next `READ_DATA`. It returns the new position.
 
-`MODE` may be 0 (from the start), 1 (from current position) or 2 (from end).
+`MODE` may be 0 (from the start), 1 (from current position) or 2 (from end). The corresponding constants
+are available in the package: `FROM_BEGIN`, `FROM_CURRENT`, `FROM_END`.
 
 When `MODE` is 2, `OFFSET` should be zero or negative.
 
