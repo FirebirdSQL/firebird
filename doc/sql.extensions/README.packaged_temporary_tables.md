@@ -20,7 +20,8 @@ END
 <package_item> ::=
     <package_temporary_table_declaration> |
     <package_procedure_declaration> |
-    <package_function_declaration>
+    <package_function_declaration> |
+	<package_constant_declaration>
 
 <package_temporary_table_declaration> ::=
     TEMPORARY TABLE <table_name>
@@ -41,7 +42,8 @@ END
 <package_body_item> ::=
     <package_temporary_table_declaration> |
     <package_procedure_definition> |
-    <package_function_definition>
+    <package_function_definition> |
+	<package_constant_declaration>
 ```
 
 ## Semantics
