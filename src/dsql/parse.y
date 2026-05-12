@@ -9900,11 +9900,6 @@ symbol_label_name
 	: valid_symbol_name
 	;
 
-%type <qualifiedNamePtr> symbol_ddl_name
-symbol_ddl_name
-	: schema_opt_qualified_name
-	;
-
 %type <qualifiedNamePtr> symbol_procedure_name
 symbol_procedure_name
 	: schema_opt_qualified_name
