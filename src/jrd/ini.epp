@@ -2189,7 +2189,7 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 				PAD(SYSTEM_SCHEMA, CONST.RDB$SCHEMA_NAME);
 
 				// Type
-				CONST.RDB$PRIVATE_FLAG = false;
+				CONST.RDB$PRIVATE_FLAG = FALSE;
 
 				if (constant.valueSource != nullptr)
 				{

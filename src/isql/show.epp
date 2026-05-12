@@ -6864,7 +6864,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 			if (constant.schema.hasData() && constant.schema != CONST.RDB$SCHEMA_NAME)
 				continue;
 
-			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG != 0;
 			const char* type = isPrivate ? "BODY" : "HEADER";
 
 			if (first && msg)
@@ -6895,7 +6895,7 @@ static processing_state show_constants(const std::optional<QualifiedMetaString>&
 		FOR CONST IN RDB$CONSTANTS
 			SORTED BY CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME, CONST.RDB$CONSTANT_NAME
 		{
-			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG;
+			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG != 0;
 			const char* type = isPrivate ? "BODY" : "HEADER";
 
 			if (first && msg)

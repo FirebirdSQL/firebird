@@ -843,7 +843,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			fb_assert(package);
 		}
 
-		package->addConstant(tdbb, constantFullName, CONST.RDB$PRIVATE_FLAG, CONST.RDB$CONSTANT_BLR);
+		package->addConstant(tdbb, constantFullName, CONST.RDB$PRIVATE_FLAG != 0, CONST.RDB$CONSTANT_BLR);
 	}
 	END_FOR
 

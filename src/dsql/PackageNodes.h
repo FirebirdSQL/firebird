@@ -126,30 +126,30 @@ public:
 	PackageReferenceNode(Firebird::MemoryPool& pool, const QualifiedName& name,
 		const UCHAR itemType);
 
-	Firebird::string internalPrint(NodePrinter& printer) const final;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 
-	bool constant() const final
+	bool constant() const override
 	{
 		return m_itemType == blr_pkg_reference_to_constant;
 	}
 
-	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) final;
+	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	static DmlNode* parse(thread_db* tdbb, Firebird::MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
-	void genBlr(DsqlCompilerScratch* dsqlScratch) final;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
-	void setParameterName(dsql_par* parameter) const final;
-	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) final;
+	void setParameterName(dsql_par* parameter) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
 	// Search for a package constant by its fully qualified name
 	static bool constantExists(thread_db* tdbb, Jrd::jrd_tra* transaction,
 		const QualifiedName& name, bool* isPrivate = nullptr);
 
-	void getDesc(thread_db*, CompilerScratch*, dsc*) final;
+	void getDesc(thread_db*, CompilerScratch*, dsc*) override;
 
-	ValueExprNode* copy(thread_db*, NodeCopier&) const final;
-	ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) final;
-	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) final;
-	dsc* execute(thread_db*, Request*) const final;
+	ValueExprNode* copy(thread_db*, NodeCopier&) const override;
+	ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	dsc* execute(thread_db*, Request*) const override;
 
 	const char* getName() const
 	{
@@ -157,7 +157,6 @@ public:
 	}
 
 private:
-	ConstantValue* m_prefetchedConstant = nullptr;
 	CachedResource<Package, PackagePermanent> m_package;
 	const QualifiedName m_fullName;
 

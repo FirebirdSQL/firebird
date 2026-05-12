@@ -644,11 +644,12 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowWireStatsNode();
 			}
-			else if (text.length() >= 4 && TOKEN_CONSTANTS.find(text) == 0)
+			else if (text.length() >= 5 && TOKEN_CONSTANTS.find(text) == 0)
 			{
 				ShowConstantsNode node;
 				node.name = parseQualifiedName(true);
-				if (node.name->package.isEmpty())
+
+				if (node.name.has_value() && node.name->package.isEmpty())
 				{
 					// It is expecting to get package = <PACKAGE> and object = <CONSTANT>
 					// But it is getting package = <SCHEMA> and object = <CONSTANT>

@@ -312,7 +312,7 @@ ScanResult Package::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		{
 			addConstant(tdbb,
 				QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME),
-				CONST.RDB$PRIVATE_FLAG,
+				CONST.RDB$PRIVATE_FLAG != 0,
 				CONST.RDB$CONSTANT_BLR,
 				skipMakeValue);
 
@@ -354,7 +354,7 @@ ScanResult Package::reload(thread_db* tdbb, ObjectBase::Flag fl)
 	{
 		addConstant(tdbb,
 			QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME),
-			CONST.RDB$PRIVATE_FLAG,
+			CONST.RDB$PRIVATE_FLAG != 0,
 			CONST.RDB$CONSTANT_BLR);
 	}
 	END_FOR
