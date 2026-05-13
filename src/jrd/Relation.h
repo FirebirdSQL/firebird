@@ -49,6 +49,7 @@ class ExternalFile;
 class RelationPermanent;
 class jrd_rel;
 class Record;
+class ForeignTableAdapter;
 
 // trigger types
 inline constexpr int TRIGGER_PRE_STORE		= 1;
@@ -667,6 +668,8 @@ public:
 	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
+	bool isPageBased() const noexcept;
+
 	ObjectType getObjectType() const noexcept
 	{
 		return isView() ? obj_view : obj_relation;
@@ -677,6 +680,7 @@ public:
 	const QualifiedName& getSecurityName() const noexcept;
 	MetaName getOwnerName() const noexcept;
 	ExternalFile* getExtFile() const noexcept;
+	ForeignTableAdapter* getForeignAdapter() const noexcept;
 
 	static void destroy(thread_db* tdbb, jrd_rel *rel);
 	static jrd_rel* create(thread_db* tdbb, MemoryPool& p, Cached::Relation* perm);
@@ -955,6 +959,17 @@ public:
 		rel_file = f;
 	}
 
+	ForeignTableAdapter* getForeignAdapter() const noexcept
+	{
+		return rel_foreign_adapter;
+	}
+
+	void setForeignAdapter(ForeignTableAdapter* adapter) noexcept
+	{
+		fb_assert(!rel_foreign_adapter);
+		rel_foreign_adapter = adapter;
+	}
+
 	void getRelLockKey(thread_db* tdbb, UCHAR* key);
 	PageNumber getIndexRootPage(thread_db* tdbb);
 	Record* getGCRecord(thread_db* tdbb, const Format* const format);
@@ -966,6 +981,7 @@ public:
 	bool isView() const noexcept;
 	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
+	bool isPageBased() const noexcept;
 
 	static int partners_ast_relation(void* ast_object);
 
@@ -1030,6 +1046,7 @@ private:
 	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
 
 	ExternalFile* rel_file;
+	ForeignTableAdapter* rel_foreign_adapter;
 
 	Firebird::Array<QualifiedName> rel_clear_deps;
 };
@@ -1070,6 +1087,11 @@ inline MemoryPool& jrd_rel::getPool() const noexcept
 inline ExternalFile* jrd_rel::getExtFile() const noexcept
 {
 	return rel_perm->getExtFile();
+}
+
+inline ForeignTableAdapter* jrd_rel::getForeignAdapter() const noexcept
+{
+	return rel_perm->getForeignAdapter();
 }
 
 inline const QualifiedName& jrd_rel::getSecurityName() const noexcept
@@ -1132,6 +1154,10 @@ inline Record* jrd_rel::getGCRecord(thread_db* tdbb)
 	return rel_perm->getGCRecord(tdbb, currentFormat(tdbb));
 }
 
+inline bool jrd_rel::isPageBased() const noexcept
+{
+	return rel_perm->isPageBased();
+}
 
 inline bool RelationPermanent::isSystem() const noexcept
 {
@@ -1171,6 +1197,10 @@ inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, TraNumber tra
 	return getPagesInternal(tdbb, tran, allocPages);
 }
 
+inline bool RelationPermanent::isPageBased() const noexcept
+{
+	return (!getExtFile() && !isView() && !isVirtual() && !getForeignAdapter());
+}
 
 /// class GCLock::Shared
 

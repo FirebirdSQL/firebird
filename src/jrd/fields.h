@@ -245,3 +245,10 @@
 	FIELD(fld_const_name	, nam_const_name	, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, false		, ODS_14_0)
 	FIELD(fld_const_blr		, nam_const_blr		, dtype_blob	, BLOB_SIZE					, isc_blob_blr				, NULL		, true		, ODS_14_0)
 	FIELD(fld_const_source	, nam_const_source	, dtype_blob	, BLOB_SIZE					, isc_blob_text				, NULL		, true		, ODS_14_0)
+
+	FIELD(fld_fs_name				, nam_fs_name			, dtype_text, 		MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata, NULL, true	, ODS_14_0)
+	FIELD(fld_fs_data_wrapper_name	, nam_fs_wrapper_name	, dtype_varying,	MAX_SQL_IDENTIFIER_LEN	, 0						, NULL, true	, ODS_14_0)
+
+	FIELD(fld_fo_name		, nam_fo_name		, dtype_varying	, MAX_SQL_IDENTIFIER_LEN	, 0							, NULL		, true		, ODS_14_0)
+	FIELD(fld_fo_value		, nam_fo_value		, dtype_varying	, MAX_VARY_COLUMN_SIZE		, 0							, NULL		, true		, ODS_14_0)
+	FIELD(fld_fo_type		, nam_fo_type		, dtype_short	, sizeof(SSHORT)			, 0 						, NULL		, true		, ODS_14_0)

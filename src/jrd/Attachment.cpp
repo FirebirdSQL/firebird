@@ -59,6 +59,8 @@
 #include "../common/isc_proto.h"
 #include "../common/classes/RefMutex.h"
 
+#include "../jrd/ForeignServer.h"
+
 
 using namespace Jrd;
 using namespace Firebird;

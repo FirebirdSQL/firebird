@@ -135,6 +135,8 @@ class PreparedStatement;
 class TraceManager;
 class MessageNode;
 class Database;
+class ForeignServer;
+class ForeignTableAdapter;
 
 //
 // Transaction element block

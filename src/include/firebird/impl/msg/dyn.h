@@ -316,3 +316,8 @@ FB_IMPL_MSG(DYN, 323, dyn_column_name_exists, -612, "42", "000", "Column @1 alre
 FB_IMPL_MSG_SYMBOL(DYN, 324, dyn_constant_not_found, "Constant @1 not found")
 FB_IMPL_MSG_SYMBOL(DYN, 325, dyn_dup_const, "Constant @1 already exists")
 FB_IMPL_MSG_SYMBOL(DYN, 326, dyn_non_constant_constant, "The constant @1 must be initialized by a constant expression")
+FB_IMPL_MSG(DYN, 327, dyn_foreign_server_not_found, -901, "42", "000", "Foreign server @1 not found")
+FB_IMPL_MSG(DYN, 328, dyn_user_mapping_not_found, -901, "42", "000", "User mapping for user @1 and server @2 not found")
+FB_IMPL_MSG(DYN, 329, dyn_foreign_server_already_exists, -901, "42", "000", "Foreign server @1 already exists")
+FB_IMPL_MSG(DYN, 330, dyn_foreign_server_not_exist, -901, "42", "000", "Foreign server @1 does not exist")
+FB_IMPL_MSG_NO_SYMBOL(DYN, 331, "attempt to index a foreign table")
