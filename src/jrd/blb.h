@@ -182,8 +182,7 @@ inline constexpr int BLB_damaged		= 16;		// Blob is busted
 inline constexpr int BLB_seek			= 32;		// Seek is pending
 inline constexpr int BLB_large_scan		= 64;		// Blob is larger than page buffer cache
 inline constexpr int BLB_close_on_read	= 128;		// Temporary blob is not closed until read
-inline constexpr int BLB_bulk			= 256;		// Blob created by bulk insert operation
-inline constexpr int BLB_user			= 512;		// User-defined blob
+inline constexpr int BLB_user			= 256;		// User-defined blob
 
 /* Blob levels are:
 

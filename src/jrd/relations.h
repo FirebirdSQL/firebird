@@ -85,6 +85,7 @@ RELATION(nam_i_segments, rel_segments, ODS_8_0, rel_persistent)
 	FIELD(f_seg_position, nam_f_position, fld_f_position, 1, ODS_8_0)
 	FIELD(f_seg_statistics, nam_statistics, fld_statistics, 1, ODS_11_0)
 	FIELD(f_seg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_seg_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 4 (RDB$INDICES)
@@ -108,6 +109,7 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_foreign_schema, nam_foreign_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_format, nam_fmt, fld_format, 1, ODS_14_0)
+	FIELD(f_idx_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -135,6 +137,7 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_identity_type, nam_identity_type, fld_identity_type, 1, ODS_12_0)
 	FIELD(f_rfr_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_rfr_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 	FIELD(f_rfr_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
@@ -159,6 +162,8 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_type, nam_r_type, fld_r_type, 0, ODS_11_1)
 	FIELD(f_rel_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 	FIELD(f_rel_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_rel_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_rel_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
 	FIELD(f_rel_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 	FIELD(f_rel_first_pp, nam_pp_number, fld_pp_number, 0, ODS_14_0)
 	FIELD(f_rel_idx_root, nam_idx_number, fld_idx_number, 0, ODS_14_0)
@@ -686,6 +691,7 @@ RELATION(nam_packages, rel_packages, ODS_12_0, rel_persistent)
 	FIELD(f_pkg_desc, nam_description, fld_description, 1, ODS_12_0)
 	FIELD(f_pkg_sql_security, nam_sql_security, fld_b_sql_security, 1, ODS_13_0)
 	FIELD(f_pkg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
+	FIELD(f_pkg_id, nam_pkg_id, fld_pkg_id, 0, ODS_14_0)
 END_RELATION
 
 // Relation 43 (SEC$USERS)
@@ -755,6 +761,7 @@ RELATION(nam_mon_tab_stats, rel_mon_tab_stats, ODS_12_0, rel_virtual)
 	FIELD(f_mon_tab_rec_stat_id, nam_mon_rec_stat_id, fld_stat_id, 0, ODS_12_0)
 	FIELD(f_mon_tab_sch_name, nam_mon_sch_name, fld_sch_name, 0, ODS_14_0)
 	FIELD(f_mon_tab_type, nam_mon_tab_type, fld_tab_type, 0, ODS_14_0)
+	FIELD(f_mon_tab_pkg_name, nam_mon_pkg_name, fld_pkg_name, 0, ODS_14_0)
 END_RELATION
 
 // Relation 50 (RDB$TIME_ZONES)
@@ -846,7 +853,20 @@ RELATION(nam_mon_local_temp_table_columns, rel_mon_local_temp_table_columns, ODS
 	FIELD(f_mon_lttc_collate_id, nam_mon_collate_id, fld_collate_id, 0, ODS_14_0)
 END_RELATION
 
-// Relation 59 (RDB$TABLESPACES)
+// Relation 59 (RDB$CONSTANTS)
+RELATION(nam_constants, rel_constants, ODS_14_0, rel_persistent)
+	FIELD(f_const_name, nam_const_name, fld_f_name, 0, ODS_14_0)
+	FIELD(f_const_package, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_const_field, nam_f_source, fld_f_name, 0, ODS_14_0)
+	FIELD(f_const_field_source_schema, nam_field_source_sch_name, fld_sch_name, 0, ODS_14_0)
+	FIELD(f_const_private_flag, nam_private_flag, fld_flag_nullable, 0, ODS_14_0)
+	FIELD(f_const_blr, nam_const_blr, fld_const_blr, 0, ODS_14_0)
+	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_14_0)
+	FIELD(f_const_package_schema, nam_sch_name, fld_sch_name, 0, ODS_14_0)
+	FIELD(f_const_description, nam_description, fld_description, 1, ODS_14_0)
+END_RELATION
+
+// Relation 60 (RDB$TABLESPACES)
 RELATION(nam_tablespaces, rel_tablespaces, ODS_14_0, rel_persistent)
 	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_14_0)
 	FIELD(f_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
@@ -859,7 +879,7 @@ RELATION(nam_tablespaces, rel_tablespaces, ODS_14_0, rel_persistent)
 	FIELD(f_ts_readonly, nam_ts_readonly, fld_bool, 1, ODS_14_0)
 END_RELATION
 
-// Relation 60 (MON$TABLESPACE_STATS)
+// Relation 61 (MON$TABLESPACE_STATS)
 RELATION(nam_mon_ts_stats, rel_mon_ts_stats, ODS_14_0, rel_virtual)
 	FIELD(f_mon_ts_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_14_0)
 	FIELD(f_mon_ts_stat_group, nam_mon_stat_group, fld_stat_group, 0, ODS_14_0)

@@ -1808,7 +1808,7 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		MsgMetadata* fieldsMsg = FB_NEW MsgMetadata;
 		metadata->triggerFields = fieldsMsg;
 
-		Format* relFormat = relation->rel_current_format;
+		auto* relFormat = relation->rel_current_format;
 
 		for (FB_SIZE_T i = 0; i < relation->rel_fields->count(); ++i)
 		{

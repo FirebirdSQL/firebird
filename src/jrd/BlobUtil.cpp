@@ -286,6 +286,12 @@ BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
 				},
 				{fld_varybinary_max, true}
 			)
+		},
+		// constants
+		{
+			SystemConstant(pool, "FROM_BEGIN", fld_integer, "0", {blr_literal, blr_short, 0, 0, 0}),
+			SystemConstant(pool, "FROM_CURRENT", fld_integer, "1", {blr_literal, blr_short, 0, 1, 0}),
+			SystemConstant(pool, "FROM_END", fld_integer, "2", {blr_literal, blr_short, 0, 2, 0})
 		}
 	)
 {

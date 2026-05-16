@@ -29,11 +29,12 @@
 #ifndef JRD_CACHEVECTOR_H
 #define JRD_CACHEVECTOR_H
 
-#include <condition_variable>
 #include <stdio.h>
 
 #include "../common/ThreadStart.h"
 #include "../common/StatusArg.h"
+#include "../common/classes/locks.h"
+#include "../common/classes/condition.h"
 
 #include "../jrd/SharedReadVector.h"
 #include "../jrd/constants.h"
@@ -449,7 +450,7 @@ public:
 
 		permanent->setLock(tdbb, permanent->getId(), Versioned::objectFamily(permanent));
 
-		std::unique_lock<std::mutex> g(mtx);
+		Firebird::MutexLockGuard guard(mtx, FB_FUNCTION);
 
 		for(;;)
 		{
@@ -509,7 +510,7 @@ public:
 					}
 
 					thd = 0;
-					cond.notify_all();			// other threads may proceed successfully
+					cond.notifyAll();			// other threads may proceed successfully
 					return result;
 
 				}
@@ -517,14 +518,14 @@ public:
 				{
 					state = savedState;
 					thd = 0;
-					cond.notify_all();		// avoid deadlock in other threads
+					cond.notifyAll();		// avoid deadlock in other threads
 
 					throw;
 				}
 
 			case SCANNING:		// other thread is already scanning object
-				cond.wait(g, [this]{ return state != SCANNING; });
-				continue;		// repeat check of FLG value
+				cond.wait(mtx);
+				continue;		// repeat check of state
 
 			case READY:
 				return ScanResult::COMPLETE;
@@ -557,8 +558,8 @@ private:
 	//		nill	|	object dropped	|	cache to be loaded
 	//	not nill	|	prohibited		|	cache is actual
 
-	std::condition_variable cond;
-	std::mutex mtx;
+	Firebird::Condition cond;
+	Firebird::Mutex mtx;
 	Versioned* object;
 	std::atomic<ListEntry*> next = nullptr;
 	TraNumber traNumber;		// when COMMITTED not set - stores transaction that created this list element

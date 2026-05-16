@@ -62,6 +62,7 @@ public:
 		VALUE_STRING,
 		VALUE_BOOLEAN,
 		VALUE_TABLE_ID_SCHEMA_NAME,
+		VALUE_TABLE_ID_PACKAGE_NAME,
 		VALUE_TABLESPACE_ID,
 		VALUE_LAST_MARKER	// Should be last item
 	};
@@ -135,6 +136,11 @@ public:
 		void storeTableIdSchemaName(int field_id, SLONG value)
 		{
 			storeField(field_id, VALUE_TABLE_ID_SCHEMA_NAME, sizeof(SLONG), &value);
+		}
+
+		void storeTableIdPackageName(int field_id, SLONG value)
+		{
+			storeField(field_id, VALUE_TABLE_ID_PACKAGE_NAME, sizeof(SLONG), &value);
 		}
 
 		void storeTablespaceId(int field_id, ULONG value)

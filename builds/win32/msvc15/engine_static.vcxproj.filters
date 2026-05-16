@@ -228,6 +228,9 @@
     <ClCompile Include="..\..\..\src\jrd\BlobUtil.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\BulkInsert.cpp">
+      <Filter>JRD files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\btn.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
@@ -725,6 +728,9 @@
     <ClInclude Include="..\..\..\src\jrd\BlobUtil.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\BulkInsert.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\blp.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -1212,6 +1218,9 @@
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\jrd\SystemTriggers.epp">
+      <Filter>JRD files\GPRE files</Filter>
+    </None>
+    <None Include="..\..\..\src\jrd\Package.epp">
       <Filter>JRD files\GPRE files</Filter>
     </None>
     <None Include="..\..\..\src\utilities\gstat\dba.epp">

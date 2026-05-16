@@ -91,7 +91,6 @@ Jrd::Cached::Relation*	MET_change_fields(Jrd::thread_db*, Jrd::jrd_tra*, const d
 void		MET_delete_dependencies(Jrd::thread_db*, const Jrd::QualifiedName&, int);
 void		MET_delete_shadow(Jrd::thread_db*, USHORT);
 void		MET_error(const TEXT*, ...);
-Jrd::Format*	MET_format(Jrd::thread_db*, Jrd::RelationPermanent*, USHORT);
 bool		MET_get_char_coll_subtype_info(Jrd::thread_db*, USHORT, Jrd::SubtypeInfo* info);
 Jrd::DmlNode*	MET_get_dependencies(Jrd::thread_db*, Jrd::jrd_rel*, const UCHAR*, const ULONG,
 								Jrd::CompilerScratch*, Jrd::bid*, Jrd::Statement**,

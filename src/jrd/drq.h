@@ -247,6 +247,7 @@ enum drq_type_t
 	drq_e_pub_tab_all,		// erase relation from all publication
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
+	drq_g_nxt_package_id,	// lookup next package ID
 	drq_l_ts_name,			// lookup tablespace name
 	drq_ts_drop_idx_dfw,	// find index of tablespace in dfw for drop
 	drq_ts_drop_rel_dfw,	// find relation of tablespace in dfw for drop

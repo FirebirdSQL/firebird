@@ -415,6 +415,12 @@ bool IndexCreateTask::handler(WorkItem& _item)
 			idx->idx_expression_statement = NULL;
 		}
 
+		if (item->m_ownAttach && idx->idx_condition_statement)
+		{
+			idx->idx_condition_statement->release(tdbb);
+			idx->idx_condition_statement = NULL;
+		}
+
 		if (!m_stop && m_creation->duplicates.value() == 0)
 			scb->sort(tdbb);
 
