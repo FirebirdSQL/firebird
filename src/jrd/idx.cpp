@@ -78,89 +78,10 @@ static idx_e check_foreign_key(thread_db*, Record*, jrd_rel*, jrd_tra*, index_de
 static idx_e check_partner_index(thread_db*, jrd_rel*, Record*, jrd_tra*, index_desc*, jrd_rel*, USHORT);
 static bool cmpRecordKeys(thread_db*, Record*, jrd_rel*, index_desc*, Record*, jrd_rel*, index_desc*);
 static bool duplicate_key(const UCHAR*, const UCHAR*, void*);
-static PageNumber get_root_page(thread_db*, Cached::Relation*);
 static idx_e insert_key(thread_db*, jrd_rel*, Record*, jrd_tra*, WIN *, index_insertion*, IndexErrorContext&);
 
 
-void IDX_check_access(thread_db* tdbb, CompilerScratch* csb, Cached::Relation* view, Cached::Relation* relation)
-{
-/**************************************
- *
- *	I D X _ c h e c k _ a c c e s s
- *
- **************************************
- *
- * Functional description
- *	Check the various indices in a relation
- *	to see if we need REFERENCES access to fields
- *	in the primary key.   Don't call this routine for
- *	views or external relations, since the mechanism
- *	ain't there.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	index_desc idx;
-	idx.idx_id = idx_invalid;
-	RelationPages* relPages = relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
-	WIN referenced_window(relPages->rel_pg_space_id, -1);
-
-	while (BTR_next_index(tdbb, relation, NULL, &idx, &window))
-	{
-		if (idx.idx_flags & idx_foreign)
-		{
-			// find the corresponding primary key index
-
-			if (!MET_lookup_partner(tdbb, relation, &idx, {}))
-				continue;
-
-			auto referenced_relation =
-				MetadataCache::getVersioned<Cached::Relation>(tdbb, idx.idx_primary_relation, CacheFlag::AUTOCREATE);
-			const USHORT index_id = idx.idx_primary_index;
-
-			// get the description of the primary key index
-
-			referenced_window.win_page = get_root_page(tdbb, getPermanent(referenced_relation));
-			referenced_window.win_flags = 0;
-			auto* referenced_root = BTR_fetch_root(FB_FUNCTION, tdbb, &referenced_window);
-			index_desc referenced_idx;
-			if (!BTR_description(tdbb, getPermanent(referenced_relation), referenced_root,
-								 &referenced_idx, index_id))
-			{
-				CCH_RELEASE(tdbb, &referenced_window);
-				BUGCHECK(173);	// msg 173 referenced index description not found
-			}
-
-			// post references access to each field in the index
-
-			const index_desc::idx_repeat* idx_desc = referenced_idx.idx_rpt;
-			for (USHORT i = 0; i < referenced_idx.idx_count; i++, idx_desc++)
-			{
-				const SLONG ssRelationId = view ? view->rel_id : 0;
-				const jrd_fld* referenced_field = MET_get_field(referenced_relation, idx_desc->idx_field);
-
-				CMP_post_access(tdbb, csb, relation->getSecurityName().schema, ssRelationId,
-					SCL_usage, obj_schemas, QualifiedName(relation->getName().schema));
-
-				CMP_post_access(tdbb, csb,
-								referenced_relation->getSecurityName().object, ssRelationId,
-								SCL_references, obj_relations,
-								referenced_relation->getName());
-
-				CMP_post_access(tdbb, csb,
-								referenced_field->fld_security_name, 0,
-								SCL_references, obj_column,
-								referenced_relation->getName(), referenced_field->fld_name);
-			}
-
-			CCH_RELEASE(tdbb, &referenced_window);
-		}
-	}
-}
-
-
-bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* partner_relation, int& bad_segment)
+bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, jrd_rel* partner_relation, int& bad_segment)
 {
 /**********************************************
  *
@@ -181,11 +102,15 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 	index_desc partner_idx;
 
 	// get the index root page for the partner relation
-	WIN window(get_root_page(tdbb, partner_relation));
-	auto* root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+	const auto rootPage = partner_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		BUGCHECK(175);			// msg 175 partner index description not found
+
+	WIN window(rootPage.value());
+	const auto root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
 	// get the description of the partner index
-	const bool ok = BTR_description(tdbb, partner_relation, root, &partner_idx, idx.idx_primary_index);
+	const bool ok = BTR_description(tdbb, partner_relation->getPermanent(), root, &partner_idx, idx.idx_primary_index);
 	CCH_RELEASE(tdbb, &window);
 
 	if (!ok)
@@ -255,7 +180,7 @@ public:
 			// preserving the page working sets of other attachments.
 			if (att && (att != m_dbb->dbb_attachments || att->att_next))
 			{
-				if (att->isGbak() || DPM_data_pages(tdbb, getPermanent(m_creation->relation)) > m_dbb->dbb_bcb->bcb_count)
+				if (att->isGbak() || DPM_data_pages(tdbb, m_creation->relation) > m_dbb->dbb_bcb->bcb_count)
 					m_flags |= IS_LARGE_SCAN;
 			}
 
@@ -559,7 +484,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	if (m_flags & IS_LARGE_SCAN)
 	{
 		primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = WIN_large_scan;
-		primary.rpb_org_scans = secondary.rpb_org_scans = getPermanent(relation)->rel_scan_count++;
+		primary.rpb_org_scans = secondary.rpb_org_scans = relation->rel_scan_count++;
 	}
 
 	const bool isDescending = (idx->idx_flags & idx_descending);
@@ -671,7 +596,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 				} while (stack.hasData() && (record = stack.pop()));
 
 				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
+					--relation->rel_scan_count;
 
 				context.raise(tdbb, result, record);
 			}
@@ -684,7 +609,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 				} while (stack.hasData() && (record = stack.pop()));
 
 				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
+					--relation->rel_scan_count;
 
 				context.raise(tdbb, idx_e_keytoobig, record);
 			}
@@ -743,7 +668,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	gc_record.release();
 
 	if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-		--getPermanent(relation)->rel_scan_count;
+		--relation->rel_scan_count;
 	}
 	catch (const Exception& ex)
 	{
@@ -851,8 +776,6 @@ void IDX_create_index(thread_db* tdbb,
 		ERR_post(Arg::Gds(isc_no_meta_update) <<
 				 Arg::Gds(isc_wish_list));
 	}
-
-	get_root_page(tdbb, getPermanent(relation));
 
 	fb_assert(transaction);
 
@@ -967,13 +890,7 @@ void IDX_create_index(thread_db* tdbb,
 }
 
 
-bool IDX_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
-{
-	return BTR_activate_index(tdbb, relation, id);
-}
-
-
-void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
+void IDX_mark_index(thread_db* tdbb, jrd_rel* relation, MetaId id)
 {
 /**************************************
  *
@@ -987,11 +904,14 @@ void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
  **************************************/
 	SET_TDBB(tdbb);
 
-	auto* relPages = relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+	const auto rootPage = relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
+
+	WIN window(rootPage.value());
 	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
-	BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
+	BTR_mark_index_for_delete(tdbb, relation->getPermanent(), id, &window, root, 0);
 }
 
 void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current, TraNumber tran)
@@ -1048,7 +968,7 @@ void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Atta
 }
 
 
-void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPages* relPages, bool withCleanup)
+void IDX_delete_indices(thread_db* tdbb, const PageNumber& rootPage, bool withCleanup)
 {
 /**************************************
  *
@@ -1062,51 +982,13 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
  **************************************/
 	SET_TDBB(tdbb);
 
-	fb_assert(relPages->rel_index_root);
+	WIN window(rootPage);
 
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		const bool tree_exists = BTR_delete_index(tdbb, &window, i, withCleanup);
-		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-	}
-
-	CCH_RELEASE(tdbb, &window);
-}
-
-
-void IDX_mark_indices(thread_db* tdbb, Cached::Relation* relation)
-{
-/**************************************
- *
- *	I D X _ m a r k _ i n d i c e s
- *
- **************************************
- *
- * Functional description
- *	Mark all known indices for delete in preparation for deleting a
- *	complete relation.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	auto* relPages = relation->getBasePages();
-	fb_assert(relPages->rel_index_root);
-
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
-
-	for (USHORT i = 0; i < root->irt_count; i++)
-	{
-		BTR_mark_index_for_delete(tdbb, relation, i, &window, root, 0);
+		BTR_delete_index(tdbb, &window, i, withCleanup);
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	}
 
@@ -1133,10 +1015,12 @@ void IDX_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	index_desc idx;
 	idx.idx_id = idx_invalid;
 
-	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
+	const auto rootPage = rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
 
-	while (BTR_next_index(tdbb, getPermanent(rpb->rpb_relation), transaction, &idx, &window))
+	WIN window(rootPage.value().getPageSpaceID(), -1);
+	while (BTR_next_index(tdbb, rpb->rpb_relation, transaction, &idx, &window))
 	{
 		if (idx.idx_flags & (idx_primary | idx_unique))
 		{
@@ -1177,9 +1061,12 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 	insertion.iib_relation = rpb->rpb_relation;
 	insertion.iib_btr_level = 0;
 
-	WIN window(get_root_page(tdbb, getPermanent(rpb->rpb_relation)));
+	const auto rootPage = rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
 
-	auto* root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+	WIN window(rootPage.value());
+	auto root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
@@ -1298,12 +1185,14 @@ void IDX_modify(thread_db* tdbb,
 	insertion.iib_transaction = transaction;
 	insertion.iib_btr_level = 0;
 
-	RelationPages* relPages = org_rpb->rpb_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
-
 	new_rpb->rpb_runtime_flags &= ~RPB_uk_updated;
 
-	while (BTR_next_index(tdbb, getPermanent(org_rpb->rpb_relation), transaction, &idx, &window))
+	const auto rootPage = org_rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
+
+	WIN window(rootPage.value().getPageSpaceID(), -1);
+	while (BTR_next_index(tdbb, org_rpb->rpb_relation, transaction, &idx, &window))
 	{
 		IndexErrorContext context(new_rpb->rpb_relation, &idx);
 		idx_e error_code = idx_e_ok;
@@ -1406,13 +1295,15 @@ void IDX_modify_check_constraints(thread_db* tdbb,
 	index_desc idx;
 	idx.idx_id = idx_invalid;
 
-	RelationPages* relPages = org_rpb->rpb_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
-
 	// Now check all the foreign key constraints. Referential integrity relation
 	// could be established by primary key/foreign key or unique key/foreign key
 
-	while (BTR_next_index(tdbb, getPermanent(org_rpb->rpb_relation), transaction, &idx, &window))
+	const auto rootPage = org_rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
+
+	WIN window(rootPage.value().getPageSpaceID(), -1);
+	while (BTR_next_index(tdbb, org_rpb->rpb_relation, transaction, &idx, &window))
 	{
 		if (!(idx.idx_flags & (idx_primary | idx_unique)) ||
 			!MET_lookup_partner(tdbb, getPermanent(org_rpb->rpb_relation), &idx, {}))
@@ -1488,14 +1379,16 @@ void IDX_modify_flag_uk_modified(thread_db* tdbb,
 	jrd_rel* const relation = org_rpb->rpb_relation;
 	fb_assert(new_rpb->rpb_relation == relation);
 
-	RelationPages* const relPages = relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
-
 	DSC desc1, desc2;
 	index_desc idx;
 	idx.idx_id = idx_invalid;
 
-	while (BTR_next_index(tdbb, getPermanent(relation), transaction, &idx, &window))
+	const auto rootPage = org_rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
+
+	WIN window(rootPage.value().getPageSpaceID(), -1);
+	while (BTR_next_index(tdbb, relation, transaction, &idx, &window))
 	{
 		if (!(idx.idx_flags & (idx_primary | idx_unique)) ||
 			!MET_lookup_partner(tdbb, getPermanent(relation), &idx, {}))
@@ -1518,26 +1411,6 @@ void IDX_modify_flag_uk_modified(thread_db* tdbb,
 			}
 		}
 	}
-}
-
-
-void IDX_statistics(thread_db* tdbb, Cached::Relation* relation, USHORT id, SelectivityList& selectivity)
-{
-/**************************************
- *
- *	I D X _ s t a t i s t i c s
- *
- **************************************
- *
- * Functional description
- *	Scan index pages recomputing
- *	selectivity.
- *
- **************************************/
-
-	SET_TDBB(tdbb);
-
-	BTR_selectivity(tdbb, relation, id, selectivity);
 }
 
 
@@ -1567,10 +1440,12 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	insertion.iib_transaction = transaction;
 	insertion.iib_btr_level = 0;
 
-	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, -1);
+	const auto rootPage = rpb->rpb_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
 
-	while (BTR_next_index(tdbb, getPermanent(rpb->rpb_relation), transaction, &idx, &window))
+	WIN window(rootPage.value().getPageSpaceID(), -1);
+	while (BTR_next_index(tdbb, rpb->rpb_relation, transaction, &idx, &window))
 	{
 		IndexErrorContext context(rpb->rpb_relation, &idx);
 		idx_e error_code = idx_e_ok;
@@ -1827,38 +1702,39 @@ static idx_e check_foreign_key(thread_db* tdbb,
 	if (!MET_lookup_partner(tdbb, relation->getPermanent(), idx, {}))
 		return result;
 
-	jrd_rel* partner_relation = nullptr;
+	jrd_rel* partnerRelation = nullptr;
 	USHORT index_id = 0;
 
 	if (idx->idx_flags & idx_foreign)
 	{
-		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, idx->idx_primary_relation, CacheFlag::AUTOCREATE);
-		fb_assert(partner_relation);
+		partnerRelation = MetadataCache::getVersioned<Cached::Relation>(tdbb, idx->idx_primary_relation, CacheFlag::AUTOCREATE);
+		fb_assert(partnerRelation);
 		index_id = idx->idx_primary_index;
 		result = check_partner_index(tdbb, relation, record, transaction, idx,
-									 partner_relation, index_id);
+									 partnerRelation, index_id);
 	}
 	else if ((idx->idx_flags & (idx_primary | idx_unique)) && (idx->idx_foreign_dep.dep_reference_id >= 0))
 	{
 		const auto& frgn = idx->idx_foreign_dep;
 
-		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, frgn.dep_relation, CacheFlag::AUTOCREATE);
-		fb_assert(partner_relation);
-		auto* partnerRelation = partner_relation->getPermanent();
+		partnerRelation = MetadataCache::getVersioned<Cached::Relation>(tdbb, frgn.dep_relation, CacheFlag::AUTOCREATE);
+		fb_assert(partnerRelation);
 		index_id = frgn.dep_index;
 
 		if ((relation->getPermanent()->rel_flags & REL_temp_conn) &&
-			(partnerRelation->rel_flags & REL_temp_tran))
+			(partnerRelation->getPermanent()->rel_flags & REL_temp_tran))
 		{
-			RelationPermanent::RelPagesSnapshot pagesSnapshot(tdbb, partnerRelation);
-			partnerRelation->fillPagesSnapshot(pagesSnapshot, true);
+			RelationPermanent::PagesSnapshot pagesSnapshot(tdbb, partnerRelation->getPermanent());
 
-			for (FB_SIZE_T i = 0; i < pagesSnapshot.getCount(); i++)
+			if (!partnerRelation->getPermanent()->fillPagesSnapshot(pagesSnapshot, true))
+				pagesSnapshot.add(partnerRelation->getBasePages());
+
+			for (const auto partnerPages : pagesSnapshot)
 			{
-				RelationPages* partnerPages = pagesSnapshot[i];
 				tdbb->tdbb_temp_traid = partnerPages->rel_instance_id;
+
 				if ( (result = check_partner_index(tdbb, relation, record,
-							transaction, idx, partner_relation, index_id)) )
+							transaction, idx, partnerRelation, index_id)) )
 				{
 					break;
 				}
@@ -1867,7 +1743,7 @@ static idx_e check_foreign_key(thread_db* tdbb,
 			tdbb->tdbb_temp_traid = 0;
 		}
 		else
-			result = check_partner_index(tdbb, relation, record, transaction, idx, partner_relation, index_id);
+			result = check_partner_index(tdbb, relation, record, transaction, idx, partnerRelation, index_id);
 	}
 
 	if (result)
@@ -1875,7 +1751,7 @@ static idx_e check_foreign_key(thread_db* tdbb,
 		if (idx->idx_flags & idx_foreign)
 			context.setErrorLocation(relation, idx->idx_id);
 		else
-			context.setErrorLocation(partner_relation, index_id);
+			context.setErrorLocation(partnerRelation, index_id);
 	}
 
 	return result;
@@ -1906,8 +1782,12 @@ static idx_e check_partner_index(thread_db* tdbb,
 
 	// get the index root page for the partner relation
 
-	WIN window(get_root_page(tdbb, getPermanent(partner_relation)));
-	auto* root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+	const auto rootPage = partner_relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		BUGCHECK(175);			// msg 175 partner index description not found
+
+	WIN window(rootPage.value());
+	const auto root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
 	// get the description of the partner index
 
@@ -2038,22 +1918,6 @@ static bool duplicate_key(const UCHAR* record1, const UCHAR* record2, void* ifl_
 	}
 
 	return false;
-}
-
-
-static PageNumber get_root_page(thread_db* tdbb, Cached::Relation* relation)
-{
-/**************************************
- *
- *	g e t _ r o o t _ p a g e
- *
- **************************************
- *
- * Functional description
- *	Find the root page for a relation.
- *
- **************************************/
-	return relation->getIndexRootPage(tdbb);
 }
 
 

@@ -854,6 +854,7 @@ namespace Jrd
 	:	dbb_permanent(p),
 		dbb_guid(Firebird::Guid::empty()),
 		dbb_page_manager(this, *p),
+		dbb_tablespaces(*p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
 		dbb_internal(*p),

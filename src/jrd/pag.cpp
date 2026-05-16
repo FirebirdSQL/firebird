@@ -964,8 +964,8 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, 0u, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
-	RelationPages* relPages = relation->getBasePages();
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+	const auto relPages = relation->getBasePages();
 	if (!relPages->rel_pages)
 	{
 		// NS: There's no need to reassign first page for RDB$PAGES relation since
@@ -2100,16 +2100,18 @@ PageSpace* PageManager::findPageSpace(const ULONG pageSpace) const
 	return 0;
 }
 
-void PageManager::delPageSpace(const ULONG pageSpace)
+void PageManager::delPageSpace(const ULONG pageSpace, bool deleteFile)
 {
 	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
 
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos))
 	{
-		PageSpace* pageSpaceToDelete = pageSpaces[pos];
+		AutoPtr<PageSpace> pageSpaceToDelete(pageSpaces[pos]);
 		pageSpaces.remove(pos);
-		delete pageSpaceToDelete;
+
+		if (deleteFile && pageSpaceToDelete->file)
+			unlink(pageSpaceToDelete->file->fil_string);
 	}
 }
 
@@ -2194,19 +2196,19 @@ ULONG PageManager::getTempPageSpaceID(thread_db* tdbb)
 }
 
 
-void PageManager::allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool create, const PathName& fileName)
+void PageManager::allocTableSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const PathName& fileName)
 {
 	/***
 	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
 	 */
-	fb_assert(PageSpace::isTablespace(tableSpaceID));
+	fb_assert(PageSpace::isTablespace(pageSpaceID));
 
-	if (!findPageSpace(tableSpaceID))
+	if (!findPageSpace(pageSpaceID))
 	{
 		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
 
 		// Double check if someone concurrently have added the tablespaceid
-		if (findPageSpace(tableSpaceID))
+		if (findPageSpace(pageSpaceID))
 			return;
 
 		// Verify tablespace file path against DatabaseAccess entry of firebird.conf
@@ -2216,7 +2218,7 @@ void PageManager::allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool crea
 				Arg::Str(fileName));
 		}
 
-		PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, tableSpaceID);
+		PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
 
 		try
 		{
@@ -2247,7 +2249,7 @@ void PageManager::allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool crea
 			if (create)
 			{
 				WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
-				pageSpaces.findAndRemove(tableSpaceID);
+				pageSpaces.findAndRemove(pageSpaceID);
 			}
 			delete newPageSpace;
 			throw;

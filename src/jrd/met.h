@@ -252,7 +252,6 @@ public:
 		mdc_cleanup_queue.check(tdbb, oldest);
 	}
 
-	void releaseRelations(thread_db* tdbb);
 	void releaseLocks(thread_db* tdbb);
 	void releaseGTTs(thread_db* tdbb);
 	void runDBTriggers(thread_db* tdbb, TriggerAction action);

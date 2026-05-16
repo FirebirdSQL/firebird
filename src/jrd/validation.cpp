@@ -1506,7 +1506,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 		corrupt(VAL_BLOB_UNKNOWN_LEVEL, relation, number.getValue(), header->blh_level);
 	}
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	// Level 1 blobs are a little more complicated
@@ -1576,7 +1576,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 	USHORT counter = 0;
 #endif
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	ULONG page_number = header->rhd_b_page;
@@ -1708,7 +1708,7 @@ void Validation::walk_database()
 					continue;
 			}
 
-			const auto relPages = getPermanent(relation)->getBasePages();
+			const auto relPages = relation->getBasePages();
 
 			// We can't realiable track double allocated page's when validating online.
 			// All we can check is that page is not double allocated at the same relation.
@@ -1746,7 +1746,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	WIN window(pageSpaceId, -1);
@@ -2032,6 +2032,8 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 	ULONG pageSpaceId = root_page->irt_rpt[id].getRootPageSpaceId();
 	if (!pageSpaceId)
 		pageSpaceId = DB_PAGE_SPACE;
+
+	Tablespace::lock(vdr_tdbb, pageSpaceId);
 
 	const bool unique = (root_page->irt_rpt[id].irt_flags & (irt_unique | idx_primary));
 	const bool descending = (root_page->irt_rpt[id].irt_flags & irt_descending);
@@ -2610,7 +2612,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const vcl* vector = relPages->rel_pages;
 
 	if (!vector || sequence >= vector->count())
@@ -2867,7 +2869,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	USHORT line_number = fragment->rhdf_f_line;
 	USHORT flags = fragment->rhdf_flags;
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	data_page* page = 0;
@@ -2976,7 +2978,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	* Early in walk_chain we observed that this page in related to the relation so we skip such kind of check here.
 	**************************************/
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	WIN window(pageSpaceId, page_number);
@@ -3053,7 +3055,7 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
@@ -3114,10 +3116,11 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		return rtn_ok;
 
 	AutoLock lckRead(vdr_tdbb);
-	GCLock::Exclusive lckGC(vdr_tdbb, getPermanent(relation));
+	GCLock::Exclusive lckGC(vdr_tdbb, relation);
+
 	if (vdr_flags & VDR_online)
 	{
-		lckRead = getPermanent(relation)->createLock(vdr_tdbb, LCK_relation, false);
+		lckRead = relation->createLock(vdr_tdbb, LCK_relation, false);
 		if (!LCK_lock(vdr_tdbb, lckRead, LCK_PR, vdr_lock_tout))
 		{
 			output("Acquire relation lock failed\n");
@@ -3153,7 +3156,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	const bool idxRootOk = (vdr_flags & VDR_records) && !relation->isSystem() ?
 		walk_root(relation, true) == rtn_ok : true;
 
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->rel_pg_space_id;
 
 	// Check if the first pointer page is lost and try to restore it if VDR_update is set
@@ -3327,7 +3330,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
  **************************************/
 
 	// If the relation has an index root, walk it
-	const auto relPages = getPermanent(relation)->getBasePages();
+	const auto relPages = relation->getBasePages();
 
 	if (!relPages->rel_index_root)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);

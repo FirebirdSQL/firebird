@@ -8,9 +8,7 @@
 			"type": "shell",
 			"command": "make",
 			"args": [
-				"TARGET=Debug",
-				"engine",
-				"-j7"
+				"-j7", "Debug"
 			],
 			"problemMatcher": [],
 			"group": "build"

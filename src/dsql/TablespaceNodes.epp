@@ -21,7 +21,6 @@
  */
 
 #include "firebird.h"
-#include "../dsql/TablespaceNodes.h"
 #include "../jrd/dyn.h"
 #include "../jrd/intl.h"
 #include "../jrd/jrd.h"
@@ -34,6 +33,7 @@
 #include "../dsql/pass1_proto.h"
 #include "../common/StatusArg.h"
 #include "../common/os/path_utils.h"
+#include "../common/isc_f_proto.h"
 #include "../jrd/Attachment.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/dyn_ut_proto.h"
@@ -41,6 +41,7 @@
 #include "../jrd/os/pio_proto.h"
 #include "../jrd/lck.h"
 
+#include "../dsql/TablespaceNodes.h"
 
 using namespace Firebird;
 
@@ -193,6 +194,12 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 		}
 	}
 
+	fb_assert(id != INVALID_PAGE_SPACE && id > DB_PAGE_SPACE);
+
+	// Create new pagespace and the backing file, load new tablespace into the cache
+	const auto tableSpace = Tablespace::create(tdbb, id);
+	tableSpace->mark(tdbb, Tablespace::Operation::CREATE, transaction, fileName);
+
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_TABLESPACE,
 		QualifiedName(name), {});
 }
@@ -201,10 +208,40 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
-	Attachment* attachment = transaction->getAttachment();
-	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
+	const auto attachment = transaction->getAttachment();
+
+	PathName expandedFileName(fileName);
+	ISC_expand_filename(expandedFileName, true);
+
+	if (fileName.hasData())
+	{
+		if (!PIO_file_exists(fileName.c_str()))
+			ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(fileName));
+
+		AutoCacheRequest requestHandle(tdbb, irq_chk_ts_filename, IRQ_REQUESTS);
+
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+			X IN RDB$TABLESPACES
+			WITH X.RDB$SYSTEM_FLAG NE 1
+				AND X.RDB$TABLESPACE_NAME NE name.c_str()
+		{
+			PathName otherfileName(X.RDB$FILE_NAME);
+			ISC_expand_filename(otherfileName, true);
+
+			if (expandedFileName == otherfileName)
+			{
+				const MetaName tablespaceName(X.RDB$TABLESPACE_NAME);
+
+				ERR_post(Arg::Gds(isc_ts_file_dup) <<
+					Arg::Str(otherfileName) << Arg::Str(tablespaceName));
+			}
+		}
+		END_FOR
+	}
+
 	bool modified = false;
-	ULONG tableSpaceId = 0;
+
+	AutoCacheRequest requestHandle(tdbb, drq_m_tablespace, DYN_REQUESTS);
 
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		X IN RDB$TABLESPACES
@@ -213,25 +250,13 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		if (X.RDB$SYSTEM_FLAG)
 			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
 
+		if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
+			status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+
 		modified = true;
-		tableSpaceId = X.RDB$TABLESPACE_ID;
 
-		fb_assert(PageSpace::isTablespace(tableSpaceId));
-
-		Tablespace* tablespace = MET_tablespace_id(tdbb, tableSpaceId, false);
-		tablespace->modified = true;
-
-		// Get the EX lock here to prevent other attachments from using the tablespace.
-		// It's needed because other attachments see uncommitted changes in RDB$TABLESPACES.
-		// I think this solution is temporary and should be reconsidered.
-		if (tablespace->isUsed() ||
-			!LCK_convert(tdbb, tablespace->existenceLock, LCK_EX, transaction->getLockWait()))
-		{
-			string obj_name;
-			obj_name.printf("TABLESPACE \"%s\"", name.c_str());
-
-			ERR_post(Arg::Gds(isc_obj_in_use) << Arg::Str(obj_name));
-		}
+		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, false);
+		tableSpace->mark(tdbb, Tablespace::Operation::ALTER, transaction, fileName);
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_ALTER_TABLESPACE, QualifiedName(name), {});
@@ -239,13 +264,7 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		MODIFY X
 			if (fileName.hasData())
 			{
-				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
-
 				fb_assert(X.RDB$FILE_NAME.NULL == FALSE);
-				if (!PIO_file_exists(fileName.c_str()))
-					ERR_post(Arg::Gds(isc_ts_file_not_exists) << Arg::Str(fileName));
-
 				strcpy(X.RDB$FILE_NAME, fileName.c_str());
 			}
 
@@ -308,8 +327,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		found = true;
 
-		// Ensure it's cached to be used in the DFW stage later
-		MET_tablespace_id(tdbb, X.RDB$TABLESPACE_ID);
+		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, false);
+		tableSpace->mark(tdbb, Tablespace::Operation::DROP, transaction, "");
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});

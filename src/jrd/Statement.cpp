@@ -79,6 +79,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  blr(*p),
 	  mapFieldInfo(*p),
 	  resources(nullptr),
+	  tablespaces(*p),
 	  messages(*p, 2) // Most statements have two messages, preallocate space for them
 {
 	if (csb->csb_resources)
@@ -157,32 +158,6 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 			flags |= FLAG_INTERNAL;
 
 		loadResources(tdbb, nullptr, false);
-
-		// Take out existence locks for tablespaces used in statement
-		HalfStaticArray<ULONG, 4> usedTablespaces;
-
-		for (const auto& relation : resources->relations)
-		{
-			const ULONG pageSpaceId = relation()->getBasePages()->rel_pg_space_id;
-			if (!usedTablespaces.exist(pageSpaceId))
-				usedTablespaces.add(pageSpaceId);
-		}
-
-		for (const auto& index : resources->indices)
-		{
-			const ULONG pageSpaceId = MET_index_pagespace(tdbb, index()->getRelation(), index()->getId());
-			if (!usedTablespaces.exist(pageSpaceId))
-				usedTablespaces.add(pageSpaceId);
-		}
-
-		for (const auto tableSpaceId : usedTablespaces)
-		{
-			if (PageSpace::isTablespace(tableSpaceId))
-			{
-				const auto tableSpace = MET_tablespace_id(tdbb, tableSpaceId);
-				tableSpace->addRef(tdbb);
-			}
-		}
 
 		messages.grow(csb->csb_rpt.getCount());
 		for (decltype(messages)::size_type i = 0; i < csb->csb_rpt.getCount(); ++i)
@@ -781,38 +756,12 @@ void Statement::release(thread_db* tdbb)
 {
 	SET_TDBB(tdbb);
 
-	// Release sub statements.
+	// Release sub statements
 	for (Statement** subStatement = subStatements.begin();
 		 subStatement != subStatements.end();
 		 ++subStatement)
 	{
 		(*subStatement)->release(tdbb);
-	}
-
-	// Release existence locks for tablespaces
-	HalfStaticArray<ULONG, 4> usedTablespaces;
-
-	for (const auto& relation : resources->relations)
-	{
-		const ULONG pageSpaceId = relation()->getBasePages()->rel_pg_space_id;
-		if (!usedTablespaces.exist(pageSpaceId))
-			usedTablespaces.add(pageSpaceId);
-	}
-
-	for (const auto& index : resources->indices)
-	{
-		const ULONG pageSpaceId = MET_index_pagespace(tdbb, index()->getRelation(), index()->getId());
-		if (!usedTablespaces.exist(pageSpaceId))
-			usedTablespaces.add(pageSpaceId);
-	}
-
-	for (const auto tableSpaceId : usedTablespaces)
-	{
-		if (PageSpace::isTablespace(tableSpaceId))
-		{
-			const auto tableSpace = MET_tablespace_id(tdbb, tableSpaceId);
-			tableSpace->release(tdbb);
-		}
 	}
 
 	// ok to use write accessor w/o lock - we are in a kind of "dtor"

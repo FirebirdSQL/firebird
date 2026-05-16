@@ -174,8 +174,8 @@ public:
 	void initTempPageSpace(thread_db* tdbb);
 	ULONG getTempPageSpaceID(thread_db* tdbb);
 
-	void allocTableSpace(thread_db* tdbb, ULONG tableSpaceID, bool create, const Firebird::PathName& fileName);
-	void delPageSpace(const ULONG pageSpaceID);
+	void allocTableSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const Firebird::PathName& fileName);
+	void delPageSpace(const ULONG pageSpaceID, bool deleteFile = false);
 
 	void closeAll();
 

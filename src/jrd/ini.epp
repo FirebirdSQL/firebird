@@ -714,7 +714,7 @@ void INI_format(thread_db* tdbb, const string& charset)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent)
 			{
-				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+				DPM_create_relation(tdbb, MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
 					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
 			}
 
@@ -1283,7 +1283,7 @@ void INI_upgrade(thread_db* tdbb)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
 			{
-				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+				DPM_create_relation(tdbb, MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
 					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
 			}
 
@@ -1404,8 +1404,7 @@ void INI_upgrade(thread_db* tdbb)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
 			{
-				const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID], CacheFlag::NOSCAN);
-				if (relation && relation->getBasePages()->rel_pages)
+				if (const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID], CacheFlag::NOSCAN))
 					DPM_delete_relation(tdbb, relation);
 			}
 

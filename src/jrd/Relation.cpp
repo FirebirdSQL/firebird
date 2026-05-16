@@ -106,30 +106,22 @@ const Triggers& TrigArray::operator[](int t) const
 jrd_rel::jrd_rel(MemoryPool& p, Cached::Relation* r)
 	: rel_pool(&p),
 	  rel_perm(r),
-	  rel_current_fmt(0),
-	  rel_current_format(nullptr),
-	  rel_fields(nullptr),
-	  rel_view_rse(nullptr),
 	  rel_view_contexts(p),
 	  rel_triggers(p),
-	  rel_ss_definer(false)
+	  rel_ss_definer(false),
+	  rel_scan_count(0),
+	  rel_gc_lock(this),
+	  rel_pages_base(p)
 { }
 
 RelationPermanent::RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, NoData)
 	: PermanentStorage(p),
-	  rel_partners_lock(nullptr),
-	  rel_gc_lock(this),
 	  rel_gc_records(p),
-	  rel_scan_count(0),
 	  rel_formats(/*p*/),
 	  rel_indices(p, this),
 	  rel_name(p),
 	  rel_id(id),
 	  rel_flags(REL_check_partners),
-	  rel_pages_inst(nullptr),
-	  rel_pages_base(p),
-	  rel_pages_free(nullptr),
-	  rel_file(nullptr),
 	  rel_clear_deps(p)
 {
 	rel_partners_lock = FB_NEW_RPT(getPool(), 0)
@@ -276,31 +268,32 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	return oldState == Bool3State::True;
 }
 
-RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
+RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, TraNumber traNumber, bool allocPages)
 {
-	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
-		return &rel_pages_base;
-
-	Jrd::Attachment* attachment = tdbb->getAttachment();
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
 
 	RelationPages::InstanceId inst_id;
 
 	if (rel_flags & REL_temp_tran)
 	{
-		if (tran != 0 && tran != MAX_TRA_NUMBER)
-			inst_id = tran;
+		if (traNumber != 0 && traNumber != MAX_TRA_NUMBER)
+			inst_id = traNumber;
 		else if (tdbb->tdbb_temp_traid)
 			inst_id = tdbb->tdbb_temp_traid;
 		else if (tdbb->getTransaction())
 			inst_id = tdbb->getTransaction()->tra_number;
 		else // called without transaction, maybe from OPT or CMP ?
-			return &rel_pages_base;
+			return nullptr;
+	}
+	else if (rel_flags & REL_temp_conn)
+	{
+		inst_id = PAG_attachment_id(tdbb);
 	}
 	else
-		inst_id = PAG_attachment_id(tdbb);
+		fb_assert(false);
 
-	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+	MutexLockGuard pagesGuard(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		rel_pages_inst = FB_NEW_POOL(getPool()) RelationPagesInstances(getPool());
@@ -329,7 +322,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		rel_pages_inst->add(newPages);
 
 		// create primary pointer page and index root page
-		DPM_create_relation_pages(tdbb, this, newPages);
+		DPM_create_relation_pages(tdbb, getId(), newPages);
 
 #ifdef VIO_DEBUG
 		VIO_trace(DEBUG_WRITES,
@@ -353,23 +346,24 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		if (!idxTran)
 			idxTran = attachment->getSysTransaction();
 
-		jrd_rel* rel = MetadataCache::getVersioned<Cached::Relation>(tdbb, getId(), CacheFlag::AUTOCREATE);
-		fb_assert(rel);
+		const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, getId(), CacheFlag::AUTOCREATE);
+		fb_assert(relation);
 
-		WIN window(rel_pages_base.rel_pg_space_id, -1);
+		const auto basePages = relation->getBasePages();
+
+		WIN window(basePages->rel_pg_space_id, -1);
 		index_desc idx;
 		idx.idx_id = idx_invalid;
 
-		while (BTR_next_index(tdbb, rel->getPermanent(), idxTran, &idx, &window, &rel_pages_base))
+		while (BTR_next_index(tdbb, relation, idxTran, &idx, &window, basePages))
 		{
-			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			QualifiedName idx_name;
-			if (idp)
+			if (const auto idp = lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
 				idx_name = idp->getName();
 
 			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, IdxCreate::AtOnce, rel, &idx, idx_name, NULL, idxTran, selectivity);
+			IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, idx_name, NULL, idxTran, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
@@ -398,7 +392,7 @@ RelationPages* RelationPermanent::getAttPages(thread_db* tdbb, RelationPages::In
 {
 	fb_assert(!(rel_flags & REL_temp_tran));
 
-	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
+	MutexLockGuard pagesGuard(rel_pages_mutex, FB_FUNCTION);
 
 	if (!rel_pages_inst)
 		return nullptr;
@@ -412,13 +406,10 @@ RelationPages* RelationPermanent::getAttPages(thread_db* tdbb, RelationPages::In
 	return pages;
 }
 
-bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
+bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = nullptr)
 {
-	RelationPages* pages = aPages ? aPages : getPages(tdbb, tran, false);
 	if (!pages || !pages->rel_instance_id)
 		return false;
-
-	fb_assert(tran == 0 || tran == MAX_TRA_NUMBER || pages->rel_instance_id == tran);
 
 	fb_assert(pages->useCount > 0);
 
@@ -449,10 +440,13 @@ bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages*
 	}
 
 	if (pages->rel_index_root)
-		IDX_delete_indices(tdbb, this, pages, false);
+	{
+		const PageNumber rootPage(pages->rel_pg_space_id, pages->rel_index_root);
+		IDX_delete_indices(tdbb, rootPage, false);
+	}
 
 	if (pages->rel_pages)
-		DPM_delete_relation_pages(tdbb, this, pages);
+		DPM_delete_relation_pages(tdbb, rel_id, pages);
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
@@ -471,10 +465,13 @@ void RelationPermanent::freePages(thread_db* tdbb)
 		auto* pages = rel_pages_inst->pop();
 
 		if (pages->rel_index_root)
-			IDX_delete_indices(tdbb, this, pages, false);
+		{
+			const PageNumber rootPage(pages->rel_pg_space_id, pages->rel_index_root);
+			IDX_delete_indices(tdbb, rootPage, false);
+		}
 
 		if (pages->rel_pages)
-			DPM_delete_relation_pages(tdbb, this, pages);
+			DPM_delete_relation_pages(tdbb, rel_id, pages);
 
 		pages->free(rel_pages_free);
 	}
@@ -522,69 +519,45 @@ void RelationPermanent::clearDropMarker(thread_db* tdbb)
 	}
 }
 
-void RelationPermanent::getRelLockKey(thread_db* tdbb, UCHAR* key)
-{
-	const ULONG val = getId();
-	memcpy(key, &val, sizeof(ULONG));
-	key += sizeof(ULONG);
-
-	const RelationPages::InstanceId inst_id = getPages(tdbb)->rel_instance_id;
-	memcpy(key, &inst_id, sizeof(inst_id));
-}
-
-constexpr USHORT RelationPermanent::getRelLockKeyLength() noexcept
-{
-	return sizeof(ULONG) + sizeof(SINT64);
-}
-
-void RelationPermanent::cleanUp() noexcept
-{
-	delete rel_pages_inst;
-	rel_pages_inst = NULL;
-}
-
-
-void RelationPermanent::fillPagesSnapshot(RelPagesSnapshot& snapshot, const bool attachmentOnly)
+bool RelationPermanent::fillPagesSnapshot(PagesSnapshot& snapshot, const bool attachmentOnly)
 {
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
-	if (rel_pages_inst)
-	{
-		for (FB_SIZE_T i = 0; i < rel_pages_inst->getCount(); i++)
-		{
-			RelationPages* relPages = (*rel_pages_inst)[i];
+	if (!rel_pages_inst)
+		return false;
 
-			if (!attachmentOnly)
+	for (const auto relPages : *rel_pages_inst)
+	{
+		if (!attachmentOnly)
+		{
+			snapshot.add(relPages);
+			relPages->addRef();
+		}
+		else if ((rel_flags & REL_temp_conn) &&
+			PAG_attachment_id(snapshot.spt_tdbb) == relPages->rel_instance_id)
+		{
+			snapshot.add(relPages);
+			relPages->addRef();
+		}
+		else if (rel_flags & REL_temp_tran)
+		{
+			const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
+			for (; tran; tran = tran->tra_next)
 			{
-				snapshot.add(relPages);
-				relPages->addRef();
-			}
-			else if ((rel_flags & REL_temp_conn) &&
-				PAG_attachment_id(snapshot.spt_tdbb) == relPages->rel_instance_id)
-			{
-				snapshot.add(relPages);
-				relPages->addRef();
-			}
-			else if (rel_flags & REL_temp_tran)
-			{
-				const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
-				for (; tran; tran = tran->tra_next)
+				if (tran->tra_number == relPages->rel_instance_id)
 				{
-					if (tran->tra_number == relPages->rel_instance_id)
-					{
-						snapshot.add(relPages);
-						relPages->addRef();
-					}
+					snapshot.add(relPages);
+					relPages->addRef();
 				}
 			}
 		}
 	}
-	else
-		snapshot.add(&rel_pages_base);
+
+	return true;
 }
 
 
-void RelationPermanent::RelPagesSnapshot::clear()
+void RelationPermanent::PagesSnapshot::clear()
 {
 #ifdef DEV_BUILD
 	thread_db* tdbb = NULL;
@@ -594,15 +567,78 @@ void RelationPermanent::RelPagesSnapshot::clear()
 
 	for (FB_SIZE_T i = 0; i < getCount(); i++)
 	{
-		RelationPages* relPages = (*this)[i];
+		auto const relPages = (*this)[i];
 		(*this)[i] = NULL;
 
-		spt_relation->delPages(spt_tdbb, MAX_TRA_NUMBER, relPages);
+		spt_relation->deletePages(spt_tdbb, relPages);
 	}
 
 	inherited::clear();
 }
 
+RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber traNumber, bool allocPages)
+{
+	RelationPages* relPages = &rel_pages_base;
+
+	if (!relPages->rel_pages || !relPages->rel_index_root)
+	{
+		DPM_scan_pages(tdbb, pag_pointer, getId());
+		DPM_scan_pages(tdbb, pag_root, getId());
+	}
+
+	const auto pageSpaceId = relPages->rel_pg_space_id;
+	fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
+
+	Tablespace::lock(tdbb, pageSpaceId);
+
+	return (isTemporary() && !(tdbb->tdbb_flags & TDBB_use_db_page_space)) ?
+		rel_perm->getTempPages(tdbb, traNumber, allocPages) : relPages;
+}
+
+void jrd_rel::getRelLockKey(thread_db* tdbb, UCHAR* key)
+{
+	const ULONG val = getId();
+	memcpy(key, &val, sizeof(ULONG));
+	key += sizeof(ULONG);
+
+	const RelationPages::InstanceId inst_id = getPages(tdbb)->rel_instance_id;
+	memcpy(key, &inst_id, sizeof(inst_id));
+}
+
+constexpr USHORT jrd_rel::getRelLockKeyLength() noexcept
+{
+	return sizeof(ULONG) + sizeof(SINT64);
+}
+
+Lock* jrd_rel::createLock(thread_db* tdbb, lck_t lckType, bool noAst)
+{
+	return createLock(tdbb, getPool(), lckType, noAst);
+}
+
+Lock* jrd_rel::createLock(thread_db* tdbb, MemoryPool& pool, lck_t lckType, bool noAst)
+{
+	const USHORT relLockLen = getRelLockKeyLength();
+
+	Lock* lock = FB_NEW_RPT(pool, relLockLen)
+		Lock(tdbb, relLockLen, lckType, lckType == LCK_relation ? (void*)this : (void*)&rel_gc_lock);
+	getRelLockKey(tdbb, lock->getKeyPtr());
+
+	lock->lck_type = lckType;
+	switch (lckType)
+	{
+	case LCK_relation:
+		break;
+
+	case LCK_rel_gc:
+		lock->lck_ast = noAst ? nullptr : GCLock::ast;
+		break;
+
+	default:
+		fb_assert(false);
+	}
+
+	return lock;
+}
 
 IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 {
@@ -635,32 +671,6 @@ Cached::Index* RelationPermanent::ensureIndex(thread_db* tdbb, MetaId id)
 }
 
 
-PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
-{
-/**************************************
- *
- *	g e t _ r o o t _ p a g e
- *
- **************************************
- *
- * Functional description
- *	Find the root page for a relation.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	RelationPages* relPages = getPages(tdbb);
-	SLONG page = relPages->rel_index_root;
-	if (!page)
-	{
-		DPM_scan_pages(tdbb);
-		page = relPages->rel_index_root;
-	}
-
-	return PageNumber(relPages->rel_pg_space_id, page);
-}
-
-
 Cached::Relation* RelationPermanent::newVersion(thread_db* tdbb, const QualifiedName& name)
 {
 	auto id = jrd_rel::getIdByName(tdbb, name);
@@ -683,8 +693,6 @@ void RelationPermanent::releaseLock(thread_db* tdbb)
 {
 	if (rel_partners_lock)
 		LCK_release(tdbb, rel_partners_lock);
-
-	rel_gc_lock.forcedRelease(tdbb);
 
 	for (auto* index : rel_indices)
 	{
@@ -733,39 +741,9 @@ void Triggers::release(thread_db* tdbb, bool destroy)
 	}
 }
 
-Lock* RelationPermanent::createLock(thread_db* tdbb, lck_t lckType, bool noAst)
-{
-	return createLock(tdbb, getPool(), lckType, noAst);
-}
-
-Lock* RelationPermanent::createLock(thread_db* tdbb, MemoryPool& pool, lck_t lckType, bool noAst)
-{
-	const USHORT relLockLen = getRelLockKeyLength();
-
-	Lock* lock = FB_NEW_RPT(pool, relLockLen)
-		Lock(tdbb, relLockLen, lckType, lckType == LCK_relation ? (void*)this : (void*)&rel_gc_lock);
-	getRelLockKey(tdbb, lock->getKeyPtr());
-
-	lock->lck_type = lckType;
-	switch (lckType)
-	{
-	case LCK_relation:
-		break;
-
-	case LCK_rel_gc:
-		lock->lck_ast = noAst ? nullptr : GCLock::ast;
-		break;
-
-	default:
-		fb_assert(false);
-	}
-
-	return lock;
-}
-
 void RelationPermanent::addFormat(Format* fmt)
 {
-	MutexLockGuard g(rel_formats_grow, FB_FUNCTION);
+	MutexLockGuard g(rel_formats_mutex, FB_FUNCTION);
 
 	rel_formats.grow(fmt->fmt_version + 1, true);
 	rel_formats.writeAccessor()->value(fmt->fmt_version) = fmt;
@@ -780,17 +758,17 @@ void GCLock::blockingAst()
 	 PW - gc allowed to the one connection only
 	****/
 
-	Database* dbb = gcLck->lck_dbb;
+	const auto dbb = m_lock->lck_dbb;
 
 	AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-	unsigned oldFlags = gcFlags.load(std::memory_order_acquire);
+	unsigned oldFlags = m_flags.load(std::memory_order_acquire);
 	do
 	{
 		fb_assert(oldFlags & GC_locked);
 		if (!(oldFlags & GC_locked)) // work already done synchronously ?
 			return;
-	} while (!gcFlags.compare_exchange_weak(oldFlags, oldFlags | GC_blocking,
+	} while (!m_flags.compare_exchange_weak(oldFlags, oldFlags | GC_blocking,
 										  std::memory_order_release, std::memory_order_acquire));
 
 	if (oldFlags & GC_counterMask)
@@ -800,20 +778,20 @@ void GCLock::blockingAst()
 	{
 		// someone acquired EX lock
 
-		fb_assert(gcLck->lck_id);
-		fb_assert(gcLck->lck_physical == LCK_SR);
+		fb_assert(m_lock->lck_id);
+		fb_assert(m_lock->lck_physical == LCK_SR);
 
-		LCK_release(tdbb, gcLck);
-		gcFlags.fetch_and(~(GC_disabled | GC_blocking | GC_locked));
+		LCK_release(tdbb, m_lock);
+		m_flags.fetch_and(~(GC_disabled | GC_blocking | GC_locked));
 	}
 	else
 	{
 		// someone acquired PW lock
 
-		fb_assert(gcLck->lck_id);
-		fb_assert(gcLck->lck_physical == LCK_SW);
+		fb_assert(m_lock->lck_id);
+		fb_assert(m_lock->lck_physical == LCK_SW);
 
-		gcFlags.fetch_or(GC_disabled);
+		m_flags.fetch_or(GC_disabled);
 		downgrade(tdbb);
 	}
 }
@@ -829,7 +807,7 @@ void GCLock::checkGuard(unsigned flags)
 
 bool GCLock::acquire(thread_db* tdbb, int wait)
 {
-	unsigned oldFlags = gcFlags.load(std::memory_order_acquire);
+	unsigned oldFlags = m_flags.load(std::memory_order_acquire);
 	for(;;)
 	{
 		if (oldFlags & (GC_blocking | GC_disabled))		// lock should not be obtained
@@ -838,7 +816,7 @@ bool GCLock::acquire(thread_db* tdbb, int wait)
 		const unsigned newFlags = oldFlags + 1;
 		checkGuard(newFlags);
 
-		if (!gcFlags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire))
+		if (!m_flags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire))
 			continue;
 
 		if (oldFlags & GC_locked)			// lock was already taken when we checked flags
@@ -848,38 +826,38 @@ bool GCLock::acquire(thread_db* tdbb, int wait)
 			break;
 
 		// undefined state - someone else is taking/releasing a lock right now:
-		oldFlags = gcFlags.fetch_sub(1, std::memory_order_acquire);	// decrement our lock counter,
+		oldFlags = m_flags.fetch_sub(1, std::memory_order_acquire);	// decrement our lock counter,
 		checkGuard(oldFlags - 1);
 		Thread::yield();											// wait a bit
-		oldFlags = gcFlags.load(std::memory_order_acquire);			// and retry
+		oldFlags = m_flags.load(std::memory_order_acquire);			// and retry
 	}
 
 	// No need to use LM for LTT
-	if (gcRel->isLTT())
+	if (m_relation->isLTT())
 		return true;
 
 	// We incremented counter from 0 to 1 - take care about lck
-	if (!gcLck)
-		gcLck = gcRel->createLock(tdbb, LCK_rel_gc, false);
+	if (!m_lock)
+		m_lock = m_relation->createLock(tdbb, LCK_rel_gc, false);
 
-	fb_assert(!gcLck->lck_id);
+	fb_assert(!m_lock->lck_id);
 
 	ThreadStatusGuard temp_status(tdbb);
 
 	bool ret;
 	if (oldFlags & GC_disabled)
-		ret = LCK_lock(tdbb, gcLck, LCK_SR, wait);
+		ret = LCK_lock(tdbb, m_lock, LCK_SR, wait);
 	else
 	{
-		ret = LCK_lock(tdbb, gcLck, LCK_SW, wait);
+		ret = LCK_lock(tdbb, m_lock, LCK_SW, wait);
 		if (ret)
 		{
-			gcFlags.fetch_or(GC_locked);
+			m_flags.fetch_or(GC_locked);
 			return true;
 		}
 
-		oldFlags = gcFlags.fetch_or(GC_disabled, std::memory_order_seq_cst) | GC_disabled;
-		ret = LCK_lock(tdbb, gcLck, LCK_SR, wait);
+		oldFlags = m_flags.fetch_or(GC_disabled, std::memory_order_seq_cst) | GC_disabled;
+		ret = LCK_lock(tdbb, m_lock, LCK_SR, wait);
 	}
 
 	unsigned newFlags;
@@ -891,51 +869,51 @@ bool GCLock::acquire(thread_db* tdbb, int wait)
 		if (!ret)
 			newFlags &= ~GC_disabled;
 
-	} while (!gcFlags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
+	} while (!m_flags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
 
 	return false;
 }
 
 void GCLock::downgrade(thread_db* tdbb)
 {
-	unsigned oldFlags = gcFlags.load(std::memory_order_acquire);
+	unsigned oldFlags = m_flags.load(std::memory_order_acquire);
 	unsigned newFlags;
 	do
 	{
 		newFlags = oldFlags - 1;
 		checkGuard(newFlags);
-	} while (!gcFlags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
+	} while (!m_flags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
 
-	if ((!gcRel->isLTT()) && ((newFlags & GC_counterMask) == 0) && (newFlags & GC_blocking))
+	if ((!m_relation->isLTT()) && ((newFlags & GC_counterMask) == 0) && (newFlags & GC_blocking))
 	{
 		fb_assert(newFlags & GC_locked);
-		fb_assert(gcLck->lck_id);
-		fb_assert(gcLck->lck_physical == LCK_SW);
+		fb_assert(m_lock->lck_id);
+		fb_assert(m_lock->lck_physical == LCK_SW);
 
-		LCK_downgrade(tdbb, gcLck);
+		LCK_downgrade(tdbb, m_lock);
 
 		oldFlags = newFlags;
 		do
 		{
 			newFlags = oldFlags;
-			if (gcLck->lck_physical != LCK_SR)
+			if (m_lock->lck_physical != LCK_SR)
 			{
 				newFlags &= ~GC_disabled;
-				if (gcLck->lck_physical < LCK_SR)
+				if (m_lock->lck_physical < LCK_SR)
 					newFlags &= ~GC_locked;
 			}
 			else
 				newFlags |= GC_disabled;
 
 			newFlags &= ~GC_blocking;
-		} while (!gcFlags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
+		} while (!m_flags.compare_exchange_weak(oldFlags, newFlags, std::memory_order_release, std::memory_order_acquire));
 	}
 }
 
 // violates rules of atomic counters - ok ONLY for ASSERT
 unsigned GCLock::getSweepCount() const
 {
-	return gcFlags.load(std::memory_order_relaxed) & GC_counterMask;
+	return m_flags.load(std::memory_order_relaxed) & GC_counterMask;
 }
 
 bool GCLock::disable(thread_db* tdbb, int wait, Lock*& tempLock)
@@ -943,15 +921,15 @@ bool GCLock::disable(thread_db* tdbb, int wait, Lock*& tempLock)
 	ThreadStatusGuard temp_status(tdbb);
 
 	// if validation is already running - go out
-	unsigned oldFlags = gcFlags.load(std::memory_order_acquire);
+	unsigned oldFlags = m_flags.load(std::memory_order_acquire);
 	do {
 		if (oldFlags & GC_disabled)
 			return false;
-	} while (gcFlags.compare_exchange_weak(oldFlags, oldFlags | GC_disabled,
-										 std::memory_order_release, std::memory_order_acquire));
+	} while (m_flags.compare_exchange_weak(oldFlags, oldFlags | GC_disabled,
+										   std::memory_order_release, std::memory_order_acquire));
 
 	int sleeps = -wait * 10;
-	while (gcFlags.load(std::memory_order_relaxed) & GC_counterMask)
+	while (m_flags.load(std::memory_order_relaxed) & GC_counterMask)
 	{
 		EngineCheckout cout(tdbb, FB_FUNCTION);
 		Thread::sleep(100);
@@ -960,46 +938,46 @@ bool GCLock::disable(thread_db* tdbb, int wait, Lock*& tempLock)
 			break;
 	}
 
-	if (gcFlags.load(std::memory_order_relaxed) & GC_counterMask)
+	if (m_flags.load(std::memory_order_relaxed) & GC_counterMask)
 	{
-		gcFlags.fetch_and(~GC_disabled);
+		m_flags.fetch_and(~GC_disabled);
 		return false;
 	}
 
-	if (gcRel->isLTT())
+	if (m_relation->isLTT())
 		return true;
 
 	ensureReleased(tdbb);
 
 	// we need no AST here
 	if (!tempLock)
-		tempLock = gcRel->createLock(tdbb, LCK_rel_gc, true);
+		tempLock = m_relation->createLock(tdbb, LCK_rel_gc, true);
 
 	const bool ret = LCK_lock(tdbb, tempLock, LCK_PW, wait);
 	if (!ret)
-		gcFlags.fetch_and(~GC_disabled);
+		m_flags.fetch_and(~GC_disabled);
 
 	return ret;
 }
 
 void GCLock::ensureReleased(thread_db* tdbb)
 {
-	if (!gcLck)
+	if (!m_lock)
 		return;
 
-	unsigned oldFlags = gcFlags.load(std::memory_order_acquire);
+	unsigned oldFlags = m_flags.load(std::memory_order_acquire);
 	for (;;)
 	{
 		if (oldFlags & GC_locked)
 		{
-			if (!gcFlags.compare_exchange_strong(oldFlags, oldFlags & ~GC_locked,
-											   std::memory_order_release, std::memory_order_acquire))
+			if (!m_flags.compare_exchange_strong(oldFlags, oldFlags & ~GC_locked,
+											     std::memory_order_release, std::memory_order_acquire))
 			{
 				continue;
 			}
 
 			// exactly one who cleared GC_locked bit releases a lock
-			LCK_release(tdbb, gcLck);
+			LCK_release(tdbb, m_lock);
 		}
 
 		return;
@@ -1008,9 +986,10 @@ void GCLock::ensureReleased(thread_db* tdbb)
 
 void GCLock::forcedRelease(thread_db* tdbb)
 {
-	gcFlags.fetch_and(~GC_locked);
-	if (gcLck)
-		LCK_release(tdbb, gcLck);
+	m_flags.fetch_and(~GC_locked);
+
+	if (m_lock)
+		LCK_release(tdbb, m_lock);
 }
 
 void GCLock::enable(thread_db* tdbb, Lock* tempLock)
@@ -1018,15 +997,28 @@ void GCLock::enable(thread_db* tdbb, Lock* tempLock)
 	if (!(tempLock && tempLock->lck_id))
 		return;
 
-	fb_assert(gcFlags.load() & GC_disabled);
+	fb_assert(m_flags.load() & GC_disabled);
 
 	ensureReleased(tdbb);
 
 	LCK_convert(tdbb, tempLock, LCK_EX, LCK_WAIT);
-	gcFlags.fetch_and(~GC_disabled);
+	m_flags.fetch_and(~GC_disabled);
 
 	LCK_release(tdbb, tempLock);
 }
+
+#ifdef DEV_BUILD
+GCLock::State GCLock::isGCEnabled() const
+{
+	if (getSweepCount() || m_relation->isSystem() || m_relation->isTemporary())
+		return State::enabled;
+
+	if (m_flags & GC_disabled)
+		return State::disabled;
+
+	return State::unknown;
+}
+#endif //DEV_BUILD
 
 
 /// RelationPages
@@ -1102,7 +1094,7 @@ void IndexPermanent::reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
 void jrd_rel::destroy(thread_db* tdbb, jrd_rel* rel)
 {
     rel->releaseTriggers(tdbb, true);
-
+	rel->rel_gc_lock.forcedRelease(tdbb);
 	delete rel;
 }
 
@@ -1242,17 +1234,3 @@ int DbTriggers::objectType()
 {
 	return obj_trigger;
 }
-
-#ifdef DEV_BUILD
-GCLock::State GCLock::isGCEnabled() const
-{
-	if (getSweepCount() || gcRel->isSystem() || gcRel->isTemporary())
-		return State::enabled;
-
-	if (gcFlags & GC_disabled)
-		return State::disabled;
-
-	return State::unknown;
-}
-#endif //DEV_BUILD
-

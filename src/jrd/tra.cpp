@@ -981,28 +981,6 @@ void jrd_tra::postResources(thread_db* tdbb, const Resources* resources)
 			if (!traLttRel.find(relation(), pos))
 				traLttRel.insert(pos, relation());
 		}
-
-		const ULONG pageSpaceId = relation()->getBasePages()->rel_pg_space_id;
-		if (!tra_tablespaces.exist(pageSpaceId))
-			tra_tablespaces.add(pageSpaceId);
-	}
-
-	for (const auto& index : resources->indices)
-	{
-		const ULONG pageSpaceId = MET_index_pagespace(tdbb, index()->getRelation(), index()->getId());
-		if (!tra_tablespaces.exist(pageSpaceId))
-			tra_tablespaces.add(pageSpaceId);
-	}
-
-	// Take out existence locks for tablespaces used in statement
-
-	for (const auto tableSpaceId : tra_tablespaces)
-	{
-		if (PageSpace::isTablespace(tableSpaceId))
-		{
-			const auto tableSpace = MET_tablespace_id(tdbb, tableSpaceId);
-			tableSpace->addRef(tdbb);
-		}
 	}
 }
 
@@ -1259,22 +1237,14 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 			TRA_detach_request(transaction->tra_requests);
 	}
 
-	// Release existence locks for tablespaces used in statement
-
-	for (const auto tableSpaceId : transaction->tra_tablespaces)
-	{
-		if (PageSpace::isTablespace(tableSpaceId))
-		{
-			const auto tableSpace = MET_tablespace_id(tdbb, tableSpaceId);
-			tableSpace->release(tdbb);
-		}
-	}
-
 	// Care about used external files
 	while (transaction->traExtRel.hasData())
 		transaction->traExtRel.pop()->traDetach();
 
 	MetadataCache::release_temp_tables(tdbb, transaction);
+
+	// Release tablespaces used by this transaction
+	transaction->releaseTablespaces(tdbb);
 
 	// Release the locks associated with the transaction
 
@@ -1364,6 +1334,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
  *
  **************************************/
 	SET_TDBB(tdbb);
+	const auto dbb = tdbb->getDatabase();
 
 	TraceTransactionEnd trace(transaction, false, retaining_flag);
 
@@ -1452,9 +1423,9 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 		state = tra_committed;
 	}
 
-	if (!(tdbb->getDatabase()->dbb_flags & DBB_dropping))
+	if (!(dbb->dbb_flags & DBB_dropping))
 	{
-		const jrd_tra* const sysTran = tdbb->getAttachment()->getSysTransaction();
+		const auto sysTran = tdbb->getAttachment()->getSysTransaction();
 		if (sysTran->tra_flags & TRA_write)
 			transaction_flush(tdbb, FLUSH_SYSTEM, 0);
 	}
@@ -1470,6 +1441,9 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	REPL_trans_rollback(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
+
+	// Undo any uncommitted changes in the tablespace cache
+	dbb->dbb_tablespaces.rollback(tdbb, transaction);
 
 	TRA_release_transaction(tdbb, transaction, &trace);
 }
@@ -2252,7 +2226,7 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 	}
 
 	// set up the lock on the relation/view
-	Lock* lock = RLCK_transaction_relation_lock(tdbb, transaction, getPermanent(relation));
+	Lock* lock = RLCK_transaction_relation_lock(tdbb, transaction, relation);
 	lock->lck_logical = lock_type;
 
 	if (!found)
@@ -2484,24 +2458,24 @@ void MetadataCache::release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
  *
  **************************************/
 	// Release GTTs (Global Temporary Tables) with transaction lifetime
-	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
+	for (const auto relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
-			relation->delPages(tdbb, transaction->tra_number);
+			relation->deletePages(tdbb, transaction->tra_number);
 	}
 
 	// Release LTTs (Local Temporary Tables) with transaction lifetime
-	Attachment* att = tdbb->getAttachment();
+	const auto att = tdbb->getAttachment();
 
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
-		const auto ltt = lttEntry.second;
-
-		if (ltt && ltt->relation)
+		if (const auto ltt = lttEntry.second)
 		{
-			auto *rel = ltt->relation->getPermanent();
-			if (rel->rel_flags & REL_temp_tran)
-				rel->delPages(tdbb, transaction->tra_number);
+			if (const auto relation = ltt->relation)
+			{
+				if (relation->checkFlags(REL_temp_tran))
+					relation->getPermanent()->deletePages(tdbb, transaction->tra_number);
+			}
 		}
 	}
 }
@@ -2523,21 +2497,28 @@ void MetadataCache::retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, Tr
  **************************************/
 
 	// Retain GTTs (Global Temporary Tables) with transaction lifetime
-	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
+	for (const auto relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
 			relation->retainPages(tdbb, transaction->tra_number, new_number);
 	}
 
 	// Retain LTTs (Local Temporary Tables) with transaction lifetime
-	Attachment* att = tdbb->getAttachment();
+	const auto att = tdbb->getAttachment();
 
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
-		const auto ltt = lttEntry.second;
+		if (const auto ltt = lttEntry.second)
+		{
+			if (const auto relation = ltt->relation)
+			{
+				const auto relPerm = ltt->relation->getPermanent();
+				fb_assert(relPerm);
 
-		if (ltt && ltt->relation && (ltt->relation->getPermanent()->rel_flags & REL_temp_tran))
-			ltt->relation->getPermanent()->retainPages(tdbb, transaction->tra_number, new_number);
+				if (relPerm->rel_flags & REL_temp_tran)
+					relPerm->retainPages(tdbb, transaction->tra_number, new_number);
+			}
+		}
 	}
 }
 
@@ -2659,6 +2640,12 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
+
+		if (!commit)
+		{
+			// Undo any uncommitted changes in the tablespace cache
+			dbb->dbb_tablespaces.rollback(tdbb, transaction);
+		}
 	}
 
 	MetadataCache::retain_temp_tables(tdbb, transaction, new_number);

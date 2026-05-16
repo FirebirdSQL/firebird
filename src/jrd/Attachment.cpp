@@ -199,7 +199,6 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_user(nullptr),
 	  att_ss_user(nullptr),
 	  att_active_snapshots(*pool),
-	  att_tablespaces(*pool),
 	  att_requests(*pool),
 	  att_lock_owner_id(Database::getLockOwnerId()),
 	  att_backup_state_counter(0),
@@ -243,9 +242,6 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_initial_options(*pool),
 	  att_provider(provider)
 {
-	const auto dbTableSpace = FB_NEW_POOL(*pool) Tablespace(*pool);
-	att_tablespaces.add(dbTableSpace);
-
 	att_system_schema_search_path->push(SYSTEM_SCHEMA);
 }
 
@@ -390,19 +386,14 @@ void Jrd::Attachment::releaseBatches()
 
 void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
 {
-	HalfStaticArray<Cached::Relation*, 8> tempRelations;
-
 	for (auto& lttEntry : att_local_temporary_tables)
 	{
 		const auto ltt = lttEntry.second;
 		if (ltt->relation)
-			tempRelations.add(ltt->relation->getPermanent());
-	}
-
-	for (const auto tempRelation : tempRelations)
-	{
-		if (tempRelation->rel_flags & REL_temp_conn)
-			tempRelation->delPages(tdbb);
+		{
+			if (ltt->relation->checkFlags(REL_temp_conn))
+				ltt->relation->getPermanent()->deletePages(tdbb);
+		}
 	}
 }
 
@@ -617,17 +608,6 @@ void Jrd::Attachment::initLocks(thread_db* tdbb)
 
 void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 {
-	// Release all tablespace existence locks that might have been taken
-
-	for (const auto tablespace : att_tablespaces)
-	{
-		if (tablespace && tablespace->existenceLock)
-		{
-			LCK_release(tdbb, tablespace->existenceLock);
-			tablespace->useCount = 0;
-		}
-	}
-
 	// Release the DSQL cache locks
 
 	DSqlCache::Accessor accessor(&att_dsql_cache);

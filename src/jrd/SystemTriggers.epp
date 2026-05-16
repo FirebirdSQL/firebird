@@ -687,7 +687,7 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 	{
 		static const CachedRequestId request3CacheId;
 		AutoCacheRequest request3(tdbb, request3CacheId);
-		auto* rel = MetadataCache::getPerm<Cached::Relation>(tdbb, QualifiedName(relationName, schemaName), 0);
+		const auto rel = MetadataCache::getPerm<Cached::Relation>(tdbb, QualifiedName(relationName, schemaName), 0);
 
 		FOR (REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
 			IND IN RDB$INDICES
@@ -703,7 +703,10 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 					IND.RDB$INDEX_INACTIVE = MET_index_deferred_drop;
 				END_MODIFY
 
-				IDX_mark_index(tdbb, rel, idxId);
+				const auto relation = rel->getVersioned(tdbb, CacheFlag::AUTOCREATE);
+				fb_assert(relation);
+				IDX_mark_index(tdbb, relation, idxId);
+
 				rel->eraseIndex(tdbb, idxId);
 			}
 		}
@@ -1586,18 +1589,22 @@ void afterInsertRelation(thread_db* tdbb, Record* record)
 
 		// Here minor optimization is possible - do it in single cache call
 		MetadataCache::newVersion<Cached::Relation>(tdbb, id);
-		auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, id, CacheFlag::MINISCAN);
+		const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, id, CacheFlag::MINISCAN);
+		relation->rel_flags |= REL_get_dependencies;
 
 		// Do not access external file info from cache - it may be not usable yet
 		// On contrary rel_flags (and therefore check for view) are OK
 		fb_assert(relation);
 		if (relation)
 		{
+			const auto newVersion = relation->getVersioned(tdbb, CacheFlag::NOCOMMIT | CacheFlag::MINISCAN);
+			fb_assert(newVersion);
+
 			if (!EVL_field(nullptr, record, f_rel_ext_file, &desc) &&
 				!relation->isView())
 			{
 				// create the table
-				DPM_create_relation(tdbb, relation);
+				DPM_create_relation(tdbb, newVersion);
 			}
 
 			relation->rel_flags |= REL_get_dependencies;

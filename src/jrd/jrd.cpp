@@ -8235,10 +8235,8 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	delete dbb->dbb_crypto_manager;
 	dbb->dbb_crypto_manager = NULL;
 
-	MetadataCache::clear(tdbb);
-
-	// Shut down any extern relations
-	dbb->dbb_mdc->releaseRelations(tdbb);
+	dbb->dbb_mdc->cleanup(tdbb);
+	dbb->dbb_tablespaces.release(tdbb);
 
 	LCK_fini(tdbb, LCK_OWNER_database);
 
@@ -8260,8 +8258,6 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 			}
 		}
 	}
-
-	dbb->dbb_mdc->cleanup(tdbb);
 
 	if (flags & SHUT_DBB_RELEASE_POOLS)
 	{

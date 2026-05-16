@@ -890,8 +890,8 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 			name = PRIMARY_TABLESPACE_NAME;
 		else if (PageSpace::isTablespace(pageSpaceId))
 		{
-			if (const auto tablespace = MET_tablespace_id(tdbb, pageSpaceId))
-				name = tablespace->name;
+			if (const auto tableSpace = Tablespace::lookup(tdbb, pageSpaceId))
+				name = tableSpace->getName();
 		}
 
 		if (name.hasData())

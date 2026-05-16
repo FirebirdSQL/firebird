@@ -2730,7 +2730,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	}
 
 	request->req_operation = Request::req_return;
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
 	if (rpb->rpb_runtime_flags & RPB_just_deleted)
 		return parentStmt;
@@ -8451,7 +8451,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	}
 
 	impure->sta_state = 0;
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
 	if (orgRpb->rpb_runtime_flags & RPB_just_deleted)
 	{
@@ -9450,7 +9450,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 			impure->sta_state = 0;
 			if (relation)
-				RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+				RLCK_reserve_relation(tdbb, transaction, relation, true);
 			break;
 
 		case Request::req_return:

@@ -648,6 +648,8 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 									 RuntimeStatistics* baseline, RuntimeStatistics* stats,
 									 SINT64 clock, SINT64 recordsFetched)
 {
+	const auto dbb = attachment->att_database;
+
 	memset(&m_info, 0, sizeof(m_info));
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
 	m_info.pin_records_fetched = recordsFetched;
@@ -672,8 +674,8 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 
 			if (PageSpace::isTablespace(id))
 			{
-				if (const auto tablespace = attachment->getTablespace(id))
-					return tablespace->name.c_str();
+				if (const auto tablespace = dbb->dbb_tablespaces.get(id))
+					return tablespace->getName().c_str();
 			}
 
 			return "";
@@ -683,8 +685,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 
 		auto getTableName = [&](MetaId id) -> Firebird::string
 		{
-			auto* mdc = attachment->att_database->dbb_mdc;
-			if (const auto* relation = mdc->lookupRelationNoChecks(id))
+			if (const auto* relation = dbb->dbb_mdc->lookupRelationNoChecks(id))
 				return relation->getName().toQuotedString();
 
 			return "";
