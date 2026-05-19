@@ -7536,10 +7536,9 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		}
 
 		// Store foreign field options
-		for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
+		for (const auto& option : clause->options)
 		{
-			const Option* option = &clause->options[cnt];
-			if (option->value.hasData())
+			if (option.value.hasData())
 			{
 				AutoCacheRequest request(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
 
@@ -7556,10 +7555,10 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 					strcpy(FTFOPT.RDB$FIELD_NAME, field->fld_name.c_str());
 
 					FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.name.c_str());
 
 					FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-					strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option.value.c_str());
 				}
 				END_STORE
 			}
@@ -9710,11 +9709,11 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		lock.release();		// ID generated
 
 		// Store foreign table options
-		for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+		for (auto& option : options)
 		{
-			if (options[cnt].value.hasData())
+			if (option.value.hasData())
 			{
-				storeOption(tdbb, transaction, &options[cnt]);
+				storeOption(tdbb, transaction, &option);
 			}
 		}
 
@@ -10332,23 +10331,22 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						found = true;
 
 						// Drop old options and insert the new ones
-						for (unsigned cnt = 0; cnt < clause->options.getCount(); ++cnt)
+						for (auto& option : clause->options)
 						{
-							const Option* option = &clause->options[cnt];
-							AutoCacheRequest request(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
+								AutoCacheRequest request(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
 
 							FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 								FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
 								WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 									FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
 									FTFOPT.RDB$FIELD_NAME EQ clause->name.c_str() AND
-									FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option->name.c_str()
+									FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option.name.c_str()
 							{
 								ERASE FTFOPT;
 							}
 							END_FOR
 
-							if (option->value.hasData())
+							if (option.value.hasData())
 							{
 								request.reset(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
 								STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -10364,10 +10362,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 									strcpy(FTFOPT.RDB$FIELD_NAME, clause->name.c_str());
 
 									FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-									strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.name.c_str());
 
 									FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-									strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option.value.c_str());
 								}
 								END_STORE
 							}
@@ -10521,12 +10519,12 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 				case Clause::TYPE_ALTER_OPTIONS:
 				{
 					// Drop old options and insert the new ones
-					for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+					for (auto& option : options)
 					{
-						DropRelationNode::dropOption(tdbb, transaction, name, options[cnt].name);
+						DropRelationNode::dropOption(tdbb, transaction, name, option.name);
 
-						if (options[cnt].value.hasData())
-							storeOption(tdbb, transaction, &options[cnt]);
+						if (option.value.hasData())
+							storeOption(tdbb, transaction, &option);
 					}
 					break;
 				}
@@ -16080,11 +16078,11 @@ void CreateAlterForeignServerNode::executeCreate(thread_db* tdbb, DsqlCompilerSc
 
 	if (options.hasData())
 	{
-		for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+		for (auto& option : options)
 		{
-			if (options[cnt].value.hasData())
+			if (option.value.hasData())
 			{
-				storeOption(tdbb, transaction, &options[cnt]);
+				storeOption(tdbb, transaction, &option);
 			}
 		}
 
@@ -16136,12 +16134,12 @@ bool CreateAlterForeignServerNode::executeAlter(thread_db* tdbb, DsqlCompilerScr
 		return found;
 
 	// Drop old options and insert the new ones
-	for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+	for (auto& option : options)
 	{
-		DropForeignServerNode::dropOption(tdbb, transaction, name, options[cnt].name);
+		DropForeignServerNode::dropOption(tdbb, transaction, name, option.name);
 
-		if (options[cnt].value.hasData())
-			storeOption(tdbb, transaction, &options[cnt]);
+		if (option.value.hasData())
+			storeOption(tdbb, transaction, &option);
 	}
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_ALTER_FOREIGN_SERVER,
@@ -16353,11 +16351,11 @@ void UserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 
 	if (options.hasData())
 	{
-		for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+		for (auto& option : options)
 		{
-			if (options[cnt].value.hasData())
+			if (option.value.hasData())
 			{
-				storeOption(tdbb, transaction, &options[cnt]);
+				storeOption(tdbb, transaction, &option);
 			}
 		}
 	}
@@ -16404,14 +16402,14 @@ bool UserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScr
 		case UMAP_RPL:
 		{
 			// Drop old options and insert the new ones
-			for (unsigned cnt = 0; cnt < options.getCount(); ++cnt)
+			for (auto& option : options)
 			{
-				if (dropOption(tdbb, transaction, user, server, options[cnt].name))
+				if (dropOption(tdbb, transaction, user, server, option.name))
 					modified = true;
 
-				if (options[cnt].value.hasData())
+				if (option.value.hasData())
 				{
-					storeOption(tdbb, transaction, &options[cnt]);
+					storeOption(tdbb, transaction, &option);
 
 					modified = true;
 				}
