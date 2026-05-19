@@ -469,6 +469,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 	const auto ctx_var_buffer = allocBuffer(tdbb, pool, rel_mon_ctx_vars);
 	const auto mem_usage_buffer = allocBuffer(tdbb, pool, rel_mon_mem_usage);
 	const auto tab_stat_buffer = allocBuffer(tdbb, pool, rel_mon_tab_stats);
+	const auto ts_stat_buffer = allocBuffer(tdbb, pool, rel_mon_ts_stats);
 	const auto local_temp_tables_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_tables);
 	const auto local_temp_table_columns_buffer = allocBuffer(tdbb, pool, rel_mon_local_temp_table_columns);
 
@@ -606,6 +607,8 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 		case rel_mon_tab_stats:
 			buffer = tab_stat_buffer;
 			break;
+		case rel_mon_ts_stats:
+			buffer = ts_stat_buffer;
 		case rel_mon_local_temp_tables:
 			buffer = local_temp_tables_buffer;
 			break;
@@ -878,6 +881,32 @@ void SnapshotData::putField(thread_db* tdbb, Record* record, const DumpField& fi
 		dsc from_desc;
 		from_desc.makeBoolean(&value);
 		MOV_move(tdbb, &from_desc, &to_desc);
+	}
+	else if (field.type == VALUE_TABLESPACE_ID)
+	{
+		// special case: translate tablespace ID into name
+		fb_assert(field.length == sizeof(ULONG));
+		ULONG pageSpaceId;
+		memcpy(&pageSpaceId, field.data, field.length);
+
+		MetaName name;
+
+		if (pageSpaceId == 0)
+			name = TEMP_TABLESPACE_NAME;
+		else if (pageSpaceId == DB_PAGE_SPACE)
+			name = PRIMARY_TABLESPACE_NAME;
+		else if (PageSpace::isTablespace(pageSpaceId))
+		{
+			if (const auto tableSpace = Tablespace::lookup(tdbb, pageSpaceId))
+				name = tableSpace->getName();
+		}
+
+		if (name.hasData())
+		{
+			dsc from_desc;
+			from_desc.makeText(name.length(), CS_METADATA, (UCHAR*) name.c_str());
+			MOV_move(tdbb, &from_desc, &to_desc);
+		}
 	}
 	else
 	{
@@ -1541,7 +1570,33 @@ void Monitoring::putStatistics(thread_db* tdbb, SnapshotData::DumpRecord& record
 	record.storeInteger(f_mon_rec_imgc, statistics[RecordStatType::IMGC]);
 	record.write();
 
-	// logical I/O statistics (table wise)
+	// physical I/O statistics (per tablespace)
+
+	for (const auto& counts : statistics.getPageCounters())
+	{
+		if (counts.isEmpty())
+			continue;
+
+		const auto io_stat_id = getGlobalId(fb_utils::genUniqueId());
+
+		record.reset(rel_mon_ts_stats);
+		record.storeGlobalId(f_mon_ts_stat_id, id);
+		record.storeInteger(f_mon_ts_stat_group, stat_group);
+		record.storeTablespaceId(f_mon_ts_name, counts.getGroupId());
+		record.storeGlobalId(f_mon_tab_io_stat_id, io_stat_id);
+		record.write();
+
+		record.reset(rel_mon_io_stats);
+		record.storeGlobalId(f_mon_io_stat_id, io_stat_id);
+		record.storeInteger(f_mon_io_stat_group, stat_group);
+		record.storeInteger(f_mon_io_page_reads, counts[PageStatType::READS]);
+		record.storeInteger(f_mon_io_page_writes, counts[PageStatType::WRITES]);
+		record.storeInteger(f_mon_io_page_fetches, counts[PageStatType::FETCHES]);
+		record.storeInteger(f_mon_io_page_marks, counts[PageStatType::MARKS]);
+		record.write();
+	}
+
+	// logical I/O statistics (per table)
 
 	for (const auto& counts : statistics.getTableCounters())
 	{

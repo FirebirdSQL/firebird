@@ -964,8 +964,8 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, 0u, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
-	RelationPages* relPages = relation->getBasePages();
+	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+	const auto relPages = relation->getBasePages();
 	if (!relPages->rel_pages)
 	{
 		// NS: There's no need to reassign first page for RDB$PAGES relation since
@@ -1289,15 +1289,16 @@ void PAG_release_page(thread_db* tdbb, const PageNumber& number, const PageNumbe
  *
  **************************************/
 
-	fb_assert(number.getPageSpaceID() == prior_page.getPageSpaceID() ||
-			  prior_page == ZERO_PAGE_NUMBER);
+	// RS: When index is on another tablespace this maybe wrong assert if prior is IRP
+//	fb_assert(number.getPageSpaceID() == prior_page.getPageSpaceID() ||
+//			  prior_page == ZERO_PAGE_NUMBER);
 
 	const ULONG pgNum = number.getPageNum();
 	PAG_release_pages(tdbb, number.getPageSpaceID(), 1, &pgNum, prior_page.getPageNum());
 }
 
 
-void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
+void PAG_release_pages(thread_db* tdbb, ULONG pageSpaceID, int cntRelease,
 		const ULONG* pgNums, const ULONG prior_page)
 {
 /**************************************
@@ -2034,7 +2035,7 @@ ULONG PageSpace::extend(thread_db* tdbb, const ULONG pageNum, bool forceSize)
 	}
 }
 
-ULONG PageSpace::getSCNPageNum(ULONG sequence) noexcept
+ULONG PageSpace::getSCNPageNum(ULONG sequence) const noexcept
 {
 /**************************************
  *
@@ -2046,32 +2047,51 @@ ULONG PageSpace::getSCNPageNum(ULONG sequence) noexcept
  *  First SCN page number is fixed as FIRST_SCN_PAGE.
  *
  **************************************/
-	if (!sequence) {
-		return scnFirst;
-	}
-	return sequence * dbb->dbb_page_manager.pagesPerSCN;
+
+	return sequence ? sequence * dbb->dbb_page_manager.pagesPerSCN : scnFirst;
 }
 
-ULONG PageSpace::getSCNPageNum(const Database* dbb, ULONG sequence)
+
+PageManager::PageManager(Database* aDbb, Firebird::MemoryPool& aPool) :
+	dbb(aDbb),
+	pageSpaces(aPool),
+	pageSpacesLock(NULL),
+	pool(aPool)
 {
-	PageSpace* pgSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-	return pgSpace->getSCNPageNum(sequence);
+	pagesPerPIP = 0;
+	bytesBitPIP = 0;
+	transPerTIP = 0;
+	gensPerPage = 0;
+	pagesPerSCN = 0;
+	tempPageSpaceID = 0;
+	tempFileCreated = false;
+
+	if (dbb->dbb_config->getServerMode() == MODE_SUPER)
+		pageSpacesLock = FB_NEW_POOL(pool) RWLock();
+
+	addPageSpace(DB_PAGE_SPACE);
 }
 
-PageSpace* PageManager::addPageSpace(const USHORT pageSpaceID)
+PageSpace* PageManager::addPageSpace(const ULONG pageSpaceID)
 {
-	PageSpace* newPageSpace = findPageSpace(pageSpaceID);
-	if (!newPageSpace)
-	{
-		newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
-		pageSpaces.add(newPageSpace);
+	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
+	FB_SIZE_T pos;
+	if (pageSpaces.find(pageSpaceID, pos)) {
+		fb_assert(false);
+		return pageSpaces[pos];
 	}
+
+	PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
+	pageSpaces.add(newPageSpace);
 
 	return newPageSpace;
 }
 
-PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
+PageSpace* PageManager::findPageSpace(const ULONG pageSpace) const
 {
+	ReadLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos)) {
 		return pageSpaces[pos];
@@ -2080,14 +2100,18 @@ PageSpace* PageManager::findPageSpace(const USHORT pageSpace) const
 	return 0;
 }
 
-void PageManager::delPageSpace(const USHORT pageSpace)
+void PageManager::delPageSpace(const ULONG pageSpace, bool deleteFile)
 {
+	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
+
 	FB_SIZE_T pos;
 	if (pageSpaces.find(pageSpace, pos))
 	{
-		PageSpace* pageSpaceToDelete = pageSpaces[pos];
+		AutoPtr<PageSpace> pageSpaceToDelete(pageSpaces[pos]);
 		pageSpaces.remove(pos);
-		delete pageSpaceToDelete;
+
+		if (deleteFile && pageSpaceToDelete->file)
+			unlink(pageSpaceToDelete->file->fil_string);
 	}
 }
 
@@ -2115,12 +2139,12 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 		if (!attachment->att_temp_pg_lock)
 		{
 			Lock* const lock = FB_NEW_RPT(*attachment->att_pool, 0)
-				Lock(tdbb, sizeof(SLONG), LCK_page_space);
+				Lock(tdbb, sizeof(ULONG), LCK_page_space);
 
 			while (true)
 			{
-				const double tmp = rand() * (MAX_USHORT - TEMP_PAGE_SPACE - 1.0) / (RAND_MAX + 1.0);
-				lock->setKey(static_cast<SLONG>(tmp) + TEMP_PAGE_SPACE + 1);
+				const double tmp = rand() * (MAX_PAGE_SPACE_ID - TEMP_PAGE_SPACE - 1.0) / (RAND_MAX + 1.0);
+				lock->setKey(static_cast<ULONG>(tmp) + TEMP_PAGE_SPACE + 1);
 				if (LCK_lock(tdbb, lock, LCK_write, LCK_NO_WAIT))
 					break;
 				fb_utils::init_status(tdbb->tdbb_status_vector);
@@ -2129,7 +2153,7 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 			attachment->att_temp_pg_lock = lock;
 		}
 
-		tempPageSpaceID = (USHORT) attachment->att_temp_pg_lock->getKey();
+		tempPageSpaceID = (ULONG) attachment->att_temp_pg_lock->getKey();
 	}
 	else
 	{
@@ -2139,7 +2163,7 @@ void PageManager::initTempPageSpace(thread_db* tdbb)
 	addPageSpace(tempPageSpaceID);
 }
 
-USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
+ULONG PageManager::getTempPageSpaceID(thread_db* tdbb)
 {
 	fb_assert(tempPageSpaceID != 0);
 	if (!tempFileCreated)
@@ -2170,6 +2194,75 @@ USHORT PageManager::getTempPageSpaceID(thread_db* tdbb)
 	}
 	return tempPageSpaceID;
 }
+
+
+void PageManager::allocTableSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const PathName& fileName)
+{
+	/***
+	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
+	 */
+	fb_assert(PageSpace::isTablespace(pageSpaceID));
+
+	if (!findPageSpace(pageSpaceID))
+	{
+		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);
+
+		// Double check if someone concurrently have added the tablespaceid
+		if (findPageSpace(pageSpaceID))
+			return;
+
+		// Verify tablespace file path against DatabaseAccess entry of firebird.conf
+		if (!JRD_verify_database_access(fileName))
+		{
+			ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("tablespace") <<
+				Arg::Str(fileName));
+		}
+
+		PageSpace* newPageSpace = FB_NEW_POOL(pool) PageSpace(dbb, pageSpaceID);
+
+		try
+		{
+			if (create)
+			{
+				newPageSpace->file = PIO_create(tdbb, fileName, false, false);
+				// When opening an existing TS, a pointer to this PageSpace can be added to pageSpaces at the end of the method.
+				// When creating a new TS, there is a need to add a new PageSpace to pageSpaces earlier.
+				// Because of the need to update the SCN (if the database SCN is greater than zero) during the creation of new TS pages.
+				// This early addition of a pointer to PageSpace will not create a race anywhere
+				// (due to the fact that there is a pointer to an incompletely constructed object for some time),
+				// because the TS metadata is not yet in the system table and no one can access this TS.
+				{
+					WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+					pageSpaces.add(newPageSpace);
+				}
+				PAG_format_pip(tdbb, *newPageSpace);
+			}
+			else
+			{
+				newPageSpace->file = PIO_open(tdbb, fileName, fileName);
+				newPageSpace->pipFirst = FIRST_PIP_PAGE;
+				newPageSpace->scnFirst = FIRST_SCN_PAGE;
+			}
+		}
+		catch (...)
+		{
+			if (create)
+			{
+				WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+				pageSpaces.findAndRemove(pageSpaceID);
+			}
+			delete newPageSpace;
+			throw;
+		}
+
+		if (!create)
+		{
+			WriteLockGuard writeGuard(pageSpacesLock, FB_FUNCTION);
+			pageSpaces.add(newPageSpace);
+		}
+	}
+}
+
 
 ULONG PAG_page_count(thread_db* tdbb)
 {

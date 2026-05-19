@@ -95,6 +95,7 @@
 #include "../common/classes/Hash.h"
 #include "../common/classes/MsgPrint.h"
 #include "../jrd/Function.h"
+#include "../jrd/Tablespace.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "firebird/impl/msg_helper.h"
 #include "../jrd/LocalTemporaryTable.h"
@@ -337,6 +338,17 @@ void MetadataCache::update_partners(thread_db* tdbb)
 // Done before MDC is deleted
 void MetadataCache::cleanup(thread_db* tdbb)
 {
+	// Shut down any extern relations
+
+	for (auto relation : mdc_relations)
+	{
+		if (relation)
+		{
+			if (const auto ext = relation->getExtFile())
+				ext->release();
+		}
+	}
+
 	mdc_relations.cleanup(tdbb);
 	mdc_procedures.cleanup(tdbb);
 	mdc_functions.cleanup(tdbb);
@@ -3095,6 +3107,22 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				if (!REL.RDB$RELATION_TYPE.NULL)
 					rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
+				ULONG pageSpaceId = DB_PAGE_SPACE;
+
+				if (!rel_perm->isSystem())
+				{
+#ifdef DEV_BUILD
+					if (!attachment->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
+						fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
+#endif
+					if (!REL.RDB$TABLESPACE_NAME.NULL)
+					{
+						pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
+					}
+				}
+
+				setPageSpace(tdbb, pageSpaceId);
+
 				rel_current_fmt = REL.RDB$FORMAT;
 			}
 			END_FOR
@@ -3278,6 +3306,22 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 					fb_assert(false);
 			}
 		}
+
+		ULONG pageSpaceId = DB_PAGE_SPACE;
+
+		if (!rel_perm->isSystem())
+		{
+#ifdef DEV_BUILD
+			if (!attachment->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
+				fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
+#endif
+			if (!REL.RDB$TABLESPACE_NAME.NULL)
+			{
+				pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
+			}
+		}
+
+		setPageSpace(tdbb, pageSpaceId);
 
 		// Pick up field specific stuff
 
@@ -4753,13 +4797,10 @@ MetadataCache::~MetadataCache()
 
 void MetadataCache::releaseGTTs(thread_db* tdbb)
 {
-	for (auto relation : mdc_relations)
+	for (const auto relation : mdc_relations)
 	{
-		if (relation && (relation->rel_flags & REL_temp_conn) &&
-			!(relation->isDropped()))
-		{
-			relation->delPages(tdbb);
-		}
+		if (relation && (relation->rel_flags & REL_temp_conn) && !relation->isDropped())
+			relation->deletePages(tdbb);
 	}
 }
 
@@ -4800,21 +4841,6 @@ void MetadataCache::runDBTriggers(thread_db* tdbb, TriggerAction action)
 			}
 		}
 		throw;
-	}
-}
-
-void MetadataCache::releaseRelations(thread_db* tdbb)
-{
-	// Shut down any extern relations
-
-	for (auto relation : mdc_relations)
-	{
-		if (relation)
-		{
-			auto* ext = relation->getExtFile();
-			if (ext)
-				ext->release();
-		}
 	}
 }
 
@@ -5565,16 +5591,215 @@ bool MET_check_schema_exists(thread_db* tdbb, const MetaName& name)
 	return false;
 }
 
+ULONG MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id)
+{
+/**************************************
+ *
+ *	M E T _ r e l _ p a g e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Find id and filename of tablespace by ID of relation and allocate page space
+ *      Returns page space id for relation of default DB_PAGE_SPACE if table space
+ *      for relation is not specified
+ *      RS: Probably later it would be useful to implement cache of tablespaces
+ *
+ **************************************/
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	ULONG pageSpaceId = DB_PAGE_SPACE;
+
+	AutoCacheRequest request(tdbb, irq_find_rel_ts, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		REL IN RDB$RELATIONS
+			WITH REL.RDB$RELATION_ID EQ rel_id AND
+				 REL.RDB$TABLESPACE_NAME NOT MISSING
+	{
+#ifdef DEV_BUILD
+		if (!attachment->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
+			fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
+#endif
+		pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
+	}
+	END_FOR
+
+	return pageSpaceId;
+}
+
+ULONG MET_index_pagespace(thread_db* tdbb, RelationPermanent* relation, USHORT idx_id)
+{
+/**************************************
+ *
+ *	M E T _ i n d e x _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Find tablespace name for index and lookup page space for it.
+ *      If there is no tablespace for the index or relation is system
+ *      returns relation pagespace.
+ *
+ **************************************/
+	// Relation tablespace name must be in system table after index creation
+	// If it's not so we should use the main DB page space.
+	ULONG pageSpaceId = DB_PAGE_SPACE;
+
+	// System relations are always inside the default page space
+	if (relation->isSystem())
+		return pageSpaceId;
+
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	AutoCacheRequest request(tdbb, irq_find_idx_ts, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		IDX IN RDB$INDICES
+			WITH IDX.RDB$SCHEMA_NAME EQ relation->rel_name.schema.c_str() AND
+			IDX.RDB$RELATION_NAME EQ relation->rel_name.object.c_str() AND
+			IDX.RDB$INDEX_ID EQ idx_id + 1 AND
+			IDX.RDB$TABLESPACE_NAME NOT MISSING
+	{
+		pageSpaceId = Tablespace::lookupId(tdbb, IDX.RDB$TABLESPACE_NAME);
+	}
+	END_FOR
+
+	return pageSpaceId;
+}
+
+ULONG MET_tablespace_id(thread_db* tdbb, const MetaName& name, PathName& fileName)
+{
+/**************************************
+ *
+ *	M E T _ t a b l e s p a c e _ i d
+ *
+ **************************************
+ *
+ * Functional description
+ *      Get tablespace ID by its name.
+ *
+ **************************************/
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	fb_assert(name.hasData());
+
+	ULONG id = 0;
+
+	AutoCacheRequest request(tdbb, irq_find_ts_id, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		TS IN RDB$TABLESPACES
+		WITH TS.RDB$TABLESPACE_NAME EQ name.c_str()
+	{
+		id = TS.RDB$TABLESPACE_ID;
+		fileName = TS.RDB$FILE_NAME;
+	}
+	END_FOR
+
+	return id;
+}
+
+
+bool MET_tablespace(thread_db* tdbb, ULONG id, MetaName& name, PathName& fileName)
+{
+/**************************************
+ *
+ *	M E T _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *      Read tablespace metadata from disk, return false if not found.
+ *
+ **************************************/
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	fb_assert(PageSpace::isTablespace(id));
+
+	bool found = false;
+
+	AutoCacheRequest request(tdbb, irq_find_ts, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		TS IN RDB$TABLESPACES
+		WITH TS.RDB$TABLESPACE_ID EQ id
+	{
+		found = true;
+		name = TS.RDB$TABLESPACE_NAME;
+		fileName = TS.RDB$FILE_NAME;
+	}
+	END_FOR
+
+	return found;
+}
+
+
+void MET_get_ts_files(Jrd::thread_db* tdbb, ObjectsArray<PathName>& files)
+{
+/**************************************
+ *
+ *	M E T _ g e t _ t s _ f i l e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      List all tablespace file names
+ *
+ **************************************/
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	AutoCacheRequest request(tdbb, irq_list_ts_files, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		TS IN RDB$TABLESPACES WITH
+		(TS.RDB$SYSTEM_FLAG MISSING OR TS.RDB$SYSTEM_FLAG NE RDB_system)
+	{
+		files.push(TS.RDB$FILE_NAME);
+	}
+	END_FOR
+}
+
+void MET_scan_tablespaces(Jrd::thread_db* tdbb)
+{
+/**************************************
+ *
+ *	M E T _ s c a n _ t a b l e s p a c e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Scan every tablespace to cache it.
+ *      The main usage is to scan every tablespace PIP
+ *      in walk_pip
+ *
+ **************************************/
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	// Now we need to find tablespace in system table
+	AutoCacheRequest request(tdbb, irq_scan_ts, IRQ_REQUESTS);
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		TS IN RDB$TABLESPACES
+	{
+		if (!Tablespace::lookup(tdbb, TS.RDB$TABLESPACE_NAME))
+			fb_assert(false);
+	}
+	END_FOR
+}
+
 bool MET_get_ltt_index(Attachment* attachment, const QualifiedName& indexName,
 	LocalTemporaryTable** outLtt, LocalTemporaryTable::Index** outIndex)
 {
 /**************************************
  *
  *  M E T _ g e t _ l t t _ i n d e x
- *
- **************************************
- *
- * Functional description
  *  Look up an index by name in all LTTs of the current attachment.
  *  If found, returns true and sets outLtt to the owning LocalTemporaryTable
  *  and outIndex to point to the index. If not found, returns false.

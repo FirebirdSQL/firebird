@@ -316,3 +316,8 @@ FB_IMPL_MSG(DYN, 323, dyn_column_name_exists, -612, "42", "000", "Column @1 alre
 FB_IMPL_MSG_SYMBOL(DYN, 324, dyn_constant_not_found, "Constant @1 not found")
 FB_IMPL_MSG_SYMBOL(DYN, 325, dyn_dup_const, "Constant @1 already exists")
 FB_IMPL_MSG_SYMBOL(DYN, 326, dyn_non_constant_constant, "The constant @1 must be initialized by a constant expression")
+FB_IMPL_MSG(DYN, 327, dyn_ts_not_found, -901, "42", "000", "Tablespace @1 not found")
+FB_IMPL_MSG(DYN, 328, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for @1")
+FB_IMPL_MSG(DYN, 329, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")
+FB_IMPL_MSG(DYN, 330, dyn_dup_tablespace, -901, "42", "000", "Tablespace @1 already exists")
+FB_IMPL_MSG(DYN, 331, dyn_cannot_mod_sys_ts, -901, "42", "000", "Cannot ALTER or DROP system tablespace @1")

@@ -102,6 +102,14 @@ public:
 			return count + needs <= capacity;
 		}
 
+		bool add(const T& value)
+		{
+			if (!hasSpace())
+				return false;
+			data[count++] = value;
+			return true;
+		}
+
 		bool add(const Generation* from)
 		{
 			if (!hasSpace(from->count))

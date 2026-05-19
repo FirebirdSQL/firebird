@@ -132,7 +132,7 @@ private:
 		VAL_DATA_PAGE_HASNO_PP      = 38,
 		VAL_DATA_PAGE_SEC_PRI		= 39,
 
-		VAL_MAX_ERROR				= 40
+		VAL_MAX_ERROR
 	};
 
 	struct MSG_ENTRY
@@ -145,20 +145,24 @@ private:
 	static const MSG_ENTRY vdr_msg_table[VAL_MAX_ERROR];
 
 	thread_db* vdr_tdbb;
-	ULONG vdr_max_page;
+	ULONG vdr_max_page[TRANS_PAGE_SPACE];	// Keep max page in every available tablespace
 	USHORT vdr_flags;
 	int vdr_errors;
 	int vdr_warns;
 	int vdr_fixed;
 	TraNumber vdr_max_transaction;
+
+	// Note vdr_backversion_pages and vdr_chain_pages are reset check every relation
+	// so it's not necessary to keep page space but we can know it from relation context
 	FB_UINT64 vdr_rel_backversion_counter;	// Counts slots w/rhd_chain
 	PageBitmap* vdr_backversion_pages;		// 1 bit per visited table page
 	FB_UINT64 vdr_rel_chain_counter;		// Counts chains w/rdr_chain
-	PageBitmap* vdr_chain_pages;			// 1 bit per visited record chain page
+	PageBitmap* vdr_chain_pages;    // 1 bit per visited record chain page
+
 	RecordBitmap* vdr_rel_records;			// 1 bit per valid record
 	RecordBitmap* vdr_idx_records;			// 1 bit per index item
 	Firebird::Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
-	PageBitmap* vdr_page_bitmap;
+	PageBitmap* vdr_page_bitmap[TRANS_PAGE_SPACE];	// fetched pages in every tablespace
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
 	Firebird::UtilSvc* vdr_service;
@@ -187,23 +191,23 @@ private:
 		BufferDesc* bdb;
 		int count;
 
-		static const ULONG generate(const UsedBdb& p)
+		static const PageNumber generate(const UsedBdb& p)
 		{
-			return p.bdb ? p.bdb->bdb_page.getPageNum() : 0;
+			return p.bdb ? p.bdb->bdb_page : PageNumber(0, 0);
 		}
 	};
 
 	typedef Firebird::SortedArray<
 				UsedBdb,
 				Firebird::EmptyStorage<UsedBdb>,
-				ULONG,
+				PageNumber,
 				UsedBdb> UsedBdbs;
 
 	UsedBdbs vdr_used_bdbs;
 
 	void cleanup();
 	RTN corrupt(int, const jrd_rel*, ...);
-	FETCH_CODE fetch_page(bool mark, ULONG, USHORT, WIN*, void*);
+	FETCH_CODE fetch_page(bool mark, PageNumber, USHORT, WIN*, void*);
 	void release_page(WIN*);
 	void garbage_collect();
 

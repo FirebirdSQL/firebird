@@ -1092,7 +1092,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 			BLB_gen_bpb_from_descs(from_desc, to_desc, bpb);
 
 			Database* dbb = tdbb->getDatabase();
-			const USHORT pageSpace = dbb->readOnly() ?
+			const ULONG pageSpace = dbb->readOnly() ?
 				dbb->dbb_page_manager.getTempPageSpaceID(tdbb) : DB_PAGE_SPACE;
 
 			copy_blob(tdbb, source, destination, bpb.getCount(), bpb.begin(), pageSpace);
@@ -1105,11 +1105,10 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 	Request* request = tdbb->getRequest();
 
-	if (relation->getPermanent()->isVirtual()) {
+	if (relation->getPermanent()->isVirtual())
 		ERR_post(Arg::Gds(isc_read_only));
-	}
 
-	RelationPages* relPages = relation->getPermanent()->getPages(tdbb);
+	RelationPages* const relPages = relation->getPages(tdbb);
 
 	// If either the source value is null or the blob id itself is null
 	// (all zeros), then the blob is null.
@@ -1139,7 +1138,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 			BLB_gen_bpb_from_descs(from_desc, to_desc, bpb);
 
 			Database* dbb = tdbb->getDatabase();
-			const USHORT pageSpace = dbb->readOnly() ?
+			const ULONG pageSpace = dbb->readOnly() ?
 				dbb->dbb_page_manager.getTempPageSpaceID(tdbb) : DB_PAGE_SPACE;
 
 			copy_blob(tdbb, source, destination, bpb.getCount(), bpb.begin(), pageSpace);
@@ -2123,7 +2122,7 @@ static ISC_STATUS blob_filter(USHORT action, BlobControl* control)
 
 blb* blb::copy_blob(thread_db* tdbb, const bid* source, bid* destination,
 					  USHORT bpb_length, const UCHAR* bpb,
-					  USHORT destPageSpaceID)
+					  ULONG destPageSpaceID)
 {
 /**************************************
  *
@@ -2190,11 +2189,11 @@ void blb::delete_blob(thread_db* tdbb, ULONG prior_page)
 	Database* const dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	const USHORT pageSpaceID = blb_pg_space_id;
+	const ULONG pageSpaceID = blb_pg_space_id;
 
 	if (dbb->readOnly())
 	{
-		const USHORT tempSpaceID = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+		const ULONG tempSpaceID = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
 
 		if (pageSpaceID != tempSpaceID)
 		{
@@ -2471,7 +2470,7 @@ void blb::insert_page(thread_db* tdbb)
 	// Allocate a page for the now full blob data page.  Move the page
 	// image to the buffer, and release the page.
 
-	const USHORT pageSpaceID = blb_pg_space_id;
+	const ULONG pageSpaceID = blb_pg_space_id;
 
 	WIN window(pageSpaceID, -1);
 	blob_page* page = (blob_page*) DPM_allocate(tdbb, &window);

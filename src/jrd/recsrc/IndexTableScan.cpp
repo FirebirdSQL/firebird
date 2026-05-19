@@ -68,9 +68,9 @@ void IndexTableScan::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_first | irsb_open;
 
-	record_param* const rpb = &request->req_rpb[m_stream];
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
+	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(tdbb), false);
 
+	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->rpb_number.setValue(BOF_NUMBER);
 
 	fb_assert(!impure->irsb_nav_lower);
@@ -201,7 +201,7 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 	const bool descending = (idx->idx_flags & idx_descending);
 
 	// find the last fetched position from the index
-	const USHORT pageSpaceID = m_relation()->getPages(tdbb)->rel_pg_space_id;
+	const ULONG pageSpaceID = idx->idx_pg_space_id;
 	win window(pageSpaceID, impure->irsb_nav_page);
 
 	const IndexRetrieval* const retrieval = m_index->retrieval;

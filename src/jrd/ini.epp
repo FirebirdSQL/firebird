@@ -613,6 +613,19 @@ namespace
 				END_MODIFY
 			}
 			END_FOR
+
+			handle.reset();
+
+			FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$SYSTEM_FLAG EQ RDB_system
+			{
+				MODIFY TS USING
+					TS.RDB$SECURITY_CLASS.NULL = FALSE;
+					PAD(securityClass, TS.RDB$SECURITY_CLASS);
+				END_MODIFY
+			}
+			END_FOR
 		}
 
 	private:
@@ -708,7 +721,7 @@ void INI_format(thread_db* tdbb, const string& charset)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent)
 			{
-				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+				DPM_create_relation(tdbb, MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
 					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
 			}
 
@@ -766,6 +779,31 @@ void INI_format(thread_db* tdbb, const string& charset)
 
 	for (const gfld* gfield = gfields; gfield->gfld_name; gfield++)
 		store_global_field(tdbb, gfield, handle, nonRelSec);
+
+	// Store PRIMARY TABLESPACE record
+
+	handle.reset();
+
+	STORE(REQUEST_HANDLE handle) X IN RDB$TABLESPACES
+	{
+		X.RDB$TABLESPACE_ID = DB_PAGE_SPACE;
+		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+
+		X.RDB$SYSTEM_FLAG = RDB_system;
+
+		PAD(ownerName, X.RDB$OWNER_NAME);
+		X.RDB$OWNER_NAME.NULL = FALSE;
+
+		PAD(dbb->dbb_filename.c_str(), X.RDB$FILE_NAME);
+		X.RDB$FILE_NAME.NULL = FALSE;
+
+		X.RDB$OFFLINE.NULL = FALSE;
+		X.RDB$OFFLINE = FALSE;
+
+		X.RDB$READ_ONLY.NULL = FALSE;
+		X.RDB$READ_ONLY = FALSE;
+	}
+	END_STORE
 
 	// Store DATABASE record
 
@@ -1252,7 +1290,7 @@ void INI_upgrade(thread_db* tdbb)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
 			{
-				DPM_create_relation(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
+				DPM_create_relation(tdbb, MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID],
 					CacheFlag::AUTOCREATE | CacheFlag::NOSCAN));
 			}
 
@@ -1373,8 +1411,7 @@ void INI_upgrade(thread_db* tdbb)
 		{
 			if (relfld[RFLD_R_TYPE] == rel_persistent && relfld[RFLD_R_ODS] > odsVersion)
 			{
-				const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relfld[RFLD_R_ID], CacheFlag::NOSCAN);
-				if (relation && relation->getBasePages()->rel_pages)
+				if (const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relfld[RFLD_R_ID], CacheFlag::NOSCAN))
 					DPM_delete_relation(tdbb, relation);
 			}
 
@@ -1750,12 +1787,16 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 
 			idx.idx_count = index->ini_idx_segment_count;
 			idx.idx_flags = index->ini_idx_flags;
+			idx.idx_pg_space_id = DB_PAGE_SPACE;
 			SelectivityList selectivity(*tdbb->getDefaultPool());
 
 			IDX_create_index(tdbb, IdxCreate::AtOnce, relVers, &idx, indexName, NULL,
 				transaction, selectivity);
 
 			X.RDB$INDEX_ID = idx.idx_id + 1;
+
+			PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
 		}
 		END_STORE
 
@@ -1928,6 +1969,14 @@ static void store_relation(thread_db* tdbb,
 		X.RDB$FORMAT = getLatestFormat(tdbb, relId, fieldId);
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$DBKEY_LENGTH = 8;
+
+		if (fb_utils::hasTablespaceName(rel_t(relType)))
+		{
+			PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
+		}
+		else
+			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 	}
 	END_STORE;
 
@@ -1958,6 +2007,9 @@ static void store_relation_field(thread_db* tdbb,
 		X.RDB$SYSTEM_FLAG = RDB_system;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
 		X.RDB$UPDATE_FLAG = updateFlag;
+
+		PAD(PRIMARY_TABLESPACE_NAME, X.RDB$TABLESPACE_NAME);
+		X.RDB$TABLESPACE_NAME.NULL = FALSE;
 	}
 	END_STORE
 }

@@ -161,6 +161,9 @@ class jrd_tra final : public pool_alloc<type_tra>
 	static constexpr size_t MAX_UNDO_RECORDS = 2;
 	typedef Firebird::HalfStaticArray<Record*, MAX_UNDO_RECORDS> UndoRecordList;
 
+	typedef Firebird::Pair<Firebird::NonPooled<RelationPages*, RelationPages*> > PagesReplacement;
+	typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<MetaId, PagesReplacement> > > RelationPagesMap;
+
 public:
 	jrd_tra(MemoryPool* p, Firebird::MemoryStats* parent_stats,
 			Attachment* attachment, jrd_tra* outer)
@@ -199,7 +202,9 @@ public:
 		tra_dbcreators_list(nullptr),
 		tra_autonomous_pool(NULL),
 		tra_autonomous_cnt(0),
-		tra_dependencies(*p)
+		tra_tablespaces(*p),
+		tra_dependencies(*p),
+		tra_cleanup_pages(*p)
 	{
 	}
 
@@ -333,8 +338,11 @@ private:
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 	BulkInsert* tra_bulkInsert = nullptr;
 
+	Tablespace::UsageList tra_tablespaces;
+
 public:
 	Firebird::Array<WildDependency> tra_dependencies;
+	RelationPagesMap tra_cleanup_pages;
 
 public:
 	MemoryPool* getAutonomousPool();
@@ -419,6 +427,16 @@ public:
 			tra_gen_ids = FB_NEW_POOL(*tra_pool) GenIdCache(*tra_pool);
 
 		return tra_gen_ids;
+	}
+
+	void lockTablespace(thread_db* tdbb, ULONG pageSpaceId)
+	{
+		tra_tablespaces.add(tdbb, pageSpaceId);
+	}
+
+	void releaseTablespaces(thread_db* tdbb)
+	{
+		tra_tablespaces.release(tdbb);
 	}
 
 	// Get existing or create new BulkInsert for the relation.
@@ -554,6 +572,10 @@ enum dfw_t : int {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_create_tablespace,
+	dfw_delete_tablespace,
+	dfw_modify_tablespace,
+	dfw_clear_datapages,
 
 	// deferred works argument types
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory

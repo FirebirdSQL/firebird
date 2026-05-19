@@ -60,6 +60,8 @@ namespace Replication
 		static void splitConnectionString(const Firebird::string& input, Firebird::string& database,
 										  Firebird::string& username, Firebird::string& password);
 
+		bool isMaster() const;
+
 		Firebird::PathName dbName;
 		ULONG bufferSize;
 		Firebird::string includeSchemaFilter;
@@ -86,6 +88,7 @@ namespace Replication
 		bool reportErrors;
 		bool disableOnError;
 		bool cascadeReplication;
+		bool applyTablespacesDdl;
 	};
 };
 

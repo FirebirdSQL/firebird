@@ -154,6 +154,7 @@ public:
 
 private:
 	Resources* resources;				// Resources (relations, routines, etc.)
+	Firebird::Array<ULONG> tablespaces;	// Tablespaces used by the statement
 	Firebird::RefPtr<VersionedObjects> latestVer;
 	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
 	Firebird::Array<MessageNode*> messages;	// Input/output messages

@@ -77,6 +77,7 @@ enum lck_t : UCHAR {
 	LCK_repl_tables,			// Replication set lock
 	LCK_dsql_statement_cache,	// DSQL statement cache lock
 	LCK_profiler_listener,		// Remote profiler listener
+	LCK_tablespace,				// Tablespace existance lock
 	LCK_dbwide_triggers,		// Database wide triggers rescan lock
 	LCK_idx_create				// Taken during index build process
 };

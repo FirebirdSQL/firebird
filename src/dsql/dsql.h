@@ -250,7 +250,8 @@ class dsql_fld : public TypeClause
 public:
 	explicit dsql_fld(MemoryPool& p)
 		: TypeClause(p, {}),
-		  fld_name(p)
+		  fld_name(p),
+		  fld_ts_name(p)
 	{
 	}
 
@@ -266,6 +267,7 @@ public:
 	USHORT fld_id = 0;							// Field ID in database
 	USHORT fld_pos = 0;							// Field position in relation
 	MetaName fld_name;
+	MetaName fld_ts_name;						// Tablespace name for BLOB field
 };
 
 // values used in fld_flags

@@ -22,11 +22,15 @@
 			}
 		},
 		{
-			"name": "isql - attach",
+			"name": "firebird - launch",
 			"type": "cppdbg",
-			"request": "attach",
-			"program": "${workspaceRoot}/gen/Debug/firebird/bin/isql",
-			"processId": "${command.pickProcess}",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/Debug/firebird/bin/firebird",
+			"args": ["-d"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": true,
 			"linux": {
 				"MIMode": "gdb"
 			},
@@ -36,6 +40,24 @@
 			"windows": {
 				"MIMode": "gdb"
 			}
-		}
-	]
-}
+		},
+		{
+			"name": "empbuild - launch",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceRoot}/gen/examples/empbuild",
+			"args": ["/work/zhdanov/gen/examples/employee.fdb"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceRoot}",
+			"environment": [],
+			"externalConsole": true,
+			"linux": {
+				"MIMode": "gdb"
+			},
+			"osx": {
+				"MIMode": "lldb"
+			},
+			"windows": {
+				"MIMode": "gdb"
+			}
+		},

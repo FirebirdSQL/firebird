@@ -60,10 +60,10 @@ void	DPM_backout(Jrd::thread_db*, Jrd::record_param*);
 void	DPM_backout_mark(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
 double	DPM_cardinality(Jrd::thread_db*, Jrd::jrd_rel*, const Jrd::Format*);
 bool	DPM_chain(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*);
-void	DPM_create_relation(Jrd::thread_db*, Jrd::Cached::Relation*);
-ULONG	DPM_data_pages(Jrd::thread_db*, Jrd::Cached::Relation*);
+void	DPM_create_relation(Jrd::thread_db*, Jrd::jrd_rel*);
+ULONG	DPM_data_pages(Jrd::thread_db*, Jrd::jrd_rel*);
 void	DPM_delete(Jrd::thread_db*, Jrd::record_param*, ULONG);
-void	DPM_delete_relation(Jrd::thread_db*, Jrd::RelationPermanent*);
+void	DPM_delete_relation(Jrd::thread_db*, Jrd::jrd_rel*);
 USHORT	DPM_reserve_pages(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::win*);
 bool	DPM_fetch(Jrd::thread_db*, Jrd::record_param*, USHORT);
 bool	DPM_fetch_back(Jrd::thread_db*, Jrd::record_param*, USHORT, SSHORT);
@@ -71,21 +71,23 @@ void	DPM_fetch_fragment(Jrd::thread_db*, Jrd::record_param*, USHORT);
 SINT64	DPM_gen_id(Jrd::thread_db*, SLONG, bool, SINT64);
 bool	DPM_get(Jrd::thread_db*, Jrd::record_param*, SSHORT);
 ULONG	DPM_get_blob(Jrd::thread_db*, Jrd::blb*, Jrd::jrd_rel*, RecordNumber, bool, ULONG);
-void	DPM_mark_relation(Jrd::thread_db*, Jrd::Cached::Relation*);
+void	DPM_mark_relation(Jrd::thread_db*, Jrd::jrd_rel*);
 bool	DPM_next(Jrd::thread_db*, Jrd::record_param*, USHORT, Jrd::FindNextRecordScope);
 void	DPM_pages(Jrd::thread_db*, SSHORT, int, ULONG, ULONG);
 #ifdef SUPERSERVER_V2
 SLONG	DPM_prefetch_bitmap(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::PageBitmap*, SLONG);
 #endif
 ULONG	DPM_pointer_pages(Jrd::thread_db*, Jrd::jrd_rel*);
-void	DPM_scan_pages(Jrd::thread_db*);
+void	DPM_scan_pages(Jrd::thread_db*, SCHAR pagType = 0, int relId = 0);
 void	DPM_store(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack&, const Jrd::RecordStorageType type);
 RecordNumber DPM_store_blob(Jrd::thread_db*, Jrd::blb*, Jrd::jrd_rel*, Jrd::Record*);
 void	DPM_rewrite_header(Jrd::thread_db*, Jrd::record_param*);
-void	DPM_scan_marker(Jrd::thread_db*, MetaId);
+void	DPM_scan_marker(Jrd::thread_db*, Jrd::jrd_rel*);
 void	DPM_update(Jrd::thread_db*, Jrd::record_param*, Jrd::PageStack*, const Jrd::jrd_tra*);
 
-void DPM_create_relation_pages(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*);
-void DPM_delete_relation_pages(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*);
+void DPM_create_relation_pages(Jrd::thread_db*, MetaId, Jrd::RelationPages*);
+void DPM_delete_relation_pages(Jrd::thread_db*, MetaId, Jrd::RelationPages*);
+
+void DPM_copy_data(Jrd::thread_db* tdbb, ULONG relationId, Jrd::RelationPages* orgPages, Jrd::RelationPages* newPages);
 
 #endif // JRD_DPM_PROTO_H

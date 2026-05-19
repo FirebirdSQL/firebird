@@ -1015,3 +1015,7 @@ FB_IMPL_MSG(JRD, 1012, bad_constant_type, -901, "2F", "000", "@1 is not supporte
 FB_IMPL_MSG(JRD, 1013, not_defined_constant, -901, "42", "000", "The constant @1 is not defined")
 FB_IMPL_MSG(JRD, 1014, const_name, -901, "42", "000", "CONSTANT @1")
 FB_IMPL_MSG(JRD, 1015, private_table, -901, "42", "000", "Table @1 is private to package @2")
+FB_IMPL_MSG(JRD, 1016, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\" already exists")
+FB_IMPL_MSG(JRD, 1017, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 1018, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
+FB_IMPL_MSG(JRD, 1019, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")

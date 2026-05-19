@@ -57,7 +57,9 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open;
 
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
+	const auto relation = m_relation(tdbb);
+
+	RLCK_reserve_relation(tdbb, request->req_transaction, relation, false);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
@@ -79,10 +81,10 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 
 		BufferControl* const bcb = dbb->dbb_bcb;
 
-		if (attachment->isGbak() || DPM_data_pages(tdbb, m_relation()) > bcb->bcb_count)
+		if (attachment->isGbak() || DPM_data_pages(tdbb, relation) > bcb->bcb_count)
 		{
 			rpb->getWindow(tdbb).win_flags = WIN_large_scan;
-			rpb->rpb_org_scans = m_relation()->rel_scan_count++;
+			rpb->rpb_org_scans = relation->rel_scan_count++;
 		}
 	}
 
@@ -93,14 +95,13 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 		impure->irsb_lower.setValid(false);
 		impure->irsb_upper.setValid(false);
 
-		EVL_dbkey_bounds(tdbb, m_dbkeyRanges, rpb->rpb_relation,
-			impure->irsb_lower, impure->irsb_upper);
+		EVL_dbkey_bounds(tdbb, m_dbkeyRanges, relation, impure->irsb_lower, impure->irsb_upper);
 
 		if (impure->irsb_lower.isValid())
 		{
 			auto number = impure->irsb_lower.getValue();
 
-			const auto ppages = rpb->rpb_relation->getPages(tdbb)->rel_pages;
+			const auto ppages = relation->getPages(tdbb)->rel_pages;
 			const auto maxRecno = (SINT64) ppages->count() *
 				dbb->dbb_dp_per_pp * dbb->dbb_max_records - 1;
 			if (number > maxRecno)
@@ -123,11 +124,13 @@ void FullTableScan::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 
+		const auto relation = m_relation(tdbb);
+
 		record_param* const rpb = &request->req_rpb[m_stream];
 		if ((rpb->getWindow(tdbb).win_flags & WIN_large_scan) &&
-			m_relation()->rel_scan_count)
+			relation->rel_scan_count)
 		{
-			m_relation()->rel_scan_count--;
+			relation->rel_scan_count--;
 		}
 	}
 }

@@ -160,6 +160,11 @@ public:
 		return m_tpcHeader->getHeader()->monitor_generation++ + 1;
 	}
 
+	bool isInitialized()
+	{
+		return m_tpcHeader;
+	}
+
 	static int cacheState(thread_db* tdbb, TraNumber number)
 	{
 		auto* tipCache = tdbb->getDatabase()->dbb_tip_cache;
