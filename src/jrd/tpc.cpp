@@ -796,7 +796,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	if (m_exclusive)
 	{
 		lastInterestingBlockNumber =
-			MAX(dbb->dbb_next_transaction, m_tpcHeader->getHeader()->latest_transaction_id) /
+			MAX(dbb->dbb_next_transaction, m_tpcHeader->getHeader()->latest_transaction_id.load()) /
 			m_transactionsPerBlock;
 	}
 	else
