@@ -1913,7 +1913,7 @@ void ERR_updateConflict(TraNumber concurrTra)
 	if (snapshot)
 	{
 		const Database* dbb = tdbb->getDatabase();
-		CommitNumber concurCN = dbb->dbb_tip_cache->snapshotState(tdbb, concurrTra);
+		CommitNumber concurCN = dbb->dbb_tip_cache->cacheState(concurrTra);
 
 		string str;
 		str.printf("Current snapshot %" SQUADFORMAT ", concurrent CN %" SQUADFORMAT, snapshot, concurCN);

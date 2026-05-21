@@ -72,9 +72,9 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 	header->monitor_generation.store(0, std::memory_order_relaxed);
 	header->tpc_block_size = dbb->dbb_config->getTipCacheBlockSize();
 
+	AutoSetRestore setExcl(&m_cache->m_exclusive, true);
 	m_cache->initTransactionsPerBlock(header->tpc_block_size);
 	m_cache->loadInventoryPages(tdbb, header);
-
 	return true;
 }
 
@@ -103,10 +103,15 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 
 	TransactionStatusBlock* header = static_cast<TransactionStatusBlock*>(sm->sh_mem_header);
 
-	// Initialize the shared data header
-	initHeader(header);
+	// If mapped file exists already, check its contents to make sure it is ok to use it
+	const bool doInit = !m_fileExists || (sm->sh_mem_length_mapped < m_blockSize) || !checkHeader(header, false);
 
-	memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+	if (doInit)
+	{
+		// Initialize the shared data header
+		initHeader(header);
+		memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+	}
 
 	fb_assert(header->data->is_lock_free());
 
@@ -114,8 +119,9 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 }
 
 TipCache::TipCache(Database* dbb)
-	: m_tpcHeader(NULL), m_snapshots(NULL), m_transactionsPerBlock(0), m_lock(nullptr),
-	  globalTpcInitializer(this), snapshotsInitializer(this), memBlockInitializer(this),
+	: m_tpcHeader(NULL), m_snapshots(NULL), m_transactionsPerBlock(0),
+	  m_lock(nullptr), m_exclusive(false),
+	  globalTpcInitializer(this), snapshotsInitializer(this),
 	  m_blocks_memory(*dbb->dbb_permanent)
 {
 }
@@ -147,6 +153,8 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	if (!LCK_convert(tdbb, m_lock, LCK_SW, LCK_WAIT))
 		ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 
+	m_exclusive = LCK_convert(tdbb, m_lock, LCK_EX, LCK_NO_WAIT);
+
 	// Release locks and deallocate all shared memory structures
 	if (m_blocks_memory.getFirst())
 	{
@@ -156,6 +164,9 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 			delete cur;
 		} while (m_blocks_memory.getNext());
 	}
+
+	if (m_exclusive && m_tpcHeader)
+		releaseSharedMemory(tdbb, 0, 0);
 
 	PathName nmSnap, nmHdr;
 	if (m_snapshots)
@@ -175,23 +186,15 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	m_blocks_memory.clear();
 	m_transactionsPerBlock = 0;
 
-    if (nmSnap.hasData() || nmHdr.hasData())
-    {
-    	if (LCK_lock(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
-		{
-			if (nmSnap.hasData())
-				SharedMemoryBase::unlinkFile(nmSnap.c_str());
-			if (nmHdr.hasData())
-				SharedMemoryBase::unlinkFile(nmHdr.c_str());
-
-			LCK_release(tdbb, m_lock);
-		}
-		else
-			tdbb->tdbb_status_vector->init();
+	if (m_exclusive)
+	{
+		if (nmSnap.hasData())
+			SharedMemoryBase::unlinkFile(nmSnap.c_str());
+		if (nmHdr.hasData())
+			SharedMemoryBase::unlinkFile(nmHdr.c_str());
 	}
-	else
-		LCK_release(tdbb, m_lock);
 
+	LCK_release(tdbb, m_lock);
 	m_lock.reset();
 }
 
@@ -385,18 +388,31 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 
 	PathName fileName = makeSharedMemoryFileName(dbb, blockNumber, false);
 
+	bool fileExists = false;
+	if (!cache->m_exclusive)
+	{
+		PathName fullName = makeSharedMemoryFileName(dbb, blockNumber, true);
+		struct stat fileStat;
+
+		if (os_utils::stat(fullName.c_str(), &fileStat) == 0)
+			fileExists = (fileStat.st_size >= blockSize);
+	}
+
 	try
 	{
+		MemBlockInitializer initializer(cache, blockSize, fileExists);
+
 		// Here SharedMemory constructor is called with skipLock parameter set to true.
 		// Appropriate locking is performed by existenceLock using LM.
 		// This should be in sync with SharedMemoryBase::unlinkFile() call
 		// in TipCache::StatusBlockData::clear().
 		memory = FB_NEW_POOL(*dbb->dbb_permanent) SharedMemory<TransactionStatusBlock>(
-			fileName.c_str(), blockSize,
-			&cache->memBlockInitializer, true);
+			fileName.c_str(),
+			fileExists ? 0 : blockSize,		// pass zero to preserve contents of existing file
+			&initializer, false);
 
 		const auto* header = memory->getHeader();
-		cache->memBlockInitializer.checkHeader(header);
+		initializer.checkHeader(header);
 
 		LCK_convert(tdbb, &existenceLock, LCK_SR, LCK_WAIT);	// never fails
 		acceptAst = true;
@@ -455,13 +471,17 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			}
 		}
 
-		if (blockNumber < oldest / cache->m_transactionsPerBlock &&			// old block => send AST
-			!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
+		const bool oldBlock = blockNumber < (oldest / cache->m_transactionsPerBlock);
+
+		// old block => send AST
+		if (oldBlock && !LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
 		{
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 		}
 
-		fName = memory->getMapFileName();
+		if (oldBlock || cache->m_exclusive)
+			fName = memory->getMapFileName();
+
 		delete memory;
 		memory = NULL;
 	}
@@ -768,21 +788,33 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	return 0;
 }
 
-
-
-
 void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNumber oldest_new)
 {
 	Database* dbb = tdbb->getDatabase();
 
-	TpcBlockNumber lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
+	TpcBlockNumber lastInterestingBlockNumber;
+	if (m_exclusive)
+	{
+		lastInterestingBlockNumber =
+			MAX(dbb->dbb_next_transaction, m_tpcHeader->getHeader()->latest_transaction_id) /
+			m_transactionsPerBlock;
+	}
+	else
+	{
+		lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
 
-	// If we didn't cross block boundary - there is nothing to do.
-	// Note that due to the fuzziness of our caller's memory access to variables
-	// there is an unlikely possibility that we might lose one such event.
-	// This is not too bad, and next such event will clean things up.
-	if (oldest_old / m_transactionsPerBlock == lastInterestingBlockNumber)
-		return;
+		// If we didn't cross block boundary - there is nothing to do.
+		// Note that due to the fuzziness of our caller's memory access to variables
+		// there is an unlikely possibility that we might lose one such event.
+		// This is not too bad, and next such event will clean things up.
+		if (oldest_old / m_transactionsPerBlock == lastInterestingBlockNumber)
+			return;
+
+		if (lastInterestingBlockNumber < SAFETY_GAP_BLOCKS + 1)
+			return;
+
+		lastInterestingBlockNumber -= SAFETY_GAP_BLOCKS + 1;
+	}
 
 	// Populate array of blocks that might be unmapped and deleted.
 	// We scan for blocks to clean up in descending order, but delete them in
@@ -790,15 +822,13 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	PathName fileName;
 	HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
-	for (TpcBlockNumber cleanupCounter = lastInterestingBlockNumber - SAFETY_GAP_BLOCKS;
-		cleanupCounter; cleanupCounter--)
+	for (TpcBlockNumber blockNumber = lastInterestingBlockNumber; blockNumber; blockNumber--)
 	{
-		TpcBlockNumber blockNumber = cleanupCounter - 1;
 		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
 
 		struct stat st;
 		// If file is not found -- look no further
-		if (stat(fileName.c_str(), &st) != 0)
+		if (os_utils::stat(fileName.c_str(), &st) != 0)
 			break;
 
 		blocksToCleanup.add(blockNumber);
