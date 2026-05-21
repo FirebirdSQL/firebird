@@ -977,3 +977,5 @@ FB_IMPL_MSG(JRD, 991, sweep_attach_no_cleanup, -901, "42", "000", "Attachment ha
 FB_IMPL_MSG(JRD, 998, no_user_att_while_restore, -901, "HY", "000", "User attachments are not allowed for the database being restored")
 // Codes 999..1004 are used in v6
 FB_IMPL_MSG(JRD, 1005, update_overwrite, -901, "27", "000", "UPDATE will overwrite changes made by the trigger or by the another UPDATE in the same cursor")
+// Codes 1006..1015 are used in v6
+FB_IMPL_MSG(JRD, 1016, temp_space_invalid_pos, -901, "HY", "000", "Invalid position to read/write in a temporary file (positon: @1, size: @2)")
