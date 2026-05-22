@@ -8723,6 +8723,7 @@ long_integer
 %type <valueExprNode> function
 function
 	: aggregate_function		{ $$ = $1; }
+	| hypothetical_set_function { $$ = $1; }
 	| non_aggregate_function
 	| over_clause
 	;
@@ -8907,6 +8908,30 @@ within_group_specification_opt
 %type <valueListNode> within_group_specification
 within_group_specification
 	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
+	;
+
+%type <aggNode> hypothetical_set_function
+hypothetical_set_function
+	: hypothetical_set_function_prefix
+	| hypothetical_set_function_prefix FILTER '(' WHERE search_condition ')'
+		{
+			$$ = $1;
+
+			fb_assert($$->arg);
+			$$->arg = newNode<ValueIfNode>($5, $$->arg, NullNode::instance());
+		}
+	;
+
+%type <aggNode> hypothetical_set_function_prefix
+hypothetical_set_function_prefix
+	: DENSE_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_DENSE_RANK, $3, $5); }
+	| RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_RANK, $3, $5); }
+	| PERCENT_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_PERCENT_RANK, $3, $5); }
+	| CUME_DIST '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_CUME_DIST, $3, $5); }
 	;
 
 %type <aggNode> window_function

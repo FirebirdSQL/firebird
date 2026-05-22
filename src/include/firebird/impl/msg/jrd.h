@@ -1016,3 +1016,4 @@ FB_IMPL_MSG(JRD, 1013, not_defined_constant, -901, "42", "000", "The constant @1
 FB_IMPL_MSG(JRD, 1014, const_name, -901, "42", "000", "CONSTANT @1")
 FB_IMPL_MSG(JRD, 1015, private_table, -901, "42", "000", "Table @1 is private to package @2")
 FB_IMPL_MSG(JRD, 1016, temp_space_invalid_pos, -901, "HY", "000", "Invalid position to read/write in a temporary file (positon: @1, size: @2)")
+FB_IMPL_MSG(JRD, 1017, hypfun_args_non_equal_sort_item, -833, "42", "000", "Number of arguments hypothetical-set aggregate function @1 must match number of sort items in WITHIN GROUP")
