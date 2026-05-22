@@ -893,7 +893,7 @@ AC_CHECK_HEADERS(iconv.h)
 AC_CHECK_HEADERS(linux/falloc.h)
 AC_CHECK_HEADERS(utime.h)
 
-AC_CHECK_HEADERS(socket.h sys/socket.h sys/sockio.h winsock2.h)
+AC_CHECK_HEADERS(socket.h sys/socket.h sys/sockio.h sys/un.h winsock2.h)
 AC_CHECK_DECLS(SOCK_CLOEXEC,,,[[
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
