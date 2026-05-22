@@ -14,11 +14,9 @@ Syntax of aggregate functions of a hypothetical set:
     | CUME_DIST(<args>) WITHIN GROUP (ORDER BY <sorted_args>)
 ```
 
-Each of the "hypothetical-set" aggregates is associated with a window function of the same name. In each case, the aggregate's result is the value that the associated window function would have returned for the "hypothetical" row constructed from args, if such a row had been added to the sorted group of rows represented by the sorted_args. For each of these functions, the list of direct arguments given in args must match the number and types of the aggregated arguments given in sorted_args. Unlike most built-in aggregates, these aggregates are not strict, that is they do not drop input rows containing nulls. `NULL` values sort according to the rule specified in the `ORDER BY` clause.
+Each of the "hypothetical-set" aggregates is associated with a window function of the same name. In each case, the aggregate's result is the value that the associated window function would have returned for the "hypothetical" row constructed from `args`, if such a row had been added to the sorted group of rows represented by the `sorted_args`. For each of these functions, the list of direct arguments given in `args` must match the number and types of the aggregated arguments given in `sorted_args`. Unlike most built-in aggregates, these aggregates are not strict, that is they do not drop input rows containing NULLs. `NULL` values sort according to the rule specified in the `ORDER BY` clause.
 
-The values ​​of the input arguments must be constant within each group.
-
-The number of input arguments of the hypothetical set functions must match the number of sorting elements in the `WITHIN GROUP (ORDER BY <sorted_args>)` clause.
+The values ​​of the input arguments `args` must be constant within each group.
 
 An example of using hypothetical set functions without grouping:
 
