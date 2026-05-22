@@ -110,6 +110,12 @@ Examples:
     inet://C:\db\mydb.fdb
     inet://mydb
 
+  Local connection via Unix domain socket (POSIX only):
+
+    unix:///run/firebird/firebird.sock:/db/mydb.fdb
+    unix:///run/firebird/firebird.sock:mydb
+    unix:///run/firebird/firebird.sock:service_mgr
+
   Local connection via shared memory:
 
     xnet://C:\db\mydb.fdb
@@ -135,7 +141,10 @@ to connect locally using a specific transport protocol, please specify:
 
   inet://<file path to database or alias>
   or
+  unix://<socket path>:<file path to database or alias>
+  or
   xnet://<file path to database or alias>
 
 Note: XNET (shared memory) protocol is available on Windows only.
-
+Unix domain socket protocol is available on POSIX only and the socket path
+must not contain ':'.

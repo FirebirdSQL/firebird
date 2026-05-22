@@ -48,6 +48,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "../common/file_params.h"
 #include <stdarg.h>
 
@@ -87,6 +88,10 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#ifdef HAVE_SYS_UN_H
+#include <sys/un.h>
+#endif
 #include <sys/wait.h>
 
 #if defined(HAVE_POLL_H)
@@ -521,6 +526,15 @@ static void		disconnect(rem_port*);
 static void		force_close(rem_port*);
 static int		cleanup_ports(const int, const int, void*);
 
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+static string makeAuxUnixSocketPath(const string& mainSocketPath);
+static void makeUnixSocketAddress(bool releasePort, rem_port* port, const char* path,
+	sockaddr_un* address, socklen_t* length);
+static void removeUnixSocketPath(const string& path);
+static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* packet, USHORT flag);
+static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* socketPath);
+#endif
+
 #ifdef NO_FORK
 static int		fork();
 #endif
@@ -623,6 +637,51 @@ static rem_port* inet_async_receive = NULL;
 static GlobalPtr<Mutex> port_mutex;
 static GlobalPtr<PortsCleanup>	inet_ports;
 static GlobalPtr<SocketsArray> ports_to_close;
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+static AtomicCounter unixAuxSequence;
+
+static void makeUnixSocketAddress(bool releasePort, rem_port* port, const char* path,
+	sockaddr_un* address, socklen_t* length)
+{
+	const size_t pathLength = path ? strlen(path) : 0;
+
+	if (!pathLength || pathLength >= sizeof(address->sun_path))
+	{
+		gds__log("INET/unix: invalid Unix socket path length: %s", path ? path : "");
+		inet_gen_error(releasePort, port,
+			Arg::Gds(isc_net_lookup_err) << Arg::Gds(isc_host_unknown));
+	}
+
+	memset(address, 0, sizeof(*address));
+	address->sun_family = AF_UNIX;
+	memcpy(address->sun_path, path, pathLength + 1);
+	*length = offsetof(sockaddr_un, sun_path) + pathLength + 1;
+}
+
+static void removeUnixSocketPath(const string& path)
+{
+	if (path.isEmpty())
+		return;
+
+	struct stat st;
+	if (lstat(path.c_str(), &st) == 0 && S_ISSOCK(st.st_mode))
+		unlink(path.c_str());
+}
+
+static string makeAuxUnixSocketPath(const string& mainSocketPath)
+{
+	const FB_SIZE_T slash = mainSocketPath.rfind('/');
+	string directory = slash == string::npos ? "." : mainSocketPath.substr(0, slash);
+
+	string path;
+	path.printf("%s/fb_event.%d.%ld", directory.c_str(), getpid(),
+		static_cast<long>(unixAuxSequence.exchangeAdd(1)));
+
+	return path;
+}
+
+#endif // !WIN_NT && HAVE_SYS_UN_H
 
 
 rem_port* INET_analyze(ClntAuthBlock* cBlock,
@@ -908,8 +967,19 @@ rem_port* INET_connect(const TEXT* name,
 
 	if ((!name || !name[0]) && !packet)
 	{
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+		const char* const socketPath = port->getPortConfig()->getRemoteServiceUnixSocket();
+		if (socketPath && socketPath[0])
+			return unix_connect(port, socketPath, packet, flag);
+#endif
+
 		name = port->getPortConfig()->getRemoteBindAddress();
 	}
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+	if (af == AF_UNIX)
+		return unix_connect(port, name, packet, flag);
+#endif
 
 	if (name)
 	{
@@ -1061,6 +1131,108 @@ rem_port* INET_connect(const TEXT* name,
 
 	return port;
 }
+
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+
+static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* packet, USHORT flag)
+{
+	sockaddr_un address;
+	socklen_t addressLength;
+	makeUnixSocketAddress(true, port, socketPath, &address, &addressLength);
+
+	port->port_flags |= PORT_unix;
+	port->port_address = socketPath;
+	port->port_protocol_id = "UNIX";
+
+	delete port->port_connection;
+	port->port_connection = REMOTE_make_string(socketPath);
+	delete port->port_version;
+	port->port_version = REMOTE_make_string("unix");
+
+	port->port_handle = os_utils::socket(AF_UNIX, SOCK_STREAM, 0);
+	if (port->port_handle == INVALID_SOCKET)
+	{
+		inet_error(true, port, packet ? "socket" : "listen", packet ? isc_net_connect_err :
+			isc_net_connect_listen_err, INET_ERRNO);
+	}
+
+	if (!packet)
+		return unix_listener_socket(port, flag, socketPath);
+
+	const int n = connect(port->port_handle, reinterpret_cast<sockaddr*>(&address), addressLength);
+	if (n != -1)
+	{
+		port->port_peer_name = socketPath;
+		if (send_full(port, packet))
+			return port;
+	}
+
+	SOCLOSE(port->port_handle);
+	port->port_handle = INVALID_SOCKET;
+	inet_error(true, port, "connect", isc_net_connect_err, INET_ERRNO);
+
+	return port;
+}
+
+static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* socketPath)
+{
+	sockaddr_un address;
+	socklen_t addressLength;
+	makeUnixSocketAddress(true, port, socketPath, &address, &addressLength);
+
+	removeUnixSocketPath(socketPath);
+
+	if (bind(port->port_handle, reinterpret_cast<sockaddr*>(&address), addressLength) < 0)
+		inet_error(true, port, "bind", isc_net_connect_listen_err, INET_ERRNO);
+
+	port->port_flags |= PORT_unix_unlink;
+
+	if (listen(port->port_handle, SOMAXCONN) < 0)
+		inet_error(false, port, "listen", isc_net_connect_listen_err, INET_ERRNO);
+
+	inet_ports->registerPort(port);
+
+	if (flag & SRVR_multi_client)
+	{
+		port->port_dummy_packet_interval = 0;
+		port->port_dummy_timeout = 0;
+		port->port_server_flags |= (SRVR_server | SRVR_multi_client);
+		return port;
+	}
+
+	while (true)
+	{
+		SOCKET s = os_utils::accept(port->port_handle, NULL, NULL);
+		const int inetErrNo = INET_ERRNO;
+		if (s == INVALID_SOCKET)
+		{
+			if (INET_shutting_down)
+				return NULL;
+			inet_error(true, port, "accept", isc_net_connect_err, inetErrNo);
+		}
+
+		if ((flag & SRVR_debug) || !fork())
+		{
+			SOCLOSE(port->port_handle);
+			port->port_handle = s;
+			port->port_server_flags |= SRVR_server;
+			port->port_flags |= PORT_server;
+			port->port_flags &= ~PORT_unix_unlink;
+			return port;
+		}
+
+		MutexLockGuard guard(waitThreadMutex, FB_FUNCTION);
+
+		if (!procCount++)
+			Thread::start(waitThread, 0, THREAD_medium);
+
+		SOCLOSE(s);
+	}
+}
+
+#endif // !WIN_NT && HAVE_SYS_UN_H
+
 
 static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pai)
 {
@@ -1534,7 +1706,16 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		port->port_handle = n;
 		port->port_flags |= PORT_async;
 
-		get_peer_info(port);
+		if (port->port_flags & PORT_unix)
+		{
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+			removeUnixSocketPath(port->port_address);
+#endif
+			port->port_protocol_id = "UNIX";
+			port->port_flags &= ~PORT_unix_unlink;
+		}
+		else
+			get_peer_info(port);
 
 		return port;
 	}
@@ -1545,6 +1726,44 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	new_port->port_dummy_packet_interval = port->port_dummy_packet_interval;
 	new_port->port_dummy_timeout = new_port->port_dummy_packet_interval;
 	P_RESP* response = &packet->p_resp;
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+	if (port->port_flags & PORT_unix)
+	{
+		string auxPath;
+		auxPath.assign(reinterpret_cast<const char*>(response->p_resp_data.cstr_address),
+			response->p_resp_data.cstr_length);
+
+		sockaddr_un address;
+		socklen_t addressLength;
+		makeUnixSocketAddress(false, port, auxPath.c_str(), &address, &addressLength);
+
+		SOCKET n = os_utils::socket(AF_UNIX, SOCK_STREAM, 0);
+		if (n == INVALID_SOCKET)
+		{
+			const int savedError = INET_ERRNO;
+			port->auxAcceptError(packet);
+			inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
+		}
+
+		const int status = connect(n, reinterpret_cast<sockaddr*>(&address), addressLength);
+		if (status < 0)
+		{
+			const int savedError = INET_ERRNO;
+			SOCLOSE(n);
+			port->auxAcceptError(packet);
+			inet_error(false, port, "connect", isc_net_event_connect_err, savedError);
+		}
+
+		new_port->port_handle = n;
+		new_port->port_flags |= PORT_unix;
+		new_port->port_protocol_id = "UNIX";
+		new_port->port_peer_name = port->port_peer_name;
+		new_port->port_address = auxPath;
+
+		return new_port;
+	}
+#endif
 
 	// NJK - Determine address and port to use.
 	//
@@ -1609,6 +1828,56 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
  *	connection; the server calls aux_request to set up the connection.
  *
  **************************************/
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+	if (port->port_flags & PORT_unix)
+	{
+		const string auxPath = makeAuxUnixSocketPath(port->port_address);
+
+		sockaddr_un address;
+		socklen_t addressLength;
+		makeUnixSocketAddress(false, port, auxPath.c_str(), &address, &addressLength);
+
+		SOCKET n = os_utils::socket(AF_UNIX, SOCK_STREAM, 0);
+		if (n == INVALID_SOCKET)
+			inet_error(false, port, "socket", isc_net_event_listen_err, INET_ERRNO);
+
+		removeUnixSocketPath(auxPath);
+
+		if (bind(n, reinterpret_cast<sockaddr*>(&address), addressLength) < 0)
+		{
+			const int savedError = INET_ERRNO;
+			SOCLOSE(n);
+			inet_error(false, port, "bind", isc_net_event_listen_err, savedError);
+		}
+
+		if (listen(n, 1) < 0)
+		{
+			const int savedError = INET_ERRNO;
+			removeUnixSocketPath(auxPath);
+			SOCLOSE(n);
+			inet_error(false, port, "listen", isc_net_event_listen_err, savedError);
+		}
+
+		rem_port* const new_port = alloc_port(port->port_parent,
+			(port->port_flags & PORT_no_oob) | PORT_async | PORT_connecting | PORT_unix | PORT_unix_unlink);
+		port->port_async = new_port;
+		new_port->port_dummy_packet_interval = port->port_dummy_packet_interval;
+		new_port->port_dummy_timeout = new_port->port_dummy_packet_interval;
+
+		new_port->port_server_flags = port->port_server_flags;
+		new_port->port_channel = n;
+		new_port->port_peer_name = port->port_peer_name;
+		new_port->port_address = auxPath;
+		new_port->port_protocol_id = "UNIX";
+
+		P_RESP* response = &packet->p_resp;
+		response->p_resp_data.cstr_length = (ULONG) auxPath.length();
+		memcpy(response->p_resp_data.cstr_address, auxPath.c_str(), auxPath.length());
+
+		return new_port;
+	}
+#endif
 
 	// listen on (local) address of the original socket
 	SockAddr our_address;
@@ -1771,7 +2040,13 @@ static void disconnect(rem_port* port)
 		return;
 
 	port->port_state = rem_port::DISCONNECTED;
-	port->port_flags &= ~PORT_connecting;
+
+#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+	if ((port->port_flags & PORT_unix_unlink) && (port->port_flags & PORT_unix))
+		removeUnixSocketPath(port->port_address);
+#endif
+
+	port->port_flags &= ~(PORT_connecting | PORT_unix_unlink);
 
 	if (port->port_async)
 	{
@@ -2174,7 +2449,14 @@ static rem_port* select_accept( rem_port* main_port)
 		inet_error(true, port, "accept", isc_net_connect_err, INET_ERRNO);
 	}
 
-	setKeepAlive(port->port_handle);
+	if (main_port->port_flags & PORT_unix)
+	{
+		port->port_flags |= PORT_unix;
+		port->port_protocol_id = "UNIX";
+		port->port_address = main_port->port_address;
+	}
+	else
+		setKeepAlive(port->port_handle);
 
 	port->port_flags |= PORT_server;
 
@@ -2515,6 +2797,12 @@ void get_peer_info(rem_port* port)
 *	Port just connected. Obtain some info about connection and peer.
 *
 **************************************/
+	if (port->port_flags & PORT_unix)
+	{
+		port->port_protocol_id = "UNIX";
+		return;
+	}
+
 	port->port_protocol_id = "TCPv4";
 
 	SockAddr address;
