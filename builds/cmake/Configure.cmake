@@ -116,6 +116,7 @@ set(CASE_SENSITIVITY "true")
 set(SUPPORT_RAW_DEVICES 1)
 
 set(include_files_list
+    afunix.h
     aio.h
     assert.h
     atomic.h
