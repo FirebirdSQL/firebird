@@ -13114,21 +13114,54 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	unsigned pos = 0;
 
-	for (auto& arg : node->args->items)
+	for (auto p_nodeArg = node->args->items.begin(), e_nodeArg = node->args->items.end();
+		p_nodeArg != e_nodeArg;
+		++p_nodeArg, ++pos)
 	{
-		if (pos < node->dsqlFunction->udf_arguments.getCount())
+		if (node->dsqlFunction->udf_arguments.getCount() <= pos)
 		{
-			PASS1_set_parameter_type(dsqlScratch, arg,
-				[&] (dsc* desc) { *desc = node->dsqlFunction->udf_arguments[pos]; },
-				false);
-		}
-		else
-		{
-			// We should complain here in the future! The parameter is
+			// TODO: We should complain here in the future! The parameter is
 			// out of bounds or the function doesn't declare input params.
+
+			break;
 		}
 
-		++pos;
+		auto& nodeArg = (*p_nodeArg);
+
+		if (!nodeArg)
+		{
+			continue;
+		}
+
+		const auto& udfArg = node->dsqlFunction->udf_arguments[pos];
+
+		PASS1_set_parameter_type(dsqlScratch, nodeArg,
+			[&] (dsc* desc) { *desc = udfArg.desc; },
+			false);
+
+		// We will provide a client with the additional information about
+		// the linked UDF argument of DSQL parameter with array.
+
+		if (udfArg.desc.dsc_dtype != dtype_array)
+		{
+			// It is not array and will be ignored.
+		}
+		else
+		if (!node->dsqlFunction->udf_name.package.isEmpty())
+		{
+			// We can't provide with the exact information about package objects.
+		}
+		else
+		if (nodeArg->getType() == ExprNode::TYPE_PARAMETER)
+		{
+			ParameterNode* const paramNode = nodeAs<ParameterNode>(nodeArg);
+			dsql_par* const parameter = paramNode->dsqlParameter;
+			parameter->par_rel_name = node->dsqlFunction->udf_name.identifier;
+			parameter->par_name = udfArg.name;
+
+			fb_assert(!parameter->par_rel_name.isEmpty());
+			fb_assert(!parameter->par_name.isEmpty());
+		}
 	}
 
 	return node;
