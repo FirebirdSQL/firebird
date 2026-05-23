@@ -74,9 +74,18 @@ void DsqlDescMaker::fromElement(dsc* desc, const TypeClause* field)
 
 void DsqlDescMaker::fromField(dsc* desc, const TypeClause* field)
 {
-	composeDesc(desc,
-		field->dtype, field->scale, field->subType, field->length,
-		field->charSetId.value, field->collationId, field->flags & FLD_nullable);
+	if (field->dimensions != 0)
+	{
+		composeDesc(desc,
+			dtype_array, /*scale*/0, /*subType*/0, sizeof(ISC_QUAD),
+			/*charSetId*/0, /*collationId*/0, field->flags & FLD_nullable);
+	}
+	else
+	{
+		composeDesc(desc,
+			field->dtype, field->scale, field->subType, field->length,
+			field->charSetId.value, field->collationId, field->flags & FLD_nullable);
+	}
 }
 
 void DsqlDescMaker::fromList(DsqlCompilerScratch* scratch, dsc* desc,
