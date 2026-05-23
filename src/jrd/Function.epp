@@ -360,8 +360,19 @@ Function* Function::loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT
 				if (parameter->prm_desc.dsc_dtype == dtype_cstring)
 					parameter->prm_desc.dsc_length++;
 
-				length += (parameter->prm_desc.dsc_dtype == dtype_blob) ?
-					sizeof(udf_blob) : FB_ALIGN(parameter->prm_desc.dsc_length, FB_DOUBLE_ALIGN);
+				if (parameter->prm_fun_mechanism == FUN_scalar_array)
+				{
+					//scalar_array_desc is always allocated separately. See get_scalar_array in fun.epp
+				}
+				else
+				if (parameter->prm_desc.dsc_dtype == dtype_blob)
+				{
+					length += sizeof(udf_blob);
+				}
+				else
+				{
+					length += FB_ALIGN(parameter->prm_desc.dsc_length, FB_DOUBLE_ALIGN);
+				}
 
 				count = MAX(count, size_t(Y.RDB$ARGUMENT_POSITION));
 			}
