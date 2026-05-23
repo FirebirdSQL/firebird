@@ -38,7 +38,7 @@ rem_port*	INET_analyze(ClntAuthBlock*, const Firebird::PathName&, const TEXT*,
 						 const Firebird::PathName*, Firebird::ICryptKeyCallback*, int af = AF_UNSPEC);
 rem_port*	INET_connect(const TEXT*, struct packet*, USHORT, Firebird::ClumpletReader*,
 						 Firebird::RefPtr<const Firebird::Config>*, int af = AF_UNSPEC);
-rem_port*	INET_reconnect(SOCKET);
+rem_port*	INET_reconnect(SOCKET, bool unixSocket);
 rem_port*	INET_server(SOCKET);
 void		setStopMainThread(FPTR_INT func);
 

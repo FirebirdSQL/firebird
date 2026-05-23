@@ -81,6 +81,10 @@
 
 #ifdef	WIN_NT
 #define FD_SETSIZE 2048
+#include <winsock2.h>
+#include <windows.h>
+#include <winioctl.h>
+#include <afunix.h>
 #endif
 
 #ifndef WIN_NT
@@ -101,6 +105,18 @@
 #endif
 
 #endif // !WIN_NT
+
+#if (defined(WIN_NT) && defined(HAVE_AFUNIX_H)) || defined(HAVE_SYS_UN_H)
+#define HAVE_AF_UNIX_SUPPORT
+#endif
+
+#ifdef HAVE_AF_UNIX_SUPPORT
+#if defined(WIN_NT)
+using UnixSocketAddress = SOCKADDR_UN;
+#else
+using UnixSocketAddress = sockaddr_un;
+#endif
+#endif
 
 constexpr int INET_RETRY_CALL = 5;
 
@@ -526,10 +542,10 @@ static void		disconnect(rem_port*);
 static void		force_close(rem_port*);
 static int		cleanup_ports(const int, const int, void*);
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 static string makeAuxUnixSocketPath(const string& mainSocketPath);
 static void makeUnixSocketAddress(bool releasePort, rem_port* port, const char* path,
-	sockaddr_un* address, socklen_t* length);
+	UnixSocketAddress* address, socklen_t* length);
 static void removeUnixSocketPath(const string& path);
 static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* packet, USHORT flag);
 static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* socketPath);
@@ -539,18 +555,38 @@ static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* s
 static int		fork();
 #endif
 
+namespace
+{
+	struct ForkSocket
+	{
+		ForkSocket()
+			: socket(0), unixSocket(false)
+		{
+		}
+
+		ForkSocket(SOCKET aSocket, bool aUnixSocket)
+			: socket(aSocket), unixSocket(aUnixSocket)
+		{
+		}
+
+		SOCKET socket;
+		bool unixSocket;
+	};
+}
+
 typedef Array<SOCKET> SocketsArray;
+typedef Array<ForkSocket> ForkSocketsArray;
 
 #ifdef WIN_NT
 static int		wsaExitHandler(const int, const int, void*);
-static int		fork(SOCKET, USHORT);
+static int		fork(SOCKET, USHORT, bool);
 static THREAD_ENTRY_DECLARE forkThread(THREAD_ENTRY_PARAM);
 
 static GlobalPtr<Mutex> forkMutex;
 static HANDLE forkEvent = INVALID_HANDLE_VALUE;
 static bool forkThreadStarted = false;
 
-static SocketsArray* forkSockets;
+static ForkSocketsArray* forkSockets;
 #endif
 
 static void		get_peer_info(rem_port*);
@@ -638,11 +674,11 @@ static GlobalPtr<Mutex> port_mutex;
 static GlobalPtr<PortsCleanup>	inet_ports;
 static GlobalPtr<SocketsArray> ports_to_close;
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 static AtomicCounter unixAuxSequence;
 
 static void makeUnixSocketAddress(bool releasePort, rem_port* port, const char* path,
-	sockaddr_un* address, socklen_t* length)
+	UnixSocketAddress* address, socklen_t* length)
 {
 	const size_t pathLength = path ? strlen(path) : 0;
 
@@ -656,32 +692,70 @@ static void makeUnixSocketAddress(bool releasePort, rem_port* port, const char* 
 	memset(address, 0, sizeof(*address));
 	address->sun_family = AF_UNIX;
 	memcpy(address->sun_path, path, pathLength + 1);
-	*length = offsetof(sockaddr_un, sun_path) + pathLength + 1;
+	*length = offsetof(UnixSocketAddress, sun_path) + pathLength + 1;
 }
+
+#ifdef WIN_NT
+static bool isUnixSocketPath(const string& path)
+{
+	const HANDLE handle = CreateFileA(path.c_str(), FILE_READ_ATTRIBUTES,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+		FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+
+	if (handle == INVALID_HANDLE_VALUE)
+		return false;
+
+	FILE_ATTRIBUTE_TAG_INFO info;
+	const bool result = GetFileInformationByHandleEx(handle, FileAttributeTagInfo,
+		&info, sizeof(info)) &&
+		(info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+		info.ReparseTag == IO_REPARSE_TAG_AF_UNIX;
+
+	CloseHandle(handle);
+
+	return result;
+}
+#endif
 
 static void removeUnixSocketPath(const string& path)
 {
 	if (path.isEmpty())
 		return;
 
+#ifdef WIN_NT
+	if (isUnixSocketPath(path))
+		DeleteFileA(path.c_str());
+#else
 	struct stat st;
 	if (lstat(path.c_str(), &st) == 0 && S_ISSOCK(st.st_mode))
 		unlink(path.c_str());
+#endif
 }
 
 static string makeAuxUnixSocketPath(const string& mainSocketPath)
 {
+#ifdef WIN_NT
+	const FB_SIZE_T slash = mainSocketPath.find_last_of("\\/");
+	const char* const separator = (slash != string::npos && mainSocketPath[slash] == '/') ? "/" : "\\";
+#else
 	const FB_SIZE_T slash = mainSocketPath.rfind('/');
+	const char* const separator = "/";
+#endif
 	string directory = slash == string::npos ? "." : mainSocketPath.substr(0, slash);
 
 	string path;
-	path.printf("%s/fb_event.%d.%ld", directory.c_str(), getpid(),
+	path.printf("%s%sfb_event.%lu.%ld", directory.c_str(), separator,
+#ifdef WIN_NT
+		static_cast<unsigned long>(GetCurrentProcessId()),
+#else
+		static_cast<unsigned long>(getpid()),
+#endif
 		static_cast<long>(unixAuxSequence.exchangeAdd(1)));
 
 	return path;
 }
 
-#endif // !WIN_NT && HAVE_SYS_UN_H
+#endif // HAVE_AF_UNIX_SUPPORT
 
 
 rem_port* INET_analyze(ClntAuthBlock* cBlock,
@@ -967,7 +1041,7 @@ rem_port* INET_connect(const TEXT* name,
 
 	if ((!name || !name[0]) && !packet)
 	{
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 		const char* const socketPath = port->getPortConfig()->getRemoteServiceUnixSocket();
 		if (socketPath && socketPath[0])
 			return unix_connect(port, socketPath, packet, flag);
@@ -976,7 +1050,7 @@ rem_port* INET_connect(const TEXT* name,
 		name = port->getPortConfig()->getRemoteBindAddress();
 	}
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 	if (af == AF_UNIX)
 		return unix_connect(port, name, packet, flag);
 #endif
@@ -1133,11 +1207,11 @@ rem_port* INET_connect(const TEXT* name,
 }
 
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 
 static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* packet, USHORT flag)
 {
-	sockaddr_un address;
+	UnixSocketAddress address;
 	socklen_t addressLength;
 	makeUnixSocketAddress(true, port, socketPath, &address, &addressLength);
 
@@ -1177,7 +1251,7 @@ static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* pa
 
 static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* socketPath)
 {
-	sockaddr_un address;
+	UnixSocketAddress address;
 	socklen_t addressLength;
 	makeUnixSocketAddress(true, port, socketPath, &address, &addressLength);
 
@@ -1212,7 +1286,11 @@ static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* s
 			inet_error(true, port, "accept", isc_net_connect_err, inetErrNo);
 		}
 
+#ifdef WIN_NT
+		if (flag & SRVR_debug)
+#else
 		if ((flag & SRVR_debug) || !fork())
+#endif
 		{
 			SOCLOSE(port->port_handle);
 			port->port_handle = s;
@@ -1222,16 +1300,30 @@ static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* s
 			return port;
 		}
 
+#ifdef WIN_NT
+		MutexLockGuard forkGuard(forkMutex, FB_FUNCTION);
+		if (!forkThreadStarted)
+		{
+			forkThreadStarted = true;
+			forkEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+			forkSockets = FB_NEW ForkSocketsArray(*getDefaultMemoryPool());
+
+			Thread::start(forkThread, (void*) flag, THREAD_medium);
+		}
+		forkSockets->add(ForkSocket(s, true));
+		SetEvent(forkEvent);
+#else
 		MutexLockGuard guard(waitThreadMutex, FB_FUNCTION);
 
 		if (!procCount++)
 			Thread::start(waitThread, 0, THREAD_medium);
 
 		SOCLOSE(s);
+#endif
 	}
 }
 
-#endif // !WIN_NT && HAVE_SYS_UN_H
+#endif // HAVE_AF_UNIX_SUPPORT
 
 
 static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pai)
@@ -1376,11 +1468,11 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 		{
 			forkThreadStarted = true;
 			forkEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-			forkSockets = FB_NEW SocketsArray(*getDefaultMemoryPool());
+			forkSockets = FB_NEW ForkSocketsArray(*getDefaultMemoryPool());
 
 			Thread::start(forkThread, (void*) flag, THREAD_medium);
 		}
-		forkSockets->add(s);
+		forkSockets->add(ForkSocket(s, false));
 		SetEvent(forkEvent);
 #else
 		MutexLockGuard guard(waitThreadMutex, FB_FUNCTION);
@@ -1407,7 +1499,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 }
 
 
-rem_port* INET_reconnect(SOCKET handle)
+rem_port* INET_reconnect(SOCKET handle, bool unixSocket)
 {
 /**************************************
  *
@@ -1427,12 +1519,34 @@ rem_port* INET_reconnect(SOCKET handle)
 	port->port_flags |= PORT_server;
 	port->port_server_flags |= SRVR_server;
 
-	if (! setKeepAlive(port->port_handle)) {
-		gds__log("inet server err: setting KEEPALIVE socket option \n");
-	}
+#ifdef HAVE_AF_UNIX_SUPPORT
+	if (unixSocket)
+	{
+		port->port_flags |= PORT_unix;
+		port->port_protocol_id = "UNIX";
 
-	if (! setNoNagleOption(port)) {
-		gds__log("inet server err: setting NODELAY socket option \n");
+		UnixSocketAddress address;
+		socklen_t addressLength = sizeof(address);
+		memset(&address, 0, sizeof(address));
+
+		if (getsockname(port->port_handle, reinterpret_cast<sockaddr*>(&address), &addressLength) == 0 &&
+			address.sun_path[0])
+		{
+			port->port_address = address.sun_path;
+		}
+		else
+			gds__log("inet server err: getting Unix socket name \n");
+	}
+	else
+#endif
+	{
+		if (! setKeepAlive(port->port_handle)) {
+			gds__log("inet server err: setting KEEPALIVE socket option \n");
+		}
+
+		if (! setNoNagleOption(port)) {
+			gds__log("inet server err: setting NODELAY socket option \n");
+		}
 	}
 
 	return port;
@@ -1708,7 +1822,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 
 		if (port->port_flags & PORT_unix)
 		{
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 			removeUnixSocketPath(port->port_address);
 #endif
 			port->port_protocol_id = "UNIX";
@@ -1727,14 +1841,14 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 	new_port->port_dummy_timeout = new_port->port_dummy_packet_interval;
 	P_RESP* response = &packet->p_resp;
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 	if (port->port_flags & PORT_unix)
 	{
 		string auxPath;
 		auxPath.assign(reinterpret_cast<const char*>(response->p_resp_data.cstr_address),
 			response->p_resp_data.cstr_length);
 
-		sockaddr_un address;
+		UnixSocketAddress address;
 		socklen_t addressLength;
 		makeUnixSocketAddress(false, port, auxPath.c_str(), &address, &addressLength);
 
@@ -1829,12 +1943,12 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
  *
  **************************************/
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 	if (port->port_flags & PORT_unix)
 	{
 		const string auxPath = makeAuxUnixSocketPath(port->port_address);
 
-		sockaddr_un address;
+		UnixSocketAddress address;
 		socklen_t addressLength;
 		makeUnixSocketAddress(false, port, auxPath.c_str(), &address, &addressLength);
 
@@ -2041,7 +2155,7 @@ static void disconnect(rem_port* port)
 
 	port->port_state = rem_port::DISCONNECTED;
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 	if ((port->port_flags & PORT_unix_unlink) && (port->port_flags & PORT_unix))
 		removeUnixSocketPath(port->port_address);
 #endif
@@ -2197,7 +2311,7 @@ static int wsaExitHandler(const int, const int, void*)
 }
 
 
-static int fork(SOCKET old_handle, USHORT flag)
+static int fork(SOCKET old_handle, USHORT flag, bool unixSocket)
 {
 /**************************************
  *
@@ -2222,7 +2336,8 @@ static int fork(SOCKET old_handle, USHORT flag)
 	}
 
 	string cmdLine;
-	cmdLine.printf("%s -i -h %" HANDLEFORMAT"@%" ULONGFORMAT, name, new_handle, GetCurrentProcessId());
+	cmdLine.printf("%s -i%s -h %" HANDLEFORMAT"@%" ULONGFORMAT,
+		name, unixSocket ? " -u" : "", new_handle, GetCurrentProcessId());
 
 	STARTUPINFO start_crud;
 	start_crud.cb = sizeof(STARTUPINFO);
@@ -2263,18 +2378,18 @@ THREAD_ENTRY_DECLARE forkThread(THREAD_ENTRY_PARAM arg)
 
 		while (!INET_shutting_down)
 		{
-			SOCKET s = 0;
+			ForkSocket forkSocket;
 			{	// scope
 				MutexLockGuard forkGuard(forkMutex, FB_FUNCTION);
 
 				if (!forkSockets || forkSockets->getCount() == 0)
 					break;
 
-				s = (*forkSockets)[0];
+				forkSocket = (*forkSockets)[0];
 				forkSockets->remove((FB_SIZE_T) 0);
 			}
-			fork(s, flag);
-			SOCLOSE(s);
+			fork(forkSocket.socket, flag, forkSocket.unixSocket);
+			SOCLOSE(forkSocket.socket);
 		}
 	}
 

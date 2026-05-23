@@ -90,7 +90,12 @@
 #endif
 
 #ifdef WIN_NT
+#include <winsock2.h>
 #include <process.h>
+#endif
+
+#if (defined(WIN_NT) && defined(HAVE_AFUNIX_H)) || defined(HAVE_SYS_UN_H)
+#define HAVE_AF_UNIX_SUPPORT
 #endif
 
 #if defined(WIN_NT)
@@ -103,7 +108,7 @@ const char* const PROTOCOL_INET = "inet";
 const char* const PROTOCOL_INET4 = "inet4";
 const char* const PROTOCOL_INET6 = "inet6";
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 const char* const PROTOCOL_UNIX = "unix";
 #endif
 
@@ -1184,7 +1189,7 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& authItr, rem_por
 
 static AtomicCounter remote_event_id;
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 static bool analyzeUnixProtocol(PathName& expandedName, PathName& nodeName)
 {
 	nodeName.erase();
@@ -1200,7 +1205,17 @@ static bool analyzeUnixProtocol(PathName& expandedName, PathName& nodeName)
 	PathName savedName = expandedName;
 	expandedName.erase(0, prefix.length());
 
-	const PathName::size_type separator = expandedName.find(':');
+	PathName::size_type separator = expandedName.find(':');
+
+#ifdef WIN_NT
+	if (separator == 1)
+	{
+		const char driveLetter = expandedName[0];
+		if ((driveLetter >= 'A' && driveLetter <= 'Z') || (driveLetter >= 'a' && driveLetter <= 'z'))
+			separator = expandedName.find(':', separator + 1);
+	}
+#endif
+
 	if (separator == PathName::npos || separator == 0 || separator == expandedName.length() - 1)
 	{
 		expandedName = savedName;
@@ -7968,7 +7983,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			else
 #endif
 
-#if !defined(WIN_NT) && defined(HAVE_SYS_UN_H)
+#ifdef HAVE_AF_UNIX_SUPPORT
 			if (analyzeUnixProtocol(attach_name, node_name))
 			{
 				ISC_utf8ToSystem(node_name);
