@@ -26,8 +26,10 @@
 
 #include "../jrd/EngineInterface.h"
 #include "../jrd/jrd.h"
+#include "../jrd/met.h"
 #include "../jrd/status.h"
 #include "../jrd/exe_proto.h"
+#include "../jrd/scl_proto.h"
 #include "../dsql/dsql.h"
 #include "../dsql/errd_proto.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -415,9 +417,54 @@ void DsqlBatch::addBlobStream(thread_db* tdbb, unsigned length, const void* inBu
 	m_blobs.put(inBuffer, length);
 }
 
-void DsqlBatch::registerBlob(thread_db*, const ISC_QUAD* existingBlob, ISC_QUAD* blobId)
+void DsqlBatch::registerBlob(thread_db* tdbb, const ISC_QUAD* existingBlob, ISC_QUAD* blobId)
 {
 	blobCheckMeta();
+
+	auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, existingBlob->gds_quad_high, CacheFlag::AUTOCREATE);
+	if (!relation)
+		return;
+
+	auto securityName = relation->getSecurityName().object;
+	fb_assert(securityName.hasData());
+
+	SecurityClass* securityClass = SCL_get_class(tdbb, securityName.c_str());
+
+	if (!securityClass)
+		return;
+
+	switch (securityClass->scl_blb_access)
+	{
+	case SecurityClass::BA_UNKNOWN:
+		try
+		{
+			SCL_check_access(tdbb, securityClass, 0, {}, SCL_select, obj_relations, false, relation->rel_name);
+
+			securityClass->scl_blb_access = SecurityClass::BA_SUCCESS;
+		}
+		catch (const Exception& ex)
+		{
+			StaticStatusVector status;
+			ex.stuffException(status);
+			if (status[1] != isc_no_priv)
+				throw;
+
+			securityClass->scl_blb_access = SecurityClass::BA_FAILURE;
+
+			throw;
+		}
+		break;
+
+	case SecurityClass::BA_FAILURE:
+		ERR_post(Arg::Gds(isc_no_priv) << Arg::Str("SELECT") <<
+			Arg::Str("TABLE") << relation->getName().toQuotedString().c_str());
+
+	case SecurityClass::BA_SUCCESS:
+		break;
+
+	default:
+		fb_assert(false);
+	}
 
 	// Generate auto blob ID if needed
 	if (m_blobPolicy == IBatch::BLOB_ID_ENGINE)
