@@ -522,7 +522,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 		}
 		else if (!fetchRecord(tdbb, impure, m_subs.getCount() - 1))
 		{
-			fb_assert(m_joinType == JoinType::INNER);
+			fb_assert(m_joinType == JoinType::INNER || m_joinType == JoinType::OUTER);
 			impure->irsb_flags |= irsb_mustread;
 			continue;
 		}

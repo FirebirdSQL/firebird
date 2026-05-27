@@ -182,11 +182,130 @@ RecordSource* OuterJoin::process()
 
 	fb_assert(outerRsb);
 
+	StreamList outerStreams;
+	outer.getStreams(outerStreams);
+
+	RecordSource* joinRsb = nullptr;
+
 	if (inner.number != INVALID_STREAM)
 	{
-		// AB: the sort clause for the inner stream of an OUTER JOIN
-		//	   should never be used for the index retrieval
-		innerRsb = optimizer->generateRetrieval(inner.number, nullptr, false, true);
+		// Search for for possible equi-join conditions
+		BooleanList equiMatches;
+
+		auto iter = optimizer->getConjuncts(false, true);
+		for (iter.rewind(); iter.hasData(); ++iter)
+		{
+			if (!(iter & Optimizer::CONJUNCT_USED))
+			{
+				// Check whether we have an equivalence operation
+				if (!optimizer->checkEquiJoin(iter))
+					continue;
+
+				// Ensure the boolean references both inner and outer streams
+				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
+				fb_assert(cmpNode && (cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv));
+				auto outerArg = cmpNode->arg1;
+				auto innerArg = cmpNode->arg2;
+
+				if (!innerArg->containsStream(inner.number, true))
+				{
+					if (!outerArg->containsStream(inner.number, true))
+						continue;
+
+					std::swap(outerArg, innerArg);
+				}
+
+				if (outerArg->containsStream(inner.number))
+					continue;
+
+				if (!outerArg->computable(csb, inner.number, false))
+					continue;
+
+				equiMatches.add(*iter);
+			}
+		}
+
+		// Estimate costs for both LOOP and HASH joins and choose the cheapest option
+		if (equiMatches.hasData())
+		{
+			const auto streamCardinality = csb->csb_rpt[inner.number].csb_cardinality;
+			const auto outerCardinality = outerRsb->getCardinality();
+
+			// Calculate the nested loop join cost (excluding the outer stream)
+			Retrieval loopRetrieval(tdbb, optimizer, inner.number, false, true, nullptr, true);
+			const auto loopCandidate = loopRetrieval.getInversion();
+
+			const auto loopCost = loopCandidate->cost * outerCardinality;
+
+			// Calculate the match cardinality
+			const auto matchSelectivity = loopCandidate->selectivity;
+			const auto matchCardinality = MIN(streamCardinality * matchSelectivity, MINIMUM_CARDINALITY);
+
+			// Calculate the hash join cost (excluding the outer stream)
+			StreamStateHolder outerHolder(csb, outerStreams);
+			outerHolder.deactivate();
+
+			Retrieval hashRetrieval(tdbb, optimizer, inner.number, false, true, nullptr, true);
+			const auto hashCandidate = hashRetrieval.getInversion();
+
+			const auto hashCardinality = hashCandidate->selectivity * streamCardinality;
+			const auto hashCost = hashCandidate->cost +
+				// hashing cost
+				hashCardinality * (COST_FACTOR_MEMCOPY + COST_FACTOR_HASHING) +
+				// probing + copying cost
+				outerCardinality * (COST_FACTOR_HASHING + matchCardinality * COST_FACTOR_MEMCOPY);
+
+			if (hashCost <= loopCost && hashCardinality <= HashJoin::maxCapacity())
+			{
+				// Create an independent retrieval
+				innerRsb = optimizer->generateRetrieval(inner.number, nullptr, false, true);
+
+				// Prepare record sources and corresponding equivalence keys for hash-joining
+				RecordSource* hashJoinRsbs[] = {outerRsb, innerRsb};
+
+				HalfStaticArray<NestValueArray*, OPT_STATIC_ITEMS> keys;
+
+				keys.add(FB_NEW_POOL(getPool()) NestValueArray(getPool()));
+				keys.add(FB_NEW_POOL(getPool()) NestValueArray(getPool()));
+
+				for (const auto match : equiMatches)
+				{
+					NestConst<ValueExprNode> node1;
+					NestConst<ValueExprNode> node2;
+
+					if (!optimizer->getEquiJoinKeys(match, &node1, &node2))
+						fb_assert(false);
+
+					if (!node2->containsStream(inner.number))
+					{
+						fb_assert(node1->containsStream(inner.number));
+
+						// Swap the sides
+						std::swap(node1, node2);
+					}
+
+					keys[0]->add(node1);
+					keys[1]->add(node2);
+				}
+
+				// Create a hash join
+				joinRsb = FB_NEW_POOL(getPool())
+					HashJoin(tdbb, csb, boolean, hashJoinRsbs, keys.begin(), matchSelectivity);
+
+				for (iter.rewind(); iter.hasData(); ++iter)
+				{
+					if (equiMatches.exist(*iter))
+						iter |= Optimizer::CONJUNCT_JOINED;
+				}
+			}
+		}
+
+		if (!joinRsb)
+		{
+			// AB: the sort clause for the inner stream of an OUTER JOIN
+			//         should never be used for the index retrieval
+			innerRsb = optimizer->generateRetrieval(inner.number, nullptr, false, true);
+		}
 	}
 	else
 	{
@@ -196,8 +315,6 @@ RecordSource* OuterJoin::process()
 		{
 			fb_assert(optimizer->isFullJoin());
 
-			StreamList outerStreams;
-			outerRsb->findUsedStreams(outerStreams);
 			optimizer->setOuterStreams(outerStreams);
 
 			innerRsb = inner.node->compile(tdbb, optimizer, true);
@@ -213,7 +330,7 @@ RecordSource* OuterJoin::process()
 
 	// Allocate and return the join record source
 
-	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
+	return joinRsb ? joinRsb : FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
 };
 
 
