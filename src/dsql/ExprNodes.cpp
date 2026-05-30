@@ -9644,12 +9644,14 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const AggNode* aggNode = nodeAs<AggNode>(node->aggExpr);
 
 	if (node->window &&
-		node->window->extent &&
 		aggNode &&
+		(node->window->extent || node->window->exclusion != WindowClause::Exclusion::NO_OTHERS) &&
 		(aggNode->getCapabilities() & AggNode::CAP_RESPECTS_WINDOW_FRAME) !=
 			AggNode::CAP_RESPECTS_WINDOW_FRAME)
 	{
-		node->window->extent = WindowClause::FrameExtent::createDefault(dsqlScratch->getPool());
+		if (node->window->extent)
+			node->window->extent = WindowClause::FrameExtent::createDefault(dsqlScratch->getPool());
+
 		node->window->exclusion = WindowClause::Exclusion::NO_OTHERS;
 	}
 

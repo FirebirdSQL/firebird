@@ -4,7 +4,7 @@ By the SQL specification, window functions (also know as analytical functions) a
 
 That sort of functions are used with the `OVER` clause. Window functions may appear only in the select list or the `ORDER BY` clause of a query.
 
-Additional to the `OVER` clause, Firebird window functions may use partitions, order and frames (FB 4.0).
+Additional to the `OVER` clause, Firebird window functions may use partitions, order, frames (FB 4.0) and frame exclusions (FB 6.0).
 
 Syntax:
 
@@ -14,7 +14,7 @@ Syntax:
     OVER {<window specification> | <existing window name>}
 
 <window specification> ::=
-  ([<existing window name>] [<window partition>] [<window order>] [<window frame>])
+  ([<existing window name>] [<window partition>] [<window order>] [<window frame>] [<window frame exclusion>])
 
 <window partition> ::=
   PARTITION BY <expr> [, <expr> ...]
@@ -34,6 +34,9 @@ Syntax:
 <window frame between> ::=
   BETWEEN {UNBOUNDED PRECEDING | <expr> PRECEDING | <expr> FOLLOWING | CURRENT ROW} AND
           {UNBOUNDED FOLLOWING | <expr> PRECEDING | <expr> FOLLOWING | CURRENT ROW}
+
+<window frame exclusion> ::=
+  EXCLUDE {NO OTHERS | CURRENT ROW | GROUP | TIES}
 
 <direction> ::=
   {ASC | DESC}
@@ -279,6 +282,28 @@ With `ROWS`, order expressions is not limited by number or types. In this case, 
 
 The frame syntax with `<window frame start>` specifies the start frame, with the end frame being `CURRENT ROW`.
 
+The optional frame exclusion clause (FB 6.0) removes rows from the frame after its bounds have been evaluated. `EXCLUDE NO OTHERS` is the default and keeps the frame unchanged.
+
+`EXCLUDE CURRENT ROW` removes only the current row from the frame.
+
+`EXCLUDE GROUP` removes the current row and all its peers. Peers are rows with the same `ORDER BY` values as the current row. If there is no `ORDER BY`, all rows in the partition are peers.
+
+`EXCLUDE TIES` removes the peers of the current row, but keeps the current row itself. If there is no `ORDER BY`, all other rows in the partition are removed from the frame.
+
+For example, with duplicate salaries, the following query sums the full ordered partition except the current salary peer group:
+
+```sql
+select
+    id,
+    salary,
+    sum(salary) over (
+      order by salary
+      rows between unbounded preceding and unbounded following
+      exclude group
+    ) sum_other_salaries
+  from employee
+  order by salary;
+```
 
 
 When `ORDER BY` window clause is used but frame clause is omitted, it defaults to `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. This fact makes the query below to produce "weird" behaviour for the "sum_salary" column. It sums from the partition start to the current key, instead of sum the whole partition.
@@ -346,9 +371,9 @@ select
 |  5 |  10.00 |           3 |
 |  2 |  12.00 |           1 |
 
-Some window functions discard frames. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
+Some window functions discard frames and frame exclusions. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
-`FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames, but the `RANGE` unit works identically as `ROWS`.
+`FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames and frame exclusions, but the `RANGE` unit works identically as `ROWS`.
 
 ## 6. Named windows (FB 4.0)
 

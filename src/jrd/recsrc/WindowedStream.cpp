@@ -645,7 +645,11 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 	if (!m_next->getRecord(tdbb))
 		fb_assert(false);
 
-	if (impure->rangePending > 0)
+	Block exclusion1, exclusion2;
+	exclusion1.invalidate();
+	exclusion2.invalidate();
+
+	if (impure->rangePending > 0 && m_exclusion == Exclusion::NO_OTHERS)
 		--impure->rangePending;
 	else
 	{
@@ -758,13 +762,14 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 			return false;
 		}
 
-		if ((m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value &&
-			 m_frameExtent->frame2->bound == Frame::Bound::FOLLOWING && !m_frameExtent->frame2->value) ||
-		    (m_frameExtent->unit == FrameExtent::Unit::RANGE && !m_order))
+		if (m_exclusion == Exclusion::NO_OTHERS &&
+			((m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value &&
+				m_frameExtent->frame2->bound == Frame::Bound::FOLLOWING && !m_frameExtent->frame2->value) ||
+		     (m_frameExtent->unit == FrameExtent::Unit::RANGE && !m_order)))
 		{
 			impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
 		}
-		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE)
+		else if (m_exclusion == Exclusion::NO_OTHERS && m_frameExtent->unit == FrameExtent::Unit::RANGE)
 		{
 			SINT64 rangePos = position;
 			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
@@ -792,10 +797,12 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 
 		//// TODO: There is no need to pass record by record when m_aggSources.isEmpty()
 
-		if (!impure->windowBlock.isValid() ||
+		const bool invalidFrame = !impure->windowBlock.isValid() ||
 			impure->windowBlock.endPosition < impure->windowBlock.startPosition ||
 			impure->windowBlock.startPosition > impure->partitionBlock.endPosition ||
-			impure->windowBlock.endPosition < impure->partitionBlock.startPosition)
+			impure->windowBlock.endPosition < impure->partitionBlock.startPosition;
+
+		if (invalidFrame)
 		{
 			if (position == 0 || impure->windowBlock.isValid())
 			{
@@ -811,53 +818,83 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 			impure->windowBlock.endPosition =
 				MIN(impure->windowBlock.endPosition, impure->partitionBlock.endPosition);
 
-			// If possible, reuse the last window aggregation.
-			//
-			// This may be incompatible with some function like LIST, but currently LIST cannot
-			// be used in ordered windows anyway.
-
-			if (!lastWindow.isValid() ||
-				impure->windowBlock.startPosition > lastWindow.startPosition ||
-				impure->windowBlock.endPosition < lastWindow.endPosition)
+			if (m_exclusion != Exclusion::NO_OTHERS)
 			{
+				getExclusionBlocks(tdbb, request, impure, position, &exclusion1, &exclusion2);
+
 				aggInit(tdbb, request, m_windowMap);
 				m_next->locate(tdbb, impure->windowBlock.startPosition);
+
+				SINT64 aggPos = impure->windowBlock.startPosition;
+
+				while (aggPos <= impure->windowBlock.endPosition)
+				{
+					if (!m_next->getRecord(tdbb))
+						fb_assert(false);
+
+					if (!isExcluded(aggPos, exclusion1, exclusion2))
+						aggPass(tdbb, request, m_aggSources, m_aggTargets);
+
+					++aggPos;
+				}
+
+				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
+
+				m_next->locate(tdbb, position);
+
+				if (!m_next->getRecord(tdbb))
+					fb_assert(false);
 			}
 			else
 			{
-				if (impure->windowBlock.startPosition < lastWindow.startPosition)
+				// If possible, reuse the last window aggregation.
+				//
+				// This may be incompatible with some function like LIST, but currently LIST cannot
+				// be used in ordered windows anyway.
+
+				if (!lastWindow.isValid() ||
+					impure->windowBlock.startPosition > lastWindow.startPosition ||
+					impure->windowBlock.endPosition < lastWindow.endPosition)
 				{
+					aggInit(tdbb, request, m_windowMap);
 					m_next->locate(tdbb, impure->windowBlock.startPosition);
-					SINT64 pending = lastWindow.startPosition - impure->windowBlock.startPosition;
-
-					while (pending-- > 0)
+				}
+				else
+				{
+					if (impure->windowBlock.startPosition < lastWindow.startPosition)
 					{
-						if (!m_next->getRecord(tdbb))
-							fb_assert(false);
+						m_next->locate(tdbb, impure->windowBlock.startPosition);
+						SINT64 pending = lastWindow.startPosition - impure->windowBlock.startPosition;
 
-						aggPass(tdbb, request, m_aggSources, m_aggTargets);
+						while (pending-- > 0)
+						{
+							if (!m_next->getRecord(tdbb))
+								fb_assert(false);
+
+							aggPass(tdbb, request, m_aggSources, m_aggTargets);
+						}
 					}
+
+					m_next->locate(tdbb, lastWindow.endPosition + 1);
 				}
 
-				m_next->locate(tdbb, lastWindow.endPosition + 1);
-			}
+				SINT64 aggPos = (SINT64) m_next->getPosition(request);
 
-			SINT64 aggPos = (SINT64) m_next->getPosition(request);
+				while (aggPos++ <= impure->windowBlock.endPosition)
+				{
+					if (!m_next->getRecord(tdbb))
+						fb_assert(false);
 
-			while (aggPos++ <= impure->windowBlock.endPosition)
-			{
+					aggPass(tdbb, request, m_aggSources, m_aggTargets);
+				}
+
+				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
+
+				m_next->locate(tdbb, position);
+
 				if (!m_next->getRecord(tdbb))
 					fb_assert(false);
-
-				aggPass(tdbb, request, m_aggSources, m_aggTargets);
 			}
-
-			aggExecute(tdbb, request, m_aggSources, m_aggTargets);
-
-			m_next->locate(tdbb, position);
-
-			if (!m_next->getRecord(tdbb))
-				fb_assert(false);
 		}
 	}
 
@@ -867,7 +904,9 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 	{
 		SlidingWindow window(tdbb, m_next, request,
 			impure->partitionBlock.startPosition, impure->partitionBlock.endPosition,
-			impure->windowBlock.startPosition, impure->windowBlock.endPosition);
+			impure->windowBlock.startPosition, impure->windowBlock.endPosition,
+			exclusion1.startPosition, exclusion1.endPosition,
+			exclusion2.startPosition, exclusion2.endPosition);
 		dsc* desc;
 
 		const NestConst<ValueExprNode>* const sourceEnd = m_winPassSources.end();
@@ -992,6 +1031,120 @@ void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, Request* reque
 	}
 }
 
+WindowedStream::WindowStream::Block WindowedStream::WindowStream::getPeerBlock(
+	thread_db* tdbb, Request* request, Impure* impure, SINT64 position) const
+{
+	Block peerBlock;
+	peerBlock.startPosition = peerBlock.endPosition = position;
+
+	if (!m_order)
+	{
+		peerBlock.startPosition = impure->partitionBlock.startPosition;
+		peerBlock.endPosition = impure->partitionBlock.endPosition;
+		return peerBlock;
+	}
+
+	cacheValues(tdbb, request, &m_order->expressions, impure->orderValues, DummyAdjustFunctor());
+
+	while (peerBlock.startPosition > impure->partitionBlock.startPosition)
+	{
+		m_next->locate(tdbb, peerBlock.startPosition - 1);
+
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
+
+		if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues))
+			break;
+
+		--peerBlock.startPosition;
+	}
+
+	m_next->locate(tdbb, position);
+
+	if (!m_next->getRecord(tdbb))
+		fb_assert(false);
+
+	while (peerBlock.endPosition < impure->partitionBlock.endPosition)
+	{
+		m_next->locate(tdbb, peerBlock.endPosition + 1);
+
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
+
+		if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues))
+			break;
+
+		++peerBlock.endPosition;
+	}
+
+	m_next->locate(tdbb, position);
+
+	if (!m_next->getRecord(tdbb))
+		fb_assert(false);
+
+	return peerBlock;
+}
+
+void WindowedStream::WindowStream::getExclusionBlocks(thread_db* tdbb, Request* request,
+	Impure* impure, SINT64 position, Block* exclusion1, Block* exclusion2) const
+{
+	exclusion1->invalidate();
+	exclusion2->invalidate();
+
+	if (m_exclusion == Exclusion::NO_OTHERS ||
+		!impure->windowBlock.isValid() ||
+		impure->windowBlock.startPosition > impure->windowBlock.endPosition)
+	{
+		return;
+	}
+
+	auto setBlock = [&] (Block* block, SINT64 startPosition, SINT64 endPosition)
+	{
+		startPosition = MAX(startPosition, impure->windowBlock.startPosition);
+		endPosition = MIN(endPosition, impure->windowBlock.endPosition);
+
+		if (startPosition <= endPosition)
+		{
+			block->startPosition = startPosition;
+			block->endPosition = endPosition;
+		}
+	};
+
+	switch (m_exclusion)
+	{
+		case Exclusion::CURRENT_ROW:
+			setBlock(exclusion1, position, position);
+			break;
+
+		case Exclusion::GROUP:
+		{
+			const Block peerBlock = getPeerBlock(tdbb, request, impure, position);
+			setBlock(exclusion1, peerBlock.startPosition, peerBlock.endPosition);
+			break;
+		}
+
+		case Exclusion::TIES:
+		{
+			const Block peerBlock = getPeerBlock(tdbb, request, impure, position);
+			setBlock(exclusion1, peerBlock.startPosition, position - 1);
+			setBlock(exclusion2, position + 1, peerBlock.endPosition);
+			break;
+		}
+
+		case Exclusion::NO_OTHERS:
+			break;
+	}
+}
+
+bool WindowedStream::WindowStream::isExcluded(SINT64 position, const Block& exclusion1,
+	const Block& exclusion2) const
+{
+	return (exclusion1.isValid() &&
+			position >= exclusion1.startPosition && position <= exclusion1.endPosition) ||
+		(exclusion2.isValid() &&
+			position >= exclusion2.startPosition && position <= exclusion2.endPosition);
+}
+
 SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
 	const Frame* frame, const dsc* offsetDesc, SINT64 position) const
 {
@@ -1109,16 +1262,22 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* 
 
 SlidingWindow::SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream,
 			Request* request,
-			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
-			FB_UINT64 aFrameStart, FB_UINT64 aFrameEnd)
+			SINT64 aPartitionStart, SINT64 aPartitionEnd,
+			SINT64 aFrameStart, SINT64 aFrameEnd,
+			SINT64 aExclusionStart1, SINT64 aExclusionEnd1,
+			SINT64 aExclusionStart2, SINT64 aExclusionEnd2)
 	: tdbb(aTdbb),	// Note: instantiate the class only as local variable
 	  stream(aStream),
 	  partitionStart(aPartitionStart),
 	  partitionEnd(aPartitionEnd),
 	  frameStart(aFrameStart),
-	  frameEnd(aFrameEnd)
+	  frameEnd(aFrameEnd),
+	  exclusionStart1(aExclusionStart1),
+	  exclusionEnd1(aExclusionEnd1),
+	  exclusionStart2(aExclusionStart2),
+	  exclusionEnd2(aExclusionEnd2)
 {
-	savedPosition = stream->getPosition(request) - 1;
+	savedPosition = (SINT64) stream->getPosition(request) - 1;
 }
 
 SlidingWindow::~SlidingWindow()
@@ -1153,13 +1312,88 @@ bool SlidingWindow::moveWithinPartition(SINT64 delta)
 	return true;
 }
 
+bool SlidingWindow::moveToFramePosition(SINT64 position)
+{
+	if (!hasFrame() || position < frameStart || position > frameEnd || isExcluded(position))
+		return false;
+
+	return moveWithinPartition(position - savedPosition);
+}
+
 // Move in the window without pass frame boundaries.
 bool SlidingWindow::moveWithinFrame(SINT64 delta)
 {
 	const auto newPosition = savedPosition + delta;
 
-	if (newPosition < frameStart || newPosition > frameEnd)
+	if (!hasFrame() || newPosition < frameStart || newPosition > frameEnd || isExcluded(newPosition))
 		return false;
 
 	return moveWithinPartition(delta);
+}
+
+bool SlidingWindow::moveToFrameStart()
+{
+	if (!hasFrame())
+		return false;
+
+	for (SINT64 position = frameStart; position <= frameEnd; ++position)
+	{
+		if (!isExcluded(position))
+			return moveToFramePosition(position);
+	}
+
+	return false;
+}
+
+bool SlidingWindow::moveToFrameEnd()
+{
+	if (!hasFrame())
+		return false;
+
+	for (SINT64 position = frameEnd; position >= frameStart; --position)
+	{
+		if (!isExcluded(position))
+			return moveToFramePosition(position);
+	}
+
+	return false;
+}
+
+bool SlidingWindow::moveToFrameOffset(SINT64 offset)
+{
+	if (!hasFrame() || offset < 0)
+		return false;
+
+	for (SINT64 position = frameStart; position <= frameEnd; ++position)
+	{
+		if (isExcluded(position))
+			continue;
+
+		if (offset-- == 0)
+			return moveToFramePosition(position);
+	}
+
+	return false;
+}
+
+SINT64 SlidingWindow::getEffectiveFrameSize() const
+{
+	if (!hasFrame())
+		return 0;
+
+	SINT64 size = frameEnd - frameStart + 1;
+
+	const auto subtractBlock = [&] (SINT64 start, SINT64 end)
+	{
+		start = MAX(start, frameStart);
+		end = MIN(end, frameEnd);
+
+		if (start <= end)
+			size -= end - start + 1;
+	};
+
+	subtractBlock(exclusionStart1, exclusionEnd1);
+	subtractBlock(exclusionStart2, exclusionEnd2);
+
+	return size;
 }

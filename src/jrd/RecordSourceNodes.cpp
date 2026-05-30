@@ -2656,11 +2656,6 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				break;
 
 			case blr_window_win_exclusion:
-				//// TODO: CORE-5338 - write code for execution.
-				PAR_error(csb,
-					Arg::Gds(isc_wish_list) <<
-					Arg::Gds(isc_random) << "window EXCLUDE clause");
-
 				window.exclusion = (WindowClause::Exclusion) csb->csb_blr_reader.getByte();
 
 				switch (window.exclusion)
