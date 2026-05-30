@@ -8977,6 +8977,13 @@ window_clause
 	: symbol_window_name_opt
 			window_partition_opt
 			order_clause_opt
+		{
+			$$ = newNode<WindowClause>($1, $2, $3,
+				static_cast<WindowClause::FrameExtent*>(NULL), WindowClause::Exclusion::NO_OTHERS);
+		}
+	| symbol_window_name_opt
+			window_partition_opt
+			order_clause_opt
 			window_frame_extent
 			window_frame_exclusion_opt
 		{
@@ -8992,9 +8999,7 @@ window_partition_opt
 
 %type <windowClauseFrameExtent> window_frame_extent
 window_frame_extent
-	: /* nothing */
-		{ $$ = NULL; }
-	| RANGE
+	: RANGE
 		{ $$ = newNode<WindowClause::FrameExtent>(WindowClause::FrameExtent::Unit::RANGE); }
 		window_frame($2)
 		{ $$ = $2; }

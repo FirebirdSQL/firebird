@@ -14,7 +14,7 @@ Syntax:
     OVER {<window specification> | <existing window name>}
 
 <window specification> ::=
-  ([<existing window name>] [<window partition>] [<window order>] [<window frame>] [<window frame exclusion>])
+  ([<existing window name>] [<window partition>] [<window order>] [<window frame>])
 
 <window partition> ::=
   PARTITION BY <expr> [, <expr> ...]
@@ -23,7 +23,7 @@ Syntax:
   ORDER BY <expr> [<direction>] [<nulls placement>] [, <expr> [<direction>] [<nulls placement>]] ...
 
 <window frame> ::=
-  {RANGE | ROWS} <window frame extent>
+  {RANGE | ROWS} <window frame extent> [<window frame exclusion>]
 
 <window frame extent> ::=
   {<window frame start> | <window frame between>}
@@ -282,7 +282,7 @@ With `ROWS`, order expressions is not limited by number or types. In this case, 
 
 The frame syntax with `<window frame start>` specifies the start frame, with the end frame being `CURRENT ROW`.
 
-The optional frame exclusion clause (FB 6.0) removes rows from the frame after its bounds have been evaluated. `EXCLUDE NO OTHERS` is the default and keeps the frame unchanged.
+The optional frame exclusion clause (FB 6.0) is part of the frame clause and removes rows from the frame after its bounds have been evaluated. It can only be specified together with an explicit `ROWS` or `RANGE` frame. `EXCLUDE NO OTHERS` is the default and keeps the frame unchanged.
 
 `EXCLUDE CURRENT ROW` removes only the current row from the frame.
 
