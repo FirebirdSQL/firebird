@@ -168,31 +168,26 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	if (m_exclusive && m_tpcHeader)
 		releaseSharedMemory(tdbb, 0, 0);
 
-	PathName nmSnap, nmHdr;
 	if (m_snapshots)
 	{
-		nmSnap = m_snapshots->getMapFileName();
+		if (m_exclusive)
+			m_snapshots->removeMapFile();
+
 		delete m_snapshots;
 		m_snapshots = NULL;
 	}
 
 	if (m_tpcHeader)
 	{
-		nmHdr = m_tpcHeader->getMapFileName();
+		if (m_exclusive)
+			m_tpcHeader->removeMapFile();
+
 		delete m_tpcHeader;
 		m_tpcHeader = NULL;
 	}
 
 	m_blocks_memory.clear();
 	m_transactionsPerBlock = 0;
-
-	if (m_exclusive)
-	{
-		if (nmSnap.hasData())
-			SharedMemoryBase::unlinkFile(nmSnap.c_str());
-		if (nmHdr.hasData())
-			SharedMemoryBase::unlinkFile(nmHdr.c_str());
-	}
 
 	LCK_release(tdbb, m_lock);
 	m_lock.reset();
@@ -388,6 +383,11 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 
 	PathName fileName = makeSharedMemoryFileName(dbb, blockNumber, false);
 
+	// File for block "blockNumber" may have already been created by another process.
+	// If that process has gone, it could be that nobody holds lock on that file and
+	// we will be asked to initialize new memory mapping.
+	// Take care to not clear contents of a valid file in such case.
+
 	bool fileExists = false;
 	if (!cache->m_exclusive)
 	{
@@ -402,14 +402,10 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 	{
 		MemBlockInitializer initializer(cache, blockSize, fileExists);
 
-		// Here SharedMemory constructor is called with skipLock parameter set to true.
-		// Appropriate locking is performed by existenceLock using LM.
-		// This should be in sync with SharedMemoryBase::unlinkFile() call
-		// in TipCache::StatusBlockData::clear().
 		memory = FB_NEW_POOL(*dbb->dbb_permanent) SharedMemory<TransactionStatusBlock>(
 			fileName.c_str(),
 			fileExists ? 0 : blockSize,		// pass zero to preserve contents of existing file
-			&initializer, false);
+			&initializer);
 
 		const auto* header = memory->getHeader();
 		initializer.checkHeader(header);
@@ -480,26 +476,15 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 		}
 
 		if (oldBlock || cache->m_exclusive)
-			fName = memory->getMapFileName();
+		{
+			if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
+				memory->removeMapFile();
+			else
+				tdbb->tdbb_status_vector->init();
+		}
 
 		delete memory;
 		memory = NULL;
-	}
-
-	if (fName.hasData())
-	{
-		// Here file is removed from SharedMemory created with skipLock parameter
-		// set to true. That means internal file lock is turned off.
-		// Appropriate locking is performed by existenceLock using LM.
-		// This should be in sync with SharedMemory constructor called
-		// in TipCache::StatusBlockData constructor.
-		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
-			SharedMemoryBase::unlinkFile(fName.c_str());
-		else
-		{
-			tdbb->tdbb_status_vector->init();
-			return;
-		}
 	}
 
 	LCK_release(tdbb, &existenceLock);
@@ -822,7 +807,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	PathName fileName;
 	HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
-	for (TpcBlockNumber blockNumber = lastInterestingBlockNumber; blockNumber; blockNumber--)
+	for (TpcBlockNumber blockNumber = lastInterestingBlockNumber; ;)
 	{
 		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
 
@@ -832,6 +817,9 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 			break;
 
 		blocksToCleanup.add(blockNumber);
+
+		if (blockNumber-- == 0)
+			break;
 	}
 
 	if (blocksToCleanup.isEmpty())
