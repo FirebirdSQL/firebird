@@ -797,7 +797,7 @@ FB_IMPL_MSG(JRD, 795, no_cursor, -901, "07", "005", "Cannot open cursor for non-
 FB_IMPL_MSG(JRD, 796, dsql_window_incompat_frames, -104, "42", "000", "If <window frame bound 1> specifies @1, then <window frame bound 2> shall not specify @2")
 FB_IMPL_MSG(JRD, 797, dsql_window_range_multi_key, -104, "42", "000", "RANGE based window with <expr> {PRECEDING | FOLLOWING} cannot have ORDER BY with more than one value")
 FB_IMPL_MSG(JRD, 798, dsql_window_range_inv_key_type, -104, "42", "000", "RANGE based window with <offset> PRECEDING/FOLLOWING must have a single ORDER BY key of numerical, date, time or timestamp types")
-FB_IMPL_MSG(JRD, 799, dsql_window_frame_value_inv_type, -104, "42", "000", "Window RANGE/ROWS PRECEDING/FOLLOWING value must be of a numerical type")
+FB_IMPL_MSG(JRD, 799, dsql_window_frame_value_inv_type, -104, "42", "000", "Window RANGE/ROWS/GROUPS PRECEDING/FOLLOWING value must be of a numerical type")
 FB_IMPL_MSG(JRD, 800, window_frame_value_invalid, -833, "42", "000", "Invalid PRECEDING or FOLLOWING offset in window function: cannot be negative")
 FB_IMPL_MSG(JRD, 801, dsql_window_not_found, -833, "42", "000", "Window @1 not found")
 FB_IMPL_MSG(JRD, 802, dsql_window_cant_overr_part, -833, "42", "000", "Cannot use PARTITION BY clause while overriding the window @1")

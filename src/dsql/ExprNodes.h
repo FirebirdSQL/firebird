@@ -1492,8 +1492,8 @@ public:
 		{
 			// Warning: used in BLR
 			RANGE = 0,
-			ROWS
-			//// TODO: SQL-2013: GROUPS
+			ROWS,
+			GROUPS
 		};
 
 	public:

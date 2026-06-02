@@ -2647,6 +2647,7 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				{
 					case WindowClause::FrameExtent::Unit::RANGE:
 					case WindowClause::FrameExtent::Unit::ROWS:
+					case WindowClause::FrameExtent::Unit::GROUPS:
 						break;
 
 					default:

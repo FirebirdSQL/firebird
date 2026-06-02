@@ -713,6 +713,7 @@ using namespace Firebird;
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> GENERATE_SERIES
 %token <metaNamePtr> GREATEST
+%token <metaNamePtr> GROUPS
 %token <metaNamePtr> LEAST
 %token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
@@ -9001,6 +9002,10 @@ window_partition_opt
 window_frame_extent
 	: RANGE
 		{ $$ = newNode<WindowClause::FrameExtent>(WindowClause::FrameExtent::Unit::RANGE); }
+		window_frame($2)
+		{ $$ = $2; }
+	| GROUPS
+		{ $$ = newNode<WindowClause::FrameExtent>(WindowClause::FrameExtent::Unit::GROUPS); }
 		window_frame($2)
 		{ $$ = $2; }
 	| ROWS

@@ -225,7 +225,9 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 	{
 		// While here, verify not supported functions/clauses.
 
-		if (window.order || window.frameExtent->unit == FrameExtent::Unit::ROWS)
+		if (window.order ||
+			window.frameExtent->unit == FrameExtent::Unit::ROWS ||
+			window.frameExtent->unit == FrameExtent::Unit::GROUPS)
 		{
 			for (const auto& source : window.map->sourceList)
 			{
@@ -241,7 +243,9 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 					if (arg)
 					{
 						string msg;
-						msg.printf("%s is not supported in windows with ORDER BY or frame by ROWS clauses", arg);
+						msg.printf(
+							"%s is not supported in windows with ORDER BY or frame by ROWS/GROUPS clauses",
+							arg);
 
 						status_exception::raise(
 							Arg::Gds(isc_wish_list) <<
@@ -660,7 +664,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		if (m_frameExtent->frame1->value && !(m_invariantOffsets & 0x1))
 			getFrameValue(tdbb, request, m_frameExtent->frame1, &impure->startOffset);
 
-		// {range | rows} between unbounded preceding and ...
+		// {range | rows | groups} between unbounded preceding and ...
 		// (no order by) range
 		if ((m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value) ||
 			(!m_order && m_frameExtent->unit == FrameExtent::Unit::RANGE))
@@ -673,11 +677,25 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		{
 			impure->windowBlock.startPosition = position;
 		}
+		// groups between current row and ...
+		else if (m_frameExtent->unit == FrameExtent::Unit::GROUPS &&
+			m_frameExtent->frame1->bound == Frame::Bound::CURRENT_ROW)
+		{
+			impure->windowBlock.startPosition = locateFrameGroups(tdbb, request, impure,
+				m_frameExtent->frame1, nullptr, position, true);
+		}
 		// rows between <n> {preceding | following} and ...
 		else if (m_frameExtent->unit == FrameExtent::Unit::ROWS &&
 			m_frameExtent->frame1->value)
 		{
 			impure->windowBlock.startPosition = position + impure->startOffset.vlux_count;
+		}
+		// groups between <n> {preceding | following} and ...
+		else if (m_frameExtent->unit == FrameExtent::Unit::GROUPS &&
+			m_frameExtent->frame1->value)
+		{
+			impure->windowBlock.startPosition = locateFrameGroups(tdbb, request, impure,
+				m_frameExtent->frame1, &impure->startOffset, position, true);
 		}
 		// range between current row and ...
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
@@ -703,7 +721,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		if (m_frameExtent->frame2->value && !(m_invariantOffsets & 0x2))
 			getFrameValue(tdbb, request, m_frameExtent->frame2, &impure->endOffset);
 
-		// {range | rows} between ... and unbounded following
+		// {range | rows | groups} between ... and unbounded following
 		// (no order by) range
 		if ((m_frameExtent->frame2->bound == Frame::Bound::FOLLOWING && !m_frameExtent->frame2->value) ||
 			(!m_order && m_frameExtent->unit == FrameExtent::Unit::RANGE))
@@ -716,11 +734,25 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		{
 			impure->windowBlock.endPosition = position;
 		}
+		// groups between ... and current row
+		else if (m_frameExtent->unit == FrameExtent::Unit::GROUPS &&
+			m_frameExtent->frame2->bound == Frame::Bound::CURRENT_ROW)
+		{
+			impure->windowBlock.endPosition = locateFrameGroups(tdbb, request, impure,
+				m_frameExtent->frame2, nullptr, position, false);
+		}
 		// rows between ... and <n> {preceding | following}
 		else if (m_frameExtent->unit == FrameExtent::Unit::ROWS &&
 			m_frameExtent->frame2->value)
 		{
 			impure->windowBlock.endPosition = position + impure->endOffset.vlux_count;
+		}
+		// groups between ... and <n> {preceding | following}
+		else if (m_frameExtent->unit == FrameExtent::Unit::GROUPS &&
+			m_frameExtent->frame2->value)
+		{
+			impure->windowBlock.endPosition = locateFrameGroups(tdbb, request, impure,
+				m_frameExtent->frame2, &impure->endOffset, position, false);
 		}
 		// range between ... and current row
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
@@ -765,11 +797,14 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		if (m_exclusion == Exclusion::NO_OTHERS &&
 			((m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value &&
 				m_frameExtent->frame2->bound == Frame::Bound::FOLLOWING && !m_frameExtent->frame2->value) ||
-		     (m_frameExtent->unit == FrameExtent::Unit::RANGE && !m_order)))
+		     ((m_frameExtent->unit == FrameExtent::Unit::RANGE ||
+				m_frameExtent->unit == FrameExtent::Unit::GROUPS) && !m_order)))
 		{
 			impure->rangePending = MAX(0, impure->windowBlock.endPosition - position);
 		}
-		else if (m_exclusion == Exclusion::NO_OTHERS && m_frameExtent->unit == FrameExtent::Unit::RANGE)
+		else if (m_exclusion == Exclusion::NO_OTHERS &&
+			(m_frameExtent->unit == FrameExtent::Unit::RANGE ||
+			 m_frameExtent->unit == FrameExtent::Unit::GROUPS))
 		{
 			SINT64 rangePos = position;
 			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
@@ -1006,7 +1041,8 @@ void WindowedStream::WindowStream::getFrameValue(thread_db* tdbb, Request* reque
 		error = true;
 	else
 	{
-		if (m_frameExtent->unit == FrameExtent::Unit::ROWS)
+		if (m_frameExtent->unit == FrameExtent::Unit::ROWS ||
+			m_frameExtent->unit == FrameExtent::Unit::GROUPS)
 		{
 			// Purposedly used 32-bit here. So long distance will complicate things for no gain.
 			impureValue->vlux_count = MOV_get_long(tdbb, desc, 0);
@@ -1042,6 +1078,14 @@ WindowedStream::WindowStream::Block WindowedStream::WindowStream::getPeerBlock(
 		peerBlock.startPosition = impure->partitionBlock.startPosition;
 		peerBlock.endPosition = impure->partitionBlock.endPosition;
 		return peerBlock;
+	}
+
+	if ((SINT64) m_next->getPosition(request) != position + 1)
+	{
+		m_next->locate(tdbb, position);
+
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
 	}
 
 	cacheValues(tdbb, request, &m_order->expressions, impure->orderValues, DummyAdjustFunctor());
@@ -1143,6 +1187,62 @@ bool WindowedStream::WindowStream::isExcluded(SINT64 position, const Block& excl
 			position >= exclusion1.startPosition && position <= exclusion1.endPosition) ||
 		(exclusion2.isValid() &&
 			position >= exclusion2.startPosition && position <= exclusion2.endPosition);
+}
+
+SINT64 WindowedStream::WindowStream::locateFrameGroups(thread_db* tdbb, Request* request,
+	Impure* impure, const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
+	bool startFrame) const
+{
+	SINT64 offset = 0;
+
+	if (offsetValue)
+	{
+		offset = MOV_get_long(tdbb, &offsetValue->vlu_desc, 0);
+
+		if (frame->bound == Frame::Bound::PRECEDING)
+			offset = -offset;
+	}
+
+	Block groupBlock = getPeerBlock(tdbb, request, impure, position);
+
+	auto restoreAndReturn = [&] (SINT64 result)
+	{
+		m_next->locate(tdbb, position);
+
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
+
+		return result;
+	};
+
+	if (offset < 0)
+	{
+		for (SINT64 pending = -offset; pending > 0; --pending)
+		{
+			if (groupBlock.startPosition <= impure->partitionBlock.startPosition)
+			{
+				return restoreAndReturn(startFrame ?
+					impure->partitionBlock.startPosition : impure->partitionBlock.startPosition - 1);
+			}
+
+			groupBlock = getPeerBlock(tdbb, request, impure, groupBlock.startPosition - 1);
+		}
+	}
+	else if (offset > 0)
+	{
+		for (SINT64 pending = offset; pending > 0; --pending)
+		{
+			if (groupBlock.endPosition >= impure->partitionBlock.endPosition)
+			{
+				return restoreAndReturn(startFrame ?
+					impure->partitionBlock.endPosition + 1 : impure->partitionBlock.endPosition);
+			}
+
+			groupBlock = getPeerBlock(tdbb, request, impure, groupBlock.endPosition + 1);
+		}
+	}
+
+	return restoreAndReturn(startFrame ? groupBlock.startPosition : groupBlock.endPosition);
 }
 
 SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,

@@ -1064,6 +1064,9 @@ namespace Jrd
 
 			SINT64 locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
 				const Frame* frame, const dsc* offsetDesc, SINT64 position) const;
+			SINT64 locateFrameGroups(thread_db* tdbb, Request* request, Impure* impure,
+				const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
+				bool startFrame) const;
 
 		private:
 			NestConst<SortNode> m_order;
