@@ -45,6 +45,7 @@ class DeclareVariableNode;
 class ParameterClause;
 class RseNode;
 class SelectExprNode;
+class StmtNode;
 class TypeClause;
 class VariableNode;
 class WithClause;
@@ -202,6 +203,12 @@ public:
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
 		Firebird::Array<NestConst<ParameterClause> >& returns);
 
+	void compileAggregateFunction(Firebird::Array<NestConst<ParameterClause> >& parameters,
+		ParameterClause* returnParameter, NestConst<LocalDeclarationsNode>& localDeclList,
+		NestConst<StmtNode>& aggregateOnStartBody, NestConst<StmtNode>& aggregateOnAccumulateBody,
+		NestConst<StmtNode>& aggregateOnGroupBody, NestConst<StmtNode>& aggregateOnFinishBody,
+		bool reserveInitialReturnVarNumber);
+
 	// Get rid of any predefined contexts created for a view or trigger definition.
 	// Also reset hidden variables.
 	void resetContextStack()
@@ -331,6 +338,9 @@ public:
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
 	bool processingWindow = false;			// processing window functions
 	bool checkConstraintTrigger = false;	// compiling a check constraint trigger
+	bool aggregatePhaseReturn = false;		// aggregate section return is phase-local
+	std::optional<AggregateFunctionPhase> aggregatePhase;	// aggregate section being compiled
+	USHORT aggregatePhaseLabel = 0;			// label used by aggregate phase-local RETURN
 	dsc domainValue;						// VALUE in the context of domain's check constraint
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;

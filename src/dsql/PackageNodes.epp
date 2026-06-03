@@ -196,6 +196,9 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG != 0)
 			function.flags |= Signature::FLAG_DETERMINISTIC;
 
+		if (!FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0)
+			function.flags |= Signature::FLAG_AGGREGATE;
+
 		if (details)
 		{
 			FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE transaction)

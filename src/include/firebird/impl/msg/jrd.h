@@ -1016,3 +1016,7 @@ FB_IMPL_MSG(JRD, 1013, not_defined_constant, -901, "42", "000", "The constant @1
 FB_IMPL_MSG(JRD, 1014, const_name, -901, "42", "000", "CONSTANT @1")
 FB_IMPL_MSG(JRD, 1015, private_table, -901, "42", "000", "Table @1 is private to package @2")
 FB_IMPL_MSG(JRD, 1016, temp_space_invalid_pos, -901, "HY", "000", "Invalid position to read/write in a temporary file (positon: @1, size: @2)")
+FB_IMPL_MSG(JRD, 1017, dsql_agg_non_agg_context, -104, "42", "000", "Aggregate function @1 cannot be used in non-aggregate context")
+FB_IMPL_MSG(JRD, 1018, dsql_agg_param_not_accum, -204, "42", "000", "Aggregate function input parameters may be referenced only in ON ACCUMULATE DO")
+FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allowed in ON GROUP DO section of aggregate function")
+FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")

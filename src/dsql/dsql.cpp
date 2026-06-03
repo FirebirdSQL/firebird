@@ -1499,6 +1499,9 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 	  udf_arguments(p),
 	  udf_private(jfun->flPrivate)
 {
+	udf_aggregate = jfun->fun_aggregate;
+	udf_private = jfun->fun_private;
+
 	// return value
 	fb_assert(jfun->getOutputFields().getCount() == 1);
 	const dsc& desc = jfun->getOutputFields()[0]->prm_desc;

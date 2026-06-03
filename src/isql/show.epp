@@ -1808,6 +1808,12 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 		fputc('\n', fp);
 }
 
+void SHOW_print_function_source_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote,
+	bool avoid_end_in_single_line_comment)
+{
+	SHOW_print_metadata_text_blob(fp, blobid, escape_squote, avoid_end_in_single_line_comment);
+}
+
 
 processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 {
@@ -4293,7 +4299,10 @@ static processing_state show_func(const QualifiedMetaString& name)
 	{
 		first = false;
 
-		isqlGlob.printf("Function: %s%s", IUTILS_name_to_string(name).c_str(), NEWLINE);
+		const bool aggregate = !FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0;
+
+		isqlGlob.printf("%s: %s%s", aggregate ? "Aggregate function" : "Function",
+			IUTILS_name_to_string(name).c_str(), NEWLINE);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("Deterministic function%s", NEWLINE);
@@ -4320,7 +4329,7 @@ static processing_state show_func(const QualifiedMetaString& name)
 		{
 			isqlGlob.printf("Function text:%s", NEWLINE);
 			isqlGlob.printf("=============================================================================%s", NEWLINE);
-			SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
+			SHOW_print_function_source_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
 			isqlGlob.printf("%s=============================================================================%s", NEWLINE, NEWLINE);
 		}
 

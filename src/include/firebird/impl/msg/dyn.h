@@ -316,3 +316,4 @@ FB_IMPL_MSG(DYN, 323, dyn_column_name_exists, -612, "42", "000", "Column @1 alre
 FB_IMPL_MSG_SYMBOL(DYN, 324, dyn_constant_not_found, "Constant @1 not found")
 FB_IMPL_MSG_SYMBOL(DYN, 325, dyn_dup_const, "Constant @1 already exists")
 FB_IMPL_MSG_SYMBOL(DYN, 326, dyn_non_constant_constant, "The constant @1 must be initialized by a constant expression")
+FB_IMPL_MSG(DYN, 327, dyn_function_mismatch, -104, "42", "000", "Function @1 cannot change between aggregate and non-aggregate")

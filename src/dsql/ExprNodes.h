@@ -1649,8 +1649,8 @@ public:
 class OverNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName);
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow);
+	explicit OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, const MetaName* aWindowName);
+	explicit OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, WindowClause* aWindow);
 
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
@@ -2296,6 +2296,7 @@ public:
 	{
 		ValueExprNode::getChildren(holder, dsql);
 		holder.add(args);
+		holder.add(dsqlAggFilter);
 	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -2328,6 +2329,7 @@ public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
 	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
+	NestConst<BoolExprNode> dsqlAggFilter;
 	SubRoutine<Function> function;
 
 private:

@@ -408,20 +408,10 @@ public:
 	CreateAlterFunctionNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
-		  create(true),
-		  alter(false),
-		  external(NULL),
 		  parameters(pool),
-		  returnType(NULL),
-		  localDeclList(NULL),
+		  aggregateParameters(pool),
 		  source(pool),
-		  body(NULL),
-		  compiled(false),
-		  invalid(false),
-		  packageOwner(pool),
-		  packagePrivate(false),
-		  preserveDefaults(false),
-		  udfReturnPos(0)
+		  packageOwner(pool)
 	{
 	}
 
@@ -461,22 +451,28 @@ private:
 
 public:
 	QualifiedName name;
-	bool create;
-	bool alter;
+	bool create = true;
+	bool alter = false;
 	bool createIfNotExistsOnly = false;
+	bool aggregate = false;
 	NestConst<ExternalClause> external;
 	Firebird::TriState deterministic;
 	Firebird::Array<NestConst<ParameterClause>> parameters;
+	Firebird::Array<NestConst<ParameterClause>> aggregateParameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	Firebird::string source;
 	NestConst<StmtNode> body;
-	bool compiled;
-	bool invalid;
+	NestConst<StmtNode> aggregateOnStartBody;
+	NestConst<StmtNode> aggregateOnAccumulateBody;
+	NestConst<StmtNode> aggregateOnGroupBody;
+	NestConst<StmtNode> aggregateOnFinishBody;
+	bool compiled = false;
+	bool invalid = false;
 	MetaName packageOwner;
-	bool packagePrivate;
-	bool preserveDefaults;
-	SLONG udfReturnPos;
+	bool packagePrivate = false;
+	bool preserveDefaults = false;
+	SLONG udfReturnPos = 0;
 	std::optional<SqlSecurity> ssDefiner;
 
 private:

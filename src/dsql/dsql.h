@@ -359,6 +359,7 @@ public:
 	QualifiedName udf_name;
 	Firebird::Array<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
+	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
 
@@ -836,6 +837,7 @@ struct SignatureParameter
 struct Signature
 {
 	const static unsigned FLAG_DETERMINISTIC = 0x01;
+	const static unsigned FLAG_AGGREGATE = 0x02;
 
 	Signature(MemoryPool& p, const MetaName& aName)
 		: name(p, aName),
@@ -900,6 +902,14 @@ struct Signature
 	Firebird::SortedObjectsArray<SignatureParameter> parameters;
 	unsigned flags = 0;
 	bool defined = false;
+};
+
+enum class AggregateFunctionPhase : UCHAR
+{
+	START = 0,
+	ACCUMULATE = 1,
+	GROUP = 2,
+	FINISH = 3
 };
 
 

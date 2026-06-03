@@ -511,3 +511,5 @@ NAME("MON$FIELD_PRECISION", nam_mon_f_precision)
 NAME("MON$FIELD_SUB_TYPE", nam_mon_f_sub_type)
 NAME("MON$CHAR_LENGTH", nam_mon_char_length)
 NAME("MON$COLLATION_ID", nam_mon_collate_id)
+
+NAME("RDB$AGGREGATE_FLAG", nam_aggregate_flag)

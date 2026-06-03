@@ -2925,7 +2925,13 @@ static void list_functions_ods12_headers(GetDefaultCharSetForSchemaFunc getDefau
 
 	bool header = true;
 	static const char* const create_function	= "CREATE OR ALTER FUNCTION %s ";
+	static const char* const create_aggregate_function = "CREATE OR ALTER AGGREGATE FUNCTION %s ";
 	static const char* const body_function		= "BEGIN END %s%s";
+	static const char* const body_aggregate_function =
+		"BEGIN%s"
+		"ON ACCUMULATE DO BEGIN END%s"
+		"ON GROUP DO BEGIN RETURN NULL; END%s"
+		"END %s%s";
 
 	//  First the dummy functions (without bodies)
 
@@ -2936,6 +2942,7 @@ static void list_functions_ods12_headers(GetDefaultCharSetForSchemaFunc getDefau
 		SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
 	{
 		const QualifiedMetaString name(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
+		const bool aggregate = !FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0;
 
 		if (header)
 		{
@@ -2943,15 +2950,20 @@ static void list_functions_ods12_headers(GetDefaultCharSetForSchemaFunc getDefau
 			header = false;
 		}
 
-		isqlGlob.printf(create_function, IUTILS_name_to_string(name).c_str());
+		isqlGlob.printf(aggregate ? create_aggregate_function : create_function,
+			IUTILS_name_to_string(name).c_str());
 
 		get_function_args_ods12(name, FUN.RDB$RETURN_ARGUMENT, getDefaultCharSetForSchemaFunc);
 
-		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
+		if (!aggregate && !FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("DETERMINISTIC %s", NEWLINE);
 
 		isqlGlob.printf("AS %s", NEWLINE);
-		isqlGlob.printf(body_function, Procterm, NEWLINE);
+
+		if (aggregate)
+			isqlGlob.printf(body_aggregate_function, NEWLINE, NEWLINE, NEWLINE, Procterm, NEWLINE);
+		else
+			isqlGlob.printf(body_function, Procterm, NEWLINE);
 	}
 	END_FOR
 	ON_ERROR
@@ -2981,6 +2993,7 @@ static void list_functions_ods12_bodies(GetDefaultCharSetForSchemaFunc getDefaul
 		SORTED BY FUN.RDB$SCHEMA_NAME, FUN.RDB$FUNCTION_NAME
 	{
 		const QualifiedMetaString name(FUN.RDB$FUNCTION_NAME, FUN.RDB$SCHEMA_NAME);
+		const bool aggregate = !FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0;
 
 		if (header)
 		{
@@ -2988,7 +3001,8 @@ static void list_functions_ods12_bodies(GetDefaultCharSetForSchemaFunc getDefaul
 			header = false;
 		}
 
-		isqlGlob.printf("%sALTER FUNCTION %s ", NEWLINE, IUTILS_name_to_string(name).c_str());
+		isqlGlob.printf("%sALTER %sFUNCTION %s ", NEWLINE, aggregate ? "AGGREGATE " : "",
+			IUTILS_name_to_string(name).c_str());
 
 		get_function_args_ods12(name, FUN.RDB$RETURN_ARGUMENT, getDefaultCharSetForSchemaFunc);
 
@@ -3018,14 +3032,14 @@ static void list_functions_ods12_bodies(GetDefaultCharSetForSchemaFunc getDefaul
 			if (!FUN.RDB$FUNCTION_SOURCE.NULL)
 			{
 				isqlGlob.printf("%sAS '", NEWLINE);
-				SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE, true);
+				SHOW_print_function_source_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE, true);
 				isqlGlob.printf("'%s", NEWLINE);
 			}
 		}
 		else if (!FUN.RDB$FUNCTION_SOURCE.NULL)
 		{
 			isqlGlob.printf("AS %s", NEWLINE);
-			SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
+			SHOW_print_function_source_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
 		}
 
 		isqlGlob.printf(" %s%s", Procterm, NEWLINE);

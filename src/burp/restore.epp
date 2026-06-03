@@ -4575,6 +4575,9 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 			X.RDB$DETERMINISTIC_FLAG = 0;
 
+			X.RDB$AGGREGATE_FLAG.NULL = FALSE;
+			X.RDB$AGGREGATE_FLAG = 0;
+
 			X.RDB$LEGACY_FLAG.NULL = FALSE;
 			X.RDB$LEGACY_FLAG = 1;
 
@@ -4756,6 +4759,16 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_aggregate_flag:
+					if (tdgbl->RESTORE_format >= 12)
+					{
+						X.RDB$AGGREGATE_FLAG = get_int32(tdgbl);
+						X.RDB$AGGREGATE_FLAG.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 89);
 					// msg 89 function
@@ -4884,6 +4897,13 @@ bool get_function(BurpGlobals* tdgbl)
 				case att_function_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
 						get_boolean(tdgbl, attribute == att_function_sql_security_deprecated);
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
+				case att_function_aggregate_flag:
+					if (tdgbl->RESTORE_format >= 12)
+						get_int32(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;

@@ -1864,12 +1864,18 @@ string CreateAlterFunctionNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, create);
 	NODE_PRINT(printer, alter);
 	NODE_PRINT(printer, external);
+	NODE_PRINT(printer, aggregate);
 	NODE_PRINT(printer, deterministic);
 	NODE_PRINT(printer, parameters);
+	NODE_PRINT(printer, aggregateParameters);
 	NODE_PRINT(printer, returnType);
 	NODE_PRINT(printer, localDeclList);
 	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, body);
+	NODE_PRINT(printer, aggregateOnStartBody);
+	NODE_PRINT(printer, aggregateOnAccumulateBody);
+	NODE_PRINT(printer, aggregateOnGroupBody);
+	NODE_PRINT(printer, aggregateOnFinishBody);
 	NODE_PRINT(printer, compiled);
 	NODE_PRINT(printer, invalid);
 	NODE_PRINT(printer, packageOwner);
@@ -1890,11 +1896,34 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->ddlSchema = name.schema;
 
 	dsqlScratch->flags |= (DsqlCompilerScratch::FLAG_BLOCK | DsqlCompilerScratch::FLAG_FUNCTION);
+
 	dsqlScratch->reserveInitialVarNumbers(1);
 
 	LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, &parameters, nullptr);
 
 	source.ltrim("\n\r\t ");
+
+	if (aggregate)
+	{
+		const bool declarationOnly = name.package.hasData() && !body && !external &&
+			!aggregateOnStartBody && !aggregateOnAccumulateBody && !aggregateOnGroupBody &&
+			!aggregateOnFinishBody;
+
+		if (localDeclList)
+			LocalDeclarationsNode::checkUniqueFieldsNames(localDeclList, nullptr, nullptr);
+
+		if (deterministic.isAssigned() && deterministic.asBool())
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_invalid_clause) << Arg::Str("DETERMINISTIC aggregate functions"));
+		}
+
+		if (!external && !declarationOnly && (!aggregateOnAccumulateBody || !aggregateOnGroupBody))
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_invalid_clause) << Arg::Str("ON ACCUMULATE DO and ON GROUP DO clauses are required"));
+		}
+	}
 
 	bool hasDefaultParams = false;
 
@@ -2072,6 +2101,9 @@ bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 				FUN.RDB$LEGACY_FLAG.NULL = FALSE;
 				FUN.RDB$LEGACY_FLAG = isUdf() ? TRUE : FALSE;
 
+				FUN.RDB$AGGREGATE_FLAG.NULL = FALSE;
+				FUN.RDB$AGGREGATE_FLAG = aggregate ? TRUE : FALSE;
+
 				FUN.RDB$RETURN_ARGUMENT.NULL = FALSE;
 				FUN.RDB$RETURN_ARGUMENT = 0;
 			}
@@ -2103,6 +2135,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
 	const auto attachment = transaction->getAttachment();
+	const bool aggregateDeclarationOnly = aggregate && name.package.hasData() && !body && !external &&
+		!aggregateOnStartBody && !aggregateOnAccumulateBody && !aggregateOnGroupBody &&
+		!aggregateOnFinishBody;
 
 	bool modified = false;
 	unsigned returnPos = 0;
@@ -2123,6 +2158,15 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		}
 
 		id = FUN.RDB$FUNCTION_ID;
+
+		if (!create && !secondPass)
+		{
+			bool existingAggregate = !FUN.RDB$AGGREGATE_FLAG.NULL &&
+				FUN.RDB$AGGREGATE_FLAG != 0;
+
+			if (aggregate != existingAggregate)
+				ERRD_post(Arg::Gds(isc_dyn_function_mismatch) << name.toQuotedString());
+		}
 
 		if (!secondPass && runTriggers)
 		{
@@ -2154,6 +2198,10 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 				FUN.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 				FUN.RDB$DETERMINISTIC_FLAG = deterministic.asBool() ? TRUE : FALSE;
+
+				FUN.RDB$AGGREGATE_FLAG.NULL = FALSE;
+				FUN.RDB$AGGREGATE_FLAG = aggregate ? TRUE : FALSE;
+
 				FUN.RDB$RETURN_ARGUMENT = 0;
 
 				if (ssDefiner.has_value())
@@ -2263,7 +2311,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 					external->name.copyTo(FUN.RDB$ENTRYPOINT, sizeof(FUN.RDB$ENTRYPOINT));
 				}
 			}
-			else if (body)
+			else if (body || (aggregate && !aggregateDeclarationOnly))
 			{
 				if (secondPass)
 				{
@@ -2351,6 +2399,15 @@ bool CreateAlterFunctionNode::executeAlterIndividualParameters(thread_db* tdbb, 
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_ALTER_FUNCTION, name, {});
 
 		id = FUN.RDB$FUNCTION_ID;
+
+		if (!secondPass)
+		{
+			bool existingAggregate = !FUN.RDB$AGGREGATE_FLAG.NULL &&
+				FUN.RDB$AGGREGATE_FLAG != 0;
+
+			if (aggregate != existingAggregate)
+				ERRD_post(Arg::Gds(isc_dyn_function_mismatch) << name.toQuotedString());
+		}
 
 		MODIFY FUN
 			if (deterministic.isAssigned())
@@ -2579,7 +2636,7 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 	END_STORE
 }
 
-void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* dsqlScratch)
+void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch)
 {
 	if (invalid)
 		status_exception::raise(Arg::Gds(isc_dyn_invalid_ddl_func) << name.toQuotedString());
@@ -2590,7 +2647,23 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 	compiled = true;
 	invalid = true;
 
-	if (body)
+	const bool aggregateDeclarationOnly = aggregate && name.package.hasData() && !body && !external &&
+		!aggregateOnStartBody && !aggregateOnAccumulateBody && !aggregateOnGroupBody &&
+		!aggregateOnFinishBody;
+
+	if (aggregate && !external && !aggregateDeclarationOnly)
+	{
+		dsqlScratch->compileAggregateFunction(
+			parameters,
+			returnType,
+			localDeclList,
+			aggregateOnStartBody,
+			aggregateOnAccumulateBody,
+			aggregateOnGroupBody,
+			aggregateOnFinishBody,
+			false);
+	}
+	else if (body)
 	{
 		dsqlScratch->beginDebug();
 		dsqlScratch->getBlrData().clear();
@@ -2602,7 +2675,7 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 
 		dsqlScratch->appendUChar(blr_begin);
 
-		Array<NestConst<ParameterClause> > returns;
+		Array<NestConst<ParameterClause>> returns;
 		returns.add(returnType);
 		dsqlScratch->genParameters(parameters, returns);
 
@@ -2631,8 +2704,8 @@ void CreateAlterFunctionNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch* 
 			}
 		}
 
-		dsql_var* const variable = dsqlScratch->outputVariables[0];
-		dsqlScratch->putLocalVariable(variable);
+		for (const auto variable : dsqlScratch->outputVariables)
+			dsqlScratch->putLocalVariable(variable);
 
 		// ASF: This is here to not change the old logic (proc_flag)
 		// of previous calls to PASS1_node and PASS1_statement.
