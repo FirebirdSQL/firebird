@@ -4887,6 +4887,7 @@ keyword_or_column
 	| CALL
 	| CURRENT_SCHEMA
 	| GREATEST
+	| GROUPS
 	| LEAST
 	| LISTAGG
 	| LTRIM
