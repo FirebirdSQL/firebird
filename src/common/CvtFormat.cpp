@@ -172,7 +172,7 @@ namespace
 	#undef CVT_FORMAT2
 	#undef CVT_FORMAT_FLAG
 
-	constexpr const char* const TO_DATETIME_PATTERNS[] = {
+	constexpr const char* const TO_STRING_PATTERNS[] = {
 		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::Q, FormatStr::MM,
 		FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::WW, FormatStr::W, FormatStr::D, FormatStr::DAY,
 		FormatStr::DD, FormatStr::DDD, FormatStr::DY, FormatStr::J, FormatStr::HH, FormatStr::HH12, FormatStr::HH24,
@@ -181,7 +181,7 @@ namespace
 		FormatStr::TZR, FormatStr::AM, FormatStr::PM
 	};
 
-	constexpr const char* const TO_STRING_PATTERNS[] = {
+	constexpr const char* const TO_DATETIME_PATTERNS[] = {
 		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::RRRR, FormatStr::RR,
 		FormatStr::MM, FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::DD, FormatStr::J, FormatStr::HH,
 		FormatStr::HH12, FormatStr::HH24, FormatStr::MI, FormatStr::SS, FormatStr::SSSSS, FormatStr::FF1, FormatStr::FF2,
@@ -606,7 +606,7 @@ namespace
 				continue;
 			}
 
-			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_DATETIME_PATTERNS, formatLength,
+			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_STRING_PATTERNS, formatLength,
 				formatOffset, i);
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
@@ -976,7 +976,7 @@ namespace
 			if (i == formatLength)
 				break;
 
-			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_STRING_PATTERNS, formatLength,
+			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_DATETIME_PATTERNS, formatLength,
 				formatOffset, i);
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
