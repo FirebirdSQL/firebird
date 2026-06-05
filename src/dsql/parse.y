@@ -2438,6 +2438,22 @@ table_clause
 			{
 				$$ = $3;
 			}
+	| simple_table_name column_parens_opt AS select_expr with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $4;
+			node->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
+			node->withData = $5;
+			$$ = node;
+		}
+	;
+
+%type <boolVal> with_data_opt
+with_data_opt
+	: /* nothing */		{ $$ = true; }
+	| WITH DATA			{ $$ = true; }
+	| WITH NO DATA		{ $$ = false; }
 	;
 
 %type table_attributes(<relationNode>)
@@ -2477,6 +2493,19 @@ gtt_table_clause
 			{
 				$$ = $2;
 			}
+	| simple_table_name column_parens_opt AS select_expr with_data_opt
+		{
+			$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+			$<createRelationNode>$->tempFlag = REL_temp_gtt;
+			$<createRelationNode>$->queryColumns = $2;
+			$<createRelationNode>$->querySelectExpr = $4;
+			$<createRelationNode>$->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
+			$<createRelationNode>$->withData = $5;
+		}
+		gtt_subclauses_opt($6)
+		{
+			$$ = $6;
+		}
 	;
 
 %type gtt_subclauses_opt(<createRelationNode>)
@@ -2517,6 +2546,19 @@ ltt_table_clause
 			{
 				$$ = $2;
 			}
+	| simple_table_name column_parens_opt AS select_expr with_data_opt
+		{
+			$<createRelationNode>$ = newNode<CreateRelationNode>($1);
+			$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			$<createRelationNode>$->queryColumns = $2;
+			$<createRelationNode>$->querySelectExpr = $4;
+			$<createRelationNode>$->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
+			$<createRelationNode>$->withData = $5;
+		}
+		ltt_subclause_opt($6)
+		{
+			$$ = $6;
+		}
 	;
 
 %type <createRelationNode> packaged_table_clause

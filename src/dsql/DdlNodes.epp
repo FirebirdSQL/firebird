@@ -60,6 +60,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../dsql/ddl_proto.h"
+#include "../dsql/dsql_proto.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
@@ -9646,6 +9647,10 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, externalFile);
 	NODE_PRINT(printer, tempFlag);
 	NODE_PRINT(printer, tempRowsFlag);
+	NODE_PRINT(printer, queryColumns);
+	NODE_PRINT(printer, querySelectExpr);
+	NODE_PRINT(printer, querySource);
+	NODE_PRINT(printer, withData);
 
 	return "CreateRelationNode";
 }
@@ -9668,6 +9673,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
+
+	if (querySelectExpr)
+		defineQueryColumns(tdbb, dsqlScratch);
 
 	saveRelation(tdbb, dsqlScratch, name, false, true);
 
@@ -9700,6 +9708,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 		// Update DSQL cache
 		METD_drop_relation(transaction, name);
+
+		if (withData)
+			executeInsert(tdbb, dsqlScratch, transaction);
 
 		return;
 	}
@@ -9922,7 +9933,184 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	// Update DSQL cache
 	METD_drop_relation(transaction, name);
 
+	if (withData)
+		executeInsert(tdbb, dsqlScratch, transaction);
+
 	savePoint.release();	// everything is ok
+}
+
+void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(querySelectExpr);
+
+	dsqlScratch->resetContextStack();
+	dsqlScratch->unionContext.clear();
+	dsqlScratch->derivedContext.clear();
+
+	const auto rse = PASS1_rse(dsqlScratch, querySelectExpr);
+	const auto items = rse->dsqlSelectList;
+
+	if (queryColumns && queryColumns->items.getCount() != items->items.getCount())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(isc_num_field_err));
+	}
+
+	ObjectsArray<MetaName> names;
+	FB_SIZE_T position = 0;
+
+	for (auto item : items->items)
+	{
+		MetaName fieldName;
+
+		if (queryColumns)
+			fieldName = nodeAs<FieldNode>(queryColumns->items[position])->dsqlName;
+		else
+		{
+			const ValueExprNode* nameNode = item;
+			const char* aliasName = nullptr;
+
+			while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
+				nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
+			{
+				if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = aliasNode->name.c_str();
+
+					nameNode = aliasNode->value;
+				}
+				else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
+					nameNode = mapNode->map->map_node;
+				else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = derivedField->name.c_str();
+
+					nameNode = derivedField->value;
+				}
+				else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = referenceNode->getName();
+
+					nameNode = nullptr;
+				}
+			}
+
+			if (aliasName)
+				fieldName = aliasName;
+			else if (const auto fieldNode = nodeAs<FieldNode>(nameNode))
+				fieldName = fieldNode->dsqlField->fld_name;
+			else
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_specify_field_err));
+			}
+		}
+
+		for (const auto& name : names)
+		{
+			if (name == fieldName)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_dsql_col_more_than_once_view) << Arg::Str(fieldName.c_str()));
+			}
+		}
+
+		names.add() = fieldName;
+
+		dsc desc;
+		DsqlDescMaker::fromNode(dsqlScratch, &desc, item);
+
+		if (!desc.dsc_dtype)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_dsql_datatype_err));
+		}
+
+		auto clause = FB_NEW_POOL(dsqlScratch->getPool()) AddColumnClause(dsqlScratch->getPool());
+		clause->field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		auto field = clause->field;
+		field->fld_name = fieldName;
+		field->dtype = desc.dsc_dtype;
+		field->length = desc.dsc_length;
+		field->scale = desc.dsc_scale;
+		field->subType = desc.dsc_sub_type;
+
+		if (desc.dsc_flags & DSC_nullable)
+			field->flags |= FLD_nullable;
+
+		if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+		{
+			field->charSetId = desc.getCharSet();
+			field->collationId = desc.getCollation();
+		}
+
+		if (desc.isText())
+		{
+			const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
+			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
+			field->charLength = (field->length - adjust) / bpc;
+		}
+		else if (desc.isBlob())
+			field->segLength = 80;
+
+		field->setExactPrecision();
+		clauses.add(clause);
+
+		++position;
+	}
+
+	dsqlScratch->resetContextStack();
+	dsqlScratch->unionContext.clear();
+	dsqlScratch->derivedContext.clear();
+}
+
+void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	string sql;
+	sql.printf("insert into %s (", name.toQuotedString().c_str());
+
+	bool first = true;
+
+	for (const auto& clause : clauses)
+	{
+		if (clause->type != Clause::TYPE_ADD_COLUMN)
+			continue;
+
+		const auto addColumnClause = static_cast<const AddColumnClause*>(clause.getObject());
+
+		if (!first)
+			sql += ", ";
+
+		first = false;
+		sql += addColumnClause->field->fld_name.toQuotedString();
+	}
+
+	sql += ") ";
+	sql += querySource;
+
+	jrd_tra* traHandle = transaction;
+	const auto attachment = tdbb->getAttachment();
+
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags,
+		DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, tempFlag == REL_temp_ltt);
+
+	DSQL_execute_immediate(tdbb, attachment, &traHandle, sql.length(), sql.c_str(),
+		dsqlScratch->clientDialect, nullptr, nullptr, nullptr, nullptr, true);
+
+	fb_assert(traHandle == transaction);
 }
 
 // Starting from the elements in a table definition, locate the PK columns if given in a

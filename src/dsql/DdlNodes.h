@@ -1763,7 +1763,8 @@ public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
 				const Firebird::string* aExternalFile = NULL)
 		: RelationNode(p, aDsqlNode),
-		  externalFile(aExternalFile)
+		  externalFile(aExternalFile),
+		  querySource(p)
 	{
 	}
 
@@ -1799,12 +1800,18 @@ protected:
 
 private:
 	const Firebird::ObjectsArray<MetaName>* findPkColumns();
+	void defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
+	void executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	const Firebird::string* externalFile;
 	bool createIfNotExistsOnly = false;
 	bool packagePrivate = false;
+	NestConst<ValueListNode> queryColumns;
+	NestConst<SelectExprNode> querySelectExpr;
+	Firebird::string querySource;
+	bool withData = false;
 };
 
 
