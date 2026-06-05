@@ -173,7 +173,7 @@ namespace
 	#undef CVT_FORMAT_FLAG
 
 	constexpr const char* const TO_STRING_PATTERNS[] = {
-		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::Q, FormatStr::MM,
+		FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::YEAR, FormatStr::Q, FormatStr::MM,
 		FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::WW, FormatStr::W, FormatStr::D, FormatStr::DAY,
 		FormatStr::DD, FormatStr::DDD, FormatStr::DY, FormatStr::J, FormatStr::HH, FormatStr::HH12, FormatStr::HH24,
 		FormatStr::MI, FormatStr::SS, FormatStr::SSSSS, FormatStr::FF1, FormatStr::FF2, FormatStr::FF3, FormatStr::FF4,
@@ -182,7 +182,7 @@ namespace
 	};
 
 	constexpr const char* const TO_DATETIME_PATTERNS[] = {
-		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::RRRR, FormatStr::RR,
+		FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::RRRR, FormatStr::RR,
 		FormatStr::MM, FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::DD, FormatStr::J, FormatStr::HH,
 		FormatStr::HH12, FormatStr::HH24, FormatStr::MI, FormatStr::SS, FormatStr::SSSSS, FormatStr::FF1, FormatStr::FF2,
 		FormatStr::FF3, FormatStr::FF4, FormatStr::TZH, FormatStr::TZM, FormatStr::TZR, FormatStr::AM, FormatStr::PM
@@ -716,6 +716,122 @@ namespace
 		return string(timezoneBuffer, length);
 	}
 
+	string yearToWords(unsigned year, Callbacks* cb)
+	{
+		static constexpr const char* ZERO = "ZERO";
+		static constexpr const char* ONES[] = {
+			"", "ONE", "TWO", "THREE", "FOUR", "FIVE",
+			"SIX", "SEVEN", "EIGHT", "NINE", "TEN",
+			"ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN",
+			"SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"
+		};
+		static constexpr const char* TENS[] = {
+			"", "", "TWENTY", "THIRTY", "FORTY", "FIFTY",
+			"SIXTY", "SEVENTY", "EIGHTY", "NINETY"
+		};
+
+		auto twoDigits = [&](unsigned n, string& result) -> void
+		{
+			fb_assert(n < 100);
+
+			if (n == 0)
+			{
+				result += ZERO;
+				return;
+			}
+			if (n < 20)
+			{
+				result += ONES[n];
+				return;
+			}
+
+			result += TENS[n / 10];
+			if (n % 10)
+			{
+				result += "-";
+				result += ONES[n % 10];
+			}
+		};
+
+		// Not possible in our date implementation, but anyway handle 0 value just in case.
+		if (year == 0)
+			return ZERO;
+
+		string result;
+		result.reserve(30);
+
+		if (year < 100)
+		{
+			twoDigits(year, result);
+		}
+		else if (year < 1000)
+		{
+			const unsigned hi = year / 100;
+			const unsigned lo = year % 100;
+			result = ONES[hi];
+			if (lo < 10)
+			{
+				// 900 -> "nine hundred"
+				result += " HUNDRED";
+				if (lo != 0)
+				{
+					// 905 -> "nine hundred five"
+					result += " ";
+					result += ONES[lo];
+				}
+			}
+			else
+			{
+				// 925 -> "nine twenty-five"
+				result += " ";
+				twoDigits(lo, result);
+			}
+		}
+		else if (year < 10000)
+		{
+			const unsigned hi = year / 100;
+			const unsigned lo = year % 100;
+			if (lo < 10)
+			{
+				const unsigned hihi = hi / 10;
+				const unsigned hilo = hi % 10;
+				// 1000 -> "one thousand"
+				result += ONES[hihi];
+				result += " THOUSAND";
+				if (hilo != 0)
+				{
+					// 1900 -> "one thousand nine hundred"
+					result += " ";
+					result += ONES[hilo];
+					result += " HUNDRED";
+				}
+				if (lo != 0)
+				{
+					// 1905 -> "one thousand nine hundred five"
+					result += " ";
+					result += ONES[lo];
+				}
+			}
+			else
+			{
+				// 1985 -> "nineteen eighty-five"
+				// 2685 -> "twenty-six eighty-five"
+				twoDigits(hi, result);
+				result += " ";
+				twoDigits(lo, result);
+			}
+		}
+		else
+		{
+			// Currently we don't support dates >9999
+			fb_assert(false);
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
+				<< FormatStr::YEAR << Arg::Num(1) << Arg::Num(9999));
+		}
+
+		return result;
+	}
+
 	string processDateTimeToStringTokens(const dsc* desc, const std::vector<Token>& tokens, const struct tm& times, int fractions, Callbacks* cb)
 	{
 		string result;
@@ -740,8 +856,11 @@ namespace
 					patternResult.printf("%04d", (times.tm_year + 1900) % 10000);
 					break;
 				case Format::YEAR:
-					patternResult.printf("%d", (times.tm_year + 1900));
+				{
+					const string year = yearToWords(times.tm_year + 1900, cb);
+					patternResult.printf("%s", year.data());
 					break;
+				}
 
 				case Format::Q:
 				{
@@ -1001,7 +1120,7 @@ namespace
 	constexpr void validateFormatFlags(Format::Patterns formatFlags, Callbacks* cb)
 	{
 		// CT shall contain at most one of each of the following: <datetime template year>
-		if (Format::Patterns value = formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY | Format::YEAR))
+		if (Format::Patterns value = formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY))
 		{
 			switch (value)
 			{
@@ -1009,10 +1128,9 @@ namespace
 				case Format::YY:
 				case Format::YYY:
 				case Format::YYYY:
-				case Format::YEAR:
 					break;
 				default:
-					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("Y/YY/YYY/YYYY/YEAR"));
+					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("Y/YY/YYY/YYYY"));
 			}
 		}
 
@@ -1021,8 +1139,8 @@ namespace
 			cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("RR/RRRR"));
 
 		// CT shall not contain both <datetime template year> and <datetime template rounded year>
-		if ((formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY | Format::YEAR)) && (formatFlags & (Format::RR | Format::RRRR)))
-			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("Y/YY/YYY/YYYY/YEAR") << Arg::Str("RR/RRRR"));
+		if ((formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY)) && (formatFlags & (Format::RR | Format::RRRR)))
+			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("Y/YY/YYY/YYYY") << Arg::Str("RR/RRRR"));
 
 		// If CT contains <datetime template day of year>, then CT shall not contain <datetime template month>
 		// or <datetime template day of month>.
@@ -1389,19 +1507,6 @@ namespace
 					const std::optional<int> year = getIntFromString(str, strLength, strOffset, 4);
 					throwExceptionOnEmptyValue(year, patternStr, cb);
 
-					outTimes.tm_year = year.value() - 1900;
-					break;
-				}
-				case Format::YEAR:
-				{
-					const std::optional<int> year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
-					throwExceptionOnEmptyValue(year, patternStr, cb);
-
-					if (year > 9999)
-					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
-							Arg::Num(0) << Arg::Num(9999));
-					}
 					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
