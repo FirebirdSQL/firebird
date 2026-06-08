@@ -160,9 +160,9 @@ namespace
 
 		string getString()
 		{
-			const ULONG length = static_cast<ULONG>(getInt32());
+			const auto length = getInt32();
 
-			if (m_data + length > m_end)
+			if (length <= 0 || m_end - m_data < length)
 				malformed();
 
 			const string str((const char*) m_data, length);
@@ -172,7 +172,7 @@ namespace
 
 		const UCHAR* getBinary(ULONG length)
 		{
-			if (m_data + length > m_end)
+			if (m_end - m_data < length)
 				malformed();
 
 			const auto ptr = m_data;
@@ -193,6 +193,9 @@ namespace
 		void defineAtom()
 		{
 			const auto length = getByte();
+			if (length <= 0)
+				malformed();
+
 			const auto ptr = getBinary(length);
 			const MetaString name((const char*) ptr, length);
 			m_atoms.add(name);
