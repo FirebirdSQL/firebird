@@ -127,13 +127,21 @@ namespace
 
 		const string& getAtomString()
 		{
-			const auto pos = getInt32();
+			const ULONG pos = static_cast<ULONG>(getInt32());
+
+			if (pos >= m_atoms.getCount())
+				malformed();
+
 			return m_atoms[pos];
 		}
 
 		const MetaString getAtomMetaName()
 		{
-			const auto pos = getInt32();
+			const ULONG pos = static_cast<ULONG>(getInt32());
+
+			if (pos >= m_atoms.getCount())
+				malformed();
+
 			return m_atoms[pos];
 		}
 
@@ -152,7 +160,7 @@ namespace
 
 		string getString()
 		{
-			const auto length = getInt32();
+			const ULONG length = static_cast<ULONG>(getInt32());
 
 			if (m_data + length > m_end)
 				malformed();
