@@ -1539,6 +1539,8 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
  *	Make sure chain of record versions is completely intact.
  *
  **************************************/
+	Database* dbb = vdr_tdbb->getDatabase();
+
 #ifdef DEBUG_VAL_VERBOSE
 	USHORT counter = 0;
 #endif
@@ -1547,6 +1549,28 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 	USHORT line_number = header->rhd_b_line;
 	WIN window(DB_PAGE_SPACE, -1);
 	window.win_flags = WIN_garbage_collector;
+	bool check_backversion_state = false;
+
+	if ((vdr_flags & VDR_records) && (header->rhd_flags & rhd_deleted))
+	{
+		// Handle the case where the primary record version is deleted and
+		// check its transaction state first. If it's neither limbo nor
+		// committed then we need to check a transaction state of a backversion
+		// to finally determine if the record should be set in the bitmap which
+		// is used for index validation.
+		// Note, if the primary record version is deleted and committed, the
+		// existence of an index entry is not required for such version chain
+		// because it is all garbage.
+		const TraNumber transaction = Ods::getTraNum(header);
+
+		const int state = (transaction < dbb->dbb_oldest_transaction) ?
+			tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
+
+		if (state == tra_limbo)
+			RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, head_number.getValue());
+		else if (state != tra_committed)
+			check_backversion_state = true;
+	}
 
 	while (page_number)
 	{
@@ -1579,6 +1603,25 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 			release_page(&window);
 			return corrupt(VAL_REC_CHAIN_BROKEN, relation, head_number.getValue());
 		}
+
+		if (check_backversion_state)
+		{
+			if (header->rhd_b_page)
+				RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, head_number.getValue());
+			else
+			{
+				const TraNumber transaction = Ods::getTraNum(header);
+
+				const int state = (transaction < dbb->dbb_oldest_transaction) ?
+					tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
+
+				if (state == tra_committed || state == tra_limbo)
+					RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, head_number.getValue());
+			}
+
+			check_backversion_state = false;
+		}
+
 		page_number = header->rhd_b_page;
 		line_number = header->rhd_b_line;
 		release_page(&window);
@@ -1787,22 +1830,29 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 			if ((vdr_flags & VDR_records) &&
 				!(header->rhd_flags & (rhd_chain | rhd_fragment | rhd_blob)))
 			{
-				// Only set committed (or limbo) records in the bitmap. If there
-				// is a backversion then at least one of the record versions is
+				// Only set committed (or limbo) records in the bitmap.
+				// If the primary record version is not deleted and there is a
+				// backversion then at least one of the record versions is
 				// committed. If there's no backversion then check transaction
 				// state of the lone primary record version.
+				// The case where the primary record version is deleted is handled
+				// in walk_chain() because it requires to check a transaction
+				// state of a backversion.
 
-				if (header->rhd_b_page)
-					RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
-				else
+				if (!(header->rhd_flags & rhd_deleted))
 				{
-					const TraNumber transaction = Ods::getTraNum(header);
-
-					const int state = (transaction < dbb->dbb_oldest_transaction) ?
-						tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
-
-					if (state == tra_committed || state == tra_limbo)
+					if (header->rhd_b_page)
 						RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
+					else
+					{
+						const TraNumber transaction = Ods::getTraNum(header);
+
+						const int state = (transaction < dbb->dbb_oldest_transaction) ?
+							tra_committed : TRA_fetch_state(vdr_tdbb, transaction);
+
+						if (state == tra_committed || state == tra_limbo)
+							RBM_SET(vdr_tdbb->getDefaultPool(), &vdr_rel_records, number.getValue());
+					}
 				}
 
 				primary_versions++;
