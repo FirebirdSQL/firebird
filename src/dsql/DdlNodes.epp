@@ -10107,6 +10107,10 @@ void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsq
 	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags,
 		DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, tempFlag == REL_temp_ltt);
 
+	// Clear TDBB_use_db_page_space so the INSERT uses per-transaction temp pages for GTT/LTT,
+	// not the structural base pages that were used during table creation.
+	AutoSetRestoreFlag<ULONG> noDbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+
 	DSQL_execute_immediate(tdbb, attachment, &traHandle, sql.length(), sql.c_str(),
 		dsqlScratch->clientDialect, nullptr, nullptr, nullptr, nullptr, true);
 

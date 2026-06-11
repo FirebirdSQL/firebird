@@ -2428,6 +2428,21 @@ db_rem_option($alterDatabaseNode)
 
 // CREATE TABLE
 
+// Helper rule to capture AS <query> for table creation with a regular trailing action.
+// A mid-rule action cannot use YYPOSNARG correctly.
+%type <createRelationNode> table_as_query_clause
+table_as_query_clause
+	: simple_table_name column_parens_opt AS select_expr with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $4;
+			node->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
+			node->withData = $5;
+			$$ = node;
+		}
+	;
+
 %type <createRelationNode> table_clause
 table_clause
 	: simple_table_name external_file
@@ -2438,14 +2453,9 @@ table_clause
 			{
 				$$ = $3;
 			}
-	| simple_table_name column_parens_opt AS select_expr with_data_opt
+	| table_as_query_clause
 		{
-			const auto node = newNode<CreateRelationNode>($1);
-			node->queryColumns = $2;
-			node->querySelectExpr = $4;
-			node->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
-			node->withData = $5;
-			$$ = node;
+			$$ = $1;
 		}
 	;
 
@@ -2493,18 +2503,14 @@ gtt_table_clause
 			{
 				$$ = $2;
 			}
-	| simple_table_name column_parens_opt AS select_expr with_data_opt
+	| table_as_query_clause
 		{
-			$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-			$<createRelationNode>$->tempFlag = REL_temp_gtt;
-			$<createRelationNode>$->queryColumns = $2;
-			$<createRelationNode>$->querySelectExpr = $4;
-			$<createRelationNode>$->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
-			$<createRelationNode>$->withData = $5;
+			$1->tempFlag = REL_temp_gtt;
+			$<createRelationNode>$ = $1;
 		}
-		gtt_subclauses_opt($6)
+		gtt_subclauses_opt($2)
 		{
-			$$ = $6;
+			$$ = $2;
 		}
 	;
 
@@ -2546,18 +2552,14 @@ ltt_table_clause
 			{
 				$$ = $2;
 			}
-	| simple_table_name column_parens_opt AS select_expr with_data_opt
+	| table_as_query_clause
 		{
-			$<createRelationNode>$ = newNode<CreateRelationNode>($1);
-			$<createRelationNode>$->tempFlag = REL_temp_ltt;
-			$<createRelationNode>$->queryColumns = $2;
-			$<createRelationNode>$->querySelectExpr = $4;
-			$<createRelationNode>$->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
-			$<createRelationNode>$->withData = $5;
+			$1->tempFlag = REL_temp_ltt;
+			$<createRelationNode>$ = $1;
 		}
-		ltt_subclause_opt($6)
+		ltt_subclause_opt($2)
 		{
-			$$ = $6;
+			$$ = $2;
 		}
 	;
 
