@@ -37,6 +37,7 @@
 #include "../jrd/Coercion.h"
 #include "../jrd/Function.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/RecordBuffer.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
 #include "../jrd/extds/ExtDS.h"
@@ -121,6 +122,48 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 
 namespace
 {
+	class AutoLocalTableContext
+	{
+	public:
+		AutoLocalTableContext(thread_db* aTdbb, Request* aRequest, Request* localTableRequest,
+			jrd_tra* transaction)
+			: tdbb(aTdbb),
+			  request(aRequest),
+			  oldTransaction(aTdbb->getTransaction()),
+			  oldFrameId(aTdbb->tdbb_temp_frame_id)
+		{
+			oldSnapshot.init();
+			tdbb->setTransaction(transaction);
+			tdbb->tdbb_temp_frame_id = localTableRequest ? localTableRequest->getLocalTableInstanceId(tdbb) : 0;
+
+			Request::AutoTranCtx autoTranCtx;
+
+			if (localTableRequest && localTableRequest->getLocalTableAutoTranCtx(autoTranCtx))
+			{
+				restoreSnapshot = true;
+				oldSnapshot = request->req_snapshot;
+				request->req_snapshot = autoTranCtx.m_snapshot;
+			}
+		}
+
+		~AutoLocalTableContext()
+		{
+			if (restoreSnapshot)
+				request->req_snapshot = oldSnapshot;
+
+			tdbb->tdbb_temp_frame_id = oldFrameId;
+			tdbb->setTransaction(oldTransaction);
+		}
+
+	private:
+		thread_db* tdbb;
+		Request* request;
+		jrd_tra* oldTransaction;
+		FB_UINT64 oldFrameId;
+		Request::SnapshotData oldSnapshot;
+		bool restoreSnapshot = false;
+	};
+
 	// Node copier that remaps the field id 0 of stream 0 to a given field id.
 	class RemapFieldNodeCopier : public NodeCopier
 	{
@@ -1749,6 +1792,10 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 	{
 		switch (verb)
 		{
+			case blr_dcl_local_table_ltt:
+				node->useLtt = true;
+				break;
+
 			case blr_dcl_local_table_format:
 				if (node->format)
 					PAR_error(csb, Arg::Gds(isc_random) << "duplicate local table format");
@@ -1812,6 +1859,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 			Arg::Gds(isc_dsql_duplicate_spec) << dsqlName.toQuotedString());
 	}
 
+	useLtt = true;
 	tableNumber = dsqlScratch->localTableNumber++;
 	dsqlScratch->localTables.push(this);
 	dsqlScratch->putLocalTable(this);
@@ -1914,6 +1962,7 @@ string DeclareLocalTableNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, tableNumber);
 	NODE_PRINT(printer, dsqlName);
+	NODE_PRINT(printer, useLtt);
 
 	return "DeclareLocalTableNode";
 }
@@ -1922,6 +1971,9 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_dcl_local_table);
 	dsqlScratch->appendUShort(tableNumber);
+
+	if (useLtt)
+		dsqlScratch->appendUChar(blr_dcl_local_table_ltt);
 
 	if (dsqlRelation)
 	{
@@ -1946,12 +1998,17 @@ DeclareLocalTableNode* DeclareLocalTableNode::copy(thread_db* tdbb, NodeCopier& 
 	node->format = format;
 	node->notNullFields = notNullFields;
 	node->tableNumber = tableNumber;
+	node->useLtt = useLtt;
 	return node;
 }
 
-DeclareLocalTableNode* DeclareLocalTableNode::pass2(thread_db* /*tdbb*/, CompilerScratch* csb)
+DeclareLocalTableNode* DeclareLocalTableNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	impureOffset = csb->allocImpure<Impure>();
+
+	if (useLtt)
+		getRelation(tdbb, nullptr);
+
 	return this;
 }
 
@@ -1959,7 +2016,12 @@ const StmtNode* DeclareLocalTableNode::execute(thread_db* tdbb, Request* request
 {
 	if (request->req_operation == Request::req_evaluate)
 	{
-		if (auto& recordBuffer = getImpure(tdbb, request, false)->recordBuffer)
+		if (useLtt)
+		{
+			reset(tdbb, request);
+			getRelation(tdbb, request);
+		}
+		else if (auto& recordBuffer = getImpure(tdbb, request, false)->recordBuffer)
 			recordBuffer->reset();
 
 		request->req_operation = Request::req_return;
@@ -1984,17 +2046,93 @@ void DeclareLocalTableNode::validateRecord(const DeclareLocalTableNode* table, c
 	}
 }
 
-DeclareLocalTableNode::Impure* DeclareLocalTableNode::getImpure(thread_db* tdbb, Request* request, bool createWhenDead) const
+DeclareLocalTableNode::Impure* DeclareLocalTableNode::getImpure(thread_db* tdbb, Request* request,
+	bool createWhenDead) const
 {
 	const auto impure = request->getImpure<Impure>(impureOffset);
 
 	if (createWhenDead && !impure->recordBuffer)
 	{
+		fb_assert(!useLtt);
+
 		impure->recordBuffer = FB_NEW_POOL(*tdbb->getDefaultPool())
 			RecordBuffer(*tdbb->getDefaultPool(), format);
 	}
 
 	return impure;
+}
+
+jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) const
+{
+	if (relation)
+		return relation;
+
+	auto& pool = request ? *request->req_pool : *tdbb->getDefaultPool();
+
+	if (tableNumber >= MAX_DECLARED_LTT_COUNT)
+	{
+		ERR_post(Arg::Gds(isc_imp_exc) <<
+				 Arg::Gds(isc_random) <<
+				 Arg::Str("Too many local temporary tables declared in a single statement"));
+	}
+
+	const auto id = MIN_DECLARED_LTT_ID + tableNumber;
+
+	QualifiedName name;
+	name.object.printf("RDB$PSQL_LTT_%u", tableNumber);
+
+	const auto permanent = FB_NEW_POOL(pool) Cached::Relation(tdbb, pool, id);
+	permanent->rel_name = name;
+	permanent->rel_flags = REL_sql_relation | REL_temp_ltt | REL_temp_frame;
+	permanent->getBasePages()->rel_pg_space_id = tdbb->getDatabase()->dbb_page_manager.getTempPageSpaceID(tdbb);
+
+	const auto newRelation = FB_NEW_POOL(pool) jrd_rel(pool, permanent);
+	newRelation->rel_current_fmt = 1;
+	newRelation->rel_dbkey_length = 8;
+	newRelation->rel_fields = vec<jrd_fld*>::newVector(pool, newRelation->rel_fields, format->fmt_count);
+
+	const auto relFormat = Format::newFormat(pool, format->fmt_count);
+	relFormat->fmt_length = format->fmt_length;
+	relFormat->fmt_version = newRelation->rel_current_fmt;
+
+	for (FB_SIZE_T i = 0; i < format->fmt_count; ++i)
+	{
+		relFormat->fmt_desc[i] = format->fmt_desc[i];
+
+		auto& field = (*newRelation->rel_fields)[i];
+		field = FB_NEW_POOL(pool) jrd_fld(pool);
+		field->fld_name.printf("FIELD_%" SIZEFORMAT, i + 1);
+		field->fld_length = relFormat->fmt_desc[i].dsc_length;
+		field->fld_pos = i;
+		field->fld_flags = notNullFields[i] ? FLD_not_null : 0;
+	}
+
+	permanent->addFormat(relFormat);
+	newRelation->rel_current_format = relFormat;
+	relation = newRelation;
+
+	return relation;
+}
+
+void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
+{
+	if (relation)
+	{
+		const auto permanent = relation->getPermanent();
+		permanent->delPages(tdbb, request->getLocalTableInstanceId(tdbb));
+	}
+}
+
+void DeclareLocalTableNode::destroyRelation(thread_db* tdbb) const
+{
+	if (relation)
+	{
+		const auto permanent = relation->getPermanent();
+		permanent->freePages(tdbb);
+		jrd_rel::destroy(tdbb, relation);
+		Cached::Relation::cleanup(tdbb, permanent);
+		relation = nullptr;
+	}
 }
 
 
@@ -2828,7 +2966,8 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->dsqlCursorName = dsqlCursorName;
 	node->dsqlSkipLocked = dsqlSkipLocked;
 
-	if (relation->dsqlName.schema.hasData() || relation->dsqlName.package.hasData() ||
+	if (relation->dsqlName.schema.hasData() ||
+		relation->dsqlName.package.hasData() ||
 		!dsqlScratch->getLocalTable(relation->dsqlName.object) ||
 		dsqlCursorName.hasData())
 	{
@@ -3223,6 +3362,25 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	jrd_tra* transaction = request->req_transaction;
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
+	Request* localTableRequest = request;
+	const DeclareLocalTableNode* localTable = nullptr;
+
+	if (localTableNumber.has_value())
+	{
+		localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
+		localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
+
+		if (localTable->useLtt)
+		{
+			transaction = localTableRequest->getLocalTableTransaction();
+
+			if (!relation)
+				relation = rpb->rpb_relation = localTable->getRelation(tdbb, localTableRequest);
+		}
+	}
+
+	AutoLocalTableContext autoTransaction(tdbb, request,
+		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
 
 	switch (request->req_operation)
 	{
@@ -3236,9 +3394,6 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			if (!statement)
 				break;
 
-			const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
-			const auto localTable = localTableNumber.has_value() ?
-				localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
 			const Format* format = relation ? rpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
 			Record* record = relation ? VIO_record(tdbb, rpb, format, tdbb->getDefaultPool()) : rpb->rpb_record;
 
@@ -3311,12 +3466,9 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (!relation)
 	{
-		fb_assert(localTableNumber.has_value());
-		const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
-		const auto localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
-
-		if (!localTable->getImpure(tdbb, localTableRequest)->recordBuffer->erase(rpb->rpb_number.getValue()))
-			ERR_post(Arg::Gds(isc_no_cur_rec));
+		fb_assert(localTable);
+		fb_assert(false);
+		ERR_post(Arg::Gds(isc_wish_list));
 	}
 	else if (auto* extFile = relation->getExtFile())
 		extFile->erase(rpb, transaction);
@@ -8380,7 +8532,8 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
 	fb_assert(relation);
 
-	if (relation->dsqlName.schema.hasData() || relation->dsqlName.package.hasData() ||
+	if (relation->dsqlName.schema.hasData() ||
+		relation->dsqlName.package.hasData() ||
 		!dsqlScratch->getLocalTable(relation->dsqlName.object) ||
 		dsqlCursorName.hasData())
 	{
@@ -8912,6 +9065,24 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	record_param* newRpb = &request->req_rpb[newStream];
 
+	const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
+	const auto localTable = localTableNumber.has_value() ?
+		localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
+
+	if (localTable && localTable->useLtt)
+	{
+		transaction = localTableRequest->getLocalTableTransaction();
+
+		if (!relation)
+			relation = orgRpb->rpb_relation = localTable->getRelation(tdbb, localTableRequest);
+
+		if (!newRpb->rpb_relation)
+			newRpb->rpb_relation = relation;
+	}
+
+	AutoLocalTableContext autoTransaction(tdbb, request,
+		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
+
 	switch (request->req_operation)
 	{
 		case Request::req_evaluate:
@@ -8965,19 +9136,14 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				if (validations.hasData())
 					validateExpressions(tdbb, validations);
 
-				if (!relation)
-				{
-					fb_assert(localTableNumber.has_value());
-					const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
-					const auto localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
-
+				if (localTable)
 					DeclareLocalTableNode::validateRecord(localTable, newRpb->rpb_record);
 
-					if (!localTable->getImpure(tdbb, localTableRequest)->recordBuffer->modify(
-							orgRpb->rpb_number.getValue(), newRpb->rpb_record))
-					{
-						ERR_post(Arg::Gds(isc_no_cur_rec));
-					}
+				if (!relation)
+				{
+					fb_assert(localTable && !localTable->useLtt);
+					fb_assert(false);
+					ERR_post(Arg::Gds(isc_wish_list));
 				}
 				else if (auto* extFile = relation->getExtFile())
 					extFile->modify(orgRpb, newRpb, transaction);
@@ -9098,9 +9264,6 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	// exists for the stream and is big enough, and copying fields from the
 	// original record to the new record.
 
-	const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
-	const auto localTable = localTableNumber.has_value() ?
-		localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
 	const Format* const newFormat = relation ? newRpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
 	Record* newRecord = relation ? VIO_record(tdbb, newRpb, newFormat, tdbb->getDefaultPool()) : newRpb->rpb_record;
 
@@ -10108,7 +10271,17 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	const auto localTable = localTableSource ?
 		localTableRequest->getStatement()->localTables[localTableSource->tableNumber] :
 		nullptr;
-	const auto localTableImpure = localTable ? localTable->getImpure(tdbb, localTableRequest) : nullptr;
+	const auto localTableImpure = localTable && !localTable->useLtt ?
+		localTable->getImpure(tdbb, localTableRequest) : nullptr;
+
+	if (localTable && localTable->useLtt)
+	{
+		transaction = localTableRequest->getLocalTableTransaction();
+		relation = rpb->rpb_relation = localTable->getRelation(tdbb, localTableRequest);
+	}
+
+	AutoLocalTableContext autoTransaction(tdbb, request,
+		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
 
 	switch (request->req_operation)
 	{
@@ -10131,7 +10304,8 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 			{
 				SavepointChangeMarker scMarker(transaction);
 
-				if (relation && (relation->rel_triggers[TRIGGER_PRE_STORE] || relation->isSystem()) && whichTrig != POST_TRIG)
+				if (!localTable && relation &&
+					(relation->rel_triggers[TRIGGER_PRE_STORE] || relation->isSystem()) && whichTrig != POST_TRIG)
 				{
 					EXE_execute_triggers(tdbb, relation->rel_triggers[TRIGGER_PRE_STORE], NULL, rpb,
 						TRIGGER_INSERT, PRE_TRIG);
@@ -10149,11 +10323,11 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 				cleanupRpb(tdbb, rpb);
 
-				if (localTableSource)
-				{
+				if (localTable)
 					DeclareLocalTableNode::validateRecord(localTable, rpb->rpb_record);
+
+				if (localTable && !localTable->useLtt)
 					localTableImpure->recordBuffer->store(rpb->rpb_record);
-				}
 				else if (auto* extFile = relation->getExtFile())
 					extFile->store(tdbb, rpb);
 				else if (relation->isVirtual())
@@ -10167,7 +10341,8 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 				rpb->rpb_number.setValid(true);
 
-				if (relation && (relation->rel_triggers[TRIGGER_POST_STORE] || relation->isSystem()) &&
+				if (!localTable && relation &&
+					(relation->rel_triggers[TRIGGER_POST_STORE] || relation->isSystem()) &&
 					whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, relation->rel_triggers[TRIGGER_POST_STORE], NULL, rpb,
@@ -10203,13 +10378,12 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	// exists for the stream and is big enough, and initialize all null flags
 	// to "missing."
 
-	const Format* format = localTableSource ?
-		localTableRequest->getStatement()->localTables[localTableSource->tableNumber]->format :
+	const Format* format = localTable && !localTable->useLtt ? localTable->format.getObject() :
 		relation->currentFormat(tdbb);
 
 	Record* record;
 
-	if (localTableSource)
+	if (localTable && !localTable->useLtt)
 	{
 		record = rpb->rpb_record;
 
@@ -11316,7 +11490,12 @@ const StmtNode* TruncateLocalTableNode::execute(thread_db* tdbb, Request* reques
 	{
 		const auto localTable = request->getStatement()->localTables[tableNumber];
 
-		if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
+		if (localTable->useLtt)
+		{
+			localTable->reset(tdbb, request);
+			localTable->getRelation(tdbb, request);
+		}
+		else if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
 			recordBuffer->reset();
 
 		request->req_operation = Request::req_return;

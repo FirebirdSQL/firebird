@@ -26,6 +26,10 @@
 #include "../jrd/req.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/dpm_proto.h"
+#include "../jrd/rlck_proto.h"
+#include "../jrd/vio_proto.h"
+#include "../common/classes/auto.h"
 
 #include "RecordSource.h"
 
@@ -58,7 +62,31 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 	const auto rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
 
+	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+
+	if (m_table->useLtt)
+	{
+		AutoSetRestore<FB_UINT64> autoFrameId(
+			&tdbb->tdbb_temp_frame_id, localTableRequest->getLocalTableInstanceId(tdbb));
+
+		rpb->rpb_relation = m_table->getRelation(tdbb, localTableRequest);
+	}
+
 	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	// Inside an autonomous transaction block, reading a DLTT uses the parent transaction.
+	// The parent's top savepoint already holds a verb action for this relation (from the
+	// INSERT that made the data visible), so get_undo_data returns udForceBack, hiding
+	// all freshly-inserted rows. Bypass cursor stability for this case only — non-autonomous
+	// reads must keep cursor stability so that INSERT...SELECT from the same DLTT does not
+	// recurse into rows inserted by the current statement.
+	if (m_table->useLtt)
+	{
+		if (localTableRequest->req_auto_trans.hasData())
+			rpb->rpb_stream_flags |= RPB_s_unstable;
+		else
+			rpb->rpb_stream_flags &= ~RPB_s_unstable;
+	}
 }
 
 void LocalTableStream::close(thread_db* tdbb) const
@@ -87,30 +115,52 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	if (!rpb->rpb_record)
-		rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
-
-	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
-	const auto recordBuffer = m_table->getImpure(tdbb, localTableRequest)->recordBuffer;
-
-	while (true)
+	if (!m_table->useLtt)
 	{
-		rpb->rpb_number.increment();
+		if (!rpb->rpb_record)
+			rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
 
-		if (rpb->rpb_number.getValue() >= recordBuffer->getCount())
+		const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+		const auto recordBuffer = m_table->getImpure(tdbb, localTableRequest)->recordBuffer;
+
+		while (true)
 		{
-			rpb->rpb_number.setValid(false);
-			return false;
+			rpb->rpb_number.increment();
+
+			if (rpb->rpb_number.getValue() >= recordBuffer->getCount())
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+
+			if (recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+			{
+				rpb->rpb_number.setValid(true);
+				break;
+			}
 		}
 
-		if (recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
-		{
-			rpb->rpb_number.setValid(true);
-			break;
-		}
+		return true;
 	}
 
-	return true;
+	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+	const auto transaction = localTableRequest->getLocalTableTransaction();
+	AutoSetRestore<FB_UINT64> autoFrameId(
+		&tdbb->tdbb_temp_frame_id, localTableRequest->getLocalTableInstanceId(tdbb));
+
+	AutoSetRestore2<jrd_tra*, thread_db> autoTransaction(
+		tdbb, &thread_db::getTransaction, &thread_db::setTransaction, transaction);
+
+	const bool found = VIO_next_record(tdbb, rpb, transaction, request->req_pool, DPM_next_all, nullptr);
+
+	if (found)
+	{
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
+
+	rpb->rpb_number.setValid(false);
+	return false;
 }
 
 bool LocalTableStream::refetchRecord(thread_db* tdbb) const
