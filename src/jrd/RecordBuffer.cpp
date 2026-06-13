@@ -33,6 +33,7 @@ using namespace Jrd;
 
 RecordBuffer::RecordBuffer(MemoryPool& pool, const Format* format)
 	: PermanentStorage(pool)
+	, active(pool)
 {
 	record = FB_NEW_POOL(pool) Record(pool, format);
 }
@@ -41,6 +42,7 @@ void RecordBuffer::reset()
 {
 	count = 0;
 	space.reset();
+	active.clear();
 }
 
 offset_t RecordBuffer::store(const Record* new_record)
@@ -52,8 +54,36 @@ offset_t RecordBuffer::store(const Record* new_record)
 		space = FB_NEW_POOL(getPool()) TempSpace(getPool(), SCRATCH);
 
 	space->write(count * length, new_record->getData(), length);
+	active.add(1);
 
 	return count++;
+}
+
+bool RecordBuffer::modify(offset_t position, const Record* new_record)
+{
+	if (!isValid(position))
+		return false;
+
+	const ULONG length = record->getLength();
+	fb_assert(new_record->getLength() == length);
+	fb_assert(space.hasData());
+
+	space->write(position * length, new_record->getData(), length);
+	return true;
+}
+
+bool RecordBuffer::erase(offset_t position)
+{
+	if (!isValid(position))
+		return false;
+
+	active[position] = 0;
+	return true;
+}
+
+bool RecordBuffer::isValid(offset_t position) const
+{
+	return position < count && active[position] != 0;
 }
 
 bool RecordBuffer::fetch(offset_t position, Record* to_record)
@@ -61,7 +91,7 @@ bool RecordBuffer::fetch(offset_t position, Record* to_record)
 	const ULONG length = record->getLength();
 	fb_assert(to_record->getLength() == length);
 
-	if (position >= count)
+	if (!isValid(position))
 		return false;
 
 	fb_assert(space.hasData());

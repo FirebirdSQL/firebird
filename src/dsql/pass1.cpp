@@ -383,7 +383,14 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	{
 		relationNode = cte;
 	}
-	else
+	else if (!tableValueFunctionNode && !(procNode && procNode->inputSources) &&
+		!name.schema.hasData() && !name.package.hasData())
+	{
+		if (const auto localTable = dsqlScratch->getLocalTable(name.object))
+			relation = localTable->dsqlRelation;
+	}
+
+	if (!selNode && !tableValueFunctionNode && !cte && !procedure && !relation)
 	{
 		const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(name,
 			(((procNode && procNode->inputSources)) ?
@@ -1802,10 +1809,21 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 
 	if (context->ctx_relation)
 	{
-		const auto relNode = FB_NEW_POOL(*tdbb->getDefaultPool()) RelationSourceNode(
-			*tdbb->getDefaultPool(), context->ctx_relation->rel_name);
-		relNode->dsqlContext = context;
-		return relNode;
+		if (context->ctx_relation->rel_flags & REL_local_table)
+		{
+			const auto localTableNode = FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableSourceNode(
+				*tdbb->getDefaultPool());
+			localTableNode->dsqlContext = context;
+			localTableNode->tableNumber = context->ctx_relation->rel_local_table_number.value();
+			return localTableNode;
+		}
+		else
+		{
+			const auto relNode = FB_NEW_POOL(*tdbb->getDefaultPool()) RelationSourceNode(
+				*tdbb->getDefaultPool(), context->ctx_relation->rel_name);
+			relNode->dsqlContext = context;
+			return relNode;
+		}
 	}
 	else if (context->ctx_procedure)
 	{
@@ -3034,7 +3052,11 @@ static void remap_streams_to_parent_context(ExprNode* input, dsql_ctx* parent_co
 		DEV_BLKCHK(tableValueFunctionNode->dsqlContext, dsql_type_ctx);
 		tableValueFunctionNode->dsqlContext->ctx_parent = parent_context;
 	}
-	//// TODO: LocalTableSourceNode
+	else if (auto localTableNode = nodeAs<LocalTableSourceNode>(input))
+	{
+		DEV_BLKCHK(localTableNode->dsqlContext, dsql_type_ctx);
+		localTableNode->dsqlContext->ctx_parent = parent_context;
+	}
 	else if (auto rseNode = nodeAs<RseNode>(input))
 		remap_streams_to_parent_context(rseNode->dsqlStreams, parent_context);
 	else if (auto unionNode = nodeAs<UnionSourceNode>(input))

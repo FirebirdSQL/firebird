@@ -88,12 +88,23 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 	if (!rpb->rpb_record)
 		rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
 
-	rpb->rpb_number.increment();
+	const auto recordBuffer = m_table->getImpure(tdbb, request)->recordBuffer;
 
-	if (!m_table->getImpure(tdbb, request)->recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+	while (true)
 	{
-		rpb->rpb_number.setValid(false);
-		return false;
+		rpb->rpb_number.increment();
+
+		if (rpb->rpb_number.getValue() >= recordBuffer->getCount())
+		{
+			rpb->rpb_number.setValid(false);
+			return false;
+		}
+
+		if (recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+		{
+			rpb->rpb_number.setValid(true);
+			break;
+		}
 	}
 
 	return true;

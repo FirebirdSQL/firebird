@@ -1250,7 +1250,9 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 				continue;
 
 			auto impure = localTable->getImpure(tdbb, request, false);
-			impure->recordBuffer->reset();
+
+			if (impure->recordBuffer)
+				impure->recordBuffer->reset();
 		}
 
 		release_blobs(tdbb, request);
@@ -2079,4 +2081,3 @@ QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 		return QualifiedName("");
 	}
 }
-

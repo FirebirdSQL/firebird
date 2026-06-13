@@ -1756,12 +1756,14 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 				fieldCount = blrReader.getWord();
 				node->format = Format::newFormat(pool, fieldCount);
 				node->format->fmt_length = FLAG_BYTES(fieldCount);
+				node->notNullFields.grow(fieldCount);
 
 				for (USHORT fieldNum = 0; fieldNum < fieldCount; ++fieldNum)
 				{
 					dsc& fmtDesc = node->format->fmt_desc[fieldNum];
-					//// TODO: Support NOT NULL fields with blr_not_nullable.
-					PAR_desc(tdbb, csb, &fmtDesc, nullptr);
+					ItemInfo itemInfo;
+					PAR_desc(tdbb, csb, &fmtDesc, &itemInfo);
+					node->notNullFields[fieldNum] = !itemInfo.nullable;
 
 					if (fmtDesc.dsc_dtype >= dtype_aligned)
 						node->format->fmt_length = FB_ALIGN(node->format->fmt_length, type_alignments[fmtDesc.dsc_dtype]);
@@ -1785,8 +1787,123 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 
 DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (dsqlName.isEmpty())
+	{
+		tableNumber = dsqlScratch->localTableNumber++;
+		dsqlScratch->localTables.push(this);
+		return this;
+	}
+
+	fb_assert(dsqlTable);
+
+	const auto& tableName = dsqlTable->name;
+
+	if (tableName.schema.hasData() || tableName.package.hasData())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_random) <<
+			"Local temporary table declarations cannot use qualified names");
+	}
+
+	if (dsqlScratch->getLocalTable(dsqlName))
+	{
+		ERRD_post(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+			Arg::Gds(isc_dsql_duplicate_spec) << dsqlName.toQuotedString());
+	}
+
 	tableNumber = dsqlScratch->localTableNumber++;
 	dsqlScratch->localTables.push(this);
+	dsqlScratch->putLocalTable(this);
+
+	auto& pool = dsqlScratch->getPool();
+	dsqlRelation = FB_NEW_POOL(pool) dsql_rel(pool);
+	dsqlRelation->rel_name = QualifiedName(dsqlName);
+	dsqlRelation->rel_flags = REL_local_table;
+	dsqlRelation->rel_local_table_number = tableNumber;
+	dsqlRelation->rel_dbkey_length = 8;
+
+	dsql_fld** fieldPtr = &dsqlRelation->rel_fields;
+	USHORT position = 0;
+
+	for (const auto clause : dsqlTable->clauses)
+	{
+		if (clause->type != RelationNode::Clause::TYPE_ADD_COLUMN)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_random) <<
+				"Table constraints are not supported for local temporary table declarations");
+		}
+
+		const auto addColumn = static_cast<const RelationNode::AddColumnClause*>(clause.getObject());
+		const auto field = addColumn->field;
+
+		if (addColumn->defaultValue)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_random) <<
+				"DEFAULT is not allowed for LOCAL TEMPORARY TABLE columns");
+		}
+
+		if (addColumn->computed)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_random) <<
+				"COMPUTED BY is not allowed for LOCAL TEMPORARY TABLE columns");
+		}
+
+		if (addColumn->identityOptions)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_random) <<
+				"IDENTITY columns are not allowed for LOCAL TEMPORARY TABLEs");
+		}
+
+		if (field->dimensions != 0)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_random) <<
+				"Array type columns are not allowed for LOCAL TEMPORARY TABLEs");
+		}
+
+		bool notNull = false;
+
+		for (const auto& constraint : addColumn->constraints)
+		{
+			if (constraint.constraintType != RelationNode::AddConstraintClause::CTYPE_NOT_NULL ||
+				constraint.name.hasData())
+			{
+				status_exception::raise(
+					Arg::Gds(isc_random) <<
+					"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
+			}
+
+			notNull = true;
+		}
+
+		for (dsql_fld* existing = dsqlRelation->rel_fields; existing; existing = existing->fld_next)
+		{
+			if (existing->fld_name == field->fld_name)
+			{
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-637) <<
+					Arg::Gds(isc_dsql_duplicate_spec) << field->fld_name.toQuotedString());
+			}
+		}
+
+		field->resolve(dsqlScratch);
+		field->notNull = notNull;
+		field->fld_relation = dsqlRelation;
+		field->fld_id = position;
+		field->fld_pos = position++;
+
+		if (!notNull)
+			field->flags |= FLD_nullable;
+
+		*fieldPtr = field;
+		fieldPtr = &field->fld_next;
+		notNullFields.add(notNull);
+	}
 
 	return this;
 }
@@ -1796,6 +1913,7 @@ string DeclareLocalTableNode::internalPrint(NodePrinter& printer) const
 	StmtNode::internalPrint(printer);
 
 	NODE_PRINT(printer, tableNumber);
+	NODE_PRINT(printer, dsqlName);
 
 	return "DeclareLocalTableNode";
 }
@@ -1804,12 +1922,29 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_dcl_local_table);
 	dsqlScratch->appendUShort(tableNumber);
+
+	if (dsqlRelation)
+	{
+		USHORT fieldCount = 0;
+
+		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
+			++fieldCount;
+
+		dsqlScratch->appendUChar(blr_dcl_local_table_format);
+		dsqlScratch->appendUShort(fieldCount);
+
+		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
+			dsqlScratch->putType(field, true);
+
+		dsqlScratch->appendUChar(blr_end);
+	}
 }
 
 DeclareLocalTableNode* DeclareLocalTableNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) DeclareLocalTableNode(*tdbb->getDefaultPool());
 	node->format = format;
+	node->notNullFields = notNullFields;
 	node->tableNumber = tableNumber;
 	return node;
 }
@@ -1831,6 +1966,22 @@ const StmtNode* DeclareLocalTableNode::execute(thread_db* tdbb, Request* request
 	}
 
 	return parentStmt;
+}
+
+void DeclareLocalTableNode::validateRecord(const DeclareLocalTableNode* table, const Record* record)
+{
+	if (!table || !record)
+		return;
+
+	for (FB_SIZE_T i = 0; i < table->notNullFields.getCount(); ++i)
+	{
+		if (table->notNullFields[i] && record->isNull(i))
+		{
+			string fieldName;
+			fieldName.printf("local table field %" SIZEFORMAT, i + 1);
+			ERR_post(Arg::Gds(isc_not_valid_for_var) << Arg::Str(fieldName) << Arg::Str(NULL_STRING_MARK));
+		}
+	}
 }
 
 DeclareLocalTableNode::Impure* DeclareLocalTableNode::getImpure(thread_db* tdbb, Request* request, bool createWhenDead) const
@@ -2656,6 +2807,7 @@ DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
 	EraseNode* node = FB_NEW_POOL(pool) EraseNode(pool);
 	node->stream = csb->csb_rpt[n].csb_stream;
+	node->localTableNumber = csb->csb_rpt[n].csb_local_table_number;
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
@@ -2668,14 +2820,19 @@ DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 
 StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	auto relation = dsqlRelation;
+	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
+	fb_assert(relation);
 
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
 	node->dsqlCursorName = dsqlCursorName;
 	node->dsqlSkipLocked = dsqlSkipLocked;
 
-	if (dsqlCursorName.hasData())
+	if (relation->dsqlName.schema.hasData() || relation->dsqlName.package.hasData() ||
+		!dsqlScratch->getLocalTable(relation->dsqlName.object) ||
+		dsqlCursorName.hasData())
+	{
 		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
+	}
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -2733,7 +2890,7 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		rse->dsqlFlags |= RecordSourceNode::DFLAG_SINGLETON;
 
 	node->dsqlRse = rse;
-	node->dsqlRelation = nodeAs<RelationSourceNode>(rse->dsqlStreams->items[0]);
+	node->dsqlRelation = rse->dsqlStreams->items[0];
 
 	node->dsqlReturning = dsqlProcessReturning(dsqlScratch, node->dsqlRelation->dsqlContext->ctx_relation,
 		dsqlReturning, dsqlCursorName.hasData());
@@ -2887,12 +3044,15 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 
 		jrd_rel* const relation = tail->csb_relation(tdbb);
 
-		//// TODO: LocalTableSourceNode
 		if (!relation)
 		{
-			ERR_post(
-				Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) << "erase local_table");
+			if (tail->csb_local_table_number.has_value())
+			{
+				node->localTableNumber = tail->csb_local_table_number;
+				return;
+			}
+
+			ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "erase non-relation source");
 		}
 
 		view = relation->isView() ? relation : view;
@@ -3074,8 +3234,13 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			if (!statement)
 				break;
 
-			const Format* format = rpb->rpb_relation->currentFormat(tdbb);
-			Record* record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+			const auto localTable = localTableNumber.has_value() ?
+				request->getStatement()->localTables[localTableNumber.value()] : nullptr;
+			const Format* format = relation ? rpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
+			Record* record = relation ? VIO_record(tdbb, rpb, format, tdbb->getDefaultPool()) : rpb->rpb_record;
+
+			if (!record)
+				record = rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), format);
 
 			rpb->rpb_address = record->getData();
 			rpb->rpb_length = format->fmt_length;
@@ -3098,27 +3263,29 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	}
 
 	request->req_operation = Request::req_return;
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+
+	if (relation)
+		RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
 	if (rpb->rpb_runtime_flags & RPB_just_deleted)
 		return parentStmt;
 
-	if (rpb->rpb_number.isBof() || (!relation->isView() && !rpb->rpb_number.isValid()))
+	if (rpb->rpb_number.isBof() || ((relation ? !relation->isView() : true) && !rpb->rpb_number.isValid()))
 		ERR_post(Arg::Gds(isc_no_cur_rec));
 
-	if (forNode && forNode->isWriteLockMode(request))
+	if (relation && forNode && forNode->isWriteLockMode(request))
 	{
 		forceWriteLock(tdbb, rpb, transaction);
 		return parentStmt;
 	}
 
-	if (forNode && (marks & StmtNode::MARK_MERGE))
+	if (relation && forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->checkRecordUpdated(tdbb, request, rpb);
 
 	// If the stream was sorted, the various fields in the rpb are probably junk.
 	// Just to make sure that everything is cool, refetch and release the record.
 
-	if (rpb->rpb_runtime_flags & RPB_refetch)
+	if (relation && (rpb->rpb_runtime_flags & RPB_refetch))
 	{
 		VIO_refetch_record(tdbb, rpb, transaction, false, false);
 		rpb->rpb_runtime_flags &= ~RPB_refetch;
@@ -3133,12 +3300,21 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	// transaction and delete should be skipped.
 	const bool skipLocked = rpb->rpb_stream_flags & RPB_s_skipLocked;
 	CondSavepointAndMarker spPreTriggers(tdbb, transaction,
-		skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_triggers[TRIGGER_PRE_ERASE]);
+		relation && skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_triggers[TRIGGER_PRE_ERASE]);
 
 	// Handle pre-operation trigger.
-	preModifyEraseTriggers(tdbb, relation->rel_triggers[TRIGGER_PRE_ERASE], whichTrig, rpb, NULL, TRIGGER_DELETE);
+	if (relation)
+		preModifyEraseTriggers(tdbb, relation->rel_triggers[TRIGGER_PRE_ERASE], whichTrig, rpb, NULL, TRIGGER_DELETE);
 
-	if (auto* extFile = relation->getExtFile())
+	if (!relation)
+	{
+		fb_assert(localTableNumber.has_value());
+		const auto localTable = request->getStatement()->localTables[localTableNumber.value()];
+
+		if (!localTable->getImpure(tdbb, request)->recordBuffer->erase(rpb->rpb_number.getValue()))
+			ERR_post(Arg::Gds(isc_no_cur_rec));
+	}
+	else if (auto* extFile = relation->getExtFile())
 		extFile->erase(rpb, transaction);
 	else if (relation->isVirtual())
 		VirtualTable::erase(tdbb, rpb);
@@ -3176,28 +3352,28 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	spPreTriggers.release();
 
 	// Handle post operation trigger.
-	if ((relation->rel_triggers[TRIGGER_POST_ERASE] || relation->isSystem()) && whichTrig != PRE_TRIG)
+	if (relation && (relation->rel_triggers[TRIGGER_POST_ERASE] || relation->isSystem()) && whichTrig != PRE_TRIG)
 	{
 		EXE_execute_triggers(tdbb, relation->rel_triggers[TRIGGER_POST_ERASE], rpb, NULL, TRIGGER_DELETE, POST_TRIG);
 	}
 
-	if (forNode && (marks & StmtNode::MARK_MERGE))
+	if (relation && forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->setRecordUpdated(tdbb, request, rpb);
 
 	// Call IDX_erase (which checks constraints) after all post erase triggers have fired.
 	// This is required for cascading referential integrity, which can be implemented as
 	// post_erase triggers.
 
-	if (!relation->isView())
+	if (!relation || !relation->isView())
 	{
-		if (!relation->getExtFile() && !relation->isVirtual())
+		if (relation && !relation->getExtFile() && !relation->isVirtual())
 			IDX_erase(tdbb, rpb, transaction);
 
 		// Mark this rpb as already deleted to skip the subsequent attempts
 		rpb->rpb_runtime_flags |= RPB_just_deleted;
 	}
 
-	if (!relation->isView() || (whichTrig == ALL_TRIGS || whichTrig == POST_TRIG))
+	if (!relation || !relation->isView() || (whichTrig == ALL_TRIGS || whichTrig == POST_TRIG))
 	{
 		if (!(marks & MARK_AVOID_COUNTERS))
 		{
@@ -6952,6 +7128,8 @@ void LocalDeclarationsNode::checkUniqueFieldsNames(const LocalDeclarationsNode* 
 				name = varNode->dsqlDef->name.c_str();
 			else if (auto cursorNode = nodeAs<DeclareCursorNode>(statement))
 				name = cursorNode->dsqlName.c_str();
+			else if (auto tableNode = nodeAs<DeclareLocalTableNode>(statement))
+				name = tableNode->dsqlName.c_str();
 			else if (nodeAs<DeclareSubProcNode>(statement) || nodeAs<DeclareSubFuncNode>(statement))
 				continue;
 
@@ -7027,6 +7205,7 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			DsqlDescMaker::fromField(&variable->desc, variable->field);
 		}
 		else if (nodeIs<DeclareCursorNode>(parameter) ||
+			nodeIs<DeclareLocalTableNode>(parameter) ||
 			nodeIs<DeclareSubProcNode>(parameter) ||
 			nodeIs<DeclareSubFuncNode>(parameter))
 		{
@@ -8149,12 +8328,15 @@ DmlNode* ModifyNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* c
 
 	tail = CMP_csb_element(csb, newStream);
 	tail->csb_relation = csb->csb_rpt[orgStream].csb_relation;
+	tail->csb_format = csb->csb_rpt[orgStream].csb_format;
+	tail->csb_local_table_number = csb->csb_rpt[orgStream].csb_local_table_number;
 
 	// Make the node and parse the sub-expression.
 
 	ModifyNode* node = FB_NEW_POOL(pool) ModifyNode(pool);
 	node->orgStream = orgStream;
 	node->newStream = newStream;
+	node->localTableNumber = csb->csb_rpt[orgStream].csb_local_table_number;
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
@@ -8192,8 +8374,12 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
 	fb_assert(relation);
 
-	if (dsqlCursorName.hasData())
+	if (relation->dsqlName.schema.hasData() || relation->dsqlName.package.hasData() ||
+		!dsqlScratch->getLocalTable(relation->dsqlName.object) ||
+		dsqlCursorName.hasData())
+	{
 		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
+	}
 
 	NestConst<ValueExprNode>* ptr;
 
@@ -8513,12 +8699,16 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 
 		jrd_rel* const relation = tail->csb_relation(tdbb);
 
-		//// TODO: LocalTableSourceNode
 		if (!relation)
 		{
-			ERR_post(
-				Arg::Gds(isc_wish_list) <<
-				Arg::Gds(isc_random) << "modify local_table");
+			if (tail->csb_local_table_number.has_value())
+			{
+				node->localTableNumber = tail->csb_local_table_number;
+				makeValidation(tdbb, csb, newStream, node->validations);
+				return;
+			}
+
+			ERR_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) << "modify non-relation source");
 		}
 
 		view = relation->isView() ? relation : view;
@@ -8721,7 +8911,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 			if (!(marks & MARK_AVOID_COUNTERS))
 				request->req_records_affected.bumpModified(false);
 
-			if (impure->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
+			if (relation && impure->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
 				request->req_operation = Request::req_return;
 			else
 				break;
@@ -8740,7 +8930,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 			if (impure->sta_state == 0)
 			{
-				if (forNode && forNode->isWriteLockMode(request))
+				if (relation && forNode && forNode->isWriteLockMode(request))
 				{
 					forceWriteLock(tdbb, orgRpb, transaction);
 					return parentStmt;
@@ -8756,15 +8946,32 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				// transaction and update should be skipped.
 				const bool skipLocked = orgRpb->rpb_stream_flags & RPB_s_skipLocked;
 				CondSavepointAndMarker spPreTriggers(tdbb, transaction,
-					skipLocked && !(transaction->tra_flags & TRA_system) && relation->rel_triggers[TRIGGER_PRE_MODIFY]);
+					relation && skipLocked && !(transaction->tra_flags & TRA_system) &&
+					relation->rel_triggers[TRIGGER_PRE_MODIFY]);
 
-				preModifyEraseTriggers(tdbb, relation->rel_triggers[TRIGGER_PRE_MODIFY], whichTrig, orgRpb, newRpb,
-					TRIGGER_UPDATE);
+				if (relation)
+				{
+					preModifyEraseTriggers(tdbb, relation->rel_triggers[TRIGGER_PRE_MODIFY], whichTrig, orgRpb, newRpb,
+						TRIGGER_UPDATE);
+				}
 
 				if (validations.hasData())
 					validateExpressions(tdbb, validations);
 
-				if (auto* extFile = relation->getExtFile())
+				if (!relation)
+				{
+					fb_assert(localTableNumber.has_value());
+					const auto localTable = request->getStatement()->localTables[localTableNumber.value()];
+
+					DeclareLocalTableNode::validateRecord(localTable, newRpb->rpb_record);
+
+					if (!localTable->getImpure(tdbb, request)->recordBuffer->modify(
+							orgRpb->rpb_number.getValue(), newRpb->rpb_record))
+					{
+						ERR_post(Arg::Gds(isc_no_cur_rec));
+					}
+				}
+				else if (auto* extFile = relation->getExtFile())
 					extFile->modify(orgRpb, newRpb, transaction);
 				else if (relation->isVirtual())
 					VirtualTable::modify(tdbb, orgRpb, newRpb);
@@ -8799,23 +9006,24 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				newRpb->rpb_number = orgRpb->rpb_number;
 				newRpb->rpb_number.setValid(true);
 
-				if ((relation->rel_triggers[TRIGGER_POST_MODIFY] || relation->isSystem()) && whichTrig != PRE_TRIG)
+				if (relation && (relation->rel_triggers[TRIGGER_POST_MODIFY] || relation->isSystem()) &&
+					whichTrig != PRE_TRIG)
 				{
 					EXE_execute_triggers(tdbb, relation->rel_triggers[TRIGGER_POST_MODIFY], orgRpb, newRpb,
 						TRIGGER_UPDATE, POST_TRIG);
 				}
 
-				if (forNode && (marks & StmtNode::MARK_MERGE))
+				if (relation && forNode && (marks & StmtNode::MARK_MERGE))
 					forNode->setRecordUpdated(tdbb, request, orgRpb);
 
 				// Now call IDX_modify_check_constrints after all post modify triggers
 				// have fired.  This is required for cascading referential integrity,
 				// which can be implemented as post_erase triggers.
 
-				if (!relation->getExtFile() && !relation->isView() && !relation->isVirtual())
+				if (relation && !relation->getExtFile() && !relation->isView() && !relation->isVirtual())
 					IDX_modify_check_constraints(tdbb, orgRpb, newRpb, transaction);
 
-				if (!relation->isView() ||
+				if (!relation || !relation->isView() ||
 					(!subMod && (whichTrig == ALL_TRIGS || whichTrig == POST_TRIG)))
 				{
 					if (!(marks & MARK_AVOID_COUNTERS))
@@ -8846,7 +9054,8 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	}
 
 	impure->sta_state = 0;
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	if (relation)
+		RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
 	if (orgRpb->rpb_runtime_flags & RPB_just_deleted)
 	{
@@ -8854,17 +9063,17 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 		return parentStmt;
 	}
 
-	if (orgRpb->rpb_number.isBof() || (!relation->isView() && !orgRpb->rpb_number.isValid()))
+	if (orgRpb->rpb_number.isBof() || ((relation ? !relation->isView() : true) && !orgRpb->rpb_number.isValid()))
 		ERR_post(Arg::Gds(isc_no_cur_rec));
 
-	if (forNode && (marks & StmtNode::MARK_MERGE))
+	if (relation && forNode && (marks & StmtNode::MARK_MERGE))
 		forNode->checkRecordUpdated(tdbb, request, orgRpb);
 
 	// If the stream was sorted, the various fields in the rpb are
 	// probably junk.  Just to make sure that everything is cool,
 	// refetch and release the record.
 
-	if (orgRpb->rpb_runtime_flags & RPB_refetch)
+	if (relation && (orgRpb->rpb_runtime_flags & RPB_refetch))
 	{
 		VIO_refetch_record(tdbb, orgRpb, transaction, false, false);
 		orgRpb->rpb_runtime_flags &= ~RPB_refetch;
@@ -8881,8 +9090,14 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	// exists for the stream and is big enough, and copying fields from the
 	// original record to the new record.
 
-	const Format* const newFormat = newRpb->rpb_relation->currentFormat(tdbb);
-	Record* newRecord = VIO_record(tdbb, newRpb, newFormat, tdbb->getDefaultPool());
+	const auto localTable = localTableNumber.has_value() ?
+		request->getStatement()->localTables[localTableNumber.value()] : nullptr;
+	const Format* const newFormat = relation ? newRpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
+	Record* newRecord = relation ? VIO_record(tdbb, newRpb, newFormat, tdbb->getDefaultPool()) : newRpb->rpb_record;
+
+	if (!newRecord)
+		newRecord = newRpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), newFormat);
+
 	newRpb->rpb_address = newRecord->getData();
 	newRpb->rpb_length = newFormat->fmt_length;
 	newRpb->rpb_format_number = newFormat->fmt_version;
@@ -8891,8 +9106,10 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	if (!orgRecord)
 	{
 		const Format* const orgFormat = newFormat;
-		orgRecord = VIO_record(tdbb, orgRpb, orgFormat, tdbb->getDefaultPool());
+		orgRecord = relation ? VIO_record(tdbb, orgRpb, orgFormat, tdbb->getDefaultPool()) :
+			FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), orgFormat);
 		orgRecord->setTransactionNumber(orgRpb->rpb_transaction_nr);
+		orgRpb->rpb_record = orgRecord;
 		orgRpb->rpb_address = orgRecord->getData();
 		orgRpb->rpb_length = orgFormat->fmt_length;
 		orgRpb->rpb_format_number = orgFormat->fmt_version;
@@ -8900,7 +9117,10 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	// Copy the original record to the new record
 
-	VIO_copy_record(tdbb, relation, orgRecord, newRecord);
+	if (relation)
+		VIO_copy_record(tdbb, relation, orgRecord, newRecord);
+	else
+		newRecord->copyDataFrom(orgRecord, true);
 
 	newRpb->rpb_number = orgRpb->rpb_number;
 	newRpb->rpb_number.setValid(true);
@@ -9869,7 +10089,10 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 				cleanupRpb(tdbb, rpb);
 
 				if (localTableSource)
+				{
+					DeclareLocalTableNode::validateRecord(localTable, rpb->rpb_record);
 					localTableImpure->recordBuffer->store(rpb->rpb_record);
+				}
 				else if (auto* extFile = relation->getExtFile())
 					extFile->store(tdbb, rpb);
 				else if (relation->isVirtual())
@@ -11786,7 +12009,8 @@ static dsql_ctx* dsqlGetContext(const RecordSourceNode* node)
 		return relNode->dsqlContext;
 	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
 		return tableValueFunctionNode->dsqlContext;
-	//// TODO: LocalTableSourceNode
+	else if (auto localTableNode = nodeAs<LocalTableSourceNode>(node))
+		return localTableNode->dsqlContext;
 	else if (auto rseNode = nodeAs<RseNode>(node))
 		return rseNode->dsqlContext;
 	else
@@ -11805,7 +12029,8 @@ static void dsqlGetContexts(DsqlContextStack& contexts, const RecordSourceNode* 
 		contexts.push(relNode->dsqlContext);
 	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(node))
 		contexts.push(tableValueFunctionNode->dsqlContext);
-	//// TODO: LocalTableSourceNode
+	else if (auto localTableNode = nodeAs<LocalTableSourceNode>(node))
+		contexts.push(localTableNode->dsqlContext);
 	else if (auto rseNode = nodeAs<RseNode>(node))
 	{
 		if (rseNode->dsqlContext)	// derived table

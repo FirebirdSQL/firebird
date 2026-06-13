@@ -637,6 +637,7 @@ public:
 		QualifiedName getName(bool allowEmpty = true) const;
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
+		std::optional<USHORT> csb_local_table_number;	// Local table number for this stream
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;
