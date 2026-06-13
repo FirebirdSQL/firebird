@@ -74,6 +74,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  subStatements(*p),
 	  fors(*p),
 	  localTables(*p),
+	  outerLocalTables(*p),
 	  invariants(*p),
 	  blr(*p),
 	  mapFieldInfo(*p),
@@ -114,6 +115,17 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 		localTables = csb->csb_localTables;
 		csb->csb_localTables.clear();
+
+		if (csb->outerLocalTablesMap.count())
+		{
+			outerLocalTables.grow(localTables.getCount());
+
+			for (const auto& [innerNumber, outerNumber] : csb->outerLocalTablesMap)
+			{
+				fb_assert(innerNumber < outerLocalTables.getCount());
+				outerLocalTables[innerNumber] = 1;
+			}
+		}
 
 		// make a vector of all invariant-type nodes, so that we will
 		// be able to easily reinitialize them when we restart the request
@@ -186,6 +198,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		csb->subProcedures.clear();
 		csb->outerMessagesMap.clear();
 		csb->outerVarsMap.clear();
+		csb->outerLocalTablesMap.clear();
 		csb->csb_rpt.free();
 		csb->csb_resources = nullptr;
 	}
@@ -1034,6 +1047,19 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* st
 bool Request::isRoot() const
 {
 	return this == statement->rootRequest();
+}
+
+Request* Request::getLocalTableRequest(bool outerDecl)
+{
+	Request* request = this;
+
+	if (outerDecl)
+	{
+		while (request->getStatement()->parentStatement)
+			request = request->req_caller;
+	}
+
+	return request;
 }
 
 StmtNumber Request::getRequestId() const

@@ -605,6 +605,7 @@ public:
 	StreamType stream = 0;
 	unsigned marks = 0;					// see StmtNode::IUD_MARK_xxx
 	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 
@@ -1305,6 +1306,7 @@ public:
 	USHORT dsqlRseFlags = 0;
 	std::optional<USHORT> dsqlReturningLocalTableNumber;
 	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 

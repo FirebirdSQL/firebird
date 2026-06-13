@@ -1244,8 +1244,13 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 			tdbb->setTransaction(old_transaction);
 		}
 
-		for (auto localTable : statement->localTables)
+		for (FB_SIZE_T i = 0; i < statement->localTables.getCount(); ++i)
 		{
+			if (i < statement->outerLocalTables.getCount() && statement->outerLocalTables[i])
+				continue;
+
+			const auto localTable = statement->localTables[i];
+
 			if (!localTable)
 				continue;
 

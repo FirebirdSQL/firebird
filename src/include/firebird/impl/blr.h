@@ -469,6 +469,7 @@
 #define blr_outer_map				(unsigned char) 221
 #define blr_outer_map_message		(unsigned char) 1
 #define blr_outer_map_variable			(unsigned char) 2
+#define blr_outer_map_local_table		(unsigned char) 3
 
 // json functions (reserved)
 #define blr_json_function			(unsigned char) 222

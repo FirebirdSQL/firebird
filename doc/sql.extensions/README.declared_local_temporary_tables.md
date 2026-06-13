@@ -80,6 +80,10 @@ Declared Local Temporary Tables have execution-frame data scope.
 - Rows are discarded when that execution frame finishes.
 - Transaction commit or rollback does not define the table lifetime; there is no `ON COMMIT` behavior.
 - An autonomous transaction block inside the same execution frame sees the same rows.
+- Local subroutines may access declared local temporary tables from the containing PSQL scope. They see and modify the
+  rows of the current containing execution frame.
+- Local subroutines may also declare their own local temporary tables. Those rows are scoped to the subroutine execution
+  frame.
 - Recursive calls reuse the same compiled table structure, but each recursive execution frame has separate rows.
 
 Recursive example:
@@ -144,11 +148,52 @@ set term ;!
 
 The autonomous block sees the row inserted by its parent execution frame.
 
+Local subroutine example:
+
+```sql
+set term !;
+
+execute block returns (n integer, s integer)
+as
+    declare local temporary table t (
+        id integer
+    );
+
+    declare procedure p_add(v integer)
+    as
+    begin
+        insert into t values (:v);
+    end
+
+    declare function f_count returns integer
+    as
+        declare variable ret integer;
+    begin
+        select count(*) from t into ret;
+        return ret;
+    end
+begin
+    insert into t values (1);
+    execute procedure p_add(2);
+
+    n = f_count();
+    select sum(id) from t into s;
+    suspend;
+end!
+
+set term ;!
+```
+
+The local procedure and function access `t` declared by the outer `EXECUTE BLOCK`. They use the same row set as the
+current outer execution frame.
+
 ## Visibility and Name Resolution
 
-Declared Local Temporary Tables are visible only to SQL statements compiled inside the same PSQL scope.
+Declared Local Temporary Tables are visible only to SQL statements compiled inside the declaring PSQL scope and its
+local subroutines.
 
 - Unqualified references to the declared name resolve to the declared local table.
+- SQL statements in local subroutines may also reference declared local temporary tables from the containing PSQL scope.
 - The declaration name cannot be schema-qualified or package-qualified.
 - The table is not present in `RDB$RELATIONS`, `RDB$RELATION_FIELDS`, monitoring metadata or other persistent metadata.
 - Dynamic SQL, including `EXECUTE STATEMENT`, is parsed separately and does not see declared local temporary tables.

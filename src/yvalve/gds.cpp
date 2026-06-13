@@ -4081,7 +4081,8 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			{
 				nullptr,
 				"message",
-				"variable"
+				"variable",
+				"local_table"
 			};
 
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
@@ -4097,6 +4098,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				{
 					case blr_outer_map_message:
 					case blr_outer_map_variable:
+					case blr_outer_map_local_table:
 						blr_print_word(control);
 						n = blr_print_word(control);
 						offset = blr_print_line(control, offset);

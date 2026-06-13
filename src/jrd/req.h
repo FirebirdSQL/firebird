@@ -368,6 +368,8 @@ public:
 		return statement;
 	}
 
+	Request* getLocalTableRequest(bool outerDecl);
+
 	bool hasInternalStatement() const noexcept;
 	bool hasPowerfulStatement() const noexcept;
 

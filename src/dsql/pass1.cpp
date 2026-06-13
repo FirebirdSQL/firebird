@@ -368,6 +368,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	dsql_rel* relation = NULL;
 	dsql_prc* procedure = NULL;
 	dsql_tab_func* tableValueFunctionContext = nullptr;
+	bool outerLocalTable = false;
 
 	if (selNode)
 	{
@@ -386,7 +387,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	else if (!tableValueFunctionNode && !(procNode && procNode->inputSources) &&
 		!name.schema.hasData() && !name.package.hasData())
 	{
-		if (const auto localTable = dsqlScratch->getLocalTable(name.object))
+		if (const auto localTable = dsqlScratch->getLocalTable(name.object, &outerLocalTable))
 			relation = localTable->dsqlRelation;
 	}
 
@@ -455,6 +456,7 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 	context->ctx_relation = relation;
 	context->ctx_procedure = procedure;
 	context->ctx_table_value_fun = tableValueFunctionContext;
+	context->ctx_local_table_outer = outerLocalTable;
 
 	if (selNode)
 	{
@@ -1814,7 +1816,10 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 			const auto localTableNode = FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableSourceNode(
 				*tdbb->getDefaultPool());
 			localTableNode->dsqlContext = context;
-			localTableNode->tableNumber = context->ctx_relation->rel_local_table_number.value();
+			localTableNode->outerDecl = context->ctx_local_table_outer;
+			localTableNode->tableNumber = context->ctx_local_table_outer ?
+				dsqlScratch->getOuterLocalTableNumber(context->ctx_relation->rel_local_table_number.value()) :
+				context->ctx_relation->rel_local_table_number.value();
 			return localTableNode;
 		}
 		else

@@ -36,9 +36,11 @@ using namespace Jrd;
 // Data access: local table
 // ------------------------
 
-LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table)
+LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table,
+	bool outerDecl)
 	: RecordStream(csb, stream),
-	  m_table(table)
+	  m_table(table),
+	  m_outerDecl(outerDecl)
 {
 	fb_assert(m_table);
 
@@ -88,7 +90,8 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 	if (!rpb->rpb_record)
 		rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
 
-	const auto recordBuffer = m_table->getImpure(tdbb, request)->recordBuffer;
+	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+	const auto recordBuffer = m_table->getImpure(tdbb, localTableRequest)->recordBuffer;
 
 	while (true)
 	{
