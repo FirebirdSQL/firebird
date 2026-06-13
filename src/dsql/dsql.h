@@ -159,6 +159,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	std::optional<USHORT> rel_local_table_number;
 	bool rel_private = false;		// Packaged private relation
 };
 
@@ -169,7 +170,8 @@ enum rel_flags_vals {
 	REL_view			= 4, // relation is a view
 	REL_external		= 8, // relation is an external table
 	REL_creating		= 16,	// we are creating the bare relation in memory
-	REL_ltt_created		= 32	// relation is created local temporary table
+	REL_ltt_created		= 32,	// relation is created local temporary table
+	REL_local_table		= 64	// relation is a PSQL declared local table
 };
 
 class TypeClause

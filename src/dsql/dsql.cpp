@@ -1418,7 +1418,9 @@ dsql_rel::dsql_rel(MemoryPool& p, const dsql_rel* rel)
 	  rel_owner(p, rel->rel_owner),
 	  rel_id(rel->rel_id),
 	  rel_dbkey_length(rel->rel_dbkey_length),
-	  rel_flags(rel->rel_flags)
+	  rel_flags(rel->rel_flags),
+	  rel_local_table_number(rel->rel_local_table_number),
+	  rel_private(rel->rel_private)
 {
 	auto* from = rel->rel_fields;
 	auto** to = &rel_fields;

@@ -553,6 +553,22 @@ dsql_var* DsqlCompilerScratch::resolveVariable(const MetaName& varName)
 	return NULL;
 }
 
+DeclareLocalTableNode* DsqlCompilerScratch::getLocalTable(const MetaName& name)
+{
+	DeclareLocalTableNode* table = nullptr;
+	localTableNames.get(name, table);
+
+	if (!table && mainScratch)
+		table = mainScratch->getLocalTable(name);
+
+	return table;
+}
+
+void DsqlCompilerScratch::putLocalTable(DeclareLocalTableNode* table)
+{
+	localTableNames.put(table->dsqlName, table);
+}
+
 // Generate BLR for a return.
 void DsqlCompilerScratch::genReturn(bool eosFlag)
 {

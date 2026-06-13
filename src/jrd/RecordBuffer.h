@@ -23,7 +23,9 @@
 #ifndef JRD_RECORD_BUFFER_H
 #define JRD_RECORD_BUFFER_H
 
+#include "firebird.h"
 #include "../common/classes/alloc.h"
+#include "../common/classes/array.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/File.h"
 #include "../jrd/TempSpace.h"
@@ -52,12 +54,16 @@ public:
 
 	void reset();
 	offset_t store(const Record*);
+	bool modify(offset_t, const Record*);
+	bool erase(offset_t);
+	bool isValid(offset_t) const;
 	bool fetch(offset_t, Record*);
 
 private:
 	offset_t count = 0;
 	Firebird::AutoPtr<Record> record;
 	Firebird::AutoPtr<TempSpace> space;
+	Firebird::Array<UCHAR> active;
 };
 
 } // namespace

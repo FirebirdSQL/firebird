@@ -666,6 +666,7 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 
 		csb->csb_rpt[node->stream].csb_format = csb->csb_localTables[tableNumber]->format;
 		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+		csb->csb_rpt[node->stream].csb_local_table_number = tableNumber;
 	}
 
 	return node;
@@ -715,6 +716,8 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 	copier.remap[stream] = newSource->stream;
 
 	newSource->context = context;
+	newSource->alias = alias;
+	newSource->tableNumber = tableNumber;
 
 	if (tableNumber >= copier.csb->csb_localTables.getCount() || !copier.csb->csb_localTables[tableNumber])
 		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
@@ -723,6 +726,7 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 
 	element->csb_format = copier.csb->csb_localTables[tableNumber]->format;
 	element->csb_view_stream = copier.remap[0];
+	element->csb_local_table_number = tableNumber;
 
 	if (alias.hasData())
 	{
@@ -4525,7 +4529,11 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		relName.object = tblBasedFunNode->dsqlName;
 		relAlias = tblBasedFunNode->alias.c_str();
 	}
-	//// TODO: LocalTableSourceNode
+	else if (const auto localTableNode = nodeAs<LocalTableSourceNode>(source))
+	{
+		fb_assert(localTableNode->dsqlContext);
+		return source;
+	}
 	else
 		fb_assert(false);
 
