@@ -644,6 +644,8 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
 	{
 		if (csb->csb_rpt[stream].csb_relation)
 			compileRelation(stream);
+		else if (csb->csb_rpt[stream].csb_local_table_number.has_value())
+			compileLocalTable(stream);
 	}
 }
 
@@ -1346,6 +1348,51 @@ void Optimizer::compileRelation(StreamType stream)
 		if (tail->csb_plan)
 			markIndices(tail, relation()->getId());
 	}
+}
+
+
+void Optimizer::compileLocalTable(StreamType stream)
+{
+	compileStreams.add(stream);
+
+	const auto tail = &csb->csb_rpt[stream];
+	tail->csb_cardinality = DEFAULT_CARDINALITY;
+	tail->csb_idx = nullptr;
+
+	if (!tail->csb_local_table_number.has_value())
+		return;
+
+	const auto tableNumber = tail->csb_local_table_number.value();
+
+	if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
+		return;
+
+	const bool needIndices = conjuncts.hasData() || (rse->rse_sorted || rse->rse_aggregate);
+
+	if (!needIndices)
+		return;
+
+	const auto relation = csb->csb_localTables[tableNumber]->getRelation(tdbb, nullptr)->getPermanent();
+	const auto relPages = relation->getPages(tdbb);
+	IndexDescList idxList;
+	BTR_all(tdbb, relation, idxList, relPages, csb->csb_g_flags & csb_internal);
+
+	MetaId n = idxList.getCount();
+	while (n--)
+	{
+		auto id = idxList[n].idx_id;
+		auto* idv = relation->lookup_index(tdbb, id, CacheFlag::AUTOCREATE);
+		if (idv && idv->getActive() != MET_index_active)
+			idv = nullptr;
+		if (!idv)
+			idxList.remove(n);
+	}
+
+	if (idxList.hasData())
+		tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
+
+	if (tail->csb_plan)
+		markIndices(tail, relation->getId());
 }
 
 

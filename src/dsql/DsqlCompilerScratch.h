@@ -200,9 +200,11 @@ public:
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, std::optional<USHORT> = std::nullopt);
 	dsql_var* resolveVariable(const MetaName& varName);
+
 	DeclareLocalTableNode* getLocalTable(const MetaName& name, bool* outerDecl = nullptr);
 	USHORT getOuterLocalTableNumber(USHORT tableNumber);
 	void putLocalTable(DeclareLocalTableNode* table);
+
 	void genReturn(bool eosFlag = false);
 
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,

@@ -462,6 +462,7 @@
 
 // subcodes of blr_dcl_local_table
 #define blr_dcl_local_table_format	(unsigned char) 1
+#define blr_dcl_local_table_ltt		(unsigned char) 2
 
 #define blr_local_table_truncate	(unsigned char) 219
 #define blr_local_table_id			(unsigned char) 220

@@ -486,7 +486,7 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 // Put maps in subroutines for outer variables/parameters usage.
 void DsqlCompilerScratch::putOuterMaps()
 {
-	if (!outerMessagesMap.count() && !outerVarsMap.count() && !outerLocalTablesMap.count())
+	if (outerMessagesMap.isEmpty() && outerVarsMap.isEmpty() && outerLocalTablesMap.isEmpty())
 		return;
 
 	appendUChar(blr_outer_map);

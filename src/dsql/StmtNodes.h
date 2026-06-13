@@ -404,7 +404,11 @@ public:
 
 public:
 	static void validateRecord(const DeclareLocalTableNode* table, const Record* record);
+
 	Impure* getImpure(thread_db* tdbb, Request* request, bool createWhenDead = true) const;
+	jrd_rel* getRelation(thread_db* tdbb, Request* request) const;
+	void reset(thread_db* tdbb, Request* request) const;
+	void destroyRelation(thread_db* tdbb) const;
 
 public:
 	MetaName dsqlName;
@@ -412,7 +416,9 @@ public:
 	dsql_rel* dsqlRelation = nullptr;
 	NestConst<Format> format;
 	Firebird::Array<UCHAR> notNullFields;
+	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
+	bool useLtt = false;
 };
 
 

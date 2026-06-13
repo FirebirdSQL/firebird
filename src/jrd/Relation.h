@@ -720,6 +720,7 @@ inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
 inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
+inline constexpr ULONG REL_temp_frame			= 0x0800;	// relation data is scoped to an execution frame
 
 class GCLock
 {
@@ -908,7 +909,7 @@ public:
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
 	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
-	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
+	bool	delPages(thread_db* tdbb, RelationPages::InstanceId inst_id = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	freePages(thread_db* tdbb);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 	void	cleanUp() noexcept;
@@ -1141,7 +1142,7 @@ inline bool RelationPermanent::isSystem() const noexcept
 
 inline bool RelationPermanent::isTemporary() const noexcept
 {
-	return (rel_flags & (REL_temp_tran | REL_temp_conn));
+	return (rel_flags & (REL_temp_tran | REL_temp_conn | REL_temp_frame));
 }
 
 inline bool RelationPermanent::isVirtual() const noexcept

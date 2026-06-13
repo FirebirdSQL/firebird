@@ -5682,7 +5682,7 @@ void VIO_garbage_collect_idx(thread_db* tdbb, jrd_tra* transaction,
 	RecordStack going, staying;
 	list_staying(tdbb, org_rpb, staying);
 	// Add not-so-old versions from undo log for transaction
-	transaction->listStayingUndo(org_rpb->rpb_relation, org_rpb->rpb_number.getValue(), staying);
+	transaction->listStayingUndo(tdbb, org_rpb->rpb_relation, org_rpb->rpb_number.getValue(), staying);
 
 	// The data that is going is passed via old_data. It is up to caller to make sure that it isn't in one of two lists above
 
@@ -6101,7 +6101,9 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 	if (!transaction->tra_save_point)
 		return udNone;
 
-	VerbAction* const action = transaction->tra_save_point->getAction(rpb->rpb_relation);
+	const auto tempInstanceId = (rpb->rpb_relation->getPermanent()->rel_flags & REL_temp_frame) ?
+		tdbb->tdbb_temp_frame_id : 0;
+	VerbAction* const action = transaction->tra_save_point->getAction(rpb->rpb_relation, tempInstanceId);
 
 	if (action)
 	{
@@ -7516,7 +7518,7 @@ static void verb_post(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	VerbAction* const action = transaction->tra_save_point->createAction(rpb->rpb_relation);
+	VerbAction* const action = transaction->tra_save_point->createAction(tdbb, rpb->rpb_relation);
 
 	if (!RecordBitmap::test(action->vct_records, rpb->rpb_number.getValue()))
 	{
