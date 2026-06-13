@@ -2808,6 +2808,7 @@ DmlNode* EraseNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* cs
 	EraseNode* node = FB_NEW_POOL(pool) EraseNode(pool);
 	node->stream = csb->csb_rpt[n].csb_stream;
 	node->localTableNumber = csb->csb_rpt[n].csb_local_table_number;
+	node->localTableOuterDecl = csb->csb_rpt[n].csb_outer_local_table;
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
@@ -3049,6 +3050,7 @@ void EraseNode::pass1Erase(thread_db* tdbb, CompilerScratch* csb, EraseNode* nod
 			if (tail->csb_local_table_number.has_value())
 			{
 				node->localTableNumber = tail->csb_local_table_number;
+				node->localTableOuterDecl = tail->csb_outer_local_table;
 				return;
 			}
 
@@ -3234,8 +3236,9 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			if (!statement)
 				break;
 
+			const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
 			const auto localTable = localTableNumber.has_value() ?
-				request->getStatement()->localTables[localTableNumber.value()] : nullptr;
+				localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
 			const Format* format = relation ? rpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
 			Record* record = relation ? VIO_record(tdbb, rpb, format, tdbb->getDefaultPool()) : rpb->rpb_record;
 
@@ -3309,9 +3312,10 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	if (!relation)
 	{
 		fb_assert(localTableNumber.has_value());
-		const auto localTable = request->getStatement()->localTables[localTableNumber.value()];
+		const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
+		const auto localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
 
-		if (!localTable->getImpure(tdbb, request)->recordBuffer->erase(rpb->rpb_number.getValue()))
+		if (!localTable->getImpure(tdbb, localTableRequest)->recordBuffer->erase(rpb->rpb_number.getValue()))
 			ERR_post(Arg::Gds(isc_no_cur_rec));
 	}
 	else if (auto* extFile = relation->getExtFile())
@@ -8330,6 +8334,7 @@ DmlNode* ModifyNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* c
 	tail->csb_relation = csb->csb_rpt[orgStream].csb_relation;
 	tail->csb_format = csb->csb_rpt[orgStream].csb_format;
 	tail->csb_local_table_number = csb->csb_rpt[orgStream].csb_local_table_number;
+	tail->csb_outer_local_table = csb->csb_rpt[orgStream].csb_outer_local_table;
 
 	// Make the node and parse the sub-expression.
 
@@ -8337,6 +8342,7 @@ DmlNode* ModifyNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* c
 	node->orgStream = orgStream;
 	node->newStream = newStream;
 	node->localTableNumber = csb->csb_rpt[orgStream].csb_local_table_number;
+	node->localTableOuterDecl = csb->csb_rpt[orgStream].csb_outer_local_table;
 
 	if (csb->csb_blr_reader.peekByte() == blr_marks)
 		node->marks |= PAR_marks(csb);
@@ -8704,6 +8710,7 @@ void ModifyNode::pass1Modify(thread_db* tdbb, CompilerScratch* csb, ModifyNode* 
 			if (tail->csb_local_table_number.has_value())
 			{
 				node->localTableNumber = tail->csb_local_table_number;
+				node->localTableOuterDecl = tail->csb_outer_local_table;
 				makeValidation(tdbb, csb, newStream, node->validations);
 				return;
 			}
@@ -8961,11 +8968,12 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				if (!relation)
 				{
 					fb_assert(localTableNumber.has_value());
-					const auto localTable = request->getStatement()->localTables[localTableNumber.value()];
+					const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
+					const auto localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
 
 					DeclareLocalTableNode::validateRecord(localTable, newRpb->rpb_record);
 
-					if (!localTable->getImpure(tdbb, request)->recordBuffer->modify(
+					if (!localTable->getImpure(tdbb, localTableRequest)->recordBuffer->modify(
 							orgRpb->rpb_number.getValue(), newRpb->rpb_record))
 					{
 						ERR_post(Arg::Gds(isc_no_cur_rec));
@@ -9090,8 +9098,9 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 	// exists for the stream and is big enough, and copying fields from the
 	// original record to the new record.
 
+	const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
 	const auto localTable = localTableNumber.has_value() ?
-		request->getStatement()->localTables[localTableNumber.value()] : nullptr;
+		localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
 	const Format* const newFormat = relation ? newRpb->rpb_relation->currentFormat(tdbb) : localTable->format.getObject();
 	Record* newRecord = relation ? VIO_record(tdbb, newRpb, newFormat, tdbb->getDefaultPool()) : newRpb->rpb_record;
 
@@ -9176,6 +9185,30 @@ DmlNode* OuterMapNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch*
 				break;
 			}
 
+			case blr_outer_map_local_table:
+			{
+				const USHORT outerNumber = blrReader.getWord();
+				const USHORT innerNumber = blrReader.getWord();
+
+				if (outerNumber >= csb->mainCsb->csb_localTables.getCount() ||
+					!csb->mainCsb->csb_localTables[outerNumber])
+				{
+					PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(outerNumber));
+				}
+
+				csb->csb_localTables.grow(innerNumber + 1);
+
+				if (csb->csb_localTables[innerNumber])
+				{
+					PAR_error(csb, Arg::Gds(isc_random) <<
+						"Invalid blr_outer_map_local_table: inner local table already exists");
+				}
+
+				csb->csb_localTables[innerNumber] = csb->mainCsb->csb_localTables[outerNumber];
+				csb->outerLocalTablesMap.put(innerNumber, outerNumber);
+				break;
+			}
+
 			default:
 				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_outer_map sub code");
 		}
@@ -9235,6 +9268,32 @@ OuterMapNode* OuterMapNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		}
 
 		innerVariables[innerNumber] = outerVariables[outerNumber];
+	}
+
+	for (const auto& [innerNumber, outerNumber] : csb->outerLocalTablesMap)
+	{
+		if (outerNumber >= csb->mainCsb->csb_localTables.getCount() ||
+			!csb->mainCsb->csb_localTables[outerNumber])
+		{
+			fb_assert(false);
+			status_exception::raise(Arg::Gds(isc_bad_loctab_num) << Arg::Num(outerNumber));
+		}
+
+		const auto outerLocalTable = csb->mainCsb->csb_localTables[outerNumber];
+
+		csb->csb_localTables.grow(innerNumber + 1);
+
+		if (csb->csb_localTables[innerNumber])
+		{
+			if (csb->csb_localTables[innerNumber] != outerLocalTable)
+			{
+				fb_assert(false);
+				status_exception::raise(Arg::Gds(isc_random) <<
+					"Invalid blr_outer_map_local_table: inner local table already exist");
+			}
+		}
+		else
+			csb->csb_localTables[innerNumber] = outerLocalTable;
 	}
 
 	return this;
@@ -10044,10 +10103,12 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	jrd_rel* relation = rpb->rpb_relation;
 
 	const auto localTableSource = nodeAs<LocalTableSourceNode>(target);
+	const auto localTableRequest = request->getLocalTableRequest(
+		localTableSource && localTableSource->outerDecl);
 	const auto localTable = localTableSource ?
-		request->getStatement()->localTables[localTableSource->tableNumber] :
+		localTableRequest->getStatement()->localTables[localTableSource->tableNumber] :
 		nullptr;
-	const auto localTableImpure = localTable ? localTable->getImpure(tdbb, request) : nullptr;
+	const auto localTableImpure = localTable ? localTable->getImpure(tdbb, localTableRequest) : nullptr;
 
 	switch (request->req_operation)
 	{
@@ -10143,7 +10204,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	// to "missing."
 
 	const Format* format = localTableSource ?
-		request->getStatement()->localTables[localTableSource->tableNumber]->format :
+		localTableRequest->getStatement()->localTables[localTableSource->tableNumber]->format :
 		relation->currentFormat(tdbb);
 
 	Record* record;
