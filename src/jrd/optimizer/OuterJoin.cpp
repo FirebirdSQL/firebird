@@ -229,17 +229,22 @@ RecordSource* OuterJoin::process()
 		if (equiMatches.hasData())
 		{
 			const auto streamCardinality = csb->csb_rpt[inner.number].csb_cardinality;
-			const auto outerCardinality = outerRsb->getCardinality();
 
 			// Calculate the nested loop join cost (excluding the outer stream)
 			Retrieval loopRetrieval(tdbb, optimizer, inner.number, false, true, nullptr, true);
 			const auto loopCandidate = loopRetrieval.getInversion();
 
-			const auto loopCost = loopCandidate->cost * outerCardinality;
-
 			// Calculate the match cardinality
 			const auto matchSelectivity = loopCandidate->selectivity;
 			const auto matchCardinality = MIN(streamCardinality * matchSelectivity, MINIMUM_CARDINALITY);
+
+			// Get the outer stream cardinality, taking first-rows optimization into account
+			const auto outerCardinality = (optimizer->favorFirstRows() && matchSelectivity) ?
+				MIN(outerRsb->getCardinality() * matchSelectivity, MINIMUM_CARDINALITY) :
+				outerRsb->getCardinality();
+
+			// Calculate the loop join cost (excluding the outer stream)
+			const auto loopCost = loopCandidate->cost * outerCardinality;
 
 			// Calculate the hash join cost (excluding the outer stream)
 			StreamStateHolder outerHolder(csb, outerStreams);
