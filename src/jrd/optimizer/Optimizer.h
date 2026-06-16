@@ -582,6 +582,38 @@ public:
 		outerStreams.assign(streams);
 	}
 
+	static double getLoopJoinCost(double innerCost, double outerCardinality)
+	{
+		return innerCost * outerCardinality;
+	}
+
+	static double getHashJoinCost(double innerCost, double outerCardinality,
+								  double baseCardinality, double matchCardinality)
+	{
+		// Calculate the hashing cost. It consists of the following parts:
+		//  - hashed stream retrieval
+		//  - copying rows into the hash table (including hash calculation)
+		//  - probing the hash table and copying the matched rows
+
+		return innerCost +
+			// hashing cost
+			baseCardinality * (COST_FACTOR_MEMCOPY + COST_FACTOR_HASHING) +
+			// probing + copying cost
+			outerCardinality * (COST_FACTOR_HASHING + matchCardinality * COST_FACTOR_MEMCOPY);
+	}
+
+	static bool allowHashJoin(double streamCardinality, double hashCardinality, unsigned indices)
+	{
+		// If the table looks like empty during preparation time, we cannot be sure about
+		// its real cardinality during execution. So, unless we have some index-based
+		// filtering applied, let's better be pessimistic and avoid hash joining due to
+		// likely cardinality under-estimation.
+		// Also, avoid hashing if the stream to be hashed is too large.
+
+		return (streamCardinality > MINIMUM_CARDINALITY || indices) &&
+			(hashCardinality <= HashJoin::maxCapacity());
+	}
+
 	Firebird::string getStreamName(StreamType stream);
 	Firebird::string makeAlias(StreamType stream);
 	void printf(const char* format, ...) noexcept;
