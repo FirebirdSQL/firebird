@@ -236,6 +236,7 @@ Constraint restrictions:
 
 Other restrictions:
 
+- A single PSQL statement, procedure, function or trigger may declare at most 1024 local temporary tables.
 - Indexes are not supported.
 - Triggers on declared local temporary tables are not supported.
 - Explicit privileges are not supported.
