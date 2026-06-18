@@ -38,6 +38,7 @@
 
 namespace Jrd
 {
+class CompilerScratch;
 class DsqlCompilerScratch;
 class dsql_fld;
 
@@ -84,6 +85,8 @@ public:
 	dsc* makeValue(thread_db* tdbb, Request* request);
 
 private:
+	void executeCsbNode(thread_db* tdbb, CompilerScratch* csb);
+
 	// Lock in case of makeing value during the execute state
 	Firebird::RWLock m_makeValueLock{};
 

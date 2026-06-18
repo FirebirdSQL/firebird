@@ -332,6 +332,7 @@ constexpr int op_invsel_procedure	= 34;
 constexpr int op_table_value_fun	= 35;
 constexpr int op_for_range		= 36;
 constexpr int op_within_group_order	= 37;
+constexpr int op_custom_agg_function	= 38;
 
 static constexpr UCHAR
 	// generic print formats
@@ -441,7 +442,8 @@ static constexpr UCHAR
 				   op_line, op_indent, op_byte, op_literal,
 				   op_pad, op_line, 0 },
 	list_function[] = { op_line, op_verb, op_verb, op_within_group_order, 0 },
-	agg_function[] = { op_byte, op_literal, op_byte, op_line, op_args, op_within_group_order, 0 };
+	agg_function[] = { op_byte, op_literal, op_byte, op_line, op_args, op_within_group_order, 0 },
+	custom_agg_function[] = { op_custom_agg_function, 0 };
 
 
 #include "../jrd/blp.h"
@@ -3849,7 +3851,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			if (n != SUB_ROUTINE_TYPE_PSQL)
 				blr_error(control, "*** unknown subroutine type %d ***", (int) n);
 
-			// Procedure: prc_executable / prc_selectable; Function: deterministic
+			// Procedure: prc_executable / prc_selectable; Function: deterministic / aggregate
 			offset = blr_print_line(control, (SSHORT) offset);
 			blr_indent(control, level);
 			n = blr_print_byte(control);
@@ -4193,6 +4195,107 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 							blr_print_verb(control, level);
 
 						--level;
+						break;
+
+					default:
+						fb_assert(false);
+				}
+			}
+
+			// print blr_end
+			control->ctl_blr_reader.seekBackward(1);
+			blr_print_verb(control, level);
+			break;
+		}
+
+		case op_custom_agg_function:
+		{
+			offset = blr_print_line(control, offset);
+
+			static const char* subCodes[] =
+			{
+				nullptr,
+				"id",
+				"arg_names",
+				"args",
+				"filter"
+			};
+
+			static const char* idSubCodes[] =
+			{
+				nullptr,
+				"schema",
+				"package",
+				"name",
+				"sub"
+			};
+
+			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
+			{
+				blr_indent(control, level);
+
+				if (blr_operator == 0 || blr_operator >= FB_NELEM(subCodes))
+					blr_error(control, "*** invalid blr_invoke_agg_function sub code ***");
+
+				blr_format(control, "blr_invoke_agg_function_%s, ", subCodes[blr_operator]);
+
+				switch (blr_operator)
+				{
+					case blr_invoke_agg_function_id:
+						++level;
+
+						while ((n = control->ctl_blr_reader.getByte()) != blr_end)
+						{
+							if (n == 0 || n >= static_cast<FB_SSIZE_T>(FB_NELEM(idSubCodes)))
+								blr_error(control, "*** invalid blr_invoke_agg_function_id sub code ***");
+
+							offset = blr_print_line(control, (SSHORT) offset);
+							blr_indent(control, level + 1);
+							blr_format(control, "blr_invoke_agg_function_id_%s, ", idSubCodes[n]);
+
+							if (n == blr_invoke_agg_function_id_schema ||
+								n == blr_invoke_agg_function_id_package ||
+								n == blr_invoke_agg_function_id_name)
+							{
+								blr_print_name(control);
+							}
+						}
+
+						offset = blr_print_line(control, (SSHORT) offset);
+						--level;
+						break;
+
+					case blr_invoke_agg_function_arg_names:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+						{
+							blr_indent(control, level);
+							blr_print_name(control);
+							offset = blr_print_line(control, (SSHORT) offset);
+						}
+
+						--level;
+						break;
+
+					case blr_invoke_agg_function_args:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+
+						++level;
+
+						while (n-- > 0)
+							blr_print_verb(control, level);
+
+						--level;
+						break;
+
+					case blr_invoke_agg_function_filter:
+						offset = blr_print_line(control, (SSHORT) offset);
+						blr_print_verb(control, level);
 						break;
 
 					default:

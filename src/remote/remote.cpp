@@ -1001,19 +1001,33 @@ void Rtr::setupInlineBlob(const P_INLINE_BLOB* p_blob)
 	}
 
 	blb->rbl_blob_id = p_blob->p_blob_id;
-	if (const Rbl* old = rtr_blobs.locate(blb->rbl_blob_id))
+
+	for (Rbl* old = rtr_blobs.locate(p_blob->p_blob_id);
+		 old && (old->rbl_blob_id == p_blob->p_blob_id);)
 	{
+		fb_assert(blb != old);
+
 		// Blob with the same blob id already exists. It could be in use, or it
 		// could be opened by user explicitly with custom BPB - thus delete new one.
+		if (!(old->rbl_flags & Rbl::CACHED) || (old->rbl_flags & Rbl::USED))
+		{
+			delete blb;
+			rtr_rdb->decBlobCache(cachedSize);
+			return;
+		}
 
-		fb_assert(blb != old);
-		delete blb;
+		Rbl* next = rtr_blobs.getNext();
 
-		rtr_rdb->decBlobCache(cachedSize);
-		return;
+		// Old blob is cached and not used, so we can safely remove it from cache and
+		// replace with new fresh one.
+		rtr_rdb->decBlobCache(old->getCachedSize());
+		rtr_blobs.remove(old);
+		delete old;
+
+		old = next;
 	}
-	else
-		rtr_blobs.add(blb);
+
+	rtr_blobs.add(blb);
 
 	blb->rbl_info.parseInfo(p_blob->p_blob_info.cstr_length, p_blob->p_blob_info.cstr_address);
 
@@ -1356,6 +1370,7 @@ bool rem_port::tryNewKey(InternalCryptKey* cryptKey)
 	{
 		if (tryKeyType(port_known_server_keys[t], cryptKey))
 		{
+			delete cryptKey;
 			return true;
 		}
 	}

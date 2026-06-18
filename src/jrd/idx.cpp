@@ -978,7 +978,7 @@ bool IDX_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 }
 
 
-void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
+bool IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 {
 /**************************************
  *
@@ -992,11 +992,19 @@ void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
  **************************************/
 	SET_TDBB(tdbb);
 
-	auto* relPages = relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	auto* relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+	if (relPages)
+	{
+		fb_assert(relPages->rel_index_root);
 
-	BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
+		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+		index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+
+		BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
+		return true;
+	}
+
+	return false;
 }
 
 void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current, TraNumber tran)
@@ -1078,40 +1086,6 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		const bool tree_exists = BTR_delete_index(tdbb, &window, i, withCleanup);
-		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-	}
-
-	CCH_RELEASE(tdbb, &window);
-}
-
-
-void IDX_mark_indices(thread_db* tdbb, Cached::Relation* relation)
-{
-/**************************************
- *
- *	I D X _ m a r k _ i n d i c e s
- *
- **************************************
- *
- * Functional description
- *	Mark all known indices for delete in preparation for deleting a
- *	complete relation.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	auto* relPages = relation->getBasePages();
-	fb_assert(relPages->rel_index_root);
-
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
-
-	for (USHORT i = 0; i < root->irt_count; i++)
-	{
-		BTR_mark_index_for_delete(tdbb, relation, i, &window, root, 0);
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	}
 
@@ -1961,6 +1935,9 @@ static idx_e check_partner_index(thread_db* tdbb,
 	// tmpIndex.idx_flags |= idx_unique;
 	tmpIndex.idx_flags = (tmpIndex.idx_flags & ~idx_unique) | (partner_idx.idx_flags & idx_unique);
 
+	// hvlad: The same about descending flag, it should be the same as in the partner index.
+	tmpIndex.idx_flags = (tmpIndex.idx_flags & ~idx_descending) | (partner_idx.idx_flags & idx_descending);
+
 	const auto keyType = starting ? INTL_KEY_PARTIAL :
 		(tmpIndex.idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT;
 
@@ -1984,9 +1961,6 @@ static idx_e check_partner_index(thread_db* tdbb,
 
 		if (partner_idx.idx_flags & idx_descending)
 			retrieval.irb_generic |= irb_descending;
-
-		if ((idx->idx_flags & idx_descending) != (partner_idx.idx_flags & idx_descending))
-			BTR_complement_key(key);
 
 		RecordBitmap bm(*tdbb->getDefaultPool());
 		RecordBitmap* bitmap = &bm;

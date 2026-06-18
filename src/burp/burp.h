@@ -222,6 +222,8 @@ Version 12: FB6.0.
 			RDB$RELATION_FIELDSS.RDB$PACKAGE_NAME,
 			RDB$INDICES.RDB$PACKAGE_NAME and
 			RDB$INDEX_SEGMENTS.RDB$PACKAGE_NAME.
+
+			Custom aggregate function.
 */
 
 inline constexpr int ATT_BACKUP_FORMAT = 12;
@@ -471,6 +473,7 @@ enum att_type {
 	att_function_sql_security_deprecated,	// can be removed later
 	att_function_sql_security,
 	att_function_schema_name,
+	att_function_aggregate_flag,
 
 	// Function argument attributes
 

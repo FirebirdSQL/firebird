@@ -581,6 +581,9 @@
     <ClInclude Include="..\..\..\src\common\DecFloat.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\DeindentedStr.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\BatchCompletionState.h">
       <Filter>headers</Filter>
     </ClInclude>

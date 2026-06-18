@@ -766,6 +766,7 @@ void Statement::release(thread_db* tdbb)
 		if (*instance)
 		{
 			fb_assert(!((*instance)->isUsed()));
+
 			EXE_release(tdbb, *instance);
 			MemoryPool::deletePool((*instance)->req_pool);
 			*instance = nullptr;

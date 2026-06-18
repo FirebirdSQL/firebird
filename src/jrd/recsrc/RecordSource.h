@@ -770,41 +770,43 @@ namespace Jrd
 	{
 	public:
 		SlidingWindow(thread_db* aTdbb, const BaseBufferedStream* aStream, Request* request,
-			FB_UINT64 aPartitionStart, FB_UINT64 aPartitionEnd,
-			FB_UINT64 aFrameStart, FB_UINT64 aFrameEnd);
+			SINT64 aPartitionStart, SINT64 aPartitionEnd,
+			SINT64 aFrameStart, SINT64 aFrameEnd,
+			SINT64 aExclusionStart1, SINT64 aExclusionEnd1,
+			SINT64 aExclusionStart2, SINT64 aExclusionEnd2);
 		~SlidingWindow();
 
-		FB_UINT64 getPartitionStart() const
+		SINT64 getPartitionStart() const
 		{
 			return partitionStart;
 		}
 
-		FB_UINT64 getPartitionEnd() const
+		SINT64 getPartitionEnd() const
 		{
 			return partitionEnd;
 		}
 
-		FB_UINT64 getPartitionSize() const
+		SINT64 getPartitionSize() const
 		{
 			return partitionEnd - partitionStart + 1;
 		}
 
-		FB_UINT64 getFrameStart() const
+		SINT64 getFrameStart() const
 		{
 			return frameStart;
 		}
 
-		FB_UINT64 getFrameEnd() const
+		SINT64 getFrameEnd() const
 		{
 			return frameEnd;
 		}
 
-		FB_UINT64 getFrameSize() const
+		SINT64 getFrameSize() const
 		{
-			return frameEnd - frameStart + 1;
+			return getEffectiveFrameSize();
 		}
 
-		FB_UINT64 getRecordPosition() const
+		SINT64 getRecordPosition() const
 		{
 			return savedPosition;
 		}
@@ -825,15 +827,37 @@ namespace Jrd
 
 		bool moveWithinPartition(SINT64 delta);
 		bool moveWithinFrame(SINT64 delta);
+		bool moveToFrameStart();
+		bool moveToFrameEnd();
+		bool moveToFrameOffset(SINT64 offset);
+		SINT64 getEffectiveFrameSize() const;
+
+	private:
+		bool hasFrame() const
+		{
+			return frameStart <= frameEnd && frameStart >= partitionStart && frameEnd <= partitionEnd;
+		}
+
+		bool isExcluded(SINT64 position) const
+		{
+			return (position >= exclusionStart1 && position <= exclusionEnd1) ||
+				(position >= exclusionStart2 && position <= exclusionEnd2);
+		}
+
+		bool moveToFramePosition(SINT64 position);
 
 	private:
 		thread_db* tdbb;
 		const BaseBufferedStream* const stream;
-		FB_UINT64 partitionStart;
-		FB_UINT64 partitionEnd;
-		FB_UINT64 frameStart;
-		FB_UINT64 frameEnd;
-		FB_UINT64 savedPosition;
+		SINT64 partitionStart;
+		SINT64 partitionEnd;
+		SINT64 frameStart;
+		SINT64 frameEnd;
+		SINT64 exclusionStart1;
+		SINT64 exclusionEnd1;
+		SINT64 exclusionStart2;
+		SINT64 exclusionEnd2;
+		SINT64 savedPosition;
 		bool moved = false;
 	};
 
@@ -1032,8 +1056,17 @@ namespace Jrd
 			void getFrameValue(thread_db* tdbb, Request* request,
 				const Frame* frame, impure_value_ex* impureValue) const;
 
+			Block getPeerBlock(thread_db* tdbb, Request* request, Impure* impure,
+				SINT64 position) const;
+			void getExclusionBlocks(thread_db* tdbb, Request* request, Impure* impure,
+				SINT64 position, Block* exclusion1, Block* exclusion2) const;
+			bool isExcluded(SINT64 position, const Block& exclusion1, const Block& exclusion2) const;
+
 			SINT64 locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
 				const Frame* frame, const dsc* offsetDesc, SINT64 position) const;
+			SINT64 locateFrameGroups(thread_db* tdbb, Request* request, Impure* impure,
+				const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
+				bool startFrame) const;
 
 		private:
 			NestConst<SortNode> m_order;

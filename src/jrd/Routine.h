@@ -162,7 +162,7 @@ namespace Jrd
 
 		void afterDecrement(Jrd::thread_db*);
 		void releaseStatement(thread_db* tdbb);
-		//void remove(thread_db* tdbb);
+
 		virtual void releaseExternal()
 		{
 		}
@@ -188,6 +188,7 @@ namespace Jrd
 	public:
 		bool flReload;
 		bool compiling = false;		// Do not try to load routine's BLR in scan/reload during compile
+		bool flPrivate = false;		// Private routine in a package
 
 	public:
 		Jrd::UserId* invoker;		// Invoker ID

@@ -557,15 +557,6 @@ void Jrd::ProtectRelations::relLock::releaseLock(thread_db* tdbb, jrd_tra* trans
 	}
 }
 
-static inline constexpr UCHAR nonnull_validation_blr[] =
-{
-	blr_version5,
-	blr_not,
-	blr_missing,
-	blr_fid, 0, 0, 0,
-	blr_eoc
-};
-
 static void check_dependencies(thread_db* tdbb,
 							   const QualifiedName& dpdo_name,
 							   const MetaName& field_name,
@@ -2426,8 +2417,7 @@ static bool drop_package_body(thread_db* tdbb, SSHORT phase, DeferredWork* work,
 	case 6:
 		return true;
 	case 7:
-		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::ERASED | CacheFlag::NOSCAN);
-		fb_assert(routine);
+		routine = MetadataCache::getPerm<Cached::Package>(tdbb, work->dfw_id, CacheFlag::NOSCAN);
 		if (routine)
 			routine->commit(tdbb);
 	}
@@ -3697,8 +3687,6 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				}
 			}
 		}
-		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_index_expression);
-		MET_delete_dependencies(tdbb, work->getQualifiedName(), obj_index_condition);
 		return true;
 
 	case 5:
@@ -5025,8 +5013,8 @@ static bool delete_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 		BTR_delete_index(tdbb, &window, indexId, false);
 	}
 
-	auto* idp = relation->getPermanent()->eraseIndex(tdbb, indexId);
-	idp->commit(tdbb);
+	if (auto* idp = relation->getPermanent()->eraseIndex(tdbb, indexId))
+		idp->commit(tdbb);
 
 	return false;
 }
@@ -5112,112 +5100,13 @@ static bool make_ltt_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	}
 
 	const auto attachment = tdbb->getAttachment();
-	const auto dbb = tdbb->getDatabase();
-	auto& attPool = *attachment->att_pool;
 
 	const auto lttPtr = attachment->att_local_temporary_tables.get(work->getQualifiedName());
 	if (!lttPtr)
 		return false;
 
 	const auto ltt = *lttPtr;
-
-	if (!ltt->hasPendingChanges)
-		return false;
-
-	fb_assert(ltt->pendingFields.hasData());
-
-	jrd_rel* relation = ltt->relation;
-	const bool isAlter = (relation != nullptr);
-
-	if (!isAlter)
-	{
-		fb_assert(ltt->relationId != 0);
-
-		// CREATE: Create a new relation
-		AutoPtr<Cached::Relation> permRel = FB_NEW_POOL(attPool) Cached::Relation(tdbb, attPool, ltt->relationId);
-		permRel->rel_name = ltt->name;
-		permRel->rel_flags = REL_sql_relation | REL_temp_ltt |
-			(ltt->relationType == rel_temp_preserve ? REL_temp_conn : REL_temp_tran);
-
-		// Initialize base pages for LTT to act as a connection-wide blueprint for indexes.
-		permRel->getBasePages()->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
-		DPM_create_relation_pages(tdbb, permRel, permRel->getBasePages());
-
-		// create versioned part
-		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, permRel);
-		permRel->storeObject(tdbb, versRel, 0);
-		permRel.release();
-		relation = versRel.release();
-
-		relation->rel_current_fmt = 1;
-
-		// Note: LTTs should NOT be registered in mdc_relations.
-		// They are stored only in att_local_temporary_tables and accessed via getXxx<Cached::Relation>.
-	}
-	else
-	{
-		// ALTER: Bump the format version
-		if (relation->rel_current_fmt == MAX_TABLE_VERSIONS)
-			RelationNode::raiseTooManyVersionsError(obj_relation, work->getQualifiedName());
-
-		relation->rel_current_fmt++;
-	}
-
-	// Update the fields vector - extend if needed for new fields
-	relation->rel_fields = vec<jrd_fld*>::newVector(attPool, relation->rel_fields, ltt->pendingFields.getCount());
-
-	TemporaryField* tempFields = nullptr;
-
-	for (FB_SIZE_T i = 0; i < ltt->pendingFields.getCount(); ++i)
-	{
-		const auto& lttField = ltt->pendingFields[i];
-		auto& relField = (*relation->rel_fields)[i];
-
-		if (!relField)
-			relField = FB_NEW_POOL(attPool) jrd_fld(attPool);
-
-		relField->fld_name = lttField.name;
-		relField->fld_not_null = nullptr;
-		relField->fld_validation = nullptr;
-
-		if (lttField.notNullFlag)
-		{
-			Jrd::ContextPoolHolder context(tdbb, &attPool);
-			relField->fld_not_null = PAR_validation_blr(tdbb, &relation->getName().schema, relation->getPermanent(),
-				nonnull_validation_blr, sizeof(nonnull_validation_blr), NULL, NULL, 0);
-		}
-
-		const auto tempField = FB_NEW_POOL(attPool) TemporaryField();
-		tempField->tfb_next = tempFields;
-		tempFields = tempField;
-
-		tempField->tfb_desc = lttField.desc;
-
-		// For text types, set the text type from charset/collation
-		if (DTYPE_IS_TEXT(lttField.desc.dsc_dtype))
-		{
-			const auto charSetId = lttField.charSetId.value_or(CS_NONE);
-			const auto collationId = lttField.collationId.value_or(COLLATE_NONE);
-			tempField->tfb_desc.setTextType(TTypeId(charSetId, collationId));
-		}
-
-		memset(&tempField->tfb_default, 0, sizeof(tempField->tfb_default));
-		tempField->tfb_id = lttField.id;
-	}
-
-	relation->rel_current_format = RelationNode::makeFormat(tdbb, transaction,
-		relation->getPermanent(), &relation->rel_current_fmt, tempFields);
-
-	// Store the runtime relation in the LTT (for CREATE case)
-	ltt->relation = relation;
-
-	// Commit the changes: copy pendingFields to fields
-	ltt->fields = ltt->pendingFields;
-	ltt->pendingFields.clear();
-	ltt->hasPendingChanges = false;
-
-	// Now invalidate DSQL cache at commit time
-	// METD_drop_relation(transaction, work->getQualifiedName());
+	RelationNode::makeLttVersion(tdbb, transaction, ltt, true);
 
 	return false;
 }

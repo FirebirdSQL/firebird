@@ -106,7 +106,7 @@ Objectives:
 
       The following expressions are valid only if all operands are constants:
       1) Arithmetic operations, unary plus/minus
-      2) Bool As Value
+      2) Bool As Value, Boolean compare operations
       3) CAST, COALESCE, CONCATENATE, DECODE, EXTRACT, UPPER/LOWER, SUBSTRING
       4) BIT_LENGTH, CHAR_LENGTH, CHARACTER_LENGTH, OCTET_LENGTH
       5) TRIM, LTRIM, RTRIM, BTRIM

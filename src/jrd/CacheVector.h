@@ -368,7 +368,7 @@ public:
 			// NOCOMMIT cleared to avoid extra ASTs
 			newFlags &= ~CacheFlag::NOCOMMIT;
 
-			// Handle front & back of MDC
+			// Handle front & back versions of MDC
 			VersionIncr incr(tdbb);
 
 			// And finally make object version world-visible
@@ -741,11 +741,12 @@ public:
 				throw;
 			}
 
+			if (! (fl & CacheFlag::NOCOMMIT))
+				newEntry->commit(tdbb, traNum, TransactionNumber::next(tdbb));
+
 			if (ListEntry<Versioned>::insert(list, newEntry, nullptr))
 			{
 				auto sr = newEntry->scan(tdbb, fl, this);
-				if (! (fl & CacheFlag::NOCOMMIT))
-					newEntry->commit(tdbb, traNum, TransactionNumber::next(tdbb));
 
 				switch (sr)
 				{
@@ -1040,21 +1041,17 @@ public:
 
 	StoredElement* getData(thread_db* tdbb, MetaId id, ObjectBase::Flag fl)
 	{
+		StoredElement* data = nullptr;
+
 		SubArrayData* ptr = getDataPointer(id);
-
 		if (ptr)
-		{
-			StoredElement* rc = ptr->load(atomics::memory_order_relaxed);
-			if (rc && rc->getEntry(tdbb, TransactionNumber::current(tdbb), fl))
-				return rc;
-		}
+			data = ptr->load(atomics::memory_order_relaxed);
 
-		if (fl & CacheFlag::AUTOCREATE)
-		{
-			StoredElement* data = ensurePermanent(tdbb, id);
-			data->makeObject(tdbb, fl);
+		if ((!data) && (fl & CacheFlag::AUTOCREATE))
+			data = ensurePermanent(tdbb, id);
+
+		if (data && data->getEntry(tdbb, TransactionNumber::current(tdbb), fl))
 			return data;
-		}
 
 		return nullptr;
 	}
@@ -1218,6 +1215,7 @@ public:
 				if (ptr)
 				{
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
+
 					if (listEntry && ptr->getName() == name)
 					{
 						if (!(fl & CacheFlag::ERASED))

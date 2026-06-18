@@ -1732,6 +1732,40 @@ void afterInsertCollation(thread_db* tdbb, Record* record)
 	populateCache<f_coll_cs_id, Cached::CharSet, CSetId>(tdbb, record);
 }
 
+void afterDeleteIndex(thread_db* tdbb, Record* record)
+{
+	const auto transaction = tdbb->getTransaction();
+	dsc desc;
+
+	MetaName schemaName, packageName, indexName;
+
+	if (!EVL_field(nullptr, record, f_idx_schema, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, schemaName);
+
+	if (EVL_field(nullptr, record, f_idx_pkg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, packageName);
+
+	if (!EVL_field(nullptr, record, f_idx_name, &desc))
+		return;
+	MOV_get_metaname(tdbb, &desc, indexName);
+
+	static const CachedRequestId requestCacheId;
+	AutoCacheRequest request(tdbb, requestCacheId);
+
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		DEP IN RDB$DEPENDENCIES
+		WITH DEP.RDB$DEPENDENT_SCHEMA_NAME EQ schemaName.c_str() AND
+			 DEP.RDB$PACKAGE_NAME EQUIV NULLIF(packageName.c_str(), '') AND
+			 DEP.RDB$DEPENDENT_NAME EQ indexName.c_str() AND
+			 (DEP.RDB$DEPENDENT_TYPE EQ obj_index_expression OR
+			  DEP.RDB$DEPENDENT_TYPE EQ obj_index_condition)
+	{
+		ERASE DEP;
+	}
+	END_FOR
+}
+
 }	// anonymous
 
 
@@ -1779,6 +1813,10 @@ void SystemTriggers::executeAfterDeleteTriggers(thread_db* tdbb, jrd_rel* relati
 
 		case rel_rfr:
 			afterDeleteRelationField(tdbb, record);
+			break;
+
+		case rel_indices:
+			afterDeleteIndex(tdbb, record);
 			break;
 	}
 }

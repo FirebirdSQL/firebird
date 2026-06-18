@@ -156,7 +156,7 @@ jobs:
     if: github.ref_type != 'tag'
     runs-on: ${{ matrix.os }}
     env:
-      VS_VERSION: 2022
+      VS_VERSION: 2026
 
     strategy:
       fail-fast: false
@@ -184,7 +184,7 @@ jobs:
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           set SEVENZIP=C:\Program Files\7-Zip
           set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6
@@ -293,7 +293,7 @@ jobs:
         if: ${{ runner.environment == 'github-hosted' }}
         shell: cmd
         run: |
-          rd "C:\Program Files\Microsoft Visual Studio\2022" /s /q
+          rd "C:\Program Files\Microsoft Visual Studio\18" /s /q
 
       - name: Checkout
         uses: actions/checkout@v4

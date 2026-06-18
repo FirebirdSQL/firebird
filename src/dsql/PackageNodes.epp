@@ -196,6 +196,9 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG != 0)
 			function.flags |= Signature::FLAG_DETERMINISTIC;
 
+		if (!FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0)
+			function.flags |= Signature::FLAG_AGGREGATE;
+
 		if (details)
 		{
 			FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE transaction)
@@ -550,7 +553,6 @@ ValueExprNode* PackageReferenceNode::pass2(thread_db* tdbb, CompilerScratch* csb
 
 dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 {
-	impure_value* outputImpure = request->getImpure<impure_value>(m_impureOffset);
 	switch (m_itemType)
 	{
 		case blr_pkg_reference_to_constant:
@@ -558,7 +560,12 @@ dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 			Package* package = m_package(request->getResources());
 			package->checkReload(tdbb);
 
-			EVL_make_value(tdbb, package->findConstant(m_fullName)->makeValue(tdbb, request), outputImpure);
+			dsc* constantDsc = package->findConstant(m_fullName)->makeValue(tdbb, request);
+			if (constantDsc == nullptr || constantDsc->isNull())
+				return nullptr;
+
+			impure_value* outputImpure = request->getImpure<impure_value>(m_impureOffset);
+			EVL_make_value(tdbb, constantDsc, outputImpure);
 			return &outputImpure->vlu_desc;
 		}
 	default:

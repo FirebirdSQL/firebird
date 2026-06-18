@@ -28,6 +28,8 @@
 #include "../jrd/idx_proto.h"
 #include "../jrd/vio_proto.h"
 #include "../jrd/LocalTemporaryTable.h"
+#include "../jrd/Relation.h"
+#include "../dsql/metd_proto.h"
 
 #include "Savepoint.h"
 
@@ -491,25 +493,43 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 					// LTT was created in this savepoint - remove it
 					if (const auto lttPtr = lttMap.get(item->name))
 					{
-						delete (*lttPtr)->relation;
+						if ((*lttPtr)->relation)
+						{
+							auto relation = (*lttPtr)->relation;
+							auto permanent = relation->getPermanent();
+
+							permanent->rollback(tdbb);
+							RelationPermanent::destroy(tdbb, permanent);
+							delete permanent;
+						}
+
 						delete *lttPtr;
 						lttMap.remove(item->name);
 					}
+
+					METD_drop_relation(m_transaction, item->name);
 					break;
 
 				case LttUndoItem::LTT_UNDO_ALTER:
 					// LTT was altered - restore original state
 					if (const auto lttPtr = lttMap.get(item->name))
 					{
+						if ((*lttPtr)->relation && (*lttPtr)->relation != item->original->relation)
+							(*lttPtr)->relation->getPermanent()->rollback(tdbb);
+
 						delete *lttPtr;
 						*lttPtr = item->original.release();
 					}
+
+					METD_drop_relation(m_transaction, item->name);
 					break;
 
 				case LttUndoItem::LTT_UNDO_DROP:
 					// LTT was dropped - restore it
 					if (!lttMap.exist(item->name))
 						lttMap.put(item->name, item->original.release());
+
+					METD_drop_relation(m_transaction, item->name);
 					break;
 			}
 

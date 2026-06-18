@@ -3020,6 +3020,8 @@ void write_functions()
 				put_int32(att_function_legacy_flag, X.RDB$LEGACY_FLAG);
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				put_int32(att_function_deterministic_flag, X.RDB$DETERMINISTIC_FLAG);
+			if (!X.RDB$AGGREGATE_FLAG.NULL)
+				put_int32(att_function_aggregate_flag, X.RDB$AGGREGATE_FLAG);
 			if (!X.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_function_sql_security, X.RDB$SQL_SECURITY);
 

@@ -906,6 +906,7 @@ public:
 	};
 
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	freePages(thread_db* tdbb);

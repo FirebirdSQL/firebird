@@ -457,6 +457,10 @@ public:
 	MetaName name;
 	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
+	NestConst<StmtNode> aggregateOnStartBody;
+	NestConst<StmtNode> aggregateOnAccumulateBody;
+	NestConst<StmtNode> aggregateOnGroupBody;
+	NestConst<StmtNode> aggregateOnFinishBody;
 	DsqlCompilerScratch* blockScratch = nullptr;
 	dsql_udf* dsqlFunction = nullptr;
 	const UCHAR* blrStart = nullptr;
@@ -464,6 +468,7 @@ public:
 	Function* routine = nullptr;
 	ULONG blrLength = 0;
 	bool dsqlDeterministic = false;
+	bool aggregate = false;
 };
 
 
@@ -883,6 +888,7 @@ public:
 	}
 
 public:
+	ExitNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 };

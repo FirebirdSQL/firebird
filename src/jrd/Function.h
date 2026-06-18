@@ -48,13 +48,7 @@ namespace Jrd
 		explicit Function(Cached::Function* perm)
 			: Routine(perm->getPool()),
 			  cachedFunction(perm),
-			  fun_entrypoint(NULL),
-			  fun_inputs(0),
-			  fun_return_arg(0),
-			  fun_temp_length(0),
-			  fun_exception_message(perm->getPool()),
-			  fun_deterministic(false),
-			  fun_external(NULL)
+			  fun_exception_message(perm->getPool())
 		{
 		}
 
@@ -62,13 +56,7 @@ namespace Jrd
 		Function(MemoryPool& p)
 			: Routine(p),
 			  cachedFunction(FB_NEW_POOL(p) Cached::Function(p)),
-			  fun_entrypoint(NULL),
-			  fun_inputs(0),
-			  fun_return_arg(0),
-			  fun_temp_length(0),
-			  fun_exception_message(p),
-			  fun_deterministic(false),
-			  fun_external(NULL)
+			  fun_exception_message(p)
 		{
 		}
 
@@ -99,26 +87,32 @@ namespace Jrd
 		~Function() override
 		{
 			delete fun_external;
+			delete fun_external_aggregate;
 		}
 
 	public:
 		void releaseExternal() override
 		{
 			delete fun_external;
-			fun_external = NULL;
+			fun_external = nullptr;
+			delete fun_external_aggregate;
+			fun_external_aggregate = nullptr;
 		}
 
 	public:
 		Cached::Function* cachedFunction;		// entry in the cache
-		int (*fun_entrypoint)();				// function entrypoint
-		USHORT fun_inputs;						// input arguments
-		USHORT fun_return_arg;					// return argument
-		ULONG fun_temp_length;					// temporary space required
+		int (*fun_entrypoint)() = nullptr;		// function entrypoint
+		USHORT fun_inputs = 0;					// input arguments
+		USHORT fun_return_arg = 0;				// return argument
+		ULONG fun_temp_length = 0;				// temporary space required
 
 		Firebird::string fun_exception_message;	// message containing the exception error message
 
-		bool fun_deterministic;
-		const ExtEngineManager::Function* fun_external;
+		bool fun_private = false;
+		bool fun_deterministic = false;
+		bool fun_aggregate = false;
+		const ExtEngineManager::Function* fun_external = nullptr;
+		const ExtEngineManager::AggregateFunction* fun_external_aggregate = nullptr;
 
 		Cached::Function* getPermanent() const noexcept override
 		{
