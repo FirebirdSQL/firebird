@@ -215,6 +215,17 @@ CommitNumber TipCache::cacheState(TraNumber number)
 	if (!block)
 		return CN_PREHISTORIC;
 
+	// Check if the block is not obsolete at the moment
+	oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+
+	if (number < oldest)
+	{
+		gds__log("Re-created obsolete TPC block %u. For transaction %" UQUADFORMAT ", oldest %." UQUADFORMAT,
+			blockNumber, number, oldest);
+
+		return CN_PREHISTORIC;
+	}
+
 	// Barrier is not needed here when we are reading state from cache
 	// because all callers of this function are prepared to handle
 	// slightly out-dated information and will take slow path if necessary
