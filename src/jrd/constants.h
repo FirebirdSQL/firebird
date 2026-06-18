@@ -483,4 +483,7 @@ const int WITH_ADMIN_OPTION = 2;
 // Max length of the string returned by ERROR_TEXT context variable
 const USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
 
+// In v6 this is in consts_pub.h, but in v5 this should better be private
+inline constexpr int isc_dpb_search_path = 105;
+
 #endif // JRD_CONSTANTS_H

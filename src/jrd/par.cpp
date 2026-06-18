@@ -182,7 +182,7 @@ DmlNode* PAR_blr(thread_db* tdbb, jrd_rel* relation, const UCHAR* blr, ULONG blr
 
 	csb->csb_blr_reader = BlrReader(blr, blr_length);
 
-	getBlrVersion(csb);
+	PAR_getBlrVersionAndFlags(csb);
 
 	csb->csb_node = PAR_parse_node(tdbb, csb);
 
@@ -231,7 +231,7 @@ BoolExprNode* PAR_validation_blr(thread_db* tdbb, jrd_rel* relation, const UCHAR
 
 	csb->csb_blr_reader = BlrReader(blr, blr_length);
 
-	getBlrVersion(csb);
+	PAR_getBlrVersionAndFlags(csb);
 
 	if (csb->csb_blr_reader.peekByte() == blr_stmt_expr)
 	{
@@ -693,7 +693,7 @@ CompilerScratch* PAR_parse(thread_db* tdbb, const UCHAR* blr, ULONG blr_length,
 	if (internal_flag)
 		csb->csb_g_flags |= csb_internal;
 
-	getBlrVersion(csb);
+	PAR_getBlrVersionAndFlags(csb);
 
 	if (dbginfo_length > 0)
 		DBG_parse_debug_info(dbginfo_length, dbginfo, *csb->csb_dbg_info);
@@ -821,28 +821,11 @@ ValueListNode* PAR_args(thread_db* tdbb, CompilerScratch* csb)
 }
 
 
-StreamType PAR_context(CompilerScratch* csb, SSHORT* context_ptr)
+// Introduce a new context into the system.
+// This involves assigning a stream and possibly extending the compile scratch block.
+StreamType par_context(CompilerScratch* csb, USHORT context)
 {
-/**************************************
- *
- *	P A R _ c o n t e x t
- *
- **************************************
- *
- * Functional description
- *	Introduce a new context into the system.  This involves
- *	assigning a stream and possibly extending the compile
- *	scratch block.
- *
- **************************************/
-
-	// CVC: Bottleneck
-	const SSHORT context = (unsigned int) csb->csb_blr_reader.getByte();
-
-	if (context_ptr)
-		*context_ptr = context;
-
-	CompilerScratch::csb_repeat* tail = CMP_csb_element(csb, context);
+	const auto tail = CMP_csb_element(csb, context);
 
 	if (tail->csb_flags & csb_used)
 	{
@@ -865,6 +848,28 @@ StreamType PAR_context(CompilerScratch* csb, SSHORT* context_ptr)
 	CMP_csb_element(csb, stream);
 
 	return stream;
+}
+
+// Introduce a new context into the system - byte version.
+StreamType PAR_context(CompilerScratch* csb, SSHORT* context_ptr)
+{
+	const USHORT context = csb->csb_blr_reader.getByte();
+
+	if (context_ptr)
+		*context_ptr = (SSHORT) context;
+
+	return par_context(csb, context);
+}
+
+// Introduce a new context into the system - word version.
+StreamType PAR_context2(CompilerScratch* csb, SSHORT* context_ptr)
+{
+	const USHORT context = csb->csb_blr_reader.getWord();
+
+	if (context_ptr)
+		*context_ptr = (SSHORT) context;
+
+	return par_context(csb, context);
 }
 
 
@@ -974,6 +979,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			case blr_relation:
 			case blr_rid:
 			case blr_relation2:
+			case blr_relation3:
 			case blr_rid2:
 				{
 					const auto relationNode = RelationSourceNode::parse(tdbb, csb, blrOp, false);
@@ -989,6 +995,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			case blr_procedure3:
 			case blr_procedure4:
 			case blr_subproc:
+			case blr_select_procedure:
 				{
 					const auto procedureNode = ProcedureSourceNode::parse(tdbb, csb, blrOp, false);
 					plan->recordSourceNode = procedureNode;
@@ -1281,6 +1288,7 @@ RecordSourceNode* PAR_parseRecordSource(thread_db* tdbb, CompilerScratch* csb)
 		case blr_procedure3:
 		case blr_procedure4:
 		case blr_subproc:
+		case blr_select_procedure:
 			return ProcedureSourceNode::parse(tdbb, csb, blrOp, true);
 
 		case blr_rse:
@@ -1292,6 +1300,7 @@ RecordSourceNode* PAR_parseRecordSource(thread_db* tdbb, CompilerScratch* csb)
 		case blr_rid:
 		case blr_relation2:
 		case blr_rid2:
+		case blr_relation3:
 			return RelationSourceNode::parse(tdbb, csb, blrOp, true);
 
 		case blr_local_table_id:
@@ -1631,10 +1640,12 @@ DmlNode* PAR_parse_node(thread_db* tdbb, CompilerScratch* csb)
 		case blr_procedure3:
 		case blr_procedure4:
 		case blr_subproc:
+		case blr_select_procedure:
 		case blr_relation:
 		case blr_rid:
 		case blr_relation2:
 		case blr_rid2:
+		case blr_relation3:
 		case blr_local_table_id:
 		case blr_union:
 		case blr_recurse:
@@ -1703,24 +1714,29 @@ void PAR_warning(const Arg::StatusVector& v)
 
 
 // Get the BLR version from the CSB stream and complain if it's unknown.
-static void getBlrVersion(CompilerScratch* csb)
+void PAR_getBlrVersionAndFlags(CompilerScratch* csb)
 {
-	const SSHORT version = csb->csb_blr_reader.getByte();
+	const SSHORT version = csb->csb_blr_reader.parseHeader();
+
 	switch (version)
 	{
-	case blr_version4:
-		csb->blrVersion = 4;
-		break;
-	case blr_version5:
-		csb->blrVersion = 5;
-		break;
-	//case blr_version6:
-	//	csb->blrVersion = 6;
-	//	break;
-	default:
-		PAR_error(csb, Arg::Gds(isc_metadata_corrupt) <<
-				   Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
-						Arg::Num(version));
+		case blr_version4:
+			csb->blrVersion = 4;
+			break;
+
+		case blr_version5:
+			csb->blrVersion = 5;
+			break;
+
+		//case blr_version6:
+		//	csb->blrVersion = 6;
+		//	break;
+
+		default:
+			PAR_error(csb,
+				Arg::Gds(isc_metadata_corrupt) <<
+				Arg::Gds(isc_wroblrver2) <<
+					Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) << Arg::Num(version));
 	}
 }
 
