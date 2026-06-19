@@ -127,9 +127,9 @@ namespace
 
 		const string& getAtomString()
 		{
-			const ULONG pos = static_cast<ULONG>(getInt32());
+			const auto pos = getInt32();
 
-			if (pos >= m_atoms.getCount())
+			if (pos < 0 || pos >= m_atoms.getCount())
 				malformed();
 
 			return m_atoms[pos];
@@ -137,9 +137,9 @@ namespace
 
 		const MetaString getAtomMetaName()
 		{
-			const ULONG pos = static_cast<ULONG>(getInt32());
+			const auto pos = getInt32();
 
-			if (pos >= m_atoms.getCount())
+			if (pos < 0 || pos >= m_atoms.getCount())
 				malformed();
 
 			return m_atoms[pos];
@@ -162,7 +162,7 @@ namespace
 		{
 			const auto length = getInt32();
 
-			if (length <= 0 || m_end - m_data < length)
+			if (length < 0 || m_end - m_data < length)
 				malformed();
 
 			const string str((const char*) m_data, length);
@@ -193,9 +193,6 @@ namespace
 		void defineAtom()
 		{
 			const auto length = getByte();
-			if (length <= 0)
-				malformed();
-
 			const auto ptr = getBinary(length);
 			const MetaString name((const char*) ptr, length);
 			m_atoms.add(name);
