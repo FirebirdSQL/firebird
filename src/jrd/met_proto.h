@@ -111,8 +111,8 @@ SLONG		MET_lookup_index_name(Jrd::thread_db*, const Firebird::MetaName&, SLONG*,
 bool		MET_lookup_partner(Jrd::thread_db*, Jrd::jrd_rel*, struct Jrd::index_desc*, const TEXT*);
 Jrd::jrd_prc*	MET_lookup_procedure(Jrd::thread_db*, const Firebird::QualifiedName&, bool);
 Jrd::jrd_prc*	MET_lookup_procedure_id(Jrd::thread_db*, USHORT, bool, bool, USHORT);
-Jrd::jrd_rel*	MET_lookup_relation(Jrd::thread_db*, const Firebird::MetaName&);
-Jrd::jrd_rel*	MET_lookup_relation_id(Jrd::thread_db*, SLONG, bool);
+Jrd::jrd_rel*	MET_lookup_relation(Jrd::thread_db*, const Firebird::MetaName&, bool return_deleting = true);
+Jrd::jrd_rel*	MET_lookup_relation_id(Jrd::thread_db*, SLONG, bool, bool return_deleting = true);
 Jrd::DmlNode*	MET_parse_blob(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::bid*, Jrd::CompilerScratch**,
 							   Jrd::JrdStatement**, bool, bool);
 void		MET_parse_sys_trigger(Jrd::thread_db*, Jrd::jrd_rel*);
