@@ -44,7 +44,6 @@ public:
 	BigInteger(unsigned int count, const unsigned char* bytes);
 	explicit BigInteger(const Firebird::UCharBuffer& val);
 	BigInteger(const BigInteger& val);
-//	BigInteger(int numBits, Random& r);
 	~BigInteger();
 
 	BigInteger& operator= (const BigInteger& val);
@@ -64,6 +63,8 @@ public:
 	BigInteger& operator%= (const BigInteger& val);
 
 	bool operator== (const BigInteger& val) const;
+	bool operator< (int val) const;
+	bool operator> (int val) const;
 
 	void getBytes(Firebird::UCharBuffer& bytes) const;
 	unsigned int length() const;

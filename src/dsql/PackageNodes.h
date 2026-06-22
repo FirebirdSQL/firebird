@@ -172,6 +172,7 @@ public:
 		dsql_fld* type = nullptr, ValueExprNode* value = nullptr, bool isPrivate = false)
 		: DdlNode(pool),
 		  name(pool, name),
+		  source(pool),
 		  m_type(type),
 		  m_expr(value),
 		  m_isPrivate(isPrivate)
@@ -209,6 +210,8 @@ protected:
 
 public:
 	QualifiedName name;
+	Firebird::string source;
+
 	bool create = false;
 	bool alter = false;
 

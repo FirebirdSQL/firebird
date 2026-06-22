@@ -271,6 +271,8 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			fun_return_arg = X.RDB$RETURN_ARGUMENT;
 			fun_temp_length = length;
 
+			flPrivate = !X.RDB$PRIVATE_FLAG.NULL && X.RDB$PRIVATE_FLAG != 0;
+
 			// Prepare the exception message to be used in case this function ever
 			// causes an exception.  This is done at this time to save us from preparing
 			// (thus allocating) this message every time the function is called.
@@ -280,10 +282,16 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				fun_deterministic = (X.RDB$DETERMINISTIC_FLAG != 0);
 
+			if (!X.RDB$PRIVATE_FLAG.NULL)
+				fun_private = (X.RDB$PRIVATE_FLAG != 0);
+
+			fun_aggregate = !X.RDB$AGGREGATE_FLAG.NULL && X.RDB$AGGREGATE_FLAG != 0;
+
 			setDefined(true);
 
 			fun_entrypoint = nullptr;
 			fun_external = nullptr;
+			fun_external_aggregate = nullptr;
 			setStatement(nullptr);
 
 			if (!X.RDB$MODULE_NAME.NULL && !X.RDB$ENTRYPOINT.NULL)
@@ -315,22 +323,46 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 					if (!X.RDB$ENGINE_NAME.NULL)
 					{
-						HalfStaticArray<UCHAR, 512> body;
+						Firebird::string functionSource;
 
 						if (!X.RDB$FUNCTION_SOURCE.NULL)
 						{
 							blb* const blob = blb::open(tdbb, metaTransaction, &X.RDB$FUNCTION_SOURCE);
-							const ULONG len = blob->BLB_get_data(tdbb,
-								body.getBuffer(blob->blb_length + 1), blob->blb_length + 1);
-							body[MIN(blob->blb_length, len)] = 0;
+							const ULONG len = blob->blb_length;
+							functionSource.resize(len);
+
+							if (len)
+							{
+								const ULONG actual = blob->BLB_get_data(tdbb,
+									reinterpret_cast<UCHAR*>(functionSource.begin()), len);
+								functionSource.resize(actual);
+							}
+						}
+
+						HalfStaticArray<UCHAR, 512> body;
+
+						if (functionSource.hasData())
+						{
+							const ULONG len = functionSource.length();
+							memcpy(body.getBuffer(len + 1), functionSource.c_str(), len);
+							body[len] = 0;
 						}
 						else
 							body.getBuffer(1)[0] = 0;
 
-						dbb->dbb_extManager->makeFunction(tdbb, csb, this, X.RDB$ENGINE_NAME,
-							(X.RDB$ENTRYPOINT.NULL ? "" : X.RDB$ENTRYPOINT), (char*) body.begin());
+						if (fun_aggregate)
+						{
+							dbb->dbb_extManager->makeAggregateFunction(tdbb, csb, this,
+								X.RDB$ENGINE_NAME,
+								(X.RDB$ENTRYPOINT.NULL ? "" : X.RDB$ENTRYPOINT), (char*) body.begin());
+						}
+						else
+						{
+							dbb->dbb_extManager->makeFunction(tdbb, csb, this, X.RDB$ENGINE_NAME,
+								(X.RDB$ENTRYPOINT.NULL ? "" : X.RDB$ENTRYPOINT), (char*) body.begin());
+						}
 
-						if (!fun_external)
+						if (!fun_external && !fun_external_aggregate)
 							setDefined(false);
 
 						setImplemented(true);
@@ -461,4 +493,3 @@ void Function::checkReload(thread_db* tdbb) const
 	if (flReload)
 		getPermanent()->reload(tdbb, 0);
 }
-

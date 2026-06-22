@@ -21,6 +21,9 @@
     <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\tests\DeindentedStrTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp">
       <Filter>source</Filter>
     </ClCompile>

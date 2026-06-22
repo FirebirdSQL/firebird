@@ -19,6 +19,7 @@
  */
 
 #include "firebird.h"
+#include "../dsql/AggNodes.h"
 #include "../dsql/DsqlCompilerScratch.h"
 #include "../dsql/DdlNodes.h"
 #include "../dsql/ExprNodes.h"
@@ -638,6 +639,198 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 	// Add slot for EOS.
 	appendUChar(blr_short);
 	appendUChar(0);
+}
+
+void DsqlCompilerScratch::compileAggregateFunction(Array<NestConst<ParameterClause> >& parameters,
+	ParameterClause* returnParameter, NestConst<LocalDeclarationsNode>& localDeclList,
+	NestConst<StmtNode>& aggregateOnStartBody, NestConst<StmtNode>& aggregateOnAccumulateBody,
+	NestConst<StmtNode>& aggregateOnGroupBody, NestConst<StmtNode>& aggregateOnFinishBody,
+	bool reserveInitialReturnVarNumber)
+{
+	beginDebug();
+	getBlrData().clear();
+
+	if (isVersion4())
+		appendUChar(blr_version4);
+	else
+		appendUChar(blr_version5);
+
+	appendUChar(blr_begin);
+
+	appendUChar(blr_message);
+	appendUChar(CustomAggNode::MESSAGE_ACCUMULATE);
+	appendUShort(2 * parameters.getCount());
+
+	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+	{
+		ParameterClause* parameter = parameters[i];
+		putDebugArgument(fb_dbg_arg_input, i, parameter->name.c_str());
+		putType(parameter->type, true);
+
+		// Add slot for null flag (parameter2).
+		appendUChar(blr_short);
+		appendUChar(0);
+
+		makeVariable(parameter->type, parameter->name.c_str(),
+			dsql_var::TYPE_INPUT, CustomAggNode::MESSAGE_ACCUMULATE, (USHORT) (2 * i), 0);
+	}
+
+	appendUChar(blr_message);
+	appendUChar(CustomAggNode::MESSAGE_OUTPUT);
+	appendUShort(3);
+
+	putDebugArgument(fb_dbg_arg_output, 0, returnParameter->name.c_str());
+	putType(returnParameter->type, true);
+
+	// Add slot for null flag (parameter2).
+	appendUChar(blr_short);
+	appendUChar(0);
+
+	makeVariable(returnParameter->type, returnParameter->name.c_str(),
+		dsql_var::TYPE_OUTPUT, CustomAggNode::MESSAGE_OUTPUT, 0, 0);
+
+	if (reserveInitialReturnVarNumber)
+		reserveInitialVarNumbers(1);
+
+	// Add slot for EOS.
+	appendUChar(blr_short);
+	appendUChar(0);
+
+	const auto genEmptyMessage = [this](UCHAR number)
+	{
+		appendUChar(blr_message);
+		appendUChar(number);
+		appendUShort(0);
+	};
+
+	genEmptyMessage(CustomAggNode::MESSAGE_START);
+	genEmptyMessage(CustomAggNode::MESSAGE_GROUP);
+	genEmptyMessage(CustomAggNode::MESSAGE_FINISH);
+
+	appendUChar(blr_begin);
+
+	for (const auto variable : outputVariables)
+		putLocalVariable(variable);
+
+	setPsql(true);
+
+	if (localDeclList)
+	{
+		localDeclList = localDeclList->dsqlPass(this);
+		localDeclList->genBlr(this);
+	}
+
+	loopLevel = 0;
+	cursorNumber = 0;
+
+	const auto compileBody = [this](NestConst<StmtNode>& body, AggregateFunctionPhase phase)
+	{
+		if (!body)
+			return;
+
+		AutoSetRestore<std::optional<AggregateFunctionPhase>> autoAggregatePhase(
+			&aggregatePhase, phase);
+		body = body->dsqlPass(this);
+	};
+
+	compileBody(aggregateOnStartBody, AggregateFunctionPhase::START);
+	compileBody(aggregateOnAccumulateBody, AggregateFunctionPhase::ACCUMULATE);
+	compileBody(aggregateOnGroupBody, AggregateFunctionPhase::GROUP);
+	compileBody(aggregateOnFinishBody, AggregateFunctionPhase::FINISH);
+
+	putOuterMaps();
+	GEN_hidden_variables(this);
+
+	const auto genReceive = [this, &parameters](UCHAR message, StmtNode* body, bool validateInputs)
+	{
+		appendUChar(blr_receive);
+		appendUChar(message);
+		appendUChar(blr_begin);
+
+		if (validateInputs)
+		{
+			for (unsigned i = 0; i < parameters.getCount(); ++i)
+			{
+				ParameterClause* parameter = parameters[i];
+
+				if (parameter->type->fullDomain || parameter->type->notNull)
+				{
+					// ASF: To validate input parameters we need only to read its value.
+					// Assigning it to null is an easy way to do this.
+					appendUChar(blr_assignment);
+					appendUChar(blr_parameter2);
+					appendUChar(CustomAggNode::MESSAGE_ACCUMULATE);
+					appendUShort(i * 2);
+					appendUShort(i * 2 + 1);
+					appendUChar(blr_null);
+				}
+			}
+		}
+
+		if (body)
+		{
+			appendUChar(blr_label);
+			appendUChar(0);
+			appendUChar(blr_begin);
+
+			AutoSetRestore<bool> autoAggregatePhaseReturn(&aggregatePhaseReturn, true);
+			AutoSetRestore<USHORT> autoAggregatePhaseLabel(&aggregatePhaseLabel, 0);
+
+			body->genBlr(this);
+
+			appendUChar(blr_end);
+		}
+
+		appendUChar(blr_send);
+		appendUChar(CustomAggNode::MESSAGE_OUTPUT);
+		appendUChar(blr_begin);
+
+		for (const auto variable : outputVariables)
+		{
+			appendUChar(blr_assignment);
+			appendUChar(blr_variable);
+			appendUShort(variable->number);
+			appendUChar(blr_parameter2);
+			appendUChar(variable->msgNumber);
+			appendUShort(variable->msgItem);
+			appendUShort(variable->msgItem + 1);
+		}
+
+		appendUChar(blr_continue_loop);
+		appendUChar(1);
+		appendUChar(blr_end);
+		appendUChar(blr_end);
+	};
+
+	appendUChar(blr_label);
+	appendUChar(1);
+	appendUChar(blr_loop);
+	appendUChar(blr_begin);
+
+	for (const auto variable : outputVariables)
+	{
+		appendUChar(blr_assignment);
+		appendUChar(blr_null);
+		appendUChar(blr_variable);
+		appendUShort(variable->number);
+	}
+
+	appendUChar(blr_select);
+
+	genReceive(CustomAggNode::MESSAGE_START, aggregateOnStartBody, false);
+	genReceive(CustomAggNode::MESSAGE_ACCUMULATE, aggregateOnAccumulateBody, true);
+	genReceive(CustomAggNode::MESSAGE_GROUP, aggregateOnGroupBody, false);
+	genReceive(CustomAggNode::MESSAGE_FINISH, aggregateOnFinishBody, false);
+
+	appendUChar(blr_end);
+	appendUChar(blr_end);
+
+	getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
+	appendUChar(blr_end);
+	appendUChar(blr_end);
+	appendUChar(blr_eoc);
+
+	endDebug();
 }
 
 void DsqlCompilerScratch::addCTEs(WithClause* withClause)

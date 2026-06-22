@@ -29,6 +29,79 @@
 
 namespace Jrd {
 
+class dsql_udf;
+
+class CustomAggNode final : public AggNode
+{
+public:
+	// These are stored in BLR
+	inline static constexpr UCHAR MESSAGE_ACCUMULATE = 0;
+	inline static constexpr UCHAR MESSAGE_OUTPUT = 1;
+	inline static constexpr UCHAR MESSAGE_START = 2;
+	inline static constexpr UCHAR MESSAGE_GROUP = 3;
+	inline static constexpr UCHAR MESSAGE_FINISH = 4;
+
+private:
+	struct Impure
+	{
+		Request* funcRequest = nullptr;
+		Firebird::IExternalAggregateInstance* externalAggregate = nullptr;
+		bool active = false;
+	};
+
+public:
+	explicit CustomAggNode(MemoryPool& pool, const QualifiedName& aName = {},
+		ValueListNode* aArgs = nullptr);
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	unsigned getCapabilities() const override
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		AggNode::getChildren(holder, dsql);
+		holder.add(args);
+		holder.add(dsqlFilter);
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	void setParameterName(dsql_par* parameter) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggFinish(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) override;
+
+private:
+	bool invoke(thread_db* tdbb, Request* request, AggregateFunctionPhase phase) const;
+	void cleanupRequest(thread_db* tdbb, Impure* impure) const;
+
+public:
+	QualifiedName name;
+	NestConst<ValueListNode> args;
+	NestConst<BoolExprNode> dsqlFilter;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
+	SubRoutine<Function> function;
+	dsql_udf* dsqlFunction = nullptr;
+
+private:
+	ULONG inputImpure = 0;
+	ULONG outputImpure = 0;
+	ULONG customImpure = 0;
+};
+
 
 class AnyValueAggNode final : public AggNode
 {

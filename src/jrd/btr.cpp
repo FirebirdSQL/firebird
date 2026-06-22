@@ -82,6 +82,8 @@ namespace
 {
 	constexpr unsigned MAX_LEVELS = 16;
 
+	constexpr MetaId SKIP_IN_PROGRESS = ~MetaId(0);
+
 	constexpr size_t OVERSIZE = (MAX_PAGE_SIZE + BTN_PAGE_SIZE + MAX_KEY + sizeof(SLONG) - 1) / sizeof(SLONG);
 
 	// END_LEVEL (~0) is choosen here as a unknown/none value, because it's
@@ -692,12 +694,15 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	const bool descending = (m_index->idx_flags & idx_descending);
 
-	auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id, CacheFlag::AUTOCREATE);
-	if (skipNewFormat && idp && (idp->getState() == Ods::irt_drop) && idp->getFormat() &&
-		(record->getFormat()->fmt_version > idp->getFormat()))
+	if (skipNewFormat)
 	{
-		// tried to insert fresh formatted record into old index - skip this
-		return idx_e_skip;
+		auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id, CacheFlag::AUTOCREATE);
+		if (idp && (idp->getState() == Ods::irt_drop) && idp->getFormat() &&
+			(record->getFormat()->fmt_version > idp->getFormat()))
+		{
+			// tried to insert fresh formatted record into old index - skip this
+			return idx_e_skip;
+		}
 	}
 
 	try
@@ -1387,6 +1392,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	idx->idx_condition_node = nullptr;
 	idx->idx_condition_statement = nullptr;
 	idx->idx_fraction = 1.0;
+	idx->idx_state = irt_desc->getState();
 
 	// pick up field ids and type descriptions for each of the fields
 	const UCHAR* ptr = (UCHAR*) root + irt_desc->irt_desc;
@@ -2528,6 +2534,9 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		return false;
 
 	case irt_in_progress:
+		if (indexId == SKIP_IN_PROGRESS)
+			return false;
+
 		// index creation - should wait to know what to do
 		CCH_RELEASE(tdbb, window);
 
@@ -2551,14 +2560,16 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		default:
 			return false;
 		}
-		CCH_RELEASE(tdbb, window);
+		if (indexId != SKIP_IN_PROGRESS)
+			CCH_RELEASE(tdbb, window);
 		break;
 
 	case irt_drop:
 		// drop index when OAT >= irtTrans
 		if (oldestActive < irtTrans)
 			return false;
-		CCH_RELEASE(tdbb, window);
+		if (indexId != SKIP_IN_PROGRESS)
+			CCH_RELEASE(tdbb, window);
 		break;
 
 	default:
@@ -2904,12 +2915,12 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	const Database* const dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	jrd_rel* const relation = creation.relation;
+	auto* const rel = getPermanent(creation.relation);
 	index_desc* const idx = creation.index;
 	jrd_tra* const transaction = creation.transaction;
 
-	fb_assert(relation);
-	RelationPages* const relPages = relation->getPages(tdbb);
+	fb_assert(rel);
+	RelationPages* const relPages = rel->getPages(tdbb);
 	fb_assert(relPages && relPages->rel_index_root);
 
 	fb_assert(transaction);
@@ -2918,14 +2929,15 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	// Leave the root pointer null for the time being.
 	// Index id for temporary index instance of global temporary table is
 	// already assigned, use it.
-	const bool use_idx_id = (relPages->rel_instance_id != 0) ||
-							(relation->getPermanent()->rel_flags & REL_temp_ltt);
+	const bool use_idx_id = (relPages->rel_instance_id != 0) || (rel->rel_flags & REL_temp_ltt);
 	if (use_idx_id)
 		fb_assert(idx->idx_id <= dbb->dbb_max_idx);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	fb_assert(window.win_bdb);
 	CCH_MARK(tdbb, &window);
+	fb_assert(window.win_bdb);
 
 	// check that we create no more indexes than will fit on a single root page
 	if (root->irt_count > dbb->dbb_max_idx)
@@ -2950,42 +2962,67 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	index_root_page::irt_repeat* slot = NULL;
 	index_root_page::irt_repeat* end = NULL;
 
-	for (int retry = 0; retry < 2; ++retry)
+	for (int retry = 0; retry < 3; ++retry)
 	{
 		len = idx->idx_count * sizeof(irtd);
 
 		space = dbb->dbb_page_size;
 		slot = NULL;
 
-		end = root->irt_rpt + root->irt_count;
-		for (index_root_page::irt_repeat* root_idx = root->irt_rpt; root_idx < end; root_idx++)
+		for (MetaId id = 0; id < root->irt_count; ++id)
 		{
+			index_root_page::irt_repeat* root_idx = &root->irt_rpt[id];
+			if (root_idx->isUsed())
+			{
+				if (checkIrtRepeat(tdbb, root_idx, rel, &window, retry == 1 ? id : SKIP_IN_PROGRESS))
+				{
+					fb_assert(window.win_bdb);
+
+					switch(modifyIrtRepeat(tdbb, root_idx, rel, &window, id))
+					{
+					case ModifyIrtRepeatValue::Skip:
+					case ModifyIrtRepeatValue::Modified:
+						fb_assert(window.win_bdb);
+						break;
+
+					case ModifyIrtRepeatValue::Relock:
+					case ModifyIrtRepeatValue::Deleted:
+						root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+						fb_assert(window.win_bdb);
+						root_idx = &root->irt_rpt[id];
+						break;
+					}
+				}
+			}
+
 			if (root_idx->isUsed())
 				space = MIN(space, root_idx->irt_desc);
 
 			if (!root_idx->isUsed() && !slot)
 			{
-				if (!use_idx_id || (root_idx - root->irt_rpt) == idx->idx_id)
+				if (!use_idx_id || (id == idx->idx_id))
 					slot = root_idx;
 			}
 		}
 
 		space -= len;
 		desc = (UCHAR*) root + space;
+		end = &root->irt_rpt[root->irt_count];
 
 		// Verify that there is enough room on the Index root page.
 		if (desc < (UCHAR*) (end + 1))
 		{
 			// Not enough room:  Attempt to compress the index root page and try again.
 			// If this is the second try already, then there really is no more room.
-			if (retry)
+			if (retry == 2)
 			{
 				CCH_RELEASE(tdbb, &window);
 				ERR_post(Arg::Gds(isc_no_meta_update) <<
 						 Arg::Gds(isc_index_root_page_full));
 			}
 
-			compress_root(tdbb, root);
+			if (retry == 1)
+				compress_root(tdbb, root);
 		}
 		else
 			break;

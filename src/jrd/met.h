@@ -426,7 +426,7 @@ public:
 	static C* getPerm(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 	{
 		auto& vector = Vector<C>::get(getCache(tdbb));
-		return vector.getData(tdbb, id, flags);;
+		return vector.getData(tdbb, id, flags);
 	}
 
 	template <typename C>

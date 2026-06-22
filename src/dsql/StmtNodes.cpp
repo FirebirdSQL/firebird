@@ -25,6 +25,7 @@
 #include "../common/classes/BaseStream.h"
 #include "../common/classes/MsgPrint.h"
 #include "../common/classes/VaryStr.h"
+#include "../dsql/AggNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -1887,11 +1888,13 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		if (type != SUB_ROUTINE_TYPE_PSQL)
 			PAR_syntax_error(csb, "sub function type");
 
-		UCHAR deterministic = reader.getByte();
-		if (deterministic != 0 && deterministic != 1)
-			PAR_syntax_error(csb, "sub function deterministic");
+		UCHAR flags = reader.getByte();
+		if (flags & ~(blr_subfunc_decl_flag_deterministic | blr_subfunc_decl_flag_aggregate))
+			PAR_syntax_error(csb, "sub function flags");
 
-		subFunc->fun_deterministic = deterministic == 1;
+		subFunc->fun_deterministic = flags & blr_subfunc_decl_flag_deterministic;
+		subFunc->fun_aggregate = flags & blr_subfunc_decl_flag_aggregate;
+		node->aggregate = subFunc->fun_aggregate;
 
 		USHORT defaultCount = 0;
 		parseParameters(tdbb, pool, subCsb, subFunc->getInputFields(), &defaultCount);
@@ -1944,7 +1947,8 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 bool DeclareSubFuncNode::isForwardDecl() const
 {
-	return !dsqlBlock || !dsqlBlock->body;
+	return !dsqlBlock || (!aggregate && !dsqlBlock->body) ||
+		(aggregate && !aggregateOnAccumulateBody && !aggregateOnGroupBody);
 }
 
 void DeclareSubFuncNode::parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
@@ -1987,7 +1991,12 @@ string DeclareSubFuncNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, dsqlDeterministic);
+	NODE_PRINT(printer, aggregate);
 	NODE_PRINT(printer, dsqlBlock);
+	NODE_PRINT(printer, aggregateOnStartBody);
+	NODE_PRINT(printer, aggregateOnAccumulateBody);
+	NODE_PRINT(printer, aggregateOnGroupBody);
+	NODE_PRINT(printer, aggregateOnFinishBody);
 
 	return "DeclareSubFuncNode";
 }
@@ -2006,6 +2015,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	dsqlFunction->udf_flags = UDF_subfunc;
 	dsqlFunction->udf_name.object = name;
+	dsqlFunction->udf_aggregate = aggregate;
 
 	fb_assert(dsqlBlock->returns.getCount() == 1);
 	auto returnType = dsqlBlock->returns[0]->type;
@@ -2019,6 +2029,9 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	if (dsqlDeterministic)
 		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
+
+	if (aggregate)
+		dsqlSignature.flags |= Signature::FLAG_AGGREGATE;
 
 	SignatureParameter sigRet(pool);
 	sigRet.type = 1;
@@ -2114,7 +2127,20 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 		DsqlCompilerScratch::FLAG_SUB_ROUTINE |
 		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL);
 
-	dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
+	if (!aggregate)
+		dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
+	else
+	{
+		blockScratch->compileAggregateFunction(
+			dsqlBlock->parameters,
+			dsqlBlock->returns[0],
+			dsqlBlock->localDeclList,
+			aggregateOnStartBody,
+			aggregateOnAccumulateBody,
+			aggregateOnGroupBody,
+			aggregateOnFinishBody,
+			true);
+	}
 
 	return this;
 }
@@ -2124,13 +2150,16 @@ void DeclareSubFuncNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (isForwardDecl())
 		return;
 
-	GEN_statement(blockScratch, dsqlBlock);
+	if (!aggregate)
+		GEN_statement(blockScratch, dsqlBlock);
 
 	dsqlScratch->appendUChar(blr_subfunc_decl);
 	dsqlScratch->appendNullString(name.c_str());
 
 	dsqlScratch->appendUChar(SUB_ROUTINE_TYPE_PSQL);
-	dsqlScratch->appendUChar(dsqlDeterministic ? 1 : 0);
+	dsqlScratch->appendUChar(
+		(dsqlDeterministic ? blr_subfunc_decl_flag_deterministic : 0) |
+		(aggregate ? blr_subfunc_decl_flag_aggregate : 0));
 
 	genParameters(dsqlScratch, dsqlBlock->parameters);
 	genParameters(dsqlScratch, dsqlBlock->returns);
@@ -2643,11 +2672,12 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	auto relation = dsqlRelation;
 
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
-
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
 	node->dsqlCursorName = dsqlCursorName;
 	node->dsqlSkipLocked = dsqlSkipLocked;
+
+	if (dsqlCursorName.hasData())
+		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -6086,6 +6116,17 @@ void ExceptionNode::setError(thread_db* tdbb) const
 //--------------------
 
 
+ExitNode* ExitNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	if (dsqlScratch->aggregatePhase == AggregateFunctionPhase::GROUP)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+			Arg::Gds(isc_dsql_agg_exit_group));
+	}
+
+	return this;
+}
+
 string ExitNode::internalPrint(NodePrinter& printer) const
 {
 	StmtNode::internalPrint(printer);
@@ -6094,8 +6135,22 @@ string ExitNode::internalPrint(NodePrinter& printer) const
 
 void ExitNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_leave);
-	dsqlScratch->appendUChar(0);
+	if (dsqlScratch->aggregatePhaseReturn)
+	{
+		dsqlScratch->appendUChar(blr_begin);
+
+		if (hasLineColumn)
+			dsqlScratch->putDebugSrcInfo(line, column);
+
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar((UCHAR) dsqlScratch->aggregatePhaseLabel);
+		dsqlScratch->appendUChar(blr_end);
+	}
+	else
+	{
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar(0);
+	}
 }
 
 
@@ -8228,7 +8283,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
 	fb_assert(relation);
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
+
+	if (dsqlCursorName.hasData())
+		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
 
 	NestConst<ValueExprNode>* ptr;
 
@@ -10492,6 +10549,16 @@ ReturnNode* ReturnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Arg::Str("RETURN"));
 	}
 
+	const auto aggregatePhase = dsqlScratch->aggregatePhase;
+
+	if (aggregatePhase == AggregateFunctionPhase::START ||
+		aggregatePhase == AggregateFunctionPhase::ACCUMULATE ||
+		aggregatePhase == AggregateFunctionPhase::FINISH)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+			Arg::Gds(isc_dsql_agg_return));
+	}
+
 	ReturnNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ReturnNode(dsqlScratch->getPool());
 	node->value = doDsqlPass(dsqlScratch, value);
 
@@ -10518,9 +10585,20 @@ void ReturnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	GEN_expr(dsqlScratch, value);
 	dsqlScratch->appendUChar(blr_variable);
 	dsqlScratch->appendUShort(0);
-	dsqlScratch->genReturn();
-	dsqlScratch->appendUChar(blr_leave);
-	dsqlScratch->appendUChar(0);
+
+	if (dsqlScratch->aggregatePhaseReturn)
+		dsqlScratch->appendUChar(blr_leave);
+	else
+		dsqlScratch->genReturn();
+
+	if (dsqlScratch->aggregatePhaseReturn)
+		dsqlScratch->appendUChar((UCHAR) dsqlScratch->aggregatePhaseLabel);
+	else
+	{
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar(0);
+	}
+
 	dsqlScratch->appendUChar(blr_end);
 }
 
@@ -11085,8 +11163,6 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	auto& pool = dsqlScratch->getPool();
 
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
-
 	if (!dsqlScratch->isPsql())
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT;
 
@@ -11100,7 +11176,6 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->returning = returning;
 
 	const auto& relationName = relation->dsqlName;
-	auto baseName = relationName;
 	bool needSavePoint;
 
 	// Build the INSERT node.
@@ -11116,6 +11191,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	DEV_BLKCHK(context, dsql_type_ctx);
 
 	const auto ctxRelation = context->ctx_relation;
+	auto baseName = relationName;
 	auto fieldsCopy = fields;
 
 	// If a field list isn't present, build one using the same rules of INSERT INTO table VALUES ...

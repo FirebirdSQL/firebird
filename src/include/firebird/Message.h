@@ -161,11 +161,11 @@
 	builder->setLength(status, index, sizeof(FB_BOOLEAN));
 
 #define FB__META_FB_DATE	\
-	builder->setType(status, index, SQL_DATE);	\
+	builder->setType(status, index, SQL_TYPE_DATE);	\
 	builder->setLength(status, index, sizeof(::Firebird::FbDate));
 
 #define FB__META_FB_TIME	\
-	builder->setType(status, index, SQL_TIME);	\
+	builder->setType(status, index, SQL_TYPE_TIME);	\
 	builder->setLength(status, index, sizeof(::Firebird::FbTime));
 
 #define FB__META_FB_TIME_TZ	\

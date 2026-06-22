@@ -245,13 +245,17 @@ Input parameters:
 
 # Snapshot tables
 
-The profiler schema, snapshot tables, views and sequence are automatically created in the first usage of the profiler.
+The profiler schema, snapshot objects, views and sequence are automatically created in the first usage of the profiler.
 
-They are owned by the database owner, with usage/read/write permissions for the RDB$PROFILER role, granted by default to `PUBLIC`.
+The snapshot objects are updatable views owned by the database owner, with usage/read/write permissions for the RDB$PROFILER role, granted by default to `PUBLIC`.
+The underlying storage tables are private to the profiler schema.
+
+Users without the `PROFILE_ANY_ATTACHMENT` system privilege can see and modify only their own profile data.
+Users with `PROFILE_ANY_ATTACHMENT` can see and modify profile data from all users.
 
 When a session is deleted, the related data in other profiler snapshot tables are automatically deleted too through foreign keys with `DELETE CASCADE` option.
 
-Below is the list of tables that stores profile data.
+Below is the list of snapshot views that expose profile data.
 
 ## Table `PLG$PROF_SESSIONS`
 
@@ -265,6 +269,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_STATEMENTS`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `PARENT_STATEMENT_ID` type `BIGINT` - Parent statement ID - related to sub routines
@@ -277,6 +282,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_CURSORS`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `CURSOR_ID` type `INTEGER` - Cursor ID
@@ -287,6 +293,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_RECORD_SOURCES`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `CURSOR_ID` type `INTEGER` - Cursor ID
@@ -298,6 +305,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_REQUESTS`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `REQUEST_ID` type `BIGINT` - Request ID
@@ -310,6 +318,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_PSQL_STATS`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `REQUEST_ID` type `BIGINT` - Request ID
@@ -323,6 +332,7 @@ Below is the list of tables that stores profile data.
 
 ## Table `PLG$PROF_RECORD_SOURCE_STATS`
 
+ - `USER_NAME` type `CHAR(63) CHARACTER SET UTF8` - User name
  - `PROFILE_ID` type `BIGINT` - Profile session ID
  - `STATEMENT_ID` type `BIGINT` - Statement ID
  - `REQUEST_ID` type `BIGINT` - Request ID

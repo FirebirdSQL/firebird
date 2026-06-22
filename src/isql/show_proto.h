@@ -40,6 +40,8 @@ processing_state	SHOW_grants(const std::optional<Firebird::QualifiedMetaString>&
 void	SHOW_grant_roles(const SCHAR*, bool*, const TEXT*);
 void	SHOW_print_metadata_text_blob(FILE*, ISC_QUAD*, bool escape_squote = false,
 	bool avoid_end_in_single_line_comment = false);
+void	SHOW_print_function_source_blob(FILE*, ISC_QUAD*, bool escape_squote = false,
+	bool avoid_end_in_single_line_comment = false);
 processing_state	SHOW_metadata(const FrontendParser::AnyShowNode& node);
 void	SHOW_read_owner() noexcept;
 const Firebird::string SHOW_trigger_action(SINT64);

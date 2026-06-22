@@ -29,7 +29,7 @@ END
         <column_definition> [, ...]
     )
     [ON COMMIT {DELETE | PRESERVE} ROWS]
-    [{[UNIQUE] [ASC | DESC] INDEX <index_name> (<column_name>)}...]
+    [[UNIQUE] [ASC | DESC] INDEX <index_name> (<column_name>) ...]
 ```
 
 ```sql

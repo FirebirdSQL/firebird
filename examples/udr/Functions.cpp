@@ -153,6 +153,53 @@ FB_UDR_END_FUNCTION
 
 
 /***
+create aggregate function sum_positive (
+    n integer
+) returns integer
+    external name 'udrcpp_example!sum_positive'
+    engine udr;
+***/
+FB_UDR_BEGIN_AGGREGATE_FUNCTION(sum_positive)
+	FB_UDR_MESSAGE(InMessage,
+		(FB_INTEGER, n)
+	);
+
+	FB_UDR_MESSAGE(OutMessage,
+		(FB_INTEGER, result)
+	);
+
+	FB_UDR_CONSTRUCTOR
+		// , total(0)
+	{
+	}
+
+	FB_UDR_START_AGGREGATE_FUNCTION
+	{
+		// total = 0;
+	}
+
+	FB_UDR_ACCUMULATE_AGGREGATE_FUNCTION
+	{
+		if (!in->nNull && in->n > 0)
+			total += in->n;
+	}
+
+	FB_UDR_GROUP_AGGREGATE_FUNCTION
+	{
+		out->resultNull = FB_FALSE;
+		out->result = total;
+	}
+
+	FB_UDR_FINISH_AGGREGATE_FUNCTION
+	{
+		// total = 0;
+	}
+
+	ISC_LONG total = 0;
+FB_UDR_END_AGGREGATE_FUNCTION
+
+
+/***
 create function mult (
     a decfloat(34) not null,
     b decfloat(34) not null

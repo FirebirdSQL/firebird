@@ -100,7 +100,8 @@ struct index_desc
 	Statement* idx_expression_statement;	// stored statement for expression evaluation
 	BoolExprNode* idx_condition_node;		// node tree for index condition
 	Statement* idx_condition_statement;		// stored statement for index condition
-	float idx_fraction;						// fraction of keys included in the index
+	float	idx_fraction;					// fraction of keys included in the index
+	UCHAR	idx_state;						// state from irt_rpt
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{

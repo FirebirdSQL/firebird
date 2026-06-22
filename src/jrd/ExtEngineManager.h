@@ -57,6 +57,7 @@ class Function;
 class DeclareVariableNode;
 class StmtNode;
 class ValueExprNode;
+struct CallerName;
 struct impure_value;
 struct record_param;
 
@@ -270,6 +271,46 @@ public:
 		std::optional<ULONG> extOutputImpureOffset;
 	};
 
+	class AggregateFunction final : public ExtRoutine
+	{
+	private:
+		struct Impl;
+
+	public:
+		AggregateFunction(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+			ExtEngineManager* aExtManager,
+			Firebird::IExternalEngine* aEngine,
+			RoutineMetadata* aMetadata,
+			Firebird::IExternalAggregateFunction* aFunction,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extInputParameters,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extOutputParameters,
+			const Jrd::Function* aUdf);
+		~AggregateFunction() override;
+
+		Firebird::IExternalAggregateInstance* newInstance(thread_db* tdbb) const;
+		void disposeInstance(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+
+		void start(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+		void accumulate(thread_db* tdbb, Request* request, Firebird::IExternalAggregateInstance* aggregate,
+			UCHAR* inMsg) const;
+		bool group(thread_db* tdbb, Request* request, Firebird::IExternalAggregateInstance* aggregate,
+			UCHAR* outMsg) const;
+		void finish(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+
+	private:
+		static CallerName getCallerName(const Jrd::Function* udf);
+
+		void validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const;
+		void initializeOutput(thread_db* tdbb, Request* request, UCHAR* outMsg) const;
+
+	private:
+		Firebird::IExternalAggregateFunction* function;
+		const Jrd::Function* udf;
+		Firebird::AutoPtr<Format> extInputFormat;
+		Firebird::AutoPtr<Format> extOutputFormat;
+		Firebird::AutoPtr<Impl> impl;
+	};
+
 	class ResultSet;
 
 	class Procedure final : public ExtRoutine
@@ -346,6 +387,9 @@ public:
 	void closeAttachment(thread_db* tdbb, Attachment* attachment);
 
 	void makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
+		const MetaName& engine, const Firebird::string& entryPoint,
+		const Firebird::string& body);
+	void makeAggregateFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
 		const MetaName& engine, const Firebird::string& entryPoint,
 		const Firebird::string& body);
 	void makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_prc* prc,

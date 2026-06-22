@@ -2821,6 +2821,8 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			prc_type = P.RDB$PROCEDURE_TYPE.NULL ?
 				prc_legacy : (prc_t) P.RDB$PROCEDURE_TYPE;
 
+			flPrivate = !P.RDB$PRIVATE_FLAG.NULL && P.RDB$PRIVATE_FLAG != 0;
+
 			if (external || !P.RDB$PROCEDURE_BLR.NULL)
 			{
 				MemoryPool* const csb_pool = dbb->createPool();
@@ -3460,6 +3462,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			case RSR_field_not_null:
 				field->fld_not_null = PAR_validation_blr(tdbb, &getName().schema, rel_perm, p, length,
 					csb, NULL, csb_validation);
+				field->fld_flags |= FLD_not_null;
 				break;
 
 			case RSR_security_class:
@@ -5535,6 +5538,25 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 						WITH FUN.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 FUN.RDB$FUNCTION_NAME EQ name.object.c_str() AND
 							 FUN.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
+					{
+						found = true;
+						break;
+					}
+					END_FOR
+
+					break;
+				}
+
+				case obj_package_constant:
+				{
+					static const CachedRequestId consatntHandleId;
+					handle.reset(tdbb, consatntHandleId);
+
+					FOR (REQUEST_HANDLE handle)
+						CONST IN RDB$CONSTANTS
+						WITH CONST.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+							 CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
+							 CONST.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
 					{
 						found = true;
 						break;

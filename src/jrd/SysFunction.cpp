@@ -6366,6 +6366,10 @@ dsc* evlReplace(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 
 				if (!finished)
 				{
+					const ULONG available = static_cast<ULONG>(
+						(impure->vlu_desc.dsc_address + impure->vlu_desc.dsc_length) - dstPos);
+					if (lengths[2] > available)
+						status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_imp_exc));
 					memcpy(dstPos, addresses[2], lengths[2]);
 					dstPos += lengths[2];
 				}

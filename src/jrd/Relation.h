@@ -497,7 +497,7 @@ private:
 	RelationPermanent*	idp_relation;
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
-	UCHAR				idp_state = 0;
+	UCHAR				idp_state = 0;		// Makes sense only for expression/conditional indices
 	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
@@ -910,6 +910,7 @@ public:
 	};
 
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	freePages(thread_db* tdbb);
@@ -1233,6 +1234,7 @@ inline void GCLock::Exclusive::release()
 // Field block, one for each field in a scanned relation
 
 inline constexpr USHORT FLD_parse_computed = 0x0001;	// computed expression is being parsed
+inline constexpr USHORT FLD_not_null =		 0x0002;	// field cannot be NULL (dups fld_not_null for virtual rel)
 
 class jrd_fld : public pool_alloc<type_fld>
 {

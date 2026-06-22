@@ -196,6 +196,9 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG != 0)
 			function.flags |= Signature::FLAG_DETERMINISTIC;
 
+		if (!FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0)
+			function.flags |= Signature::FLAG_AGGREGATE;
+
 		if (details)
 		{
 			FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE transaction)
@@ -479,10 +482,11 @@ void PackageReferenceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transaction,
 	const QualifiedName& fullName, bool* isPrivate)
 {
-	fb_assert(fullName.schema.hasData());
-
 	if (fullName.package.isEmpty() || fullName.object.isEmpty())
 		return false;
+
+	// Delay this assert check due to invalid constructs such as "OLD.*" that may be passed to this function.
+	fb_assert(fullName.schema.hasData());
 
 	auto* package = MetadataCache::getVersioned<Cached::Package>(tdbb, fullName.getSchemaAndPackage(), CacheFlag::AUTOCREATE);
 	if (package == nullptr)
@@ -549,7 +553,6 @@ ValueExprNode* PackageReferenceNode::pass2(thread_db* tdbb, CompilerScratch* csb
 
 dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 {
-	impure_value* outputImpure = request->getImpure<impure_value>(m_impureOffset);
 	switch (m_itemType)
 	{
 		case blr_pkg_reference_to_constant:
@@ -557,7 +560,12 @@ dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 			Package* package = m_package(request->getResources());
 			package->checkReload(tdbb);
 
-			EVL_make_value(tdbb, package->findConstant(m_fullName)->makeValue(tdbb, request), outputImpure);
+			dsc* constantDsc = package->findConstant(m_fullName)->makeValue(tdbb, request);
+			if (constantDsc == nullptr || constantDsc->isNull())
+				return nullptr;
+
+			impure_value* outputImpure = request->getImpure<impure_value>(m_impureOffset);
+			EVL_make_value(tdbb, constantDsc, outputImpure);
 			return &outputImpure->vlu_desc;
 		}
 	default:
@@ -576,6 +584,7 @@ string CreatePackageConstantNode::internalPrint(NodePrinter& printer) const
 	DdlNode::internalPrint(printer);
 
 	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, source);
 	NODE_PRINT(printer, m_type);
 	NODE_PRINT(printer, m_expr);
 	NODE_PRINT(printer, m_isPrivate);
@@ -586,6 +595,8 @@ string CreatePackageConstantNode::internalPrint(NodePrinter& printer) const
 DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->qualifyNewName(name);
+
+	source.ltrim("\n\r\t ");
 
 	m_expr = m_expr->dsqlPass(dsqlScratch);
 
@@ -676,7 +687,7 @@ void CreatePackageConstantNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 		CONST.RDB$PRIVATE_FLAG = m_isPrivate;
 
-		CONST.RDB$CONSTANT_SOURCE.NULL = TRUE;
+		attachment->storeMetaDataBlob(tdbb, transaction, &CONST.RDB$CONSTANT_SOURCE, source);
 	}
 	END_STORE
 }

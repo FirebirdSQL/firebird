@@ -74,7 +74,15 @@ class Thread
 public:
 #ifdef WIN_NT
 	typedef HANDLE Handle;
-	constexpr static Handle INVALID_HANDLE = INVALID_HANDLE_VALUE;
+	/*
+	 * "constexpr" not applicable for Handle INVALID_HANDLE = INVALID_HANDLE_VALUE
+	 *  because in Windows INVALID_HANDLE_VALUE define in handleapi.h as:
+	 * "#define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)"
+	 *  but C-cast & reinterpret_cast<>() are prohibited in constexpr.
+	 *  The Clang++ compiler does not consider it`s as a constant expression and raise compilation error:
+	 * "constexpr variable 'INVALID_HANDLE' must be initialized by a constant expression"
+	 */
+	inline static const Handle INVALID_HANDLE = INVALID_HANDLE_VALUE;
 #endif
 #ifdef USE_POSIX_THREADS
 	typedef pthread_t Handle;

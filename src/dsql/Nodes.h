@@ -729,6 +729,7 @@ public:
 	// SubstringSimilarNode
 	// TrimNode
 	// ValueIfNode
+	// BoolExprNode
 	//
 	// Special:
 	// SysFuncCallNode - see SysFunction::functions
@@ -816,6 +817,11 @@ public:
 	Kind getKind() override
 	{
 		return KIND_BOOLEAN;
+	}
+
+	virtual bool constant() const override
+	{
+		return isChildrenConstant();
 	}
 
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override

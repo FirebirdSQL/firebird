@@ -33,6 +33,7 @@
 #include "../common/gdsassert.h"
 #include <string.h>
 #include <functional>
+#include <initializer_list>
 
 namespace Firebird {
 
@@ -42,6 +43,10 @@ class Vector
 {
 public:
 	Vector() : count(0) {}
+	Vector(const std::initializer_list<T> items) : count(0)
+	{
+		push(items.begin(), items.size());
+	}
 
 	T& operator[](FB_SIZE_T index) noexcept
 	{

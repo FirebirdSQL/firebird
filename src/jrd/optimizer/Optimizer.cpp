@@ -3713,7 +3713,7 @@ ValueExprNode* Optimizer::optimizeLikeSimilar(ComparativeBoolNode* cmpNode)
 					specialCharFound = true;
 				}
 
-				break;
+				continue;
 			}
 
 			if (!specialCharFound)

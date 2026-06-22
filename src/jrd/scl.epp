@@ -464,8 +464,8 @@ void SCL_check_index(thread_db* tdbb, const QualifiedName& index_name, UCHAR ind
 
 	// No security to check for if the index is not yet created
 
-    if (index_name.object.isEmpty() && index_id < 1)
-        return;
+	if (index_name.object.isEmpty() && index_id < 1)
+		return;
 
 	QualifiedName reln_name, aux_idx_name;
 	auto idx_name_ptr = &index_name;

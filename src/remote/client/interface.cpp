@@ -150,7 +150,7 @@ namespace {
 	{
 	public:
 		UseStandardBuffer(cstring& toSave)
-			: UsePreallocatedBuffer(toSave,0, nullptr)
+			: UsePreallocatedBuffer(toSave, 0, nullptr)
 		{ }
 
 		~UseStandardBuffer()
@@ -7856,6 +7856,8 @@ static void secureAuthentication(ClntAuthBlock& cBlock, rem_port* port)
 	{
 		LocalStatus ls;
 		CheckStatusWrapper st(&ls);
+
+		UseStandardBuffer guard(packet->p_resp.p_resp_data);
 		authReceiveResponse(true, cBlock, port, rdb, &st, packet, true);
 
 		if (st.getState() & IStatus::STATE_ERRORS)
@@ -8799,37 +8801,6 @@ static void authFillParametersBlock(ClntAuthBlock& cBlock, ClumpletWriter& dpb,
 	}
 }
 
-#ifdef NOT_USED_OR_REPLACED
-static CSTRING* REMOTE_dup_string(const CSTRING* from)
-{
-	if (from && from->cstr_length)
-	{
-		CSTRING* rc = FB_NEW_POOL(*getDefaultMemoryPool()) CSTRING;
-		memset(rc, 0, sizeof(CSTRING));
-		rc->cstr_length = from->cstr_length;
-		rc->cstr_allocated = rc->cstr_length;
-		rc->cstr_address = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[rc->cstr_length];
-		memcpy(rc->cstr_address, from->cstr_address, rc->cstr_length);
-		return rc;
-	}
-
-	return NULL;
-}
-
-static void REMOTE_free_string(CSTRING* tmp)
-{
-	if (tmp)
-	{
-		if (tmp->cstr_address)
-		{
-			fb_assert(tmp->cstr_allocated >= tmp->cstr_length);
-			delete[] tmp->cstr_address;
-		}
-		delete tmp;
-	}
-}
-#endif // NOT_USED_OR_REPLACED
-
 static void authReceiveResponse(bool havePacket, ClntAuthBlock& cBlock, rem_port* port,
 	Rdb* rdb, IStatus* status, PACKET* packet, bool checkKeys)
 {
@@ -8997,6 +8968,8 @@ static bool init(CheckStatusWrapper* status, ClntAuthBlock& cBlock, rem_port* po
 			attach->p_atch_file.cstr_address = reinterpret_cast<const UCHAR*>(file_name.c_str());
 			attach->p_atch_dpb.cstr_length = (ULONG) dpb.getBufferLength();
 			attach->p_atch_dpb.cstr_address = dpb.getBuffer();
+
+			UseStandardBuffer guard(packet->p_resp.p_resp_data);
 
 			send_packet(port, packet);
 			try
@@ -10320,9 +10293,9 @@ void ClntAuthBlock::loadClnt(ClumpletWriter& dpb, const ParametersSet* tags)
 
 void ClntAuthBlock::extractDataFromPluginTo(CSTRING* to)
 {
+	to->free();
 	to->cstr_length = (ULONG) dataFromPlugin.getCount();
 	to->cstr_address = dataFromPlugin.begin();
-	to->cstr_allocated = 0;
 }
 
 void ClntAuthBlock::extractDataFromPluginTo(P_AUTH_CONT* to)
@@ -10331,8 +10304,7 @@ void ClntAuthBlock::extractDataFromPluginTo(P_AUTH_CONT* to)
 
 	PathName pluginName = getPluginName();
 	to->p_name.cstr_length = (ULONG) pluginName.length();
-	to->p_name.cstr_address = FB_NEW_POOL(*getDefaultMemoryPool()) UCHAR[to->p_name.cstr_length];
-	to->p_name.cstr_allocated = to->p_name.cstr_length;
+	to->p_name.alloc();
 	memcpy(to->p_name.cstr_address, pluginName.c_str(), to->p_name.cstr_length);
 
 	HANDSHAKE_DEBUG(fprintf(stderr, "Cli: extractDataFromPluginTo: added plugin name (%d) and data (%d)\n",
@@ -10340,9 +10312,9 @@ void ClntAuthBlock::extractDataFromPluginTo(P_AUTH_CONT* to)
 
 	if (firstTime)
 	{
+		to->p_list.free();
 		to->p_list.cstr_length = (ULONG) pluginList.length();
 		to->p_list.cstr_address = (UCHAR*) pluginList.c_str();
-		to->p_list.cstr_allocated = 0;
 		HANDSHAKE_DEBUG(fprintf(stderr,
 			"Cli: extractDataFromPluginTo: added plugin list (%d len) to packet\n",
 			to->p_list.cstr_length));
@@ -10424,25 +10396,20 @@ ICryptKey* ClntAuthBlock::newKey(CheckStatusWrapper* status)
 
 void ClntAuthBlock::tryNewKeys(rem_port* port)
 {
-	for (unsigned k = cryptKeys.getCount(); k--; )
+	while (cryptKeys.hasData())
 	{
-		if (port->tryNewKey(cryptKeys[k]))
-		{
-			releaseKeys(k);
-			cryptKeys.clear();
-			return;
-		}
+		auto* key = cryptKeys.pop();
+		if (port->tryNewKey(key))
+			break;
 	}
 
-	cryptKeys.clear();
+	releaseKeys();
 }
 
-void ClntAuthBlock::releaseKeys(unsigned from)
+void ClntAuthBlock::releaseKeys()
 {
-	while (from < cryptKeys.getCount())
-	{
-		delete cryptKeys[from++];
-	}
+	while (cryptKeys.hasData())
+		delete cryptKeys.pop();
 }
 
 void ClntAuthBlock::createCryptCallback(ICryptKeyCallback** callback)

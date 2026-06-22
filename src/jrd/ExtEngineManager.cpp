@@ -1017,6 +1017,315 @@ void ExtEngineManager::Function::validateParameters(thread_db* tdbb, UCHAR* msg,
 //---------------------
 
 
+struct ExtEngineManager::AggregateFunction::Impl final
+{
+	Impl(MemoryPool& pool)
+		: inValidations(pool),
+		  outValidations(pool),
+		  outDefaults(pool)
+	{
+	}
+
+	Array<NonPooledPair<Item, ItemInfo*>> inValidations;
+	Array<NonPooledPair<Item, ItemInfo*>> outValidations;
+	Array<unsigned> outDefaults;
+};
+
+
+ExtEngineManager::AggregateFunction::AggregateFunction(thread_db* tdbb, MemoryPool& pool,
+		CompilerScratch* csb, ExtEngineManager* aExtManager, IExternalEngine* aEngine,
+		RoutineMetadata* aMetadata, IExternalAggregateFunction* aFunction,
+		RefPtr<IMessageMetadata> extInputParameters, RefPtr<IMessageMetadata> extOutputParameters,
+		const Jrd::Function* aUdf)
+	: ExtRoutine(tdbb, aExtManager, aEngine, aMetadata),
+	  function(aFunction),
+	  udf(aUdf),
+	  impl(FB_NEW_POOL(pool) Impl(pool))
+{
+	extInputFormat.reset(Routine::createFormat(pool, extInputParameters, false));
+	extOutputFormat.reset(Routine::createFormat(pool, extOutputParameters, true));
+
+	const bool useExtInMessage = udf->getInputFields().hasData() &&
+		!sameFormats(extInputFormat, udf->getInputFormat());
+
+	if (!useExtInMessage)
+		extInputFormat.reset();
+
+	const bool useExtOutMessage = udf->getOutputFields().hasData() &&
+		!sameFormats(extOutputFormat, udf->getOutputFormat());
+
+	if (!useExtOutMessage)
+		extOutputFormat.reset();
+
+	for (const auto param : udf->getInputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.object.c_str()))
+		{
+			const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+			const bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(entry, fieldInfo);
+			}
+
+			itemInfo.field = entry;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 0, (param->prm_number - 1) * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->inValidations.ensureCapacity(udf->getInputFields().getCount() - (param->prm_number - 1));
+			impl->inValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
+
+	for (const auto param : udf->getOutputFields())
+	{
+		FieldInfo fieldInfo;
+		ItemInfo itemInfo;
+
+		if (param->prm_mechanism != prm_mech_type_of &&
+			!fb_utils::implicit_domain(param->prm_field_source.object.c_str()))
+		{
+			const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+			const bool exist = csb->csb_map_field_info.get(entry, fieldInfo);
+
+			if (!exist)
+			{
+				dsc dummyDesc;
+				MET_get_domain(tdbb, csb->csb_pool, param->prm_field_source, &dummyDesc, &fieldInfo);
+				csb->csb_map_field_info.put(entry, fieldInfo);
+			}
+
+			if (fieldInfo.defaultValue)
+			{
+				impl->outDefaults.ensureCapacity(udf->getOutputFields().getCount() - param->prm_number);
+				impl->outDefaults.push(param->prm_number);
+			}
+
+			itemInfo.field = entry;
+			itemInfo.nullable = fieldInfo.nullable;
+			itemInfo.fullDomain = true;
+		}
+
+		itemInfo.name = param->prm_name;
+
+		if (!param->prm_nullable)
+			itemInfo.nullable = false;
+
+		if (itemInfo.isSpecial())
+		{
+			Item item(Item::TYPE_PARAMETER, 1, param->prm_number * 2);
+			csb->csb_map_item_info.put(item, itemInfo);
+
+			impl->outValidations.ensureCapacity(udf->getOutputFields().getCount());
+			impl->outValidations.push({item, CMP_pass2_validation(tdbb, csb, item)});
+		}
+	}
+}
+
+ExtEngineManager::AggregateFunction::~AggregateFunction()
+{
+	function->dispose();
+}
+
+CallerName ExtEngineManager::AggregateFunction::getCallerName(const Jrd::Function* udf)
+{
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
+
+	return udf->getName().package.isEmpty() ?
+		CallerName(obj_udf, udf->getName(), userName) :
+		CallerName(obj_package_header,
+			QualifiedName(udf->getName().package, udf->getName().schema), userName);
+}
+
+IExternalAggregateInstance* ExtEngineManager::AggregateFunction::newInstance(thread_db* tdbb) const
+{
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, function,
+		getCallerName(udf));
+
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+	FbLocalStatus status;
+	IExternalAggregateInstance* aggregate = function->newInstance(&status, attInfo->context);
+	status.check();
+
+	if (!aggregate)
+		status_exception::raise(Arg::Gds(isc_eem_func_not_returned) << udf->getName().toQuotedString());
+
+	return aggregate;
+}
+
+void ExtEngineManager::AggregateFunction::disposeInstance(thread_db* tdbb,
+	IExternalAggregateInstance* aggregate) const
+{
+	if (!aggregate)
+		return;
+
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+	aggregate->dispose();
+}
+
+void ExtEngineManager::AggregateFunction::start(thread_db* tdbb, IExternalAggregateInstance* aggregate) const
+{
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, function,
+		getCallerName(udf));
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+	FbLocalStatus status;
+	aggregate->start(&status, attInfo->context);
+	status.check();
+}
+
+void ExtEngineManager::AggregateFunction::accumulate(thread_db* tdbb, Request* request,
+	IExternalAggregateInstance* aggregate, UCHAR* inMsg) const
+{
+	validateParameters(tdbb, inMsg, true);
+
+	Array<UCHAR> extIn;
+
+	if (extInputFormat)
+	{
+		const auto extInMsg = extIn.getBuffer(extInputFormat->fmt_length);
+		copyMessage(tdbb, udf->getInputFormat(), inMsg, extInputFormat, extInMsg);
+		inMsg = extInMsg;
+	}
+
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, function,
+		getCallerName(udf));
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+	FbLocalStatus status;
+	aggregate->accumulate(&status, attInfo->context, inMsg);
+	status.check();
+}
+
+bool ExtEngineManager::AggregateFunction::group(thread_db* tdbb, Request* request,
+	IExternalAggregateInstance* aggregate, UCHAR* outMsg) const
+{
+	initializeOutput(tdbb, request, outMsg);
+
+	Array<UCHAR> extOut;
+	const auto extOutMsg = extOutputFormat ? extOut.getBuffer(extOutputFormat->fmt_length) : nullptr;
+
+	if (extOutMsg)
+		copyMessage(tdbb, udf->getOutputFormat(), outMsg, extOutputFormat, extOutMsg);
+
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, function,
+		getCallerName(udf));
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+	FbLocalStatus status;
+	aggregate->group(&status, attInfo->context, extOutMsg ? extOutMsg : outMsg);
+	status.check();
+
+	if (extOutMsg)
+		copyMessage(tdbb, extOutputFormat, extOutMsg, udf->getOutputFormat(), outMsg);
+
+	validateParameters(tdbb, outMsg, false);
+
+	const auto& nullDesc = udf->getOutputFormat()->fmt_desc[1];
+	return !*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address);
+}
+
+void ExtEngineManager::AggregateFunction::finish(thread_db* tdbb, IExternalAggregateInstance* aggregate) const
+{
+	EngineAttachmentInfo* attInfo = extManager->getEngineAttachment(tdbb, engine.get());
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, function,
+		getCallerName(udf));
+	EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+	FbLocalStatus status;
+	aggregate->finish(&status, attInfo->context);
+	status.check();
+}
+
+void ExtEngineManager::AggregateFunction::initializeOutput(thread_db* tdbb, Request* request,
+	UCHAR* outMsg) const
+{
+	fb_assert(udf->getOutputFormat()->fmt_desc.getCount() / 2 == udf->getOutputFields().getCount());
+
+	memset(outMsg, FB_TRUE, udf->getOutputFormat()->fmt_length);
+
+	for (const auto paramNumber : impl->outDefaults)
+	{
+		const auto param = udf->getOutputFields()[paramNumber];
+		const QualifiedNameMetaNamePair entry(param->prm_field_source, {});
+		FieldInfo fieldInfo;
+
+		dsc* defaultValue = nullptr;
+
+		if (request->getStatement()->mapFieldInfo.get(entry, fieldInfo) && fieldInfo.defaultValue)
+			defaultValue = EVL_expr(tdbb, request, fieldInfo.defaultValue);
+
+		const auto& paramDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2];
+		const auto& nullDesc = udf->getOutputFormat()->fmt_desc[paramNumber * 2 + 1];
+
+		fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+		if (defaultValue)
+		{
+			dsc desc = paramDesc;
+			desc.dsc_address = outMsg + (IPTR) desc.dsc_address;
+			MOV_move(tdbb, defaultValue, &desc);
+
+			*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_FALSE;
+		}
+		else
+			*(SSHORT*) (outMsg + (IPTR) nullDesc.dsc_address) = FB_TRUE;
+	}
+}
+
+void ExtEngineManager::AggregateFunction::validateParameters(thread_db* tdbb, UCHAR* msg,
+	bool input) const
+{
+	const auto format = input ? udf->getInputFormat() : udf->getOutputFormat();
+	const auto& validations = input ? impl->inValidations : impl->outValidations;
+	const UCHAR messageNumber = input ? 0 : 1;
+
+	for (const auto& [item, itemInfo] : validations)
+	{
+		const unsigned paramNumber = item.index / 2;
+		const auto& paramDesc = format->fmt_desc[paramNumber * 2];
+		const auto& nullDesc = format->fmt_desc[paramNumber * 2 + 1];
+
+		fb_assert(nullDesc.dsc_dtype == dtype_short);
+
+		dsc value = paramDesc;
+		value.dsc_address = msg + (IPTR) value.dsc_address;
+
+		const bool isNull = *(SSHORT*) (msg + (IPTR) nullDesc.dsc_address);
+
+		EVL_validate(tdbb, Item(Item::TYPE_PARAMETER, messageNumber, paramNumber), itemInfo,
+			&value, isNull);
+	}
+}
+
+
+//---------------------
+
+
 ExtEngineManager::Procedure::Procedure(thread_db* tdbb, ExtEngineManager* aExtManager,
 	    IExternalEngine* aEngine, RoutineMetadata* aMetadata, IExternalProcedure* aProcedure,
 		const jrd_prc* aPrc)
@@ -1435,6 +1744,14 @@ namespace
 			return nullptr;
 		}
 
+		IExternalAggregateFunction* makeAggregateFunction(ThrowStatusExceptionWrapper* status,
+			IExternalContext* context, IRoutineMetadata* metadata, IMetadataBuilder* inBuilder,
+			IMetadataBuilder* outBuilder) override
+		{
+			fb_assert(false);
+			return nullptr;
+		}
+
 		IExternalProcedure* makeProcedure(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override
 		{
@@ -1621,6 +1938,94 @@ void ExtEngineManager::makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::
 			metadata.release(), externalFunction, extInputParameters, extOutputParameters, udf);
 
 		// This is necessary for compilation, but will never be executed.
+		const auto dummyNode = FB_NEW_POOL(csb->csb_pool) CompoundStmtNode(csb->csb_pool);
+
+		auto statement = udf->getStatement();
+		PAR_preparsed_node(tdbb, nullptr, dummyNode, nullptr, &csb, &statement, false, 0);
+		udf->setStatement(statement);
+	}
+	catch (...)
+	{
+		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+		externalFunction->dispose();
+		throw;
+	}
+}
+
+
+void ExtEngineManager::makeAggregateFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
+	const MetaName& engine, const string& entryPoint, const string& body)
+{
+	string entryPointTrimmed = entryPoint;
+	entryPointTrimmed.trim();
+
+	EngineAttachmentInfo* attInfo = getEngineAttachment(tdbb, engine);
+	const MetaString& userName = udf->invoker ? udf->invoker->getUserName() : "";
+	ContextManager<IExternalAggregateFunction> ctxManager(tdbb, attInfo, attInfo->adminCharSet,
+		(udf->getName().package.isEmpty() ?
+			CallerName(obj_udf, udf->getName(), userName) :
+			CallerName(obj_package_header, QualifiedName(udf->getName().package, udf->getName().schema), userName)));
+
+	MemoryPool& pool = *tdbb->getDatabase()->dbb_permanent;
+
+	AutoPtr<RoutineMetadata> metadata(FB_NEW_POOL(pool) RoutineMetadata(pool));
+	metadata->name = udf->getName();
+	metadata->entryPoint = entryPointTrimmed;
+	metadata->body = body;
+	metadata->inputParameters.assignRefNoIncr(Routine::createMetadata(udf->getInputFields(), true));
+	metadata->outputParameters.assignRefNoIncr(Routine::createMetadata(udf->getOutputFields(), true));
+
+	udf->setInputFormat(Routine::createFormat(pool, metadata->inputParameters, false));
+	udf->setOutputFormat(Routine::createFormat(pool, metadata->outputParameters, true));
+
+	FbLocalStatus status;
+
+	RefPtr<IMetadataBuilder> inBuilder(REF_NO_INCR, metadata->inputParameters->getBuilder(&status));
+	status.check();
+
+	RefPtr<IMetadataBuilder> outBuilder(REF_NO_INCR, metadata->outputParameters->getBuilder(&status));
+	status.check();
+
+	IExternalAggregateFunction* externalFunction;
+	RefPtr<IMessageMetadata> extInputParameters, extOutputParameters;
+
+	{	// scope
+		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+		externalFunction = attInfo->engine->makeAggregateFunction(&status, attInfo->context, metadata,
+			inBuilder, outBuilder);
+
+		try
+		{
+			status.check();
+
+			if (!externalFunction)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_eem_func_not_returned) << udf->getName().toQuotedString() << engine);
+			}
+		}
+		catch (const Exception&)
+		{
+			if (tdbb->getAttachment()->isGbak())
+				return;
+			else
+				throw;
+		}
+
+		extInputParameters.assignRefNoIncr(inBuilder->getMetadata(&status));
+		status.check();
+
+		extOutputParameters.assignRefNoIncr(outBuilder->getMetadata(&status));
+		status.check();
+	}
+
+	try
+	{
+		udf->fun_external_aggregate = FB_NEW_POOL(pool) AggregateFunction(tdbb, pool, csb, this,
+			attInfo->engine, metadata.release(), externalFunction, extInputParameters,
+			extOutputParameters, udf);
+
 		const auto dummyNode = FB_NEW_POOL(csb->csb_pool) CompoundStmtNode(csb->csb_pool);
 
 		auto statement = udf->getStatement();

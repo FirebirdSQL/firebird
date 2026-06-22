@@ -572,7 +572,7 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 
 		if (userFunc->udf_private && name.getSchemaAndPackage() != dsqlScratch->package)
 		{
-			status_exception::raise(Arg::Gds(isc_private_procedure) <<
+			status_exception::raise(Arg::Gds(isc_private_function) <<
 				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
@@ -752,8 +752,9 @@ dsql_rel* METD_get_relation(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 		relation->rel_flags = REL_ltt_created;
 
 		dsql_fld** ptr = &relation->rel_fields;
+		const auto& fields = ltt->hasPendingChanges ? ltt->pendingFields : ltt->fields;
 
-		for (const auto& lttField : ltt->fields)
+		for (const auto& lttField : fields)
 		{
 			dsql_fld* field = FB_NEW_POOL(transaction->getPool()) dsql_fld(transaction->getPool());
 

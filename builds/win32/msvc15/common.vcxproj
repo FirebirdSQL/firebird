@@ -186,6 +186,7 @@
     <ClInclude Include="..\..\..\src\common\CvtFormatImpl.h" />
     <ClInclude Include="..\..\..\src\common\db_alias.h" />
     <ClInclude Include="..\..\..\src\common\DecFloat.h" />
+    <ClInclude Include="..\..\..\src\common\DeindentedStr.h" />
     <ClInclude Include="..\..\..\src\common\dllinst.h" />
     <ClInclude Include="..\..\..\src\common\dsc.h" />
     <ClInclude Include="..\..\..\src\common\dsc_proto.h" />
@@ -248,6 +249,7 @@
     <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='15.0'">10.0.17763.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='16.0'">10.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='17.0'">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(VisualStudioVersion)'=='18.0'">10.0</WindowsTargetPlatformVersion>
     <RootNamespace>common</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
