@@ -1022,3 +1022,4 @@ FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allo
 FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")
 FB_IMPL_MSG(JRD, 1021, foreign_server, -901, "42", "000", "foreign server @1")
 FB_IMPL_MSG(JRD, 1022, foreign_provider_not_found, -901, "42", "000", "Foreign provider '@1' for server '@2' not found")
+FB_IMPL_MSG(JRD, 1023, foreign_option_length_err, -901, "22", "000", "foreign option length @1 exceeds limit @2")

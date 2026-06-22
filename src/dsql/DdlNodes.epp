@@ -7606,7 +7606,8 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		// Store foreign field options
 		for (const auto& option : clause->options)
 		{
-			if (option.value.hasData())
+			const auto& value = option.getValue();
+			if (value.hasData())
 			{
 				AutoCacheRequest request(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
 
@@ -7623,10 +7624,10 @@ void RelationNode::defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 					strcpy(FTFOPT.RDB$FIELD_NAME, field->fld_name.c_str());
 
 					FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.name.c_str());
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.getName().c_str());
 
 					FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-					strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option.value.c_str());
+					strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, value.c_str());
 				}
 				END_STORE
 			}
@@ -9725,10 +9726,10 @@ void RelationNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option* op
 		strcpy(FTOPT.RDB$TABLE_NAME, name.object.c_str());
 
 		FTOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-		strcpy(FTOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+		strcpy(FTOPT.RDB$FOREIGN_OPTION_NAME, option->getName().c_str());
 
 		FTOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-		strcpy(FTOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+		strcpy(FTOPT.RDB$FOREIGN_OPTION_VALUE, option->getValue().c_str());
 	}
 	END_STORE
 }
@@ -9912,7 +9913,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		// Store foreign table options
 		for (auto& option : options)
 		{
-			if (option.value.hasData())
+			const auto& value = option.getValue();
+			if (value.hasData())
 			{
 				storeOption(tdbb, transaction, &option);
 			}
@@ -10716,20 +10718,21 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						// Drop old options and insert the new ones
 						for (auto& option : clause->options)
 						{
-								AutoCacheRequest request(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
+							AutoCacheRequest request(tdbb, drq_drop_f_tbl_f_opt, DYN_REQUESTS);
 
 							FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 								FTFOPT IN RDB$FOREIGN_TABLE_FIELD_OPTIONS
 								WITH FTFOPT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 									FTFOPT.RDB$TABLE_NAME EQ name.object.c_str() AND
 									FTFOPT.RDB$FIELD_NAME EQ clause->name.c_str() AND
-									FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option.name.c_str()
+									FTFOPT.RDB$FOREIGN_OPTION_NAME EQ option.getName().c_str()
 							{
 								ERASE FTFOPT;
 							}
 							END_FOR
 
-							if (option.value.hasData())
+							const auto& value = option.getValue();
+							if (value.hasData())
 							{
 								request.reset(tdbb, drq_s_f_tbl_f_opt, DYN_REQUESTS);
 								STORE (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -10745,10 +10748,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 									strcpy(FTFOPT.RDB$FIELD_NAME, clause->name.c_str());
 
 									FTFOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-									strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.name.c_str());
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_NAME, option.getName().c_str());
 
 									FTFOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-									strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, option.value.c_str());
+									strcpy(FTFOPT.RDB$FOREIGN_OPTION_VALUE, value.c_str());
 								}
 								END_STORE
 							}
@@ -10904,9 +10907,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					// Drop old options and insert the new ones
 					for (auto& option : options)
 					{
-						DropRelationNode::dropOption(tdbb, transaction, name, option.name);
+						DropRelationNode::dropOption(tdbb, transaction, name, option.getName());
 
-						if (option.value.hasData())
+						const auto& value = option.getValue();
+						if (value.hasData())
 							storeOption(tdbb, transaction, &option);
 					}
 					break;
@@ -16497,7 +16501,8 @@ void CreateAlterForeignServerNode::executeCreate(thread_db* tdbb, DsqlCompilerSc
 	{
 		for (auto& option : options)
 		{
-			if (option.value.hasData())
+			const auto& value = option.getValue();
+			if (value.hasData())
 			{
 				storeOption(tdbb, transaction, &option);
 			}
@@ -16553,9 +16558,9 @@ bool CreateAlterForeignServerNode::executeAlter(thread_db* tdbb, DsqlCompilerScr
 	// Drop old options and insert the new ones
 	for (auto& option : options)
 	{
-		DropForeignServerNode::dropOption(tdbb, transaction, name, option.name);
+		DropForeignServerNode::dropOption(tdbb, transaction, name, option.getName());
 
-		if (option.value.hasData())
+		if (option.getValue().hasData())
 			storeOption(tdbb, transaction, &option);
 	}
 
@@ -16579,17 +16584,17 @@ void CreateAlterForeignServerNode::storeOption(thread_db* tdbb, jrd_tra* transac
 		strcpy(FSOPT.RDB$FOREIGN_SERVER_NAME, name.c_str());
 
 		FSOPT.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-		strcpy(FSOPT.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+		strcpy(FSOPT.RDB$FOREIGN_OPTION_NAME, option->getName().c_str());
 
 		FSOPT.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-		strcpy(FSOPT.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+		strcpy(FSOPT.RDB$FOREIGN_OPTION_VALUE, option->getValue().c_str());
 
-		if (option->type == ExternalValueType::TYPE_STRING)
+		if (option->getType() == ExternalValueType::TYPE_STRING)
 			FSOPT.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
 		else
 		{
 			FSOPT.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
-			FSOPT.RDB$FOREIGN_OPTION_TYPE = option->type;
+			FSOPT.RDB$FOREIGN_OPTION_TYPE = option->getType();
 		}
 	}
 	END_STORE
@@ -16770,7 +16775,8 @@ void UserMappingNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	{
 		for (auto& option : options)
 		{
-			if (option.value.hasData())
+			const auto& value = option.getValue();
+			if (value.hasData())
 			{
 				storeOption(tdbb, transaction, &option);
 			}
@@ -16821,10 +16827,10 @@ bool UserMappingNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScr
 			// Drop old options and insert the new ones
 			for (auto& option : options)
 			{
-				if (dropOption(tdbb, transaction, user, server, option.name))
+				if (dropOption(tdbb, transaction, user, server, option.getName()))
 					modified = true;
 
-				if (option.value.hasData())
+				if (option.getValue().hasData())
 				{
 					storeOption(tdbb, transaction, &option);
 
@@ -16885,17 +16891,17 @@ void UserMappingNode::storeOption(thread_db* tdbb, jrd_tra* transaction, Option*
 		strcpy(FMO.RDB$FOREIGN_SERVER_NAME, server.c_str());
 
 		FMO.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-		strcpy(FMO.RDB$FOREIGN_OPTION_NAME, option->name.c_str());
+		strcpy(FMO.RDB$FOREIGN_OPTION_NAME, option->getName().c_str());
 
 		FMO.RDB$FOREIGN_OPTION_VALUE.NULL = FALSE;
-		strcpy(FMO.RDB$FOREIGN_OPTION_VALUE, option->value.c_str());
+		strcpy(FMO.RDB$FOREIGN_OPTION_VALUE, option->getValue().c_str());
 
-		if (option->type == ExternalValueType::TYPE_STRING)
+		if (option->getType() == ExternalValueType::TYPE_STRING)
 			FMO.RDB$FOREIGN_OPTION_TYPE.NULL = TRUE;
 		else
 		{
 			FMO.RDB$FOREIGN_OPTION_TYPE.NULL = FALSE;
-			FMO.RDB$FOREIGN_OPTION_TYPE = option->type;
+			FMO.RDB$FOREIGN_OPTION_TYPE = option->getType();
 		}
 	}
 	END_STORE

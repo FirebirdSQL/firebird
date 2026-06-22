@@ -6070,6 +6070,7 @@ const
 	 isc_dsql_agg_return = 335545340;
 	 isc_foreign_server = 335545341;
 	 isc_foreign_provider_not_found = 335545342;
+	 isc_foreign_option_length_err = 335545343;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

@@ -1374,6 +1374,26 @@ public:
 			: value(p)
 		{}
 
+		const MetaName& getName() const { return name; }
+
+		void setName(const MetaName& name)
+		{
+			this->name = name;
+		}
+
+		const Firebird::string& getValue() const { return value; }
+
+		void setValue(const Firebird::string& value)
+		{
+			if (value.length() > MAX_VARY_COLUMN_SIZE)
+			{
+				Firebird::status_exception::raise(Firebird::Arg::Gds(isc_foreign_option_length_err) <<
+					Firebird::Arg::Num(value.length()) << Firebird::Arg::Num(MAX_VARY_COLUMN_SIZE));
+			}
+			this->value = value;
+		}
+
+	private:
 		MetaName name;
 		Firebird::string value;
 	};
@@ -1586,10 +1606,10 @@ public:
 			fb_assert(name);
 
 			Option& option = options.add();
-			option.name = *name;
+			option.setName(*name);
 			if (value)
 			{
-				option.value = *value;
+				option.setValue(*value);
 			}
 		}
 
@@ -1618,10 +1638,10 @@ public:
 			fb_assert(name);
 
 			Option& option = options.add();
-			option.name = *name;
+			option.setName(*name);
 			if (value)
 			{
-				option.value = *value;
+				option.setValue(*value);
 			}
 		}
 
@@ -1787,10 +1807,10 @@ public:
 		fb_assert(name);
 
 		Option& option = options.add();
-		option.name = *name;
+		option.setName(*name);
 		if (value)
 		{
-			option.value = *value;
+			option.setValue(*value);
 		}
 	}
 
@@ -2827,6 +2847,33 @@ public:
 		: value(p), type(ExternalValueType::TYPE_STRING)
 	{}
 
+	const MetaName& getName() const { return name; }
+
+	void setName(const MetaName& name)
+	{
+		this->name = name;
+	}
+
+	const Firebird::string& getValue() const { return value; }
+
+	void setValue(const Firebird::string& value)
+	{
+		if (value.length() > MAX_VARY_COLUMN_SIZE)
+		{
+			Firebird::status_exception::raise(Firebird::Arg::Gds(isc_foreign_option_length_err) <<
+				Firebird::Arg::Num(value.length()) << Firebird::Arg::Num(MAX_VARY_COLUMN_SIZE));
+		}
+		this->value = value;
+	}
+
+	SSHORT getType() const { return type; }
+
+	void setType(SSHORT type)
+	{
+		this->type = type;
+	}
+
+private:
 	MetaName name;
 	Firebird::string value;
 	SSHORT type;
@@ -2881,11 +2928,11 @@ public:
 		fb_assert(name);
 
 		Option& option = options.add();
-		option.name = *name;
-		option.type = type;
+		option.setName(*name);
+		option.setType(type);
 		if (value)
 		{
-			option.value = *value;
+			option.setValue(*value);
 		}
 	}
 
@@ -2985,11 +3032,11 @@ public:
 		fb_assert(name);
 
 		Option& option = options.add();
-		option.name = *name;
-		option.type = type;
+		option.setName(*name);
+		option.setType(type);
 		if (value)
 		{
-			option.value = *value;
+			option.setValue(*value);
 		}
 	}
 
