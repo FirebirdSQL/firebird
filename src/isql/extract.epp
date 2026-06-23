@@ -2121,14 +2121,18 @@ static void list_check()
 
 	// Query gets the check clauses for triggers stored for check constraints
 
+	rel_t rel_type = rel_persistent;
 	bool first = true;
 
-	FOR TRG IN RDB$TRIGGERS CROSS
+	FOR REL IN RDB$RELATIONS CROSS
+		TRG IN RDB$TRIGGERS CROSS
 		CHK IN RDB$CHECK_CONSTRAINTS
 		WITH TRG.RDB$TRIGGER_TYPE EQ 1 AND
 			 TRG.RDB$SYSTEM_FLAG EQ int(fb_sysflag_check_constraint) AND
 			 TRG.RDB$SCHEMA_NAME EQUIV CHK.RDB$SCHEMA_NAME AND
 			 TRG.RDB$TRIGGER_NAME EQ CHK.RDB$TRIGGER_NAME AND
+			 TRG.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
+			 TRG.RDB$SCHEMA_NAME EQUIV REL.RDB$SCHEMA_NAME AND
 			 (ANY RELC IN RDB$RELATION_CONSTRAINTS
 			 	WITH CHK.RDB$SCHEMA_NAME EQUIV RELC.RDB$SCHEMA_NAME AND
 			 		 CHK.RDB$CONSTRAINT_NAME EQ RELC.RDB$CONSTRAINT_NAME AND
@@ -2136,6 +2140,9 @@ static void list_check()
 		REDUCED TO CHK.RDB$SCHEMA_NAME, CHK.RDB$CONSTRAINT_NAME
 		SORTED BY CHK.RDB$SCHEMA_NAME, CHK.RDB$CONSTRAINT_NAME
 	{
+		if (!REL.RDB$RELATION_TYPE.NULL)
+			rel_type = (rel_t) REL.RDB$RELATION_TYPE;
+
 		if (first)
 		{
 			isqlGlob.printf("%s/* Table constraints */%s", NEWLINE, NEWLINE);
@@ -2146,7 +2153,10 @@ static void list_check()
 
 		isqlGlob.printf(NEWLINE);
 
-		isqlGlob.printf("ALTER TABLE %s ADD %s%s", IUTILS_name_to_string(relationName).c_str(), NEWLINE, TAB_AS_SPACES);
+		const char* alterClause = (rel_type == rel_foreign) ? "ALTER FOREIGN TABLE" : "ALTER TABLE";
+
+		isqlGlob.printf("%s %s ADD %s%s", alterClause, IUTILS_name_to_string(relationName).c_str(), NEWLINE,
+			TAB_AS_SPACES);
 
 		// If the name of the constraint is not INTEG_..., print it
 		if (!fb_utils::implicit_integrity(CHK.RDB$CONSTRAINT_NAME))
