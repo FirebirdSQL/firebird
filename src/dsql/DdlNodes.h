@@ -2995,13 +2995,23 @@ protected:
 	}
 
 private:
+	struct CollectedObject
+	{
+		ObjectType type;
+		MetaName objName;
+		bool isLTT = false;
+	};
+
 	bool collectObjects(thread_db* tdbb,
-		Firebird::Array<Firebird::NonPooledPair<ObjectType, MetaName>>* objects = nullptr);
+		Firebird::Array<CollectedObject>* objects = nullptr);
+	void checkDependencies(thread_db* tdbb);
+	void dropObjects(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	MetaName name;
 	bool silent = false;
 	bool recreate = false;
+	bool cascade = false;
 };
 
 
