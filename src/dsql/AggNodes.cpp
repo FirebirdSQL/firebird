@@ -92,11 +92,14 @@ DmlNode* AggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
 
 	const UCHAR count = csb->csb_blr_reader.getByte();
 
-	NodeRefsHolder holder(pool);
-	node->getChildren(holder, false);
+	if (!node->isVariadicArgs())
+	{
+		NodeRefsHolder holder(pool);
+		node->getChildren(holder, false);
 
-	if (count != holder.refs.getCount())
-		PAR_error(csb, Arg::Gds(isc_funmismat) << name);
+		if (count != holder.refs.getCount())
+			PAR_error(csb, Arg::Gds(isc_funmismat) << name);
+	}
 
 	node->parseArgs(tdbb, csb, count);
 
@@ -2115,7 +2118,6 @@ string PercentileAggNode::internalPrint(NodePrinter& printer) const
 	return "PercentileAggNode";
 }
 
-
 void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
@@ -2326,6 +2328,519 @@ AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 	return node;
 }
 
+//--------------------
+
+
+static AggNode::RegisterFactory1<RankAggNode, RankAggNode::RankType> rankAggInfo(
+	"RANK_AGG", RankAggNode::TYPE_RANK);
+static AggNode::RegisterFactory1<RankAggNode, RankAggNode::RankType> denseRankAggInfo(
+	"DENSE_RANK_AGG", RankAggNode::TYPE_DENSE_RANK);
+static AggNode::RegisterFactory1<RankAggNode, RankAggNode::RankType> percentRankAggInfo(
+	"PERCENT_RANK_AGG", RankAggNode::TYPE_PERCENT_RANK);
+static AggNode::RegisterFactory1<RankAggNode, RankAggNode::RankType> cumeDistAggInfo(
+	"CUME_DIST_AGG", RankAggNode::TYPE_CUME_DIST);
+
+AggNode::RegisterFactory1<RankAggNode, RankAggNode::RankType>& getRankAggInfo(RankAggNode::RankType type)
+{
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+			return rankAggInfo;
+
+		case RankAggNode::TYPE_DENSE_RANK:
+			return denseRankAggInfo;
+
+		case RankAggNode::TYPE_PERCENT_RANK:
+			return percentRankAggInfo;
+
+		case RankAggNode::TYPE_CUME_DIST:
+		default:
+			return cumeDistAggInfo;
+	}
+}
+
+const char* getRankAggName(RankAggNode::RankType type)
+{
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+			return "RANK";
+
+		case RankAggNode::TYPE_DENSE_RANK:
+			return "DENSE_RANK";
+
+		case RankAggNode::TYPE_PERCENT_RANK:
+			return "PERCENT_RANK";
+
+		case RankAggNode::TYPE_CUME_DIST:
+		default:
+			return "CUME_DIST";
+	}
+}
+
+RankAggNode::RankAggNode(MemoryPool& pool, RankType aType,
+	ValueListNode* aArgList, ValueListNode* aOrderClause)
+	: AggNode(pool,
+		getRankAggInfo(aType),
+		false, false, nullptr),
+	type(aType),
+	valueListArg(aArgList),
+	dsqlOrderClause(aOrderClause)
+{
+
+}
+
+void RankAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count)
+{
+	valueListArg = PAR_args(tdbb, csb, count, count);
+
+	if (csb->csb_blr_reader.peekByte() == blr_within_group_order)
+	{
+		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
+		if (const auto count = csb->csb_blr_reader.getByte())
+			sort = PAR_sort_internal(tdbb, csb, true, count);
+	}
+}
+
+bool RankAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!AggNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const RankAggNode* o = nodeAs<RankAggNode>(other);
+	fb_assert(o);
+	return PASS1_node_match(dsqlScratch, dsqlOrderClause, o->dsqlOrderClause, ignoreMapCast);
+}
+
+void RankAggNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
+{
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+		case RankAggNode::TYPE_DENSE_RANK:
+			desc->makeInt64(0);
+			break;
+
+		default:
+			desc->makeDouble();
+			break;
+	}
+}
+
+void RankAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	AggNode::genBlr(dsqlScratch);
+
+	if (dsqlOrderClause)
+		GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
+}
+
+void RankAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+		case RankAggNode::TYPE_DENSE_RANK:
+			desc->makeInt64(0);
+			break;
+
+		default:
+			desc->makeDouble();
+			break;
+	}
+}
+
+void RankAggNode::makeSortDesc(thread_db*, CompilerScratch*, dsc* desc)
+{
+	desc->makeInt64(0);
+}
+
+ValueExprNode* RankAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	RankAggNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) RankAggNode(*tdbb->getDefaultPool(), type);
+
+	node->nodScale = nodScale;
+	node->valueListArg = copier.copy(tdbb, valueListArg);
+	node->sort = sort->copy(tdbb, copier);
+
+	return node;
+}
+
+AggNode* RankAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	AggNode::pass2(tdbb, csb);
+
+	// impure area for calculate
+	impureArgsOffset = csb->allocImpure<impure_value_ex>();
+	m_impureOrder = csb->allocImpure<Impure>();
+
+	return this;
+}
+
+string RankAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, type);
+	NODE_PRINT(printer, valueListArg);
+
+	return "RankAggNode";
+}
+
+bool RankAggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
+{
+	bool invalid = false;
+
+	if (!visitor.insideOwnMap)
+	{
+		// We are not in an aggregate from the same scope_level so
+		// check for valid fields inside this aggregate
+		invalid |= ExprNode::dsqlInvalidReferenceFinder(visitor);
+	}
+
+	if (!visitor.insideHigherMap)
+	{
+		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
+		getChildren(holder, true);
+
+		for (auto i : holder.refs)
+		{
+			// If there's another aggregate with the same scope_level or
+			// an higher one then it's a invalid aggregate, because
+			// aggregate-functions from the same context can't
+			// be part of each other.
+			if (Aggregate2Finder::find(visitor.dsqlScratch->getPool(), visitor.context->ctx_scope_level,
+				FIELD_MATCH_TYPE_EQUAL, false, *i))
+			{
+				// Nested aggregate functions are not allowed
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_agg_nested_err));
+			}
+		}
+
+		if (visitor.visit(**holder.refs.begin()))
+		{
+			// The percent argument must be constant within group
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_argmustbe_const_within_group) <<
+				Arg::Str(getRankAggName(type)));
+		}
+	}
+
+	return invalid;
+}
+
+int RankAggNode::lookForChange(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const
+{
+	unsigned cnt = 0;
+	for (auto desc : asb->descOrder)
+	{
+		int sortDirection = 1;
+		int nullsPlacement = 1;
+
+		unsigned index = cnt++;
+
+		if (sort->direction[index] == ORDER_DESC)
+			sortDirection = -1;
+
+		if (sort->getEffectiveNullOrder(index) == NULLS_LAST)
+			nullsPlacement = -1;
+
+		desc.dsc_address = data + (IPTR) desc.dsc_address;
+
+		impure_value* vtemp = &values[index];
+
+		int n = 0;
+
+		if (!vtemp->vlu_desc.dsc_address)
+			return 1 * nullsPlacement;
+		else if ((n = MOV_compare(tdbb, &desc, &vtemp->vlu_desc)) != 0)
+			return n * sortDirection;
+	}
+
+	return 0;
+}
+
+void RankAggNode::cacheValues(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const
+{
+	unsigned cnt = 0;
+	for (auto desc : asb->descOrder)
+	{
+		unsigned index = cnt++;
+
+		desc.dsc_address = data + (IPTR) desc.dsc_address;
+
+		impure_value* target = &values[index];
+
+		EVL_make_value(tdbb, &desc, target);
+	}
+}
+
+void RankAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	Impure* impureOrder = request->getImpure<Impure>(m_impureOrder);
+	impureOrder->vlux_count = 0;
+	impureOrder->vlux_rank = 0;
+	impureOrder->vlux_dense_rank = 0;
+
+	unsigned impureCount = sort ? sort->expressions.getCount() : 0;
+	if (!impureOrder->orderValues && impureCount > 0)
+	{
+		impureOrder->orderValues = FB_NEW_POOL(*tdbb->getDefaultPool()) impure_value[impureCount];
+		memset(impureOrder->orderValues, 0, sizeof(impure_value) * impureCount);
+	}
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+		case RankAggNode::TYPE_DENSE_RANK:
+			impure->make_int64(1);
+			break;
+
+		default:
+			impure->make_double(1);
+			break;
+	}
+	impure->vlux_count = 1;
+
+	impure_value_ex* impureArgs = request->getImpure<impure_value_ex>(impureArgsOffset);
+	impureArgs->vlu_desc.dsc_dtype = 0;
+	impureArgs->vlux_count = 0;
+}
+
+void RankAggNode::aggFinish(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggFinish(tdbb, request);
+	Impure* impureOrder = request->getImpure<Impure>(m_impureOrder);
+	if (impureOrder->orderValues)
+	{
+		delete[] impureOrder->orderValues;
+		impureOrder->orderValues = nullptr;
+	}
+}
+
+bool RankAggNode::aggPass(thread_db* tdbb, Request* request) const
+{
+	// Put function argument to sort
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	if (impure->vlux_count == 1 && sort)		// first call to aggPass()
+	{
+		if (valueListArg->items.getCount() != sort->expressions.getCount())
+			ERRD_post(Arg::Gds(isc_hypfun_args_non_equal_sort_item) << Arg::Str(getRankAggName(type)));
+
+		NestConst<ValueExprNode> findArg = MAKE_const_sint64(1, 0);
+		dsc* findValueDesc = EVL_expr(tdbb, request, findArg);
+		if (!findValueDesc)
+			return false;
+
+		fb_assert(asb);
+		// "Put" the value to sort.
+		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		UCHAR* data = nullptr;
+		asbImpure->iasb_sort->put(tdbb, reinterpret_cast<ULONG**>(&data));
+
+		MOVE_CLEAR(data, asb->length);
+
+		auto descOrder = asb->descOrder.begin();
+		auto keyItem = asb->keyItems.begin();
+
+		for (auto& nodeArg : valueListArg->items)
+		{
+			dsc toDesc = *(descOrder++);
+			toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+			if (const auto fromDsc = EVL_expr(tdbb, request, nodeArg))
+			{
+				if (IS_INTL_DATA(fromDsc))
+				{
+					INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(fromDsc->getTextType()),
+						fromDsc, &toDesc, INTL_KEY_UNIQUE);
+				}
+				else
+					MOV_move(tdbb, fromDsc, &toDesc);
+			}
+			else
+				*(data + keyItem->getSkdOffset()) = TRUE;
+
+			// The first key for NULLS FIRST/LAST, the second key for the sorter
+			keyItem += 2;
+		}
+
+		dsc toDesc = asb->desc;
+		toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+		MOV_move(tdbb, findValueDesc, &toDesc);
+	}
+
+	// Put WITHIN GROUP arguments to sort
+	NestConst<ValueExprNode> otherArg = MAKE_const_sint64(0, 0);
+	dsc* desc = EVL_expr(tdbb, request, otherArg);
+	if (!desc)
+		return false;
+
+	if (sort)
+	{
+		impure->vlux_count++;
+
+		fb_assert(asb);
+		// "Put" the value to sort.
+		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		UCHAR* data = nullptr;
+		asbImpure->iasb_sort->put(tdbb, reinterpret_cast<ULONG**>(&data));
+
+		MOVE_CLEAR(data, asb->length);
+
+		auto descOrder = asb->descOrder.begin();
+		auto keyItem = asb->keyItems.begin();
+
+		for (auto& nodeOrder : sort->expressions)
+		{
+			dsc toDesc = *(descOrder++);
+			toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+			if (const auto fromDsc = EVL_expr(tdbb, request, nodeOrder))
+			{
+				if (IS_INTL_DATA(fromDsc))
+				{
+					INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(fromDsc->getTextType()),
+						fromDsc, &toDesc, INTL_KEY_UNIQUE);
+				}
+				else
+					MOV_move(tdbb, fromDsc, &toDesc);
+			}
+			else
+				*(data + keyItem->getSkdOffset()) = TRUE;
+
+			// The first key for NULLS FIRST/LAST, the second key for the sorter
+			keyItem += 2;
+		}
+
+		dsc toDesc = asb->desc;
+		toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+		MOV_move(tdbb, desc, &toDesc);
+
+		return true;
+	}
+
+	return true;
+}
+
+dsc* RankAggNode::execute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	impure_value_ex* argsImpure = request->getImpure<impure_value_ex>(impureArgsOffset);
+
+	if (sort)
+	{
+		Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
+
+		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		dsc desc = asb->desc;
+
+		// Sort the values already "put" to sort.
+		asbImpure->iasb_sort->sort(tdbb);
+
+		// Now get the sorted/projected values and compute the aggregate.
+		bool find = false;
+		while (true)
+		{
+			UCHAR* data = nullptr;
+			asbImpure->iasb_sort->get(tdbb, reinterpret_cast<ULONG**>(&data));
+
+			if (!data)
+			{
+				// We are done, close the sort.
+				delete asbImpure->iasb_sort;
+				asbImpure->iasb_sort = NULL;
+				break;
+			}
+
+			if (impureOrder->vlux_count++ == 0)
+			{
+				impureOrder->vlux_dense_rank = 1;
+				impureOrder->vlux_rank = 1;
+				cacheValues(tdbb, request, data, impureOrder->orderValues);
+			}
+			else if (lookForChange(tdbb, request, data, impureOrder->orderValues))
+			{
+				impureOrder->vlux_dense_rank++;
+				impureOrder->vlux_rank = impureOrder->vlux_count;
+				cacheValues(tdbb, request, data, impureOrder->orderValues);
+				find = false;
+			}
+
+			desc.dsc_address = data + (IPTR) asb->desc.dsc_address;
+			EVL_make_value(tdbb, &desc, argsImpure);
+			find = find || (argsImpure->vlu_misc.vlu_int64 == 1);
+
+			if (find)
+				aggPass(tdbb, request, &desc);
+
+		}
+	}
+
+	return aggExecute(tdbb, request);
+}
+
+void RankAggNode::aggPass(thread_db* tdbb, Request* request, dsc* /* desc */) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
+	switch (type)
+	{
+		case RankAggNode::TYPE_RANK:
+			impure->make_int64(impureOrder->vlux_rank);
+			break;
+
+		case RankAggNode::TYPE_DENSE_RANK:
+			impure->make_int64(impureOrder->vlux_dense_rank);
+			break;
+
+		case RankAggNode::TYPE_PERCENT_RANK:
+			impure->make_double(impureOrder->vlux_rank - 1);
+			break;
+
+		case RankAggNode::TYPE_CUME_DIST:
+			impure->make_double(impureOrder->vlux_count);
+			break;
+
+		default:
+			fb_assert(false);
+			break;
+	}
+}
+
+dsc* RankAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!impure->vlux_count || !impure->vlu_desc.dsc_dtype)
+		return nullptr;
+
+	if (type == RankAggNode::TYPE_PERCENT_RANK)
+	{
+		double percent_rank = (impure->vlux_count > 1) ? impure->vlu_misc.vlu_double / (impure->vlux_count - 1) : 0;
+		impure->make_double(percent_rank);
+	}
+
+	if (type == RankAggNode::TYPE_CUME_DIST)
+	{
+		double percent_rank = impure->vlu_misc.vlu_double / impure->vlux_count;
+		impure->make_double(percent_rank);
+	}
+
+	return &impure->vlu_desc;
+}
+
+AggNode* RankAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) RankAggNode(dsqlScratch->getPool(), type,
+		doDsqlPass(dsqlScratch, valueListArg),
+		doDsqlPass(dsqlScratch, dsqlOrderClause));
+
+	return node;
+}
 
 //--------------------
 
