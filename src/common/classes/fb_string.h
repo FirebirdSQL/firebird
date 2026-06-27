@@ -793,6 +793,10 @@ namespace Firebird
 		{
 			return add(&c, 1);
 		}
+		StringType& operator=(const std::string_view v)
+		{
+			return assign(v.data(), static_cast<size_type>(v.length()));
+		}
 		StringType& operator=(StringType&& rhs)
 		{
 			// baseMove do not clear the buffer so do it in this method
@@ -902,6 +906,7 @@ namespace Firebird
 		bool operator>=(const char_type* str) const {return compare(str) >= 0;}
 		bool operator> (const char_type* str) const {return compare(str) >  0;}
 		bool operator!=(const char_type* str) const {return different(str);}
+		operator std::string_view() const { return std::string_view(stringBuffer, stringLength); }
 
 		bool getWord(StringType& from, const char* sep)
 		{

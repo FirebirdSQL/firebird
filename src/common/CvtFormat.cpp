@@ -1820,6 +1820,60 @@ namespace
 
 		return timestampTZ;
 	}
+
+	constexpr bool patternContainsDate(const Format::Patterns patterns)
+	{
+		return patterns & (Format::Y
+						 | Format::YY
+						 | Format::YYY
+						 | Format::YYYY
+						 | Format::YEAR
+						 | Format::RR
+						 | Format::RRRR
+						 | Format::MM
+						 | Format::MON
+						 | Format::MONTH
+						 | Format::RM
+						 | Format::DD
+						 | Format::J);
+	}
+
+	constexpr bool patternContainsTime(const Format::Patterns patterns)
+	{
+		return patterns & (Format::HH
+						 | Format::HH12
+						 | Format::HH24
+						 | Format::MI
+						 | Format::SS
+						 | Format::SSSSS
+						 | Format::FF1
+						 | Format::FF2
+						 | Format::FF3
+						 | Format::FF4
+						 | Format::AM
+						 | Format::PM);
+	}
+
+	constexpr bool patternContainsTimezone(const Format::Patterns patterns)
+	{
+		return patterns & (Format::TZH
+						 | Format::TZM
+						 | Format::TZR);
+	}
+
+	constexpr Firebird::CvtStringContains::TypeFlags getPatternTypeFlags(const Format::Patterns patterns)
+	{
+		Firebird::CvtStringContains::TypeFlags typeFlags = Firebird::CvtStringContains::NONE;
+
+		if (patternContainsDate(patterns))
+			typeFlags |= Firebird::CvtStringContains::DATE;
+		if (patternContainsTime(patterns))
+			typeFlags |= Firebird::CvtStringContains::TIME;
+		if (patternContainsTimezone(patterns))
+			typeFlags |= Firebird::CvtStringContains::TIMEZONE;
+
+		return typeFlags;
+	}
 }
 
 string CVT_format_datetime_to_string(const dsc* desc, const string& format, Callbacks* cb)
@@ -1842,7 +1896,8 @@ string CVT_format_datetime_to_string(const dsc* desc, const string& format, Call
 }
 
 ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::string& format,
-	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb)
+	const EXPECT_DATETIME expectedType, Firebird::Callbacks* cb,
+	CvtStringContains::TypeFlags* outFormat)
 {
 	if (!DTYPE_IS_TEXT(desc->dsc_dtype))
 		cb->err(Arg::Gds(isc_invalid_data_type_for_date_format));
@@ -1877,6 +1932,9 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 	ISC_TIMESTAMP_TZ timestampTZ = constructTimeStampTz(cvtData, cb);
 	validateTimeStamp(timestampTZ.utc_timestamp, cvtData.times, expectedType, desc, cb);
 	timeStampToUtc(timestampTZ, cb->getSessionTimeZone(), expectedType, cb);
+
+	if (outFormat)
+		*outFormat = getPatternTypeFlags(formatPatterns);
 
 	return timestampTZ;
 }

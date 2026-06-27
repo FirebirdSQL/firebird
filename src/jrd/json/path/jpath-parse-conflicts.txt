@@ -1,0 +1,1 @@
+4 shift/reduce conflicts, 3 reduce/reduce conflicts.
