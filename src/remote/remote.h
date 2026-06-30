@@ -363,16 +363,16 @@ public:
 	void clear()
 	{
 		delete rpr_in_msg;
-		rpr_in_msg = nullptr;
+		rpr_in_msg = NULL;
 
 		delete rpr_out_msg;
-		rpr_out_msg = nullptr;
+		rpr_out_msg = NULL;
 
 		delete rpr_in_format;
-		rpr_in_format = nullptr;
+		rpr_in_format = NULL;
 
 		delete rpr_out_format;
-		rpr_out_format = nullptr;
+		rpr_out_format = NULL;
 	}
 };
 
