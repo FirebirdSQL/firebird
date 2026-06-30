@@ -879,7 +879,6 @@ public:
 	MetaName name;
 	MetaName forCharSet;
 	MetaName fromName;
-	Firebird::string fromExternal;
 	MetaName fromExternal;
 	Firebird::UCharBuffer specificAttributes;
 
