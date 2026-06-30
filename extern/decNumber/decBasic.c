@@ -1120,7 +1120,7 @@ decFloat * decFloatAdd(decFloat *result,
   // the following buffers hold coefficients with various alignments
   // (see commentary and diagrams below)
   uByte acc[4+2+DECPMAX*3+8];
-  uByte buf[4+2+DECPMAX*2];
+  uByte buf[4+2+DECPMAX*2+4];
   uByte *umsd, *ulsd;              // local MSD and LSD pointers
 
   #if DECLITEND
