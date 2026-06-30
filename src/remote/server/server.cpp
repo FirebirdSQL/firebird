@@ -6031,11 +6031,7 @@ static void send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode)
 }
 
 // Maybe this can be a member of rem_port?
-<<<<<<< HEAD
-static void send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector& err)
-=======
-static ISC_STATUS send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector& err)
->>>>>>> e47e4e9eee (Merge commit from fork)
+static ISC_STATUS send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector& err)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
