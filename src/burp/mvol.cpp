@@ -93,6 +93,7 @@ static void	 brio_fini(BurpGlobals*);
 
 static const int MAX_HEADER_SIZE		= 512;
 static const int ZC_BUFSIZE				= IO_BUFFER_SIZE;
+static const ULONG MAX_BUFSIZE			= 32 * M_BYTES; // Theoretical limit. May be increased in case of regression
 
 static inline int get(BurpGlobals* tdgbl)
 {
@@ -1793,6 +1794,10 @@ static bool read_header(DESC handle, ULONG* buffer_size, USHORT* format, bool in
 		case att_backup_blksize:
 			{
 				const ULONG temp_buffer_size = get_numeric();
+				if (temp_buffer_size == 0 || temp_buffer_size > MAX_BUFSIZE)
+					BURP_error(267, true, tdgbl->mvol_old_file);
+					// msg 267 backup file %s might be corrupt
+
 				if (init_flag)
 					*buffer_size = temp_buffer_size;
 			}
