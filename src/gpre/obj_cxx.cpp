@@ -3367,7 +3367,8 @@ static void gen_t_start( const act* action, int column)
 
 	if (trans->tra_db_count == 1)
 	{
-		printa(column, "%s = %s->startTransaction(%s, %d, fb_tpb_%d);",
+		if (trans->tra_tpb) 
+			printa(column, "%s = %s->startTransaction(%s, %d, fb_tpb_%d);",
 			trans->tra_handle ? trans->tra_handle : gpreGlob.transaction_name,
 			trans->tra_tpb->tpb_database->dbb_name->sym_string, vector,
 			trans->tra_tpb->tpb_length, trans->tra_tpb->tpb_ident);
