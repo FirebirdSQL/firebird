@@ -4766,6 +4766,10 @@ ISC_STATUS rem_port::put_segment(P_OP op, P_SGMT * segment, PACKET* sendL)
 	{
 		length = *p++;
 		length += *p++ << 8;
+		const ULONG max_length = end - p;
+		if (length > max_length)
+			length = max_length;
+
 		blob->rbl_iface->putSegment(&status_vector, length, p);
 
 		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
