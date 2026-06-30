@@ -960,6 +960,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			if (!statement)
 				return P_FALSE(xdrs, p);
 
+			if (xdrs->x_op == XDR_DECODE && statement->rsr_batch_cs == nullptr)
+				return P_FALSE(xdrs, p);
+
 			LocalStatus ls;
 			CheckStatusWrapper status_vector(&ls);
 
