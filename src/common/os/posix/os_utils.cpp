@@ -282,31 +282,9 @@ static void raiseError(int errCode, const char* filename)
 // open (or create if missing) and set appropriate access rights
 int openCreateSharedFile(const char* pathname, int flags)
 {
-	int fd = os_utils::open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
+	int fd = os_utils::open(pathname, flags | O_RDWR | O_CREAT | O_NOFOLLOW, S_IREAD | S_IWRITE);
 	if (fd < 0)
 		raiseError(ERRNO, pathname);
-
-	// Security check - avoid symbolic links in /tmp.
-	// Malicious user can create a symlink with this name pointing to say
-	// security2.fdb and when the lock file is created the file will be damaged.
-
-	struct STAT st;
-	int rc;
-
-	rc = os_utils::fstat(fd, &st);
-
-	if (rc != 0)
-	{
-		const int e = ERRNO;
-		close(fd);
-		raiseError(e, pathname);
-	}
-
-	if (S_ISLNK(st.st_mode))
-	{
-		close(fd);
-		raiseError(ELOOP, pathname);
-	}
 
 	changeFileRights(pathname, 0660);
 
