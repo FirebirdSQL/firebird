@@ -1263,7 +1263,7 @@ static void		release_sql_request(Rsr*);
 static void		release_transaction(Rtr*);
 
 static void		send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode);
-static void		send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector&);
+static ISC_STATUS	send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector&);
 static void		set_server(rem_port*, USHORT);
 static int		shut_server(const int, const int, void*);
 static int		pre_shutdown(const int, const int, void*);
@@ -5292,6 +5292,13 @@ ISC_STATUS rem_port::put_segment(P_OP op, P_SGMT * segment, PACKET* sendL)
 	{
 		length = *p++;
 		length += *p++ << 8;
+		const ULONG max_length = end - p;
+		if (length > max_length)
+		{
+			return send_error(this, sendL,
+				Arg::Gds(isc_batch_big_seg2) << Arg::Num(length) << Arg::Num(max_length));
+		}
+
 		blob->rbl_iface->putSegment(&status_vector, length, p);
 
 		if (status_vector.getState() & Firebird::IStatus::STATE_ERRORS)
@@ -6025,12 +6032,16 @@ static void send_error(rem_port* port, PACKET* apacket, ISC_STATUS errcode)
 }
 
 // Maybe this can be a member of rem_port?
+<<<<<<< HEAD
 static void send_error(rem_port* port, PACKET* apacket, const Firebird::Arg::StatusVector& err)
+=======
+static ISC_STATUS send_error(rem_port* port, PACKET* apacket, const Arg::StatusVector& err)
+>>>>>>> e47e4e9eee (Merge commit from fork)
 {
 	LocalStatus ls;
 	CheckStatusWrapper status_vector(&ls);
 	err.copyTo(&status_vector);
-	port->send_response(apacket, 0, 0, &status_vector, false);
+	return port->send_response(apacket, 0, 0, &status_vector, false);
 }
 
 
