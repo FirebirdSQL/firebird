@@ -799,7 +799,7 @@ public:
 	Firebird::MetaName name;
 	Firebird::MetaName forCharSet;
 	Firebird::MetaName fromName;
-	Firebird::string fromExternal;
+	Firebird::MetaName fromExternal;
 	Firebird::UCharBuffer specificAttributes;
 
 private:
