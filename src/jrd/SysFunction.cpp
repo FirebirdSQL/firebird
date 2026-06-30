@@ -2707,12 +2707,14 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 	EVL_make_value(tdbb, value1, impure);
 	impure->vlu_desc.dsc_scale = 0;
 
+	const SINT64 dividend = MOV_get_int64(value1, 0);
 	const SINT64 divisor = MOV_get_int64(value2, 0);
 
 	if (divisor == 0)
 		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
 
-	const SINT64 result = MOV_get_int64(value1, 0) % divisor;
+	// Condition covers MIN % -1 UB case
+	const SINT64 result = (divisor == -1) ? 0 : dividend % divisor;
 
 	switch (impure->vlu_desc.dsc_dtype)
 	{
