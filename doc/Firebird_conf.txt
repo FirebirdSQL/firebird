@@ -142,6 +142,7 @@ DeadThreadsCollection      integer  default 50
 PriorityBoost              integer  default 5
 RemoteServiceName          string   default gds_db
 RemoteServicePort          integer  default 3050 (TCP port number)
+RemoteServiceUnixSocket    string   default empty (Unix domain socket path)
 IpcName                    string   default "FIREBIRD" (Windows only)
 
 MaxUnflushedWrites         integer

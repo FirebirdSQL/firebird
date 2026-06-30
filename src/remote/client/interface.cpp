@@ -79,8 +79,20 @@
 #include <unistd.h>
 #endif
 
+#if !defined(WIN_NT)
+#include <sys/socket.h>
+#ifdef HAVE_SYS_UN_H
+#include <sys/un.h>
+#endif
+#endif
+
 #ifdef WIN_NT
+#include <winsock2.h>
 #include <process.h>
+#endif
+
+#if (defined(WIN_NT) && defined(HAVE_AFUNIX_H)) || defined(HAVE_SYS_UN_H)
+#define HAVE_AF_UNIX_SUPPORT
 #endif
 
 #if defined(WIN_NT)
@@ -92,6 +104,10 @@
 const char* const PROTOCOL_INET = "inet";
 const char* const PROTOCOL_INET4 = "inet4";
 const char* const PROTOCOL_INET6 = "inet6";
+
+#ifdef HAVE_AF_UNIX_SUPPORT
+const char* const PROTOCOL_UNIX = "unix";
+#endif
 
 #ifdef WIN_NT
 const char* const PROTOCOL_XNET = "xnet";
@@ -1166,6 +1182,46 @@ static void authReceiveResponse(bool havePacket, ClntAuthBlock& authItr, rem_por
 	Rdb* rdb, IStatus* status, PACKET* packet, bool checkKeys);
 
 static AtomicCounter remote_event_id;
+
+#ifdef HAVE_AF_UNIX_SUPPORT
+static bool analyzeUnixProtocol(PathName& expandedName, PathName& nodeName)
+{
+	nodeName.erase();
+
+	const PathName prefix = PathName(PROTOCOL_UNIX) + "://";
+
+	if (prefix.length() > expandedName.length())
+		return false;
+
+	if (IgnoreCaseComparator::compare(prefix.c_str(), expandedName.c_str(), prefix.length()) != 0)
+		return false;
+
+	PathName savedName = expandedName;
+	expandedName.erase(0, prefix.length());
+
+	PathName::size_type separator = expandedName.find(':');
+
+#ifdef WIN_NT
+	if (separator == 1)
+	{
+		const char driveLetter = expandedName[0];
+		if ((driveLetter >= 'A' && driveLetter <= 'Z') || (driveLetter >= 'a' && driveLetter <= 'z'))
+			separator = expandedName.find(':', separator + 1);
+	}
+#endif
+
+	if (separator == PathName::npos || separator == 0 || separator == expandedName.length() - 1)
+	{
+		expandedName = savedName;
+		return false;
+	}
+
+	nodeName = expandedName.substr(0, separator);
+	expandedName.erase(0, separator + 1);
+
+	return true;
+}
+#endif
 
 static constexpr unsigned ANALYZE_USER_VFY	= 0x01;
 static constexpr unsigned ANALYZE_LOOPBACK	= 0x02;
@@ -7921,14 +7977,24 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			else
 #endif
 
+#ifdef HAVE_AF_UNIX_SUPPORT
+			if (analyzeUnixProtocol(attach_name, node_name))
+			{
+				ISC_utf8ToSystem(node_name);
+				port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
+					cBlock.getConfig(), ref_db_name, cryptCb, AF_UNIX);
+			}
+			else
+#endif
+
 			if (ISC_analyze_protocol(PROTOCOL_INET4, attach_name, node_name, INET_SEPARATOR, needFile))
 				inet_af = AF_INET;
 			else if (ISC_analyze_protocol(PROTOCOL_INET6, attach_name, node_name, INET_SEPARATOR, needFile))
 				inet_af = AF_INET6;
 
-			if (inet_af != AF_UNSPEC ||
+			if (!port && (inet_af != AF_UNSPEC ||
 				ISC_analyze_protocol(PROTOCOL_INET, attach_name, node_name, INET_SEPARATOR, needFile) ||
-				ISC_analyze_tcp(attach_name, node_name, needFile))
+				ISC_analyze_tcp(attach_name, node_name, needFile)))
 			{
 				if (node_name.isEmpty())
 					node_name = INET_LOCALHOST;

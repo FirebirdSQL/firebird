@@ -116,6 +116,7 @@ set(CASE_SENSITIVITY "true")
 set(SUPPORT_RAW_DEVICES 1)
 
 set(include_files_list
+    afunix.h
     aio.h
     assert.h
     atomic.h
@@ -179,6 +180,7 @@ set(include_files_list
     sys/time.h
     sys/timeb.h
     sys/types.h
+    sys/un.h
     sys/uio.h
     sys/wait.h
     termio.h

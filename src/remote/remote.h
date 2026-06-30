@@ -1278,6 +1278,8 @@ inline constexpr USHORT PORT_connecting		= 0x0400;	// Aux connection waits for a
 //inline constexpr USHORT PORT_z_data		= 0x0800;	// Zlib incoming buffer has data left after decompression
 inline constexpr USHORT PORT_compressed		= 0x1000;	// Compress outgoing stream (does not affect incoming)
 inline constexpr USHORT PORT_released		= 0x2000;	// release(), complementary to the first addRef() in constructor, was called
+inline constexpr USHORT PORT_unix			= 0x4000;	// Port uses Unix domain socket transport
+inline constexpr USHORT PORT_unix_unlink	= 0x8000;	// Unlink port_address when Unix domain socket port is disconnected
 
 // forward decl
 class RemotePortGuard;
