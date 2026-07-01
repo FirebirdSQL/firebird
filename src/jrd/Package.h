@@ -73,6 +73,7 @@ public:
 		delete m_value.vlu_string;
 		m_value = {};
 		m_value.vlu_desc = typeDesc;
+		m_value.vlu_desc.dsc_address = nullptr; // Make sure to call makeValue
 	}
 
 	void updateValue(const bid blobId)
@@ -82,7 +83,7 @@ public:
 
 	bid getBlobId(thread_db* tdbb);
 
-	dsc* makeValue(thread_db* tdbb, Request* request);
+	dsc* makeValue(thread_db* tdbb);
 
 private:
 	void executeCsbNode(thread_db* tdbb, CompilerScratch* csb);

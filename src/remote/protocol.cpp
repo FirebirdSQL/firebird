@@ -985,6 +985,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			if (!statement)
 				return P_FALSE(xdrs, p);
 
+			if (xdrs->x_op == XDR_DECODE && statement->rsr_batch_cs == nullptr)
+				return P_FALSE(xdrs, p);
+
 			LocalStatus ls;
 			CheckStatusWrapper status_vector(&ls);
 
@@ -2181,8 +2184,16 @@ static bool_t xdr_trrq_blr(RemoteXdr* xdrs, CSTRING* blr)
 
 	// We care about all receives and sends from fetch
 
-	if (xdrs->x_op == XDR_FREE || xdrs->x_op == XDR_ENCODE)
+	if (xdrs->x_op == XDR_ENCODE)
 		return TRUE;
+	else if (xdrs->x_op == XDR_FREE)
+	{
+		Rpr* procedure = xdrs->x_public->port_rpr;
+		if (procedure)
+			procedure->clear();
+
+		return TRUE;
+	}
 
 	rem_port* port = xdrs->x_public;
 	Rpr* procedure = port->port_rpr;

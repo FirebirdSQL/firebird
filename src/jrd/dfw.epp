@@ -392,6 +392,7 @@ static bool delete_trigger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool modify_trigger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool create_collation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_collation(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool commit_charset(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_exception(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_generator(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool delete_generator(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
@@ -1207,6 +1208,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_delete_prm, delete_parameter },
 	{ dfw_create_collation, create_collation },
 	{ dfw_delete_collation, delete_collation },
+	{ dfw_commit_charset, commit_charset },
 	{ dfw_delete_exception, delete_exception },
 	{ dfw_set_generator, set_generator },
 	{ dfw_delete_generator, delete_generator },
@@ -3378,6 +3380,37 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 		return true;
 
 	case 2:
+		return true;
+
+	case 3:
+		DFW_post_work(transaction, dfw_commit_charset, nullptr, nullptr, CSetId(id));
+		return true;
+	}
+
+	return false;
+}
+
+
+static bool commit_charset(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	c o m m i t _ c h a r s e t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Execute commit on charset id.
+ *
+ **************************************/
+
+	SET_TDBB(tdbb);
+	CSetId id(work->dfw_id);
+
+	switch (phase)
+	{
+	case 1:
+	case 2:
 	case 3:
 	case 4:
 	case 5:
@@ -3387,7 +3420,7 @@ static bool create_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	case 7:
 		{
 			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id, 0);
-			// fb_assert(cs);	--------------	breaks INI_ini()
+			fb_assert(cs);
 			if (cs)
 				cs->commit(tdbb);
 		}

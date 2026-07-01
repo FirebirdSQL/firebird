@@ -5646,12 +5646,14 @@ dsc* evlMod(thread_db* tdbb, const SysFunction*, const NestValueArray& args,
 		return &impure->vlu_desc;
 	}
 
+	const SINT64 dividend = MOV_get_int64(tdbb, value1, 0);
 	const SINT64 divisor = MOV_get_int64(tdbb, value2, 0);
 
 	if (divisor == 0)
 		status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero));
 
-	const SINT64 result = MOV_get_int64(tdbb, value1, 0) % divisor;
+	// Condition covers MIN % -1 UB case
+	const SINT64 result = (divisor == -1) ? 0 : dividend % divisor;
 
 	switch (impure->vlu_desc.dsc_dtype)
 	{
@@ -5932,7 +5934,7 @@ dsc* evlPad(thread_db* tdbb, const SysFunction* function, const NestValueArray& 
 	}
 	else
 	{
-		if (padLen * cs->maxBytesPerChar() > MAX_STR_SIZE)
+		if (padLen > MAX_STR_SIZE / cs->maxBytesPerChar())
 			status_exception::raise(Arg::Gds(isc_arith_except) << Arg::Gds(isc_imp_exc));
 
 		dsc desc;

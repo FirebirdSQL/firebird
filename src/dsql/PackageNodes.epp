@@ -560,7 +560,7 @@ dsc* PackageReferenceNode::execute(thread_db* tdbb, Request* request) const
 			Package* package = m_package(request->getResources());
 			package->checkReload(tdbb);
 
-			dsc* constantDsc = package->findConstant(m_fullName)->makeValue(tdbb, request);
+			dsc* constantDsc = package->findConstant(m_fullName)->makeValue(tdbb);
 			if (constantDsc == nullptr || constantDsc->isNull())
 				return nullptr;
 
@@ -611,7 +611,7 @@ DdlNode* CreatePackageConstantNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreatePackageConstantNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreatePackageConstantNode::checkPermission(thread_db* tdbb)
 { }
 
 void CreatePackageConstantNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
@@ -810,7 +810,7 @@ bool CreatePackageConstantNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		if (newDomainName.object.hasData())
 			newDom.dyn_fld_source = newDomainName;
 
-		AlterDomainNode::getDomainType(tdbb, transaction, newDom);
+		AlterDomainNode::getDomainType(tdbb, newDom);
 
 		if (newDom.dyn_dtype == blr_blob && newDomainName.object.isEmpty())
 			newDom.dyn_sub_type = m_type->subType;
@@ -965,7 +965,7 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 }
 
 
-void CreateAlterPackageNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterPackageNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -1251,7 +1251,7 @@ string DropPackageNode::internalPrint(NodePrinter& printer) const
 }
 
 
-void DropPackageNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropPackageNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_package(tdbb, name, SCL_drop);
 }
@@ -1464,7 +1464,7 @@ DdlNode* CreatePackageBodyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 }
 
 
-void CreatePackageBodyNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreatePackageBodyNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_create_access(tdbb, obj_packages, name.schema);
 }
@@ -1684,7 +1684,7 @@ string DropPackageBodyNode::internalPrint(NodePrinter& printer) const
 }
 
 
-void DropPackageBodyNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropPackageBodyNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_package(tdbb, name, SCL_drop);
 }

@@ -3647,13 +3647,16 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	fb_assert(specialJoins.hasData());
 
 	// Create joins between the original node and detected joinable nodes.
-	// Preserve FIRST/SKIP nodes at their original position, i.e. outside semi-joins.
+	// Preserve FIRST/SKIP/DISTINCT nodes at their original position, i.e. outside semi-joins.
 
 	const auto first = rse_first;
 	rse_first = nullptr;
 
 	const auto skip = rse_skip;
 	rse_skip = nullptr;
+
+	const auto projection = rse_projection;
+	rse_projection = nullptr;
 
 	const auto orgFlags = flags;
 	flags = 0;
@@ -3675,7 +3678,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		rse = newRse;
 	}
 
-	if (first || skip)
+	if (first || skip || projection)
 	{
 		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
 			RseNode(*tdbb->getDefaultPool());
@@ -3684,6 +3687,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		newRse->rse_jointype = INNER_JOIN;
 		newRse->rse_first = first;
 		newRse->rse_skip = skip;
+		newRse->rse_projection = projection;
 
 		rse = newRse;
 	}

@@ -383,10 +383,19 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 
 		while (BTR_next_index(tdbb, rel->getPermanent(), idxTran, &idx, &window, &rel_pages_base))
 		{
-			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			QualifiedName idx_name;
+			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			if (idp)
 				idx_name = idp->getName();
+
+			switch (idx.idx_state)
+			{
+			case Ods::irt_drop:
+			case Ods::irt_unused:
+				continue;
+			default:
+				break;
+			}
 
 			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);

@@ -1888,7 +1888,7 @@ static void store_intlnames(thread_db* tdbb, NonRelationSecurity& security)
 	for (const IntlManager::CharSetDefinition* charSet = IntlManager::defaultCharSets;
 		 charSet->name; ++charSet)
 	{
-		MetadataCache::getVersioned<Cached::CharSet>(tdbb, charSet->id, CacheFlag::UPGRADE | CacheFlag::NOCOMMIT);
+		MetadataCache::newVersion<Cached::CharSet>(tdbb, charSet->id);
 	}
 }
 
