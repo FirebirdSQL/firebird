@@ -402,7 +402,12 @@ Firebird 6.0
   Added as non-reserved words:
 
     ANY_VALUE
+    CUBE
 	FORMAT
+    GROUPING
+    GROUPING_ID
+    ROLLUP
+    SETS
 
   Moved from reserved words to non-reserved:
 

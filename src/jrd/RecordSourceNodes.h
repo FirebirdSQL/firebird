@@ -16,6 +16,7 @@
  * All Rights Reserved.
  * Contributor(s): ______________________________________.
  * Adriano dos Santos Fernandes
+ * Karol Bieniaszewski (grouping sets)
  */
 
 #ifndef JRD_RECORD_SOURCE_NODES_H
@@ -119,6 +120,243 @@ public:
 	NestValueArray sourceList;
 	NestValueArray targetList;
 };
+
+class GroupingClause final : public DsqlNode<GroupingClause, ExprNode::TYPE_GROUPING_CLAUSE>
+{
+public:
+	struct Element
+	{
+		enum class Type : UCHAR
+		{
+			SIMPLE,
+			EMPTY,
+			ROLLUP,
+			CUBE,
+			GROUPING_SETS
+		};
+
+		explicit Element(Type aType = Type::SIMPLE, ValueListNode* aItems = NULL,
+				GroupingClause* aGroupingSets = NULL)
+			: type(aType),
+			  items(aItems),
+			  groupingSets(aGroupingSets)
+		{
+		}
+
+		Type type;
+		NestConst<ValueListNode> items;
+		NestConst<GroupingClause> groupingSets;
+	};
+
+	enum class DuplicateMode : UCHAR
+	{
+		ALL,
+		DISTINCT
+	};
+
+	explicit GroupingClause(MemoryPool& pool)
+		: DsqlNode<GroupingClause, ExprNode::TYPE_GROUPING_CLAUSE>(pool),
+		  elements(pool),
+		  legacyGroup(NULL),
+		  duplicateMode(DuplicateMode::ALL),
+		  duplicateModeExplicit(false)
+	{
+	}
+
+	GroupingClause* addElement(Element::Type type, ValueListNode* items = NULL,
+		GroupingClause* groupingSets = NULL)
+	{
+		elements.add(Element(type, items, groupingSets));
+		return this;
+	}
+
+	GroupingClause* append(GroupingClause* clause)
+	{
+		for (const auto& element : clause->elements)
+			elements.add(element);
+
+		return this;
+	}
+
+	bool hasAdvancedGrouping() const
+	{
+		return !legacyGroup;
+	}
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		ValueExprNode::getChildren(holder, dsql);
+
+		for (const auto& element : elements)
+		{
+			holder.add(element.items);
+			holder.add(element.groupingSets);
+		}
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override
+	{
+		ValueExprNode::internalPrint(printer);
+
+		NODE_PRINT(printer, legacyGroup);
+		NODE_PRINT_ENUM(printer, duplicateMode);
+		NODE_PRINT(printer, duplicateModeExplicit);
+
+		printer.begin("elements");
+
+		unsigned n = 0;
+
+		for (const auto& element : elements)
+		{
+			Firebird::string name;
+			name.printf("element%u", n++);
+
+			printer.begin(name);
+			printer.print("type", static_cast<int>(element.type));
+			printer.print("items", element.items);
+			printer.print("groupingSets", element.groupingSets);
+			printer.end();
+		}
+
+		printer.end();
+
+		return "GroupingClause";
+	}
+
+	GroupingClause* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
+	{
+		GroupingClause* node = FB_NEW_POOL(dsqlScratch->getPool()) GroupingClause(dsqlScratch->getPool());
+
+		for (auto& element : elements)
+		{
+			node->addElement(element.type,
+				Node::doDsqlPass(dsqlScratch, element.items),
+				Node::doDsqlPass(dsqlScratch, element.groupingSets));
+		}
+
+		node->legacyGroup = Node::doDsqlPass(dsqlScratch, legacyGroup);
+		node->duplicateMode = duplicateMode;
+		node->duplicateModeExplicit = duplicateModeExplicit;
+
+		return node;
+	}
+
+	GroupingClause* dsqlFieldRemapper(FieldRemapper& visitor) override
+	{
+		ExprNode::dsqlFieldRemapper(visitor);
+		return this;
+	}
+
+	GroupingClause* pass1(thread_db* tdbb, CompilerScratch* csb) override
+	{
+		ExprNode::pass1(tdbb, csb);
+		return this;
+	}
+
+	GroupingClause* pass2(thread_db* tdbb, CompilerScratch* csb) override
+	{
+		ExprNode::pass2(tdbb, csb);
+		return this;
+	}
+
+public:
+	Firebird::Array<Element> elements;
+	NestConst<ValueListNode> legacyGroup;
+	DuplicateMode duplicateMode;
+	bool duplicateModeExplicit;
+};
+
+
+class GroupingSpec final : public Firebird::PermanentStorage, public Printable
+{
+public:
+	struct Dimension final : public Printable
+	{
+		explicit Dimension(MemoryPool&)
+			: expr(NULL),
+			  index(0)
+		{
+		}
+
+		Dimension(MemoryPool&, const Dimension& other)
+			: expr(other.expr),
+			  index(other.index)
+		{
+		}
+
+		Firebird::string internalPrint(NodePrinter& printer) const override
+		{
+			NODE_PRINT(printer, expr);
+			NODE_PRINT(printer, index);
+
+			return "GroupingSpec::Dimension";
+		}
+
+		NestConst<ValueExprNode> expr;
+		unsigned index;
+	};
+
+	struct Set final : public Printable
+	{
+		explicit Set(MemoryPool& pool)
+			: ordinal(0),
+			  dimensions(pool)
+		{
+		}
+
+		Set(MemoryPool& pool, const Set& other)
+			: ordinal(other.ordinal),
+			  dimensions(pool)
+		{
+			dimensions = other.dimensions;
+		}
+
+		Firebird::string internalPrint(NodePrinter& printer) const override
+		{
+			NODE_PRINT(printer, ordinal);
+
+			printer.begin("dimensions");
+
+			unsigned n = 0;
+
+			for (auto dimension = dimensions.begin(); dimension != dimensions.end(); ++dimension)
+			{
+				Firebird::string name;
+				name.printf("%u", n++);
+				printer.print(name, *dimension);
+			}
+
+			printer.end();
+
+			return "GroupingSpec::Set";
+		}
+
+		unsigned ordinal;
+		Firebird::SortedArray<unsigned> dimensions;
+	};
+
+	explicit GroupingSpec(MemoryPool& pool)
+		: PermanentStorage(pool),
+		  dimensions(pool),
+		  sets(pool),
+		  duplicateMode(GroupingClause::DuplicateMode::ALL)
+	{
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override
+	{
+		NODE_PRINT(printer, dimensions);
+		NODE_PRINT(printer, sets);
+		NODE_PRINT_ENUM(printer, duplicateMode);
+
+		return "GroupingSpec";
+	}
+
+	Firebird::ObjectsArray<Dimension> dimensions;
+	Firebird::ObjectsArray<Set> sets;
+	GroupingClause::DuplicateMode duplicateMode;
+};
+
 
 class PlanNode : public Firebird::PermanentStorage, public Printable
 {
@@ -591,6 +829,8 @@ public:
 		  maps(pool),
 		  mapStream(0),
 		  dsqlAll(false),
+		  dsqlOrderBySelectList(false),
+		  dsqlDistinctGroupingSets(false),
 		  recursive(false)
 	{
 	}
@@ -638,6 +878,8 @@ private:
 
 public:
 	bool dsqlAll;		// UNION ALL
+	bool dsqlOrderBySelectList;	// ORDER BY may be resolved against the select list
+	bool dsqlDistinctGroupingSets;	// GROUP BY DISTINCT sets may need late deduplication
 	bool recursive;		// union node is a recursive union
 };
 
@@ -812,6 +1054,12 @@ public:
 		obj->dsqlWhere = dsqlWhere;
 		obj->dsqlJoinUsing = dsqlJoinUsing;
 		obj->dsqlGroup = dsqlGroup;
+		obj->dsqlGrouping = dsqlGrouping;
+		obj->dsqlGroupingSpec = dsqlGroupingSpec;
+		obj->dsqlGroupingSet = dsqlGroupingSet;
+		obj->dsqlGroupingSelectList = dsqlGroupingSelectList;
+		obj->dsqlGroupingOrder = dsqlGroupingOrder;
+		obj->dsqlVisibleSelectItems = dsqlVisibleSelectItems;
 		obj->dsqlHaving = dsqlHaving;
 		obj->dsqlNamedWindows = dsqlNamedWindows;
 		obj->dsqlOrder = dsqlOrder;
@@ -900,6 +1148,12 @@ public:
 	NestConst<BoolExprNode> dsqlWhere;
 	NestConst<ValueListNode> dsqlJoinUsing;
 	NestConst<ValueListNode> dsqlGroup;
+	NestConst<GroupingClause> dsqlGrouping;
+	NestConst<GroupingSpec> dsqlGroupingSpec;
+	const Firebird::SortedArray<unsigned>* dsqlGroupingSet = nullptr;
+	NestConst<ValueListNode> dsqlGroupingSelectList;
+	NestConst<ValueListNode> dsqlGroupingOrder;
+	FB_SIZE_T dsqlVisibleSelectItems = 0;
 	NestConst<BoolExprNode> dsqlHaving;
 	NestConst<ValueListNode> dsqlOrder;
 	NestConst<RecSourceListNode> dsqlStreams;

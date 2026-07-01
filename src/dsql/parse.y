@@ -71,6 +71,7 @@
  * 2003.10.05 Dmitry Yemanov: Added support for explicit cursors in PSQL.
  * 2004.01.16 Vlad Horsun: added support for default parameters and
  *   EXECUTE BLOCK statement
+ * 2026.05.17 Karol Bieniaszewski: grouping sets, rollup, cube, grouping, grouping_id
  * Adriano dos Santos Fernandes
  */
 
@@ -710,12 +711,15 @@ using namespace Firebird;
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
 %token <metaNamePtr> CURRENT_SCHEMA
+%token <metaNamePtr> CUBE
 %token <metaNamePtr> DOWNTO
 %token <metaNamePtr> ERROR
 %token <metaNamePtr> FINISH
 %token <metaNamePtr> FORMAT
 %token <metaNamePtr> GENERATE_SERIES
 %token <metaNamePtr> GREATEST
+%token <metaNamePtr> GROUPING
+%token <metaNamePtr> GROUPING_ID
 %token <metaNamePtr> GROUPS
 %token <metaNamePtr> LEAST
 %token <metaNamePtr> LISTAGG
@@ -724,8 +728,10 @@ using namespace Firebird;
 %token <metaNamePtr> PERCENTILE_CONT
 %token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RTRIM
+%token <metaNamePtr> ROLLUP
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
+%token <metaNamePtr> SETS
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
@@ -815,6 +821,7 @@ using namespace Firebird;
 	Jrd::ValueListNode* valueListNode;
 	Jrd::RecSourceListNode* recSourceListNode;
 	Jrd::RseNode* rseNode;
+	Jrd::GroupingClause* groupingClause;
 	Jrd::PlanNode* planNode;
 	Jrd::PlanNode::AccessType* accessType;
 	Jrd::StmtNode* stmtNode;
@@ -6891,7 +6898,8 @@ query_spec
 			rse->dsqlSelectList = $4->items.hasData() ? $4 : nullptr;
 			rse->dsqlFrom = $5;
 			rse->dsqlWhere = $6;
-			rse->dsqlGroup = $7;
+			rse->dsqlGroup = $7 ? $7->legacyGroup.getObject() : nullptr;
+			rse->dsqlGrouping = $7;
 			rse->dsqlHaving = $8;
 			rse->dsqlNamedWindows = $9;
 			rse->rse_plan = $10;
@@ -7246,16 +7254,147 @@ gen_series_step_opt
 
 // other clauses in the select expression
 
-%type <valueListNode> group_clause
+%type <groupingClause> group_clause
 group_clause
 	: /* nothing */				{ $$ = NULL; }
-	| GROUP BY group_by_list	{ $$ = $3; }
+	| GROUP BY group_by_duplicate_opt group_by_list
+		{
+			$$ = $4;
+			$$->duplicateMode = $3 == 2 ?
+				GroupingClause::DuplicateMode::DISTINCT : GroupingClause::DuplicateMode::ALL;
+			$$->duplicateModeExplicit = $3 != 0;
+		}
 	;
 
-%type <valueListNode> group_by_list
+%type <intVal> group_by_duplicate_opt
+group_by_duplicate_opt
+	: /* nothing */	{ $$ = 0; }
+	| ALL			{ $$ = 1; }
+	| DISTINCT		{ $$ = 2; }
+	;
+
+%type <groupingClause> group_by_list
 group_by_list
-	: group_by_item						{ $$ = newNode<ValueListNode>($1); }
-	| group_by_list ',' group_by_item	{ $$ = $1->add($3); }
+	: group_by_element
+	| group_by_list ',' group_by_element
+		{
+			$$ = $1->append($3);
+
+			if ($$->legacyGroup && $3->legacyGroup && $$->legacyGroup->items.hasData() &&
+					$3->legacyGroup->items.hasData())
+			{
+				for (auto item = $3->legacyGroup->items.begin();
+					 item != $3->legacyGroup->items.end(); ++item)
+				{
+					$$->legacyGroup->add(*item);
+				}
+			}
+			else
+				$$->legacyGroup = NULL;
+		}
+	;
+
+%type <groupingClause> group_by_element
+group_by_element
+	: group_by_item
+		{
+			$$ = newNode<GroupingClause>();
+			$$->legacyGroup = newNode<ValueListNode>($1);
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, $$->legacyGroup);
+		}
+	| '(' ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->legacyGroup = newNode<ValueListNode>(0u);
+			$$->addElement(GroupingClause::Element::Type::EMPTY, $$->legacyGroup);
+		}
+	| '(' grouping_value_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->legacyGroup = $2;
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, $2);
+		}
+	| ROLLUP '(' grouping_item_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::ROLLUP, NULL, $3);
+		}
+	| CUBE '(' grouping_item_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::CUBE, NULL, $3);
+		}
+	| GROUPING SETS '(' grouping_sets_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::GROUPING_SETS, NULL, $4);
+		}
+	;
+
+%type <groupingClause> grouping_item_list
+grouping_item_list
+	: grouping_item							{ $$ = $1; }
+	| grouping_item_list ',' grouping_item	{ $$ = $1->append($3); }
+	;
+
+%type <groupingClause> grouping_item
+grouping_item
+	: group_by_item
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, newNode<ValueListNode>($1));
+		}
+	| '(' grouping_value_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, $2);
+		}
+	;
+
+%type <valueListNode> grouping_value_list
+grouping_value_list
+	: group_by_item							{ $$ = newNode<ValueListNode>($1); }
+	| grouping_value_list ',' group_by_item	{ $$ = $1->add($3); }
+	;
+
+%type <groupingClause> grouping_sets_list
+grouping_sets_list
+	: grouping_set							{ $$ = $1; }
+	| grouping_sets_list ',' grouping_set	{ $$ = $1->append($3); }
+	;
+
+%type <groupingClause> grouping_set
+grouping_set
+	: group_by_item
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, newNode<ValueListNode>($1));
+		}
+	| '(' ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::EMPTY, newNode<ValueListNode>(0u));
+		}
+	| '(' grouping_value_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::SIMPLE, $2);
+		}
+	| ROLLUP '(' grouping_item_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::ROLLUP, NULL, $3);
+		}
+	| CUBE '(' grouping_item_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::CUBE, NULL, $3);
+		}
+	| GROUPING SETS '(' grouping_sets_list ')'
+		{
+			$$ = newNode<GroupingClause>();
+			$$->addElement(GroupingClause::Element::Type::GROUPING_SETS, NULL, $4);
+		}
 	;
 
 // Except aggregate-functions are all expressions supported in group_by_item,
@@ -8933,9 +9072,23 @@ function
 
 %type <valueExprNode> non_aggregate_function
 non_aggregate_function
-	: numeric_value_function
+	: grouping_function
+	| numeric_value_function
 	| string_value_function
 	| system_function_expression
+	;
+
+%type <valueExprNode> grouping_function
+grouping_function
+	: GROUPING '(' value_list ')'
+		{
+			if ($3->items.getCount() == 1)
+				$$ = newNode<GroupingNode>($3->items[0]);
+			else
+				$$ = newNode<GroupingIdNode>($3, true);
+		}
+	| GROUPING_ID '(' value_list ')'
+		{ $$ = newNode<GroupingIdNode>($3); }
 	;
 
 %type <aggNode> aggregate_function
@@ -10528,14 +10681,19 @@ non_reserved_word
 	| BIN_OR_AGG
 	| BIN_XOR_AGG
 	| CONSTANT
+	| CUBE
 	| DOWNTO
 	| ERROR
 	| FINISH
 	| FORMAT
 	| GENERATE_SERIES
+	| GROUPING
+	| GROUPING_ID
 	| OWNER
+	| ROLLUP
 	| SEARCH_PATH
 	| SCHEMA
+	| SETS
 	| UNLIST
 	;
 
