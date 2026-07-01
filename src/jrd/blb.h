@@ -40,6 +40,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/dsc.h"
 #include "../jrd/Resources.h"
+#include "err_proto.h"
 
 namespace Ods
 {
@@ -133,6 +134,14 @@ public:
 		return destination;
 	}
 
+	// Read form specified position
+	FB_SIZE_T read(thread_db* tdbb, const offset_t position, void* buffer, const ULONG length);
+
+	// Write data at any position in a temporally (new) blob
+	// The position of the new buffer must start inside the blob range, but its length may extend beyond it
+	// Existing data will be overwritten
+	void write(thread_db* tdbb, const offset_t position, const void* buffer, ULONG length);
+
 private:
 	static blb* allocate_blob(thread_db*, jrd_tra*);
 	static blb* copy_blob(thread_db* tdbb, const bid* source, bid* destination,
@@ -141,6 +150,41 @@ private:
 	Ods::blob_page* get_next_page(thread_db*, win*);
 	void insert_page(thread_db*);
 	void destroy(const bool purge_flag);
+
+	// Modify data. Throw error on valid length violation
+	void modifyData(thread_db* tdbb, offset_t position, const void* buffer, const ULONG length);
+
+	// Modify existing data
+	// Output:
+	//     true: the input range is only inside the blob data
+	//     false: the input range is extends beyond existing data. Modify `buffer` and `length` to return only non-written data
+	template<class BufferType, class SizeType>
+	requires((std::is_same_v<BufferType, void> || std::is_same_v<BufferType, UCHAR>) && std::is_integral_v<SizeType>)
+	bool modifyBlobChunk(thread_db* tdbb, const offset_t position, const BufferType*& buffer, SizeType& length)
+	{
+		if (position > blb_length)
+		{
+			ERR_post(Firebird::Arg::Gds(isc_blob_write_after_the_end) <<
+				Firebird::Arg::Int64(position) << Firebird::Arg::Int64(blb_length));
+		}
+
+		const offset_t end = position + length;
+		if (end <= blb_length)
+		{
+			// Range is inside the current data, replace and report that no extra actions are requeued
+			modifyData(tdbb, position, buffer, length);
+			return true;
+		}
+
+		// Part inside existing data
+		const offset_t middle = blb_length - position;
+		modifyData(tdbb, position, buffer, middle);
+
+		// Return only part to append
+		buffer = reinterpret_cast<const BufferType*>(reinterpret_cast<const UCHAR*>(buffer) +  middle); // Move pointer
+		length -= middle;
+		return false;
+	}
 
 	FB_SIZE_T blb_temp_size = 0;	// size stored in transaction temp space
 	offset_t blb_temp_offset = 0;	// offset in transaction temp space

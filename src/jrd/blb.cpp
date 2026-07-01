@@ -90,6 +90,97 @@ static void move_to_string(Jrd::thread_db*, dsc*, dsc*);
 static void slice_callback(array_slice*, ULONG, dsc*);
 static blb* store_array(thread_db*, jrd_tra*, bid*);
 
+namespace {
+
+// A helper class to track positions input buffer writing process
+class DataModifyHelper
+{
+public:
+	DataModifyHelper(const offset_t position, const void* buffer, const ULONG length,
+		const USHORT dataPageSize, const USHORT maxDataPagesNumber)
+		: m_newData(buffer), m_newLength(length),
+		  m_dataPageSize(dataPageSize)
+	{
+		m_byteOffsetInPage = position % m_dataPageSize;
+	}
+
+	// Replace content on blob data page
+	inline void replaceInPage(blob_page* page) noexcept
+	{
+		fb_assert(needWrite());
+
+		UCHAR* data = reinterpret_cast<UCHAR*>(page->blp_page);
+		const ULONG dataLength = std::min<ULONG>(m_dataPageSize - m_byteOffsetInPage, m_newLength - m_written);
+		fb_assert(dataLength <= m_dataPageSize);
+
+		memcpy(data + m_byteOffsetInPage, reinterpret_cast<const UCHAR*>(m_newData) + m_written, dataLength);
+		m_written += dataLength;
+		m_byteOffsetInPage = 0; // Offset only in the first page
+	};
+
+	inline bool needWrite() const noexcept
+	{
+		return m_written < m_newLength;
+	}
+
+	[[maybe_unused]]
+	inline ULONG getWrittenLength() const noexcept
+	{
+		return m_written;
+	}
+
+private:
+	const void* m_newData;
+	const ULONG m_newLength;
+
+	// Where to replace
+	offset_t m_byteOffsetInPage = 0;
+	const USHORT m_dataPageSize;
+
+	ULONG m_written = 0;
+};
+
+// A helper class to track positions pages
+class PageIterator
+{
+public:
+	PageIterator(const ULONG pageId, const ULONG* blbPages, const FB_SIZE_T pagesCount)
+		: m_pageId(pageId),
+		  m_pagesId(blbPages),
+		  m_numberOfPages(pagesCount)
+	{ }
+
+	PageIterator(const ULONG pageId, const vcl& blbPages)
+		: m_pageId(pageId),
+		  m_pagesId(blbPages.begin()),
+		  m_numberOfPages(blbPages.count())
+	{ }
+
+	// Get blob pointer page ID (for blob level 2) or a blob data page (for blob level 1)
+	inline ULONG getNextPageId() noexcept
+	{
+		return m_pagesId[m_pageId++];
+	}
+
+	inline bool hasPages() const noexcept
+	{
+		return m_pageId < m_numberOfPages;
+	}
+
+private:
+	ULONG m_pageId = 0;
+	const ULONG* m_pagesId = nullptr; // Data pages (for BLOB level 1) or pointer pages (for BLOB level 2)
+	const ULONG m_numberOfPages = 0;
+};
+
+// Make sure blob is a temporary blob.  If not, complain bitterly.
+inline void verifyBlobModifiable(const USHORT blbFlags)
+{
+	if (!(blbFlags & BLB_temporary) || (blbFlags & BLB_closed))
+		ERR_post(Arg::Gds(isc_cannot_update_old_blob)); // Cannot update existing blob
+}
+
+} // namespace
 
 void blb::BLB_cancel(thread_db* tdbb)
 {
@@ -1573,6 +1664,20 @@ void blb::BLB_put_data(thread_db* tdbb, const UCHAR* buffer, SLONG length)
 	SET_TDBB(tdbb);
 	const BLOB_PTR* p = buffer;
 
+	// BLB_put_segment will remove the flag after the first call so replace the data here
+	if (blb_flags & BLB_seek)
+	{
+		verifyBlobModifiable(blb_flags);
+
+		blb_flags &= ~BLB_seek;
+
+		// Modify part inside existing data
+		if (modifyBlobChunk(tdbb, blb_seek, p, length))
+			return;
+
+		// Continue and append the rest
+	}
+
 	while (length > 0)
 	{
 		// ASF: the comment below was copied from BLB_get_data
@@ -1602,10 +1707,18 @@ void blb::BLB_put_segment(thread_db* tdbb, const void* seg, USHORT segment_lengt
 	Database* dbb = tdbb->getDatabase();
 	const UCHAR* segment = static_cast<const UCHAR*>(seg);
 
-	// Make sure blob is a temporary blob.  If not, complain bitterly.
+	verifyBlobModifiable(blb_flags);
 
-	if (!(blb_flags & BLB_temporary) || (blb_flags & BLB_closed))
-		ERR_post(Arg::Gds(isc_cannot_update_old_blob));
+	if (blb_flags & BLB_seek)
+	{
+		blb_flags &= ~BLB_seek;
+
+		// Modify part inside existing data
+		if (modifyBlobChunk(tdbb, blb_seek, segment, segment_length))
+			return;
+
+		// Continue and append the rest
+	}
 
 	if (blb_filter)
 	{
@@ -1944,6 +2057,149 @@ void blb::scalar(thread_db*		tdbb,
 	blob->BLB_close(tdbb);
 }
 
+void blb::modifyData(thread_db* tdbb, offset_t position, const void* buffer, const ULONG length)
+{
+	// All BLOB data is stored in the following format: <pages> <record>
+	//
+	// <record> (blb_buffer) contains unflushed data and is easy to modify.
+	// <pages> (blb_pages) must be fetched, marked, modified, and released.
+	//
+	// Depending on the BLOB level, the algorithm works as follows:
+	//
+	// Level 0: All data is inside blb_buffer.
+	//           This is the simplest case: just perform a memset, and we're done.
+	//
+	// Level 1: Flushed data is located on pages (blb_pages), unflushed data is in blb_buffer.
+	//           To modify the data:
+	//           1. Find the first blob data page that needs modification, read, mark, modify and release it.
+	//           2. If the remaining data to modify exceeds the current page size, proceed to the next data page.
+	//           3. If there are no more data pages but there is still data to modify, update the <record>.
+	//
+	// Level 2: Flushed data is organized in a pages tree.
+	//           - The blb_pages array contains BLOB pointer pages.
+	//           - Each pointer page holds a list of BLOB data page IDs.
+	//
+	//           To locate and modify the required page:
+	//           1. Calculate the pointer page offset:
+	//                  NUMBER_OF_USED_PAGES = position / <page size>
+	//                  POINTER_PAGE_ID = NUMBER_OF_USED_PAGES / <number of IDs per pointer page> .
+	//           2. Determine the target data page:
+	//                  DATA_PAGE_ID = NUMBER_OF_USED_PAGES % <number of IDs per pointer page>.
+	//           3. Compute the offset (in bytes) within the data page:
+	//                  BYTE_OFFSET = position % <page size>.
+	//           4. Modify the first relevant data page, then move to the next one.
+	//           5. If no more data pages are available, advance to the next pointer page,
+	//              read its first data page, and continue modifying next data pages.
+	//           6. If all pages have been processed but there is still input data left, update the <record>.
+
+
+	fb_assert ((blb_flags & BLB_temporary) && !(blb_flags & BLB_closed)); // Can update only new blob
+	fb_assert(position + length <= blb_length); // Update only existing data
+
+	if (blb_level == 0) // No pages, just a buffer (<record>)
+	{
+		blob_page* page = (blob_page*) getBuffer();
+		memcpy(reinterpret_cast<char*>(page->blp_page) + position, buffer, length);
+		return;
+	}
+
+	// Use helper to simplify pages modification
+	const auto maxDataPagesNumber = blb_pointers;
+	const auto dataPageSize = tdbb->getDatabase()->dbb_page_size - BLP_SIZE;
+
+	const auto numberOfUsedDataPages = position / dataPageSize;
+
+	DataModifyHelper helper(position, buffer, length, dataPageSize, maxDataPagesNumber);
+	blob_page* page = nullptr;
+
+	WIN window(blb_pg_space_id, -1);
+	if (blb_flags & BLB_large_scan)
+	{
+		window.win_flags = WIN_large_scan;
+		window.win_scans = 1;
+	}
+
+	auto releasePage = [&tdbb, &window]()
+	{
+		if (window.win_flags & WIN_large_scan)
+			CCH_RELEASE_TAIL(tdbb, &window);
+		else
+			CCH_RELEASE(tdbb, &window);
+	};
+
+	// Level 1 blobs are much easier -- page number is in vector.
+	if (blb_level == 1)
+	{
+		// Work with data pages
+		fb_assert(blb_pages);
+
+		const auto dataPageId = numberOfUsedDataPages;
+		fb_assert(dataPageId < maxDataPagesNumber);
+
+		// Update data on pages one by one
+		PageIterator dataPagesIt(dataPageId, *blb_pages);
+		while (helper.needWrite())
+		{
+			if (!dataPagesIt.hasPages()) // The last data chunk is in the blb_buffer
+			{
+				page = reinterpret_cast<blob_page*>(getBuffer());
+				helper.replaceInPage(page);
+				fb_assert(helper.getWrittenLength() == length);
+				return;
+			}
+
+			// Work with data page
+			window.win_page = dataPagesIt.getNextPageId();
+			page = reinterpret_cast<blob_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_blob));
+
+			CCH_MARK(tdbb, &window); // Mark as dirty
+			helper.replaceInPage(page);
+			releasePage();
+		}
+	}
+	else
+	{
+		fb_assert(blb_level == 2);
+
+		// blb_pages constains pointer pages ID
+		// A pointer page constains a list of data page IDs
+
+		const ULONG pointerPageId = numberOfUsedDataPages / maxDataPagesNumber;	// Example: 100000 / 8000 = 12
+		ULONG dataPageId = numberOfUsedDataPages % maxDataPagesNumber;		// Example: 100000 % 8000 = 4000
+
+		PageIterator pointerPagesIt(pointerPageId, *blb_pages);
+		while (helper.needWrite())
+		{
+			if (!pointerPagesIt.hasPages()) // The last data is in the blb_buffer
+			{
+				helper.replaceInPage(page);
+				fb_assert(helper.getWrittenLength() == length);
+				return;
+			}
+
+			// Get pointer page
+			window.win_page = pointerPagesIt.getNextPageId();
+			page = reinterpret_cast<blob_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_blob));
+
+			// Get data pages one by one and update
+			const ULONG numberOfDataPages = page->blp_length / sizeof(page->blp_page);
+			PageIterator dataPagesIt(dataPageId, page->blp_page, numberOfDataPages);
+			while (dataPagesIt.hasPages() && helper.needWrite())
+			{
+				auto dataPage = reinterpret_cast<blob_page*>(CCH_HANDOFF(tdbb, &window,
+					dataPagesIt.getNextPageId(),
+					LCK_write, pag_blob));
+
+				CCH_MARK(tdbb, &window); // Mark as dirty
+				helper.replaceInPage(dataPage);
+			}
+			releasePage();
+
+			dataPageId = 0; // Offset only for the first pointer pages
+		}
+	}
+	fb_assert(helper.getWrittenLength() == length);
+}
 
 static ArrayField* alloc_array(jrd_tra* transaction, Ods::InternalArrayDesc* proto_desc)
 {
@@ -3032,4 +3288,22 @@ void blb::storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHA
 void blb::BLB_cancel()
 {
 	BLB_cancel(JRD_get_thread_data());
+}
+
+FB_SIZE_T blb::read(thread_db* tdbb, const offset_t position, void* buffer, const ULONG length)
+{
+	// Mode 0 - from start
+	BLB_lseek(0, position);
+	return BLB_get_data(tdbb, reinterpret_cast<UCHAR*>(buffer), length, false);
+}
+
+void blb::write(thread_db* tdbb, const offset_t position, const void* buffer, ULONG length)
+{
+	verifyBlobModifiable(blb_flags);
+
+	// Modify part inside existing data
+	if (modifyBlobChunk(tdbb, position, buffer, length))
+		return; // Only modify, exit
+
+	BLB_put_data(tdbb, reinterpret_cast<const UCHAR*>(buffer), length); // Append
 }

@@ -1020,3 +1020,4 @@ FB_IMPL_MSG(JRD, 1017, dsql_agg_non_agg_context, -104, "42", "000", "Aggregate f
 FB_IMPL_MSG(JRD, 1018, dsql_agg_param_not_accum, -204, "42", "000", "Aggregate function input parameters may be referenced only in ON ACCUMULATE DO")
 FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allowed in ON GROUP DO section of aggregate function")
 FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")
+FB_IMPL_MSG(JRD, 1021, blob_write_after_the_end, -204, "42", "000", "Cannot write to blob. Position @1 is out of blob length @2")

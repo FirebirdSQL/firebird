@@ -6062,6 +6062,7 @@ const
 	 isc_dsql_agg_param_not_accum = 335545338;
 	 isc_dsql_agg_exit_group = 335545339;
 	 isc_dsql_agg_return = 335545340;
+	 isc_blob_write_after_the_end = 335545341;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
