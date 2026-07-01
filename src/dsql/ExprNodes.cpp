@@ -6470,7 +6470,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 	// Use context to check conflicts beween <relation>.<field> and <package>.<constant>
 	dsql_ctx packageContext(dsqlScratch->getPool());
-	{ // Consatnts
+	{ // Constants
 
 		QualifiedName constantName(dsqlName,
 			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : dsqlScratch->package.schema,
@@ -6480,7 +6480,9 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		{
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant);
 
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantName))
+			dsc constantDsc{};
+			auto transaction = dsqlScratch->getTransaction();
+			if (PackageReferenceNode::constantExists(tdbb, transaction, constantName, &constantDsc))
 			{
 				// Alias is a package name, not a constant
 				packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
@@ -6488,7 +6490,8 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 				ambiguousCtxStack.push(&packageContext);
 
 				MemoryPool& pool = dsqlScratch->getPool();
-				node = FB_NEW_POOL(pool) PackageReferenceNode(pool, constantName, blr_pkg_reference_to_constant);
+				node = FB_NEW_POOL(pool) PackageReferenceNode(pool,
+					constantName, blr_pkg_reference_to_constant, &constantDsc);
 			}
 		}
 	}
@@ -14243,11 +14246,12 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName))
+			dsc constantDsc{};
+			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName, &constantDsc))
 			{
 				delete node;
 				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(),
-					constantFullName, blr_pkg_reference_to_constant);
+					constantFullName, blr_pkg_reference_to_constant, &constantDsc);
 			}
 		}
 

@@ -124,7 +124,7 @@ class PackageReferenceNode final : public TypedNode<ValueExprNode, ExprNode::TYP
 {
 public:
 	PackageReferenceNode(Firebird::MemoryPool& pool, const QualifiedName& name,
-		const UCHAR itemType);
+		const UCHAR itemType, const dsc* type = nullptr);
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 
@@ -142,7 +142,7 @@ public:
 
 	// Search for a package constant by its fully qualified name
 	static bool constantExists(thread_db* tdbb, Jrd::jrd_tra* transaction,
-		const QualifiedName& name, bool* isPrivate = nullptr);
+		const QualifiedName& name, dsc* outConstantDesc = nullptr, bool* isPrivate = nullptr);
 
 	void getDesc(thread_db*, CompilerScratch*, dsc*) override;
 
@@ -159,6 +159,7 @@ public:
 private:
 	CachedResource<Package, PackagePermanent> m_package;
 	const QualifiedName m_fullName;
+	dsc m_cachedDsc = {};
 
 	const UCHAR m_itemType;
 	ULONG m_impureOffset = 0;
