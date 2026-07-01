@@ -276,6 +276,11 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	return oldState == Bool3State::True;
 }
 
+FB_UINT64 jrd_rel::getTempInstanceId(thread_db* tdbb) const
+{
+	return (getPermanent()->rel_flags & REL_temp_frame) ? tdbb->tdbb_temp_frame_id : 0;
+}
+
 void RelationPermanent::fillPages(thread_db* tdbb)
 {
 	if (!rel_file)
@@ -297,7 +302,14 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 
 	RelationPages::InstanceId inst_id;
 
-	if (rel_flags & REL_temp_tran)
+	if (rel_flags & REL_temp_frame)
+	{
+		if (tdbb->tdbb_temp_frame_id)
+			inst_id = tdbb->tdbb_temp_frame_id;
+		else // called without a local table execution frame, maybe from OPT or CMP
+			return &rel_pages_base;
+	}
+	else if (rel_flags & REL_temp_tran)
 	{
 		if (tran != 0 && tran != MAX_TRA_NUMBER)
 			inst_id = tran;
@@ -351,6 +363,9 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 			newPages->rel_index_root,
 			newPages);
 #endif
+
+		if (rel_flags & REL_temp_frame)
+			return newPages;
 
 		// create indexes
 		MemoryPool* pool = tdbb->getDefaultPool();
@@ -432,13 +447,15 @@ RelationPages* RelationPermanent::getAttPages(thread_db* tdbb, RelationPages::In
 	return pages;
 }
 
-bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
+bool RelationPermanent::delPages(thread_db* tdbb, RelationPages::InstanceId inst_id, RelationPages* aPages)
 {
-	RelationPages* pages = aPages ? aPages : getPages(tdbb, tran, false);
+	RelationPages* pages = aPages ? aPages :
+		(rel_flags & REL_temp_frame ? getAttPages(tdbb, inst_id) : getPages(tdbb, inst_id, false));
 	if (!pages || !pages->rel_instance_id)
 		return false;
 
-	fb_assert(tran == 0 || tran == MAX_TRA_NUMBER || pages->rel_instance_id == tran);
+	fb_assert(inst_id == 0 || inst_id == MAX_TRA_NUMBER || pages->rel_instance_id == inst_id ||
+		(rel_flags & REL_temp_frame));
 
 	fb_assert(pages->useCount > 0);
 

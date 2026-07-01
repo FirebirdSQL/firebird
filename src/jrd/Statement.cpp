@@ -74,6 +74,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  subStatements(*p),
 	  fors(*p),
 	  localTables(*p),
+	  outerLocalTables(*p),
 	  invariants(*p),
 	  blr(*p),
 	  mapFieldInfo(*p),
@@ -114,6 +115,17 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 
 		localTables = csb->csb_localTables;
 		csb->csb_localTables.clear();
+
+		if (csb->outerLocalTablesMap.count())
+		{
+			outerLocalTables.grow(localTables.getCount());
+
+			for (const auto& [innerNumber, outerNumber] : csb->outerLocalTablesMap)
+			{
+				fb_assert(innerNumber < outerLocalTables.getCount());
+				outerLocalTables[innerNumber] = true;
+			}
+		}
 
 		// make a vector of all invariant-type nodes, so that we will
 		// be able to easily reinitialize them when we restart the request
@@ -186,6 +198,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		csb->subProcedures.clear();
 		csb->outerMessagesMap.clear();
 		csb->outerVarsMap.clear();
+		csb->outerLocalTablesMap.clear();
 		csb->csb_rpt.free();
 		csb->csb_resources = nullptr;
 	}
@@ -773,6 +786,15 @@ void Statement::release(thread_db* tdbb)
 		}
 	}
 
+	for (FB_SIZE_T i = 0; i < localTables.getCount(); ++i)
+	{
+		if (i < outerLocalTables.getCount() && outerLocalTables[i])
+			continue;
+
+		if (const auto localTable = localTables[i])
+			localTable->destroyRelation(tdbb);
+	}
+
 	sqlText = NULL;
 
 	// ~Statement is never called :-(
@@ -1036,6 +1058,50 @@ bool Request::isRoot() const
 	return this == statement->rootRequest();
 }
 
+Request* Request::getLocalTableRequest(bool outerDecl)
+{
+	Request* request = this;
+
+	if (outerDecl)
+	{
+		while (request->getStatement()->parentStatement)
+			request = request->req_caller;
+	}
+
+	return request;
+}
+
+jrd_tra* Request::getLocalTableTransaction() const
+{
+	Stack<AutoTranCtx>::const_iterator autoTran(req_auto_trans);
+
+	if (autoTran.hasData())
+		return autoTran.object().m_transaction;
+
+	return req_transaction;
+}
+
+FB_UINT64 Request::getLocalTableInstanceId(thread_db* tdbb) const
+{
+	if (!req_local_table_instance_id)
+		req_local_table_instance_id = tdbb->getDatabase()->generateStatementId();
+
+	return req_local_table_instance_id;
+}
+
+bool Request::getLocalTableAutoTranCtx(AutoTranCtx& ctx) const
+{
+	Stack<AutoTranCtx>::const_iterator autoTran(req_auto_trans);
+
+	if (autoTran.hasData())
+	{
+		ctx = autoTran.object();
+		return true;
+	}
+
+	return false;
+}
+
 StmtNumber Request::getRequestId() const
 {
 	if (!req_id)
@@ -1050,6 +1116,8 @@ StmtNumber Request::getRequestId() const
 
 Request::Request(Firebird::AutoMemoryPool& pool, Database* dbb, /*const*/ Statement* aStatement)
 	: statement(aStatement),
+	  req_id(0),
+	  req_local_table_instance_id(0),
 	  req_inUse(false),
 	  req_pool(pool),
 	  req_memory_stats(&aStatement->pool->getStatsGroup()),

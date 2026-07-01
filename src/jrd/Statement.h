@@ -147,6 +147,7 @@ public:
 	const StmtNode* topNode;			// top of execution tree
 	Firebird::Array<const Select*> fors;	// select expressions
 	Firebird::Array<const DeclareLocalTableNode*> localTables;	// local tables
+	Firebird::Array<bool> outerLocalTables;	// local tables declared in an outer PSQL scope
 	Firebird::Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	Firebird::RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Firebird::Array<UCHAR> blr;			// BLR for non-SQL query

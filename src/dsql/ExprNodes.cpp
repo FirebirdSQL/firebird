@@ -6681,7 +6681,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlIndices)
 		dsqlScratch->appendUChar(blr_index);
 
-	if (DDL_ids(dsqlScratch))
+	if (DDL_ids(dsqlScratch) ||
+		(dsqlContext->ctx_relation && (dsqlContext->ctx_relation->rel_flags & REL_local_table)))
 	{
 		dsqlScratch->appendUChar(blr_fid);
 		GEN_stuff_context(dsqlScratch, dsqlContext);

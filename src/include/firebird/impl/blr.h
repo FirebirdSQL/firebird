@@ -462,6 +462,7 @@
 
 // subcodes of blr_dcl_local_table
 #define blr_dcl_local_table_format	(unsigned char) 1
+#define blr_dcl_local_table_ltt		(unsigned char) 2
 
 #define blr_local_table_truncate	(unsigned char) 219
 #define blr_local_table_id			(unsigned char) 220
@@ -469,6 +470,7 @@
 #define blr_outer_map				(unsigned char) 221
 #define blr_outer_map_message		(unsigned char) 1
 #define blr_outer_map_variable			(unsigned char) 2
+#define blr_outer_map_local_table		(unsigned char) 3
 
 // json functions (reserved)
 #define blr_json_function			(unsigned char) 222

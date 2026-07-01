@@ -1452,7 +1452,8 @@ namespace Jrd
 	class LocalTableStream final : public RecordStream
 	{
 	public:
-		LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table);
+		LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table,
+			bool outerDecl);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1466,8 +1467,14 @@ namespace Jrd
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
 
+		struct Impure : public RecordSource::Impure
+		{
+			Request* localTableRequest;
+		};
+
 	private:
 		const DeclareLocalTableNode* m_table;
+		bool m_outerDecl = false;
 	};
 
 	class Union final : public RecordStream

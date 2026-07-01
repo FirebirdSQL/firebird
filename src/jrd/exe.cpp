@@ -1244,15 +1244,6 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 			tdbb->setTransaction(old_transaction);
 		}
 
-		for (auto localTable : statement->localTables)
-		{
-			if (!localTable)
-				continue;
-
-			auto impure = localTable->getImpure(tdbb, request, false);
-			impure->recordBuffer->reset();
-		}
-
 		release_blobs(tdbb, request);
 
 		const auto attachment = request->req_attachment;
@@ -1262,6 +1253,21 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
 		}
+	}
+
+	const Statement* statement = request->getStatement();
+
+	for (FB_SIZE_T i = 0; i < statement->localTables.getCount(); ++i)
+	{
+		if (i < statement->outerLocalTables.getCount() && statement->outerLocalTables[i])
+			continue;
+
+		const auto localTable = statement->localTables[i];
+
+		if (!localTable)
+			continue;
+
+		localTable->reset(tdbb, request);
 	}
 
 	request->req_sorts.unlinkAll();
@@ -2079,4 +2085,3 @@ QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 		return QualifiedName("");
 	}
 }
-

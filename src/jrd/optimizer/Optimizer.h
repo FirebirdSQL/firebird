@@ -508,6 +508,7 @@ public:
 	~Optimizer();
 
 	RecordSource* compile(RseNode* subRse, BoolExprNodeStack* parentStack);
+	void compileLocalTable(StreamType stream);
 	void compileRelation(StreamType stream);
 	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack);
 	void generateAggregateDistincts(MapNode* map);
