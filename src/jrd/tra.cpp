@@ -4004,8 +4004,7 @@ void jrd_tra::listStayingUndo(thread_db* tdbb, jrd_rel* relation, SINT64 number,
  *
  **************************************/
 {
-	const auto tempInstanceId = (relation->getPermanent()->rel_flags & REL_temp_frame) ?
-		tdbb->tdbb_temp_frame_id : 0;
+	const auto tempInstanceId = relation->getTempInstanceId(tdbb);
 
 	for (Savepoint::Iterator iter(tra_save_point); *iter; ++iter)
 	{

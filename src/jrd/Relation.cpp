@@ -276,6 +276,11 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	return oldState == Bool3State::True;
 }
 
+FB_UINT64 jrd_rel::getTempInstanceId(thread_db* tdbb) const
+{
+	return (getPermanent()->rel_flags & REL_temp_frame) ? tdbb->tdbb_temp_frame_id : 0;
+}
+
 void RelationPermanent::fillPages(thread_db* tdbb)
 {
 	if (!rel_file)

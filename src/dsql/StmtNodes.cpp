@@ -125,13 +125,15 @@ namespace
 	class AutoLocalTableContext
 	{
 	public:
-		AutoLocalTableContext(thread_db* aTdbb, Request* aRequest, Request* localTableRequest,
-			jrd_tra* transaction)
+		AutoLocalTableContext(thread_db* aTdbb, Request* aRequest,
+			const DeclareLocalTableNode* localTable, Request* aLocalTableRequest, jrd_tra* transaction)
 			: tdbb(aTdbb),
 			  request(aRequest),
 			  oldTransaction(aTdbb->getTransaction()),
 			  oldFrameId(aTdbb->tdbb_temp_frame_id)
 		{
+			const auto localTableRequest = (localTable && localTable->useLtt) ? aLocalTableRequest : nullptr;
+
 			oldSnapshot.init();
 			tdbb->setTransaction(transaction);
 			tdbb->tdbb_temp_frame_id = localTableRequest ? localTableRequest->getLocalTableInstanceId(tdbb) : 0;
@@ -1804,6 +1806,7 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 				node->format = Format::newFormat(pool, fieldCount);
 				node->format->fmt_length = FLAG_BYTES(fieldCount);
 				node->notNullFields.grow(fieldCount);
+				node->fieldNames.grow(fieldCount);
 
 				for (USHORT fieldNum = 0; fieldNum < fieldCount; ++fieldNum)
 				{
@@ -1811,6 +1814,7 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 					ItemInfo itemInfo;
 					PAR_desc(tdbb, csb, &fmtDesc, &itemInfo);
 					node->notNullFields[fieldNum] = !itemInfo.nullable;
+					blrReader.getMetaName(node->fieldNames[fieldNum]);
 
 					if (fmtDesc.dsc_dtype >= dtype_aligned)
 						node->format->fmt_length = FB_ALIGN(node->format->fmt_length, type_alignments[fmtDesc.dsc_dtype]);
@@ -1986,7 +1990,10 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUShort(fieldCount);
 
 		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
+		{
 			dsqlScratch->putType(field, true);
+			dsqlScratch->appendNullString(field->fld_name.c_str());
+		}
 
 		dsqlScratch->appendUChar(blr_end);
 	}
@@ -1997,6 +2004,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::copy(thread_db* tdbb, NodeCopier& 
 	const auto node = FB_NEW_POOL(*tdbb->getDefaultPool()) DeclareLocalTableNode(*tdbb->getDefaultPool());
 	node->format = format;
 	node->notNullFields = notNullFields;
+	node->fieldNames = fieldNames;
 	node->tableNumber = tableNumber;
 	node->useLtt = useLtt;
 	return node;
@@ -2040,7 +2048,12 @@ void DeclareLocalTableNode::validateRecord(const DeclareLocalTableNode* table, c
 		if (table->notNullFields[i] && record->isNull(i))
 		{
 			string fieldName;
-			fieldName.printf("local table field %" SIZEFORMAT, i + 1);
+
+			if (i < table->fieldNames.getCount() && table->fieldNames[i].hasData())
+				fieldName.printf("\"%s\"", table->fieldNames[i].c_str());
+			else
+				fieldName.printf("local table field %" SIZEFORMAT, i + 1);
+
 			ERR_post(Arg::Gds(isc_not_valid_for_var) << Arg::Str(fieldName) << Arg::Str(NULL_STRING_MARK));
 		}
 	}
@@ -3379,8 +3392,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		}
 	}
 
-	AutoLocalTableContext autoTransaction(tdbb, request,
-		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
+	AutoLocalTableContext autoTransaction(tdbb, request, localTable, localTableRequest, transaction);
 
 	switch (request->req_operation)
 	{
@@ -9080,8 +9092,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 			newRpb->rpb_relation = relation;
 	}
 
-	AutoLocalTableContext autoTransaction(tdbb, request,
-		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
+	AutoLocalTableContext autoTransaction(tdbb, request, localTable, localTableRequest, transaction);
 
 	switch (request->req_operation)
 	{
@@ -10280,8 +10291,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 		relation = rpb->rpb_relation = localTable->getRelation(tdbb, localTableRequest);
 	}
 
-	AutoLocalTableContext autoTransaction(tdbb, request,
-		(localTable && localTable->useLtt ? localTableRequest : nullptr), transaction);
+	AutoLocalTableContext autoTransaction(tdbb, request, localTable, localTableRequest, transaction);
 
 	switch (request->req_operation)
 	{

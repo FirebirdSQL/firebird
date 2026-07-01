@@ -661,6 +661,7 @@ public:
 	bool isView() const noexcept;
 	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
+	FB_UINT64 getTempInstanceId(thread_db* tdbb) const;
 
 	ObjectType getObjectType() const noexcept
 	{

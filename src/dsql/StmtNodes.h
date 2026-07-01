@@ -382,7 +382,8 @@ public:
 	explicit DeclareLocalTableNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool),
 		  dsqlName(pool),
-		  notNullFields(pool)
+		  notNullFields(pool),
+		  fieldNames(pool)
 	{
 	}
 
@@ -416,6 +417,7 @@ public:
 	dsql_rel* dsqlRelation = nullptr;
 	NestConst<Format> format;
 	Firebird::Array<UCHAR> notNullFields;
+	Firebird::Array<MetaName> fieldNames;
 	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
 	bool useLtt = false;

@@ -1467,6 +1467,11 @@ namespace Jrd
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
 
+		struct Impure : public RecordSource::Impure
+		{
+			Request* localTableRequest;
+		};
+
 	private:
 		const DeclareLocalTableNode* m_table;
 		bool m_outerDecl = false;
