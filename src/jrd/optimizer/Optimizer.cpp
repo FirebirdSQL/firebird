@@ -1367,12 +1367,17 @@ void Optimizer::compileLocalTable(StreamType stream)
 	if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
 		return;
 
+	const auto localTable = csb->csb_localTables[tableNumber];
+
+	if (!localTable->useLtt)
+		return;
+
 	const bool needIndices = conjuncts.hasData() || (rse->rse_sorted || rse->rse_aggregate);
 
 	if (!needIndices)
 		return;
 
-	const auto relation = csb->csb_localTables[tableNumber]->getRelation(tdbb, nullptr)->getPermanent();
+	const auto relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
 	const auto relPages = relation->getPages(tdbb);
 	IndexDescList idxList;
 	BTR_all(tdbb, relation, idxList, relPages, csb->csb_g_flags & csb_internal);

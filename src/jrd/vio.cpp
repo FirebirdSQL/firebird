@@ -6101,8 +6101,7 @@ static UndoDataRet get_undo_data(thread_db* tdbb, jrd_tra* transaction,
 	if (!transaction->tra_save_point)
 		return udNone;
 
-	const auto tempInstanceId = (rpb->rpb_relation->getPermanent()->rel_flags & REL_temp_frame) ?
-		tdbb->tdbb_temp_frame_id : 0;
+	const auto tempInstanceId = rpb->rpb_relation->getTempInstanceId(tdbb);
 	VerbAction* const action = transaction->tra_save_point->getAction(rpb->rpb_relation, tempInstanceId);
 
 	if (action)

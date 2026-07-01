@@ -62,7 +62,7 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 	const auto rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
 
-	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+	const auto localTableRequest = impure->localTableRequest = request->getLocalTableRequest(m_outerDecl);
 
 	if (m_table->useLtt)
 	{
@@ -120,8 +120,7 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 		if (!rpb->rpb_record)
 			rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
 
-		const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
-		const auto recordBuffer = m_table->getImpure(tdbb, localTableRequest)->recordBuffer;
+		const auto recordBuffer = m_table->getImpure(tdbb, impure->localTableRequest)->recordBuffer;
 
 		while (true)
 		{
@@ -143,7 +142,7 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 		return true;
 	}
 
-	const auto localTableRequest = request->getLocalTableRequest(m_outerDecl);
+	const auto localTableRequest = impure->localTableRequest;
 	const auto transaction = localTableRequest->getLocalTableTransaction();
 	AutoSetRestore<FB_UINT64> autoFrameId(
 		&tdbb->tdbb_temp_frame_id, localTableRequest->getLocalTableInstanceId(tdbb));
