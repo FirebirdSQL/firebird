@@ -5154,7 +5154,7 @@ StmtNode* ForNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb, true);
 
 	rse->pass2Rse(tdbb, csb);
 

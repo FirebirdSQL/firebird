@@ -673,9 +673,11 @@ inline void CompilerScratch::csb_repeat::deactivate()
 class AutoSetCurrentCursorId : private Firebird::AutoSetRestore<ULONG>
 {
 public:
-	explicit AutoSetCurrentCursorId(CompilerScratch* csb)
+	explicit AutoSetCurrentCursorId(CompilerScratch* csb, bool forceNew = false)
 		: AutoSetRestore(&csb->csb_currentCursorId,
-			(csb->csb_currentCursorId == 0 ? csb->csb_nextCursorId++ : csb->csb_currentCursorId))
+			(forceNew || csb->csb_currentCursorId == 0 ?
+				csb->csb_nextCursorId++ :
+				csb->csb_currentCursorId))
 	{
 	}
 };
