@@ -48,10 +48,11 @@ namespace Firebird::Jrd {
 	DeferredWork* DFW_post_work(jrd_tra*, dfw_t, const string&, const MetaName& schema,
 		USHORT, const MetaName& package = {});
 	DeferredWork* DFW_post_work_arg(jrd_tra*, DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
-		USHORT);
+	USHORT);
 	DeferredWork* DFW_post_work_arg(jrd_tra*, DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
-		USHORT, dfw_t);
-	void DFW_update_index(const QualifiedName&, USHORT, const SelectivityList&, jrd_tra*);
+	USHORT, dfw_t);
+	void DFW_update_index(const QualifiedName&, USHORT, const SelectivityList&, jrd_tra*,
+		jrd_rel* relation = nullptr);
 	void DFW_reset_icu(thread_db*);
 	string DFW_remove_icu_info_from_attributes(const QualifiedName&, const string&);
 } // namespace Firebird::Jrd

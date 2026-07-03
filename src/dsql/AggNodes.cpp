@@ -19,18 +19,25 @@
  */
 
 #include "firebird.h"
+#include "../common/utils_proto.h"
 #include "../dsql/AggNodes.h"
 #include "../dsql/ExprNodes.h"
+#include "../dsql/StmtNodes.h"
 #include "../jrd/jrd.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/btr.h"
 #include "../jrd/exe.h"
+#include "../jrd/ExtEngineManager.h"
+#include "../jrd/Function.h"
+#include "../jrd/Statement.h"
+#include "../jrd/met.h"
 #include "../jrd/tra.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/blb_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/intl_proto.h"
+#include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/par_proto.h"
 #include "../dsql/ddl_proto.h"
@@ -357,6 +364,11 @@ AggNode* AggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	return this;
 }
 
+void AggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	arg->getDesc(tdbb, csb, desc);
+}
+
 void AggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -529,6 +541,829 @@ dsc* AggNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	return aggExecute(tdbb, request);
+}
+
+
+//--------------------
+
+
+static AggNode::Register<CustomAggNode> customAggInfo("CUSTOM_AGGREGATE", blr_invoke_agg_function);
+
+CustomAggNode::CustomAggNode(MemoryPool& pool, const QualifiedName& aName, ValueListNode* aArgs)
+	: AggNode(pool, customAggInfo, false, false, nullptr),
+	  name(pool, aName),
+	  args(aArgs)
+{
+}
+
+DmlNode* CustomAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
+{
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
+
+	auto& blrReader = csb->csb_blr_reader;
+	QualifiedName name;
+	const auto node = FB_NEW_POOL(pool) CustomAggNode(pool);
+	ObjectsArray<MetaName>* argNames = nullptr;
+	const UCHAR* argNamesPos = nullptr;
+	USHORT argCount = 0;
+	bool hasArgs = false;
+	bool hasFilter = false;
+
+	UCHAR subCode;
+
+	while ((subCode = blrReader.getByte()) != blr_end)
+	{
+		switch (subCode)
+		{
+			case blr_invoke_agg_function_id:
+			{
+				predateCheck(!node->function, "blr_invoke_agg_function_id", "blr_invoke_agg_function_id");
+
+				bool isSub = false;
+				UCHAR functionIdCode;
+
+				while ((functionIdCode = blrReader.getByte()) != blr_end)
+				{
+					switch (functionIdCode)
+					{
+						case blr_invoke_agg_function_id_schema:
+							blrReader.getMetaName(name.schema);
+							break;
+
+						case blr_invoke_agg_function_id_package:
+							blrReader.getMetaName(name.package);
+							break;
+
+						case blr_invoke_agg_function_id_name:
+							blrReader.getMetaName(name.object);
+							break;
+
+						case blr_invoke_agg_function_id_sub:
+							isSub = true;
+							break;
+
+						default:
+							PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_agg_function_id");
+					}
+				}
+
+				node->name = name;
+
+				if (isSub)
+				{
+					for (auto curCsb = csb; curCsb && !node->function; curCsb = curCsb->mainCsb)
+					{
+						if (DeclareSubFuncNode* declareNode; curCsb->subFunctions.get(name.object, declareNode))
+							node->function = declareNode->routine;
+					}
+				}
+				else
+				{
+					auto* func = MetadataCache::getPerm<Cached::Function>(tdbb, name, CacheFlag::AUTOCREATE);
+					if (func)
+						node->function = csb->csb_resources->functions.registerResource(func);
+				}
+
+				if (!node->function)
+					PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+
+				if (!node->function(tdbb)->fun_aggregate)
+					PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+
+				break;
+			}
+
+			case blr_invoke_agg_function_arg_names:
+			{
+				predateCheck(node->function, "blr_invoke_agg_function_id", "blr_invoke_agg_function_arg_names");
+				predateCheck(!node->args, "blr_invoke_agg_function_arg_names", "blr_invoke_agg_function_args");
+
+				argNamesPos = blrReader.getPos();
+				USHORT argNamesCount = blrReader.getWord();
+				MetaName argName;
+
+				argNames = FB_NEW_POOL(pool) ObjectsArray<MetaName>(pool);
+
+				while (argNamesCount--)
+				{
+					blrReader.getMetaName(argName);
+					argNames->add(argName);
+				}
+
+				break;
+			}
+
+			case blr_invoke_agg_function_args:
+				predateCheck(node->function, "blr_invoke_agg_function_id", "blr_invoke_agg_function_args");
+				predateCheck(!node->args, "blr_invoke_agg_function_args", "blr_invoke_agg_function_args");
+
+				argCount = blrReader.getWord();
+				node->args = PAR_args(tdbb, csb, argCount, MAX(argCount, node->function(tdbb)->fun_inputs));
+				hasArgs = true;
+				break;
+
+			case blr_invoke_agg_function_filter:
+				predateCheck(node->args, "blr_invoke_agg_function_args", "blr_invoke_agg_function_filter");
+				predateCheck(!hasFilter, "blr_invoke_agg_function_filter", "blr_invoke_agg_function_filter");
+
+				node->dsqlFilter = PAR_parse_boolean(tdbb, csb);
+				hasFilter = true;
+				break;
+
+			default:
+				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_agg_function sub code");
+		}
+	}
+
+	if (!node->function)
+		PAR_error(csb, Arg::Gds(isc_funnotdef) << name.toQuotedString());
+
+	if (!hasArgs)
+		PAR_error(csb, Arg::Gds(isc_random) << "blr_invoke_agg_function_args missing");
+
+	if (argNames && argNames->getCount() > argCount)
+	{
+		blrReader.setPos(argNamesPos);
+		PAR_error(csb,
+			Arg::Gds(isc_random) <<
+			"blr_invoke_agg_function_arg_names count cannot be greater than blr_invoke_agg_function_args");
+	}
+
+	const auto function = node->function(tdbb);
+	Arg::StatusVector mismatchStatus;
+
+	if (!argNames && argCount > function->fun_inputs)
+		mismatchStatus << Arg::Gds(isc_wronumarg);
+	else if (argNames)
+	{
+		const auto positionalArgCount = argCount - argNames->getCount();
+		auto argIt = node->args->items.begin();
+		LeftPooledMap<MetaName, NestConst<ValueExprNode>> argsByName;
+
+		if (positionalArgCount)
+		{
+			if (positionalArgCount > function->fun_inputs)
+				mismatchStatus << Arg::Gds(isc_wronumarg);
+
+			for (auto pos = 0u; pos < positionalArgCount; ++pos)
+			{
+				if (pos < function->fun_inputs)
+				{
+					const auto parameter = function->getInputFields()[pos];
+
+					if (parameter->prm_name.hasData() && argsByName.put(parameter->prm_name, *argIt))
+						mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << parameter->prm_name;
+				}
+
+				++argIt;
+			}
+		}
+
+		for (const auto& argName : *argNames)
+		{
+			if (argsByName.put(argName, *argIt++))
+				mismatchStatus << Arg::Gds(isc_param_multiple_assignments) << argName;
+		}
+
+		node->args->items.resize(function->getInputFields().getCount());
+		argIt = node->args->items.begin();
+
+		for (auto& parameter : function->getInputFields())
+		{
+			NestConst<Jrd::ValueExprNode>* argValue;
+			bool argExists = false;
+
+			if (parameter->prm_name.hasData())
+			{
+				argExists = argsByName.exist(parameter->prm_name);
+				argValue = argsByName.get(parameter->prm_name);
+
+				if (argValue)
+				{
+					*argIt = *argValue;
+					argsByName.remove(parameter->prm_name);
+				}
+			}
+			else
+				argValue = argIt;
+
+			if (!argValue || !*argValue)
+			{
+				if (parameter->prm_default_value)
+					*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+				else if (argExists)	// explicit DEFAULT in caller
+				{
+					FieldInfo fieldInfo;
+
+					if (parameter->prm_mechanism != prm_mech_type_of &&
+						!fb_utils::implicit_domain(parameter->prm_field_source.object.c_str()))
+					{
+						const QualifiedNameMetaNamePair entry(parameter->prm_field_source, {});
+
+						if (!csb->csb_map_field_info.get(entry, fieldInfo))
+						{
+							dsc dummyDesc;
+							MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+							csb->csb_map_field_info.put(entry, fieldInfo);
+						}
+					}
+
+					if (fieldInfo.defaultValue)
+						*argIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+					else
+						*argIt = NullNode::instance();
+				}
+				else
+					mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+			}
+
+			++argIt;
+		}
+
+		if (argsByName.hasData())
+		{
+			for (const auto& argPair : argsByName)
+				mismatchStatus << Arg::Gds(isc_param_not_exist) << argPair.first;
+		}
+	}
+	else
+	{
+		auto argIt = node->args->items.begin();
+
+		for (unsigned i = 0; i < function->getInputFields().getCount(); ++i, ++argIt)
+		{
+			auto parameter = function->getInputFields()[i];
+
+			if (i < argCount && *argIt)
+				continue;
+
+			if (parameter->prm_default_value)
+				*argIt = CMP_clone_node(tdbb, csb, parameter->prm_default_value);
+			else if (i < argCount)	// explicit DEFAULT in caller
+			{
+				FieldInfo fieldInfo;
+
+				if (parameter->prm_mechanism != prm_mech_type_of &&
+					!fb_utils::implicit_domain(parameter->prm_field_source.object.c_str()))
+				{
+					const QualifiedNameMetaNamePair entry(parameter->prm_field_source, {});
+
+					if (!csb->csb_map_field_info.get(entry, fieldInfo))
+					{
+						dsc dummyDesc;
+						MET_get_domain(tdbb, csb->csb_pool, parameter->prm_field_source, &dummyDesc, &fieldInfo);
+						csb->csb_map_field_info.put(entry, fieldInfo);
+					}
+				}
+
+				if (fieldInfo.defaultValue)
+					*argIt = CMP_clone_node(tdbb, csb, fieldInfo.defaultValue);
+				else
+					*argIt = NullNode::instance();
+			}
+			else
+				mismatchStatus << Arg::Gds(isc_param_no_default_not_specified) << parameter->prm_name;
+		}
+	}
+
+	if (mismatchStatus.hasData())
+		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
+
+	return node;
+}
+
+string CustomAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, name);
+	NODE_PRINT(printer, args);
+	NODE_PRINT(printer, dsqlFilter);
+	NODE_PRINT(printer, dsqlArgNames);
+
+	return "CustomAggNode";
+}
+
+bool CustomAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!AggNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const auto o = nodeAs<CustomAggNode>(other);
+	fb_assert(o);
+
+	if ((dsqlArgNames && !o->dsqlArgNames) || (!dsqlArgNames && o->dsqlArgNames))
+		return false;
+
+	if (dsqlArgNames && o->dsqlArgNames)
+	{
+		if (dsqlArgNames->getCount() != o->dsqlArgNames->getCount())
+			return false;
+
+		for (auto i = 0u; i < dsqlArgNames->getCount(); ++i)
+		{
+			if ((*dsqlArgNames)[i] != (*o->dsqlArgNames)[i])
+				return false;
+		}
+	}
+
+	return name == o->name &&
+		((!dsqlFilter && !o->dsqlFilter) ||
+			(dsqlFilter && o->dsqlFilter && dsqlFilter->dsqlMatch(dsqlScratch, o->dsqlFilter, ignoreMapCast))) &&
+		((!args && !o->args) || (args && o->args && args->dsqlMatch(dsqlScratch, o->args, ignoreMapCast)));
+}
+
+void CustomAggNode::setParameterName(dsql_par* parameter) const
+{
+	parameter->par_name = parameter->par_alias = dsqlFunction->udf_name.object;
+}
+
+void CustomAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	dsqlScratch->appendUChar(blr_invoke_agg_function);
+
+	dsqlScratch->appendUChar(blr_invoke_agg_function_id);
+
+	if (dsqlFunction->udf_name.schema.hasData())
+	{
+		dsqlScratch->appendUChar(blr_invoke_agg_function_id_schema);
+		dsqlScratch->appendMetaString(dsqlFunction->udf_name.schema.c_str());
+	}
+
+	if (dsqlFunction->udf_name.package.hasData())
+	{
+		dsqlScratch->appendUChar(blr_invoke_agg_function_id_package);
+		dsqlScratch->appendMetaString(dsqlFunction->udf_name.package.c_str());
+	}
+
+	dsqlScratch->appendUChar(blr_invoke_agg_function_id_name);
+	dsqlScratch->appendMetaString(dsqlFunction->udf_name.object.c_str());
+
+	if (dsqlFunction->udf_flags == UDF_subfunc)
+		dsqlScratch->appendUChar(blr_invoke_agg_function_id_sub);
+
+	dsqlScratch->appendUChar(blr_end);
+
+	if (dsqlArgNames && dsqlArgNames->hasData())
+	{
+		dsqlScratch->appendUChar(blr_invoke_agg_function_arg_names);
+		dsqlScratch->appendUShort(dsqlArgNames->getCount());
+
+		for (auto& argName : *dsqlArgNames)
+			dsqlScratch->appendMetaString(argName.c_str());
+	}
+
+	dsqlScratch->appendUChar(blr_invoke_agg_function_args);
+	dsqlScratch->appendUShort(USHORT(args ? args->items.getCount() : 0));
+
+	if (args)
+	{
+		for (auto& argNode : args->items)
+			GEN_arg(dsqlScratch, argNode);
+	}
+
+	if (dsqlFilter)
+	{
+		dsqlScratch->appendUChar(blr_invoke_agg_function_filter);
+		GEN_expr(dsqlScratch, dsqlFilter);
+	}
+
+	dsqlScratch->appendUChar(blr_end);
+}
+
+void CustomAggNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
+{
+	desc->dsc_dtype = static_cast<UCHAR>(dsqlFunction->udf_dtype);
+	desc->dsc_length = dsqlFunction->udf_length;
+	desc->dsc_scale = static_cast<SCHAR>(dsqlFunction->udf_scale);
+	desc->setNullable(true);
+
+	if (!desc->isText())
+		desc->dsc_sub_type = dsqlFunction->udf_sub_type;
+
+	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
+		desc->setTextType(dsqlFunction->udf_character_set_id);
+}
+
+void CustomAggNode::getDesc(thread_db* tdbb, CompilerScratch* /*csb*/, dsc* desc)
+{
+	if (function)
+		*desc = function(tdbb)->getOutputFields()[0]->prm_desc;
+	else
+		desc->clear();
+}
+
+ValueExprNode* CustomAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	auto* node = FB_NEW_POOL(*tdbb->getDefaultPool()) CustomAggNode(*tdbb->getDefaultPool(), name);
+	node->args = copier.copy(tdbb, args);
+	node->dsqlFilter = copier.copy(tdbb, dsqlFilter);
+	node->function = function;
+	return node;
+}
+
+AggNode* CustomAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	AggNode::pass2(tdbb, csb);
+
+	const auto func = function(tdbb);
+	func->checkReload(tdbb);
+
+	const ULONG inMsgLength = func->getInputFormat() ? func->getInputFormat()->fmt_length : 0;
+	const ULONG outMsgLength = func->getOutputFormat() ? func->getOutputFormat()->fmt_length : 0;
+
+	if (inMsgLength)
+		inputImpure = csb->allocImpure(FB_ALIGNMENT, inMsgLength);
+
+	if (outMsgLength)
+		outputImpure = csb->allocImpure(FB_ALIGNMENT, outMsgLength);
+
+	customImpure = csb->allocImpure<Impure>();
+
+	return this;
+}
+
+void CustomAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	auto* const impure = request->getImpure<Impure>(customImpure);
+
+	if (impure->active)
+		aggFinish(tdbb, request);
+
+	AggNode::aggInit(tdbb, request);
+
+	const auto func = function(request->getResources());
+
+	if (func->fun_external_aggregate)
+	{
+		try
+		{
+			impure->externalAggregate = func->fun_external_aggregate->newInstance(tdbb);
+			func->fun_external_aggregate->start(tdbb, impure->externalAggregate);
+			impure->active = true;
+		}
+		catch (const Exception&)
+		{
+			if (impure->externalAggregate)
+			{
+				func->fun_external_aggregate->disposeInstance(tdbb, impure->externalAggregate);
+				impure->externalAggregate = nullptr;
+			}
+
+			throw;
+		}
+
+		return;
+	}
+
+	invoke(tdbb, request, AggregateFunctionPhase::START);
+}
+
+void CustomAggNode::aggFinish(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggFinish(tdbb, request);
+
+	auto* const impure = request->getImpure<Impure>(customImpure);
+
+	if (!impure->active)
+		return;
+
+	const auto func = function(request->getResources());
+
+	if (func->fun_external_aggregate)
+	{
+		try
+		{
+			func->fun_external_aggregate->finish(tdbb, impure->externalAggregate);
+		}
+		catch (const Exception&)
+		{
+			func->fun_external_aggregate->disposeInstance(tdbb, impure->externalAggregate);
+			impure->externalAggregate = nullptr;
+			impure->active = false;
+			throw;
+		}
+
+		func->fun_external_aggregate->disposeInstance(tdbb, impure->externalAggregate);
+		impure->externalAggregate = nullptr;
+		impure->active = false;
+		return;
+	}
+
+	try
+	{
+		invoke(tdbb, request, AggregateFunctionPhase::FINISH);
+	}
+	catch (const Exception&)
+	{
+		cleanupRequest(tdbb, impure);
+		throw;
+	}
+
+	cleanupRequest(tdbb, impure);
+}
+
+void CustomAggNode::aggPass(thread_db* tdbb, Request* request, dsc* /*desc*/) const
+{
+	if (dsqlFilter && dsqlFilter->execute(tdbb, request) != TriState(true))
+		return;
+
+	const auto func = function(request->getResources());
+
+	if (func->fun_external_aggregate)
+	{
+		const ULONG inMsgLength = func->getInputFormat() ? func->getInputFormat()->fmt_length : 0;
+		UCHAR* const inMsg = inMsgLength ? request->getImpure<UCHAR>(inputImpure) : nullptr;
+
+		if (inMsgLength)
+			memset(inMsg, 0, inMsgLength);
+
+		const dsc* fmtDesc = func->getInputFormat() ? func->getInputFormat()->fmt_desc.begin() : nullptr;
+
+		if (func->fun_inputs != 0)
+		{
+			for (auto& source : args->items)
+			{
+				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+				const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+
+				dsc argDesc = fmtDesc[0];
+				argDesc.dsc_address = inMsg + argOffset;
+
+				SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
+
+				dsc* const srcDesc = EVL_expr(tdbb, request, source);
+				if (srcDesc)
+				{
+					*nullPtr = 0;
+					MOV_move(tdbb, srcDesc, &argDesc);
+				}
+				else
+					*nullPtr = -1;
+
+				fmtDesc += 2;
+			}
+		}
+
+		auto* const impure = request->getImpure<Impure>(customImpure);
+
+		try
+		{
+			func->fun_external_aggregate->accumulate(tdbb, request, impure->externalAggregate, inMsg);
+		}
+		catch (const Exception&)
+		{
+			cleanupRequest(tdbb, impure);
+			throw;
+		}
+
+		return;
+	}
+
+	invoke(tdbb, request, AggregateFunctionPhase::ACCUMULATE);
+}
+
+dsc* CustomAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	const auto func = function(request->getResources());
+
+	if (func->fun_external_aggregate)
+	{
+		UCHAR* const outMsg = request->getImpure<UCHAR>(outputImpure);
+		auto* const aggregateImpure = request->getImpure<Impure>(customImpure);
+
+		try
+		{
+			if (!func->fun_external_aggregate->group(tdbb, request,
+					aggregateImpure->externalAggregate, outMsg))
+			{
+				return nullptr;
+			}
+		}
+		catch (const Exception&)
+		{
+			cleanupRequest(tdbb, aggregateImpure);
+			throw;
+		}
+
+		const dsc* fmtDesc = func->getOutputFormat()->fmt_desc.begin();
+		const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+		dsc desc = *fmtDesc;
+		desc.dsc_address = outMsg + argOffset;
+		auto* const impure = request->getImpure<impure_value_ex>(impureOffset);
+		EVL_make_value(tdbb, &desc, impure);
+		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
+
+		return &impure->vlu_desc;
+	}
+
+	if (!invoke(tdbb, request, AggregateFunctionPhase::GROUP))
+		return nullptr;
+
+	return &request->getImpure<impure_value_ex>(impureOffset)->vlu_desc;
+}
+
+bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionPhase phase) const
+{
+	const auto func = function(request->getResources());
+	auto* const aggImpure = request->getImpure<Impure>(customImpure);
+
+	if (!func->isImplemented())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_func_pack_not_implemented) <<
+				func->getName().object.toQuotedString() <<
+				func->getName().getSchemaAndPackage().toQuotedString());
+	}
+	else if (!func->isDefined())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_funnotdef) << func->getName().toQuotedString() <<
+			Arg::Gds(isc_modnotfound));
+	}
+
+	if (func->fun_entrypoint || func->fun_external)
+	{
+		status_exception::raise(
+			Arg::Gds(isc_funnotdef) << func->getName().toQuotedString());
+	}
+
+	func->checkReload(tdbb);
+
+	const ULONG inMsgLength = func->getInputFormat() ? func->getInputFormat()->fmt_length : 0;
+	const ULONG outMsgLength = func->getOutputFormat()->fmt_length;
+	UCHAR* const inMsg = inMsgLength ? request->getImpure<UCHAR>(inputImpure) : nullptr;
+	UCHAR* const outMsg = request->getImpure<UCHAR>(outputImpure);
+
+	if (inMsgLength)
+		memset(inMsg, 0, inMsgLength);
+
+	memset(outMsg, 0, outMsgLength);
+
+	const dsc* inputFmtDesc = func->getInputFormat() ? func->getInputFormat()->fmt_desc.begin() : nullptr;
+
+	if (phase == AggregateFunctionPhase::ACCUMULATE && func->fun_inputs != 0)
+	{
+		const dsc* fmtDesc = inputFmtDesc;
+
+		for (auto& source : args->items)
+		{
+			const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+			const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+
+			dsc argDesc = fmtDesc[0];
+			argDesc.dsc_address = inMsg + argOffset;
+
+			SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(inMsg + nullOffset);
+
+			dsc* const srcDesc = EVL_expr(tdbb, request, source);
+			if (srcDesc)
+			{
+				*nullPtr = 0;
+				MOV_move(tdbb, srcDesc, &argDesc);
+			}
+			else
+				*nullPtr = -1;
+
+			fmtDesc += 2;
+		}
+	}
+
+	jrd_tra* transaction = request->req_transaction;
+	Request* funcRequest = aggImpure->funcRequest;
+
+	try
+	{
+		if (!funcRequest)
+		{
+			funcRequest = func->getStatement()->findRequest(tdbb);
+			aggImpure->funcRequest = funcRequest;
+		}
+
+		JrdContextPoolHolder context(tdbb, funcRequest->req_pool);
+		funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
+
+		if (!aggImpure->active)
+		{
+			EXE_start(tdbb, funcRequest, transaction);
+			funcRequest->req_flags |= req_proc_select | req_proc_fetch;
+			aggImpure->active = true;
+		}
+
+		USHORT msgNumber = 0;
+
+		switch (phase)
+		{
+			case AggregateFunctionPhase::START:
+				msgNumber = MESSAGE_START;
+				break;
+
+			case AggregateFunctionPhase::ACCUMULATE:
+				msgNumber = MESSAGE_ACCUMULATE;
+				break;
+
+			case AggregateFunctionPhase::GROUP:
+				msgNumber = MESSAGE_GROUP;
+				break;
+
+			case AggregateFunctionPhase::FINISH:
+				msgNumber = MESSAGE_FINISH;
+				break;
+		}
+
+		const ULONG sendMsgLength = (phase == AggregateFunctionPhase::ACCUMULATE) ? inMsgLength : 0;
+		EXE_send(tdbb, funcRequest, msgNumber, sendMsgLength, inMsg);
+		EXE_receive(tdbb, funcRequest, MESSAGE_OUTPUT, outMsgLength, outMsg);
+
+		while ((funcRequest->req_flags & req_active) &&
+			phase != AggregateFunctionPhase::FINISH &&
+			funcRequest->req_operation != Request::req_receive)
+		{
+			if (funcRequest->req_operation == Request::req_send)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_req_sync) <<
+					Arg::Gds(isc_random) << Arg::Str("Aggregate function request expected to receive"));
+			}
+
+			funcRequest->req_flags &= ~req_stall;
+			funcRequest->req_operation = Request::req_sync;
+			EXE_looper(tdbb, funcRequest, funcRequest->req_next);
+		}
+	}
+	catch (const Exception&)
+	{
+		cleanupRequest(tdbb, aggImpure);
+		throw;
+	}
+
+	const dsc* fmtDesc = func->getOutputFormat()->fmt_desc.begin();
+	const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
+	SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
+
+	bool hasValue = false;
+
+	if (!*nullPtr)
+	{
+		const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
+		dsc desc = *fmtDesc;
+		desc.dsc_address = outMsg + argOffset;
+		auto* const impure = request->getImpure<impure_value_ex>(impureOffset);
+		EVL_make_value(tdbb, &desc, impure);
+		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
+		hasValue = true;
+	}
+
+	return hasValue;
+}
+
+void CustomAggNode::cleanupRequest(thread_db* tdbb, Impure* impure) const
+{
+	if (impure->externalAggregate)
+	{
+		const auto func = function(tdbb);
+		func->fun_external_aggregate->disposeInstance(tdbb, impure->externalAggregate);
+		impure->externalAggregate = nullptr;
+		impure->active = false;
+		return;
+	}
+
+	Request* const funcRequest = impure->funcRequest;
+
+	if (!funcRequest)
+	{
+		impure->active = false;
+		return;
+	}
+
+	EXE_unwind(tdbb, funcRequest);
+	funcRequest->req_attachment = NULL;
+	funcRequest->req_flags &= ~(req_proc_fetch | req_proc_select);
+	funcRequest->invalidateTimeStamp();
+	funcRequest->setUnused();
+
+	impure->funcRequest = nullptr;
+	impure->active = false;
+}
+
+AggNode* CustomAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch)
+{
+	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) CustomAggNode(dsqlScratch->getPool(), name,
+		args ? doDsqlPass(dsqlScratch, args) : nullptr);
+	node->dsqlFilter = doDsqlPass(dsqlScratch, dsqlFilter);
+	node->dsqlArgNames = dsqlArgNames ?
+		FB_NEW_POOL(dsqlScratch->getPool()) ObjectsArray<MetaName>(dsqlScratch->getPool(), *dsqlArgNames) :
+		nullptr;
+	node->dsqlFunction = dsqlFunction;
+	return node;
 }
 
 
@@ -1091,6 +1926,399 @@ AggNode* ListAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 
 	node->setParameterType(dsqlScratch,
 		[&] (dsc* desc) { desc->makeText(charSet->maxBytesPerChar(), argDesc.getCharSet()); },
+		false);
+
+	return node;
+}
+
+
+//--------------------
+
+
+static AggNode::RegisterFactory1<PercentileAggNode, PercentileAggNode::PercentileType> percentileContAggInfo(
+	"PERCENTILE_CONT", PercentileAggNode::TYPE_PERCENTILE_CONT);
+static AggNode::RegisterFactory1<PercentileAggNode, PercentileAggNode::PercentileType> percentileDiscAggInfo(
+	"PERCENTILE_DISC", PercentileAggNode::TYPE_PERCENTILE_DISC);
+
+PercentileAggNode::PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg,
+	ValueListNode* aOrderClause)
+	: AggNode(pool,
+		(aType == PercentileAggNode::TYPE_PERCENTILE_CONT ? percentileContAggInfo : percentileDiscAggInfo),
+		false, false, aArg),
+	type(aType),
+	valueArg(nullptr),
+	dsqlOrderClause(aOrderClause)
+{
+	if (dsqlOrderClause)
+		valueArg = nodeAs<OrderNode>(dsqlOrderClause->items[0])->value;
+}
+
+void PercentileAggNode::parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned /*count*/)
+{
+	arg = PAR_parse_value(tdbb, csb);
+	valueArg = PAR_parse_value(tdbb, csb);
+	if (csb->csb_blr_reader.peekByte() == blr_within_group_order)
+	{
+		csb->csb_blr_reader.getByte(); // skip blr_within_group_order
+		if (const auto count = csb->csb_blr_reader.getByte())
+			sort = PAR_sort_internal(tdbb, csb, true, count);
+	}
+}
+
+bool PercentileAggNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const
+{
+	if (!AggNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const PercentileAggNode* o = nodeAs<PercentileAggNode>(other);
+	fb_assert(o);
+	return PASS1_node_match(dsqlScratch, dsqlOrderClause, o->dsqlOrderClause, ignoreMapCast);
+}
+
+void PercentileAggNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
+{
+	fb_assert(dsqlOrderClause);
+	if (dsqlOrderClause->items.getCount() != 1)
+	{
+		ERR_post(Arg::Gds(isc_percetile_only_one_sort_item));
+	}
+
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		// same type as order by argument
+		DsqlDescMaker::fromNode(dsqlScratch, desc, valueArg, true);
+	}
+	else
+	{
+		DsqlDescMaker::fromNode(dsqlScratch, desc, valueArg, true);
+		if (desc->isDecOrInt128())
+		{
+			desc->makeDecimal128();
+			desc->setNullable(true);
+		}
+		else
+		{
+			desc->makeDouble();
+			desc->setNullable(true);
+		}
+	}
+}
+
+void PercentileAggNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	AggNode::genBlr(dsqlScratch);
+	if (dsqlOrderClause)
+		GEN_sort(dsqlScratch, blr_within_group_order, dsqlOrderClause);
+}
+
+void PercentileAggNode::makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	valueArg->getDesc(tdbb, csb, desc);
+}
+
+void PercentileAggNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
+{
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		// same type as order by argument
+		valueArg->getDesc(tdbb, csb, desc);
+	}
+	else
+	{
+		valueArg->getDesc(tdbb, csb, desc);
+		if (desc->isDecOrInt128())
+		{
+			desc->makeDecimal128();
+			desc->setNullable(true);
+		}
+		else
+		{
+			desc->makeDouble();
+			desc->setNullable(true);
+		}
+	}
+}
+
+ValueExprNode* PercentileAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	PercentileAggNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) PercentileAggNode(*tdbb->getDefaultPool(), type);
+
+	node->nodScale = nodScale;
+	node->arg = copier.copy(tdbb, arg);
+	node->valueArg = copier.copy(tdbb, valueArg);
+	node->sort = sort->copy(tdbb, copier);
+
+	return node;
+}
+
+AggNode* PercentileAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	AggNode::pass2(tdbb, csb);
+
+	// impure area for calculate border
+	percentileImpureOffset = csb->allocImpure<PercentileImpure>();
+
+	return this;
+}
+
+bool PercentileAggNode::dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor)
+{
+	bool invalid = false;
+
+	if (!visitor.insideOwnMap)
+	{
+		// We are not in an aggregate from the same scope_level so
+		// check for valid fields inside this aggregate
+		invalid |= ExprNode::dsqlInvalidReferenceFinder(visitor);
+	}
+
+	if (!visitor.insideHigherMap)
+	{
+		NodeRefsHolder holder(visitor.dsqlScratch->getPool());
+		getChildren(holder, true);
+
+		for (auto i : holder.refs)
+		{
+			// If there's another aggregate with the same scope_level or
+			// an higher one then it's a invalid aggregate, because
+			// aggregate-functions from the same context can't
+			// be part of each other.
+			if (Aggregate2Finder::find(visitor.dsqlScratch->getPool(), visitor.context->ctx_scope_level,
+				FIELD_MATCH_TYPE_EQUAL, false, *i))
+			{
+				// Nested aggregate functions are not allowed
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_agg_nested_err));
+			}
+		}
+
+		if (visitor.visit(**holder.refs.begin()))
+		{
+			// The percent argument must be constant within group
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_argmustbe_const_within_group) <<
+				((type == TYPE_PERCENTILE_CONT) ? Arg::Str("PERCENTILE_CONT") : Arg::Str("PERCENTILE_DISC")));
+		}
+	}
+
+	return invalid;
+}
+
+string PercentileAggNode::internalPrint(NodePrinter& printer) const
+{
+	AggNode::internalPrint(printer);
+
+	NODE_PRINT(printer, type);
+
+	return "PercentileAggNode";
+}
+
+
+void PercentileAggNode::aggInit(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggInit(tdbb, request);
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure->vlu_desc.dsc_dtype = 0;
+	impure->vlux_count = 0;
+
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+	percentileImpure->vlux_count = 0;
+	percentileImpure->rn = 0;
+	percentileImpure->crn = 0;
+	percentileImpure->frn = 0;
+}
+
+bool PercentileAggNode::aggPass(thread_db* tdbb, Request* request) const
+{
+	dsc* percenteDesc = nullptr;
+	percenteDesc = EVL_expr(tdbb, request, arg);
+	if (!percenteDesc)
+		return false;
+
+	dsc* desc = nullptr;
+	desc = EVL_expr(tdbb, request, valueArg);
+	if (!desc)
+		return false;
+
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+	if (percentileImpure->vlux_count++ == 0)		// first call to aggPass()
+	{
+		if ((type == TYPE_PERCENTILE_CONT) && !desc->isNumeric())
+			ERRD_post(Arg::Gds(isc_argmustbe_numeric_function) << Arg::Str("PERCENTILE_CONT"));
+
+		if (desc->isBlob())
+			ERRD_post(Arg::Gds(isc_blobnotsup) << Arg::Str("ORDER BY"));
+
+		const auto percentileValue = MOV_get_double(tdbb, percenteDesc);
+		if ((percentileValue < 0) || (percentileValue > 1))
+		{
+			if (type == TYPE_PERCENTILE_DISC)
+				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_DISC"));
+			else
+				ERRD_post(Arg::Gds(isc_sysf_argmustbe_range_inc0_1) << Arg::Str("PERCENTILE_CONT"));
+		}
+
+		percentileImpure->percentile = percentileValue;
+	}
+
+	if (sort)
+	{
+		fb_assert(asb);
+		// "Put" the value to sort.
+		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		UCHAR* data;
+		asbImpure->iasb_sort->put(tdbb, reinterpret_cast<ULONG**>(&data));
+
+		MOVE_CLEAR(data, asb->length);
+
+		auto descOrder = asb->descOrder.begin();
+		auto keyItem = asb->keyItems.begin();
+
+		for (auto& nodeOrder : sort->expressions)
+		{
+			dsc toDesc = *(descOrder++);
+			toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+			if (const auto fromDsc = EVL_expr(tdbb, request, nodeOrder))
+			{
+				if (IS_INTL_DATA(fromDsc))
+				{
+					INTL_string_to_key(tdbb, INTL_TEXT_TO_INDEX(fromDsc->getTextType()),
+						fromDsc, &toDesc, INTL_KEY_UNIQUE);
+				}
+				else
+					MOV_move(tdbb, fromDsc, &toDesc);
+			}
+			else
+				*(data + keyItem->getSkdOffset()) = TRUE;
+
+			// The first key for NULLS FIRST/LAST, the second key for the sorter
+			keyItem += 2;
+		}
+
+		dsc toDesc = asb->desc;
+		toDesc.dsc_address = data + (IPTR) toDesc.dsc_address;
+		MOV_move(tdbb, desc, &toDesc);
+
+		return true;
+	}
+
+	return true;
+}
+
+void PercentileAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	PercentileImpure* percentileImpure = request->getImpure<PercentileImpure>(percentileImpureOffset);
+
+	if (type == TYPE_PERCENTILE_DISC)
+	{
+		if (impure->vlux_count++ == 0)
+		{
+			// calculate only ones
+			percentileImpure->rn = percentileImpure->percentile * percentileImpure->vlux_count;
+			percentileImpure->crn = MAX(static_cast<SINT64>(ceil(percentileImpure->rn)), 1);
+		}
+
+		if (impure->vlux_count == percentileImpure->crn)
+			EVL_make_value(tdbb, desc, impure);
+
+	}
+	else
+	{
+		if (impure->vlux_count++ == 0)
+		{
+			// calculate only ones
+			percentileImpure->rn = 1 + percentileImpure->percentile * (percentileImpure->vlux_count - 1);
+			percentileImpure->crn = static_cast<SINT64>(ceil(percentileImpure->rn));
+			percentileImpure->frn = static_cast<SINT64>(floor(percentileImpure->rn));
+
+			if (desc->isDecOrInt128())
+			{
+				DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+				Firebird::Decimal128 d128;
+				d128.set(0, decSt, 0);
+				impure->make_decimal128(d128);
+			}
+			else
+				impure->make_double(0);
+		}
+
+		if (percentileImpure->crn == percentileImpure->frn)
+		{
+			if (impure->vlux_count == percentileImpure->frn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					const auto value = MOV_get_dec128(tdbb, desc);
+					impure->make_decimal128(value);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure->make_double(value);
+				}
+			}
+		}
+		else
+		{
+			if (impure->vlux_count == percentileImpure->frn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+					const auto value = MOV_get_dec128(tdbb, desc);
+					Firebird::Decimal128 d128;
+					d128.set(percentileImpure->crn - percentileImpure->rn, decSt);
+					const auto part = impure->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure->make_decimal128(part);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure->vlu_misc.vlu_double += value * (percentileImpure->crn - percentileImpure->rn);
+				}
+			}
+
+			if (impure->vlux_count == percentileImpure->crn)
+			{
+				if (desc->isDecOrInt128())
+				{
+					DecimalStatus decSt = tdbb->getAttachment()->att_dec_status;
+					const auto value = MOV_get_dec128(tdbb, desc);
+					Firebird::Decimal128 d128;
+					d128.set(percentileImpure->rn - percentileImpure->frn, decSt);
+					const auto part = impure->vlu_misc.vlu_dec128.add(decSt, value.mul(decSt, d128));
+					impure->make_decimal128(part);
+				}
+				else
+				{
+					const auto value = MOV_get_double(tdbb, desc);
+					impure->vlu_misc.vlu_double += value * (percentileImpure->rn - percentileImpure->frn);
+				}
+			}
+		}
+	}
+}
+
+dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (!impure->vlux_count || !impure->vlu_desc.dsc_dtype)
+		return nullptr;
+
+	return &impure->vlu_desc;
+}
+
+AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
+{
+	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(dsqlScratch->getPool(), type,
+		doDsqlPass(dsqlScratch, arg),
+		doDsqlPass(dsqlScratch, dsqlOrderClause) );
+
+	PASS1_set_parameter_type(dsqlScratch, node->arg,
+		[&](dsc* desc) { desc->makeDouble(); },
 		false);
 
 	return node;

@@ -121,7 +121,8 @@ jobs:
           uploadFiles: gen/Firebird-*-source.tar.xz
 
   build-alpine-x64:
-    if: github.ref_type != 'tag'
+    # Disabled
+    if: ${{ false && github.ref_type != 'tag' }}
     runs-on: ubuntu-24.04
     container: alpine:3.22.1
 
@@ -156,7 +157,7 @@ jobs:
     if: github.ref_type != 'tag'
     runs-on: ${{ matrix.os }}
     env:
-      VS_VERSION: 2022
+      VS_VERSION: 2026
 
     strategy:
       fail-fast: false
@@ -184,7 +185,7 @@ jobs:
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           set SEVENZIP=C:\Program Files\7-Zip
           set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6
@@ -289,6 +290,12 @@ jobs:
         platform: [x64, x86]
 
     steps:
+      - name: Reclaim disk space in the runner
+        if: ${{ runner.environment == 'github-hosted' }}
+        shell: cmd
+        run: |
+          rd "C:\Program Files\Microsoft Visual Studio\18" /s /q
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -314,12 +321,6 @@ jobs:
         if: ${{ steps.dockerhub-login.outcome == 'success' }}
         run: |
           docker pull firebirdsql/firebird-builder-windows:fb6-x86-x64-windows-v1
-
-      - name: Reclaim disk space in the runner to build the image
-        if: ${{ runner.environment == 'github-hosted' && steps.dockerhub-login.outcome != 'success' }}
-        shell: cmd
-        run: |
-          rd "C:\Program Files\Microsoft Visual Studio\2022" /s /q
 
       - name: Build firebird-builder-windows image (fallback)
         shell: cmd

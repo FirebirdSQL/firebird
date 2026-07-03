@@ -76,6 +76,7 @@
 #include "../jrd/Collation.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/DbCreators.h"
+#include "../jrd/BulkInsert.h"
 #include "../common/os/fbsyslog.h"
 #include "../jrd/Resources.h"
 #include "firebird/impl/msg_helper.h"
@@ -485,6 +486,10 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	if (!(transaction->tra_flags & TRA_prepared))
 		DFW_perform_work(tdbb, transaction);
+
+	// Finish bulk insert operation, if any
+
+	transaction->finiBulkInsert(tdbb, true);
 
 	// Commit associated transaction in security DB
 
@@ -1079,6 +1084,10 @@ void TRA_prepare(thread_db* tdbb, jrd_tra* transaction, USHORT length, const UCH
 
 	DFW_perform_work(tdbb, transaction);
 
+	// Finish bulk insert operation, if any
+
+	transaction->finiBulkInsert(tdbb, true);
+
 	// Flush pages if transaction logically modified data
 	const jrd_tra* sysTran = tdbb->getAttachment()->getSysTransaction();
 
@@ -1339,6 +1348,10 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	if (transaction->tra_flags & (TRA_prepare2 | TRA_reconnected))
 		MET_update_transaction(tdbb, transaction, false);
+
+	// Finish bulk insert operation, if any
+
+	transaction->finiBulkInsert(tdbb, false);
 
 	// If force flag is true, get rid of all savepoints to mark the transaction as dead
 	if (force_flag || (transaction->tra_flags & TRA_invalidated))
@@ -2391,6 +2404,9 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 
 void jrd_tra::unlinkFromAttachment()
 {
+	if (tra_flags & TRA_meta)
+		return;						// Unlinked on creation
+
 	for (jrd_tra** ptr = &tra_attachment->att_transactions; *ptr; ptr = &(*ptr)->tra_next)
 	{
 		if (*ptr == this)
@@ -3771,8 +3787,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			dbb->dbb_oldest_transaction, dbb->dbb_oldest_snapshot);
 
 		// Plumb remove really old objects from metadata cache
-
 		dbb->dbb_mdc->checkCleanup(tdbb, oldest);
+
+		// Also remove really old temporary pages of dropped relations
+		dbb->deleteTempPages(tdbb, trans->tra_oldest_active);
 
 		// If the transaction block is getting out of hand, force a sweep
 
@@ -4125,9 +4143,7 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 	if (!tra_blobs->locate(blob_id->bid_temp_id()) &&
 		!tra_fetched_blobs.locate(*blob_id))
 	{
-		MetadataCache* mdc = MetadataCache::get(tdbb);
-		auto* blobRelation = mdc->lookupRelationNoChecks(rel_id);	// optimization with NoChecks
-																	// correct rel definitely present
+		auto* blobRelation = MetadataCache::getPerm<Cached::Relation>(tdbb, rel_id, CacheFlag::AUTOCREATE);
 		if (blobRelation)
 		{
 			auto security_name = (fld && fld->fld_security_name.hasData()) ?
@@ -4209,6 +4225,45 @@ void jrd_tra::checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool 
 		}
 	}
 }
+
+BulkInsert* jrd_tra::getBulkInsert(thread_db* tdbb, jrd_rel* relation, bool create)
+{
+	if (tra_bulkInsert)
+	{
+		if (tra_bulkInsert->getRelation() == relation)
+			return tra_bulkInsert;
+
+		// only one bulk insert at a time supported	currently
+		return nullptr;
+	}
+	else if (create)
+	{
+		tra_bulkInsert = FB_NEW_POOL(*tra_pool) BulkInsert(*tra_pool, tdbb, relation);
+	}
+
+	return tra_bulkInsert;
+}
+
+void jrd_tra::finiBulkInsert(thread_db* tdbb, bool /*commit*/)
+{
+	if (tra_bulkInsert)
+	{
+		// Currently, there is no way to explicitly undo bulk insert actions, while it
+		// might be implemented later if needed. Thus "commit" arg is not used for now.
+
+		tra_bulkInsert->flush(tdbb);
+
+		delete tra_bulkInsert;
+		tra_bulkInsert = nullptr;
+	}
+}
+
+void jrd_tra::finiBulkInsert(thread_db* tdbb, Request* request)
+{
+	if (tra_bulkInsert && tra_bulkInsert->getRequest() == request)
+		finiBulkInsert(tdbb, true);
+}
+
 
 /// class TraceSweepEvent
 

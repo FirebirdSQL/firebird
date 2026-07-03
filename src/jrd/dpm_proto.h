@@ -46,34 +46,32 @@ namespace Firebird::Jrd {
 		DPM_secondary,		// Chained version of primary record
 		DPM_other			// Independent (or don't care) record
 	};
-}
 
-namespace Firebird::Jrd::Ods
+namespace Ods
 {
 	struct pag;
 	struct data_page;
 }
 
-namespace Firebird::Jrd
-{
 	Ods::pag* DPM_allocate(thread_db*, win*);
-	void DPM_backout(thread_db*, record_param*);
-	void DPM_backout_mark(thread_db*, record_param*, const jrd_tra*);
-	double DPM_cardinality(thread_db*, jrd_rel*, const Format*);
-	bool DPM_chain(thread_db*, record_param*, record_param*);
-	void DPM_create_relation(thread_db*, Cached::Relation*);
-	ULONG DPM_data_pages(thread_db*, Cached::Relation*);
-	void DPM_delete(thread_db*, record_param*, ULONG);
-	void DPM_delete_relation(thread_db*, RelationPermanent*);
-	bool DPM_fetch(thread_db*, record_param*, USHORT);
-	bool DPM_fetch_back(thread_db*, record_param*, USHORT, SSHORT);
-	void DPM_fetch_fragment(thread_db*, record_param*, USHORT);
-	SINT64 DPM_gen_id(thread_db*, SLONG, bool, SINT64);
-	bool DPM_get(thread_db*, record_param*, SSHORT);
-	ULONG DPM_get_blob(thread_db*, blb*, jrd_rel*, RecordNumber, bool, ULONG);
-	void DPM_mark_relation(thread_db*, Cached::Relation*);
-	bool DPM_next(thread_db*, record_param*, USHORT, FindNextRecordScope);
-	void DPM_pages(thread_db*, SSHORT, int, ULONG, ULONG);
+	void	DPM_backout(thread_db*, record_param*);
+	void	DPM_backout_mark(thread_db*, record_param*, const jrd_tra*);
+	double	DPM_cardinality(thread_db*, jrd_rel*, const Format*);
+	bool	DPM_chain(thread_db*, record_param*, record_param*);
+	void	DPM_create_relation(thread_db*, Cached::Relation*);
+	ULONG	DPM_data_pages(thread_db*, Cached::Relation*);
+	void	DPM_delete(thread_db*, record_param*, ULONG);
+	void	DPM_delete_relation(thread_db*, RelationPermanent*);
+	USHORT	DPM_reserve_pages(thread_db*, jrd_rel*, win*);
+	bool	DPM_fetch(thread_db*, record_param*, USHORT);
+	bool	DPM_fetch_back(thread_db*, record_param*, USHORT, SSHORT);
+	void	DPM_fetch_fragment(thread_db*, record_param*, USHORT);
+	SINT64	DPM_gen_id(thread_db*, SLONG, bool, SINT64);
+	bool	DPM_get(thread_db*, record_param*, SSHORT);
+	ULONG	DPM_get_blob(thread_db*, blb*, jrd_rel*, RecordNumber, bool, ULONG);
+	void	DPM_mark_relation(thread_db*, Cached::Relation*);
+	bool	DPM_next(thread_db*, record_param*, USHORT, FindNextRecordScope);
+	void	DPM_pages(thread_db*, SSHORT, int, ULONG, ULONG);
 #ifdef SUPERSERVER_V2
 	SLONG DPM_prefetch_bitmap(thread_db*, jrd_rel*, PageBitmap*, SLONG);
 #endif

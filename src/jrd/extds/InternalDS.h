@@ -36,16 +36,18 @@ public:
 	{
 	}
 
-	~InternalProvider()
+	~InternalProvider() override
 	{}
 
-	virtual void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced);
+	void jrdAttachmentEnd(Jrd::thread_db* tdbb, Jrd::Attachment* att, bool forced) override;
 
-	virtual void initialize() {}
-	virtual void getRemoteError(const Jrd::FbStatusVector* status, string& err) const;
+	void initialize() override
+	{}
+
+	void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const override;
 
 protected:
-	virtual Connection* doCreateConnection();
+	Connection* doCreateConnection() override;
 };
 
 
@@ -59,7 +61,7 @@ protected:
 	  m_attachment(0)
 	{}
 
-	virtual ~InternalConnection();
+	~InternalConnection() override;
 
 public:
 	void attach(Jrd::thread_db* tdbb) override;
@@ -102,16 +104,16 @@ protected:
 	  m_transaction(0)
 	{}
 
-	virtual ~InternalTransaction() {}
+	~InternalTransaction() override = default;
 
 public:
 	Jrd::JTransaction* getJrdTran() { return m_transaction; }
 
 protected:
-	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, ClumpletWriter& tpb);
-	virtual void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info);
-	virtual void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
-	virtual void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain);
+	void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb) override;
+	void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info) override;
+	void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain) override;
+	void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain) override;
 
 	InternalConnection& m_IntConnection;
 	RefPtr<Jrd::JTransaction> m_transaction;
@@ -124,15 +126,15 @@ protected:
 	friend class InternalConnection;
 
 	explicit InternalStatement(InternalConnection& conn);
-	~InternalStatement();
+	~InternalStatement() override;
 
 protected:
-	virtual void doPrepare(Jrd::thread_db* tdbb, const string& sql);
-	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
-	virtual void doExecute(Jrd::thread_db* tdbb);
-	virtual void doOpen(Jrd::thread_db* tdbb);
-	virtual bool doFetch(Jrd::thread_db* tdbb);
-	virtual void doClose(Jrd::thread_db* tdbb, bool drop);
+	void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql) override;
+	void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout) override;
+	void doExecute(Jrd::thread_db* tdbb) override;
+	void doOpen(Jrd::thread_db* tdbb) override;
+	bool doFetch(Jrd::thread_db* tdbb) override;
+	void doClose(Jrd::thread_db* tdbb, bool drop) override;
 
 	const char* getParameterName(unsigned index) const override
 	{
@@ -145,8 +147,8 @@ protected:
 		return nullptr;
 	}
 
-	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
-	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
+	void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst) override;
+	void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst) override;
 
 	InternalTransaction* getIntTransaction()
 	{
@@ -169,15 +171,15 @@ protected:
 	explicit InternalBlob(InternalConnection& conn);
 
 public:
-	~InternalBlob();
+	~InternalBlob() override;
 
 public:
-	virtual void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc, const UCharBuffer* bpb);
-	virtual void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc, const UCharBuffer* bpb);
-	virtual USHORT read(Jrd::thread_db* tdbb, UCHAR* buff, USHORT len);
-	virtual void write(Jrd::thread_db* tdbb, const UCHAR* buff, USHORT len);
-	virtual void close(Jrd::thread_db* tdbb);
-	virtual void cancel(Jrd::thread_db* tdbb);
+	void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc, const Firebird::UCharBuffer* bpb) override;
+	void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc, const Firebird::UCharBuffer* bpb) override;
+	USHORT read(Jrd::thread_db* tdbb, UCHAR* buff, USHORT len) override;
+	void write(Jrd::thread_db* tdbb, const UCHAR* buff, USHORT len) override;
+	void close(Jrd::thread_db* tdbb) override;
+	void cancel(Jrd::thread_db* tdbb) override;
 
 private:
 	InternalConnection& m_connection;

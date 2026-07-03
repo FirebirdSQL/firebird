@@ -250,6 +250,7 @@ static inline constexpr const char* burp_repl_mode_sw_table[] =
 	BURP_SW_MODE_NONE, BURP_SW_MODE_RO, BURP_SW_MODE_RW
 };
 
+const int BURP_MAX_PARALLEL_WORKERS = 64;
 
 }	// namespace Firebird::Burp
 

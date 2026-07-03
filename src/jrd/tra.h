@@ -69,6 +69,7 @@ class MappingList;
 class DbCreatorsList;
 class thread_db;
 class Resources;
+class BulkInsert;
 
 class SecDbContext
 {
@@ -148,7 +149,7 @@ struct CallerName
 typedef GenericMap<Pair<NonPooled<SINT64, ULONG> > > ReplBlobMap;
 typedef GenericMap<Pair<NonPooled<SLONG, blb*> > > BlobUtilMap;
 
-inline constexpr int DEFAULT_LOCK_TIMEOUT = -1; // infinite
+inline constexpr SSHORT DEFAULT_LOCK_TIMEOUT = -1; // infinite
 inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
 inline constexpr const char* TRA_UNDO_SPACE = "fb_undo_";
 inline constexpr ULONG MAX_TEMP_BLOBS = 1000;
@@ -197,7 +198,8 @@ public:
 		tra_mapping_list(NULL),
 		tra_dbcreators_list(nullptr),
 		tra_autonomous_pool(NULL),
-		tra_autonomous_cnt(0)
+		tra_autonomous_cnt(0),
+		tra_dependencies(*p)
 	{
 	}
 
@@ -277,7 +279,7 @@ public:
 	ReplBlobMap tra_repl_blobs;			// map of blob IDs replicated in this transaction
 	BlobUtilMap tra_blob_util_map;		// map of blob IDs for RDB$BLOB_UTIL package
 	ArrayField*	tra_arrays;				// Linked list of active arrays
-	Lock*		tra_lock;				// lock for transaction
+	Lock*		tra_lock;				// lock for transaction - may be NULL for special transactions
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
 	vec<Lock*>*			tra_relation_locks;	// locks for relations
 	TransactionBitmap*	tra_commit_sub_trans;	// committed sub-transactions
@@ -329,6 +331,10 @@ private:
 	MemoryPool* tra_autonomous_pool;
 	USHORT tra_autonomous_cnt;
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
+	BulkInsert* tra_bulkInsert = nullptr;
+
+public:
+	Firebird::Array<WildDependency> tra_dependencies;
 
 public:
 	MemoryPool* getAutonomousPool();
@@ -414,6 +420,15 @@ public:
 
 		return tra_gen_ids;
 	}
+
+	// Get existing or create new BulkInsert for the relation.
+	BulkInsert* getBulkInsert(thread_db* tdbb, jrd_rel* relation, bool create);
+
+	// Finish and delete BulkInsert, if exists.
+	void finiBulkInsert(thread_db* tdbb, bool commit);
+
+	// Finish and delete BulkInsert that belongs to the request
+	void finiBulkInsert(thread_db* tdbb, Request* request);
 };
 
 // System transaction is always transaction 0.
@@ -444,6 +459,8 @@ inline constexpr ULONG TRA_ex_restart			= 0x80000L; 	// Exception was raised to 
 inline constexpr ULONG TRA_replicating			= 0x100000L;	// transaction is allowed to be replicated
 inline constexpr ULONG TRA_no_blob_check		= 0x200000L;	// disable blob access checking
 inline constexpr ULONG TRA_auto_release_temp_blobid = 0x400000L;// remove temp ids of materialized user blobs from tra_blobs
+inline constexpr ULONG TRA_deps_to_disk			= 0x800000L;	// store dependencies to RDB$DEPENDENCIES
+inline constexpr ULONG TRA_meta					= 0x1000000L;	// transaction is used to load metadata
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
@@ -519,8 +536,8 @@ enum dfw_t : int {
 	dfw_delete_prm,
 	dfw_create_collation,
 	dfw_delete_collation,
+	dfw_commit_charset,
 	dfw_delete_exception,
-	//dfw_unlink_file,
 	dfw_delete_generator,
 	dfw_create_function,
 	dfw_modify_function,
@@ -547,7 +564,16 @@ enum dfw_t : int {
 	dfw_db_crypt,			// change database encryption status
 	dfw_set_linger,			// set database linger
 	dfw_clear_cache,		// clear user mapping cache
-	dfw_set_statistics		// set statistics support
+	dfw_set_statistics,		// set statistics support
+	dfw_deps_to_disk,		// store saved deps to disk
+
+	// Constant
+	dfw_create_package_constant,
+	dfw_modify_package_constant,
+	dfw_delete_package_constant,
+
+	// Package
+	dfw_create_package
 };
 
 } // namespace Firebird::Jrd

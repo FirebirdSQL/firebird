@@ -152,12 +152,12 @@ public:
 		SHA_TRAITS::sha_init(&m_ctx);
 	}
 
-	void process(size_t length, const void* bytes) noexcept
+	void process(unsigned int length, const void* bytes) noexcept
 	{
 		SHA_TRAITS::sha_update(&m_ctx, static_cast<const unsigned char*>(bytes), length);
 	}
 
-	void process(size_t length, const unsigned char* message) noexcept
+	void process(unsigned int length, const unsigned char* message) noexcept
 	{
 		SHA_TRAITS::sha_update(&m_ctx, message, length);
 	}

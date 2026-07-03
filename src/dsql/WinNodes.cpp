@@ -256,12 +256,12 @@ dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingW
 {
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
-	const double partitionSize = window->getPartitionSize();
-	const double divisor = (partitionSize - 1) * (impureTemp->vlux_count - 1);
+	const double dividend = impureTemp->vlux_count - 1;
+	const double divisor = window->getPartitionSize() - 1;
 
 	impureTemp->vlu_misc.vlu_double = divisor == 0 ?
 		0 :
-		1 / divisor;
+		dividend / divisor;
 
 	return &impureTemp->vlu_desc;
 }
@@ -434,7 +434,7 @@ void FirstValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 dsc* FirstValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	if (!window->moveWithinFrame(-window->getInFrameOffset()))
+	if (!window->moveToFrameStart())
 		return nullptr;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
@@ -495,7 +495,7 @@ void LastValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 dsc* LastValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	if (!window->moveWithinFrame(window->getFrameEnd() - window->getRecordPosition()))
+	if (!window->moveToFrameEnd())
 		return nullptr;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
@@ -585,11 +585,11 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* 
 	const SLONG fromPos = desc ? MOV_get_long(tdbb, desc, 0) : FROM_FIRST;
 
 	if (fromPos == FROM_FIRST)
-		records -= window->getInFrameOffset() + 1;
+		--records;
 	else
-		records = window->getFrameEnd() - window->getRecordPosition() - records + 1;
+		records = window->getEffectiveFrameSize() - records;
 
-	if (!window->moveWithinFrame(records))
+	if (!window->moveToFrameOffset(records))
 		return nullptr;
 
 	desc = EVL_expr(tdbb, request, arg);

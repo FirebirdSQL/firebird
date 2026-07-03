@@ -542,6 +542,26 @@ public:
 		rpr_rdb(0), rpr_rtr(0),
 		rpr_in_msg(0), rpr_out_msg(0), rpr_in_format(0), rpr_out_format(0)
 	{ }
+
+	~Rpr()
+	{
+		clear();
+	}
+
+	void clear()
+	{
+		delete rpr_in_msg;
+		rpr_in_msg = nullptr;
+
+		delete rpr_out_msg;
+		rpr_out_msg = nullptr;
+
+		delete rpr_in_format;
+		rpr_in_format = nullptr;
+
+		delete rpr_out_format;
+		rpr_out_format = nullptr;
+	}
 };
 
 struct Rrq : public GlobalStorage, public TypedHandle<rem_type_rrq>
@@ -1139,7 +1159,7 @@ public:
 
 	~ClntAuthBlock()
 	{
-		releaseKeys(0);
+		releaseKeys();
 
 		if (createdInterface)
 			*createdInterface = nullptr;
@@ -1156,9 +1176,9 @@ public:
 	bool checkPluginName(PathName& nameToCheck);
 	PathName getPluginName();
 	void tryNewKeys(rem_port*);
-	void releaseKeys(unsigned from);
-	RefPtr<const Config>* getConfig() noexcept;
-	void createCryptCallback(ICryptKeyCallback** callback);
+	void releaseKeys();
+	Firebird::RefPtr<const Firebird::Config>* getConfig() noexcept;
+	void createCryptCallback(Firebird::ICryptKeyCallback** callback);
 
 	// IClientBlock implementation
 	const char* getLogin();

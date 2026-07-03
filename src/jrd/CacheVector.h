@@ -29,11 +29,12 @@
 #ifndef JRD_CACHEVECTOR_H
 #define JRD_CACHEVECTOR_H
 
-#include <condition_variable>
 #include <stdio.h>
 
 #include "../common/ThreadStart.h"
 #include "../common/StatusArg.h"
+#include "../common/classes/locks.h"
+#include "../common/classes/condition.h"
 
 #include "../jrd/SharedReadVector.h"
 #include "../common/constants.h"
@@ -71,7 +72,7 @@ public:
 	{ }
 
 private:
-	virtual void reset(thread_db* tdbb, bool erase) = 0;
+	virtual void reset(thread_db* tdbb, TraNumber tran, bool erase) = 0;
 	static int blockingAst(void* ast_object);
 
 public:
@@ -369,7 +370,7 @@ public:
 			// NOCOMMIT cleared to avoid extra ASTs
 			newFlags &= ~CacheFlag::NOCOMMIT;
 
-			// Handle front & back of MDC
+			// Handle front & back versions of MDC
 			VersionIncr incr(tdbb);
 
 			// And finally make object version world-visible
@@ -451,7 +452,7 @@ public:
 
 		permanent->setLock(tdbb, permanent->getId(), Versioned::objectFamily(permanent));
 
-		std::unique_lock<std::mutex> g(mtx);
+		Firebird::MutexLockGuard guard(mtx, FB_FUNCTION);
 
 		for(;;)
 		{
@@ -511,7 +512,7 @@ public:
 					}
 
 					thd = 0;
-					cond.notify_all();			// other threads may proceed successfully
+					cond.notifyAll();			// other threads may proceed successfully
 					return result;
 
 				}
@@ -519,14 +520,14 @@ public:
 				{
 					state = savedState;
 					thd = 0;
-					cond.notify_all();		// avoid deadlock in other threads
+					cond.notifyAll();		// avoid deadlock in other threads
 
 					throw;
 				}
 
 			case SCANNING:		// other thread is already scanning object
-				cond.wait(g, [this]{ return state != SCANNING; });
-				continue;		// repeat check of FLG value
+				cond.wait(mtx);
+				continue;		// repeat check of state
 
 			case READY:
 				return ScanResult::COMPLETE;
@@ -559,8 +560,8 @@ private:
 	//		nill	|	object dropped	|	cache to be loaded
 	//	not nill	|	prohibited		|	cache is actual
 
-	std::condition_variable cond;
-	std::mutex mtx;
+	Firebird::Condition cond;
+	Firebird::Mutex mtx;
 	Versioned* object;
 	std::atomic<ListEntry*> next = nullptr;
 	TraNumber traNumber;		// when COMMITTED not set - stores transaction that created this list element
@@ -742,11 +743,12 @@ public:
 				throw;
 			}
 
+			if (! (fl & CacheFlag::NOCOMMIT))
+				newEntry->commit(tdbb, traNum, TransactionNumber::next(tdbb));
+
 			if (ListEntry<Versioned>::insert(list, newEntry, nullptr))
 			{
 				auto sr = newEntry->scan(tdbb, fl, this);
-				if (! (fl & CacheFlag::NOCOMMIT))
-					newEntry->commit(tdbb, traNum, TransactionNumber::next(tdbb));
 
 				switch (sr)
 				{
@@ -787,14 +789,15 @@ public:
 		return list || hasLock();
 	}
 
-	StoreResult storeObject(thread_db* tdbb, Versioned* obj, ObjectBase::Flag fl)
+	StoreResult storeObject(thread_db* tdbb, Versioned* obj, ObjectBase::Flag fl, TraNumber cur = 0)
 	{
 		TraNumber oldest = TransactionNumber::oldestActive(tdbb);
 		TraNumber oldResetAt = resetAt.load(atomics::memory_order_acquire);
 		if (oldResetAt && oldResetAt < oldest)
 			setNewResetAt(oldResetAt, ListEntry<Versioned>::gc(tdbb, &list, oldest));
 
-		TraNumber cur = TransactionNumber::current(tdbb);
+		if (!cur)
+			cur = TransactionNumber::current(tdbb);
 		ListEntry<Versioned>* newEntry = FB_NEW_POOL(*getDefaultMemoryPool()) ListEntry<Versioned>(obj, cur, fl);
 		if (!ListEntry<Versioned>::add(tdbb, list, newEntry))
 		{
@@ -822,7 +825,7 @@ public:
 		}
 
 		if (!(fl & CacheFlag::NOCOMMIT))
-			commit(tdbb);
+			commit(tdbb, cur);
 
 		return rc;
 	}
@@ -850,12 +853,15 @@ public:
 		return nullptr;
 	}
 
-	void commit(thread_db* tdbb)
+	void commit(thread_db* tdbb, TraNumber cur = 0)
 	{
 		HazardPtr<ListEntry<Versioned>> current(list);
 		if (current)
 		{
-			auto flags = current->commit(tdbb, TransactionNumber::current(tdbb), TransactionNumber::next(tdbb));
+			if (!cur)
+				cur = TransactionNumber::current(tdbb);
+
+			auto flags = current->commit(tdbb, cur, TransactionNumber::next(tdbb));
 
 			if (flags & CacheFlag::NOCOMMIT)	// Committed newly created version in cache
 				pingLock(tdbb, flags, this->getId(), Versioned::objectFamily(this));
@@ -880,9 +886,10 @@ public:
 
 private:
 	// called by AST handler
-	void reset(thread_db* tdbb, bool erase) override
+	void reset(thread_db* tdbb, TraNumber tran, bool erase) override
 	{
-		storeObject(tdbb, nullptr, erase ? CacheFlag::ERASED : 0);
+		storeObject(tdbb, nullptr, erase ? CacheFlag::ERASED : 0, tran);
+		Permanent::reloadAst(tdbb, tran, erase);
 	}
 
 public:
@@ -1036,21 +1043,17 @@ public:
 
 	StoredElement* getData(thread_db* tdbb, MetaId id, ObjectBase::Flag fl)
 	{
+		StoredElement* data = nullptr;
+
 		SubArrayData* ptr = getDataPointer(id);
-
 		if (ptr)
-		{
-			StoredElement* rc = ptr->load(atomics::memory_order_relaxed);
-			if (rc && rc->getEntry(tdbb, TransactionNumber::current(tdbb), fl))
-				return rc;
-		}
+			data = ptr->load(atomics::memory_order_relaxed);
 
-		if (fl & CacheFlag::AUTOCREATE)
-		{
-			StoredElement* data = ensurePermanent(tdbb, id);
-			data->makeObject(tdbb, fl);
+		if ((!data) && (fl & CacheFlag::AUTOCREATE))
+			data = ensurePermanent(tdbb, id);
+
+		if (data && data->getEntry(tdbb, TransactionNumber::current(tdbb), fl))
 			return data;
-		}
 
 		return nullptr;
 	}
@@ -1214,6 +1217,7 @@ public:
 				if (ptr)
 				{
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
+
 					if (listEntry && ptr->getName() == name)
 					{
 						if (!(fl & CacheFlag::ERASED))

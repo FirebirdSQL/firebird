@@ -63,7 +63,8 @@ namespace Firebird::Jrd {
 		}
 
 		static bool destroy(thread_db* tdbb, RoutinePermanent* routine);
-		void releaseLock(thread_db*) { }
+		void reloadAst(thread_db* tdbb, TraNumber tran, bool erase) { }
+		void releaseLock(thread_db* tdbb) { }
 
 		const QualifiedName& getName() const noexcept { return name; }
 		void setName(const QualifiedName& value) { name = value; }
@@ -160,7 +161,7 @@ namespace Firebird::Jrd {
 
 		void afterDecrement(Jrd::thread_db*);
 		void releaseStatement(thread_db* tdbb);
-		//void remove(thread_db* tdbb);
+
 		virtual void releaseExternal()
 		{
 		}
@@ -186,6 +187,7 @@ namespace Firebird::Jrd {
 	public:
 		bool flReload;
 		bool compiling = false;		// Do not try to load routine's BLR in scan/reload during compile
+		bool flPrivate = false;		// Private routine in a package
 
 	public:
 		Jrd::UserId* invoker;		// Invoker ID

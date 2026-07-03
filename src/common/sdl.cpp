@@ -52,13 +52,14 @@ struct sdl_arg
 
 // Structure to compute ranges
 
+constexpr size_t INTERNAL_MAX_ARRAY_DIMENSION = 64;
 // Let's stop this insanity! The header rng.h defined rng for the purposes
 // of refresh range and emulation of file-based data formats like Pdx.
 // Therefore, I renamed this struct array_range.
 struct array_range
 {
-	SLONG rng_minima[64];
-	SLONG rng_maxima[64];
+	SLONG rng_minima[INTERNAL_MAX_ARRAY_DIMENSION];
+	SLONG rng_maxima[INTERNAL_MAX_ARRAY_DIMENSION];
 	sdl_info* rng_info;
 };
 
@@ -673,6 +674,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 	case isc_sdl_do2:
 	case isc_sdl_do3:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		if (op == isc_sdl_do1)
 			arg->rng_minima[variable] = 1;
 		else
@@ -691,6 +694,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 
 	case isc_sdl_variable:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		*min = arg->rng_minima[variable];
 		*max = arg->rng_maxima[variable];
 		return p;
@@ -929,8 +934,13 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	case dtype_text:
 	case dtype_cstring:
 	case dtype_varying:
-		desc->dsc_length += get_word(sdl);
+	{
+		const auto length = get_word(sdl);
+		desc->dsc_length += length;
+		if (length == 0 || desc->dsc_length == 0)
+			return nullptr;
 		break;
+	}
 
 	default:
 		break;

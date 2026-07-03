@@ -128,7 +128,8 @@ enum rec_type {
 	rec_db_creator,			// Database creator
 	rec_publication,		// Publication
 	rec_pub_table,			// Publication table
-	rec_schema				// Schema
+	rec_schema,				// Schema
+	rec_constants			// Constants
 };
 
 
@@ -216,6 +217,17 @@ Version 11: FB4.0.
 
 Version 12: FB6.0.
 			Schemas.
+
+			Packaged constants.
+
+			Packaged tables:
+			RDB$RELATIONS.RDB$PACKAGE_NAME,
+			RDB$RELATIONS.RDB$PRIVATE_FLAG,
+			RDB$RELATION_FIELDSS.RDB$PACKAGE_NAME,
+			RDB$INDICES.RDB$PACKAGE_NAME and
+			RDB$INDEX_SEGMENTS.RDB$PACKAGE_NAME.
+
+			Custom aggregate function.
 */
 
 inline constexpr int ATT_BACKUP_FORMAT = 12;
@@ -295,6 +307,8 @@ enum att_type {
 	att_relation_sql_security_deprecated,	// can be removed later
 	att_relation_sql_security,
 	att_relation_schema_name,
+	att_relation_package_name,
+	att_relation_private_flag,
 
 	// Field attributes (used for both global and local fields)
 
@@ -463,6 +477,7 @@ enum att_type {
 	att_function_sql_security_deprecated,	// can be removed later
 	att_function_sql_security,
 	att_function_schema_name,
+	att_function_aggregate_flag,
 
 	// Function argument attributes
 
@@ -705,6 +720,17 @@ enum att_type {
 	att_schema_security_class,
 	att_schema_owner_name,
 	att_schema_description,
+
+	// Constants
+	att_constant_name = SERIES,
+	att_constant_package,
+	att_constant_field_source,
+	att_constant_field_source_schema,
+	att_constant_private_flag,
+	att_constant_blr,
+	att_constant_source,
+	att_constant_schema_name,
+	att_constant_description,
 };
 
 

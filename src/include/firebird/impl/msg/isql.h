@@ -208,3 +208,5 @@ FB_IMPL_MSG_SYMBOL(ISQL, 208, HLP_SETAUTOTERM, "    SET AUTOTERM           -- to
 FB_IMPL_MSG_SYMBOL(ISQL, 209, HLP_SETWIRESTATS, "    SET WIRE_stats         -- toggle display of wire (network) statistics")
 FB_IMPL_MSG_SYMBOL(ISQL, 210, USAGE_SEARCH_PATH, "	-(se)arch_path <path>   set schema search path")
 FB_IMPL_MSG_SYMBOL(ISQL, 211, MSG_SCHEMAS, "Schemas:")
+FB_IMPL_MSG_SYMBOL(ISQL, 212, NO_CONSTANTS, "There are no constants in this database")
+FB_IMPL_MSG_SYMBOL(ISQL, 213, NO_CONSTANT, "There are no constant @1 in this database")

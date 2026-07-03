@@ -120,6 +120,7 @@ static processing_state show_trigger(const std::optional<QualifiedMetaString>& n
 static processing_state show_users();
 static processing_state show_users12();
 static processing_state show_wireStats();
+static processing_state show_constants(const std::optional<QualifiedMetaString>& name, const char* msg = nullptr);
 
 const char* const spaces = "                                ";
 static TEXT Print_buffer[512];
@@ -1093,7 +1094,8 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 		// Find the user specified relation and show its privileges
 
 		FOR FIRST 1 R IN RDB$RELATIONS
-			WITH R.RDB$RELATION_NAME EQ name->object.c_str()
+			WITH R.RDB$PACKAGE_NAME MISSING AND
+				 R.RDB$RELATION_NAME EQ name->object.c_str()
 			SORTED BY R.RDB$SCHEMA_NAME
 		{
 			if (name->schema.hasData() && name->schema != R.RDB$SCHEMA_NAME)
@@ -1109,6 +1111,7 @@ processing_state SHOW_grants(const std::optional<QualifiedMetaString>& name,
 					 PRV.RDB$RELATION_SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
 					 PRV.RDB$RELATION_NAME EQ relationName.object.c_str() AND
 					 REL.RDB$SCHEMA_NAME EQUIV PRV.RDB$RELATION_SCHEMA_NAME AND
+					 REL.RDB$PACKAGE_NAME MISSING AND
 					 REL.RDB$RELATION_NAME EQ PRV.RDB$RELATION_NAME AND
 					 PRV.RDB$PRIVILEGE     NE 'M' AND
 					 REL.RDB$OWNER_NAME    NE PRV.RDB$USER
@@ -1805,6 +1808,12 @@ void SHOW_print_metadata_text_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squot
 
 	if (avoid_end_in_single_line_comment && ISQL_statement_ends_in_comment(fullText.c_str()))
 		fputc('\n', fp);
+}
+
+void SHOW_print_function_source_blob(FILE* fp, ISC_QUAD* blobid, bool escape_squote,
+	bool avoid_end_in_single_line_comment)
+{
+	SHOW_print_metadata_text_blob(fp, blobid, escape_squote, avoid_end_in_single_line_comment);
 }
 
 
@@ -2573,6 +2582,23 @@ processing_state SHOW_metadata(const FrontendParser::AnyShowNode& node)
 			return show_wireStats();
 		},
 
+		[&](const FrontendParser::ShowConstantsNode& node)
+		{
+			const processing_state ret = show_constants(node.name);
+			if (ret == OBJECT_NOT_FOUND)
+			{
+				if (node.name.has_value())
+				{
+					key = NO_CONSTANT;
+					notFoundName = node.name.value();
+				}
+				else
+					key = NO_CONSTANTS;
+			}
+
+			return ret;
+		},
+
 		[](auto& arg)
 		{
 			static_assert(FrontendParser::AlwaysFalseV<decltype(arg)>,
@@ -2646,8 +2672,8 @@ static processing_state show_all_tables(SSHORT sys_flag)
 	if (sys_flag == -1)
 	{
 		// Views
-		FOR REL IN RDB$RELATIONS WITH
-			REL.RDB$VIEW_BLR NOT MISSING
+		FOR REL IN RDB$RELATIONS
+			WITH REL.RDB$VIEW_BLR NOT MISSING
 			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
 		{
 			first = false;
@@ -2666,15 +2692,16 @@ static processing_state show_all_tables(SSHORT sys_flag)
 	{
 		// The rdb$system_flag is not always set for non-system objects... this
 		// query may potentially fail.
-		FOR REL IN RDB$RELATIONS WITH
-			(REL.RDB$SYSTEM_FLAG EQ sys_flag
-				/*OR (sys_flag == 0 AND REL.RDB$SYSTEM_FLAG MISSING)*/)
-			AND REL.RDB$VIEW_BLR MISSING
-			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$RELATION_NAME
+		FOR REL IN RDB$RELATIONS
+			WITH (REL.RDB$SYSTEM_FLAG EQ sys_flag
+					/*OR (sys_flag == 0 AND REL.RDB$SYSTEM_FLAG MISSING)*/) AND
+				 REL.RDB$VIEW_BLR MISSING
+			SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME, REL.RDB$RELATION_NAME
 		{
 			first = false;
 
-			const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+			const QualifiedMetaString relationName(
+				REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 
 			isqlGlob.printf("%s%s", IUTILS_name_to_string(relationName).c_str(), NEWLINE);
 		}
@@ -2906,7 +2933,6 @@ static processing_state show_collations(const std::optional<QualifiedMetaString>
 	return SKIP;
 }
 
-
 // ***********************
 // s h o w _ c o m m e n t
 // ***********************
@@ -3001,9 +3027,9 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR RL IN RDB$RELATIONS
 		WITH RL.RDB$VIEW_BLR MISSING AND
 			 (RL.RDB$SYSTEM_FLAG EQ 0 OR RL.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY RL.RDB$SCHEMA_NAME, RL.RDB$RELATION_NAME
+		SORTED BY RL.RDB$SCHEMA_NAME, RL.RDB$PACKAGE_NAME, RL.RDB$RELATION_NAME
 	{
-		const QualifiedMetaString name(RL.RDB$RELATION_NAME, RL.RDB$SCHEMA_NAME);
+		const QualifiedMetaString name(RL.RDB$RELATION_NAME, RL.RDB$SCHEMA_NAME, RL.RDB$PACKAGE_NAME);
 
 		if (!RL.RDB$DESCRIPTION.NULL && !UserBlob::blobIsNull(RL.RDB$DESCRIPTION))
 		{
@@ -3014,6 +3040,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 
 		FOR RF IN RDB$RELATION_FIELDS
 			WITH RF.RDB$SCHEMA_NAME EQUIV NULLIF(name.schema.c_str(), '') AND
+				 RF.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 				 RF.RDB$RELATION_NAME = RL.RDB$RELATION_NAME AND
 				 RF.RDB$DESCRIPTION NOT MISSING
 			SORTED BY RF.RDB$FIELD_POSITION
@@ -3072,7 +3099,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 
 	FOR PR IN RDB$PROCEDURES
 		WITH (PR.RDB$SYSTEM_FLAG EQ 0 OR PR.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY PR.RDB$SCHEMA_NAME, PR.RDB$PROCEDURE_NAME
+		SORTED BY PR.RDB$SCHEMA_NAME, PR.RDB$PACKAGE_NAME, PR.RDB$PROCEDURE_NAME
 	{
 		const QualifiedMetaString name(PR.RDB$PROCEDURE_NAME, PR.RDB$SCHEMA_NAME, PR.RDB$PACKAGE_NAME);
 
@@ -3125,7 +3152,7 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR UD IN RDB$FUNCTIONS
 		WITH UD.RDB$DESCRIPTION NOT MISSING AND
 			 (UD.RDB$SYSTEM_FLAG EQ 0 OR UD.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY UD.RDB$SCHEMA_NAME, UD.RDB$FUNCTION_NAME
+		SORTED BY UD.RDB$SCHEMA_NAME, UD.RDB$PACKAGE_NAME, UD.RDB$FUNCTION_NAME
 	{
 		// Avoid syntax error when extracting scripts due to an historical bug in gbak.
 		// See CORE-1174.
@@ -3218,9 +3245,9 @@ static processing_state show_comments(const commentMode showextract, const char*
 	FOR IX IN RDB$INDICES
 		WITH IX.RDB$DESCRIPTION NOT MISSING AND
 			 (IX.RDB$SYSTEM_FLAG EQ 0 OR IX.RDB$SYSTEM_FLAG MISSING)
-		SORTED BY IX.RDB$SCHEMA_NAME, IX.RDB$INDEX_NAME
+		SORTED BY IX.RDB$SCHEMA_NAME, IX.RDB$PACKAGE_NAME, IX.RDB$INDEX_NAME
 	{
-		const QualifiedMetaString name(IX.RDB$INDEX_NAME, IX.RDB$SCHEMA_NAME);
+		const QualifiedMetaString name(IX.RDB$INDEX_NAME, IX.RDB$SCHEMA_NAME, IX.RDB$PACKAGE_NAME);
 
 		show_comment("INDEX", name, {}, &IX.RDB$DESCRIPTION,
 			showextract, first ? banner : 0);
@@ -4273,7 +4300,10 @@ static processing_state show_func(const QualifiedMetaString& name)
 	{
 		first = false;
 
-		isqlGlob.printf("Function: %s%s", IUTILS_name_to_string(name).c_str(), NEWLINE);
+		const bool aggregate = !FUN.RDB$AGGREGATE_FLAG.NULL && FUN.RDB$AGGREGATE_FLAG != 0;
+
+		isqlGlob.printf("%s: %s%s", aggregate ? "Aggregate function" : "Function",
+			IUTILS_name_to_string(name).c_str(), NEWLINE);
 
 		if (!FUN.RDB$DETERMINISTIC_FLAG.NULL && FUN.RDB$DETERMINISTIC_FLAG)
 			isqlGlob.printf("Deterministic function%s", NEWLINE);
@@ -4300,7 +4330,7 @@ static processing_state show_func(const QualifiedMetaString& name)
 		{
 			isqlGlob.printf("Function text:%s", NEWLINE);
 			isqlGlob.printf("=============================================================================%s", NEWLINE);
-			SHOW_print_metadata_text_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
+			SHOW_print_function_source_blob(isqlGlob.Out, &FUN.RDB$FUNCTION_SOURCE);
 			isqlGlob.printf("%s=============================================================================%s", NEWLINE, NEWLINE);
 		}
 
@@ -4409,6 +4439,9 @@ static processing_state show_func(const QualifiedMetaString& name)
 
 				show_charsets(charset, collation);
 			}
+
+			if (!ARG.RDB$NULL_FLAG.NULL && ARG.RDB$NULL_FLAG)
+				isqlGlob.printf(" NOT NULL");
 
 			if (ARG.RDB$ARGUMENT_POSITION != FUN.RDB$RETURN_ARGUMENT) // input, try to show default and make Vlad happy.
 			{
@@ -4680,7 +4713,6 @@ static processing_state show_generators(const std::optional<QualifiedMetaString>
 	return SKIP;
 }
 
-
 static void show_index(const QualifiedMetaString& relationName,
 					   const QualifiedMetaString& indexName,
 					   const SSHORT unique_flag,
@@ -4704,7 +4736,7 @@ static void show_index(const QualifiedMetaString& relationName,
 		"%s%s%s INDEX ON %s",
 		IUTILS_name_to_string(indexName).c_str(),
 		(unique_flag ? " UNIQUE" : ""),
-		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName.object).c_str());
+		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName).c_str());
 
 	// Get column names
 
@@ -4712,6 +4744,8 @@ static void show_index(const QualifiedMetaString& relationName,
 
 	if (ISQL_get_index_segments(collist, sizeof(collist), indexName))
 		isqlGlob.printf("(%s) %s%s", collist, (inactive ? "(inactive)" : ""), NEWLINE);
+	else
+		isqlGlob.printf("%s", NEWLINE);
 }
 
 
@@ -4738,16 +4772,18 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 	if (name)
 	{
 		FOR IDX IN RDB$INDICES
-			WITH IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
-				 IDX.RDB$INDEX_NAME EQ name->object.c_str()
-			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$INDEX_NAME
+			WITH IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name->package.c_str(), '') AND
+				 (IDX.RDB$RELATION_NAME EQ name->object.c_str() OR
+				  IDX.RDB$INDEX_NAME EQ name->object.c_str()) AND
+				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
+			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME, IDX.RDB$INDEX_NAME
 		{
-			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			if (name->schema.hasData() && name->schema != indexName.schema)
 				continue;
 
-			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			if (IDX.RDB$INDEX_INACTIVE.NULL)
 				IDX.RDB$INDEX_INACTIVE = 0;
@@ -4788,12 +4824,14 @@ static processing_state show_indices(const std::optional<QualifiedMetaString>& n
 		FOR IDX IN RDB$INDICES CROSS
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQUIV IDX.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IDX.RDB$PACKAGE_NAME AND
 				 REL.RDB$RELATION_NAME = IDX.RDB$RELATION_NAME AND
-				 (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING)
-			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
+				 (REL.RDB$SYSTEM_FLAG NE 1 OR REL.RDB$SYSTEM_FLAG MISSING) AND
+				 IDX.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
+			SORTED BY IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME, IDX.RDB$RELATION_NAME, IDX.RDB$INDEX_NAME
 		{
-			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME);
-			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			const QualifiedMetaString indexName(IDX.RDB$INDEX_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
+			const QualifiedMetaString relationName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME, IDX.RDB$PACKAGE_NAME);
 
 			first = false;
 
@@ -5317,6 +5355,9 @@ static processing_state show_proc(const std::optional<QualifiedMetaString>& name
 
 				show_charsets(charset, collation);
 			}
+
+			if (!PRM.RDB$NULL_FLAG.NULL && PRM.RDB$NULL_FLAG)
+				isqlGlob.printf(" NOT NULL");
 
 			if (PRM.RDB$PARAMETER_TYPE == 0) // input, try to show default and make Vlad happy.
 			{
@@ -6015,14 +6056,26 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 	// Query to obtain relation information
 	// REL.RDB$VIEW_BLR NOT MISSING
 
-	FOR REL IN RDB$RELATIONS
-		WITH REL.RDB$RELATION_NAME EQ name.object.c_str()
-		SORTED BY REL.RDB$SCHEMA_NAME
-	{
-		const QualifiedMetaString relationName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+	const QualifiedMetaString name1(name.object, name.schema, name.package);
+	const auto name2 = name1.package.hasData() ?
+		name1 :
+		QualifiedMetaString(name.object, "", name.schema);
 
-		if (name.schema.hasData() && name.schema != relationName.schema)
+	FOR REL IN RDB$RELATIONS
+		WITH (REL.RDB$RELATION_NAME EQ name1.object.c_str() AND
+			  REL.RDB$PACKAGE_NAME EQUIV NULLIF(name1.package.c_str(), '')) OR
+		     (REL.RDB$RELATION_NAME EQ name2.object.c_str() AND
+			  REL.RDB$PACKAGE_NAME EQUIV NULLIF(name2.package.c_str(), ''))
+		SORTED BY REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME
+	{
+		const QualifiedMetaString relationName(
+			REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
+
+		if (!(name1.schema.isEmpty() || name1.schema == relationName.schema) &&
+			!(name2.schema.isEmpty() || name2.schema == relationName.schema))
+		{
 			continue;
+		}
 
 		if ((isView && REL.RDB$VIEW_BLR.NULL) || (!isView && !REL.RDB$VIEW_BLR.NULL))
 			continue;
@@ -6044,298 +6097,301 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 		if (!REL.RDB$EXTERNAL_FILE.NULL)
 			isqlGlob.printf("External file: %s%s", REL.RDB$EXTERNAL_FILE, NEWLINE);
 
-	// TODO: indent
-
-	FOR RFR IN RDB$RELATION_FIELDS CROSS
-		FLD IN RDB$FIELDS
-		WITH FLD.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-			 FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE AND
-			 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
-			 RFR.RDB$RELATION_NAME EQ relationName.object.c_str()
-		SORTED BY RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
-	{
-		const QualifiedMetaString domainName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
-		const MetaString columnName(RFR.RDB$FIELD_NAME);
-
-		// Get length of colname to align columns for printing
-
-		// Print the column name in first column
-
-		isqlGlob.printf("%-31s ", IUTILS_name_to_string(columnName).c_str());
-
-		// Decide if this is a user-created domain
-		if (!(fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && FLD.RDB$SYSTEM_FLAG != 1))
-			isqlGlob.printf("(%s) ", IUTILS_name_to_string(domainName).c_str());
-
-		// Detect the existence of arrays
-
-		if (!FLD.RDB$DIMENSIONS.NULL)
+		FOR RFR IN RDB$RELATION_FIELDS CROSS
+			FLD IN RDB$FIELDS
+			WITH FLD.RDB$SCHEMA_NAME EQUIV RFR.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+				 FLD.RDB$FIELD_NAME EQ RFR.RDB$FIELD_SOURCE AND
+				 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
+				 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
+				 RFR.RDB$RELATION_NAME EQ relationName.object.c_str()
+			SORTED BY RFR.RDB$FIELD_POSITION, RFR.RDB$FIELD_NAME
 		{
-			isqlGlob.printf("ARRAY OF ");
-			ISQL_array_dimensions(domainName);
-			isqlGlob.printf("%s                                ", NEWLINE);
-		}
+			const QualifiedMetaString domainName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+			const MetaString columnName(RFR.RDB$FIELD_NAME);
 
-		// If a computed field, show the source and exit
-		// Note that view columns which are computed are dealt with later.
-		if (!FLD.RDB$COMPUTED_BLR.NULL && !isView)
-		{
-			isqlGlob.printf("Computed by: ");
-			if (!FLD.RDB$COMPUTED_SOURCE.NULL)
-				SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$COMPUTED_SOURCE);
-			isqlGlob.printf(NEWLINE);
-			continue;
-		}
+			// Get length of colname to align columns for printing
 
-		if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
-				FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
-		{
-			return ps_ERR;
-		}
+			// Print the column name in first column
 
-		SSHORT char_set_id = 0;
-		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
-			char_set_id = FLD.RDB$CHARACTER_SET_ID;
+			isqlGlob.printf("%-31s ", IUTILS_name_to_string(columnName).c_str());
 
-		SSHORT collation = 0;
-		if (!RFR.RDB$COLLATION_ID.NULL)
-			collation = RFR.RDB$COLLATION_ID;
-		else if (!FLD.RDB$COLLATION_ID.NULL)
-			collation = FLD.RDB$COLLATION_ID;
+			// Decide if this is a user-created domain
+			if (!(fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && FLD.RDB$SYSTEM_FLAG != 1))
+				isqlGlob.printf("(%s) ", IUTILS_name_to_string(domainName).c_str());
 
-		if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
-		{
-			isqlGlob.printf("(%d)", ISQL_get_field_length(domainName));
+			// Detect the existence of arrays
 
-			if (FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary)
+			if (!FLD.RDB$DIMENSIONS.NULL)
 			{
-				// Show international character sets and collations
-				show_charsets(char_set_id, collation);
+				isqlGlob.printf("ARRAY OF ");
+				ISQL_array_dimensions(domainName);
+				isqlGlob.printf("%s                                ", NEWLINE);
 			}
-		}
 
-		if (FLD.RDB$FIELD_TYPE == blr_blob)
-		{
-			isqlGlob.printf(" segment %u, subtype ", (USHORT) FLD.RDB$SEGMENT_LENGTH);
-			const int subtype  = FLD.RDB$FIELD_SUB_TYPE;
-			if (subtype >= 0 && subtype <= MAX_BLOBSUBTYPES)
+			// If a computed field, show the source and exit
+			// Note that view columns which are computed are dealt with later.
+			if (!FLD.RDB$COMPUTED_BLR.NULL && !isView)
 			{
-				isqlGlob.prints(Sub_types[subtype]);
+				isqlGlob.printf("Computed by: ");
+				if (!FLD.RDB$COMPUTED_SOURCE.NULL)
+					SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$COMPUTED_SOURCE);
+				isqlGlob.printf(NEWLINE);
+				continue;
+			}
+
+			if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+					FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+			{
+				return ps_ERR;
+			}
+
+			SSHORT char_set_id = 0;
+			if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+				char_set_id = FLD.RDB$CHARACTER_SET_ID;
+
+			SSHORT collation = 0;
+			if (!RFR.RDB$COLLATION_ID.NULL)
+				collation = RFR.RDB$COLLATION_ID;
+			else if (!FLD.RDB$COLLATION_ID.NULL)
+				collation = FLD.RDB$COLLATION_ID;
+
+			if ((FLD.RDB$FIELD_TYPE == blr_text) || (FLD.RDB$FIELD_TYPE == blr_varying))
+			{
+				isqlGlob.printf("(%d)", ISQL_get_field_length(domainName));
+
+				if (FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary)
+				{
+					// Show international character sets and collations
+					show_charsets(char_set_id, collation);
+				}
+			}
+
+			if (FLD.RDB$FIELD_TYPE == blr_blob)
+			{
+				isqlGlob.printf(" segment %u, subtype ", (USHORT) FLD.RDB$SEGMENT_LENGTH);
+				const int subtype  = FLD.RDB$FIELD_SUB_TYPE;
+				if (subtype >= 0 && subtype <= MAX_BLOBSUBTYPES)
+				{
+					isqlGlob.prints(Sub_types[subtype]);
+				}
+				else
+				{
+					isqlGlob.printf("%d", subtype);
+				}
+
+				if (subtype == isc_blob_text)
+				{
+					// Show international character sets and collations
+					show_charsets(char_set_id, collation);
+				}
+			}
+
+			if (!FLD.RDB$COMPUTED_BLR.NULL)
+			{
+				// A view expression. Other computed fields will not reach this point.
+				isqlGlob.printf(" Expression%s", NEWLINE);
+				continue;
+			}
+
+			// The null flag is either 1 or null (for nullable)
+
+			if (RFR.RDB$NULL_FLAG == 1 || FLD.RDB$NULL_FLAG == 1 ||
+				(!RFR.RDB$BASE_FIELD.NULL && !ISQL_get_null_flag(relationName, columnName)))
+			{
+				isqlGlob.printf(" Not Null ");
 			}
 			else
 			{
-				isqlGlob.printf("%d", subtype);
+				isqlGlob.printf(" Nullable ");
 			}
 
-			if (subtype == isc_blob_text)
+			if (!RFR.RDB$GENERATOR_NAME.NULL)
 			{
-				// Show international character sets and collations
-				show_charsets(char_set_id, collation);
+				isqlGlob.printf("Identity (%s)",
+					(RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_BY_DEFAULT ? "by default" :
+					 RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_ALWAYS ? "always" : ""));
 			}
-		}
 
-		if (!FLD.RDB$COMPUTED_BLR.NULL)
-		{
-			// A view expression. Other computed fields will not reach this point.
-			isqlGlob.printf(" Expression%s", NEWLINE);
-			continue;
-		}
+			// Handle defaults for columns
 
-		// The null flag is either 1 or null (for nullable)
-
-		if (RFR.RDB$NULL_FLAG == 1 || FLD.RDB$NULL_FLAG == 1 ||
-			(!RFR.RDB$BASE_FIELD.NULL && !ISQL_get_null_flag(relationName, columnName)))
-		{
-			isqlGlob.printf(" Not Null ");
-		}
-		else
-		{
-			isqlGlob.printf(" Nullable ");
-		}
-
-		if (!RFR.RDB$GENERATOR_NAME.NULL)
-		{
-			isqlGlob.printf("Identity (%s)",
-				(RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_BY_DEFAULT ? "by default" :
-				 RFR.RDB$IDENTITY_TYPE == IDENT_TYPE_ALWAYS ? "always" : ""));
-		}
-
-		// Handle defaults for columns
-
-		if (!RFR.RDB$DEFAULT_SOURCE.NULL)
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE);
-		else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
-		isqlGlob.printf(NEWLINE);
-
-		// Validation clause for domains
-		if (!FLD.RDB$VALIDATION_SOURCE.NULL)
-		{
-			isqlGlob.printf("                                ");
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE);
+			if (!RFR.RDB$DEFAULT_SOURCE.NULL)
+				SHOW_print_metadata_text_blob (isqlGlob.Out, &RFR.RDB$DEFAULT_SOURCE);
+			else if (!FLD.RDB$DEFAULT_SOURCE.NULL)
+				SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
 			isqlGlob.printf(NEWLINE);
-		}
-	}
-	END_FOR
-	ON_ERROR
-		ISQL_errmsg(fbStatus);
-		return ps_ERR;
-	END_ERROR
 
-	// If this is a view and there were columns, print the view text
-
-	if (!REL.RDB$VIEW_BLR.NULL)
-	{
-		isqlGlob.printf("View Source:%s==== ======%s", NEWLINE, NEWLINE);
-		if (!REL.RDB$VIEW_SOURCE.NULL)
-			SHOW_print_metadata_text_blob (isqlGlob.Out, &REL.RDB$VIEW_SOURCE);
-		isqlGlob.printf(NEWLINE);
-	}
-
-	// Handle any referential or primary constraint on this table
-
-	SCHAR collist[BUFFER_LENGTH512];
-
-	// Static queries for obtaining referential constraints
-
-	FOR RELC1 IN RDB$RELATION_CONSTRAINTS
-		WITH RELC1.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
-			 RELC1.RDB$RELATION_NAME EQ relationName.object.c_str()
-		SORTED BY RELC1.RDB$CONSTRAINT_TYPE, RELC1.RDB$CONSTRAINT_NAME
-	{
-		const QualifiedMetaString indexName1(RELC1.RDB$INDEX_NAME, RELC1.RDB$SCHEMA_NAME);
-		const MetaString constraintName(RELC1.RDB$CONSTRAINT_NAME);
-
-		ISQL_get_index_segments(collist, sizeof(collist), indexName1);
-		bool isPK = false;
-		bool isUK = false;
-
-		if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "PRIMARY", 7))
-		{
-			isPK = true;
-			isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
-			isqlGlob.printf("  Primary key (%s)", collist);
-		}
-		else if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "UNIQUE", 6))
-		{
-			isUK = true;
-			isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
-			isqlGlob.printf("  Unique key (%s)", collist);
-		}
-		else if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "FOREIGN", 7))
-		{
-			isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
-			isqlGlob.printf("  Foreign key (%s)", collist);
-
-			FOR RELC2 IN RDB$RELATION_CONSTRAINTS CROSS
-				REFC IN RDB$REF_CONSTRAINTS
-				WITH RELC2.RDB$SCHEMA_NAME EQUIV NULLIF(REFC.RDB$CONST_SCHEMA_NAME_UQ, '') AND
-					 RELC2.RDB$CONSTRAINT_NAME EQ REFC.RDB$CONST_NAME_UQ AND
-					 REFC.RDB$SCHEMA_NAME EQUIV NULLIF(RELC1.RDB$SCHEMA_NAME, '') AND
-					 REFC.RDB$CONSTRAINT_NAME EQ RELC1.RDB$CONSTRAINT_NAME
+			// Validation clause for domains
+			if (!FLD.RDB$VALIDATION_SOURCE.NULL)
 			{
-				const QualifiedMetaString indexName2(RELC2.RDB$INDEX_NAME, RELC2.RDB$SCHEMA_NAME);
-				const QualifiedMetaString referencesName(RELC2.RDB$RELATION_NAME, RELC2.RDB$SCHEMA_NAME);
-
-				ISQL_get_index_segments(collist, sizeof(collist), indexName2);
-
-				isqlGlob.printf("    References %s (%s)", IUTILS_name_to_string(referencesName).c_str(), collist);
-
-				if (!REFC.RDB$UPDATE_RULE.NULL)
-				{
-					IUTILS_truncate_term (REFC.RDB$UPDATE_RULE, static_cast<USHORT>(strlen(REFC.RDB$UPDATE_RULE)));
-					ISQL_ri_action_print (REFC.RDB$UPDATE_RULE, " On Update", false);
-				}
-
-				if (!REFC.RDB$DELETE_RULE.NULL)
-				{
-					IUTILS_truncate_term (REFC.RDB$DELETE_RULE, static_cast<USHORT>(strlen(REFC.RDB$DELETE_RULE)));
-					ISQL_ri_action_print (REFC.RDB$DELETE_RULE, " On Delete", false);
-				}
-
+				isqlGlob.printf("                                ");
+				SHOW_print_metadata_text_blob (isqlGlob.Out, &FLD.RDB$VALIDATION_SOURCE);
 				isqlGlob.printf(NEWLINE);
 			}
-			END_FOR
-			ON_ERROR
-				ISQL_errmsg (fbStatus);
-				return ps_ERR;
-			END_ERROR
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR
+
+		// If this is a view and there were columns, print the view text
+
+		if (!REL.RDB$VIEW_BLR.NULL)
+		{
+			isqlGlob.printf("View Source:%s==== ======%s", NEWLINE, NEWLINE);
+			if (!REL.RDB$VIEW_SOURCE.NULL)
+				SHOW_print_metadata_text_blob (isqlGlob.Out, &REL.RDB$VIEW_SOURCE);
+			isqlGlob.printf(NEWLINE);
 		}
 
-		if (isPK || isUK) // Special handling for PRIMARY KEY and UNIQUE constraints.
+		if (relationName.package.isEmpty())
 		{
-			FOR IDX IN RDB$INDICES
-			WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName1.schema.c_str(), '') AND
-				 IDX.RDB$INDEX_NAME = indexName1.object.c_str()
+			// Handle any referential or primary constraint on this table
+
+			SCHAR collist[BUFFER_LENGTH512];
+
+			// Static queries for obtaining referential constraints
+
+			FOR RELC1 IN RDB$RELATION_CONSTRAINTS
+				WITH RELC1.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
+					 RELC1.RDB$RELATION_NAME EQ relationName.object.c_str()
+				SORTED BY RELC1.RDB$CONSTRAINT_TYPE, RELC1.RDB$CONSTRAINT_NAME
 			{
-				// Yes, the same RDB$... naming convention is used for both domains and indices.
-				const bool explicit_index =
-					((isPK && !fb_utils::implicit_pk(IDX.RDB$INDEX_NAME)) ||
-					(isUK && !fb_utils::implicit_domain(indexName1.object.c_str()))) &&
-					constraintName != indexName1.object;
-				const bool descending_index = !IDX.RDB$INDEX_TYPE.NULL && IDX.RDB$INDEX_TYPE == 1;
-				if (explicit_index || descending_index)
+				const QualifiedMetaString indexName1(RELC1.RDB$INDEX_NAME, RELC1.RDB$SCHEMA_NAME);
+				const MetaString constraintName(RELC1.RDB$CONSTRAINT_NAME);
+
+				ISQL_get_index_segments(collist, sizeof(collist), indexName1);
+				bool isPK = false;
+				bool isUK = false;
+
+				if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "PRIMARY", 7))
 				{
-					isqlGlob.printf(" uses explicit %s index",
-									descending_index ? "descending" : "ascending");
+					isPK = true;
+					isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
+					isqlGlob.printf("  Primary key (%s)", collist);
+				}
+				else if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "UNIQUE", 6))
+				{
+					isUK = true;
+					isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
+					isqlGlob.printf("  Unique key (%s)", collist);
+				}
+				else if (!strncmp (RELC1.RDB$CONSTRAINT_TYPE, "FOREIGN", 7))
+				{
+					isqlGlob.printf("CONSTRAINT %s:%s", IUTILS_name_to_string(constraintName).c_str(), NEWLINE);
+					isqlGlob.printf("  Foreign key (%s)", collist);
+
+					FOR RELC2 IN RDB$RELATION_CONSTRAINTS CROSS
+						REFC IN RDB$REF_CONSTRAINTS
+						WITH RELC2.RDB$SCHEMA_NAME EQUIV NULLIF(REFC.RDB$CONST_SCHEMA_NAME_UQ, '') AND
+							 RELC2.RDB$CONSTRAINT_NAME EQ REFC.RDB$CONST_NAME_UQ AND
+							 REFC.RDB$SCHEMA_NAME EQUIV NULLIF(RELC1.RDB$SCHEMA_NAME, '') AND
+							 REFC.RDB$CONSTRAINT_NAME EQ RELC1.RDB$CONSTRAINT_NAME
+					{
+						const QualifiedMetaString indexName2(RELC2.RDB$INDEX_NAME, RELC2.RDB$SCHEMA_NAME);
+						const QualifiedMetaString referencesName(RELC2.RDB$RELATION_NAME, RELC2.RDB$SCHEMA_NAME);
+
+						ISQL_get_index_segments(collist, sizeof(collist), indexName2);
+
+						isqlGlob.printf("    References %s (%s)", IUTILS_name_to_string(referencesName).c_str(), collist);
+
+						if (!REFC.RDB$UPDATE_RULE.NULL)
+						{
+							IUTILS_truncate_term (REFC.RDB$UPDATE_RULE, static_cast<USHORT>(strlen(REFC.RDB$UPDATE_RULE)));
+							ISQL_ri_action_print (REFC.RDB$UPDATE_RULE, " On Update", false);
+						}
+
+						if (!REFC.RDB$DELETE_RULE.NULL)
+						{
+							IUTILS_truncate_term (REFC.RDB$DELETE_RULE, static_cast<USHORT>(strlen(REFC.RDB$DELETE_RULE)));
+							ISQL_ri_action_print (REFC.RDB$DELETE_RULE, " On Delete", false);
+						}
+
+						isqlGlob.printf(NEWLINE);
+					}
+					END_FOR
+					ON_ERROR
+						ISQL_errmsg (fbStatus);
+						return ps_ERR;
+					END_ERROR
 				}
 
-				if (explicit_index)
-					isqlGlob.printf(" %s", IUTILS_name_to_string(indexName1.object).c_str());
+				if (isPK || isUK) // Special handling for PRIMARY KEY and UNIQUE constraints.
+				{
+					FOR IDX IN RDB$INDICES
+					WITH IDX.RDB$SCHEMA_NAME EQUIV NULLIF(indexName1.schema.c_str(), '') AND
+						 IDX.RDB$PACKAGE_NAME MISSING AND
+						 IDX.RDB$INDEX_NAME = indexName1.object.c_str()
+					{
+						// Yes, the same RDB$... naming convention is used for both domains and indices.
+						const bool explicit_index =
+							((isPK && !fb_utils::implicit_pk(IDX.RDB$INDEX_NAME)) ||
+							(isUK && !fb_utils::implicit_domain(indexName1.object.c_str()))) &&
+							constraintName != indexName1.object;
+						const bool descending_index = !IDX.RDB$INDEX_TYPE.NULL && IDX.RDB$INDEX_TYPE == 1;
+						if (explicit_index || descending_index)
+						{
+							isqlGlob.printf(" uses explicit %s index",
+											descending_index ? "descending" : "ascending");
+						}
 
-				isqlGlob.prints(NEWLINE);
+						if (explicit_index)
+							isqlGlob.printf(" %s", IUTILS_name_to_string(indexName1.object).c_str());
+
+						isqlGlob.prints(NEWLINE);
+					}
+					END_FOR
+					ON_ERROR
+						ISQL_errmsg (fbStatus);
+						return ps_ERR;
+					END_ERROR
+				}
 			}
 			END_FOR
 			ON_ERROR
-				ISQL_errmsg (fbStatus);
+				ISQL_errmsg(fbStatus);
 				return ps_ERR;
 			END_ERROR
+
+			FOR R_C IN RDB$RELATION_CONSTRAINTS CROSS
+				C_C IN RDB$CHECK_CONSTRAINTS
+				WITH R_C.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
+					 R_C.RDB$RELATION_NAME EQ relationName.object.c_str() AND
+					 R_C.RDB$CONSTRAINT_TYPE EQ 'NOT NULL' AND
+					 R_C.RDB$SCHEMA_NAME EQUIV C_C.RDB$SCHEMA_NAME AND
+					 R_C.RDB$CONSTRAINT_NAME EQ C_C.RDB$CONSTRAINT_NAME
+			{
+				if (!fb_utils::implicit_integrity(R_C.RDB$CONSTRAINT_NAME))
+				{
+					isqlGlob.printf(
+						"CONSTRAINT %s:%s",
+						IUTILS_name_to_string(R_C.RDB$CONSTRAINT_NAME).c_str(),
+						NEWLINE);
+
+					isqlGlob.printf(
+						"  Not Null Column (%s)%s",
+						IUTILS_name_to_string(C_C.RDB$TRIGGER_NAME).c_str(),
+						NEWLINE);
+				}
+			}
+			END_FOR
+			ON_ERROR
+				ISQL_errmsg(fbStatus);
+				return ps_ERR;
+			END_ERROR
+
+			// Do check constraints
+
+			show_check(relationName);
+
+			// Do triggers
+
+			show_trigger(relationName, false, false);
+
+			// Do publications
+
+			show_pub_table(relationName);
 		}
-	}
-	END_FOR
-	ON_ERROR
-		ISQL_errmsg(fbStatus);
-		return ps_ERR;
-	END_ERROR
-
-	FOR R_C IN RDB$RELATION_CONSTRAINTS CROSS
-		C_C IN RDB$CHECK_CONSTRAINTS
-		WITH R_C.RDB$SCHEMA_NAME EQUIV NULLIF(relationName.schema.c_str(), '') AND
-			 R_C.RDB$RELATION_NAME EQ relationName.object.c_str() AND
-			 R_C.RDB$CONSTRAINT_TYPE EQ 'NOT NULL' AND
-			 R_C.RDB$SCHEMA_NAME EQUIV C_C.RDB$SCHEMA_NAME AND
-			 R_C.RDB$CONSTRAINT_NAME EQ C_C.RDB$CONSTRAINT_NAME
-	{
-		if (!fb_utils::implicit_integrity(R_C.RDB$CONSTRAINT_NAME))
-		{
-			isqlGlob.printf(
-				"CONSTRAINT %s:%s",
-				IUTILS_name_to_string(R_C.RDB$CONSTRAINT_NAME).c_str(),
-				NEWLINE);
-
-			isqlGlob.printf(
-				"  Not Null Column (%s)%s",
-				IUTILS_name_to_string(C_C.RDB$TRIGGER_NAME).c_str(),
-				NEWLINE);
-		}
-	}
-	END_FOR
-	ON_ERROR
-		ISQL_errmsg(fbStatus);
-		return ps_ERR;
-	END_ERROR
-
-	// Do check constraints
-
-	show_check(relationName);
-
-	// Do triggers
-
-	show_trigger(relationName, false, false);
-
-	// Do publications
-
-	show_pub_table(relationName);
 	}
 	END_FOR
 	ON_ERROR
@@ -6348,7 +6404,6 @@ static processing_state show_table(const QualifiedMetaString& name, bool isView)
 
 	return SKIP;
 }
-
 
 static processing_state show_trigger(const std::optional<QualifiedMetaString>& name,
 	bool show_source, bool isTriggerName)
@@ -6738,5 +6793,141 @@ static processing_state show_wireStats()
 	return SKIP;
 }
 
+static void print_constant_type(const char* fieldName, const char* schemaName)
+{
+	FOR FLD IN RDB$FIELDS WITH
+		FLD.RDB$SCHEMA_NAME EQ schemaName AND
+		FLD.RDB$FIELD_NAME EQ fieldName
+	{
+		// Decide if this is a user-created domain
+		if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) || FLD.RDB$SYSTEM_FLAG == 1)
+		{
+			fb_utils::exact_name(FLD.RDB$FIELD_NAME);
+			isqlGlob.printf("(%s) ", FLD.RDB$FIELD_NAME);
+		}
+
+		const QualifiedMetaString domainName(FLD.RDB$FIELD_NAME, FLD.RDB$SCHEMA_NAME);
+		if (!ISQL_printNumericType(domainName, FLD.RDB$FIELD_TYPE, FLD.RDB$FIELD_SUB_TYPE,
+				FLD.RDB$FIELD_PRECISION, FLD.RDB$FIELD_SCALE))
+		{
+			return;
+		}
+
+		// Use RDB$CHARACTER_LENGTH instead of RDB$FIELD_LENGTH
+		//   FSG 19.Nov.2000
+		if ((FLD.RDB$FIELD_TYPE == blr_text || FLD.RDB$FIELD_TYPE == blr_varying) &&
+			!FLD.RDB$CHARACTER_LENGTH.NULL)
+		{
+			isqlGlob.printf("(%d)", FLD.RDB$CHARACTER_LENGTH);
+		}
+
+		// Show international character sets and collations
+
+		SSHORT char_set_id = 0;
+		if (!FLD.RDB$CHARACTER_SET_ID.NULL)
+			char_set_id = FLD.RDB$CHARACTER_SET_ID;
+
+		SSHORT collation = 0;
+		if (!FLD.RDB$COLLATION_ID.NULL)
+			collation = FLD.RDB$COLLATION_ID;
+
+		if (((FLD.RDB$FIELD_TYPE == blr_text ||
+			FLD.RDB$FIELD_TYPE == blr_varying) && FLD.RDB$FIELD_SUB_TYPE != fb_text_subtype_binary) ||
+			FLD.RDB$FIELD_TYPE == blr_blob && FLD.RDB$FIELD_SUB_TYPE == isc_blob_text)
+			show_charsets(char_set_id, collation);
+
+
+		if (fb_utils::implicit_domain(FLD.RDB$FIELD_NAME) && !FLD.RDB$DEFAULT_SOURCE.NULL)
+		{
+			isqlGlob.printf(" ");
+			SHOW_print_metadata_text_blob(isqlGlob.Out, &FLD.RDB$DEFAULT_SOURCE);
+		}
+	}
+	END_FOR
+	ON_ERROR
+		ISQL_errmsg (fbStatus);
+	END_ERROR;
+}
+
+static processing_state show_constants(const std::optional<QualifiedMetaString>& name, const char* msg)
+{
+	bool first = true;
+
+	if (name.has_value())
+	{
+		// Seach for a constant with name
+		// If SCHEMA is not specifeid, search in all schemas
+
+		const QualifiedMetaString& constant = name.value();
+
+		FOR CONST IN RDB$CONSTANTS WITH
+			CONST.RDB$PACKAGE_NAME EQ constant.package.c_str() AND
+			CONST.RDB$CONSTANT_NAME EQ constant.object.c_str()
+			SORTED BY CONST.RDB$CONSTANT_NAME
+		{
+			if (constant.schema.hasData() && constant.schema != CONST.RDB$SCHEMA_NAME)
+				continue;
+
+			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG != 0;
+			const char* type = isPrivate ? "BODY" : "HEADER";
+
+			if (first && msg)
+				isqlGlob.printf("%s%s", msg, NEWLINE);
+
+			first = false;
+
+			fb_utils::exact_name(CONST.RDB$CONSTANT_NAME);
+			fb_utils::exact_name(CONST.RDB$PACKAGE_NAME);
+			isqlGlob.printf("%s (%s %s)%-20s", CONST.RDB$CONSTANT_NAME, CONST.RDB$PACKAGE_NAME, type, " ");
+
+			fb_utils::exact_name(CONST.RDB$FIELD_SOURCE);
+			fb_utils::exact_name(CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+			print_constant_type(CONST.RDB$FIELD_SOURCE, CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
+			isqlGlob.printf(NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+	}
+	else
+	{
+		// All constants
+
+		FOR CONST IN RDB$CONSTANTS
+			SORTED BY CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME, CONST.RDB$CONSTANT_NAME
+		{
+			const bool isPrivate = !CONST.RDB$PRIVATE_FLAG.NULL && CONST.RDB$PRIVATE_FLAG != 0;
+			const char* type = isPrivate ? "BODY" : "HEADER";
+
+			if (first && msg)
+				isqlGlob.printf("%s%s", msg, NEWLINE);
+
+			first = false;
+
+			fb_utils::exact_name(CONST.RDB$CONSTANT_NAME);
+			fb_utils::exact_name(CONST.RDB$PACKAGE_NAME);
+			isqlGlob.printf("%s (%s %s)%-20s", CONST.RDB$CONSTANT_NAME, CONST.RDB$PACKAGE_NAME, type, " ");
+
+			fb_utils::exact_name(CONST.RDB$FIELD_SOURCE);
+			fb_utils::exact_name(CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+			print_constant_type(CONST.RDB$FIELD_SOURCE, CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
+			isqlGlob.printf(NEWLINE);
+		}
+		END_FOR
+		ON_ERROR
+			ISQL_errmsg(fbStatus);
+			return ps_ERR;
+		END_ERROR;
+	}
+
+	if (first)
+		return OBJECT_NOT_FOUND;
+
+	return SKIP;
+}
 
 } // namespace Firebird::Isql

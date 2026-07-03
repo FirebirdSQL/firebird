@@ -322,10 +322,11 @@ private:
 	char	svc_arg_conv[MsgFormat::SAFEARG_MAX_ARG * 2];
 	char*	svc_arg_ptr;
 
-	string	svc_username;
-	string	svc_sql_role;
-	AuthReader::AuthBlock	svc_auth_block;
-	PathName	svc_expected_db;
+	Firebird::string	svc_username;
+	Firebird::string	svc_orig_username;
+	Firebird::string	svc_sql_role;
+	Firebird::AuthReader::AuthBlock	svc_auth_block;
+	Firebird::PathName	svc_expected_db;
 	bool                svc_trusted_role;
 	bool				svc_utf8;
 	string	svc_switches;	// Full set of switches

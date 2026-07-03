@@ -132,6 +132,7 @@ public:
 	{
 		if (this != &r)
 		{
+			Clear<Where>::clear(ptr);
 			ptr = r.ptr;
 			r.ptr = nullptr;
 		}

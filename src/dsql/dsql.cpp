@@ -1359,13 +1359,14 @@ dsql_rel::dsql_rel(MemoryPool& p, jrd_rel* jrel)
 	  rel_owner(p, jrel->getOwnerName()),
 	  rel_id(jrel->getId()),
 	  rel_dbkey_length(jrel->rel_dbkey_length),
-	  rel_flags((jrel->getExtFile() ? REL_external : 0) | (jrel->isView() ? REL_view : 0))
+	  rel_flags((jrel->getExtFile() ? REL_external : 0) | (jrel->isView() ? REL_view : 0)),
+	  rel_private(jrel->isPrivate())
 {
 	if (!(jrel->rel_fields))
 		return;
 
 	auto* format = jrel->currentFormat(nullptr);
-	fb_assert(format->fmt_count == jrel->rel_fields->count());
+	fb_assert(format && (format->fmt_count == jrel->rel_fields->count()));
 
 	for (MetaId id = 0; id < format->fmt_count; ++id)
 	{
@@ -1387,8 +1388,9 @@ dsql_rel::dsql_rel(MemoryPool& p, jrd_rel* jrel)
 		fld->charLength = jfld->fld_character_length;
 		fld->fieldSource = jfld->fld_source_name;
 		fld->setExactPrecision();
+		fb_assert(jfld->fld_not_null ? jfld->fld_flags & FLD_not_null : true);
 		fld->flags |= (jfld->fld_computation ? FLD_computed : 0) |
-					  (jfld->fld_not_null ? 0 : FLD_nullable);
+					  (jfld->fld_flags & FLD_not_null ? 0 : FLD_nullable);
 		if (rel_flags & REL_view)
 			fld->flags |= FLD_nullable;
 
@@ -1397,6 +1399,11 @@ dsql_rel::dsql_rel(MemoryPool& p, jrd_rel* jrel)
 			fld->elementDtype = array->arr_desc.iad_rpt[0].iad_desc.dsc_dtype;
 			fld->elementLength = array->arr_desc.iad_element_length;
 			fld->dimensions = array->arr_desc.iad_dimensions;
+
+			dsc tmp(array->arr_desc.iad_rpt[0].iad_desc);
+			fld->collationId = tmp.getCollation();
+			fld->textType = tmp.getTextType();
+			fld->charSetId = tmp.getCharSet();
 		}
 
 		auto** iter = &rel_fields;
@@ -1440,7 +1447,8 @@ dsql_prc::dsql_prc(MemoryPool& p, const jrd_prc* jproc)
 	  prc_in_count(jproc->getInputFields().getCount()),
 	  prc_def_count(jproc->getDefaultCount()),
 	  prc_out_count(jproc->getOutputFields().getCount()),
-	  prc_id(jproc->getId())
+	  prc_id(jproc->getId()),
+	  prc_private(jproc->flPrivate)
 { }
 
 dsql_fld* dsql_prc::cpFields(MemoryPool& p, const Array<NestConst<Parameter>>& fields)
@@ -1490,8 +1498,12 @@ dsql_fld::dsql_fld(MemoryPool& p, const dsc& desc, dsql_fld*** prev)
 
 dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 	: udf_name(p, jfun->getName()),
-	  udf_arguments(p)
+	  udf_arguments(p),
+	  udf_private(jfun->flPrivate)
 {
+	udf_aggregate = jfun->fun_aggregate;
+	udf_private = jfun->fun_private;
+
 	// return value
 	fb_assert(jfun->getOutputFields().getCount() == 1);
 	const dsc& desc = jfun->getOutputFields()[0]->prm_desc;

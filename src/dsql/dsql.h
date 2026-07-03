@@ -148,6 +148,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	bool rel_private = false;		// Packaged private relation
 };
 
 // rel_flags bits
@@ -347,6 +348,7 @@ public:
 	QualifiedName udf_name;
 	Array<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
+	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
 
@@ -550,6 +552,7 @@ inline constexpr USHORT CTX_view_with_check_modify	= 0x40;		// Context of WITH C
 inline constexpr USHORT CTX_cursor					= 0x80;		// Context is a cursor
 inline constexpr USHORT CTX_lateral					= 0x100;	// Context is a lateral derived table
 inline constexpr USHORT CTX_blr_fields				= 0x200;	// Fields of the context are defined inside BLR
+inline constexpr USHORT CTX_package					= 0x400;	// The context is related to a package
 
 //! Aggregate/union map block to map virtual fields to their base
 //! TMN: NOTE! This datatype should definitely be renamed!
@@ -823,6 +826,7 @@ struct SignatureParameter
 struct Signature
 {
 	const static unsigned FLAG_DETERMINISTIC = 0x01;
+	const static unsigned FLAG_AGGREGATE = 0x02;
 
 	Signature(MemoryPool& p, const MetaName& aName)
 		: name(p, aName),
@@ -887,6 +891,14 @@ struct Signature
 	SortedObjectsArray<SignatureParameter> parameters;
 	unsigned flags = 0;
 	bool defined = false;
+};
+
+enum class AggregateFunctionPhase : UCHAR
+{
+	START = 0,
+	ACCUMULATE = 1,
+	GROUP = 2,
+	FINISH = 3
 };
 
 /*! \var unsigned DSQL_debug

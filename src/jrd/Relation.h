@@ -35,6 +35,7 @@
 #include "../jrd/Resources.h"
 #include "../common/classes/TriState.h"
 #include "../common/sha2/sha2.h"
+#include "../jrd/ods.h"
 
 namespace Firebird::Jrd {
 
@@ -204,7 +205,8 @@ public:
 	const QualifiedName& getName() const noexcept;
 
 	static bool destroy(thread_db* tdbb, DbTriggersHeader* trigs);
-	void releaseLock(thread_db*) { }
+	void releaseLock(thread_db* tdbb) { }
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase) { }
 
 private:
 	MetaId type;
@@ -459,13 +461,17 @@ public:
 		: PermanentStorage(p),
 		  idp_relation(rel),
 		  idp_id(id)
-	{ }
+	{
+		idp_expression_bid.clear();
+		idp_condition_bid.clear();
+	}
 
 	~IndexPermanent()
 	{ }
 
 	static bool destroy(thread_db* tdbb, IndexPermanent* idp)
 	{
+		idp->releaseStatements(tdbb);
 		return false;
 	}
 
@@ -474,9 +480,10 @@ public:
 		return idp_id;
 	}
 
-	void releaseLock(thread_db*) { }
+	void releaseLock(thread_db* tdbb) { }
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase);
 
-	RelationPermanent* getRelation()
+	RelationPermanent* getRelation() noexcept
 	{
 		return idp_relation;
 	}
@@ -487,8 +494,58 @@ public:
 private:
 	RelationPermanent*	idp_relation;
 	MetaId				idp_id;
+	TraNumber			idp_tranum = 0;
+	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
+	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
+
+	void releaseStatements(thread_db* tdbb);
+
+public:
+	void lookupIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+		const Ods::index_root_page::irt_repeat* irt_desc)
+	{
+		if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+			refreshIndexCode(tdbb, relation, idx, irt_desc);
+
+		idx->idx_condition_node = idp_condition;
+		idx->idx_condition_statement = idp_condition_statement;
+
+		idx->idx_expression_node = idp_expression;
+		idx->idx_expression_statement = idp_expression_statement;
+		memcpy(&idx->idx_expression_desc, &idp_expression_desc, sizeof(struct dsc));
+	}
+
+	void setState(UCHAR state) noexcept
+	{
+		idp_state = state;
+	}
+
+	UCHAR getFormat() const noexcept
+	{
+		return idp_formatNumber;
+	}
+
+	void setFormat(UCHAR fmt) noexcept
+	{
+		idp_formatNumber = fmt;
+	}
+
+private:
+	void refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		index_desc* idx, const Ods::index_root_page::irt_repeat* irt_desc);
+
+	Firebird::Mutex		idp_code_mutex;			// Delays concurrent threads till the end of code refresh
+
+	bid					idp_expression_bid;
+	ValueExprNode*		idp_expression = nullptr;			// node tree for index expression
+	Statement*			idp_expression_statement = nullptr;	// statement for index expression evaluation
+	dsc					idp_expression_desc;				// descriptor for expression result
+
+	bid					idp_condition_bid;
+	BoolExprNode*		idp_condition = nullptr;			// node tree for index condition
+	Statement*			idp_condition_statement = nullptr;	// statement for index condition evaluation
 };
 
 
@@ -560,13 +617,6 @@ private:
 	SSHORT idv_type = 0;
 	QualifiedName idv_foreignKey;					// FOREIGN RELATION NAME
 	IndexStatus idv_active = MET_index_state_unknown;
-
-public:
-	ValueExprNode* idv_expression = nullptr;		// node tree for index expression
-	Statement* idv_expression_statement = nullptr;	// statement for index expression evaluation
-	dsc			idv_expression_desc;				// descriptor for expression result
-	BoolExprNode* idv_condition = nullptr;			// node tree for index condition
-	Statement* idv_condition_statement = nullptr;	// statement for index condition evaluation
 };
 
 
@@ -589,7 +639,7 @@ private:
 
 public:
 	USHORT				rel_current_fmt;	// Current format number
-	Format*				rel_current_format;	// Current record format
+	const Format*		rel_current_format;	// Current record format
 	USHORT				rel_dbkey_length;	// RDB$DBKEY length
 
 	vec<jrd_fld*>*		rel_fields;			// vector of field blocks
@@ -598,8 +648,7 @@ public:
 
 	TrigArray			rel_triggers;
 
-	TriState	rel_ss_definer;
-	TriState	rel_repl_state;		// replication state
+	Firebird::TriState	rel_ss_definer;
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
@@ -609,6 +658,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	ObjectType getObjectType() const noexcept
@@ -663,6 +713,7 @@ inline constexpr ULONG REL_virtual				= 0x0040;	// relation is virtual
 inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
+inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
 
 class GCLock
 {
@@ -781,6 +832,12 @@ public:
 	~RelationPermanent();
 	static bool destroy(thread_db* tdbb, RelationPermanent* rel);
 
+	void reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
+	{
+		if (erase)
+			dropTempPages(tdbb);
+	}
+
 	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
 	static constexpr USHORT getRelLockKeyLength() noexcept;
 	Lock* createLock(thread_db* tdbb, lck_t, bool);
@@ -791,10 +848,11 @@ public:
 	IndexVersion* lookup_index(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 	Cached::Index* lookupIndex(thread_db* tdbb, MetaId id, ObjectBase::Flag flags);
 	Cached::Index* lookupIndex(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
+	Cached::Index* ensureIndex(thread_db* tdbb, MetaId id);
 
 	void newIndexVersion(thread_db* tdbb, MetaId id, ObjectBase::Flag scanType)
 	{
-		auto chk = rel_indices.makeObject(tdbb, id, CacheFlag::NOCOMMIT | scanType);
+		[[maybe_unused]] auto chk = rel_indices.newVersion(tdbb, id);
 		fb_assert(chk);
 	}
 
@@ -842,7 +900,10 @@ public:
 	};
 
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	void	fillPages(thread_db* tdbb);
+	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
+	void	freePages(thread_db* tdbb);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 	void	cleanUp() noexcept;
 	void	fillPagesSnapshot(RelPagesSnapshot&, const bool AttachmentOnly = false);
@@ -898,12 +959,17 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	static int partners_ast_relation(void* ast_object);
 
 	// Relation must be updated on next use or commit
 	static Cached::Relation* newVersion(thread_db* tdbb, const QualifiedName& name);
+
+	// Relation is in process of remove - mark it with current transaction
+	void dropTempPages(thread_db* tdbb);
+	void clearDropMarker(thread_db* tdbb);
 
 	// Lists of FK partners should be updated on next update
 	void checkPartners(thread_db* tdbb);
@@ -916,8 +982,8 @@ public:
 	typedef SharedReadVector<Format*, 16> Formats;
 
 private:
-	SharedReadVector<Format*, 16> rel_formats;	// Known record formats
-	Mutex rel_formats_grow;	// Mutex to grow rel_formats
+	Formats rel_formats;				// Known record formats
+	Firebird::Mutex rel_formats_grow;	// Mutex to grow rel_formats
 
 public:
 	HazardPtr<Formats::Generation> getFormats()
@@ -926,6 +992,7 @@ public:
 	}
 
 	void addFormat(Format* fmt);
+	const Format* getFormat(thread_db* tdbb, USHORT );
 
 	Indices			rel_indices;		// Active indices
 	QualifiedName	rel_name;			// ascii relation name
@@ -935,13 +1002,14 @@ public:
 	QualifiedName	rel_security_name;	// security class name for relation
 	std::atomic<ULONG>	rel_flags;		// flags
 
-	TriState	rel_repl_state;	// replication state
+	enum class Bool3State {Unknown, False, True};
+	std::atomic<Bool3State>	rel_repl_state;			// replication state
 
 	PrimaryDeps*	rel_primary_dpnds = nullptr;	// foreign dependencies on this relation's primary key
 	ForeignRefs*	rel_foreign_refs = nullptr;		// foreign references to other relations' primary keys
 
 private:
-	Mutex			rel_pages_mutex;
+	Firebird::Mutex	rel_pages_mutex;	// protects rel_pages_inst and rel_pages_free
 
 	typedef SortedArray<
 				RelationPages*,
@@ -962,12 +1030,20 @@ private:
 };
 
 
-// specialization
+// specialization for LTT
 template <> template <>
 inline FB_UINT64 CacheElement<IndexVersion, IndexPermanent>::makeId<RelationPermanent*>(MetaId id,
 	RelationPermanent* rel)
 {
 	return IndexPermanent::makeLockId(rel->getId(), id);
+}
+
+
+// specialization for system relations
+template <> template <>
+inline FB_UINT64 CacheElement<jrd_rel, RelationPermanent>::makeId<NoData>(MetaId id, NoData)
+{
+	return id < USER_DEF_REL_INIT_ID ? NO_METALOCK : id;
 }
 
 
@@ -1031,6 +1107,11 @@ inline bool jrd_rel::isView() const noexcept
 	return rel_perm->isView();
 }
 
+inline bool jrd_rel::isPrivate() const noexcept
+{
+	return rel_perm->isPrivate();
+}
+
 inline bool jrd_rel::isSystem() const noexcept
 {
 	return rel_perm->isSystem();
@@ -1065,6 +1146,11 @@ inline bool RelationPermanent::isVirtual() const noexcept
 inline bool RelationPermanent::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool RelationPermanent::isPrivate() const noexcept
+{
+	return (rel_flags & REL_private);
 }
 
 inline bool RelationPermanent::isLTT() const noexcept
@@ -1112,6 +1198,7 @@ inline void GCLock::Exclusive::release()
 // Field block, one for each field in a scanned relation
 
 inline constexpr USHORT FLD_parse_computed = 0x0001;	// computed expression is being parsed
+inline constexpr USHORT FLD_not_null =		 0x0002;	// field cannot be NULL (dups fld_not_null for virtual rel)
 
 class jrd_fld : public pool_alloc<type_fld>
 {

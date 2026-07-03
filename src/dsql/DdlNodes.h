@@ -26,6 +26,7 @@
 #include <functional>
 #include <optional>
 #include "firebird/impl/blr.h"
+#include "../jrd/constants.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
 #include "../dsql/make_proto.h"
@@ -52,8 +53,10 @@ enum SqlSecurity
 class LocalDeclarationsNode;
 class LocalTemporaryTable;
 class RelationSourceNode;
+class CreateIndexNode;
 class ValueListNode;
 class SecDbContext;
+class ModifyIndexList;
 
 class BoolSourceClause : public Printable
 {
@@ -208,10 +211,10 @@ public:
 		return "RecreateNode";
 	}
 
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override
+	void checkPermission(thread_db* tdbb) override
 	{
-		dropNode.checkPermission(tdbb, transaction);
-		createNode->checkPermission(tdbb, transaction);
+		dropNode.checkPermission(tdbb);
+		createNode->checkPermission(tdbb);
 	}
 
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override
@@ -237,6 +240,11 @@ public:
 		return createNode->disallowedInReadOnlyDatabase();
 	}
 
+	bool mustBeReplicated() const override
+	{
+		return createNode->mustBeReplicated();
+	}
+
 protected:
 	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
@@ -260,8 +268,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -299,8 +307,8 @@ public:
 	}
 
 public:
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
-	string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -334,8 +342,8 @@ public:
 	}
 
 public:
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
-	string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -373,7 +381,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -401,27 +409,17 @@ public:
 	CreateAlterFunctionNode(MemoryPool& pool, const QualifiedName& aName)
 		: DdlNode(pool),
 		  name(pool, aName),
-		  create(true),
-		  alter(false),
-		  external(NULL),
 		  parameters(pool),
-		  returnType(NULL),
-		  localDeclList(NULL),
+		  aggregateParameters(pool),
 		  source(pool),
-		  body(NULL),
-		  compiled(false),
-		  invalid(false),
-		  packageOwner(pool),
-		  privateScope(false),
-		  preserveDefaults(false),
-		  udfReturnPos(0)
+		  packageOwner(pool)
 	{
 	}
 
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -442,7 +440,7 @@ private:
 
 	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		bool secondPass, bool runTriggers);
+		bool create, bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 
@@ -450,26 +448,32 @@ private:
 		unsigned pos, bool returnArg, ParameterClause* parameter,
 		const CollectedParameter* collectedParameter);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
-	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
+	void collectParameters(thread_db* tdbb, CollectedParameterMap& items);
 
 public:
 	QualifiedName name;
-	bool create;
-	bool alter;
+	bool create = true;
+	bool alter = false;
 	bool createIfNotExistsOnly = false;
+	bool aggregate = false;
 	NestConst<ExternalClause> external;
-	TriState deterministic;
-	Array<NestConst<ParameterClause>> parameters;
+	Firebird::TriState deterministic;
+	Firebird::Array<NestConst<ParameterClause>> parameters;
+	Firebird::Array<NestConst<ParameterClause>> aggregateParameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	string source;
 	NestConst<StmtNode> body;
-	bool compiled;
-	bool invalid;
+	NestConst<StmtNode> aggregateOnStartBody;
+	NestConst<StmtNode> aggregateOnAccumulateBody;
+	NestConst<StmtNode> aggregateOnGroupBody;
+	NestConst<StmtNode> aggregateOnFinishBody;
+	bool compiled = false;
+	bool invalid = false;
 	MetaName packageOwner;
-	bool privateScope;
-	bool preserveDefaults;
-	SLONG udfReturnPos;
+	bool packagePrivate = false;
+	bool preserveDefaults = false;
+	SLONG udfReturnPos = 0;
 	std::optional<SqlSecurity> ssDefiner;
 
 private:
@@ -488,8 +492,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -529,7 +533,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -566,7 +570,7 @@ public:
 		  compiled(false),
 		  invalid(false),
 		  packageOwner(pool),
-		  privateScope(false),
+		  packagePrivate(false),
 		  preserveDefaults(false)
 	{
 	}
@@ -574,7 +578,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -590,7 +594,7 @@ protected:
 private:
 	bool executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		bool secondPass, bool runTriggers);
+		bool create, bool secondPass, bool runTriggers);
 	bool executeAlterIndividualParameters(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		bool secondPass, bool runTriggers);
 
@@ -598,7 +602,7 @@ private:
 		USHORT parameterType, unsigned pos, ParameterClause* parameter,
 		const CollectedParameter* collectedParameter);
 	void compile(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
-	void collectParameters(thread_db* tdbb, jrd_tra* transaction, CollectedParameterMap& items);
+	void collectParameters(thread_db* tdbb, CollectedParameterMap& items);
 
 public:
 	QualifiedName name;
@@ -614,7 +618,7 @@ public:
 	bool compiled;
 	bool invalid;
 	MetaName packageOwner;
-	bool privateScope;
+	bool packagePrivate;
 	bool preserveDefaults;
 	std::optional<SqlSecurity> ssDefiner;
 
@@ -639,7 +643,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -725,7 +729,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -800,7 +804,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -857,7 +861,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	void setAttribute(USHORT attribute)
@@ -892,8 +896,8 @@ public:
 	QualifiedName name;
 	QualifiedName forCharSet;
 	QualifiedName fromName;
-	string fromExternal;
-	UCharBuffer specificAttributes;
+	MetaName fromExternal;
+	Firebird::UCharBuffer specificAttributes;
 	bool createIfNotExistsOnly = false;
 
 private:
@@ -914,8 +918,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -951,8 +955,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -995,13 +999,12 @@ public:
 public:
 	static void checkUpdate(const dyn_fld& origFld, const dyn_fld& newFld);
 	static ULONG checkUpdateNumericType(const dyn_fld& origFld, const dyn_fld& newFld) noexcept;
-	static void getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld);
+	static void getDomainType(thread_db* tdbb, dyn_fld& dynFld);
 	static void modifyLocalFieldIndex(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName,
-		const MetaName& newFieldName);
-
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+		const MetaName& newFieldName, ModifyIndexList& indexList);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1023,7 +1026,7 @@ protected:
 	}
 
 private:
-	void rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimensions);
+	void rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimensions, ModifyIndexList& indexList);
 
 public:
 	QualifiedName name;
@@ -1050,8 +1053,8 @@ public:
 		const QualifiedName& name);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1070,7 +1073,7 @@ protected:
 	}
 
 private:
-	void check(thread_db* tdbb, jrd_tra* transaction);
+	void check(thread_db* tdbb);
 
 public:
 	QualifiedName name;
@@ -1092,8 +1095,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1143,8 +1146,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1205,8 +1208,8 @@ public:
 		fb_sysflag sysFlag, SINT64 value, SLONG step);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1258,8 +1261,8 @@ public:
 	static void deleteIdentity(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1299,7 +1302,7 @@ class TrigArray;
 class ModifyIndexNode;
 
 
-// Collects indices to be created after table was actuallly created
+// Collects indices for performing second step of index creation after table was actually created
 
 class ModifyIndexList
 {
@@ -1314,7 +1317,7 @@ public:
 		nodes.push(node);
 	}
 
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+	void exec(thread_db* tdbb, jrd_tra* transaction);
 	void erase(thread_db* tdbb, MetaName indexName);
 
 	MemoryPool& getPool()
@@ -1453,7 +1456,8 @@ public:
 			TYPE_DROP_COLUMN,
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
-			TYPE_ALTER_PUBLICATION
+			TYPE_ALTER_PUBLICATION,
+			TYPE_ADD_PACKAGED_TABLE_INDEX
 		};
 
 		explicit Clause(MemoryPool& p, Type aType) noexcept
@@ -1479,6 +1483,17 @@ public:
 
 		unsigned updateAction;
 		unsigned deleteAction;
+	};
+
+	struct AddPackagedTableIndexClause : public Clause
+	{
+		explicit AddPackagedTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
+			: Clause(p, TYPE_ADD_PACKAGED_TABLE_INDEX),
+			  indexNode(aIndexNode)
+		{
+		}
+
+		NestConst<CreateIndexNode> indexNode;
 	};
 
 	struct AddConstraintClause : public Clause
@@ -1650,8 +1665,6 @@ public:
 	static bool checkDeletedId(thread_db* tdbb, MetaId& relId);
 	static bool checkIdRange(thread_db* tdbb, MetaId& relId, const MetaId existingRelationId);
 
-	USHORT calcDbKeyLength(thread_db* tdbb);
-
 	static bool deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& relationName, const MetaName& fieldName, bool silent,
 		std::function<void()> preChangeHandler = {});
@@ -1665,6 +1678,7 @@ public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
+	static void validateLttClauses(const Firebird::Array<NestConst<Clause>>& clauses);
 	static void validateLttColumnClause(const AddColumnClause* addColumnClause);
 
 	string internalPrint(NodePrinter& printer) const override
@@ -1706,8 +1720,10 @@ protected:
 
 public:
 	static void makeVersion(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relName);
+	static void makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTemporaryTable* ltt,
+		bool commitChanges);
 	static void raiseTooManyVersionsError(const int obj_type, const QualifiedName& obj_name);
-	static Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
+	static const Format* makeFormat(thread_db* tdbb, jrd_tra* transaction, Cached::Relation* relation,
 		USHORT* version, TemporaryField* stack);
 
 private:
@@ -1722,6 +1738,11 @@ private:
 	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc);
 
 public:
+	bool isCreatedLtt() const
+	{
+		return tempFlag == REL_temp_ltt && name.package.isEmpty();
+	}
+
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
 	Array<NestConst<Clause> > clauses;
@@ -1739,13 +1760,14 @@ public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
 				const string* aExternalFile = NULL)
 		: RelationNode(p, aDsqlNode),
-		  externalFile(aExternalFile)
+		  externalFile(aExternalFile),
+		  querySource(p)
 	{
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1757,9 +1779,14 @@ public:
 		return RelationNode::dsqlPass(dsqlScratch);
 	}
 
-	bool disallowedInReadOnlyDatabase() const override
+	bool mustBeReplicated() const override
 	{
 		return tempFlag != REL_temp_ltt;
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return !isCreatedLtt();
 	}
 
 protected:
@@ -1769,12 +1796,19 @@ protected:
 	}
 
 private:
-	const ObjectsArray<MetaName>* findPkColumns();
+	const Firebird::ObjectsArray<MetaName>* findPkColumns();
+	void defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch);
+	void executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	void defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	const string* externalFile;
 	bool createIfNotExistsOnly = false;
+	bool packagePrivate = false;
+	NestConst<ValueListNode> queryColumns;
+	NestConst<SelectExprNode> querySelectExpr;
+	Firebird::string querySource;
+	bool withData = false;
 };
 
 
@@ -1801,8 +1835,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -1832,8 +1866,8 @@ public:
 	static void deleteGlobalField(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& globalName);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1891,7 +1925,7 @@ public:
 public:
 	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -1932,37 +1966,52 @@ public:
 };
 
 
-// Performs 2-pass index create/drop
+// Performs 2-step index create/drop/alter
 
 class ModifyIndexNode
 {
 public:
-	ModifyIndexNode(const QualifiedName& indexName, bool create)
+	ModifyIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool create, bool expression)
 		: indexName(indexName),
-		  create(create)
+		  indexRelation(rel),
+		  create(create),
+		  expressionIndex(expression)
 	{
+		fb_assert(indexRelation);
 	}
+
+	ModifyIndexNode(const QualifiedName& indexName, bool create, bool expression)
+		: indexName(indexName),
+		  create(create),
+		  expressionIndex(expression)
+	{ }
 
 	virtual ~ModifyIndexNode()
 	{
 	}
 
-	bool modify(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
+	// Performs second step by calling step2() (twice for temporary tables)
+	void modify(thread_db* tdbb, jrd_tra* transaction);
 
 	bool check(thread_db*, MetaName iName)
 	{
 		return create && (indexName.object == iName);
 	}
 
-	virtual bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) = 0;
+	Cached::Relation* getRelation() const
+	{
+		return indexRelation;
+	}
 
 protected:
 	string print(NodePrinter& printer) const;
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
+	virtual void step2(thread_db* tdbb, jrd_tra* transaction) = 0;
 
-public:
 	QualifiedName indexName;
+	Cached::Relation* indexRelation = nullptr;
 	bool create;
+	bool expressionIndex;
 };
 
 
@@ -2007,8 +2056,8 @@ public:
 		Definition& definition, QualifiedName* referredIndexName = nullptr);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -2017,9 +2066,8 @@ public:
 		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
-private:
 	void defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
-		jrd_tra* transaction, LocalTemporaryTable* ltt);
+		jrd_tra* transaction, LocalTemporaryTable* ltt) const;
 
 protected:
 	void putErrorPrefix(Arg::StatusVector& statusVector) override
@@ -2043,20 +2091,16 @@ public:
 class StoreIndexNode final : public ModifyIndexNode
 {
 public:
-	StoreIndexNode(const QualifiedName& indexName, bool expressionIndex)
-		: ModifyIndexNode(indexName, true),
-		  expressionIndex(expressionIndex)
+	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex)
+		: ModifyIndexNode(indexName, rel, true, expressionIndex)
 	{ }
 
 public:
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	void step2(thread_db* tdbb, jrd_tra* transaction) override;
 
 private:
-	MetaId create(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
-	MetaId createExpression(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction);
-
-private:
-	bool expressionIndex = false;
+	MetaId create(thread_db* tdbb, jrd_tra* transaction);
+	MetaId createExpression(thread_db* tdbb, jrd_tra* transaction);
 };
 
 
@@ -2064,15 +2108,17 @@ class AlterIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
 	AlterIndexNode(MemoryPool& p, const QualifiedName& name, bool active)
-		: ModifyIndexNode(name, active),
+		: ModifyIndexNode(name, active, false),
 		  DdlNode(p)
 	{
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
+	// First step of index alteration. Returns true if second step is needed
+	bool step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -2090,7 +2136,8 @@ public:
 private:
 	void alterLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	// Second step of index alteration
+	void step2(thread_db* tdbb, jrd_tra* transaction) override;
 
 protected:
 	void putErrorPrefix(Arg::StatusVector& statusVector) override
@@ -2098,7 +2145,6 @@ protected:
 		statusVector << Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
-public:
 	std::optional<MetaId> idxId;
 };
 
@@ -2113,8 +2159,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -2123,6 +2169,11 @@ public:
 		dsqlScratch->ddlSchema = indexName.schema;
 
 		return DdlNode::dsqlPass(dsqlScratch);
+	}
+
+	bool disallowedInReadOnlyDatabase() const override
+	{
+		return false;  // Deferred to execute() - LTT status unknown at parse time
 	}
 
 private:
@@ -2144,18 +2195,21 @@ public:
 class DropIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
-	DropIndexNode(MemoryPool& p, const QualifiedName& aName);
+	DropIndexNode(MemoryPool& p, const QualifiedName& name)
+		: ModifyIndexNode(name, false, false),
+		  DdlNode(p)
+	{ }
 
 	static bool deleteSegmentRecords(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 	static void clearFrgn(thread_db* tdbb, MetaId relId, MetaId indexId);
 	static void clearId(thread_db* tdbb, MetaId relId, MetaId indexId);
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
-	Cached::Relation* drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-	    ModifyIndexList& list, bool runTriggers);
+	void drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
+	    ModifyIndexList& list, bool dropSegments = true);
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
@@ -2173,7 +2227,7 @@ public:
 private:
 	void dropLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
-	bool exec(thread_db* tdbb, Cached::Relation* rel, jrd_tra* transaction) override;
+	void step2(thread_db* tdbb, jrd_tra* transaction) override;
 
 protected:
 	void putErrorPrefix(Arg::StatusVector& statusVector) override
@@ -2231,8 +2285,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2261,8 +2315,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2291,8 +2345,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -2326,8 +2380,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -2373,8 +2427,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2428,8 +2482,8 @@ public:
 		return DdlNode::dsqlPass(dsqlScratch);
 	}
 
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2473,8 +2527,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2520,8 +2574,8 @@ public:
 	{ }
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -2589,8 +2643,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -2648,8 +2702,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -2739,14 +2793,14 @@ private:
 	void modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SSHORT option, const GranteeClause* user);
 	void grantRevoke(thread_db* tdbb, jrd_tra* transaction, const GranteeClause* object,
 		const GranteeClause* userNod, const char* privs, MetaName field, int options);
-	static void checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
+	static void checkGrantorCanGrantRelation(thread_db* tdbb, const char* grantor,
 		const char* privilege, const QualifiedName& relationName,
 		const MetaName& fieldName, bool topLevel);
 	static void checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transaction,
 			const MetaName& grantor, const MetaName& roleName);
-	static void checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transaction,
-			const MetaName& grantor, const char* privilege, const QualifiedName& objName);
-	static void checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
+	static void checkGrantorCanGrantDdl(thread_db* tdbb, const MetaName& grantor,
+		const char* privilege, const QualifiedName& objName);
+	static void checkGrantorCanGrantObject(thread_db* tdbb, const char* grantor,
 		const char* privilege, const QualifiedName& objName, SSHORT objType);
 	static void storePrivilege(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& object, const QualifiedName& user,
@@ -2845,8 +2899,8 @@ public:
 		return this;
 	}
 
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	bool mustBeReplicated() const override
@@ -2890,8 +2944,8 @@ public:
 
 public:
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2928,8 +2982,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
-	void checkPermission(thread_db* tdbb, jrd_tra* transaction) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
@@ -2939,13 +2993,23 @@ protected:
 	}
 
 private:
-	bool collectObjects(thread_db* tdbb, jrd_tra* transaction,
-		Array<NonPooledPair<ObjectType, MetaName>>* objects = nullptr);
+	struct CollectedObject
+	{
+		ObjectType type;
+		MetaName objName;
+		bool isLTT = false;
+	};
+
+	bool collectObjects(thread_db* tdbb,
+		Firebird::Array<CollectedObject>* objects = nullptr);
+	void checkDependencies(thread_db* tdbb);
+	void dropObjects(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
 	MetaName name;
 	bool silent = false;
 	bool recreate = false;
+	bool cascade = false;
 };
 
 

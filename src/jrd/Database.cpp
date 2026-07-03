@@ -436,16 +436,16 @@ namespace Firebird::Jrd
 
 			if (dbb_repl_state.isUnknown())
 			{
-				if (!dbb_repl_lock)
+				if (!dbb_repl_state_lock)
 				{
-					dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
+					dbb_repl_state_lock = FB_NEW_RPT(*dbb_permanent, 0)
 						Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 				}
 
 				dbb_repl_state = MET_get_repl_state(tdbb, {});
 
-				fb_assert(dbb_repl_lock->lck_logical == LCK_none);
-				LCK_lock(tdbb, dbb_repl_lock, LCK_SR, LCK_WAIT);
+				fb_assert(dbb_repl_state_lock->lck_logical == LCK_none);
+				LCK_lock(tdbb, dbb_repl_state_lock, LCK_SR, LCK_WAIT);
 			}
 		}
 
@@ -458,22 +458,23 @@ namespace Firebird::Jrd
 
 		dbb_repl_state.reset();
 
-		if (broadcast)
+		if (!dbb_repl_state_lock)
 		{
-			if (!dbb_repl_lock)
-			{
-				dbb_repl_lock = FB_NEW_RPT(*dbb_permanent, 0)
-					Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
-			}
-
-			// Signal other processes about the changed state
-			if (dbb_repl_lock->lck_logical == LCK_none)
-				LCK_lock(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
-			else
-				LCK_convert(tdbb, dbb_repl_lock, LCK_EX, LCK_WAIT);
+			dbb_repl_state_lock = FB_NEW_RPT(*dbb_permanent, 0)
+				Lock(tdbb, 0, LCK_repl_state, this, replStateAst);
 		}
 
-		LCK_release(tdbb, dbb_repl_lock);
+		LCK_release(tdbb, dbb_repl_state_lock);
+
+		if (broadcast)
+		{
+			// Signal other processes about the changed state
+			ThreadStatusGuard temp_status(tdbb);
+
+			Lock tempLock(tdbb, 0, LCK_repl_state);
+			LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tempLock);
+		}
 	}
 
 	int Database::replStateAst(void* ast_object)
@@ -485,6 +486,62 @@ namespace Firebird::Jrd
 			AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
 			dbb->invalidateReplState(tdbb, false);
+		}
+		catch (const Exception&)
+		{} // no-op
+
+		return 0;
+	}
+
+	void Database::checkReplSetLock(thread_db* tdbb)
+	{
+		if (dbb_ast_flags & DBB_repl_reset)
+		{
+			fb_assert(dbb_repl_set_lock->lck_logical == LCK_none);
+			LCK_lock(tdbb, dbb_repl_set_lock, LCK_SR, LCK_WAIT);
+			dbb_ast_flags &= ~DBB_repl_reset;
+		}
+	}
+
+	void Database::invalidateReplSet(thread_db* tdbb, bool broadcast)
+	{
+		SyncLockGuard guard(&dbb_repl_sync, SYNC_EXCLUSIVE, FB_FUNCTION);
+
+		if (!dbb_repl_set_lock)
+		{
+			dbb_repl_set_lock = FB_NEW_RPT(*dbb_permanent, 0)
+				Lock(tdbb, 0, LCK_repl_tables, this, blockingAstReplSet);
+		}
+
+		if (!(dbb_ast_flags & DBB_repl_reset))
+		{
+			dbb_ast_flags |= DBB_repl_reset;
+			dbb_mdc->invalidateReplSet(tdbb);
+			LCK_release(tdbb, dbb_repl_set_lock);
+		}
+
+		if (broadcast)
+		{
+			fb_assert(dbb_repl_set_lock->lck_logical == LCK_none);
+
+			// Signal others about the changed state
+			ThreadStatusGuard temp_status(tdbb);
+
+			Lock tempLock(tdbb, 0, LCK_repl_tables);
+			LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT);
+			LCK_release(tdbb, &tempLock);
+		}
+	}
+
+	int Database::blockingAstReplSet(void* ast_object)
+	{
+		Database* const dbb = static_cast<Database*>(ast_object);
+
+		try
+		{
+			AsyncContextHolder tdbb(dbb, FB_FUNCTION, dbb->dbb_repl_set_lock);
+
+			dbb->invalidateReplSet(tdbb, false);
 		}
 		catch (const Exception&)
 		{} // no-op
@@ -628,7 +685,8 @@ namespace Firebird::Jrd
 
 	void Database::Linger::handler()
 	{
-		JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS);
+		if (active)
+			JRD_shutdown_database(dbb, SHUT_DBB_RELEASE_POOLS);
 	}
 
 	void Database::Linger::reset()
@@ -823,7 +881,8 @@ namespace Firebird::Jrd
 		dbb_compatibility_index(~0U),
 		dbb_dic(*p),
 		dbb_mdc(FB_NEW_POOL(*p) MetadataCache(*p)),
-		dbb_user_ids(*p)
+		dbb_user_ids(*p),
+		dbb_del_pages(*p)
 	{
 		dbb_pools.add(p);
 
@@ -893,4 +952,59 @@ namespace Firebird::Jrd
 		}
 		return result;
 	}
-} // namespace Firebird::Jrd
+
+	void Database::markForDelete(RelationPermanent* relation)
+	{
+		MutexLockGuard g(dbb_del_pages_mutex, FB_FUNCTION);
+
+#ifdef DEV_BUILD
+		FB_SIZE_T dummy;
+		bool rc = dbb_del_pages.findEx(
+			[relation](const DelPagesMarker& item) -> int
+			{
+				return std::greater{}(item.relation, relation);
+			},
+			dummy);
+		fb_assert(!rc);
+#endif
+
+		dbb_del_pages.add({dbb_next_transaction, relation});
+	}
+
+	void Database::clearDeleteMark(RelationPermanent* relation)
+	{
+		MutexLockGuard guard(dbb_del_pages_mutex, FB_FUNCTION);
+
+		FB_SIZE_T pos;
+		bool found = dbb_del_pages.findEx(
+			[relation](const DelPagesMarker& item) -> int
+			{
+				return std::greater{}(item.relation, relation);
+			},
+			pos);
+		fb_assert(found);
+
+		if (found)
+			dbb_del_pages.remove(pos);
+	}
+
+	void Database::deleteTempPages(thread_db* tdbb, TraNumber oldestActive)
+	{
+		// check for data presence is safe even w/o mutex locked
+		// normally there is no data in array
+		if (!dbb_del_pages.hasData())
+			return;
+
+		MutexLockGuard g(dbb_del_pages_mutex, FB_FUNCTION);
+		while (dbb_del_pages.hasData() && dbb_del_pages[0].tran < oldestActive)
+		{
+			auto* relation = dbb_del_pages[0].relation;
+			dbb_del_pages.remove(0u);
+
+			MutexUnlockGuard checkout(dbb_del_pages_mutex, FB_FUNCTION);
+			relation->freePages(tdbb);
+		}
+	}
+
+
+} // namespace

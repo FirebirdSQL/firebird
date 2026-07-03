@@ -426,7 +426,7 @@ bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
 					break;
 				}
 
-				format = MET_format(tdbb, relation->getPermanent(), format->fmt_version + 1);
+				format = relation->getPermanent()->getFormat(tdbb, format->fmt_version + 1);
 				fb_assert(format);
 			}
 

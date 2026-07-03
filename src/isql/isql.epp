@@ -303,6 +303,8 @@ static inline int fb_isdigit(const char c)
 typedef Array<char> CharBuffer;
 GlobalPtr<CharBuffer> charBuffer;
 
+static bool sigTstp = false;
+
 #ifdef WIN_NT
 
 GlobalPtr<Array<WCHAR>> wideBuffer;
@@ -791,6 +793,8 @@ int ISQL_main(int argc, char* argv[])
  *
  **************************************/
 
+	os_utils::StopHandler stopHandler(&sigTstp);
+
 #if defined(HAVE_EDITLINE_H) && defined(HAVE_LOCALE_H)
 	setlocale(LC_CTYPE, "");
 #endif
@@ -1025,7 +1029,22 @@ static void readNextInputLine(const char* prompt)
 		// CVC: On 2005-04-02, use an empty prompt when not working in
 		// interactive mode to behave like @@@ below at request by Pavel.
 		const char* new_prompt = Interactive ? prompt : "";
-		lastInputLine = readline(new_prompt);
+		for(;;)
+		{
+			lastInputLine = readline(new_prompt);
+
+			// In a case of ignored SIGTSTP (ctrl-Z typically) readline return NULL -
+			// same as for EOF case, causing normal termination. Let's avoid it.
+			if (!lastInputLine)
+			{
+				if (!sigTstp)
+					break;
+				sigTstp = false;
+				new_prompt = "";
+			}
+			else
+				break;
+		}
 
 		if (lastInputLine != NULL && strlen(lastInputLine) != 0) {
 			add_history(lastInputLine);
@@ -1729,6 +1748,7 @@ SLONG ISQL_get_index_segments(TEXT* segs,
 
 	FOR SEG IN RDB$INDEX_SEGMENTS
 		WITH SEG.RDB$SCHEMA_NAME EQUIV NULLIF(indexname.schema.c_str(), '') AND
+			 SEG.RDB$PACKAGE_NAME EQUIV NULLIF(indexname.package.c_str(), '') AND
 			 SEG.RDB$INDEX_NAME EQ indexname.object.c_str()
 		SORTED BY SEG.RDB$FIELD_POSITION
 	{
@@ -1809,6 +1829,13 @@ bool ISQL_get_base_column_null_flag(const QualifiedMetaString& view_name,
 	bool error = false;
 	while (!done && !error)
 	{
+		if (save_view_name.package.hasData())
+		{
+			fb_assert(false);
+			error = true;
+			break;
+		}
+
 		bool found = false;
 		FOR FIRST 1
 			VR IN RDB$VIEW_RELATIONS
@@ -1817,6 +1844,7 @@ bool ISQL_get_base_column_null_flag(const QualifiedMetaString& view_name,
 				 VR.RDB$VIEW_NAME EQ save_view_name.object.c_str() AND
 				 VR.RDB$VIEW_CONTEXT EQ save_view_context AND
 				 NEWRFR.RDB$SCHEMA_NAME EQUIV VR.RDB$RELATION_SCHEMA_NAME AND
+				 NEWRFR.RDB$PACKAGE_NAME EQUIV VR.RDB$PACKAGE_NAME AND
 				 NEWRFR.RDB$RELATION_NAME = VR.RDB$RELATION_NAME AND
 				 NEWRFR.RDB$FIELD_NAME = save_base_field.c_str()
 		{
@@ -1830,7 +1858,8 @@ bool ISQL_get_base_column_null_flag(const QualifiedMetaString& view_name,
 			}
 			else
 			{
-				save_view_name = QualifiedMetaString(NEWRFR.RDB$RELATION_NAME, NEWRFR.RDB$SCHEMA_NAME);
+				save_view_name = QualifiedMetaString(NEWRFR.RDB$RELATION_NAME, NEWRFR.RDB$SCHEMA_NAME,
+					NEWRFR.RDB$PACKAGE_NAME);
 				save_view_context = NEWRFR.RDB$VIEW_CONTEXT;
 				save_base_field = NEWRFR.RDB$BASE_FIELD;
 			}
@@ -1928,6 +1957,7 @@ bool ISQL_get_null_flag(const QualifiedMetaString& rel_name,
 		WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV FLD.RDB$SCHEMA_NAME AND
 			 RFR.RDB$FIELD_SOURCE EQ FLD.RDB$FIELD_NAME AND
 			 RFR.RDB$SCHEMA_NAME EQUIV NULLIF(rel_name.schema.c_str(), '') AND
+			 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(rel_name.package.c_str(), '') AND
 			 RFR.RDB$RELATION_NAME EQ rel_name.object.c_str() AND
 			 RFR.RDB$FIELD_NAME EQ field_name.c_str()
 	{
@@ -1940,7 +1970,6 @@ bool ISQL_get_null_flag(const QualifiedMetaString& rel_name,
 
 			if (RFR.RDB$BASE_FIELD.NULL)
 			{
-
 				// Simple column. Did user define it not null?
 
 				if (!RFR.RDB$NULL_FLAG.NULL && RFR.RDB$NULL_FLAG == 1)
@@ -3958,6 +3987,7 @@ static void col_check(const QualifiedMetaString& tabname, unsigned* colnumber)
 		WITH F.RDB$SCHEMA_NAME EQUIV R.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 			 F.RDB$FIELD_NAME = R.RDB$FIELD_SOURCE AND
 			 R.RDB$SCHEMA_NAME EQUIV NULLIF(tabname.schema.c_str(), '') AND
+			 R.RDB$PACKAGE_NAME EQUIV NULLIF(tabname.package.c_str(), '') AND
 			 R.RDB$RELATION_NAME EQ tabname.object.c_str()
 		SORTED BY R.RDB$FIELD_POSITION, R.RDB$FIELD_NAME
 	{

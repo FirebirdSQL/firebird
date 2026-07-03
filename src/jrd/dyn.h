@@ -34,8 +34,10 @@
 
 inline constexpr const char* ALL_PRIVILEGES = "SIUDR";	// all applicable grant/revoke privileges
 inline constexpr const char* EXEC_PRIVILEGES = "X";		// execute privilege
+inline constexpr const char* PACKAGE_PRIVILEGES = "XSIUD";	// all applicable package privileges
 inline constexpr const char* USAGE_PRIVILEGES = "G";	// usage privilege
 inline constexpr const char* ALL_DDL_PRIVILEGES = "CLO";
+inline constexpr const char* SYSTEM_PACKAGE_PRIVILEGES = "XU";	// execute and usage privileges
 
 inline constexpr int DYN_MSG_FAC = FB_IMPL_MSG_FACILITY_DYN;
 

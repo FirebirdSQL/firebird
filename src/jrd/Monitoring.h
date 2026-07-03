@@ -64,6 +64,7 @@ public:
 		VALUE_STRING,
 		VALUE_BOOLEAN,
 		VALUE_TABLE_ID_SCHEMA_NAME,
+		VALUE_TABLE_ID_PACKAGE_NAME,
 		VALUE_LAST_MARKER	// Should be last item
 	};
 
@@ -138,6 +139,11 @@ public:
 			storeField(field_id, VALUE_TABLE_ID_SCHEMA_NAME, sizeof(SLONG), &value);
 		}
 
+		void storeTableIdPackageName(int field_id, SLONG value)
+		{
+			storeField(field_id, VALUE_TABLE_ID_PACKAGE_NAME, sizeof(SLONG), &value);
+		}
+
 		void storeInteger(int field_id, SINT64 value)
 		{
 			storeField(field_id, VALUE_INTEGER, sizeof(SINT64), &value);
@@ -169,7 +175,7 @@ public:
 		void storeString(int field_id, const std::string_view value)
 		{
 			if (!value.empty())
-				storeField(field_id, VALUE_STRING, value.length(), value.data());
+				storeField(field_id, VALUE_STRING, static_cast<FB_SIZE_T>(value.length()), value.data());
 		}
 
 		void storeBoolean(int field_id, bool value)

@@ -86,11 +86,13 @@ public:
 
 class RemotePassword : public GlobalStorage
 {
-private:
+public:
 	const RemoteGroup*		group;
-	Auth::SecureHash<Sha1>	hash;
-	BigInteger	privateKey;
-	BigInteger	scramble;
+
+private:
+	Auth::SecureHash<Firebird::Sha1>	hash;
+	Firebird::BigInteger	privateKey;
+	Firebird::BigInteger	scramble;
 
 protected:
     virtual BigInteger makeProof(const BigInteger n1, const BigInteger n2,
@@ -120,13 +122,13 @@ public:
 	void genClientKey(string& clientPubKey);
 	void genServerKey(string& serverPubKey, const UCharBuffer& verifier);
 	void computeScramble();
-	void clientSessionKey(UCharBuffer& sessionKey, const char* account,
-						  const char* salt, const char* password,
-						  const char* serverPubKey);
-	void serverSessionKey(UCharBuffer& sessionKey,
-						  const char* clientPubKey,
-						  const UCharBuffer& verifier);
-	BigInteger clientProof(const char* account,
+	void makePrivate();
+	Firebird::BigInteger setKey(const char* from);
+	void clientSessionKey(Firebird::UCharBuffer& sessionKey, const char* account,
+						  const char* salt, const char* password);
+	void serverSessionKey(Firebird::UCharBuffer& sessionKey,
+						  const Firebird::UCharBuffer& verifier);
+	Firebird::BigInteger clientProof(const char* account,
 									 const char* salt,
 									 const UCharBuffer& sessionKey);
 };

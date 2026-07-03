@@ -331,16 +331,20 @@ namespace
 			const size_t ownerNameLength = ownerName.length();
 			fb_assert(ownerNameLength <= MAX_UCHAR);
 
-			const UCHAR privilege = package ? priv_execute : priv_usage;
+			Vector<UCHAR, 8> NON_REL_OWNER_ACL
+				{ACL_priv_list, priv_control, priv_alter, priv_drop, priv_usage, ACL_end};
 
-			const UCHAR NON_REL_OWNER_ACL[] =
-				{ACL_priv_list, priv_control, priv_alter, priv_drop, privilege, ACL_end};
+			Vector<UCHAR, 4> NON_REL_PUBLIC_ACL
+				{ACL_priv_list, priv_usage, ACL_end};
 
-			const UCHAR NON_REL_PUBLIC_ACL[] =
-				{ACL_priv_list, privilege, ACL_end};
+			if (package)
+			{
+				NON_REL_OWNER_ACL.insert(NON_REL_OWNER_ACL.getCount() - 2, priv_execute);
+				NON_REL_PUBLIC_ACL.insert(NON_REL_PUBLIC_ACL.getCount() - 2, priv_execute);
+			}
 
 			fb_assert(sizeof(buffer) >= 8 + ownerNameLength +
-					  sizeof(NON_REL_OWNER_ACL) + sizeof(NON_REL_PUBLIC_ACL));
+					  NON_REL_OWNER_ACL.getCount() + NON_REL_PUBLIC_ACL.getCount());
 
 			UCHAR* acl = buffer;
 			*acl++ = ACL_version;
@@ -353,14 +357,14 @@ namespace
 
 			*acl++ = ACL_end;
 
-			memcpy(acl, NON_REL_OWNER_ACL, sizeof(NON_REL_OWNER_ACL));
-			acl += sizeof(NON_REL_OWNER_ACL);
+			memcpy(acl, NON_REL_OWNER_ACL.begin(), NON_REL_OWNER_ACL.getCount());
+			acl += NON_REL_OWNER_ACL.getCount();
 
 			*acl++ = ACL_id_list;
 			*acl++ = ACL_end;
 
-			memcpy(acl, NON_REL_PUBLIC_ACL, sizeof(NON_REL_PUBLIC_ACL));
-			acl += sizeof(NON_REL_PUBLIC_ACL);
+			memcpy(acl, NON_REL_PUBLIC_ACL.begin(), NON_REL_PUBLIC_ACL.getCount());
+			acl += NON_REL_PUBLIC_ACL.getCount();
 
 			*acl++ = ACL_end; // Extra terminator to avoid scl.epp:walk_acl() missing the end
 
@@ -398,14 +402,14 @@ namespace
 				break;
 
 			case obj_package_header:
-				privileges = EXEC_PRIVILEGES;
+				privileges = SYSTEM_PACKAGE_PRIVILEGES;
 				break;
 
 			default:
 				fb_assert(false);
 			}
 
-			fb_assert(privileges && privileges[0] && !privileges[1]);
+			fb_assert(privileges);
 
 			const auto userName = getOwnerName();
 			fb_assert(userName && *userName);
@@ -416,20 +420,23 @@ namespace
 
 			for (unsigned i = 0; i < FB_NELEM(users); i++)
 			{
-				STORE(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
-					PRIV IN RDB$USER_PRIVILEGES
+				for (const char* privilege = privileges; *privilege != '\0'; ++privilege)
 				{
-					PAD(users[i], PRIV.RDB$USER);
-					PAD(SYSTEM_SCHEMA, PRIV.RDB$RELATION_SCHEMA_NAME);
-					PAD(objName, PRIV.RDB$RELATION_NAME);
-					PRIV.RDB$PRIVILEGE[0] = *privileges;
-					PRIV.RDB$PRIVILEGE[1] = 0;
-					PRIV.RDB$GRANT_OPTION = grantOptions[i];
-					PRIV.RDB$USER_TYPE = obj_user;
-					PRIV.RDB$OBJECT_TYPE = objType;
-					PRIV.RDB$GRANTOR.NULL = TRUE;
+					STORE(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
+						PRIV IN RDB$USER_PRIVILEGES
+					{
+						PAD(users[i], PRIV.RDB$USER);
+						PAD(SYSTEM_SCHEMA, PRIV.RDB$RELATION_SCHEMA_NAME);
+						PAD(objName, PRIV.RDB$RELATION_NAME);
+						PRIV.RDB$PRIVILEGE[0] = *privilege;
+						PRIV.RDB$PRIVILEGE[1] = 0;
+						PRIV.RDB$GRANT_OPTION = grantOptions[i];
+						PRIV.RDB$USER_TYPE = obj_user;
+						PRIV.RDB$OBJECT_TYPE = objType;
+						PRIV.RDB$GRANTOR.NULL = TRUE;
+					}
+					END_STORE
 				}
-				END_STORE
 			}
 		}
 
@@ -774,11 +781,13 @@ void INI_format(thread_db* tdbb, const string& charset)
 
 	STORE(REQUEST_HANDLE handle) X IN RDB$DATABASE
 	{
-		X.RDB$RELATION_ID = (int) USER_DEF_REL_INIT_ID;
+		X.RDB$RELATION_ID = 0;
 		PAD(charSetName.object.c_str(), X.RDB$CHARACTER_SET_NAME);
 		PAD(charSetName.schema.c_str(), X.RDB$CHARACTER_SET_SCHEMA_NAME);
 	}
 	END_STORE
+
+	DPM_gen_id(tdbb, RELATIONS_GENERATOR, true, USER_DEF_REL_INIT_ID);
 
 	HalfStaticArray<QualifiedName, 2> predefinedSchemas;
 
@@ -1007,6 +1016,8 @@ void INI_init(thread_db* tdbb)
 			field->fld_name = localFields[fieldPos].name;
 			field->fld_source_name = QualifiedName(names[localFields[fieldPos].gfield->gfld_name], SYSTEM_SCHEMA);
 			field->fld_length = localFields[fieldPos].gfield->gfld_length;
+			if (!localFields[fieldPos].gfield->gfld_nullable)
+				field->fld_flags |= FLD_not_null;
 			*iter = field;
 			++fieldPos;
 		}
@@ -1043,8 +1054,6 @@ void INI_init(thread_db* tdbb)
 			format->fmt_version = formatNumber;
 			format->fmt_length = FLAG_BYTES(format->fmt_count);
 
-			relation->addFormat(format);
-
 			auto desc = format->fmt_desc.begin();
 
 			for (fld = relfld + RFLD_RPT; fld[RFLD_F_NAME]; fld += RFLD_F_LENGTH, ++desc)
@@ -1079,6 +1088,8 @@ void INI_init(thread_db* tdbb)
 				desc->dsc_address = (UCHAR*)(IPTR) format->fmt_length;
 				format->fmt_length += desc->dsc_length;
 			}
+
+			relation->addFormat(format);
 
 			if (minorVersion == dbMinorVersion)
 				currentFormat = formatNumber;
@@ -1718,6 +1729,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			X.RDB$SYSTEM_FLAG.NULL = FALSE;
 
 			X.RDB$INDEX_INACTIVE = 0;
+			X.RDB$FORMAT.NULL = true;
 
 			// Store each segment for the index
 			index_desc::idx_repeat* tail = idx.idx_rpt;
@@ -1877,7 +1889,7 @@ static void store_intlnames(thread_db* tdbb, NonRelationSecurity& security)
 	for (const IntlManager::CharSetDefinition* charSet = IntlManager::defaultCharSets;
 		 charSet->name; ++charSet)
 	{
-		MetadataCache::getVersioned<Cached::CharSet>(tdbb, charSet->id, CacheFlag::UPGRADE | CacheFlag::NOCOMMIT);
+		MetadataCache::newVersion<Cached::CharSet>(tdbb, charSet->id);
 	}
 }
 
@@ -1966,8 +1978,10 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 
 	AutoRequest packageHandle, procedureHandle, procedureParameterHandle;
 	AutoRequest functionHandle, functionReturnHandle, functionArgumentHandle;
+	AutoRequest constantHandle;
 	const SLONG procGen = lookupGenerator(PROCEDURES_GENERATOR);
 	const SLONG funcGen = lookupGenerator(FUNCTIONS_GENERATOR);
+	const SLONG packageGen = lookupGenerator(PACKAGES_GENERATOR);
 
 	for (const auto& systemPackage : SystemPackage::get())
 	{
@@ -1990,6 +2004,8 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 
 			PKG.RDB$SYSTEM_FLAG = RDB_system;
 			PKG.RDB$VALID_BODY_FLAG = TRUE;
+
+			PKG.RDB$PACKAGE_ID = DPM_gen_id(tdbb, packageGen, false, 1);
 		}
 		END_STORE
 
@@ -2157,6 +2173,45 @@ static void store_packages(thread_db* tdbb, NonRelationSecurity& security, USHOR
 				}
 				END_STORE
 			}
+		}
+
+		for (const auto& constant : systemPackage.constants)
+		{
+			STORE (REQUEST_HANDLE constantHandle TRANSACTION_HANDLE transaction)
+				CONST IN RDB$CONSTANTS
+			{
+				// Constant name
+				PAD(constant.name, CONST.RDB$CONSTANT_NAME);
+
+				// Description (filed) name
+				PAD(SYSTEM_SCHEMA, CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+				PAD(names[gfields[constant.fieldId].gfld_name], CONST.RDB$FIELD_SOURCE);
+
+				// Put the blr
+				Array<UCHAR> blrData(1 + constant.valueBlr.getCount() + 1);
+				blrData.push(blr_version5);
+				blrData.append(constant.valueBlr);
+				blrData.push(blr_eoc);
+				attachment->storeBinaryBlob(tdbb, transaction, &CONST.RDB$CONSTANT_BLR, blrData);
+
+				// Parent package
+				PAD(systemPackage.name, CONST.RDB$PACKAGE_NAME);
+
+				// Schema of the parent package
+				PAD(SYSTEM_SCHEMA, CONST.RDB$SCHEMA_NAME);
+
+				// Type
+				CONST.RDB$PRIVATE_FLAG = FALSE;
+
+				if (constant.valueSource != nullptr)
+				{
+					CONST.RDB$CONSTANT_SOURCE.NULL = FALSE;
+					attachment->storeMetaDataBlob(tdbb, transaction, &CONST.RDB$CONSTANT_SOURCE, constant.valueSource);
+				}
+				else
+					CONST.RDB$CONSTANT_SOURCE.NULL = TRUE;
+			}
+			END_STORE
 		}
 	}
 }

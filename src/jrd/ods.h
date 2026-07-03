@@ -510,7 +510,6 @@ inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
 	fb_assert(getState() == irt_in_progress || getState() == irt_normal);
 	fb_assert(rootPage);
 
-	irt_transaction = 0;
 	irt_page_num = rootPage;
 	irt_page_space_id = 0;
 	setState(irt_normal);
@@ -578,7 +577,6 @@ inline void index_root_page::irt_repeat::setNormal()
 	fb_assert(irt_page_num);
 	fb_assert(irt_transaction);
 
-	irt_transaction = 0;
 	setState(irt_normal);
 }
 
@@ -589,7 +587,6 @@ inline void index_root_page::irt_repeat::setNormal(ULONG rootPage)
 	fb_assert(!irt_page_num);
 	fb_assert(rootPage);
 
-	irt_transaction = 0;
 	irt_page_num = rootPage;
 	irt_page_space_id = 0;
 	setState(irt_normal);
@@ -848,6 +845,7 @@ inline constexpr UCHAR ppg_dp_large			= 0x02;		// Large object is on data page
 inline constexpr UCHAR ppg_dp_swept			= 0x04;		// Sweep has nothing to do on data page
 inline constexpr UCHAR ppg_dp_secondary		= 0x08;		// Primary record versions not stored on data page
 inline constexpr UCHAR ppg_dp_empty			= 0x10;		// Data page is empty
+inline constexpr UCHAR ppg_dp_reserved		= 0x20;		// Slot is reserved for bulk insert
 
 inline constexpr UCHAR PPG_DP_ALL_BITS	= (1 << PPG_DP_BITS_NUM) - 1;
 

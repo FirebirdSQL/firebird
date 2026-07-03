@@ -127,12 +127,20 @@ namespace
 		const string& getAtomString()
 		{
 			const auto pos = getInt32();
+
+			if (pos < 0 || pos >= m_atoms.getCount())
+				malformed();
+
 			return m_atoms[pos];
 		}
 
 		const MetaString getAtomMetaName()
 		{
 			const auto pos = getInt32();
+
+			if (pos < 0 || pos >= m_atoms.getCount())
+				malformed();
+
 			return m_atoms[pos];
 		}
 
@@ -153,7 +161,7 @@ namespace
 		{
 			const auto length = getInt32();
 
-			if (m_data + length > m_end)
+			if (length < 0 || m_end - m_data < length)
 				malformed();
 
 			const string str((const char*) m_data, length);
@@ -163,7 +171,7 @@ namespace
 
 		const UCHAR* getBinary(ULONG length)
 		{
-			if (m_data + length > m_end)
+			if (m_end - m_data < length)
 				malformed();
 
 			const auto ptr = m_data;
@@ -225,6 +233,24 @@ namespace
 } // namespace
 
 
+Applier::Applier(Firebird::MemoryPool& pool,
+				 const Firebird::PathName& database,
+				 Request* request, bool cascade)
+	: PermanentStorage(pool),
+	  m_txnMap(pool), m_database(pool, database),
+	  m_request(request), m_enableCascade(cascade),
+	  m_constraintIndexMap(pool)
+{
+	bool setUsed = m_request->setUsed();
+	fb_assert(setUsed);
+}
+
+Applier::~Applier()
+{
+	if (m_request)
+		m_request->setUnused();
+}
+
 Applier* Applier::create(thread_db* tdbb)
 {
 	const auto dbb = tdbb->getDatabase();
@@ -246,8 +272,8 @@ Applier* Applier::create(thread_db* tdbb)
 		AutoPtr<CompilerScratch> csb(FB_NEW_POOL(*req_pool) CompilerScratch(*req_pool));
 
 		request = Statement::makeRequest(tdbb, csb, true);
+		request->setAttachment(attachment);
 		request->validateTimeStamp();
-		request->req_attachment = attachment;
 	}
 	catch (const Exception&)
 	{
@@ -278,6 +304,7 @@ void Applier::shutdown(thread_db* tdbb)
 	if (!(dbb->dbb_flags & DBB_bugcheck))
 	{
 		cleanupTransactions(tdbb);
+		m_request->setUnused();
 		CMP_release(tdbb, m_request);
 	}
 	m_request = nullptr;	// already deleted by pool
@@ -932,7 +959,7 @@ void Applier::deleteRecord(thread_db* tdbb, TraNumber traNum,
 void Applier::setSequence(thread_db* tdbb, const QualifiedName& genName, SINT64 value)
 {
 	const auto dbb = tdbb->getDatabase();
-	const auto attachment = tdbb->getAttachment();		// ??????????????//
+	const auto attachment = tdbb->getAttachment();
 
 	QualifiedName qualifiedGenName(genName);
 	attachment->qualifyExistingName(tdbb, qualifiedGenName, {obj_generator});
@@ -1144,7 +1171,6 @@ bool Applier::lookupRecord(thread_db* tdbb,
 	bool haveIdx = false;
 	if (idxName && idxName->object.hasData())
 	{
-		SLONG foundRelId;
 		auto* idv = relation->getPermanent()->lookup_index(tdbb, *idxName, CacheFlag::AUTOCREATE);
 
 		if (idv)
@@ -1184,7 +1210,7 @@ const Format* Applier::findFormat(thread_db* tdbb, jrd_rel* relation, ULONG leng
 	auto format = relation->currentFormat(tdbb);
 
 	while (format->fmt_length != length && format->fmt_version)
-		format = MET_format(tdbb, relation->getPermanent(), format->fmt_version - 1);
+		format = relation->getPermanent()->getFormat(tdbb, format->fmt_version - 1);
 
 	if (format->fmt_length != length)
 	{

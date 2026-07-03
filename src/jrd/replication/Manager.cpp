@@ -179,6 +179,8 @@ Manager::Manager(const string& dbId,
 		if (localStatus->getState() & IStatus::STATE_ERRORS)
 		{
 			logPrimaryStatus(m_config->dbName, &localStatus);
+			if (m_config->reportErrors)
+				(Arg::Gds(isc_repl_error) << Arg::StatusVector(&localStatus)).raise();
 			continue;
 		}
 
@@ -187,6 +189,8 @@ Manager::Manager(const string& dbId,
 		{
 			logPrimaryStatus(m_config->dbName, &localStatus);
 			attachment->detach(&localStatus);
+			if (m_config->reportErrors)
+				(Arg::Gds(isc_repl_error) << Arg::StatusVector(&localStatus)).raise();
 			continue;
 		}
 

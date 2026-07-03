@@ -181,6 +181,44 @@ public:
 };
 
 
+class BulkInsertNode : public TypedNode<StmtNode, StmtNode::TYPE_BULK_INSERT>
+{
+public:
+	explicit BulkInsertNode(MemoryPool& pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_BULK_INSERT>(pool)
+	{
+	}
+
+public:
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	BulkInsertNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	BulkInsertNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
+	BulkInsertNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
+
+public:
+	NestConst<RseNode> rse = nullptr;					// source RSE
+	NestConst<RecordSourceNode> target = nullptr;		// target relation
+	NestConst<StmtNode> statement = nullptr;			// assignments: field = value [, ...]
+	NestConst<Cursor> cursor = nullptr;					// source cursor
+
+private:
+	struct Impure
+	{
+		Firebird::Array<dsc>* descs;
+	};
+
+	void fromCursor(thread_db* tdbb, Request* request) const;
+	void fromMessage(thread_db* tdbb, Request* request) const;
+
+	void prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const;
+	void assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const;
+};
+
+
 class CompoundStmtNode : public TypedNode<StmtNode, StmtNode::TYPE_COMPOUND_STMT>	// blr_begin
 {
 public:
@@ -419,6 +457,10 @@ public:
 	MetaName name;
 	Signature dsqlSignature;
 	NestConst<ExecBlockNode> dsqlBlock;
+	NestConst<StmtNode> aggregateOnStartBody;
+	NestConst<StmtNode> aggregateOnAccumulateBody;
+	NestConst<StmtNode> aggregateOnGroupBody;
+	NestConst<StmtNode> aggregateOnFinishBody;
 	DsqlCompilerScratch* blockScratch = nullptr;
 	dsql_udf* dsqlFunction = nullptr;
 	const UCHAR* blrStart = nullptr;
@@ -426,6 +468,7 @@ public:
 	Function* routine = nullptr;
 	ULONG blrLength = 0;
 	bool dsqlDeterministic = false;
+	bool aggregate = false;
 };
 
 
@@ -845,7 +888,8 @@ public:
 	}
 
 public:
-	string internalPrint(NodePrinter& printer) const override;
+	ExitNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 };
 
@@ -1544,7 +1588,15 @@ public:
 
 	static StmtNode* make(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, StmtNode* node, bool force = false);
 
-	string internalPrint(NodePrinter& printer) const override;
+private:
+	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
+		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
+		  statement(stmt)
+	{
+	}
+
+public:
+	Firebird::string internalPrint(NodePrinter& printer) const override;
 	SavepointEncloseNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -1553,13 +1605,7 @@ public:
 
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
-private:
-	explicit SavepointEncloseNode(MemoryPool& pool, StmtNode* stmt)
-		: TypedNode<StmtNode, StmtNode::TYPE_SAVEPOINT>(pool),
-		  statement(stmt)
-	{
-	}
-
+public:
 	NestConst<StmtNode> statement;
 };
 
@@ -2116,6 +2162,7 @@ public:
 	Array<NestConst<ParameterClause>> parameters;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
+	bool inAutonomousTransaction = false;
 };
 
 

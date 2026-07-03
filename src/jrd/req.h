@@ -155,12 +155,11 @@ inline constexpr USHORT rpb_not_packed	= 2048;		// record (or delta) is stored "
 
 // Stream flags
 
-inline constexpr USHORT RPB_s_update	= 0x01;	// input stream fetched for update
-inline constexpr USHORT RPB_s_no_data	= 0x02;	// nobody is going to access the data
-inline constexpr USHORT RPB_s_sweeper	= 0x04;	// garbage collector - skip swept pages
-inline constexpr USHORT RPB_s_unstable	= 0x08;	// don't use undo log, used with unstable explicit cursors
-inline constexpr USHORT RPB_s_bulk		= 0x10;	// bulk operation (currently insert only)
-inline constexpr USHORT RPB_s_skipLocked = 0x20;	// skip locked record
+inline constexpr USHORT RPB_s_update		= 0x01;	// input stream fetched for update
+inline constexpr USHORT RPB_s_no_data		= 0x02;	// nobody is going to access the data
+inline constexpr USHORT RPB_s_sweeper		= 0x04;	// garbage collector - skip swept pages
+inline constexpr USHORT RPB_s_unstable		= 0x08;	// don't use undo log, used with unstable explicit cursors
+inline constexpr USHORT RPB_s_skipLocked	= 0x10;	// skip locked record
 
 // Runtime flags
 

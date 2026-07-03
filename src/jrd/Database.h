@@ -95,6 +95,7 @@ class CryptoManager;
 class KeywordsMap;
 class MetadataCache;
 class ExtEngineManager;
+class RelationPermanent;
 
 // Flags to indicate normal internal requests vs. dyn internal requests
 // IRQ_REQUESTS & DYN_REQUESTS are depecated
@@ -140,6 +141,7 @@ inline constexpr ULONG DBB_assert_locks	= 0x4L;		// Locks are to be asserted
 inline constexpr ULONG DBB_shut_attach	= 0x8L;		// No new attachments accepted
 inline constexpr ULONG DBB_shut_tran	= 0x10L;	// No new transactions accepted
 inline constexpr ULONG DBB_shut_force	= 0x20L;	// Forced shutdown in progress
+inline constexpr ULONG DBB_repl_reset	= 0x40L;	// Replication set has been reset
 
 class Database : public pool_alloc<type_dbb>
 {
@@ -291,7 +293,18 @@ public:
 		bool active;
 	};
 
-	static Database* create(IPluginConfig* pConf, bool shared)
+	struct DelPagesMarker
+	{
+		TraNumber			tran;
+		RelationPermanent*	relation;
+
+		static TraNumber generate(const DelPagesMarker& item)
+		{
+			return item.tran;
+		}
+	};
+
+	static Database* create(Firebird::IPluginConfig* pConf, bool shared)
 	{
 		MemoryStats temp_stats;
 		MemoryPool* const pool = MemoryPool::createPool(NULL, temp_stats);
@@ -442,9 +455,10 @@ public:
 	time_t dbb_linger_end;
 	RefPtr<IPluginConfig> dbb_plugin_config;
 
-	TriState dbb_repl_state;	// replication state
-	Lock* dbb_repl_lock;				// replication state lock
-	SyncObject dbb_repl_sync;
+	Firebird::TriState dbb_repl_state;	// replication state
+	Lock* dbb_repl_state_lock;			// replication state lock
+	Lock* dbb_repl_set_lock;			// replication set lock
+	Firebird::SyncObject dbb_repl_sync;
 	FB_UINT64 dbb_repl_sequence;		// replication sequence
 	std::atomic<ReplicaMode> dbb_replica_mode;		// replica access mode
 
@@ -457,6 +471,10 @@ public:
 private:
 	GenericMap<Pair<Left<MetaString, UserId*> > > dbb_user_ids;	// set of used UserIds
 
+	Firebird::SortedArray<DelPagesMarker, Firebird::EmptyStorage<DelPagesMarker>,
+		TraNumber, DelPagesMarker> dbb_del_pages;
+	Firebird::Mutex  dbb_del_pages_mutex;
+
 public:
 	// returns true if primary file is located on raw device
 	bool onRawDevice() const;
@@ -466,6 +484,11 @@ public:
 
 	// returns the minimum IO block size
 	ULONG getIOBlockSize() const;
+
+	// control temporary pages cleanup
+	void markForDelete(RelationPermanent* relation);
+	void clearDeleteMark(RelationPermanent* relation);
+	void deleteTempPages(thread_db* tdbb, TraNumber oldestActive);
 
 #ifdef DEV_BUILD
 	// returns true if main lock is in exclusive state
@@ -554,6 +577,9 @@ public:
 	bool isReplicating(thread_db* tdbb);
 	void invalidateReplState(thread_db* tdbb, bool broadcast);
 	static int replStateAst(void*);
+	void checkReplSetLock(thread_db* tdbb);
+	void invalidateReplSet(thread_db* tdbb, bool broadcast);
+	static int blockingAstReplSet(void*);
 
 	const CoercionArray *getBindings() const;
 

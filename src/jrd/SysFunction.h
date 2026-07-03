@@ -45,6 +45,12 @@ namespace Firebird::Jrd
 class SysFunction
 {
 public:
+	enum Flags : UCHAR
+	{
+		DETERMINISTIC = 1,
+		CONSTANT = 2
+	};
+
 	typedef void (*SetParamsFunc)(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, int, dsc**);
 	typedef void (*MakeFunc)(DataTypeUtilBase* dataTypeUtil, const SysFunction* function, dsc*, int, const dsc**);
 	typedef dsc* (*EvlFunc)(thread_db*, const SysFunction* function, const NestValueArray&, impure_value*);
@@ -52,7 +58,7 @@ public:
 	const char* name;
 	int minArgCount;
 	int maxArgCount;	// -1 for no limit
-	bool deterministic;
+	UCHAR flags;
 	SetParamsFunc setParamsFunc;
 	MakeFunc makeFunc;
 	EvlFunc evlFunc;
@@ -61,6 +67,16 @@ public:
 	static const SysFunction* lookup(const Jrd::MetaName& name);
 
 	void checkArgsMismatch(int count) const;
+
+	inline bool isDeterministic() const
+	{
+		return flags & DETERMINISTIC;
+	}
+
+	inline bool isConstant() const
+	{
+		return flags & CONSTANT;
+	}
 
 private:
 	const static SysFunction functions[];

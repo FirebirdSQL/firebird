@@ -64,6 +64,7 @@ namespace Firebird::Gpre
 #ifdef FTN_BLK_DATA
 static void		block_data_list(const gpre_dbb*);
 #endif
+static bool		is_gpre_action_context();
 static bool		match_parentheses();
 static act*		par_any();
 static act*		par_array_element();
@@ -145,6 +146,13 @@ act* PAR_action(const TEXT* base_dir)
 		gpreGlob.token_global.tok_keyword <= KW_end_actions)
 	{
 		const kwwords_t keyword = gpreGlob.token_global.tok_keyword;
+
+		if (!is_gpre_action_context())
+		{
+			gpreGlob.token_global.tok_symbol = NULL;
+			return NULL;
+		}
+
 		if (! gpreGlob.sw_no_qli)
 		{
 			switch (keyword)
@@ -1265,6 +1273,67 @@ static void block_data_list( const gpre_dbb* db)
 
 //____________________________________________________________
 //
+//		In Firebird's internal C++ preprocessor mode, GPRE action
+//		keywords may also appear as regular C++ identifiers.  Treat
+//		them as commands only where a standalone embedded command can
+//		reasonably start.
+//
+
+static bool is_gpre_action_context()
+{
+	if (gpreGlob.sw_language != lang_internal)
+		return true;
+
+	switch (gpreGlob.token_global.tok_keyword)
+	{
+		case KW_L_BRACE:
+		case KW_R_BRACE:
+			return true;
+
+		default:
+			break;
+	}
+
+	if (gpreGlob.token_global.tok_first)
+	{
+		switch (gpreGlob.prior_token.tok_keyword)
+		{
+			case KW_EQUALS:
+			case KW_COMMA:
+			case KW_DOT:
+			case KW_POINTS:
+			case KW_LEFT_PAREN:
+			case KW_L_BRCKET:
+			case KW_PLUS:
+			case KW_MINUS:
+			case KW_ASTERISK:
+			case KW_SLASH:
+				return false;
+
+			default:
+				return true;
+		}
+	}
+
+	switch (gpreGlob.prior_token.tok_keyword)
+	{
+		case KW_none:
+			return !gpreGlob.prior_token.tok_symbol && gpreGlob.prior_token.tok_length == 0;
+
+		case KW_SEMI_COLON:
+		case KW_L_BRACE:
+		case KW_R_BRACE:
+		case KW_RIGHT_PAREN:
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+
+//____________________________________________________________
+//
 //
 //		For reasons best left unnamed, we need
 //		to skip the contents of a parenthesized
@@ -1292,8 +1361,6 @@ static bool match_parentheses()
 
 	return false;
 }
-
-
 //____________________________________________________________
 //
 //		Parse a free standing ANY expression.
@@ -3341,6 +3408,5 @@ static bool terminator()
 
 	return false;
 }
-
 
 } // namespace Firebird::Gpre

@@ -223,9 +223,7 @@ void Statement::loadResources(thread_db* tdbb, Request* req, bool withLock)
 
 		if (ddl || (!latestVer) || (latestVer->version != frontVersion))
 		{
-			const FB_SIZE_T resourceCount = latestVer ? latestVer->getCapacity() :
-				resources->charSets.getCount() + resources->relations.getCount() + resources->procedures.getCount() +
-				resources->functions.getCount() + resources->triggers.getCount();
+			const FB_SIZE_T resourceCount = latestVer ? latestVer->getCapacity() : resources->countVersionedObjects();
 			AutoPtr<VersionedObjects> newVer = FB_NEW_RPT(*pool, resourceCount) VersionedObjects(resourceCount);
 
 			MetadataCache::Version ver(mdc);
@@ -768,6 +766,7 @@ void Statement::release(thread_db* tdbb)
 		if (*instance)
 		{
 			fb_assert(!((*instance)->isUsed()));
+
 			EXE_release(tdbb, *instance);
 			MemoryPool::deletePool((*instance)->req_pool);
 			*instance = nullptr;

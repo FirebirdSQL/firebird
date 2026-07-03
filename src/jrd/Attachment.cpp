@@ -263,6 +263,15 @@ Attachment::~Attachment()
 }
 
 
+bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
+{
+	if (tdbb->tdbb_flags & TDBB_replicator)
+		return true;
+
+	const auto user = getEffectiveUserId();
+	return (user && user->locksmith(tdbb, sp));
+}
+
 PreparedStatement* Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
 	const string& text, MemoryPool* pool)
 {
@@ -585,7 +594,7 @@ void Attachment::initLocks(thread_db* tdbb)
 	lock->setKey(att_attachment_id);
 	LCK_lock(tdbb, lock, LCK_EX, LCK_WAIT);
 
-	// Unless we're a system attachment, allocate cancellation and replication locks
+	// Unless we're a system attachment, allocate cancellation and profiling locks
 
 	if (!(att_flags & ATT_system))
 	{
@@ -593,10 +602,6 @@ void Attachment::initLocks(thread_db* tdbb)
 			Lock(tdbb, sizeof(AttNumber), LCK_cancel, this, blockingAstCancel);
 		att_cancel_lock = lock;
 		lock->setKey(att_attachment_id);
-
-		lock = FB_NEW_RPT(*att_pool, 0)
-			Lock(tdbb, 0, LCK_repl_tables, this, blockingAstReplSet);
-		att_repl_lock = lock;
 
 		lock = FB_NEW_RPT(*att_pool, 0)
 			Lock(tdbb, sizeof(AttNumber), LCK_profiler_listener, this, ProfilerManager::blockingAst);
@@ -632,9 +637,6 @@ void Attachment::releaseLocks(thread_db* tdbb)
 
 	if (att_temp_pg_lock)
 		LCK_release(tdbb, att_temp_pg_lock);
-
-	if (att_repl_lock)
-		LCK_release(tdbb, att_repl_lock);
 
 	if (att_profiler_listener_lock)
 		LCK_release(tdbb, att_profiler_listener_lock);
@@ -854,70 +856,6 @@ UserId* Attachment::getUserId(const MetaString& userName)
 	return att_database->getUserId(userName);
 }
 
-void Attachment::checkReplSetLock(thread_db* tdbb)
-{
-	if (att_flags & ATT_repl_reset)
-	{
-		fb_assert(att_repl_lock->lck_logical == LCK_none);
-		LCK_lock(tdbb, att_repl_lock, LCK_SR, LCK_WAIT);
-		att_flags &= ~ATT_repl_reset;
-	}
-}
-
-// Move to database level ? !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-void Attachment::invalidateReplSet(thread_db* tdbb, bool broadcast)
-{
-
-	att_flags |= ATT_repl_reset;
-
-	att_database->dbb_mdc->invalidateReplSet(tdbb);
-
-/* !!!!!!!!!!!!!!!!!!!!!!!
-	if (broadcast)
-	{
-		// Signal other attachments about the changed state
-		if (att_repl_lock->lck_logical == LCK_none)
-			LCK_lock(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
-		else
-			LCK_convert(tdbb, att_repl_lock, LCK_EX, LCK_WAIT);
-	}
-
-	if (att_flags & ATT_repl_reset)
-		return;
-
-	att_flags |= ATT_repl_reset;
-
-	if (att_relations)
-	{
-		for (auto relation : *att_relations)
-		{
-			if (relation)
-				relation->rel_repl_state.reset();
-		}
-	}
-
-	LCK_release(tdbb, att_repl_lock); */
-}
-
-int Attachment::blockingAstReplSet(void* ast_object)
-{
-	Attachment* const attachment = static_cast<Attachment*>(ast_object);
-
-	try
-	{
-		Database* const dbb = attachment->att_database;
-
-		AsyncContextHolder tdbb(dbb, FB_FUNCTION, attachment->att_repl_lock);
-
-		attachment->invalidateReplSet(tdbb, false);
-	}
-	catch (const Exception&)
-	{} // no-op
-
-	return 0;
-}
-
 ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 {
 	auto profilerManager = att_profiler_manager.get();
@@ -960,6 +898,15 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 	{
 		att_meta_transaction = TRA_start(tdbb,
 			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version, DEFAULT_LOCK_TIMEOUT);
+
+		if (att_meta_transaction && att_meta_transaction->tra_lock)
+		{
+			LCK_release(tdbb, att_meta_transaction->tra_lock);
+			att_meta_transaction->tra_lock = nullptr;
+		}
+
+		att_meta_transaction->unlinkFromAttachment();
+		att_meta_transaction->tra_flags |= TRA_meta;
 	}
 }
 

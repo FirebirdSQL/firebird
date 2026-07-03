@@ -7,8 +7,8 @@ search path. The ambiguity arises between:
 - `<schema>.<object>` (a schema and its object)
 - `<package>.<object>` (a package and its object)
 
-This document focuses on name resolution rules for tables, views, procedures, and functions within queries and
-code blocks.
+This document focuses on name resolution rules for tables, views, procedures, and functions within queries,
+code blocks, and `COMMENT ON`.
 
 ## Scope specifier (`%`)
 
@@ -36,6 +36,13 @@ select rdb$time_zone_util%package.database_version()
 
 select *
     from rdb$time_zone_util%package.transitions('America/Sao_Paulo', timestamp '2017-01-01', timestamp '2019-01-01');
+
+select *
+    from pkg_ltt%package.t_pub;
+
+comment on table pkg_ltt%package.t_pub is 'Public packaged temporary table';
+
+comment on column pkg_ltt%package.t_pub.id is 'Column comment through %package';
 ```
 
 ## Detailed name resolution rules

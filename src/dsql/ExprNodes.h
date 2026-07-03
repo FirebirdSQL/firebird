@@ -87,6 +87,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -200,6 +205,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -235,6 +245,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -266,6 +281,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	void setDsqlDesc(const dsc& desc)
 	{
@@ -318,6 +338,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -424,6 +449,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -614,6 +644,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	bool possiblyUnknown() const override
 	{
 		return true;
@@ -782,6 +817,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -990,6 +1030,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return true;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -1275,6 +1320,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -1313,6 +1363,11 @@ public:
 	void setParameterName(dsql_par* parameter) const override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return true;
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -1436,8 +1491,8 @@ public:
 		{
 			// Warning: used in BLR
 			RANGE = 0,
-			ROWS
-			//// TODO: SQL-2013: GROUPS
+			ROWS,
+			GROUPS
 		};
 
 	public:
@@ -1593,8 +1648,8 @@ public:
 class OverNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_OVER>
 {
 public:
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName);
-	explicit OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow);
+	explicit OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, const MetaName* aWindowName);
+	explicit OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, WindowClause* aWindow);
 
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
@@ -1833,6 +1888,11 @@ public:
 		fb_assert(false);
 	}
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -1924,6 +1984,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -1957,6 +2022,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -2060,6 +2130,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
@@ -2100,6 +2175,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	ValueExprNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
@@ -2134,6 +2214,7 @@ public:
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
 	bool deterministic(thread_db* tdbb) const override;
+	bool constant() const override;
 
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -2174,6 +2255,11 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
+
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
@@ -2209,6 +2295,7 @@ public:
 	{
 		ValueExprNode::getChildren(holder, dsql);
 		holder.add(args);
+		holder.add(dsqlAggFilter);
 	}
 
 	string internalPrint(NodePrinter& printer) const override;
@@ -2240,7 +2327,8 @@ public:
 public:
 	QualifiedName name;
 	NestConst<ValueListNode> args;
-	NestConst<ObjectsArray<MetaName>> dsqlArgNames;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
+	NestConst<BoolExprNode> dsqlAggFilter;
 	SubRoutine<Function> function;
 
 private:
@@ -2273,6 +2361,11 @@ public:
 		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	bool constant() const override
+	{
+		return isChildrenConstant();
+	}
 
 	bool possiblyUnknown() const override
 	{

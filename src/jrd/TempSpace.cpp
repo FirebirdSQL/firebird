@@ -260,7 +260,11 @@ TempSpace::~TempSpace()
 
 FB_SIZE_T TempSpace::read(offset_t offset, void* buffer, FB_SIZE_T length)
 {
-	fb_assert(offset + length <= logicalSize);
+	if (offset + length > logicalSize)
+	{
+		status_exception::raise(Arg::Gds(isc_temp_space_invalid_pos) <<
+			Arg::Int64(offset + length) << Arg::Int64(logicalSize));
+	}
 
 	if (length)
 	{
@@ -292,7 +296,11 @@ FB_SIZE_T TempSpace::read(offset_t offset, void* buffer, FB_SIZE_T length)
 
 FB_SIZE_T TempSpace::write(offset_t offset, const void* buffer, FB_SIZE_T length)
 {
-	fb_assert(offset <= logicalSize);
+	if (offset > logicalSize)
+	{
+		status_exception::raise(Arg::Gds(isc_temp_space_invalid_pos) <<
+			Arg::Int64(offset) << Arg::Int64(logicalSize));
+	}
 
 	if (offset + length > logicalSize)
 	{
@@ -330,9 +338,17 @@ FB_SIZE_T TempSpace::write(offset_t offset, const void* buffer, FB_SIZE_T length
 
 void TempSpace::extend(FB_SIZE_T size)
 {
-	logicalSize += size;
+	const auto originalLogicalSize = logicalSize;
+	const auto originalPhysicalSize = physicalSize;
 
-	if (logicalSize > physicalSize)
+	AutoPtr<Block> originalHead; // Delay deletion and restore in case of error
+	Block* originalTail = tail;
+
+	logicalSize += size;
+	if (logicalSize <= physicalSize)
+		return;
+
+	try
 	{
 		const FB_SIZE_T initialSize = initialBuffer.getCount();
 
@@ -369,7 +385,7 @@ void TempSpace::extend(FB_SIZE_T size)
 		if (initialSize)
 		{
 			fb_assert(head == tail);
-			delete head;
+			originalHead = head;
 			head = tail = NULL;
 			size = static_cast<FB_SIZE_T>(FB_ALIGN(logicalSize, minBlockSize));
 			physicalSize = size;
@@ -401,12 +417,10 @@ void TempSpace::extend(FB_SIZE_T size)
 			}
 		}
 
-		// NS 2014-07-31: FIXME: missing exception handling.
-		// error thrown in block of code below will leave TempSpace in inconsistent state:
-		// logical/physical size already increased while allocation has in fact failed.
 		if (!block)
 		{
 			// allocate block in the temp file
+			// Possible error thrown when not enough physical memory
 			TempFile* const file = setupFile(size);
 			fb_assert(file);
 			if (tail && tail->sameFile(file))
@@ -431,6 +445,15 @@ void TempSpace::extend(FB_SIZE_T size)
 			head = block;
 		}
 		tail = block;
+	}
+	catch (...)
+	{
+		// Restore original state
+		logicalSize = originalLogicalSize;
+		physicalSize = originalPhysicalSize;
+		head = originalHead.release();
+		tail = originalTail;
+		throw;
 	}
 }
 

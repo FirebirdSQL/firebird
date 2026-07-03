@@ -167,11 +167,11 @@ inline constexpr ULONG ATT_security_db			= 0x20000L; // Attachment used for secu
 inline constexpr ULONG ATT_mapping				= 0x40000L; // Attachment used for mapping auth block
 inline constexpr ULONG ATT_from_thread			= 0x80000L; // Attachment from internal special thread (sweep, crypt)
 inline constexpr ULONG ATT_monitor_init			= 0x100000L; // Attachment is registered in monitoring
-inline constexpr ULONG ATT_repl_reset			= 0x200000L; // Replication set has been reset
-inline constexpr ULONG ATT_replicating			= 0x400000L; // Replication is active
-inline constexpr ULONG ATT_resetting			= 0x800000L; // Session reset is in progress
-inline constexpr ULONG ATT_worker				= 0x1000000L; // Worker attachment, managed by the engine
-inline constexpr ULONG ATT_gbak_restore_has_schema = 0x2000000L;
+inline constexpr ULONG ATT_replicating			= 0x200000L; // Replication is active
+inline constexpr ULONG ATT_resetting			= 0x400000L; // Session reset is in progress
+inline constexpr ULONG ATT_worker				= 0x800000L; // Worker attachment, managed by the engine
+inline constexpr ULONG ATT_gbak_restore_has_schema = 0x1000000L;
+inline constexpr ULONG ATT_schema_cascade_dropping = 0x2000000L; // DROP SCHEMA CASCADE dropping contained objects
 
 inline constexpr ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
@@ -629,7 +629,6 @@ public:
 	static int blockingAstShutdown(void*);
 	static int blockingAstCancel(void*);
 	static int blockingAstMonitor(void*);
-	static int blockingAstReplSet(void*);
 
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
 
@@ -782,9 +781,6 @@ public:
 		return att_debug_options;
 	}
 
-	void checkReplSetLock(thread_db* tdbb);
-	void invalidateReplSet(thread_db* tdbb, bool broadcast);
-
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
 	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
 	bool isProfilerActive();
@@ -817,7 +813,6 @@ private:
 	DebugOptions att_debug_options;
 	AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager
 
-	Lock* att_repl_lock;				// Replication set lock
 	JProvider* att_provider;	// Provider which created this attachment
 
 	AutoPtr<MetaString> att_retUser, att_retRole;
@@ -832,12 +827,6 @@ private:
 	}
 };
 
-
-inline bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
-{
-	const auto user = getEffectiveUserId();
-	return (user && user->locksmith(tdbb, sp));
-}
 
 inline jrd_tra* Attachment::getSysTransaction() noexcept
 {

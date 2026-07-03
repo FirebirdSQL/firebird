@@ -220,7 +220,7 @@ bool BackupRelationTask::handler(WorkItem& _item)
 
 		{ // scope
 			SimpleGblHolder gbl(m_masterGbl);
-			BURP_print_status(true, &st);
+			BURP_print_status(&st, true);
 		}
 
 		m_stop = true;
@@ -641,6 +641,7 @@ RestoreRelationTask::RestoreRelationTask(BurpGlobals* tdgbl) : BurpTask(tdgbl),
 	m_relation(NULL),
 	m_lastRecord(rec_relation_data),
 	m_writers(0),
+	m_waiters(0),
 	m_readDone(false),
 	m_stop(false),
 	m_error(false),
@@ -743,7 +744,7 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 
 		{ // scope
 			SimpleGblHolder gbl(m_masterGbl);
-			BURP_print_status(true, &st);
+			BURP_print_status(&st, true);
 		}
 
 		m_stop = true;
@@ -957,7 +958,7 @@ bool RestoreRelationTask::freeItem(Item& item, bool commit)
 				ret = false;
 
 				// more detailed message required ?
-				BURP_print_status(false, &status);
+				BURP_print_status(&status);
 			}
 			item.m_tra = nullptr;
 		}
@@ -1008,7 +1009,7 @@ IOBuffer* RestoreRelationTask::getCleanBuffer()
 void RestoreRelationTask::putDirtyBuffer(IOBuffer* buf)
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
-	if (m_dirtyBuffers.isEmpty())
+	if (m_dirtyBuffers.isEmpty() || m_waiters)
 		m_dirtyCond.notifyOne();
 	buf->unlock();
 	m_dirtyBuffers.push(buf);
@@ -1083,7 +1084,11 @@ IOBuffer* RestoreRelationTask::getDirtyBuffer()
 		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		while (!m_dirtyBuffers.hasData() && !m_readDone && !m_stop)
+		{
+			m_waiters++;
 			m_dirtyCond.wait(m_mutex);
+			m_waiters--;
+		}
 
 		if (m_stop)
 			return NULL;

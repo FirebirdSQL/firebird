@@ -1,43 +1,47 @@
 SQL Language Extension: LISTAGG
 
 Function:
-	The current implementation has an aggregate function LIST which concatenates multiple row
-	fields into a blob. The SQL standard has a similar function called LISTAGG. The major
-	difference is that it also supports the ordered concatenation.
+	LISTAGG is a SQL standard equivalent of the Firebird-specific aggregate function LIST.
+	It provides concatenation of values within a group, with optional ordering.
 
 Authors:
 	Chudaykin Alex <chudaykinalex@gmail.com>
 
 Format:
 	<listagg set function> ::=
-		LISTAGG <left paren> [ <set quantifier> ] <character value expression> <comma> <listagg separator> [ <listagg overflow clause> ] <right paren> [ <within group specification> ]
+	  { LISTAGG | LIST }
+	    <left paren>
+	      [ ALL | DISTINCT ] <expression>
+	      [ <comma> <listagg separator> ]
+	      [ <listagg overflow clause> ]
+	    <right paren>
+	    [ <within group specification> ]
 
 	<listagg separator> ::=
-		<character string literal>
+	  <character string literal>
 
 	<listagg overflow clause> ::=
-		ON OVERFLOW <overflow behavior>
+	  ON OVERFLOW <overflow behavior>
 
 	<overflow behavior> ::=
-		ERROR | TRUNCATE [ <listagg truncation filler> ] <listagg count indication>
+	    ERROR
+	  | TRUNCATE [ <listagg truncation filler> ] <listagg count indication>
 
 	<listagg truncation filler> ::=
-		<character string literal>
+	  <character string literal>
 
 	<listagg count indication> ::=
-		WITH COUNT | WITHOUT COUNT
+	  WITH COUNT | WITHOUT COUNT
 
 	<within group specification> ::=
-		WITHIN GROUP <left paren> ORDER BY <sort specification list> <right paren>
+	  WITHIN GROUP <left paren> ORDER BY <sort specification list> <right paren>
 
 Syntax Rules:
-	The legacy LIST syntax is preserved for backward compatibility, LISTAGG is added to cover the
-	standard features.
+	The legacy LIST syntax is preserved for backward compatibility and is now an alias for LISTAGG.
 
-	There is a <listagg overflow clause> rule in the standard, which is intended to output an error
-	when the output value overflows. Since the LIST function always returns a BLOB, it was decided
-	that this rule would be meaningless. So the OVERFLOW clause is syntactically supported but
-	silently ignored if specified.
+	The SQL standard defines the <listagg overflow clause>, which is intended to output an error
+	or truncate when the output value overflows. Since LISTAGG always returns a BLOB, this rule
+	does not apply. The OVERFLOW clause is syntactically supported but effectively ignored.
 
 Examples:
 CREATE TABLE TEST_T

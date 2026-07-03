@@ -487,6 +487,12 @@ bool IndexCreateTask::handler(WorkItem& _item)
 			idx->idx_expression_statement = NULL;
 		}
 
+		if (item->m_ownAttach && idx->idx_condition_statement)
+		{
+			idx->idx_condition_statement->release(tdbb);
+			idx->idx_condition_statement = NULL;
+		}
+
 		if (!m_stop && m_creation->duplicates.value() == 0)
 			scb->sort(tdbb);
 
@@ -519,7 +525,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	if (idx->idx_flags & idx_foreign)
 	{
 		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, idx->idx_primary_relation,
-			CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+			CacheFlag::AUTOCREATE);
 		partner_index_id = idx->idx_primary_index;
 	}
 
@@ -968,7 +974,7 @@ bool IDX_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 }
 
 
-void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
+bool IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 {
 /**************************************
  *
@@ -982,14 +988,72 @@ void IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
  **************************************/
 	SET_TDBB(tdbb);
 
-	auto* relPages = relation->getPages(tdbb);
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	auto* relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+	if (relPages)
+	{
+		fb_assert(relPages->rel_index_root);
 
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
+		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
-	BTR_mark_index_for_delete(tdbb, relation, id, &window, root);
+		BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
+		return true;
+	}
+
+	return false;
+}
+
+void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current, TraNumber tran)
+{
+/**************************************
+ *
+ *	I D X _ m a r k _ t e m p
+ *
+ **************************************
+ *
+ * Functional description
+ *	Mark GTT (preserve rows) index
+ *	in all pagespaces
+ *
+ **************************************/
+	Database* dbb = tdbb->getDatabase();
+	AttachmentsRefHolder attachments;
+
+	{
+		Sync guard(&dbb->dbb_sync, "JRD_shutdown_attachments");
+		if (!dbb->dbb_sync.ourExclusiveLock())
+			guard.lock(SYNC_SHARED);
+
+		for (Attachment* attachment = dbb->dbb_attachments;
+			 attachment;
+			 attachment = attachment->att_next)
+		{
+			if (attachment != current)
+			{
+				fb_assert(attachment->getStable());
+				attachments.add(attachment->getStable());
+			}
+		}
+	}
+
+	for (AttachmentsRefHolder::Iterator iter(attachments); *iter; ++iter)
+	{
+		StableAttachmentPart* const sAtt = *iter;
+
+		AttSyncLockGuard guard(*(sAtt->getSync(true)), FB_FUNCTION);
+		Attachment* attachment = sAtt->getHandle();
+
+		if (attachment)
+		{
+			auto* pages = relation->getAttPages(tdbb, attachment->att_attachment_id);
+			if (pages && pages->rel_index_root)
+			{
+				WIN window(pages->rel_pg_space_id, pages->rel_index_root);
+				auto* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+				BTR_mark_index_for_delete(tdbb, relation, id, &window, root, tran);
+			}
+		}
+	}
 }
 
 
@@ -1010,7 +1074,7 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	fb_assert(relPages->rel_index_root);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
@@ -1018,40 +1082,6 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
 		const bool tree_exists = BTR_delete_index(tdbb, &window, i, withCleanup);
-		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-	}
-
-	CCH_RELEASE(tdbb, &window);
-}
-
-
-void IDX_mark_indices(thread_db* tdbb, Cached::Relation* relation)
-{
-/**************************************
- *
- *	I D X _ m a r k _ i n d i c e s
- *
- **************************************
- *
- * Functional description
- *	Mark all known indices for delete in preparation for deleting a
- *	complete relation.
- *
- **************************************/
-	SET_TDBB(tdbb);
-
-	auto* relPages = relation->getBasePages();
-	fb_assert(relPages->rel_index_root);
-
-	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-
-	// loop through pagespaces and mark for delete %%%%%%
-	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
-
-	for (USHORT i = 0; i < root->irt_count; i++)
-	{
-		BTR_mark_index_for_delete(tdbb, relation, i, &window, root);
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	}
 
@@ -1271,8 +1301,11 @@ void IDX_modify(thread_db* tdbb,
 		AutoIndexExpression expression;
 		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
-		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
+		if ( (error_code = newKey.compose(new_rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
@@ -1370,8 +1403,11 @@ void IDX_modify_check_constraints(thread_db* tdbb,
 		AutoIndexExpression expression;
 		IndexKey newKey(tdbb, new_rpb->rpb_relation, &idx, expression), orgKey(newKey);
 
-		if ( (error_code = newKey.compose(new_rpb->rpb_record)) )
+		if ( (error_code = newKey.compose(new_rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, new_rpb->rpb_record);
 		}
@@ -1532,8 +1568,11 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		AutoIndexExpression expression;
 		IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);
 
-		if ( (error_code = key.compose(rpb->rpb_record)) )
+		if ( (error_code = key.compose(rpb->rpb_record, true)) )
 		{
+			if (error_code == idx_e_skip)
+				continue;
+
 			CCH_RELEASE(tdbb, &window);
 			context.raise(tdbb, error_code, rpb->rpb_record);
 		}
@@ -1892,6 +1931,9 @@ static idx_e check_partner_index(thread_db* tdbb,
 	// tmpIndex.idx_flags |= idx_unique;
 	tmpIndex.idx_flags = (tmpIndex.idx_flags & ~idx_unique) | (partner_idx.idx_flags & idx_unique);
 
+	// hvlad: The same about descending flag, it should be the same as in the partner index.
+	tmpIndex.idx_flags = (tmpIndex.idx_flags & ~idx_descending) | (partner_idx.idx_flags & idx_descending);
+
 	const auto keyType = starting ? INTL_KEY_PARTIAL :
 		(tmpIndex.idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT;
 
@@ -1915,9 +1957,6 @@ static idx_e check_partner_index(thread_db* tdbb,
 
 		if (partner_idx.idx_flags & idx_descending)
 			retrieval.irb_generic |= irb_descending;
-
-		if ((idx->idx_flags & idx_descending) != (partner_idx.idx_flags & idx_descending))
-			BTR_complement_key(key);
 
 		RecordBitmap bm(*tdbb->getDefaultPool());
 		RecordBitmap* bitmap = &bm;

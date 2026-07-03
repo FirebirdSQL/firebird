@@ -98,6 +98,7 @@
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "firebird/impl/msg_helper.h"
 #include "../jrd/LocalTemporaryTable.h"
+#include "../jrd/Package.h"
 
 
 #ifdef HAVE_CTYPE_H
@@ -341,6 +342,7 @@ void MetadataCache::cleanup(thread_db* tdbb)
 	mdc_procedures.cleanup(tdbb);
 	mdc_functions.cleanup(tdbb);
 	mdc_charsets.cleanup(tdbb);
+	mdc_packages.cleanup(tdbb);
 
 	for (unsigned i = 0; i < DB_TRIGGERS_COUNT; ++i)
 	{
@@ -570,6 +572,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
  *      Find all relations affected and schedule a format update.
  *      Find all procedures and triggers and schedule a BLR validate.
  *      Find all functions and schedule a BLR validate.
+ *      Find all package constants.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -583,12 +586,15 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATION_FIELDS
 		CROSS R IN RDB$RELATIONS
-		OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
-		WITH X.RDB$SCHEMA_NAME EQ schemaName->dsc_address AND
-			 X.RDB$FIELD_SOURCE EQ fieldSource->dsc_address
+		WITH X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ schemaName->dsc_address AND
+			 X.RDB$FIELD_SOURCE EQ fieldSource->dsc_address AND
+			 R.RDB$SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
+			 R.RDB$PACKAGE_NAME EQUIV X.RDB$PACKAGE_NAME AND
+			 R.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME
 	{
-		SCL_check_relation(tdbb, QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME), SCL_alter);
-		{
+		SCL_check_relation(tdbb, QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME), SCL_alter);
+
+		{	// scope
 			AutoSetRestore2<jrd_tra*, thread_db> tempTrans(tdbb,
 				&thread_db::getTransaction,
 				&thread_db::setTransaction,
@@ -596,6 +602,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 			calcFieldRelation = MetadataCache::newVersion<Cached::Relation>(tdbb, R.RDB$RELATION_ID);
 		}
+
 		DFW_post_work(transaction, dfw_commit_relation, nullptr, nullptr, R.RDB$RELATION_ID);
 
 		AutoCacheRequest request2(tdbb, irq_m_fields4, IRQ_REQUESTS);
@@ -807,6 +814,40 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 	}
 	END_FOR
 
+	request.reset(tdbb, irq_m_fields10, IRQ_REQUESTS);
+
+	Package* package = nullptr;
+	FOR(REQUEST_HANDLE request)
+		DEP IN RDB$DEPENDENCIES CROSS
+		CONST IN RDB$CONSTANTS CROSS
+		PKG IN RDB$PACKAGES
+		WITH PKG.RDB$SCHEMA_NAME EQ schemaName->dsc_address AND
+			 PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME AND
+			 DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
+			 DEP.RDB$DEPENDED_ON_NAME EQ fieldSource->dsc_address AND
+			 DEP.RDB$DEPENDED_ON_TYPE EQ obj_field AND
+			 (DEP.RDB$DEPENDENT_TYPE EQ obj_package_header OR
+				 DEP.RDB$DEPENDENT_TYPE EQ obj_package_body) AND
+			 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+			 DEP.RDB$DEPENDENT_NAME EQ CONST.RDB$PACKAGE_NAME
+	{
+		QualifiedName constantFullName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME);
+
+		DeferredWork* dw2 = DFW_post_work(transaction, dfw_modify_package_constant,
+			string(constantFullName.object.c_str()), constantFullName.schema, 0, constantFullName.package);
+
+		if (package == nullptr)
+		{
+			const auto id = PKG.RDB$PACKAGE_ID;
+
+			package = MetadataCache::newVersion<Cached::Package>(tdbb, id)->getVersioned(tdbb, 0);
+			fb_assert(package);
+		}
+
+		package->addConstant(tdbb, constantFullName, CONST.RDB$PRIVATE_FLAG != 0, CONST.RDB$CONSTANT_BLR);
+	}
+	END_FOR
+
 	return calcFieldRelation;
 }
 
@@ -950,7 +991,7 @@ void MET_error(const TEXT* string, ...)
 			 Arg::Gds(isc_random) << Arg::Str(s));
 }
 
-Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
+const Format* RelationPermanent::getFormat(thread_db* tdbb, USHORT number)
 {
 /**************************************
  *
@@ -966,23 +1007,31 @@ Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
-	Format* format;
-	auto formats = relation->getFormats();
-	if ((number < formats->getCount()) && (format = formats->value(number)))
-	{
-		return format;
+	{ // scope
+		auto formats = getFormats();
+		if ((number < formats->getCount()) && formats->value(number))
+			return formats->value(number);
 	}
 
-	// System relations don't have their formats stored inside RDB$FORMATS,
-	// so it's absolutely pointless trying to find one there
-	fb_assert(!relation->isSystem());
-	fb_assert(!(relation->rel_flags & REL_temp_ltt));
+	MutexLockGuard guard(rel_formats_grow, FB_FUNCTION);
 
-	format = NULL;
+	{ // scope
+		auto formats = getFormats();
+		if ((number < formats->getCount()) && formats->value(number))
+			return formats->value(number);
+	}
+
+	// System relations and LTT don't have their formats stored inside RDB$FORMATS,
+	// so it's absolutely pointless trying to find one there
+	fb_assert(!isSystem());
+	fb_assert(!(rel_flags & REL_temp_ltt));
+
+	Format* format = NULL;
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
-		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ relation->getId() AND
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ getId() AND
 			X.RDB$FORMAT EQ number
 	{
 		blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &X.RDB$DESCRIPTOR);
@@ -994,7 +1043,7 @@ Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
 		unsigned bufferPos = 2;
 		USHORT count = buffer[0] | (buffer[1] << 8);
 
-		format = Format::newFormat(relation->getPool(), count);
+		format = Format::newFormat(getPool(), count);
 
 		Array<Ods::Descriptor> odsDescs;
 		Ods::Descriptor* odsDesc = odsDescs.getBuffer(count);
@@ -1026,20 +1075,20 @@ Format* MET_format(thread_db* tdbb, RelationPermanent* relation, USHORT number)
 
 			desc.dsc_address = tmpArray.getBuffer(desc.dsc_length, false);
 			memcpy(desc.dsc_address, p, desc.dsc_length);
-			EVL_make_value(tdbb, &desc, &format->fmt_defaults[offset], &relation->getPool());
+			EVL_make_value(tdbb, &desc, &format->fmt_defaults[offset], &getPool());
 
 			p += desc.dsc_length;
 		}
 	}
 	END_FOR
 
-	if (!format)
-		format = Format::newFormat(relation->getPool());
+	if (format)
+	{
+		format->fmt_version = number;
 
-	format->fmt_version = number;
-
-	// Link the format block into the world
-	relation->addFormat(format);
+		// Link the format block into the world
+		addFormat(format);
+	}
 
 	return format;
 }
@@ -1203,14 +1252,14 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, domainName, type);
 
-		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, domainName, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, domainName, type);
 	}
 	else
 	{
 		if (type != obj_package_body)
 			MET_delete_dependencies(tdbb, object_name, type);
 
-		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, object_name, type, transaction);
+		MET_store_dependencies(tdbb, csb->csb_dependencies, relation, object_name, type);
 	}
 
 	if (csb_ptr)
@@ -1255,6 +1304,9 @@ bool MET_get_repl_state(Jrd::thread_db* tdbb, const QualifiedName& name)
  *      for either database or given relation.
  *
  **************************************/
+	if (name.package.hasData())
+		return false;
+
 	SET_TDBB(tdbb);
 	Attachment* const attachment = tdbb->getAttachment();
 
@@ -1584,6 +1636,8 @@ void MET_lookup_index_for_cnstrt(thread_db* tdbb,
 *      index_name is output parameter.
 *
 **************************************/
+	fb_assert(constraint_name.package.isEmpty());
+
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
@@ -1622,6 +1676,10 @@ void MET_lookup_cnstrt_for_index(thread_db* tdbb,
 	Attachment* attachment = tdbb->getAttachment();
 
 	constraint_name = "";
+
+	if (index_name.package.hasData())
+		return;
+
 	AutoCacheRequest request(tdbb, irq_l_cnstrt, IRQ_REQUESTS);
 
 	FOR(REQUEST_HANDLE request)
@@ -2127,6 +2185,7 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$INDICES
 		WITH X.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
 			 X.RDB$INDEX_NAME EQ index_name.object.c_str()
 	{
 		*status = getIndexStatus(X.RDB$INDEX_INACTIVE.NULL, X.RDB$INDEX_INACTIVE);
@@ -2137,7 +2196,9 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 		if (relationId)
 		{
 			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb,
-				QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME), CacheFlag::AUTOCREATE);
+				QualifiedName(X.RDB$RELATION_NAME, X.RDB$SCHEMA_NAME, X.RDB$PACKAGE_NAME),
+				CacheFlag::AUTOCREATE);
+
 			if (relation)
 				*relationId = relation->getId();
 			else
@@ -2150,7 +2211,8 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 }
 
 
-void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_desc* idx)
+void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+	const Ods::index_root_page::irt_repeat* irt_desc)
 {
 /***********************************************
 *
@@ -2164,15 +2226,83 @@ void MET_lookup_index_code(thread_db* tdbb, Cached::Relation* relation, index_de
 **************************************/
 	SET_TDBB(tdbb);
 
-	IndexVersion* idv = relation->lookup_index(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
-	if (idv)
-	{
-		idx->idx_condition_node = idv->idv_condition;
-		idx->idx_condition_statement = idv->idv_condition_statement;
+	MutexLockGuard g(idp_code_mutex, FB_FUNCTION);
 
-		idx->idx_expression_node = idv->idv_expression;
-		idx->idx_expression_statement = idv->idv_expression_statement;
-		memcpy(&idx->idx_expression_desc, &idv->idv_expression_desc, sizeof(struct dsc));
+	if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+	{
+		Database* dbb = tdbb->getDatabase();
+		Attachment* attachment = tdbb->getAttachment();
+
+		bid expression, condition;
+		expression.clear();
+		condition.clear();
+
+		MetaId relId = relation->getId();
+
+		JrdContextPoolHolder context(tdbb, dbb->dbb_permanent);
+
+		AUTO_HANDLE(handle);
+		FOR(REQUEST_HANDLE handle)		// Use system transaction
+			IND IN RDB$INDICES
+			CROSS REL IN RDB$RELATIONS
+			WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
+				 REL.RDB$RELATION_ID EQ relId AND
+				 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+				 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+				 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
+		{
+			if (!IND.RDB$EXPRESSION_BLR.NULL)
+				expression = IND.RDB$EXPRESSION_BLR;
+			if (!IND.RDB$CONDITION_BLR.NULL)
+				condition = IND.RDB$CONDITION_BLR;
+		}
+		END_FOR
+
+		releaseStatements(tdbb);
+
+		idp_expression_bid = expression;
+		idp_condition_bid = condition;
+
+		if (expression.hasData())
+		{
+			MemoryPool* stmtPool = dbb->createPool();
+			try
+			{
+				JrdContextPoolHolder context(tdbb, stmtPool);
+
+				CompilerScratch* csb = nullptr;
+				Cleanup cc([csb]() {delete csb;});
+				MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
+				idp_expression_statement = Statement::makeValueExpression(tdbb, idp_expression, idp_expression_desc, csb, false);
+			}
+			catch (const Exception&)
+			{
+				dbb->deletePool(stmtPool);
+				throw;
+			}
+		}
+
+		if (condition.hasData())
+		{
+			MemoryPool* stmtPool = dbb->createPool();
+			try
+			{
+				JrdContextPoolHolder context(tdbb, stmtPool);
+
+				CompilerScratch* csb = nullptr;
+				Cleanup cc([csb]() {delete csb;});
+				MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
+				idp_condition_statement = Statement::makeBoolExpression(tdbb, idp_condition, csb, false);
+			}
+			catch (const Exception&)
+			{
+				dbb->deletePool(stmtPool);
+				throw;
+			}
+		}
+
+		idp_state = irt_desc->getState();
+		idp_tranum = irt_desc->getTransaction();
 	}
 }
 
@@ -2202,6 +2332,7 @@ bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const QualifiedName& index_
 	FOR(REQUEST_HANDLE request)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
+			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
 			 IDX.RDB$INDEX_NAME EQ index_name.object.c_str()
 	{
 		found = !IDX.RDB$EXPRESSION_BLR.NULL || !IDX.RDB$CONDITION_BLR.NULL;
@@ -2228,6 +2359,9 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
  *
  **************************************/
 
+	if (index_name.package.hasData())
+		return false;
+
 	SET_TDBB(tdbb);
 
 	fb_assert(index_name.object.isEmpty() || index_name.schema == relation->getName().schema);
@@ -2241,6 +2375,9 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 	{
 		if (index_name.object.hasData())
 		{
+			fb_assert(index_name.package.isEmpty());
+			fb_assert(relation->getName().package.isEmpty());
+
 			// Since primary key index names aren't being cached, do a long
 			// hard lookup. This is only called during index create for foreign keys.
 
@@ -2251,10 +2388,12 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 				IDX IN RDB$INDICES CROSS
 					IND IN RDB$INDICES WITH
 					IDX.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
+					IDX.RDB$PACKAGE_NAME MISSING AND
 					IDX.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
 					(IDX.RDB$INDEX_ID EQ idx->idx_id + 1 OR
 					 IDX.RDB$INDEX_NAME EQ index_name.object.c_str()) AND
 					IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
+					IND.RDB$PACKAGE_NAME MISSING AND
 					IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 					IND.RDB$UNIQUE_FLAG = 1
 			{
@@ -2398,6 +2537,7 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATIONS
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+			 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			 X.RDB$RELATION_NAME EQ name.object.c_str()
 	{
 		fb_assert(!id.has_value());
@@ -2682,6 +2822,8 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			prc_type = P.RDB$PROCEDURE_TYPE.NULL ?
 				prc_legacy : (prc_t) P.RDB$PROCEDURE_TYPE;
 
+			flPrivate = !P.RDB$PRIVATE_FLAG.NULL && P.RDB$PRIVATE_FLAG != 0;
+
 			if (external || !P.RDB$PROCEDURE_BLR.NULL)
 			{
 				MemoryPool* const csb_pool = dbb->createPool();
@@ -2949,8 +3091,11 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			{
 				found = true;
 
-				rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+				rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 				rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
+				if (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0)
+					rel_perm->rel_flags |= REL_private;
+
 				if (!REL.RDB$RELATION_TYPE.NULL)
 					rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
@@ -3022,9 +3167,12 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 		found = true;
 
 		if (getName().isEmpty())
-			rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+			rel_perm->rel_name = QualifiedName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME, REL.RDB$PACKAGE_NAME);
 
 		rel_perm->rel_flags |= get_rel_flags_from_FLAGS(REL.RDB$FLAGS);
+		if (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0)
+			rel_perm->rel_flags |= REL_private;
+
 		if (!REL.RDB$RELATION_TYPE.NULL)
 			rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
@@ -3036,8 +3184,27 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 		rel_current_fmt = REL.RDB$FORMAT;
 		rel_fields = vec<jrd_fld*>::newVector(*rel_pool, rel_fields, REL.RDB$FIELD_ID);
-		if (rel_perm->rel_security_name.isEmpty() && !REL.RDB$SECURITY_CLASS.NULL)
-			rel_perm->rel_security_name = QualifiedName(REL.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+
+		if (rel_perm->rel_security_name.isEmpty())
+		{
+			if (!REL.RDB$SECURITY_CLASS.NULL)
+				rel_perm->rel_security_name = QualifiedName(REL.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+			else if (!REL.RDB$PACKAGE_NAME.NULL)
+			{
+				static const CachedRequestId packageClassRequestId;
+				AutoCacheRequest packageClassRequest(tdbb, packageClassRequestId);
+
+				FOR (REQUEST_HANDLE packageClassRequest TRANSACTION_HANDLE trans)
+					PKG IN RDB$PACKAGES
+					WITH PKG.RDB$SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
+						 PKG.RDB$PACKAGE_NAME EQ REL.RDB$PACKAGE_NAME
+				{
+					if (!PKG.RDB$SECURITY_CLASS.NULL)
+						rel_perm->rel_security_name = QualifiedName(PKG.RDB$SECURITY_CLASS, SCH.RDB$SECURITY_CLASS);
+				}
+				END_FOR
+			}
+		}
 
 		rel_perm->rel_owner_name = REL.RDB$OWNER_NAME;
 
@@ -3201,8 +3368,18 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				{
 					csb->csb_g_flags |= csb_get_dependencies;
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
-					const QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
-					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, obj_view, trans);
+
+					QualifiedName depName(REL.RDB$RELATION_NAME, REL.RDB$SCHEMA_NAME);
+					ObjectType depType = obj_view;
+
+					if (!REL.RDB$PACKAGE_NAME.NULL)
+					{
+						depName = QualifiedName(REL.RDB$PACKAGE_NAME, REL.RDB$SCHEMA_NAME);
+						depType = (!REL.RDB$PRIVATE_FLAG.NULL && REL.RDB$PRIVATE_FLAG != 0) ?
+							obj_package_body : obj_package_header;
+					}
+
+					MET_store_dependencies(tdbb, csb->csb_dependencies, nullptr, depName, depType);
 				}
 				else
 					field->fld_source = PAR_make_field(tdbb, csb, view_context, (TEXT*) p);
@@ -3262,6 +3439,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			case RSR_field_not_null:
 				field->fld_not_null = PAR_validation_blr(tdbb, &getName().schema, rel_perm, p, length,
 					csb, NULL, csb_validation);
+				field->fld_flags |= FLD_not_null;
 				break;
 
 			case RSR_security_class:
@@ -3326,7 +3504,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 	delete csb;
 
-	rel_current_format = MET_format(tdbb, rel_perm, rel_current_fmt);
+	rel_current_format = rel_perm->getFormat(tdbb, rel_current_fmt);
 	dependencies = false;
 
 	if (rel_fields)
@@ -3682,7 +3860,7 @@ static void lookup_view_contexts( thread_db* tdbb, jrd_rel* view)
 		ViewContext* view_context = FB_NEW_POOL(*view->rel_pool)
 			ViewContext(*view->rel_pool,
 				V.RDB$CONTEXT_NAME,
-				QualifiedName(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME),
+				QualifiedName(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME, V.RDB$PACKAGE_NAME),
 				V.RDB$VIEW_CONTEXT,
 				(V.RDB$CONTEXT_TYPE.NULL ? VCT_TABLE : ViewContextType(V.RDB$CONTEXT_TYPE)));
 
@@ -3882,6 +4060,9 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		END_FOR
 	}
 
+	if (flags & CacheFlag::MINISCAN)
+		return ScanResult::REPEAT;
+
 	FOR(REQUEST_HANDLE handle2)
 		CS IN RDB$CHARACTER_SETS
 			CROSS COL IN RDB$COLLATIONS OVER RDB$CHARACTER_SET_ID
@@ -3928,34 +4109,49 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			}
 		}
 
-		AutoPtr<texttype> tt = FB_NEW_POOL(perm->getPool()) texttype;
-		memset(tt, 0, sizeof(texttype));
-		INTL_lookup_texttype(tt, &info);
-
 		if (charset_collations.getCount() <= colId)
 			charset_collations.grow(colId + 1);
 
-		fb_assert((tt->texttype_canonical_width == 0 && tt->texttype_fn_canonical == NULL) ||
-				  (tt->texttype_canonical_width != 0 && tt->texttype_fn_canonical != NULL));
-
-		if (tt->texttype_canonical_width == 0)
+		try
 		{
-			if (charset->isMultiByte())
-				tt->texttype_canonical_width = sizeof(ULONG);	// UTF-32
-			else
+			AutoPtr<texttype> tt = FB_NEW_POOL(perm->getPool()) texttype;
+			memset(tt, 0, sizeof(texttype));
+			INTL_lookup_texttype(tt, &info);
+
+			fb_assert((tt->texttype_canonical_width == 0 && tt->texttype_fn_canonical == NULL) ||
+					  (tt->texttype_canonical_width != 0 && tt->texttype_fn_canonical != NULL));
+
+			if (tt->texttype_canonical_width == 0)
 			{
-				tt->texttype_canonical_width = charset->minBytesPerChar();
-				// canonical is equal to string, then TEXTTYPE_DIRECT_MATCH can be turned on
-				tt->texttype_flags |= TEXTTYPE_DIRECT_MATCH;
+				if (charset->isMultiByte())
+					tt->texttype_canonical_width = sizeof(ULONG);	// UTF-32
+				else
+				{
+					tt->texttype_canonical_width = charset->minBytesPerChar();
+					// canonical is equal to string, then TEXTTYPE_DIRECT_MATCH can be turned on
+					tt->texttype_flags |= TEXTTYPE_DIRECT_MATCH;
+				}
 			}
+
+			Collation* collation = Collation::createInstance(perm->getPool(),
+				TTypeId(id, colId), tt, nullptr, info.attributes, charset);
+			collation->name = info.collationName;
+
+			tt.release();
+			charset_collations[colId] = collation;
 		}
+		catch (const Exception& ex)
+		{
+			AutoDispose<IStatus> error = MasterInterfacePtr()->getStatus();
+			ex.stuffException(error);
 
-		Collation* collation = Collation::createInstance(perm->getPool(),
-			TTypeId(id, colId), tt, info.attributes, charset);
-		collation->name = info.collationName;
+			Collation* collation = Collation::createInstance(perm->getPool(),
+				TTypeId(id, colId), nullptr, error, info.attributes, charset);
+			collation->name = info.collationName;
 
-		tt.release();
-		charset_collations[colId] = collation;
+			error.release();
+			charset_collations[colId] = collation;
+		}
 	}
 	END_FOR
 
@@ -4040,7 +4236,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
  *      scan of primary dependencies on relation's primary key.
  *
  **************************************/
-	if (rel_flags & REL_temp_ltt)
+	if ((rel_flags & REL_temp_ltt))
 		return;
 
 	Attachment* attachment = tdbb->getAttachment();
@@ -4067,8 +4263,10 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IND IN RDB$INDICES WITH
 			RC.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME MISSING AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str() AND
 			IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
+			IND.RDB$PACKAGE_NAME MISSING AND
 			IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
@@ -4113,8 +4311,10 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME MISSING AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str() AND
 			IND.RDB$FOREIGN_KEY_SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
+			IND.RDB$PACKAGE_NAME MISSING AND
 			IND.RDB$FOREIGN_KEY EQ IDX.RDB$INDEX_NAME
 		{
 			const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
@@ -4149,8 +4349,7 @@ void MET_store_dependencies(thread_db* tdbb,
 							Array<Dependency>& dependencies,
 							const jrd_rel* dep_rel,
 							const QualifiedName& object_name,
-							int dependency_type,
-							jrd_tra* transaction)
+							int dependency_type)
 {
 /**************************************
  *
@@ -4164,236 +4363,278 @@ void MET_store_dependencies(thread_db* tdbb,
  *      compilation of blr for a trigger, view, etc.
  *
  **************************************/
-	QualifiedName name;
+	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
 
 	SET_TDBB(tdbb);
 
-	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
-
-	const Trigger* t = nullptr;
-	const bool checkTableScope =
-		(dependency_type == obj_computed) ||
-		(dependency_type == obj_trigger) && dep_rel && (t = dep_rel->findTrigger(object_name)) && (t->sysTrigger);
+	auto* transaction = tdbb->getTransaction();
+	bool toTemp = !(transaction->tra_flags & TRA_deps_to_disk);
+	bool tempDeps = false;
 
 	while (dependencies.hasData())
 	{
 		Dependency dependency = dependencies.pop();
 
 		if (!dependency.relation && !dependency.function && !dependency.procedure &&
-			!dependency.name && !dependency.number)
+			!dependency.name.hasData() && !dependency.number)
 		{
 			continue;
 		}
 
-		int dpdo_type = dependency.objType;
-		Cached::Relation* relation = nullptr;
-		Cached::Procedure* procedure = nullptr;
-		const QualifiedName* dpdo_name = NULL;
-		SubtypeInfo info;
-
-		switch (dpdo_type)
+		if (toTemp)
 		{
-		case obj_relation:
-		case obj_view:
-			relation = dependency.relation;
-			dpdo_name = &relation->getName();
+			auto& wdep = transaction->tra_dependencies.add();
+			wdep.dependency = dependency;
+			wdep.dep_rel = dep_rel;
+			wdep.object_name = object_name;
+			wdep.dependency_type = dependency_type;
 
-			fb_assert(dep_rel || !checkTableScope);
+			tempDeps = true;
+		}
+		else
+			MET_store_dependency(tdbb, dependency, dep_rel, object_name, dependency_type);
+	}
 
-			if (checkTableScope &&
-				( (dep_rel->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_conn)) !=
-				  (relation->rel_flags & (REL_temp_tran | REL_temp_conn)) ))
+	if (tempDeps)
+		DFW_post_work(transaction, dfw_deps_to_disk, nullptr, nullptr, 0);
+}
+
+
+void MET_store_dependency(thread_db* tdbb,
+						  Dependency& dependency,
+						  const jrd_rel* dep_rel,
+						  const QualifiedName& object_name,
+						  int dependency_type)
+{
+/**************************************
+ *
+ *      s t o r e _ d e p e n d e n c i e s
+ *
+ **************************************
+ *
+ * Functional description
+ *      Store record in RDB$DEPENDENCIES
+ *      corresponding to the dependency passed
+ *
+ **************************************/
+	fb_assert(!dep_rel || !(dep_rel->getPermanent()->rel_flags & REL_temp_ltt));
+
+	SET_TDBB(tdbb);
+
+	QualifiedName name;
+	auto* transaction = tdbb->getTransaction();
+
+	const Trigger* t = nullptr;
+	const bool checkTableScope =
+		(dependency_type == obj_computed) ||
+		(dependency_type == obj_trigger) && dep_rel && (t = dep_rel->findTrigger(object_name)) && (t->sysTrigger);
+
+	int dpdo_type = dependency.objType;
+	Cached::Relation* relation = nullptr;
+	Cached::Procedure* procedure = nullptr;
+	const QualifiedName* dpdo_name = NULL;
+	SubtypeInfo info;
+
+	switch (dpdo_type)
+	{
+	case obj_relation:
+	case obj_view:
+		relation = dependency.relation;
+		dpdo_name = &relation->getName();
+
+		fb_assert(dep_rel || !checkTableScope);
+
+		if (checkTableScope &&
+			( (dep_rel->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_conn)) !=
+			  (relation->rel_flags & (REL_temp_tran | REL_temp_conn)) ))
+		{
+			if ( !( // master is ON COMMIT PRESERVE, detail is ON COMMIT DELETE
+					(dep_rel->getPermanent()->rel_flags & REL_temp_tran) && (relation->rel_flags & REL_temp_conn) ||
+					// computed field of a view
+					(dependency_type == obj_computed) && dep_rel->isView()
+				   ))
 			{
-				if ( !( // master is ON COMMIT PRESERVE, detail is ON COMMIT DELETE
-						(dep_rel->getPermanent()->rel_flags & REL_temp_tran) && (relation->rel_flags & REL_temp_conn) ||
-						// computed field of a view
-						(dependency_type == obj_computed) && dep_rel->isView()
-					   ))
-				{
-					string sMaster, sChild;
+				string sMaster, sChild;
 
-					make_relation_scope_name(relation->getName(), relation->rel_flags, sMaster);
-					make_relation_scope_name(dep_rel->getName(), dep_rel->getPermanent()->rel_flags, sChild);
+				make_relation_scope_name(relation->getName(), relation->rel_flags, sMaster);
+				make_relation_scope_name(dep_rel->getName(), dep_rel->getPermanent()->rel_flags, sChild);
 
-					ERR_post(Arg::Gds(isc_no_meta_update) <<
-							 Arg::Gds(isc_met_wrong_gtt_scope) << Arg::Str(sChild) <<
+				ERR_post(Arg::Gds(isc_no_meta_update) <<
+						 Arg::Gds(isc_met_wrong_gtt_scope) << Arg::Str(sChild) <<
 																  Arg::Str(sMaster));
-				}
 			}
-
-			if (relation->isView())
-				dpdo_type = obj_view;
-			break;
-
-		case obj_procedure:
-			procedure = dependency.procedure;
-			dpdo_name = &procedure->getName();
-			break;
-
-		case obj_collation:
-			{
-				const USHORT number = dependency.number;
-				MET_get_char_coll_subtype_info(tdbb, number, &info);
-				dpdo_name = &info.collationName;
-			}
-			break;
-
-		case obj_exception:
-			{
-				const SLONG number = dependency.number;
-				MET_lookup_exception(tdbb, number, name, NULL);
-				dpdo_name = &name;
-			}
-			break;
-
-		case obj_field:
-			dpdo_name = dependency.name;
-			break;
-
-		case obj_generator:
-			{
-				// CVC: Here I'm going to track those pesky things named generators and UDFs.
-				// But don't track sys gens.
-				bool sysGen = false;
-				const SLONG number = dependency.number;
-				if (number == 0 || !MET_lookup_generator_id(tdbb, number, name, &sysGen) || sysGen)
-					continue;
-				dpdo_name = &name;
-			}
-			break;
-
-		case obj_udf:
-			dpdo_name = &dependency.function->getName();
-			break;
-
-		case obj_index:
-			name = *dependency.name;
-			dpdo_name = &name;
-			break;
 		}
 
-		MetaName field_name;
+		if (relation->isView())
+			dpdo_type = obj_view;
+		break;
 
-		if (dependency.subNumber || dependency.subName)
+	case obj_procedure:
+		procedure = dependency.procedure;
+		dpdo_name = &procedure->getName();
+		break;
+
+	case obj_collation:
 		{
-			if (dependency.subNumber)
-			{
-				const SSHORT fld_id = (SSHORT) dependency.subNumber;
-				if (relation)
-				{
-					const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
-					if (field)
-						field_name = field->fld_name;
-				}
-				else if (procedure)
-				{
-					const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
-					// CVC: Setting the field var here didn't make sense alone,
-					// so I thought the missing code was to try to extract
-					// the field name that's in this case an output var from a proc.
-					if (param)
-						field_name = param->prm_name;
-				}
-			}
-			else
-				field_name = *dependency.subName;
+			const USHORT number = dependency.number;
+			MET_get_char_coll_subtype_info(tdbb, number, &info);
+			dpdo_name = &info.collationName;
 		}
+		break;
+
+	case obj_exception:
+		{
+			const SLONG number = dependency.number;
+			MET_lookup_exception(tdbb, number, name, NULL);
+			dpdo_name = &name;
+		}
+		break;
+
+	case obj_field:
+		dpdo_name = &dependency.name;
+		break;
+
+	case obj_generator:
+		{
+			// CVC: Here I'm going to track those pesky things named generators and UDFs.
+			// But don't track sys gens.
+			bool sysGen = false;
+			const SLONG number = dependency.number;
+			if (number == 0 || !MET_lookup_generator_id(tdbb, number, name, &sysGen) || sysGen)
+				return;
+			dpdo_name = &name;
+		}
+		break;
+
+	case obj_udf:
+		dpdo_name = &dependency.function->getName();
+		break;
+
+	case obj_index:
+		name = dependency.name;
+		dpdo_name = &name;
+		break;
+	case obj_package_constant:
+		dpdo_name = &dependency.name;
+		break;
+	}
+
+	MetaName field_name;
+
+	if (dependency.subNumber || dependency.subName.hasData())
+	{
+		if (dependency.subNumber)
+		{
+			const SSHORT fld_id = (SSHORT) dependency.subNumber;
+			if (relation)
+			{
+				const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
+				if (field)
+					field_name = field->fld_name;
+			}
+			else if (procedure)
+			{
+				const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
+				// CVC: Setting the field var here didn't make sense alone,
+				// so I thought the missing code was to try to extract
+				// the field name that's in this case an output var from a proc.
+				if (param)
+					field_name = param->prm_name;
+			}
+		}
+		else
+			field_name = dependency.subName;
+	}
+
+	bool found = false;
+	if (field_name.hasData())
+	{
+		AutoCacheRequest request(tdbb, irq_c_deps_f, IRQ_REQUESTS);
+		fb_assert(dpdo_name);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			X IN RDB$DEPENDENCIES
+			WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
+				 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
+				 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
+				 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
+				 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
+				 X.RDB$FIELD_NAME = field_name.c_str() AND
+				 X.RDB$DEPENDENT_TYPE = dependency_type
+		{
+			found = true;
+		}
+		END_FOR
+	}
+	else
+	{
+		AutoCacheRequest request(tdbb, irq_c_deps, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			X IN RDB$DEPENDENCIES
+			WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
+				 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
+				 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
+				 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
+				 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
+				 X.RDB$FIELD_NAME MISSING AND
+				 X.RDB$DEPENDENT_TYPE = dependency_type AND
+				 X.RDB$PACKAGE_NAME EQUIV NULLIF(dpdo_name->package.c_str(), '')
+		{
+			found = true;
+		}
+		END_FOR
+	}
+	if (found)
+		return;
+
+	AutoCacheRequest request(tdbb, irq_s_deps, IRQ_REQUESTS);
+
+	fb_assert(dpdo_name);
+
+	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction) DEP IN RDB$DEPENDENCIES
+	{
+		if (object_name.schema.hasData())
+		{
+			DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$DEPENDENT_SCHEMA_NAME, object_name.schema.c_str());
+		}
+		else
+			DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = TRUE;
+
+		strcpy(DEP.RDB$DEPENDENT_NAME, object_name.object.c_str());
+
+		DEP.RDB$DEPENDED_ON_TYPE = dpdo_type;
+
+		if (dpdo_name->schema.hasData())
+		{
+			DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$DEPENDED_ON_SCHEMA_NAME, dpdo_name->schema.c_str());
+		}
+		else
+			DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = TRUE;
+
+		strcpy(DEP.RDB$DEPENDED_ON_NAME, dpdo_name->object.c_str());
 
 		if (field_name.hasData())
 		{
-			AutoCacheRequest request(tdbb, irq_c_deps_f, IRQ_REQUESTS);
-			bool found = false;
-			fb_assert(dpdo_name);
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				X IN RDB$DEPENDENCIES
-				WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
-					 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
-					 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
-					 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
-					 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
-					 X.RDB$FIELD_NAME = field_name.c_str() AND
-					 X.RDB$DEPENDENT_TYPE = dependency_type
-			{
-				found = true;
-			}
-			END_FOR
-
-			if (found)
-				continue;
+			DEP.RDB$FIELD_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$FIELD_NAME, field_name.c_str());
 		}
 		else
+			DEP.RDB$FIELD_NAME.NULL = TRUE;
+
+		if (dpdo_name->package.hasData())
 		{
-			AutoCacheRequest request(tdbb, irq_c_deps, IRQ_REQUESTS);
-			bool found = false;
-
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-				X IN RDB$DEPENDENCIES
-				WITH X.RDB$DEPENDENT_SCHEMA_NAME = NULLIF(object_name.schema.c_str(), '') AND
-					 X.RDB$DEPENDENT_NAME = object_name.object.c_str() AND
-					 X.RDB$DEPENDED_ON_SCHEMA_NAME = NULLIF(dpdo_name->schema.c_str(), '') AND
-					 X.RDB$DEPENDED_ON_NAME = dpdo_name->object.c_str() AND
-					 X.RDB$DEPENDED_ON_TYPE = dpdo_type AND
-					 X.RDB$FIELD_NAME MISSING AND
-					 X.RDB$DEPENDENT_TYPE = dependency_type AND
-					 X.RDB$PACKAGE_NAME EQUIV NULLIF(dpdo_name->package.c_str(), '')
-			{
-				found = true;
-			}
-			END_FOR
-
-			if (found)
-				continue;
+			DEP.RDB$PACKAGE_NAME.NULL = FALSE;
+			strcpy(DEP.RDB$PACKAGE_NAME, dpdo_name->package.c_str());
 		}
+		else
+			DEP.RDB$PACKAGE_NAME.NULL = TRUE;
 
-		AutoCacheRequest request(tdbb, irq_s_deps, IRQ_REQUESTS);
-
-		fb_assert(dpdo_name);
-
-		STORE(REQUEST_HANDLE request TRANSACTION_HANDLE tdbb->getTransaction()) DEP IN RDB$DEPENDENCIES
-		{
-			if (object_name.schema.hasData())
-			{
-				DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$DEPENDENT_SCHEMA_NAME, object_name.schema.c_str());
-			}
-			else
-				DEP.RDB$DEPENDENT_SCHEMA_NAME.NULL = TRUE;
-
-			strcpy(DEP.RDB$DEPENDENT_NAME, object_name.object.c_str());
-
-			DEP.RDB$DEPENDED_ON_TYPE = dpdo_type;
-
-			if (dpdo_name->schema.hasData())
-			{
-				DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$DEPENDED_ON_SCHEMA_NAME, dpdo_name->schema.c_str());
-			}
-			else
-				DEP.RDB$DEPENDED_ON_SCHEMA_NAME.NULL = TRUE;
-
-			strcpy(DEP.RDB$DEPENDED_ON_NAME, dpdo_name->object.c_str());
-
-			if (field_name.hasData())
-			{
-				DEP.RDB$FIELD_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$FIELD_NAME, field_name.c_str());
-			}
-			else
-				DEP.RDB$FIELD_NAME.NULL = TRUE;
-
-			if (dpdo_name->package.hasData())
-			{
-				DEP.RDB$PACKAGE_NAME.NULL = FALSE;
-				strcpy(DEP.RDB$PACKAGE_NAME, dpdo_name->package.c_str());
-			}
-			else
-				DEP.RDB$PACKAGE_NAME.NULL = TRUE;
-
-			DEP.RDB$DEPENDENT_TYPE = dependency_type;
-		}
-		END_STORE
+		DEP.RDB$DEPENDENT_TYPE = dependency_type;
 	}
+	END_STORE
 }
 
 
@@ -4617,6 +4858,14 @@ void MetadataCache::releaseLocks(thread_db* tdbb)
 			charset->releaseLocks(tdbb);
 	}
 
+	// Release packages locks
+
+	for (auto package : mdc_packages)
+	{
+		if (package)
+			package->releaseLocks(tdbb);
+	}
+
 	// Release database triggers locks
 
 	for (unsigned i = 0; i < DB_TRIGGERS_COUNT; ++i)
@@ -4629,10 +4878,10 @@ void MetadataCache::releaseLocks(thread_db* tdbb)
 
 void MetadataCache::invalidateReplSet(thread_db* tdbb)
 {
-	for (auto relation : mdc_relations)
+	for (auto* relation : mdc_relations)
 	{
 		if (relation)
-			relation->rel_repl_state.reset();
+			relation->rel_repl_state = RelationPermanent::Bool3State::Unknown;
 	}
 }
 
@@ -4823,9 +5072,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* transaction = attachment->getMetaTransaction(tdbb);
 
-	bid expression, condition;
-	expression.clear();
-	condition.clear();
 	MetaId relId = getPermanent()->getRelation()->getId();
 	bool found = false;
 
@@ -4835,13 +5081,15 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 		IND IN RDB$INDICES
 		CROSS REL IN RDB$RELATIONS
-			OVER RDB$RELATION_NAME, RDB$SCHEMA_NAME
-		WITH IND.RDB$INDEX_ID EQ getId() + 1
-			AND REL.RDB$RELATION_ID EQ relId
+		WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
+			 REL.RDB$RELATION_ID EQ relId AND
+			 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+			 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 	{
 		found = true;
 
-		idv_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME);
+		idv_name = QualifiedName(IND.RDB$INDEX_NAME, IND.RDB$SCHEMA_NAME, IND.RDB$PACKAGE_NAME);
 		idv_uniqFlag = IND.RDB$UNIQUE_FLAG;
 		idv_segmentCount = IND.RDB$SEGMENT_COUNT;
 		idv_type = IND.RDB$INDEX_TYPE;
@@ -4849,10 +5097,7 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 
 		idv_active = MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE);
 
-		if (!IND.RDB$EXPRESSION_BLR.NULL)
-			expression = IND.RDB$EXPRESSION_BLR;
-		if (!IND.RDB$CONDITION_BLR.NULL)
-			condition = IND.RDB$CONDITION_BLR;
+		perm->setFormat(IND.RDB$FORMAT.NULL ? 1 : IND.RDB$FORMAT);
 	}
 	END_FOR
 
@@ -4862,46 +5107,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		return ScanResult::MISS;
 	}
 
-	auto* relation = (expression.hasData() || condition.hasData()) ?
-		MetadataCache::getPerm<Cached::Relation>(tdbb, relId, CacheFlag::AUTOCREATE) : nullptr;
-
-	if (expression.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			JrdContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
-			idv_expression_statement = Statement::makeValueExpression(tdbb, idv_expression, idv_expression_desc, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
-
-	if (condition.hasData())
-	{
-		MemoryPool* stmtPool = dbb->createPool();
-		try
-		{
-			JrdContextPoolHolder context(tdbb, stmtPool);
-
-			CompilerScratch* csb = nullptr;
-			Cleanup cc([csb]() {delete csb;});
-			MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
-			idv_condition_statement = Statement::makeBoolExpression(tdbb, idv_condition, csb, false);
-		}
-		catch (const Exception&)
-		{
-			dbb->deletePool(stmtPool);
-			throw;
-		}
-	}
 
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }
@@ -4946,6 +5151,7 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedNa
 
 	// We need to look up the index in RDB$INDICES
 	fb_assert(getName().schema == name.schema);
+	fb_assert(getName().package == name.package);
 
 	AutoCacheRequest request(tdbb, irq_get_index_by_name, IRQ_REQUESTS);
 	IndexVersion* idv = nullptr;
@@ -4954,6 +5160,7 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedNa
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
 	{
 		if (!idv)
@@ -4974,7 +5181,7 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, const QualifiedNa
 
 	// See if we already know the relation by name
 	auto* idp = rel_indices.lookup(tdbb,
-		[tdbb, name, flags](Cached::Index* idp)
+		[name](Cached::Index* idp)
 		{
 			return idp->getName() == name ? idp : nullptr;
 		},
@@ -4990,6 +5197,7 @@ Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, const QualifiedNa
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
 	{
 		if (!idp)
@@ -5149,27 +5357,28 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 
 				case obj_index:
 				{
-					fb_assert(name.package.isEmpty());
-
-					// Check LTT indexes first
-					for (const auto& lttEntry : attachment->att_local_temporary_tables)
+					// Check Created LTT indexes first
+					if (name.package.isEmpty())
 					{
-						const auto ltt = lttEntry.second;
-
-						if (ltt->name.schema != searchSchema)
-							continue;
-
-						for (const auto& index : ltt->indexes)
+						for (const auto& lttEntry : attachment->att_local_temporary_tables)
 						{
-							if (index.name.object == name.object)
-							{
-								found = true;
-								break;
-							}
-						}
+							const auto ltt = lttEntry.second;
 
-						if (found)
-							break;
+							if (ltt->name.schema != searchSchema)
+								continue;
+
+							for (const auto& index : ltt->indexes)
+							{
+								if (index.name.object == name.object)
+								{
+									found = true;
+									break;
+								}
+							}
+
+							if (found)
+								break;
+						}
 					}
 
 					if (!found)
@@ -5180,6 +5389,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 						FOR (REQUEST_HANDLE handle)
 							IDX IN RDB$INDICES
 							WITH IDX.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+								 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
 								 IDX.RDB$INDEX_NAME EQ name.object.c_str()
 						{
 							found = true;
@@ -5304,6 +5514,25 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					break;
 				}
 
+				case obj_package_constant:
+				{
+					static const CachedRequestId consatntHandleId;
+					handle.reset(tdbb, consatntHandleId);
+
+					FOR (REQUEST_HANDLE handle)
+						CONST IN RDB$CONSTANTS
+						WITH CONST.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
+							 CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
+							 CONST.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '')
+					{
+						found = true;
+						break;
+					}
+					END_FOR
+
+					break;
+				}
+
 				default:
 					fb_assert(false);
 			}
@@ -5406,11 +5635,13 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 {
 	Attachment* attachment = tdbb->getAttachment();
 
-	if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
-		return (*lttPtr)->relation;
+	if (name.package.isEmpty())
+	{
+		if (const auto lttPtr = attachment->att_local_temporary_tables.get(name))
+			return (*lttPtr)->relation;
+	}
 
 	return nullptr;
 }
-
 
 } // namespace Firebird::Jrd

@@ -25,6 +25,7 @@
 #include "../common/classes/BaseStream.h"
 #include "../common/classes/MsgPrint.h"
 #include "../common/classes/VaryStr.h"
+#include "../dsql/AggNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -65,6 +66,7 @@
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../dsql/DsqlStatementCache.h"
+#include "../jrd/BulkInsert.h"
 
 namespace Firebird::Jrd {
 
@@ -765,6 +767,343 @@ bool BlockNode::testAndFixupError(thread_db* tdbb, Request* request, const Excep
     }
 
 	return found;
+}
+
+
+//--------------------
+
+
+static RegisterNode<BulkInsertNode> regBulkInsertNode({blr_bulk_insert});
+
+DmlNode* BulkInsertNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
+{
+	auto node = FB_NEW_POOL(pool) BulkInsertNode(pool);
+
+	if (csb->csb_blr_reader.peekByte() == blr_marks)
+		/*node->marks |= */PAR_marks(csb);
+
+	// Should be enough for cursor stability
+	AutoSetRestore<StmtNode*> autoCurrentDMLNode(&csb->csb_currentDMLNode, node);
+
+	//AutoSetRestore<ForNode*> autoCurrentForNode(&csb->csb_currentForNode, node);
+
+	const auto rseBlr = csb->csb_blr_reader.peekByte();
+
+	switch (rseBlr)
+	{
+	case blr_null:
+		csb->csb_blr_reader.getByte();
+		break;		// no RSE
+
+	case blr_rse:
+	case blr_lateral_rse:
+	case blr_singular:
+	case blr_scrollable:
+		node->rse = PAR_rse(tdbb, csb);
+		break;
+
+	default:
+		node->rse = PAR_rse(tdbb, csb, blrOp);
+		break;
+	}
+
+	const UCHAR* blrPos = csb->csb_blr_reader.getPos();
+
+	node->target = PAR_parseRecordSource(tdbb, csb);
+
+	if (!nodeIs<RelationSourceNode>(node->target) &&
+		!nodeIs<LocalTableSourceNode>(node->target))
+	{
+		csb->csb_blr_reader.setPos(blrPos);
+		PAR_syntax_error(csb, "relation source");
+	}
+
+	node->statement = PAR_parse_stmt(tdbb, csb);
+
+	return node;
+}
+
+string BulkInsertNode::internalPrint(NodePrinter& printer) const
+{
+	StmtNode::internalPrint(printer);
+
+	NODE_PRINT(printer, rse);
+	NODE_PRINT(printer, target);
+	NODE_PRINT(printer, statement);
+	NODE_PRINT(printer, cursor);
+
+	return "BulkInsertNode";
+}
+
+BulkInsertNode* BulkInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(false); // not implemented
+	return nullptr;
+}
+
+void BulkInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(false); // not implemented
+}
+
+BulkInsertNode* BulkInsertNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (rse)
+	{
+		AutoSetRestore<bool> autoImplicitCursor(&csb->csb_implicit_cursor, true);
+		doPass1(tdbb, csb, rse.getAddress());
+	}
+
+	preprocessAssignments(tdbb, csb, target->getStream(), nodeAs<CompoundStmtNode>(statement), nullptr);
+	doPass1(tdbb, csb, statement.getAddress());
+
+	const StreamType stream = target->getStream();
+	auto& tail = csb->csb_rpt[stream];
+	tail.csb_flags |= csb_store;
+
+	jrd_rel* const relation = tail.csb_relation(tdbb);
+	fb_assert(relation);
+
+	pass1Update(tdbb, csb, relation,
+		relation->rel_triggers[TRIGGER_PRE_STORE],	// unused inside pass1Update
+		stream, stream, SCL_insert, nullptr, 0, 0);
+
+	return this;
+}
+
+BulkInsertNode* BulkInsertNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	if (rse)
+	{
+		AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+
+		StreamList streams;
+		streams.add(target->getStream());
+
+		StreamStateHolder stateHolder(csb, streams);
+		stateHolder.activate();
+
+		rse->pass2Rse(tdbb, csb);
+		doPass2(tdbb, csb, statement.getAddress(), this);
+
+		RecordSource* const rsb = CMP_post_rse(tdbb, csb, rse.getObject());
+
+		cursor = FB_NEW_POOL(*tdbb->getDefaultPool())
+			Cursor(csb, rsb, rse, true, line, column, "");
+
+		csb->csb_fors.add(cursor);
+	}
+	else
+		doPass2(tdbb, csb, statement.getAddress(), this);
+
+	impureOffset = csb->allocImpure<Impure>();
+
+	return this;
+}
+
+const StmtNode* BulkInsertNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
+{
+	if (request->req_operation == Request::req_evaluate)
+	{
+		if (cursor)
+			fromCursor(tdbb, request);
+		else
+			fromMessage(tdbb, request);
+
+		request->req_operation = Request::req_return;
+	}
+
+	return parentStmt;
+}
+
+void BulkInsertNode::fromCursor(thread_db* tdbb, Request* request) const
+{
+	jrd_tra* transaction = request->req_transaction;
+
+	const StreamType stream = target->getStream();
+	record_param* rpb = &request->req_rpb[stream];
+	jrd_rel* relation = rpb->rpb_relation;
+	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+
+	const Format* format = relation->currentFormat(tdbb);
+	auto record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+
+	rpb->rpb_address = record->getData();
+	rpb->rpb_length = format->fmt_length;
+	rpb->rpb_format_number = format->fmt_version;
+
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+
+	HalfStaticArray<dsc, 16> toDescs(*tdbb->getDefaultPool(), compound->statements.getCount());
+	prepareTarget(tdbb, request, toDescs.begin());
+
+	cursor->open(tdbb);
+	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
+	fb_assert(bulk);
+
+	Cleanup clean([&] {
+		cursor->close(tdbb);
+		transaction->finiBulkInsert(tdbb, false);
+	});
+
+	while (cursor->fetchNext(tdbb))
+	{
+		rpb->rpb_number.setValue(BOF_NUMBER);
+		record->nullify();
+		record->setTransactionNumber(transaction->tra_number);
+
+		assignValues(tdbb, request, relation, record, toDescs.begin());
+
+		bulk->putRecord(tdbb, rpb, transaction);
+		Replication::REPL_store(tdbb, rpb, transaction);
+	}
+
+	transaction->finiBulkInsert(tdbb, true);
+}
+
+void BulkInsertNode::fromMessage(thread_db* tdbb, Request* request) const
+{
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	jrd_tra* transaction = request->req_transaction;
+
+	const StreamType stream = target->getStream();
+	record_param* rpb = &request->req_rpb[stream];
+
+	jrd_rel* relation = rpb->rpb_relation;
+
+	const Format* format = relation->currentFormat(tdbb);
+	auto record = VIO_record(tdbb, rpb, format, tdbb->getDefaultPool());
+
+	rpb->rpb_address = record->getData();
+	rpb->rpb_length = format->fmt_length;
+	rpb->rpb_format_number = format->fmt_version;
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	record->nullify();
+	record->setTransactionNumber(transaction->tra_number);
+
+	if (!impure->descs)
+	{
+		RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+
+		auto compound = nodeAs<CompoundStmtNode>(statement);
+		const auto count = compound->statements.getCount();
+
+		impure->descs = FB_NEW_POOL(*request->req_pool) Array<dsc>(*request->req_pool, count);
+
+		prepareTarget(tdbb, request, impure->descs->getBuffer(count));
+	}
+	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
+	assignValues(tdbb, request, relation, record, impure->descs->begin());
+
+	bulk->putRecord(tdbb, rpb, transaction);
+	Replication::REPL_store(tdbb, rpb, transaction);
+}
+
+void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const
+{
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+	fb_assert(compound->onlyAssignments);
+
+	dsc* toDesc = descs;
+	for (auto stmt : compound->statements)
+	{
+		auto assign = nodeAs<AssignmentNode>(stmt);
+
+		// Get descriptor of target field
+		const auto* toField = nodeAs<FieldNode>(assign->asgnTo);
+		*toDesc = *EVL_assign_to(tdbb, toField);
+		toDesc++;
+	}
+}
+
+void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const
+{
+	auto compound = nodeAs<CompoundStmtNode>(statement);
+
+	// assignments
+	for (auto stmt : compound->statements)
+	{
+		auto assign = nodeAs<AssignmentNode>(stmt);
+		//EXE_assignment(tdbb, assign);
+
+		if (assign->hasLineColumn)
+		{
+			request->req_src_line = assign->line;
+			request->req_src_column = assign->column;
+		}
+
+		const FieldNode* toField = nodeAs<FieldNode>(assign->asgnTo);
+
+		fb_assert(record == request->req_rpb[toField->fieldStream].rpb_record);
+
+		dsc* from_desc = EVL_expr(tdbb, request, assign->asgnFrom);
+
+		if (!from_desc)
+		{
+			const auto relField = (*relation->rel_fields)[toField->fieldId];
+			if (relField->fld_not_null)
+			{
+				string name;
+				auto& rel_name = relation->getName();
+
+				if (!rel_name.isEmpty())
+					name.printf("%s.\"%s\"", rel_name.toQuotedString().c_str(), relField->fld_name.c_str());
+				else
+					name = relField->fld_name.toQuotedString();
+
+				if (name.isEmpty())
+					name = UNKNOWN_STRING_MARK;
+
+				// validation error for column @1, value \"@2\"
+				ERR_post(Arg::Gds(isc_not_valid) << Arg::Str(name) << Arg::Str(NULL_STRING_MARK));
+			}
+
+			fb_assert(record->isNull(toField->fieldId));
+			to_desc->dsc_flags |= DSC_null;
+		}
+		else
+		{
+			record->clearNull(toField->fieldId);
+
+			if (DTYPE_IS_BLOB_OR_QUAD(from_desc->dsc_dtype) || DTYPE_IS_BLOB_OR_QUAD(to_desc->dsc_dtype))
+			{
+				// ASF: Don't let MOV_move call blb::move because MOV
+				// will not pass the destination field to blb::move.
+
+				blb::move(tdbb, from_desc, to_desc, relation, record, toField->fieldId, true);
+			}
+			else if (!DSC_EQUIV(from_desc, to_desc, false))
+			{
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (DTYPE_IS_TEXT(from_desc->dsc_dtype))
+			{
+				// Force slow move to properly handle the case when source string is provided with real length instead of padded length
+				MOV_move(tdbb, from_desc, to_desc);
+			}
+			else if (from_desc->dsc_dtype == dtype_short)
+			{
+				*((SSHORT*) to_desc->dsc_address) = *((SSHORT*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_long)
+			{
+				*((SLONG*) to_desc->dsc_address) = *((SLONG*) from_desc->dsc_address);
+			}
+			else if (from_desc->dsc_dtype == dtype_int64)
+			{
+				*((SINT64*) to_desc->dsc_address) = *((SINT64*) from_desc->dsc_address);
+			}
+			else
+			{
+				memcpy(to_desc->dsc_address, from_desc->dsc_address, from_desc->dsc_length);
+			}
+
+			to_desc->dsc_flags &= ~DSC_null;
+		}
+
+		to_desc++;
+	}
 }
 
 
@@ -1539,11 +1878,13 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		if (type != SUB_ROUTINE_TYPE_PSQL)
 			PAR_syntax_error(csb, "sub function type");
 
-		UCHAR deterministic = reader.getByte();
-		if (deterministic != 0 && deterministic != 1)
-			PAR_syntax_error(csb, "sub function deterministic");
+		UCHAR flags = reader.getByte();
+		if (flags & ~(blr_subfunc_decl_flag_deterministic | blr_subfunc_decl_flag_aggregate))
+			PAR_syntax_error(csb, "sub function flags");
 
-		subFunc->fun_deterministic = deterministic == 1;
+		subFunc->fun_deterministic = flags & blr_subfunc_decl_flag_deterministic;
+		subFunc->fun_aggregate = flags & blr_subfunc_decl_flag_aggregate;
+		node->aggregate = subFunc->fun_aggregate;
 
 		USHORT defaultCount = 0;
 		parseParameters(tdbb, pool, subCsb, subFunc->getInputFields(), &defaultCount);
@@ -1596,7 +1937,8 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 
 bool DeclareSubFuncNode::isForwardDecl() const
 {
-	return !dsqlBlock || !dsqlBlock->body;
+	return !dsqlBlock || (!aggregate && !dsqlBlock->body) ||
+		(aggregate && !aggregateOnAccumulateBody && !aggregateOnGroupBody);
 }
 
 void DeclareSubFuncNode::parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
@@ -1639,7 +1981,12 @@ string DeclareSubFuncNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, dsqlDeterministic);
+	NODE_PRINT(printer, aggregate);
 	NODE_PRINT(printer, dsqlBlock);
+	NODE_PRINT(printer, aggregateOnStartBody);
+	NODE_PRINT(printer, aggregateOnAccumulateBody);
+	NODE_PRINT(printer, aggregateOnGroupBody);
+	NODE_PRINT(printer, aggregateOnFinishBody);
 
 	return "DeclareSubFuncNode";
 }
@@ -1658,6 +2005,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	dsqlFunction->udf_flags = UDF_subfunc;
 	dsqlFunction->udf_name.object = name;
+	dsqlFunction->udf_aggregate = aggregate;
 
 	fb_assert(dsqlBlock->returns.getCount() == 1);
 	auto returnType = dsqlBlock->returns[0]->type;
@@ -1671,6 +2019,9 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 
 	if (dsqlDeterministic)
 		dsqlSignature.flags |= Signature::FLAG_DETERMINISTIC;
+
+	if (aggregate)
+		dsqlSignature.flags |= Signature::FLAG_AGGREGATE;
 
 	SignatureParameter sigRet(pool);
 	sigRet.type = 1;
@@ -1766,7 +2117,20 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 		DsqlCompilerScratch::FLAG_SUB_ROUTINE |
 		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_DDL);
 
-	dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
+	if (!aggregate)
+		dsqlBlock = dsqlBlock->dsqlPass(blockScratch);
+	else
+	{
+		blockScratch->compileAggregateFunction(
+			dsqlBlock->parameters,
+			dsqlBlock->returns[0],
+			dsqlBlock->localDeclList,
+			aggregateOnStartBody,
+			aggregateOnAccumulateBody,
+			aggregateOnGroupBody,
+			aggregateOnFinishBody,
+			true);
+	}
 
 	return this;
 }
@@ -1776,13 +2140,16 @@ void DeclareSubFuncNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (isForwardDecl())
 		return;
 
-	GEN_statement(blockScratch, dsqlBlock);
+	if (!aggregate)
+		GEN_statement(blockScratch, dsqlBlock);
 
 	dsqlScratch->appendUChar(blr_subfunc_decl);
 	dsqlScratch->appendNullString(name.c_str());
 
 	dsqlScratch->appendUChar(SUB_ROUTINE_TYPE_PSQL);
-	dsqlScratch->appendUChar(dsqlDeterministic ? 1 : 0);
+	dsqlScratch->appendUChar(
+		(dsqlDeterministic ? blr_subfunc_decl_flag_deterministic : 0) |
+		(aggregate ? blr_subfunc_decl_flag_aggregate : 0));
 
 	genParameters(dsqlScratch, dsqlBlock->parameters);
 	genParameters(dsqlScratch, dsqlBlock->returns);
@@ -2194,7 +2561,7 @@ DmlNode* DeclareVariableNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerS
 
 DeclareVariableNode* DeclareVariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	if (dsqlDef->defaultClause)
+	if (dsqlDef->defaultClause && !(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 		dsqlDef->defaultClause->value = doDsqlPass(dsqlScratch, dsqlDef->defaultClause->value);
 
 	dsql_fld* field = dsqlDef->type;
@@ -2295,11 +2662,12 @@ StmtNode* EraseNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	auto relation = dsqlRelation;
 
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
-
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) EraseNode(dsqlScratch->getPool());
 	node->dsqlCursorName = dsqlCursorName;
 	node->dsqlSkipLocked = dsqlSkipLocked;
+
+	if (dsqlCursorName.hasData())
+		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
 
 	if (dsqlCursorName.hasData() && dsqlScratch->isPsql())
 	{
@@ -2402,6 +2770,9 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
 
 	std::optional<USHORT> tableNumber;
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty();
 
 	const bool skipLocked = dsqlRse && dsqlRse->hasSkipLocked();
 
@@ -2420,6 +2791,13 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -2452,6 +2830,9 @@ void EraseNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (!dsqlScratch->isPsql() && dsqlCursorName.isEmpty())
 		{
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, tableNumber.value());
 
 			if (!skipLocked)
@@ -3408,7 +3789,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 			{
 				Dependency dependency(obj_procedure);
 				dependency.procedure = node->procedure();
-				dependency.subName = &argName;
+				dependency.subName = argName;
 				csb->addDependency(dependency);
 			}
 		}
@@ -3419,7 +3800,7 @@ DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 			{
 				Dependency dependency(obj_procedure);
 				dependency.procedure = node->procedure();
-				dependency.subName = &argName;
+				dependency.subName = argName;
 				csb->addDependency(dependency);
 			}
 		}
@@ -4705,15 +5086,11 @@ DmlNode* InAutonomousTransactionNode::parse(thread_db* tdbb, MemoryPool& pool, C
 
 InAutonomousTransactionNode* InAutonomousTransactionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	const bool autoTrans = dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
-	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
+	AutoSetRestoreFlag autoTrans(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK, true);
 
 	InAutonomousTransactionNode* node = FB_NEW_POOL(dsqlScratch->getPool()) InAutonomousTransactionNode(
 		dsqlScratch->getPool());
 	node->action = action->dsqlPass(dsqlScratch);
-
-	if (!autoTrans)
-		dsqlScratch->flags &= ~DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK;
 
 	return node;
 }
@@ -4729,9 +5106,33 @@ string InAutonomousTransactionNode::internalPrint(NodePrinter& printer) const
 
 void InAutonomousTransactionNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_auto_trans);
-	dsqlScratch->appendUChar(0);	// to extend syntax in the future
-	action->genBlr(dsqlScratch);
+	bool useInternalAutoTrans = false;
+
+	if (dsqlScratch && !dsqlScratch->isPsql())
+	{
+		if (const auto modifyNode = nodeAs<ModifyNode>(action))
+			useInternalAutoTrans = modifyNode->dsqlReturning && modifyNode->dsqlCursorName.isEmpty();
+		else if (const auto eraseNode = nodeAs<EraseNode>(action))
+			useInternalAutoTrans = eraseNode->dsqlReturning && eraseNode->dsqlCursorName.isEmpty();
+		else if (const auto storeNode = nodeAs<StoreNode>(action))
+			useInternalAutoTrans = storeNode->dsqlReturning != nullptr;
+		else if (const auto updateOrInsertNode = nodeAs<UpdateOrInsertNode>(action))
+			useInternalAutoTrans = updateOrInsertNode->returning != nullptr;
+		else if (const auto mergeNode = nodeAs<MergeNode>(action))
+			useInternalAutoTrans = mergeNode->returning != nullptr;
+	}
+
+	if (useInternalAutoTrans)
+	{
+		AutoSetRestoreFlag autoTrans(&dsqlScratch->flags, DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK, true);
+		action->genBlr(dsqlScratch);
+	}
+	else
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);	// to extend syntax in the future
+		action->genBlr(dsqlScratch);
+	}
 }
 
 InAutonomousTransactionNode* InAutonomousTransactionNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -5050,7 +5451,6 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (newParam->defaultClause)
 			newParam->defaultClause->value = doDsqlPass(dsqlScratch, newParam->defaultClause->value);
-
 
 		{ // scope
 			ValueExprNode* temp = newParam->parameterExpr;
@@ -5616,6 +6016,17 @@ void ExceptionNode::setError(thread_db* tdbb) const
 //--------------------
 
 
+ExitNode* ExitNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	if (dsqlScratch->aggregatePhase == AggregateFunctionPhase::GROUP)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+			Arg::Gds(isc_dsql_agg_exit_group));
+	}
+
+	return this;
+}
+
 string ExitNode::internalPrint(NodePrinter& printer) const
 {
 	StmtNode::internalPrint(printer);
@@ -5624,8 +6035,22 @@ string ExitNode::internalPrint(NodePrinter& printer) const
 
 void ExitNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
-	dsqlScratch->appendUChar(blr_leave);
-	dsqlScratch->appendUChar(0);
+	if (dsqlScratch->aggregatePhaseReturn)
+	{
+		dsqlScratch->appendUChar(blr_begin);
+
+		if (hasLineColumn)
+			dsqlScratch->putDebugSrcInfo(line, column);
+
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar((UCHAR) dsqlScratch->aggregatePhaseLabel);
+		dsqlScratch->appendUChar(blr_end);
+	}
+	else
+	{
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar(0);
+	}
 }
 
 
@@ -5816,7 +6241,7 @@ StmtNode* ForNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 
 StmtNode* ForNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
-	AutoSetCurrentCursorId autoSetCurrentCursorId(csb);
+	AutoSetCurrentCursorId autoSetCurrentCursorId(csb, true);
 
 	rse->pass2Rse(tdbb, csb);
 
@@ -7239,6 +7664,9 @@ string MergeNode::internalPrint(NodePrinter& printer) const
 void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	std::optional<USHORT> tableNumber;
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		returning && !dsqlScratch->isPsql();
 
 	if (returning && !dsqlScratch->isPsql())
 	{
@@ -7246,6 +7674,13 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		tableNumber = dsqlScratch->localTableNumber++;
 		dsqlGenReturningLocalTableDecl(dsqlScratch, tableNumber.value());
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	// Put src info for blr_for.
@@ -7485,6 +7920,9 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(blr_end);
 	}
+
+	if (useInternalAutoTrans)
+		dsqlScratch->appendUChar(blr_end);
 
 	if (returning && !dsqlScratch->isPsql())
 	{
@@ -7745,7 +8183,9 @@ StmtNode* ModifyNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, bool up
 
 	NestConst<RelationSourceNode> relation = nodeAs<RelationSourceNode>(dsqlRelation);
 	fb_assert(relation);
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
+
+	if (dsqlCursorName.hasData())
+		dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
 
 	NestConst<ValueExprNode>* ptr;
 
@@ -7942,6 +8382,15 @@ string ModifyNode::internalPrint(NodePrinter& printer) const
 
 void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlCursorName.isEmpty() &&
+		dsqlReturningLocalTableNumber.has_value() &&
+		!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT);
+	const bool deferUpdateOrInsertLocalTableDecl =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK);
+
 	if (dsqlScratch->recordKeyMessage)
 	{
 		GEN_port(dsqlScratch, dsqlScratch->recordKeyMessage);
@@ -7950,12 +8399,22 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlCursorName.isEmpty())
-			dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
+		{
+			if (!deferUpdateOrInsertLocalTableDecl)
+				dsqlGenReturningLocalTableDecl(dsqlScratch, dsqlReturningLocalTableNumber.value());
+		}
 		else
 		{
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -7995,6 +8454,9 @@ void ModifyNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
 			dsqlCursorName.isEmpty())
 		{
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
 			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
@@ -8995,6 +9457,11 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 
 void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		dsqlReturning && !dsqlScratch->isPsql() && dsqlReturningLocalTableNumber.has_value() &&
+		!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT);
+
 	if (dsqlReturning && !dsqlScratch->isPsql())
 	{
 		if (dsqlRse)
@@ -9004,6 +9471,13 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->appendUChar(blr_send);
 			dsqlScratch->appendUChar(dsqlScratch->getDsqlStatement()->getReceiveMsg()->msg_number);
 		}
+	}
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
 	}
 
 	if (dsqlRse)
@@ -9028,10 +9502,18 @@ void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (dsqlReturningLocalTableNumber.has_value())
 		{
+			const bool deferUpdateOrInsertCursor =
+				(dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT) &&
+				(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK);
+
 			if (dsqlScratch->flags & DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT)
 				dsqlScratch->appendUChar(blr_end);	// close blr_if (blr_eql, blr_internal_info)
 
-			dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
+			if (useInternalAutoTrans)
+				dsqlScratch->appendUChar(blr_end);
+
+			if (!deferUpdateOrInsertCursor)
+				dsqlGenReturningLocalTableCursor(dsqlScratch, dsqlReturning, dsqlReturningLocalTableNumber.value());
 		}
 	}
 	else if (overrideClause.has_value())
@@ -9332,9 +9814,6 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	const StreamType stream = target->getStream();
 	record_param* rpb = &request->req_rpb[stream];
 	jrd_rel* relation = rpb->rpb_relation;
-
-	if ((marks & MARK_BULK_INSERT) || request->req_batch_mode)
-		rpb->rpb_stream_flags |= RPB_s_bulk;
 
 	const auto localTableSource = nodeAs<LocalTableSourceNode>(target);
 	const auto localTable = localTableSource ?
@@ -9948,6 +10427,16 @@ ReturnNode* ReturnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_dsql_unsupported_in_auto_trans) << Arg::Str("RETURN"));
 	}
 
+	const auto aggregatePhase = dsqlScratch->aggregatePhase;
+
+	if (aggregatePhase == AggregateFunctionPhase::START ||
+		aggregatePhase == AggregateFunctionPhase::ACCUMULATE ||
+		aggregatePhase == AggregateFunctionPhase::FINISH)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+			Arg::Gds(isc_dsql_agg_return));
+	}
+
 	ReturnNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ReturnNode(dsqlScratch->getPool());
 	node->value = doDsqlPass(dsqlScratch, value);
 
@@ -9974,9 +10463,20 @@ void ReturnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	GEN_expr(dsqlScratch, value);
 	dsqlScratch->appendUChar(blr_variable);
 	dsqlScratch->appendUShort(0);
-	dsqlScratch->genReturn();
-	dsqlScratch->appendUChar(blr_leave);
-	dsqlScratch->appendUChar(0);
+
+	if (dsqlScratch->aggregatePhaseReturn)
+		dsqlScratch->appendUChar(blr_leave);
+	else
+		dsqlScratch->genReturn();
+
+	if (dsqlScratch->aggregatePhaseReturn)
+		dsqlScratch->appendUChar((UCHAR) dsqlScratch->aggregatePhaseLabel);
+	else
+	{
+		dsqlScratch->appendUChar(blr_leave);
+		dsqlScratch->appendUChar(0);
+	}
+
 	dsqlScratch->appendUChar(blr_end);
 }
 
@@ -10541,8 +11041,6 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	auto& pool = dsqlScratch->getPool();
 
-	dsqlScratch->qualifyExistingName(relation->dsqlName, obj_relation);
-
 	if (!dsqlScratch->isPsql())
 		dsqlScratch->flags |= DsqlCompilerScratch::FLAG_UPDATE_OR_INSERT;
 
@@ -10556,7 +11054,6 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->returning = returning;
 
 	const auto& relationName = relation->dsqlName;
-	auto baseName = relationName;
 	bool needSavePoint;
 
 	// Build the INSERT node.
@@ -10572,6 +11069,7 @@ StmtNode* UpdateOrInsertNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	DEV_BLKCHK(context, dsql_type_ctx);
 
 	const auto ctxRelation = context->ctx_relation;
+	auto baseName = relationName;
 	auto fieldsCopy = fields;
 
 	// If a field list isn't present, build one using the same rules of INSERT INTO table VALUES ...
@@ -10738,6 +11236,19 @@ string UpdateOrInsertNode::internalPrint(NodePrinter& printer) const
 
 void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	const bool useInternalAutoTrans =
+		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
+		storeNode->dsqlReturningLocalTableNumber.has_value() && !dsqlScratch->isPsql();
+
+	if (useInternalAutoTrans)
+	{
+		dsqlGenReturningLocalTableDecl(dsqlScratch, storeNode->dsqlReturningLocalTableNumber.value());
+
+		dsqlScratch->appendUChar(blr_auto_trans);
+		dsqlScratch->appendUChar(0);
+		dsqlScratch->appendUChar(blr_begin);
+	}
+
 	dsqlScratch->appendUChar(blr_begin);
 
 	for (auto& varAssign : varAssignments)
@@ -10770,6 +11281,13 @@ void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(blr_end);	// blr_if
 
 	dsqlScratch->appendUChar(blr_end);
+
+	if (useInternalAutoTrans)
+	{
+		dsqlScratch->appendUChar(blr_end);
+		dsqlGenReturningLocalTableCursor(dsqlScratch, storeNode->dsqlReturning,
+			storeNode->dsqlReturningLocalTableNumber.value());
+	}
 }
 
 
@@ -10952,14 +11470,15 @@ void UserSavepointNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra**
 
 StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	// USING without parameters and subroutines is useless
-	if (parameters.isEmpty() && !localDeclList)
+	// USING without parameters, subroutines or autonomous transaction is useless
+	if (parameters.isEmpty() && !localDeclList && !inAutonomousTransaction)
 	{
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_using_requires_params_subroutines));
+				  Arg::Gds(isc_dsql_using_statement_must_contain_clause));
 	}
 
 	dsqlScratch->flags |= DsqlCompilerScratch::FLAG_USING_STATEMENT;
+	dsqlScratch->reserveInitialVarNumbers(parameters.getCount());
 
 	const auto statement = dsqlScratch->getDsqlStatement();
 	unsigned index = 0;
@@ -10967,6 +11486,7 @@ StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	const auto node = FB_NEW_POOL(dsqlScratch->getPool()) UsingNode(dsqlScratch->getPool());
 
 	node->parameters = parameters;
+	node->inAutonomousTransaction = inAutonomousTransaction;
 
 	for (auto newParam : node->parameters)
 	{
@@ -11029,6 +11549,7 @@ string UsingNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, parameters);
 	NODE_PRINT(printer, localDeclList);
 	NODE_PRINT(printer, body);
+	NODE_PRINT(printer, inAutonomousTransaction);
 
 	return "UsingNode";
 }

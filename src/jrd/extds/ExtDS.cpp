@@ -513,7 +513,8 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 				}
 			}
 		}
-		status->init();
+		// commented out till final solution because it caused regressions
+		// status->init();		// ????????????
 	}
 
 	if (inPool)
@@ -1637,15 +1638,30 @@ void Transaction::rollback(thread_db* tdbb, bool retain)
 	doRollback(&status, tdbb, retain);
 
 	Connection& conn = m_connection;
-	if (!retain)
+	const bool hasErrors = status->getState() & IStatus::STATE_ERRORS;
+
+	const auto cleanup = [&]()
 	{
-		detachFromJrdTran();
-		m_connection.deleteTransaction(tdbb, this);
+		if (!retain)
+		{
+			detachFromJrdTran();
+			m_connection.deleteTransaction(tdbb, this);
+		}
+	};
+
+	try
+	{
+		if (hasErrors) {
+			conn.raise(&status, tdbb, "transaction rollback");
+		}
+	}
+	catch (const Exception&)
+	{
+		cleanup();
+		throw;
 	}
 
-	if (status->getState() & IStatus::STATE_ERRORS) {
-		conn.raise(&status, tdbb, "transaction rollback");
-	}
+	cleanup();
 }
 
 Transaction* Transaction::getTransaction(thread_db* tdbb, Connection* conn, TraScope tra_scope)

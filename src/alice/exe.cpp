@@ -133,9 +133,13 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 		}
 	}
 
+	// It takes longer to print errors, so don't call the started() method and just return
+	if (error)
+		return FINI_ERROR;
+
 	tdgbl->uSvc->started();
 
-	return error ? FINI_ERROR : FINI_OK;
+	return FINI_OK;
 }
 
 
@@ -189,9 +193,12 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 		}
 	}
 
+	if (error)
+		return FINI_ERROR;
+
 	tdgbl->uSvc->started();
 
-	return (error ? FINI_ERROR : FINI_OK);
+	return FINI_OK;
 }
 
 //____________________________________________________________

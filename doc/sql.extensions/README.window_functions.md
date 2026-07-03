@@ -4,7 +4,7 @@ By the SQL specification, window functions (also know as analytical functions) a
 
 That sort of functions are used with the `OVER` clause. Window functions may appear only in the select list or the `ORDER BY` clause of a query.
 
-Additional to the `OVER` clause, Firebird window functions may use partitions, order and frames (FB 4.0).
+Additional to the `OVER` clause, Firebird window functions may use partitions, order, frames (FB 4.0) and frame exclusions (FB 6.0).
 
 Syntax:
 
@@ -23,7 +23,7 @@ Syntax:
   ORDER BY <expr> [<direction>] [<nulls placement>] [, <expr> [<direction>] [<nulls placement>]] ...
 
 <window frame> ::=
-  {RANGE | ROWS} <window frame extent>
+  {RANGE | ROWS | GROUPS} <window frame extent> [<window frame exclusion>]
 
 <window frame extent> ::=
   {<window frame start> | <window frame between>}
@@ -34,6 +34,9 @@ Syntax:
 <window frame between> ::=
   BETWEEN {UNBOUNDED PRECEDING | <expr> PRECEDING | <expr> FOLLOWING | CURRENT ROW} AND
           {UNBOUNDED FOLLOWING | <expr> PRECEDING | <expr> FOLLOWING | CURRENT ROW}
+
+<window frame exclusion> ::=
+  EXCLUDE {NO OTHERS | CURRENT ROW | GROUP | TIES}
 
 <direction> ::=
   {ASC | DESC}
@@ -269,16 +272,40 @@ And the result set:
 
 It's possible to specify the frame that some window functions work. The frame is divided in three piecies: unit, start bound and end bound.
 
-The unit `RANGE` or `ROWS` defines how the bounds `<expr> PRECEDING`, `<expr> FOLLOWING` and `CURRENT ROW` works.
+The unit `RANGE`, `ROWS` or `GROUPS` defines how the bounds `<expr> PRECEDING`, `<expr> FOLLOWING` and `CURRENT ROW` works.
 
 With `RANGE`, the `ORDER BY` should specify only one expression, and that expression should be of a numeric, date, time or timestamp type. For `<expr> PRECEDING` and `<expr> FOLLOWING` bounds, `<expr>` is respectively subtracted or added to the order expression, and for `CURRENT ROW` only the order expression is used. Then, all rows (inside the partition) between the bounds are considered part of the resulting window frame.
 
 With `ROWS`, order expressions is not limited by number or types. In this case, `<expr> PRECEDING`, `<expr> FOLLOWING` and `CURRENT ROW` relates to the row position under the partition, and not to the order keys values.
 
-`UNBOUNDED PRECEDING` and `UNBOUNDED FOLLOWING` work identically with `RANGE` and `ROWS`. `UNBOUNDED PRECEDING` looks for the first row and `UNBOUNDED FOLLOWING` the last one, always inside the partition.
+With `GROUPS`, order expressions are not limited by number or types. In this case, `<expr> PRECEDING`, `<expr> FOLLOWING` and `CURRENT ROW` relate to peer groups under the partition. Peers are rows with the same `ORDER BY` values. If there is no `ORDER BY`, all rows in the partition are peers and the partition has one group.
+
+`UNBOUNDED PRECEDING` and `UNBOUNDED FOLLOWING` work identically with `RANGE`, `ROWS` and `GROUPS`. `UNBOUNDED PRECEDING` looks for the first row and `UNBOUNDED FOLLOWING` the last one, always inside the partition.
 
 The frame syntax with `<window frame start>` specifies the start frame, with the end frame being `CURRENT ROW`.
 
+The optional frame exclusion clause (FB 6.0) is part of the frame clause and removes rows from the frame after its bounds have been evaluated. It can only be specified together with an explicit `ROWS`, `RANGE` or `GROUPS` frame. `EXCLUDE NO OTHERS` is the default and keeps the frame unchanged.
+
+`EXCLUDE CURRENT ROW` removes only the current row from the frame.
+
+`EXCLUDE GROUP` removes the current row and all its peers. Peers are rows with the same `ORDER BY` values as the current row. If there is no `ORDER BY`, all rows in the partition are peers.
+
+`EXCLUDE TIES` removes the peers of the current row, but keeps the current row itself. If there is no `ORDER BY`, all other rows in the partition are removed from the frame.
+
+For example, with duplicate salaries, the following query sums the full ordered partition except the current salary peer group:
+
+```sql
+select
+    id,
+    salary,
+    sum(salary) over (
+      order by salary
+      rows between unbounded preceding and unbounded following
+      exclude group
+    ) sum_other_salaries
+  from employee
+  order by salary;
+```
 
 
 When `ORDER BY` window clause is used but frame clause is omitted, it defaults to `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. This fact makes the query below to produce "weird" behaviour for the "sum_salary" column. It sums from the partition start to the current key, instead of sum the whole partition.
@@ -346,13 +373,13 @@ select
 |  5 |  10.00 |           3 |
 |  2 |  12.00 |           1 |
 
-Some window functions discard frames. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
+Some window functions discard frames and frame exclusions. `ROW_NUMBER`, `LAG` and `LEAD` always work as `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. And `DENSE_RANK`, `RANK`, `PERCENT_RANK` and `CUME_DIST` always work as `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.
 
-`FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames, but the `RANGE` unit works identically as `ROWS`.
+`FIRST_VALUE`, `LAST_VALUE` and `NTH_VALUE` respect frames and frame exclusions, but the `RANGE` unit works identically as `ROWS`.
 
 ## 6. Named windows (FB 4.0)
 
-To avoid write repetitive or confusing expressions, windows can be named in a query with the `WINDOW` clause. A named window can be used in `OVER` to reference a window definition and can also be used as a base window of another named or inline (`OVER`) window. A window with frame (`ROWS` or `RANGE` clauses) can't be used as base window (but can be used with `OVER <window name>`). And a window with a base window can't have `PARTITION BY` nor can override `ORDER BY` of a base window.
+To avoid write repetitive or confusing expressions, windows can be named in a query with the `WINDOW` clause. A named window can be used in `OVER` to reference a window definition and can also be used as a base window of another named or inline (`OVER`) window. A window with frame (`ROWS`, `RANGE` or `GROUPS` clauses) can't be used as base window (but can be used with `OVER <window name>`). And a window with a base window can't have `PARTITION BY` nor can override `ORDER BY` of a base window.
 
 In a query with multiple `SELECT` and `WINDOW` clauses (for example, with subqueries), the window name scope is bound only to its query context, that is, a window name from an inner or outer context could not be used in another context. As such, the same window name definition could be used at different contexts.
 
