@@ -1820,6 +1820,12 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err)
  **************************************/
 	string message;
 
+	if (desc->isUnknown() || desc->dsc_dtype >= DTYPE_TYPE_MAX)
+	{
+		fb_assert(false);
+		err(Arg::Gds(isc_badblk));
+	}
+
 	if (desc->dsc_dtype == dtype_blob)
 		message = "BLOB";
 	else if (desc->dsc_dtype == dtype_array)
