@@ -284,9 +284,9 @@ public:
 	struct Impure
 	{
 		impure_value* orderValues;
-		int64_t vlux_count;
-		int64_t vlux_rank;
-		int64_t vlux_dense_rank;
+		uint64_t vlux_count;
+		uint64_t vlux_rank;
+		uint64_t vlux_dense_rank;
 	};
 
 	explicit RankAggNode(MemoryPool& pool, RankType aType,

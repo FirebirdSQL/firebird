@@ -2538,7 +2538,7 @@ int RankAggNode::lookForChange(thread_db* tdbb, Request* request, UCHAR* data, i
 		int sortDirection = 1;
 		int nullsPlacement = 1;
 
-		unsigned index = cnt++;
+		const unsigned index = cnt++;
 
 		if (sort->direction[index] == ORDER_DESC)
 			sortDirection = -1;
@@ -2548,7 +2548,7 @@ int RankAggNode::lookForChange(thread_db* tdbb, Request* request, UCHAR* data, i
 
 		desc.dsc_address = data + (IPTR) desc.dsc_address;
 
-		impure_value* vtemp = &values[index];
+		impure_value* const vtemp = &values[index];
 
 		int n = 0;
 
@@ -2566,13 +2566,11 @@ void RankAggNode::cacheValues(thread_db* tdbb, Request* request, UCHAR* data, im
 	unsigned cnt = 0;
 	for (auto desc : asb->descOrder)
 	{
-		unsigned index = cnt++;
+		const unsigned index = cnt++;
 
 		desc.dsc_address = data + (IPTR) desc.dsc_address;
 
-		impure_value* target = &values[index];
-
-		EVL_make_value(tdbb, &desc, target);
+		EVL_make_value(tdbb, &desc, &values[index]);
 	}
 }
 
@@ -2580,19 +2578,19 @@ void RankAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
-	Impure* impureOrder = request->getImpure<Impure>(m_impureOrder);
+	Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
 	impureOrder->vlux_count = 0;
 	impureOrder->vlux_rank = 0;
 	impureOrder->vlux_dense_rank = 0;
 
-	unsigned impureCount = sort ? sort->expressions.getCount() : 0;
-	if (!impureOrder->orderValues && impureCount > 0)
+	const unsigned impureCount = sort ? sort->expressions.getCount() : 0;
+	if (!impureOrder->orderValues && impureCount)
 	{
 		impureOrder->orderValues = FB_NEW_POOL(*tdbb->getDefaultPool()) impure_value[impureCount];
 		memset(impureOrder->orderValues, 0, sizeof(impure_value) * impureCount);
 	}
 
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* const impure = request->getImpure<impure_value_ex>(impureOffset);
 	switch (type)
 	{
 		case RankAggNode::TYPE_RANK:
@@ -2606,15 +2604,15 @@ void RankAggNode::aggInit(thread_db* tdbb, Request* request) const
 	}
 	impure->vlux_count = 1;
 
-	impure_value_ex* impureArgs = request->getImpure<impure_value_ex>(impureArgsOffset);
-	impureArgs->vlu_desc.dsc_dtype = 0;
+	impure_value_ex* const impureArgs = request->getImpure<impure_value_ex>(impureArgsOffset);
+	impureArgs->vlu_desc.dsc_dtype = dtype_unknown;
 	impureArgs->vlux_count = 0;
 }
 
 void RankAggNode::aggFinish(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggFinish(tdbb, request);
-	Impure* impureOrder = request->getImpure<Impure>(m_impureOrder);
+	Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
 	if (impureOrder->orderValues)
 	{
 		delete[] impureOrder->orderValues;
@@ -2625,20 +2623,20 @@ void RankAggNode::aggFinish(thread_db* tdbb, Request* request) const
 bool RankAggNode::aggPass(thread_db* tdbb, Request* request) const
 {
 	// Put function argument to sort
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* const impure = request->getImpure<impure_value_ex>(impureOffset);
 	if (impure->vlux_count == 1 && sort)		// first call to aggPass()
 	{
 		if (valueListArg->items.getCount() != sort->expressions.getCount())
 			ERRD_post(Arg::Gds(isc_hypfun_args_non_equal_sort_item) << Arg::Str(getRankAggName(type)));
 
 		NestConst<ValueExprNode> findArg = MAKE_const_sint64(1, 0);
-		dsc* findValueDesc = EVL_expr(tdbb, request, findArg);
+		dsc* const findValueDesc = EVL_expr(tdbb, request, findArg);
 		if (!findValueDesc)
 			return false;
 
 		fb_assert(asb);
 		// "Put" the value to sort.
-		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		impure_agg_sort* const asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 		UCHAR* data = nullptr;
 		asbImpure->iasb_sort->put(tdbb, reinterpret_cast<ULONG**>(&data));
 
@@ -2675,7 +2673,7 @@ bool RankAggNode::aggPass(thread_db* tdbb, Request* request) const
 
 	// Put WITHIN GROUP arguments to sort
 	NestConst<ValueExprNode> otherArg = MAKE_const_sint64(0, 0);
-	dsc* desc = EVL_expr(tdbb, request, otherArg);
+	dsc* const desc = EVL_expr(tdbb, request, otherArg);
 	if (!desc)
 		return false;
 
@@ -2727,22 +2725,22 @@ bool RankAggNode::aggPass(thread_db* tdbb, Request* request) const
 
 dsc* RankAggNode::execute(thread_db* tdbb, Request* request) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* const impure = request->getImpure<impure_value_ex>(impureOffset);
 
-	impure_value_ex* argsImpure = request->getImpure<impure_value_ex>(impureArgsOffset);
+	impure_value_ex* const argsImpure = request->getImpure<impure_value_ex>(impureArgsOffset);
 
 	if (sort)
 	{
 		Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
 
-		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
+		impure_agg_sort* const asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 		dsc desc = asb->desc;
 
 		// Sort the values already "put" to sort.
 		asbImpure->iasb_sort->sort(tdbb);
 
 		// Now get the sorted/projected values and compute the aggregate.
-		bool find = false;
+		bool found = false;
 		while (true)
 		{
 			UCHAR* data = nullptr;
@@ -2752,7 +2750,7 @@ dsc* RankAggNode::execute(thread_db* tdbb, Request* request) const
 			{
 				// We are done, close the sort.
 				delete asbImpure->iasb_sort;
-				asbImpure->iasb_sort = NULL;
+				asbImpure->iasb_sort = nullptr;
 				break;
 			}
 
@@ -2767,16 +2765,15 @@ dsc* RankAggNode::execute(thread_db* tdbb, Request* request) const
 				impureOrder->vlux_dense_rank++;
 				impureOrder->vlux_rank = impureOrder->vlux_count;
 				cacheValues(tdbb, request, data, impureOrder->orderValues);
-				find = false;
+				found = false;
 			}
 
 			desc.dsc_address = data + (IPTR) asb->desc.dsc_address;
 			EVL_make_value(tdbb, &desc, argsImpure);
-			find = find || (argsImpure->vlu_misc.vlu_int64 == 1);
+			found = found || (argsImpure->vlu_misc.vlu_int64 == 1);
 
-			if (find)
+			if (found)
 				aggPass(tdbb, request, &desc);
-
 		}
 	}
 
@@ -2785,7 +2782,7 @@ dsc* RankAggNode::execute(thread_db* tdbb, Request* request) const
 
 void RankAggNode::aggPass(thread_db* tdbb, Request* request, dsc* /* desc */) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* const impure = request->getImpure<impure_value_ex>(impureOffset);
 	Impure* const impureOrder = request->getImpure<Impure>(m_impureOrder);
 	switch (type)
 	{
@@ -2813,20 +2810,20 @@ void RankAggNode::aggPass(thread_db* tdbb, Request* request, dsc* /* desc */) co
 
 dsc* RankAggNode::aggExecute(thread_db* tdbb, Request* request) const
 {
-	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	impure_value_ex* const impure = request->getImpure<impure_value_ex>(impureOffset);
 
-	if (!impure->vlux_count || !impure->vlu_desc.dsc_dtype)
+	if (!impure->vlux_count || impure->vlu_desc.isUnknown())
 		return nullptr;
 
 	if (type == RankAggNode::TYPE_PERCENT_RANK)
 	{
-		double percent_rank = (impure->vlux_count > 1) ? impure->vlu_misc.vlu_double / (impure->vlux_count - 1) : 0;
+		const double percent_rank = (impure->vlux_count > 1) ? impure->vlu_misc.vlu_double / (impure->vlux_count - 1) : 0;
 		impure->make_double(percent_rank);
 	}
 
 	if (type == RankAggNode::TYPE_CUME_DIST)
 	{
-		double percent_rank = impure->vlu_misc.vlu_double / impure->vlux_count;
+		const double percent_rank = impure->vlu_misc.vlu_double / impure->vlux_count;
 		impure->make_double(percent_rank);
 	}
 
