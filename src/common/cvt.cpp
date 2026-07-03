@@ -2209,7 +2209,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
  **************************************/
 	string message;
 
-	if (desc->dsc_dtype >= DTYPE_TYPE_MAX)
+	if (desc->isUnknown() || desc->dsc_dtype >= DTYPE_TYPE_MAX)
 	{
 		fb_assert(false);
 		err(Arg::Gds(isc_badblk));

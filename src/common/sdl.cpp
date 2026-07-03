@@ -576,6 +576,12 @@ static bool execute(sdl_arg* arg)
 		case op_scalar:
 			{
 				value = *next++;
+				if (value >= array_desc->iad_dimensions)
+				{
+					error(arg->sdl_arg_status_vector, Arg::Gds(isc_invalid_dimension)
+						<< Arg::Num(arg->sdl_arg_desc->iad_dimensions) << Arg::Num(value));
+					return false;
+				}
 				next++;				// Skip count, unsupported.
 				SLONG subscript = 0;
 				for (const Ods::InternalArrayDesc::iad_repeat* range = array_desc->iad_rpt;
