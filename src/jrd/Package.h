@@ -60,25 +60,30 @@ public:
 
 	bool hash(thread_db* tdbb, Firebird::sha512& digest) const;
 
-	static dsc getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name);
-
 	static void genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema);
 
-
-	void updateValue(const dsc typeDesc)
+	void setType(const dsc& typeDesc)
 	{
+		m_type = typeDesc;
 		m_blrBlobId = {};
 
 		delete m_value.vlu_string;
 		m_value = {};
-		m_value.vlu_desc = typeDesc;
-		m_value.vlu_desc.dsc_address = nullptr; // Make sure to call makeValue
 	}
 
-	void updateValue(const bid blobId)
+	void setValue(const bid blobId)
 	{
 		m_blrBlobId = blobId;
+
+		delete m_value.vlu_string;
+		m_value = {};
+	}
+
+	inline dsc getDesc() const noexcept
+	{
+		fb_assert(m_type.dsc_dtype != dtype_unknown);
+		return m_type;
 	}
 
 	bid getBlobId(thread_db* tdbb);
@@ -91,8 +96,12 @@ private:
 	// Lock in case of makeing value during the execute state
 	Firebird::RWLock m_makeValueLock{};
 
-	// Keep type to gen hash (when not commited - we cannot read it from system table)
-	// Keep value when scanning and after the first execution
+	// The constant type and constant value type may be different
+	// (e.g. the defined type is int, but the value type is short),
+	// so keep it explicit
+	dsc m_type{};
+
+	// Get the value when scanning (without MINISCAN) or after the first execution
 	impure_value m_value{};
 
 	// keep only materialized value
@@ -234,6 +243,7 @@ public:
 	ConstantValue& addConstant(thread_db* tdbb,
 		const QualifiedName& constName,
 		const bool isPrivate,
+		const dsc type,
 		const bid blrBlobId,
 		const bool skipMakeValue = false);
 
@@ -245,6 +255,8 @@ public:
 	ConstantValue* findConstant(const QualifiedName& name);
 
 private:
+	void collectConstants(thread_db* tdbb, const bool skipMakingValue);
+
 	virtual ~Package() = default;
 
 private:
