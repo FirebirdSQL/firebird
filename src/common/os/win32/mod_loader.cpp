@@ -11,7 +11,9 @@
 #include "../common/config/config.h"
 #include "../common/classes/ImplementHelper.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /// This is the Win32 implementation of the mod_loader abstraction.
 
@@ -120,7 +122,7 @@ public:
 		actCtx.cbSize = sizeof(actCtx);
 		actCtx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_HMODULE_VALID;
 		actCtx.lpResourceName = ISOLATIONAWARE_MANIFEST_RESOURCE_ID;
-		actCtx.hModule = Firebird::hDllInst;
+		actCtx.hModule = hDllInst;
 
 		if (actCtx.hModule)
 		{
@@ -282,3 +284,6 @@ bool Win32Module::getRealPath(const string& /*anySymbol*/, PathName& path)
 
 	return false;
 }
+
+
+}  // namespace Firebird

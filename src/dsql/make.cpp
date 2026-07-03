@@ -41,7 +41,7 @@
 #include "../dsql/ExprNodes.h"
 #include "ibase.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/align.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/make_proto.h"
@@ -60,8 +60,9 @@
 #include "../common/config/config.h"
 #include "../common/StatusArg.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // DsqlDescMaker methods
 
@@ -605,3 +606,6 @@ LiteralNode* MAKE_system_privilege(const char* privilege)
 
 	return literal;
 }
+
+
+} // namespace Firebird::Jrd

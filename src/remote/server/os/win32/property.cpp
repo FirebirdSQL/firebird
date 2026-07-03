@@ -54,6 +54,7 @@
 #include <stdio.h>				// snprintf()
 
 using namespace Firebird;
+using namespace Firebird::Remote;
 
 
 static HINSTANCE hInstance = NULL;	// Handle to the current app. instance

@@ -91,8 +91,6 @@
 
 #include "../common/config/config.h"
 
-constexpr char INET_FLAG = ':';
-
 // Unix/NFS specific stuff
 #ifndef NO_NFS
 
@@ -135,20 +133,24 @@ constexpr const char* MTAB = "/etc/mtab";
 #define MAXHOSTLEN	64
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace {
-	typedef Firebird::PathName tstring;
+	typedef PathName tstring;
 	typedef tstring::size_type size;
 	typedef tstring::iterator iter;
 	const size npos = tstring::npos;
 
+	constexpr char INET_FLAG = ':';
+
 #ifndef NO_NFS
 	const char* NFS_TYPE = "nfs";
 
-	Firebird::GlobalPtr<Firebird::Mutex> mntinfoMutex;
+	GlobalPtr<Mutex> mntinfoMutex;
 
-	class Mnt : public Firebird::MutexLockGuard		// Protect static values returned by getmntinfo()/getmntent()
+	class Mnt : public MutexLockGuard		// Protect static values returned by getmntinfo()/getmntent()
 	{
 #ifdef DARWIN
 	private:
@@ -158,7 +160,7 @@ namespace {
 
 	public:
 		Mnt()
-			: Firebird::MutexLockGuard(mntinfoMutex, FB_FUNCTION),
+			: MutexLockGuard(mntinfoMutex, FB_FUNCTION),
 			  mnt_info(NULL), mnt_cnt(getmntinfo(&mnt_info, MNT_NOWAIT)), mnt_i(0)
 		{ }
 
@@ -169,7 +171,7 @@ namespace {
 
 	public:
 		Mnt()
-			: Firebird::MutexLockGuard(mntinfoMutex, FB_FUNCTION),
+			: MutexLockGuard(mntinfoMutex, FB_FUNCTION),
 			  mtab(MTAB_OPEN(MTAB, "r"))
 		{ }
 
@@ -533,8 +535,8 @@ bool ISC_check_if_remote(const tstring& file_name, bool implicit_flag)
 }
 
 
-iscProtocol ISC_extract_host(Firebird::PathName& file_name,
-							 Firebird::PathName& host_name,
+iscProtocol ISC_extract_host(PathName& file_name,
+							 PathName& host_name,
 							 bool implicit_flag)
 {
 /**************************************
@@ -1774,7 +1776,7 @@ private:
 
 
 // Converts a string from the system charset to UTF-8.
-void ISC_systemToUtf8(Firebird::AbstractString& str)
+void ISC_systemToUtf8(AbstractString& str)
 {
 	if (str.isEmpty())
 		return;
@@ -1797,7 +1799,7 @@ void ISC_systemToUtf8(Firebird::AbstractString& str)
 
 
 // Converts a string from UTF-8 to the system charset.
-void ISC_utf8ToSystem(Firebird::AbstractString& str)
+void ISC_utf8ToSystem(AbstractString& str)
 {
 	if (str.isEmpty())
 		return;
@@ -1897,3 +1899,6 @@ void ISC_unescape(AbstractString& /*str*/)
 	}
 #endif
 }
+
+
+} // namespace Firebird

@@ -48,6 +48,10 @@
 // Switch handling constants.  Note that IN_SW_COUNT must always be
 // one larger than the largest switch value
 
+namespace Firebird::Gpre
+{
+
+
 enum gpre_cmd_switch
 {
 	IN_SW_GPRE_0,		// not a known switch
@@ -198,3 +202,6 @@ const static Switches::in_sw_tab_t gpre_in_sw_table[] =
 	{IN_SW_NO_QLI		, 0, "NOQLI"		, 0, 0, 0, false, false, 0, 0, "\t\tsuppress QLI syntax"},
 	{IN_SW_GPRE_0		, 0, NULL			, 0, 0, 0, false, false, 0, 0, NULL}
 };
+
+
+} // namespace Firebird::Gpre

@@ -82,22 +82,22 @@
 #include "firebird/impl/msg_helper.h"
 
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
+
+typedef GenericMap<Pair<NonPooled<USHORT, UCHAR> > > RelationLockTypeMap;
 
 
 #ifdef SUPERSERVER_V2
 static TraNumber bump_transaction_id(thread_db*, WIN*);
 #else
-static header_page* bump_transaction_id(thread_db*, WIN*, bool);
+static Ods::header_page* bump_transaction_id(thread_db*, WIN*, bool);
 #endif
 static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, int state);
 static void expand_view_lock(thread_db* tdbb, jrd_tra*, jrd_rel*, UCHAR lock_type,
 	const char* option_name, RelationLockTypeMap& lockmap, const int level);
-static tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
+static Ods::tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
 static constexpr const char* get_lockname_v3(const UCHAR lock) noexcept;
 static ULONG inventory_page(thread_db*, ULONG);
 static int limbo_transaction(thread_db*, TraNumber id);
@@ -331,7 +331,7 @@ bool TRA_cleanup(thread_db* tdbb)
 	// transaction is automatically marked active.
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	const Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 	const TraNumber ceiling = header->hdr_next_transaction;
 	const TraNumber active = header->hdr_oldest_active;
 	CCH_RELEASE(tdbb, &window);
@@ -350,7 +350,7 @@ bool TRA_cleanup(thread_db* tdbb)
 	for (ULONG sequence = active / trans_per_tip; sequence <= last; sequence++, number = 0)
 	{
 		window.win_page = inventory_page(tdbb, sequence);
-		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+		Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 		TraNumber max = ceiling - (TraNumber) sequence * trans_per_tip;
 		if (max >= trans_per_tip)
 			max = trans_per_tip - 1;
@@ -399,13 +399,13 @@ bool TRA_cleanup(thread_db* tdbb)
 
 #ifdef SUPERSERVER_V2
 	window.win_page = inventory_page(tdbb, last);
-	tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 
 	while (tip->tip_next)
 	{
 		CCH_RELEASE(tdbb, &window);
 		window.win_page = inventory_page(tdbb, ++last);
-		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
+		tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_transactions);
 		CCH_MARK(tdbb, &window);
 		for (number = 0; number < trans_per_tip; number++)
 		{
@@ -472,7 +472,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 	if (transaction->tra_flags & TRA_invalidated)
 		ERR_post(Arg::Gds(isc_trans_invalid));
 
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	// Get rid of all user savepoints
 	while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
@@ -480,7 +480,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Let replicator perform heavy and error-prone part of work
 
-	REPL_trans_prepare(tdbb, transaction);
+	Replication::REPL_trans_prepare(tdbb, transaction);
 
 	// Perform any meta data work deferred
 
@@ -543,7 +543,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Set the state on the inventory page to be committed
 
-	REPL_trans_commit(tdbb, transaction);
+	Replication::REPL_trans_commit(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, tra_committed);
 
 	// Perform any post commit work
@@ -581,14 +581,14 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 	CHECK_DBB(dbb);
 
 	// Start by fetching prior transaction page, if any
-	tx_inv_page* prior_tip = NULL;
+	Ods::tx_inv_page* prior_tip = NULL;
 	WIN prior_window(DB_PAGE_SPACE, -1);
 	if (sequence)
 		prior_tip = fetch_inventory_page(tdbb, &prior_window, (sequence - 1), LCK_write);
 
 	// Allocate and format new page
 	WIN window(DB_PAGE_SPACE, -1);
-	tx_inv_page* tip = (tx_inv_page*) DPM_allocate(tdbb, &window);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) DPM_allocate(tdbb, &window);
 	tip->tip_header.pag_type = pag_transactions;
 
 	CCH_must_write(tdbb, &window);
@@ -638,7 +638,7 @@ int TRA_fetch_state(thread_db* tdbb, TraNumber number)
 	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
 	const ULONG tip_seq = number / trans_per_tip;
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
 
 	// calculate the state of the desired transaction
 
@@ -682,7 +682,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 	// fetch the first inventory page
 
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
 
 	// move the first page into the bit vector
 
@@ -702,7 +702,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 		// release the read lock as we go, so that some one else can
 		// commit without having to signal all other transactions.
 
-		tip = (tx_inv_page*) CCH_HANDOFF(tdbb, &window, inventory_page(tdbb, sequence++),
+		tip = (Ods::tx_inv_page*) CCH_HANDOFF(tdbb, &window, inventory_page(tdbb, sequence++),
 							  LCK_read, pag_transactions);
 
 		l = TRANS_OFFSET(MIN((top + TRA_MASK + 1 - base), trans_per_tip));
@@ -759,7 +759,7 @@ void TRA_header_write(thread_db* tdbb, Database* dbb, TraNumber number)
 	if (!number || dbb->dbb_last_header_write < number)
 	{
 		WIN window(HEADER_PAGE_NUMBER);
-		const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+		const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 		const TraNumber next_transaction = header->hdr_next_transaction;
 		const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -920,7 +920,7 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 	}
 
 	WIN window(HEADER_PAGE_NUMBER);
-	const auto header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	const auto header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 	const TraNumber next_transaction = header->hdr_next_transaction;
 	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -1169,7 +1169,7 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 	}
 
 	MemoryPool* const pool = dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const trans = jrd_tra::create(pool, attachment, NULL);
 	trans->tra_number = number;
 	trans->tra_flags |= TRA_prepared | TRA_reconnected | TRA_write;
@@ -1226,7 +1226,7 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 				{
 					const ULONG temp_id = current->bli_temp_id;
 					current->bli_blob_object->BLB_cancel(tdbb);
-					if (!transaction->tra_blobs->locate(Firebird::locGreat, temp_id))
+					if (!transaction->tra_blobs->locate(locGreat, temp_id))
 						break;
 				}
 			}
@@ -1344,7 +1344,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	EDS::Transaction::jrdTransactionEnd(tdbb, transaction, false, retaining_flag, false /*force_flag ?*/);
 
-	Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+	JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 	if (transaction->tra_flags & (TRA_prepare2 | TRA_reconnected))
 		MET_update_transaction(tdbb, transaction, false);
@@ -1384,7 +1384,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 			// because record data won't be updated with intermediate versions
 			while (transaction->tra_save_point && !transaction->tra_save_point->isRoot())
 			{
-				REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+				Replication::REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
 				transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
 			}
 
@@ -1412,7 +1412,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 				state = tra_committed;
 			}
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			// Prevent a bugcheck in TRA_set_state to cause a loop
 			// Clear the error because the rollback will succeed.
@@ -1447,7 +1447,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 		return;
 	}
 
-	REPL_trans_rollback(tdbb, transaction);
+	Replication::REPL_trans_rollback(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
 
 	TRA_release_transaction(tdbb, transaction, &trace);
@@ -1491,7 +1491,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 	const USHORT shift = TRANS_SHIFT(number);
 
 	WIN window(DB_PAGE_SPACE, -1);
-	tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
+	Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
 
 	UCHAR* address = tip->tip_transactions + byte;
 	const int old_state = ((*address) >> shift) & TRA_MASK;
@@ -1535,7 +1535,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 		Database::Checkout dcoHolder(dbb, FB_FUNCTION);
 		Thread::yield();
 	}
-	tip = reinterpret_cast<tx_inv_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_transactions));
+	tip = reinterpret_cast<Ods::tx_inv_page*>(CCH_FETCH(tdbb, &window, LCK_write, pag_transactions));
 	if (generation == tip->tip_header.pag_generation)
 		CCH_MARK_MUST_WRITE(tdbb, &window);
 	CCH_RELEASE(tdbb, &window);
@@ -1692,7 +1692,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
 	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
 	transaction->tra_flags = flags & TRA_OPTIONS_MASK;
@@ -1749,7 +1749,7 @@ jrd_tra* TRA_start(thread_db* tdbb, int tpb_length, const UCHAR* tpb, Jrd::jrd_t
 	// transaction block first, seize relation locks, then go ahead and
 	// make up the real transaction block.
 	MemoryPool* const pool = outer ? outer->getAutonomousPool() : dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
+	JrdContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
 	try
@@ -1883,7 +1883,7 @@ void TRA_sweep(thread_db* tdbb)
 			CCH_flush(tdbb, FLUSH_SWEEP, 0);
 
 			WIN window(HEADER_PAGE_NUMBER);
-			header_page* const header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+			Ods::header_page* const header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 
 			if (header->hdr_oldest_transaction < --transaction_oldest_active)
 			{
@@ -1903,7 +1903,7 @@ void TRA_sweep(thread_db* tdbb)
 		tdbb->setTransaction(tdbb_old_trans);
 		dbb->clearSweepFlags(tdbb);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		PathName message = "Error during sweep of ";
 		message += dbb->dbb_database_name;
@@ -1918,7 +1918,7 @@ void TRA_sweep(thread_db* tdbb)
 			{
 				TRA_commit(tdbb, transaction, false);
 			}
-			catch (const Firebird::Exception& ex2)
+			catch (const Exception& ex2)
 			{
 				ex2.stuffException(tdbb->tdbb_status_vector);
 			}
@@ -1988,7 +1988,7 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, tra_wait_t wait)
 	if (state == tra_active)
 	{
 		state = tra_dead;
-		REPL_trans_cleanup(tdbb, number);
+		Replication::REPL_trans_cleanup(tdbb, number);
 		TRA_set_state(tdbb, 0, number, tra_dead);
 	}
 
@@ -2047,7 +2047,7 @@ static TraNumber bump_transaction_id(thread_db* tdbb, WIN* window)
 #else
 
 
-static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontWrite)
+static Ods::header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontWrite)
 {
 /**************************************
  *
@@ -2065,7 +2065,7 @@ static header_page* bump_transaction_id(thread_db* tdbb, WIN* window, bool dontW
 	CHECK_DBB(dbb);
 
 	window->win_page = HEADER_PAGE_NUMBER;
-	header_page* header = (header_page*) CCH_FETCH(tdbb, window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, window, LCK_write, pag_header);
 
 	const TraNumber next_transaction = header->hdr_next_transaction;
 	const TraNumber oldest_transaction = header->hdr_oldest_transaction;
@@ -2259,7 +2259,7 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 }
 
 
-static tx_inv_page* fetch_inventory_page(thread_db* tdbb,
+static Ods::tx_inv_page* fetch_inventory_page(thread_db* tdbb,
 										 WIN* window,
 										 ULONG sequence,
 										 USHORT lock_level)
@@ -2279,7 +2279,7 @@ static tx_inv_page* fetch_inventory_page(thread_db* tdbb,
 	SET_TDBB(tdbb);
 
 	window->win_page = inventory_page(tdbb, sequence);
-	tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, window, lock_level, pag_transactions);
+	Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, window, lock_level, pag_transactions);
 
 	return tip;
 }
@@ -2348,14 +2348,14 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
 		WIN window(DB_PAGE_SPACE, dbb->getKnownPage(pag_transactions, tipCount - 1));
-		tx_inv_page* tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
+		Ods::tx_inv_page* tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		const ULONG next = tip->tip_next;
 		CCH_RELEASE(tdbb, &window);
 		if (!(window.win_page = next))
 			BUGCHECK(165);		// msg 165 cannot find tip page
 
 		// Type check it
-		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
+		tip = (Ods::tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
 		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
 	}
@@ -2390,7 +2390,7 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 	const ULONG number = id % trans_per_tip;
 
 	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
+	const Ods::tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
 
 	const ULONG trans_offset = TRANS_OFFSET(number);
 	const UCHAR* byte = tip->tip_transactions + trans_offset;
@@ -2632,9 +2632,9 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 	if (!dbb->readOnly())
 	{
 		if (commit)
-			REPL_trans_commit(tdbb, transaction);
+			Replication::REPL_trans_commit(tdbb, transaction);
 		else
-			REPL_trans_rollback(tdbb, transaction);
+			Replication::REPL_trans_rollback(tdbb, transaction);
 
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
@@ -3834,7 +3834,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (dbb->isReplicating(tdbb))
 			trans->tra_flags |= TRA_replicating;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		LCK_release(tdbb, lock);
 		trans->tra_lock = nullptr;
@@ -4061,12 +4061,12 @@ void jrd_tra::rollbackSavepoint(thread_db* tdbb, bool preserveLocks)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, true);
 
 		if (tra_flags & TRA_ex_restart)
 			preserveLocks = true;
 
-		Jrd::ContextPoolHolder context(tdbb, tra_pool);
+		JrdContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollback(tdbb, NULL, preserveLocks);
 	}
 }
@@ -4086,13 +4086,13 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
  *
  **************************************/
 {
-	Jrd::ContextPoolHolder context(tdbb, tra_pool);
+	JrdContextPoolHolder context(tdbb, tra_pool);
 
 	// Merge all savepoints (except the given one) into a single one
 	while (tra_save_point && tra_save_point->getNumber() > number &&
 		tra_save_point->getNext() && tra_save_point->getNext()->getNumber() >= number)
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, true);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, true);
 		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 
@@ -4122,9 +4122,9 @@ void jrd_tra::releaseSavepoint(thread_db* tdbb)
 {
 	if (tra_save_point && !(tra_flags & TRA_system))
 	{
-		REPL_save_cleanup(tdbb, this, tra_save_point, false);
+		Replication::REPL_save_cleanup(tdbb, this, tra_save_point, false);
 
-		Jrd::ContextPoolHolder context(tdbb, tra_pool);
+		JrdContextPoolHolder context(tdbb, tra_pool);
 		tra_save_point = tra_save_point->rollforward(tdbb);
 	}
 }
@@ -4436,3 +4436,5 @@ void jrd_tra::eraseSecDbContext() noexcept
 	tra_sec_db_context = NULL;
 }
 
+
+} // namespace Firebird::Jrd

@@ -33,12 +33,16 @@
 
 //enum LogFormat { lfText = 0, lfBinary = 1 };
 
+namespace Firebird::Ntrace
+{
+
+
 struct TracePluginConfig
 {
 #define DATABASE_PARAMS
 #define SERVICE_PARAMS
 
-#define PATH_PARAMETER(NAME, VALUE) Firebird::PathName NAME;
+#define PATH_PARAMETER(NAME, VALUE) PathName NAME;
 #define STR_PARAMETER(NAME, VALUE) ConfigFile::String NAME;
 #define BOOL_PARAMETER(NAME, VALUE) bool NAME;
 #define UINT_PARAMETER(NAME, VALUE) ULONG NAME;
@@ -47,7 +51,7 @@ struct TracePluginConfig
 #undef STR_PARAMETER
 #undef BOOL_PARAMETER
 #undef UINT_PARAMETER
-	Firebird::PathName db_filename;
+	PathName db_filename;
 
 	// Default constructor. Pass pool to all string parameters, initialize everything to defaults
 	TracePluginConfig() :
@@ -83,5 +87,8 @@ private:
 #undef DATABASE_PARAMS
 #undef SERVICE_PARAMS
 };
+
+
+} // namespace Firebird::Ntrace
 
 #endif

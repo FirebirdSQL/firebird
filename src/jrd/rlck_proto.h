@@ -24,18 +24,18 @@
 #ifndef JRD_RLCK_PROTO_H
 #define JRD_RLCK_PROTO_H
 
-namespace Jrd {
+#include "../jrd/Resources.h"
+
+namespace Firebird::Jrd
+{
 	class Lock;
 	class jrd_tra;
 	struct record_param;
 	class Attachment;
 	class thread_db;
-}
 
-#include "../jrd/Resources.h"
-
-Jrd::Lock* RLCK_reserve_relation(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::Cached::Relation*, bool);
-Jrd::Lock* RLCK_transaction_relation_lock(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::Cached::Relation*);
+	Lock* RLCK_reserve_relation(thread_db*, jrd_tra*, Cached::Relation*, bool);
+	Lock* RLCK_transaction_relation_lock(thread_db*, jrd_tra*, Cached::Relation*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_RLCK_PROTO_H
-

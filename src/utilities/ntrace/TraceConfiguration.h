@@ -36,11 +36,14 @@
 
 #include <sys/types.h>
 
+namespace Firebird::Ntrace
+{
+
 
 class TraceCfgReader
 {
 public:
-	static void readTraceConfiguration(const char* text, const Firebird::PathName& databaseName, TracePluginConfig& config);
+	static void readTraceConfiguration(const char* text, const PathName& databaseName, TracePluginConfig& config);
 
 private:
 	struct MatchPos
@@ -59,7 +62,7 @@ private:
 	};
 
 private:
-	TraceCfgReader(const char* text, const Firebird::PathName& databaseName, TracePluginConfig& config) noexcept :
+	TraceCfgReader(const char* text, const PathName& databaseName, TracePluginConfig& config) noexcept :
 		m_text(text),
 		m_databaseName(databaseName),
 		m_config(config)
@@ -67,15 +70,18 @@ private:
 
 	void readConfig();
 
-	void expandPattern(const ConfigFile::Parameter* el, Firebird::PathName& valueToExpand);
+	void expandPattern(const ConfigFile::Parameter* el, PathName& valueToExpand);
 	bool parseBoolean(const ConfigFile::Parameter* el) const;
 	ULONG parseUInteger(const ConfigFile::Parameter* el) const;
 	SectionType parseSectionKey(const ConfigFile::Parameter* el) const;
 
 	const char* const m_text;
-	const Firebird::PathName& m_databaseName;
+	const PathName& m_databaseName;
 	MatchPos m_subpatterns[10]{};
 	TracePluginConfig& m_config;
 };
+
+
+} // namespace Firebird::Ntrace
 
 #endif // TRACE_CONFIGURATION

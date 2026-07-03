@@ -27,9 +27,12 @@
 #include "ibase.h"
 #include "firebird/Interface.h"
 
+namespace Firebird
+{
+
+
 static constexpr USHORT SEGMENT_LIMIT = 65535;
 
-using namespace Firebird;
 
 bool BlobWrapper::open(IAttachment* db, ITransaction* trans, ISC_QUAD& blobid,
 					USHORT bpb_len, const UCHAR* bpb)
@@ -94,7 +97,7 @@ bool BlobWrapper::getSegment(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len)
 
 	const unsigned ilen = MIN(len, SEGMENT_LIMIT);
 	unsigned olen = 0;
-	const bool eof = m_blob->getSegment(m_status, ilen, buffer, &olen) == Firebird::IStatus::RESULT_NO_DATA;
+	const bool eof = m_blob->getSegment(m_status, ilen, buffer, &olen) == IStatus::RESULT_NO_DATA;
 	if (m_status->isEmpty() && !eof)
 	{
 		real_len = olen;
@@ -121,7 +124,7 @@ bool BlobWrapper::getData(FB_SIZE_T len, void* buffer, FB_SIZE_T& real_len,
 	{
 		unsigned olen = 0;
 		const unsigned ilen = MIN(len, SEGMENT_LIMIT);
-		const bool eof = m_blob->getSegment(m_status, ilen, buf2, &olen) == Firebird::IStatus::RESULT_NO_DATA;
+		const bool eof = m_blob->getSegment(m_status, ilen, buf2, &olen) == IStatus::RESULT_NO_DATA;
 		if (m_status->isEmpty() && !eof)
 		{
 			len -= olen;
@@ -278,3 +281,6 @@ bool BlobWrapper::getSize(FB_UINT64* size, ULONG* seg_count, USHORT* max_seg) co
 
 	return true;
 }
+
+
+}  // namespace Firebird

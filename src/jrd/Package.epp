@@ -41,8 +41,8 @@
 #include "../common/classes/VaryStr.h"
 #include "../dsql/make_proto.h" // DsqlDescMaker
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 DATABASE DB = FILENAME "ODS.RDB";
 
@@ -128,7 +128,7 @@ void ConstantValue::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScr
 
 	Attachment* attachment = tdbb->getAttachment();
 	MemoryPool* csb_pool = attachment->att_database->createPool();
-	ContextPoolHolder context(tdbb, csb_pool);
+	JrdContextPoolHolder context(tdbb, csb_pool);
 
 	AutoPtr<CompilerScratch> autoCsb(FB_NEW_POOL(*csb_pool) CompilerScratch(*csb_pool));
 	CompilerScratch* csb = autoCsb;
@@ -187,7 +187,7 @@ dsc* ConstantValue::makeValue(thread_db* tdbb)
 	Request* request = nullptr;
 	try
 	{
-		ContextPoolHolder context(tdbb, csb_pool);
+		JrdContextPoolHolder context(tdbb, csb_pool);
 
 		CompilerScratch* csb = nullptr;
 		Cleanup cc([csb]() {delete csb;});
@@ -451,3 +451,5 @@ ConstantValue* Package::findConstant(const QualifiedName& name)
 
 	return nullptr;
 }
+
+} // namespace Firebird::Jrd

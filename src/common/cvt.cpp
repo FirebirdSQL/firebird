@@ -44,7 +44,7 @@
 #include <ctype.h>
 #include "iberror.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/intlobj_new.h"
 #include "../common/gdsassert.h"
 #include "../common/CharSet.h"
@@ -52,7 +52,7 @@
 #include "../common/classes/timestamp.h"
 #include "../common/cvt.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/classes/FpeControl.h"
 #include "../common/dsc_proto.h"
@@ -73,7 +73,9 @@
 #endif
 
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /* normally the following two definitions are part of limits.h
    but due to a compiler bug on Apollo casting LONG_MIN to be a
@@ -142,9 +144,9 @@ static void float_to_text(const dsc*, dsc*, Callbacks*);
 static void decimal_float_to_text(const dsc*, dsc*, DecimalStatus, Callbacks*);
 static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
-static void localError(const Firebird::Arg::StatusVector&);
+static void localError(const Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
-static void make_null_string(const dsc*, TTypeId, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+static void make_null_string(const dsc*, TTypeId, const char**, vary*, USHORT, DecimalStatus, ErrorFunction);
 
 namespace {
 	class RetPtr;
@@ -1078,7 +1080,7 @@ void CVT_string_to_datetime(const dsc* desc,
 
 		// Fetch current date/time
 		tm times2;
-		Firebird::TimeStamp::getCurrentTimeStamp().decode(&times2);
+		TimeStamp::getCurrentTimeStamp().decode(&times2);
 
 		// Handle defaulting of year
 
@@ -1128,7 +1130,7 @@ void CVT_string_to_datetime(const dsc* desc,
 	// convert day/month/year to Julian and validate result
 	// This catches things like 29-Feb-1995 (not a leap year)
 
-	Firebird::TimeStamp ts(times);
+	TimeStamp ts(times);
 	validateTimeStamp(ts.value(), expect_type, desc, cb);
 
 	if (expect_type != expect_sql_time && expect_type != expect_sql_time_tz)
@@ -2388,7 +2390,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	switch (from->dsc_dtype)
 	{
 	case dtype_sql_time:
-		Firebird::TimeStamp::decode_time(*(GDS_TIME*) from->dsc_address,
+		TimeStamp::decode_time(*(GDS_TIME*) from->dsc_address,
 			&times.tm_hour, &times.tm_min, &times.tm_sec, &fractions);
 		break;
 
@@ -2400,12 +2402,12 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		break;
 
 	case dtype_sql_date:
-		Firebird::TimeStamp::decode_date(*(GDS_DATE *) from->dsc_address, &times);
+		TimeStamp::decode_date(*(GDS_DATE *) from->dsc_address, &times);
 		break;
 
 	case dtype_timestamp:
 		cb->isVersion4(version4); // Used in the conversion to text some lines below.
-		Firebird::TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) from->dsc_address, &times, &fractions);
+		TimeStamp::decode_timestamp(*(GDS_TIMESTAMP*) from->dsc_address, &times, &fractions);
 		break;
 
 	case dtype_timestamp_tz:
@@ -3707,7 +3709,7 @@ static void hex_to_value(const char*& string, const char* end, RetPtr* retValue)
 }
 
 
-static void localError(const Firebird::Arg::StatusVector&)
+static void localError(const Arg::StatusVector&)
 {
 	throw DummyException();
 }
@@ -3855,3 +3857,6 @@ void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err, 
 	CommonCallbacks callbacks(err);
 	CVT_move_common(from, to, decSt, &callbacks, trustedSource);
 }
+
+
+}	// namespace Firebird

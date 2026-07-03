@@ -50,11 +50,13 @@ DEFINE_TRACE_ROUTINE(nbak_trace);
 #define NBAK_TRACE_AST(message) /* nothing */
 #endif
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 class Lock;
 class Record;
@@ -82,7 +84,7 @@ public:
 	}
 };
 
-typedef Firebird::BePlusTree<AllocItem, ULONG, AllocItem> AllocItemTree;
+typedef BePlusTree<AllocItem, ULONG, AllocItem> AllocItemTree;
 
 // Class to synchronize access to backup state
 
@@ -135,7 +137,7 @@ protected:
  *  return the version which is fresher, because we don't know if it is merged or not.
  *  Merged pages are written only in database file.
  *
- *  For synchronization NBAK uses 3 lock types via Firebird::GlobalRWLock:
+ *  For synchronization NBAK uses 3 lock types via GlobalRWLock:
  *  LCK_backup_database, LCK_backup_alloc, LCK_backup_end.
  *
  *  LCK_backup_database protects "clean" state of database. Database is meant to be
@@ -178,7 +180,7 @@ private:
 	class StateWriteGuard
 	{
 	public:
-		StateWriteGuard(thread_db* tdbb, Jrd::WIN* window);
+		StateWriteGuard(thread_db* tdbb, WIN* window);
 		~StateWriteGuard();
 
 		void releaseHeader();
@@ -194,7 +196,7 @@ private:
 		StateWriteGuard& operator=(const StateWriteGuard&);
 
 		thread_db* m_tdbb;
-		Jrd::WIN* m_window;
+		WIN* m_window;
 		bool m_success;
 	};
 
@@ -208,7 +210,7 @@ public:
 			{
 				lock(tdbb, LCK_WAIT);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				unlock(tdbb);
 				throw;
@@ -222,7 +224,7 @@ public:
 
 		static bool lock(thread_db* tdbb, SSHORT wait)
 		{
-			Jrd::Attachment* const att = tdbb->getAttachment();
+			Attachment* const att = tdbb->getAttachment();
 			Database* const dbb = tdbb->getDatabase();
 
 			const bool ok = att ?
@@ -237,7 +239,7 @@ public:
 
 		static void unlock(thread_db* tdbb)
 		{
-			Jrd::Attachment* const att = tdbb->getAttachment();
+			Attachment* const att = tdbb->getAttachment();
 			Database* const dbb = tdbb->getDatabase();
 
 			if (att)
@@ -501,10 +503,10 @@ private:
 	AllocItemTree* alloc_table; // Cached allocation table of pages in difference file
 	UCHAR backup_state;
 	ULONG last_allocated_page; // Last physical page allocated in the difference file
-	Firebird::Array<UCHAR> temp_buffers_space;
+	Array<UCHAR> temp_buffers_space;
 	ULONG *alloc_buffer, *empty_buffer, *spare_buffer;
 	ULONG current_scn;
-	Firebird::PathName diff_name;
+	PathName diff_name;
 	bool explicit_diff_name;
 	bool flushInProgress;
 	bool shutDown;
@@ -513,10 +515,10 @@ private:
 	std::atomic_bool stateBlocking;			// blocking AST handler doesn't released stateLock
 
 	NBackupStateLock* stateLock;
-	Firebird::RWLock localStateLock;	// must be acquired before global stateLock
+	RWLock localStateLock;	// must be acquired before global stateLock
 										// Important: this lock must prefer readers to writers !
 	NBackupAllocLock* allocLock;
-	Firebird::RWLock localAllocLock;	// must be acquired before global allocLock
+	RWLock localAllocLock;	// must be acquired before global allocLock
 
 	ULONG findPageIndex(thread_db* tdbb, ULONG db_page);
 	void generateFilename();
@@ -546,6 +548,6 @@ private:
 };
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif /* JRD_NBAK_H */

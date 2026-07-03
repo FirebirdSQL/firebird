@@ -30,7 +30,7 @@
 #include "../jrd/sbm.h"
 
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Database;
 class Savepoint;
@@ -70,7 +70,7 @@ private:
 			return item.pageno;
 		}
 	};
-	typedef Firebird::BePlusTree<PageTran, ULONG, PageTran> PageTranMap;
+	typedef BePlusTree<PageTran, ULONG, PageTran> PageTranMap;
 
 
 	class RelationData
@@ -101,26 +101,26 @@ private:
 
 		void clear();
 
-		Firebird::MemoryPool& m_pool;
-		Firebird::SyncObject m_sync;
+		MemoryPool& m_pool;
+		SyncObject m_sync;
 		PageTranMap m_pages;
 		USHORT m_relID;
 	};
 
-	typedef	Firebird::SortedArray<
+	typedef	SortedArray<
 				RelationData*,
-				Firebird::EmptyStorage<RelationData*>,
+				EmptyStorage<RelationData*>,
 				USHORT,
 				RelationData> RelGarbageArray;
 
-	RelationData* getRelData(Firebird::Sync& sync, const USHORT relID, bool allowCreate);
+	RelationData* getRelData(Sync& sync, const USHORT relID, bool allowCreate);
 
-	Firebird::MemoryPool& m_pool;
-	Firebird::SyncObject m_sync;
+	MemoryPool& m_pool;
+	SyncObject m_sync;
 	RelGarbageArray m_relations;
 	USHORT m_nextRelID;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_GARBAGE_COLLECTOR_H

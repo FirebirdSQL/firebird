@@ -26,6 +26,10 @@
 
 #include "../gpre/parse.h"
 
+namespace Firebird::Gpre
+{
+
+
 act*		MSC_action(gpre_req*, act_t);
 UCHAR*		MSC_alloc(int);
 UCHAR*		MSC_alloc_permanent(int);
@@ -50,5 +54,7 @@ gpre_nod*	MSC_ternary(nod_t, gpre_nod*, gpre_nod*, gpre_nod*);
 gpre_nod*	MSC_unary(nod_t, gpre_nod*);
 gpre_usn*	MSC_username(const SCHAR*, USHORT);
 
-#endif // GPRE_MSC_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_MSC_PROTO_H

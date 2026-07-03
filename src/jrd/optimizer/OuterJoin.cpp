@@ -29,8 +29,8 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 //
@@ -217,3 +217,4 @@ RecordSource* OuterJoin::process()
 };
 
 
+}	// namespace Firebird::Jrd

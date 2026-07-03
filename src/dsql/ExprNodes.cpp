@@ -70,8 +70,8 @@
 
 #include "../dsql/PackageNodes.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 namespace
 {
@@ -203,8 +203,6 @@ namespace
 	}
 }
 
-namespace Jrd {
-
 
 static const long LONG_POS_MAX = 2147483647;
 static const SINT64 MAX_INT64_LIMIT = MAX_SINT64 / 10;
@@ -309,7 +307,7 @@ TriState LookupValueList::find(thread_db* tdbb, Request* request, const ValueExp
 void Printable::print(NodePrinter& printer) const
 {
 	NodePrinter subPrinter(printer.getIndent() + 1);
-	Firebird::string tag(internalPrint(subPrinter));
+	string tag(internalPrint(subPrinter));
 	printer.begin(tag);
 	printer.append(subPrinter);
 	printer.end();
@@ -582,7 +580,7 @@ string ValueExprNode::internalPrint(NodePrinter& printer) const
 //--------------------
 
 
-Firebird::string ValueListNode::internalPrint(NodePrinter& printer) const
+string ValueListNode::internalPrint(NodePrinter& printer) const
 {
 	ListExprNode::internalPrint(printer);
 
@@ -617,7 +615,7 @@ void ValueListNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 //--------------------
 
 
-Firebird::string RecSourceListNode::internalPrint(NodePrinter& printer) const
+string RecSourceListNode::internalPrint(NodePrinter& printer) const
 {
 	ListExprNode::internalPrint(printer);
 
@@ -3731,7 +3729,7 @@ dsc* CastNode::execute(thread_db* tdbb, Request* request) const
 
 // Cast from one datatype to another.
 dsc* CastNode::perform(thread_db* tdbb, impure_value* impure, dsc* value,
-	const dsc* castDesc, const ItemInfo* itemInfo, const Firebird::string& format)
+	const dsc* castDesc, const ItemInfo* itemInfo, const string& format)
 {
 	// If validation is not required and the source value is either NULL
 	// or already in the desired data type, simply return it "as is"
@@ -8734,7 +8732,7 @@ bool DsqlMapNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* ot
 //--------------------
 
 
-void DerivedFieldNode::getContextNumbers(Firebird::SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack)
+void DerivedFieldNode::getContextNumbers(SortedArray<USHORT>& contextNumbers, const DsqlContextStack& contextStack)
 {
 	for (DsqlContextStack::const_iterator stack(contextStack); stack.hasData(); ++stack)
 	{
@@ -10121,7 +10119,7 @@ dsc* ParameterNode::execute(thread_db* tdbb, Request* request) const
 
 		if (charSet->isMultiByte() && maxCharLength * charSet->maxBytesPerChar() == retDesc->dsc_length)
 		{
-			Firebird::HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
+			HalfStaticArray<UCHAR, BUFFER_SMALL> buffer;
 
 			retDesc->dsc_length = charSet->substring(retDesc->dsc_length, retDesc->dsc_address,
 				retDesc->dsc_length, buffer.getBuffer(retDesc->dsc_length), 0,
@@ -13284,7 +13282,7 @@ DmlNode* UdfCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 	for (auto& parameter : node->function(tdbb)->getInputFields())
 	{
-		NestConst<Jrd::ValueExprNode>* argValue;
+		NestConst<ValueExprNode>* argValue;
 		bool argExists = false;
 
 		if (parameter->prm_name.hasData())
@@ -13733,7 +13731,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 
 		try
 		{
-			Jrd::ContextPoolHolder context(tdbb, funcRequest->req_pool);	// Save the old pool.
+			JrdContextPoolHolder context(tdbb, funcRequest->req_pool);	// Save the old pool.
 
 			funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
@@ -14473,7 +14471,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 //--------------------
 
 
-Firebird::string RowsClause::internalPrint(NodePrinter& printer) const
+string RowsClause::internalPrint(NodePrinter& printer) const
 {
 	NODE_PRINT(printer, length);
 	NODE_PRINT(printer, skip);
@@ -14485,7 +14483,7 @@ Firebird::string RowsClause::internalPrint(NodePrinter& printer) const
 //--------------------
 
 
-Firebird::string GeneratorItem::internalPrint(NodePrinter& printer) const
+string GeneratorItem::internalPrint(NodePrinter& printer) const
 {
 	NODE_PRINT(printer, id);
 	NODE_PRINT(printer, name);
@@ -14600,4 +14598,4 @@ static void setParameterInfo(dsql_par* parameter, const dsql_ctx* context)
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

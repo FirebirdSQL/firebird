@@ -32,11 +32,18 @@
 #include "../jrd/intl.h"
 #include "../intl/country_codes.h"
 #include "../intl/charsets.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/dflt.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods.h"
 #include "../common/dsc.h"
+
+// Should go before types.h
+#include "SystemPrivileges.h"
+
+namespace Firebird::Jrd
+{
+
 
 //******************************
 // names.h
@@ -166,13 +173,6 @@ static inline constexpr int relfields[] =
 #undef END_RELATION
 
 //******************************
-// SystemPrivileges.h
-//	should go before types.h
-//******************************
-
-#include "SystemPrivileges.h"
-
-//******************************
 // types.h
 //******************************
 
@@ -194,5 +194,8 @@ static inline constexpr rtyp types[] =
 };
 
 #undef TYPE
+
+
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_INI_H

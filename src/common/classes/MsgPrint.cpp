@@ -32,9 +32,9 @@
 #include "../common/utils_proto.h"
 #include "../common/file_params.h"
 
-
-namespace MsgFormat
+namespace Firebird::MsgFormat
 {
+
 
 // Enough to the current conversions. If SINT128 is decoded as a full number
 // instead of two parts, it may be updated to 63, because 2^128 ~ 3.4e38.
@@ -352,8 +352,11 @@ int MsgPrintErr(const char* format, const SafeArg& arg, bool userFormatting)
 	return MsgPrint(st, format, arg, userFormatting);
 }
 
-} // namespace
+} // namespace Firebird::MsgFormat
 
+
+namespace Firebird
+{
 
 // Lookup and format message.  Return as much of formatted string as fits in caller's buffer.
 int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsize, TEXT* buffer,
@@ -377,14 +380,14 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 	}
 	else
 	{
-		Firebird::string s;
+		string s;
 		s.printf("can't format message %d:%d -- ", facility, number);
 		if (n == -1)
 			s += "message text not found";
 		else if (n == -2)
 		{
 			s += "message file ";
-			s += fb_utils::getPrefix(Firebird::IConfigManager::DIR_MSG, MSG_FILE).ToString();
+			s += fb_utils::getPrefix(IConfigManager::DIR_MSG, MSG_FILE).ToString();
 			s += " not found";
 		}
 		else
@@ -397,3 +400,6 @@ int fb_msg_format(void* handle, USHORT facility, USHORT number, unsigned int bsi
 
 	return (n > 0 ? total_msg : -total_msg);
 }
+
+
+} // namespace Firebird

@@ -50,9 +50,8 @@
 #include "../jrd/Attachment.h"
 #include "../jrd/CryptoManager.h"
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 // Out of alpha order because the first one was public.
@@ -398,7 +397,7 @@ void SDW_get_shadows(thread_db* tdbb)
 		// fb_assert (lock->lck_physical == LCK_none);
 
 		WIN window(HEADER_PAGE_NUMBER);
-		const header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+		const Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 		lock->setKey(header->hdr_shadow_count);
 		LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
 		CCH_RELEASE(tdbb, &window);
@@ -440,7 +439,7 @@ void SDW_init(thread_db* tdbb, bool activate, bool delete_files)
 
 	// set up the lock block for synchronizing addition of new shadows
 
-	header_page* header; // for sizeof here, used later
+	Ods::header_page* header; // for sizeof here, used later
 	constexpr USHORT key_length = sizeof(header->hdr_shadow_count);
 	Lock* lock = FB_NEW_RPT(*dbb->dbb_permanent, key_length)
 		Lock(tdbb, key_length, LCK_shadow, dbb, blocking_ast_shadowing);
@@ -453,7 +452,7 @@ void SDW_init(thread_db* tdbb, bool activate, bool delete_files)
 
 	WIN window(HEADER_PAGE_NUMBER);
 
-	header = (header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+	header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 	lock->setKey(header->hdr_shadow_count);
 	LCK_lock(tdbb, lock, LCK_SR, LCK_WAIT);
 	CCH_RELEASE(tdbb, &window);
@@ -540,7 +539,7 @@ void SDW_notify(thread_db* tdbb)
 	// on the shadow count, this is effectively an uninterruptible operation
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
 
 	// get an exclusive lock on the current shadowing semaphore to
@@ -797,7 +796,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	// check to see if the shadow is the same as the current database --
 	// if so, a shadow file is being accessed as a database
 
-	Firebird::PathName expanded_name(file_name);
+	PathName expanded_name(file_name);
 	ISC_expand_filename(expanded_name, false);
 	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
 	jrd_file* dbb_file = pageSpace->file;
@@ -839,22 +838,22 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 		// 3. make sure that the shadow has not already been activated
 
 		window.win_page = HEADER_PAGE_NUMBER;
-		const header_page* database_header =
-			(header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
+		const Ods::header_page* database_header =
+			(Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_header);
 		header_fetched++;
 
-		if (!PIO_read(tdbb, shadow_file, window.win_bdb, (PAG) spare_page, tdbb->tdbb_status_vector))
+		if (!PIO_read(tdbb, shadow_file, window.win_bdb, (Ods::PAG) spare_page, tdbb->tdbb_status_vector))
 		{
 			ERR_punt();
 		}
 
-		const header_page* shadow_header = (header_page*) spare_page;
+		const Ods::header_page* shadow_header = (Ods::header_page*) spare_page;
 
 		const UCHAR* p = shadow_header->hdr_data;
-		while (*p != HDR_end && *p != HDR_root_file_name) {
+		while (*p != Ods::HDR_end && *p != Ods::HDR_root_file_name) {
 			p += 2 + p[1];
 		}
-		if (*p++ == HDR_end)
+		if (*p++ == Ods::HDR_end)
 			BUGCHECK(163);		// msg 163 root file name not listed for shadow
 
 		// if the database file is not the same and the original file is
@@ -870,7 +869,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 
 		if ((shadow_header->hdr_creation_date[0] != database_header->hdr_creation_date[0]) ||
 			(shadow_header->hdr_creation_date[1] != database_header->hdr_creation_date[1]) ||
-			!(shadow_header->hdr_flags & hdr_active_shadow))
+			!(shadow_header->hdr_flags & Ods::hdr_active_shadow))
 		{
 			ERR_punt();
 		}
@@ -888,7 +887,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	}
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 		if (header_fetched) {
@@ -936,9 +935,9 @@ static void activate_shadow(thread_db* tdbb)
 	// clear the shadow bit on the header page
 
 	WIN window(HEADER_PAGE_NUMBER);
-	header_page* header = (header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
+	Ods::header_page* header = (Ods::header_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_header);
 	CCH_MARK_MUST_WRITE(tdbb, &window);
-	header->hdr_flags &= ~hdr_active_shadow;
+	header->hdr_flags &= ~Ods::hdr_active_shadow;
 
 	CCH_RELEASE(tdbb, &window);
 }
@@ -1021,7 +1020,7 @@ static int blocking_ast_shadowing(void* ast_object)
 
 		LCK_release(tdbb, lock);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 
 	return 0;
@@ -1043,7 +1042,7 @@ static bool check_for_file(thread_db* tdbb, const SCHAR* name, USHORT length)
  **************************************/
 
 	SET_TDBB(tdbb);
-	const Firebird::PathName path(name, length);
+	const PathName path(name, length);
 
 	try {
 		// This use of PIO_open is NOT checked against DatabaseAccess configuration
@@ -1052,7 +1051,7 @@ static bool check_for_file(thread_db* tdbb, const SCHAR* name, USHORT length)
 		jrd_file* temp_file = PIO_open(tdbb, path, path);
 		PIO_close(temp_file);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 		return false;
@@ -1131,3 +1130,6 @@ static void update_dbb_to_sdw(Database* dbb)
 	pageSpace->file = shadow->sdw_file;
 	shadow->sdw_flags |= SDW_rollover;
 }
+
+
+} // namespace Firebird::Jrd

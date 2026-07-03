@@ -48,6 +48,8 @@
 #include <process.h>			// _beginthread
 #endif
 
+using namespace Firebird;
+
 // Startup Configuration Entry point for regcfg.exe.
 //#define SVC_CONFIG          4
 //#define REGCFG_ENTRYPOINT   "LaunchInstReg"

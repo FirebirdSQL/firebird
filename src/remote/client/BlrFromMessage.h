@@ -32,12 +32,14 @@
 #include "firebird/Interface.h"
 #include "../common/classes/BlrWriter.h"
 
-namespace Remote {
+namespace Firebird::Remote
+{
 
-class BlrFromMessage : public Firebird::BlrWriter
+
+class BlrFromMessage : public BlrWriter
 {
 public:
-	BlrFromMessage(Firebird::IMessageMetadata* metadata, unsigned dialect, unsigned protocol);
+	BlrFromMessage(IMessageMetadata* metadata, unsigned dialect, unsigned protocol);
 
 	unsigned getLength();
 	const unsigned char* getBytes();
@@ -46,13 +48,14 @@ public:
 	virtual bool isVersion4();
 
 private:
-	void buildBlr(Firebird::IMessageMetadata* metadata);
+	void buildBlr(IMessageMetadata* metadata);
 
 	unsigned expectedMessageLength;
 	unsigned dialect;
 	unsigned protocol;
 };
 
-} // namespace Firebird
+
+} // namespace Firebird::Remote
 
 #endif // FB_REMOTE_CLIENT_BLR_FROM_MESSAGE

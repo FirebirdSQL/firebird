@@ -29,7 +29,7 @@
 #include "../dsql/sym.h"
 #include "../jrd/intl.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class dsql_ctx;
 	class dsql_fld;
 	class TypeClause;
@@ -79,16 +79,20 @@ namespace Jrd {
 	};
 }
 
+namespace Firebird::Jrd {
 
-Jrd::LiteralNode* MAKE_const_slong(SLONG);
-Jrd::LiteralNode* MAKE_const_sint64(SINT64 value, SCHAR scale);
-Jrd::ValueExprNode* MAKE_constant(const char*, Jrd::dsql_constant_type, SSHORT = 0);
-Jrd::LiteralNode* MAKE_str_constant(Jrd::IntlString*, CSetId);
-Jrd::FieldNode* MAKE_field(Jrd::dsql_ctx*, Jrd::dsql_fld*, Jrd::ValueListNode*);
-void MAKE_field(Jrd::dsql_fld*, const dsc*);
-Jrd::FieldNode* MAKE_field_name(const char*);
-Jrd::dsql_par* MAKE_parameter(Jrd::dsql_msg*, bool, bool, USHORT, const Jrd::ValueExprNode*);
-void MAKE_parameter_names(Jrd::dsql_par*, const Jrd::ValueExprNode*);
-Jrd::LiteralNode* MAKE_system_privilege(const char*);
+LiteralNode* MAKE_const_slong(SLONG);
+LiteralNode* MAKE_const_sint64(SINT64 value, SCHAR scale);
+ValueExprNode* MAKE_constant(const char*, dsql_constant_type, SSHORT = 0);
+LiteralNode* MAKE_str_constant(IntlString*, CSetId);
+FieldNode* MAKE_field(dsql_ctx*, dsql_fld*, ValueListNode*);
+void MAKE_field(dsql_fld*, const dsc*);
+FieldNode* MAKE_field_name(const char*);
+dsql_par* MAKE_parameter(dsql_msg*, bool, bool, USHORT, const ValueExprNode*);
+void MAKE_parameter_names(dsql_par*, const ValueExprNode*);
+LiteralNode* MAKE_system_privilege(const char*);
+
+} // namespace Firebird::Jrd
+
 
 #endif // DSQL_MAKE_PROTO_H

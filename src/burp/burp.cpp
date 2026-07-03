@@ -41,7 +41,7 @@
 #include "../jrd/ibsetjmp.h"
 #include "../common/msg_encode.h"
 #include "../jrd/ods.h"			// to get MAX_PAGE_SIZE
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../burp/burp.h"
 #include "../burp/std_desc.h"
 #include "../burp/split/spit.h"
@@ -84,9 +84,11 @@
 #include <sys/file.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird::Burp
+{
+
 using MsgFormat::SafeArg;
-using namespace Burp;
+
 
 inline constexpr const char* fopen_write_type = "w";
 inline constexpr const char* fopen_read_type = "r";
@@ -105,18 +107,18 @@ enum gbak_action
 	//FDESC	=	3 // CVC: Unused
 };
 
-static void close_out_transaction(gbak_action, Firebird::ITransaction**);
+static void close_out_transaction(gbak_action, ITransaction**);
 //static void enable_signals();
 //static void excp_handler();
 static SLONG get_number(const SCHAR*) noexcept;
 static ULONG get_size(const SCHAR*, burp_fil*);
 static gbak_action open_files(const TEXT *, const TEXT**, USHORT,
-							  const Firebird::ClumpletWriter&);
-static int svc_api_gbak(Firebird::UtilSvc*, const Switches& switches);
+							  const ClumpletWriter&);
+static int svc_api_gbak(UtilSvc*, const Switches& switches);
 static void burp_output(bool err, const SCHAR*, ...) ATTRIBUTE_FORMAT(2,3);
 static void burp_usage(const Switches& switches);
-static Switches::in_sw_tab_t* findSwitchOrThrow(Firebird::UtilSvc*, Switches& switches, Firebird::string& sw);
-static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv);
+static Switches::in_sw_tab_t* findSwitchOrThrow(UtilSvc*, Switches& switches, string& sw);
+static void processFetchPass(const SCHAR*& password, int& itr, const int argc, UtilSvc::ArgvType& argv);
 
 
 // fil.fil_length is FB_UINT64
@@ -140,7 +142,7 @@ static inline constexpr StatFormat STAT_FORMATS[] =
 	{"writes",	"%6" UQUADFORMAT" ", 7}
 };
 
-int BURP_main(Firebird::UtilSvc* uSvc)
+int BURP_main(UtilSvc* uSvc)
 {
 /**************************************
  *
@@ -157,9 +159,9 @@ int BURP_main(Firebird::UtilSvc* uSvc)
 	try {
 		exit_code = gbak(uSvc);
 	}
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
-		Firebird::StaticStatusVector status;
+		StaticStatusVector status;
 		e.stuffException(status);
 		UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
 		sa.init();
@@ -203,13 +205,13 @@ static unsigned int binIn(void* data, int len)
 
 	int n = read(bin, data, len);
 	if (n < 0)
-		Firebird::system_call_failed::raise("read(stdin)");
+		system_call_failed::raise("read(stdin)");
 
 	return n;
 }
 
 
-static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
+static int svc_api_gbak(UtilSvc* uSvc, const Switches& switches)
 {
 /**********************************************
  *
@@ -221,7 +223,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
  *	Run gbak using services APIs
  *
  **********************************************/
-    Firebird::string usr, pswd, service;
+    string usr, pswd, service;
     const SCHAR* pswd2 = NULL;
 	bool flag_restore = false;
 	bool flag_verbose = false;
@@ -231,9 +233,9 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 	bool flag_verbint = false;
 	SLONG verbint_val = 0;
 
-	Firebird::UtilSvc::ArgvType& argv = uSvc->argv;
+	UtilSvc::ArgvType& argv = uSvc->argv;
 	const int argc = uSvc->argv.getCount();
-	Firebird::string files[2];
+	string files[2];
 	unsigned fileIndex = 0;
 
 	for (int itr = 1; itr < argc; ++itr)
@@ -340,14 +342,14 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		}
 	}
 
-	const Firebird::string* dbName = flag_restore ? &files[1] : &files[0];
+	const string* dbName = flag_restore ? &files[1] : &files[0];
 
 	FbLocalStatus status;
-	Firebird::IService* svc_handle = nullptr;
+	IService* svc_handle = nullptr;
 
 	try
 	{
-		Firebird::ClumpletWriter spb(Firebird::ClumpletWriter::spbList, MAX_DPB_SIZE);
+		ClumpletWriter spb(ClumpletWriter::spbList, MAX_DPB_SIZE);
 
 		// isc_spb_user_name
 		// isc_spb_password
@@ -374,20 +376,20 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 #endif
 
 		// Fill command line options
-		Firebird::string options;
+		string options;
 		for (int itr = 1; itr < argc; ++itr)
 		{
 			if (!argv[itr])
 			{
 				continue;
 			}
-			Firebird::UtilSvc::addStringWithSvcTrmntr(argv[itr], options);
+			UtilSvc::addStringWithSvcTrmntr(argv[itr], options);
 		}
 		options.rtrim();
 
 		spb.insertString(isc_spb_command_line, options);
 
-		svc_handle = Firebird::DispatcherPtr()->attachServiceManager(&status, service.c_str(),
+		svc_handle = DispatcherPtr()->attachServiceManager(&status, service.c_str(),
 			spb.getBufferLength(), spb.getBuffer());
 		if (!status.isSuccess())
 		{
@@ -432,7 +434,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		}
 
 		// What are we going to receive from service manager
-		Firebird::ClumpletWriter receive(Firebird::ClumpletWriter::SpbReceiveItems, 16);
+		ClumpletWriter receive(ClumpletWriter::SpbReceiveItems, 16);
 		receive.insertTag(flag_verbose ? isc_info_svc_line : isc_info_svc_to_eof);
 		if (flag_restore)
 			receive.insertTag(isc_info_svc_stdin);
@@ -440,7 +442,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		unsigned int stdinRequest = 0;
 		for (bool running = true; running;) {
 			// Were we requested to send some data
-			Firebird::ClumpletWriter send(Firebird::ClumpletWriter::SpbSendItems, MAX_DPB_SIZE);
+			ClumpletWriter send(ClumpletWriter::SpbSendItems, MAX_DPB_SIZE);
 			UCHAR respbuf[16384];
 			if (stdinRequest)
 			{
@@ -462,10 +464,10 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 				return FINI_ERROR;
 			}
 
-			Firebird::ClumpletReader resp(Firebird::ClumpletReader::SpbResponse, respbuf, sizeof(respbuf));
+			ClumpletReader resp(ClumpletReader::SpbResponse, respbuf, sizeof(respbuf));
 			stdinRequest = 0;
 			int len = 0;
-			Firebird::string line;
+			string line;
 			bool not_ready = false;
 			for (resp.rewind(); running && !resp.isEof(); resp.moveNext())
 			{
@@ -502,7 +504,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 		svc_handle->release();
 		return FINI_OK;
 	}
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
 		FbLocalStatus s;
 		e.stuffException(&s);
@@ -515,7 +517,7 @@ static int svc_api_gbak(Firebird::UtilSvc* uSvc, const Switches& switches)
 }
 
 
-static Switches::in_sw_tab_t* findSwitchOrThrow(Firebird::UtilSvc* uSvc, Switches& switches, Firebird::string& sw)
+static Switches::in_sw_tab_t* findSwitchOrThrow(UtilSvc* uSvc, Switches& switches, string& sw)
 {
 /**************************************
  *
@@ -555,7 +557,7 @@ static Switches::in_sw_tab_t* findSwitchOrThrow(Firebird::UtilSvc* uSvc, Switche
 }
 
 
-int gbak(Firebird::UtilSvc* uSvc)
+int gbak(UtilSvc* uSvc)
 {
 /**************************************
  *
@@ -577,7 +579,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	tdgbl->burp_throw = true;
 	tdgbl->file_desc = INVALID_HANDLE_VALUE;
 
-	Firebird::UtilSvc::ArgvType& argv = uSvc->argv;
+	UtilSvc::ArgvType& argv = uSvc->argv;
 	const int argc = uSvc->argv.getCount();
 
 	try
@@ -624,11 +626,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 	bool verbint = false;
 	bool noGarbage = false, ignoreDamaged = false, noDbTrig = false;
 	bool transportableMentioned = false;
-	Firebird::string replicaMode;
+	string replicaMode;
 
 	for (int itr = 1; itr < argc; ++itr)
 	{
-		Firebird::string str = argv[itr];
+		string str = argv[itr];
 		if (str.isEmpty())
 		{
 			continue;
@@ -675,7 +677,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				if ((itr < argc - 1) && (*argv[itr + 1] != switch_char))
 				{
 					// find optional BURP_SW_OVERWRITE parameter
-					Firebird::string next(argv[itr + 1]);
+					string next(argv[itr + 1]);
 					next.upper();
 					if (strstr(BURP_SW_OVERWRITE, next.c_str()) == BURP_SW_OVERWRITE)
 					{
@@ -943,7 +945,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 					// msg 4 redirect location for output is not specified
 				}
 
-				Firebird::string up(redirect);
+				string up(redirect);
 				up.upper();
 				tdgbl->sw_redirect = (up == output_suppress) ? NOOUTPUT : REDIRECT;
 
@@ -1161,7 +1163,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		else if (!file2)
 			file2 = file->fil_name.c_str();
 
-		Firebird::PathName expanded;
+		PathName expanded;
 		expandDatabaseName(file->fil_name, expanded, NULL);
 
 		for (file_list = file->fil_next; file_list;
@@ -1173,7 +1175,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 				// msg 9 mutiple sources or destinations specified
 			}
 
-			Firebird::PathName expanded2;
+			PathName expanded2;
 			expandDatabaseName(file_list->fil_name, expanded2, NULL);
 			if (file->fil_name == expanded2 || expanded == expanded2)
 			{
@@ -1185,7 +1187,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	}
 
 	// Initialize 'dpb'
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 
 	dpb.insertString(isc_dpb_gbak_attach, FB_VERSION, fb_strlen(FB_VERSION));
 	uSvc->fillDpb(dpb);
@@ -1472,7 +1474,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 	BURP_exit_local(result, tdgbl);
 	}	// try
 
-	catch (const Firebird::LongJump&)
+	catch (const LongJump&)
 	{
 		// All calls to exit_local(), normal and error exits, wind up here
 		tdgbl->burp_throw = false;
@@ -1483,7 +1485,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 		exit_code = tdgbl->exit_code;
 	}
 
-	catch (const Firebird::Exception& e)
+	catch (const Exception& e)
 	{
 		// Non-burp exception was caught
 		tdgbl->burp_throw = false;
@@ -1542,8 +1544,7 @@ int gbak(Firebird::UtilSvc* uSvc)
 }
 
 
-
-void BURP_abort(const Firebird::IStatus* status)
+void BURP_abort(const IStatus* status)
 {
 /**************************************
  *
@@ -1629,7 +1630,7 @@ void BURP_error(USHORT errcode, bool abort, const char* str)
 }
 
 
-void BURP_error_redirect(const Firebird::IStatus* status_vector, USHORT errcode, const SafeArg& arg)
+void BURP_error_redirect(const IStatus* status_vector, USHORT errcode, const SafeArg& arg)
 {
 /**************************************
  *
@@ -1660,7 +1661,7 @@ void BURP_exit_local(int code, BurpGlobals* tdgbl)
 {
 	tdgbl->exit_code = code;
 	if (tdgbl->burp_throw)
-		throw Firebird::LongJump();
+		throw LongJump();
 }
 
 
@@ -1721,7 +1722,7 @@ void BURP_msg_get(USHORT number, TEXT* output_msg, const SafeArg& arg)
 	strcpy(output_msg, buffer);
 }
 
-void OutputVersion::callback(Firebird::CheckStatusWrapper* status, const char* text)
+void OutputVersion::callback(CheckStatusWrapper* status, const char* text)
 {
 /**************************************
  *
@@ -1857,7 +1858,7 @@ void BURP_print_status(const Firebird::IStatus* status_vector, bool serviceFlag,
 }
 
 
-void BURP_print_warning(const Firebird::IStatus* status, bool printErrorAsWarning)
+void BURP_print_warning(const IStatus* status, bool printErrorAsWarning)
 {
 /**************************************
  *
@@ -1943,7 +1944,7 @@ void BURP_verbose(USHORT number, const string& str)
 }
 
 
-static void close_out_transaction(gbak_action action, Firebird::ITransaction** tPtr)
+static void close_out_transaction(gbak_action action, ITransaction** tPtr)
 {
 /**************************************
  *
@@ -2024,7 +2025,7 @@ static SLONG get_number(const SCHAR* string) noexcept
 static gbak_action open_files(const TEXT* file1,
 							  const TEXT** file2,
 							  USHORT sw_replace,
-							  const Firebird::ClumpletWriter& dpb)
+							  const ClumpletWriter& dpb)
 {
 /**************************************
  *
@@ -2047,7 +2048,7 @@ static gbak_action open_files(const TEXT* file1,
 
 	if (sw_replace != IN_SW_BURP_C && sw_replace != IN_SW_BURP_R)
 	{
-		Firebird::DispatcherPtr provider;
+		DispatcherPtr provider;
 
 		// provide crypt key(s) for engine
 
@@ -2066,7 +2067,7 @@ static gbak_action open_files(const TEXT* file1,
 		tdgbl->db_handle = provider->attachDatabase(&status_vector, file1,
 			dpb.getBufferLength(), dpb.getBuffer());
 
-		if (!(status_vector->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector->getState() & IStatus::STATE_ERRORS))
 		{
 			if (sw_replace != IN_SW_BURP_B)
 			{
@@ -2086,7 +2087,7 @@ static gbak_action open_files(const TEXT* file1,
 				BURP_message(139, SafeArg() << file1);
 				// msg 139 Version(s) for database "%s"
 				OutputVersion outputVersion("\t%s\n");
-				Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, tdgbl->db_handle, &outputVersion);
+				UtilInterfacePtr()->getFbVersion(&status_vector, tdgbl->db_handle, &outputVersion);
 			}
 			BURP_verbose(166, file1); // msg 166: readied database %s for backup
 
@@ -2214,7 +2215,7 @@ static gbak_action open_files(const TEXT* file1,
 			}
 			else
 			{
-				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
+				string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
 #else
@@ -2324,7 +2325,7 @@ static gbak_action open_files(const TEXT* file1,
 		tdgbl->stdIoMode = false;
 
 		// open first file
-		Firebird::string nm = tdgbl->toSystem(fil->fil_name);
+		string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
 		if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
@@ -2370,7 +2371,7 @@ static gbak_action open_files(const TEXT* file1,
 					return QUIT;
 				}
 				tdgbl->action->act_file = fil;
-				Firebird::string nm = tdgbl->toSystem(fil->fil_name);
+				string nm = tdgbl->toSystem(fil->fil_name);
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
@@ -2439,7 +2440,7 @@ static gbak_action open_files(const TEXT* file1,
 
 	if (sw_replace == IN_SW_BURP_C || sw_replace == IN_SW_BURP_R)
 	{
-		Firebird::DispatcherPtr provider;
+		DispatcherPtr provider;
 
 		// provide crypt key(s) for engine
 
@@ -2457,7 +2458,7 @@ static gbak_action open_files(const TEXT* file1,
 		tdgbl->db_handle = provider->attachDatabase(&status_vector, *file2,
 			dpb.getBufferLength(), dpb.getBuffer());
 
-		if (!(status_vector->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (!(status_vector->getState() & IStatus::STATE_ERRORS))
 		{
 			if (sw_replace == IN_SW_BURP_C)
 			{
@@ -2475,9 +2476,9 @@ static gbak_action open_files(const TEXT* file1,
 			{
 				tdgbl->db_handle->dropDatabase(&status_vector);
 
-				if (status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status_vector->getState() & IStatus::STATE_ERRORS)
 				{
-					Firebird::FbLocalStatus status2;
+					FbLocalStatus status2;
 					tdgbl->db_handle->detach(&status2);
 
 					if (status2->getState() & Firebird::IStatus::STATE_ERRORS)
@@ -2544,7 +2545,7 @@ static void burp_output(bool err, const SCHAR* format, ...)
 		}
 		else
 		{
-			Firebird::string buf;
+			string buf;
 			buf.vprintf(format, arglist);
 			if (err)
 				tdgbl->uSvc->outputError(buf.c_str());
@@ -2738,16 +2739,16 @@ void BurpGlobals::setupSkipIncludePattern(const string& regexp, USHORT alreadySe
 				"\\", 1));
 		}
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
-		Firebird::fatal_exception::raiseFmt(
+		fatal_exception::raiseFmt(
 			"error while compiling regular expression \"%s\"", regexp.c_str());
 	}
 }
 
-Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
+string BurpGlobals::toSystem(const PathName& from)
 {
-	Firebird::string to = from.ToString();
+	string to = from.ToString();
 	if (uSvc->utf8FileNames())
 		ISC_utf8ToSystem(to);
 	return to;
@@ -2757,8 +2758,7 @@ namespace // for local symbols
 {
 	enum Pattern { NOT_SET = 0, MATCH = 1, NOT_MATCH = 2 };
 
-	Pattern checkPattern(Firebird::AutoPtr<Firebird::SimilarToRegex>& matcher,
-					const char* name)
+	Pattern checkPattern(AutoPtr<SimilarToRegex>& matcher, const char* name)
 	{
 		if (!matcher)
 			return NOT_SET;
@@ -2907,7 +2907,7 @@ void BurpGlobals::print_stats_header()
 	burp_output(false, "\n");
 }
 
-static void processFetchPass(const SCHAR*& password, int& itr, const int argc, Firebird::UtilSvc::ArgvType& argv)
+static void processFetchPass(const SCHAR*& password, int& itr, const int argc, UtilSvc::ArgvType& argv)
 {
 	if (++itr >= argc)
 	{
@@ -2938,3 +2938,5 @@ static void processFetchPass(const SCHAR*& password, int& itr, const int argc, F
 		break;
 	}
 }
+
+} // namespace Firebird::Burp

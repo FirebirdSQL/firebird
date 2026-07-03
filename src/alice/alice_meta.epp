@@ -53,9 +53,11 @@ DATABASE DB = STATIC FILENAME "yachts.lnk";
 #define DB			tdgbl->db_handle
 #define gds_trans	tdgbl->tr_handle
 
-typedef Firebird::HalfStaticArray<TEXT, 1024> TextBuffer;
+namespace Firebird::Alice {
 
-static void get_string(const TEXT**, Firebird::string&);
+typedef HalfStaticArray<TEXT, 1024> TextBuffer;
+
+static void get_string(const TEXT**, string&);
 static USHORT get_capabilities(ISC_STATUS*);
 static tdr* get_description(ISC_QUAD*);
 static void parse_fullpath(tdr*);
@@ -81,7 +83,7 @@ static const rfr_tab_t rfr_table[] =
 static inline void return_error(const ISC_STATUS* /*user_status*/)
 {
 	ALICE_print_status(true, gds_status);
-	Firebird::LongJump::raise();
+	LongJump::raise();
 }
 
 /*____________________________________________________________
@@ -243,7 +245,7 @@ void MET_set_capabilities(ISC_STATUS* user_status, tdr* trans)
  *		Eat a string with a byte-encoded length.
  */
 
-static void get_string(const TEXT** ptr, Firebird::string& str)
+static void get_string(const TEXT** ptr, string& str)
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 
@@ -316,11 +318,11 @@ static tdr* get_description(ISC_QUAD* blob_id)
 		return NULL;
 
 	tdr* trans = NULL;
-	Firebird::string host_site;
-	Firebird::string database_path;
+	string host_site;
+	string database_path;
 
 	const TEXT* p = buffer.begin();
-	Firebird::MemoryPool& pool(*tdgbl->getDefaultPool());
+	MemoryPool& pool(*tdgbl->getDefaultPool());
 
 	// skip version number
 	++p;
@@ -380,8 +382,8 @@ static tdr* get_description(ISC_QUAD* blob_id)
 
 static void parse_fullpath(tdr* trans)
 {
-	Firebird::PathName filename = trans->tdr_fullpath.c_str();
-	Firebird::PathName hostname;
+	PathName filename = trans->tdr_fullpath.c_str();
+	PathName hostname;
 
 	// Find the last remote node in the path
 
@@ -442,3 +444,5 @@ static bool snarf_blob(ISC_QUAD* blob_id, TextBuffer& buffer)
 
 	return true;
 }
+
+} // namespace Firebird::Alice

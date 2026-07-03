@@ -28,8 +28,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------
 // Data access: nested loops join
@@ -286,3 +287,6 @@ bool NestedLoopJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T n) const
 			return true;
 	}
 }
+
+
+}	// namespace Firebird::Jrd

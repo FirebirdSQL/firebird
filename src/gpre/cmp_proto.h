@@ -24,6 +24,10 @@
 #ifndef GPRE_CMP_PROTO_H
 #define GPRE_CMP_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 void	CMP_check(gpre_req*, SSHORT);
 void	CMP_compile_request(gpre_req*);
 void	CMP_external_field(gpre_req*, const gpre_fld*);
@@ -32,5 +36,7 @@ ULONG	CMP_next_ident();
 void	CMP_stuff_symbol(gpre_req*, const gpre_sym*);
 void	CMP_t_start(gpre_tra*);
 
-#endif // GPRE_CMP_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_CMP_PROTO_H

@@ -37,32 +37,32 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/ImplementHelper.h"
 
-namespace Auth {
+namespace Firebird::Auth {
 
 class WriterImplementation :
-	public Firebird::AutoIface<Firebird::IWriterImpl<WriterImplementation, Firebird::CheckStatusWrapper> >
+	public AutoIface<IWriterImpl<WriterImplementation, CheckStatusWrapper> >
 {
 public:
 	WriterImplementation();
 
-	void store(Firebird::ClumpletWriter* to, unsigned char tag);
+	void store(ClumpletWriter* to, unsigned char tag);
 	void setPlugin(const char* m);
 
 	// IWriter implementation
 	void reset();
-	void add(Firebird::CheckStatusWrapper* st, const char* name);
-	void setType(Firebird::CheckStatusWrapper* st, const char* value);
-	void setDb(Firebird::CheckStatusWrapper* st, const char* value);
+	void add(CheckStatusWrapper* st, const char* name);
+	void setType(CheckStatusWrapper* st, const char* value);
+	void setDb(CheckStatusWrapper* st, const char* value);
 
 private:
-	Firebird::ClumpletWriter current, result;
-	Firebird::string plugin, type;
+	ClumpletWriter current, result;
+	string plugin, type;
 	unsigned int sequence;
 
 	void putLevel();
 };
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 
 #endif // FB_AUTH_H

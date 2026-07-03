@@ -23,8 +23,6 @@
 #include "firebird.h"
 #include "../jrd/rpb_chain.h"
 
-using namespace Jrd;
-
 #ifdef DEV_BUILD
 #define ExecAssert(x) fb_assert(x)
 #else  // DEV_BUILD
@@ -32,6 +30,10 @@ using namespace Jrd;
 #endif // DEV_BUILD
 
 // rpb_chain.h includes req.h => struct record_param.
+
+namespace Firebird::Jrd
+{
+
 
 int traRpbList::PushRpb(record_param* value)
 {
@@ -73,3 +75,5 @@ bool traRpbList::PopRpb(record_param* value, int Level)
 	return rc;
 }
 
+
+} // namespace Firebird::Jrd

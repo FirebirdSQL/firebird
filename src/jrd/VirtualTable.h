@@ -24,7 +24,7 @@
 #ifndef JRD_VIRTUAL_TABLE_H
 #define JRD_VIRTUAL_TABLE_H
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class VirtualTable
 	{
@@ -33,7 +33,6 @@ namespace Jrd
 		static void modify(thread_db*, record_param*, record_param*);
 		static void store(thread_db*, record_param*);
 	};
-
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_VIRTUAL_TABLE_H

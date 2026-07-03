@@ -31,10 +31,14 @@
 #include "../common/classes/init.h"
 #include "../common/classes/tree.h"
 
-class TempSpace : public Firebird::File
+namespace Firebird::Jrd
+{
+
+
+class TempSpace : public File
 {
 public:
-	TempSpace(MemoryPool& pool, const Firebird::PathName& prefix, bool dynamic = true);
+	TempSpace(MemoryPool& pool, const PathName& prefix, bool dynamic = true);
 	virtual ~TempSpace();
 
 	FB_SIZE_T read(offset_t offset, void* buffer, FB_SIZE_T length) override;
@@ -61,7 +65,7 @@ public:
 		size_t size;
 	};
 
-	typedef Firebird::Array<SegmentInMemory> Segments;
+	typedef Array<SegmentInMemory> Segments;
 
 	ULONG allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize, Segments& segments);
 
@@ -88,7 +92,7 @@ private:
 		virtual FB_SIZE_T write(offset_t offset, const void* buffer, FB_SIZE_T length) = 0;
 
 		virtual UCHAR* inMemory(offset_t offset, size_t size) const noexcept = 0;
-		virtual bool sameFile(const Firebird::TempFile* file) const noexcept = 0;
+		virtual bool sameFile(const TempFile* file) const noexcept = 0;
 
 		Block *prev;
 		Block *next;
@@ -118,7 +122,7 @@ private:
 			return NULL;
 		}
 
-		bool sameFile(const Firebird::TempFile*) const noexcept override
+		bool sameFile(const TempFile*) const noexcept override
 		{
 			return false;
 		}
@@ -143,7 +147,7 @@ private:
 	class FileBlock : public Block
 	{
 	public:
-		FileBlock(Firebird::TempFile* f, Block* tail, size_t length)
+		FileBlock(TempFile* f, Block* tail, size_t length)
 			: Block(tail, length), file(f)
 		{
 			fb_assert(file);
@@ -163,18 +167,18 @@ private:
 			return NULL;
 		}
 
-		bool sameFile(const Firebird::TempFile* aFile) const noexcept override
+		bool sameFile(const TempFile* aFile) const noexcept override
 		{
 			return (aFile == this->file);
 		}
 
 	private:
-		Firebird::TempFile* file;
+		TempFile* file;
 		offset_t seek;
 	};
 
 	Block* findBlock(offset_t& offset) const;
-	Firebird::TempFile* setupFile(FB_SIZE_T size);
+	TempFile* setupFile(FB_SIZE_T size);
 
 	UCHAR* findMemory(offset_t& begin, offset_t end, size_t size) const;
 
@@ -217,18 +221,18 @@ private:
 	};
 
 	MemoryPool& pool;
-	Firebird::PathName filePrefix;
+	PathName filePrefix;
 	offset_t logicalSize;
 	offset_t physicalSize;
 	offset_t localCacheUsage;
 	Block* head;
 	Block* tail;
-	Firebird::Array<Firebird::TempFile*> tempFiles;
-	Firebird::Array<UCHAR> initialBuffer;
+	Array<TempFile*> tempFiles;
+	Array<UCHAR> initialBuffer;
 	bool initiallyDynamic;
 
-	typedef Firebird::BePlusTree<Segment*, offset_t, Segment> FreeSegmentTree;
-	typedef Firebird::BePlusTree<SegmentsStack, offset_t, SegmentsStack> FreeSegmentsStackTree;
+	typedef BePlusTree<Segment*, offset_t, Segment> FreeSegmentTree;
+	typedef BePlusTree<SegmentsStack, offset_t, SegmentsStack> FreeSegmentsStackTree;
 
 	class FreeSegmentBySize
 	{
@@ -250,9 +254,12 @@ private:
 	FreeSegmentTree freeSegments;
 	FreeSegmentBySize freeSegmentsBySize;
 
-	static Firebird::GlobalPtr<Firebird::Mutex> initMutex;
-	static Firebird::TempDirectoryList* tempDirs;
+	static GlobalPtr<Mutex> initMutex;
+	static TempDirectoryList* tempDirs;
 	static FB_SIZE_T minBlockSize;
 };
+
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_TEMP_SPACE_H

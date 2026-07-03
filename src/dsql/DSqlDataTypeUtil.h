@@ -27,7 +27,7 @@
 
 #include "../jrd/DataTypeUtil.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 	class DsqlCompilerScratch;
 

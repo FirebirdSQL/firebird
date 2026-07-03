@@ -35,8 +35,11 @@
 #endif
 #include <fcntl.h>
 
-using namespace Firebird;
-Firebird::Mutex open_mutex;
+namespace Firebird::Ntrace
+{
+
+
+Mutex open_mutex;
 
 void FileObject::open(int flags, int pflags)
 {
@@ -137,7 +140,7 @@ void FileObject::reopen()
 	//fchmod(file, PMASK);
 }
 
-bool FileObject::renameFile(const Firebird::PathName new_filename)
+bool FileObject::renameFile(const PathName new_filename)
 {
 	if (rename(filename.c_str(), new_filename.c_str()))
 	{
@@ -185,3 +188,6 @@ SINT64 FileObject::seek(SINT64 newOffset, SeekOrigin origin)
 
 	return result;
 }
+
+
+} // namespace Firebird::Ntrace

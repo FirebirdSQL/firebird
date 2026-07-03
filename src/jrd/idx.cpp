@@ -68,9 +68,9 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 static idx_e check_duplicates(thread_db*, Record*, index_desc*, index_insertion*, jrd_rel*);
 static idx_e check_foreign_key(thread_db*, Record*, jrd_rel*, jrd_tra*, index_desc*, IndexErrorContext&);
@@ -205,8 +205,6 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 	return true;
 }
 
-
-namespace Jrd {
 
 class IndexCreateTask : public Task
 {
@@ -536,7 +534,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		fb_assert(!m_exprBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
-		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
+		JrdContextPoolHolder context(tdbb, dbb->createPool());
 
 		idx->idx_expression_node = static_cast<ValueExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
 			getPermanent(relation), &m_exprBlob, &csb, &idx->idx_expression_statement, false, false));
@@ -549,7 +547,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		fb_assert(!m_condBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
-		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
+		JrdContextPoolHolder context(tdbb, dbb->createPool());
 
 		idx->idx_condition_node = static_cast<BoolExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
 			getPermanent(relation), &m_condBlob, &csb, &idx->idx_condition_statement, false, false));
@@ -821,8 +819,6 @@ int IndexCreateTask::getMaxWorkers()
 	return MIN(parWorkers, m_countPP);
 }
 
-}; // namespace Jrd
-
 
 void IDX_create_index(thread_db* tdbb,
 					  IdxCreate createMethod,
@@ -998,7 +994,7 @@ bool IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 		fb_assert(relPages->rel_index_root);
 
 		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-		index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 		BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
 		return true;
@@ -1078,7 +1074,7 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	fb_assert(relPages->rel_index_root);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
@@ -2092,3 +2088,6 @@ static idx_e insert_key(thread_db* tdbb,
 
 	return result;
 }
+
+
+} // namespace Firebird::Jrd

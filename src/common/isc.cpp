@@ -61,6 +61,10 @@
 #include <aclapi.h>
 #include <lmcons.h>
 
+namespace Firebird
+{
+
+
 class SecurityAttributes
 {
 public:
@@ -74,7 +78,7 @@ public:
 		// Pseudo-handles do not work on WinNT. Need real process handle.
 		HANDLE hCurrentProcess = OpenProcess(READ_CONTROL | WRITE_DAC, FALSE, GetCurrentProcessId());
 		if (hCurrentProcess == NULL) {
-			Firebird::system_call_failed::raise("OpenProcess");
+			system_call_failed::raise("OpenProcess");
 		}
 
 		DWORD result = GetSecurityInfo(hCurrentProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
@@ -90,7 +94,7 @@ public:
 		if (result != ERROR_SUCCESS)
 		{
 			CloseHandle(hCurrentProcess);
-			Firebird::system_call_failed::raise("GetSecurityInfo", result);
+			system_call_failed::raise("GetSecurityInfo", result);
 		}
 
 		// NULL pOldACL means all privileges. If we assign pNewACL in this case
@@ -168,7 +172,10 @@ private:
 	MemoryPool& m_pool;
 };
 
-static Firebird::InitInstance<SecurityAttributes> security_attributes;
+static InitInstance<SecurityAttributes> security_attributes;
+
+
+} // namespace Firebird
 
 #endif // WIN_NT
 
@@ -198,6 +205,9 @@ static Firebird::InitInstance<SecurityAttributes> security_attributes;
 #ifndef O_RDWR
 #include <fcntl.h>
 #endif
+
+namespace Firebird
+{
 
 
 bool ISC_check_process_existence(SLONG pid)
@@ -307,7 +317,7 @@ TEXT* ISC_get_host(TEXT* string, USHORT length)
 }
 #endif
 
-const TEXT* ISC_get_host(Firebird::string& host)
+const TEXT* ISC_get_host(string& host)
 {
 /**************************************
  *
@@ -326,7 +336,7 @@ const TEXT* ISC_get_host(Firebird::string& host)
 }
 
 #ifdef UNIX
-bool ISC_get_user(Firebird::string* name, int* id, int* group)
+bool ISC_get_user(string* name, int* id, int* group)
 {
 /**************************************
  *
@@ -368,7 +378,7 @@ bool ISC_get_user(Firebird::string* name, int* id, int* group)
 
 
 #ifdef WIN_NT
-bool ISC_get_user(Firebird::string* name, int* id, int* group)
+bool ISC_get_user(string* name, int* id, int* group)
 {
 /**************************************
  *
@@ -408,7 +418,7 @@ bool ISC_get_user(Firebird::string* name, int* id, int* group)
 }
 #endif //WIN_NT
 
-inline void setPrefixIfNotEmpty(const Firebird::PathName& prefix, SSHORT arg_type)
+inline void setPrefixIfNotEmpty(const PathName& prefix, SSHORT arg_type)
 {
 /**************************************
  *
@@ -451,7 +461,7 @@ SLONG ISC_set_prefix(const TEXT* sw, const TEXT* path)
 	 */
 	static struct ESwitches
 	{
-		Firebird::PathName prefix, lockPrefix, msgPrefix;
+		PathName prefix, lockPrefix, msgPrefix;
 
 		explicit ESwitches(MemoryPool& p)
 			: prefix(p), lockPrefix(p), msgPrefix(p)
@@ -462,9 +472,9 @@ SLONG ISC_set_prefix(const TEXT* sw, const TEXT* path)
 	{
 		if (eSw)
 		{
-			setPrefixIfNotEmpty(eSw->prefix, IB_PREFIX_TYPE);
-			setPrefixIfNotEmpty(eSw->lockPrefix, IB_PREFIX_LOCK_TYPE);
-			setPrefixIfNotEmpty(eSw->msgPrefix, IB_PREFIX_MSG_TYPE);
+			setPrefixIfNotEmpty(eSw->prefix, Why::IB_PREFIX_TYPE);
+			setPrefixIfNotEmpty(eSw->lockPrefix, Why::IB_PREFIX_LOCK_TYPE);
+			setPrefixIfNotEmpty(eSw->msgPrefix, Why::IB_PREFIX_MSG_TYPE);
 
 			delete eSw;
 			eSw = 0;
@@ -526,7 +536,7 @@ void iscLogStatus(const TEXT* text, const ISC_STATUS* status_vector)
 
 	try
 	{
-		Firebird::string buffer(text ? text : "");
+		string buffer(text ? text : "");
 
 		TEXT temp[BUFFER_LARGE];
 		while (fb_interpret(temp, sizeof(temp), &status_vector))
@@ -540,23 +550,23 @@ void iscLogStatus(const TEXT* text, const ISC_STATUS* status_vector)
 
 		gds__log("%s", buffer.c_str());
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{} // no-op
 }
 
 
-void iscLogStatus(const TEXT* text, const Firebird::IStatus* status)
+void iscLogStatus(const TEXT* text, const IStatus* status)
 {
-	Firebird::StaticStatusVector tmp;
+	StaticStatusVector tmp;
 	tmp.mergeStatus(status);
 	iscLogStatus(text, tmp.begin());
 }
 
 
-void iscDbLogStatus(const TEXT* text, Firebird::IStatus* status)
+void iscDbLogStatus(const TEXT* text, IStatus* status)
 {
 	const TEXT* hdr = NULL;
-	Firebird::string buf;
+	string buf;
 	if (text)
 	{
 		buf = "Database: ";
@@ -567,7 +577,7 @@ void iscDbLogStatus(const TEXT* text, Firebird::IStatus* status)
 }
 
 
-void iscLogException(const char* text, const Firebird::Exception& e)
+void iscLogException(const char* text, const Exception& e)
 {
 /**************************************
  *
@@ -579,7 +589,7 @@ void iscLogException(const char* text, const Firebird::Exception& e)
  *	Add record about an exception to firebird.log
  *
  **************************************/
-	Firebird::StaticStatusVector s;
+	StaticStatusVector s;
 	e.stuffException(s);
 	iscLogStatus(text, s.begin());
 }
@@ -642,3 +652,6 @@ void iscSafeConcatPath(TEXT *resultString, const TEXT *appendString)
 	memcpy(&resultString[len], appendString, alen);
 	resultString[len + alen] = 0;
 }
+
+
+} // namespace Firebird

@@ -48,17 +48,21 @@
 // operator in destructor will cause AV.
 #undef DEBUG_INIT
 
+namespace Firebird
+{
+
+
 static bool dontCleanup = false;
 
 namespace
 {
 #ifdef DEV_BUILD
-	[[noreturn]] void cleanError(const Firebird::Exception* e)
+	[[noreturn]] void cleanError(const Exception* e)
 	{
 		if (e)
 		{
 			// This is done to be able to look at status in debugger
-			Firebird::StaticStatusVector status;
+			StaticStatusVector status;
 			e->stuffException(status);
 		}
 
@@ -66,7 +70,7 @@ namespace
 		abort();
 	}
 #else
-	inline void cleanError(const Firebird::Exception*) noexcept { }
+	inline void cleanError(const Exception*) noexcept { }
 #endif
 
 	// This helps initialize globals, needed before regular ctors run
@@ -89,14 +93,14 @@ namespace
 		initDone = 2;
 
 #ifdef WIN_NT
-		if (Firebird::bDllProcessExiting)
+		if (bDllProcessExiting)
 			dontCleanup = true;
 #endif
 		if (dontCleanup)
 			return;
 
 #ifdef DEBUG_GDS_ALLOC
-		Firebird::AutoPtr<FILE> file;
+		AutoPtr<FILE> file;
 
 		{	// scope
 			char name[PATH_MAX];
@@ -110,14 +114,14 @@ namespace
 		}
 #endif	// DEBUG_GDS_ALLOC
 
-		Firebird::InstanceControl::destructors();
+		InstanceControl::destructors();
 
 		if (dontCleanup)
 			return;
 
 		try
 		{
-			Firebird::StaticMutex::release();
+			StaticMutex::release();
 		}
 		catch (...)
 		{
@@ -131,11 +135,11 @@ namespace
 			if (file)
 			{
 				getDefaultMemoryPool()->print_contents(file,
-					Firebird::MemoryPool::PRINT_USED_ONLY | Firebird::MemoryPool::PRINT_RECURSIVE);
+					MemoryPool::PRINT_USED_ONLY | MemoryPool::PRINT_RECURSIVE);
 				file = NULL;
 			}
 #endif
-			Firebird::MemoryPool::cleanupDefaultPool();
+			MemoryPool::cleanupDefaultPool();
 		}
 		catch (...)
 		{
@@ -146,7 +150,7 @@ namespace
 #ifndef DEBUG_INIT
 
 	// This instance ensures dtors run when program exits
-	Firebird::CleanupFunction global(allClean);
+	CleanupFunction global(allClean);
 
 #endif //DEBUG_INIT
 
@@ -166,9 +170,9 @@ namespace
 			return;
 		}
 
-		Firebird::Mutex::initMutexes();
-		Firebird::MemoryPool::initDefaultPool();
-		Firebird::StaticMutex::create();
+		Mutex::initMutexes();
+		MemoryPool::initDefaultPool();
+		StaticMutex::create();
 
 #ifdef DEBUG_INIT
 		atexit(allClean);
@@ -179,17 +183,15 @@ namespace
 		std::ignore = pthread_atfork(NULL, NULL, child);
 #endif
 
-		Firebird::MemoryPool::contextPoolInit();
+		MemoryPool::contextPoolInit();
 	}
 
-	Firebird::InstanceControl::InstanceList* instanceList = 0;
+	InstanceControl::InstanceList* instanceList = 0;
 	FPTR_VOID gdsCleanup = 0;
 	FPTR_VOID gdsShutdown = 0;
 }
 
 
-namespace Firebird
-{
 	InstanceControl::InstanceControl()
 	{
 		// Initialize required subsystems, including static mutex
@@ -243,7 +245,7 @@ namespace Firebird
 			{
 				gdsShutdown();
 			}
-			catch (const Firebird::Exception& e)
+			catch (const Exception& e)
 			{
 				cleanError(&e);
 			}
@@ -256,7 +258,7 @@ namespace Firebird
 			{
 				gdsCleanup();
 			}
-			catch (const Firebird::Exception& e)
+			catch (const Exception& e)
 			{
 				cleanError(&e);
 			}
@@ -283,7 +285,7 @@ namespace Firebird
 					{
 						i->dtor();
 					}
-					catch (const Firebird::Exception& e)
+					catch (const Exception& e)
 					{
 						cleanError(&e);
 					}
@@ -324,14 +326,13 @@ namespace Firebird
 		dontCleanup = true;
 	}
 
-	namespace StaticMutex
-	{
-		Firebird::Mutex* mutex = NULL;
+	namespace StaticMutex {
+		Mutex* mutex = NULL;
 
 		void create() noexcept
 		{
-			static char place[sizeof(Firebird::Mutex) + FB_ALIGNMENT];
-			mutex = new((void*) FB_ALIGN(place, FB_ALIGNMENT)) Firebird::Mutex;
+			static char place[sizeof(Mutex) + FB_ALIGNMENT];
+			mutex = new((void*) FB_ALIGN(place, FB_ALIGNMENT)) Mutex;
 		}
 
 		void release() noexcept
@@ -339,4 +340,6 @@ namespace Firebird
 			mutex->~Mutex();
 		}
 	}
-}
+
+
+} // namespace Firebird

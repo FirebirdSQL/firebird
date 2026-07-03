@@ -46,7 +46,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/align.h"
 #include "../common/gdsassert.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/stuff.h"
 #include "../burp/backu_proto.h"
 #include "../burp/burp_proto.h"
@@ -62,9 +62,10 @@
 #include "../burp/OdsDetection.h"
 #include "../burp/BurpTasks.h"
 
+namespace Firebird::Burp
+{
+
 using MsgFormat::SafeArg;
-using namespace Firebird;
-using namespace Burp;
 
 
 // For service APIs the follow DB handle is a value stored
@@ -236,7 +237,7 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	if (tdgbl->gbl_sw_ignore_limbo)
 	{
 		gds_trans = DB->startTransaction(&status_vector, sizeof(limbo_nau_tpb), limbo_nau_tpb);
-		if (status_vector->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status_vector->getState() & IStatus::STATE_ERRORS)
 		{
 			gds_trans = DB->startTransaction(&status_vector, sizeof(limbo_tpb), limbo_tpb);
 		}
@@ -244,14 +245,14 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	else
 	{
 		EXEC SQL SET TRANSACTION NO_AUTO_UNDO;
-		if (isc_status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (isc_status->getState() & IStatus::STATE_ERRORS)
 			EXEC SQL SET TRANSACTION;
 	}
 
 	if (!gds_trans)
 	{
 		EXEC SQL SET TRANSACTION NAME gds_trans NO_AUTO_UNDO;
-		if (isc_status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (isc_status->getState() & IStatus::STATE_ERRORS)
 			EXEC SQL SET TRANSACTION NAME gds_trans;
 	}
 
@@ -668,7 +669,7 @@ burp_fld* get_fields( burp_rel* relation)
 
 	USHORT count = 1;
 
-	Firebird::HalfStaticArray<burp_fld*, 16> field_list;
+	HalfStaticArray<burp_fld*, 16> field_list;
 
 	// if we have all capabilities, use the first request to get the
 	// most performance out of the latest engine; if we don't
@@ -947,15 +948,15 @@ SINT64 get_gen_id(const QualifiedMetaString& name)
 	{
 		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
-		Firebird::string sql;
+		string sql;
 		sql.printf(
 			"select first(1) gen_id(%s, 0) from %srdb$database",
 			name.toQuotedString().c_str(),
 			(tdgbl->runtimeODS >= DB_VERSION_DDL14 ? "system." : ""));
 
 		BurpSql getGenerator(tdgbl, sql.c_str());
-		FB_MESSAGE(GetGen, Firebird::ThrowWrapper, (FB_BIGINT, id));
-		GetGen getGen(&tdgbl->throwStatus, Firebird::MasterInterfacePtr());
+		FB_MESSAGE(GetGen, ThrowWrapper, (FB_BIGINT, id));
+		GetGen getGen(&tdgbl->throwStatus, MasterInterfacePtr());
 
 		getGenerator.singleSelect(tdgbl->tr_handle, &getGen);
 		return getGen->id;
@@ -2373,7 +2374,7 @@ void write_character_sets()
  *	each user defined character set.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2480,7 +2481,7 @@ void write_check_constraints()
  *	each check constraint.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2520,7 +2521,7 @@ void write_collations()
  *	each user defined collation
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2630,8 +2631,8 @@ void write_database( const TEXT* dbb_file)
  **************************************/
 	FbLocalStatus status_vector;
 	UCHAR buffer[256];
-	Firebird::IRequest* req_handle1 = nullptr;
-	Firebird::IRequest* req_handle2 = nullptr;
+	IRequest* req_handle1 = nullptr;
+	IRequest* req_handle2 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2794,7 +2795,7 @@ void write_exceptions()
  *	each exception.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2876,7 +2877,7 @@ void write_field_dimensions()
  *	each array field dimension.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2916,7 +2917,7 @@ void write_filters()
  *	each filter.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -2957,7 +2958,7 @@ void write_functions()
  *	each function.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3242,7 +3243,7 @@ void write_generators()
  *	Write any defined generators.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3377,7 +3378,7 @@ void write_global_fields()
  *	each global field.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3629,7 +3630,7 @@ void write_packages()
  *	each package.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3703,7 +3704,7 @@ void write_procedures()
  *	each stored procedure.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3918,7 +3919,7 @@ void write_publications()
  *	each publication.
  *
  **************************************/
-	Firebird::IRequest* req_handle = nullptr;
+	IRequest* req_handle = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -3967,7 +3968,7 @@ void write_pub_tables()
  *
  **************************************/
 	QualifiedMetaString tableName;
-	Firebird::IRequest* req_handle = nullptr;
+	IRequest* req_handle = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4014,7 +4015,7 @@ void write_ref_constraints()
  *	each referential constraint.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4060,7 +4061,7 @@ void write_rel_constraints()
  *	each relation constraint.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4117,7 +4118,7 @@ void write_relations()
  *	each relation.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4323,7 +4324,7 @@ void write_schemas()
 
 void write_secclasses()
 {
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4359,7 +4360,7 @@ void write_shadow_files()
  *	Write out files to use as shadows.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4401,7 +4402,7 @@ void write_sql_roles()
  *	each SQL roles.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4467,7 +4468,7 @@ void write_mapping()
  *	each names mapping.
  *
  **************************************/
-	Firebird::IRequest* req_handle = nullptr;
+	IRequest* req_handle = nullptr;
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
@@ -4547,7 +4548,7 @@ void write_db_creators()
  *	each grant to create database.
  *
  **************************************/
-	Firebird::IRequest* req_handle = nullptr;
+	IRequest* req_handle = nullptr;
 	bool first = true;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -4606,7 +4607,7 @@ void write_triggers()
  * 	write the triggers in rdb$triggers
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4734,7 +4735,7 @@ void write_trigger_messages()
  *	each trigger message.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4787,7 +4788,7 @@ void write_types()
  *	each type.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4829,7 +4830,7 @@ void write_user_privileges()
  *
  **************************************/
 	QualifiedMetaString user;
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
 
@@ -4920,8 +4921,6 @@ void write_constants()
 }
 
 } // namespace
-
-namespace Burp {
 
 /// class ReadRelationMeta
 
@@ -5310,4 +5309,5 @@ bool BackupRelationTask::tableReader(Item& item)
 	return true;
 }
 
-} // namespace Burp
+
+} // namespace Firebird::Burp

@@ -34,6 +34,7 @@
 #include "firebird/Interface.h"
 
 #include "memory_routines.h"
+#include "ibase.h"
 #include "iberror.h"
 #include "../yvalve/YObjects.h"
 #include "firebird/impl/sqlda_pub.h"
@@ -82,8 +83,10 @@
 
 #include <functional>
 
-using namespace Firebird;
-using namespace Why;
+namespace Firebird::Why
+{
+	class StatusVector;
+	extern UtilInterface utilInterface;
 
 
 [[noreturn]] static void badHandle(ISC_STATUS code);
@@ -99,11 +102,6 @@ static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHand
 
 //-------------------------------------
 
-
-namespace Why {
-	class StatusVector;
-	extern UtilInterface utilInterface;
-};
 
 namespace {
 
@@ -137,8 +135,8 @@ private:
 
 	// Fool-proof requested by Alex
 	// Private memory operators to be sure that this class is used in heap only with launcher
-	void* operator new (size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS) { return pool.allocate(s ALLOC_PASS_ARGS); }
-	void operator delete (void* mem, Firebird::MemoryPool& ALLOC_PARAMS_DEF) { MemoryPool::globalFree(mem); }
+	void* operator new (size_t s, MemoryPool& pool ALLOC_PARAMS) { return pool.allocate(s ALLOC_PASS_ARGS); }
+	void operator delete (void* mem, MemoryPool& ALLOC_PARAMS_DEF) { MemoryPool::globalFree(mem); }
 	void operator delete (void* mem) { MemoryPool::globalFree(mem); }
 
 public:
@@ -876,8 +874,7 @@ private:
 
 //-------------------------------------
 
-namespace Why
-{
+
 	// StatusVector:	Provides correct status vector for operation and init() it.
 	class StatusVector final : public AutoIface<BaseStatus<StatusVector> >
 	{
@@ -1374,7 +1371,6 @@ namespace Why
 		}
 	}
 
-}	// namespace Why
 
 struct TEB
 {
@@ -1532,6 +1528,18 @@ static ISC_STATUS openOrCreateBlob(ISC_STATUS* userStatus, isc_db_handle* dbHand
 //-------------------------------------
 
 
+
+IAttachment* handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle);
+ITransaction* handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle);
+
+} // namespace Firebird::Why
+
+
+
+
+using namespace Firebird;
+using namespace Firebird::Why;
+
 static TLS_DECLARE(ICryptKeyCallback*, legacyCryptCallback);
 
 ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* cb)
@@ -1555,7 +1563,7 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
-Firebird::IAttachment* handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
+IAttachment* Why::handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
 {
 	try
 	{
@@ -1572,7 +1580,7 @@ Firebird::IAttachment* handleToIAttachment(CheckStatusWrapper* status, isc_db_ha
 }
 
 
-Firebird::ITransaction* handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle)
+ITransaction* Why::handleToITransaction(CheckStatusWrapper* status, isc_tr_handle* handle)
 {
 	try
 	{
@@ -3945,7 +3953,6 @@ ISC_STATUS API_ROUTINE fb_get_statement_interface(ISC_STATUS* userStatus, void* 
 
 //-------------------------------------
 
-namespace Why {
 
 IAttachment* MasterImplementation::registerAttachment(IProvider* provider, IAttachment* attachment)
 {
@@ -6657,7 +6664,7 @@ YService* Dispatcher::attachServiceManager(CheckStatusWrapper* status, const cha
 
 		if (spbLength > 0 && !spb)
 			status_exception::raise(Arg::Gds(isc_bad_spb_form) <<
- 									Arg::Gds(isc_null_spb));
+									Arg::Gds(isc_null_spb));
 
 		PathName svcName(serviceName);
 		svcName.trim();
@@ -6975,5 +6982,3 @@ void Dispatcher::setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallbac
 	status->init();
 	cryptCallback = callback;
 }
-
-} // namespace Why

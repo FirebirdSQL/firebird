@@ -39,6 +39,10 @@
 #include "../gpre/msc_proto.h"
 #include "../gpre/gpre_meta.h"
 
+namespace Firebird::Gpre
+{
+
+
 typedef void (*pfn_local_trigger_cb) (gpre_nod*, gpre_req*);
 
 static void alter_database(gpre_req*, act*);
@@ -2829,3 +2833,5 @@ static void set_statistics( gpre_req* request, const act* action)
 	request->add_end();
 }
 
+
+} // namespace Firebird::Gpre

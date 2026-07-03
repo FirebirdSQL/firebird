@@ -95,9 +95,16 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 #include "../jrd/Package.h"
+#include "../jrd/constants.h"
 
-using namespace Jrd;
-using namespace Firebird;
+#ifdef VIO_DEBUG
+#include <stdio.h>
+#include <stdarg.h>
+#endif
+
+namespace Firebird::Jrd
+{
+
 
 static void check_class(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
 static bool check_nullify_source(thread_db*, record_param*, record_param*, int, int = -1);
@@ -114,9 +121,6 @@ static void garbage_collect(thread_db*, record_param*, ULONG, RecordStack&);
 
 
 #ifdef VIO_DEBUG
-#include <stdio.h>
-#include <stdarg.h>
-
 int vio_debug_flag = DEBUG_TRACE_ALL_INFO;
 
 void VIO_trace(int level, const char* format, ...)
@@ -124,7 +128,7 @@ void VIO_trace(int level, const char* format, ...)
 	if (vio_debug_flag <= level)
 		return;
 
-	Firebird::string buffer;
+	string buffer;
 	va_list params;
 	va_start(params, format);
 	buffer.vprintf(format, params);
@@ -186,9 +190,6 @@ static void set_owner_name(thread_db*, Record*, USHORT);
 static bool set_security_class(thread_db*, Record*, USHORT);
 static void set_system_flag(thread_db*, Record*, USHORT);
 static void verb_post(thread_db*, jrd_tra*, record_param*, Record*);
-
-namespace Jrd
-{
 
 class SweepTask : public Task
 {
@@ -566,8 +567,6 @@ bool SweepTask::getWorkItem(WorkItem** pItem)
 	item->m_inuse = false;
 	return false;
 }
-
-}; // namespace Jrd
 
 
 namespace
@@ -1154,7 +1153,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* const attachment = transaction->tra_attachment;
+	Attachment* const attachment = transaction->tra_attachment;
 	jrd_rel* const relation = rpb->rpb_relation;
 
 	const bool gcPolicyCooperative = dbb->dbb_flags & DBB_gc_cooperative;
@@ -2835,7 +2834,7 @@ bool VIO_garbage_collect(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Jrd::Attachment* attachment = transaction->tra_attachment;
+	Attachment* attachment = transaction->tra_attachment;
 
 #ifdef VIO_DEBUG
 	jrd_rel* relation = rpb->rpb_relation;
@@ -3221,7 +3220,7 @@ void VIO_init(thread_db* tdbb)
  *
  **************************************/
 	Database* dbb = tdbb->getDatabase();
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 	if (dbb->readOnly() || !(dbb->dbb_flags & DBB_gc_background))
 		return;
@@ -4799,7 +4798,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
  **************************************/
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_TRACE,
@@ -5511,7 +5510,7 @@ static void expunge(thread_db* tdbb, record_param* rpb, const jrd_tra* transacti
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Jrd::Attachment* attachment = transaction->tra_attachment;
+	Attachment* attachment = transaction->tra_attachment;
 
 	fb_assert(assert_gc_enabled(transaction, rpb->rpb_relation));
 
@@ -5719,7 +5718,7 @@ void Database::garbage_collector(Database* dbb)
 		UserId user;
 		user.setUserName("Garbage Collector");
 
-		Jrd::Attachment* const attachment = Jrd::Attachment::create(dbb, nullptr);
+		Attachment* const attachment = Attachment::create(dbb, nullptr);
 		RefPtr<SysStableAttachment> sAtt(FB_NEW SysStableAttachment(attachment));
 		attachment->setStable(sAtt);
 		attachment->att_filename = dbb->dbb_filename;
@@ -5727,7 +5726,7 @@ void Database::garbage_collector(Database* dbb)
 		attachment->att_user = &user;
 
 		BackgroundContextHolder tdbb(dbb, attachment, &status_vector, FB_FUNCTION);
-		Jrd::Attachment::UseCountHolder use(attachment);
+		Attachment::UseCountHolder use(attachment);
 		tdbb->markAsSweeper();
 
 		jrd_rel* relation;
@@ -5922,7 +5921,7 @@ void Database::garbage_collector(Database* dbb)
 				}
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(&status_vector);
 			iscDbLogStatus(dbb->dbb_filename.c_str(), &status_vector);
@@ -5941,7 +5940,7 @@ void Database::garbage_collector(Database* dbb)
 		attachment->releaseLocks(tdbb);
 		LCK_fini(tdbb, LCK_OWNER_attachment);
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		dbb->exceptionHandler(ex, NULL);
 	}
@@ -5957,14 +5956,14 @@ void Database::garbage_collector(Database* dbb)
 			dbb->dbb_gc_init.release();
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		dbb->exceptionHandler(ex, NULL);
 	}
 }
 
 
-void Database::exceptionHandler(const Firebird::Exception& ex,
+void Database::exceptionHandler(const Exception& ex,
 	ThreadFinishSync<Database*>::ThreadRoutine* /*routine*/)
 {
 	FbLocalStatus status_vector;
@@ -7544,3 +7543,6 @@ static void verb_post(thread_db* tdbb,
 		action->garbageCollectIdxLite(tdbb, transaction, rpb->rpb_number.getValue(), action, old_data);
 	}
 }
+
+
+}	// namespace Firebird::Jrd

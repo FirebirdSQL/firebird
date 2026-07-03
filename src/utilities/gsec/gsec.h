@@ -26,13 +26,16 @@
 
 #include "firebird/Interface.h"
 #include "../common/ThreadData.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/impl/msg_helper.h"
 
-inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
-inline constexpr int MSG_LENGTH = 128;
+namespace Firebird::Gsec
+{
+	inline constexpr USHORT GSEC_MSG_FAC = FB_IMPL_MSG_FACILITY_GSEC;
+	inline constexpr int MSG_LENGTH = 128;
+} // namespace Firebird::Gsec
 
-namespace Auth
+namespace Firebird::Auth
 {
 
 class UserData;
@@ -53,12 +56,17 @@ inline constexpr unsigned int HELP_OPER		= 102;
 inline constexpr unsigned int ADDMOD_OPER	= 103;
 inline constexpr unsigned int OLD_DIS_OPER	= 104;
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 namespace Firebird
 {
 	class UtilSvc;
 }
+
+
+namespace Firebird::Gsec
+{
+
 
 class tsec : public Firebird::ThreadData
 {
@@ -72,7 +80,7 @@ public:
 	}
 
 	Firebird::UtilSvc*	utilSvc;
-	Auth::UserData*		tsec_user_data;
+	Firebird::Auth::UserData*		tsec_user_data;
 	int					tsec_exit_code;
 	bool				tsec_throw;
 	bool				tsec_interactive;
@@ -200,5 +208,7 @@ inline constexpr USHORT GsecMsg102	= 102;	// -adm(in) {yes|no}
 inline constexpr USHORT GsecMsg103	= 103;	// invalid parameter for -ADMIN, only YES or NO is accepted
 inline constexpr USHORT GsecMsg104	= 104;	// not enough privileges to complete operation
 
-#endif // UTILITIES_GSEC_H
 
+} // namespace Firebird::Gsec
+
+#endif // UTILITIES_GSEC_H

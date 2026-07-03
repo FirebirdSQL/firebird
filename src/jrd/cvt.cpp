@@ -59,6 +59,10 @@
 
 #include "../jrd/intl_classes.h"
 
+namespace Firebird::Jrd
+{
+
+
 /* ERR_post is used to flag whether we were called from mov.cpp or
    anywhere else CVT is used from (by comparing with param err) */
 
@@ -84,9 +88,6 @@
 
 #define INT64_LIMIT     ((((SINT64) 1) << 62) / 5)
 #define NUMERIC_LIMIT   (INT64_LIMIT)
-
-using namespace Jrd;
-using namespace Firebird;
 
 
 double CVT_date_to_double(const dsc* desc)
@@ -455,7 +456,7 @@ ISC_TIMESTAMP_TZ CVT_get_timestamp_tz(const dsc* desc)
 }
 
 
-Firebird::GlobalPtr<EngineCallbacks> EngineCallbacks::instance;
+GlobalPtr<EngineCallbacks> EngineCallbacks::instance;
 
 
 bool EngineCallbacks::transliterate(const dsc* from, dsc* to, CSetId& charset2)
@@ -621,3 +622,6 @@ void EngineCallbacks::isVersion4(bool& v4)
 		v4 = (tdbb->getRequest()->getStatement()->blrVersion == 4);
 	}
 }
+
+
+} // namespace Firebird::Jrd

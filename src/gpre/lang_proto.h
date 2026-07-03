@@ -26,6 +26,10 @@
 #ifndef GPRE_LANG_PROTO_H
 #define GPRE_LANG_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 void	ADA_action(const act*, int);
 void	ADA_print_buffer(TEXT*, const int);
 void	C_CXX_action(const act*, int);
@@ -42,5 +46,7 @@ void	PAS_action(const act*, int);
 void	RMC_action(const act*, int);
 void	RMC_print_buffer(TEXT*, bool);
 
-#endif // GPRE_LANG_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_LANG_PROTO_H

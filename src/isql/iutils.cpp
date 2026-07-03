@@ -37,7 +37,9 @@
 #include "../common/utils_proto.h"
 #include <stdarg.h>
 
-using namespace Firebird;
+namespace Firebird::Isql
+{
+
 using MsgFormat::SafeArg;
 
 
@@ -304,3 +306,6 @@ void IUTILS_truncate_term(TEXT* str, USHORT len)
 		--i;
 	str[i + 1] = 0;
 }
+
+
+} // namespace Firebird::Isql

@@ -48,6 +48,9 @@
 #include <stdio.h>
 #include <string.h>
 
+namespace Firebird
+{
+
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -166,3 +169,6 @@ bool ScanDir::isDots()
 {
 	return getFileName() [0] == '.';
 }
+
+
+} // namespace Firebird

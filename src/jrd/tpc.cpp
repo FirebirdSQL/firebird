@@ -36,9 +36,9 @@
 
 #include <sys/stat.h>
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Jrd {
 
 void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
 {
@@ -703,7 +703,7 @@ CommitNumber TipCache::snapshotState(thread_db* tdbb, TraNumber number)
 	// to avoid more work in the future
 	if (state == tra_active)
 	{
-		REPL_trans_cleanup(tdbb, number);
+		Replication::REPL_trans_cleanup(tdbb, number);
 		TRA_set_state(tdbb, 0, number, tra_dead); // This will update TIP cache
 		return CN_DEAD;
 	}
@@ -1241,4 +1241,4 @@ int TPC_snapshot_state(thread_db* tdbb, TraNumber number)
 }
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

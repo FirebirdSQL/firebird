@@ -28,7 +28,7 @@
 #include "../common/classes/objects_array.h"
 #include "../include/fb_exception.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 enum class PackageItemType : USHORT
 {
@@ -300,10 +300,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_pack_failed, isc_dsql_alter_pack_failed,
 					isc_dsql_create_alter_pack_failed)) <<
 				name.toQuotedString();
@@ -362,9 +362,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_pack_failed) << name.toQuotedString();
 	}
 
 public:
@@ -398,20 +398,20 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_pack_body_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_pack_body_failed) << name.toQuotedString();
 	}
 
 public:
 	QualifiedName name;
-	Firebird::string source;
-	Firebird::Array<CreateAlterPackageNode::Item>* declaredItems;
-	Firebird::Array<CreateAlterPackageNode::Item>* items;
+	string source;
+	Array<CreateAlterPackageNode::Item>* declaredItems;
+	Array<CreateAlterPackageNode::Item>* items;
 	bool createIfNotExistsOnly = false;
 
 private:
-	Firebird::string owner;
+	string owner;
 };
 
 
@@ -439,9 +439,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_pack_body_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_pack_body_failed) << name.toQuotedString();
 	}
 
 public:

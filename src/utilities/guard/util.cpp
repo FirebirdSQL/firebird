@@ -62,6 +62,8 @@
 #include "../common/utils_proto.h"
 #include "../common/os/os_utils.h"
 
+using namespace Firebird;
+
 
 pid_t UTIL_start_process(const char* process, char** argv, const char* prog_name)
 {
@@ -250,7 +252,7 @@ int UTIL_ex_lock(const TEXT* file)
 	Firebird::PathName expanded_filename = fb_utils::getPrefix(Firebird::IConfigManager::DIR_GUARD, file);
 
 	// file fd for the opened and locked file
-	int fd_file = os_utils::open(expanded_filename.c_str(), O_RDWR | O_CREAT, 0660);
+	int fd_file = Firebird::os_utils::open(expanded_filename.c_str(), O_RDWR | O_CREAT, 0660);
 	if (fd_file == -1)
 	{
 		fprintf(stderr, "Could not open %s for write\n", expanded_filename.c_str());

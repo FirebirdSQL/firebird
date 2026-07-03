@@ -49,10 +49,8 @@
 #include "../jrd/DataTypeUtil.h"
 #include <math.h>
 
-using namespace Firebird;
-using namespace Jrd;
-
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 
 static RegisterNode<AggNode> regAggNode({blr_agg_function});
@@ -1250,7 +1248,7 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 			aggImpure->funcRequest = funcRequest;
 		}
 
-		Jrd::ContextPoolHolder context(tdbb, funcRequest->req_pool);
+		JrdContextPoolHolder context(tdbb, funcRequest->req_pool);
 		funcRequest->setGmtTimeStamp(request->getGmtTimeStamp());
 
 		if (!aggImpure->active)
@@ -2874,7 +2872,7 @@ void BinAggNode::aggInit(thread_db* tdbb, Request* request) const
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	if (nodFlags & FLAG_INT128)
 	{
-		Firebird::Int128 i128;
+		Int128 i128;
 		i128.set(initValue, 0);
 		impure->make_decimal_fixed(i128, 0);
 	}
@@ -3825,4 +3823,4 @@ AggNode* RegrCountAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

@@ -26,6 +26,9 @@
 #include "ld_proto.h"
 #include "cv_narrow.h"
 
+using namespace Firebird;
+
+
 static void CV_convert_destroy(csconvert* csptr);
 
 

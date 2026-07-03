@@ -36,6 +36,10 @@
 #include "../gpre/lang_proto.h"
 #include "../yvalve/gds_proto.h"
 
+namespace Firebird::Gpre
+{
+
+
 static void align(const int);
 static void asgn_from(ref*, int);
 #ifdef NOT_USED_OR_REPLACED
@@ -738,3 +742,5 @@ static void printa(const int column, const TEXT* string, ...)
 	va_end(ptr);
 }
 
+
+} // namespace Firebird::Gpre

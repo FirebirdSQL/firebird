@@ -46,7 +46,7 @@ void tomCheck(int err, const char* text, int specErr = CRYPT_OK,  const char* sp
 		buf = specText;
 	else
 		buf.printf("TomCrypt library error %s: %s", text, error_to_string(err));
-	(Arg::Gds(isc_random) << buf).raise();
+	(Firebird::Arg::Gds(isc_random) << buf).raise();
 }
 
 
@@ -70,7 +70,7 @@ public:
 			tomCheck(chacha_ivctr64(&chacha, iv, 8, 0), "setting IV for CHACHA#20");
 			break;
 		default:
-			(Arg::Gds(isc_random) << "Wrong IV length, need 8, 12 or 16").raise();
+			(Firebird::Arg::Gds(isc_random) << "Wrong IV length, need 8, 12 or 16").raise();
 			break;
 		}
 	}
@@ -169,7 +169,7 @@ private:
 	Cipher* createCypher(unsigned int l, const void* key)
 	{
 		if (l < 16)
-			(Arg::Gds(isc_random) << "Key too short").raise();
+			(Firebird::Arg::Gds(isc_random) << "Key too short").raise();
 
 		hash_state md;
 		tomCheck(sha256_init(&md), "initializing sha256");

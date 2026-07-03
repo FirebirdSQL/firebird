@@ -32,9 +32,13 @@
 #include "../jrd/req.h"
 #include "../common/classes/array.h"
 
+namespace Firebird::Jrd
+{
+
+
 void BLB_garbage_collect(Jrd::thread_db*, Jrd::RecordStack&, Jrd::RecordStack&, ULONG, Jrd::jrd_rel*);
-void BLB_gen_bpb(SSHORT source, SSHORT target, UCHAR sourceCharset, UCHAR targetCharset, Firebird::UCharBuffer& bpb);
-void BLB_gen_bpb_from_descs(const dsc*, const dsc*, Firebird::UCharBuffer&);
+void BLB_gen_bpb(SSHORT source, SSHORT target, UCHAR sourceCharset, UCHAR targetCharset, UCharBuffer& bpb);
+void BLB_gen_bpb_from_descs(const dsc*, const dsc*, UCharBuffer&);
 
 
 class AutoBlb
@@ -69,5 +73,8 @@ private:
 	Jrd::thread_db* tdbb;
 	Jrd::blb* blob;
 };
+
+
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_BLB_PROTO_H

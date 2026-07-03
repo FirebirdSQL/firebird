@@ -17,7 +17,9 @@
 #include "../common/os/guid.h"
 #include "../common/utils_proto.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -342,7 +344,6 @@ void sha_final(unsigned char digest[SHA_DIGESTSIZE], SHA_INFO *sha_info) noexcep
 
 }	// anonymous namespace
 
-namespace Firebird {
 
 	void Sha1::hashBased64(string& hash, const string& data)
 	{
@@ -393,4 +394,5 @@ namespace Firebird {
 		}
 	}
 
-} // namespace Firebird
+
+}  // namespace Firebird

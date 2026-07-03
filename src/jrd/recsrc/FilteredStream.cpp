@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------------
 // Data access: predicate driven filter
@@ -171,7 +172,7 @@ void FilteredStream::nullRecords(thread_db* tdbb) const
 	m_next->nullRecords(tdbb);
 }
 
-Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
+TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();
 
@@ -373,3 +374,6 @@ Firebird::TriState FilteredStream::evaluateBoolean(thread_db* tdbb) const
 
 	return nullFlag && !result ? TriState::empty() : TriState(result);
 }
+
+
+}	// namespace Firebird::Jrd

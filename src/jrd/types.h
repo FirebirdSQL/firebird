@@ -198,7 +198,7 @@ TYPE("AGGREGATE", 1, nam_aggregate_flag)
 TYPE("USER", 0, nam_map_to_type)
 TYPE("ROLE", 1, nam_map_to_type)
 
-#define SYSTEM_PRIVILEGE(p) TYPE(STRINGIZE(p), int(Jrd::p), nam_system_privileges)
+#define SYSTEM_PRIVILEGE(p) TYPE(STRINGIZE(p), int(p), nam_system_privileges)
 #include "SystemPrivileges.h"
 #undef SYSTEM_PRIVILEGE
 

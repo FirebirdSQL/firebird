@@ -24,7 +24,7 @@
 #ifndef JRD_PAG_PROTO_H
 #define JRD_PAG_PROTO_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class thread_db;
 	class Database;
 	class PageNumber;
@@ -32,42 +32,46 @@ namespace Jrd {
 	struct win;
 }
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 	struct header_page;
 }
 
-void	PAG_add_header_entry(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
-bool	PAG_replace_entry_first(Jrd::thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
-Ods::pag*	PAG_allocate_pages(Jrd::thread_db* tdbb, Jrd::win* window, unsigned cntAlloc, bool aligned);
-AttNumber	PAG_attachment_id(Jrd::thread_db*);
-bool	PAG_delete_clump_entry(Jrd::thread_db* tdbb, USHORT);
-void	PAG_format_header(Jrd::thread_db*);
-void	PAG_format_pip(Jrd::thread_db*, Jrd::PageSpace& pageSpace);
-bool	PAG_get_clump(Jrd::thread_db*, USHORT, USHORT*, UCHAR*);
-void	PAG_header(Jrd::thread_db*, bool, const Firebird::TriState newForceWrite = Firebird::TriState::empty());
-void	PAG_header_init(Jrd::thread_db*);
-void	PAG_init(Jrd::thread_db*);
-void	PAG_init2(Jrd::thread_db*);
-SLONG	PAG_last_page(Jrd::thread_db* tdbb);
-void	PAG_release_page(Jrd::thread_db* tdbb, const Jrd::PageNumber&, const Jrd::PageNumber&);
-void	PAG_release_pages(Jrd::thread_db* tdbb, USHORT pageSpaceID, int cntRelease,
-			const ULONG* pgNums, const ULONG prior_page);
-void	PAG_set_db_guid(Jrd::thread_db* tdbb, const Firebird::Guid&);
-void	PAG_set_force_write(Jrd::thread_db* tdbb, bool);
-void	PAG_set_no_reserve(Jrd::thread_db* tdbb, bool);
-void	PAG_set_db_readonly(Jrd::thread_db* tdbb, bool);
-void	PAG_set_db_replica(Jrd::thread_db* tdbb, ReplicaMode);
-void	PAG_set_db_SQL_dialect(Jrd::thread_db* tdbb, SSHORT);
-void	PAG_set_page_buffers(Jrd::thread_db* tdbb, ULONG);
-void	PAG_set_page_scn(Jrd::thread_db* tdbb, Jrd::win* window);
-void	PAG_set_repl_sequence(Jrd::thread_db* tdbb, FB_UINT64);
-void	PAG_set_sweep_interval(Jrd::thread_db* tdbb, SLONG);
-ULONG	PAG_page_count(Jrd::thread_db*);
+namespace Firebird::Jrd {
 
-inline Ods::pag* PAG_allocate(Jrd::thread_db* tdbb, Jrd::win* window)
+void PAG_add_header_entry(thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
+bool PAG_replace_entry_first(thread_db* tdbb, Ods::header_page*, USHORT, USHORT, const UCHAR*);
+Ods::pag* PAG_allocate_pages(thread_db* tdbb, win* window, unsigned cntAlloc, bool aligned);
+AttNumber PAG_attachment_id(thread_db*);
+bool PAG_delete_clump_entry(thread_db* tdbb, USHORT);
+void PAG_format_header(thread_db*);
+void PAG_format_pip(thread_db*, PageSpace& pageSpace);
+bool PAG_get_clump(thread_db*, USHORT, USHORT*, UCHAR*);
+void PAG_header(thread_db*, bool, const TriState newForceWrite = TriState::empty());
+void PAG_header_init(thread_db*);
+void PAG_init(thread_db*);
+void PAG_init2(thread_db*);
+SLONG PAG_last_page(thread_db* tdbb);
+void PAG_release_page(thread_db* tdbb, const PageNumber&, const PageNumber&);
+void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease, const ULONG* pgNums, const ULONG prior_page);
+void PAG_set_db_guid(thread_db* tdbb, const Guid&);
+void PAG_set_force_write(thread_db* tdbb, bool);
+void PAG_set_no_reserve(thread_db* tdbb, bool);
+void PAG_set_db_readonly(thread_db* tdbb, bool);
+void PAG_set_db_replica(thread_db* tdbb, ReplicaMode);
+void PAG_set_db_SQL_dialect(thread_db* tdbb, SSHORT);
+void PAG_set_page_buffers(thread_db* tdbb, ULONG);
+void PAG_set_page_scn(thread_db* tdbb, win* window);
+void PAG_set_repl_sequence(thread_db* tdbb, FB_UINT64);
+void PAG_set_sweep_interval(thread_db* tdbb, SLONG);
+ULONG PAG_page_count(thread_db*);
+
+inline Ods::pag* PAG_allocate(thread_db* tdbb, win* window)
 {
 	return PAG_allocate_pages(tdbb, window, 1, false);
 }
+
+} // namespace Firebird::Jrd
+
 
 #endif // JRD_PAG_PROTO_H

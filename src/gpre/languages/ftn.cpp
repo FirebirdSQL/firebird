@@ -49,6 +49,10 @@
 #include <string.h>
 #endif
 
+namespace Firebird::Gpre
+{
+
+
 #ifdef NOT_USED_OR_REPLACED
 static void align (int column);
 #endif
@@ -1315,9 +1319,9 @@ static void gen_database()
 
 static void gen_database_data() //(const act* action)
 {
-	Firebird::PathName include_buffer;
+	PathName include_buffer;
 
-	include_buffer = fb_utils::getPrefix(Firebird::IConfigManager::DIR_INC, INCLUDE_FTN_FILE);
+	include_buffer = fb_utils::getPrefix(IConfigManager::DIR_INC, INCLUDE_FTN_FILE);
 	snprintf(output_buffer, sizeof(output_buffer), INCLUDE_ISC_FTN, include_buffer.c_str());
 
 	FTN_print_buffer(output_buffer);
@@ -4241,3 +4245,5 @@ static void printb(const TEXT* string, ...)
 }
 #endif
 
+
+} // namespace Firebird::Gpre

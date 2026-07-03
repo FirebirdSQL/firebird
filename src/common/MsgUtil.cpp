@@ -29,7 +29,9 @@
 #include "../common/classes/init.h"
 #include "utils_proto.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -84,3 +86,6 @@ ISC_STATUS MsgUtil::getCodeByName(const char* name)
 
 	return code;
 }
+
+
+}  // namespace Firebird

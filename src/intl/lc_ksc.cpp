@@ -27,6 +27,9 @@
 #include "cv_ksc.h"
 #include "ld_proto.h"
 
+using namespace Firebird;
+
+
 static USHORT LCKSC_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar,
 	USHORT iOutLen, BYTE *pOutChar, USHORT);
 static USHORT LCKSC_key_length(texttype* obj, USHORT inLen);

@@ -45,7 +45,7 @@
 
 #include <cmath>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // AB: 2005-11-05
 // Constants below needs some discussions and ideas
@@ -94,7 +94,7 @@ typedef Firebird::HalfStaticArray<BoolExprNode*, OPT_STATIC_ITEMS> BooleanList;
 // River
 //
 
-typedef Firebird::HalfStaticArray<River*, OPT_STATIC_ITEMS> RiverList;
+typedef HalfStaticArray<River*, OPT_STATIC_ITEMS> RiverList;
 
 class River
 {
@@ -178,7 +178,7 @@ public:
 
 protected:
 	RecordSource* m_rsb;
-	Firebird::HalfStaticArray<RecordSourceNode*, OPT_STATIC_ITEMS> m_nodes;
+	HalfStaticArray<RecordSourceNode*, OPT_STATIC_ITEMS> m_nodes;
 	StreamList m_streams;
 };
 
@@ -273,7 +273,7 @@ private:
 // Optimizer
 //
 
-class Optimizer final : public Firebird::PermanentStorage
+class Optimizer final : public PermanentStorage
 {
 public:
 	struct Conjunct
@@ -287,7 +287,7 @@ public:
 	static constexpr unsigned CONJUNCT_MATCHED	= 2;	// conjunct matches an index segment
 	static constexpr unsigned CONJUNCT_JOINED	= 4;	// conjunct used for equi-join
 
-	typedef Firebird::HalfStaticArray<Conjunct, OPT_STATIC_ITEMS> ConjunctList;
+	typedef HalfStaticArray<Conjunct, OPT_STATIC_ITEMS> ConjunctList;
 
 	class ConjunctIterator
 	{
@@ -385,7 +385,7 @@ public:
 		return ConjunctIterator(begin, end);
 	}
 
-	static Firebird::string getPlan(thread_db* tdbb, const Statement* statement, bool detailed)
+	static string getPlan(thread_db* tdbb, const Statement* statement, bool detailed)
 	{
 		return statement ? statement->getPlan(tdbb, detailed) : "";
 	}
@@ -582,8 +582,8 @@ public:
 		outerStreams.assign(streams);
 	}
 
-	Firebird::string getStreamName(StreamType stream);
-	Firebird::string makeAlias(StreamType stream);
+	string getStreamName(StreamType stream);
+	string makeAlias(StreamType stream);
 	void printf(const char* format, ...) noexcept;
 
 private:
@@ -702,11 +702,11 @@ struct IndexScratch
 	bool useMultiStartingKeys = false;			// Use INTL_KEY_MULTI_STARTING
 	bool useRootListScan = false;
 
-	Firebird::ObjectsArray<IndexScratchSegment> segments;
+	ObjectsArray<IndexScratchSegment> segments;
 	BooleanList matches;					// matched booleans (partial indices only)
 };
 
-typedef Firebird::ObjectsArray<IndexScratch> IndexScratchList;
+typedef ObjectsArray<IndexScratch> IndexScratchList;
 
 //
 // InversionCandidate
@@ -749,14 +749,14 @@ struct InversionCandidate
 	}
 };
 
-typedef Firebird::HalfStaticArray<InversionCandidate*, OPT_STATIC_ITEMS> InversionCandidateList;
+typedef HalfStaticArray<InversionCandidate*, OPT_STATIC_ITEMS> InversionCandidateList;
 
 
 //
 // Retrieval
 //
 
-class Retrieval final : private Firebird::PermanentStorage
+class Retrieval final : private PermanentStorage
 {
 public:
 	Retrieval(thread_db* tdbb, Optimizer* opt, StreamType streamNumber,
@@ -780,7 +780,7 @@ protected:
 	bool checkIndexExpression(const index_desc* idx, ValueExprNode* node) const;
 	InversionNode* composeInversion(InversionNode* node1, InversionNode* node2,
 		InversionNode::Type node_type) const;
-	const Firebird::string& getAlias();
+	const string& getAlias();
 	void getInversionCandidates(InversionCandidateList& inversions,
 		IndexScratchList& indexScratches, unsigned scope) const;
 	InversionNode* makeIndexScanNode(IndexScratch* indexScratch) const;
@@ -810,11 +810,11 @@ private:
 	Rsc::Rel relation;
 	const bool createIndexScanNodes;
 	const bool setConjunctionsMatched;
-	Firebird::string alias;
+	string alias;
 	IndexScratchList indexScratches;
 	InversionCandidateList inversionCandidates;
-	Firebird::AutoPtr<InversionCandidate> finalCandidate;
-	Firebird::AutoPtr<InversionCandidate> navigationCandidate;
+	AutoPtr<InversionCandidate> finalCandidate;
+	AutoPtr<InversionCandidate> navigationCandidate;
 };
 
 
@@ -822,7 +822,7 @@ private:
 // InnerJoin
 //
 
-class InnerJoin final : private Firebird::PermanentStorage
+class InnerJoin final : private PermanentStorage
 {
 	struct IndexRelationship
 	{
@@ -867,10 +867,10 @@ class InnerJoin final : private Firebird::PermanentStorage
 		bool unique = false;
 		double cost = 0;
 		double cardinality = 0;
-		Firebird::Vector<StreamType, MAX_DEP_STREAMS> depStreams;
+		Vector<StreamType, MAX_DEP_STREAMS> depStreams;
 	};
 
-	typedef Firebird::SortedArray<IndexRelationship> IndexedRelationships;
+	typedef SortedArray<IndexRelationship> IndexedRelationships;
 
 	class StreamInfo
 	{
@@ -926,7 +926,7 @@ class InnerJoin final : private Firebird::PermanentStorage
 		IndexedRelationships indexedRelationships;
 	};
 
-	typedef Firebird::HalfStaticArray<StreamInfo*, OPT_STATIC_ITEMS> StreamInfoList;
+	typedef HalfStaticArray<StreamInfo*, OPT_STATIC_ITEMS> StreamInfoList;
 
 	struct JoinedStreamInfo
 	{
@@ -941,10 +941,10 @@ class InnerJoin final : private Firebird::PermanentStorage
 
 		StreamType number;			// stream in position of join order
 		double selectivity = 0.0;	// position selectivity
-		Firebird::Vector<BoolExprNode*, MAX_EQUI_MATCHES> equiMatches;
+		Vector<BoolExprNode*, MAX_EQUI_MATCHES> equiMatches;
 	};
 
-	typedef Firebird::HalfStaticArray<JoinedStreamInfo, OPT_STATIC_ITEMS> JoinedStreamList;
+	typedef HalfStaticArray<JoinedStreamInfo, OPT_STATIC_ITEMS> JoinedStreamList;
 
 public:
 	InnerJoin(thread_db* tdbb, Optimizer* opt,
@@ -991,7 +991,7 @@ private:
 	JoinedStreamList bestStreams;
 };
 
-class OuterJoin : private Firebird::PermanentStorage
+class OuterJoin : private PermanentStorage
 {
 	struct OuterJoinStream
 	{
@@ -1027,6 +1027,7 @@ private:
 	OuterJoinStream joinStreams[2];
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // OPTIMIZER_H

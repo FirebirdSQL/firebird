@@ -24,6 +24,10 @@
 #ifndef JRD_ISC_I_PROTO_H
 #define JRD_ISC_I_PROTO_H
 
+namespace Firebird
+{
+
+
 #ifdef WIN_NT
 // This will poke event
 int		ISC_kill(SLONG, SLONG, HANDLE);
@@ -38,5 +42,8 @@ HANDLE	ISC_make_signal(bool, bool, int, int);
 #endif
 
 void	ISC_signal_init();
+
+
+} // namespace Firebird
 
 #endif // JRD_ISC_I_PROTO_H

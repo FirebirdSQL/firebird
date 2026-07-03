@@ -137,7 +137,7 @@ public:
 		int vMajor, vMinor;
 	};
 
-	static Firebird::string getDefaultIcuVersion();
+	static string getDefaultIcuVersion();
 
 	class ICUModules;
 	// routines semantically equivalent with intlobj_new.h
@@ -166,20 +166,20 @@ public:
 	static INTL_BOOL utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position) noexcept;
 	static INTL_BOOL utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position) noexcept;
 
-	static void utf8Normalize(Firebird::UCharBuffer& data);
+	static void utf8Normalize(UCharBuffer& data);
 
 	static ConversionICU& getConversionICU();
-	static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& configInfo);
+	static ICU* loadICU(const string& icuVersion, const string& configInfo);
 	static void getICUVersion(ICU* icu, int& majorVersion, int& minorVersion) noexcept;
-	static ICU* getCollVersion(const Firebird::string& icuVersion,
-		const Firebird::string& configInfo, Firebird::string& collVersion);
+	static ICU* getCollVersion(const string& icuVersion,
+		const string& configInfo, string& collVersion);
 
 	class Utf16Collation
 	{
 	public:
 		static Utf16Collation* create(texttype* tt, USHORT attributes,
-									  Firebird::IntlUtil::SpecificAttributesMap& specificAttributes,
-									  const Firebird::string& configInfo);
+									  IntlUtil::SpecificAttributesMap& specificAttributes,
+									  const string& configInfo);
 
 		Utf16Collation()
 			: contractionsPrefix(*getDefaultMemoryPool())
@@ -200,7 +200,7 @@ public:
 		class ArrayComparator
 		{
 		public:
-			static bool greaterThan(const Firebird::Array<T>& i1, const Firebird::Array<T>& i2)
+			static bool greaterThan(const Array<T>& i1, const Array<T>& i2)
 			{
 				const FB_SIZE_T minCount = std::min(i1.getCount(), i2.getCount());
 				const int cmp = memcmp(i1.begin(), i2.begin(), minCount * sizeof(T));
@@ -211,35 +211,35 @@ public:
 				return i1.getCount() > i2.getCount();
 			}
 
-			static bool greaterThan(const Firebird::Array<T>* i1, const Firebird::Array<T>* i2)
+			static bool greaterThan(const Array<T>* i1, const Array<T>* i2)
 			{
 				return greaterThan(*i1, *i2);
 			}
 		};
 
-		typedef Firebird::SortedObjectsArray<
-					Firebird::Array<UCHAR>,
-					Firebird::InlineStorage<Firebird::Array<UCHAR>*, 3>,
-					Firebird::Array<UCHAR>,
-					Firebird::DefaultKeyValue<const Firebird::Array<UCHAR>*>,
+		typedef SortedObjectsArray<
+					Array<UCHAR>,
+					InlineStorage<Array<UCHAR>*, 3>,
+					Array<UCHAR>,
+					DefaultKeyValue<const Array<UCHAR>*>,
 					ArrayComparator<UCHAR>
 				> SortKeyArray;
 
-		typedef Firebird::GenericMap<
-					Firebird::Pair<
-						Firebird::Full<
-							Firebird::Array<USHORT>,	// UTF-16 string
+		typedef GenericMap<
+					Pair<
+						Full<
+							Array<USHORT>,	// UTF-16 string
 							SortKeyArray				// sort keys
 						>
 					>,
 					ArrayComparator<USHORT>
 				> ContractionsPrefixMap;
 
-		static ICU* loadICU(const Firebird::string& icuVersion, const Firebird::string& collVersion,
-			const Firebird::string& locale, const Firebird::string& configInfo);
+		static ICU* loadICU(const string& icuVersion, const string& collVersion,
+			const string& locale, const string& configInfo);
 
 		void normalize(ULONG* strLen, const USHORT** str, bool forNumericSort,
-			Firebird::HalfStaticArray<USHORT, BUFFER_SMALL / 2>& buffer) const;
+			HalfStaticArray<USHORT, BUFFER_SMALL / 2>& buffer) const;
 
 		ICU* icu;
 		texttype* tt;

@@ -5,7 +5,9 @@
 #include <direct.h>		// _mkdir
 #include <string>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /// The Win32 implementation of the path_utils abstraction.
 
@@ -261,3 +263,6 @@ int PathUtils::makeDir(const PathName& path)
 {
 	return _mkdir(path.c_str()) ? errno : 0;
 }
+
+
+}  // namespace Firebird

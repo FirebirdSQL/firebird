@@ -28,9 +28,9 @@
 #include "../jrd/ntrace.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
-namespace Jrd {
 
 GlobalPtr<RuntimeStatistics> RuntimeStatistics::dummy;
 
@@ -143,4 +143,5 @@ RuntimeStatistics::Accumulator::~Accumulator()
 		m_tdbb->bumpStats(m_type, m_id, m_counter);
 }
 
-} // namespace
+
+} // namespace Firebird::Jrd

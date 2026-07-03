@@ -34,8 +34,7 @@
 #include "../common/classes/fb_string.h"
 #include <stdio.h>
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 // This is the abstract base class that is used by the MsgPrint routines.
 // It doesn't own the stream, thus it doesn't open, check or close it.
@@ -112,11 +111,11 @@ private:
 };
 
 
-// Wraps a reference to a Firebird::string.
+// Wraps a reference to a string.
 class StringRefStream : public BaseStream
 {
 public:
-	StringRefStream(Firebird::string& aRef)
+	StringRefStream(string& aRef)
 		: ref(aRef)
 	{
 	}
@@ -128,7 +127,7 @@ public:
 	}
 
 private:
-	Firebird::string& ref;
+	string& ref;
 };
 
 } // namespace

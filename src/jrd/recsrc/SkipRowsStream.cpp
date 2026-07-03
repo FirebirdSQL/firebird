@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // -------------------------------
 // Data access: skip N rows filter
@@ -159,3 +160,6 @@ void SkipRowsStream::nullRecords(thread_db* tdbb) const
 {
 	m_next->nullRecords(tdbb);
 }
+
+
+}	// namespace Firebird::Jrd

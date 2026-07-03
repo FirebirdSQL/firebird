@@ -32,8 +32,8 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/Attachment.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -171,9 +171,6 @@ namespace
 		}
 	}
 }
-
-
-namespace Jrd {
 
 
 // Move data from result set message to user variables.
@@ -383,8 +380,8 @@ PreparedStatement::PreparedStatement(thread_db* tdbb, MemoryPool& pool,
 	  builder(NULL),
 	  inValues(pool),
 	  outValues(pool),
-	  inMetadata(FB_NEW Firebird::MsgMetadata),
-	  outMetadata(FB_NEW Firebird::MsgMetadata),
+	  inMetadata(FB_NEW MsgMetadata),
+	  outMetadata(FB_NEW MsgMetadata),
 	  inMessage(pool),
 	  outMessage(pool),
 	  resultSet(NULL)
@@ -400,8 +397,8 @@ PreparedStatement::PreparedStatement(thread_db* tdbb, MemoryPool& pool,
 	  builder(&aBuilder),
 	  inValues(pool),
 	  outValues(pool),
-	  inMetadata(FB_NEW Firebird::MsgMetadata),
-	  outMetadata(FB_NEW Firebird::MsgMetadata),
+	  inMetadata(FB_NEW MsgMetadata),
+	  outMetadata(FB_NEW MsgMetadata),
 	  inMessage(pool),
 	  outMessage(pool),
 	  resultSet(NULL)
@@ -422,7 +419,7 @@ PreparedStatement::~PreparedStatement()
 
 
 void PreparedStatement::init(thread_db* tdbb, Attachment* attachment, jrd_tra* transaction,
-	const Firebird::string& text, bool isInternalRequest)
+	const string& text, bool isInternalRequest)
 {
 	auto newSchemaSearchPath = isInternalRequest ?
 		attachment->att_system_schema_search_path :
@@ -578,4 +575,4 @@ void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& va
 }
 
 
-}	// namespace
+}	// namespace Firebird::Jrd

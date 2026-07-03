@@ -25,6 +25,7 @@
  *
  */
 
+// FIXME: Move this file to src/common
 #ifndef JRD_ALIGN_H
 #define JRD_ALIGN_H
 
@@ -35,6 +36,12 @@ Maximum alignments for corresponding data types are defined in dsc.h
 #include "../common/DecFloat.h"
 #include "../common/Int128.h"
 #include "firebird/impl/blr.h"
+#include "../common/dsc.h"
+#include "../jrd/RecordNumber.h"
+
+namespace Firebird
+{
+
 
 /*  The following macro must be defined as the highest-numericly-valued
  *  blr which describes a datatype: arrays are sized based on this value.
@@ -50,9 +57,6 @@ inline constexpr unsigned char DTYPE_BLR_MAX = blr_blob_id;
 No need to worry about blr_blob or ?blr_blob_id
 
 */
-
-#include "../common/dsc.h"
-#include "../jrd/RecordNumber.h"
 
 static inline constexpr USHORT gds_cvt_blr_dtype[DTYPE_BLR_MAX + 1] =
 {
@@ -112,8 +116,8 @@ static inline constexpr USHORT type_alignments[DTYPE_TYPE_MAX] =
 	sizeof(SINT64),				/* dtype_int64 */
 	sizeof(ULONG),				/* dtype_dbkey */
 	sizeof(UCHAR),				/* dtype_boolean */
-	sizeof(Firebird::Decimal64),/* dtype_dec64 */
-	sizeof(Firebird::Decimal64),/* dtype_dec128 */
+	sizeof(Decimal64),/* dtype_dec64 */
+	sizeof(Decimal64),/* dtype_dec128 */
 	sizeof(SINT64),				/* dtype_int128 */
 	sizeof(GDS_TIME),			/* dtype_sql_time_tz */
 	sizeof(GDS_DATE),			/* dtype_timestamp_tz */
@@ -145,9 +149,9 @@ static inline constexpr USHORT type_lengths[DTYPE_TYPE_MAX] =
 	sizeof(SINT64),					/* dtype_int64 */
 	sizeof(RecordNumber::Packed),	/* dtype_dbkey */
 	sizeof(UCHAR),					/* dtype_boolean */
-	sizeof(Firebird::Decimal64),	/* dtype_dec64 */
-	sizeof(Firebird::Decimal128),	/* dtype_dec128 */
-	sizeof(Firebird::Int128),		/* dtype_int128 */
+	sizeof(Decimal64),	/* dtype_dec64 */
+	sizeof(Decimal128),	/* dtype_dec128 */
+	sizeof(Int128),		/* dtype_int128 */
 	sizeof(ISC_TIME_TZ),			/* dtype_sql_time_tz */
 	sizeof(ISC_TIMESTAMP_TZ),		/* dtype_timestamp_tz */
 	sizeof(ISC_TIME_TZ_EX),			/* dtype_ex_time_tz */
@@ -189,5 +193,8 @@ static inline constexpr USHORT type_significant_bits[DTYPE_TYPE_MAX] =
 	0,							// dtype_ex_time_tz
 	0							// dtype_ex_timestamp_tz
 };
+
+
+} // namespace Firebird
 
 #endif /* JRD_ALIGN_H */

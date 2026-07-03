@@ -38,7 +38,7 @@
 #include "../common/classes/array.h"
 #include "fb_blk.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 template <typename T, FB_SIZE_T CAP>
 class SharedReadVector
@@ -221,6 +221,6 @@ private:
 	std::atomic<Generation*> currentData;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_SHAREDREADVECTOR_H

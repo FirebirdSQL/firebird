@@ -28,12 +28,12 @@
 #include "../common/classes/File.h"
 #include "../jrd/TempSpace.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Format;
 class Record;
 
-class RecordBuffer : public Firebird::PermanentStorage
+class RecordBuffer : public PermanentStorage
 {
 public:
 	RecordBuffer(MemoryPool&, const Format*);
@@ -56,8 +56,8 @@ public:
 
 private:
 	offset_t count = 0;
-	Firebird::AutoPtr<Record> record;
-	Firebird::AutoPtr<TempSpace> space;
+	AutoPtr<Record> record;
+	AutoPtr<TempSpace> space;
 };
 
 } // namespace

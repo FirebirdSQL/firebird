@@ -26,47 +26,49 @@
 
 #include "../common/classes/fb_string.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class jrd_file;
 	class Database;
 	class BufferDesc;
 }
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 
-void	PIO_close(Jrd::jrd_file*);
-Jrd::jrd_file*	PIO_create(Jrd::thread_db*, const Firebird::PathName&,
-							const bool, const bool);
-bool	PIO_expand(const TEXT*, USHORT, TEXT*, FB_SIZE_T);
-bool	PIO_fast_extension_is_supported(const Jrd::jrd_file& file) noexcept;
-bool	PIO_extend(Jrd::thread_db* tdbb, Jrd::jrd_file* file, ULONG extPages, USHORT pageSize);
-void	PIO_flush(Jrd::thread_db*, Jrd::jrd_file*);
-void	PIO_force_write(Jrd::jrd_file*, const bool);
-ULONG	PIO_get_number_of_pages(const Jrd::jrd_file*, const USHORT);
-bool	PIO_header(Jrd::thread_db*, UCHAR*, unsigned);
-USHORT	PIO_init_data(Jrd::thread_db* tdbb, Jrd::jrd_file* file, Jrd::FbStatusVector* status_vector, ULONG startPage, USHORT initPages);
-Jrd::jrd_file*	PIO_open(Jrd::thread_db*, const Firebird::PathName&,
-						 const Firebird::PathName&);
-bool	PIO_read(Jrd::thread_db*, Jrd::jrd_file*, Jrd::BufferDesc*, Ods::pag*, Jrd::FbStatusVector*);
-
-#ifdef SUPERSERVER_V2
-bool	PIO_read_ahead(Jrd::thread_db*, SLONG, SCHAR*, SLONG,
-				   struct Jrd::phys_io_blk*, Jrd::FbStatusVector*);
-bool	PIO_status(Jrd::thread_db*, struct Jrd::phys_io_blk*, Jrd::FbStatusVector*);
-#endif
-
-#ifdef SUPPORT_RAW_DEVICES
-bool	PIO_on_raw_device(const Firebird::PathName&);
-int		PIO_unlink(const Firebird::PathName&);
-#else
-inline bool PIO_on_raw_device(const Firebird::PathName&)
+namespace Firebird::Jrd
 {
-	return false;
-}
-#endif
-bool	PIO_write(Jrd::thread_db*, Jrd::jrd_file*, Jrd::BufferDesc*, Ods::pag*, Jrd::FbStatusVector*);
+	void	PIO_close(jrd_file*);
+	jrd_file*	PIO_create(thread_db*, const PathName&,
+								const bool, const bool);
+	bool	PIO_expand(const TEXT*, USHORT, TEXT*, FB_SIZE_T);
+	bool	PIO_fast_extension_is_supported(const jrd_file& file) noexcept;
+	bool	PIO_extend(thread_db* tdbb, jrd_file* file, ULONG extPages, USHORT pageSize);
+	void	PIO_flush(thread_db*, jrd_file*);
+	void	PIO_force_write(jrd_file*, const bool);
+	ULONG	PIO_get_number_of_pages(const jrd_file*, const USHORT);
+	bool	PIO_header(thread_db*, UCHAR*, unsigned);
+	USHORT	PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector, ULONG startPage, USHORT initPages);
+	jrd_file*	PIO_open(thread_db*, const PathName&,
+							const PathName&);
+	bool	PIO_read(thread_db*, jrd_file*, BufferDesc*, Ods::pag*, FbStatusVector*);
+
+	#ifdef SUPERSERVER_V2
+	bool	PIO_read_ahead(thread_db*, SLONG, SCHAR*, SLONG,
+					struct phys_io_blk*, FbStatusVector*);
+	bool	PIO_status(thread_db*, struct phys_io_blk*, FbStatusVector*);
+	#endif
+
+	#ifdef SUPPORT_RAW_DEVICES
+	bool	PIO_on_raw_device(const PathName&);
+	int		PIO_unlink(const PathName&);
+	#else
+	inline bool PIO_on_raw_device(const PathName&)
+	{
+		return false;
+	}
+	#endif
+	bool	PIO_write(thread_db*, jrd_file*, BufferDesc*, Ods::pag*, FbStatusVector*);
+}	// namespace Firebird::Jrd
 
 #endif // JRD_PIO_PROTO_H
-

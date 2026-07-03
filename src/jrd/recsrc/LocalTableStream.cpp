@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------
 // Data access: local table
@@ -132,3 +133,6 @@ void LocalTableStream::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, un
 	planEntry.lines.add().text = "Local Table Full Scan";
 	printOptInfo(planEntry.lines);
 }
+
+
+}	// namespace Firebird::Jrd

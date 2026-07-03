@@ -40,6 +40,7 @@
 
 #include "../common/dsc_proto.h" // DSC_make_descriptor
 #include "../jrd/Package.h" // Constant
+#include "../jrd/constants.h"
 
 #include "../dsql/metd_proto.h" // METD_get_domain
 #include "../common/classes/VaryStr.h" // METD_get_domain
@@ -47,16 +48,10 @@
 #include "../jrd/met.h" // Metacache
 #include "../jrd/Statement.h" // Jrd::Statement
 
-using namespace Firebird;
-
-namespace Jrd {
-
-using namespace Firebird;
-
 DATABASE DB = STATIC "ODS.RDB";
 
 
-//----------------------
+namespace Firebird::Jrd {
 
 
 namespace
@@ -1821,4 +1816,4 @@ void DropPackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

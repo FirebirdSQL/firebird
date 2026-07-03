@@ -24,7 +24,9 @@
 #ifndef GPRE_PAT_PROTO_H
 #define GPRE_PAT_PROTO_H
 
-void	PATTERN_expand(USHORT, const TEXT*, PAT*);
+namespace Firebird::Gpre
+{
+	void	PATTERN_expand(USHORT, const TEXT*, PAT*);
+} // namespace Firebird::Gpre
 
 #endif // GPRE_PAT_PROTO_H
-

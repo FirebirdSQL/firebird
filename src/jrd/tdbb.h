@@ -45,15 +45,15 @@
 #define BUGCHECK(number) ERR_bugcheck(number, __FILE__, __LINE__)
 
 
-namespace Firebird {
-
-class MemoryPool;
-
+namespace Firebird
+{
+	class MemoryPool;
 }
 
 
-namespace Jrd
+namespace Firebird::Jrd
 {
+
 
 class Database;
 class Attachment;
@@ -65,7 +65,7 @@ class Lock;
 
 #ifdef USE_ITIMER
 class TimeoutTimer final :
-	public Firebird::RefCntIface<Firebird::ITimerImpl<TimeoutTimer, Firebird::CheckStatusWrapper> >
+	public RefCntIface<ITimerImpl<TimeoutTimer, CheckStatusWrapper> >
 {
 public:
 	explicit TimeoutTimer() noexcept
@@ -116,7 +116,7 @@ private:
 	ISC_STATUS m_error;
 };
 #else
-class TimeoutTimer final : public Firebird::RefCounted
+class TimeoutTimer final : public RefCounted
 {
 public:
 	explicit TimeoutTimer() noexcept
@@ -188,7 +188,7 @@ inline constexpr ULONG TDBB_replicator			= 16384;	// Replicator
 inline constexpr ULONG TDBB_async				= 32768;	// Async context (set in AST)
 inline constexpr ULONG TDBB_no_security_class	= 65536;	// don't assign a security class to the object being created
 
-class thread_db final : public Firebird::ThreadData
+class thread_db final : public ThreadData
 {
 	static constexpr int QUANTUM		= 100;	// Default quantum
 	static constexpr int SWEEP_QUANTUM	= 10;	// Make sweeps less disruptive
@@ -199,7 +199,7 @@ private:
 	{
 		defaultPool = p;
 	}
-	friend class Firebird::SubsystemContextPoolHolder <Jrd::thread_db, MemoryPool>;
+	friend class SubsystemContextPoolHolder <Jrd::thread_db, MemoryPool>;
 	Database*	database;
 	Attachment*	attachment;
 	jrd_tra*	transaction;
@@ -219,7 +219,7 @@ public:
 		  tdbb_flags(0),
 		  tdbb_temp_traid(0),
 		  tdbb_bdbs(*getDefaultMemoryPool()),
-		  tdbb_thread(Firebird::ThreadSync::getThread("thread_db"))
+		  tdbb_thread(ThreadSync::getThread("thread_db"))
 	{
 		reqStat = traStat = attStat = dbbStat = RuntimeStatistics::getDummy();
 		fb_utils::init_status(tdbb_status_vector);
@@ -244,8 +244,8 @@ public:
 	TraNumber	tdbb_temp_traid;	// current temporary table scope
 
 	// BDB's held by thread
-	Firebird::HalfStaticArray<BufferDesc*, 16> tdbb_bdbs;
-	Firebird::ThreadSync* tdbb_thread;
+	HalfStaticArray<BufferDesc*, 16> tdbb_bdbs;
+	ThreadSync* tdbb_thread;
 
 	MemoryPool* getDefaultPool() noexcept
 	{
@@ -444,18 +444,18 @@ public:
 	private:
 		thread_db* m_tdbb;
 		bool m_autoStop;
-		Firebird::RefPtr<TimeoutTimer> m_saveTimer;
+		RefPtr<TimeoutTimer> m_saveTimer;
 	};
 
 private:
-	Firebird::RefPtr<TimeoutTimer> tdbb_reqTimer;
+	RefPtr<TimeoutTimer> tdbb_reqTimer;
 
 };
 
 class ThreadContextHolder
 {
 public:
-	explicit ThreadContextHolder(Firebird::CheckStatusWrapper* status = NULL)
+	explicit ThreadContextHolder(CheckStatusWrapper* status = NULL)
 		: context(status ? status : &localStatus)
 	{
 		context.putSpecific();
@@ -481,7 +481,7 @@ public:
 
 	~ThreadContextHolder()
 	{
-		Firebird::ThreadData::restoreSpecific();
+		ThreadData::restoreSpecific();
 	}
 
 	// copying is prohibited
@@ -499,10 +499,11 @@ public:
 	}
 
 private:
-	Firebird::FbLocalStatus localStatus;
+	FbLocalStatus localStatus;
 	thread_db context;
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_TDBB_H

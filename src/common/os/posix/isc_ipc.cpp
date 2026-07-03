@@ -81,6 +81,10 @@
 
 //#define LOCAL_SEMAPHORES 4
 
+namespace Firebird
+{
+
+
 struct sig
 {
 	struct sig* sig_next;
@@ -114,15 +118,15 @@ namespace {
 	class SignalMutex
 	{
 	public:
-		Firebird::Mutex mutex;
+		Mutex mutex;
 
-		explicit SignalMutex(Firebird::MemoryPool&)
+		explicit SignalMutex(MemoryPool&)
 		{
 			sigActive = true;
 		}
 		~SignalMutex()
 		{
-			Firebird::MutexLockGuard guard(mutex, "~SignalMutex()");
+			MutexLockGuard guard(mutex, "~SignalMutex()");
 			sigActive = false;
 
 			for (SIG sig = signals; sig;)
@@ -135,11 +139,12 @@ namespace {
 		}
 	};
 
-	Firebird::GlobalPtr<SignalMutex> sigMutex;
+	GlobalPtr<SignalMutex> sigMutex;
 }
 
 static bool isc_signal2(int signal, FPTR_VOID handler, void* arg, ULONG);
 static SIG que_signal(int signal, FPTR_VOID handler, void* arg, int flags, bool w_siginfo);
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -196,7 +201,7 @@ static bool isc_signal2(int signal_number, FPTR_VOID handler, void* arg, ULONG f
 
 	SIG sig;
 
-	Firebird::MutexLockGuard guard(sigMutex->mutex, "isc_signal2");
+	MutexLockGuard guard(sigMutex->mutex, "isc_signal2");
 
 	// See if this signal has ever been cared about before
 
@@ -277,7 +282,7 @@ void ISC_signal_cancel(int signal_number, FPTR_VOID_PTR handler, void* arg)
 	SIG sig;
 	volatile SIG* ptr;
 
-	Firebird::MutexLockGuard guard(sigMutex->mutex, "ISC_signal_cancel");
+	MutexLockGuard guard(sigMutex->mutex, "ISC_signal_cancel");
 
 	for (ptr = &signals; (sig = *ptr);) {
 		if (sig->sig_signal == signal_number &&
@@ -393,3 +398,6 @@ static void CLIB_ROUTINE signal_action(int number)
 		}
 	}
 }
+
+
+} // namespace Firebird

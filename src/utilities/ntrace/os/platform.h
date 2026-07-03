@@ -28,10 +28,11 @@
 #ifndef OS_PLATFORM_H
 #define OS_PLATFORM_H
 
-const char* get_error_string();
-
-void set_error_string(const char* str);
-
-SLONG get_process_id();
+namespace Firebird::Ntrace
+{
+	const char* get_error_string();
+	void set_error_string(const char* str);
+	SLONG get_process_id();
+} // namespace Firebird::Ntrace
 
 #endif // OS_PLATFORM_H

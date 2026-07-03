@@ -36,7 +36,7 @@
 #include "../jrd/lck.h"
 #include "../common/classes/GenericMap.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 class CompilerScratch;
 class DsqlCompilerScratch;
@@ -60,7 +60,7 @@ public:
 
 	bool hash(thread_db* tdbb, Firebird::sha512& digest) const;
 
-	static dsc getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name);
+	static dsc getDesc(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name);
 
 	static void genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema);
@@ -253,6 +253,6 @@ private:
 	bool m_callReload = true;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PACKAGE_H

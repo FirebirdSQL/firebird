@@ -37,7 +37,7 @@
 #include "../jrd/RecordNumber.h"
 
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 
 class Compressor;
@@ -102,6 +102,6 @@ private:
 	Firebird::AutoPtr<Buffer> m_other;
 };
 
-};	// namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_BULKINSERT

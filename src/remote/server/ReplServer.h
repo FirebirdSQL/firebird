@@ -23,6 +23,9 @@
 #ifndef UTIL_REPL_SERVER_H
 #define UTIL_REPL_SERVER_H
 
-bool REPL_server(Firebird::CheckStatusWrapper*, const Replication::Config::ReplicaList&, bool);
+namespace Firebird::Remote
+{
+	bool REPL_server(CheckStatusWrapper*, const Jrd::Replication::Config::ReplicaList&, bool);
+}	// namespace Firebird::Remote
 
 #endif // UTIL_REPL_SERVER_H

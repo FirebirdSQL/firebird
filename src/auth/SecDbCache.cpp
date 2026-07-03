@@ -32,10 +32,9 @@
 
 #include <string.h>
 
+namespace Firebird::Auth
+{
 
-using namespace Firebird;
-
-namespace Auth {
 
 void CachedSecurityDatabase::close()
 {
@@ -163,4 +162,5 @@ void PluginDatabases::handler(CachedSecurityDatabase* tgt)
 	}
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

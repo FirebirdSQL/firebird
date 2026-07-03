@@ -40,8 +40,8 @@
 // Pick up relation ids
 #include "../jrd/ini.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 TrigArray::TrigArray(MemoryPool& p)
@@ -358,7 +358,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 
 		if (poolCreated)
 			pool = dbb->createPool(false);
-		Jrd::ContextPoolHolder context(tdbb, pool);
+		JrdContextPoolHolder context(tdbb, pool);
 
 		jrd_tra* idxTran = tdbb->getTransaction();
 		if (!idxTran)
@@ -1223,7 +1223,7 @@ void Trigger::free(thread_db* tdbb)
 // class DbTriggers
 
 DbTriggersHeader::DbTriggersHeader(thread_db* tdbb, MemoryPool& p, MetaId& t, NoData)
-	: Firebird::PermanentStorage(p),
+	: PermanentStorage(p),
 	  type(t)
 { }
 
@@ -1264,3 +1264,5 @@ GCLock::State GCLock::isGCEnabled() const
 	return State::unknown;
 }
 #endif //DEV_BUILD
+
+} // namespace Firebird::Jrd

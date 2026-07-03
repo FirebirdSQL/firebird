@@ -123,7 +123,7 @@ status_exception::~status_exception() noexcept
 
 const char* status_exception::what() const noexcept
 {
-	return "Firebird::status_exception";
+	return "status_exception";
 }
 
 [[noreturn]] void status_exception::raise(const ISC_STATUS *status_vector)
@@ -169,7 +169,7 @@ void BadAlloc::stuffByException(StaticStatusVector& status) const noexcept
 
 const char* BadAlloc::what() const noexcept
 {
-	return "Firebird::BadAlloc";
+	return "BadAlloc";
 }
 
 // ********************************* LongJump ***************************
@@ -182,7 +182,7 @@ const char* BadAlloc::what() const noexcept
 void LongJump::stuffByException(StaticStatusVector& status) const noexcept
 {
 	const ISC_STATUS sv[] = {isc_arg_gds, isc_random, isc_arg_string,
-		(ISC_STATUS)(IPTR) "Unexpected call to Firebird::LongJump::stuffException()", isc_arg_end};
+		(ISC_STATUS)(IPTR) "Unexpected call to LongJump::stuffException()", isc_arg_end};
 
 	try
 	{
@@ -196,7 +196,7 @@ void LongJump::stuffByException(StaticStatusVector& status) const noexcept
 
 const char* LongJump::what() const noexcept
 {
-	return "Firebird::LongJump";
+	return "LongJump";
 }
 
 

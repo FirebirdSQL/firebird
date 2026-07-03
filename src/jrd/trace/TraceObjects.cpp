@@ -55,7 +55,9 @@
 #include <unistd.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -108,7 +110,7 @@ bool descToUTF8(const paramdsc* param, string& result)
 		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, CSetId(param->dsc_sub_type), status_exception::raise))
 			result = src;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		result = src;
 	}
@@ -118,7 +120,6 @@ bool descToUTF8(const paramdsc* param, string& result)
 
 } // namespace
 
-namespace Jrd {
 
 const char* StatementHolder::ensurePlan(bool explained)
 {
@@ -134,7 +135,7 @@ const char* StatementHolder::ensurePlan(bool explained)
 
 /// StatementHolder
 
-Firebird::string StatementHolder::getName() const
+string StatementHolder::getName() const
 {
 	if (m_statement)
 	{
@@ -662,14 +663,14 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 		m_globalCounters[PerformanceInfo::MARKS] = (*baseline)[PageStatType::MARKS];
 		m_globalCounters[PerformanceInfo::WRITES] = (*baseline)[PageStatType::WRITES];
 
-		auto getTablespaceName = [&](MetaId id) -> Firebird::string
+		auto getTablespaceName = [&](MetaId id) -> string
 		{
 			return ""; // TODO
 		};
 
 		m_pageCounters.reset(&baseline->getPageCounters(), getTablespaceName);
 
-		auto getTableName = [&](MetaId id) -> Firebird::string
+		auto getTableName = [&](MetaId id) -> string
 		{
 			auto* mdc = attachment->att_database->dbb_mdc;
 			if (const auto* relation = mdc->lookupRelationNoChecks(id))
@@ -729,4 +730,5 @@ const char* TraceStatusVectorImpl::getText()
 	return m_error.c_str();
 }
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
