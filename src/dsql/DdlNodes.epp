@@ -1531,7 +1531,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			QualifiedName constantName(subName, name.schema, name.object); // name is a package
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant); // Search for a schema
 
-			if (!PackageReferenceNode::constantExists(tdbb, transaction, constantName))
+			if (!PackageReferenceNode::constantExists(tdbb, constantName))
 			{
 				status_exception::raise(Arg::Gds(isc_bad_constant_name) << constantName.toQuotedString());
 			}

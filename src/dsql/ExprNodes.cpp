@@ -6481,8 +6481,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant);
 
 			dsc constantDsc{};
-			auto transaction = dsqlScratch->getTransaction();
-			if (PackageReferenceNode::constantExists(tdbb, transaction, constantName, &constantDsc))
+			if (PackageReferenceNode::constantExists(tdbb, constantName, &constantDsc))
 			{
 				// Alias is a package name, not a constant
 				packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
@@ -6491,7 +6490,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 				MemoryPool& pool = dsqlScratch->getPool();
 				node = FB_NEW_POOL(pool) PackageReferenceNode(pool,
-					constantName, blr_pkg_reference_to_constant, &constantDsc);
+					constantName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 	}
@@ -14246,12 +14245,13 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
+
 			dsc constantDsc{};
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName, &constantDsc))
+			if (PackageReferenceNode::constantExists(tdbb, constantFullName, &constantDsc))
 			{
 				delete node;
 				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(),
-					constantFullName, blr_pkg_reference_to_constant, &constantDsc);
+					constantFullName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 
