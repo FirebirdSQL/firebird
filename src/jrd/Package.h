@@ -63,7 +63,7 @@ public:
 	static void genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 		ValueExprNode* constExpr, dsql_fld* type, const MetaName& schema);
 
-	void setType(const dsc typeDesc)
+	void setType(const dsc& typeDesc)
 	{
 		m_type = typeDesc;
 		m_blrBlobId = {};
