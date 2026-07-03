@@ -480,7 +480,7 @@ void PackageReferenceNode::setParameterName(dsql_par* parameter) const
 
 void PackageReferenceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	fb_assert(m_cachedDsc.dsc_dtype != dtype_unknown);
+	fb_assert(!m_cachedDsc.isUnknown());
 	*desc = m_cachedDsc;
 }
 
@@ -513,7 +513,7 @@ bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transac
 
 void PackageReferenceNode::getDesc(thread_db*, CompilerScratch*, dsc* desc)
 {
-	fb_assert(m_cachedDsc.dsc_dtype != dtype_unknown);
+	fb_assert(!m_cachedDsc.isUnknown());
 	*desc = m_cachedDsc;
 }
 

@@ -96,9 +96,9 @@ private:
 	// Lock in case of makeing value during the execute state
 	Firebird::RWLock m_makeValueLock{};
 
-	// The constant type and constant value type may differed
-	// For example, the the defiend type is int but value type is short)
-	// So keep it explicit
+	// The constant type and constant value type may be different
+	// (e.g. the defined type is int, but the value type is short),
+	// so keep it explicit
 	dsc m_type{};
 
 	// Get the value when scanning (without MINISCAN) or after the first execution

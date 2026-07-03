@@ -55,7 +55,7 @@ static_assert(DSC_SIZE_TO_HASH - offsetof(dsc, dsc_flags) == sizeof(dsc::dsc_fla
 
 bool ConstantValue::hash(thread_db* tdbb, Firebird::sha512& digest) const
 {
-	fb_assert(m_type.dsc_dtype != dtype_unknown);
+	fb_assert(!m_type.isUnknown());
 	digest.process(DSC_SIZE_TO_HASH, &m_type);
 
 	// The value hashing is unneccecery as Alex Peshkoff explained
