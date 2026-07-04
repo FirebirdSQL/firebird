@@ -256,11 +256,25 @@ ALTER SCHEMA <schema name>
 ### DROP SCHEMA
 
 ```sql
-DROP SCHEMA [IF EXISTS] <schema name>
+DROP SCHEMA [IF EXISTS] <schema name> [CASCADE | RESTRICT]
 ```
 
-Currently, only empty schemas can be dropped. In the future, a `CASCADE` sub-clause will be introduced, allowing 
-schemas to be dropped along with all their contained objects.
+`RESTRICT` is the default. With `RESTRICT`, the statement fails if the schema contains any objects.
+
+With `CASCADE`, all objects contained in the schema are automatically dropped before the schema itself is removed.
+Objects are dropped in a fixed broad order chosen to remove the most common dependents before the objects they use:
+triggers, packages, views, tables, procedures, functions, sequences, exceptions, collations, character sets, and domains.
+Within that process, dependencies between objects in the same schema are handled as internal to the cascade operation, so
+cycles or mutual references inside the schema do not by themselves prevent the schema from being dropped. Cross-schema
+dependents — objects in other schemas that reference objects in the schema being dropped — are not removed automatically;
+their presence causes the operation to fail with a dependency error, leaving the schema and all its contents intact.
+
+#### DDL triggers and CASCADE
+
+`DROP SCHEMA ... CASCADE` fires DDL triggers for the schema drop itself, but does not fire object-level DDL triggers for
+objects removed internally by the cascade. For example, `BEFORE DROP TABLE` and `AFTER DROP TABLE` triggers do not fire
+for tables dropped as part of a `DROP SCHEMA ... CASCADE`. Direct `DROP` statements for those objects continue to fire
+their corresponding DDL triggers normally.
 
 ### CURRENT_SCHEMA
 

@@ -817,11 +817,14 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	Package* package = nullptr;
 	FOR(REQUEST_HANDLE request)
-		DEP IN RDB$DEPENDENCIES CROSS
-		CONST IN RDB$CONSTANTS CROSS
-		PKG IN RDB$PACKAGES
+		DEP IN RDB$DEPENDENCIES
+		CROSS CONST IN RDB$CONSTANTS
+		CROSS FLD IN RDB$FIELDS
+		CROSS PKG IN RDB$PACKAGES
 		WITH PKG.RDB$SCHEMA_NAME EQ schemaName->dsc_address AND
 			 PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME AND
+			 FLD.RDB$SCHEMA_NAME EQ CONST.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+			 FLD.RDB$FIELD_NAME EQ CONST.RDB$FIELD_SOURCE AND
 			 DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
 			 DEP.RDB$DEPENDED_ON_NAME EQ fieldSource->dsc_address AND
 			 DEP.RDB$DEPENDED_ON_TYPE EQ obj_field AND
@@ -843,7 +846,19 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			fb_assert(package);
 		}
 
-		package->addConstant(tdbb, constantFullName, CONST.RDB$PRIVATE_FLAG != 0, CONST.RDB$CONSTANT_BLR);
+		dsc constantType{};
+		const bool succeed = DSC_make_descriptor(&constantType,
+			FLD.RDB$FIELD_TYPE,
+			FLD.RDB$FIELD_SCALE,
+			FLD.RDB$FIELD_LENGTH,
+			FLD.RDB$FIELD_SUB_TYPE,
+			CSetId(FLD.RDB$CHARACTER_SET_ID),
+			CollId(FLD.RDB$COLLATION_ID));
+
+		if (!succeed)
+			(Arg::Gds(isc_bad_constant_desc) << Arg::Str(constantFullName.toQuotedString())).raise();
+
+		package->addConstant(tdbb, constantFullName, CONST.RDB$PRIVATE_FLAG != 0, constantType, CONST.RDB$CONSTANT_BLR);
 	}
 	END_FOR
 
@@ -1026,9 +1041,10 @@ const Format* RelationPermanent::getFormat(thread_db* tdbb, USHORT number)
 	fb_assert(!(rel_flags & REL_temp_ltt));
 
 	Format* format = NULL;
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ getId() AND
 			X.RDB$FORMAT EQ number
 	{
@@ -5514,8 +5530,8 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 
 				case obj_package_constant:
 				{
-					static const CachedRequestId consatntHandleId;
-					handle.reset(tdbb, consatntHandleId);
+					static const CachedRequestId constantHandleId;
+					handle.reset(tdbb, constantHandleId);
 
 					FOR (REQUEST_HANDLE handle)
 						CONST IN RDB$CONSTANTS

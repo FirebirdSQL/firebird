@@ -291,7 +291,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 	DEBUG_XDR_PACKET(xdrs, p);
 
-	if (!xdr_enum(xdrs, reinterpret_cast<xdr_op*>(&p->p_operation)))
+	if (!xdr_enum(xdrs, &p->p_operation))
 		return P_FALSE(xdrs, p);
 
 #if COMPRESS_DEBUG > 1
@@ -319,9 +319,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_connect:
 		{
 			P_CNCT* connect = &p->p_cnct;
-			MAP(xdr_enum, reinterpret_cast<xdr_op&>(connect->p_cnct_operation));
+			MAP(xdr_enum, connect->p_cnct_operation);
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(connect->p_cnct_cversion));
-			MAP(xdr_enum, reinterpret_cast<xdr_op&>(connect->p_cnct_client));
+			MAP(xdr_enum, connect->p_cnct_client);
 			MAP(xdr_cstring_const, connect->p_cnct_file);
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(connect->p_cnct_count));
 
@@ -338,7 +338,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 				}
 
 				MAP(xdr_short, reinterpret_cast<SSHORT&>(tail->p_cnct_version));
-				MAP(xdr_enum, reinterpret_cast<xdr_op&>(tail->p_cnct_architecture));
+				MAP(xdr_enum, tail->p_cnct_architecture);
 				MAP(xdr_u_short, tail->p_cnct_min_type);
 				MAP(xdr_u_short, tail->p_cnct_max_type);
 				MAP(xdr_short, reinterpret_cast<SSHORT&>(tail->p_cnct_weight));
@@ -357,7 +357,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_accept:
 		accept = &p->p_acpt;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(accept->p_acpt_version));
-		MAP(xdr_enum, reinterpret_cast<xdr_op&>(accept->p_acpt_architecture));
+		MAP(xdr_enum, accept->p_acpt_architecture);
 		MAP(xdr_u_short, accept->p_acpt_type);
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
 		return P_TRUE(xdrs, p);
@@ -366,7 +366,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_cond_accept:
 		accept_with_data = &p->p_acpd;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(accept_with_data->p_acpt_version));
-		MAP(xdr_enum, reinterpret_cast<xdr_op&>(accept_with_data->p_acpt_architecture));
+		MAP(xdr_enum, accept_with_data->p_acpt_architecture);
 		MAP(xdr_u_short, accept_with_data->p_acpt_type);
 		MAP(xdr_cstring, accept_with_data->p_acpt_data);
 		MAP(xdr_cstring, accept_with_data->p_acpt_plugin);
@@ -983,6 +983,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			}
 
 			if (!statement)
+				return P_FALSE(xdrs, p);
+
+			if (xdrs->x_op == XDR_DECODE && statement->rsr_batch_cs == nullptr)
 				return P_FALSE(xdrs, p);
 
 			LocalStatus ls;
@@ -2181,8 +2184,16 @@ static bool_t xdr_trrq_blr(RemoteXdr* xdrs, CSTRING* blr)
 
 	// We care about all receives and sends from fetch
 
-	if (xdrs->x_op == XDR_FREE || xdrs->x_op == XDR_ENCODE)
+	if (xdrs->x_op == XDR_ENCODE)
 		return TRUE;
+	else if (xdrs->x_op == XDR_FREE)
+	{
+		Rpr* procedure = xdrs->x_public->port_rpr;
+		if (procedure)
+			procedure->clear();
+
+		return TRUE;
+	}
 
 	rem_port* port = xdrs->x_public;
 	Rpr* procedure = port->port_rpr;

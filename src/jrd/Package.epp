@@ -55,8 +55,8 @@ static_assert(DSC_SIZE_TO_HASH - offsetof(dsc, dsc_flags) == sizeof(dsc::dsc_fla
 
 bool ConstantValue::hash(thread_db* tdbb, Firebird::sha512& digest) const
 {
-	fb_assert(m_value.vlu_desc.dsc_dtype != dtype_unknown);
-	digest.process(DSC_SIZE_TO_HASH, &m_value.vlu_desc);
+	fb_assert(!m_type.isUnknown());
+	digest.process(DSC_SIZE_TO_HASH, &m_type);
 
 	// The value hashing is unneccecery as Alex Peshkoff explained
 	// See https://groups.google.com/g/firebird-devel/c/xIxhL_QAjEg/m/9RGT47ugAwAJ
@@ -70,46 +70,6 @@ bool ConstantValue::hash(thread_db* tdbb, Firebird::sha512& digest) const
 	*/
 
 	return true;
-}
-
-dsc ConstantValue::getDesc(thread_db* tdbb, Jrd::jrd_tra* transaction, const QualifiedName& name)
-{
-	dsc desc{};
-	bool found = false;
-
-	FbLocalStatus status;
-	static const CachedRequestId requestId;
-	AutoCacheRequest getConstantDscRequest(tdbb, requestId);
-	FOR(REQUEST_HANDLE getConstantDscRequest TRANSACTION_HANDLE transaction)
-		CONST IN RDB$CONSTANTS CROSS FLD IN RDB$FIELDS
-			WITH CONST.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-				CONST.RDB$PACKAGE_NAME EQ name.package.c_str() AND
-				CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
-				FLD.RDB$SCHEMA_NAME EQ CONST.RDB$FIELD_SOURCE_SCHEMA_NAME AND
-				FLD.RDB$FIELD_NAME EQ CONST.RDB$FIELD_SOURCE
-	{
-		found = true;
-
-		const bool succeed = DSC_make_descriptor(&desc,
-			FLD.RDB$FIELD_TYPE,
-			FLD.RDB$FIELD_SCALE,
-			FLD.RDB$FIELD_LENGTH,
-			FLD.RDB$FIELD_SUB_TYPE,
-			CSetId(FLD.RDB$CHARACTER_SET_ID),
-			CollId(FLD.RDB$COLLATION_ID));
-
-		if (!succeed)
-			(Arg::Gds(isc_bad_constant_desc) << Arg::Str(name.toQuotedString())).raise();
-
-		desc.setNullable(FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0);
-	}
-
-	END_FOR
-
-	if (!found)
-		(Arg::Gds(isc_bad_constant_name) << Arg::Str(name.toQuotedString())).raise();
-
-	return desc;
 }
 
 void ConstantValue::genConstantBlr(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
@@ -168,22 +128,23 @@ bid ConstantValue::getBlobId(thread_db* tdbb)
 	return m_blrBlobId.isEmpty() ? getConstantBid(tdbb, name) : m_blrBlobId;
 }
 
-dsc* ConstantValue::makeValue(thread_db* tdbb, Request* request)
+dsc* ConstantValue::makeValue(thread_db* tdbb)
 {
 	{
 		ReadLockGuard guard(m_makeValueLock, FB_FUNCTION);
-		if (m_value.vlu_desc.dsc_dtype != dtype_unknown)
+		if (m_value.vlu_desc.dsc_address != nullptr)
 			return &m_value.vlu_desc;
 	}
 
 	WriteLockGuard guard(m_makeValueLock, FB_FUNCTION);
-	if (m_value.vlu_desc.dsc_dtype != dtype_unknown) // Extra check in case of two callers waiting
+	if (m_value.vlu_desc.dsc_address != nullptr) // Extra check in case of two callers waiting
 		return &m_value.vlu_desc;
 
 	Attachment* attachment = tdbb->getAttachment();
 
 	MemoryPool* csb_pool = attachment->att_database->createPool();
 	Statement* handmadeStmt = nullptr;
+	Request* request = nullptr;
 	try
 	{
 		ContextPoolHolder context(tdbb, csb_pool);
@@ -195,28 +156,21 @@ dsc* ConstantValue::makeValue(thread_db* tdbb, Request* request)
 		bid constantBid = getBlobId(tdbb);
 
 		MET_parse_blob(tdbb, &name.schema, nullptr, &constantBid, &csb, nullptr, false, false);
-		fb_assert(csb->csb_node != nullptr);
 
-		if (request == nullptr)
-		{
-			// Came from Reload
-			handmadeStmt = Statement::makeStatement(tdbb, csb, true);
-			request = handmadeStmt->makeRootRequest(tdbb);
+		handmadeStmt = Statement::makeStatement(tdbb, csb, true);
+		request = handmadeStmt->makeRootRequest(tdbb);
 
-			AutoSetRestore2<Request*, thread_db> autoSetRequest(
-				tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
+		AutoSetRestore2<Request*, thread_db> autoSetRequest(
+			tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
 
-			request->setUsed();
-			request->setAttachment(attachment);
-			attachment->att_requests.add(request);
+		request->setUsed();
+		request->setAttachment(attachment);
+		attachment->att_requests.add(request);
 
-			TRA_attach_request(tdbb->getTransaction(), request);
+		TRA_attach_request(tdbb->getTransaction(), request);
 
-			// Execute it here, while AutoSetRestore2 is active
-			executeCsbNode(tdbb, csb);
-		}
-		else
-			executeCsbNode(tdbb, csb);
+		// Execute it while AutoSetRestore2 is active
+		executeCsbNode(tdbb, csb);
 	}
 	catch (const Exception& ex)
 	{
@@ -251,7 +205,7 @@ void ConstantValue::executeCsbNode(thread_db* tdbb, CompilerScratch* csb)
 	}
 	else
 	{
-		exprNode->getDesc(tdbb, csb, &m_value.vlu_desc);
+		m_value.vlu_desc = m_type;
 		m_value.vlu_desc.setNull();
 	}
 }
@@ -330,27 +284,8 @@ ScanResult Package::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		END_FOR
 	}
 
-	{ // Constants
-		static const CachedRequestId requestId;
-		AutoCacheRequest requestConst(tdbb, requestId);
-
-		FOR(REQUEST_HANDLE requestConst TRANSACTION_HANDLE metaTransaction)
-			PKG IN RDB$PACKAGES CROSS CONST IN RDB$CONSTANTS
-			WITH PKG.RDB$PACKAGE_ID EQ getId() AND
-				PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME AND
-				PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME
-		{
-			addConstant(tdbb,
-				QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME),
-				CONST.RDB$PRIVATE_FLAG != 0,
-				CONST.RDB$CONSTANT_BLR,
-				skipMakeValue);
-
-			if (skipMakeValue)
-				this->m_callReload = true; // Value is necessary for to calculate hash
-		}
-		END_FOR
-	}
+	fb_assert(constants.values.isEmpty());
+	collectConstants(tdbb, skipMakeValue);
 
 	return this->m_callReload ? ScanResult::REPEAT : ScanResult::COMPLETE;
 }
@@ -373,18 +308,7 @@ ScanResult Package::reload(thread_db* tdbb, ObjectBase::Flag fl)
 	AutoCacheRequest requestConst(tdbb, requestId);
 
 	constants.clear();
-	FOR(REQUEST_HANDLE requestConst TRANSACTION_HANDLE metaTransaction)
-		PKG IN RDB$PACKAGES CROSS CONST IN RDB$CONSTANTS
-		WITH PKG.RDB$PACKAGE_ID EQ getId() AND
-			PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME AND
-			PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME
-	{
-		addConstant(tdbb,
-			QualifiedName(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME),
-			CONST.RDB$PRIVATE_FLAG != 0,
-			CONST.RDB$CONSTANT_BLR);
-	}
-	END_FOR
+	collectConstants(tdbb, false);
 
 	m_callReload = false;
 	return ScanResult::COMPLETE;
@@ -412,7 +336,7 @@ ConstantValue& Package::addConstant(thread_db* tdbb,
 	DsqlDescMaker::fromField(&typeDesc, type);
 
 	auto& value = constants.add(constName, isPrivate);
-	value.updateValue(typeDesc);
+	value.setType(typeDesc);
 
 	return value;
 }
@@ -420,13 +344,15 @@ ConstantValue& Package::addConstant(thread_db* tdbb,
 ConstantValue& Package::addConstant(thread_db* tdbb,
 	const QualifiedName& constName,
 	const bool isPrivate,
+	const dsc type,
 	const bid blrBlobId,
 	const bool skipMakeValue)
 {
 	auto& value = constants.add(constName, isPrivate);
-	value.updateValue(blrBlobId);
+	value.setType(type);
+	value.setValue(blrBlobId);
 	if (!skipMakeValue)
-		value.makeValue(tdbb, nullptr);
+		value.makeValue(tdbb);
 
 	return value;
 }
@@ -443,7 +369,7 @@ ConstantValue& Package::updateConstant(thread_db* tdbb, const QualifiedName& nam
 
 	auto& constant = constants.values[*innerId];
 	constant.isPrivate = isPrivate;
-	constant.updateValue(typeDesc);
+	constant.setType(typeDesc);
 
 	return constant;
 }
@@ -456,4 +382,53 @@ ConstantValue* Package::findConstant(const QualifiedName& name)
 		return &constants.values[*it];
 
 	return nullptr;
+}
+
+void Package::collectConstants(thread_db* tdbb, const bool skipMakingValue)
+{
+	Attachment* attachment = tdbb->getAttachment();
+	jrd_tra* metaTransaction = attachment->getMetaTransaction(tdbb);
+	Database* dbb = tdbb->getDatabase();
+
+	MemoryPool& pool = getPermanent()->getPool();
+
+	static const CachedRequestId requestId;
+	AutoCacheRequest requestConst(tdbb, requestId);
+	FOR(REQUEST_HANDLE requestConst TRANSACTION_HANDLE metaTransaction)
+		PKG IN RDB$PACKAGES
+		CROSS CONST IN RDB$CONSTANTS
+		CROSS FLD IN RDB$FIELDS
+		WITH PKG.RDB$PACKAGE_ID EQ getId() AND
+			PKG.RDB$PACKAGE_NAME EQ CONST.RDB$PACKAGE_NAME AND
+			PKG.RDB$SCHEMA_NAME EQ CONST.RDB$SCHEMA_NAME AND
+			FLD.RDB$SCHEMA_NAME EQ CONST.RDB$FIELD_SOURCE_SCHEMA_NAME AND
+			FLD.RDB$FIELD_NAME EQ CONST.RDB$FIELD_SOURCE
+	{
+		QualifiedName name(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME);
+
+		dsc constantType{};
+		const bool succeed = DSC_make_descriptor(&constantType,
+			FLD.RDB$FIELD_TYPE,
+			FLD.RDB$FIELD_SCALE,
+			FLD.RDB$FIELD_LENGTH,
+			FLD.RDB$FIELD_SUB_TYPE,
+			CSetId(FLD.RDB$CHARACTER_SET_ID),
+			CollId(FLD.RDB$COLLATION_ID));
+
+		if (!succeed)
+			(Arg::Gds(isc_bad_constant_desc) << Arg::Str(name.toQuotedString())).raise();
+
+		constantType.setNullable(FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0);
+
+		addConstant(tdbb,
+			name,
+			CONST.RDB$PRIVATE_FLAG != 0,
+			constantType,
+			CONST.RDB$CONSTANT_BLR,
+			skipMakingValue);
+
+		if (skipMakingValue)
+			this->m_callReload = true; // Value is necessary to calculate hash
+	}
+	END_FOR
 }

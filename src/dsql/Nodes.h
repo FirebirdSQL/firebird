@@ -223,7 +223,7 @@ public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
 	// If returns false permissions will be check in old style at vio level as well as while direct RDB$ tables modify.
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction) = 0;
+	virtual void checkPermission(thread_db* tdbb) = 0;
 
 	// Set the scratch's transaction when executing a node. Fact of accessing the scratch during
 	// execution is a hack.
@@ -234,7 +234,7 @@ public:
 			dsqlScratch->setTransaction(transaction);
 
 		if (!trusted)
-			checkPermission(tdbb, transaction);
+			checkPermission(tdbb);
 		execute(tdbb, dsqlScratch, transaction);
 	}
 

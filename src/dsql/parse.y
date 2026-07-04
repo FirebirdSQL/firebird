@@ -5507,10 +5507,11 @@ drop_clause
 			node->silentDrop = $3;
 			$$ = node;
 		}
-	| SCHEMA if_exists_opt symbol_schema_name
+	| SCHEMA if_exists_opt symbol_schema_name drop_behaviour
 		{
 			const auto node = newNode<DropSchemaNode>(*$3);
 			node->silent = $2;
+			node->cascade = $4;
 			$$ = node;
 		}
 	;

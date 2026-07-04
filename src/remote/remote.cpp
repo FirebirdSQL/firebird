@@ -1540,6 +1540,7 @@ rem_port::~rem_port()
 	delete port_version;
 	delete port_connection;
 	delete port_host;
+	delete port_rpr;
 	delete port_server_crypt_callback;
 
 #ifdef DEBUG_XDR_MEMORY

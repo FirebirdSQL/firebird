@@ -496,7 +496,7 @@ private:
 	RelationPermanent*	idp_relation;
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
-	UCHAR				idp_state = 0;		// Makes sense only for expression/conditional indices
+	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
 	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
@@ -521,11 +521,6 @@ public:
 	void setState(UCHAR state) noexcept
 	{
 		idp_state = state;
-	}
-
-	UCHAR getState() const noexcept
-	{
-		return idp_state;
 	}
 
 	UCHAR getFormat() const noexcept
