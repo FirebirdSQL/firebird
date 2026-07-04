@@ -135,8 +135,8 @@ public:
 			GROUPING_SETS
 		};
 
-		explicit Element(Type aType = Type::SIMPLE, ValueListNode* aItems = NULL,
-				GroupingClause* aGroupingSets = NULL)
+		explicit Element(Type aType = Type::SIMPLE, ValueListNode* aItems = nullptr,
+				GroupingClause* aGroupingSets = nullptr)
 			: type(aType),
 			  items(aItems),
 			  groupingSets(aGroupingSets)
@@ -160,8 +160,8 @@ public:
 	{
 	}
 
-	GroupingClause* addElement(Element::Type type, ValueListNode* items = NULL,
-		GroupingClause* groupingSets = NULL)
+	GroupingClause* addElement(Element::Type type, ValueListNode* items = nullptr,
+		GroupingClause* groupingSets = nullptr)
 	{
 		elements.add(Element(type, items, groupingSets));
 		return this;
