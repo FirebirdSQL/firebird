@@ -30,6 +30,7 @@ Firebird extension for the bit-mask form.
   | ()
   | ROLLUP(<grouping element> [, <grouping element> ...])
   | CUBE(<grouping element> [, <grouping element> ...])
+  | GROUPING SETS(<grouping set> [, <grouping set> ...])
 
 <grouping function> ::=
     GROUPING(<value expression> [, <value expression> ...])
@@ -113,6 +114,24 @@ than 4096 grouping sets.
 select a, b, sum(x)
 from t
 group by grouping sets ((a, b), (a), ());
+```
+
+`GROUPING SETS` may be nested inside another `GROUPING SETS` clause. Nested
+grouping sets are expanded in place, preserving order and duplicates:
+
+```sql
+select a, b, c, sum(x)
+from t
+group by grouping sets ((a), grouping sets ((b), (c)), ());
+```
+
+is equivalent to:
+
+```
+(a)
+(b)
+(c)
+()
 ```
 
 Top-level grouping elements are combined as a Cartesian product. For example:
