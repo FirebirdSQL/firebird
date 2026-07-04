@@ -7257,20 +7257,12 @@ gen_series_step_opt
 %type <groupingClause> group_clause
 group_clause
 	: /* nothing */				{ $$ = NULL; }
-	| GROUP BY group_by_duplicate_opt group_by_list
+	| GROUP BY quantifier_opt group_by_list
 		{
 			$$ = $4;
-			$$->duplicateMode = $3 == 2 ?
+			$$->duplicateMode = $3 ?
 				GroupingClause::DuplicateMode::DISTINCT : GroupingClause::DuplicateMode::ALL;
-			$$->duplicateModeExplicit = $3 != 0;
 		}
-	;
-
-%type <intVal> group_by_duplicate_opt
-group_by_duplicate_opt
-	: /* nothing */	{ $$ = 0; }
-	| ALL			{ $$ = 1; }
-	| DISTINCT		{ $$ = 2; }
 	;
 
 %type <groupingClause> group_by_list

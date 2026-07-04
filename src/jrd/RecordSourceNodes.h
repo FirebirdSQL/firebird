@@ -158,8 +158,7 @@ public:
 		: DsqlNode<GroupingClause, ExprNode::TYPE_GROUPING_CLAUSE>(pool),
 		  elements(pool),
 		  legacyGroup(NULL),
-		  duplicateMode(DuplicateMode::ALL),
-		  duplicateModeExplicit(false)
+		  duplicateMode(DuplicateMode::ALL)
 	{
 	}
 
@@ -200,7 +199,6 @@ public:
 
 		NODE_PRINT(printer, legacyGroup);
 		NODE_PRINT_ENUM(printer, duplicateMode);
-		NODE_PRINT(printer, duplicateModeExplicit);
 
 		printer.begin("elements");
 
@@ -236,7 +234,6 @@ public:
 
 		node->legacyGroup = Node::doDsqlPass(dsqlScratch, legacyGroup);
 		node->duplicateMode = duplicateMode;
-		node->duplicateModeExplicit = duplicateModeExplicit;
 
 		return node;
 	}
@@ -263,7 +260,6 @@ public:
 	Firebird::Array<Element> elements;
 	NestConst<ValueListNode> legacyGroup;
 	DuplicateMode duplicateMode;
-	bool duplicateModeExplicit;
 };
 
 
