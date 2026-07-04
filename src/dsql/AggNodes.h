@@ -270,6 +270,84 @@ private:
 	ULONG percentileImpureOffset = 0;
 };
 
+class RankAggNode final : public AggNode
+{
+public:
+	enum RankType : UCHAR
+	{
+		TYPE_RANK,
+		TYPE_DENSE_RANK,
+		TYPE_PERCENT_RANK,
+		TYPE_CUME_DIST
+	};
+
+	struct Impure
+	{
+		impure_value* orderValues;
+		uint64_t vlux_count;
+		uint64_t vlux_rank;
+		uint64_t vlux_dense_rank;
+	};
+
+	explicit RankAggNode(MemoryPool& pool, RankType aType,
+		ValueListNode* aArgList = nullptr, ValueListNode* aOrderClause = nullptr);
+
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
+
+	unsigned getCapabilities() const override
+	{
+		return 0;
+	}
+
+	bool isVariadicArgs() const override
+	{
+		return true;
+	}
+
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		ValueExprNode::getChildren(holder, dsql);
+
+		for (FB_SIZE_T i = 0; i < valueListArg->items.getCount(); i++)
+			holder.add(valueListArg->items[i]);
+	}
+
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+	void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	int lookForChange(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const;
+	void cacheValues(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggFinish(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	dsc* execute(thread_db* tdbb, Request* request) const override;
+
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
+private:
+	const RankType type;
+	NestConst<ValueListNode> valueListArg;
+	NestConst<ValueListNode> dsqlOrderClause;
+	ULONG impureArgsOffset = 0;
+	ULONG m_impureOrder = 0;
+};
+
 class CountAggNode final : public AggNode
 {
 public:
