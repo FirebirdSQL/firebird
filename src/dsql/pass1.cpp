@@ -2040,7 +2040,7 @@ static GroupingSpec* pass1_grouping_spec_raw(DsqlCompilerScratch* dsqlScratch,
 
 namespace
 {
-	constexpr FB_SIZE_T MAX_GROUPING_ID_ARGS = 63;
+	constexpr FB_SIZE_T MAX_GROUPING_ARGS = 63;
 
 	bool pass1_find_grouping_dimension_match(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
 		ValueListNode* selectList, ValueExprNode* node, const SortedArray<unsigned>* set,
@@ -2050,9 +2050,9 @@ namespace
 	bool pass1_find_raw_grouping_dimension(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
 		ValueListNode* selectList, ValueExprNode* node, unsigned& index, bool resolveDsql = true);
 
-	ValueExprNode* pass1_make_grouping_id_value(DsqlCompilerScratch* dsqlScratch,
+	ValueExprNode* pass1_make_grouping_function_value(DsqlCompilerScratch* dsqlScratch,
 		GroupingSpec* spec, const SortedArray<unsigned>* groupingSet, ValueListNode* selectList,
-		GroupingIdNode* groupingIdNode, bool resolveDsql);
+		GroupingNode* groupingNode, bool resolveDsql);
 
 	void postGroupingValidationError(const char* message)
 	{
@@ -2101,25 +2101,8 @@ namespace
 
 				if (groupingSet)
 				{
-					unsigned dimension = 0;
-					bool present = false;
-
-					if (pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList,
-							groupingNode->arg, groupingSet, dimension, present, true, true, true))
-					{
-						*nodePtr = MAKE_const_slong(present ? 0 : 1);
-						return;
-					}
-				}
-			}
-			else if (GroupingIdNode* groupingIdNode = nodeAs<GroupingIdNode>(node))
-			{
-				validateGroupingId(groupingIdNode);
-
-				if (groupingSet)
-				{
-					*nodePtr = pass1_make_grouping_id_value(dsqlScratch, spec, groupingSet,
-						selectList, groupingIdNode, true);
+					*nodePtr = pass1_make_grouping_function_value(dsqlScratch, spec,
+						groupingSet, selectList, groupingNode, true);
 					return;
 				}
 			}
@@ -2136,26 +2119,7 @@ namespace
 
 		void validateGrouping(GroupingNode* groupingNode)
 		{
-			if (!spec)
-			{
-				postGroupingValidationError(missingContextMessage);
-				return;
-			}
-
-			unsigned dimension = 0;
-
-			if (pass1_find_raw_grouping_dimension(dsqlScratch, spec, selectList,
-					groupingNode->arg, dimension))
-			{
-				return;
-			}
-
-			postGroupingValidationError("GROUPING argument must match a grouping expression");
-		}
-
-		void validateGroupingId(GroupingIdNode* groupingIdNode)
-		{
-			const char* functionName = groupingIdNode->getDsqlFunctionName();
+			const char* functionName = groupingNode->getDsqlFunctionName();
 
 			if (!spec)
 			{
@@ -2163,16 +2127,16 @@ namespace
 				return;
 			}
 
-			if (!groupingIdNode->args || groupingIdNode->args->items.isEmpty())
+			if (!groupingNode->args || groupingNode->args->items.isEmpty())
 				postGroupingValidationError(string(functionName) +
 					" requires at least one argument");
 
-			if (groupingIdNode->args->items.getCount() > MAX_GROUPING_ID_ARGS)
+			if (groupingNode->args->items.getCount() > MAX_GROUPING_ARGS)
 				postGroupingValidationError(string(functionName) +
 					" supports at most 63 arguments");
 
-			for (auto arg = groupingIdNode->args->items.begin();
-				 arg != groupingIdNode->args->items.end();
+			for (auto arg = groupingNode->args->items.begin();
+				 arg != groupingNode->args->items.end();
 				 ++arg)
 			{
 				unsigned dimension = 0;
@@ -2388,25 +2352,25 @@ namespace
 			index, present, resolveDsql, true, true);
 	}
 
-	ValueExprNode* pass1_make_grouping_id_value(DsqlCompilerScratch* dsqlScratch,
+	ValueExprNode* pass1_make_grouping_function_value(DsqlCompilerScratch* dsqlScratch,
 		GroupingSpec* spec, const SortedArray<unsigned>* groupingSet, ValueListNode* selectList,
-		GroupingIdNode* groupingIdNode, bool resolveDsql)
+		GroupingNode* groupingNode, bool resolveDsql)
 	{
 		fb_assert(spec);
 		fb_assert(groupingSet);
 
-		const char* functionName = groupingIdNode->getDsqlFunctionName();
+		const char* functionName = groupingNode->getDsqlFunctionName();
 
-		if (!groupingIdNode->args || groupingIdNode->args->items.isEmpty())
+		if (!groupingNode->args || groupingNode->args->items.isEmpty())
 			postGroupingValidationError(string(functionName) +
 				" requires at least one argument");
 
-		if (groupingIdNode->args->items.getCount() > MAX_GROUPING_ID_ARGS)
+		if (groupingNode->args->items.getCount() > MAX_GROUPING_ARGS)
 			postGroupingValidationError(string(functionName) +
 				" supports at most 63 arguments");
 
 		SINT64 value = 0;
-		const FB_SIZE_T count = groupingIdNode->args->items.getCount();
+		const FB_SIZE_T count = groupingNode->args->items.getCount();
 
 		for (FB_SIZE_T i = 0; i < count; ++i)
 		{
@@ -2414,7 +2378,7 @@ namespace
 			bool present = false;
 
 			if (!pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList,
-					groupingIdNode->args->items[i], groupingSet, dimension, present, resolveDsql,
+					groupingNode->args->items[i], groupingSet, dimension, present, resolveDsql,
 					true, true))
 			{
 				postGroupingValidationError(string(functionName) +
@@ -2425,7 +2389,8 @@ namespace
 				value |= SINT64(1) << (count - i - 1);
 		}
 
-		return MAKE_const_sint64(value, 0);
+		return count == 1 ? MAKE_const_slong(static_cast<SLONG>(value)) :
+			MAKE_const_sint64(value, 0);
 	}
 
 	ValueExprNode* pass1_make_grouping_value(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
@@ -2439,25 +2404,11 @@ namespace
 
 		if (auto groupingNode = nodeAs<GroupingNode>(node))
 		{
-			if (pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList,
-					groupingNode->arg, &set.dimensions, dimension, present, false, true, false))
-			{
-				DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool, MetaName("GROUPING"),
-					MAKE_const_slong(present ? 0 : 1));
-				aliasNode->dsqlGroupingExpression = groupingNode;
-				return aliasNode;
-			}
-
-			return node;
-		}
-
-		if (auto groupingIdNode = nodeAs<GroupingIdNode>(node))
-		{
 			DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool,
-				MetaName(groupingIdNode->getDsqlFunctionName()),
-				pass1_make_grouping_id_value(dsqlScratch, spec, &set.dimensions, selectList,
-					groupingIdNode, false));
-			aliasNode->dsqlGroupingExpression = groupingIdNode;
+				MetaName(groupingNode->getDsqlFunctionName()),
+				pass1_make_grouping_function_value(dsqlScratch, spec, &set.dimensions, selectList,
+					groupingNode, false));
+			aliasNode->dsqlGroupingExpression = groupingNode;
 			return aliasNode;
 		}
 
@@ -2979,7 +2930,7 @@ namespace
 		if (!node)
 			return false;
 
-		if (nodeIs<GroupingNode>(node) || nodeIs<GroupingIdNode>(node))
+		if (nodeIs<GroupingNode>(node))
 			return true;
 
 		if (nodeIs<SubQueryNode>(node))
@@ -3223,11 +3174,8 @@ ValueExprNode* DsqlCompilerScratch::makeGroupingValue(ValueExprNode* node)
 			MemoryPool& pool = *tdbb->getDefaultPool();
 			DsqlAliasNode* newAlias = FB_NEW_POOL(pool) DsqlAliasNode(pool, aliasNode->name, value);
 
-			if (nodeIs<GroupingNode>(aliasNode->value) ||
-				nodeIs<GroupingIdNode>(aliasNode->value))
-			{
+			if (nodeIs<GroupingNode>(aliasNode->value))
 				newAlias->dsqlGroupingExpression = aliasNode->value;
-			}
 			else if (auto valueAlias = nodeAs<DsqlAliasNode>(value))
 				newAlias->dsqlGroupingExpression = valueAlias->dsqlGroupingExpression;
 
@@ -3244,40 +3192,7 @@ ValueExprNode* DsqlCompilerScratch::makeGroupingValue(ValueExprNode* node)
 
 	if (groupingNode)
 	{
-		if (inWhereClause)
-		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_command_err) <<
-					  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in the WHERE clause"));
-		}
-
-		if (inGroupByClause)
-		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_command_err) <<
-					  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in the GROUP BY clause"));
-		}
-
-		if (inAggregateFunction)
-		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-					  Arg::Gds(isc_dsql_command_err) <<
-					  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in aggregate function arguments"));
-		}
-
-		if (!pass1_find_grouping_dimension_match(this, activeGroupingSpec,
-				activeGroupingSelectList, groupingNode->arg, activeGroupingSet,
-				dimension, present, true, true, true))
-		{
-			postGroupingValidationError("GROUPING argument must match a grouping expression");
-		}
-
-		return MAKE_const_slong(present ? 0 : 1);
-	}
-
-	if (auto groupingIdNode = nodeAs<GroupingIdNode>(node))
-	{
-		const char* functionName = groupingIdNode->getDsqlFunctionName();
+		const char* functionName = groupingNode->getDsqlFunctionName();
 
 		if (inWhereClause)
 		{
@@ -3303,8 +3218,8 @@ ValueExprNode* DsqlCompilerScratch::makeGroupingValue(ValueExprNode* node)
 					  Arg::Str(string(functionName) + " is not allowed in aggregate function arguments"));
 		}
 
-		return pass1_make_grouping_id_value(this, activeGroupingSpec, activeGroupingSet,
-			activeGroupingSelectList, groupingIdNode, true);
+		return pass1_make_grouping_function_value(this, activeGroupingSpec, activeGroupingSet,
+			activeGroupingSelectList, groupingNode, true);
 	}
 
 	if (inWhereClause || inGroupByClause || inAggregateFunction)
@@ -4823,14 +4738,15 @@ static ValueListNode* pass1_sel_list(DsqlCompilerScratch* dsqlScratch, ValueList
 	{
 		ValueExprNode* value = Node::doDsqlPass(dsqlScratch, *ptr, false);
 
-		if ((nodeIs<GroupingNode>(*ptr) || nodeIs<GroupingIdNode>(*ptr)) &&
-			!nodeIs<DsqlAliasNode>(value))
+		if (auto groupingNode = nodeAs<GroupingNode>(*ptr))
 		{
-			DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool,
-				nodeIs<GroupingIdNode>(*ptr) ? MetaName("GROUPING_ID") : MetaName("GROUPING"),
-				value);
-			aliasNode->dsqlGroupingExpression = *ptr;
-			value = aliasNode;
+			if (!nodeIs<DsqlAliasNode>(value))
+			{
+				DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool,
+					MetaName(groupingNode->getDsqlFunctionName()), value);
+				aliasNode->dsqlGroupingExpression = *ptr;
+				value = aliasNode;
+			}
 		}
 
 		retList->add(value);

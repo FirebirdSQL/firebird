@@ -9080,14 +9080,9 @@ non_aggregate_function
 %type <valueExprNode> grouping_function
 grouping_function
 	: GROUPING '(' value_list ')'
-		{
-			if ($3->items.getCount() == 1)
-				$$ = newNode<GroupingNode>($3->items[0]);
-			else
-				$$ = newNode<GroupingIdNode>($3, true);
-		}
+		{ $$ = newNode<GroupingNode>($3); }
 	| GROUPING_ID '(' value_list ')'
-		{ $$ = newNode<GroupingIdNode>($3); }
+		{ $$ = newNode<GroupingNode>($3, true); }
 	;
 
 %type <aggNode> aggregate_function

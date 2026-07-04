@@ -227,8 +227,9 @@ order by gid, department, product;
 
 ## GROUPING_ID()
 
-`GROUPING_ID(<expr> [, <expr> ...])` returns the same `BIGINT` bit mask as
-multi-argument `GROUPING`. For each argument, the corresponding bit is `0` when
+`GROUPING_ID(<expr> [, <expr> ...])` returns the same bit mask as `GROUPING`.
+With one argument it returns an `INTEGER` flag, and with multiple arguments it
+returns a `BIGINT` mask. For each argument, the corresponding bit is `0` when
 the expression is present in the current grouping set and `1` when it is rolled
 up. The last argument is the least significant bit.
 

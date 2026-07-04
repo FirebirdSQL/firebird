@@ -7682,119 +7682,13 @@ string GroupingNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
-	NODE_PRINT(printer, arg);
+	NODE_PRINT(printer, args);
+	NODE_PRINT(printer, dsqlGroupingIdFunction);
 
 	return "GroupingNode";
 }
 
 ValueExprNode* GroupingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
-{
-	if (dsqlScratch->inWhereClause)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_command_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in the WHERE clause"));
-	}
-
-	if (dsqlScratch->inGroupByClause)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_command_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in the GROUP BY clause"));
-	}
-
-	if (dsqlScratch->inAggregateFunction)
-	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
-				  Arg::Gds(isc_dsql_command_err) <<
-				  Arg::Gds(isc_random) << Arg::Str("GROUPING is not allowed in aggregate function arguments"));
-	}
-
-	if (ValueExprNode* value = dsqlScratch->makeGroupingValue(this))
-		return value;
-
-	GroupingNode* node = FB_NEW_POOL(dsqlScratch->getPool()) GroupingNode(dsqlScratch->getPool(),
-		doDsqlPass(dsqlScratch, arg));
-	node->dsqlDesc.makeLong(0);
-	return node;
-}
-
-void GroupingNode::setParameterName(dsql_par* parameter) const
-{
-	parameter->par_name = parameter->par_alias = "GROUPING";
-}
-
-void GroupingNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
-{
-	ERRD_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
-			  Arg::Str("GROUPING expression was not lowered"));
-}
-
-void GroupingNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
-{
-	desc->makeLong(0);
-}
-
-void GroupingNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
-{
-	desc->makeLong(0);
-}
-
-ValueExprNode* GroupingNode::copy(thread_db* tdbb, NodeCopier& copier) const
-{
-	GroupingNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) GroupingNode(*tdbb->getDefaultPool());
-	node->arg = copier.copy(tdbb, arg);
-	return node;
-}
-
-bool GroupingNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
-	bool ignoreMapCast) const
-{
-	if (!ExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
-		return false;
-
-	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
-	fb_assert(otherNode);
-
-	return (!arg && !otherNode->arg) ||
-		(arg && otherNode->arg && PASS1_node_match(dsqlScratch, arg, otherNode->arg, ignoreMapCast));
-}
-
-bool GroupingNode::sameAs(const ExprNode* other, bool ignoreStreams) const
-{
-	if (!ExprNode::sameAs(other, ignoreStreams))
-		return false;
-
-	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
-	fb_assert(otherNode);
-
-	return (!arg && !otherNode->arg) ||
-		(arg && otherNode->arg && arg->sameAs(otherNode->arg, ignoreStreams));
-}
-
-ValueExprNode* GroupingNode::pass2(thread_db* tdbb, CompilerScratch* csb)
-{
-	ValueExprNode::pass2(tdbb, csb);
-	return this;
-}
-
-dsc* GroupingNode::execute(thread_db* /*tdbb*/, Request* /*request*/) const
-{
-	fb_assert(false);
-	return NULL;
-}
-
-
-string GroupingIdNode::internalPrint(NodePrinter& printer) const
-{
-	ValueExprNode::internalPrint(printer);
-
-	NODE_PRINT(printer, args);
-
-	return "GroupingIdNode";
-}
-
-ValueExprNode* GroupingIdNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	const char* functionName = getDsqlFunctionName();
 
@@ -7825,48 +7719,55 @@ ValueExprNode* GroupingIdNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	if (ValueExprNode* value = dsqlScratch->makeGroupingValue(this))
 		return value;
 
-	GroupingIdNode* node = FB_NEW_POOL(dsqlScratch->getPool()) GroupingIdNode(dsqlScratch->getPool(),
-		doDsqlPass(dsqlScratch, args), dsqlGroupingFunction);
-	node->dsqlDesc.makeInt64(0);
+	GroupingNode* node = FB_NEW_POOL(dsqlScratch->getPool()) GroupingNode(dsqlScratch->getPool(),
+		doDsqlPass(dsqlScratch, args), dsqlGroupingIdFunction);
+	node->setDsqlDesc();
 	return node;
 }
 
-void GroupingIdNode::setParameterName(dsql_par* parameter) const
+void GroupingNode::setParameterName(dsql_par* parameter) const
 {
 	parameter->par_name = parameter->par_alias = getDsqlFunctionName();
 }
 
-void GroupingIdNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+void GroupingNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
 {
 	ERRD_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
 			  Arg::Str(string(getDsqlFunctionName()) + " expression was not lowered"));
 }
 
-void GroupingIdNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
+void GroupingNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 {
-	desc->makeInt64(0);
+	if (returnsInt64())
+		desc->makeInt64(0);
+	else
+		desc->makeLong(0);
 }
 
-void GroupingIdNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
+void GroupingNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
 {
-	desc->makeInt64(0);
+	if (returnsInt64())
+		desc->makeInt64(0);
+	else
+		desc->makeLong(0);
 }
 
-ValueExprNode* GroupingIdNode::copy(thread_db* tdbb, NodeCopier& copier) const
+ValueExprNode* GroupingNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
-	GroupingIdNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) GroupingIdNode(
-		*tdbb->getDefaultPool(), NULL, dsqlGroupingFunction);
+	GroupingNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) GroupingNode(
+		*tdbb->getDefaultPool(), NULL, dsqlGroupingIdFunction);
 	node->args = copier.copy(tdbb, args);
+	node->setDsqlDesc();
 	return node;
 }
 
-bool GroupingIdNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+bool GroupingNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
 	bool ignoreMapCast) const
 {
 	if (!ExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
 		return false;
 
-	const GroupingIdNode* otherNode = nodeAs<GroupingIdNode>(other);
+	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
 	fb_assert(otherNode);
 
 	if (!args || !otherNode->args)
@@ -7889,12 +7790,12 @@ bool GroupingIdNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode*
 	return true;
 }
 
-bool GroupingIdNode::sameAs(const ExprNode* other, bool ignoreStreams) const
+bool GroupingNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 {
 	if (!ExprNode::sameAs(other, ignoreStreams))
 		return false;
 
-	const GroupingIdNode* otherNode = nodeAs<GroupingIdNode>(other);
+	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
 	fb_assert(otherNode);
 
 	if (!args || !otherNode->args)
@@ -7915,13 +7816,13 @@ bool GroupingIdNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	return true;
 }
 
-ValueExprNode* GroupingIdNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+ValueExprNode* GroupingNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 {
 	ValueExprNode::pass2(tdbb, csb);
 	return this;
 }
 
-dsc* GroupingIdNode::execute(thread_db* /*tdbb*/, Request* /*request*/) const
+dsc* GroupingNode::execute(thread_db* /*tdbb*/, Request* /*request*/) const
 {
 	fb_assert(false);
 	return NULL;
