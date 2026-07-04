@@ -148,12 +148,6 @@ public:
 		NestConst<GroupingClause> groupingSets;
 	};
 
-	enum class DuplicateMode : UCHAR
-	{
-		ALL,
-		DISTINCT
-	};
-
 	explicit GroupingClause(MemoryPool& pool)
 		: DsqlNode<GroupingClause, ExprNode::TYPE_GROUPING_CLAUSE>(pool),
 		  elements(pool)
@@ -196,7 +190,7 @@ public:
 		ValueExprNode::internalPrint(printer);
 
 		NODE_PRINT(printer, legacyGroup);
-		NODE_PRINT_ENUM(printer, duplicateMode);
+		NODE_PRINT(printer, distinct);
 
 		printer.begin("elements");
 
@@ -231,7 +225,7 @@ public:
 		}
 
 		node->legacyGroup = Node::doDsqlPass(dsqlScratch, legacyGroup);
-		node->duplicateMode = duplicateMode;
+		node->distinct = distinct;
 
 		return node;
 	}
@@ -257,7 +251,7 @@ public:
 public:
 	Firebird::Array<Element> elements;
 	NestConst<ValueListNode> legacyGroup;
-	DuplicateMode duplicateMode = DuplicateMode::ALL;
+	bool distinct = false;
 };
 
 
@@ -337,14 +331,14 @@ public:
 	{
 		NODE_PRINT(printer, dimensions);
 		NODE_PRINT(printer, sets);
-		NODE_PRINT_ENUM(printer, duplicateMode);
+		NODE_PRINT(printer, distinct);
 
 		return "GroupingSpec";
 	}
 
 	Firebird::ObjectsArray<Dimension> dimensions;
 	Firebird::ObjectsArray<Set> sets;
-	GroupingClause::DuplicateMode duplicateMode = GroupingClause::DuplicateMode::ALL;
+	bool distinct = false;
 };
 
 

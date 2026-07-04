@@ -7260,8 +7260,7 @@ group_clause
 	| GROUP BY quantifier_opt group_by_list
 		{
 			$$ = $4;
-			$$->duplicateMode = $3 ?
-				GroupingClause::DuplicateMode::DISTINCT : GroupingClause::DuplicateMode::ALL;
+			$$->distinct = $3;
 		}
 	;
 

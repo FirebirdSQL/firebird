@@ -1821,7 +1821,7 @@ namespace
 			fb_assert(clause && clause->hasAdvancedGrouping());
 
 			spec = FB_NEW_POOL(pool) GroupingSpec(pool);
-			spec->duplicateMode = clause->duplicateMode;
+			spec->distinct = clause->distinct;
 
 			ObjectsArray<GroupingSpec::Set> sets(pool);
 			expandClause(clause, sets);
@@ -1867,7 +1867,7 @@ namespace
 
 		void addResultSet(const GroupingSpec::Set& set)
 		{
-			if (spec->duplicateMode == GroupingClause::DuplicateMode::DISTINCT)
+			if (spec->distinct)
 			{
 				for (const auto& existingSet : spec->sets)
 				{
@@ -3794,8 +3794,7 @@ static RseNode* pass1_lower_grouping_sets(DsqlCompilerScratch* dsqlScratch, RseN
 	UnionSourceNode* unionNode = FB_NEW_POOL(pool) UnionSourceNode(pool);
 	unionNode->dsqlAll = true;
 	unionNode->dsqlOrderBySelectList = selectListExpands;
-	unionNode->dsqlDistinctGroupingSets =
-		spec->duplicateMode == GroupingClause::DuplicateMode::DISTINCT;
+	unionNode->dsqlDistinctGroupingSets = spec->distinct;
 	unionNode->dsqlClauses = FB_NEW_POOL(pool) RecSourceListNode(pool, spec->sets.getCount());
 
 	for (FB_SIZE_T i = 0; i < spec->sets.getCount(); ++i)
