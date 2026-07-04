@@ -7268,21 +7268,7 @@ group_clause
 group_by_list
 	: group_by_element
 	| group_by_list ',' group_by_element
-		{
-			$$ = $1->append($3);
-
-			if ($$->legacyGroup && $3->legacyGroup && $$->legacyGroup->items.hasData() &&
-					$3->legacyGroup->items.hasData())
-			{
-				for (auto item = $3->legacyGroup->items.begin();
-					 item != $3->legacyGroup->items.end(); ++item)
-				{
-					$$->legacyGroup->add(*item);
-				}
-			}
-			else
-				$$->legacyGroup = NULL;
-		}
+		{ $$ = $1->append($3); }
 	;
 
 %type <groupingClause> group_by_element

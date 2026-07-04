@@ -166,6 +166,18 @@ public:
 		for (const auto& element : clause->elements)
 			elements.add(element);
 
+		if (legacyGroup && clause->legacyGroup && legacyGroup->items.hasData() &&
+				clause->legacyGroup->items.hasData())
+		{
+			for (auto item = clause->legacyGroup->items.begin();
+				 item != clause->legacyGroup->items.end(); ++item)
+			{
+				legacyGroup->add(*item);
+			}
+		}
+		else
+			legacyGroup = nullptr;
+
 		return this;
 	}
 
