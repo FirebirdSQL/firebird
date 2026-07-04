@@ -143,7 +143,7 @@ public:
 		{
 		}
 
-		Type type;
+		Type type = Type::SIMPLE;
 		NestConst<ValueListNode> items;
 		NestConst<GroupingClause> groupingSets;
 	};
@@ -156,9 +156,7 @@ public:
 
 	explicit GroupingClause(MemoryPool& pool)
 		: DsqlNode<GroupingClause, ExprNode::TYPE_GROUPING_CLAUSE>(pool),
-		  elements(pool),
-		  legacyGroup(NULL),
-		  duplicateMode(DuplicateMode::ALL)
+		  elements(pool)
 	{
 	}
 
@@ -259,7 +257,7 @@ public:
 public:
 	Firebird::Array<Element> elements;
 	NestConst<ValueListNode> legacyGroup;
-	DuplicateMode duplicateMode;
+	DuplicateMode duplicateMode = DuplicateMode::ALL;
 };
 
 
@@ -269,8 +267,6 @@ public:
 	struct Dimension final : public Printable
 	{
 		explicit Dimension(MemoryPool&)
-			: expr(NULL),
-			  index(0)
 		{
 		}
 
@@ -289,14 +285,13 @@ public:
 		}
 
 		NestConst<ValueExprNode> expr;
-		unsigned index;
+		unsigned index = 0;
 	};
 
 	struct Set final : public Printable
 	{
 		explicit Set(MemoryPool& pool)
-			: ordinal(0),
-			  dimensions(pool)
+			: dimensions(pool)
 		{
 		}
 
@@ -327,15 +322,14 @@ public:
 			return "GroupingSpec::Set";
 		}
 
-		unsigned ordinal;
+		unsigned ordinal = 0;
 		Firebird::SortedArray<unsigned> dimensions;
 	};
 
 	explicit GroupingSpec(MemoryPool& pool)
 		: PermanentStorage(pool),
 		  dimensions(pool),
-		  sets(pool),
-		  duplicateMode(GroupingClause::DuplicateMode::ALL)
+		  sets(pool)
 	{
 	}
 
@@ -350,7 +344,7 @@ public:
 
 	Firebird::ObjectsArray<Dimension> dimensions;
 	Firebird::ObjectsArray<Set> sets;
-	GroupingClause::DuplicateMode duplicateMode;
+	GroupingClause::DuplicateMode duplicateMode = GroupingClause::DuplicateMode::ALL;
 };
 
 
