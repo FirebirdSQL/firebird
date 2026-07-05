@@ -80,22 +80,17 @@ namespace Jrd
 	class VerbAction
 	{
 	public:
-		VerbAction()
-			: vct_next(NULL), vct_relation(NULL), vct_records(NULL), vct_undo(NULL),
-			  vct_temp_instance_id(0)
-		{}
-
 		~VerbAction()
 		{
 			delete vct_records;
 			delete vct_undo;
 		}
 
-		VerbAction* 	vct_next;		// Next action within verb
-		jrd_rel*		vct_relation;	// Relation involved
-		RecordBitmap*	vct_records;	// Record involved
-		UndoItemTree*	vct_undo;		// Data for undo records
-		FB_UINT64		vct_temp_instance_id;	// Frame-scoped temporary relation instance
+		VerbAction* 	vct_next = nullptr;		// Next action within verb
+		jrd_rel*		vct_relation = nullptr;	// Relation involved
+		RecordBitmap*	vct_records = nullptr;	// Record involved
+		UndoItemTree*	vct_undo = nullptr;		// Data for undo records
+		FB_UINT64		vct_temp_instance_id = 0;	// Frame-scoped temporary relation instance
 
 		void mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* nextAction);
 		void undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,

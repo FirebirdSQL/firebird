@@ -1871,7 +1871,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 	auto& pool = dsqlScratch->getPool();
 	dsqlRelation = FB_NEW_POOL(pool) dsql_rel(pool);
 	dsqlRelation->rel_name = QualifiedName(dsqlName);
-	dsqlRelation->rel_flags = REL_local_table;
+	dsqlRelation->rel_flags = REL_ltt_declared;
 	dsqlRelation->rel_local_table_number = tableNumber;
 	dsqlRelation->rel_dbkey_length = 8;
 
@@ -3482,7 +3482,8 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		fb_assert(false);
 		ERR_post(Arg::Gds(isc_wish_list));
 	}
-	else if (auto* extFile = relation->getExtFile())
+
+	if (auto* extFile = relation->getExtFile())
 		extFile->erase(rpb, transaction);
 	else if (relation->isVirtual())
 		VirtualTable::erase(tdbb, rpb);
@@ -9156,7 +9157,8 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					fb_assert(false);
 					ERR_post(Arg::Gds(isc_wish_list));
 				}
-				else if (auto* extFile = relation->getExtFile())
+
+				if (auto* extFile = relation->getExtFile())
 					extFile->modify(orgRpb, newRpb, transaction);
 				else if (relation->isVirtual())
 					VirtualTable::modify(tdbb, orgRpb, newRpb);

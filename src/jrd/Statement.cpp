@@ -1064,7 +1064,7 @@ Request* Request::getLocalTableRequest(bool outerDecl)
 
 	if (outerDecl)
 	{
-		while (request->getStatement()->parentStatement)
+		while (request->req_caller)
 			request = request->req_caller;
 	}
 
@@ -1075,16 +1075,13 @@ jrd_tra* Request::getLocalTableTransaction() const
 {
 	Stack<AutoTranCtx>::const_iterator autoTran(req_auto_trans);
 
-	if (autoTran.hasData())
-		return autoTran.object().m_transaction;
-
-	return req_transaction;
+	return autoTran.hasData() ? autoTran.object().m_transaction : req_transaction;
 }
 
 FB_UINT64 Request::getLocalTableInstanceId(thread_db* tdbb) const
 {
 	if (!req_local_table_instance_id)
-		req_local_table_instance_id = tdbb->getDatabase()->generateStatementId();
+		req_local_table_instance_id = tdbb->getDatabase()->generateLocalTableId();
 
 	return req_local_table_instance_id;
 }

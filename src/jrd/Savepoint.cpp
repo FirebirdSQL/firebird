@@ -398,10 +398,8 @@ VerbAction* Savepoint::createAction(thread_db* tdbb, jrd_rel* relation, FB_UINT6
 {
 	// Create action for the given relation. If it already exists, just return.
 
-	if (!(relation->getPermanent()->rel_flags & REL_temp_frame))
-		tempInstanceId = 0;
-	else if (!tempInstanceId)
-		tempInstanceId = tdbb->tdbb_temp_frame_id;
+	if (!tempInstanceId)
+		tempInstanceId = relation->getTempInstanceId(tdbb);
 
 	VerbAction* action = getAction(relation, tempInstanceId);
 

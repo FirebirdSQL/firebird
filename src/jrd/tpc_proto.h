@@ -140,6 +140,7 @@ public:
 	TraNumber generateTransactionId();
 	AttNumber generateAttachmentId();
 	StmtNumber generateStatementId();
+	FB_UINT64 generateLocalTableId();
 	//void assignLatestTransactionId(TraNumber number);
 	void assignLatestAttachmentId(AttNumber number);
 	AttNumber getLatestAttachmentId() const;
@@ -215,6 +216,7 @@ private:
 		std::atomic<TraNumber> latest_transaction_id;
 		std::atomic<AttNumber> latest_attachment_id;
 		std::atomic<StmtNumber> latest_statement_id;
+		std::atomic<FB_UINT64> latest_local_table_id;
 
 		// Monitor state generation
 		std::atomic<ULONG> monitor_generation;
@@ -316,7 +318,7 @@ private:
 
 	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
 
-	static constexpr ULONG TPC_VERSION = 2;
+	static constexpr ULONG TPC_VERSION = 3;
 	static constexpr int SAFETY_GAP_BLOCKS = 1;
 
 	Firebird::SharedMemory<GlobalTpcHeader>* m_tpcHeader; // final

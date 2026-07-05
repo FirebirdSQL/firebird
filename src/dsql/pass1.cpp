@@ -1811,7 +1811,7 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 
 	if (context->ctx_relation)
 	{
-		if (context->ctx_relation->rel_flags & REL_local_table)
+		if (context->ctx_relation->rel_flags & REL_ltt_declared)
 		{
 			const auto localTableNode = FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableSourceNode(
 				*tdbb->getDefaultPool());

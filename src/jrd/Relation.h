@@ -655,7 +655,7 @@ public:
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
-	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
 	bool isLTT() const noexcept;
@@ -904,7 +904,7 @@ public:
 	friend class RelationPermanent;
 	};
 
-	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
 	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, RelationPages::InstanceId inst_id = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
@@ -1027,7 +1027,7 @@ private:
 	RelationPages			rel_pages_base;
 	RelationPages*			rel_pages_free;
 
-	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
+	RelationPages* getPagesInternal(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages);
 
 	ExternalFile* rel_file;
 
@@ -1087,9 +1087,9 @@ inline MetaId jrd_rel::getId() const noexcept
 	return rel_perm->getId();
 }
 
-inline RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)
+inline RelationPages* jrd_rel::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
-	return rel_perm->getPages(tdbb, tran, allocPages);
+	return rel_perm->getPages(tdbb, instanceId, allocPages);
 }
 
 inline bool jrd_rel::isTemporary() const noexcept
@@ -1163,12 +1163,11 @@ inline bool RelationPermanent::isLTT() const noexcept
 	return (rel_flags & REL_temp_ltt);
 }
 
-inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)
+inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
-	if (!isTemporary())
-		return &rel_pages_base;
-
-	return getPagesInternal(tdbb, tran, allocPages);
+	return !isTemporary() ?
+		&rel_pages_base :
+		getPagesInternal(tdbb, instanceId, allocPages);
 }
 
 

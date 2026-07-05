@@ -17,7 +17,7 @@ This feature is distinct from:
 Declared Local Temporary Tables are declared in the same declaration section as variables, cursors and subroutines.
 
 ```sql
-DECLARE LOCAL TEMPORARY TABLE <table_name>
+DECLARE [LOCAL] TEMPORARY TABLE <table_name>
 (
     <column_definition> [, ...]
 );

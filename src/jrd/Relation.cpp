@@ -292,7 +292,8 @@ void RelationPermanent::fillPages(thread_db* tdbb)
 	}
 }
 
-RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
+RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, RelationPages::InstanceId instanceId,
+	bool allocPages)
 {
 	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
 		return &rel_pages_base;
@@ -300,28 +301,27 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
-	RelationPages::InstanceId inst_id;
-
 	if (rel_flags & REL_temp_frame)
 	{
 		if (tdbb->tdbb_temp_frame_id)
-			inst_id = tdbb->tdbb_temp_frame_id;
+			instanceId = tdbb->tdbb_temp_frame_id;
 		else // called without a local table execution frame, maybe from OPT or CMP
 			return &rel_pages_base;
 	}
 	else if (rel_flags & REL_temp_tran)
 	{
-		if (tran != 0 && tran != MAX_TRA_NUMBER)
-			inst_id = tran;
-		else if (tdbb->tdbb_temp_traid)
-			inst_id = tdbb->tdbb_temp_traid;
-		else if (tdbb->getTransaction())
-			inst_id = tdbb->getTransaction()->tra_number;
-		else // called without transaction, maybe from OPT or CMP ?
-			return &rel_pages_base;
+		if (instanceId == 0 || instanceId == MAX_TRA_NUMBER)
+		{
+			if (tdbb->tdbb_temp_traid)
+				instanceId = tdbb->tdbb_temp_traid;
+			else if (tdbb->getTransaction())
+				instanceId = tdbb->getTransaction()->tra_number;
+			else // called without transaction, maybe from OPT or CMP ?
+				return &rel_pages_base;
+		}
 	}
 	else
-		inst_id = PAG_attachment_id(tdbb);
+		instanceId = PAG_attachment_id(tdbb);
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
@@ -329,7 +329,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		rel_pages_inst = FB_NEW_POOL(getPool()) RelationPagesInstances(getPool());
 
 	FB_SIZE_T pos;
-	if (!rel_pages_inst->find(inst_id, pos))
+	if (!rel_pages_inst->find(instanceId, pos))
 	{
 		if (!allocPages)
 			return nullptr;
@@ -347,7 +347,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		fb_assert(newPages->useCount == 0);
 
 		newPages->addRef();
-		newPages->rel_instance_id = inst_id;
+		newPages->rel_instance_id = instanceId;
 		newPages->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
 		rel_pages_inst->add(newPages);
 
@@ -425,7 +425,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	}
 
 	RelationPages* pages = (*rel_pages_inst)[pos];
-	fb_assert(pages->rel_instance_id == inst_id);
+	fb_assert(pages->rel_instance_id == instanceId);
 	return pages;
 }
 
