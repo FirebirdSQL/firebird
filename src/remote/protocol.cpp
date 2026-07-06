@@ -881,7 +881,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 			ULONG count = b->p_batch_messages;
 			ULONG size = statement->rsr_batch_size;
-			if (!size)
+			if (!size && statement->rsr_format)
 				statement->rsr_batch_size = size = FB_ALIGN(statement->rsr_format->fmt_length, FB_ALIGNMENT);
 			if (xdrs->x_op == XDR_DECODE)
 			{
