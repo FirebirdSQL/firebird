@@ -696,8 +696,9 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	if (skipNewFormat)
 	{
-		auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id, CacheFlag::AUTOCREATE);
-		if (idp && (idp->getState() == Ods::irt_drop) && idp->getFormat() &&
+		auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id,
+			CacheFlag::AUTOCREATE | CacheFlag::ERASED);
+		if (idp && (m_index->idx_state == Ods::irt_drop) && idp->getFormat() &&
 			(record->getFormat()->fmt_version > idp->getFormat()))
 		{
 			// tried to insert fresh formatted record into old index - skip this
@@ -1392,6 +1393,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	idx->idx_condition_node = nullptr;
 	idx->idx_condition_statement = nullptr;
 	idx->idx_fraction = 1.0;
+	idx->idx_state = irt_desc->getState();
 
 	// pick up field ids and type descriptions for each of the fields
 	const UCHAR* ptr = (UCHAR*) root + irt_desc->irt_desc;

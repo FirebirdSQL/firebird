@@ -168,22 +168,23 @@ bid ConstantValue::getBlobId(thread_db* tdbb)
 	return m_blrBlobId.isEmpty() ? getConstantBid(tdbb, name) : m_blrBlobId;
 }
 
-dsc* ConstantValue::makeValue(thread_db* tdbb, Request* request)
+dsc* ConstantValue::makeValue(thread_db* tdbb)
 {
 	{
 		ReadLockGuard guard(m_makeValueLock, FB_FUNCTION);
-		if (m_value.vlu_desc.dsc_dtype != dtype_unknown)
+		if (m_value.vlu_desc.dsc_address != nullptr)
 			return &m_value.vlu_desc;
 	}
 
 	WriteLockGuard guard(m_makeValueLock, FB_FUNCTION);
-	if (m_value.vlu_desc.dsc_dtype != dtype_unknown) // Extra check in case of two callers waiting
+	if (m_value.vlu_desc.dsc_address != nullptr) // Extra check in case of two callers waiting
 		return &m_value.vlu_desc;
 
 	Attachment* attachment = tdbb->getAttachment();
 
 	MemoryPool* csb_pool = attachment->att_database->createPool();
 	Statement* handmadeStmt = nullptr;
+	Request* request = nullptr;
 	try
 	{
 		ContextPoolHolder context(tdbb, csb_pool);
@@ -195,28 +196,21 @@ dsc* ConstantValue::makeValue(thread_db* tdbb, Request* request)
 		bid constantBid = getBlobId(tdbb);
 
 		MET_parse_blob(tdbb, &name.schema, nullptr, &constantBid, &csb, nullptr, false, false);
-		fb_assert(csb->csb_node != nullptr);
 
-		if (request == nullptr)
-		{
-			// Came from Reload
-			handmadeStmt = Statement::makeStatement(tdbb, csb, true);
-			request = handmadeStmt->makeRootRequest(tdbb);
+		handmadeStmt = Statement::makeStatement(tdbb, csb, true);
+		request = handmadeStmt->makeRootRequest(tdbb);
 
-			AutoSetRestore2<Request*, thread_db> autoSetRequest(
-				tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
+		AutoSetRestore2<Request*, thread_db> autoSetRequest(
+			tdbb, &thread_db::getRequest, &thread_db::setRequest, request);
 
-			request->setUsed();
-			request->setAttachment(attachment);
-			attachment->att_requests.add(request);
+		request->setUsed();
+		request->setAttachment(attachment);
+		attachment->att_requests.add(request);
 
-			TRA_attach_request(tdbb->getTransaction(), request);
+		TRA_attach_request(tdbb->getTransaction(), request);
 
-			// Execute it here, while AutoSetRestore2 is active
-			executeCsbNode(tdbb, csb);
-		}
-		else
-			executeCsbNode(tdbb, csb);
+		// Execute it while AutoSetRestore2 is active
+		executeCsbNode(tdbb, csb);
 	}
 	catch (const Exception& ex)
 	{
@@ -347,7 +341,7 @@ ScanResult Package::scan(thread_db* tdbb, ObjectBase::Flag flags)
 				skipMakeValue);
 
 			if (skipMakeValue)
-				this->m_callReload = true; // Value is necessary for to calculate hash
+				this->m_callReload = true;
 		}
 		END_FOR
 	}
@@ -426,7 +420,7 @@ ConstantValue& Package::addConstant(thread_db* tdbb,
 	auto& value = constants.add(constName, isPrivate);
 	value.updateValue(blrBlobId);
 	if (!skipMakeValue)
-		value.makeValue(tdbb, nullptr);
+		value.makeValue(tdbb);
 
 	return value;
 }

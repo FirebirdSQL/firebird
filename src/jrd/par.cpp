@@ -298,6 +298,8 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			desc->dsc_dtype = dtype_cstring;
 			desc->dsc_flags |= DSC_no_subtype;
 			desc->dsc_length = blrReader.getWord();
+			if (desc->dsc_length == 0)
+				desc->dsc_length = 1;
 			desc->setTextType(ttype_dynamic);
 			break;
 
@@ -315,6 +317,8 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			desc->dsc_dtype = dtype_cstring;
 			desc->setTextType(VldTTypeId(tdbb, blrReader.getWord()));
 			desc->dsc_length = blrReader.getWord();
+			if (desc->dsc_length == 0)
+				desc->dsc_length = 1;
 			break;
 
 		case blr_varying2:

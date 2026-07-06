@@ -1026,9 +1026,10 @@ const Format* RelationPermanent::getFormat(thread_db* tdbb, USHORT number)
 	fb_assert(!(rel_flags & REL_temp_ltt));
 
 	Format* format = NULL;
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, irq_r_format, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ getId() AND
 			X.RDB$FORMAT EQ number
 	{

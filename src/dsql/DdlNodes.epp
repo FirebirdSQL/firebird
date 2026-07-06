@@ -60,6 +60,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../dsql/ddl_proto.h"
+#include "../dsql/dsql_proto.h"
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
@@ -102,11 +103,10 @@ static const UCHAR nonnull_validation_blr[] =
 };
 
 static void checkDeferredDdlInReadOnlyReplica(thread_db* tdbb);
-static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
+static void checkForeignKeyTempScope(thread_db* tdbb,
 	const QualifiedName&	childRelName, const QualifiedName& masterIndexName);
 static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalTemporaryTable* ltt);
-static void checkSpTrigDependency(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& relationName, const MetaName& fieldName);
+static void checkSpTrigDependency(thread_db* tdbb, const QualifiedName& relationName, const MetaName& fieldName);
 static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& fieldName);
 static void clearPermanentField(dsql_rel* relation, bool permanent);
@@ -114,14 +114,12 @@ static void defineComputed(DsqlCompilerScratch* dsqlScratch, RelationSourceNode*
 	dsql_fld* field, ValueSourceClause* clause, string& source, BlrDebugWriter::BlrData& value);
 static void deleteKeyConstraint(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& constraintName, const MetaName& indexName);
-static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relationName,
-	const MetaName& fieldName);
-static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& inputName,
-	MetaName& outputName);
-static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& grantor,
+static bool fieldExists(thread_db* tdbb, const QualifiedName& relationName, const MetaName& fieldName);
+static bool isItSqlRole(thread_db* tdbb, const MetaName& inputName, MetaName& outputName);
+static int getGrantorOption(thread_db* tdbb, const MetaName& grantor,
 	int grantorType, const MetaName& roleName);
-static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& indexName, bool& systemIndex, bool silent = false);
+static QualifiedName getIndexRelationName(thread_db* tdbb,const QualifiedName& indexName,
+	bool& systemIndex, bool silent = false);
 static const char* getRelationScopeName(const rel_t type);
 static void makeRelationScopeName(string& to, const QualifiedName& name, const rel_t type);
 static void checkRelationType(const rel_t type, const QualifiedName& name);
@@ -214,14 +212,15 @@ static void checkDeferredDdlInReadOnlyReplica(thread_db* tdbb)
 
 // Check temporary table reference rules between given child relation and master
 // relation (owner of given PK/UK index).
-static void checkForeignKeyTempScope(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName&	childRelName, const QualifiedName& masterIndexName)
+static void checkForeignKeyTempScope(thread_db* tdbb, const QualifiedName& childRelName,
+	const QualifiedName& masterIndexName)
 {
 	AutoCacheRequest request(tdbb, drq_l_rel_info, DYN_REQUESTS);
 	QualifiedName masterRelName;
 	rel_t masterType, childType;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		RLC_M IN RDB$RELATION_CONSTRAINTS CROSS
 		REL_C IN RDB$RELATIONS CROSS
 		REL_M IN RDB$RELATIONS
@@ -279,8 +278,7 @@ static void checkLttNotInUse(thread_db* tdbb, jrd_tra* transaction, const LocalT
 
 // Check temporary table reference rules between just created child relation and all
 // its master relations.
-static void checkRelationTempScope(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& childRelName, const rel_t childType)
+static void checkRelationTempScope(thread_db* tdbb, const QualifiedName& childRelName, const rel_t childType)
 {
 	if (childType != rel_persistent &&
 		childType != rel_temp_preserve &&
@@ -289,11 +287,12 @@ static void checkRelationTempScope(thread_db* tdbb, jrd_tra* transaction,
 		return;
 	}
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_l_rel_info2, DYN_REQUESTS);
 	QualifiedName masterRelName;
 	rel_t masterType;
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		RLC_C IN RDB$RELATION_CONSTRAINTS CROSS
 		IND_C IN RDB$INDICES CROSS
 		IND_M IN RDB$INDICES CROSS
@@ -327,12 +326,12 @@ static void checkRelationTempScope(thread_db* tdbb, jrd_tra* transaction,
 
 // Checks to see if the given field is referenced in a stored procedure or trigger.
 // If the field is referenced, throw.
-static void checkSpTrigDependency(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& relationName, const MetaName& fieldName)
+static void checkSpTrigDependency(thread_db* tdbb, const QualifiedName& relationName, const MetaName& fieldName)
 {
 	AutoRequest request;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FIRST 1
 		DEP IN RDB$DEPENDENCIES
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ relationName.schema.c_str() AND
@@ -357,8 +356,9 @@ static void checkViewDependency(thread_db* tdbb, jrd_tra* transaction,
 	const QualifiedName& relationName, const MetaName& fieldName)
 {
 	AutoRequest request;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FIRST 1
 		X IN RDB$RELATION_FIELDS CROSS
 		Y IN RDB$RELATION_FIELDS CROSS
@@ -574,13 +574,13 @@ static void deleteKeyConstraint(thread_db* tdbb, jrd_tra* transaction,
 }
 
 // Checks to see if the given field already exists in a relation.
-static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relationName,
-	const MetaName& fieldName)
+static bool fieldExists(thread_db* tdbb, const QualifiedName& relationName, const MetaName& fieldName)
 {
 	AutoRequest request;
 	bool found = false;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FLD IN RDB$RELATION_FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
 			 FLD.RDB$PACKAGE_NAME EQUIV NULLIF(relationName.package.c_str(), '') AND
@@ -595,12 +595,12 @@ static bool fieldExists(thread_db* tdbb, jrd_tra* transaction, const QualifiedNa
 }
 
 // If inputName is found in RDB$ROLES, then returns true. Otherwise returns false.
-static bool isItSqlRole(thread_db* tdbb, jrd_tra* transaction, const MetaName& inputName,
-	MetaName& outputName)
+static bool isItSqlRole(thread_db* tdbb, const MetaName& inputName, MetaName& outputName)
 {
 	AutoCacheRequest request(tdbb, drq_get_role_nm, DYN_REQUESTS);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$ROLES
 		WITH X.RDB$ROLE_NAME EQ inputName.c_str()
 	{
@@ -620,13 +620,13 @@ static void makeRelationScopeName(string& to, const QualifiedName& name, const r
 }
 
 // Get relation name of an index.
-static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& indexName, bool& systemIndex, bool silent)
+static QualifiedName getIndexRelationName(thread_db* tdbb, const QualifiedName& indexName,
+	bool& systemIndex, bool silent)
 {
 	systemIndex = false;
 
 	// Check LTT indexes first
-	const auto attachment = transaction->getAttachment();
+	const auto attachment = tdbb->getAttachment();
 
 	if (indexName.package.isEmpty())
 	{
@@ -646,8 +646,9 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	AutoCacheRequest request(tdbb, drq_l_index_relname, DYN_REQUESTS);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
 			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
@@ -668,12 +669,12 @@ static QualifiedName getIndexRelationName(thread_db* tdbb, jrd_tra* transaction,
 }
 
 // Get relation name of an trigger.
-static QualifiedName getTriggerRelationName(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& triggerName)
+static QualifiedName getTriggerRelationName(thread_db* tdbb, const QualifiedName& triggerName)
 {
 	AutoCacheRequest request(tdbb, drq_l_trigger_relname, DYN_REQUESTS);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$TRIGGERS
 		WITH X.RDB$SCHEMA_NAME EQ triggerName.schema.c_str() AND
 			 X.RDB$TRIGGER_NAME EQ triggerName.object.c_str()
@@ -1082,8 +1083,8 @@ void DdlNode::executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction, DdlTrigge
 {
 	Attachment* const attachment = transaction->tra_attachment;
 
- 	// do nothing if user doesn't want database triggers
-	if (attachment->att_flags & ATT_no_db_triggers)
+	// do nothing if user doesn't want database triggers or DROP SCHEMA CASCADE is running
+	if (attachment->att_flags & (ATT_no_db_triggers | ATT_schema_cascade_dropping))
 		return;
 
 	fb_assert(action > 0);	// first element is NULL
@@ -1268,7 +1269,7 @@ string AlterCharSetNode::internalPrint(NodePrinter& printer) const
 	return "AlterCharSetNode";
 }
 
-void AlterCharSetNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterCharSetNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_charset(tdbb, charSet, SCL_alter);
 }
@@ -1334,7 +1335,7 @@ void AlterCharSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 //----------------------
 
 
-void AlterEDSPoolSetNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterEDSPoolSetNode::checkPermission(thread_db* tdbb)
 {
 	if (!tdbb->getAttachment()->locksmith(tdbb, MODIFY_EXT_CONN_POOL))
 		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
@@ -1373,7 +1374,7 @@ void AlterEDSPoolSetNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlSc
 //----------------------
 
 
-void AlterEDSPoolClearNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterEDSPoolClearNode::checkPermission(thread_db* tdbb)
 {
 	if (!tdbb->getAttachment()->locksmith(tdbb, MODIFY_EXT_CONN_POOL))
 		status_exception::raise(Arg::Gds(isc_miss_prvlg) << "MODIFY_EXT_CONN_POOL");
@@ -1548,9 +1549,9 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CommentOnNode::checkPermission(thread_db* tdbb)
 {
-	Attachment* const attachment = transaction->tra_attachment;
+	Attachment* const attachment = tdbb->getAttachment();
 
 	Arg::StatusVector status;
 
@@ -1580,7 +1581,7 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 
 		case obj_trigger:
 		{
-			const auto relationName = getTriggerRelationName(tdbb, transaction, name);
+			const auto relationName = getTriggerRelationName(tdbb, name);
 			if (relationName.object.isEmpty())
 				SCL_check_database(tdbb, SCL_alter);
 			else
@@ -1620,7 +1621,7 @@ void CommentOnNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 		case obj_index:
 		{
 			bool systemIndex;
-			const auto relationName = getIndexRelationName(tdbb, transaction, name, systemIndex);
+			const auto relationName = getIndexRelationName(tdbb, name, systemIndex);
 			SCL_check_relation(tdbb, relationName, SCL_alter, systemIndex);
 			break;
 		}
@@ -1963,7 +1964,7 @@ DdlNode* CreateAlterFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreateAlterFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterFunctionNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -2347,7 +2348,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 		// Get all comments and defaults from the old parameter list
 
 		CollectedParameterMap collectedParameters;
-		collectParameters(tdbb, transaction, collectedParameters);
+		collectParameters(tdbb, collectedParameters);
 
 		// Delete all old arguments ...
 
@@ -2746,12 +2747,12 @@ void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsql
 	invalid = false;
 }
 
-void CreateAlterFunctionNode::collectParameters(thread_db* tdbb, jrd_tra* transaction,
-	CollectedParameterMap& items)
+void CreateAlterFunctionNode::collectParameters(thread_db* tdbb, CollectedParameterMap& items)
 {
 	AutoRequest requestHandle;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 		ARG IN RDB$FUNCTION_ARGUMENTS
 		WITH ARG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 ARG.RDB$FUNCTION_NAME EQ name.object.c_str() AND
@@ -2780,7 +2781,7 @@ string AlterExternalFunctionNode::internalPrint(NodePrinter& printer) const
 	return "AlterExternalFunctionNode";
 }
 
-void AlterExternalFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterExternalFunctionNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_function(tdbb, name, SCL_alter);
 }
@@ -2923,7 +2924,7 @@ DdlNode* DropFunctionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void DropFunctionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropFunctionNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_function(tdbb, name, SCL_drop);
 }
@@ -3079,7 +3080,7 @@ DdlNode* CreateAlterProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreateAlterProcedureNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterProcedureNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -3363,7 +3364,7 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 		// Get all comments and defaults from the old parameter list
 
 		CollectedParameterMap collectedParameters;
-		collectParameters(tdbb, transaction, collectedParameters);
+		collectParameters(tdbb, collectedParameters);
 
 		// Delete all old input and output parameters ...
 
@@ -3720,12 +3721,12 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 	invalid = false;
 }
 
-void CreateAlterProcedureNode::collectParameters(thread_db* tdbb, jrd_tra* transaction,
-	CollectedParameterMap& items)
+void CreateAlterProcedureNode::collectParameters(thread_db* tdbb, CollectedParameterMap& items)
 {
 	AutoRequest requestHandle;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 		PRM IN RDB$PROCEDURE_PARAMETERS
 		WITH PRM.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 PRM.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
@@ -3807,7 +3808,7 @@ DdlNode* DropProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void DropProcedureNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropProcedureNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_procedure(tdbb, name, SCL_drop);
 }
@@ -4112,13 +4113,14 @@ DdlNode* CreateAlterTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreateAlterTriggerNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterTriggerNode::checkPermission(thread_db* tdbb)
 {
 	if (!create)
 	{
 		AutoRequest requestHandle;
+		auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			TRG IN RDB$TRIGGERS
 			WITH TRG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 				 TRG.RDB$TRIGGER_NAME EQ name.object.c_str()
@@ -4323,9 +4325,9 @@ DdlNode* DropTriggerNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void DropTriggerNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropTriggerNode::checkPermission(thread_db* tdbb)
 {
-	const auto relationName = getTriggerRelationName(tdbb, transaction, name);
+	const auto relationName = getTriggerRelationName(tdbb, name);
 
 	if (relationName.object.isEmpty())
 		SCL_check_database(tdbb, SCL_alter);
@@ -4470,7 +4472,7 @@ string CreateCollationNode::internalPrint(NodePrinter& printer) const
 	return "CreateCollationNode";
 }
 
-void CreateCollationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateCollationNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_create_access(tdbb, obj_collations, name.schema);
 }
@@ -4706,7 +4708,7 @@ string DropCollationNode::internalPrint(NodePrinter& printer) const
 	return "DropCollationNode";
 }
 
-void DropCollationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropCollationNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_collation(tdbb, name, SCL_drop);
 }
@@ -4718,6 +4720,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	bool found = false;
 	AutoCacheRequest request(tdbb, drq_e_colls, DYN_REQUESTS);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		COLL IN RDB$COLLATIONS
@@ -4745,7 +4748,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		AutoCacheRequest request2(tdbb, drq_l_rfld_coll, DYN_REQUESTS);
 
-		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 			RF IN RDB$RELATION_FIELDS
 			CROSS F IN RDB$FIELDS
 			WITH RF.RDB$COLLATION_ID EQ COLL.RDB$COLLATION_ID AND
@@ -4766,7 +4769,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		request2.reset(tdbb, drq_l_prm_coll, DYN_REQUESTS);
 
-		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 			PRM IN RDB$PROCEDURE_PARAMETERS
 			CROSS F IN RDB$FIELDS
 			WITH PRM.RDB$COLLATION_ID EQ COLL.RDB$COLLATION_ID AND
@@ -4788,7 +4791,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		request2.reset(tdbb, drq_l_arg_coll, DYN_REQUESTS);
 
-		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 			ARG IN RDB$FUNCTION_ARGUMENTS
 			CROSS F IN RDB$FIELDS
 			WITH ARG.RDB$COLLATION_ID EQ COLL.RDB$COLLATION_ID AND
@@ -4810,7 +4813,7 @@ void DropCollationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 		request2.reset(tdbb, drq_l_fld_coll, DYN_REQUESTS);
 
-		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 			F IN RDB$FIELDS
 			WITH F.RDB$CHARACTER_SET_ID EQ COLL.RDB$CHARACTER_SET_ID AND
 				 F.RDB$COLLATION_ID EQ COLL.RDB$COLLATION_ID
@@ -4862,7 +4865,7 @@ string CreateDomainNode::internalPrint(NodePrinter& printer) const
 	return "CreateDomainNode";
 }
 
-void CreateDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateDomainNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_create_access(tdbb, obj_domains, name.schema);
 }
@@ -5445,11 +5448,12 @@ ULONG AlterDomainNode::checkUpdateNumericType(const dyn_fld& origFld, const dyn_
 
 // Retrieves the type information for a domain so that it can be compared to a local field before
 // modifying the datatype of a field.
-void AlterDomainNode::getDomainType(thread_db* tdbb, jrd_tra* transaction, dyn_fld& dynFld)
+void AlterDomainNode::getDomainType(thread_db* tdbb, dyn_fld& dynFld)
 {
 	AutoRequest request;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FLD IN RDB$FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ dynFld.dyn_fld_source.schema.c_str() AND
 			 FLD.RDB$FIELD_NAME EQ dynFld.dyn_fld_source.object.c_str()
@@ -5681,7 +5685,7 @@ string AlterDomainNode::internalPrint(NodePrinter& printer) const
 	return "AlterDomainNode";
 }
 
-void AlterDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterDomainNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_domain(tdbb, name, SCL_alter);
 }
@@ -5689,6 +5693,7 @@ void AlterDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
 {
 	Attachment* const attachment = transaction->tra_attachment;
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 
 	QualifiedName qualifiedRenameTo = renameTo.hasData() ?
 		QualifiedName(renameTo, name.schema) : QualifiedName();
@@ -5815,7 +5820,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				{
 					AutoRequest request2;
 
-					FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+					FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 						RFL IN RDB$RELATION_FIELDS CROSS
 						IND IN RDB$INDICES CROSS
 						INDSEG IN RDB$INDEX_SEGMENTS CROSS
@@ -5902,7 +5907,7 @@ void AlterDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 				{
 					AutoCacheRequest request2(tdbb, drq_l_ident_gens, DYN_REQUESTS);
 
-					FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+					FOR (REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 						RFR IN RDB$RELATION_FIELDS
 						WITH RFR.RDB$FIELD_SOURCE_SCHEMA_NAME = FLD.RDB$SCHEMA_NAME AND
 							 RFR.RDB$FIELD_SOURCE = FLD.RDB$FIELD_NAME AND
@@ -5981,8 +5986,9 @@ void AlterDomainNode::rename(thread_db* tdbb, jrd_tra* transaction, SSHORT dimen
 	// Checks to see if the given domain already exists.
 
 	AutoRequest request;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FLD IN RDB$FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 FLD.RDB$FIELD_NAME EQ renameTo.c_str()
@@ -6059,7 +6065,7 @@ string DropDomainNode::internalPrint(NodePrinter& printer) const
 	return "DropDomainNode";
 }
 
-void DropDomainNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropDomainNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_domain(tdbb, name, SCL_drop);
 }
@@ -6079,7 +6085,7 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	{
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_DOMAIN, name, {});
 
-		check(tdbb, transaction);
+		check(tdbb);
 		deleteDimensionRecords(tdbb, transaction, name);
 
 		ERASE X;
@@ -6104,11 +6110,12 @@ void DropDomainNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	savePoint.release();	// everything is ok
 }
 
-void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
+void DropDomainNode::check(thread_db* tdbb)
 {
 	AutoCacheRequest request(tdbb, drq_l_fld_src, DYN_REQUESTS);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		Y IN RDB$RELATION_FIELDS
 		WITH Y.RDB$FIELD_SOURCE_SCHEMA_NAME EQ name.schema.c_str() AND
 			 Y.RDB$FIELD_SOURCE EQ name.object.c_str()
@@ -6125,7 +6132,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 
 	request.reset(tdbb, drq_l_prp_src, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$PROCEDURE_PARAMETERS
 		WITH X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$FIELD_SOURCE EQ name.object.c_str()
@@ -6142,7 +6149,7 @@ void DropDomainNode::check(thread_db* tdbb, jrd_tra* transaction)
 
 	request.reset(tdbb, drq_l_arg_src, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$FUNCTION_ARGUMENTS
 		WITH X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$FIELD_SOURCE EQ name.object.c_str()
@@ -6174,7 +6181,7 @@ string CreateAlterExceptionNode::internalPrint(NodePrinter& printer) const
 	return "CreateAlterExceptionNode";
 }
 
-void CreateAlterExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterExceptionNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -6315,7 +6322,7 @@ string DropExceptionNode::internalPrint(NodePrinter& printer) const
 	return "DropExceptionNode";
 }
 
-void DropExceptionNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropExceptionNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_exception(tdbb, name, SCL_drop);
 }
@@ -6376,7 +6383,7 @@ string CreateAlterSequenceNode::internalPrint(NodePrinter& printer) const
 	return "CreateAlterSequenceNode";
 }
 
-void CreateAlterSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterSequenceNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -6650,7 +6657,7 @@ string DropSequenceNode::internalPrint(NodePrinter& printer) const
 	return "DropSequenceNode";
 }
 
-void DropSequenceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropSequenceNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_generator(tdbb, name, SCL_drop);
 }
@@ -7133,11 +7140,13 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 		}
 	};
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
+
 	AutoCacheRequest request(tdbb, drq_l_dep_flds, DYN_REQUESTS);
 
 	// Make sure that column is not referenced in any views.
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$RELATION_FIELDS CROSS
 		Y IN RDB$RELATION_FIELDS CROSS
 		Z IN RDB$VIEW_RELATIONS
@@ -7175,7 +7184,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 
 		request.reset(tdbb, drq_g_rel_constr_nm, DYN_REQUESTS);
 
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 			IDX IN RDB$INDICES CROSS
 			IDX_SEG IN RDB$INDEX_SEGMENTS CROSS
 			REL_CONST IN RDB$RELATION_CONSTRAINTS
@@ -7216,7 +7225,7 @@ bool RelationNode::deleteLocalField(thread_db* tdbb, jrd_tra* transaction,
 
 		request.reset(tdbb, drq_e_l_idx, DYN_REQUESTS);
 
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 			IDX IN RDB$INDICES CROSS
 			IDX_SEG IN RDB$INDEX_SEGMENTS
 			WITH IDX.RDB$SCHEMA_NAME EQ IDX_SEG.RDB$SCHEMA_NAME AND
@@ -7864,7 +7873,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				CRT.RDB$INDEX_NAME.NULL = FALSE;
 				strcpy(CRT.RDB$INDEX_NAME, constraint.index->name.c_str());
 
-				checkForeignKeyTempScope(tdbb, transaction, name, referredIndexName);
+				checkForeignKeyTempScope(tdbb, name, referredIndexName);
 
 				// Check that we have references permissions on the schema, table and
 				// fields that the index:referredIndexName is on.
@@ -7904,13 +7913,14 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 	// Make sure unique field names were specified for UNIQUE/PRIMARY/FOREIGN
 	// All fields must have the NOT NULL attribute specified for UNIQUE/PRIMARY.
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	request.reset(tdbb, drq_c_unq_nam2, DYN_REQUESTS);
 
 	int allCount = 0;
 	int uniqueCount = 0;
 	ObjectsArray<MetaName> fieldList;
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		IDS IN RDB$INDEX_SEGMENTS CROSS
 		RFR IN RDB$RELATION_FIELDS CROSS
 		FLX IN RDB$FIELDS
@@ -7943,7 +7953,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 
 	request.reset(tdbb, drq_n_idx_seg, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		IDS IN RDB$INDEX_SEGMENTS
 		WITH IDS.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 IDS.RDB$PACKAGE_NAME MISSING AND
@@ -7968,7 +7978,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		{
 			AutoCacheRequest request2(tdbb, drq_l_intg_con, DYN_REQUESTS);
 
-			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				CRT IN RDB$RELATION_CONSTRAINTS
 				WITH CRT.RDB$SCHEMA_NAME EQ referredIndexName.schema.c_str() AND
 					 CRT.RDB$INDEX_NAME EQ referredIndexName.object.c_str() AND
@@ -8003,7 +8013,7 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 		int listIndex = -1;
 		bool found = false;
 
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 			CRT IN RDB$RELATION_CONSTRAINTS CROSS
 			IDS IN RDB$INDEX_SEGMENTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
 			WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -9657,11 +9667,15 @@ string CreateRelationNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, externalFile);
 	NODE_PRINT(printer, tempFlag);
 	NODE_PRINT(printer, tempRowsFlag);
+	NODE_PRINT(printer, queryColumns);
+	NODE_PRINT(printer, querySelectExpr);
+	NODE_PRINT(printer, querySource);
+	NODE_PRINT(printer, withData);
 
 	return "CreateRelationNode";
 }
 
-void CreateRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateRelationNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_create_access(tdbb, obj_relations, name.schema);
 }
@@ -9674,11 +9688,15 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	Database* dbb = tdbb->getDatabase();
 	Cached::Relation* relation = nullptr;
 	bool extFile = false;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	AutoSetRestoreFlag dfwFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
 
 	if (createIfNotExistsOnly && !DYN_UTIL_check_unique_name_nothrow(tdbb, name, obj_relation))
 		return;
+
+	if (querySelectExpr)
+		defineQueryColumns(tdbb, dsqlScratch);
 
 	saveRelation(tdbb, dsqlScratch, name, false, true);
 
@@ -9712,6 +9730,9 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		// Update DSQL cache
 		METD_drop_relation(transaction, name);
 
+		if (withData)
+			executeInsert(tdbb, dsqlScratch, transaction);
+
 		return;
 	}
 
@@ -9722,7 +9743,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		) :
 		rel_persistent;
 
-	checkRelationTempScope(tdbb, transaction, name, relationType);
+	checkRelationTempScope(tdbb, name, relationType);
 
 	try
 	{
@@ -9802,7 +9823,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 			AutoCacheRequest request2(tdbb, drq_l_pub_mode, DYN_REQUESTS);
 
-			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				PUB IN RDB$PUBLICATIONS
 				WITH PUB.RDB$PUBLICATION_NAME EQ DEFAULT_PUBLICATION
 			{
@@ -9933,7 +9954,188 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 	// Update DSQL cache
 	METD_drop_relation(transaction, name);
 
+	if (withData)
+		executeInsert(tdbb, dsqlScratch, transaction);
+
 	savePoint.release();	// everything is ok
+}
+
+void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch)
+{
+	fb_assert(querySelectExpr);
+
+	dsqlScratch->resetContextStack();
+	dsqlScratch->unionContext.clear();
+	dsqlScratch->derivedContext.clear();
+
+	const auto rse = PASS1_rse(dsqlScratch, querySelectExpr);
+	const auto items = rse->dsqlSelectList;
+
+	if (queryColumns && queryColumns->items.getCount() != items->items.getCount())
+	{
+		status_exception::raise(
+			Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+			Arg::Gds(isc_dsql_command_err) <<
+			Arg::Gds(isc_num_field_err));
+	}
+
+	ObjectsArray<MetaName> names;
+	FB_SIZE_T position = 0;
+
+	for (auto item : items->items)
+	{
+		MetaName fieldName;
+
+		if (queryColumns)
+			fieldName = nodeAs<FieldNode>(queryColumns->items[position])->dsqlName;
+		else
+		{
+			const ValueExprNode* nameNode = item;
+			const char* aliasName = nullptr;
+
+			while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
+				nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
+			{
+				if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = aliasNode->name.c_str();
+
+					nameNode = aliasNode->value;
+				}
+				else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
+					nameNode = mapNode->map->map_node;
+				else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = derivedField->name.c_str();
+
+					nameNode = derivedField->value;
+				}
+				else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
+				{
+					if (!aliasName)
+						aliasName = referenceNode->getName();
+
+					nameNode = nullptr;
+				}
+			}
+
+			if (aliasName)
+				fieldName = aliasName;
+			else if (const auto fieldNode = nodeAs<FieldNode>(nameNode))
+				fieldName = fieldNode->dsqlField->fld_name;
+			else
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_specify_field_err));
+			}
+		}
+
+		for (const auto& name : names)
+		{
+			if (name == fieldName)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_command_err) <<
+					Arg::Gds(isc_dsql_col_more_than_once_view) << Arg::Str(fieldName.c_str()));
+			}
+		}
+
+		names.add() = fieldName;
+
+		dsc desc;
+		DsqlDescMaker::fromNode(dsqlScratch, &desc, item);
+
+		if (!desc.dsc_dtype)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_dsql_datatype_err));
+		}
+
+		auto clause = FB_NEW_POOL(dsqlScratch->getPool()) AddColumnClause(dsqlScratch->getPool());
+		clause->field = FB_NEW_POOL(dsqlScratch->getPool()) dsql_fld(dsqlScratch->getPool());
+
+		auto field = clause->field;
+		field->fld_name = fieldName;
+		field->dtype = desc.dsc_dtype;
+		field->length = desc.dsc_length;
+		field->scale = desc.dsc_scale;
+		field->subType = desc.dsc_sub_type;
+
+		if (desc.dsc_flags & DSC_nullable)
+			field->flags |= FLD_nullable;
+
+		if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+		{
+			field->charSetId = desc.getCharSet();
+			field->collationId = desc.getCollation();
+		}
+
+		if (desc.isText())
+		{
+			const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
+			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
+			field->charLength = (field->length - adjust) / bpc;
+		}
+		else if (desc.isBlob())
+			field->segLength = 80;
+
+		field->setExactPrecision();
+		clauses.add(clause);
+
+		++position;
+	}
+
+	dsqlScratch->resetContextStack();
+	dsqlScratch->unionContext.clear();
+	dsqlScratch->derivedContext.clear();
+}
+
+void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
+	jrd_tra* transaction)
+{
+	string sql;
+	sql.printf("insert into %s (", name.toQuotedString().c_str());
+
+	bool first = true;
+
+	for (const auto& clause : clauses)
+	{
+		if (clause->type != Clause::TYPE_ADD_COLUMN)
+			continue;
+
+		const auto addColumnClause = static_cast<const AddColumnClause*>(clause.getObject());
+
+		if (!first)
+			sql += ", ";
+
+		first = false;
+		sql += addColumnClause->field->fld_name.toQuotedString();
+	}
+
+	sql += ") ";
+	sql += querySource;
+
+	jrd_tra* traHandle = transaction;
+	const auto attachment = tdbb->getAttachment();
+
+	AutoSetRestoreFlag autoLttReferences(&dsqlScratch->flags,
+		DsqlCompilerScratch::FLAG_ALLOW_CREATED_LTT_REFERENCE, tempFlag == REL_temp_ltt);
+
+	// Clear TDBB_use_db_page_space so the INSERT uses per-transaction temp pages for GTT/LTT,
+	// not the structural base pages that were used during table creation.
+	AutoSetRestoreFlag<ULONG> noDbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
+
+	DSQL_execute_immediate(tdbb, attachment, &traHandle, sql.length(), sql.c_str(),
+		dsqlScratch->clientDialect, nullptr, nullptr, nullptr, nullptr, true);
+
+	fb_assert(traHandle == transaction);
 }
 
 // Starting from the elements in a table definition, locate the PK columns if given in a
@@ -10088,7 +10290,7 @@ string AlterRelationNode::internalPrint(NodePrinter& printer) const
 	return "AlterRelationNode";
 }
 
-void AlterRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterRelationNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_relation(tdbb, name, SCL_alter);
 }
@@ -10097,6 +10299,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 	jrd_tra* transaction)
 {
 	const auto attachment = tdbb->getAttachment();
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 
 	// Check if this is an LTT and set flag before METD_get_relation (called by saveRelation)
 	// to avoid false "LTT cannot be referenced in persistent metadata" error
@@ -10180,7 +10383,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					{
 						AutoCacheRequest request(tdbb, drq_l_rel_fld_name, DYN_REQUESTS);
 
-						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 							RFL IN RDB$RELATION_FIELDS
 							WITH RFL.RDB$SCHEMA_NAME = relation->rel_name.schema.c_str() AND
 								 RFL.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
@@ -10227,9 +10430,9 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						MODIFY RFL
 							checkViewDependency(tdbb, transaction, name, clause->fromName);
-							checkSpTrigDependency(tdbb, transaction, name, clause->fromName);
+							checkSpTrigDependency(tdbb, name, clause->fromName);
 
-							if (!fieldExists(tdbb, transaction, name, clause->toName))
+							if (!fieldExists(tdbb, name, clause->toName))
 							{
 								strcpy(RFL.RDB$FIELD_NAME, clause->toName.c_str());
 								AlterDomainNode::modifyLocalFieldIndex(tdbb, transaction, name,
@@ -10402,7 +10605,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 						AutoCacheRequest request(tdbb, drq_l_rel_con, DYN_REQUESTS);
 
-						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+						FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 							RC IN RDB$RELATION_CONSTRAINTS
 							WITH RC.RDB$CONSTRAINT_NAME EQ constraintName.c_str() AND
 								 RC.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -10930,7 +11133,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					if (newDomainName.object.hasData())
 						newDom.dyn_fld_source = newDomainName;
 
-					AlterDomainNode::getDomainType(tdbb, transaction, newDom);
+					AlterDomainNode::getDomainType(tdbb, newDom);
 					AlterDomainNode::checkUpdate(origDom, newDom);
 
 					if (!RFR.RDB$GENERATOR_NAME.NULL)
@@ -11450,7 +11653,7 @@ string DropRelationNode::internalPrint(NodePrinter& printer) const
 	return "DropRelationNode";
 }
 
-void DropRelationNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropRelationNode::checkPermission(thread_db* tdbb)
 {
 	if (view)
 		SCL_check_view(tdbb, name, SCL_drop);
@@ -11465,6 +11668,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	AutoSavePoint savePoint(tdbb, transaction);
 
 	const auto attachment = tdbb->getAttachment();
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 
 	if (const auto lttIt = attachment->att_local_temporary_tables.get(name))
 	{
@@ -11542,7 +11746,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 	AutoCacheRequest request(tdbb, drq_l_relation, DYN_REQUESTS);
 	bool found = false;
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		R IN RDB$RELATIONS
 		WITH R.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 R.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
@@ -11597,6 +11801,24 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 	indexList.exec(tdbb, transaction);
 
+	if (name.package.isEmpty())
+	{
+		// Drop CHECK/NOT NULL constraints before fields, otherwise system triggers
+		// still see active constraints while RDB$RELATION_FIELDS is erased.
+		request.reset(tdbb, drq_e_rel_con3, DYN_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			CRT IN RDB$RELATION_CONSTRAINTS
+			WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 CRT.RDB$RELATION_NAME EQ name.object.c_str() AND
+				 (CRT.RDB$CONSTRAINT_TYPE EQ CHECK_CNSTRT OR
+				  CRT.RDB$CONSTRAINT_TYPE EQ NOT_NULL_CNSTRT)
+		{
+			ERASE CRT;
+		}
+		END_FOR
+	}
+
 	request.reset(tdbb, drq_e_rel_flds, DYN_REQUESTS);
 
 	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -11636,20 +11858,6 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 				 TM.RDB$TRIGGER_NAME EQ T.RDB$TRIGGER_NAME
 		{
 			ERASE TM;
-		}
-		END_FOR
-
-		// CVC: Moved this block here to avoid SF Bug #1111570.
-		request.reset(tdbb, drq_e_rel_con3, DYN_REQUESTS);
-
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
-			CRT IN RDB$RELATION_CONSTRAINTS
-			WITH CRT.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
-				 CRT.RDB$RELATION_NAME EQ name.object.c_str() AND
-				 (CRT.RDB$CONSTRAINT_TYPE EQ CHECK_CNSTRT OR
-				  CRT.RDB$CONSTRAINT_TYPE EQ NOT_NULL_CNSTRT)
-		{
-			ERASE CRT;
 		}
 		END_FOR
 
@@ -11868,7 +12076,7 @@ DdlNode* CreateAlterViewNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreateAlterViewNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterViewNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -12068,7 +12276,8 @@ void CreateAlterViewNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	// Check privileges on base tables and views.
 
 	request.reset(tdbb, drq_l_view_rels, DYN_REQUESTS);
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		VRL IN RDB$VIEW_RELATIONS
 		CROSS PREL IN RDB$RELATIONS
 		WITH VRL.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -12864,13 +13073,14 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 	MetaId idxId = dbb->dbb_max_idx;
 	bool active = false;
 	const bool tempConn = !(tdbb->tdbb_flags & TDBB_use_db_page_space);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	idx.idx_flags = 0;
 
 	// Fetch the information necessary to create the index.
 	request.reset(tdbb, irq_c_index, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		IDX IN RDB$INDICES CROSS
 		REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
 			WITH IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
@@ -12918,7 +13128,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		{
 			AutoCacheRequest rc_request(tdbb, irq_c_index_rc, IRQ_REQUESTS);
 
-			FOR(REQUEST_HANDLE rc_request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE rc_request TRANSACTION_HANDLE metaTransaction)
 				RC IN RDB$RELATION_CONSTRAINTS WITH
 				RC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
 				RC.RDB$INDEX_NAME EQ indexName.object.c_str() AND
@@ -13180,10 +13390,11 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 	MetaId idxId = dbb->dbb_max_idx;
 	bool active = false;
 	const bool tempConn = !(tdbb->tdbb_flags & TDBB_use_db_page_space);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	AutoCacheRequest request(tdbb, irq_c_exp_index, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		IDX IN RDB$INDICES
 		CROSS REL IN RDB$RELATIONS OVER RDB$SCHEMA_NAME, RDB$RELATION_NAME
 		WITH IDX.RDB$EXPRESSION_BLR NOT MISSING AND
@@ -13347,6 +13558,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 	definition.index = idxName;
 	ULONG keyLength = 0;
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_s_indices, DYN_REQUESTS);
 	STORE(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		IDX IN RDB$INDICES
@@ -13379,7 +13591,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 		AutoCacheRequest request2(tdbb, drq_l_view_idx, DYN_REQUESTS);
 
-		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 			VREL IN RDB$RELATIONS
 			WITH VREL.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
 				 VREL.RDB$PACKAGE_NAME EQUIV NULLIF(definition.relation.package.c_str(), '') AND
@@ -13427,7 +13639,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 			bool found = false;
 
-			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				F IN RDB$RELATION_FIELDS CROSS
 				GF IN RDB$FIELDS
 				WITH F.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
@@ -13571,7 +13783,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			int listIndex = -1;
 			bool found = false;
 
-			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				RC IN RDB$RELATION_CONSTRAINTS CROSS
 				IND IN RDB$INDICES OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME CROSS
 				ISEG IN RDB$INDEX_SEGMENTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
@@ -13629,7 +13841,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				AutoRequest request3;
 				bool isView = false;
 
-				FOR(REQUEST_HANDLE request3 TRANSACTION_HANDLE transaction)
+				FOR(REQUEST_HANDLE request3 TRANSACTION_HANDLE metaTransaction)
 					X IN RDB$RELATIONS
 					WITH X.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
 						 X.RDB$PACKAGE_NAME MISSING AND
@@ -13665,7 +13877,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 			request2.reset(tdbb, drq_l_primary, DYN_REQUESTS);
 
-			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
 				IND IN RDB$INDICES CROSS
 				RC IN RDB$RELATION_CONSTRAINTS OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME
 				WITH IND.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
@@ -13755,7 +13967,7 @@ string CreateIndexNode::internalPrint(NodePrinter& printer) const
 	return "CreateIndexNode";
 }
 
-void CreateIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateIndexNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_relation(tdbb, relation->dsqlName, SCL_alter, false);
 }
@@ -13994,10 +14206,10 @@ string AlterIndexNode::internalPrint(NodePrinter& printer) const
 	return "AlterIndexNode";
 }
 
-void AlterIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterIndexNode::checkPermission(thread_db* tdbb)
 {
 	bool systemIndex;
-	const auto relationName = getIndexRelationName(tdbb, transaction, indexName, systemIndex);
+	const auto relationName = getIndexRelationName(tdbb, indexName, systemIndex);
 
 	SCL_check_relation(tdbb, relationName, SCL_alter, systemIndex);
 }
@@ -14199,10 +14411,10 @@ string SetStatisticsNode::internalPrint(NodePrinter& printer) const
 	return "SetStatisticsNode";
 }
 
-void SetStatisticsNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void SetStatisticsNode::checkPermission(thread_db* tdbb)
 {
 	bool systemIndex;
-	const auto relationName = getIndexRelationName(tdbb, transaction, indexName, systemIndex);
+	const auto relationName = getIndexRelationName(tdbb, indexName, systemIndex);
 
 	SCL_check_relation(tdbb, relationName, SCL_alter, false);
 }
@@ -14316,10 +14528,10 @@ string DropIndexNode::internalPrint(NodePrinter& printer) const
 	return "DropIndexNode";
 }
 
-void DropIndexNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropIndexNode::checkPermission(thread_db* tdbb)
 {
 	bool systemIndex;
-	const auto relationName = getIndexRelationName(tdbb, transaction, indexName, systemIndex, silent);
+	const auto relationName = getIndexRelationName(tdbb, indexName, systemIndex, silent);
 
 	if (relationName.object.hasData())
 		SCL_check_relation(tdbb, relationName, SCL_alter, systemIndex);
@@ -14371,8 +14583,9 @@ void DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_
 	if (dropSegments && indexName.package.isEmpty())
 	{
 		AUTO_HANDLE(req1);
+		auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-		FOR (REQUEST_HANDLE req1 TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE req1 TRANSACTION_HANDLE metaTransaction)
 			RLC IN RDB$RELATION_CONSTRAINTS
 			WITH RLC.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
 				 RLC.RDB$INDEX_NAME EQ indexName.object.c_str()
@@ -14751,7 +14964,7 @@ string CreateFilterNode::internalPrint(NodePrinter& printer) const
 	return "CreateFilterNode";
 }
 
-void CreateFilterNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateFilterNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_create_access(tdbb, obj_filters, {});
 }
@@ -14832,7 +15045,7 @@ string DropFilterNode::internalPrint(NodePrinter& printer) const
 	return "DropFilterNode";
 }
 
-void DropFilterNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropFilterNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_filter(tdbb, name, SCL_drop);
 }
@@ -14879,7 +15092,7 @@ string CreateShadowNode::internalPrint(NodePrinter& printer) const
 	return "CreateShadowNode";
 }
 
-void CreateShadowNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateShadowNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_database(tdbb, SCL_alter);
 }
@@ -14900,9 +15113,10 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 
 	// If a shadow set identified by the shadow number already exists return error
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_l_shadow, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FIRST 1 X IN RDB$FILES
 		WITH X.RDB$SHADOW_NUMBER EQ number
 	{
@@ -14924,7 +15138,7 @@ void CreateShadowNode::execute(thread_db* tdbb, DsqlCompilerScratch* /*dsqlScrat
 
 	request.reset(tdbb, drq_l_files, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		FIRST 1 X IN RDB$FILES
 		WITH X.RDB$FILE_NAME EQ expandedName.c_str()
 	{
@@ -14960,7 +15174,7 @@ string DropShadowNode::internalPrint(NodePrinter& printer) const
 	return "DropShadowNode";
 }
 
-void DropShadowNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropShadowNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_database(tdbb, SCL_alter);
 }
@@ -15017,7 +15231,7 @@ string CreateAlterRoleNode::internalPrint(NodePrinter& printer) const
 	return "CreateAlterRoleNode";
 }
 
-void CreateAlterRoleNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterRoleNode::checkPermission(thread_db* tdbb)
 {
 	if (createFlag)
 		SCL_check_create_access(tdbb, obj_roles, {});
@@ -15040,7 +15254,7 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 	AutoSavePoint savePoint(tdbb, transaction);
 	MetaName dummyName;
 
-	if (createIfNotExistsOnly && isItSqlRole(tdbb, transaction, name, dummyName))
+	if (createIfNotExistsOnly && isItSqlRole(tdbb, name, dummyName))
 		return;
 
 	executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
@@ -15064,7 +15278,7 @@ void CreateAlterRoleNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 		status_exception::raise(Arg::PrivateDyn(193) << name);
 	}
 
-	if (createFlag && isItSqlRole(tdbb, transaction, name, dummyName))
+	if (createFlag && isItSqlRole(tdbb, name, dummyName))
 	{
 		// msg 194: "SQL role @1 already exists"
 		status_exception::raise(Arg::PrivateDyn(194) << name);
@@ -15126,9 +15340,10 @@ bool CreateAlterRoleNode::isItUserName(thread_db* tdbb, jrd_tra* transaction)
 	// If there is a user with privilege or a grantor on a relation we
 	// can infer there is a user with this name
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_get_user_priv, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		PRIV IN RDB$USER_PRIVILEGES
 		WITH (PRIV.RDB$USER EQ name.c_str() AND PRIV.RDB$USER_TYPE = obj_user) OR
 			 (PRIV.RDB$GRANTOR EQ name.c_str() AND PRIV.RDB$OBJECT_TYPE = obj_relation)
@@ -15146,7 +15361,7 @@ bool CreateAlterRoleNode::isItUserName(thread_db* tdbb, jrd_tra* transaction)
 
 	request.reset(tdbb, drq_get_rel_owner, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$OWNER_NAME EQ name.c_str()
 	{
@@ -15202,7 +15417,7 @@ void MappingNode::addItem(string& ddl, const char* text, char quote)
 	ddl += quote;
 }
 
-void MappingNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void MappingNode::checkPermission(thread_db* tdbb)
 {
 	//DDL_TODO
 }
@@ -15616,7 +15831,7 @@ string DropRoleNode::internalPrint(NodePrinter& printer) const
 	return "DropRoleNode";
 }
 
-void DropRoleNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropRoleNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_role(tdbb, name, SCL_drop);
 }
@@ -15742,7 +15957,7 @@ static void setCharField(Auth::CharField& field, const string* value)
 }
 
 
-void CreateAlterUserNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterUserNode::checkPermission(thread_db* tdbb)
 {
 	//DDL_TODO
 }
@@ -15875,7 +16090,7 @@ string DropUserNode::internalPrint(NodePrinter& printer) const
 	return "DropUserNode";
 }
 
-void DropUserNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropUserNode::checkPermission(thread_db* tdbb)
 {
 	//DDL_TODO
 }
@@ -15931,7 +16146,7 @@ string GrantRevokeNode::internalPrint(NodePrinter& printer) const
 	return "GrantRevokeNode";
 }
 
-void GrantRevokeNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void GrantRevokeNode::checkPermission(thread_db* tdbb)
 {
 	// GRANT OPTION will be checked in grantRevoke method
 }
@@ -16107,16 +16322,17 @@ void GrantRevokeNode::modifyPrivileges(thread_db* tdbb, jrd_tra* transaction, SS
 }
 
 
-static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& name, int type)
+static bool checkObjectExist(thread_db* tdbb, const QualifiedName& name, int type)
 {
 	bool rc = false;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	switch (type)
 	{
 		case obj_procedure:
 		{
 			AutoCacheRequest request(tdbb, drq_proc_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$PROCEDURES
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
@@ -16131,7 +16347,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_udf:
 		{
 			AutoCacheRequest request(tdbb, drq_udf_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$FUNCTIONS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
@@ -16146,7 +16362,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_package_header:
 		{
 			AutoCacheRequest request(tdbb, drq_package_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$PACKAGES
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$PACKAGE_NAME EQ name.object.c_str()
@@ -16164,7 +16380,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 			static const CachedRequestId requestId;
 			AutoCacheRequest request(tdbb, requestId);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				SCH IN RDB$SCHEMAS
 				WITH SCH.RDB$SCHEMA_NAME EQ name.object.c_str()
 			{
@@ -16177,7 +16393,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_trigger:
 		{
 			AutoCacheRequest request(tdbb, drq_trigger_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$TRIGGERS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$TRIGGER_NAME EQ name.object.c_str()
@@ -16192,7 +16408,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_view:
 		{
 			AutoCacheRequest request(tdbb, drq_rel_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$RELATIONS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
@@ -16207,7 +16423,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_exception:
 		{
 			AutoCacheRequest request(tdbb, drq_exception_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$EXCEPTIONS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$EXCEPTION_NAME EQ name.object.c_str()
@@ -16221,7 +16437,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		case obj_generator:
 		{
 			AutoCacheRequest request(tdbb, drq_generator_exist, DYN_REQUESTS);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$GENERATORS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$GENERATOR_NAME EQ name.object.c_str()
@@ -16236,7 +16452,7 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 		{
 			static const CachedRequestId requestId;
 			AutoCacheRequest request(tdbb, requestId);
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				X IN RDB$CONSTANTS
 				WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 					 X.RDB$PACKAGE_NAME EQ name.package.c_str() AND
@@ -16252,13 +16468,13 @@ static bool checkObjectExist(thread_db* tdbb, jrd_tra* transaction, const Qualif
 	return rc;
 }
 
-static bool checkFieldExist(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relation,
-	const MetaName& field)
+static bool checkFieldExist(thread_db* tdbb, const QualifiedName& relation, const MetaName& field)
 {
 	bool rc = false;
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	AutoCacheRequest request(tdbb, drq_rel_field_exist, DYN_REQUESTS);
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$RELATION_FIELDS
 		WITH X.RDB$SCHEMA_NAME EQ relation.schema.c_str() AND
 			 X.RDB$PACKAGE_NAME EQUIV NULLIF(relation.package.c_str(), '') AND
@@ -16325,7 +16541,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	{
 		case obj_user_or_role:
 			// This test may become obsolete as we now allow explicit ROLE keyword.
-			if (isItSqlRole(tdbb, transaction, user.object, dummyName))
+			if (isItSqlRole(tdbb, user.object, dummyName))
 			{
 				userType = obj_sql_role;
 				if (user.object == NULL_ROLE)
@@ -16343,37 +16559,37 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 			break;
 
 		case obj_udf:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::PrivateDyn(301) << user.toQuotedString());	// Function @1 does not exist
 			break;
 
 		case obj_procedure:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::PrivateDyn(302) << user.toQuotedString());	// Procedure @1 does not exist
 			break;
 
 		case obj_package_header:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::PrivateDyn(303) << user.toQuotedString());	// Package @1 does not exist
 			break;
 
 		case obj_schema:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << user.toQuotedString());
 			break;
 
 		case obj_trigger:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::PrivateDyn(304) << user.toQuotedString());	// Trigger @1 does not exist
 			break;
 
 		case obj_view:
-			if (!checkObjectExist(tdbb, transaction, user, userType))
+			if (!checkObjectExist(tdbb, user, userType))
 				status_exception::raise(Arg::PrivateDyn(305) << user.toQuotedString());	// View @1 does not exist
 			break;
 
 		case obj_sql_role:
-			if (!crdb && (!isItSqlRole(tdbb, transaction, user.object, dummyName)))
+			if (!crdb && (!isItSqlRole(tdbb, user.object, dummyName)))
 			{
 				// msg 188: Role doesn't exist.
 				status_exception::raise(Arg::PrivateDyn(188) << user.toQuotedString());
@@ -16397,7 +16613,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 	switch (objType)
 	{
 		case obj_view:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(305) << objName.toQuotedString());	// View @1 does not exist
 			break;
 
@@ -16408,50 +16624,50 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					objName.toQuotedString() << (isGrant ? "GRANT" : "REVOKE"));
 			}
 
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(306) << objName.toQuotedString());	// Table @1 does not exist
 
-			if (field.hasData() && !checkFieldExist(tdbb, transaction, objName, field))
+			if (field.hasData() && !checkFieldExist(tdbb, objName, field))
 				status_exception::raise(Arg::PrivateDyn(309) << field.c_str() << objName.toQuotedString());	// Field @1 of table @2 does not exist
 			break;
 
 		case obj_schema:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
 			break;
 
 		case obj_trigger:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(304) << objName.toQuotedString());	// Trigger @1 does not exist
 			break;
 
 		case obj_procedure:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(302) << objName.toQuotedString());	// Procedure @1 does not exist
 			break;
 
 		case obj_exception:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(307) << objName.toQuotedString());	// Exception @1 does not exist
 			break;
 
 		case obj_generator:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(308) << objName.toQuotedString());	// Generator/Sequence @1 does not exist
 			break;
 
 		case obj_udf:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(301) << objName.toQuotedString());	// Function @1 does not exist
 			break;
 
 		case obj_package_header:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::PrivateDyn(303) << objName.toQuotedString());	// Package @1 does not exist
 			break;
 
 		case obj_sql_role:
-			if (!isItSqlRole(tdbb, transaction, objName.object, dummyName))
+			if (!isItSqlRole(tdbb, objName.object, dummyName))
 				status_exception::raise(Arg::PrivateDyn(188) << objName.toQuotedString());	// Role doesn't exist.
 			break;
 
@@ -16465,12 +16681,12 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 		case obj_exceptions:
 		case obj_charsets:
 		case obj_collations:
-			if (!checkObjectExist(tdbb, transaction, QualifiedName(objName.schema), obj_schema))
+			if (!checkObjectExist(tdbb, QualifiedName(objName.schema), obj_schema))
 				status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << objName.toQuotedString());
 			break;
 
 		case obj_package_constant:
-			if (!checkObjectExist(tdbb, transaction, objName, objType))
+			if (!checkObjectExist(tdbb, objName, objType))
 				status_exception::raise(Arg::Gds(isc_dyn_constant_not_found) << objName.toQuotedString());
 			break;
 
@@ -16670,8 +16886,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					case obj_relation:
 					{
 						// Relation or view because we cannot distinguish at this point.
-						checkGrantorCanGrantRelation(tdbb, transaction, currentUser.c_str(), priv, objName,
-							field, true);
+						checkGrantorCanGrantRelation(tdbb, currentUser.c_str(), priv, objName, field, true);
 						break;
 					}
 
@@ -16683,13 +16898,13 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 					case obj_schema:
 					case obj_package_constant:
 					{
-						checkGrantorCanGrantObject(tdbb, transaction, currentUser.c_str(), priv, objName, objType);
+						checkGrantorCanGrantObject(tdbb, currentUser.c_str(), priv, objName, objType);
 						break;
 					}
 
 					default:
 						if (isDdlObject(objType))
-							checkGrantorCanGrantDdl(tdbb, transaction, currentUser.c_str(), priv, objName);
+							checkGrantorCanGrantDdl(tdbb, currentUser.c_str(), priv, objName);
 						else
 							fb_assert(false);
 				}
@@ -16772,9 +16987,9 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 						(attachment->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT) ||	// God-like check
 						((objType == obj_sql_role) && (PRIV.RDB$PRIVILEGE[0] == 'M') &&		// This is ROLE to USER grant
 						 (currentUser != user.object) &&						// And current user does not revoke his own grant
-						 (isItSqlRole(tdbb, transaction, objName.object, owner) &&		// Pick up role owner name
+						 (isItSqlRole(tdbb, objName.object, owner) &&			// Pick up role owner name
 						    (owner == currentUser)) ||							// Current user is role owner
-						  (getGrantorOption(tdbb, transaction, currentUser, obj_user, objName.object) == 2))))	// or has ADMIN option
+						  (getGrantorOption(tdbb, currentUser, obj_user, objName.object) == 2))))	// or has ADMIN option
 					{
 						MetaName newField = NULL;
 						int newOptions = 0;
@@ -16820,7 +17035,7 @@ void GrantRevokeNode::grantRevoke(thread_db* tdbb, jrd_tra* transaction, const G
 }
 
 // Check if the grantor has grant privilege on the relation/field.
-void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* transaction,
+void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb,
 	const char* grantor, const char* privilege, const QualifiedName& relationName,
 	const MetaName& fieldName, bool topLevel)
 {
@@ -16830,12 +17045,13 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 
 	// Verify that the input relation exists.
 
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_gcg4, DYN_REQUESTS);
 
 	bool sqlRelation = false;
 	bool relationExists = false;
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
 			 REL.RDB$PACKAGE_NAME MISSING AND
@@ -16861,7 +17077,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 
 		request.reset(tdbb, drq_gcg5, DYN_REQUESTS);
 
-		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 			G_FLD IN RDB$RELATION_FIELDS
 			WITH G_FLD.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
 				 G_FLD.RDB$PACKAGE_NAME MISSING AND
@@ -16893,7 +17109,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 
 	request.reset(tdbb, drq_gcg2, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
 			 REL.RDB$PACKAGE_NAME MISSING AND
@@ -16920,7 +17136,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 
 	request.reset(tdbb, drq_gcg1, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		PRV IN RDB$USER_PRIVILEGES WITH
 			((PRV.RDB$USER = UPPERCASE(grantor) AND
 				PRV.RDB$USER_TYPE = obj_user) OR (PRV.RDB$USER_TYPE = obj_sql_role)) AND
@@ -17007,7 +17223,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 
 	request.reset(tdbb, drq_gcg3, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		G_FLD IN RDB$RELATION_FIELDS
 		CROSS G_VIEW IN RDB$VIEW_RELATIONS
 		WITH G_FLD.RDB$SCHEMA_NAME = relationName.schema.c_str() AND
@@ -17022,7 +17238,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		{
 			if (fieldName == G_FLD.RDB$FIELD_NAME)
 			{
-				checkGrantorCanGrantRelation(tdbb, transaction, grantor, privilege,
+				checkGrantorCanGrantRelation(tdbb, grantor, privilege,
 					QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME,
 						G_VIEW.RDB$PACKAGE_NAME),
 					G_FLD.RDB$BASE_FIELD, false);
@@ -17030,7 +17246,7 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
 		}
 		else
 		{
-			checkGrantorCanGrantRelation(tdbb, transaction, grantor, privilege,
+			checkGrantorCanGrantRelation(tdbb, grantor, privilege,
 				QualifiedName(G_VIEW.RDB$RELATION_NAME, G_VIEW.RDB$RELATION_SCHEMA_NAME,
 					G_VIEW.RDB$PACKAGE_NAME),
 				G_FLD.RDB$BASE_FIELD, false);
@@ -17045,12 +17261,13 @@ void GrantRevokeNode::checkGrantorCanGrantRelation(thread_db* tdbb, jrd_tra* tra
  * Otherwise returns 0;
  *
  */
-static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaName& grantor,
+static int getGrantorOption(thread_db* tdbb, const MetaName& grantor,
 	int grantorType, const MetaName& roleName)
 {
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_get_role_au, DYN_REQUESTS);
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		PRV IN RDB$USER_PRIVILEGES WITH
 			PRV.RDB$USER = UPPERCASE(grantor.c_str()) AND
 			PRV.RDB$USER_TYPE = grantorType AND
@@ -17064,7 +17281,7 @@ static int getGrantorOption(thread_db* tdbb, jrd_tra* transaction, const MetaNam
 			return grantable ? 2 : 1;
 		else
 		{
-			switch (getGrantorOption(tdbb, transaction, role, obj_sql_role, roleName))
+			switch (getGrantorOption(tdbb, role, obj_sql_role, roleName))
 			{
 			case 0:
 				continue;
@@ -17094,7 +17311,7 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 {
 	// Fetch the name of the owner of the ROLE.
 	MetaName owner;
-	if (isItSqlRole(tdbb, transaction, roleName, owner))
+	if (isItSqlRole(tdbb, roleName, owner))
 	{
 		// Both SYSDBA and the owner of this ROLE can grant membership
 		if (tdbb->getAttachment()->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT) || owner == grantor)
@@ -17106,7 +17323,7 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 		status_exception::raise(Arg::PrivateDyn(188) << roleName.c_str());
 	}
 
-	const int r = getGrantorOption(tdbb, transaction, grantor, obj_user, roleName);
+	const int r = getGrantorOption(tdbb, grantor, obj_user, roleName);
 
 	if (r < 2)
 	{
@@ -17117,18 +17334,19 @@ void GrantRevokeNode::checkGrantorCanGrantRole(thread_db* tdbb, jrd_tra* transac
 }
 
 // Check if the grantor has grant option on DDL privilege
-void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transaction,
-	const MetaName& grantor, const char* privilege, const QualifiedName& objName)
+void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, const MetaName& grantor,
+	const char* privilege, const QualifiedName& objName)
 {
-	const Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 	if (attachment->locksmith(tdbb, GRANT_REVOKE_ANY_DDL_RIGHT))
 		return;
 
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_l_grant_option, DYN_REQUESTS);
 	bool grantable = false;
 
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		PRV IN RDB$USER_PRIVILEGES
 		WITH ((PRV.RDB$USER = UPPERCASE(grantor.c_str()) AND
 				PRV.RDB$USER_TYPE = obj_user) OR (PRV.RDB$USER_TYPE = obj_sql_role)) AND
@@ -17161,18 +17379,19 @@ void GrantRevokeNode::checkGrantorCanGrantDdl(thread_db* tdbb, jrd_tra* transact
 
 
 // Check if the grantor has grant option on generator privilege
-void GrantRevokeNode::checkGrantorCanGrantObject(thread_db* tdbb, jrd_tra* transaction, const char* grantor,
+void GrantRevokeNode::checkGrantorCanGrantObject(thread_db* tdbb, const char* grantor,
 		const char* privilege, const QualifiedName& objName, SSHORT objType)
 {
-	const Attachment* attachment = tdbb->getAttachment();
+	Attachment* attachment = tdbb->getAttachment();
 
 	if (attachment->locksmith(tdbb, GRANT_REVOKE_ON_ANY_OBJECT))
 		return;
 
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest request(tdbb, drq_l_grant_object, DYN_REQUESTS);
 	bool grantable = false;
 
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		PRV IN RDB$USER_PRIVILEGES
 		WITH ((PRV.RDB$USER = UPPERCASE(grantor) AND
 				PRV.RDB$USER_TYPE = obj_user) OR (PRV.RDB$USER_TYPE = obj_sql_role)) AND
@@ -17317,7 +17536,7 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 	return "AlterDatabaseNode";
 }
 
-void AlterDatabaseNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void AlterDatabaseNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_database(tdbb, SCL_alter);
 }
@@ -17378,6 +17597,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
 	if (clauses & CLAUSE_DROP_DIFFERENCE)
 		changeBackupMode(tdbb, transaction, CLAUSE_DROP_DIFFERENCE);
@@ -17404,7 +17624,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 		{
 			AutoCacheRequest request(tdbb, drq_l_pub_all_rels, DYN_REQUESTS);
 
-			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 				REL IN RDB$RELATIONS
 				WITH REL.RDB$SYSTEM_FLAG EQ 0
 					AND REL.RDB$VIEW_BLR MISSING
@@ -17438,7 +17658,7 @@ void AlterDatabaseNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			{
 				bool found = false;
 
-				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 					REL IN RDB$RELATIONS
 					WITH REL.RDB$SYSTEM_FLAG EQ 0 AND
 						 REL.RDB$VIEW_BLR MISSING AND
@@ -17754,7 +17974,7 @@ DdlNode* CreateAlterSchemaNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	return DdlNode::dsqlPass(dsqlScratch);
 }
 
-void CreateAlterSchemaNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterSchemaNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 	{
@@ -17946,11 +18166,12 @@ string DropSchemaNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, silent);
+	NODE_PRINT(printer, cascade);
 
 	return "DropSchemaNode";
 }
 
-void DropSchemaNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropSchemaNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_schema(tdbb, name, SCL_drop);
 }
@@ -17979,7 +18200,11 @@ void DropSchemaNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_SCHEMA, qualifiedName, {});
 
-		if (collectObjects(tdbb, transaction))
+		checkDependencies(tdbb);
+
+		if (cascade)
+			dropObjects(tdbb, dsqlScratch, transaction);
+		else if (collectObjects(tdbb))
 			status_exception::raise(Arg::Gds(isc_dyn_cannot_drop_non_emptyschema) << name.toQuotedString());
 
 		ERASE SCH;
@@ -18036,13 +18261,40 @@ void DropSchemaNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	savePoint.release();	// everything is ok
 }
 
-bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
-	Array<NonPooledPair<ObjectType, MetaName>>* objects)
+// Check if others schemas depends on our schema.
+void DropSchemaNode::checkDependencies(thread_db* tdbb)
+{
+	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
+
+	static const CachedRequestId requestHandleId;
+	AutoCacheRequest requestHandle(tdbb, requestHandleId);
+
+	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
+		FIRST 1
+		DEP IN RDB$DEPENDENCIES
+		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ name.c_str() AND
+			 DEP.RDB$DEPENDENT_SCHEMA_NAME NE name.c_str()
+	{
+		status_exception::raise(
+			Arg::Gds(isc_no_meta_update) <<
+			Arg::Gds(isc_no_delete) <<
+			Arg::Gds(isc_dependency) << Arg::Num(1));
+	}
+	END_FOR
+}
+
+bool DropSchemaNode::collectObjects(thread_db* tdbb, Array<CollectedObject>* objects)
 {
 	if (objects)
 		objects->clear();
 
+	const auto addObject = [&](ObjectType type, const MetaName& objName, bool isLTT = false)
+	{
+		objects->add({type, objName, isLTT});
+	};
+
 	const auto attachment = tdbb->getAttachment();
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 
 	for (const auto& lttEntry : attachment->att_local_temporary_tables)
 	{
@@ -18051,7 +18303,7 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		if (lttName.schema == name)
 		{
 			if (objects)
-				objects->add({obj_relation, lttName.object});
+				addObject(obj_relation, lttName.object, true);
 			else
 				return true;
 		}
@@ -18061,15 +18313,18 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			FLD IN RDB$FIELDS
 			WITH FLD.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY FLD.RDB$FIELD_NAME
 		{
-			if (objects)
-				objects->add({obj_field, FLD.RDB$FIELD_NAME});
-			else
-				return true;
+			if (!fb_utils::implicit_domain(FLD.RDB$FIELD_NAME))
+			{
+				if (objects)
+					addObject(obj_field, FLD.RDB$FIELD_NAME);
+				else
+					return true;
+			}
 		}
 		END_FOR
 	}
@@ -18078,13 +18333,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY REL.RDB$RELATION_NAME
 		{
 			if (objects)
-				objects->add({obj_relation, REL.RDB$RELATION_NAME});
+				addObject((REL.RDB$VIEW_BLR.NULL ? obj_relation : obj_view), REL.RDB$RELATION_NAME);
 			else
 				return true;
 		}
@@ -18095,14 +18350,14 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			TRG IN RDB$TRIGGERS
 			WITH TRG.RDB$SCHEMA_NAME EQ name.c_str() AND
 				 TRG.RDB$RELATION_NAME MISSING
 			SORTED BY TRG.RDB$TRIGGER_NAME
 		{
 			if (objects)
-				objects->add({obj_trigger, TRG.RDB$TRIGGER_NAME});
+				addObject(obj_trigger, TRG.RDB$TRIGGER_NAME);
 			else
 				return true;
 		}
@@ -18113,14 +18368,14 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			FUN IN RDB$FUNCTIONS
 			WITH FUN.RDB$SCHEMA_NAME EQ name.c_str() AND
 				 FUN.RDB$PACKAGE_NAME MISSING
 			SORTED BY FUN.RDB$FUNCTION_NAME
 		{
 			if (objects)
-				objects->add({obj_udf, FUN.RDB$FUNCTION_NAME});
+				addObject(obj_udf, FUN.RDB$FUNCTION_NAME);
 			else
 				return true;
 		}
@@ -18131,13 +18386,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			GEN IN RDB$GENERATORS
 			WITH GEN.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY GEN.RDB$GENERATOR_NAME
 		{
 			if (objects)
-				objects->add({obj_generator, GEN.RDB$GENERATOR_NAME});
+				addObject(obj_generator, GEN.RDB$GENERATOR_NAME);
 			else
 				return true;
 		}
@@ -18148,14 +18403,14 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			PRC IN RDB$PROCEDURES
 			WITH PRC.RDB$SCHEMA_NAME EQ name.c_str() AND
 				 PRC.RDB$PACKAGE_NAME MISSING
 			SORTED BY PRC.RDB$PROCEDURE_NAME
 		{
 			if (objects)
-				objects->add({obj_procedure, PRC.RDB$PROCEDURE_NAME});
+				addObject(obj_procedure, PRC.RDB$PROCEDURE_NAME);
 			else
 				return true;
 		}
@@ -18166,13 +18421,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			CSC IN RDB$CHARACTER_SETS
 			WITH CSC.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY CSC.RDB$CHARACTER_SET_NAME
 		{
 			if (objects)
-				objects->add({obj_charset, CSC.RDB$CHARACTER_SET_NAME});
+				addObject(obj_charset, CSC.RDB$CHARACTER_SET_NAME);
 			else
 				return true;
 		}
@@ -18183,13 +18438,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			COL IN RDB$COLLATIONS
 			WITH COL.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY COL.RDB$COLLATION_NAME
 		{
 			if (objects)
-				objects->add({obj_collation, COL.RDB$COLLATION_NAME});
+				addObject(obj_collation, COL.RDB$COLLATION_NAME);
 			else
 				return true;
 		}
@@ -18200,13 +18455,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			XCP IN RDB$EXCEPTIONS
 			WITH XCP.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY XCP.RDB$EXCEPTION_NAME
 		{
 			if (objects)
-				objects->add({obj_exception, XCP.RDB$EXCEPTION_NAME});
+				addObject(obj_exception, XCP.RDB$EXCEPTION_NAME);
 			else
 				return true;
 		}
@@ -18217,13 +18472,13 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 		static const CachedRequestId requestHandleId;
 		AutoCacheRequest requestHandle(tdbb, requestHandleId);
 
-		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
 			PKG IN RDB$PACKAGES
 			WITH PKG.RDB$SCHEMA_NAME EQ name.c_str()
 			SORTED BY PKG.RDB$PACKAGE_NAME
 		{
 			if (objects)
-				objects->add({obj_package_header, PKG.RDB$PACKAGE_NAME});
+				addObject(obj_package_header, PKG.RDB$PACKAGE_NAME);
 			else
 				return true;
 		}
@@ -18231,6 +18486,216 @@ bool DropSchemaNode::collectObjects(thread_db* tdbb, jrd_tra* transaction,
 	}
 
 	return objects && objects->hasData();
+}
+
+// Drop every object contained in the schema (DROP SCHEMA ... CASCADE).
+// Cross-schema dependencies are rejected before this routine runs.
+void DropSchemaNode::dropObjects(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction)
+{
+	const auto attachment = tdbb->getAttachment();
+	const auto metaTransaction = attachment->getMetaTransaction(tdbb);
+
+	Array<CollectedObject> items;
+	collectObjects(tdbb, &items);
+
+	if (!items.hasData())
+		return;
+
+	AutoSetRestoreFlag<ULONG> autoSchemaCascadeDropping(&attachment->att_flags, ATT_schema_cascade_dropping, true);
+
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	// Drop FK constraints first.
+	// This is important when there are cyclic FK dependencies between tables in the schema.
+	// Dropping the constraints first allows us to drop the tables in any order,
+	// without worrying about FK dependencies.
+
+	{	// scope
+		struct ForeignKey
+		{
+			QualifiedName relationName;
+			MetaName constraintName;
+		};
+
+		Array<ForeignKey> foreignKeys;
+
+		static const CachedRequestId requestHandleId;
+		AutoCacheRequest requestHandle(tdbb, requestHandleId);
+
+		FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE metaTransaction)
+			RCC IN RDB$RELATION_CONSTRAINTS
+			WITH RCC.RDB$SCHEMA_NAME EQ name.c_str() AND
+				 RCC.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY
+		{
+			foreignKeys.add({
+				QualifiedName(RCC.RDB$RELATION_NAME, RCC.RDB$SCHEMA_NAME),
+				MetaName(RCC.RDB$CONSTRAINT_NAME)
+			});
+		}
+		END_FOR
+
+		for (const auto& foreignKey : foreignKeys)
+		{
+			AutoSetRestoreFlag autoNoMetadataSaved(&dsqlScratch->flags,
+				DsqlCompilerScratch::FLAG_METADATA_SAVED, false);
+			AutoSetRestore<dsql_rel*> autoNullRelation(&dsqlScratch->relation, nullptr);
+
+			const auto sourceNode = FB_NEW_POOL(pool) RelationSourceNode(pool, foreignKey.relationName);
+			const auto alterNode = FB_NEW_POOL(pool) AlterRelationNode(pool, sourceNode);
+			auto clause = FB_NEW_POOL(pool) RelationNode::DropConstraintClause(pool);
+
+			clause->name = foreignKey.constraintName;
+			clause->silent = true;
+			alterNode->clauses.add(clause);
+			alterNode->execute(tdbb, dsqlScratch, transaction);
+		}
+	}
+
+	// Helper to create and execute the appropriate silent drop node for an object.
+	const auto dropObject = [&](const CollectedObject& item)
+	{
+		const QualifiedName qualifiedName(item.objName, name);
+		DdlNode* node = nullptr;
+
+		switch (item.type)
+		{
+			case obj_relation:
+			case obj_view:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropRelationNode(pool, qualifiedName,
+					(item.type == obj_view));
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_trigger:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropTriggerNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_udf:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropFunctionNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_procedure:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropProcedureNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_generator:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropSequenceNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_exception:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropExceptionNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_collation:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropCollationNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_field:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropDomainNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_package_header:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropPackageNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			case obj_package_body:
+			{
+				const auto dropNode = FB_NEW_POOL(pool) DropPackageBodyNode(pool, qualifiedName);
+				dropNode->silent = true;
+				node = dropNode;
+				break;
+			}
+
+			default:
+				// No DDL drop node (e.g. character sets, which cannot exist in a user schema); nothing to do.
+				fb_assert(false);
+				break;
+		}
+
+		if (node)
+			node->execute(tdbb, dsqlScratch, transaction);
+	};
+
+	// Drop Created LTTs, triggers and package bodies.
+	// Stored objects cannot reference them.
+	for (const auto& item : items)
+	{
+		if (item.isLTT || item.type == obj_trigger)
+			dropObject(item);
+		else if (item.type == obj_package_header)
+		{
+			auto bodyItem = item;
+			bodyItem.type = obj_package_body;
+			dropObject(bodyItem);
+		}
+	}
+
+	// Drop functions, procedures, package headers, views and tables.
+	for (const auto& item : items)
+	{
+		if (!item.isLTT &&
+			(item.type == obj_udf ||
+			 item.type == obj_procedure ||
+			 item.type == obj_package_header ||
+			 item.type == obj_view ||
+			 item.type == obj_relation))
+		{
+			dropObject(item);
+		}
+	}
+
+	// Drop domains.
+	// This must be after tables, views, procedures, and functions, because drop domain check for
+	// dependencies in its execution (before DFW).
+	for (const auto& item : items)
+	{
+		if (item.type == obj_field)
+			dropObject(item);
+	}
+
+	// Drop generators, exceptions, collations.
+	// These are the last objects to be dropped, because they never have dependencies on other objects,
+	// and other objects can depend on them.
+	for (const auto& item : items)
+	{
+		if (item.type == obj_generator || item.type == obj_exception || item.type == obj_collation)
+			dropObject(item);
+	}
 }
 
 }	// namespace Jrd

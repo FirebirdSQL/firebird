@@ -2428,6 +2428,21 @@ db_rem_option($alterDatabaseNode)
 
 // CREATE TABLE
 
+// Helper rule to capture AS <query> for table creation with a regular trailing action.
+// A mid-rule action cannot use YYPOSNARG correctly.
+%type <createRelationNode> table_as_query_clause
+table_as_query_clause
+	: simple_table_name column_parens_opt AS select_expr with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $4;
+			node->querySource = makeParseStr(YYPOSNARG(4), YYPOSNARG(4));
+			node->withData = $5;
+			$$ = node;
+		}
+	;
+
 %type <createRelationNode> table_clause
 table_clause
 	: simple_table_name external_file
@@ -2438,6 +2453,17 @@ table_clause
 			{
 				$$ = $3;
 			}
+	| table_as_query_clause
+		{
+			$$ = $1;
+		}
+	;
+
+%type <boolVal> with_data_opt
+with_data_opt
+	: /* nothing */		{ $$ = true; }
+	| WITH DATA			{ $$ = true; }
+	| WITH NO DATA		{ $$ = false; }
 	;
 
 %type table_attributes(<relationNode>)
@@ -2477,6 +2503,15 @@ gtt_table_clause
 			{
 				$$ = $2;
 			}
+	| table_as_query_clause
+		{
+			$1->tempFlag = REL_temp_gtt;
+			$<createRelationNode>$ = $1;
+		}
+		gtt_subclauses_opt($2)
+		{
+			$$ = $2;
+		}
 	;
 
 %type gtt_subclauses_opt(<createRelationNode>)
@@ -2517,6 +2552,15 @@ ltt_table_clause
 			{
 				$$ = $2;
 			}
+	| table_as_query_clause
+		{
+			$1->tempFlag = REL_temp_ltt;
+			$<createRelationNode>$ = $1;
+		}
+		ltt_subclause_opt($2)
+		{
+			$$ = $2;
+		}
 	;
 
 %type <createRelationNode> packaged_table_clause
@@ -5456,10 +5500,11 @@ drop_clause
 			node->silentDrop = $3;
 			$$ = node;
 		}
-	| SCHEMA if_exists_opt symbol_schema_name
+	| SCHEMA if_exists_opt symbol_schema_name drop_behaviour
 		{
 			const auto node = newNode<DropSchemaNode>(*$3);
 			node->silent = $2;
+			node->cascade = $4;
 			$$ = node;
 		}
 	;

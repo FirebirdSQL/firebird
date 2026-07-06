@@ -170,6 +170,7 @@ inline constexpr ULONG ATT_replicating			= 0x200000L; // Replication is active
 inline constexpr ULONG ATT_resetting			= 0x400000L; // Session reset is in progress
 inline constexpr ULONG ATT_worker				= 0x800000L; // Worker attachment, managed by the engine
 inline constexpr ULONG ATT_gbak_restore_has_schema = 0x1000000L;
+inline constexpr ULONG ATT_schema_cascade_dropping = 0x2000000L; // DROP SCHEMA CASCADE dropping contained objects
 
 inline constexpr ULONG ATT_NO_CLEANUP			= (ATT_no_cleanup | ATT_notify_gc);
 
