@@ -2441,6 +2441,15 @@ table_as_query_clause
 			node->withData = $5;
 			$$ = node;
 		}
+	| simple_table_name column_parens_opt AS '(' select_expr ')' with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $5;
+			node->querySource = makeParseStr(YYPOSNARG(5), YYPOSNARG(5));
+			node->withData = $7;
+			$$ = node;
+		}
 	;
 
 %type <createRelationNode> table_clause

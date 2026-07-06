@@ -5,7 +5,7 @@ Tables may be created from a query result using the following syntax:
 ```sql
 CREATE [{GLOBAL | LOCAL} TEMPORARY] TABLE [IF NOT EXISTS] <table name>
   [ (<column name> [, <column name> ...]) ]
-  AS <query expression>
+  AS { (<query expression>) | <query expression> }
   [WITH [NO] DATA]
   [ON COMMIT {DELETE | PRESERVE} ROWS]
 ```
@@ -67,6 +67,12 @@ CREATE LOCAL TEMPORARY TABLE tx_work AS
   SELECT emp_no, salary
     FROM employee
   WITH NO DATA;
+
+CREATE TABLE high_salary AS
+  (WITH avg_salary AS (SELECT AVG(salary) AS avg_salary FROM employee)
+   SELECT e.emp_no, e.salary
+     FROM employee e, avg_salary a
+     WHERE e.salary > a.avg_salary);
 ```
 
 ## ISQL behavior
