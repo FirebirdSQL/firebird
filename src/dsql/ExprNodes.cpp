@@ -6504,6 +6504,11 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 			l = csb->csb_blr_reader.getWord();
 			q = csb->csb_blr_reader.getPos();
+
+			unsigned int offset = csb->csb_blr_reader.getOffset();
+			if (offset + l > csb->csb_blr_reader.getLength())
+				(Arg::Gds(isc_invalid_blr) << Arg::Num(offset)).raise();
+
 			dtype = CVT_get_numeric(q, l, &scale, (double*) p);
 			node->litDesc.dsc_dtype = dtype;
 
