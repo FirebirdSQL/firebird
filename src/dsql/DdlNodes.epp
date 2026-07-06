@@ -14785,7 +14785,10 @@ void DropIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 	fb_assert(idxId >= 0 && idxId < dbb->dbb_max_idx);
 
 	if (IDX_mark_index(tdbb, indexRelation, idxId))
-		indexRelation->eraseIndex(tdbb, idxId);
+	{
+		if (tdbb->tdbb_flags & TDBB_use_db_page_space)
+			indexRelation->eraseIndex(tdbb, idxId);
+	}
 }
 
 

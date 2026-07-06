@@ -1186,7 +1186,8 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 
 	Cleanup releaseWindow([&] ()
 	{
-		CCH_RELEASE(tdbb, window);
+		if (window->win_bdb)
+			CCH_RELEASE(tdbb, window);
 	});
 
 	// Get index descriptor.  If index doesn't exist, just leave.
