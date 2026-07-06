@@ -24,7 +24,7 @@ public:
 		if (att != nullptr)
 			return att;
 
-		att = prov.createDatabase(&status, dbPath.string().data(), 0, nullptr);
+		att = prov->createDatabase(&status, dbPath.string().data(), 0, nullptr);
 		BOOST_REQUIRE(att);
 
 		tra = att->startTransaction(&status, 0, nullptr);
@@ -35,11 +35,18 @@ public:
 		return att;
 	}
 
-	~CachedAttach()
+	void releaseAttachment()
 	{
 		att->release();
 		Jrd::TraceManager::getStorage()->shutdown();
 		removeDb();
+		prov->release();
+		prov = nullptr;
+	}
+
+	~CachedAttach()
+	{
+		fb_assert(prov == nullptr);
 	}
 
 	void removeDb()
@@ -48,7 +55,7 @@ public:
 			std::filesystem::remove(dbPath);
 	}
 
-	Jrd::JProvider prov{nullptr};
+	Firebird::AutoPlugin<Jrd::JProvider> prov = Jrd::JProvider::getInstance();
 	Firebird::FbLocalStatus status;
 
 
@@ -60,6 +67,19 @@ public:
 };
 static Firebird::GlobalPtr<CachedAttach, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storage;
 
+struct TestsCleanup {
+	// Setup: Run before ANY test starts
+    TestsCleanup()
+	{ }
+
+	// Teardown: Run when ALL tests are completely finished
+    ~TestsCleanup()
+	{
+		storage->releaseAttachment();
+    }
+};
+
+BOOST_TEST_GLOBAL_FIXTURE(TestsCleanup);
 
 TestContextHolder::TestContextHolder() :
 	m_tdbb(&storage->status, storage->getAttachment(), FB_FUNCTION),
@@ -72,10 +92,12 @@ TestContextHolder::TestContextHolder() :
 	m_tdbb->getRequest()->setGmtTimeStamp(ts);
 
 	tdbb = JRD_get_thread_data();
+	storage->getAttachment()->getHandle()->att_use_count++;
 }
 
 TestContextHolder::~TestContextHolder()
 {
 	m_tdbb->setRequest(nullptr);
 	m_tdbb->setTransaction(nullptr);
+	storage->getAttachment()->getHandle()->att_use_count--;
 }
