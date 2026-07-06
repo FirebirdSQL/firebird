@@ -2232,6 +2232,8 @@ string UnionSourceNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, clauses);
 	NODE_PRINT(printer, maps);
 	NODE_PRINT(printer, mapStream);
+	NODE_PRINT(printer, dsqlOrderBySelectList);
+	NODE_PRINT(printer, dsqlDistinctGroupingSets);
 
 	return "UnionSourceNode";
 }
@@ -2908,6 +2910,11 @@ string RseNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlWhere);
 	NODE_PRINT(printer, dsqlJoinUsing);
 	NODE_PRINT(printer, dsqlGroup);
+	NODE_PRINT(printer, dsqlGrouping);
+	NODE_PRINT(printer, dsqlGroupingSpec);
+	NODE_PRINT(printer, dsqlGroupingSelectList);
+	NODE_PRINT(printer, dsqlGroupingOrder);
+	NODE_PRINT(printer, dsqlVisibleSelectItems);
 	NODE_PRINT(printer, dsqlHaving);
 	NODE_PRINT(printer, dsqlOrder);
 	NODE_PRINT(printer, dsqlStreams);

@@ -1012,6 +1012,62 @@ public:
 };
 
 
+class GroupingNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_GROUPING>
+{
+public:
+	explicit GroupingNode(MemoryPool& pool, ValueListNode* aArgs = NULL,
+			bool aDsqlGroupingIdFunction = false)
+		: TypedNode<ValueExprNode, ExprNode::TYPE_GROUPING>(pool),
+		  args(aArgs),
+		  dsqlGroupingIdFunction(aDsqlGroupingIdFunction)
+	{
+		setDsqlDesc();
+	}
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		ValueExprNode::getChildren(holder, dsql);
+		holder.add(args);
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	ValueExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
+	void setParameterName(dsql_par* parameter) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	bool sameAs(const ExprNode* other, bool ignoreStreams) const override;
+	ValueExprNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+	dsc* execute(thread_db* tdbb, Request* request) const override;
+
+public:
+	const char* getDsqlFunctionName() const
+	{
+		return dsqlGroupingIdFunction ? "GROUPING_ID" : "GROUPING";
+	}
+
+	bool returnsInt64() const
+	{
+		return args && args->items.getCount() > 1;
+	}
+
+	void setDsqlDesc()
+	{
+		if (returnsInt64())
+			dsqlDesc.makeInt64(0);
+		else
+			dsqlDesc.makeLong(0);
+	}
+
+public:
+	NestConst<ValueListNode> args;
+	bool dsqlGroupingIdFunction;
+};
+
+
 class LiteralNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_LITERAL>
 {
 public:
@@ -1074,6 +1130,7 @@ public:
 		: TypedNode<ValueExprNode, ExprNode::TYPE_ALIAS>(pool),
 		  name(aName),
 		  value(aValue),
+		  dsqlGroupingExpression(NULL),
 		  implicitJoin(NULL)
 	{
 	}
@@ -1116,6 +1173,7 @@ public:
 public:
 	const MetaName name;
 	NestConst<ValueExprNode> value;
+	NestConst<ValueExprNode> dsqlGroupingExpression;
 	NestConst<ImplicitJoin> implicitJoin;
 };
 

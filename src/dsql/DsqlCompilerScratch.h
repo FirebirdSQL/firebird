@@ -42,11 +42,13 @@ class LocalDeclarationsNode;
 class DeclareCursorNode;
 class DeclareLocalTableNode;
 class DeclareVariableNode;
+class GroupingSpec;
 class ParameterClause;
 class RseNode;
 class SelectExprNode;
 class StmtNode;
 class TypeClause;
+class ValueExprNode;
 class VariableNode;
 class WithClause;
 
@@ -286,6 +288,7 @@ public:
 
 	DeclareSubProcNode* getSubProcedure(const MetaName& name);
 	void putSubProcedure(DeclareSubProcNode* subProc, bool replace = false);
+	ValueExprNode* makeGroupingValue(ValueExprNode* node);
 
 private:
 	SelectExprNode* pass1RecursiveCte(SelectExprNode* input);
@@ -328,6 +331,11 @@ public:
 	USHORT inGroupByClause = 0;				// processing "group by clause"
 	USHORT inHavingClause = 0;				// processing "having clause"
 	USHORT inOrderByClause = 0;				// processing "order by clause"
+	USHORT inAggregateFunction = 0;			// processing aggregate function arguments
+	GroupingSpec* activeGroupingSpec = nullptr;	// grouping set being lowered
+	const Firebird::SortedArray<unsigned>* activeGroupingSet = nullptr;
+	ValueListNode* activeGroupingSelectList = nullptr;
+	USHORT activeGroupingScopeLevel = 0;
 	USHORT errorHandlers = 0;				// count of active error handlers
 	USHORT clientDialect = 0;				// dialect passed into the API call
 	USHORT inOuterJoin = 0;					// processing inside outer-join part

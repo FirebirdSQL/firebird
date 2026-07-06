@@ -16,6 +16,7 @@
  * All Rights Reserved.
  * Contributor(s): ______________________________________.
  * Adriano dos Santos Fernandes - refactored from pass1.cpp, gen.cpp, cmp.cpp, par.cpp and evl.cpp
+ * Karol Bieniaszewski - grouping sets
  */
 
 #include "firebird.h"
@@ -6168,6 +6169,9 @@ string FieldNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* FieldNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	if (ValueExprNode* value = dsqlScratch->makeGroupingValue(this))
+		return value;
+
 	if (dsqlContext)
 	{
 		// AB: This is an already processed node. This could be done in expand_select_list.
@@ -6723,6 +6727,17 @@ bool FieldNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* othe
 
 	const FieldNode* o = nodeAs<FieldNode>(other);
 	fb_assert(o);
+
+	if (!dsqlField && !dsqlContext && !o->dsqlField && !o->dsqlContext)
+	{
+		if (dsqlQualifier != o->dsqlQualifier || dsqlName != o->dsqlName)
+			return false;
+
+		if (dsqlIndices || o->dsqlIndices)
+			return PASS1_node_match(dsqlScratch, dsqlIndices, o->dsqlIndices, ignoreMapCast);
+
+		return true;
+	}
 
 	if (dsqlField != o->dsqlField || dsqlContext != o->dsqlContext)
 		return false;
@@ -7664,6 +7679,158 @@ ValueExprNode* InternalInfoNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 static RegisterNode<LiteralNode> regLiteralNode({blr_literal});
 
+
+string GroupingNode::internalPrint(NodePrinter& printer) const
+{
+	ValueExprNode::internalPrint(printer);
+
+	NODE_PRINT(printer, args);
+	NODE_PRINT(printer, dsqlGroupingIdFunction);
+
+	return "GroupingNode";
+}
+
+ValueExprNode* GroupingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+{
+	const char* functionName = getDsqlFunctionName();
+
+	if (dsqlScratch->inWhereClause)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) <<
+				  Arg::Str(string(functionName) + " is not allowed in the WHERE clause"));
+	}
+
+	if (dsqlScratch->inGroupByClause)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) <<
+				  Arg::Str(string(functionName) + " is not allowed in the GROUP BY clause"));
+	}
+
+	if (dsqlScratch->inAggregateFunction)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) <<
+				  Arg::Str(string(functionName) + " is not allowed in aggregate function arguments"));
+	}
+
+	if (ValueExprNode* value = dsqlScratch->makeGroupingValue(this))
+		return value;
+
+	GroupingNode* node = FB_NEW_POOL(dsqlScratch->getPool()) GroupingNode(dsqlScratch->getPool(),
+		doDsqlPass(dsqlScratch, args), dsqlGroupingIdFunction);
+	node->setDsqlDesc();
+	return node;
+}
+
+void GroupingNode::setParameterName(dsql_par* parameter) const
+{
+	parameter->par_name = parameter->par_alias = getDsqlFunctionName();
+}
+
+void GroupingNode::genBlr(DsqlCompilerScratch* /*dsqlScratch*/)
+{
+	ERRD_post(Arg::Gds(isc_wish_list) << Arg::Gds(isc_random) <<
+			  Arg::Str(string(getDsqlFunctionName()) + " expression was not lowered"));
+}
+
+void GroupingNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
+{
+	if (returnsInt64())
+		desc->makeInt64(0);
+	else
+		desc->makeLong(0);
+}
+
+void GroupingNode::getDesc(thread_db* /*tdbb*/, CompilerScratch* /*csb*/, dsc* desc)
+{
+	if (returnsInt64())
+		desc->makeInt64(0);
+	else
+		desc->makeLong(0);
+}
+
+ValueExprNode* GroupingNode::copy(thread_db* tdbb, NodeCopier& copier) const
+{
+	GroupingNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) GroupingNode(
+		*tdbb->getDefaultPool(), NULL, dsqlGroupingIdFunction);
+	node->args = copier.copy(tdbb, args);
+	node->setDsqlDesc();
+	return node;
+}
+
+bool GroupingNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other,
+	bool ignoreMapCast) const
+{
+	if (!ExprNode::dsqlMatch(dsqlScratch, other, ignoreMapCast))
+		return false;
+
+	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
+	fb_assert(otherNode);
+
+	if (!args || !otherNode->args)
+		return !args && !otherNode->args;
+
+	if (args->items.getCount() != otherNode->args->items.getCount())
+		return false;
+
+	for (FB_SIZE_T i = 0; i < args->items.getCount(); ++i)
+	{
+		const ValueExprNode* left = args->items[i];
+		const ValueExprNode* right = otherNode->args->items[i];
+
+		if (!PASS1_node_match(dsqlScratch, left, right, ignoreMapCast))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool GroupingNode::sameAs(const ExprNode* other, bool ignoreStreams) const
+{
+	if (!ExprNode::sameAs(other, ignoreStreams))
+		return false;
+
+	const GroupingNode* otherNode = nodeAs<GroupingNode>(other);
+	fb_assert(otherNode);
+
+	if (!args || !otherNode->args)
+		return !args && !otherNode->args;
+
+	if (args->items.getCount() != otherNode->args->items.getCount())
+		return false;
+
+	for (FB_SIZE_T i = 0; i < args->items.getCount(); ++i)
+	{
+		const ValueExprNode* left = args->items[i];
+		const ValueExprNode* right = otherNode->args->items[i];
+
+		if (!left || !right || !left->sameAs(right, ignoreStreams))
+			return false;
+	}
+
+	return true;
+}
+
+ValueExprNode* GroupingNode::pass2(thread_db* tdbb, CompilerScratch* csb)
+{
+	ValueExprNode::pass2(tdbb, csb);
+	return this;
+}
+
+dsc* GroupingNode::execute(thread_db* /*tdbb*/, Request* /*request*/) const
+{
+	fb_assert(false);
+	return NULL;
+}
+
+
 // Parse a literal value.
 DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR /*blrOp*/)
 {
@@ -8530,6 +8697,7 @@ string DsqlAliasNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, value);
+	NODE_PRINT(printer, dsqlGroupingExpression);
 	NODE_PRINT(printer, implicitJoin);
 
 	return "DsqlAliasNode";
@@ -8539,6 +8707,7 @@ ValueExprNode* DsqlAliasNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	DsqlAliasNode* node = FB_NEW_POOL(dsqlScratch->getPool()) DsqlAliasNode(dsqlScratch->getPool(), name,
 		doDsqlPass(dsqlScratch, value));
+	node->dsqlGroupingExpression = dsqlGroupingExpression;
 	DsqlDescMaker::fromNode(dsqlScratch, node->value);
 	return node;
 }

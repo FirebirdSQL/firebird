@@ -123,6 +123,9 @@ AggNode* AggNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				  Arg::Gds(isc_dsql_agg_ref_err));
 	}
 
+	AutoSetRestore<USHORT> autoInAggregateFunction(&dsqlScratch->inAggregateFunction,
+		static_cast<USHORT>(dsqlScratch->inAggregateFunction + 1));
+
 	return dsqlCopy(dsqlScratch);
 }
 

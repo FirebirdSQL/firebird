@@ -134,6 +134,8 @@
  * 2004.01.16 Vlad Horsun: added support for default parameters and
  *   EXECUTE BLOCK statement
  *
+ * 2026.05.17 Karol Bieniaszewski: added grouping sets
+ *
  * Adriano dos Santos Fernandes
  *
  */
@@ -180,6 +182,9 @@ using namespace Firebird;
 
 
 static ValueListNode* pass1_group_by_list(DsqlCompilerScratch*, ValueListNode*, ValueListNode*);
+static GroupingSpec* pass1_grouping_spec_raw(DsqlCompilerScratch*, GroupingClause*, ValueListNode*);
+static RseNode* pass1_lower_grouping_sets(DsqlCompilerScratch*, RseNode*, ValueListNode*, RowsClause*,
+	bool, bool, USHORT);
 static ValueExprNode* pass1_make_derived_field(thread_db*, DsqlCompilerScratch*, ValueExprNode*);
 static RseNode* pass1_rse(DsqlCompilerScratch*, RecordSourceNode*, ValueListNode*, RowsClause*, bool, bool, USHORT);
 static RseNode* pass1_rse_impl(DsqlCompilerScratch*, RecordSourceNode*, ValueListNode*, RowsClause*, bool, bool, USHORT);
@@ -849,6 +854,13 @@ void PASS1_field_unknown(const TEXT* qualifier_name, const TEXT* field_name,
 
 
 
+namespace
+{
+	bool pass1_raw_field_matches_resolved_field(DsqlCompilerScratch* dsqlScratch,
+		const FieldNode* rawField, const FieldNode* resolvedField);
+}
+
+
 /**
 
 	PASS1_node_match
@@ -961,6 +973,15 @@ bool PASS1_node_match(DsqlCompilerScratch* dsqlScratch, const ExprNode* node1, c
 
 		if (derivedField2)
 			return PASS1_node_match(dsqlScratch, node1, derivedField2->value, ignoreMapCast);
+	}
+
+	if (ignoreMapCast &&
+		(pass1_raw_field_matches_resolved_field(dsqlScratch,
+				nodeAs<FieldNode>(node1), nodeAs<FieldNode>(node2)) ||
+		 pass1_raw_field_matches_resolved_field(dsqlScratch,
+			 nodeAs<FieldNode>(node2), nodeAs<FieldNode>(node1))))
+	{
+		return true;
 	}
 
 	return node1->getType() == node2->getType() && node1->dsqlMatch(dsqlScratch, node2, ignoreMapCast);
@@ -1604,6 +1625,2283 @@ static ValueListNode* pass1_group_by_list(DsqlCompilerScratch* dsqlScratch, Valu
 }
 
 
+namespace
+{
+	constexpr unsigned MAX_GROUPING_SETS = 4096;
+
+	class ActiveGroupingContextDisabler
+	{
+	public:
+		explicit ActiveGroupingContextDisabler(DsqlCompilerScratch* dsqlScratch)
+			: autoGroupingSpec(&dsqlScratch->activeGroupingSpec, NULL),
+			  autoGroupingSet(&dsqlScratch->activeGroupingSet, NULL),
+			  autoGroupingSelectList(&dsqlScratch->activeGroupingSelectList, NULL),
+			  autoGroupingScopeLevel(&dsqlScratch->activeGroupingScopeLevel, 0)
+		{
+		}
+
+	private:
+		AutoSetRestore<GroupingSpec*> autoGroupingSpec;
+		AutoSetRestore<const SortedArray<unsigned>*> autoGroupingSet;
+		AutoSetRestore<ValueListNode*> autoGroupingSelectList;
+		AutoSetRestore<USHORT> autoGroupingScopeLevel;
+	};
+
+	ValueExprNode* pass1_effective_grouping_item(ValueExprNode* node)
+	{
+		if (auto aliasNode = nodeAs<DsqlAliasNode>(node))
+			return aliasNode->value;
+
+		return node;
+	}
+
+	bool pass1_select_list_has_asterisk(ValueListNode* selectList)
+	{
+		if (!selectList)
+			return true;
+
+		for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+		{
+			if (auto fieldNode = nodeAs<FieldNode>(*item))
+			{
+				if (!fieldNode->dsqlName.hasData())
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	void pass1_post_ambiguous_select_list_name(const MetaName& name)
+	{
+		TEXT buffer1[] = "an item";
+		TEXT buffer2[] = "an item in the select list with name";
+
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				  Arg::Gds(isc_dsql_ambiguous_field_name) << Arg::Str(buffer1) <<
+															 Arg::Str(buffer2) <<
+				  Arg::Gds(isc_random) << name);
+	}
+
+	bool pass1_raw_qualifier_matches_context(const QualifiedName& qualifier, const dsql_ctx* context);
+
+	ValueExprNode* pass1_resolve_raw_grouping_item(ValueExprNode* node, ValueListNode* selectList,
+		bool resolvePositions = true)
+	{
+		if (!node || !selectList)
+			return node;
+
+		if (auto fieldNode = nodeAs<FieldNode>(node))
+		{
+			if (fieldNode->dsqlName.hasData())
+			{
+				ValueExprNode* found = NULL;
+
+				for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+				{
+					ValueExprNode* selectItem = *item;
+					bool matched = false;
+
+					if (fieldNode->dsqlQualifier.object.isEmpty())
+					{
+						if (auto aliasNode = nodeAs<DsqlAliasNode>(selectItem))
+						{
+							if (aliasNode->name == fieldNode->dsqlName)
+							{
+								selectItem = aliasNode->value;
+								matched = true;
+							}
+						}
+						else if (auto selectField = nodeAs<FieldNode>(selectItem))
+						{
+							matched = selectField->dsqlQualifier.object.isEmpty() &&
+								selectField->dsqlName == fieldNode->dsqlName;
+						}
+					}
+
+					if (!matched)
+					{
+						if (auto derivedField = nodeAs<DerivedFieldNode>(selectItem))
+						{
+							matched = derivedField->name == fieldNode->dsqlName &&
+								pass1_raw_qualifier_matches_context(fieldNode->dsqlQualifier,
+									derivedField->context);
+						}
+					}
+
+					if (matched)
+					{
+						if (found)
+							pass1_post_ambiguous_select_list_name(fieldNode->dsqlName);
+
+						found = selectItem;
+					}
+				}
+
+				if (found)
+					return found;
+			}
+		}
+		else if (resolvePositions)
+		{
+			if (auto literal = nodeAs<LiteralNode>(node))
+			{
+				if (literal->litDesc.dsc_dtype == dtype_long)
+				{
+					const ULONG position = literal->getSlong();
+
+					if (position < 1 || position > (ULONG) selectList->items.getCount())
+					{
+						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								  Arg::Gds(isc_dsql_column_pos_err) << Arg::Str("GROUP BY"));
+					}
+
+					return pass1_effective_grouping_item(selectList->items[position - 1]);
+				}
+			}
+		}
+
+		return node;
+	}
+
+	void tooManyGroupingSets()
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) << Arg::Str("Too many grouping sets"));
+	}
+
+	bool groupingSetMatches(const GroupingSpec::Set& left, const GroupingSpec::Set& right)
+	{
+		if (left.dimensions.getCount() != right.dimensions.getCount())
+			return false;
+
+		auto l = left.dimensions.begin();
+
+		for (auto r = right.dimensions.begin(); r != right.dimensions.end(); ++r, ++l)
+		{
+			if (*l != *r)
+				return false;
+		}
+
+		return true;
+	}
+
+	void mergeGroupingSet(GroupingSpec::Set& target, const GroupingSpec::Set& source)
+	{
+		for (auto dimension = source.dimensions.begin(); dimension != source.dimensions.end(); ++dimension)
+			target.dimensions.addUniq(*dimension);
+	}
+
+	GroupingSpec::Set& addScratchGroupingSet(ObjectsArray<GroupingSpec::Set>& sets,
+		const GroupingSpec::Set& set)
+	{
+		if (sets.getCount() >= MAX_GROUPING_SETS)
+			tooManyGroupingSets();
+
+		const auto pos = sets.add(set);
+		return sets[pos];
+	}
+
+	class GroupingSpecBuilder
+	{
+	public:
+		GroupingSpecBuilder(DsqlCompilerScratch* aDsqlScratch, MemoryPool& aPool,
+				ValueListNode* aSelectList)
+			: dsqlScratch(aDsqlScratch),
+			  pool(aPool),
+			  selectList(aSelectList),
+			  resolvePositions(!pass1_select_list_has_asterisk(aSelectList)),
+			  spec(NULL)
+		{
+		}
+
+		GroupingSpec* build(GroupingClause* clause)
+		{
+			fb_assert(clause && clause->hasAdvancedGrouping());
+
+			spec = FB_NEW_POOL(pool) GroupingSpec(pool);
+			spec->distinct = clause->distinct;
+
+			ObjectsArray<GroupingSpec::Set> sets(pool);
+			expandClause(clause, sets);
+
+			for (const auto& set : sets)
+				addResultSet(set);
+
+			return spec;
+		}
+
+	private:
+		unsigned addDimension(ValueExprNode* expr)
+		{
+			for (const auto& dimension : spec->dimensions)
+			{
+				if (PASS1_node_match(dsqlScratch, dimension.expr, expr, true))
+					return dimension.index;
+			}
+
+			if (spec->dimensions.getCount() >= MAX_SORT_ITEMS)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
+						  Arg::Gds(isc_dsql_max_group_items));
+			}
+
+			auto& dimension = spec->dimensions.add();
+			dimension.index = spec->dimensions.getCount() - 1;
+			dimension.expr = expr;
+
+			return dimension.index;
+		}
+
+		void addItems(GroupingSpec::Set& set, ValueListNode* items)
+		{
+			if (!items)
+				return;
+
+			for (auto item = items->items.begin(); item != items->items.end(); ++item)
+				set.dimensions.addUniq(addDimension(
+					pass1_resolve_raw_grouping_item(*item, selectList, resolvePositions)));
+		}
+
+		void addResultSet(const GroupingSpec::Set& set)
+		{
+			if (spec->distinct)
+			{
+				for (const auto& existingSet : spec->sets)
+				{
+					if (groupingSetMatches(existingSet, set))
+						return;
+				}
+			}
+
+			if (spec->sets.getCount() >= MAX_GROUPING_SETS)
+				tooManyGroupingSets();
+
+			const auto pos = spec->sets.add(set);
+			spec->sets[pos].ordinal = pos;
+		}
+
+		void expandClause(GroupingClause* clause, ObjectsArray<GroupingSpec::Set>& output)
+		{
+			GroupingSpec::Set empty(pool);
+			addScratchGroupingSet(output, empty);
+
+			for (auto& element : clause->elements)
+			{
+				ObjectsArray<GroupingSpec::Set> elementSets(pool);
+				expandElement(element, elementSets);
+
+				ObjectsArray<GroupingSpec::Set> combined(pool);
+
+				for (const auto& currentSet : output)
+				{
+					for (const auto& elementSet : elementSets)
+					{
+						GroupingSpec::Set merged(pool, currentSet);
+						mergeGroupingSet(merged, elementSet);
+						addScratchGroupingSet(combined, merged);
+					}
+				}
+
+				output.clear();
+
+				for (const auto& set : combined)
+					addScratchGroupingSet(output, set);
+			}
+		}
+
+		void expandElement(GroupingClause::Element& element,
+			ObjectsArray<GroupingSpec::Set>& output)
+		{
+			switch (element.type)
+			{
+				case GroupingClause::Element::Type::SIMPLE:
+				{
+					GroupingSpec::Set set(pool);
+					addItems(set, element.items);
+					addScratchGroupingSet(output, set);
+					break;
+				}
+
+				case GroupingClause::Element::Type::EMPTY:
+				{
+					GroupingSpec::Set set(pool);
+					addScratchGroupingSet(output, set);
+					break;
+				}
+
+				case GroupingClause::Element::Type::ROLLUP:
+					expandRollup(element.groupingSets, output);
+					break;
+
+				case GroupingClause::Element::Type::CUBE:
+					expandCube(element.groupingSets, output);
+					break;
+
+				case GroupingClause::Element::Type::GROUPING_SETS:
+					expandGroupingSets(element.groupingSets, output);
+					break;
+			}
+		}
+
+		void expandGroupingSets(GroupingClause* clause, ObjectsArray<GroupingSpec::Set>& output)
+		{
+			fb_assert(clause);
+
+			for (auto& element : clause->elements)
+			{
+				ObjectsArray<GroupingSpec::Set> elementSets(pool);
+				expandElement(element, elementSets);
+
+				for (const auto& set : elementSets)
+					addScratchGroupingSet(output, set);
+			}
+		}
+
+		void expandUnitList(GroupingClause* clause, ObjectsArray<GroupingSpec::Set>& units)
+		{
+			fb_assert(clause);
+
+			for (auto& element : clause->elements)
+			{
+				ObjectsArray<GroupingSpec::Set> elementSets(pool);
+				expandElement(element, elementSets);
+
+				for (const auto& set : elementSets)
+					addScratchGroupingSet(units, set);
+			}
+		}
+
+		void expandRollup(GroupingClause* clause, ObjectsArray<GroupingSpec::Set>& output)
+		{
+			ObjectsArray<GroupingSpec::Set> units(pool);
+			expandUnitList(clause, units);
+
+			for (FB_SIZE_T count = units.getCount();; --count)
+			{
+				GroupingSpec::Set set(pool);
+
+				for (FB_SIZE_T i = 0; i < count; ++i)
+					mergeGroupingSet(set, units[i]);
+
+				addScratchGroupingSet(output, set);
+
+				if (count == 0)
+					break;
+			}
+		}
+
+		void expandCube(GroupingClause* clause, ObjectsArray<GroupingSpec::Set>& output)
+		{
+			ObjectsArray<GroupingSpec::Set> units(pool);
+			expandUnitList(clause, units);
+
+			GroupingSpec::Set empty(pool);
+			expandCube(units, 0, empty, output);
+		}
+
+		void expandCube(const ObjectsArray<GroupingSpec::Set>& units, FB_SIZE_T index,
+			const GroupingSpec::Set& current, ObjectsArray<GroupingSpec::Set>& output)
+		{
+			if (index == units.getCount())
+			{
+				addScratchGroupingSet(output, current);
+				return;
+			}
+
+			GroupingSpec::Set withUnit(pool, current);
+			mergeGroupingSet(withUnit, units[index]);
+			expandCube(units, index + 1, withUnit, output);
+			expandCube(units, index + 1, current, output);
+		}
+
+	private:
+		DsqlCompilerScratch* dsqlScratch;
+		MemoryPool& pool;
+		ValueListNode* selectList;
+		bool resolvePositions;
+		GroupingSpec* spec;
+	};
+}
+
+
+static GroupingSpec* pass1_grouping_spec_raw(DsqlCompilerScratch* dsqlScratch,
+	GroupingClause* groupingClause, ValueListNode* selectList)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	GroupingSpecBuilder builder(dsqlScratch, pool, selectList);
+	return builder.build(groupingClause);
+}
+
+
+namespace
+{
+	constexpr FB_SIZE_T MAX_GROUPING_ARGS = 63;
+
+	bool pass1_find_grouping_dimension_match(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
+		ValueListNode* selectList, ValueExprNode* node, const SortedArray<unsigned>* set,
+		unsigned& index, bool& present, bool resolveDsql, bool resolveNodePosition,
+		bool resolveDimensionPosition);
+
+	bool pass1_find_raw_grouping_dimension(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
+		ValueListNode* selectList, ValueExprNode* node, unsigned& index, bool resolveDsql = true);
+
+	ValueExprNode* pass1_make_grouping_function_value(DsqlCompilerScratch* dsqlScratch,
+		GroupingSpec* spec, const SortedArray<unsigned>* groupingSet, ValueListNode* selectList,
+		GroupingNode* groupingNode, bool resolveDsql);
+
+	void postGroupingValidationError(const char* message)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) << Arg::Str(message));
+	}
+
+	void postGroupingValidationError(const string& message)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_command_err) <<
+				  Arg::Gds(isc_random) << Arg::Str(message));
+	}
+
+	class GroupingExpressionValidator
+	{
+	public:
+		GroupingExpressionValidator(DsqlCompilerScratch* aDsqlScratch, GroupingSpec* aSpec,
+				const SortedArray<unsigned>* aGroupingSet, ValueListNode* aSelectList,
+				const char* aMissingContextMessage)
+			: dsqlScratch(aDsqlScratch),
+			  spec(aSpec),
+			  groupingSet(aGroupingSet),
+			  selectList(aSelectList),
+			  missingContextMessage(aMissingContextMessage)
+		{
+		}
+
+		void visit(ExprNode* node)
+		{
+			visit(&node);
+		}
+
+	private:
+		void visit(ExprNode** nodePtr)
+		{
+			if (!nodePtr || !*nodePtr)
+				return;
+
+			ExprNode* node = *nodePtr;
+
+			if (GroupingNode* groupingNode = nodeAs<GroupingNode>(node))
+			{
+				validateGrouping(groupingNode);
+
+				if (groupingSet)
+				{
+					*nodePtr = pass1_make_grouping_function_value(dsqlScratch, spec,
+						groupingSet, selectList, groupingNode, true);
+					return;
+				}
+			}
+
+			if (nodeIs<SubQueryNode>(node))
+				return;
+
+			NodeRefsHolder holder(dsqlScratch->getPool());
+			node->getChildren(holder, true);
+
+			for (auto child : holder.refs)
+				visit(child);
+		}
+
+		void validateGrouping(GroupingNode* groupingNode)
+		{
+			const char* functionName = groupingNode->getDsqlFunctionName();
+
+			if (!spec)
+			{
+				postGroupingValidationError(missingContextMessage);
+				return;
+			}
+
+			if (!groupingNode->args || groupingNode->args->items.isEmpty())
+				postGroupingValidationError(string(functionName) +
+					" requires at least one argument");
+
+			if (groupingNode->args->items.getCount() > MAX_GROUPING_ARGS)
+				postGroupingValidationError(string(functionName) +
+					" supports at most 63 arguments");
+
+			for (auto arg = groupingNode->args->items.begin();
+				 arg != groupingNode->args->items.end();
+				 ++arg)
+			{
+				unsigned dimension = 0;
+
+				if (!pass1_find_raw_grouping_dimension(dsqlScratch, spec, selectList, *arg,
+						dimension))
+				{
+					postGroupingValidationError(string(functionName) +
+						" argument must match a grouping expression");
+				}
+			}
+		}
+
+	private:
+		DsqlCompilerScratch* dsqlScratch;
+		GroupingSpec* spec;
+		const SortedArray<unsigned>* groupingSet;
+		ValueListNode* selectList;
+		const char* missingContextMessage;
+	};
+}
+
+
+static void pass1_validate_grouping_expressions(DsqlCompilerScratch* dsqlScratch,
+	GroupingSpec* groupingSpec, const SortedArray<unsigned>* groupingSet, ValueListNode* selectList,
+	ExprNode* node, const char* missingContextMessage)
+{
+	GroupingExpressionValidator(dsqlScratch, groupingSpec, groupingSet, selectList,
+		missingContextMessage).visit(node);
+}
+
+
+namespace
+{
+	bool pass1_grouping_set_contains(const GroupingSpec::Set& set, unsigned dimension)
+	{
+		return set.dimensions.exist(dimension);
+	}
+
+	bool pass1_grouping_set_contains(const SortedArray<unsigned>& set, unsigned dimension)
+	{
+		return set.exist(dimension);
+	}
+
+	void pass1_copy_desc_to_field(dsql_fld* field, const dsc& desc)
+	{
+		field->dtype = desc.dsc_dtype;
+		field->scale = desc.dsc_scale;
+		field->subType = desc.dsc_sub_type;
+		field->length = desc.dsc_length;
+		field->flags = FLD_nullable;
+
+		if (desc.isText() || desc.isBlob())
+		{
+			field->textType = desc.getTextType();
+			field->charSetId = desc.getCharSet();
+			field->collationId = desc.getCollation();
+		}
+	}
+
+	ValueExprNode* pass1_make_typed_null(const dsc& desc)
+	{
+		thread_db* tdbb = JRD_get_thread_data();
+		MemoryPool& pool = *tdbb->getDefaultPool();
+
+		CastNode* castNode = FB_NEW_POOL(pool) CastNode(pool);
+		castNode->source = NullNode::instance();
+		castNode->dsqlField = FB_NEW_POOL(pool) dsql_fld(pool);
+		pass1_copy_desc_to_field(castNode->dsqlField, desc);
+
+		dsc nullDesc = desc;
+		nullDesc.setNull();
+		castNode->castDesc = nullDesc;
+		castNode->setDsqlDesc(nullDesc);
+
+		return castNode;
+	}
+
+	bool pass1_raw_qualifier_matches_context(const QualifiedName& qualifier, const dsql_ctx* context)
+	{
+		if (qualifier.object.isEmpty())
+			return true;
+
+		if (!context)
+			return false;
+
+		if (context->ctx_internal_alias.object.hasData())
+			return PASS1_compare_alias(context->ctx_internal_alias, qualifier);
+
+		if (context->ctx_relation)
+			return PASS1_compare_alias(context->ctx_relation->rel_name, qualifier);
+
+		if (context->ctx_procedure)
+			return PASS1_compare_alias(context->ctx_procedure->prc_name, qualifier);
+
+		if (context->ctx_table_value_fun)
+		{
+			QualifiedName functionName;
+			functionName.object = context->ctx_table_value_fun->funName;
+			return PASS1_compare_alias(functionName, qualifier);
+		}
+
+		return context->ctx_alias.hasData() && PASS1_compare_alias(context->ctx_alias[0], qualifier);
+	}
+
+	bool pass1_raw_field_matches_resolved_field(DsqlCompilerScratch* dsqlScratch,
+		const FieldNode* rawField, const FieldNode* resolvedField)
+	{
+		if (!rawField || rawField->dsqlField || rawField->dsqlContext ||
+			!resolvedField || !resolvedField->dsqlField ||
+			!rawField->dsqlName.hasData() || rawField->dsqlName != resolvedField->dsqlField->fld_name)
+		{
+			return false;
+		}
+
+		if (!pass1_raw_qualifier_matches_context(rawField->dsqlQualifier, resolvedField->dsqlContext))
+			return false;
+
+		if (rawField->dsqlIndices || resolvedField->dsqlIndices)
+		{
+			return rawField->dsqlIndices && resolvedField->dsqlIndices &&
+				PASS1_node_match(dsqlScratch, rawField->dsqlIndices,
+					resolvedField->dsqlIndices, true);
+		}
+
+		return true;
+	}
+
+	ValueExprNode* pass1_resolve_grouping_dimension(GroupingSpec* spec, ValueListNode* selectList,
+		unsigned index, bool resolvePositions = true)
+	{
+		return pass1_resolve_raw_grouping_item(
+			pass1_effective_grouping_item(spec->dimensions[index].expr), selectList,
+			resolvePositions);
+	}
+
+	ValueExprNode* pass1_dsql_pass_grouping_match_item(DsqlCompilerScratch* dsqlScratch,
+		ValueExprNode* node)
+	{
+		ActiveGroupingContextDisabler disableGrouping(dsqlScratch);
+		NestConst<ValueExprNode> nestNode = node;
+		return Node::doDsqlPass(dsqlScratch, nestNode, false);
+	}
+
+	bool pass1_dsql_grouping_items_match(DsqlCompilerScratch* dsqlScratch,
+		ValueExprNode* left, ValueExprNode* right)
+	{
+		ValueExprNode* dsqlLeft = pass1_dsql_pass_grouping_match_item(dsqlScratch, left);
+		ValueExprNode* dsqlRight = pass1_dsql_pass_grouping_match_item(dsqlScratch, right);
+
+		return PASS1_node_match(dsqlScratch, dsqlLeft, dsqlRight, true);
+	}
+
+	bool pass1_grouping_dimension_matches(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
+		ValueListNode* selectList, const GroupingSpec::Dimension& dimension,
+		ValueExprNode* resolvedNode, bool resolveDsql, bool resolveDimensionPosition)
+	{
+		ValueExprNode* dimensionExpr = pass1_resolve_grouping_dimension(spec, selectList,
+			dimension.index, resolveDimensionPosition);
+
+		if (PASS1_node_match(dsqlScratch, dimensionExpr, resolvedNode, true))
+			return true;
+
+		if (pass1_raw_field_matches_resolved_field(dsqlScratch, nodeAs<FieldNode>(dimensionExpr),
+				nodeAs<FieldNode>(resolvedNode)))
+		{
+			return true;
+		}
+
+		return resolveDsql &&
+			pass1_dsql_grouping_items_match(dsqlScratch, dimensionExpr, resolvedNode);
+	}
+
+	bool pass1_find_grouping_dimension_match(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
+		ValueListNode* selectList, ValueExprNode* node, const SortedArray<unsigned>* set,
+		unsigned& index, bool& present, bool resolveDsql, bool resolveNodePosition,
+		bool resolveDimensionPosition)
+	{
+		ValueExprNode* resolvedNode = pass1_resolve_raw_grouping_item(
+			pass1_effective_grouping_item(node), selectList, resolveNodePosition);
+
+		bool found = false;
+		present = false;
+
+		for (auto& dimension : spec->dimensions)
+		{
+			if (pass1_grouping_dimension_matches(dsqlScratch, spec, selectList, dimension,
+					resolvedNode, resolveDsql, resolveDimensionPosition))
+			{
+				if (!found)
+				{
+					index = dimension.index;
+					found = true;
+				}
+
+				if (set && pass1_grouping_set_contains(*set, dimension.index))
+				{
+					index = dimension.index;
+					present = true;
+				}
+			}
+		}
+
+		return found;
+	}
+
+	bool pass1_find_raw_grouping_dimension(DsqlCompilerScratch* dsqlScratch, GroupingSpec* spec,
+		ValueListNode* selectList, ValueExprNode* node, unsigned& index, bool resolveDsql)
+	{
+		bool present = false;
+
+		return pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList, node, NULL,
+			index, present, resolveDsql, true, true);
+	}
+
+	ValueExprNode* pass1_make_grouping_function_value(DsqlCompilerScratch* dsqlScratch,
+		GroupingSpec* spec, const SortedArray<unsigned>* groupingSet, ValueListNode* selectList,
+		GroupingNode* groupingNode, bool resolveDsql)
+	{
+		fb_assert(spec);
+		fb_assert(groupingSet);
+
+		const char* functionName = groupingNode->getDsqlFunctionName();
+
+		if (!groupingNode->args || groupingNode->args->items.isEmpty())
+			postGroupingValidationError(string(functionName) +
+				" requires at least one argument");
+
+		if (groupingNode->args->items.getCount() > MAX_GROUPING_ARGS)
+			postGroupingValidationError(string(functionName) +
+				" supports at most 63 arguments");
+
+		SINT64 value = 0;
+		const FB_SIZE_T count = groupingNode->args->items.getCount();
+
+		for (FB_SIZE_T i = 0; i < count; ++i)
+		{
+			unsigned dimension = 0;
+			bool present = false;
+
+			if (!pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList,
+					groupingNode->args->items[i], groupingSet, dimension, present, resolveDsql,
+					true, true))
+			{
+				postGroupingValidationError(string(functionName) +
+					" argument must match a grouping expression");
+			}
+
+			if (!present)
+				value |= SINT64(1) << (count - i - 1);
+		}
+
+		return count == 1 ? MAKE_const_slong(static_cast<SLONG>(value)) :
+			MAKE_const_sint64(value, 0);
+	}
+
+	ValueExprNode* pass1_make_grouping_value(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
+		GroupingSpec* spec, const GroupingSpec::Set& set, ValueListNode* selectList, ValueExprNode* node)
+	{
+		if (auto aliasNode = nodeAs<DsqlAliasNode>(node))
+			return node;
+
+		unsigned dimension = 0;
+		bool present = false;
+
+		if (auto groupingNode = nodeAs<GroupingNode>(node))
+		{
+			DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool,
+				MetaName(groupingNode->getDsqlFunctionName()),
+				pass1_make_grouping_function_value(dsqlScratch, spec, &set.dimensions, selectList,
+					groupingNode, false));
+			aliasNode->dsqlGroupingExpression = groupingNode;
+			return aliasNode;
+		}
+
+		if (pass1_find_grouping_dimension_match(dsqlScratch, spec, selectList, node,
+				&set.dimensions, dimension, present, false, false, false) && !present)
+		{
+			if (auto fieldNode = nodeAs<FieldNode>(node))
+			{
+				if (fieldNode->dsqlName.hasData())
+					return FB_NEW_POOL(pool) DsqlAliasNode(pool, fieldNode->dsqlName, node);
+			}
+		}
+
+		return node;
+	}
+
+	ValueListNode* pass1_make_grouping_select_list(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
+		GroupingSpec* spec, const GroupingSpec::Set& set, ValueListNode* selectList)
+	{
+		if (!selectList)
+			return NULL;
+
+		ValueListNode* branchList = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
+
+		for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+		{
+			branchList->add(pass1_make_grouping_value(dsqlScratch, pool, spec, set,
+				selectList, *item));
+		}
+
+		return branchList;
+	}
+
+	ValueListNode* pass1_copy_grouping_select_list(MemoryPool& pool, ValueListNode* selectList)
+	{
+		if (!selectList)
+			return NULL;
+
+		ValueListNode* copy = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
+
+		for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+			copy->add(*item);
+
+		return copy;
+	}
+
+	ValueListNode* pass1_trim_grouping_select_list(MemoryPool& pool, ValueListNode* selectList,
+		FB_SIZE_T count)
+	{
+		if (selectList->items.getCount() == count)
+			return selectList;
+
+		ValueListNode* trimmed = FB_NEW_POOL(pool) ValueListNode(pool, count);
+
+		for (FB_SIZE_T i = 0; i < count; ++i)
+			trimmed->items[i] = selectList->items[i];
+
+		return trimmed;
+	}
+
+	AggregateSourceNode* pass1_find_grouping_aggregate(RseNode* rse)
+	{
+		if (!rse || !rse->dsqlStreams)
+			return NULL;
+
+		for (auto stream = rse->dsqlStreams->items.begin(); stream != rse->dsqlStreams->items.end();
+			 ++stream)
+		{
+			if (auto aggregate = nodeAs<AggregateSourceNode>(*stream))
+			{
+				if (!aggregate->dsqlWindow)
+					return aggregate;
+
+				if (auto nested = pass1_find_grouping_aggregate(aggregate->dsqlRse.getObject()))
+					return nested;
+			}
+			else if (auto nestedRse = nodeAs<RseNode>(*stream))
+			{
+				if (auto nested = pass1_find_grouping_aggregate(nestedRse))
+					return nested;
+			}
+		}
+
+		return NULL;
+	}
+
+	bool pass1_grouping_contexts_match(const dsql_ctx* left, const dsql_ctx* right)
+	{
+		if (left == right)
+			return true;
+
+		if (!left || !right || left->ctx_scope_level != right->ctx_scope_level)
+			return false;
+
+		if (left->ctx_relation != right->ctx_relation ||
+			left->ctx_procedure != right->ctx_procedure ||
+			left->ctx_table_value_fun != right->ctx_table_value_fun)
+		{
+			return false;
+		}
+
+		if (left->ctx_alias.hasData() || right->ctx_alias.hasData())
+			return PASS1_compare_alias(left->ctx_alias, right->ctx_alias);
+
+		return left->ctx_internal_alias == right->ctx_internal_alias;
+	}
+
+	bool pass1_resolved_group_fields_match(DsqlCompilerScratch* dsqlScratch,
+		const FieldNode* left, const FieldNode* right)
+	{
+		if (!left || !right || !left->dsqlField || !right->dsqlField ||
+			left->dsqlField != right->dsqlField ||
+			!pass1_grouping_contexts_match(left->dsqlContext, right->dsqlContext))
+		{
+			return false;
+		}
+
+		if (left->dsqlIndices || right->dsqlIndices)
+		{
+			return left->dsqlIndices && right->dsqlIndices &&
+				(PASS1_node_match(dsqlScratch, left->dsqlIndices, right->dsqlIndices, true) ||
+				 PASS1_node_match(dsqlScratch, right->dsqlIndices, left->dsqlIndices, true));
+		}
+
+		return true;
+	}
+
+	void pass1_collect_grouping_match_nodes(ExprNode* node,
+		HalfStaticArray<FieldNode*, 8>& fields, HalfStaticArray<DsqlMapNode*, 4>& maps)
+	{
+		if (!node)
+			return;
+
+		if (auto fieldNode = nodeAs<FieldNode>(node))
+			fields.add(fieldNode);
+		else if (auto mapNode = nodeAs<DsqlMapNode>(node))
+		{
+			maps.add(mapNode);
+			pass1_collect_grouping_match_nodes(mapNode->map->map_node, fields, maps);
+		}
+
+		NodeRefsHolder holder;
+		node->getChildren(holder, true);
+
+		for (auto child : holder.refs)
+			pass1_collect_grouping_match_nodes(*child, fields, maps);
+	}
+
+	bool pass1_find_grouping_field_match_context(const dsql_ctx* context,
+		const HalfStaticArray<FieldNode*, 8>& fields, dsql_ctx*& target)
+	{
+		target = NULL;
+
+		if (!context)
+			return false;
+
+		for (auto field = fields.begin(); field != fields.end(); ++field)
+		{
+			if (!(*field)->dsqlContext)
+				continue;
+
+			if (!pass1_grouping_contexts_match((*field)->dsqlContext, context))
+				continue;
+
+			if (!target)
+				target = (*field)->dsqlContext;
+			else if (target != (*field)->dsqlContext)
+				return false;
+		}
+
+		return target != NULL;
+	}
+
+	bool pass1_find_grouping_map_match_context(const dsql_ctx* context,
+		const HalfStaticArray<DsqlMapNode*, 4>& maps, dsql_ctx*& target)
+	{
+		target = NULL;
+
+		if (!context)
+			return false;
+
+		for (auto map = maps.begin(); map != maps.end(); ++map)
+		{
+			if (!(*map)->context)
+				continue;
+
+			if (!pass1_grouping_contexts_match((*map)->context, context))
+				continue;
+
+			if (!target)
+				target = (*map)->context;
+			else if (target != (*map)->context)
+				return false;
+		}
+
+		return target != NULL;
+	}
+
+	struct GroupingFieldReferenceRestore
+	{
+		ExprNode** ref = NULL;
+		ExprNode* node = NULL;
+	};
+
+	struct GroupingMapContextRestore
+	{
+		DsqlMapNode* node = NULL;
+		dsql_ctx* context = NULL;
+	};
+
+	class GroupingContextMatcher
+	{
+	public:
+		GroupingContextMatcher(MemoryPool& aPool, ValueExprNode* left, ValueExprNode* right)
+			: pool(aPool),
+			  rightRoot(right)
+		{
+			pass1_collect_grouping_match_nodes(left, leftFields, leftMaps);
+
+			HalfStaticArray<FieldNode*, 8> rightFields;
+			pass1_collect_grouping_match_nodes(rightRoot, rightFields, rightMaps);
+
+			ExprNode** rightRootRef = reinterpret_cast<ExprNode**>(rightRoot.getAddress());
+			remapFieldReferences(rightRootRef);
+			remapMapContexts();
+		}
+
+		~GroupingContextMatcher()
+		{
+			for (auto restore = fieldRestores.begin(); restore != fieldRestores.end(); ++restore)
+				*restore->ref = restore->node;
+
+			for (auto restore = mapRestores.begin(); restore != mapRestores.end(); ++restore)
+				restore->node->context = restore->context;
+		}
+
+		ValueExprNode* getRightNode()
+		{
+			return rightRoot;
+		}
+
+	private:
+		FieldNode* makeFieldNode(const FieldNode* source, dsql_ctx* context)
+		{
+			FieldNode* node = FB_NEW_POOL(pool) FieldNode(pool, context, source->dsqlField,
+				const_cast<ValueListNode*>(source->dsqlIndices.getObject()));
+
+			node->dsqlQualifier = source->dsqlQualifier;
+			node->dsqlName = source->dsqlName;
+			node->setDsqlDesc(source->getDsqlDesc());
+			node->format = source->format;
+			node->cursorNumber = source->cursorNumber;
+			node->dsqlCursorField = source->dsqlCursorField;
+
+			return node;
+		}
+
+		void remapFieldReference(ExprNode** ref, FieldNode* field)
+		{
+			dsql_ctx* target = NULL;
+
+			if (!pass1_find_grouping_field_match_context(field->dsqlContext, leftFields, target) ||
+				field->dsqlContext == target)
+			{
+				return;
+			}
+
+			GroupingFieldReferenceRestore restore;
+			restore.ref = ref;
+			restore.node = *ref;
+			fieldRestores.add(restore);
+
+			*ref = makeFieldNode(field, target);
+		}
+
+		void remapFieldReferences(ExprNode** ref)
+		{
+			if (!ref || !*ref)
+				return;
+
+			if (auto field = nodeAs<FieldNode>(*ref))
+			{
+				remapFieldReference(ref, field);
+				return;
+			}
+
+			if (auto map = nodeAs<DsqlMapNode>(*ref))
+			{
+				ExprNode** mapRef = reinterpret_cast<ExprNode**>(map->map->map_node.getAddress());
+				remapFieldReferences(mapRef);
+			}
+
+			NodeRefsHolder holder;
+			(*ref)->getChildren(holder, true);
+
+			for (auto child : holder.refs)
+			{
+				remapFieldReferences(child);
+			}
+		}
+
+		void remapMapContexts()
+		{
+			for (auto map = rightMaps.begin(); map != rightMaps.end(); ++map)
+			{
+				dsql_ctx* target = NULL;
+
+				if (!pass1_find_grouping_map_match_context((*map)->context, leftMaps, target) ||
+					(*map)->context == target)
+				{
+					continue;
+				}
+
+				GroupingMapContextRestore restore;
+				restore.node = *map;
+				restore.context = (*map)->context;
+				mapRestores.add(restore);
+
+				(*map)->context = target;
+			}
+		}
+
+	private:
+		MemoryPool& pool;
+		NestConst<ValueExprNode> rightRoot;
+		HalfStaticArray<FieldNode*, 8> leftFields;
+		HalfStaticArray<DsqlMapNode*, 4> leftMaps;
+		HalfStaticArray<DsqlMapNode*, 4> rightMaps;
+		HalfStaticArray<GroupingFieldReferenceRestore, 8> fieldRestores;
+		HalfStaticArray<GroupingMapContextRestore, 4> mapRestores;
+	};
+
+	bool pass1_group_items_match(DsqlCompilerScratch* dsqlScratch, const ValueExprNode* left,
+		const ValueExprNode* right)
+	{
+		ValueExprNode* leftNode = const_cast<ValueExprNode*>(left);
+		ValueExprNode* rightNode = const_cast<ValueExprNode*>(right);
+
+		if (PASS1_node_match(dsqlScratch, left, right, true) ||
+			PASS1_node_match(dsqlScratch, right, left, true) ||
+			pass1_resolved_group_fields_match(dsqlScratch, nodeAs<FieldNode>(left),
+				nodeAs<FieldNode>(right)) ||
+			pass1_dsql_grouping_items_match(dsqlScratch, leftNode, rightNode))
+		{
+			return true;
+		}
+
+		GroupingContextMatcher matcher(dsqlScratch->getPool(), leftNode, rightNode);
+		ValueExprNode* remappedRightNode = matcher.getRightNode();
+
+		return PASS1_node_match(dsqlScratch, left, remappedRightNode, true) ||
+			PASS1_node_match(dsqlScratch, remappedRightNode, left, true);
+	}
+
+	bool pass1_group_list_contains(DsqlCompilerScratch* dsqlScratch, const ValueListNode* group,
+		const ValueExprNode* expr)
+	{
+		if (!group)
+			return false;
+
+		for (auto item = group->items.begin(); item != group->items.end(); ++item)
+		{
+			if (pass1_group_items_match(dsqlScratch, *item, expr))
+				return true;
+		}
+
+		return false;
+	}
+
+	FB_SIZE_T pass1_group_list_unique_count(DsqlCompilerScratch* dsqlScratch,
+		const ValueListNode* group)
+	{
+		if (!group)
+			return 0;
+
+		FB_SIZE_T count = 0;
+
+		for (auto item = group->items.begin(); item != group->items.end(); ++item)
+		{
+			bool duplicate = false;
+
+			for (auto previous = group->items.begin(); previous != item; ++previous)
+			{
+				if (pass1_group_items_match(dsqlScratch, *previous, *item))
+				{
+					duplicate = true;
+					break;
+				}
+			}
+
+			if (!duplicate)
+				++count;
+		}
+
+		return count;
+	}
+
+	bool pass1_group_lists_match(DsqlCompilerScratch* dsqlScratch, const ValueListNode* left,
+		const ValueListNode* right)
+	{
+		if (pass1_group_list_unique_count(dsqlScratch, left) !=
+			pass1_group_list_unique_count(dsqlScratch, right))
+		{
+			return false;
+		}
+
+		if (!left)
+			return true;
+
+		for (auto item = left->items.begin(); item != left->items.end(); ++item)
+		{
+			bool duplicate = false;
+
+			for (auto previous = left->items.begin(); previous != item; ++previous)
+			{
+				if (pass1_group_items_match(dsqlScratch, *previous, *item))
+				{
+					duplicate = true;
+					break;
+				}
+			}
+
+			if (!duplicate && !pass1_group_list_contains(dsqlScratch, right, *item))
+				return false;
+		}
+
+		return true;
+	}
+
+	bool pass1_grouping_branches_match(DsqlCompilerScratch* dsqlScratch, RseNode* left,
+		RseNode* right)
+	{
+		AggregateSourceNode* leftAggregate = pass1_find_grouping_aggregate(left);
+		AggregateSourceNode* rightAggregate = pass1_find_grouping_aggregate(right);
+
+		return leftAggregate && rightAggregate &&
+			pass1_group_lists_match(dsqlScratch, leftAggregate->dsqlGroup,
+				rightAggregate->dsqlGroup);
+	}
+
+	RecSourceListNode* pass1_deduplicate_grouping_union_clauses(
+		DsqlCompilerScratch* dsqlScratch, MemoryPool& pool, RecSourceListNode* clauses)
+	{
+		RecSourceListNode* deduplicated = FB_NEW_POOL(pool) RecSourceListNode(pool, 0u);
+
+		for (auto clause = clauses->items.begin(); clause != clauses->items.end(); ++clause)
+		{
+			RseNode* candidate = nodeAs<RseNode>(*clause);
+			fb_assert(candidate);
+
+			bool duplicate = false;
+
+			for (auto existing = deduplicated->items.begin(); existing != deduplicated->items.end();
+				 ++existing)
+			{
+				if (pass1_grouping_branches_match(dsqlScratch, nodeAs<RseNode>(*existing),
+						candidate))
+				{
+					duplicate = true;
+					break;
+				}
+			}
+
+			if (!duplicate)
+				deduplicated->add(candidate);
+		}
+
+		return deduplicated;
+	}
+
+	ValueListNode* pass1_make_grouping_group_list(MemoryPool& pool, GroupingSpec* spec,
+		const GroupingSpec::Set& set)
+	{
+		ValueListNode* groupList = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
+
+		for (auto dimension = set.dimensions.begin(); dimension != set.dimensions.end(); ++dimension)
+			groupList->add(spec->dimensions[*dimension].expr);
+
+		return groupList;
+	}
+
+	ValueExprNode* pass1_unmap_grouping_order_item(ValueExprNode* node)
+	{
+		while (auto mapNode = nodeAs<DsqlMapNode>(node))
+			node = mapNode->map->map_node;
+
+		return node;
+	}
+
+	bool pass1_raw_select_item_matches(DsqlCompilerScratch* dsqlScratch, ValueExprNode* orderValue,
+		ValueExprNode* selectItem)
+	{
+		selectItem = pass1_unmap_grouping_order_item(selectItem);
+
+		if (PASS1_node_match(dsqlScratch, orderValue, selectItem, true) ||
+			PASS1_node_match(dsqlScratch, selectItem, orderValue, true))
+		{
+			return true;
+		}
+
+		if (auto aliasNode = nodeAs<DsqlAliasNode>(selectItem))
+		{
+			if (aliasNode->dsqlGroupingExpression &&
+				(PASS1_node_match(dsqlScratch, orderValue, aliasNode->dsqlGroupingExpression, true) ||
+				 PASS1_node_match(dsqlScratch, aliasNode->dsqlGroupingExpression, orderValue, true)))
+			{
+				return true;
+			}
+
+			return PASS1_node_match(dsqlScratch, orderValue, aliasNode->value, true) ||
+				PASS1_node_match(dsqlScratch, aliasNode->value, orderValue, true);
+		}
+
+		return false;
+	}
+
+	bool pass1_node_contains_grouping(ExprNode* node)
+	{
+		if (!node)
+			return false;
+
+		if (nodeIs<GroupingNode>(node))
+			return true;
+
+		if (nodeIs<SubQueryNode>(node))
+			return false;
+
+		NodeRefsHolder holder;
+		node->getChildren(holder, true);
+
+		for (auto child : holder.refs)
+		{
+			if (pass1_node_contains_grouping(*child))
+				return true;
+		}
+
+		return false;
+	}
+
+	ValueExprNode* pass1_make_hidden_order_select_item(MemoryPool& pool, ValueExprNode* orderValue)
+	{
+		if (!pass1_node_contains_grouping(orderValue))
+			return orderValue;
+
+		DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool, MetaName(), orderValue);
+		aliasNode->dsqlGroupingExpression = orderValue;
+		return aliasNode;
+	}
+
+	bool pass1_grouping_expression_matches(DsqlCompilerScratch* dsqlScratch, ValueExprNode* left,
+		ValueExprNode* right)
+	{
+		return PASS1_node_match(dsqlScratch, left, right, true) ||
+			PASS1_node_match(dsqlScratch, right, left, true);
+	}
+
+	bool pass1_find_grouping_dependency_position(DsqlCompilerScratch* dsqlScratch,
+		ValueExprNode* value, ValueListNode* selectList, SLONG& position)
+	{
+		if (!pass1_node_contains_grouping(value) || !selectList)
+			return false;
+
+		for (FB_SIZE_T i = selectList->items.getCount(); i > 0; --i)
+		{
+			ValueExprNode* selectItem = pass1_unmap_grouping_order_item(selectList->items[i - 1]);
+
+			if (auto aliasNode = nodeAs<DsqlAliasNode>(selectItem))
+			{
+				if (aliasNode->dsqlGroupingExpression &&
+					pass1_grouping_expression_matches(dsqlScratch, value,
+						aliasNode->dsqlGroupingExpression))
+				{
+					position = static_cast<SLONG>(i);
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	bool pass1_find_raw_order_position(DsqlCompilerScratch* dsqlScratch, ValueExprNode* orderValue,
+		ValueListNode* selectList, FB_SIZE_T selectItems, SLONG& position)
+	{
+		if (auto fieldNode = nodeAs<FieldNode>(orderValue))
+		{
+			if (fieldNode->dsqlName.hasData())
+			{
+				bool found = false;
+
+				for (FB_SIZE_T i = 0; i < selectItems; ++i)
+				{
+					ValueExprNode* selectItem = selectList->items[i];
+					ValueExprNode* orderSelectItem = pass1_unmap_grouping_order_item(selectItem);
+					bool matched = false;
+
+					if (fieldNode->dsqlQualifier.object.isEmpty())
+					{
+						if (auto aliasNode = nodeAs<DsqlAliasNode>(orderSelectItem))
+							matched = aliasNode->name == fieldNode->dsqlName;
+						else if (auto selectField = nodeAs<FieldNode>(orderSelectItem))
+						{
+							matched = selectField->dsqlQualifier.object.isEmpty() &&
+								selectField->dsqlName == fieldNode->dsqlName;
+						}
+					}
+
+					if (!matched)
+					{
+						matched = pass1_raw_field_matches_resolved_field(dsqlScratch, fieldNode,
+							nodeAs<FieldNode>(pass1_effective_grouping_item(orderSelectItem)));
+					}
+
+					if (!matched)
+					{
+						if (auto derivedField = nodeAs<DerivedFieldNode>(orderSelectItem))
+						{
+							matched = derivedField->name == fieldNode->dsqlName &&
+								pass1_raw_qualifier_matches_context(fieldNode->dsqlQualifier,
+									derivedField->context);
+						}
+					}
+
+					if (matched)
+					{
+						if (found)
+							pass1_post_ambiguous_select_list_name(fieldNode->dsqlName);
+
+						position = static_cast<SLONG>(i + 1);
+						found = true;
+					}
+				}
+
+				if (found)
+					return true;
+			}
+		}
+
+		for (FB_SIZE_T i = 0; i < selectItems; ++i)
+		{
+			if (pass1_raw_select_item_matches(dsqlScratch, orderValue, selectList->items[i]))
+			{
+				position = static_cast<SLONG>(i + 1);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void pass1_append_grouping_order_select_items(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
+		ValueListNode* selectList, ValueListNode* order)
+	{
+		if (!order)
+			return;
+
+		for (FB_SIZE_T i = 0; i < order->items.getCount(); ++i)
+		{
+			const auto orderNode = nodeAs<OrderNode>(order->items[i]);
+			fb_assert(orderNode);
+
+			ValueExprNode* orderValue = orderNode->value;
+			const auto collateNode = nodeAs<CollateNode>(orderValue);
+
+			if (collateNode)
+				orderValue = collateNode->arg;
+
+			if (auto literal = nodeAs<LiteralNode>(orderValue))
+			{
+				if (literal->litDesc.dsc_dtype == dtype_long)
+					continue;
+			}
+
+			SLONG position = 0;
+
+			if (!pass1_find_raw_order_position(dsqlScratch, orderValue, selectList,
+					selectList->items.getCount(), position))
+			{
+				selectList->add(pass1_make_hidden_order_select_item(pool, orderValue));
+			}
+		}
+	}
+
+	ValueListNode* pass1_make_grouping_union_order(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
+		ValueListNode* order, ValueListNode* selectList, FB_SIZE_T visibleSelectItems,
+		bool selectListExpands)
+	{
+		if (!order)
+			return NULL;
+
+		if (selectListExpands)
+			return order;
+
+		fb_assert(selectList);
+
+		ValueListNode* unionOrder = FB_NEW_POOL(pool) ValueListNode(pool, order->items.getCount());
+
+		for (FB_SIZE_T i = 0; i < order->items.getCount(); ++i)
+		{
+			const auto orderNode = nodeAs<OrderNode>(order->items[i]);
+			fb_assert(orderNode);
+
+			ValueExprNode* orderValue = orderNode->value;
+			const auto collateNode = nodeAs<CollateNode>(orderValue);
+
+			if (collateNode)
+				orderValue = collateNode->arg;
+
+			SLONG position = 0;
+
+			if (auto literal = nodeAs<LiteralNode>(orderValue))
+			{
+				if (literal->litDesc.dsc_dtype == dtype_long)
+					position = literal->getSlong();
+			}
+
+			if (position != 0)
+			{
+				if (position < 1 || position > (SLONG) visibleSelectItems)
+				{
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_command_err) <<
+							  Arg::Gds(isc_order_by_err));
+				}
+			}
+			else if (!pass1_find_raw_order_position(dsqlScratch, orderValue, selectList,
+				visibleSelectItems, position))
+			{
+				position = static_cast<SLONG>(selectList->items.getCount() + 1);
+				selectList->add(orderValue);
+			}
+
+			ValueExprNode* unionOrderValue = MAKE_const_slong(position);
+
+			if (collateNode)
+				unionOrderValue = FB_NEW_POOL(pool) CollateNode(pool, unionOrderValue, collateNode->collation);
+
+			OrderNode* unionOrderNode = FB_NEW_POOL(pool) OrderNode(pool, unionOrderValue);
+			unionOrderNode->descending = orderNode->descending;
+			unionOrderNode->nullsPlacement = orderNode->nullsPlacement;
+
+			unionOrder->items[i] = unionOrderNode;
+		}
+
+		return unionOrder;
+	}
+}
+
+
+ValueExprNode* DsqlCompilerScratch::makeGroupingValue(ValueExprNode* node)
+{
+	if (!activeGroupingSpec || !activeGroupingSet)
+		return NULL;
+
+	if (scopeLevel != activeGroupingScopeLevel)
+		return NULL;
+
+	if (auto aliasNode = nodeAs<DsqlAliasNode>(node))
+	{
+		if (ValueExprNode* value = makeGroupingValue(aliasNode->value))
+		{
+			thread_db* tdbb = JRD_get_thread_data();
+			MemoryPool& pool = *tdbb->getDefaultPool();
+			DsqlAliasNode* newAlias = FB_NEW_POOL(pool) DsqlAliasNode(pool, aliasNode->name, value);
+
+			if (nodeIs<GroupingNode>(aliasNode->value))
+				newAlias->dsqlGroupingExpression = aliasNode->value;
+			else if (auto valueAlias = nodeAs<DsqlAliasNode>(value))
+				newAlias->dsqlGroupingExpression = valueAlias->dsqlGroupingExpression;
+
+			return newAlias;
+		}
+
+		return NULL;
+	}
+
+	auto groupingNode = nodeAs<GroupingNode>(node);
+
+	unsigned dimension = 0;
+	bool present = false;
+
+	if (groupingNode)
+	{
+		const char* functionName = groupingNode->getDsqlFunctionName();
+
+		if (inWhereClause)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_random) <<
+					  Arg::Str(string(functionName) + " is not allowed in the WHERE clause"));
+		}
+
+		if (inGroupByClause)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_random) <<
+					  Arg::Str(string(functionName) + " is not allowed in the GROUP BY clause"));
+		}
+
+		if (inAggregateFunction)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_random) <<
+					  Arg::Str(string(functionName) + " is not allowed in aggregate function arguments"));
+		}
+
+		return pass1_make_grouping_function_value(this, activeGroupingSpec, activeGroupingSet,
+			activeGroupingSelectList, groupingNode, true);
+	}
+
+	if (inWhereClause || inGroupByClause || inAggregateFunction)
+		return NULL;
+
+	if (pass1_find_grouping_dimension_match(this, activeGroupingSpec,
+			activeGroupingSelectList, node, activeGroupingSet, dimension, present, true, false,
+			true) &&
+		!present)
+	{
+		dsc desc;
+
+		GroupingSpec* groupingSpec = activeGroupingSpec;
+		ActiveGroupingContextDisabler disableGrouping(this);
+
+		NestConst<ValueExprNode> dimensionNode = pass1_resolve_grouping_dimension(groupingSpec,
+			activeGroupingSelectList, dimension);
+		ValueExprNode* value = Node::doDsqlPass(this, dimensionNode, false);
+		DsqlDescMaker::fromNode(this, &desc, value, true);
+
+		ValueExprNode* nullValue = pass1_make_typed_null(desc);
+
+		if (auto fieldNode = nodeAs<FieldNode>(node))
+		{
+			if (fieldNode->dsqlField && fieldNode->dsqlField->fld_name.hasData())
+			{
+				thread_db* tdbb = JRD_get_thread_data();
+				MemoryPool& pool = *tdbb->getDefaultPool();
+				return FB_NEW_POOL(pool) DsqlAliasNode(pool, fieldNode->dsqlField->fld_name,
+					nullValue);
+			}
+		}
+
+		return nullValue;
+	}
+
+	return NULL;
+}
+
+static bool pass1_contains_window_function(DsqlCompilerScratch* dsqlScratch, ExprNode* node)
+{
+	if (!node)
+		return false;
+
+	if (nodeIs<OverNode>(node))
+		return true;
+
+	if (nodeIs<SubQueryNode>(node))
+		return false;
+
+	NodeRefsHolder holder(dsqlScratch->getPool());
+	node->getChildren(holder, true);
+
+	for (auto child : holder.refs)
+	{
+		if (pass1_contains_window_function(dsqlScratch, *child))
+			return true;
+	}
+
+	return false;
+}
+
+static bool pass1_contains_window_function(DsqlCompilerScratch* dsqlScratch, ValueListNode* list)
+{
+	if (!list)
+		return false;
+
+	for (auto item = list->items.begin(); item != list->items.end(); ++item)
+	{
+		if (pass1_contains_window_function(dsqlScratch, *item))
+			return true;
+	}
+
+	return false;
+}
+
+static ValueExprNode* pass1_as_value_expr(ExprNode* node)
+{
+	return node && node->getKind() == DmlNode::KIND_VALUE ?
+		static_cast<ValueExprNode*>(node) : NULL;
+}
+
+static ValueExprNode* pass1_make_grouping_window_placeholder(MemoryPool& pool, ValueExprNode* node)
+{
+	ValueExprNode* value = NullNode::instance();
+
+	if (auto aliasNode = nodeAs<DsqlAliasNode>(node))
+		return FB_NEW_POOL(pool) DsqlAliasNode(pool, aliasNode->name, value);
+
+	return value;
+}
+
+static ValueListNode* pass1_make_grouping_window_select_list(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList)
+{
+	if (!selectList)
+		return NULL;
+
+	ValueListNode* copy = FB_NEW_POOL(pool) ValueListNode(pool, 0u);
+
+	for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+	{
+		if (pass1_contains_window_function(dsqlScratch, *item))
+			copy->add(pass1_make_grouping_window_placeholder(pool, *item));
+		else
+			copy->add(*item);
+	}
+
+	return copy;
+}
+
+static void pass1_append_grouping_window_dependency(DsqlCompilerScratch* dsqlScratch, MemoryPool& pool,
+	ValueListNode* selectList, ValueExprNode* node)
+{
+	if (!selectList || !node || nodeIs<OverNode>(node) || nodeIs<SubQueryNode>(node))
+		return;
+
+	SLONG position = 0;
+
+	if (pass1_node_contains_grouping(node))
+	{
+		if (!pass1_find_grouping_dependency_position(dsqlScratch, node, selectList, position))
+			selectList->add(pass1_make_hidden_order_select_item(pool, node));
+
+		return;
+	}
+
+	if (!pass1_find_raw_order_position(dsqlScratch, node, selectList,
+			selectList->items.getCount(), position))
+	{
+		selectList->add(pass1_make_hidden_order_select_item(pool, node));
+	}
+}
+
+static void pass1_append_grouping_window_order_dependencies(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList, ValueListNode* order)
+{
+	if (!order)
+		return;
+
+	for (auto item = order->items.begin(); item != order->items.end(); ++item)
+	{
+		ValueExprNode* value = *item;
+
+		if (const auto orderNode = nodeAs<OrderNode>(value))
+			value = orderNode->value;
+
+		pass1_append_grouping_window_dependency(dsqlScratch, pool, selectList, value);
+	}
+}
+
+static void pass1_append_grouping_window_clause_dependencies(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList, WindowClause* window)
+{
+	if (!window)
+		return;
+
+	if (window->partition)
+	{
+		for (auto item = window->partition->items.begin(); item != window->partition->items.end(); ++item)
+			pass1_append_grouping_window_dependency(dsqlScratch, pool, selectList, *item);
+	}
+
+	pass1_append_grouping_window_order_dependencies(dsqlScratch, pool, selectList, window->order);
+
+	if (window->extent)
+	{
+		NodeRefsHolder holder(dsqlScratch->getPool());
+		window->extent->getChildren(holder, true);
+
+		for (auto child : holder.refs)
+		{
+			if (auto value = pass1_as_value_expr(*child))
+				pass1_append_grouping_window_dependency(dsqlScratch, pool, selectList, value);
+		}
+	}
+}
+
+static void pass1_append_grouping_window_dependencies(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList, ExprNode* node)
+{
+	if (!node || nodeIs<SubQueryNode>(node))
+		return;
+
+	if (auto overNode = nodeAs<OverNode>(node))
+	{
+		if (overNode->aggExpr)
+		{
+			NodeRefsHolder holder(dsqlScratch->getPool());
+			overNode->aggExpr->getChildren(holder, true);
+
+			for (auto child : holder.refs)
+			{
+				if (auto value = pass1_as_value_expr(*child))
+					pass1_append_grouping_window_dependency(dsqlScratch, pool, selectList, value);
+			}
+		}
+
+		pass1_append_grouping_window_clause_dependencies(dsqlScratch, pool, selectList,
+			overNode->window);
+		return;
+	}
+
+	NodeRefsHolder holder(dsqlScratch->getPool());
+	node->getChildren(holder, true);
+
+	for (auto child : holder.refs)
+	{
+		if (auto value = pass1_as_value_expr(*child))
+		{
+			if (!pass1_contains_window_function(dsqlScratch, value))
+			{
+				pass1_append_grouping_window_dependency(dsqlScratch, pool, selectList, value);
+				continue;
+			}
+		}
+
+		pass1_append_grouping_window_dependencies(dsqlScratch, pool, selectList, *child);
+	}
+}
+
+static void pass1_append_grouping_window_dependencies(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList, ValueListNode* list)
+{
+	if (!list)
+		return;
+
+	for (auto item = list->items.begin(); item != list->items.end(); ++item)
+		pass1_append_grouping_window_dependencies(dsqlScratch, pool, selectList, *item);
+}
+
+static void pass1_append_grouping_window_dependencies(DsqlCompilerScratch* dsqlScratch,
+	MemoryPool& pool, ValueListNode* selectList, NamedWindowsClause* namedWindows)
+{
+	if (!namedWindows)
+		return;
+
+	for (NamedWindowsClause::iterator i = namedWindows->begin(); i != namedWindows->end(); ++i)
+		pass1_append_grouping_window_clause_dependencies(dsqlScratch, pool, selectList, i->second);
+}
+
+static bool pass1_is_grouping_window_alias(DsqlCompilerScratch* dsqlScratch, ValueExprNode* node,
+	ValueListNode* selectList)
+{
+	const auto fieldNode = nodeAs<FieldNode>(node);
+
+	if (!fieldNode || !fieldNode->dsqlName.hasData() ||
+		fieldNode->dsqlQualifier.object.hasData() || !selectList)
+	{
+		return false;
+	}
+
+	for (auto item = selectList->items.begin(); item != selectList->items.end(); ++item)
+	{
+		if (auto aliasNode = nodeAs<DsqlAliasNode>(*item))
+		{
+			if (aliasNode->name == fieldNode->dsqlName &&
+				pass1_contains_window_function(dsqlScratch, aliasNode->value))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+struct GroupingWindowExpressionRestore
+{
+	ExprNode** ref = NULL;
+	ExprNode* node = NULL;
+};
+
+class GroupingWindowExpressionRemapper
+{
+public:
+	GroupingWindowExpressionRemapper(DsqlCompilerScratch* aDsqlScratch, ValueListNode* aSourceList,
+			ValueListNode* aTargetList, ValueListNode* aOuterSelectList)
+		: dsqlScratch(aDsqlScratch),
+		  sourceList(aSourceList),
+		  targetList(aTargetList),
+		  outerSelectList(aOuterSelectList)
+	{
+	}
+
+	~GroupingWindowExpressionRemapper()
+	{
+		for (auto restore = restores.begin(); restore != restores.end(); ++restore)
+			*restore->ref = restore->node;
+	}
+
+	void remapSelectList(ValueListNode* list)
+	{
+		remapList(list, false);
+	}
+
+	void remapOrderList(ValueListNode* list)
+	{
+		remapList(list, true);
+	}
+
+	void remapNamedWindows(NamedWindowsClause* namedWindows)
+	{
+		if (!namedWindows)
+			return;
+
+		for (NamedWindowsClause::iterator i = namedWindows->begin(); i != namedWindows->end(); ++i)
+			remapChildren(i->second);
+	}
+
+private:
+	void remapList(ValueListNode* list, bool preserveWindowAliases)
+	{
+		if (!list)
+			return;
+
+		for (auto item = list->items.begin(); item != list->items.end(); ++item)
+		{
+			if (preserveWindowAliases)
+			{
+				if (auto orderNode = nodeAs<OrderNode>(*item))
+				{
+					remapRef(reinterpret_cast<ExprNode**>(orderNode->value.getAddress()), true,
+						preserveWindowAliases);
+					continue;
+				}
+			}
+
+			remapRef(reinterpret_cast<ExprNode**>(item->getAddress()), true, preserveWindowAliases);
+		}
+	}
+
+	void remapChildren(ExprNode* node)
+	{
+		if (!node)
+			return;
+
+		NodeRefsHolder holder(dsqlScratch->getPool());
+		node->getChildren(holder, true);
+
+		for (auto child : holder.refs)
+			remapRef(child, false, false);
+	}
+
+	void remapRef(ExprNode** ref, bool /*root*/, bool preserveWindowAliases)
+	{
+		if (!ref || !*ref || nodeIs<SubQueryNode>(*ref))
+			return;
+
+		if (auto aliasNode = nodeAs<DsqlAliasNode>(*ref))
+		{
+			remapRef(reinterpret_cast<ExprNode**>(aliasNode->value.getAddress()), false,
+				preserveWindowAliases);
+			return;
+		}
+
+		if (!nodeIs<OverNode>(*ref))
+		{
+			if (auto value = pass1_as_value_expr(*ref))
+			{
+				const bool isWindowAlias = pass1_is_grouping_window_alias(dsqlScratch, value,
+					outerSelectList);
+
+				if (sourceList && targetList && !isWindowAlias)
+				{
+					SLONG position = 0;
+
+					if ((pass1_find_grouping_dependency_position(dsqlScratch, value, sourceList,
+								position) ||
+						 pass1_find_raw_order_position(dsqlScratch, value, sourceList,
+							 sourceList->items.getCount(), position)) &&
+						position >= 1 && ULONG(position) <= targetList->items.getCount())
+					{
+						GroupingWindowExpressionRestore restore;
+						restore.ref = ref;
+						restore.node = *ref;
+						restores.add(restore);
+
+						*ref = targetList->items[position - 1];
+						return;
+					}
+				}
+			}
+		}
+
+		remapChildren(*ref);
+	}
+
+private:
+	DsqlCompilerScratch* dsqlScratch;
+	ValueListNode* sourceList;
+	ValueListNode* targetList;
+	ValueListNode* outerSelectList;
+	HalfStaticArray<GroupingWindowExpressionRestore, 16> restores;
+};
+
+static void pass1_process_grouping_window_named_windows(DsqlCompilerScratch* dsqlScratch,
+	NamedWindowsClause* namedWindows)
+{
+	if (!namedWindows)
+		return;
+
+	for (NamedWindowsClause::iterator i = namedWindows->begin(); i != namedWindows->end(); ++i)
+	{
+		if (dsqlScratch->context->object()->ctx_named_windows.exist(i->first))
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+				Arg::Gds(isc_dsql_window_duplicate) << i->first);
+		}
+
+		i->second->dsqlPass(dsqlScratch);
+		dsqlScratch->context->object()->ctx_named_windows.put(i->first, i->second);
+	}
+}
+
+static RseNode* pass1_apply_grouping_window(DsqlCompilerScratch* dsqlScratch, RseNode* unionRse,
+	ValueListNode* selectList, ValueListNode* order, RowsClause* rows, bool updateLock,
+	bool skipLocked, USHORT flags)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	RseNode* rse = FB_NEW_POOL(pool) RseNode(pool);
+	rse->dsqlStreams = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
+	rse->dsqlStreams->items[0] = unionRse;
+
+	++dsqlScratch->inSelectList;
+	rse->dsqlSelectList = pass1_sel_list(dsqlScratch, selectList);
+	--dsqlScratch->inSelectList;
+
+	if (order)
+	{
+		++dsqlScratch->inOrderByClause;
+		rse->dsqlOrder = PASS1_sort(dsqlScratch, order, selectList);
+		--dsqlScratch->inOrderByClause;
+	}
+
+	if (rows)
+		PASS1_limit(dsqlScratch, rows->length, rows->skip, rse);
+
+	if (updateLock)
+		rse->flags |= RseNode::FLAG_WRITELOCK;
+
+	if (skipLocked)
+		rse->flags |= RseNode::FLAG_SKIP_LOCKED;
+
+	dsql_ctx* parent_context = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_ctx(*tdbb->getDefaultPool());
+	parent_context->ctx_scope_level = dsqlScratch->scopeLevel;
+
+	if (dsqlScratch->inOuterJoin)
+		parent_context->ctx_flags |= CTX_outer_join;
+	parent_context->ctx_in_outer_join = dsqlScratch->inOuterJoin;
+
+	AggregateSourceNode* window = FB_NEW_POOL(pool) AggregateSourceNode(pool);
+	window->dsqlContext = parent_context;
+	window->dsqlRse = rse;
+	window->dsqlWindow = true;
+
+	RseNode* parentRse = FB_NEW_POOL(pool) RseNode(pool);
+	parentRse->dsqlStreams = FB_NEW_POOL(pool) RecSourceListNode(pool, 1);
+	parentRse->dsqlStreams->items[0] = window;
+
+	if (rse->hasWriteLock())
+	{
+		parentRse->flags |= RseNode::FLAG_WRITELOCK;
+		rse->flags &= ~RseNode::FLAG_WRITELOCK;
+	}
+
+	if (rse->hasSkipLocked())
+	{
+		parentRse->flags |= RseNode::FLAG_SKIP_LOCKED;
+		rse->flags &= ~RseNode::FLAG_SKIP_LOCKED;
+	}
+
+	if (rse->dsqlFirst)
+	{
+		parentRse->dsqlFirst = rse->dsqlFirst;
+		rse->dsqlFirst = NULL;
+	}
+
+	if (rse->dsqlSkip)
+	{
+		parentRse->dsqlSkip = rse->dsqlSkip;
+		rse->dsqlSkip = NULL;
+	}
+
+	AutoSetRestore<bool> autoProcessingWindow(&dsqlScratch->processingWindow, true);
+
+	dsqlScratch->context->push(parent_context);
+	remap_streams_to_parent_context(rse->dsqlStreams, parent_context);
+
+	FieldRemapper remapper(dsqlScratch->getPool(), dsqlScratch, parent_context, true);
+
+	ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlSelectList, rse->dsqlSelectList);
+	rse->dsqlSelectList = NULL;
+
+	if (order)
+	{
+		ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlOrder, rse->dsqlOrder);
+		rse->dsqlOrder = NULL;
+	}
+
+	for (FB_SIZE_T i = 0, mapCount = parent_context->ctx_win_maps.getCount(); i < mapCount; ++i)
+	{
+		WindowMap* windowMap = parent_context->ctx_win_maps[i];
+
+		if (windowMap->window && windowMap->window->partition)
+		{
+			windowMap->partitionRemapped = Node::doDsqlPass(dsqlScratch,
+				windowMap->window->partition);
+
+			FieldRemapper remapper2(dsqlScratch->getPool(), dsqlScratch, parent_context, true,
+				windowMap->window);
+			ExprNode::doDsqlFieldRemapper(remapper2, windowMap->partitionRemapped);
+		}
+	}
+
+	parentRse->dsqlFlags = flags;
+
+	return parentRse;
+}
+
+
+static RseNode* pass1_lower_grouping_sets(DsqlCompilerScratch* dsqlScratch, RseNode* inputRse,
+	ValueListNode* order, RowsClause* rows, bool updateLock, bool skipLocked, USHORT flags)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	MemoryPool& pool = *tdbb->getDefaultPool();
+
+	fb_assert(inputRse->dsqlGrouping && inputRse->dsqlGrouping->hasAdvancedGrouping());
+
+	RowsClause* unionRows = rows;
+
+	if ((inputRse->dsqlFirst || inputRse->dsqlSkip) && rows)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				  Arg::Gds(isc_dsql_firstskip_rows));
+	}
+	else if (inputRse->dsqlFirst || inputRse->dsqlSkip)
+	{
+		unionRows = FB_NEW_POOL(pool) RowsClause(pool);
+		unionRows->length = inputRse->dsqlFirst;
+		unionRows->skip = inputRse->dsqlSkip;
+	}
+
+	GroupingSpec* spec = pass1_grouping_spec_raw(dsqlScratch, inputRse->dsqlGrouping,
+		inputRse->dsqlSelectList);
+
+	const bool hasWindow = pass1_contains_window_function(dsqlScratch, inputRse->dsqlSelectList) ||
+		pass1_contains_window_function(dsqlScratch, order);
+
+	ValueListNode* branchSelectList = hasWindow ?
+		pass1_make_grouping_window_select_list(dsqlScratch, pool, inputRse->dsqlSelectList) :
+		pass1_copy_grouping_select_list(pool, inputRse->dsqlSelectList);
+	const bool selectListExpands = pass1_select_list_has_asterisk(branchSelectList);
+	const FB_SIZE_T visibleSelectItems = branchSelectList ? branchSelectList->items.getCount() : 0;
+
+	if (hasWindow)
+	{
+		pass1_append_grouping_window_dependencies(dsqlScratch, pool, branchSelectList,
+			inputRse->dsqlSelectList);
+		pass1_append_grouping_window_dependencies(dsqlScratch, pool, branchSelectList,
+			inputRse->dsqlNamedWindows);
+		pass1_append_grouping_window_order_dependencies(dsqlScratch, pool, branchSelectList, order);
+	}
+
+	ValueListNode* unionOrder = hasWindow ? NULL :
+		pass1_make_grouping_union_order(dsqlScratch, pool, order, branchSelectList,
+			visibleSelectItems, selectListExpands);
+
+	UnionSourceNode* unionNode = FB_NEW_POOL(pool) UnionSourceNode(pool);
+	unionNode->dsqlAll = true;
+	unionNode->dsqlOrderBySelectList = selectListExpands;
+	unionNode->dsqlDistinctGroupingSets = spec->distinct;
+	unionNode->dsqlClauses = FB_NEW_POOL(pool) RecSourceListNode(pool, spec->sets.getCount());
+
+	for (FB_SIZE_T i = 0; i < spec->sets.getCount(); ++i)
+	{
+		const auto& set = spec->sets[i];
+
+		RseNode* branch = FB_NEW_POOL(pool) RseNode(pool);
+		branch->line = inputRse->line;
+		branch->column = inputRse->column;
+		branch->dsqlDistinct = NULL;
+		branch->dsqlSelectList = pass1_make_grouping_select_list(dsqlScratch, pool, spec, set,
+			branchSelectList);
+		branch->dsqlFrom = inputRse->dsqlFrom;
+		branch->dsqlWhere = inputRse->dsqlWhere;
+		branch->dsqlJoinUsing = inputRse->dsqlJoinUsing;
+		branch->dsqlGroup = pass1_make_grouping_group_list(pool, spec, set);
+		branch->dsqlGroupingSpec = spec;
+		branch->dsqlGroupingSet = &set.dimensions;
+		branch->dsqlGroupingSelectList = inputRse->dsqlSelectList;
+		branch->dsqlGroupingOrder = (!hasWindow && selectListExpands) ? order : NULL;
+		branch->dsqlHaving = inputRse->dsqlHaving;
+		branch->dsqlNamedWindows = hasWindow ? NULL : inputRse->dsqlNamedWindows;
+		branch->rse_plan = inputRse->rse_plan;
+		branch->dsqlFlags = inputRse->dsqlFlags;
+
+		unionNode->dsqlClauses->items[i] = branch;
+	}
+
+	RseNode* unionRse = pass1_union(dsqlScratch, unionNode, unionOrder, hasWindow ? NULL : unionRows, updateLock,
+		skipLocked, flags);
+
+	if (!hasWindow && branchSelectList && !selectListExpands)
+	{
+		unionRse->dsqlSelectList = pass1_trim_grouping_select_list(pool, unionRse->dsqlSelectList,
+			visibleSelectItems);
+	}
+
+	if (hasWindow)
+	{
+		ValueListNode* outerSelectList = pass1_copy_grouping_select_list(pool,
+			inputRse->dsqlSelectList);
+		ValueListNode* outerOrder = pass1_copy_grouping_select_list(pool, order);
+
+		GroupingWindowExpressionRemapper remapper(dsqlScratch, branchSelectList,
+			unionRse->dsqlSelectList, outerSelectList);
+
+		remapper.remapSelectList(outerSelectList);
+		remapper.remapOrderList(outerOrder);
+		remapper.remapNamedWindows(inputRse->dsqlNamedWindows);
+
+		pass1_process_grouping_window_named_windows(dsqlScratch, inputRse->dsqlNamedWindows);
+
+		RowsClause* outerRows = rows;
+
+		if (!outerRows && (inputRse->dsqlFirst || inputRse->dsqlSkip))
+		{
+			outerRows = FB_NEW_POOL(pool) RowsClause(pool);
+			outerRows->length = inputRse->dsqlFirst;
+			outerRows->skip = inputRse->dsqlSkip;
+		}
+
+		RseNode* windowRse = pass1_apply_grouping_window(dsqlScratch, unionRse, outerSelectList,
+			outerOrder, outerRows, updateLock, skipLocked, flags);
+
+		if (inputRse->dsqlDistinct)
+		{
+			if (updateLock)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_wlock_conflict) << Arg::Str("DISTINCT"));
+			}
+
+			if (windowRse->dsqlSelectList->items.getCount() > MAX_SORT_ITEMS)
+			{
+				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+						  Arg::Gds(isc_dsql_command_err) <<
+						  Arg::Gds(isc_dsql_max_distinct_items));
+			}
+
+			windowRse->dsqlDistinct = windowRse->dsqlSelectList;
+		}
+
+		return windowRse;
+	}
+
+	if (inputRse->dsqlDistinct)
+	{
+		if (updateLock)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_wlock_conflict) << Arg::Str("DISTINCT"));
+		}
+
+		if (unionRse->dsqlSelectList->items.getCount() > MAX_SORT_ITEMS)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					  Arg::Gds(isc_dsql_command_err) <<
+					  Arg::Gds(isc_dsql_max_distinct_items));
+		}
+
+		unionRse->dsqlDistinct = unionRse->dsqlSelectList;
+	}
+
+	return unionRse;
+}
+
+
 // Process the limit clause (FIRST/SKIP/ROWS)
 void PASS1_limit(DsqlCompilerScratch* dsqlScratch, NestConst<ValueExprNode> firstNode,
 	NestConst<ValueExprNode> skipNode, RseNode* rse)
@@ -1619,13 +3917,16 @@ void PASS1_limit(DsqlCompilerScratch* dsqlScratch, NestConst<ValueExprNode> firs
 	else
 		descNode.makeInt64(0);
 
-	rse->dsqlFirst = Node::doDsqlPass(dsqlScratch, firstNode, false);
+	{
+		ActiveGroupingContextDisabler disableGrouping(dsqlScratch);
+
+		rse->dsqlFirst = Node::doDsqlPass(dsqlScratch, firstNode, false);
+		rse->dsqlSkip = Node::doDsqlPass(dsqlScratch, skipNode, false);
+	}
 
 	PASS1_set_parameter_type(dsqlScratch, rse->dsqlFirst,
 		[&] (dsc* desc) { *desc = descNode; },
 		false);
-
-	rse->dsqlSkip = Node::doDsqlPass(dsqlScratch, skipNode, false);
 
 	PASS1_set_parameter_type(dsqlScratch, rse->dsqlSkip,
 		[&] (dsc* desc) { *desc = descNode; },
@@ -1823,7 +4124,6 @@ RecordSourceNode* PASS1_relation(DsqlCompilerScratch* dsqlScratch, RecordSourceN
 			tableValueFunctionNode->dsqlContext = context;
 			return tableValueFunctionNode;
 	}
-	//// TODO: LocalTableSourceNode
 
 	fb_assert(false);
 	return NULL;
@@ -1906,6 +4206,18 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	RseNode* inputRse = nodeAs<RseNode>(input);
 	fb_assert(inputRse);
 
+	if (inputRse->dsqlGrouping && inputRse->dsqlGrouping->hasAdvancedGrouping())
+		return pass1_lower_grouping_sets(dsqlScratch, inputRse, order, rows, updateLock, skipLocked, flags);
+
+	AutoSetRestore<GroupingSpec*> autoGroupingSpec(&dsqlScratch->activeGroupingSpec,
+		inputRse->dsqlGroupingSpec.getObject());
+	AutoSetRestore<const SortedArray<unsigned>*> autoGroupingSet(&dsqlScratch->activeGroupingSet,
+		inputRse->dsqlGroupingSet);
+	AutoSetRestore<ValueListNode*> autoGroupingSelectList(&dsqlScratch->activeGroupingSelectList,
+		inputRse->dsqlGroupingSelectList.getObject());
+	AutoSetRestore<USHORT> autoGroupingScopeLevel(&dsqlScratch->activeGroupingScopeLevel,
+		dsqlScratch->scopeLevel);
+
 	// Save the original base of the context stack and process relations
 
 	RseNode* targetRse = FB_NEW_POOL(pool) RseNode(pool);
@@ -1917,7 +4229,12 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	if (skipLocked)
 		rse->flags |= RseNode::FLAG_SKIP_LOCKED;
 
-	rse->dsqlStreams = Node::doDsqlPass(dsqlScratch, inputRse->dsqlFrom, false);
+	{
+		ActiveGroupingContextDisabler disableGrouping(dsqlScratch);
+
+		rse->dsqlStreams = Node::doDsqlPass(dsqlScratch, inputRse->dsqlFrom, false);
+	}
+
 	RecSourceListNode* streamList = rse->dsqlStreams;
 
 	{ // scope block
@@ -1980,8 +4297,22 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 	++dsqlScratch->inSelectList;
 	selectList = PASS1_expand_select_list(dsqlScratch, selectList, rse->dsqlStreams);
 
+	ValueListNode* groupingSelectList = selectList;
+	FB_SIZE_T visibleSelectItems = 0;
+
+	if (inputRse->dsqlGroupingOrder)
+	{
+		visibleSelectItems = selectList->items.getCount();
+		groupingSelectList = pass1_copy_grouping_select_list(pool, selectList);
+		pass1_append_grouping_order_select_items(dsqlScratch, pool, selectList,
+			inputRse->dsqlGroupingOrder);
+	}
+
+	if (inputRse->dsqlGroupingSpec)
+		dsqlScratch->activeGroupingSelectList = groupingSelectList;
+
 	if ((flags & RecordSourceNode::DFLAG_VALUE) &&
-		(!selectList || selectList->items.getCount() > 1))
+		(!selectList || (visibleSelectItems ? visibleSelectItems : selectList->items.getCount()) > 1))
 	{
 		// More than one column (or asterisk) is specified in column_singleton
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -2097,8 +4428,13 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		// if there are positions in the group by clause then replace them
 		// by the (newly pass) items from the select_list
 		++dsqlScratch->inGroupByClause;
-		aggregate->dsqlGroup = pass1_group_by_list(dsqlScratch, inputRse->dsqlGroup, selectList);
+		aggregate->dsqlGroup = pass1_group_by_list(dsqlScratch, inputRse->dsqlGroup,
+			groupingSelectList);
 		--dsqlScratch->inGroupByClause;
+
+		// GROUP BY () still forces aggregation, but has no grouping keys.
+		if (!aggregate->dsqlGroup->items.hasData())
+			aggregate->dsqlGroup = NULL;
 
 		// AB: An field pointing to another parent_context isn't
 		// allowed and GROUP BY items can't contain aggregates
@@ -2111,6 +4447,17 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 					  Arg::Gds(isc_dsql_agg_group_err));
 		}
 	}
+
+	GroupingSpec* groupingSpec = inputRse->dsqlGroupingSpec.getObject();
+	const char* missingGroupingContext =
+		"GROUPING is only allowed with ROLLUP, CUBE or GROUPING SETS";
+
+	pass1_validate_grouping_expressions(dsqlScratch, groupingSpec, inputRse->dsqlGroupingSet,
+		groupingSelectList,
+		rse->dsqlSelectList,
+		missingGroupingContext);
+	pass1_validate_grouping_expressions(dsqlScratch, groupingSpec, inputRse->dsqlGroupingSet,
+		groupingSelectList, rse->dsqlOrder, missingGroupingContext);
 
 	// Parse a user-specified access PLAN
 	if (inputRse->rse_plan)
@@ -2202,6 +4549,10 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 			++dsqlScratch->inHavingClause;
 			parentRse->dsqlWhere = Node::doDsqlPass(dsqlScratch, inputRse->dsqlHaving, false);
 			--dsqlScratch->inHavingClause;
+
+			pass1_validate_grouping_expressions(dsqlScratch, groupingSpec,
+				inputRse->dsqlGroupingSet, groupingSelectList, parentRse->dsqlWhere,
+				missingGroupingContext);
 
 			ExprNode::doDsqlFieldRemapper(remapper, parentRse->dsqlWhere);
 
@@ -2353,6 +4704,9 @@ static RseNode* pass1_rse_impl(DsqlCompilerScratch* dsqlScratch, RecordSourceNod
 		rse = parentRse;
 	}
 
+	if (visibleSelectItems)
+		rse->dsqlVisibleSelectItems = visibleSelectItems;
+
 	rse->dsqlFlags = flags;
 
 	return rse;
@@ -2380,7 +4734,22 @@ static ValueListNode* pass1_sel_list(DsqlCompilerScratch* dsqlScratch, ValueList
 
 	NestConst<ValueExprNode>* ptr = input->items.begin();
 	for (const NestConst<ValueExprNode>* const end = input->items.end(); ptr != end; ++ptr)
-		retList->add(Node::doDsqlPass(dsqlScratch, *ptr, false));
+	{
+		ValueExprNode* value = Node::doDsqlPass(dsqlScratch, *ptr, false);
+
+		if (auto groupingNode = nodeAs<GroupingNode>(*ptr))
+		{
+			if (!nodeIs<DsqlAliasNode>(value))
+			{
+				DsqlAliasNode* aliasNode = FB_NEW_POOL(pool) DsqlAliasNode(pool,
+					MetaName(groupingNode->getDsqlFunctionName()), value);
+				aliasNode->dsqlGroupingExpression = *ptr;
+				value = aliasNode;
+			}
+		}
+
+		retList->add(value);
+	}
 
 	return retList;
 }
@@ -2514,6 +4883,8 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 	UnionSourceNode* unionSource = FB_NEW_POOL(pool) UnionSourceNode(pool);
 	unionSource->dsqlAll = input->dsqlAll;
+	unionSource->dsqlOrderBySelectList = input->dsqlOrderBySelectList;
+	unionSource->dsqlDistinctGroupingSets = input->dsqlDistinctGroupingSets;
 	unionSource->recursive = input->recursive;
 
 	RseNode* unionRse = FB_NEW_POOL(pool) RseNode(pool);
@@ -2572,6 +4943,10 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 		}
 	} // end scope block
 
+	if (unionSource->dsqlDistinctGroupingSets)
+		unionSource->dsqlClauses = pass1_deduplicate_grouping_union_clauses(dsqlScratch, pool,
+			unionSource->dsqlClauses);
+
 	// generate the list of fields to select.
 	ValueListNode* items = nodeAs<RseNode>(unionSource->dsqlClauses->items[0])->dsqlSelectList;
 
@@ -2596,6 +4971,21 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 					  Arg::Gds(isc_dsql_command_err) <<
 					  // overload of msg
 					  Arg::Gds(isc_dsql_count_mismatch));
+		}
+	}
+
+	FB_SIZE_T visibleSelectItems = 0;
+
+	for (FB_SIZE_T i = 0; i < unionSource->dsqlClauses->items.getCount(); ++i)
+	{
+		const RseNode* clause = nodeAs<RseNode>(unionSource->dsqlClauses->items[i]);
+
+		if (clause->dsqlVisibleSelectItems)
+		{
+			if (!visibleSelectItems)
+				visibleSelectItems = clause->dsqlVisibleSelectItems;
+			else
+				fb_assert(visibleSelectItems == clause->dsqlVisibleSelectItems);
 		}
 	}
 
@@ -2692,16 +5082,19 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 				position = collateNode->arg;
 
 			const LiteralNode* literal = nodeAs<LiteralNode>(position);
+			SLONG number = 0;
 
-			if (!literal || literal->litDesc.dsc_dtype != dtype_long)
+			if (literal && literal->litDesc.dsc_dtype == dtype_long)
+				number = literal->getSlong();
+			else if (!input->dsqlOrderBySelectList ||
+				!pass1_find_raw_order_position(dsqlScratch, position, items,
+					items->items.getCount(), number))
 			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 						  Arg::Gds(isc_dsql_command_err) <<
 						  // invalid ORDER BY clause.
 						  Arg::Gds(isc_order_by_err));
 			}
-
-			const SLONG number = literal->getSlong();
 
 			if (number < 1 || ULONG(number) > union_items->items.getCount())
 			{
@@ -2740,6 +5133,10 @@ static RseNode* pass1_union(DsqlCompilerScratch* dsqlScratch, UnionSourceNode* i
 
 	if (skipLocked)
 		unionRse->flags |= RseNode::FLAG_SKIP_LOCKED;
+
+	if (visibleSelectItems && visibleSelectItems < unionRse->dsqlSelectList->items.getCount())
+		unionRse->dsqlSelectList = pass1_trim_grouping_select_list(pool,
+			unionRse->dsqlSelectList, visibleSelectItems);
 
 	unionRse->dsqlFlags = flags;
 

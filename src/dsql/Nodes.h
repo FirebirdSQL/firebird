@@ -129,6 +129,12 @@ public:
 		if (!node)
 			return NULL;
 
+		if constexpr (std::is_same<T, ValueExprNode>::value)
+		{
+			if (ValueExprNode* value = dsqlScratch->makeGroupingValue(node.getObject()))
+				return value;
+		}
+
 		return node->dsqlPass(dsqlScratch);
 	}
 
@@ -139,7 +145,18 @@ public:
 		if (!node)
 			target = NULL;
 		else
+		{
+			if constexpr (std::is_same<T1, ValueExprNode>::value)
+			{
+				if (ValueExprNode* value = dsqlScratch->makeGroupingValue(node.getObject()))
+				{
+					target = value;
+					return;
+				}
+			}
+
 			target = node->dsqlPass(dsqlScratch);
+		}
 	}
 
 	// Changes dsqlScratch->isPsql() value, calls doDsqlPass and restore dsqlScratch->isPsql().
@@ -505,6 +522,8 @@ public:
 		TYPE_EXTRACT,
 		TYPE_FIELD,
 		TYPE_GEN_ID,
+		TYPE_GROUPING,
+		TYPE_GROUPING_CLAUSE,
 		TYPE_INTERNAL_INFO,
 		TYPE_LITERAL,
 		TYPE_LOCAL_TIME,
