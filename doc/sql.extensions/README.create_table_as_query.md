@@ -22,10 +22,25 @@ be explicitly aliased.
 For global and local temporary tables, normal temporary-table data lifetime rules apply. Package temporary tables
 do not support this syntax.
 
+## Datatypes and Domains
+
+When a select list item is a direct reference to a source table or view column, the new column copies the source
+column's exact datatype instead of one derived only from the query's runtime result (which would lose information
+such as declared `NUMERIC`/`DECIMAL` precision).
+
+* If the source column is based on a named domain, the new column references that domain directly, as if it had
+  been declared `<column name> <domain name>`.
+* If the source column is based on an auto-generated (implicit) domain, its exact type (precision/scale, character
+  set, collation, etc.) is copied.
+
+For any other select list item (an expression, a literal, or an aggregate, for example), the new column's datatype
+is derived from the query result.
+
 ## Character Sets
 
-For `CHAR` and `VARCHAR` columns, the database default character set is not used. The character set and collation
-of the new column are copied from the corresponding query expression.
+For `CHAR` and `VARCHAR` columns not covered by the direct column-reference rule above, the database default
+character set is not used. The character set and collation of the new column are copied from the corresponding
+query expression.
 
 String literals use the connection character set, so columns created from string literals inherit the connection
 character set.
