@@ -10879,6 +10879,9 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
 	FB_UINT64 records = 0;
 	rec_type record;
 
+	// msg 427 skipping data for table @1
+	BURP_verbose(427, relation->rel_name.toQuotedString());
+
 	try
 	{
 		while (true)
