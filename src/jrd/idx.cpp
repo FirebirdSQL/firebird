@@ -314,11 +314,26 @@ public:
 			}
 
 			FbLocalStatus status;
-			if (m_tra)
+			if (m_tra || m_idx.idx_expression_statement || m_idx.idx_condition_statement)
 			{
 				BackgroundContextHolder tdbb(att->att_database, att, &status, FB_FUNCTION);
-				TRA_commit(tdbb, m_tra, false);
+
+				if (m_tra)
+					TRA_commit(tdbb, m_tra, false);
+
+				if (m_idx.idx_expression_statement)
+				{
+					m_idx.idx_expression_statement->release(tdbb);
+					m_idx.idx_expression_statement = NULL;
+				}
+
+				if (m_idx.idx_condition_statement)
+				{
+					m_idx.idx_condition_statement->release(tdbb);
+					m_idx.idx_condition_statement = NULL;
+				}
 			}
+
 			WorkerAttachment::releaseAttachment(&status, m_attStable);
 		}
 
@@ -482,18 +497,6 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	if (item->m_ppSequence == m_countPP)
 	{
 		//fb_assert((scb->scb_flags & scb_sorted) == 0);
-
-		if (item->m_ownAttach && idx->idx_expression_statement)
-		{
-			idx->idx_expression_statement->release(tdbb);
-			idx->idx_expression_statement = NULL;
-		}
-
-		if (item->m_ownAttach && idx->idx_condition_statement)
-		{
-			idx->idx_condition_statement->release(tdbb);
-			idx->idx_condition_statement = NULL;
-		}
 
 		if (!m_stop && m_creation->duplicates.value() == 0)
 			scb->sort(tdbb);
