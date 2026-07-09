@@ -1,6 +1,7 @@
 #include "boost/test/unit_test.hpp"
 #include <cstddef>
 #include <cstring>
+#include <source_location>
 #include "../common/tests/CvtTestUtils.h"
 
 #include "../common/StatusArg.h"
@@ -26,7 +27,8 @@ MockCallback cb(errFunc, std::bind(mockGetLocalDate, 2023));
 BOOST_AUTO_TEST_SUITE(CVTDatetimeToFormatString)
 
 template<typename T>
-static void testCVTDatetimeToFormatString(T date, const string& format, const string& expected, Callbacks& cb)
+static void testCVTDatetimeToFormatString(T date, const string& format, const string& expected, Callbacks& cb,
+	std::source_location sl = std::source_location::current())
 {
 	try
 	{
@@ -36,7 +38,7 @@ static void testCVTDatetimeToFormatString(T date, const string& format, const st
 		desc.dsc_address = (UCHAR*) &date;
 		desc.dsc_scale = 0;
 
-		BOOST_TEST_INFO("FORMAT: " << "\"" << format.c_str() << "\"");
+		BOOST_TEST_INFO("FORMAT: " << "\"" << format.c_str() << "\"" << " at Line:" << sl.line() << " Column:" << sl.column());
 
 		string result = CVT_format_datetime_to_string(&desc, format, &cb);
 
@@ -53,13 +55,13 @@ BOOST_AUTO_TEST_SUITE(FunctionalTest)
 
 BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_DATE)
 {
-	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.0001.001.01.1", cb);
-	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1234.1234.234.34.4", cb);
-	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YEAR.YYYY.YYY.YY.Y", "9999.9999.999.99.9", cb);
+	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YYYY.YYY.YY.Y", "0001.001.01.1", cb);
+	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YYYY.YYY.YY.Y", "1234.234.34.4", cb);
+	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YYYY.YYY.YY.Y", "9999.999.99.9", cb);
 
-	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1.0001.001.01.1", cb);
-	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YEAR.YYYY.YYY.YY.Y", "1234.1234.234.34.4", cb);
-	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YEAR.YYYY.YYY.YY.Y", "9999.9999.999.99.9", cb);
+	testCVTDatetimeToFormatString(createDate(1, 1, 1), "YYYY.YYY.YY.Y", "0001.001.01.1", cb);
+	testCVTDatetimeToFormatString(createDate(1234, 1, 1), "YYYY.YYY.YY.Y", "1234.234.34.4", cb);
+	testCVTDatetimeToFormatString(createDate(9999, 1, 1), "YYYY.YYY.YY.Y", "9999.999.99.9", cb);
 
 	testCVTDatetimeToFormatString(createDate(1, 1, 1), "Q", "1", cb);
 	testCVTDatetimeToFormatString(createDate(1, 2, 1), "Q", "1", cb);
@@ -73,6 +75,58 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_DATE)
 	testCVTDatetimeToFormatString(createDate(1, 10, 1), "Q", "4", cb);
 	testCVTDatetimeToFormatString(createDate(1, 11, 1), "Q", "4", cb);
 	testCVTDatetimeToFormatString(createDate(1, 12, 1), "Q", "4", cb);
+
+	testCVTDatetimeToFormatString(createDate(1, 1, 1),  "YEAR", "ONE", cb);
+	testCVTDatetimeToFormatString(createDate(2, 1, 1),  "YEAR", "TWO", cb);
+	testCVTDatetimeToFormatString(createDate(3, 1, 1),  "YEAR", "THREE", cb);
+	testCVTDatetimeToFormatString(createDate(4, 1, 1),  "YEAR", "FOUR", cb);
+	testCVTDatetimeToFormatString(createDate(5, 1, 1),  "YEAR", "FIVE", cb);
+	testCVTDatetimeToFormatString(createDate(6, 1, 1),  "YEAR", "SIX", cb);
+	testCVTDatetimeToFormatString(createDate(7, 1, 1),  "YEAR", "SEVEN", cb);
+	testCVTDatetimeToFormatString(createDate(8, 1, 1),  "YEAR", "EIGHT", cb);
+	testCVTDatetimeToFormatString(createDate(9, 1, 1),  "YEAR", "NINE", cb);
+	testCVTDatetimeToFormatString(createDate(10, 1, 1), "YEAR", "TEN", cb);
+	testCVTDatetimeToFormatString(createDate(11, 1, 1), "YEAR", "ELEVEN", cb);
+	testCVTDatetimeToFormatString(createDate(12, 1, 1), "YEAR", "TWELVE", cb);
+	testCVTDatetimeToFormatString(createDate(13, 1, 1), "YEAR", "THIRTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(14, 1, 1), "YEAR", "FOURTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(15, 1, 1), "YEAR", "FIFTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(16, 1, 1), "YEAR", "SIXTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(17, 1, 1), "YEAR", "SEVENTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(18, 1, 1), "YEAR", "EIGHTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(19, 1, 1), "YEAR", "NINETEEN", cb);
+	testCVTDatetimeToFormatString(createDate(20, 1, 1), "YEAR", "TWENTY", cb);
+	testCVTDatetimeToFormatString(createDate(30, 1, 1), "YEAR", "THIRTY", cb);
+	testCVTDatetimeToFormatString(createDate(40, 1, 1), "YEAR", "FORTY", cb);
+	testCVTDatetimeToFormatString(createDate(50, 1, 1), "YEAR", "FIFTY", cb);
+	testCVTDatetimeToFormatString(createDate(60, 1, 1), "YEAR", "SIXTY", cb);
+	testCVTDatetimeToFormatString(createDate(70, 1, 1), "YEAR", "SEVENTY", cb);
+	testCVTDatetimeToFormatString(createDate(80, 1, 1), "YEAR", "EIGHTY", cb);
+	testCVTDatetimeToFormatString(createDate(90, 1, 1), "YEAR", "NINETY", cb);
+	testCVTDatetimeToFormatString(createDate(100, 3, 1), "YEAR", "ONE HUNDRED", cb);
+	testCVTDatetimeToFormatString(createDate(500, 3, 1), "YEAR", "FIVE HUNDRED", cb);
+	testCVTDatetimeToFormatString(createDate(900, 3, 1), "YEAR", "NINE HUNDRED", cb);
+	testCVTDatetimeToFormatString(createDate(1000, 4, 1), "YEAR", "ONE THOUSAND", cb);
+	testCVTDatetimeToFormatString(createDate(5000, 4, 1), "YEAR", "FIVE THOUSAND", cb);
+	testCVTDatetimeToFormatString(createDate(9000, 4, 1), "YEAR", "NINE THOUSAND", cb);
+	testCVTDatetimeToFormatString(createDate(101, 1, 1), "YEAR", "ONE HUNDRED ONE", cb);
+	testCVTDatetimeToFormatString(createDate(105, 1, 1), "YEAR", "ONE HUNDRED FIVE", cb);
+	testCVTDatetimeToFormatString(createDate(109, 1, 1), "YEAR", "ONE HUNDRED NINE", cb);
+	testCVTDatetimeToFormatString(createDate(110, 1, 1), "YEAR", "ONE TEN", cb);
+	testCVTDatetimeToFormatString(createDate(115, 1, 1), "YEAR", "ONE FIFTEEN", cb);
+	testCVTDatetimeToFormatString(createDate(119, 1, 1), "YEAR", "ONE NINETEEN", cb);
+	testCVTDatetimeToFormatString(createDate(199, 1, 1), "YEAR", "ONE NINETY-NINE", cb);
+	testCVTDatetimeToFormatString(createDate(1001, 1, 1), "YEAR", "ONE THOUSAND ONE", cb);
+	testCVTDatetimeToFormatString(createDate(1009, 1, 1), "YEAR", "ONE THOUSAND NINE", cb);
+	testCVTDatetimeToFormatString(createDate(1010, 1, 1), "YEAR", "TEN TEN", cb);
+	testCVTDatetimeToFormatString(createDate(1019, 1, 1), "YEAR", "TEN NINETEEN", cb);
+	testCVTDatetimeToFormatString(createDate(1099, 1, 1), "YEAR", "TEN NINETY-NINE", cb);
+	testCVTDatetimeToFormatString(createDate(1100, 1, 1), "YEAR", "ONE THOUSAND ONE HUNDRED", cb);
+	testCVTDatetimeToFormatString(createDate(1101, 1, 1), "YEAR", "ONE THOUSAND ONE HUNDRED ONE", cb);
+	testCVTDatetimeToFormatString(createDate(1111, 1, 1), "YEAR", "ELEVEN ELEVEN", cb);
+	testCVTDatetimeToFormatString(createDate(3434, 1, 1), "YEAR", "THIRTY-FOUR THIRTY-FOUR", cb);
+	testCVTDatetimeToFormatString(createDate(3406, 1, 1), "YEAR", "THREE THOUSAND FOUR HUNDRED SIX", cb);
+	testCVTDatetimeToFormatString(createDate(2026, 1, 1), "YEAR", "TWENTY TWENTY-SIX", cb);
 
 	testCVTDatetimeToFormatString(createDate(1, 1, 1), "MON", "Jan", cb);
 	testCVTDatetimeToFormatString(createDate(1, 2, 1), "MON", "Feb", cb);
@@ -204,7 +258,7 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP)
 {
 	ISC_TIMESTAMP timestamp = createTimeStamp(1982, 4, 21, 1, 34, 15, 2500);
 
-	testCVTDatetimeToFormatString(timestamp, "YEAR.YYYY.YYY.YY.Y/J", "1982.1982.982.82.2/2445081", cb);
+	testCVTDatetimeToFormatString(timestamp, "YYYY.YYY.YY.Y/J", "1982.982.82.2/2445081", cb);
 	testCVTDatetimeToFormatString(timestamp, "Q-MM-RM-MON-MONTH", "2-04-IV-Apr-APRIL", cb);
 	testCVTDatetimeToFormatString(timestamp, "WW,W-D;DAY:DD DDD.DY", "16,3-4;WEDNESDAY:21 111.Wed", cb);
 	testCVTDatetimeToFormatString(timestamp, "HH-HH12 P.M.-HH24-MI-SS-SSSSS.FF2", "01-01 A.M.-01-34-15-5655.25", cb);
@@ -274,7 +328,7 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_TIMESTAMP_TZ)
 {
 	ISC_TIMESTAMP_TZ timestampTZ = createTimeStampTZ(1982, 4, 21, 1, 34, 15, 0, 500);
 
-	testCVTDatetimeToFormatString(timestampTZ, "YEAR.YYYY.YYY.YY.Y/J", "1982.1982.982.82.2/2445081", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "YYYY.YYY.YY.Y/J", "1982.982.82.2/2445081", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "Q-MM-RM-MON-MONTH", "2-04-IV-Apr-APRIL", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "WW,W-D;DAY:DD DDD.DY", "16,3-4;WEDNESDAY:21 111.Wed", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "HH A.M.-HH12-HH24-MI-SS-SSSSS.FF2/TZH/TZM", "01 A.M.-01-01-34-15-5655.50/+00/00", cb);
@@ -291,7 +345,7 @@ BOOST_AUTO_TEST_CASE(CVTDatetimeToFormatStringTest_SOLID_PATTERNS)
 {
 	ISC_TIMESTAMP_TZ timestampTZ = createTimeStampTZ(1982, 4, 21, 1, 34, 15, 0, 500);
 
-	testCVTDatetimeToFormatString(timestampTZ, "YEARYYYYYYYYYYJ", "198219821982822445081", cb);
+	testCVTDatetimeToFormatString(timestampTZ, "YYYYYYYYYYJ", "19821982822445081", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "QMMRMMONMONTH", "204IVAprAPRIL", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "WWWD/DAYDDDDDDY", "1634/WEDNESDAY1111112", cb);
 	testCVTDatetimeToFormatString(timestampTZ, "HHHH12A.M.HH24MISSSSSSSFF2TZHTZM", "0101A.M.013456551550+0000", cb);
@@ -401,11 +455,6 @@ BOOST_AUTO_TEST_SUITE(FunctionalTest)
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 {
-	testCVTStringToFormatDateTimeExpectDate("1", "YEAR", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("0001", "YEAR", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("1234", "YEAR", createTimeStampTZ(1234, 0, 0, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("9999", "YEAR", createTimeStampTZ(9999, 0, 0, 0, 0, 0, 0), cb);
-
 	testCVTStringToFormatDateTimeExpectDate("1", "YYYY", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("0001", "YYYY", createTimeStampTZ(1, 0, 0, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("1234", "YYYY", createTimeStampTZ(1234, 0, 0, 0, 0, 0, 0), cb);
@@ -519,16 +568,16 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_DATE)
 	testCVTStringToFormatDateTimeExpectDate("1721426", "J", createTimeStampTZ(1, 1, 1, 0, 0, 0, 0), cb);
 	testCVTStringToFormatDateTimeExpectDate("5373484", "J", createTimeStampTZ(9999, 12, 31, 0, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectDate("1:1,1", "YEAR.MM.DD", createTimeStampTZ(1, 1, 1, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YEAR.MM.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("9999 12;31", "YEAR.MM.DD", createTimeStampTZ(9999, 12, 31, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1:1,1", "YYYY.MM.DD", createTimeStampTZ(1, 1, 1, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YYYY.MM.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("9999 12;31", "YYYY.MM.DD", createTimeStampTZ(9999, 12, 31, 0, 0, 0, 0), cb);
 
-	testCVTStringToFormatDateTimeExpectDate("1981-Aug/13", "YEAR.MON.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("1981-August/13", "YEAR.MONTH.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("1981-VIII/13", "YEAR.RM.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1981-Aug/13", "YYYY.MON.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1981-August/13", "YYYY.MONTH.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1981-VIII/13", "YYYY.RM.DD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
 
 	testCVTStringToFormatDateTimeExpectDate("25.Jan.25", "YY;MON;DD", createTimeStampTZ(2025, 1, 25, 0, 0, 0, 0), cb);
-	testCVTStringToFormatDateTimeExpectDate("./.1981./''-8--/13-'-", "  YEAR.' -.MM.,',-.DD//", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("./.1981./''-8--/13-'-", "  YYYY.' -.MM.,',-.DD//", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TIME)
@@ -649,7 +698,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_TZ)
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_SOLID_PATTERNS)
 {
 	testCVTStringToFormatDateTimeExpectTime("1 P.M. - 25 - 45 ' 2", "HHA.M.MISSFF4", createTimeStampTZ(0, 0, 0, 13, 25, 45, 0, 2000), cb);
-	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YEARMMDD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
+	testCVTStringToFormatDateTimeExpectDate("1981-8/13", "YYYYMMDD", createTimeStampTZ(1981, 8, 13, 0, 0, 0, 0), cb);
 }
 
 BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
@@ -659,7 +708,7 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("2000.12", "YYYY.MM.DD", cb);
 	testExceptionCvtStringToFormatDateTime("2000.12", "YYYY", cb);
 
-	testExceptionCvtStringToFormatDateTime("2 20 200 2000 2000", "Y YY YYY YYYY YEAR", cb);
+	testExceptionCvtStringToFormatDateTime("2 20 200 2000", "Y YY YYY YYYY", cb);
 	testExceptionCvtStringToFormatDateTime("20 2000", "RR RRRR", cb);
 
 	testExceptionCvtStringToFormatDateTime("2000 2000", "YYYY RRRR", cb);
@@ -692,7 +741,6 @@ BOOST_AUTO_TEST_CASE(CVTStringToFormatDateTime_EXCEPTION_CHECK)
 	testExceptionCvtStringToFormatDateTime("Apr", "YY    MON", cb);
 	testExceptionCvtStringToFormatDateTime("Apr", "YYY   MON", cb);
 	testExceptionCvtStringToFormatDateTime("Apr", "YYYY  MON", cb);
-	testExceptionCvtStringToFormatDateTime("Apr", "YEAR  MON", cb);
 	testExceptionCvtStringToFormatDateTime("Apr", "RR    MON", cb);
 	testExceptionCvtStringToFormatDateTime("Apr", "RRRR  MON", cb);
 	testExceptionCvtStringToFormatDateTime("Apr", "MM    MON", cb);

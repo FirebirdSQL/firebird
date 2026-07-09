@@ -30,3 +30,8 @@ extern/ttmath/release/
 /src/include/gen/autoconfig.h
 /vcpkg_installed/
 .idea/
+
+# clangd index and background cache
+/.cache/clangd
+# Compilation database generated for clangd
+/compile_commands.json

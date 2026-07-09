@@ -317,6 +317,8 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
 			case isc_spb_bkp_include_data:
+			case isc_spb_bkp_skip_schema_data:
+			case isc_spb_bkp_include_schema_data:
 			case isc_spb_bkp_keyholder:
 			case isc_spb_bkp_keyname:
 			case isc_spb_bkp_crypt:

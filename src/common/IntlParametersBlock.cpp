@@ -265,6 +265,9 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 		{
 		FB_IPB_TAG(isc_spb_bkp_file);
 		FB_IPB_TAG(isc_spb_bkp_skip_data);
+		FB_IPB_TAG(isc_spb_bkp_include_data);
+		FB_IPB_TAG(isc_spb_bkp_skip_schema_data);
+		FB_IPB_TAG(isc_spb_bkp_include_schema_data);
 			return TAG_STRING;
 		}
 		break;

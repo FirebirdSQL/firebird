@@ -983,7 +983,6 @@ namespace Jrd
 				return std::greater{}(item.relation, relation);
 			},
 			pos);
-		fb_assert(found);
 
 		if (found)
 			dbb_del_pages.remove(pos);

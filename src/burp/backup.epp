@@ -354,11 +354,11 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		write_schemas();
 
 		// Write foreign servers
-		BURP_verbose(423);	// msg 423 writing foreign servers
+		BURP_verbose(428);	// msg 428 writing foreign servers
 		write_foreign_servers();
 
 		// Write foreign user mappings
-		BURP_verbose(436);	// msg 436 writing foreign user mappings
+		BURP_verbose(441);	// msg 441 writing foreign user mappings
 		write_foreign_user_mappings();
 	}
 
@@ -2990,8 +2990,8 @@ void write_foreign_mapping_options(const MetaString& userName, const MetaString&
 
 		PUT_TEXT(att_foreign_mapping_option_name, X.RDB$FOREIGN_OPTION_NAME);
 
-		// msg 440 writing foreign user mapping option %s
-		BURP_verbose(440, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+		// msg 445 writing foreign user mapping option %s
+		BURP_verbose(445, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 
 		PUT_TEXT(att_foreign_mapping_option_value, X.RDB$FOREIGN_OPTION_VALUE);
 
@@ -3043,8 +3043,8 @@ void write_foreign_table_options(const QualifiedMetaString& table)
 
 		PUT_TEXT(att_foreign_table_option_value, X.RDB$FOREIGN_OPTION_VALUE);
 
-		// msg 430 writing foreign table option %s
-		BURP_verbose(430, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+		// msg 435 writing foreign table option %s
+		BURP_verbose(435, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 
 		put(tdgbl, att_end);
 	}
@@ -3090,8 +3090,8 @@ void write_foreign_table_field_options(const QualifiedMetaString& table, const M
 
 		PUT_TEXT(att_foreign_table_field_option_value, X.RDB$FOREIGN_OPTION_VALUE);
 
-		// msg 433 writing foreign table column option %s
-		BURP_verbose(433, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+		// msg 438 writing foreign table column option %s
+		BURP_verbose(438, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 
 		put(tdgbl, att_end);
 	}
@@ -3124,8 +3124,8 @@ void write_foreign_user_mappings()
 	{
 		put(tdgbl, rec_foreign_user_mapping);
 
-		// msg 437 writing foreign user mapping options for user %s and server %s
-		BURP_verbose(437, SafeArg() << MetaString(X.RDB$USER).toQuotedString().c_str() <<
+		// msg 442 writing foreign user mapping for user %s and server %s
+		BURP_verbose(442, SafeArg() << MetaString(X.RDB$USER).toQuotedString().c_str() <<
 			MetaString(X.RDB$FOREIGN_SERVER_NAME).toQuotedString().c_str());
 
 		PUT_TEXT(att_foreign_user_mapping_user, X.RDB$USER);
@@ -4585,8 +4585,8 @@ void write_foreign_servers()
 
 		PUT_TEXT(att_foreign_server_name, X.RDB$FOREIGN_SERVER_NAME);
 
-		// msg 424 writing foreign server %s
-		BURP_verbose(424, MetaString(X.RDB$FOREIGN_SERVER_NAME).toQuotedString());
+		// msg 429 writing foreign server %s
+		BURP_verbose(429, MetaString(X.RDB$FOREIGN_SERVER_NAME).toQuotedString());
 
 		if (!X.RDB$FOREIGN_SERVER_WRAPPER.NULL)
 			PUT_TEXT(att_foreign_server_data_wrapper_name, X.RDB$FOREIGN_SERVER_WRAPPER);
@@ -4638,8 +4638,8 @@ void write_foreign_server_options(const MetaString& serverName)
 
 		PUT_TEXT(att_foreign_server_option_name, X.RDB$FOREIGN_OPTION_NAME);
 
-		// msg 427 writing foreign server option %s
-		BURP_verbose(427, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+		// msg 432 writing foreign server option %s
+		BURP_verbose(432, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 
 		PUT_TEXT(att_foreign_server_option_value, X.RDB$FOREIGN_OPTION_VALUE);
 

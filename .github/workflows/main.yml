@@ -121,7 +121,8 @@ jobs:
           uploadFiles: gen/Firebird-*-source.tar.xz
 
   build-alpine-x64:
-    if: github.ref_type != 'tag'
+    # Disabled
+    if: ${{ false && github.ref_type != 'tag' }}
     runs-on: ubuntu-24.04
     container: alpine:3.22.1
 

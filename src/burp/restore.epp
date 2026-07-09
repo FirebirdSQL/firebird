@@ -10807,7 +10807,7 @@ bool get_foreign_server(BurpGlobals* tdgbl)
 					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
 					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
 					name.object = X.RDB$FOREIGN_SERVER_NAME;
-					BURP_verbose(425, name.object.toQuotedString());	// msg 425 restoring foreign server %s
+					BURP_verbose(430, name.object.toQuotedString());	// msg 430 restoring foreign server %s
 					break;
 
 				case att_foreign_server_data_wrapper_name:
@@ -10833,7 +10833,7 @@ bool get_foreign_server(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 426);	// msg 426 foreign server
+					bad_attribute(scan_next_attr, attribute, 431);	// msg 431 foreign server
 					break;
 			}
 		}
@@ -10889,7 +10889,7 @@ bool get_foreign_server_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 429);	// msg 429 foreign server option
+					bad_attribute(scan_next_attr, attribute, 434);	// msg 434 foreign server option
 					break;
 			}
 		}
@@ -10923,8 +10923,8 @@ bool get_foreign_server_option(BurpGlobals* tdgbl)
 				case att_foreign_server_option_name:
 					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
 					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					// msg 428 restoring foreign server option %s
-					BURP_verbose(428, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					// msg 433 restoring foreign server option %s
+					BURP_verbose(433, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 					break;
 
 				case att_foreign_server_option_value:
@@ -10938,7 +10938,7 @@ bool get_foreign_server_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 429);	// msg 429 foreign server option
+					bad_attribute(scan_next_attr, attribute, 434);	// msg 434 foreign server option
 					break;
 			}
 		}
@@ -10996,7 +10996,7 @@ bool get_foreign_table_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 432);	// msg 432 foreign table option
+					bad_attribute(scan_next_attr, attribute, 437);	// msg 437 foreign table option
 					break;
 			}
 		}
@@ -11036,8 +11036,8 @@ bool get_foreign_table_option(BurpGlobals* tdgbl)
 				case att_foreign_table_option_name:
 					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
 					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					// msg 431 restoring foreign table option %s
-					BURP_verbose(431, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					// msg 436 restoring foreign table option %s
+					BURP_verbose(436, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 					break;
 
 				case att_foreign_table_option_value:
@@ -11046,7 +11046,7 @@ bool get_foreign_table_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 432);	// msg 432 foreign table option
+					bad_attribute(scan_next_attr, attribute, 437);	// msg 437 foreign table option
 					break;
 			}
 		}
@@ -11104,8 +11104,8 @@ bool get_foreign_table_field_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					// msg 435 foreign table column option
-					bad_attribute(scan_next_attr, attribute, 435);
+					// msg 440 foreign table column option
+					bad_attribute(scan_next_attr, attribute, 440);
 					break;
 			}
 		}
@@ -11153,8 +11153,8 @@ bool get_foreign_table_field_option(BurpGlobals* tdgbl)
 				case att_foreign_table_field_option_name:
 					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
 					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					// msg 434 restoring foreign table column option %s
-					BURP_verbose(434, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					// msg 439 restoring foreign table column option %s
+					BURP_verbose(439, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 					break;
 
 				case att_foreign_table_field_option_value:
@@ -11163,8 +11163,8 @@ bool get_foreign_table_field_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					// msg 435 foreign table column option
-					bad_attribute(scan_next_attr, attribute, 435);
+					// msg 440 foreign table column option
+					bad_attribute(scan_next_attr, attribute, 440);
 					break;
 			}
 		}
@@ -11214,7 +11214,7 @@ bool get_foreign_user_mapping(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 439);	// msg 439 foreign user mapping
+					bad_attribute(scan_next_attr, attribute, 444);	// msg 444 foreign user mapping
 					break;
 			}
 		}
@@ -11248,8 +11248,8 @@ bool get_foreign_user_mapping(BurpGlobals* tdgbl)
 					GET_TEXT(X.RDB$FOREIGN_SERVER_NAME);
 					X.RDB$FOREIGN_SERVER_NAME.NULL = FALSE;
 					server.object = X.RDB$FOREIGN_SERVER_NAME;
-					// msg 438 restoring foreign user mapping for user %s and server %s
-					BURP_verbose(438, SafeArg() << user.object.toQuotedString().c_str() <<
+					// msg 443 restoring foreign user mapping for user %s and server %s
+					BURP_verbose(443, SafeArg() << user.object.toQuotedString().c_str() <<
 						server.object.toQuotedString().c_str());
 					break;
 
@@ -11259,7 +11259,7 @@ bool get_foreign_user_mapping(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 439);	// msg 439 foreign user mapping
+					bad_attribute(scan_next_attr, attribute, 444);	// msg 444 foreign user mapping
 					break;
 			}
 		}
@@ -11317,7 +11317,7 @@ bool get_foreign_mapping_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 442);	// msg 442 foreign user mapping option
+					bad_attribute(scan_next_attr, attribute, 447);	// msg 442 foreign user mapping option
 					break;
 			}
 		}
@@ -11359,8 +11359,8 @@ bool get_foreign_mapping_option(BurpGlobals* tdgbl)
 				case att_foreign_mapping_option_name:
 					GET_TEXT(X.RDB$FOREIGN_OPTION_NAME);
 					X.RDB$FOREIGN_OPTION_NAME.NULL = FALSE;
-					// msg 441 restoring foreign user mapping option %s
-					BURP_verbose(441, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
+					// msg 446 restoring foreign user mapping option %s
+					BURP_verbose(446, MetaString(X.RDB$FOREIGN_OPTION_NAME).toQuotedString());
 					break;
 
 				case att_foreign_mapping_option_value:
@@ -11374,7 +11374,7 @@ bool get_foreign_mapping_option(BurpGlobals* tdgbl)
 					break;
 
 				default:
-					bad_attribute(scan_next_attr, attribute, 442);	// msg 442 foreign user mapping option
+					bad_attribute(scan_next_attr, attribute, 447);	// msg 442 foreign user mapping option
 					break;
 			}
 		}
@@ -11555,6 +11555,9 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
  **************************************/
 	FB_UINT64 records = 0;
 	rec_type record;
+
+	// msg 427 skipping data for table @1
+	BURP_verbose(427, relation->rel_name.toQuotedString());
 
 	try
 	{

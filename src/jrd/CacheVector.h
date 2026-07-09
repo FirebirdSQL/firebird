@@ -115,9 +115,8 @@ namespace CacheFlag
 	static constexpr ObjectBase::Flag NOCOMMIT =	0x010;		// do not commit created version
 	static constexpr ObjectBase::Flag NOERASED =	0x020;		// never return erased version, skip till older object
 	static constexpr ObjectBase::Flag RETIRED = 	0x040;		// object is in a process of GC
-	static constexpr ObjectBase::Flag UPGRADE =		0x080;		// create new versions for already existing in a cache objects
-	static constexpr ObjectBase::Flag MINISCAN =	0x100;		// perform minimum scan and set cache entry to reload state
-	static constexpr ObjectBase::Flag DB_VERSION =	0x200;		// execute version upgrade in database
+	static constexpr ObjectBase::Flag MINISCAN =	0x080;		// perform minimum scan and set cache entry to reload state
+	static constexpr ObjectBase::Flag DB_VERSION =	0x100;		// execute version upgrade in database
 
 	// Useful combinations
 	static constexpr ObjectBase::Flag TAG_FOR_UPDATE = NOCOMMIT | MINISCAN | DB_VERSION;
@@ -163,11 +162,13 @@ class ListEntry : public HazardObject
 public:
 	enum State { INITIAL, RELOAD, MISSING, SCANNING, READY };
 
-	ListEntry(Versioned* object, TraNumber traNumber, ObjectBase::Flag fl)
+	ListEntry(Versioned* object, TraNumber traNumber, ObjectBase::Flag fl, ListEntry* link = nullptr)
 		: object(object), traNumber(traNumber), cacheFlags(fl), state(INITIAL)
 	{
 		if (fl & CacheFlag::ERASED)
 			fb_assert(!object);
+		if (link)
+			next.store(link);
 	}
 
 	~ListEntry()
@@ -546,6 +547,21 @@ public:
 	bool scanInProgress() const
 	{
 		return state == READY ? false : (thd == Thread::getCurrentThreadId()) && (state == SCANNING);
+	}
+
+	static bool upgradable(HazardPtr<ListEntry>& listEntry, const Versioned* from)
+	{
+		for (; listEntry; listEntry.set(listEntry->next))
+		{
+			if (listEntry->object == from)
+				return false;		// not found upgrade version
+
+			if (listEntry->getFlags() & CacheFlag::COMMITTED)
+				return true;		// already upgraded by someone else
+		}
+
+		fb_assert(false);
+		return false;				// miss from what to upgrade
 	}
 
 private:
@@ -951,6 +967,36 @@ public:
 		}
 	}
 
+	bool upgrade(thread_db* tdbb, const Versioned* from)
+	{
+		HazardPtr<ListEntry<Versioned>> l(list);
+
+		// list of versions should be present
+		fb_assert(l);
+		if (!l)
+			return false;
+
+		// if there is another version at the top nothing to be added
+		if (l->getVersioned() != from)
+			return ListEntry<Versioned>::upgradable(l, from);
+
+		// we have candidate for upgrade - make sure it's not half-done
+		fb_assert(l->getFlags() & CacheFlag::COMMITTED);
+		if (!(l->getFlags() & CacheFlag::COMMITTED))
+			return false;
+
+		// Try to upgrade
+		ListEntry<Versioned>* newEntry = FB_NEW ListEntry<Versioned>(nullptr, TransactionNumber::current(tdbb),
+			CacheFlag::COMMITTED | CacheFlag::MINISCAN | CacheFlag::DB_VERSION, l.getPointer());
+		if (l.replace(list, newEntry))
+			return true;
+		delete newEntry;
+
+		// Someone already added entry - see is it OK for us
+		l.set(list);
+		return ListEntry<Versioned>::upgradable(l, from);
+	}
+
 private:
 	void setNewResetAt(TraNumber oldVal, TraNumber newVal)
 	{
@@ -1063,7 +1109,6 @@ public:
 
 	Versioned* getVersioned(thread_db* tdbb, MetaId id, ObjectBase::Flag fl)
 	{
-
 //		In theory that should be endless cycle - object may arrive/disappear again and again.
 //		But in order to faster find devel problems we run it very limited number of times.
 #ifdef DEV_BUILD
@@ -1077,17 +1122,7 @@ public:
 			{
 				StoredElement* data = ptr->load(atomics::memory_order_acquire);
 				if (data)
-				{
-					if (fl & CacheFlag::UPGRADE)
-					{
-						auto val = makeObject(tdbb, id, fl);
-						if (val)
-							return val;
-						continue;
-					}
-
 					return data->getVersioned(tdbb, fl);
-				}
 			}
 
 			if (!(fl & CacheFlag::AUTOCREATE))
@@ -1170,6 +1205,28 @@ public:
 		return data;
 	}
 
+	bool upgrade(thread_db* tdbb, MetaId id, const Versioned* from)
+	{
+		fb_assert(id < getCount());
+
+		if (id < getCount())
+		{
+			auto ptr = getDataPointer(id);
+			fb_assert(ptr);
+
+			if (ptr)
+			{
+				StoredElement* data = ptr->load(atomics::memory_order_acquire);
+				fb_assert(data);
+
+				if (data)
+					return data->upgrade(tdbb, from);
+			}
+		}
+
+		return false;
+	}
+
 	template <typename F>
 	StoredElement* lookup(thread_db* tdbb, F&& cmp, ObjectBase::Flag fl) const
 	{
@@ -1188,6 +1245,7 @@ public:
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
 					if (listEntry && cmp(ptr))
 					{
+//						if (!(fl & (CacheFlag::ERASED | CacheFlag::MINISCAN)))
 						if (!(fl & CacheFlag::ERASED))
 							ptr->reload(tdbb, fl);		// found object to be reloaded w/o MINISCAN flag
 						return ptr;
