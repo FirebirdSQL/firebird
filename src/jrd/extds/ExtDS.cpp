@@ -1759,6 +1759,8 @@ void Transaction::detachFromJrdTran()
 void Transaction::jrdTransactionEnd(thread_db* tdbb, jrd_tra* transaction,
 		bool commit, bool retain, bool force)
 {
+	transaction->tra_foreign_blob_map.clear();
+
 	Transaction* tran = transaction->tra_ext_common;
 	while (tran)
 	{

@@ -75,6 +75,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/VaryStr.h"
 #include "../jrd/Statement.h"
+#include "../jrd/extds/ExtDS.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -1406,6 +1407,43 @@ blb* blb::open2(thread_db* tdbb,
 						new_blob->BLB_close(tdbb);
 					else
 						ERR_post(Arg::Gds(isc_bad_segstr_id));
+				}
+
+				if (new_blob->blb_flags & BLB_foreign)
+				{
+					PredictableForeignBlob foreignBlob;
+					const SINT64 blobIdValue = blobId.get_permanent_number().getValue();
+					if (transaction->tra_foreign_blob_map.get(blobIdValue, foreignBlob))
+					{
+						// Free empty temporary blob handle
+						transaction->tra_blobs->fastRemove();
+
+						// Copy data from foreign blob to new local blob
+						AutoPtr<EDS::Blob> edsBlob(foreignBlob.m_connection->createBlob());
+						edsBlob->open(tdbb, *foreignBlob.m_transaction, foreignBlob.m_descriptor, NULL);
+
+						new_blob = blb::create2(tdbb, transaction, &blobId, sizeof(bpb), bpb);
+						new_blob->blb_sub_type = foreignBlob.m_descriptor.getBlobSubType();
+						new_blob->blb_charset = foreignBlob.m_descriptor.getCharSet();
+
+						Array<UCHAR> buffer;
+						UCHAR* buff = buffer.getBuffer(EDS::EXT_BLOB_SEGMENT_SIZE);
+
+						while (true)
+						{
+							const USHORT length = edsBlob->read(tdbb, buff, EDS::EXT_BLOB_SEGMENT_SIZE);
+							if (!length)
+								break;
+
+							new_blob->BLB_put_segment(tdbb, buff, length);
+						}
+
+						edsBlob->close(tdbb);
+						new_blob->BLB_close(tdbb);
+
+						// Remove the foreign blob from the map because there is a materialized local one
+						transaction->tra_foreign_blob_map.remove(blobIdValue);
+					}
 				}
 
 				blob->blb_lead_page = new_blob->blb_lead_page;

@@ -32,6 +32,7 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/Mapping.h"
+#include "../jrd/tra.h"
 #include "../dsql/make_proto.h"
 
 using namespace Firebird;
@@ -469,7 +470,21 @@ bool ForeignTableStatement::fetchInternal(thread_db* tdbb, Record* record)
 		{
 			localDsc = fromDesc;
 			localDsc.dsc_address = (UCHAR*) &localBlobID;
-			getExtBlob(tdbb, fromDesc, localDsc);
+
+			Request* request = tdbb->getRequest();
+
+			// Create an empty blob and associate it with foreign blob
+			const UCHAR bpb[] = {isc_bpb_version1, isc_bpb_storage, 1, isc_bpb_storage_temp};
+			bid* localBlobId = (bid*) localDsc.dsc_address;
+			blb* destBlob = blb::create2(tdbb, request->req_transaction, localBlobId, sizeof(bpb), bpb);
+			destBlob->blb_flags |= BLB_foreign;
+			destBlob->BLB_close(tdbb);
+
+			// Foreign blob will be created when local blob is opened
+			const SINT64 localBlobIdValue = localBlobId->get_permanent_number().getValue();
+			PredictableForeignBlob foreignBlob(&m_connection, m_transaction, fromDesc);
+			request->req_transaction->tra_foreign_blob_map.put(localBlobIdValue, foreignBlob);
+
 			local = &localDsc;
 		}
 
