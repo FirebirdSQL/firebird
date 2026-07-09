@@ -1895,13 +1895,13 @@ private:
 
 public:
 	const Firebird::string* externalFile;
-	MetaName foreignServer;
 	bool createIfNotExistsOnly = false;
 	bool packagePrivate = false;
 	NestConst<ValueListNode> queryColumns;
 	NestConst<SelectExprNode> querySelectExpr;
 	Firebird::string querySource;
 	bool withData = false;
+	MetaName foreignServer;
 };
 
 
@@ -2897,9 +2897,9 @@ public:
 	{ }
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
@@ -2964,9 +2964,9 @@ public:
 		const MetaName& optionName);
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 	void dropOptions(thread_db* tdbb, jrd_tra* transaction, const MetaName& serverName);
 
@@ -3004,9 +3004,9 @@ public:
 	{ }
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction);
-	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void checkPermission(thread_db* tdbb) override;
+	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
 	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
