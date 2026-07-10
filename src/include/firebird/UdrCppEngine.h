@@ -38,6 +38,7 @@
 		namespace Udr	\
 		{	\
 			RegistrationNode<IUdrFunctionFactory>* regFunctions = NULL;	\
+			RegistrationNode<IUdrAggregateFactory>* regAggregates = NULL;	\
 			RegistrationNode<IUdrProcedureFactory>* regProcedures = NULL;	\
 			RegistrationNode<IUdrTriggerFactory>* regTriggers = NULL;	\
 		}	\
@@ -100,6 +101,57 @@
 	\
 	void internalExecute(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context, \
 		InMessage::Type* in, OutMessage::Type* out)
+
+
+#define FB_UDR_BEGIN_AGGREGATE_FUNCTION(name)	\
+	namespace AggFunc##name	\
+	{	\
+		class Impl;	\
+		\
+		static ::Firebird::Udr::AggregateFactoryImpl<Impl, FB_UDR_STATUS_TYPE> factory(#name);	\
+		\
+		class Impl : public ::Firebird::Udr::AggregateInstance<Impl, FB_UDR_STATUS_TYPE>	\
+		{	\
+		public:	\
+			FB__UDR_COMMON_IMPL
+
+#define FB_UDR_END_AGGREGATE_FUNCTION	\
+		};	\
+	}
+
+#define FB_UDR_START_AGGREGATE_FUNCTION	\
+	void start(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context)	\
+	{	\
+		internalStart(status, context);	\
+	}	\
+	\
+	void internalStart(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context)
+
+#define FB_UDR_ACCUMULATE_AGGREGATE_FUNCTION	\
+	void accumulate(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context, void* in)	\
+	{	\
+		internalAccumulate(status, context, (InMessage::Type*) in);	\
+	}	\
+	\
+	void internalAccumulate(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context, \
+		InMessage::Type* in)
+
+#define FB_UDR_GROUP_AGGREGATE_FUNCTION	\
+	void group(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context, void* out)	\
+	{	\
+		internalGroup(status, context, (OutMessage::Type*) out);	\
+	}	\
+	\
+	void internalGroup(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context, \
+		OutMessage::Type* out)
+
+#define FB_UDR_FINISH_AGGREGATE_FUNCTION	\
+	void finish(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context)	\
+	{	\
+		internalFinish(status, context);	\
+	}	\
+	\
+	void internalFinish(FB_UDR_STATUS_TYPE* status, ::Firebird::IExternalContext* context)
 
 
 #define FB_UDR_BEGIN_PROCEDURE(name)	\
@@ -246,6 +298,57 @@ protected:
 
 
 template <typename This, typename StatusType>
+class AggregateInstance : public IExternalAggregateInstanceImpl<This, StatusType>
+{
+public:
+	FB__UDR_COMMON_TYPE(InMessage);
+	FB__UDR_COMMON_TYPE(OutMessage);
+
+	void dispose()
+	{
+		delete static_cast<This*>(this);
+	}
+
+	void start(StatusType* /*status*/, IExternalContext* /*context*/)
+	{
+	}
+
+	void finish(StatusType* /*status*/, IExternalContext* /*context*/)
+	{
+	}
+};
+
+
+template <typename T, typename StatusType>
+class Aggregate : public IExternalAggregateFunctionImpl<Aggregate<T, StatusType>, StatusType>
+{
+public:
+	Aggregate(StatusType* /*status*/, IExternalContext* /*context*/, IRoutineMetadata* aMetadata)
+		: metadata(aMetadata)
+	{
+	}
+
+	void dispose()
+	{
+		delete this;
+	}
+
+	void getCharSet(StatusType* /*status*/, IExternalContext* /*context*/,
+		char* /*name*/, unsigned /*nameSize*/)
+	{
+	}
+
+	IExternalAggregateInstance* newInstance(StatusType* status, IExternalContext* context)
+	{
+		return new T(status, context, metadata);
+	}
+
+private:
+	IRoutineMetadata* metadata;
+};
+
+
+template <typename This, typename StatusType>
 class Function : public IExternalFunctionImpl<This, StatusType>
 {
 public:
@@ -309,6 +412,7 @@ template <typename T> struct RegistrationNode
 };
 
 extern RegistrationNode<IUdrFunctionFactory>* regFunctions;
+extern RegistrationNode<IUdrAggregateFactory>* regAggregates;
 extern RegistrationNode<IUdrProcedureFactory>* regProcedures;
 extern RegistrationNode<IUdrTriggerFactory>* regTriggers;
 
@@ -333,6 +437,12 @@ public:
 		if (!run<IUdrFunctionFactory>(&statusWrapper, plugin, &IUdrPlugin::registerFunction, regFunctions))
 			return;
 
+		if (!run<IUdrAggregateFactory>(&statusWrapper, plugin,
+				&IUdrPlugin::registerAggregateFunction, regAggregates))
+		{
+			return;
+		}
+
 		if (!run<IUdrProcedureFactory>(&statusWrapper, plugin, &IUdrPlugin::registerProcedure, regProcedures))
 			return;
 
@@ -355,6 +465,35 @@ private:
 		}
 
 		return true;
+	}
+};
+
+
+template <typename T, typename StatusType> class AggregateFactoryImpl :
+	public IUdrAggregateFactoryImpl<AggregateFactoryImpl<T, StatusType>, StatusType>
+{
+public:
+	explicit AggregateFactoryImpl(const char* name)
+	{
+		FactoryRegistration::schedule<IUdrAggregateFactory>(name, this, &regAggregates);
+	}
+
+	void dispose()
+	{
+		// Do not delete this. The instances are statically allocated.
+	}
+
+	void setup(StatusType* status, IExternalContext* /*context*/,
+		IRoutineMetadata* /*metadata*/, IMetadataBuilder* in, IMetadataBuilder* out)
+	{
+		T::InMessage::setup(status, in);
+		T::OutMessage::setup(status, out);
+	}
+
+	IExternalAggregateFunction* newItem(StatusType* status, IExternalContext* context,
+		IRoutineMetadata* metadata)
+	{
+		return new Aggregate<T, StatusType>(status, context, metadata);
 	}
 };
 

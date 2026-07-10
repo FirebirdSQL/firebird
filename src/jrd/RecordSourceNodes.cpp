@@ -805,13 +805,16 @@ RelationSourceNode* RelationSourceNode::parse(thread_db* tdbb, CompilerScratch* 
 
 		case blr_relation3:
 			csb->csb_blr_reader.getMetaName(name.schema);
+			csb->csb_blr_reader.getMetaName(name.package);
 			[[fallthrough]];
 
 		case blr_relation:
 		case blr_relation2:
 		{
 			csb->csb_blr_reader.getMetaName(name.object);
-			csb->qualifyExistingName(tdbb, name, obj_relation);
+
+			if (blrOp != blr_relation3)
+				csb->qualifyExistingName(tdbb, name, obj_relation);
 
 			if (blrOp == blr_relation2 || blrOp == blr_relation3)
 			{
@@ -894,11 +897,13 @@ void RelationSourceNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 	else
 	{
-		if (relation->rel_name.schema != dsqlScratch->ddlSchema)
+		if (relation->rel_name.package.hasData() || relation->rel_name.schema != dsqlScratch->ddlSchema)
 		{
 			dsqlScratch->appendUChar(blr_relation3);
 			dsqlScratch->appendMetaString(relation->rel_name.schema.c_str());
+			dsqlScratch->appendMetaString(relation->rel_name.package.c_str());
 			dsqlScratch->appendMetaString(relation->rel_name.object.c_str());
+
 			if (dsqlContext->ctx_alias.isEmpty())
 				dsqlScratch->appendMetaString("");
 		}
@@ -2642,6 +2647,7 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				{
 					case WindowClause::FrameExtent::Unit::RANGE:
 					case WindowClause::FrameExtent::Unit::ROWS:
+					case WindowClause::FrameExtent::Unit::GROUPS:
 						break;
 
 					default:
@@ -2651,11 +2657,6 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				break;
 
 			case blr_window_win_exclusion:
-				//// TODO: CORE-5338 - write code for execution.
-				PAR_error(csb,
-					Arg::Gds(isc_wish_list) <<
-					Arg::Gds(isc_random) << "window EXCLUDE clause");
-
 				window.exclusion = (WindowClause::Exclusion) csb->csb_blr_reader.getByte();
 
 				switch (window.exclusion)
@@ -3637,13 +3638,16 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	fb_assert(specialJoins.hasData());
 
 	// Create joins between the original node and detected joinable nodes.
-	// Preserve FIRST/SKIP nodes at their original position, i.e. outside semi-joins.
+	// Preserve FIRST/SKIP/DISTINCT nodes at their original position, i.e. outside semi-joins.
 
 	const auto first = rse_first;
 	rse_first = nullptr;
 
 	const auto skip = rse_skip;
 	rse_skip = nullptr;
+
+	const auto projection = rse_projection;
+	rse_projection = nullptr;
 
 	const auto orgFlags = flags;
 	flags = 0;
@@ -3665,7 +3669,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		rse = newRse;
 	}
 
-	if (first || skip)
+	if (first || skip || projection)
 	{
 		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
 			RseNode(*tdbb->getDefaultPool());
@@ -3674,6 +3678,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		newRse->rse_jointype = INNER_JOIN;
 		newRse->rse_first = first;
 		newRse->rse_skip = skip;
+		newRse->rse_projection = projection;
 
 		rse = newRse;
 	}

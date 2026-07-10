@@ -51,13 +51,14 @@ struct sdl_arg
 
 // Structure to compute ranges
 
+constexpr size_t INTERNAL_MAX_ARRAY_DIMENSION = 64;
 // Let's stop this insanity! The header rng.h defined rng for the purposes
 // of refresh range and emulation of file-based data formats like Pdx.
 // Therefore, I renamed this struct array_range.
 struct array_range
 {
-	SLONG rng_minima[64];
-	SLONG rng_maxima[64];
+	SLONG rng_minima[INTERNAL_MAX_ARRAY_DIMENSION];
+	SLONG rng_maxima[INTERNAL_MAX_ARRAY_DIMENSION];
 	sdl_info* rng_info;
 };
 
@@ -586,6 +587,12 @@ static bool execute(sdl_arg* arg)
 		case op_scalar:
 			{
 				value = *next++;
+				if (value >= array_desc->iad_dimensions)
+				{
+					error(arg->sdl_arg_status_vector, Arg::Gds(isc_invalid_dimension)
+						<< Arg::Num(arg->sdl_arg_desc->iad_dimensions) << Arg::Num(value));
+					return false;
+				}
 				next++;				// Skip count, unsupported.
 				SLONG subscript = 0;
 				for (const Ods::InternalArrayDesc::iad_repeat* range = array_desc->iad_rpt;
@@ -672,6 +679,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 	case isc_sdl_do2:
 	case isc_sdl_do3:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		if (op == isc_sdl_do1)
 			arg->rng_minima[variable] = 1;
 		else
@@ -690,6 +699,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 
 	case isc_sdl_variable:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		*min = arg->rng_minima[variable];
 		*max = arg->rng_maxima[variable];
 		return p;

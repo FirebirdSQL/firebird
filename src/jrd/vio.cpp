@@ -94,6 +94,7 @@
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
+#include "../jrd/Package.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -2092,7 +2093,9 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				}
 				EVL_field(0, rpb->rpb_record, f_rel_name, &desc);
 				EVL_field(0, rpb->rpb_record, f_rel_schema, &schemaDesc);
-				DFW_post_work(transaction, dfw_delete_relation, &desc, &schemaDesc, id);
+				if (EVL_field(0, rpb->rpb_record, f_rel_pkg_name, &desc2))
+					MOV_get_metaname(tdbb, &desc2, object_name.package);
+				DFW_post_work(transaction, dfw_delete_relation, &desc, &schemaDesc, id, object_name.package);
 			}
 			break;
 
@@ -2165,6 +2168,10 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 			EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
 			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+
+			if (EVL_field(0, rpb->rpb_record, f_rfr_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
 			EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
 			MOV_get_metaname(tdbb, &desc, object_name.object);
 
@@ -2347,6 +2354,18 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pub_tables:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
+			break;
+
+		case rel_constants:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+
+			EVL_field(0, rpb->rpb_record, f_const_name, &desc);
+			EVL_field(0, rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			EVL_field(0, rpb->rpb_record, f_const_package, &desc2);
+			MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			DFW_post_work(transaction, dfw_delete_package_constant, &desc, &schemaDesc, 0, object_name.package);
 			break;
 
 		default:    // Shut up compiler warnings
@@ -3408,6 +3427,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_relations:
 			EVL_field(0, org_rpb->rpb_record, f_rel_schema, &schemaDesc);
 			EVL_field(0, org_rpb->rpb_record, f_rel_name, &desc1);
+			if (EVL_field(0, org_rpb->rpb_record, f_rel_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
 			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 			MOV_get_metaname(tdbb, &desc1, object_name.object);
 
@@ -3432,6 +3453,12 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 					MOV_get_metaname(tdbb, &desc1, object_name.object);
 					SCL_check_package(tdbb, object_name, SCL_alter);
+
+					{ // Send dfw
+						EVL_field(0, org_rpb->rpb_record, f_pkg_id, &desc2);
+						const USHORT id = MOV_get_long(tdbb, &desc2, 0);
+						DFW_post_work(transaction, dfw_modify_package_header, &desc1, &schemaDesc, id);
+					}
 				}
 			}
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_pkg_class);
@@ -3615,6 +3642,10 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			{
 				dsc dscId;
 				EVL_field(0, new_rpb->rpb_record, f_idx_schema, &schemaDesc);
+
+				if (EVL_field(0, new_rpb->rpb_record, f_idx_pkg_name, &desc2))
+					MOV_get_metaname(tdbb, &desc2, object_name.package);
+
 				EVL_field(0, new_rpb->rpb_record, f_idx_name, &desc1);
 				EVL_field(0, new_rpb->rpb_record, f_idx_relation, &desc2);
 				EVL_field(0, new_rpb->rpb_record, f_idx_id, &dscId);
@@ -3733,6 +3764,18 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_pub_owner);
 			check_repl_state(tdbb, transaction, org_rpb, new_rpb, f_pub_active_flag);
+			break;
+
+		case rel_constants:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+
+			EVL_field(0, org_rpb->rpb_record, f_const_name, &desc1);
+			EVL_field(0, org_rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			EVL_field(0, org_rpb->rpb_record, f_const_package, &desc2);
+			MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			DFW_post_work(transaction, dfw_modify_package_constant, &desc1, &schemaDesc, 0, object_name.package);
 			break;
 
 		default:
@@ -4350,11 +4393,17 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_rel_schema, &schemaDesc);
 			EVL_field(0, rpb->rpb_record, f_rel_name, &desc);
-			DFW_post_work(transaction, dfw_create_relation, &desc, &schemaDesc, 0);
+			if (EVL_field(0, rpb->rpb_record, f_rel_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+			DFW_post_work(transaction, dfw_create_relation, &desc, &schemaDesc, 0, object_name.package);
 			set_system_flag(tdbb, rpb->rpb_record, f_rel_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_rel_owner);
-			if (set_security_class(tdbb, rpb->rpb_record, f_rel_class))
-				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_relation);
+
+			if (object_name.package.isEmpty())
+			{
+				if (set_security_class(tdbb, rpb->rpb_record, f_rel_class))
+					DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_relation);
+			}
 			break;
 
 		case rel_packages:
@@ -4365,6 +4414,11 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			set_owner_name(tdbb, rpb->rpb_record, f_pkg_owner);
 			if (set_security_class(tdbb, rpb->rpb_record, f_pkg_class))
 				DFW_post_work(transaction, dfw_grant, &desc, &schemaDesc, obj_package_header);
+
+			object_id = set_metadata_id(tdbb, rpb->rpb_record,
+										f_pkg_id, drq_g_nxt_package_id, PACKAGES_GENERATOR);
+
+			DFW_post_work(transaction, dfw_create_package, &desc, &schemaDesc, object_id);
 			break;
 
 		case rel_procedures:
@@ -4438,6 +4492,10 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 			{
 				EVL_field(0, rpb->rpb_record, f_idx_schema, &schemaDesc);
+
+				if (EVL_field(0, rpb->rpb_record, f_idx_pkg_name, &desc2))
+					MOV_get_metaname(tdbb, &desc2, object_name.package);
+
 				EVL_field(0, rpb->rpb_record, f_idx_relation, &desc);
 				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 				MOV_get_metaname(tdbb, &desc, object_name.object);
@@ -4457,6 +4515,10 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_rfr:
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
+
+			if (EVL_field(0, rpb->rpb_record, f_rfr_pkg_name, &desc2))
+				MOV_get_metaname(tdbb, &desc2, object_name.package);
+
 			EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
 			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 			MOV_get_metaname(tdbb, &desc, object_name.object);
@@ -4650,6 +4712,18 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		case rel_pub_tables:
 			protect_system_table_insert(tdbb, request, relation);
 			DFW_post_work(transaction, dfw_change_repl_state, {}, {}, 1);
+			break;
+
+		case rel_constants:
+			protect_system_table_insert(tdbb, request, relation);
+
+			EVL_field(0, rpb->rpb_record, f_const_name, &desc);
+			EVL_field(0, rpb->rpb_record, f_const_package_schema, &schemaDesc);
+
+			EVL_field(0, rpb->rpb_record, f_const_package, &desc2);
+			MOV_get_metaname(tdbb, &desc2, object_name.package);
+
+			DFW_post_work(transaction, dfw_create_package_constant, &desc, &schemaDesc, 0, object_name.package);
 			break;
 
 		default:    // Shut up compiler warnings
@@ -5079,6 +5153,10 @@ static void check_rel_field_class(thread_db* tdbb,
 
 	QualifiedName object_name;
 	MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+
+	if (EVL_field(0, rpb->rpb_record, f_rfr_pkg_name, &desc))
+		MOV_get_metaname(tdbb, &desc, object_name.package);
+
 	MOV_get_metaname(tdbb, &desc, object_name.object);
 	RelationPermanent::newVersion(tdbb, object_name);
 }

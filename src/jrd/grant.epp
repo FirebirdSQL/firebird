@@ -70,6 +70,7 @@ DATABASE DB = STATIC "yachts.lnk";
 
 static void define_default_class(thread_db*, const QualifiedName&, MetaName&, const Acl&,
 							jrd_tra*);
+static void ensure_relation_reload(thread_db*, MetaId, jrd_tra*);
 static void finish_security_class(Acl&, SecurityClass::flags_t);
 static void get_object_info(thread_db*, const QualifiedName&, ObjectType,
 							MetaName&, MetaName&, MetaName&, bool&);
@@ -129,8 +130,11 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 
 		case obj_procedure:
 		case obj_udf:
-		case obj_package_header:
 			priv |= SCL_execute;
+			break;
+
+		case obj_package_header:
+			priv |= SCL_execute | SCL_select | SCL_insert | SCL_update | SCL_delete;
 			break;
 
 		case obj_field:
@@ -139,6 +143,7 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 		case obj_charset:
 		case obj_collation:
 		case obj_schema:
+		case obj_package_constant:
 			priv |= SCL_usage;
 			break;
 
@@ -172,6 +177,10 @@ void GRANT_privileges(thread_db* tdbb, const QualifiedName& name, ObjectType id,
 		finish_security_class(acl, aggregate_public);
 
 		save_security_class(tdbb, s_class, acl, transaction);
+
+		ensure_relation_reload(tdbb,
+			MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE)->getId(),
+			transaction);
 
 		if (acl.getCount() != default_acl.getCount())	// relation privs were added?
 			restrct = true;
@@ -238,11 +247,14 @@ static void define_default_class(thread_db* tdbb,
 		default_class.printf("%s%" SQUADFORMAT, DEFAULT_CLASS,
 			DPM_gen_id(tdbb, MET_lookup_generator(tdbb, QualifiedName(DEFAULT_CLASS, SYSTEM_SCHEMA)), false, 1));
 
+		fb_assert(relationName.package.isEmpty());
+
 		AutoCacheRequest request(tdbb, irq_grant7, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
+				 REL.RDB$PACKAGE_NAME MISSING AND
 				 REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		{
             MODIFY REL USING
@@ -355,6 +367,7 @@ static void get_object_info(thread_db* tdbb,
 		FOR(REQUEST_HANDLE request)
 			REL IN RDB$RELATIONS
 			WITH REL.RDB$SCHEMA_NAME EQ object_name.schema.c_str() AND
+				 REL.RDB$PACKAGE_NAME EQUIV NULLIF(object_name.package.c_str(), '') AND
 				 REL.RDB$RELATION_NAME EQ object_name.object.c_str()
 		{
 			s_class = REL.RDB$SECURITY_CLASS;
@@ -749,6 +762,8 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
  *	security class to be effective.
  *
  **************************************/
+	fb_assert(relation_name.package.isEmpty());
+
 	SET_TDBB(tdbb);
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 
@@ -772,9 +787,12 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 		CROSS PRV IN RDB$USER_PRIVILEGES OVER RDB$RELATION_NAME, RDB$FIELD_NAME
 		CROSS REL IN RDB$RELATIONS OVER RDB$RELATION_NAME
 		WITH PRV.RDB$RELATION_SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+			 FLD.RDB$PACKAGE_NAME MISSING AND
 			 PRV.RDB$OBJECT_TYPE EQ obj_relation AND
 			 PRV.RDB$RELATION_SCHEMA_NAME EQ relation_name.schema.c_str() AND
 			 PRV.RDB$RELATION_NAME EQ relation_name.object.c_str() AND
+			 REL.RDB$SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME MISSING AND
 			 PRV.RDB$FIELD_NAME NOT MISSING AND
 			 (PRV.RDB$USER NE owner.c_str() OR PRV.RDB$USER_TYPE NE obj_user)
 		SORTED BY PRV.RDB$FIELD_NAME, PRV.RDB$USER, PRV.RDB$USER_SCHEMA_NAME
@@ -837,6 +855,7 @@ static SecurityClass::flags_t save_field_privileges(thread_db* tdbb,
 				FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 					RFR IN RDB$RELATION_FIELDS
 					WITH RFR.RDB$SCHEMA_NAME EQ FLD.RDB$SCHEMA_NAME AND
+						 RFR.RDB$PACKAGE_NAME MISSING AND
 						 RFR.RDB$RELATION_NAME EQ FLD.RDB$RELATION_NAME AND
 						 RFR.RDB$FIELD_NAME EQ FLD.RDB$FIELD_NAME
 				{

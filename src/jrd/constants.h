@@ -154,6 +154,9 @@ inline constexpr int GEN_SECCLASS_PREFIX_LEN			= 4;
 
 inline constexpr const char* PROCEDURES_GENERATOR = "RDB$PROCEDURES";
 inline constexpr const char* FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
+inline constexpr const char* PACKAGES_GENERATOR = "RDB$PACKAGES";
+
+inline constexpr SLONG RELATIONS_GENERATOR = 13;
 
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
 inline constexpr const char* IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
@@ -516,5 +519,8 @@ inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; /
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
+
+// How many times request can be restarted in attempts to sync formats in it
+inline constexpr int EXEC_RESTARTS = 8;
 
 #endif // JRD_CONSTANTS_H

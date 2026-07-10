@@ -41,6 +41,7 @@
 #include "../jrd/license.h"
 #include "../jrd/obj.h"
 #include "../jrd/ods.h"
+#include "../common/DeindentedStr.h"
 #include "../common/stuff.h"
 #include "../burp/burp_proto.h"
 #include "../burp/canon_proto.h"
@@ -167,6 +168,7 @@ bool	get_trigger_old (BurpGlobals* tdgbl, burp_rel*);
 bool	get_type(BurpGlobals* tdgbl);
 bool	get_user_privilege(BurpGlobals* tdgbl);
 bool	get_view(BurpGlobals* tdgbl, burp_rel*);
+bool	get_constants(BurpGlobals* tdgbl);
 void	ignore_array(BurpGlobals* tdgbl, burp_rel*);
 void	ignore_blob(BurpGlobals* tdgbl);
 rec_type	ignore_data(BurpGlobals* tdgbl, burp_rel*);
@@ -490,6 +492,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 			CROSS IDS IN RDB$INDICES WITH
 			CNST.RDB$CONSTRAINT_TYPE EQ FOREIGN_KEY AND
 			CNST.RDB$SCHEMA_NAME EQUIV IDS.RDB$SCHEMA_NAME AND
+			IDS.RDB$PACKAGE_NAME MISSING AND
 			CNST.RDB$INDEX_NAME EQ IDS.RDB$INDEX_NAME AND
 			IDS.RDB$INDEX_INACTIVE EQ DEFERRED_ACTIVE
 		{
@@ -3862,6 +3865,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 		{
 			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			X.RDB$SCHEMA_NAME.NULL = TRUE;
+			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$FIELD_POSITION = 0;
 			X.RDB$VIEW_CONTEXT.NULL = TRUE;
 			X.RDB$BASE_FIELD.NULL = TRUE;
@@ -3892,6 +3896,12 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 			{
 				strcpy(X.RDB$SCHEMA_NAME, relation->rel_name.schema.c_str());
 				X.RDB$SCHEMA_NAME.NULL = FALSE;
+			}
+
+			if (relation->rel_name.package.hasData())
+			{
+				strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+				X.RDB$PACKAGE_NAME.NULL = FALSE;
 			}
 
 			skip_init(&scan_next_attr);
@@ -4565,6 +4575,9 @@ bool get_function(BurpGlobals* tdgbl)
 			X.RDB$DETERMINISTIC_FLAG.NULL = FALSE;
 			X.RDB$DETERMINISTIC_FLAG = 0;
 
+			X.RDB$AGGREGATE_FLAG.NULL = FALSE;
+			X.RDB$AGGREGATE_FLAG = 0;
+
 			X.RDB$LEGACY_FLAG.NULL = FALSE;
 			X.RDB$LEGACY_FLAG = 1;
 
@@ -4746,6 +4759,16 @@ bool get_function(BurpGlobals* tdgbl)
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
 
+				case att_function_aggregate_flag:
+					if (tdgbl->RESTORE_format >= 12)
+					{
+						X.RDB$AGGREGATE_FLAG = get_int32(tdgbl);
+						X.RDB$AGGREGATE_FLAG.NULL = FALSE;
+					}
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
 				default:
 					bad_attribute(scan_next_attr, attribute, 89);
 					// msg 89 function
@@ -4874,6 +4897,13 @@ bool get_function(BurpGlobals* tdgbl)
 				case att_function_sql_security:
 					if (tdgbl->RESTORE_format >= 11)
 						get_boolean(tdgbl, attribute == att_function_sql_security_deprecated);
+					else
+						bad_attribute(scan_next_attr, attribute, 89);
+					break;
+
+				case att_function_aggregate_flag:
+					if (tdgbl->RESTORE_format >= 12)
+						get_int32(tdgbl);
 					else
 						bad_attribute(scan_next_attr, attribute, 89);
 					break;
@@ -6746,6 +6776,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			X.RDB$INDEX_INACTIVE = TRUE;
 
 		X.RDB$SCHEMA_NAME.NULL = TRUE;
+		X.RDB$PACKAGE_NAME.NULL = TRUE;
 		X.RDB$INDEX_TYPE.NULL = TRUE;
 		X.RDB$DESCRIPTION.NULL = TRUE;
 		X.RDB$FOREIGN_KEY_SCHEMA_NAME.NULL = TRUE;
@@ -6764,6 +6795,12 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			X.RDB$SCHEMA_NAME.NULL = FALSE;
 		}
 
+		if (relation->rel_name.package.hasData())
+		{
+			strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+			X.RDB$PACKAGE_NAME.NULL = FALSE;
+		}
+
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
 		{
@@ -6772,7 +6809,8 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			case att_index_name:
 				GET_TEXT(X.RDB$INDEX_NAME);
 				strcpy(index_name, X.RDB$INDEX_NAME);
-				BURP_verbose(122, QualifiedMetaString(X.RDB$INDEX_NAME, relation->rel_name.schema).toQuotedString());
+				BURP_verbose(122, QualifiedMetaString(
+					X.RDB$INDEX_NAME, relation->rel_name.schema, relation->rel_name.package).toQuotedString());
 				break;
 
 			case att_segment_count:
@@ -6817,6 +6855,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 					Y.RDB$SCHEMA_NAME.NULL = X.RDB$SCHEMA_NAME.NULL;
 					if (!X.RDB$SCHEMA_NAME.NULL)
 						strcpy(Y.RDB$SCHEMA_NAME, X.RDB$SCHEMA_NAME);
+
+					Y.RDB$PACKAGE_NAME.NULL = X.RDB$PACKAGE_NAME.NULL;
+					if (!X.RDB$PACKAGE_NAME.NULL)
+						strcpy(Y.RDB$PACKAGE_NAME, X.RDB$PACKAGE_NAME);
 				}
 				END_STORE
 				ON_ERROR
@@ -6898,8 +6940,10 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			RFR IN RDB$RELATION_FIELDS
 			CROSS IDS IN RDB$INDEX_SEGMENTS
 			WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 				 RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
 				 IDS.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
+				 IDS.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 				 IDS.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
 				 IDS.RDB$INDEX_NAME = index_name
 		{
@@ -6915,6 +6959,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 			FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle4)
 				IDS IN RDB$INDEX_SEGMENTS
 				WITH IDS.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 IDS.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 					 IDS.RDB$INDEX_NAME = index_name
 			{
 				ERASE IDS;
@@ -8051,6 +8096,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 				ext_desc_null = true;
 	FB_BOOLEAN	sql_security = FB_FALSE;
 	bool		sql_security_null = true;
+	USHORT		private_flag = 0;
+	bool		private_flag_null = true;
 
 	BASED_ON RDB$RELATIONS.RDB$SECURITY_CLASS sec_class;
 	sec_class[0] = '\0';
@@ -8097,6 +8144,11 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 		case att_relation_schema_name:
 			GET_TEXT(temp);
 			relation->rel_name.schema = temp;
+			break;
+
+		case att_relation_package_name:
+			GET_TEXT(temp);
+			relation->rel_name.package = temp;
 			break;
 
 		case att_relation_name:
@@ -8182,6 +8234,11 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			sql_security = get_boolean(tdgbl, attribute == att_relation_sql_security_deprecated);
 			break;
 
+		case att_relation_private_flag:
+			private_flag_null = false;
+			private_flag = (USHORT) get_int32(tdgbl);
+			break;
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
@@ -8214,6 +8271,8 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$EXTERNAL_FILE.NULL = ext_file_name_null;
 			X.RDB$RELATION_TYPE.NULL = FALSE;
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
+			X.RDB$PACKAGE_NAME.NULL = TRUE;
+			X.RDB$PRIVATE_FLAG.NULL = private_flag_null;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -8228,12 +8287,19 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 				X.RDB$SCHEMA_NAME.NULL = FALSE;
 			}
 
+			if (relation->rel_name.package.hasData())
+			{
+				strcpy(X.RDB$PACKAGE_NAME, relation->rel_name.package.c_str());
+				X.RDB$PACKAGE_NAME.NULL = FALSE;
+			}
+
 			strcpy(X.RDB$SECURITY_CLASS, sec_class);
 			strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 			strcpy(X.RDB$EXTERNAL_FILE, ext_file_name);
 
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
+			X.RDB$PRIVATE_FLAG = private_flag;
 		}
 		END_STORE
 		ON_ERROR
@@ -8466,6 +8532,11 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 		case att_relation_schema_name:
 			GET_TEXT(temp);
 			name.schema = temp;
+			break;
+
+		case att_relation_package_name:
+			GET_TEXT(temp);
+			name.package = temp;
 			break;
 
 		case att_relation_name:
@@ -10556,6 +10627,89 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 	return true;
 }
 
+bool get_constants(BurpGlobals* tdgbl)
+{
+	if (tdgbl->runtimeODS < DB_VERSION_DDL14)	// FB6
+		return false;
+
+	QualifiedMetaString name;
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (TRANSACTION_HANDLE local_trans
+			REQUEST_HANDLE tdgbl->handles_get_type_req_handle1)
+		CONST IN RDB$CONSTANTS
+	{
+		CONST.RDB$PACKAGE_NAME.NULL = TRUE;
+		CONST.RDB$CONSTANT_SOURCE.NULL = TRUE;
+		CONST.RDB$DESCRIPTION.NULL = TRUE;
+
+		skip_init(&scan_next_attr);
+		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+		{
+			switch (attribute)
+			{
+			case att_constant_name:
+				GET_TEXT(CONST.RDB$CONSTANT_NAME);
+				name.object = CONST.RDB$CONSTANT_NAME;
+				break;
+
+			case att_constant_package:
+				CONST.RDB$PACKAGE_NAME.NULL = FALSE;
+				GET_TEXT(CONST.RDB$PACKAGE_NAME);
+				name.package = CONST.RDB$PACKAGE_NAME;
+				break;
+
+			case att_constant_field_source:
+				GET_TEXT(CONST.RDB$FIELD_SOURCE);
+				break;
+
+			case att_constant_field_source_schema:
+				GET_TEXT(CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+				break;
+
+			case att_constant_private_flag:
+				CONST.RDB$PRIVATE_FLAG = (USHORT) get_int32(tdgbl);
+				break;
+
+			case att_constant_blr:
+				get_blr_blob(tdgbl, CONST.RDB$CONSTANT_BLR, true);
+				break;
+
+			case att_constant_source:
+				CONST.RDB$CONSTANT_SOURCE.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$CONSTANT_SOURCE, true);
+				break;
+
+			case att_constant_schema_name:
+				GET_TEXT(CONST.RDB$SCHEMA_NAME);
+				name.schema = CONST.RDB$SCHEMA_NAME;
+				break;
+
+			case att_constant_description:
+				CONST.RDB$DESCRIPTION.NULL = FALSE;
+				get_source_blob(tdgbl, CONST.RDB$DESCRIPTION, true);
+				break;
+
+			default:
+				bad_attribute(scan_next_attr, attribute, USHORT(isc_gbak_constant));
+				break;
+			}
+		}
+
+		BURP_verbose(USHORT(isc_gbak_restoring_constant), SafeArg() << name.toQuotedString().data());
+	}
+	END_STORE
+	ON_ERROR
+		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
 void ignore_array(BurpGlobals* tdgbl, burp_rel* relation)
 {
 /**************************************
@@ -10724,6 +10878,9 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
  **************************************/
 	FB_UINT64 records = 0;
 	rec_type record;
+
+	// msg 427 skipping data for table @1
+	BURP_verbose(427, relation->rel_name.toQuotedString());
 
 	try
 	{
@@ -11399,6 +11556,12 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 			flag = true;
 			break;
 
+		case rec_constants:
+			if (!get_constants(tdgbl))
+				return false;
+			flag = true;
+			break;
+
 		default:
 			BURP_error(43, true, SafeArg() << record);
 			// msg 43 don't recognize record type %ld
@@ -11585,6 +11748,10 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 	Firebird::IRequest* req_handle1 = nullptr;
 
 	USHORT result = 0;
+	fb_assert(current_view_name.package.isEmpty());
+
+	if (current_view_name.package.hasData())
+		return result;
 
 	FOR (REQUEST_HANDLE req_handle1)
 		V IN RDB$VIEW_RELATIONS
@@ -11593,6 +11760,7 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		  V.RDB$SCHEMA_NAME EQUIV NULLIF(current_view_name.schema.c_str(), '') AND
 		  V.RDB$VIEW_NAME EQ current_view_name.object.c_str() AND
 		  R.RDB$SCHEMA_NAME EQUIV V.RDB$RELATION_SCHEMA_NAME AND
+		  R.RDB$PACKAGE_NAME EQUIV V.RDB$PACKAGE_NAME AND
 		  R.RDB$RELATION_NAME EQ V.RDB$RELATION_NAME
 	{
 		if (R.RDB$VIEW_BLR.NULL)
@@ -11602,6 +11770,8 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		}
 		else
 		{
+			fb_assert(V.RDB$PACKAGE_NAME.NULL);
+
 			// Call recursive for VIEWS that are referenced in VIEWS
 			result += get_view_base_relation_count(tdgbl,
 				QualifiedMetaString(V.RDB$RELATION_NAME, V.RDB$RELATION_SCHEMA_NAME),
@@ -12001,6 +12171,7 @@ void update_ownership(BurpGlobals* tdgbl)
 			FOR (REQUEST_HANDLE req_handle2)
 				X IN RDB$RELATIONS
 				WITH X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 X.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 					 X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 			{
 				MODIFY X
@@ -12251,19 +12422,21 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 		const std::vector<const char*> migrations;
 	};
 
+#define DEINDENTED_STR(str) [] { static constexpr auto s = deindentStr(str); return s.c_str(); }()
+
 	const PluginMigration pluginsMigration[] = {
 		{"PROFILER", "PLG$PROFILER",
-			R"""(
+			DEINDENTED_STR(R"""(
 			select exists(
 			           select first 1 1
 			               from system.rdb$relations
 			               where rdb$schema_name = 'PUBLIC' and
-			                     rdb$relation_name = 'PLG$PROF_SESSIONS'
+			                     rdb$relation_name in ('PLG$PROF_SESSIONS', 'PLG$PROF_SESSIONS_DATA')
 			       )
 			    from system.rdb$database
-			)""",
+			)"""),
 			{
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -12278,283 +12451,293 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        'grant usage on sequence plg$profiler.plg$prof_profile_id to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_sessions (
-				            profile_id bigint not null,
-				            attachment_id bigint not null,
-				            user_name char(63) character set utf8 not null,
-				            description varchar(255) character set utf8,
-				            start_timestamp timestamp with time zone not null,
-				            finish_timestamp timestamp with time zone
-				        )
+				create table plg$profiler.plg$prof_sessions (
+				    profile_id bigint not null,
+				    attachment_id bigint not null,
+				    user_name char(63) character set utf8 not null,
+				    description varchar(255) character set utf8,
+				    start_timestamp timestamp with time zone not null,
+				    finish_timestamp timestamp with time zone
+				)
 				    }';
 
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_sessions to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_statements (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            parent_statement_id bigint,
-				            statement_type varchar(20) character set utf8 not null,
-				            schema_name char(63) character set utf8,
-				            package_name char(63) character set utf8,
-				            routine_name char(63) character set utf8,
-				            sql_text blob sub_type text character set utf8
-				        )
+				create table plg$profiler.plg$prof_statements (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    parent_statement_id bigint,
+				    statement_type varchar(20) character set utf8 not null,
+				    schema_name char(63) character set utf8,
+				    package_name char(63) character set utf8,
+				    routine_name char(63) character set utf8,
+				    sql_text blob sub_type text character set utf8
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_statements to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_cursors (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            cursor_id integer not null,
-				            name char(63) character set utf8,
-				            line_num integer,
-				            column_num integer
-				        )
+				create table plg$profiler.plg$prof_cursors (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    cursor_id integer not null,
+				    name char(63) character set utf8,
+				    line_num integer,
+				    column_num integer
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_cursors to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_record_sources (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            cursor_id integer not null,
-				            record_source_id integer not null,
-				            parent_record_source_id integer,
-				            level integer not null,
-				            access_path blob sub_type text character set utf8 not null
-				        )
+				create table plg$profiler.plg$prof_record_sources (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    cursor_id integer not null,
+				    record_source_id integer not null,
+				    parent_record_source_id integer,
+				    level integer not null,
+				    access_path blob sub_type text character set utf8 not null
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_record_sources to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_requests (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            request_id bigint not null,
-				            caller_statement_id bigint,
-				            caller_request_id bigint,
-				            start_timestamp timestamp with time zone not null,
-				            finish_timestamp timestamp with time zone,
-				            total_elapsed_time bigint
-				        )
+				create table plg$profiler.plg$prof_requests (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    caller_statement_id bigint,
+				    caller_request_id bigint,
+				    start_timestamp timestamp with time zone not null,
+				    finish_timestamp timestamp with time zone,
+				    total_elapsed_time bigint
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_requests to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_psql_stats (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            request_id bigint not null,
-				            line_num integer not null,
-				            column_num integer not null,
-				            counter bigint not null,
-				            min_elapsed_time bigint not null,
-				            max_elapsed_time bigint not null,
-				            total_elapsed_time bigint not null
-				        )
+				create table plg$profiler.plg$prof_psql_stats (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    line_num integer not null,
+				    column_num integer not null,
+				    counter bigint not null,
+				    min_elapsed_time bigint not null,
+				    max_elapsed_time bigint not null,
+				    total_elapsed_time bigint not null
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_psql_stats to plg$profiler';
 
 				    execute statement q'{
-				        create table plg$profiler.plg$prof_record_source_stats (
-				            profile_id bigint not null,
-				            statement_id bigint not null,
-				            request_id bigint not null,
-				            cursor_id integer not null,
-				            record_source_id integer not null,
-				            open_counter bigint not null,
-				            open_min_elapsed_time bigint not null,
-				            open_max_elapsed_time bigint not null,
-				            open_total_elapsed_time bigint not null,
-				            fetch_counter bigint not null,
-				            fetch_min_elapsed_time bigint not null,
-				            fetch_max_elapsed_time bigint not null,
-				            fetch_total_elapsed_time bigint not null
-				        )
+				create table plg$profiler.plg$prof_record_source_stats (
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    cursor_id integer not null,
+				    record_source_id integer not null,
+				    open_counter bigint not null,
+				    open_min_elapsed_time bigint not null,
+				    open_max_elapsed_time bigint not null,
+				    open_total_elapsed_time bigint not null,
+				    fetch_counter bigint not null,
+				    fetch_min_elapsed_time bigint not null,
+				    fetch_max_elapsed_time bigint not null,
+				    fetch_total_elapsed_time bigint not null
+				)
 				    }';
 				    execute statement
 				        'grant select, update, insert, delete on table plg$profiler.plg$prof_record_source_stats to plg$profiler';
 
 				    execute statement q'{
-				        recreate view plg$profiler.plg$prof_statement_stats_view
-				        as
-				        select req.profile_id,
-				               req.statement_id,
-				               sta.statement_type,
-				               sta.schema_name,
-				               sta.package_name,
-				               sta.routine_name,
-				               sta.parent_statement_id,
-				               sta_parent.statement_type parent_statement_type,
-				               sta_parent.routine_name parent_routine_name,
-				               (select sql_text
-				                   from plg$profiler.plg$prof_statements
-				                   where profile_id = req.profile_id and
-				                         statement_id = coalesce(sta.parent_statement_id, req.statement_id)
-				               ) sql_text,
-				               count(*) counter,
-				               min(req.total_elapsed_time) min_elapsed_time,
-				               max(req.total_elapsed_time) max_elapsed_time,
-				               cast(sum(req.total_elapsed_time) as bigint) total_elapsed_time,
-				               cast(sum(req.total_elapsed_time) / count(*) as bigint) avg_elapsed_time
-				          from plg$profiler.plg$prof_requests req
-				          join plg$profiler.plg$prof_statements sta
-				            on sta.profile_id = req.profile_id and
-				               sta.statement_id = req.statement_id
-				          left join plg$profiler.plg$prof_statements sta_parent
-				            on sta_parent.profile_id = sta.profile_id and
-				               sta_parent.statement_id = sta.parent_statement_id
-				          group by req.profile_id,
-				                   req.statement_id,
-				                   sta.statement_type,
-				                   sta.schema_name,
-				                   sta.package_name,
-				                   sta.routine_name,
-				                   sta.parent_statement_id,
-				                   sta_parent.statement_type,
-				                   sta_parent.routine_name
-				          order by sum(req.total_elapsed_time) desc
+				recreate view plg$profiler.plg$prof_statement_stats_view
+				as
+				select req.profile_id,
+				       req.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = req.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, req.statement_id)
+				       ) sql_text,
+				       count(*) counter,
+				       min(req.total_elapsed_time) min_elapsed_time,
+				       max(req.total_elapsed_time) max_elapsed_time,
+				       cast(sum(req.total_elapsed_time) as bigint) total_elapsed_time,
+				       cast(sum(req.total_elapsed_time) / count(*) as bigint) avg_elapsed_time
+				  from plg$profiler.plg$prof_requests req
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = req.profile_id and
+				       sta.statement_id = req.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by req.profile_id,
+				           req.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name
+				  order by sum(req.total_elapsed_time) desc
 				    }';
 				    execute statement
 				        'grant select on table plg$profiler.plg$prof_statement_stats_view to plg$profiler';
 
 				    execute statement q'{
-				        recreate view plg$profiler.plg$prof_psql_stats_view
-				        as
-				        select pstat.profile_id,
-				               pstat.statement_id,
-				               sta.statement_type,
-				               sta.schema_name,
-				               sta.package_name,
-				               sta.routine_name,
-				               sta.parent_statement_id,
-				               sta_parent.statement_type parent_statement_type,
-				               sta_parent.routine_name parent_routine_name,
-				               (select sql_text
-				                   from plg$profiler.plg$prof_statements
-				                   where profile_id = pstat.profile_id and
-				                         statement_id = coalesce(sta.parent_statement_id, pstat.statement_id)
-				               ) sql_text,
-				               pstat.line_num,
-				               pstat.column_num,
-				               cast(sum(pstat.counter) as bigint) counter,
-				               min(pstat.min_elapsed_time) min_elapsed_time,
-				               max(pstat.max_elapsed_time) max_elapsed_time,
-				               cast(sum(pstat.total_elapsed_time) as bigint) total_elapsed_time,
-				               cast(sum(pstat.total_elapsed_time) / nullif(sum(pstat.counter), 0) as bigint) avg_elapsed_time
-				          from plg$profiler.plg$prof_psql_stats pstat
-				          join plg$profiler.plg$prof_statements sta
-				            on sta.profile_id = pstat.profile_id and
-				               sta.statement_id = pstat.statement_id
-				          left join plg$profiler.plg$prof_statements sta_parent
-				            on sta_parent.profile_id = sta.profile_id and
-				               sta_parent.statement_id = sta.parent_statement_id
-				          group by pstat.profile_id,
-				                   pstat.statement_id,
-				                   sta.statement_type,
-				                   sta.schema_name,
-				                   sta.package_name,
-				                   sta.routine_name,
-				                   sta.parent_statement_id,
-				                   sta_parent.statement_type,
-				                   sta_parent.routine_name,
-				                   pstat.line_num,
-				                   pstat.column_num
-				          order by sum(pstat.total_elapsed_time) desc
+				recreate view plg$profiler.plg$prof_psql_stats_view
+				as
+				select pstat.profile_id,
+				       pstat.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = pstat.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, pstat.statement_id)
+				       ) sql_text,
+				       pstat.line_num,
+				       pstat.column_num,
+				       cast(sum(pstat.counter) as bigint) counter,
+				       min(pstat.min_elapsed_time) min_elapsed_time,
+				       max(pstat.max_elapsed_time) max_elapsed_time,
+				       cast(sum(pstat.total_elapsed_time) as bigint) total_elapsed_time,
+				       cast(sum(pstat.total_elapsed_time) / nullif(sum(pstat.counter), 0) as bigint) avg_elapsed_time
+				  from plg$profiler.plg$prof_psql_stats pstat
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = pstat.profile_id and
+				       sta.statement_id = pstat.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by pstat.profile_id,
+				           pstat.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name,
+				           pstat.line_num,
+				           pstat.column_num
+				  order by sum(pstat.total_elapsed_time) desc
 				    }';
 				    execute statement
 				        'grant select on table plg$profiler.plg$prof_psql_stats_view to plg$profiler';
 
 				    execute statement q'{
-				        recreate view plg$profiler.plg$prof_record_source_stats_view
-				        as
-				        select rstat.profile_id,
-				               rstat.statement_id,
-				               sta.statement_type,
-				               sta.schema_name,
-				               sta.package_name,
-				               sta.routine_name,
-				               sta.parent_statement_id,
-				               sta_parent.statement_type parent_statement_type,
-				               sta_parent.routine_name parent_routine_name,
-				               (select sql_text
-				                   from plg$profiler.plg$prof_statements
-				                   where profile_id = rstat.profile_id and
-				                         statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
-				               ) sql_text,
-				               rstat.cursor_id,
-				               cur.name cursor_name,
-				               cur.line_num cursor_line_num,
-				               cur.column_num cursor_column_num,
-				               rstat.record_source_id,
-				               recsrc.parent_record_source_id,
-				               recsrc.level,
-				               recsrc.access_path,
-				               cast(sum(rstat.open_counter) as bigint) open_counter,
-				               min(rstat.open_min_elapsed_time) open_min_elapsed_time,
-				               max(rstat.open_max_elapsed_time) open_max_elapsed_time,
-				               cast(sum(rstat.open_total_elapsed_time) as bigint) open_total_elapsed_time,
-				               cast(sum(rstat.open_total_elapsed_time) / nullif(sum(rstat.open_counter), 0) as bigint) open_avg_elapsed_time,
-				               cast(sum(rstat.fetch_counter) as bigint) fetch_counter,
-				               min(rstat.fetch_min_elapsed_time) fetch_min_elapsed_time,
-				               max(rstat.fetch_max_elapsed_time) fetch_max_elapsed_time,
-				               cast(sum(rstat.fetch_total_elapsed_time) as bigint) fetch_total_elapsed_time,
-				               cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
-				               cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
-				          from plg$profiler.plg$prof_record_source_stats rstat
-				          join plg$profiler.plg$prof_cursors cur
-				            on cur.profile_id = rstat.profile_id and
-				               cur.statement_id = rstat.statement_id and
-				               cur.cursor_id = rstat.cursor_id
-				          join plg$profiler.plg$prof_record_sources recsrc
-				            on recsrc.profile_id = rstat.profile_id and
-				               recsrc.statement_id = rstat.statement_id and
-				               recsrc.cursor_id = rstat.cursor_id and
-				               recsrc.record_source_id = rstat.record_source_id
-				          join plg$profiler.plg$prof_statements sta
-				            on sta.profile_id = rstat.profile_id and
-				               sta.statement_id = rstat.statement_id
-				          left join plg$profiler.plg$prof_statements sta_parent
-				            on sta_parent.profile_id = sta.profile_id and
-				               sta_parent.statement_id = sta.parent_statement_id
-				          group by rstat.profile_id,
-				                   rstat.statement_id,
-				                   sta.statement_type,
-				                   sta.schema_name,
-				                   sta.package_name,
-				                   sta.routine_name,
-				                   sta.parent_statement_id,
-				                   sta_parent.statement_type,
-				                   sta_parent.routine_name,
-				                   rstat.cursor_id,
-				                   cur.name,
-				                   cur.line_num,
-				                   cur.column_num,
-				                   rstat.record_source_id,
-				                   recsrc.parent_record_source_id,
-				                   recsrc.level,
-				                   recsrc.access_path
-				          order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
+				recreate view plg$profiler.plg$prof_record_source_stats_view
+				as
+				select rstat.profile_id,
+				       rstat.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = rstat.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
+				       ) sql_text,
+				       rstat.cursor_id,
+				       cur.name cursor_name,
+				       cur.line_num cursor_line_num,
+				       cur.column_num cursor_column_num,
+				       rstat.record_source_id,
+				       recsrc.parent_record_source_id,
+				       recsrc.level,
+				       recsrc.access_path,
+				       cast(sum(rstat.open_counter) as bigint) open_counter,
+				       min(rstat.open_min_elapsed_time) open_min_elapsed_time,
+				       max(rstat.open_max_elapsed_time) open_max_elapsed_time,
+				       cast(sum(rstat.open_total_elapsed_time) as bigint) open_total_elapsed_time,
+				       cast(sum(rstat.open_total_elapsed_time) / nullif(sum(rstat.open_counter), 0) as bigint) open_avg_elapsed_time,
+				       cast(sum(rstat.fetch_counter) as bigint) fetch_counter,
+				       min(rstat.fetch_min_elapsed_time) fetch_min_elapsed_time,
+				       max(rstat.fetch_max_elapsed_time) fetch_max_elapsed_time,
+				       cast(sum(rstat.fetch_total_elapsed_time) as bigint) fetch_total_elapsed_time,
+				       cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
+				       cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
+				  from plg$profiler.plg$prof_record_source_stats rstat
+				  join plg$profiler.plg$prof_cursors cur
+				    on cur.profile_id = rstat.profile_id and
+				       cur.statement_id = rstat.statement_id and
+				       cur.cursor_id = rstat.cursor_id
+				  join plg$profiler.plg$prof_record_sources recsrc
+				    on recsrc.profile_id = rstat.profile_id and
+				       recsrc.statement_id = rstat.statement_id and
+				       recsrc.cursor_id = rstat.cursor_id and
+				       recsrc.record_source_id = rstat.record_source_id
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = rstat.profile_id and
+				       sta.statement_id = rstat.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by rstat.profile_id,
+				           rstat.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name,
+				           rstat.cursor_id,
+				           cur.name,
+				           cur.line_num,
+				           cur.column_num,
+				           rstat.record_source_id,
+				           recsrc.parent_record_source_id,
+				           recsrc.level,
+				           recsrc.access_path
+				  order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
 				    }';
 				    execute statement
 				        'grant select on table plg$profiler.plg$prof_record_source_stats_view to plg$profiler';
 				end
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
+				    declare source_suffix varchar(5) = '';
 				begin
-				    insert into plg$profiler.plg$prof_sessions
+				    if (exists(
+				        select first 1 1
+				            from system.rdb$relations
+				            where rdb$schema_name = 'PUBLIC' and
+				                  rdb$relation_name = 'PLG$PROF_SESSIONS_DATA'
+				    )) then
+				        source_suffix = '_data';
+
+				    execute statement
+				    'insert into plg$profiler.plg$prof_sessions
 				        (profile_id,
 				         attachment_id,
 				         user_name,
@@ -12568,9 +12751,10 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               description,
 				               start_timestamp,
 				               finish_timestamp
-				            from public.plg$prof_sessions;
+				            from public.plg$prof_sessions' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_statements
+				    execute statement
+				    'insert into plg$profiler.plg$prof_statements
 				        (profile_id,
 				         statement_id,
 				         parent_statement_id,
@@ -12584,13 +12768,14 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               statement_id,
 				               parent_statement_id,
 				               statement_type,
-				               case when routine_name is null then null else 'PUBLIC' end,
+				               case when routine_name is null then null else ''PUBLIC'' end,
 				               package_name,
 				               routine_name,
 				               sql_text
-				            from public.plg$prof_statements;
+				            from public.plg$prof_statements' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_cursors
+				    execute statement
+				    'insert into plg$profiler.plg$prof_cursors
 				        (profile_id,
 				         statement_id,
 				         cursor_id,
@@ -12604,9 +12789,10 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               name,
 				               line_num,
 				               column_num
-				            from public.plg$prof_cursors;
+				            from public.plg$prof_cursors' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_record_sources
+				    execute statement
+				    'insert into plg$profiler.plg$prof_record_sources
 				        (profile_id,
 				         statement_id,
 				         cursor_id,
@@ -12622,9 +12808,10 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               parent_record_source_id,
 				               level,
 				               access_path
-				            from public.plg$prof_record_sources;
+				            from public.plg$prof_record_sources' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_requests
+				    execute statement
+				    'insert into plg$profiler.plg$prof_requests
 				        (profile_id,
 				         statement_id,
 				         request_id,
@@ -12642,9 +12829,10 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               start_timestamp,
 				               finish_timestamp,
 				               total_elapsed_time
-				            from public.plg$prof_requests;
+				            from public.plg$prof_requests' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_psql_stats
+				    execute statement
+				    'insert into plg$profiler.plg$prof_psql_stats
 				        (profile_id,
 				         statement_id,
 				         request_id,
@@ -12664,9 +12852,10 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               min_elapsed_time,
 				               max_elapsed_time,
 				               total_elapsed_time
-				            from public.plg$prof_psql_stats;
+				            from public.plg$prof_psql_stats' || source_suffix;
 
-				    insert into plg$profiler.plg$prof_record_source_stats
+				    execute statement
+				    'insert into plg$profiler.plg$prof_record_source_stats
 				        (profile_id,
 				         statement_id,
 				         request_id,
@@ -12694,11 +12883,11 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				               fetch_min_elapsed_time,
 				               fetch_max_elapsed_time,
 				               fetch_total_elapsed_time
-				            from public.plg$prof_record_source_stats;
+				            from public.plg$prof_record_source_stats' || source_suffix;
 				end
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -12706,16 +12895,16 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        'alter sequence plg$profiler.plg$prof_profile_id restart with ' ||
 				        (select gen_id(public.plg$prof_profile_id, 1) from system.rdb$database);
 				end
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_sessions
 				    add constraint plg$prof_sessions_pk
 				        primary key (profile_id)
 				        using index plg$prof_sessions_profile
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_statements
 				    add constraint plg$prof_statements_session_fk
 				        foreign key (profile_id)
@@ -12730,9 +12919,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        references plg$profiler.plg$prof_statements (profile_id, statement_id)
 				        on delete cascade
 				        using index plg$prof_statements_parent_statement
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_cursors
 				    add constraint plg$prof_cursors_session_fk
 				        foreign key (profile_id)
@@ -12746,9 +12935,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 				        on delete cascade
 				        using index plg$prof_cursors_profile_statement
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_record_sources
 				    add constraint plg$prof_record_sources_session_fk
 				        foreign key (profile_id)
@@ -12771,9 +12960,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        references plg$profiler.plg$prof_record_sources (profile_id, statement_id, cursor_id, record_source_id)
 				        on delete cascade
 				        using index plg$prof_record_sources_profile_statement_cursor_parent_rec_src
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_requests
 				    add constraint plg$prof_requests_session_fk
 				        foreign key (profile_id)
@@ -12796,9 +12985,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        references plg$profiler.plg$prof_requests (profile_id, statement_id, request_id)
 				        on delete cascade
 				        using index plg$prof_requests_profile_caller_statement_caller_request
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_psql_stats
 				    add constraint plg$prof_psql_stats_session_fk
 				        foreign key (profile_id)
@@ -12816,9 +13005,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        foreign key (profile_id, statement_id) references plg$profiler.plg$prof_statements
 				        on delete cascade
 				        using index plg$prof_psql_stats_profile_statement
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$profiler.plg$prof_record_source_stats
 				    add constraint plg$prof_record_source_stats_session_fk
 				        foreign key (profile_id)
@@ -12845,12 +13034,596 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        references plg$profiler.plg$prof_record_sources
 				        on delete cascade
 				        using index plg$prof_record_source_stats_statement_cursor_record_source
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
+				    execute statement q'{
+				create table plg$profiler.plg$prof_sessions_data (
+				    profile_id bigint not null
+				        constraint plg$prof_sessions_data_pk
+				            primary key
+				            using index plg$prof_sessions_data_profile,
+				    attachment_id bigint not null,
+				    user_name char(63) character set utf8 default current_user not null,
+				    description varchar(255) character set utf8,
+				    start_timestamp timestamp with time zone not null,
+				    finish_timestamp timestamp with time zone,
+				    constraint plg$prof_sessions_data_profile_user_uk
+				        unique (profile_id, user_name)
+				        using index plg$prof_sessions_data_profile_user
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_statements_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    parent_statement_id bigint,
+				    statement_type varchar(20) character set utf8 not null,
+				    schema_name char(63) character set utf8,
+				    package_name char(63) character set utf8,
+				    routine_name char(63) character set utf8,
+				    sql_text blob sub_type text character set utf8,
+				    constraint plg$prof_statements_data_pk
+				        primary key (profile_id, statement_id)
+				        using index plg$prof_statements_data_profile_statement,
+				    constraint plg$prof_statements_data_profile_user_statement_uk
+				        unique (profile_id, user_name, statement_id)
+				        using index plg$prof_statements_data_profile_user_statement,
+				    constraint plg$prof_statements_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_statements_data_profile_user,
+				    constraint plg$prof_statements_data_parent_fk
+				        foreign key (profile_id, user_name, parent_statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_statements_data_parent_statement
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_cursors_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    cursor_id integer not null,
+				    name char(63) character set utf8,
+				    line_num integer,
+				    column_num integer,
+				    constraint plg$prof_cursors_data_pk
+				        primary key (profile_id, statement_id, cursor_id)
+				        using index plg$prof_cursors_data_profile_statement_cursor,
+				    constraint plg$prof_cursors_data_profile_user_statement_cursor_uk
+				        unique (profile_id, user_name, statement_id, cursor_id)
+				        using index plg$prof_cursors_data_profile_user_statement_cursor,
+				    constraint plg$prof_cursors_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_cursors_data_profile_user,
+				    constraint plg$prof_cursors_data_statement_fk
+				        foreign key (profile_id, user_name, statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_cursors_data_profile_user_statement
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_record_sources_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    cursor_id integer not null,
+				    record_source_id integer not null,
+				    parent_record_source_id integer,
+				    level integer not null,
+				    access_path blob sub_type text character set utf8 not null,
+				    constraint plg$prof_record_sources_data_pk
+				        primary key (profile_id, statement_id, cursor_id, record_source_id)
+				        using index plg$prof_recsrc_data_prof_stmt_cur_recsrc,
+				    constraint plg$prof_record_sources_data_prof_user_stmt_cur_recsrc_uk
+				        unique (profile_id, user_name, statement_id, cursor_id, record_source_id)
+				        using index plg$prof_recsrc_data_prof_user_stmt_cur_recsrc,
+				    constraint plg$prof_record_sources_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_recsrc_data_profile_user,
+				    constraint plg$prof_record_sources_data_statement_fk
+				        foreign key (profile_id, user_name, statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_recsrc_data_prof_user_stmt,
+				    constraint plg$prof_record_sources_data_cursor_fk
+				        foreign key (profile_id, user_name, statement_id, cursor_id)
+				        references plg$profiler.plg$prof_cursors_data (profile_id, user_name, statement_id, cursor_id)
+				        on delete cascade
+				        using index plg$prof_recsrc_data_prof_user_stmt_cur,
+				    constraint plg$prof_record_sources_data_parent_fk
+				        foreign key (profile_id, user_name, statement_id, cursor_id, parent_record_source_id)
+				        references plg$profiler.plg$prof_record_sources_data
+				            (profile_id, user_name, statement_id, cursor_id, record_source_id)
+				        on delete cascade
+				        using index plg$prof_recsrc_data_parent_recsrc
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_requests_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    caller_statement_id bigint,
+				    caller_request_id bigint,
+				    start_timestamp timestamp with time zone not null,
+				    finish_timestamp timestamp with time zone,
+				    total_elapsed_time bigint,
+				    constraint plg$prof_requests_data_pk
+				        primary key (profile_id, statement_id, request_id)
+				        using index plg$prof_requests_data_profile_statement_request,
+				    constraint plg$prof_requests_data_profile_user_statement_request_uk
+				        unique (profile_id, user_name, statement_id, request_id)
+				        using index plg$prof_requests_data_prof_user_stmt_req,
+				    constraint plg$prof_requests_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_requests_data_profile_user,
+				    constraint plg$prof_requests_data_statement_fk
+				        foreign key (profile_id, user_name, statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_requests_data_prof_user_stmt,
+				    constraint plg$prof_requests_data_caller_statement_fk
+				        foreign key (profile_id, user_name, caller_statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_requests_data_caller_statement,
+				    constraint plg$prof_requests_data_caller_request_fk
+				        foreign key (profile_id, user_name, caller_statement_id, caller_request_id)
+				        references plg$profiler.plg$prof_requests_data (profile_id, user_name, statement_id, request_id)
+				        on delete cascade
+				        using index plg$prof_requests_data_caller_request
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_psql_stats_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    line_num integer not null,
+				    column_num integer not null,
+				    counter bigint not null,
+				    min_elapsed_time bigint not null,
+				    max_elapsed_time bigint not null,
+				    total_elapsed_time bigint not null,
+				    constraint plg$prof_psql_stats_data_pk
+				        primary key (profile_id, statement_id, request_id, line_num, column_num)
+				        using index plg$prof_psql_data_prof_stmt_req_line_col,
+				    constraint plg$prof_psql_stats_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_psql_data_profile_user,
+				    constraint plg$prof_psql_stats_data_request_fk
+				        foreign key (profile_id, user_name, statement_id, request_id)
+				        references plg$profiler.plg$prof_requests_data (profile_id, user_name, statement_id, request_id)
+				        on delete cascade
+				        using index plg$prof_psql_data_prof_user_stmt_req,
+				    constraint plg$prof_psql_stats_data_statement_fk
+				        foreign key (profile_id, user_name, statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_psql_data_prof_user_stmt
+				)
+				    }';
+
+				    execute statement q'{
+				create table plg$profiler.plg$prof_record_source_stats_data (
+				    user_name char(63) character set utf8 default current_user not null,
+				    profile_id bigint not null,
+				    statement_id bigint not null,
+				    request_id bigint not null,
+				    cursor_id integer not null,
+				    record_source_id integer not null,
+				    open_counter bigint not null,
+				    open_min_elapsed_time bigint not null,
+				    open_max_elapsed_time bigint not null,
+				    open_total_elapsed_time bigint not null,
+				    fetch_counter bigint not null,
+				    fetch_min_elapsed_time bigint not null,
+				    fetch_max_elapsed_time bigint not null,
+				    fetch_total_elapsed_time bigint not null,
+				    constraint plg$prof_record_source_stats_data_pk
+				        primary key (profile_id, statement_id, request_id, cursor_id, record_source_id)
+				        using index plg$prof_rstat_data_prof_stmt_req_cur_recsrc,
+				    constraint plg$prof_record_source_stats_data_session_fk
+				        foreign key (profile_id, user_name)
+				        references plg$profiler.plg$prof_sessions_data (profile_id, user_name)
+				        on delete cascade
+				        using index plg$prof_rstat_data_profile_user,
+				    constraint plg$prof_record_source_stats_data_request_fk
+				        foreign key (profile_id, user_name, statement_id, request_id)
+				        references plg$profiler.plg$prof_requests_data (profile_id, user_name, statement_id, request_id)
+				        on delete cascade
+				        using index plg$prof_rstat_data_prof_user_stmt_req,
+				    constraint plg$prof_record_source_stats_data_statement_fk
+				        foreign key (profile_id, user_name, statement_id)
+				        references plg$profiler.plg$prof_statements_data (profile_id, user_name, statement_id)
+				        on delete cascade
+				        using index plg$prof_rstat_data_prof_user_stmt,
+				    constraint plg$prof_record_source_stats_data_cursor_fk
+				        foreign key (profile_id, user_name, statement_id, cursor_id)
+				        references plg$profiler.plg$prof_cursors_data (profile_id, user_name, statement_id, cursor_id)
+				        on delete cascade
+				        using index plg$prof_rstat_data_prof_user_stmt_cur,
+				    constraint plg$prof_record_source_stats_data_record_source_fk
+				        foreign key (profile_id, user_name, statement_id, cursor_id, record_source_id)
+				        references plg$profiler.plg$prof_record_sources_data
+				            (profile_id, user_name, statement_id, cursor_id, record_source_id)
+				        on delete cascade
+				        using index plg$prof_rstat_data_prof_user_stmt_cur_recsrc
+				)
+				    }';
+				end
+				)"""),
+
+				DEINDENTED_STR(R"""(
+				execute block
+				as
+				begin
+				    insert into plg$profiler.plg$prof_sessions_data
+				        (profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp)
+				        select profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp
+				            from plg$profiler.plg$prof_sessions;
+
+				    insert into plg$profiler.plg$prof_statements_data
+				        (user_name, profile_id, statement_id, parent_statement_id, statement_type, schema_name,
+				         package_name, routine_name, sql_text)
+				        select ses.user_name, sta.profile_id, sta.statement_id, sta.parent_statement_id,
+				               sta.statement_type, sta.schema_name, sta.package_name, sta.routine_name, sta.sql_text
+				            from plg$profiler.plg$prof_statements sta
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = sta.profile_id;
+
+				    insert into plg$profiler.plg$prof_cursors_data
+				        (user_name, profile_id, statement_id, cursor_id, name, line_num, column_num)
+				        select ses.user_name, cur.profile_id, cur.statement_id, cur.cursor_id, cur.name,
+				               cur.line_num, cur.column_num
+				            from plg$profiler.plg$prof_cursors cur
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = cur.profile_id;
+
+				    insert into plg$profiler.plg$prof_record_sources_data
+				        (user_name, profile_id, statement_id, cursor_id, record_source_id, parent_record_source_id,
+				         level, access_path)
+				        select ses.user_name, recsrc.profile_id, recsrc.statement_id, recsrc.cursor_id,
+				               recsrc.record_source_id, recsrc.parent_record_source_id, recsrc.level,
+				               recsrc.access_path
+				            from plg$profiler.plg$prof_record_sources recsrc
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = recsrc.profile_id;
+
+				    insert into plg$profiler.plg$prof_requests_data
+				        (user_name, profile_id, statement_id, request_id, caller_statement_id, caller_request_id,
+				         start_timestamp, finish_timestamp, total_elapsed_time)
+				        select ses.user_name, req.profile_id, req.statement_id, req.request_id,
+				               req.caller_statement_id, req.caller_request_id, req.start_timestamp,
+				               req.finish_timestamp, req.total_elapsed_time
+				            from plg$profiler.plg$prof_requests req
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = req.profile_id;
+
+				    insert into plg$profiler.plg$prof_psql_stats_data
+				        (user_name, profile_id, statement_id, request_id, line_num, column_num, counter,
+				         min_elapsed_time, max_elapsed_time, total_elapsed_time)
+				        select ses.user_name, pstat.profile_id, pstat.statement_id, pstat.request_id,
+				               pstat.line_num, pstat.column_num, pstat.counter, pstat.min_elapsed_time,
+				               pstat.max_elapsed_time, pstat.total_elapsed_time
+				            from plg$profiler.plg$prof_psql_stats pstat
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = pstat.profile_id;
+
+				    insert into plg$profiler.plg$prof_record_source_stats_data
+				        (user_name, profile_id, statement_id, request_id, cursor_id, record_source_id, open_counter,
+				         open_min_elapsed_time, open_max_elapsed_time, open_total_elapsed_time, fetch_counter,
+				         fetch_min_elapsed_time, fetch_max_elapsed_time, fetch_total_elapsed_time)
+				        select ses.user_name, rstat.profile_id, rstat.statement_id, rstat.request_id,
+				               rstat.cursor_id, rstat.record_source_id, rstat.open_counter,
+				               rstat.open_min_elapsed_time, rstat.open_max_elapsed_time,
+				               rstat.open_total_elapsed_time, rstat.fetch_counter, rstat.fetch_min_elapsed_time,
+				               rstat.fetch_max_elapsed_time, rstat.fetch_total_elapsed_time
+				            from plg$profiler.plg$prof_record_source_stats rstat
+				            join plg$profiler.plg$prof_sessions ses
+				              on ses.profile_id = rstat.profile_id;
+				end
+				)"""),
+
+				DEINDENTED_STR(R"""(
+				execute block
+				as
+				    declare source_has_data boolean;
+				begin
+				    source_has_data = exists(
+				        select first 1 1
+				            from system.rdb$relations
+				            where rdb$schema_name = 'PUBLIC' and
+				                  rdb$relation_name = 'PLG$PROF_SESSIONS_DATA'
+				    );
+
+				    execute statement
+				        'drop view plg$profiler.plg$prof_record_source_stats_view';
+				    execute statement
+				        'drop view plg$profiler.plg$prof_psql_stats_view';
+				    execute statement
+				        'drop view plg$profiler.plg$prof_statement_stats_view';
+
+				    execute statement
+				        'drop table plg$profiler.plg$prof_record_source_stats';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_psql_stats';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_requests';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_record_sources';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_cursors';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_statements';
+				    execute statement
+				        'drop table plg$profiler.plg$prof_sessions';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_sessions as
+				    select profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp
+				        from plg$profiler.plg$prof_sessions_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_sessions to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_statements as
+				    select user_name, profile_id, statement_id, parent_statement_id, statement_type,
+				           schema_name, package_name, routine_name, sql_text
+				        from plg$profiler.plg$prof_statements_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_statements to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_cursors as
+				    select user_name, profile_id, statement_id, cursor_id, name, line_num, column_num
+				        from plg$profiler.plg$prof_cursors_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_cursors to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_record_sources as
+				    select user_name, profile_id, statement_id, cursor_id, record_source_id,
+				           parent_record_source_id, level, access_path
+				        from plg$profiler.plg$prof_record_sources_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_record_sources to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_requests as
+				    select user_name, profile_id, statement_id, request_id, caller_statement_id,
+				           caller_request_id, start_timestamp, finish_timestamp, total_elapsed_time
+				        from plg$profiler.plg$prof_requests_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_requests to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_psql_stats as
+				    select user_name, profile_id, statement_id, request_id, line_num, column_num, counter,
+				           min_elapsed_time, max_elapsed_time, total_elapsed_time
+				        from plg$profiler.plg$prof_psql_stats_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_psql_stats to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_record_source_stats as
+				    select user_name, profile_id, statement_id, request_id, cursor_id, record_source_id,
+				           open_counter, open_min_elapsed_time, open_max_elapsed_time, open_total_elapsed_time,
+				           fetch_counter, fetch_min_elapsed_time, fetch_max_elapsed_time,
+				           fetch_total_elapsed_time
+				        from plg$profiler.plg$prof_record_source_stats_data
+				        where user_name = current_user or rdb$system_privilege(profile_any_attachment)
+				        with check option
+				    }';
+				    execute statement
+				        'grant select, update, insert, delete on table plg$profiler.plg$prof_record_source_stats to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_statement_stats_view
+				as
+				select req.profile_id,
+				       req.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = req.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, req.statement_id)
+				       ) sql_text,
+				       count(*) counter,
+				       min(req.total_elapsed_time) min_elapsed_time,
+				       max(req.total_elapsed_time) max_elapsed_time,
+				       cast(sum(req.total_elapsed_time) as bigint) total_elapsed_time,
+				       cast(sum(req.total_elapsed_time) / count(*) as bigint) avg_elapsed_time
+				  from plg$profiler.plg$prof_requests req
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = req.profile_id and
+				       sta.statement_id = req.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by req.profile_id,
+				           req.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name
+				  order by sum(req.total_elapsed_time) desc
+				    }';
+				    execute statement
+				        'grant select on table plg$profiler.plg$prof_statement_stats_view to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_psql_stats_view
+				as
+				select pstat.profile_id,
+				       pstat.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = pstat.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, pstat.statement_id)
+				       ) sql_text,
+				       pstat.line_num,
+				       pstat.column_num,
+				       cast(sum(pstat.counter) as bigint) counter,
+				       min(pstat.min_elapsed_time) min_elapsed_time,
+				       max(pstat.max_elapsed_time) max_elapsed_time,
+				       cast(sum(pstat.total_elapsed_time) as bigint) total_elapsed_time,
+				       cast(sum(pstat.total_elapsed_time) / nullif(sum(pstat.counter), 0) as bigint) avg_elapsed_time
+				  from plg$profiler.plg$prof_psql_stats pstat
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = pstat.profile_id and
+				       sta.statement_id = pstat.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by pstat.profile_id,
+				           pstat.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name,
+				           pstat.line_num,
+				           pstat.column_num
+				  order by sum(pstat.total_elapsed_time) desc
+				    }';
+				    execute statement
+				        'grant select on table plg$profiler.plg$prof_psql_stats_view to plg$profiler';
+
+				    execute statement q'{
+				recreate view plg$profiler.plg$prof_record_source_stats_view
+				as
+				select rstat.profile_id,
+				       rstat.statement_id,
+				       sta.statement_type,
+				       sta.schema_name,
+				       sta.package_name,
+				       sta.routine_name,
+				       sta.parent_statement_id,
+				       sta_parent.statement_type parent_statement_type,
+				       sta_parent.routine_name parent_routine_name,
+				       (select sql_text
+				           from plg$profiler.plg$prof_statements
+				           where profile_id = rstat.profile_id and
+				                 statement_id = coalesce(sta.parent_statement_id, rstat.statement_id)
+				       ) sql_text,
+				       rstat.cursor_id,
+				       cur.name cursor_name,
+				       cur.line_num cursor_line_num,
+				       cur.column_num cursor_column_num,
+				       rstat.record_source_id,
+				       recsrc.parent_record_source_id,
+				       recsrc.level,
+				       recsrc.access_path,
+				       cast(sum(rstat.open_counter) as bigint) open_counter,
+				       min(rstat.open_min_elapsed_time) open_min_elapsed_time,
+				       max(rstat.open_max_elapsed_time) open_max_elapsed_time,
+				       cast(sum(rstat.open_total_elapsed_time) as bigint) open_total_elapsed_time,
+				       cast(sum(rstat.open_total_elapsed_time) / nullif(sum(rstat.open_counter), 0) as bigint) open_avg_elapsed_time,
+				       cast(sum(rstat.fetch_counter) as bigint) fetch_counter,
+				       min(rstat.fetch_min_elapsed_time) fetch_min_elapsed_time,
+				       max(rstat.fetch_max_elapsed_time) fetch_max_elapsed_time,
+				       cast(sum(rstat.fetch_total_elapsed_time) as bigint) fetch_total_elapsed_time,
+				       cast(sum(rstat.fetch_total_elapsed_time) / nullif(sum(rstat.fetch_counter), 0) as bigint) fetch_avg_elapsed_time,
+				       cast(coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) as bigint) open_fetch_total_elapsed_time
+				  from plg$profiler.plg$prof_record_source_stats rstat
+				  join plg$profiler.plg$prof_cursors cur
+				    on cur.profile_id = rstat.profile_id and
+				       cur.statement_id = rstat.statement_id and
+				       cur.cursor_id = rstat.cursor_id
+				  join plg$profiler.plg$prof_record_sources recsrc
+				    on recsrc.profile_id = rstat.profile_id and
+				       recsrc.statement_id = rstat.statement_id and
+				       recsrc.cursor_id = rstat.cursor_id and
+				       recsrc.record_source_id = rstat.record_source_id
+				  join plg$profiler.plg$prof_statements sta
+				    on sta.profile_id = rstat.profile_id and
+				       sta.statement_id = rstat.statement_id
+				  left join plg$profiler.plg$prof_statements sta_parent
+				    on sta_parent.profile_id = sta.profile_id and
+				       sta_parent.statement_id = sta.parent_statement_id
+				  group by rstat.profile_id,
+				           rstat.statement_id,
+				           sta.statement_type,
+				           sta.schema_name,
+				           sta.package_name,
+				           sta.routine_name,
+				           sta.parent_statement_id,
+				           sta_parent.statement_type,
+				           sta_parent.routine_name,
+				           rstat.cursor_id,
+				           cur.name,
+				           cur.line_num,
+				           cur.column_num,
+				           rstat.record_source_id,
+				           recsrc.parent_record_source_id,
+				           recsrc.level,
+				           recsrc.access_path
+				  order by coalesce(sum(rstat.open_total_elapsed_time), 0) + coalesce(sum(rstat.fetch_total_elapsed_time), 0) desc
+				    }';
+				    execute statement
+				        'grant select on table plg$profiler.plg$prof_record_source_stats_view to plg$profiler';
+
 				    execute statement
 				        'drop sequence public.plg$prof_profile_id';
 
@@ -12861,27 +13634,62 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				    execute statement
 				        'drop view public.plg$prof_record_source_stats_view';
 
-				    execute statement
-				        'drop table public.plg$prof_psql_stats';
-				    execute statement
-				        'drop table public.plg$prof_record_source_stats';
-				    execute statement
-				        'drop table public.plg$prof_record_sources';
-				    execute statement
-				        'drop table public.plg$prof_cursors';
-				    execute statement
-				        'drop table public.plg$prof_requests';
-				    execute statement
-				        'drop table public.plg$prof_statements';
-				    execute statement
-				        'drop table public.plg$prof_sessions';
+				    if (source_has_data) then
+				    begin
+				        execute statement
+				            'drop view public.plg$prof_record_source_stats';
+				        execute statement
+				            'drop view public.plg$prof_psql_stats';
+				        execute statement
+				            'drop view public.plg$prof_requests';
+				        execute statement
+				            'drop view public.plg$prof_record_sources';
+				        execute statement
+				            'drop view public.plg$prof_cursors';
+				        execute statement
+				            'drop view public.plg$prof_statements';
+				        execute statement
+				            'drop view public.plg$prof_sessions';
+
+				        execute statement
+				            'drop table public.plg$prof_record_source_stats_data';
+				        execute statement
+				            'drop table public.plg$prof_psql_stats_data';
+				        execute statement
+				            'drop table public.plg$prof_requests_data';
+				        execute statement
+				            'drop table public.plg$prof_record_sources_data';
+				        execute statement
+				            'drop table public.plg$prof_cursors_data';
+				        execute statement
+				            'drop table public.plg$prof_statements_data';
+				        execute statement
+				            'drop table public.plg$prof_sessions_data';
+				    end
+				    else
+				    begin
+				        execute statement
+				            'drop table public.plg$prof_record_source_stats';
+				        execute statement
+				            'drop table public.plg$prof_psql_stats';
+				        execute statement
+				            'drop table public.plg$prof_requests';
+				        execute statement
+				            'drop table public.plg$prof_record_sources';
+				        execute statement
+				            'drop table public.plg$prof_cursors';
+				        execute statement
+				            'drop table public.plg$prof_statements';
+				        execute statement
+				            'drop table public.plg$prof_sessions';
+				    end
 				end
-				)""",
+				)"""),
 			}
 		},
 
 		{"SRP", "PLG$SRP",
-			R"""(
+			DEINDENTED_STR(R"""(
 			select exists(
 			           select first 1 1
 			               from system.rdb$relations
@@ -12889,9 +13697,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 			                     rdb$relation_name = 'PLG$SRP'
 			       )
 			    from system.rdb$database
-			)""",
+			)"""),
 			{
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -12901,22 +13709,22 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        'GRANT USAGE ON SCHEMA PLG$SRP TO PUBLIC';
 
 				    execute statement q'{
-				        CREATE TABLE PLG$SRP.PLG$SRP (PLG$USER_NAME SYSTEM.SEC$USER_NAME NOT NULL,
-				            PLG$VERIFIER VARCHAR(128) CHARACTER SET OCTETS NOT NULL,
-				            PLG$SALT VARCHAR(32) CHARACTER SET OCTETS NOT NULL,
-				            PLG$COMMENT SYSTEM.RDB$DESCRIPTION, PLG$FIRST SYSTEM.SEC$NAME_PART,
-				            PLG$MIDDLE SYSTEM.SEC$NAME_PART, PLG$LAST SYSTEM.SEC$NAME_PART,
-				            PLG$ATTRIBUTES SYSTEM.RDB$DESCRIPTION,
-				            PLG$ACTIVE BOOLEAN
-				        )
+				CREATE TABLE PLG$SRP.PLG$SRP (PLG$USER_NAME SYSTEM.SEC$USER_NAME NOT NULL,
+				    PLG$VERIFIER VARCHAR(128) CHARACTER SET OCTETS NOT NULL,
+				    PLG$SALT VARCHAR(32) CHARACTER SET OCTETS NOT NULL,
+				    PLG$COMMENT SYSTEM.RDB$DESCRIPTION, PLG$FIRST SYSTEM.SEC$NAME_PART,
+				    PLG$MIDDLE SYSTEM.SEC$NAME_PART, PLG$LAST SYSTEM.SEC$NAME_PART,
+				    PLG$ATTRIBUTES SYSTEM.RDB$DESCRIPTION,
+				    PLG$ACTIVE BOOLEAN
+				)
 				    }';
 
 				    execute statement q'{
-				        CREATE VIEW PLG$SRP.PLG$SRP_VIEW AS
-				            SELECT PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$COMMENT,
-				               PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$ATTRIBUTES, PLG$ACTIVE
-				            FROM PLG$SRP.PLG$SRP WHERE RDB$SYSTEM_PRIVILEGE(USER_MANAGEMENT)
-				               OR CURRENT_USER = PLG$SRP.PLG$USER_NAME
+				CREATE VIEW PLG$SRP.PLG$SRP_VIEW AS
+				    SELECT PLG$USER_NAME, PLG$VERIFIER, PLG$SALT, PLG$COMMENT,
+				       PLG$FIRST, PLG$MIDDLE, PLG$LAST, PLG$ATTRIBUTES, PLG$ACTIVE
+				    FROM PLG$SRP.PLG$SRP WHERE RDB$SYSTEM_PRIVILEGE(USER_MANAGEMENT)
+				       OR CURRENT_USER = PLG$SRP.PLG$USER_NAME
 				    }';
 
 				    execute statement
@@ -12928,9 +13736,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				             PLG$COMMENT, PLG$ATTRIBUTES) ON PLG$SRP.PLG$SRP_VIEW TO PUBLIC';
 				    execute statement 'GRANT ALL ON PLG$SRP.PLG$SRP_VIEW TO SYSTEM PRIVILEGE USER_MANAGEMENT';
 				end
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				insert into plg$srp.plg$srp
 				    (plg$user_name,
 				     plg$verifier,
@@ -12948,13 +13756,13 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				           plg$attributes,
 				           plg$active
 				        from public.plg$srp
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$srp.plg$srp add primary key (plg$user_name)
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -12964,12 +13772,12 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				    execute statement
 				        'drop table public.plg$srp';
 				end
-				)""",
+				)"""),
 			}
 		},
 
 		{"LEGACY_SEC", "PLG$LEGACY_SEC",
-			R"""(
+			DEINDENTED_STR(R"""(
 			select exists(
 			           select first 1 1
 			               from system.rdb$relations
@@ -12977,9 +13785,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 			                     rdb$relation_name = 'PLG$USERS'
 			       )
 			    from system.rdb$database
-			)""",
+			)"""),
 			{
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -12989,36 +13797,36 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        'GRANT USAGE ON SCHEMA PLG$LEGACY_SEC TO PUBLIC';
 
 				    execute statement q'{
-				        CREATE DOMAIN PLG$LEGACY_SEC.PLG$PASSWD AS VARBINARY(64)
+				CREATE DOMAIN PLG$LEGACY_SEC.PLG$PASSWD AS VARBINARY(64)
 				    }';
 
 				    execute statement q'{
-				        CREATE DOMAIN PLG$LEGACY_SEC.PLG$ID AS INTEGER
+				CREATE DOMAIN PLG$LEGACY_SEC.PLG$ID AS INTEGER
 				    }';
 
 				    execute statement q'{
-				        CREATE TABLE PLG$LEGACY_SEC.PLG$USERS (
-				            PLG$USER_NAME SYSTEM.SEC$USER_NAME NOT NULL,
-				            PLG$GROUP_NAME SYSTEM.SEC$USER_NAME,
-				            PLG$UID PLG$LEGACY_SEC.PLG$ID,
-				            PLG$GID PLG$LEGACY_SEC.PLG$ID,
-				            PLG$PASSWD PLG$LEGACY_SEC.PLG$PASSWD NOT NULL,
-				            PLG$COMMENT SYSTEM.RDB$DESCRIPTION,
-				            PLG$FIRST_NAME SYSTEM.SEC$NAME_PART,
-				            PLG$MIDDLE_NAME SYSTEM.SEC$NAME_PART,
-				            PLG$LAST_NAME SYSTEM.SEC$NAME_PART
+				CREATE TABLE PLG$LEGACY_SEC.PLG$USERS (
+				    PLG$USER_NAME SYSTEM.SEC$USER_NAME NOT NULL,
+				    PLG$GROUP_NAME SYSTEM.SEC$USER_NAME,
+				    PLG$UID PLG$LEGACY_SEC.PLG$ID,
+				    PLG$GID PLG$LEGACY_SEC.PLG$ID,
+				    PLG$PASSWD PLG$LEGACY_SEC.PLG$PASSWD NOT NULL,
+				    PLG$COMMENT SYSTEM.RDB$DESCRIPTION,
+				    PLG$FIRST_NAME SYSTEM.SEC$NAME_PART,
+				    PLG$MIDDLE_NAME SYSTEM.SEC$NAME_PART,
+				    PLG$LAST_NAME SYSTEM.SEC$NAME_PART
 					    )
 				    }';
 
 				    execute statement q'{
-				        CREATE VIEW PLG$LEGACY_SEC.PLG$VIEW_USERS (PLG$USER_NAME, PLG$GROUP_NAME, PLG$UID, PLG$GID, PLG$PASSWD,
-				                PLG$COMMENT, PLG$FIRST_NAME, PLG$MIDDLE_NAME, PLG$LAST_NAME) AS
-				            SELECT PLG$USER_NAME, PLG$GROUP_NAME, PLG$UID, PLG$GID, PLG$PASSWD,
-				                PLG$COMMENT, PLG$FIRST_NAME, PLG$MIDDLE_NAME, PLG$LAST_NAME
-				            FROM PLG$LEGACY_SEC.PLG$USERS
-				            WHERE CURRENT_USER = 'SYSDBA'
-				               OR CURRENT_ROLE = 'RDB$ADMIN'
-				               OR CURRENT_USER = PLG$USERS.PLG$USER_NAME
+				CREATE VIEW PLG$LEGACY_SEC.PLG$VIEW_USERS (PLG$USER_NAME, PLG$GROUP_NAME, PLG$UID, PLG$GID, PLG$PASSWD,
+				        PLG$COMMENT, PLG$FIRST_NAME, PLG$MIDDLE_NAME, PLG$LAST_NAME) AS
+				    SELECT PLG$USER_NAME, PLG$GROUP_NAME, PLG$UID, PLG$GID, PLG$PASSWD,
+				        PLG$COMMENT, PLG$FIRST_NAME, PLG$MIDDLE_NAME, PLG$LAST_NAME
+				    FROM PLG$LEGACY_SEC.PLG$USERS
+				    WHERE CURRENT_USER = 'SYSDBA'
+				       OR CURRENT_ROLE = 'RDB$ADMIN'
+				       OR CURRENT_USER = PLG$USERS.PLG$USER_NAME
 				    }';
 
 				    execute statement
@@ -13029,9 +13837,9 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				        'GRANT UPDATE(PLG$PASSWD, PLG$GROUP_NAME, PLG$UID, PLG$GID, PLG$FIRST_NAME, PLG$MIDDLE_NAME, PLG$LAST_NAME)
 				             ON PLG$LEGACY_SEC.PLG$VIEW_USERS TO PUBLIC';
 				end
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				insert into plg$legacy_sec.plg$users
 				    (plg$user_name,
 				     plg$group_name,
@@ -13053,13 +13861,13 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				           plg$middle_name,
 				           plg$last_name
 				        from public.plg$users
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				alter table plg$legacy_sec.plg$users add primary key (plg$user_name)
-				)""",
+				)"""),
 
-				R"""(
+				DEINDENTED_STR(R"""(
 				execute block
 				as
 				begin
@@ -13074,10 +13882,12 @@ void fix_plugins_schemas(BurpGlobals* tdgbl)
 				    execute statement
 				        'drop domain public.plg$id';
 				end
-				)""",
+				)"""),
 			}
 		},
 	};
+
+#undef DEINDENTED_STR
 
 	for (const auto& pluginMigration : pluginsMigration)
 	{
@@ -13503,6 +14313,8 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 
 void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 {
+	const bool use_bulk_insert = (tdgbl->runtimeODS >= DB_VERSION_DDL14);
+
 	m_batchMode = false;
 	m_inMgsNum = 0;
 
@@ -13657,23 +14469,33 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	add_byte(blr, blr_loop);
 	add_byte(blr, blr_receive);
 	add_byte(blr, 0);
-	if (identity_type == IDENT_TYPE_ALWAYS)
+
+	if (!use_bulk_insert)
 	{
-		add_byte(blr, blr_store3);
-		add_byte(blr, blr_store_override_system);
+		if (identity_type == IDENT_TYPE_ALWAYS)
+		{
+			add_byte(blr, blr_store3);
+			add_byte(blr, blr_store_override_system);
+		}
+		else
+			add_byte(blr, blr_store);
+
+		// Mark this store operation as bulk one
+		add_byte(blr, blr_marks);
+		add_byte(blr, 1);
+		add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
 	}
 	else
-		add_byte(blr, blr_store);
-
-	// Mark this store operation as bulk one
-	add_byte(blr, blr_marks);
-	add_byte(blr, 1);
-	add_byte(blr, 0x10);	// must be Jrd::StatementNode::MARK_BULK_INSERT
+	{
+		add_byte(blr, blr_bulk_insert);
+		add_byte(blr, blr_null);		// no source RSE
+	}
 
 	if (m_relation->rel_name.schema.hasData())
 	{
 		add_byte(blr, blr_relation3);
 		add_string(blr, m_relation->rel_name.schema.c_str());
+		add_string(blr, m_relation->rel_name.package.c_str());
 		add_string(blr, m_relation->rel_name.object.c_str());
 		add_string(blr, "");
 	}
@@ -13710,8 +14532,11 @@ void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 	}
 
 	add_byte(blr, blr_end);
-	if (identity_type == IDENT_TYPE_ALWAYS)
-		add_byte(blr, blr_null);
+	if (!use_bulk_insert)
+	{
+		if (identity_type == IDENT_TYPE_ALWAYS)
+			add_byte(blr, blr_null);
+	}
 	add_byte(blr, blr_end);
 	add_byte(blr, blr_eoc);
 
@@ -13811,7 +14636,7 @@ void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec
 		// memory when there are blobs and arrays fields - CORE-3802.
 
 		FbLocalStatus status;
-		if (m_resync || m_recs % 1000 == 1)
+		if (m_resync || ((m_recs % 1000 == 1) && !tdgbl->gbl_use_auto_release_temp_blobid))
 			m_request->startAndSend(&status, tran, 0, 0, m_inMsg.getCount(), m_inMsg.begin());
 		else
 			m_request->send(&status, 0, 0, m_inMsg.getCount(), m_inMsg.begin());

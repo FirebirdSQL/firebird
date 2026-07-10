@@ -58,7 +58,7 @@ static inline constexpr struct
 	{"minimum", two},	// 30
 	{"total", two},
 	{"receive_batch", byte_verb},
-	{NULL, NULL},
+	{"bulk_insert", three},
 	{"add", two},
 	{"subtract", two},
 	{"multiply", two},
@@ -268,5 +268,6 @@ static inline constexpr struct
 	{"current_schema", zero},
 	{NULL, NULL},	// flags - part of header
 	{NULL, NULL},	// blr_within_group_order - part of blr_agg_list[_distinct] and blr_agg_function
+	{"invoke_agg_function", custom_agg_function},
 	{0, 0}
 };

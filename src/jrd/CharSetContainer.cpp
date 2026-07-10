@@ -35,8 +35,14 @@ CharSetVers* CharSetVers::create(thread_db* tdbb, MemoryPool& pool, Cached::Char
 	return FB_NEW_POOL(pool) CharSetVers(csp);
 }
 
-void CharSetVers::destroy(thread_db*, CharSetVers* csv)
+void CharSetVers::destroy(thread_db* tdbb, CharSetVers* csv)
 {
+	for (auto* col : csv->charset_collations)
+	{
+		if (col)
+			col->destroy(tdbb);
+	}
+
 	delete csv;
 }
 

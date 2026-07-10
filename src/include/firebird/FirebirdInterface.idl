@@ -1099,6 +1099,26 @@ interface ExternalFunction : Disposable
 }
 
 
+interface ExternalAggregateInstance : Disposable
+{
+	void start(Status status, ExternalContext context);
+	void accumulate(Status status, ExternalContext context, void* inMsg);
+	void group(Status status, ExternalContext context, void* outMsg);
+	void finish(Status status, ExternalContext context);
+}
+
+interface ExternalAggregateFunction : Disposable
+{
+	// This method is called just before start/accumulate/group/finish and informs the engine
+	// our requested character set for data exchange inside these methods.
+	// During this call, the context uses the character set obtained from ExternalEngine::getCharSet.
+	void getCharSet(Status status, ExternalContext context,
+		string name, uint nameSize);
+
+	ExternalAggregateInstance newInstance(Status status, ExternalContext context);
+}
+
+
 
 interface ExternalProcedure : Disposable
 {
@@ -1191,6 +1211,11 @@ interface ExternalEngine : PluginBase
 		MetadataBuilder inBuilder, MetadataBuilder outBuilder);
 	ExternalTrigger makeTrigger(Status status, ExternalContext context,
 		RoutineMetadata metadata, MetadataBuilder fieldsBuilder);
+
+version:	// 5.0 => 6.0 Alpha1
+	ExternalAggregateFunction makeAggregateFunction(Status status, ExternalContext context,
+		RoutineMetadata metadata,
+		MetadataBuilder inBuilder, MetadataBuilder outBuilder);
 }
 
 
@@ -1702,6 +1727,13 @@ interface UdrFunctionFactory : Disposable
 	ExternalFunction newItem(Status status, ExternalContext context, RoutineMetadata metadata);
 }
 
+interface UdrAggregateFactory : Disposable
+{
+	void setup(Status status, ExternalContext context, RoutineMetadata metadata,
+		MetadataBuilder inBuilder, MetadataBuilder outBuilder);
+	ExternalAggregateFunction newItem(Status status, ExternalContext context, RoutineMetadata metadata);
+}
+
 interface UdrProcedureFactory : Disposable
 {
 	void setup(Status status, ExternalContext context, RoutineMetadata metadata,
@@ -1723,6 +1755,9 @@ interface UdrPlugin : Versioned
 	void registerFunction(Status status, const string name, UdrFunctionFactory factory);
 	void registerProcedure(Status status, const string name, UdrProcedureFactory factory);
 	void registerTrigger(Status status, const string name, UdrTriggerFactory factory);
+
+version:	// 5.0 => 6.0 Alpha1
+	void registerAggregateFunction(Status status, const string name, UdrAggregateFactory factory);
 }
 
 interface DecFloat16 : Versioned
@@ -1943,4 +1978,3 @@ interface PerformanceStats : Versioned
 
 	PerformanceCounters getCounters(uint group);
 }
-

@@ -496,7 +496,7 @@ private:
 	RelationPermanent*	idp_relation;
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
-	UCHAR				idp_state = 0;
+	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
 	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
@@ -521,11 +521,6 @@ public:
 	void setState(UCHAR state) noexcept
 	{
 		idp_state = state;
-	}
-
-	UCHAR getState() const noexcept
-	{
-		return idp_state;
 	}
 
 	UCHAR getFormat() const noexcept
@@ -664,6 +659,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	ObjectType getObjectType() const noexcept
@@ -718,6 +714,7 @@ inline constexpr ULONG REL_virtual				= 0x0040;	// relation is virtual
 inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
+inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
 
 class GCLock
 {
@@ -904,6 +901,7 @@ public:
 	};
 
 	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
 	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	freePages(thread_db* tdbb);
@@ -962,6 +960,7 @@ public:
 	bool isLTT() const noexcept;
 	bool isVirtual() const noexcept;
 	bool isView() const noexcept;
+	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
 
 	static int partners_ast_relation(void* ast_object);
@@ -1109,6 +1108,11 @@ inline bool jrd_rel::isView() const noexcept
 	return rel_perm->isView();
 }
 
+inline bool jrd_rel::isPrivate() const noexcept
+{
+	return rel_perm->isPrivate();
+}
+
 inline bool jrd_rel::isSystem() const noexcept
 {
 	return rel_perm->isSystem();
@@ -1143,6 +1147,11 @@ inline bool RelationPermanent::isVirtual() const noexcept
 inline bool RelationPermanent::isView() const noexcept
 {
 	return (rel_flags & REL_jrd_view);
+}
+
+inline bool RelationPermanent::isPrivate() const noexcept
+{
+	return (rel_flags & REL_private);
 }
 
 inline bool RelationPermanent::isLTT() const noexcept
@@ -1190,6 +1199,7 @@ inline void GCLock::Exclusive::release()
 // Field block, one for each field in a scanned relation
 
 inline constexpr USHORT FLD_parse_computed = 0x0001;	// computed expression is being parsed
+inline constexpr USHORT FLD_not_null =		 0x0002;	// field cannot be NULL (dups fld_not_null for virtual rel)
 
 class jrd_fld : public pool_alloc<type_fld>
 {

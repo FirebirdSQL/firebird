@@ -315,6 +315,54 @@ namespace
 		}
 	}
 
+	void attachDatabase(ISC_STATUS* statusVector, const Firebird::PathName& connName,
+		isc_db_handle* dbHandle, Firebird::UtilSvc* uSvc, const TEXT* username,
+		const TEXT* password, const TEXT* role
+#ifdef TRUSTED_AUTH
+		, bool trustedAuth
+#endif
+		)
+	{
+		// Check to make sure that the user accessing the database is either
+		// SYSDBA or owner of the database.
+
+		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+		uSvc->fillDpb(dpb);
+		dpb.insertTag(isc_dpb_gstat_attach);
+		dpb.insertTag(isc_dpb_no_garbage_collect);
+
+		const unsigned char* authBlock;
+		unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
+		if (authBlockSize)
+		{
+			dpb.insertBytes(isc_dpb_auth_block, authBlock, authBlockSize);
+		}
+		else
+		{
+			if (*username)
+				dpb.insertString(isc_dpb_user_name, username, fb_strlen(username));
+
+			if (*password)
+			{
+				dpb.insertString(uSvc->isService() ? isc_dpb_password_enc : isc_dpb_password,
+								password, fb_strlen(password));
+			}
+
+#ifdef TRUSTED_AUTH
+			if (trustedAuth)
+				dpb.insertTag(isc_dpb_trusted_auth);
+#endif
+		}
+
+		if (*role)
+			dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
+
+		dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA);
+
+		isc_attach_database(statusVector, 0, connName.c_str(), dbHandle, dpb.getBufferLength(),
+							reinterpret_cast<const char*>(dpb.getBuffer()));
+	}
+
 	void getDateTime(char* datetime, FB_SIZE_T sizeof_datetime) noexcept
 	{
 		time_t t;
@@ -623,6 +671,22 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	Firebird::PathName fileName = name;
 	const Firebird::PathName connName = fileName;
+
+	if (uSvc->isService())
+	{
+		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
+#ifdef TRUSTED_AUTH
+			, trusted_auth
+#endif
+			);
+
+		if (status_vector[1])
+			dba_exit(FINI_ERROR, tddba);
+
+		if (sw_version)
+			isc_version(&DB, NULL, NULL);
+	}
+
 	Firebird::PathName tempStr;
 
 	if (!ISC_analyze_tcp(fileName, tempStr))
@@ -763,48 +827,20 @@ int gstat(Firebird::UtilSvc* uSvc)
 		dba_exit(FINI_OK, tddba);
 	}
 
-	// Check to make sure that the user accessing the database is either
-	// SYSDBA or owner of the database
-
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
-	uSvc->fillDpb(dpb);
-	dpb.insertTag(isc_dpb_gstat_attach);
-	dpb.insertTag(isc_dpb_no_garbage_collect);
-
-	const unsigned char* authBlock;
-	const unsigned int authBlockSize = uSvc->getAuthBlock(&authBlock);
-	if (authBlockSize)
+	if (!uSvc->isService())
 	{
-		dpb.insertBytes(isc_dpb_auth_block, authBlock, authBlockSize);
-	}
-	else
-	{
-		if (*username)
-			dpb.insertString(isc_dpb_user_name, username, fb_strlen(username));
-
-		if (*password)
-		{
-			dpb.insertString(uSvc->isService() ? isc_dpb_password_enc : isc_dpb_password,
-							password, fb_strlen(password));
-		}
-
+		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
 #ifdef TRUSTED_AUTH
-		if (trusted_auth)
-			dpb.insertTag(isc_dpb_trusted_auth);
+			, trusted_auth
 #endif
+			);
+
+		if (status_vector[1])
+			dba_exit(FINI_ERROR, tddba);
+
+		if (sw_version)
+			isc_version(&DB, NULL, NULL);
 	}
-	if (*role)
-		dpb.insertString(isc_dpb_sql_role_name, role, fb_strlen(role));
-
-	dpb.insertString(isc_dpb_search_path, SYSTEM_SCHEMA);
-
-	isc_attach_database(status_vector, 0, connName.c_str(), &DB, dpb.getBufferLength(),
-						reinterpret_cast<const char*>(dpb.getBuffer()));
-	if (status_vector[1])
-		dba_exit(FINI_ERROR, tddba);
-
-	if (sw_version)
-		isc_version(&DB, NULL, NULL);
 
 	isc_tr_handle transact1 = 0;
 	START_TRANSACTION transact1 READ_ONLY;
@@ -1252,8 +1288,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	if ((exit_code != FINI_OK) && uSvc->isService() && tddba->dba_status[1])
 	{
 		Firebird::UtilSvc::StatusAccessor sa = uSvc->getStatusAccessor();
-		sa.init();
-		sa.setServiceStatus(tddba->dba_status);
+		if (!(sa->getState() & IStatus::STATE_ERRORS))
+			sa.setServiceStatus(tddba->dba_status);
 	}
 
 	return exit_code;

@@ -138,6 +138,7 @@ COMMENT ON <basic_type> name IS {'txt'|NULL};
 COMMENT ON COLUMN table_or_view_name.field_name IS {'txt'|NULL};
 COMMENT ON {PROCEDURE | [EXTERNAL] FUNCTION} [<package_name> .] name.param_name IS {'txt'|NULL};
 COMMENT ON [PROCEDURE | FUNCTION] PARAMETER [<package_name> .] name.param_name IS {'txt'|NULL};
+COMMENT ON CONSTANT [<schema_name> .] <package_name> . name IS {'txt'|NULL};
 
 An empty literal string '' will act as NULL since the internal code (DYN in this case)
 works this way with blobs.

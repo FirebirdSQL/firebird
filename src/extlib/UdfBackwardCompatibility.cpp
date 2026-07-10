@@ -96,7 +96,7 @@ FB_UDR_BEGIN_FUNCTION(UC_div)
 		{
 			out->resultNull = FB_FALSE;
 			if (in->n2)
-				out->result = div(in->n1, in->n2).quot;
+				out->result = div((long long) in->n1, (long long) in->n2).quot;
 			else
 			{
 				out->result = std::numeric_limits<double>::infinity();

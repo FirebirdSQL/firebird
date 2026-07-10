@@ -119,6 +119,7 @@ public:
 	struct ShowVersionNode {};
 	struct ShowViewsNode { std::optional<Firebird::QualifiedMetaString> name; };
 	struct ShowWireStatsNode {};
+	struct ShowConstantsNode { std::optional<Firebird::QualifiedMetaString> name; };
 
 	using AnySetNode = std::variant<
 		SetNode,
@@ -184,6 +185,7 @@ public:
 		ShowVersionNode,
 		ShowViewsNode,
 		ShowWireStatsNode,
+		ShowConstantsNode,
 
 		InvalidNode
 	>;
@@ -254,7 +256,7 @@ private:
 
 	template <typename Node>
 	std::optional<AnyShowNode> parseShowOptQualifiedName(std::string_view showCommand,
-		std::string_view testCommand, unsigned testCommandMinLen = 0);
+		std::string_view testCommand, unsigned testCommandMinLen, bool allowPackage);
 
 	bool parseEof()
 	{

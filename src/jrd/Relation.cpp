@@ -276,6 +276,17 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	return oldState == Bool3State::True;
 }
 
+void RelationPermanent::fillPages(thread_db* tdbb)
+{
+	if (!rel_file)
+	{
+		if (!rel_pages_base.rel_index_root)
+			DPM_scan_pages(tdbb);
+
+		fb_assert(rel_pages_base.rel_index_root);
+	}
+}
+
 RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
 {
 	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
@@ -362,10 +373,19 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 
 		while (BTR_next_index(tdbb, rel->getPermanent(), idxTran, &idx, &window, &rel_pages_base))
 		{
-			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			QualifiedName idx_name;
+			auto* idp = this->lookupIndex(tdbb, idx.idx_id, CacheFlag::AUTOCREATE);
 			if (idp)
 				idx_name = idp->getName();
+
+			switch (idx.idx_state)
+			{
+			case Ods::irt_drop:
+			case Ods::irt_unused:
+				continue;
+			default:
+				break;
+			}
 
 			idx.idx_root = 0;
 			SelectivityList selectivity(*pool);
@@ -612,18 +632,7 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, MetaId id, Object
 
 Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 {
-	auto* idp = rel_indices.getDataNoChecks(id);
-	if (idp)
-		return idp;
-
-	if (flags & CacheFlag::AUTOCREATE)
-	{
-		auto* idv = lookup_index(tdbb, id, flags);
-		if (idv)
-			return getPermanent(idv);
-	}
-
-	return nullptr;
+	return rel_indices.getData(tdbb, id, flags);
 }
 
 
@@ -1255,4 +1264,3 @@ GCLock::State GCLock::isGCEnabled() const
 	return State::unknown;
 }
 #endif //DEV_BUILD
-

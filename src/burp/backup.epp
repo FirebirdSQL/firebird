@@ -156,6 +156,7 @@ void write_triggers();
 void write_trigger_messages();
 void write_types();
 void write_user_privileges();
+void write_constants();
 void general_on_error();
 
 
@@ -424,6 +425,9 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		if (relation->rel_name.schema.hasData())
 			put_text(att_relation_schema_name, relation->rel_name.schema);
 
+		if (relation->rel_name.package.hasData())
+			put_text(att_relation_package_name, relation->rel_name.package);
+
 		put_text(att_relation_name, relation->rel_name.object);
 
 		put(tdgbl, att_end);
@@ -503,6 +507,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 
 		write_publications();
 		write_pub_tables();
+	}
+
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write constants
+		BURP_verbose(USHORT(isc_gbak_writing_constants));	// writing constants
+		write_constants();
 	}
 
 	// Finish up
@@ -673,6 +684,7 @@ burp_fld* get_fields( burp_rel* relation)
 			X.RDB$FIELD_SOURCE_SCHEMA_NAME EQUIV Y.RDB$SCHEMA_NAME AND
 			X.RDB$FIELD_SOURCE = Y.RDB$FIELD_NAME AND
 			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+			X.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str()
 		{
 			field = (burp_fld*) BURP_alloc_zero(sizeof(burp_fld));
@@ -1659,6 +1671,7 @@ void put_index( burp_rel* relation)
 		FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle1)
 			X IN RDB$INDICES WITH
 			X.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+			X.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 			X.RDB$RELATION_NAME EQ relation->rel_name.object.c_str() AND
 			X.RDB$INDEX_NAME NOT STARTING TEMP_DEPEND
 		{
@@ -1668,8 +1681,10 @@ void put_index( burp_rel* relation)
 				RFR IN RDB$RELATION_FIELDS WITH
 				I_S.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
 				I_S.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
+				I_S.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
 				I_S.RDB$INDEX_NAME = X.RDB$INDEX_NAME AND
 				RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 				RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str()
 			{
 				count++;
@@ -1687,7 +1702,8 @@ void put_index( burp_rel* relation)
 
 			put(tdgbl, rec_index);
 			PUT_TEXT(att_index_name, X.RDB$INDEX_NAME);
-			BURP_verbose(151, QualifiedMetaString(X.RDB$INDEX_NAME, relation->rel_name.schema).toQuotedString());
+			BURP_verbose(151, QualifiedMetaString(
+				X.RDB$INDEX_NAME, relation->rel_name.schema, relation->rel_name.package).toQuotedString());
 			// msg 151 writing index %s
 
 			put_int32 (att_segment_count, X.RDB$SEGMENT_COUNT);
@@ -1697,6 +1713,7 @@ void put_index( burp_rel* relation)
 			FOR (REQUEST_HANDLE tdgbl->handles_put_index_req_handle5)
 				Y IN RDB$INDEX_SEGMENTS WITH
 				Y.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+				Y.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
 				Y.RDB$INDEX_NAME EQ X.RDB$INDEX_NAME
 				SORTED BY Y.RDB$FIELD_POSITION
 			{
@@ -3003,6 +3020,8 @@ void write_functions()
 				put_int32(att_function_legacy_flag, X.RDB$LEGACY_FLAG);
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				put_int32(att_function_deterministic_flag, X.RDB$DETERMINISTIC_FLAG);
+			if (!X.RDB$AGGREGATE_FLAG.NULL)
+				put_int32(att_function_aggregate_flag, X.RDB$AGGREGATE_FLAG);
 			if (!X.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_function_sql_security, X.RDB$SQL_SECURITY);
 
@@ -4049,6 +4068,7 @@ void write_rel_constraints()
 		X IN RDB$RELATION_CONSTRAINTS CROSS
 		REL IN RDB$RELATIONS
 		WITH REL.RDB$SCHEMA_NAME EQUIV X.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME MISSING AND
 			 REL.RDB$RELATION_NAME EQ X.RDB$RELATION_NAME AND
 			 (REL.RDB$SYSTEM_FLAG MISSING OR REL.RDB$SYSTEM_FLAG NE 1)
 	{
@@ -4123,6 +4143,15 @@ void write_relations()
 				PUT_TEXT(att_relation_schema_name, X.RDB$SCHEMA_NAME);
 				name.schema = X.RDB$SCHEMA_NAME;
 			}
+
+			if (!X.RDB$PACKAGE_NAME.NULL)
+			{
+				PUT_TEXT(att_relation_package_name, X.RDB$PACKAGE_NAME);
+				name.package = X.RDB$PACKAGE_NAME;
+			}
+
+			if (!X.RDB$PRIVATE_FLAG.NULL)
+				put_int32(att_relation_private_flag, X.RDB$PRIVATE_FLAG);
 
 			PUT_TEXT(att_relation_name, X.RDB$RELATION_NAME);
 			name.object = X.RDB$RELATION_NAME;
@@ -4841,6 +4870,51 @@ void write_user_privileges()
 	ON_ERROR
 		general_on_error();
 	END_ERROR;
+
+	MISC_release_request_silent(req_handle1);
+}
+
+void write_constants()
+{
+	IRequest* req_handle1 = nullptr;
+
+	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+
+	FOR (REQUEST_HANDLE req_handle1)
+		CONST IN RDB$CONSTANTS CROSS
+		PKG IN RDB$PACKAGES WITH
+			CONST.RDB$SCHEMA_NAME EQ PKG.RDB$SCHEMA_NAME AND
+			CONST.RDB$PACKAGE_NAME EQ PKG.RDB$PACKAGE_NAME AND
+			PKG.RDB$SYSTEM_FLAG NE 1
+	{
+		QualifiedMetaString name(CONST.RDB$CONSTANT_NAME, CONST.RDB$SCHEMA_NAME, CONST.RDB$PACKAGE_NAME);
+
+		put(tdgbl, rec_constants);
+		PUT_TEXT(att_constant_name, CONST.RDB$CONSTANT_NAME);
+		PUT_TEXT(att_constant_package, CONST.RDB$PACKAGE_NAME);
+		PUT_TEXT(att_constant_field_source, CONST.RDB$FIELD_SOURCE);
+		PUT_TEXT(att_constant_field_source_schema, CONST.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
+		put_int32(att_constant_private_flag, CONST.RDB$PRIVATE_FLAG);
+
+		put_blr_blob(att_constant_blr, CONST.RDB$CONSTANT_BLR);
+
+		if (!CONST.RDB$CONSTANT_SOURCE.NULL)
+			put_source_blob(att_constant_source, att_constant_source, CONST.RDB$CONSTANT_SOURCE);
+
+		PUT_TEXT(att_constant_schema_name, CONST.RDB$SCHEMA_NAME);
+
+		if (!CONST.RDB$DESCRIPTION.NULL)
+			put_source_blob (att_constant_description, att_constant_description, CONST.RDB$DESCRIPTION);
+
+		// writing constant %s
+		BURP_verbose(USHORT(isc_gbak_writing_constant), SafeArg() << name.toQuotedString().data());
+		put(tdgbl, att_end);
+	}
+	END_FOR
+	ON_ERROR
+		general_on_error();
+	END_ERROR
 
 	MISC_release_request_silent(req_handle1);
 }

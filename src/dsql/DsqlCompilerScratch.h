@@ -45,6 +45,7 @@ class DeclareVariableNode;
 class ParameterClause;
 class RseNode;
 class SelectExprNode;
+class StmtNode;
 class TypeClause;
 class VariableNode;
 class WithClause;
@@ -76,7 +77,7 @@ public:
 	static const unsigned FLAG_FETCH				= 0x4000;
 	static const unsigned FLAG_VIEW_WITH_CHECK		= 0x8000;
 	static const unsigned FLAG_EXEC_BLOCK			= 0x010000;
-	static const unsigned FLAG_ALLOW_LTT_REFERENCES	= 0x020000;
+	static const unsigned FLAG_ALLOW_CREATED_LTT_REFERENCE	= 0x020000;
 	static const unsigned FLAG_USING_STATEMENT		= 0x040000;
 	static const unsigned FLAG_ACTUAL_LTT_DDL		= 0x080000;
 
@@ -201,6 +202,12 @@ public:
 
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
 		Firebird::Array<NestConst<ParameterClause> >& returns);
+
+	void compileAggregateFunction(Firebird::Array<NestConst<ParameterClause> >& parameters,
+		ParameterClause* returnParameter, NestConst<LocalDeclarationsNode>& localDeclList,
+		NestConst<StmtNode>& aggregateOnStartBody, NestConst<StmtNode>& aggregateOnAccumulateBody,
+		NestConst<StmtNode>& aggregateOnGroupBody, NestConst<StmtNode>& aggregateOnFinishBody,
+		bool reserveInitialReturnVarNumber);
 
 	// Get rid of any predefined contexts created for a view or trigger definition.
 	// Also reset hidden variables.
@@ -331,6 +338,9 @@ public:
 	USHORT recursiveCtxId = 0;				// id of recursive union stream context
 	bool processingWindow = false;			// processing window functions
 	bool checkConstraintTrigger = false;	// compiling a check constraint trigger
+	bool aggregatePhaseReturn = false;		// aggregate section return is phase-local
+	std::optional<AggregateFunctionPhase> aggregatePhase;	// aggregate section being compiled
+	USHORT aggregatePhaseLabel = 0;			// label used by aggregate phase-local RETURN
 	dsc domainValue;						// VALUE in the context of domain's check constraint
 	Firebird::Array<dsql_var*> hiddenVariables;	// hidden variables
 	Firebird::Array<dsql_var*> variables;

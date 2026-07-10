@@ -206,7 +206,7 @@ public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
 	// If returns false permissions will be check in old style at vio level as well as while direct RDB$ tables modify.
-	virtual void checkPermission(thread_db* tdbb, jrd_tra* transaction) = 0;
+	virtual void checkPermission(thread_db* tdbb) = 0;
 
 	// Set the scratch's transaction when executing a node. Fact of accessing the scratch during
 	// execution is a hack.
@@ -217,7 +217,7 @@ public:
 			dsqlScratch->setTransaction(transaction);
 
 		if (!trusted)
-			checkPermission(tdbb, transaction);
+			checkPermission(tdbb);
 		execute(tdbb, dsqlScratch, transaction);
 	}
 
@@ -233,6 +233,18 @@ public:
 	static void executeDdlTrigger(thread_db* tdbb, jrd_tra* transaction,
 		DdlTriggerWhen when, int action, const QualifiedName& objectName,
 		const QualifiedName& oldNewObjectName, const Firebird::string& sqlText);
+
+	// Update RDB$FIELDS received by reference.
+	static void updateRdbFields(const Jrd::TypeClause* type,
+		SSHORT& fieldType,
+		SSHORT& fieldLength,
+		SSHORT& fieldSubTypeNull, SSHORT& fieldSubType,
+		SSHORT& fieldScaleNull, SSHORT& fieldScale,
+		SSHORT& characterSetIdNull, SSHORT& characterSetId,
+		SSHORT& characterLengthNull, SSHORT& characterLength,
+		SSHORT& fieldPrecisionNull, SSHORT& fieldPrecision,
+		SSHORT& collationIdNull, SSHORT& collationId,
+		SSHORT& segmentLengthNull, SSHORT& segmentLength);
 
 protected:
 	typedef Firebird::Pair<Firebird::Left<MetaName, bid> > MetaNameBidPair;
@@ -519,6 +531,7 @@ public:
 		TYPE_WINDOW_CLAUSE,
 		TYPE_WINDOW_CLAUSE_FRAME,
 		TYPE_WINDOW_CLAUSE_FRAME_EXTENT,
+		TYPE_PACKAGE_REFERENCE,
 
 		// Bool types
 		TYPE_BINARY_BOOL,
@@ -677,6 +690,9 @@ public:
 	}
 
 	// Check if expression returns deterministic result
+	// Determinate whether the node is volatile (or not) in the current execution context.
+	// For example, a DBKEY is deterministic (it cannot change for an already fetched row)
+	// but it's not constant (and thus cannot be used as an initializer expression).
 	virtual bool deterministic(thread_db* tdbb) const;
 
 	// Check if expression could return NULL or expression can turn NULL into a true/false.
@@ -688,8 +704,45 @@ public:
 	// Verify if this node is allowed in an unmapped boolean.
 	virtual bool unmappable(const MapNode* mapNode, StreamType shellStream) const;
 
+	// Check if expression returns constant result
+	// Check if expression returns a constant result (the one which does not change after recompilation)
+	//
+	// Current list of consent nodes
+	// -- Always:
+	// LiteralNode
+	// NullNode
+	//
+	// -- Only if all child nodes are marked as constant expression
+	// ArithmeticNode
+	// AtNode
+	// BoolAsValueNode
+	// CastNode
+	// CoalesceNode
+	// ConcatenateNode
+	// DecodeNode
+	// ExtractNode
+	// NegateNode
+	// ScalarNode
+	// StrCaseNode
+	// StrLenNode
+	// SubstringNode
+	// SubstringSimilarNode
+	// TrimNode
+	// ValueIfNode
+	// BoolExprNode
+	//
+	// Special:
+	// SysFuncCallNode - see SysFunction::functions
+	// PackageReferenceNode - when referencing a constant.
+	virtual bool constant() const
+	{
+		return false;
+	}
+
 	// Return all streams referenced by the expression.
 	virtual void collectStreams(SortedStreamList& streamList) const;
+
+	bool isChildrenConstant() const;
 
 	bool containsStream(StreamType stream, bool only = false) const
 	{
@@ -764,6 +817,11 @@ public:
 	Kind getKind() override
 	{
 		return KIND_BOOLEAN;
+	}
+
+	virtual bool constant() const override
+	{
+		return isChildrenConstant();
 	}
 
 	BoolExprNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
@@ -1099,6 +1157,11 @@ public:
 
 	virtual void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
+	virtual bool isVariadicArgs() const
+	{
+		return false;
+	}
+
 	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, Request* request) const;
 	virtual bool aggPass(thread_db* tdbb, Request* request) const;
@@ -1342,6 +1405,17 @@ public:
 
 	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
+	virtual bool constant() const override
+	{
+		for (auto& child : items)
+		{
+			if (!child->constant())
+				return false;
+		}
+
+		return true;
+	}
+
 	ValueListNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
 		ValueListNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ValueListNode(dsqlScratch->getPool(),
@@ -1454,6 +1528,7 @@ public:
 	{
 		TYPE_ASSIGNMENT,
 		TYPE_BLOCK,
+		TYPE_BULK_INSERT,
 		TYPE_COMPOUND_STMT,
 		TYPE_CONTINUE_LEAVE,
 		TYPE_CURSOR_STMT,

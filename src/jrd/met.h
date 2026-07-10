@@ -238,6 +238,7 @@ public:
 		  mdc_procedures(getPool()),
 		  mdc_functions(getPool()),
 		  mdc_charsets(getPool()),
+		  mdc_packages(getPool()),
 		  mdc_cleanup_queue(pool)
 	{
 		memset(mdc_triggers, 0, sizeof(mdc_triggers));
@@ -390,6 +391,15 @@ public:
 		return vector.newVersion(tdbb, id);
 	}
 
+	// Upgrade object in cache from requested version
+
+	template <typename C, typename V>
+	static bool upgrade(thread_db* tdbb, MetaId id, V* from)
+	{
+		auto& vector = Vector<C>::get(getCache(tdbb));
+		return vector.upgrade(tdbb, id, from);
+	}
+
 	// Mark object in cache as dropped
 
 	template <typename C>
@@ -425,7 +435,7 @@ public:
 	static C* getPerm(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 	{
 		auto& vector = Vector<C>::get(getCache(tdbb));
-		return vector.getData(tdbb, id, flags);;
+		return vector.getData(tdbb, id, flags);
 	}
 
 	template <typename C>
@@ -497,6 +507,16 @@ private:
 		static CacheVector<Cached::Function>& get(MetadataCache* mdc)
 		{
 			return mdc->mdc_functions;
+		}
+	};
+
+	template <typename Dummy>
+	class Vector<Cached::Package, Dummy>
+	{
+	public:
+		static CacheVector<Cached::Package>& get(MetadataCache* mdc)
+		{
+			return mdc->mdc_packages;
 		}
 	};
 
@@ -605,6 +625,7 @@ private:
 	CacheVector<Cached::Procedure>		mdc_procedures;
 	CacheVector<Cached::Function>		mdc_functions;	// User defined functions
 	CacheVector<Cached::CharSet>		mdc_charsets;	// intl character set descriptions
+	CacheVector<Cached::Package>		mdc_packages;	// Package Constants
 	TriggersSet							mdc_triggers[DB_TRIGGERS_COUNT];
 	// Two numbers are required because commit into cache is not atomic event.
 	// Front value is incremented before commit, back - after commit.
