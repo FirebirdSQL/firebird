@@ -10104,7 +10104,7 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 				field->dtype = desc.dsc_dtype;
 				field->length = desc.dsc_length;
 				field->scale = desc.dsc_scale;
-				field->subType = desc.dsc_sub_type;
+				field->subType = desc.getSubType();
 
 				if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
 				{
