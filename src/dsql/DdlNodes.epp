@@ -10089,6 +10089,7 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 			// Named domain: reference it directly, like "<field name> <domain name>".
 			field->typeOfName = sourceField->fieldSource;
 			field->fullDomain = true;
+			field->flags |= sourceField->flags & FLD_nullable;
 		}
 		else
 		{
@@ -10127,13 +10128,12 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 			field->flags &= ~FLD_nullable;
 			if (desc.dsc_flags & DSC_nullable)
 				field->flags |= FLD_nullable;
-			else
-			{
-				// A newly created (non-domain) column is nullable unless a NOT NULL constraint
-				// is explicitly added - field->flags alone does not drive this, see defineField().
-				auto& notNullConstraint = clause->constraints.add();
-				notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
-			}
+		}
+
+		if (!(field->flags & FLD_nullable))
+		{
+			auto& notNullConstraint = clause->constraints.add();
+			notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
 		}
 
 		clauses.add(clause);
