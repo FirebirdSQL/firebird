@@ -842,7 +842,7 @@ decFloat * decFloatFromString(decFloat *result, const char *string,
           for (;; c++) {
             edig=(uInt)*c-(uInt)'0';
             if (edig>9) break;
-            exp=exp*10+edig;
+            exp=(Int)((uInt)exp*10+edig);  // unsigned to avoid signed overflow (clipped below)
             }
           }
         // if not now on the '\0', *c must not be a digit
