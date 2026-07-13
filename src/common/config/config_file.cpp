@@ -117,6 +117,8 @@ private:
 class TextStream : public ConfigFile::Stream
 {
 public:
+	inline static constexpr const char* STREAM_NAME = "Passed text";
+
 	explicit TextStream(const char* configText)
 		: s(configText), l(0)
 	{
@@ -275,7 +277,7 @@ ConfigFile::Stream::~Stream()
  *	Parse line, taking quotes into account
  */
 
-ConfigFile::LineType ConfigFile::parseLine(const char* fileName, const String& inputPar, Parameter& par)
+ConfigFile::LineType ConfigFile::parseLine(const StreamName fileName, const String& inputPar, Parameter& par)
 {
 	int inString = 0;
 	String::size_type valStart = 0;
@@ -449,7 +451,7 @@ void ConfigFile::adjustMacroReplacePositions(const String& value, const String& 
 		to += getDirSeparatorLength(value, to);
 }
 
-bool ConfigFile::macroParse(String& value, const char* fileName) const
+bool ConfigFile::macroParse(String& value, const StreamName fileName) const
 {
 	String::size_type pos = 0;
 	String::size_type subFrom;
@@ -506,7 +508,7 @@ bool ConfigFile::macroParse(String& value, const char* fileName) const
  *	Find macro value
  */
 
-bool ConfigFile::translate(const char* fileName, const String& from, String& to) const
+bool ConfigFile::translate(const StreamName fileName, const String& from, String& to) const
 {
 	if (from == "root")
 	{
@@ -518,19 +520,20 @@ bool ConfigFile::translate(const char* fileName, const String& from, String& to)
 	}
 	else if (from == "this")
 	{
-		if (!fileName)
+		if (!fileName.has_value())
 		{
 			return false;
 		}
 
-		PathName tempPath(fileName);
+		const char* fileNameData = fileName.value_or("");
+		PathName tempPath(fileNameData);
 
 #ifdef UNIX
 		if (PathUtils::isSymLink(tempPath))
 		{
 			// If $(this) is a symlink, expand it.
 			TEXT temp[MAXPATHLEN];
-			const int n = readlink(fileName, temp, sizeof(temp));
+			const int n = readlink(fileNameData, temp, sizeof(temp));
 
 			if (n != -1)
 			{
@@ -539,7 +542,7 @@ bool ConfigFile::translate(const char* fileName, const String& from, String& to)
 				if (PathUtils::isRelative(tempPath))
 				{
 					PathName parent;
-					PathUtils::splitLastComponent(parent, tempPath, fileName);
+					PathUtils::splitLastComponent(parent, tempPath, fileNameData);
 					PathUtils::concatPath(tempPath, parent, temp);
 				}
 			}
@@ -640,9 +643,9 @@ const ConfigFile::Parameter* ConfigFile::findParameter(const KeyType& name, cons
  *	Take into an account fault line
  */
 
-void ConfigFile::badLine(const char* fileName, const String& line)
+void ConfigFile::badLine(const StreamName fileName, const String& line)
 {
-	(Arg::Gds(isc_conf_line) << (fileName ? fileName : "Passed text") << line).raise();
+	(Arg::Gds(isc_conf_line) << fileName.value_or(TextStream::STREAM_NAME) << line).raise();
 }
 
 /******************************************************************************
@@ -655,7 +658,7 @@ void ConfigFile::parse(Stream* stream)
 	String inputLine;
 	Parameter* previous = NULL;
 	unsigned int line;
-	const char* streamName = stream->getFileName();
+	const StreamName streamName = stream->getFileName();
 
 	parameters.setSortMode(FB_ARRAY_SORT_MANUAL);
 
@@ -753,8 +756,10 @@ void ConfigFile::parse(Stream* stream)
  *	Parse include operator
  */
 
-void ConfigFile::include(const char* currentFileName, const PathName& parPath)
+void ConfigFile::include(const StreamName currentFileName, const PathName& parPath)
 {
+	const auto fileNameForError = currentFileName.value_or(TextStream::STREAM_NAME);
+
 #ifdef DEBUG_INCLUDES
 	fprintf(stderr, "include into %s file(s) %s\n", currentFileName, parPath.c_str());
 #endif
@@ -762,7 +767,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	AutoSetRestore<unsigned> depth(&includeLimit, includeLimit + 1);
 	if (includeLimit > INCLUDE_LIMIT)
 	{
-		(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_depth)).raise();
+		(Arg::Gds(isc_conf_include) << fileNameForError << parPath << Arg::Gds(isc_include_depth)).raise();
 	}
 
 	// for relative paths first of all prepend with current path (i.e. path of current conf file)
@@ -770,7 +775,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	if (PathUtils::isRelative(parPath))
 	{
 		PathName dummy;
-		PathUtils::splitLastComponent(path, dummy, currentFileName);
+		PathUtils::splitLastComponent(path, dummy, currentFileName.value_or(""));
 	}
 	PathUtils::concatPath(path, path, parPath);
 
@@ -793,12 +798,12 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
 	}
 
 	// analyze components for wildcards
-	if (!wildCards(currentFileName, pathPrefix, components))
+	if (!wildCards(pathPrefix, components))
 	{
 		// no matches found - check for presence of wild symbols in path
 		if (!hadWildCards)
 		{
-			(Arg::Gds(isc_conf_include) << currentFileName << parPath << Arg::Gds(isc_include_miss)).raise();
+			(Arg::Gds(isc_conf_include) << fileNameForError << parPath << Arg::Gds(isc_include_miss)).raise();
 		}
 	}
 }
@@ -811,7 +816,7 @@ void ConfigFile::include(const char* currentFileName, const PathName& parPath)
  *		- returns true if some match was found
  */
 
-bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPrefix, FilesArray& components)
+bool ConfigFile::wildCards(const PathName& pathPrefix, FilesArray& components)
 {
 	// Any change in directory can cause config change
 	PathName prefix(pathPrefix);
@@ -852,7 +857,7 @@ bool ConfigFile::wildCards(const char* currentFileName, const PathName& pathPref
 
 		if (mustBeDir)	// should be directory
 		{
-			found = wildCards(currentFileName, name, components) || found;
+			found = wildCards(name, components) || found;
 		}
 		else
 		{
@@ -959,4 +964,3 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("yes") ||
 		value.equalsNoCase("y");
 }
-

@@ -28,6 +28,8 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/auto.h"
+#include "../common/utils_proto.h"
+
 
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
@@ -50,6 +52,8 @@ class ConfigCache;
 
 class ConfigFile : public Firebird::AutoStorage, public Firebird::RefCounted
 {
+	using StreamName = fb_utils::SafePointer<const char>;
+
 public:
 	// flags for config file
 	static inline constexpr USHORT HAS_SUB_CONF		= 0x01;
@@ -125,7 +129,7 @@ public:
 	}
 
 	// Substitute macro values in a string
-	bool macroParse(String& value, const char* fileName) const;
+	bool macroParse(String& value, const StreamName fileName) const;
 
 private:
 	enum LineType {LINE_BAD, LINE_REGULAR, LINE_START_SUB, LINE_END_SUB, LINE_INCLUDE};
@@ -139,11 +143,11 @@ private:
 	// utilities
 	bool getLine(Stream* stream, String&, unsigned int&);
 	void parse(Stream* stream);
-	LineType parseLine(const char* fileName, const String& input, Parameter& par);
-	bool translate(const char* fileName, const String& from, String& to) const;
-	[[noreturn]] void badLine(const char* fileName, const String& line);
-	void include(const char* currentFileName, const Firebird::PathName& path);
-	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
+	LineType parseLine(const StreamName fileName, const String& input, Parameter& par);
+	bool translate(const StreamName fileName, const String& from, String& to) const;
+	[[noreturn]] void badLine(const StreamName fileName, const String& line);
+	void include(const StreamName currentFileName, const Firebird::PathName& path);
+	bool wildCards(const Firebird::PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;
 	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
 	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;
