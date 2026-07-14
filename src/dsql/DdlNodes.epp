@@ -10121,8 +10121,12 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 				}
 				else if (desc.isBlob())
 					field->segLength = 80;
-
-				field->setExactPrecision();
+				else if (desc.dsc_dtype == dtype_dec64)
+					field->precision = 16;
+				else if (desc.dsc_dtype == dtype_dec128)
+					field->precision = 34;
+				else if (desc.isExact() && field->subType != dsc_num_type_none)
+					field->setExactPrecision();
 			}
 
 			field->flags &= ~FLD_nullable;
