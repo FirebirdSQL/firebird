@@ -2057,6 +2057,8 @@ void blb::scalar(thread_db*		tdbb,
 	blob->BLB_close(tdbb);
 }
 
+// Run the unit tests in case of function change:
+//  gen/Debug/firebird/tests/libEngine14_test --run_test=EngineSuite/JrdClassesSuite/BlobTests/BlobModificationTests
 void blb::modifyData(thread_db* tdbb, offset_t position, const void* buffer, const ULONG length)
 {
 	// All BLOB data is stored in the following format: <pages> <record>

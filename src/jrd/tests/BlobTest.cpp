@@ -167,7 +167,8 @@ BOOST_FIXTURE_TEST_CASE(Level0WriteTest, EngineHolder)
 	}
 }
 
-BOOST_FIXTURE_TEST_CASE(Level1WriteTest, EngineHolder)
+// Run log test manual: gen/Debug/firebird/tests/libEngine14_test --run_test=EngineSuite/JrdClassesSuite/BlobTests/BlobModificationTests
+BOOST_FIXTURE_TEST_CASE(Level1WriteTest, EngineHolder, * boost::unit_test::disabled())
 {
 	Jrd::bid id;
 	Jrd::blb* blob = nullptr;
@@ -270,7 +271,8 @@ BOOST_FIXTURE_TEST_CASE(Level1WriteTest, EngineHolder)
 	}
 }
 
-BOOST_FIXTURE_TEST_CASE(Level2WriteTest, EngineHolder)
+// Run log test manual: gen/Debug/firebird/tests/libEngine14_test --run_test=EngineSuite/JrdClassesSuite/BlobTests/BlobModificationTests
+BOOST_FIXTURE_TEST_CASE(Level2WriteTest, EngineHolder, * boost::unit_test::disabled())
 {
 	// Takes some time
 
