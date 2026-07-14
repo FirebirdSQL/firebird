@@ -236,8 +236,8 @@ static const index_root_page* fetch_root(thread_db*, WIN*, const RelationPermane
 static UCHAR* find_node_start_point(btree_page*, temporary_key*, UCHAR*, USHORT*,
 									bool, int, bool = false, RecordNumber = NO_VALUE);
 
-static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*,
-									USHORT*, bool, int, RecordNumber = NO_VALUE);
+static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*, USHORT*,
+									bool, int, RecordNumber = NO_VALUE);
 
 static ULONG find_page(btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
 					   int = 0);
@@ -1186,7 +1186,8 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 
 	Cleanup releaseWindow([&] ()
 	{
-		CCH_RELEASE(tdbb, window);
+		if (window->win_bdb)
+			CCH_RELEASE(tdbb, window);
 	});
 
 	// Get index descriptor.  If index doesn't exist, just leave.
@@ -1600,7 +1601,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 		UCHAR* pointer;
 		if (retrieval->irb_lower_count)
 		{
-			while (!(pointer = find_node_start_point(page, lower, 0, &prefix,
+			while (!(pointer = find_node_start_point(page, lower, nullptr, &prefix,
 				descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
 			{
 				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
@@ -5231,10 +5232,8 @@ static const index_root_page* fetch_root(thread_db* tdbb, WIN* window, const Rel
 }
 
 
-static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
-									UCHAR* value,
-									USHORT* return_value, bool descending,
-									int retrieval, bool pointer_by_marker,
+static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key, UCHAR* value, USHORT* return_value,
+									bool descending, int retrieval, bool pointer_by_marker,
 									RecordNumber find_record_number)
 {
 /**************************************
@@ -5257,8 +5256,8 @@ static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key,
 	const UCHAR* const endPointer = (UCHAR*) bucket + bucket->btr_length;
 
 	// Find point where we can start search.
-	UCHAR* pointer = find_area_start_point(bucket, key, value, &prefix, descending, retrieval,
-										   find_record_number);
+	UCHAR* pointer = find_area_start_point(bucket, key, value, &prefix,
+										   descending, retrieval, find_record_number);
 	const UCHAR* p = key->key_data + prefix;
 
 	IndexNode node;
@@ -5381,10 +5380,8 @@ done:
 }
 
 
-static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key,
-									UCHAR* value,
-									USHORT* return_prefix, bool descending,
-									int retrieval, RecordNumber find_record_number)
+static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key, UCHAR* value, USHORT* return_prefix,
+									bool descending, int retrieval, RecordNumber find_record_number)
 {
 /**************************************
  *
@@ -5640,7 +5637,7 @@ static ULONG find_page(btree_page* bucket, const temporary_key* key,
 	USHORT prefix = 0;	// last computed prefix against processed node
 
 	// pointer where to start reading next node
-	UCHAR* pointer = find_area_start_point(bucket, key, 0, &prefix,
+	UCHAR* pointer = find_area_start_point(bucket, key, nullptr, &prefix,
 										   descending, retrieval, find_record_number);
 
 	IndexNode node;
@@ -6465,19 +6462,19 @@ static ULONG insert_node(thread_db* tdbb,
 	const index_desc* const idx = insertion->iib_descriptor;
 	const bool unique = (idx->idx_flags & idx_unique);
 	const bool primary = (idx->idx_flags & idx_primary);
+	const bool descending = (idx->idx_flags & idx_descending);
 	const bool key_all_nulls = (key->key_nulls == (1 << idx->idx_count) - 1);
 	const bool leafPage = (bucket->btr_level == 0);
 	// hvlad: don't check unique index if key has only null values
 	const bool validateDuplicates = (unique && !key_all_nulls) || primary;
 
 	USHORT prefix = 0;
-	const RecordNumber newRecordNumber = leafPage ?
-		insertion->iib_number : *new_record_number;
+	const RecordNumber newRecordNumber = leafPage ? insertion->iib_number : *new_record_number;
+	const RecordNumber findRecordNumber = validateDuplicates ? NO_VALUE : newRecordNumber;
 
 	// For checking on duplicate nodes we should find the first matching key.
-	UCHAR* pointer = find_node_start_point(bucket, key, 0, &prefix,
-						idx->idx_flags & idx_descending,
-						false, true, validateDuplicates ? NO_VALUE : newRecordNumber);
+	UCHAR* pointer = find_node_start_point(bucket, key, nullptr, &prefix,
+										   descending, 0, true, findRecordNumber);
 	if (!pointer)
 		return NO_VALUE_PAGE;
 
@@ -7277,16 +7274,16 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 	const index_desc* const idx = insertion->iib_descriptor;
 	const bool primary = (idx->idx_flags & idx_primary);
 	const bool unique = (idx->idx_flags & idx_unique);
+	const bool descending = (idx->idx_flags & idx_descending);
 	const bool key_all_nulls = (key->key_nulls == (1 << idx->idx_count) - 1);
 	const bool validateDuplicates = (unique && !key_all_nulls) || primary;
+	const RecordNumber findRecordNumber = validateDuplicates ? NO_VALUE : insertion->iib_number;
 
 	// Look for the first node with the value to be removed.
 	UCHAR* pointer;
 	USHORT prefix;
-	while (!(pointer = find_node_start_point(page, key, 0, &prefix,
-			(idx->idx_flags & idx_descending),
-			false, false,
-			(validateDuplicates ? NO_VALUE : insertion->iib_number))))
+	while (!(pointer = find_node_start_point(page, key, nullptr, &prefix,
+											 descending, 0, false, findRecordNumber)))
 	{
 		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
 	}

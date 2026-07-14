@@ -4,11 +4,11 @@ The following patterns are currently implemented for datetime to string conversi
 
 | Format Pattern | Description |
 | -------------- | ----------- |
-| YEAR | Year (1 - 9999) |
 | YYYY | Last 4 digits of Year (0001 - 9999) |
 | YYY | Last 3 digits of Year (000 - 999) |
 | YY | Last 2 digits of Year (00 - 99) |
 | Y | Last 1 digits of Year (0 - 9) |
+| YEAR | Spelled out Year (TWENTY TWENTY-SIX) |
 | Q | Quarter of the Year (1 - 4) |
 | MM | Month (01 - 12) |
 | MON | Short Month name (Apr) |
@@ -47,7 +47,7 @@ The separators are:
 
 Patterns can be used without any separators:
 ```
-SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(50) FORMAT 'YEARMMDD HH24MISS') FROM RDB$DATABASE;
+SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(50) FORMAT 'YYYYMMDD HH24MISS') FROM RDB$DATABASE;
 =========================
 20230719 161757
 ```
@@ -58,7 +58,7 @@ Also the format is case-insensitive, so `YYYY-MM` == `yyyy-mm`.
 
 Example:
 ```
-SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(45) FORMAT 'DD.MM.YEAR HH24:MI:SS "is" J "Julian day"') FROM RDB$DATABASE;
+SELECT CAST(CURRENT_TIMESTAMP AS VARCHAR(45) FORMAT 'DD.MM.YYYY HH24:MI:SS "is" J "Julian day"') FROM RDB$DATABASE;
 =========================
 14.06.2023 15:41:29 is 2460110 Julian day
 ```
@@ -69,7 +69,6 @@ The following patterns are currently implemented for string to datetime conversi
 
 | Format Pattern | Description |
 | ------------- | ------------- |
-| YEAR | Year |
 | YYYY | Last 4 digits of Year |
 | YYY | Last 3 digits of Year |
 | YY | Last 2 digits of Year |
@@ -109,7 +108,7 @@ Behavior of `RRRR`: Accepts either 4-digit or 2-digit input. If 2-digit, provide
 
 Example:
 ```
-SELECT CAST('2000.12.08 12:35:30.5000' AS TIMESTAMP FORMAT 'YEAR.MM.DD HH24:MI:SS.FF4') FROM RDB$DATABASE;
+SELECT CAST('2000.12.08 12:35:30.5000' AS TIMESTAMP FORMAT 'YYYY.MM.DD HH24:MI:SS.FF4') FROM RDB$DATABASE;
 =====================
 2000-12-08 12:35:30.5000
 ```

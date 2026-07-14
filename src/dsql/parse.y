@@ -2441,6 +2441,15 @@ table_as_query_clause
 			node->withData = $5;
 			$$ = node;
 		}
+	| simple_table_name column_parens_opt AS '(' select_expr ')' with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $5;
+			node->querySource = makeParseStr(YYPOSNARG(5), YYPOSNARG(5));
+			node->withData = $7;
+			$$ = node;
+		}
 	;
 
 %type <createRelationNode> table_clause
@@ -8925,6 +8934,7 @@ long_integer
 %type <valueExprNode> function
 function
 	: aggregate_function		{ $$ = $1; }
+	| hypothetical_set_function { $$ = $1; }
 	| non_aggregate_function
 	| custom_aggregate_function
 	| over_clause
@@ -9123,6 +9133,30 @@ within_group_specification_opt
 %type <valueListNode> within_group_specification
 within_group_specification
 	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
+	;
+
+%type <aggNode> hypothetical_set_function
+hypothetical_set_function
+	: hypothetical_set_function_prefix
+	| hypothetical_set_function_prefix FILTER '(' WHERE search_condition ')'
+		{
+			$$ = $1;
+
+			fb_assert($$->arg);
+			$$->arg = newNode<ValueIfNode>($5, $$->arg, NullNode::instance());
+		}
+	;
+
+%type <aggNode> hypothetical_set_function_prefix
+hypothetical_set_function_prefix
+	: DENSE_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_DENSE_RANK, $3, $5); }
+	| RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_RANK, $3, $5); }
+	| PERCENT_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_PERCENT_RANK, $3, $5); }
+	| CUME_DIST '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_CUME_DIST, $3, $5); }
 	;
 
 %type <aggNode> window_function

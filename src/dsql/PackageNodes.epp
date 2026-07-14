@@ -370,10 +370,11 @@ void PackageItemsHolder::clear()
 
 static RegisterNode<PackageReferenceNode> regPackageReferenceNode({blr_package_reference});
 
-PackageReferenceNode::PackageReferenceNode(MemoryPool& pool, const QualifiedName& fullName, const UCHAR itemType)
+PackageReferenceNode::PackageReferenceNode(MemoryPool& pool, const QualifiedName& fullName, const UCHAR itemType,
+	const dsc& type)
 		: TypedNode<ValueExprNode, ExprNode::TYPE_PACKAGE_REFERENCE>(pool),
-		  m_fullName(fullName), m_itemType(itemType)
-{}
+		  m_fullName(fullName), m_cachedDsc(type), m_itemType(itemType)
+{ }
 
 string PackageReferenceNode::internalPrint(NodePrinter& printer) const
 {
@@ -387,12 +388,10 @@ string PackageReferenceNode::internalPrint(NodePrinter& printer) const
 ValueExprNode* PackageReferenceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	MemoryPool& pool = dsqlScratch->getPool();
-
-	jrd_tra* transaction = dsqlScratch->getTransaction();
 	thread_db* tdbb = JRD_get_thread_data();
 
 	bool isPrivate = false;
-	if (constantExists(tdbb, transaction, m_fullName, &isPrivate))
+	if (constantExists(tdbb, m_fullName, &m_cachedDsc, &isPrivate))
 	{
 		// External objects do not have access to private constants
 		if (isPrivate)
@@ -407,8 +406,7 @@ ValueExprNode* PackageReferenceNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			Arg::Str(m_fullName.toQuotedString()));
 	}
 
-	auto* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, m_fullName, m_itemType);
-	return node;
+	return FB_NEW_POOL(pool) PackageReferenceNode(pool, m_fullName, m_itemType, m_cachedDsc);
 }
 
 DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR)
@@ -424,7 +422,6 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 			csb->csb_blr_reader.getMetaName(fullName.schema);
 			csb->csb_blr_reader.getMetaName(fullName.package);
 
-			PackageReferenceNode* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, fullName, itemType);
 
 			if (csb->collectingDependencies())
 			{
@@ -434,20 +431,20 @@ DmlNode* PackageReferenceNode::parse(thread_db* tdbb, MemoryPool& pool, Compiler
 				csb->addDependency(dependency);
 			}
 
-			{ // Package cache
-				auto package = MetadataCache::getVersioned<Cached::Package>(tdbb, fullName.getSchemaAndPackage(), CacheFlag::AUTOCREATE);
-				if (package)
-				{
-					node->m_package = csb->csb_resources->packages.registerResource(package->getPermanent());
-				}
-			}
+			ConstantValue* constant = nullptr;
+			// Package cache
+			auto package = MetadataCache::getVersioned<Cached::Package>(tdbb, fullName.getSchemaAndPackage(), CacheFlag::AUTOCREATE);
+			if (package)
+				constant = package->findConstant(fullName);
 
-			if (!node->m_package)
+			if (constant == nullptr)
 			{
 				status_exception::raise(Arg::Gds(isc_bad_constant_name) <<
 					Arg::Str(fullName.toQuotedString()));
 			}
 
+			PackageReferenceNode* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, fullName, itemType, constant->getDesc());
+			node->m_package = csb->csb_resources->packages.registerResource(package->getPermanent());
 			return node;
 		}
 	// TODO: rowtype
@@ -474,13 +471,12 @@ void PackageReferenceNode::setParameterName(dsql_par* parameter) const
 
 void PackageReferenceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 {
-	jrd_tra* transaction = dsqlScratch->getTransaction();
-	thread_db* tdbb = JRD_get_thread_data();
-	*desc = ConstantValue::getDesc(tdbb, transaction, m_fullName);
+	fb_assert(!m_cachedDsc.isUnknown());
+	*desc = m_cachedDsc;
 }
 
-bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transaction,
-	const QualifiedName& fullName, bool* isPrivate)
+bool PackageReferenceNode::constantExists(thread_db* tdbb, const QualifiedName& fullName,
+	dsc* outConstantDesc, bool* isPrivate)
 {
 	if (fullName.package.isEmpty() || fullName.object.isEmpty())
 		return false;
@@ -500,18 +496,22 @@ bool PackageReferenceNode::constantExists(thread_db* tdbb, Jrd::jrd_tra* transac
 	if (isPrivate)
 		*isPrivate = value->isPrivate;
 
+	if (outConstantDesc)
+		*outConstantDesc = value->getDesc();
+
 	return true;
 }
 
-void PackageReferenceNode::getDesc(thread_db* tdbb, CompilerScratch*, dsc* desc)
+void PackageReferenceNode::getDesc(thread_db*, CompilerScratch*, dsc* desc)
 {
-	*desc = ConstantValue::getDesc(tdbb, tdbb->getTransaction(), m_fullName);
+	fb_assert(!m_cachedDsc.isUnknown());
+	*desc = m_cachedDsc;
 }
 
 ValueExprNode* PackageReferenceNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	MemoryPool& pool = *tdbb->getDefaultPool();
-	auto* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, m_fullName, m_itemType);
+	auto* node = FB_NEW_POOL(pool) PackageReferenceNode(pool, m_fullName, m_itemType, m_cachedDsc);
 
 	node->m_package = copier.csb->csb_resources->packages.registerResource(m_package());
 

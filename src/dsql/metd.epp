@@ -509,6 +509,10 @@ bool METD_get_domain(jrd_tra* transaction, TypeClause* field, const QualifiedNam
 		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
 			field->charLength = FLX.RDB$CHARACTER_LENGTH;
 
+		field->precision = 0;
+		if (!FLX.RDB$FIELD_PRECISION.NULL)
+			field->precision = FLX.RDB$FIELD_PRECISION;
+
 		if (!FLX.RDB$COMPUTED_BLR.NULL)
 			field->flags |= FLD_computed;
 

@@ -391,6 +391,15 @@ public:
 		return vector.newVersion(tdbb, id);
 	}
 
+	// Upgrade object in cache from requested version
+
+	template <typename C, typename V>
+	static bool upgrade(thread_db* tdbb, MetaId id, V* from)
+	{
+		auto& vector = Vector<C>::get(getCache(tdbb));
+		return vector.upgrade(tdbb, id, from);
+	}
+
 	// Mark object in cache as dropped
 
 	template <typename C>

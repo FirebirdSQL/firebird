@@ -1157,6 +1157,11 @@ public:
 
 	virtual void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
 
+	virtual bool isVariadicArgs() const
+	{
+		return false;
+	}
+
 	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, Request* request) const;
 	virtual bool aggPass(thread_db* tdbb, Request* request) const;

@@ -35,6 +35,7 @@
 #include "../dsql/errd_proto.h"
 #include "../dsql/movd_proto.h"
 #include "../jrd/exe_proto.h"
+#include "../common/utils_proto.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -553,17 +554,47 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	firstRowFetched = false;
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 
-	if (!message)
+	for (int i = 0; i < EXEC_RESTARTS; ++i)
 	{
-		JRD_start(tdbb, request, req_transaction);
-	}
-	else
-	{
-		fb_assert(inMsg != nullptr);
+		try
+		{
+			if (!message)
+			{
+				JRD_start(tdbb, request, req_transaction);
+			}
+			else
+			{
+				fb_assert(inMsg != nullptr);
 
-		const ULONG inMsgLength = dsqlStatement->getStatement()->getMessage(message->msg_number)->getFormat(request)->fmt_length;
-		JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
-			inMsgLength, inMsg);
+				const ULONG inMsgLength = dsqlStatement->getStatement()->getMessage(message->msg_number)->
+					getFormat(request)->fmt_length;
+				JRD_start_and_send(tdbb, request, req_transaction, message->msg_number,
+					inMsgLength, inMsg);
+			}
+
+			break;
+		}
+		catch (const Exception& ex)
+		{
+			FbLocalStatus st;
+			ex.stuffException(&st);
+
+			if (fb_utils::containsErrorCode(st->getErrors(), isc_old_format))
+			{
+				// destroy existing request
+				auto* statement = request->getStatement();
+				EXE_release(tdbb, request);
+
+				// create fresh one (with changed metadata in cache)
+				request = statement->findRequest(tdbb);
+				tdbb->getAttachment()->att_requests.add(request);
+
+				tdbb->tdbb_status_vector->init();
+				continue;
+			}
+
+			throw;
+		}
 	}
 
 	// Selectable execute block should get the "proc fetch" flag assigned,
