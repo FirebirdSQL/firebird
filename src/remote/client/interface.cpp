@@ -739,6 +739,12 @@ private:
 	void freeClientData(CheckStatusWrapper* status, bool force = false);
 	void internalFree(CheckStatusWrapper* status);
 
+	~Statement()
+	{
+		if (statement)
+			statement->rsr_self = NULL;
+	}
+
 	StatementMetadata metadata;
 	Attachment* remAtt;
 	Rsr* statement;
@@ -4278,6 +4284,8 @@ void Statement::freeClientData(CheckStatusWrapper* status, bool force)
 			clear_queue(rdb->rdb_port);
 			REMOTE_reset_statement(statement);
 		}
+		if (statement)
+			statement->rsr_self = NULL;
 		statement = NULL;
 	}
 	catch (const Exception& ex)
