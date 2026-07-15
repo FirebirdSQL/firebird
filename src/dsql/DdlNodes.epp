@@ -9986,52 +9986,55 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 	{
 		MetaName fieldName;
 
+		// Unwrap aliases/derived fields/union maps/package references to reach the underlying
+		// node. This is used to find the field name (when no explicit column list is given) and,
+		// in all cases, to detect a direct reference to a source table column so its exact
+		// datatype (and, for named domains, the domain itself) can be copied.
+		const ValueExprNode* nameNode = item;
+		const char* aliasName = nullptr;
+
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
+			nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
+		{
+			if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = aliasNode->name.c_str();
+
+				nameNode = aliasNode->value;
+			}
+			else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
+				nameNode = mapNode->map->map_node;
+			else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = derivedField->name.c_str();
+
+				nameNode = derivedField->value;
+			}
+			else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = referenceNode->getName();
+
+				nameNode = nullptr;
+			}
+		}
+
+		const auto sourceFieldNode = nodeAs<FieldNode>(nameNode);
+
 		if (queryColumns)
 			fieldName = nodeAs<FieldNode>(queryColumns->items[position])->dsqlName;
+		else if (aliasName)
+			fieldName = aliasName;
+		else if (sourceFieldNode)
+			fieldName = sourceFieldNode->dsqlField->fld_name;
 		else
 		{
-			const ValueExprNode* nameNode = item;
-			const char* aliasName = nullptr;
-
-			while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
-				nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
-			{
-				if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = aliasNode->name.c_str();
-
-					nameNode = aliasNode->value;
-				}
-				else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
-					nameNode = mapNode->map->map_node;
-				else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = derivedField->name.c_str();
-
-					nameNode = derivedField->value;
-				}
-				else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = referenceNode->getName();
-
-					nameNode = nullptr;
-				}
-			}
-
-			if (aliasName)
-				fieldName = aliasName;
-			else if (const auto fieldNode = nodeAs<FieldNode>(nameNode))
-				fieldName = fieldNode->dsqlField->fld_name;
-			else
-			{
-				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_specify_field_err));
-			}
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_specify_field_err));
 		}
 
 		for (const auto& name : names)
@@ -10063,30 +10066,80 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 
 		auto field = clause->field;
 		field->fld_name = fieldName;
-		field->dtype = desc.dsc_dtype;
-		field->length = desc.dsc_length;
-		field->scale = desc.dsc_scale;
-		field->subType = desc.dsc_sub_type;
 
-		if (desc.dsc_flags & DSC_nullable)
-			field->flags |= FLD_nullable;
+		// If the select item is a direct reference to a source table/view column, copy its
+		// exact datatype rather than relying only on the runtime descriptor. A column based on
+		// a named domain is copied as a full domain reference (inheriting its NOT NULL/DEFAULT/
+		// CHECK, like a hand-written column of that domain). A column based on an implicit
+		// (auto-generated) domain has its exact primitive type copied instead, since implicit
+		// domains must not be shared between tables (they are erased, unconditionally, when
+		// their owning column is dropped).
+		dsql_fld* sourceField = nullptr;
 
-		if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+		if (sourceFieldNode && sourceFieldNode->dsqlField &&
+			sourceFieldNode->dsqlField->fld_relation &&
+			!(sourceFieldNode->dsqlField->flags & FLD_computed) &&
+			sourceFieldNode->dsqlField->fieldSource.object.hasData())
 		{
-			field->charSetId = desc.getCharSet();
-			field->collationId = desc.getCollation();
+			sourceField = sourceFieldNode->dsqlField;
 		}
 
-		if (desc.isText())
+		if (sourceField && !fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()))
 		{
-			const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
-			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
-			field->charLength = (field->length - adjust) / bpc;
+			// Named domain: reference it directly, like "<field name> <domain name>".
+			field->typeOfName = sourceField->fieldSource;
+			field->fullDomain = true;
+			field->flags |= sourceField->flags & FLD_nullable;
 		}
-		else if (desc.isBlob())
-			field->segLength = 80;
+		else
+		{
+			if (sourceField)
+			{
+				// Implicit domain: copy its exact stored type (precision, charset, collation,
+				// dimensions, etc.) instead of sharing the domain object itself.
+				METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
+				field->flags &= ~(FLD_computed | FLD_system);
+			}
+			else
+			{
+				field->dtype = desc.dsc_dtype;
+				field->length = desc.dsc_length;
+				field->scale = desc.dsc_scale;
+				field->subType = desc.getSubType();
 
-		field->setExactPrecision();
+				if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+				{
+					field->charSetId = desc.getCharSet();
+					field->collationId = desc.getCollation();
+				}
+
+				if (desc.isText())
+				{
+					const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
+					const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
+					field->charLength = (field->length - adjust) / bpc;
+				}
+				else if (desc.isBlob())
+					field->segLength = 80;
+				else if (desc.dsc_dtype == dtype_dec64)
+					field->precision = 16;
+				else if (desc.dsc_dtype == dtype_dec128)
+					field->precision = 34;
+				else if (desc.isExact() && field->subType != dsc_num_type_none)
+					field->setExactPrecision();
+			}
+
+			field->flags &= ~FLD_nullable;
+			if (desc.dsc_flags & DSC_nullable)
+				field->flags |= FLD_nullable;
+		}
+
+		if (!(field->flags & FLD_nullable))
+		{
+			auto& notNullConstraint = clause->constraints.add();
+			notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
+		}
+
 		clauses.add(clause);
 
 		++position;
@@ -14736,7 +14789,10 @@ void DropIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 	fb_assert(idxId >= 0 && idxId < dbb->dbb_max_idx);
 
 	if (IDX_mark_index(tdbb, indexRelation, idxId))
-		indexRelation->eraseIndex(tdbb, idxId);
+	{
+		if (tdbb->tdbb_flags & TDBB_use_db_page_space)
+			indexRelation->eraseIndex(tdbb, idxId);
+	}
 }
 
 

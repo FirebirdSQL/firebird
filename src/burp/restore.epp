@@ -2628,6 +2628,12 @@ bool get_character_set(BurpGlobals* tdgbl)
 				if (X.RDB$CHARACTER_SET_ID.NULL && !X.RDB$DEFAULT_COLLATE_NAME.NULL &&
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
+					if (tdgbl->RESTORE_format < 12)
+					{
+						charset.schema = SYSTEM_SCHEMA;
+						collate.schema.clear();	// SYSTEM or PUBLIC
+					}
+
 					tdgbl->defaultCollations.put(charset, collate);
 					throw AbortException();	// prevent the STORE
 				}
@@ -2724,6 +2730,12 @@ bool get_character_set(BurpGlobals* tdgbl)
 				if (X.RDB$CHARACTER_SET_ID.NULL && !X.RDB$DEFAULT_COLLATE_NAME.NULL &&
 					!X.RDB$CHARACTER_SET_NAME.NULL)
 				{
+					if (tdgbl->RESTORE_format < 12)
+					{
+						charset.schema = SYSTEM_SCHEMA;
+						collate.schema.clear();	// SYSTEM or PUBLIC
+					}
+
 					tdgbl->defaultCollations.put(charset, collate);
 					throw AbortException();	// prevent the STORE
 				}
@@ -10879,6 +10891,9 @@ rec_type ignore_data(BurpGlobals* tdgbl, burp_rel* relation)
 	FB_UINT64 records = 0;
 	rec_type record;
 
+	// msg 427 skipping data for table @1
+	BURP_verbose(427, relation->rel_name.toQuotedString());
+
 	try
 	{
 		while (true)
@@ -11571,6 +11586,26 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	if (tdgbl->defaultCollations.hasData())
 	{
+		NonPooledMap<MetaString, MetaString> collationSchemas;
+
+		if (tdgbl->runtimeODS >= DB_VERSION_DDL14 &&
+			std::find_if(tdgbl->defaultCollations.begin(), tdgbl->defaultCollations.end(),
+				[](const auto& pair) { return pair.second.object.isEmpty(); }) != tdgbl->defaultCollations.end())
+		{
+			IRequest* req_handle_coll = nullptr;
+			FOR (REQUEST_HANDLE req_handle_coll)
+				COLL IN RDB$COLLATIONS
+			{
+				if (!COLL.RDB$COLLATION_NAME.NULL && !COLL.RDB$SCHEMA_NAME.NULL)
+					collationSchemas.put(MetaString(COLL.RDB$COLLATION_NAME), MetaString(COLL.RDB$SCHEMA_NAME));
+			}
+			END_FOR
+			ON_ERROR
+				general_on_error();
+			END_ERROR
+			MISC_release_request_silent(req_handle_coll);
+		}
+
 		Firebird::IRequest* req_handle5 = nullptr;
 
 		FOR (REQUEST_HANDLE req_handle5)
@@ -11581,10 +11616,14 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 			{
 				MODIFY CS
 				{
-					if (collationName->schema.hasData())
+					const auto schema = collationName->schema.hasData() ?
+						&collationName->schema :
+						collationSchemas.get(collationName->object);
+
+					if (schema && schema->hasData())
 					{
 						CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME.NULL = FALSE;
-						strcpy(CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME, collationName->schema.c_str());
+						strcpy(CS.RDB$DEFAULT_COLLATE_SCHEMA_NAME, schema->c_str());
 					}
 
 					CS.RDB$DEFAULT_COLLATE_NAME.NULL = FALSE;
