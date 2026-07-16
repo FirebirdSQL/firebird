@@ -1026,10 +1026,10 @@ public:
 
 	~LogFileHandles()
 	{
-		if (mutex_handle != INVALID_HANDLE_VALUE)
+		if (mutex_handle != NULL)
 			CloseHandle(mutex_handle);
 
-		mutex_handle = INVALID_HANDLE_VALUE;
+		mutex_handle = NULL;
 
 		if (file_handle != INVALID_HANDLE_VALUE)
 			CloseHandle(file_handle);
@@ -1088,7 +1088,7 @@ void LogFileHandles::trace_raw(const char* text, unsigned int length)
 
 Firebird::InitInstance<LogFileHandles> logFileHandles;
 
-HANDLE LogFileHandles::mutex_handle = INVALID_HANDLE_VALUE;
+HANDLE LogFileHandles::mutex_handle = NULL;
 HANDLE LogFileHandles::file_handle = INVALID_HANDLE_VALUE;
 
 

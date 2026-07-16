@@ -61,21 +61,110 @@
 #include <aclapi.h>
 #include <lmcons.h>
 
+// Check if Windows SDK version is above v7
+#include <sdkddkver.h>
+#ifdef _WIN32_WINNT_WIN8
+#include <VersionHelpers.h>
+#endif
+
+// Before Vista, pseudo-handle returned by GetCurrentProcess() could contain not enough
+// privileges to change	security descriptor. Thus use hard way to obtain good for us handle.
+static HANDLE legacyGetCurrentProcess()
+{
+	HANDLE hCurrentProcess = NULL;
+
+	// If current thread impersonates some low-privileged account, it might have
+	// no access to open handle of current process
+
+	HANDLE hToken = NULL;
+	DWORD err = 0;
+	if (OpenThreadToken(GetCurrentThread(), TOKEN_IMPERSONATE | TOKEN_DUPLICATE, TRUE, &hToken))
+	{
+		if (RevertToSelf())
+		{
+			hCurrentProcess = OpenProcess(READ_CONTROL | WRITE_DAC, FALSE, GetCurrentProcessId());
+			err = GetLastError();
+			SetThreadToken(NULL, hToken);
+		}
+		else
+		{
+			// MSDN: You should shut down the process if RevertToSelf fails.
+			Firebird::string err;
+			err.printf("RevertToSelf failed with %d", GetLastError());
+			gds__log(err.c_str());
+
+			Firebird::fatal_exception::raise(err.c_str());
+		}
+		CloseHandle(hToken);
+	}
+	else
+	{
+		if (GetLastError() == ERROR_NO_TOKEN)
+		{
+			// No impersonation
+			hCurrentProcess = OpenProcess(READ_CONTROL | WRITE_DAC, FALSE, GetCurrentProcessId());
+			err = GetLastError();
+		}
+		else
+		{
+			// Impersonated account have too low privileges
+			Firebird::system_call_failed::raise("OpenThreadToken");
+		}
+	}
+
+	if (hCurrentProcess == NULL)
+		Firebird::system_call_failed::raise("OpenProcess", err);
+
+	return hCurrentProcess;
+}
+
+
 class SecurityAttributes
 {
 public:
 	explicit SecurityAttributes(MemoryPool& pool)
 		: m_pool(pool)
 	{
+		static bool initializing = false;
+
+		// initializing == true means recursive call of SecurityAttributes constructor.
+		// It happens if first instance throws an exception and handling code accesses
+		// SecurityAttributes. Avoid recursion and leave null at attributes.lpSecurityDescriptor
+		// in this case.
+
+		if (initializing)
+			return;
+
+		initializing = true;
+
+		attributes.nLength = sizeof(attributes);
+		attributes.lpSecurityDescriptor = NULL;
+		attributes.bInheritHandle = TRUE;
+
 		// Ensure that our process has the SYNCHRONIZE privilege granted to everyone
 		PSECURITY_DESCRIPTOR pOldSD = NULL;
 		PACL pOldACL = NULL;
 
 		// Pseudo-handles do not work on WinNT. Need real process handle.
-		HANDLE hCurrentProcess = OpenProcess(READ_CONTROL | WRITE_DAC, FALSE, GetCurrentProcessId());
-		if (hCurrentProcess == NULL) {
-			Firebird::system_call_failed::raise("OpenProcess");
+		// hvlad: it have PROCESS_ALL_ACCESS access right since Vista
+
+#ifdef _WIN32_WINNT_WIN8
+		const bool isVistaOrGreater = IsWindowsVistaOrGreater();
+#else
+		OSVERSIONINFO OsVersionInfo;
+		OsVersionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+
+		const bool isVistaOrGreater = GetVersionEx(&OsVersionInfo) &&
+			(OsVersionInfo.dwMajorVersion >= 6);
+#endif
+		HANDLE hCurrentProcess = NULL;
+		if (isVistaOrGreater)
+		{
+			// Pseudo handle is not affected by impersonation and contains PROCESS_ALL_ACCESS access right
+			hCurrentProcess = GetCurrentProcess();
 		}
+		else
+			hCurrentProcess = legacyGetCurrentProcess();
 
 		DWORD result = GetSecurityInfo(hCurrentProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
 							NULL, NULL, &pOldACL, NULL, &pOldSD);
@@ -89,7 +178,9 @@ public:
 
 		if (result != ERROR_SUCCESS)
 		{
-			CloseHandle(hCurrentProcess);
+			if (!isVistaOrGreater)
+				CloseHandle(hCurrentProcess);
+
 			Firebird::system_call_failed::raise("GetSecurityInfo", result);
 		}
 
@@ -117,19 +208,18 @@ public:
 			SetSecurityInfo(hCurrentProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
 							NULL, NULL, pNewACL, NULL);
 
-			if (pSID) {
+			if (pSID)
 				FreeSid(pSID);
-			}
-			if (pNewACL) {
+
+			if (pNewACL)
 				LocalFree(pNewACL);
-			}
 		}
 
-		CloseHandle(hCurrentProcess);
+		if (!isVistaOrGreater)
+			CloseHandle(hCurrentProcess);
 
-		if (pOldSD) {
+		if (pOldSD)
 			LocalFree(pOldSD);
-		}
 
 		// Create and initialize the default security descriptor
 		// to be assigned to various IPC objects.
@@ -140,16 +230,16 @@ public:
 		PSECURITY_DESCRIPTOR p_security_desc = static_cast<PSECURITY_DESCRIPTOR>(
 			FB_NEW_POOL(m_pool) char[SECURITY_DESCRIPTOR_MIN_LENGTH]);
 
-		attributes.nLength = sizeof(attributes);
-		attributes.lpSecurityDescriptor = p_security_desc;
-		attributes.bInheritHandle = TRUE;
-
 		if (!InitializeSecurityDescriptor(p_security_desc, SECURITY_DESCRIPTOR_REVISION) ||
 			!SetSecurityDescriptorDacl(p_security_desc, TRUE, NULL, FALSE))
 		{
 			delete p_security_desc;
-			attributes.lpSecurityDescriptor = NULL;
 		}
+		else
+		{
+			attributes.lpSecurityDescriptor = p_security_desc;
+		}
+		initializing = false;
 	}
 
 	~SecurityAttributes()
