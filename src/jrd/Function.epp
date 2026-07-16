@@ -483,7 +483,7 @@ ScanResult Function::reload(thread_db* tdbb, ObjectBase::Flag /*unused*/)
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }
 
-ObjectType Function::objectType()
+ObjectType Function::objectType() noexcept
 {
 	return obj_udf;
 }
