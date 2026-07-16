@@ -503,6 +503,8 @@ public:
 	{
 	}
 
+	virtual ~TraceDescriptors() = default;
+
 	FB_SIZE_T getCount()
 	{
 		fillParams();
