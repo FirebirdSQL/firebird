@@ -235,7 +235,7 @@ public:
 
 	static const enum lck_t LOCKTYPE = LCK_dbwide_triggers;
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
@@ -252,7 +252,7 @@ public:
 		return "set of database-wide triggers on";
 	}
 
-	static int objectType();
+	static ObjectType objectType() noexcept;
 
 private:
 	DbTriggersHeader* perm;
@@ -562,7 +562,9 @@ public:
 	static void destroy(thread_db* tdbb, IndexVersion* idv);
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<RelationPermanent*> name);
+	static ObjectType objectType() noexcept;
+
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
 		return scan(tdbb, flags);
@@ -679,7 +681,7 @@ public:
 	static const enum lck_t LOCKTYPE = LCK_rel_rescan;
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag& flags);		// Scan the newly loaded relation for meta data
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag& flags)
 	{
 		return scan(tdbb, flags);
@@ -688,7 +690,7 @@ public:
 	bool hash(thread_db* tdbb, Firebird::sha512& digest);
 
 	static const char* objectFamily(RelationPermanent* perm);
-	static int objectType();
+	static ObjectType objectType() noexcept;
 
 	void releaseTriggers(thread_db* tdbb, bool destroy);
 	const Trigger* findTrigger(const QualifiedName& trig_name) const;

@@ -62,7 +62,7 @@ namespace Jrd
 
 		static Function* create(thread_db* tdbb, MemoryPool& pool, Cached::Function* perm);
 		ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
-		static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+		static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 		void checkReload(thread_db* tdbb) const override;
 
 		static const char* objectFamily(void*)
@@ -81,7 +81,7 @@ namespace Jrd
 			return obj_functions;
 		}
 
-		static int objectType();
+		static ObjectType objectType() noexcept;
 
 	private:
 		~Function() override

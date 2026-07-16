@@ -712,6 +712,11 @@ void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
 	delete idv;
 }
 
+ObjectType IndexVersion::objectType() noexcept
+{
+	return obj_index;
+}
+
 
 void jrd_rel::releaseTriggers(thread_db* tdbb, bool destroy)
 {
@@ -1125,7 +1130,7 @@ const char* jrd_rel::objectFamily(RelationPermanent* perm)
 	return perm->isView() ? "view" : "table";
 }
 
-int jrd_rel::objectType()
+ObjectType jrd_rel::objectType() noexcept
 {
 	return obj_relation;
 }
@@ -1247,7 +1252,7 @@ const QualifiedName& DbTriggersHeader::getName() const noexcept
 	return tnames[type];
 }
 
-int DbTriggers::objectType()
+ObjectType DbTriggers::objectType() noexcept
 {
 	return obj_trigger;
 }

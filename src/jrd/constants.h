@@ -520,7 +520,4 @@ inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; /
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
 
-// How many times request can be restarted in attempts to sync formats in it
-inline constexpr int EXEC_RESTARTS = 8;
-
 #endif // JRD_CONSTANTS_H

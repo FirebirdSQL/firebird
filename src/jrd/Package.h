@@ -198,7 +198,7 @@ public:
 	}
 
 	static Package* create(thread_db* tdbb, MemoryPool& pool, Cached::Package* perm);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
 	void checkReload(thread_db* tdbb);
@@ -224,7 +224,7 @@ public:
 		return obj_package_header;
 	}
 
-	static int objectType();
+	static ObjectType objectType() noexcept;
 
 	bool hash(thread_db* tdbb, Firebird::sha512& digest);
 

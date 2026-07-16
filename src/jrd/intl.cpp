@@ -846,26 +846,6 @@ Collation* INTL_texttype_lookup(thread_db* tdbb, TTypeId parm1)
 }
 
 
-/*void INTL_texttype_unload(thread_db* tdbb, USHORT ttype)
-{
- **************************************
- *
- *      I N T L _ t e x t t y p e _ u n l o a d
- *
- **************************************
- *
- * Functional description
- *  Unload a collation from memory.
- *
- **************************************
-	SET_TDBB(tdbb);
-
-	CharSetContainer* csc = CharSetContainer::lookupCharset(tdbb, ttype);
-	if (csc)
-		csc->unloadCollation(tdbb, ttype);
-}
-*/
-
 bool INTL_texttype_validate(Jrd::thread_db* tdbb, const SubtypeInfo* info)
 {
 /**************************************
