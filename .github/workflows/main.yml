@@ -164,7 +164,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - windows-2025
+          - windows-2022
         platform: [x64, x86]
 
     steps:
