@@ -657,7 +657,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	Firebird::PathName fileName = name;
 	const Firebird::PathName connName = fileName;
 
-	if (uSvc->isService())
+	if (uSvc->hasAuthBlock())
 	{
 		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
 #ifdef TRUSTED_AUTH
@@ -854,7 +854,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	dba_print(false, 9, SafeArg() << current->fil_string << ((current == tddba->files) ? "only" : "last"));
 	// msg 9: File %s is the %s file\n
 
-	if (!uSvc->isService())
+	if (!uSvc->hasAuthBlock())
 	{
 		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
 #ifdef TRUSTED_AUTH
