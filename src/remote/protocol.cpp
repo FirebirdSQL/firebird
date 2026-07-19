@@ -907,7 +907,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			}
 
 			RMessage* message = statement->rsr_buffer;
-			if (!message)
+			if (!message || !b->p_batch_data.cstr_address)
 				return P_FALSE(xdrs, p);
 			statement->rsr_buffer = message->msg_next;
 			message->msg_address = b->p_batch_data.cstr_address;
