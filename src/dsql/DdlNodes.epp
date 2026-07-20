@@ -10084,23 +10084,23 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 			sourceField = sourceFieldNode->dsqlField;
 		}
 
-		if (sourceField && !fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()))
+		if (sourceField)
+		{
+			METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
+			field->flags &= ~(FLD_computed | FLD_system);
+		}
+
+		if (sourceField &&
+			!fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()) &&
+			!(!(field->flags & FLD_nullable) && (desc.dsc_flags & DSC_nullable)))
 		{
 			// Named domain: reference it directly, like "<field name> <domain name>".
 			field->typeOfName = sourceField->fieldSource;
 			field->fullDomain = true;
-			field->flags |= sourceField->flags & FLD_nullable;
 		}
 		else
 		{
-			if (sourceField)
-			{
-				// Implicit domain: copy its exact stored type (precision, charset, collation,
-				// dimensions, etc.) instead of sharing the domain object itself.
-				METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
-				field->flags &= ~(FLD_computed | FLD_system);
-			}
-			else
+			if (!sourceField)
 			{
 				field->dtype = desc.dsc_dtype;
 				field->length = desc.dsc_length;
@@ -10128,11 +10128,11 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 				else if (desc.isExact() && field->subType != dsc_num_type_none)
 					field->setExactPrecision();
 			}
-
-			field->flags &= ~FLD_nullable;
-			if (desc.dsc_flags & DSC_nullable)
-				field->flags |= FLD_nullable;
 		}
+
+		field->flags &= ~FLD_nullable;
+		if (desc.dsc_flags & DSC_nullable)
+			field->flags |= FLD_nullable;
 
 		if (!(field->flags & FLD_nullable))
 		{

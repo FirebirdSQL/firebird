@@ -29,7 +29,10 @@ column's exact datatype instead of one derived only from the query's runtime res
 such as declared `NUMERIC`/`DECIMAL` precision).
 
 * If the source column is based on a named domain, the new column references that domain directly, as if it had
-  been declared `<column name> <domain name>`.
+  been declared `<column name> <domain name>`. However, if the column appears in an outer join context
+  where it is nullable and the domain is declared `NOT NULL`, the new column instead uses a copy of the
+  domain's underlying type (preserving precision, scale, character set, collation, etc.) without
+  referencing the original domain.
 * If the source column is based on an auto-generated (implicit) domain, its exact type (precision/scale, character
   set, collation, etc.) is copied.
 
