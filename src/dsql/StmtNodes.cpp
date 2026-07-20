@@ -1806,7 +1806,6 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 				node->format = Format::newFormat(pool, fieldCount);
 				node->format->fmt_length = FLAG_BYTES(fieldCount);
 				node->notNullFields.grow(fieldCount);
-				node->fieldNames.grow(fieldCount);
 
 				for (USHORT fieldNum = 0; fieldNum < fieldCount; ++fieldNum)
 				{
@@ -1814,7 +1813,6 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 					ItemInfo itemInfo;
 					PAR_desc(tdbb, csb, &fmtDesc, &itemInfo);
 					node->notNullFields[fieldNum] = !itemInfo.nullable;
-					blrReader.getMetaName(node->fieldNames[fieldNum]);
 
 					if (fmtDesc.dsc_dtype >= dtype_aligned)
 						node->format->fmt_length = FB_ALIGN(node->format->fmt_length, type_alignments[fmtDesc.dsc_dtype]);
@@ -1825,9 +1823,29 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 
 				break;
 
+			case blr_dcl_local_table_field_names:
+			{
+				if (node->fieldNames.hasData())
+					PAR_error(csb, Arg::Gds(isc_random) << "duplicate local table field names");
+
+				const USHORT nameCount = blrReader.getWord();
+				node->fieldNames.grow(nameCount);
+
+				for (USHORT fieldNum = 0; fieldNum < nameCount; ++fieldNum)
+					blrReader.getMetaName(node->fieldNames[fieldNum]);
+
+				break;
+			}
+
 			default:
 				PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_dcl_local_table sub code");
 		}
+	}
+
+	if (node->fieldNames.hasData() && node->fieldNames.getCount() != fieldCount)
+	{
+		PAR_error(csb, Arg::Gds(isc_random) <<
+			"Local table field names count does not match format field count");
 	}
 
 	if (fieldCount == 0)
@@ -1986,14 +2004,19 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
 			++fieldCount;
 
+		// Format layout: count + descriptors only.
 		dsqlScratch->appendUChar(blr_dcl_local_table_format);
 		dsqlScratch->appendUShort(fieldCount);
 
 		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
-		{
 			dsqlScratch->putType(field, true);
+
+		// Field names are optional and use a separate subcode.
+		dsqlScratch->appendUChar(blr_dcl_local_table_field_names);
+		dsqlScratch->appendUShort(fieldCount);
+
+		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
 			dsqlScratch->appendNullString(field->fld_name.c_str());
-		}
 
 		dsqlScratch->appendUChar(blr_end);
 	}
@@ -2114,7 +2137,12 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 
 		auto& field = (*newRelation->rel_fields)[i];
 		field = FB_NEW_POOL(pool) jrd_fld(pool);
-		field->fld_name.printf("FIELD_%" SIZEFORMAT, i + 1);
+
+		if (i < fieldNames.getCount() && fieldNames[i].hasData())
+			field->fld_name = fieldNames[i];
+		else
+			field->fld_name.printf("FIELD_%" SIZEFORMAT, i + 1);
+
 		field->fld_length = relFormat->fmt_desc[i].dsc_length;
 		field->fld_pos = i;
 		field->fld_flags = notNullFields[i] ? FLD_not_null : 0;

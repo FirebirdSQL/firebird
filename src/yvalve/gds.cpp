@@ -4034,7 +4034,8 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			{
 				nullptr,
 				"format",
-				"ltt"
+				"ltt",
+				"field_names"
 			};
 
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
@@ -4061,6 +4062,21 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 						{
 							blr_indent(control, level);
 							blr_print_dtype(control);
+							offset = blr_print_line(control, offset);
+						}
+
+						--level;
+						break;
+
+					case blr_dcl_local_table_field_names:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_indent(control, level);
+							blr_print_name(control);
 							offset = blr_print_line(control, offset);
 						}
 
