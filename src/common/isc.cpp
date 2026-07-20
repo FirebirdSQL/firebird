@@ -125,6 +125,10 @@ public:
 	explicit SecurityAttributes(MemoryPool& pool)
 		: m_pool(pool)
 	{
+		attributes.nLength = sizeof(attributes);
+		attributes.lpSecurityDescriptor = NULL;
+		attributes.bInheritHandle = TRUE;
+
 		static bool initializing = false;
 
 		// initializing == true means recursive call of SecurityAttributes constructor.
@@ -136,10 +140,6 @@ public:
 			return;
 
 		initializing = true;
-
-		attributes.nLength = sizeof(attributes);
-		attributes.lpSecurityDescriptor = NULL;
-		attributes.bInheritHandle = TRUE;
 
 		// Ensure that our process has the SYNCHRONIZE privilege granted to everyone
 		PSECURITY_DESCRIPTOR pOldSD = NULL;
