@@ -313,6 +313,7 @@ private:
 		mutable ISC_TIME localTime;				// gmtTimeStamp converted to local time (WITH TZ)
 	};
 
+public:
 	// Fields to support read consistency in READ COMMITTED transactions
 
 	struct SnapshotData
@@ -368,6 +369,11 @@ public:
 		return statement;
 	}
 
+	Request* getLocalTableRequest(bool outerDecl);
+	jrd_tra* getLocalTableTransaction() const;
+	FB_UINT64 getLocalTableInstanceId(thread_db* tdbb) const;
+	bool getLocalTableAutoTranCtx(AutoTranCtx& ctx) const;
+
 	bool hasInternalStatement() const noexcept;
 	bool hasPowerfulStatement() const noexcept;
 
@@ -397,6 +403,7 @@ public:
 private:
 	Statement* const statement;
 	mutable StmtNumber	req_id;			// request identifier
+	mutable FB_UINT64	req_local_table_instance_id;	// declared local table page instance identifier
 	TimeStampCache req_timeStampCache;	// time stamp cache
 	std::atomic<bool> req_inUse;
 

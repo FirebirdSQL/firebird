@@ -193,10 +193,27 @@ inline constexpr USHORT USER_DEF_REL_INIT_ID = 128;	// ODS >= 9
 // Define range of user relation and LTT ids
 inline constexpr USHORT MIN_RELATION_ID = USER_DEF_REL_INIT_ID;
 inline constexpr USHORT MAX_RELATION_ID = 32767;
-inline constexpr USHORT MAX_LTT_COUNT = 1024;
-inline constexpr USHORT MAX_LTT_ID = MAX_USHORT;
-inline constexpr USHORT MIN_LTT_ID = MAX_LTT_ID - MAX_LTT_COUNT + 1;
+
+// Local temporary table relation ids occupy the band above MAX_RELATION_ID, split
+// into two disjoint sub-bands so the two id-allocation schemes can never overlap:
+//  - Created LTTs (CREATE LOCAL TEMPORARY TABLE) are attachment things; their ids are
+//    assigned by a per-attachment rotating allocator coordinated through the metadata cache.
+//  - Declared LTTs (PSQL DECLARE ... LOCAL TABLE) are statement things (the relation lives
+//    on the shared Statement); their id is deterministic: MIN_DECLARED_LTT_ID + tableNumber.
+inline constexpr USHORT MAX_CREATED_LTT_COUNT = 1024;					// created LTTs per attachment
+inline constexpr USHORT MAX_CREATED_LTT_ID = MAX_USHORT;
+inline constexpr USHORT MIN_CREATED_LTT_ID = MAX_CREATED_LTT_ID - MAX_CREATED_LTT_COUNT + 1;
+
+inline constexpr USHORT MAX_DECLARED_LTT_COUNT = 1024;			// declared LTTs per statement
+inline constexpr USHORT MAX_DECLARED_LTT_ID = MIN_CREATED_LTT_ID - 1;
+inline constexpr USHORT MIN_DECLARED_LTT_ID = MAX_DECLARED_LTT_ID - MAX_DECLARED_LTT_COUNT + 1;
+
+// Full LTT union (used to classify an id as belonging to any LTT)
+inline constexpr USHORT MIN_LTT_ID = MIN_DECLARED_LTT_ID;
+inline constexpr USHORT MAX_LTT_ID = MAX_CREATED_LTT_ID;
+
 static_assert(MIN_LTT_ID > MAX_RELATION_ID);
+static_assert(MAX_DECLARED_LTT_ID < MIN_CREATED_LTT_ID);
 
 
 // Page types

@@ -544,6 +544,7 @@ public:
 	AttNumber generateAttachmentId();
 	TraNumber generateTransactionId();
 	StmtNumber generateStatementId();
+	FB_UINT64 generateLocalTableId();
 	// void assignLatestTransactionId(TraNumber number);
 	void assignLatestAttachmentId(AttNumber number);
 	AttNumber getLatestAttachmentId() const;

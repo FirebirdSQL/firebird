@@ -380,7 +380,10 @@ public:
 
 public:
 	explicit DeclareLocalTableNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool),
+		  dsqlName(pool),
+		  notNullFields(pool),
+		  fieldNames(pool)
 	{
 	}
 
@@ -401,11 +404,23 @@ public:
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
+	static void validateRecord(const DeclareLocalTableNode* table, const Record* record);
+
 	Impure* getImpure(thread_db* tdbb, Request* request, bool createWhenDead = true) const;
+	jrd_rel* getRelation(thread_db* tdbb, Request* request) const;
+	void reset(thread_db* tdbb, Request* request) const;
+	void destroyRelation(thread_db* tdbb) const;
 
 public:
+	MetaName dsqlName;
+	NestConst<CreateRelationNode> dsqlTable;
+	dsql_rel* dsqlRelation = nullptr;
 	NestConst<Format> format;
+	Firebird::Array<UCHAR> notNullFields;
+	Firebird::Array<MetaName> fieldNames;
+	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
+	bool useLtt = false;
 };
 
 
@@ -581,7 +596,7 @@ private:
 	const StmtNode* erase(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const;
 
 public:
-	NestConst<RelationSourceNode> dsqlRelation;
+	NestConst<RecordSourceNode> dsqlRelation;
 	NestConst<BoolExprNode> dsqlBoolean;
 	NestConst<PlanNode> dsqlPlan;
 	NestConst<ValueListNode> dsqlOrder;
@@ -597,6 +612,8 @@ public:
 	NestConst<ForNode> forNode;			// parent implicit cursor, if present
 	StreamType stream = 0;
 	unsigned marks = 0;					// see StmtNode::IUD_MARK_xxx
+	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 
@@ -1296,6 +1313,8 @@ public:
 	unsigned marks = 0;						// see StmtNode::IUD_MARK_xxx
 	USHORT dsqlRseFlags = 0;
 	std::optional<USHORT> dsqlReturningLocalTableNumber;
+	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 

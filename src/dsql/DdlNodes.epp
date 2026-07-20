@@ -10229,7 +10229,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	if (externalFile)
 		status_exception::raise(Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
 
-	if (attachment->att_local_temporary_tables.count() >= MAX_LTT_COUNT)
+	if (attachment->att_local_temporary_tables.count() >= MAX_CREATED_LTT_COUNT)
 	{
 		ERR_post(Arg::Gds(isc_imp_exc) <<
 				 Arg::Gds(isc_random) <<
@@ -10299,14 +10299,14 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	// Assign LTT relation ID
 
 	if (!attachment->att_next_ltt_id.has_value())
-		attachment->att_next_ltt_id = MAX_LTT_ID;
+		attachment->att_next_ltt_id = MAX_CREATED_LTT_ID;
 
 	const auto startLttId = attachment->att_next_ltt_id.value();
 
 	while (true)
 	{
-		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
-			attachment->att_next_ltt_id = MIN_LTT_ID;
+		if (attachment->att_next_ltt_id.value() >= MAX_CREATED_LTT_ID)
+			attachment->att_next_ltt_id = MIN_CREATED_LTT_ID;
 		else
 			++attachment->att_next_ltt_id.value();
 
