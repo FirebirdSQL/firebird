@@ -28,14 +28,14 @@
 
 #include "../dsql/chars.h"
 #include <cmath>
+#include <cstring>
 
 #ifdef HAVE_FLOAT_H
 #include <float.h>
 #else
-static inline constexpr DBL_MAX_10_EXP = 308
+static inline constexpr USHORT DBL_MAX_10_EXP = 308
 #endif
 
-#include "unicode/utf16.h" // U16_IS_TRAIL
 
 using namespace FBJSON;
 
@@ -88,202 +88,164 @@ void json_fatal_exception::raise(const JsonStatusVector& statusVector)
 
 // Classes
 
-template<class TView>
-void FBJSON::JsonScalarParser<TView>::parseQuotedString(TView& input, TextPos& current, SmallString& escapelessOutput)
+void BasicParse::parseStringUnsafe(const std::string_view input, SmallString& output)
 {
-	escapelessOutput.clear();
-	escapelessOutput.reserve(BUFFER_SMALL);
+	const ULONG length = input.length();
 
-	const TextPos end = input.end();
+	output.clear();
+	output.reserve(length);
 
-	// UTF-16, two \uXXXX in a row
-	int	leadSurrogate = LEAD_SURROGATE_NULL;
-
-	while (current < end)
+	ULONG startPos = 0;
+	while (true)
 	{
-		char c = input[current++];
-
-		if (c == '"')
+		// Use memchr because it is usually implemented with vector instructions
+		const char* slashIt = reinterpret_cast<const char*>(std::memchr(input.data() + startPos, '\\', length - startPos));
+		if (slashIt == nullptr)
 		{
+			output += input.substr(startPos, length - startPos);
 			return;
 		}
-		else if ((unsigned char)c < 32)
+
+		const auto currentPos = slashIt - input.data();
+		output += input.substr(startPos, currentPos - startPos); // Get part before the escape char
+
+		const char c = slashIt[1];
+		if (c == 'u')
 		{
-			escapelessOutput.printf("%02x", (unsigned char)c);
-			initError() << JsonStatusMsg(isc_jparser_unescaped_character) << escapelessOutput;
+			const auto unicodeSubstring = input.substr(currentPos); // \uXXXX
+			const auto unicodeValue = parseUnicodeUnsafe(unicodeSubstring.substr(ESCAPE_LENGTH));
+			appendUnicode(unicodeValue.value, unicodeSubstring.substr(0, unicodeValue.length + ESCAPE_LENGTH), output);
 
-			escapelessOutput.clear();
-			return;
-		}
-		else if (c == '\\')
-		{
-			if (current == end)
-			{
-				initError() << JsonStatusMsg(isc_jparser_invalid_quoted_string);
-
-				escapelessOutput.clear();
-				return;
-			}
-
-			c = input[current++];
-
-			if (c == 'u')
-			{
-				// Unicode escape sequence \uXXXX
-
-				if (current + UNICODE_HEX_SEQUENCE_LENGTH >= end)
-				{
-					initError() << JsonStatusMsg(isc_jparser_invalid_sequence) << input.getErrorSubstring(current, end - current);
-					current = end;
-
-					escapelessOutput.clear();
-					return;
-				}
-
-				// Get a digital code of the handling hex sequence to store it to hexToUnicodeValue
-				int hexToUnicodeValue = 0;
-				for (USHORT i = 0; i < UNICODE_HEX_SEQUENCE_LENGTH; ++i)
-				{
-					c = input[current++];
-					const auto cherMeta = classes_array[static_cast<USHORT>(c)];
-					if (cherMeta & CHR_DIGIT)
-					{
-						hexToUnicodeValue = (hexToUnicodeValue << 4) + (c - '0');
-					}
-					else
-					{
-						c = UPPER(c);
-						if (cherMeta & CHR_HEX)
-						{
-							hexToUnicodeValue = (hexToUnicodeValue << 4) + (c - 'A') + 10;
-						}
-						else
-						{
-							initError() << JsonStatusMsg(isc_jparser_un_incorrect_code) <<
-								input.getErrorSubstring(current - i - 1, UNICODE_HEX_SEQUENCE_LENGTH);
-							return;
-						}
-					}
-				}
-
-				// The first (lead) surrogate is a 16-bit code value in the range U+D800 to U+DBFF
-				if (U16_IS_LEAD(hexToUnicodeValue)) // or U_IS_LEAD
-				{
-					if (leadSurrogate != LEAD_SURROGATE_NULL)
-					{
-						// Two lead codes in a row
-						initError() << JsonStatusMsg(isc_jparser_un_double_high_surrogate) <<
-							input.getErrorSubstring(current - UNICODE_HEX_SEQUENCE_LENGTH, UNICODE_HEX_SEQUENCE_LENGTH);
-						return;
-					}
-					leadSurrogate = hexToUnicodeValue;
-					continue;
-				}
-				// The second (tail) surrogate is a 16-bit code value in the range U+DC00 to U+DFFF
-				else if (U16_IS_TRAIL(hexToUnicodeValue)) // or U_IS_TRAIL
-				{
-					if (leadSurrogate == LEAD_SURROGATE_NULL)
-					{
-						initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) <<
-							input.getErrorSubstring(current - UNICODE_HEX_SEQUENCE_LENGTH, UNICODE_HEX_SEQUENCE_LENGTH);
-						return;
-					}
-					hexToUnicodeValue = U16_GET_SUPPLEMENTARY(leadSurrogate, hexToUnicodeValue);
-				}
-				else if (leadSurrogate != LEAD_SURROGATE_NULL)
-				{
-					initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) <<
-							input.getErrorSubstring(current - UNICODE_HEX_SEQUENCE_LENGTH, UNICODE_HEX_SEQUENCE_LENGTH);
-					return;
-				}
-
-				if (hexToUnicodeValue == 0)
-				{
-					initError() << JsonStatusMsg(isc_jparser_un_conv_error);
-					return;
-				}
-				// C0 Controls and Basic Latin Range: 0000–007F (127)
-				else if (hexToUnicodeValue <= CHAR_MAX)
-				{
-					escapelessOutput.append(1, (char)hexToUnicodeValue);
-				}
-				else
-				{
-					// Append the raw code
-
-					// We are standing to the last hex digit so start and end with offset of 1
-					const TextPos unicodeEndPos = current;
-
-					// We need to get the full code sequence including the escape
-					if (leadSurrogate != LEAD_SURROGATE_NULL)
-					{
-						for (TextPos i = unicodeEndPos - (2 * UNICODE_ESCAPED_SEQUENCE_LENGTH); i < unicodeEndPos; ++i)
-						{
-							escapelessOutput.append(1, input[i]);
-						}
-
-						// Two codes, 12 chars - \uXXXX\uXXXX
-						leadSurrogate = LEAD_SURROGATE_NULL;
-					}
-					else // 6 chars - \uXXXX
-					{
-						for (TextPos i = unicodeEndPos - UNICODE_ESCAPED_SEQUENCE_LENGTH; i < unicodeEndPos; ++i)
-						{
-							escapelessOutput.append(1, input[i]);
-						}
-					}
-				}
-
-				continue; // End of unicode sequence handling
-			}
-
-			switch (c)
-			{
-				case '\'':
-				case '"':
-				case '\\':
-				case '/':
-					escapelessOutput.append(1, c);
-					break;
-				case 'b':
-					escapelessOutput.append(1, '\b');
-					break;
-				case 'f':
-					escapelessOutput.append(1, '\f');
-					break;
-				case 'n':
-					escapelessOutput.append(1, '\n');
-					break;
-				case 'r':
-					escapelessOutput.append(1, '\r');
-					break;
-				case 't':
-					escapelessOutput.append(1, '\t');
-					break;
-				default:
-					escapelessOutput = c;
-					initError() << JsonStatusMsg(isc_jparser_invalid_sequence) << JsonStatusMsgStrArg(escapelessOutput);
-					return;
-			} // !switch
+			startPos = currentPos + unicodeValue.length + ESCAPE_LENGTH;
 		}
 		else
 		{
-			// Handle a simple character
-			escapelessOutput.append(1, c);
+			output.append(1, '\\');
+			output.append(1, c);
+			startPos = currentPos + ESCAPE_LENGTH;
 		}
 
-		// The unicode tail is missing
-		// Handle a non-unicode escape character
-		if (leadSurrogate != LEAD_SURROGATE_NULL)
+	} // while
+}
+
+JsonStatusMsg& BasicParse::initError()
+{
+	error.reset(FB_NEW JsonStatusMsg());
+	return *error.get();
+}
+
+template<class TView>
+void FBJSON::JsonScalarParser<TView>::parseQuotedString(TView input, TextPos& current, bool keepEscapeSequence, bool expectEndQuote, SmallString* output)
+{
+	const bool hasOutput = output != nullptr;
+
+	const TextPos end = input.end();
+	constexpr static USHORT chunkSize = 256;
+
+	// To check the most common case, using just a simple uint8_t mast is about 10% faster then using an enum
+	static constexpr auto isSpecial = getSpecialCharacterTable();
+	// Interestingly, accessing this std::array is about 20% faster than accessing a C-style ControlType[256] array!
+	static constexpr auto controlsChars = getControlsTable();
+
+	while (current < end)
+	{
+		std::string_view chunk = input.getStringView(current, chunkSize);
+		USHORT startPos = 0;
+
+		for (USHORT i = 0; i < chunk.length();)
 		{
-			initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) <<
-				input.getErrorSubstring(current - UNICODE_HEX_SEQUENCE_LENGTH, UNICODE_HEX_SEQUENCE_LENGTH);
-			return;
-		}
+			UCHAR c = chunk[i++];
 
-	} // for
+			// Check the most common case without switch!
+			// 2x time better performance!
+			if (FB_LIKELY(!isSpecial[c]))
+				continue;
 
-	if (current >= end)
+			// Switch is faster then if-else chain by 10%
+			const auto charType = controlsChars[c];
+			switch (charType)
+			{
+			case ControlType::QUOTE:
+			{
+				if (hasOutput)
+					*output += chunk.substr(startPos, i - startPos - 1); // Exclude the last quote
+
+				current += i;
+				return;
+			}
+			case ControlType::INVALID:
+			{
+				Firebird::string hexStr;
+				hexStr.printf("%02x", c);
+				initError() << JsonStatusMsg(isc_jparser_unescaped_character) << hexStr;
+				current += i - 1;
+				return;
+			}
+			case ControlType::SLASH:
+			{
+				// Prefetch chunk for possible unicode
+				const USHORT lengthWithPrefetchedSize = i + UNICODE_UTF16_SEQUENCE_LENGTH;
+				if (lengthWithPrefetchedSize >= chunk.length()  && current + lengthWithPrefetchedSize < end)
+				{
+					// Part before the escape sequence
+					const auto appendSize = i - (startPos + 1);
+
+					if (hasOutput)
+						*output += chunk.substr(startPos, appendSize);
+
+					current += appendSize;
+					chunk = input.getStringView(current, chunkSize);
+					i = 1; // symbol after slash
+					fb_assert(chunk[0] == '\\');
+
+					if (current >= end)
+					{
+						initError() << JsonStatusMsg(isc_jparser_invalid_quoted_string);
+						return;
+					}
+				}
+				else if (hasOutput)
+				{
+					*output += chunk.substr(startPos, i - (startPos + 1));
+				}
+
+				c = chunk[i++];
+
+				if (c == 'u')
+				{
+					// Unicode escape sequence \uXXXX
+
+					const auto unicode = parseUnicode(chunk.substr(i));
+					if (hasOutput)
+						appendUnicode(unicode.value, chunk.substr(i - 2, unicode.length + 2), *output);
+
+					i += unicode.length;
+				}
+				else if (hasOutput)
+				{
+					if (keepEscapeSequence)
+					{
+						output->append(1, '\\');
+						output->append(1, c);
+					}
+					else
+						output->append(1, resolveEscapedChar(c));
+				}
+
+				startPos = i;
+				break;
+			} //case
+			} //switch
+		} // for
+
+		const auto end = chunk.length();
+		if (hasOutput)
+			*output += chunk.substr(startPos, end - startPos); // Exclude the last quote
+
+		current += end;
+	} // while
+
+	if (expectEndQuote)
 	{
 		initError() << JsonStatusMsg(isc_jparser_invalid_quoted_string);
 	}
@@ -291,7 +253,7 @@ void FBJSON::JsonScalarParser<TView>::parseQuotedString(TView& input, TextPos& c
 
 
 template<class TView>
-ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView& input, TextPos& current, bool strictMode)
+ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& current, bool strictMode)
 {
 	const TextPos start = current;
 	const TextPos end = input.end();
@@ -451,12 +413,6 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView& input, TextPos&
 	return lex;
 }
 
-template<class T>
-JsonStatusMsg& JsonScalarParser<T>::initError()
-{
-	error.reset(FB_NEW JsonStatusMsg());
-	return *error.get();
-}
 
 template class FBJSON::JsonScalarParser<StringParseView>;
-// template class FBJSON::JsonScalarParser<InputJsonText&>;
+// template class FBJSON::JsonScalarParser<InputJsonText>;

@@ -781,6 +781,11 @@ namespace Firebird
 			append(1, c);
 			return *this;
 		}
+		StringType& operator+=(const std::string_view v)
+		{
+			append(v.data(), v.length());
+			return *this;
+		}
 		StringType operator+(const StringType& v) const
 		{
 			return add(v.c_str(), v.length());

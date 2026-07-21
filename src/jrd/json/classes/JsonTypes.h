@@ -30,6 +30,14 @@
 #include "firebird.h"
 #include "fb_exception.h"
 #include "../JsonConsts.h"
+#include "../common/utils_proto.h"
+
+#include "unicode/utf16.h" // U16_IS_TRAIL, U16_GET_SUPPLEMENTARY
+
+#include <math.h>
+#include <string_view>
+#include <array>
+
 
 namespace FBJSON {
 
@@ -244,26 +252,282 @@ struct ParsedNumber
 	}
 };
 
+struct ParsedUnicode
+{
+	using ValueType = ULONG;
+	ValueType value = 0;
+	UCHAR length = 0; // in bytes
+};
 
-template<class TView>
-class JsonScalarParser
+class BasicParse
 {
 public:
-	// JsonStatusMsg allocation is super expansive
-	Firebird::AutoPtr<JsonStatusMsg> error;
+	static inline constexpr USHORT ESCAPE_LENGTH = 2; // \X
+	static inline constexpr USHORT UNICODE_HEX_SEQUENCE_LENGTH = 4; // XXXXX
+	static inline constexpr USHORT UNICODE_UTF16_SEQUENCE_LENGTH = UNICODE_HEX_SEQUENCE_LENGTH * 2 + 2; // XXXX\uXXXX
+	static inline constexpr USHORT UNICODE_ESCAPED_SEQUENCE_LENGTH = 6; // \uXXXX - with the escape
+	static inline constexpr UCHAR INVALID_HEX = 255;
+	static inline constexpr UCHAR INVALID_ESCAPE = 0;
 
+	// Keep the size of the enum at 4 bytes, as working with a 4-byte is faster than with a 1-byte
+	enum class ControlType
+	{
+		CHARACTER = 0,
+		INVALID,
+		QUOTE,
+		SLASH
+	};
+
+	// A table to get the type of the symbol in a fast way
+	static constexpr auto getControlsTable()
+	{
+		std::array<ControlType, UCHAR_MAX + 1> controls{};
+
+		// 0-32 are non char symbols
+		for (UCHAR i = 0; i < 32; ++i)
+			controls[i] = ControlType::INVALID;
+
+		controls['\"'] = ControlType::QUOTE;
+		controls['\\'] = ControlType::SLASH;
+		controls[127]  = ControlType::INVALID; // del
+
+		return controls;
+	}
+
+	// A table to check the simple character in a fast way: 0 is a simple char, 1 is a special
+	static constexpr auto getSpecialCharacterTable()
+	{
+		// Accessing a 4-byte value is faster than with a 1-byte step
+		std::array<uint32_t, UCHAR_MAX + 1> controls{};
+
+		// 0-32 are non char symbols
+		for (UCHAR i = 0; i < 32; ++i)
+			controls[i] = 1;
+
+		controls['\"'] = 1;
+		controls['\\'] = 1;
+		controls[127] = 1; // del
+
+		return controls;
+	}
+
+	static constexpr auto getHexToDecTable()
+	{
+		// Cant use std::optional in constexpr
+		std::array<UCHAR, UCHAR_MAX> hexToDec{};
+		for (USHORT c = 0; c < hexToDec.size(); ++c)
+			hexToDec[c] = INVALID_HEX; // Cannot use fill in constexpr
+
+		for (UCHAR c = '0'; c <= '9'; ++c)
+			hexToDec[c] = c - '0';
+
+		for (UCHAR c = 'A'; c <= 'F'; ++c)
+			hexToDec[c] = 10 + c - 'A';
+
+		for (UCHAR c = 'a'; c <= 'f'; ++c)
+			hexToDec[c] = 10 + c - 'a';
+
+		return hexToDec;
+	}
+
+	static constexpr auto getEscapeResolverTable()
+	{
+		// Cant use std::optional in constexpr
+		std::array<char, UCHAR_MAX> resolveTable{};
+		resolveTable['\\'] = '\\';
+		resolveTable['"'] = '"';
+		resolveTable['/'] = '/';
+		resolveTable['b'] = '\b';
+		resolveTable['f'] = '\f';
+		resolveTable['n'] = '\n';
+		resolveTable['r'] = '\r';
+		resolveTable['t'] = '\t';
+		return resolveTable;
+	}
+
+	static constexpr auto getEscapeTable()
+	{
+		// Cant use std::optional in constexpr
+		std::array<std::string_view, UCHAR_MAX + 1> resolveTable{};
+		resolveTable['\\'] = "\\\\";
+		resolveTable['"'] = "\\\"";
+		resolveTable['\b'] = "\\b";
+		resolveTable['\f'] = "\\f";
+		resolveTable['\n'] = "\\n";
+		resolveTable['\r'] = "\\r";
+		resolveTable['\t'] = "\\t";
+		return resolveTable;
+	}
+
+	// Instead of std::expected
+	Firebird::AutoPtr<JsonStatusMsg> error;
 	bool hasError() const
 	{
 		return error && error->isDirty();
 	}
 
-	void parseQuotedString(TView& view, TextPos& current, SmallString& escapelessOutput);
+	inline ParsedUnicode::ValueType parseHex(const std::string_view sequence)
+	{
+		if (sequence.length() < UNICODE_HEX_SEQUENCE_LENGTH)
+		{
+			initError() << JsonStatusMsg(isc_jparser_un_incorrect_code) << sequence;
+			return 0;
+		}
+
+		constexpr static auto hetToDecTable = getHexToDecTable();
+
+		ParsedUnicode::ValueType hexValue = 0;
+		char c;
+		for (USHORT i = 0; i < UNICODE_HEX_SEQUENCE_LENGTH; ++i)
+		{
+			c = sequence[i];
+			const auto dec = hetToDecTable[c];
+			if (dec != INVALID_HEX)
+			{
+				hexValue = (hexValue << 4) + dec;
+			}
+			else
+			{
+				initError() << JsonStatusMsg(isc_jparser_un_incorrect_code) << sequence;
+				return 0;
+			}
+		}
+
+		return hexValue;
+	}
+
+	ParsedUnicode parseUnicode(const std::string_view sequence)
+	{
+		// Possible values
+		// UTF-8, \uXXXX
+		// UTF-16, \uXXXX\uXXXX
+
+		// Get a digital code of the handling hex sequence to store it to hexToUnicodeValue
+		auto hexToUnicodeValue = parseHex(sequence);
+		if (hasError())
+			return {};
+
+		UCHAR bytesLength = UNICODE_HEX_SEQUENCE_LENGTH;
+
+		// UTF-16, the first (lead) surrogate is a 16-bit code value in the range U+D800 to U+DBFF
+		if (U16_IS_LEAD(hexToUnicodeValue)) // or U_IS_LEAD
+		{
+			const auto leadSurrogate = hexToUnicodeValue;
+
+			if (sequence.length() < UNICODE_UTF16_SEQUENCE_LENGTH ||
+				sequence[UNICODE_HEX_SEQUENCE_LENGTH] != '\\' ||
+				sequence[UNICODE_HEX_SEQUENCE_LENGTH + 1] != 'u')
+			{
+				initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) << sequence;
+				return {};
+			}
+
+			// The second (tail) surrogate is a 16-bit code value in the range U+DC00 to U+DFFF
+			const auto tailSurrogate = parseHex(sequence.substr(UNICODE_HEX_SEQUENCE_LENGTH + 2)); // skip "\u"
+			if (hasError())
+				return {};
+
+			if (!U16_IS_TRAIL(tailSurrogate))
+			{
+				initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) << sequence;
+				return {};
+			}
+
+			hexToUnicodeValue = U16_GET_SUPPLEMENTARY(leadSurrogate, tailSurrogate);
+			bytesLength = UNICODE_UTF16_SEQUENCE_LENGTH;
+		}
+		else if (U16_IS_TRAIL(hexToUnicodeValue))
+		{
+			initError() << JsonStatusMsg(isc_jparser_un_missing_high_surrogate) << sequence;
+			return {};
+		}
+
+		if (hexToUnicodeValue == 0)
+		{
+			initError() << JsonStatusMsg(isc_jparser_un_conv_error);
+			return {};
+		}
+
+		return {hexToUnicodeValue, bytesLength};
+	}
+
+	inline char resolveEscapedChar(const char c)
+	{
+		static constexpr auto resolver = getEscapeResolverTable();
+
+		const auto escaped = resolver[c];
+		if (FB_UNLIKELY(escaped == INVALID_ESCAPE))
+			initError() << JsonStatusMsg(isc_jparser_invalid_sequence) << JsonStatusMsgStrArg(std::string_view(&c, 1));
+
+		return escaped;
+	}
+
+	// Static
+
+	static inline ParsedUnicode::ValueType parseHexUnsafe(const std::string_view sequence)
+	{
+		constexpr static auto hetToDecTable = getHexToDecTable();
+
+		ParsedUnicode::ValueType hexValue = 0;
+		for (USHORT i = 0; i < UNICODE_HEX_SEQUENCE_LENGTH; ++i)
+			hexValue = (hexValue << 4) + hetToDecTable[sequence[i]];
+
+		return hexValue;
+	}
+
+	static ParsedUnicode parseUnicodeUnsafe(const std::string_view sequence)
+	{
+		// Possible values
+		// UTF-8, \uXXXX
+		// UTF-16, \uXXXX\uXXXX
+
+		// Get a digital code of the handling hex sequence to store it to hexToUnicodeValue
+		auto hexToUnicodeValue = parseHexUnsafe(sequence);
+		UCHAR bytesLength = UNICODE_HEX_SEQUENCE_LENGTH;
+
+		// UTF-16, the first (lead) surrogate is a 16-bit code value in the range U+D800 to U+DBFF
+		if (U16_IS_LEAD(hexToUnicodeValue)) // or U_IS_LEAD
+		{
+			const auto leadSurrogate = hexToUnicodeValue;
+
+			// The second (tail) surrogate is a 16-bit code value in the range U+DC00 to U+DFFF
+			const auto tailSurrogate = parseHexUnsafe(sequence.substr(UNICODE_HEX_SEQUENCE_LENGTH));
+
+			hexToUnicodeValue = U16_GET_SUPPLEMENTARY(leadSurrogate, tailSurrogate);
+			bytesLength = UNICODE_HEX_SEQUENCE_LENGTH * 2;
+		}
+
+		return {hexToUnicodeValue, bytesLength};
+	}
+
+	// Put unicode as char if possible, or append unicodeStr (\uXXXX or \uXXXX\uXXXX)
+	inline static void appendUnicode(const ParsedUnicode::ValueType unicodeValue, const std::string_view unicodeStr, SmallString& outStr)
+	{
+		// C0 Controls and Basic Latin Range: 0000–007F
+		if (unicodeValue <= 0X007F)
+		{
+			outStr.append(1, char(unicodeValue));
+		}
+		else
+		{
+			outStr.append(unicodeStr.data(), unicodeStr.length());
+		}
+	}
+
+	static void parseStringUnsafe(const std::string_view input, SmallString& outStr);
+
+protected:
+	JsonStatusMsg& initError();
+};
+
+template<class TView>
+class JsonScalarParser : public BasicParse
+{
+public:
+	void parseQuotedString(TView view, TextPos& current, bool keepEscapeSequence, bool expectEndQuote, SmallString* output);
 
 	// strictMode for unary plus/minus and parse errors
-	ParsedNumber parseNumber(TView& input, TextPos& current, const bool strictMode);
-
-private:
-	JsonStatusMsg& initError();
+	ParsedNumber parseNumber(TView input, TextPos& current, bool strictMode);
 };
 
 
@@ -273,6 +537,16 @@ struct StringParseView
 	char operator[](TextPos i)
 	{
 		return base[i];
+	}
+
+	std::string_view getStringView(const TextPos subStart, TextPos subLength) const
+	{
+		if (subStart + subLength > base.length())
+		{
+			subLength = base.length() - subStart;
+		}
+
+		return base.substr(subStart, subLength);
 	}
 
 	SmallString getErrorSubstring(TextPos subStart, TextPos subLength = JSON_MAX_REPORT_SIZE) const

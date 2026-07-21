@@ -381,7 +381,7 @@ int PathParser::yylexAux()
 		std::string_view view(lex.ptr, lex.end - lex.ptr);
 		StringParseView viewp{view};
 		string* stringPtr = mkTempString("");
-		scalarParser.parseQuotedString(viewp, offset, *stringPtr);
+		scalarParser.parseQuotedString({view}, offset, false, true, stringPtr);
 
 		lex.ptr += offset;
 		if (scalarParser.hasError())

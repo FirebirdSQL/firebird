@@ -36,6 +36,24 @@
 #include "../common/TextType.h"
 
 
+#if defined(GNUC) || defined(clang)
+    #define FB_LIKELY(x)   (__builtin_expect(!!(x), 1))
+    #define FB_UNLIKELY(x) (__builtin_expect(!!(x), 0))
+    #define FB_ASSUME(x)   do { if (!(x)) __builtin_unreachable(); } while (0)
+
+#elif defined(_MSC_VER)
+    #define FB_LIKELY(x)   (x)
+    #define FB_UNLIKELY(x) (x)
+    #define FB_ASSUME(x)   __assume(x)
+
+#else
+    #define FB_LIKELY(x)   (x)
+    #define FB_UNLIKELY(x) (x)
+    #define FB_ASSUME(x)   ((void)0)
+
+#endif
+
+
 // Tokens
 namespace FBJSON
 {
