@@ -317,9 +317,6 @@ void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask)
 	if (att_class && (att_class->scl_flags & mask))
 		return;
 
-	if (mask == SCL_alter && attachment->locksmith(tdbb, USE_NBACKUP_UTILITY))
-		return;
-
 	if (mask == SCL_drop && attachment->locksmith(tdbb, DROP_DATABASE))
 		return;
 
