@@ -754,7 +754,7 @@ void PASS1_ambiguity_check(DsqlCompilerScratch* dsqlScratch,
 		if (printAliasHelp)
 			status.append(Arg::Gds(isc_package_alias_help));
 
-		ERR_post(status);
+		ERRD_post(status);
 	}
 
 	ERRD_post_warning(Arg::Warning(isc_sqlwarn) << Arg::Num(204) <<
