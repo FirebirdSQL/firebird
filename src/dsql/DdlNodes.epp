@@ -12499,6 +12499,22 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 
 void AlterDatabaseNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
 {
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const unsigned nbackupClauses = CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP;
+
+	const bool hasNonBackupClauses =
+		(clauses & ~nbackupClauses) ||
+		differenceFile.hasData() ||
+		setDefaultCharSet.hasData() ||
+		setDefaultCollation.hasData() ||
+		linger >= 0 ||
+		ssDefiner.isAssigned() ||
+		cryptPlugin.hasData();
+
+	if (!hasNonBackupClauses && attachment->locksmith(tdbb, USE_NBACKUP_UTILITY))
+		return;
+
 	SCL_check_database(tdbb, SCL_alter);
 }
 
