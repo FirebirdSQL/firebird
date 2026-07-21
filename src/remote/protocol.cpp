@@ -902,7 +902,12 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 				statement->rsr_batch_size = size = FB_ALIGN(statement->rsr_format->fmt_length, FB_ALIGNMENT);
 			if (xdrs->x_op == XDR_DECODE)
 			{
-				b->p_batch_data.cstr_length = (count ? count : 1) * size;
+				const ULONG safe_count = count ? count : 1;
+				const FB_UINT64 product = (FB_UINT64)safe_count * size;
+				if (product > MAX_ULONG)
+					return P_FALSE(xdrs, p);
+
+				b->p_batch_data.cstr_length = (ULONG)product;
 				b->p_batch_data.alloc(xdrs);
 			}
 
