@@ -243,11 +243,13 @@ void ConfigStorage::checkAudit()
 
 		TraceSession session(*getDefaultMemoryPool());
 
-		fseek(cfgFile, 0, SEEK_END);
+		[[maybe_unused]] int fseekResult = fseek(cfgFile, 0, SEEK_END);
+		fb_assert(fseekResult == 0);
 		const long len = ftell(cfgFile);
 		if (len)
 		{
-			fseek(cfgFile, 0, SEEK_SET);
+			fseekResult = fseek(cfgFile, 0, SEEK_SET);
+			fb_assert(fseekResult == 0);
 			char* p = session.ses_config.getBuffer(len + 1);
 
 			if (fread(p, 1, len, cfgFile) != size_t(len)) {
