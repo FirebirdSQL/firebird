@@ -473,6 +473,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			jrd_rel* relation = nullptr;
 			Record* record = nullptr;
 			USHORT fieldId = 0;
+			FB_UINT64 tempInstanceId = 0;
 
 			if (to)
 			{
@@ -483,12 +484,19 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 					relation = rpb->rpb_relation;
 					record = rpb->rpb_record;
 					fieldId = toField->fieldId;
+					tempInstanceId = rpb->rpb_temp_instance_id;
 				}
 				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
 					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			if (tempInstanceId)
+			{
+				AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
+				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			}
+			else
+				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{

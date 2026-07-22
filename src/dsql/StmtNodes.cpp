@@ -9119,6 +9119,10 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 		if (!newRpb->rpb_relation)
 			newRpb->rpb_relation = relation;
+
+		const auto tempInstanceId = localTableRequest->getLocalTableInstanceId(tdbb);
+		orgRpb->rpb_temp_instance_id = tempInstanceId;
+		newRpb->rpb_temp_instance_id = tempInstanceId;
 	}
 
 	AutoLocalTableContext autoTransaction(tdbb, request, localTable, localTableRequest, transaction);
@@ -10319,6 +10323,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	{
 		transaction = localTableRequest->getLocalTableTransaction();
 		relation = rpb->rpb_relation = localTable->getRelation(tdbb, localTableRequest);
+		rpb->rpb_temp_instance_id = localTableRequest->getLocalTableInstanceId(tdbb);
 	}
 
 	AutoLocalTableContext autoTransaction(tdbb, request, localTable, localTableRequest, transaction);

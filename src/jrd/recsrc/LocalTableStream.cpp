@@ -66,10 +66,12 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 
 	if (m_table->useLtt)
 	{
+		const auto tempInstanceId = localTableRequest->getLocalTableInstanceId(tdbb);
 		AutoSetRestore<FB_UINT64> autoFrameId(
-			&tdbb->tdbb_temp_frame_id, localTableRequest->getLocalTableInstanceId(tdbb));
+			&tdbb->tdbb_temp_frame_id, tempInstanceId);
 
 		rpb->rpb_relation = m_table->getRelation(tdbb, localTableRequest);
+		rpb->rpb_temp_instance_id = tempInstanceId;
 	}
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
