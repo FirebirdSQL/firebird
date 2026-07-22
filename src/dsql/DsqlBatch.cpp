@@ -420,8 +420,6 @@ void DsqlBatch::registerBlob(thread_db* tdbb, const ISC_QUAD* existingBlob, ISC_
 {
 	blobCheckMeta();
 
-	tdbb->getAttachment()->getSysTransaction()->checkBlob(tdbb, reinterpret_cast<const bid*>(existingBlob), NULL, true);
-
 	// Generate auto blob ID if needed
 	if (m_blobPolicy == IBatch::BLOB_ID_ENGINE)
 		genBlobId(blobId);
@@ -724,6 +722,9 @@ private:
 				}
 
 				m_blobMap.remove(*id);
+
+				transaction->checkBlob(tdbb, reinterpret_cast<const bid*>(&newId), NULL, true);
+
 				*id = newId;
 			}
 
