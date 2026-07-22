@@ -716,7 +716,7 @@ void ConfigStorage::addSession(TraceSession& session)
 	session.ses_flags |= trs_active;
 	slot->ses_flags = session.ses_flags;
 	time(&session.ses_start);
-
+	fb_assert(session.ses_start != (time_t) -1);
 	char* p = reinterpret_cast<char*> (header) + slot->offset;
 	Writer writer(p, slot->size);
 
