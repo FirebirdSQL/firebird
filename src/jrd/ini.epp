@@ -1133,9 +1133,12 @@ static void add_security_to_sys_obj(thread_db* tdbb,
 	SET_TDBB(tdbb);
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 
-	MetaName security_class;
-	security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
+	MetaName security_class = (obj_type == obj_database) ? DATABASE_CLASS : "";
+	if (security_class.isEmpty())
+	{
+		security_class.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
 		DPM_gen_id(tdbb, MET_lookup_generator(tdbb, SQL_SECCLASS_GENERATOR), false, 1));
+	}
 
 	add_security_class(tdbb, reqAddSC, security_class, acl_length, acl);
 
