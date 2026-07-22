@@ -313,6 +313,10 @@ void SCL_check_database(thread_db* tdbb, SecurityClass::flags_t mask)
 	SET_TDBB(tdbb);
 
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	if (!attachment->att_security_class)
+		attachment->att_security_class = SCL_get_class(tdbb, DATABASE_CLASS);
+
 	const SecurityClass* const att_class = attachment->att_security_class;
 	if (att_class && (att_class->scl_flags & mask))
 		return;
@@ -1152,7 +1156,16 @@ void UserId::sclInit(thread_db* tdbb, bool create)
 	user->usr_init_role = role_name;
 	attachment->att_user = user;
 
-	if (!create)
+	if (create)
+	{
+		dbb->dbb_owner = user->getUserName();
+		user->usr_privileges.load(INI_owner_privileges().c_str());
+		user->usr_granted_roles.clear();
+		user->usr_granted_roles.add(ADMIN_ROLE);
+
+		user->usr_flags &= ~USR_newrole;
+	}
+	else
 	{
 		AutoCacheRequest request(tdbb, irq_get_att_class, IRQ_REQUESTS);
 
@@ -1170,22 +1183,13 @@ void UserId::sclInit(thread_db* tdbb, bool create)
 			FOR(REQUEST_HANDLE request2)
 				FIRST 1 REL IN RDB$RELATIONS
 				WITH REL.RDB$SCHEMA_NAME EQ SYSTEM_SCHEMA AND
-					 REL.RDB$RELATION_NAME EQ "RDB$DATABASE"
+					REL.RDB$RELATION_NAME EQ "RDB$DATABASE"
 			{
-	            if (!REL.RDB$OWNER_NAME.NULL)
+				if (!REL.RDB$OWNER_NAME.NULL)
 					dbb->dbb_owner = REL.RDB$OWNER_NAME;
 			}
 			END_FOR
 		}
-	}
-	else
-	{
-		dbb->dbb_owner = user->getUserName();
-		user->usr_privileges.load(INI_owner_privileges().c_str());
-		user->usr_granted_roles.clear();
-		user->usr_granted_roles.add("RDB$ADMIN");
-
-		user->usr_flags &= ~USR_newrole;
 	}
 }
 

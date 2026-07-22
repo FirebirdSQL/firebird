@@ -139,6 +139,7 @@ inline constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
+inline constexpr const char* DATABASE_CLASS				= "SQL$DATABASE";
 inline constexpr const char* DEFAULT_CLASS				= "SQL$DEFAULT";
 inline constexpr const char* SQL_SECCLASS_GENERATOR		= "RDB$SECURITY_CLASS";
 inline constexpr const char* SQL_SECCLASS_PREFIX		= "SQL$";

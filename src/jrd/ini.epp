@@ -596,11 +596,7 @@ namespace
 				}
 			}
 
-			MetaName securityClass;
-			securityClass.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-				DPM_gen_id(tdbb, lookupGenerator(SQL_SECCLASS_GENERATOR), false, 1));
-
-			addSecurityClass(tdbb, securityClass);
+			addSecurityClass(tdbb, DATABASE_CLASS);
 
 			handle.reset();
 
@@ -609,7 +605,7 @@ namespace
 			{
 				MODIFY DB USING
 					DB.RDB$SECURITY_CLASS.NULL = FALSE;
-					PAD(securityClass, DB.RDB$SECURITY_CLASS);
+					PAD(DATABASE_CLASS, DB.RDB$SECURITY_CLASS);
 				END_MODIFY
 			}
 			END_FOR
