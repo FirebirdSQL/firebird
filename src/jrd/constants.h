@@ -132,6 +132,7 @@ const char* const MASTER_GENERATOR = ""; //Was "RDB$GENERATORS";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
+const char* const DATABASE_CLASS			= "SQL$DATABASE";
 const char* const DEFAULT_CLASS				= "SQL$DEFAULT";
 const char* const SQL_SECCLASS_GENERATOR	= "RDB$SECURITY_CLASS";
 const char* const SQL_SECCLASS_PREFIX		= "SQL$";
