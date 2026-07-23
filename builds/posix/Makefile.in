@@ -212,7 +212,7 @@ ifeq ($(PLATFORM),DARWIN)
 	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(SRCDIR)/extern/cloop
 else
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
 endif
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
 	cmake --build .
