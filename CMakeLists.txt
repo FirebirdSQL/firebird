@@ -17,7 +17,7 @@
 #
 ################################################################################
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.20)
 
 # In-source builds are not possible and so disabled.
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
@@ -51,6 +51,14 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake Targets")
 ################################################################################
 
 project("firebird" C CXX)
+
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 ########################################
 # build type settings
@@ -152,6 +160,166 @@ if (FREEBSD)
     set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 endif()
 
+################################################################################
+#
+# Platform/CPU Detection and Definitions (from configure.ac)
+#
+################################################################################
+
+# Set OS and CPU specific definitions used by common.h and other headers.
+# This logic mirrors the main case statement in the autoconf script.
+
+include(CheckTypeSize)
+include(TestBigEndian)
+
+# Check for byte order (endianness)
+test_big_endian(WORDS_BIGENDIAN)
+if(WORDS_BIGENDIAN)
+    add_definitions(-DWORDS_BIGENDIAN)
+endif()
+
+if (WIN32)
+    add_definitions(-DWIN_NT)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+        add_definitions(-DAMD64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        add_definitions(-DARM64)
+    else()
+        add_definitions(-DI386)
+    endif()
+elseif(APPLE)
+    add_definitions(-DDARWIN)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        add_definitions(-DARM64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+        add_definitions(-DAMD64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
+        add_definitions(-DI386)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "powerpc|ppc")
+        check_type_size("void*" SIZEOF_VOID_P)
+        if (SIZEOF_VOID_P EQUAL 8)
+            add_definitions(-D__ppc64__)
+        else()
+            add_definitions(-D__ppc__)
+        endif()
+    endif()
+elseif(LINUX)
+    add_definitions(-DLINUX)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+        add_definitions(-DAMD64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
+        add_definitions(-DI386)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        add_definitions(-DARM64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+        add_definitions(-DARM)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ia64")
+        add_definitions(-DIA64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        add_definitions(-DPPC64EL)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64" AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        add_definitions(-DPPC64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "powerpc|ppc")
+        add_definitions(-DPPC)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64")
+        add_definitions(-DRISCV64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "loongarch")
+        add_definitions(-DLOONGARCH)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "sparc")
+        add_definitions(-Dsparc)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips64el")
+        add_definitions(-DMIPS64EL)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mipsel")
+        add_definitions(-DMIPSEL)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips")
+        add_definitions(-DMIPSEB)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "s390x")
+        add_definitions(-D__s390x__)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "s390")
+        add_definitions(-D__s390__)
+    endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    add_definitions(-DFREEBSD)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64|x86_64")
+        add_definitions(-DAMD64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
+        add_definitions(-DI386)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
+        add_definitions(-DPPC64EL)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
+        add_definitions(-DPPC64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "powerpc|ppc")
+        add_definitions(-DPPC)
+    endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+    add_definitions(-DNETBSD)
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
+        add_definitions(-D__i386__)
+    endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "AIX")
+    add_definitions(-D_AIX)
+    check_type_size("void*" SIZEOF_VOID_P)
+    add_definitions(-DSIZEOF_VOID_P=${SIZEOF_VOID_P})
+elseif(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+    add_definitions(-D__sun -DSOLARIS)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "sparc")
+        add_definitions(-D__sparc)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+        add_definitions(-D__amd64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i.86")
+        add_definitions(-D__i386)
+    endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "HP-UX")
+    add_definitions(-DHPUX)
+endif()
+
+########################################
+# LIBRARY Boost
+########################################
+
+# Provide an option to use system-wide Boost, defaulting to the embedded version.
+option(USE_SYSTEM_BOOST "Use system-wide Boost library instead of embedded copy" OFF)
+
+if(USE_SYSTEM_BOOST)
+    # Find a system-installed Boost library.
+    message(STATUS "Searching for system-wide Boost library...")
+    find_package(Boost 1.70.0 COMPONENTS system thread REQUIRED)
+
+    if(Boost_FOUND)
+        message(STATUS "Found system Boost: ${Boost_VERSION_STRING}")
+        # The variables Boost_INCLUDE_DIRS and Boost_LIBRARIES are set by find_package
+        set(BOOST_INCLUDE_DIRS ${Boost_INCLUDE_DIRS})
+        set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+    else()
+        message(FATAL_ERROR "System Boost was requested but not found. Please install the Boost development packages (e.g., libboost-all-dev on Debian/Ubuntu).")
+    endif()
+else()
+    # Use the embedded header-only Boost library.
+    message(STATUS "Using embedded Boost library")
+    set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/extern/boost)
+    # For a header-only setup, there are no libraries to link.
+    set(BOOST_LIBRARIES "")
+endif()
+
+########################################
+# LIBRARY libcds
+########################################
+
+message(STATUS "Using embedded libcds library")
+
+# Configure the libcds sub-project before adding it.
+# We disable its tests as we don't need to build/run them as part of Firebird.
+set(WITH_TESTS OFF CACHE BOOL "Disable libcds's own tests" FORCE)
+set(ENABLE_UNIT_TEST OFF CACHE BOOL "Disable libcds's unit tests" FORCE)
+set(ENABLE_STRESS_TEST OFF CACHE BOOL "Disable libcds's stress tests" FORCE)
+add_subdirectory(extern/libcds)
+
+# We define a variable pointing to the static version of the library ('cds-s').
+# This is the target we will link against.
+set(CDS_LIBRARIES cds-s)
+
+########################################
+
 set(FB_PREFIX ${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME})
 set(FB_IPC_NAME "FirebirdIPI")
 set(FB_LOGFILENAME "firebird.log")
@@ -206,14 +374,14 @@ if (MINGW)
 
     # 0x0601 is Windows 7 - see also comments in autoconfig_msvc.h
     add_definitions(-D_WIN32_WINNT=0x0601)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4 -std=c++20")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4")
 endif()
 
 if (UNIX)
     set(OS_DIR posix)
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4 -std=c++20")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -msse4")
 
     if (NOT CMAKE_CROSSCOMPILING)
         set(LIB_readline readline)
@@ -346,7 +514,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/src/include/gen")
 
 file(GLOB libtommath_src "extern/libtommath/*.c" "extern/libtommath/*.h")
 
-add_library             (libtommath ${libtommath_src})
+add_library             (libtommath STATIC ${libtommath_src})
 project_group           (libtommath Extern)
 
 
@@ -360,6 +528,7 @@ list(FILTER libtomcrypt_src EXCLUDE REGEX ".*whirltab.c")
 list(FILTER libtomcrypt_src EXCLUDE REGEX ".*sober128tab.c")
 
 add_library                 (libtomcrypt ${libtomcrypt_src})
+target_link_libraries       (libtomcrypt libtommath)
 target_compile_definitions  (libtomcrypt PRIVATE LTC_NO_ROLC LTC_SOURCE)
 project_group               (libtomcrypt Extern)
 
@@ -375,6 +544,36 @@ list(FILTER decNumber_src EXCLUDE REGEX ".*decCommon.c")
 add_library                 (decNumber ${decNumber_src})
 project_group               (decNumber Extern)
 
+########################################
+# LIBRARY re2
+########################################
+
+# This is needed for a full server build (not client-only).
+# We can either use a system-provided re2 or the embedded one.
+option(USE_SYSTEM_RE2 "Use system-wide re2 library instead of embedded copy" OFF)
+
+if(USE_SYSTEM_RE2)
+    # Find system re2
+    find_path(RE2_INCLUDE_DIR re2/re2.h)
+    find_library(RE2_LIBRARY NAMES re2)
+
+    if(RE2_INCLUDE_DIR AND RE2_LIBRARY)
+        message(STATUS "Found system RE2: ${RE2_LIBRARY}")
+        include_directories(${RE2_INCLUDE_DIR})
+        set(RE2_LIBRARIES ${RE2_LIBRARY})
+    else()
+        message(FATAL_ERROR "System RE2 not found. Please install re2 development package or disable USE_SYSTEM_RE2 by setting it to OFF.")
+    endif()
+else()
+    # Use embedded re2 by adding its directory as a sub-project.
+    message(STATUS "Using embedded re2 library")
+    # Configure the re2 sub-project: build it as a static library and disable its tests.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build RE2 as a static library" FORCE)
+    set(RE2_BUILD_TESTING OFF CACHE BOOL "Disable RE2's own tests" FORCE)
+
+    add_subdirectory(extern/re2)
+    set(RE2_LIBRARIES re2)
+endif()
 
 ########################################
 # EXECUTABLE btyacc
@@ -385,6 +584,9 @@ file(GLOB btyacc_src "extern/btyacc/*.c" "extern/btyacc/*.h")
 if (NOT CMAKE_CROSSCOMPILING)
 
 add_executable          (btyacc ${btyacc_src})
+set_property(TARGET btyacc PROPERTY C_STANDARD 17)
+set_property(TARGET btyacc PROPERTY C_STANDARD_REQUIRED OFF)
+set_property(TARGET btyacc PROPERTY C_EXTENSIONS ON)
 project_group           (btyacc Extern)
 set_output_directory    (btyacc . CURRENT_DIR)
 

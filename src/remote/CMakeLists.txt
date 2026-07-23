@@ -34,6 +34,7 @@ add_dependencies_cc     (remote UpdateCloopInterfaces)
 set(fbserver_src
     ../auth/SecureRemotePassword/server/SrpServer.cpp
     ../auth/SecureRemotePassword/server/SrpServer.h
+    ../auth/SecDbCache.cpp
 )
 add_src_win32(fbserver_src
     server/os/win32/chop.cpp
@@ -51,6 +52,7 @@ add_src_unix(fbserver_src
     ../auth/SecureRemotePassword/srp.cpp
     server/os/posix/inet_server.cpp
     server/server.cpp
+    server/ReplServer.cpp
 
     inet.cpp
     merge.cpp
