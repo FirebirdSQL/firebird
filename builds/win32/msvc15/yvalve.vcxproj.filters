@@ -1,14 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="headers">
-      <UniqueIdentifier>{e851796a-334f-465a-87d4-3a8493cde72c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="source">
       <UniqueIdentifier>{c8501fd3-5859-4685-baad-969e1b6e2e1c}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resource files">
       <UniqueIdentifier>{a06a0231-22bb-432f-95c2-ee97b9a1cee8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="headers">
+      <UniqueIdentifier>{e851796a-334f-465a-87d4-3a8493cde72c}</UniqueIdentifier>
     </Filter>
     <Filter Include="GPRE files">
       <UniqueIdentifier>{754afcc7-5b6d-4620-abe9-78b4653e08b0}</UniqueIdentifier>
@@ -60,9 +60,6 @@
     <ClCompile Include="..\..\..\src\auth\SecurityDatabase\LegacyClient.cpp">
       <Filter>Auth</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\jrd\os\win32\ibinitdll.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\remote\client\interface.cpp">
       <Filter>Remote client</Filter>
     </ClCompile>
@@ -84,6 +81,17 @@
     <ClCompile Include="..\..\..\src\yvalve\config\os\win32\config_root.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\os\win32\ibinitdll.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\..\..\src\jrd\version.rc">
+      <Filter>Resource files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\defs\firebird.def" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\yvalve\why_proto.h">
@@ -140,13 +148,5 @@
     <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h">
       <Filter>headers</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="..\..\..\src\jrd\version.rc">
-      <Filter>Resource files</Filter>
-    </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\defs\firebird.def" />
   </ItemGroup>
 </Project>

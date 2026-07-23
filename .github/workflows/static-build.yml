@@ -1,0 +1,242 @@
+name: Static Client Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  build-linux-static-client:
+    name: build-linux-static-client-${{ matrix.arch }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'ubuntu-24.04-arm') || 'ubuntu-24.04' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Write build script
+        run: |
+          mkdir -p gen
+          cat > /tmp/build-static-client.sh <<'EOF'
+          #!/bin/sh
+          set -e
+          gcc -v
+          ld -v
+          make -v
+          cd /home/ctng/firebird-build
+          /firebird/autogen.sh \
+            --host=$BUILD_ARCH \
+            --prefix=/opt/firebird \
+            --enable-binreloc \
+            --with-builtin-tomcrypt \
+            --with-termlib=:libncurses.a \
+            --with-atomiclib=:libatomic.a \
+            --enable-client-only
+          make client_static -j$(nproc)
+          # CXX lives in gen/make.defaults (substituted by configure). The
+          # top-level Makefile only forwards targets to gen/ and has no CXX=.
+          CXX=$(sed -n 's/^[[:space:]]*CXX[[:space:]]*=[[:space:]]*//p' gen/make.defaults | head -n 1)
+          if test -z "$CXX"; then
+            echo "error: could not determine CXX from gen/make.defaults" >&2
+            exit 1
+          fi
+          echo "Linking example with CXX=$CXX"
+          "$CXX" /firebird/examples/interfaces/01.create.cpp \
+            -I/firebird/src/include \
+            -I/home/ctng/firebird-build/gen/Release/firebird/include \
+            -L/home/ctng/firebird-build/gen/Release/firebird/lib \
+            -L/home/ctng/firebird-build/temp/Release \
+            -lfbclient -ltommath -lz -ldl -pthread \
+            -o /tmp/01.create
+          EOF
+          chmod +x /tmp/build-static-client.sh
+
+      - name: Build
+        run: |
+          docker run --platform ${{ (matrix.arch == 'x64' && 'amd64') || 'i386' }} --rm \
+            -e CTNG_UID=$(id -u) -e CTNG_GID=$(id -g) \
+            -v ${{ github.workspace }}:/firebird:ro \
+            -v ${{ github.workspace }}/gen:/home/ctng/firebird-build/gen \
+            -v /tmp/build-static-client.sh:/build.sh:ro \
+            firebirdsql/firebird-builder-linux:fb6-${{ matrix.arch }}-ng-v2
+
+      - name: Upload static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-linux-${{ matrix.arch }}-static-client
+          path: gen/Release/firebird/lib/libfbclient.a
+
+  build-linux-static-client-arm64:
+    name: build-linux-static-client-arm64
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Prepare
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libtool-bin automake autoconf-archive libtool libicu-dev zlib1g-dev cmake
+
+      - name: Build
+        run: |
+          ./autogen.sh \
+            --with-builtin-tommath \
+            --with-builtin-tomcrypt \
+            --without-editline \
+            --enable-binreloc \
+            --prefix=/opt/firebird \
+            --enable-client-only
+          make client_static -j$(nproc)
+
+      - name: Compile and link interface example
+        run: |
+          g++ examples/interfaces/01.create.cpp \
+            -Isrc/include \
+            -Igen/Release/firebird/include \
+            -Lgen/Release/firebird/lib \
+            -Ltemp/Release \
+            -lfbclient -ltommath -lz -ldl -pthread \
+            -o /tmp/01.create
+
+      - name: Upload static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-linux-arm64-static-client
+          path: gen/Release/firebird/lib/libfbclient.a
+
+  build-macos-static-client:
+    name: build-macos-static-client-${{ matrix.arch }}
+    runs-on: ${{ (matrix.arch == 'arm64' && 'macos-15') || 'macos-15-intel' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+          submodules: 'true'
+
+      - name: Prepare - Install tools
+        run: |
+          brew install --quiet automake autoconf-archive libtool ninja llvm
+          echo "${{ (matrix.arch == 'arm64' && '/opt/homebrew/opt/llvm/bin') || '/usr/local/opt/llvm/bin' }}" >> $GITHUB_PATH
+
+      - name: Restore vcpkg cache
+        uses: actions/cache/restore@v4
+        id: restore-vcpkg-cache
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-staticclient-${{ hashFiles('vcpkg-custom/**', 'vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-staticclient-
+            vcpkg-cache-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Build
+        run: |
+          export LIBTOOLIZE=glibtoolize
+          export LIBTOOL=glibtool
+          ./autogen.sh --with-builtin-tommath --with-builtin-tomcrypt --enable-client-only
+          make client_static -j4
+
+      - name: Compile and link interface example
+        run: |
+          clang++ examples/interfaces/01.create.cpp \
+            -Isrc/include \
+            -Igen/Release/firebird/include \
+            -Lgen/Release/firebird/lib \
+            -Ltemp/Release \
+            -lfbclient -ltommath -lz \
+            -liconv -lobjc -framework CoreFoundation -framework Foundation -framework Security \
+            -o /tmp/01.create
+
+      - name: Upload static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-macos-${{ matrix.arch }}-static-client
+          path: gen/Release/firebird/lib/libfbclient.a
+
+      - name: Save vcpkg cache
+        uses: actions/cache/save@v4
+        if: steps.restore-vcpkg-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: ${{ steps.restore-vcpkg-cache.outputs.cache-primary-key }}
+
+  build-windows-static-client:
+    name: build-windows-static-client-${{ matrix.platform }}
+    runs-on: ${{ (matrix.platform == 'arm64' && 'windows-11-arm') || 'windows-2025' }}
+    env:
+      VS_VERSION: ${{ (matrix.platform == 'arm64' && '2022') || '2026' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, x86, arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Prepare
+        shell: cmd
+        run: |
+          for /r %%i in (*.bat) do unix2dos "%%i"
+
+      - name: Prepare envs
+        shell: cmd
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          if "%PLATFORM%" == "x64" set FB_VS_ARCH=amd64
+          if "%PLATFORM%" == "x64" set FB_PROCESSOR_ARCHITECTURE=AMD64
+          if "%PLATFORM%" == "x86" set FB_VS_ARCH=x86
+          if "%PLATFORM%" == "x86" set FB_PROCESSOR_ARCHITECTURE=x86
+          if "%PLATFORM%" == "x86" set FB_LIBRARY_PLATFORM=Win32
+          if "%PLATFORM%" == "arm64" set FB_VS_ARCH=arm64
+          if "%PLATFORM%" == "arm64" set FB_PROCESSOR_ARCHITECTURE=ARM64
+          if not "%PLATFORM%" == "x86" set FB_LIBRARY_PLATFORM=%PLATFORM%
+          echo FB_VS_ARCH=%FB_VS_ARCH%>>%GITHUB_ENV%
+          echo FB_PROCESSOR_ARCHITECTURE=%FB_PROCESSOR_ARCHITECTURE%>>%GITHUB_ENV%
+          echo FB_LIBRARY_PLATFORM=%FB_LIBRARY_PLATFORM%>>%GITHUB_ENV%
+
+      - name: Build
+        shell: cmd
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\${{ (matrix.platform == 'arm64' && '2022') || '18' }}\Enterprise\Common7\Tools\VsDevCmd.bat
+        run: |
+          call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
+          set "PATH=%VSINSTALLDIR%VC\Tools\Llvm\x64\bin;%PATH%"
+          cd builds\win32
+          call run_all.bat CLIENT_ONLY=STATIC JUSTBUILD NOCLEAN
+
+      - name: Compile and link interface example
+        shell: cmd
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\${{ (matrix.platform == 'arm64' && '2022') || '18' }}\Enterprise\Common7\Tools\VsDevCmd.bat
+        run: |
+          call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
+          cl /nologo /EHsc /MD /Isrc\include /Ioutput_%FB_LIBRARY_PLATFORM%_release\include examples\interfaces\01.create.cpp output_%FB_LIBRARY_PLATFORM%_release\lib\fbclient_static_ms.lib extern\libtommath\lib\%FB_LIBRARY_PLATFORM%\Release\tommath.lib advapi32.lib bcrypt.lib legacy_stdio_definitions.lib mpr.lib ole32.lib psapi.lib shell32.lib user32.lib ws2_32.lib /Fe:%TEMP%\01.create.exe
+
+      - name: Upload static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebird-windows-${{ matrix.platform }}-static-client
+          path: output_${{ env.FB_LIBRARY_PLATFORM }}_release\lib\fbclient_static_ms.lib
