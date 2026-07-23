@@ -386,6 +386,8 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 						(Arg::Gds(isc_io_error) << Arg::Str("read") << Arg::Str(fileName) <<
 							Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
 						break;
+					default:
+						fb_assert(false);
 				}
 			}
 			else
