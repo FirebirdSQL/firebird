@@ -927,6 +927,13 @@ fixFilePermissions() {
 
 	rm -f $tmp1 $tmp2 $tmp3 $tmp4
 
+	# fb_guard 
+    cd @FB_BINDIR@
+    for FileName in fbguard
+    do
+		chcon -t bin_t $FileName
+    done
+
     # Lock files
     cd @FB_GUARDDIR@
     for FileName in fb_guard
