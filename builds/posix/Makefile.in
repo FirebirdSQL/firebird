@@ -212,7 +212,7 @@ ifeq ($(PLATFORM),DARWIN)
 	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(SRCDIR)/extern/cloop
 else
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
 endif
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
 	cmake --build .
@@ -279,7 +279,7 @@ endif
 #
 
 %.vers: $(SRCDIR)/builds/posix/%.vers
-	sh vers.sh $(firstword $@)
+	cd $(dir $@) && sh vers.sh $(notdir $@)
 
 export_lists: $(ALLVERS)
 
@@ -499,6 +499,48 @@ endif
 # remote redirector is statically linked in main FB library
 $(LIBFIREBIRD_FULLNAME):	$(YValve_Objects) $(Remote_Client_Objects) $(COMMON_LIB)
 	$(LINK_FIREBIRD) -o $@ $^ $(LINK_FIREBIRD_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,lib/libfbclient.$(SHRLIB_EXT))
+
+
+#___________________________________________________________________________
+# static client library (non-default, built on request with `make client_static`)
+# See doc/README.StaticClient.md for a detailed description of the static
+# client archive construction, symbol renaming, and archive slimming.
+#
+# client_static is meant to be usable as the very first target on a freshly
+# configured tree (i.e. without a prior full build), so - like
+# master_process above.
+#
+
+.PHONY: client_static client_static_process
+
+client_static:
+	$(MAKE) TARGET?=$(DefaultTarget) client_static_process
+
+client_static_process:
+	mkdir -p $(ROOT)/src/include/gen
+	ln -sf $(ROOT)/gen/autoconfig.auto $(ROOT)/src/include/gen/autoconfig.h
+	$(MAKE) updateBuildNum
+	$(MAKE) export_lists
+	$(MAKE) external
+	$(MAKE) updateCloopInterfaces
+	$(MAKE) $(LIBFIREBIRD_STATIC)
+
+STATIC_CLIENT_SLIM_STAGE = $(ROOT)/temp/static_client_stage
+STATIC_CLIENT_SLIM_CREF  = $(ROOT)/temp/static_client_cref.txt
+STATIC_CLIENT_SLIM_PROBE = $(ROOT)/temp/static_client_probe.o
+
+$(LIBFIREBIRD_STATIC):	$(YValve_Objects) $(Remote_Client_Objects) $(Common_Objects) \
+			| $(GEN_ROOT)/$(FIREBIRD_VERS)
+	-$(RM) $@
+	$(STATICLIB_LINK) $@ $^ $(ROOT)/temp/extern/decNumber/*.o
+	$(SHELL) $(STATIC_CLIENT_SCRIPT) \
+		--archive $(abspath $@) \
+		--seeds-file $(GEN_ROOT)/$(FIREBIRD_VERS) \
+		--stage $(STATIC_CLIENT_SLIM_STAGE) \
+		--cref $(STATIC_CLIENT_SLIM_CREF) \
+		--probe $(STATIC_CLIENT_SLIM_PROBE) \
+		--objcopy $(OBJCOPY) \
+		--slim-mode $(STATIC_CLIENT_SLIM_MODE)
 
 
 #___________________________________________________________________________
@@ -963,6 +1005,7 @@ clean_makefiles:
 	$(RM) $(GEN_ROOT)/make*
 	-$(RM) $(GEN_ROOT)/darwin.defaults
 	-$(RM) $(GEN_ROOT)/vers.sh
+	-$(RM) $(GEN_ROOT)/static_client.sh
 	$(RM) `find $(GEN_ROOT)/install \( -type f -o -type l \) -print`
 	-$(RM) $(GEN_ROOT)/examples/Make*
 	$(RM) $(ROOT)/Makefile

@@ -836,6 +836,7 @@ AC_CHECK_TOOL([OBJCOPY], [objcopy])
 AC_CHECK_TOOL([OBJDUMP], [objdump])
 AC_CHECK_TOOL([RANLIB], [ranlib])
 AC_CHECK_TOOL([READELF], [readelf])
+AC_CHECK_TOOL([NM], [nm])
 LT_INIT([dlopen win32-dll])
 
 dnl Check for system header files
@@ -1407,6 +1408,7 @@ fi
 
 AC_CONFIG_FILES([
 gen/vers.sh:builds/posix/vers.sh.in
+gen/static_client.sh:builds/posix/static_client.sh.in
 ])
 
 dnl: Platform Specific Files

@@ -70,6 +70,7 @@
 #include "../common/StatusHolder.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/fb_tls.h"
+#include "../common/classes/ThreadCleanup.h"
 #include "../common/os/os_utils.h"
 
 #ifdef HAVE_UNISTD_H
@@ -3238,10 +3239,6 @@ void setLogin(ClumpletWriter& dpb, bool spbFlag)
 // circularAlloc()
 //
 
-#ifdef WIN_NT
-#include <windows.h>
-#endif
-
 namespace {
 
 class ThreadCleanup
@@ -3276,43 +3273,20 @@ private:
 ThreadCleanup* ThreadCleanup::chain = NULL;
 GlobalPtr<Mutex> ThreadCleanup::cleanupMutex;
 
-#ifdef USE_POSIX_THREADS
-
-pthread_key_t key;
-pthread_once_t keyOnce = PTHREAD_ONCE_INIT;
-bool keySet = false;
-
-void makeKey()
-{
-	int err = pthread_key_create(&key, ThreadCleanup::destructor);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_key_create", err);
-	}
-	keySet = true;
-}
+GlobalPtr<ThreadCleanupCallback> threadExitCallback([] (MemoryPool& p) {
+	return FB_NEW_POOL(p) ThreadCleanupCallback(p, ThreadCleanup::destructor);
+});
 
 void ThreadCleanup::initThreadCleanup()
 {
-	int err = pthread_once(&keyOnce, makeKey);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_once", err);
-	}
-
-	err = pthread_setspecific(key, &key);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_setspecific", err);
-	}
+	threadExitCallback->enable();
 }
 
 void ThreadCleanup::finiThreadCleanup()
 {
-	pthread_setspecific(key, NULL);
+	threadExitCallback->disable();
 	PluginManager::threadDetach();
 }
-
 
 class FiniThreadCleanup
 {
@@ -3323,29 +3297,10 @@ public:
 	~FiniThreadCleanup()
 	{
 		ThreadCleanup::assertNoCleanupChain();
-		if (keySet)
-		{
-			int err = pthread_key_delete(key);
-			if (err)
-				gds__log("pthread_key_delete failed with error %d", err);
-		}
 	}
 };
 
 Firebird::GlobalPtr<FiniThreadCleanup> thrCleanup;		// needed to call dtor
-
-#endif // USE_POSIX_THREADS
-
-#ifdef WIN_NT
-void ThreadCleanup::initThreadCleanup()
-{
-}
-
-void ThreadCleanup::finiThreadCleanup()
-{
-	PluginManager::threadDetach();
-}
-#endif // #ifdef WIN_NT
 
 ThreadCleanup** ThreadCleanup::findCleanup(FPTR_VOID_PTR cleanup, void* arg)
 {
@@ -3545,14 +3500,3 @@ void makePermanentVector(ISC_STATUS* v) noexcept
 {
 	makePermanentVector(v, v);
 }
-
-#ifdef WIN_NT
-namespace Why
-{
-	// This is called from ibinitdll.cpp:DllMain()
-	void threadCleanup()
-	{
-		ThreadCleanup::destructor(NULL);
-	}
-}
-#endif
