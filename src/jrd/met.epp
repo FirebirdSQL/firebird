@@ -2468,7 +2468,7 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 }
 
 
-std::optional<MetaId> jrd_prc::getIdByName(thread_db* tdbb, const QualifiedName& name)
+std::optional<MetaId> jrd_prc::getIdByName(thread_db* tdbb, ExName<> nm)
 {
 /**************************************
  *
@@ -2482,6 +2482,7 @@ std::optional<MetaId> jrd_prc::getIdByName(thread_db* tdbb, const QualifiedName&
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
+	auto& name = nm.name;
 	std::optional<MetaId> id;
 
 	// We need to look up the procedure name in RDB$PROCEDURES
@@ -2503,7 +2504,7 @@ std::optional<MetaId> jrd_prc::getIdByName(thread_db* tdbb, const QualifiedName&
 }
 
 
-std::optional<MetaId> Function::getIdByName(thread_db* tdbb, const QualifiedName& name)
+std::optional<MetaId> Function::getIdByName(thread_db* tdbb, ExName<> nm)
 {
 /************************************************
  *
@@ -2517,6 +2518,7 @@ std::optional<MetaId> Function::getIdByName(thread_db* tdbb, const QualifiedName
  **************************************/
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
+	auto& name = nm.name;
 	std::optional<MetaId> id;
 
 	// We need to look up the function in RDB$FUNCTIONS
@@ -2538,10 +2540,11 @@ std::optional<MetaId> Function::getIdByName(thread_db* tdbb, const QualifiedName
 }
 
 
-std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName& name)
+std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, ExName<> nm)
 {
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
+	auto& name = nm.name;
 	std::optional<MetaId> id;
 
 	// We need to look up the relation name in RDB$RELATIONS
@@ -2558,6 +2561,50 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, const QualifiedName&
 		id = X.RDB$RELATION_ID;
 	}
 	END_FOR
+
+	return id;
+}
+
+
+std::optional<MetaId> CharSetVers::getIdByName(thread_db* tdbb, ExName<> nm)
+{
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+	auto& name = nm.name;
+	std::optional<MetaId> id;
+
+	if (name.schema == SYSTEM_SCHEMA)
+	{
+		// We need to look up system charset in RDB$TYPES
+
+		AUTO_HANDLE(request);
+
+		FOR(REQUEST_HANDLE request)
+			T IN RDB$TYPES
+			WITH T.RDB$FIELD_NAME EQ "RDB$CHARACTER_SET_NAME" AND
+			 	 T.RDB$TYPE_NAME EQ name.object.c_str()
+		{
+			fb_assert(!id.has_value());
+			id = T.RDB$TYPE;
+		}
+		END_FOR
+	}
+	else
+	{
+		// We need to look up user charset in RDB$CHARACTER_SETS
+
+		AUTO_HANDLE(request);
+
+		FOR(REQUEST_HANDLE request)
+			X IN RDB$CHARACTER_SETS
+			WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
+				 X.RDB$CHARACTER_SET_NAME EQ name.object.c_str()
+		{
+			fb_assert(!id.has_value());
+			id = X.RDB$CHARACTER_SET_ID;
+		}
+		END_FOR
+	}
 
 	return id;
 }
@@ -3965,19 +4012,19 @@ bool MetadataCache::resolve_charset_and_collation(thread_db* tdbb,
  **************************************
  *
  * Functional description
- *      Given ASCII7 name of charset & collation
+ *      Given qualified name of charset & collation
  *      resolve the specification to a Character set id.
  *      This character set id is also the id of the text_object
  *      that implements the C locale for the Character set.
  *
  * Inputs:
  *      (charset)
- *              ASCII7z name of character set.
+ *              Qualified name of character set.
  *              NULL (implying unspecified) means use the character set
  *              for defined for (collation).
  *
  *      (collation)
- *              ASCII7z name of collation.
+ *              Qualified name of collation.
  *              NULL means use the default collation for (charset).
  *
  * Outputs:
@@ -4007,14 +4054,9 @@ bool MetadataCache::resolve_charset_and_collation(thread_db* tdbb,
 	if (charSetName.hasData())
 	{
 		auto* mdc = MetadataCache::get(tdbb);
-		auto* cs = mdc->mdc_charsets.lookup(tdbb,
-			[charSetName](CharSetContainer* csc)
-			{
-				return csc->names.exist(charSetName);
-			},
-			CacheFlag::AUTOCREATE
-		);
-		if (!cs)
+		Cached::CharSet* cs = nullptr;
+		CharSetVers* csVer = nullptr;
+		if (!mdc->mdc_charsets.lookup(tdbb, charSetName, CacheFlag::AUTOCREATE, &cs, &csVer))
 			return false;
 
 		if (collationName.isEmpty())
@@ -4023,12 +4065,11 @@ bool MetadataCache::resolve_charset_and_collation(thread_db* tdbb,
 			return true;
 		}
 
-		auto* csVer = cs->getVersioned(tdbb, CacheFlag::AUTOCREATE);
 		Collation* coll = csVer->getCollation(collationName);
 		if (!coll)
 			return false;
 
-		*id = coll->getType();		//TTypeId(cs->getId(), CollId(COL.RDB$COLLATION_ID));
+		*id = coll->getType();
 		return true;
 	}
 
@@ -5016,7 +5057,7 @@ MetadataCache* MetadataCache::getCache(thread_db* tdbb) noexcept
 	return tdbb->getDatabase()->dbb_mdc;
 }
 
-int jrd_prc::objectType() noexcept
+ObjectType jrd_prc::objectType() noexcept
 {
 	return obj_procedure;
 }
@@ -5142,87 +5183,43 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedNa
 {
 	SET_TDBB(tdbb);
 
-	Attachment* attachment = tdbb->getAttachment();
-
-	// See if we already know the index by name
-	auto* idp = rel_indices.lookup(tdbb,
-		[tdbb, name, flags](Cached::Index* idp)->Cached::Index*
-		{
-			if (idp->getName() == name)
-			{
-				auto* idv = idp->getVersioned(tdbb, flags);
-				if (idv && idv->getName() == name)
-					return idp;
-			}
-			return nullptr;
-		},
-		flags);
-
-	if (idp)
-		return idp->getVersioned(tdbb, flags);
-	if (!(flags & CacheFlag::AUTOCREATE))
-		return nullptr;
-
-	// We need to look up the index in RDB$INDICES
-	fb_assert(getName().schema == name.schema);
-	fb_assert(getName().package == name.package);
-
-	AutoCacheRequest request(tdbb, irq_get_index_by_name, IRQ_REQUESTS);
 	IndexVersion* idv = nullptr;
+	rel_indices.lookup(tdbb, name, flags, nullptr, &idv);
+
+	return idv;
+}
+
+std::optional<MetaId> IndexVersion::getIdByName(thread_db* tdbb, ExName<RelationPermanent*> nm)
+{
+	SET_TDBB(tdbb);
+	Attachment* attachment = tdbb->getAttachment();
+	auto& name = nm.name;
+	std::optional<MetaId> id;
+
+	// We need to look up the index name in RDB$INDICES
+	AUTO_HANDLE(request);
 
 	FOR(REQUEST_HANDLE request)
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
-			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
+			IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
-			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
+			IDX.RDB$RELATION_NAME EQ nm.ex->getName().object.c_str()
 	{
-		if (!idv)
-			idv = rel_indices.getVersioned(tdbb, IDX.RDB$INDEX_ID - 1, flags);
-		else
-			fb_assert(false);
+		fb_assert(!id.has_value());
+		id = IDX.RDB$INDEX_ID - 1;
 	}
 	END_FOR
 
-	return idv;
+	return id;
 }
 
 Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)
 {
 	SET_TDBB(tdbb);
 
-	Attachment* attachment = tdbb->getAttachment();
-
-	// See if we already know the relation by name
-	auto* idp = rel_indices.lookup(tdbb,
-		[name](Cached::Index* idp)
-		{
-			return idp->getName() == name ? idp : nullptr;
-		},
-		flags);
-
-	if (idp || !(flags & CacheFlag::AUTOCREATE))
-		return idp;
-
-	// We need to look up the index in RDB$INDICES
-	AutoCacheRequest request(tdbb, irq_get_index_by_name, IRQ_REQUESTS);
-
-	FOR(REQUEST_HANDLE request)
-		IDX IN RDB$INDICES
-		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
-			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
-			IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
-			IDX.RDB$RELATION_NAME EQ getName().object.c_str()
-	{
-		if (!idp)
-		{
-			if (auto* idv = rel_indices.getVersioned(tdbb, IDX.RDB$INDEX_ID - 1, flags))
-				idp = getPermanent(idv);
-		}
-		else
-			fb_assert(false);
-	}
-	END_FOR
+	Cached::Index* idp = nullptr;
+	rel_indices.lookup(tdbb, name, flags, &idp, nullptr);
 
 	return idp;
 }

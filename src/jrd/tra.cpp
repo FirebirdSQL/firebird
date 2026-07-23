@@ -3973,10 +3973,12 @@ Record* jrd_tra::findNextUndo(VerbAction* stopAction, jrd_rel* relation, SINT64 
  **************************************/
 {
 	UndoItem* result = NULL;
+	const auto tempInstanceId = (relation->getPermanent()->rel_flags & REL_temp_frame) ?
+		stopAction->vct_temp_instance_id : 0;
 
 	for (Savepoint::Iterator iter(tra_save_point); *iter; ++iter)
 	{
-		VerbAction* const action = (*iter)->getAction(relation);
+		VerbAction* const action = (*iter)->getAction(relation, tempInstanceId);
 
 		if (action == stopAction)
 			return result ? result->setupRecord(this) : NULL;
@@ -3989,7 +3991,7 @@ Record* jrd_tra::findNextUndo(VerbAction* stopAction, jrd_rel* relation, SINT64 
 	return NULL;
 }
 
-void jrd_tra::listStayingUndo(jrd_rel* relation, SINT64 number, RecordStack &staying)
+void jrd_tra::listStayingUndo(thread_db* tdbb, jrd_rel* relation, SINT64 number, RecordStack &staying)
 /**************************************
  *
  *	l i s t S t a y i n g U n d o
@@ -4002,9 +4004,11 @@ void jrd_tra::listStayingUndo(jrd_rel* relation, SINT64 number, RecordStack &sta
  *
  **************************************/
 {
+	const auto tempInstanceId = relation->getTempInstanceId(tdbb);
+
 	for (Savepoint::Iterator iter(tra_save_point); *iter; ++iter)
 	{
-		VerbAction* const action = (*iter)->getAction(relation);
+		VerbAction* const action = (*iter)->getAction(relation, tempInstanceId);
 
 		if (action && action->vct_undo && action->vct_undo->locate(number))
 			staying.push(action->vct_undo->current().setupRecord(this));
@@ -4435,4 +4439,3 @@ void jrd_tra::eraseSecDbContext() noexcept
 	delete tra_sec_db_context;
 	tra_sec_db_context = NULL;
 }
-

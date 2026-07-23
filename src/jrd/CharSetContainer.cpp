@@ -57,7 +57,7 @@ bool CharSetContainer::destroy(thread_db* tdbb, CharSetContainer* container)
 	return false;
 }
 
-int CharSetVers::objectType()
+ObjectType CharSetVers::objectType() noexcept
 {
 	return obj_charset;
 }

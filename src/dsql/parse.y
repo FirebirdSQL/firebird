@@ -3660,7 +3660,22 @@ local_nonforward_declarations
 
 %type <stmtNode> local_nonforward_declaration
 local_nonforward_declaration
-	: DECLARE var_decl_opt local_declaration_item ';'
+	: DECLARE local_opt TEMPORARY TABLE valid_symbol_name
+			{
+				RelationSourceNode* relationNode = newNode<RelationSourceNode>(QualifiedName(*$5));
+				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($<createRelationNode>6) ')' ';'
+		{
+			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
+			node->dsqlName = *$5;
+			node->dsqlTable = $<createRelationNode>6;
+			$$ = node;
+			$$->line = YYPOSNARG(1).firstLine;
+			$$->column = YYPOSNARG(1).firstColumn;
+		}
+	| DECLARE var_decl_opt local_declaration_item ';'
 		{
 			$$ = $3;
 			$$->line = YYPOSNARG(1).firstLine;
@@ -3786,6 +3801,11 @@ var_declaration_initializer
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+local_opt
+	: // nothing
+	| LOCAL
 	;
 
 var_decl_opt

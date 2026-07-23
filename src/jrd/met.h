@@ -166,7 +166,7 @@ private:
 public:
 	static jrd_prc* create(thread_db* tdbb, MemoryPool& p, Cached::Procedure* perm);
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 
 	void releaseExternal() override
 	{
@@ -187,7 +187,7 @@ public:
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag fl);
 	void checkReload(thread_db* tdbb) const override;
 
-	static int objectType() noexcept;
+	static ObjectType objectType() noexcept;
 	static const enum lck_t LOCKTYPE = LCK_prc_rescan;
 };
 
@@ -377,9 +377,12 @@ public:
 	template <typename C>
 	static C* oldVersion(thread_db* tdbb, MetaId id, ObjectBase::Flag scanType)
 	{
+	/*
 		auto& vector = Vector<C>::get(getCache(tdbb));
 		auto* vrsn = vector.getVersioned(tdbb, id, CacheFlag::AUTOCREATE | scanType);
 		return vrsn ? getPermanent(vrsn) : nullptr;
+		*/
+		return getPerm<C>(tdbb, id, CacheFlag::AUTOCREATE | scanType);
 	}
 
 	// Create new version of object in cache (if not exists)
@@ -682,6 +685,13 @@ inline Cached::Relation* MetadataCache::getPerm<Cached::Relation>(thread_db* tdb
 	}
 	return rc;
 }
+
+template <>
+inline bool CacheElement<CharSetVers, CharSetContainer>::nameIs(const QualifiedName& name)
+{
+	return this->names.exist(name);
+}
+
 
 } // namespace Jrd
 

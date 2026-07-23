@@ -139,6 +139,7 @@ inline constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
+inline constexpr const char* DATABASE_CLASS				= "SQL$DATABASE";
 inline constexpr const char* DEFAULT_CLASS				= "SQL$DEFAULT";
 inline constexpr const char* SQL_SECCLASS_GENERATOR		= "RDB$SECURITY_CLASS";
 inline constexpr const char* SQL_SECCLASS_PREFIX		= "SQL$";
@@ -519,8 +520,5 @@ inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; /
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
-
-// How many times request can be restarted in attempts to sync formats in it
-inline constexpr int EXEC_RESTARTS = 8;
 
 #endif // JRD_CONSTANTS_H
