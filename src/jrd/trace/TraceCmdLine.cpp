@@ -434,6 +434,8 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			case IN_SW_TRACE_RESUME:
 				usage(uSvc, isc_trace_switch_param_miss, "ID", action_sw->in_sw_name);
 				break;
+			default:
+				fb_assert(false);
 		}
 	}
 
