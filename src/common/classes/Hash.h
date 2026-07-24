@@ -103,6 +103,7 @@ namespace Firebird
 
 			void link(Entry** where) noexcept
 			{
+				fb_assert(where != nullptr);
 				unLink();
 
 				// set our pointers
