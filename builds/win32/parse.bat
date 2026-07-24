@@ -27,4 +27,27 @@
 @del y_tab.c
 @del sed*
 
+
+@echo Generating JsonPathParser.cpp
+
+@sed -n "/%%type .*/p" < %FB_ROOT_PATH%\src\jrd\json\path\JsonPathParser.y > jtypes.y
+@sed "s/%%type .*//" < %FB_ROOT_PATH%\src\jrd\json\path\JsonPathParser.y > json_y.y
+
+%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\btyacc\btyacc -l -d -b jpath -S %FB_ROOT_PATH%\src\jrd\json\path\btyacc_json.ske json_y.y 2>json_y.txt
+@if errorlevel 1 (type json_y.txt && exit /B 1)
+@type json_y.txt
+
+@sed -i "s/#define \([A-Z].*\)/#define TOK_\1/" jpath_tab.h
+@sed -i "s/#define TOK_YY\(.*\)/#define YY\1/" jpath_tab.h
+@sed -n -e "s/.*btyacc: \(.*conflicts.*\)/\1/p" json_y.txt > %FB_ROOT_PATH%\src\dsql\jpath-parse-conflicts.txt
+
+@copy jpath_tab.h %FB_ROOT_PATH%\src\include\gen\jparse.h > nul
+@copy jpath_tab.c %FB_ROOT_PATH%\src\jrd\json\path\JsonPathParser.cpp > nul
+@del json_y.y
+@del json_y.txt
+@del jtypes.y
+@del jpath_tab.h
+@del jpath_tab.c
+@del sed*
+
 :END

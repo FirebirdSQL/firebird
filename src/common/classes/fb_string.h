@@ -783,6 +783,11 @@ namespace Firebird
 			append(1, c);
 			return *this;
 		}
+		StringType& operator+=(const std::string_view v)
+		{
+			append(v.data(), v.length());
+			return *this;
+		}
 		StringType operator+(const StringType& v) const
 		{
 			return add(v.c_str(), v.length());
@@ -794,6 +799,10 @@ namespace Firebird
 		StringType operator+(char_type c) const
 		{
 			return add(&c, 1);
+		}
+		StringType& operator=(const std::string_view v)
+		{
+			return assign(v.data(), static_cast<size_type>(v.length()));
 		}
 		StringType& operator=(StringType&& rhs)
 		{
@@ -904,6 +913,17 @@ namespace Firebird
 		bool operator>=(const char_type* str) const {return compare(str) >= 0;}
 		bool operator> (const char_type* str) const {return compare(str) >  0;}
 		bool operator!=(const char_type* str) const {return different(str);}
+
+		bool operator==(const std::string_view s) const
+		{
+			// Special operator for std::string_view. The method `equals` searches for '\0'
+			// but it may not be present at the location of s.data + s.length().
+			// So use a separate implementation for std::string_view
+			const size_type n = s.length();
+			return (length() != n) ? false : (Comparator::compare(c_str(), s.data(), n) == 0);
+		}
+
+		operator std::string_view() const { return std::string_view(stringBuffer, stringLength); }
 
 		bool getWord(StringType& from, const char* sep)
 		{

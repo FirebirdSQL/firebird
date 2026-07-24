@@ -973,6 +973,7 @@ clean_gpre_gen:
 
 clean_yacc_gen:
 	$(RM) $(ROOT)/src/dsql/parse.cpp $(ROOT)/src/dsql/dsql.tab.h $(TMP_ROOT)/include/gen/parse.h types.y y.* $(OBJ)/.parse-gen-sentinel
+	$(RM) $(ROOT)/jrd/json/path/JsonPathParser.cpp $(GEN_ROOT)/jtypes.y $(GEN_ROOT)/json_y.y $(TMP_ROOT)/include/gen/jparse.h jtypes.y y.* $(OBJ)/.jparse-gen-sentinel
 
 #___________________________________________________________________________
 # Extra platform specific targets
