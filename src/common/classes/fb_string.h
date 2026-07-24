@@ -918,7 +918,7 @@ namespace Firebird
 			// but it may not be present at the location of s.data + s.length().
 			// So use a separate implementation for std::string_view
 			const size_type n = s.length();
-			return (length() != n) ? false : (Comparator::compare(c_str(), s, n) == 0);
+			return (length() != n) ? false : (Comparator::compare(c_str(), s.data(), n) == 0);
 		}
 
 		operator std::string_view() const { return std::string_view(stringBuffer, stringLength); }
