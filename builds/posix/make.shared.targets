@@ -71,7 +71,6 @@ $(OBJ)/.jparse-gen-sentinel: $(SRC_ROOT)/jrd/json/path/JsonPathParser.y $(SRC_RO
 	($(BTYACC) -l -d -b jpath -S $(SRC_ROOT)/jrd/json/path/btyacc_json.ske $(GEN_ROOT)/json_y.y; echo $$? > $(GEN_ROOT)/json_y.status) 2>&1 | tee $(GEN_ROOT)/json_y.txt
 	(exit `cat $(GEN_ROOT)/json_y.status`)
 	sed -n -e "s/.*btyacc: \(.*conflicts.*\)/\1/p" $(GEN_ROOT)/json_y.txt > $(TMP_ROOT)/jpath-parse-conflicts.txt
-	cp $(TMP_ROOT)/jpath-parse-conflicts.txt $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt
 	if [ ! -f $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt ] || ! cmp -s $(TMP_ROOT)/jpath-parse-conflicts.txt $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt; then \
 		cp $(TMP_ROOT)/jpath-parse-conflicts.txt $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt 2>/dev/null || : ; \
 	fi
