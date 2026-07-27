@@ -438,7 +438,7 @@ void Savepoint::cleanupTempData()
 
 	for (VerbAction* action = m_actions; action; action = action->vct_next)
 	{
-		if (action->vct_relation->getPermanent()->rel_flags & REL_temp_tran)
+		if (action->vct_relation->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_frame))
 		{
 			RecordBitmap::reset(action->vct_records);
 

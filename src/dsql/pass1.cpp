@@ -1405,7 +1405,6 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 {
 	FieldNode* fieldNode;
 
-	//// TODO: LocalTableSourceNode
 	if (auto rseNode = nodeAs<RseNode>(node))
 	{
 		ValueListNode* sub_items = rseNode->dsqlSelectList;
@@ -1490,6 +1489,33 @@ void PASS1_expand_select_node(DsqlCompilerScratch* dsqlScratch, ExprNode* node, 
 							select_item = NullNode::instance();
 						else
 							select_item = MAKE_field(context, field, NULL);
+					}
+
+					list->add(select_item);
+				}
+			}
+		}
+	}
+	else if (auto localTableNode = nodeAs<LocalTableSourceNode>(node))
+	{
+		dsql_ctx* context = localTableNode->dsqlContext;
+
+		if (context->ctx_relation)
+		{
+			for (dsql_fld* field = context->ctx_relation->rel_fields; field; field = field->fld_next)
+			{
+				DEV_BLKCHK(field, dsql_type_fld);
+
+				NestConst<ValueExprNode> select_item = nullptr;
+
+				if (!hide_using || context->getImplicitJoinField(field->fld_name, select_item))
+				{
+					if (!select_item)
+					{
+						if (context->ctx_flags & CTX_null)
+							select_item = NullNode::instance();
+						else
+							select_item = MAKE_field(context, field, nullptr);
 					}
 
 					list->add(select_item);

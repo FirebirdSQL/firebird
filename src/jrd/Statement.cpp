@@ -1064,7 +1064,7 @@ Request* Request::getLocalTableRequest(bool outerDecl)
 
 	if (outerDecl)
 	{
-		while (request->req_caller)
+		while (request->getStatement()->parentStatement)
 			request = request->req_caller;
 	}
 

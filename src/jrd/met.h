@@ -457,6 +457,11 @@ public:
 		return (id >= MIN_LTT_ID && id <= MAX_LTT_ID);
 	}
 
+	static bool isDeclaredLTT(MetaId id)
+	{
+		return (id >= MIN_DECLARED_LTT_ID && id <= MAX_DECLARED_LTT_ID);
+	}
+
 
 private:
 	static jrd_rel* getLtt(thread_db* tdbb, MetaId id);
