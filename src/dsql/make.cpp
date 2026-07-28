@@ -54,6 +54,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/ini.h"
 #include "../jrd/cvt_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../common/dsc_proto.h"
 #include "../yvalve/why_proto.h"
@@ -334,6 +335,85 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 	}
 
 	return literal;
+}
+
+static bool isRelativeDateTimeString(const dsc* desc)
+{
+	const char* p = reinterpret_cast<const char*>(desc->dsc_address);
+	const char* end = p + desc->dsc_length;
+
+	while (p < end && (*p == ' ' || *p == '\t'))
+		++p;
+	while (end > p && (end[-1] == ' ' || end[-1] == '\t'))
+		--end;
+
+	const auto equalsWord = [&](const char* word)
+	{
+		const char* q = p;
+		while (q < end && *word && UPPER7(*q) == *word)
+		{
+			++q;
+			++word;
+		}
+		return q == end && !*word;
+	};
+
+	return equalsWord("NOW") || equalsWord("TODAY") ||
+		equalsWord("TOMORROW") || equalsWord("YESTERDAY");
+}
+
+ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* reference)
+{
+	if (from->litDesc.dsc_dtype != dtype_text)
+		return nullptr;
+
+	if (CVT2_compare_priority[from->litDesc.dsc_dtype] >=
+		CVT2_compare_priority[reference->dsc_dtype])
+	{
+		return nullptr;
+	}
+
+	dsql_constant_type to;
+
+	switch (reference->dsc_dtype)
+	{
+	case dtype_double:
+		to = CONSTANT_DOUBLE;
+		break;
+	case dtype_dec64:
+	case dtype_dec128:
+		to = CONSTANT_DECIMAL;
+		break;
+	case dtype_int128:
+		to = CONSTANT_NUM128;
+		break;
+	case dtype_sql_date:
+		to = CONSTANT_DATE;
+		break;
+	case dtype_sql_time:
+	case dtype_sql_time_tz:
+		to = CONSTANT_TIME;
+		break;
+	case dtype_timestamp:
+		to = CONSTANT_TIMESTAMP;
+		break;
+	default:
+		return nullptr;
+	}
+
+	switch (to)
+	{
+	case CONSTANT_DATE:
+	case CONSTANT_TIME:
+	case CONSTANT_TIMESTAMP:
+		if (isRelativeDateTimeString(&from->litDesc))
+			return nullptr;
+		break;
+	default:
+		break;
+	}
+
+	return MAKE_constant(reinterpret_cast<const char*>(from->litDesc.dsc_address), to, 0);
 }
 
 
