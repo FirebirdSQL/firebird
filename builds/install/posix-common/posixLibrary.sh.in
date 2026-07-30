@@ -936,7 +936,7 @@ fixFilePermissions() {
 		if [[ $(ls -Z / | grep usr | grep system_u:) ]]; then
 
 		    # check fcontext for fbguard not bin_t
-            if [[ ! $(ls -Z \"$FileName\" | grep bin_t) ]];
+            if [[ ! $(ls -Z \"$FileName\" | grep bin_t) ]]; then
 
 	            # check semanage exists
 				if [[ $(command -v semanage) ]]; then
