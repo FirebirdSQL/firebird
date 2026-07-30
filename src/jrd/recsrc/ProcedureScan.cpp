@@ -31,7 +31,6 @@
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/optimizer/Optimizer.h"
-#include "../common/utils_proto.h"
 
 #include "RecordSource.h"
 
@@ -117,21 +116,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 		im = NULL;
 	}
 
-	Request* proc_request = nullptr;
-	try
-	{
-		proc_request = proc->getStatement()->findRequest(tdbb);
-	}
-	catch (const Exception& ex)
-	{
-		FbLocalStatus st;
-		ex.stuffException(&st);
-
-		if (fb_utils::containsErrorCode(st->getErrors(), isc_old_format))
-			MetadataCache::upgrade<Cached::Procedure>(tdbb, m_procedure()->getId(), proc);
-
-		throw;
-	}
+	Request* const proc_request = proc->getStatement()->findRequest(tdbb);
 	impure->irsb_req_handle = proc_request;
 
 	// req_proc_fetch flag used only when fetching rows, so

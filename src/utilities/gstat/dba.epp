@@ -672,7 +672,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	Firebird::PathName fileName = name;
 	const Firebird::PathName connName = fileName;
 
-	if (uSvc->isService())
+	if (uSvc->hasAuthBlock())
 	{
 		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
 #ifdef TRUSTED_AUTH
@@ -827,7 +827,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 		dba_exit(FINI_OK, tddba);
 	}
 
-	if (!uSvc->isService())
+	if (!uSvc->hasAuthBlock())
 	{
 		attachDatabase(status_vector, connName, &DB, uSvc, username, password, role
 #ifdef TRUSTED_AUTH

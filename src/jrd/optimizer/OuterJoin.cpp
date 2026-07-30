@@ -57,7 +57,7 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 		auto& joinStream = joinStreams[pos];
 		joinStream.node = node;
 
-		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
+		if (nodeIs<RelationSourceNode>(node))
 		{
 			const auto stream = node->getStream();
 			fb_assert(!(csb->csb_rpt[stream].csb_flags & csb_active));

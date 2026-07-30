@@ -473,6 +473,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 			jrd_rel* relation = nullptr;
 			Record* record = nullptr;
 			USHORT fieldId = 0;
+			FB_UINT64 tempInstanceId = 0;
 
 			if (to)
 			{
@@ -483,12 +484,19 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 					relation = rpb->rpb_relation;
 					record = rpb->rpb_record;
 					fieldId = toField->fieldId;
+					tempInstanceId = rpb->rpb_temp_instance_id;
 				}
 				else if (!(nodeAs<ParameterNode>(to) || nodeAs<VariableNode>(to)))
 					BUGCHECK(199);	// msg 199 expected field node
 			}
 
-			blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			if (tempInstanceId)
+			{
+				AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
+				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
+			}
+			else
+				blb::move(tdbb, from_desc, to_desc, relation, record, fieldId);
 		}
 		else if (!DSC_EQUIV(from_desc, to_desc, false))
 		{
@@ -1244,15 +1252,6 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 			tdbb->setTransaction(old_transaction);
 		}
 
-		for (auto localTable : statement->localTables)
-		{
-			if (!localTable)
-				continue;
-
-			auto impure = localTable->getImpure(tdbb, request, false);
-			impure->recordBuffer->reset();
-		}
-
 		release_blobs(tdbb, request);
 
 		const auto attachment = request->req_attachment;
@@ -1262,6 +1261,21 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
 		}
+	}
+
+	const Statement* statement = request->getStatement();
+
+	for (FB_SIZE_T i = 0; i < statement->localTables.getCount(); ++i)
+	{
+		if (i < statement->outerLocalTables.getCount() && statement->outerLocalTables[i])
+			continue;
+
+		const auto localTable = statement->localTables[i];
+
+		if (!localTable)
+			continue;
+
+		localTable->reset(tdbb, request);
 	}
 
 	request->req_sorts.unlinkAll();
@@ -2079,4 +2093,3 @@ QualifiedName CompilerScratch::csb_repeat::getName(bool allowEmpty) const
 		return QualifiedName("");
 	}
 }
-

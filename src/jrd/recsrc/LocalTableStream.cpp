@@ -24,8 +24,13 @@
 #include "../jrd/align.h"
 #include "../jrd/jrd.h"
 #include "../jrd/req.h"
+#include "../jrd/tra.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/dpm_proto.h"
+#include "../jrd/rlck_proto.h"
+#include "../jrd/vio_proto.h"
+#include "../common/classes/auto.h"
 
 #include "RecordSource.h"
 
@@ -36,9 +41,11 @@ using namespace Jrd;
 // Data access: local table
 // ------------------------
 
-LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table)
+LocalTableStream::LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table,
+	bool outerDecl)
 	: RecordStream(csb, stream),
-	  m_table(table)
+	  m_table(table),
+	  m_outerDecl(outerDecl)
 {
 	fb_assert(m_table);
 
@@ -55,8 +62,31 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 
 	const auto rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
-
 	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	impure->cursorSavepoint = 0;
+
+	const auto localTableRequest = impure->localTableRequest = request->getLocalTableRequest(m_outerDecl);
+
+	if (m_table->useLtt)
+	{
+		const auto tempInstanceId = localTableRequest->getLocalTableInstanceId(tdbb);
+		AutoSetRestore<FB_UINT64> autoFrameId(
+			&tdbb->tdbb_temp_frame_id, tempInstanceId);
+
+		rpb->rpb_relation = m_table->getRelation(tdbb, localTableRequest);
+		rpb->rpb_temp_instance_id = tempInstanceId;
+
+		if (localTableRequest->req_auto_trans.hasData())
+		{
+			const auto transaction = localTableRequest->getLocalTableTransaction();
+
+			// Keep rows inserted after this stream was opened out of the scan while
+			// retaining visibility of rows inserted before the autonomous block.
+			if (!(transaction->tra_flags & TRA_system) && transaction->tra_save_point)
+				impure->cursorSavepoint = transaction->startSavepoint()->getNumber();
+		}
+	}
 }
 
 void LocalTableStream::close(thread_db* tdbb) const
@@ -69,6 +99,20 @@ void LocalTableStream::close(thread_db* tdbb) const
 
 	if (impure->irsb_flags & irsb_open)
 		impure->irsb_flags &= ~irsb_open;
+
+	if (impure->cursorSavepoint)
+	{
+		const auto transaction = impure->localTableRequest->getLocalTableTransaction();
+
+		while (transaction->tra_save_point &&
+			transaction->tra_save_point->getNumber() >= impure->cursorSavepoint)
+		{
+			fb_assert(!transaction->tra_save_point->isChanging());
+			transaction->releaseSavepoint(tdbb);
+		}
+
+		impure->cursorSavepoint = 0;
+	}
 }
 
 bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
@@ -85,18 +129,51 @@ bool LocalTableStream::internalGetRecord(thread_db* tdbb) const
 		return false;
 	}
 
-	if (!rpb->rpb_record)
-		rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
-
-	rpb->rpb_number.increment();
-
-	if (!m_table->getImpure(tdbb, request)->recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+	if (!m_table->useLtt)
 	{
-		rpb->rpb_number.setValid(false);
-		return false;
+		if (!rpb->rpb_record)
+			rpb->rpb_record = FB_NEW_POOL(*tdbb->getDefaultPool()) Record(*tdbb->getDefaultPool(), m_format);
+
+		const auto recordBuffer = m_table->getImpure(tdbb, impure->localTableRequest)->recordBuffer;
+
+		while (true)
+		{
+			rpb->rpb_number.increment();
+
+			if (rpb->rpb_number.getValue() >= recordBuffer->getCount())
+			{
+				rpb->rpb_number.setValid(false);
+				return false;
+			}
+
+			if (recordBuffer->fetch(rpb->rpb_number.getValue(), rpb->rpb_record))
+			{
+				rpb->rpb_number.setValid(true);
+				break;
+			}
+		}
+
+		return true;
 	}
 
-	return true;
+	const auto localTableRequest = impure->localTableRequest;
+	const auto transaction = localTableRequest->getLocalTableTransaction();
+	AutoSetRestore<FB_UINT64> autoFrameId(
+		&tdbb->tdbb_temp_frame_id, localTableRequest->getLocalTableInstanceId(tdbb));
+
+	AutoSetRestore2<jrd_tra*, thread_db> autoTransaction(
+		tdbb, &thread_db::getTransaction, &thread_db::setTransaction, transaction);
+
+	const bool found = VIO_next_record(tdbb, rpb, transaction, request->req_pool, DPM_next_all, nullptr);
+
+	if (found)
+	{
+		rpb->rpb_number.setValid(true);
+		return true;
+	}
+
+	rpb->rpb_number.setValid(false);
+	return false;
 }
 
 bool LocalTableStream::refetchRecord(thread_db* tdbb) const

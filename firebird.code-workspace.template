@@ -1,0 +1,16 @@
+/* Copy this file to a *.code-workspace file and adjust your local settings */
+{
+    "folders": [
+        {
+            "name": "firebird",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "C_Cpp.default.includePath": [
+            "${workspaceFolder}/temp/debug/src/include"
+        ],
+        "C_Cpp.default.compilerPath": "/usr/bin/clang",
+        "C_Cpp.default.intelliSenseMode": "linux-clang-x64"
+    }
+}

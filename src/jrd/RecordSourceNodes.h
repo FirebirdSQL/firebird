@@ -348,6 +348,7 @@ public:
 public:
 	Firebird::string alias;
 	USHORT tableNumber = 0;
+	bool outerDecl = false;
 	SSHORT context = 0;			// user-specified context number for the local table reference
 };
 

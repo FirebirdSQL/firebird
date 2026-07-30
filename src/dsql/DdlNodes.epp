@@ -10084,7 +10084,15 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 			sourceField = sourceFieldNode->dsqlField;
 		}
 
-		if (sourceField && !fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()))
+		if (sourceField)
+		{
+			METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
+			field->flags &= ~(FLD_computed | FLD_system);
+		}
+
+		if (sourceField &&
+			!fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()) &&
+			!(!(field->flags & FLD_nullable) && (desc.dsc_flags & DSC_nullable)))
 		{
 			// Named domain: reference it directly, like "<field name> <domain name>".
 			field->typeOfName = sourceField->fieldSource;
@@ -10092,19 +10100,12 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 		}
 		else
 		{
-			if (sourceField)
-			{
-				// Implicit domain: copy its exact stored type (precision, charset, collation,
-				// dimensions, etc.) instead of sharing the domain object itself.
-				METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
-				field->flags &= ~(FLD_computed | FLD_system);
-			}
-			else
+			if (!sourceField)
 			{
 				field->dtype = desc.dsc_dtype;
 				field->length = desc.dsc_length;
 				field->scale = desc.dsc_scale;
-				field->subType = desc.dsc_sub_type;
+				field->subType = desc.getSubType();
 
 				if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
 				{
@@ -10120,20 +10121,23 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 				}
 				else if (desc.isBlob())
 					field->segLength = 80;
-
-				field->setExactPrecision();
+				else if (desc.dsc_dtype == dtype_dec64)
+					field->precision = 16;
+				else if (desc.dsc_dtype == dtype_dec128)
+					field->precision = 34;
+				else if (desc.isExact() && field->subType != dsc_num_type_none)
+					field->setExactPrecision();
 			}
+		}
 
-			field->flags &= ~FLD_nullable;
-			if (desc.dsc_flags & DSC_nullable)
-				field->flags |= FLD_nullable;
-			else
-			{
-				// A newly created (non-domain) column is nullable unless a NOT NULL constraint
-				// is explicitly added - field->flags alone does not drive this, see defineField().
-				auto& notNullConstraint = clause->constraints.add();
-				notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
-			}
+		field->flags &= ~FLD_nullable;
+		if (desc.dsc_flags & DSC_nullable)
+			field->flags |= FLD_nullable;
+
+		if (!(field->flags & FLD_nullable))
+		{
+			auto& notNullConstraint = clause->constraints.add();
+			notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
 		}
 
 		clauses.add(clause);
@@ -10225,7 +10229,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	if (externalFile)
 		status_exception::raise(Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
 
-	if (attachment->att_local_temporary_tables.count() >= MAX_LTT_COUNT)
+	if (attachment->att_local_temporary_tables.count() >= MAX_CREATED_LTT_COUNT)
 	{
 		ERR_post(Arg::Gds(isc_imp_exc) <<
 				 Arg::Gds(isc_random) <<
@@ -10295,14 +10299,14 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	// Assign LTT relation ID
 
 	if (!attachment->att_next_ltt_id.has_value())
-		attachment->att_next_ltt_id = MAX_LTT_ID;
+		attachment->att_next_ltt_id = MAX_CREATED_LTT_ID;
 
 	const auto startLttId = attachment->att_next_ltt_id.value();
 
 	while (true)
 	{
-		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
-			attachment->att_next_ltt_id = MIN_LTT_ID;
+		if (attachment->att_next_ltt_id.value() >= MAX_CREATED_LTT_ID)
+			attachment->att_next_ltt_id = MIN_CREATED_LTT_ID;
 		else
 			++attachment->att_next_ltt_id.value();
 
@@ -17590,6 +17594,22 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 
 void AlterDatabaseNode::checkPermission(thread_db* tdbb)
 {
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const unsigned nbackupClauses = CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP;
+
+	const bool hasNonBackupClauses =
+		(clauses & ~nbackupClauses) ||
+		differenceFile.hasData() ||
+		setDefaultCharSet.hasData() ||
+		setDefaultCollation.hasData() ||
+		linger >= 0 ||
+		ssDefiner.isAssigned() ||
+		cryptPlugin.hasData();
+
+	if (!hasNonBackupClauses && attachment->locksmith(tdbb, USE_NBACKUP_UTILITY))
+		return;
+
 	SCL_check_database(tdbb, SCL_alter);
 }
 

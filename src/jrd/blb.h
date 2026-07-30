@@ -104,7 +104,7 @@ public:
 	void	BLB_check_well_formed(thread_db*, const dsc* desc);
 	bool	BLB_close(thread_db*);
 	static blb*	create(thread_db*, jrd_tra*, bid*);
-	static blb*	create2(thread_db*, jrd_tra*, bid*, USHORT, const UCHAR*, bool = false);
+	static blb* create2(thread_db*, jrd_tra*, bid*, USHORT, const UCHAR*, bool = false);
 	static blb* get_array(thread_db*, jrd_tra*, const bid*, Ods::InternalArrayDesc*);
 	ULONG	BLB_get_data(thread_db*, UCHAR*, SLONG, bool = true);
 	USHORT	BLB_get_segment(thread_db*, void*, USHORT);
@@ -183,6 +183,7 @@ inline constexpr int BLB_seek			= 32;		// Seek is pending
 inline constexpr int BLB_large_scan		= 64;		// Blob is larger than page buffer cache
 inline constexpr int BLB_close_on_read	= 128;		// Temporary blob is not closed until read
 inline constexpr int BLB_user			= 256;		// User-defined blob
+inline constexpr int BLB_dltt			= 512;		// Blob stored in a declared local temporary table
 
 /* Blob levels are:
 

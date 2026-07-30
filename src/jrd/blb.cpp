@@ -477,7 +477,8 @@ void BLB_garbage_collect(thread_db* tdbb,
 						bmGoing.set(number.getValue());
 						cntGoing++;
 					}
-					else
+					else if (!(relation->getPermanent()->rel_flags & REL_temp_frame) ||
+						blob->bid_internal.bid_relation_id)
 					{
 						// hvlad: blob_id in descriptor is not from our relation. Yes, it is
 						// garbage in user data but we can handle it without bugcheck - just
@@ -520,7 +521,8 @@ void BLB_garbage_collect(thread_db* tdbb,
 								return;
 						}
 					}
-					else
+					else if (!(relation->getPermanent()->rel_flags & REL_temp_frame) ||
+						blob->bid_internal.bid_relation_id)
 					{
 						gds__log("staying blob (%ld:%ld) is not owned by relation (id = %d), ignored",
 							blob->bid_quad.bid_quad_high, blob->bid_quad.bid_quad_low, relation->getId());
@@ -1109,8 +1111,6 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 		ERR_post(Arg::Gds(isc_read_only));
 	}
 
-	RelationPages* relPages = relation->getPermanent()->getPages(tdbb);
-
 	// If either the source value is null or the blob id itself is null
 	// (all zeros), then the blob is null.
 
@@ -1124,6 +1124,65 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	record->clearNull(fieldId);
 	jrd_tra* transaction = request->req_transaction;
 	transaction = transaction->getOuter();
+
+	// Declared LTT records live only in an execution frame, while their BLOB
+	// values must be usable outside that frame. Keep the value as a transaction
+	// temporary BLOB instead of storing a frame-scoped permanent ID.
+	if (MetadataCache::isDeclaredLTT(relation->getId()))
+	{
+		bool directMove = false;
+
+		if (!needFilter && !source->bid_internal.bid_relation_id &&
+			transaction->tra_blobs->locate(source->bid_temp_id()))
+		{
+			const auto sourceIndex = &transaction->tra_blobs->current();
+
+			if (!sourceIndex->bli_materialized)
+			{
+				const auto sourceBlob = sourceIndex->bli_blob_object;
+
+				if (!sourceBlob || !(sourceBlob->blb_flags & BLB_closed))
+				{
+					if (sourceBlob && (sourceBlob->blb_flags & BLB_close_on_read))
+						sourceBlob->BLB_close(tdbb);
+					else
+						ERR_post(Arg::Gds(isc_bad_segstr_id));
+				}
+
+				directMove = true;
+			}
+		}
+
+		if (directMove)
+			*destination = *source;
+		else
+		{
+			UCharBuffer bpb;
+			if (needFilter)
+				BLB_gen_bpb_from_descs(from_desc, to_desc, bpb);
+
+			const auto dbb = tdbb->getDatabase();
+			const USHORT pageSpace = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+			blb* const blob = copy_blob(tdbb, source, destination,
+				bpb.getCount(), bpb.begin(), pageSpace);
+
+			blob->blb_flags |= BLB_dltt;
+			blob->blb_sub_type = to_desc->getBlobSubType();
+			blob->blb_charset = to_desc->getCharSet();
+		}
+
+		fb_assert(!destination->bid_internal.bid_relation_id);
+		fb_assert(transaction);
+
+		if (!transaction->tra_blobs->locate(destination->bid_temp_id()))
+			BUGCHECK(305); // msg 305 Blobs accounting is inconsistent
+
+		BlobIndex* const blobIndex = &transaction->tra_blobs->current();
+		fb_assert(!blobIndex->bli_materialized);
+		fb_assert(blobIndex->bli_blob_object);
+
+		return;
+	}
 
 	// If the target is a view, this must be from a view update trigger.
 	// Just pass the blob id thru.
@@ -1149,6 +1208,8 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 		return;
 	}
+
+	RelationPages* relPages = relation->getPermanent()->getPages(tdbb);
 
 	// If the source is a permanent blob, then the blob must be copied.
 	// Otherwise find the temporary blob referenced.
@@ -2601,6 +2662,9 @@ static void move_from_string(thread_db* tdbb, const dsc* from_desc, dsc* to_desc
 	bid temp_bid;
 	temp_bid.clear();
 	blb* blob = blb::create2(tdbb, transaction, &temp_bid, bpb.getCount(), bpb.begin());
+
+	if (relation && MetadataCache::isDeclaredLTT(relation->getId()))
+		blob->blb_flags |= BLB_dltt;
 
 	dsc blob_desc;
 

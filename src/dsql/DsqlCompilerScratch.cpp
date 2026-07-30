@@ -486,7 +486,7 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 // Put maps in subroutines for outer variables/parameters usage.
 void DsqlCompilerScratch::putOuterMaps()
 {
-	if (!outerMessagesMap.count() && !outerVarsMap.count())
+	if (outerMessagesMap.isEmpty() && outerVarsMap.isEmpty() && outerLocalTablesMap.isEmpty())
 		return;
 
 	appendUChar(blr_outer_map);
@@ -503,6 +503,13 @@ void DsqlCompilerScratch::putOuterMaps()
 		appendUChar(blr_outer_map_message);
 		appendUShort(inner);
 		appendUShort(outer);
+	}
+
+	for (auto& [outer, inner] : outerLocalTablesMap)
+	{
+		appendUChar(blr_outer_map_local_table);
+		appendUShort(outer);
+		appendUShort(inner);
 	}
 
 	appendUChar(blr_end);
@@ -551,6 +558,41 @@ dsql_var* DsqlCompilerScratch::resolveVariable(const MetaName& varName)
 	}
 
 	return NULL;
+}
+
+DeclareLocalTableNode* DsqlCompilerScratch::getLocalTable(const MetaName& name, bool* outerDecl)
+{
+	DeclareLocalTableNode* table = nullptr;
+	localTableNames.get(name, table);
+
+	if (outerDecl)
+		*outerDecl = false;
+
+	if (!table && mainScratch)
+	{
+		table = mainScratch->getLocalTable(name);
+
+		if (table && outerDecl)
+			*outerDecl = true;
+	}
+
+	return table;
+}
+
+USHORT DsqlCompilerScratch::getOuterLocalTableNumber(USHORT tableNumber)
+{
+	if (const auto innerNumber = outerLocalTablesMap.get(tableNumber))
+		return *innerNumber;
+
+	const auto innerNumber = localTableNumber++;
+	outerLocalTablesMap.put(tableNumber, innerNumber);
+
+	return innerNumber;
+}
+
+void DsqlCompilerScratch::putLocalTable(DeclareLocalTableNode* table)
+{
+	localTableNames.put(table->dsqlName, table);
 }
 
 // Generate BLR for a return.
