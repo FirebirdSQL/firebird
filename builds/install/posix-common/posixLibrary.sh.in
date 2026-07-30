@@ -932,12 +932,15 @@ fixFilePermissions() {
     for FileName in fbguard
     do
 		# check need fcontext 
-		if [[ $(ls -Z / | grep usr | grep system_u:) ]]; then
+		if [ "$(ls -Z / | grep usr | grep system_u:)" != "" ]; then
 
 		    # check fcontext for fbguard not bin_t
-            if [[ ! $(ls -Z ${fb_install_prefix}/bin/$FileName | grep bin_t) ]]; then
+            if [ "$(ls -Z ${fb_install_prefix}/bin/$FileName | grep bin_t)" == "" ]; then
+
+				# echo "before $(ls -Z ${fb_install_prefix}/bin/$FileName)"
+
 	            # check semanage exists
-				if [[  $(command -v semanage) ]]; then
+				if [ "$(command -v semanage)" != "" ]; then
 
 					semanage fcontext --delete \"${fb_install_prefix}/bin/$FileName\"? > /dev/null
 					restorecon -vRF ${fb_install_prefix}/bin/$FileName  > /dev/null
@@ -945,10 +948,13 @@ fixFilePermissions() {
 					semanage fcontext --add -t bin_t \"${fb_install_prefix}/bin/$FileName\"? > /dev/null
 					restorecon -vRF ${fb_install_prefix}/bin/$FileName  > /dev/null
 
+     				# echo "after $(ls -Z ${fb_install_prefix}/bin/$FileName)"
+
 				else
 
     				echo "!!! SELinux context error: $(ls -Z ${fb_install_prefix}/bin/$FileName)"
-					echo "!!! Please install 'semanage' and 'restorecon' from 'policycoreutils-python(-utils)' and reinstall firebird \n for '$FileName' may be run as service."
+					echo "!!! Please install 'semanage' and 'restorecon' and reinstall firebird"
+					echo "!!! for '$FileName' may be run as service."
 
 				fi
 			fi
