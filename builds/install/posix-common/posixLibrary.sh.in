@@ -931,7 +931,28 @@ fixFilePermissions() {
     cd @FB_BINDIR@
     for FileName in fbguard
     do
-		chcon -t bin_t $FileName
+
+		# check need fcontext 
+		if [[ $(ls -Z / | grep usr | grep system_u:) ]]; then
+
+		    # check fcontext for fbguard not bin_t
+            if [[ ! $(ls -Z \"$FileName\" | grep bin_t) ]];
+
+	            # check semanage exists
+				if [[ $(command -v semanage) ]]; then
+
+					semanage fcontext --add -t bin_t \"$FileName\"? 2>/dev/null
+					restorecon -vRF \"$FileName\" 2>/dev/null
+
+				else
+
+					echo "/n $(ls -Z \"$FileName\")"
+					echo "/nPlease install 'semanage' and 'restorecon' from 'policycoreutils-python(-utils)' and reinstall firebird \n for '$FileName' may be run as service."
+
+				fi
+
+			fi
+		fi
     done
 
     # Lock files
