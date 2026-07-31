@@ -215,17 +215,6 @@ CommitNumber TipCache::cacheState(TraNumber number)
 	if (!block)
 		return CN_PREHISTORIC;
 
-	// Check if the block is not obsolete at the moment
-	oldest = header->oldest_transaction.load(std::memory_order_relaxed);
-
-	if (number < oldest)
-	{
-		gds__log("Re-created obsolete TPC block %u. For transaction %" UQUADFORMAT ", oldest %." UQUADFORMAT,
-			blockNumber, number, oldest);
-
-		return CN_PREHISTORIC;
-	}
-
 	// Barrier is not needed here when we are reading state from cache
 	// because all callers of this function are prepared to handle
 	// slightly out-dated information and will take slow path if necessary
@@ -540,9 +529,32 @@ TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcH
 		else
 		{
 			// Check if block might be too old to be created.
-			TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+			const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 			if (blockNumber >= oldest / m_transactionsPerBlock)
+			{
 				block = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
+
+				// Check if the block is not obsolete at the moment
+				const TraNumber oldest2 = header->oldest_transaction.load(std::memory_order_relaxed);
+
+				if (blockNumber < oldest2 / m_transactionsPerBlock)
+				{
+					gds__log("TPC: Re-created obsolete block %u. Oldest before %" UQUADFORMAT " (%u), oldest after %" UQUADFORMAT " (%u)",
+						blockNumber,
+						oldest, oldest / m_transactionsPerBlock,
+						oldest2, oldest2 / m_transactionsPerBlock);
+
+					if (m_blocks_memory.locate(blockNumber))
+					{
+						auto data = m_blocks_memory.current();
+						m_blocks_memory.fastRemove();
+						delete data;
+					}
+
+					sync.unlock();
+					return nullptr;
+				}
+			}
 			else
 				sync.unlock();
 		}
@@ -651,6 +663,13 @@ CommitNumber TipCache::setState(TraNumber number, int state)
 
 			// We verified for all other cases, transaction must either be Active or in Limbo
 			fb_assert(oldStateCn == CN_ACTIVE || oldStateCn == CN_LIMBO);
+
+			// Paranoid check against CN_ACTIVE state got from obsolete re-created TPC block.
+			if ((oldStateCn == CN_ACTIVE) && (number < header->oldest_transaction.load(std::memory_order_relaxed)))
+			{
+				gds__log("TPC: Not generated new CN for old committed transaction %" UQUADFORMAT, number);
+				return CN_PREHISTORIC;
+			}
 
 			// Generate new commit number
 			CommitNumber newCommitNumber = header->latest_commit_number++ + 1;
