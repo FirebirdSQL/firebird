@@ -62,10 +62,7 @@ namespace
 		static const SafeArg dummy;
 		printMsg(number, dummy, newLine);
 	}
-// All MessageSet instances below (MAIN_USAGE, EXAMPLES) are initialized with
-// message codes in range 3..42, which fits well within USHORT (0..65535).
-// See usages below: MAIN_USAGE{{3, 21}, {41}}, EXAMPLES{{22, 27}, {42}}.
-// If new codes are added, make sure they still fit into USHORT.
+
 	struct MessageSet
 	{
 		const int range[2];
