@@ -179,7 +179,7 @@ void ConfigStorage::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
 	[[maybe_unused]] const int len = snprintf(msg, sizeof(msg), "ConfigStorage: mutex %s error, status = %d", string, state);
-	fb_assert(len >= 0 && len < (int) sizeof(msg));
+	fb_assert(len >= 0 && len < static_cast<int>(sizeof(msg)));
 	fb_utils::logAndDie(msg);
 }
 
@@ -244,13 +244,13 @@ void ConfigStorage::checkAudit()
 
 		TraceSession session(*getDefaultMemoryPool());
 
-		[[maybe_unused]] int fseekResult = fseek(cfgFile, 0, SEEK_END);
-		fb_assert(fseekResult == 0);
+		[[maybe_unused]] const int resultEnd = fseek(cfgFile, 0, SEEK_END);
+		fb_assert(resultEnd == 0);
 		const long len = ftell(cfgFile);
 		if (len)
 		{
-			fseekResult = fseek(cfgFile, 0, SEEK_SET);
-			fb_assert(fseekResult == 0);
+			[[maybe_unused]] const int resultSet = fseek(cfgFile, 0, SEEK_SET);
+			fb_assert(resultSet == 0);
 			char* p = session.ses_config.getBuffer(len + 1);
 
 			if (fread(p, 1, len, cfgFile) != size_t(len)) {
