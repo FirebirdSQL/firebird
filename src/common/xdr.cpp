@@ -190,7 +190,8 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 
 	case dtype_varying:
 		{
-			fb_assert(desc->dsc_length >= sizeof(USHORT));
+			if (desc->dsc_length < sizeof(USHORT))
+				return FALSE;
 			vary* v = reinterpret_cast<vary*>(p);
 			if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(&v->vary_length)))
 			{
@@ -212,6 +213,8 @@ bool_t xdr_datum( XDR* xdrs, const dsc* desc, UCHAR* buffer)
 	    {
 			//SSHORT n;
 			USHORT n;
+			if (desc->dsc_length < 1)
+				return FALSE;
 			if (xdrs->x_op == XDR_ENCODE)
 			{
 				n = MIN(static_cast<ULONG>(strlen(reinterpret_cast<char*>(p))), (ULONG)(desc->dsc_length - 1));
