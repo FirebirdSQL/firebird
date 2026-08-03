@@ -280,7 +280,7 @@ namespace
 				PathName file(par->value.ToPathName());
 				if (file.empty())
 				{
-					gds__log("Alias %s has no value, ignored", par->name.data());
+					gds__log("Alias %s has no value, ignored", par->name.c_str());
 					continue;
 				}
 
