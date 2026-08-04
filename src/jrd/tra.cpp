@@ -4112,6 +4112,20 @@ void jrd_tra::rollbackToSavepoint(thread_db* tdbb, SavNumber number)
 }
 
 
+void jrd_tra::discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId)
+{
+	fb_assert(relation);
+	fb_assert(relation->getPermanent()->rel_flags & REL_temp_frame);
+	fb_assert(tempInstanceId);
+
+	for (auto transaction = this; transaction; transaction = transaction->tra_outer)
+	{
+		for (Savepoint::Iterator iter(transaction->tra_save_point); *iter; ++iter)
+			(*iter)->discardTempFrameActions(relation, tempInstanceId);
+	}
+}
+
+
 void jrd_tra::releaseSavepoint(thread_db* tdbb)
 /**************************************
  *

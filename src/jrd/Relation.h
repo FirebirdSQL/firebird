@@ -871,8 +871,9 @@ public:
 		return rel_indices.erase(tdbb, id);
 	}
 
-	Lock*		rel_partners_lock;		// partners lock
-	GCLock		rel_gc_lock;			// garbage collection lock
+	Firebird::Mutex rel_scan_partners_mutex;
+	Lock* rel_partners_lock;	// partners lock
+	GCLock rel_gc_lock;			// garbage collection lock
 
 	void releaseLock(thread_db* tdbb);
 

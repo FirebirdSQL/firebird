@@ -251,7 +251,7 @@ void VerbAction::mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* next
 		}
 	}
 
-	release(tdbb, transaction);
+	discard(transaction);
 }
 
 void VerbAction::undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks, VerbAction* preserveAction)
@@ -366,13 +366,11 @@ void VerbAction::undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,
 		delete rpb.rpb_record;
 	}
 
-	release(tdbb, transaction);
+	discard(transaction);
 }
 
-void VerbAction::release(thread_db* tdbb, jrd_tra* transaction)
+void VerbAction::discard(jrd_tra* transaction)
 {
-	AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, vct_temp_instance_id);
-
 	// Release resources used by this verb action
 
 	RecordBitmap::reset(vct_records);
@@ -439,23 +437,26 @@ void Savepoint::cleanupTempData()
 	for (VerbAction* action = m_actions; action; action = action->vct_next)
 	{
 		if (action->vct_relation->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_frame))
+			action->discard(m_transaction);
+	}
+}
+
+
+void Savepoint::discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId)
+{
+	for (auto actionPtr = &m_actions; *actionPtr;)
+	{
+		const auto action = *actionPtr;
+
+		if (action->vct_relation == relation && action->vct_temp_instance_id == tempInstanceId)
 		{
-			RecordBitmap::reset(action->vct_records);
-
-			if (action->vct_undo)
-			{
-				if (action->vct_undo->getFirst())
-				{
-					do
-					{
-						action->vct_undo->current().release(m_transaction);
-					} while (action->vct_undo->getNext());
-				}
-
-				delete action->vct_undo;
-				action->vct_undo = NULL;
-			}
+			action->discard(m_transaction);
+			*actionPtr = action->vct_next;
+			action->vct_next = m_freeActions;
+			m_freeActions = action;
 		}
+		else
+			actionPtr = &action->vct_next;
 	}
 }
 

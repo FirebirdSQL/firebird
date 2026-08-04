@@ -4296,6 +4296,8 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 
 	Attachment* attachment = tdbb->getAttachment();
 
+	MutexLockGuard guard(rel_scan_partners_mutex, FB_FUNCTION);
+
 	if (rel_flags & REL_check_partners)
 	{
 		LCK_lock(tdbb, rel_partners_lock, LCK_SR, LCK_WAIT);

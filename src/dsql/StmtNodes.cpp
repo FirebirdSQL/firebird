@@ -2160,7 +2160,38 @@ void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
 	if (relation)
 	{
 		const auto permanent = relation->getPermanent();
-		permanent->delPages(tdbb, request->getLocalTableInstanceId(tdbb));
+		const auto tempInstanceId = request->getLocalTableInstanceId(tdbb);
+		const auto transaction = request->req_transaction;
+
+		try
+		{
+			permanent->delPages(tdbb, tempInstanceId);
+
+			if (transaction)
+				transaction->discardTempFrameActions(relation, tempInstanceId);
+		}
+		catch (const Exception&)
+		{
+			fb_assert(false);
+
+			if (transaction)
+			{
+				try
+				{
+					transaction->discardTempFrameActions(relation, tempInstanceId);
+				}
+				catch (const Exception&)
+				{
+					// Preserve the original frame teardown error.
+					fb_assert(false);
+				}
+			}
+
+			for (auto current = transaction; current; current = current->tra_outer)
+				current->tra_flags |= TRA_invalidated;
+
+			throw;
+		}
 	}
 }
 

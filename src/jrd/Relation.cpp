@@ -191,7 +191,7 @@ int RelationPermanent::partners_ast_relation(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-		auto oldFlags = relation->rel_flags.fetch_or(REL_check_partners);
+		const auto oldFlags = relation->rel_flags.fetch_or(REL_check_partners);
 		if (!(oldFlags & REL_check_partners))
 			LCK_release(tdbb, lock);
 	}
@@ -248,10 +248,15 @@ Record* RelationPermanent::getGCRecord(thread_db* tdbb, const Format* const form
 
 void RelationPermanent::checkPartners(thread_db* tdbb)
 {
-	rel_flags |= REL_check_partners;
+	const auto oldFlags = rel_flags.fetch_or(REL_check_partners);
+	if (!(oldFlags & REL_check_partners))
+		LCK_release(tdbb, rel_partners_lock);
 
-	LCK_lock(tdbb, rel_partners_lock, LCK_EX, LCK_WAIT);
-	LCK_release(tdbb, rel_partners_lock);
+	Lock tempLock(tdbb, 0, LCK_rel_partners);
+	tempLock.setKey(rel_id);
+
+	if (LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT))
+		LCK_release(tdbb, &tempLock);
 }
 
 bool RelationPermanent::isReplicating(thread_db* tdbb)
@@ -689,19 +694,24 @@ PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
 
 Cached::Relation* RelationPermanent::newVersion(thread_db* tdbb, const QualifiedName& name)
 {
-	auto id = jrd_rel::getIdByName(tdbb, name);
-	if (id.has_value())
+	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::MINISCAN);
+
+	if (relation)
+		relation->newVersion(tdbb);
+	else
 	{
-		auto* relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
-		fb_assert(relation);
-
-		if (relation)
-			DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, id.value());
-
-		return relation;
+		auto id = jrd_rel::getIdByName(tdbb, name);
+		if (id.has_value())
+		{
+			relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
+			fb_assert(relation);
+		}
 	}
 
-	return nullptr;
+	if (relation)
+		DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, relation->getId());
+
+	return relation;
 }
 
 

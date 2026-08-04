@@ -407,6 +407,7 @@ public:
 	Savepoint* startSavepoint(bool root = false);
 	void rollbackSavepoint(thread_db* tdbb, bool preserveLocks = false);
 	void rollbackToSavepoint(thread_db* tdbb, SavNumber number);
+	void discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId);
 	void releaseSavepoint(thread_db* tdbb);
 	DbCreatorsList* getDbCreatorsList();
 	void checkBlob(thread_db* tdbb, const bid* blob_id, jrd_fld* fld, bool punt);

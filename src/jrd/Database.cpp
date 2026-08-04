@@ -970,7 +970,7 @@ namespace Jrd
 		bool rc = dbb_del_pages.findEx(
 			[relation](const DelPagesMarker& item) -> int
 			{
-				return std::greater{}(item.relation, relation);
+				return item.relation == relation ? 0 : 1;
 			},
 			dummy);
 		fb_assert(!rc);
@@ -987,7 +987,7 @@ namespace Jrd
 		bool found = dbb_del_pages.findEx(
 			[relation](const DelPagesMarker& item) -> int
 			{
-				return std::greater{}(item.relation, relation);
+				return item.relation == relation ? 0 : 1;
 			},
 			pos);
 

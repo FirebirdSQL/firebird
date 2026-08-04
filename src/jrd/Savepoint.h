@@ -98,8 +98,7 @@ namespace Jrd
 		void garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SINT64 recordNumber,
 								   VerbAction* nextAction, Record* goingRecord);
 
-	private:
-		void release(thread_db* tdbb, jrd_tra* transaction);
+		void discard(jrd_tra* transaction);
 	};
 
 	// LTT undo item - stores original state of a LocalTemporaryTable for savepoint rollback
@@ -262,6 +261,7 @@ namespace Jrd
 			LocalTemporaryTable* original = nullptr);
 
 		void cleanupTempData();
+		void discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId);
 
 		Savepoint* rollback(thread_db* tdbb, Savepoint* prior = NULL, bool preserveLocks = false);
 		Savepoint* rollforward(thread_db* tdbb, Savepoint* prior = NULL);

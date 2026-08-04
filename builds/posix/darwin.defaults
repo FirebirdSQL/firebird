@@ -35,3 +35,15 @@ PLATFORM_FALLBACK=os/posix
 STATIC_CXX_SUPPORT = -lsupc++ $(GCCS) -lgcc_eh -lSystem
 
 INLINE_EDIT_SED:= -i ""
+
+# GNU objcopy cannot rewrite Mach-O object/archive files; llvm-objcopy can
+# (and supports --redefine-syms on Mach-O). Apple's own `nm` output is
+# compatible with the --defined-only/-g flags used by the comprehensive
+# symbol rename in the static client build.
+OBJCOPY = llvm-objcopy
+
+# Mach-O slim step. vers.sh's platform_darwin output already emits symbols
+# with a leading underscore, and the seeds flow through the script's
+# symbol-token parser unchanged. The slim itself is driven by Apple ld64's
+# -Wl,-map output (parsed by the same sed regex as the GNU -Wl,--cref path).
+STATIC_CLIENT_SLIM_MODE = darwin

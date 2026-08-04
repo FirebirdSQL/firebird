@@ -1131,32 +1131,16 @@ public:
 
 	Versioned* getVersioned(thread_db* tdbb, MetaId id, ObjectBase::Flag fl)
 	{
-//		In theory that should be endless cycle - object may arrive/disappear again and again.
-//		But in order to faster find devel problems we run it very limited number of times.
-#ifdef DEV_BUILD
-		for (int i = 0; i < 2; ++i)
-#else
-		for (;;)
-#endif
-		{
-			auto ptr = getDataPointer(id);
-			if (ptr)
-			{
-				StoredElement* data = ptr->load(atomics::memory_order_acquire);
-				if (data)
-					return data->getVersioned(tdbb, fl);
-			}
+		StoredElement* data = nullptr;
 
-			if (!(fl & CacheFlag::AUTOCREATE))
-				return nullptr;
+		SubArrayData* ptr = getDataPointer(id);
+		if (ptr)
+			data = ptr->load(atomics::memory_order_relaxed);
 
-			auto val = makeObject(tdbb, id, fl);
-			if (val)
-				return val;
-		}
-#ifdef DEV_BUILD
-		(Firebird::Arg::Gds(isc_random) << "Object suddenly disappeared").raise();
-#endif
+		if ((!data) && (fl & CacheFlag::AUTOCREATE))
+			data = ensurePermanent(tdbb, id);
+
+		return data ? data->getVersioned(tdbb, fl) : nullptr;
 	}
 
 	StoredElement* erase(thread_db* tdbb, MetaId id)
