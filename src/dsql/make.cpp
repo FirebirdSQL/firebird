@@ -337,30 +337,6 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 	return literal;
 }
 
-static bool isRelativeDateTimeString(const dsc* desc)
-{
-	const char* p = reinterpret_cast<const char*>(desc->dsc_address);
-	const char* end = p + desc->dsc_length;
-
-	while (p < end && (*p == ' ' || *p == '\t'))
-		++p;
-	while (end > p && (end[-1] == ' ' || end[-1] == '\t'))
-		--end;
-
-	const auto equalsWord = [&](const char* word)
-	{
-		const char* q = p;
-		while (q < end && *word && UPPER7(*q) == *word)
-		{
-			++q;
-			++word;
-		}
-		return q == end && !*word;
-	};
-
-	return equalsWord("NOW") || equalsWord("TODAY") ||
-		equalsWord("TOMORROW") || equalsWord("YESTERDAY");
-}
 
 ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* reference)
 {
@@ -406,8 +382,11 @@ ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* referenc
 	case CONSTANT_DATE:
 	case CONSTANT_TIME:
 	case CONSTANT_TIMESTAMP:
-		if (isRelativeDateTimeString(&from->litDesc))
+		if (CVT_get_special_datetime(reinterpret_cast<const char*>(from->litDesc.dsc_address),
+				from->litDesc.dsc_length) != SpecialDateTime::NONE)
+		{
 			return nullptr;
+		}
 		break;
 	default:
 		break;
