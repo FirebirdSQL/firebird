@@ -646,6 +646,7 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 		*tdbb->getDefaultPool());
 
 	node->tableNumber = tableNumber;
+	node->outerDecl = csb->outerLocalTablesMap.exist(tableNumber);
 
 	AutoPtr<string> aliasString(FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool));
 	csb->csb_blr_reader.getString(*aliasString);
@@ -666,6 +667,8 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 
 		csb->csb_rpt[node->stream].csb_format = csb->csb_localTables[tableNumber]->format;
 		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+		csb->csb_rpt[node->stream].csb_local_table_number = tableNumber;
+		csb->csb_rpt[node->stream].csb_outer_local_table = node->outerDecl;
 	}
 
 	return node;
@@ -677,6 +680,7 @@ string LocalTableSourceNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, alias);
 	NODE_PRINT(printer, tableNumber);
+	NODE_PRINT(printer, outerDecl);
 	NODE_PRINT(printer, context);
 
 	return "LocalTableSourceNode";
@@ -715,6 +719,9 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 	copier.remap[stream] = newSource->stream;
 
 	newSource->context = context;
+	newSource->alias = alias;
+	newSource->tableNumber = tableNumber;
+	newSource->outerDecl = outerDecl;
 
 	if (tableNumber >= copier.csb->csb_localTables.getCount() || !copier.csb->csb_localTables[tableNumber])
 		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
@@ -723,6 +730,8 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 
 	element->csb_format = copier.csb->csb_localTables[tableNumber]->format;
 	element->csb_view_stream = copier.remap[0];
+	element->csb_local_table_number = tableNumber;
+	element->csb_outer_local_table = outerDecl;
 
 	if (alias.hasData())
 	{
@@ -759,7 +768,7 @@ RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, Optimizer* opt, boo
 
 	auto localTable = csb->csb_localTables[tableNumber];
 
-	return FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableStream(csb, stream, localTable);
+	return FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableStream(csb, stream, localTable, outerDecl);
 }
 
 
@@ -2647,6 +2656,7 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				{
 					case WindowClause::FrameExtent::Unit::RANGE:
 					case WindowClause::FrameExtent::Unit::ROWS:
+					case WindowClause::FrameExtent::Unit::GROUPS:
 						break;
 
 					default:
@@ -2656,11 +2666,6 @@ void WindowSourceNode::parseWindow(thread_db* tdbb, CompilerScratch* csb)
 				break;
 
 			case blr_window_win_exclusion:
-				//// TODO: CORE-5338 - write code for execution.
-				PAR_error(csb,
-					Arg::Gds(isc_wish_list) <<
-					Arg::Gds(isc_random) << "window EXCLUDE clause");
-
 				window.exclusion = (WindowClause::Exclusion) csb->csb_blr_reader.getByte();
 
 				switch (window.exclusion)
@@ -3642,13 +3647,16 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 	fb_assert(specialJoins.hasData());
 
 	// Create joins between the original node and detected joinable nodes.
-	// Preserve FIRST/SKIP nodes at their original position, i.e. outside semi-joins.
+	// Preserve FIRST/SKIP/DISTINCT nodes at their original position, i.e. outside semi-joins.
 
 	const auto first = rse_first;
 	rse_first = nullptr;
 
 	const auto skip = rse_skip;
 	rse_skip = nullptr;
+
+	const auto projection = rse_projection;
+	rse_projection = nullptr;
 
 	const auto orgFlags = flags;
 	flags = 0;
@@ -3670,7 +3678,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		rse = newRse;
 	}
 
-	if (first || skip)
+	if (first || skip || projection)
 	{
 		const auto newRse = FB_NEW_POOL(*tdbb->getDefaultPool())
 			RseNode(*tdbb->getDefaultPool());
@@ -3679,6 +3687,7 @@ RseNode* RseNode::processPossibleJoins(thread_db* tdbb, CompilerScratch* csb)
 		newRse->rse_jointype = INNER_JOIN;
 		newRse->rse_first = first;
 		newRse->rse_skip = skip;
+		newRse->rse_projection = projection;
 
 		rse = newRse;
 	}
@@ -4529,7 +4538,11 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		relName.object = tblBasedFunNode->dsqlName;
 		relAlias = tblBasedFunNode->alias.c_str();
 	}
-	//// TODO: LocalTableSourceNode
+	else if (const auto localTableNode = nodeAs<LocalTableSourceNode>(source))
+	{
+		fb_assert(localTableNode->dsqlContext);
+		return source;
+	}
 	else
 		fb_assert(false);
 

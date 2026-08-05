@@ -101,6 +101,7 @@ TYPE("COLLATION", obj_collation, nam_obj_type)
 TYPE("PACKAGE", obj_package_header, nam_obj_type)
 TYPE("PACKAGE BODY", obj_package_body, nam_obj_type)
 TYPE("INDEX_CONDITION", obj_index_condition, nam_obj_type)
+TYPE("SCHEMA", obj_schema, nam_obj_type)
 
 TYPE("LIMBO", 1, nam_trans_state)
 TYPE("COMMITTED", 2, nam_trans_state)
@@ -191,6 +192,9 @@ TYPE("LEGACY_STYLE", 1, nam_legacy_flag)
 
 TYPE("NON_DETERMINISTIC", 0, nam_deterministic_flag)
 TYPE("DETERMINISTIC", 1, nam_deterministic_flag)
+
+TYPE("STANDARD", 0, nam_aggregate_flag)
+TYPE("AGGREGATE", 1, nam_aggregate_flag)
 
 TYPE("USER", 0, nam_map_to_type)
 TYPE("ROLE", 1, nam_map_to_type)

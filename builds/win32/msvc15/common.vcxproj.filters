@@ -141,6 +141,9 @@
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp">
       <Filter>classes</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\ThreadCleanup.cpp">
+      <Filter>classes</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp">
       <Filter>classes</Filter>
     </ClCompile>
@@ -476,6 +479,9 @@
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\ThreadCleanup.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -579,6 +585,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\DecFloat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\DeindentedStr.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\BatchCompletionState.h">

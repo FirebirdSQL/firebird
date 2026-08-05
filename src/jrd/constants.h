@@ -139,6 +139,7 @@ inline constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
+inline constexpr const char* DATABASE_CLASS				= "SQL$DATABASE";
 inline constexpr const char* DEFAULT_CLASS				= "SQL$DEFAULT";
 inline constexpr const char* SQL_SECCLASS_GENERATOR		= "RDB$SECURITY_CLASS";
 inline constexpr const char* SQL_SECCLASS_PREFIX		= "SQL$";
@@ -155,6 +156,8 @@ inline constexpr int GEN_SECCLASS_PREFIX_LEN			= 4;
 inline constexpr const char* PROCEDURES_GENERATOR = "RDB$PROCEDURES";
 inline constexpr const char* FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
 inline constexpr const char* PACKAGES_GENERATOR = "RDB$PACKAGES";
+
+inline constexpr SLONG RELATIONS_GENERATOR = 13;
 
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
 inline constexpr const char* IMPLICIT_INTEGRITY_PREFIX = "INTEG_";

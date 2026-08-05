@@ -55,7 +55,7 @@ void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
 
 [[noreturn]] void Resources::outdated()
 {
-	ERR_post(Arg::Gds(isc_random) << "Statement format outdated, need to be reprepared");
+	ERR_post(Arg::Gds(isc_old_format));
 }
 
 Resources::~Resources()
@@ -72,7 +72,9 @@ jrd_rel* CachedResource<jrd_rel, RelationPermanent>::operator()(thread_db* tdbb)
 
 void Format::hash(Firebird::sha512& digest) const
 {
-	// Here is supposed that in fmt_desc (i.e. Firebird::Array) all elements are located
+	static_assert(std::has_unique_object_representations_v<dsc>);
+
+	// Here is also supposed that in fmt_desc (i.e. Firebird::Array) all elements are located
 	// one after another starting with begin() position.
 	// If that became wrong this function to be modified.
 

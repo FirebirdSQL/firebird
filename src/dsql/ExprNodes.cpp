@@ -26,6 +26,7 @@
 #include "../common/classes/FpeControl.h"
 #include "../common/classes/VaryStr.h"
 #include "../common/CvtFormat.h"
+#include "../dsql/AggNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/BoolNodes.h"
 #include "../dsql/StmtNodes.h"
@@ -6469,7 +6470,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 	// Use context to check conflicts beween <relation>.<field> and <package>.<constant>
 	dsql_ctx packageContext(dsqlScratch->getPool());
-	{ // Consatnts
+	{ // Constants
 
 		QualifiedName constantName(dsqlName,
 			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : dsqlScratch->package.schema,
@@ -6479,7 +6480,8 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		{
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant);
 
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantName))
+			dsc constantDsc{};
+			if (PackageReferenceNode::constantExists(tdbb, constantName, &constantDsc))
 			{
 				// Alias is a package name, not a constant
 				packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
@@ -6487,7 +6489,8 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 				ambiguousCtxStack.push(&packageContext);
 
 				MemoryPool& pool = dsqlScratch->getPool();
-				node = FB_NEW_POOL(pool) PackageReferenceNode(pool, constantName, blr_pkg_reference_to_constant);
+				node = FB_NEW_POOL(pool) PackageReferenceNode(pool,
+					constantName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 	}
@@ -6680,7 +6683,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlIndices)
 		dsqlScratch->appendUChar(blr_index);
 
-	if (DDL_ids(dsqlScratch))
+	if (DDL_ids(dsqlScratch) ||
+		(dsqlContext->ctx_relation && (dsqlContext->ctx_relation->rel_flags & REL_ltt_declared)))
 	{
 		dsqlScratch->appendUChar(blr_fid);
 		GEN_stuff_context(dsqlScratch, dsqlContext);
@@ -7722,6 +7726,11 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 			l = csb->csb_blr_reader.getWord();
 			q = csb->csb_blr_reader.getPos();
+
+			unsigned int offset = csb->csb_blr_reader.getOffset();
+			if (offset + l > csb->csb_blr_reader.getLength())
+				(Arg::Gds(isc_invalid_blr) << Arg::Num(offset)).raise();
+
 			SSHORT scale = 0;
 			UCHAR dtype = CVT_get_numeric(q, l, &scale, p);
 			node->litDesc.dsc_dtype = dtype;
@@ -9435,7 +9444,7 @@ WindowClause* WindowClause::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowName)
+OverNode::OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, const MetaName* aWindowName)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_OVER>(pool),
 	  aggExpr(aAggExpr),
 	  windowName(aWindowName),
@@ -9443,7 +9452,7 @@ OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, const MetaName* aWindowN
 {
 }
 
-OverNode::OverNode(MemoryPool& pool, AggNode* aAggExpr, WindowClause* aWindow)
+OverNode::OverNode(MemoryPool& pool, ValueExprNode* aAggExpr, WindowClause* aWindow)
 	: TypedNode<ValueExprNode, ExprNode::TYPE_OVER>(pool),
 	  aggExpr(aAggExpr),
 	  windowName(NULL),
@@ -9627,18 +9636,27 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	else
 		refWindow = window;
 
-	OverNode* node = FB_NEW_POOL(dsqlScratch->getPool()) OverNode(dsqlScratch->getPool(),
-		static_cast<AggNode*>(doDsqlPass(dsqlScratch, aggExpr)), doDsqlPass(dsqlScratch, refWindow));
+	ValueExprNode* const compiledAggExpr = doDsqlPass(dsqlScratch, aggExpr);
+	const auto aggNode = nodeAs<AggNode>(compiledAggExpr);
 
-	const AggNode* aggNode = nodeAs<AggNode>(node->aggExpr);
+	if (!aggNode)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_dsql_command_err));
+	}
+
+	OverNode* node = FB_NEW_POOL(dsqlScratch->getPool()) OverNode(dsqlScratch->getPool(),
+		compiledAggExpr, doDsqlPass(dsqlScratch, refWindow));
 
 	if (node->window &&
-		node->window->extent &&
 		aggNode &&
+		(node->window->extent || node->window->exclusion != WindowClause::Exclusion::NO_OTHERS) &&
 		(aggNode->getCapabilities() & AggNode::CAP_RESPECTS_WINDOW_FRAME) !=
 			AggNode::CAP_RESPECTS_WINDOW_FRAME)
 	{
-		node->window->extent = WindowClause::FrameExtent::createDefault(dsqlScratch->getPool());
+		if (node->window->extent)
+			node->window->extent = WindowClause::FrameExtent::createDefault(dsqlScratch->getPool());
+
 		node->window->exclusion = WindowClause::Exclusion::NO_OTHERS;
 	}
 
@@ -13352,6 +13370,7 @@ string UdfCallNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, args);
+	NODE_PRINT(printer, dsqlAggFilter);
 
 	return "UdfCallNode";
 }
@@ -13466,6 +13485,7 @@ ValueExprNode* UdfCallNode::copy(thread_db* tdbb, NodeCopier& copier) const
 {
 	UdfCallNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) UdfCallNode(*tdbb->getDefaultPool(), name);
 	node->args = copier.copy(tdbb, args);
+	node->dsqlAggFilter = copier.copy(tdbb, dsqlAggFilter);
 
 	if (isSubRoutine)
 		node->function = function;
@@ -13485,7 +13505,10 @@ bool UdfCallNode::dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* ot
 
 	const UdfCallNode* otherNode = nodeAs<UdfCallNode>(other);
 
-	return name == otherNode->name;
+	return name == otherNode->name &&
+		((!dsqlAggFilter && !otherNode->dsqlAggFilter) ||
+			(dsqlAggFilter && otherNode->dsqlAggFilter &&
+				dsqlAggFilter->dsqlMatch(dsqlScratch, otherNode->dsqlAggFilter, ignoreMapCast)));
 }
 
 bool UdfCallNode::sameAs(const ExprNode* other, bool ignoreStreams) const
@@ -13496,7 +13519,10 @@ bool UdfCallNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	const UdfCallNode* const otherNode = nodeAs<UdfCallNode>(other);
 	fb_assert(otherNode);
 
-	return function && function == otherNode->function;
+	return function && function == otherNode->function &&
+		((!dsqlAggFilter && !otherNode->dsqlAggFilter) ||
+			(dsqlAggFilter && otherNode->dsqlAggFilter &&
+				dsqlAggFilter->sameAs(otherNode->dsqlAggFilter, ignoreStreams)));
 }
 
 ValueExprNode* UdfCallNode::pass1(thread_db* tdbb, CompilerScratch* csb)
@@ -13576,6 +13602,12 @@ ValueExprNode* UdfCallNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	if (f->isDefined() && !f->fun_entrypoint)
 	{
+		if (f->fun_aggregate)
+		{
+			status_exception::raise(
+				Arg::Gds(isc_dsql_agg_non_agg_context) << f->getName().toQuotedString());
+		}
+
 		if (f->getInputFormat() && f->getInputFormat()->fmt_count)
 		{
 			fb_assert(f->getInputFormat()->fmt_length);
@@ -13801,6 +13833,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		dsqlArgNames ?
 			FB_NEW_POOL(dsqlScratch->getPool()) ObjectsArray<MetaName>(dsqlScratch->getPool(), *dsqlArgNames) :
 			nullptr);
+	node->dsqlAggFilter = doDsqlPass(dsqlScratch, dsqlAggFilter);
 
 	node->dsqlFunction = function;
 
@@ -13846,6 +13879,22 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (mismatchStatus.hasData())
 			status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
+	}
+
+	if (node->dsqlFunction->udf_aggregate)
+	{
+		const auto aggNode = FB_NEW_POOL(dsqlScratch->getPool()) CustomAggNode(
+			dsqlScratch->getPool(), name, node->args);
+		aggNode->dsqlFunction = node->dsqlFunction;
+		aggNode->dsqlFilter = node->dsqlAggFilter;
+		aggNode->dsqlArgNames = node->dsqlArgNames;
+		return aggNode->AggNode::dsqlPass(dsqlScratch);
+	}
+
+	if (node->dsqlAggFilter)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+			Arg::Gds(isc_dsql_command_err));
 	}
 
 	return node;
@@ -14191,15 +14240,25 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName))
+
+			dsc constantDsc{};
+			if (PackageReferenceNode::constantExists(tdbb, constantFullName, &constantDsc))
 			{
 				delete node;
 				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(),
-					constantFullName, blr_pkg_reference_to_constant);
+					constantFullName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 
 		PASS1_field_unknown(NULL, dsqlName.toQuotedString().c_str(), this);
+	}
+
+	if (node->dsqlVar->type == dsql_var::TYPE_INPUT &&
+		dsqlScratch->aggregatePhase.has_value() &&
+		dsqlScratch->aggregatePhase != AggregateFunctionPhase::ACCUMULATE)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
+			Arg::Gds(isc_dsql_agg_param_not_accum));
 	}
 
 	return node;

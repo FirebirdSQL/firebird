@@ -41,7 +41,7 @@ namespace Jrd
 bool IDX_check_master_types(Jrd::thread_db*, Jrd::index_desc&, Jrd::jrd_rel*, int&);
 void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*,
 					  const Jrd::QualifiedName&, USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
-void IDX_mark_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId);
+bool IDX_mark_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId);
 void IDX_mark_temp(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, MetaId id, Jrd::Attachment* current,
 				   TraNumber tran);
 void IDX_delete_indices(Jrd::thread_db*, const Jrd::PageNumber&, bool);

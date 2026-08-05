@@ -443,13 +443,21 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		if (!(relation->rel_flags & REL_view) && !(relation->rel_flags & REL_external))
 		{
 			put_index(relation);
-			if (!(tdgbl->gbl_sw_meta || tdgbl->skipRelation(relation->rel_name)))
+			if (!tdgbl->gbl_sw_meta)
 			{
-				task.SetRelation(relation);
-				coord.runSync(&task);
+				if (tdgbl->skipRelation(relation->rel_name))
+				{
+					// msg 427 skipping data for table @1
+					BURP_verbose(427, relation->rel_name.toQuotedString());
+				}
+				else
+				{
+					task.SetRelation(relation);
+					coord.runSync(&task);
 
-				if (!task.getResult(NULL))
-					BURP_exit_local(FINI_ERROR, tdgbl);
+					if (!task.getResult(NULL))
+						BURP_exit_local(FINI_ERROR, tdgbl);
+				}
 			}
 		}
 
@@ -3043,6 +3051,8 @@ void write_functions()
 				put_int32(att_function_legacy_flag, X.RDB$LEGACY_FLAG);
 			if (!X.RDB$DETERMINISTIC_FLAG.NULL)
 				put_int32(att_function_deterministic_flag, X.RDB$DETERMINISTIC_FLAG);
+			if (!X.RDB$AGGREGATE_FLAG.NULL)
+				put_int32(att_function_aggregate_flag, X.RDB$AGGREGATE_FLAG);
 			if (!X.RDB$SQL_SECURITY.NULL)
 				put_boolean(att_function_sql_security, X.RDB$SQL_SECURITY);
 

@@ -12,7 +12,7 @@ Syntax:
     [ RETURNS ( <parameter list> ) ]
     EXTERNAL NAME '<external name>' ENGINE <engine>
 
-{ CREATE [ OR ALTER ] | RECREATE | ALTER } FUNCTION <name>
+{ CREATE [ OR ALTER ] | RECREATE | ALTER } [ AGGREGATE ] FUNCTION <name>
     [ <parameter list> ]
     RETURNS <data type>
     EXTERNAL NAME '<external name>' ENGINE <engine>
@@ -35,6 +35,12 @@ create function wait_event (
   event_name varchar(31) character set ascii
 ) returns integer
   external name 'udrcpp_example!wait_event'
+  engine udr;
+
+create aggregate function sum_positive (
+  n integer
+) returns integer
+  external name 'udrcpp_example!sum_positive'
   engine udr;
 
 create trigger persons_replicate
@@ -61,8 +67,8 @@ config example present below).
         path $(this)/udr
     </plugin_config>
 
-When Firebird wants to load an external routine (function, procedure or trigger) into its metadata
-cache, it gets (if not already done for the database*) the external engine through the plugin
+When Firebird wants to load an external routine (function, aggregate function, procedure or trigger)
+into its metadata cache, it gets (if not already done for the database*) the external engine through the plugin
 external engine factory and asks it for the routine. The plugin used is the one referenced by the
 attribute plugin_module of the external engine.
 
@@ -101,6 +107,9 @@ database through the ISC API.
 The UDR routines state (i.e., member variables) are shared between multiple invocations of the same
 routine until it's unloaded from the metadata cache. But note that it isolates the instances per
 session, different from the raw interface that shares instances by multiple sessions in SuperServer.
+UDR aggregate function state is different: member variables of the aggregate implementation object
+belong to one aggregate instance, i.e. one group or one window frame. The routine-level aggregate
+object is cached per session like other UDR routines.
 
 By default, UDR routines use the same character set specified by the client. They can modify it
 overriding the getCharSet method. The chosen character set is valid for communication with the ISC

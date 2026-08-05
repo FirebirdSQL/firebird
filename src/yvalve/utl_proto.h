@@ -87,9 +87,4 @@ void makePermanentVector(ISC_STATUS* v) noexcept;
 void UTL_get_ods_version(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
 	USHORT* ods_version, USHORT* ods_minor_version);
 
-namespace Why
-{
-	void threadCleanup();
-}
-
 #endif // JRD_UTL_PROTO_H

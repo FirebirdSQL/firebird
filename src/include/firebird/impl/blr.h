@@ -415,7 +415,12 @@
 #define blr_exec_subproc			(unsigned char) 204
 #define blr_subproc_decl			(unsigned char) 205
 #define blr_subproc					(unsigned char) 206
+
 #define blr_subfunc_decl			(unsigned char) 207
+
+#define blr_subfunc_decl_flag_deterministic	(unsigned char) 1
+#define blr_subfunc_decl_flag_aggregate		(unsigned char) 2
+
 #define blr_subfunc					(unsigned char) 208
 #define blr_record_version2			(unsigned char) 209
 #define blr_gen_id2					(unsigned char) 210 // NEXT VALUE FOR generator
@@ -456,7 +461,9 @@
 #define blr_dcl_local_table			(unsigned char) 218
 
 // subcodes of blr_dcl_local_table
-#define blr_dcl_local_table_format	(unsigned char) 1
+#define blr_dcl_local_table_format		(unsigned char) 1
+#define blr_dcl_local_table_ltt			(unsigned char) 2
+#define blr_dcl_local_table_field_names	(unsigned char) 3
 
 #define blr_local_table_truncate	(unsigned char) 219
 #define blr_local_table_id			(unsigned char) 220
@@ -464,6 +471,7 @@
 #define blr_outer_map				(unsigned char) 221
 #define blr_outer_map_message		(unsigned char) 1
 #define blr_outer_map_variable			(unsigned char) 2
+#define blr_outer_map_local_table		(unsigned char) 3
 
 // json functions (reserved)
 #define blr_json_function			(unsigned char) 222
@@ -535,5 +543,15 @@
 
 // Subcodes of blr_package_reference
 #define blr_pkg_reference_to_constant			(unsigned char) 1
+
+#define blr_invoke_agg_function		(unsigned char) 237
+#define blr_invoke_agg_function_id					(unsigned char) 1
+#define blr_invoke_agg_function_id_schema			(unsigned char) 1
+#define blr_invoke_agg_function_id_package			(unsigned char) 2
+#define blr_invoke_agg_function_id_name				(unsigned char) 3
+#define blr_invoke_agg_function_id_sub				(unsigned char) 4
+#define blr_invoke_agg_function_arg_names			(unsigned char) 2
+#define blr_invoke_agg_function_args					(unsigned char) 3
+#define blr_invoke_agg_function_filter				(unsigned char) 4
 
 #endif // FIREBIRD_IMPL_BLR_H

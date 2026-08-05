@@ -66,7 +66,7 @@ string CreateAlterTablespaceNode::internalPrint(NodePrinter& printer) const
 }
 
 
-void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void CreateAlterTablespaceNode::checkPermission(thread_db* tdbb)
 {
 	if (alter)
 		SCL_check_tablespace(tdbb, name, SCL_alter);
@@ -301,7 +301,7 @@ string DropTablespaceNode::internalPrint(NodePrinter& printer) const
 }
 
 
-void DropTablespaceNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropTablespaceNode::checkPermission(thread_db* tdbb)
 {
 	SCL_check_tablespace(tdbb, name, SCL_drop);
 }

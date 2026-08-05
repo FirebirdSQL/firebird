@@ -159,6 +159,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	std::optional<USHORT> rel_local_table_number;
 	bool rel_private = false;		// Packaged private relation
 };
 
@@ -169,7 +170,8 @@ enum rel_flags_vals {
 	REL_view			= 4, // relation is a view
 	REL_external		= 8, // relation is an external table
 	REL_creating		= 16,	// we are creating the bare relation in memory
-	REL_ltt_created		= 32	// relation is created local temporary table
+	REL_ltt_created		= 32,	// relation is created local temporary table
+	REL_ltt_declared	= 64	// relation is a PSQL declared local temporary table
 };
 
 class TypeClause
@@ -361,6 +363,7 @@ public:
 	QualifiedName udf_name;
 	Firebird::Array<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
+	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values
 };
 
@@ -485,6 +488,7 @@ public:
 	dsql_map* ctx_map = nullptr;				// Maps for aggregates and unions
 	RseNode* ctx_rse = nullptr;					// Sub-rse for aggregates
 	dsql_ctx* ctx_parent = nullptr;				// Parent context for aggregates
+	bool ctx_local_table_outer = false;			// Local table belongs to an outer PSQL scope
 	USHORT ctx_context = 0;						// Context id
 	USHORT ctx_recursive = 0;					// Secondary context id for recursive UNION (nobody referred to this context)
 	USHORT ctx_scope_level = 0;					// Subquery level within this request
@@ -507,6 +511,7 @@ public:
 		ctx_map = v.ctx_map;
 		ctx_rse = v.ctx_rse;
 		ctx_parent = v.ctx_parent;
+		ctx_local_table_outer = v.ctx_local_table_outer;
 		ctx_alias = v.ctx_alias;
 		ctx_context = v.ctx_context;
 		ctx_recursive = v.ctx_recursive;
@@ -838,6 +843,7 @@ struct SignatureParameter
 struct Signature
 {
 	const static unsigned FLAG_DETERMINISTIC = 0x01;
+	const static unsigned FLAG_AGGREGATE = 0x02;
 
 	Signature(MemoryPool& p, const MetaName& aName)
 		: name(p, aName),
@@ -902,6 +908,14 @@ struct Signature
 	Firebird::SortedObjectsArray<SignatureParameter> parameters;
 	unsigned flags = 0;
 	bool defined = false;
+};
+
+enum class AggregateFunctionPhase : UCHAR
+{
+	START = 0,
+	ACCUMULATE = 1,
+	GROUP = 2,
+	FINISH = 3
 };
 
 

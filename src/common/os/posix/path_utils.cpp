@@ -102,18 +102,18 @@ const PosixDirIterator& PosixDirIterator::operator++()
 	{
 		while ( (ent = os_utils::readdir(dir)) )
 		{
-			PathName entryname;
-			PathUtils::concatPath(entryname, dirPrefix, ent->d_name);
+			PathUtils::concatPath(file, dirPrefix, ent->d_name);
 
 			struct stat stats;
-			if (!stat(entryname.c_str(), &stats) && S_ISREG(stats.st_mode))
+			if (!stat(file.c_str(), &stats) && S_ISREG(stats.st_mode))
 				break;
 		}
 
-		if (ent)
-			PathUtils::concatPath(file, dirPrefix, ent->d_name);
-		else
+		if (!ent)
+		{
 			done = true;
+			file.clear();
+		}
 	}
 
 	return *this;

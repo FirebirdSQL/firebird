@@ -8238,6 +8238,12 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	dbb->dbb_mdc->cleanup(tdbb);
 	dbb->dbb_tablespaces.release(tdbb);
 
+	// Release cached metadata objects (procedures, functions, etc.) while
+	// the buffer manager and lock manager are still alive.
+	// This is needed because Statement::release may require page access
+	// (e.g. for LTT cleanup via IDX_delete_indices).
+	dbb->dbb_mdc->cleanup(tdbb);
+
 	LCK_fini(tdbb, LCK_OWNER_database);
 
 	CCH_fini(tdbb);
