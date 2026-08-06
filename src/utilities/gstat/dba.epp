@@ -156,7 +156,11 @@ struct dba_rel
 	FB_UINT64 rel_total_space;
 	USHORT rel_total_formats;
 	USHORT rel_used_formats;
+	USHORT rel_current_format;
 	SSHORT rel_id;
+	ULONG rel_opt_rec_cnt;
+	ULONG rel_opt_rec_len;
+	ULONG rel_opt_pag_cnt;
 	SCHAR rel_name[MAX_SQL_IDENTIFIER_SIZE];
 };
 
@@ -245,6 +249,7 @@ public:
 		relations = 0;
 		page_size = 0;
 		dp_per_pp = 0;
+		no_reserve = false;
 		max_records = 0;
 		page_number = 0;
 		buffer1 = 0;
@@ -263,6 +268,7 @@ public:
 	dba_rel* relations;
 	USHORT page_size;
 	USHORT dp_per_pp;
+	bool no_reserve;
 	USHORT max_records;
 	SLONG page_number;
 	pag* buffer1;
@@ -641,6 +647,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	fl_print_complete = true;
 
 	tddba->page_size = header->hdr_page_size;
+	tddba->no_reserve = header->hdr_flags & hdr_no_reserve;
 	tddba->dp_per_pp = Ods::dataPagesPerPP(tddba->page_size);
 	tddba->max_records = Ods::maxRecsPerDP(tddba->page_size);
 	tddba->buffer1 = (pag*) alloc(tddba->page_size);
@@ -850,6 +857,7 @@ int gstat(Firebird::UtilSvc* uSvc)
                 if (!(strcmp(relation->rel_name, X.RDB$RELATION_NAME)))
                 {
 					relation->rel_id = X.RDB$RELATION_ID;
+					relation->rel_current_format = X.RDB$FORMAT;
 					break;
                 }
 			}
@@ -862,6 +870,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 			relation->rel_next = tddba->relations;
 			tddba->relations = relation;
 			relation->rel_id = X.RDB$RELATION_ID;
+			relation->rel_current_format = X.RDB$FORMAT;
 			strcpy(relation->rel_name, X.RDB$RELATION_NAME);
 			fb_utils::exact_name(relation->rel_name);
 		}
@@ -1077,6 +1086,41 @@ int gstat(Firebird::UtilSvc* uSvc)
 				dba_print(false, 47, SafeArg() << relation->rel_bigrec_pages);
 				// msg 47: "    Big record pages: @1
 			}
+
+			// optimizer estimated cardinality
+			double opt_cardinality = 0;
+			if (relation->rel_opt_pag_cnt == 1)
+			{
+				opt_cardinality = relation->rel_opt_rec_cnt;
+			}
+			else
+			{
+				ULONG compressedSize = 0;
+				if (relation->rel_opt_rec_cnt)
+				{
+					compressedSize = relation->rel_opt_rec_len / relation->rel_opt_rec_cnt;
+				}
+				else
+				{
+					static const double DEFAULT_COMPRESSION_RATIO = 0.5;
+					for (dba_fmt* format = relation->rel_formats; format; format = format->fmt_next)
+					{
+						if (!compressedSize || format->fmt_number == relation->rel_current_format)
+						{
+							compressedSize = format->fmt_length * DEFAULT_COMPRESSION_RATIO;
+							break;
+						}
+					}
+				}
+
+				const ULONG recordSize = sizeof(Ods::data_page::dpg_repeat) +
+					ROUNDUP(compressedSize + RHD_SIZE, ODS_ALIGNMENT) +
+					(tddba->no_reserve ? 0 : RHDF_SIZE);
+
+				opt_cardinality = (double)relation->rel_opt_pag_cnt * (tddba->page_size - DPG_SIZE) / recordSize;
+			}
+			sprintf((char*)buf, "%.2f", opt_cardinality);
+			tddba->uSvc->printf(false, "    Optimizer cardinality esimation: %s\n", buf);
 
 			if (relation->rel_blobs_level_0 || relation->rel_blobs_level_1 || relation->rel_blobs_level_2)
 			{
@@ -1393,12 +1437,19 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 	}
 
 	USHORT space = page->dpg_count * sizeof(data_page::dpg_repeat);
+	const bool opt_data = (!(page->dpg_header.pag_flags & dpg_secondary) && !relation->rel_opt_rec_cnt);
 
 	const data_page::dpg_repeat* tail = page->dpg_rpt;
 	for (const data_page::dpg_repeat* const end = tail + page->dpg_count; tail < end; tail++)
 	{
 		if (tail->dpg_offset && tail->dpg_length)
 		{
+			if (opt_data)
+			{
+				relation->rel_opt_rec_cnt++;
+				relation->rel_opt_rec_len += tail->dpg_length - RHD_SIZE;
+			}
+
 			space += tail->dpg_length;
 
 			if (sw_record)
@@ -1458,6 +1509,9 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 	if (page->dpg_header.pag_flags & dpg_swept)
 		++relation->rel_swept_pages;
 	++relation->rel_fill_distribution[bucket];
+
+	if (page->dpg_count && !(page->dpg_header.pag_flags & dpg_secondary))
+		++relation->rel_opt_pag_cnt;
 
 	return true;
 }
