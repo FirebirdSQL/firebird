@@ -66,7 +66,6 @@ namespace
 	struct MessageSet
 	{
 		const int range[2];
-
 		const std::initializer_list<USHORT> list;
 
 		void print() const
