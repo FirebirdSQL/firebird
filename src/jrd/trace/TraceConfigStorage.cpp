@@ -179,7 +179,7 @@ void ConfigStorage::mutexBug(int state, const char* string)
 {
 	TEXT msg[BUFFER_TINY];
 	[[maybe_unused]] const int len = snprintf(msg, sizeof(msg), "ConfigStorage: mutex %s error, status = %d", string, state);
-	fb_assert(len >= 0 && len < static_cast<int>(sizeof(msg)));
+	fb_assert(len >= 0 && static_cast<size_t>(len) < sizeof(msg));
 	fb_utils::logAndDie(msg);
 }
 
