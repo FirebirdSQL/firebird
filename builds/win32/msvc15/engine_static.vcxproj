@@ -200,6 +200,13 @@
     <ClCompile Include="..\..\..\src\utilities\gsec\gsec.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gstat\ppg.cpp" />
     <ClCompile Include="..\..\..\src\utilities\nbackup\nbackup.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\JsonRuntime.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\path\JsonPath.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\path\JsonPathParser.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\path\JPathParser.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonTypes.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonScalar.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonDatetime.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\dsql\AggNodes.h" />
@@ -402,6 +409,12 @@
     <ClInclude Include="..\..\..\src\jrd\vio_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\VirtualTable.h" />
     <ClInclude Include="..\..\..\src\jrd\WorkerAttachment.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\JsonRuntime.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\path\JsonPath.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\path\JPathParser.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonTypes.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonScalar.h" />
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonDatetime.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\src\dsql\DdlNodes.epp" />
@@ -422,6 +435,9 @@
     <None Include="..\..\..\src\jrd\SystemTriggers.epp" />
     <None Include="..\..\..\src\jrd\Package.epp" />
     <None Include="..\..\..\src\utilities\gstat\dba.epp" />
+    <None Include="..\..\..\src\jrd\json\path\JsonPathParser.y">
+      <FileType>Document</FileType>
+    </None>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{B32D1B09-8161-451E-8D20-D30F26094EC0}</ProjectGuid>

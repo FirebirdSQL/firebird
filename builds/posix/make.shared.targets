@@ -61,6 +61,29 @@ $(OBJ)/.parse-gen-sentinel: $(SRC_ROOT)/dsql/parse.y $(SRC_ROOT)/dsql/btyacc_fb.
 	touch $@
 
 
+# This rule creates JsonPathParser.cpp from JsonPathParser.y
+
+$(OBJ)/jrd/json/path/JsonPathParser.cpp $(SRC_ROOT)/include/gen/jparse.h: $(OBJ)/.jparse-gen-sentinel ;
+
+$(OBJ)/.jparse-gen-sentinel: $(SRC_ROOT)/jrd/json/path/JsonPathParser.y $(SRC_ROOT)/jrd/json/path/btyacc_json.ske
+	sed -n '/%type .*/p' < $< > $(GEN_ROOT)/jtypes.y
+	sed 's/%type .*//' < $< > $(GEN_ROOT)/json_y.y
+	($(BTYACC) -l -d -b jpath -S $(SRC_ROOT)/jrd/json/path/btyacc_json.ske $(GEN_ROOT)/json_y.y; echo $$? > $(GEN_ROOT)/json_y.status) 2>&1 | tee $(GEN_ROOT)/json_y.txt
+	(exit `cat $(GEN_ROOT)/json_y.status`)
+	sed -n -e "s/.*btyacc: \(.*conflicts.*\)/\1/p" $(GEN_ROOT)/json_y.txt > $(TMP_ROOT)/jpath-parse-conflicts.txt
+	if [ ! -f $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt ] || ! cmp -s $(TMP_ROOT)/jpath-parse-conflicts.txt $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt; then \
+		cp $(TMP_ROOT)/jpath-parse-conflicts.txt $(SRC_ROOT)/jrd/json/path/jpath-parse-conflicts.txt 2>/dev/null || : ; \
+	fi
+	sed -i -e 's/#define \([A-Z].*\)/#define TOK_\1/' $(GEN_ROOT)/jpath_tab.h
+	sed -i -e 's/#define TOK_YY\(.*\)/#define YY\1/' $(GEN_ROOT)/jpath_tab.h
+	$(MV) $(GEN_ROOT)/jpath_tab.h $(TMP_ROOT)/include/gen/jparse.h
+	$(MV) $(GEN_ROOT)/jpath_tab.c $(OBJ)/jrd/json/path/JsonPathParser.cpp
+	touch $(OBJ)/jrd/json/path/JsonPathParser.cpp
+
+# Explicit dependence on generated header (jparser)
+$(OBJ)/jrd/json/path/JsonPath.o $(OBJ)/jrd/json/path/JsonPathParser.o $(OBJ)/jrd/RecordSourceNodes.o $(OBJ)/dsql/ExprNodes.o:  $(SRC_ROOT)/include/gen/jparse.h
+
+
 # gpre_meta needs a special boot build since there is no database.
 
 $(SRC_ROOT)/gpre/gpre_meta.cpp:  $(SRC_ROOT)/gpre/gpre_meta.epp

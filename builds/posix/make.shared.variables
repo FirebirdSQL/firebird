@@ -86,13 +86,18 @@ AllObjects += $(Chacha_Objects)
 Profiler_Objects:= $(call dirObjects,plugins/profiler)
 AllObjects += $(Profiler_Objects)
 
+JSON_Objects:=  $(call dirObjects,jrd/json) \
+				$(call dirObjects,jrd/json/path) \
+				$(call dirObjects,jrd/json/classes)
+
 # Engine
 Engine_Objects:= $(call dirObjects,jrd) $(call dirObjects,dsql) $(call dirObjects,jrd/extds) \
 				 $(call dirObjects,jrd/optimizer) $(call dirObjects,jrd/recsrc) $(call dirObjects,jrd/replication) \
 				 $(call dirObjects,jrd/sys-packages) $(call dirObjects,jrd/trace) \
-				 $(call makeObjects,lock,lock.cpp)
+				 $(call makeObjects,lock,lock.cpp) $(JSON_Objects)
 
-Engine_Test_Objects:= $(call dirObjects,jrd/tests) $(call dirObjects,lock/tests)
+Engine_Test_Objects:= $(call dirObjects,jrd/tests) $(call dirObjects,lock/tests) \
+	$(call dirObjects,jrd/tests/json) $(call dirObjects,jrd/tests/json/classes)
 
 AllObjects += $(Engine_Objects) $(Engine_Test_Objects)
 

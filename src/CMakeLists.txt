@@ -260,6 +260,34 @@ project_group(parse "Boot/Custom build steps")
 set_source_files_properties(dsql/parse.cpp include/gen/parse.h PROPERTIES GENERATED TRUE)
 
 
+set(jpath_parse_src
+    ${CMAKE_CURRENT_SOURCE_DIR}/jrd/json/path/JsonPathParser.y
+    ${CMAKE_CURRENT_SOURCE_DIR}/jrd/json/path/btyacc_json.ske
+)
+add_custom_command(
+    OUTPUT jpath_tab.h jpath_tab.c
+    DEPENDS
+        btyacc
+        ${jpath_parse_src}
+    COMMAND sed -n "/%type .*/p" ${CMAKE_CURRENT_SOURCE_DIR}/jrd/json/path/JsonPathParser.y > jtypes.y
+    COMMAND sed "s/%type .*//" ${CMAKE_CURRENT_SOURCE_DIR}/jrd/json/path/JsonPathParser.y > json_y.y
+    COMMAND btyacc -l -d -b jpath -S ${CMAKE_CURRENT_SOURCE_DIR}/jrd/json/path/btyacc_json.ske json_y.y
+
+    COMMAND sed -i "s/#define \\([A-Z].*\\)/#define TOK_\\1/g" jpath_tab.h
+    COMMAND sed -i "s/#define TOK_YY\\(.*\\)/#define YY\\1/g" jpath_tab.h
+
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different jpath_tab.h include/gen/jparse.h
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different jpath_tab.c dsql/JsonPathParser.cpp
+    COMMENT "Generating JsonPathParser.cpp, JsonPathParser.h"
+    VERBATIM
+)
+add_custom_target(parse_jpath
+    DEPENDS jpath_tab.h jpath_tab.c
+    SOURCES ${parse_src} jpath_tab.h jpath_tab.c
+)
+project_group(parse_jpath "Boot/Custom build steps")
+set_source_files_properties(dsql/JsonPathParser.cpp include/gen/jparse.h PROPERTIES GENERATED TRUE)
+
 ########################################
 # BUILD_STEP UpdateCloopInterfaces
 ########################################

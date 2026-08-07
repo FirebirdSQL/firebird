@@ -81,6 +81,16 @@ enum EXPECT_DATETIME
 	expect_sql_time_tz
 };
 
+namespace CvtStringContains
+{
+	typedef UCHAR TypeFlags;
+
+	constexpr TypeFlags NONE 	 = 0;
+	constexpr TypeFlags TIME 	 = 1 << 0;
+	constexpr TypeFlags DATE 	 = 1 << 1;
+	constexpr TypeFlags TIMEZONE = 1 << 2;
+}
+
 class Int128;
 
 } // namespace Firebird
@@ -103,7 +113,7 @@ USHORT CVT_get_string_ptr(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird
 USHORT CVT_get_string_ptr_common(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
 SINT64 CVT_get_int64(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 SQUAD CVT_get_quad(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
-void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const Firebird::EXPECT_DATETIME,
+void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, Firebird::CvtStringContains::TypeFlags*, const Firebird::EXPECT_DATETIME,
 	bool, Firebird::Callbacks*);
 const UCHAR* CVT_get_bytes(const dsc*, unsigned&);
 

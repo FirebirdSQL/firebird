@@ -262,11 +262,15 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 			// Now invoke the string_to_date/time/timestamp routines
 
 			ISC_TIMESTAMP_TZ ts;
-			bool tz;
-			CVT_string_to_datetime(&tmp, &ts, &tz, expect1, false, &EngineCallbacks::instance);
+			CvtStringContains::TypeFlags flags;
+			CVT_string_to_datetime(&tmp, &ts, &flags, expect1, false, &EngineCallbacks::instance);
+			bool tz = flags & CvtStringContains::TIMEZONE;
 
 			if (!tz && expect1 != expect2)
-				CVT_string_to_datetime(&tmp, &ts, &tz, expect2, false, &EngineCallbacks::instance);
+			{
+				CVT_string_to_datetime(&tmp, &ts, &flags, expect2, false, &EngineCallbacks::instance);
+				tz = flags & CvtStringContains::TIMEZONE;
+			}
 
 			switch (numeric_flag)
 			{
