@@ -1373,7 +1373,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 
 			for (int prefixLen = 1; prefixLen < len; ++prefixLen)
 			{
-				const Array<USHORT> str(strChars, prefixLen);
+				const Array<USHORT> str(reinterpret_cast<USHORT*>(strChars), prefixLen);
 				SortKeyArray* keySet = obj->contractionsPrefix.get(str);
 
 				if (!keySet)
