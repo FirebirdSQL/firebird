@@ -19,7 +19,7 @@
 # 2 Oct 2002, Nickolay Samofatov - Major cleanup
 
 COMMON_FLAGS=-ggdb -DFB_SEND_FLAGS=MSG_NOSIGNAL -DLINUX -DAMD64 -pipe -MMD -fPIC -fmessage-length=0 -fno-delete-null-pointer-checks
-CXXFLAGS=-std=gnu++03
+CXXFLAGS:=-std=gnu++03 $(CXXFLAGS)
 OPTIMIZE_FLAGS=-O3 -fno-omit-frame-pointer
 WARN_FLAGS=-Wall -Wno-switch -Wno-parentheses -Wno-unknown-pragmas -Wno-unused-variable -Wno-invalid-offsetof -Wno-narrowing -Wno-unused-local-typedefs -Wno-class-memaccess -Wno-template-id-cdtor
 
