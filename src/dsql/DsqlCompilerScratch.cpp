@@ -139,6 +139,15 @@ void DsqlCompilerScratch::putDtype(const TypeClause* field, bool useSubType)
 		return;
 	}
 
+	if (field->dimensions != 0)
+	{
+		fb_assert(field->dimensions > 0);
+		fb_assert(blr_dtypes[dtype_array] == blr_quad);
+		appendUChar(blr_dtypes[dtype_array]);
+		appendUChar(0);
+		return;
+	}
+
 	switch (field->dtype)
 	{
 		case dtype_cstring:
