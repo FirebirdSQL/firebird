@@ -9801,6 +9801,15 @@ static void send_packet(rem_port* port, PACKET* packet)
  *
  **************************************/
 
+	auto buffer_cleanup = [](RemoteXdr* xdr)
+	{
+		if (xdr == nullptr)
+			return;
+
+		xdr->x_handy += xdr->x_private - xdr->x_base;
+		xdr->x_private = xdr->x_base;
+	};
+
 	RefMutexGuard guard(*port->port_write_sync, FB_FUNCTION);
 
 	if (port->port_flags & PORT_detached || port->port_state == rem_port::BROKEN)
@@ -9823,8 +9832,12 @@ static void send_packet(rem_port* port, PACKET* packet)
 			if (!p->sent)
 			{
 				if (!port->send_partial(&p->packet))
+				{
+					buffer_cleanup(port->port_send);
+
 					(Arg::Gds(isc_net_write_err) <<
 					 Arg::Gds(isc_random) << "send_packet/send_partial").raise();
+				}
 
 				p->sent = true;
 			}
@@ -9833,7 +9846,11 @@ static void send_packet(rem_port* port, PACKET* packet)
 
 	if (!port->send(packet))
 	{
-		(Arg::Gds(isc_net_write_err)<< Arg::Gds(isc_random) << "send_packet/send").raise();
+		// Something went wrong in the send routine, so be sure to clear the port's internal buffer
+		// of rubbish packet.
+		buffer_cleanup(port->port_send);
+
+		(Arg::Gds(isc_net_write_err) << Arg::Gds(isc_random) << "send_packet/send").raise();
 	}
 }
 
