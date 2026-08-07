@@ -51,6 +51,7 @@
 #include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/cmp_proto.h"
+#include "../jrd/dfw_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_proto.h"
@@ -58,11 +59,12 @@
 #include "../jrd/idx_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/jrd_proto.h"
-#include "../jrd/lck.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/met.h"
 #include "../jrd/mov_proto.h"
+#include "../jrd/ProtectRelations.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/Collation.h"
 #include "../common/Task.h"
@@ -207,6 +209,286 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 
 
 namespace Jrd {
+
+// class IndexKeySet serves two purposes:
+// - collect a set of distinct keys
+// - avoid excess memory allocation for keys data
+
+class IndexKeySet
+{
+public:
+	IndexKeySet(MemoryPool& pool) :
+		m_buffer(pool),
+		m_keys(pool)
+	{
+	}
+
+	struct key
+	{
+		key() {}
+
+		explicit key(const temporary_key* temp) :
+			m_data(temp->key_data),
+			m_length(temp->key_length),
+			m_flags(temp->key_flags),
+			m_nulls(temp->key_nulls)
+		{
+		}
+
+		const UCHAR* m_data = nullptr;
+		USHORT m_length = 0;
+		USHORT m_flags = 0;
+		USHORT m_nulls = 0;		// nulls bitmap, see temporary_key
+
+		bool operator >(const key& other) const
+		{
+			const auto len = MIN(m_length, other.m_length);
+			const auto cmp = memcmp(m_data, other.m_data, len);
+			if (cmp > 0)
+				return true;
+			if (cmp < 0)
+				return false;
+			return m_length > other.m_length;
+		}
+
+		void copyTo(temporary_key* temp) const
+		{
+			temp->key_length = m_length;
+			temp->key_flags = m_flags;
+			temp->key_nulls = m_nulls;
+			memcpy(temp->key_data, m_data, m_length);
+		}
+	};
+
+	// Returns true if key were not present in the set and was added
+	bool put(temporary_key* temp, key** pKey = nullptr)
+	{
+		FB_SIZE_T pos;
+		key tmpKey(temp);
+
+		const bool found = m_keys.find(tmpKey, pos);
+		if (!found)
+		{
+			const UCHAR* const buff = m_buffer.begin();
+			const UCHAR* p = m_buffer.end();
+
+			m_buffer.append(tmpKey.m_data, tmpKey.m_length);
+			tmpKey.m_data = p;
+			m_keys.insert(pos, tmpKey);
+
+			// if buffer was reallocated, recalculate pointers in keys
+			if (buff != m_buffer.begin())
+			{
+				for (auto& k : m_keys)
+				{
+					const auto offset = k.m_data - buff;
+					k.m_data = m_buffer.begin() + offset;
+				}
+			}
+		}
+
+		if (pKey)
+			*pKey = &m_keys[pos];
+
+		return !found;
+	}
+
+	// Returns true if key was present in the set and was removed
+	bool remove(const temporary_key* temp)
+	{
+		FB_SIZE_T pos;
+		key tmpKey(temp);
+
+		if (m_keys.find(tmpKey, pos))
+		{
+			// m_data is not changed here to avoid recalculating pointers in remaining keys.
+			// It could be implemented later if needed.
+
+			m_keys.remove(pos);
+			return true;
+		}
+
+		return false;
+	}
+
+	key* find(const key* other)
+	{
+		FB_SIZE_T pos;
+
+		if (m_keys.find(*other, pos))
+			return &m_keys[pos];
+
+		return nullptr;
+	}
+
+	key* find(const temporary_key* temp)
+	{
+		key tmpKey(temp);
+		return find(&tmpKey);
+	}
+
+	const key* begin() const
+	{
+		return m_keys.isEmpty() ? nullptr : m_keys.begin();
+	}
+
+	const key* end() const
+	{
+		return m_keys.isEmpty() ? nullptr : m_keys.end();
+	}
+
+	FB_SIZE_T count() const
+	{
+		return m_keys.getCount();
+	}
+
+	void clear()
+	{
+		m_buffer.clear();
+		m_keys.clear();
+	}
+
+private:
+	HalfStaticArray<UCHAR, 1024> m_buffer;
+	SortedArray<key, InlineStorage<key, 8>> m_keys;
+};
+
+
+// class IdxCreationHelper contains code and data used to create index concurrently.
+
+class IdxCreationHelper
+{
+public:
+	IdxCreationHelper(thread_db* tdbb, IndexCreation& creation) :
+		m_tdbb(tdbb),
+		m_creation(creation),
+		m_gcLock(tdbb, m_creation.relation->getPermanent()),
+		m_protectRelations(tdbb, m_creation.transaction)
+	{
+		m_creation.helper = this;
+	}
+
+	~IdxCreationHelper()
+	{
+		m_creation.helper = nullptr;
+	}
+
+private:
+	thread_db* const m_tdbb;
+	IndexCreation& m_creation;
+	GCLock::Exclusive m_gcLock;
+	ProtectRelations m_protectRelations;
+	SnapshotHandle m_snapHandle = 0;
+	CommitNumber m_snapNumber = 0;
+	PageNumber m_tempRoot;
+
+public:
+	void beginPrepare()
+	{
+		jrd_tra* transaction = m_creation.transaction;
+
+		m_protectRelations.addRelation(m_creation.relation->getPermanent());
+
+		if (!lockWrites(transaction->getLockWait()))
+		{
+			ERR_post(Arg::Gds(isc_lock_timeout) << Arg::Str(m_creation.index_name.toQuotedString()));	// error message
+		}
+
+		Database* dbb = m_tdbb->getDatabase();
+		Attachment* att = transaction->tra_attachment;
+
+		m_snapHandle = dbb->dbb_tip_cache->beginSnapshot(m_tdbb, att->att_attachment_id, m_snapNumber);
+	}
+
+	void endPrepare()
+	{
+		fb_assert(m_tempRoot.getPageNum() == 0);
+		fb_assert(m_creation.index->idx_root != 0);
+
+		// A this point slot on IRT is marked with irt_complementary and irt_root points to the temp index.
+		// Save the root page of the complementary b-tree.
+
+		const auto relPages = m_creation.relation->getPages(m_tdbb);
+		m_tempRoot = (PageNumber(relPages->rel_pg_space_id, m_creation.index->idx_root));
+
+		// Set index id at RDB$INDICES.RDB$INDEX_ID
+
+		SelectivityList dummy(*m_tdbb->getDefaultPool());
+		dummy.grow(m_creation.index->idx_count);
+		DFW_update_index(m_creation.index_name, m_creation.index->idx_id, dummy, m_creation.transaction);
+
+		unlockWrites();
+	}
+
+	void releaseSnapshot()
+	{
+		Database* dbb = m_tdbb->getDatabase();
+
+		dbb->dbb_tip_cache->endSnapshot(m_tdbb, m_snapHandle,
+			m_creation.transaction->tra_attachment->att_attachment_id);
+		m_snapNumber = 0;
+	}
+
+	void mergeAndCleanup()
+	{
+		// A this point slot on IRT is marked with idx_temporary and irt_root points to the new index.
+		// Temp index root page was saved at m_tempRoot by BTR_create() earlier.
+		// Now merge temp index into new index.
+
+		BTR_merge_index(m_tdbb, m_creation.transaction, m_creation.relation, m_creation.index,
+			m_tempRoot);
+
+		unlockWrites();		// see lockWrites in BTR_create
+
+		// mark new index as ready for use
+		RelationPages* relPages = m_creation.relation->getPages(m_tdbb);
+		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+
+		index_root_page* root = (index_root_page*) CCH_FETCH(m_tdbb, &window, LCK_write, pag_root);
+		index_root_page::irt_repeat* irt_desc = root->irt_rpt + m_creation.index->idx_id;
+
+		CCH_MARK(m_tdbb, &window);
+
+		irt_desc->setConcurrentlyComplete(m_creation.transaction->tra_number);
+
+		CCH_RELEASE(m_tdbb, &window);
+
+		// release temp index
+		BTR_delete_tree(m_tdbb, m_creation.relation->getId(), m_creation.index->idx_id, m_tempRoot);
+	}
+
+	bool lockWrites(SSHORT wait)
+	{
+		bool ok = true;
+
+		ThreadStatusGuard guard(m_tdbb);
+
+		/*ok = */m_protectRelations.lock();
+
+		if (ok)
+			ok = m_gcLock.acquire(wait);
+
+		return ok;
+	}
+
+	void unlockWrites()
+	{
+		m_gcLock.release();
+		m_protectRelations.unlock();
+	}
+
+	CommitNumber getSnapNumber() const
+	{
+		return m_snapNumber;
+	}
+};
+
+
+bool IndexCreation::lockWrites(SSHORT wait)
+{
+	return helper->lockWrites(wait);
+}
+
 
 class IndexCreateTask : public Task
 {
@@ -395,7 +677,7 @@ public:
 				FPTR_REJECT_DUP_CALLBACK callback = NULL;
 				void* callback_arg = NULL;
 
-				if (m_idx.idx_flags & idx_unique)
+				if ((m_idx.idx_flags & idx_unique) && !creation->isConcurrently())
 				{
 					callback = duplicate_key;
 					callback_arg = creation;
@@ -484,7 +766,6 @@ bool IndexCreateTask::handler(WorkItem& _item)
 	jrd_tra* transaction = item->m_tra ? item->m_tra : m_creation->transaction;
 	Sort* scb = item->m_sort;
 
-	RecordStack stack;
 	record_param primary, secondary;
 	secondary.rpb_relation = relation;
 	primary.rpb_relation   = relation;
@@ -560,15 +841,25 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		delete csb;
 	}
 
-	// Checkout a garbage collect record block for fetching data.
-
-	AutoTempRecord gc_record(relation->getGCRecord(tdbb));
+	RecordStack stack(*transaction->tra_pool), free(*transaction->tra_pool);
 
 	if (m_flags & IS_LARGE_SCAN)
 	{
 		primary.getWindow(tdbb).win_flags = secondary.getWindow(tdbb).win_flags = WIN_large_scan;
 		primary.rpb_org_scans = secondary.rpb_org_scans = getPermanent(relation)->rel_scan_count++;
 	}
+
+	Cleanup cleanAfterScan([&]
+	{
+		while (stack.hasData())
+			delete stack.pop();
+
+		while (free.hasData())
+			delete free.pop();
+
+		if (m_flags & IS_LARGE_SCAN)
+			--relation->getPermanent()->rel_scan_count;
+	});
 
 	const bool isDescending = (idx->idx_flags & idx_descending);
 	const bool isPrimary = (idx->idx_flags & idx_primary);
@@ -584,6 +875,10 @@ bool IndexCreateTask::handler(WorkItem& _item)
 
 	IndexKey key(tdbb, relation, idx);
 	IndexCondition condition(tdbb, idx);
+	IndexKeySet keySet(*transaction->tra_pool);
+
+	// Used by GC in new (complementary) index by scan below
+	AutoSetRestore tdbbCreation(&tdbb->tdbb_indexCreation, m_creation->isConcurrently() ? m_creation : nullptr);
 
 	// Loop thru the relation computing index keys.  If there are old versions, find them, too.
 	while (DPM_next(tdbb, &primary, LCK_read, DPM_next_pointer_page))
@@ -600,20 +895,43 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		// If there are any back-versions left make an attempt at intermediate GC.
 		if (primary.rpb_b_page)
 		{
-			VIO_intermediate_gc(tdbb, &primary, transaction);
+			GCLock::Shared gcGuard(tdbb, relation->getPermanent());
+			if (!(attachment->att_flags & ATT_no_cleanup) && gcGuard.gcEnabled())
+			{
+				VIO_intermediate_gc(tdbb, &primary, transaction);
 
-			if (!DPM_get(tdbb, &primary, LCK_read))
-				continue;
+				if (!DPM_get(tdbb, &primary, LCK_read))
+					continue;
+			}
 		}
+
+		// concurrent index creation should ignore records inserted after prepare phase
+		auto skipRecord = [&](TraNumber recTran)
+		{
+			if (!m_creation->isConcurrently())
+				return false;
+
+			if (recTran == transaction->tra_number)
+				return false;
+
+			const auto cnRec = dbb->dbb_tip_cache->cacheState(recTran);
+			if (cnRec > 0 && cnRec <= m_creation->helper->getSnapNumber())
+				return false;	// committed
+
+			return true;
+		};
 
 		const bool deleted = primary.rpb_flags & rpb_deleted;
 		if (deleted)
 			CCH_RELEASE(tdbb, &primary.getWindow(tdbb));
 		else
 		{
-			primary.rpb_record = gc_record;
+			primary.rpb_record = free.hasData() ? free.pop() : nullptr;
 			VIO_data(tdbb, &primary, relation->rel_pool);
-			stack.push(primary.rpb_record);
+			if (skipRecord(primary.rpb_transaction_nr))
+				free.push(primary.rpb_record);
+			else
+				stack.push(primary.rpb_record);
 		}
 
 		secondary.rpb_page = primary.rpb_b_page;
@@ -625,16 +943,22 @@ bool IndexCreateTask::handler(WorkItem& _item)
 			if (!DPM_fetch(tdbb, &secondary, LCK_read))
 				break;			// must be garbage collected
 
-			secondary.rpb_record = NULL;
+			secondary.rpb_record = free.hasData() ? free.pop() : nullptr;
 			VIO_data(tdbb, &secondary, relation->rel_pool);
-			stack.push(secondary.rpb_record);
+			if (skipRecord(secondary.rpb_transaction_nr))
+				free.push(secondary.rpb_record);
+			else
+				stack.push(secondary.rpb_record);
 			secondary.rpb_page = secondary.rpb_b_page;
 			secondary.rpb_line = secondary.rpb_b_line;
 		}
 
+		keySet.clear();
 		while (!m_stop && stack.hasData())
 		{
 			Record* record = stack.pop();
+			free.push(record);
+
 			idx_e result = idx_e_ok;
 
 			const auto checkResult = condition.check(record, &result);
@@ -671,31 +995,25 @@ bool IndexCreateTask::handler(WorkItem& _item)
 				}
 			}
 
+			if ((result == idx_e_ok) && (key->key_length > m_creation->key_length))
+				result = idx_e_keytoobig;
+
 			if (result != idx_e_ok)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
-
-				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
-
 				context.raise(tdbb, result, record);
-			}
 
-			if (key->key_length > m_creation->key_length)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
+			const bool secondary = (stack.hasData() || deleted);
 
-				if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-					--getPermanent(relation)->rel_scan_count;
+			IndexKeySet::key* k = nullptr;
+			if (keySet.put(key, &k))
+				k->m_flags |= secondary ? key_secondary : 0;
+			else if (!secondary)
+				k->m_flags &= ~key_secondary;
+		}
 
-				context.raise(tdbb, idx_e_keytoobig, record);
-			}
+		for (const auto& k : keySet)
+		{
+			if (m_stop)
+				break;
 
 			UCHAR* p;
 			scb->put(tdbb, reinterpret_cast<ULONG**>(&p));
@@ -703,25 +1021,18 @@ bool IndexCreateTask::handler(WorkItem& _item)
 			// try to catch duplicates early
 
 			if (m_creation->duplicates.value() > 0)
-			{
-				do {
-					if (record != gc_record)
-						delete record;
-				} while (stack.hasData() && (record = stack.pop()));
-
 				break;
-			}
 
 			if (m_creation->nullIndLen)
-				*p++ = (key->key_length == 0) ? 0 : 1;
+				*p++ = (k.m_length == 0) ? 0 : 1;
 
-			if (key->key_length > 0)
+			if (k.m_length > 0)
 			{
-				memcpy(p, key->key_data, key->key_length);
-				p += key->key_length;
+				memcpy(p, k.m_data, k.m_length);
+				p += k.m_length;
 			}
 
-			int l = int(m_creation->key_length) - m_creation->nullIndLen - key->key_length;	// must be signed
+			int l = int(m_creation->key_length) - m_creation->nullIndLen - k.m_length;	// must be signed
 
 			if (l > 0)
 			{
@@ -729,14 +1040,13 @@ bool IndexCreateTask::handler(WorkItem& _item)
 				p += l;
 			}
 
-			const bool key_is_null = (key->key_nulls == (1 << idx->idx_count) - 1);
-
 			index_sort_record* isr = (index_sort_record*) p;
 			isr->isr_record_number = primary.rpb_number.getValue();
-			isr->isr_key_length = key->key_length;
-			isr->isr_flags = ((stack.hasData() || deleted) ? ISR_secondary : 0) | (key_is_null ? ISR_null : 0);
-			if (record != gc_record)
-				delete record;
+			isr->isr_key_length = k.m_length;
+			isr->isr_flags = (k.m_flags & key_secondary) ? ISR_secondary : 0;
+
+			if (k.m_nulls == (1 << idx->idx_count) - 1)
+				isr->isr_flags |= ISR_null;
 		}
 
 		if (m_stop)
@@ -747,11 +1057,6 @@ bool IndexCreateTask::handler(WorkItem& _item)
 
 		JRD_reschedule(tdbb);
 	}
-
-	gc_record.release();
-
-	if (primary.getWindow(tdbb).win_flags & WIN_large_scan)
-		--getPermanent(relation)->rel_scan_count;
 	}
 	catch (const Exception& ex)
 	{
@@ -902,14 +1207,20 @@ void IDX_create_index(thread_db* tdbb,
 	creation.nullIndLen = nullIndLen;
 	creation.dup_recno = -1;
 	creation.duplicates.setValue(0);
-	creation.forRollback = createMethod;
+	creation.createMethod = createMethod;
 
-	IndexCreateLock crtLock(tdbb, relation->getId());
+	IdxCreationHelper helper(tdbb, creation);
 
-	BTR_reserve_slot(tdbb, creation, crtLock);
+	if (creation.isConcurrently())
+		helper.beginPrepare();
+
+	BTR_reserve_slot(tdbb, creation);
 
 	if (index_id)
 		*index_id = idx->idx_id;
+
+	if (creation.isConcurrently())
+		helper.endPrepare();
 
 	sort_key_def key_desc[2];
 	// Key sort description
@@ -943,6 +1254,9 @@ void IDX_create_index(thread_db* tdbb,
 			local_status.raise();
 	}
 
+	if (creation.isConcurrently())
+		helper.releaseSnapshot();
+
 	sort.buildMergeTree();
 
 	if (creation.duplicates.value() == 0)
@@ -966,12 +1280,14 @@ void IDX_create_index(thread_db* tdbb,
 				VIO_data(tdbb, &primary, relation->rel_pool);
 				error_record = primary.rpb_record;
 			}
-
 		}
 
 		IndexErrorContext context(relation, idx, index_name);
 		context.raise(tdbb, idx_e_duplicate, error_record);
 	}
+
+	if (creation.isConcurrently())
+		helper.mergeAndCleanup();
 }
 
 
@@ -1150,6 +1466,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
  *
  **************************************/
 	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
 
 	index_desc idx;
 
@@ -1158,91 +1475,123 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 	insertion.iib_number = rpb->rpb_number;
 	insertion.iib_relation = rpb->rpb_relation;
 	insertion.iib_btr_level = 0;
+	insertion.iib_transaction = tdbb->getTransaction();
 
 	WIN window(get_root_page(tdbb, getPermanent(rpb->rpb_relation)));
 
 	auto* root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
-	for (USHORT i = 0; i < root->irt_count; i++)
+	for (USHORT id = 0; id < root->irt_count; id++)
 	{
-		if (BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, i))
+		if (BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id))
 		{
+			const bool isComplementary = (idx.idx_flags & irt_complementary) == irt_complementary;
+			const IndexCreation* creation = tdbb->tdbb_indexCreation;
+
+			// The current thread is creating an index
+			const bool creatingIndex = isComplementary && creation &&
+				(creation->relation->getId() == rpb->rpb_relation->getId()) &&
+				(creation->index->idx_id == id);
+
 			IndexErrorContext context(rpb->rpb_relation, &idx);
 			IndexCondition condition(tdbb, &idx);
 
 			AutoIndexExpression expression;
-			IndexKey key1(tdbb, rpb->rpb_relation, &idx, expression), key2(key1);
+			IndexKey key(tdbb, rpb->rpb_relation, &idx, expression);
 
-			for (RecordStack::iterator stack1(going); stack1.hasData(); ++stack1)
+			IndexKeySet keySet(*tdbb->getDefaultPool());
+
+			// Construct set of distinct keys from going records.
+			for (RecordStack::iterator gIter(going); gIter.hasData(); ++gIter)
 			{
-				Record* const rec1 = stack1.object();
+				Record* const rec = gIter.object();
 
-				if (!condition.check(rec1).asBool())
+				if (!condition.check(rec).asBool())
 					continue;
 
-				if (const auto result = key1.compose(rec1))
+				if (const auto result = key.compose(rec))
 				{
 					if (result == idx_e_conversion)
 						continue;
 
 					CCH_RELEASE(tdbb, &window);
-					context.raise(tdbb, result, rec1);
+					context.raise(tdbb, result, rec);
 				}
 
-				// Cancel index if there are duplicates in the remaining records
+				IndexKeySet::key* pkey = nullptr;
+				keySet.put(key, &pkey);
 
-				RecordStack::iterator stack2(stack1);
-				for (++stack2; stack2.hasData(); ++stack2)
+				if (creatingIndex && !(pkey->m_flags & key_newver))
 				{
-					Record* const rec2 = stack2.object();
+					// Check if record version was created after the index scan started.
 
-					if (const auto result = key2.compose(rec2))
-					{
-						if (result == idx_e_conversion)
-							continue;
-
-						CCH_RELEASE(tdbb, &window);
-						context.raise(tdbb, result, rec2);
-					}
-
-					if (key1 == key2)
-						break;
+					TraNumber recTran = rec->getTransactionNumber();
+					const auto cnRec = dbb->dbb_tip_cache->cacheState(recTran);
+					if (cnRec > creation->helper->getSnapNumber())
+						pkey->m_flags |= key_newver;	// key is present in new record version
 				}
+			}
 
-				if (stack2.hasData())
+			if (!keySet.count())
+				continue;
+
+			// Make sure the going keys doesn't exists in any record remaining
+			for (RecordStack::iterator sIter(staying); sIter.hasData(); ++sIter)
+			{
+				Record* const rec = sIter.object();
+
+				if (!condition.check(rec).asBool())
 					continue;
 
-				// Make sure the index doesn't exist in any record remaining
-
-				RecordStack::iterator stack3(staying);
-				for (; stack3.hasData(); ++stack3)
+				if (const auto result = key.compose(rec))
 				{
-					Record* const rec3 = stack3.object();
+					if (result == idx_e_conversion)
+						continue;
 
-					if (const auto result = key2.compose(rec3))
-					{
-						if (result == idx_e_conversion)
-							continue;
-
-						CCH_RELEASE(tdbb, &window);
-						context.raise(tdbb, result, rec3);
-					}
-
-					if (key1 == key2)
-						break;
+					CCH_RELEASE(tdbb, &window);
+					context.raise(tdbb, result, rec);
 				}
 
-				if (stack3.hasData())
+				keySet.remove(key);
+			}
+
+			for (auto goingKey = keySet.begin(); goingKey != keySet.end(); ++goingKey)
+			{
+				// Don't remove key if it is present in old versions only, because
+				// it is not inserted into the index by the scan.
+				if (creatingIndex && !(goingKey->m_flags & key_newver))
 					continue;
 
 				// Get rid of index node
 
-				insertion.iib_key = key1;
-				BTR_remove(tdbb, &window, &insertion);
-				root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+				goingKey->copyTo(key);
+				insertion.iib_key = key;
 
-				if (stack1.hasMore(1))
-					BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, i);
+				const auto recno = rpb->rpb_number.getValue();
+
+				// Complementary index uses lower bit of record number to mark deleted nodes
+				if (isComplementary)
+					insertion.iib_number.setValue(recno << 1);
+
+				BTR_remove(tdbb, &window, &insertion);
+
+				if (creatingIndex)
+					fb_assert(insertion.iib_removed);
+
+				if (isComplementary && !creatingIndex && !insertion.iib_removed)
+				{
+					root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+					idx.idx_root = root->irt_rpt[id].getRoot();
+
+					// set 'deleted' node marker in lower bit and insert key into b-tree
+					insertion.iib_number.increment();
+					insertion.iib_btr_level = 0;
+					BTR_insert(tdbb, &window, &insertion);
+				}
+				insertion.iib_number.setValue(recno);
+
+				root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+				idx.idx_root = root->irt_rpt[id].getRoot();
 			}
 		}
 	}
@@ -1595,6 +1944,71 @@ void IDX_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 		}
 	}
 }
+
+
+bool IDX_validate_unique(thread_db* tdbb, jrd_rel* relation, MetaId id)
+{
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
+	jrd_tra* const transaction = tdbb->getTransaction();
+
+	// We don't need to check active versions because they are already checked by
+	// corresponding INSERT or UPDATE.
+	// Thus RC RV transaction is ideal here - it skips active records and returns
+	// recently commited version if it exists.
+
+	AutoSaveRestore traFlags(&transaction->tra_flags);
+	transaction->tra_flags |= TRA_read_committed | TRA_rec_version | TRA_ignore_limbo;
+	transaction->tra_flags &= ~(TRA_read_consistency | TRA_degree3);
+
+	IndexDuplicateScanner scanner(relation, id);
+
+	RecordBitmap duplicates(*tdbb->getDefaultPool());
+	while (scanner.find(tdbb, duplicates))
+	{
+		if (duplicates.getFirst())
+		{
+			RecordStack stack;
+			record_param rpb;
+			rpb.rpb_relation = relation;
+
+			Cleanup cleanRecords([&]()
+			{
+				delete rpb.rpb_record;
+				while (stack.hasData())
+					delete stack.pop();
+			});
+
+			do {
+				rpb.rpb_number.setValue(duplicates.current());
+
+				if (!VIO_get(tdbb, &rpb, transaction, tdbb->getDefaultPool()))
+					continue;
+
+				if (!scanner.checkRecord(tdbb, &rpb))
+					continue;
+
+				index_desc* index = scanner.getIndexDesc();
+
+				for (RecordStack::iterator rec(stack); rec.hasData(); ++rec)
+				{
+					if (cmpRecordKeys(tdbb, rec.object(), relation, index,
+						rpb.rpb_record, relation, index))
+					{
+						IndexErrorContext context(relation, index);
+						context.raise(tdbb, idx_e_duplicate, rpb.rpb_record);
+					}
+				}
+
+				stack.push(rpb.rpb_record);
+				rpb.rpb_record = nullptr;
+			} while (duplicates.getNext());
+		}
+	}
+
+	return true;
+}
+
 
 static bool cmpRecordKeys(thread_db* tdbb,
 						  Record* rec1, jrd_rel* rel1, index_desc* idx1,
@@ -2067,8 +2481,18 @@ static idx_e insert_key(thread_db* tdbb,
 
 	// Insert the key into the index.  If the index is unique, btr will keep track of duplicates.
 
+	const bool isComplementary = (idx->idx_flags & irt_complementary);
+	const FB_UINT64 recno = insertion->iib_number.getValue();
+
+	// Complementary index uses lower bit of record number to mark deleted nodes
+	if (isComplementary)
+		insertion->iib_number.setValue(recno << 1);
+
 	insertion->iib_duplicates = NULL;
 	BTR_insert(tdbb, window_ptr, insertion);
+
+	if (isComplementary)
+		insertion->iib_number.setValue(recno);
 
 	if (insertion->iib_duplicates)
 	{

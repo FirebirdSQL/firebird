@@ -4735,7 +4735,8 @@ static void show_index(const QualifiedMetaString& relationName,
 	isqlGlob.printf(
 		"%s%s%s INDEX ON %s",
 		IUTILS_name_to_string(indexName).c_str(),
-		(unique_flag ? " UNIQUE" : ""),
+		(unique_flag & IDX_UNIQUE ? " UNIQUE" : ""),
+		(unique_flag & IDX_NOT_VALIDATED ? " NOT VALIDATED" : ""),
 		(index_type == 1 ? " DESCENDING" : ""), IUTILS_name_to_string(relationName).c_str());
 
 	// Get column names

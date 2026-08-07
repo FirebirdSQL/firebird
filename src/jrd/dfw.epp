@@ -513,49 +513,42 @@ void DFW_raiseRelationInUseError(const Cached::Relation* relation)
 void Jrd::ProtectRelations::relLock::takeLock(thread_db* tdbb, jrd_tra* transaction)
 {
 	m_lock = RLCK_transaction_relation_lock(tdbb, transaction, m_relation);
+	m_level = m_lock->lck_logical;
+	const auto physical = m_lock->lck_physical;		// lck_physical could be greater than lck_logical
 
-	m_release = (m_lock->lck_logical == LCK_none);
+	const auto wait = transaction->getLockWait();
+	bool locked = false;
 
-	bool inUse = false;
+	// Internal "compatible" locks requires special handling, details in lck.cpp
 
-	if (!m_release)
-	{
-		if ((m_lock->lck_logical < LCK_PR) &&
-			!LCK_convert(tdbb, m_lock, LCK_PR, transaction->getLockWait()))
-		{
-			inUse = true;
-		}
-	}
+	if (physical == LCK_none)
+		locked = LCK_lock(tdbb, m_lock, LCK_PR, wait);
+	else if (physical < LCK_PR)
+		locked = LCK_convert(tdbb, m_lock, LCK_PR, wait);
+	else if (physical == LCK_SW)
+		locked = LCK_convert(tdbb, m_lock, LCK_PW, wait);
 	else
 	{
-		if (!LCK_lock(tdbb, m_lock, LCK_PR, transaction->getLockWait()))
-			inUse = true;
+		fb_assert(physical == LCK_PR || physical >= LCK_PW);
+		locked = true;
 	}
 
-	if (inUse)
+	if (!locked)
 		DFW_raiseRelationInUseError(m_relation);
 }
 
 
 void Jrd::ProtectRelations::relLock::releaseLock(thread_db* tdbb, jrd_tra* transaction)
 {
-	if (!m_release)
-		return;
+	// Internal "compatible" locks requires special handling, details in lck.cpp
 
-	vec<Lock*>* vector = transaction->tra_relation_locks;
-	if (vector)
+	if (m_level)
 	{
-		vec<Lock*>::iterator lock = vector->begin();
-		for (ULONG i = 0; i < vector->count(); ++i, ++lock)
-		{
-			if (*lock == m_lock)
-			{
-				LCK_release(tdbb, m_lock);
-				*lock = NULL;
-				break;
-			}
-		}
+		m_lock->lck_logical = m_level;
+		LCK_downgrade(tdbb, m_lock);
 	}
+	else
+		LCK_release(tdbb, m_lock);
 }
 
 static void check_dependencies(thread_db* tdbb,

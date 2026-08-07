@@ -843,7 +843,7 @@ public:
 			dropTempPages(tdbb);
 	}
 
-	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
+	// void makeLocks(thread_db* tdbb, Cached::Relation* relation);		// hvlad: not implemented
 	static constexpr USHORT getRelLockKeyLength() noexcept;
 	Lock* createLock(thread_db* tdbb, lck_t, bool);
 	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);

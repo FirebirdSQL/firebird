@@ -2409,7 +2409,7 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 					IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
 					IND.RDB$PACKAGE_NAME MISSING AND
 					IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
-					IND.RDB$UNIQUE_FLAG = 1
+					IND.RDB$UNIQUE_FLAG = IDX_UNIQUE
 			{
 				const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
 
@@ -4327,7 +4327,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
-			IND.RDB$UNIQUE_FLAG = 1
+			IND.RDB$UNIQUE_FLAG = IDX_UNIQUE
 		{
 			const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
 
@@ -4364,7 +4364,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 		FOR(REQUEST_HANDLE request)
 			IDX IN RDB$INDICES CROSS
 			IND IN RDB$INDICES WITH
-			IDX.RDB$UNIQUE_FLAG = 1 AND
+			IDX.RDB$UNIQUE_FLAG = IDX_UNIQUE AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
