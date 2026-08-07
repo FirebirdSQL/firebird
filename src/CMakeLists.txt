@@ -39,8 +39,6 @@ set(epp_boot_files
     alice/alice_meta.epp
     gpre/std/gpre_meta.epp
     utilities/stats.epp
-    yvalve/array.epp
-    yvalve/blob.epp
     utilities/gstat/dba.epp
 )
 set(epp_boot_gds_files
@@ -56,11 +54,10 @@ set(epp_boot_gds_files
     jrd/met.epp
     jrd/scl.epp
     jrd/Function.epp
+    jrd/SystemTriggers.epp
 )
 set(epp_master_files
     auth/SecurityDatabase/LegacyManagement.epp
-    msgs/build_file.epp
-    misc/codes.epp
 )
 
 if (NOT CMAKE_CROSSCOMPILING)
@@ -88,16 +85,7 @@ epp_process(master  epp_master_files        ${BOOT_GPRE_CMD} -n -m)
 ########################################
 
 set(msgs_src
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/facilities2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/history2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/locales.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/messages2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/msg.sql
     ${CMAKE_CURRENT_SOURCE_DIR}/msgs/sqlstates.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/symbols2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/system_errors2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/transmsgs.de_DE2.sql
-    ${CMAKE_CURRENT_SOURCE_DIR}/msgs/transmsgs.fr_FR2.sql
 )
 set(databases_src
     ${CMAKE_CURRENT_SOURCE_DIR}/dbs/security.sql
@@ -143,7 +131,6 @@ add_custom_target(databases
     SOURCES
         ${databases_src}
 )
-add_dependencies_cc(databases msg_fdb)
 project_group(databases "Boot/Custom build steps")
 
 
@@ -154,77 +141,14 @@ project_group(databases "Boot/Custom build steps")
 add_custom_command(
     OUTPUT firebird.msg
     DEPENDS
-        build_msg
-        msg_fdb
+        build_file
     #
     COMMAND ${CMAKE_COMMAND} -E remove firebird.msg
-    COMMAND ${BUILD_MSG_CMD} -D msg.fdb -P ${CMAKE_CURRENT_BINARY_DIR}/ -F firebird.msg -L all
-    COMMAND ${BUILD_MSG_CMD} -D msg.fdb -P ${CMAKE_CURRENT_BINARY_DIR}/ -F firebird.msg
+    COMMAND ${BUILD_FILE_CMD} -F firebird.msg
     COMMAND ${CMAKE_COMMAND} -E copy_if_different firebird.msg ${output_dir}/firebird.msg
 )
-add_custom_command(
-    OUTPUT codes_headers.dummy
-    DEPENDS
-        codes
-        msg_fdb
-    COMMENT ""
-    #
-    COMMAND ${CMAKE_COMMAND} -E echo "" > codes_headers.dummy
-    COMMAND ${CMAKE_COMMAND} -E echo Building codes header...
-    COMMAND ${CODES_CMD} ${CMAKE_CURRENT_SOURCE_DIR}/include/gen ${CMAKE_SOURCE_DIR}/lang_helpers
-)
-add_custom_target(messages ALL DEPENDS firebird.msg codes_headers.dummy)
+add_custom_target(messages ALL DEPENDS firebird.msg)
 project_group(messages "Boot/Custom build steps")
-
-
-########################################
-# BUILD STEP msg_fdb
-########################################
-
-set(isql_exec_msg ${BOOT_ISQL_CMD} -q msg_.fdb -i ${CMAKE_CURRENT_SOURCE_DIR}/msgs)
-
-add_custom_command(
-    OUTPUT msg.fdb
-    VERBATIM
-    DEPENDS
-        boot_isql
-        boot_gfix
-        ${msgs_src}
-    #
-    COMMAND ${CMAKE_COMMAND} -E remove msg.fdb
-    COMMAND ${CMAKE_COMMAND} -E remove msg_.fdb
-    COMMAND ${CMAKE_COMMAND} -E echo "create database 'msg_.fdb';" > create_db_msg.sql
-    COMMAND ${BOOT_ISQL_CMD} -q -i create_db_msg.sql
-    COMMAND ${BOOT_GFIX_CMD} -write async msg_.fdb
-    COMMAND ${isql_exec_msg}/msg.sql
-    #
-    COMMAND echo loading facilities
-    COMMAND ${isql_exec_msg}/facilities2.sql
-    COMMAND echo loading sql states
-    COMMAND ${isql_exec_msg}/sqlstates.sql
-    COMMAND echo loading locales
-    COMMAND ${isql_exec_msg}/locales.sql
-    COMMAND echo loading history
-    COMMAND ${isql_exec_msg}/history2.sql
-    COMMAND echo loading messages
-    COMMAND ${isql_exec_msg}/messages2.sql
-    COMMAND echo loading symbols
-    COMMAND ${isql_exec_msg}/symbols2.sql
-    COMMAND echo loading system errors
-    COMMAND ${isql_exec_msg}/system_errors2.sql
-    COMMAND echo loading French translation
-    COMMAND ${isql_exec_msg}/transmsgs.fr_FR2.sql
-    COMMAND echo loading German translation
-    COMMAND ${isql_exec_msg}/transmsgs.de_DE2.sql
-    #
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different msg_.fdb msg.fdb
-)
-add_custom_target(msg_fdb
-    DEPENDS
-        boot_engine
-        msg.fdb
-)
-project_group(msg_fdb "Boot/Custom build steps")
 
 
 ########################################
@@ -335,6 +259,7 @@ add_epp_suffix(burp_generated_src master)
 if (NOT CMAKE_CROSSCOMPILING)
 
 add_library                 (boot_burp ${burp_src} ${burp_generated_src_boot})
+target_link_libraries		(boot_burp PUBLIC ${RE2_LIBRARIES})
 project_group               (boot_burp Boot)
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
@@ -345,7 +270,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 ########################################
 
 add_library                 (burp ${burp_src} ${burp_generated_src_master})
-
+target_link_libraries		(burp PUBLIC ${RE2_LIBRARIES})
 
 ########################################
 # LIBRARY common
@@ -360,10 +285,12 @@ if (APPLE)
 endif()
 
 add_library                 (common ${common_src} ${common_os_src} ${common_include})
-target_link_libraries       (common ${LIB_mpr} libtommath libtomcrypt decNumber)
+target_link_libraries       (common PUBLIC ${LIB_mpr} libtomcrypt decNumber
+								${RE2_LIBRARIES} ${BOOST_LIBRARIES} ${CDS_LIBRARIES})
+target_include_directories  (common PUBLIC ${BOOST_INCLUDE_DIRS})
 add_dependencies_cc         (common UpdateCloopInterfaces)
 if (UNIX)
-target_link_libraries       (common dl)
+target_link_libraries       (common PRIVATE dl)
 endif()
 
 
@@ -390,19 +317,13 @@ set(yvalve_src ${yvalve_src}
 add_src_win32(yvalve_src
     jrd/os/win32/ibinitdll.cpp
 )
-set(yvalve_generated_src
-    yvalve/array.epp
-    yvalve/blob.epp
-)
-add_epp_suffix(yvalve_generated_src boot)
-add_epp_suffix(yvalve_generated_src master)
 
 add_library                 (yvalve_common OBJECT ${yvalve_src} ${yvalve_include})
 add_dependencies_cc         (yvalve_common parse UpdateCloopInterfaces)
 
 if (NOT CMAKE_CROSSCOMPILING)
 
-add_library                 (boot_yvalve SHARED $<TARGET_OBJECTS:yvalve_common> ${yvalve_generated_src_boot} ${VERSION_RC})
+add_library                 (boot_yvalve SHARED $<TARGET_OBJECTS:yvalve_common> ${VERSION_RC})
 target_link_libraries       (boot_yvalve
     PRIVATE remote
     PRIVATE common
@@ -424,7 +345,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 # SHARED LIBRARY yvalve
 ########################################
 
-add_library                 (yvalve SHARED $<TARGET_OBJECTS:yvalve_common> ${yvalve_generated_src_master} ${VERSION_RC})
+add_library                 (yvalve SHARED $<TARGET_OBJECTS:yvalve_common> ${VERSION_RC})
 target_link_libraries       (yvalve
     PRIVATE remote
     PRIVATE common
@@ -452,6 +373,7 @@ file(GLOB engine_src
     "jrd/recsrc/*.cpp"
     "jrd/replication/*.cpp"
     "jrd/trace/*.cpp"
+    "jrd/sys-packages/*.cpp"
     "jrd/os/${OS_DIR}/*.cpp"
 )
 set(engine_src ${engine_src}
@@ -478,6 +400,7 @@ set(engine_generated_src
     jrd/ini.epp
     jrd/met.epp
     jrd/scl.epp
+    jrd/SystemTriggers.epp
     utilities/gstat/dba.epp
 )
 add_epp_suffix(engine_generated_src boot)
@@ -486,6 +409,8 @@ add_epp_suffix(engine_generated_src master)
 file(GLOB_RECURSE engine_include "dsql/*.h" "jrd/*.h" include/gen/iberror.h)
 
 add_library                 (engine_common ${engine_src} ${engine_include} ${parse_src})
+target_link_libraries		(engine_common PUBLIC ${RE2_LIBRARIES} ${BOOST_LIBRARIES} ${CDS_LIBRARIES})
+target_include_directories  (engine_common PUBLIC ${BOOST_INCLUDE_DIRS})
 add_dependencies_cc         (engine_common parse UpdateCloopInterfaces)
 
 if (NOT CMAKE_CROSSCOMPILING)
@@ -505,7 +430,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 ########################################
 
 add_library                 (engine SHARED ${engine_generated_src_master} ${VERSION_RC})
-target_link_libraries       (engine engine_common alice burp common yvalve)
+target_link_libraries       (engine PUBLIC engine_common alice burp common yvalve)
 set_target_properties       (engine PROPERTIES OUTPUT_NAME Engine14)
 set_output_directory        (engine plugins)
 set_exported_symbols        (engine fbplugin)
@@ -637,42 +562,21 @@ target_link_libraries       (gpre gpre_common common yvalve)
 
 
 ########################################
-# EXECUTABLE build_msg
+# EXECUTABLE build_file
 ########################################
 
-set(build_msg_generated_src
-    msgs/build_file.epp
+set(build_msg_src
+    msgs/build_file.cpp
 )
-add_epp_suffix(build_msg_generated_src master)
 
 if (NOT CMAKE_CROSSCOMPILING)
 
-add_executable              (build_msg ${build_msg_generated_src_master} ${VERSION_RC})
-target_link_libraries       (build_msg boot_yvalve)
-set_output_directory        (build_msg . CURRENT_DIR)
-project_group               (build_msg Boot)
+add_executable              (build_file ${build_msg_src} ${VERSION_RC})
+target_link_libraries       (build_file boot_yvalve libtommath)
+set_output_directory        (build_file . CURRENT_DIR)
+project_group               (build_file Boot)
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
-
-
-########################################
-# EXECUTABLE codes
-########################################
-
-set(codes_generated_src
-    misc/codes.epp
-)
-add_epp_suffix(codes_generated_src master)
-
-if (NOT CMAKE_CROSSCOMPILING)
-
-add_executable              (codes ${codes_generated_src_master} ${VERSION_RC})
-target_link_libraries       (codes boot_yvalve)
-set_output_directory        (codes . CURRENT_DIR)
-project_group               (codes Boot)
-
-endif() # if (NOT CMAKE_CROSSCOMPILING)
-
 
 ########################################
 # EXECUTABLE gstat
@@ -907,7 +811,6 @@ add_custom_target(copy_files
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/include/gen/iberror.h ${output_dir}/include/iberror.h
 )
 add_dependencies_cc     (copy_files databases)
-add_dependencies_unix_cc(copy_files makeHeader)
 project_group(copy_files "Custom build steps")
 
 # headers
@@ -994,8 +897,6 @@ if (UNIX)
 
     if (NOT CMAKE_CROSSCOMPILING)
 
-    add_executable          (makeHeader misc/makeHeader.cpp)
-    set_output_directory    (makeHeader . CURRENT_DIR)
     set(files
         ${CMAKE_SOURCE_DIR}/src/include/types_pub.h
         ${CMAKE_SOURCE_DIR}/src/include/consts_pub.h
@@ -1011,10 +912,6 @@ if (UNIX)
         add_custom_command(TARGET copy_files POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different ${F} ${name})
     endforeach()
-    add_custom_command(TARGET copy_files POST_BUILD
-        # include
-        COMMAND makeHeader < ibase.h > ${output_dir}/include/ibase.h
-    )
 
     endif() # if (NOT CMAKE_CROSSCOMPILING)
 endif()
