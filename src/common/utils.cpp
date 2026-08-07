@@ -1892,4 +1892,21 @@ FbShutdown::~FbShutdown()
 	fb_shutdown(0, reason);
 }
 
+bool isLoopbackAddress(const std::string_view address)
+{
+	// In case of embedded
+	if (address.empty())
+		return true;
+
+	static constexpr std::string_view ipv4loopback = "127.0.0.1/";
+	static constexpr std::string_view ipv6loopback = "::1/";
+
+	auto startsWith = [](const std::string_view& str, const std::string_view& prefix)
+	{
+    	return str.size() >= prefix.size() && str.substr(0, prefix.size()) == prefix;
+	};
+
+	return startsWith(address, ipv4loopback) || startsWith(address, ipv6loopback);
+}
+
 } // namespace fb_utils

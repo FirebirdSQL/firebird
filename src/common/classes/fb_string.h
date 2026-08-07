@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <string_view>
 
 #include "firebird.h"
 #include "fb_types.h"
@@ -766,6 +767,12 @@ namespace Firebird
 		StringBase<IgnoreCaseComparator> ToNoCaseString() const
 		{
 			return StringBase<IgnoreCaseComparator>(c_str());
+		}
+		std::string_view ToStringView() const
+		{
+			static_assert(std::is_same_v<Comparator, StringComparator>,
+				"Only a string can be safely converted to a string_view");
+			return std::string_view(c_str(), length());
 		}
 
 		StringType substr(size_type pos = 0, size_type n = npos) const

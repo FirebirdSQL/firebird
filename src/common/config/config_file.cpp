@@ -678,6 +678,9 @@ void ConfigFile::parse(Stream* stream)
 			break;
 
 		case LINE_INCLUDE:
+			if (flags & DENY_INCLUDE)
+				badLine(streamName, inputLine);
+
 			include(streamName, current.value.ToPathName());
 			break;
 

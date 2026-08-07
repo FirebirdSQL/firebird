@@ -324,6 +324,8 @@ namespace fb_utils
 	private:
 		int reason;
 	};
+
+	bool isLoopbackAddress(const std::string_view address);
 } // namespace fb_utils
 
 #endif // INCLUDE_UTILS_PROTO_H

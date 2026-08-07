@@ -58,6 +58,7 @@ public:
 	static const USHORT NO_COMMENTS		= 0x08;
 	static const USHORT CUSTOM_MACROS	= 0x10;
 	static const USHORT REGEXP_SUPPORT	= 0x20;
+	static const USHORT DENY_INCLUDE	= 0x40;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};

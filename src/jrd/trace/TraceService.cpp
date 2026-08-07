@@ -136,6 +136,10 @@ void TraceSvcJrd::startSession(TraceSession& session, bool interactive)
 			session.ses_logfile.insert(0, FB_TRACE_FILE);
 		}
 
+		// Embedded or local connection
+		if (fb_utils::isLoopbackAddress(m_svc.getRemoteAddress().ToStringView()))
+			session.ses_flags |= trs_local;
+
 		storage->addSession(session);
 		m_chg_number = storage->getChangeNumber();
 	}
@@ -263,6 +267,9 @@ void TraceSvcJrd::listSessions()
 			}
 			if (session.ses_flags & trs_system) {
 				flags += ", system";
+			}
+			if (session.ses_flags & trs_local) {
+				flags += ", local";
 			}
 			if (session.ses_logfile.empty()) {
 				flags += ", audit";
