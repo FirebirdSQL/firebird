@@ -839,10 +839,15 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					description[i] = SPECIAL;
 
-					while (++p < end)
+					// Note: p points to the first character not consumed as a part of
+					// the word, so it must be checked too.
+
+					while (p < end)
 					{
 						if (*p != ' ' && *p != '\t' && *p != '\0')
 							CVT_conversion_error(desc, cb->err);
+
+						++p;
 					}
 
 					// fetch the current datetime
