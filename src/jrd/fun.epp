@@ -292,8 +292,7 @@ enum UdfError
 static SSHORT blob_get_segment(blb*, UCHAR*, USHORT, USHORT*);
 static void blob_put_segment(blb*, const UCHAR*, USHORT);
 static SLONG blob_lseek(blb*, USHORT, SLONG);
-static ULONG get_scalar_array(thread_db* tdbb, const Parameter*, DSC*,
-							  scalar_array_desc*, UCharStack&);
+static scalar_array_desc* get_scalar_array(thread_db* tdbb, const Parameter*, DSC*, UCharStack&);
 static void invoke(thread_db* tdbb,
 				   const Function* function,
 				   const Parameter* return_ptr,
@@ -478,8 +477,10 @@ void FUN_evaluate(thread_db* tdbb, const Function* function, const NestValueArra
 		}
 		else if (parameter->prm_fun_mechanism == FUN_scalar_array)
 		{
-			length = get_scalar_array(tdbb, parameter, input, (scalar_array_desc*) temp_ptr,
-									  array_stack);
+			scalar_array_desc* const scalar_array = get_scalar_array(tdbb, parameter, input, array_stack);
+
+			*arg_ptr++ = reinterpret_cast<UDF_ARG*>(scalar_array);
+			continue;
 		}
 		else
 		{
@@ -976,11 +977,10 @@ static SSHORT blob_get_segment(blb* blob, UCHAR* buffer, USHORT length, USHORT* 
 }
 
 
-static ULONG get_scalar_array(thread_db* tdbb,
-							  const Parameter* arg,
-							  DSC* value,
-							  scalar_array_desc* scalar_desc,
-							  UCharStack& stack)
+static scalar_array_desc* get_scalar_array(thread_db* const tdbb,
+										   const Parameter* const arg,
+										   DSC* const value,
+										   UCharStack& stack)
 {
 /**************************************
  *
@@ -1007,6 +1007,14 @@ static ULONG get_scalar_array(thread_db* tdbb,
 	blob->BLB_get_data(tdbb, data, array_desc->iad_total_length);
 	const USHORT dimensions = array_desc->iad_dimensions;
 
+	if (dimensions == 0) // todo: correct this message
+		status_exception::raise(Arg::Gds(isc_random) << "Array dimension can not be zero.");
+
+	static_assert(MAX_ARRAY_DIMENSIONS == 16, "");
+
+	if (MAX_ARRAY_DIMENSIONS < dimensions)
+		status_exception::raise(Arg::Gds(isc_random) << "Array has more than 16 dimensions.");
+
 	// Convert array, if necessary
 
 	dsc to = arg->prm_desc;
@@ -1031,11 +1039,22 @@ static ULONG get_scalar_array(thread_db* tdbb,
 	}
 
 	// Fill out the scalar array descriptor
+	size_t const scalar_array_desc_sz
+		= sizeof(scalar_array_desc) + (dimensions - 1u) * sizeof(scalar_array_desc::sad_repeat);
+
+	AutoPtr<UCHAR, ArrayDelete> scalar_array_desc_mem(FB_NEW_POOL(pool) UCHAR[scalar_array_desc_sz]);
+
+	scalar_array_desc* const scalar_desc = (scalar_array_desc*) scalar_array_desc_mem.get();
+
+	// check a pointer align
+	fb_assert((((uintptr_t)scalar_desc) % sizeof(void*)) == 0);
+
+	// scalar_desc->sad_rpt has one element
+	static_assert(sizeof(scalar_desc->sad_rpt) == sizeof(scalar_desc->sad_rpt[0]), "");
 
 	scalar_desc->sad_desc = arg->prm_desc;
 	scalar_desc->sad_desc.dsc_address = data;
 	scalar_desc->sad_dimensions = dimensions;
-	stack.push(data.release());
 
 	const Ods::InternalArrayDesc::iad_repeat* tail1 = array_desc->iad_rpt;
 	scalar_array_desc::sad_repeat* tail2 = scalar_desc->sad_rpt;
@@ -1046,8 +1065,13 @@ static ULONG get_scalar_array(thread_db* tdbb,
 		tail2->sad_lower = tail1->iad_lower;
 	}
 
-	return static_cast<ULONG>(sizeof(scalar_array_desc) +
-		(dimensions - 1u) * sizeof(scalar_array_desc::sad_repeat));
+	stack.push(data.get());
+	data.release();
+
+	stack.push(scalar_array_desc_mem.get());
+	scalar_array_desc_mem.release();
+
+	return scalar_desc;
 }
 
 
