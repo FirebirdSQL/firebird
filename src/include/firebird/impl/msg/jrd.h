@@ -1022,3 +1022,4 @@ FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allo
 FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")
 FB_IMPL_MSG(JRD, 1021, hypfun_args_non_equal_sort_item, -833, "42", "000", "Number of arguments of hypothetical-set aggregate function @1 must match number of sort items in WITHIN GROUP clause")
 FB_IMPL_MSG(JRD, 1022, old_format, -804, "07", "000", "Statement format outdated, need to be reprepared")
+FB_IMPL_MSG(JRD, 1023, blob_write_after_the_end, -204, "42", "000", "Cannot write to blob. Position @1 is out of blob length @2")
