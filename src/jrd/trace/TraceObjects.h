@@ -545,7 +545,7 @@ public:
 	{}
 
 protected:
-	void fillParams();
+	void fillParams() override;
 
 private:
 	Request* const m_request;
@@ -563,7 +563,7 @@ public:
 	{}
 
 protected:
-	void fillParams();
+	void fillParams() override;
 
 private:
 	const Format* const m_format;
@@ -587,7 +587,7 @@ public:
 	}
 
 protected:
-	void fillParams() {}
+	void fillParams() override {}
 };
 
 
