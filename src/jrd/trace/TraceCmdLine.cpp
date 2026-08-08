@@ -210,6 +210,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 				case IN_SW_TRACE_LIST:
 					usage(uSvc, isc_trace_param_act_notcompat, sw->in_sw_name, action_sw->in_sw_name);
 					break;
+				default:
+					fb_assert(false);
+					break;
 			}
 
 			if (!session.ses_config.empty())
@@ -231,6 +234,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 				case IN_SW_TRACE_LIST:
 					usage(uSvc, isc_trace_param_act_notcompat, sw->in_sw_name, action_sw->in_sw_name);
 					break;
+				default:
+					fb_assert(false);
+					break;
 			}
 
 			if (!session.ses_name.empty())
@@ -249,6 +255,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 				case IN_SW_TRACE_START:
 				case IN_SW_TRACE_LIST:
 					usage(uSvc, isc_trace_param_act_notcompat, sw->in_sw_name, action_sw->in_sw_name);
+					break;
+				default:
+					fb_assert(false);
 					break;
 			}
 
@@ -274,6 +283,9 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 				case IN_SW_TRACE_RESUME:
 				case IN_SW_TRACE_LIST:
 					usage(uSvc, isc_trace_param_act_notcompat, sw->in_sw_name, action_sw->in_sw_name);
+					break;
+				default:
+					fb_assert(false);
 					break;
 			}
 
@@ -374,6 +386,8 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 						(Arg::Gds(isc_io_error) << Arg::Str("read") << Arg::Str(fileName) <<
 							Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
 						break;
+					default:
+						fb_assert(false);
 				}
 			}
 			else
@@ -420,6 +434,8 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 			case IN_SW_TRACE_RESUME:
 				usage(uSvc, isc_trace_switch_param_miss, "ID", action_sw->in_sw_name);
 				break;
+			default:
+				fb_assert(false);
 		}
 	}
 
