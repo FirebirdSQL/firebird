@@ -3310,6 +3310,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 
 		if (REL.RDB$EXTERNAL_FILE[0] && !rel_perm->getExtFile())
 		{
+			checkExternalFileAccess(tdbb->getDatabase(), REL.RDB$EXTERNAL_FILE);
 			rel_perm->setExtFile(ExternalFile::create(getPool(), REL.RDB$EXTERNAL_FILE));
 		}
 
