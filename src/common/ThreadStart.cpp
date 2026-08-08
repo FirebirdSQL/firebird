@@ -182,7 +182,7 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Threa
 	if (pThread != &thread)
 	{
 		int dummy;		// We do not want to know old cancel type
-		state = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &dummy);
+		state = pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &dummy);
 		if (state)
 			 Firebird::system_call_failed::raise("pthread_setcanceltype", state);
 	}
