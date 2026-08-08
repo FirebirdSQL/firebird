@@ -121,7 +121,7 @@ static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE process_connection_thread(THREAD_ENTRY_PARAM);
-static HANDLE parse_args(LPCSTR, USHORT*);
+static HANDLE parse_args(LPCSTR, USHORT*, bool*);
 static void service_connection(rem_port*);
 static int wait_threads(const int reason, const int mask, void* arg);
 
@@ -230,7 +230,8 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	if (Config::getServerMode() != MODE_CLASSIC)
 		server_flag = SRVR_multi_client;
 
-	const HANDLE connection_handle = parse_args(lpszArgs, &server_flag);
+	bool connectionUnixSocket = false;
+	const HANDLE connection_handle = parse_args(lpszArgs, &server_flag, &connectionUnixSocket);
 
 	// get priority class from the config file
 	int priority = Config::getProcessPriorityLevel();
@@ -286,7 +287,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		{
 			if (server_flag & SRVR_inet)
 			{
-				port = INET_reconnect((SOCKET) connection_handle);
+				port = INET_reconnect((SOCKET) connection_handle, connectionUnixSocket);
 
 				if (port)
 				{
@@ -549,7 +550,7 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 }
 
 
-static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
+static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag, bool* connectionUnixSocket)
 {
 /**************************************
  *
@@ -667,6 +668,10 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 
 				case 'R':
 					*pserver_flag &= ~SRVR_high_priority;
+					break;
+
+				case 'U':
+					*connectionUnixSocket = true;
 					break;
 
 				case 'S':
