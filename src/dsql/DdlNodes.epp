@@ -9092,7 +9092,8 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		permRel.release();
 		relation = versRel.release();
 
-		DPM_create_relation_pages(tdbb, ltt->relationId, versRel->getBasePages());
+		relation->setPageSpace(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
+		DPM_create_relation_pages(tdbb, relation->getId(), relation->getBasePages());
 
 		relation->rel_current_fmt = 1;
 		relation->rel_dbkey_length = 8;
@@ -9102,9 +9103,12 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		if (relation->rel_current_fmt == MAX_TABLE_VERSIONS)
 			raiseTooManyVersionsError(obj_relation, ltt->name);
 
+		fb_assert(relation->getPageSpace() == dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
+
 		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, relation->getPermanent());
 		versRel->rel_current_fmt = relation->rel_current_fmt + 1;
 		versRel->rel_dbkey_length = relation->rel_dbkey_length;
+		versRel->setPages(relation);
 		relation->getPermanent()->storeObject(tdbb, versRel, CacheFlag::NOCOMMIT);
 		relation = versRel.release();
 	}

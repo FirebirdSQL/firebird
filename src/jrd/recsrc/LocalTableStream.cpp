@@ -61,7 +61,6 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open;
 
 	const auto rpb = &request->req_rpb[m_stream];
-	rpb->getWindow(tdbb).win_flags = 0;
 	rpb->rpb_number.setValue(BOF_NUMBER);
 
 	impure->cursorSavepoint = 0;
@@ -76,6 +75,9 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 
 		rpb->rpb_relation = m_table->getRelation(tdbb, localTableRequest);
 		rpb->rpb_temp_instance_id = tempInstanceId;
+
+		// We cannot access the window before tdbb_temp_frame_id is assigned
+		rpb->getWindow(tdbb).win_flags = 0;
 
 		if (localTableRequest->req_auto_trans.hasData())
 		{

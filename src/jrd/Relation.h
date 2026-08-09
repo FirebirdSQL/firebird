@@ -334,7 +334,34 @@ public:
 		: Firebird::PermanentStorage(pool), dpMap(pool)
 	{}
 
-	void setPageSpace(thread_db* tdbb, ULONG pageSpaceId)
+	RelationPages& operator=(const RelationPages& other)
+	{
+		rel_pg_space_id = other.rel_pg_space_id;
+
+		delete rel_pages;
+		rel_pages = nullptr;
+		if (other.rel_pages)
+		{
+			const auto pageCount = other.rel_pages->count();
+			rel_pages = vcl::newVector(getPool(), pageCount);
+			memcpy(rel_pages->begin(), other.rel_pages->begin(), pageCount * sizeof(ULONG));
+		}
+
+		rel_index_root = other.rel_index_root;
+		rel_data_pages = other.rel_data_pages;
+		rel_slot_space = other.rel_slot_space;
+		rel_pri_data_space = other.rel_pri_data_space;
+		rel_sec_data_space = other.rel_sec_data_space;
+		rel_last_free_pri_dp = other.rel_last_free_pri_dp;
+		rel_last_free_blb_dp = other.rel_last_free_blb_dp;
+
+		dpMap.assign(other.dpMap);
+		dpMapMark = other.dpMapMark;
+
+		return *this;
+	}
+
+	void setPageSpace(ULONG pageSpaceId)
 	{
 		if (rel_pg_space_id != pageSpaceId)
 		{
@@ -832,9 +859,19 @@ public:
 
 	void fillPages(thread_db* tdbb);
 
-	void setPageSpace(thread_db* tdbb, ULONG pageSpaceId)
+	void setPages(const jrd_rel* relation)
 	{
-		rel_pages_base.setPageSpace(tdbb, pageSpaceId);
+		rel_pages_base = relation->rel_pages_base;
+	}
+
+	ULONG getPageSpace() const
+	{
+		return rel_pages_base.rel_pg_space_id;
+	}
+
+	void setPageSpace(ULONG pageSpaceId)
+	{
+		rel_pages_base.setPageSpace(pageSpaceId);
 	}
 
 	std::optional<PageNumber> getIndexRootPage(thread_db* tdbb)
