@@ -121,6 +121,11 @@ namespace Jrd
 			void release(thread_db* tdbb);
 			void rollback(thread_db* tdbb, jrd_tra* transaction);
 
+			Firebird::Mutex& getMutex()
+			{
+				return m_mutex;
+			}
+
 		private:
 			SharedReadVector<Tablespace*, 8> m_tablespaces;
 			Firebird::Mutex m_mutex;
@@ -177,11 +182,12 @@ namespace Jrd
 		MetaName m_name;						// tablespace name
 		Firebird::PathName m_fileName;			// file name
 		Firebird::AutoPtr<Lock> m_lock;			// existence lock
-		int m_useCount = 0;
-		unsigned m_flags = 0;
+		std::atomic<int> m_useCount = 0;
+		std::atomic<unsigned> m_flags = 0;
 		jrd_tra* m_transaction = nullptr;
+		Firebird::Mutex m_mutex;
 
-		void init(const MetaName& name, const Firebird::PathName& fileName, Lock* lock)
+		void init(const MetaName& name, const Firebird::PathName& fileName, Lock* lock, std::optional<bool> alloc)
 		{
 			fb_assert(m_name.isEmpty() && m_fileName.isEmpty() && !m_lock);
 
@@ -194,7 +200,7 @@ namespace Jrd
 
 		void allocate(thread_db* tdbb, bool create);
 
-		inline bool isVisible(thread_db* tdbb) const;
+		inline bool isVisible(thread_db* tdbb);
 
 		inline bool isReady() const
 		{

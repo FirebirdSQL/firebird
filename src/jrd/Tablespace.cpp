@@ -114,7 +114,7 @@ Tablespace* Tablespace::lookup(thread_db* tdbb, const MetaName& name)
 
 void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction, const PathName& fileName)
 {
-	const auto dbb = tdbb->getDatabase();
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 	fb_assert(m_lock && m_lock->lck_logical >= LCK_SR);
 
@@ -139,6 +139,7 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	{
 		m_flags |= MODIFIED;
 
+		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
 		dbb->dbb_page_manager.allocTableSpace(tdbb, m_id, false, fileName);
 	}
@@ -150,19 +151,23 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 
 void Tablespace::commit(thread_db* tdbb, jrd_tra* transaction)
 {
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
 	if (m_transaction != transaction)
 		return;
 
 	fb_assert(m_flags & (CREATED | MODIFIED | DELETED));
 	fb_assert(m_lock && m_lock->lck_logical == LCK_EX);
 
-	const auto dbb = tdbb->getDatabase();
-
 	if (m_flags & DELETED)
 	{
 		release(tdbb, true);
+		guard.release();
+
+		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
-		dbb->dbb_tablespaces.remove(m_id); // implicitly deletes this
+		dbb->dbb_tablespaces.remove(m_id); // deletes this
+
 		return;
 	}
 
@@ -175,24 +180,29 @@ void Tablespace::commit(thread_db* tdbb, jrd_tra* transaction)
 
 void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 {
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
 	if (!m_transaction || m_transaction != transaction)
 		return;
 
 	fb_assert(m_flags & (CREATED | MODIFIED | DELETED));
 	fb_assert(m_lock && m_lock->lck_logical == LCK_EX);
 
-	const auto dbb = tdbb->getDatabase();
-
 	if (m_flags & CREATED)
 	{
 		release(tdbb, true);
+		guard.release();
+
+		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id, true);
-		dbb->dbb_tablespaces.remove(m_id); // implicitly deletes this
+		dbb->dbb_tablespaces.remove(m_id); // deletes this
+
 		return;
 	}
 
 	if (m_flags & MODIFIED)
 	{
+		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
 	}
 
@@ -205,13 +215,12 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 
 void Tablespace::allocate(thread_db* tdbb, bool create)
 {
-	const auto dbb = tdbb->getDatabase();
-
 	fb_assert(m_flags & NOALLOC);
 	fb_assert(!(m_flags & OBSOLETE));
 
 	try
 	{
+		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.allocTableSpace(tdbb, m_id, create, m_fileName);
 		m_flags &= ~NOALLOC;
 	}
@@ -223,8 +232,10 @@ void Tablespace::allocate(thread_db* tdbb, bool create)
 	}
 }
 
-inline bool Tablespace::isVisible(thread_db* tdbb) const
+inline bool Tablespace::isVisible(thread_db* tdbb)
 {
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
 	if (!m_transaction)
 		return true;
 
@@ -246,6 +257,8 @@ void Tablespace::astHandler()
 
 	AsyncContextHolder tdbb(dbb, FB_FUNCTION, m_lock);
 
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
 	if (isUsed())
 	{
 		m_flags |= BLOCKING;
@@ -260,6 +273,11 @@ void Tablespace::astHandler()
 
 void Tablespace::rescan(thread_db* tdbb, bool open)
 {
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+	if (isReady())
+		return;
+
 	const auto dbb = tdbb->getDatabase();
 
 	fb_assert(m_lock);
@@ -302,6 +320,13 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 		}
 	}
 
+	// Serialize creation of the new tablespace
+	MutexLockGuard guard(dbb->dbb_tablespaces.getMutex(), FB_FUNCTION);
+
+	// Double check it wasn't created concurrently in the meantime
+	if (const auto tableSpace = dbb->dbb_tablespaces.get(id))
+		return tableSpace;
+
 	AutoPtr<Tablespace> tableSpace(FB_NEW_POOL(*dbb->dbb_permanent) Tablespace(*dbb->dbb_permanent, id));
 
 	AutoPtr<Lock> lock(FB_NEW_RPT(*dbb->dbb_permanent, 0)
@@ -326,7 +351,7 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 
 	// Reinitialize tablespace with proper metadata
 
-	tableSpace->init(tsName, fileName, lock.release());
+	tableSpace->init(tsName, fileName, lock.release(), alloc);
 
 	// Allocate the pagespace, if requested
 
@@ -341,7 +366,7 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 
 void Tablespace::addRef(thread_db* tdbb)
 {
-	if (m_useCount++ == 0)
+	if (++m_useCount == 1)
 	{
 		if (!isReady())
 			rescan(tdbb, true);
@@ -355,10 +380,15 @@ void Tablespace::release(thread_db* tdbb, bool force)
 	if (force)
 	{
 		fb_assert(m_useCount == 0);
-		m_useCount = 0;
+
+		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		if (m_lock)
 			LCK_release(tdbb, m_lock);
+
+		m_useCount = 0;
+		m_flags = 0;
+		m_transaction = nullptr;
 	}
 	else
 	{
@@ -367,6 +397,8 @@ void Tablespace::release(thread_db* tdbb, bool force)
 
 		if (--m_useCount == 0)
 		{
+			MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
 			if (m_flags & BLOCKING)
 			{
 				LCK_release(tdbb, m_lock);
