@@ -15,7 +15,7 @@ public:
 		BOOST_ASSERT(m_prevLocale != nullptr);
 
 		const char* loc = std::setlocale(LC_NUMERIC, newLocale);
-		BOOST_ASSERT(loc != nullptr);
+		m_changed = loc != nullptr;
 	}
 
 	~LocaleChangeHolder()
@@ -24,8 +24,13 @@ public:
 		BOOST_ASSERT(loc != nullptr);
 	}
 
+	inline bool changed() const
+	{
+		return m_changed;
+	}
 private:
 	char* m_prevLocale;
+	bool m_changed = false;
 };
 
 BOOST_AUTO_TEST_SUITE(JsonSuite)
@@ -40,6 +45,8 @@ BOOST_AUTO_TEST_CASE(ruUtf8LocaleTest)
 {
 	SKIP_TEST; // Missing locale
 	LocaleChangeHolder ruEncoding("ru_RU.UTF-8");
+	if (!ruEncoding.changed())
+		return;
 
 	FBJSON::NumberConvertBuffer buffer;
 	BOOST_TEST(FBJSON::convertNumberToString(buffer, NUMBER_TO_CONVERT).find('.') != std::string_view::npos);
@@ -47,7 +54,9 @@ BOOST_AUTO_TEST_CASE(ruUtf8LocaleTest)
 
 BOOST_AUTO_TEST_CASE(enUtf8LocaleTest)
 {
-	LocaleChangeHolder ruEncoding("en_US.UTF-8");
+	LocaleChangeHolder enEncoding("en_US.UTF-8");
+	if (!enEncoding.changed())
+		return;
 
 	FBJSON::NumberConvertBuffer buffer;
 	BOOST_TEST(FBJSON::convertNumberToString(buffer, NUMBER_TO_CONVERT).find('.') != std::string_view::npos);
@@ -55,8 +64,9 @@ BOOST_AUTO_TEST_CASE(enUtf8LocaleTest)
 
 BOOST_AUTO_TEST_CASE(russianLocaleTest)
 {
-	SKIP_TEST // Missing locale
 	LocaleChangeHolder ruEncoding("russian");
+	if (!ruEncoding.changed())
+		return;
 
 	FBJSON::NumberConvertBuffer buffer;
 	BOOST_TEST(FBJSON::convertNumberToString(buffer, NUMBER_TO_CONVERT).find('.') != std::string_view::npos);
