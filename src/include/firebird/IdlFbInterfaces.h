@@ -6483,6 +6483,7 @@ namespace Firebird
 			const char* (CLOOP_CARG *getDatabaseName)(ITraceInitInfo* self) CLOOP_NOEXCEPT;
 			ITraceDatabaseConnection* (CLOOP_CARG *getConnection)(ITraceInitInfo* self) CLOOP_NOEXCEPT;
 			ITraceLogWriter* (CLOOP_CARG *getLogWriter)(ITraceInitInfo* self) CLOOP_NOEXCEPT;
+			unsigned (CLOOP_CARG *getTraceSessionFlags)(ITraceInitInfo* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -6497,6 +6498,12 @@ namespace Firebird
 
 	public:
 		static CLOOP_CONSTEXPR unsigned VERSION = FIREBIRD_ITRACE_INIT_INFO_VERSION;
+
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_ADMIN = 0x1;
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_ACTIVE = 0x2;
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_SYSTEM = 0x4;
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_LOG_FULL = 0x8;
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_LOCAL = 0x16;
 
 		const char* getConfigText()
 		{
@@ -6537,6 +6544,12 @@ namespace Firebird
 		ITraceLogWriter* getLogWriter()
 		{
 			ITraceLogWriter* ret = static_cast<VTable*>(this->cloopVTable)->getLogWriter(this);
+			return ret;
+		}
+
+		unsigned getTraceSessionFlags()
+		{
+			unsigned ret = static_cast<VTable*>(this->cloopVTable)->getTraceSessionFlags(this);
 			return ret;
 		}
 	};
@@ -19941,6 +19954,7 @@ namespace Firebird
 					this->getDatabaseName = &Name::cloopgetDatabaseNameDispatcher;
 					this->getConnection = &Name::cloopgetConnectionDispatcher;
 					this->getLogWriter = &Name::cloopgetLogWriterDispatcher;
+					this->getTraceSessionFlags = &Name::cloopgetTraceSessionFlagsDispatcher;
 				}
 			} vTable;
 
@@ -20037,6 +20051,19 @@ namespace Firebird
 				return static_cast<ITraceLogWriter*>(0);
 			}
 		}
+
+		static unsigned CLOOP_CARG cloopgetTraceSessionFlagsDispatcher(ITraceInitInfo* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::getTraceSessionFlags();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<unsigned>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<ITraceInitInfo> > >
@@ -20059,6 +20086,7 @@ namespace Firebird
 		virtual const char* getDatabaseName() = 0;
 		virtual ITraceDatabaseConnection* getConnection() = 0;
 		virtual ITraceLogWriter* getLogWriter() = 0;
+		virtual unsigned getTraceSessionFlags() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

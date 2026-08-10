@@ -691,6 +691,7 @@ type
 	ITraceInitInfo_getDatabaseNamePtr = function(this: ITraceInitInfo): PAnsiChar; cdecl;
 	ITraceInitInfo_getConnectionPtr = function(this: ITraceInitInfo): ITraceDatabaseConnection; cdecl;
 	ITraceInitInfo_getLogWriterPtr = function(this: ITraceInitInfo): ITraceLogWriter; cdecl;
+	ITraceInitInfo_getTraceSessionFlagsPtr = function(this: ITraceInitInfo): Cardinal; cdecl;
 	ITracePlugin_trace_get_errorPtr = function(this: ITracePlugin): PAnsiChar; cdecl;
 	ITracePlugin_trace_attachPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; create_db: Boolean; att_result: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_detachPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; drop_db: Boolean): Boolean; cdecl;
@@ -3540,10 +3541,16 @@ type
 		getDatabaseName: ITraceInitInfo_getDatabaseNamePtr;
 		getConnection: ITraceInitInfo_getConnectionPtr;
 		getLogWriter: ITraceInitInfo_getLogWriterPtr;
+		getTraceSessionFlags: ITraceInitInfo_getTraceSessionFlagsPtr;
 	end;
 
 	ITraceInitInfo = class(IVersioned)
 		const VERSION = 2;
+		const SESSION_FLAG_ADMIN = Cardinal($1);
+		const SESSION_FLAG_ACTIVE = Cardinal($2);
+		const SESSION_FLAG_SYSTEM = Cardinal($4);
+		const SESSION_FLAG_LOG_FULL = Cardinal($8);
+		const SESSION_FLAG_LOCAL = Cardinal($16);
 
 		function getConfigText(): PAnsiChar;
 		function getTraceSessionID(): Integer;
@@ -3552,6 +3559,7 @@ type
 		function getDatabaseName(): PAnsiChar;
 		function getConnection(): ITraceDatabaseConnection;
 		function getLogWriter(): ITraceLogWriter;
+		function getTraceSessionFlags(): Cardinal;
 	end;
 
 	ITraceInitInfoImpl = class(ITraceInitInfo)
@@ -3564,6 +3572,7 @@ type
 		function getDatabaseName(): PAnsiChar; virtual; abstract;
 		function getConnection(): ITraceDatabaseConnection; virtual; abstract;
 		function getLogWriter(): ITraceLogWriter; virtual; abstract;
+		function getTraceSessionFlags(): Cardinal; virtual; abstract;
 	end;
 
 	TracePluginVTable = class(ReferenceCountedVTable)
@@ -9807,6 +9816,11 @@ end;
 function ITraceInitInfo.getLogWriter(): ITraceLogWriter;
 begin
 	Result := TraceInitInfoVTable(vTable).getLogWriter(Self);
+end;
+
+function ITraceInitInfo.getTraceSessionFlags(): Cardinal;
+begin
+	Result := TraceInitInfoVTable(vTable).getTraceSessionFlags(Self);
 end;
 
 function ITracePlugin.trace_get_error(): PAnsiChar;
@@ -16876,6 +16890,16 @@ begin
 	end
 end;
 
+function ITraceInitInfoImpl_getTraceSessionFlagsDispatcher(this: ITraceInitInfo): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceInitInfoImpl(this).getTraceSessionFlags();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceInitInfoImpl_vTable: TraceInitInfoVTable;
 
@@ -19174,6 +19198,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getDatabaseName := @ITraceInitInfoImpl_getDatabaseNameDispatcher;
 	ITraceInitInfoImpl_vTable.getConnection := @ITraceInitInfoImpl_getConnectionDispatcher;
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
+	ITraceInitInfoImpl_vTable.getTraceSessionFlags := @ITraceInitInfoImpl_getTraceSessionFlagsDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
 	ITracePluginImpl_vTable.version := 5;

@@ -58,6 +58,7 @@ public:
 	static inline constexpr USHORT NO_COMMENTS		= 0x08;
 	static inline constexpr USHORT CUSTOM_MACROS	= 0x10;
 	static inline constexpr USHORT REGEXP_SUPPORT	= 0x20;
+	static inline constexpr USHORT DENY_INCLUDE		= 0x40;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};

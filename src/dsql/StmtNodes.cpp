@@ -3439,7 +3439,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	if (localTableNumber.has_value())
 	{
 		localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
-		localTable = localTableRequest->getStatement()->localTables[localTableNumber.value()];
+		localTable = request->getStatement()->localTables[localTableNumber.value()];
 
 		if (localTable->useLtt)
 		{
@@ -9137,7 +9137,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	const auto localTableRequest = request->getLocalTableRequest(localTableOuterDecl);
 	const auto localTable = localTableNumber.has_value() ?
-		localTableRequest->getStatement()->localTables[localTableNumber.value()] : nullptr;
+		request->getStatement()->localTables[localTableNumber.value()] : nullptr;
 
 	if (localTable && localTable->useLtt)
 	{
@@ -10343,7 +10343,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 	const auto localTableRequest = request->getLocalTableRequest(
 		localTableSource && localTableSource->outerDecl);
 	const auto localTable = localTableSource ?
-		localTableRequest->getStatement()->localTables[localTableSource->tableNumber] :
+		request->getStatement()->localTables[localTableSource->tableNumber] :
 		nullptr;
 	const auto localTableImpure = localTable && !localTable->useLtt ?
 		localTable->getImpure(tdbb, localTableRequest) : nullptr;
