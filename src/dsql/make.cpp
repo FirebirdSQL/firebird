@@ -371,6 +371,7 @@ ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* referenc
 		to = CONSTANT_TIME;
 		break;
 	case dtype_timestamp:
+	case dtype_timestamp_tz:
 		to = CONSTANT_TIMESTAMP;
 		break;
 	default:
