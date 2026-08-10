@@ -22,8 +22,6 @@ BOOST_FIXTURE_TEST_CASE(IncludeInUserSessionBug, TestsUtils::TempPathFixture)
 	std::ofstream confidentialFile(tempPathFX);
 	confidentialFile << "Secret data";
 	confidentialFile.close();
-	if (!std::filesystem::exists(tempPathFX))
-		return; // Something gone wrong in CI, probably with macos
 
 	BOOST_CHECK_NO_THROW(ConfigFile file({}, text.data(), 0)); // Allow include, no exception
 	BOOST_CHECK_THROW(ConfigFile file({}, text.data(), ConfigFile::DENY_INCLUDE), Firebird::Exception);
@@ -64,8 +62,6 @@ include )";
 	std::ofstream out(pathStr);
 	out << "include " + pathStr;
 	out.close();
-	if (!std::filesystem::exists(tempPathFX))
-		return; // Something gone wrong in CI, probably with macos
 
 	Firebird::string error;
 	error.printf("Invalid include operator in %s for <%s> Include depth too big", pathStr.data(), pathStr.data());

@@ -17,7 +17,11 @@ struct TempPathFixture
 
 	TempPathFixture()
 	{
-		tempPathFX = fs::temp_directory_path() / (generateRandomString(10) + "_common_test.tmp");
+		auto tempDir = fs::temp_directory_path();
+		// Resolve symlink (/var on macos)
+		tempDir = fs::canonical(tempDir);
+
+		tempPathFX = tempDir / (generateRandomString(10) + "_common_test.tmp");
 	}
 
 	~TempPathFixture()
