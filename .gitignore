@@ -29,6 +29,7 @@ extern/ttmath/release/
 /src/include/gen/autoconfig.auto
 /src/include/gen/autoconfig.h
 /vcpkg_installed/
+/firebird.code-workspace
 .idea/
 
 # clangd index and background cache

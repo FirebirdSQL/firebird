@@ -35,3 +35,8 @@ PLATFORM_FALLBACK=os/posix
 STATIC_CXX_SUPPORT = -lsupc++ $(GCCS) -lgcc_eh -lSystem
 
 INLINE_EDIT_SED:= -i ""
+
+# Mach-O static-client processing uses native ld64. The exported symbols list
+# both retains the public API and localizes all other definitions, so no
+# external objcopy-compatible tool is needed.
+STATIC_CLIENT_SLIM_MODE = darwin

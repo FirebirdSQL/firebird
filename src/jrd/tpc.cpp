@@ -1181,6 +1181,17 @@ StmtNumber TipCache::generateStatementId()
 	return statement_id;
 }
 
+FB_UINT64 TipCache::generateLocalTableId()
+{
+	// Can only be called on initialized TipCache
+	fb_assert(m_tpcHeader);
+	GlobalTpcHeader* header = m_tpcHeader->getHeader();
+
+	// No barrier here, because local table id order does not generally matter
+	FB_UINT64 local_table_id = header->latest_local_table_id++ + 1;
+	return local_table_id;
+}
+
 //void TipCache::assignLatestTransactionId(TraNumber number) {
 //	// XXX: there is no paired acquire because value assigned here is not really used for now
 //	atomic_int_store_release(&m_tpcHeader->getHeader()->latest_transaction_id, number);

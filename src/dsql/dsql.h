@@ -159,6 +159,7 @@ public:
 	USHORT rel_id = 0;				// Relation id
 	USHORT rel_dbkey_length = 0;
 	USHORT rel_flags = 0;
+	std::optional<USHORT> rel_local_table_number;
 	bool rel_private = false;		// Packaged private relation
 };
 
@@ -170,7 +171,8 @@ enum rel_flags_vals {
 	REL_external		= 8, // relation is an external table
 	REL_creating		= 16,	// we are creating the bare relation in memory
 	REL_ltt_created		= 32,	// relation is created local temporary table
-	REL_foreign			= 64	// relation is a foreign table
+	REL_ltt_declared	= 64,	// relation is a PSQL declared local temporary table
+	REL_foreign			= 128	// relation is a foreign table
 };
 
 class TypeClause
@@ -485,6 +487,7 @@ public:
 	dsql_map* ctx_map = nullptr;				// Maps for aggregates and unions
 	RseNode* ctx_rse = nullptr;					// Sub-rse for aggregates
 	dsql_ctx* ctx_parent = nullptr;				// Parent context for aggregates
+	bool ctx_local_table_outer = false;			// Local table belongs to an outer PSQL scope
 	USHORT ctx_context = 0;						// Context id
 	USHORT ctx_recursive = 0;					// Secondary context id for recursive UNION (nobody referred to this context)
 	USHORT ctx_scope_level = 0;					// Subquery level within this request
@@ -507,6 +510,7 @@ public:
 		ctx_map = v.ctx_map;
 		ctx_rse = v.ctx_rse;
 		ctx_parent = v.ctx_parent;
+		ctx_local_table_outer = v.ctx_local_table_outer;
 		ctx_alias = v.ctx_alias;
 		ctx_context = v.ctx_context;
 		ctx_recursive = v.ctx_recursive;

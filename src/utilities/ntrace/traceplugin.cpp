@@ -61,8 +61,10 @@ Firebird::ITracePlugin* TraceFactoryImpl::trace_create(Firebird::CheckStatusWrap
 		if (!dbname)
 			dbname = "";
 
+		const bool isLocalSession = initInfo->getTraceSessionFlags() & Firebird::ITraceInitInfo::SESSION_FLAG_LOCAL;
+
 		TracePluginConfig config;
-		TraceCfgReader::readTraceConfiguration(initInfo->getConfigText(), dbname, config);
+		TraceCfgReader::readTraceConfiguration(initInfo->getConfigText(), dbname, config, isLocalSession);
 
 		Firebird::ITraceDatabaseConnection* connection = initInfo->getConnection();
 

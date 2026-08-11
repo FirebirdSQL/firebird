@@ -8200,6 +8200,12 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	// Shut down any extern relations
 	dbb->dbb_mdc->releaseRelations(tdbb);
 
+	// Release cached metadata objects (procedures, functions, etc.) while
+	// the buffer manager and lock manager are still alive.
+	// This is needed because Statement::release may require page access
+	// (e.g. for LTT cleanup via IDX_delete_indices).
+	dbb->dbb_mdc->cleanup(tdbb);
+
 	LCK_fini(tdbb, LCK_OWNER_database);
 
 	CCH_fini(tdbb);
@@ -8220,8 +8226,6 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 			}
 		}
 	}
-
-	dbb->dbb_mdc->cleanup(tdbb);
 
 	if (flags & SHUT_DBB_RELEASE_POOLS)
 	{

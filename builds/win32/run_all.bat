@@ -11,6 +11,7 @@ set FBBUILD_MAKE_KITS_ONLY=
 set FBBUILD_BUILD_ONLY=0
 set FBBUILD_KITS=ISX ZIP
 set FBBUILD_TEST_ONLY=
+set FBBUILD_WITHOUT_TOMCRYPT=
 set FB2_SNAPSHOT=
 
 ::Check if on-line help is required
@@ -80,6 +81,8 @@ goto :END
 @echo The following params may be passed:
 @echo.
 @echo    NOCLEAN   - don't run CLEAN_ALL.BAT
+@echo.
+@echo    WITHOUT_TOMCRYPT - omit TomCrypt and ChaCha from CLIENT_ONLY=STATIC builds
 @echo.
 @echo    REALCLEAN - Run CLEAN_ALL.BAT REALCLEAN
 @echo                This will do a deeper clean.

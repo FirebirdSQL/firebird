@@ -235,8 +235,9 @@ Package* Package::create(thread_db* tdbb, MemoryPool& pool, Cached::Package* per
 	return FB_NEW_POOL(perm->getPool()) Package(perm);
 }
 
-std::optional<MetaId> Package::getIdByName(thread_db* tdbb, const QualifiedName& name)
+std::optional<MetaId> Package::getIdByName(thread_db* tdbb, ExName<> nm)
 {
+	auto& name = nm.name;
 	fb_assert(name.package.isEmpty());
 
 	SET_TDBB(tdbb);
@@ -314,7 +315,7 @@ ScanResult Package::reload(thread_db* tdbb, ObjectBase::Flag fl)
 	return ScanResult::COMPLETE;
 }
 
-int Package::objectType()
+ObjectType Package::objectType() noexcept
 {
 	return obj_package_header;
 }
