@@ -614,6 +614,7 @@ static bool		packet_receive2(rem_port*, UCHAR*, SSHORT, SSHORT*);
 static bool		packet_send(rem_port*, const SCHAR*, SSHORT);
 static rem_port*		receive(rem_port*, PACKET *);
 static rem_port*		select_accept(rem_port*);
+static bool		is_listener(const rem_port*);
 
 static void		select_port(rem_port*, Select*, RemPortPtr&);
 static bool		select_multi(rem_port*, UCHAR* buffer, SSHORT bufsize, SSHORT* length, RemPortPtr&);
@@ -999,7 +1000,8 @@ rem_port* INET_connect(const TEXT* name,
 					   USHORT flag,
 					   ClumpletReader* dpb,
 					   RefPtr<const Config>* config,
-					   int af)
+					   int af,
+					   bool disableTcp)
 {
 /**************************************
  *
@@ -1036,19 +1038,32 @@ rem_port* INET_connect(const TEXT* name,
 	}
 	REMOTE_get_timeout_params(port, dpb);
 
+	const RefPtr<const Config> portConfig = port->getPortConfig();
+	const bool explicitTcpPort = !packet && name && name[0];
+	// RemoteServicePort defaults to zero internally; only an explicitly configured zero disables TCP.
+	const bool configDisablesTcp = !packet && !explicitTcpPort &&
+		portConfig->getIsSet(KEY_REMOTE_SERVICE_PORT) && portConfig->getRemoteServicePort() == 0;
+	const bool tcpDisabled = !packet && (disableTcp || configDisablesTcp);
+
 	string host;
 	string protocol;
 
-	if ((!name || !name[0]) && !packet)
+#ifdef HAVE_AF_UNIX_SUPPORT
+	const char* const socketPath = !packet ? portConfig->getRemoteServiceUnixSocket() : nullptr;
+#endif
+
+	if (!packet && tcpDisabled)
 	{
 #ifdef HAVE_AF_UNIX_SUPPORT
-		const char* const socketPath = port->getPortConfig()->getRemoteServiceUnixSocket();
 		if (socketPath && socketPath[0])
 			return unix_connect(port, socketPath, packet, flag);
 #endif
 
-		name = port->getPortConfig()->getRemoteBindAddress();
+		inet_error(true, port, "listen", isc_net_connect_listen_err, 0);
 	}
+
+	if ((!name || !name[0]) && !packet)
+		name = portConfig->getRemoteBindAddress();
 
 #ifdef HAVE_AF_UNIX_SUPPORT
 	if (af == AF_UNIX)
@@ -1087,12 +1102,12 @@ rem_port* INET_connect(const TEXT* name,
 
 	if (protocol.isEmpty())
 	{
-		const unsigned short port2 = port->getPortConfig()->getRemoteServicePort();
+		const unsigned short port2 = portConfig->getRemoteServicePort();
 		if (port2) {
 			protocol.printf("%hu", port2);
 		}
 		else {
-			protocol = port->getPortConfig()->getRemoteServiceName();
+			protocol = portConfig->getRemoteServiceName();
 		}
 	}
 
@@ -1207,6 +1222,47 @@ rem_port* INET_connect(const TEXT* name,
 }
 
 
+bool INET_shouldListenUnix(const TEXT* name, bool disableTcp)
+{
+#ifdef HAVE_AF_UNIX_SUPPORT
+	const RefPtr<const Config> config = Config::getDefaultConfig();
+	const bool explicitTcpPort = name && name[0];
+	const bool configDisablesTcp = !explicitTcpPort &&
+		config->getIsSet(KEY_REMOTE_SERVICE_PORT) && config->getRemoteServicePort() == 0;
+	const char* const socketPath = config->getRemoteServiceUnixSocket();
+
+	return socketPath && socketPath[0] && !disableTcp && !configDisablesTcp;
+#else
+	return false;
+#endif
+}
+
+
+rem_port* INET_listenUnix(USHORT flag)
+{
+#ifdef HAVE_AF_UNIX_SUPPORT
+	const char* const socketPath = Config::getDefaultConfig()->getRemoteServiceUnixSocket();
+	if (socketPath && socketPath[0])
+		return unix_connect(alloc_port(nullptr), socketPath, nullptr, flag);
+#endif
+
+	return nullptr;
+}
+
+
+void INET_addUnixListener(rem_port* mainPort, USHORT flag)
+{
+#ifdef HAVE_AF_UNIX_SUPPORT
+	if (!(flag & SRVR_multi_client) || (mainPort->port_flags & PORT_unix))
+		return;
+
+	const char* const socketPath = mainPort->getPortConfig()->getRemoteServiceUnixSocket();
+	if (socketPath && socketPath[0])
+		unix_connect(alloc_port(mainPort), socketPath, nullptr, flag);
+#endif
+}
+
+
 #ifdef HAVE_AF_UNIX_SUPPORT
 
 static rem_port* unix_connect(rem_port* port, const TEXT* socketPath, PACKET* packet, USHORT flag)
@@ -1263,7 +1319,7 @@ static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* s
 	port->port_flags |= PORT_unix_unlink;
 
 	if (listen(port->port_handle, SOMAXCONN) < 0)
-		inet_error(false, port, "listen", isc_net_connect_listen_err, INET_ERRNO);
+		inet_error(true, port, "listen", isc_net_connect_listen_err, INET_ERRNO);
 
 	inet_ports->registerPort(port);
 
@@ -1282,7 +1338,10 @@ static rem_port* unix_listener_socket(rem_port* port, USHORT flag, const TEXT* s
 		if (s == INVALID_SOCKET)
 		{
 			if (INET_shutting_down)
+			{
+				disconnect(port);
 				return NULL;
+			}
 			inet_error(true, port, "accept", isc_net_connect_err, inetErrNo);
 		}
 
@@ -2455,6 +2514,12 @@ static rem_port* receive( rem_port* main_port, PACKET * packet)
 	return main_port;
 }
 
+static bool is_listener(const rem_port* port)
+{
+	return port && (port->port_server_flags & SRVR_multi_client) &&
+		!(port->port_flags & (PORT_server | PORT_async));
+}
+
 static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSHORT* length,
 						 RemPortPtr& port)
 {
@@ -2482,19 +2547,19 @@ static bool select_multi(rem_port* main_port, UCHAR* buffer, SSHORT bufsize, SSH
 	for (;;)
 	{
 		select_port(main_port, &INET_select, port);
-		if (port == main_port && (port->port_server_flags & SRVR_multi_client))
+		if (is_listener(port))
 		{
 			if (INET_shutting_down)
 			{
-				if (main_port->port_state == rem_port::PENDING)
+				if (port->port_state == rem_port::PENDING)
 				{
-					main_port->port_state = rem_port::BROKEN;
+					port->port_state = rem_port::BROKEN;
 
-					shutdown(main_port->port_handle, 2);
-					SOCLOSE(main_port->port_handle);
+					shutdown(port->port_handle, 2);
+					SOCLOSE(port->port_handle);
 				}
 			}
-			else if ((port = select_accept(main_port)))
+			else if ((port = select_accept(port)))
 			{
 				if (!REMOTE_inflate(port, packet_receive, buffer, bufsize, length))
 				{
@@ -2726,8 +2791,8 @@ static bool select_wait( rem_port* main_port, Select* selct)
 						}
 					}
 
-					// if process is shuting down - don't listen on main port
-					if (!INET_shutting_down || port != main_port)
+					// if process is shutting down - don't listen on server ports
+					if (!INET_shutting_down || !is_listener(port))
 					{
 						selct->set(port->port_handle);
 						found = true;
