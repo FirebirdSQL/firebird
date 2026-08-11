@@ -38,6 +38,7 @@ namespace Jrd
 	class jrd_tra;
 	class thread_db;
 	class ValueListNode;
+	class ForeignTableAdapter;
 }
 
 namespace EDS {
@@ -595,6 +596,11 @@ public:
 		return m_cryptCallbackRedir.isValid();
 	}
 
+	void setBoundForeignAdapter(Jrd::ForeignTableAdapter* foreignAdapter)
+	{
+		m_foreignAdapter = foreignAdapter;
+	}
+
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
@@ -626,6 +632,7 @@ protected:
 	bool m_wrapErrors;
 	bool m_broken;
 	bool m_features[fb_feature_max];
+	Jrd::ForeignTableAdapter* m_foreignAdapter;
 
 	CryptCallbackRedirector m_cryptCallbackRedir;
 };

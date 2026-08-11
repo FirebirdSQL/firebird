@@ -43,6 +43,7 @@
 #include "../evl_proto.h"
 #include "../intl_proto.h"
 #include "../mov_proto.h"
+#include "../ForeignServer.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -615,7 +616,8 @@ Connection::Connection(Provider& prov) :
 	m_sqlDialect(0),
 	m_wrapErrors(true),
 	m_broken(false),
-	m_features{}
+	m_features{},
+	m_foreignAdapter(nullptr)
 {
 }
 
@@ -630,6 +632,9 @@ void Connection::setup(const PathName& dbName, const ClumpletReader& dpb)
 void Connection::deleteConnection(thread_db* tdbb, Connection* conn)
 {
 	conn->m_deleting = true;
+
+	if (conn->m_foreignAdapter)
+		conn->m_foreignAdapter->releaseConnection();
 
 	if (conn->isConnected())
 		conn->detach(tdbb);

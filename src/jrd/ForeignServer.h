@@ -198,6 +198,12 @@ namespace Jrd
 			m_skippedOrgRpbIdx(pool)
 		{ }
 
+		~ForeignTableAdapter()
+		{
+			if (m_connection)
+				m_connection->setBoundForeignAdapter(nullptr);
+		}
+
 		void release(thread_db* tdbb)
 		{
 			Firebird::LeftPooledMap<Firebird::MetaString, ForeignField*>::Accessor accessor(&m_foreignFields);
@@ -223,6 +229,12 @@ namespace Jrd
 		const Firebird::string getOriginalFieldName(const MetaName& name) const;
 
 		const ForeignServer* getServer() { return m_server; }
+
+		void releaseConnection()
+		{
+			if (m_connection)
+				m_connection = nullptr;
+		}
 
 	private:
 		void ensureConnect(thread_db* tdbb);

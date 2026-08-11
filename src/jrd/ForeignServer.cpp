@@ -515,7 +515,10 @@ void ForeignTableAdapter::ensureConnect(thread_db* tdbb)
 		m_provider = static_cast<ForeignTableProvider*>(EDS::Manager::getProvider("Firebird"));
 
 	if (!m_connection || !m_connection->getAPIHandle())
+	{
 		m_connection = static_cast<ForeignTableConnection*>(m_provider->createForeignConnection(tdbb, m_server));
+		m_connection->setBoundForeignAdapter(this);
+	}
 }
 
 EDS::Statement* ForeignTableAdapter::createStatement(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb,
