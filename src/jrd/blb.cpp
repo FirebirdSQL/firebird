@@ -1472,13 +1472,12 @@ blb* blb::open2(thread_db* tdbb,
 
 				if (new_blob->blb_flags & BLB_foreign)
 				{
-					PredictableForeignBlob foreignBlob;
+					ForeignBlob foreignBlob;
 					const SINT64 blobIdValue = blobId.get_permanent_number().getValue();
 					if (transaction->tra_foreign_blob_map.get(blobIdValue, foreignBlob))
 					{
-						// Free empty temporary blob handle
-						transaction->tra_blobs->fastRemove();
-
+						const ULONG origTempId = blobId.bid_temp_id();
+						new_blob->BLB_cancel(tdbb);
 						// Copy data from foreign blob to new local blob
 						AutoPtr<EDS::Blob> edsBlob(foreignBlob.m_connection->createBlob());
 						edsBlob->open(tdbb, *foreignBlob.m_transaction, foreignBlob.m_descriptor, NULL);
@@ -1502,8 +1501,13 @@ blb* blb::open2(thread_db* tdbb,
 						edsBlob->close(tdbb);
 						new_blob->BLB_close(tdbb);
 
-						// Remove the foreign blob from the map because there is a materialized local one
-						transaction->tra_foreign_blob_map.remove(blobIdValue);
+						// Remove the new blob from index tree and restore it with original ID
+						bool defined = transaction->tra_blobs->locate(new_blob->blb_temp_id);
+						fb_assert(defined);
+
+						transaction->tra_blobs->fastRemove();
+						new_blob->blb_temp_id = origTempId;
+						transaction->tra_blobs->add(BlobIndex(blobIdValue, new_blob));
 					}
 				}
 

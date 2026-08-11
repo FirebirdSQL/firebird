@@ -482,7 +482,7 @@ bool ForeignTableStatement::fetchInternal(thread_db* tdbb, Record* record)
 
 			// Foreign blob will be created when local blob is opened
 			const SINT64 localBlobIdValue = localBlobId->get_permanent_number().getValue();
-			PredictableForeignBlob foreignBlob(&m_connection, m_transaction, fromDesc);
+			ForeignBlob foreignBlob(&m_connection, m_transaction, fromDesc);
 			request->req_transaction->tra_foreign_blob_map.put(localBlobIdValue, foreignBlob);
 
 			local = &localDsc;

@@ -66,8 +66,8 @@ enum TraScope {
 	traTwoPhase
 };
 
-
 inline constexpr int EXT_BLOB_SEGMENT_SIZE	= 32766;
+
 
 // helper to work with ICryptKeyCallback
 class CryptHash

@@ -37,6 +37,7 @@
 #include "RecordSource.h"
 
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/tra.h"
 
 using namespace Firebird;
 using namespace Jrd;

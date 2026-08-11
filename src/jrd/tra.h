@@ -152,11 +152,11 @@ typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > >
 // Structure for preparing to create a foreign blob.
 // There is no need to create the foreign blob in advance,
 // since there is no guarantee that it will be used
-struct PredictableForeignBlob
+struct ForeignBlob
 {
-	PredictableForeignBlob() { }
+	ForeignBlob() { }
 
-	PredictableForeignBlob(EDS::Connection* conn, EDS::Transaction* tran, dsc desc) :
+	ForeignBlob(EDS::Connection* conn, EDS::Transaction* tran, dsc desc) :
 		m_connection(conn), m_transaction(tran), m_descriptor(desc)
 	{ }
 
@@ -165,7 +165,7 @@ struct PredictableForeignBlob
 	dsc m_descriptor;
 };
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, PredictableForeignBlob> > > ForeignBlobMap;
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ForeignBlob> > > ForeignBlobMap;
 
 inline constexpr SSHORT DEFAULT_LOCK_TIMEOUT = -1; // infinite
 inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
