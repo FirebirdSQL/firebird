@@ -133,6 +133,7 @@ RPL_AWK_SRC=$(MISC)/def_awk.c
 RPL_GREP=$(GEN_ROOT)/isc_grep
 RPL_GREP_SRC=$(MISC)/isc_grep.c
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE) $(API_C_H_FILE)
 
 $(API_H_FILE): $(IDL_FILE)
@@ -178,6 +179,7 @@ $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
     	--exceptionClass FbException \
     	--functionsFile $(TMP_FUNCS_PAS) \
     	--prefix I
+endif
 
 updateBuildNum : $(SRC_ROOT)/jrd/build_no.h $(GEN_ROOT)/Make.Version
 
@@ -197,7 +199,9 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/btyacc
 endif
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	CXX="$(CXX)" $(MAKE) -C $(ROOT)/extern/cloop TARGET=release WITH_FPC=0 BUILD_DIR=$(TMP_ROOT)/cloop OUT_DIR=$(GEN_ROOT)/$(TARGET)/cloop core
+endif
 
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(ROOT)/extern/decNumber
 	ln -sf $(ROOT)/extern/decNumber/libdecFloat.a $(STATIC_LIB)
@@ -335,7 +339,9 @@ master_process:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 	$(MAKE) rest
 	$(MAKE) yvalve
 ifeq ($(CLIENT_ONLY_FLG),Y)
@@ -370,7 +376,9 @@ cross1:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) boot
 	$(MAKE) yvalve
@@ -829,7 +837,9 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
+endif
 
 
 ifeq ($(EDITLINE_FLG),Y)
