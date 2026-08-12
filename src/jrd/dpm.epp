@@ -285,14 +285,14 @@ double DPM_cardinality(thread_db* tdbb, jrd_rel* relation, const Format* format)
 	ULONG recordCount = 0, recordLength = 0;
 
 	const auto relPages = relation->getPages(tdbb);
-	if (relPages->rel_pages)
+	if (relPages->hasData())
 	{
-		const ULONG pageSpaceId = relPages->rel_pg_space_id;
+		const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 		bool done = false;
 		for (ULONG sequence = 0; !done; sequence++)
 		{
-			WIN window(pageSpaceId, -1);
+			WIN window(pageSpaceId);
 
 			const pointer_page* ppage =
 				get_pointer_page(tdbb, relation->getId(), relPages, &window, sequence, LCK_read);
@@ -588,21 +588,29 @@ bool DPM_chain( thread_db* tdbb, record_param* org_rpb, record_param* new_rpb)
 }
 
 
-static void update_first_pointer_page(thread_db* tdbb, USHORT rel_id, ULONG page, ULONG root)
+static void update_first_pointer_page(thread_db* tdbb, USHORT rel_id, RelationPages* pages)
 {
-	// Update the first pointer page transactionally.
-	AutoCacheRequest request(tdbb, irq_s_first_pp, IRQ_REQUESTS);
+	const auto firstPointerPage = pages->getPointerPage(0);
+	const auto rootPage = pages->getIndexRootPage();
 
-	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE tdbb->getTransaction())
-		R IN RDB$RELATIONS
-			WITH R.RDB$RELATION_ID EQ rel_id
+	if (firstPointerPage || rootPage)
 	{
-		MODIFY R USING
-			R.RDB$POINTER_PAGE = page;
-			R.RDB$ROOT_PAGE = root;
-		END_MODIFY;
+		// Update the first pointer page transactionally
+		AutoCacheRequest request(tdbb, irq_s_first_pp, IRQ_REQUESTS);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE tdbb->getTransaction())
+			R IN RDB$RELATIONS
+				WITH R.RDB$RELATION_ID EQ rel_id
+		{
+			MODIFY R USING
+				if (firstPointerPage)
+					R.RDB$POINTER_PAGE = firstPointerPage.value().getPageNum();
+				if (rootPage)
+					R.RDB$ROOT_PAGE = rootPage.value().getPageNum();
+			END_MODIFY;
+		}
+		END_FOR
 	}
-	END_FOR
 }
 
 void DPM_create_relation( thread_db* tdbb, jrd_rel* relation)
@@ -628,17 +636,25 @@ void DPM_create_relation( thread_db* tdbb, jrd_rel* relation)
 	DPM_create_relation_pages(tdbb, relation->getId(), relPages);
 
 	// Store page numbers in RDB$PAGES
-	DPM_pages(tdbb, relation->getId(), pag_pointer, (ULONG) 0,
-			  (*relPages->rel_pages)[0] /*window.win_page*/);
-	DPM_pages(tdbb, relation->getId(), pag_root, (ULONG) 0,
-			  relPages->rel_index_root /*root_window.win_page*/);
+
+	if (const auto firstPointerPage = relPages->getPointerPage(0))
+	{
+		const auto ppNumber = firstPointerPage.value().getPageNum();
+		DPM_pages(tdbb, relation->getId(), pag_pointer, (ULONG) 0, ppNumber);
+	}
+
+	if (const auto rootPage = relPages->getIndexRootPage())
+	{
+		const auto irpNumber = rootPage.value().getPageNum();
+		DPM_pages(tdbb, relation->getId(), pag_root, (ULONG) 0, irpNumber);
+	}
 
 	// RDB$PAGE_NUMBER is used only for non system tables
 	if (relation->getId() < rel_MAX)
 		return;
 
-	// Update the first pointer page transactionally.
-	update_first_pointer_page(tdbb, relation->getId(), (*relPages->rel_pages)[0], relPages->rel_index_root);
+	// Update the first pointer page transactionally
+	update_first_pointer_page(tdbb, relation->getId(), relPages);
 
 	// Special record directing remove table when transaction rolled back
 	if (auto tra = tdbb->getTransaction())
@@ -682,7 +698,7 @@ void DPM_create_relation_pages(thread_db* tdbb, MetaId relationId, RelationPages
 	CHECK_DBB(dbb);
 
 	// Allocate first pointer page
-	WIN window(relPages->rel_pg_space_id, -1);
+	WIN window(relPages->getPageSpaceId());
 	pointer_page* page = (pointer_page*) DPM_allocate(tdbb, &window);
 	page->ppg_header.pag_type = pag_pointer;
 	page->ppg_relation = relationId;
@@ -708,13 +724,13 @@ void DPM_create_relation_pages(thread_db* tdbb, MetaId relationId, RelationPages
 	// CVC: AFAIK, DPM_allocate calls PAG_allocate and neither of them cares about win_page.
 	// Therefore, I decided that the root_window in the if() above and this one aren't related.
 	// Create an index root page
-	WIN root_window(relPages->rel_pg_space_id, -1);
+	WIN root_window(relPages->getPageSpaceId());
 	index_root_page* root = (index_root_page*) DPM_allocate(tdbb, &root_window);
 	root->irt_header.pag_type = pag_root;
 	root->irt_relation = relationId;
 	//root->irt_count = 0;
 	CCH_RELEASE(tdbb, &root_window);
-	relPages->rel_index_root = root_window.win_page.getPageNum();
+	relPages->setIndexRootPage(root_window.win_page);
 }
 
 
@@ -741,12 +757,12 @@ ULONG DPM_data_pages(thread_db* tdbb, jrd_rel* relation)
 #endif
 
 	const auto relPages = relation->getPages(tdbb);
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	ULONG pages = relPages->rel_data_pages;
 	if (!pages)
 	{
-		WIN window(pageSpaceId, -1);
+		WIN window(pageSpaceId);
 		for (ULONG sequence = 0; true; sequence++)
 		{
 			const pointer_page* ppage =
@@ -921,12 +937,12 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
 	RelationPages* relPages	= NULL;
-	WIN pwindow(DB_PAGE_SPACE, -1);	// Will be initialized by pagespace of relation later
+	WIN pwindow(DB_PAGE_SPACE);	// Will be initialized by pagespace of relation later
 
 	for (;;)
 	{
 		relPages = rpb->rpb_relation->getPages(tdbb);
-		pwindow = WIN(relPages->rel_pg_space_id, -1);
+		pwindow = WIN(relPages->getPageSpaceId());
 
 		if (!(ppage = get_pointer_page(tdbb, rpb->rpb_relation->getId(), relPages, &pwindow,
 				pp_sequence, LCK_write)))
@@ -1016,7 +1032,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		{
 			if (s != slot)
 			{
-				WIN dp_window(relPages->rel_pg_space_id, pages[i]);
+				WIN dp_window(relPages->toNumber(pages[i]));
 				data_page* dpage = (data_page*) CCH_FETCH(tdbb, &dp_window, LCK_read, pag_data);
 				if (dpage->dpg_count)
 				{
@@ -1099,7 +1115,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 	// Earlier, we make sure that the pointer page is written after the data
 	// page being released.
 
-	PAG_release_pages(tdbb, relPages->rel_pg_space_id, pages.getCount(), pages.begin(),
+	PAG_release_pages(tdbb, relPages->getPageSpaceId(), pages.getCount(), pages.begin(),
 		pwindow.win_page.getPageNum());
 }
 
@@ -1118,7 +1134,7 @@ void DPM_delete_relation(thread_db* tdbb, jrd_rel* relation)
  **************************************/
 	const auto relPages = relation->getPages(tdbb);
 
-	if (!relPages->rel_pages)
+	if (!relPages->hasData())
 		return;
 
 	DPM_delete_relation_pages(tdbb, relation->getId(), relPages);
@@ -1145,14 +1161,14 @@ void DPM_delete_relation_pages(thread_db* tdbb, MetaId relationId, RelationPages
 {
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
-	WIN window(relPages->rel_pg_space_id, -1), data_window(relPages->rel_pg_space_id, -1);
+	WIN window(relPages->getPageSpaceId()), data_window(relPages->getPageSpaceId());
 	window.win_flags = data_window.win_flags = WIN_large_scan;
 	window.win_scans = data_window.win_scans = 1;
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_TRACE_ALL,
 		"DPM_delete_relation_pages (relation %d, instance %" SQUADFORMAT")\n",
-		relationId, relPages->rel_instance_id);
+		relationId, relPages->getInstanceId());
 #endif
 
 	// Delete all data and pointer pages
@@ -1193,7 +1209,7 @@ void DPM_delete_relation_pages(thread_db* tdbb, MetaId relationId, RelationPages
 						rhd* header = (rhd*) ((UCHAR *) dpage + line->dpg_offset);
 						if (header->rhd_flags & rhd_large)
 						{
-							delete_tail(tdbb, (rhdf*)header, relPages->rel_pg_space_id,
+							delete_tail(tdbb, (rhdf*)header, relPages->getPageSpaceId(),
 										line->dpg_length);
 						}
 					}
@@ -1208,21 +1224,20 @@ void DPM_delete_relation_pages(thread_db* tdbb, MetaId relationId, RelationPages
 		CCH_RELEASE_TAIL(tdbb, &window);
 
 		pages.add(window.win_page.getPageNum());
-		PAG_release_pages(tdbb, relPages->rel_pg_space_id, pages.getCount(), pages.begin(), 0);
+		PAG_release_pages(tdbb, relPages->getPageSpaceId(), pages.getCount(), pages.begin(), 0);
 
 		if (pag_flags & ppg_eof)
 			break;
 	}
 
-	delete relPages->rel_pages;
-	relPages->rel_pages = NULL;
-	relPages->rel_data_pages = 0;
-
 	// Now get rid of the index root page
 
-	PAG_release_page(tdbb,
-		PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root), ZERO_PAGE_NUMBER);
-	relPages->rel_index_root = 0;
+	if (const auto rootPage = relPages->getIndexRootPage())
+		PAG_release_page(tdbb, rootPage.value(), ZERO_PAGE_NUMBER);
+	else
+		fb_assert(false);
+
+	relPages->reset();
 }
 
 // Reserve pages for bulk insert, return count of reserved pages.
@@ -1262,7 +1277,7 @@ bool DPM_fetch(thread_db* tdbb, record_param* rpb, USHORT lock)
 
 	const RecordNumber number = rpb->rpb_number;
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	rpb->getWindow(tdbb).win_page = PageNumber(relPages->rel_pg_space_id, rpb->rpb_page);
+	rpb->getWindow(tdbb).win_page = relPages->toNumber(rpb->rpb_page);
 	CCH_FETCH(tdbb, &rpb->getWindow(tdbb), lock, pag_data);
 
 	if (!get_header(&rpb->getWindow(tdbb), rpb->rpb_line, rpb))
@@ -1463,7 +1478,7 @@ SINT64 DPM_gen_id(thread_db* tdbb, SLONG generator, bool initialize, SINT64 val)
 	const USHORT sequence = generator / dbb->dbb_page_manager.gensPerPage;
 	const USHORT offset = generator % dbb->dbb_page_manager.gensPerPage;
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	ULONG pageNumber = dbb->getKnownPage(pag_ids, sequence);
 	if (!pageNumber)
 	{
@@ -1852,7 +1867,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 
 	if (page_number)
 	{
-		fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
+		fb_assert(window->win_page.getPageSpaceID() == relPages->getPageSpaceId());
 
 		window->win_page = page_number;
 		const data_page* dpage = (data_page*) CCH_FETCH(tdbb, window, lock_type, pag_undefined);
@@ -2137,8 +2152,11 @@ ULONG DPM_pointer_pages(thread_db* tdbb, jrd_rel* relation)
 #endif
 
 	const auto relPages = relation->getPages(tdbb);
-	ULONG sequence = relPages->rel_pages ? relPages->rel_pages->count() - 1 : 0;
-	WIN window(relPages->rel_pg_space_id, -1);
+	ULONG sequence = 0;
+	WIN window(relPages->getPageSpaceId());
+
+	if (const auto ppCount = relPages->getPointerPageCount())
+		sequence = ppCount - 1;
 
 	while (true)
 	{
@@ -2165,13 +2183,14 @@ ULONG DPM_pointer_pages(thread_db* tdbb, jrd_rel* relation)
 	VIO_trace(DEBUG_TRACE_ALL,
 		"    returned pointer pages: %" ULONGFORMAT"\n", sequence + 1);
 #endif
-	fb_assert(relPages->rel_pages && relPages->rel_pages->count() == sequence + 1);
+
+	fb_assert(relPages->getPointerPageCount() == sequence + 1);
 
 	return sequence + 1;
 }
 
 
-void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
+void DPM_scan_pages(thread_db* tdbb, SCHAR pagType, std::optional<int> relId)
 {
 /**************************************
  *
@@ -2198,59 +2217,69 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 
 	auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 	auto relPages = relation->getBasePages();
+	ULONG sequence;
 
-	vcl** address = &relPages->rel_pages;
-	vcl* vector = *address;
-	FB_SIZE_T sequence = vector->count() - 1;
-	WIN window(relPages->rel_pg_space_id, (*vector)[sequence]);
-	pointer_page* ppage = (pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
-
-	while (ppage->ppg_next)
+	if (const auto ppCount = relPages->getPointerPageCount())
 	{
-		++sequence;
-		vector->resize(sequence + 1);
-		(*vector)[sequence] = ppage->ppg_next;
-		ppage = (pointer_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_next, LCK_read, pag_pointer);
+		sequence = ppCount - 1;
+
+		if (const auto ppNumber = relPages->getPointerPage(sequence))
+		{
+			WIN window(ppNumber.value());
+			pointer_page* ppage = (pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
+
+			HalfStaticArray<ULONG, 16> newPointerPages;
+			while (ppage->ppg_next)
+			{
+				newPointerPages.add(ppage->ppg_next);
+				ppage = (pointer_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_next, LCK_read, pag_pointer);
+			}
+
+			CCH_RELEASE(tdbb, &window);
+
+			if (const auto newCount = (ULONG) newPointerPages.getCount())
+				relPages->setPointerPages(sequence, newCount, newPointerPages.begin());
+		}
+
+		if (!relPages->hasIndices())
+		{
+			// Try to guess IRT number for RDB$PAGES, it should be next page after first PP
+			if (const auto firstPage = relPages->getPointerPage(0))
+			{
+				const auto firstPageNum = firstPage.value();
+				WIN window(firstPageNum.getPageSpaceID(), firstPageNum.getPageNum() + 1);
+				index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
+
+				if (root->irt_header.pag_type == pag_root && root->irt_relation == rel_pages)
+					relPages->setIndexRootPage(window.win_page);
+
+				CCH_RELEASE(tdbb, &window);
+			}
+		}
 	}
 
-	CCH_RELEASE(tdbb, &window);
-
-	if (!relPages->rel_index_root)
-	{
-		// Try to guess IRT number for RDB$PAGES, it should be next page after first PP
-		window.win_page = (*vector)[0] + 1;
-
-		index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
-
-		if (root->irt_header.pag_type == pag_root && root->irt_relation == 0)
-			relPages->rel_index_root = window.win_page.getPageNum();
-
-		CCH_RELEASE(tdbb, &window);
-	}
-
+	HalfStaticArray<ULONG, 8> ppList;
 	HalfStaticArray<ULONG, 256> tipSeqList;
 	HalfStaticArray<ULONG, 4> genSeqList;
 	HalfStaticArray<jrd_rel*, 8> markList;
 
-	if (pagType == 0 && relId == 0 || !relPages->rel_index_root)
+	if (!relId)
 	{
+		fb_assert(pagType == 0 || pagType == pag_transactions || pagType == pag_ids);
+
 		AutoCacheRequest request(tdbb, irq_r_pages, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request) X IN RDB$PAGES
+			WITH X.RDB$RELATION_ID = 0
+			AND X.RDB$PAGE_TYPE = pag_transactions OR X.RDB$PAGE_TYPE = pag_ids
 		{
-			relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, X.RDB$RELATION_ID, CacheFlag::AUTOCREATE);
-			relPages = relation->getBasePages();
 			sequence = X.RDB$PAGE_SEQUENCE;
 
 			switch (X.RDB$PAGE_TYPE)
 			{
 			case pag_root:
-				relPages->rel_index_root = X.RDB$PAGE_NUMBER;
-				break;
-
 			case pag_pointer:
-				relPages->rel_pages = vcl::newVector(relation->getPool(), relPages->rel_pages, sequence + 1);
-				(*relPages->rel_pages)[sequence] = X.RDB$PAGE_NUMBER;
+				fb_assert(false);
 				break;
 
 			case pag_transactions:
@@ -2271,7 +2300,10 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 				if (!dbb->dbb_tip_cache)
 					dbb->dbb_flags |= DBB_rescan_pages;
 				else
+				{
+					relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, X.RDB$RELATION_ID, CacheFlag::AUTOCREATE);
 					markList.push(relation);
+				}
 				break;
 
 			default:
@@ -2282,10 +2314,12 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 	}
 	else
 	{
+		fb_assert(pagType != 0);
+
 		AutoCacheRequest request(tdbb, irq_r_pages2, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request) X IN RDB$PAGES
-			WITH X.RDB$RELATION_ID = relId
+			WITH X.RDB$RELATION_ID = relId.value()
 			AND X.RDB$PAGE_TYPE = pagType
 		{
 			relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, X.RDB$RELATION_ID, CacheFlag::AUTOCREATE);
@@ -2295,24 +2329,18 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 			switch (X.RDB$PAGE_TYPE)
 			{
 			case pag_root:
-				relPages->rel_index_root = X.RDB$PAGE_NUMBER;
+				relPages->setIndexRootPage(X.RDB$PAGE_NUMBER);
 				break;
 
 			case pag_pointer:
-				relPages->rel_pages = vcl::newVector(relation->getPool(), relPages->rel_pages, sequence + 1);
-				(*relPages->rel_pages)[sequence] = X.RDB$PAGE_NUMBER;
+				if (sequence >= ppList.getCount())
+					ppList.resize(sequence + 1);
+				ppList[sequence] = X.RDB$PAGE_NUMBER;
 				break;
 
 			case pag_transactions:
-				if (sequence >= tipSeqList.getCount())
-					tipSeqList.resize(sequence + 1);
-				tipSeqList[sequence] = X.RDB$PAGE_NUMBER;
-				break;
-
 			case pag_ids:
-				if (sequence >= genSeqList.getCount())
-					genSeqList.resize(sequence + 1);
-				genSeqList[sequence] = X.RDB$PAGE_NUMBER;
+				fb_assert(false);
 				break;
 
 			case MRK_commit:
@@ -2330,6 +2358,9 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType /*= 0*/, int relId /*= 0*/)
 		}
 		END_FOR
 	}
+
+	if (const auto count = ppList.getCount())
+		relPages->setPointerPages(0, count, ppList.begin());
 
 	if (const auto count = tipSeqList.getCount())
 		dbb->copyKnownPages(pag_transactions, count, tipSeqList.begin());
@@ -3251,12 +3282,12 @@ static USHORT extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window,
 	Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 	const auto relPages = relation->getPages(tdbb);
-	WIN pp_window(relPages->rel_pg_space_id, -1);
+	WIN pp_window(relPages->getPageSpaceId());
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_WRITES_INFO,
 		"     extend_relation (relation %d, instance %" SQUADFORMAT", window)\n",
-		relation->getId(), relPages->rel_instance_id);
+		relation->getId(), relPages->getInstanceId());
 #endif
 
 	//  Search pointer pages for an empty slot.
@@ -3298,7 +3329,7 @@ static USHORT extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window,
 
 		if (ppage->ppg_header.pag_flags & ppg_eof)
 		{
-			WIN new_pp_window(relPages->rel_pg_space_id, -1);
+			WIN new_pp_window(relPages->getPageSpaceId());
 			pointer_page* new_ppage = (pointer_page*) DPM_allocate(tdbb, &new_pp_window);
 			new_ppage->ppg_header.pag_type = pag_pointer;
 			new_ppage->ppg_header.pag_flags |= ppg_eof;
@@ -3308,26 +3339,24 @@ static USHORT extend_relation(thread_db* tdbb, jrd_rel* relation, WIN* window,
 			CCH_must_write(tdbb, &new_pp_window);
 			CCH_RELEASE(tdbb, &new_pp_window);
 
-			vcl* vector = relPages->rel_pages =
-				vcl::newVector(relation->getPool(), relPages->rel_pages, pp_sequence + 1);
-			(*vector)[pp_sequence] = new_pp_window.win_page.getPageNum();
+			const auto newPageNum = new_pp_window.win_page.getPageNum();
+			relPages->setPointerPage(pp_sequence, newPageNum);
 
 			// hvlad: temporary tables don't save their pointer pages in RDB$PAGES
-			if (relation->getId() && (relPages->rel_instance_id == 0))
-			{
-				DPM_pages(tdbb, relation->getId(), pag_pointer,
-						  pp_sequence, new_pp_window.win_page.getPageNum());
-			}
+			if (relation->getId() && relPages->getInstanceId() == 0)
+				DPM_pages(tdbb, relation->getId(), pag_pointer, pp_sequence, newPageNum);
+
 			relPages->rel_slot_space = pp_sequence;
 
 			CCH_MARK(tdbb, &pp_window);
 			ppage->ppg_header.pag_flags &= ~ppg_eof;
-			ppage->ppg_next = new_pp_window.win_page.getPageNum();
+			ppage->ppg_next = newPageNum;
 			--pp_sequence;
 		}
 
 		CCH_RELEASE(tdbb, &pp_window);
 	}
+
 
 	unsigned cntAlloc = 1;
 	// allocate extent (PAGES_IN_EXTENT contiguous pages) if
@@ -3663,37 +3692,39 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	vcl* vector = relPages->rel_pages;
 	bool restored = false;
-	if (!vector || sequence >= vector->count())
+	if (sequence >= relPages->getPointerPageCount())
 	{
 		for (;;)
 		{
 			DPM_scan_pages(tdbb, pag_pointer, relationId);
-			vector = relPages->rel_pages;
 
 			// If there is no relation in RDB$PAGES we try to restore it from RDB$RELATIONS
 			// After moving relation and deleting its pages maybe other DFWs
 			// I rely it may not cause cleaning vector of pages. We hold locks. But I leave this comment
 			// describing a potential situation.
-			if (!vector || vector->count() == 0)
+			if (!relPages->hasData())
 			{
-				if (restored || (relPages->rel_instance_id != 0) || (relationId < rel_MAX))
+				if (restored || (relPages->getInstanceId() != 0) || (relationId < rel_MAX))
 					return NULL;
 
-				if (restore_pages(tdbb, relationId))
-				{
-					restored = true;
-					continue;
-				}
-				else
+				if (!restore_pages(tdbb, relationId))
 					return NULL;
+
+				restored = true;
+				continue;
 			}
 
-			if (sequence < vector->count())
+			const auto ppCount = relPages->getPointerPageCount();
+
+			if (sequence < ppCount)
 				break;			// we are in business again
 
-			window->win_page = (*vector)[vector->count() - 1];
+			const auto ppNumber = relPages->getPointerPage(ppCount - 1);
+			if (!ppNumber)
+				return NULL;
+
+			window->win_page = ppNumber.value();
 			const pointer_page* page = (pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
 			const ULONG next_ppg = page->ppg_next;
 			CCH_RELEASE(tdbb, window);
@@ -3701,12 +3732,16 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
 				return NULL;
 
 			// hvlad: temporary tables don't save their pointer pages in RDB$PAGES
-			if (relPages->rel_instance_id == 0)
-				DPM_pages(tdbb, relationId, pag_pointer, vector->count(), next_ppg);
+			if (relPages->getInstanceId() == 0)
+				DPM_pages(tdbb, relationId, pag_pointer, ppCount, next_ppg);
 		}
 	}
 
-	window->win_page = (*vector)[sequence];
+	const auto ppNumber = relPages->getPointerPage(sequence);
+	if (!ppNumber)
+		return nullptr;
+
+	window->win_page = ppNumber.value();
 	pointer_page* page = (pointer_page*) CCH_FETCH(tdbb, window, lock, pag_pointer);
 
 	if (page->ppg_relation != relationId || page->ppg_sequence != sequence)
@@ -4005,7 +4040,7 @@ static void mark_full(thread_db* tdbb, record_param* rpb)
 	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
 	const auto relPages = relation->getPages(tdbb);
-	WIN pp_window(relPages->rel_pg_space_id, -1);
+	WIN pp_window(relPages->getPageSpaceId());
 
 	USHORT slot;
 	ULONG pp_sequence;
@@ -4158,7 +4193,7 @@ static void store_big_record(thread_db* tdbb,
 
 	const UCHAR* in = rpb->rpb_address + rpb->rpb_length;
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	PageNumber prior(relPages->rel_pg_space_id, 0);
+	PageNumber prior(relPages->toNumber(0));
 
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
@@ -4321,29 +4356,29 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 	const auto dbb = tdbb->getDatabase();
 	const auto attachment = tdbb->getAttachment();
 
-	fb_assert(orgPages->rel_pg_space_id != newPages->rel_pg_space_id);
+	fb_assert(orgPages->getPageSpaceId() != newPages->getPageSpaceId());
 
-	WIN newWindow(newPages->rel_pg_space_id, -1);
-	WIN oldWindow(orgPages->rel_pg_space_id, -1);
-	WIN dpWindow(newPages->rel_pg_space_id, -1);
+	WIN newWindow(newPages->getPageSpaceId());
+	WIN oldWindow(orgPages->getPageSpaceId());
+	WIN dpWindow(newPages->getPageSpaceId());
 
 	// Copy index root page to the new tablespace
-	oldWindow.win_page = orgPages->rel_index_root;
+	oldWindow.win_page = orgPages->getIndexRootPage().value();
 	Ods::pag* oldPage = CCH_FETCH(tdbb, &oldWindow, LCK_read, pag_root);
 
 	Ods::pag* newPage = DPM_allocate(tdbb, &newWindow);
 	CCH_MARK_MUST_WRITE(tdbb, &newWindow);
 	memcpy(newPage, oldPage, dbb->dbb_page_size);
 	newPage->pag_pageno = newWindow.win_page.getPageNum();
-	newPages->rel_index_root = newWindow.win_page.getPageNum();
+	newPages->setIndexRootPage(newWindow.win_page);
 
 	CCH_RELEASE(tdbb, &newWindow);
 	CCH_RELEASE(tdbb, &oldWindow);
 
 	PagesMap pagesMap;
 
-	const ULONG ppCount = orgPages->rel_pages->count();
-	newPages->init(0, ppCount);
+	const ULONG ppCount = orgPages->getPointerPageCount();
+	HalfStaticArray<ULONG, 256> newPointerPages(ppCount);
 
 	ULONG sequence = 0;
 
@@ -4356,7 +4391,7 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 			const ULONG firstPage = newWindow.win_page.getPageNum();
 			CCH_RELEASE(tdbb, &newWindow);
 			for (unsigned i = 0; i < PAGES_IN_EXTENT; i++)
-				(*newPages->rel_pages)[sequence + i] = firstPage + i;
+				newPointerPages.add(firstPage + i);
 		}
 	}
 
@@ -4366,16 +4401,20 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 		PAG_allocate_pages(tdbb, &newWindow, 1, false);
 		const ULONG page = newWindow.win_page.getPageNum();
 		CCH_RELEASE(tdbb, &newWindow);
-		(*newPages->rel_pages)[sequence] = page;
+		newPointerPages.add(page);
 	}
 
+	fb_assert(newPointerPages.getCount() == ppCount);
+	newPages->setPointerPages(0, ppCount, newPointerPages.begin());
+
 	// Copy and fix every pointer page and allocate and map its datapages
-	for (sequence = 0; sequence < ppCount; sequence++)
+	sequence = 0;
+	for (const auto oldPage : *orgPages->getPointerPages().getPointer())
 	{
-		ULONG oldPage = oldWindow.win_page = (*orgPages->rel_pages)[sequence];
+		oldWindow.win_page = oldPage;
 		const pointer_page* oldPP = (pointer_page*) CCH_FETCH(tdbb, &oldWindow, LCK_read, pag_pointer);
 
-		ULONG newPage = newWindow.win_page = (*newPages->rel_pages)[sequence];
+		const ULONG newPage = newWindow.win_page = newPointerPages[sequence];
 		pointer_page* newPP = (pointer_page*) CCH_FETCH(tdbb, &newWindow, LCK_write, pag_undefined);
 
 		// Copy and replace useful markers from orgPages
@@ -4392,10 +4431,10 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 		CCH_MARK(tdbb, &newWindow);
 		memcpy(newPP, oldPP, dbb->dbb_page_size);
 
-		if (sequence < (ppCount - 1))
+		if (sequence < ppCount - 1)
 		{
 			// Fix the pointer to the next PP
-			newPP->ppg_next = (*newPages->rel_pages)[sequence + 1];
+			newPP->ppg_next = newPointerPages[sequence + 1];
 		}
 		else
 		{
@@ -4474,6 +4513,7 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 		}
 
 		CCH_RELEASE(tdbb, &newWindow);
+		sequence++;
 	}
 
 	// Now we have copied all PPs, allocated all DPs and got an allocation map
@@ -4521,8 +4561,8 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 					for (; page1 < end1; page1++)
 					{
 						// Copy blob page with blob page numbers
-						WIN oldWindow1(orgPages->rel_pg_space_id, *page1);
-						WIN newWindow1(newPages->rel_pg_space_id, -1);
+						WIN oldWindow1(orgPages->toNumber(*page1));
+						WIN newWindow1(newPages->getPageSpaceId());
 						blob_page* oldBlobPage1 = (blob_page*) CCH_FETCH(tdbb, &oldWindow1, LCK_read, pag_blob);
 						blob_page* newBlobPage1 = (blob_page*) PAG_allocate(tdbb, &newWindow1);
 						memcpy(newBlobPage1, oldBlobPage1, dbb->dbb_page_size);
@@ -4537,8 +4577,8 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 
 							for (; page2 < end2; page2++)
 							{
-								WIN oldWindow2(orgPages->rel_pg_space_id, *page2);
-								WIN newWindow2(newPages->rel_pg_space_id, -1);
+								WIN oldWindow2(orgPages->toNumber(*page2));
+								WIN newWindow2(newPages->getPageSpaceId());
 								blob_page* oldBlobPage2 = (blob_page*) CCH_FETCH(tdbb, &oldWindow2, LCK_read, pag_blob);
 								blob_page* newBlobPage2 = (blob_page*) PAG_allocate(tdbb, &newWindow2);
 								memcpy(newBlobPage2, oldBlobPage2, dbb->dbb_page_size);
@@ -4580,5 +4620,5 @@ void DPM_copy_data(thread_db* tdbb, ULONG relationId, RelationPages* orgPages, R
 		CCH_RELEASE(tdbb, &newWindow);
 	}
 
-	update_first_pointer_page(tdbb, relationId, (*newPages->rel_pages)[0], newPages->rel_index_root);
+	update_first_pointer_page(tdbb, relationId, newPages);
 }

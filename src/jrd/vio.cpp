@@ -438,7 +438,7 @@ bool SweepTask::handler(WorkItem& _item)
 		if (relation &&
 			!getPermanent(relation)->isDropped() &&
 			!relation->isTemporary() &&
-			relation->getPages(tdbb)->rel_pages)
+			relation->getPages(tdbb)->hasData())
 		{
 			GCLock::Shared gcGuard(tdbb, relation);
 			if (!gcGuard.gcEnabled())
@@ -451,7 +451,7 @@ bool SweepTask::handler(WorkItem& _item)
 			jrd_tra* tran = tdbb->getTransaction();
 
 			if (relInfo->countPP == 0)
-				relInfo->countPP = relation->getPages(tdbb)->rel_pages->count();
+				relInfo->countPP = relation->getPages(tdbb)->getPointerPageCount();
 
 			rpb.rpb_relation = relation;
 			rpb.rpb_org_scans = relation->rel_scan_count++;
@@ -2747,7 +2747,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(PageNumber(relPages->rel_pg_space_id, staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toNumber(staying_chain_rpb.rpb_page));
 		++const_i;
 	}
 
@@ -2771,7 +2771,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(PageNumber(relPages->rel_pg_space_id, staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toNumber(staying_chain_rpb.rpb_page));
 	}
 
 	// Read head version with write lock and check if it is still the same version
@@ -4894,7 +4894,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 			if (relation &&
 				!(relation->getPermanent()->isDropped()) &&
 				!relation->isTemporary() &&
-				relation->getPages(tdbb)->rel_pages)
+				relation->getPages(tdbb)->hasData())
 			{
 				GCLock::Shared gcGuard(tdbb, relation);
 				if (!gcGuard.gcEnabled())

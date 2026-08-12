@@ -9103,7 +9103,7 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		if (relation->rel_current_fmt == MAX_TABLE_VERSIONS)
 			raiseTooManyVersionsError(obj_relation, ltt->name);
 
-		fb_assert(relation->getPageSpace() == dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
+		fb_assert(relation->getPageSpaceId() == dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
 
 		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, relation->getPermanent());
 		versRel->rel_current_fmt = relation->rel_current_fmt + 1;
@@ -10001,13 +10001,10 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 			const auto relPages = newVersion->getPages(tdbb);
 
-			if (relPages->rel_index_root)
-			{
-				const PageNumber rootPage(relPages->rel_pg_space_id, relPages->rel_index_root);
-				IDX_delete_indices(tdbb, rootPage, true);
-			}
+			if (const auto rootPage = relPages->getIndexRootPage())
+				IDX_delete_indices(tdbb, rootPage.value(), true);
 
-			if (relPages->rel_pages)
+			if (relPages->hasData())
 				DPM_delete_relation(tdbb, newVersion);
 
 			relation->rollback(tdbb);
@@ -10934,8 +10931,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			const auto newPages = newVersion->getBasePages();
 
-			fb_assert(newPages->rel_pg_space_id == pageSpaceId.value());
-			fb_assert(newPages->rel_pg_space_id != orgPages->rel_pg_space_id);
+			fb_assert(newPages->getPageSpaceId() == pageSpaceId.value());
+			fb_assert(newPages->getPageSpaceId() != orgPages->getPageSpaceId());
 
 			// Protect relation from modification to create a consistent table copy.
 			// The lock is held until the transaction end.
@@ -12188,7 +12185,7 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 
 		const auto relPages = relation->getBasePages();
 
-		if (relPages->rel_pages)
+		if (relPages->hasData())
 			DPM_mark_relation(tdbb, relation);
 
 		AutoSetRestoreFlag<ULONG> noDfw(&tdbb->tdbb_flags, TDBB_dont_post_dfw, true);
@@ -14643,7 +14640,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 		{
 			// One way or another the index was just created, finalize it
 			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex);
-			fb_assert(relation->getBasePages()->rel_index_root);
+			fb_assert(relation->getBasePages()->getIndexRootPage());
 			storeNode.step2(tdbb, transaction);
 			return;
 		}

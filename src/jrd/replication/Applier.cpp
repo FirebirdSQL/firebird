@@ -1072,16 +1072,11 @@ void Applier::executeSql(thread_db* tdbb,
 
 bool Applier::lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& key)
 {
-	const auto relPages = relation->getPages(tdbb);
-	auto page = relPages->rel_index_root;
-	if (!page)
-	{
-		DPM_scan_pages(tdbb, pag_root, relation->getId());
-		page = relPages->rel_index_root;
-	}
+	const auto rootPage = relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return false;
 
-	const PageNumber root_page(relPages->rel_pg_space_id, page);
-	win window(root_page);
+	win window(rootPage.value());
 	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
 	index_desc idx;

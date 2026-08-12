@@ -33,6 +33,7 @@
 #include "../jrd/ExtEngineManager.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/Resources.h"
+#include "../jrd/SharedReadVector.h"
 #include "../jrd/Tablespace.h"
 #include "../common/classes/TriState.h"
 #include "../common/sha2/sha2.h"
@@ -311,6 +312,8 @@ class RelationPages : private Firebird::PermanentStorage
 {
 	friend class RelationPermanent;
 
+	typedef SharedReadVector<ULONG, 8> PageList;
+
 public:
 	typedef FB_UINT64 InstanceId;
 
@@ -318,11 +321,6 @@ public:
 	static_assert(sizeof(InstanceId) >= sizeof(TraNumber), "InstanceId must fit TraNumber");
 	static_assert(sizeof(InstanceId) >= sizeof(AttNumber), "InstanceId must fit AttNumber");
 
-	vcl* rel_pages = nullptr;			// vector of pointer page numbers
-	InstanceId rel_instance_id = 0;		// 0 or att_attachment_id or tra_number
-	ULONG rel_pg_space_id = DB_PAGE_SPACE;
-
-	ULONG rel_index_root = 0;			// index root page number
 	ULONG rel_data_pages = 0;			// count of relation data pages
 	ULONG rel_slot_space = 0;			// lowest pointer page with slot space
 	ULONG rel_pri_data_space = 0;		// lowest pointer page with primary data page space
@@ -331,86 +329,241 @@ public:
 	ULONG rel_last_free_blb_dp = 0;		// last blob data page found with space
 
 	RelationPages(Firebird::MemoryPool& pool)
-		: Firebird::PermanentStorage(pool), dpMap(pool)
+		: Firebird::PermanentStorage(pool), m_dpMap(pool)
 	{}
 
-	RelationPages& operator=(const RelationPages& other)
+	void assign(const RelationPages& from)
 	{
-		rel_pg_space_id = other.rel_pg_space_id;
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-		delete rel_pages;
-		rel_pages = nullptr;
-		if (other.rel_pages)
-		{
-			const auto pageCount = other.rel_pages->count();
-			rel_pages = vcl::newVector(getPool(), pageCount);
-			memcpy(rel_pages->begin(), other.rel_pages->begin(), pageCount * sizeof(ULONG));
-		}
+		m_pageSpaceId = from.m_pageSpaceId;
 
-		rel_index_root = other.rel_index_root;
-		rel_data_pages = other.rel_data_pages;
-		rel_slot_space = other.rel_slot_space;
-		rel_pri_data_space = other.rel_pri_data_space;
-		rel_sec_data_space = other.rel_sec_data_space;
-		rel_last_free_pri_dp = other.rel_last_free_pri_dp;
-		rel_last_free_blb_dp = other.rel_last_free_blb_dp;
+		m_pointerPages.clear();
 
-		dpMap.assign(other.dpMap);
-		dpMapMark = other.dpMapMark;
+		const auto readAccessor = from.m_pointerPages.readAccessor();
+		const auto pageCount = readAccessor->getCount();
+		m_pointerPages.grow(pageCount, true);
 
-		return *this;
+		const auto writeAccessor = m_pointerPages.writeAccessor();
+		writeAccessor->add(readAccessor);
+
+		m_indexRootPage = from.m_indexRootPage;
+		rel_data_pages = from.rel_data_pages;
+		rel_slot_space = from.rel_slot_space;
+		rel_pri_data_space = from.rel_pri_data_space;
+		rel_sec_data_space = from.rel_sec_data_space;
+		rel_last_free_pri_dp = from.rel_last_free_pri_dp;
+		rel_last_free_blb_dp = from.rel_last_free_blb_dp;
+
+		m_dpMap.assign(from.m_dpMap);
+		m_dpMapMark = from.m_dpMapMark;
+	}
+
+	void reset(ULONG pageSpaceId = INVALID_PAGE_SPACE)
+	{
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+		m_pageSpaceId = pageSpaceId;
+		m_instanceId = 0;
+
+		m_pointerPages.clear();
+		m_indexRootPage = 0;
+
+		rel_data_pages = 0;
+		rel_slot_space = 0;
+		rel_pri_data_space = 0;
+		rel_sec_data_space = 0;
+		rel_last_free_pri_dp = 0;
+		rel_last_free_blb_dp = 0;
+
+		m_dpMap.clear();
+		m_dpMapMark = 0;
+	}
+
+	ULONG getPageSpaceId() const noexcept
+	{
+		return m_pageSpaceId;
 	}
 
 	void setPageSpace(ULONG pageSpaceId)
 	{
-		if (rel_pg_space_id != pageSpaceId)
+		if (m_pageSpaceId != pageSpaceId)
+			reset(pageSpaceId);
+	}
+
+	void init(ULONG pageNo, ULONG pageCount = 1)
+	{
+		fb_assert(pageCount);
+		fb_assert(pageNo);
+
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE);
+
+		auto accessor = m_pointerPages.writeAccessor();
+
+		if (pageCount > accessor->getCount())
 		{
-			fb_assert(rel_instance_id == 0);
-			rel_pg_space_id = pageSpaceId;
-			delete rel_pages;
-			rel_pages = nullptr;
-			rel_index_root = 0;
-			rel_data_pages = 0;
-			rel_slot_space = 0;
-			rel_pri_data_space = 0;
-			rel_sec_data_space = 0;
-			rel_last_free_pri_dp = 0;
-			rel_last_free_blb_dp = 0;
+			m_pointerPages.grow(pageCount, true);
+			accessor = m_pointerPages.writeAccessor();
 		}
+
+		auto& value = accessor->value(0);
+		fb_assert(!value || value == pageNo);
+		value = pageNo;
 	}
 
-	void init(ULONG pageNumber, ULONG count = 1)
+	InstanceId getInstanceId() const noexcept
 	{
-		fb_assert(rel_pg_space_id);
-
-		if (!rel_pages)
-			rel_pages = vcl::newVector(getPool(), count);
-
-		(*rel_pages)[0] = pageNumber;
+		return m_instanceId;
 	}
 
-	inline SLONG addRef() noexcept
+	void setInstanceId(InstanceId instanceId)
 	{
-		return useCount++;
+		m_instanceId = instanceId;
+	}
+
+	PageNumber toNumber(ULONG pageNo) const noexcept
+	{
+		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE);
+		return PageNumber(m_pageSpaceId, pageNo);
+	}
+
+	bool hasIndices() const
+	{
+		return (m_indexRootPage != 0);
+	}
+
+	std::optional<PageNumber> getIndexRootPage()
+	{
+		if (!m_indexRootPage)
+			return std::nullopt;
+
+		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE);
+
+		return PageNumber(m_pageSpaceId, m_indexRootPage);
+	}
+
+	void setIndexRootPage(ULONG indexRootPage)
+	{
+		fb_assert(indexRootPage);
+		m_indexRootPage = indexRootPage;
+	}
+
+	void setIndexRootPage(PageNumber indexRootPage)
+	{
+		const auto pageNo = indexRootPage.getPageNum();
+		fb_assert(indexRootPage.getPageSpaceID() == m_pageSpaceId && pageNo);
+
+		m_indexRootPage = pageNo;
+	}
+
+	bool hasData() const
+	{
+		return (m_pointerPages.readAccessor()->getCount() != 0);
+	}
+
+	HazardPtr<PageList::Generation> getPointerPages()
+	{
+		return m_pointerPages.readAccessor();
+	}
+
+	ULONG getPointerPageCount()
+	{
+		const auto accessor = m_pointerPages.readAccessor();
+		return accessor->getCount();
+	}
+
+	std::optional<PageNumber> getPointerPage(ULONG sequence)
+	{
+		const auto accessor = m_pointerPages.readAccessor();
+		if (sequence >= accessor->getCount())
+			return std::nullopt;
+
+		const auto pageNo = accessor->value(sequence);
+		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE && pageNo);
+
+		return PageNumber(m_pageSpaceId, pageNo);
+	}
+
+	void setPointerPages(ULONG sequence, ULONG count, const ULONG* data)
+	{
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		auto accessor = m_pointerPages.writeAccessor();
+
+		if (sequence + count >= accessor->getCount())
+		{
+			m_pointerPages.grow(sequence + count + 1, true);
+			accessor = m_pointerPages.writeAccessor();
+		}
+
+#ifdef DEV_BUILD
+		for (unsigned i = 0; i < count; i++)
+		{
+			auto& value = accessor->value(sequence + i);
+			fb_assert(!value || value == data[i]);
+			fb_assert(data[i]);
+			value = data[i];
+		}
+#else
+		memcpy(accessor->begin() + sequence, data, count);
+#endif
+	}
+
+	void setPointerPage(ULONG sequence, ULONG pageNo)
+	{
+		fb_assert(pageNo);
+
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		auto accessor = m_pointerPages.writeAccessor();
+
+		if (sequence >= accessor->getCount())
+		{
+			m_pointerPages.grow(sequence + 1, true);
+			accessor = m_pointerPages.writeAccessor();
+		}
+
+		auto& value = accessor->value(sequence);
+		fb_assert(!value || value == pageNo);
+		value = pageNo;
+	}
+
+	inline int addRef() noexcept
+	{
+		return ++m_useCount;
+	}
+
+	RelationPages* reuse()
+	{
+		const auto freePages = m_freePages;
+		m_freePages = nullptr;
+		return freePages;
+	}
+
+	void setup(InstanceId instanceId, ULONG pageSpaceId)
+	{
+		addRef();
+		m_instanceId = instanceId;
+		m_pageSpaceId = pageSpaceId;
 	}
 
 	void free(RelationPages*& nextFree);
 
 	static inline InstanceId generate(const RelationPages* item) noexcept
 	{
-		return item->rel_instance_id;
+		return item->m_instanceId;
 	}
 
 	ULONG getDPNumber(ULONG dpSequence)
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		FB_SIZE_T pos;
-		if (dpMap.find(dpSequence, pos))
+		if (m_dpMap.find(dpSequence, pos))
 		{
-			if (dpMap[pos].mark != dpMapMark)
-				dpMap[pos].mark = ++dpMapMark;
-			return dpMap[pos].physNum;
+			if (m_dpMap[pos].mark != m_dpMapMark)
+				m_dpMap[pos].mark = ++m_dpMapMark;
+			return m_dpMap[pos].physNum;
 		}
 
 		return 0;
@@ -418,58 +571,64 @@ public:
 
 	void setDPNumber(ULONG dpSequence, ULONG dpNumber)
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		FB_SIZE_T pos;
-		if (dpMap.find(dpSequence, pos))
+		if (m_dpMap.find(dpSequence, pos))
 		{
 			if (dpNumber)
 			{
-				dpMap[pos].physNum = dpNumber;
-				dpMap[pos].mark = ++dpMapMark;
+				m_dpMap[pos].physNum = dpNumber;
+				m_dpMap[pos].mark = ++m_dpMapMark;
 			}
 			else
-				dpMap.remove(pos);
+				m_dpMap.remove(pos);
 		}
 		else if (dpNumber)
 		{
-			dpMap.insert(pos, {dpSequence, dpNumber, ++dpMapMark});
+			m_dpMap.insert(pos, {dpSequence, dpNumber, ++m_dpMapMark});
 
-			if (dpMap.getCount() == MAX_DPMAP_ITEMS)
+			if (m_dpMap.getCount() == MAX_DPMAP_ITEMS)
 				freeOldestMapItems();
 		}
 	}
 
 	void freeOldestMapItems() noexcept
 	{
-		Firebird::MutexLockGuard g(dpMutex, FB_FUNCTION);
+		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		ULONG minMark = MAX_ULONG;
 		FB_SIZE_T i;
 
-		for (i = 0; i < dpMap.getCount(); i++)
+		for (i = 0; i < m_dpMap.getCount(); i++)
 		{
-			if (minMark > dpMap[i].mark)
-				minMark = dpMap[i].mark;
+			if (minMark > m_dpMap[i].mark)
+				minMark = m_dpMap[i].mark;
 		}
 
-		minMark = (minMark + dpMapMark) / 2;
+		minMark = (minMark + m_dpMapMark) / 2;
 
 		i = 0;
-		while (i < dpMap.getCount())
+		while (i < m_dpMap.getCount())
 		{
-			if (dpMap[i].mark > minMark)
-				dpMap[i++].mark -= minMark;
+			if (m_dpMap[i].mark > minMark)
+				m_dpMap[i++].mark -= minMark;
 			else
-				dpMap.remove(i);
+				m_dpMap.remove(i);
 		}
 
-		dpMapMark -= minMark;
+		m_dpMapMark -= minMark;
 	}
 
 private:
-	RelationPages* rel_next_free = nullptr;
-	std::atomic<SLONG> useCount = 0;
+	InstanceId m_instanceId = 0;		// 0 or att_attachment_id or tra_number
+	ULONG m_pageSpaceId = DB_PAGE_SPACE;
+
+	PageList m_pointerPages;
+	ULONG m_indexRootPage = 0;
+	RelationPages* m_freePages = nullptr;
+	std::atomic<int> m_useCount = 0;
+	Firebird::Mutex m_mutex;
 
 	static constexpr ULONG MAX_DPMAP_ITEMS = 64;
 
@@ -485,9 +644,8 @@ private:
 		}
 	};
 
-	Firebird::SortedArray<DPItem, Firebird::InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> dpMap;
-	ULONG dpMapMark = 0;
-	Firebird::Mutex dpMutex;
+	Firebird::SortedArray<DPItem, Firebird::InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> m_dpMap;
+	ULONG m_dpMapMark = 0;
 };
 
 
@@ -861,12 +1019,18 @@ public:
 
 	void setPages(const jrd_rel* relation)
 	{
-		rel_pages_base = relation->rel_pages_base;
+		rel_pages_base.assign(relation->rel_pages_base);
 	}
 
-	ULONG getPageSpace() const
+	ULONG getPageSpaceId() const
 	{
-		return rel_pages_base.rel_pg_space_id;
+		return rel_pages_base.getPageSpaceId();
+	}
+
+	ULONG getPageSpaceId(thread_db* tdbb)
+	{
+		const auto relPages = getPages(tdbb);
+		return relPages->getPageSpaceId();
 	}
 
 	void setPageSpace(ULONG pageSpaceId)
@@ -877,11 +1041,7 @@ public:
 	std::optional<PageNumber> getIndexRootPage(thread_db* tdbb)
 	{
 		const auto relPages = getPages(tdbb);
-
-		if (!relPages->rel_index_root)
-			return std::nullopt;
-
-		return PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root);
+		return relPages->getIndexRootPage();
 	}
 
 	void getRelLockKey(thread_db* tdbb, UCHAR* key);

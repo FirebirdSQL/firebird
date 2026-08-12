@@ -1634,11 +1634,12 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 					END_FOR
 
 					// Regenerate RDB$PAGES for the new relation
-					DPM_pages(tdbb, work->dfw_id, pag_root, 0, newPages->rel_index_root);
-					ULONG* page = newPages->rel_pages->begin();
-					const FB_SIZE_T n = newPages->rel_pages->count();
-					for (FB_SIZE_T seq = 0; seq < n; seq++, page++)
-						DPM_pages(tdbb, work->dfw_id, pag_pointer, seq, *page);
+					ULONG sequence = 0;
+					for (const auto pageNo : *newPages->getPointerPages().getPointer())
+						DPM_pages(tdbb, work->dfw_id, pag_pointer, sequence++, pageNo);
+
+					if (const auto indexRoot = newPages->getIndexRootPage())
+						DPM_pages(tdbb, work->dfw_id, pag_root, 0, indexRoot.value().getPageNum());
 
 					CCH_flush(tdbb, FLUSH_SYSTEM, 0);
 				}
@@ -3673,9 +3674,9 @@ static bool set_statistics(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 					MetadataCache::getVersioned<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::AUTOCREATE);
 
 				// no need to recalculate statistics for base instance of GTT
-				RelationPages* relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+				const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
 				const bool isTempInstance = relation->isTemporary() &&
-					relPages && (relPages->rel_instance_id != 0);
+					relPages && (relPages->getInstanceId() != 0);
 
 				if (isTempInstance || !relation->isTemporary())
 				{
@@ -5093,11 +5094,13 @@ static bool delete_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		// Get the relation pages
 		const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
-		if (!relPages || !relPages->rel_index_root)
+		const auto rootPage = relPages ? relPages->getIndexRootPage() : std::nullopt;
+
+		if (!rootPage)
 			return false;
 
 		// Delete the index by its ID
-		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+		WIN window(rootPage.value());
 		CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 
 		BTR_delete_index(tdbb, &window, indexId, false);

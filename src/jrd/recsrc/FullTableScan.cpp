@@ -101,9 +101,8 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 		{
 			auto number = impure->irsb_lower.getValue();
 
-			const auto ppages = relation->getPages(tdbb)->rel_pages;
-			const auto maxRecno = (SINT64) ppages->count() *
-				dbb->dbb_dp_per_pp * dbb->dbb_max_records - 1;
+			const auto ppCount = relation->getPages(tdbb)->getPointerPageCount();
+			const auto maxRecno = (SINT64) ppCount * dbb->dbb_dp_per_pp * dbb->dbb_max_records - 1;
 			if (number > maxRecno)
 				number = maxRecno;
 

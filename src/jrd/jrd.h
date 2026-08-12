@@ -160,10 +160,12 @@ struct win
 	class BufferDesc* win_bdb;
 	SSHORT win_scans;
 	USHORT win_flags;
+
 	explicit win(const PageNumber& wp) noexcept
 		: win_page(wp), win_bdb(NULL), win_flags(0)
 	{}
-	win(const ULONG pageSpaceID, const ULONG pageNum) noexcept
+
+	explicit win(const ULONG pageSpaceID, const ULONG pageNum = MAX_ULONG) noexcept
 		: win_page(pageSpaceID, pageNum), win_bdb(NULL), win_flags(0)
 	{}
 };

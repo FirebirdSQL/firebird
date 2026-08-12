@@ -194,8 +194,8 @@ RecordNumber BulkInsert::Buffer::putBlob(thread_db* tdbb, blb* blob, Record* rec
 
 	if (record)
 	{
-		RelationPages* relPages = rpb.rpb_relation->getPages(tdbb);
-		record->pushPrecedence(PageNumber(relPages->rel_pg_space_id, m_current->dpg_header.pag_pageno));
+		const auto relPages = rpb.rpb_relation->getPages(tdbb);
+		record->pushPrecedence(relPages->toNumber(m_current->dpg_header.pag_pageno));
 	}
 
 	return rpb.rpb_number;
@@ -203,13 +203,13 @@ RecordNumber BulkInsert::Buffer::putBlob(thread_db* tdbb, blb* blob, Record* rec
 
 void BulkInsert::Buffer::fragmentRecord(thread_db* tdbb, record_param* rpb, Compressor* dcc)
 {
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	// Start compression from the end.
 
 	const UCHAR* in = rpb->rpb_address + rpb->rpb_length;
-	RelationPages* relPages = rpb->rpb_relation->getPages(tdbb);
-	PageNumber prior(relPages->rel_pg_space_id, 0);
+	const auto relPages = rpb->rpb_relation->getPages(tdbb);
+	PageNumber prior(relPages->toNumber(0));
 
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
@@ -364,10 +364,10 @@ UCHAR* BulkInsert::Buffer::findSpace(thread_db* tdbb, record_param* rpb, USHORT 
 
 data_page* BulkInsert::Buffer::allocatePages(thread_db* tdbb)
 {
-	Database* dbb = tdbb->getDatabase();
-	RelationPages* relPages = m_relation->getPages(tdbb);
+	const auto dbb = tdbb->getDatabase();
+	const auto relPages = m_relation->getPages(tdbb);
 
-	WIN window(relPages->rel_pg_space_id, 0);
+	WIN window(relPages->getPageSpaceId());
 
 	const auto reserved = DPM_reserve_pages(tdbb, m_relation, &window);
 
@@ -405,8 +405,8 @@ void BulkInsert::Buffer::flush(thread_db* tdbb)
 	if (!m_current)
 		return;
 
-	Database* dbb = tdbb->getDatabase();
-	RelationPages* relPages = m_relation->getPages(tdbb);
+	const auto dbb = tdbb->getDatabase();
+	const auto relPages = m_relation->getPages(tdbb);
 
 	const ULONG pp_sequence = m_current->dpg_sequence / dbb->dbb_dp_per_pp;
 
@@ -417,7 +417,7 @@ void BulkInsert::Buffer::flush(thread_db* tdbb)
 		if (m_current->dpg_count == 0)
 			break;
 
-		win dpWindow(relPages->rel_pg_space_id, m_current->dpg_header.pag_pageno);
+		win dpWindow(relPages->toNumber(m_current->dpg_header.pag_pageno));
 
 		auto dpage = CCH_FETCH(tdbb, &dpWindow, LCK_write, pag_data);
 
@@ -438,7 +438,8 @@ void BulkInsert::Buffer::flush(thread_db* tdbb)
 		m_current = nextPage(m_current, m_pageSize);
 	}
 
-	win ppWindow(relPages->rel_pg_space_id, (*relPages->rel_pages)[pp_sequence]);
+	const auto ppNumber = relPages->getPointerPage(pp_sequence);
+	win ppWindow(ppNumber.value());
 	pointer_page* ppage = (pointer_page*) CCH_FETCH(tdbb, &ppWindow, LCK_write, pag_pointer);
 
 	m_current = m_pages;

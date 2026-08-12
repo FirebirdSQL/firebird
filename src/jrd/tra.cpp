@@ -583,12 +583,12 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 
 	// Start by fetching prior transaction page, if any
 	tx_inv_page* prior_tip = NULL;
-	WIN prior_window(DB_PAGE_SPACE, -1);
+	WIN prior_window(DB_PAGE_SPACE);
 	if (sequence)
 		prior_tip = fetch_inventory_page(tdbb, &prior_window, (sequence - 1), LCK_write);
 
 	// Allocate and format new page
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	tx_inv_page* tip = (tx_inv_page*) DPM_allocate(tdbb, &window);
 	tip->tip_header.pag_type = pag_transactions;
 
@@ -638,7 +638,7 @@ int TRA_fetch_state(thread_db* tdbb, TraNumber number)
 
 	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
 	const ULONG tip_seq = number / trans_per_tip;
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
 
 	// calculate the state of the desired transaction
@@ -682,7 +682,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 
 	// fetch the first inventory page
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
 
 	// move the first page into the bit vector
@@ -1498,7 +1498,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 	const ULONG byte = TRANS_OFFSET(number % trans_per_tip);
 	const USHORT shift = TRANS_SHIFT(number);
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
 
 	UCHAR* address = tip->tip_transactions + byte;
@@ -2397,7 +2397,7 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 	const ULONG page = id / trans_per_tip;
 	const ULONG number = id % trans_per_tip;
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
 
 	const ULONG trans_offset = TRANS_OFFSET(number);
@@ -2597,7 +2597,7 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 	// Create a new transaction lock, inheriting oldest active from transaction being committed.
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	TraNumber new_number;
 #ifdef SUPERSERVER_V2
 	new_number = bump_transaction_id(tdbb, &window);
@@ -3571,7 +3571,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 
 	Lock* lock = FB_NEW_RPT(*tdbb->getDefaultPool(), 0) Lock(tdbb, sizeof(TraNumber), LCK_tra);
 

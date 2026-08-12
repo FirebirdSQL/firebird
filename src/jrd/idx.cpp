@@ -972,12 +972,14 @@ void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Atta
 
 		if (attachment)
 		{
-			const auto pages = relation->getAttPages(tdbb, attachment->att_attachment_id);
-			if (pages && pages->rel_index_root)
+			if (const auto pages = relation->getAttPages(tdbb, attachment->att_attachment_id))
 			{
-				WIN window(pages->rel_pg_space_id, pages->rel_index_root);
-				auto* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
-				BTR_mark_index_for_delete(tdbb, relation, id, &window, root, tran);
+				if (const auto rootPage = pages->getIndexRootPage())
+				{
+					WIN window(rootPage.value());
+					const auto root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+					BTR_mark_index_for_delete(tdbb, relation, id, &window, root, tran);
+				}
 			}
 		}
 	}
@@ -1747,7 +1749,7 @@ static idx_e check_foreign_key(thread_db* tdbb,
 
 			for (const auto partnerPages : pagesSnapshot)
 			{
-				tdbb->tdbb_temp_traid = partnerPages->rel_instance_id;
+				tdbb->tdbb_temp_traid = partnerPages->getInstanceId();
 
 				if ( (result = check_partner_index(tdbb, relation, record,
 							transaction, idx, partnerRelation, index_id)) )

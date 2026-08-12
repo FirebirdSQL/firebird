@@ -2130,7 +2130,7 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 	newRelation->rel_fields = vec<jrd_fld*>::newVector(pool, newRelation->rel_fields, format->fmt_count);
 
 	const auto relPages = newRelation->getBasePages();
-	relPages->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+	relPages->setPageSpace(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
 
 	const auto relFormat = Format::newFormat(pool, format->fmt_count);
 	relFormat->fmt_length = format->fmt_length;

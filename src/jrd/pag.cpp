@@ -966,13 +966,11 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 
 	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 	const auto relPages = relation->getBasePages();
-	if (!relPages->rel_pages)
+	if (!relPages->hasData())
 	{
 		// NS: There's no need to reassign first page for RDB$PAGES relation since
 		// current code cannot change its location after database creation.
-		vcl* vector = vcl::newVector(relation->getPool(), 1);
-		relPages->rel_pages = vector;
-		(*vector)[0] = header->hdr_PAGES;
+		relPages->init(header->hdr_PAGES);
 	}
 
 	dbb->dbb_next_transaction = next_transaction;

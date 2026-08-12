@@ -1229,7 +1229,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 		if (source->bid_internal.bid_relation_id || needFilter)
 		{
 			blob = copy_blob(tdbb, source, destination,
-							 bpb.getCount(), bpb.begin(), relPages->rel_pg_space_id);
+							 bpb.getCount(), bpb.begin(), relPages->getPageSpaceId());
 		}
 		else if ((to_desc->dsc_dtype == dtype_array) && (array = find_array(transaction, source)) &&
 			(blob = store_array(tdbb, transaction, source)))
@@ -1279,11 +1279,11 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 						ERR_post(Arg::Gds(isc_bad_segstr_id));
 				}
 
-				if (blob->blb_level && (blob->blb_pg_space_id != relPages->rel_pg_space_id))
+				if (blob->blb_level && (blob->blb_pg_space_id != relPages->getPageSpaceId()))
 				{
 					const ULONG oldTempID = blob->blb_temp_id;
 					blb* newBlob = copy_blob(tdbb, source, destination,
-						bpb.getCount(), bpb.begin(), relPages->rel_pg_space_id);
+						bpb.getCount(), bpb.begin(), relPages->getPageSpaceId());
 
 					transaction->tra_blobs->locate(newBlob->blb_temp_id);
 					BlobIndex* newBlobIndex = &transaction->tra_blobs->current();
@@ -1517,7 +1517,7 @@ blb* blb::open2(thread_db* tdbb,
 		if (!blob->blb_relation)
 			ERR_post(Arg::Gds(isc_bad_segstr_id));
 
-		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->rel_pg_space_id;
+		blob->blb_pg_space_id = blob->blb_relation->getPages(tdbb)->getPageSpaceId();
 		DPM_get_blob(tdbb, blob, blob->blb_relation, blobId.get_permanent_number(), false, 0);
 
 #ifdef CHECK_BLOB_FIELD_ACCESS_FOR_SELECT
@@ -2347,7 +2347,7 @@ void blb::delete_blob_id(thread_db* tdbb, const bid* blob_id, ULONG prior_page, 
 	// Fetch blob
 
 	blb* blob = allocate_blob(tdbb, attachment->getSysTransaction());
-	blob->blb_pg_space_id = relation->getPages(tdbb)->rel_pg_space_id;
+	blob->blb_pg_space_id = relation->getPages(tdbb)->getPageSpaceId();
 	prior_page = DPM_get_blob(tdbb, blob, relation, blob_id->get_permanent_number(), true, prior_page);
 
 	if (!(blob->blb_flags & BLB_damaged))

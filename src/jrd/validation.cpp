@@ -1514,7 +1514,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 	}
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	// Level 1 blobs are a little more complicated
 	WIN window1(pageSpaceId, -1), window2(pageSpaceId, -1);
@@ -1584,7 +1584,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 #endif
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	ULONG page_number = header->rhd_b_page;
 	USHORT line_number = header->rhd_b_line;
@@ -1654,7 +1654,8 @@ void Validation::walk_database()
 #endif
 
 	DPM_scan_pages(vdr_tdbb);
-	WIN window(DB_PAGE_SPACE, -1);
+
+	WIN window(DB_PAGE_SPACE);
 	header_page* page = 0;
 	fetch_page(true, PageNumber(DB_PAGE_SPACE, HEADER_PAGE), pag_header, &window, &page);
 	const TraNumber next = vdr_max_transaction = page->hdr_next_transaction;
@@ -1720,7 +1721,7 @@ void Validation::walk_database()
 			// We can't realiable track double allocated page's when validating online.
 			// All we can check is that page is not double allocated at the same relation.
 			if (vdr_flags & VDR_online)
-				vdr_page_bitmap[relPages->rel_pg_space_id]->clear();	// Should all array be cleared?
+				vdr_page_bitmap[relPages->getPageSpaceId()]->clear();	// Should all array be cleared?
 
 			string relName;
 			relName.printf("Relation %d (%s)", relation->getId(), relation->getName().toQuotedString().c_str());
@@ -1754,7 +1755,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	Database* dbb = vdr_tdbb->getDatabase();
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	WIN window(pageSpaceId, -1);
 	window.win_flags = WIN_garbage_collector;
@@ -1991,7 +1992,7 @@ void Validation::walk_generators()
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 
 	if (const auto idsCount = dbb->getKnownPagesCount(pag_ids))
 	{
@@ -2620,18 +2621,18 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	Database* dbb = vdr_tdbb->getDatabase();
 
 	const auto relPages = relation->getBasePages();
-	const vcl* vector = relPages->rel_pages;
-
-	if (!vector || sequence >= vector->count())
-		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
 
 	pointer_page* page = nullptr;
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	WIN window(pageSpaceId, -1);
 	window.win_flags = WIN_garbage_collector;
 
-	fetch_page(true, PageNumber(pageSpaceId, (*vector)[sequence]), pag_pointer, &window, &page);
+	auto ppNumber = relPages->getPointerPage(sequence);
+	if (!ppNumber)
+		return corrupt(VAL_P_PAGE_LOST, relation, sequence);
+
+	fetch_page(true, ppNumber.value(), pag_pointer, &window, &page);
 
 #ifdef DEBUG_VAL_VERBOSE
 	if (VAL_debug_level)
@@ -2646,7 +2647,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	if (page->ppg_relation != relation->getId() || page->ppg_sequence != sequence)
 	{
 		release_page(&window);
-		return corrupt(VAL_P_PAGE_INCONSISTENT, relation, pageSpaceId, (*vector)[sequence], sequence);
+		return corrupt(VAL_P_PAGE_INCONSISTENT, relation, pageSpaceId, ppNumber.value().getPageNum(), sequence);
 	}
 
 	// Walk the data pages (someday we may optionally walk pages with "large objects"
@@ -2675,7 +2676,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 			if (releasePP)
 			{
-				fetch_page(false, PageNumber(pageSpaceId, (*vector)[sequence]), pag_pointer, &window, &page);
+				fetch_page(false, ppNumber.value(), pag_pointer, &window, &page);
 				bits = (UCHAR*) (page->ppg_page + dbb->dbb_dp_per_pp);
 				pages = &page->ppg_page[slot];
 			}
@@ -2729,8 +2730,8 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 	// Make sure the "next" pointer agrees with the pages relation
 
-	if (++sequence >= vector->count() ||
-		(page->ppg_next && page->ppg_next != (*vector)[sequence]))
+	ppNumber = relPages->getPointerPage(++sequence);
+	if (!ppNumber || (page->ppg_next && page->ppg_next != ppNumber.value().getPageNum()))
 	{
 		release_page(&window);
 
@@ -2741,17 +2742,14 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 
 			DPM_scan_pages(vdr_tdbb, pag_pointer, relation->getId());
 
-			vector = relPages->rel_pages;
-
-			--sequence;
-			if (!vector || sequence >= vector->count())
+			ppNumber = relPages->getPointerPage(--sequence);
+			if (!ppNumber)
 				return corrupt(VAL_P_PAGE_LOST, relation, sequence);
 
-			fetch_page(false, PageNumber(pageSpaceId, (*vector)[sequence]), pag_pointer, &window, &page);
+			fetch_page(false, ppNumber.value(), pag_pointer, &window, &page);
 
-			++sequence;
-			const bool error = (sequence >= vector->count()) ||
-				(page->ppg_next && page->ppg_next != (*vector)[sequence]);
+			ppNumber = relPages->getPointerPage(++sequence);
+			const bool error = (!ppNumber || (page->ppg_next && page->ppg_next != ppNumber.value().getPageNum()));
 
 			release_page(&window);
 
@@ -2877,7 +2875,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	USHORT flags = fragment->rhdf_flags;
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	data_page* page = 0;
 	while (flags & rhd_incomplete)
@@ -2986,7 +2984,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	**************************************/
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	WIN window(pageSpaceId, page_number);
 	data_page* dpage;
@@ -3000,50 +2998,55 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	Database* dbb = vdr_tdbb->getDatabase();
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
-	const vcl* vector = relPages->rel_pages;
 	pointer_page* ppage = 0;
-	if (pp_sequence < vector->count())
+	if (pp_sequence < relPages->getPointerPageCount())
 	{
-		fetch_page(false, PageNumber(pageSpaceId, (*vector)[pp_sequence]), pag_pointer, &window, &ppage);
-		if (slot >= ppage->ppg_count)
+		if (const auto ppNumber = relPages->getPointerPage(pp_sequence))
 		{
-			corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, pageSpaceId, page_number,
-					window.win_page.getPageNum(), slot);
-			if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
+			fetch_page(false, ppNumber.value(), pag_pointer, &window, &ppage);
+
+			if (slot >= ppage->ppg_count)
 			{
-				CCH_MARK(vdr_tdbb, &window);
-				for (USHORT i = ppage->ppg_count; i < slot; i++)
+				corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, pageSpaceId, page_number,
+						window.win_page.getPageNum(), slot);
+				if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
 				{
-					ppage->ppg_page[i] = 0;
+					CCH_MARK(vdr_tdbb, &window);
+					for (USHORT i = ppage->ppg_count; i < slot; i++)
+					{
+						ppage->ppg_page[i] = 0;
 
-					// Clear control fields
+						// Clear control fields
+						UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
+						*byte = 0;
+					}
+					ppage->ppg_page[slot] = page_number;
+					ppage->ppg_count = slot + 1;
+
+					// Restore control fields
 					UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-					*byte = 0;
+					restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
+					vdr_fixed++;
 				}
-				ppage->ppg_page[slot] = page_number;
-				ppage->ppg_count = slot + 1;
-
-				// Restore control fields
-				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-				vdr_fixed++;
 			}
-		}
-		else if (page_number != ppage->ppg_page[slot])
-		{
-			corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, pageSpaceId, page_number,
-					window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
-			if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
+			else if (page_number != ppage->ppg_page[slot])
 			{
-				CCH_MARK(vdr_tdbb, &window);
-				ppage->ppg_page[slot] = page_number;
+				corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, pageSpaceId, page_number,
+						window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
+				if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
+				{
+					CCH_MARK(vdr_tdbb, &window);
+					ppage->ppg_page[slot] = page_number;
 
-				// Restore control fields
-				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-				vdr_fixed++;
+					// Restore control fields
+					UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
+					restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
+					vdr_fixed++;
+				}
 			}
 		}
+		else
+			corrupt(VAL_DATA_PAGE_HASNO_PP, relation, pageSpaceId, page_number, dpage->dpg_sequence);
 	}
 	else
 		corrupt(VAL_DATA_PAGE_HASNO_PP, relation, pageSpaceId, page_number, dpage->dpg_sequence);
@@ -3063,7 +3066,7 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 	Database* dbb = vdr_tdbb->getDatabase();
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
 	PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
@@ -3142,7 +3145,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 			return rtn_ok;
 		}
 
-		WIN window(DB_PAGE_SPACE, -1);
+		WIN window(DB_PAGE_SPACE);
 		header_page* page = NULL;
 		fetch_page(false, PageNumber(DB_PAGE_SPACE, HEADER_PAGE), pag_header, &window, &page);
 		vdr_max_transaction = page->hdr_next_transaction;
@@ -3164,13 +3167,11 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 		walk_root(relation, true) == rtn_ok : true;
 
 	const auto relPages = relation->getBasePages();
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	// Check if the first pointer page is lost and try to restore it if VDR_update is set
 	// We use POINTER_PAGE and ROOT_PAGE of RDB$RELATIONS for this purpose
-	if ((vdr_flags & VDR_update) && !relPages->rel_instance_id &&
-		(!relPages->rel_pages || !relPages->rel_pages->count())
-		)
+	if ((vdr_flags & VDR_update) && !relPages->getInstanceId() && !relPages->hasData())
 	{
 		const auto attachment = vdr_tdbb->getAttachment();
 
@@ -3228,9 +3229,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	for (ULONG sequence = 0; true; sequence++)
 	{
-		const vcl* vector = relPages->rel_pages;
-		const int ppCnt = vector ? vector->count() : 0;
-
+		const int ppCnt = relPages->getPointerPageCount();
 		output("  process pointer page %4d of %4d\n", sequence, ppCnt);
 
 		const RTN result = walk_pointer_page(relation, sequence);
@@ -3338,14 +3337,15 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 
 	// If the relation has an index root, walk it
 	const auto relPages = relation->getBasePages();
+	const auto rootPage = relPages->getIndexRootPage();
 
-	if (!relPages->rel_index_root)
+	if (!rootPage)
 		return corrupt(VAL_INDEX_ROOT_MISSING, relation);
 
-	const ULONG pageSpaceId = relPages->rel_pg_space_id;
+	const ULONG pageSpaceId = relPages->getPageSpaceId();
 	index_root_page* page = nullptr;
 	WIN window(pageSpaceId, -1);
-	fetch_page(!getInfo, PageNumber(pageSpaceId, relPages->rel_index_root), pag_root, &window, &page);
+	fetch_page(!getInfo, rootPage.value(), pag_root, &window, &page);
 
 	for (USHORT i = 0; i < page->irt_count; i++)
 	{
@@ -3358,7 +3358,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 		QualifiedName index;
 		if (idx)
 			index = idx->getName();
-		fetch_page(false, PageNumber(pageSpaceId, relPages->rel_index_root), pag_root, &window, &page);
+		fetch_page(false, rootPage.value(), pag_root, &window, &page);
 
 		if (vdr_sch_incl)
 		{
@@ -3442,7 +3442,7 @@ Validation::RTN Validation::walk_tip(TraNumber transaction)
 			pageNumber = dbb->getKnownPage(pag_transactions, sequence);
 		}
 
-		WIN window(DB_PAGE_SPACE, -1);
+		WIN window(DB_PAGE_SPACE);
 		fetch_page(true, PageNumber(DB_PAGE_SPACE, pageNumber), pag_transactions, &window, &page);
 
 #ifdef DEBUG_VAL_VERBOSE

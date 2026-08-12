@@ -1635,7 +1635,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 	SET_TDBB(tdbb);
 
 	// Proper pagespace is assigned inside BTR_find_page
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 
 	temporary_key lowerKey, upperKey;
 	lowerKey.key_flags = 0;
@@ -2826,7 +2826,11 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 		if (!relPages)
 			relPages = transaction ? relation->getPages(tdbb, transaction->tra_number) : relation->getPages(tdbb);
 
-		window->win_page = PageNumber(relPages->rel_pg_space_id, relPages->rel_index_root);
+		const auto rootPage = relPages->getIndexRootPage();
+		if (!rootPage)
+			return false;
+
+		window->win_page = rootPage.value();
 
 		if (!(root = BTR_fetch_root(FB_FUNCTION, tdbb, window)))
 			return false;
@@ -3047,7 +3051,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	// Leave the root pointer null for the time being.
 	// Index id for temporary index instance of global temporary table is
 	// already assigned, use it.
-	const bool use_idx_id = (relPages->rel_instance_id != 0) || (rel->rel_flags & REL_temp_ltt);
+	const bool use_idx_id = (relPages->getInstanceId() != 0) || (rel->rel_flags & REL_temp_ltt);
 	if (use_idx_id)
 		fb_assert(idx->idx_id <= dbb->dbb_max_idx);
 
