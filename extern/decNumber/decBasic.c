@@ -1120,7 +1120,7 @@ decFloat * decFloatAdd(decFloat *result,
   // the following buffers hold coefficients with various alignments
   // (see commentary and diagrams below)
   uByte acc[4+2+DECPMAX*3+8];
-  uByte buf[4+2+DECPMAX*2];
+  uByte buf[4+2+DECPMAX*2+4];
   uByte *umsd, *ulsd;              // local MSD and LSD pointers
 
   #if DECLITEND
@@ -1186,8 +1186,8 @@ decFloat * decFloatAdd(decFloat *result,
       // construct the result; low word is the same for both formats
       encode =BIN2DPD[tac[0]];
       encode|=BIN2DPD[tac[1]]<<10;
-      encode|=BIN2DPD[tac[2]]<<20;
-      encode|=BIN2DPD[tac[3]]<<30;
+      encode|=(uInt)BIN2DPD[tac[2]]<<20;
+      encode|=(uInt)BIN2DPD[tac[3]]<<30;
       DFWORD(result, (DECBYTES/4)-1)=encode;
 
       // collect next two declets (all that remains, for Double)
@@ -1197,13 +1197,13 @@ decFloat * decFloatAdd(decFloat *result,
       #if QUAD
       // complete and lay out middling words
       encode|=BIN2DPD[tac[5]]<<18;
-      encode|=BIN2DPD[tac[6]]<<28;
+      encode|=(uInt)BIN2DPD[tac[6]]<<28;
       DFWORD(result, 2)=encode;
 
       encode =BIN2DPD[tac[6]]>>4;
       encode|=BIN2DPD[tac[7]]<<6;
       encode|=BIN2DPD[tac[8]]<<16;
-      encode|=BIN2DPD[tac[9]]<<26;
+      encode|=(uInt)BIN2DPD[tac[9]]<<26;
       DFWORD(result, 1)=encode;
 
       // and final two declets
@@ -1533,7 +1533,7 @@ decFloat * decFloatAdd(decFloat *result,
         umsd=acc+COFF+DECPMAX-1;   // so far, so zero
         if (ulsd>umsd) {           // more to check
           umsd++;                  // to align after checked area
-          for (; UBTOUI(umsd)==0 && umsd+3<ulsd;) umsd+=4;
+          for (; umsd+3<ulsd && UBTOUI(umsd)==0;) umsd+=4;
           for (; *umsd==0 && umsd<ulsd;) umsd++;
           }
         if (*umsd==0) {            // must be true zero (and diffsign)
@@ -1768,6 +1768,7 @@ decFloat * decFloatCompareTotal(decFloat *result,
            else comp=-sigl;                  // ..
            break;
           }
+        break;                               // winner found; stop scanning
         }
       } // same NaN type and sign
     }
@@ -2077,9 +2078,9 @@ decFloat * decFloatFMA(decFloat *result, const decFloat *dfl,
   // remove leading zeros on both operands; this will save time later
   // and make testing for zero trivial (tests are safe because acc
   // and coe are rounded up to uInts)
-  for (; UBTOUI(hi->msd)==0 && hi->msd+3<hi->lsd;) hi->msd+=4;
+  for (; hi->msd+3<hi->lsd && UBTOUI(hi->msd)==0;) hi->msd+=4;
   for (; *hi->msd==0 && hi->msd<hi->lsd;) hi->msd++;
-  for (; UBTOUI(lo->msd)==0 && lo->msd+3<lo->lsd;) lo->msd+=4;
+  for (; lo->msd+3<lo->lsd && UBTOUI(lo->msd)==0;) lo->msd+=4;
   for (; *lo->msd==0 && lo->msd<lo->lsd;) lo->msd++;
 
   // if hi is zero then result will be lo (which has the smaller
@@ -2242,7 +2243,7 @@ decFloat * decFloatFMA(decFloat *result, const decFloat *dfl,
       // all done except for the special IEEE 754 exact-zero-result
       // rule (see above); while testing for zero, strip leading
       // zeros (which will save decFinalize doing it)
-      for (; UBTOUI(lo->msd)==0 && lo->msd+3<lo->lsd;) lo->msd+=4;
+      for (; lo->msd+3<lo->lsd && UBTOUI(lo->msd)==0;) lo->msd+=4;
       for (; *lo->msd==0 && lo->msd<lo->lsd;) lo->msd++;
       if (*lo->msd==0) {           // must be true zero (and diffsign)
         lo->sign=0;                // assume +
