@@ -1362,7 +1362,7 @@ void Validation::garbage_collect()
 
 		PageSpace* pageSpace = pageSpaceMgr.findPageSpace(pageSpaceId);
 		fb_assert(pageSpace);	// probably here we need to continue if NULL
-		WIN window(pageSpaceId, -1);
+		WIN window(pageSpaceId);
 
 		for (ULONG sequence = 0, number = 0; number < vdr_max_page[pageSpaceId]; sequence++)
 		{
@@ -1517,7 +1517,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	// Level 1 blobs are a little more complicated
-	WIN window1(pageSpaceId, -1), window2(pageSpaceId, -1);
+	WIN window1(pageSpaceId), window2(pageSpaceId);
 	window1.win_flags = window2.win_flags = WIN_garbage_collector;
 
 	const ULONG* pages1 = header->blh_page;
@@ -1588,7 +1588,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 
 	ULONG page_number = header->rhd_b_page;
 	USHORT line_number = header->rhd_b_line;
-	WIN window(pageSpaceId, -1);
+	WIN window(pageSpaceId);
 	window.win_flags = WIN_garbage_collector;
 
 	while (page_number)
@@ -1757,7 +1757,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
-	WIN window(pageSpaceId, -1);
+	WIN window(pageSpaceId);
 	window.win_flags = WIN_garbage_collector;
 
 	data_page* page = 0;
@@ -2082,7 +2082,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 
 	while (next)
 	{
-		WIN window(pageSpaceId, -1);
+		WIN window(pageSpaceId);
 		window.win_flags = WIN_garbage_collector;
 
 		btree_page* page = 0;
@@ -2324,7 +2324,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 				// Note: mark == false for the fetch_page() call here
 				// as we don't want to mark the page as visited yet - we'll
 				// mark it when we visit it for real later on
-				WIN down_window(pageSpaceId, -1);
+				WIN down_window(pageSpaceId);
 				down_window.win_flags = WIN_garbage_collector;
 
 				btree_page* down_page = 0;
@@ -2504,7 +2504,7 @@ void Validation::walk_pip()
 			if (VAL_debug_level)
 				fprintf(stdout, "walk_pip: page %d\n", page_number);
 	#endif
-			WIN window(pageSpaceId, -1);
+			WIN window(pageSpaceId);
 			fetch_page(true, PageNumber(pageSpaceId, page_number), pag_pages, &window, &page);
 
 			ULONG pipMin = MAX_ULONG;
@@ -2625,7 +2625,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 	pointer_page* page = nullptr;
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
-	WIN window(pageSpaceId, -1);
+	WIN window(pageSpaceId);
 	window.win_flags = WIN_garbage_collector;
 
 	auto ppNumber = relPages->getPointerPage(sequence);
@@ -2880,7 +2880,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	data_page* page = 0;
 	while (flags & rhd_incomplete)
 	{
-		WIN window(pageSpaceId, -1);
+		WIN window(pageSpaceId);
 		window.win_flags = WIN_garbage_collector;
 
 		fetch_page(true, PageNumber(pageSpaceId, page_number), pag_data, &window, &page);
@@ -3195,7 +3195,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 			while (pointerPage)
 			{
 				pointer_page* page = NULL;
-				WIN window(pageSpaceId, -1);
+				WIN window(pageSpaceId);
 				fetch_page(false, PageNumber(pageSpaceId, pointerPage), pag_pointer, &window, &page);
 				if (page->ppg_relation != relation->getId())
 					break;
@@ -3207,7 +3207,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 				sequence++;
 			}
 			index_root_page* root = NULL;
-			WIN window(pageSpaceId, -1);
+			WIN window(pageSpaceId);
 			fetch_page(false, PageNumber(pageSpaceId, rootPage), pag_root, &window, &root);
 			const bool correctRoot = (root->irt_relation == relation->getId());
 			release_page(&window);
@@ -3344,7 +3344,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 	index_root_page* page = nullptr;
-	WIN window(pageSpaceId, -1);
+	WIN window(pageSpaceId);
 	fetch_page(!getInfo, rootPage.value(), pag_root, &window, &page);
 
 	for (USHORT i = 0; i < page->irt_count; i++)

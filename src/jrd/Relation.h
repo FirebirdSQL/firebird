@@ -391,9 +391,8 @@ public:
 			reset(pageSpaceId);
 	}
 
-	void init(ULONG pageNo, ULONG pageCount = 1)
+	void init(ULONG pageNo)
 	{
-		fb_assert(pageCount);
 		fb_assert(pageNo);
 
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -402,9 +401,9 @@ public:
 
 		auto accessor = m_pointerPages.writeAccessor();
 
-		if (pageCount > accessor->getCount())
+		if (!accessor->getCount())
 		{
-			m_pointerPages.grow(pageCount, true);
+			m_pointerPages.grow(1, true);
 			accessor = m_pointerPages.writeAccessor();
 		}
 
@@ -491,9 +490,9 @@ public:
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 		auto accessor = m_pointerPages.writeAccessor();
 
-		if (sequence + count >= accessor->getCount())
+		if (sequence + count > accessor->getCount())
 		{
-			m_pointerPages.grow(sequence + count + 1, true);
+			m_pointerPages.grow(sequence + count, true);
 			accessor = m_pointerPages.writeAccessor();
 		}
 
