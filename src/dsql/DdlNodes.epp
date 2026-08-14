@@ -8848,7 +8848,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 											 CSetId(FLD.RDB$CHARACTER_SET_ID), collation))
 					{
 						if (null_view && REL.RDB$FORMAT.NULL)
-							DPM_delete_relation(tdbb, relation);
+							relation->deletePages(tdbb);
 
 						ERR_post(Arg::Gds(isc_no_meta_update) <<
 								 Arg::Gds(isc_random) << relName.toQuotedString());
@@ -8858,7 +8858,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					if (!validateTextType(tdbb, tfb))
 					{
 						if (null_view && REL.RDB$FORMAT.NULL)
-							DPM_delete_relation(tdbb, relation);
+							relation->deletePages(tdbb);
 
 						ERR_post_nothrow(Arg::Gds(isc_no_meta_update) <<
 										 Arg::Gds(isc_random) << relName.toQuotedString());
@@ -8986,7 +8986,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 				if (null_view && !physical_fields)
 				{
 					if (REL.RDB$FORMAT.NULL)
-						DPM_delete_relation(tdbb, relation);
+						relation->deletePages(tdbb);
 
 					ERR_post(Arg::Gds(isc_no_meta_update) <<
 							 Arg::Gds(isc_table_name) << relName.toQuotedString() <<
@@ -9092,8 +9092,8 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		permRel.release();
 		relation = versRel.release();
 
-		relation->setPageSpace(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
-		DPM_create_relation_pages(tdbb, relation->getId(), relation->getBasePages());
+		relation->setPageSpaceId(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
+		DPM_create_relation_pages(tdbb, relation->getPermanent(), relation->getBasePages());
 
 		relation->rel_current_fmt = 1;
 		relation->rel_dbkey_length = 8;
@@ -10004,8 +10004,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			if (const auto rootPage = relPages->getIndexRootPage())
 				IDX_delete_indices(tdbb, rootPage.value(), true);
 
-			if (relPages->hasData())
-				DPM_delete_relation(tdbb, newVersion);
+			DPM_delete_relation(tdbb, newVersion->getPermanent(), relPages);
 
 			relation->rollback(tdbb);
 		}
@@ -10856,8 +10855,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 						pageSpaceId = Tablespace::lookupId(tdbb, tableSpace);
 
 						// Ensure the original page set is initialized
-						DPM_scan_pages(tdbb, pag_pointer, rel->getId());
-						DPM_scan_pages(tdbb, pag_root, rel->getId());
+						rel->getPages(tdbb);
 
 						MODIFY REL
 						{
@@ -10933,19 +10931,14 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			fb_assert(newPages->getPageSpaceId() == pageSpaceId.value());
 			fb_assert(newPages->getPageSpaceId() != orgPages->getPageSpaceId());
+			newPages->reset(pageSpaceId.value());
 
 			// Protect relation from modification to create a consistent table copy.
 			// The lock is held until the transaction end.
 			ProtectRelations protectRelations(tdbb, transaction, rel, false);
 
 			// Copy pages to the new tablespace
-			DPM_copy_data(tdbb, rel->getId(), orgPages, newPages);
-
-			// Post commit work will clean up old pages. It must be done exactly after commit
-			// If crash is happend the metadata will point to the old page space and new ones
-			// will be garbage. Right after commit old pages will be garbage.
-			transaction->tra_cleanup_pages.put(rel->getId(), {orgPages, newPages});
-			DFW_post_work(transaction, dfw_clear_datapages, {}, {}, rel->getId());
+			DPM_copy_data(tdbb, newRel, orgPages, newPages);
 		}
 
 		if (beforeTriggerWasExecuted)
@@ -13146,7 +13139,6 @@ void ModifyIndexNode::modify(thread_db* tdbb, jrd_tra* transaction)
 	SET_TDBB(tdbb);
 
 	fb_assert(indexRelation);
-//	indexRelation->fillPages(tdbb);
 
 	if (operation == OP_ACTIVE)
 		step2(tdbb, transaction);

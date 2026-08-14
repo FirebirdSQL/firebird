@@ -1542,7 +1542,6 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		{
 		case dfw_post_event:
 		case dfw_delete_shadow:
-		case dfw_clear_datapages:
 		case dfw_delete_tablespace:
 			break;
 
@@ -1607,42 +1606,6 @@ void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 			case dfw_delete_shadow:
 				if (work->dfw_name.hasData())
 					unlink(work->dfw_name.c_str());
-				break;
-
-			case dfw_clear_datapages:
-				{
-					const auto cleanupPages = transaction->tra_cleanup_pages.get(work->dfw_id);
-					fb_assert(cleanupPages);
-
-					const auto orgPages = cleanupPages->first;
-					const auto newPages = cleanupPages->second;
-
-					// Delete original relation pages
-					DPM_delete_relation_pages(tdbb, work->dfw_id, orgPages);
-
-					// Delete old records from RDB$PAGES
-					const auto attachment = tdbb->getAttachment();
-
-					static const CachedRequestId requestCacheId;
-					AutoCacheRequest handle(tdbb, requestCacheId);
-
-					FOR(REQUEST_HANDLE handle) X IN RDB$PAGES WITH
-						X.RDB$RELATION_ID EQ work->dfw_id
-					{
-						ERASE X;
-					}
-					END_FOR
-
-					// Regenerate RDB$PAGES for the new relation
-					ULONG sequence = 0;
-					for (const auto pageNo : *newPages->getPointerPages().getPointer())
-						DPM_pages(tdbb, work->dfw_id, pag_pointer, sequence++, pageNo);
-
-					if (const auto indexRoot = newPages->getIndexRootPage())
-						DPM_pages(tdbb, work->dfw_id, pag_root, 0, indexRoot.value().getPageNum());
-
-					CCH_flush(tdbb, FLUSH_SYSTEM, 0);
-				}
 				break;
 
 			default:

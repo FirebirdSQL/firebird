@@ -612,7 +612,7 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 
 	// Write into pages relation
 
-	DPM_pages(tdbb, 0, pag_transactions, sequence, pageNumber);
+	DPM_pages(tdbb, 0, pag_transactions, sequence, window.win_page);
 }
 
 
@@ -2365,7 +2365,7 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 		// Type check it
 		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
-		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
+		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page);
 	}
 
 	return dbb->getKnownPage(pag_transactions, sequence);

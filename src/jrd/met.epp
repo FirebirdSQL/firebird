@@ -3186,7 +3186,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 					}
 				}
 
-				setPageSpace(pageSpaceId);
+				setPageSpaceId(pageSpaceId);
 
 				rel_current_fmt = REL.RDB$FORMAT;
 			}
@@ -3384,7 +3384,7 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
 		}
 
-		setPageSpace(pageSpaceId);
+		setPageSpaceId(pageSpaceId);
 
 		// Pick up field specific stuff
 

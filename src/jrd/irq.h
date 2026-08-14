@@ -29,8 +29,6 @@
 
 enum irq_type_t
 {
-	irq_s_pages,			// store PAGES
-	irq_r_pages,			// read PAGES
 	irq_format1,			// make a new format for a record
 	irq_format2,			// make a new format for a record
 	irq_format3,			// make a new format for a record
@@ -190,7 +188,6 @@ enum irq_type_t
 	irq_find_ts_dfw0,		// find tablespace options by name in dfw for cleanup
 	irq_scan_ts,			// scan tablespaces
 	irq_ts_security,		// verify security for tablespace
-	irq_r_pages2,
 	irq_s_first_pp,
 	irq_chk_ts_filename,
 

@@ -241,9 +241,6 @@
 	FIELD(fld_ts_id			, nam_ts_id			, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
 	FIELD(fld_ts_name		, nam_ts_name		, dtype_text	, MAX_SQL_IDENTIFIER_LEN	, dsc_text_type_metadata	, NULL		, true		, ODS_14_0)
 
-	FIELD(fld_pp_number		, nam_pp_number		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
-	FIELD(fld_idx_number	, nam_idx_number	, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)
-
 	FIELD(fld_tab_type		, nam_mon_tab_type	, dtype_varying	, 32						, dsc_text_type_ascii		, NULL		, true		, ODS_14_0)
 
 	FIELD(fld_pkg_id		, nam_pkg_id		, dtype_long	, sizeof(SLONG)				, 0							, NULL		, true		, ODS_14_0)

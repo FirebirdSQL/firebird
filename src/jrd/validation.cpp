@@ -2740,7 +2740,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 			// relation could be extended before we acquired its lock in PR mode
 			// let's re-read pointer pages and check again
 
-			DPM_scan_pages(vdr_tdbb, pag_pointer, relation->getId());
+			DPM_scan_pages(vdr_tdbb, relation->getPermanent(), relPages);
 
 			ppNumber = relPages->getPointerPage(--sequence);
 			if (!ppNumber)
@@ -3168,56 +3168,6 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	const auto relPages = relation->getBasePages();
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
-
-	// Check if the first pointer page is lost and try to restore it if VDR_update is set
-	// We use POINTER_PAGE and ROOT_PAGE of RDB$RELATIONS for this purpose
-	if ((vdr_flags & VDR_update) && !relPages->getInstanceId() && !relPages->hasData())
-	{
-		const auto attachment = vdr_tdbb->getAttachment();
-
-		// Get POINTER_PAGE and ROOT_PAGE from RDB$RELATIONS
-		PreparedStatement::Builder sql;
-		SLONG pointerPage;	// Must be ULONG
-		SLONG rootPage;		// Must be ULONG
-		SLONG relId;
-		sql << "select"
-			<< sql("rdb$pointer_page, " , pointerPage)
-			<< sql("rdb$root_page", rootPage)
-			<< "from rdb$relations where rdb$relation_id = " << relId;
-		AutoPreparedStatement ps(attachment->prepareStatement(vdr_tdbb, attachment->getSysTransaction(), sql));
-		relId = relation->getId();
-		AutoResultSet rs(ps->executeQuery(vdr_tdbb, attachment->getSysTransaction()));
-
-		if (rs->fetch(vdr_tdbb))
-		{
-			// Try to restore pages and check every page that it is a pointer page and belongs to the relation
-			ULONG sequence = 0;
-			while (pointerPage)
-			{
-				pointer_page* page = NULL;
-				WIN window(pageSpaceId);
-				fetch_page(false, PageNumber(pageSpaceId, pointerPage), pag_pointer, &window, &page);
-				if (page->ppg_relation != relation->getId())
-					break;
-				const ULONG next_ppg = page->ppg_next;
-				release_page(&window);
-
-				DPM_pages(vdr_tdbb, relation->getId(), pag_pointer, sequence, pointerPage);
-				pointerPage = next_ppg;
-				sequence++;
-			}
-			index_root_page* root = NULL;
-			WIN window(pageSpaceId);
-			fetch_page(false, PageNumber(pageSpaceId, rootPage), pag_root, &window, &root);
-			const bool correctRoot = (root->irt_relation == relation->getId());
-			release_page(&window);
-			if (correctRoot)
-				DPM_pages(vdr_tdbb, relation->getId(), pag_root, 0, rootPage);
-
-			DPM_scan_pages(vdr_tdbb, pag_pointer, relation->getId());
-			DPM_scan_pages(vdr_tdbb, pag_root, relation->getId());
-		}
-	}
 
 	// Walk pointer and selected data pages associated with relation
 

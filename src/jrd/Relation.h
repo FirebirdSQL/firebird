@@ -328,15 +328,18 @@ public:
 	ULONG rel_last_free_pri_dp = 0;		// last primary data page found with space
 	ULONG rel_last_free_blb_dp = 0;		// last blob data page found with space
 
-	RelationPages(Firebird::MemoryPool& pool)
-		: Firebird::PermanentStorage(pool), m_dpMap(pool)
+	RelationPages(Firebird::MemoryPool& pool, ULONG pageSpaceId, InstanceId instanceId = 0)
+		: Firebird::PermanentStorage(pool),
+		  m_pageSpaceId(pageSpaceId),
+		  m_instanceId(instanceId),
+		  m_dpMap(pool)
 	{}
 
 	void assign(const RelationPages& from)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-		m_pageSpaceId = from.m_pageSpaceId;
+		fb_assert(m_pageSpaceId == from.m_pageSpaceId);
 
 		m_pointerPages.clear();
 
@@ -364,7 +367,6 @@ public:
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
 		m_pageSpaceId = pageSpaceId;
-		m_instanceId = 0;
 
 		m_pointerPages.clear();
 		m_indexRootPage = 0;
@@ -388,7 +390,12 @@ public:
 	void setPageSpace(ULONG pageSpaceId)
 	{
 		if (m_pageSpaceId != pageSpaceId)
+		{
+			fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
+			fb_assert(m_instanceId == 0);
+
 			reset(pageSpaceId);
+		}
 	}
 
 	void init(ULONG pageNo)
@@ -485,6 +492,11 @@ public:
 		return PageNumber(m_pageSpaceId, pageNo);
 	}
 
+	void resetPointerPages(ULONG count, const ULONG* data)
+	{
+		setPointerPages(0, count, data);
+	}
+
 	void setPointerPages(ULONG sequence, ULONG count, const ULONG* data)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -532,18 +544,16 @@ public:
 		return ++m_useCount;
 	}
 
-	RelationPages* reuse()
+	RelationPages* reuse(ULONG pageSpaceId, InstanceId instanceId)
 	{
+		fb_assert(m_useCount == 0);
+
+		m_pageSpaceId = pageSpaceId;
+		m_instanceId = instanceId;
+
 		const auto freePages = m_freePages;
 		m_freePages = nullptr;
 		return freePages;
-	}
-
-	void setup(InstanceId instanceId, ULONG pageSpaceId)
-	{
-		addRef();
-		m_instanceId = instanceId;
-		m_pageSpaceId = pageSpaceId;
 	}
 
 	void free(RelationPages*& nextFree);
@@ -620,8 +630,8 @@ public:
 	}
 
 private:
-	InstanceId m_instanceId = 0;		// 0 or att_attachment_id or tra_number
-	ULONG m_pageSpaceId = DB_PAGE_SPACE;
+	ULONG m_pageSpaceId;
+	InstanceId m_instanceId; // 0 or att_attachment_id or tra_number
 
 	PageList m_pointerPages;
 	ULONG m_indexRootPage = 0;
@@ -936,140 +946,7 @@ private:
 };
 
 
-// Relation block; one is created for each relation referenced
-// in the database, though it is not really filled out until
-// the relation is scanned
-
-class jrd_rel final : public ObjectBase
-{
-	jrd_rel(const jrd_rel&) = delete;
-	jrd_rel(const jrd_rel&&) = delete;
-
-public:
-	jrd_rel(MemoryPool& p, Cached::Relation* r);
-
-	MemoryPool* rel_pool;
-
-private:
-	Cached::Relation* rel_perm;
-
-public:
-	USHORT rel_current_fmt = 0;					// Current format number
-	const Format* rel_current_format = nullptr;	// Current record format
-	USHORT rel_dbkey_length = 0;				// RDB$DBKEY length
-
-	vec<jrd_fld*>* rel_fields = nullptr;	// vector of field blocks
-	RseNode* rel_view_rse = nullptr;		// view record select expression
-	ViewContexts rel_view_contexts;			// sorted array of view contexts
-
-	TrigArray rel_triggers;
-
-	Firebird::TriState	rel_ss_definer;
-
-	std::atomic<SSHORT> rel_scan_count;		// concurrent sequential scan count
-
-	GCLock rel_gc_lock;						// garbage collection lock
-
-	bool hasData() const;
-	MetaId getId() const noexcept;
-
-	bool isSystem() const noexcept;
-	bool isTemporary() const noexcept;
-	bool isLTT() const noexcept;
-	bool isVirtual() const noexcept;
-	bool isView() const noexcept;
-	bool isPrivate() const noexcept;
-	bool isReplicating(thread_db* tdbb);
-
-	bool checkFlags(ULONG mask);
-	FB_UINT64 getTempInstanceId(thread_db* tdbb) const;
-
-	ObjectType getObjectType() const noexcept
-	{
-		return isView() ? obj_view : obj_relation;
-	}
-
-	const QualifiedName& getName() const noexcept;
-	MemoryPool& getPool() const noexcept;
-	const QualifiedName& getSecurityName() const noexcept;
-	MetaName getOwnerName() const noexcept;
-	ExternalFile* getExtFile() const noexcept;
-
-	static void destroy(thread_db* tdbb, jrd_rel *rel);
-	static jrd_rel* create(thread_db* tdbb, MemoryPool& p, Cached::Relation* perm);
-
-	static const enum lck_t LOCKTYPE = LCK_rel_rescan;
-
-	ScanResult scan(thread_db* tdbb, ObjectBase::Flag& flags);		// Scan the newly loaded relation for meta data
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
-	ScanResult reload(thread_db* tdbb, ObjectBase::Flag& flags)
-	{
-		return scan(tdbb, flags);
-	}
-
-	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
-
-	RelationPages* getBasePages() noexcept
-	{
-		return &rel_pages_base;
-	}
-
-	void fillPages(thread_db* tdbb);
-
-	void setPages(const jrd_rel* relation)
-	{
-		rel_pages_base.assign(relation->rel_pages_base);
-	}
-
-	ULONG getPageSpaceId() const
-	{
-		return rel_pages_base.getPageSpaceId();
-	}
-
-	ULONG getPageSpaceId(thread_db* tdbb)
-	{
-		const auto relPages = getPages(tdbb);
-		return relPages->getPageSpaceId();
-	}
-
-	void setPageSpace(ULONG pageSpaceId)
-	{
-		rel_pages_base.setPageSpace(pageSpaceId);
-	}
-
-	std::optional<PageNumber> getIndexRootPage(thread_db* tdbb)
-	{
-		const auto relPages = getPages(tdbb);
-		return relPages->getIndexRootPage();
-	}
-
-	void getRelLockKey(thread_db* tdbb, UCHAR* key);
-	static constexpr USHORT getRelLockKeyLength() noexcept;
-
-	Lock* createLock(thread_db* tdbb, lck_t, bool);
-	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);
-
-	bool hash(thread_db* tdbb, Firebird::sha512& digest);
-
-	static const char* objectFamily(RelationPermanent* perm);
-	static ObjectType objectType() noexcept;
-
-	void releaseTriggers(thread_db* tdbb, bool destroy);
-	const Trigger* findTrigger(const QualifiedName& trig_name) const;
-	const Format* currentFormat(thread_db* tdbb);
-
-	decltype(rel_perm) getPermanent() const
-	{
-		return rel_perm;
-	}
-
-	Record* getGCRecord(thread_db* tdbb);
-
-private:
-	RelationPages rel_pages_base;
-};
-
-// rel_flags
+// Relation flags
 
 inline constexpr ULONG REL_system				= 0x0001;
 inline constexpr ULONG REL_get_dependencies		= 0x0002;	// New relation needs dependencies during scan
@@ -1202,12 +1079,36 @@ public:
 
 	Record* getGCRecord(thread_db* tdbb, const Format* const format);
 
-	bool isSystem() const noexcept;
-	bool isTemporary() const noexcept;
-	bool isLTT() const noexcept;
-	bool isVirtual() const noexcept;
-	bool isView() const noexcept;
-	bool isPrivate() const noexcept;
+	bool isSystem() const noexcept
+	{
+		return rel_flags & REL_system;
+	}
+
+	bool isTemporary() const noexcept
+	{
+		return (rel_flags & (REL_temp_tran | REL_temp_conn | REL_temp_frame));
+	}
+
+	bool isVirtual() const noexcept
+	{
+		return (rel_flags & REL_virtual);
+	}
+
+	bool isView() const noexcept
+	{
+		return (rel_flags & REL_jrd_view);
+	}
+
+	bool isPrivate() const noexcept
+	{
+		return (rel_flags & REL_private);
+	}
+
+	bool isLTT() const noexcept
+	{
+		return (rel_flags & REL_temp_ltt);
+	}
+
 	bool isReplicating(thread_db* tdbb);
 
 	static int partners_ast_relation(void* ast_object);
@@ -1216,6 +1117,7 @@ public:
 	static Cached::Relation* newVersion(thread_db* tdbb, const QualifiedName& name);
 
 	// Page management
+	RelationPages* getPages(ULONG pageSpaceId);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId instanceId);
 	RelationPages* getTempPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages);
 	bool deletePages(thread_db* tdbb, RelationPages* pages);
@@ -1286,6 +1188,8 @@ private:
 
 	RelationPagesInstances* rel_pages_inst = nullptr;
 	RelationPages* rel_pages_free = nullptr;
+
+	Firebird::Array<RelationPages*> rel_pagespaces;
 };
 
 
@@ -1306,116 +1210,200 @@ inline FB_UINT64 CacheElement<jrd_rel, RelationPermanent>::makeId<NoData>(MetaId
 }
 
 
-inline bool jrd_rel::hasData() const
-{
-	return rel_perm->rel_name.hasData();
-}
+// Relation block; one is created for each relation referenced
+// in the database, though it is not really filled out until
+// the relation is scanned
 
-inline const QualifiedName& jrd_rel::getName() const noexcept
+class jrd_rel final : public ObjectBase
 {
-	return rel_perm->getName();
-}
+	jrd_rel(const jrd_rel&) = delete;
+	jrd_rel(const jrd_rel&&) = delete;
 
-inline MemoryPool& jrd_rel::getPool() const noexcept
-{
-	return rel_perm->getPool();
-}
+public:
+	jrd_rel(MemoryPool& p, Cached::Relation* r);
 
-inline ExternalFile* jrd_rel::getExtFile() const noexcept
-{
-	return rel_perm->getExtFile();
-}
+	MemoryPool* rel_pool;
 
-inline const QualifiedName& jrd_rel::getSecurityName() const noexcept
-{
-	return rel_perm->getSecurityName();
-}
+private:
+	Cached::Relation* rel_perm;
 
-inline MetaName jrd_rel::getOwnerName() const noexcept
-{
-	return rel_perm->getOwnerName();
-}
+public:
+	USHORT rel_current_fmt = 0;					// Current format number
+	const Format* rel_current_format = nullptr;	// Current record format
+	USHORT rel_dbkey_length = 0;				// RDB$DBKEY length
 
-inline MetaId jrd_rel::getId() const noexcept
-{
-	return rel_perm->getId();
-}
+	vec<jrd_fld*>* rel_fields = nullptr;	// vector of field blocks
+	RseNode* rel_view_rse = nullptr;		// view record select expression
+	ViewContexts rel_view_contexts;			// sorted array of view contexts
 
-inline bool jrd_rel::isTemporary() const noexcept
-{
-	return rel_perm->isTemporary();
-}
+	TrigArray rel_triggers;
 
-inline bool jrd_rel::isLTT() const noexcept
-{
-	return rel_perm->isLTT();
-}
+	Firebird::TriState	rel_ss_definer;
 
-inline bool jrd_rel::isVirtual() const noexcept
-{
-	return rel_perm->isVirtual();
-}
+	std::atomic<SSHORT> rel_scan_count;		// concurrent sequential scan count
 
-inline bool jrd_rel::isView() const noexcept
-{
-	return rel_perm->isView();
-}
+	GCLock rel_gc_lock;						// garbage collection lock
 
-inline bool jrd_rel::isPrivate() const noexcept
-{
-	return rel_perm->isPrivate();
-}
+	bool hasData() const
+	{
+		return rel_perm->rel_name.hasData();
+	}
 
-inline bool jrd_rel::isSystem() const noexcept
-{
-	return rel_perm->isSystem();
-}
+	MetaId getId() const noexcept
+	{
+		return rel_perm->getId();
+	}
 
-inline bool jrd_rel::isReplicating(thread_db* tdbb)
-{
-	return rel_perm->isReplicating(tdbb);
-}
+	const QualifiedName& getName() const noexcept
+	{
+		return rel_perm->getName();
+	}
 
-inline bool jrd_rel::checkFlags(ULONG mask)
-{
-	return (rel_perm->rel_flags & mask);
-}
+	MemoryPool& getPool() const noexcept
+	{
+		return rel_perm->getPool();
+	}
 
-inline Record* jrd_rel::getGCRecord(thread_db* tdbb)
-{
-	return rel_perm->getGCRecord(tdbb, currentFormat(tdbb));
-}
+	ExternalFile* getExtFile() const noexcept
+	{
+		return rel_perm->getExtFile();
+	}
 
+	const QualifiedName& getSecurityName() const noexcept
+	{
+		return rel_perm->getSecurityName();
+	}
 
-inline bool RelationPermanent::isSystem() const noexcept
-{
-	return rel_flags & REL_system;
-}
+	MetaName getOwnerName() const noexcept
+	{
+		return rel_perm->getOwnerName();
+	}
 
-inline bool RelationPermanent::isTemporary() const noexcept
-{
-	return (rel_flags & (REL_temp_tran | REL_temp_conn | REL_temp_frame));
-}
+	bool isTemporary() const noexcept
+	{
+		return rel_perm->isTemporary();
+	}
 
-inline bool RelationPermanent::isVirtual() const noexcept
-{
-	return (rel_flags & REL_virtual);
-}
+	bool isLTT() const noexcept
+	{
+		return rel_perm->isLTT();
+	}
 
-inline bool RelationPermanent::isView() const noexcept
-{
-	return (rel_flags & REL_jrd_view);
-}
+	bool isVirtual() const noexcept
+	{
+		return rel_perm->isVirtual();
+	}
 
-inline bool RelationPermanent::isPrivate() const noexcept
-{
-	return (rel_flags & REL_private);
-}
+	bool isView() const noexcept
+	{
+		return rel_perm->isView();
+	}
 
-inline bool RelationPermanent::isLTT() const noexcept
-{
-	return (rel_flags & REL_temp_ltt);
-}
+	bool isPrivate() const noexcept
+	{
+		return rel_perm->isPrivate();
+	}
+
+	bool isSystem() const noexcept
+	{
+		return rel_perm->isSystem();
+	}
+
+	bool isReplicating(thread_db* tdbb)
+	{
+		return rel_perm->isReplicating(tdbb);
+	}
+
+	bool checkFlags(ULONG mask)
+	{
+		return (rel_perm->rel_flags & mask);
+	}
+
+	Record* getGCRecord(thread_db* tdbb)
+	{
+		return rel_perm->getGCRecord(tdbb, currentFormat(tdbb));
+	}
+
+	FB_UINT64 getTempInstanceId(thread_db* tdbb) const;
+
+	ObjectType getObjectType() const noexcept
+	{
+		return isView() ? obj_view : obj_relation;
+	}
+
+	static void destroy(thread_db* tdbb, jrd_rel *rel);
+	static jrd_rel* create(thread_db* tdbb, MemoryPool& p, Cached::Relation* perm);
+
+	static const enum lck_t LOCKTYPE = LCK_rel_rescan;
+
+	ScanResult scan(thread_db* tdbb, ObjectBase::Flag& flags);		// Scan the newly loaded relation for meta data
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
+	ScanResult reload(thread_db* tdbb, ObjectBase::Flag& flags)
+	{
+		return scan(tdbb, flags);
+	}
+
+	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
+
+	RelationPages* getBasePages() noexcept
+	{
+		if (!m_basePages || m_basePages->getPageSpaceId() != m_pageSpaceId)
+			m_basePages = rel_perm->getPages(m_pageSpaceId);
+
+		fb_assert(m_basePages);
+		return m_basePages;
+	}
+
+	void deletePages(thread_db* tdbb);
+
+	void setPages(const jrd_rel* relation)
+	{
+		fb_assert(relation && relation->m_basePages);
+		setPageSpaceId(relation->m_basePages->getPageSpaceId());
+		m_basePages->assign(*relation->m_basePages);
+	}
+
+	ULONG getPageSpaceId() const noexcept
+	{
+		return m_pageSpaceId;
+	}
+
+	void setPageSpaceId(ULONG pageSpaceId)
+	{
+		m_pageSpaceId = pageSpaceId;
+		m_basePages = rel_perm->getPages(pageSpaceId);
+	}
+
+	std::optional<PageNumber> getIndexRootPage(thread_db* tdbb)
+	{
+		const auto relPages = getPages(tdbb);
+		return relPages->getIndexRootPage();
+	}
+
+	void getRelLockKey(thread_db* tdbb, UCHAR* key);
+	static constexpr USHORT getRelLockKeyLength() noexcept;
+
+	Lock* createLock(thread_db* tdbb, lck_t, bool);
+	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);
+
+	bool hash(thread_db* tdbb, Firebird::sha512& digest);
+
+	static const char* objectFamily(RelationPermanent* perm);
+	static ObjectType objectType() noexcept;
+
+	void releaseTriggers(thread_db* tdbb, bool destroy);
+	const Trigger* findTrigger(const QualifiedName& trig_name) const;
+	const Format* currentFormat(thread_db* tdbb);
+
+	decltype(rel_perm) getPermanent() const
+	{
+		return rel_perm;
+	}
+
+private:
+	ULONG m_pageSpaceId = DB_PAGE_SPACE; // Current page space
+	RelationPages* m_basePages = nullptr;
+};
 
 
 /// class GCLock::Shared

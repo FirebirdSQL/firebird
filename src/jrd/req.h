@@ -124,7 +124,10 @@ struct record_param : public RecordParameterBase
 	inline WIN& getWindow(thread_db* tdbb)
 	{
 		if (rpb_relation)
-			rpb_window.win_page.setPageSpaceID(rpb_relation->getPageSpaceId(tdbb));
+		{
+			const auto relPages = rpb_relation->getPages(tdbb);
+			rpb_window.win_page.setPageSpaceID(relPages->getPageSpaceId());
+		}
 
 		return rpb_window;
 	}

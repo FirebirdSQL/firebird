@@ -30,6 +30,7 @@ RELATION(nam_pages, rel_pages, ODS_8_0, rel_persistent)
 	FIELD(f_pag_id, nam_r_id, fld_r_id, 0, ODS_8_0)
 	FIELD(f_pag_seq, nam_p_sequence, fld_p_sequence, 0, ODS_8_0)
 	FIELD(f_pag_type, nam_p_type, fld_p_type, 0, ODS_8_0)
+	FIELD(f_pag_ts, nam_ts_id, fld_ts_id, 0, ODS_14_0)
 END_RELATION
 
 // Relation 1 (RDB$DATABASE)
@@ -165,8 +166,6 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 	FIELD(f_rel_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
 	FIELD(f_rel_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
-	FIELD(f_rel_first_pp, nam_pp_number, fld_pp_number, 0, ODS_14_0)
-	FIELD(f_rel_idx_root, nam_idx_number, fld_idx_number, 0, ODS_14_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)

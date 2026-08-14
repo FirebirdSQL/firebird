@@ -110,9 +110,8 @@ jrd_rel::jrd_rel(MemoryPool& p, Cached::Relation* r)
 	  rel_triggers(p),
 	  rel_ss_definer(false),
 	  rel_scan_count(0),
-	  rel_gc_lock(this),
-	  rel_pages_base(p)
-{ }
+	  rel_gc_lock(this)
+{}
 
 RelationPermanent::RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, NoData)
 	: PermanentStorage(p),
@@ -122,7 +121,8 @@ RelationPermanent::RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, 
 	  rel_name(p),
 	  rel_id(id),
 	  rel_flags(REL_check_partners),
-	  rel_clear_deps(p)
+	  rel_clear_deps(p),
+	  rel_pagespaces(p, 1)
 {
 	rel_partners_lock = FB_NEW_RPT(getPool(), 0)
 		Lock(tdbb, sizeof(SLONG), LCK_rel_partners, this, partners_ast_relation);
@@ -132,6 +132,9 @@ RelationPermanent::RelationPermanent(thread_db* tdbb, MemoryPool& p, MetaId id, 
 RelationPermanent::~RelationPermanent()
 {
 	fb_assert(!rel_partners_lock);
+
+	for (const auto pages : rel_pagespaces)
+		delete pages;
 }
 
 bool RelationPermanent::destroy(thread_db* tdbb, RelationPermanent* rel)
@@ -278,17 +281,6 @@ FB_UINT64 jrd_rel::getTempInstanceId(thread_db* tdbb) const
 	return (getPermanent()->rel_flags & REL_temp_frame) ? tdbb->tdbb_temp_frame_id : 0;
 }
 
-void jrd_rel::fillPages(thread_db* tdbb)
-{
-	if (!rel_pages_base.hasData())
-		DPM_scan_pages(tdbb, pag_pointer, getId());
-
-	if (!rel_pages_base.hasIndices())
-		DPM_scan_pages(tdbb, pag_root, getId());
-
-	fb_assert(rel_pages_base.hasData() && rel_pages_base.hasIndices());
-}
-
 RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
 	const auto dbb = tdbb->getDatabase();
@@ -329,20 +321,20 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 		if (!allocPages)
 			return nullptr;
 
+		const auto pageSpaceId = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
+
 		RelationPages* newPages = rel_pages_free;
 		if (!newPages)
-			newPages = FB_NEW_POOL(getPool()) RelationPages(getPool());
+			newPages = FB_NEW_POOL(getPool()) RelationPages(getPool(), pageSpaceId, instanceId);
 		else
-			rel_pages_free = newPages->reuse();
+			rel_pages_free = newPages->reuse(pageSpaceId, instanceId);
 
-		fb_assert(newPages->m_useCount == 0);
+		newPages->addRef();
 
-		const auto pageSpaceId = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
-		newPages->setup(instanceId, pageSpaceId);
 		rel_pages_inst->add(newPages);
 
 		// create primary pointer page and index root page
-		DPM_create_relation_pages(tdbb, getId(), newPages);
+		DPM_create_relation_pages(tdbb, this, newPages);
 
 #ifdef VIO_DEBUG
 		const auto firstPointerPage = pages->getPointerPage(0);
@@ -477,7 +469,7 @@ bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = null
 		IDX_delete_indices(tdbb, rootPage.value(), false);
 
 	if (pages->hasData())
-		DPM_delete_relation_pages(tdbb, rel_id, pages);
+		DPM_delete_relation_pages(tdbb, this, pages);
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
@@ -499,7 +491,7 @@ void RelationPermanent::freePages(thread_db* tdbb)
 			IDX_delete_indices(tdbb, rootPage.value(), false);
 
 		if (pages->hasData())
-			DPM_delete_relation_pages(tdbb, rel_id, pages);
+			DPM_delete_relation_pages(tdbb, this, pages);
 
 		pages->free(rel_pages_free);
 	}
@@ -606,21 +598,20 @@ void RelationPermanent::PagesSnapshot::clear()
 
 RelationPages* jrd_rel::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
-	RelationPages* relPages = &rel_pages_base;
+	const auto relPages = getBasePages();
 
-	if (!relPages->hasData())
-		DPM_scan_pages(tdbb, pag_pointer, getId());
+	if (!relPages->hasData() || !relPages->hasIndices())
+		DPM_scan_pages(tdbb, rel_perm, relPages);
 
-	if (!relPages->hasIndices())
-		DPM_scan_pages(tdbb, pag_root, getId());
-
-	const auto pageSpaceId = relPages->getPageSpaceId();
-	fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
-
-	Tablespace::lock(tdbb, pageSpaceId);
+	Tablespace::lock(tdbb, relPages->getPageSpaceId());
 
 	return (isTemporary() && !(tdbb->tdbb_flags & TDBB_use_db_page_space)) ?
 		rel_perm->getTempPages(tdbb, instanceId, allocPages) : relPages;
+}
+
+void jrd_rel::deletePages(thread_db* tdbb)
+{
+	DPM_delete_relation(tdbb, rel_perm, getBasePages());
 }
 
 void jrd_rel::getRelLockKey(thread_db* tdbb, UCHAR* key)
@@ -776,6 +767,19 @@ void RelationPermanent::addFormat(Format* fmt)
 	rel_formats.writeAccessor()->value(fmt->fmt_version) = fmt;
 }
 
+RelationPages* RelationPermanent::getPages(ULONG pageSpaceId)
+{
+	MutexLockGuard guard(rel_pages_mutex, FB_FUNCTION);
+
+	for (const auto pages : rel_pagespaces)
+	{
+		if (pages->getPageSpaceId() == pageSpaceId)
+			return pages;
+	}
+
+	rel_pagespaces.add(FB_NEW_POOL(getPool()) RelationPages(getPool(), pageSpaceId));
+	return rel_pagespaces.back();
+}
 
 void GCLock::blockingAst()
 {

@@ -43,6 +43,8 @@ Tablespace::~Tablespace()
 
 void Tablespace::lock(thread_db* tdbb, ULONG pageSpaceId)
 {
+	fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
+
 	if (PageSpace::isTablespace(pageSpaceId))
 	{
 		// Protect the tablespace from being modified or dropped until the current transaction ends
