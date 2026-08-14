@@ -5656,3 +5656,52 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 
 	return nullptr;
 }
+
+
+void ElementBase::fillDeps(thread_db* tdbb)
+{
+	auto* attachment = tdbb->getAttachment();
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
+	auto* transaction = tdbb->getTransaction();
+
+	ObjectType objType = getObjectType();
+	QualifiedName name;
+	getObjectName(name);
+
+	MetaName object = name.object;
+	if (name.package.hasData())
+	{
+		objType = obj_package_header;
+		object = name.package;
+	}
+
+	AUTO_HANDLE(hndl);
+
+	FOR (REQUEST_HANDLE hndl TRANSACTION_HANDLE metaTransaction)
+		D IN RDB$DEPENDENCIES
+		WITH D.RDB$DEPENDED_ON_TYPE EQ objType
+		 AND D.RDB$DEPENDED_ON_SCHEMA_NAME EQ name.schema.c_str()
+		 AND D.RDB$DEPENDED_ON_NAME EQ object.c_str()
+		REDUCED TO D.RDB$DEPENDENT_TYPE, D.RDB$DEPENDENT_SCHEMA_NAME, D.RDB$PACKAGE_NAME, D.RDB$DEPENDENT_NAME
+	{
+		switch (D.RDB$DEPENDENT_TYPE)
+		{
+		case obj_procedure:
+			{
+				QualifiedName name;
+				name.schema = D.RDB$DEPENDENT_SCHEMA_NAME;
+				if (!D.RDB$PACKAGE_NAME.NULL)
+					name.package = D.RDB$PACKAGE_NAME;
+				name.object = D.RDB$DEPENDENT_NAME;
+
+				transaction->storeUpdate(MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE));
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+	END_FOR
+}
+

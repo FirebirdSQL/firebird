@@ -35,6 +35,8 @@
 #include "../include/fb_blk.h"
 #include "../common/classes/tree.h"
 #include "../common/classes/GenericMap.h"
+#include "../common/classes/auto.h"
+#include "../common/classes/array.h"
 #include "../jrd/exe.h"
 #include "../jrd/rpb_chain.h"
 #include "../jrd/blb.h" // For bid structure
@@ -430,6 +432,26 @@ public:
 
 	// Finish and delete BulkInsert that belongs to the request
 	void finiBulkInsert(thread_db* tdbb, Request* request);
+
+	// Store an object to be updated
+	void storeUpdate(ElementBase* obj);
+
+	// Store an object to be updated
+	void storeCommit(ElementBase* obj);
+
+	// Process updates/commits accumulated by transaction
+	bool processUpdates(thread_db* tdbb);
+	void processCommits(thread_db* tdbb);
+
+private:
+	// Under processing and accumulated sets of dependencies
+	typedef Firebird::BePlusTree<ElementBase*> Deps;
+	Firebird::AutoPtr<Deps> processingDeps;
+	Firebird::AutoPtr<Deps> accumulatedDeps;
+
+	// Set of updated objects to be committed
+	typedef Firebird::HalfStaticArray<ElementBase*, 64> UpdateCommits;
+	Firebird::AutoPtr<UpdateCommits> updateCommits;
 };
 
 // System transaction is always transaction 0.
@@ -574,7 +596,10 @@ enum dfw_t : int {
 	dfw_delete_package_constant,
 
 	// Package
-	dfw_create_package
+	dfw_create_package,
+
+	// Update various objects dependent from modified in this transaction
+	dfw_update_dependencies
 };
 
 } //namespace Jrd

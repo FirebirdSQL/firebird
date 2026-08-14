@@ -233,6 +233,13 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	}
 }
 
+void Routine::makeRequests(thread_db* tdbb)
+{
+	auto *req = statement->findRequest(tdbb);
+	if (req)
+		req->setUnused();
+}
+
 bool Routine::hash(thread_db* tdbb, Firebird::sha512& digest)
 {
 	if (inputFields.hasData())

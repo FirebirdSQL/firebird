@@ -254,6 +254,8 @@ public:
 
 	static ObjectType objectType() noexcept;
 
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
+
 private:
 	DbTriggersHeader* perm;
 
@@ -565,6 +567,8 @@ public:
 	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<RelationPermanent*> name);
 	static ObjectType objectType() noexcept;
 
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
+
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
 		return scan(tdbb, flags);
@@ -692,6 +696,8 @@ public:
 
 	static const char* objectFamily(RelationPermanent* perm);
 	static ObjectType objectType() noexcept;
+
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
 
 	void releaseTriggers(thread_db* tdbb, bool destroy);
 	const Trigger* findTrigger(const QualifiedName& trig_name) const;
