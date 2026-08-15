@@ -517,7 +517,7 @@ public:
 			value = data[i];
 		}
 #else
-		memcpy(accessor->begin() + sequence, data, count);
+		memcpy(accessor->begin() + sequence, data, count * sizeof(ULONG));
 #endif
 	}
 
