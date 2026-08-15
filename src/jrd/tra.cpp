@@ -4454,7 +4454,7 @@ void jrd_tra::eraseSecDbContext() noexcept
 	tra_sec_db_context = NULL;
 }
 
-void jrd_tra::storeUpdate(ElementBase* obj)
+void jrd_tra::storeUpdate(ElementBase* obj, bool forceRecompile)
 {
 	if (!accumulatedDeps)
 	{
@@ -4462,8 +4462,14 @@ void jrd_tra::storeUpdate(ElementBase* obj)
 		DFW_post_work(this, dfw_update_dependencies, nullptr, nullptr, 0u);
 	}
 
-	if (!accumulatedDeps->locate(obj))
-		accumulatedDeps->add(obj);
+	bool* recompile = accumulatedDeps->get(obj);
+	if (recompile)
+		*recompile = forceRecompile || *recompile;
+	else
+	{
+		recompile = accumulatedDeps->put(obj);
+		*recompile = forceRecompile;
+	}
 }
 
 void jrd_tra::storeCommit(ElementBase* obj)
@@ -4492,29 +4498,37 @@ bool jrd_tra::processUpdates(thread_db* tdbb)
 			processingDeps = accumulatedDeps.release();
 
 		// process updates
-		for(auto run = processingDeps->getFirst(); run; run = processingDeps->getNext())
+		for(auto iter : *processingDeps)
 		{
-			auto* elem = processingDeps->current();
+			auto* elem = iter.first;
+			bool use = iter.second;
 
 			// may be this element was already processed in this update?
 			if (elem->getVersion(tdbb) >= startingVersion)
 				continue;
 
-			// now ask cache element to create all possible requests
-			try
+			if (!use)
 			{
-				elem->makeRequests(tdbb);
+				// now ask cache element to create all possible requests
+				try
+				{
+					elem->makeRequests(tdbb);
+				}
+
+				// handle specific for outdated element error
+				catch (const status_exception& ex)
+				{
+					if (ex.value()[1] != isc_old_format)
+						throw;
+					tdbb->tdbb_status_vector->init();
+					use = true;
+				}
 			}
 
-			// handle specific for outdated element error
-			catch (const status_exception& ex)
+			if (use)
 			{
-				if (ex.value()[1] != isc_old_format)
-					throw;
-				tdbb->tdbb_status_vector->init();
-
 				// get all existing currently dependencies
-				elem->fillDeps(tdbb);
+				elem->fillDeps(tdbb, false);
 
 				// make new version and compile it
 				elem->newVersion(tdbb);

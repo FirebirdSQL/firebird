@@ -434,9 +434,9 @@ public:
 	void finiBulkInsert(thread_db* tdbb, Request* request);
 
 	// Store an object to be updated
-	void storeUpdate(ElementBase* obj);
+	void storeUpdate(ElementBase* obj, bool forceRecompile);
 
-	// Store an object to be updated
+	// Store updated object to be committed
 	void storeCommit(ElementBase* obj);
 
 	// Process updates/commits accumulated by transaction
@@ -445,7 +445,7 @@ public:
 
 private:
 	// Under processing and accumulated sets of dependencies
-	typedef Firebird::BePlusTree<ElementBase*> Deps;
+	typedef Firebird::GenericMap<Firebird::NonPooledPair<ElementBase*, bool>> Deps;
 	Firebird::AutoPtr<Deps> processingDeps;
 	Firebird::AutoPtr<Deps> accumulatedDeps;
 

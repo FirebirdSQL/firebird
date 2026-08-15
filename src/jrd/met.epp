@@ -5658,7 +5658,7 @@ jrd_rel* MetadataCache::getLtt(thread_db* tdbb, const QualifiedName& name)
 }
 
 
-void ElementBase::fillDeps(thread_db* tdbb)
+void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 {
 	auto* attachment = tdbb->getAttachment();
 	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
@@ -5694,7 +5694,7 @@ void ElementBase::fillDeps(thread_db* tdbb)
 					name.package = D.RDB$PACKAGE_NAME;
 				name.object = D.RDB$DEPENDENT_NAME;
 
-				transaction->storeUpdate(MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE));
+				transaction->storeUpdate(MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE), forceRecompile);
 			}
 			break;
 

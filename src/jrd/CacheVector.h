@@ -108,7 +108,7 @@ public:
 	}
 
 	// fill dependencies info
-	void fillDeps(thread_db* tdbb);
+	void fillDeps(thread_db* tdbb, bool forceRecompile);
 
 private:
 	Lock* lock = nullptr;
@@ -1018,7 +1018,7 @@ private:
 	void toUpdatedList(thread_db* tdbb, ObjectBase::Flag fl)
 	{
 		if (fl & CacheFlag::DEPENDS)
-			ElementBase::fillDeps(tdbb);
+			ElementBase::fillDeps(tdbb, true);
 	}
 
 private:
