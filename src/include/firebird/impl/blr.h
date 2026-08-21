@@ -464,6 +464,9 @@
 #define blr_dcl_local_table_format		(unsigned char) 1
 #define blr_dcl_local_table_ltt			(unsigned char) 2
 #define blr_dcl_local_table_field_names	(unsigned char) 3
+#define blr_dcl_local_table_index		(unsigned char) 4
+#define blr_dcl_local_table_index_unique		(unsigned char) 1
+#define blr_dcl_local_table_index_descending	(unsigned char) 2
 
 #define blr_local_table_truncate	(unsigned char) 219
 #define blr_local_table_id			(unsigned char) 220

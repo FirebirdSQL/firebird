@@ -56,7 +56,8 @@ void BitmapTableScan::internalOpen(thread_db* tdbb) const
 	impure->irsb_bitmap = EVL_bitmap(tdbb, m_inversion, NULL);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
+	const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+	RLCK_reserve_relation(tdbb, transaction, m_relation(), false);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 }
@@ -110,7 +111,9 @@ bool BitmapTableScan::internalGetRecord(thread_db* tdbb) const
 		{
 			rpb->rpb_number.setValue(bitmap->current());
 
-			if (VIO_get(tdbb, rpb, request->req_transaction, request->req_pool))
+			const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+
+			if (VIO_get(tdbb, rpb, transaction, request->req_pool))
 			{
 				rpb->rpb_number.setValid(true);
 				return true;
