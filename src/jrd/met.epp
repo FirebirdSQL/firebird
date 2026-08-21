@@ -5176,7 +5176,7 @@ void IndexVersion::setLtt(thread_db* tdbb, LocalTemporaryTable::Index* lttIndex)
 
 	idv_name = lttIndex->name;
 	idv_uniqFlag = lttIndex->unique;
-	idv_segmentCount = lttIndex->columns.getCount();
+	idv_segmentCount = lttIndex->segments.getCount();
 	idv_type = lttIndex->descending;
 	idv_active = lttIndex->inactive ? MET_index_inactive : MET_index_active;
 }

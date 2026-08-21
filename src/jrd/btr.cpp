@@ -225,7 +225,7 @@ namespace
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
 					  ULONG*, ULONG*);
 static void compress(thread_db*, const dsc*, const SSHORT scale, temporary_key*,
-					 USHORT, bool, USHORT, bool*);
+					 USHORT, SSHORT, bool, USHORT, bool*);
 static USHORT compress_root(thread_db*, index_root_page*);
 static void copy_key(const temporary_mini_key*, temporary_mini_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
@@ -756,7 +756,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 			m_key.key_flags |= key_empty;
 
-			compress(m_tdbb, desc_ptr, 0, &m_key, tail->idx_itype, descending, m_keyType, nullptr);
+			compress(m_tdbb, desc_ptr, 0, &m_key, tail->idx_itype, tail->idx_length, descending, m_keyType, nullptr);
 		}
 		else
 		{
@@ -795,7 +795,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 					m_key.key_nulls |= 1 << n;
 				}
 
-				compress(m_tdbb, desc_ptr, 0, &temp, tail->idx_itype, descending, m_keyType, nullptr);
+				compress(m_tdbb, desc_ptr, 0, &temp, tail->idx_itype, tail->idx_length, descending, m_keyType, nullptr);
 
 				const UCHAR* q = temp.key_data;
 				for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -1703,6 +1703,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 		const irtd* key_descriptor = (irtd*) ptr;
 		idx_desc->idx_field = key_descriptor->irtd_field;
 		idx_desc->idx_itype = key_descriptor->irtd_itype;
+		idx_desc->idx_length = key_descriptor->irtd_length;
 		idx_desc->idx_selectivity = key_descriptor->irtd_selectivity;
 		ptr += sizeof(irtd);
 	}
@@ -2388,9 +2389,22 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			}
 			else
 			{
-				length = format->fmt_desc[tail->idx_field].dsc_length;
-				if (format->fmt_desc[tail->idx_field].dsc_dtype == dtype_varying) {
-					length = length - sizeof(SSHORT);
+				if (!tail->idx_length)
+				{
+					length = format->fmt_desc[tail->idx_field].dsc_length;
+					if (format->fmt_desc[tail->idx_field].dsc_dtype == dtype_varying) {
+						length = length - sizeof(SSHORT);
+					}
+				}
+				else if (tail->idx_itype == idx_metadata)
+				{
+					const auto cs = INTL_charset_lookup(tdbb, CS_METADATA);
+					length = tail->idx_length * cs->maxBytesPerChar();
+				}
+				else if (tail->idx_itype >= idx_first_intl_string)
+				{
+					const auto tt = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(tail->idx_itype));
+					length = tail->idx_length * tt->getCharSet()->maxBytesPerChar();
 				}
 			}
 
@@ -2437,9 +2451,23 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			length = Int128::getIndexKeyLength();
 			break;
 		default:
-			length = format->fmt_desc[tail->idx_field].dsc_length;
-			if (format->fmt_desc[tail->idx_field].dsc_dtype == dtype_varying)
-				length -= sizeof(SSHORT);
+			if (!tail->idx_length)
+			{
+				length = format->fmt_desc[tail->idx_field].dsc_length;
+				if (format->fmt_desc[tail->idx_field].dsc_dtype == dtype_varying)
+					length -= sizeof(SSHORT);
+			}
+			else if (tail->idx_itype == idx_metadata)
+			{
+				const auto cs = INTL_charset_lookup(tdbb, CS_METADATA);
+				length = tail->idx_length * cs->maxBytesPerChar();
+			}
+			else if (tail->idx_itype >= idx_first_intl_string)
+			{
+				const auto tt = INTL_texttype_lookup(tdbb, INTL_INDEX_TO_TEXT(tail->idx_itype));
+				length = tail->idx_length * tt->getCharSet()->maxBytesPerChar();
+			}
+
 			if (tail->idx_itype >= idx_first_intl_string)
 				length = INTL_key_length(tdbb, tail->idx_itype, length);
 			break;
@@ -2620,7 +2648,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 		key->key_flags |= key_empty;
 
-		compress(tdbb, desc, scale ? *scale : 0, key, tail->idx_itype, descending, keyType, forceInclude);
+		compress(tdbb, desc, scale ? *scale : 0, key, tail->idx_itype, tail->idx_length, descending, keyType, forceInclude);
 
 		if (fuzzy && (key->key_flags & key_empty))
 		{
@@ -2653,7 +2681,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 
 			temp.key_flags |= key_empty;
 
-			compress(tdbb, desc, scale ? *scale++ : 0, &temp, tail->idx_itype, descending,
+			compress(tdbb, desc, scale ? *scale++ : 0, &temp, tail->idx_itype, tail->idx_length, descending,
 				(n == count - 1 ?
 					keyType : ((idx->idx_flags & idx_unique) ? INTL_KEY_UNIQUE : INTL_KEY_SORT)),
 				forceInclude);
@@ -2779,7 +2807,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 	// If the index is a single segment index, don't sweat the compound stuff
 	if ((idx->idx_count == 1) || (idx->idx_flags & idx_expression))
 	{
-		compress(tdbb, nullptr, 0, key, tail->idx_itype, descending, INTL_KEY_SORT, nullptr);
+		compress(tdbb, nullptr, 0, key, tail->idx_itype, tail->idx_length, descending, INTL_KEY_SORT, nullptr);
 	}
 	else
 	{
@@ -2793,7 +2821,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 			for (; stuff_count; --stuff_count)
 				*p++ = 0;
 
-			compress(tdbb, nullptr, 0, &temp, tail->idx_itype, descending, INTL_KEY_SORT, nullptr);
+			compress(tdbb, nullptr, 0, &temp, tail->idx_itype, tail->idx_length, descending, INTL_KEY_SORT, nullptr);
 
 			const UCHAR* q = temp.key_data;
 			for (USHORT l = temp.key_length; l; --l, --stuff_count)
@@ -3879,6 +3907,7 @@ static void compress(thread_db* tdbb,
 					 const SSHORT matchScale,
 					 temporary_key* key,
 					 USHORT itype,
+					 SSHORT ilength,
 					 bool descending, USHORT key_type,
 					 bool* forceInclude)
 {
@@ -3976,6 +4005,35 @@ static void compress(thread_db* tdbb,
 				}
 				else if (itype >= idx_first_intl_string || itype == idx_metadata)
 				{
+					MoveBuffer substr;
+					dsc subDesc;
+					const dsc* pDesc = desc;
+
+					if (ilength)
+					{
+						// Get first ilength characters from a full string value
+
+						const USHORT fromLen = desc->dsc_length - (desc->dsc_dtype == dtype_varying ? sizeof(USHORT) : 0);
+						const UCHAR* from = desc->dsc_address + (desc->dsc_dtype == dtype_varying ? sizeof(USHORT) : 0);
+
+						CharSet* cs = INTL_charset_lookup(tdbb, desc->getCharSet());
+						const auto fromChars = cs->length(fromLen, from, false);
+						if (fromChars > ilength)
+						{
+							const auto maxLen = ilength * cs->maxBytesPerChar();
+
+							subDesc.makeText(maxLen, desc->getTextType());
+							subDesc.dsc_address = substr.getBuffer(maxLen);
+
+							subDesc.dsc_length = cs->substring(fromLen, from, maxLen, subDesc.dsc_address, 0, ilength);
+
+							pDesc = &subDesc;
+						}
+
+						if (forceInclude && (ilength <= fromChars))
+							*forceInclude = true;
+					}
+
 					DSC to;
 
 					// convert to an international byte array
@@ -3986,10 +4044,20 @@ static void compress(thread_db* tdbb,
 					to.setTextType(ttype_sort_key);
 					to.dsc_length = MIN(MAX_COLUMN_SIZE, MAX_KEY * 4);
 					ptr = to.dsc_address = reinterpret_cast<UCHAR*>(buffer.vary_string);
-					multiKeyLength = length = INTL_string_to_key(tdbb, itype, desc, &to, key_type);
+					multiKeyLength = length = INTL_string_to_key(tdbb, itype, pDesc, &to, key_type);
 				}
 				else
+				{
 					length = MOV_get_string(tdbb, desc, &ptr, &buffer, MAX_KEY);
+
+					if (ilength && ilength <= length)
+					{
+						length = ilength;
+
+						if (forceInclude)
+							*forceInclude = true;
+					}
+				}
 			}
 
 			if (key_type == INTL_KEY_MULTI_STARTING && multiKeyLength != 0)

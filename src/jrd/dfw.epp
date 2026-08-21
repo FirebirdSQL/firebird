@@ -4914,7 +4914,7 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	memset(&idx, 0, sizeof(idx));
 
 	idx.idx_id = lttIndex->id;
-	idx.idx_count = lttIndex->columns.getCount();
+	idx.idx_count = lttIndex->segments.getCount();
 	idx.idx_flags = 0;
 
 	if (lttIndex->unique)
@@ -4925,14 +4925,14 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	// Build the index key descriptors from LTT field info
 	int keyPos = 0;
 
-	for (const auto& colName : lttIndex->columns)
+	for (const auto& segment : lttIndex->segments)
 	{
 		// Find the field in the LTT
 		bool found = false;
 
 		for (const auto& field : ltt->fields)
 		{
-			if (field.name == colName)
+			if (field.name == segment.name)
 			{
 				idx.idx_rpt[keyPos].idx_field = field.id;
 
@@ -4942,7 +4942,9 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 					DTYPE_IS_TEXT(field.desc.dsc_dtype) ?
 						TTypeId(field.charSetId.value_or(CS_NONE), field.collationId.value_or(COLLATE_NONE)) :
 						ttype_none);
+
 				idx.idx_rpt[keyPos].idx_itype = idxType;
+				idx.idx_rpt[keyPos].idx_length = segment.length;
 
 				found = true;
 				break;
