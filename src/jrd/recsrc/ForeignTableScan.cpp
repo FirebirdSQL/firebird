@@ -313,13 +313,19 @@ bool ForeignTableScan::checkArgument(thread_db* tdbb, const ValueExprNode* node)
 			return true;
 	}
 	else if (nodeIs<FieldNode>(node) || nodeIs<LiteralNode>(node) || nodeAs<NullNode>(node) ||
-		nodeAs<ParameterNode> (node))
+		nodeAs<ParameterNode> (node) || nodeAs<VariableNode>(node))
 	{
 		if (const auto fieldNode = nodeAs<FieldNode>(node))
 		{
 			// If node is a blob field, exclude it
 			const dsc& desc = fieldNode->format->fmt_desc[fieldNode->fieldId];
 			if (desc.isBlob())
+				return false;
+		}
+		else if (const auto variableNode = nodeAs<VariableNode>(node))
+		{
+			const auto varDesc = variableNode->varDecl->varDesc;
+			if (varDesc.isBlob())
 				return false;
 		}
 		return true;
@@ -482,6 +488,18 @@ void ForeignTableScan::processArgument(thread_db* tdbb, string& conjunctSql, con
 	}
 	else if (nodeIs<NullNode>(node))
 		appendFilterValue("null", conjunctSql);
+	else if (const auto variableNode = nodeAs<VariableNode>(node))
+	{
+		Request* request = tdbb->getRequest();
+		const auto impure = variableNode->getVarRequest(request)->
+			getImpure<impure_value>(variableNode->varDecl->impureOffset);
+
+		string value;
+		const auto desc = impure->vlu_desc;
+
+		getDescString(tdbb, &desc, value, getServerCharset(tdbb));
+		appendFilterValue(value, conjunctSql);
+	}
 }
 
 void ForeignTableScan::processOptionalArgument(thread_db* tdbb, Firebird::string& conjunctSql,
