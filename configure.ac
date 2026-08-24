@@ -601,6 +601,16 @@ AC_ARG_WITH(tomcrypt,
    esac])
 AC_SUBST(WITH_TOMCRYPT)
 
+CLOOP_GENERATION=Y
+AC_ARG_WITH(cloop-generation,
+  [  --without-cloop-generation do not build cloop or update generated interface files (default=no)],
+  [case "$withval" in
+     yes) CLOOP_GENERATION=Y;;
+     no)  CLOOP_GENERATION=N;;
+     *)   AC_MSG_ERROR(bad value '${withval}' for --with-cloop-generation);;
+   esac])
+AC_SUBST(CLOOP_GENERATION)
+
 TOMCRYPT_BUILD=N
 AC_ARG_WITH(builtin-tomcrypt,
   [  --with-builtin-tomcrypt build libtomcrypt library from firebird tree],
@@ -894,7 +904,7 @@ AC_CHECK_HEADERS(iconv.h)
 AC_CHECK_HEADERS(linux/falloc.h)
 AC_CHECK_HEADERS(utime.h)
 
-AC_CHECK_HEADERS(socket.h sys/socket.h sys/sockio.h winsock2.h)
+AC_CHECK_HEADERS(afunix.h socket.h sys/socket.h sys/sockio.h sys/un.h winsock2.h)
 AC_CHECK_DECLS(SOCK_CLOEXEC,,,[[
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -1537,6 +1547,12 @@ echo           "                   Service name : $FB_SERVICE_NAME"
 echo           "                   Service port : $FB_SERVICE_PORT"
 
 echo           "                   GPRE modules : c_cxx.cpp$GPRE_LANGUAGE_MODULES"
+
+case $CLOOP_GENERATION in
+ Y)       echo "               Cloop generation : enabled";;
+ N)       echo "               Cloop generation : disabled";;
+esac
+
 echo
 
 echo           "                    Install Dir : $prefix"

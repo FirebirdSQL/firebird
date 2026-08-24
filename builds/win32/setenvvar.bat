@@ -31,6 +31,11 @@ if /I "%~1"=="WITHOUT_TOMCRYPT" (
   shift /1
   goto :parse_args
 )
+if /I "%~1"=="WITHOUT_CLOOP_GENERATION" (
+  set FBBUILD_WITHOUT_CLOOP_GENERATION=1
+  shift /1
+  goto :parse_args
+)
 if /I "%~1"=="CLEAN" (
   set FB_CLEAN=:rebuild
   shift /1
@@ -288,6 +293,7 @@ goto :END
 @echo    vs_ver=%VS_VER%
 @echo    FB_VSCOMNTOOLS=%FB_VSCOMNTOOLS%
 @echo    platform=%FB_TARGET_PLATFORM%
+@if defined FBBUILD_WITHOUT_CLOOP_GENERATION echo    without_cloop_generation=yes
 @if /I "%FB_CLIENT_ONLY%"=="STATIC" (
   @echo    fbclient_static_config=%FB_STATIC_CONFIG%
   @if defined FBBUILD_WITHOUT_TOMCRYPT echo    without_tomcrypt=yes

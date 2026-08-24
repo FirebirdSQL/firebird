@@ -3550,7 +3550,7 @@ type
 		const SESSION_FLAG_ACTIVE = Cardinal($2);
 		const SESSION_FLAG_SYSTEM = Cardinal($4);
 		const SESSION_FLAG_LOG_FULL = Cardinal($8);
-		const SESSION_FLAG_LOCAL = Cardinal($16);
+		const SESSION_FLAG_LOCAL = Cardinal($10);
 
 		function getConfigText(): PAnsiChar;
 		function getTraceSessionID(): Integer;

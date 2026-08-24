@@ -135,6 +135,7 @@ RPL_AWK_SRC=$(MISC)/def_awk.c
 RPL_GREP=$(GEN_ROOT)/isc_grep
 RPL_GREP_SRC=$(MISC)/isc_grep.c
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE) $(API_C_H_FILE)
 
 $(API_H_FILE): $(IDL_FILE)
@@ -185,6 +186,7 @@ $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
 	else \
 		rm -f $(API_PAS_TMP_FILE); \
 	fi
+endif
 
 updateBuildNum : $(SRC_ROOT)/jrd/build_no.h $(GEN_ROOT)/Make.Version
 
@@ -205,6 +207,7 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 		PROGRAM=$(GEN_ROOT)/extern/btyacc/btyacc OBJ_DIR=$(ROOT)/temp/extern/btyacc
 endif
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	mkdir -p $(GEN_ROOT)/$(TARGET)/cloop
 
 ifeq ($(PLATFORM),DARWIN)
@@ -216,6 +219,7 @@ else
 endif
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
 	cmake --build .
+endif
 
 	mkdir -p $(ROOT)/temp/extern/decNumber $(GEN_ROOT)/extern/decNumber
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/decNumber \
@@ -365,7 +369,9 @@ master_process:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 	$(MAKE) rest
 	$(MAKE) yvalve
 ifeq ($(CLIENT_ONLY_FLG),Y)
@@ -401,7 +407,9 @@ cross1:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) boot
 	$(MAKE) yvalve
@@ -522,7 +530,9 @@ client_static_process:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 	$(MAKE) rest
 	$(MAKE) $(LIBFIREBIRD_STATIC)
 	$(MAKE) include_generic
@@ -927,7 +937,9 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
+endif
 
 
 ifeq ($(EDITLINE_FLG),Y)

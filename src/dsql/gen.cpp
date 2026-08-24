@@ -345,6 +345,20 @@ void GEN_descriptor( DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool tex
 		dsqlScratch->appendUShort(desc->dsc_length);
 		break;
 
+	case dtype_cstring:
+		if (texttype || desc->getTextType() == ttype_binary || desc->getTextType() == ttype_none)
+		{
+			dsqlScratch->appendUChar(blr_varying2);
+			dsqlScratch->appendUShort(desc->getTextType());
+		}
+		else
+		{
+			dsqlScratch->appendUChar(blr_varying2);	// automatic transliteration
+			dsqlScratch->appendUShort(ttype_dynamic);
+		}
+		dsqlScratch->appendUShort(desc->dsc_length - 1);
+		break;
+
 	case dtype_varying:
 		if (texttype || desc->getTextType() == ttype_binary || desc->getTextType() == ttype_none)
 		{

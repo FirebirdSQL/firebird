@@ -1541,7 +1541,7 @@ interface TraceInitInfo : Versioned
 	const uint SESSION_FLAG_ACTIVE 		= 0x0002;	// session is active
 	const uint SESSION_FLAG_SYSTEM 		= 0x0004;	// session created by engine itself
 	const uint SESSION_FLAG_LOG_FULL	= 0x0008;	// session trace log is full
-	const uint SESSION_FLAG_LOCAL		= 0x0016;	// session is running on the same machine as the server
+	const uint SESSION_FLAG_LOCAL		= 0x0010;	// session is running on the same machine as the server
 
 	const string getConfigText();
 	int getTraceSessionID();

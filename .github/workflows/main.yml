@@ -307,6 +307,22 @@ jobs:
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
 
+      - name: Start Docker
+        shell: powershell
+        run: |
+          Start-Service docker
+
+          for ($i = 0; $i -lt 30; $i++) {
+            docker info 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            Start-Sleep -Seconds 2
+          }
+
+          throw "Docker failed to start"
+
       # firebirdsql/firebird-builder-windows image is private
       - name: Login to Docker Hub
         id: dockerhub-login

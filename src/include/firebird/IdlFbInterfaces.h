@@ -6503,7 +6503,7 @@ namespace Firebird
 		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_ACTIVE = 0x2;
 		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_SYSTEM = 0x4;
 		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_LOG_FULL = 0x8;
-		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_LOCAL = 0x16;
+		static CLOOP_CONSTEXPR unsigned SESSION_FLAG_LOCAL = 0x10;
 
 		const char* getConfigText()
 		{

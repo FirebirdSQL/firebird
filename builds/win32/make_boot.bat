@@ -29,7 +29,7 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 
 @mkdir %FB_BIN_DIR%\tzdata 2>nul
 
-call :interfaces
+@if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 
 call :LibTom
@@ -205,6 +205,7 @@ goto :EOF
 ::===================
 :: Build CLOOP and generate interface headers
 :interfaces
+@if defined FBBUILD_WITHOUT_CLOOP_GENERATION goto :EOF
 @echo.
 @echo Building CLOOP and generating interfaces...
 @mkdir %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop 2>nul

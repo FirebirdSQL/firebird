@@ -731,6 +731,8 @@ using namespace Firebird;
 %token <metaNamePtr> WITHIN
 %token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> CONSTANT
+%token <metaNamePtr> CONCURRENTLY
+%token <metaNamePtr> VALIDATE
 %token <metaNamePtr> SERVER
 %token <metaNamePtr> OPTIONS
 %token <metaNamePtr> ENV
@@ -868,6 +870,7 @@ using namespace Firebird;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;
+	Jrd::AlterIndexNode* alterIndexNode;
 	Jrd::AlterDatabaseNode* alterDatabaseNode;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
@@ -1961,9 +1964,10 @@ unique_opt
 
 %type index_definition(<createIndexNode>)
 index_definition($createIndexNode)
-	: index_column_expr($createIndexNode) index_condition_opt
+	: index_column_expr($createIndexNode) index_condition_opt concurrently_opt
 		{
 			$createIndexNode->partial = $2;
+			$createIndexNode->concurrently = $3;
 		}
 	;
 
@@ -1992,6 +1996,12 @@ index_condition_opt
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+%type <boolVal> concurrently_opt
+concurrently_opt
+	: /* nothing */		{ $$ = false; }
+	| CONCURRENTLY		{ $$ = true; }
 	;
 
 // CREATE SHADOW
@@ -5470,11 +5480,17 @@ drop_behaviour
 	| CASCADE		{ $$ = true; }
 	;
 
-%type <ddlNode>	alter_index_clause
+%type <alterIndexNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name index_active concurrently_opt
 		{
 			$$ = newNode<AlterIndexNode>(*$1, $2);
+			$$->concurrently = $3;
+		}
+	| symbol_index_name VALIDATE UNIQUE
+		{
+			$$ = newNode<AlterIndexNode>(*$1, false);
+			$$->validateUnique = true;
 		}
 	;
 
@@ -11151,7 +11167,12 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+<<<<<<< HEAD
 	| WRAPPER
+=======
+	| CONCURRENTLY
+	| VALIDATE
+>>>>>>> origin/master
 	;
 
 %%
