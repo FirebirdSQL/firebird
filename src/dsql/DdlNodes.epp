@@ -14029,8 +14029,8 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 			if (!VREL.RDB$FOREIGN_SERVER_NAME.NULL)
 			{
-				// msg 332: "attempt to index a foreign table"
-				status_exception::raise(Arg::PrivateDyn(332));
+				// msg 336: "attempt to index a foreign table"
+				status_exception::raise(Arg::PrivateDyn(336));
 			}
 		}
 		END_FOR

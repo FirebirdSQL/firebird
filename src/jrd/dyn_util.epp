@@ -353,7 +353,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 				FS IN RDB$FOREIGN_SERVERS
 				WITH FS.RDB$FOREIGN_SERVER_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 325;	// isc_dyn_foreign_server_already_exists
+				*errorCode = 334;	// isc_dyn_foreign_server_already_exists
 			}
 			END_FOR
 

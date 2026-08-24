@@ -6249,10 +6249,10 @@ const
 	 isc_dyn_cannot_infer_schema = 336068929;
 	 isc_dyn_column_name_exists = 336068931;
 	 isc_dyn_function_mismatch = 336068935;
-	 isc_dyn_foreign_server_not_found = 336068936;
-	 isc_dyn_user_mapping_not_found = 336068937;
-	 isc_dyn_foreign_server_already_exists = 336068938;
-	 isc_dyn_foreign_server_not_exist = 336068939;
+	 isc_dyn_foreign_server_not_found = 336068940;
+	 isc_dyn_user_mapping_not_found = 336068941;
+	 isc_dyn_foreign_server_already_exists = 336068942;
+	 isc_dyn_foreign_server_not_exist = 336068943;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;

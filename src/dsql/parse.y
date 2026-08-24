@@ -11167,12 +11167,9 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
-<<<<<<< HEAD
-	| WRAPPER
-=======
 	| CONCURRENTLY
 	| VALIDATE
->>>>>>> origin/master
+	| WRAPPER
 	;
 
 %%
