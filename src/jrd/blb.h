@@ -184,6 +184,7 @@ inline constexpr int BLB_large_scan		= 64;		// Blob is larger than page buffer c
 inline constexpr int BLB_close_on_read	= 128;		// Temporary blob is not closed until read
 inline constexpr int BLB_user			= 256;		// User-defined blob
 inline constexpr int BLB_dltt			= 512;		// Blob stored in a declared local temporary table
+inline constexpr int BLB_foreign		= 1024;		// Blob is stored in foreign (external) table
 
 /* Blob levels are:
 

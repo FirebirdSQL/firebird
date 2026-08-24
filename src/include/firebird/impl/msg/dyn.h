@@ -321,3 +321,8 @@ FB_IMPL_MSG_SYMBOL(DYN, 328, dyn_index_cant_validate_inactive, "Can't validate i
 FB_IMPL_MSG_SYMBOL(DYN, 329, dyn_index_cant_validate_non_unique, "Can't validate non-unique index")
 FB_IMPL_MSG_SYMBOL(DYN, 330, dyn_index_already_validated, "Index uniqueness already validated")
 FB_IMPL_MSG_SYMBOL(DYN, 331, dyn_index_validation_failed, "Uniqueness validation of the index @1 failed")
+FB_IMPL_MSG(DYN, 332, dyn_foreign_server_not_found, -901, "42", "000", "Foreign server @1 not found")
+FB_IMPL_MSG(DYN, 333, dyn_user_mapping_not_found, -901, "42", "000", "User mapping for user @1 and server @2 not found")
+FB_IMPL_MSG(DYN, 334, dyn_foreign_server_already_exists, -901, "42", "000", "Foreign server @1 already exists")
+FB_IMPL_MSG(DYN, 335, dyn_foreign_server_not_exist, -901, "42", "000", "Foreign server @1 does not exist")
+FB_IMPL_MSG_NO_SYMBOL(DYN, 336, "attempt to index a foreign table")

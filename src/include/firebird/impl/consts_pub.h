@@ -138,6 +138,7 @@
 #define isc_dpb_search_path				 105
 #define isc_dpb_blr_request_search_path	 106
 #define isc_dpb_gbak_restore_has_schema	 107
+#define isc_dpb_foreign_options			 108
 
 
 /**************************************************/

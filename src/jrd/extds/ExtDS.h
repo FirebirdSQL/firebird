@@ -38,6 +38,7 @@ namespace Jrd
 	class jrd_tra;
 	class thread_db;
 	class ValueListNode;
+	class ForeignTableAdapter;
 }
 
 namespace EDS {
@@ -64,6 +65,8 @@ enum TraScope {
 	traCommon,
 	traTwoPhase
 };
+
+inline constexpr int EXT_BLOB_SEGMENT_SIZE	= 32766;
 
 
 // helper to work with ICryptKeyCallback
@@ -156,7 +159,14 @@ public:
 	static Provider* getProvider(const Firebird::string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
+		const Firebird::string& pwd, const Firebird::string& role,
+		const Firebird::PathName& providers, TraScope tra_scope,
+		const Firebird::string& options);
+	static Connection* getProviderConnection(Jrd::thread_db* tdbb,
+		Provider* provider, Firebird::ClumpletWriter& dpb,
+		const Firebird::string& database, const Firebird::string& user,
+		const Firebird::string& pwd, const Firebird::string& role,
+		TraScope tra_scope);
 
 	static ConnectionsPool* getConnPool(bool create);
 
@@ -586,6 +596,11 @@ public:
 		return m_cryptCallbackRedir.isValid();
 	}
 
+	void setBoundForeignAdapter(Jrd::ForeignTableAdapter* foreignAdapter)
+	{
+		m_foreignAdapter = foreignAdapter;
+	}
+
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
@@ -617,6 +632,7 @@ protected:
 	bool m_wrapErrors;
 	bool m_broken;
 	bool m_features[fb_feature_max];
+	Jrd::ForeignTableAdapter* m_foreignAdapter;
 
 	CryptCallbackRedirector m_cryptCallbackRedir;
 };
@@ -705,6 +721,10 @@ public:
 
 	const Firebird::string& getSql() const noexcept { return m_sql; }
 
+	const Firebird::string& getRawSql() const noexcept { return m_rawSql; }
+
+	void setRawSql(const Firebird::string& rawSql) { m_rawSql = rawSql; }
+
 	void setCallerPrivileges(bool use) noexcept { m_callerPrivileges = use; }
 
 	bool isActive() const noexcept { return m_active; }
@@ -767,6 +787,7 @@ protected:
 	Statement* m_prevInReq;
 
 	Firebird::string m_sql;
+	Firebird::string m_rawSql;
 
 	// passed in open()
 	bool	m_singleton;

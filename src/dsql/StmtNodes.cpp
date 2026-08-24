@@ -68,6 +68,8 @@
 #include "../dsql/pass1_proto.h"
 #include "../dsql/DsqlStatementCache.h"
 #include "../jrd/BulkInsert.h"
+#include "../jrd/ForeignServer.h"
+#include "../jrd/Mapping.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -3376,7 +3378,7 @@ EraseNode* EraseNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 
 	csb->csb_rpt[stream].csb_flags |= csb_update;
 
-	impureOffset = csb->allocImpure<impure_state>();
+	impureOffset = csb->allocImpure<Impure>();
 
 	return this;
 }
@@ -3428,7 +3430,8 @@ const StmtNode* EraseNode::execute(thread_db* tdbb, Request* request, ExeState* 
 // Perform erase operation.
 const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const
 {
-	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	impure_state* state = &impure->state;
 
 	jrd_tra* transaction = request->req_transaction;
 	record_param* rpb = &request->req_rpb[stream];
@@ -3456,7 +3459,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 	{
 		case Request::req_evaluate:
 		{
-			impure->sta_state = 0;
+			state->sta_state = 0;
 
 			if (!(marks & MARK_AVOID_COUNTERS))
 				request->req_records_affected.bumpModified(false);
@@ -3478,9 +3481,9 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		}
 
 		case Request::req_return:
-			if (impure->sta_state == 1)
+			if (state->sta_state == 1)
 			{
-				impure->sta_state = 0;
+				state->sta_state = 0;
 				rpb->rpb_number.setValid(false);
 				return parentStmt;
 			}
@@ -3545,6 +3548,15 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		extFile->erase(rpb, transaction);
 	else if (relation->isVirtual())
 		VirtualTable::erase(tdbb, rpb);
+	else if (auto* foreignAdapter = relation->getForeignAdapter())
+	{
+		if (!impure->statement)
+		{
+			impure->statement = foreignAdapter->createStatement(tdbb, rpb);
+			impure->statement->bindToRequest(request, &impure->statement);
+		}
+		foreignAdapter->execute(tdbb, impure->statement, rpb);
+	}
 	else if (!relation->isView())
 	{
 		// VIO_erase returns false if:
@@ -3593,7 +3605,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (!relation || !relation->isView())
 	{
-		if (relation && !relation->getExtFile() && !relation->isVirtual())
+		if (relation && !relation->getExtFile() && !relation->isVirtual() && !relation->getForeignAdapter())
 			IDX_erase(tdbb, rpb, transaction);
 
 		// Mark this rpb as already deleted to skip the subsequent attempts
@@ -3611,7 +3623,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 
 	if (returningStatement)
 	{
-		impure->sta_state = 1;
+		state->sta_state = 1;
 		request->req_operation = Request::req_evaluate;
 		return returningStatement;
 	}
@@ -4942,6 +4954,18 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						node->role = PAR_parse_value(tdbb, csb);
 						break;
 
+					case blr_exec_stmt_ext_server:
+					{
+						csb->csb_blr_reader.getMetaName(node->server);
+						if (csb->collectingDependencies())
+						{
+							Dependency dependency(obj_foreign_server);
+							dependency.name = QualifiedName(node->server);
+							csb->addDependency(dependency);
+						}
+						break;
+					}
+
 					case blr_exec_stmt_tran:
 						PAR_syntax_error(csb, "external transaction parameters");
 						break;
@@ -5085,6 +5109,7 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->role = doDsqlPass(dsqlScratch, role);
 	node->traScope = traScope;
 	node->useCallerPrivs = useCallerPrivs;
+	node->server = server;
 
 	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 }
@@ -5097,6 +5122,7 @@ string ExecStatementNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, dsqlLabelNumber);
 	NODE_PRINT(printer, sql);
 	NODE_PRINT(printer, dataSource);
+	NODE_PRINT(printer, server);
 	NODE_PRINT(printer, userName);
 	NODE_PRINT(printer, password);
 	NODE_PRINT(printer, role);
@@ -5120,7 +5146,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// If no new features of EXECUTE STATEMENT are used, lets generate old BLR.
 	if (!dataSource && !userName && !password && !role && !useCallerPrivs && !inputs &&
-		 traScope == EDS::traNotSet)
+		 traScope == EDS::traNotSet && server.isEmpty())
 	{
 		if (outputs)
 		{
@@ -5179,6 +5205,13 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_user, userName);
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_pwd, password);
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_role, role);
+
+		// Server
+		if (server.hasData())
+		{
+			dsqlScratch->appendUChar(blr_exec_stmt_ext_server);
+			dsqlScratch->appendMetaString(server.c_str());
+		}
 
 		// dsqlScratch's transaction behavior.
 		if (traScope != EDS::traNotSet)
@@ -5254,6 +5287,14 @@ ExecStatementNode* ExecStatementNode::pass1(thread_db* tdbb, CompilerScratch* cs
 	doPass1(tdbb, csb, innerStmt.getAddress());
 	doPass1(tdbb, csb, inputs.getAddress());
 	doPass1(tdbb, csb, outputs.getAddress());
+
+	if (server.hasData())
+	{
+		AutoPtr<ForeignServer> foreignServer = MET_get_foreign_server(tdbb, server);
+		CMP_post_access(tdbb, csb, foreignServer->getSecurityClass(), 0, SCL_usage, obj_foreign_servers,
+			QualifiedName(server));
+	}
+
 	return this;
 }
 
@@ -5292,6 +5333,7 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 	{
 		fb_assert(!*stmtPtr);
 
+		// Explicitly specified connection properties have the highest priority.
 		string sSql;
 		getString(tdbb, request, sql, sSql, true);
 
@@ -5307,7 +5349,57 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 		string sRole;
 		getString(tdbb, request, role, sRole);
 
-		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope);
+		PathName sProviders;
+		string sOptions;
+
+		if (server.hasData())
+		{
+			AutoPtr<ForeignServer> foreignServer = MET_get_foreign_server(tdbb, server);
+
+			Database* const dbb = tdbb->getDatabase();
+			Jrd::Attachment* attachment = tdbb->getAttachment();
+			const string currentUser = attachment->getUserName();
+			const string fServer = server.c_str();
+			Mapping mapping(Mapping::MAP_NO_FLAGS, NULL);
+
+			// If there is mapping for user and foreign server,
+			// get a map of the connection parameters, skipping the explicitly specified properties earlier.
+			GenericMap<MetaStringOptionPair>* foreignMap;
+			mapping.getForeignUserMap(attachment, currentUser, fServer, foreignMap);
+
+			// The connection properties specified in foreign server options have the lowest priority.
+			const auto& options = foreignServer.get()->getOptions();
+
+			auto getOption = [&](const char* optionName) -> string
+			{
+				ForeignOption option(*tdbb->getAttachment()->att_pool);
+				if (foreignMap && foreignMap->get(optionName, option))
+					return option.getActualValue();
+				if (options.get(optionName, option))
+					return option.getActualValue();
+				return "";
+			};
+
+			if (sDataSrc.isEmpty())
+				sDataSrc = getOption(FOREIGN_SERVER_CONNECTION_STRING);
+			if (sUser.isEmpty())
+				sUser = getOption(FOREIGN_SERVER_USER);
+			if (sPwd.isEmpty())
+				sPwd = getOption(FOREIGN_SERVER_PASSWORD);
+			if (sRole.isEmpty())
+				sRole = getOption(FOREIGN_SERVER_ROLE);
+
+			if (!foreignServer.get()->getPluginName().isEmpty())
+			{
+				sProviders = foreignServer.get()->getPluginName().c_str();
+				sProviders.insert(0, "Providers=");
+			}
+
+			ForeignTableProvider::makeOptionsString(options, sOptions);
+		}
+
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, sProviders, traScope,
+			sOptions);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);
@@ -6834,8 +6926,8 @@ void ForNode::setWriteLockMode(Request* request) const
 
 void ForNode::checkRecordUpdated(thread_db* tdbb, Request* request, record_param* rpb) const
 {
-	auto* relation = rpb->rpb_relation->getPermanent();
-	if (!(marks & MARK_MERGE) || relation->isVirtual() || relation->isView() || relation->getExtFile())
+	auto* relation = rpb->rpb_relation;
+	if (!(marks & MARK_MERGE) || !relation->isPageBased())
 		return;
 
 	ImpureMerge* impure = request->getImpure<ImpureMerge>(impureOffset);
@@ -6849,8 +6941,8 @@ void ForNode::checkRecordUpdated(thread_db* tdbb, Request* request, record_param
 
 void ForNode::setRecordUpdated(thread_db* tdbb, Request* request, record_param* rpb) const
 {
-	auto* relation = rpb->rpb_relation->getPermanent();
-	if (!(marks & MARK_MERGE) || relation->isVirtual() || relation->isView() || relation->getExtFile())
+	auto* relation = rpb->rpb_relation;
+	if (!(marks & MARK_MERGE) || !relation->isPageBased())
 		return;
 
 	ImpureMerge* impure = request->getImpure<ImpureMerge>(impureOffset);
@@ -9073,20 +9165,21 @@ ModifyNode* ModifyNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 	if (!(marks & StmtNode::MARK_POSITIONED))
 		forNode = pass2FindForNode(parentStmt, orgStream);
 
-	impureOffset = csb->allocImpure<impure_state>();
+	impureOffset = csb->allocImpure<Impure>();
 
 	return this;
 }
 
 const StmtNode* ModifyNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
 {
-	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	impure_state* state = &impure->state;
 	const StmtNode* retNode;
 
 	if (request->req_operation == Request::req_unwind)
 		return parentStmt;
 
-	if (request->req_operation == Request::req_return && !impure->sta_state && subMod)
+	if (request->req_operation == Request::req_return && !state->sta_state && subMod)
 	{
 		if (!exeState->topNode)
 		{
@@ -9128,7 +9221,8 @@ const StmtNode* ModifyNode::execute(thread_db* tdbb, Request* request, ExeState*
 const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const
 {
 	jrd_tra* transaction = request->req_transaction;
-	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	impure_state* state = &impure->state;
 
 	record_param* orgRpb = &request->req_rpb[orgStream];
 	jrd_rel* relation = orgRpb->rpb_relation;
@@ -9162,16 +9256,16 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 			if (!(marks & MARK_AVOID_COUNTERS))
 				request->req_records_affected.bumpModified(false);
 
-			if (relation && impure->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
+			if (relation && state->sta_state == 0 && forNode && forNode->isWriteLockMode(request))
 				request->req_operation = Request::req_return;
 			else
 				break;
 			[[fallthrough]];
 
 		case Request::req_return:
-			if (impure->sta_state == 1)
+			if (state->sta_state == 1)
 			{
-				impure->sta_state = 0;
+				state->sta_state = 0;
 				Record* orgRecord = orgRpb->rpb_record;
 				const Record* newRecord = newRpb->rpb_record;
 				orgRecord->copyDataFrom(newRecord, true);
@@ -9179,7 +9273,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				return statement;
 			}
 
-			if (impure->sta_state == 0)
+			if (state->sta_state == 0)
 			{
 				if (relation && forNode && forNode->isWriteLockMode(request))
 				{
@@ -9223,6 +9317,15 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					extFile->modify(orgRpb, newRpb, transaction);
 				else if (relation->isVirtual())
 					VirtualTable::modify(tdbb, orgRpb, newRpb);
+				else if (auto* foreignAdapter = relation->getForeignAdapter())
+				{
+					if (!impure->statement)
+					{
+						impure->statement = foreignAdapter->createStatement(tdbb, orgRpb, newRpb);
+						impure->statement->bindToRequest(request, &impure->statement);
+					}
+					foreignAdapter->execute(tdbb, impure->statement, orgRpb, newRpb);
+				}
 				else if (!relation->isView())
 				{
 					// VIO_modify returns false if:
@@ -9268,7 +9371,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 				// have fired.  This is required for cascading referential integrity,
 				// which can be implemented as post_erase triggers.
 
-				if (relation && !relation->getExtFile() && !relation->isView() && !relation->isVirtual())
+				if (relation && relation->isPageBased())
 					IDX_modify_check_constraints(tdbb, orgRpb, newRpb, transaction);
 
 				if (!relation || !relation->isView() ||
@@ -9283,7 +9386,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 				if (statement2)
 				{
-					impure->sta_state = 2;
+					state->sta_state = 2;
 					request->req_operation = Request::req_evaluate;
 					return statement2;
 				}
@@ -9301,7 +9404,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 			return parentStmt;
 	}
 
-	impure->sta_state = 0;
+	state->sta_state = 0;
 	if (relation)
 		RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 
@@ -9377,7 +9480,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 
 	if (mapView)
 	{
-		impure->sta_state = 1;
+		state->sta_state = 1;
 		return mapView;
 	}
 
@@ -10281,17 +10384,18 @@ StoreNode* StoreNode::pass2(thread_db* tdbb, CompilerScratch* csb)
 		ExprNode::doPass2(tdbb, csb, i->value.getAddress());
 	}
 
-	impureOffset = csb->allocImpure<impure_state>();
+	impureOffset = csb->allocImpure<Impure>();
 
 	return this;
 }
 
 const StmtNode* StoreNode::execute(thread_db* tdbb, Request* request, ExeState* exeState) const
 {
-	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	impure_state* state = &impure->state;
 	const StmtNode* retNode;
 
-	if (request->req_operation == Request::req_return && !impure->sta_state && subStore)
+	if (request->req_operation == Request::req_return && !state->sta_state && subStore)
 	{
 		if (!exeState->topNode)
 		{
@@ -10333,7 +10437,8 @@ const StmtNode* StoreNode::execute(thread_db* tdbb, Request* request, ExeState* 
 const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const
 {
 	jrd_tra* transaction = request->req_transaction;
-	impure_state* impure = request->getImpure<impure_state>(impureOffset);
+	Impure* impure = request->getImpure<Impure>(impureOffset);
+	impure_state* state = &impure->state;
 
 	const StreamType stream = target->getStream();
 	record_param* rpb = &request->req_rpb[stream];
@@ -10368,13 +10473,13 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 				request->req_records_affected.bumpModified(false);
 			}
 
-			impure->sta_state = 0;
+			state->sta_state = 0;
 			if (relation)
 				RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
 			break;
 
 		case Request::req_return:
-			if (!impure->sta_state)
+			if (!state->sta_state)
 			{
 				SavepointChangeMarker scMarker(transaction);
 
@@ -10406,6 +10511,15 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 					extFile->store(tdbb, rpb);
 				else if (relation->isVirtual())
 					VirtualTable::store(tdbb, rpb);
+				else if (auto* foreignAdapter = relation->getForeignAdapter())
+				{
+					if (!impure->statement)
+					{
+						impure->statement = foreignAdapter->createStatement(tdbb, NULL, rpb);
+						impure->statement->bindToRequest(request, &impure->statement);
+					}
+					foreignAdapter->execute(tdbb, impure->statement, NULL, rpb);
+				}
 				else if (!relation->isView())
 				{
 					VIO_store(tdbb, rpb, transaction);
@@ -10436,7 +10550,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 
 				if (statement2)
 				{
-					impure->sta_state = 1;
+					state->sta_state = 1;
 					request->req_operation = Request::req_evaluate;
 					return statement2;
 				}

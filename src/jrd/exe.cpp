@@ -1875,6 +1875,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 				(*ptr)->close(tdbb);
 		}
 
+		// Close external statements
+		while (request->req_ext_stmt)
+			request->req_ext_stmt->close(tdbb);
+
 		if (!exeState.errorPending)
 			TRA_release_request_snapshot(tdbb, request);
 
