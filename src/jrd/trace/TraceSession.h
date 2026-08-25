@@ -40,7 +40,7 @@ const int trs_admin			= 0x0001;	// session created by server administrator
 const int trs_active		= 0x0002;	// session is active
 const int trs_system		= 0x0004;	// session created by engine itself
 const int trs_log_full		= 0x0008;	// session trace log is full
-const int trs_local			= 0x0016;	// session is running on the same machine as the server
+const int trs_local			= 0x0010;	// session is running on the same machine as the server
 
 class TraceSession
 {
