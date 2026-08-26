@@ -47,10 +47,7 @@
 #include <unicode/uchar.h>
 #include <unicode/ucol.h>
 #include <unicode/uversion.h>
-
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-#	include <unicode/utf_old.h>
-#endif
+#include <unicode/utf_old.h>
 
 
 using namespace Firebird;
@@ -1282,16 +1279,12 @@ void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion) 
 UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 {
 	if (convIcu)
-	{
 		return *convIcu;
-	}
 
 	MutexLockGuard g(convIcuMutex, "UnicodeUtil::getConversionICU");
 
 	if (convIcu)
-	{
 		return *convIcu;
-	}
 
 	// Try "favorite" (distributed on Windows) version first
 	constexpr int favMaj = 77;
@@ -1318,32 +1311,17 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	CheckStatusWrapper lastError(&ls);
 	string version;
 
-	// According to http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
-	// we using two ranges of version numbers: 3.0 - 4.8 and 49 - 79.
-	// Note 1: the most current version for now is 64, thus it is seems as enough to
-	// limit upper bound by value of 79. It should be enlarged when necessary in the
-	// future.
-	// Note 2: the required function ucal_getTZDataVersion() is available since 3.8.
+	// Note: the most current version for now is 78, thus it is seems as enough to limit upper bound by value of 99.
+	// It should be enlarged when necessary in the future.
 
-	for (int major = 79; major >= 3;)
+	for (int major = 99; major >= 53;)
 	{
-#ifdef WIN_NT
-		int minor = 0;
-#else
 		int minor = 9;
-#endif
-
-		if (major == 4)
-			minor = 8;
-		else if (major <= 4)
-			minor = 9;
 
 		for (; minor >= 0; --minor)
 		{
 			if ((major == favMaj) && (minor == favMin))
-			{
 				continue;
-			}
 
 			try
 			{
@@ -1357,10 +1335,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 			}
 		}
 
-		if (major == 49)
-			major = 4;
-		else
-			major--;
+		--major;
 	}
 
 	Arg::Gds err(isc_icu_library);
