@@ -3412,7 +3412,12 @@ static bool commit_charset(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 	case 7:
 		{
-			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id, 0);
+			// ASF: During database creation there is no need to force loading of
+			// all system collations - they are not used yet and will be loaded on
+			// demand later.
+			const bool creating = tdbb->getDatabase()->dbb_flags & DBB_creating;
+			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id,
+				(creating ? CacheFlag::NOSCAN : 0));
 			fb_assert(cs);
 			if (cs)
 				cs->commit(tdbb);
