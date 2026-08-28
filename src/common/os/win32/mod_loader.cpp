@@ -57,6 +57,24 @@ private:
 
 constexpr const char* KERNEL32_DLL = "kernel32.dll";
 
+// Our own containing module (the DLL, or the host EXE when fbclient is
+// linked statically) never changes during the process lifetime, so look it
+// up via GetModuleHandleEx(..._FROM_ADDRESS...).
+static HMODULE getOwnModuleHandle() noexcept
+{
+	static const HMODULE hModule = []() noexcept
+	{
+		HMODULE h = nullptr;
+		GetModuleHandleExA(
+			GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			(LPCSTR) &getOwnModuleHandle,
+			&h);
+		return h;
+	}();
+
+	return hModule;
+}
+
 
 class ContextActivator
 {
@@ -120,7 +138,7 @@ public:
 		actCtx.cbSize = sizeof(actCtx);
 		actCtx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID | ACTCTX_FLAG_HMODULE_VALID;
 		actCtx.lpResourceName = ISOLATIONAWARE_MANIFEST_RESOURCE_ID;
-		actCtx.hModule = Firebird::hDllInst;
+		actCtx.hModule = getOwnModuleHandle();
 
 		if (actCtx.hModule)
 		{

@@ -141,7 +141,8 @@ PrioritySwitchDelay        integer  default 100 (milliseconds)
 DeadThreadsCollection      integer  default 50
 PriorityBoost              integer  default 5
 RemoteServiceName          string   default gds_db
-RemoteServicePort          integer  default 3050 (TCP port number)
+RemoteServicePort          integer  default 3050 (TCP port number; explicitly set to 0 to disable TCP listening)
+RemoteServiceUnixSocket    string   default empty (Unix domain socket path; additional listener, or sole listener when RemoteServicePort is 0)
 IpcName                    string   default "FIREBIRD" (Windows only)
 
 MaxUnflushedWrites         integer

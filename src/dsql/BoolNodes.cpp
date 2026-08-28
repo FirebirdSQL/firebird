@@ -43,6 +43,7 @@
 #include "../dsql/make_proto.h"
 #include "../dsql/pass1_proto.h"
 #include "../dsql/DSqlDataTypeUtil.h"
+#include "../jrd/cvt2_proto.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -462,12 +463,39 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		fb_assert(false);
 	}
 
+	procArg1 = doDsqlPass(dsqlScratch, procArg1);
 	procArg2 = doDsqlPass(dsqlScratch, procArg2);
+	procArg3 = doDsqlPass(dsqlScratch, procArg3);
+
+
+	const auto convertLiteralToOperand =
+		[&](NestConst<ValueExprNode>& literalArg, NestConst<ValueExprNode>& referenceArg)
+		{
+			LiteralNode* const literal = nodeAs<LiteralNode>(literalArg);
+
+			if (!literal || literal->litDesc.dsc_dtype != dtype_text)
+				return;
+
+			dsc referenceDesc;
+			DsqlDescMaker::fromNode(dsqlScratch, &referenceDesc, referenceArg);
+
+			if (referenceDesc.isUnknown())
+				return;
+
+			if (ValueExprNode* const value = MAKE_constant_from_literal(literal, &referenceDesc))
+				literalArg = value;
+		};
+
+	convertLiteralToOperand(procArg1, procArg2);
+	convertLiteralToOperand(procArg2, procArg1);
+
+	if (blrOp == blr_between)
+		convertLiteralToOperand(procArg3, procArg1);
 
 	ComparativeBoolNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ComparativeBoolNode(dsqlScratch->getPool(), blrOp,
-		doDsqlPass(dsqlScratch, procArg1),
+		procArg1,
 		procArg2,
-		doDsqlPass(dsqlScratch, procArg3));
+		procArg3);
 
 	if (dsqlCheckBoolean)
 	{

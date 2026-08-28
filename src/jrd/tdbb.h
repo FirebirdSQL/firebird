@@ -61,6 +61,7 @@ class jrd_tra;
 class Request;
 class BufferDesc;
 class Lock;
+struct IndexCreation;
 
 
 #ifdef USE_ITIMER
@@ -218,6 +219,7 @@ public:
 		  tdbb_quantum(QUANTUM),
 		  tdbb_flags(0),
 		  tdbb_temp_traid(0),
+		  tdbb_temp_frame_id(0),
 		  tdbb_bdbs(*getDefaultMemoryPool()),
 		  tdbb_thread(Firebird::ThreadSync::getThread("thread_db"))
 	{
@@ -242,10 +244,13 @@ public:
 	ULONG		tdbb_flags;
 
 	TraNumber	tdbb_temp_traid;	// current temporary table scope
+	FB_UINT64	tdbb_temp_frame_id;	// current frame-scoped temporary table scope
 
 	// BDB's held by thread
 	Firebird::HalfStaticArray<BufferDesc*, 16> tdbb_bdbs;
 	Firebird::ThreadSync* tdbb_thread;
+
+	IndexCreation* tdbb_indexCreation = nullptr;	// current thread creates index
 
 	MemoryPool* getDefaultPool() noexcept
 	{

@@ -478,11 +478,16 @@ void PackageReferenceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 bool PackageReferenceNode::constantExists(thread_db* tdbb, const QualifiedName& fullName,
 	dsc* outConstantDesc, bool* isPrivate)
 {
+	// Invalid constructs such as "OLD.*" that may be passed to this function.
 	if (fullName.package.isEmpty() || fullName.object.isEmpty())
 		return false;
 
-	// Delay this assert check due to invalid constructs such as "OLD.*" that may be passed to this function.
-	fb_assert(fullName.schema.hasData());
+	if (fullName.schema.isEmpty())
+	{
+		// The schema must always be specified, except when the search path is missing.
+		fb_assert(tdbb->getAttachment()->att_schema_search_path->isEmpty());
+		return false;
+	}
 
 	auto* package = MetadataCache::getVersioned<Cached::Package>(tdbb, fullName.getSchemaAndPackage(), CacheFlag::AUTOCREATE);
 	if (package == nullptr)

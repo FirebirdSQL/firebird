@@ -1120,10 +1120,10 @@ public:
 
 	~LogFileHandles()
 	{
-		if (mutex_handle != INVALID_HANDLE_VALUE)
+		if (mutex_handle != NULL)
 			CloseHandle(mutex_handle);
 
-		mutex_handle = INVALID_HANDLE_VALUE;
+		mutex_handle = NULL;
 
 		if (file_handle != INVALID_HANDLE_VALUE)
 			CloseHandle(file_handle);
@@ -1182,7 +1182,7 @@ void LogFileHandles::trace_raw(const char* text, unsigned int length)
 
 Firebird::InitInstance<LogFileHandles> logFileHandles;
 
-HANDLE LogFileHandles::mutex_handle = INVALID_HANDLE_VALUE;
+HANDLE LogFileHandles::mutex_handle = NULL;
 HANDLE LogFileHandles::file_handle = INVALID_HANDLE_VALUE;
 
 
@@ -4033,7 +4033,9 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			static const char* subCodes[] =
 			{
 				nullptr,
-				"format"
+				"format",
+				"ltt",
+				"field_names"
 			};
 
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
@@ -4047,6 +4049,10 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 
 				switch (blr_operator)
 				{
+					case blr_dcl_local_table_ltt:
+						offset = blr_print_line(control, offset);
+						break;
+
 					case blr_dcl_local_table_format:
 						n = blr_print_word(control);
 						offset = blr_print_line(control, offset);
@@ -4056,6 +4062,21 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 						{
 							blr_indent(control, level);
 							blr_print_dtype(control);
+							offset = blr_print_line(control, offset);
+						}
+
+						--level;
+						break;
+
+					case blr_dcl_local_table_field_names:
+						n = blr_print_word(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_indent(control, level);
+							blr_print_name(control);
 							offset = blr_print_line(control, offset);
 						}
 
@@ -4081,7 +4102,8 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 			{
 				nullptr,
 				"message",
-				"variable"
+				"variable",
+				"local_table"
 			};
 
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
@@ -4097,6 +4119,7 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				{
 					case blr_outer_map_message:
 					case blr_outer_map_variable:
+					case blr_outer_map_local_table:
 						blr_print_word(control);
 						n = blr_print_word(control);
 						offset = blr_print_line(control, offset);

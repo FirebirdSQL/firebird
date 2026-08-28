@@ -1100,7 +1100,18 @@ namespace
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
 			if (pattern == Format::NONE)
-				invalidPatternException(patternStr, cb);
+			{
+				// An invalid `patternStr` may be incomplete, so just parse it from the beginning up to the separator.
+				// Since patterns can be combined without separators, we can print multiple patterns, but it's fine.
+				const FB_SIZE_T patternBeginPos = i - patternStr.length();
+				for (; i < formatLength; i++)
+				{
+					if (isSeparator(formatUpper[i]))
+						break;
+				}
+				std::string_view errorPattern(formatUpper.data() + patternBeginPos, i - patternBeginPos);
+				invalidPatternException(errorPattern, cb);
+			}
 			if (outFormatPatterns & pattern)
 				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << patternStr);
 			if (!patternIsCompatibleWithDscType(desc, pattern))

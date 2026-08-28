@@ -90,11 +90,14 @@ public:
 	BaseICU& operator =(const BaseICU&) = delete;
 
 	ModuleLoader::Module* formatAndLoad(const char* templateName);
-	void initialize(ModuleLoader::Module* module);
+	bool initialize(LocalStatus& status, ModuleLoader::Module* module);
 
-	template <typename T> string getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
-		bool optional = false)
+	template <typename T> string getEntryPoint(LocalStatus& status, const char* name, ModuleLoader::Module* module,
+		T& ptr, bool optional = false)
 	{
+		if (status.hasErrors())
+			return "";
+
 		// System-wide ICU have no version number at entries names
 		if (!majorVersion)
 		{
@@ -120,7 +123,7 @@ public:
 		}
 
 		if (!optional)
-			(Arg::Gds(isc_icu_entrypoint) << name).raise();
+			(Arg::Gds(isc_icu_entrypoint) << name).copyTo(&status);
 
 		return "";
 	}
@@ -188,9 +191,12 @@ ModuleLoader::Module* BaseICU::formatAndLoad(const char* templateName)
 	return module;
 }
 
-void BaseICU::initialize(ModuleLoader::Module* module)
+bool BaseICU::initialize(LocalStatus& status, ModuleLoader::Module* module)
 {
-	getEntryPoint("u_getVersion", module, u_getVersion);
+	getEntryPoint(status, "u_getVersion", module, u_getVersion);
+
+	if (status.hasErrors())
+		return false;
 
 	UVersionInfo versionInfo;
 	u_getVersion(versionInfo);
@@ -203,7 +209,9 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 			(int) versionInfo[0], (int) versionInfo[1],
 			this->majorVersion, this->minorVersion);
 
-		(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		(Arg::Gds(isc_random) << Arg::Str(err)).copyTo(&status);
+
+		return false;
 	}
 
 	majorVersion = versionInfo[0];
@@ -213,9 +221,10 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	void (U_EXPORT2 *uSetTimeZoneFilesDirectory)(const char* path, UErrorCode* status);
 	void (U_EXPORT2 *uSetDataDirectory)(const char* directory);
 
-	getEntryPoint("u_init", module, uInit, true);
-	getEntryPoint("u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
-	const auto uSetDataDirectorySymbolName = getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
+	getEntryPoint(status, "u_init", module, uInit, true);
+	getEntryPoint(status, "u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
+	const auto uSetDataDirectorySymbolName = getEntryPoint(status, "u_setDataDirectory", module,
+		uSetDataDirectory, true);
 
 	if (uSetDataDirectory)
 	{
@@ -261,13 +270,16 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 
 	if (uInit)
 	{
-		UErrorCode status = U_ZERO_ERROR;
-		uInit(&status);
-		if (status != U_ZERO_ERROR)
+		UErrorCode errorCode = U_ZERO_ERROR;
+		uInit(&errorCode);
+		if (errorCode != U_ZERO_ERROR)
 		{
 			string diag;
-			diag.printf("u_init() error %d", status);
-			(Arg::Gds(isc_random) << diag).raise();
+			diag.printf("u_init() error %d", errorCode);
+
+			(Arg::Gds(isc_random) << diag).copyTo(&status);
+
+			return false;
 		}
 	}
 
@@ -276,9 +288,11 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	// safe. See comments in fb_utils::setenv.
 	if (uSetTimeZoneFilesDirectory && TimeZoneUtil::getTzDataPath().hasData())
 	{
-		UErrorCode status = U_ZERO_ERROR;
-		uSetTimeZoneFilesDirectory(TimeZoneUtil::getTzDataPath().c_str(), &status);
+		UErrorCode errorCode = U_ZERO_ERROR;
+		uSetTimeZoneFilesDirectory(TimeZoneUtil::getTzDataPath().c_str(), &errorCode);
 	}
+
+	return true;
 }
 
 }
@@ -399,7 +413,7 @@ public:
 class ImplementConversionICU : public UnicodeUtil::ConversionICU, BaseICU
 {
 private:
-	ImplementConversionICU(int aMajorVersion, int aMinorVersion)
+	ImplementConversionICU(LocalStatus& status, int aMajorVersion, int aMinorVersion)
 		: BaseICU(aMajorVersion, aMinorVersion)
 	{
 #ifdef ANDROID
@@ -415,52 +429,58 @@ private:
 		if (!module)
 			return;
 
-		initialize(module);
+		if (!initialize(status, module))
+			return;
 
-		getEntryPoint("ucnv_open", module, ucnv_open);
-		getEntryPoint("ucnv_close", module, ucnv_close);
-		getEntryPoint("ucnv_fromUChars", module, ucnv_fromUChars);
-		getEntryPoint("u_tolower", module, u_tolower);
-		getEntryPoint("u_toupper", module, u_toupper);
-		getEntryPoint("u_strCompare", module, u_strCompare);
-		getEntryPoint("u_countChar32", module, u_countChar32);
-		getEntryPoint("utf8_nextCharSafeBody", module, utf8_nextCharSafeBody);
+		getEntryPoint(status, "ucnv_open", module, ucnv_open);
+		getEntryPoint(status, "ucnv_close", module, ucnv_close);
+		getEntryPoint(status, "ucnv_fromUChars", module, ucnv_fromUChars);
+		getEntryPoint(status, "u_tolower", module, u_tolower);
+		getEntryPoint(status, "u_toupper", module, u_toupper);
+		getEntryPoint(status, "u_strCompare", module, u_strCompare);
+		getEntryPoint(status, "u_countChar32", module, u_countChar32);
+		getEntryPoint(status, "utf8_nextCharSafeBody", module, utf8_nextCharSafeBody);
 
-		getEntryPoint("UCNV_TO_U_CALLBACK_STOP", module, UCNV_TO_U_CALLBACK_STOP);
-		getEntryPoint("ucnv_fromUnicode", module, ucnv_fromUnicode);
-		getEntryPoint("ucnv_toUnicode", module, ucnv_toUnicode);
-		getEntryPoint("ucnv_getInvalidChars", module, ucnv_getInvalidChars);
-		getEntryPoint("ucnv_getMaxCharSize", module, ucnv_getMaxCharSize);
-		getEntryPoint("ucnv_getMinCharSize", module, ucnv_getMinCharSize);
-		getEntryPoint("ucnv_setFromUCallBack", module, ucnv_setFromUCallBack);
-		getEntryPoint("ucnv_setToUCallBack", module, ucnv_setToUCallBack);
+		getEntryPoint(status, "UCNV_TO_U_CALLBACK_STOP", module, UCNV_TO_U_CALLBACK_STOP);
+		getEntryPoint(status, "ucnv_fromUnicode", module, ucnv_fromUnicode);
+		getEntryPoint(status, "ucnv_toUnicode", module, ucnv_toUnicode);
+		getEntryPoint(status, "ucnv_getInvalidChars", module, ucnv_getInvalidChars);
+		getEntryPoint(status, "ucnv_getMaxCharSize", module, ucnv_getMaxCharSize);
+		getEntryPoint(status, "ucnv_getMinCharSize", module, ucnv_getMinCharSize);
+		getEntryPoint(status, "ucnv_setFromUCallBack", module, ucnv_setFromUCallBack);
+		getEntryPoint(status, "ucnv_setToUCallBack", module, ucnv_setToUCallBack);
 
-		getEntryPoint("u_strcmp", module, ustrcmp);
+		getEntryPoint(status, "u_strcmp", module, ustrcmp);
+
+		if (status.hasErrors())
+			return;
 
 		inModule = formatAndLoad(inTemplate);
 		if (!inModule)
 			return;
 
-		getEntryPoint("ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
-		getEntryPoint("ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
-		getEntryPoint("ucal_open", inModule, ucalOpen);
-		getEntryPoint("ucal_close", inModule, ucalClose);
-		getEntryPoint("ucal_setAttribute", inModule, ucalSetAttribute);
-		getEntryPoint("ucal_setMillis", inModule, ucalSetMillis);
-		getEntryPoint("ucal_get", inModule, ucalGet);
-		getEntryPoint("ucal_setDateTime", inModule, ucalSetDateTime);
+		getEntryPoint(status, "ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
+		getEntryPoint(status, "ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
+		getEntryPoint(status, "ucal_open", inModule, ucalOpen);
+		getEntryPoint(status, "ucal_close", inModule, ucalClose);
+		getEntryPoint(status, "ucal_setAttribute", inModule, ucalSetAttribute);
+		getEntryPoint(status, "ucal_setMillis", inModule, ucalSetMillis);
+		getEntryPoint(status, "ucal_get", inModule, ucalGet);
+		getEntryPoint(status, "ucal_setDateTime", inModule, ucalSetDateTime);
 
-		getEntryPoint("ucal_getNow", inModule, ucalGetNow);
-		getEntryPoint("ucal_getTimeZoneTransitionDate", inModule, ucalGetTimeZoneTransitionDate);
+		getEntryPoint(status, "ucal_getNow", inModule, ucalGetNow);
+		getEntryPoint(status, "ucal_getTimeZoneTransitionDate", inModule, ucalGetTimeZoneTransitionDate);
 	}
 
 public:
-	static ImplementConversionICU* create(int majorVersion, int minorVersion)
+	static ImplementConversionICU* create(LocalStatus& status, int majorVersion, int minorVersion)
 	{
-		ImplementConversionICU* o = FB_NEW_POOL(*getDefaultMemoryPool()) ImplementConversionICU(
-			majorVersion, minorVersion);
+		status.init();
 
-		if (!o->module)
+		ImplementConversionICU* o = FB_NEW_POOL(*getDefaultMemoryPool()) ImplementConversionICU(
+			status, majorVersion, minorVersion);
+
+		if (!o->module || status.hasErrors())
 		{
 			delete o;
 			o = NULL;
@@ -564,15 +584,15 @@ USHORT UnicodeUtil::utf16ToKey(USHORT srcLen, const USHORT* src, USHORT dstLen, 
 	if (dstLen < srcLen / sizeof(*src) * 4)
 		return INTL_BAD_KEY_LENGTH;
 
-	UErrorCode status = U_ZERO_ERROR;
+	UErrorCode errorCode = U_ZERO_ERROR;
 	ConversionICU& cIcu(getConversionICU());
-	UConverter* conv = cIcu.ucnv_open("BOCU-1", &status);
-	fb_assert(U_SUCCESS(status));
+	UConverter* conv = cIcu.ucnv_open("BOCU-1", &errorCode);
+	fb_assert(U_SUCCESS(errorCode));
 
 	const int32_t len = cIcu.ucnv_fromUChars(conv, reinterpret_cast<char*>(dst), dstLen,
 		// safe cast - alignment not changed
-		reinterpret_cast<const UChar*>(src), srcLen / sizeof(*src), &status);
-	fb_assert(U_SUCCESS(status));
+		reinterpret_cast<const UChar*>(src), srcLen / sizeof(*src), &errorCode);
+	fb_assert(U_SUCCESS(errorCode));
 
 	cIcu.ucnv_close(conv);
 
@@ -1142,6 +1162,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 {
 	ObjectsArray<string> versions;
 	getVersions(configInfo, versions);
+	LocalStatus loadStatus;
 
 	if (versions.isEmpty())
 		gds__log("No ICU versions specified");
@@ -1196,50 +1217,55 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 			continue;
 		}
 
-		try
+		loadStatus.init();
+
+		if (!icu->initialize(loadStatus, icu->ucModule))
 		{
-			icu->initialize(icu->ucModule);
-
-			icu->inModule = icu->formatAndLoad(inTemplate);
-			if (!icu->inModule)
-			{
-				gds__log("failed to load IN icu module version %s", configVersion.c_str());
-				delete icu;
-				continue;
-			}
-
-			icu->getEntryPoint("u_versionToString", icu->ucModule, icu->uVersionToString);
-			icu->getEntryPoint("uloc_countAvailable", icu->ucModule, icu->ulocCountAvailable);
-			icu->getEntryPoint("uloc_getAvailable", icu->ucModule, icu->ulocGetAvailable);
-			icu->getEntryPoint("uset_close", icu->ucModule, icu->usetClose);
-			icu->getEntryPoint("uset_getItem", icu->ucModule, icu->usetGetItem);
-			icu->getEntryPoint("uset_getItemCount", icu->ucModule, icu->usetGetItemCount);
-			icu->getEntryPoint("uset_open", icu->ucModule, icu->usetOpen);
-
-			icu->getEntryPoint("ucol_close", icu->inModule, icu->ucolClose);
-			icu->getEntryPoint("ucol_getContractionsAndExpansions", icu->inModule,
-				icu->ucolGetContractionsAndExpansions);
-			icu->getEntryPoint("ucol_getRules", icu->inModule, icu->ucolGetRules);
-			icu->getEntryPoint("ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
-			icu->getEntryPoint("ucol_open", icu->inModule, icu->ucolOpen);
-			icu->getEntryPoint("ucol_openRules", icu->inModule, icu->ucolOpenRules);
-			icu->getEntryPoint("ucol_setAttribute", icu->inModule, icu->ucolSetAttribute);
-			icu->getEntryPoint("ucol_strcoll", icu->inModule, icu->ucolStrColl);
-			icu->getEntryPoint("ucol_getVersion", icu->inModule, icu->ucolGetVersion);
-			icu->getEntryPoint("utrans_openU", icu->inModule, icu->utransOpenU);
-			icu->getEntryPoint("utrans_close", icu->inModule, icu->utransClose);
-			icu->getEntryPoint("utrans_transUChars", icu->inModule, icu->utransTransUChars);
-		}
-		catch (const status_exception& s)
-		{
-			iscLogStatus("ICU load error", s.value());
+			iscLogStatus("ICU load error", &loadStatus);
 			delete icu;
 			continue;
 		}
 
-		UErrorCode status = U_ZERO_ERROR;
+		icu->inModule = icu->formatAndLoad(inTemplate);
+		if (!icu->inModule)
+		{
+			gds__log("failed to load IN icu module version %s", configVersion.c_str());
+			delete icu;
+			continue;
+		}
 
-		UCollator* collator = icu->ucolOpen("", &status);
+		icu->getEntryPoint(loadStatus, "u_versionToString", icu->ucModule, icu->uVersionToString);
+		icu->getEntryPoint(loadStatus, "uloc_countAvailable", icu->ucModule, icu->ulocCountAvailable);
+		icu->getEntryPoint(loadStatus, "uloc_getAvailable", icu->ucModule, icu->ulocGetAvailable);
+		icu->getEntryPoint(loadStatus, "uset_close", icu->ucModule, icu->usetClose);
+		icu->getEntryPoint(loadStatus, "uset_getItem", icu->ucModule, icu->usetGetItem);
+		icu->getEntryPoint(loadStatus, "uset_getItemCount", icu->ucModule, icu->usetGetItemCount);
+		icu->getEntryPoint(loadStatus, "uset_open", icu->ucModule, icu->usetOpen);
+
+		icu->getEntryPoint(loadStatus, "ucol_close", icu->inModule, icu->ucolClose);
+		icu->getEntryPoint(loadStatus, "ucol_getContractionsAndExpansions", icu->inModule,
+			icu->ucolGetContractionsAndExpansions);
+		icu->getEntryPoint(loadStatus, "ucol_getRules", icu->inModule, icu->ucolGetRules);
+		icu->getEntryPoint(loadStatus, "ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
+		icu->getEntryPoint(loadStatus, "ucol_open", icu->inModule, icu->ucolOpen);
+		icu->getEntryPoint(loadStatus, "ucol_openRules", icu->inModule, icu->ucolOpenRules);
+		icu->getEntryPoint(loadStatus, "ucol_setAttribute", icu->inModule, icu->ucolSetAttribute);
+		icu->getEntryPoint(loadStatus, "ucol_strcoll", icu->inModule, icu->ucolStrColl);
+		icu->getEntryPoint(loadStatus, "ucol_getVersion", icu->inModule, icu->ucolGetVersion);
+		icu->getEntryPoint(loadStatus, "utrans_openU", icu->inModule, icu->utransOpenU);
+		icu->getEntryPoint(loadStatus, "utrans_close", icu->inModule, icu->utransClose);
+		icu->getEntryPoint(loadStatus, "utrans_transUChars", icu->inModule, icu->utransTransUChars);
+
+		if (loadStatus.getState() & IStatus::STATE_ERRORS)
+		{
+			iscLogStatus("ICU load error", &loadStatus);
+			delete icu;
+			continue;
+		}
+
+		UErrorCode errorCode = U_ZERO_ERROR;
+
+		UCollator* collator = icu->ucolOpen("", &errorCode);
 		if (!collator)
 		{
 			gds__log("ucolOpen failed");
@@ -1296,22 +1322,14 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 	// Try "favorite" (distributed on Windows) version first
 	constexpr int favMaj = 77;
 	constexpr int favMin = 1;
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+	LocalStatus probeStatus;
+
+	if ((convIcu = ImplementConversionICU::create(probeStatus, favMaj, favMin)))
+		return *convIcu;
 
 	// Try system-wide version
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(0, 0)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+	if ((convIcu = ImplementConversionICU::create(probeStatus, 0, 0)))
+		return *convIcu;
 
 	// Do a regular search
 	LocalStatus ls;
@@ -1345,14 +1363,12 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 				continue;
 			}
 
-			try
+			if ((convIcu = ImplementConversionICU::create(probeStatus, major, minor)))
+				return *convIcu;
+
+			if (probeStatus.getState() & IStatus::STATE_ERRORS)
 			{
-				if ((convIcu = ImplementConversionICU::create(major, minor)))
-					return *convIcu;
-			}
-			catch (const Exception& ex)
-			{
-				ex.stuffException(&lastError);
+				fb_utils::copyStatus(&lastError, &probeStatus);
 				version.printf("Error loading ICU library version %d.%d", major, minor);
 			}
 		}
@@ -2031,13 +2047,13 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 
 			if (avail < 0)
 			{
-				UErrorCode status = U_ZERO_ERROR;
-				UCollator* testCollator = icu->ucolOpen(locale.c_str(), &status);
+				UErrorCode errorCode = U_ZERO_ERROR;
+				UCollator* testCollator = icu->ucolOpen(locale.c_str(), &errorCode);
 				if (!testCollator)
 					continue;
 
 				icu->ucolClose(testCollator);
-				if (status != U_ZERO_ERROR)
+				if (errorCode != U_ZERO_ERROR)
 					continue;
 			}
 		}

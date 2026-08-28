@@ -97,6 +97,7 @@ public:
 		  labels(p),
 		  cursors(p),
 		  localTables(p),
+		  localTableNames(p),
 		  aliasRelationPrefix(p),
 		  package(p),
 		  currCtes(p),
@@ -106,6 +107,7 @@ public:
 		  mainScratch(aMainScratch),
 		  outerMessagesMap(p),
 		  outerVarsMap(p),
+		  outerLocalTablesMap(p),
 		  ddlSchema(p),
 		  ctes(p),
 		  cteAliases(p),
@@ -198,6 +200,11 @@ public:
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, std::optional<USHORT> = std::nullopt);
 	dsql_var* resolveVariable(const MetaName& varName);
+
+	DeclareLocalTableNode* getLocalTable(const MetaName& name, bool* outerDecl = nullptr);
+	USHORT getOuterLocalTableNumber(USHORT tableNumber);
+	void putLocalTable(DeclareLocalTableNode* table);
+
 	void genReturn(bool eosFlag = false);
 
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
@@ -323,6 +330,7 @@ public:
 	Firebird::Array<DeclareCursorNode*> cursors; // Cursors
 	USHORT localTableNumber = 0;			// Local table number
 	Firebird::Array<DeclareLocalTableNode*> localTables; // Local tables
+	Firebird::LeftPooledMap<MetaName, DeclareLocalTableNode*> localTableNames;
 	USHORT inSelectList = 0;				// now processing "select list"
 	USHORT inWhereClause = 0;				// processing "where clause"
 	USHORT inGroupByClause = 0;				// processing "group by clause"
@@ -350,6 +358,7 @@ public:
 	DsqlCompilerScratch* mainScratch = nullptr;
 	Firebird::NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <outer, inner>
 	Firebird::NonPooledMap<USHORT, USHORT> outerVarsMap;		// <outer, inner>
+	Firebird::NonPooledMap<USHORT, USHORT> outerLocalTablesMap;	// <outer, inner>
 	MetaName ddlSchema;
 	Firebird::AutoPtr<Firebird::ObjectsArray<Firebird::MetaString>> cachedDdlSchemaSearchPath;
 	dsql_msg* recordKeyMessage = nullptr;	// Side message for positioned DML

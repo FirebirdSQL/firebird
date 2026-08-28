@@ -235,19 +235,10 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 
 bool Routine::hash(thread_db* tdbb, Firebird::sha512& digest)
 {
-	if (inputFields.hasData())
-	{
-		if (!inputFormat)
-			return false;
+	if (inputFormat)
 		inputFormat->hash(digest);
-	}
-
-	if (outputFields.hasData())
-	{
-		if (!outputFormat)
-			return false;
+	if (outputFormat)
 		outputFormat->hash(digest);
-	}
 
 	return true;
 }

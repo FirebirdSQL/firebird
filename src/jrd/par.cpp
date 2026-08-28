@@ -165,27 +165,6 @@ namespace
 		AutoPtr<CompilerScratch> m_csb;
 		CompilerScratch** const m_csbPtr;
 	};
-
-	class VldTTypeId : public TTypeId
-	{
-	public:
-		VldTTypeId(thread_db* tdbb, USHORT a_id) : TTypeId(a_id)
-		{
-			TTypeId parm1(a_id);
-			if (parm1 == ttype_dynamic)
-				parm1 = tdbb->getCharSet();
-
-			auto* vers = MetadataCache::getVersioned<Cached::CharSet>(tdbb, parm1, CacheFlag::AUTOCREATE);
-			if (vers)
-			{
-				CollId coll(parm1);
-				if (USHORT(coll) == 0 || vers->getCollation(coll))
-					return;
-			}
-
-			ERR_post(Arg::Gds(isc_text_subtype) << Arg::Num(parm1));
-		}
-	};
 }	// namespace
 
 
@@ -309,20 +288,20 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			break;
 
 		case blr_text2:
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->makeText(blrReader.getWord(), textType);
 			break;
 
 		case blr_cstring2:
 			desc->dsc_dtype = dtype_cstring;
-			desc->setTextType(VldTTypeId(tdbb, blrReader.getWord()));
+			desc->setTextType(TTypeId(blrReader.getWord()));
 			desc->dsc_length = blrReader.getWord();
 			if (desc->dsc_length == 0)
 				desc->dsc_length = 1;
 			break;
 
 		case blr_varying2:
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->makeVarying(blrReader.getWord(), textType);
 			break;
 
@@ -416,7 +395,7 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			desc->dsc_dtype = dtype_blob;
 			desc->dsc_length = sizeof(ISC_QUAD);
 			desc->dsc_sub_type = blrReader.getWord();
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->dsc_scale = textType & 0xFF;		// BLOB character set
 			desc->dsc_flags = textType & 0xFF00;	// BLOB collation
 			break;
@@ -496,7 +475,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 			{
 				explicitCollation = true;
 
-				const auto ttype = VldTTypeId(tdbb, csb->csb_blr_reader.getWord());
+				const auto ttype = TTypeId(csb->csb_blr_reader.getWord());
 
 				switch (desc->dsc_dtype)
 				{
@@ -566,7 +545,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 				(dtype == blr_column_name3 && csb->csb_blr_reader.getByte() != 0))
 			{
 				explicitCollation = true;
-				const auto ttype = VldTTypeId(tdbb, csb->csb_blr_reader.getWord());
+				const auto ttype = TTypeId(csb->csb_blr_reader.getWord());
 
 				switch (desc->dsc_dtype)
 				{

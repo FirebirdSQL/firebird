@@ -135,6 +135,7 @@ RPL_AWK_SRC=$(MISC)/def_awk.c
 RPL_GREP=$(GEN_ROOT)/isc_grep
 RPL_GREP_SRC=$(MISC)/isc_grep.c
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 updateCloopInterfaces : $(API_H_FILE) $(API_PAS_FILE) $(API_C_H_FILE)
 
 $(API_H_FILE): $(IDL_FILE)
@@ -185,6 +186,7 @@ $(API_PAS_FILE): $(IDL_FILE) $(PASCAL_SOURCES) $(TMP_FUNCS_PAS)
 	else \
 		rm -f $(API_PAS_TMP_FILE); \
 	fi
+endif
 
 updateBuildNum : $(SRC_ROOT)/jrd/build_no.h $(GEN_ROOT)/Make.Version
 
@@ -205,6 +207,7 @@ ifeq ($(CLIENT_ONLY_FLG),N)
 		PROGRAM=$(GEN_ROOT)/extern/btyacc/btyacc OBJ_DIR=$(ROOT)/temp/extern/btyacc
 endif
 
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	mkdir -p $(GEN_ROOT)/$(TARGET)/cloop
 
 ifeq ($(PLATFORM),DARWIN)
@@ -212,10 +215,11 @@ ifeq ($(PLATFORM),DARWIN)
 	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF $(SRCDIR)/extern/cloop
 else
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
-	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_CXX_FLAGS="-static-libstdc++" -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
+	cmake -DCMAKE_BUILD_TYPE=$(FB_CMAKE_BUILD_TYPE) -DCMAKE_CXX_COMPILER="$(CXX)" -DCLOOP_BUILD_TESTS=OFF -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" $(SRCDIR)/extern/cloop
 endif
 	cd $(GEN_ROOT)/$(TARGET)/cloop && \
 	cmake --build .
+endif
 
 	mkdir -p $(ROOT)/temp/extern/decNumber $(GEN_ROOT)/extern/decNumber
 	CC="$(CC)" CFLAGS="$(CFLAGS)" AR="$(AR)" $(MAKE) -C $(SRCDIR)/extern/decNumber \
@@ -279,7 +283,7 @@ endif
 #
 
 %.vers: $(SRCDIR)/builds/posix/%.vers
-	sh vers.sh $(firstword $@)
+	cd $(dir $@) && sh vers.sh $(notdir $@)
 
 export_lists: $(ALLVERS)
 
@@ -365,7 +369,9 @@ master_process:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 	$(MAKE) rest
 	$(MAKE) yvalve
 ifeq ($(CLIENT_ONLY_FLG),Y)
@@ -401,7 +407,9 @@ cross1:
 	$(MAKE) updateBuildNum
 	$(MAKE) export_lists
 	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(MAKE) updateCloopInterfaces
+endif
 ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) boot
 	$(MAKE) yvalve
@@ -499,6 +507,64 @@ endif
 # remote redirector is statically linked in main FB library
 $(LIBFIREBIRD_FULLNAME):	$(YValve_Objects) $(Remote_Client_Objects) $(COMMON_LIB)
 	$(LINK_FIREBIRD) -o $@ $^ $(LINK_FIREBIRD_LIBS) $(call LIB_LINK_DARWIN_INSTALL_NAME,lib/libfbclient.$(SHRLIB_EXT))
+
+
+#___________________________________________________________________________
+# static client library (non-default, built on request with `make client_static`)
+# See doc/README.StaticClient.md for a detailed description of the static
+# client archive construction, symbol renaming, and archive slimming.
+#
+# client_static is meant to be usable as the very first target on a freshly
+# configured tree (i.e. without a prior full build), so - like
+# master_process above.
+#
+
+.PHONY: client_static client_static_process
+
+client_static:
+	$(MAKE) TARGET?=$(DefaultTarget) client_static_process
+
+client_static_process:
+	mkdir -p $(ROOT)/src/include/gen
+	ln -sf $(ROOT)/gen/autoconfig.auto $(ROOT)/src/include/gen/autoconfig.h
+	$(MAKE) updateBuildNum
+	$(MAKE) export_lists
+	$(MAKE) external
+ifeq ($(CLOOP_GENERATION_FLG),Y)
+	$(MAKE) updateCloopInterfaces
+endif
+	$(MAKE) rest
+	$(MAKE) $(LIBFIREBIRD_STATIC)
+	$(MAKE) include_generic
+
+$(Static_Client_Interface_Object): $(SRC_ROOT)/remote/client/interface.cpp
+	mkdir -p $(@D)
+	$(CXX) $(WCXXFLAGS) -DSTATIC_CLIENT -c $(firstword $<) -o $@
+	@sed $(INLINE_EDIT_SED) -e "1,2s/:/: \$$(wildcard/" -e "\$$s/\(.*\)/\\1)/" $(patsubst %.o,%.d,$@)
+
+STATIC_CLIENT_PLUGIN_OBJECTS=
+ifeq ($(WITH_TOMCRYPT),Y)
+STATIC_CLIENT_PLUGIN_OBJECTS += $(Chacha_Objects)
+endif
+
+STATIC_CLIENT_SLIM_STAGE = $(ROOT)/temp/static_client_stage
+STATIC_CLIENT_SLIM_CREF  = $(ROOT)/temp/static_client_cref.txt
+STATIC_CLIENT_SLIM_PROBE = $(ROOT)/temp/static_client_probe.o
+
+
+$(LIBFIREBIRD_STATIC):	$(YValve_Objects) $(Static_Client_Remote_Client_Objects) $(Common_Objects) \
+			$(STATIC_CLIENT_PLUGIN_OBJECTS) \
+			| $(GEN_ROOT)/$(FIREBIRD_VERS)
+	-$(RM) $@
+	$(STATICLIB_LINK) $@ $^ $(ROOT)/temp/extern/decNumber/*.o
+	$(SHELL) $(STATIC_CLIENT_SCRIPT) \
+		--archive $(abspath $@) \
+		--seeds-file $(GEN_ROOT)/$(FIREBIRD_VERS) \
+		--stage $(STATIC_CLIENT_SLIM_STAGE) \
+		--cref $(STATIC_CLIENT_SLIM_CREF) \
+		--probe $(STATIC_CLIENT_SLIM_PROBE) \
+		--objcopy "$(OBJCOPY)" \
+		--slim-mode $(STATIC_CLIENT_SLIM_MODE)
 
 
 #___________________________________________________________________________
@@ -871,7 +937,9 @@ clean_vers:
 clean_misc:
 	$(RM) security.tmp test.header.txt
 	$(RM) $(TMP_FUNCS_PAS) $(RPL_AWK) $(RPL_GREP)
+ifeq ($(CLOOP_GENERATION_FLG),Y)
 	$(TOUCH) -c -t 200001010000 $(API_H_FILE) $(API_PAS_FILE)
+endif
 
 
 ifeq ($(EDITLINE_FLG),Y)
@@ -963,6 +1031,7 @@ clean_makefiles:
 	$(RM) $(GEN_ROOT)/make*
 	-$(RM) $(GEN_ROOT)/darwin.defaults
 	-$(RM) $(GEN_ROOT)/vers.sh
+	-$(RM) $(GEN_ROOT)/static_client.sh
 	$(RM) `find $(GEN_ROOT)/install \( -type f -o -type l \) -print`
 	-$(RM) $(GEN_ROOT)/examples/Make*
 	$(RM) $(ROOT)/Makefile

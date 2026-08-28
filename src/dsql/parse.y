@@ -731,6 +731,8 @@ using namespace Firebird;
 %token <metaNamePtr> WITHIN
 %token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> CONSTANT
+%token <metaNamePtr> CONCURRENTLY
+%token <metaNamePtr> VALIDATE
 
 // precedence declarations for expression evaluation
 
@@ -863,6 +865,7 @@ using namespace Firebird;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;
+	Jrd::AlterIndexNode* alterIndexNode;
 	Jrd::AlterDatabaseNode* alterDatabaseNode;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
@@ -1919,9 +1922,10 @@ unique_opt
 
 %type index_definition(<createIndexNode>)
 index_definition($createIndexNode)
-	: index_column_expr($createIndexNode) index_condition_opt
+	: index_column_expr($createIndexNode) index_condition_opt concurrently_opt
 		{
 			$createIndexNode->partial = $2;
+			$createIndexNode->concurrently = $3;
 		}
 	;
 
@@ -1950,6 +1954,12 @@ index_condition_opt
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+%type <boolVal> concurrently_opt
+concurrently_opt
+	: /* nothing */		{ $$ = false; }
+	| CONCURRENTLY		{ $$ = true; }
 	;
 
 // CREATE SHADOW
@@ -3660,7 +3670,22 @@ local_nonforward_declarations
 
 %type <stmtNode> local_nonforward_declaration
 local_nonforward_declaration
-	: DECLARE var_decl_opt local_declaration_item ';'
+	: DECLARE local_opt TEMPORARY TABLE valid_symbol_name
+			{
+				RelationSourceNode* relationNode = newNode<RelationSourceNode>(QualifiedName(*$5));
+				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($<createRelationNode>6) ')' ';'
+		{
+			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
+			node->dsqlName = *$5;
+			node->dsqlTable = $<createRelationNode>6;
+			$$ = node;
+			$$->line = YYPOSNARG(1).firstLine;
+			$$->column = YYPOSNARG(1).firstColumn;
+		}
+	| DECLARE var_decl_opt local_declaration_item ';'
 		{
 			$$ = $3;
 			$$->line = YYPOSNARG(1).firstLine;
@@ -3786,6 +3811,11 @@ var_declaration_initializer
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+local_opt
+	: // nothing
+	| LOCAL
 	;
 
 var_decl_opt
@@ -5164,11 +5194,17 @@ drop_behaviour
 	| CASCADE		{ $$ = true; }
 	;
 
-%type <ddlNode>	alter_index_clause
+%type <alterIndexNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name index_active concurrently_opt
 		{
 			$$ = newNode<AlterIndexNode>(*$1, $2);
+			$$->concurrently = $3;
+		}
+	| symbol_index_name VALIDATE UNIQUE
+		{
+			$$ = newNode<AlterIndexNode>(*$1, false);
+			$$->validateUnique = true;
 		}
 	;
 
@@ -10571,6 +10607,8 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| CONCURRENTLY
+	| VALIDATE
 	;
 
 %%

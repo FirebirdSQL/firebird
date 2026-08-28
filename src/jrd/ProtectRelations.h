@@ -37,10 +37,10 @@ namespace Jrd {
 class thread_db;
 class jrd_tra;
 
-// Lock relation with protected_read level or raise existing relation lock
-// to this level to ensure nobody can write to this relation.
+// Prevent concurrent transactions from modification of relation data.
+// To do it, upgrade existing relation lock to PR level at least.
+// Note, existing lock level should not be lowered.
 // Used when new index is built.
-// releaseLock set to true if there was no existing lock before
 class ProtectRelations
 {
 public:
@@ -100,10 +100,10 @@ public:
 private:
 	struct relLock
 	{
-		relLock(Cached::Relation* relation = NULL) :
+		relLock(Cached::Relation* relation = nullptr) :
 			m_relation(relation),
-			m_lock(NULL),
-			m_release(false)
+			m_lock(nullptr),
+			m_level(LCK_none)
 		{
 		}
 
@@ -117,7 +117,7 @@ private:
 
 		Cached::Relation* m_relation;
 		Lock* m_lock;
-		bool m_release;
+		UCHAR m_level;		// original lock level
 	};
 
 	thread_db* m_tdbb;

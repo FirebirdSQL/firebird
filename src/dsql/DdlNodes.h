@@ -2005,6 +2005,8 @@ public:
 		return indexRelation;
 	}
 
+	void validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction, bool silent);
+
 protected:
 	Firebird::string print(NodePrinter& printer) const;
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
@@ -2037,6 +2039,7 @@ public:
 		Firebird::TriState unique;
 		Firebird::TriState descending;
 		Firebird::TriState inactive;
+		Firebird::TriState concurrently;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -2082,6 +2085,7 @@ public:
 	bool unique = false;
 	bool descending = false;
 	bool active = true;
+	bool concurrently = false;
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
@@ -2093,8 +2097,9 @@ public:
 class StoreIndexNode final : public ModifyIndexNode
 {
 public:
-	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex)
-		: ModifyIndexNode(indexName, rel, true, expressionIndex)
+	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex, bool concurrently)
+		: ModifyIndexNode(indexName, rel, true, expressionIndex),
+		  concurrently(concurrently)
 	{ }
 
 public:
@@ -2103,6 +2108,8 @@ public:
 private:
 	MetaId create(thread_db* tdbb, jrd_tra* transaction);
 	MetaId createExpression(thread_db* tdbb, jrd_tra* transaction);
+
+	bool concurrently;
 };
 
 
@@ -2148,6 +2155,10 @@ protected:
 	}
 
 	std::optional<MetaId> idxId;
+
+public:
+	bool concurrently = false;
+	bool validateUnique = false;
 };
 
 

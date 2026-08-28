@@ -596,11 +596,7 @@ namespace
 				}
 			}
 
-			MetaName securityClass;
-			securityClass.printf("%s%" SQUADFORMAT, SQL_SECCLASS_PREFIX,
-				DPM_gen_id(tdbb, lookupGenerator(SQL_SECCLASS_GENERATOR), false, 1));
-
-			addSecurityClass(tdbb, securityClass);
+			addSecurityClass(tdbb, DATABASE_CLASS);
 
 			handle.reset();
 
@@ -609,7 +605,7 @@ namespace
 			{
 				MODIFY DB USING
 					DB.RDB$SECURITY_CLASS.NULL = FALSE;
-					PAD(securityClass, DB.RDB$SECURITY_CLASS);
+					PAD(DATABASE_CLASS, DB.RDB$SECURITY_CLASS);
 				END_MODIFY
 			}
 			END_FOR
@@ -1713,7 +1709,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			PAD(relation->rel_name.object, X.RDB$RELATION_NAME);
 			PAD(indexName.object, X.RDB$INDEX_NAME);
 
-			X.RDB$UNIQUE_FLAG = (index->ini_idx_flags & idx_unique) ? 1 : 0;
+			X.RDB$UNIQUE_FLAG = (index->ini_idx_flags & idx_unique) ? IDX_UNIQUE : 0;
 			X.RDB$SEGMENT_COUNT = index->ini_idx_segment_count;
 
 			if (index->ini_idx_flags & idx_descending)

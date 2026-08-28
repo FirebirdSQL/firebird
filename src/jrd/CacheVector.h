@@ -117,11 +117,12 @@ namespace CacheFlag
 	static constexpr ObjectBase::Flag RETIRED = 	0x040;		// object is in a process of GC
 	static constexpr ObjectBase::Flag MINISCAN =	0x080;		// perform minimum scan and set cache entry to reload state
 	static constexpr ObjectBase::Flag DB_VERSION =	0x100;		// execute version upgrade in database
+	static constexpr ObjectBase::Flag DEPENDS =		0x200;		// collect object dependencies
 
 	// Useful combinations
 	static constexpr ObjectBase::Flag TAG_FOR_UPDATE = NOCOMMIT | MINISCAN | DB_VERSION;
 	static constexpr ObjectBase::Flag OLD_DROP = MINISCAN | AUTOCREATE;
-	static constexpr ObjectBase::Flag OLD_ALTER = MINISCAN | AUTOCREATE;
+	static constexpr ObjectBase::Flag OLD_ALTER = MINISCAN | AUTOCREATE | DEPENDS;
 }
 
 
@@ -747,8 +748,7 @@ public:
 			ListEntry<Versioned>* newEntry = nullptr;
 			try
 			{
-				newEntry = FB_NEW_POOL(*getDefaultMemoryPool())
-					ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
+				newEntry = FB_NEW ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
 			}
 			catch (const Firebird::Exception&)
 			{
@@ -812,7 +812,7 @@ public:
 
 		if (!cur)
 			cur = TransactionNumber::current(tdbb);
-		ListEntry<Versioned>* newEntry = FB_NEW_POOL(*getDefaultMemoryPool()) ListEntry<Versioned>(obj, cur, fl);
+		ListEntry<Versioned>* newEntry = FB_NEW ListEntry<Versioned>(obj, cur, fl);
 		if (!ListEntry<Versioned>::add(tdbb, list, newEntry))
 		{
 			newEntry->cleanup(tdbb, false);
@@ -990,11 +990,18 @@ public:
 			CacheFlag::COMMITTED | CacheFlag::MINISCAN | CacheFlag::DB_VERSION, l.getPointer());
 		if (l.replace(list, newEntry))
 			return true;
+
+		// undo changes
 		delete newEntry;
 
 		// Someone already added entry - see is it OK for us
 		l.set(list);
 		return ListEntry<Versioned>::upgradable(l, from);
+	}
+
+	bool nameIs(const QualifiedName& name)
+	{
+		return this->getName() == name;
 	}
 
 private:
@@ -1014,6 +1021,21 @@ private:
 struct NoData
 {
 	NoData() { }
+};
+
+template <typename EXTEND = NoData>
+struct ExName
+{
+	ExName(const QualifiedName& name)
+		: name(name)
+	{ }
+
+	ExName(const QualifiedName& name, EXTEND ex)
+        : name(name), ex(ex)
+    { }
+
+	const QualifiedName& name;
+	EXTEND ex = EXTEND();
 };
 
 template <class StoredElement, unsigned SUBARRAY_SHIFT = 8, typename EXTEND = NoData>
@@ -1109,32 +1131,16 @@ public:
 
 	Versioned* getVersioned(thread_db* tdbb, MetaId id, ObjectBase::Flag fl)
 	{
-//		In theory that should be endless cycle - object may arrive/disappear again and again.
-//		But in order to faster find devel problems we run it very limited number of times.
-#ifdef DEV_BUILD
-		for (int i = 0; i < 2; ++i)
-#else
-		for (;;)
-#endif
-		{
-			auto ptr = getDataPointer(id);
-			if (ptr)
-			{
-				StoredElement* data = ptr->load(atomics::memory_order_acquire);
-				if (data)
-					return data->getVersioned(tdbb, fl);
-			}
+		StoredElement* data = nullptr;
 
-			if (!(fl & CacheFlag::AUTOCREATE))
-				return nullptr;
+		SubArrayData* ptr = getDataPointer(id);
+		if (ptr)
+			data = ptr->load(atomics::memory_order_relaxed);
 
-			auto val = makeObject(tdbb, id, fl);
-			if (val)
-				return val;
-		}
-#ifdef DEV_BUILD
-		(Firebird::Arg::Gds(isc_random) << "Object suddenly disappeared").raise();
-#endif
+		if ((!data) && (fl & CacheFlag::AUTOCREATE))
+			data = ensurePermanent(tdbb, id);
+
+		return data ? data->getVersioned(tdbb, fl) : nullptr;
 	}
 
 	StoredElement* erase(thread_db* tdbb, MetaId id)
@@ -1227,36 +1233,6 @@ public:
 		return false;
 	}
 
-	template <typename F>
-	StoredElement* lookup(thread_db* tdbb, F&& cmp, ObjectBase::Flag fl) const
-	{
-		auto a = m_objects.readAccessor();
-		for (FB_SIZE_T i = 0; i < a->getCount(); ++i)
-		{
-			SubArrayData* const sub = a->value(i).load(atomics::memory_order_relaxed);
-			if (!sub)
-				continue;
-
-			for (SubArrayData* end = &sub[SUBARRAY_SIZE]; sub < end--;)
-			{
-				StoredElement* ptr = end->load(atomics::memory_order_relaxed);
-				if (ptr)
-				{
-					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
-					if (listEntry && cmp(ptr))
-					{
-//						if (!(fl & (CacheFlag::ERASED | CacheFlag::MINISCAN)))
-						if (!(fl & CacheFlag::ERASED))
-							ptr->reload(tdbb, fl);		// found object to be reloaded w/o MINISCAN flag
-						return ptr;
-					}
-				}
-			}
-		}
-
-		return nullptr;
-	}
-
 	bool lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag fl,
 		StoredElement** element, Versioned** versioned)
 	{
@@ -1274,9 +1250,9 @@ public:
 				{
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
 
-					if (listEntry && ptr->getName() == name)
+					if (listEntry && ptr->nameIs(name))
 					{
-						if (!(fl & CacheFlag::ERASED))
+						if (!(fl & (CacheFlag::ERASED | CacheFlag::MINISCAN)))
 							ptr->reload(tdbb, fl);		// found object to be reloaded w/o MINISCAN flag
 						if (versioned)
 							*versioned = listEntry->getVersioned();
@@ -1292,7 +1268,7 @@ public:
 		if (!(fl & CacheFlag::AUTOCREATE))
 			return false;
 
-		auto id = Versioned::getIdByName(tdbb, name);
+		auto id = Versioned::getIdByName(tdbb, {name, m_extend});
 		if (!id.has_value())
 			return false;
 

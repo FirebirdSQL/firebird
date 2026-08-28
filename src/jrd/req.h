@@ -60,6 +60,7 @@ struct RecordParameterBase
 	RecordParameterBase()
 		: rpb_transaction_nr(0), rpb_record(NULL), rpb_prior(NULL),
 		  rpb_undo(NULL), rpb_format_number(0),
+		  rpb_temp_instance_id(0),
 		  rpb_page(0), rpb_line(0),
 		  rpb_f_page(0), rpb_f_line(0),
 		  rpb_b_page(0), rpb_b_line(0),
@@ -75,6 +76,7 @@ struct RecordParameterBase
 	Record*		rpb_prior;			// prior record block if this is a delta record
 	Record*		rpb_undo;			// our first version of data if this is a second modification
 	USHORT		rpb_format_number;	// format number in relation
+	FB_UINT64	rpb_temp_instance_id;	// declared local table page instance
 
 	ULONG rpb_page;					// page number
 	USHORT rpb_line;				// line number on page
@@ -313,6 +315,7 @@ private:
 		mutable ISC_TIME localTime;				// gmtTimeStamp converted to local time (WITH TZ)
 	};
 
+public:
 	// Fields to support read consistency in READ COMMITTED transactions
 
 	struct SnapshotData
@@ -368,6 +371,11 @@ public:
 		return statement;
 	}
 
+	Request* getLocalTableRequest(bool outerDecl);
+	jrd_tra* getLocalTableTransaction() const;
+	FB_UINT64 getLocalTableInstanceId(thread_db* tdbb) const;
+	bool getLocalTableAutoTranCtx(AutoTranCtx& ctx) const;
+
 	bool hasInternalStatement() const noexcept;
 	bool hasPowerfulStatement() const noexcept;
 
@@ -397,6 +405,7 @@ public:
 private:
 	Statement* const statement;
 	mutable StmtNumber	req_id;			// request identifier
+	mutable FB_UINT64	req_local_table_instance_id;	// declared local table page instance identifier
 	TimeStampCache req_timeStampCache;	// time stamp cache
 	std::atomic<bool> req_inUse;
 

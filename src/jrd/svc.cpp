@@ -1250,18 +1250,6 @@ ISC_STATUS Service::query2(thread_db* /*tdbb*/,
 			}
 			break;
 
-		case isc_info_svc_dump_pool_info:
-			{
-				char fname[MAXPATHLEN];
-				size_t length2 = gds__vax_integer(items, sizeof(USHORT));
-				if (length2 >= sizeof(fname))
-					length2 = sizeof(fname) - 1; // truncation
-				items += sizeof(USHORT);
-				strncpy(fname, (const char*) items, length2);
-				fname[length2] = 0;
-				break;
-			}
-
 		case isc_info_svc_get_config:
 			// TODO: iterate through all integer-based config values
 			//		 and return them to the client
@@ -1704,17 +1692,6 @@ void Service::query(USHORT			send_item_length,
 			//	need_admin_privs(status, "isc_info_svc_get_env");
 			break;
 
-		case isc_info_svc_dump_pool_info:
-			{
-				char fname[MAXPATHLEN];
-				size_t length2 = gds__vax_integer(items, sizeof(USHORT));
-				if (length2 >= sizeof(fname))
-					length2 = sizeof(fname) - 1; // truncation
-				items += sizeof(USHORT);
-				memcpy(fname, items, length2);
-				fname[length2] = 0;
-				break;
-			}
 		/*
 		case isc_info_svc_get_config:
 			// TODO: iterate through all integer-based config values
