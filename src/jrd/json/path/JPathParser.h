@@ -85,7 +85,7 @@ struct JsonPathContext
 
 } // namespace
 
-#include "../gen/jparse.h"
+#include "jparse.h"
 
 using PassingKeys = Firebird::LeftPooledMap<FBJSON::SmallString, bool>;
 
@@ -220,7 +220,7 @@ private:
 
 			if (type == PathVariable::Type::PASSING)
 			{
-				m_mainRootCreated = true; // Allow passing instead of root path expression ($.<something>) 
+				m_mainRootCreated = true; // Allow passing instead of root path expression ($.<something>)
 			}
 		}
 

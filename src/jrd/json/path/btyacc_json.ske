@@ -21,7 +21,7 @@
 #include "../jrd/json/path/JsonPath.h"
 #include "../jrd/json/path/JPathParser.h"
 
-#include "../gen/jparse.h"
+#include "jparse.h"
 
 %% tables
 

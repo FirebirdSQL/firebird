@@ -63,7 +63,7 @@ $(OBJ)/.parse-gen-sentinel: $(SRC_ROOT)/dsql/parse.y $(SRC_ROOT)/dsql/btyacc_fb.
 
 # This rule creates JsonPathParser.cpp from JsonPathParser.y
 
-$(OBJ)/jrd/json/path/JsonPathParser.cpp $(SRC_ROOT)/include/gen/jparse.h: $(OBJ)/.jparse-gen-sentinel ;
+$(OBJ)/jrd/json/path/JsonPathParser.cpp $(TMP_ROOT)/include/gen/jparse.h: $(OBJ)/.jparse-gen-sentinel ;
 
 $(OBJ)/.jparse-gen-sentinel: $(SRC_ROOT)/jrd/json/path/JsonPathParser.y $(SRC_ROOT)/jrd/json/path/btyacc_json.ske
 	sed -n '/%type .*/p' < $< > $(GEN_ROOT)/jtypes.y
@@ -81,7 +81,7 @@ $(OBJ)/.jparse-gen-sentinel: $(SRC_ROOT)/jrd/json/path/JsonPathParser.y $(SRC_RO
 	touch $(OBJ)/jrd/json/path/JsonPathParser.cpp
 
 # Explicit dependence on generated header (jparser)
-$(OBJ)/jrd/json/path/JsonPath.o $(OBJ)/jrd/json/path/JsonPathParser.o $(OBJ)/jrd/RecordSourceNodes.o $(OBJ)/dsql/ExprNodes.o:  $(SRC_ROOT)/include/gen/jparse.h
+$(OBJ)/jrd/json/path/JsonPath.o $(OBJ)/jrd/json/path/JsonPathParser.o $(OBJ)/jrd/RecordSourceNodes.o $(OBJ)/dsql/ExprNodes.o:  $(TMP_ROOT)/include/gen/jparse.h
 
 
 # gpre_meta needs a special boot build since there is no database.
