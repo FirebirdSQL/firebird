@@ -35,18 +35,29 @@ public:
 		return att;
 	}
 
-	~CachedAttach()
-	{
-		att->release();
-		Jrd::TraceManager::getStorage()->shutdown();
-		removeDb();
-	}
-
 	void removeDb()
 	{
 		if (std::filesystem::exists(dbPath))
 			std::filesystem::remove(dbPath);
 	}
+
+
+	void shutdown()
+	{
+		if (att == nullptr)
+			return;
+
+		att->release();
+		att = nullptr;
+		Jrd::TraceManager::getStorage()->shutdown();
+		removeDb();
+	}
+
+	~CachedAttach()
+	{
+		shutdown();
+	}
+
 
 	Jrd::JProvider prov{nullptr};
 	Firebird::FbLocalStatus status;
@@ -60,6 +71,20 @@ public:
 };
 static Firebird::GlobalPtr<CachedAttach, Firebird::InstanceControl::PRIORITY_DELETE_FIRST> storage;
 
+// Cleanp of the cached attachment must be done before global FB cleanp or a pool-related segfault will be present
+class TestsCleanCallback
+{
+public:
+	TestsCleanCallback()
+	{ }
+
+	~TestsCleanCallback()
+	{
+		storage->shutdown();
+	}
+};
+
+BOOST_TEST_GLOBAL_FIXTURE(TestsCleanCallback);
 
 TestContextHolder::TestContextHolder() :
 	m_tdbb(&storage->status, storage->getAttachment(), FB_FUNCTION),
