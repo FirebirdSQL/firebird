@@ -1023,6 +1023,25 @@ static void checkIndexStatus(CompilerScratch* csb, bool isGbak, IndexStatus idx_
 	}
 }
 
+static ElementBase::ReturnedId lookupPlanIndex(thread_db* tdbb, Cached::Relation* relation,
+	const QualifiedName& name, MetaId& foundRelationId, IndexStatus& idxStatus)
+{
+	if (relation->isLTT())
+	{
+		if (const auto index = relation->lookup_index(tdbb, name, 0))
+		{
+			foundRelationId = relation->getId();
+			idxStatus = index->getActive();
+			return index->getId();
+		}
+
+		idxStatus = MET_index_state_unknown;
+		return 0;
+	}
+
+	return MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idxStatus);
+}
+
 
 static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 {
@@ -1106,7 +1125,21 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			}
 
 			case blr_local_table_id:
-				// TODO
+			{
+				const auto localTableNode = LocalTableSourceNode::parse(tdbb, csb, blrOp, false);
+				plan->recordSourceNode = localTableNode;
+
+				if (localTableNode->tableNumber >= csb->csb_localTables.getCount() ||
+					!csb->csb_localTables[localTableNode->tableNumber])
+				{
+					PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(localTableNode->tableNumber));
+				}
+
+				const auto localTable = csb->csb_localTables[localTableNode->tableNumber];
+				if (localTable->useLtt)
+					relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
+				break;
+			}
 
 			default:
 				PAR_syntax_error(csb, "TABLE or PROCEDURE");
@@ -1141,6 +1174,9 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				if (procedure)
 					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
 
+				if (!relation)
+					PAR_error(csb, Arg::Gds(isc_random) << "Index access plans are not supported for non-LTT local tables");
+
 				plan->accessType = FB_NEW_POOL(csb->csb_pool) PlanNode::AccessType(csb->csb_pool,
 					PlanNode::AccessType::TYPE_NAVIGATIONAL);
 
@@ -1153,7 +1189,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				IndexStatus idx_status;
 				MetaId foundRelationId;
 				const ElementBase::ReturnedId index_id =
-					MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idx_status);
+					lookupPlanIndex(tdbb, relation, name, foundRelationId, idx_status);
 				checkIndexStatus(csb, isGbak, idx_status, name, relation);
 
 				// save both the relation id and the index id, since
@@ -1165,7 +1201,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				item.indexId = index_id;
 				item.indexName = name;
 
-				if (csb->collectingDependencies())
+				if (csb->collectingDependencies() && !relation->isLTT())
 				{
 					Dependency dependency(obj_index);
 					dependency.name = item.indexName;
@@ -1183,6 +1219,9 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			{
 				if (procedure)
 					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
+
+				if (!relation)
+					PAR_error(csb, Arg::Gds(isc_random) << "Index access plans are not supported for non-LTT local tables");
 
 				if (plan->accessType)
 					csb->csb_blr_reader.getByte(); // skip blr_indices
@@ -1205,7 +1244,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					IndexStatus idx_status;
 					MetaId foundRelationId;
 					const ElementBase::ReturnedId index_id =
-						MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idx_status);
+						lookupPlanIndex(tdbb, relation, name, foundRelationId, idx_status);
 					checkIndexStatus(csb, isGbak, idx_status, name, relation);
 
 					// save both the relation id and the index id, since
@@ -1217,7 +1256,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					item.indexId = index_id;
 					item.indexName = name;
 
-					if (csb->collectingDependencies())
+					if (csb->collectingDependencies() && !relation->isLTT())
 					{
 						Dependency dependency(obj_index);
 						dependency.name = item.indexName;

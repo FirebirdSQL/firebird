@@ -4991,7 +4991,8 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	// create versioned part
 	auto& attPool = *attachment->att_pool;
 	AutoPtr<IndexVersion> idv = FB_NEW_POOL(attPool) IndexVersion(attPool, idp);
-	idv->setLtt(tdbb, lttIndex);
+	idv->setLtt(tdbb, lttIndex->name, lttIndex->unique, lttIndex->descending,
+		lttIndex->columns.getCount(), lttIndex->inactive);
 
 	idp->storeObject(tdbb, idv, 0);
 	idv.release();

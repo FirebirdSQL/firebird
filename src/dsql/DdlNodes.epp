@@ -7076,17 +7076,17 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_ALTER_PUBLICATION:
 				break;
 
-			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+			case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 			{
-				auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(clause.getObject());
+				auto addInlineTableIndexClause = static_cast<AddInlineTableIndexClause*>(clause.getObject());
 
-				if (!addPackagedTableIndexClause->indexNode->relation)
+				if (!addInlineTableIndexClause->indexNode->relation)
 				{
-					addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+					addInlineTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 						RelationSourceNode(dsqlScratch->getPool(), name);
 				}
 
-				addPackagedTableIndexClause->indexNode->dsqlPass(dsqlScratch);
+				addInlineTableIndexClause->indexNode->dsqlPass(dsqlScratch);
 				break;
 			}
 
@@ -7335,7 +7335,7 @@ void RelationNode::validateLttClauses(const Array<NestConst<Clause>>& clauses)
 						"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
 				break;
 
-			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+			case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 				break;
 
 			default:
@@ -9864,14 +9864,14 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 						static_cast<AddConstraintClause*>(i->getObject()), constraints);
 					break;
 
-				case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+				case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 				{
-					auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(i->getObject());
-					const auto indexNode = addPackagedTableIndexClause->indexNode;
+					auto addInlineTableIndexClause = static_cast<AddInlineTableIndexClause*>(i->getObject());
+					const auto indexNode = addInlineTableIndexClause->indexNode;
 
 					if (!indexNode->relation)
 					{
-						addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+						addInlineTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 							RelationSourceNode(dsqlScratch->getPool(), name);
 					}
 
@@ -9893,7 +9893,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					}
 
 					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
-						addPackagedTableIndexClause->indexNode->name, definition));
+						addInlineTableIndexClause->indexNode->name, definition));
 
 					break;
 				}
