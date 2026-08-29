@@ -407,6 +407,10 @@ int Parser::yylexAux()
 	}
 
 	SSHORT c = lex.ptr[-1];
+
+	if (c == '\0')
+		yyabandon(yyposn, -104, isc_token_err);
+
 	UCHAR tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
 
