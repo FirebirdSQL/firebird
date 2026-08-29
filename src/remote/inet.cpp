@@ -253,12 +253,45 @@ constexpr ULONG DEF_MAX_DATA	= 8192;
 
 constexpr int SELECT_TIMEOUT	= 60;		// Dispatch thread select timeout (sec)
 
+class ForRead
+{
+public:
+	static constexpr int SEL_INIT_EVENTS = POLLIN;
+	static constexpr int SEL_CHECK_MASK = POLLIN;
+
+	static fd_set* readSet(fd_set* set)
+	{
+		return set;
+	}
+
+	static fd_set* writeSet(fd_set* set)
+	{
+		return nullptr;
+	}
+};
+
+class ForWrite
+{
+public:
+	static constexpr int SEL_INIT_EVENTS = POLLOUT;
+	static constexpr int SEL_CHECK_MASK = POLLOUT;
+
+	static fd_set* readSet(fd_set* set)
+	{
+		return nullptr;
+	}
+
+	static fd_set* writeSet(fd_set* set)
+	{
+		return set;
+	}
+};
+
+template <class Traits>
 class Select
 {
 #ifdef HAVE_POLL
 private:
-	static constexpr int SEL_INIT_EVENTS = POLLIN;
-	static constexpr int SEL_CHECK_MASK = POLLIN;
 
 	pollfd* getPollFd(int n)
 	{
@@ -377,7 +410,7 @@ public:
 
 		if (pf)
 		{
-			HandleState ret = pf->events & SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
+			HandleState ret = pf->events & Traits::SEL_CHECK_MASK ? SEL_READY : SEL_NO_DATA;
 			pf->events = 0;		// unset
 			return ret;
 		}
@@ -416,13 +449,13 @@ public:
 		FB_SIZE_T pos;
 		if (slct_poll.find(handle, pos))
 		{
-			slct_poll[pos].events = SEL_INIT_EVENTS;
+			slct_poll[pos].events = Traits::SEL_INIT_EVENTS;
 		}
 		else
 		{
 			pollfd f;
 			f.fd = handle;
-			f.events = SEL_INIT_EVENTS;
+			f.events = Traits::SEL_INIT_EVENTS;
 			slct_poll.insert(pos, f);
 		}
 #else
@@ -460,7 +493,7 @@ public:
 		for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
 		{
 			pf->revents = pf->events;
-			if (pf->events & SEL_CHECK_MASK)
+			if (pf->events & Traits::SEL_CHECK_MASK)
 				hasRequest = true;
 		}
 
@@ -479,15 +512,15 @@ public:
 			for (pollfd* pf = slct_poll.begin(); pf < end; ++pf)
 			{
 				pf->events = pf->revents;
-				if (pf->revents & SEL_CHECK_MASK)
+				if (pf->revents & Traits::SEL_CHECK_MASK)
 					slct_ready.add(pf);
 			}
 		}
 #else
 #ifdef WIN_NT
-		slct_count = ::select(FD_SETSIZE, &slct_fdset, NULL, NULL, timeout);
+		slct_count = ::select(FD_SETSIZE, readSet(&slct_fdset), writeSet(&slct_fdset), NULL, timeout);
 #else
-		slct_count = ::select(slct_width, &slct_fdset, NULL, NULL, timeout);
+		slct_count = ::select(slct_width, readSet(&slct_fdset), writeSet(&slct_fdset), NULL, timeout);
 #endif // WIN_NT
 #endif // HAVE_POLL
 	}
@@ -616,9 +649,9 @@ static rem_port*		receive(rem_port*, PACKET *);
 static rem_port*		select_accept(rem_port*);
 static bool		is_listener(const rem_port*);
 
-static void		select_port(rem_port*, Select*, RemPortPtr&);
+static void		select_port(rem_port*, Select<ForRead>*, RemPortPtr&);
 static bool		select_multi(rem_port*, UCHAR* buffer, SSHORT bufsize, SSHORT* length, RemPortPtr&);
-static bool		select_wait(rem_port*, Select*);
+static bool		select_wait(rem_port*, Select<ForRead>*);
 static int		send_full(rem_port*, PACKET *);
 static int		send_partial(rem_port*, PACKET *);
 
@@ -667,7 +700,7 @@ ULONG INET_remote_buffer;
 static GlobalPtr<Mutex> init_mutex;
 static volatile bool INET_initialized = false;
 static volatile bool INET_shutting_down = false;
-static GlobalPtr<Select> INET_select;
+static GlobalPtr<Select<ForRead>> INET_select;
 static rem_port* inet_async_receive = NULL;
 
 
@@ -1199,13 +1232,63 @@ rem_port* INET_connect(const TEXT* name,
 			gds__log("setsockopt: error setting TCP_NODELAY");
 		else
 		{
-			n = connect(port->port_handle, pai->ai_addr, static_cast<socklen_t>(pai->ai_addrlen));
-			if (n != -1)
+			int flags;
+			if (port->port_connect_timeout)
 			{
-				port->port_peer_name = host;
-				get_peer_info(port);
-				if (send_full(port, packet))
-					return port;
+				flags = fcntl(port->port_handle, F_GETFL, 0);
+				if (flags < 0)
+				{
+					SOCLOSE(port->port_handle);
+					continue;
+				}
+
+				if (fcntl(port->port_handle, F_SETFL, flags | O_NONBLOCK) < 0)
+				{
+					SOCLOSE(port->port_handle);
+					continue;
+				}
+			}
+
+			n = connect(port->port_handle, pai->ai_addr, static_cast<socklen_t>(pai->ai_addrlen));
+			if (n != -1 || errno == EINPROGRESS)
+			{
+				bool connected = true;
+				if (n == -1 && errno == EINPROGRESS)
+				{
+					fb_assert(port->port_connect_timeout);
+
+					timeval timeout {};
+					timeout.tv_sec = port->port_connect_timeout;
+
+					Select<ForWrite> slct;
+					slct.set(port->port_handle);
+					slct.select(&timeout);
+					connected = (slct.getCount() > 0);
+
+					if (connected)
+					{
+						int optError;
+						socklen_t len = sizeof(optError);
+						if (getsockopt(port->port_handle, SOL_SOCKET, SO_ERROR, &optError, &len) < 0)
+							connected = false;
+						else
+							connected = (optError == 0);
+					}
+
+					if (connected)
+					{
+						if (fcntl(port->port_handle, F_SETFL, flags) < 0)
+							connected = false;
+					}
+				}
+
+				if (connected)
+				{
+					port->port_peer_name = host;
+					get_peer_info(port);
+					if (send_full(port, packet))
+						return port;
+				}
 			}
 		}
 
@@ -1838,7 +1921,7 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		timeval timeout {};
 		timeout.tv_sec = port->port_connect_timeout;
 
-		Select slct;
+		Select<ForRead> slct;
 		slct.set(port->port_channel);
 
 		int inetErrNo = 0;
@@ -2649,7 +2732,7 @@ static rem_port* select_accept( rem_port* main_port)
 	return 0;
 }
 
-static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
+static void select_port(rem_port* main_port, Select<ForRead>* selct, RemPortPtr& port)
 {
 /**************************************
  *
@@ -2670,23 +2753,23 @@ static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
 	MutexLockGuard guard(port_mutex, FB_FUNCTION);
 	while (true)
 	{
-		const Select::HandleState result = selct->checkNext(port);
+		const Select<ForRead>::HandleState result = selct->checkNext(port);
 		if (!port)
 			return;
 
 		switch (result)
 		{
-		case Select::SEL_BAD:
+		case Select<ForRead>::SEL_BAD:
 			if (port->port_state == rem_port::BROKEN || (port->port_flags & PORT_connecting))
 				continue;
 			if (port->port_flags & PORT_async)
 				continue;
 			return;
 
-		case Select::SEL_DISCONNECTED:
+		case Select<ForRead>::SEL_DISCONNECTED:
 			continue;
 
-		case Select::SEL_READY:
+		case Select<ForRead>::SEL_READY:
 			port->port_dummy_timeout = port->port_dummy_packet_interval;
 			return;
 
@@ -2699,7 +2782,7 @@ static void select_port(rem_port* main_port, Select* selct, RemPortPtr& port)
 	}
 }
 
-static bool select_wait( rem_port* main_port, Select* selct)
+static bool select_wait( rem_port* main_port, Select<ForRead>* selct)
 {
 /**************************************
  *
@@ -3487,7 +3570,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 
 		if ( !(port->port_flags & PORT_async) )
 		{
-			Select slct;
+			Select<ForRead> slct;
 			slct.set(ph);
 
 			int slct_count;
