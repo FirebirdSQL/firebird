@@ -29,7 +29,7 @@ static constexpr int sign(T value)
 	return (value >= T(0)) ? 1 : -1;
 }
 
-static ISC_DATE mockGetLocalDate(int year = 2023)
+inline ISC_DATE mockGetLocalDate(int year = 2023)
 {
 	struct tm time;
 	memset(&time, 0, sizeof(time));
@@ -41,7 +41,7 @@ static ISC_DATE mockGetLocalDate(int year = 2023)
 
 
 // Pass 0 to year, month and day to use CurrentTimeStamp for them
-static struct tm initTMStruct(int year, int month, int day)
+inline struct tm initTMStruct(int year, int month, int day)
 {
 	struct tm currentTime;
 	NoThrowTimeStamp::decode_date(mockGetLocalDate(), &currentTime);
@@ -58,19 +58,19 @@ static struct tm initTMStruct(int year, int month, int day)
 }
 
 // Pass 0 to year, month and day to use CurrentTimeStamp for them
-static ISC_DATE createDate(int year, int month, int day)
+inline ISC_DATE createDate(int year, int month, int day)
 {
 	struct tm times = initTMStruct(year, month, day);
 	return NoThrowTimeStamp::encode_date(&times);
 }
 
-static ISC_TIME createTime(int hours, int minutes, int seconds, int fractions = 0)
+inline ISC_TIME createTime(int hours, int minutes, int seconds, int fractions = 0)
 {
 	return NoThrowTimeStamp::encode_time(hours, minutes, seconds, fractions);
 }
 
 // Pass 0 to year, month and day to use CurrentTimeStamp for them
-static ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, int minutes, int seconds, int fractions = 0)
+inline ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, int minutes, int seconds, int fractions = 0)
 {
 	struct tm times = initTMStruct(year, month, day);
 	times.tm_hour = hours;
@@ -81,7 +81,7 @@ static ISC_TIMESTAMP createTimeStamp(int year, int month, int day, int hours, in
 }
 
 // Pass 0 to year, month and day to use CurrentTimeStamp for them
-static ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hours, int minutes, int seconds,
+inline ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hours, int minutes, int seconds,
 	int offsetInMinutes, int fractions = 0)
 {
 	ISC_TIMESTAMP_TZ timestampTZ;
@@ -94,7 +94,7 @@ static ISC_TIMESTAMP_TZ createTimeStampTZ(int year, int month, int day, int hour
 	return timestampTZ;
 }
 
-static ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetInMinutes, int fractions = 0)
+inline ISC_TIME_TZ createTimeTZ(int hours, int minutes, int seconds, int offsetInMinutes, int fractions = 0)
 {
 	// Day is 2 because we need to handle 00:00 with negative timezone offset, and anyway date is not used in TIME WITH TIME ZONE
 	ISC_TIMESTAMP_TZ timestampTz = createTimeStampTZ(1, 1, 2, hours, minutes, seconds, offsetInMinutes, fractions);
