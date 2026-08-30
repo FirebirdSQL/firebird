@@ -518,9 +518,9 @@ public:
 		}
 #else
 #ifdef WIN_NT
-		slct_count = ::select(FD_SETSIZE, readSet(&slct_fdset), writeSet(&slct_fdset), NULL, timeout);
+		slct_count = ::select(FD_SETSIZE, Traits::readSet(&slct_fdset), Traits::writeSet(&slct_fdset), NULL, timeout);
 #else
-		slct_count = ::select(slct_width, readSet(&slct_fdset), writeSet(&slct_fdset), NULL, timeout);
+		slct_count = ::select(slct_width, Traits::readSet(&slct_fdset), Traits::writeSet(&slct_fdset), NULL, timeout);
 #endif // WIN_NT
 #endif // HAVE_POLL
 	}
@@ -1232,6 +1232,7 @@ rem_port* INET_connect(const TEXT* name,
 			gds__log("setsockopt: error setting TCP_NODELAY");
 		else
 		{
+#ifndef WIN_NT
 			int flags;
 			if (port->port_connect_timeout)
 			{
@@ -1248,12 +1249,25 @@ rem_port* INET_connect(const TEXT* name,
 					continue;
 				}
 			}
+			auto errCode = EINPROGRESS;
+#else
+			if (port->port_connect_timeout)
+			{
+				ULONG mode = 1;
+				if (ioctlsocket(port->port_handle, FIONBIO, &mode) != 0)
+				{
+					SOCLOSE(port->port_handle);
+					continue;
+				}
+			}
+			auto errCode = WSAEWOULDBLOCK;
+#endif
 
 			n = connect(port->port_handle, pai->ai_addr, static_cast<socklen_t>(pai->ai_addrlen));
-			if (n != -1 || errno == EINPROGRESS)
+			if (n != -1 || errno == errCode)
 			{
 				bool connected = true;
-				if (n == -1 && errno == EINPROGRESS)
+				if (n == -1)
 				{
 					fb_assert(port->port_connect_timeout);
 
@@ -1277,7 +1291,12 @@ rem_port* INET_connect(const TEXT* name,
 
 					if (connected)
 					{
+#ifndef WIN_NT
 						if (fcntl(port->port_handle, F_SETFL, flags) < 0)
+#else
+						ULONG mode = 0;
+						if (ioctlsocket(port->port_handle, FIONBIO, &mode) != 0)
+#endif
 							connected = false;
 					}
 				}
