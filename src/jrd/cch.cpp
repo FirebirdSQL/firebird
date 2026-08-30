@@ -2033,6 +2033,16 @@ void CCH_release(thread_db* tdbb, WIN* window, const bool release_tail)
  **************************************/
 	SET_TDBB(tdbb);
 
+	// If TDBB_cache_unwound is set, return here to prevent
+	// changing bdb_flags below because it can be dangerous
+	// in a concurrent environment.
+	if (tdbb->tdbb_flags & TDBB_cache_unwound)
+	{
+		fb_assert(tdbb->tdbb_bdbs.isEmpty());
+		window->win_bdb = NULL;
+		return;
+	}
+
 	BufferDesc* const bdb = window->win_bdb;
 	BLKCHK(bdb, type_bdb);
 
