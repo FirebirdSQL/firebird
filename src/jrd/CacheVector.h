@@ -40,6 +40,7 @@
 #include "../jrd/constants.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/QualifiedName.h"
+#include "../jrd/obj.h"
 
 namespace Jrd {
 
@@ -87,6 +88,13 @@ public:
 
 	virtual ~ElementBase();
 	virtual void cleanup(thread_db* tdbb) = 0;
+	virtual ObjectType getObjectType() = 0;
+	virtual void getObjectName(QualifiedName& name) = 0;
+	virtual void newVersion(thread_db* tdbb) = 0;
+	virtual bool ensureVersioned(thread_db* tdbb, ObjectBase::Flag fl) = 0;
+	virtual void makeRequests(thread_db* tdbb) = 0;
+	virtual void commit(thread_db* tdbb, TraNumber curNumber = 0) = 0;
+	virtual MdcVersion getVersion(thread_db* tdbb) = 0;
 
 public:
 	[[noreturn]] void busyError(thread_db* tdbb, MetaId id, const char* family);
@@ -98,6 +106,9 @@ public:
 	{
 		return locked;
 	}
+
+	// fill dependencies info
+	void fillDeps(thread_db* tdbb, bool forceRecompile);
 
 private:
 	Lock* lock = nullptr;
@@ -163,11 +174,17 @@ class ListEntry : public HazardObject
 public:
 	enum State { INITIAL, RELOAD, MISSING, SCANNING, READY };
 
-	ListEntry(Versioned* object, TraNumber traNumber, ObjectBase::Flag fl, ListEntry* link = nullptr)
+	ListEntry(thread_db* tdbb, Versioned* object, TraNumber traNumber, ObjectBase::Flag fl, ListEntry* link = nullptr)
 		: object(object), traNumber(traNumber), cacheFlags(fl), state(INITIAL)
 	{
 		if (fl & CacheFlag::ERASED)
 			fb_assert(!object);
+
+		// Handle front & back versions of MDC
+		VersionIncr incr(tdbb);
+		version = incr.getVersion();
+
+		// Add to linked list
 		if (link)
 			next.store(link);
 	}
@@ -550,19 +567,9 @@ public:
 		return state == READY ? false : (thd == Thread::getCurrentThreadId()) && (state == SCANNING);
 	}
 
-	static bool upgradable(HazardPtr<ListEntry>& listEntry, const Versioned* from)
+	MdcVersion getVersion()
 	{
-		for (; listEntry; listEntry.set(listEntry->next))
-		{
-			if (listEntry->object == from)
-				return false;		// not found upgrade version
-
-			if (listEntry->getFlags() & CacheFlag::COMMITTED)
-				return true;		// already upgraded by someone else
-		}
-
-		fb_assert(false);
-		return false;				// miss from what to upgrade
+		return version;
 	}
 
 private:
@@ -582,7 +589,6 @@ private:
 	TraNumber traNumber;		// when COMMITTED not set - stores transaction that created this list element
 								// when COMMITTED is set - stores transaction after which older elements are not needed
 								// traNumber to be changed BEFORE setting COMMITTED
-
 	MdcVersion version = 0;		// version of metadata cache when object was added
 	ThreadId thd = 0;			// thread that performs object scan()
 	std::atomic<ObjectBase::Flag> cacheFlags;
@@ -677,6 +683,11 @@ public:
 		return getVersioned(tdbb, TransactionNumber::current(tdbb), fl);
 	}
 
+	bool ensureVersioned(thread_db* tdbb, ObjectBase::Flag fl) override
+	{
+		return getVersioned(tdbb, fl);
+	}
+
 	bool isReady(thread_db* tdbb)
 	{
 		auto entry = getEntry(tdbb, TransactionNumber::current(tdbb), CacheFlag::NOSCAN | CacheFlag::NOCOMMIT);
@@ -748,7 +759,7 @@ public:
 			ListEntry<Versioned>* newEntry = nullptr;
 			try
 			{
-				newEntry = FB_NEW ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
+				newEntry = FB_NEW ListEntry<Versioned>(tdbb, obj, traNum, fl & ~CacheFlag::ERASED);
 			}
 			catch (const Firebird::Exception&)
 			{
@@ -776,6 +787,7 @@ public:
 					return listEntry;	// nullptr
 				}
 
+				toUpdatedList(tdbb, fl);
 				return HazardPtr<ListEntry<Versioned>>(newEntry);
 			}
 
@@ -784,7 +796,9 @@ public:
 			fb_assert(list.load());
 			listEntry = list;
 		}
+
 		fl &= ~CacheFlag::AUTOCREATE;
+		toUpdatedList(tdbb, fl);
 		return ListEntry<Versioned>::getEntry(tdbb, listEntry, traNum, fl, this);
 	}
 
@@ -812,7 +826,7 @@ public:
 
 		if (!cur)
 			cur = TransactionNumber::current(tdbb);
-		ListEntry<Versioned>* newEntry = FB_NEW ListEntry<Versioned>(obj, cur, fl);
+		ListEntry<Versioned>* newEntry = FB_NEW ListEntry<Versioned>(tdbb, obj, cur, fl);
 		if (!ListEntry<Versioned>::add(tdbb, list, newEntry))
 		{
 			newEntry->cleanup(tdbb, false);
@@ -867,15 +881,15 @@ public:
 		return nullptr;
 	}
 
-	void commit(thread_db* tdbb, TraNumber cur = 0)
+	void commit(thread_db* tdbb, TraNumber curNumber = 0) override
 	{
 		HazardPtr<ListEntry<Versioned>> current(list);
 		if (current)
 		{
-			if (!cur)
-				cur = TransactionNumber::current(tdbb);
+			if (!curNumber)
+				curNumber = TransactionNumber::current(tdbb);
 
-			auto flags = current->commit(tdbb, cur, TransactionNumber::next(tdbb));
+			auto flags = current->commit(tdbb, curNumber, TransactionNumber::next(tdbb));
 
 			if (flags & CacheFlag::NOCOMMIT)	// Committed newly created version in cache
 				pingLock(tdbb, flags, this->getId(), Versioned::objectFamily(this));
@@ -938,12 +952,17 @@ public:
 		return listEntry->scanInProgress();
 	}
 
-	static int getObjectType()
+	ObjectType getObjectType() override
 	{
 		return Versioned::objectType();
 	}
 
-	void newVersion(thread_db* tdbb)
+	void getObjectName(QualifiedName& name) override
+	{
+		name = this->getName();
+	}
+
+	void newVersion(thread_db* tdbb) override
 	{
 		TraNumber traNum;
 
@@ -967,41 +986,25 @@ public:
 		}
 	}
 
-	bool upgrade(thread_db* tdbb, const Versioned* from)
-	{
-		HazardPtr<ListEntry<Versioned>> l(list);
-
-		// list of versions should be present
-		fb_assert(l);
-		if (!l)
-			return false;
-
-		// if there is another version at the top nothing to be added
-		if (l->getVersioned() != from)
-			return ListEntry<Versioned>::upgradable(l, from);
-
-		// we have candidate for upgrade - make sure it's not half-done
-		fb_assert(l->getFlags() & CacheFlag::COMMITTED);
-		if (!(l->getFlags() & CacheFlag::COMMITTED))
-			return false;
-
-		// Try to upgrade
-		ListEntry<Versioned>* newEntry = FB_NEW ListEntry<Versioned>(nullptr, TransactionNumber::current(tdbb),
-			CacheFlag::COMMITTED | CacheFlag::MINISCAN | CacheFlag::DB_VERSION, l.getPointer());
-		if (l.replace(list, newEntry))
-			return true;
-
-		// undo changes
-		delete newEntry;
-
-		// Someone already added entry - see is it OK for us
-		l.set(list);
-		return ListEntry<Versioned>::upgradable(l, from);
-	}
-
 	bool nameIs(const QualifiedName& name)
 	{
 		return this->getName() == name;
+	}
+
+	// This is needed to check correctness of statements present in current object's version
+	void makeRequests(thread_db* tdbb) override
+	{
+		Versioned* v = getVersioned(tdbb, CacheFlag::AUTOCREATE);
+		if (!v)
+			return;
+
+		v->makeRequests(tdbb);
+	}
+
+	MdcVersion getVersion(thread_db* tdbb) override
+	{
+		auto entry = getEntry(tdbb, TransactionNumber::current(tdbb), CacheFlag::NOSCAN | CacheFlag::NOCOMMIT);
+		return entry ? entry->getVersion() : 0;
 	}
 
 private:
@@ -1009,6 +1012,13 @@ private:
 	{
 		resetAt.compare_exchange_strong(oldVal, newVal,
 			atomics::memory_order_release, atomics::memory_order_relaxed);
+	}
+
+	// Check flags and may be fill dependencies info
+	void toUpdatedList(thread_db* tdbb, ObjectBase::Flag fl)
+	{
+		if (fl & CacheFlag::DEPENDS)
+			ElementBase::fillDeps(tdbb, true);
 	}
 
 private:
@@ -1209,28 +1219,6 @@ public:
 		StoredElement* data = ensurePermanent(tdbb, id);
 		data->newVersion(tdbb);
 		return data;
-	}
-
-	bool upgrade(thread_db* tdbb, MetaId id, const Versioned* from)
-	{
-		fb_assert(id < getCount());
-
-		if (id < getCount())
-		{
-			auto ptr = getDataPointer(id);
-			fb_assert(ptr);
-
-			if (ptr)
-			{
-				StoredElement* data = ptr->load(atomics::memory_order_acquire);
-				fb_assert(data);
-
-				if (data)
-					return data->upgrade(tdbb, from);
-			}
-		}
-
-		return false;
 	}
 
 	bool lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag fl,

@@ -421,6 +421,7 @@ static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_statistics(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool deps_to_disk(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool update_dependencies(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 // ----------------------------------------------------------------
 
@@ -1221,6 +1222,7 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_modify_package_constant, createOrAlterConstant },
 	{ dfw_delete_package_constant, deleteConstant },
 	{ dfw_create_package, createPackage },
+	{ dfw_update_dependencies, update_dependencies },			// must be last
 
 	{ dfw_null, NULL }
 };
@@ -3471,6 +3473,46 @@ static bool delete_collation(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 }
 
 
+static bool update_dependencies(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/*******************************************
+ *
+ *	u p d a t e _ d e p e n d e n c i e s
+ *
+ *******************************************
+ *
+ * Functional description
+ *	Update dependent from changed in this transaction objects
+ *	and commit them at specific DFW phase.
+ *
+ **************************************/
+	SET_TDBB(tdbb);
+
+	switch (phase)
+	{
+	case 0:
+		return false;
+
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+		return true;
+
+	case 6:
+		transaction->processUpdates(tdbb);
+		return true;
+
+	case 7:
+		transaction->processCommits(tdbb);
+		break;
+	}
+
+	return false;
+}
+
+
 static bool delete_parameter(thread_db* tdbb, SSHORT phase, DeferredWork*, jrd_tra*)
 {
 /**************************************
@@ -3528,12 +3570,7 @@ static bool create_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
  *	Create a new index or change the state of an index between active/inactive.
  *
  **************************************/
-	jrd_rel* relation = nullptr;
-
 	SET_TDBB(tdbb);
-	Jrd::Attachment* attachment = tdbb->getAttachment();
-	Database* dbb = tdbb->getDatabase();
-	AutoRequest request;
 
 	switch (phase)
 	{
