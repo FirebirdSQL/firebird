@@ -1283,7 +1283,7 @@ rem_port* INET_connect(const TEXT* name,
 					{
 						int optError;
 						socklen_t len = sizeof(optError);
-						if (getsockopt(port->port_handle, SOL_SOCKET, SO_ERROR, &optError, &len) < 0)
+						if (getsockopt(port->port_handle, SOL_SOCKET, SO_ERROR, (SCHAR *)&optError, &len) < 0)
 							connected = false;
 						else
 							connected = (optError == 0);
