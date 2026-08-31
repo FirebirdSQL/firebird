@@ -191,7 +191,7 @@ int RelationPermanent::partners_ast_relation(void* ast_object)
 
 		AsyncContextHolder tdbb(dbb, FB_FUNCTION);
 
-		auto oldFlags = relation->rel_flags.fetch_or(REL_check_partners);
+		const auto oldFlags = relation->rel_flags.fetch_or(REL_check_partners);
 		if (!(oldFlags & REL_check_partners))
 			LCK_release(tdbb, lock);
 	}
@@ -248,10 +248,15 @@ Record* RelationPermanent::getGCRecord(thread_db* tdbb, const Format* const form
 
 void RelationPermanent::checkPartners(thread_db* tdbb)
 {
-	rel_flags |= REL_check_partners;
+	const auto oldFlags = rel_flags.fetch_or(REL_check_partners);
+	if (!(oldFlags & REL_check_partners))
+		LCK_release(tdbb, rel_partners_lock);
 
-	LCK_lock(tdbb, rel_partners_lock, LCK_EX, LCK_WAIT);
-	LCK_release(tdbb, rel_partners_lock);
+	Lock tempLock(tdbb, sizeof(SLONG), LCK_rel_partners);
+	tempLock.setKey(rel_id);
+
+	if (LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT))
+		LCK_release(tdbb, &tempLock);
 }
 
 bool RelationPermanent::isReplicating(thread_db* tdbb)
@@ -276,6 +281,11 @@ bool RelationPermanent::isReplicating(thread_db* tdbb)
 	return oldState == Bool3State::True;
 }
 
+FB_UINT64 jrd_rel::getTempInstanceId(thread_db* tdbb) const
+{
+	return (getPermanent()->rel_flags & REL_temp_frame) ? tdbb->tdbb_temp_frame_id : 0;
+}
+
 void RelationPermanent::fillPages(thread_db* tdbb)
 {
 	if (!rel_file)
@@ -287,7 +297,8 @@ void RelationPermanent::fillPages(thread_db* tdbb)
 	}
 }
 
-RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages)
+RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, RelationPages::InstanceId instanceId,
+	bool allocPages)
 {
 	if (tdbb->tdbb_flags & TDBB_use_db_page_space)
 		return &rel_pages_base;
@@ -295,21 +306,27 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 
-	RelationPages::InstanceId inst_id;
-
-	if (rel_flags & REL_temp_tran)
+	if (rel_flags & REL_temp_frame)
 	{
-		if (tran != 0 && tran != MAX_TRA_NUMBER)
-			inst_id = tran;
-		else if (tdbb->tdbb_temp_traid)
-			inst_id = tdbb->tdbb_temp_traid;
-		else if (tdbb->getTransaction())
-			inst_id = tdbb->getTransaction()->tra_number;
-		else // called without transaction, maybe from OPT or CMP ?
+		if (tdbb->tdbb_temp_frame_id)
+			instanceId = tdbb->tdbb_temp_frame_id;
+		else // called without a local table execution frame, maybe from OPT or CMP
 			return &rel_pages_base;
 	}
+	else if (rel_flags & REL_temp_tran)
+	{
+		if (instanceId == 0 || instanceId == MAX_TRA_NUMBER)
+		{
+			if (tdbb->tdbb_temp_traid)
+				instanceId = tdbb->tdbb_temp_traid;
+			else if (tdbb->getTransaction())
+				instanceId = tdbb->getTransaction()->tra_number;
+			else // called without transaction, maybe from OPT or CMP ?
+				return &rel_pages_base;
+		}
+	}
 	else
-		inst_id = PAG_attachment_id(tdbb);
+		instanceId = PAG_attachment_id(tdbb);
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
@@ -317,7 +334,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		rel_pages_inst = FB_NEW_POOL(getPool()) RelationPagesInstances(getPool());
 
 	FB_SIZE_T pos;
-	if (!rel_pages_inst->find(inst_id, pos))
+	if (!rel_pages_inst->find(instanceId, pos))
 	{
 		if (!allocPages)
 			return nullptr;
@@ -335,7 +352,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 		fb_assert(newPages->useCount == 0);
 
 		newPages->addRef();
-		newPages->rel_instance_id = inst_id;
+		newPages->rel_instance_id = instanceId;
 		newPages->rel_pg_space_id = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
 		rel_pages_inst->add(newPages);
 
@@ -351,6 +368,9 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 			newPages->rel_index_root,
 			newPages);
 #endif
+
+		if (rel_flags & REL_temp_frame)
+			return newPages;
 
 		// create indexes
 		MemoryPool* pool = tdbb->getDefaultPool();
@@ -410,7 +430,7 @@ RelationPages* RelationPermanent::getPagesInternal(thread_db* tdbb, TraNumber tr
 	}
 
 	RelationPages* pages = (*rel_pages_inst)[pos];
-	fb_assert(pages->rel_instance_id == inst_id);
+	fb_assert(pages->rel_instance_id == instanceId);
 	return pages;
 }
 
@@ -432,13 +452,15 @@ RelationPages* RelationPermanent::getAttPages(thread_db* tdbb, RelationPages::In
 	return pages;
 }
 
-bool RelationPermanent::delPages(thread_db* tdbb, TraNumber tran, RelationPages* aPages)
+bool RelationPermanent::delPages(thread_db* tdbb, RelationPages::InstanceId inst_id, RelationPages* aPages)
 {
-	RelationPages* pages = aPages ? aPages : getPages(tdbb, tran, false);
+	RelationPages* pages = aPages ? aPages :
+		(rel_flags & REL_temp_frame ? getAttPages(tdbb, inst_id) : getPages(tdbb, inst_id, false));
 	if (!pages || !pages->rel_instance_id)
 		return false;
 
-	fb_assert(tran == 0 || tran == MAX_TRA_NUMBER || pages->rel_instance_id == tran);
+	fb_assert(inst_id == 0 || inst_id == MAX_TRA_NUMBER || pages->rel_instance_id == inst_id ||
+		(rel_flags & REL_temp_frame));
 
 	fb_assert(pages->useCount > 0);
 
@@ -672,19 +694,24 @@ PageNumber RelationPermanent::getIndexRootPage(thread_db* tdbb)
 
 Cached::Relation* RelationPermanent::newVersion(thread_db* tdbb, const QualifiedName& name)
 {
-	auto id = jrd_rel::getIdByName(tdbb, name);
-	if (id.has_value())
+	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::MINISCAN);
+
+	if (relation)
+		relation->newVersion(tdbb);
+	else
 	{
-		auto* relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
-		fb_assert(relation);
-
-		if (relation)
-			DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, id.value());
-
-		return relation;
+		auto id = jrd_rel::getIdByName(tdbb, name);
+		if (id.has_value())
+		{
+			relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
+			fb_assert(relation);
+		}
 	}
 
-	return nullptr;
+	if (relation)
+		DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, relation->getId());
+
+	return relation;
 }
 
 
@@ -710,6 +737,11 @@ IndexVersion::IndexVersion(MemoryPool& p, Cached::Index* idp)
 void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
 {
 	delete idv;
+}
+
+ObjectType IndexVersion::objectType() noexcept
+{
+	return obj_index;
 }
 
 
@@ -1125,7 +1157,7 @@ const char* jrd_rel::objectFamily(RelationPermanent* perm)
 	return perm->isView() ? "view" : "table";
 }
 
-int jrd_rel::objectType()
+ObjectType jrd_rel::objectType() noexcept
 {
 	return obj_relation;
 }
@@ -1247,7 +1279,7 @@ const QualifiedName& DbTriggersHeader::getName() const noexcept
 	return tnames[type];
 }
 
-int DbTriggers::objectType()
+ObjectType DbTriggers::objectType() noexcept
 {
 	return obj_trigger;
 }

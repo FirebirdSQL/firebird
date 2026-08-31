@@ -234,7 +234,7 @@ public:
 
 	static const enum lck_t LOCKTYPE = LCK_dbwide_triggers;
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
@@ -251,7 +251,7 @@ public:
 		return "set of database-wide triggers on";
 	}
 
-	static int objectType();
+	static ObjectType objectType() noexcept;
 
 private:
 	DbTriggersHeader* perm;
@@ -561,7 +561,9 @@ public:
 	static void destroy(thread_db* tdbb, IndexVersion* idv);
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<RelationPermanent*> name);
+	static ObjectType objectType() noexcept;
+
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
 		return scan(tdbb, flags);
@@ -605,7 +607,8 @@ public:
 		return true;
 	}
 
-	void setLtt(thread_db* tdbb, LocalTemporaryTable::Index* ltt);
+	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+		USHORT segmentCount, bool inactive = false);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 
@@ -652,7 +655,7 @@ public:
 
 	bool hasData() const;
 	MetaId getId() const noexcept;
-	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
 	bool isSystem() const noexcept;
 	bool isTemporary() const noexcept;
 	bool isLTT() const noexcept;
@@ -660,6 +663,7 @@ public:
 	bool isView() const noexcept;
 	bool isPrivate() const noexcept;
 	bool isReplicating(thread_db* tdbb);
+	FB_UINT64 getTempInstanceId(thread_db* tdbb) const;
 
 	ObjectType getObjectType() const noexcept
 	{
@@ -678,7 +682,7 @@ public:
 	static const enum lck_t LOCKTYPE = LCK_rel_rescan;
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag& flags);		// Scan the newly loaded relation for meta data
-	static std::optional<MetaId> getIdByName(thread_db* tdbb, const QualifiedName& name);
+	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag& flags)
 	{
 		return scan(tdbb, flags);
@@ -687,7 +691,7 @@ public:
 	bool hash(thread_db* tdbb, sha512& digest);
 
 	static const char* objectFamily(RelationPermanent* perm);
-	static int objectType();
+	static ObjectType objectType() noexcept;
 
 	void releaseTriggers(thread_db* tdbb, bool destroy);
 	const Trigger* findTrigger(const QualifiedName& trig_name) const;
@@ -714,6 +718,7 @@ inline constexpr ULONG REL_jrd_view				= 0x0080;	// relation is VIEW
 inline constexpr ULONG REL_temp_gtt				= 0x0100;	// relation is a GTT
 inline constexpr ULONG REL_temp_ltt				= 0x0200;	// relation is a LTT
 inline constexpr ULONG REL_private				= 0x0400;	// relation is private to its package
+inline constexpr ULONG REL_temp_frame			= 0x0800;	// relation data is scoped to an execution frame
 
 class GCLock
 {
@@ -838,7 +843,7 @@ public:
 			dropTempPages(tdbb);
 	}
 
-	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
+	// void makeLocks(thread_db* tdbb, Cached::Relation* relation);		// hvlad: not implemented
 	static constexpr USHORT getRelLockKeyLength() noexcept;
 	Lock* createLock(thread_db* tdbb, lck_t, bool);
 	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);
@@ -866,8 +871,9 @@ public:
 		return rel_indices.erase(tdbb, id);
 	}
 
-	Lock*		rel_partners_lock;		// partners lock
-	GCLock		rel_gc_lock;			// garbage collection lock
+	Firebird::Mutex rel_scan_partners_mutex;
+	Lock* rel_partners_lock;	// partners lock
+	GCLock rel_gc_lock;			// garbage collection lock
 
 	void releaseLock(thread_db* tdbb);
 
@@ -899,10 +905,10 @@ public:
 	friend class RelationPermanent;
 	};
 
-	RelationPages* getPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, bool allocPages = true);
+	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER, bool allocPages = true);
 	void	fillPages(thread_db* tdbb);
 	RelationPages* getAttPages(thread_db* tdbb, RelationPages::InstanceId inst_id);
-	bool	delPages(thread_db* tdbb, TraNumber tran = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
+	bool	delPages(thread_db* tdbb, RelationPages::InstanceId inst_id = MAX_TRA_NUMBER, RelationPages* aPages = NULL);
 	void	freePages(thread_db* tdbb);
 	void	retainPages(thread_db* tdbb, TraNumber oldNumber, TraNumber newNumber);
 	void	cleanUp() noexcept;
@@ -1022,7 +1028,7 @@ private:
 	RelationPages			rel_pages_base;
 	RelationPages*			rel_pages_free;
 
-	RelationPages* getPagesInternal(thread_db* tdbb, TraNumber tran, bool allocPages);
+	RelationPages* getPagesInternal(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages);
 
 	ExternalFile* rel_file;
 
@@ -1082,9 +1088,9 @@ inline MetaId jrd_rel::getId() const noexcept
 	return rel_perm->getId();
 }
 
-inline RelationPages* jrd_rel::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)
+inline RelationPages* jrd_rel::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
-	return rel_perm->getPages(tdbb, tran, allocPages);
+	return rel_perm->getPages(tdbb, instanceId, allocPages);
 }
 
 inline bool jrd_rel::isTemporary() const noexcept
@@ -1135,7 +1141,7 @@ inline bool RelationPermanent::isSystem() const noexcept
 
 inline bool RelationPermanent::isTemporary() const noexcept
 {
-	return (rel_flags & (REL_temp_tran | REL_temp_conn));
+	return (rel_flags & (REL_temp_tran | REL_temp_conn | REL_temp_frame));
 }
 
 inline bool RelationPermanent::isVirtual() const noexcept
@@ -1158,12 +1164,11 @@ inline bool RelationPermanent::isLTT() const noexcept
 	return (rel_flags & REL_temp_ltt);
 }
 
-inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, TraNumber tran, bool allocPages)
+inline RelationPages* RelationPermanent::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
 {
-	if (!isTemporary())
-		return &rel_pages_base;
-
-	return getPagesInternal(tdbb, tran, allocPages);
+	return !isTemporary() ?
+		&rel_pages_base :
+		getPagesInternal(tdbb, instanceId, allocPages);
 }
 
 

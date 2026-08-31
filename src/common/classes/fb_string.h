@@ -695,6 +695,8 @@ namespace Firebird
 		StringBase(const void* s, size_type n) : AbstractString(Comparator::getMaxLength(), n, s) {}
 		StringBase(const_pointer s) :
 			AbstractString(Comparator::getMaxLength(), s ? length(s) : 0, s) {}
+		StringBase(std::string_view sv) :
+			AbstractString(Comparator::getMaxLength(), static_cast<size_type>(sv.length()), sv.data()) {}
 		explicit StringBase(const unsigned char* s) :
 			AbstractString(Comparator::getMaxLength(), length((char*) s), (char*) s) {}
 		StringBase(const MetaString& v) : AbstractString(Comparator::getMaxLength(), v) {}
@@ -824,6 +826,12 @@ namespace Firebird
 		StringBase<IgnoreCaseComparator> ToNoCaseString() const
 		{
 			return StringBase<IgnoreCaseComparator>(c_str());
+		}
+		std::string_view ToStringView() const
+		{
+			static_assert(std::is_same_v<Comparator, StringComparator>,
+				"Only a string can be safely converted to a string_view");
+			return std::string_view(c_str(), length());
 		}
 
 		StringType substr(size_type pos = 0, size_type n = npos) const

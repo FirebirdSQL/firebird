@@ -293,7 +293,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 	DEBUG_XDR_PACKET(xdrs, p);
 
-	if (!xdr_enum(xdrs, reinterpret_cast<xdr_op*>(&p->p_operation)))
+	if (!xdr_enum(xdrs, &p->p_operation))
 		return P_FALSE(xdrs, p);
 
 #if COMPRESS_DEBUG > 1
@@ -321,9 +321,9 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_connect:
 		{
 			P_CNCT* connect = &p->p_cnct;
-			MAP(xdr_enum, reinterpret_cast<xdr_op&>(connect->p_cnct_operation));
+			MAP(xdr_enum, connect->p_cnct_operation);
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(connect->p_cnct_cversion));
-			MAP(xdr_enum, reinterpret_cast<xdr_op&>(connect->p_cnct_client));
+			MAP(xdr_enum, connect->p_cnct_client);
 			MAP(xdr_cstring_const, connect->p_cnct_file);
 			MAP(xdr_short, reinterpret_cast<SSHORT&>(connect->p_cnct_count));
 
@@ -340,7 +340,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 				}
 
 				MAP(xdr_short, reinterpret_cast<SSHORT&>(tail->p_cnct_version));
-				MAP(xdr_enum, reinterpret_cast<xdr_op&>(tail->p_cnct_architecture));
+				MAP(xdr_enum, tail->p_cnct_architecture);
 				MAP(xdr_u_short, tail->p_cnct_min_type);
 				MAP(xdr_u_short, tail->p_cnct_max_type);
 				MAP(xdr_short, reinterpret_cast<SSHORT&>(tail->p_cnct_weight));
@@ -359,7 +359,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_accept:
 		accept = &p->p_acpt;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(accept->p_acpt_version));
-		MAP(xdr_enum, reinterpret_cast<xdr_op&>(accept->p_acpt_architecture));
+		MAP(xdr_enum, accept->p_acpt_architecture);
 		MAP(xdr_u_short, accept->p_acpt_type);
 		DEBUG_PRINTSIZE(xdrs, p->p_operation);
 		return P_TRUE(xdrs, p);
@@ -368,7 +368,7 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 	case op_cond_accept:
 		accept_with_data = &p->p_acpd;
 		MAP(xdr_short, reinterpret_cast<SSHORT&>(accept_with_data->p_acpt_version));
-		MAP(xdr_enum, reinterpret_cast<xdr_op&>(accept_with_data->p_acpt_architecture));
+		MAP(xdr_enum, accept_with_data->p_acpt_architecture);
 		MAP(xdr_u_short, accept_with_data->p_acpt_type);
 		MAP(xdr_cstring, accept_with_data->p_acpt_data);
 		MAP(xdr_cstring, accept_with_data->p_acpt_plugin);
@@ -909,16 +909,21 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 
 			ULONG count = b->p_batch_messages;
 			ULONG size = statement->rsr_batch_size;
-			if (!size)
+			if (!size && statement->rsr_format)
 				statement->rsr_batch_size = size = FB_ALIGN(statement->rsr_format->fmt_length, FB_ALIGNMENT);
 			if (xdrs->x_op == XDR_DECODE)
 			{
-				b->p_batch_data.cstr_length = (count ? count : 1) * size;
+				const ULONG safe_count = count ? count : 1;
+				const FB_UINT64 product = (FB_UINT64)safe_count * size;
+				if (product > MAX_ULONG)
+					return P_FALSE(xdrs, p);
+
+				b->p_batch_data.cstr_length = (ULONG)product;
 				b->p_batch_data.alloc(xdrs);
 			}
 
 			RMessage* message = statement->rsr_buffer;
-			if (!message)
+			if (!message || !b->p_batch_data.cstr_address)
 				return P_FALSE(xdrs, p);
 			statement->rsr_buffer = message->msg_next;
 			message->msg_address = b->p_batch_data.cstr_address;

@@ -89,7 +89,5 @@ namespace Firebird::Why
 	void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 		USHORT* ods_version, USHORT* ods_minor_version);
 
-	void threadCleanup();
 } // namespace Firebird::Why
-
 #endif // JRD_UTL_PROTO_H

@@ -91,6 +91,7 @@ if (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
 endif()
 
 set(ENABLE_BINRELOC 1)
+set(HAVE_TOMCRYPT 1)
 
 string(TOUPPER ${CMAKE_SYSTEM_NAME} CMAKE_SYSTEM_NAME_UPPER)
 set(${CMAKE_SYSTEM_NAME_UPPER} 1)
@@ -116,6 +117,7 @@ set(CASE_SENSITIVITY "true")
 set(SUPPORT_RAW_DEVICES 1)
 
 set(include_files_list
+    afunix.h
     aio.h
     assert.h
     atomic.h
@@ -179,6 +181,7 @@ set(include_files_list
     sys/time.h
     sys/timeb.h
     sys/types.h
+    sys/un.h
     sys/uio.h
     sys/wait.h
     termio.h

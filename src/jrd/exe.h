@@ -493,6 +493,7 @@ public:
 		subProcedures(p),
 		outerMessagesMap(p),
 		outerVarsMap(p),
+		outerLocalTablesMap(p),
 		csb_schema(p),
 		csb_currentForNode(NULL),
 		csb_currentDMLNode(NULL),
@@ -616,6 +617,7 @@ public:
 	LeftPooledMap<MetaName, DeclareSubProcNode*> subProcedures;
 	NonPooledMap<USHORT, USHORT> outerMessagesMap;	// <inner, outer>
 	NonPooledMap<USHORT, USHORT> outerVarsMap;		// <inner, outer>
+	NonPooledMap<USHORT, USHORT> outerLocalTablesMap;	// <inner, outer>
 
 	MetaName csb_schema;
 
@@ -638,6 +640,8 @@ public:
 		QualifiedName getName(bool allowEmpty = true) const;
 
 		std::optional<USHORT> csb_cursor_number;	// Cursor number for this stream
+		std::optional<USHORT> csb_local_table_number;	// Local table number for this stream
+		bool csb_outer_local_table = false;	// Local table belongs to an outer PSQL scope
 		StreamType csb_stream;			// Map user context to internal stream
 		StreamType csb_view_stream;		// stream number for view relation, below
 		USHORT csb_flags;

@@ -414,23 +414,36 @@ PlanNode* PlanNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (context->ctx_relation)
 		{
-			RelationSourceNode* relNode = FB_NEW_POOL(pool) RelationSourceNode(pool);
-			relNode->dsqlContext = context;
-			node->recordSourceNode = relNode;
+			if (context->ctx_relation->rel_flags & REL_ltt_declared)
+			{
+				const auto localTableNode = FB_NEW_POOL(pool) LocalTableSourceNode(pool);
+				localTableNode->dsqlContext = context;
+				localTableNode->outerDecl = context->ctx_local_table_outer;
+				fb_assert(context->ctx_relation->rel_local_table_number.has_value());
+				localTableNode->tableNumber = context->ctx_local_table_outer ?
+					dsqlScratch->getOuterLocalTableNumber(context->ctx_relation->rel_local_table_number.value()) :
+					context->ctx_relation->rel_local_table_number.value();
+				node->recordSourceNode = localTableNode;
+			}
+			else
+			{
+				const auto relNode = FB_NEW_POOL(pool) RelationSourceNode(pool);
+				relNode->dsqlContext = context;
+				node->recordSourceNode = relNode;
+			}
 		}
 		else if (context->ctx_procedure)
 		{
-			ProcedureSourceNode* procNode = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
+			const auto procNode = FB_NEW_POOL(pool) ProcedureSourceNode(pool);
 			procNode->dsqlContext = context;
 			node->recordSourceNode = procNode;
 		}
 		else if (context->ctx_table_value_fun)
 		{
-			auto tableValueFunctionNode = FB_NEW_POOL(pool) TableValueFunctionSourceNode(pool);
+			const auto tableValueFunctionNode = FB_NEW_POOL(pool) TableValueFunctionSourceNode(pool);
 			tableValueFunctionNode->dsqlContext = context;
 			node->recordSourceNode = tableValueFunctionNode;
 		}
-		//// TODO: LocalTableSourceNode
 
 		// ASF: I think it's a error to let node->recordSourceNode be NULL here, but it happens
 		// at least since v2.5. See gen.cpp/gen_plan for more information.
@@ -646,6 +659,7 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 		*tdbb->getDefaultPool());
 
 	node->tableNumber = tableNumber;
+	node->outerDecl = csb->outerLocalTablesMap.exist(tableNumber);
 
 	AutoPtr<string> aliasString(FB_NEW_POOL(csb->csb_pool) string(csb->csb_pool));
 	csb->csb_blr_reader.getString(*aliasString);
@@ -666,6 +680,8 @@ LocalTableSourceNode* LocalTableSourceNode::parse(thread_db* tdbb, CompilerScrat
 
 		csb->csb_rpt[node->stream].csb_format = csb->csb_localTables[tableNumber]->format;
 		csb->csb_rpt[node->stream].csb_alias = aliasString.release();
+		csb->csb_rpt[node->stream].csb_local_table_number = tableNumber;
+		csb->csb_rpt[node->stream].csb_outer_local_table = node->outerDecl;
 	}
 
 	return node;
@@ -677,6 +693,7 @@ string LocalTableSourceNode::internalPrint(NodePrinter& printer) const
 
 	NODE_PRINT(printer, alias);
 	NODE_PRINT(printer, tableNumber);
+	NODE_PRINT(printer, outerDecl);
 	NODE_PRINT(printer, context);
 
 	return "LocalTableSourceNode";
@@ -715,6 +732,9 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 	copier.remap[stream] = newSource->stream;
 
 	newSource->context = context;
+	newSource->alias = alias;
+	newSource->tableNumber = tableNumber;
+	newSource->outerDecl = outerDecl;
 
 	if (tableNumber >= copier.csb->csb_localTables.getCount() || !copier.csb->csb_localTables[tableNumber])
 		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
@@ -723,6 +743,8 @@ LocalTableSourceNode* LocalTableSourceNode::copy(thread_db* tdbb, NodeCopier& co
 
 	element->csb_format = copier.csb->csb_localTables[tableNumber]->format;
 	element->csb_view_stream = copier.remap[0];
+	element->csb_local_table_number = tableNumber;
+	element->csb_outer_local_table = outerDecl;
 
 	if (alias.hasData())
 	{
@@ -748,6 +770,18 @@ void LocalTableSourceNode::pass2Rse(thread_db* tdbb, CompilerScratch* csb)
 	csb->csb_rpt[stream].activate();
 
 	pass2(tdbb, csb);
+
+	if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
+		ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+	const auto localTable = csb->csb_localTables[tableNumber];
+
+	if (localTable->useLtt)
+	{
+		const auto relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
+		csb->csb_rpt[stream].csb_relation =
+			csb->csb_resources->relations.registerResource(relation);
+	}
 }
 
 RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*innerSubStream*/)
@@ -759,7 +793,13 @@ RecordSource* LocalTableSourceNode::compile(thread_db* tdbb, Optimizer* opt, boo
 
 	auto localTable = csb->csb_localTables[tableNumber];
 
-	return FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableStream(csb, stream, localTable);
+	if (localTable->useLtt)
+	{
+		opt->compileLocalTable(stream);
+		return nullptr;
+	}
+
+	return FB_NEW_POOL(*tdbb->getDefaultPool()) LocalTableStream(csb, stream, localTable, outerDecl);
 }
 
 
@@ -3696,7 +3736,9 @@ void RseNode::planCheck(thread_db* tdbb, const CompilerScratch* csb) const
 
 	for (const auto node : rse_relations)
 	{
-		if (nodeIs<RelationSourceNode>(node) || nodeIs<ProcedureSourceNode>(node))
+		if (nodeIs<RelationSourceNode>(node) ||
+			nodeIs<LocalTableSourceNode>(node) ||
+			nodeIs<ProcedureSourceNode>(node))
 		{
 			const auto stream = node->getStream();
 
@@ -3734,10 +3776,27 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 	string planAlias;
 
 	RelationPermanent* planRelation = nullptr;
+	const DeclareLocalTableNode* planLocalTable = nullptr;
+
 	if (const auto relationNode = nodeAs<RelationSourceNode>(plan->recordSourceNode))
 	{
 		planRelation = relationNode->relation();
 		planAlias = relationNode->alias;
+	}
+	else if (const auto localTableNode = nodeAs<LocalTableSourceNode>(plan->recordSourceNode))
+	{
+		if (localTableNode->tableNumber >= csb->csb_localTables.getCount() ||
+			!csb->csb_localTables[localTableNode->tableNumber])
+		{
+			ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(localTableNode->tableNumber));
+		}
+
+		planLocalTable = csb->csb_localTables[localTableNode->tableNumber];
+
+		if (planLocalTable->useLtt)
+			planRelation = planLocalTable->getRelation(tdbb, nullptr)->getPermanent();
+
+		planAlias = localTableNode->alias;
 	}
 
 	RoutinePermanent* planProcedure = nullptr;
@@ -3747,7 +3806,7 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 		planAlias = procedureNode->alias;
 	}
 
-	fb_assert(planRelation || planProcedure);
+	fb_assert(planRelation || planProcedure || planLocalTable);
 
 	ObjectsArray<QualifiedMetaString> planAliasList;
 	if (planAlias.hasData())
@@ -3927,7 +3986,17 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 
 	// Make some validity checks
 
-	if (!tail->csb_relation && !tail->csb_procedure)
+	const DeclareLocalTableNode* tailLocalTable = nullptr;
+	if (tail->csb_local_table_number.has_value())
+	{
+		const auto tableNumber = tail->csb_local_table_number.value();
+		if (tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[tableNumber])
+			ERR_post(Arg::Gds(isc_bad_loctab_num) << Arg::Num(tableNumber));
+
+		tailLocalTable = csb->csb_localTables[tableNumber];
+	}
+
+	if (!tail->csb_relation && !tail->csb_procedure && !tailLocalTable)
 	{
 		// table or procedure %s is referenced in the plan but not the from list
 		ERR_post(Arg::Gds(isc_stream_not_found) << name.toQuotedString());
@@ -3935,6 +4004,9 @@ void RseNode::planSet(thread_db* tdbb, CompilerScratch* csb, PlanNode* plan)
 
 	if ((tail->csb_relation && planRelation &&
 		tail->csb_relation()->getId() != planRelation->getId() && !viewRelation) ||
+		(tailLocalTable && !planLocalTable) ||
+		(!tailLocalTable && planLocalTable) ||
+		(tailLocalTable && planLocalTable && tailLocalTable != planLocalTable) ||
 		(tail->csb_procedure && planProcedure &&
 		tail->csb_procedure()->getId() != planProcedure->getId() && !viewProcedure))
 	{
@@ -4529,7 +4601,11 @@ static RecordSourceNode* dsqlPassRelProc(DsqlCompilerScratch* dsqlScratch, Recor
 		relName.object = tblBasedFunNode->dsqlName;
 		relAlias = tblBasedFunNode->alias.c_str();
 	}
-	//// TODO: LocalTableSourceNode
+	else if (const auto localTableNode = nodeAs<LocalTableSourceNode>(source))
+	{
+		fb_assert(localTableNode->dsqlContext);
+		return source;
+	}
 	else
 		fb_assert(false);
 

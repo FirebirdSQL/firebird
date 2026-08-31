@@ -44,6 +44,7 @@ class RecordBuffer;
 class RelationSourceNode;
 class SelectNode;
 class GeneratorItem;
+struct index_desc;
 
 
 class ExceptionItem final : public PermanentStorage, public Printable
@@ -373,6 +374,28 @@ public:
 class DeclareLocalTableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>
 {
 public:
+	struct Index
+	{
+		explicit Index(MemoryPool& pool)
+			: name(pool),
+			  fieldIds(pool)
+		{
+		}
+
+		Index(MemoryPool& pool, const Index& other)
+			: name(pool, other.name),
+			  fieldIds(pool, other.fieldIds),
+			  unique(other.unique),
+			  descending(other.descending)
+		{
+		}
+
+		MetaName name;
+		Firebird::Array<USHORT> fieldIds;
+		bool unique = false;
+		bool descending = false;
+	};
+
 	struct Impure
 	{
 		RecordBuffer* recordBuffer;
@@ -380,7 +403,11 @@ public:
 
 public:
 	explicit DeclareLocalTableNode(MemoryPool& pool)
-		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool)
+		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool),
+		  dsqlName(pool),
+		  notNullFields(pool),
+		  fieldNames(pool),
+		  indexes(pool)
 	{
 	}
 
@@ -401,11 +428,27 @@ public:
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 public:
+	static void validateRecord(const DeclareLocalTableNode* table, const Record* record);
+
 	Impure* getImpure(thread_db* tdbb, Request* request, bool createWhenDead = true) const;
+	jrd_rel* getRelation(thread_db* tdbb, Request* request) const;
+	void getIndexDescription(thread_db* tdbb, FB_SIZE_T indexId, index_desc* idx) const;
+	void createFrameIndexes(thread_db* tdbb, Request* request) const;
+	void createFrameIndex(thread_db* tdbb, FB_SIZE_T indexId, jrd_tra* transaction) const;
+	void reset(thread_db* tdbb, Request* request) const;
+	void destroyRelation(thread_db* tdbb) const;
 
 public:
+	MetaName dsqlName;
+	NestConst<CreateRelationNode> dsqlTable;
+	dsql_rel* dsqlRelation = nullptr;
 	NestConst<Format> format;
+	Firebird::Array<UCHAR> notNullFields;
+	Firebird::Array<MetaName> fieldNames;
+	Firebird::ObjectsArray<Index> indexes;
+	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
+	bool useLtt = false;
 };
 
 
@@ -581,7 +624,7 @@ private:
 	const StmtNode* erase(thread_db* tdbb, Request* request, WhichTrigger whichTrig) const;
 
 public:
-	NestConst<RelationSourceNode> dsqlRelation;
+	NestConst<RecordSourceNode> dsqlRelation;
 	NestConst<BoolExprNode> dsqlBoolean;
 	NestConst<PlanNode> dsqlPlan;
 	NestConst<ValueListNode> dsqlOrder;
@@ -597,6 +640,8 @@ public:
 	NestConst<ForNode> forNode;			// parent implicit cursor, if present
 	StreamType stream = 0;
 	unsigned marks = 0;					// see StmtNode::IUD_MARK_xxx
+	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 
@@ -1296,6 +1341,8 @@ public:
 	unsigned marks = 0;						// see StmtNode::IUD_MARK_xxx
 	USHORT dsqlRseFlags = 0;
 	std::optional<USHORT> dsqlReturningLocalTableNumber;
+	std::optional<USHORT> localTableNumber;
+	bool localTableOuterDecl = false;
 };
 
 

@@ -43,7 +43,8 @@ namespace Firebird::Ntrace
 class TraceCfgReader
 {
 public:
-	static void readTraceConfiguration(const char* text, const PathName& databaseName, TracePluginConfig& config);
+	static void readTraceConfiguration(const char* text, const PathName& databaseName,
+		TracePluginConfig& config, const bool isLocalSession);
 
 private:
 	struct MatchPos
@@ -62,10 +63,12 @@ private:
 	};
 
 private:
-	TraceCfgReader(const char* text, const PathName& databaseName, TracePluginConfig& config) noexcept :
+	TraceCfgReader(const char* text, const PathName& databaseName, TracePluginConfig& config,
+			const bool isLocalSession) noexcept :
 		m_text(text),
 		m_databaseName(databaseName),
-		m_config(config)
+		m_config(config),
+		m_isLocalSession(isLocalSession)
 	{}
 
 	void readConfig();
@@ -79,6 +82,7 @@ private:
 	const PathName& m_databaseName;
 	MatchPos m_subpatterns[10]{};
 	TracePluginConfig& m_config;
+	const bool m_isLocalSession;
 };
 
 

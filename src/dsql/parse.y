@@ -731,6 +731,8 @@ using namespace Firebird::Jrd;
 %token <metaNamePtr> WITHIN
 %token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> CONSTANT
+%token <metaNamePtr> CONCURRENTLY
+%token <metaNamePtr> VALIDATE
 
 // precedence declarations for expression evaluation
 
@@ -863,6 +865,7 @@ using namespace Firebird::Jrd;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;
+	Jrd::AlterIndexNode* alterIndexNode;
 	Jrd::AlterDatabaseNode* alterDatabaseNode;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
@@ -1919,9 +1922,10 @@ unique_opt
 
 %type index_definition(<createIndexNode>)
 index_definition($createIndexNode)
-	: index_column_expr($createIndexNode) index_condition_opt
+	: index_column_expr($createIndexNode) index_condition_opt concurrently_opt
 		{
 			$createIndexNode->partial = $2;
+			$createIndexNode->concurrently = $3;
 		}
 	;
 
@@ -1950,6 +1954,12 @@ index_condition_opt
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+%type <boolVal> concurrently_opt
+concurrently_opt
+	: /* nothing */		{ $$ = false; }
+	| CONCURRENTLY		{ $$ = true; }
 	;
 
 // CREATE SHADOW
@@ -2441,6 +2451,15 @@ table_as_query_clause
 			node->withData = $5;
 			$$ = node;
 		}
+	| simple_table_name column_parens_opt AS '(' select_expr ')' with_data_opt
+		{
+			const auto node = newNode<CreateRelationNode>($1);
+			node->queryColumns = $2;
+			node->querySelectExpr = $5;
+			node->querySource = makeParseStr(YYPOSNARG(5), YYPOSNARG(5));
+			node->withData = $7;
+			$$ = node;
+		}
 	;
 
 %type <createRelationNode> table_clause
@@ -2570,26 +2589,26 @@ packaged_table_clause
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) packaged_table_indexes_opt($2)
+		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) inline_table_indexes_opt($2)
 			{
 				$$ = $2;
 			}
 	;
 
-%type packaged_table_indexes_opt(<createRelationNode>)
-packaged_table_indexes_opt($createRelationNode)
+%type inline_table_indexes_opt(<createRelationNode>)
+inline_table_indexes_opt($createRelationNode)
 	: /* nothing */
-	| packaged_table_indexes($createRelationNode)
+	| inline_table_indexes($createRelationNode)
 	;
 
-%type packaged_table_indexes(<createRelationNode>)
-packaged_table_indexes($createRelationNode)
-	: packaged_table_index($createRelationNode)
-	| packaged_table_indexes packaged_table_index($createRelationNode)
+%type inline_table_indexes(<createRelationNode>)
+inline_table_indexes($createRelationNode)
+	: inline_table_index($createRelationNode)
+	| inline_table_indexes inline_table_index($createRelationNode)
 	;
 
-%type packaged_table_index(<createRelationNode>)
-packaged_table_index($createRelationNode)
+%type inline_table_index(<createRelationNode>)
+inline_table_index($createRelationNode)
 	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] column_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
@@ -2597,7 +2616,7 @@ packaged_table_index($createRelationNode)
 			node->descending = $2;
 			node->columns = $6;
 
-			auto clause = newNode<RelationNode::AddPackagedTableIndexClause>(node);
+			auto clause = newNode<RelationNode::AddInlineTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);
 		}
 	;
@@ -3651,7 +3670,22 @@ local_nonforward_declarations
 
 %type <stmtNode> local_nonforward_declaration
 local_nonforward_declaration
-	: DECLARE var_decl_opt local_declaration_item ';'
+	: DECLARE local_opt TEMPORARY TABLE valid_symbol_name
+			{
+				RelationSourceNode* relationNode = newNode<RelationSourceNode>(QualifiedName(*$5));
+				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
+				$<createRelationNode>$->tempFlag = REL_temp_ltt;
+			}
+		'(' table_elements($<createRelationNode>6) ')' [YYVALID;] inline_table_indexes_opt($<createRelationNode>6) ';'
+		{
+			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
+			node->dsqlName = *$5;
+			node->dsqlTable = $<createRelationNode>6;
+			$$ = node;
+			$$->line = YYPOSNARG(1).firstLine;
+			$$->column = YYPOSNARG(1).firstColumn;
+		}
+	| DECLARE var_decl_opt local_declaration_item ';'
 		{
 			$$ = $3;
 			$$->line = YYPOSNARG(1).firstLine;
@@ -3777,6 +3811,11 @@ var_declaration_initializer
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+local_opt
+	: // nothing
+	| LOCAL
 	;
 
 var_decl_opt
@@ -5155,11 +5194,17 @@ drop_behaviour
 	| CASCADE		{ $$ = true; }
 	;
 
-%type <ddlNode>	alter_index_clause
+%type <alterIndexNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name index_active concurrently_opt
 		{
 			$$ = newNode<AlterIndexNode>(*$1, $2);
+			$$->concurrently = $3;
+		}
+	| symbol_index_name VALIDATE UNIQUE
+		{
+			$$ = newNode<AlterIndexNode>(*$1, false);
+			$$->validateUnique = true;
 		}
 	;
 
@@ -8925,6 +8970,7 @@ long_integer
 %type <valueExprNode> function
 function
 	: aggregate_function		{ $$ = $1; }
+	| hypothetical_set_function { $$ = $1; }
 	| non_aggregate_function
 	| custom_aggregate_function
 	| over_clause
@@ -9123,6 +9169,30 @@ within_group_specification_opt
 %type <valueListNode> within_group_specification
 within_group_specification
 	: WITHIN GROUP '(' order_clause ')'	{ $$ = $4; }
+	;
+
+%type <aggNode> hypothetical_set_function
+hypothetical_set_function
+	: hypothetical_set_function_prefix
+	| hypothetical_set_function_prefix FILTER '(' WHERE search_condition ')'
+		{
+			$$ = $1;
+
+			fb_assert($$->arg);
+			$$->arg = newNode<ValueIfNode>($5, $$->arg, NullNode::instance());
+		}
+	;
+
+%type <aggNode> hypothetical_set_function_prefix
+hypothetical_set_function_prefix
+	: DENSE_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_DENSE_RANK, $3, $5); }
+	| RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_RANK, $3, $5); }
+	| PERCENT_RANK '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_PERCENT_RANK, $3, $5); }
+	| CUME_DIST '(' value_list ')' within_group_specification
+	    { $$ = newNode<RankAggNode>(RankAggNode::TYPE_CUME_DIST, $3, $5); }
 	;
 
 %type <aggNode> window_function
@@ -10537,6 +10607,8 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| CONCURRENTLY
+	| VALIDATE
 	;
 
 %%

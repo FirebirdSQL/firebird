@@ -30,6 +30,7 @@
 #include "../jrd/LocalTemporaryTable.h"
 #include "../jrd/Relation.h"
 #include "../dsql/metd_proto.h"
+#include "../common/classes/auto.h"
 
 #include "Savepoint.h"
 
@@ -85,6 +86,8 @@ void UndoItem::release(jrd_tra* transaction)
 void VerbAction::garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SINT64 recordNumber,
 									   VerbAction* nextAction, Record* goingRecord)
 {
+	AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, vct_temp_instance_id);
+
 	// Clean up index entries and referenced BLOBs.
 	// This routine uses smaller set of staying record than original VIO_garbage_collect_idx().
 	//
@@ -163,6 +166,8 @@ void VerbAction::garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SI
 
 void VerbAction::mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* nextAction)
 {
+	AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, vct_temp_instance_id);
+
 	// Post bitmap of modified records and undo data to the next savepoint.
 	//
 	// Notes:
@@ -246,11 +251,13 @@ void VerbAction::mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* next
 		}
 	}
 
-	release(transaction);
+	discard(transaction);
 }
 
 void VerbAction::undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks, VerbAction* preserveAction)
 {
+	AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, vct_temp_instance_id);
+
 	// Undo changes recorded for this verb action.
 	// After that, clear the verb action and prepare it for later reuse.
 
@@ -359,10 +366,10 @@ void VerbAction::undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,
 		delete rpb.rpb_record;
 	}
 
-	release(transaction);
+	discard(transaction);
 }
 
-void VerbAction::release(jrd_tra* transaction)
+void VerbAction::discard(jrd_tra* transaction)
 {
 	// Release resources used by this verb action
 
@@ -385,11 +392,14 @@ void VerbAction::release(jrd_tra* transaction)
 
 // Savepoint implementation
 
-VerbAction* Savepoint::createAction(jrd_rel* relation)
+VerbAction* Savepoint::createAction(thread_db* tdbb, jrd_rel* relation, FB_UINT64 tempInstanceId)
 {
 	// Create action for the given relation. If it already exists, just return.
 
-	VerbAction* action = getAction(relation);
+	if (!tempInstanceId)
+		tempInstanceId = relation->getTempInstanceId(tdbb);
+
+	VerbAction* action = getAction(relation, tempInstanceId);
 
 	if (!action)
 	{
@@ -402,6 +412,7 @@ VerbAction* Savepoint::createAction(jrd_rel* relation)
 		m_actions = action;
 
 		action->vct_relation = relation;
+		action->vct_temp_instance_id = tempInstanceId;
 	}
 
 	return action;
@@ -425,24 +436,27 @@ void Savepoint::cleanupTempData()
 
 	for (VerbAction* action = m_actions; action; action = action->vct_next)
 	{
-		if (action->vct_relation->getPermanent()->rel_flags & REL_temp_tran)
+		if (action->vct_relation->getPermanent()->rel_flags & (REL_temp_tran | REL_temp_frame))
+			action->discard(m_transaction);
+	}
+}
+
+
+void Savepoint::discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId)
+{
+	for (auto actionPtr = &m_actions; *actionPtr;)
+	{
+		const auto action = *actionPtr;
+
+		if (action->vct_relation == relation && action->vct_temp_instance_id == tempInstanceId)
 		{
-			RecordBitmap::reset(action->vct_records);
-
-			if (action->vct_undo)
-			{
-				if (action->vct_undo->getFirst())
-				{
-					do
-					{
-						action->vct_undo->current().release(m_transaction);
-					} while (action->vct_undo->getNext());
-				}
-
-				delete action->vct_undo;
-				action->vct_undo = NULL;
-			}
+			action->discard(m_transaction);
+			*actionPtr = action->vct_next;
+			action->vct_next = m_freeActions;
+			m_freeActions = action;
 		}
+		else
+			actionPtr = &action->vct_next;
 	}
 }
 
@@ -469,7 +483,7 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 			VerbAction* preserveAction = nullptr;
 
 			if (preserveLocks && m_next)
-				preserveAction = m_next->createAction(action->vct_relation);
+				preserveAction = m_next->createAction(tdbb, action->vct_relation, action->vct_temp_instance_id);
 
 			action->undo(tdbb, m_transaction, preserveLocks, preserveAction);
 
@@ -595,7 +609,7 @@ Savepoint* Savepoint::rollforward(thread_db* tdbb, Savepoint* prior)
 
 			if (m_next)
 			{
-				nextAction = m_next->getAction(action->vct_relation);
+				nextAction = m_next->getAction(action->vct_relation, action->vct_temp_instance_id);
 
 				if (!nextAction) // next savepoint didn't touch this table yet - send whole action
 				{
@@ -838,36 +852,41 @@ void AutoSavePoint::rollback(bool preserveLocks)
 
 // StableCursorSavePoint implementation
 
-StableCursorSavePoint::StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool start)
+StableCursorSavePoint::StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool shouldStart)
 	: m_tdbb(tdbb), m_transaction(trans), m_number(0)
 {
-	if (!start)
-		return;
-
-	if (trans->tra_flags & TRA_system)
-		return;
-
-	if (!trans->tra_save_point)
-		return;
-
-	const auto savepoint = trans->startSavepoint();
-	m_number = savepoint->getNumber();
+	if (shouldStart)
+		m_number = startSavepoint(trans);
 }
 
+SavNumber StableCursorSavePoint::startSavepoint(jrd_tra* trans)
+{
+	if (!trans || (trans->tra_flags & TRA_system) || !trans->tra_save_point)
+		return 0;
+
+	return trans->startSavepoint()->getNumber();
+}
+
+void StableCursorSavePoint::releaseSavepoint(thread_db* tdbb, jrd_tra* trans, SavNumber& number)
+{
+	if (!number || !trans)
+	{
+		number = 0;
+		return;
+	}
+
+	while (trans->tra_save_point && trans->tra_save_point->getNumber() >= number)
+	{
+		fb_assert(!trans->tra_save_point->isChanging());
+		trans->releaseSavepoint(tdbb);
+	}
+
+	number = 0;
+}
 
 void StableCursorSavePoint::release()
 {
-	if (!m_number)
-		return;
-
-	while (m_transaction->tra_save_point &&
-		m_transaction->tra_save_point->getNumber() >= m_number)
-	{
-		fb_assert(!m_transaction->tra_save_point->isChanging());
-		m_transaction->releaseSavepoint(m_tdbb);
-	}
-
-	m_number = 0;
+	releaseSavepoint(m_tdbb, m_transaction, m_number);
 }
 
 

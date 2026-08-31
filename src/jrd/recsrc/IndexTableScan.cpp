@@ -70,7 +70,8 @@ void IndexTableScan::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_first | irsb_open;
 
 	record_param* const rpb = &request->req_rpb[m_stream];
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
+	const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+	RLCK_reserve_relation(tdbb, transaction, m_relation(), false);
 
 	rpb->rpb_number.setValue(BOF_NUMBER);
 
@@ -333,7 +334,9 @@ bool IndexTableScan::internalGetRecord(thread_db* tdbb) const
 
 			CCH_RELEASE(tdbb, &window);
 
-			if (VIO_get(tdbb, rpb, request->req_transaction, request->req_pool))
+			const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+
+			if (VIO_get(tdbb, rpb, transaction, request->req_pool))
 			{
 				if (const auto result = recordKey.compose(rpb->rpb_record))
 				{

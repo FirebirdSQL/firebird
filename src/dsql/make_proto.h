@@ -95,4 +95,9 @@ LiteralNode* MAKE_system_privilege(const char*);
 } // namespace Firebird::Jrd
 
 
+namespace Firebird::Jrd
+{
+	ValueExprNode* MAKE_constant_from_literal(LiteralNode*, const dsc*);
+} // namespace Firebird::Jrd
+
 #endif // DSQL_MAKE_PROTO_H

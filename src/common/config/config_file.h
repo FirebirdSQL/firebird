@@ -28,6 +28,8 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/auto.h"
+#include "../common/utils_proto.h"
+
 
 namespace Firebird
 {
@@ -53,6 +55,8 @@ class ConfigCache;
 
 class ConfigFile : public AutoStorage, public RefCounted
 {
+	using StreamName = fb_utils::SafePointer<const char>;
+
 public:
 	// flags for config file
 	static inline constexpr USHORT HAS_SUB_CONF		= 0x01;
@@ -61,6 +65,7 @@ public:
 	static inline constexpr USHORT NO_COMMENTS		= 0x08;
 	static inline constexpr USHORT CUSTOM_MACROS	= 0x10;
 	static inline constexpr USHORT REGEXP_SUPPORT	= 0x20;
+	static inline constexpr USHORT DENY_INCLUDE		= 0x40;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};
@@ -128,7 +133,7 @@ public:
 	}
 
 	// Substitute macro values in a string
-	bool macroParse(String& value, const char* fileName) const;
+	bool macroParse(String& value, const StreamName fileName) const;
 
 private:
 	enum LineType {LINE_BAD, LINE_REGULAR, LINE_START_SUB, LINE_END_SUB, LINE_INCLUDE};
@@ -142,11 +147,11 @@ private:
 	// utilities
 	bool getLine(Stream* stream, String&, unsigned int&);
 	void parse(Stream* stream);
-	LineType parseLine(const char* fileName, const String& input, Parameter& par);
-	bool translate(const char* fileName, const String& from, String& to) const;
-	[[noreturn]] void badLine(const char* fileName, const String& line);
-	void include(const char* currentFileName, const PathName& path);
-	bool wildCards(const char* currentFileName, const PathName& pathPrefix, FilesArray& components);
+	LineType parseLine(const StreamName fileName, const String& input, Parameter& par);
+	bool translate(const StreamName fileName, const String& from, String& to) const;
+	[[noreturn]] void badLine(const StreamName fileName, const String& line);
+	void include(const StreamName currentFileName, const PathName& path);
+	bool wildCards(const PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;
 	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
 	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;

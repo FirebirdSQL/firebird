@@ -1532,7 +1532,7 @@ DdlNode* CommentOnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			QualifiedName constantName(subName, name.schema, name.object); // name is a package
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant); // Search for a schema
 
-			if (!PackageReferenceNode::constantExists(tdbb, transaction, constantName))
+			if (!PackageReferenceNode::constantExists(tdbb, constantName))
 			{
 				status_exception::raise(Arg::Gds(isc_bad_constant_name) << constantName.toQuotedString());
 			}
@@ -5561,7 +5561,7 @@ void upgradeSingleIndex(thread_db* tdbb,
 
 	// request creation of new index
 	auto* store = FB_NEW_POOL(indexList.getPool()) StoreIndexNode(QualifiedName(index_name, schema_name, package_name),
-		node->getRelation(), expression_blr);
+		node->getRelation(), expression_blr, false);
 	indexList.push(store);
 }
 
@@ -7077,17 +7077,17 @@ DdlNode* RelationNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			case Clause::TYPE_ALTER_PUBLICATION:
 				break;
 
-			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+			case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 			{
-				auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(clause.getObject());
+				auto addInlineTableIndexClause = static_cast<AddInlineTableIndexClause*>(clause.getObject());
 
-				if (!addPackagedTableIndexClause->indexNode->relation)
+				if (!addInlineTableIndexClause->indexNode->relation)
 				{
-					addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+					addInlineTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 						RelationSourceNode(dsqlScratch->getPool(), name);
 				}
 
-				addPackagedTableIndexClause->indexNode->dsqlPass(dsqlScratch);
+				addInlineTableIndexClause->indexNode->dsqlPass(dsqlScratch);
 				break;
 			}
 
@@ -7336,7 +7336,7 @@ void RelationNode::validateLttClauses(const Array<NestConst<Clause>>& clauses)
 						"Only NOT NULL constraints without names are supported on LOCAL TEMPORARY TABLEs");
 				break;
 
-			case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+			case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 				break;
 
 			default:
@@ -9865,14 +9865,14 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 						static_cast<AddConstraintClause*>(i->getObject()), constraints);
 					break;
 
-				case Clause::TYPE_ADD_PACKAGED_TABLE_INDEX:
+				case Clause::TYPE_ADD_INLINE_TABLE_INDEX:
 				{
-					auto addPackagedTableIndexClause = static_cast<AddPackagedTableIndexClause*>(i->getObject());
-					const auto indexNode = addPackagedTableIndexClause->indexNode;
+					auto addInlineTableIndexClause = static_cast<AddInlineTableIndexClause*>(i->getObject());
+					const auto indexNode = addInlineTableIndexClause->indexNode;
 
 					if (!indexNode->relation)
 					{
-						addPackagedTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
+						addInlineTableIndexClause->indexNode->relation = FB_NEW_POOL(dsqlScratch->getPool())
 							RelationSourceNode(dsqlScratch->getPool(), name);
 					}
 
@@ -9894,7 +9894,7 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					}
 
 					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
-						addPackagedTableIndexClause->indexNode->name, definition));
+						addInlineTableIndexClause->indexNode->name, definition));
 
 					break;
 				}
@@ -9987,52 +9987,55 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 	{
 		MetaName fieldName;
 
+		// Unwrap aliases/derived fields/union maps/package references to reach the underlying
+		// node. This is used to find the field name (when no explicit column list is given) and,
+		// in all cases, to detect a direct reference to a source table column so its exact
+		// datatype (and, for named domains, the domain itself) can be copied.
+		const ValueExprNode* nameNode = item;
+		const char* aliasName = nullptr;
+
+		while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
+			nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
+		{
+			if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = aliasNode->name.c_str();
+
+				nameNode = aliasNode->value;
+			}
+			else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
+				nameNode = mapNode->map->map_node;
+			else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = derivedField->name.c_str();
+
+				nameNode = derivedField->value;
+			}
+			else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
+			{
+				if (!aliasName)
+					aliasName = referenceNode->getName();
+
+				nameNode = nullptr;
+			}
+		}
+
+		const auto sourceFieldNode = nodeAs<FieldNode>(nameNode);
+
 		if (queryColumns)
 			fieldName = nodeAs<FieldNode>(queryColumns->items[position])->dsqlName;
+		else if (aliasName)
+			fieldName = aliasName;
+		else if (sourceFieldNode)
+			fieldName = sourceFieldNode->dsqlField->fld_name;
 		else
 		{
-			const ValueExprNode* nameNode = item;
-			const char* aliasName = nullptr;
-
-			while (nodeIs<DsqlAliasNode>(nameNode) || nodeIs<DerivedFieldNode>(nameNode) ||
-				nodeIs<DsqlMapNode>(nameNode) || nodeAs<PackageReferenceNode>(nameNode))
-			{
-				if (const auto aliasNode = nodeAs<DsqlAliasNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = aliasNode->name.c_str();
-
-					nameNode = aliasNode->value;
-				}
-				else if (const auto mapNode = nodeAs<DsqlMapNode>(nameNode))
-					nameNode = mapNode->map->map_node;
-				else if (const auto derivedField = nodeAs<DerivedFieldNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = derivedField->name.c_str();
-
-					nameNode = derivedField->value;
-				}
-				else if (const auto referenceNode = nodeAs<PackageReferenceNode>(nameNode))
-				{
-					if (!aliasName)
-						aliasName = referenceNode->getName();
-
-					nameNode = nullptr;
-				}
-			}
-
-			if (aliasName)
-				fieldName = aliasName;
-			else if (const auto fieldNode = nodeAs<FieldNode>(nameNode))
-				fieldName = fieldNode->dsqlField->fld_name;
-			else
-			{
-				status_exception::raise(
-					Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
-					Arg::Gds(isc_dsql_command_err) <<
-					Arg::Gds(isc_specify_field_err));
-			}
+			status_exception::raise(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-607) <<
+				Arg::Gds(isc_dsql_command_err) <<
+				Arg::Gds(isc_specify_field_err));
 		}
 
 		for (const auto& name : names)
@@ -10064,30 +10067,80 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 
 		auto field = clause->field;
 		field->fld_name = fieldName;
-		field->dtype = desc.dsc_dtype;
-		field->length = desc.dsc_length;
-		field->scale = desc.dsc_scale;
-		field->subType = desc.dsc_sub_type;
 
+		// If the select item is a direct reference to a source table/view column, copy its
+		// exact datatype rather than relying only on the runtime descriptor. A column based on
+		// a named domain is copied as a full domain reference (inheriting its NOT NULL/DEFAULT/
+		// CHECK, like a hand-written column of that domain). A column based on an implicit
+		// (auto-generated) domain has its exact primitive type copied instead, since implicit
+		// domains must not be shared between tables (they are erased, unconditionally, when
+		// their owning column is dropped).
+		dsql_fld* sourceField = nullptr;
+
+		if (sourceFieldNode && sourceFieldNode->dsqlField &&
+			sourceFieldNode->dsqlField->fld_relation &&
+			!(sourceFieldNode->dsqlField->flags & FLD_computed) &&
+			sourceFieldNode->dsqlField->fieldSource.object.hasData())
+		{
+			sourceField = sourceFieldNode->dsqlField;
+		}
+
+		if (sourceField)
+		{
+			METD_get_domain(dsqlScratch->getTransaction(), field, sourceField->fieldSource);
+			field->flags &= ~(FLD_computed | FLD_system);
+		}
+
+		if (sourceField &&
+			!fb_utils::implicit_domain(sourceField->fieldSource.object.c_str()) &&
+			!(!(field->flags & FLD_nullable) && (desc.dsc_flags & DSC_nullable)))
+		{
+			// Named domain: reference it directly, like "<field name> <domain name>".
+			field->typeOfName = sourceField->fieldSource;
+			field->fullDomain = true;
+		}
+		else
+		{
+			if (!sourceField)
+			{
+				field->dtype = desc.dsc_dtype;
+				field->length = desc.dsc_length;
+				field->scale = desc.dsc_scale;
+				field->subType = desc.getSubType();
+
+				if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+				{
+					field->charSetId = desc.getCharSet();
+					field->collationId = desc.getCollation();
+				}
+
+				if (desc.isText())
+				{
+					const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
+					const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
+					field->charLength = (field->length - adjust) / bpc;
+				}
+				else if (desc.isBlob())
+					field->segLength = 80;
+				else if (desc.dsc_dtype == dtype_dec64)
+					field->precision = 16;
+				else if (desc.dsc_dtype == dtype_dec128)
+					field->precision = 34;
+				else if (desc.isExact() && field->subType != dsc_num_type_none)
+					field->setExactPrecision();
+			}
+		}
+
+		field->flags &= ~FLD_nullable;
 		if (desc.dsc_flags & DSC_nullable)
 			field->flags |= FLD_nullable;
 
-		if (desc.isText() || (desc.isBlob() && desc.getBlobSubType() == isc_blob_text))
+		if (!(field->flags & FLD_nullable))
 		{
-			field->charSetId = desc.getCharSet();
-			field->collationId = desc.getCollation();
+			auto& notNullConstraint = clause->constraints.add();
+			notNullConstraint.constraintType = AddConstraintClause::CTYPE_NOT_NULL;
 		}
 
-		if (desc.isText())
-		{
-			const USHORT adjust = (desc.dsc_dtype == dtype_varying) ? sizeof(USHORT) : 0;
-			const USHORT bpc = METD_get_charset_bpc(dsqlScratch->getTransaction(), field->charSetId.value_or(CS_NONE));
-			field->charLength = (field->length - adjust) / bpc;
-		}
-		else if (desc.isBlob())
-			field->segLength = 80;
-
-		field->setExactPrecision();
 		clauses.add(clause);
 
 		++position;
@@ -10177,7 +10230,7 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	if (externalFile)
 		status_exception::raise(Arg::Gds(isc_random) << "External file is not allowed for local temporary tables");
 
-	if (attachment->att_local_temporary_tables.count() >= MAX_LTT_COUNT)
+	if (attachment->att_local_temporary_tables.count() >= MAX_CREATED_LTT_COUNT)
 	{
 		ERR_post(Arg::Gds(isc_imp_exc) <<
 				 Arg::Gds(isc_random) <<
@@ -10247,14 +10300,14 @@ void CreateRelationNode::defineLocalTempTable(thread_db* tdbb, DsqlCompilerScrat
 	// Assign LTT relation ID
 
 	if (!attachment->att_next_ltt_id.has_value())
-		attachment->att_next_ltt_id = MAX_LTT_ID;
+		attachment->att_next_ltt_id = MAX_CREATED_LTT_ID;
 
 	const auto startLttId = attachment->att_next_ltt_id.value();
 
 	while (true)
 	{
-		if (attachment->att_next_ltt_id.value() >= MAX_LTT_ID)
-			attachment->att_next_ltt_id = MIN_LTT_ID;
+		if (attachment->att_next_ltt_id.value() >= MAX_CREATED_LTT_ID)
+			attachment->att_next_ltt_id = MIN_CREATED_LTT_ID;
 		else
 			++attachment->att_next_ltt_id.value();
 
@@ -13000,6 +13053,67 @@ Cached::Relation* ModifyIndexNode::getRelByIndex(thread_db* tdbb, const Qualifie
 	return relation;
 }
 
+void ModifyIndexNode::validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction, bool silent)
+{
+	try
+	{
+		ThreadStatusGuard local(tdbb);
+
+		static const CachedRequestId requestCacheId;
+		AutoCacheRequest request(tdbb, requestCacheId);
+
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+			IDX IN RDB$INDICES
+			WITH
+				IDX.RDB$SCHEMA_NAME EQ indexName.schema.c_str() AND
+				IDX.RDB$PACKAGE_NAME EQUIV NULLIF(indexName.package.c_str(), '') AND
+				IDX.RDB$INDEX_NAME EQ indexName.object.c_str()
+		{
+			if (IDX.RDB$INDEX_INACTIVE != 0)
+				status_exception::raise(Arg::Gds(isc_dyn_index_cant_validate_inactive));
+				// msg 328: "Can't validate inactive index"
+
+			if (IDX.RDB$UNIQUE_FLAG.NULL || !(IDX.RDB$UNIQUE_FLAG & IDX_UNIQUE))
+				status_exception::raise(Arg::Gds(isc_dyn_index_cant_validate_non_unique));
+				// msg 329: "Can't validate non-unique index"
+
+			fb_assert(IDX.RDB$UNIQUE_FLAG & IDX_UNIQUE);
+
+			if (!(IDX.RDB$UNIQUE_FLAG & IDX_NOT_VALIDATED))
+				status_exception::raise(Arg::Gds(isc_dyn_index_already_validated));
+				// msg 330: "Index uniqueness already validated"
+
+			const MetaId idxId = IDX.RDB$INDEX_ID - 1;
+
+			QualifiedName relName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
+			jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
+
+			if (relation && IDX_validate_unique(tdbb, relation, idxId))
+			{
+				MODIFY IDX
+					IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
+					IDX.RDB$UNIQUE_FLAG &= ~IDX_NOT_VALIDATED;
+				END_MODIFY
+			}
+		}
+		END_FOR
+	}
+	catch (const Exception& ex)
+	{
+		Arg::StatusVector err(ex);
+
+		if (!silent)
+		{
+			err.prepend(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_dyn_index_validation_failed) <<
+				indexName.toQuotedString());
+			ERR_post(err);
+		}
+
+		// msg 331: "Uniqueness validation of the index @1 failed"
+		err.prepend(Arg::Warning(isc_dyn_index_validation_failed) << indexName.toQuotedString());
+		ERR_post_warning(err);
+	}
+}
 
 //----------------------
 
@@ -13275,6 +13389,8 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 	Cached::Relation* partnerRelation = nullptr;
 	if (idx.idx_flags & idx_foreign)
 	{
+		fb_assert(!concurrently);
+
 		idx.idx_id = idx_invalid;
 
 		if (MET_lookup_partner(tdbb, indexRelation, &idx, indexName))
@@ -13328,16 +13444,22 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 	if (active)
 	{
 		// Actually create the index
-		protectRelations.lock();
+		if (!concurrently)
+			protectRelations.lock();
 
 		fb_assert(idxId <= dbb->dbb_max_idx);
 		idx.idx_id = idxId;
 		SelectivityList selectivity(*tdbb->getDefaultPool());
-		IDX_create_index(tdbb, IdxCreate::ForRollback, relation, &idx, indexName,
-			&idxId, transaction, selectivity);
+		IDX_create_index(tdbb,
+			concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
+			relation, &idx, indexName, &idxId, transaction, selectivity);
+
 		fb_assert(idxId == idx.idx_id);
 		if (!tempConn)
 			DFW_update_index(indexName, idxId, selectivity, transaction, relation);
+
+		if (concurrently && (idx.idx_flags & idx_unique))
+			validateUniqueIndex(tdbb, transaction, true);
 	}
 	else
 		fb_assert(idxId == dbb->dbb_max_idx);
@@ -13501,7 +13623,12 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		// Actually create the index
 
 		// Protect relation from modification to create consistent index
-		ProtectRelations protectRelation(tdbb, transaction, indexRelation);
+		ProtectRelations protectRelation(tdbb, transaction);
+		if (!concurrently)
+		{
+			protectRelation.addRelation(indexRelation);
+			protectRelation.lock();
+		}
 
 		SelectivityList selectivity(*tdbb->getDefaultPool());
 
@@ -13512,8 +13639,9 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		{
 			fb_assert(idxId <= dbb->dbb_max_idx);
 			idx.idx_id = idxId;
-			IDX_create_index(tdbb, IdxCreate::ForRollback, relation, &idx, indexName, &idxId,
-				transaction, selectivity);
+			IDX_create_index(tdbb,
+				concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
+				relation, &idx, indexName, &idxId, transaction, selectivity);
 
 			fb_assert(idxId == idx.idx_id);
 		}
@@ -13529,6 +13657,9 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 
 		if (!tempConn)
 			DFW_update_index(indexName, idx.idx_id, selectivity, transaction);
+
+		if (concurrently && (idx.idx_flags & idx_unique))
+			validateUniqueIndex(tdbb, transaction, true);
 	}
 	else
 		fb_assert(idxId == dbb->dbb_max_idx);
@@ -13609,7 +13740,12 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		if (definition.unique.isAssigned())
 		{
 			IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
-			IDX.RDB$UNIQUE_FLAG = SSHORT(definition.unique.asBool());
+			IDX.RDB$UNIQUE_FLAG = definition.unique.asBool() ? IDX_UNIQUE : 0;
+
+			if (definition.unique.asBool() && definition.concurrently.asBool())
+			{
+				IDX.RDB$UNIQUE_FLAG |= IDX_NOT_VALIDATED;
+			}
 		}
 
 		if (definition.inactive.isAssigned())
@@ -13766,6 +13902,9 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		{
 			fb_assert(definition.refRelation.package.isEmpty());
 
+			// Make sure CONCURRENTLY is not set
+			fb_assert(!definition.concurrently.asBool());
+
 			// If referring columns count <> referred columns return error.
 
 			if (definition.columns.getCount() != definition.refColumns.getCount())
@@ -13791,7 +13930,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				WITH IND.RDB$SCHEMA_NAME EQ definition.refRelation.schema.c_str() AND
 					 IND.RDB$RELATION_NAME EQ definition.refRelation.object.c_str() AND
 					 IND.RDB$PACKAGE_NAME MISSING AND
-					 IND.RDB$UNIQUE_FLAG NOT MISSING AND
+					 IND.RDB$UNIQUE_FLAG EQ IDX_UNIQUE AND
 					 (RC.RDB$CONSTRAINT_TYPE = PRIMARY_KEY OR
 					  RC.RDB$CONSTRAINT_TYPE = UNIQUE_CNSTRT) AND
 					 ISEG.RDB$PACKAGE_NAME MISSING
@@ -13876,6 +14015,9 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		{
 			fb_assert(definition.refRelation.package.isEmpty());
 
+			// Make sure CONCURRENTLY is not set
+			fb_assert(!definition.concurrently.asBool());
+
 			request2.reset(tdbb, drq_l_primary, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE metaTransaction)
@@ -13950,7 +14092,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 	}
 
 	auto* rel = MetadataCache::getPerm<Cached::Relation>(tdbb, definition.relation, CacheFlag::AUTOCREATE);
-	return FB_NEW_POOL(p) StoreIndexNode(definition.index, rel, definition.expressionBlr.hasData());
+	return FB_NEW_POOL(p) StoreIndexNode(definition.index, rel, definition.expressionBlr.hasData(), definition.concurrently.asBool());
 }
 
 
@@ -13961,9 +14103,13 @@ string CreateIndexNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, name);
 	NODE_PRINT(printer, unique);
 	NODE_PRINT(printer, descending);
+	NODE_PRINT(printer, active);
+	NODE_PRINT(printer, concurrently);
 	NODE_PRINT(printer, relation);
 	NODE_PRINT(printer, columns);
 	NODE_PRINT(printer, computed);
+	NODE_PRINT(printer, partial);
+	NODE_PRINT(printer, createIfNotExistsOnly);
 
 	return "CreateIndexNode";
 }
@@ -14009,6 +14155,7 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	definition.unique = unique;
 	definition.descending = descending;
 	definition.inactive = !active;
+	definition.concurrently = concurrently;
 
 	if (columns)
 	{
@@ -14203,6 +14350,8 @@ string AlterIndexNode::internalPrint(NodePrinter& printer) const
 	ModifyIndexNode::print(printer);
 
 	NODE_PRINT(printer, idxId);
+	NODE_PRINT(printer, concurrently);
+	NODE_PRINT(printer, validateUnique);
 
 	return "AlterIndexNode";
 }
@@ -14228,7 +14377,9 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 
 	if (MET_get_ltt_index(transaction->getAttachment(), indexName, &ltt, &lttIndex))
 	{
-		alterLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+		if (!validateUnique)
+			alterLocalTempIndex(tdbb, dsqlScratch, transaction, ltt, lttIndex);
+
 		savePoint.release();	// everything is ok
 		return;
 	}
@@ -14236,7 +14387,11 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 	if (tdbb->getDatabase()->readOnly())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
-	if (step1(tdbb, dsqlScratch, transaction))
+	if (validateUnique)
+	{
+		validateUniqueIndex(tdbb, transaction, false);
+	}
+	else if (step1(tdbb, dsqlScratch, transaction))
 	{
 		if (idxId.has_value())
 		{
@@ -14246,7 +14401,7 @@ void AlterIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, 
 		else
 		{
 			// Index is a brand new
-			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex);
+			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex, concurrently);
 			storeNode.modify(tdbb, transaction);
 		}
 	}
@@ -14325,7 +14480,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 	{
 		if (idxId.has_value())
 		{
-			if (! IDX_activate_index(tdbb, indexRelation, idxId.value()))
+			if (!IDX_activate_index(tdbb, indexRelation, idxId.value()))
 			{
 				// No index to restore, create a new one from scratch
 				AUTO_HANDLE(rq1);
@@ -14351,7 +14506,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 		if (!idxId.has_value())
 		{
 			// One way or another the index was just created, finalize it
-			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex);
+			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex, concurrently);
 			fb_assert(indexRelation->getBasePages()->rel_index_root);
 			storeNode.step2(tdbb, transaction);
 			return;
@@ -14737,7 +14892,10 @@ void DropIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 	fb_assert(idxId >= 0 && idxId < dbb->dbb_max_idx);
 
 	if (IDX_mark_index(tdbb, indexRelation, idxId))
-		indexRelation->eraseIndex(tdbb, idxId);
+	{
+		if (tdbb->tdbb_flags & TDBB_use_db_page_space)
+			indexRelation->eraseIndex(tdbb, idxId);
+	}
 }
 
 
@@ -17539,6 +17697,22 @@ string AlterDatabaseNode::internalPrint(NodePrinter& printer) const
 
 void AlterDatabaseNode::checkPermission(thread_db* tdbb)
 {
+	Jrd::Attachment* const attachment = tdbb->getAttachment();
+
+	const unsigned nbackupClauses = CLAUSE_BEGIN_BACKUP | CLAUSE_END_BACKUP;
+
+	const bool hasNonBackupClauses =
+		(clauses & ~nbackupClauses) ||
+		differenceFile.hasData() ||
+		setDefaultCharSet.hasData() ||
+		setDefaultCollation.hasData() ||
+		linger >= 0 ||
+		ssDefiner.isAssigned() ||
+		cryptPlugin.hasData();
+
+	if (!hasNonBackupClauses && attachment->locksmith(tdbb, USE_NBACKUP_UTILITY))
+		return;
+
 	SCL_check_database(tdbb, SCL_alter);
 }
 

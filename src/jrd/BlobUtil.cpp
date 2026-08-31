@@ -53,7 +53,7 @@ namespace
 			status_exception::raise(Arg::Gds(isc_bad_segstr_id));
 
 		const auto blobIndex = &transaction->tra_blobs->current();
-		fb_assert(blobIndex->bli_blob_object);
+		fb_assert(blobIndex->bli_materialized || blobIndex->bli_blob_object);
 
 		return blobIndex;
 	}
@@ -71,7 +71,7 @@ IExternalResultSet* BlobUtilPackage::cancelBlobProcedure(ThrowStatusExceptionWra
 
 	if (const auto blobIdx = getTempBlobIndexFromId(tdbb, blobId))
 	{
-		if (blobIdx->bli_materialized)
+		if (blobIdx->bli_materialized || (blobIdx->bli_blob_object->blb_flags & BLB_dltt))
 			status_exception::raise(Arg::Gds(isc_bad_segstr_id));
 
 		const auto blob = blobIdx->bli_blob_object;
@@ -107,7 +107,9 @@ void BlobUtilPackage::isWritableFunction(ThrowStatusExceptionWrapper* status,
 
 	if (const auto blobIdx = getTempBlobIndexFromId(tdbb, blobId))
 	{
-		if (!blobIdx->bli_materialized && (blobIdx->bli_blob_object->blb_flags & BLB_close_on_read))
+		if (!blobIdx->bli_materialized &&
+			!(blobIdx->bli_blob_object->blb_flags & BLB_dltt) &&
+			(blobIdx->bli_blob_object->blb_flags & BLB_close_on_read))
 		{
 			out->boolean = FB_TRUE;
 			return;

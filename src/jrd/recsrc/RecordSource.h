@@ -228,6 +228,125 @@ namespace Firebird::Jrd {
 
 	// Primary (table scan) access methods
 
+	class LocalTableContext final
+	{
+	public:
+		LocalTableContext(thread_db* tdbb, Request* request,
+			const DeclareLocalTableNode* table, bool outerDecl);
+		~LocalTableContext();
+
+		LocalTableContext(const LocalTableContext&) = delete;
+		LocalTableContext& operator= (const LocalTableContext&) = delete;
+
+	public:
+		jrd_tra* getTransaction() const noexcept
+		{
+			return m_transaction;
+		}
+
+		Request* getLocalTableRequest() const noexcept
+		{
+			return m_localTableRequest;
+		}
+
+		Request* getRequest() const noexcept
+		{
+			return m_request;
+		}
+
+		FB_UINT64 getFrameId() const noexcept
+		{
+			return m_frameId;
+		}
+
+	private:
+		thread_db* m_tdbb;
+		Request* m_request;
+		Request* m_localTableRequest;
+		jrd_tra* m_oldTransaction;
+		jrd_tra* m_transaction;
+		FB_UINT64 m_oldFrameId;
+		FB_UINT64 m_frameId;
+		Request::SnapshotData m_oldSnapshot;
+		bool m_restoreSnapshot = false;
+		bool m_switched = false;
+	};
+
+	class LocalTableScan : public RecordStream
+	{
+	protected:
+		struct LocalImpure : public RecordSource::Impure
+		{
+			Request* localTableRequest = nullptr;
+			jrd_tra* cursorTransaction = nullptr;
+			SavNumber cursorSavepoint;
+		};
+
+	protected:
+		LocalTableScan(CompilerScratch* csb, StreamType stream,
+			const DeclareLocalTableNode* table = nullptr, bool outerDecl = false,
+			const Format* format = nullptr);
+
+	protected:
+		void setupLocalTable(thread_db* tdbb, const LocalTableContext& context) const;
+		void initializeLocalTable(const LocalTableContext& context) const;
+		void closeLocalTable(thread_db* tdbb) const;
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+		void nullRecords(thread_db* tdbb) const override;
+
+	protected:
+		const DeclareLocalTableNode* m_localTable;
+		const bool m_outerDecl;
+		const ULONG m_localImpure;
+	};
+
+	class LocalTableRecordSource final : public RecordSource
+	{
+		struct Impure : public RecordSource::Impure
+		{
+			Request* localTableRequest = nullptr;
+			jrd_tra* cursorTransaction = nullptr;
+			SavNumber cursorSavepoint;
+		};
+
+	public:
+		LocalTableRecordSource(CompilerScratch* csb, StreamType stream, RecordSource* next,
+			const DeclareLocalTableNode* table, bool outerDecl);
+
+	public:
+		void close(thread_db* tdbb) const override;
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+		void markRecursive() override;
+		void invalidateRecords(Request* request) const override;
+
+		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
+		void nullRecords(thread_db* tdbb) const override;
+
+		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
+		{
+			m_next->setAnyBoolean(anyBoolean, ansiAny, ansiNot);
+		}
+
+	protected:
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+		void internalOpen(thread_db* tdbb) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+
+	private:
+		const StreamType m_stream;
+		NestConst<RecordSource> m_next;
+		const DeclareLocalTableNode* m_localTable;
+		const bool m_outerDecl;
+	};
+
 	class FullTableScan final : public RecordStream
 	{
 		struct Impure : public RecordSource::Impure
@@ -1448,10 +1567,11 @@ namespace Firebird::Jrd {
 		Array<const NestValueArray*> m_keys;
 	};
 
-	class LocalTableStream final : public RecordStream
+	class LocalTableStream final : public LocalTableScan
 	{
 	public:
-		LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table);
+		LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table,
+			bool outerDecl);
 
 		void close(thread_db* tdbb) const override;
 
@@ -1461,12 +1581,11 @@ namespace Firebird::Jrd {
 		void getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const override;
 
 	protected:
+		using Impure = LocalTableScan::LocalImpure;
+
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
-
-	private:
-		const DeclareLocalTableNode* m_table;
 	};
 
 	class Union final : public RecordStream

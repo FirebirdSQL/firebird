@@ -55,7 +55,7 @@ void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
 
 [[noreturn]] void Resources::outdated()
 {
-	ERR_post(Arg::Gds(isc_random) << "Statement format outdated, need to be reprepared");
+	ERR_post(Arg::Gds(isc_old_format));
 }
 
 Resources::~Resources()

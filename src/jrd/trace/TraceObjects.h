@@ -82,7 +82,7 @@ private:
 };
 
 
-class TraceRuntimeStats :
+class TraceRuntimeStats final :
 	public AutoIface<IPerformanceStatsImpl<TraceRuntimeStats, CheckStatusWrapper>>
 {
 	static constexpr unsigned GLOBAL_COUNTERS = 4; // PerformanceInfo::{FETCHES|READS|MARKS|WRITES}
@@ -203,7 +203,7 @@ private:
 };
 
 
-class TraceConnectionImpl :
+class TraceConnectionImpl final :
 	public AutoIface<ITraceDatabaseConnectionImpl<TraceConnectionImpl, CheckStatusWrapper>>
 {
 public:
@@ -230,7 +230,7 @@ private:
 };
 
 
-class TraceTransactionImpl :
+class TraceTransactionImpl final :
 	public AutoIface<ITraceTransactionImpl<TraceTransactionImpl, CheckStatusWrapper>>
 {
 public:
@@ -314,7 +314,7 @@ private:
 };
 
 
-class TraceBLRStatementImpl : public BLRPrinter<TraceBLRStatementImpl>
+class TraceBLRStatementImpl final : public BLRPrinter<TraceBLRStatementImpl>
 {
 public:
 	TraceBLRStatementImpl(const Statement* stmt, TraceRuntimeStats* stats) :
@@ -344,7 +344,7 @@ private:
 };
 
 
-class TraceFailedBLRStatement : public BLRPrinter<TraceFailedBLRStatement>
+class TraceFailedBLRStatement final : public BLRPrinter<TraceFailedBLRStatement>
 {
 public:
 	TraceFailedBLRStatement(const unsigned char* blr, unsigned length) :
@@ -357,7 +357,7 @@ public:
 };
 
 
-class TraceSQLStatementImpl :
+class TraceSQLStatementImpl final :
 	public AutoIface<ITraceSQLStatementImpl<TraceSQLStatementImpl, CheckStatusWrapper>>,
 	public StatementHolder
 {
@@ -400,7 +400,7 @@ public:
 	}
 
 private:
-	class DSQLParamsImpl :
+	class DSQLParamsImpl final :
 		public AutoIface<ITraceParamsImpl<DSQLParamsImpl, CheckStatusWrapper>>
 	{
 	public:
@@ -428,7 +428,7 @@ private:
 };
 
 
-class TraceFailedSQLStatement :
+class TraceFailedSQLStatement final :
 	public AutoIface<ITraceSQLStatementImpl<TraceFailedSQLStatement, CheckStatusWrapper>>
 {
 public:
@@ -452,7 +452,7 @@ private:
 };
 
 
-class TraceContextVarImpl :
+class TraceContextVarImpl final :
 	public AutoIface<ITraceContextVariableImpl<TraceContextVarImpl, CheckStatusWrapper>>
 {
 public:
@@ -477,7 +477,7 @@ private:
 // forward declaration
 class TraceDescriptors;
 
-class TraceParamsImpl :
+class TraceParamsImpl final :
 	public AutoIface<ITraceParamsImpl<TraceParamsImpl, CheckStatusWrapper>>
 {
 public:
@@ -503,6 +503,8 @@ public:
 		m_traceParams(this)
 	{
 	}
+
+	virtual ~TraceDescriptors() = default;
 
 	FB_SIZE_T getCount()
 	{
@@ -535,7 +537,7 @@ private:
 };
 
 
-class TraceDscFromValues : public TraceDescriptors
+class TraceDscFromValues final : public TraceDescriptors
 {
 public:
 	TraceDscFromValues(Request* request, const ValueListNode* params) :
@@ -544,7 +546,7 @@ public:
 	{}
 
 protected:
-	void fillParams();
+	void fillParams() override;
 
 private:
 	Request* const m_request;
@@ -552,7 +554,7 @@ private:
 };
 
 
-class TraceDscFromMsg : public TraceDescriptors
+class TraceDscFromMsg final : public TraceDescriptors
 {
 public:
 	TraceDscFromMsg(const Format* format, const UCHAR* inMsg, ULONG inMsgLength) :
@@ -562,7 +564,7 @@ public:
 	{}
 
 protected:
-	void fillParams();
+	void fillParams() override;
 
 private:
 	const Format* const m_format;
@@ -571,7 +573,7 @@ private:
 };
 
 
-class TraceDscFromDsc : public TraceDescriptors
+class TraceDscFromDsc final : public TraceDescriptors
 {
 public:
 	TraceDscFromDsc(const dsc* desc)
@@ -586,11 +588,11 @@ public:
 	}
 
 protected:
-	void fillParams() {}
+	void fillParams() override {}
 };
 
 
-class TraceProcedureImpl :
+class TraceProcedureImpl final :
 	public AutoIface<ITraceProcedureImpl<TraceProcedureImpl, CheckStatusWrapper>>,
 	public StatementHolder
 {
@@ -652,7 +654,7 @@ private:
 };
 
 
-class TraceFunctionImpl :
+class TraceFunctionImpl final :
 	public AutoIface<ITraceFunctionImpl<TraceFunctionImpl, CheckStatusWrapper>>,
 	public StatementHolder
 {
@@ -723,7 +725,7 @@ private:
 };
 
 
-class TraceTriggerImpl :
+class TraceTriggerImpl final :
 	public AutoIface<ITraceTriggerImpl<TraceTriggerImpl, CheckStatusWrapper>>,
 	public StatementHolder
 {
@@ -803,7 +805,7 @@ private:
 };
 
 
-class TraceServiceImpl :
+class TraceServiceImpl final :
 	public AutoIface<ITraceServiceConnectionImpl<TraceServiceImpl, CheckStatusWrapper>>
 {
 public:
@@ -831,7 +833,7 @@ private:
 };
 
 
-class TraceInitInfoImpl :
+class TraceInitInfoImpl final :
 	public AutoIface<ITraceInitInfoImpl<TraceInitInfoImpl, CheckStatusWrapper>>
 {
 public:
@@ -854,6 +856,7 @@ public:
 
 	const char* getFirebirdRootDirectory();
 	const char* getDatabaseName()		{ return m_filename; }
+	unsigned getTraceSessionFlags()			{ return m_session.ses_flags; }
 
 	ITraceDatabaseConnection* getConnection()
 	{
@@ -874,7 +877,7 @@ private:
 };
 
 
-class TraceStatusVectorImpl :
+class TraceStatusVectorImpl final :
 	public AutoIface<ITraceStatusVectorImpl<TraceStatusVectorImpl, CheckStatusWrapper>>
 {
 public:
@@ -908,7 +911,7 @@ private:
 	Kind kind;
 };
 
-class TraceSweepImpl :
+class TraceSweepImpl final :
 	public AutoIface<ITraceSweepInfoImpl<TraceSweepImpl, CheckStatusWrapper>>
 {
 public:

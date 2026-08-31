@@ -53,6 +53,7 @@ namespace Firebird::Jrd
 	void IDX_statistics(thread_db*, Cached::Relation*, USHORT, SelectivityList&);
 	void IDX_store(thread_db*, record_param*, jrd_tra*);
 	void IDX_modify_flag_uk_modified(thread_db*, record_param*, record_param*, jrd_tra*);
+	bool IDX_validate_unique(thread_db* tdbb, jrd_rel* relation, MetaId id);
 
 } // namespace Firebird::Jrd
 

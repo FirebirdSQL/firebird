@@ -6468,7 +6468,7 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 
 	// Use context to check conflicts beween <relation>.<field> and <package>.<constant>
 	dsql_ctx packageContext(dsqlScratch->getPool());
-	{ // Consatnts
+	{ // Constants
 
 		QualifiedName constantName(dsqlName,
 			dsqlQualifier.schema.hasData() ? dsqlQualifier.schema : dsqlScratch->package.schema,
@@ -6478,7 +6478,8 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 		{
 			dsqlScratch->qualifyExistingName(constantName, obj_package_constant);
 
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantName))
+			dsc constantDsc{};
+			if (PackageReferenceNode::constantExists(tdbb, constantName, &constantDsc))
 			{
 				// Alias is a package name, not a constant
 				packageContext.ctx_alias.push(QualifiedName(constantName.package, constantName.schema));
@@ -6486,7 +6487,8 @@ ValueExprNode* FieldNode::internalDsqlPass(DsqlCompilerScratch* dsqlScratch, Rec
 				ambiguousCtxStack.push(&packageContext);
 
 				MemoryPool& pool = dsqlScratch->getPool();
-				node = FB_NEW_POOL(pool) PackageReferenceNode(pool, constantName, blr_pkg_reference_to_constant);
+				node = FB_NEW_POOL(pool) PackageReferenceNode(pool,
+					constantName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 	}
@@ -6679,7 +6681,8 @@ void FieldNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	if (dsqlIndices)
 		dsqlScratch->appendUChar(blr_index);
 
-	if (DDL_ids(dsqlScratch))
+	if (DDL_ids(dsqlScratch) ||
+		(dsqlContext->ctx_relation && (dsqlContext->ctx_relation->rel_flags & REL_ltt_declared)))
 	{
 		dsqlScratch->appendUChar(blr_fid);
 		GEN_stuff_context(dsqlScratch, dsqlContext);
@@ -7732,6 +7735,11 @@ DmlNode* LiteralNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 
 			l = csb->csb_blr_reader.getWord();
 			q = csb->csb_blr_reader.getPos();
+
+			unsigned int offset = csb->csb_blr_reader.getOffset();
+			if (offset + l > csb->csb_blr_reader.getLength())
+				(Arg::Gds(isc_invalid_blr) << Arg::Num(offset)).raise();
+
 			SSHORT scale = 0;
 			UCHAR dtype = CVT_get_numeric(q, l, &scale, p);
 			node->litDesc.dsc_dtype = dtype;
@@ -14241,11 +14249,13 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		{
 			thread_db* tdbb = JRD_get_thread_data();
 			QualifiedName constantFullName(dsqlName, dsqlScratch->package.schema, dsqlScratch->package.object);
-			if (PackageReferenceNode::constantExists(tdbb, dsqlScratch->getTransaction(), constantFullName))
+
+			dsc constantDsc{};
+			if (PackageReferenceNode::constantExists(tdbb, constantFullName, &constantDsc))
 			{
 				delete node;
 				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(),
-					constantFullName, blr_pkg_reference_to_constant);
+					constantFullName, blr_pkg_reference_to_constant, constantDsc);
 			}
 		}
 

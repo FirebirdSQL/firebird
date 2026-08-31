@@ -80,7 +80,7 @@ namespace Firebird::Jrd {
 	public:
 		MetaId id;							// routine ID
 		QualifiedName name;					// routine name
-		QualifiedName securityName;				// security class name
+		QualifiedName securityName;			// security class name
 		bool subRoutine;                    // Is this a subroutine?
 		MetaName owner;
 	};

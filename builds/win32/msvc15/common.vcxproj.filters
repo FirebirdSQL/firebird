@@ -141,6 +141,9 @@
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp">
       <Filter>classes</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\ThreadCleanup.cpp">
+      <Filter>classes</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp">
       <Filter>classes</Filter>
     </ClCompile>
@@ -474,6 +477,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\ThreadCleanup.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h">

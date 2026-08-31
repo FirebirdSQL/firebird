@@ -319,7 +319,7 @@ void afterUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 
 		ModifyIndexList oneItemList(pool);
 		auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
-		oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, relation, expressionIndex));
+		oneItemList.push(FB_NEW_POOL(pool) StoreIndexNode(indexName, relation, expressionIndex, false));
 		oneItemList.exec(tdbb, tdbb->getTransaction());
 	}
 }

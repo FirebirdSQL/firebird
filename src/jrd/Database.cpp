@@ -107,6 +107,13 @@ namespace Firebird::Jrd
 		return dbb_tip_cache->generateStatementId();
 	}
 
+	FB_UINT64 Database::generateLocalTableId()
+	{
+		if (!dbb_tip_cache)
+			return 0;
+		return dbb_tip_cache->generateLocalTableId();
+	}
+
 	AttNumber Database::getLatestAttachmentId() const
 	{
 		if (!dbb_tip_cache)
@@ -962,7 +969,7 @@ namespace Firebird::Jrd
 		bool rc = dbb_del_pages.findEx(
 			[relation](const DelPagesMarker& item) -> int
 			{
-				return std::greater{}(item.relation, relation);
+				return item.relation == relation ? 0 : 1;
 			},
 			dummy);
 		fb_assert(!rc);
@@ -979,10 +986,9 @@ namespace Firebird::Jrd
 		bool found = dbb_del_pages.findEx(
 			[relation](const DelPagesMarker& item) -> int
 			{
-				return std::greater{}(item.relation, relation);
+				return item.relation == relation ? 0 : 1;
 			},
 			pos);
-		fb_assert(found);
 
 		if (found)
 			dbb_del_pages.remove(pos);

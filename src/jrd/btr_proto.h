@@ -59,11 +59,13 @@ namespace Firebird::Jrd
 	bool	BTR_next_index(thread_db*, Cached::Relation*, jrd_tra*, index_desc*, win*,
 					   RelationPages* = nullptr);
 	void	BTR_remove(thread_db*, win*, index_insertion*);
-	void	BTR_reserve_slot(thread_db*, IndexCreation&, IndexCreateLock&);
+	void	BTR_reserve_slot(thread_db*, IndexCreation&);
 	void	BTR_selectivity(thread_db*, Cached::Relation*, MetaId, SelectivityList&);
 	bool	BTR_types_comparable(const dsc& target, const dsc& source);
 	Ods::index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, win* window);
 	const Ods::index_root_page* BTR_fetch_root(const char* from, thread_db* tdbb, win* window);
+	void	BTR_delete_tree(thread_db*, USHORT, USHORT, PageNumber);
+	void	BTR_merge_index(thread_db*, jrd_tra*, jrd_rel*, index_desc*, PageNumber);
 
 	inline constexpr USHORT BTR_DESCRIBE_NO_THROW =		0x0001;
 	inline constexpr USHORT BTR_DESCRIBE_SYSTEM_RQ =	0x0002;

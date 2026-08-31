@@ -150,6 +150,7 @@ public:
 	Array<ULONG*> invariants;	// pointer to nodes invariant offsets
 	RefStrPtr sqlText;		// SQL text (encoded in the metadata charset)
 	Array<UCHAR> blr;			// BLR for non-SQL query
+	Array<bool> outerLocalTables;	// local tables declared in an outer PSQL scope
 	MapFieldInfo mapFieldInfo;			// Map field name to field info
 
 private:

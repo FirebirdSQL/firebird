@@ -163,6 +163,11 @@ public:
 			|| checkForShutdown();
 	}
 
+	bool hasAuthBlock() override
+	{
+		return svc_auth_block.hasData();
+	}
+
 	// Get authentication block if present
 	unsigned int getAuthBlock(const unsigned char** bytes) override;
 

@@ -57,7 +57,8 @@ OuterJoin::OuterJoin(thread_db* aTdbb, Optimizer* opt,
 		auto& joinStream = joinStreams[pos];
 		joinStream.node = node;
 
-		if (nodeIs<RelationSourceNode>(node) || nodeIs<LocalTableSourceNode>(node))
+		if (nodeIs<RelationSourceNode>(node) ||
+			(nodeIs<LocalTableSourceNode>(node) && csb->csb_rpt[node->getStream()].csb_relation))
 		{
 			const auto stream = node->getStream();
 			fb_assert(!(csb->csb_rpt[stream].csb_flags & csb_active));
@@ -215,6 +216,4 @@ RecordSource* OuterJoin::process()
 
 	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
 };
-
-
 }	// namespace Firebird::Jrd

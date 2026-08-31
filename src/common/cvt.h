@@ -78,6 +78,15 @@ enum EXPECT_DATETIME
 	expect_sql_time_tz
 };
 
+enum class SpecialDateTime
+{
+	NONE,
+	NOW,
+	TODAY,
+	TOMORROW,
+	YESTERDAY
+};
+
 class Int128;
 
 
@@ -85,9 +94,9 @@ void CVT_conversion_error(const dsc*, ErrorFunction, const Exception* = nullptr)
 double CVT_power_of_ten(const int);
 SLONG CVT_get_long(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
 bool CVT_get_boolean(const dsc*, ErrorFunction);
-double CVT_get_double(const dsc*, DecimalStatus, ErrorFunction, bool* getNumericOverflow = nullptr);
-Decimal64 CVT_get_dec64(const dsc*, DecimalStatus, ErrorFunction);
-Decimal128 CVT_get_dec128(const dsc*, DecimalStatus, ErrorFunction);
+	double CVT_get_double(const dsc*, DecimalStatus, ErrorFunction, bool* getNumericOverflow = nullptr);
+	Decimal64 CVT_get_dec64(const dsc*, DecimalStatus, ErrorFunction);
+	Decimal128 CVT_get_dec128(const dsc*, DecimalStatus, ErrorFunction);
 Int128 CVT_get_int128(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
 Int128 CVT_hex_to_int128(const char* str, USHORT len);
 USHORT CVT_make_string(const dsc*, TTypeId, const char**, vary*, USHORT, DecimalStatus, ErrorFunction);
@@ -96,10 +105,11 @@ void CVT_move(const dsc*, dsc*, DecimalStatus, ErrorFunction, bool trustedSource
 SSHORT CVT_decompose(const char*, USHORT, Int128*, ErrorFunction);
 USHORT CVT_get_string_ptr(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, DecimalStatus, ErrorFunction);
 USHORT CVT_get_string_ptr_common(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, DecimalStatus, Callbacks*);
-SINT64 CVT_get_int64(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
-SQUAD CVT_get_quad(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
-void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const EXPECT_DATETIME,
-	bool, Callbacks*);
+	SINT64 CVT_get_int64(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
+	SQUAD CVT_get_quad(const dsc*, SSHORT, DecimalStatus, ErrorFunction);
+	SpecialDateTime CVT_get_special_datetime(const char*, FB_SIZE_T);
+	void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const EXPECT_DATETIME,
+		bool, Callbacks*);
 const UCHAR* CVT_get_bytes(const dsc*, unsigned&);
 
 

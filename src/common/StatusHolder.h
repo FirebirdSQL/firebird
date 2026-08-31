@@ -236,6 +236,11 @@ public:
 			status_exception::raise(s);
 	}
 
+	bool hasErrors() const
+	{
+		return getState() & IStatus::STATE_ERRORS;
+	}
+
 protected:
 	void clear()
 	{

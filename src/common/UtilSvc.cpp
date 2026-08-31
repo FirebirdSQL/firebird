@@ -124,6 +124,11 @@ public:
 		status_exception::raise(Arg::Gds(isc_utl_trusted_switch));
 	}
 
+	bool hasAuthBlock() override
+	{
+		return false;
+	}
+
 	unsigned int getAuthBlock(const unsigned char** bytes) override
 	{
 		// Utility has no auth block
