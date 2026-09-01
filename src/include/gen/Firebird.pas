@@ -4341,6 +4341,8 @@ const
 	isc_dpb_search_path = byte(105);
 	isc_dpb_blr_request_search_path = byte(106);
 	isc_dpb_gbak_restore_has_schema = byte(107);
+	isc_dpb_send_timeout = byte(108);
+	isc_dpb_receive_timeout = byte(109);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4432,6 +4434,8 @@ const
 	isc_spb_os_user = byte(122);
 	isc_spb_config = byte(123);
 	isc_spb_expected_db = byte(124);
+	isc_spb_send_timeout = byte(125);
+	isc_spb_receive_timeout = byte(126);
 	isc_action_svc_backup = byte(1);
 	isc_action_svc_restore = byte(2);
 	isc_action_svc_repair = byte(3);

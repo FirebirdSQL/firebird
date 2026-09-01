@@ -151,7 +151,8 @@ struct ParametersSet
 		  address_path, process_id, process_name,
 		  encrypt_key, client_version, remote_protocol,
 		  host_name, os_user, config_text,
-		  utf8_filename, map_attach;
+		  utf8_filename, map_attach,
+		  connect_timeout, send_timeout, receive_timeout;
 };
 
 extern const ParametersSet dpbParam, spbParam, connectParam;
@@ -1337,9 +1338,11 @@ struct rem_port : public Firebird::GlobalStorage, public Firebird::RefCounted
 	std::atomic<bool>
 					port_partial_data,	// Physical packet doesn't contain all API packet
 					port_z_data;		// Zlib incoming buffer has data left after decompression
-	SLONG			port_connect_timeout;   // Connection timeout value
+	SLONG			port_connect_timeout; // Connection timeout value
 	SLONG			port_dummy_packet_interval; // keep alive dummy packet interval
 	SLONG			port_dummy_timeout;	// time remaining until keepalive packet
+	SLONG			port_send_timeout;  // packet send timeout value
+	SLONG			port_receive_timeout; // packet receive timeout value
 	SOCKET			port_handle;		// handle for INET socket
 	SOCKET			port_channel;		// handle for connection (from by OS)
 	struct linger	port_linger;		// linger value as defined by SO_LINGER

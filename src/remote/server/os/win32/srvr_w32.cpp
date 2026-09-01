@@ -401,7 +401,7 @@ static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM)
 		rem_port* port = NULL;
 		try
 		{
-			port = INET_connect(protocol_inet, NULL, server_flag, 0, NULL, AF_UNSPEC, disableTcp);
+			port = INET_connect(protocol_inet, NULL, server_flag, 0, NULL, NULL, AF_UNSPEC, disableTcp);
 		}
 		catch (const Exception& ex)
 		{

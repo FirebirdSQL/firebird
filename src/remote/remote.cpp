@@ -72,7 +72,10 @@ const ParametersSet dpbParam =
 	isc_dpb_os_user,
 	isc_dpb_config,
 	isc_dpb_utf8_filename,
-	isc_dpb_map_attach
+	isc_dpb_map_attach,
+	isc_dpb_connect_timeout,
+	isc_dpb_send_timeout,
+	isc_dpb_receive_timeout
 };
 
 const ParametersSet spbParam =
@@ -96,7 +99,10 @@ const ParametersSet spbParam =
 	isc_spb_os_user,
 	isc_spb_config,
 	isc_spb_utf8_filename,
-	0
+	0,
+	isc_spb_connect_timeout,
+	isc_spb_send_timeout,
+	isc_spb_receive_timeout
 };
 
 const ParametersSet connectParam =
@@ -118,6 +124,9 @@ const ParametersSet connectParam =
 	0,
 	CNCT_host,
 	CNCT_user,
+	0,
+	0,
+	0,
 	0,
 	0,
 	0
@@ -352,7 +361,7 @@ void REMOTE_free_packet(rem_port* port, PACKET* packet, bool partial)
 }
 
 
-void REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb)
+void REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb, const ParametersSet* par)
 {
 /**************************************
  *
@@ -368,12 +377,11 @@ void REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb)
  *	is no other specification.
  *
  **************************************/
-	//bool got_dpb_connect_timeout = false;
-
-	fb_assert(isc_dpb_connect_timeout == isc_spb_connect_timeout);
-
-	port->port_connect_timeout = pb && pb->find(isc_dpb_connect_timeout) ?
+	port->port_connect_timeout = pb && pb->find(par->connect_timeout) ?
 		pb->getInt() : port->getPortConfig()->getConnectionTimeout();
+
+	port->port_send_timeout = pb && pb->find(par->send_timeout) ? pb->getInt() : 0;
+	port->port_receive_timeout = pb && pb->find(par->receive_timeout) ? pb->getInt() : 0;
 
 	port->port_flags |= PORT_dummy_pckt_set;
 	port->port_dummy_packet_interval = port->getPortConfig()->getDummyPacketInterval();

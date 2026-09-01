@@ -138,6 +138,8 @@
 #define isc_dpb_search_path				 105
 #define isc_dpb_blr_request_search_path	 106
 #define isc_dpb_gbak_restore_has_schema	 107
+#define isc_dpb_send_timeout             108
+#define isc_dpb_receive_timeout          109
 
 
 /**************************************************/
@@ -329,6 +331,8 @@
 #define isc_spb_os_user                   122
 #define isc_spb_config					  123
 #define isc_spb_expected_db				  124
+#define isc_spb_send_timeout			  125
+#define isc_spb_receive_timeout			  126
 
 #define isc_spb_connect_timeout           isc_dpb_connect_timeout
 #define isc_spb_dummy_packet_interval     isc_dpb_dummy_packet_interval

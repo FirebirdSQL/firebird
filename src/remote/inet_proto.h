@@ -33,12 +33,14 @@ namespace Firebird
 	class ClumpletReader;
 }
 
-rem_port*	INET_analyze(ClntAuthBlock*, const Firebird::PathName&, const TEXT*,
-						 bool, Firebird::ClumpletReader&, Firebird::RefPtr<const Firebird::Config>*,
+struct ParametersSet;
+
+rem_port*	INET_analyze(ClntAuthBlock*, const Firebird::PathName&, const TEXT*, bool,
+						 Firebird::ClumpletReader&, const ParametersSet*, Firebird::RefPtr<const Firebird::Config>*,
 						 const Firebird::PathName*, Firebird::ICryptKeyCallback*, int af = AF_UNSPEC);
 rem_port*	INET_connect(const TEXT*, struct packet*, USHORT, Firebird::ClumpletReader*,
-						 Firebird::RefPtr<const Firebird::Config>*, int af = AF_UNSPEC,
-						 bool disableTcp = false);
+						 const ParametersSet* par, Firebird::RefPtr<const Firebird::Config>*,
+						 int af = AF_UNSPEC, bool disableTcp = false);
 bool		INET_shouldListenUnix(const TEXT*, bool disableTcp);
 rem_port*	INET_listenUnix(USHORT);
 void		INET_addUnixListener(rem_port*, USHORT);

@@ -7988,7 +7988,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 			{
 				ISC_utf8ToSystem(node_name);
 				port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-					cBlock.getConfig(), ref_db_name, cryptCb, AF_UNIX);
+					&parSet, cBlock.getConfig(), ref_db_name, cryptCb, AF_UNIX);
 			}
 			else
 #endif
@@ -8011,7 +8011,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 				}
 
 				port = INET_analyze(&cBlock, attach_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-					cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
+					&parSet, cBlock.getConfig(), ref_db_name, cryptCb, inet_af);
 			}
 
 			// We have a local connection string. If it's a file on a network share,
@@ -8028,7 +8028,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 						ISC_utf8ToSystem(node_name);
 
 						port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-							cBlock.getConfig(), ref_db_name, cryptCb);
+							&parSet, cBlock.getConfig(), ref_db_name, cryptCb);
 					}
 				}
 #endif
@@ -8043,7 +8043,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 						ISC_utf8ToSystem(node_name);
 
 						port = INET_analyze(&cBlock, expanded_name, node_name.c_str(), flags & ANALYZE_USER_VFY, pb,
-							cBlock.getConfig(), ref_db_name, cryptCb);
+							&parSet, cBlock.getConfig(), ref_db_name, cryptCb);
 					}
 				}
 #endif
@@ -8066,7 +8066,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 					if (!port)
 					{
 						port = INET_analyze(&cBlock, attach_name, INET_LOCALHOST, flags & ANALYZE_USER_VFY, pb,
-							cBlock.getConfig(), ref_db_name, cryptCb);
+							&parSet, cBlock.getConfig(), ref_db_name, cryptCb);
 					}
 				}
 			}

@@ -597,7 +597,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 			try
 			{
-				port = INET_connect(protocol, 0, INET_SERVER_flag, 0, NULL, AF_UNSPEC, disableTcp);
+				port = INET_connect(protocol, 0, INET_SERVER_flag, nullptr, nullptr, nullptr, AF_UNSPEC, disableTcp);
 			}
 			catch (const Exception& ex)
 			{

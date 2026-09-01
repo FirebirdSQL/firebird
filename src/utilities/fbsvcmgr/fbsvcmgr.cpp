@@ -381,6 +381,9 @@ constexpr SvcSwitches attSwitch[] =
 	{"password", putStringArgument, 0, isc_spb_password, 0},
 	{"fetch_password", putFileArgument, 0, isc_spb_password, 0},
 	{"trusted_auth", putSingleTag, 0, isc_spb_trusted_auth, 0},
+	{"connect_timeout", putIntArgument, 0, isc_spb_connect_timeout, 0},
+	{"send_timeout", putIntArgument, 0, isc_spb_send_timeout, 0},
+	{"receive_timeout", putIntArgument, 0, isc_spb_receive_timeout, 0},
 	{"expected_db", putStringArgument, 0, isc_spb_expected_db, 0},
 	{"key_holder", putCallback, 0, 0, 0},
 	{0, 0, 0, 0, 0}

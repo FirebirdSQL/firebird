@@ -2587,7 +2587,7 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 
 	// See if user has specified parameters relevant to the connection,
 	// they will be stuffed in the DPB if so.
-	REMOTE_get_timeout_params(authPort, pb);
+	REMOTE_get_timeout_params(authPort, pb, &dpbParam);
 
 	const UCHAR* dpb = pb->getBuffer();
 	unsigned int dl = (ULONG) pb->getBufferLength();
@@ -6484,7 +6484,7 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 
 	// See if user has specified parameters relevant to the connection,
 	// they will be stuffed in the SPB if so.
-	REMOTE_get_timeout_params(this, spb);
+	REMOTE_get_timeout_params(this, spb, &spbParam);
 
 	DispatcherPtr provider;
 	LocalStatus ls;

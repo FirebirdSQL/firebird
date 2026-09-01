@@ -77,6 +77,9 @@
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
 
 
 #ifdef	WIN_NT
@@ -632,6 +635,7 @@ static rem_port*		inet_try_connect(	PACKET*,
 									const PathName&,
 									const TEXT*,
 									ClumpletReader&,
+									const ParametersSet*,
 									RefPtr<const Config>*,
 									const PathName*,
 									int);
@@ -657,7 +661,7 @@ static int		send_partial(rem_port*, PACKET *);
 
 static RemoteXdr*		xdrinet_create(rem_port*, UCHAR *, USHORT, enum xdr_op);
 static bool		setNoNagleOption(rem_port*);
-static bool		setKeepAlive(SOCKET);
+static bool		setKeepAlive(SOCKET, rem_port* = nullptr);
 static FPTR_INT	tryStopMainThread = 0;
 
 
@@ -797,6 +801,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 					   const TEXT* node_name,
 					   bool uv_flag,
 					   ClumpletReader &dpb,
+					   const ParametersSet* par,
 					   RefPtr<const Config>* config,
 					   const PathName* ref_db_name,
 					   ICryptKeyCallback* cryptCb,
@@ -900,7 +905,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 		}
 	}
 
-	rem_port* port = inet_try_connect(packet, rdb, file_name, node_name, dpb, config, ref_db_name, af);
+	rem_port* port = inet_try_connect(packet, rdb, file_name, node_name, dpb, par, config, ref_db_name, af);
 	P_ACPT* accept;
 
 	for (;;)
@@ -1032,6 +1037,7 @@ rem_port* INET_connect(const TEXT* name,
 					   PACKET* packet,
 					   USHORT flag,
 					   ClumpletReader* dpb,
+					   const ParametersSet* par,
 					   RefPtr<const Config>* config,
 					   int af,
 					   bool disableTcp)
@@ -1069,7 +1075,7 @@ rem_port* INET_connect(const TEXT* name,
 	{
 		port->port_config = *config;
 	}
-	REMOTE_get_timeout_params(port, dpb);
+	REMOTE_get_timeout_params(port, dpb, par);
 
 	const RefPtr<const Config> portConfig = port->getPortConfig();
 	const bool explicitTcpPort = !packet && name && name[0];
@@ -1225,7 +1231,7 @@ rem_port* INET_connect(const TEXT* name,
 			return listener_socket(port, flag, pai);
 
 		// client
-		if (!setKeepAlive(port->port_handle))
+		if (!setKeepAlive(port->port_handle, port))
 			gds__log("setsockopt: error setting SO_KEEPALIVE");
 
 		if (!setNoNagleOption(port))
@@ -1553,7 +1559,7 @@ static rem_port* listener_socket(rem_port* port, USHORT flag, const addrinfo* pa
 	}
 	else
 	{
-		if (! setKeepAlive(port->port_handle))
+		if (! setKeepAlive(port->port_handle, port))
 		{
 			inet_error(true, port, "setsockopt SO_KEEPALIVE", isc_net_connect_listen_err, INET_ERRNO);
 		}
@@ -1701,7 +1707,7 @@ rem_port* INET_reconnect(SOCKET handle, bool unixSocket)
 	else
 #endif
 	{
-		if (! setKeepAlive(port->port_handle)) {
+		if (! setKeepAlive(port->port_handle, port)) {
 			gds__log("inet server err: setting KEEPALIVE socket option \n");
 		}
 
@@ -1731,7 +1737,7 @@ rem_port* INET_server(SOCKET sock)
 	port->port_server_flags |= SRVR_server;
 	port->port_handle = sock;
 
-	if (! setKeepAlive(port->port_handle)) {
+	if (! setKeepAlive(port->port_handle, port)) {
 		gds__log("inet server err: setting KEEPALIVE socket option \n");
 	}
 
@@ -1870,7 +1876,7 @@ static rem_port* alloc_port(rem_port* const parent, const USHORT flags)
 	}
 
 	rem_port* const port = FB_NEW rem_port(rem_port::INET, INET_remote_buffer * 2);
-	REMOTE_get_timeout_params(port, 0);
+	REMOTE_get_timeout_params(port, nullptr, nullptr);
 
 	TEXT buffer[BUFFER_SMALL];
 	gethostname(buffer, sizeof(buffer));
@@ -3397,6 +3403,7 @@ static rem_port* inet_try_connect(PACKET* packet,
 								  const PathName& file_name,
 								  const TEXT* node_name,
 								  ClumpletReader& dpb,
+								  const ParametersSet* par,
 								  RefPtr<const Config>* config,
 								  const PathName* ref_db_name,
 								  int af)
@@ -3431,7 +3438,7 @@ static rem_port* inet_try_connect(PACKET* packet,
 	rem_port* port = NULL;
 	try
 	{
-		port = INET_connect(node_name, packet, false, &dpb, config, af);
+		port = INET_connect(node_name, packet, false, &dpb, par, config, af);
 	}
 	catch (const Exception&)
 	{
@@ -3534,21 +3541,26 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 	}
 
 	timeval timeout{};
-	timeval* time_ptr = NULL;
+	timeval* time_ptr = &timeout;
 
-	if (port->port_protocol == 0)
+	if (port->port_protocol == 0 && port->port_connect_timeout)
 	{
 		// If the protocol is 0 we are still in the process of establishing
 		// a connection. Add a time out to the wait.
 		timeout.tv_sec = port->port_connect_timeout;
-		time_ptr = &timeout;
+	}
+	else if (port->port_receive_timeout)
+	{
+		// Should stop waiting and report error
+		timeout.tv_sec = port->port_receive_timeout;
 	}
 	else if (port->port_dummy_packet_interval > 0)
 	{
 		// Set the time interval for sending dummy packets to the client
 		timeout.tv_sec = port->port_dummy_packet_interval;
-		time_ptr = &timeout;
 	}
+	else
+		time_ptr = nullptr;
 
 	// On Linux systems (and possibly others too) select will eventually
 	// change timout values so save it here for later reuse.
@@ -3623,7 +3635,7 @@ static bool packet_receive(rem_port* port, UCHAR* buffer, SSHORT buffer_length, 
 
 			if (!slct_count)
 			{
-				if (port->port_protocol == 0)
+				if (port->port_protocol == 0 || port->port_receive_timeout)
 					return false;
 
 #ifdef DEBUG
@@ -3905,7 +3917,19 @@ static bool setNoNagleOption(rem_port* port)
 	return true;
 }
 
-static bool setKeepAlive(SOCKET s)
+static bool setTimeout(SOCKET s, int timeout, int optname)
+{
+#ifdef WIN_NT
+	DWORD tv = timeout * 1000;
+#else
+	struct timeval tv;
+	tv.tv_sec = timeout;
+	tv.tv_usec = 0;
+#endif
+	return setsockopt(s, SOL_SOCKET, optname, &tv, sizeof(tv)) >= 0;
+}
+
+static bool setKeepAlive(SOCKET s, rem_port* port)
 {
 /**************************************
  *
@@ -3914,14 +3938,32 @@ static bool setKeepAlive(SOCKET s)
  **************************************
  *
  * Functional description
- *      Set SO_KEEPALIVE, return false
- *		in case of unexpected error
+ *      Set SO_KEEPALIVE, SO_SNDTIMEO & SO_RCVTIMEO,
+ *		return false in case of unexpected error.
  *
  **************************************/
 	constexpr int optval = 1;
 	const int n = setsockopt(s, SOL_SOCKET, SO_KEEPALIVE,
 					   (SCHAR*) &optval, sizeof(optval));
-	return n != -1;
+	if (n < 0)
+		return false;
+
+	if (port)
+	{
+		if (port->port_send_timeout)
+		{
+			if (!setTimeout(s, port->port_send_timeout, SO_SNDTIMEO))
+				return false;
+		}
+
+		if (port->port_receive_timeout)
+		{
+			if (!setTimeout(s, port->port_receive_timeout, SO_RCVTIMEO))
+				return false;
+		}
+	}
+
+	return true;
 }
 
 void setStopMainThread(FPTR_INT func)
