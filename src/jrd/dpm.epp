@@ -4448,6 +4448,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 		// Now copy the page data
 		CCH_MARK(tdbb, &newWindow);
 		memcpy(newPP, oldPP, dbb->dbb_page_size);
+		newPP->ppg_header.pag_pageno = newPage;
 
 		if (sequence < ppCount - 1)
 		{
@@ -4555,6 +4556,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 
 		CCH_MARK(tdbb, &newWindow);
 		memcpy(newDP, oldDP, dbb->dbb_page_size);
+		newDP->dpg_header.pag_pageno = newPage;
 
 		CCH_RELEASE(tdbb, &oldWindow);	// We don't need old datapage anymore
 
@@ -4585,6 +4587,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 						blob_page* newBlobPage1 = (blob_page*) PAG_allocate(tdbb, &newWindow1);
 						memcpy(newBlobPage1, oldBlobPage1, dbb->dbb_page_size);
 						*page1 = newWindow1.win_page.getPageNum();
+						newBlobPage1->blp_header.pag_pageno = *page1;
 						CCH_RELEASE_TAIL(tdbb, &oldWindow1);
 
 						if (blob->blh_level == 2)
@@ -4601,6 +4604,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 								blob_page* newBlobPage2 = (blob_page*) PAG_allocate(tdbb, &newWindow2);
 								memcpy(newBlobPage2, oldBlobPage2, dbb->dbb_page_size);
 								*page2 = newWindow2.win_page.getPageNum();
+								newBlobPage2->blp_header.pag_pageno = *page2;
 								CCH_RELEASE_TAIL(tdbb, &oldWindow2);
 								CCH_RELEASE_TAIL(tdbb, &newWindow2);
 							}

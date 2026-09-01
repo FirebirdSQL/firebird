@@ -641,7 +641,7 @@ inline void index_root_page::irt_repeat::setNormal()
 
 inline void index_root_page::irt_repeat::setNormal(ULONG pageSpaceId, ULONG rootPage)
 {
-			//create index mode AtOnce
+			// create index mode AtOnce
 	fb_assert(getState() == irt_in_progress
 			// completed migration
 			|| getState() == irt_migrate);
@@ -657,7 +657,7 @@ inline void index_root_page::irt_repeat::setNormal(ULONG pageSpaceId, ULONG root
 
 inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 {
-	fb_assert(getState() == irt_normal);
+	fb_assert(getState() == irt_normal || getState() == irt_migrate);
 	fb_assert(irt_page_num);
 
 	irt_transaction = traNumber;
@@ -678,7 +678,7 @@ inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 
 inline void index_root_page::irt_repeat::setMigrate(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber, USHORT slot)
 {
-	fb_assert(getState() == irt_normal || getState() == irt_rollback);
+	fb_assert(getState() == irt_normal || getState() == irt_rollback || getState() == irt_migrate);
 	fb_assert(irt_page_num);
 
 	irt_page_num = rootPage;

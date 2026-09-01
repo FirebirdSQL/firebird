@@ -395,7 +395,6 @@ void Tablespace::release(thread_db* tdbb, bool force)
 	else
 	{
 		fb_assert(m_useCount > 0);
-		fb_assert(!(m_flags & OBSOLETE));
 
 		if (--m_useCount == 0)
 		{
