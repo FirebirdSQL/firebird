@@ -3926,7 +3926,7 @@ static bool setTimeout(SOCKET s, int timeout, int optname)
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 #endif
-	return setsockopt(s, SOL_SOCKET, optname, &tv, sizeof(tv)) >= 0;
+	return setsockopt(s, SOL_SOCKET, optname, (SCHAR*) &tv, sizeof(tv)) >= 0;
 }
 
 static bool setKeepAlive(SOCKET s, rem_port* port)
