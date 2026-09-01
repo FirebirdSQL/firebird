@@ -41,14 +41,12 @@
 #include "../common/dsc.h"
 #include "../jrd/Resources.h"
 
-namespace Ods
-{
+namespace Firebird::Jrd::Ods {
 	struct blob_page;
 	struct blh;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class Attachment;
 class BlobControl;
@@ -124,7 +122,7 @@ public:
 	void fromPageHeader(const Ods::blh* header);
 	void toPageHeader(Ods::blh* header) const;
 	void getFromPage(USHORT length, const UCHAR* data);
-	void storeToPage(USHORT* length, Firebird::Array<UCHAR>& buffer, const UCHAR** data, void* stack);
+	void storeToPage(USHORT* length, Array<UCHAR>& buffer, const UCHAR** data, void* stack);
 
 	static bid copy(thread_db* tdbb, const bid* source)
 	{
@@ -151,7 +149,7 @@ private:
 	bid blb_blob_id{};				// Id of materialized blob
 	vcl* blb_pages = nullptr;		// Vector of pages
 
-	Firebird::Array<SLONG> blb_buffer; // buffer used in opened blobs - must be longword aligned
+	Array<SLONG> blb_buffer; // buffer used in opened blobs - must be longword aligned
 
 	ULONG blb_temp_id = 0;			// ID of newly created blob in transaction
 	ULONG blb_sequence = 0;			// Blob page sequence
@@ -257,7 +255,7 @@ inline USHORT blb::getMaxSegment() const
 }
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 
 namespace Firebird {

@@ -45,6 +45,8 @@
 
 #include "../common/config/config.h"
 
+using namespace Firebird::Remote;
+
 
 static HWND hPSDlg = NULL;
 static HINSTANCE hInstance = NULL;

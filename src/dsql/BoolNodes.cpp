@@ -45,8 +45,9 @@
 #include "../dsql/DSqlDataTypeUtil.h"
 #include "../jrd/cvt2_proto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -2241,3 +2242,6 @@ BoolExprNode* RseBoolNode::convertNeqAllToNotAny(thread_db* tdbb, CompilerScratc
 	SubExprNodeCopier copier(csb->csb_pool, csb);
 	return copier.copy(tdbb, static_cast<BoolExprNode*>(newNode));
 }
+
+
+}	// namespace Firebird::Jrd

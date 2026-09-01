@@ -92,7 +92,7 @@ template<class SHA>void get_digest(const unsigned char* message, size_t len, uns
 /* This template class provides a simple one line means of computing a SHA-2
  * digest from an arbitrary length message, and encoding the result in BASE64.
  */
-template<class SHA> void hashBased64(Firebird::string& hash, const Firebird::string& data)
+template<class SHA> void hashBased64(string& hash, const string& data)
 {
 	SHA digest;
 	digest.process(data.length(), data.c_str());

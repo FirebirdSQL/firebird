@@ -23,7 +23,10 @@
 
 #include "firebird.h"
 
-int DBG_supervisor(int /*arg*/)
+namespace Firebird::Jrd
 {
-	return TRUE;
-}
+	int DBG_supervisor(int /*arg*/)
+	{
+		return TRUE;
+	}
+} // namespace Firebird::Jrd

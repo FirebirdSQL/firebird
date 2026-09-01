@@ -30,6 +30,10 @@
 
 #include "../common/classes/fb_string.h"
 
+namespace Firebird
+{
+
+
 /***
 	The ModuleLoader class is an abstraction of the dynamic code loading
 	facilities provided by the host operating system.  The class provides
@@ -60,11 +64,11 @@ public:
 			If the symbol can't be found or doesn't exist the function returns
 			NULL.
 		**/
-		virtual void* findSymbol(ISC_STATUS*, const Firebird::string&) = 0;
+		virtual void* findSymbol(ISC_STATUS*, const string&) = 0;
 
-		virtual bool getRealPath(const Firebird::string& anySymbol, Firebird::PathName& path) = 0;
+		virtual bool getRealPath(const string& anySymbol, PathName& path) = 0;
 
-		template <typename T> T& findSymbol(ISC_STATUS* status, const Firebird::string& symbol, T& ptr)
+		template <typename T> T& findSymbol(ISC_STATUS* status, const string& symbol, T& ptr)
 		{
 			return (ptr = (T)(findSymbol(status, symbol)));
 		}
@@ -77,12 +81,12 @@ public:
 		/// assignment of Modules isn't supported
 		const Module& operator=(const Module&) = delete;
 
-		const Firebird::PathName fileName;
+		const PathName fileName;
 
 	protected:
 		/// The constructor is protected so normal code can't allocate instances
 		/// of the class, but the class itself is still able to be subclassed.
-		Module(MemoryPool& pool, const Firebird::PathName& aFileName)
+		Module(MemoryPool& pool, const PathName& aFileName)
 			: fileName(pool, aFileName)
 		{
 		}
@@ -96,7 +100,7 @@ public:
 		the returned module object when it is no longer needed.
 		If unsuccessful it returns NULL. OS-specific error is returned in status parameter.
 	**/
-	static Module* loadModule(ISC_STATUS* status, const Firebird::PathName&);
+	static Module* loadModule(ISC_STATUS* status, const PathName&);
 
 	/** doctorModuleExtension modifies the given path name to add the platform
 		specific module extension.  This allows the user to provide the root name
@@ -108,13 +112,13 @@ public:
 		Initialize step to zero before use.
 		Return false if no name modification can be done anymore.
 	**/
-	static bool doctorModuleExtension(Firebird::PathName& name, int& step);
+	static bool doctorModuleExtension(PathName& name, int& step);
 
 	/** Almost like loadModule(), but in case of failure invokes doctorModuleExtension()
 		and retries.
 		On success modName is set to really found module name.
 	**/
-	static Module* fixAndLoadModule(ISC_STATUS* status, Firebird::PathName& modName)
+	static Module* fixAndLoadModule(ISC_STATUS* status, PathName& modName)
 	{
 		Module* mod = nullptr;
 		int step = 0;
@@ -131,8 +135,10 @@ public:
 		module.  This function is required because different operating
 		systems require different checks.
 	**/
-	static bool isLoadableModule(const Firebird::PathName&);
+	static bool isLoadableModule(const PathName&);
 };
 
-#endif // JRD_OS_MOD_LOADER_H
 
+} // namespace Firebird
+
+#endif // JRD_OS_MOD_LOADER_H

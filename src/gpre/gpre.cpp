@@ -73,6 +73,10 @@
 #include <locale.h>
 #endif
 
+namespace Firebird::Gpre
+{
+
+
 // Globals
 GpreGlobals gpreGlob;
 
@@ -842,7 +846,7 @@ int main(int argc, char* argv[])
 		while ((end_position = compile_module(end_position, filename_array[3])))
 			; // empty loop body
 	}	// try
-	catch (const Firebird::Exception&) {}  // fall through to the cleanup code
+	catch (const Exception&) {}  // fall through to the cleanup code
 
 #ifdef FTN_BLK_DATA
 	if (gpreGlob.sw_language == lang_fortran)
@@ -889,7 +893,7 @@ int main(int argc, char* argv[])
 [[noreturn]] void CPR_abort()
 {
 	++fatals_global;
-	//throw Firebird::Exception();
+	//throw Exception();
 	throw gpre_exception("Program terminated.");
 }
 
@@ -1307,7 +1311,7 @@ static SLONG compile_module( SLONG start_position, const TEXT* base_directory)
 	fseek(input_file, start_position, 0);
 	input_char = input_buffer;
 
-	const Firebird::PathName filename = Firebird::TempFile::create(SCRATCH);
+	const PathName filename = TempFile::create(SCRATCH);
 	strcpy(trace_file_name, filename.c_str());
 	trace_file = os_utils::fopen(trace_file_name, "w+b");
 #ifdef UNIX
@@ -2911,4 +2915,13 @@ static SSHORT skip_white()
 	}
 
 	return c;
+}
+
+
+} // namespace Firebird::Gpre
+
+
+int main(int argc, char* argv[])
+{
+	return Firebird::Gpre::main(argc, argv);
 }

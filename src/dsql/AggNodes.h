@@ -27,7 +27,7 @@
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class dsql_udf;
 
@@ -117,7 +117,7 @@ public:
 
 	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -147,7 +147,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -186,7 +186,7 @@ public:
 
 	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 
@@ -360,7 +360,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
@@ -391,7 +391,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -422,7 +422,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -458,7 +458,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -493,7 +493,7 @@ public:
 		} dbl;
 		struct
 		{
-			Firebird::Decimal128 x, x2;
+			Decimal128 x, x2;
 		} dec;
 	};
 
@@ -506,7 +506,7 @@ public:
 
 	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -544,7 +544,7 @@ public:
 		} dbl;
 		struct
 		{
-			Firebird::Decimal128 x, x2, y, y2, xy;
+			Decimal128 x, x2, y, y2, xy;
 		} dec;
 	};
 
@@ -564,7 +564,7 @@ public:
 		holder.add(arg2);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -609,7 +609,7 @@ public:
 		} dbl;
 		struct
 		{
-			Firebird::Decimal128 x, x2, y, y2, xy;
+			Decimal128 x, x2, y, y2, xy;
 		} dec;
 	};
 
@@ -629,7 +629,7 @@ public:
 		holder.add(arg2);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -670,7 +670,7 @@ public:
 		holder.add(arg2);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;

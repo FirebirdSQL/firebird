@@ -31,6 +31,8 @@
 #include <unicode/ucnv.h>
 #include "../common/unicode_util.h"
 
+using namespace Firebird;
+
 
 static void charset_destroy(charset* cs)
 {

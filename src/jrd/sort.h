@@ -29,7 +29,9 @@
 #include "../jrd/TempSpace.h"
 #include "../jrd/align.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 // Forward declaration
 class Attachment;
@@ -179,12 +181,12 @@ public:
 		switch (dtype)
 		{
 		case SKD_dec64:
-			fb_assert(dscLength == sizeof(Firebird::Decimal64));
-			skd_length = Firebird::Decimal64::getKeyLength();
+			fb_assert(dscLength == sizeof(Decimal64));
+			skd_length = Decimal64::getKeyLength();
 			break;
 		case SKD_dec128:
-			fb_assert(dscLength == sizeof(Firebird::Decimal128));
-			skd_length = Firebird::Decimal128::getKeyLength();
+			fb_assert(dscLength == sizeof(Decimal128));
+			skd_length = Decimal128::getKeyLength();
 			break;
 		default:
 			skd_length = dscLength;
@@ -282,9 +284,9 @@ public:
 		 FPTR_REJECT_DUP_CALLBACK, void*, FB_UINT64 = 0);
 	~Sort();
 
-	void get(Jrd::thread_db*, ULONG**);
-	void put(Jrd::thread_db*, ULONG**);
-	void sort(Jrd::thread_db*);
+	void get(thread_db*, ULONG**);
+	void put(thread_db*, ULONG**);
+	void sort(thread_db*);
 
 	bool isSorted() const noexcept
 	{
@@ -316,9 +318,9 @@ private:
 	void init();
 	void mergeRuns(USHORT);
 	ULONG order();
-	void orderAndSave(Jrd::thread_db*);
-	void putRun(Jrd::thread_db*);
-	void sortBuffer(Jrd::thread_db*);
+	void orderAndSave(thread_db*);
+	void putRun(thread_db*);
+	void sortBuffer(thread_db*);
 	void sortRunsBySeek(int);
 
 #ifdef DEV_BUILD
@@ -352,7 +354,7 @@ private:
 	ULONG m_min_alloc_size;						// MIN and MAX values
 	ULONG m_max_alloc_size;						// for the run buffer size
 
-	Firebird::Array<sort_key_def> m_description;
+	Array<sort_key_def> m_description;
 };
 
 
@@ -362,7 +364,7 @@ public:
 	PartitionedSort(Database*, SortOwner*);
 	~PartitionedSort();
 
-	void get(Jrd::thread_db*, ULONG**);
+	void get(thread_db*, ULONG**);
 
 	void addPartition(Sort* sort)
 	{
@@ -380,8 +382,8 @@ private:
 	sort_record* getMerge();
 
 	SortOwner* m_owner;
-	Firebird::HalfStaticArray<sort_control, 8> m_parts;
-	Firebird::HalfStaticArray<merge_control, 8> m_nodes;	// nodes of merge tree
+	HalfStaticArray<sort_control, 8> m_parts;
+	HalfStaticArray<merge_control, 8> m_nodes;	// nodes of merge tree
 	merge_control* m_merge;				// root of merge tree
 };
 
@@ -432,10 +434,11 @@ public:
 private:
 	MemoryPool& pool;
 	Database* const dbb;
-	Firebird::SortedArray<Sort*> sorts;
-	Firebird::HalfStaticArray<UCHAR*, 4> buffers;
+	SortedArray<Sort*> sorts;
+	HalfStaticArray<UCHAR*, 4> buffers;
 };
 
-} //namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_SORT_H

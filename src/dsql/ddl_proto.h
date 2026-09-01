@@ -30,10 +30,12 @@
 // This is a DSQL internal file. Not to be used by anything but
 // the DSQL module itself.
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class DsqlCompilerScratch;
 	class dsql_fld;
-};
+}
+
+namespace Firebird::Jrd {
 
 const USHORT blr_dtypes[] = {
 	0,
@@ -67,8 +69,10 @@ const USHORT blr_dtypes[] = {
 	blr_ex_timestamp_tz			// dtype_ex_timestamp_tz
 };
 
-bool DDL_ids(const Jrd::DsqlCompilerScratch*);
-void DDL_resolve_intl_type(Jrd::DsqlCompilerScratch*, Jrd::dsql_fld*, Jrd::QualifiedName&,
-	bool = false);
+bool DDL_ids(const DsqlCompilerScratch*);
+void DDL_resolve_intl_type(DsqlCompilerScratch*, dsql_fld*, QualifiedName&, bool = false);
+
+} // namespace Firebird::Jrd
+
 
 #endif // DSQL_DDL_PROTO_H

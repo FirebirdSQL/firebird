@@ -24,6 +24,10 @@
 #ifndef GPRE_SQE_PROTO_H
 #define GPRE_SQE_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 typedef gpre_nod* (*pfn_SQE_list_cb) (gpre_req*, bool, USHORT*, bool*);
 
 gpre_nod*	SQE_boolean(gpre_req*, USHORT*);
@@ -39,5 +43,7 @@ gpre_nod*	SQE_value(gpre_req*, bool, USHORT*, bool*);
 gpre_nod*	SQE_value_or_null(gpre_req*, bool, USHORT*, bool*);
 gpre_nod*	SQE_variable(gpre_req*, bool, USHORT*, bool*);
 
-#endif // GPRE_SQE_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_SQE_PROTO_H

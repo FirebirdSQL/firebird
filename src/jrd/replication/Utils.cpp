@@ -29,7 +29,7 @@
 #include "../common/ScanDir.h"
 #include "../common/os/mod_loader.h"
 #include "../common/os/path_utils.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include "Utils.h"
 
@@ -51,8 +51,9 @@
 #include <time.h>
 #include <atomic>
 
-using namespace Firebird;
-using namespace Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 namespace
 {
@@ -215,8 +216,7 @@ namespace
 
 } // namespace
 
-namespace Replication
-{
+
 	void raiseError(const char* msg, ...)
 	{
 		char buffer[BUFFER_LARGE];
@@ -291,4 +291,5 @@ namespace Replication
 		logMessage(REPLICA_SIDE, VERBOSE_MSG, database, message);
 	}
 
-} // namespace
+
+} // namespace Firebird::Jrd::Replication

@@ -32,8 +32,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------------
 // Data access: index driven table scan
@@ -780,3 +781,6 @@ bool IndexTableScan::setupBitmaps(thread_db* tdbb, Impure* impure) const
 
 	return true;
 }
+
+
+}	// namespace Firebird::Jrd

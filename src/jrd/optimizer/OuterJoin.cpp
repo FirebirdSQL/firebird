@@ -29,8 +29,8 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 //
@@ -216,3 +216,4 @@ RecordSource* OuterJoin::process()
 
 	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
 };
+}	// namespace Firebird::Jrd

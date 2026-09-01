@@ -87,9 +87,9 @@ typedef struct dsc
 {
 	dsc() = default;
 
-	// These Ods::Descriptor constructor and operator were added to have
-	// interoperability between Ods::Descriptor and struct dsc
-	dsc(const Ods::Descriptor& od) noexcept
+	// These Firebird::Jrd::Ods::Descriptor constructor and operator were added to have
+	// interoperability between Firebird::Jrd::Ods::Descriptor and struct dsc
+	dsc(const Firebird::Jrd::Ods::Descriptor& od) noexcept
 		: dsc_dtype(od.dsc_dtype),
 		  dsc_scale(od.dsc_scale),
 		  dsc_length(od.dsc_length),
@@ -528,12 +528,12 @@ typedef struct dsc
 
 	USHORT getStringLength() const noexcept;
 
-	operator Ods::Descriptor() const
+	operator Firebird::Jrd::Ods::Descriptor() const
 	{
 #ifdef DEV_BUILD
 		address32bit();
 #endif
-		Ods::Descriptor d;
+		Firebird::Jrd::Ods::Descriptor d;
 		d.dsc_dtype = dsc_dtype;
 		d.dsc_scale = dsc_scale;
 		d.dsc_length = dsc_length;

@@ -34,32 +34,32 @@
 namespace Firebird {
 
 // tools to operate lists of security-related plugins
-class ParsedList : public Firebird::ObjectsArray<Firebird::PathName>
+class ParsedList : public ObjectsArray<PathName>
 {
 public:
-	explicit ParsedList(const Firebird::PathName& list);
+	explicit ParsedList(const PathName& list);
 
 	ParsedList()
 	{ }
 
 	explicit ParsedList(MemoryPool& p)
-		: Firebird::ObjectsArray<Firebird::PathName>(p)
+		: ObjectsArray<PathName>(p)
 	{ }
 
-	ParsedList(const Firebird::PathName& list, const char* delimiters);
+	ParsedList(const PathName& list, const char* delimiters);
 
 	// create plane list from this parsed
-	void makeList(Firebird::PathName& list) const;
+	void makeList(PathName& list) const;
 
 	// merge lists keeping only commom for both plugins
-	static void mergeLists(Firebird::PathName& list, const Firebird::PathName& serverList,
-		const Firebird::PathName& clientList);
+	static void mergeLists(PathName& list, const PathName& serverList,
+		const PathName& clientList);
 
 	// get providers list for particular database amd remove "Loopback" provider from it
-	static Firebird::PathName getNonLoopbackProviders(const Firebird::PathName& aliasDb);
+	static PathName getNonLoopbackProviders(const PathName& aliasDb);
 
 private:
-	void parse(Firebird::PathName list, const char* delimiters);
+	void parse(PathName list, const char* delimiters);
 };
 
 } // namespace Firebird

@@ -101,11 +101,11 @@ class BePlusTree
 	static constexpr FB_SIZE_T LEAF_COUNT = LEAF_PAGE_SIZE / sizeof(Value);
 	static constexpr FB_SIZE_T NODE_COUNT = NODE_PAGE_SIZE / sizeof(void*);
 public:
-	explicit BePlusTree(Firebird::MemoryPool& _pool)
+	explicit BePlusTree(MemoryPool& _pool)
 		: pool(&_pool), level(0), defaultAccessor(this)
 	{ }
 
-	BePlusTree(Firebird::MemoryPool& _pool, const BePlusTree& from)
+	BePlusTree(MemoryPool& _pool, const BePlusTree& from)
 		: pool(&_pool), level(0), defaultAccessor(this)
 	{
 		append(from);
@@ -632,7 +632,7 @@ public:
 	}; // class Accessor
 
 private:
-	Firebird::MemoryPool* const pool;
+	MemoryPool* const pool;
 	int level;
 	NodePtr root;
 	Accessor defaultAccessor;
@@ -848,7 +848,7 @@ bool BePlusTree<Value, Key, KeyOfValue, Cmp>::add(const Value& item, Accessor* a
 		this->root = nodeList;
 		this->level++;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		// Recover tree to innocent state
 		while (curLevel)

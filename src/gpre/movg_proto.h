@@ -24,7 +24,9 @@
 #ifndef GPRE_MOVG_PROTO_H
 #define GPRE_MOVG_PROTO_H
 
-void MOVG_move(const dsc*, dsc*);
+namespace Firebird::Gpre
+{
+	void MOVG_move(const dsc*, dsc*);
+} // namespace Firebird::Gpre
 
 #endif //  GPRE_MOVG_PROTO_H
-

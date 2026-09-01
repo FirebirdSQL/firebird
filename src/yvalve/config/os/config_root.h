@@ -52,15 +52,16 @@
 	getConfigFilePath() member function.
 **/
 
-class ConfigRoot : public Firebird::PermanentStorage
+namespace Firebird::Why
 {
-	// we deal with names of files here
-	typedef Firebird::PathName string;
 
+
+class ConfigRoot : public PermanentStorage
+{
 private:
 	void GetRoot()
 	{
-		const Firebird::PathName* clRoot = Firebird::Config::getCommandLineRootDirectory();
+		const PathName* clRoot = Config::getCommandLineRootDirectory();
 		if (clRoot)
 		{
 			root_dir = *clRoot;
@@ -103,7 +104,7 @@ public:
 	}
 
 private:
-	string root_dir, install_dir;
+	PathName root_dir, install_dir;
 
 	// If the path ends with a separator, remove it.
 	void fixPath()
@@ -116,7 +117,7 @@ private:
 
 	bool getRootFromEnvironment(const char* envName)
 	{
-		string envValue;
+		PathName envValue;
 		if (!fb_utils::readenv(envName, envValue))
 			return false;
 
@@ -132,5 +133,8 @@ private:
 	ConfigRoot(const ConfigRoot&);
 	void operator=(const ConfigRoot&);
 };
+
+
+}	// namespace Firebird::Why
 
 #endif // CONFIG_ROOT_H

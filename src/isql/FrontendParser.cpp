@@ -25,6 +25,9 @@
 #include "../isql/FrontendParser.h"
 #include <cctype>
 
+namespace Firebird::Isql
+{
+
 
 FrontendParser::AnyNode FrontendParser::internalParse()
 {
@@ -736,3 +739,6 @@ std::optional<std::string> FrontendParser::parseUtilEof()
 
 	return std::nullopt;
 }
+
+
+} // namespace Firebird::Isql

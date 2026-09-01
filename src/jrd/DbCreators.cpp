@@ -31,7 +31,7 @@
 #include "../auth/SecureRemotePassword/Message.h"
 #include "iberror.h"
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/classes/init.h"
 #include "../common/classes/Hash.h"
@@ -53,13 +53,13 @@
 
 #define DBC_DEBUG(A)
 
-using namespace Firebird;
-using namespace Jrd;
-using namespace Auth;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 
-void check(const char* s, IStatus* st)
+void checkStatus(const char* s, IStatus* st)
 {
 	if (!(st->getState() & IStatus::STATE_ERRORS))
 		return;
@@ -84,7 +84,7 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 	if (st->getState() & IStatus::STATE_ERRORS)
 	{
 		if (!fb_utils::containsErrorCode(st->getErrors(), isc_io_error))
-			check("IProvider::attachDatabase", &st);
+			checkStatus("IProvider::attachDatabase", &st);
 
 		// missing security DB - checking granted rights not possible
 		return false;
@@ -94,15 +94,13 @@ bool openDb(const char* securityDb, RefPtr<IAttachment>& att, RefPtr<ITransactio
 	readOnly.insertTag(isc_tpb_read);
 	readOnly.insertTag(isc_tpb_wait);
 	tra.assignRefNoIncr(att->startTransaction(&st, readOnly.getBufferLength(), readOnly.getBuffer()));
-	check("IAttachment::startTransaction", &st);
+	checkStatus("IAttachment::startTransaction", &st);
 
 	return true;
 }
 
 } // anonymous namespace
 
-
-namespace Jrd {
 
 CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaString& trustedRole,
 	const MetaString& sqlRole, const char* securityDb)
@@ -121,7 +119,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 		const UCHAR info[] = { isc_info_db_sql_dialect, isc_info_end };
 		UCHAR buffer[BUFFER_TINY];
 		att->getInfo(&st, sizeof(info), info, sizeof(buffer), buffer);
-		check("IAttachment::getInfo", &st);
+		checkStatus("IAttachment::getInfo", &st);
 
 		int dialect = SQL_DIALECT_V5;		// reasonable default
 
@@ -158,7 +156,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 			// isc_dsql_relation_err when exec SQL - i.e. table RDB$USER_PRIVILEGES
 			// is missing due to non-FB security DB
 			if (!fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
-				check("IAttachment::execute", &st);
+				checkStatus("IAttachment::execute", &st);
 
 			role = "";
 		}
@@ -200,7 +198,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 			// is missing due to non-FB3 security DB
 			return CreateGrant::NONE;
 		}
-		check("IAttachment::execute", &st);
+		checkStatus("IAttachment::execute", &st);
 	}
 
 	if (cnt > 0)
@@ -235,7 +233,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 		"   from role_tree t join system.rdb$roles r on t.nm = r.rdb$role_name ";
 	RefPtr<IResultSet> rs(REF_NO_INCR, att->openCursor(&st, tra, 0, sql,
 		SQL_DIALECT_V6, par2.getMetadata(), par2.getBuffer(), res2.getMetadata(), NULL, 0));
-	check("IAttachment::execute", &st);
+	checkStatus("IAttachment::execute", &st);
 
 	UserId::Privileges privileges, wrk;
 
@@ -245,7 +243,7 @@ CreateGrant checkCreateDatabaseGrant(const MetaString& userName, const MetaStrin
 		privileges |= wrk;
 	}
 
-	check("IResultSet::fetchNext", &st);
+	checkStatus("IResultSet::fetchNext", &st);
 
 	return wrk.test(CREATE_DATABASE) ? CreateGrant::GRANTED : CreateGrant::NONE;
 }
@@ -310,7 +308,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 	if (st->getState() & IStatus::STATE_ERRORS)
 	{
 		if (!fb_utils::containsErrorCode(st->getErrors(), isc_dsql_relation_err))
-			check("IAttachment::openCursor", &st);
+			checkStatus("IAttachment::openCursor", &st);
 
 		// isc_dsql_relation_err when opening cursor - i.e. table
 		// is missing due to non-FB3 security DB
@@ -339,7 +337,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 
 			buffer->store(record);
 		}
-		check("IResultSet::fetchNext", &st);
+		checkStatus("IResultSet::fetchNext", &st);
 	}
 	catch (const Exception&)
 	{
@@ -350,4 +348,5 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 	return getData(relation);
 }
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd

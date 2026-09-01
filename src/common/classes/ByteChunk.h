@@ -41,7 +41,7 @@ struct ByteChunk
 	// Array<UCHAR> buffer.
 	// This constructor is intentionally not-explicit.
 	template <typename Storage>
-	ByteChunk(const Firebird::Array<UCHAR, Storage>& array)
+	ByteChunk(const Array<UCHAR, Storage>& array)
 		: data(array.begin()),
 		  length(array.getCount())
 	{

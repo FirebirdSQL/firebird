@@ -26,7 +26,7 @@
 
 #include "../common/classes/fb_string.h"
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 struct header_page;
 
@@ -37,7 +37,7 @@ namespace Firebird {
 class DbImplementation
 {
 public:
-	explicit DbImplementation(const Ods::header_page* h) noexcept;
+	explicit DbImplementation(const Jrd::Ods::header_page* h) noexcept;
 
 	DbImplementation(UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags) noexcept
 		: di_cpu(p_cpu), di_os(p_os), di_cc(p_cc), di_flags(p_flags)
@@ -57,7 +57,7 @@ public:
 	string implementation() const;
 
 	bool compatible(const DbImplementation& v) const noexcept;
-	void store(Ods::header_page* h) const noexcept;
+	void store(Jrd::Ods::header_page* h) const noexcept;
 	void stuff(UCHAR** info) const noexcept;
 	static DbImplementation pick(const UCHAR* info) noexcept;
 	UCHAR backwardCompatibleImplementation() const noexcept;

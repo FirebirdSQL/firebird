@@ -27,8 +27,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 static const char* const SCRATCH = "fb_merge_";
 
@@ -458,3 +459,6 @@ bool MergeJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T index) const
 
 	return true;
 }
+
+
+}	// namespace Firebird::Jrd

@@ -24,14 +24,17 @@
 #ifndef JRD_FILTE_PROTO_H
 #define JRD_FILTE_PROTO_H
 
-ISC_STATUS filter_acl(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_blr(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_debug_info(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_format(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_runtime(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_text(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_transliterate_text(USHORT, Jrd::BlobControl*);
-ISC_STATUS filter_trans(USHORT, Jrd::BlobControl*);
+namespace Firebird::Jrd
+{
+	ISC_STATUS filter_acl(USHORT, BlobControl*);
+	ISC_STATUS filter_blr(USHORT, BlobControl*);
+	ISC_STATUS filter_debug_info(USHORT, BlobControl*);
+	ISC_STATUS filter_format(USHORT, BlobControl*);
+	ISC_STATUS filter_runtime(USHORT, BlobControl*);
+	ISC_STATUS filter_text(USHORT, BlobControl*);
+	ISC_STATUS filter_transliterate_text(USHORT, BlobControl*);
+	ISC_STATUS filter_trans(USHORT, BlobControl*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_FILTE_PROTO_H
 

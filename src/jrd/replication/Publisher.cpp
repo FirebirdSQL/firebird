@@ -40,9 +40,9 @@
 #include "Replicator.h"
 #include <numeric>
 
-using namespace Firebird;
-using namespace Jrd;
-using namespace Replication;
+namespace Firebird::Jrd::Replication
+{
+
 
 namespace
 {
@@ -412,7 +412,7 @@ void REPL_attach(thread_db* tdbb, bool cleanupTransactions)
 	attachment->att_flags |= ATT_replicating;
 
 	if (cleanupTransactions)
-		REPL_trans_cleanup(tdbb, 0);
+		Replication::REPL_trans_cleanup(tdbb, 0);
 	// else defer creation of replicator till really needed
 }
 
@@ -720,3 +720,6 @@ void REPL_journal_cleanup(Database* dbb)
 	if (const auto replMgr = dbb->replManager(true))
 		replMgr->journalCleanup();
 }
+
+
+} // namespace Firebird::Jrd::Replication

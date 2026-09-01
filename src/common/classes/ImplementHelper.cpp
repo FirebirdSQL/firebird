@@ -31,20 +31,22 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/status.h"
 
+namespace Firebird
+{
+
+
 namespace
 {
-Firebird::IMaster* cached = NULL;
+IMaster* cached = NULL;
 
 #ifdef NEVERDEF
-typedef Firebird::ReferenceCounterDebugger* ReferenceCounterDebuggerPtr;
+typedef ReferenceCounterDebugger* ReferenceCounterDebuggerPtr;
 TLS_DECLARE(ReferenceCounterDebuggerPtr*, debugArray);
 #endif // DEV_BUILD
 
-Firebird::UnloadDetector myModule;
+UnloadDetector myModule;
 }
 
-namespace Firebird
-{
 
 UnloadDetectorHelper* getUnloadDetector() noexcept
 {
@@ -148,4 +150,5 @@ IDebug* getImpDebug()
 }
 #endif //DEV_BUILD
 
-}
+
+}	// namespace Firebird

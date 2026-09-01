@@ -36,7 +36,7 @@
 #include "../common/classes/RefMutex.h"
 #include "../jrd/jrd.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 int MetaName::compare(const char* s, FB_SIZE_T len) const
 {
@@ -107,17 +107,17 @@ FB_SIZE_T MetaName::copyTo(char* to, FB_SIZE_T toSize) const
 	return toSize;
 }
 
-MetaName::operator Firebird::MetaString() const noexcept
+MetaName::operator MetaString() const noexcept
 {
-	return Firebird::MetaString(c_str(), length());
+	return MetaString(c_str(), length());
 }
 
-MetaName::MetaName(const Firebird::MetaString& s)
+MetaName::MetaName(const MetaString& s)
 {
 	assign(s.c_str(), s.length());
 }
 
-MetaName& MetaName::operator=(const Firebird::MetaString& s)
+MetaName& MetaName::operator=(const MetaString& s)
 {
 	return assign(s.c_str(), s.length());
 }
@@ -151,7 +151,7 @@ static constexpr unsigned int hashSize[] = { 10007, 100003, 1000003 };
 #endif
 
 Dictionary::Dictionary(MemoryPool& p)
-	: Firebird::PermanentStorage(p),
+	: PermanentStorage(p),
 #if DIC_STATS > 0
 	  words(0), totLength(0), lostWords(0), conflicts(0), retriesHash(0), retriesSegment(0),
 #endif
@@ -221,7 +221,7 @@ Dictionary::Word* MetaName::get(const char* s, FB_SIZE_T len)
 
 Dictionary::TableData* Dictionary::HashTable::getEntryByHash(const char* s, FB_SIZE_T len)
 {
-	unsigned h = Firebird::InternalHash::hash(len, reinterpret_cast<const UCHAR*>(s), hashSize[level]);
+	unsigned h = InternalHash::hash(len, reinterpret_cast<const UCHAR*>(s), hashSize[level]);
 	return &table[h];
 }
 
@@ -282,7 +282,7 @@ Dictionary::Word* Dictionary::get(const char* s, FB_SIZE_T len)
 			newWord = segment->getSpace(len DIC_STAT_SEGMENT_CALL);
 			if (!newWord)
 			{
-				Firebird::MutexEnsureUnlock guard(mutex, FB_FUNCTION);
+				MutexEnsureUnlock guard(mutex, FB_FUNCTION);
 				if (guard.tryEnter())
 				{
 					// retry allocation to avoid a case when someone already changed segment
@@ -412,7 +412,7 @@ void Dictionary::growHash()
 
 Dictionary::HashTable* Dictionary::waitForMutex(Jrd::Dictionary::Word** checkWordPtr)
 {
-	Firebird::MutexLockGuard guard(mutex, FB_FUNCTION);
+	MutexLockGuard guard(mutex, FB_FUNCTION);
 
 #if DIC_STATS > 0
 	++conflicts;
@@ -491,4 +491,4 @@ Dictionary::Word* Dictionary::Segment::getSpace(FB_SIZE_T len DIC_STAT_SEGMENT_P
 	return nullptr;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd

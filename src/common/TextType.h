@@ -97,7 +97,7 @@ public:
 	USHORT getFlags() const;
 
 public:
-	Firebird::QualifiedMetaString name;
+	QualifiedMetaString name;
 
 protected:
 	texttype* tt;

@@ -44,9 +44,9 @@
 					{ \
 						if ((sig = sigsetjmp(sigenv, 1))) \
 							ISC_exception_post(sig, err, __isc_error_code); \
-						Firebird::syncSignalsSet(&sigenv); \
+						syncSignalsSet(&sigenv); \
 					}
-#define END_CHECK_FOR_EXCEPTIONS(err)   if (!Config::getBugcheckAbort()) Firebird::syncSignalsReset(); }
+#define END_CHECK_FOR_EXCEPTIONS(err)   if (!Config::getBugcheckAbort()) syncSignalsReset(); }
 
 #endif // UNIX
 

@@ -45,7 +45,8 @@
 #include "../common/os/path_utils.h"
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -67,8 +68,6 @@ namespace
 		}
 	};
 }
-
-namespace Jrd {
 
 
 struct ExternalInfo
@@ -421,7 +420,7 @@ bool IntlManager::initialize()
 	ObjectsArray<CharSetCollationName> conflicts;
 	string builtinConfig;
 
-	PathName intlPath = fb_utils::getPrefix(Firebird::IConfigManager::DIR_INTL, "");
+	PathName intlPath = fb_utils::getPrefix(IConfigManager::DIR_INTL, "");
 
 	ScanDir dir(intlPath.c_str(), "*.conf");
 
@@ -884,4 +883,4 @@ bool IntlManager::validateCharSet(const QualifiedMetaString& charSetName, charse
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

@@ -37,7 +37,7 @@ namespace Firebird {
 	class ZLib
 	{
 	public:
-		explicit ZLib(Firebird::MemoryPool&);
+		explicit ZLib(MemoryPool&);
 
 		int ZEXPORT (*deflateInit_)(z_stream* strm, int level, const char *version, int stream_size);
 		int ZEXPORT (*inflateInit_)(z_stream* strm, const char *version, int stream_size);

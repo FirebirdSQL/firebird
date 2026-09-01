@@ -14,8 +14,8 @@
 #include "../intl/charsets.h"
 #include "../common/classes/Aligner.h"
 
-using Firebird::IntlUtil;
-using Firebird::UnicodeUtil;
+namespace Firebird::Jrd
+{
 
 
 static USHORT internal_keylength(texttype*, USHORT);
@@ -214,7 +214,7 @@ static ULONG internal_fss_to_unicode(csconvert* obj,
 	if (p_dest_ptr == NULL)
 		return (src_len * 2);	// All single byte narrow characters
 
-	Firebird::OutAligner<UNICODE> d(p_dest_ptr, dest_len);
+	OutAligner<UNICODE> d(p_dest_ptr, dest_len);
 	UNICODE* dest_ptr = d;
 
 	const UNICODE* const start = dest_ptr;
@@ -263,7 +263,7 @@ ULONG internal_unicode_to_fss(csconvert* obj,
 	if (fss_str == NULL)
 		return ((unicode_len + 1) / 2 * 3);	// worst case - all han character input
 
-	Firebird::Aligner<UNICODE> s(p_unicode_str, unicode_len);
+	Aligner<UNICODE> s(p_unicode_str, unicode_len);
 	const UNICODE* unicode_str = s;
 
 	const UCHAR* const start = fss_str;
@@ -670,7 +670,7 @@ static USHORT utf16_string_to_key(texttype* obj,
 	fb_assert(obj != NULL);
 	fb_assert(srcLen % 2 == 0);
 
-	Firebird::Aligner<USHORT> alSrc(src, srcLen);
+	Aligner<USHORT> alSrc(src, srcLen);
 
 	if (obj->texttype_pad_option)
 	{
@@ -700,8 +700,8 @@ static SSHORT utf16_compare(texttype* obj,
 	fb_assert(len1 % 2 == 0 && len2 % 2 == 0);
 	fb_assert(str1 != NULL && str2 != NULL);
 
-	Firebird::Aligner<USHORT> al1(str1, len1);
-	Firebird::Aligner<USHORT> al2(str2, len2);
+	Aligner<USHORT> al1(str1, len1);
+	Aligner<USHORT> al2(str2, len2);
 
 	if (obj->texttype_pad_option)
 	{
@@ -727,8 +727,8 @@ static ULONG utf16_upper(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG ds
 	fb_assert(srcLen % 2 == 0);
 	fb_assert(src != NULL && dst != NULL);
 
-	return UnicodeUtil::utf16UpperCase(srcLen, Firebird::Aligner<USHORT>(src, srcLen),
-		dstLen, Firebird::OutAligner<USHORT>(dst, dstLen), NULL);
+	return UnicodeUtil::utf16UpperCase(srcLen, Aligner<USHORT>(src, srcLen),
+		dstLen, OutAligner<USHORT>(dst, dstLen), NULL);
 }
 
 static ULONG utf16_lower(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst)
@@ -746,8 +746,8 @@ static ULONG utf16_lower(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG ds
 	fb_assert(srcLen % 2 == 0);
 	fb_assert(src != NULL && dst != NULL);
 
-	return UnicodeUtil::utf16LowerCase(srcLen, Firebird::Aligner<USHORT>(src, srcLen),
-		dstLen, Firebird::OutAligner<USHORT>(dst, dstLen), NULL);
+	return UnicodeUtil::utf16LowerCase(srcLen, Aligner<USHORT>(src, srcLen),
+		dstLen, OutAligner<USHORT>(dst, dstLen), NULL);
 }
 
 
@@ -787,8 +787,8 @@ static USHORT utf32_string_to_key(texttype* obj,
 	USHORT err_code;
 	ULONG err_position;
 
-	Firebird::HalfStaticArray<USHORT, BUFFER_SMALL / sizeof(USHORT)> utf16Str;
-	ULONG sLen = UnicodeUtil::utf32ToUtf16(srcLen, Firebird::Aligner<ULONG>(src, srcLen),
+	HalfStaticArray<USHORT, BUFFER_SMALL / sizeof(USHORT)> utf16Str;
+	ULONG sLen = UnicodeUtil::utf32ToUtf16(srcLen, Aligner<ULONG>(src, srcLen),
 		dstLen, utf16Str.getBuffer(dstLen / sizeof(USHORT) + 1), &err_code, &err_position);
 	const USHORT* s = utf16Str.begin();
 
@@ -823,7 +823,7 @@ static ULONG wc_to_nc(csconvert* obj, ULONG nSrc, const UCHAR* ppSrc,
 	if (pDest == NULL)			// length estimate needed?
 		return ((nSrc + 1) / 2);
 
-	Firebird::Aligner<USHORT> s(ppSrc, nSrc);
+	Aligner<USHORT> s(ppSrc, nSrc);
 	const USHORT* pSrc = s;
 
 	const UCHAR* const pStart = pDest;
@@ -873,7 +873,7 @@ static ULONG mb_to_wc(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,
 	if (ppDest == NULL)			// length estimate needed?
 		return (nSrc);
 
-	Firebird::OutAligner<USHORT> d(ppDest, nDest);
+	OutAligner<USHORT> d(ppDest, nDest);
 	USHORT* pDest = d;
 
 	const USHORT* const pStart = pDest;
@@ -918,7 +918,7 @@ static ULONG wc_to_mb(csconvert* obj, ULONG nSrc, const UCHAR* ppSrc,
 	if (pDest == NULL)			// length estimate needed?
 		return (nSrc);
 
-	Firebird::Aligner<USHORT> s(ppSrc, nSrc);
+	Aligner<USHORT> s(ppSrc, nSrc);
 	const USHORT* pSrc = s;
 
 	const UCHAR* const pStart = pDest;
@@ -1074,11 +1074,11 @@ static INTL_BOOL ttype_unicode8_init(texttype* tt,
 	memset(cs, 0, sizeof(*cs));
 	cs_utf8_init(cs, "UTF8", config_info);
 
-	Firebird::UCharBuffer specificAttributes;
+	UCharBuffer specificAttributes;
 	memcpy(specificAttributes.getBuffer(specific_attributes_length),
 		specific_attributes, specific_attributes_length);
 
-	return Firebird::IntlUtil::initUnicodeCollation(tt, cs, POSIX, attributes, specificAttributes, config_info);
+	return IntlUtil::initUnicodeCollation(tt, cs, POSIX, attributes, specificAttributes, config_info);
 }
 
 
@@ -1160,7 +1160,7 @@ static INTL_BOOL cs_utf16_well_formed(charset* cs,
  *************************************/
 	fb_assert(cs != NULL);
 
-	return UnicodeUtil::utf16WellFormed(len, Firebird::Aligner<USHORT>(str, len), offending_position);
+	return UnicodeUtil::utf16WellFormed(len, Aligner<USHORT>(str, len), offending_position);
 }
 
 
@@ -1177,7 +1177,7 @@ static ULONG cs_utf16_length(charset* cs, ULONG srcLen, const UCHAR* src)
  *
  *************************************/
 	fb_assert(cs != NULL);
-	return UnicodeUtil::utf16Length(srcLen, Firebird::Aligner<USHORT>(src, srcLen));
+	return UnicodeUtil::utf16Length(srcLen, Aligner<USHORT>(src, srcLen));
 }
 
 
@@ -1201,8 +1201,8 @@ static ULONG cs_utf16_substring(charset* cs,
  *************************************/
 	fb_assert(cs != NULL);
 
-	return UnicodeUtil::utf16Substring(srcLen, Firebird::Aligner<USHORT>(src, srcLen),
-		dstLen, Firebird::OutAligner<USHORT>(dst, dstLen), startPos, length);
+	return UnicodeUtil::utf16Substring(srcLen, Aligner<USHORT>(src, srcLen),
+		dstLen, OutAligner<USHORT>(dst, dstLen), startPos, length);
 }
 
 
@@ -1223,7 +1223,7 @@ static INTL_BOOL cs_utf32_well_formed(charset* cs,
  *************************************/
 	fb_assert(cs != NULL);
 
-	return UnicodeUtil::utf32WellFormed(len, Firebird::Aligner<ULONG>(str, len), offending_position);
+	return UnicodeUtil::utf32WellFormed(len, Aligner<ULONG>(str, len), offending_position);
 }
 
 
@@ -1247,7 +1247,7 @@ static ULONG cvt_none_to_unicode(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,
 	fb_assert((pSrc != NULL) || (ppDest == NULL));
 	fb_assert(err_code != NULL);
 
-	Firebird::OutAligner<USHORT> d(ppDest, nDest);
+	OutAligner<USHORT> d(ppDest, nDest);
 	USHORT* pDest = d;
 
 	*err_code = 0;
@@ -1297,9 +1297,9 @@ static ULONG cvt_unicode_to_unicode(csconvert* obj, ULONG nSrc, const UCHAR* ppS
 	if (ppDest == NULL)			// length estimate needed?
 		return nSrc;
 
-	Firebird::Aligner<USHORT> s(ppSrc, nSrc);
+	Aligner<USHORT> s(ppSrc, nSrc);
 	const USHORT* pSrc = s;
-	Firebird::OutAligner<USHORT> d(ppDest, nDest);
+	OutAligner<USHORT> d(ppDest, nDest);
 	USHORT* pDest = d;
 
 	const USHORT* const pStart = pDest;
@@ -1384,8 +1384,8 @@ static ULONG cvt_unicode_to_utf32(csconvert* obj,
 {
 	fb_assert(obj != NULL);
 	fb_assert(obj->csconvert_fn_convert == cvt_unicode_to_utf32);
-	return UnicodeUtil::utf16ToUtf32(unicode_len, Firebird::Aligner<USHORT>(unicode_str, unicode_len),
-		utf32_len, Firebird::OutAligner<ULONG>(utf32_str, utf32_len), err_code, err_position);
+	return UnicodeUtil::utf16ToUtf32(unicode_len, Aligner<USHORT>(unicode_str, unicode_len),
+		utf32_len, OutAligner<ULONG>(utf32_str, utf32_len), err_code, err_position);
 }
 
 
@@ -1400,8 +1400,8 @@ static ULONG cvt_utf32_to_unicode(csconvert* obj,
 	fb_assert(obj != NULL);
 	fb_assert(obj->csconvert_fn_convert == cvt_utf32_to_unicode);
 
-	return UnicodeUtil::utf32ToUtf16(utf32_len, Firebird::Aligner<ULONG>(utf32_str, utf32_len),
-		unicode_len, Firebird::OutAligner<USHORT>(unicode_str, unicode_len), err_code, err_position);
+	return UnicodeUtil::utf32ToUtf16(utf32_len, Aligner<ULONG>(utf32_str, utf32_len),
+		unicode_len, OutAligner<USHORT>(unicode_str, unicode_len), err_code, err_position);
 }
 
 
@@ -1702,14 +1702,14 @@ INTL_BOOL INTL_builtin_lookup_texttype_status(
 
 	if (func)
 	{
-		Firebird::string errorMsg;
+		string errorMsg;
 
 		try
 		{
 			return func(tt, texttype_name, charset_name, attributes,
 				specific_attributes, specific_attributes_length, ignore_attributes, config_info);
 		}
-		catch (const Firebird::status_exception& ex)
+		catch (const status_exception& ex)
 		{
 			auto status = ex.value();
 			TEXT temp[BUFFER_LARGE];
@@ -1740,15 +1740,15 @@ ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* char
 	// the preprocessor, but this is a task for another day.
 	if (strstr(textTypeName, "UNICODE") && strcmp(textTypeName, "UNICODE_FSS") != 0)
 	{
-		Firebird::AutoPtr<charset> cs(FB_NEW charset);
+		AutoPtr<charset> cs(FB_NEW charset);
 		memset(cs, 0, sizeof(*cs));
 
 		// test if that charset exists
 		if (!INTL_builtin_lookup_charset(cs, charSetName, configInfo))
 			return INTL_BAD_STR_LENGTH;
 
-		const Firebird::string specificAttributes((const char*) src, srcLen);
-		Firebird::string newSpecificAttributes = specificAttributes;
+		const string specificAttributes((const char*) src, srcLen);
+		string newSpecificAttributes = specificAttributes;
 
 		if (IntlUtil::setupIcuAttributes(cs, specificAttributes, configInfo, newSpecificAttributes))
 		{
@@ -1767,3 +1767,6 @@ ULONG INTL_builtin_setup_attributes(const ASCII* textTypeName, const ASCII* char
 
 	return INTL_BAD_STR_LENGTH;
 }
+
+
+}	// namespace Firebird::Jrd

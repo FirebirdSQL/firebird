@@ -24,9 +24,11 @@
 #ifndef BURP_MISC_PROTO_H
 #define BURP_MISC_PROTO_H
 
-void	MISC_release_request_silent(Firebird::IRequest*& req_handle);
-int		MISC_symbol_length(const TEXT*, ULONG);
-void	MISC_terminate(const TEXT*, TEXT*, ULONG, ULONG);
+namespace Firebird::Burp
+{
+	void	MISC_release_request_silent(IRequest*& req_handle);
+	int		MISC_symbol_length(const TEXT*, ULONG);
+	void	MISC_terminate(const TEXT*, TEXT*, ULONG, ULONG);
+} // namespace Firebird::Burp
 
 #endif	// BURP_MISC_PROTO_H
-

@@ -24,9 +24,12 @@
 #ifndef REMOTE_CNTL_PROTO_H
 #define REMOTE_CNTL_PROTO_H
 
-void	CNTL_init(ThreadEntryPoint*, const TEXT*);
-void	WINAPI CNTL_main_thread(DWORD, char*[]);
-void	CNTL_shutdown_service(const TEXT*);
+namespace Firebird::Remote
+{
+	void	CNTL_init(ThreadEntryPoint*, const TEXT*);
+	void	WINAPI CNTL_main_thread(DWORD, char*[]);
+	void	CNTL_shutdown_service(const TEXT*);
+}
 
 #endif // REMOTE_CNTL_PROTO_H
 

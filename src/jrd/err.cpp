@@ -46,8 +46,9 @@
 #include "../common/config/config.h"
 #include "../common/utils_proto.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 //#define JRD_FAILURE_SPACE	2048
 //#define JRD_FAILURE_UNKNOWN	"<UNKNOWN>"	// Used when buffer fails
@@ -453,3 +454,6 @@ void ERR_build_status(FbStatusVector* status_vector, const Arg::StatusVector& v)
 
 	ERR_post(Arg::Gds(status) << Arg::Str(errmsg));
 }
+
+
+} // namespace Firebird::Jrd

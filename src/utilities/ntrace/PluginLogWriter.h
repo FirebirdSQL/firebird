@@ -47,15 +47,18 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+namespace Firebird::Ntrace
+{
+
 
 // Empty header. We need it to get shared mutex using SharedMemory
-struct PluginLogWriterHeader : public Firebird::MemoryHeader
+struct PluginLogWriterHeader : public MemoryHeader
 {
 };
 
 class PluginLogWriter final :
-	public Firebird::RefCntIface<Firebird::ITraceLogWriterImpl<PluginLogWriter, Firebird::CheckStatusWrapper> >,
-	public Firebird::IpcObject
+	public RefCntIface<ITraceLogWriterImpl<PluginLogWriter, CheckStatusWrapper>>,
+	public IpcObject
 {
 public:
 	PluginLogWriter(const char* fileName, size_t maxSize);
@@ -63,7 +66,7 @@ public:
 
 	// TraceLogWriter implementation
 	FB_SIZE_T write(const void* buf, FB_SIZE_T size) override;
-	FB_SIZE_T write_s(Firebird::CheckStatusWrapper* status, const void* buf, FB_SIZE_T size) override;
+	FB_SIZE_T write_s(CheckStatusWrapper* status, const void* buf, FB_SIZE_T size) override;
 
 private:
 	static constexpr USHORT PLUGIN_LOG_VERSION = 1;
@@ -75,7 +78,7 @@ private:
 	// evaluate new value or clear idle timer
 	void setupIdleTimer(bool clear);
 
-	void onIdleTimer(Firebird::TimerImpl*);
+	void onIdleTimer(TimerImpl*);
 
 	// Windows requires explicit syncronization when few processes appends to the
 	// same file simultaneously, therefore we used our fastMutex for this
@@ -84,9 +87,9 @@ private:
 	// Mutex on Posix is needed to rotate log file.
 
 	void mutexBug(int osErrorCode, const char* text) override;
-	bool initialize(Firebird::SharedMemoryBase*, bool) override;
+	bool initialize(SharedMemoryBase*, bool) override;
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TRACE_AUDIT_MTX; };
+	USHORT getType() const override { return SharedMemoryBase::SRAM_TRACE_AUDIT_MTX; };
 	USHORT getVersion() const override { return PLUGIN_LOG_VERSION; };
 	const char* getName() const override { return "AuditLogMutex"; };
 
@@ -112,14 +115,17 @@ private:
 		PluginLogWriter* m_log;
 	};
 
-	Firebird::PathName m_fileName;
+	PathName m_fileName;
 	int		 m_fileHandle;
 	size_t	 m_maxSize;
-	Firebird::AutoPtr<Firebird::SharedMemory<PluginLogWriterHeader> > m_sharedMemory;
+	AutoPtr<SharedMemory<PluginLogWriterHeader>> m_sharedMemory;
 
-	typedef Firebird::TimerImpl IdleTimer;
-	Firebird::RefPtr<IdleTimer> m_idleTimer;
-	Firebird::Mutex m_idleMutex;
+	typedef TimerImpl IdleTimer;
+	RefPtr<IdleTimer> m_idleTimer;
+	Mutex m_idleMutex;
 };
+
+
+} // namespace Firebird::Ntrace
 
 #endif // PLUGINLOGWRITER_H

@@ -26,50 +26,53 @@
 #define JRD_MSG_H
 
 #define MSG_NUMBER(facility, code)	((SLONG) facility * 10000 + code)
-inline constexpr USHORT MSG_BUCKET			= 1024;
-inline constexpr UCHAR MSG_MAJOR_VERSION	= 1;
 // trick to silence the compiler when FB_MSG_MINOR_VERSION is 0
 #define FB_MSG_MINOR_VERSION	1
-inline constexpr UCHAR MSG_MINOR_VERSION	= FB_MSG_MINOR_VERSION;
 
-// Message file header block
-
-struct isc_msghdr
+namespace Firebird
 {
-	UCHAR msghdr_major_version;	// Version number
-	UCHAR msghdr_minor_version;	// Version number
-	USHORT msghdr_bucket_size;	// Bucket size of B-tree
-	ULONG msghdr_top_tree;		// Start address of first index bucket
-	ULONG msghdr_origin;		// Origin for data records, unused.
-	USHORT msghdr_levels;		// Levels in tree
-};
+	inline constexpr USHORT MSG_BUCKET			= 1024;
+	inline constexpr UCHAR MSG_MAJOR_VERSION	= 1;
+	inline constexpr UCHAR MSG_MINOR_VERSION	= FB_MSG_MINOR_VERSION;
 
-// Index node
+	// Message file header block
 
-struct msgnod
-{
-	ULONG msgnod_code;			// Message code
-	ULONG msgnod_seek;			// Offset of next bucket or message
-};
-
-// Leaf node
-
-struct msgrec
-{
-	ULONG msgrec_code;			// Message code
-	USHORT msgrec_length;		// Length of message text
-	USHORT msgrec_flags;		// Misc flags
-	TEXT msgrec_text[1];		// Text of message
-
-	inline msgrec* next() const
+	struct isc_msghdr
 	{
-		IPTR next = (IPTR) this;
-		next += FB_ALIGN(offsetof(msgrec, msgrec_text[0]) + msgrec_length, sizeof (SLONG));
-		return (msgrec*) next;
-	}
-};
+		UCHAR msghdr_major_version;	// Version number
+		UCHAR msghdr_minor_version;	// Version number
+		USHORT msghdr_bucket_size;	// Bucket size of B-tree
+		ULONG msghdr_top_tree;		// Start address of first index bucket
+		ULONG msghdr_origin;		// Origin for data records, unused.
+		USHORT msghdr_levels;		// Levels in tree
+	};
 
-typedef msgrec* MSGREC;
+	// Index node
+
+	struct msgnod
+	{
+		ULONG msgnod_code;			// Message code
+		ULONG msgnod_seek;			// Offset of next bucket or message
+	};
+
+	// Leaf node
+
+	struct msgrec
+	{
+		ULONG msgrec_code;			// Message code
+		USHORT msgrec_length;		// Length of message text
+		USHORT msgrec_flags;		// Misc flags
+		TEXT msgrec_text[1];		// Text of message
+
+		inline msgrec* next() const
+		{
+			IPTR next = (IPTR) this;
+			next += FB_ALIGN(offsetof(msgrec, msgrec_text[0]) + msgrec_length, sizeof (SLONG));
+			return (msgrec*) next;
+		}
+	};
+
+	typedef msgrec* MSGREC;
+}
 
 #endif // JRD_MSG_H
-

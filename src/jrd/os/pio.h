@@ -34,7 +34,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/File.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 #ifdef UNIX
 
@@ -42,7 +42,7 @@ class jrd_file : public pool_alloc_rpt<SCHAR, type_fil>
 {
 public:
 	int fil_desc;
-	Firebird::Mutex fil_mutex;
+	Mutex fil_mutex;
 	USHORT fil_flags;
 	SCHAR fil_string[1];		// Expanded file name
 };
@@ -65,7 +65,7 @@ public:
 	}
 
 	HANDLE fil_desc;					// File descriptor
-	Firebird::RWLock* fil_ext_lock;		// file extend lock
+	RWLock* fil_ext_lock;		// file extend lock
 	USHORT fil_flags;
 	SCHAR fil_string[1];				// Expanded file name
 };
@@ -109,7 +109,7 @@ inline constexpr UCHAR PIOB_success	= 2;	// I/O successfully completed
 inline constexpr UCHAR PIOB_pending	= 4;	// Asynchronous I/O not yet completed
 #endif
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PIO_H
 

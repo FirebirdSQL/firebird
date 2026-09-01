@@ -53,7 +53,7 @@
 #include <unistd.h>
 #endif
 #include "../common/isc_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "firebird/impl/inf_pub.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/init.h"
@@ -77,7 +77,8 @@
 #include "../common/os/os_utils.h"
 #include "../common/security.h"
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
 
 
 struct server_req_t : public GlobalStorage
@@ -170,14 +171,14 @@ public:
 		return replyLength;
 	}
 
-	int getHashLength(Firebird::CheckStatusWrapper* status) override
+	int getHashLength(CheckStatusWrapper* status) override
 	{
 		getHashData(status, nullptr);
 
 		return -1;
 	}
 
-	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+	void getHashData(CheckStatusWrapper* status, void* h) override
 	{
 		constexpr ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 		status->setErrors2(FB_NELEM(err), err);
@@ -276,7 +277,7 @@ public:
 		return rc;
 	}
 
-	int getHashLength(Firebird::CheckStatusWrapper* status) override
+	int getHashLength(CheckStatusWrapper* status) override
 	{
 		Reference r(*port);
 		loadClientKey();
@@ -295,7 +296,7 @@ public:
 		return 0;
 	}
 
-	void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+	void getHashData(CheckStatusWrapper* status, void* h) override
 	{
 		Reference r(*port);
 		loadClientKey();
@@ -7758,3 +7759,6 @@ bool SrvAuthBlock::extractNewKeys(CSTRING* to, ULONG flags)
 
 	return to->cstr_length > 0;
 }
+
+
+} // namespace Firebird::Remote

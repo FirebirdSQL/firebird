@@ -34,6 +34,10 @@
 
 #include <firebird/Interface.h>
 
+namespace Firebird::Why
+{
+
+
 enum pp_vals {
 	PP_CREATE = 0,
 	PP_DATABASE,
@@ -52,7 +56,7 @@ enum pp_vals {
 };
 
 
-static void generate_error(const Firebird::NoCaseString&, SSHORT, char = 0);
+static void generate_error(const NoCaseString&, SSHORT, char = 0);
 
 struct pp_table
 {
@@ -93,9 +97,6 @@ enum token_vals {
 };
 
 static const char* quotes = "\"\'";
-
-
-using namespace Firebird;
 
 
 static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYMBOL)
@@ -155,7 +156,7 @@ static NoCaseString getToken(unsigned& pos, const Tokens& toks, int symbol = SYM
     @param dialect
 
  **/
-bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
+bool PREPARSE_execute(CheckStatusWrapper* status, YAttachment** ptrAtt,
 					  string& stmt, bool* stmt_eaten, USHORT dialect, unsigned dpbLength, const unsigned char* dpb)
 {
 	// no use creating separate pool for a couple of strings
@@ -320,7 +321,7 @@ bool PREPARSE_execute(CheckStatusWrapper* status, Why::YAttachment** ptrAtt,
 				} // for
 			} while (matched);
 
-			RefPtr<Why::Dispatcher> dispatcher(FB_NEW Why::Dispatcher);
+			RefPtr<Dispatcher> dispatcher(FB_NEW Dispatcher);
 			*ptrAtt = dispatcher->createDatabase(status, file_name.c_str(),
 				dpbWriter.getBufferLength(), dpbWriter.getBuffer());
 
@@ -393,3 +394,6 @@ static void generate_error(const NoCaseString& token, SSHORT error, char result)
 
 	Arg::StatusVector(temp_status).raise();
 }
+
+
+} // namespace Firebird::Why

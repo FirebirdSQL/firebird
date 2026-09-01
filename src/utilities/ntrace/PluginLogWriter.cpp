@@ -40,7 +40,9 @@
 #define S_IWRITE S_IWUSR
 #endif
 
-using namespace Firebird;
+namespace Firebird::Ntrace
+{
+
 
 // seems to only be Solaris 9 that doesn't have strerror_r,
 // maybe we can remove this in the future
@@ -327,3 +329,6 @@ void PluginLogWriter::onIdleTimer(TimerImpl*)
 	::close(m_fileHandle);
 	m_fileHandle = -1;
 }
+
+
+} // namespace Firebird::Ntrace

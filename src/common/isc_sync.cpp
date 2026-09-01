@@ -132,7 +132,9 @@ static size_t getpagesize()
 
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 static void		error(CheckStatusWrapper*, const TEXT*, ISC_STATUS);
 static bool		event_blocked(const event_t* event, const SLONG value);
@@ -258,8 +260,6 @@ namespace {
 
 } // anonymous namespace
 
-
-namespace Firebird {
 
 class SharedFileInfo : public RefCounted
 {
@@ -463,8 +463,6 @@ private:
 
 GlobalPtr<SharedFileInfo::SharedFiles> SharedFileInfo::sharedFiles;
 GlobalPtr<Mutex> SharedFileInfo::sharedFilesMutex;
-
-} // namespace Firebird
 
 
 FileLock::FileLock(const char* fileName, InitFunction* init)
@@ -2910,3 +2908,6 @@ static void error(CheckStatusWrapper* statusVector, const TEXT* string, ISC_STAT
 	(Arg::StatusVector(statusVector) <<
 		Arg::Gds(isc_sys_request) << string << SYS_ERR(status)).copyTo(statusVector);
 }
+
+
+} // namespace Firebird

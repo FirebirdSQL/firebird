@@ -47,9 +47,11 @@
 
 #include <dlfcn.h>
 
-typedef Firebird::PathName string;
+namespace Firebird::Why
+{
 
-static string getFrameworkFromBundle()
+
+static PathName getFrameworkFromBundle()
 {
 	// Attempt to locate the Firebird.framework bundle
 	CFBundleRef fbFramework = CFBundleGetBundleWithIdentifier(CFSTR(DARWIN_FRAMEWORK_ID));
@@ -67,7 +69,7 @@ static string getFrameworkFromBundle()
 				if (CFStringGetCString(msgFilePath, file_buff, MAXPATHLEN,
 					kCFStringEncodingMacRoman))
 				{
-					string dir = file_buff;
+					PathName dir = file_buff;
 					dir += PathUtils::dir_sep;
 					return dir;
 				}
@@ -79,33 +81,33 @@ static string getFrameworkFromBundle()
 	return "";
 }
 
-static string getExecutablePath()
+static PathName getExecutablePath()
 {
 	char file_buff[MAXPATHLEN];
 	uint32_t bufsize = sizeof(file_buff);
 	_NSGetExecutablePath(file_buff, &bufsize);
 	char canonic[PATH_MAX];
 	if (!realpath(file_buff, canonic))
-		Firebird::system_call_failed::raise("realpath");
-	string bin_dir = canonic;
+		system_call_failed::raise("realpath");
+	PathName bin_dir = canonic;
 	// get rid of the filename
 	int index = bin_dir.rfind(PathUtils::dir_sep);
 	bin_dir = bin_dir.substr(0, index);
 	// go to parent directory
 	index = bin_dir.rfind(PathUtils::dir_sep, bin_dir.length());
-	string dir = (index ? bin_dir.substr(0,index) : bin_dir) + PathUtils::dir_sep;
+	PathName dir = (index ? bin_dir.substr(0,index) : bin_dir) + PathUtils::dir_sep;
 	return dir;
 }
 
-static string getDlInfoPath()
+static PathName getDlInfoPath()
 {
 	Dl_info dlInfo;
 	static int test = 1;
 	if (dladdr(&test, &dlInfo) != 0)		// non-zero is success in dladdr
 	{
-		string next, dummy;
+		PathName next, dummy;
 		PathUtils::splitLastComponent(next, dummy, dlInfo.dli_fname);
-		string dir;
+		PathName dir;
 		PathUtils::splitLastComponent(dir, dummy, next);
 		return dir;
 	}
@@ -166,3 +168,6 @@ void ConfigRoot::osConfigInstallDir()
 	// As a last resort get it from the default install directory
 	install_dir = FB_PREFIX;
 }
+
+
+}	// namespace Firebird::Why

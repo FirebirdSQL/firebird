@@ -30,6 +30,9 @@
 #include "../platform.h"
 #include "../common/classes/fb_tls.h"
 
+namespace Firebird::Ntrace
+{
+
 TLS_DECLARE(char*, error_string);
 
 const char* get_error_string()
@@ -63,16 +66,20 @@ SLONG get_process_id()
 	return GetCurrentProcessId();
 }
 
+} // namespace Firebird::Ntrace
+
 
 BOOL WINAPI DllMain(HINSTANCE /*hinstDLL*/, DWORD fdwReason, LPVOID /*lpvReserved*/)
 {
+	using namespace Firebird;
+
 	if (fdwReason == DLL_THREAD_DETACH)
 	{
-		char* str = TLS_GET(error_string);
+		char* str = TLS_GET(Ntrace::error_string);
 		if (str)
 		{
 			LocalFree(str);
-			TLS_SET(error_string, NULL);
+			TLS_SET(Ntrace::error_string, NULL);
 		}
 	}
 	return TRUE;

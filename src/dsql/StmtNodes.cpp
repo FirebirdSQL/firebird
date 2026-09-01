@@ -72,11 +72,8 @@
 #include "../dsql/DsqlStatementCache.h"
 #include "../jrd/BulkInsert.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd {
 
-
-namespace Jrd {
 
 template <typename T> static void dsqlExplodeFields(dsql_rel* relation, Array<NestConst<T> >& fields,
 	bool includeComputed);
@@ -119,8 +116,6 @@ static void preprocessAssignments(thread_db* tdbb, CompilerScratch* csb,
 static void restartRequest(const Request* request, jrd_tra* transaction);
 static void revertParametersOrder(Array<dsql_par*>& parameters);
 static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& validations);
-
-}	// namespace Jrd
 
 
 namespace
@@ -235,13 +230,10 @@ namespace
 		AutoSavePoint m_savepoint;
 		Savepoint::ChangeMarker m_marker;
 	};
-}	// namespace
+}	// unnamed namespace
 
 
 //--------------------
-
-
-namespace Jrd {
 
 
 string StmtNode::internalPrint(NodePrinter& printer) const
@@ -629,14 +621,14 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 					// The savepoint of this block will be dealt with below.
 					// Do this only if error handlers exist. Otherwise, leave undo up to callers.
 
-					Jrd::ContextPoolHolder context(tdbb, transaction->tra_pool);
+					JrdContextPoolHolder context(tdbb, transaction->tra_pool);
 
 					while (transaction->tra_save_point &&
 						transaction->tra_save_point->getNumber() > savNumber &&
 						transaction->tra_save_point->getNext() &&
 						transaction->tra_save_point->getNext()->getNumber() > savNumber)
 					{
-						REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
+						Replication::REPL_save_cleanup(tdbb, transaction, transaction->tra_save_point, true);
 						transaction->tra_save_point = transaction->tra_save_point->rollforward(tdbb);
 					}
 
@@ -668,7 +660,7 @@ const StmtNode* BlockNode::execute(thread_db* tdbb, Request* request, ExeState* 
 						// request for that invocation of looper. Avoid this.
 
 						{
-							Jrd::ContextPoolHolder contextLooper(tdbb, exeState->oldPool);
+							JrdContextPoolHolder contextLooper(tdbb, exeState->oldPool);
 							tdbb->setRequest(exeState->oldRequest);
 							fb_assert(request->req_caller == exeState->oldRequest);
 							request->req_caller = NULL;
@@ -765,7 +757,7 @@ bool BlockNode::testAndFixupError(thread_db* tdbb, Request* request, const Excep
 	if (tdbb->tdbb_flags & TDBB_sys_error)
 		return false;
 
-	Jrd::FbStatusVector* statusVector = tdbb->tdbb_status_vector;
+	FbStatusVector* statusVector = tdbb->tdbb_status_vector;
 
 	bool found = false;
 
@@ -1011,7 +1003,7 @@ void BulkInsertNode::fromCursor(thread_db* tdbb, Request* request) const
 		assignValues(tdbb, request, relation, record, toDescs.begin());
 
 		bulk->putRecord(tdbb, rpb, transaction);
-		REPL_store(tdbb, rpb, transaction);
+		Replication::REPL_store(tdbb, rpb, transaction);
 	}
 
 	transaction->finiBulkInsert(tdbb, true);
@@ -1053,7 +1045,7 @@ void BulkInsertNode::fromMessage(thread_db* tdbb, Request* request) const
 	assignValues(tdbb, request, relation, record, impure->descs->begin());
 
 	bulk->putRecord(tdbb, rpb, transaction);
-	REPL_store(tdbb, rpb, transaction);
+	Replication::REPL_store(tdbb, rpb, transaction);
 }
 
 void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const
@@ -2507,7 +2499,7 @@ DmlNode* DeclareSubFuncNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
 		BlrReader& reader = subCsb->csb_blr_reader;
-		ContextPoolHolder context(tdbb, &subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &subCsb->csb_pool);
 
 		UCHAR type = reader.getByte();
 		if (type != SUB_ROUTINE_TYPE_PSQL)
@@ -2577,7 +2569,7 @@ bool DeclareSubFuncNode::isForwardDecl() const
 }
 
 void DeclareSubFuncNode::parseParameters(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
-	Firebird::Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount)
+	Array<NestConst<Parameter> >& paramArray, USHORT* defaultCount)
 {
 	BlrReader& reader = csb->csb_blr_reader;
 	USHORT count = reader.getWord();
@@ -2858,7 +2850,7 @@ DmlNode* DeclareSubProcNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerSc
 		subCsb->csb_blr_reader = csb->csb_blr_reader;
 
 		BlrReader& reader = subCsb->csb_blr_reader;
-		ContextPoolHolder context(tdbb, &subCsb->csb_pool);
+		JrdContextPoolHolder context(tdbb, &subCsb->csb_pool);
 
 		UCHAR type = reader.getByte();
 		if (type != SUB_ROUTINE_TYPE_PSQL)
@@ -3840,7 +3832,7 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 			return forNode;
 		}
 
-		REPL_erase(tdbb, rpb, transaction);
+		Replication::REPL_erase(tdbb, rpb, transaction);
 	}
 	spPreTriggers.release();
 
@@ -5098,7 +5090,7 @@ void ExecProcedureNode::executeProcedure(thread_db* tdbb, Request* request) cons
 		ex.stuffException(tdbb->tdbb_status_vector);
 		const bool noPriv = (tdbb->tdbb_status_vector->getErrors()[1] == isc_no_priv);
 		trace.finish(false,
-			noPriv ? Firebird::ITracePlugin::RESULT_UNAUTHORIZED : ITracePlugin::RESULT_FAILED);
+			noPriv ? ITracePlugin::RESULT_UNAUTHORIZED : ITracePlugin::RESULT_FAILED);
 
 		EXE_unwind(tdbb, procRequest);
 		procRequest->req_attachment = NULL;
@@ -5641,7 +5633,7 @@ void ExecStatementNode::getString(thread_db* tdbb, Request* request, const Value
 
 	if (dsc)
 	{
-		const Jrd::Attachment* att = tdbb->getAttachment();
+		const Attachment* att = tdbb->getAttachment();
 		len = MOV_make_string2(tdbb, dsc, (useAttCS ? TTypeId(att->att_charset) : dsc->getTextType()),
 			&p, buffer, false);
 	}
@@ -5828,7 +5820,7 @@ InAutonomousTransactionNode* InAutonomousTransactionNode::pass2(thread_db* tdbb,
 const StmtNode* InAutonomousTransactionNode::execute(thread_db* tdbb, Request* request, ExeState* /*exeState*/) const
 {
 	Database* const dbb = tdbb->getDatabase();
-	Jrd::Attachment* const attachment = tdbb->getAttachment();
+	Attachment* const attachment = tdbb->getAttachment();
 
 	Impure* const impure = request->getImpure<Impure>(impureOffset);
 
@@ -9513,7 +9505,7 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					}
 
 					IDX_modify(tdbb, orgRpb, newRpb, transaction);
-					REPL_modify(tdbb, orgRpb, newRpb, transaction);
+					Replication::REPL_modify(tdbb, orgRpb, newRpb, transaction);
 				}
 				spPreTriggers.release();
 
@@ -10676,7 +10668,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 				{
 					VIO_store(tdbb, rpb, transaction);
 					IDX_store(tdbb, rpb, transaction);
-					REPL_store(tdbb, rpb, transaction);
+					Replication::REPL_store(tdbb, rpb, transaction);
 				}
 
 				rpb->rpb_number.setValid(true);
@@ -12105,7 +12097,7 @@ void UpdateOrInsertNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 //--------------------
 
 
-Firebird::string CommitRollbackNode::internalPrint(NodePrinter& printer) const
+string CommitRollbackNode::internalPrint(NodePrinter& printer) const
 {
 	TransactionNode::internalPrint(printer);
 
@@ -12169,7 +12161,7 @@ void CommitRollbackNode::execute(thread_db* tdbb, DsqlRequest* request, jrd_tra*
 //--------------------
 
 
-Firebird::string UserSavepointNode::internalPrint(NodePrinter& printer) const
+string UserSavepointNode::internalPrint(NodePrinter& printer) const
 {
 	TransactionNode::internalPrint(printer);
 
@@ -13806,4 +13798,4 @@ static void validateExpressions(thread_db* tdbb, const Array<ValidateInfo>& vali
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

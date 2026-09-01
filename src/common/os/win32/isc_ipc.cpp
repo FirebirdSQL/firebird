@@ -64,6 +64,9 @@
 #define SIG_ACK (void (__cdecl *)(int))4	// acknowledge
 #endif
 
+namespace Firebird
+{
+
 
 namespace {
 
@@ -73,7 +76,7 @@ constexpr int MAX_OPN_EVENTS = 40;
 class OpenEvents
 {
 public:
-	explicit OpenEvents(Firebird::MemoryPool&) noexcept
+	explicit OpenEvents(MemoryPool&) noexcept
 	{
 		m_count = 0;
 		m_clock = 0;
@@ -91,7 +94,7 @@ public:
 
 	HANDLE getEvent(SLONG pid, SLONG signal_number)
 	{
-		Firebird::MutexLockGuard guard(&m_mutex, FB_FUNCTION);
+		MutexLockGuard guard(&m_mutex, FB_FUNCTION);
 
 		Item* oldestEvent = NULL;
 		FB_UINT64 oldestAge = ~(0ULL);
@@ -145,12 +148,12 @@ private:
 	Item m_events[MAX_OPN_EVENTS]{};
 	int m_count;
 	FB_UINT64 m_clock;
-	Firebird::Mutex m_mutex;
+	Mutex m_mutex;
 };
 
 }  // namespace
 
-Firebird::GlobalPtr<OpenEvents> openEvents;
+GlobalPtr<OpenEvents> openEvents;
 
 int ISC_kill(SLONG pid, SLONG signal_number, HANDLE object_hndl)
 {
@@ -228,7 +231,7 @@ namespace
 		}
 	};
 
-	Firebird::InitMutex<SignalInit> signalInit("SignalInit");
+	InitMutex<SignalInit> signalInit("SignalInit");
 } // anonymous namespace
 
 void ISC_signal_init()
@@ -246,3 +249,6 @@ void ISC_signal_init()
 
 	signalInit.init();
 }
+
+
+} // namespace Firebird

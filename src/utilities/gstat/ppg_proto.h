@@ -26,7 +26,7 @@
 
 #include "../common/UtilSvc.h"
 
-void	PPG_print_header(const Ods::header_page*, bool, Firebird::UtilSvc*);
+void	PPG_print_header(const Firebird::Jrd::Ods::header_page*, bool, Firebird::UtilSvc*);
 int     gstat(Firebird::UtilSvc*);
 
 #endif // UTILITIES_PPG_PROTO_H

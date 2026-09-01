@@ -35,7 +35,8 @@
 #endif
 #include <tomcrypt.h>
 
-using namespace Firebird;
+namespace Firebird
+{
 
 
 struct LibTomCryptHashContext::Descriptor
@@ -165,5 +166,7 @@ void Crc32HashContext::finish(dsc& result)
 	crc32_finish(&statePtr->ctx, &hash, sizeof hash);
 	result.makeLong(0, &hash);
 }
+
+}  // namespace Firebird
 
 #endif // HAVE_TOMCRYPT && !WITHOUT_TOMCRYPT

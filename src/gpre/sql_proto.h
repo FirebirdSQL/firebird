@@ -24,6 +24,10 @@
 #ifndef GPRE_SQL_PROTO_H
 #define GPRE_SQL_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 act*	SQL_action(const TEXT*);
 void	SQL_adjust_field_dtype(gpre_fld*);
 void	SQL_dialect1_bad_type(USHORT);
@@ -36,5 +40,7 @@ void	SQL_relation_name(TEXT*, TEXT*, TEXT*);
 void	SQL_resolve_identifier(const TEXT*, TEXT*, int in_size);
 TEXT*	SQL_var_or_string(bool);
 
-#endif // GPRE_SQL_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_SQL_PROTO_H

@@ -29,7 +29,9 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/classes/DbImplementation.h"
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
+
 
 inline void PUT_WORD(UCHAR*& ptr, USHORT value)
 {
@@ -227,3 +229,6 @@ static ISC_STATUS merge_setup(const ClumpletReader& input, UCHAR** out, const UC
 
 	return FB_SUCCESS;
 }
+
+
+} // namespace Firebird::Remote

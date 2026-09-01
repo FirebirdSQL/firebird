@@ -66,9 +66,9 @@
 #include "../jrd/tpc_proto.h"
 #include "../dsql/DdlNodes.h"
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 //#define DEBUG_BTR_SPLIT
 
@@ -91,8 +91,8 @@ namespace
 	//
 	// NO_VALUE_PAGE and NO_VALUE are the same constant, but with different size
 	// Sign-extension mechanizm guaranties that they may be compared to each other safely
-	constexpr ULONG NO_VALUE_PAGE = END_LEVEL;
-	const RecordNumber NO_VALUE(END_LEVEL);
+	constexpr ULONG NO_VALUE_PAGE = Ods::END_LEVEL;
+	const RecordNumber NO_VALUE(Ods::END_LEVEL);
 
 	// A split page will never have the number 0, because that's the value
 	// of the main page.
@@ -182,7 +182,7 @@ namespace
 	struct FastLoadLevel
 	{
 		temporary_mini_key key;
-		btree_page* bucket;
+		Ods::btree_page* bucket;
 		win_for_array window;
 		ULONG splitPage;
 		RecordNumber splitRecordNumber;
@@ -226,25 +226,25 @@ static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, Record
 					  ULONG*, ULONG*);
 static void compress(thread_db*, const dsc*, const SSHORT scale, temporary_key*,
 					 USHORT, bool, USHORT, bool*);
-static USHORT compress_root(thread_db*, index_root_page*);
+static USHORT compress_root(thread_db*, Ods::index_root_page*);
 static void copy_key(const temporary_mini_key*, temporary_mini_key*);
 static contents delete_node(thread_db*, WIN*, UCHAR*);
 static void delete_tree(thread_db*, MetaId, MetaId, PageNumber, PageNumber);
 static ULONG fast_load(thread_db*, IndexCreation&, SelectivityList&);
 
-static const index_root_page* fetch_root(thread_db*, WIN*, const RelationPermanent*, const RelationPages*);
-static UCHAR* find_node_start_point(btree_page*, temporary_key*, UCHAR*, USHORT*,
+static const Ods::index_root_page* fetch_root(thread_db*, WIN*, const RelationPermanent*, const RelationPages*);
+static UCHAR* find_node_start_point(Ods::btree_page*, temporary_key*, UCHAR*, USHORT*,
 									bool, int, bool = false, RecordNumber = NO_VALUE);
 
-static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*, USHORT*,
-									bool, int, RecordNumber = NO_VALUE);
+static UCHAR* find_area_start_point(Ods::btree_page*, const temporary_key*, UCHAR*,
+									USHORT*, bool, int, RecordNumber = NO_VALUE);
 
-static ULONG find_page(btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
+static ULONG find_page(Ods::btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
 					   int = 0);
 
-static void format_first_leaf(btree_page*, USHORT, USHORT, USHORT);
+static void format_first_leaf(Ods::btree_page*, USHORT, USHORT, USHORT);
 static contents garbage_collect(thread_db*, WIN*, ULONG);
-static void generate_jump_nodes(thread_db*, btree_page*, JumpNodeList*, USHORT,
+static void generate_jump_nodes(thread_db*, Ods::btree_page*, JumpNodeList*, USHORT,
 								USHORT*, USHORT*, USHORT*, USHORT);
 
 static ULONG insert_node(thread_db*, WIN*, index_insertion*, temporary_key*,
@@ -260,7 +260,7 @@ static contents remove_leaf_node(thread_db*, index_insertion*, WIN*);
 static bool scan(thread_db*, UCHAR*, RecordBitmap**, RecordBitmap*, index_desc*,
 				 const IndexRetrieval*, USHORT, temporary_key*,
 				 bool&, const temporary_key&, USHORT);
-static void update_selectivity(index_root_page*, MetaId, const SelectivityList&);
+static void update_selectivity(Ods::index_root_page*, MetaId, const SelectivityList&);
 static void checkForLowerKeySkip(bool&, const bool, const IndexNode&, const temporary_key&,
 								 const index_desc&, const IndexRetrieval*);
 
@@ -277,17 +277,17 @@ enum class ModifyIrtRepeatValue
 class Flags
 {
 public:
-	static const char* state(const index_root_page::irt_repeat& rpt)
+	static const char* state(const Ods::index_root_page::irt_repeat& rpt)
 	{
 		switch (rpt.getState())
 		{
-		case irt_in_progress: return "irt_in_progress";
-		case irt_commit: return "irt_commit";
-		case irt_drop: return "irt_drop";
-		case irt_rollback: return "irt_rollback";
-		case irt_normal: return "irt_normal";
-		case irt_kill: return "irt_kill";
-		case irt_unused: return "irt_unused";
+		case Ods::irt_in_progress: return "Ods::irt_in_progress";
+		case Ods::irt_commit: return "Ods::irt_commit";
+		case Ods::irt_drop: return "Ods::irt_drop";
+		case Ods::irt_rollback: return "Ods::irt_rollback";
+		case Ods::irt_normal: return "Ods::irt_normal";
+		case Ods::irt_kill: return "Ods::irt_kill";
+		case Ods::irt_unused: return "Ods::irt_unused";
 		}
 
 		return "** UNKNOWN **";
@@ -296,7 +296,7 @@ public:
 
 #ifdef DEBUG_INDEX_ROOT
 
-void dumpIndexRoot(const char* up, const char* from, thread_db* tdbb, WIN* window, const index_root_page* root)
+void dumpIndexRoot(const char* up, const char* from, thread_db* tdbb, WIN* window, const Ods::index_root_page* root)
 {
 	if (root->irt_relation > 127)
 	{
@@ -322,23 +322,23 @@ void dumpIndexRoot(...) { }
 #endif // DEBUG_INDEX_ROOT
 }
 
-static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* irt_desc,
+static bool checkIrtRepeat(thread_db* tdbb, const Ods::index_root_page::irt_repeat* irt_desc,
 	RelationPermanent* relation, WIN* window, MetaId indexId);
-static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::irt_repeat* irt_desc,
+static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, Ods::index_root_page::irt_repeat* irt_desc,
 	RelationPermanent* relation, WIN* window, MetaId indexId, bool fromActivate = false);
 
-index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, WIN* window)
+Ods::index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, WIN* window)
 {
-	index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
+	Ods::index_root_page* root = (Ods::index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
 
 	dumpIndexRoot("Upd", from, tdbb, window, root);
 
 	return root;
 }
 
-const index_root_page* BTR_fetch_root(const char* from, thread_db* tdbb, WIN* window)
+const Ods::index_root_page* BTR_fetch_root(const char* from, thread_db* tdbb, WIN* window)
 {
-	const index_root_page* root = (const index_root_page*) CCH_FETCH(tdbb, window, LCK_read, pag_root);
+	const Ods::index_root_page* root = (const Ods::index_root_page*) CCH_FETCH(tdbb, window, LCK_read, pag_root);
 
 	dumpIndexRoot("", from, tdbb, window, root);
 
@@ -557,7 +557,7 @@ TriState IndexCondition::evaluate(Record* record) const
 
 	try
 	{
-		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+		JrdContextPoolHolder context(m_tdbb, m_request->req_pool);
 
 		result = m_condition->execute(m_tdbb, m_request).asBool();
 	}
@@ -665,7 +665,7 @@ dsc* IndexExpression::evaluate(Record* record) const
 
 	try
 	{
-		Jrd::ContextPoolHolder context(m_tdbb, m_request->req_pool);
+		JrdContextPoolHolder context(m_tdbb, m_request->req_pool);
 
 		result = EVL_expr(m_tdbb, m_request, m_expression);
 	}
@@ -806,7 +806,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 					if (stuff_count == 0)
 					{
 						*p++ = m_index->idx_count - n;
-						stuff_count = STUFF_COUNT;
+						stuff_count = Ods::STUFF_COUNT;
 
 						if (p - m_key.key_data >= maxKeyLength)
 							return idx_e_keytoobig;
@@ -1054,7 +1054,7 @@ bool IndexDuplicateScanner::find(thread_db* tdbb, RecordBitmap& recs)
 		if (descending && allNulls)
 			break;
 
-		page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 		pointer = page->btr_nodes + page->btr_jump_size;
 		first = true;
 
@@ -1108,7 +1108,7 @@ UCHAR* IndexDuplicateScanner::init(thread_db* tdbb, win* window)
 	while (page->btr_level > 0)
 	{
 		node.readNode(pointer, false);
-		page = (btree_page*) CCH_HANDOFF(tdbb, window, node.pageNumber, LCK_read, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, node.pageNumber, LCK_read, pag_index);
 		pointer = page->btr_nodes + page->btr_jump_size;
 	}
 
@@ -1135,7 +1135,7 @@ UCHAR* IndexDuplicateScanner::restorePosition(thread_db* tdbb, win* window)
 	while (!(pointer = find_node_start_point(page, &findKey, 0, &prefix,
 		(m_index.idx_flags & idx_descending), 0, false)))
 	{
-		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
 	}
 
 	// Found node with the less or equal key value, skip this node and its duplicates
@@ -1155,7 +1155,7 @@ UCHAR* IndexDuplicateScanner::restorePosition(thread_db* tdbb, win* window)
 
 		if (node.isEndBucket)
 		{
-			page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+			page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
 			pointer = page->btr_nodes + page->btr_jump_size;
 			first = true;
 			continue;
@@ -1243,7 +1243,7 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 
 	WIN window(relPages->rel_pg_space_id, -1);
 
-	const index_root_page* const root = fetch_root(tdbb, &window, relation, relPages);
+	const Ods::index_root_page* const root = fetch_root(tdbb, &window, relation, relPages);
 	if (!root)
 		return;
 
@@ -1254,20 +1254,20 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 
 	for (MetaId id = 0; id < root->irt_count; id++)
 	{
-		const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+		const Ods::index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 		const TraNumber descTrans = irt_desc->getTransaction();
 
 		switch (irt_desc->getState())
 		{
-		case irt_normal:
+		case Ods::irt_normal:
 			break;
 
-		case irt_in_progress:			// index creation - skip
-		case irt_concurrently:
-		case irt_drop:					// index removal - skip
+		case Ods::irt_in_progress:			// index creation - skip
+		case Ods::irt_concurrently:
+		case Ods::irt_drop:					// index removal - skip
 			continue;
 
-		case irt_rollback:		// to be removed when irt_transaction dead
+		case Ods::irt_rollback:		// to be removed when irt_transaction dead
 			switch (indexCacheState(tdbb, descTrans, relation, id, true))
 			{
 			case tra_unknown:	// skip - index in unknown state
@@ -1276,7 +1276,7 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 			}
 			break;
 
-		case irt_commit:		// change state on irt_transaction completion
+		case Ods::irt_commit:		// change state on irt_transaction completion
 			switch (indexCacheState(tdbb, descTrans, relation, id, false))
 			{
 			case tra_unknown:	// skip - index in unknown state
@@ -1359,7 +1359,7 @@ void BTR_create(thread_db* tdbb,
 	// Index is created.  Go back to the index root page and update it to
 	// point to the index.
 	WIN window(relation->getPermanent()->getIndexRootPage(tdbb));
-	index_root_page* const root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* const root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	CCH_MARK(tdbb, &window);
 
 	const jrd_tra* tra = creation.transaction;
@@ -1408,11 +1408,11 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, MetaId id, bool withCleanup)
 	CHECK_DBB(dbb);
 
 	// Get index descriptor.  If index doesn't exist, just leave.
-	index_root_page* const root = (index_root_page*) window->win_buffer;
+	Ods::index_root_page* const root = (Ods::index_root_page*) window->win_buffer;
 
 	if (id < root->irt_count)
 	{
-		index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+		Ods::index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 
 		CCH_MARK(tdbb, window);
 		const auto rootPage = irt_desc->getRoot();
@@ -1446,7 +1446,7 @@ void BTR_delete_tree(thread_db* tdbb, USHORT rel_id, USHORT idx_id, PageNumber n
 }
 
 
-static void checkTransactionNumber(const index_root_page::irt_repeat* irt_desc, TraNumber tran, const char* msg)
+static void checkTransactionNumber(const Ods::index_root_page::irt_repeat* irt_desc, TraNumber tran, const char* msg)
 {
 	if (irt_desc->getTransaction() != tran)
 	{
@@ -1456,14 +1456,14 @@ static void checkTransactionNumber(const index_root_page::irt_repeat* irt_desc, 
 }
 
 
-[[noreturn]] static void badState (const index_root_page::irt_repeat* irt_desc, const char* set, const char* msg)
+[[noreturn]] static void badState (const Ods::index_root_page::irt_repeat* irt_desc, const char* set, const char* msg)
 {
 	fb_assert(false);
 	fatal_exception::raiseFmt("Invalid index state %s (%d, %s) when %s", Flags::state(*irt_desc), irt_desc->getState(), set, msg);
 }
 
 
-void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId id, WIN* window, index_root_page* root,
+void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId id, WIN* window, Ods::index_root_page* root,
 	TraNumber tran)
 {
 /***********************************************************
@@ -1508,7 +1508,7 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 			{
 			case ModifyIrtRepeatValue::Skip:
 				// buffer could be released and refetched by modifyIrtRepeat
-				root = (index_root_page*) window->win_buffer;
+				root = (Ods::index_root_page*) window->win_buffer;
 				irt_desc = root->irt_rpt + id;
 				break;
 
@@ -1530,28 +1530,28 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 
 			switch (irt_desc->getState())
 			{
-			case irt_unused:
-			case irt_drop:	// index alredy in process of deletion
+			case Ods::irt_unused:
+			case Ods::irt_drop:	// index alredy in process of deletion
 				break;
 
-			case irt_commit:
+			case Ods::irt_commit:
 				if (tran == irt_desc->getTransaction())
 					break;	// already marked in current transaction
 				[[fallthrough]];
 
-			case irt_in_progress:
-			case irt_concurrently:
-			case irt_kill:
-				badState(irt_desc, "not irt_rollback/irt_normal", msg);
+			case Ods::irt_in_progress:
+			case Ods::irt_concurrently:
+			case Ods::irt_kill:
+				badState(irt_desc, "not Ods::irt_rollback/Ods::irt_normal", msg);
 
-			case irt_rollback:			// created not long ago
+			case Ods::irt_rollback:			// created not long ago
 				checkTransactionNumber(irt_desc, tran, msg);
 				if (!marked)
 					CCH_MARK(tdbb, window);
 				irt_desc->setKill(tran);
 				break;
 
-			case irt_normal:
+			case Ods::irt_normal:
 				if (!marked)
 					CCH_MARK(tdbb, window);
 				irt_desc->setCommit(tran);
@@ -1580,7 +1580,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 	CHECK_DBB(dbb);
 
 	WIN window(relation->getIndexRootPage(tdbb));
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	bool rc = false;
 
 	// Get index descriptor.  If index doesn't exist, just leave.
@@ -1599,7 +1599,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 			{
 			case ModifyIrtRepeatValue::Skip:
 				// buffer could be released and refetched by modifyIrtRepeat
-				root = (index_root_page*) window.win_buffer;
+				root = (Ods::index_root_page*) window.win_buffer;
 				irt_desc = root->irt_rpt + id;
 				break;
 
@@ -1618,18 +1618,18 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 
 			switch (irt_desc->getState())
 			{
-			case irt_unused:
-			case irt_drop:
+			case Ods::irt_unused:
+			case Ods::irt_drop:
 				rc = false;
 				break;
 
-			case irt_in_progress:
-			case irt_concurrently:
-			case irt_rollback:
-			case irt_normal:
-				badState(irt_desc, "irt_in_progress/irt_concurrently/irt_rollback/irt_normal", msg);
+			case Ods::irt_in_progress:
+			case Ods::irt_concurrently:
+			case Ods::irt_rollback:
+			case Ods::irt_normal:
+				badState(irt_desc, "Ods::irt_in_progress/Ods::irt_rollback/Ods::irt_normal", msg);
 
-			case irt_commit:		// removed not long ago
+			case Ods::irt_commit:		// removed not long ago
 				checkTransactionNumber(irt_desc, tra->tra_number, msg);
 				if (!marked)
 					CCH_MARK(tdbb, &window);
@@ -1637,7 +1637,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 				rc = true;
 				break;
 
-			case irt_kill:
+			case Ods::irt_kill:
 				checkTransactionNumber(irt_desc, tra->tra_number, msg);
 				if (!marked)
 					CCH_MARK(tdbb, &window);
@@ -1653,7 +1653,7 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 }
 
 
-bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_root_page* root, index_desc* idx,
+bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const Ods::index_root_page* root, index_desc* idx,
 					 MetaId id, USHORT flags)
 {
 /**************************************
@@ -1673,7 +1673,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	if (id >= root->irt_count)
 		return false;
 
-	const index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
+	const Ods::index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 
 	const ULONG rootPage = irt_desc->getRoot();
 	if (!rootPage)
@@ -1703,11 +1703,11 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	index_desc::idx_repeat* idx_desc = idx->idx_rpt;
 	for (int i = 0; i < idx->idx_count; i++, idx_desc++)
 	{
-		const irtd* key_descriptor = (irtd*) ptr;
+		const Ods::irtd* key_descriptor = (Ods::irtd*) ptr;
 		idx_desc->idx_field = key_descriptor->irtd_field;
 		idx_desc->idx_itype = key_descriptor->irtd_itype;
 		idx_desc->idx_selectivity = key_descriptor->irtd_selectivity;
-		ptr += sizeof(irtd);
+		ptr += sizeof(Ods::irtd);
 	}
 	idx->idx_selectivity = idx->idx_rpt[idx->idx_count - 1].idx_selectivity;
 
@@ -1884,7 +1884,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 		return;
 
 	index_desc idx;
-	btree_page* page = nullptr;
+	Ods::btree_page* page = nullptr;
 
 	do
 	{
@@ -1906,7 +1906,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			while (!(pointer = find_node_start_point(page, lower, nullptr, &prefix,
 				descending, (retrieval->irb_generic & (irb_starting | irb_partial)))))
 			{
-				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 			}
 
 			// Compute the number of matching characters in lower and upper bounds
@@ -1936,7 +1936,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 			while (scan(tdbb, pointer, bitmap, bitmap_and, &idx, retrieval, prefix, upper,
 						skipLowerKey, *lower, forceInclFlag))
 			{
-				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 				pointer = page->btr_nodes + page->btr_jump_size;
 				prefix = 0;
 			}
@@ -1988,7 +1988,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 					continue;
 				}
 
-				page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+				page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
 				endPointer = (UCHAR*) page + page->btr_length;
 				pointer = page->btr_nodes + page->btr_jump_size;
 				pointer = node.readNode(pointer, true);
@@ -2020,7 +2020,7 @@ void BTR_evaluate(thread_db* tdbb, const IndexRetrieval* retrieval, RecordBitmap
 }
 
 
-UCHAR* BTR_find_leaf(btree_page* bucket, temporary_key* key, UCHAR* value,
+UCHAR* BTR_find_leaf(Ods::btree_page* bucket, temporary_key* key, UCHAR* value,
 					 USHORT* return_value, bool descending, int retrieval)
 {
 /**************************************
@@ -2039,7 +2039,7 @@ UCHAR* BTR_find_leaf(btree_page* bucket, temporary_key* key, UCHAR* value,
 }
 
 
-btree_page* BTR_find_page(thread_db* tdbb,
+Ods::btree_page* BTR_find_page(thread_db* tdbb,
 						  const IndexRetrieval* retrieval,
 						  WIN* window,
 						  index_desc* idx,
@@ -2063,7 +2063,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 	fb_assert(window->win_page.getPageSpaceID() == relPages->rel_pg_space_id);
 
 	window->win_page = relPages->rel_index_root;
-	const index_root_page* rpage = BTR_fetch_root(FB_FUNCTION, tdbb, window);
+	const Ods::index_root_page* rpage = BTR_fetch_root(FB_FUNCTION, tdbb, window);
 
 	if (!BTR_description(tdbb, retrieval->getPermRelation(), rpage, idx, retrieval->irb_index))
 	{
@@ -2071,7 +2071,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 		IBERROR(260);	// msg 260 index unexpectedly deleted
 	}
 
-	btree_page* page = (btree_page*) CCH_HANDOFF(tdbb, window, idx->idx_root, LCK_read, pag_index);
+	Ods::btree_page* page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, idx->idx_root, LCK_read, pag_index);
 
 	// If there is a starting descriptor, search down index to starting position.
 	// This may involve sibling buckets if splits are in progress.  If there
@@ -2100,13 +2100,13 @@ btree_page* BTR_find_page(thread_db* tdbb,
 				const temporary_key* tkey = ignoreNulls ? &firstNotNullKey : lower;
 				const ULONG number = find_page(page, tkey, idx,
 					NO_VALUE, (retrieval->irb_generic & (irb_starting | irb_partial)));
-				if (number != END_BUCKET)
+				if (number != Ods::END_BUCKET)
 				{
-					page = (btree_page*) CCH_HANDOFF(tdbb, window, number, LCK_read, pag_index);
+					page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, number, LCK_read, pag_index);
 					break;
 				}
 
-				page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+				page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
 			}
 		}
 	}
@@ -2124,7 +2124,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 			if (pointer > endPointer)
 				BUGCHECK(204);	// msg 204 index inconsistent
 
-			page = (btree_page*) CCH_HANDOFF(tdbb, window, node.pageNumber, LCK_read, pag_index);
+			page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, node.pageNumber, LCK_read, pag_index);
 		}
 	}
 
@@ -2149,7 +2149,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	index_desc* idx = insertion->iib_descriptor;
 	RelationPages* relPages = insertion->iib_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, idx->idx_root);
-	btree_page* bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
+	Ods::btree_page* bucket = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
 	UCHAR root_level = bucket->btr_level;
 
 	if (bucket->btr_level == 0)
@@ -2173,10 +2173,10 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 
 	// The top of the index has split.  We need to make a new level and
 	// update the index root page.  Oh boy.
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, root_window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, root_window);
 
 	window.win_page = root->irt_rpt[idx->idx_id].getRoot();
-	bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
+	bucket = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
 
 	if (window.win_page.getPageNum() != idx->idx_root)
 	{
@@ -2226,7 +2226,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 		}
 
 		window.win_page = root->irt_rpt[idx->idx_id].getRoot();
-		bucket = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
+		bucket = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
 		key.key_length = ret_key.key_length;
 		memcpy(key.key_data, ret_key.key_data, ret_key.key_length);
 		key.key_flags = ret_key.key_flags;
@@ -2240,7 +2240,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	lock.enablePageGC(tdbb);
 
 	WIN new_window(relPages->rel_pg_space_id, split_page);
-	btree_page* new_bucket = (btree_page*) CCH_FETCH(tdbb, &new_window, LCK_read, pag_index);
+	Ods::btree_page* new_bucket = (Ods::btree_page*) CCH_FETCH(tdbb, &new_window, LCK_read, pag_index);
 
 	if (bucket->btr_level != new_bucket->btr_level)
 	{
@@ -2272,7 +2272,7 @@ void BTR_insert(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	}
 
 	// Allocate and format new bucket, this will always be a non-leaf page
-	new_bucket = (btree_page*) DPM_allocate(tdbb, &new_window);
+	new_bucket = (Ods::btree_page*) DPM_allocate(tdbb, &new_window);
 	CCH_precedence(tdbb, &new_window, window.win_page);
 
 	new_bucket->btr_header.pag_type = pag_index;
@@ -2448,7 +2448,7 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 			break;
 		}
 
-		key_length += ((length + prefix + STUFF_COUNT - 1) / STUFF_COUNT) * (STUFF_COUNT + 1);
+		key_length += ((length + prefix + Ods::STUFF_COUNT - 1) / Ods::STUFF_COUNT) * (Ods::STUFF_COUNT + 1);
 	}
 
 	return key_length;
@@ -2471,7 +2471,7 @@ bool BTR_lookup(thread_db* tdbb, Cached::Relation* relation, MetaId id, index_de
 	SET_TDBB(tdbb);
 	WIN window(relPages->rel_pg_space_id, -1);
 
-	const index_root_page* const root = fetch_root(tdbb, &window, relation, relPages);
+	const Ods::index_root_page* const root = fetch_root(tdbb, &window, relation, relPages);
 
 	if (!root)
 		return false;
@@ -2681,7 +2681,7 @@ idx_e BTR_make_key(thread_db* tdbb,
 					if (stuff_count == 0)
 					{
 						*p++ = idx->idx_count - n;
-						stuff_count = STUFF_COUNT;
+						stuff_count = Ods::STUFF_COUNT;
 
 						if (p - current_key->key_data >= maxKeyLength)
 							return idx_e_keytoobig;
@@ -2804,7 +2804,7 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 				if (stuff_count == 0)
 				{
 					*p++ = idx->idx_count - n;
-					stuff_count = STUFF_COUNT;
+					stuff_count = Ods::STUFF_COUNT;
 				}
 				*p++ = *q++;
 			}
@@ -2833,7 +2833,7 @@ void BTR_merge_index(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, i
 
 	WIN srcWindow(srcRootPage);
 
-	btree_page* srcBucket = (btree_page*) CCH_FETCH(tdbb, &srcWindow, LCK_read, pag_index);
+	Ods::btree_page* srcBucket = (Ods::btree_page*) CCH_FETCH(tdbb, &srcWindow, LCK_read, pag_index);
 	const unsigned srcHeight = srcBucket->btr_level + 1;
 	UCHAR* pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
 	IndexNode node;
@@ -2841,7 +2841,7 @@ void BTR_merge_index(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, i
 	while (srcBucket->btr_level)
 	{
 		node.readNode(pointer, false);
-		srcBucket = (btree_page*) CCH_HANDOFF(tdbb, &srcWindow, node.pageNumber, LCK_read, pag_index);
+		srcBucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, &srcWindow, node.pageNumber, LCK_read, pag_index);
 		pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
 		srcPage = node.pageNumber;
 	}
@@ -2898,7 +2898,7 @@ void BTR_merge_index(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, i
 		if (node.isEndLevel || !(srcPage = srcBucket->btr_sibling))
 			break;
 
-		srcBucket = (btree_page*) CCH_HANDOFF(tdbb, &srcWindow, srcPage, LCK_read, pag_index);
+		srcBucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, &srcWindow, srcPage, LCK_read, pag_index);
 		pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
 	}
 
@@ -2909,7 +2909,7 @@ void BTR_merge_index(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, i
 // checks is there a need to modify index descriptor
 // if yes - we release index root window
 
-static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* irt_desc,
+static bool checkIrtRepeat(thread_db* tdbb, const Ods::index_root_page::irt_repeat* irt_desc,
 	RelationPermanent* relation, WIN* window, MetaId indexId)
 {
 	const TraNumber irtTrans = irt_desc->getTransaction();
@@ -2917,13 +2917,13 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 
 	switch (irt_desc->getState())
 	{
-	case irt_unused:
-	case irt_normal:
+	case Ods::irt_unused:
+	case Ods::irt_normal:
 		// normal processing
 		return false;
 
-	case irt_in_progress:
-	case irt_concurrently:
+	case Ods::irt_in_progress:
+	case Ods::irt_concurrently:
 		if (indexId == SKIP_IN_PROGRESS)
 			return false;
 
@@ -2937,9 +2937,9 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		CCH_RELEASE(tdbb, window);
 		return true;
 
-	case irt_rollback:
-	case irt_commit:
-	case irt_kill:
+	case Ods::irt_rollback:
+	case Ods::irt_commit:
+	case Ods::irt_kill:
 		// this three states require modification if irtTrans is completed
 		switch (TPC_cache_state(tdbb, irtTrans))
 		{
@@ -2954,7 +2954,7 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 			CCH_RELEASE(tdbb, window);
 		break;
 
-	case irt_drop:
+	case Ods::irt_drop:
 		// drop index when OAT >= irtTrans
 		if (oldestActive < irtTrans)
 			return false;
@@ -2974,7 +2974,7 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 // checks is there a need to modify index descriptor
 // if yes - modifies it up to index deletion
 
-static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::irt_repeat* irt_desc,
+static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, Ods::index_root_page::irt_repeat* irt_desc,
 	RelationPermanent* relation, WIN* window, MetaId indexId, bool fromActivate)
 {
 	const TraNumber irtTrans = irt_desc->getTransaction();
@@ -2983,21 +2983,21 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 	const auto irtDescState = irt_desc->getState();
 	switch (irtDescState)
 	{
-	case irt_unused:
-	case irt_normal:
+	case Ods::irt_unused:
+	case Ods::irt_normal:
 		// normal processing
 		return ModifyIrtRepeatValue::Skip;
 
-	case irt_in_progress:
-	case irt_concurrently:
-		// index creation - check transaction state to know what to do
+	case Ods::irt_in_progress:
+	case Ods::irt_concurrently:
+		// index creation - should wait to know what to do
 		CCH_RELEASE(tdbb, window);
 		{
 			auto transaction = tdbb->getTransaction();
 			const auto state = transaction && (transaction->tra_number == irtTrans) ? tra_active :
 				TRA_wait(tdbb, transaction, irtTrans, tra_probe);
 
-			auto root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
+			auto root = (Ods::index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
 
 			if (state == tra_active)
 				return ModifyIrtRepeatValue::Skip;
@@ -3013,7 +3013,7 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 			return ModifyIrtRepeatValue::Deleted;
 		}
 
-	case irt_rollback:
+	case Ods::irt_rollback:
 		switch (transactionState(tdbb, irtTrans, relation, indexId, true))
 		{
 		case tra_committed:	// switch to normal state
@@ -3029,7 +3029,7 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		}
 		break;
 
-	case irt_kill:
+	case Ods::irt_kill:
 		switch (TPC_cache_state(tdbb, irtTrans))
 		{
 		case tra_committed:
@@ -3041,7 +3041,7 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		}
 		break;
 
-	case irt_commit:
+	case Ods::irt_commit:
 		switch (transactionState(tdbb, irtTrans, relation, indexId, false))
 		{
 		case tra_committed:	// switch to drop state
@@ -3062,7 +3062,7 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		fb_assert(false);
 		return ModifyIrtRepeatValue::Skip;
 
-	case irt_drop:
+	case Ods::irt_drop:
 		// drop index when OAT >= irtTrans
 		if (oldestActive >= irtTrans)
 			break;
@@ -3104,9 +3104,9 @@ bool BTR_next_index(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transa
 	else
 		id = idx->idx_id + 1;
 
-	const index_root_page* root;
+	const Ods::index_root_page* root;
 	if (window->win_bdb)
-		root = (const index_root_page*) window->win_buffer;
+		root = (const Ods::index_root_page*) window->win_buffer;
 	else
 	{
 		if (!relPages)
@@ -3120,7 +3120,7 @@ bool BTR_next_index(thread_db* tdbb, Cached::Relation* relation, jrd_tra* transa
 	{
 		for (; id < root->irt_count; ++id)
 		{
-			const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+			const Ods::index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 
 			if (checkIrtRepeat(tdbb, irt_desc, relation, window, id))
 			{
@@ -3180,11 +3180,11 @@ bool BTR_cleanup_index(thread_db* tdbb, const QualifiedName& relName, jrd_tra* t
 		relation->getPages(tdbb, transaction->tra_number) : relation->getPages(tdbb);
 
 	WIN window(relPages->rel_pg_space_id, -1);
-	const index_root_page* root = fetch_root(tdbb, &window, relation, relPages);
+	const Ods::index_root_page* root = fetch_root(tdbb, &window, relation, relPages);
 	if (!root)
 		return false;
 
-	const index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
+	const Ods::index_root_page::irt_repeat* irt_desc = root->irt_rpt + id;
 	bool rc = false;
 	if (checkIrtRepeat(tdbb, irt_desc, relation, &window, id))
 	{
@@ -3197,10 +3197,10 @@ bool BTR_cleanup_index(thread_db* tdbb, const QualifiedName& relName, jrd_tra* t
 		case ModifyIrtRepeatValue::Skip:
 		case ModifyIrtRepeatValue::Modified:
 			// buffer could be released and refetched by modifyIrtRepeat
-			root_write = (index_root_page*) window.win_buffer;
+			root_write = (Ods::index_root_page*) window.win_buffer;
 			irt_write = root_write->irt_rpt + id;
 
-			if (irt_write->getState() == irt_drop)
+			if (irt_write->getState() == Ods::irt_drop)
 				rc = true;
 			CCH_RELEASE(tdbb, &window);
 			break;
@@ -3239,7 +3239,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 	index_desc* idx = insertion->iib_descriptor;
 	RelationPages* relPages = insertion->iib_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, idx->idx_root);
-	btree_page* page = (btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
+	Ods::btree_page* page = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_index);
 
 	// If the page is level 0, re-fetch it for write
 	const UCHAR level = page->btr_level;
@@ -3265,8 +3265,8 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 		CCH_RELEASE(tdbb, &window);
 		CCH_RELEASE(tdbb, root_window);
 
-		index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, root_window);
-		page = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, root_window);
+		page = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_write, pag_index);
 
 		// get the page number of the child, and check to make sure
 		// the page still has only one node on it
@@ -3292,7 +3292,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 		CCH_RELEASE(tdbb, root_window);
 
 		CCH_MARK(tdbb, &window);
-		page->btr_header.pag_flags |= btr_released;
+		page->btr_header.pag_flags |= Ods::btr_released;
 
 		CCH_RELEASE(tdbb, &window);
 		PAG_release_page(tdbb, window.win_page, root_window->win_page);
@@ -3343,7 +3343,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 		fb_assert(idx->idx_id <= dbb->dbb_max_idx);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+	Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	fb_assert(window.win_bdb);
 	CCH_MARK(tdbb, &window);
 	fb_assert(window.win_bdb);
@@ -3362,25 +3362,25 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 	if (use_idx_id && (idx->idx_id >= root->irt_count))
 	{
 		memset(root->irt_rpt + root->irt_count, 0,
-			sizeof(index_root_page::irt_repeat) * (idx->idx_id - root->irt_count + 1));
+			sizeof(Ods::index_root_page::irt_repeat) * (idx->idx_id - root->irt_count + 1));
 		root->irt_count = idx->idx_id + 1;
 	}
 
 	UCHAR* desc = 0;
 	USHORT len, space;
-	index_root_page::irt_repeat* slot = NULL;
-	index_root_page::irt_repeat* end = NULL;
+	Ods::index_root_page::irt_repeat* slot = NULL;
+	Ods::index_root_page::irt_repeat* end = NULL;
 
 	for (int retry = 0; retry < 3; ++retry)
 	{
-		len = idx->idx_count * sizeof(irtd);
+		len = idx->idx_count * sizeof(Ods::irtd);
 
 		space = dbb->dbb_page_size;
 		slot = NULL;
 
 		for (MetaId id = 0; id < root->irt_count; ++id)
 		{
-			index_root_page::irt_repeat* root_idx = &root->irt_rpt[id];
+			Ods::index_root_page::irt_repeat* root_idx = &root->irt_rpt[id];
 			if (root_idx->isUsed())
 			{
 				if (checkIrtRepeat(tdbb, root_idx, rel, &window, retry == 1 ? id : SKIP_IN_PROGRESS))
@@ -3393,7 +3393,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 					case ModifyIrtRepeatValue::Modified:
 						fb_assert(window.win_bdb);
 						// buffer could be released and refetched by modifyIrtRepeat
-						root = (index_root_page*) window.win_buffer;
+						root = (Ods::index_root_page*) window.win_buffer;
 						root_idx = root->irt_rpt + id;
 						break;
 
@@ -3466,7 +3466,7 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 			// Allocate and format root page of the temp index
 
 			WIN leaf(relPages->rel_pg_space_id, 0);
-			btree_page* bucket = (btree_page*) DPM_allocate(tdbb, &leaf);
+			Ods::btree_page* bucket = (Ods::btree_page*) DPM_allocate(tdbb, &leaf);
 			idx->idx_root = leaf.win_page.getPageNum();
 
 			format_first_leaf(bucket, rel->getId(), idx->idx_id, creation.key_length);
@@ -3512,7 +3512,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 	RelationPages* relPages = relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, -1);
 
-	const index_root_page* root = fetch_root(tdbb, &window, relation, relPages);
+	const Ods::index_root_page* root = fetch_root(tdbb, &window, relation, relPages);
 	if (!root)
 		return;
 
@@ -3523,12 +3523,12 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 	}
 
 	ULONG page = root->irt_rpt[id].getRoot();
-	const bool descending = (root->irt_rpt[id].irt_flags & irt_descending);
+	const bool descending = (root->irt_rpt[id].irt_flags & Ods::irt_descending);
 	const ULONG segments = root->irt_rpt[id].irt_keys;
 
 	window.win_flags = WIN_large_scan;
 	window.win_scans = 1;
-	btree_page* bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, page, LCK_read, pag_index);
+	Ods::btree_page* bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, page, LCK_read, pag_index);
 
 	// go down the left side of the index to leaf level
 	UCHAR* pointer = bucket->btr_nodes + bucket->btr_jump_size;
@@ -3536,7 +3536,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 	{
 		IndexNode pageNode;
 		pageNode.readNode(pointer, false);
-		bucket = (btree_page*) CCH_HANDOFF(tdbb, &window, pageNode.pageNumber, LCK_read, pag_index);
+		bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, &window, pageNode.pageNumber, LCK_read, pag_index);
 		pointer = bucket->btr_nodes + bucket->btr_jump_size;
 		page = pageNode.pageNumber;
 	}
@@ -3594,7 +3594,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 				{
 					const SSHORT pos = node.prefix;
 					// find the segment number were we're starting.
-					const SSHORT i = (pos / (STUFF_COUNT + 1)) * (STUFF_COUNT + 1);
+					const SSHORT i = (pos / (Ods::STUFF_COUNT + 1)) * (Ods::STUFF_COUNT + 1);
 					if (i == pos)
 					{
 						// We _should_ pick number from data if available
@@ -3604,7 +3604,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 						count = *(p1 + i);
 
 					// update stuff_count to the current position.
-					stuff_count = STUFF_COUNT + 1 - (pos - i);
+					stuff_count = Ods::STUFF_COUNT + 1 - (pos - i);
 					p1 += pos;
 				}
 
@@ -3621,7 +3621,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 						count = *p2;
 						p1++;
 						p2++;
-						stuff_count = STUFF_COUNT;
+						stuff_count = Ods::STUFF_COUNT;
 					}
 
 					if (*p1 != *p2)
@@ -3670,7 +3670,7 @@ void BTR_selectivity(thread_db* tdbb, Cached::Relation* relation, MetaId id, Sel
 		if (node.isEndLevel || !(page = bucket->btr_sibling))
 			break;
 
-		bucket = (btree_page*) CCH_HANDOFF_TAIL(tdbb, &window, page, LCK_read, pag_index);
+		bucket = (Ods::btree_page*) CCH_HANDOFF_TAIL(tdbb, &window, page, LCK_read, pag_index);
 		pointer = bucket->btr_nodes + bucket->btr_jump_size;
 	}
 
@@ -3767,7 +3767,7 @@ static ULONG add_node(thread_db* tdbb,
  **************************************/
 
 	SET_TDBB(tdbb);
-	btree_page* bucket = (btree_page*) window->win_buffer;
+	Ods::btree_page* bucket = (Ods::btree_page*) window->win_buffer;
 
 	// For leaf level guys, loop thru the leaf buckets until insertion
 	// point is found (should be instant)
@@ -3781,7 +3781,7 @@ static ULONG add_node(thread_db* tdbb,
 			if (split != NO_VALUE_PAGE)
 				return split;
 
-			bucket = (btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_write, pag_index);
+			bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_write, pag_index);
 		}
 	}
 
@@ -3794,10 +3794,10 @@ static ULONG add_node(thread_db* tdbb,
 		page = find_page(bucket, insertion->iib_key, insertion->iib_descriptor,
 						 insertion->iib_number);
 
-		if (page != END_BUCKET)
+		if (page != Ods::END_BUCKET)
 			break;
 
-		bucket = (btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_read, pag_index);
+		bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_read, pag_index);
 	}
 
 	BtrPageGCLock lockCurrent(tdbb);
@@ -3836,7 +3836,7 @@ static ULONG add_node(thread_db* tdbb,
 	// The page at the lower level split, so we need to insert a pointer
 	// to the new page to the page at this level.
 	window->win_page = index;
-	bucket = (btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_index);
+	bucket = (Ods::btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_index);
 
 	propagate.iib_number = RecordNumber(split);
 	propagate.iib_descriptor = insertion->iib_descriptor;
@@ -3857,7 +3857,7 @@ static ULONG add_node(thread_db* tdbb,
 		if (split != NO_VALUE_PAGE)
 			break;
 
-		bucket = (btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_write, pag_index);
+		bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, bucket->btr_sibling, LCK_write, pag_index);
 	}
 
 	// the split page on the lower level has been propagated, so we can go back to
@@ -4431,7 +4431,7 @@ static void compress(thread_db* tdbb,
 }
 
 
-static USHORT compress_root(thread_db* tdbb, index_root_page* page)
+static USHORT compress_root(thread_db* tdbb, Ods::index_root_page* page)
 {
 /**************************************
  *
@@ -4452,13 +4452,13 @@ static USHORT compress_root(thread_db* tdbb, index_root_page* page)
 	memcpy(temp, page, dbb->dbb_page_size);
 	UCHAR* p = (UCHAR*) page + dbb->dbb_page_size;
 
-	index_root_page::irt_repeat* root_idx = page->irt_rpt;
-	for (const index_root_page::irt_repeat* const end = root_idx + page->irt_count;
+	Ods::index_root_page::irt_repeat* root_idx = page->irt_rpt;
+	for (const Ods::index_root_page::irt_repeat* const end = root_idx + page->irt_count;
 		 root_idx < end; root_idx++)
 	{
 		if (root_idx->getRoot())
 		{
-			const USHORT len = root_idx->irt_keys * sizeof(irtd);
+			const USHORT len = root_idx->irt_keys * sizeof(Ods::irtd);
 			p -= len;
 			memcpy(p, temp + root_idx->irt_desc, len);
 			root_idx->irt_desc = p - (UCHAR*) page;
@@ -4507,7 +4507,7 @@ static contents delete_node(thread_db* tdbb, WIN* window, UCHAR* pointer)
 	const Database* dbb = tdbb->getDatabase();
 	CHECK_DBB(dbb);
 
-	btree_page* page = (btree_page*) window->win_buffer;
+	Ods::btree_page* page = (Ods::btree_page*) window->win_buffer;
 
 	CCH_MARK(tdbb, window);
 
@@ -4805,7 +4805,7 @@ static void delete_tree(thread_db* tdbb,
 	while (next.getPageNum())
 	{
 		window.win_page = next;
-		btree_page* page = (btree_page*) CCH_FETCH(tdbb, &window, LCK_write, 0);
+		Ods::btree_page* page = (Ods::btree_page*) CCH_FETCH(tdbb, &window, LCK_write, 0);
 
 		// do a little defensive programming--if any of these conditions
 		// are true we have a damaged pointer, so just stop deleting. At
@@ -4914,7 +4914,7 @@ static ULONG fast_load(thread_db* tdbb,
 		leafLevel->window.win_page.setPageSpaceID(pageSpaceID);
 
 		// Allocate and format the first leaf level bucket.
-		btree_page* bucket = (btree_page*) DPM_allocate(tdbb, &leafLevel->window);
+		Ods::btree_page* bucket = (Ods::btree_page*) DPM_allocate(tdbb, &leafLevel->window);
 		format_first_leaf(bucket, relation->getId(), idx->idx_id, key_length);
 
 		const USHORT jumpAreaSize = bucket->btr_jump_interval;
@@ -5043,7 +5043,7 @@ static ULONG fast_load(thread_db* tdbb,
 					BUGCHECK(205);	// msg 205 index bucket overfilled
 
 				// Allocate new bucket.
-				btree_page* split = (btree_page*) DPM_allocate(tdbb, &split_window);
+				Ods::btree_page* split = (Ods::btree_page*) DPM_allocate(tdbb, &split_window);
 				bucket->btr_sibling = split_window.win_page.getPageNum();
 				split->btr_left_sibling = leafLevel->window.win_page.getPageNum();
 				split->btr_header.pag_type = pag_index;
@@ -5128,7 +5128,7 @@ static ULONG fast_load(thread_db* tdbb,
 				{
 					const SSHORT pos = newNode.prefix;
 					// find the segment number were we're starting.
-					const SSHORT i = (pos / (STUFF_COUNT + 1)) * (STUFF_COUNT + 1);
+					const SSHORT i = (pos / (Ods::STUFF_COUNT + 1)) * (Ods::STUFF_COUNT + 1);
 					if (i == pos)
 					{
 						// We _should_ pick number from data if available
@@ -5138,7 +5138,7 @@ static ULONG fast_load(thread_db* tdbb,
 						segment = *(p1 + i);
 
 					// update stuff_count to the current position.
-					stuff_count = STUFF_COUNT + 1 - (pos - i);
+					stuff_count = Ods::STUFF_COUNT + 1 - (pos - i);
 					p1 += pos;
 				}
 
@@ -5155,7 +5155,7 @@ static ULONG fast_load(thread_db* tdbb,
 						segment = *p2;
 						p1++;
 						p2++;
-						stuff_count = STUFF_COUNT;
+						stuff_count = Ods::STUFF_COUNT;
 					}
 
 					if (*p1 != *p2)
@@ -5265,7 +5265,7 @@ static ULONG fast_load(thread_db* tdbb,
 					// Initialize new level
 					currLevel->window.win_page.setPageSpaceID(pageSpaceID);
 
-					currLevel->bucket = bucket = (btree_page*) DPM_allocate(tdbb, window);
+					currLevel->bucket = bucket = (Ods::btree_page*) DPM_allocate(tdbb, window);
 					bucket->btr_header.pag_type = pag_index;
 					bucket->btr_relation = relation->getId();
 					bucket->btr_id = (UCHAR)(idx->idx_id % 256);
@@ -5359,7 +5359,7 @@ static ULONG fast_load(thread_db* tdbb,
 					if (bucket->btr_length > dbb->dbb_page_size)
 						BUGCHECK(205);	// msg 205 index bucket overfilled
 
-					btree_page* split = (btree_page*) DPM_allocate(tdbb, &split_window);
+					Ods::btree_page* split = (Ods::btree_page*) DPM_allocate(tdbb, &split_window);
 					bucket->btr_sibling = split_window.win_page.getPageNum();
 					split->btr_left_sibling = window->win_page.getPageNum();
 					split->btr_header.pag_type = pag_index;
@@ -5609,7 +5609,7 @@ static ULONG fast_load(thread_db* tdbb,
 }
 
 
-static const index_root_page* fetch_root(thread_db* tdbb, WIN* window, const RelationPermanent* relation,
+static const Ods::index_root_page* fetch_root(thread_db* tdbb, WIN* window, const RelationPermanent* relation,
 										 const RelationPages* relPages)
 {
 /**************************************
@@ -5643,8 +5643,10 @@ static const index_root_page* fetch_root(thread_db* tdbb, WIN* window, const Rel
 }
 
 
-static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key, UCHAR* value, USHORT* return_value,
-									bool descending, int retrieval, bool pointer_by_marker,
+static UCHAR* find_node_start_point(Ods::btree_page* bucket, temporary_key* key,
+									UCHAR* value,
+									USHORT* return_value, bool descending,
+									int retrieval, bool pointer_by_marker,
 									RecordNumber find_record_number)
 {
 /**************************************
@@ -5728,7 +5730,7 @@ static UCHAR* find_node_start_point(btree_page* bucket, temporary_key* key, UCHA
 						if ((retrieval & irb_partial) && !(retrieval & irb_starting))
 						{
 							// check segment
-							const bool sameSegment = ((p - STUFF_COUNT > key->key_data) && p[-(STUFF_COUNT + 1)] == *q);
+							const bool sameSegment = ((p - Ods::STUFF_COUNT > key->key_data) && p[-(Ods::STUFF_COUNT + 1)] == *q);
 							if (sameSegment)
 								break;
 						}
@@ -5791,8 +5793,10 @@ done:
 }
 
 
-static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key, UCHAR* value, USHORT* return_prefix,
-									bool descending, int retrieval, RecordNumber find_record_number)
+static UCHAR* find_area_start_point(Ods::btree_page* bucket, const temporary_key* key,
+									UCHAR* value,
+									USHORT* return_prefix, bool descending,
+									int retrieval, RecordNumber find_record_number)
 {
 /**************************************
  *
@@ -5901,7 +5905,7 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 					if ((retrieval & irb_partial) && !(retrieval & irb_starting))
 					{
 						// check segment
-						const bool sameSegment = ((keyPointer - STUFF_COUNT > key->key_data) && keyPointer[-(STUFF_COUNT + 1)] == *q);
+						const bool sameSegment = ((keyPointer - Ods::STUFF_COUNT > key->key_data) && keyPointer[-(Ods::STUFF_COUNT + 1)] == *q);
 						if (!sameSegment)
 							done = true;
 					}
@@ -6013,7 +6017,7 @@ static UCHAR* find_area_start_point(btree_page* bucket, const temporary_key* key
 }
 
 
-static ULONG find_page(btree_page* bucket, const temporary_key* key,
+static ULONG find_page(Ods::btree_page* bucket, const temporary_key* key,
 					   const index_desc* idx, RecordNumber find_record_number,
 					   int retrieval)
 {
@@ -6183,7 +6187,7 @@ static ULONG find_page(btree_page* bucket, const temporary_key* key,
 }
 
 
-static void format_first_leaf(btree_page* bucket, USHORT rel_id, USHORT idx_id, USHORT key_length)
+static void format_first_leaf(Ods::btree_page* bucket, USHORT rel_id, USHORT idx_id, USHORT key_length)
 {
 	// AB: Let's try to determine to size between the jumps to speed up
 	// index search. Of course the size depends on the key_length. The
@@ -6250,7 +6254,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	CHECK_DBB(dbb);
 
 	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
-	btree_page* gc_page = (btree_page*) window->win_buffer;
+	Ods::btree_page* gc_page = (Ods::btree_page*) window->win_buffer;
 	contents result = contents_above_threshold;
 
 	// check to see if the page was marked not to be garbage collected
@@ -6297,7 +6301,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	// released and reused already as another page on this level, but if so, it
 	// won't really matter because we won't find the node on it
 	WIN parent_window(pageSpaceID, parent_number);
-	btree_page* parent_page = (btree_page*) CCH_FETCH(tdbb, &parent_window, LCK_write, pag_undefined);
+	Ods::btree_page* parent_page = (Ods::btree_page*) CCH_FETCH(tdbb, &parent_window, LCK_write, pag_undefined);
 	if ((parent_page->btr_header.pag_type != pag_index) ||
 		(parent_page->btr_relation != relation_number) ||
 		(parent_page->btr_id != (UCHAR)(index_id % 256)) ||
@@ -6307,7 +6311,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 		return contents_above_threshold;
 	}
 
-	if (parent_page->btr_header.pag_flags & btr_released)
+	if (parent_page->btr_header.pag_flags & Ods::btr_released)
 	{
 		CCH_RELEASE(tdbb, &parent_window);
 #ifdef DEBUG_BTR
@@ -6325,7 +6329,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 		parentPointer = parentNode.readNode(parentPointer, false);
 		if (parentNode.isEndBucket)
 		{
-			parent_page = (btree_page*) CCH_HANDOFF(tdbb, &parent_window,
+			parent_page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &parent_window,
 				parent_page->btr_sibling, LCK_write, pag_index);
 			parentPointer = parent_page->btr_nodes + parent_page->btr_jump_size;
 			continue;
@@ -6369,7 +6373,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	// going to the right until we find the page that is our real
 	// left sibling
 	WIN left_window(pageSpaceID, left_number);
-	btree_page* left_page = (btree_page*) CCH_FETCH(tdbb, &left_window, LCK_write, pag_undefined);
+	Ods::btree_page* left_page = (Ods::btree_page*) CCH_FETCH(tdbb, &left_window, LCK_write, pag_undefined);
 	if (left_page->btr_header.pag_type != pag_index ||
 		left_page->btr_relation != relation_number ||
 		left_page->btr_id != UCHAR(index_id % 256) ||
@@ -6380,7 +6384,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 		return contents_above_threshold;
 	}
 
-	if (left_page->btr_header.pag_flags & btr_released)
+	if (left_page->btr_header.pag_flags & Ods::btr_released)
 	{
 		CCH_RELEASE(tdbb, &parent_window);
 		CCH_RELEASE(tdbb, &left_window);
@@ -6407,13 +6411,13 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 			CCH_RELEASE(tdbb, &left_window);
 			return contents_above_threshold;
 		}
-		left_page = (btree_page*) CCH_HANDOFF(tdbb, &left_window,
+		left_page = (Ods::btree_page*) CCH_HANDOFF(tdbb, &left_window,
 											  left_page->btr_sibling, LCK_write, pag_index);
 	}
 
 	// now refetch the original page and make sure it is still
 	// below the threshold for garbage collection.
-	gc_page = (btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_index);
+	gc_page = (Ods::btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_index);
 	if (gc_page->btr_length >= GARBAGE_COLLECTION_BELOW_THRESHOLD ||
 		!BtrPageGCLock::isPageGCAllowed(tdbb, window->win_page))
 	{
@@ -6423,7 +6427,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 		return contents_above_threshold;
 	}
 
-	if (gc_page->btr_header.pag_flags & btr_released)
+	if (gc_page->btr_header.pag_flags & Ods::btr_released)
 	{
 		CCH_RELEASE(tdbb, &parent_window);
 		CCH_RELEASE(tdbb, &left_window);
@@ -6436,12 +6440,12 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	}
 
 	// fetch the right sibling page
-	btree_page* right_page = NULL;
+	Ods::btree_page* right_page = NULL;
 	WIN right_window(pageSpaceID, gc_page->btr_sibling);
 	if (right_window.win_page.getPageNum())
 	{
 		// right_window.win_flags = 0; redundant, made by the constructor
-		right_page = (btree_page*) CCH_FETCH(tdbb, &right_window, LCK_write, pag_index);
+		right_page = (Ods::btree_page*) CCH_FETCH(tdbb, &right_window, LCK_write, pag_index);
 
 		if (right_page->btr_left_sibling != window->win_page.getPageNum())
 		{
@@ -6537,7 +6541,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 
 	// First copy left page to scratch page.
 	SLONG scratchPage[OVERSIZE];
-	btree_page* const newBucket = (btree_page*) scratchPage;
+	Ods::btree_page* const newBucket = (Ods::btree_page*) scratchPage;
 
 	pointer = left_page->btr_nodes;
 	const USHORT jumpersOriginalSize = left_page->btr_jump_size;
@@ -6696,7 +6700,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	// finally, release the page, and indicate that we should write the
 	// previous page out before we write the TIP page out
 	CCH_MARK(tdbb, window);
-	gc_page->btr_header.pag_flags |= btr_released;
+	gc_page->btr_header.pag_flags |= Ods::btr_released;
 
 	CCH_RELEASE(tdbb, window);
 	PAG_release_page(tdbb, window->win_page, left_page ? left_window.win_page :
@@ -6711,7 +6715,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	if (result != contents_above_threshold)
 	{
 		window->win_page = parent_window.win_page;
-		parent_page = (btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
+		parent_page = (Ods::btree_page*) CCH_FETCH(tdbb, window, LCK_write, pag_undefined);
 
 		if ((parent_page->btr_header.pag_type != pag_index) ||
 			(parent_page->btr_relation != relation_number) || (parent_page->btr_id != index_id) ||
@@ -6747,7 +6751,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 }
 
 
-static void generate_jump_nodes(thread_db* tdbb, btree_page* page,
+static void generate_jump_nodes(thread_db* tdbb, Ods::btree_page* page,
 								JumpNodeList* jumpNodes,
 								USHORT excludeOffset, USHORT* jumpersSize,
 								USHORT* splitIndex, USHORT* splitPrefix, USHORT keyLen)
@@ -6909,7 +6913,7 @@ static ULONG insert_node(thread_db* tdbb,
 	const USHORT pageSpaceID = window->win_page.getPageSpaceID();
 
 	// find the insertion point for the specified key
-	btree_page* bucket = (btree_page*) window->win_buffer;
+	Ods::btree_page* bucket = (Ods::btree_page*) window->win_buffer;
 	temporary_key* key = insertion->iib_key;
 
 	const index_desc* const idx = insertion->iib_descriptor;
@@ -7045,7 +7049,7 @@ static ULONG insert_node(thread_db* tdbb,
 	// Copy data up to insert point to scratch page.
 	SLONG scratchPage[OVERSIZE];
 	memcpy(scratchPage, bucket, nodeOffset);
-	btree_page* const newBucket = (btree_page*) scratchPage;
+	Ods::btree_page* const newBucket = (Ods::btree_page*) scratchPage;
 
 	// Set pointer of new node to right place.
 	pointer = ((UCHAR*) newBucket + nodeOffset);
@@ -7329,7 +7333,7 @@ static ULONG insert_node(thread_db* tdbb,
 
 	// Allocate and format the overflow page
 	WIN split_window(pageSpaceID, -1);
-	btree_page* split = (btree_page*) DPM_allocate(tdbb, &split_window);
+	Ods::btree_page* split = (Ods::btree_page*) DPM_allocate(tdbb, &split_window);
 
 	// if we're a pointer page, make sure the child page is written first
 	if (!leafPage)
@@ -7472,7 +7476,7 @@ static ULONG insert_node(thread_db* tdbb,
 	// left sibling pointer to point to the newly split page
 	if (right_sibling)
 	{
-		bucket = (btree_page*) CCH_HANDOFF(tdbb, window, right_sibling, LCK_write, pag_index);
+		bucket = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, right_sibling, LCK_write, pag_index);
 		CCH_MARK(tdbb, window);
 		bucket->btr_left_sibling = split_window.win_page.getPageNum();
 	}
@@ -7654,7 +7658,7 @@ static contents remove_node(thread_db* tdbb, index_insertion* insertion, WIN* wi
 	SET_TDBB(tdbb);
 	//const Database* dbb = tdbb->getDatabase();
 	index_desc* idx = insertion->iib_descriptor;
-	btree_page* page = (btree_page*) window->win_buffer;
+	Ods::btree_page* page = (Ods::btree_page*) window->win_buffer;
 
 	// if we are on a leaf page, remove the leaf node
 	if (page->btr_level == 0) {
@@ -7666,7 +7670,7 @@ static contents remove_node(thread_db* tdbb, index_insertion* insertion, WIN* wi
 		const ULONG number = find_page(page, insertion->iib_key, idx, insertion->iib_number);
 
 		// we should always find the node, but let's make sure
-		if (number == END_LEVEL)
+		if (number == Ods::END_LEVEL)
 		{
 			CCH_RELEASE(tdbb, window);
 #ifdef DEBUG_BTR
@@ -7677,12 +7681,12 @@ static contents remove_node(thread_db* tdbb, index_insertion* insertion, WIN* wi
 
 		// recurse to the next level down; if we are about to fetch a
 		// level 0 page, make sure we fetch it for write
-		if (number != END_BUCKET)
+		if (number != Ods::END_BUCKET)
 		{
 
 			// handoff down to the next level, retaining the parent page number
 			const ULONG parent_number = window->win_page.getPageNum();
-			page = (btree_page*) CCH_HANDOFF(tdbb, window, number, (SSHORT)
+			page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, number, (SSHORT)
 				((page->btr_level == 1) ? LCK_write : LCK_read), pag_index);
 
 			// if the removed node caused the page to go below the garbage collection
@@ -7700,7 +7704,7 @@ static contents remove_node(thread_db* tdbb, index_insertion* insertion, WIN* wi
 		}
 
 		// we've hit end of bucket, so go to the sibling looking for the node
-		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
 	}
 
 	// NOTREACHED
@@ -7721,7 +7725,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
  *
  **************************************/
 	SET_TDBB(tdbb);
-	btree_page* page = (btree_page*) window->win_buffer;
+	Ods::btree_page* page = (Ods::btree_page*) window->win_buffer;
 	temporary_key* key = insertion->iib_key;
 
 	const index_desc* const idx = insertion->iib_descriptor;
@@ -7738,7 +7742,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 	while (!(pointer = find_node_start_point(page, key, nullptr, &prefix,
 											 descending, 0, false, findRecordNumber)))
 	{
-		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
 	}
 
 	// Make sure first node looks ok
@@ -7809,7 +7813,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 		// if we hit the end of bucket, go to the right sibling page,
 		// and check that the first node is a duplicate
 		++pages;
-		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
+		page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_write, pag_index);
 
 		pointer = page->btr_nodes + page->btr_jump_size;
 		pointer = node.readNode(pointer, true);
@@ -7878,7 +7882,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 	if ((flag & irb_partial) && (flag & irb_equality) &&
 		!(flag & irb_starting) && !(flag & irb_descending))
 	{
-		count = STUFF_COUNT - ((key->key_length + STUFF_COUNT) % (STUFF_COUNT + 1));
+		count = Ods::STUFF_COUNT - ((key->key_length + Ods::STUFF_COUNT) % (Ods::STUFF_COUNT + 1));
 
 		for (ULONG i = 0; i < count; i++)
 			key->key_data[key->key_length + i] = 0;
@@ -7941,7 +7945,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 		else if (node.prefix <= prefix)
 		{
 			prefix = node.prefix;
-			USHORT byteInSegment = prefix % (STUFF_COUNT + 1);
+			USHORT byteInSegment = prefix % (Ods::STUFF_COUNT + 1);
 			p = key->key_data + prefix;
 			const UCHAR* q = node.data;
 			USHORT l = node.length;
@@ -7961,7 +7965,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 							return false;
 					}
 
-					if (++byteInSegment > STUFF_COUNT)
+					if (++byteInSegment > Ods::STUFF_COUNT)
 						byteInSegment = 0;
 				}
 
@@ -7978,7 +7982,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 
 						if ((flag & irb_partial) && !(flag & irb_starting))
 						{
-							if ((p - STUFF_COUNT > key->key_data) && (p[-(STUFF_COUNT + 1)] == *q))
+							if ((p - Ods::STUFF_COUNT > key->key_data) && (p[-(Ods::STUFF_COUNT + 1)] == *q))
 							{
 								if (descending)
 									break;
@@ -8072,7 +8076,7 @@ static bool scan(thread_db* tdbb, UCHAR* pointer, RecordBitmap** bitmap, RecordB
 }
 
 
-void update_selectivity(index_root_page* root, MetaId id, const SelectivityList& selectivity)
+void update_selectivity(Ods::index_root_page* root, MetaId id, const SelectivityList& selectivity)
 {
 /**************************************
  *
@@ -8086,12 +8090,13 @@ void update_selectivity(index_root_page* root, MetaId id, const SelectivityList&
  **************************************/
 	//const Database* dbb = GET_DBB();
 
-	index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
+	Ods::index_root_page::irt_repeat* irt_desc = &root->irt_rpt[id];
 	const USHORT idx_count = irt_desc->irt_keys;
 	fb_assert(selectivity.getCount() == idx_count);
 
 	// dimitr: per-segment selectivities exist only for ODS11 and above
-	irtd* key_descriptor = (irtd*) ((UCHAR*) root + irt_desc->irt_desc);
+	Ods::irtd* key_descriptor = (Ods::irtd*) ((UCHAR*) root + irt_desc->irt_desc);
 	for (int i = 0; i < idx_count; i++, key_descriptor++)
 		key_descriptor->irtd_selectivity = selectivity[i];
 }
+}	// namespace Firebird::Jrd

@@ -28,9 +28,8 @@
 #include "Replicator.h"
 #include "Utils.h"
 
-using namespace Firebird;
-using namespace Jrd;
-using namespace Replication;
+namespace Firebird::Jrd::Replication
+{
 
 
 Replicator::Replicator(MemoryPool& pool,
@@ -494,3 +493,6 @@ void Replicator::setSequence2(CheckStatusWrapper* status,
 		ex.stuffException(status);
 	}
 }
+
+
+}	// namespace Firebird::Jrd::Replication

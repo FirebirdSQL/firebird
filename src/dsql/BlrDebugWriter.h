@@ -24,20 +24,20 @@
 
 #include "../common/classes/BlrWriter.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class DeclareSubFuncNode;
 class DeclareSubProcNode;
 
 // BLR writer with debug info support.
-class BlrDebugWriter : public Firebird::BlrWriter
+class BlrDebugWriter : public BlrWriter
 {
 public:
-	typedef Firebird::HalfStaticArray<UCHAR, 128> DebugData;
+	typedef HalfStaticArray<UCHAR, 128> DebugData;
 
 	explicit BlrDebugWriter(MemoryPool& p)
-		: Firebird::BlrWriter(p),
+		: BlrWriter(p),
 		  debugData(p)
 	{
 	}
@@ -54,7 +54,7 @@ public:
 
 	DebugData& getDebugData() { return debugData; }
 
-	virtual void raiseError(const Firebird::Arg::StatusVector& vector);
+	virtual void raiseError(const Arg::StatusVector& vector);
 
 private:
 	void putValue(ULONG val);
@@ -64,6 +64,6 @@ private:
 };
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // DSQL_BLR_DEBUG_WRITER_H

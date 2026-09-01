@@ -29,7 +29,7 @@
 #include "../common/classes/Hash.h"
 #include "../jrd/cch.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // PageToBufferMap used to cache pointers to the often used page buffers.
 // Its purpose is to avoid more costly usage of shared hash table.
@@ -111,7 +111,7 @@ public:
 
 private:
 	struct Item;
-	using HashTableType = Firebird::HashTable<Item, MAP_SIZE, PageNumber, Item, Item>;
+	using HashTableType = HashTable<Item, MAP_SIZE, PageNumber, Item, Item>;
 
 	struct Item : public HashTableType::Entry
 	{
@@ -221,6 +221,6 @@ private:
 	Item* m_free = nullptr;		// unused items
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PAGE_TO_BUFFER_MAP

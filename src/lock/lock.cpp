@@ -128,7 +128,9 @@ SSHORT LOCK_debug_level = 0;
 #define DEBUG_DELAY
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 // hvlad: enable to log deadlocked owners and its PIDs in firebird.log
 //#define DEBUG_TRACE_DEADLOCKS
@@ -160,9 +162,6 @@ static constexpr bool compatibility[LCK_max][LCK_max] =
 /* PW */	{true,	true,	true,	false,	false,	false,	false},
 /* EX */	{true,	true,	false,	false,	false,	false,	false}
 };
-
-
-namespace Jrd {
 
 
 LockManager::LockManager(const string& id, const Config* conf)
@@ -4065,4 +4064,5 @@ void LockManager::Extent::assign(const SharedMemoryBase& p)
 }
 #endif // USE_SHMEM_EXT
 
-} // namespace
+
+} // namespace Firebird::Jrd

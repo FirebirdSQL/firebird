@@ -34,6 +34,8 @@
 #include <windows.h>
 #endif
 
+using namespace Firebird;
+
 struct thread
 {
 	thread* thread_next;

@@ -26,6 +26,9 @@
 #include "OptionsBase.h"
 #include "../common/gdsassert.h"
 
+namespace Firebird::Isql
+{
+
 
 int OptionsBase::getCommand(const char* cmd) const
 {
@@ -102,3 +105,5 @@ void OptionsBase::showCommands(FILE* out) const
 		fputc('\n', out);
 }
 
+
+} // namespace Firebird::Isql
