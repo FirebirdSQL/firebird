@@ -195,7 +195,7 @@ static bool isCurrentAccount(UserId* currUserID,
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
-	const string& user, const string& pwd, const string& role, TraScope tra_scope)
+	const string& user, const string& pwd, const string& role, TraScope tra_scope, const Timeouts& timeouts)
 {
 	Attachment* att = tdbb->getAttachment();
 	if (att->att_ext_call_depth >= MAX_CALLBACKS)
@@ -212,7 +212,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 
 	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	if (!isCurrentAtt)
-		prv->generateDPB(tdbb, dpb, user, pwd, role);
+		prv->generateDPB(tdbb, dpb, user, pwd, role, timeouts);
 
 	// look up at connections already bound to current attachment
 	Connection* conn = prv->getBoundConnection(tdbb, dbName, dpb, tra_scope, isCurrentAtt);
@@ -307,8 +307,16 @@ Provider::~Provider()
 	fb_assert(m_connections.isEmpty());
 }
 
+void Provider::generateTimeout(ULONG timeout, UCHAR tag, ClumpletWriter& dpb)
+{
+	if (timeout)
+	{
+		dpb.insertInt(tag, timeout);
+	}
+}
+
 void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
-	const string& user, const string& pwd, const string& role) const
+	const string& user, const string& pwd, const string& role, const Timeouts& timeouts) const
 {
 	dpb.reset(isc_dpb_version1);
 
@@ -349,6 +357,10 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 	char timeZoneBuffer[TimeZoneUtil::MAX_SIZE];
 	TimeZoneUtil::format(timeZoneBuffer, sizeof(timeZoneBuffer), attachment->att_current_timezone);
 	dpb.insertString(isc_dpb_session_time_zone, timeZoneBuffer);
+
+	generateTimeout(timeouts.connect, isc_dpb_connect_timeout, dpb);
+	generateTimeout(timeouts.send, isc_dpb_send_timeout, dpb);
+	generateTimeout(timeouts.receive, isc_dpb_receive_timeout, dpb);
 
 	// remote network address???
 }

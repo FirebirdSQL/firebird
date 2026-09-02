@@ -723,9 +723,11 @@ using namespace Firebird;
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> PERCENTILE_CONT
 %token <metaNamePtr> PERCENTILE_DISC
+%token <metaNamePtr> RECEIVE
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
+%token <metaNamePtr> SEND
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
 %token <metaNamePtr> WITHIN
@@ -4173,6 +4175,17 @@ exec_stmt_option($execStatementNode)
 	| WITH TWO_PHASE TRANSACTION
 		{ setClause($execStatementNode->traScope, "TRANSACTION", EDS::traTwoPhase); }
 	*/
+	| CONNECT timeout_noise value
+		{ setClause($execStatementNode->connectTimeout, "CONNECT TIMEOUT", $3); }
+	| SEND timeout_noise value
+		{ setClause($execStatementNode->sendTimeout, "SEND TIMEOUT", $3); }
+	| RECEIVE timeout_noise value
+		{ setClause($execStatementNode->receiveTimeout, "RECEIVE TIMEOUT", $3); }
+	;
+
+timeout_noise
+	:
+	| TIMEOUT
 	;
 
 %type <stmtNode> if_then_else
@@ -5132,7 +5145,9 @@ keyword_or_column
 	| LTRIM
 	| PERCENTILE_CONT
 	| PERCENTILE_DISC
+	| RECEIVE
 	| RTRIM
+	| SEND
 	| TRUNCATE
 	| WITHIN
 	;

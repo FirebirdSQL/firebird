@@ -703,6 +703,9 @@ public:
 		  innerStmt(NULL),
 		  inputs(NULL),
 		  outputs(NULL),
+		  connectTimeout(NULL),
+		  sendTimeout(NULL),
+		  receiveTimeout(NULL),
 		  inputNames(NULL),
 		  excessInputs(NULL),
 		  dsqlLabelNumber(0),
@@ -726,6 +729,7 @@ private:
 
 	void getString(thread_db* tdbb, Request* request, const ValueExprNode* node,
 		Firebird::string& str, bool useAttCS = false) const;
+	ULONG getLong(thread_db* tdbb, Request* request, const ValueExprNode* node) const;
 
 public:
 	MetaName* dsqlLabelName;
@@ -737,6 +741,9 @@ public:
 	NestConst<StmtNode> innerStmt;
 	NestConst<ValueListNode> inputs;
 	NestConst<ValueListNode> outputs;
+	NestConst<ValueExprNode> connectTimeout;
+	NestConst<ValueExprNode> sendTimeout;
+	NestConst<ValueExprNode> receiveTimeout;
 	EDS::ParamNames* inputNames;
 	EDS::ParamNumbers* excessInputs;
 	USHORT dsqlLabelNumber;

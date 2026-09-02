@@ -2,6 +2,7 @@ SQL Language Extension: EXECUTE STATEMENT
 
    Extends already implemented EXECUTE STATEMENT with ability to query
 external Firebird's databases. Introduced support for input parameters.
+Added clauses to control network timeouts.
 
 Authors:
    Vlad Khorsun <hvlad@users.sourceforge.net>
@@ -18,7 +19,7 @@ Syntax and notes :
     [ROLE <role_name>]
     [WITH CALLER PRIVILEGES]
     [INTO <variables>]
-    
+
 - Order of clauses below is not fixed :
     [ON EXTERNAL [DATA SOURCE] <connection_string>]
     [WITH AUTONOMOUS TRANSACTION | COMMON TRANSACTION]
@@ -26,7 +27,10 @@ Syntax and notes :
     [PASSWORD <password>]
     [ROLE <role_name>]
     [WITH CALLER PRIVILEGES]
-	
+    [CONNECT [TIMEOUT] <seconds>]
+    [SEND [TIMEOUT] <seconds>]
+    [RECEIVE [TIMEOUT] <seconds>]
+
 - Duplicate clauses are not allowed
 
 - if you use both <query_text> and <input_parameters> then you must
@@ -100,6 +104,10 @@ Syntax and notes :
 	the statement is prepared using additional privileges of caller stored procedure or trigger
 	(if EXECUTE STATEMENT is inside SP\trigger). This causes the same effect as if statement 
 	is executed by SP\trigger directly.
+
+- if CONNECT timeout is omitted then configuration parameter ConnectionTimeout (default 180)
+	is used, if SEND or RECEIVE timeout is omitted appropriate timeout is not set (defautls to
+	OS settings).
 
 - Exceptions handling
 	a) if ON EXTERNAL DATA SOURCE clause is present then error information is interpreted 

@@ -394,6 +394,9 @@
 #define blr_exec_stmt_out_params	(unsigned char) 13	// output parameters
 #define blr_exec_stmt_role			(unsigned char) 14
 #define blr_exec_stmt_in_excess		(unsigned char) 15  // excess input params numbers
+#define blr_exec_stmt_connect		(unsigned char) 16	// timeouts: connect
+#define blr_exec_stmt_send			(unsigned char) 17	//			 send
+#define blr_exec_stmt_receive		(unsigned char) 18	//			 receive
 
 #define blr_stmt_expr				(unsigned char) 190
 #define blr_derived_expr			(unsigned char) 191
