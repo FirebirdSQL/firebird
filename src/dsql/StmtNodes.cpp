@@ -40,12 +40,15 @@
 #include "../jrd/RecordBuffer.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../jrd/VirtualTable.h"
+#include "../jrd/btr.h"
+#include "../jrd/sort.h"
 #include "../jrd/extds/ExtDS.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/recsrc/Cursor.h"
 #include "../jrd/replication/Publisher.h"
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
+#include "../jrd/btr_proto.h"
 #include "../jrd/cmp_proto.h"
 #include "../jrd/dfw_proto.h"
 #include "../jrd/dpm_proto.h"
@@ -1784,8 +1787,13 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 	const auto node = FB_NEW_POOL(pool) DeclareLocalTableNode(pool);
 	node->tableNumber = blrReader.getWord();
 
+	if (node->tableNumber >= MAX_DECLARED_LTT_COUNT)
+		PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table number");
+
 	csb->csb_localTables.grow(node->tableNumber + 1);
-	fb_assert(!csb->csb_localTables[node->tableNumber]);
+	if (csb->csb_localTables[node->tableNumber])
+		PAR_error(csb, Arg::Gds(isc_random) << "Duplicate local table number");
+
 	csb->csb_localTables[node->tableNumber] = node;
 
 	USHORT fieldCount = 0;
@@ -1795,8 +1803,34 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 		switch (verb)
 		{
 			case blr_dcl_local_table_ltt:
+				if (node->useLtt)
+					PAR_error(csb, Arg::Gds(isc_random) << "Duplicate local table ltt sub code");
+
 				node->useLtt = true;
 				break;
+
+			case blr_dcl_local_table_index:
+			{
+				auto& index = node->indexes.add();
+				blrReader.getMetaName(index.name);
+				const auto flags = blrReader.getByte();
+
+				if (flags & ~(blr_dcl_local_table_index_unique | blr_dcl_local_table_index_descending))
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index flags");
+
+				index.unique = flags & blr_dcl_local_table_index_unique;
+				index.descending = flags & blr_dcl_local_table_index_descending;
+
+				const auto segmentCount = blrReader.getByte();
+
+				if (segmentCount == 0 || segmentCount > MAX_INDEX_SEGMENTS)
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index segment count");
+
+				for (USHORT i = 0; i < segmentCount; ++i)
+					index.fieldIds.add(blrReader.getWord());
+
+				break;
+			}
 
 			case blr_dcl_local_table_format:
 				if (node->format)
@@ -1851,6 +1885,34 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 	if (fieldCount == 0)
 		PAR_error(csb, Arg::Gds(isc_random) << "Local table without fields");
 
+	if (node->indexes.hasData())
+	{
+		if (!node->useLtt)
+			PAR_error(csb, Arg::Gds(isc_random) << "Indexes are not supported for non-LTT local tables");
+
+		SortedArray<MetaName> indexNames;
+
+		for (const auto& index : node->indexes)
+		{
+			if (index.name.isEmpty())
+				PAR_error(csb, Arg::Gds(isc_random) << "Local table index without a name");
+
+			if (indexNames.exist(index.name))
+				PAR_error(csb, Arg::Gds(isc_random) << "Duplicate local table index name");
+
+			indexNames.add(index.name);
+
+			for (const auto fieldId : index.fieldIds)
+			{
+				if (fieldId >= fieldCount)
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index field id");
+
+				if (node->format->fmt_desc[fieldId].dsc_dtype == dtype_blob)
+					PAR_error(csb, Arg::Gds(isc_random) << "BLOB fields cannot be indexed in local tables");
+			}
+		}
+	}
+
 	return node;
 }
 
@@ -1899,11 +1961,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 	for (const auto clause : dsqlTable->clauses)
 	{
 		if (clause->type != RelationNode::Clause::TYPE_ADD_COLUMN)
-		{
-			status_exception::raise(
-				Arg::Gds(isc_random) <<
-				"Table constraints are not supported for local temporary table declarations");
-		}
+			continue;
 
 		const auto addColumn = static_cast<const RelationNode::AddColumnClause*>(clause.getObject());
 		const auto field = addColumn->field;
@@ -1975,6 +2033,82 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 		notNullFields.add(notNull);
 	}
 
+	for (const auto clause : dsqlTable->clauses)
+	{
+		switch (clause->type)
+		{
+			case RelationNode::Clause::TYPE_ADD_COLUMN:
+				break;
+
+			case RelationNode::Clause::TYPE_ADD_INLINE_TABLE_INDEX:
+			{
+				const auto addIndex = static_cast<const RelationNode::AddInlineTableIndexClause*>(clause.getObject());
+				const auto indexNode = addIndex->indexNode;
+
+				if (indexNode->name.schema.hasData() || indexNode->name.package.hasData())
+				{
+					status_exception::raise(
+						Arg::Gds(isc_random) <<
+						"Local temporary table index declarations cannot use qualified names");
+				}
+
+				for (const auto& index : indexes)
+				{
+					if (index.name == indexNode->name.object)
+						ERRD_post(Arg::Gds(isc_no_dup) << indexNode->name.toQuotedString());
+				}
+
+				fb_assert(indexNode->columns);
+
+				if (indexNode->segments->getCount() == 0 ||
+					indexNode->segments->getCount() > MAX_INDEX_SEGMENTS)
+				{
+					status_exception::raise(Arg::Gds(isc_idx_key_err) << indexNode->name.toQuotedString());
+				}
+
+				auto& index = indexes.add();
+				index.name = indexNode->name.object;
+				index.unique = indexNode->unique;
+				index.descending = indexNode->descending;
+
+				for (const auto& segment : *indexNode->segments)
+				{
+					const dsql_fld* field = nullptr;
+
+					for (auto existing = dsqlRelation->rel_fields; existing; existing = existing->fld_next)
+					{
+						if (existing->fld_name == segment.name)
+						{
+							field = existing;
+							break;
+						}
+					}
+
+					if (!field)
+					{
+						status_exception::raise(
+							Arg::Gds(isc_dyn_column_does_not_exist) << segment.name.c_str() << dsqlName.toQuotedString());
+					}
+
+					if (field->dtype == dtype_blob)
+						status_exception::raise(Arg::Gds(isc_blob_idx_err) << segment.name.c_str());
+
+					if (std::find(index.fieldIds.begin(), index.fieldIds.end(), field->fld_id) != index.fieldIds.end())
+						status_exception::raise(Arg::Gds(isc_key_field_err) << indexNode->name.toQuotedString());
+
+					index.fieldIds.add(field->fld_id);
+				}
+
+				break;
+			}
+
+			default:
+				status_exception::raise(
+					Arg::Gds(isc_random) <<
+					"Table constraints are not supported for local temporary table declarations");
+		}
+	}
+
 	return this;
 }
 
@@ -2018,6 +2152,26 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		for (auto field = dsqlRelation->rel_fields; field; field = field->fld_next)
 			dsqlScratch->appendNullString(field->fld_name.c_str());
 
+		for (const auto& index : indexes)
+		{
+			dsqlScratch->appendUChar(blr_dcl_local_table_index);
+			dsqlScratch->appendNullString(index.name.c_str());
+
+			UCHAR flags = 0;
+
+			if (index.unique)
+				flags |= blr_dcl_local_table_index_unique;
+
+			if (index.descending)
+				flags |= blr_dcl_local_table_index_descending;
+
+			dsqlScratch->appendUChar(flags);
+			dsqlScratch->appendUChar(index.fieldIds.getCount());
+
+			for (const auto fieldId : index.fieldIds)
+				dsqlScratch->appendUShort(fieldId);
+		}
+
 		dsqlScratch->appendUChar(blr_end);
 	}
 }
@@ -2028,6 +2182,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::copy(thread_db* tdbb, NodeCopier& 
 	node->format = format;
 	node->notNullFields = notNullFields;
 	node->fieldNames = fieldNames;
+	node->indexes = indexes;
 	node->tableNumber = tableNumber;
 	node->useLtt = useLtt;
 	return node;
@@ -2051,6 +2206,7 @@ const StmtNode* DeclareLocalTableNode::execute(thread_db* tdbb, Request* request
 		{
 			reset(tdbb, request);
 			getRelation(tdbb, request);
+			createFrameIndexes(tdbb, request);
 		}
 		else if (auto& recordBuffer = getImpure(tdbb, request, false)->recordBuffer)
 			recordBuffer->reset();
@@ -2150,9 +2306,119 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 
 	permanent->addFormat(relFormat);
 	newRelation->rel_current_format = relFormat;
+	permanent->storeObject(tdbb, newRelation, 0);
+
+	for (FB_SIZE_T i = 0; i < indexes.getCount(); ++i)
+	{
+		const auto& index = indexes[i];
+		auto* idp = permanent->rel_indices.ensurePermanent(tdbb, i);
+		AutoPtr<IndexVersion> idv(FB_NEW_POOL(pool) IndexVersion(pool, idp));
+		idv->setLtt(tdbb, QualifiedName(index.name), index.unique, index.descending, index.fieldIds.getCount());
+		idp->storeObject(tdbb, idv, 0);
+		idv.release();
+	}
+
 	relation = newRelation;
 
 	return relation;
+}
+
+void DeclareLocalTableNode::getIndexDescription(thread_db* tdbb, FB_SIZE_T indexId, index_desc* idx) const
+{
+	fb_assert(idx);
+	fb_assert(indexId < indexes.getCount());
+
+	memset(idx, 0, sizeof(*idx));
+
+	const auto& index = indexes[indexId];
+	idx->idx_id = indexId;
+	idx->idx_count = index.fieldIds.getCount();
+
+	if (index.unique)
+		idx->idx_flags |= idx_unique;
+
+	if (index.descending)
+		idx->idx_flags |= idx_descending;
+
+	for (FB_SIZE_T i = 0; i < index.fieldIds.getCount(); ++i)
+	{
+		const auto fieldId = index.fieldIds[i];
+		const auto& desc = format->fmt_desc[fieldId];
+
+		idx->idx_rpt[i].idx_field = fieldId;
+		idx->idx_rpt[i].idx_itype = DFW_assign_index_type(tdbb, QualifiedName(index.name), desc.dsc_dtype,
+			desc.isText() ? desc.getTextType() : ttype_none);
+	}
+}
+
+void DeclareLocalTableNode::createFrameIndexes(thread_db* tdbb, Request* request) const
+{
+	if (indexes.isEmpty())
+		return;
+
+	fb_assert(relation);
+
+	const auto frameId = request->getLocalTableInstanceId(tdbb);
+	AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, frameId);
+	relation->getPages(tdbb);
+
+	const auto transaction = request->req_transaction ?
+		request->req_transaction : tdbb->getAttachment()->getSysTransaction();
+
+	for (FB_SIZE_T indexId = 0; indexId < indexes.getCount(); ++indexId)
+		createFrameIndex(tdbb, indexId, transaction);
+}
+
+void DeclareLocalTableNode::createFrameIndex(thread_db* tdbb, FB_SIZE_T indexId, jrd_tra* transaction) const
+{
+	// Frame relations are statement-owned and are not visible through the metadata cache used by
+	// IDX_create_index's worker attachment, so create their empty indexes synchronously here.
+	index_desc idx;
+	getIndexDescription(tdbb, indexId, &idx);
+
+	const auto& index = indexes[indexId];
+	const auto& indexName = index.name;
+	SelectivityList selectivity(*tdbb->getDefaultPool());
+
+	const auto dbb = tdbb->getDatabase();
+	const auto nullIndLen = !(idx.idx_flags & idx_descending) && idx.idx_count == 1 ? 1 : 0;
+	const auto keyLength = ROUNDUP(BTR_key_length(tdbb, relation, &idx) + nullIndLen, sizeof(SINT64));
+
+	if (keyLength >= dbb->getMaxIndexKeyLength())
+		ERR_post(Arg::Gds(isc_no_meta_update) << Arg::Gds(isc_keytoobig) << indexName.toQuotedString());
+
+	sort_key_def keyDesc[2];
+	keyDesc[0].setSkdLength(SKD_bytes, keyLength);
+	keyDesc[0].skd_flags = SKD_ascending;
+	keyDesc[0].setSkdOffset();
+	keyDesc[0].skd_vary_offset = 0;
+	keyDesc[1].setSkdLength(SKD_int64, sizeof(RecordNumber));
+	keyDesc[1].skd_flags = SKD_ascending;
+	keyDesc[1].setSkdOffset(keyDesc);
+	keyDesc[1].skd_vary_offset = 0;
+
+	PartitionedSort sort(dbb, &transaction->tra_sorts);
+
+	IndexCreation creation;
+	creation.index = &idx;
+	creation.index_name = QualifiedName(indexName);
+	creation.relation = relation;
+	creation.transaction = transaction;
+	creation.sort = &sort;
+	creation.key_desc = keyDesc;
+	creation.key_length = keyLength;
+	creation.nullIndLen = nullIndLen;
+	creation.dup_recno = -1;
+	creation.duplicates.setValue(0);
+	creation.createMethod = IdxCreate::AtOnce;
+
+	BTR_reserve_slot(tdbb, creation);
+
+	const auto scb = FB_NEW_POOL(transaction->tra_sorts.getPool())
+		Sort(dbb, &transaction->tra_sorts, keyLength + sizeof(index_sort_record), 2, 1, keyDesc, nullptr, nullptr);
+	sort.addPartition(scb);
+	sort.buildMergeTree();
+	BTR_create(tdbb, creation, selectivity);
 }
 
 void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
@@ -2201,7 +2467,6 @@ void DeclareLocalTableNode::destroyRelation(thread_db* tdbb) const
 	{
 		const auto permanent = relation->getPermanent();
 		permanent->freePages(tdbb);
-		jrd_rel::destroy(tdbb, relation);
 		Cached::Relation::cleanup(tdbb, permanent);
 		relation = nullptr;
 	}
@@ -11533,6 +11798,9 @@ DmlNode* TruncateLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compil
 	if (node->tableNumber >= csb->csb_localTables.getCount() || !csb->csb_localTables[node->tableNumber])
 		PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(node->tableNumber));
 
+	if (csb->csb_localTables[node->tableNumber]->useLtt)
+		PAR_error(csb, Arg::Gds(isc_random) << "TRUNCATE is not supported for declared local temporary tables");
+
 	return node;
 }
 
@@ -11564,12 +11832,9 @@ const StmtNode* TruncateLocalTableNode::execute(thread_db* tdbb, Request* reques
 	{
 		const auto localTable = request->getStatement()->localTables[tableNumber];
 
-		if (localTable->useLtt)
-		{
-			localTable->reset(tdbb, request);
-			localTable->getRelation(tdbb, request);
-		}
-		else if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
+		fb_assert(!localTable->useLtt);
+
+		if (auto& recordBuffer = localTable->getImpure(tdbb, request, false)->recordBuffer)
 			recordBuffer->reset();
 
 		request->req_operation = Request::req_return;

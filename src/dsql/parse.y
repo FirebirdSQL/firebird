@@ -2630,26 +2630,26 @@ packaged_table_clause
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) packaged_table_indexes_opt($2)
+		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) inline_table_indexes_opt($2)
 			{
 				$$ = $2;
 			}
 	;
 
-%type packaged_table_indexes_opt(<createRelationNode>)
-packaged_table_indexes_opt($createRelationNode)
+%type inline_table_indexes_opt(<createRelationNode>)
+inline_table_indexes_opt($createRelationNode)
 	: /* nothing */
-	| packaged_table_indexes($createRelationNode)
+	| inline_table_indexes($createRelationNode)
 	;
 
-%type packaged_table_indexes(<createRelationNode>)
-packaged_table_indexes($createRelationNode)
-	: packaged_table_index($createRelationNode)
-	| packaged_table_indexes packaged_table_index($createRelationNode)
+%type inline_table_indexes(<createRelationNode>)
+inline_table_indexes($createRelationNode)
+	: inline_table_index($createRelationNode)
+	| inline_table_indexes inline_table_index($createRelationNode)
 	;
 
-%type packaged_table_index(<createRelationNode>)
-packaged_table_index($createRelationNode)
+%type inline_table_index(<createRelationNode>)
+inline_table_index($createRelationNode)
 	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] segment_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
@@ -2657,7 +2657,7 @@ packaged_table_index($createRelationNode)
 			node->descending = $2;
 			node->segments = $6;
 
-			auto clause = newNode<RelationNode::AddPackagedTableIndexClause>(node);
+			auto clause = newNode<RelationNode::AddInlineTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);
 		}
 	;
@@ -3717,7 +3717,7 @@ local_nonforward_declaration
 				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($<createRelationNode>6) ')' ';'
+		'(' table_elements($<createRelationNode>6) ')' [YYVALID;] inline_table_indexes_opt($<createRelationNode>6) ';'
 		{
 			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
 			node->dsqlName = *$5;

@@ -2237,7 +2237,7 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 	return false;
 }
 
-static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+static bool user_management(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -2256,16 +2256,22 @@ static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* wor
 		return true;
 
 	case 3:
-		transaction->getUserManagement()->execute(work->dfw_id);
-		return true;
+		{
+			EngineCheckout cout(tdbb, FB_FUNCTION);
+			transaction->getUserManagement()->execute(work->dfw_id);
+			return true;
+		}
 
 	case 4:
 	case 5:
 		return true;
 
 	case 6:
-		transaction->getUserManagement()->commit();	// safe to be called multiple times
-		break;
+		{
+			EngineCheckout cout(tdbb, FB_FUNCTION);
+			transaction->getUserManagement()->commit();	// safe to be called multiple times
+			break;
+		}
 	}
 
 	return false;
@@ -3412,7 +3418,12 @@ static bool commit_charset(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 
 	case 7:
 		{
-			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id, 0);
+			// ASF: During database creation there is no need to force loading of
+			// all system collations - they are not used yet and will be loaded on
+			// demand later.
+			const bool creating = tdbb->getDatabase()->dbb_flags & DBB_creating;
+			auto* cs = MetadataCache::getPerm<Cached::CharSet>(tdbb, id,
+				(creating ? CacheFlag::NOSCAN : 0));
 			fb_assert(cs);
 			if (cs)
 				cs->commit(tdbb);
@@ -4988,7 +4999,8 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	// create versioned part
 	auto& attPool = *attachment->att_pool;
 	AutoPtr<IndexVersion> idv = FB_NEW_POOL(attPool) IndexVersion(attPool, idp);
-	idv->setLtt(tdbb, lttIndex);
+	idv->setLtt(tdbb, lttIndex->name, lttIndex->unique, lttIndex->descending,
+		lttIndex->segments.getCount(), lttIndex->inactive);
 
 	idp->storeObject(tdbb, idv, 0);
 	idv.release();

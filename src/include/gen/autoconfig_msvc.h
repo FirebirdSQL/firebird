@@ -92,6 +92,7 @@
 #endif
 
 /* Headers */
+#define HAVE_AFUNIX_H
 #define HAVE_ASSERT_H
 #define HAVE_CTYPE_H
 #undef HAVE_UNISTD_H

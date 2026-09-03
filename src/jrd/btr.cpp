@@ -432,7 +432,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	}
 
 	if (indexName.object.hasData())
-		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	{
+		if (!relation->isLTT())
+			MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	}
 	else
 		indexName.object = "***unknown***";
 
@@ -1359,7 +1362,7 @@ void BTR_create(thread_db* tdbb,
 	index_root_page* const root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	CCH_MARK(tdbb, &window);
 
-	const jrd_tra* tra = tdbb->getTransaction();
+	const jrd_tra* tra = creation.transaction;
 	auto* const irt_desc = root->irt_rpt + idx->idx_id;
 
 	switch(creation.createMethod)

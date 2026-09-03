@@ -1460,7 +1460,7 @@ public:
 			TYPE_DROP_CONSTRAINT,
 			TYPE_ALTER_SQL_SECURITY,
 			TYPE_ALTER_PUBLICATION,
-			TYPE_ADD_PACKAGED_TABLE_INDEX
+			TYPE_ADD_INLINE_TABLE_INDEX
 		};
 
 		explicit Clause(MemoryPool& p, Type aType) noexcept
@@ -1488,10 +1488,10 @@ public:
 		unsigned deleteAction;
 	};
 
-	struct AddPackagedTableIndexClause : public Clause
+	struct AddInlineTableIndexClause : public Clause
 	{
-		explicit AddPackagedTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
-			: Clause(p, TYPE_ADD_PACKAGED_TABLE_INDEX),
+		explicit AddInlineTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
+			: Clause(p, TYPE_ADD_INLINE_TABLE_INDEX),
 			  indexNode(aIndexNode)
 		{
 		}
