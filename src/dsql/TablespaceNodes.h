@@ -59,6 +59,7 @@ protected:
 	}
 
 private:
+	void checkFileName(thread_db* tdbb);
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 	bool executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
@@ -91,6 +92,9 @@ protected:
 	{
 		statusVector << Firebird::Arg::Gds(isc_dsql_drop_ts_failed) << name;
 	}
+
+private:
+	void checkDependencies(thread_db* tdbb, jrd_tra* transaction);
 
 public:
 	MetaName name;
