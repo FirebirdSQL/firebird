@@ -2578,7 +2578,7 @@ static bool store_view_context_type(thread_db* tdbb, SSHORT phase, DeferredWork*
 }
 
 
-static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+static bool user_management(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -2597,12 +2597,18 @@ static bool user_management(thread_db* /*tdbb*/, SSHORT phase, DeferredWork* wor
 		return true;
 
 	case 3:
-		transaction->getUserManagement()->execute(work->dfw_id);
-		return true;
+		{
+			EngineCheckout cout(tdbb, FB_FUNCTION);
+			transaction->getUserManagement()->execute(work->dfw_id);
+			return true;
+		}
 
 	case 4:
-		transaction->getUserManagement()->commit();	// safe to be called multiple times
-		break;
+		{
+			EngineCheckout cout(tdbb, FB_FUNCTION);
+			transaction->getUserManagement()->commit();	// safe to be called multiple times
+			break;
+		}
 	}
 
 	return false;
