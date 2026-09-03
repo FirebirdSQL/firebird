@@ -2058,7 +2058,7 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 						ERRD_post(Arg::Gds(isc_no_dup) << indexNode->name.toQuotedString());
 				}
 
-				fb_assert(indexNode->columns);
+				fb_assert(indexNode->segments && indexNode->segments->hasData());
 
 				if (indexNode->segments->getCount() == 0 ||
 					indexNode->segments->getCount() > MAX_INDEX_SEGMENTS)
