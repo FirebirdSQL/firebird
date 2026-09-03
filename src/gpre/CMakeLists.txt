@@ -1,4 +1,3 @@
-include(SourceGroups)
 
 ###############################################################################
 # LIBRARY gpre_common
@@ -26,6 +25,6 @@ add_dependencies_cc         (gpre_common UpdateCloopInterfaces)
 
 if (WIN32)
     add_library             (fbrmclib SHARED languages/fbrmclib.cpp ${VERSION_RC})
-    target_link_libraries   (fbrmclib common yvalve)
+    target_link_libraries   (fbrmclib common yvalve yvalve_common srp)
     set_exported_symbols    (fbrmclib fbrmclib)
 endif(WIN32)
