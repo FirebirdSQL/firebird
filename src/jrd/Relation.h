@@ -429,7 +429,7 @@ public:
 		m_instanceId = instanceId;
 	}
 
-	PageNumber toNumber(ULONG pageNo) const noexcept
+	PageNumber toPageNumber(ULONG pageNo) const noexcept
 	{
 		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE);
 		return PageNumber(m_pageSpaceId, pageNo);

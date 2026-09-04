@@ -2747,7 +2747,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(relPages->toNumber(staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toPageNumber(staying_chain_rpb.rpb_page));
 		++const_i;
 	}
 
@@ -2771,7 +2771,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(relPages->toNumber(staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toPageNumber(staying_chain_rpb.rpb_page));
 	}
 
 	// Read head version with write lock and check if it is still the same version

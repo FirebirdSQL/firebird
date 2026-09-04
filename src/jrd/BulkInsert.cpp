@@ -195,7 +195,7 @@ RecordNumber BulkInsert::Buffer::putBlob(thread_db* tdbb, blb* blob, Record* rec
 	if (record)
 	{
 		const auto relPages = rpb.rpb_relation->getPages(tdbb);
-		record->pushPrecedence(relPages->toNumber(m_current->dpg_header.pag_pageno));
+		record->pushPrecedence(relPages->toPageNumber(m_current->dpg_header.pag_pageno));
 	}
 
 	return rpb.rpb_number;
@@ -209,7 +209,7 @@ void BulkInsert::Buffer::fragmentRecord(thread_db* tdbb, record_param* rpb, Comp
 
 	const UCHAR* in = rpb->rpb_address + rpb->rpb_length;
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	PageNumber prior(relPages->toNumber(0));
+	PageNumber prior(relPages->toPageNumber(0));
 
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
@@ -417,7 +417,7 @@ void BulkInsert::Buffer::flush(thread_db* tdbb)
 		if (m_current->dpg_count == 0)
 			break;
 
-		win dpWindow(relPages->toNumber(m_current->dpg_header.pag_pageno));
+		win dpWindow(relPages->toPageNumber(m_current->dpg_header.pag_pageno));
 
 		auto dpage = CCH_FETCH(tdbb, &dpWindow, LCK_write, pag_data);
 

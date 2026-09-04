@@ -1051,7 +1051,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		{
 			if (s != slot)
 			{
-				WIN dp_window(relPages->toNumber(pages[i]));
+				WIN dp_window(relPages->toPageNumber(pages[i]));
 				data_page* dpage = (data_page*) CCH_FETCH(tdbb, &dp_window, LCK_read, pag_data);
 				if (dpage->dpg_count)
 				{
@@ -1293,7 +1293,7 @@ bool DPM_fetch(thread_db* tdbb, record_param* rpb, USHORT lock)
 
 	const RecordNumber number = rpb->rpb_number;
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	rpb->getWindow(tdbb).win_page = relPages->toNumber(rpb->rpb_page);
+	rpb->getWindow(tdbb).win_page = relPages->toPageNumber(rpb->rpb_page);
 	CCH_FETCH(tdbb, &rpb->getWindow(tdbb), lock, pag_data);
 
 	if (!get_header(&rpb->getWindow(tdbb), rpb->rpb_line, rpb))
@@ -4210,7 +4210,7 @@ static void store_big_record(thread_db* tdbb,
 
 	const UCHAR* in = rpb->rpb_address + rpb->rpb_length;
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	PageNumber prior(relPages->toNumber(0));
+	PageNumber prior(relPages->toPageNumber(0));
 
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
@@ -4581,7 +4581,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 					for (; page1 < end1; page1++)
 					{
 						// Copy blob page with blob page numbers
-						WIN oldWindow1(orgPages->toNumber(*page1));
+						WIN oldWindow1(orgPages->toPageNumber(*page1));
 						WIN newWindow1(newPages->getPageSpaceId());
 						blob_page* oldBlobPage1 = (blob_page*) CCH_FETCH(tdbb, &oldWindow1, LCK_read, pag_blob);
 						blob_page* newBlobPage1 = (blob_page*) PAG_allocate(tdbb, &newWindow1);
@@ -4598,7 +4598,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 
 							for (; page2 < end2; page2++)
 							{
-								WIN oldWindow2(orgPages->toNumber(*page2));
+								WIN oldWindow2(orgPages->toPageNumber(*page2));
 								WIN newWindow2(newPages->getPageSpaceId());
 								blob_page* oldBlobPage2 = (blob_page*) CCH_FETCH(tdbb, &oldWindow2, LCK_read, pag_blob);
 								blob_page* newBlobPage2 = (blob_page*) PAG_allocate(tdbb, &newWindow2);
@@ -4646,7 +4646,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 
 	sequence = 0;
 	for (const auto pageNo : *newPages->getPointerPages().getPointer())
-		DPM_pages(tdbb, relation->getId(), pag_pointer, sequence++, newPages->toNumber(pageNo));
+		DPM_pages(tdbb, relation->getId(), pag_pointer, sequence++, newPages->toPageNumber(pageNo));
 
 	DPM_pages(tdbb, relation->getId(), pag_root, 0, rootPage);
 
