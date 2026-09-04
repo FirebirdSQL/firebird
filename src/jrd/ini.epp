@@ -768,9 +768,6 @@ void INI_format(thread_db* tdbb, const string& charset)
 		PAD(securityClass, X.RDB$SECURITY_CLASS);
 		X.RDB$SECURITY_CLASS.NULL = FALSE;
 
-		PAD(dbb->dbb_filename.c_str(), X.RDB$FILE_NAME);
-		X.RDB$FILE_NAME.NULL = FALSE;
-
 		X.RDB$OFFLINE.NULL = FALSE;
 		X.RDB$OFFLINE = FALSE;
 
