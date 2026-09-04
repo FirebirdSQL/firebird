@@ -15,12 +15,17 @@ SYNTAX
     1. TABLESPACE
     CREATE TABLESPACE [IF NOT EXISTS] <TS NAME> FILE '/path/to/file'
     ALTER TABLESPACE <TS NAME> SET FILE [TO] '/path/to/file'
-    You can specify either an absolute path or a relative path (relative to the database file)
+
+    You can specify either an absolute path or a relative path (relative to the database file).
+    While creating, the specified file must not exist and will be created. While altering, the specified file must exist.
+    The ALTER command replaces the data/indices contained inside the original tablespace with the data/indices contained in the new one.
+    After altering, the old file remains intact but is no longer associated with the database.
 
     DROP TABLESPACE [IF EXISTS] <TS NAME>
-    The development of the INCLUDING CONTENTS option has been postponed.
 
-    For an existing tablespace, it is possible to add a comment using the COMMENT ON statement.
+    It's currently impossible to drop a tabespace containing metadata objects inside, error is returned.
+
+    It's possible to add a comment for the existing tablespace:
     COMMENT ON TABLESPACE <TS NAME> IS {'text' | NULL}
 
     2. TABLE
@@ -53,10 +58,10 @@ SYNTAX
 SECURITY
 -----------------
 
-    Only administrators and users with the “CREATE TABLESPACE” privilege can create tablespaces (CREATE TABLESPACE).
-    Only administrators and users with the “ALTER ANY TABLESPACE” privilege can change tablespaces file paths (ALTER TABLESPACE <name> SET FILE [TO] <file_name>).
-    Only administrators, domain owners, or users with the ALTER ANY TABLESPACE privilege can comment (COMMENT ON) tablespaces.
-    Only administrators and users with the “DROP ANY TABLESPACE” privilege can delete tablespaces (DROP TABLESPACE).
+    Only administrators and users with the CREATE TABLESPACE privilege can create tablespaces.
+    Only administrators, tablespace owners and users with the ALTER ANY TABLESPACE privilege can alter tablespaces (change tablespaces file paths)).
+    Only administrators, tablespace owners and users with the ALTER ANY TABLESPACE privilege can comment on tablespaces.
+    Only administrators, tablespace owners and users with the DROP ANY TABLESPACE privilege can drop tablespaces.
 
 -----------------
 ODS CHANGES
@@ -82,18 +87,17 @@ ODS CHANGES
     New fields in RDB$RELATIONS:
     RDB$TABLESPACE_NAME - CHAR (63)
 
-    By default, the RDB$TABLESPACES table stores a record about the PRIMARY tablespace.
-    PRIMARY tablespace has the system flag and FILE_NAME matches the path to the database file.
+    Initially, RDB$TABLESPACES contains a record about the PRIMARY tablespace (defined as system).
 
 -----------------
 UTILITIES
 -----------------
 
-    1. Logical backup
+    1. GBAK backup
     gbak -b works as usual for now. It gets data from a database transparently working with tablespaces.
 
-    2. Logical restore
-    gbak -c
+    2. GBAK restore
+    gbak -c / -r
 
     -ts_map[ping] <path to file>
     option is required for correct database restore if its backup contains tables or indexes saved in tablespaces.
@@ -107,7 +111,7 @@ UTILITIES
     The option can be used as many times as required. It can also be used together with -ts_map.
 
     If you specify “PRIMARY” instead of the path for the new tablespace, the contents of the tablespace will be moved to the PRIMARY tablespace.
-    The tablespace will not be created.
+    The original tablespace will not be created.
 
     -ts_orig[inal_paths]
     To restore tablespaces to the original paths they were on when the backup was created.
@@ -118,14 +122,15 @@ UTILITIES
     If you do not specify the above options, when restoring a database that has tablespaces,
     an error about the inability to determine the path to restore tablespaces will occur.
 
-    3. Show
+    3. ISQL
     SHOW {TABLESPACES | TABLESPACE <TS NAME>}
     Displays a list of all tablespaces names in alphabetical order or information about the specified tablespace.
 
     4. Replication
-    There is an apply_tablespaces_ddl parameter for replication.
-    If this parameter is disabled, tablespaces-related DDL statements and CREATE/ALTER TABLE/INDEX clauses will not be applied to the replica.
-    This is used if the replica has its own set of tablespaces or none at all.
+    There is an apply_tablespaces_ddl parameter for replication, it may be configured for the replica side.
+    If this parameter is disabled, CREATE/ALTER/DROP TSABLESPACE statements will not be ignored on the replica and
+    tablespace-related clauses in CREATE/ALTER TABLE/INDEX statements will also be ignored.
+    This parameter is useful when the replica has its own set of tablespaces or none at all.
 
 -----------------
 DETAILS
@@ -136,33 +141,37 @@ DETAILS
   pag_scns and pag_pip are located in every tablespace.
   pag_root is located in the tablespace where a table is located.
 
-  An algorithm for moving data to another tablespace:
-  First, you have to move all the pages to another tablespace:
-  The main steps are:
-   - allocate necessary number of pointer pages by extents.
-   - allocate the rest of pointer pages by pages.
-   - walking through PPs allocate DPs by pages or extents.
-   - fix every PP by correcting DP numbers and ppg_next pointer and build a map
-   - walking through the map and copy every DP to the new one by fixing
-     b_page and f_page numbers.
-  At the end of work insert new records into RDB$PAGES and mark existing pages for deletion.
+  Algorithm of moving the table data to another tablespace:
+    - allocate necessary number of pointer pages by extents
+    - allocate the rest of pointer pages by pages
+    - walking through PPs allocate DPs by pages or extents
+    - fix every PP by correcting DP numbers and ppg_next pointer and build a map
+    - walking through the map and copy every DP to the new one by fixing b_page and f_page numbers
+    - insert newly allocated page numbers into RDB$PAGES and mark original page numbers for deletion after commit
+    - if rolled back, delete the newly allocated pages and mark the original pages as active again
+
+  Algorithm of moving the index to another tablespace:
+    - new index tree is created, containing all the keys from the original index
+    - new index tree becomes active, but contains a backpointer to the original index tree
+    - original index tree is marked for deletion after commit
+    - if rolled back, mark the new index tree for deletion and restore the original index tree as active
 
 -----------------
 CONSTRAINTS
 -----------------
 
-    It's possible to create up to 253 tablespaces.
-    Operators to move an index or table to a tablespace require an exclusive database lock.
+    Currently it's possible to create up to 253 tablespaces, this limit may be shifted in the future.
+    Altering or dropping a tablespace requires an exclusive tablespace lock.
+    Moving an index or table to another tablespace requires a PR (protected read) table lock.
 
 -----------------
 PLANS
 -----------------
 
-    1. TEMPORARY predefined tablespaces.
-    2. Grouping page counters by tablespace (For output in trace and monitoring).
-    3. New header page for tablespaces
-    4. NBACKUP support for tablespaces
-    5. Moving blobs to separate tablespaces  (The RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose).
-    6. Possibility to introduce UNDO tablespace in future versions
-    7. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level.
+    1. TEMPORARY predefined tablespaces
+    2. New header page for tablespaces
+    3. NBACKUP support for tablespaces
+    4. Moving blobs to separate tablespaces (RDB$TABLESPACE_NAME column in RDB$RELATION_FIELDS is reserved for this purpose)
+    5. Possibility to introduce UNDO tablespace in future versions
+    6. The ability to set default tablespaces for tables, indexes and BLOBs at the database or schema level
 
