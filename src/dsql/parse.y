@@ -7177,7 +7177,7 @@ table_proc_inputs
 
 %type <relSourceNode> table_name
 table_name
-	: symbol_table_name correlation_name_opt
+	: scoped_qualified_name correlation_name_opt
 		{
 			RelationSourceNode* node = newNode<RelationSourceNode>(*$1);
 			if ($2)
@@ -7401,13 +7401,13 @@ plan_item
 
 %type <qualifiedNameArray> table_or_alias_list
 table_or_alias_list
-	: symbol_table_name
+	: scoped_qualified_name
 		{
 			const auto node = newNode<ObjectsArray<QualifiedName>>();
 			node->add(*$1);
 			$$ = node;
 		}
-	| table_or_alias_list symbol_table_name
+	| table_or_alias_list scoped_qualified_name
 		{
 			const auto node = $1;
 			node->add(*$2);
@@ -7584,10 +7584,10 @@ insert
 
 %type <storeNode> insert_start
 insert_start
-	: INSERT INTO simple_table_name
+	: INSERT INTO scoped_qualified_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->target = $3;
+			node->target = newNode<RelationSourceNode>(*$3);
 			$$ = node;
 		}
 	;
@@ -7787,10 +7787,10 @@ update_positioned
 
 %type <updInsNode> update_or_insert
 update_or_insert
-	: UPDATE OR INSERT INTO simple_table_name
+	: UPDATE OR INSERT INTO scoped_qualified_name
 			{
 				UpdateOrInsertNode* node = $$ = newNode<UpdateOrInsertNode>();
-				node->relation = $5;
+				node->relation = newNode<RelationSourceNode>(*$5);
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
 				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
