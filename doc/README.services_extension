@@ -146,6 +146,7 @@ List of existing trace sessions
 			if the session was created by the engine itself : "system"
 			kind of session : "audit" or "trace"
 			if user session log file is full : "log full"
+			if the user session is started on the same machine where the server is located: "local"
 		"plugins" is a set of plugins for use with trace session
 			Plugins can be specified via API/tracemgr.
 			By default, plugins form the firebird.conf (TracePlugin) are used
