@@ -247,9 +247,6 @@ enum drq_type_t
 	drq_l_rel_con,			// lookup relation constraint
 	drq_l_rel_fld_name,		// lookup relation field name
 	drq_g_nxt_package_id,	// lookup next package ID
-	drq_l_ts_name,			// lookup tablespace name
-	drq_e_ts_check_idx,		// find index of tablespace
-	drq_e_ts_check_rel,		// find relation of tablespace
 
 	drq_MAX
 };

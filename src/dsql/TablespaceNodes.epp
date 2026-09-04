@@ -313,13 +313,13 @@ void DropTablespaceNode::checkDependencies(thread_db* tdbb, jrd_tra* transaction
 {
 	const auto metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	AutoCacheRequest request;
+	static const CachedRequestId requestHandleId1, requestHandleId2;
 	unsigned total = 0;
 
 	// Find all tables
-	request.reset(tdbb, drq_e_ts_check_rel, DYN_REQUESTS);
+	AutoCacheRequest requestHandle1(tdbb, requestHandleId1);
 
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+	FOR (REQUEST_HANDLE requestHandle1 TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$RELATIONS
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
@@ -328,9 +328,9 @@ void DropTablespaceNode::checkDependencies(thread_db* tdbb, jrd_tra* transaction
 	END_FOR
 
 	// Find all indices
-	request.reset(tdbb, drq_e_ts_check_idx, DYN_REQUESTS);
+	AutoCacheRequest requestHandle2(tdbb, requestHandleId2);
 
-	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+	FOR (REQUEST_HANDLE requestHandle2 TRANSACTION_HANDLE metaTransaction)
 		X IN RDB$INDICES
 		WITH X.RDB$TABLESPACE_NAME EQ name.c_str()
 	{
@@ -348,9 +348,9 @@ void DropTablespaceNode::checkDependencies(thread_db* tdbb, jrd_tra* transaction
 	if (total)
 	{
 		status_exception::raise(Arg::Gds(isc_no_meta_update) <<
-				Arg::Gds(isc_no_delete) <<						// Msg353: can not delete
-				Arg::Gds(isc_tablespace_name) << Arg::Str(name) <<
-				Arg::Gds(isc_dependency) << Arg::Num(total));	// Msg310: there are %ld dependencies
+			Arg::Gds(isc_no_delete) <<
+			Arg::Gds(isc_tablespace_name) << Arg::Str(name) <<
+			Arg::Gds(isc_dependency) << Arg::Num(total));
 	}
 }
 
