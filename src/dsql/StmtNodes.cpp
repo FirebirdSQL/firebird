@@ -1827,7 +1827,19 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index segment count");
 
 				for (USHORT i = 0; i < segmentCount; ++i)
-					index.fieldIds.add(blrReader.getWord());
+				{
+					const auto code = blrReader.getByte();
+					if (code == blr_dcl_local_table_index_segment)
+						index.segments.add({ blrReader.getWord(), 0 });
+					else
+						PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index segment subcode");
+
+					if (blrReader.peekByte() == blr_dcl_local_table_index_seg_length)
+					{
+						blrReader.getByte();
+						index.segments.back().length = blrReader.getWord();
+					}
+				}
 
 				break;
 			}
@@ -1902,13 +1914,23 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 
 			indexNames.add(index.name);
 
-			for (const auto fieldId : index.fieldIds)
+			for (const auto& segment: index.segments)
 			{
-				if (fieldId >= fieldCount)
+				if (segment.fieldId >= fieldCount)
 					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index field id");
 
-				if (node->format->fmt_desc[fieldId].dsc_dtype == dtype_blob)
+				const auto fieldType = node->format->fmt_desc[segment.fieldId].dsc_dtype;
+				if (fieldType == dtype_blob)
 					PAR_error(csb, Arg::Gds(isc_random) << "BLOB fields cannot be indexed in local tables");
+
+				if (segment.length && fieldType > dtype_any_text)
+				{
+					string msg;
+					msg.printf("Attempt to specify a length for non-text field %s in index %s",
+						node->fieldNames[segment.fieldId].c_str(), index.name.toQuotedString().c_str());
+
+					PAR_error(csb, Arg::Gds(isc_random) << msg);
+				}
 			}
 		}
 	}
@@ -2091,12 +2113,19 @@ DeclareLocalTableNode* DeclareLocalTableNode::dsqlPass(DsqlCompilerScratch* dsql
 					}
 
 					if (field->dtype == dtype_blob)
-						status_exception::raise(Arg::Gds(isc_blob_idx_err) << segment.name.c_str());
+						status_exception::raise(Arg::Gds(isc_blob_idx_err) << index.name.c_str());
 
-					if (std::find(index.fieldIds.begin(), index.fieldIds.end(), field->fld_id) != index.fieldIds.end())
-						status_exception::raise(Arg::Gds(isc_key_field_err) << indexNode->name.toQuotedString());
+					const auto foundSeg = std::find_if(index.segments.begin(), index.segments.end(),
+						[field](const auto& seg) { return seg.fieldId == field->fld_id; });
 
-					index.fieldIds.add(field->fld_id);
+					if (foundSeg != index.segments.end())
+					{
+						// msg 240 "Field %s cannot be used twice in index %s"
+						status_exception::raise(
+							Arg::PrivateDyn(240) << field->fld_name.c_str() << index.name.toQuotedString());
+					}
+
+					index.segments.add({field->fld_id, segment.length});
 				}
 
 				break;
@@ -2166,10 +2195,19 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 				flags |= blr_dcl_local_table_index_descending;
 
 			dsqlScratch->appendUChar(flags);
-			dsqlScratch->appendUChar(index.fieldIds.getCount());
+			dsqlScratch->appendUChar(index.segments.getCount());
 
-			for (const auto fieldId : index.fieldIds)
-				dsqlScratch->appendUShort(fieldId);
+			for (const auto& segment : index.segments)
+			{
+				dsqlScratch->appendUChar(blr_dcl_local_table_index_segment);
+				dsqlScratch->appendUShort(segment.fieldId);
+
+				if (segment.length)
+				{
+					dsqlScratch->appendUChar(blr_dcl_local_table_index_seg_length);
+					dsqlScratch->appendUShort(segment.length);
+				}
+			}
 		}
 
 		dsqlScratch->appendUChar(blr_end);
@@ -2313,7 +2351,7 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 		const auto& index = indexes[i];
 		auto* idp = permanent->rel_indices.ensurePermanent(tdbb, i);
 		AutoPtr<IndexVersion> idv(FB_NEW_POOL(pool) IndexVersion(pool, idp));
-		idv->setLtt(tdbb, QualifiedName(index.name), index.unique, index.descending, index.fieldIds.getCount());
+		idv->setLtt(tdbb, QualifiedName(index.name), index.unique, index.descending, index.segments.getCount());
 		idp->storeObject(tdbb, idv, 0);
 		idv.release();
 	}
@@ -2332,7 +2370,7 @@ void DeclareLocalTableNode::getIndexDescription(thread_db* tdbb, FB_SIZE_T index
 
 	const auto& index = indexes[indexId];
 	idx->idx_id = indexId;
-	idx->idx_count = index.fieldIds.getCount();
+	idx->idx_count = index.segments.getCount();
 
 	if (index.unique)
 		idx->idx_flags |= idx_unique;
@@ -2340,14 +2378,15 @@ void DeclareLocalTableNode::getIndexDescription(thread_db* tdbb, FB_SIZE_T index
 	if (index.descending)
 		idx->idx_flags |= idx_descending;
 
-	for (FB_SIZE_T i = 0; i < index.fieldIds.getCount(); ++i)
+	for (FB_SIZE_T i = 0; i < index.segments.getCount(); ++i)
 	{
-		const auto fieldId = index.fieldIds[i];
-		const auto& desc = format->fmt_desc[fieldId];
+		const auto& segment = index.segments[i];
+		const auto& desc = format->fmt_desc[segment.fieldId];
 
-		idx->idx_rpt[i].idx_field = fieldId;
+		idx->idx_rpt[i].idx_field = segment.fieldId;
 		idx->idx_rpt[i].idx_itype = DFW_assign_index_type(tdbb, QualifiedName(index.name), desc.dsc_dtype,
 			desc.isText() ? desc.getTextType() : ttype_none);
+		idx->idx_rpt[i].idx_length = segment.length;
 	}
 }
 
