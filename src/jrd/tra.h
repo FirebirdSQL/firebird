@@ -432,7 +432,7 @@ public:
 
 	void releaseTablespaces(thread_db* tdbb)
 	{
-		tra_tablespaces.release(tdbb);
+		tra_tablespaces.releaseAll(tdbb);
 	}
 
 	// Get existing or create new BulkInsert for the relation.

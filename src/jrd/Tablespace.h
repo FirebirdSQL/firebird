@@ -42,6 +42,7 @@ namespace Jrd
 		static constexpr unsigned BLOCKING = 8;
 		static constexpr unsigned OBSOLETE = 16;
 		static constexpr unsigned NOALLOC = 32;
+		static constexpr unsigned CLEANUP = 64;
 
 	public:
 		enum class Operation {	CREATE, ALTER, DROP	};
@@ -73,7 +74,7 @@ namespace Jrd
 				}
 			}
 
-			void release(thread_db* tdbb)
+			void releaseAll(thread_db* tdbb)
 			{
 				for (const auto tableSpace : m_tablespaces)
 					tableSpace->release(tdbb);
@@ -174,7 +175,7 @@ namespace Jrd
 
 		bool isUsed() const
 		{
-			return (m_useCount > 0);
+			return (m_useCount != 0);
 		}
 
 	private:

@@ -24,6 +24,7 @@
 #include "../jrd/jrd.h"
 #include "../jrd/lck.h"
 #include "../jrd/tra.h"
+#include "../jrd/cch_proto.h"
 #include "../jrd/met_proto.h"
 
 #include "../jrd/Tablespace.h"
@@ -130,6 +131,7 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	}
 
 	fb_assert(!m_transaction || m_transaction == transaction);
+	fb_assert(m_useCount == 0);
 
 	m_transaction = transaction;
 
@@ -140,6 +142,8 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	else if (operation == Operation::ALTER)
 	{
 		m_flags |= MODIFIED;
+
+		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
@@ -163,21 +167,24 @@ void Tablespace::commit(thread_db* tdbb, jrd_tra* transaction)
 
 	if (m_flags & DELETED)
 	{
-		release(tdbb, true);
+		m_flags |= CLEANUP | (isUsed() ? BLOCKING : 0);
 		guard.release();
+
+		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
-		dbb->dbb_tablespaces.remove(m_id); // deletes this
+		dbb->dbb_tablespaces.remove(m_id);
+
+		if (!isUsed())
+			release(tdbb, true);
 
 		return;
 	}
 
-	m_flags = 0;
-	m_transaction = nullptr;
-
 	LCK_release(tdbb, m_lock);
-	m_flags |= OBSOLETE;
+	m_flags = OBSOLETE;
+	m_transaction = nullptr;
 }
 
 void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
@@ -189,30 +196,36 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 
 	fb_assert(m_flags & (CREATED | MODIFIED | DELETED));
 	fb_assert(m_lock && m_lock->lck_logical == LCK_EX);
+	fb_assert(m_useCount == 0);
 
 	if (m_flags & CREATED)
 	{
-		release(tdbb, true);
+		m_flags |= CLEANUP | (isUsed() ? BLOCKING : 0);
 		guard.release();
+
+		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id, true);
-		dbb->dbb_tablespaces.remove(m_id); // deletes this
+		dbb->dbb_tablespaces.remove(m_id);
+
+		if (!isUsed())
+			release(tdbb, true);
 
 		return;
 	}
 
 	if (m_flags & MODIFIED)
 	{
+		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
+
 		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.delPageSpace(m_id);
 	}
 
-	m_flags = 0;
-	m_transaction = nullptr;
-
 	LCK_release(tdbb, m_lock);
-	m_flags |= OBSOLETE;
+	m_flags = OBSOLETE;
+	m_transaction = nullptr;
 }
 
 void Tablespace::allocate(thread_db* tdbb, bool create)
@@ -379,6 +392,8 @@ void Tablespace::addRef(thread_db* tdbb)
 
 void Tablespace::release(thread_db* tdbb, bool force)
 {
+	AutoPtr<Tablespace> cleanup;
+
 	if (force)
 	{
 		fb_assert(m_useCount == 0);
@@ -391,10 +406,12 @@ void Tablespace::release(thread_db* tdbb, bool force)
 		m_useCount = 0;
 		m_flags = 0;
 		m_transaction = nullptr;
+
+		cleanup = this;
 	}
 	else
 	{
-		fb_assert(m_useCount > 0);
+		fb_assert(m_useCount != 0);
 
 		if (--m_useCount == 0)
 		{
@@ -406,6 +423,9 @@ void Tablespace::release(thread_db* tdbb, bool force)
 				m_flags &= ~BLOCKING;
 				m_flags |= OBSOLETE;
 			}
+
+			if (m_flags & CLEANUP)
+				cleanup = this;
 		}
 	}
 }
@@ -467,7 +487,7 @@ void Tablespace::Cache::remove(ULONG id)
 	if (id <= accessor->getCount())
 	{
 		auto& tableSpace = accessor->value(id - 1);
-		delete std::exchange(tableSpace, nullptr);
+		tableSpace = nullptr;
 	}
 }
 
@@ -481,7 +501,7 @@ void Tablespace::Cache::release(thread_db* tdbb)
 		if (tableSpace)
 		{
 			tableSpace->release(tdbb, true);
-			delete std::exchange(tableSpace, nullptr);
+			tableSpace = nullptr;
 		}
 	}
 }
