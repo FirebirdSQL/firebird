@@ -6777,6 +6777,19 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 
 	SSHORT count = 0, segments = 0;
 
+	struct IndexSegment
+	{
+		IndexSegment(MemoryPool& pool) :
+			name(pool)
+		{
+		}
+
+		string name;
+		int length = 0;
+	};
+
+	ObjectsArray<IndexSegment> arrSegments(*getDefaultMemoryPool());
+
 	STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle1)
 		X IN RDB$INDICES
 	{
@@ -6857,26 +6870,22 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				break;
 
 			case att_index_field_name:
-				STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle2)
-					Y IN RDB$INDEX_SEGMENTS
-				{
-					GET_TEXT(Y.RDB$FIELD_NAME);
-					strcpy(Y.RDB$INDEX_NAME, X.RDB$INDEX_NAME);
-					Y.RDB$FIELD_POSITION = count++;
-
-					Y.RDB$SCHEMA_NAME.NULL = X.RDB$SCHEMA_NAME.NULL;
-					if (!X.RDB$SCHEMA_NAME.NULL)
-						strcpy(Y.RDB$SCHEMA_NAME, X.RDB$SCHEMA_NAME);
-
-					Y.RDB$PACKAGE_NAME.NULL = X.RDB$PACKAGE_NAME.NULL;
-					if (!X.RDB$PACKAGE_NAME.NULL)
-						strcpy(Y.RDB$PACKAGE_NAME, X.RDB$PACKAGE_NAME);
-				}
-				END_STORE
-				ON_ERROR
-					general_on_error ();
-				END_ERROR
+			{
+				BASED ON RDB$INDEX_SEGMENTS.RDB$FIELD_NAME segName;
+				GET_TEXT(segName);
+				auto& seg = arrSegments.add();
+				seg.name = segName;
 				break;
+			}
+
+			case att_index_field_char_length:
+			{
+				fb_assert(arrSegments.hasData());
+
+				auto& seg = arrSegments.back();
+				seg.length = get_int32(tdgbl);
+				break;
+			}
 
 			case att_index_description:
 				X.RDB$DESCRIPTION.NULL = FALSE;
@@ -6948,43 +6957,59 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		}
 
 		count = 0;
-		FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle3)
-			RFR IN RDB$RELATION_FIELDS
-			CROSS IDS IN RDB$INDEX_SEGMENTS
-			WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
-				 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
-				 RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
-				 IDS.RDB$SCHEMA_NAME EQUIV RFR.RDB$SCHEMA_NAME AND
-				 IDS.RDB$PACKAGE_NAME EQUIV RFR.RDB$PACKAGE_NAME AND
-				 IDS.RDB$FIELD_NAME = RFR.RDB$FIELD_NAME AND
-				 IDS.RDB$INDEX_NAME = index_name
+		for (const auto& seg : arrSegments)
 		{
-			count++;
-		}
-		END_FOR
-		ON_ERROR
-			general_on_error ();
-		END_ERROR
-
-		if (count != segments)
-		{
-			FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle4)
-				IDS IN RDB$INDEX_SEGMENTS
-				WITH IDS.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
-					 IDS.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
-					 IDS.RDB$INDEX_NAME = index_name
+			FOR (REQUEST_HANDLE tdgbl->handles_get_index_req_handle3)
+				RFR IN RDB$RELATION_FIELDS
+				WITH RFR.RDB$SCHEMA_NAME EQUIV NULLIF(relation->rel_name.schema.c_str(), '') AND
+					 RFR.RDB$PACKAGE_NAME EQUIV NULLIF(relation->rel_name.package.c_str(), '') AND
+					 RFR.RDB$RELATION_NAME = relation->rel_name.object.c_str() AND
+					 RFR.RDB$FIELD_NAME	= seg.name.c_str()
 			{
-				ERASE IDS;
-				ON_ERROR
-					general_on_error ();
-				END_ERROR
+				count++;
 			}
 			END_FOR
 			ON_ERROR
 				general_on_error ();
-
 			END_ERROR
+		};
+
+		if (count != segments)
 			return false;
+
+		count = 0;
+		for (const auto& seg : arrSegments)
+		{
+			STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle2)
+				Y IN RDB$INDEX_SEGMENTS
+			{
+				strcpy(Y.RDB$FIELD_NAME, seg.name.c_str());
+
+				strcpy(Y.RDB$INDEX_NAME, X.RDB$INDEX_NAME);
+				Y.RDB$FIELD_POSITION = count++;
+
+				Y.RDB$SCHEMA_NAME.NULL = X.RDB$SCHEMA_NAME.NULL;
+				if (!X.RDB$SCHEMA_NAME.NULL)
+					strcpy(Y.RDB$SCHEMA_NAME, X.RDB$SCHEMA_NAME);
+
+				Y.RDB$PACKAGE_NAME.NULL = X.RDB$PACKAGE_NAME.NULL;
+				if (!X.RDB$PACKAGE_NAME.NULL)
+					strcpy(Y.RDB$PACKAGE_NAME, X.RDB$PACKAGE_NAME);
+
+				if (seg.length == 0)
+				{
+					Y.RDB$CHARACTER_LENGTH.NULL = TRUE;
+				}
+				else
+				{
+					Y.RDB$CHARACTER_LENGTH.NULL = FALSE;
+					Y.RDB$CHARACTER_LENGTH = seg.length;
+				}
+			}
+			END_STORE
+			ON_ERROR
+				general_on_error ();
+			END_ERROR
 		}
 	}
 	END_STORE

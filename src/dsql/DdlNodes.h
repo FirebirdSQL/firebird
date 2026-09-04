@@ -36,6 +36,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/TriState.h"
+#include "../jrd/IndexSegment.h"
 #include "../jrd/Relation.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
@@ -2022,6 +2023,27 @@ protected:
 class CreateIndexNode final : public DdlNode
 {
 public:
+	struct Segment: Jrd::IndexSegment, Printable
+	{
+		Segment(MemoryPool& pool) : Jrd::IndexSegment(pool)
+		{}
+
+		Segment(MemoryPool& pool, const IndexSegment& other) :
+			Jrd::IndexSegment(pool, other)
+		{}
+
+		Firebird::string internalPrint(NodePrinter& printer) const override
+		{
+			NODE_PRINT(printer, name);
+			if (length)
+				NODE_PRINT(printer, length);
+			return "Segment";
+		}
+	};
+
+	typedef Firebird::ObjectsArray<Segment> Segments;
+
+
 	struct Definition
 	{
 		Definition()
@@ -2035,7 +2057,7 @@ public:
 
 		QualifiedName index;
 		QualifiedName relation;
-		Firebird::ObjectsArray<MetaName> columns;
+		Segments segments;
 		Firebird::TriState unique;
 		Firebird::TriState descending;
 		Firebird::TriState inactive;
@@ -2087,7 +2109,7 @@ public:
 	bool active = true;
 	bool concurrently = false;
 	NestConst<RelationSourceNode> relation;
-	NestConst<ValueListNode> columns;
+	NestConst<Segments> segments;
 	NestConst<ValueSourceClause> computed;
 	NestConst<BoolSourceClause> partial;
 	bool createIfNotExistsOnly = false;
