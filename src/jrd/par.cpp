@@ -1185,6 +1185,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				QualifiedName name;
 				csb->csb_blr_reader.getMetaName(name.object);
 				name.schema = relation->rel_name.schema;
+				name.package = relation->rel_name.package;
 
 				IndexStatus idx_status;
 				MetaId foundRelationId;
@@ -1240,6 +1241,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					QualifiedName name;
 					csb->csb_blr_reader.getMetaName(name.object);
 					name.schema = relation->rel_name.schema;
+					name.package = relation->rel_name.package;
 
 					IndexStatus idx_status;
 					MetaId foundRelationId;

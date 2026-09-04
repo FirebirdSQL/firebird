@@ -7423,7 +7423,7 @@ access_type
 			'(' index_list($2) ')'
 		{ $$ = $2; }
 	| ORDER { $$ = newNode<PlanNode::AccessType>(PlanNode::AccessType::TYPE_NAVIGATIONAL); }
-			symbol_index_name extra_indices_opt($2)
+			scoped_qualified_name extra_indices_opt($2)
 		{
 			$$ = $2;
 			$$->items.insert(0).indexName = *$3;
@@ -7432,12 +7432,12 @@ access_type
 
 %type index_list(<accessType>)
 index_list($accessType)
-	: symbol_index_name
+	: scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$1;
 		}
-	| index_list ',' symbol_index_name
+	| index_list ',' scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$3;
