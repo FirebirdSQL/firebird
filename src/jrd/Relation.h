@@ -398,6 +398,9 @@ public:
 		}
 	}
 
+	// Ensure that at least one slot is allocated inside the page vector and
+	// initialize the first pointer page slot with the given page number
+
 	void init(ULONG pageNo)
 	{
 		fb_assert(pageNo);

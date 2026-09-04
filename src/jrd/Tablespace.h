@@ -117,7 +117,7 @@ namespace Jrd
 			Tablespace* get(ULONG id);
 			Tablespace* get(const MetaName& name);
 
-			void store(Tablespace* tabpeSpace);
+			void store(Tablespace* tableSpace);
 			void remove(ULONG id);
 			void release(thread_db* tdbb);
 			void rollback(thread_db* tdbb, jrd_tra* transaction);
