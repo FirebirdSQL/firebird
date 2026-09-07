@@ -105,7 +105,7 @@ namespace Jrd
 			explicit Cache(MemoryPool& pool)
 			{
 				// predefined DB_PAGE_SPACE
-				if (!m_tablespaces.writeAccessor()->add(FB_NEW_POOL(pool) Tablespace(pool)))
+				if (!m_tablespaces.writeAccessor()->add(FB_NEW_POOL(pool) Tablespace(pool, DB_PAGE_SPACE)))
 					fb_assert(false);
 			}
 
@@ -132,7 +132,7 @@ namespace Jrd
 			Firebird::Mutex m_mutex;
 		};
 
-		explicit Tablespace(MemoryPool& pool, ULONG id = DB_PAGE_SPACE)
+		Tablespace(MemoryPool& pool, ULONG id)
 			: m_id(id), m_name(pool), m_fileName(pool)
 		{}
 
@@ -188,7 +188,7 @@ namespace Jrd
 		jrd_tra* m_transaction = nullptr;
 		Firebird::Mutex m_mutex;
 
-		void init(const MetaName& name, const Firebird::PathName& fileName, Lock* lock, std::optional<bool> alloc)
+		void init(const MetaName& name, const Firebird::PathName& fileName, Lock* lock)
 		{
 			fb_assert(m_name.isEmpty() && m_fileName.isEmpty() && !m_lock);
 

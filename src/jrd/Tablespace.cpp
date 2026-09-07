@@ -366,7 +366,7 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 
 	// Reinitialize tablespace with proper metadata
 
-	tableSpace->init(tsName, fileName, lock.release(), alloc);
+	tableSpace->init(tsName, fileName, lock.release());
 
 	// Allocate the pagespace, if requested
 
