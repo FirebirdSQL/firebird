@@ -823,6 +823,24 @@ namespace
 	{
 		return callback ? callback : &defCallback;
 	}
+
+	bool dropFile(const Database* dbb, const PathName& fileName)
+	{
+		FbLocalStatus status;
+
+		if (unlink(fileName.c_str()))
+		{
+			ERR_build_status(&status,
+							 Arg::Gds(isc_io_error) << Arg::Str("unlink") << Arg::Str(fileName) <<
+							 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+
+			const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+			iscDbLogStatus(pageSpace->file->fil_string, &status);
+		}
+
+		return status->getState() & IStatus::STATE_ERRORS ? true : false;
+	}
+
 } // anonymous
 
 
@@ -1291,8 +1309,6 @@ private:
 
 static void			check_database(thread_db* tdbb, bool async = false);
 static void			commit(thread_db*, jrd_tra*, const bool);
-static bool			drop_file(const Database*, const jrd_file*);
-static bool			drop_files(ObjectsArray<PathName> &tsFiles);
 static void			find_intl_charset(thread_db*, Jrd::Attachment*, const DatabaseOptions*);
 static void			init_database_lock(thread_db*);
 static void			run_commit_triggers(thread_db* tdbb, jrd_tra* transaction);
@@ -3563,13 +3579,13 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 
 			if (JRD_shutdown_database(dbb))
 			{
-				// This point on database is useless
+				// At this point the database becomes useless, so drop all its files
 
-				// drop the files here
-				bool err = drop_file(dbb, file);
+				bool err = dropFile(dbb, file->fil_string);
 				for (; shadow; shadow = shadow->sdw_next)
-					err = drop_file(dbb, shadow->sdw_file) || err;
-				err = drop_files(tsFiles) || err;
+					err = err || dropFile(dbb, shadow->sdw_file->fil_string);
+				while (tsFiles.hasData())
+					err = err || dropFile(dbb, tsFiles.pop());
 
 				tdbb->setDatabase(NULL);
 				Database::destroy(dbb);
@@ -6890,64 +6906,6 @@ static void commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_f
 	TRA_commit(tdbb, transaction, retaining_flag);
 }
 
-
-static bool drop_file(const Database* dbb, const jrd_file* file)
-{
-/**************************************
- *
- *	d r o p _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Drop a file.
- *
- **************************************/
-	FbLocalStatus status;
-
-	if (unlink(file->fil_string))
-	{
-		ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-														   Arg::Str(file->fil_string) <<
-								 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
-
-		const PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-		iscDbLogStatus(pageSpace->file->fil_string, &status);
-	}
-
-	return status->getState() & IStatus::STATE_ERRORS ? true : false;
-}
-
-static bool drop_files(ObjectsArray<PathName>& tsFiles)
-{
-/**************************************
- *
- *	d r o p _ f i l e s
- *
- **************************************
- *
- * Functional description
- *	drop files in list
- *
- **************************************/
-	FbLocalStatus status;
-
-	while (tsFiles.getCount())
-	{
-		const PathName file(tsFiles.pop());
-		if (unlink(file.c_str()))
-		{
-			ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-									  Arg::Str(file) <<
-									  Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
-			Database* dbb = GET_DBB();
-			PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-			iscDbLogStatus(pageSpace->file->fil_string, &status);
-		}
-	}
-
-	return status->getState() & IStatus::STATE_ERRORS ? true : false;
-}
 
 static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, const DatabaseOptions* options)
 {
