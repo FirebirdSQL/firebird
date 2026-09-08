@@ -3583,9 +3583,9 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 
 				bool err = dropFile(dbb, file->fil_string);
 				for (; shadow; shadow = shadow->sdw_next)
-					err = err || dropFile(dbb, shadow->sdw_file->fil_string);
+					err = dropFile(dbb, shadow->sdw_file->fil_string) || err;
 				while (tsFiles.hasData())
-					err = err || dropFile(dbb, tsFiles.pop());
+					err = dropFile(dbb, tsFiles.pop()) || err;
 
 				tdbb->setDatabase(NULL);
 				Database::destroy(dbb);
