@@ -135,8 +135,12 @@ public:
 		p.p_cc.p_cc_reply = bufferLength;
 		port->send(&p);
 
+#ifdef DEV_BUILD
+		sem.enter();
+#else
 		if (!sem.tryEnter(60))
 			return 0;
+#endif
 
 		return l;
 	}
@@ -2422,12 +2426,19 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 #endif
 			rdb->rdb_port = authPort;
 			rdb->rdb_iface = iface;
+
+			authPort->port_server_crypt_callback->stop();
 		}
+	}
+
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	{
+		delete authPort->port_server_crypt_callback;
+		authPort->port_server_crypt_callback = NULL;
 	}
 
 	CSTRING* const s = &send->p_resp.p_resp_data;
 	authPort->extractNewKeys(s);
-	authPort->port_server_crypt_callback->stop();
 	authPort->send_response(send, 0, s->cstr_length, &status_vector, false);
 }
 
@@ -5607,8 +5618,15 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 			Svc* svc = rdb->rdb_svc = FB_NEW Svc;
 			svc->svc_iface = iface;
 		}
+
+		port_server_crypt_callback->stop();
 	}
-	port_server_crypt_callback->stop();
+
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	{
+		delete port_server_crypt_callback;
+		port_server_crypt_callback = NULL;
+	}
 
 	return this->send_response(sendL, 0, sendL->p_resp.p_resp_data.cstr_length, &status_vector,
 		false);
