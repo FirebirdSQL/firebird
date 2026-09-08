@@ -7037,11 +7037,8 @@ void RelationNode::FieldDefinition::store(thread_db* tdbb, jrd_tra* transaction)
 
 		if (tableSpace.hasData() && applyTablespacesDdl(tdbb))
 		{
-			if ((tableSpace != PRIMARY_TABLESPACE_NAME) &&
-				!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespaces))
-			{
+			if (!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespace))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
-			}
 
 			strcpy(RFR.RDB$TABLESPACE_NAME, tableSpace.c_str());
 		}
@@ -9854,11 +9851,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 			{
 				if (tableSpace.hasData() && applyTablespacesDdl(tdbb))
 				{
-					if ((tableSpace != PRIMARY_TABLESPACE_NAME) &&
-						!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespaces))
-					{
+					if (!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespace))
 						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace.c_str());
-					}
 
 					strcpy(REL.RDB$TABLESPACE_NAME, tableSpace.c_str());
 				}
@@ -10825,11 +10819,8 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 					if (!applyTablespacesDdl(tdbb))
 						break;
 
-					if ((tableSpace != PRIMARY_TABLESPACE_NAME) &&
-						!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespaces))
-					{
+					if (!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespace))
 						status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace);
-					}
 
 					AutoRequest request2;
 
@@ -13831,14 +13822,10 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			if (temporary)
 				status_exception::raise(Arg::Gds(isc_dyn_cant_set_ts_index) << IDX.RDB$INDEX_NAME);
 
-			if ((definition.tableSpace != PRIMARY_TABLESPACE_NAME) &&
-			     !checkObjectExist(tdbb, QualifiedName(definition.tableSpace), obj_tablespaces))
-			{
+			if (!checkObjectExist(tdbb, QualifiedName(definition.tableSpace), obj_tablespace))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << definition.tableSpace.c_str());
-			}
 
 			strcpy(IDX.RDB$TABLESPACE_NAME, definition.tableSpace.c_str());
-
 		}
 		else
 		{
@@ -14519,9 +14506,7 @@ bool AlterIndexNode::step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 			if (!applyTablespacesDdl(tdbb))
 				return false;
 
-			const bool primaryTs = (tableSpace == PRIMARY_TABLESPACE_NAME);
-
-			if (!primaryTs && !checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespaces))
+			if (!checkObjectExist(tdbb, QualifiedName(tableSpace), obj_tablespace))
 				status_exception::raise(Arg::Gds(isc_dyn_ts_not_found) << tableSpace);
 
 			AutoRequest request2;
@@ -16771,15 +16756,9 @@ static bool checkObjectExist(thread_db* tdbb, const QualifiedName& name, int typ
 			break;
 		}
 
-		case obj_tablespaces:
+		case obj_tablespace:
 		{
 			fb_assert(name.object.hasData() && name.schema.isEmpty());
-
-			if (name.object == PRIMARY_TABLESPACE_NAME)
-			{
-				rc = true;
-				break;
-			}
 
 			static const CachedRequestId requestId;
 			AutoCacheRequest request(tdbb, requestId);
