@@ -8682,14 +8682,6 @@ drop_tablespace_clause
 			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
 			$$ = node;
 		}
-/*
-	| symbol_tablespace_name INCLUDING CONTENTS
-		{
-			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
-			node->dropDependencies = true;
-			$$ = node;
-		}
-*/
 	;
 
 // value types
