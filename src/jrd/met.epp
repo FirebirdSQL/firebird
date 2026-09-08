@@ -3144,6 +3144,23 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 	blb* blob = NULL;
 	jrd_tra* trans = attachment->getMetaTransaction(tdbb);
 
+	auto setupPageSpace = [&](const rel_t type, const MetaName& tableSpaceName)
+	{
+		ULONG pageSpaceId = DB_PAGE_SPACE;
+
+		if (!rel_perm->isSystem())
+		{
+#ifdef DEV_BUILD
+			if (!attachment->isGbak() && fb_utils::hasTablespaceName(type))
+				fb_assert(tableSpaceName.hasData());
+#endif
+			if (tableSpaceName.hasData())
+				pageSpaceId = Tablespace::lookupId(tdbb, tableSpaceName);
+
+			setPageSpaceId(pageSpaceId);
+		}
+	};
+
 	if ((flags & CacheFlag::MINISCAN) || getName().isEmpty())
 	{
 		// New version of relation is created currently.
@@ -3172,21 +3189,8 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 				if (!REL.RDB$RELATION_TYPE.NULL)
 					rel_perm->rel_flags |= MET_get_rel_flags_from_TYPE(REL.RDB$RELATION_TYPE);
 
-				ULONG pageSpaceId = DB_PAGE_SPACE;
-
-				if (!rel_perm->isSystem())
-				{
-#ifdef DEV_BUILD
-					if (!attachment->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
-						fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
-#endif
-					if (!REL.RDB$TABLESPACE_NAME.NULL)
-					{
-						pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
-					}
-				}
-
-				setPageSpaceId(pageSpaceId);
+				const MetaName tableSpaceName(REL.RDB$TABLESPACE_NAME.NULL ? "" : REL.RDB$TABLESPACE_NAME);
+				setupPageSpace(rel_t(REL.RDB$RELATION_TYPE), tableSpaceName);
 
 				rel_current_fmt = REL.RDB$FORMAT;
 			}
@@ -3372,19 +3376,8 @@ ScanResult jrd_rel::scan(thread_db* tdbb, ObjectBase::Flag& flags)
 			}
 		}
 
-		ULONG pageSpaceId = DB_PAGE_SPACE;
-
-		if (!rel_perm->isSystem())
-		{
-#ifdef DEV_BUILD
-			if (!attachment->isGbak() && fb_utils::hasTablespaceName(rel_t(REL.RDB$RELATION_TYPE)))
-				fb_assert(!REL.RDB$TABLESPACE_NAME.NULL);
-#endif
-			if (!REL.RDB$TABLESPACE_NAME.NULL)
-				pageSpaceId = Tablespace::lookupId(tdbb, REL.RDB$TABLESPACE_NAME);
-		}
-
-		setPageSpaceId(pageSpaceId);
+		const MetaName tableSpaceName(REL.RDB$TABLESPACE_NAME.NULL ? "" : REL.RDB$TABLESPACE_NAME);
+		setupPageSpace(rel_t(REL.RDB$RELATION_TYPE), tableSpaceName);
 
 		// Pick up field specific stuff
 
