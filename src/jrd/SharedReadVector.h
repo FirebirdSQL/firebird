@@ -106,7 +106,8 @@ public:
 		{
 			if (!hasSpace())
 				return false;
-			data[count++] = value;
+			data[count] = value;
+			++count; // don't update the count before the assignment due to possible races with concurrent readers
 			return true;
 		}
 

@@ -348,7 +348,7 @@ public:
 		m_pointerPages.grow(pageCount, true);
 
 		const auto writeAccessor = m_pointerPages.writeAccessor();
-		writeAccessor->add(readAccessor);
+		writeAccessor->add(readAccessor.getPointer());
 
 		m_indexRootPage = from.m_indexRootPage;
 		rel_data_pages = from.rel_data_pages;
