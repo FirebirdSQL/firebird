@@ -14,6 +14,7 @@ SYNTAX
 
     1. TABLESPACE
     CREATE TABLESPACE [IF NOT EXISTS] <TS NAME> FILE '/path/to/file'
+    CREATE OR ALTER TABLESPACE <TS NAME> FILE '/path/to/file'
     ALTER TABLESPACE <TS NAME> SET FILE [TO] '/path/to/file'
 
     You can specify either an absolute path or a relative path (relative to the database file).
