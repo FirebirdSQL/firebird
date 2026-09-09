@@ -877,10 +877,7 @@ TriState ComparativeBoolNode::execute(thread_db* tdbb, Request* request) const
 	}
 
 	if (comparison == UNKNOWN && (blrOp != blr_between))
-	{
-		request->req_flags |= req_null;
 		return TriState(false);
-	}
 
 	// If we are checking equality of record_version
 	// and same transaction updated the record, force equality.

@@ -342,7 +342,7 @@ void PackageItemsHolder::collectPackagedItems(thread_db* tdbb, jrd_tra* transact
 	requestHandle.reset(tdbb, drq_l_pkg_types, DYN_REQUESTS);
 	FOR (REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 		PT IN RDB$PACKAGED_TYPES
-		WITH PT.RDB$PACKAGE_NAME EQ metaName.c_str()
+		WITH PT.RDB$PACKAGE_NAME EQ packageName.object.c_str()
 	{
 		Signature type(PT.RDB$TYPE_NAME);
 		type.defined = true;
@@ -953,7 +953,7 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				break;
 			}
 
-			case CreateAlterPackageNode::Item::PACKAGE_TYPE:
+			case PackageItemType::PACKAGE_TYPE:
 			{
 				DeclarePackageTypeNode* const type = (*items)[i].packageType;
 				ddlNode = type;
@@ -1168,8 +1168,7 @@ bool CreateAlterPackageNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* 
 		dropMissingItems<DropConstantNode>(tdbb, dsqlScratch, name, existingItems.constants, constantNames);
 		dropItems<DropRelationNode>(tdbb, dsqlScratch, name, existingItems.tables);
 
-		for (SortedObjectsArray<Signature>::iterator i = existingPackageTypes.begin();
-			 i != existingPackageTypes.end(); ++i)
+		for (auto i = existingItems.packageTypes.begin(); i != existingItems.packageTypes.end(); ++i)
 		{
 			if (!packageTypeNames.exist(i->name))
 			{
@@ -1722,7 +1721,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					break;
 				}
 
-				case CreateAlterPackageNode::Item::PACKAGE_TYPE:
+				case PackageItemType::PACKAGE_TYPE:
 				{
 					DeclarePackageTypeNode* type = elem.packageType;
 
@@ -1733,7 +1732,7 @@ void CreatePackageBodyNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 					type->name.package = name.object;
 					type->packageOwner = owner;
 					type->preserveDefaults =
-						existingItems.packageTypes.exist(Signature(type->fieldSource)) && arrays[i] == items;
+						existingItems.packageTypes.exist(Signature(type->fieldSource.object)) && arrays[i] == items;
 					type->executeDdl(tdbb, elem.dsqlScratch, transaction, true);
 					break;
 				}

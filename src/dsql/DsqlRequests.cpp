@@ -814,7 +814,7 @@ void setDescFromMeta(Firebird::CheckStatusWrapper* st, Firebird::IMessageMetadat
 	checkD(st);
 	desc->dsc_sub_type = meta->getSubType(st, index);
 	checkD(st);
-	const auto textType = CSetId(meta->getCharSet(&st, index));
+	const auto textType = CSetId(meta->getCharSet(st, index));
 	checkD(st);
 	desc->setTextType(textType);
 	desc->dsc_address = (UCHAR*)(IPTR) meta->getOffset(st, index);

@@ -36,6 +36,7 @@
 
 #include <numeric>
 #include "../common/classes/array.h"
+#include "../common/classes/objects_array.h"
 #include "../common/classes/fb_atomic.h"
 #include "../common/classes/GenericMap.h"
 #include "../jrd/MetaName.h"
@@ -354,6 +355,14 @@ public:
 		Argument()
 		{ }
 
+		explicit Argument(MemoryPool& p)
+			: name(p), desc(p)
+		{ }
+
+		Argument(MemoryPool& p, const Argument& argument)
+			: name(p, argument.name), desc(p, argument.desc)
+		{ }
+
 	public:
 		MetaName name;
 		dsc desc;
@@ -363,10 +372,7 @@ public:
 	dsql_udf(MemoryPool& p, const class Function* jfun);
 
 	explicit dsql_udf(MemoryPool& p)
-		: udf_name(p),
-		  udf_arguments(p),
-		  udf_outputs(p),
-		  udf_outfield(p) // TODO ROWTYPE: make these one-liner
+		: udf_name(p), udf_arguments(p), udf_outfield(p)
 	{
 	}
 
@@ -377,7 +383,7 @@ public:
 	CSetId udf_character_set_id = CSetId();
 	USHORT udf_flags = 0;
 	QualifiedName udf_name;
-	Firebird::Array<Argument> udf_arguments;
+	Firebird::ObjectsArray<Argument> udf_arguments;
 	bool udf_private = false;	// Packaged private function
 	bool udf_aggregate = false;
 	SSHORT udf_def_count = 0;	// number of inputs with default values

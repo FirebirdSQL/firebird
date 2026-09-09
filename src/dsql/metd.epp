@@ -506,12 +506,12 @@ bool METD_get_composite_type_descriptors(jrd_tra* transaction, TypeClause* fld, 
 		field.subType = FLX.RDB$FIELD_SUB_TYPE;
 		field.dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field.charSetId.reset();
+		field.charSetId = std::nullopt;
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
-			field.charSetId = FLX.RDB$CHARACTER_SET_ID;
-		field.collationId = 0;
+			field.charSetId = CSetId(FLX.RDB$CHARACTER_SET_ID);
+		field.collationId = CollId(0);
 		if (!FLX.RDB$COLLATION_ID.NULL)
-			field.collationId = FLX.RDB$COLLATION_ID;
+			field.collationId = CollId(FLX.RDB$COLLATION_ID);
 		field.charLength = 0;
 		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
 			field.charLength = FLX.RDB$CHARACTER_LENGTH;
@@ -693,12 +693,12 @@ bool METD_get_packaged_type(jrd_tra* transaction, TypeClause* field, const Quali
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;
 		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field->charSetId.reset();
+		field->charSetId = std::nullopt;
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
-			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
-		field->collationId = 0;
+			field->charSetId = CSetId(FLX.RDB$CHARACTER_SET_ID);
+		field->collationId = CollId(0);
 		if (!FLX.RDB$COLLATION_ID.NULL)
-			field->collationId = FLX.RDB$COLLATION_ID;
+			field->collationId = CollId(FLX.RDB$COLLATION_ID);
 		field->charLength = 0;
 		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
 			field->charLength = FLX.RDB$CHARACTER_LENGTH;
@@ -933,12 +933,12 @@ int METD_gen_composite_type_fields(Jrd::jrd_tra* transaction, Jrd::DsqlCompilerS
 		field->subType = FLX.RDB$FIELD_SUB_TYPE;
 		field->dimensions = FLX.RDB$DIMENSIONS.NULL ? 0 : FLX.RDB$DIMENSIONS;
 
-		field->charSetId.reset();
+		field->charSetId = std::nullopt;
 		if (!FLX.RDB$CHARACTER_SET_ID.NULL)
-			field->charSetId = FLX.RDB$CHARACTER_SET_ID;
-		field->collationId = 0;
+			field->charSetId = CSetId(FLX.RDB$CHARACTER_SET_ID);
+		field->collationId = CollId(0);
 		if (!FLX.RDB$COLLATION_ID.NULL)
-			field->collationId = FLX.RDB$COLLATION_ID;
+			field->collationId = CollId(FLX.RDB$COLLATION_ID);
 		field->charLength = 0;
 		if (!FLX.RDB$CHARACTER_LENGTH.NULL)
 			field->charLength = FLX.RDB$CHARACTER_LENGTH;

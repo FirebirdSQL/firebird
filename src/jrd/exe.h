@@ -154,7 +154,7 @@ public:
 	bool intl = false;
 	ULONG impure = 0;
 	Firebird::HalfStaticArray<sort_key_def, 2> keyItems;
-	Firebird::HalfStaticArray<dsc, 2> descOrder;
+	Firebird::ObjectsArray<dsc> descOrder;
 };
 
 // Inversion (i.e. nod_index) impure area

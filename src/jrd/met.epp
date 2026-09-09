@@ -159,8 +159,8 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 								FLD.RDB$FIELD_SCALE,
 								FLD.RDB$FIELD_LENGTH,
 								FLD.RDB$FIELD_SUB_TYPE,
-								FLD.RDB$CHARACTER_SET_ID,
-								FLD.RDB$COLLATION_ID))
+								CSetId(FLD.RDB$CHARACTER_SET_ID),
+								CollId(FLD.RDB$COLLATION_ID)))
 		{
 			found = true;
 			relationName = QualifiedName(FLD.RDB$RELATION_NAME, FLD.RDB$SCHEMA_NAME);
@@ -198,16 +198,10 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 
 	if (!found)
 	{
-		if (!MET_lookup_relation(tdbb, name))
+		if (!MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE))
 			ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.object.c_str());
 
-		if (DSC_make_descriptor(desc, blr_rowtype, 0, 0, 0, 0, 0))
-								// FLD.RDB$FIELD_TYPE,
-								// FLD.RDB$FIELD_SCALE,
-								// FLD.RDB$FIELD_LENGTH,		// calc from subfields
-								// FLD.RDB$FIELD_SUB_TYPE,
-								// FLD.RDB$CHARACTER_SET_ID,	// should use
-								// FLD.RDB$COLLATION_ID))		// table collation
+		if (DSC_make_descriptor(desc, blr_rowtype, 0, 0, 0, CSetId(0), CollId(0)))
 		{
 			relationName = name;
 			fromTable = true;
@@ -233,8 +227,8 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 								FLD.RDB$FIELD_SCALE,
 								FLD.RDB$FIELD_LENGTH,
 								FLD.RDB$FIELD_SUB_TYPE,
-								FLD.RDB$CHARACTER_SET_ID,
-								FLD.RDB$COLLATION_ID))
+								CSetId(FLD.RDB$CHARACTER_SET_ID),
+								CollId(FLD.RDB$COLLATION_ID)))
 		{
 			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
 				nextSub->dsc_flags |= DSC_nullable;
@@ -788,7 +782,7 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DeferredWork* dw2 =
 				DFW_post_work(transaction, dfw_modify_procedure, &nameDesc, &schemaDesc, PRC.RDB$PROCEDURE_ID);
 			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
-			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
+			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -811,12 +805,12 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			nameDesc.makeText(triggerName.object.length(), CS_METADATA, (UCHAR*) triggerName.object.c_str());
 
 			DeferredWork* dw2 = DFW_post_work(transaction, dfw_modify_trigger, &nameDesc, &schemaDesc, 0);
-			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, TRG.RDB$TRIGGER_TYPE, dfw_arg_trg_type);
+			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, TRG.RDB$TRIGGER_TYPE, dfw_arg_trg_type);
 
 			nameDesc.dsc_length = triggerRelationName.length();
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
-			DFW_post_work_arg(transaction, dw2, &nameDesc, 0, dfw_arg_drop_routine_cache);
+			// DFW_post_work_arg(transaction, dw2, &nameDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -841,7 +835,7 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DeferredWork* dw2 =
 				DFW_post_work(transaction, dfw_modify_function, &nameDesc, &schemaDesc, FUN.RDB$FUNCTION_ID);
 			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
-			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
+			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 	}
@@ -943,8 +937,8 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			nameDesc.dsc_length = triggerRelationName.length();
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
-			if (DEP.RDB$FIELD_NAME.NULL)
-				DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_drop_routine_cache);
+			// if (DEP.RDB$FIELD_NAME.NULL)
+				// DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -4876,7 +4870,7 @@ void MET_store_dependency(thread_db* tdbb,
 		dpdo_name = &dependency.name;
 		break;
 	case obj_packaged_type:
-		name = *dependency.name;
+		name = dependency.name;
 		dpdo_name = &name;
 		break;
 	}

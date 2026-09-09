@@ -30,7 +30,7 @@
 
 #include "firebird.h"
 
-#include "../common/classes/array.h"
+#include "../common/classes/objects_array.h"
 #include "../common/dsc.h"
 
 namespace Jrd
@@ -41,6 +41,19 @@ class TypeClause;
 class CoercionRule
 {
 public:
+	CoercionRule() = default;
+
+	explicit CoercionRule(MemoryPool& p)
+		: fromDsc(p), toDsc(p)
+	{
+	}
+
+	CoercionRule(MemoryPool& p, const CoercionRule& rule)
+		: fromDsc(p, rule.fromDsc), toDsc(p, rule.toDsc),
+		  fromMask(rule.fromMask), toMask(rule.toMask)
+	{
+	}
+
 	void setRule(const TypeClause* from, const TypeClause *to);
 	dsc* makeLegacy(USHORT mask = 0);
 	bool coerce(thread_db* tdbb, dsc* d) const;
@@ -56,11 +69,11 @@ private:
 	USHORT toMask = 0;
 };
 
-class CoercionArray : public Firebird::HalfStaticArray<CoercionRule, 4>
+class CoercionArray : public Firebird::ObjectsArray<CoercionRule>
 {
 public:
 	CoercionArray(MemoryPool& p)
-		: Firebird::HalfStaticArray<CoercionRule, 4>(p)
+		: Firebird::ObjectsArray<CoercionRule>(p)
 	{
 	}
 

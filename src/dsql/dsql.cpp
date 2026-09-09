@@ -1696,7 +1696,8 @@ dsql_fld::dsql_fld(MemoryPool& p, const dsc& desc, dsql_fld*** prev)
 dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 	: udf_name(p, jfun->getName()),
 	  udf_arguments(p),
-	  udf_private(jfun->flPrivate)
+	  udf_private(jfun->flPrivate),
+	  udf_outfield(p)
 {
 	udf_aggregate = jfun->fun_aggregate;
 	udf_private = jfun->fun_private;

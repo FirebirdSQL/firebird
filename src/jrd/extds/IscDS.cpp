@@ -62,7 +62,7 @@ public:
 static RegisterFBProvider reg;
 
 static bool isConnectionBrokenError(FbStatusVector* status);
-static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc>& descs);
+static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::ObjectsArray<dsc>& descs);
 
 // 	IscProvider
 
@@ -1782,7 +1782,7 @@ static bool isConnectionBrokenError(FbStatusVector* status)
 }
 
 
-static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &descs)
+static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::ObjectsArray<dsc>& descs)
 {
 	FB_SIZE_T offset = 0;
 	XSQLVAR* xVar = xsqlda->sqlvar;

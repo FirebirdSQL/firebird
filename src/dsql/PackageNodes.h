@@ -86,6 +86,7 @@ public:
 				"PROCEDURE",
 				"TABLE",
 				"CONSTANT",
+				"PACKAGE TYPE",
 			};
 
 			// Print just the object name because the full path is present in the parent error message
@@ -105,7 +106,8 @@ public:
 		functions(pool),
 		procedures(pool),
 		tables(pool),
-		constants(pool)
+		constants(pool),
+		packageTypes(pool)
 	{ }
 
 	void drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, const QualifiedName& packageAndSchema);
@@ -119,6 +121,7 @@ public:
 	ItemsSignatureArray procedures;
 	ItemsSignatureArray tables;
 	ItemsSignatureArray constants;
+	ItemsSignatureArray packageTypes;
 };
 
 class PackageReferenceNode final : public TypedNode<ValueExprNode, ExprNode::TYPE_PACKAGE_REFERENCE>
@@ -271,9 +274,9 @@ public:
 		static Item create(DeclarePackageTypeNode* packageType)
 		{
 			Item item;
-			item.type = PACKAGE_TYPE;
-			item.packageType = PackageItemType::PACKAGE_TYPE;
-			item.dsqlScratch = NULL;
+			item.type = PackageItemType::PACKAGE_TYPE;
+			item.packageType = packageType;
+			item.dsqlScratch = nullptr;
 			return item;
 		}
 
@@ -338,9 +341,9 @@ public:
 	ItemsNameArray procedureNames;
 	ItemsNameArray tableNames;
 	ItemsNameArray constantNames;
+	ItemsNameArray packageTypeNames;
 	std::optional<SqlSecurity> ssDefiner;
 	MetaId id;
-	Firebird::SortedArray<MetaName> packageTypeNames;
 
 private:
 	MetaName owner;

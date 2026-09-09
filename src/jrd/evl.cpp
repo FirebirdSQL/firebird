@@ -188,7 +188,7 @@ dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
 		auto record = request->req_rpb[fieldNode->fieldStream].rpb_record;
 		auto impure = request->getImpure<impure_value>(node->impureOffset);
 
-		if (!EVL_field(tdbb, record, fieldNode->fieldId, &impure->vlu_desc))
+		if (!EVL_field(0, record, fieldNode->fieldId, &impure->vlu_desc))
 		{
 			// The below condition means that EVL_field() returned
 			// a read-only dummy value which cannot be assigned to.
@@ -379,6 +379,94 @@ void EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>& ranges,
 			}
 		}
 	}
+}
+
+
+bool EVL_field(jrd_rel* relation, Record* record, USHORT id, dsc* desc)
+{
+/**************************************
+ *
+ *      E V L _ f i e l d
+ *
+ **************************************
+ *
+ * Functional description
+ *      Evaluate a field by filling out a descriptor.
+ *
+ **************************************/
+
+	DEV_BLKCHK(record, type_rec);
+
+	if (!record)
+	{
+		// ASF: Usage of ERR_warning with Arg::Gds (instead of Arg::Warning) is correct here.
+		// Maybe not all code paths are prepared for throwing an exception here,
+		// but it will leave the engine as an error (when testing for req_warning).
+		ERR_warning(Arg::Gds(isc_no_cur_rec));
+		return false;
+	}
+
+	const Format* format = record->getFormat();
+	fb_assert(format);
+
+	if (id < format->fmt_count)
+		EVL_put_desc(JRD_get_thread_data(), &format->fmt_desc[id], desc);
+
+	if (id >= format->fmt_count || desc->isUnknown())
+	{
+		// Map a non-existent field to a default value, if available.
+		// This enables automatic format upgrade for data rows.
+		// Reference: Bug 10424, 10116
+
+		if (relation)
+		{
+			thread_db* tdbb = JRD_get_thread_data();
+
+			const Format* const currentFormat = relation->currentFormat(tdbb);
+
+			while (id >= format->fmt_defaults.getCount() ||
+				 format->fmt_defaults[id].vlu_desc.isUnknown())
+			{
+				if (format->fmt_version >= currentFormat->fmt_version)
+				{
+					format = NULL;
+					break;
+				}
+
+				format = relation->getPermanent()->getFormat(tdbb, format->fmt_version + 1);
+				fb_assert(format);
+			}
+
+			if (format)
+			{
+				*desc = format->fmt_defaults[id].vlu_desc;
+
+				if (record->isNull())
+					desc->dsc_flags |= DSC_null;
+
+				return !(desc->dsc_flags & DSC_null);
+			}
+		}
+
+		desc->makeText(1, ttype_ascii, (UCHAR*) " ");
+		return false;
+	}
+
+	// If the offset of the field is 0, the field can't possible exist
+
+	if (!desc->dsc_address)
+		return false;
+
+	desc->setAddress(record->getData() + (IPTR) desc->dsc_address);
+
+	if (record->isNull(id))
+	{
+		desc->dsc_flags |= DSC_null;
+		return false;
+	}
+
+	desc->dsc_flags &= ~DSC_null;
+	return true;
 }
 
 
@@ -666,4 +754,29 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 
 		ERR_post(Arg::Gds(status) << Arg::Str(arg) << Arg::Str(value));
 	}
+}
+
+
+
+dsc* EVL_put_desc(thread_db* tdbb, const dsc* desc, dsc* impure_desc, MemoryPool* pool)
+{
+	// Free old subdescriptors and copy
+	// new ones inside appropriate pool
+	//
+	// Explicite impure dsc overload
+
+	delete impure_desc->dsc_sub_first;
+
+	if (!pool)
+		pool = tdbb->getDefaultPool();
+
+	impure_desc->pool = pool;
+	*impure_desc = *desc;
+
+	return impure_desc;
+}
+
+dsc* EVL_put_desc(thread_db* tdbb, const dsc* desc, impure_value* value, MemoryPool* pool)
+{
+	return EVL_put_desc(tdbb, desc, &value->vlu_desc, pool);
 }

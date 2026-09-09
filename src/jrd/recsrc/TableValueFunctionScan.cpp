@@ -502,7 +502,7 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 
 		auto toDesc = m_format->fmt_desc.begin();
 
-		assignParameter(tdbb, &impure->m_result.vlu_desc, toDesc, 0, record);
+		assignParameter(tdbb, &impure->m_result.vlu_desc, &(*toDesc), 0, record);
 
 		// evaluate next result
 		try

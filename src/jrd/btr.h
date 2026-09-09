@@ -29,6 +29,7 @@
 
 #include "../jrd/constants.h"
 #include "../common/classes/array.h"
+#include "../common/classes/objects_array.h"
 #include "../include/fb_blk.h"
 
 #include "../jrd/err_proto.h"    // Index error types
@@ -86,6 +87,19 @@ typedef Firebird::HalfStaticArray<dep, 8> ForeignRefs;
 
 struct index_desc
 {
+	index_desc() = default;
+
+	explicit index_desc(MemoryPool& pool)
+		: idx_expression_desc(pool)
+	{
+	}
+
+	index_desc(MemoryPool& pool, const index_desc& other)
+		: index_desc(pool)
+	{
+		*this = other;
+	}
+
 	ULONG	idx_root;						// Index root
 	float	idx_selectivity;				// selectivity of index
 	MetaId	idx_id;
@@ -111,7 +125,7 @@ struct index_desc
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
 
-typedef Firebird::HalfStaticArray<index_desc, 16> IndexDescList;
+typedef Firebird::ObjectsArray<index_desc> IndexDescList;
 
 inline constexpr USHORT idx_invalid = USHORT(~0);		// Applies to idx_id as special value
 

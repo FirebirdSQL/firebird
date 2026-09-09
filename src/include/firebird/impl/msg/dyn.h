@@ -324,4 +324,4 @@ FB_IMPL_MSG_SYMBOL(DYN, 331, dyn_index_validation_failed, "Uniqueness validation
 FB_IMPL_MSG(DYN, 332, dyn_wrong_default_syntax, -901, "42", "000", "Wrong default declaration syntax")
 FB_IMPL_MSG(DYN, 333, dyn_wrong_default_param_number, -901, "42", "000", "Wrong default parameters number")
 FB_IMPL_MSG(DYN, 334, dyn_composite_not_fount, -901, "42", "000", "Composite type @1 not found")
-FB_IMPL_MSG(DYN, 325, dyn_packaged_type_is_used, -901, "42", "000", "Packaged type @1 is used in @2 and cannot be dropped")
+FB_IMPL_MSG(DYN, 335, dyn_packaged_type_is_used, -901, "42", "000", "Packaged type @1 is used in @2 and cannot be dropped")

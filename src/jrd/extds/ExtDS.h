@@ -797,8 +797,8 @@ protected:
 	// set in prepare()
 	Firebird::UCharBuffer m_in_buffer;
 	Firebird::UCharBuffer m_out_buffer;
-	Firebird::Array<dsc> m_inDescs;
-	Firebird::Array<dsc> m_outDescs;
+	Firebird::ObjectsArray<dsc> m_inDescs;
+	Firebird::ObjectsArray<dsc> m_outDescs;
 };
 
 

@@ -550,10 +550,6 @@
 #define blr_row_value_expression					(unsigned char) 235
 #define blr_rve_subselect							(unsigned char) 1
 
-#define blr_dcl_composite_type						(unsigned char) 236
-
-#define blr_not_missing								(unsigned char) 237
-
 #define blr_within_group_order		(unsigned char) 235
 
 // Package const
@@ -571,5 +567,8 @@
 #define blr_invoke_agg_function_arg_names			(unsigned char) 2
 #define blr_invoke_agg_function_args					(unsigned char) 3
 #define blr_invoke_agg_function_filter				(unsigned char) 4
+
+#define blr_dcl_composite_type						(unsigned char) 238
+#define blr_not_missing								(unsigned char) 239
 
 #endif // FIREBIRD_IMPL_BLR_H

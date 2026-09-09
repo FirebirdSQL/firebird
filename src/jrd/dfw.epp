@@ -674,10 +674,6 @@ namespace
 					if (work->dfw_package.isEmpty())
 						MET_delete_dependencies(tdbb, work->getQualifiedName(), objType);
 
-					// drop routine cache if routine is being altered because of relation dependency change
-					if (work->findArg(dfw_arg_drop_routine_cache))
-						Self::dropRoutineCache(tdbb, transaction, work);
-
 					// Now handle the new definition
 					bool compile = !work->findArg(dfw_arg_check_blr);
 					getDependencies(work, compile, transaction);
@@ -954,14 +950,6 @@ namespace
 		END_FOR
 	}
 
-	void FunctionManager::dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work)
-	{
-		Jrd::Attachment* attachment = tdbb->getAttachment();
-		// Update DSQL cache
-		METD_drop_function(transaction, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
-		MET_dsql_cache_release(tdbb, SYM_udf, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
-	}
-
 	void FunctionManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)
 	{
 		Jrd::Attachment* attachment = tdbb->getAttachment();
@@ -1049,14 +1037,6 @@ namespace
 			END_MODIFY
 		}
 		END_FOR
-	}
-
-	void ProcedureManager::dropRoutineCache(thread_db* tdbb, jrd_tra* transaction, DeferredWork* work)
-	{
-		Jrd::Attachment* attachment = tdbb->getAttachment();
-		// Update DSQL cache
-		METD_drop_procedure(transaction, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
-		MET_dsql_cache_release(tdbb, SYM_procedure, QualifiedName(work->dfw_name, work->dfw_schema, work->dfw_package));
 	}
 
 	void ProcedureManager::checkParamDependencies(thread_db* tdbb, DeferredWork* work, jrd_tra* transaction)

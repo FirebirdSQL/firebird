@@ -162,13 +162,13 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 
 	ULONG net_length = 0;
 	ULONG offset = 0;
-	dsc* const begin = format->fmt_desc.begin();
 
-	for (dsc* desc = begin; count; --count, ++desc)
+	for (USHORT i = 0; i < count; ++i)
 	{
 		if (blr_length-- == 0)
 			return NULL;
 
+		dsc* const desc = &format->fmt_desc[i];
 		USHORT align = 4;
 		bool is_blob = false;
 
@@ -176,7 +176,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			return NULL;
 
 		if (is_blob)
-			format->fmt_blob_idx.add(desc - begin);
+			format->fmt_blob_idx.add(i);
 
 		if (desc->dsc_dtype == dtype_varying)
 			net_length += 4 + ((desc->dsc_length - 2 + 3) & ~3);
@@ -303,7 +303,7 @@ static bool parse_descriptor(const UCHAR*& blr, size_t& blr_length, dsc* desc, U
 		desc->dsc_length = sizeof(SLONG) * 2;
 		desc->dsc_scale = *blr++;
 
-		format->fmt_blob_idx.add(desc - begin);
+		is_blob = true;
 		break;
 
 	case blr_float:
@@ -357,7 +357,6 @@ static bool parse_descriptor(const UCHAR*& blr, size_t& blr_length, dsc* desc, U
 			textType += (*blr++) << 8;
 			desc->setTextType(TTypeId(textType));
 
-			format->fmt_blob_idx.add(desc - begin);
 			is_blob = true;
 		}
 		break;

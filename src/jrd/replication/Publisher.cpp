@@ -280,9 +280,9 @@ namespace
 		{
 			newRecord->clearNull(i);
 
-			if (EVL_field(tdbb, relation, newRecord, i, &newDesc))
+			if (EVL_field(relation, newRecord, i, &newDesc))
 			{
-				if (EVL_field(tdbb, relation, record, i, &orgDesc))
+				if (EVL_field(relation, record, i, &orgDesc))
 					MOV_move(tdbb, &orgDesc, &newDesc);
 				else
 					newRecord->setNull(i);

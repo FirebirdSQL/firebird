@@ -47,16 +47,9 @@ namespace
 		}
 	};
 
-	void dscToMetaItem(const dsql_par* par, MsgMetadata::Item& item)
+	void dscToMetaItem(const dsc* desc, MsgMetadata::Item& item)
 	{
 		item.finished = true;
-		item.field = par->par_name.c_str();
-		item.relation = par->par_rel_name.object.c_str();
-		item.owner = par->par_owner_name.c_str();
-		item.alias = par->par_alias.c_str();
-		item.schema = par->par_rel_name.schema.c_str();
-
-		const auto desc = &par->par_desc;
 
 		switch (desc->dsc_dtype)
 		{
@@ -173,7 +166,7 @@ namespace
 
 					auto submeta = FB_NEW MsgMetadata;
 					submeta->setItemsCount(desc->dsc_sub_count);
-					dsc* next = desc->dsc_sub_first;
+					const dsc* next = desc->dsc_sub_first;
 					for (FB_SIZE_T i = 0; i < desc->dsc_sub_count; ++i)
 					{
 						dscToMetaItem(next, submeta->getItem(i));
@@ -187,6 +180,17 @@ namespace
 				item.finished = false;
 				fb_assert(false);
 		}
+	}
+
+	void dscToMetaItem(const dsql_par* par, MsgMetadata::Item& item)
+	{
+		item.field = par->par_name.c_str();
+		item.relation = par->par_rel_name.object.c_str();
+		item.owner = par->par_owner_name.c_str();
+		item.alias = par->par_alias.c_str();
+		item.schema = par->par_rel_name.schema.c_str();
+
+		dscToMetaItem(&par->par_desc, item);
 	}
 }
 
@@ -545,7 +549,7 @@ int PreparedStatement::getResultCount() const
 }
 
 
-void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& values,
+void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, ObjectsArray<dsc>& values,
 	MsgMetadata* msgMetadata, UCharBuffer& msg)
 {
 	// hvlad: Parameters in dsqlMsg->msg_parameters almost always linked in descending
@@ -577,23 +581,21 @@ void PreparedStatement::parseDsqlMessage(const dsql_msg* dsqlMsg, Array<dsc>& va
 	msgMetadata->makeOffsets();
 	msg.resize(msgMetadata->getMessageLength());
 
-	dsc* value = values.begin();
-
 	for (FB_SIZE_T i = 0; i < paramCount; ++i)
 	{
 		// value
+		dsc* value = &values[i * 2];
 		*value = params[i]->par_desc;
 		value->dsc_address = msg.begin() + msgMetadata->getItem(i).offset;
 		if (value->dsc_dtype == dtype_rowtype)
 			value->setAddress(msg.begin() + msgMetadata->getItem(i).offset);
-		++value;
 
 		// NULL indicator
+		value = &values[i * 2 + 1];
 		value->makeShort(0);
 		value->dsc_address = msg.begin() + msgMetadata->getItem(i).nullInd;
 		// set NULL indicator value
 		*((SSHORT*) value->dsc_address) = -1;
-		++value;
 	}
 }
 

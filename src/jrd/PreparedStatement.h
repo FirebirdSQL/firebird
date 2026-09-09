@@ -34,6 +34,7 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/MetaString.h"
+#include "../common/classes/objects_array.h"
 #include "../jrd/MetaName.h"
 
 namespace Jrd {
@@ -358,13 +359,13 @@ public:
 		return dsqlRequest;
 	}
 
-	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Firebird::Array<dsc>& values,
+	static void parseDsqlMessage(const dsql_msg* dsqlMsg, Firebird::ObjectsArray<dsc>& values,
 		Firebird::MsgMetadata* msgMetadata, Firebird::UCharBuffer& msg);
 
 private:
 	const Builder* builder;
 	DsqlRequest* dsqlRequest;
-	Firebird::Array<dsc> inValues, outValues;
+	Firebird::ObjectsArray<dsc> inValues, outValues;
 	Firebird::RefPtr<Firebird::MsgMetadata> inMetadata, outMetadata;
 	Firebird::UCharBuffer inMessage, outMessage;
 	ResultSet* resultSet;

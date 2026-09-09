@@ -647,17 +647,17 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 
 					if (csb->collectingDependencies())
 					{
-						auto relation = MET_lookup_relation(tdbb, fieldSourceName);
+						auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, fieldSourceName, CacheFlag::AUTOCREATE);
 						if (relation)
 						{
-							CompilerScratch::Dependency dependency(obj_relation);
+							Dependency dependency(obj_relation);
 							dependency.relation = relation;
 							csb->addDependency(dependency);
 						}
 						else
 						{
-							CompilerScratch::Dependency dependency(obj_field);
-							dependency.name = FB_NEW_POOL(csb->csb_pool) QualifiedName(csb->csb_pool, fieldSourceName);
+							Dependency dependency(obj_field);
+							dependency.name = fieldSourceName;
 							csb->addDependency(dependency);
 						}
 					}

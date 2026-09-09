@@ -118,7 +118,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 			dsc* from_desc = EVL_expr(tdbb, request, *(sourcePtr+skip));
 			if (!from_desc)
 			{
-				EXE_assignment(tdbb, *(targetPtr+skip), from_desc);
+				EXE_assignment(tdbb, *(targetPtr+skip), from_desc, nullptr, nullptr);
 				continue;
 			}
 
@@ -126,7 +126,7 @@ void ProcedureScan::internalOpen(thread_db* tdbb) const
 			{
 				auto clonedDsc = *from_desc;
 				clonedDsc.dsc_next = nullptr;
-				EXE_assignment(tdbb, *(targetPtr+skip), &clonedDsc);
+				EXE_assignment(tdbb, *(targetPtr+skip), &clonedDsc, nullptr, nullptr);
 
 				from_desc = from_desc->dsc_next;
 				if (from_desc)

@@ -113,6 +113,7 @@ enum literal_string_type
 #include "../jrd/license.h"
 #include "../jrd/constants.h"
 #include "../jrd/ods.h"
+#include "../jrd/align.h"
 #include "../common/file_params.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../isql/extra_proto.h"
@@ -7646,7 +7647,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				break;
 
 			case SQL_ROWTYPE:
-				// this is only for debug purposes, TODO: rewrite
+				// this is only for debug purposes, TODO ROWTYPE rewrite
 				{
 					// auto str2 = var->value.asChar;
 					// const ULONG hex_len = 2 * var->length;
@@ -8374,7 +8375,7 @@ static unsigned process_message_display(Firebird::IMessageMetadata* message, uns
 		// Lambda to calculate display length for a variable
 		auto calculateDisplayLength = [&](const IsqlVar& currentVar) -> unsigned {
 			const unsigned type = currentVar.type;
-			const SSHORT charSet = TTYPE_TO_CHARSET(currentVar.charSet);
+			const auto charSet = currentVar.charSet;
 			unsigned currentDispLength = currentVar.length;
 			unsigned alignment = currentVar.length;
 

@@ -1594,10 +1594,9 @@ static bool_t xdr_message( RemoteXdr* xdrs, RMessage* message, const rem_fmt* fo
 	if (port->port_flags & PORT_symmetric)
 		return xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(message->msg_address), format->fmt_length);
 
-	const dsc* desc = format->fmt_desc.begin();
-	for (const dsc* const end = format->fmt_desc.end(); desc < end; ++desc)
+	for (const auto& desc : format->fmt_desc)
 	{
-		if (!xdr_datum(xdrs, desc, message->msg_address))
+		if (!xdr_datum(xdrs, &desc, message->msg_address))
 			return FALSE;
 	}
 
@@ -1668,11 +1667,11 @@ static bool_t xdr_packed_message( RemoteXdr* xdrs, RMessage* message, const rem_
 	{
 		// First pass (odd elements): track NULL indicators
 
-		const dsc* desc = format->fmt_desc.begin() + 1;
-		for (const dsc* const end = format->fmt_desc.end(); desc < end; desc += 2)
+		for (FB_SIZE_T i = 1; i < format->fmt_desc.getCount(); i += 2)
 		{
+			const dsc* const desc = &format->fmt_desc[i];
 			fb_assert(desc->dsc_dtype == dtype_short);
-			const USHORT index = (USHORT) (desc - format->fmt_desc.begin()) / 2;
+			const USHORT index = (USHORT) (i / 2);
 			const SSHORT* const flag = (SSHORT*) (message->msg_address + (IPTR) desc->dsc_address);
 
 			if (*flag)
@@ -1686,10 +1685,10 @@ static bool_t xdr_packed_message( RemoteXdr* xdrs, RMessage* message, const rem_
 
 		// Second pass (even elements): process non-NULL items
 
-		desc = format->fmt_desc.begin();
-		for (const dsc* const end = format->fmt_desc.end(); desc < end; desc += 2)
+		for (FB_SIZE_T i = 0; i < format->fmt_desc.getCount(); i += 2)
 		{
-			const USHORT index = (USHORT) (desc - format->fmt_desc.begin()) / 2;
+			const dsc* const desc = &format->fmt_desc[i];
+			const USHORT index = (USHORT) (i / 2);
 
 			if (!nulls.isNull(index))
 			{
@@ -1711,21 +1710,21 @@ static bool_t xdr_packed_message( RemoteXdr* xdrs, RMessage* message, const rem_
 
 		// First pass (odd elements): initialize NULL indicators
 
-		const dsc* desc = format->fmt_desc.begin() + 1;
-		for (const dsc* const end = format->fmt_desc.end(); desc < end; desc += 2)
+		for (FB_SIZE_T i = 1; i < format->fmt_desc.getCount(); i += 2)
 		{
+			const dsc* const desc = &format->fmt_desc[i];
 			fb_assert(desc->dsc_dtype == dtype_short);
-			const USHORT index = (USHORT) (desc - format->fmt_desc.begin()) / 2;
+			const USHORT index = (USHORT) (i / 2);
 			SSHORT* const flag = (SSHORT*) (message->msg_address + (IPTR) desc->dsc_address);
 			*flag = nulls.isNull(index) ? -1 : 0;
 		}
 
 		// Second pass (even elements): process non-NULL items
 
-		desc = format->fmt_desc.begin();
-		for (const dsc* const end = format->fmt_desc.end(); desc < end; desc += 2)
+		for (FB_SIZE_T i = 0; i < format->fmt_desc.getCount(); i += 2)
 		{
-			const USHORT index = (USHORT) (desc - format->fmt_desc.begin()) / 2;
+			const dsc* const desc = &format->fmt_desc[i];
+			const USHORT index = (USHORT) (i / 2);
 
 			if (!nulls.isNull(index))
 			{

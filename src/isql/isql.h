@@ -41,6 +41,7 @@
 #include <firebird/Interface.h>
 #include "firebird/impl/msg_helper.h"
 #include "../common/MsgUtil.h"
+#include "../common/classes/objects_array.h"
 
 // Define lengths used in isql.e
 
@@ -280,6 +281,19 @@ inline constexpr char SINGLE_QUOTE	= '\'';
 
 struct IsqlVar
 {
+	IsqlVar() = default;
+
+	explicit IsqlVar(Firebird::MemoryPool& pool)
+		: subvars(pool)
+	{
+	}
+
+	IsqlVar(Firebird::MemoryPool& pool, const IsqlVar& other)
+		: IsqlVar(pool)
+	{
+		*this = other;
+	}
+
 	const char* field;
 	const char* relation;
 	const char* owner;
@@ -321,7 +335,7 @@ struct IsqlVar
 	};
 	TypeMix value;
 
-	Firebird::Array<IsqlVar> subvars;
+	Firebird::ObjectsArray<IsqlVar> subvars;
 };
 
 class IsqlWireStats

@@ -130,7 +130,7 @@ bool MonitoringTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 			(USHORT) f_mon_att_idle_timer : (USHORT) f_mon_stmt_timer;
 
 		dsc desc;
-		if (EVL_field(tdbb, relation, record, fieldId, &desc))
+		if (EVL_field(relation, record, fieldId, &desc))
 		{
 			SINT64 clock;
 			memcpy(&clock, desc.dsc_address, sizeof(clock));
@@ -645,12 +645,12 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 				StmtBlobs stmtBlobs;
 				dsc desc;
 
-				if ((rid == rel_mon_compiled_statements) && EVL_field(tdbb, record, f_mon_cmp_stmt_id, &desc))
+				if ((rid == rel_mon_compiled_statements) && EVL_field(nullptr, record, f_mon_cmp_stmt_id, &desc))
 				{
 					fb_assert(desc.dsc_dtype == dtype_int64);
 					stmtId = *(FB_UINT64*) desc.dsc_address;
 
-					if (EVL_field(tdbb, record, f_mon_cmp_stmt_sql_text, &desc))
+					if (EVL_field(nullptr, record, f_mon_cmp_stmt_sql_text, &desc))
 					{
 						fb_assert(desc.isBlob());
 						stmtBlobs.text = *reinterpret_cast<bid*>(desc.dsc_address);
@@ -658,7 +658,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 					else
 						stmtBlobs.text.clear();
 
-					if (EVL_field(tdbb, record, f_mon_cmp_stmt_expl_plan, &desc))
+					if (EVL_field(nullptr, record, f_mon_cmp_stmt_expl_plan, &desc))
 					{
 						fb_assert(desc.isBlob());
 						stmtBlobs.plan = *reinterpret_cast<bid*>(desc.dsc_address);
@@ -669,7 +669,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 					if (!stmtBlobs.text.isEmpty() || !stmtBlobs.plan.isEmpty())
 						blobsMap.put(stmtId, stmtBlobs);
 				}
-				else if ((rid == rel_mon_statements) && EVL_field(tdbb, record, f_mon_stmt_cmp_stmt_id, &desc))
+				else if ((rid == rel_mon_statements) && EVL_field(nullptr, record, f_mon_stmt_cmp_stmt_id, &desc))
 				{
 					fb_assert(desc.dsc_dtype == dtype_int64);
 					stmtId = *(FB_UINT64*) desc.dsc_address;
@@ -679,7 +679,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 						if (!stmtBlobs.text.isEmpty())
 						{
 							record->clearNull(f_mon_stmt_sql_text);
-							if (EVL_field(tdbb, record, f_mon_stmt_sql_text, &desc))
+							if (EVL_field(nullptr, record, f_mon_stmt_sql_text, &desc))
 							{
 								fb_assert(desc.isBlob());
 								*reinterpret_cast<bid*>(desc.dsc_address) = stmtBlobs.text;
@@ -688,7 +688,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 						if (!stmtBlobs.plan.isEmpty())
 						{
 							record->clearNull(f_mon_stmt_expl_plan);
-							if (EVL_field(tdbb, record, f_mon_stmt_expl_plan, &desc))
+							if (EVL_field(nullptr, record, f_mon_stmt_expl_plan, &desc))
 							{
 								fb_assert(desc.isBlob());
 								*reinterpret_cast<bid*>(desc.dsc_address) = stmtBlobs.plan;

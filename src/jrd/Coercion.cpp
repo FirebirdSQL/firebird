@@ -47,7 +47,7 @@ bool CoercionArray::coerce(thread_db* tdbb, dsc* d, unsigned startItem) const
 	// move down through array to ensure correct order: newer rule overrides older one
 	for (unsigned n = getCount(); n-- > startItem; )
 	{
-		if (getElement(n).coerce(tdbb, d))
+		if ((*this)[n].coerce(tdbb, d))
 			return true;
 	}
 
@@ -61,7 +61,7 @@ void CoercionArray::setRule(const TypeClause* from, const TypeClause *to)
 
 	for (unsigned n = 0; n < getCount(); ++n)
 	{
-		if (getElement(n) == newRule)
+		if ((*this)[n] == newRule)
 		{
 			remove(n);
 			break;

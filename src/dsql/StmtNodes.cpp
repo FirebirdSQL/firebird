@@ -990,8 +990,9 @@ void BulkInsertNode::fromCursor(thread_db* tdbb, Request* request) const
 
 	auto compound = nodeAs<CompoundStmtNode>(statement);
 
-	HalfStaticArray<dsc, 16> toDescs(*tdbb->getDefaultPool(), compound->statements.getCount());
-	prepareTarget(tdbb, request, toDescs.begin());
+	ObjectsArray<dsc> toDescs(*tdbb->getDefaultPool());
+	toDescs.resize(compound->statements.getCount());
+	prepareTarget(tdbb, request, toDescs);
 
 	cursor->open(tdbb);
 	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
@@ -1008,7 +1009,7 @@ void BulkInsertNode::fromCursor(thread_db* tdbb, Request* request) const
 		record->nullify();
 		record->setTransactionNumber(transaction->tra_number);
 
-		assignValues(tdbb, request, relation, record, toDescs.begin());
+		assignValues(tdbb, request, relation, record, toDescs);
 
 		bulk->putRecord(tdbb, rpb, transaction);
 		REPL_store(tdbb, rpb, transaction);
@@ -1045,23 +1046,24 @@ void BulkInsertNode::fromMessage(thread_db* tdbb, Request* request) const
 		auto compound = nodeAs<CompoundStmtNode>(statement);
 		const auto count = compound->statements.getCount();
 
-		impure->descs = FB_NEW_POOL(*request->req_pool) Array<dsc>(*request->req_pool, count);
+		impure->descs = FB_NEW_POOL(*request->req_pool) ObjectsArray<dsc>(*request->req_pool);
+		impure->descs->resize(count);
 
-		prepareTarget(tdbb, request, impure->descs->getBuffer(count));
+		prepareTarget(tdbb, request, *impure->descs);
 	}
 	auto bulk = transaction->getBulkInsert(tdbb, relation, true);
-	assignValues(tdbb, request, relation, record, impure->descs->begin());
+	assignValues(tdbb, request, relation, record, *impure->descs);
 
 	bulk->putRecord(tdbb, rpb, transaction);
 	REPL_store(tdbb, rpb, transaction);
 }
 
-void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const
+void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, ObjectsArray<dsc>& descs) const
 {
 	auto compound = nodeAs<CompoundStmtNode>(statement);
 	fb_assert(compound->onlyAssignments);
 
-	dsc* toDesc = descs;
+	auto toDesc = descs.begin();
 	for (auto stmt : compound->statements)
 	{
 		auto assign = nodeAs<AssignmentNode>(stmt);
@@ -1073,13 +1075,16 @@ void BulkInsertNode::prepareTarget(thread_db* tdbb, Request* request, dsc* descs
 	}
 }
 
-void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const
+void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record,
+	ObjectsArray<dsc>& toDescs) const
 {
 	auto compound = nodeAs<CompoundStmtNode>(statement);
+	auto descIter = toDescs.begin();
 
 	// assignments
 	for (auto stmt : compound->statements)
 	{
+		dsc* to_desc = &*descIter++;
 		auto assign = nodeAs<AssignmentNode>(stmt);
 		//EXE_assignment(tdbb, assign);
 
@@ -1157,8 +1162,6 @@ void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* re
 
 			to_desc->dsc_flags &= ~DSC_null;
 		}
-
-		to_desc++;
 	}
 }
 
@@ -6770,8 +6773,6 @@ void ExecBlockNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 			dsqlScratch->context->push(new_context);
 		}
 
-	for (const auto variable : variables)
-	{
 		if (variable->type != dsql_var::TYPE_LOCAL)
 			dsqlScratch->putLocalVariable(variable);
 	}
@@ -8224,6 +8225,8 @@ void LocalDeclarationsNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		{
 			dsql_var* variable = varNode->dsqlVar;
 			fb_assert(variable);
+
+			dsql_fld* field = varNode->dsqlDef->type;
 
 			auto isRowtype = dsqlScratch->localCompositeTypeDeclarations.exist(field->typeOfName.object);
 			if (!isRowtype)

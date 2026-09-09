@@ -2473,7 +2473,7 @@ public:
 		dsqlDesc = desc;
 	}
 
-	virtual bool deterministic() const override
+	virtual bool deterministic(thread_db*) const override
 	{
 		return false;
 	}

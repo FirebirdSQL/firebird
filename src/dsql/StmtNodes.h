@@ -32,6 +32,7 @@
 #include "../dsql/DdlNodes.h"
 #include "../dsql/NodePrinter.h"
 #include "../common/DecFloat.h"
+#include "../common/classes/objects_array.h"
 #include "../common/classes/TriState.h"
 
 namespace Jrd {
@@ -209,14 +210,15 @@ public:
 private:
 	struct Impure
 	{
-		Firebird::Array<dsc>* descs;
+		Firebird::ObjectsArray<dsc>* descs;
 	};
 
 	void fromCursor(thread_db* tdbb, Request* request) const;
 	void fromMessage(thread_db* tdbb, Request* request) const;
 
-	void prepareTarget(thread_db* tdbb, Request* request, dsc* descs) const;
-	void assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record, dsc* to_desc) const;
+	void prepareTarget(thread_db* tdbb, Request* request, Firebird::ObjectsArray<dsc>& descs) const;
+	void assignValues(thread_db* tdbb, Request* request, jrd_rel* relation, Record* record,
+		Firebird::ObjectsArray<dsc>& toDescs) const;
 };
 
 

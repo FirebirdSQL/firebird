@@ -487,13 +487,13 @@ struct rem_fmt : public Firebird::GlobalStorage
 {
 	ULONG		fmt_length;
 	ULONG		fmt_net_length;
-	Firebird::Array<dsc> fmt_desc;
+	Firebird::ObjectsArray<dsc> fmt_desc;
 	Firebird::HalfStaticArray<unsigned short, 4> fmt_blob_idx;		// indices of blob's in fmt_desc
 
 public:
 	explicit rem_fmt(FB_SIZE_T rpt) :
 		fmt_length(0), fmt_net_length(0),
-		fmt_desc(getPool(), rpt),
+		fmt_desc(getPool()),
 		fmt_blob_idx(getPool())
 	{
 		fmt_desc.grow(rpt);

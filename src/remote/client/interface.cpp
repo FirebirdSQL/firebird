@@ -9141,13 +9141,10 @@ static void mov_dsql_message(const UCHAR* from_msg,
 		// Msg 263 SQLDA missing or wrong number of variables
 	}
 
-	const dsc* from_desc = from_fmt->fmt_desc.begin();
-	const dsc* to_desc = to_fmt->fmt_desc.begin();
-	for (const dsc* const end_desc = to_fmt->fmt_desc.end();
-		to_desc < end_desc; from_desc++, to_desc++)
+	for (FB_SIZE_T i = 0; i < to_fmt->fmt_desc.getCount(); ++i)
 	{
-		dsc from = *from_desc;
-		dsc to = *to_desc;
+		dsc from = from_fmt->fmt_desc[i];
+		dsc to = to_fmt->fmt_desc[i];
 		// Safe const cast, we are going to move from it to anywhere.
 		from.dsc_address = const_cast<UCHAR*>(from_msg) + (IPTR) from.dsc_address;
 		to.dsc_address = to_msg + (IPTR) to.dsc_address;

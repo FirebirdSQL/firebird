@@ -58,11 +58,11 @@ void beforeDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_ccon_schema, &desc))
+	if (EVL_field(nullptr, record, f_ccon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, record, f_ccon_cname, &desc))
+	if (EVL_field(nullptr, record, f_ccon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId requestCacheId;
@@ -84,15 +84,15 @@ void afterDeleteCheckConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_ccon_schema, &desc))
+	if (EVL_field(nullptr, record, f_ccon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, record, f_ccon_cname, &desc))
+	if (EVL_field(nullptr, record, f_ccon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	MetaName triggerName;
-	if (EVL_field(tdbb, record, f_ccon_tname, &desc))
+	if (EVL_field(nullptr, record, f_ccon_tname, &desc))
 		MOV_get_metaname(tdbb, &desc, triggerName);
 
 	static const CachedRequestId request1CacheId;
@@ -155,11 +155,11 @@ void beforeUpdateCheckConstraint(thread_db* tdbb, Record* orgRecord, Record* new
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, orgRecord, f_ccon_schema, &desc))
+	if (EVL_field(nullptr, orgRecord, f_ccon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, orgRecord, f_ccon_cname, &desc))
+	if (EVL_field(nullptr, orgRecord, f_ccon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId requestCacheId;
@@ -185,11 +185,11 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 		return;
 
 	MetaName oldSchemaName;
-	if (EVL_field(tdbb, orgRecord, f_idx_schema, &desc))
+	if (EVL_field(nullptr, orgRecord, f_idx_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
 	MetaName oldIndexName;
-	if (EVL_field(tdbb, orgRecord, f_idx_name, &desc))
+	if (EVL_field(nullptr, orgRecord, f_idx_name, &desc))
 		MOV_get_metaname(tdbb, &desc, oldIndexName);
 
 	static const CachedRequestId request1CacheId;
@@ -213,16 +213,16 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 		dsc descOldForeignKey, descNewForeignKey;
 		MetaName oldForeignKey, newForeignKey;
 
-		if (EVL_field(tdbb, newRecord, f_idx_schema, &descNewSchemaName) &&
-			EVL_field(tdbb, newRecord, f_idx_name, &descNewIndexName) &&
-			EVL_field(tdbb, orgRecord, f_idx_relation, &descOldRelationName) &&
-			EVL_field(tdbb, newRecord, f_idx_relation, &descNewRelationName) &&
-			EVL_field(tdbb, orgRecord, f_idx_id, &descOldIndexId) &&
-			EVL_field(tdbb, newRecord, f_idx_id, &descNewIndexId) &&
-			EVL_field(tdbb, orgRecord, f_idx_count, &descOldSegmentCount) &&
-			EVL_field(tdbb, newRecord, f_idx_count, &descNewSegmentCount) &&
-			EVL_field(tdbb, orgRecord, f_idx_foreign, &descOldForeignKey) &&
-			EVL_field(tdbb, newRecord, f_idx_foreign, &descNewForeignKey))
+		if (EVL_field(nullptr, newRecord, f_idx_schema, &descNewSchemaName) &&
+			EVL_field(nullptr, newRecord, f_idx_name, &descNewIndexName) &&
+			EVL_field(nullptr, orgRecord, f_idx_relation, &descOldRelationName) &&
+			EVL_field(nullptr, newRecord, f_idx_relation, &descNewRelationName) &&
+			EVL_field(nullptr, orgRecord, f_idx_id, &descOldIndexId) &&
+			EVL_field(nullptr, newRecord, f_idx_id, &descNewIndexId) &&
+			EVL_field(nullptr, orgRecord, f_idx_count, &descOldSegmentCount) &&
+			EVL_field(nullptr, newRecord, f_idx_count, &descNewSegmentCount) &&
+			EVL_field(nullptr, orgRecord, f_idx_foreign, &descOldForeignKey) &&
+			EVL_field(nullptr, newRecord, f_idx_foreign, &descNewForeignKey))
 		{
 			MOV_get_metaname(tdbb, &descNewSchemaName, newSchemaName);
 			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
@@ -250,9 +250,9 @@ void beforeUpdateIndex(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 
 	dsc descOldIndexInactive, descNewIndexInactive;
 
-	if (EVL_field(tdbb, newRecord, f_idx_inactive, &descNewIndexInactive) &&
+	if (EVL_field(nullptr, newRecord, f_idx_inactive, &descNewIndexInactive) &&
 		MOV_get_long(tdbb, &descNewIndexInactive, 0) == 1 &&
-		(!EVL_field(tdbb, orgRecord, f_idx_inactive, &descOldIndexInactive) ||
+		(!EVL_field(nullptr, orgRecord, f_idx_inactive, &descOldIndexInactive) ||
 			MOV_get_long(tdbb, &descOldIndexInactive, 0) == 0))
 	{
 		static const CachedRequestId request2CacheId;
@@ -333,11 +333,11 @@ void beforeDeleteIndexSegment(thread_db* tdbb, Record* record)
 		return;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_seg_schema, &desc))
+	if (EVL_field(nullptr, record, f_seg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName indexName;
-	if (EVL_field(tdbb, record, f_seg_name, &desc))
+	if (EVL_field(nullptr, record, f_seg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, indexName);
 
 	static const CachedRequestId requestCacheId;
@@ -362,11 +362,11 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 		return;
 
 	MetaName oldSchemaName;
-	if (EVL_field(tdbb, orgRecord, f_seg_schema, &desc))
+	if (EVL_field(nullptr, orgRecord, f_seg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
 	MetaName oldIndexName;
-	if (EVL_field(tdbb, orgRecord, f_seg_name, &desc))
+	if (EVL_field(nullptr, orgRecord, f_seg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, oldIndexName);
 
 	static const CachedRequestId requestCacheId;
@@ -386,12 +386,12 @@ void beforeUpdateIndexSegment(thread_db* tdbb, Record* orgRecord, Record* newRec
 		dsc descOldFieldPosition, descNewFieldPosition;
 		SLONG oldFieldPosition, newFieldPosition;
 
-		if (EVL_field(tdbb, newRecord, f_seg_schema, &descNewSchemaName) &&
-			EVL_field(tdbb, newRecord, f_seg_name, &descNewIndexName) &&
-			EVL_field(tdbb, orgRecord, f_seg_field, &descOldFieldName) &&
-			EVL_field(tdbb, newRecord, f_seg_field, &descNewFieldName) &&
-			EVL_field(tdbb, orgRecord, f_seg_position, &descOldFieldPosition) &&
-			EVL_field(tdbb, newRecord, f_seg_position, &descNewFieldPosition))
+		if (EVL_field(nullptr, newRecord, f_seg_schema, &descNewSchemaName) &&
+			EVL_field(nullptr, newRecord, f_seg_name, &descNewIndexName) &&
+			EVL_field(nullptr, orgRecord, f_seg_field, &descOldFieldName) &&
+			EVL_field(nullptr, newRecord, f_seg_field, &descNewFieldName) &&
+			EVL_field(nullptr, orgRecord, f_seg_position, &descOldFieldPosition) &&
+			EVL_field(nullptr, newRecord, f_seg_position, &descNewFieldPosition))
 		{
 			MOV_get_metaname(tdbb, &descNewSchemaName, newSchemaName);
 			MOV_get_metaname(tdbb, &descNewIndexName, newIndexName);
@@ -418,12 +418,12 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 	dsc desc;
 
 	MetaName schemaName;
-	if (!EVL_field(tdbb, orgRecord, f_fld_schema, &desc))
+	if (!EVL_field(nullptr, orgRecord, f_fld_schema, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName fieldName;
-	if (!EVL_field(tdbb, orgRecord, f_fld_name, &desc))
+	if (!EVL_field(nullptr, orgRecord, f_fld_name, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, fieldName);
 
@@ -436,14 +436,14 @@ void beforeUpdateField(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 	dsc descOldCharSetId, descNewCharSetId;
 	SLONG oldCharSetId, newCharSetId;
 
-	if (EVL_field(tdbb, orgRecord, f_fld_length, &descOldFieldLength) &&
-		EVL_field(tdbb, newRecord, f_fld_length, &descNewFieldLength) &&
-		EVL_field(tdbb, orgRecord, f_fld_type, &descOldFieldType) &&
-		EVL_field(tdbb, newRecord, f_fld_type, &descNewFieldType) &&
-		EVL_field(tdbb, orgRecord, f_fld_coll_id, &descOldCollationId) &&
-		EVL_field(tdbb, newRecord, f_fld_coll_id, &descNewCollationId) &&
-		EVL_field(tdbb, orgRecord, f_fld_charset_id, &descOldCharSetId) &&
-		EVL_field(tdbb, newRecord, f_fld_charset_id, &descNewCharSetId))
+	if (EVL_field(nullptr, orgRecord, f_fld_length, &descOldFieldLength) &&
+		EVL_field(nullptr, newRecord, f_fld_length, &descNewFieldLength) &&
+		EVL_field(nullptr, orgRecord, f_fld_type, &descOldFieldType) &&
+		EVL_field(nullptr, newRecord, f_fld_type, &descNewFieldType) &&
+		EVL_field(nullptr, orgRecord, f_fld_coll_id, &descOldCollationId) &&
+		EVL_field(nullptr, newRecord, f_fld_coll_id, &descNewCollationId) &&
+		EVL_field(nullptr, orgRecord, f_fld_charset_id, &descOldCharSetId) &&
+		EVL_field(nullptr, newRecord, f_fld_charset_id, &descNewCharSetId))
 	{
 		oldFieldLength = MOV_get_long(tdbb, &descOldFieldLength, 0);
 		newFieldLength = MOV_get_long(tdbb, &descNewFieldLength, 0);
@@ -493,19 +493,19 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_refc_schema, &desc))
+	if (EVL_field(nullptr, record, f_refc_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 	else
 		schemaName = PUBLIC_SCHEMA;
 
 	MetaName uqSchemaName;
-	if (EVL_field(tdbb, record, f_refc_uq_schema, &desc))
+	if (EVL_field(nullptr, record, f_refc_uq_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, uqSchemaName);
 	else
 		uqSchemaName = PUBLIC_SCHEMA;
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, record, f_refc_cname, &desc))
+	if (EVL_field(nullptr, record, f_refc_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	static const CachedRequestId request1CacheId;
@@ -526,7 +526,7 @@ void beforeInsertRefConstraint(thread_db* tdbb, Record* record)
 		ERR_post(Arg::Gds(isc_ref_cnstrnt_notfound));
 
 	MetaName constraintNameUq;
-	if (EVL_field(tdbb, record, f_refc_uq, &desc))
+	if (EVL_field(nullptr, record, f_refc_uq, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintNameUq);
 
 	static const CachedRequestId request2CacheId;
@@ -553,15 +553,15 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_rcon_schema, &desc))
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, record, f_rcon_cname, &desc))
+	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	string constraintType;
-	if (EVL_field(tdbb, record, f_rcon_ctype, &desc))
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
 	{
 		MOV_get_string(tdbb, &desc, constraintType);
 		constraintType.rtrim();
@@ -598,7 +598,7 @@ void beforeDeleteRelationConstraint(thread_db* tdbb, Record* record)
 	else if (constraintType == NOT_NULL_CNSTRT)
 	{
 		MetaName relationName;
-		if (EVL_field(tdbb, record, f_rcon_rname, &desc))
+		if (EVL_field(nullptr, record, f_rcon_rname, &desc))
 			MOV_get_metaname(tdbb, &desc, relationName);
 
 		static const CachedRequestId request1CacheId;
@@ -650,26 +650,26 @@ void afterDeleteRelationConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	string constraintType;
-	if (EVL_field(tdbb, record, f_rcon_ctype, &desc))
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
 	{
 		MOV_get_string(tdbb, &desc, constraintType);
 		constraintType.rtrim();
 	}
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_rcon_schema, &desc))
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName constraintName;
-	if (EVL_field(tdbb, record, f_rcon_cname, &desc))
+	if (EVL_field(nullptr, record, f_rcon_cname, &desc))
 		MOV_get_metaname(tdbb, &desc, constraintName);
 
 	MetaName relationName;
-	if (EVL_field(tdbb, record, f_rcon_rname, &desc))
+	if (EVL_field(nullptr, record, f_rcon_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, relationName);
 
 	MetaName indexName;
-	if (EVL_field(tdbb, record, f_rcon_iname, &desc))
+	if (EVL_field(nullptr, record, f_rcon_iname, &desc))
 		MOV_get_metaname(tdbb, &desc, indexName);
 
 	if (constraintType == FOREIGN_KEY)
@@ -771,17 +771,17 @@ void beforeInsertRelationConstraint(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_rcon_schema, &desc))
+	if (EVL_field(nullptr, record, f_rcon_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 	else
 		schemaName = PUBLIC_SCHEMA;
 
 	MetaName relationName;
-	if (EVL_field(tdbb, record, f_rcon_rname, &desc))
+	if (EVL_field(nullptr, record, f_rcon_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, relationName);
 
 	string constraintType;
-	if (EVL_field(tdbb, record, f_rcon_ctype, &desc))
+	if (EVL_field(nullptr, record, f_rcon_ctype, &desc))
 	{
 		MOV_get_string(tdbb, &desc, constraintType);
 		constraintType.rtrim();
@@ -826,17 +826,17 @@ void beforeDeleteRelationField(thread_db* tdbb, Record* record)
 		return;
 
 	MetaName schemaName;
-	if (!EVL_field(tdbb, record, f_rfr_schema, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName relationName;
-	if (!EVL_field(tdbb, record, f_rfr_rname, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, relationName);
 
 	MetaName fieldName;
-	if (!EVL_field(tdbb, record, f_rfr_fname, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_fname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, fieldName);
 
@@ -924,17 +924,17 @@ void afterDeleteRelationField(thread_db* tdbb, Record* record)
 		return;
 
 	MetaName schemaName;
-	if (!EVL_field(tdbb, record, f_rfr_schema, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_schema, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName relationName;
-	if (!EVL_field(tdbb, record, f_rfr_rname, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_rname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, relationName);
 
 	MetaName fieldName;
-	if (!EVL_field(tdbb, record, f_rfr_fname, &desc))
+	if (!EVL_field(nullptr, record, f_rfr_fname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, fieldName);
 
@@ -971,28 +971,28 @@ void beforeUpdateRelationField(thread_db* tdbb, Record* orgRecord, Record* newRe
 	MetaName oldFieldSource, newFieldSource;
 	std::optional<SLONG> oldCollationId, newCollationId;
 
-	if (EVL_field(tdbb, orgRecord, f_rfr_schema, &desc))
+	if (EVL_field(nullptr, orgRecord, f_rfr_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
-	if (EVL_field(tdbb, orgRecord, f_rfr_rname, &desc))
+	if (EVL_field(nullptr, orgRecord, f_rfr_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, oldRelationName);
 
-	if (EVL_field(tdbb, orgRecord, f_rfr_fname, &desc))
+	if (EVL_field(nullptr, orgRecord, f_rfr_fname, &desc))
 		MOV_get_metaname(tdbb, &desc, oldFieldName);
 
-	if (EVL_field(tdbb, newRecord, f_rfr_fname, &desc))
+	if (EVL_field(nullptr, newRecord, f_rfr_fname, &desc))
 		MOV_get_metaname(tdbb, &desc, newFieldName);
 
-	if (EVL_field(tdbb, orgRecord, f_rfr_sname, &desc))
+	if (EVL_field(nullptr, orgRecord, f_rfr_sname, &desc))
 		MOV_get_metaname(tdbb, &desc, oldFieldSource);
 
-	if (EVL_field(tdbb, newRecord, f_rfr_sname, &desc))
+	if (EVL_field(nullptr, newRecord, f_rfr_sname, &desc))
 		MOV_get_metaname(tdbb, &desc, newFieldSource);
 
-	if (EVL_field(tdbb, orgRecord, f_rfr_coll_id, &desc))
+	if (EVL_field(nullptr, orgRecord, f_rfr_coll_id, &desc))
 		oldCollationId = MOV_get_long(tdbb, &desc, 0);
 
-	if (EVL_field(tdbb, newRecord, f_rfr_coll_id, &desc))
+	if (EVL_field(nullptr, newRecord, f_rfr_coll_id, &desc))
 		newCollationId = MOV_get_long(tdbb, &desc, 0);
 
 	if (oldFieldName != newFieldName ||
@@ -1030,7 +1030,7 @@ void beforeInsertSchema(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
-	if (!EVL_field(tdbb, record, f_sch_schema, &desc))
+	if (!EVL_field(nullptr, record, f_sch_schema, &desc))
 		return;;
 
 	TTypeId ttype;
@@ -1054,15 +1054,15 @@ void beforeDeleteTrigger(thread_db* tdbb, Record* record)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
-	if (EVL_field(tdbb, record, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
+	if (EVL_field(nullptr, record, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
 		ERR_post(Arg::Gds(isc_systrig_update));
 
 	MetaName oldSchemaName;
-	if (EVL_field(tdbb, record, f_trg_schema, &desc))
+	if (EVL_field(nullptr, record, f_trg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, oldSchemaName);
 
 	MetaName oldTriggerName;
-	if (EVL_field(tdbb, record, f_trg_name, &desc))
+	if (EVL_field(nullptr, record, f_trg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, oldTriggerName);
 
 	static const CachedRequestId requestCacheId;
@@ -1087,55 +1087,55 @@ void beforeUpdateTrigger(thread_db* tdbb, Record* orgRecord, Record* newRecord)
 	const auto transaction = tdbb->getTransaction();
 	dsc desc;
 
-	if (EVL_field(tdbb, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
+	if (EVL_field(nullptr, orgRecord, f_trg_sys_flag, &desc) && MOV_get_long(tdbb, &desc, 0) == 1)
 		ERR_post(Arg::Gds(isc_systrig_update));
 
 	MetaName oldSchemaName, newSchemaName;
-	if (EVL_field(tdbb, orgRecord, f_trg_schema, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, oldSchemaName);
-	if (EVL_field(tdbb, newRecord, f_trg_schema, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, newSchemaName);
 
 	MetaName oldTriggerName, newTriggerName;
-	if (EVL_field(tdbb, orgRecord, f_trg_name, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, oldTriggerName);
-	if (EVL_field(tdbb, newRecord, f_trg_name, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, newTriggerName);
 
 	MetaName oldRelationName, newRelationName;
-	if (EVL_field(tdbb, orgRecord, f_trg_rname, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, oldRelationName);
-	if (EVL_field(tdbb, newRecord, f_trg_rname, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, newRelationName);
 
 	std::optional<SLONG> oldTriggerSequence, newTriggerSequence;
-	if (EVL_field(tdbb, orgRecord, f_trg_seq, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_seq, &desc))
 		oldTriggerSequence = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(tdbb, newRecord, f_trg_seq, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_seq, &desc))
 		newTriggerSequence = MOV_get_long(tdbb, &desc, 0);
 
 	std::optional<bid> oldTriggerBlr, newTriggerBlr;
-	if (EVL_field(tdbb, orgRecord, f_trg_blr, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_blr, &desc))
 		oldTriggerBlr = *(bid*) desc.dsc_address;
-	if (EVL_field(tdbb, newRecord, f_trg_blr, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_blr, &desc))
 		newTriggerBlr = *(bid*) desc.dsc_address;
 
 	std::optional<SLONG> oldTriggerInactive, newTriggerInactive;
-	if (EVL_field(tdbb, orgRecord, f_trg_inactive, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_inactive, &desc))
 		oldTriggerInactive = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(tdbb, newRecord, f_trg_inactive, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_inactive, &desc))
 		newTriggerInactive = MOV_get_long(tdbb, &desc, 0);
 
 	std::optional<SLONG> oldFlags, newFlags;
-	if (EVL_field(tdbb, orgRecord, f_trg_flags, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_flags, &desc))
 		oldFlags = MOV_get_long(tdbb, &desc, 0);
-	if (EVL_field(tdbb, newRecord, f_trg_flags, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_flags, &desc))
 		newFlags = MOV_get_long(tdbb, &desc, 0);
 
 	std::optional<bid> oldDebugInfo, newDebugInfo;
-	if (EVL_field(tdbb, orgRecord, f_trg_debug_info, &desc))
+	if (EVL_field(nullptr, orgRecord, f_trg_debug_info, &desc))
 		oldDebugInfo = *(bid*) desc.dsc_address;
-	if (EVL_field(tdbb, newRecord, f_trg_debug_info, &desc))
+	if (EVL_field(nullptr, newRecord, f_trg_debug_info, &desc))
 		newDebugInfo = *(bid*) desc.dsc_address;
 
 	static const CachedRequestId requestCacheId;
@@ -1170,17 +1170,17 @@ void beforeDeleteUserPrivilege(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName schemaName;
-	if (!EVL_field(tdbb, record, f_prv_rel_schema, &desc))
+	if (!EVL_field(nullptr, record, f_prv_rel_schema, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, schemaName);
 
 	MetaName relationName;
-	if (!EVL_field(tdbb, record, f_prv_rname, &desc))
+	if (!EVL_field(nullptr, record, f_prv_rname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, relationName);
 
 	MetaName fieldName;
-	if (!EVL_field(tdbb, record, f_prv_fname, &desc))
+	if (!EVL_field(nullptr, record, f_prv_fname, &desc))
 		return;
 	MOV_get_metaname(tdbb, &desc, fieldName);
 
@@ -1218,7 +1218,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 	dsc desc;
 
 	MetaName grantor;
-	if (EVL_field(tdbb, record, f_prv_grantor, &desc))
+	if (EVL_field(nullptr, record, f_prv_grantor, &desc))
 		MOV_get_metaname(tdbb, &desc, grantor);
 
 	if (grantor.isEmpty())
@@ -1232,24 +1232,24 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 	}
 
 	MetaName user;
-	if (EVL_field(tdbb, record, f_prv_user, &desc))
+	if (EVL_field(nullptr, record, f_prv_user, &desc))
 		MOV_get_metaname(tdbb, &desc, user);
 
-	EVL_field(tdbb, record, f_prv_o_type, &desc);
+	EVL_field(nullptr, record, f_prv_o_type, &desc);
 	const SLONG objectType = MOV_get_long(tdbb, &desc, 0);
 
 	string privilege;
-	if (EVL_field(tdbb, record, f_prv_priv, &desc))
+	if (EVL_field(nullptr, record, f_prv_priv, &desc))
 		MOV_get_string(tdbb, &desc, privilege);
 
 	MetaName schemaName;
-	if (EVL_field(tdbb, record, f_prv_rel_schema, &desc))
+	if (EVL_field(nullptr, record, f_prv_rel_schema, &desc))
 		MOV_get_metaname(tdbb, &desc, schemaName);
 	else
 		schemaName = PUBLIC_SCHEMA;
 
 	MetaName relationName;
-	if (EVL_field(tdbb, record, f_prv_rname, &desc))
+	if (EVL_field(nullptr, record, f_prv_rname, &desc))
 		MOV_get_metaname(tdbb, &desc, relationName);
 
 	switch (objectType)
@@ -1257,7 +1257,7 @@ void beforeInsertUserPrivilege(thread_db* tdbb, Record* record)
 		case obj_relation:
 		{
 			MetaName fieldName;
-			if (EVL_field(tdbb, record, f_prv_fname, &desc))
+			if (EVL_field(nullptr, record, f_prv_fname, &desc))
 				MOV_get_metaname(tdbb, &desc, fieldName);
 
 			static const CachedRequestId request1CacheId;

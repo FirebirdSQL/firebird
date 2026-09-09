@@ -28,6 +28,7 @@
 #include "fb_types.h"
 
 #include "../common/classes/array.h"
+#include "../common/classes/objects_array.h"
 #include "../common/SimilarToRegex.h"
 #include "../jrd/ods.h"
 #include "../jrd/cch.h"
@@ -82,6 +83,16 @@ private:
 	struct IdxInfo
 	{
 		IdxInfo()
+		{}
+
+		explicit IdxInfo(MemoryPool& pool)
+			: m_desc(pool)
+		{}
+
+		IdxInfo(MemoryPool& pool, const IdxInfo& other)
+			: m_desc(pool, other.m_desc),
+			  m_recs(other.m_recs),
+			  m_condition(other.m_condition)
 		{}
 
 		index_desc m_desc;
@@ -157,7 +168,7 @@ private:
 	PageBitmap* vdr_chain_pages;			// 1 bit per visited record chain page
 	RecordBitmap* vdr_rel_records;			// 1 bit per valid record
 	RecordBitmap* vdr_idx_records;			// 1 bit per index item
-	Firebird::Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
+	Firebird::ObjectsArray<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
 	PageBitmap* vdr_page_bitmap;
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 

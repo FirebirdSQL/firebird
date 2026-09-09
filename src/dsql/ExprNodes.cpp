@@ -594,7 +594,7 @@ Firebird::string ValueListNode::internalPrint(NodePrinter& printer) const
 
 void ValueListNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
-	HalfStaticArray<dsc, INITIAL_CAPACITY> descs;
+	ObjectsArray<dsc> descs;
 	descs.resize(items.getCount());
 
 	unsigned i = 0;
@@ -3969,7 +3969,7 @@ void CoalesceNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 void CoalesceNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
-	Array<dsc> descs;
+	ObjectsArray<dsc> descs;
 	descs.resize(args->items.getCount());
 
 	unsigned i = 0;
@@ -5104,7 +5104,7 @@ void DecodeNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 
 void DecodeNode::getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc)
 {
-	Array<dsc> descs;
+	ObjectsArray<dsc> descs;
 	descs.resize(values->items.getCount());
 
 	unsigned i = 0;
@@ -5242,14 +5242,13 @@ DmlNode* DefaultNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* 
 			dsc desc;
 			try
 			{
-				if (!MET_get_relation_field(tdbb, pool, relationName, fieldName, &desc, &fieldInfo).isEmpty())
-				{
-					DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
-					node->field = FB_NEW_POOL(pool) jrd_fld(pool);
-					node->field->fld_default_value = fieldInfo.defaultValue;
+				MET_get_relation_field(tdbb, pool, relationName, fieldName, &desc, &fieldInfo);
 
-					return node;
-				}
+				DefaultNode* node = FB_NEW_POOL(pool) DefaultNode(pool, relationName, fieldName);
+				node->field = FB_NEW_POOL(pool) jrd_fld(pool);
+				node->field->fld_default_value = fieldInfo.defaultValue;
+
+				return node;
 			}
 			catch(const Firebird::Exception& e)
 			{
@@ -7260,7 +7259,7 @@ dsc* FieldNode::execute(thread_db* tdbb, Request* request) const
 	// In order to "map a null to a default" value (in EVL_field()), the relation block is referenced.
 	// Reference: Bug 10116, 10424
 
-	auto null = !EVL_field(tdbb, relation, record, fieldId, &impure->vlu_desc);
+	auto null = !EVL_field(relation, record, fieldId, &impure->vlu_desc);
 	if (itemInfo)
 		EVL_validate(tdbb, Item(Item::TYPE_FIELD, contextNum, fieldId), itemInfo, &impure->vlu_desc, null ? true : (impure->vlu_desc.dsc_flags & DSC_null));
 
@@ -12041,8 +12040,6 @@ dsc* SubQueryNode::execute(thread_db* tdbb, Request* request) const
 							currentDesc = currentDesc->dsc_next;
 						}
 					}
-
-					request->req_flags &= ~req_null;
 				}
 				else
 				{
@@ -12922,7 +12919,7 @@ ValueExprNode* SysFuncCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		if (node->function->setParamsFunc)
 		{
-			Array<dsc> tempDescs(items.getCount());
+			ObjectsArray<dsc> tempDescs;
 			tempDescs.resize(items.getCount());
 
 			Array<dsc*> argsArray(items.getCount());
@@ -13776,8 +13773,7 @@ void UdfCallNode::make(DsqlCompilerScratch* /*dsqlScratch*/, dsc* desc)
 	desc->setNullable(true);
 
 	if (!desc->isText())
-		// desc->dsc_ttype() = dsqlFunction->udf_sub_type;
-		desc->dsc_sub_type = dsqlFunction->udf_outputs[0].getSubType();
+		desc->dsc_sub_type = dsqlFunction->udf_sub_type;
 
 	if (desc->isText() || (desc->isBlob() && desc->getBlobSubType() == isc_blob_text))
 		desc->setTextType(dsqlFunction->udf_character_set_id);
@@ -14106,7 +14102,7 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 			throw;
 		}
 
-		auto fmtDesc = function->getOutputFormat()->fmt_desc.begin();
+		auto fmtDesc = func->getOutputFormat()->fmt_desc.begin();
 		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 		SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
 
@@ -14244,7 +14240,7 @@ ValueExprNode* UdfCallNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 			Arg::Gds(isc_dsql_command_err));
 	}
-	node->dsqlDesc = node->dsqlFunction->udf_outputs[0];
+	node->makeDsqlDesc(dsqlScratch);
 
 	return node;
 }
@@ -14865,7 +14861,7 @@ dsc* VariableNode::execute(thread_db* tdbb, Request* request) const
 
 			if (!isDescNull(*varImpure->vlu_desc.dsc_sub_first))
 			{
-				request->req_flags &= ~req_null;
+				isNull = false;
 				varImpure->vlu_desc.dsc_flags &= ~DSC_null;
 			}
 

@@ -5106,7 +5106,7 @@ string DeclarePackageTypeNode::internalPrint(NodePrinter& printer) const
 	return "DeclarePackageTypeNode";
 }
 
-void DeclarePackageTypeNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DeclarePackageTypeNode::checkPermission(thread_db* tdbb)
 {
 	// TODO: which type of privilege should we use?
 	SCL_check_create_access(tdbb, obj_domains, {});
@@ -5305,7 +5305,7 @@ void DeclarePackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlS
 		MetaName relationGeneratedName;
 		DYN_UTIL_generate_composite_type_relation_name(tdbb, relationGeneratedName);
 
-		DYN_UTIL_check_unique_name(tdbb, transaction, QualifiedName(relationGeneratedName, name.schema), obj_field);
+		DYN_UTIL_check_unique_name(tdbb, QualifiedName(relationGeneratedName, name.schema), obj_field);
 
 		dsql_fld* field = FB_NEW_POOL(*tdbb->getDefaultPool()) dsql_fld(*tdbb->getDefaultPool());
 		field->packageName = QualifiedName(name.package, name.schema);
@@ -5454,7 +5454,7 @@ string DropPackageTypeNode::internalPrint(NodePrinter& printer) const
 	return "DropPackageTypeNode";
 }
 
-void DropPackageTypeNode::checkPermission(thread_db* tdbb, jrd_tra* transaction)
+void DropPackageTypeNode::checkPermission(thread_db* tdbb)
 {
 	// SCL_check_domain(tdbb, name, SCL_drop);
 }
@@ -5492,7 +5492,7 @@ void DropPackageTypeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScra
 				Y IN RDB$RELATION_FIELDS
 				WITH Y.RDB$RELATION_NAME EQ compositeTypeRelationName.c_str()
 			{
-				if (!MET_lookup_relation(tdbb, QualifiedName(compositeTypeRelationName, "")))
+				if (!MetadataCache::getVersioned<Cached::Relation>(tdbb, QualifiedName(compositeTypeRelationName, ""), CacheFlag::AUTOCREATE))
 					ERASE Y;
 			}
 			END_FOR

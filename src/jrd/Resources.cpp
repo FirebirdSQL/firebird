@@ -70,13 +70,17 @@ jrd_rel* CachedResource<jrd_rel, RelationPermanent>::operator()(thread_db* tdbb)
 	return cacheElement->getVersioned(tdbb, cacheElement->isSystem() ? CacheFlag::NOSCAN : 0);
 }
 
+void hashDescriptor(Firebird::sha512& digest, const dsc& desc)
+{
+	digest.process(offsetof(dsc, dsc_sub_count) + sizeof(desc.dsc_sub_count), &desc);
+
+	for (const dsc* subDesc = desc.dsc_sub_first; subDesc; subDesc = subDesc->dsc_next)
+		hashDescriptor(digest, *subDesc);
+}
+
+
 void Format::hash(Firebird::sha512& digest) const
 {
-	static_assert(std::has_unique_object_representations_v<dsc>);
-
-	// Here is also supposed that in fmt_desc (i.e. Firebird::Array) all elements are located
-	// one after another starting with begin() position.
-	// If that became wrong this function to be modified.
-
-	digest.process(fmt_desc.getCount() * sizeof(dsc), fmt_desc.begin());
+	for (const auto& desc : fmt_desc)
+		hashDescriptor(digest, desc);
 }

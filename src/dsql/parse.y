@@ -7760,7 +7760,7 @@ insert
 			returning_clause
 		{
 			StoreNode* node = $$ = $1;
-			node->overrideClause = $3;
+			node->overrideClause = $3.toOptional();
 			node->dsqlValues = $5;
 			node->dsqlReturning = $6;
 		}

@@ -128,7 +128,7 @@ typedef struct dsc
 		return *this;
 	}
 
-	// TODO: make this function non-recursive if you want cyclic/self-reference descriptors
+	// AAM: make this function non-recursive if you want cyclic/self-reference descriptors
 	dsc& makeDeepCopy(dsc& l, const dsc& r, MemoryPool* p = nullptr)
 	{
 		l.dsc_dtype = r.dsc_dtype;
@@ -270,15 +270,16 @@ typedef struct dsc
 		return length;
 	}
 
+	// AAM: do not move around fields without Format::hash() adaptation
 	UCHAR	dsc_dtype = 0;
 	SCHAR	dsc_scale = 0;
 	USHORT	dsc_length = 0;
 	SSHORT	dsc_sub_type = 0;
 	USHORT	dsc_flags = 0;
 	UCHAR*	dsc_address = nullptr; // Used either as offset in a message or as a pointer
+	USHORT	dsc_sub_count = 0;
 	dsc*	dsc_sub_first = nullptr;
 	dsc*	dsc_next = nullptr;
-	USHORT	dsc_sub_count = 0;
 	MemoryPool* pool = nullptr;
 
 #ifdef __cplusplus
@@ -723,6 +724,7 @@ typedef struct dsc
 		dsc_address = address;
 	}
 
+	// TODO ROWTYPE think about adding subfields comparison
 	bool operator==(const dsc& v) const noexcept
 	{
 		return dsc_dtype == v.dsc_dtype &&
@@ -796,16 +798,6 @@ inline bool DSC_SAME(const dsc* d1, const dsc* d2) noexcept
 	if (d1->dsc_next && d2->dsc_next)
 		is_same &= DSC_SAME(d1->dsc_next, d2->dsc_next);
 
-		// UCHAR	dsc_dtype = 0;
-		// SCHAR	dsc_scale = 0;
-		// USHORT	dsc_length = 0;
-		// SSHORT	dsc_sub_type = 0;
-		// USHORT	dsc_flags = 0;
-		// UCHAR*	dsc_address = nullptr; // Used either as offset in a message or as a pointer
-		// dsc*	dsc_sub_first = nullptr;
-		// dsc*	dsc_next = nullptr;
-		// USHORT	dsc_sub_count = 0;
-		// MemoryPool* pool = nullptr;
 	return is_same;
 }
 

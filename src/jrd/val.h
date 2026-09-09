@@ -31,6 +31,7 @@
 
 #include "../include/fb_blk.h"
 #include "../common/classes/array.h"
+#include "../common/classes/objects_array.h"
 #include "../common/classes/TriState.h"
 #include "../jrd/intl_classes.h"
 #include "../jrd/MetaName.h"
@@ -119,6 +120,19 @@ struct impure_state
 
 struct impure_value
 {
+	impure_value() = default;
+
+	explicit impure_value(MemoryPool& p)
+		: vlu_desc(p), vlu_flags(0), vlu_string(nullptr), vlu_rowvalue(nullptr), vlu_misc{}
+	{
+	}
+
+	impure_value(MemoryPool& p, const impure_value& value)
+		: vlu_desc(p, value.vlu_desc), vlu_flags(value.vlu_flags),
+		  vlu_string(value.vlu_string), vlu_rowvalue(value.vlu_rowvalue), vlu_misc(value.vlu_misc)
+	{
+	}
+
 	struct PatternMatcherCache : pool_alloc_rpt<UCHAR>
 	{
 		PatternMatcherCache(ULONG aKeySize)
@@ -281,16 +295,10 @@ class Format : public pool_alloc<type_fmt>
 public:
 	Format(MemoryPool& p, int len)
 		: fmt_length(0), fmt_count(len), fmt_version(0),
-		  fmt_desc(p), fmt_defaults(p, fmt_count)
+		  fmt_desc(p), fmt_defaults(p)
 	{
 		fmt_desc.resize(fmt_count);
 		fmt_defaults.resize(fmt_count);
-
-		for (fmt_defaults_iterator impure = fmt_defaults.begin();
-			 impure != fmt_defaults.end(); ++impure)
-		{
-			memset(&*impure, 0, sizeof(*impure));
-		}
 	}
 
 	~Format()
@@ -309,10 +317,17 @@ public:
 
 	bool operator==(const Format& v) const
 	{
-		if ((fmt_length != v.fmt_length) || (fmt_count != v.fmt_count))
+		if ((fmt_length != v.fmt_length) || (fmt_count != v.fmt_count) ||
+			(fmt_desc.getCount() != v.fmt_desc.getCount()))
 			return false;
 
-		return fmt_desc == v.fmt_desc;
+		for (FB_SIZE_T i = 0; i < fmt_desc.getCount(); ++i)
+		{
+			if (!(fmt_desc[i] == v.fmt_desc[i]))
+				return false;
+		}
+
+		return true;
 	}
 
 	void hash(Firebird::sha512& digest) const;
@@ -321,12 +336,12 @@ public:
 	USHORT fmt_count;
 	USHORT fmt_version;
 	Firebird::ObjectsArray<dsc> fmt_desc;
-	Firebird::Array<impure_value> fmt_defaults;
+	Firebird::ObjectsArray<impure_value> fmt_defaults;
 
 	typedef Firebird::ObjectsArray<dsc>::iterator fmt_desc_iterator;
 	typedef Firebird::ObjectsArray<dsc>::const_iterator fmt_desc_const_iterator;
 
-	typedef Firebird::Array<impure_value>::iterator fmt_defaults_iterator;
+	typedef Firebird::ObjectsArray<impure_value>::iterator fmt_defaults_iterator;
 };
 
 

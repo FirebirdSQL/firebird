@@ -25,6 +25,7 @@
 #define JRD_MET_PROTO_H
 
 #include "../common/classes/array.h"
+#include "../common/classes/GenericMap.h"
 #include "../common/classes/TriState.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/Resources.h"
@@ -142,6 +143,7 @@ std::optional<ObjectType> MET_qualify_existing_name(Jrd::thread_db* tdbb, Jrd::Q
 bool MET_check_schema_exists(Jrd::thread_db* tdbb, const Jrd::MetaName& name);
 bool MET_get_ltt_index(Jrd::Attachment* attachment, const Jrd::QualifiedName& indexName,
 	Jrd::LocalTemporaryTable** outLtt = nullptr, Jrd::LocalTemporaryTable::Index** outIndex = nullptr);
-bool MET_get_composite_type(Jrd::thread_db*, MemoryPool&, const Jrd::QualifiedName&, dsc*, Jrd::MapFieldInfo* = nullptr);
+bool MET_get_composite_type(Jrd::thread_db*, MemoryPool&, const Jrd::QualifiedName&, dsc*,
+	Firebird::LeftPooledMap<Jrd::QualifiedNameMetaNamePair, Jrd::FieldInfo>* = nullptr);
 
 #endif // JRD_MET_PROTO_H

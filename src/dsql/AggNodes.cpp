@@ -1099,10 +1099,10 @@ void CustomAggNode::aggPass(thread_db* tdbb, Request* request, dsc* /*desc*/) co
 		if (inMsgLength)
 			memset(inMsg, 0, inMsgLength);
 
-		const dsc* fmtDesc = func->getInputFormat() ? func->getInputFormat()->fmt_desc.begin() : nullptr;
-
 		if (func->fun_inputs != 0)
 		{
+			auto fmtDesc = func->getInputFormat()->fmt_desc.begin();
+
 			for (auto& source : args->items)
 			{
 				const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
@@ -1167,7 +1167,7 @@ dsc* CustomAggNode::aggExecute(thread_db* tdbb, Request* request) const
 			throw;
 		}
 
-		const dsc* fmtDesc = func->getOutputFormat()->fmt_desc.begin();
+		auto fmtDesc = func->getOutputFormat()->fmt_desc.begin();
 		const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 		dsc desc = *fmtDesc;
 		desc.dsc_address = outMsg + argOffset;
@@ -1221,11 +1221,9 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 
 	memset(outMsg, 0, outMsgLength);
 
-	const dsc* inputFmtDesc = func->getInputFormat() ? func->getInputFormat()->fmt_desc.begin() : nullptr;
-
 	if (phase == AggregateFunctionPhase::ACCUMULATE && func->fun_inputs != 0)
 	{
-		const dsc* fmtDesc = inputFmtDesc;
+		auto fmtDesc = func->getInputFormat()->fmt_desc.begin();
 
 		for (auto& source : args->items)
 		{
@@ -1318,7 +1316,7 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 		throw;
 	}
 
-	const dsc* fmtDesc = func->getOutputFormat()->fmt_desc.begin();
+	auto fmtDesc = func->getOutputFormat()->fmt_desc.begin();
 	const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 	SSHORT* const nullPtr = reinterpret_cast<SSHORT*>(outMsg + nullOffset);
 

@@ -737,7 +737,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 				// the relation block is referenced.
 				// Reference: Bug 10116, 10424
 
-				if (EVL_field(m_tdbb, m_relation, record, tail->idx_field, &desc))
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
 				{
 					desc_ptr = &desc;
 
@@ -781,7 +781,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 				// the relation block is referenced.
 				// Reference: Bug 10116, 10424
 
-				if (EVL_field(m_tdbb, m_relation, record, tail->idx_field, &desc))
+				if (EVL_field(m_relation, record, tail->idx_field, &desc))
 				{
 					desc_ptr = &desc;
 
@@ -7618,7 +7618,7 @@ string print_key(thread_db* tdbb, jrd_rel* relation, index_desc* idx, Record* re
 				key += value;
 
 				dsc desc;
-				const bool notNull = EVL_field(tdbb, relation, record, field_id, &desc);
+				const bool notNull = EVL_field(relation, record, field_id, &desc);
 				value = DescPrinter(tdbb, notNull ? &desc : NULL, MAX_KEY_STRING_LEN, CS_METADATA).get();
 				key += " = " + value;
 

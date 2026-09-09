@@ -8605,6 +8605,7 @@ bool get_packaged_type_composite_fields(BurpGlobals* tdgbl, Coordinator* coord, 
 	// Eat up misc. records
 	burp_fld* field = NULL;
 	burp_fld** ptr = &relation->rel_fields;
+	USHORT id = 0;
 
 	rec_type record;
 	while (get_record(&record, tdgbl) != rec_data)
@@ -8619,9 +8620,9 @@ bool get_packaged_type_composite_fields(BurpGlobals* tdgbl, Coordinator* coord, 
 				COMMIT
 				// existing ON_ERROR continues past error, beck
 				ON_ERROR
-					BURP_print (false, 171, relation->rel_name.object.toQuotedString().c_str());
+					BURP_print (171, relation->rel_name.object.toQuotedString().c_str());
 					// msg 171: error committing metadata for relation %s
-					BURP_print_status (false, &tdgbl->status_vector);
+					BURP_print_status (&tdgbl->status_vector);
 					ROLLBACK;
 					ON_ERROR
 						general_on_error ();
@@ -8634,7 +8635,7 @@ bool get_packaged_type_composite_fields(BurpGlobals* tdgbl, Coordinator* coord, 
 			return true;
 
 		case rec_field:
-			*ptr = field = get_field (tdgbl, relation);
+			*ptr = field = get_field(tdgbl, relation, id++);
 			if (!field)
 				return false;
 			ptr = &field->fld_next;
