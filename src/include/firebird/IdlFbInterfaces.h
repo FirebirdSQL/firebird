@@ -3978,7 +3978,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 3u
+#define FIREBIRD_ICRYPT_KEY_CALLBACK_VERSION 4u
 
 	class ICryptKeyCallback : public IVersioned
 	{
@@ -4035,9 +4035,9 @@ namespace Firebird
 
 		template <typename StatusType> int getHashLength(StatusType* status)
 		{
-			if (cloopVTable->version < 3)
+			if (cloopVTable->version < 4)
 			{
-				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 3);
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
 				StatusType::checkException(status);
 				return -1;
 			}
@@ -4049,9 +4049,9 @@ namespace Firebird
 
 		template <typename StatusType> void getHashData(StatusType* status, void* hash)
 		{
-			if (cloopVTable->version < 3)
+			if (cloopVTable->version < 4)
 			{
-				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 3);
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
 				StatusType::checkException(status);
 				return;
 			}

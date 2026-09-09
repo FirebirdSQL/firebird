@@ -2412,7 +2412,7 @@ type
 	end;
 
 	ICryptKeyCallback = class(IVersioned)
-		const VERSION = 3;
+		const VERSION = 4;
 
 		function callback(dataLength: Cardinal; data: Pointer; bufferLength: Cardinal; buffer: Pointer): Cardinal;
 		procedure dummy1(status: IStatus);
@@ -8255,8 +8255,8 @@ end;
 
 function ICryptKeyCallback.getHashLength(status: IStatus): Integer;
 begin
-	if (vTable.version < 3) then begin
-		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 4);
 		Result := -1;
 	end
 	else begin
@@ -8267,8 +8267,8 @@ end;
 
 procedure ICryptKeyCallback.getHashData(status: IStatus; hash: Pointer);
 begin
-	if (vTable.version < 3) then begin
-		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 3);
+	if (vTable.version < 4) then begin
+		FbException.setVersionError(status, 'ICryptKeyCallback', vTable.version, 4);
 	end
 	else begin
 		CryptKeyCallbackVTable(vTable).getHashData(Self, status, hash);
@@ -17832,7 +17832,7 @@ initialization
 	IWireCryptPluginImpl_vTable.setSpecificData := @IWireCryptPluginImpl_setSpecificDataDispatcher;
 
 	ICryptKeyCallbackImpl_vTable := CryptKeyCallbackVTable.create;
-	ICryptKeyCallbackImpl_vTable.version := 3;
+	ICryptKeyCallbackImpl_vTable.version := 4;
 	ICryptKeyCallbackImpl_vTable.callback := @ICryptKeyCallbackImpl_callbackDispatcher;
 	ICryptKeyCallbackImpl_vTable.dummy1 := @ICryptKeyCallbackImpl_dummy1Dispatcher;
 	ICryptKeyCallbackImpl_vTable.dummy2 := @ICryptKeyCallbackImpl_dummy2Dispatcher;
