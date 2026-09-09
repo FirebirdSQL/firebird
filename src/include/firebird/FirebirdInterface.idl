@@ -944,6 +944,7 @@ version:		// 6.0, 5.0.2, 4.0.6
 	[stub defaultAction]
 	void dummy2();
 
+version:		// 6.0, 5.0.5, 4.0.8
 	// Produce something to be compared with other interface instance
 	[notImplemented(-1)]
 	int getHashLength(Status status);

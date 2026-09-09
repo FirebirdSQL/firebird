@@ -3780,7 +3780,7 @@ namespace Firebird
 		}
 
 	public:
-		static const unsigned VERSION = 3;
+		static const unsigned VERSION = 4;
 
 		unsigned callback(unsigned dataLength, const void* data, unsigned bufferLength, void* buffer)
 		{
@@ -3812,9 +3812,9 @@ namespace Firebird
 
 		template <typename StatusType> int getHashLength(StatusType* status)
 		{
-			if (cloopVTable->version < 3)
+			if (cloopVTable->version < 4)
 			{
-				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 3);
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
 				StatusType::checkException(status);
 				return -1;
 			}
@@ -3826,9 +3826,9 @@ namespace Firebird
 
 		template <typename StatusType> void getHashData(StatusType* status, void* hash)
 		{
-			if (cloopVTable->version < 3)
+			if (cloopVTable->version < 4)
 			{
-				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 3);
+				StatusType::setVersionError(status, "ICryptKeyCallback", cloopVTable->version, 4);
 				StatusType::checkException(status);
 				return;
 			}
