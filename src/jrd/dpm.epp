@@ -4348,8 +4348,6 @@ static void store_big_record(thread_db* tdbb,
 		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 }
 
-typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ULONG, ULONG> > > PagesMap;
-
 void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* orgPages, RelationPages* newPages)
 {
 	/**************************************
@@ -4361,12 +4359,11 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 	 * Functional description
 	 *	Copy data and blob pages from orgPages to newPages.
 	 * The main steps are:
-	 *  - allocate necessary number of pointer pages by extents.
-	 *  - allocate the rest of pointer pages by pages.
-	 *  - walking through PPs allocate DPs by pages or extents.
+	 *  - allocate necessary number of pointer pages by extents
+	 *  - allocate the rest of pointer pages by pages
+	 *  - walking through PPs allocate DPs by pages or extents
 	 *  - fix every PP by correcting DP numbers and ppg_next pointer and build a map
-	 *  - walking through the map and copy every DP to the new one by fixing
-	 *    b_page and f_page numbers.
+	 *  - walk through the map and copy every DP to the new one by fixing b_page and f_page numbers
 	 * We expect that DPM_scan_pages has been called.
 	 *
 	 **************************************/
@@ -4393,33 +4390,25 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 	CCH_RELEASE(tdbb, &newWindow);
 	CCH_RELEASE(tdbb, &oldWindow);
 
-	PagesMap pagesMap;
+	typedef Pair<NonPooled<ULONG, ULONG> > PagesPair;
+	GenericMap<PagesPair> dataPagesMap;
 
 	const ULONG ppCount = orgPages->getPointerPageCount();
 	HalfStaticArray<ULONG, 256> newPointerPages(ppCount);
 
 	ULONG sequence = 0;
 
-	// Allocate PPs by extents
-	if (ppCount > PAGES_IN_EXTENT)
+	// Allocate pointer pages
+	while (sequence < ppCount)
 	{
-		for (; sequence < ppCount - PAGES_IN_EXTENT; sequence += PAGES_IN_EXTENT)
-		{
-			PAG_allocate_pages(tdbb, &newWindow, PAGES_IN_EXTENT, true);
-			const ULONG firstPage = newWindow.win_page.getPageNum();
-			CCH_RELEASE(tdbb, &newWindow);
-			for (unsigned i = 0; i < PAGES_IN_EXTENT; i++)
-				newPointerPages.add(firstPage + i);
-		}
-	}
-
-	// Allocate the rest of PPs by pages
-	for (; sequence < ppCount; sequence++)
-	{
-		PAG_allocate_pages(tdbb, &newWindow, 1, false);
-		const ULONG page = newWindow.win_page.getPageNum();
+		const unsigned toAlloc = MIN(ppCount - sequence, PAGES_IN_EXTENT);
+		PAG_allocate_pages(tdbb, &newWindow, toAlloc, true);
+		const ULONG firstPage = newWindow.win_page.getPageNum();
 		CCH_RELEASE(tdbb, &newWindow);
-		newPointerPages.add(page);
+
+		for (unsigned i = 0; i < toAlloc; i++)
+			newPointerPages.add(firstPage + i);
+		sequence += toAlloc;
 	}
 
 	fb_assert(newPointerPages.getCount() == ppCount);
@@ -4435,7 +4424,8 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 		const ULONG newPage = newWindow.win_page = newPointerPages[sequence];
 		pointer_page* newPP = (pointer_page*) CCH_FETCH(tdbb, &newWindow, LCK_write, pag_undefined);
 
-		// Copy and replace useful markers from orgPages
+		// Remap helper page markers from orgPages to newPages
+
 		if (orgPages->rel_slot_space == oldPage)
 			newPages->rel_slot_space = newPage;
 
@@ -4452,18 +4442,22 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 
 		if (sequence < ppCount - 1)
 		{
-			// Fix the pointer to the next PP
 			newPP->ppg_next = newPointerPages[sequence + 1];
+			fb_assert(!(newPP->ppg_header.pag_flags & ppg_eof));
+			newPP->ppg_header.pag_flags &= ~ppg_eof;
 		}
 		else
 		{
 			// We rely that rel_pages vector is correct and nobody extend relation when we copy its data!!!
-			fb_assert(oldPP->ppg_header.pag_flags & ppg_eof);
+			fb_assert(!newPP->ppg_next);
+			newPP->ppg_next = 0;
+			fb_assert(newPP->ppg_header.pag_flags & ppg_eof);
+			newPP->ppg_header.pag_flags |= ppg_eof;
 		}
 
-		CCH_RELEASE(tdbb, &oldWindow);
+		CCH_RELEASE_TAIL(tdbb, &oldWindow);
 
-		// Allocate DPs
+		// Allocate data pages
 		if (!sequence && newPP->ppg_count < PAGES_IN_EXTENT)
 		{
 			// Allocate by pages
@@ -4471,22 +4465,22 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 			{
 				if (newPP->ppg_page[slot])
 				{
-					PAG_allocate(tdbb, &dpWindow);
+					DPM_allocate(tdbb, &dpWindow);
 					// Replace slots by the new data page numbers
 					const ULONG newPageNumber = dpWindow.win_page.getPageNum();
 					CCH_RELEASE(tdbb, &dpWindow);
-					pagesMap.put(newPP->ppg_page[slot], newPageNumber);
+					dataPagesMap.put(newPP->ppg_page[slot], newPageNumber);
 					newPP->ppg_page[slot] = newPageNumber;
 				}
 			}
 		}
 		else
 		{
-			// Allocated by extents
+			// Allocate by extents
 			UCHAR* bits = (UCHAR*) (newPP->ppg_page + dbb->dbb_dp_per_pp);
 			for (USHORT slot = 0; slot < newPP->ppg_count; slot += PAGES_IN_EXTENT)
 			{
-				// We are on the new extent. Check it for empty.
+				// We are on the new extent. Check it for empty slots.
 				unsigned count = 0;
 				for (unsigned i = 0; i < PAGES_IN_EXTENT; i++)
 				{
@@ -4497,55 +4491,75 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 					else
 						newPP->ppg_min_space = MIN(newPP->ppg_min_space, slot + i);
 				}
+				fb_assert(count == PAGES_IN_EXTENT);
+
 				// If new extent is empty go to the next
 				if (!count)
 					continue;
 
 				PAG_allocate_pages(tdbb, &dpWindow, PAGES_IN_EXTENT, true);
-				// Replace slots by the new data page numbers
+
 				const ULONG newPageNumber = dpWindow.win_page.getPageNum();
 				CCH_RELEASE(tdbb, &dpWindow);
 
-				// All non empty slots we replace by new data page numbers in the allocated extent.
+				// Replace all non-empty slots by new data page numbers in the allocated extent.
 				// Check if there are empty slots. In general case all slots in extent must be used.
-				// If such slot is we remove it and replace by empty data page.
+				// If an empty slot exists we remove it and replace by empty data page.
 				for (unsigned i = 0; i < PAGES_IN_EXTENT; i++)
 				{
-					if (!newPP->ppg_page[slot + i])
+					if (newPP->ppg_page[slot + i])
+						dataPagesMap.put(newPP->ppg_page[slot + i], newPageNumber + i);
+					else
 					{
-						// Original PP has empty slot here. We replace it by empty data page
+						// Original PP has empty slot here. We replace it by an empty data page.
+						PPG_DP_BIT_CLEAR(bits, slot + i, PPG_DP_ALL_BITS);
 						PPG_DP_BIT_SET(bits, slot + i, ppg_dp_empty);
 						dpWindow.win_page = newPageNumber + i;
 						data_page* dpage = (data_page*) CCH_fake(tdbb, &dpWindow, 1);
 						dpage->dpg_sequence = sequence * dbb->dbb_dp_per_pp + slot + i;
 						dpage->dpg_relation = relation->getId();
 						dpage->dpg_header.pag_type = pag_data;
-						CCH_RELEASE(tdbb, &dpWindow);
+						CCH_RELEASE_TAIL(tdbb, &dpWindow);
 						newPP->ppg_count = MAX(newPP->ppg_count, slot + i);
 					}
-					else
-						pagesMap.put(newPP->ppg_page[slot + i], newPageNumber + i);
 
 					newPP->ppg_page[slot + i] = newPageNumber + i;
 				}
 			}
 		}
 
-		CCH_RELEASE(tdbb, &newWindow);
+		CCH_RELEASE_TAIL(tdbb, &newWindow);
 		sequence++;
 	}
 
-	// Now we have copied all PPs, allocated all DPs and got an allocation map
-	// We can copy and fix every DP. We will use sorted order in the map to optimize reads.
-	PagesMap::Accessor dPage(&pagesMap);
+	// At this point we have copied all PPs, allocated all DPs and created the allocation map.
+	// Now we copy and fix every DP. Do it in the natural map order (sorted by page number) to optimize reads.
+	Firebird::Array<PagesPair> dataPagesToCopy(dataPagesMap.count());
 
-	for (bool found = dPage.getFirst(); found; found = dPage.getNext())
+	auto getAllocatedPage = [&](win* window, ULONG page)
 	{
-		const ULONG oldPage = dPage.current()->first;
-		const ULONG newPage = dPage.current()->second;
+		ULONG newPage;
 
-		if (orgPages->rel_last_free_pri_dp == oldPage)
-			newPages->rel_last_free_pri_dp = newPage;
+		if (!dataPagesMap.get(page, newPage))
+		{
+			DPM_allocate(tdbb, window);
+			newPage = window->win_page.getPageNum();
+			CCH_RELEASE(tdbb, window);
+			dataPagesMap.put(page, newPage);
+			dataPagesToCopy.add(PagesPair(page, newPage));
+		}
+
+		return newPage;
+	};
+
+	auto accessor = dataPagesMap.accessor();
+	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+		dataPagesToCopy.add(*accessor.current());
+
+	for (unsigned i = 0; i < dataPagesToCopy.getCount(); i++)
+	{
+		const ULONG oldPage = dataPagesToCopy[i].first;
+		const ULONG newPage = dataPagesToCopy[i].second;
 
 		// Copy data page
 		oldWindow.win_page = oldPage;
@@ -4558,7 +4572,7 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 		memcpy(newDP, oldDP, dbb->dbb_page_size);
 		newDP->dpg_header.pag_pageno = newPage;
 
-		CCH_RELEASE(tdbb, &oldWindow);	// We don't need old datapage anymore
+		CCH_RELEASE_TAIL(tdbb, &oldWindow);	// We don't need old datapage anymore
 
 		// Now we need to fix every b_page and f_page pointers in record versions
 		const Ods::data_page::dpg_repeat* index = newDP->dpg_rpt;
@@ -4568,31 +4582,36 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 			if (index->dpg_offset)
 			{
 				Ods::rhd* header = (rhd*) ((SCHAR*) newDP + index->dpg_offset);
-				// If the record is blob we need to copy all its pages
+
+				// If the record is a blob we need to copy all its pages
 				if (header->rhd_flags & rhd_blob)
 				{
 					blh* blob = (blh*) header;
 					if (blob->blh_level == 0)
 						continue;
 
+					fb_assert(blob->blh_level == 1 || blob->blh_level == 2);
+
 					ULONG* page1 = blob->blh_page;
 					const ULONG* const end1 = page1 + (index->dpg_length - BLH_SIZE) / sizeof(ULONG);
 
 					for (; page1 < end1; page1++)
 					{
-						// Copy blob page with blob page numbers
+						// It's the level 1 or level 2 blob, copy its content
 						WIN oldWindow1(orgPages->toPageNumber(*page1));
 						WIN newWindow1(newPages->getPageSpaceId());
 						blob_page* oldBlobPage1 = (blob_page*) CCH_FETCH(tdbb, &oldWindow1, LCK_read, pag_blob);
-						blob_page* newBlobPage1 = (blob_page*) PAG_allocate(tdbb, &newWindow1);
+						blob_page* newBlobPage1 = (blob_page*) DPM_allocate(tdbb, &newWindow1);
 						memcpy(newBlobPage1, oldBlobPage1, dbb->dbb_page_size);
+						// Fix blob page number on newDP
 						*page1 = newWindow1.win_page.getPageNum();
 						newBlobPage1->blp_header.pag_pageno = *page1;
 						CCH_RELEASE_TAIL(tdbb, &oldWindow1);
 
 						if (blob->blh_level == 2)
 						{
-							// Fix blob page numbers and copy other pages
+							// It's a level 2 blob. newBlobPage1 contains numbers of pages with blob data.
+							// Fix blob page numbers and copy pages of this level.
 							ULONG* page2 = newBlobPage1->blp_page;
 							const ULONG* const end2 = page2 + ((newBlobPage1->blp_length) / sizeof(ULONG));
 
@@ -4601,8 +4620,9 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 								WIN oldWindow2(orgPages->toPageNumber(*page2));
 								WIN newWindow2(newPages->getPageSpaceId());
 								blob_page* oldBlobPage2 = (blob_page*) CCH_FETCH(tdbb, &oldWindow2, LCK_read, pag_blob);
-								blob_page* newBlobPage2 = (blob_page*) PAG_allocate(tdbb, &newWindow2);
+								blob_page* newBlobPage2 = (blob_page*) DPM_allocate(tdbb, &newWindow2);
 								memcpy(newBlobPage2, oldBlobPage2, dbb->dbb_page_size);
+								// Fix page number on newBlobPage1
 								*page2 = newWindow2.win_page.getPageNum();
 								newBlobPage2->blp_header.pag_pageno = *page2;
 								CCH_RELEASE_TAIL(tdbb, &oldWindow2);
@@ -4617,30 +4637,37 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 				{
 					if (header->rhd_b_page)
 					{
-						// If backversion page number is the same as primary we don't need mapping
-						if (header->rhd_b_page == oldPage)
-							header->rhd_b_page = newPage;
-						else
-						{
-							const bool r = pagesMap.get(header->rhd_b_page, header->rhd_b_page);
-							fb_assert(r);	// Maybe to drop bugcheck?
-						}
+						// If backversion page number is the same as primary then we don't need mapping
+						header->rhd_b_page = (header->rhd_b_page == oldPage) ? newPage :
+							getAllocatedPage(&dpWindow, header->rhd_b_page);
 					}
+
 					if (header->rhd_flags & rhd_incomplete)
 					{
-						Ods::rhdf* fheader = (rhdf*) header;
-						if (fheader->rhdf_f_page)
-						{
-							const bool r = pagesMap.get(fheader->rhdf_f_page, header->rhd_b_page);
-							fb_assert(r);	// Maybe to drop bugcheck?
-						}
+						const auto fragmentHeader = (rhdf*) header;
+						if (fragmentHeader->rhdf_f_page)
+							fragmentHeader->rhdf_f_page = getAllocatedPage(&dpWindow, fragmentHeader->rhdf_f_page);
 					}
 				}
 			}
 		}
 
-		CCH_RELEASE(tdbb, &newWindow);
+		CCH_RELEASE_TAIL(tdbb, &newWindow);
 	}
+
+	// Now dataPagesMap is full and we can remap helper page markers from orgPages to newPages
+
+	auto remapDataPage = [&dataPagesMap](ULONG number, ULONG& result)
+	{
+		if (number && !dataPagesMap.get(number, result))
+		{
+			result = 0; // the page must be found, but zero page number is an acceptable workaround
+			fb_assert(false);
+		}
+	};
+
+	remapDataPage(orgPages->rel_last_free_pri_dp, newPages->rel_last_free_pri_dp);
+	remapDataPage(orgPages->rel_last_free_blb_dp, newPages->rel_last_free_blb_dp);
 
 	// Add pages RDB$PAGES for the new relation
 

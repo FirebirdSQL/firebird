@@ -550,6 +550,7 @@ PAG PAG_allocate_pages(thread_db* tdbb, WIN* window, unsigned cntAlloc, bool ali
 					pipMin = lastBit;
 
 				// assume PAGES_IN_EXTENT == 8
+				static_assert(PAGES_IN_EXTENT == 8);
 				if (i == 7 && *bytes == 0xFF && pipExtent > lastBit - 7)
 					pipExtent = lastBit - 7;
 
