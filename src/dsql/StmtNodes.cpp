@@ -2261,7 +2261,6 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 		return relation;
 
 	const auto dbb = tdbb->getDatabase();
-	const auto pageSpaceId = dbb->dbb_page_manager.getTempPageSpaceID(tdbb);
 
 	auto& pool = request ? *request->req_pool : *tdbb->getDefaultPool();
 

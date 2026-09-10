@@ -9086,15 +9086,14 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 			(ltt->relationType == rel_temp_preserve ? REL_temp_conn : REL_temp_tran);
 
 		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, permRel);
+		versRel->rel_current_fmt = 1;
+		versRel->rel_dbkey_length = 8;
+		versRel->setPageSpaceId(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
+		DPM_create_relation_pages(tdbb, versRel->getPermanent(), versRel->getBasePages());
+
 		permRel->storeObject(tdbb, versRel, CacheFlag::NOCOMMIT);
 		permRel.release();
 		relation = versRel.release();
-
-		relation->setPageSpaceId(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
-		DPM_create_relation_pages(tdbb, relation->getPermanent(), relation->getBasePages());
-
-		relation->rel_current_fmt = 1;
-		relation->rel_dbkey_length = 8;
 	}
 	else if (!commitChanges)
 	{
@@ -9108,6 +9107,7 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		versRel->rel_dbkey_length = relation->rel_dbkey_length;
 		versRel->setPages(relation);
 		relation->getPermanent()->storeObject(tdbb, versRel, CacheFlag::NOCOMMIT);
+
 		relation = versRel.release();
 	}
 
@@ -12164,9 +12164,6 @@ void DropRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch
 		// Free any memory associated with the relation's garbage collection bitmap
 		if (dbb->dbb_garbage_collector)
 			dbb->dbb_garbage_collector->removeRelation(relation->getId());
-
-		if (relation->isTemporary())
-			relation->getPermanent()->deletePages(tdbb);
 
 		const auto relPages = relation->getBasePages();
 

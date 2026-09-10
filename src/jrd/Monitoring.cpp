@@ -609,6 +609,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 			break;
 		case rel_mon_ts_stats:
 			buffer = ts_stat_buffer;
+			break;
 		case rel_mon_local_temp_tables:
 			buffer = local_temp_tables_buffer;
 			break;

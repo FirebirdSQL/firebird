@@ -51,11 +51,8 @@ Lock* RLCK_reserve_relation(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rela
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 
-	if ((transaction->tra_flags & TRA_system) ||
-		(relation->getPermanent()->rel_flags & REL_temp_ltt))
-	{
+	if ((transaction->tra_flags & TRA_system) || !relation || relation->isLTT())
 		return nullptr;
-	}
 
 	// hvlad: virtual relations are always writable, see below for the other rules
 
