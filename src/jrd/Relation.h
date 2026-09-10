@@ -322,9 +322,9 @@ public:
 	static_assert(sizeof(InstanceId) >= sizeof(AttNumber), "InstanceId must fit AttNumber");
 
 	ULONG rel_data_pages = 0;			// count of relation data pages
-	ULONG rel_slot_space = 0;			// lowest pointer page with slot space
-	ULONG rel_pri_data_space = 0;		// lowest pointer page with primary data page space
-	ULONG rel_sec_data_space = 0;		// lowest pointer page with secondary data page space
+	ULONG rel_slot_space = 0;			// lowest pointer page sequence with slot space
+	ULONG rel_pri_data_space = 0;		// lowest pointer page sequence with primary data page space
+	ULONG rel_sec_data_space = 0;		// lowest pointer page sequence with secondary data page space
 	ULONG rel_last_free_pri_dp = 0;		// last primary data page found with space
 	ULONG rel_last_free_blb_dp = 0;		// last blob data page found with space
 
