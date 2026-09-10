@@ -648,7 +648,8 @@ static bool assert_gc_enabled(const jrd_tra* transaction, const jrd_rel* relatio
 	if (!lock)
 		return false;
 
-	return (lock->lck_physical == LCK_SW) || (lock->lck_physical == LCK_EX);
+	// SW, PW, EX modes are incompatible with PR that's taken by the online validation
+	return (lock->lck_physical >= LCK_SW);
 }
 #endif //DEV_BUILD
 
