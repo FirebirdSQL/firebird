@@ -191,6 +191,28 @@ public:
 		return ts;
 	}
 
+	inline bool operator>(const NoThrowTimeStamp& rhs) const
+	{
+		const auto rhsValue = rhs.value();
+
+		if (mValue.timestamp_date > rhsValue.timestamp_date)
+			return true;
+		if (mValue.timestamp_date < rhsValue.timestamp_date)
+			return false;
+		return mValue.timestamp_time > rhsValue.timestamp_time;
+	};
+
+	inline bool operator<(const NoThrowTimeStamp& rhs) const
+	{
+		const auto rhsValue = rhs.value();
+
+		if (mValue.timestamp_date < rhsValue.timestamp_date)
+			return true;
+		if (mValue.timestamp_date > rhsValue.timestamp_date)
+			return false;
+		return mValue.timestamp_time < rhsValue.timestamp_time;
+	};
+
 private:
 	ISC_TIMESTAMP mValue;
 

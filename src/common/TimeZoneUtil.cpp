@@ -1055,6 +1055,36 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::dateToTimeStampTz(const ISC_DATE& date, Callbacks
 	return tsTz;
 }
 
+
+int TimeZoneUtil::compareTimeStamps(ISC_TIMESTAMP_TZ lhs, ISC_TIMESTAMP_TZ rhs)
+{
+	if (lhs.time_zone != rhs.time_zone)
+	{
+		localTimeStampToUtc(lhs);
+		localTimeStampToUtc(rhs);
+	}
+
+	return compareUtcTimeStamps(lhs.utc_timestamp, rhs.utc_timestamp);
+}
+
+int TimeZoneUtil::compareUtcTimeStamps(const ISC_TIMESTAMP lhs, const ISC_TIMESTAMP rhs)
+{
+	const NoThrowTimeStamp leftTimestamp(lhs);
+	const NoThrowTimeStamp rightTimestamp(rhs);
+	if (leftTimestamp > rightTimestamp)
+	{
+		return 1;
+	}
+	else if (leftTimestamp < rightTimestamp)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
 //-------------------------------------
 
 TimeZoneRuleIterator::TimeZoneRuleIterator(USHORT id, const ISC_TIMESTAMP_TZ& aFrom, const ISC_TIMESTAMP_TZ& aTo)
