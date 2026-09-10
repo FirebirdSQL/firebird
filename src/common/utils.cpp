@@ -1638,4 +1638,16 @@ FbShutdown::~FbShutdown()
 	fb_shutdown(0, reason);
 }
 
+bool isLoopbackAddress(const std::string_view address)
+{
+	// In case of embedded
+	if (address.empty())
+		return true;
+
+	static constexpr std::string_view ipv4loopback = "127.0.0.1/";
+	static constexpr std::string_view ipv6loopback = "::1/";
+
+	return address.starts_with(ipv4loopback) || address.starts_with(ipv6loopback);
+}
+
 } // namespace fb_utils

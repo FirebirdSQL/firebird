@@ -37,10 +37,10 @@ namespace Jrd {
 class thread_db;
 class jrd_tra;
 
-// Lock relation with protected_read level or raise existing relation lock
-// to this level to ensure nobody can write to this relation.
+// Prevent concurrent transactions from modification of relation data.
+// To do it, upgrade existing relation lock to PR level at least.
+// Note, existing lock level should not be lowered.
 // Used when new index is built.
-// releaseLock set to true if there was no existing lock before
 class ProtectRelations
 {
 public:
@@ -64,7 +64,8 @@ public:
 
 	~ProtectRelations()
 	{
-		unlock();
+		if (m_release)
+			unlock();
 	}
 
 	void addRelation(jrd_rel* relation)
@@ -90,19 +91,19 @@ public:
 
 	void unlock()
 	{
-		if (m_release)
-		{
-			for (auto& item : m_locks)
-				item.releaseLock(m_tdbb, m_transaction);
-		}
+		for (auto& item : m_locks)
+			item.releaseLock(m_tdbb, m_transaction);
 	}
 
 private:
 	struct RelationLock
 	{
-		explicit RelationLock(jrd_rel* relation = nullptr)
-			: m_relation(relation)
-		{}
+		RelationLock(jrd_rel* relation = nullptr) :
+			m_relation(relation),
+			m_lock(nullptr),
+			m_level(LCK_none)
+		{
+		}
 
 		void takeLock(thread_db* tdbb, jrd_tra* transaction);
 		void releaseLock(thread_db* tdbb, jrd_tra* transaction);
@@ -113,9 +114,9 @@ private:
 		}
 
 		jrd_rel* m_relation;
-		Lock* m_lock = nullptr;
-		bool m_release = false;
-	};
+		Lock* m_lock;
+		UCHAR m_level;		// original lock level
+};
 
 	thread_db* const m_tdbb;
 	jrd_tra* const m_transaction;

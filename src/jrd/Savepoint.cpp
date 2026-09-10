@@ -852,34 +852,39 @@ void AutoSavePoint::rollback(bool preserveLocks)
 
 // StableCursorSavePoint implementation
 
-StableCursorSavePoint::StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool start)
+StableCursorSavePoint::StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool shouldStart)
 	: m_tdbb(tdbb), m_transaction(trans), m_number(0)
 {
-	if (!start)
-		return;
-
-	if (trans->tra_flags & TRA_system)
-		return;
-
-	if (!trans->tra_save_point)
-		return;
-
-	const auto savepoint = trans->startSavepoint();
-	m_number = savepoint->getNumber();
+	if (shouldStart)
+		m_number = startSavepoint(trans);
 }
 
+SavNumber StableCursorSavePoint::startSavepoint(jrd_tra* trans)
+{
+	if (!trans || (trans->tra_flags & TRA_system) || !trans->tra_save_point)
+		return 0;
+
+	return trans->startSavepoint()->getNumber();
+}
+
+void StableCursorSavePoint::releaseSavepoint(thread_db* tdbb, jrd_tra* trans, SavNumber& number)
+{
+	if (!number || !trans)
+	{
+		number = 0;
+		return;
+	}
+
+	while (trans->tra_save_point && trans->tra_save_point->getNumber() >= number)
+	{
+		fb_assert(!trans->tra_save_point->isChanging());
+		trans->releaseSavepoint(tdbb);
+	}
+
+	number = 0;
+}
 
 void StableCursorSavePoint::release()
 {
-	if (!m_number)
-		return;
-
-	while (m_transaction->tra_save_point &&
-		m_transaction->tra_save_point->getNumber() >= m_number)
-	{
-		fb_assert(!m_transaction->tra_save_point->isChanging());
-		m_transaction->releaseSavepoint(m_tdbb);
-	}
-
-	m_number = 0;
+	releaseSavepoint(m_tdbb, m_transaction, m_number);
 }

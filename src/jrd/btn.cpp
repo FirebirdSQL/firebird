@@ -494,11 +494,17 @@ UCHAR* IndexNode::writeNode(UCHAR* pagePointer, bool leafNode, bool withData)
 				else
 				{
 					*pagePointer++ = tmp | 0x80;
+					tmp = (number & 0xFF);	// allow 41 bit
+					*pagePointer++ = tmp;
+
+/***
+					*pagePointer++ = tmp | 0x80;
 					tmp = (number & 0x7F);
 					number >>= 7; //40
 					if (number == 0) {
 						*pagePointer++ = tmp;
 					}
+***/
 /*
 			Enable this if you need more bits in record number
 						else

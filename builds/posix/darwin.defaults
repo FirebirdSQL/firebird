@@ -20,7 +20,7 @@
 # Options
 #FirebirdInstallPrefix=
 LIB_BUNDLE_OPTIONS=$(LD_FLAGS) -bundle
-LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib
+LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib $(call LINK_DARWIN_RPATH,..)
 LIB_LINK_SONAME:=-current_version @FIREBIRD_VERSION@ -compatibility_version @FIREBIRD_VERSION@
 LIB_LINK_MAPFILE=-Wl,-exported_symbols_list,$(1)
 
@@ -36,14 +36,7 @@ STATIC_CXX_SUPPORT = -lsupc++ $(GCCS) -lgcc_eh -lSystem
 
 INLINE_EDIT_SED:= -i ""
 
-# GNU objcopy cannot rewrite Mach-O object/archive files; llvm-objcopy can
-# (and supports --redefine-syms on Mach-O). Apple's own `nm` output is
-# compatible with the --defined-only/-g flags used by the comprehensive
-# symbol rename in the static client build.
-OBJCOPY = llvm-objcopy
-
-# Mach-O slim step. vers.sh's platform_darwin output already emits symbols
-# with a leading underscore, and the seeds flow through the script's
-# symbol-token parser unchanged. The slim itself is driven by Apple ld64's
-# -Wl,-map output (parsed by the same sed regex as the GNU -Wl,--cref path).
+# Mach-O static-client processing uses native ld64. The exported symbols list
+# both retains the public API and localizes all other definitions, so no
+# external objcopy-compatible tool is needed.
 STATIC_CLIENT_SLIM_MODE = darwin

@@ -828,7 +828,8 @@ public:
 		return true;
 	}
 
-	void setLtt(thread_db* tdbb, LocalTemporaryTable::Index* ltt);
+	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+		USHORT segmentCount, bool inactive = false);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 
@@ -982,7 +983,11 @@ public:
 			dropTempPages(tdbb);
 	}
 
-	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
+	// void makeLocks(thread_db* tdbb, Cached::Relation* relation);		// hvlad: not implemented
+	static constexpr USHORT getRelLockKeyLength() noexcept;
+	Lock* createLock(thread_db* tdbb, lck_t, bool);
+	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);
+
 	void extFile(thread_db* tdbb, const TEXT* file_name);		// impl in ext.cpp
 
 	IndexVersion* lookup_index(thread_db* tdbb, MetaId id, ObjectBase::Flag flags);

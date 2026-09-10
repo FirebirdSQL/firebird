@@ -75,7 +75,15 @@ Remote_Client:= $(call dirObjects,remote/client) $(call dirObjects,auth/SecureRe
 Remote_Server_Objects:= $(Remote_Common) $(Remote_Server)
 Remote_Client_Objects:= $(Remote_Common) $(Remote_Client)
 
+# The static client uses a separate remote client interface object to register
+# plugins that are compiled into the static archive without changing the
+# shared client library's plugin loading behavior.
+Static_Client_Interface_Object:= $(OBJ)/static-client/remote/client/interface.o
+Static_Client_Remote_Client_Objects:= $(filter-out $(OBJ)/remote/client/interface.o,$(Remote_Client_Objects)) \
+	$(Static_Client_Interface_Object)
+
 AllObjects += $(Remote_Common) $(Remote_Server) $(Remote_Client)
+AllObjects += $(Static_Client_Interface_Object)
 
 
 # Chacha plugin

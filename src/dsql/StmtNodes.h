@@ -44,6 +44,7 @@ class RecordBuffer;
 class RelationSourceNode;
 class SelectNode;
 class GeneratorItem;
+struct index_desc;
 
 
 class ExceptionItem final : public Firebird::PermanentStorage, public Printable
@@ -373,6 +374,28 @@ public:
 class DeclareLocalTableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>
 {
 public:
+	struct Index
+	{
+		explicit Index(MemoryPool& pool)
+			: name(pool),
+			  fieldIds(pool)
+		{
+		}
+
+		Index(MemoryPool& pool, const Index& other)
+			: name(pool, other.name),
+			  fieldIds(pool, other.fieldIds),
+			  unique(other.unique),
+			  descending(other.descending)
+		{
+		}
+
+		MetaName name;
+		Firebird::Array<USHORT> fieldIds;
+		bool unique = false;
+		bool descending = false;
+	};
+
 	struct Impure
 	{
 		RecordBuffer* recordBuffer;
@@ -383,7 +406,8 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool),
 		  dsqlName(pool),
 		  notNullFields(pool),
-		  fieldNames(pool)
+		  fieldNames(pool),
+		  indexes(pool)
 	{
 	}
 
@@ -408,6 +432,9 @@ public:
 
 	Impure* getImpure(thread_db* tdbb, Request* request, bool createWhenDead = true) const;
 	jrd_rel* getRelation(thread_db* tdbb, Request* request) const;
+	void getIndexDescription(thread_db* tdbb, FB_SIZE_T indexId, index_desc* idx) const;
+	void createFrameIndexes(thread_db* tdbb, Request* request) const;
+	void createFrameIndex(thread_db* tdbb, FB_SIZE_T indexId, jrd_tra* transaction) const;
 	void reset(thread_db* tdbb, Request* request) const;
 	void destroyRelation(thread_db* tdbb) const;
 
@@ -418,6 +445,7 @@ public:
 	NestConst<Format> format;
 	Firebird::Array<UCHAR> notNullFields;
 	Firebird::Array<MetaName> fieldNames;
+	Firebird::ObjectsArray<Index> indexes;
 	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
 	bool useLtt = false;

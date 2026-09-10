@@ -393,6 +393,7 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 			const auto refetch = (id == ID_TRANS);
 
 			if (refetch && relation &&
+				!relation->isLTT() &&
 				!relation->getExtFile() &&
 				!relation->isView() &&
 				!relation->isVirtual())

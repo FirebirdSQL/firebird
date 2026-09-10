@@ -54,6 +54,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/ini.h"
 #include "../jrd/cvt_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../common/dsc_proto.h"
 #include "../yvalve/why_proto.h"
@@ -334,6 +335,65 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 	}
 
 	return literal;
+}
+
+
+ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* reference)
+{
+	if (from->litDesc.dsc_dtype != dtype_text)
+		return nullptr;
+
+	if (CVT2_compare_priority[from->litDesc.dsc_dtype] >=
+		CVT2_compare_priority[reference->dsc_dtype])
+	{
+		return nullptr;
+	}
+
+	dsql_constant_type to;
+
+	switch (reference->dsc_dtype)
+	{
+	case dtype_double:
+		to = CONSTANT_DOUBLE;
+		break;
+	case dtype_dec64:
+	case dtype_dec128:
+		to = CONSTANT_DECIMAL;
+		break;
+	case dtype_int128:
+		to = CONSTANT_NUM128;
+		break;
+	case dtype_sql_date:
+		to = CONSTANT_DATE;
+		break;
+	case dtype_sql_time:
+	case dtype_sql_time_tz:
+		to = CONSTANT_TIME;
+		break;
+	case dtype_timestamp:
+	case dtype_timestamp_tz:
+		to = CONSTANT_TIMESTAMP;
+		break;
+	default:
+		return nullptr;
+	}
+
+	switch (to)
+	{
+	case CONSTANT_DATE:
+	case CONSTANT_TIME:
+	case CONSTANT_TIMESTAMP:
+		if (CVT_get_special_datetime(reinterpret_cast<const char*>(from->litDesc.dsc_address),
+				from->litDesc.dsc_length) != SpecialDateTime::NONE)
+		{
+			return nullptr;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return MAKE_constant(reinterpret_cast<const char*>(from->litDesc.dsc_address), to, 0);
 }
 
 

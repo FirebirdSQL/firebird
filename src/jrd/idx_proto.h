@@ -51,6 +51,7 @@ void IDX_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jr
 void IDX_modify_check_constraints(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_modify_flag_uk_modified(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
+bool IDX_validate_unique(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, MetaId id);
 
 
 #endif // JRD_IDX_PROTO_H

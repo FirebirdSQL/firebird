@@ -1464,6 +1464,7 @@ public:
 			TYPE_ALTER_SQL_SECURITY,
 			TYPE_ALTER_PUBLICATION,
 			TYPE_ADD_PACKAGED_TABLE_INDEX,
+			TYPE_ADD_INLINE_TABLE_INDEX,
 			TYPE_SET_TABLESPACE
 		};
 
@@ -1492,10 +1493,10 @@ public:
 		unsigned deleteAction;
 	};
 
-	struct AddPackagedTableIndexClause : public Clause
+	struct AddInlineTableIndexClause : public Clause
 	{
-		explicit AddPackagedTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
-			: Clause(p, TYPE_ADD_PACKAGED_TABLE_INDEX),
+		explicit AddInlineTableIndexClause(MemoryPool& p, CreateIndexNode* aIndexNode)
+			: Clause(p, TYPE_ADD_INLINE_TABLE_INDEX),
 			  indexNode(aIndexNode)
 		{
 		}
@@ -1981,7 +1982,7 @@ public:
 class ModifyIndexNode
 {
 public:
-	enum OP { OP_ACTIVE, OP_INACTIVE, OP_SET_TABLESPACE };
+	enum OP { OP_ACTIVE, OP_INACTIVE, OP_VALIDATE_UNIQUE, OP_SET_TABLESPACE };
 
 	ModifyIndexNode(const QualifiedName& indexName, Cached::Relation* rel, OP op, bool expression)
 		: indexName(indexName),
@@ -2014,6 +2015,8 @@ public:
 	{
 		return indexRelation;
 	}
+
+	void validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction, bool silent);
 
 protected:
 	Firebird::string print(NodePrinter& printer) const;
@@ -2050,6 +2053,7 @@ public:
 		Firebird::TriState unique;
 		Firebird::TriState descending;
 		Firebird::TriState inactive;
+		Firebird::TriState concurrently;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
@@ -2096,6 +2100,7 @@ public:
 	bool unique = false;
 	bool descending = false;
 	bool active = true;
+	bool concurrently = false;
 	NestConst<RelationSourceNode> relation;
 	NestConst<ValueListNode> columns;
 	NestConst<ValueSourceClause> computed;
@@ -2108,8 +2113,9 @@ public:
 class StoreIndexNode final : public ModifyIndexNode
 {
 public:
-	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex)
-		: ModifyIndexNode(indexName, rel, OP_ACTIVE, expressionIndex)
+	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex, bool concurrently)
+		: ModifyIndexNode(indexName, rel, OP_ACTIVE, expressionIndex),
+		  concurrently(concurrently)
 	{ }
 
 public:
@@ -2118,6 +2124,8 @@ public:
 private:
 	MetaId create(thread_db* tdbb, jrd_tra* transaction);
 	MetaId createExpression(thread_db* tdbb, jrd_tra* transaction);
+
+	bool concurrently;
 };
 
 
@@ -2163,6 +2171,9 @@ protected:
 	}
 
 	std::optional<MetaId> idxId;
+
+public:
+	bool concurrently = false;
 };
 
 

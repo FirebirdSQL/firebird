@@ -352,7 +352,7 @@ namespace Firebird
 		SINT64 hashNumber = 0;
 	};
 
-#if defined(HAVE_TOMCRYPT)
+#if defined(HAVE_TOMCRYPT) && !defined(WITHOUT_TOMCRYPT)
 	class LibTomCryptHashContext : public HashContext
 	{
 	public:
@@ -439,7 +439,7 @@ namespace Firebird
 		State* statePtr;
 		SLONG hash;
 	};
-#endif // HAVE_TOMCRYPT
+#endif // HAVE_TOMCRYPT && !WITHOUT_TOMCRYPT
 
 } // namespace Firebird
 
