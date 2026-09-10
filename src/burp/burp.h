@@ -977,7 +977,8 @@ public:
 		  flag_on_line(true),
 		  firstMap(true),
 		  firstDbc(true),
-		  stdIoMode(false)
+		  stdIoMode(false),
+		  setSearchPath(getPool())
 	{
 		// this is VERY dirty hack to keep current (pre-FB2) behaviour
 		memset (&gbl_database_file_name, 0,
@@ -1220,6 +1221,8 @@ public:
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
 
+	Firebird::string setSearchPath;
+
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);
 
@@ -1293,7 +1296,7 @@ public:
 		: Firebird::AutoStorage(),
 		  tdgbl(g), stmt(nullptr)
 	{
-		stmt = tdgbl->db_handle->prepare(&tdgbl->throwStatus, tdgbl->tr_handle, 0, sql, 3, 0);
+		stmt = tdgbl->db_handle->prepare(&tdgbl->throwStatus, tdgbl->tr_handle, 0, sql, SQL_DIALECT_CURRENT, 0);
 	}
 
 	template <typename M>
