@@ -169,9 +169,11 @@ namespace Jrd
 
 		void sharedCheckUnlock(thread_db* tdbb);
 
+		void makeRequests(thread_db* tdbb);
+
 	public:
 		virtual RoutinePermanent* getPermanent() const noexcept = 0;	// Permanent part of data
-		virtual int getObjectType() const noexcept = 0;
+		virtual ObjectType getObjectType() const noexcept = 0;
 		virtual SLONG getSclType() const noexcept = 0;
 
 	private:

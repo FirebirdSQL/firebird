@@ -134,6 +134,8 @@ public:
 
 	static ObjectType objectType() noexcept;
 
+	void makeRequests(thread_db* tdbb) { }
+
 	bool hash(thread_db*, Firebird::sha512&)
 	{
 		return true;
