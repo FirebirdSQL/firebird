@@ -289,7 +289,7 @@ bool BackupRelationTask::getWorkItem(BackupRelationTask::WorkItem** pItem)
 
 bool BackupRelationTask::getResult(IStatus* /*status*/)
 {
-	fb_assert(!m_error || m_dirtyBuffers.isEmpty());
+	fb_assert(m_error || m_dirtyBuffers.isEmpty());
 
 	return !m_error;
 }
@@ -808,7 +808,7 @@ bool RestoreRelationTask::getWorkItem(WorkItem** pItem)
 
 bool RestoreRelationTask::getResult(IStatus* /*status*/)
 {
-	fb_assert(!m_error || m_dirtyBuffers.isEmpty());
+	fb_assert(m_error || m_dirtyBuffers.isEmpty());
 
 	return !m_error;
 }

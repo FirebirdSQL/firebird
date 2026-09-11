@@ -159,6 +159,14 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 	const auto tail = &csb->csb_rpt[stream];
 	relation = tail->csb_relation;
 
+	if (tail->csb_local_table_number.has_value())
+	{
+		const auto tableNumber = tail->csb_local_table_number.value();
+
+		if (tableNumber < csb->csb_localTables.getCount())
+			localTable = csb->csb_localTables[tableNumber];
+	}
+
 	if (!tail->csb_idx)
 		return;
 
@@ -173,7 +181,8 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 		if ((index.idx_flags & idx_condition) && !checkIndexCondition(index, matches))
 			continue;
 
-		const auto length = ROUNDUP(BTR_key_length(tdbb, relation(tdbb), &index), sizeof(SLONG));
+		const auto relationForKey = localTable ? localTable->getRelation(tdbb, nullptr) : relation(tdbb);
+		const auto length = ROUNDUP(BTR_key_length(tdbb, relationForKey, &index), sizeof(SLONG));
 
 		// AB: Calculate the cardinality which should reflect the total number
 		// of index pages for this index.
@@ -417,8 +426,9 @@ IndexTableScan* Retrieval::getNavigation()
 
 	const auto indexNode = makeIndexScanNode(scratch);
 
+	const auto relationForKey = localTable ? localTable->getRelation(tdbb, nullptr) : relation(tdbb);
 	const USHORT keyLength =
-		ROUNDUP(BTR_key_length(tdbb, relation(tdbb), scratch->index), sizeof(SLONG));
+		ROUNDUP(BTR_key_length(tdbb, relationForKey, scratch->index), sizeof(SLONG));
 
 	return FB_NEW_POOL(getPool())
 		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,

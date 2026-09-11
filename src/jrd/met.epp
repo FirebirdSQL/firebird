@@ -5168,17 +5168,18 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }
 
-void IndexVersion::setLtt(thread_db* tdbb, LocalTemporaryTable::Index* lttIndex)
+void IndexVersion::setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+	USHORT segmentCount, bool inactive)
 {
 	SET_TDBB(tdbb);
 
 	fb_assert(getPermanent()->getRelation()->rel_flags & REL_temp_ltt);
 
-	idv_name = lttIndex->name;
-	idv_uniqFlag = lttIndex->unique;
-	idv_segmentCount = lttIndex->columns.getCount();
-	idv_type = lttIndex->descending;
-	idv_active = lttIndex->inactive ? MET_index_inactive : MET_index_active;
+	idv_name = name;
+	idv_uniqFlag = unique;
+	idv_segmentCount = segmentCount;
+	idv_type = descending;
+	idv_active = inactive ? MET_index_inactive : MET_index_active;
 }
 
 IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)

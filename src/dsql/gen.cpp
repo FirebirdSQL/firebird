@@ -523,14 +523,32 @@ static void gen_plan(DsqlCompilerScratch* dsqlScratch, const PlanNode* planNode)
 
 		const auto checkIndexSchema = [&]()
 		{
-			if (node->recordSourceNode &&
-				node->recordSourceNode->dsqlContext &&
-				node->recordSourceNode->dsqlContext->ctx_relation &&
-				idx_iter->indexName.schema.hasData() &&
-				idx_iter->indexName.schema != node->recordSourceNode->dsqlContext->ctx_relation->rel_name.schema)
+			if (!node->recordSourceNode ||
+				!node->recordSourceNode->dsqlContext ||
+				!node->recordSourceNode->dsqlContext->ctx_relation)
 			{
-				ERRD_post(Arg::Gds(isc_index_unused) << idx_iter->indexName.toQuotedString());
+				return;
 			}
+
+			const auto& relName = node->recordSourceNode->dsqlContext->ctx_relation->rel_name;
+			const auto& indexName = idx_iter->indexName;
+
+			if (indexName.package.hasData())
+			{
+				if ((!indexName.schema.hasData() || indexName.schema == relName.schema) &&
+					indexName.package == relName.package)
+				{
+					return;
+				}
+			}
+			else if (!indexName.schema.hasData() ||
+				indexName.schema == relName.schema ||
+				indexName.schema == relName.package)
+			{
+				return;
+			}
+
+			ERRD_post(Arg::Gds(isc_index_unused) << indexName.toQuotedString());
 		};
 
 		switch (node->accessType->type)

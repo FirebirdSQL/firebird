@@ -608,7 +608,8 @@ public:
 		return true;
 	}
 
-	void setLtt(thread_db* tdbb, LocalTemporaryTable::Index* ltt);
+	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+		USHORT segmentCount, bool inactive = false);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 

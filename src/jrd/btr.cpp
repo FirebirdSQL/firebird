@@ -432,7 +432,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	}
 
 	if (indexName.object.hasData())
-		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	{
+		if (!relation->isLTT())
+			MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	}
 	else
 		indexName.object = "***unknown***";
 

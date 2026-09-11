@@ -51,6 +51,7 @@ public:
 			: count(0), capacity(size)
 		{ }
 
+	// TODO: protect increment of count with barrier.
 		FB_SIZE_T count, capacity;
 		T data[1];
 
