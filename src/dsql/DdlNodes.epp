@@ -14197,11 +14197,11 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	if (relation->dsqlName.package.isEmpty())
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_AFTER, DDL_TRIGGER_CREATE_INDEX, name, {});
 
-	savePoint.release();	// everything is ok
-
 	ModifyIndexList oneItemList(*MemoryPool::getContextPool());
 	oneItemList.push(store(tdbb, oneItemList.getPool(), transaction, name, definition));
 	oneItemList.exec(tdbb, transaction);
+
+	savePoint.release();	// everything is ok
 }
 
 // Define an index on a Local Temporary Table.
