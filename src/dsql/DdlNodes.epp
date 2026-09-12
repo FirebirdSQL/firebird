@@ -7861,7 +7861,10 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				if (constraint.index->descending)
 					definition.descending = true;
 				definition.inactive = false;
-				definition.columns = constraint.columns;
+
+				for (const auto& column : constraint.columns)
+					definition.segments.add().name = column;
+
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
 
@@ -9882,15 +9885,11 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					definition.descending = indexNode->descending;
 					definition.inactive = !indexNode->active;
 
-					fb_assert(indexNode->columns);
+					fb_assert(indexNode->segments && indexNode->segments->hasData());
 					fb_assert(!indexNode->computed);
 					fb_assert(!indexNode->partial);
 
-					for (const auto indexColumn : indexNode->columns->items)
-					{
-						MetaName& column = definition.columns.add();
-						column = nodeAs<FieldNode>(indexColumn)->dsqlName;
-					}
+					definition.segments = *indexNode->segments;
 
 					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
 						addInlineTableIndexClause->indexNode->name, definition));
@@ -13355,6 +13354,8 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 			idx.idx_rpt[SEG.RDB$FIELD_POSITION].idx_itype =
 				DFW_assign_index_type(tdbb, indexName, gds_cvt_blr_dtype[FLD.RDB$FIELD_TYPE], text_type);
 
+			idx.idx_rpt[SEG.RDB$FIELD_POSITION].idx_length = SEG.RDB$CHARACTER_LENGTH;
+
 			// Initialize selectivity to zero. Otherwise random rubbish makes its way into database
 			idx.idx_rpt[SEG.RDB$FIELD_POSITION].idx_selectivity = 0;
 		}
@@ -13572,6 +13573,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 				DFW_assign_index_type(tdbb, indexName,
 					idx.idx_expression_desc.dsc_dtype,
 					idx.idx_expression_desc.getTextType());
+			idx.idx_rpt[0].idx_length = 0;
 			idx.idx_rpt[0].idx_selectivity = 0;
 		}
 		catch (const Exception&)
@@ -13761,15 +13763,15 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 		request2.reset(tdbb, drq_l_lfield, DYN_REQUESTS);
 
-		for (FB_SIZE_T i = 0; i < definition.columns.getCount(); ++i)
+		for (FB_SIZE_T i = 0; i < definition.segments.getCount(); ++i)
 		{
 			for (FB_SIZE_T j = 0; j < i; ++j)
 			{
-				if (definition.columns[i] == definition.columns[j])
+				if (definition.segments[i].name == definition.segments[j].name)
 				{
 					// msg 240 "Field %s cannot be used twice in index %s"
 					status_exception::raise(
-						Arg::PrivateDyn(240) << definition.columns[i] << IDX.RDB$INDEX_NAME);
+						Arg::PrivateDyn(240) << definition.segments[i].name << IDX.RDB$INDEX_NAME);
 				}
 			}
 
@@ -13781,11 +13783,12 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				WITH F.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
 					 F.RDB$PACKAGE_NAME EQUIV NULLIF(definition.relation.package.c_str(), '') AND
 					 F.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME AND
-					 F.RDB$FIELD_NAME EQ definition.columns[i].c_str() AND
+					 F.RDB$FIELD_NAME EQ definition.segments[i].name.c_str() AND
 					 GF.RDB$SCHEMA_NAME EQ F.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 					 GF.RDB$FIELD_NAME EQ F.RDB$FIELD_SOURCE
 			{
 				ULONG length = 0;
+				const SSHORT segmentLen = definition.segments[i].length;
 
 				if (GF.RDB$FIELD_TYPE == blr_blob)
 				{
@@ -13807,25 +13810,42 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 					// Compute the length of the key segment allowing for international
 					// information. Note that we we must convert a <character set, collation>
 					// type to an index type in order to compute the length.
+
+					if (!segmentLen)
+						length = GF.RDB$FIELD_LENGTH;
+					else if (segmentLen > GF.RDB$CHARACTER_LENGTH)
+						status_exception::raise(Arg::Gds(isc_random) << "segment length greater than field length ");
+					else
+						length = segmentLen * GF.RDB$FIELD_LENGTH / GF.RDB$CHARACTER_LENGTH;
+
 					if (!F.RDB$COLLATION_ID.NULL)
 					{
 						length = INTL_key_length(tdbb,
 							INTL_TEXT_TO_INDEX(TTypeId(CSetId(GF.RDB$CHARACTER_SET_ID),
 								CollId(F.RDB$COLLATION_ID))),
-							GF.RDB$FIELD_LENGTH);
+							length);
 					}
 					else if (!GF.RDB$COLLATION_ID.NULL)
 					{
 						length = INTL_key_length(tdbb,
 							INTL_TEXT_TO_INDEX(TTypeId(CSetId(GF.RDB$CHARACTER_SET_ID),
 								CollId(GF.RDB$COLLATION_ID))),
-							GF.RDB$FIELD_LENGTH);
+							length);
 					}
-					else
-						length = GF.RDB$FIELD_LENGTH;
 				}
 				else
+				{
+					if (segmentLen)
+					{
+						string msg;
+						msg.printf("attempt to specify a length for non-text field %s in index %s",
+							definition.segments[i].name.c_str(), idxName.toQuotedString().c_str());
+
+						status_exception::raise(Arg::Gds(isc_random) << msg);
+					}
+
 					length = sizeof(double);
+				}
 
 				if (keyLength)
 				{
@@ -13865,15 +13885,13 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			status_exception::raise(Arg::PrivateDyn(118) << idxName.toQuotedString());
 		}
 
-		if (definition.columns.hasData())
+		if (definition.segments.hasData())
 		{
 			request2.reset(tdbb, drq_s_idx_segs, DYN_REQUESTS);
 
 			SSHORT position = 0;
 
-			for (ObjectsArray<MetaName>::const_iterator segment(definition.columns.begin());
-				 segment != definition.columns.end();
-				 ++segment)
+			for (const auto& segment : definition.segments)
 			{
 				STORE(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 					X IN RDB$INDEX_SEGMENTS
@@ -13885,7 +13903,11 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 						strcpy(X.RDB$PACKAGE_NAME, IDX.RDB$PACKAGE_NAME);
 
 					strcpy(X.RDB$INDEX_NAME, IDX.RDB$INDEX_NAME);
-					strcpy(X.RDB$FIELD_NAME, segment->c_str());
+					strcpy(X.RDB$FIELD_NAME, segment.name.c_str());
+
+					X.RDB$CHARACTER_LENGTH.NULL = (segment.length > 0 ? FALSE : TRUE);
+					X.RDB$CHARACTER_LENGTH = segment.length;
+
 					X.RDB$FIELD_POSITION = position++;
 				}
 				END_STORE
@@ -13906,7 +13928,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 			// If referring columns count <> referred columns return error.
 
-			if (definition.columns.getCount() != definition.refColumns.getCount())
+			if (definition.segments.getCount() != definition.refColumns.getCount())
 			{
 				// msg 133: "Number of referencing columns do not equal number of
 				// referenced columns
@@ -14031,7 +14053,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				// of columns in referring index.
 
 				fb_assert(IND.RDB$SEGMENT_COUNT >= 0);
-				if (definition.columns.getCount() != ULONG(IND.RDB$SEGMENT_COUNT))
+				if (definition.segments.getCount() != ULONG(IND.RDB$SEGMENT_COUNT))
 				{
 					// msg 133: "Number of referencing columns do not equal number of
 					// referenced columns"
@@ -14059,7 +14081,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			}
 		}
 
-		IDX.RDB$SEGMENT_COUNT = SSHORT(definition.columns.getCount());
+		IDX.RDB$SEGMENT_COUNT = SSHORT(definition.segments.getCount());
 	}
 	END_STORE
 
@@ -14105,7 +14127,7 @@ string CreateIndexNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, active);
 	NODE_PRINT(printer, concurrently);
 	NODE_PRINT(printer, relation);
-	NODE_PRINT(printer, columns);
+	NODE_PRINT(printer, segments);
 	NODE_PRINT(printer, computed);
 	NODE_PRINT(printer, partial);
 	NODE_PRINT(printer, createIfNotExistsOnly);
@@ -14156,16 +14178,9 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	definition.inactive = !active;
 	definition.concurrently = concurrently;
 
-	if (columns)
+	if (segments && segments->hasData())
 	{
-		const NestConst<ValueExprNode>* ptr = columns->items.begin();
-		const NestConst<ValueExprNode>* const end = columns->items.end();
-
-		for (; ptr != end; ++ptr)
-		{
-			MetaName& column = definition.columns.add();
-			column = nodeAs<FieldNode>(*ptr)->dsqlName;
-		}
+		definition.segments = *segments;
 	}
 	else if (computed)
 	{
@@ -14254,28 +14269,29 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 		status_exception::raise(Arg::Gds(isc_no_dup) << name.toQuotedString());
 	}
 
-	if (columns->items.getCount() > MAX_INDEX_SEGMENTS)
-		status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
-
 	const auto& fields = ltt->hasPendingChanges ? ltt->pendingFields : ltt->fields;
 
-	for (const auto& col : columns->items)
+	if (segments)
 	{
-		const auto& colName = nodeAs<FieldNode>(col)->dsqlName;
+		if (segments->getCount() > MAX_INDEX_SEGMENTS)
+			status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
 
-		auto fieldIt = std::find_if(fields.begin(), fields.end(),
-			[&colName](const auto& field) { return field.name == colName; });
-
-		if (fieldIt == fields.end())
+		for (const auto& seg : *segments)
 		{
-			// Column not found in LTT
-			status_exception::raise(
-				Arg::Gds(isc_dyn_column_does_not_exist) << colName.c_str() << ltt->name.toQuotedString());
-		}
+			auto fieldIt = std::find_if(fields.begin(), fields.end(),
+				[&seg](const auto& field) { return field.name == seg.name; });
 
-		// Check if field type is indexable (no blobs or arrays)
-		if (fieldIt->desc.dsc_dtype == dtype_blob)
-			status_exception::raise(Arg::Gds(isc_blob_idx_err) << colName.c_str());
+			if (fieldIt == fields.end())
+			{
+				// Column not found in LTT
+				status_exception::raise(
+					Arg::Gds(isc_dyn_column_does_not_exist) << seg.name.c_str() << ltt->name.toQuotedString());
+			}
+
+			// Check if field type is indexable (no blobs or arrays)
+			if (fieldIt->desc.dsc_dtype == dtype_blob)
+				status_exception::raise(Arg::Gds(isc_blob_idx_err) << seg.name.c_str());
+		}
 	}
 
 	// Register undo action with the savepoint
@@ -14307,8 +14323,11 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 	newIndex.inactive = !active;
 	newIndex.id = ltt->nextIndexId++;
 
-	for (const auto& col : columns->items)
-		newIndex.columns.add(nodeAs<FieldNode>(col)->dsqlName);
+	if (segments)
+	{
+		for (const auto& seg : *segments)
+			newIndex.segments.add(seg);
+	}
 
 	// Post deferred work to create the actual B-tree structure
 	DFW_post_work(transaction, dfw_create_ltt_index, string(name.object.c_str()), name.schema, 0);

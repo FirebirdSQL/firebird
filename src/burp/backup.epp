@@ -1726,6 +1726,9 @@ void put_index( burp_rel* relation)
 				SORTED BY Y.RDB$FIELD_POSITION
 			{
 				PUT_TEXT (att_index_field_name, Y.RDB$FIELD_NAME);
+
+				if (!Y.RDB$CHARACTER_LENGTH.NULL && Y.RDB$CHARACTER_LENGTH)
+					put_int32 (att_index_field_char_length, Y.RDB$CHARACTER_LENGTH);
 			}
 			END_FOR
 			ON_ERROR

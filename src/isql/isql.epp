@@ -1779,6 +1779,13 @@ SLONG ISQL_get_index_segments(TEXT* segs,
 				segs += fieldNameStrLen + 2;
 			}
 		}
+
+		const auto ilen = SEG.RDB$CHARACTER_LENGTH;
+		if (ilen)
+		{
+			const auto l = snprintf(segs, segs_end - segs + 1, "(%d)", ilen);
+			segs += l;
+		}
 	}
 	END_FOR
 	ON_ERROR

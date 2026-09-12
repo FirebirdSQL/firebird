@@ -297,6 +297,7 @@
     <ClInclude Include="..\..\..\src\jrd\ibsetjmp.h" />
     <ClInclude Include="..\..\..\src\jrd\idx.h" />
     <ClInclude Include="..\..\..\src\jrd\idx_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\IndexSegment.h" />
     <ClInclude Include="..\..\..\src\jrd\inf_proto.h" />
     <ClInclude Include="..\..\..\src\include\firebird\impl\inf_pub.h" />
     <ClInclude Include="..\..\..\src\jrd\ini.h" />
