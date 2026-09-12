@@ -29,6 +29,8 @@
 #include "ld_proto.h"
 #include "lc_ascii.h"
 
+using namespace Firebird;
+
 
 static const ULONG UPPER_EXCEPTIONS_B5[] = {
 	0x00B5,	// #MICRO SIGN

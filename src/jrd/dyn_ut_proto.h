@@ -25,22 +25,25 @@
 #ifndef JRD_DYN_UT_PROTO_H
 #define JRD_DYN_UT_PROTO_H
 
-void	DYN_UTIL_store_check_constraints(Jrd::thread_db*, Jrd::jrd_tra*,
-			const Jrd::QualifiedName&, const Jrd::MetaName&);
-bool	DYN_UTIL_find_field_source(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-			const Jrd::QualifiedName& view_name, USHORT context, const TEXT* local_name,
-			TEXT* output_field_schema_name, TEXT* output_field_name);
-void	DYN_UTIL_generate_generator_name(Jrd::thread_db*, Jrd::QualifiedName&);
-void	DYN_UTIL_generate_trigger_name(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::QualifiedName&);
-void	DYN_UTIL_generate_index_name(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::QualifiedName&, UCHAR);
-void	DYN_UTIL_generate_field_position(Jrd::thread_db*, const Jrd::QualifiedName&, SLONG*);
-void	DYN_UTIL_generate_field_name(Jrd::thread_db*, Jrd::QualifiedName&);
-void	DYN_UTIL_generate_constraint_name(Jrd::thread_db*, Jrd::QualifiedName&);
-bool	DYN_UTIL_check_unique_name_nothrow(Jrd::thread_db* tdbb,
-			const Jrd::QualifiedName& object_name, int object_type, USHORT* errorCode = nullptr,
-			bool freeWhenPossible = false);
-void	DYN_UTIL_check_unique_name(Jrd::thread_db* tdbb,
-			const Jrd::QualifiedName& object_name, int object_type);
-SINT64	DYN_UTIL_gen_unique_id(Jrd::thread_db*, SSHORT, const char*);
+namespace Firebird::Jrd
+{
+	void	DYN_UTIL_store_check_constraints(thread_db*, jrd_tra*,
+				const QualifiedName&, const MetaName&);
+	bool	DYN_UTIL_find_field_source(thread_db* tdbb, jrd_tra* transaction,
+				const QualifiedName& view_name, USHORT context, const TEXT* local_name,
+				TEXT* output_field_schema_name, TEXT* output_field_name);
+	void	DYN_UTIL_generate_generator_name(thread_db*, QualifiedName&);
+	void	DYN_UTIL_generate_trigger_name(thread_db*, jrd_tra*, QualifiedName&);
+	void	DYN_UTIL_generate_index_name(thread_db*, jrd_tra*, QualifiedName&, UCHAR);
+	void	DYN_UTIL_generate_field_position(thread_db*, const QualifiedName&, SLONG*);
+	void	DYN_UTIL_generate_field_name(thread_db*, QualifiedName&);
+	void	DYN_UTIL_generate_constraint_name(thread_db*, QualifiedName&);
+	bool	DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
+				const QualifiedName& object_name, int object_type, USHORT* errorCode = nullptr,
+				bool freeWhenPossible = false);
+	void	DYN_UTIL_check_unique_name(thread_db* tdbb,
+				const QualifiedName& object_name, int object_type);
+	SINT64	DYN_UTIL_gen_unique_id(thread_db*, SSHORT, const char*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_DYN_UT_PROTO_H

@@ -27,6 +27,10 @@
 #include "firebird/Interface.h"
 #include "std_desc.h"
 
+namespace Firebird::Burp
+{
+
+
 class BurpGlobals;
 
 FB_UINT64		MVOL_fini_read();
@@ -41,12 +45,13 @@ UCHAR*			MVOL_read_block(BurpGlobals*, UCHAR*, ULONG);
 void			MVOL_skip_block(BurpGlobals*, ULONG);
 void			MVOL_write(BurpGlobals*);
 const UCHAR*	MVOL_write_block(BurpGlobals*, const UCHAR*, ULONG);
-Firebird::ICryptKeyCallback*	MVOL_get_crypt(BurpGlobals*);
+ICryptKeyCallback*	MVOL_get_crypt(BurpGlobals*);
 
 #if defined WIN_NT
 DESC			NT_tape_open(const char*, ULONG, ULONG);
 #endif
 
 
-#endif	// BURP_MVOL_PROTO_H
+} // namespace Firebird::Burp
 
+#endif	// BURP_MVOL_PROTO_H

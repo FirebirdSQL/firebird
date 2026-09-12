@@ -36,6 +36,7 @@
  */
 
 #include "firebird.h"
+#include "ibase.h"
 #include "../dsql/chars.h"
 #include "firebird/impl/sqlda_pub.h"
 #include "../yvalve/gds_proto.h"
@@ -51,10 +52,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+using namespace Firebird;
+
+
 // SQLDA dialects
 constexpr USHORT DIALECT_sqlda	= 0;
 
-using namespace Firebird;
 
 enum name_type {
 	NAME_statement = 1,
@@ -102,7 +105,7 @@ struct dsql_err_stblock
 
 static void		cleanup(void*);
 static void		cleanup_database(FB_API_HANDLE*, void*);
-static ISC_STATUS	error(const Firebird::Exception& ex);
+static ISC_STATUS	error(const Exception& ex);
 static ISC_STATUS	error();
 static void		error_post(const Arg::StatusVector& v);
 static dsql_name*		lookup_name(const SCHAR*, dsql_name*);
@@ -122,7 +125,7 @@ static dsql_name*		statement_names	= NULL;
 static dsql_name*		cursor_names	= NULL;
 static dsql_dbb*		databases		= NULL;
 
-Firebird::GlobalPtr<Firebird::RWLock> global_sync;
+GlobalPtr<RWLock> global_sync;
 
 static inline void set_global_private_status(ISC_STATUS* user_status, ISC_STATUS* local_status) noexcept
 {
@@ -154,7 +157,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_close(ISC_STATUS* user_status, const SCHAR
 
 		return isc_dsql_free_statement(user_status, &statement->stmt_handle, DSQL_close);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -184,12 +187,12 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_declare(ISC_STATUS*	user_status,
 			return s;
 		}
 
-		Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+		WriteLockGuard guard(global_sync, FB_FUNCTION);
 		statement->stmt_cursor = insert_name(cursor, &cursor_names, statement);
 
 		return s;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -216,7 +219,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_describe(ISC_STATUS* user_status,
 
 		return isc_dsql_describe(user_status, &statement->stmt_handle, dialect, sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -256,7 +259,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_describe_bind(ISC_STATUS*	user_status,
 
 		return isc_dsql_describe_bind(user_status, &statement->stmt_handle, dialect, sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -300,7 +303,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_execute2(ISC_STATUS*	user_status,
 		return isc_dsql_execute2(user_status, trans_handle, &statement->stmt_handle,
 								 dialect, in_sqlda, out_sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -376,7 +379,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_fetch(ISC_STATUS* user_status,
 
 		return isc_dsql_fetch(user_status, &statement->stmt_handle, dialect, sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -429,7 +432,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_insert(ISC_STATUS* user_status,
 
 		return isc_dsql_insert(user_status, &statement->stmt_handle, dialect, sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -511,7 +514,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_open2(ISC_STATUS* user_status,
 		return isc_dsql_execute2(user_status, trans_handle, &statement->stmt_handle,
 								 dialect, in_sqlda, out_sqlda);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -591,7 +594,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_prepare(ISC_STATUS*	user_status,
 	// If a new statement was allocated, add it to the symbol table and insert it
 	// into the list of statements
 
-	Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+	WriteLockGuard guard(global_sync, FB_FUNCTION);
 
 	if (!statement)
 	{
@@ -621,7 +624,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_prepare(ISC_STATUS*	user_status,
 	return s;
 
 	}	// try
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -657,7 +660,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_release(ISC_STATUS* user_status, const SCH
 
 		// remove the statement from the symbol tables
 
-		Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+		WriteLockGuard guard(global_sync, FB_FUNCTION);
 
 		if (statement->stmt_stmt)
 			remove_name(statement->stmt_stmt, &statement_names);
@@ -679,7 +682,7 @@ ISC_STATUS API_ROUTINE isc_embed_dsql_release(ISC_STATUS* user_status, const SCH
 
 		return s;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		return error(ex);
 	}
@@ -975,7 +978,7 @@ static void cleanup(void*)
 	UDSQL_error = NULL;
 
 	{ // scope
-		Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+		WriteLockGuard guard(global_sync, FB_FUNCTION);
 
 		free_all_databases(databases);
 		free_all_statements(statements);
@@ -1000,7 +1003,7 @@ static void cleanup_database(FB_API_HANDLE* db_handle, void* /*dummy*/)
 	// for each of the statements in this database, remove it
 	// from the local list and from the hash table
 
-	Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+	WriteLockGuard guard(global_sync, FB_FUNCTION);
 
 	dsql_stmt** stmt_ptr = &statements;
 	dsql_stmt* p;
@@ -1043,11 +1046,11 @@ static void cleanup_database(FB_API_HANDLE* db_handle, void* /*dummy*/)
 //	a status vector, return a status code.  Otherwise print the
 //	error code(s) and abort.
 //
-static ISC_STATUS error(const Firebird::Exception& ex)
+static ISC_STATUS error(const Exception& ex)
 {
-	Firebird::StaticStatusVector v;
+	StaticStatusVector v;
 	ex.stuffException(v);
-	makePermanentVector(v.begin());
+	Why::makePermanentVector(v.begin());
 
 	if (UDSQL_error->dsql_user_status)
 	{
@@ -1092,7 +1095,7 @@ static void error_post(const Arg::StatusVector& v)
 	v.copyTo(UDSQL_error->dsql_status);
 
 	// Give up whatever we were doing and return to the user.
-	Firebird::status_exception::raise(UDSQL_error->dsql_status);
+	status_exception::raise(UDSQL_error->dsql_status);
 }
 
 
@@ -1123,7 +1126,7 @@ static void init(FB_API_HANDLE* db_handle)
 	dsql_dbb* dbb;
 
 	{ // scope
-		Firebird::ReadLockGuard guard(global_sync, FB_FUNCTION);
+		ReadLockGuard guard(global_sync, FB_FUNCTION);
 
 		for (dbb = databases; dbb; dbb = dbb->dbb_next)
 		{
@@ -1142,7 +1145,7 @@ static void init(FB_API_HANDLE* db_handle)
 		return;					// Not a great error handler
 	}
 
-	Firebird::WriteLockGuard guard(global_sync, FB_FUNCTION);
+	WriteLockGuard guard(global_sync, FB_FUNCTION);
 
 	dbb->dbb_next = databases;
 	databases = dbb;
@@ -1196,7 +1199,7 @@ static dsql_name* lookup_name(const TEXT* name, dsql_name* list)
  *
  **************************************/
 
-	Firebird::ReadLockGuard guard(global_sync, FB_FUNCTION);
+	ReadLockGuard guard(global_sync, FB_FUNCTION);
 
 	const USHORT l = name_length(name);
 	for (; list; list = list->name_next)

@@ -57,6 +57,10 @@
 #include "../gpre/sql_proto.h"
 #include "../common/utils_proto.h"
 
+namespace Firebird::Gpre
+{
+
+
 #ifdef FTN_BLK_DATA
 static void		block_data_list(const gpre_dbb*);
 #endif
@@ -300,7 +304,7 @@ act* PAR_action(const TEXT* base_dir)
 					if (gpreGlob.sw_language == lang_internal || gpreGlob.sw_language == lang_cxx ||
 						gpreGlob.sw_language == lang_cplusplus)
 					{
-						if (CPR_token())
+						while (true)
 						{
 							if (gpreGlob.token_global.tok_keyword == KW_L_BRACE)
 							{
@@ -309,6 +313,12 @@ act* PAR_action(const TEXT* base_dir)
 								++brace_count;
 								return NULL;
 							}
+
+							if (gpreGlob.token_global.tok_keyword == KW_SEMI_COLON)
+								break;
+
+							if (!CPR_token())
+								break;
 						}
 					}
 					break;
@@ -364,13 +374,13 @@ act* PAR_action(const TEXT* base_dir)
 		catch (const gpre_exception&) {
 			throw;
 		}
-		catch (const Firebird::fatal_exception&)
+		catch (const fatal_exception&)
 		{
 			// CVC: a fatal exception should be propagated.
 			// For example, a failure in our runtime.
 			throw;
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			gpreGlob.sw_sql = false;
 			// This is to force GPRE to get the next symbol. Fix for bug #274. DROOT
@@ -396,12 +406,12 @@ act* PAR_action(const TEXT* base_dir)
 				catch (const gpre_exception&) {
 					throw;
 				}
-				catch (const Firebird::fatal_exception&)
+				catch (const fatal_exception&)
 				{
 					// CVC: a fatal exception should be propagated.
 					throw;
 				}
-				catch (const Firebird::Exception&) {
+				catch (const Exception&) {
 					return 0;
 				}
 			case SYM_blob:
@@ -412,12 +422,12 @@ act* PAR_action(const TEXT* base_dir)
 				catch (const gpre_exception&) {
 					throw;
 				}
-				catch (const Firebird::fatal_exception&)
+				catch (const fatal_exception&)
 				{
 					// CVC: a fatal exception should be propagated.
 					throw;
 				}
-				catch (const Firebird::Exception&) {
+				catch (const Exception&) {
 					return 0;
 				}
 			case SYM_relation:
@@ -428,12 +438,12 @@ act* PAR_action(const TEXT* base_dir)
 				catch (const gpre_exception&) {
 					throw;
 				}
-				catch (const Firebird::fatal_exception&)
+				catch (const fatal_exception&)
 				{
 					// CVC: a fatal exception should be propagated.
 					throw;
 				}
-				catch (const Firebird::Exception&) {
+				catch (const Exception&) {
 					return 0;
 				}
 			default:
@@ -647,7 +657,7 @@ act* PAR_database(bool sql, const TEXT* base_directory)
 		    found_error = true;
 	}
 	// CVC: It avoids countless errors if the db can't be loaded.
-	catch (const Firebird::Exception& exc)
+	catch (const Exception& exc)
 	{
 		found_error = true;
 		// CVC: Print the low level error. The lack of this caused me a lot of problems.
@@ -1192,7 +1202,7 @@ gpre_sym* PAR_symbol(sym_t type)
 
 [[noreturn]] void PAR_unwind()
 {
-	throw Firebird::LongJump();
+	throw LongJump();
 }
 
 
@@ -1351,8 +1361,6 @@ static bool match_parentheses()
 
 	return false;
 }
-
-
 //____________________________________________________________
 //
 //		Parse a free standing ANY expression.
@@ -2851,11 +2859,8 @@ static act* par_right_brace()
 	if (--brace_count < 0)
 		brace_count = 0;
 
-	if (brace_count <= 0)
-	{
-		if (--namespace_count < 0)
-			namespace_count = 0;
-	}
+	if (namespace_count > brace_count)
+		namespace_count = brace_count;
 
 	return NULL;
 }
@@ -3403,3 +3408,5 @@ static bool terminator()
 
 	return false;
 }
+
+} // namespace Firebird::Gpre

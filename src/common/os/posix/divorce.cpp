@@ -78,6 +78,8 @@
 #include <fcntl.h>
 #endif
 
+namespace Firebird
+{
 
 
 void divorce_terminal(int mask)
@@ -147,3 +149,6 @@ void divorce_terminal(int mask)
 #endif // HAVE_SETPGID
 #endif // HAVE_SETPGRP
 }
+
+
+}	// namespace Firebird

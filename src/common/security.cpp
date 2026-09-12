@@ -41,10 +41,10 @@ void raise()
 
 } // anonymous namespace
 
-namespace Auth {
+namespace Firebird::Auth {
 
 Get::Get(const Config* firebirdConf)
-	: GetPlugins<Firebird::IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf)
+	: GetPlugins<IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf)
 {
 	if (!hasData())
 	{
@@ -53,7 +53,7 @@ Get::Get(const Config* firebirdConf)
 }
 
 Get::Get(const Config* firebirdConf, const char* plugName)
-	: GetPlugins<Firebird::IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf, plugName)
+	: GetPlugins<IManagement>(IPluginManager::TYPE_AUTH_USER_MANAGEMENT, firebirdConf, plugName)
 {
 	if (!hasData())
 	{
@@ -61,7 +61,7 @@ Get::Get(const Config* firebirdConf, const char* plugName)
 	}
 }
 
-void UserData::clear(Firebird::CheckStatusWrapper*)
+void UserData::clear(CheckStatusWrapper*)
 {
 	op = 0;
 
@@ -101,24 +101,24 @@ int setGsecCode(int code, unsigned int operation)
 	switch(operation)
 	{
 	case ADD_OPER:
-		return GsecMsg19;
+		return Gsec::GsecMsg19;
 
 	case MOD_OPER:
-		return GsecMsg20;
+		return Gsec::GsecMsg20;
 
 	case DEL_OPER:
-		return GsecMsg23;
+		return Gsec::GsecMsg23;
 
 	case OLD_DIS_OPER:
 	case DIS_OPER:
-		return GsecMsg28;
+		return Gsec::GsecMsg28;
 
 	case MAP_DROP_OPER:
 	case MAP_SET_OPER:
-		return GsecMsg97;
+		return Gsec::GsecMsg97;
 	}
 
-	return GsecMsg17;
+	return Gsec::GsecMsg17;
 }
 
-} // namespace Auth
+} // namespace Firebird::Auth

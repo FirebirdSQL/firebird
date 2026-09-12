@@ -38,11 +38,8 @@
 #include "../jrd/Statement.h"
 #include <variant>
 
-using namespace Jrd;
-using namespace Firebird;
-
-
-//--------------------------------------
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -177,7 +174,7 @@ namespace
 }
 
 
-class Jrd::ProfilerListener final
+class ProfilerListener final
 {
 public:
 	explicit ProfilerListener(thread_db* tdbb);
@@ -187,7 +184,7 @@ public:
 	ProfilerListener& operator=(const ProfilerListener&) = delete;
 
 public:
-	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<ProfilerListener*>::ThreadRoutine* routine);
+	void exceptionHandler(const Exception& ex, ThreadFinishSync<ProfilerListener*>::ThreadRoutine* routine);
 
 private:
 	void watcherThread();
@@ -1005,3 +1002,6 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 	)
 {
 }
+
+
+}	// namespace Firebird::Jrd

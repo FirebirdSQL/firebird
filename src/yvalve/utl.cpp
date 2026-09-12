@@ -57,7 +57,7 @@
 #include "../yvalve/why_proto.h"
 #include "../yvalve/prepa_proto.h"
 #include "../yvalve/PluginManager.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/build_no.h"
 #include "../common/TimeZoneUtil.h"
 #include "../common/classes/ClumpletWriter.h"
@@ -89,8 +89,9 @@
 #include <sys/file.h>
 #endif
 
+namespace Firebird::Why
+{
 
-using namespace Firebird;
 
 IAttachment* handleToIAttachment(CheckStatusWrapper*, FB_API_HANDLE*);
 ITransaction* handleToITransaction(CheckStatusWrapper*, FB_API_HANDLE*);
@@ -194,7 +195,7 @@ void load(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 
 	// Open the blob.  If it failed, what the hell -- just return failure
 	IBlob* blob = att->createBlob(status, tra, blobId, 0, NULL);
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return;
 
 	// Copy data from file to blob.  Make up boundaries at end of line.
@@ -216,7 +217,7 @@ void load(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 		const SSHORT l = p - buffer;
 
 		blob->putSegment(status, l, buffer);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			blob->close(&temp);
 			return;
@@ -248,7 +249,7 @@ void dump(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 	// Open the blob.  If it failed, what the hell -- just return failure
 
 	IBlob* blob = att->openBlob(status, tra, blobId, 0, NULL);
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return;
 
 	// Copy data from blob to scratch file
@@ -260,8 +261,8 @@ void dump(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 		unsigned l = 0;
 		switch (blob->getSegment(status, sizeof(buffer), buffer, &l))
 		{
-		case Firebird::IStatus::RESULT_ERROR:
-		case Firebird::IStatus::RESULT_NO_DATA:
+		case IStatus::RESULT_ERROR:
+		case IStatus::RESULT_NO_DATA:
 			cond = false;
 			break;
 		}
@@ -320,7 +321,7 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 	// Would have saved me a lot of time, if I had seen this earlier :-(
 	// FSG 15.Oct.2000
 	PathName tmpf = TempFile::create(status, buffer);
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return FB_FALSE;
 
 	FILE* file = os_utils::fopen(tmpf.c_str(), FOPEN_WRITE_TYPE_TEXT);
@@ -363,8 +364,6 @@ FB_BOOLEAN edit(CheckStatusWrapper* status, ISC_QUAD* blob_id, IAttachment* att,
 
 } // anonymous namespace
 
-
-namespace Why {
 
 UtilInterface utilInterface;
 
@@ -454,7 +453,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 		do
 		{
 			att->getInfo(status, sizeof(info), info, buf_len, buf);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				return;
 
 			ClumpletReader p(ClumpletReader::InfoResponse, buf, buf_len);
@@ -549,14 +548,14 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 			s.printf("%s (%s), version \"%.*s\"", implementation_string, class_string, l, versions);
 
 			callback->callback(status, s.c_str());
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 				return;
 			versions += l;
 		}
 
 		USHORT ods_version, ods_minor_version;
 		UTL_get_ods_version(status, att, &ods_version, &ods_minor_version);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return;
 
 		s.printf("on disk structure version %d.%d", ods_version, ods_minor_version);
@@ -569,7 +568,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 }
 
 YAttachment* UtilInterface::executeCreateDatabase2(
-	Firebird::CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
+	CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
 	unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb)
 {
 	try
@@ -589,7 +588,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		if (stmtIsCreateDb)
 			*stmtIsCreateDb = FB_TRUE;
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 			return NULL;
 
 		LocalStatus tempStatus;
@@ -597,7 +596,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 
 		ITransaction* crdbTrans = att->startTransaction(status, 0, NULL);
 
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			att->dropDatabase(&tempCheckStatusWrapper);
 			return NULL;
@@ -606,7 +605,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		if (!stmtEaten)
 		{
 			att->execute(status, crdbTrans, statement.length(), statement.c_str(), dialect, NULL, NULL, NULL, NULL);
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 			{
 				crdbTrans->rollback(&tempCheckStatusWrapper);
 				att->dropDatabase(&tempCheckStatusWrapper);
@@ -615,7 +614,7 @@ YAttachment* UtilInterface::executeCreateDatabase2(
 		}
 
 		crdbTrans->commit(status);
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			crdbTrans->rollback(&tempCheckStatusWrapper);
 			att->dropDatabase(&tempCheckStatusWrapper);
@@ -699,7 +698,7 @@ void UtilInterface::decodeTimeTz(CheckStatusWrapper* status, const ISC_TIME_TZ* 
 		hours, minutes, seconds, fractions, timeZoneBufferLength, timeZoneBuffer);
 }
 
-void UtilInterface::decodeTimeTzEx(Firebird::CheckStatusWrapper* status, const ISC_TIME_TZ_EX* timeEx,
+void UtilInterface::decodeTimeTzEx(CheckStatusWrapper* status, const ISC_TIME_TZ_EX* timeEx,
 	unsigned* hours, unsigned* minutes, unsigned* seconds, unsigned* fractions,
 	unsigned timeZoneBufferLength, char* timeZoneBuffer)
 {
@@ -797,7 +796,7 @@ void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_
 	}
 }
 
-void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
+void UtilInterface::convert(CheckStatusWrapper* status,
 	unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
 	unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
 {
@@ -1444,8 +1443,6 @@ unsigned UtilInterface::setOffsets(CheckStatusWrapper* status, IMessageMetadata*
 
 	return 0;
 }
-
-} // namespace Why
 
 
 #if (defined SOLARIS ) || (defined __cplusplus)
@@ -2467,7 +2464,7 @@ int API_ROUTINE BLOB_display(ISC_QUAD* blob_id,
 		ex.stuffException(&statusWrapper);
 	}
 
-	if (statusWrapper.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (statusWrapper.getState() & IStatus::STATE_ERRORS)
 	{
 		isc_print_status(statusWrapper.getErrors());
 		return FB_FAILURE;
@@ -2528,15 +2525,15 @@ static int any_text_dump(ISC_QUAD* blob_id,
 	LocalStatus ls;
 	CheckStatusWrapper st(&ls);
 	RefPtr<IAttachment> att(REF_NO_INCR, handleToIAttachment(&st, &database));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 	RefPtr<ITransaction> tra(REF_NO_INCR, handleToITransaction(&st, &transaction));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 
 	UtilInterfacePtr()->dumpBlob(&st, blob_id, att, tra, file_name, txt);
 
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 	{
 		isc_print_status(st.getErrors());
 		return FB_FAILURE;
@@ -2629,10 +2626,10 @@ int API_ROUTINE BLOB_edit(ISC_QUAD* blob_id,
 	CheckStatusWrapper statusWrapper(&st);
 
 	RefPtr<IAttachment> att(REF_NO_INCR, handleToIAttachment(&statusWrapper, &database));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 	RefPtr<ITransaction> tra(REF_NO_INCR, handleToITransaction(&statusWrapper, &transaction));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 
 	int rc = FB_SUCCESS;
@@ -2646,7 +2643,7 @@ int API_ROUTINE BLOB_edit(ISC_QUAD* blob_id,
 		ex.stuffException(&statusWrapper);
 	}
 
-	if (statusWrapper.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (statusWrapper.getState() & IStatus::STATE_ERRORS)
 		isc_print_status(statusWrapper.getErrors());
 
 	return rc;
@@ -2745,15 +2742,15 @@ static int any_text_load(ISC_QUAD* blob_id,
 	LocalStatus ls;
 	CheckStatusWrapper st(&ls);
 	RefPtr<IAttachment> att(REF_NO_INCR, handleToIAttachment(&st, &database));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 	RefPtr<ITransaction> tra(REF_NO_INCR, handleToITransaction(&st, &transaction));
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 		return FB_FAILURE;
 
 	UtilInterfacePtr()->loadBlob(&st, blob_id, att, tra, file_name, flag);
 
-	if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (st.getState() & IStatus::STATE_ERRORS)
 	{
 		isc_print_status(st.getErrors());
 		return FB_FAILURE;
@@ -3013,7 +3010,7 @@ void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 
 	att->getInfo(status, sizeof(ods_info), ods_info, sizeof(buffer), buffer);
 
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 		return;
 
 	for (ClumpletReader p(ClumpletReader::InfoResponse, buffer, sizeof(buffer)); !p.isEof(); p.moveNext())
@@ -3291,7 +3288,7 @@ void ThreadCleanup::finiThreadCleanup()
 class FiniThreadCleanup
 {
 public:
-	FiniThreadCleanup(Firebird::MemoryPool&)
+	FiniThreadCleanup(MemoryPool&)
 	{ }
 
 	~FiniThreadCleanup()
@@ -3300,7 +3297,7 @@ public:
 	}
 };
 
-Firebird::GlobalPtr<FiniThreadCleanup> thrCleanup;		// needed to call dtor
+GlobalPtr<FiniThreadCleanup> thrCleanup;		// needed to call dtor
 
 ThreadCleanup** ThreadCleanup::findCleanup(FPTR_VOID_PTR cleanup, void* arg)
 {
@@ -3329,7 +3326,7 @@ void ThreadCleanup::destructor(void*)
 
 void ThreadCleanup::add(FPTR_VOID_PTR cleanup, void* arg)
 {
-	Firebird::MutexLockGuard guard(cleanupMutex, FB_FUNCTION);
+	MutexLockGuard guard(cleanupMutex, FB_FUNCTION);
 
 	initThreadCleanup();
 
@@ -3427,7 +3424,7 @@ public:
 		ThreadCleanup::remove(cleanupAllStrings, NULL);
 	}
 };
-Firebird::GlobalPtr<Strings> cleanStrings;
+GlobalPtr<Strings> cleanStrings;
 
 const char* circularAlloc(const char* s, size_t len)
 {
@@ -3500,3 +3497,4 @@ void makePermanentVector(ISC_STATUS* v) noexcept
 {
 	makePermanentVector(v, v);
 }
+} // namespace Firebird::Why

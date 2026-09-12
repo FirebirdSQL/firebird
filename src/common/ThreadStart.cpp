@@ -53,6 +53,9 @@
 #include "../common/classes/rwlock.h"
 #include "../common/classes/Synchronize.h"
 
+namespace Firebird
+{
+
 
 namespace
 {
@@ -86,7 +89,7 @@ extern "C"
 THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 {
 	fb_assert(arg);
-	Firebird::ThreadSync* thread = FB_NEW Firebird::ThreadSync("threadStart");
+	ThreadSync* thread = FB_NEW ThreadSync("threadStart");
 
 	MemoryPool::setContextPool(getDefaultMemoryPool());
 	ThreadArgs localArgs(*static_cast<ThreadArgs*>(arg));
@@ -94,7 +97,7 @@ THREAD_ENTRY_DECLARE threadStart(THREAD_ENTRY_PARAM arg)
 	localArgs.run();
 
 	// Check if ThreadSync still exists before deleting
-	thread = Firebird::ThreadSync::findThread();
+	thread = ThreadSync::findThread();
 	delete thread;
 
 	return 0;
@@ -124,18 +127,18 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Threa
 
 #if defined (LINUX) || defined (FREEBSD)
 	if ((state = pthread_create(&pThread->m_handle, NULL, THREAD_ENTRYPOINT, THREAD_ARG)))
-		Firebird::system_call_failed::raise("pthread_create", state);
+		system_call_failed::raise("pthread_create", state);
 
 	if (pThread == &thread)
 	{
 		if ((state = pthread_detach(pThread->m_handle)))
-			Firebird::system_call_failed::raise("pthread_detach", state);
+			system_call_failed::raise("pthread_detach", state);
 	}
 #else
 	pthread_attr_t pattr;
 	state = pthread_attr_init(&pattr);
 	if (state)
-		Firebird::system_call_failed::raise("pthread_attr_init", state);
+		system_call_failed::raise("pthread_attr_init", state);
 
 #if defined(_AIX) || defined(DARWIN) || defined(HPUX)
 // adjust stack size
@@ -149,32 +152,32 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Threa
 	size_t stack_size;
 	state = pthread_attr_getstacksize(&pattr, &stack_size);
 	if (state)
-		Firebird::system_call_failed::raise("pthread_attr_getstacksize");
+		system_call_failed::raise("pthread_attr_getstacksize");
 
 	if (stack_size < 0x400000L)
 	{
 		state = pthread_attr_setstacksize(&pattr, 0x400000L);
 		if (state)
-			Firebird::system_call_failed::raise("pthread_attr_setstacksize", state);
+			system_call_failed::raise("pthread_attr_setstacksize", state);
 	}
 #endif // _AIX
 
 	state = pthread_attr_setscope(&pattr, PTHREAD_SCOPE_SYSTEM);
 	if (state)
-		Firebird::system_call_failed::raise("pthread_attr_setscope", state);
+		system_call_failed::raise("pthread_attr_setscope", state);
 
 	if (pThread == &thread)
 	{
 		state = pthread_attr_setdetachstate(&pattr, PTHREAD_CREATE_DETACHED);
 		if (state)
-			Firebird::system_call_failed::raise("pthread_attr_setdetachstate", state);
+			system_call_failed::raise("pthread_attr_setdetachstate", state);
 	}
 	state = pthread_create(&pThread->m_handle, &pattr, THREAD_ENTRYPOINT, THREAD_ARG);
 	int state2 = pthread_attr_destroy(&pattr);
 	if (state)
-		Firebird::system_call_failed::raise("pthread_create", state);
+		system_call_failed::raise("pthread_create", state);
 	if (state2)
-		Firebird::system_call_failed::raise("pthread_attr_destroy", state2);
+		system_call_failed::raise("pthread_attr_destroy", state2);
 
 #endif
 
@@ -184,7 +187,7 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Threa
 		int dummy;		// We do not want to know old cancel type
 		state = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &dummy);
 		if (state)
-			 Firebird::system_call_failed::raise("pthread_setcanceltype", state);
+			 system_call_failed::raise("pthread_setcanceltype", state);
 	}
 #endif
 }
@@ -197,7 +200,7 @@ void Thread::waitForCompletion()
 
 		int state = pthread_join(m_handle, NULL);
 		if (state)
-			Firebird::system_call_failed::raise("pthread_join", state);
+			system_call_failed::raise("pthread_join", state);
 		m_handle = INVALID_HANDLE;
 	}
 }
@@ -249,12 +252,12 @@ void Thread::sleep(unsigned milliseconds)
 	{
 		if (errno != EINTR)
 		{
-			Firebird::system_call_failed::raise("nanosleep");
+			system_call_failed::raise("nanosleep");
 		}
 		timer = rem;
 	}
 #else
-	Firebird::Semaphore timer;
+	Semaphore timer;
 	timer.tryEnter(0, milliseconds);
 #endif
 }
@@ -334,7 +337,7 @@ void Thread::start(ThreadEntryPoint* routine, void* arg, int priority_arg, Threa
 		// GetLastError() still works because RTL call no other system
 		// functions after CreateThread() in the case of error.
 		// Watch out if it is ever changed.
-		Firebird::system_call_failed::raise("_beginthreadex", GetLastError());
+		system_call_failed::raise("_beginthreadex", GetLastError());
 	}
 
 	SetThreadPriority(handle, priority);
@@ -371,7 +374,7 @@ void Thread::waitForCompletion()
 	// When current DLL is unloading, OS loader holds loader lock. When thread is
 	// exiting, OS notifies every DLL about it, and acquires loader lock. In such
 	// scenario waiting on thread handle will never succeed.
-	if (!Firebird::dDllUnloadTID) {
+	if (!dDllUnloadTID) {
 		WaitForSingleObject(m_handle, 10000);		// error handler ????????????
 	}
 	detach();
@@ -409,3 +412,6 @@ void Thread::yield()
 }
 
 #endif  // WIN_NT
+
+
+} // namespace Firebird

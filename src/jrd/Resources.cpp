@@ -16,8 +16,8 @@
 #include "../jrd/Function.h"
 #include "../jrd/met.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 void Resources::transfer(thread_db* tdbb, VersionedObjects* to, bool internal)
@@ -70,7 +70,7 @@ jrd_rel* CachedResource<jrd_rel, RelationPermanent>::operator()(thread_db* tdbb)
 	return cacheElement->getVersioned(tdbb, cacheElement->isSystem() ? CacheFlag::NOSCAN : 0);
 }
 
-void Format::hash(Firebird::sha512& digest) const
+void Format::hash(sha512& digest) const
 {
 	static_assert(std::has_unique_object_representations_v<dsc>);
 
@@ -80,3 +80,6 @@ void Format::hash(Firebird::sha512& digest) const
 
 	digest.process(fmt_desc.getCount() * sizeof(dsc), fmt_desc.begin());
 }
+
+
+} // namespace Firebird::Jrd

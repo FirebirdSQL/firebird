@@ -30,23 +30,24 @@
 #include "../common/classes/objects_array.h"
 #include "../jrd/SystemPackages.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 
 class SqlPackage final : public SystemPackage
 {
 public:
-	SqlPackage(Firebird::MemoryPool& pool);
+	SqlPackage(MemoryPool& pool);
 
 	SqlPackage(const SqlPackage&) = delete;
 	SqlPackage& operator=(const SqlPackage&) = delete;
 
 private:
-	FB_MESSAGE(ExplainInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ExplainInput, ThrowStatusExceptionWrapper,
 		(FB_BLOB, sql)
 	);
 
-	FB_MESSAGE(ExplainOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ExplainOutput, ThrowStatusExceptionWrapper,
 		(FB_INTEGER, planLine)
 		(FB_BIGINT, recordSourceId)
 		(FB_BIGINT, parentRecordSourceId)
@@ -64,15 +65,15 @@ private:
 
 	class ExplainResultSet :
 		public
-			Firebird::DisposeIface<
-				Firebird::IExternalResultSetImpl<
+			DisposeIface<
+				IExternalResultSetImpl<
 					ExplainResultSet,
-					Firebird::ThrowStatusExceptionWrapper
+					ThrowStatusExceptionWrapper
 				>
 			>
 	{
 	public:
-		ExplainResultSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+		ExplainResultSet(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			const ExplainInput::Type* in, ExplainOutput::Type* out);
 
 	public:
@@ -82,38 +83,38 @@ private:
 		}
 
 	public:
-		FB_BOOLEAN fetch(Firebird::ThrowStatusExceptionWrapper* status) override;
+		FB_BOOLEAN fetch(ThrowStatusExceptionWrapper* status) override;
 
 	private:
 		ExplainOutput::Type* out;
-		Firebird::Array<ExplainOutput::Type> resultEntries{*getDefaultMemoryPool()};
-		Firebird::Array<ExplainOutput::Type>::const_iterator resultIterator = nullptr;
+		Array<ExplainOutput::Type> resultEntries{*getDefaultMemoryPool()};
+		Array<ExplainOutput::Type>::const_iterator resultIterator = nullptr;
 	};
 
-	static Firebird::IExternalResultSet* explainProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context, const ExplainInput::Type* in, ExplainOutput::Type* out);
+	static IExternalResultSet* explainProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context, const ExplainInput::Type* in, ExplainOutput::Type* out);
 
 	//----------
 
-	FB_MESSAGE(ParseUnqualifiedNamesInput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ParseUnqualifiedNamesInput, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(MAX_VARY_COLUMN_SIZE / METADATA_BYTES_PER_CHAR * METADATA_BYTES_PER_CHAR, CS_METADATA), names)
 	);
 
-	FB_MESSAGE(ParseUnqualifiedNamesOutput, Firebird::ThrowStatusExceptionWrapper,
+	FB_MESSAGE(ParseUnqualifiedNamesOutput, ThrowStatusExceptionWrapper,
 		(FB_INTL_VARCHAR(METADATA_IDENTIFIER_CHAR_LEN * METADATA_BYTES_PER_CHAR, CS_METADATA), name)
 	);
 
 	class ParseUnqualifiedNamesResultSet :
 		public
-			Firebird::DisposeIface<
-				Firebird::IExternalResultSetImpl<
+			DisposeIface<
+				IExternalResultSetImpl<
 					ParseUnqualifiedNamesResultSet,
-					Firebird::ThrowStatusExceptionWrapper
+					ThrowStatusExceptionWrapper
 				>
 			>
 	{
 	public:
-		ParseUnqualifiedNamesResultSet(Firebird::ThrowStatusExceptionWrapper* status, Firebird::IExternalContext* context,
+		ParseUnqualifiedNamesResultSet(ThrowStatusExceptionWrapper* status, IExternalContext* context,
 			const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* out);
 
 	public:
@@ -123,20 +124,20 @@ private:
 		}
 
 	public:
-		FB_BOOLEAN fetch(Firebird::ThrowStatusExceptionWrapper* status) override;
+		FB_BOOLEAN fetch(ThrowStatusExceptionWrapper* status) override;
 
 	private:
 		ParseUnqualifiedNamesOutput::Type* out;
-		Firebird::ObjectsArray<Firebird::MetaString> resultEntries{*getDefaultMemoryPool()};
-		Firebird::ObjectsArray<Firebird::MetaString>::const_iterator resultIterator;
+		ObjectsArray<MetaString> resultEntries{*getDefaultMemoryPool()};
+		ObjectsArray<MetaString>::const_iterator resultIterator;
 	};
 
-	static Firebird::IExternalResultSet* parseUnqualifiedNamesProcedure(Firebird::ThrowStatusExceptionWrapper* status,
-		Firebird::IExternalContext* context,
+	static IExternalResultSet* parseUnqualifiedNamesProcedure(ThrowStatusExceptionWrapper* status,
+		IExternalContext* context,
 		const ParseUnqualifiedNamesInput::Type* in, ParseUnqualifiedNamesOutput::Type* out);
 };
 
 
-}	// namespace
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_SYS_PACKAGES_SQL_PACKAGE_H

@@ -47,8 +47,9 @@
 #include "../../common/SimpleStatusVector.h"
 #include "../../jrd/status.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Ntrace
+{
+
 
 static const char* const DEFAULT_LOG_NAME = "default_trace.log";
 
@@ -61,9 +62,9 @@ static const char* const DEFAULT_LOG_NAME = "default_trace.log";
 
 /// TracePluginImpl
 
-const char* TracePluginImpl::marshal_exception(const Firebird::Exception& ex)
+const char* TracePluginImpl::marshal_exception(const Exception& ex)
 {
-	Firebird::StaticStatusVector st;
+	StaticStatusVector st;
 	ex.stuffException(st);
 	const ISC_STATUS* status = st.begin();
 
@@ -259,7 +260,7 @@ void TracePluginImpl::logRecord(const char* action)
 {
 	// We use atomic file appends for logging. Do not try to break logging
 	// to multiple separate file operations
-	const Firebird::TimeStamp stamp(Firebird::TimeStamp::getCurrentTimeStamp());
+	const TimeStamp stamp(TimeStamp::getCurrentTimeStamp());
 	struct tm times;
 	stamp.decode(&times);
 
@@ -809,7 +810,7 @@ bool TracePluginImpl::filterStatus(const ISC_STATUS* status, GdsCodesArray& arr)
 }
 
 
-void TracePluginImpl::str2Array(const Firebird::string& str, GdsCodesArray& arr)
+void TracePluginImpl::str2Array(const string& str, GdsCodesArray& arr)
 {
 	// input: string with comma-delimited list of gds codes values and\or gds codes names
 	// output: sorted array of gds codes values
@@ -1077,14 +1078,14 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				case dtype_sql_date:
 				{
 					struct tm times;
-					Firebird::TimeStamp::decode_date(*(ISC_DATE*)parameters->dsc_address, &times);
+					TimeStamp::decode_date(*(ISC_DATE*)parameters->dsc_address, &times);
 					paramvalue.printf("%04d-%02d-%02d", times.tm_year + 1900, times.tm_mon + 1, times.tm_mday);
 					break;
 				}
 				case dtype_sql_time:
 				{
 					int hours, minutes, seconds, fractions;
-					Firebird::TimeStamp::decode_time(*(ISC_TIME*) parameters->dsc_address,
+					TimeStamp::decode_time(*(ISC_TIME*) parameters->dsc_address,
 						&hours, &minutes, &seconds, &fractions);
 
 					paramvalue.printf("%02d:%02d:%02d.%04d", hours,	minutes, seconds, fractions);
@@ -1092,7 +1093,7 @@ void TracePluginImpl::appendParams(ITraceParams* params)
 				}
 				case dtype_timestamp:
 				{
-					Firebird::TimeStamp ts(*(ISC_TIMESTAMP*) parameters->dsc_address);
+					TimeStamp ts(*(ISC_TIMESTAMP*) parameters->dsc_address);
 					struct tm times;
 
 					ts.decode(&times);
@@ -2345,10 +2346,10 @@ void TracePluginImpl::log_event_service_start(ITraceServiceConnection* service,
 			// Delete terminator symbols from service switches
 			for (FB_SIZE_T i = 0; i < sw.length(); ++i)
 			{
-				if (sw[i] == Firebird::SVC_TRMNTR)
+				if (sw[i] == SVC_TRMNTR)
 				{
 					sw.erase(i, 1);
-					if ((i < sw.length()) && (sw[i] != Firebird::SVC_TRMNTR))
+					if ((i < sw.length()) && (sw[i] != SVC_TRMNTR))
 						--i;
 				}
 			}
@@ -2537,7 +2538,7 @@ FB_BOOLEAN TracePluginImpl::trace_attach(ITraceDatabaseConnection* connection,
 		log_event_attach(connection, create_db, att_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2551,7 +2552,7 @@ FB_BOOLEAN TracePluginImpl::trace_detach(ITraceDatabaseConnection* connection, F
 		log_event_detach(connection, drop_db);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2568,7 +2569,7 @@ FB_BOOLEAN TracePluginImpl::trace_transaction_start(ITraceDatabaseConnection* co
 		log_event_transaction_start(connection, transaction, tpb_length, tpb, tra_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2584,7 +2585,7 @@ FB_BOOLEAN TracePluginImpl::trace_transaction_end(ITraceDatabaseConnection* conn
 		log_event_transaction_end(connection, transaction, commit, retain_context, tra_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2600,7 +2601,7 @@ FB_BOOLEAN TracePluginImpl::trace_set_context(ITraceDatabaseConnection* connecti
 		log_event_set_context(connection, transaction, variable);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2616,7 +2617,7 @@ FB_BOOLEAN TracePluginImpl::trace_proc_compile(ITraceDatabaseConnection* connect
 		log_event_proc_compile(connection, procedure, time_millis, proc_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2633,7 +2634,7 @@ FB_BOOLEAN TracePluginImpl::trace_proc_execute(ITraceDatabaseConnection* connect
 		log_event_proc_execute(connection, transaction, procedure, started, proc_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2649,7 +2650,7 @@ FB_BOOLEAN TracePluginImpl::trace_func_compile(ITraceDatabaseConnection* connect
 		log_event_func_compile(connection, function, time_millis, func_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2666,7 +2667,7 @@ FB_BOOLEAN TracePluginImpl::trace_func_execute(ITraceDatabaseConnection* connect
 		log_event_func_execute(connection, transaction, function, started, func_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2682,7 +2683,7 @@ FB_BOOLEAN TracePluginImpl::trace_trigger_compile(ITraceDatabaseConnection* conn
 		log_event_trigger_compile(connection, trigger, time_millis, trig_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2699,7 +2700,7 @@ FB_BOOLEAN TracePluginImpl::trace_trigger_execute(ITraceDatabaseConnection* conn
 		log_event_trigger_execute(connection, transaction, trigger, started, trig_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2717,7 +2718,7 @@ FB_BOOLEAN TracePluginImpl::trace_dsql_prepare(ITraceDatabaseConnection* connect
 		log_event_dsql_prepare(connection, transaction, statement, time_millis, req_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2732,7 +2733,7 @@ FB_BOOLEAN TracePluginImpl::trace_dsql_free(ITraceDatabaseConnection* connection
 		log_event_dsql_free(connection, statement, option);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2748,7 +2749,7 @@ FB_BOOLEAN TracePluginImpl::trace_dsql_execute(ITraceDatabaseConnection* connect
 		log_event_dsql_execute(connection, transaction, statement, started, 0, req_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2764,7 +2765,7 @@ FB_BOOLEAN TracePluginImpl::trace_dsql_restart(ITraceDatabaseConnection* connect
 			ITracePlugin::RESULT_SUCCESS);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2782,7 +2783,7 @@ FB_BOOLEAN TracePluginImpl::trace_blr_compile(ITraceDatabaseConnection* connecti
 		log_event_blr_compile(connection, transaction, statement, time_millis, req_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2797,7 +2798,7 @@ FB_BOOLEAN TracePluginImpl::trace_blr_execute(ITraceDatabaseConnection* connecti
 		log_event_blr_execute(connection, transaction, statement, req_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2814,7 +2815,7 @@ FB_BOOLEAN TracePluginImpl::trace_dyn_execute(ITraceDatabaseConnection* connecti
 		log_event_dyn_execute(connection, transaction, request, time_millis, req_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2830,7 +2831,7 @@ FB_BOOLEAN TracePluginImpl::trace_service_attach(ITraceServiceConnection* servic
 		log_event_service_attach(service, att_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2845,7 +2846,7 @@ FB_BOOLEAN TracePluginImpl::trace_service_start(ITraceServiceConnection* service
 		log_event_service_start(service, switches_length, switches, start_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2862,7 +2863,7 @@ FB_BOOLEAN TracePluginImpl::trace_service_query(ITraceServiceConnection* service
 								recv_item_length, recv_items, query_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2878,7 +2879,7 @@ FB_BOOLEAN TracePluginImpl::trace_service_detach(ITraceServiceConnection* servic
 		log_event_service_detach(service, detach_result);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2893,7 +2894,7 @@ FB_BOOLEAN TracePluginImpl::trace_event_error(ITraceConnection* connection,
 		log_event_error(connection, status, function);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
@@ -2908,9 +2909,12 @@ FB_BOOLEAN TracePluginImpl::trace_event_sweep(ITraceDatabaseConnection* connecti
 		log_event_sweep(connection, sweep, sweep_state);
 		return true;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		marshal_exception(ex);
 		return false;
 	}
 }
+
+
+} // namespace Firebird::Ntrace

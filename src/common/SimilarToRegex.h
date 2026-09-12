@@ -28,10 +28,7 @@
 #include "../common/classes/fb_string.h"
 
 namespace Firebird {
-
-
-namespace SimilarToFlag
-{
+namespace SimilarToFlag {
 	static inline constexpr unsigned CASE_INSENSITIVE = 0x1;
 	static inline constexpr unsigned LATIN = 0x2;
 	static inline constexpr unsigned WELLFORMED = 0x4;

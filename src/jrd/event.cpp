@@ -61,9 +61,8 @@
 
 #define SRQ_BASE                  ((UCHAR*) m_sharedMemory->getHeader())
 
-using namespace Firebird;
-
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 
 void EventManager::init(Attachment* attachment)
@@ -1361,4 +1360,5 @@ void EventManager::exceptionHandler(const Exception& ex, ThreadFinishSync<EventM
 	iscLogException("Error closing event watcher thread\n", ex);
 }
 
-} // namespace
+
+} // namespace Firebird::Jrd

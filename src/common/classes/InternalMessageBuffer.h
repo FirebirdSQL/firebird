@@ -41,7 +41,7 @@ public:
 	~InternalMessageBuffer();
 
 public:
-	Firebird::IMessageMetadata* metadata;
+	IMessageMetadata* metadata;
 	UCHAR* buffer;
 };
 

@@ -33,9 +33,11 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/init.h"
 
-namespace Auth {
+namespace Firebird::Auth
+{
 
-int SecurityDatabaseClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* cb)
+
+int SecurityDatabaseClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 {
 	// fprintf(stderr, "Clnt: Legacy: lgn=%s pswd=%s\n", cb->getLogin(), cb->getPassword());
 	if (!(cb->getLogin() && cb->getPassword()))
@@ -46,7 +48,7 @@ int SecurityDatabaseClient::authenticate(Firebird::CheckStatusWrapper* status, F
 	TEXT pwt[MAX_LEGACY_PASSWORD_LENGTH + 2];
 	ENC_crypt(pwt, sizeof pwt, cb->getPassword(), LEGACY_PASSWORD_SALT);
 	cb->putData(status, static_cast<unsigned>(strlen(&pwt[2])), &pwt[2]);
-	if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+	if (status->getState() & IStatus::STATE_ERRORS)
 	{
 		return AUTH_FAILED;
 	}
@@ -55,12 +57,13 @@ int SecurityDatabaseClient::authenticate(Firebird::CheckStatusWrapper* status, F
 }
 
 namespace {
-	Firebird::SimpleFactory<SecurityDatabaseClient> factory;
+	SimpleFactory<SecurityDatabaseClient> factory;
 }
 
-void registerLegacyClient(Firebird::IPluginManager* iPlugin)
+void registerLegacyClient(IPluginManager* iPlugin)
 {
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_CLIENT, "Legacy_Auth", &factory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, "Legacy_Auth", &factory);
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

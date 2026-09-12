@@ -28,18 +28,17 @@
 
 #include "../jrd/blb.h"
 
+namespace Firebird::Jrd
+{
+class MetaName;
+
+
 // Version 2 of the debug information replaces 16-bit values
 // inside the fb_dbg_map_src2blr tag with 32-bit ones.
 // Also, it introduces some new tags.
 inline constexpr UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
 inline constexpr UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
 inline constexpr UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
-
-namespace Jrd {
-class MetaName;
-}
-
-namespace Firebird {
 
 class MapBlrToSrcItem
 {
@@ -52,9 +51,9 @@ public:
 	{ return Item.mbs_offset; }
 };
 
-typedef Firebird::SortedArray<
+typedef SortedArray<
 	MapBlrToSrcItem,
-	Firebird::EmptyStorage<MapBlrToSrcItem>,
+	EmptyStorage<MapBlrToSrcItem>,
 	ULONG,
 	MapBlrToSrcItem> MapBlrToSrc;
 
@@ -112,7 +111,7 @@ struct DbgInfo : public PermanentStorage
 		forCursorOffsetToName.clear();
 
 		{	// scope
-			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subFuncs);
+			LeftPooledMap<MetaName, DbgInfo*>::Accessor accessor(&subFuncs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -121,7 +120,7 @@ struct DbgInfo : public PermanentStorage
 		}
 
 		{	// scope
-			LeftPooledMap<Jrd::MetaName, DbgInfo*>::Accessor accessor(&subProcs);
+			LeftPooledMap<MetaName, DbgInfo*>::Accessor accessor(&subProcs);
 
 			for (bool found = accessor.getFirst(); found; found = accessor.getNext())
 				delete accessor.current()->second;
@@ -131,17 +130,18 @@ struct DbgInfo : public PermanentStorage
 	}
 
 	MapBlrToSrc blrToSrc;					// mapping between blr offsets and source text position
-	RightPooledMap<USHORT, Jrd::MetaName> varIndexToName;		// mapping between variable index and name
-	RightPooledMap<ArgumentInfo, Jrd::MetaName> argInfoToName;	// mapping between argument info (type, index) and name
-	RightPooledMap<USHORT, Jrd::MetaName> declaredCursorIndexToName;	// mapping between declared cursor index and name
-	RightPooledMap<ULONG, Jrd::MetaName> forCursorOffsetToName;	// mapping between for-cursor offset and name
-	LeftPooledMap<Jrd::MetaName, DbgInfo*> subFuncs;	// sub functions
-	LeftPooledMap<Jrd::MetaName, DbgInfo*> subProcs;	// sub procedures
+	RightPooledMap<USHORT, MetaName> varIndexToName;		// mapping between variable index and name
+	RightPooledMap<ArgumentInfo, MetaName> argInfoToName;	// mapping between argument info (type, index) and name
+	RightPooledMap<USHORT, MetaName> declaredCursorIndexToName;	// mapping between declared cursor index and name
+	RightPooledMap<ULONG, MetaName> forCursorOffsetToName;	// mapping between for-cursor offset and name
+	LeftPooledMap<MetaName, DbgInfo*> subFuncs;	// sub functions
+	LeftPooledMap<MetaName, DbgInfo*> subProcs;	// sub procedures
 };
 
-} // namespace Firebird
+void DBG_parse_debug_info(thread_db*, bid*, DbgInfo&);
+void DBG_parse_debug_info(ULONG, const UCHAR*, DbgInfo&);
 
-void DBG_parse_debug_info(Jrd::thread_db*, Jrd::bid*, Firebird::DbgInfo&);
-void DBG_parse_debug_info(ULONG, const UCHAR*, Firebird::DbgInfo&);
+
+} // namespace Firebird::Jrd
 
 #endif // DEBUG_INTERFACE_H

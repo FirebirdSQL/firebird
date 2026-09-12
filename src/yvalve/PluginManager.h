@@ -35,7 +35,9 @@
 #include "../common/config/config_file.h"
 #include "../common/config/config.h"
 
-namespace Firebird {
+namespace Firebird::Why
+{
+
 
 class PluginManager : public AutoIface<IPluginManagerImpl<PluginManager, CheckStatusWrapper> >
 {
@@ -58,6 +60,7 @@ public:
 	static void deleteDelayed();
 };
 
-}	// namespace Firebird
+
+}	// namespace Firebird::Why
 
 #endif	// YVALVE_PLUGIN_MANAGER_H

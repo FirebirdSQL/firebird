@@ -24,7 +24,9 @@
 #ifndef BURP_RESTO_PROTO_H
 #define BURP_RESTO_PROTO_H
 
-int	RESTORE_restore(const TEXT*, const TEXT*);
+namespace Firebird::Burp
+{
+	int	RESTORE_restore(const TEXT*, const TEXT*);
+} // namespace Firebird::Burp
 
 #endif	// BURP_RESTO_PROTO_H
-

@@ -37,6 +37,9 @@
 #include <windows.h>
 #endif
 
+namespace Firebird
+{
+
 
 // Thread priorities (may be ignored)
 
@@ -233,7 +236,7 @@ class ThreadFinishSync
 public:
 	typedef void ThreadRoutine(TA);
 
-	ThreadFinishSync(Firebird::MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
+	ThreadFinishSync(MemoryPool& pool, ThreadRoutine* routine, int priority_arg = THREAD_medium)
 		: threadRoutine(routine),
 		  threadPriority(priority_arg),
 		  closing(false)
@@ -279,7 +282,7 @@ private:
 		{
 			threadRoutine(threadArg);
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			threadArg->exceptionHandler(ex, threadRoutine);
 		}
@@ -289,5 +292,8 @@ private:
 		closing = true;
 	}
 };
+
+
+}	// namespace Firebird
 
 #endif // JRD_THREADSTART_H

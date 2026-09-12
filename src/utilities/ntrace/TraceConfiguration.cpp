@@ -31,7 +31,8 @@
 #include "../../common/db_alias.h"
 #include "../../common/os/path_utils.h"
 
-using namespace Firebird;
+namespace Firebird::Ntrace
+{
 
 
 void TraceCfgReader::readTraceConfiguration(const char* text,
@@ -46,7 +47,7 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 
 #define PATH_PARAMETER(NAME, VALUE) \
 	if (!found && el->name == #NAME) { \
-		Firebird::PathName temp; \
+		PathName temp; \
 		expandPattern(el, temp); \
 		PathUtils::fixupSeparators(temp.begin()); \
 		m_config.NAME = temp.c_str(); \
@@ -350,3 +351,6 @@ TraceCfgReader::SectionType TraceCfgReader::parseSectionKey(const ConfigFile::Pa
 		return SectionType::DATABASE;
 	}
 }
+
+
+} // namespace Firebird::Ntrace

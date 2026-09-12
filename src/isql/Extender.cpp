@@ -25,6 +25,10 @@
 #include "Extender.h"
 #include "../common/classes/alloc.h"
 
+namespace Firebird::Isql
+{
+
+
 // Dynamic allocation. This is a destructive operation if the requested size
 // is bigger than the existing one. Otherwise, no reallocation happens.
 // The insertion point is always reset. This means getUsed() returns zero after
@@ -108,3 +112,5 @@ void Extender::grow(size_t n)
 	}
 }
 
+
+} // namespace Firebird::Isql

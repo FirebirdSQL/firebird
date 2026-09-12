@@ -103,6 +103,9 @@
 #include "../remote/os/win32/xnet_proto.h"
 #endif
 
+namespace Firebird::Remote
+{
+
 
 const char* const PROTOCOL_INET = "inet";
 const char* const PROTOCOL_INET4 = "inet4";
@@ -119,8 +122,6 @@ const char* const PROTOCOL_XNET = "xnet";
 const char* const INET_SEPARATOR = "/";
 const char* const INET_LOCALHOST = "localhost";
 
-
-using namespace Firebird;
 
 namespace {
 	[[noreturn]] void handle_error(ISC_STATUS code)
@@ -199,8 +200,6 @@ namespace {
 
 	GlobalPtr<ClientPortsCleanup> outPorts;
 }
-
-namespace Remote {
 
 // Provider stuff
 class Attachment;
@@ -1124,8 +1123,6 @@ void registerRedirector(IPluginManager* iPlugin)
 #endif
 }
 
-} // namespace Remote
-
 /*
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
@@ -1134,8 +1131,6 @@ extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 	pi->release();
 }
 */
-
-namespace Remote {
 
 static Rvnt* add_event(rem_port*);
 static void add_other_params(rem_port*, ClumpletWriter&, const ParametersSet&);
@@ -10152,8 +10147,6 @@ static void cleanDpb(ClumpletWriter& dpb, const ParametersSet* tags)
 	dpb.deleteWithTag(tags->trusted_auth);
 }
 
-} //namespace Remote
-
 
 void ClientPortsCleanup::closePort(rem_port* port)
 {
@@ -10602,15 +10595,18 @@ void ClntAuthBlock::ClientCrypt::dispose()
 	}
 }
 
-int ClntAuthBlock::ClientCrypt::getHashLength(Firebird::CheckStatusWrapper* status)
+int ClntAuthBlock::ClientCrypt::getHashLength(CheckStatusWrapper* status)
 {
 	getHashData(status, nullptr);
 
 	return -1;
 }
 
-void ClntAuthBlock::ClientCrypt::getHashData(Firebird::CheckStatusWrapper* status, void*)
+void ClntAuthBlock::ClientCrypt::getHashData(CheckStatusWrapper* status, void*)
 {
 	ISC_STATUS err[] = {isc_arg_gds, isc_wish_list};
 	status->setErrors2(FB_NELEM(err), err);
 }
+
+
+} // namespace Firebird::Remote

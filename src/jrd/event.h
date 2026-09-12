@@ -31,11 +31,15 @@
 #include "../jrd/que.h"
 #include "firebird/Interface.h"
 
+namespace Firebird::Jrd
+{
+
+
 // Global section header
 
 inline constexpr USHORT EVENT_VERSION = 4;
 
-class evh : public Firebird::MemoryHeader
+class evh : public MemoryHeader
 {
 public:
 	ULONG evh_length;				// Current length of global section
@@ -79,7 +83,7 @@ struct prb
 	srq prb_processes;				// Process que owned by header
 	srq prb_sessions;				// Sessions within process
 	SLONG prb_process_id;			// Process id
-	Firebird::event_t prb_event;	// Event on which to wait
+	event_t prb_event;	// Event on which to wait
 	USHORT prb_flags;
 };
 
@@ -121,7 +125,7 @@ struct evt_req
 	SRQ_PTR req_process;			// Parent process block
 	SRQ_PTR req_session;			// Parent session block
 	SRQ_PTR req_interests;			// First interest in request
-	Firebird::IEventCallback* req_ast; // Asynchronous callback
+	IEventCallback* req_ast; // Asynchronous callback
 	SLONG req_request_id;			// Request id, dummy
 };
 
@@ -137,7 +141,7 @@ struct req_int
 	SLONG rint_count;				// Threshold count
 };
 
-inline constexpr int EPB_version1 = 1;
+
+}	// namespace Firebird::Jrd
 
 #endif // JRD_EVENT_H
-

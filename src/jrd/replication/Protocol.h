@@ -24,7 +24,7 @@
 #ifndef JRD_REPLICATION_PROTOCOL_H
 #define JRD_REPLICATION_PROTOCOL_H
 
-namespace Replication
+namespace Firebird::Jrd::Replication
 {
 	// Supported protocol versions
 	inline constexpr USHORT PROTOCOL_VERSION_1 = 1;

@@ -31,6 +31,9 @@
 #include "../common/classes/fb_string.h"
 #include "../../common/classes/alloc.h"
 
+namespace Firebird
+{
+
 
 /** This is a utility class that provides a platform independent way to do some
 	file path operations.  The operations include determining if a path is
@@ -62,16 +65,16 @@ public:
 		subclass DirIterator to create DirIterator objects that function
 		correctly on the platform.
 	**/
-	class DirIterator : protected Firebird::AutoStorage
+	class DirIterator : protected AutoStorage
 	{
 	public:
 		// The constructor requires a string that is the path of the directory being iterated.
 		// DirIterator may be located on stack, therefore use AutoStorage.
-		DirIterator(MemoryPool& p, const Firebird::PathName& dir)
+		DirIterator(MemoryPool& p, const PathName& dir)
 			: AutoStorage(p), dirPrefix(getPool(), dir)
 		{}
 
-		DirIterator(const Firebird::PathName& dir)
+		DirIterator(const PathName& dir)
 			: AutoStorage(), dirPrefix(getPool(), dir)
 		{}
 
@@ -93,7 +96,7 @@ public:
 		// item in the iteration.  This path is prefixed with the path of
 		// the directory.  If the last element of the path is wanted use
 		// PathUtils::splitLastComponent on the result of this function.
-		virtual const Firebird::PathName& operator*() noexcept = 0;
+		virtual const PathName& operator*() noexcept = 0;
 
 		// Tests if the iterator has reached the end of the iteration.
 		// It is implemented in such a way to make the following loop work correctly:
@@ -102,7 +105,7 @@ public:
 
 	protected:
 		// Stores the path to the directory as given in the constructor
-		const Firebird::PathName dirPrefix;
+		const PathName dirPrefix;
 	};
 
 	/** isRelative returns true if the given path is relative, and false if not.
@@ -110,19 +113,19 @@ public:
 		For example, the path 'firebird/bin' is a relative path in unix while
 		the path '/opt/firebird/bin' is not.
 	**/
-	static bool isRelative(const Firebird::PathName& path);
+	static bool isRelative(const PathName& path);
 
 	/** isSymLink returns true if the given path is symbolic link, and false if not.
 		Use of this links may provide way to override system security.
 		Example: ln -s /usr/firebird/ExternalTables/mytable /etc/xinet.d/remoteshell
 		and insert desired rows into mytable.
 	**/
-	static bool isSymLink(const Firebird::PathName& path);
+	static bool isSymLink(const PathName& path);
 
 	/** canAccess returns true if the given path can be accessed
 		by this process. mode - like in ACCESS(2).
 	**/
-	static bool canAccess(const Firebird::PathName& path, int mode);
+	static bool canAccess(const PathName& path, int mode);
 
 	/** Concatenates the two paths given in the second and third parameters,
 		and writes the resulting path into the first parameter.  The
@@ -132,17 +135,17 @@ public:
 		a simple string concatenation of the arguments with the directory
 		separator character.
 	**/
-	static void concatPath(Firebird::PathName&, const Firebird::PathName&,
-					const Firebird::PathName&);
+	static void concatPath(PathName&, const PathName&,
+					const PathName&);
 
 	// Tries to ensure our path finishes with a platform-specific directory separator.
 	// We don't work correctly with MBCS.
-	static void ensureSeparator(Firebird::PathName& in_out);
+	static void ensureSeparator(PathName& in_out);
 
 	// Ensure the path separators are correct for the current platform
 	static void fixupSeparators(char* path) noexcept;
 
-	static void fixupSeparators(Firebird::PathName& path) noexcept
+	static void fixupSeparators(PathName& path) noexcept
 	{
 		fixupSeparators(path.begin());
 	}
@@ -154,15 +157,15 @@ public:
 		If the input path has only one component that component is returned in the
 		second parameter and the first parameter is set to the empty string.
 	**/
-	static void splitLastComponent(Firebird::PathName&, Firebird::PathName&,
-									const Firebird::PathName&);
+	static void splitLastComponent(PathName&, PathName&,
+									const PathName&);
 
 	/**	splitPrefix takes a path as the first argument, splits OS-dependent prefix
 		from it (something like C:\, D: or \ in windows or / in posix),
 		and returns stripped path inplace, i.e. as first argument.
 		Prefix is returned as the second argument.
 	**/
-	static void splitPrefix(Firebird::PathName& path, Firebird::PathName& prefix);
+	static void splitPrefix(PathName& path, PathName& prefix);
 
 	/** This is the factory method for allocating DirIterator objects.
 		It takes a reference to a memory pool to use for all heap allocations,
@@ -171,13 +174,15 @@ public:
 		All errors result in either exceptions being thrown, or a valid empty
 		DirIterator being returned.
 	**/
-	static DirIterator* newDirIterator(MemoryPool&, const Firebird::PathName&);
+	static DirIterator* newDirIterator(MemoryPool&, const PathName&);
 
 	/** makeDir creates directory passed as parameter.
 		return value is 0 on success or error code on error.
 	**/
-	static int makeDir(const Firebird::PathName& path);
+	static int makeDir(const PathName& path);
 };
 
-#endif // JRD_OS_PATH_UTILS_H
 
+} // namespace Firebird
+
+#endif // JRD_OS_PATH_UTILS_H

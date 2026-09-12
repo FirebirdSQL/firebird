@@ -57,7 +57,9 @@
 #include "../common/classes/locks.h"
 #include "../common/classes/rwlock.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace {
 
@@ -84,3 +86,6 @@ void ThreadData::restoreSpecific()
 	ThreadData* current_context = getSpecific();
 	TLS_SET(tData, current_context->threadDataPriorContext);
 }
+
+
+}  // namespace Firebird

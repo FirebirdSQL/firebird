@@ -29,8 +29,7 @@
 #include "../jrd/recsrc/RecordSource.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class KeywordsTable : public SnapshotData
 {
@@ -48,7 +47,7 @@ public:
 class KeywordsTableScan final : public VirtualTableScan
 {
 public:
-	KeywordsTableScan(CompilerScratch* csb, const Firebird::string& alias,
+	KeywordsTableScan(CompilerScratch* csb, const string& alias,
 					  StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{
@@ -74,6 +73,6 @@ private:
 	ULONG impureOffset;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_KEYWORDS_TABLE_H

@@ -54,8 +54,9 @@
 #endif
 
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 static void bug_lck(const TEXT*);
 static bool compatible(const Lock*, const Lock*, USHORT);
@@ -1606,3 +1607,5 @@ Lock* Lock::detach()
 	return next;
 }
 
+
+}	// namespace Firebird::Jrd

@@ -325,7 +325,7 @@ namespace Firebird {
 		private:
 			// friend definition here is required to implement
 			// Merge/Split pair of functions
-			friend class ::Firebird::Stack<Object, Capacity>;
+			friend class Stack<Object, Capacity>;
 			const Entry* stk;
 			FB_SIZE_T elem;
 
@@ -429,7 +429,7 @@ namespace Firebird {
 		class const_iterator
 		{
 		private:
-			friend class ::Firebird::Stack<Object, Capacity>;
+			friend class Stack<Object, Capacity>;
 			const Entry* stk;
 			FB_SIZE_T elem;
 
@@ -736,4 +736,3 @@ namespace Firebird {
 } // namespace Firebird
 
 #endif // CLASSES_STACK_H
-

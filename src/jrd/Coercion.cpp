@@ -34,8 +34,9 @@
 #include "../jrd/align.h"
 #include "../jrd/DataTypeUtil.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 static const USHORT FROM_MASK = FLD_has_len | FLD_has_chset | FLD_has_scale |
 	FLD_has_sub | FLD_has_prec;
@@ -369,3 +370,5 @@ bool CoercionRule::coerce(thread_db* tdbb, dsc* d) const
 	return true;
 }
 
+
+}	// namespace Firebird::Jrd

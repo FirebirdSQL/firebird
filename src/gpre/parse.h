@@ -27,6 +27,14 @@
 #include "../gpre/words.h"
 #include "../gpre/gpre.h"
 
+namespace Firebird::Gpre
+{
+
+struct gpre_sym;
+
+inline constexpr int MAX_SYM_SIZE = 512; // max length of symbol + terminator
+
+
 // Token block, used to hold a lexical token.
 
 enum tok_t {
@@ -69,5 +77,7 @@ inline bool isQuoted(const int typ) noexcept
 	return (typ == tok_sglquoted || typ == tok_dblquoted);
 }
 
-#endif // GPRE_PARSE_H
 
+} // namespace Firebird
+
+#endif // GPRE_PARSE_H

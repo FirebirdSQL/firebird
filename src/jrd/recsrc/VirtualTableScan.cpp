@@ -29,8 +29,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // -------------------------------
 // Data access: virtual table scan
@@ -134,3 +135,6 @@ void VirtualTableScan::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, un
 	if (m_alias.hasData() && m_alias != string(m_relation()->getName().object))
 		planEntry.alias = m_alias;
 }
+
+
+}	// namespace Firebird::Jrd

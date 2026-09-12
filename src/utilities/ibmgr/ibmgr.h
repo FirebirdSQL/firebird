@@ -27,7 +27,7 @@
 
 #define OUTFILE			stderr
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 static const char* const FIREBIRD_USER_NAME		= "firebird";
 static const char* const INTERBASE_USER_NAME	= "interbase";

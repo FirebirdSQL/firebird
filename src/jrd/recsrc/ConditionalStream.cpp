@@ -31,8 +31,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------------
 // Data access: predicate driven filter
@@ -175,3 +176,6 @@ void ConditionalStream::nullRecords(thread_db* tdbb) const
 	m_first->nullRecords(tdbb);
 	m_second->nullRecords(tdbb);
 }
+
+
+}	// namespace Firebird::Jrd

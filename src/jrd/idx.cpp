@@ -70,9 +70,9 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 
-using namespace Jrd;
-using namespace Ods;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 static idx_e check_duplicates(thread_db*, Record*, index_desc*, index_insertion*, jrd_rel*);
 static idx_e check_foreign_key(thread_db*, Record*, jrd_rel*, jrd_tra*, index_desc*, IndexErrorContext&);
@@ -207,8 +207,6 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, Cached::Relation* 
 	return true;
 }
 
-
-namespace Jrd {
 
 // class IndexKeySet serves two purposes:
 // - collect a set of distinct keys
@@ -444,8 +442,8 @@ public:
 		RelationPages* relPages = m_creation.relation->getPages(m_tdbb);
 		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
 
-		index_root_page* root = (index_root_page*) CCH_FETCH(m_tdbb, &window, LCK_write, pag_root);
-		index_root_page::irt_repeat* irt_desc = root->irt_rpt + m_creation.index->idx_id;
+		Ods::index_root_page* root = (Ods::index_root_page*) CCH_FETCH(m_tdbb, &window, LCK_write, pag_root);
+		Ods::index_root_page::irt_repeat* irt_desc = root->irt_rpt + m_creation.index->idx_id;
 
 		CCH_MARK(m_tdbb, &window);
 
@@ -820,7 +818,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		fb_assert(!m_exprBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
-		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
+		JrdContextPoolHolder context(tdbb, dbb->createPool());
 
 		idx->idx_expression_node = static_cast<ValueExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
 			getPermanent(relation), &m_exprBlob, &csb, &idx->idx_expression_statement, false, false));
@@ -833,7 +831,7 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		fb_assert(!m_condBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
-		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
+		JrdContextPoolHolder context(tdbb, dbb->createPool());
 
 		idx->idx_condition_node = static_cast<BoolExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
 			getPermanent(relation), &m_condBlob, &csb, &idx->idx_condition_statement, false, false));
@@ -1129,8 +1127,6 @@ int IndexCreateTask::getMaxWorkers()
 	return MIN(parWorkers, m_countPP);
 }
 
-}; // namespace Jrd
-
 
 void IDX_create_index(thread_db* tdbb,
 					  IdxCreate createMethod,
@@ -1317,7 +1313,7 @@ bool IDX_mark_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 		fb_assert(relPages->rel_index_root);
 
 		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-		index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 		BTR_mark_index_for_delete(tdbb, relation, id, &window, root, 0);
 		return true;
@@ -1397,7 +1393,7 @@ void IDX_delete_indices(thread_db* tdbb, RelationPermanent* relation, RelationPa
 	fb_assert(relPages->rel_index_root);
 
 	WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
-	index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
+		Ods::index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	// loop through pagespaces and mark for delete %%%%%%
 	// if ((relation->rel_flags & REL_temp_conn) && (relPages->rel_instance_id != 0))
@@ -1485,7 +1481,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 	{
 		if (BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id))
 		{
-			const bool isComplementary = (idx.idx_flags & irt_complementary) == irt_complementary;
+			const bool isComplementary = (idx.idx_flags & Ods::irt_complementary) == Ods::irt_complementary;
 			const IndexCreation* creation = tdbb->tdbb_indexCreation;
 
 			// The current thread is creating an index
@@ -1580,7 +1576,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 
 				if (isComplementary && !creatingIndex && !insertion.iib_removed)
 				{
-					root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+					root = (Ods::index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 					idx.idx_root = root->irt_rpt[id].getRoot();
 
 					// set 'deleted' node marker in lower bit and insert key into b-tree
@@ -1590,7 +1586,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 				}
 				insertion.iib_number.setValue(recno);
 
-				root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+				root = (Ods::index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 				idx.idx_root = root->irt_rpt[id].getRoot();
 			}
 		}
@@ -2481,7 +2477,7 @@ static idx_e insert_key(thread_db* tdbb,
 
 	// Insert the key into the index.  If the index is unique, btr will keep track of duplicates.
 
-	const bool isComplementary = (idx->idx_flags & irt_complementary);
+	const bool isComplementary = (idx->idx_flags & Ods::irt_complementary);
 	const FB_UINT64 recno = insertion->iib_number.getValue();
 
 	// Complementary index uses lower bit of record number to mark deleted nodes
@@ -2519,3 +2515,6 @@ static idx_e insert_key(thread_db* tdbb,
 
 	return result;
 }
+
+
+} // namespace Firebird::Jrd

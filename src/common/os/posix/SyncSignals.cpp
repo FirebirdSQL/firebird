@@ -54,11 +54,15 @@
 #include <errno.h>
 #include <unistd.h>
 
-namespace {
+namespace Firebird
+{
 
+
+namespace
+{
 	// Here we can't use atomic counter instead mutex/counter pair - or some thread may leave SyncSignalsSet()
 	// before signals are actually set in the other thread, which incremented counter first
-	Firebird::GlobalPtr<Firebird::Mutex> syncEnterMutex;
+	GlobalPtr<Mutex> syncEnterMutex;
 	int syncEnterCounter = 0;
 
 	TLS_DECLARE(sigjmp_buf*, sigjmpPtr);
@@ -79,10 +83,8 @@ namespace {
 		act.sa_handler = handler;
 		sigaction(signum, &act, NULL);
 	}
-
 } // anonymous namespace
 
-namespace Firebird {
 
 void syncSignalsSet(sigjmp_buf* sigenv)
 {
@@ -98,7 +100,7 @@ void syncSignalsSet(sigjmp_buf* sigenv)
  **************************************/
 	TLS_SET(sigjmpPtr, sigenv);
 
-	Firebird::MutexLockGuard g(syncEnterMutex, "syncSignalsSet");
+	MutexLockGuard g(syncEnterMutex, "syncSignalsSet");
 
 	if (syncEnterCounter++ == 0)
 	{
@@ -124,7 +126,7 @@ void syncSignalsReset()
  *
  **************************************/
 
-	Firebird::MutexLockGuard g(syncEnterMutex, "syncSignalsReset");
+	MutexLockGuard g(syncEnterMutex, "syncSignalsReset");
 
 	fb_assert(syncEnterCounter > 0);
 
@@ -136,5 +138,6 @@ void syncSignalsReset()
 		fb_sigset(SIGSEGV, SIG_DFL);
 	}
 }
+
 
 } // namespace Firebird

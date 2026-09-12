@@ -68,11 +68,13 @@
 #define DYNAMIC_SHARED_LIBRARIES
 #endif
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace {
-	Firebird::InitInstance<Jrd::Module::LoadedModules> loadedModules;
-	Firebird::GlobalPtr<Firebird::Mutex> modulesMutex;
+	InitInstance<Jrd::Module::LoadedModules> loadedModules;
+	GlobalPtr<Mutex> modulesMutex;
 
 	template <typename S>
 	void terminate_at_space(S& s, const char* psz)
@@ -116,12 +118,12 @@ namespace {
 	};
 
 	// UDF/BLOB filter verifier
-	class UdfDirectoryList : public Firebird::DirectoryList
+	class UdfDirectoryList : public DirectoryList
 	{
 	private:
-		const Firebird::PathName getConfigString() const
+		const PathName getConfigString() const
 		{
-			return Firebird::PathName(Config::getUdfAccess());
+			return PathName(Config::getUdfAccess());
 		}
 	public:
 		explicit UdfDirectoryList(MemoryPool& p)
@@ -130,18 +132,17 @@ namespace {
 			initialize();
 		}
 	};
-	Firebird::InitInstance<UdfDirectoryList> iUdfDirectoryList;
+	InitInstance<UdfDirectoryList> iUdfDirectoryList;
 }
 
-namespace Jrd
-{
+
 	bool Module::operator>(const Module &im) const
 	{
 		// we need it to sort on some key
 		return interMod > im.interMod;
 	}
 
-	Module::InternalModule* Module::scanModule(const Firebird::PathName& name)
+	Module::InternalModule* Module::scanModule(const PathName& name)
 	{
 		typedef Module::InternalModule** itr;
 		for (itr it = loadedModules().begin(); it != loadedModules().end(); ++it)
@@ -164,7 +165,7 @@ namespace Jrd
 			return 0;
 		}
 
-		Firebird::string symbol;
+		string symbol;
 		terminate_at_space(symbol, name);
 		void* rc = m.lookupSymbol(symbol);
 		if (rc)
@@ -176,9 +177,9 @@ namespace Jrd
 	// flag 'udf' means pass name-path through UdfDirectoryList
 	Module Module::lookupModule(const char* name)
 	{
-		Firebird::MutexLockGuard lg(modulesMutex, FB_FUNCTION);
+		MutexLockGuard lg(modulesMutex, FB_FUNCTION);
 
-		Firebird::PathName initialModule;
+		PathName initialModule;
 		terminate_at_space(initialModule, name);
 
 		// Look for module in array of already loaded
@@ -189,12 +190,12 @@ namespace Jrd
 		}
 
 		// apply suffix (and/or prefix) and try that name
-		Firebird::PathName module(initialModule);
+		PathName module(initialModule);
 		for (size_t i = 0; i < sizeof(libfixes) / sizeof(Libfix); i++)
 		{
 			const Libfix* l = &libfixes[i];
 			// os-dependent module name modification
-			Firebird::PathName fixedModule(module);
+			PathName fixedModule(module);
 			switch (l->kind)
 			{
 			case MOD_PREFIX:
@@ -216,7 +217,7 @@ namespace Jrd
 			}
 
 			// UdfAccess verification
-			Firebird::PathName path, relative;
+			PathName path, relative;
 
 			// Search for module name in UdfAccess restricted
 			// paths list
@@ -257,7 +258,7 @@ namespace Jrd
 	{
 		if (interMod)
 		{
-			Firebird::MutexLockGuard lg(modulesMutex, FB_FUNCTION);
+			MutexLockGuard lg(modulesMutex, FB_FUNCTION);
 			interMod = NULL;	// This makes RefPtr call release()
 		}
 	}
@@ -280,4 +281,5 @@ namespace Jrd
 		fb_assert(false);
 	}
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd

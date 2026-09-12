@@ -27,6 +27,7 @@
 #include <variant>
 
 using namespace Firebird;
+using namespace Firebird::Isql;
 
 BOOST_AUTO_TEST_SUITE(ISqlSuite)
 BOOST_AUTO_TEST_SUITE(FrontendLexerSuite)

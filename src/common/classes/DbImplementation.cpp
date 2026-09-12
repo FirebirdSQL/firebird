@@ -145,7 +145,7 @@ constexpr UCHAR backEndianess[FB_NELEM(hardware)] =
 
 namespace Firebird {
 
-DbImplementation::DbImplementation(const Ods::header_page* h) noexcept
+DbImplementation::DbImplementation(const Jrd::Ods::header_page* h) noexcept
 	: di_cpu(h->hdr_db_impl.hdr_cpu), di_os(h->hdr_db_impl.hdr_os),
 	  di_cc(h->hdr_db_impl.hdr_cc), di_flags(h->hdr_db_impl.hdr_compat)
 {
@@ -195,7 +195,7 @@ bool DbImplementation::compatible(const DbImplementation& v) const noexcept
 	return di_flags == v.di_flags;
 }
 
-void DbImplementation::store(Ods::header_page* h) const noexcept
+void DbImplementation::store(Jrd::Ods::header_page* h) const noexcept
 {
 	h->hdr_db_impl.hdr_cpu = di_cpu;
 	h->hdr_db_impl.hdr_os = di_os;

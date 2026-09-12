@@ -68,7 +68,7 @@ inline void fb_assert_impl(const char* msg, const char* file, int line, bool do_
 
 #endif	// DEV_BUILD
 
-namespace DtorException {
+namespace Firebird::DtorException {
 	inline void devHalt() noexcept
 	{
 		// If any guard's dtor is executed during exception processing,

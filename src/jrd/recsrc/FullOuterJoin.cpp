@@ -30,8 +30,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ----------------------------
 // Data access: full outer join
@@ -141,3 +142,6 @@ void FullOuterJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsig
 
 	Join::internalGetPlan(tdbb, planEntry, level, recurse);
 }
+
+
+}	// namespace Firebird::Jrd

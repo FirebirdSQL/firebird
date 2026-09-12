@@ -30,7 +30,10 @@
 #include "../common/ThreadData.h"
 #include "../common/UtilSvc.h"
 
-void nbackup(Firebird::UtilSvc*);
-int NBACKUP_main(Firebird::UtilSvc*);
+namespace Firebird::Nbackup
+{
+	void nbackup(UtilSvc*);
+	int NBACKUP_main(UtilSvc*);
+} // namespace Firebird::Nbackup
 
 #endif // NBK_PROTO_H

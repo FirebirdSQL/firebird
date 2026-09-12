@@ -24,7 +24,7 @@
 #define JRD_LOCAL_TEMPORARY_TABLE_H
 
 #include "firebird.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"
 #include "../common/dsc.h"
@@ -32,8 +32,7 @@
 #include "../common/classes/objects_array.h"
 #include <optional>
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_rel;
 
 	class LocalTemporaryTable
@@ -104,7 +103,7 @@ namespace Jrd
 
 		public:
 			QualifiedName name;
-			Firebird::ObjectsArray<MetaName> columns;
+			ObjectsArray<MetaName> columns;
 			bool unique = false;
 			bool descending = false;
 			bool inactive = false;
@@ -136,9 +135,9 @@ namespace Jrd
 
 	public:
 		QualifiedName name;
-		Firebird::ObjectsArray<Field> fields;  // Committed state (stable)
-		Firebird::ObjectsArray<Field> pendingFields;  // Uncommitted changes (working copy)
-		Firebird::ObjectsArray<Index> indexes;
+		ObjectsArray<Field> fields;  // Committed state (stable)
+		ObjectsArray<Field> pendingFields;  // Uncommitted changes (working copy)
+		ObjectsArray<Index> indexes;
 		rel_t relationType;
 		jrd_rel* relation = nullptr;
 		USHORT relationId = 0;
@@ -146,6 +145,6 @@ namespace Jrd
 		USHORT nextIndexId = 0;
 		bool hasPendingChanges = false;
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// JRD_LOCAL_TEMPORARY_TABLE_H

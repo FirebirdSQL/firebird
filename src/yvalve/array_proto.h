@@ -26,10 +26,17 @@
 
 #include "../common/classes/MetaString.h"
 
-namespace Why {
+namespace Firebird::Why
+{
 	class YAttachment;
 	class YTransaction;
-}
+
+	void iscArrayLookupBoundsImpl(YAttachment* attachment, YTransaction* transaction,
+		const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
+
+	void iscArrayLookupDescImpl(YAttachment* attachment, YTransaction* transaction,
+		const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc, MetaString* globalField);
+} // namespace Firebird::Why
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,11 +62,5 @@ ISC_STATUS API_ROUTINE isc_array_set_desc(ISC_STATUS*, const SCHAR*, const SCHAR
 #ifdef __cplusplus
 }   /* extern "C"  */
 #endif
-
-void iscArrayLookupBoundsImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
-	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc);
-
-void iscArrayLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
-	const SCHAR* relationName, const SCHAR* fieldName, ISC_ARRAY_DESC* desc, Firebird::MetaString* globalField);
 
 #endif // DSQL_ARRAY_PROTO_H

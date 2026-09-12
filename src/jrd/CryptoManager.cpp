@@ -52,7 +52,9 @@
 #include "../common/classes/ClumpletWriter.h"
 #include "../common/sha.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
@@ -73,8 +75,6 @@ namespace
 }
 
 
-namespace Jrd
-{
 	class Header
 	{
 	protected:
@@ -985,7 +985,7 @@ namespace Jrd
 			guard.leave();		// release in advance to avoid races with cryptThread()
 			Thread::start(cryptThreadStatic, (THREAD_ENTRY_PARAM) this, THREAD_medium, &cryptThread);
 		}
-		catch (const Firebird::Exception&)
+		catch (const Exception&)
 		{
 			if (!releasingLock)		// avoid secondary exception in catch
 			{
@@ -993,7 +993,7 @@ namespace Jrd
 				{
 					LCK_release(tdbb, threadLock);
 				}
-				catch (const Firebird::Exception&)
+				catch (const Exception&)
 				{ }
 			}
 
@@ -1515,11 +1515,10 @@ namespace Jrd
 		}
 	}
 
-	const char* CryptoManager::DbInfo::getDatabaseFullPath(Firebird::CheckStatusWrapper* status)
+	const char* CryptoManager::DbInfo::getDatabaseFullPath(CheckStatusWrapper* status)
 	{
 		if (!cryptoManager)
 			return NULL;
 		return cryptoManager->dbb.dbb_filename.c_str();
 	}
-
-} // namespace Jrd
+} // namespace Firebird::Jrd

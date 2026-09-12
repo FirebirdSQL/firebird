@@ -24,6 +24,10 @@
 #ifndef GPRE_GPRE_META_H
 #define GPRE_GPRE_META_H
 
+namespace Firebird::Gpre
+{
+
+
 gpre_fld*	MET_context_field(gpre_ctx*, const char*);
 bool		MET_database(gpre_dbb*, bool);
 bool		MET_domain_lookup(gpre_req*, gpre_fld*, const char*);
@@ -48,5 +52,7 @@ gpre_rel*	MET_make_relation(const SCHAR*);
 bool		MET_type(gpre_fld*, const TEXT*, SSHORT*);
 bool		MET_trigger_exists(gpre_dbb*, const TEXT*);
 
-#endif // GPRE_GPRE_META_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_GPRE_META_H

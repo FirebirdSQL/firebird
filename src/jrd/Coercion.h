@@ -33,10 +33,11 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 class thread_db;
 class TypeClause;
+
 
 class CoercionRule
 {
@@ -56,11 +57,11 @@ private:
 	USHORT toMask = 0;
 };
 
-class CoercionArray : public Firebird::HalfStaticArray<CoercionRule, 4>
+class CoercionArray : public HalfStaticArray<CoercionRule, 4>
 {
 public:
 	CoercionArray(MemoryPool& p)
-		: Firebird::HalfStaticArray<CoercionRule, 4>(p)
+		: HalfStaticArray<CoercionRule, 4>(p)
 	{
 	}
 
@@ -68,6 +69,7 @@ public:
 	void setRule(const TypeClause* from, const TypeClause *to);
 };
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_COERCION_H

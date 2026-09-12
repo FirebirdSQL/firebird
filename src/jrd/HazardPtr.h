@@ -36,7 +36,7 @@
 
 #include <type_traits>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class HazardObject
 {
@@ -254,6 +254,6 @@ bool operator!=(const T* v1, const HazardPtr<T> v2)
 	return v2 != v1;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_HAZARDPTR_H

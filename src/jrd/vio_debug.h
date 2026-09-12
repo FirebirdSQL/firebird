@@ -23,7 +23,11 @@
 #ifndef JRD_VIO_DEBUG_H
 #define JRD_VIO_DEBUG_H
 
+namespace Firebird::Jrd
+{
+
 //#define VIO_DEBUG
+
 
 inline constexpr int DEBUG_WRITES			= 1;
 inline constexpr int DEBUG_WRITES_INFO		= 2;
@@ -38,5 +42,7 @@ inline constexpr int DEBUG_TRACE_ALL_INFO	= 8;
 extern int vio_debug_flag;
 void VIO_trace(int level, const char* format, ...);
 
-#endif /* JRD_VIO_DEBUG_H */
 
+} // namespace Firebird::Jrd
+
+#endif /* JRD_VIO_DEBUG_H */

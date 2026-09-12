@@ -24,22 +24,31 @@
 #ifndef DSQL_GEN_PROTO_H
 #define DSQL_GEN_PROTO_H
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
+	class DmlNode;
+	class DsqlCompilerScratch;
 	class ExprNode;
+	class RseNode;
+	class dsql_ctx;
+	class dsql_msg;
+	class dsql_par;
 	class ValueListNode;
 }
 
-void	GEN_arg(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*);
-void	GEN_descriptor(Jrd::DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype);
-void	GEN_expr(Jrd::DsqlCompilerScratch*, Jrd::ExprNode*);
-void	GEN_hidden_variables(Jrd::DsqlCompilerScratch* dsqlScratch);
-void	GEN_parameter(Jrd::DsqlCompilerScratch*, const Jrd::dsql_par*);
-void	GEN_port(Jrd::DsqlCompilerScratch*, Jrd::dsql_msg*);
-void	GEN_statement(Jrd::DsqlCompilerScratch*, Jrd::DmlNode*);
-void	GEN_rse(Jrd::DsqlCompilerScratch*, Jrd::RseNode*);
-void	GEN_sort(Jrd::DsqlCompilerScratch*, UCHAR, Jrd::ValueListNode*);
-void	GEN_stuff_context(Jrd::DsqlCompilerScratch*, const Jrd::dsql_ctx*);
-void	GEN_stuff_context_number(Jrd::DsqlCompilerScratch*, USHORT);
+namespace Firebird::Jrd {
+
+void GEN_arg(DsqlCompilerScratch*, ExprNode*);
+void GEN_descriptor(DsqlCompilerScratch* dsqlScratch, const dsc* desc, bool texttype);
+void GEN_expr(DsqlCompilerScratch*, ExprNode*);
+void GEN_hidden_variables(DsqlCompilerScratch* dsqlScratch);
+void GEN_parameter(DsqlCompilerScratch*, const dsql_par*);
+void GEN_port(DsqlCompilerScratch*, dsql_msg*);
+void GEN_statement(DsqlCompilerScratch*, DmlNode*);
+void GEN_rse(DsqlCompilerScratch*, RseNode*);
+void GEN_sort(DsqlCompilerScratch*, UCHAR, ValueListNode*);
+void GEN_stuff_context(DsqlCompilerScratch*, const dsql_ctx*);
+void GEN_stuff_context_number(DsqlCompilerScratch*, USHORT);
+
+} // namespace Firebird::Jrd
 
 #endif //  DSQL_GEN_PROTO_H

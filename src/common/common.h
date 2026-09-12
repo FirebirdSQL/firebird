@@ -355,7 +355,7 @@
 #define FB_CC CcMsvc
 #endif
 
-#define SYS_ERR		Arg::Windows
+#define SYS_ERR		Firebird::Arg::Windows
 
 //format for __LINE__
 #define LINEFORMAT "d"
@@ -415,11 +415,11 @@
  * UNIX
 *****************************************************/
 #ifdef UNIX
-#define SYS_ERR		Arg::Unix
+#define SYS_ERR		Firebird::Arg::Unix
 #endif /* UNIX */
 
 #ifndef SYS_ERR
-#define SYS_ERR		Arg::Unix
+#define SYS_ERR		Firebird::Arg::Unix
 #endif
 
 #ifndef ERRNO

@@ -45,6 +45,10 @@
 
 #include "../remote/remote.h"
 
+namespace Firebird::Remote
+{
+
+
 class SockAddr
 {
 private:
@@ -275,5 +279,7 @@ inline void SockAddr::unmapV4()
 	len = sizeof(struct sockaddr_in);
 }
 
+
+} // namespace Firebird::Remote
 
 #endif // REMOTE_SOCKADDR_H

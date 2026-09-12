@@ -29,8 +29,7 @@
 #include "../jrd/MetaName.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class Keywords final
 	{
 	public:
@@ -77,8 +76,8 @@ namespace Jrd
 		}
 
 	private:
-		Firebird::LeftPooledMap<MetaName, Keyword> map;
+		LeftPooledMap<MetaName, Keyword> map;
 	};
-}	// namespace Jrd
+}	// namespace Firebird::Jrd
 
 #endif	// DSQL_KEYWORDS_H

@@ -110,6 +110,9 @@
 #include <locale.h>
 #endif
 
+namespace Firebird::Remote
+{
+
 
 const char* TEMP_DIR = "/tmp";
 
@@ -126,9 +129,6 @@ static void cleanupUnixSocket();
 #define FB_RAISE_LIMITS 1
 static void raiseLimit(int resource);
 #endif
-
-using namespace Firebird;
-
 
 static void logSecurityDatabaseError(const char* path, ISC_STATUS* status)
 {
@@ -240,9 +240,11 @@ bool check_fd(int fd)
     return fcntl(fd, F_GETFL) != -1 || errno != EBADF;
 }
 
-extern "C" {
 
-int CLIB_ROUTINE main( int argc, char** argv)
+}	// namespace Firebird::Remote
+
+
+int CLIB_ROUTINE main(int argc, char** argv)
 {
 /**************************************
  *
@@ -254,6 +256,9 @@ int CLIB_ROUTINE main( int argc, char** argv)
  *	Run the server with apollo mailboxes.
  *
  **************************************/
+	using namespace Firebird;
+	using namespace Firebird::Remote;
+
 	try
 	{
 		RemPortPtr port;
@@ -521,8 +526,8 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
-		Replication::Config::ReplicaList replicas;
-		Replication::Config::enumerate(replicas);
+		Jrd::Replication::Config::ReplicaList replicas;
+		Jrd::Replication::Config::enumerate(replicas);
 
 		if (super || standaloneClassic)
 		{
@@ -723,7 +728,9 @@ int CLIB_ROUTINE main( int argc, char** argv)
 	}
 }
 
-} // extern "C"
+
+namespace Firebird::Remote
+{
 
 
 static void set_signal(int signal_number, void (*handler) (int))
@@ -807,3 +814,6 @@ static void raiseLimit(int resource)
 	}
 }
 #endif // FB_RAISE_LIMITS
+
+
+}	// namespace Firebird::Remote
