@@ -1,4 +1,3 @@
-include(SourceGroups)
 
 ###############################################################################
 # LIBRARY remote
@@ -10,6 +9,13 @@ set(remote_src
     protocol.cpp
     remote.cpp
     inet.cpp
+
+    remote.h
+
+     ../common/xdr.cpp
+     ../common/sdl.cpp
+     ../common/classes/zip.cpp
+     ../common/Auth.cpp
 
     ../auth/SecureRemotePassword/srp.cpp
     ../auth/SecureRemotePassword/srp.h
@@ -34,6 +40,17 @@ add_dependencies_cc     (remote UpdateCloopInterfaces)
 set(fbserver_src
     ../auth/SecureRemotePassword/server/SrpServer.cpp
     ../auth/SecureRemotePassword/server/SrpServer.h
+    ../auth/SecDbCache.cpp   
+    server/ReplServer.cpp
+    server/server.cpp
+
+    ../common/classes/SafeArg.cpp
+    ../common/classes/MsgPrint.cpp
+    ../common/cvt.cpp
+    ../common/IntlParametersBlock.cpp
+    ../common/classes/BlrWriter.cpp
+    ../common/call_service.cpp
+    ../common/Tokens.cpp
 )
 add_src_win32(fbserver_src
     server/os/win32/chop.cpp
@@ -44,13 +61,11 @@ add_src_win32(fbserver_src
     server/os/win32/server.ico
     server/os/win32/caution.ico
     server/os/win32/window.rc
-    server/ReplServer.cpp
-    server/server.cpp
+    # server/ReplServer.cpp
 )
 add_src_unix(fbserver_src
     ../auth/SecureRemotePassword/srp.cpp
     server/os/posix/inet_server.cpp
-    server/server.cpp
 
     inet.cpp
     merge.cpp

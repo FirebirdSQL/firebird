@@ -1,0 +1,45 @@
+name: CMake on multiple platforms
+
+on:
+    workflow_dispatch:
+
+jobs:
+  build:
+    if: ${{ true && github.ref_type != 'tag' }} # set !true for disable
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+      # os: [ubuntu-latest, windows-latest, macos-latest, windows-11-arm, macos-26-intel, ubuntu-24.04-arm]               
+        os: [ubuntu-24.04, windows-2025, macos-15, windows-11-arm, macos-15-intel, ubuntu-24.04-arm]               
+        build_type: [Release]
+        c_compiler: [clang]
+        cpp_compiler: [clang++]
+
+    steps:
+    - uses: actions/checkout@v4 
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Configure CMake
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -S ${{ github.workspace }}
+        -G "Unix Makefiles"
+
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target all  -j 8
+
+    - name: runTest
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target run_tests  -j 8
+
