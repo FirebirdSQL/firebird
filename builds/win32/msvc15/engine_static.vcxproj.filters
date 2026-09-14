@@ -46,6 +46,9 @@
     <Filter Include="Replication\Headers">
       <UniqueIdentifier>{4bcf3dd7-c9c1-4148-bfeb-d5960bf35faa}</UniqueIdentifier>
     </Filter>
+    <Filter Include="JSON">
+      <UniqueIdentifier>{49f32cf0-a84a-4f19-8efd-58524e855ce2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\jrd\recsrc\WindowedStream.cpp">
@@ -1214,5 +1217,23 @@
     <None Include="..\..\..\src\dsql\parse.y">
       <Filter>DSQL</Filter>
     </None>
+    <ClCompile Include="..\..\..\src\jrd\json\JsonPath.cpp">
+      <Filter>JSON</Filter>
+    </ClCompile>
+    <None Include="..\..\..\src\jrd\json\path\JsonPathParser.y">
+      <Filter>JSON</Filter>
+    </None>
+    <ClCompile Include="..\..\..\src\jrd\json\path\JsonPathParser.cpp">
+      <Filter>JSON</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\json\path\JPathParser.cpp">
+      <Filter>JSON</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonTypes.cpp">
+      <Filter>JSON</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\json\classes\JsonDatetime.cpp">
+      <Filter>JSON</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
