@@ -420,8 +420,16 @@ void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExpl
 
 void DsqlCompilerScratch::putLocalTypes()
 {
-	for (auto& pair : localCompositeTypeDeclarations)
+	if (!mainScratch)
+		return;
+
+	for (const auto& pair : mainScratch->localCompositeTypeDeclarations)
 	{
+		// A local declaration may shadow an inherited type.
+		const auto localType = localCompositeTypeDeclarations.get(pair.first);
+		if (!localType || *localType != pair.second)
+			continue;
+
 		appendUChar(blr_dcl_composite_type);
 		appendMetaString(pair.first.c_str());
 		auto declarationNode = nodeAs<DeclareLocalTypeNode>(pair.second);
@@ -474,14 +482,12 @@ void DsqlCompilerScratch::putLocalTypes()
 }
 
 // Write out local variable field data type.
-void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam,
-	QualifiedName& collationName)
+void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable)
 {
 	const auto field = variable->field;
 
 	appendUChar(blr_dcl_variable);
 	appendUShort(variable->number);
-	DDL_resolve_intl_type(this, field, collationName);
 
 	if (field->dtype == dtype_rowtype)
 	{
@@ -526,13 +532,6 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 	if (variable->field->fld_name.hasData())	// Not a function return value
 		putDebugVariable(variable->number, variable->field->fld_name);
 
-	if (variable->type != dsql_var::TYPE_INPUT && hostParam && hostParam->dsqlDef->defaultClause)
-	{
-		hostParam->dsqlDef->defaultClause->value =
-			Node::doDsqlPass(this, hostParam->dsqlDef->defaultClause->value, true);
-	}
-
-	variable->initialized = true;
 }
 
 // Write out local variable initialization.
@@ -797,12 +796,24 @@ void DsqlCompilerScratch::genReturn(bool eosFlag)
 	appendUChar(blr_end);
 }
 
+void DsqlCompilerScratch::prepareParameters(Array<NestConst<ParameterClause>>& parameters,
+	Array<NestConst<ParameterClause>>& returns)
+{
+	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+		prepareParameter(parameters[i]->type, dsql_var::TYPE_INPUT, 0, (USHORT) (2 * i));
+
+	// Output slots are reserved by the caller before allocating any other variables.
+	for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
+		prepareParameter(returns[i]->type, dsql_var::TYPE_OUTPUT, 1, (USHORT) (2 * i), i);
+}
+
 void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& parameters,
 	Array<NestConst<ParameterClause> >& returns)
 {
-	const auto processParameters = [&](Array<NestConst<ParameterClause>>& params, dsql_var::Type direction)
+	const auto processParameters = [&](const Array<NestConst<ParameterClause>>& params,
+		dsql_var::Type direction)
 	{
-		if (!params.hasData() && direction == dsql_var::TYPE_INPUT)
+		if (params.isEmpty() && direction == dsql_var::TYPE_INPUT)
 			return;
 
 		fb_assert(params.getCount() < MAX_USHORT / 2);
@@ -810,35 +821,27 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 		appendUChar(direction);
 		appendUShort(2 * params.getCount() + (direction == dsql_var::TYPE_OUTPUT ? 1 : 0));
 
-		for (FB_SIZE_T i = 0; i < params.getCount(); ++i)
+		FB_SIZE_T i = 0;
+		for (const auto variable : variables)
 		{
-			auto parameter = params[i];
-			dsql_var* variable = nullptr;
+			if (variable->type != direction)
+				continue;
 
-			putDebugArgument(direction, i, parameter->name.c_str());
+			fb_assert(i < params.getCount());
+			fb_assert(variable->field == params[i]->type);
+			putDebugArgument(direction, i, params[i]->name.c_str());
+			++i;
 
-			auto field = parameter->type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
-
-			if (isRowtype)
-			{
-				variable = genRowtypeParameter(field, direction, direction == dsql_var::TYPE_OUTPUT ? 1 : 0, i);
-			}
+			if (variable->field->dtype == dtype_rowtype)
+				putRowtypeParameter(variable);
 			else
-			{
-				putType(parameter->type, true);
-				variable = makeVariable(parameter->type, parameter->name.c_str(),
-					direction, direction == dsql_var::TYPE_OUTPUT ? 1 : 0, (USHORT) (2 * i),
-					direction == dsql_var::TYPE_OUTPUT ? std::nullopt : std::make_optional(0));
-			}
+				putType(variable->field, true);
 
 			// Add slot for null flag (parameter2).
 			appendUChar(blr_short);
 			appendUChar(0);
-
-			if (direction == dsql_var::TYPE_OUTPUT)
-				functionOutputVariableNumber = variable->number;
 		}
+		fb_assert(i == params.getCount());
 	};
 
 	processParameters(parameters, dsql_var::TYPE_INPUT);
@@ -1041,8 +1044,8 @@ void DsqlCompilerScratch::compileAggregateFunction(Array<NestConst<ParameterClau
 	endDebug();
 }
 
-dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
-	dsql_var::Type varType, USHORT msgNumber, FB_SIZE_T index)
+dsql_var* DsqlCompilerScratch::prepareParameter(dsql_fld* field,
+	dsql_var::Type type, USHORT msgNumber, USHORT itemNumber, std::optional<USHORT> localNumber)
 {
 	if (field->fromCursor)
 	{
@@ -1051,50 +1054,60 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 			Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object.c_str()));
 	}
 
-	dsql_rel* relation = METD_get_relation(getTransaction(), this, field->typeOfTable);
-	dsql_fld* fld = nullptr;
+	field->resolve(this);
 
-	if (!field->packageName.object.hasData() && getTypeFromCache(field, field->typeOfName.object))
-	{
-		genCompositeTypeFromCache(field, fld);
-		field->fld_sub_first = fld;
-	}
-	else if (!relation && field->packageName.object.hasData())
-	{
-		if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fld))
-			genCompositeTypeFromCache(field, fld);
+	const bool isRowtype = field->dtype == dtype_rowtype ||
+		(field->typeOfName.object.isEmpty() && field->typeOfTable.object.hasData());
 
-		field->fieldSource = field->typeOfName;
-		field->fld_sub_first = fld;
-	}
+	if (isRowtype)
+	{
+		if (!field->fld_sub_first)
+			genCompositeTypeFromCache(field, field->fld_sub_first);
 
-	if (relation)
-	{
-		fld = field->fld_sub_first = relation->rel_fields;
-		field->fld_sub_count = relation->rel_fields_number;
+		if (!field->fld_sub_first)
+		{
+			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+				Arg::Gds(isc_invalid_parameter_decl) <<
+				Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object.c_str()));
+		}
+
+		field->dtype = dtype_rowtype;
+		calculateCompositeFieldLength(*field);
 	}
-	else if (!fld)
+	else if (type == dsql_var::TYPE_INPUT && !localNumber.has_value())
 	{
-		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-			Arg::Gds(isc_invalid_parameter_decl) <<
-			Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object.c_str()));
+		// Scalar PSQL inputs are read from the message, not from a local variable.
+		localNumber = 0;
 	}
 
-	calculateCompositeFieldLength(*field);
+	const auto variable = makeVariable(field, field->fld_name.c_str(), type,
+		msgNumber, itemNumber, localNumber);
+	variable->initialized = true;
 
-	dsql_var* variable = makeVariable(nullptr, field->fld_name.c_str(),
-		varType, msgNumber, (USHORT) (2 * index));
+	if (isRowtype)
+		makeRowtypeContext(variable);
 
-	dsql_ctx* new_context = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
-	new_context->ctx_context = contextNumber++;
-	new_context->ctx_scope_level = scopeLevel;
-	new_context->ctx_alias.push(new_context->ctx_internal_alias = QualifiedName(field->fld_name));
-	new_context->ctx_flags = CTX_rowtype_var;
-	new_context->ctx_rowtype_var = variable;
-	context->push(new_context);
-	variable->contextNum = new_context->ctx_context;
-	variable->field = field;
+	if (type == dsql_var::TYPE_OUTPUT)
+		functionOutputVariableNumber = variable->number;
 
+	return variable;
+}
+
+void DsqlCompilerScratch::makeRowtypeContext(dsql_var* variable)
+{
+	const auto rowContext = FB_NEW_POOL(getPool()) dsql_ctx(getPool());
+	rowContext->ctx_context = contextNumber++;
+	rowContext->ctx_scope_level = scopeLevel;
+	rowContext->ctx_alias.push(rowContext->ctx_internal_alias = QualifiedName(variable->field->fld_name));
+	rowContext->ctx_flags = CTX_rowtype_var;
+	rowContext->ctx_rowtype_var = variable;
+	context->push(rowContext);
+	variable->contextNum = rowContext->ctx_context;
+}
+
+void DsqlCompilerScratch::putRowtypeParameter(const dsql_var* variable)
+{
+	const auto field = variable->field;
 	appendUChar(blr_rowtype);
 	if (field->fieldSource.object.hasData())
 	{
@@ -1121,7 +1134,6 @@ dsql_var* DsqlCompilerScratch::genRowtypeParameter(dsql_fld* field,
 		}
 	}
 
-	return variable;
 }
 
 void DsqlCompilerScratch::addCTEs(WithClause* withClause)

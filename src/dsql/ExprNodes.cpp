@@ -14566,7 +14566,8 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			const bool execBlock = (dsqlScratch->mainScratch->flags & DsqlCompilerScratch::FLAG_EXEC_BLOCK);
 
-			if (node->dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock)
+			if (node->dsqlVar->type == dsql_var::TYPE_INPUT && !execBlock &&
+				node->dsqlVar->field->dtype != dtype_rowtype)
 			{
 				if (!dsqlScratch->outerMessagesMap.exist(node->dsqlVar->msgNumber))
 				{

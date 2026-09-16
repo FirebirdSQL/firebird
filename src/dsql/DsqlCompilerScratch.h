@@ -193,13 +193,12 @@ public:
 	void putType(const TypeClause* type, bool useSubType);
 	void putLocalTypes();
 
-	void putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam, QualifiedName& collationName);
+	void putLocalVariableDecl(dsql_var* variable);
 	void putLocalVariableInit(dsql_var* variable, const DeclareVariableNode* hostParam);
 
 	void putLocalVariable(dsql_var* variable)
 	{
-		QualifiedName dummyCollationName;
-		putLocalVariableDecl(variable, nullptr, dummyCollationName);
+		putLocalVariableDecl(variable);
 		putLocalVariableInit(variable, nullptr);
 	}
 
@@ -209,6 +208,9 @@ public:
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,
 		USHORT, std::optional<USHORT> = std::nullopt);
+	dsql_var* prepareParameter(dsql_fld* field, dsql_var::Type type, USHORT msgNumber,
+		USHORT itemNumber, std::optional<USHORT> localNumber = std::nullopt);
+	void makeRowtypeContext(dsql_var* variable);
 	dsql_var* resolveVariable(const MetaName& varName);
 
 	DeclareLocalTableNode* getLocalTable(const MetaName& name, bool* outerDecl = nullptr);
@@ -217,6 +219,8 @@ public:
 
 	void genReturn(bool eosFlag = false);
 
+	void prepareParameters(Firebird::Array<NestConst<ParameterClause>>& parameters,
+		Firebird::Array<NestConst<ParameterClause>>& returns);
 	void genParameters(Firebird::Array<NestConst<ParameterClause> >& parameters,
 		Firebird::Array<NestConst<ParameterClause> >& returns);
 
@@ -316,7 +320,7 @@ private:
 	void putTypeName(const TypeClause& type, const bool useExplicitCollate);
 
 	void putDtype(const TypeClause& type, const bool useSubType);
-	dsql_var* genRowtypeParameter(dsql_fld* field, dsql_var::Type varType, USHORT msgNumber, FB_SIZE_T index);
+	void putRowtypeParameter(const dsql_var* variable);
 
 	dsql_dbb* dbb = nullptr;				// DSQL attachment
 	jrd_tra* transaction = nullptr;			// Transaction

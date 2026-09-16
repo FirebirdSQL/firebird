@@ -2805,6 +2805,7 @@ void CreateAlterFunctionNode::compile(thread_db* tdbb, DsqlCompilerScratch* dsql
 
 		Array<NestConst<ParameterClause>> returns;
 		returns.add(returnType);
+		dsqlScratch->prepareParameters(parameters, returns);
 		dsqlScratch->genParameters(parameters, returns);
 
 		if (parameters.getCount() != 0)
@@ -3869,6 +3870,7 @@ void CreateAlterProcedureNode::compile(thread_db* /*tdbb*/, DsqlCompilerScratch*
 
 	dsqlScratch->appendUChar(blr_begin);
 
+	dsqlScratch->prepareParameters(parameters, returns);
 	dsqlScratch->genParameters(parameters, returns);
 
 	if (parameters.getCount() != 0)
