@@ -432,6 +432,15 @@
     <ClCompile Include="..\..\..\src\utilities\nbackup\nbackup.cpp">
       <Filter>Services</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathBurpUtil.cpp">
+      <Filter>Services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathRecordReader.cpp">
+      <Filter>Services</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathRecordWriter.cpp">
+      <Filter>Services</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\gen\jrd\scl.cpp">
       <Filter>JRD files\GPRE cpp</Filter>
     </ClCompile>

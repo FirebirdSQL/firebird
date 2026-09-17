@@ -255,9 +255,11 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			EXEC SQL SET TRANSACTION NAME gds_trans;
 	}
 
-	// get shared snapshot number if asked for parallel backup
+	// Readers that use a private attachment must join this snapshot via
+	// isc_tpb_at_snapshot_number. FAST_PATH always does (VIO needs a
+	// JAttachment, not the yvalve master handle), as does -parallel > 1.
 	tdgbl->tr_snapshot = 0;
-	if (gds_trans && tdgbl->gbl_sw_par_workers > 1)
+	if (gds_trans && (tdgbl->gbl_fast_path || tdgbl->gbl_sw_par_workers > 1))
 	{
 		UCHAR in_buf[] = {fb_info_tra_snapshot_number, isc_info_end};
 		UCHAR out_buf[16] = {0};
@@ -268,25 +270,37 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 			UCHAR* p = out_buf, *e = out_buf + sizeof(out_buf);
 			while (p < e)
 			{
-				SSHORT len;
-				switch (*p++)
-				{
-				case isc_info_error:
-				case isc_info_end:
-					p = e;
+				const UCHAR item = *p++;
+				if (item == isc_info_end || item == isc_info_error || p + 2 > e)
 					break;
 
-				case fb_info_tra_snapshot_number:
-					len = isc_portable_integer(p, 2);
-					p += 2;
-					tdgbl->tr_snapshot = isc_portable_integer(p, len);
-					p += len;
+				const USHORT len = isc_portable_integer(p, 2);
+				p += 2;
+				if (p + len > e)
 					break;
+
+				switch (item)
+				{
+					case fb_info_tra_snapshot_number:
+						tdgbl->tr_snapshot = isc_portable_integer(p, len);
+						break;
 				}
+
+				p += len;
 			}
 		}
+
 		if (tdgbl->tr_snapshot == 0)
-			tdgbl->gbl_sw_par_workers = 1;
+		{
+			if (tdgbl->gbl_fast_path)
+			{
+				// msg 431 cannot obtain transaction snapshot number for FAST_PATH backup
+				BURP_error(431, true);
+			}
+
+			if (tdgbl->gbl_sw_par_workers > 1)
+				tdgbl->gbl_sw_par_workers = 1;
+		}
 	}
 
 	// detect if MAKE_DBKEY is supported and decide kind of read relation query
@@ -1565,7 +1579,7 @@ void put_data(burp_rel* relation, ReadRelationReq* request)
 	count++; // eof
 
 	FbLocalStatus status;
-	request->start(&status, gds_trans);
+	request->start(&status, DB, gds_trans);
 	if (status->getState() & IStatus::STATE_ERRORS)
 	{
 		BURP_error_redirect(&status, 28);
@@ -4211,6 +4225,9 @@ void write_relations()
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
 			relation->rel_id = X.RDB$RELATION_ID;
+			relation->rel_type = X.RDB$RELATION_TYPE.NULL ?
+				(!X.RDB$EXTERNAL_FILE.NULL ? rel_external : rel_persistent) :
+				static_cast<SSHORT>(X.RDB$RELATION_TYPE);
 
 			if (!X.RDB$SCHEMA_NAME.NULL)
 				relation->rel_name.schema = X.RDB$SCHEMA_NAME;
@@ -4270,6 +4287,7 @@ void write_relations()
 			relation->rel_next = tdgbl->relations;
 			tdgbl->relations = relation;
 			relation->rel_id = X.RDB$RELATION_ID;
+			relation->rel_type = !X.RDB$EXTERNAL_FILE.NULL ? rel_external : rel_persistent;
 			relation->rel_name = name;
 			relation->rel_flags |= flags;
 			put_relation (relation);
@@ -4933,9 +4951,13 @@ namespace Burp {
 
 /// class ReadRelationMeta
 
-void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
+void ReadRelationMeta::setRelation(burp_rel* relation, bool partition, bool fastPath)
 {
 	m_relation = relation;
+	m_fastPath = fastPath;
+
+	if (m_fastPath)
+		m_layout.build(relation, false, CS_NONE);
 
 	// Build request BLR. There could be two kind of requests :
 	// a) partition == true
@@ -5004,6 +5026,16 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 		if (field->fld_flags & FLD_array)
 			blrType = blr_blob;
 
+		// Normalize text2 family like RestoreMessageLayout does, so tables
+		// using text2/varying2/cstring2 don't abort BLR building before
+		// fast-path gets a chance (VIO normalizes the same way).
+		if (blrType == blr_text2)
+			blrType = blr_text;
+		else if (blrType == blr_varying2)
+			blrType = blr_varying;
+		else if (blrType == blr_cstring2)
+			blrType = blr_cstring;
+
 		if (blrType <= DTYPE_BLR_MAX)
 		{
 			const auto dtype = gds_cvt_blr_dtype[blrType];
@@ -5014,7 +5046,8 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 		{
 		case blr_text:
 		case blr_varying:
-			add_byte(blr, field->fld_type);
+		case blr_cstring:
+			add_byte(blr, blrType);
 			add_word(blr, field->fld_length);
 			if (blrType == blr_varying)
 				length += sizeof(USHORT);
@@ -5073,6 +5106,7 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 		add_byte(blr, 0);
 		offset = FB_ALIGN(offset, sizeof(SSHORT));
 		field->fld_missing_parameter = count++;
+		field->fld_missing_offset = offset;
 		offset += sizeof(SSHORT);
 	}
 
@@ -5085,6 +5119,31 @@ void ReadRelationMeta::setRelation(const burp_rel* relation, bool partition)
 	m_outEofOffset = FB_ALIGN(offset, sizeof(SSHORT));
 	// To be used later for the buffer size to receive data
 	m_outMsgLen = m_outEofOffset + sizeof(SSHORT);
+
+	// The fast-path and BLR paths must describe identical message
+	// layouts: VIO fills buffers at layout offsets while put_data() locates
+	// blob/array quads via fld_offset. Drift between the two computations
+	// would silently corrupt backups, so fail closed if they disagree.
+	if (m_fastPath)
+	{
+		bool layoutOk = m_layout.getLength() == m_outRecLen &&
+			m_outMsgLen == m_layout.getLength() + sizeof(SSHORT);
+
+		for (const auto& layoutField : m_layout)
+		{
+			layoutOk = layoutOk &&
+				layoutField.metadata->fld_offset == layoutField.offset &&
+				layoutField.metadata->fld_missing_offset == layoutField.nullOffset;
+		}
+
+		if (!layoutOk)
+		{
+			fb_assert(false);
+			(Arg::Gds(isc_random) <<
+				Arg::Str("FAST_PATH produced an inconsistent message layout") <<
+				Arg::Str(relation->rel_name.toQuotedString())).raise();
+		}
+	}
 
 	if (partition)
 	{
@@ -5209,6 +5268,8 @@ void ReadRelationMeta::clear()
 	m_relation = NULL;
 	m_fldCount = 0;
 	m_blr.clear();
+	m_layout.clear();
+	m_fastPath = false;
 	m_inMgsNum = m_outMgsNum = 0;
 	m_outMsgLen = m_outRecLen = m_outEofOffset = 0;
 }
@@ -5230,13 +5291,19 @@ void ReadRelationReq::reset(const ReadRelationMeta* meta)
 		m_relation = m_meta->m_relation;
 
 		BurpGlobals* tdgbl = BurpGlobals::getSpecific();
-		FbLocalStatus status;
-		compile(&status, DB);
-		if (status->getState() & IStatus::STATE_ERRORS)
+
+		if (!m_meta->isFastPath())
 		{
-			BURP_error_redirect(&status, 27);
-			// msg 27 isc_compile_request failed
-			fb_print_blr(m_meta->m_blr.begin(), m_meta->m_blr.getCount(), NULL, NULL, 0);
+			FbLocalStatus status;
+
+			compile(&status, DB);
+
+			if (status->getState() & IStatus::STATE_ERRORS)
+			{
+				BURP_error_redirect(&status, 27);
+				// msg 27 isc_compile_request failed
+				fb_print_blr(m_meta->m_blr.begin(), m_meta->m_blr.getCount(), NULL, NULL, 0);
+			}
 		}
 
 		UCHAR* data = m_outMsg.getBuffer(m_meta->m_outMsgLen);
@@ -5254,10 +5321,15 @@ void ReadRelationReq::reset(const ReadRelationMeta* meta)
 
 void ReadRelationReq::clear()
 {
+	m_fastPathReader.clear();
+	m_usingFastPath = false;
+	m_fastPathBatchRecords = 0;
+	m_fastPathBatchPosition = 0;
 	m_relation = NULL;
 	m_meta = NULL;
 	m_eof = NULL;
 	m_outMsg.clear();
+	m_fastPathBatch.clear();
 
 	if (m_request)
 	{
@@ -5273,6 +5345,12 @@ void ReadRelationReq::compile(CheckStatusWrapper* status, IAttachment* att)
 
 void ReadRelationReq::release(CheckStatusWrapper* status)
 {
+	if (m_usingFastPath)
+	{
+		clear();
+		return;
+	}
+
 	if (m_request)
 	{
 		m_request->free(status);
@@ -5291,8 +5369,18 @@ void ReadRelationReq::setParams(ULONG loPP, ULONG hiPP)
 	m_inMgs.hiPP = hiPP;
 }
 
-void ReadRelationReq::start(CheckStatusWrapper* status, ITransaction* tran)
+void ReadRelationReq::start(CheckStatusWrapper* status, IAttachment* att, ITransaction* tran)
 {
+	if (m_meta->isFastPath())
+	{
+		m_fastPathReader.init(att, tran, m_relation, m_meta->getLayout(), m_meta->haveInputs());
+		m_usingFastPath = true;
+		m_fastPathBatchRecords = 0;
+		m_fastPathBatchPosition = 0;
+		m_fastPathReader.start(m_inMgs.loPP, m_inMgs.hiPP);
+		return;
+	}
+
 	if (m_meta->haveInputs())
 		m_request->startAndSend(status, tran, 0, m_meta->m_inMgsNum, sizeof(m_inMgs), &m_inMgs);
 	else
@@ -5301,7 +5389,63 @@ void ReadRelationReq::start(CheckStatusWrapper* status, ITransaction* tran)
 
 void ReadRelationReq::receive(CheckStatusWrapper* status)
 {
-	m_request->receive(status, 0, m_meta->m_outMgsNum, m_meta->m_outMsgLen, m_outMsg.begin());
+	if (!m_usingFastPath)
+	{
+		m_request->receive(status, 0, m_meta->m_outMgsNum, m_meta->m_outMsgLen, m_outMsg.begin());
+		return;
+	}
+
+	memset(m_outMsg.begin(), 0, m_meta->m_outMsgLen);
+
+	if (m_fastPathBatchPosition == m_fastPathBatchRecords)
+	{
+		const FB_SIZE_T messageLength = m_meta->m_outMsgLen;
+
+		// Aligned stride keeps descriptor alignment between packed records;
+		// serialization still uses messageLength.
+		FB_SIZE_T stride = messageLength;
+
+		const USHORT maxAlign = m_meta->getLayout().getMaxAlignment();
+		if (maxAlign)
+			stride = FB_ALIGN(messageLength, maxAlign);
+
+		unsigned batchRecords = FAST_PATH_BACKUP_BATCH_MAX_RECORDS;
+
+		if (stride)
+		{
+			batchRecords = MIN(batchRecords,
+				static_cast<unsigned>(FAST_PATH_BACKUP_BATCH_MAX_BYTES / stride));
+		}
+
+		batchRecords = MAX(batchRecords, 1);
+
+		m_fastPathBatchRecords = m_fastPathReader.readRecords(
+			m_fastPathBatch.getBuffer(static_cast<FB_SIZE_T>(batchRecords) * stride, false),
+			static_cast<RCRD_LENGTH>(stride), batchRecords);
+		m_fastPathBatchPosition = 0;
+
+		// Remember stride for extraction below via batch size; store it
+		// implicitly by keeping the buffer stride-aligned. The next block
+		// recomputes the same stride.
+	}
+
+	if (m_fastPathBatchPosition < m_fastPathBatchRecords)
+	{
+		FB_SIZE_T stride = m_meta->m_outMsgLen;
+
+		const USHORT maxAlign = m_meta->getLayout().getMaxAlignment();
+		if (maxAlign)
+			stride = FB_ALIGN((FB_SIZE_T) m_meta->m_outMsgLen, maxAlign);
+
+		memcpy(m_outMsg.begin(),
+			m_fastPathBatch.begin() + static_cast<FB_SIZE_T>(m_fastPathBatchPosition) * stride,
+			m_meta->m_outMsgLen);
+
+		++m_fastPathBatchPosition;
+		*m_eof = 1;
+	}
+	else
+		*m_eof = 0;
 }
 
 

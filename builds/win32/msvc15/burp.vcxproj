@@ -193,6 +193,7 @@
     <ClCompile Include="..\..\..\src\burp\burp.cpp" />
     <ClCompile Include="..\..\..\src\burp\BurpTasks.cpp" />
     <ClCompile Include="..\..\..\src\burp\canonical.cpp" />
+    <ClCompile Include="..\..\..\src\burp\RestoreMessageLayout.cpp" />
     <ClCompile Include="..\..\..\src\burp\misc.cpp" />
     <ClCompile Include="..\..\..\src\burp\mvol.cpp" />
     <ClCompile Include="..\..\..\gen\burp\backup.cpp" />
@@ -211,10 +212,14 @@
     <ClInclude Include="..\..\..\src\burp\burp_proto.h" />
     <ClInclude Include="..\..\..\src\burp\burpswi.h" />
     <ClInclude Include="..\..\..\src\burp\canon_proto.h" />
+    <ClInclude Include="..\..\..\src\burp\FastPathBurpProvider.h" />
+    <ClInclude Include="..\..\..\src\burp\FastPathRecordReader.h" />
+    <ClInclude Include="..\..\..\src\burp\FastPathRecordWriter.h" />
     <ClInclude Include="..\..\..\src\burp\misc_proto.h" />
     <ClInclude Include="..\..\..\src\burp\mvol_proto.h" />
     <ClInclude Include="..\..\..\src\burp\OdsDetection.h" />
     <ClInclude Include="..\..\..\src\burp\resto_proto.h" />
+    <ClInclude Include="..\..\..\src\burp\RestoreMessageLayout.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -31,6 +31,7 @@
 #include "../common/classes/SafeArg.h"
 #include "../burp/burp_proto.h"
 #include "../burp/mvol_proto.h"
+#include "../burp/FastPathBurpProvider.h"
 
 using MsgFormat::SafeArg;
 using namespace Firebird;
@@ -141,7 +142,7 @@ BackupRelationTask::BackupRelationTask(BurpGlobals* tdgbl) : BurpTask(tdgbl),
 	m_items.add(item);
 
 	item = FB_NEW_POOL(*pool) Item(this, false);
-	item->m_ownAttach = false;		// will use attach from main thread
+	item->m_ownAttach = m_masterGbl->gbl_fast_path; // Direct VIO requires an engine attachment.
 	m_items.add(item);
 
 	for (int i = 1; i < workers; i++)
@@ -182,7 +183,11 @@ void BackupRelationTask::SetRelation(burp_rel* relation)
 	m_readDone = false;
 	m_nextPP = 0;
 
-	m_metadata.setRelation(m_relation, getMaxWorkers() > 2);
+	const bool useFastPath = m_masterGbl->gbl_fast_path &&
+		!relation->rel_system && !(relation->rel_flags & (REL_view | REL_external)) &&
+		relation->rel_type == rel_persistent;
+
+	m_metadata.setRelation(m_relation, getMaxWorkers() > 2, useFastPath);
 }
 
 bool BackupRelationTask::handler(WorkItem& _item)
@@ -505,14 +510,33 @@ void BackupRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 		if (!item.m_att)
 		{
 			FbLocalStatus status;
-			DispatcherPtr provider;
+			FastPathBurpProvider provider(m_masterGbl->gbl_fast_path);
+
+			// Propagate the database crypt callback so encrypted databases
+			// requiring per-attachment keys (useOnlyOwnKeys) work on workers.
+			if (m_masterGbl->gbl_fast_path)
+			{
+				ICryptKeyCallback* cryptCb = nullptr;
+
+				if (m_masterGbl->gbl_sw_keyholder)
+					cryptCb = MVOL_get_crypt(m_masterGbl);
+				else
+					cryptCb = m_masterGbl->uSvc->getCryptCallback();
+
+				if (cryptCb)
+				{
+					provider.get()->setDbCryptCallback(&status, cryptCb);
+					if (status->getState() & IStatus::STATE_ERRORS)
+						BURP_abort(&status);
+				}
+			}
 
 			// attach, start tran, etc
 
 			const unsigned char* dpbBuffer = m_masterGbl->gbl_dpb_data.begin();
 			const unsigned int dpbLength = m_masterGbl->gbl_dpb_data.getCount();
 
-			item.m_att = provider->attachDatabase(&status, tdgbl->gbl_database_file_name,
+			item.m_att = provider.get()->attachDatabase(&status, tdgbl->gbl_database_file_name,
 							dpbLength, dpbBuffer);
 			if (status->getState() & IStatus::STATE_ERRORS)
 				BURP_abort(&status);
@@ -520,10 +544,14 @@ void BackupRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			ClumpletWriter tpb(ClumpletReader::Tpb, 128, isc_tpb_version3);
 			tpb.insertTag(isc_tpb_concurrency);
 			tpb.insertTag(isc_tpb_read);
+
 			if (tdgbl->gbl_sw_ignore_limbo)
 				tpb.insertTag(isc_tpb_ignore_limbo);
+
 			tpb.insertTag(isc_tpb_no_auto_undo);
+
 			// add snapshot id
+			fb_assert(m_masterGbl->tr_snapshot);
 			tpb.insertBigInt(isc_tpb_at_snapshot_number, m_masterGbl->tr_snapshot);
 
 			item.m_tra = item.m_att->startTransaction(&status,
@@ -570,11 +598,13 @@ void BackupRelationTask::freeItem(Item& item)
 
 void BackupRelationTask::stopItems()
 {
-	MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
 	for (Item** p = m_items.begin(); p < m_items.end(); p++)
+	{
+		MutexLockGuard guard((*p)->m_mutex, FB_FUNCTION);
 		(*p)->m_cleanCond.notifyAll();
+	}
 
+	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 	m_dirtyCond.notifyAll();
 }
 
@@ -703,7 +733,11 @@ void RestoreRelationTask::SetRelation(BurpGlobals* tdgbl, burp_rel* relation)
 	m_lastRecord = rec_relation_data;
 
 	m_records = 0;
-	m_verbRecs = 0;
+
+	{	// scope
+		MutexLockGuard guard(m_verbMutex, FB_FUNCTION);
+		m_verbRecs = 0;
+	}
 
 	m_metadata.setRelation(tdgbl, m_relation);
 }
@@ -732,6 +766,7 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 	}
 	catch (const LongJump&)
 	{
+		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 		m_stop = true;
 		m_error = true;
 		m_dirtyCond.notifyAll();
@@ -747,6 +782,7 @@ bool RestoreRelationTask::handler(WorkItem& _item)
 			BURP_print_status(&st, true);
 		}
 
+		MutexLockGuard guard(m_mutex, FB_FUNCTION);
 		m_stop = true;
 		m_error = true;
 		m_dirtyCond.notifyAll();
@@ -831,6 +867,9 @@ void RestoreRelationTask::verbRecs(FB_UINT64& records, bool total)
 	records = 0;
 
 	const FB_UINT64 newVerb = (newRecs / m_masterGbl->verboseInterval) * m_masterGbl->verboseInterval;
+
+	MutexLockGuard guard(m_verbMutex, FB_FUNCTION);
+
 	if (newVerb > m_verbRecs)
 	{
 		m_verbRecs = newVerb;
@@ -841,6 +880,8 @@ void RestoreRelationTask::verbRecs(FB_UINT64& records, bool total)
 
 void RestoreRelationTask::verbRecsFinal()
 {
+	MutexLockGuard guard(m_verbMutex, FB_FUNCTION);
+
 	if (m_verbRecs < static_cast<FB_UINT64>(m_records))
 	{
 		m_verbRecs = m_records;
@@ -890,6 +931,7 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 	tdgbl->runtimeODS = m_masterGbl->runtimeODS;
 	tdgbl->gbl_use_no_auto_undo = m_masterGbl->gbl_use_no_auto_undo;
 	tdgbl->gbl_use_auto_release_temp_blobid = m_masterGbl->gbl_use_auto_release_temp_blobid;
+	tdgbl->gbl_fast_path = m_masterGbl->gbl_fast_path;
 
 	if (item.m_ownAttach)
 	{
@@ -897,7 +939,6 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 		{
 			// attach, start tran, etc
 			FbLocalStatus status;
-			DispatcherPtr provider;
 
 			ClumpletWriter dpb(ClumpletReader::dpbList, 128,
 				m_masterGbl->gbl_dpb_data.begin(),
@@ -906,8 +947,24 @@ void RestoreRelationTask::initItem(BurpGlobals* tdgbl, Item& item)
 			const UCHAR* dpbBuffer = dpb.getBuffer();
 			const USHORT dpbLength = dpb.getBufferLength();
 
-			item.m_att = provider->attachDatabase(&status, tdgbl->gbl_database_file_name,
-				dpbLength, dpbBuffer);
+			if (tdgbl->gbl_fast_path)
+			{
+				ICryptKeyCallback* cryptCb = nullptr;
+
+				if (m_masterGbl->gbl_sw_keyholder)
+					cryptCb = MVOL_get_crypt(m_masterGbl);
+				else
+					cryptCb = m_masterGbl->uSvc->getCryptCallback();
+
+				item.m_att = FastPathBurpProvider::attachWorker(&status,
+					tdgbl->gbl_database_file_name, dpbLength, dpbBuffer, cryptCb);
+			}
+			else
+			{
+				DispatcherPtr provider;
+				item.m_att = provider->attachDatabase(&status, tdgbl->gbl_database_file_name,
+					dpbLength, dpbBuffer);
+			}
 
 			if (status->getState() & IStatus::STATE_ERRORS)
 				BURP_abort(&status);
@@ -960,18 +1017,21 @@ bool RestoreRelationTask::freeItem(Item& item, bool commit)
 				// more detailed message required ?
 				BURP_print_status(&status);
 			}
-			item.m_tra = nullptr;
+			else
+				item.m_tra = nullptr;
 		}
 
 		if (item.m_tra)
 		{
-			item.m_tra->rollback(&status);
+			FbLocalStatus rollbackStatus;
+			item.m_tra->rollback(&rollbackStatus);
 			item.m_tra = nullptr;
 		}
 
 		if (item.m_att)
 		{
-			item.m_att->detach(&status);
+			FbLocalStatus detachStatus;
+			item.m_att->detach(&detachStatus);
 			item.m_att = nullptr;
 		}
 	}

@@ -423,3 +423,7 @@ FB_IMPL_MSG(GBAK, 424, gbak_writing_constant, -901, "00", "000", "writing consta
 FB_IMPL_MSG(GBAK, 425, gbak_constant, -901, "00", "000", "constant (in RDB$CONSTANTS)")
 FB_IMPL_MSG(GBAK, 426, gbak_restoring_constant, -901, "00", "000", "restoring constant %s")
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 427, "skipping data for table @1")
+FB_IMPL_MSG(GBAK, 428, gbak_inv_column, -901, "00", "000", "invalid column @1 in table @2: @3")
+FB_IMPL_MSG(GBAK, 429, gbak_inv_record_length, -901, "00", "000", "invalid record length for table @1")
+FB_IMPL_MSG(GBAK, 430, gbak_fast_path_needs_service, -901, "00", "000", "FAST_PATH requires the -service option")
+FB_IMPL_MSG_NO_SYMBOL(GBAK, 431, "    @1FAST(_PATH)          fast-path data transfer (requires -service)")
