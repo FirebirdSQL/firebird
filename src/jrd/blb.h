@@ -118,6 +118,12 @@ public:
 	void	BLB_put_segment(thread_db*, const void*, USHORT);
 	static void	put_slice(thread_db*, jrd_tra*, bid*, const UCHAR*, USHORT, const UCHAR*, SLONG, UCHAR*);
 	static void release_array(ArrayField*);
+
+	// Release ArrayFields created on the request-less fast-path (arr_request
+	// == nullptr), e.g. arrays belonging to records skipped after a conversion
+	// failure. Safe to call after a batch: future batches have not created their
+	// arrays yet, so all remaining request-less arrays belong to processed records.
+	static void releaseRequestlessArrays(jrd_tra* transaction);
 	static void scalar(thread_db*, jrd_tra*, const bid*, USHORT, const SLONG*, impure_value*);
 
 	static void delete_blob_id(thread_db*, const bid*, ULONG, Jrd::jrd_rel*);

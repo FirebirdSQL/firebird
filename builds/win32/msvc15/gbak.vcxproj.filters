@@ -51,5 +51,14 @@
     <ClCompile Include="..\..\..\src\burp\main\burpMain.cpp">
       <Filter>BURP files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\main\FastPathBurpProviderStub.cpp">
+      <Filter>BURP files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\main\FastPathRecordWriterStub.cpp">
+      <Filter>BURP files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\main\FastPathRecordReaderStub.cpp">
+      <Filter>BURP files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

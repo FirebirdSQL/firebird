@@ -817,7 +817,9 @@ struct burp_rel
 	burp_rel*	rel_next;
 	burp_fld*	rel_fields;
 	SSHORT		rel_flags;
+	bool		rel_system;		// set on restore; backup relies on BURP_alloc_zero (false = user table)
 	SSHORT		rel_id;
+	SSHORT		rel_type;		// RDB$RELATION_TYPE (rel_persistent, rel_view, ...); zero == persistent
 	Firebird::QualifiedMetaString rel_name;
 	GDS_NAME	rel_owner;		// relation owner, if not us
 	ULONG		rel_max_pp;		// max pointer page sequence number
@@ -1305,6 +1307,7 @@ public:
 
 	bool gbl_use_no_auto_undo = true;
 	bool gbl_use_auto_release_temp_blobid = true;
+	bool gbl_fast_path = false;
 };
 
 // CVC: This aux routine declared here to not force inclusion of burp.h with burp_proto.h
