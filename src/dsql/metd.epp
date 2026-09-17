@@ -77,43 +77,49 @@ namespace
 		}
 	}
 
-	void setupRowtypeField(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch,
-		const QualifiedName& relationName, const MetaName& fieldSource, dsql_fld& field)
+	void setupRowtypeField(jrd_tra* transaction, DsqlCompilerScratch* dsqlScratch, dsql_fld& field)
 	{
-		int subfieldNum = 0;
+		QualifiedName& relationName = field.typeOfTable;
+		if (relationName.object.isEmpty())
+		{
+			// Packaged types store their subfields under a generated relation name.
+			thread_db* tdbb = JRD_get_thread_data();
+			static const CachedRequestId requestCacheId;
+			AutoCacheRequest request(tdbb, requestCacheId);
+
+			FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+				FLD IN RDB$FIELDS
+				WITH FLD.RDB$SCHEMA_NAME EQ field.fieldSource.schema.c_str() AND
+					 FLD.RDB$FIELD_NAME EQ field.fieldSource.object.c_str()
+			{
+				if (!FLD.RDB$RELATION_NAME.NULL)
+					relationName = QualifiedName(FLD.RDB$RELATION_NAME, FLD.RDB$SCHEMA_NAME);
+			}
+			END_FOR
+		}
+
 		dsql_rel* relation = METD_get_relation(transaction, dsqlScratch, relationName);
 		dsql_fld* subField = NULL;
 
 		if (relation)
-		{
 			subField = relation->rel_fields;
-			subfieldNum = relation->rel_fields_number;
-		}
 		else
-		{
-			subfieldNum = METD_gen_composite_type_fields(transaction, dsqlScratch, relationName, subField);
-		}
+			METD_gen_composite_type_fields(transaction, dsqlScratch, relationName, subField);
 
 		if (!relation && !subField)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 				Arg::Gds(isc_invalid_parameter_decl) <<
-				Arg::Gds(isc_relnotdef) << Arg::Str(fieldSource));
+				Arg::Gds(isc_relnotdef) << Arg::Str(field.fieldSource.object));
 		}
 
 		// fill the top-level composite field with subfields
 		field.fld_sub_first = subField;
 
-		// calculate the actual length of the composite field
+		// calculate the subfield count and actual length of the composite field
 		// TODO: we have to find a way to update the length of the parameter in system table after
 		// table modification that we are depending on
-		field.length = NULL_BYTES(subfieldNum);
-		for (dsql_fld* next = field.fld_sub_first; next; next = next->fld_next)
-		{
-			if (next->dtype >= dtype_aligned)
-				field.length = FB_ALIGN(field.length, type_alignments[next->dtype]);
-			field.length += next->length;
-		}
+		calculateCompositeFieldLength(field);
 	}
 }
 
@@ -876,6 +882,16 @@ dsql_prc* METD_get_procedure(jrd_tra* transaction, DsqlCompilerScratch* dsqlScra
 		{
 			status_exception::raise(Arg::Gds(isc_private_procedure) <<
 				Arg::Str(name.object) << Arg::Str(name.package));
+		}
+
+		// The cached parameter descriptors do not provide named DSQL subfields.
+		for (auto fields : {procedure->prc_inputs, procedure->prc_outputs})
+		{
+			for (auto* field = fields; field; field = field->fld_next)
+			{
+				if (field->dtype == dtype_rowtype)
+					setupRowtypeField(transaction, dsqlScratch, *field);
+			}
 		}
 
 		dsqlScratch->procedures.put(procedure->prc_name, procedure);
