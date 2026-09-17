@@ -527,7 +527,13 @@ states for just created index:
 states for existing index:
 	irt_normal
 		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			=> irt_migrate
 		on commit / on rollback				no action
+	irt_migrate
+		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			create and link a new slot
+		on commit							=> irt_normal (for a new slot), irt_kill (for an old slot)
+		on rollback							=> irt_kill (for a new slot), irt_normal (for an old slot)
 	irt_commit
 		on commit							=> irt_drop
 		on rollback							=> irt_normal
