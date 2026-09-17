@@ -144,6 +144,7 @@ List of existing trace sessions
 			if the session was created by the engine itself : "system"
 			kind of session : "audit" or "trace"
 			if user session log file is full : "log full"
+			if user session is started on the same machine where the server is located: "local"
 
 
 	Output of every service is obtained as usually using isc_service_query call
