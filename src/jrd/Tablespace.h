@@ -36,13 +36,13 @@ namespace Jrd
 
 	class Tablespace
 	{
-		static constexpr unsigned CREATED = 1;
-		static constexpr unsigned MODIFIED = 2;
-		static constexpr unsigned DELETED = 4;
-		static constexpr unsigned BLOCKING = 8;
-		static constexpr unsigned OBSOLETE = 16;
-		static constexpr unsigned NOALLOC = 32;
-		static constexpr unsigned CLEANUP = 64;
+		static constexpr unsigned CREATED 	= 0x0001U;	// tablespace is created but not yet committed
+		static constexpr unsigned MODIFIED	= 0x0002U;	// tablespace is altered in the given transaction
+		static constexpr unsigned DELETED	= 0x0004U;	// tablespace is dropped in the given transaction
+		static constexpr unsigned BLOCKING	= 0x0008U;	// tablespace is being locked concurrently but is currently used
+		static constexpr unsigned OBSOLETE	= 0x0010U;	// cached metadata is outdated and must be actualized
+		static constexpr unsigned ALLOCATED	= 0x0020U;	// tablespace pages are allocated
+		static constexpr unsigned CLEANUP	= 0x0040U;	// tablespace must be deleted as soon as no longer used
 
 	public:
 		enum class Operation {	CREATE, ALTER, DROP	};
@@ -196,7 +196,7 @@ namespace Jrd
 			m_fileName = fileName;
 			m_lock = lock;
 
-			m_flags |= NOALLOC;
+			m_flags &= ~ALLOCATED;
 		}
 
 		void allocate(thread_db* tdbb, bool create);
@@ -205,7 +205,7 @@ namespace Jrd
 
 		inline bool isReady() const
 		{
-			return (m_flags & (OBSOLETE | NOALLOC)) == 0;
+			return (m_flags & ALLOCATED) && !(m_flags & OBSOLETE);
 		}
 
 		void setLock(Lock* lock)

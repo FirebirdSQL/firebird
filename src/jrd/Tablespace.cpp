@@ -230,14 +230,13 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 
 void Tablespace::allocate(thread_db* tdbb, bool create)
 {
-	fb_assert(m_flags & NOALLOC);
-	fb_assert(!(m_flags & OBSOLETE));
+	fb_assert(!(m_flags & (OBSOLETE | ALLOCATED)));
 
 	try
 	{
 		const auto dbb = tdbb->getDatabase();
 		dbb->dbb_page_manager.allocTableSpace(tdbb, m_id, create, m_fileName);
-		m_flags &= ~NOALLOC;
+		m_flags |= ALLOCATED;
 	}
 	catch (const Exception&)
 	{
@@ -315,7 +314,7 @@ void Tablespace::rescan(thread_db* tdbb, bool open)
 		m_flags &= ~OBSOLETE;
 	}
 
-	if (open && (m_flags & NOALLOC))
+	if (open && !(m_flags & ALLOCATED))
 		allocate(tdbb, false);
 }
 
