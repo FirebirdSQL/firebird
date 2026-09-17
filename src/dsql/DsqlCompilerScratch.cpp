@@ -465,10 +465,6 @@ void DsqlCompilerScratch::putLocalTypes()
 
 			if (defaultsExist)
 			{
-				// set NULL as default if default value is nullptr
-				if (!*defaultNode)
-					*defaultNode = NullNode::instance();
-
 				appendUChar(DeclareLocalTypeNode::HAS_DEFAULT_VALUE);
 				GEN_expr(this, *defaultNode);
 				++defaultNode;

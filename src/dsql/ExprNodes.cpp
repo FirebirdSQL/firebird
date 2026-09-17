@@ -14937,7 +14937,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 		// AB: This is an already processed node. This could be done in expand_select_list.
 		return this;
 	}
-	// TODO: refactor this method, it's ugly
+	// TODO ROWTYPE refactor this method, it's ugly
 	auto& pool = dsqlScratch->getPool();
 
 	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
@@ -14961,7 +14961,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	node->rowField->fld_sub_count = node->rowValueExpressionList->items.getCount();
 	node->rowField->length = NULL_BYTES(rowDesc.dsc_sub_count);
 
-	// TODO: implement dsc generating via fromField() for rowtype fields
+	// TODO ROWTYPE implement dsc generating via fromField() for rowtype fields
 	delete rowDesc.dsc_sub_first;
 	rowDesc.clear();
 	rowDesc.dsc_dtype = dtype_rowtype;

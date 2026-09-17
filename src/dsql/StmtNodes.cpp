@@ -3339,7 +3339,8 @@ DeclareLocalTypeNode* DeclareLocalTypeNode::dsqlPass(DsqlCompilerScratch* dsqlSc
 	for (auto& it : clauses)
 	{
 		auto clause = (static_cast<RelationNode::AddColumnClause*>(it.getObject()));
-		node->defaultList->add(clause->defaultValue ? doDsqlPass(dsqlScratch, clause->defaultValue->value) : nullptr);
+		node->defaultList->add(clause->defaultValue ?
+			doDsqlPass(dsqlScratch, clause->defaultValue->value) : NullNode::instance());
 		onlyNulls &= !clause->defaultValue;
 
 		clause->field->resolve(dsqlScratch, false);
@@ -3429,10 +3430,6 @@ void DeclareLocalTypeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 		if (defaultsExist)
 		{
-			// set NULL as default if default value is nullptr
-			if (!*defaultNode)
-				*defaultNode = NullNode::instance();
-
 			dsqlScratch->appendUChar(DeclareLocalTypeNode::HAS_DEFAULT_VALUE);
 			GEN_expr(dsqlScratch, *defaultNode);
 			++defaultNode;
