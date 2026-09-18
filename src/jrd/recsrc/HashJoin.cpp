@@ -32,6 +32,8 @@
 #include "../jrd/intl_proto.h"
 #include "../jrd/optimizer/Optimizer.h"
 
+#include <algorithm>
+
 #include "RecordSource.h"
 
 using namespace Firebird;
@@ -43,211 +45,276 @@ using namespace Jrd;
 // Data access: hash join
 // ----------------------
 
-// NS: FIXME - Why use static hash table here??? Hash table shall support dynamic resizing
-static constexpr ULONG HASH_SIZE = 1009;
-static constexpr ULONG BUCKET_PREALLOCATE_SIZE = 32;	// 256 bytes per bucket
+namespace
+{
+	// Predefined table sizes (all prime). The sizes grow roughly by a factor
+	// of two, which keeps the number of growth steps small while never
+	// leaving too much slack. Table sizing is done once, in build(),
+	// based on the actual number of collected entries.	
+	constexpr ULONG HASH_SIZES[] =
+	{
+		1009, 2003, 4001, 8009, 16001, 32003,
+		64007, 128021, 256019, 512009, 1000003
+	};
+
+	constexpr ULONG MIN_HASH_SIZE = HASH_SIZES[0];
+	constexpr ULONG MAX_HASH_SIZE = HASH_SIZES[FB_NELEM(HASH_SIZES) - 1];
+
+	// Desired average number of entries per bucket. We sort each bucket
+	// by hash and use binary search on lookup, so even a moderately long
+	// bucket is cheap. A small factor here means more buckets and a larger
+	// bucketStart array; a large factor means longer buckets.
+	constexpr ULONG HASH_LOAD_FACTOR = 4;
+
+	constexpr ULONG nextHashSize(ULONG current)
+	{
+		for (const ULONG size : HASH_SIZES)
+		{
+			if (size > current)
+				return size;
+		}
+		return MAX_HASH_SIZE;
+	}
+
+}
 
 unsigned HashJoin::maxCapacity() noexcept
 {
-	// Binary search across 1000 collisions is computationally similar to
-	// linear search across 10 collisions. We use this number as a rough
-	// estimation of whether the lookup performance is likely to be acceptable.
-	return HASH_SIZE * 1000;
+	// Upper bound on the number of records the optimizer may reasonably
+	// feed into a single hash join. Above this the bucket scan starts
+	// to dominate and the optimizer should pick a different join method.
+	return MAX_HASH_SIZE * HASH_LOAD_FACTOR;
 }
 
 
 class HashJoin::HashTable final : public PermanentStorage
 {
-	class CollisionList
+	// A single {hash, position} pair. The position refers to a record
+	// inside the corresponding BufferedStream.
+	struct Entry
 	{
-		static constexpr FB_SIZE_T INVALID_ITERATOR = FB_SIZE_T(~0);
+		ULONG hash;
+		ULONG position;
+	};
 
-		struct Entry
-		{
-			Entry() noexcept
-				: hash(0), position(0)
-			{}
+	struct Stream
+	{
+		Array<Entry> entries;        // all records, grouped by bucket after build()
+		Array<ULONG> bucketStart;    // size = tableSize + 1; see build() for layout
+		ULONG iterator;              // current cursor for iterate()
 
-			Entry(ULONG h, ULONG pos) noexcept
-				: hash(h), position(pos)
-			{}
-
-			static const ULONG generate(const Entry& item) noexcept
-			{
-				return item.hash;
-			}
-
-			ULONG hash;
-			ULONG position;
-		};
-
-	public:
-		CollisionList(MemoryPool& pool)
-			: m_collisions(pool, BUCKET_PREALLOCATE_SIZE),
-			  m_iterator(INVALID_ITERATOR)
-		{
-			m_collisions.setSortMode(FB_ARRAY_SORT_MANUAL);
-		}
-
-		void sort()
-		{
-			m_collisions.sort();
-		}
-
-		ULONG getCount() const noexcept
-		{
-			return (ULONG) m_collisions.getCount();
-		}
-
-		void add(ULONG hash, ULONG position)
-		{
-			m_collisions.add(Entry(hash, position));
-		}
-
-		bool locate(ULONG hash)
-		{
-			if (m_collisions.find(hash, m_iterator))
-				return true;
-
-			m_iterator = INVALID_ITERATOR;
-			return false;
-		}
-
-		bool iterate(ULONG hash, ULONG& position) noexcept
-		{
-			if (m_iterator >= m_collisions.getCount())
-				return false;
-
-			const Entry& collision = m_collisions[m_iterator++];
-
-			if (hash != collision.hash)
-			{
-				m_iterator = INVALID_ITERATOR;
-				return false;
-			}
-
-			position = collision.position;
-			return true;
-		}
-
-	private:
-		SortedArray<Entry, EmptyStorage<Entry>, ULONG, Entry> m_collisions;
-		FB_SIZE_T m_iterator;
+		explicit Stream(MemoryPool& p) : entries(p), bucketStart(p), iterator(0) {}
 	};
 
 public:
-	HashTable(MemoryPool& pool, ULONG streamCount, ULONG tableSize = HASH_SIZE)
-		: PermanentStorage(pool), m_streamCount(streamCount),
-		  m_tableSize(tableSize), m_slot(0)
+	HashTable(MemoryPool& pool, ULONG streamCount)
+		: PermanentStorage(pool), m_streams(pool, streamCount)
 	{
-		m_collisions = FB_NEW_POOL(pool) CollisionList*[streamCount * tableSize];
-		memset(m_collisions, 0, streamCount * tableSize * sizeof(CollisionList*));
+		for (ULONG i = 0; i < streamCount; i++)
+			m_streams.add(FB_NEW_POOL(pool) Stream(pool));
 	}
 
 	~HashTable()
 	{
-		for (ULONG i = 0; i < m_streamCount * m_tableSize; i++)
-			delete m_collisions[i];
-
-		delete[] m_collisions;
+		for (auto* s : m_streams)
+			delete s;
 	}
 
+	// Phase 1: collect raw (hash, position) pairs. No bucket logic here,
+	// so the caller can freely call put() while reading the inner stream.
+	// The only caller of put() is HashJoin itself, in internalGetRecord().
 	void put(ULONG stream, ULONG hash, ULONG position)
 	{
-		const ULONG slot = hash % m_tableSize;
-
-		fb_assert(stream < m_streamCount);
-		fb_assert(slot < m_tableSize);
-
-		CollisionList* collisions = m_collisions[stream * m_tableSize + slot];
-
-		if (!collisions)
-		{
-			collisions = FB_NEW_POOL(getPool()) CollisionList(getPool());
-			m_collisions[stream * m_tableSize + slot] = collisions;
-		}
-
-		collisions->add(hash, position);
+		m_streams[stream]->entries.add({ hash, position });
 	}
 
-	bool setup(ULONG hash)
-	{
-		const ULONG slot = hash % m_tableSize;
+	// Phase 2: once all inner streams are fully read, group their entries
+	// by bucket. Called exactly once, never re-run.
+	void build();
 
-		for (ULONG i = 0; i < m_streamCount; i++)
-		{
-			CollisionList* const collisions = m_collisions[i * m_tableSize + slot];
-
-			if (!collisions)
-				return false;
-
-			if (!collisions->locate(hash))
-				return false;
-		}
-
-		m_slot = slot;
-		return true;
-	}
-
-	void reset(ULONG stream, ULONG hash)
-	{
-		fb_assert(stream < m_streamCount);
-
-		CollisionList* const collisions = m_collisions[stream * m_tableSize + m_slot];
-		collisions->locate(hash);
-	}
-
-	bool iterate(ULONG stream, ULONG hash, ULONG& position) noexcept
-	{
-		fb_assert(stream < m_streamCount);
-
-		CollisionList* const collisions = m_collisions[stream * m_tableSize + m_slot];
-		return collisions->iterate(hash, position);
-	}
-
-	void sort()
-	{
-		for (ULONG i = 0; i < m_streamCount * m_tableSize; i++)
-		{
-			if (const auto collisions = m_collisions[i])
-				collisions->sort();
-		}
-
-#ifdef PRINT_HASH_TABLE
-		FB_UINT64 total = 0;
-		ULONG min = MAX_ULONG, max = 0, count = 0;
-
-		for (ULONG i = 0; i < m_streamCount * m_tableSize; i++)
-		{
-			CollisionList* const collisions = m_collisions[i];
-			if (!collisions)
-				continue;
-
-			const auto cnt = collisions->getCount();
-
-			if (cnt < min)
-				min = cnt;
-			if (cnt > max)
-				max = cnt;
-			total += cnt;
-			count++;
-		}
-
-		if (count)
-		{
-			printf("Hash table size %u, count %u, buckets %u, min %u, max %u, avg %u\n",
-				   m_tableSize, (ULONG) total, count, min, max, (ULONG) (total / count));
-		}
-#endif
-	}
+	// Lookup API. The typical usage pattern is:
+	//
+	//     if (table->setup(hash))
+	//         while (table->iterate(stream, hash, position)) { ... }
+	//
+	// setup() primes all streams to the first matching record in the
+	// current bucket, iterate() advances the cursor of a single stream.
+	// If iterate() advances past the end of the bucket, the caller is
+	// expected to advance the previous stream (see HashJoin::fetchRecord)
+	// and call reset() for the current stream to restart the scan of
+	// matching records.
+	bool setup(ULONG hash);
+	void reset(ULONG stream, ULONG hash);
+	bool iterate(ULONG stream, ULONG hash, ULONG& position) noexcept;
 
 private:
-	const ULONG m_streamCount;
-	const ULONG m_tableSize;
-	CollisionList** m_collisions;
-	ULONG m_slot;
+	Array<Stream*> m_streams;
+	ULONG m_tableSize = 0;
+	ULONG m_slot = 0;
 };
 
+void HashJoin::HashTable::build()
+{
+	// The table size is chosen from the *actual* number of collected
+	// entries, not from any cardinality estimate. The estimate may be
+	// wildly off (e.g. for table functions and stored procedures, where
+	// the optimizer uses a fixed default), and getting the size wrong is
+	// exactly what a dynamic resizing scheme would be paying for later.
+	// Since the inner streams are fully materialized by the time build()
+	// runs, we can afford to decide once and for all.
+	ULONG total = 0;
+	for (auto* s : m_streams)
+		total += s->entries.getCount();
+
+	const ULONG desired = total / (m_streams.getCount() * HASH_LOAD_FACTOR);
+	m_tableSize = nextHashSize(desired);
+
+	// Each stream is processed independently. For every stream we do a
+	// standard counting sort of its entries by (hash % tableSize), using
+	// two passes over the entries plus a prefix-sum pass over the buckets.
+	// After that:
+	//
+	//   - entries are grouped by bucket,
+	//   - bucketStart[b] and bucketStart[b + 1] delimit the entries of
+	//     bucket b in the entries array,
+	//   - entries within each bucket are sorted by hash, so that lookup
+	//     can binary-search inside the bucket.
+	//
+	// The extra (tableSize + 1)-th element of bucketStart is needed so
+	// that the range of bucket b can be expressed uniformly as
+	// [bucketStart[b], bucketStart[b + 1]) without special-casing the
+	// last bucket.
+
+	for (auto* s : m_streams)
+	{
+		const ULONG n = s->entries.getCount();
+		s->bucketStart.grow(m_tableSize + 1);
+		memset(s->bucketStart.begin(), 0, (m_tableSize + 1) * sizeof(ULONG));
+
+		// Pass 1: count how many entries fall into each bucket.
+		// bucketStart[b + 1] is used as a per-bucket counter, so after
+		// this pass bucketStart[b + 1] holds the size of bucket b.
+		// Offset by one lets us compute prefix sums below without
+		// touching bucketStart[0], which stays zero.
+		for (ULONG k = 0; k < n; k++)
+			s->bucketStart[s->entries[k].hash % m_tableSize + 1]++;
+
+		// Pass 2: turn per-bucket counts into start offsets.
+		// After this pass bucketStart[b] is the index of the first
+		// entry of bucket b, and bucketStart[b + 1] is the index of
+		// the first entry of bucket b + 1 (equivalently, one past the
+		// last entry of bucket b).
+		for (ULONG b = 0; b < m_tableSize; b++)
+			s->bucketStart[b + 1] += s->bucketStart[b];
+
+		// Pass 3: physically move entries into their buckets. Since we
+		// cannot write into s->entries while still reading from it
+		// without corrupting data, we allocate a temporary buffer and
+		// use a separate cursor array 'next' that starts as a copy of
+		// bucketStart and gets incremented as entries are placed.
+		//
+		// This is the only place where O(n) temporary memory is needed.
+		// The peak footprint of the table is therefore roughly twice
+		// the size of the entries array; after assign() the temporary
+		// buffer is released.
+		if (n > 0)
+		{
+			Array<Entry> temp(getPool(), n);
+			temp.grow(n);
+
+			Array<ULONG> next(getPool(), m_tableSize);
+			next.grow(m_tableSize);
+			memcpy(next.begin(), s->bucketStart.begin(), m_tableSize * sizeof(ULONG));
+
+			for (ULONG k = 0; k < n; k++)
+			{
+				const Entry& e = s->entries[k];
+				temp[next[e.hash % m_tableSize]++] = e;
+			}
+
+			s->entries.assign(temp);
+		}
+
+		// Pass 4: sort each bucket by hash. Buckets are contiguous ranges
+		// in entries; singletons are skipped. Records with equal hashes
+		// may end up in any order relative to each other, which is fine
+		// for the join: they all compare equal on the join key anyway.
+		auto compareHash = [] (const Entry& a, const Entry& b) { return (a.hash < b.hash); };
+
+		for (ULONG b = 0; b < m_tableSize; b++)
+		{
+			const ULONG start = s->bucketStart[b];
+			const ULONG end = s->bucketStart[b + 1];
+			if (end > start + 1)
+				std::sort(s->entries.begin() + start, s->entries.begin() + end, compareHash);
+		}
+	}
+}
+
+bool HashJoin::HashTable::setup(ULONG hash)
+{
+	const ULONG slot = hash % m_tableSize;
+
+	// Every inner stream must have at least one record in this bucket,
+	// otherwise the join cannot produce any output for this leader row.
+	// This mirrors the old behaviour of probing each CollisionList for
+	// the target hash; here we cannot test the hash itself without a
+	// binary search, so we settle for the cheaper "bucket is non-empty"
+	// check and let iterate() reject misses on the first probe.
+	for (auto* s : m_streams)
+	{
+		if (s->bucketStart[slot] == s->bucketStart[slot + 1])
+			return false;
+	}
+
+	m_slot = slot;
+
+	// Prime the cursors of all streams. For every stream the cursor is
+	// positioned at the first entry whose hash is >= the target hash.
+	for (ULONG i = 0; i < m_streams.getCount(); i++)
+		reset(i, hash);
+
+	return true;
+}
+
+void HashJoin::HashTable::reset(ULONG stream, ULONG hash)
+{
+	auto* s = m_streams[stream];
+	ULONG lo = s->bucketStart[m_slot];
+	ULONG hi = s->bucketStart[m_slot + 1];
+
+	// Lower bound: the first entry in the bucket whose hash is >= the
+	// target. If the target hash is not present, the cursor ends up
+	// past the last matching entry and iterate() immediately returns
+	// false. If the target is present, the cursor ends up on the first
+	// entry with that hash; the subsequent iterate() calls walk through
+	// all entries sharing that hash.
+	while (lo < hi)
+	{
+		const ULONG mid = lo + (hi - lo) / 2;
+		if (s->entries[mid].hash < hash)
+			lo = mid + 1;
+		else
+			hi = mid;
+	}
+	s->iterator = lo;
+}
+
+bool HashJoin::HashTable::iterate(ULONG stream, ULONG hash, ULONG& position) noexcept
+{
+	auto* s = m_streams[stream];
+	const ULONG end = s->bucketStart[m_slot + 1];
+
+	// Stop on the first mismatch. Because the bucket is sorted by hash
+	// and the cursor starts at the lower bound for 'hash', any entry
+	// with a different hash means we have exhausted the matches.
+	if (s->iterator >= end || s->entries[s->iterator].hash != hash)
+		return false;
+
+	position = s->entries[s->iterator].position;
+	s->iterator++;
+	return true;
+}
 
 HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
 				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
@@ -456,7 +523,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 					}
 				}
 
-				impure->irsb_hash_table->sort();
+				impure->irsb_hash_table->build();
 			}
 
 			// Compute and hash the comparison keys
