@@ -200,7 +200,7 @@
 #if PlatformTarget == "x64"
 #define WOW64Dir="output_win32"
 #endif
-#define msvc_version 10
+#define msvc_version 0
 
 ;BaseVer should be used for all FB_MAJOR_VER.FB_MINOR_VER installs.
 ;This allows us to upgrade silently from FB_MAJOR_VER.FB_MINOR_VER.m to FB_MAJOR_VER.FB_MINOR_VER.n
