@@ -2099,7 +2099,7 @@ PageSpace* PageManager::findPageSpace(const ULONG pageSpace) const
 	return 0;
 }
 
-void PageManager::delPageSpace(const ULONG pageSpace, bool deleteFile)
+void PageManager::deletePageSpace(const ULONG pageSpace, bool deleteFile)
 {
 	WriteLockGuard guard(pageSpacesLock, FB_FUNCTION);
 
@@ -2195,13 +2195,8 @@ ULONG PageManager::getTempPageSpaceID(thread_db* tdbb)
 }
 
 
-void PageManager::allocTableSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const PathName& fileName)
+void PageManager::allocatePageSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const PathName& fileName)
 {
-	/***
-	 * NOTE: PageSpaceId of Tablespaces is equal to tablespace id
-	 */
-	fb_assert(PageSpace::isTablespace(pageSpaceID));
-
 	if (!findPageSpace(pageSpaceID))
 	{
 		Firebird::MutexLockGuard guard(initTmpMtx, FB_FUNCTION);

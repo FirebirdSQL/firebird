@@ -146,8 +146,8 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.delPageSpace(m_id);
-		dbb->dbb_page_manager.allocTableSpace(tdbb, m_id, false, fileName);
+		dbb->dbb_page_manager.deletePageSpace(m_id);
+		dbb->dbb_page_manager.allocatePageSpace(tdbb, m_id, false, fileName);
 	}
 	else if (operation == Operation::DROP)
 	{
@@ -173,7 +173,7 @@ void Tablespace::commit(thread_db* tdbb, jrd_tra* transaction)
 		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.delPageSpace(m_id);
+		dbb->dbb_page_manager.deletePageSpace(m_id);
 		dbb->dbb_tablespaces.remove(m_id);
 
 		if (!isUsed())
@@ -206,7 +206,7 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.delPageSpace(m_id, true);
+		dbb->dbb_page_manager.deletePageSpace(m_id, true);
 		dbb->dbb_tablespaces.remove(m_id);
 
 		if (!isUsed())
@@ -220,7 +220,7 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
 
 		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.delPageSpace(m_id);
+		dbb->dbb_page_manager.deletePageSpace(m_id);
 	}
 
 	LCK_release(tdbb, m_lock);
@@ -235,7 +235,7 @@ void Tablespace::allocate(thread_db* tdbb, bool create)
 	try
 	{
 		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.allocTableSpace(tdbb, m_id, create, m_fileName);
+		dbb->dbb_page_manager.allocatePageSpace(tdbb, m_id, create, m_fileName);
 		m_flags |= ALLOCATED;
 	}
 	catch (const Exception&)
