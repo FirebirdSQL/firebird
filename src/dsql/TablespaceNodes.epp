@@ -186,8 +186,8 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 	{
 		try
 		{
-			id = DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_ts_id, "RDB$TABLESPACES") + 1;	// +1 to skip DB_PAGE_SPACE
-			id %= TRANS_PAGE_SPACE;
+			id = DYN_UTIL_gen_unique_id(tdbb, drq_g_nxt_ts_id, "RDB$TABLESPACES");
+			id %= (MAX_TABLESPACE_ID + 1);
 
 			if (!id || id == 1) // skip DB_PAGE_SPACE
 				continue;
@@ -223,7 +223,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 			if (ex.value()[1] != isc_unique_key_violation)
 				throw;
 
-			if (++faults >= TRANS_PAGE_SPACE)
+			if (++faults > MAX_TABLESPACE_ID)
 				throw;
 
 			fb_utils::init_status(tdbb->tdbb_status_vector);

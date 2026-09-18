@@ -335,7 +335,7 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 	}
 
 	// Serialize creation of the new tablespace
-	MutexLockGuard guard(dbb->dbb_tablespaces.getMutex(), FB_FUNCTION);
+	Cache::LockGuard guard(dbb->dbb_tablespaces, FB_FUNCTION);
 
 	// Double check it wasn't created concurrently in the meantime
 	if (const auto tableSpace = dbb->dbb_tablespaces.get(id))

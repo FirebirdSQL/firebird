@@ -84,8 +84,9 @@ namespace Jrd
 			}
 
 		private:
-			static_assert((TRANS_PAGE_SPACE + 1) % BITS_PER_LONG == 0);
-			ULONG m_bits[(TRANS_PAGE_SPACE + 1) / BITS_PER_LONG];
+			static const auto TABLESPACE_CAPACITY = ROUNDUP_LONG(MAX_TABLESPACE_ID);
+			static_assert(TABLESPACE_CAPACITY % BITS_PER_LONG == 0);
+			ULONG m_bits[TABLESPACE_CAPACITY / BITS_PER_LONG];
 			Firebird::Array<Tablespace*> m_tablespaces;
 
 			inline void set(ULONG id)
@@ -114,18 +115,26 @@ namespace Jrd
 			Cache(const Cache&) = delete;
 			Cache& operator=(const Cache&) = delete;
 
+			// Retrieve tablespace from the cache by either its ID or its name
 			Tablespace* get(ULONG id);
 			Tablespace* get(const MetaName& name);
 
+			// Add tablespace to the shared cache
 			void store(Tablespace* tableSpace);
+			// Remove tablespace from the shared cache
 			void remove(ULONG id);
+			// Release all cached tablespaces and remove them from the cache
 			void release(thread_db* tdbb);
+			// Broadcast the Tablespace::rollback() call through all the cached tablespaces
 			void rollback(thread_db* tdbb, jrd_tra* transaction);
 
-			Firebird::Mutex& getMutex()
+			class LockGuard : public Firebird::MutexLockGuard
 			{
-				return m_mutex;
-			}
+			public:
+				LockGuard(Cache& cache, const char* reason)
+					: Firebird::MutexLockGuard(cache.m_mutex, reason)
+				{}
+			};
 
 		private:
 			SharedReadVector<Tablespace*, 8> m_tablespaces;

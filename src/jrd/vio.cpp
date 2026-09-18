@@ -181,7 +181,7 @@ static void protect_system_table_delupd(thread_db* tdbb, const jrd_rel* relation
 static void purge(thread_db*, record_param*);
 static void replace_record(thread_db*, record_param*, PageStack*, const jrd_tra*);
 static void refresh_changed_fields(thread_db*, Record*, record_param*, record_param*);
-static SSHORT set_metadata_id(thread_db*, Record*, USHORT, drq_type_t, const char*, SLONG shift = 0);
+static SSHORT set_metadata_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
 static void set_nbackup_id(thread_db*, Record*, USHORT, drq_type_t, const char*);
 static void set_owner_name(thread_db*, Record*, USHORT);
 static bool set_security_class(thread_db*, Record*, USHORT);
@@ -4760,7 +4760,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			protect_system_table_insert(tdbb, request, relation);
 			EVL_field(0, rpb->rpb_record, f_ts_name, &desc);
 			object_id = set_metadata_id(tdbb, rpb->rpb_record,
-										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES", 1);
+										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES");
 			DFW_post_work(transaction, dfw_create_tablespace, &desc, nullptr, object_id);
 			set_system_flag(tdbb, rpb->rpb_record, f_ts_sys_flag);
 			set_owner_name(tdbb, rpb->rpb_record, f_ts_owner);
@@ -7261,7 +7261,7 @@ static void refresh_changed_fields(thread_db* tdbb, Record* old_rec, record_para
 
 
 static SSHORT set_metadata_id(thread_db* tdbb, Record* record, USHORT field_id, drq_type_t dyn_id,
-	const char* name, SLONG shift)
+	const char* name)
 {
 /**************************************
  *
@@ -7279,7 +7279,7 @@ static SSHORT set_metadata_id(thread_db* tdbb, Record* record, USHORT field_id, 
 	if (EVL_field(0, record, field_id, &desc1))
 		return MOV_get_long(tdbb, &desc1, 0);
 
-	SSHORT value = (SSHORT) DYN_UTIL_gen_unique_id(tdbb, dyn_id, name) + shift;
+	SSHORT value = (SSHORT) DYN_UTIL_gen_unique_id(tdbb, dyn_id, name);
 	dsc desc2;
 	desc2.makeShort(0, &value);
 	MOV_move(tdbb, &desc2, &desc1);

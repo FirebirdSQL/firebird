@@ -863,10 +863,10 @@ const Validation::MSG_ENTRY Validation::vdr_msg_table[VAL_MAX_ERROR] =
 
 Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
 	: vdr_cond_idx(*tdbb->getDefaultPool()),
+	  vdr_page_spaces(*tdbb->getDefaultPool()),
 	  vdr_used_bdbs(*tdbb->getDefaultPool())
 {
 	vdr_tdbb = tdbb;
-	memset(vdr_max_page, 0, sizeof(vdr_max_page));
 	vdr_flags = 0;
 	vdr_errors = 0;
 	vdr_warns = 0;
@@ -878,7 +878,6 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
 	vdr_chain_pages = NULL;
 	vdr_rel_records = NULL;
 	vdr_idx_records = NULL;
-	memset(vdr_page_bitmap, 0, sizeof(vdr_page_bitmap));
 
 	vdr_service = uSvc;
 	vdr_lock_tout = -10;
@@ -1090,19 +1089,23 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 
 void Validation::cleanup()
 {
-	for (ULONG i = DB_PAGE_SPACE; i < TRANS_PAGE_SPACE; i++)
+	PageSpaceMap::Accessor accessor(&vdr_page_spaces);
+
+	if (accessor.getFirst())
 	{
-		if (!vdr_page_bitmap[i])
-			continue;
-		delete vdr_page_bitmap[i];
-		vdr_page_bitmap[i] = NULL;
+		do {
+			const auto& info = accessor.current()->second;
+			delete info.bitmap;
+		} while (accessor.getNext());
 	}
 
+	vdr_page_spaces.clear();
+
 	delete vdr_rel_records;
-	vdr_rel_records = NULL;
+	vdr_rel_records = nullptr;
 
 	delete vdr_idx_records;
-	vdr_idx_records = NULL;
+	vdr_idx_records = nullptr;
 
 	for (auto& item : vdr_cond_idx)
 	{
@@ -1264,7 +1267,11 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
 	const PageManager& pageMgr = dbb->dbb_page_manager;
 	const PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 
-	vdr_max_page[pageSpaceId] = MAX(vdr_max_page[pageSpaceId], page_number.getPageNum());
+	auto pageSpaceInfo = vdr_page_spaces.get(pageSpaceId);
+	if (!pageSpaceInfo)
+		pageSpaceInfo = vdr_page_spaces.put(pageSpaceId);
+
+	pageSpaceInfo->maxPage = MAX(pageSpaceInfo->maxPage, page_number.getPageNum());
 
 	// For walking back versions & record fragments on data pages we
 	// sometimes will fetch the same page more than once.  In that
@@ -1276,7 +1283,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
 	// non pag_scns type.
 
 	if (type != pag_data && type != pag_scns &&
-		PageBitmap::test(vdr_page_bitmap[pageSpaceId], page_number.getPageNum()))
+		PageBitmap::test(pageSpaceInfo->bitmap, page_number.getPageNum()))
 	{
 		corrupt(VAL_PAG_DOUBLE_ALLOC, 0, page_number.getPageSpaceID(), page_number.getPageNum());
 		return fetch_duplicate;
@@ -1316,7 +1323,7 @@ Validation::FETCH_CODE Validation::fetch_page(bool mark, PageNumber page_number,
 		}
 	}
 
-	PBM_SET(vdr_tdbb->getDefaultPool(), &vdr_page_bitmap[page_number.getPageSpaceID()], page_number.getPageNum());
+	PBM_SET(vdr_tdbb->getDefaultPool(), &pageSpaceInfo->bitmap, page_number.getPageNum());
 
 	return fetch_ok;
 }
@@ -1355,81 +1362,97 @@ void Validation::garbage_collect()
 
 	PageManager& pageSpaceMgr = dbb->dbb_page_manager;
 
-	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	PageSpaceMap::Accessor accessor(&vdr_page_spaces);
+
+	if (accessor.getFirst())
 	{
-		if (!vdr_max_page[pageSpaceId])
-			continue;
+		do {
+			const auto pageSpaceId = accessor.current()->first;
+			const auto& info = accessor.current()->second;
 
-		PageSpace* pageSpace = pageSpaceMgr.findPageSpace(pageSpaceId);
-		fb_assert(pageSpace);	// probably here we need to continue if NULL
-		WIN window(pageSpaceId);
+			if (!info.maxPage)
+				continue;
 
-		for (ULONG sequence = 0, number = 0; number < vdr_max_page[pageSpaceId]; sequence++)
-		{
-			const ULONG page_number = sequence ? sequence * pageSpaceMgr.pagesPerPIP - 1 : pageSpace->pipFirst;
-			page_inv_page* page = 0;
-			fetch_page(false, PageNumber(pageSpaceId, page_number), pag_pages, &window, &page);
-			UCHAR* p = page->pip_bits;
-			const UCHAR* const end = p + pageSpaceMgr.bytesBitPIP;
-			while (p < end && number < vdr_max_page[pageSpaceId])
+			const auto pageSpace = pageSpaceMgr.findPageSpace(pageSpaceId);
+			fb_assert(pageSpace);	// probably here we need to continue if NULL
+			WIN window(pageSpaceId);
+
+			for (ULONG sequence = 0, number = 0; number < info.maxPage; sequence++)
 			{
-				UCHAR byte = *p++;
-				for (int i = 8; i; --i, byte >>= 1, number++)
+				const ULONG page_number = sequence ? sequence * pageSpaceMgr.pagesPerPIP - 1 : pageSpace->pipFirst;
+				page_inv_page* page = 0;
+				fetch_page(false, PageNumber(pageSpaceId, page_number), pag_pages, &window, &page);
+				UCHAR* p = page->pip_bits;
+				const UCHAR* const end = p + pageSpaceMgr.bytesBitPIP;
+				while (p < end && number < info.maxPage)
 				{
-					if (PageBitmap::test(vdr_page_bitmap[pageSpaceId], number))	// This page was fetched
+					UCHAR byte = *p++;
+					for (int i = 8; i; --i, byte >>= 1, number++)
 					{
-						if (byte & 1)	// The page mark as free in PIP
+						if (PageBitmap::test(info.bitmap, number)) // this page was fetched
 						{
-							corrupt(VAL_PAG_IN_USE, 0, pageSpaceId, page_number);
+							if (byte & 1)	// The page mark as free in PIP
+							{
+								corrupt(VAL_PAG_IN_USE, 0, pageSpaceId, page_number);
+								if (vdr_flags & VDR_update)
+								{
+									CCH_MARK(vdr_tdbb, &window);
+									p[-1] &= ~(1 << (number & 7));
+									vdr_fixed++;
+								}
+							}
+						}
+						else if (!(byte & 1) && (vdr_flags & VDR_records) &&
+								(pageSpaceId == DB_PAGE_SPACE || number > HEADER_PAGE))
+						{
+							// Page is potentially an orphan - but don't declare it as such
+							// unless we think we walked all pages (with full validation - VDR_records)
+							// For non main tablespace we skip header page. It's reserved for now
+
+							corrupt(VAL_PAG_ORPHAN, 0, pageSpaceId, number);
 							if (vdr_flags & VDR_update)
 							{
 								CCH_MARK(vdr_tdbb, &window);
-								p[-1] &= ~(1 << (number & 7));
+								p[-1] |= 1 << (number & 7);
 								vdr_fixed++;
+
+								const ULONG bit = number - sequence * pageSpaceMgr.pagesPerPIP;
+								if (page->pip_min > bit)
+									page->pip_min = bit;
+
+								if (p[-1] == 0xFF && page->pip_extent > bit)
+									page->pip_extent = bit & ((ULONG) ~7);
 							}
 						}
 					}
-					else if (!(byte & 1) && (vdr_flags & VDR_records) &&
-							 (pageSpaceId == DB_PAGE_SPACE || number > HEADER_PAGE))
-					{
-						// Page is potentially an orphan - but don't declare it as such
-						// unless we think we walked all pages (with full validation - VDR_records)
-						// For non main tablespace we skip header page. It's reserved for now
-
-						corrupt(VAL_PAG_ORPHAN, 0, pageSpaceId, number);
-						if (vdr_flags & VDR_update)
-						{
-							CCH_MARK(vdr_tdbb, &window);
-							p[-1] |= 1 << (number & 7);
-							vdr_fixed++;
-
-							const ULONG bit = number - sequence * pageSpaceMgr.pagesPerPIP;
-							if (page->pip_min > bit)
-								page->pip_min = bit;
-
-							if (p[-1] == 0xFF && page->pip_extent > bit)
-								page->pip_extent = bit & ((ULONG) ~7);
-						}
-					}
 				}
+				const UCHAR test_byte = p[-1];
+				release_page(&window);
+				if (test_byte & 0x80)
+					break;
 			}
-			const UCHAR test_byte = p[-1];
-			release_page(&window);
-			if (test_byte & 0x80)
-				break;
-		}
+		} while (accessor.getNext());
 	}
 
 #ifdef DEBUG_VAL_VERBOSE
 	// Dump verbose output of all the pages fetched
 	if (VAL_debug_level >= 2)
 	{
-		if (vdr_page_bitmap->getFirst())
+		PageSpaceMap::Accessor accessor(&vdr_page_spaces);
+
+		if (accessor.getFirst())
 		{
 			do {
-				ULONG dmp_page_number = vdr_page_bitmap->current();
-				DMP_page(dmp_page_number, dbb->dbb_page_size);
-			} while (vdr_page_bitmap->getNext());
+				const auto& pageSpaceInfo = accessor.current()->second;
+
+				if (pageSpaceInfo.bitmap && pageSpaceInfo.bitmap->getFirst())
+				{
+					do {
+						ULONG dmp_page_number = pageSpaceInfo.bitmap->current();
+						DMP_page(dmp_page_number, dbb->dbb_page_size);
+					} while (pageSpaceInfo.bitmap->getNext());
+				}
+			} while (accessor.getNext());
 		}
 	}
 #endif
@@ -1716,12 +1739,17 @@ void Validation::walk_database()
 					continue;
 			}
 
-			const auto relPages = relation->getBasePages();
-
-			// We can't realiable track double allocated page's when validating online.
+			// We can't reliably track double allocated page's when validating online.
 			// All we can check is that page is not double allocated at the same relation.
 			if (vdr_flags & VDR_online)
-				vdr_page_bitmap[relPages->getPageSpaceId()]->clear();	// Should all array be cleared?
+			{
+				const auto relPages = relation->getBasePages();
+				if (const auto pageSpaceInfo = vdr_page_spaces.get(relPages->getPageSpaceId()))
+				{
+					if (pageSpaceInfo->bitmap)
+						pageSpaceInfo->bitmap->clear();	// Should all array be cleared?
+				}
+			}
 
 			string relName;
 			relName.printf("Relation %d (%s)", relation->getId(), relation->getName().toQuotedString().c_str());
@@ -2488,7 +2516,7 @@ void Validation::walk_pip()
 
 	MET_scan_tablespaces(vdr_tdbb);
 
-	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId <= MAX_TABLESPACE_ID; pageSpaceId++)
 	{
 		const PageSpace* pageSpace = pageSpaceMgr.findPageSpace(pageSpaceId);
 		if (!pageSpace)
@@ -3428,7 +3456,7 @@ Validation::RTN Validation::walk_scns()
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
 
-	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId < TRANS_PAGE_SPACE; pageSpaceId++)
+	for (ULONG pageSpaceId = DB_PAGE_SPACE; pageSpaceId <= MAX_TABLESPACE_ID; pageSpaceId++)
 	{
 		PageSpace* pageSpace = pageMgr.findPageSpace(pageSpaceId);
 		if (!pageSpace)

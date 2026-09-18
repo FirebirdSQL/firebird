@@ -144,8 +144,15 @@ private:
 
 	static const MSG_ENTRY vdr_msg_table[VAL_MAX_ERROR];
 
+	struct PageSpaceInfo
+	{
+		PageBitmap* bitmap = nullptr;
+		ULONG maxPage = 0;
+	};
+
+	typedef	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ULONG, PageSpaceInfo> > > PageSpaceMap;
+
 	thread_db* vdr_tdbb;
-	ULONG vdr_max_page[TRANS_PAGE_SPACE];	// Keep max page in every available tablespace
 	USHORT vdr_flags;
 	int vdr_errors;
 	int vdr_warns;
@@ -162,7 +169,7 @@ private:
 	RecordBitmap* vdr_rel_records;			// 1 bit per valid record
 	RecordBitmap* vdr_idx_records;			// 1 bit per index item
 	Firebird::Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
-	PageBitmap* vdr_page_bitmap[TRANS_PAGE_SPACE];	// fetched pages in every tablespace
+	PageSpaceMap vdr_page_spaces;			// fetched pages and max page number in every tablespace
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
 	Firebird::UtilSvc* vdr_service;

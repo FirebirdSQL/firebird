@@ -803,6 +803,7 @@ void INI_format(thread_db* tdbb, const string& charset)
 	END_STORE
 
 	DPM_gen_id(tdbb, RELATIONS_GENERATOR, true, USER_DEF_REL_INIT_ID);
+	DPM_gen_id(tdbb, TABLESPACES_GENERATOR, true, DB_PAGE_SPACE);
 
 	HalfStaticArray<QualifiedName, 2> predefinedSchemas;
 

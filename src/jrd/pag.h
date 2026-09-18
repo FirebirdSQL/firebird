@@ -63,8 +63,9 @@ class PageControl : public pool_alloc<type_pgc>
 // INVALID_PAGE_SPACE is to ???
 inline constexpr ULONG INVALID_PAGE_SPACE	= 0;
 inline constexpr ULONG DB_PAGE_SPACE		= 1;
-inline constexpr ULONG TRANS_PAGE_SPACE	= 255;
-inline constexpr ULONG TEMP_PAGE_SPACE	= 256;
+inline constexpr ULONG MAX_TABLESPACE_ID	= 254;
+inline constexpr ULONG TRANS_PAGE_SPACE		= 255;
+inline constexpr ULONG TEMP_PAGE_SPACE		= 256;
 inline constexpr ULONG MAX_PAGE_SPACE_ID	= MAX_ULONG;
 
 inline constexpr USHORT PAGES_IN_EXTENT	= 8;
@@ -112,7 +113,7 @@ public:
 
 	static inline bool isTablespace(ULONG aPageSpaceID)
 	{
-		return (aPageSpaceID > DB_PAGE_SPACE) && (aPageSpaceID < TRANS_PAGE_SPACE);
+		return (aPageSpaceID > DB_PAGE_SPACE && aPageSpaceID <= MAX_TABLESPACE_ID);
 	}
 
 	inline bool isTablespace() const
