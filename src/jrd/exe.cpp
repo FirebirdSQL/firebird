@@ -144,10 +144,10 @@ string Item::getDescription(Request* request, const ItemInfo* itemInfo) const
 		}
 		else if (function)
 		{
-			if (oneBasedIndex - int(function->getInputFields().getCount() <= int(function->getOutputFields().getCount())))
+			if (oneBasedIndex <= int(function->getOutputFields().getCount()))
 				s.printf("[output parameter]");
 			else
-				s.printf("[number %d]", oneBasedIndex - int(function->getInputFields().getCount()));
+				s.printf("[number %d]", oneBasedIndex - int(function->getOutputFields().getCount()));
 		}
 		else
 			s.printf("[number %d]", oneBasedIndex);
