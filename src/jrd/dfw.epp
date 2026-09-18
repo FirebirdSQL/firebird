@@ -2950,6 +2950,7 @@ static bool find_depend_in_dfw(thread_db*	tdbb,
 
 	switch (dep_type)
 	{
+	case obj_relation:
 	case obj_view:
 		dfw_type = dfw_delete_relation;
 		break;
@@ -3978,7 +3979,10 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				CacheFlag::NOERASED | CacheFlag::AUTOCREATE | CacheFlag::NOCOMMIT);
 
 			// check - may be relation currently contains deleted field once again
-			if (relation && (MET_lookup_field(tdbb, relation, work->dfw_name) >= 0))
+			// then check column dependencies when dropping its relation
+			if (relation && (MET_lookup_field(tdbb, relation, work->dfw_name) >= 0) &&
+				!find_depend_in_dfw(tdbb, relation->getName(),
+					relation->isView() ? obj_view : obj_relation, work->dfw_id, transaction))
 				break;
 		}
 		catch(const Exception& ex)
