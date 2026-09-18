@@ -782,7 +782,8 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DeferredWork* dw2 =
 				DFW_post_work(transaction, dfw_modify_procedure, &nameDesc, &schemaDesc, PRC.RDB$PROCEDURE_ID);
 			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
-			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
+
+			MetadataCache::newVersion<Cached::Procedure>(tdbb, PRC.RDB$PROCEDURE_ID);
 		}
 		END_FOR
 
@@ -805,12 +806,10 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			nameDesc.makeText(triggerName.object.length(), CS_METADATA, (UCHAR*) triggerName.object.c_str());
 
 			DeferredWork* dw2 = DFW_post_work(transaction, dfw_modify_trigger, &nameDesc, &schemaDesc, 0);
-			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, TRG.RDB$TRIGGER_TYPE, dfw_arg_trg_type);
 
 			nameDesc.dsc_length = triggerRelationName.length();
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
-			// DFW_post_work_arg(transaction, dw2, &nameDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
@@ -835,7 +834,8 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DeferredWork* dw2 =
 				DFW_post_work(transaction, dfw_modify_function, &nameDesc, &schemaDesc, FUN.RDB$FUNCTION_ID);
 			DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_check_blr);
-			// DFW_post_work_arg(transaction, dw2, nullptr, nullptr, 0, dfw_arg_drop_routine_cache);
+
+			MetadataCache::newVersion<Cached::Function>(tdbb, FUN.RDB$FUNCTION_ID);
 		}
 		END_FOR
 	}
@@ -937,8 +937,6 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 			nameDesc.dsc_length = triggerRelationName.length();
 			nameDesc.dsc_address = (UCHAR*) triggerRelationName.c_str();
 			DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_check_blr);
-			// if (DEP.RDB$FIELD_NAME.NULL)
-				// DFW_post_work_arg(transaction, dw2, &nameDesc, &schemaDesc, 0, dfw_arg_drop_routine_cache);
 		}
 		END_FOR
 
