@@ -1042,6 +1042,11 @@ int gbak(Firebird::UtilSvc* uSvc)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_deactivate_indexes = true;
 			break;
+		case IN_SW_BURP_FAST_PATH:
+			if (tdgbl->gbl_fast_path)
+				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
+			tdgbl->gbl_fast_path = true;
+			break;
 		case IN_SW_BURP_IG:
 			if (ignoreDamaged)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
@@ -1298,6 +1303,16 @@ int gbak(Firebird::UtilSvc* uSvc)
 
 	if (!sw_replace)
 		sw_replace = IN_SW_BURP_B;
+
+	if (tdgbl->gbl_fast_path)
+	{
+		// Single enforcement point for FAST_PATH: it requires -service.
+		if (!uSvc->isService())
+		{
+			// msg 430 FAST_PATH requires the -service option
+			BURP_error(430, true);
+		}
+	}
 
 	if (sw_replace == IN_SW_BURP_B)
 	{

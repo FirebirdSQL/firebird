@@ -200,6 +200,9 @@
     <ClCompile Include="..\..\..\src\utilities\gsec\gsec.cpp" />
     <ClCompile Include="..\..\..\src\utilities\gstat\ppg.cpp" />
     <ClCompile Include="..\..\..\src\utilities\nbackup\nbackup.cpp" />
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathBurpUtil.cpp" />
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathRecordReader.cpp" />
+    <ClCompile Include="..\..\..\src\burp\engine\FastPathRecordWriter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\dsql\AggNodes.h" />

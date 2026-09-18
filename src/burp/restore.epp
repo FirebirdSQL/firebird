@@ -49,6 +49,7 @@
 #include "../burp/mvol_proto.h"
 #include "../burp/resto_proto.h"
 #include "../burp/BurpTasks.h"
+#include "../burp/FastPathRecordWriter.h"
 #include "../common/gdsassert.h"
 #include "../jrd/constants.h"
 #include "../remote/protocol.h"
@@ -66,6 +67,7 @@
 #include "../common/ThreadStart.h"
 #include "../common/msg_encode.h"
 #include "../common/classes/BatchCompletionState.h"
+#include "../burp/FastPathBurpProvider.h"
 
 using MsgFormat::SafeArg;
 using namespace Firebird;
@@ -352,8 +354,26 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	Firebird::IRequest* req_handle3 = nullptr;
 	QualifiedMetaString indexName;
 
-	Firebird::DispatcherPtr provider;
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	FastPathBurpProvider burpProvider(tdgbl->gbl_fast_path);
+
+	IProvider* provider = burpProvider.get();
+
+	// The fast-path provider bypasses the y-valve, so the crypt callback held by
+	// the service (normally installed as y-valve TLS state by fillDpb) is not
+	// picked up automatically. Set it explicitly, unless the backup itself
+	// supplied the keys (KEYHOLDER).
+	if (tdgbl->gbl_fast_path && !tdgbl->gbl_sw_keyholder)
+	{
+		if (const auto cryptCb = tdgbl->uSvc->getCryptCallback())
+		{
+			FbLocalStatus status;
+			provider->setDbCryptCallback(&status, cryptCb);
+			if (status->getState() & IStatus::STATE_ERRORS)
+				BURP_abort(&status);
+		}
+	}
+
 	tdgbl->gbl_sw_transportable = tdgbl->gbl_sw_compress = false;
 
 	if (!restore(tdgbl, provider, file_name, database_name))
@@ -3500,6 +3520,13 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 			if (batch)
 				req->execBatch(tdgbl);
 		}
+
+		req->execFastPathBatch();
+
+		// Flush and destroy the fast-path writer while the transaction is
+		// still valid. Must run before the incremental commit below: the
+		// commit destroys the engine transaction held by the writer.
+		req->finishFastPathBulk();
 	}
 	catch (const FbException& ex)
 	{
@@ -8257,6 +8284,9 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			break;
 		}
 	}
+
+	relation->rel_system = (sys_flag != fb_sysflag_user);
+	relation->rel_type = (SSHORT) type;
 
 	// If this is a view and there is a global transaction then use it
 	Firebird::ITransaction* local_trans;
@@ -14050,18 +14080,38 @@ void WriteRelationMeta::clear()
 {
 	m_relation = nullptr;
 	m_batchMode = false;
+	m_fastPathMode = false;
 	m_batchOk = false;
 	m_batchMeta = nullptr;
 	m_sqlStatement.clear();
 	m_blr.clear();
+	m_messageLayout.clear();
 	m_inMgsNum = 0;
 	m_inMsgLen = 0;
 	m_blobCount = 0;
 }
 
-void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation)
+void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, burp_rel* relation)
 {
 	m_relation = relation;
+
+	if (tdgbl->gbl_fast_path && tdgbl->RESTORE_format >= 8 &&
+		!relation->rel_system &&
+		!(relation->rel_flags & (REL_view | REL_external)) &&
+		relation->rel_type == rel_persistent)
+	{
+		m_fastPathMode = true;
+		m_batchMode = false;
+		prepareMessageLayout(tdgbl);
+		return;
+	}
+
+	buildNonFastPathMode(tdgbl);
+}
+
+void WriteRelationMeta::buildNonFastPathMode(BurpGlobals* tdgbl)
+{
+	m_fastPathMode = false;
 	m_batchMode = true;
 	m_batchOk = false;
 
@@ -14079,7 +14129,7 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 		bool sysDomFlag = false;
 		burp_fld* field;
 
-		for (field = relation->rel_fields; field && !sysDomFlag; field = field->fld_next)
+		for (field = m_relation->rel_fields; field && !sysDomFlag; field = field->fld_next)
 		{
 			if (field->fld_flags & FLD_computed)
 				continue;
@@ -14347,6 +14397,16 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 	return true;
 }
 
+void WriteRelationMeta::prepareMessageLayout(BurpGlobals* tdgbl)
+{
+	m_batchMode = false;
+	m_inMgsNum = 0;
+
+	m_messageLayout.build(m_relation, tdgbl->gbl_sw_fix_fss_data,
+		CSetId(tdgbl->gbl_sw_fix_fss_data_id));
+	m_inMsgLen = m_messageLayout.getLength();
+}
+
 void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 {
 	const bool use_bulk_insert = (tdgbl->runtimeODS >= DB_VERSION_DDL14);
@@ -14610,6 +14670,7 @@ void WriteRelationReq::reset(WriteRelationMeta* meta)
 		m_request = 0;
 		m_recs = 0;
 		m_batchRecs = 0;
+		m_fastPathBatchRecs = 0;
 		m_resync = true;
 	}
 }
@@ -14620,6 +14681,7 @@ void WriteRelationReq::clear()
 	m_meta = NULL;
 	m_recs = 0;
 	m_batchRecs = 0;
+	m_fastPathBatchRecs = 0;
 	m_resync = true;
 
 	if (m_batch)
@@ -14633,10 +14695,76 @@ void WriteRelationReq::clear()
 		release();
 		m_request = nullptr;
 	}
+
+	m_fastPathWriter = nullptr;
+	m_fastPathBatch.clear();
+}
+
+void WriteRelationReq::initFastPathWriter(IAttachment* att, ITransaction* tra,
+	const burp_rel* relation, const RestoreMessageLayout& layout)
+{
+	if (!m_fastPathWriter)
+		m_fastPathWriter = FB_NEW_POOL(*getDefaultMemoryPool()) FastPathRecordWriter();
+
+	m_fastPathWriter->init(att, tra, relation, layout);
+}
+
+void WriteRelationReq::execFastPathBatch()
+{
+	if (!m_fastPathWriter || !m_fastPathBatchRecs)
+		return;
+
+	const unsigned recordCount = m_fastPathBatchRecs;
+	const RCRD_LENGTH recordLength = m_inMsg.getCount();
+
+	// In-memory stride preserves descriptor alignment between packed records;
+	// the serialized backup format still uses recordLength.
+	RCRD_LENGTH stride = recordLength;
+
+	if (m_meta)
+	{
+		const RCRD_LENGTH layoutStride = m_meta->getMessageLayout().getStride();
+		if (layoutStride > stride)
+			stride = layoutStride;
+	}
+
+	const UCHAR* const batchBuffer = m_fastPathBatch.begin();
+	m_fastPathBatchRecs = 0;
+
+	// The direct writer is fail-fast. Any conversion or engine error aborts
+	// the restore instead of continuing with a partially isolated row.
+	m_fastPathWriter->writeRecords(batchBuffer, stride, recordCount);
+
+	// Do not finish the bulk insert here: the BulkInsert object auto-flushes
+	// full extents internally and stays alive across message batches. Forcing
+	// a flush per staging batch would strand a partial-extent tail each time
+	// (thousands of empty pages on large tables). Flushing happens at table end
+	// via finishFastPathBulk() and at commit. Arrays are released eagerly in blb::move;
+	// releaseRequestlessArrays() handles any remaining request-less arrays.
+	m_fastPathWriter->releaseRequestlessArrays();
+
+	m_fastPathBatch.clear();
+}
+
+void WriteRelationReq::finishFastPathBulk()
+{
+	if (m_fastPathWriter)
+	{
+		m_fastPathWriter->finishBulk();
+
+		// Destroy the writer after flushing: it caches the raw engine
+		// transaction, which gets replaced by commit_relation_data() in
+		// incremental restore. initFastPathWriter() creates a fresh writer for
+		// every table.
+		m_fastPathWriter = nullptr;
+	}
 }
 
 void WriteRelationReq::compile(BurpGlobals* tdgbl, IAttachment* att)
 {
+	if (m_meta->m_fastPathMode)
+		return;
+
 	if (m_meta->m_batchMode)
 		m_batch = m_meta->createBatch(tdgbl, att);
 
@@ -14656,6 +14784,40 @@ void WriteRelationReq::compile(BurpGlobals* tdgbl, IAttachment* att)
 void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec)
 {
 	m_recs++;
+
+	if (m_meta->m_fastPathMode)
+	{
+		fb_assert(m_fastPathWriter);
+
+		const RCRD_LENGTH recordLength = m_inMsg.getCount();
+		RCRD_LENGTH stride = recordLength;
+		const RCRD_LENGTH layoutStride = m_meta->getMessageLayout().getStride();
+		if (layoutStride > stride)
+			stride = layoutStride;
+
+		if (m_fastPathBatchRecs &&
+			(m_fastPathBatchRecs >= FAST_PATH_RESTORE_BATCH_MAX_RECORDS ||
+			 m_fastPathBatch.getCount() + stride > FAST_PATH_RESTORE_BATCH_MAX_BYTES))
+		{
+			execFastPathBatch();
+		}
+
+		const FB_SIZE_T base = m_fastPathBatch.getCount();
+		m_fastPathBatch.add(m_inMsg.begin(), recordLength);
+		// Pad to the aligned stride so the next record keeps field alignment.
+		// Array<UCHAR>::grow zero-fills the new tail.
+		if (stride > recordLength)
+			m_fastPathBatch.grow(base + stride);
+		++m_fastPathBatchRecs;
+
+		if (lastRec || m_fastPathBatchRecs >= FAST_PATH_RESTORE_BATCH_MAX_RECORDS ||
+			m_fastPathBatch.getCount() >= FAST_PATH_RESTORE_BATCH_MAX_BYTES)
+		{
+			execFastPathBatch();
+		}
+
+		return;
+	}
 
 	if (m_batch)
 	{
@@ -14707,6 +14869,9 @@ void WriteRelationReq::execBatch(BurpGlobals * tdgbl)
 
 void WriteRelationReq::release()
 {
+	// Release fast-path record while the engine attachment is still valid.
+	m_fastPathWriter = nullptr;
+
 	if (m_batch)
 	{
 		m_batch->release();
@@ -15129,6 +15294,11 @@ bool RestoreRelationTask::tableWriter(BurpGlobals* tdgbl, Item& item)
 {
 	item.m_request.reset(&m_metadata);
 
+	if (m_metadata.m_fastPathMode)
+	{
+		item.m_request.initFastPathWriter(tdgbl->db_handle, tdgbl->tr_handle,
+			item.m_relation, m_metadata.getMessageLayout());
+	}
 	get_data(tdgbl, item.m_relation, &item.m_request);
 
 	item.getRestoreTask()->releaseBuffer(item);

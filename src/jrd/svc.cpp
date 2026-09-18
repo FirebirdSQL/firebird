@@ -3163,6 +3163,8 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 		status_exception::raise(Arg::Gds(isc_unexp_spb_form) << Arg::Str(SPB_SEC_USERNAME));
 	}
 
+	// FAST_PATH requires -service; this is enforced in burp.cpp via uSvc->isService().
+
 	// postfixes for burp & nbackup
 	switch (svc_action)
 	{
