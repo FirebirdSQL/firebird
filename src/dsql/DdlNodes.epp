@@ -2610,13 +2610,16 @@ void CreateAlterFunctionNode::storeArgument(thread_db* tdbb, DsqlCompilerScratch
 			ARG.RDB$NULL_FLAG = TRUE;
 		}
 
-		ARG.RDB$RELATION_NAME.NULL = type->typeOfTable.object.isEmpty();
+		ARG.RDB$RELATION_SCHEMA_NAME.NULL = ARG.RDB$RELATION_NAME.NULL = type->typeOfTable.object.isEmpty();
 		ARG.RDB$FIELD_NAME.NULL = ARG.RDB$RELATION_NAME.NULL || type->typeOfName.object.isEmpty();
 
 		if (ARG.RDB$RELATION_NAME.NULL || ARG.RDB$FIELD_NAME.NULL)
 		{
 			if (!ARG.RDB$RELATION_NAME.NULL)
+			{
+				strcpy(ARG.RDB$RELATION_SCHEMA_NAME, type->typeOfTable.schema.c_str());
 				strcpy(ARG.RDB$RELATION_NAME, type->typeOfTable.object.c_str());
+			}
 
 			if (type->typeOfName.object.hasData())
 			{

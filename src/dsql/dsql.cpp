@@ -1704,12 +1704,18 @@ dsql_udf::dsql_udf(MemoryPool& p, const class Function* jfun)
 
 	// return value
 	fb_assert(jfun->getOutputFields().getCount() == 1);
-	const dsc& desc = jfun->getOutputFields()[0]->prm_desc;
+	const auto* output = jfun->getOutputFields()[0].getObject();
+	const dsc& desc = output->prm_desc;
 	udf_dtype = desc.getType();
 	udf_scale = desc.getScale();
 	udf_sub_type = desc.getSubType();
 	udf_length = desc.getLength();
 	udf_character_set_id = desc.getCharSet();
+
+	MAKE_field(&udf_outfield, &desc);
+	udf_outfield.fieldSource = output->prm_field_source;
+	udf_outfield.typeOfTable = output->prm_type_of_table;
+	udf_outfield.typeOfName = QualifiedName(output->prm_type_of_column);
 
 	// arguments
 	for (const auto& jfld : jfun->getInputFields())

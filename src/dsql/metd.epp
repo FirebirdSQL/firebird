@@ -788,6 +788,9 @@ dsql_udf* METD_get_function(jrd_tra* transaction, DsqlCompilerScratch* dsqlScrat
 				Arg::Str(name.object) << Arg::Str(name.package));
 		}
 
+		if (userFunc->udf_outfield.dtype == dtype_rowtype)
+			setupRowtypeField(transaction, dsqlScratch, userFunc->udf_outfield);
+
 		dsqlScratch->functions.put(userFunc->udf_name, userFunc);
 		return userFunc;
 	}
