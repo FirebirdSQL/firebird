@@ -32,6 +32,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/tra.h"
 #include "../jrd/intl.h"
+#include "../jrd/Tablespace.h"
 
 #include "../jrd/blb_proto.h"
 #include "../jrd/exe_proto.h"
@@ -385,19 +386,14 @@ void Jrd::Attachment::releaseBatches()
 
 void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
 {
-	HalfStaticArray<Cached::Relation*, 8> tempRelations;
-
 	for (auto& lttEntry : att_local_temporary_tables)
 	{
 		const auto ltt = lttEntry.second;
 		if (ltt->relation)
-			tempRelations.add(ltt->relation->getPermanent());
-	}
-
-	for (const auto tempRelation : tempRelations)
-	{
-		if (tempRelation->rel_flags & REL_temp_conn)
-			tempRelation->delPages(tdbb);
+		{
+			if (ltt->relation->checkFlags(REL_temp_conn))
+				ltt->relation->getPermanent()->deletePages(tdbb);
+		}
 	}
 }
 

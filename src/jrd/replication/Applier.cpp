@@ -1070,18 +1070,13 @@ void Applier::executeSql(thread_db* tdbb,
 	}
 }
 
-bool Applier::lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc& key)
+bool Applier::lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& key)
 {
-	RelationPages* const relPages = relation->getPages(tdbb);
-	auto page = relPages->rel_index_root;
-	if (!page)
-	{
-		DPM_scan_pages(tdbb);
-		page = relPages->rel_index_root;
-	}
+	const auto rootPage = relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return false;
 
-	const PageNumber root_page(relPages->rel_pg_space_id, page);
-	win window(root_page);
+	win window(rootPage.value());
 	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
 	index_desc idx;
@@ -1089,7 +1084,7 @@ bool Applier::lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc&
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		if (BTR_description(tdbb, relation, root, &idx, i))
+		if (BTR_description(tdbb, relation->getPermanent(), root, &idx, i))
 		{
 			if (idx.idx_flags & idx_primary)
 			{
@@ -1179,13 +1174,12 @@ bool Applier::lookupRecord(thread_db* tdbb,
 			auto idxStatus = idv->getActive();
 			fb_assert(idxStatus == MET_index_active);
 
-			haveIdx = (idxStatus == MET_index_active) &&
-				BTR_lookup(tdbb, relation->getPermanent(), idv->getId(), &idx, relation->getPages(tdbb));
+			haveIdx = (idxStatus == MET_index_active) && BTR_lookup(tdbb, relation, idv->getId(), &idx);
 		}
 	}
 
 	if (!haveIdx)
-		haveIdx = lookupKey(tdbb, relation->getPermanent(), idx);
+		haveIdx = lookupKey(tdbb, relation, idx);
 
 	if (haveIdx)
 	{
@@ -1230,7 +1224,7 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	const auto format = record->getFormat();
 	const auto relation = rpb->rpb_relation;
 
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
 	for (USHORT id = 0; id < format->fmt_count; id++)
 	{
@@ -1316,7 +1310,7 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	const auto format = newRecord->getFormat();
 	const auto relation = newRpb->rpb_relation;
 
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	RLCK_reserve_relation(tdbb, transaction, relation, true);
 
 	for (USHORT id = 0; id < format->fmt_count; id++)
 	{
@@ -1409,7 +1403,7 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 {
 	fb_assert(!(transaction->tra_flags & TRA_system));
 
-	RLCK_reserve_relation(tdbb, transaction, getPermanent(rpb->rpb_relation), true);
+	RLCK_reserve_relation(tdbb, transaction, rpb->rpb_relation, true);
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 

@@ -465,6 +465,12 @@ NAME("RDB$KEYWORD_RESERVED", nam_keyword_reserved)
 NAME("MON$COMPILED_STATEMENTS", nam_mon_compiled_statements)
 NAME("MON$COMPILED_STATEMENT_ID", nam_mon_cmp_stmt_id)
 
+NAME("RDB$TABLESPACES", nam_tablespaces)
+NAME("RDB$TABLESPACE_ID", nam_ts_id)
+NAME("RDB$TABLESPACE_NAME", nam_ts_name)
+NAME("RDB$OFFLINE", nam_ts_offline)
+NAME("RDB$READ_ONLY", nam_ts_readonly)
+
 NAME("RDB$SHORT_DESCRIPTION", nam_short_description)
 NAME("RDB$SECONDS_INTERVAL", nam_seconds_interval)
 NAME("RDB$PROFILE_SESSION_ID", nam_prof_ses_id)
@@ -513,3 +519,7 @@ NAME("MON$CHAR_LENGTH", nam_mon_char_length)
 NAME("MON$COLLATION_ID", nam_mon_collate_id)
 
 NAME("RDB$AGGREGATE_FLAG", nam_aggregate_flag)
+
+NAME("MON$TABLESPACE_STATS", nam_mon_ts_stats)
+NAME("MON$IO_STAT_ID", nam_mon_io_stat_id)
+NAME("MON$TABLESPACE_NAME", nam_mon_ts_name)

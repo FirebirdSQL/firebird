@@ -410,29 +410,51 @@ struct index_root_page
 		USHORT irt_flags;				// index flags
 		UCHAR irt_state;				// index state
 		UCHAR irt_keys;					// number of keys in index
-		USHORT irt_dummy;				// alignment to 8-byte boundary
+		USHORT irt_backslot;			// slot with original page number
 
 	private:
 		void setState(UCHAR newState);
 
 	public:
-		ULONG getRoot() const;
-		TraNumber getTransaction() const;
 		bool isUsed() const;
-		UCHAR getState() const;
 
-		void setRoot(ULONG rootPage/*, ULONG pageSpaceId*/);
+		TraNumber getTransaction() const
+		{
+			return irt_transaction;
+		}
+
+		UCHAR getState() const
+		{
+			return irt_state;
+		}
+
+		ULONG getRootPage() const
+		{
+			return isUsed() ? irt_page_num : 0;
+		}
+
+		ULONG getRootPageSpaceId() const
+		{
+			return isUsed() ? irt_page_space_id : 0;
+		}
+
+		void setRootPage(ULONG pageSpaceId, ULONG rootPage);
+
+		void setInProgress(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
 		void setInProgress(TraNumber traNumber);
-		void setConcurrentlyTemp(ULONG rootPage, TraNumber traNumber);
-		void setConcurrentlyMain(ULONG rootPage, TraNumber traNumber);
+		void setConcurrentlyTemp(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
+		void setConcurrentlyMain(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
 		void setConcurrentlyComplete(TraNumber traNumber);
-		void setRollback(ULONG rootPage/*, ULONG pageSpaceId*/, TraNumber traNumber);
+		void setRollback(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
 		void setRollback(TraNumber traNumber);
+		void setKill();
+		void setKill(ULONG pageSpaceId, ULONG rootPage);
 		void setKill(TraNumber traNumber);
 		void setNormal();
-		void setNormal(ULONG rootPage/*, ULONG pageSpaceId*/);
+		void setNormal(ULONG pageSpaceId, ULONG rootPage);
 		void setCommit(TraNumber traNumber);
 		void setDrop(TraNumber traNumber);
+		void setMigrate(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber, USHORT slot);
 		void setEmpty();
 	} irt_rpt[1];
 
@@ -475,7 +497,8 @@ inline constexpr UCHAR irt_kill			= 4;	// index to be removed when irt_transacti
 inline constexpr UCHAR irt_commit		= 5;	// start index removal (switch to irt_drop) when irt_transaction committed
 inline constexpr UCHAR irt_drop			= 6;	// index to be removed when OAT > irt_transaction
 inline constexpr UCHAR irt_concurrently	= 7;	// creating index concurrently
-inline constexpr UCHAR irt_last			= 7;	// last possible state
+inline constexpr UCHAR irt_migrate		= 8;	// index is being migrated to another tablespace
+inline constexpr UCHAR irt_last			= 8;	// last possible state
 
 // irt_flags, must match the idx_flags (see btr.h)
 inline constexpr USHORT irt_unique			= 0x01;
@@ -504,7 +527,13 @@ states for just created index:
 states for existing index:
 	irt_normal
 		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			=> irt_migrate
 		on commit / on rollback				no action
+	irt_migrate
+		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			create and link a new slot
+		on commit							=> irt_normal (for a new slot), irt_kill (for an old slot)
+		on rollback							=> irt_kill (for a new slot), irt_normal (for an old slot)
 	irt_commit
 		on commit							=> irt_drop
 		on rollback							=> irt_normal
@@ -518,26 +547,28 @@ access in SELECTs:
 	irt_commit		- other transactions
  */
 
-inline void index_root_page::irt_repeat::setState(UCHAR newState)
-{
-	fb_assert(newState <= irt_last);
-	irt_state = newState;
-}
-
 inline bool index_root_page::irt_repeat::isUsed() const
 {
-	return getState() != irt_unused;
+	return (irt_state != irt_unused);
 }
 
-inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
-{				// hvlad: is irt_in_progress possible here ?
+inline void index_root_page::irt_repeat::setRootPage(ULONG pageSpaceId, ULONG rootPage)
+{
+	// hvlad: is irt_in_progress possible here ?
 	fb_assert(getState() == irt_in_progress || getState() == irt_normal || getState() == irt_concurrently);
 	fb_assert(rootPage);
 
 	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_space_id = pageSpaceId;
+
 	if (getState() == irt_in_progress)
 		setState(irt_normal);
+}
+
+inline void index_root_page::irt_repeat::setState(UCHAR newState)
+{
+	fb_assert(newState <= irt_last);
+	irt_state = newState;
 }
 
 inline void index_root_page::irt_repeat::setEmpty()
@@ -547,6 +578,19 @@ inline void index_root_page::irt_repeat::setEmpty()
 	irt_page_num = 0;
 	irt_page_space_id = 0;
 	irt_flags = 0;
+	irt_backslot = 0;
+}
+
+inline void index_root_page::irt_repeat::setInProgress(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(traNumber == irt_transaction);
+	fb_assert(!irt_page_num);
+
+	irt_page_num = rootPage;
+	irt_page_space_id = pageSpaceId;
+	irt_transaction = traNumber;
+	setState(irt_in_progress);
 }
 
 inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
@@ -560,26 +604,26 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 }
 
 // Scan phase of concurrent index creation, set temp index root page and complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyTemp(ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyTemp(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_unused);
 
 	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_space_id = pageSpaceId;
 	irt_transaction = traNumber;
 	irt_flags |= irt_complementary;
 	setState(irt_concurrently);
 }
 
 // Merge phase of concurrent index creation, set main index root page and clear complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyMain(ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyMain(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_concurrently);
 	fb_assert(irt_transaction == traNumber);
 	fb_assert(irt_flags & irt_complementary);
 
 	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_space_id = pageSpaceId;
 	irt_transaction = traNumber;
 	irt_flags &= ~irt_complementary;
 	setState(irt_concurrently);
@@ -597,14 +641,14 @@ inline void index_root_page::irt_repeat::setConcurrentlyComplete(TraNumber traNu
 	setState(irt_rollback);
 }
 
-inline void index_root_page::irt_repeat::setRollback(ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setRollback(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
 	fb_assert(!irt_page_num);
 
 	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_space_id = pageSpaceId;
 	irt_transaction = traNumber;
 	setState(irt_rollback);
 }
@@ -619,6 +663,25 @@ inline void index_root_page::irt_repeat::setRollback(TraNumber traNumber)
 	setState(irt_rollback);
 }
 
+inline void index_root_page::irt_repeat::setKill()
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(irt_transaction);
+
+	setState(irt_kill);
+}
+
+inline void index_root_page::irt_repeat::setKill(ULONG pageSpaceId, ULONG rootPage)
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(irt_transaction);
+
+	irt_page_num = rootPage;
+	irt_page_space_id = pageSpaceId;
+
+	setState(irt_kill);
+}
+
 inline void index_root_page::irt_repeat::setKill(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_rollback);
@@ -631,7 +694,7 @@ inline void index_root_page::irt_repeat::setKill(TraNumber traNumber)
 
 inline void index_root_page::irt_repeat::setNormal()
 {
-			//create index mode ForRollback
+			// create index mode ForRollback
 	fb_assert(getState() == irt_rollback
 			// deleted by current tra
 			|| getState() == irt_commit
@@ -640,24 +703,31 @@ inline void index_root_page::irt_repeat::setNormal()
 	fb_assert(irt_page_num);
 	fb_assert(irt_transaction);
 
+	irt_transaction = 0;
+	irt_backslot = 0;
+
 	setState(irt_normal);
 }
 
-inline void index_root_page::irt_repeat::setNormal(ULONG rootPage)
+inline void index_root_page::irt_repeat::setNormal(ULONG pageSpaceId, ULONG rootPage)
 {
-			//create index mode AtOnce
-	fb_assert(getState() == irt_in_progress);
-	fb_assert(!irt_page_num);
+			// create index mode AtOnce
+	fb_assert(getState() == irt_in_progress
+			// completed migration
+			|| getState() == irt_migrate);
 	fb_assert(rootPage);
 
 	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	irt_page_space_id = pageSpaceId;
+	irt_transaction = 0;
+	irt_backslot = 0;
+
 	setState(irt_normal);
 }
 
 inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 {
-	fb_assert(getState() == irt_normal);
+	fb_assert(getState() == irt_normal || getState() == irt_migrate);
 	fb_assert(irt_page_num);
 
 	irt_transaction = traNumber;
@@ -676,19 +746,17 @@ inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 	irt_flags &= ~(irt_unique | irt_foreign | irt_primary);
 }
 
-inline UCHAR index_root_page::irt_repeat::getState() const
+inline void index_root_page::irt_repeat::setMigrate(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber, USHORT slot)
 {
-	return irt_state;
-}
+	fb_assert(getState() == irt_normal || getState() == irt_rollback || getState() == irt_migrate);
+	fb_assert(irt_page_num);
 
-inline ULONG index_root_page::irt_repeat::getRoot() const
-{
-	return getState() == irt_unused ? 0 : irt_page_num;
-}
+	irt_page_num = rootPage;
+	irt_page_space_id = pageSpaceId;
+	irt_transaction = traNumber;
+	irt_backslot = slot;
 
-inline TraNumber index_root_page::irt_repeat::getTransaction() const
-{
-	return irt_transaction;
+	setState(irt_migrate);
 }
 
 inline constexpr int STUFF_COUNT		= 4;

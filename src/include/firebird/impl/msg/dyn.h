@@ -321,3 +321,8 @@ FB_IMPL_MSG_SYMBOL(DYN, 328, dyn_index_cant_validate_inactive, "Can't validate i
 FB_IMPL_MSG_SYMBOL(DYN, 329, dyn_index_cant_validate_non_unique, "Can't validate non-unique index")
 FB_IMPL_MSG_SYMBOL(DYN, 330, dyn_index_already_validated, "Index uniqueness already validated")
 FB_IMPL_MSG_SYMBOL(DYN, 331, dyn_index_validation_failed, "Uniqueness validation of the index @1 failed")
+FB_IMPL_MSG(DYN, 332, dyn_ts_not_found, -901, "42", "000", "Tablespace @1 not found")
+FB_IMPL_MSG(DYN, 333, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tablespace for @1")
+FB_IMPL_MSG(DYN, 334, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")
+FB_IMPL_MSG(DYN, 335, dyn_dup_tablespace, -901, "42", "000", "Tablespace @1 already exists")
+FB_IMPL_MSG(DYN, 336, dyn_cannot_mod_sys_ts, -901, "42", "000", "Cannot ALTER or DROP system tablespace @1")

@@ -756,6 +756,18 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 }
 
 
+bool PIO_file_exists(const Firebird::PathName& fileName)
+{
+	const HANDLE fd = CreateFile(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
+					NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (fd == INVALID_HANDLE_VALUE)
+		return false;
+
+	CloseHandle(fd);
+	return true;
+}
+
+
 static bool seek_file(jrd_file*	file, const BufferDesc* bdb, OVERLAPPED* overlapped)
 {
 /**************************************
