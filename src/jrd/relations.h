@@ -86,6 +86,7 @@ RELATION(nam_i_segments, rel_segments, ODS_8_0, rel_persistent)
 	FIELD(f_seg_statistics, nam_statistics, fld_statistics, 1, ODS_11_0)
 	FIELD(f_seg_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_seg_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_seg_char_length, nam_char_length, fld_f_length, 1, ODS_14_0)
 END_RELATION
 
 // Relation 4 (RDB$INDICES)

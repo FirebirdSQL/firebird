@@ -902,6 +902,8 @@ using namespace Firebird;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
 	Jrd::CreatePackageConstantNode* createPackageConstantNode;
+	Jrd::CreateIndexNode::Segments* indexSegments;
+	Jrd::CreateIndexNode::Segment* indexSegment;
 }
 
 %include types.y
@@ -1931,10 +1933,10 @@ index_definition($createIndexNode)
 
 %type index_column_expr(<createIndexNode>)
 index_column_expr($createIndexNode)
-	: column_list
-		{ $createIndexNode->columns = $1; }
-	| column_parens
-		{ $createIndexNode->columns = $1; }
+	: segment_list
+		{ $createIndexNode->segments = $1; }
+	| segment_parens
+		{ $createIndexNode->segments = $1; }
 	| computed_by '(' value ')'
 		{
  			$createIndexNode->computed = newNode<ValueSourceClause>();
@@ -1942,6 +1944,45 @@ index_column_expr($createIndexNode)
 			$createIndexNode->computed->source = makeParseStr(YYPOSNARG(2), YYPOSNARG(4));
 		}
 	;
+
+
+%type <indexSegments> segment_parens
+segment_parens
+	: '(' segment_list ')'	{ $$ = $2; }
+	;
+
+%type <indexSegments> segment_list
+segment_list
+	: single_segment
+		{
+			$$ = newNode<CreateIndexNode::Segments>();
+			$$->add(*$1);
+		}
+	| segment_list ',' single_segment
+		{
+			$1->add(*$3);
+			$$ = $1;
+		}
+	;
+
+
+%type <indexSegment> single_segment
+single_segment
+	: symbol_column_name
+		{
+			auto* segment = newNode<CreateIndexNode::Segment>();
+			segment->name = *$1;
+			$$ = segment;
+		}
+	| symbol_column_name '(' pos_short_integer ')'
+		{
+			auto* segment = newNode<CreateIndexNode::Segment>();
+			segment->name = *$1;
+			segment->length = $3;
+			$$ = segment;
+		}
+	;
+
 
 %type <boolSourceClause> index_condition_opt
 index_condition_opt
@@ -2609,12 +2650,12 @@ inline_table_indexes($createRelationNode)
 
 %type inline_table_index(<createRelationNode>)
 inline_table_index($createRelationNode)
-	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] column_parens
+	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] segment_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
 			node->unique = $1;
 			node->descending = $2;
-			node->columns = $6;
+			node->segments = $6;
 
 			auto clause = newNode<RelationNode::AddInlineTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);

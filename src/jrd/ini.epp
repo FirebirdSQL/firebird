@@ -1743,6 +1743,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 					PAD(field->fld_name, Y.RDB$FIELD_NAME);
 					tail->idx_field = segment->ini_idx_rfld_id;
 					tail->idx_itype = segment->ini_idx_type;
+					tail->idx_length = 0;
 				    tail->idx_selectivity = 0;
 				}
 				END_STORE

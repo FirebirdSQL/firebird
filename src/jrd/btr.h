@@ -107,6 +107,7 @@ struct index_desc
 	{
 		USHORT idx_field;					// field id
 		USHORT idx_itype;					// data of field in index
+		USHORT idx_length;					// data length in characters, if set (non zero)
 		float idx_selectivity;				// segment selectivity
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
