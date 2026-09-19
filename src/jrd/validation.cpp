@@ -2061,13 +2061,13 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const ULONG pageNumber = root_page->irt_rpt[id].getRootPage();
-	if (!pageNumber)
+	const auto rootPageNumber = root_page->irt_rpt[id].getRootPage();
+	if (!rootPageNumber)
 		return rtn_ok;
 
-	ULONG pageSpaceId = root_page->irt_rpt[id].getRootPageSpaceId();
-	if (!pageSpaceId)
-		pageSpaceId = DB_PAGE_SPACE;
+	fb_assert(rootPageNumber.value().isValid());
+	const ULONG pageNumber = rootPageNumber.value().getPageNum();
+	const ULONG pageSpaceId = rootPageNumber.value().getPageSpaceID();
 
 	Tablespace::lock(vdr_tdbb, pageSpaceId);
 

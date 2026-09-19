@@ -369,8 +369,8 @@ public:
 		fb_assert(rootPage);
 
 		WIN window(rootPage.value());
-		index_root_page* root = (index_root_page*) CCH_FETCH(m_tdbb, &window, LCK_write, pag_root);
-		index_root_page::irt_repeat* irt_desc = root->irt_rpt + m_creation.index->idx_id;
+		index_root_page* const root = BTR_fetch_root_for_update(FB_FUNCTION, m_tdbb, &window);
+		index_root_page::irt_repeat* const irt_desc = root->irt_rpt + m_creation.index->idx_id;
 
 		CCH_MARK(m_tdbb, &window);
 
@@ -1214,12 +1214,6 @@ void IDX_create_index(thread_db* tdbb,
 }
 
 
-bool IDX_activate_index(thread_db* tdbb, jrd_rel* relation, MetaId id)
-{
-	return BTR_activate_index(tdbb, relation, id);
-}
-
-
 bool IDX_mark_index(thread_db* tdbb, jrd_rel* relation, MetaId id)
 {
 /**************************************
@@ -1447,7 +1441,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 				{
 					// Check if record version was created after the index scan started.
 
-					TraNumber recTran = rec->getTransactionNumber();
+					const TraNumber recTran = rec->getTransactionNumber();
 					const auto cnRec = dbb->dbb_tip_cache->cacheState(recTran);
 					if (cnRec > creation->helper->getSnapNumber())
 						pkey->m_flags |= key_newver;	// key is present in new record version
@@ -1502,18 +1496,19 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 
 				if (isComplementary && !creatingIndex && !insertion.iib_removed)
 				{
-					root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
-					idx.idx_root = root->irt_rpt[id].getRootPage();
+					root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+					BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id);
 
 					// set 'deleted' node marker in lower bit and insert key into b-tree
 					insertion.iib_number.increment();
 					insertion.iib_btr_level = 0;
 					BTR_insert(tdbb, &window, &insertion);
 				}
+
 				insertion.iib_number.setValue(recno);
 
-				root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
-				idx.idx_root = root->irt_rpt[id].getRootPage();
+				root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
+				BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id);
 			}
 		}
 	}

@@ -1636,9 +1636,11 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 	if (index_root->irt_count <= index->idx_id)
 		return;
 
-	ULONG page = index_root->irt_rpt[index->idx_id].getRootPage();
-	if (!page)
+	const auto rootPageNumber = index_root->irt_rpt[index->idx_id].getRootPage();
+	if (!rootPageNumber)
 		return;
+
+	ULONG page = rootPageNumber.value().getPageNum();
 
 	// CVC: The two const_cast's for bucket can go away if BTreeNode's functions
 	// are overloaded for constness. They don't modify bucket and pointer's contents.

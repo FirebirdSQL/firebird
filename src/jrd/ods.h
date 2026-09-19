@@ -33,6 +33,7 @@
 #ifndef JRD_ODS_H
 #define JRD_ODS_H
 
+#include "../jrd/PageNumber.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/Uuid.h"
@@ -416,8 +417,6 @@ struct index_root_page
 		void setState(UCHAR newState);
 
 	public:
-		bool isUsed() const;
-
 		TraNumber getTransaction() const
 		{
 			return irt_transaction;
@@ -428,33 +427,25 @@ struct index_root_page
 			return irt_state;
 		}
 
-		ULONG getRootPage() const
-		{
-			return isUsed() ? irt_page_num : 0;
-		}
+		bool isUsed() const;
+		std::optional<Jrd::PageNumber> getRootPage() const;
+		void setRootPage(const Jrd::PageNumber& rootPage);
 
-		ULONG getRootPageSpaceId() const
-		{
-			return isUsed() ? irt_page_space_id : 0;
-		}
-
-		void setRootPage(ULONG pageSpaceId, ULONG rootPage);
-
-		void setInProgress(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
+		void setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber);
 		void setInProgress(TraNumber traNumber);
-		void setConcurrentlyTemp(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
-		void setConcurrentlyMain(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
+		void setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber);
 		void setConcurrentlyComplete(TraNumber traNumber);
-		void setRollback(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber);
+		void setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber);
 		void setRollback(TraNumber traNumber);
 		void setKill();
-		void setKill(ULONG pageSpaceId, ULONG rootPage);
+		void setKill(const Jrd::PageNumber& rootPage);
 		void setKill(TraNumber traNumber);
 		void setNormal();
-		void setNormal(ULONG pageSpaceId, ULONG rootPage);
+		void setNormal(const Jrd::PageNumber& rootPage);
 		void setCommit(TraNumber traNumber);
 		void setDrop(TraNumber traNumber);
-		void setMigrate(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber, USHORT slot);
+		void setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot);
 		void setEmpty();
 	} irt_rpt[1];
 
@@ -552,14 +543,24 @@ inline bool index_root_page::irt_repeat::isUsed() const
 	return (irt_state != irt_unused);
 }
 
-inline void index_root_page::irt_repeat::setRootPage(ULONG pageSpaceId, ULONG rootPage)
+inline std::optional<Jrd::PageNumber> index_root_page::irt_repeat::getRootPage() const
+{
+	if (irt_page_num && irt_page_space_id)
+		return Jrd::PageNumber(irt_page_space_id, irt_page_num);
+
+	fb_assert(!irt_page_num && !irt_page_space_id);
+	fb_assert(irt_state == irt_unused || irt_state == irt_in_progress);
+	return std::nullopt;
+}
+
+inline void index_root_page::irt_repeat::setRootPage(const Jrd::PageNumber& rootPage)
 {
 	// hvlad: is irt_in_progress possible here ?
 	fb_assert(getState() == irt_in_progress || getState() == irt_normal || getState() == irt_concurrently);
-	fb_assert(rootPage);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
 
 	if (getState() == irt_in_progress)
 		setState(irt_normal);
@@ -581,14 +582,16 @@ inline void index_root_page::irt_repeat::setEmpty()
 	irt_backslot = 0;
 }
 
-inline void index_root_page::irt_repeat::setInProgress(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
-	fb_assert(!irt_page_num);
+	fb_assert(!irt_page_num && !irt_page_space_id);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	setState(irt_in_progress);
 }
@@ -604,26 +607,30 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 }
 
 // Scan phase of concurrent index creation, set temp index root page and complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyTemp(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_unused);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	irt_flags |= irt_complementary;
 	setState(irt_concurrently);
 }
 
 // Merge phase of concurrent index creation, set main index root page and clear complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyMain(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_concurrently);
 	fb_assert(irt_transaction == traNumber);
 	fb_assert(irt_flags & irt_complementary);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	irt_flags &= ~irt_complementary;
 	setState(irt_concurrently);
@@ -635,20 +642,22 @@ inline void index_root_page::irt_repeat::setConcurrentlyComplete(TraNumber traNu
 	fb_assert(getState() == irt_concurrently);
 	fb_assert(irt_transaction == traNumber);
 	fb_assert(!(irt_flags & irt_complementary));
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 
 	irt_transaction = traNumber;
 	setState(irt_rollback);
 }
 
-inline void index_root_page::irt_repeat::setRollback(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
-	fb_assert(!irt_page_num);
+	fb_assert(!irt_page_num && !irt_page_space_id);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	setState(irt_rollback);
 }
@@ -657,7 +666,7 @@ inline void index_root_page::irt_repeat::setRollback(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_kill);
 	fb_assert(traNumber == irt_transaction);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 
 	irt_transaction = traNumber;
 	setState(irt_rollback);
@@ -671,13 +680,14 @@ inline void index_root_page::irt_repeat::setKill()
 	setState(irt_kill);
 }
 
-inline void index_root_page::irt_repeat::setKill(ULONG pageSpaceId, ULONG rootPage)
+inline void index_root_page::irt_repeat::setKill(const Jrd::PageNumber& rootPage)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(irt_transaction);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
 
 	setState(irt_kill);
 }
@@ -685,7 +695,7 @@ inline void index_root_page::irt_repeat::setKill(ULONG pageSpaceId, ULONG rootPa
 inline void index_root_page::irt_repeat::setKill(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_rollback);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 	fb_assert(traNumber == irt_transaction);
 
 	irt_transaction = traNumber;
@@ -700,7 +710,7 @@ inline void index_root_page::irt_repeat::setNormal()
 			|| getState() == irt_commit
 			// deleted not long ago
 			|| getState() == irt_drop);		// hvlad: is it possible ?
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 	fb_assert(irt_transaction);
 
 	irt_transaction = 0;
@@ -709,16 +719,17 @@ inline void index_root_page::irt_repeat::setNormal()
 	setState(irt_normal);
 }
 
-inline void index_root_page::irt_repeat::setNormal(ULONG pageSpaceId, ULONG rootPage)
+inline void index_root_page::irt_repeat::setNormal(const Jrd::PageNumber& rootPage)
 {
 			// create index mode AtOnce
 	fb_assert(getState() == irt_in_progress
 			// completed migration
 			|| getState() == irt_migrate);
-	fb_assert(rootPage);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = 0;
 	irt_backslot = 0;
 
@@ -728,7 +739,7 @@ inline void index_root_page::irt_repeat::setNormal(ULONG pageSpaceId, ULONG root
 inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_normal || getState() == irt_migrate);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 
 	irt_transaction = traNumber;
 	setState(irt_commit);
@@ -737,7 +748,7 @@ inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_commit);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 	irt_transaction = traNumber;
 	setState(irt_drop);
 
@@ -746,13 +757,15 @@ inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 	irt_flags &= ~(irt_unique | irt_foreign | irt_primary);
 }
 
-inline void index_root_page::irt_repeat::setMigrate(ULONG pageSpaceId, ULONG rootPage, TraNumber traNumber, USHORT slot)
+inline void index_root_page::irt_repeat::setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot)
 {
 	fb_assert(getState() == irt_normal || getState() == irt_rollback || getState() == irt_migrate);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = pageSpaceId;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	irt_backslot = slot;
 

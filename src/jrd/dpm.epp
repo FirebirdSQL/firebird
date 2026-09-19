@@ -659,24 +659,19 @@ void DPM_create_relation( thread_db* tdbb, jrd_rel* relation)
 
 	// Store page numbers in RDB$PAGES
 
-	if (const auto firstPointerPage = relPages->getPointerPage(0))
-		DPM_pages(tdbb, relation->getId(), pag_pointer, (ULONG) 0, firstPointerPage.value());
-	else
-		fb_assert(false);
+	const auto firstPointerPage = relPages->getPointerPage(0);
+	fb_assert(firstPointerPage);
+	DPM_pages(tdbb, relation->getId(), pag_pointer, (ULONG) 0, firstPointerPage.value());
 
-	if (const auto rootPage = relPages->getIndexRootPage())
-		DPM_pages(tdbb, relation->getId(), pag_root, (ULONG) 0, rootPage.value());
-	else
-		fb_assert(false);
+	const auto rootPage = relPages->getIndexRootPage();
+	fb_assert(rootPage);
+	DPM_pages(tdbb, relation->getId(), pag_root, (ULONG) 0, rootPage.value());
 
 	// Special record directing remove table when transaction rolled back
-	if (const auto transaction = tdbb->getTransaction())
-	{
-		if (const auto traNumber = transaction->tra_number)
-			set_marker(tdbb, relation->getId(), pageSpaceId, MRK_rollback, traNumber);
-	}
-	else
-		fb_assert(false);
+	const auto transaction = tdbb->getTransaction();
+	fb_assert(transaction);
+	if (const auto traNumber = transaction->tra_number)
+		set_marker(tdbb, relation->getId(), pageSpaceId, MRK_rollback, traNumber);
 }
 
 
@@ -1248,10 +1243,9 @@ void DPM_delete_relation_pages(thread_db* tdbb, RelationPermanent* relation, Rel
 
 	// Now get rid of the index root page
 
-	if (const auto rootPage = relPages->getIndexRootPage())
-		PAG_release_page(tdbb, rootPage.value(), ZERO_PAGE_NUMBER);
-	else
-		fb_assert(false);
+	const auto rootPage = relPages->getIndexRootPage();
+	fb_assert(rootPage);
+	PAG_release_page(tdbb, rootPage.value(), ZERO_PAGE_NUMBER);
 
 	relPages->reset();
 }
@@ -2067,8 +2061,7 @@ void DPM_pages(thread_db* tdbb, MetaId relationId, int type, ULONG sequence, con
 	SET_TDBB(tdbb);
 	const auto attachment = tdbb->getAttachment();
 
-	fb_assert(page.getPageSpaceID() == DB_PAGE_SPACE ||
-			  PageSpace::isTablespace(page.getPageSpaceID()));
+	fb_assert(page.getPageSpaceID() == DB_PAGE_SPACE || PageSpace::isTablespace(page));
 
 #ifdef VIO_DEBUG
 	VIO_trace(DEBUG_TRACE_ALL,
@@ -3814,7 +3807,7 @@ static rhd* locate_space(thread_db* tdbb,
 				if (space)
 					return (rhd*) space;
 
-				if (!window->win_page.isTemporary())
+				if (!PageSpace::isTemporary(window->win_page))
 					CCH_get_related(tdbb, window->win_page, lowPages);
 			}
 			else
@@ -4677,14 +4670,11 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 
 	// Setup the transition rules between old and new pages
 
-	if (const auto transaction = tdbb->getTransaction())
+	const auto transaction = tdbb->getTransaction();
+	fb_assert(transaction);
+	if (const auto traNumber = transaction->tra_number)
 	{
-		if (const auto traNumber = transaction->tra_number)
-		{
-			set_marker(tdbb, relation->getId(), orgPages->getPageSpaceId(), MRK_commit, traNumber);
-			set_marker(tdbb, relation->getId(), newPages->getPageSpaceId(), MRK_rollback, traNumber);
-		}
+		set_marker(tdbb, relation->getId(), orgPages->getPageSpaceId(), MRK_commit, traNumber);
+		set_marker(tdbb, relation->getId(), newPages->getPageSpaceId(), MRK_rollback, traNumber);
 	}
-	else
-		fb_assert(false);
 }

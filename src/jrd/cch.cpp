@@ -301,11 +301,11 @@ void CCH_clean_page(thread_db* tdbb, PageNumber page)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	fb_assert(page.getPageNum() > 0);
-	fb_assert(page.isTemporary());
-	if (!page.isTemporary())
+	fb_assert(PageSpace::isTemporary(page.getPageSpaceID()));
+	if (!PageSpace::isTemporary(page.getPageSpaceID()))
 		return;
 
 	BufferControl* bcb = dbb->dbb_bcb;
@@ -1798,8 +1798,7 @@ void CCH_must_write(thread_db* tdbb, WIN* window)
 	}
 
 	bdb->bdb_flags |= BDB_must_write | BDB_dirty;
-	fb_assert((bdb->bdb_flags & BDB_nbak_state_lock) ||
-			  PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
+	fb_assert((bdb->bdb_flags & BDB_nbak_state_lock) || PageSpace::isTemporary(bdb->bdb_page));
 }
 
 
@@ -1846,12 +1845,11 @@ void CCH_precedence(thread_db* tdbb, WIN* window, PageNumber page)
  *
  **************************************/
 	// If the page is zero, the caller isn't really serious
-
 	if (page.getPageNum() == 0)
 		return;
 
-	// no need to support precedence for temporary pages
-	if (page.isTemporary() || window->win_page.isTemporary())
+	// No need to support precedence for temporary pages
+	if (PageSpace::isTemporary(page) || PageSpace::isTemporary(window->win_page))
 		return;
 
 	check_precedence(tdbb, window, page);
@@ -1946,7 +1944,7 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 	BackupManager* const bm = dbb->dbb_backup_manager;
 
 	// Temporary pages don't write to delta and need no SCN
-	if (PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()))
+	if (PageSpace::isTemporary(bdb->bdb_page))
 		return true;
 
 	// Take backup state lock
@@ -2733,9 +2731,8 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id)
 				BufferDesc* bdb = &blk.m_bdbs[i];
 
 				if (page_space_id == INVALID_PAGE_SPACE ||
-					bdb->bdb_page.getPageSpaceID() == page_space_id)
+					(bdb->bdb_page.isValid() && bdb->bdb_page.getPageSpaceID() == page_space_id))
 				{
-
 					if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
 					{
 						if (bdb->bdb_flags & BDB_dirty)
@@ -5105,7 +5102,7 @@ static void clear_dirty_flag_and_nbak_state(thread_db* tdbb, BufferDesc* bdb)
 		tdbb->getDatabase()->dbb_backup_manager->unlockStateRead(tdbb);
 	}
 	else if ((oldFlags & BDB_dirty) && bdb->bdb_page != HEADER_PAGE_NUMBER)
-		fb_assert(PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
+		fb_assert(PageSpace::isTemporary(bdb->bdb_page));
 }
 
 void recentlyUsed(BufferDesc* bdb)
