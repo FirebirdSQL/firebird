@@ -33,6 +33,7 @@
 #include "../jrd/optimizer/Optimizer.h"
 
 #include <algorithm>
+#include <iterator>
 
 #include "RecordSource.h"
 
@@ -58,7 +59,7 @@ namespace
 	};
 
 	constexpr ULONG MIN_HASH_SIZE = HASH_SIZES[0];
-	constexpr ULONG MAX_HASH_SIZE = HASH_SIZES[FB_NELEM(HASH_SIZES) - 1];
+	constexpr ULONG MAX_HASH_SIZE = HASH_SIZES[std::size(HASH_SIZES) - 1];
 
 	// Desired average number of entries per bucket. We sort each bucket
 	// by hash and use binary search on lookup, so even a moderately long
