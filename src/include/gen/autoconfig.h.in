@@ -155,6 +155,9 @@
 /* security database DIR (PREFIX) */
 #define FB_SECDBDIR "@FB_SECDBDIR@"
 
+/* tzdata DIR (PREFIX) */
+#define FB_TZDATADIR "@FB_TZDATADIR@"
+
 
 /******************************************************************************
  *
