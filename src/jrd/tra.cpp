@@ -4453,3 +4453,117 @@ void jrd_tra::eraseSecDbContext() noexcept
 	delete tra_sec_db_context;
 	tra_sec_db_context = NULL;
 }
+
+void jrd_tra::storeUpdate(ElementBase* obj, bool forceRecompile)
+{
+	if (!accumulatedDeps)
+	{
+		accumulatedDeps = FB_NEW_POOL(getPool()) Deps(getPool());
+		DFW_post_work(this, dfw_update_dependencies, nullptr, nullptr, 0u);
+	}
+
+	bool* recompile = accumulatedDeps->get(obj);
+	if (recompile)
+		*recompile = forceRecompile || *recompile;
+	else
+	{
+		recompile = accumulatedDeps->put(obj);
+		*recompile = forceRecompile;
+	}
+}
+
+void jrd_tra::storeCommit(ElementBase* obj)
+{
+	if (!updateCommits)
+		updateCommits = FB_NEW_POOL(getPool()) UpdateCommits(getPool());
+
+	updateCommits->push(obj);
+}
+
+bool jrd_tra::processUpdates(thread_db* tdbb)
+{
+	if (!(accumulatedDeps || processingDeps))
+		return false;
+
+	MdcVersion startingVersion;
+	{
+		VersionIncr incr(tdbb);
+		startingVersion = incr.getVersion();
+	}
+
+	while (accumulatedDeps || processingDeps)
+	{
+		// switch deps
+		if (!processingDeps)
+			processingDeps = accumulatedDeps.release();
+
+		// process updates
+		for(auto iter : *processingDeps)
+		{
+			auto* elem = iter.first;
+			bool use = iter.second;
+
+			// may be this element was already processed in this update?
+			if (elem->getVersion(tdbb) >= startingVersion)
+				continue;
+
+			if (!use)
+			{
+				// now ask cache element to create all possible requests
+				try
+				{
+					elem->makeRequests(tdbb);
+				}
+
+				// handle specific for outdated element error
+				catch (const status_exception& ex)
+				{
+					if (ex.value()[1] != isc_old_format)
+						throw;
+					tdbb->tdbb_status_vector->init();
+					use = true;
+				}
+			}
+
+			if (use)
+			{
+				// get all existing currently dependencies
+				elem->fillDeps(tdbb, false);
+
+				// make new version and compile it
+				elem->newVersion(tdbb);
+				auto rc = elem->ensureVersioned(tdbb, 0);
+				fb_assert(rc);
+
+				storeCommit(elem);
+			}
+		}
+
+		// This portion of update is ready
+		delete processingDeps.release();
+	}
+
+	return true;
+}
+
+void jrd_tra::processCommits(thread_db* tdbb)
+{
+	if (!updateCommits)
+		return;
+
+	unsigned pos = 0;
+	try
+	{
+		for (pos = 0; pos < updateCommits->getCount(); pos++)
+			updateCommits->getElement(pos)->commit(tdbb);
+	}
+	catch(const Exception&)
+	{
+		// We do not expect exceptions in metacache commits - but
+		// already committed elements should better go away
+		if (pos > 0)
+			updateCommits->removeRange(0, pos);
+
+		throw;
+	}
+}
