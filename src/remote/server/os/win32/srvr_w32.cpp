@@ -83,6 +83,7 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <windows.h>
 
 #include "fb_exception.h"
@@ -118,10 +119,11 @@
 
 
 static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM);
+static THREAD_ENTRY_DECLARE inet_unix_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE xnet_connect_wait_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM);
 static THREAD_ENTRY_DECLARE process_connection_thread(THREAD_ENTRY_PARAM);
-static HANDLE parse_args(LPCSTR, USHORT*);
+static HANDLE parse_args(LPCSTR, USHORT*, bool*, bool*);
 static void service_connection(rem_port*);
 static int wait_threads(const int reason, const int mask, void* arg);
 
@@ -131,6 +133,7 @@ static TEXT protocol_inet[128];
 static TEXT instance[MAXPATHLEN];
 static USHORT server_flag = 0;
 static bool server_shutdown = false;
+static bool disableTcp = false;
 
 using namespace Firebird;
 
@@ -230,7 +233,8 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 	if (Config::getServerMode() != MODE_CLASSIC)
 		server_flag = SRVR_multi_client;
 
-	const HANDLE connection_handle = parse_args(lpszArgs, &server_flag);
+	bool connectionUnixSocket = false;
+	const HANDLE connection_handle = parse_args(lpszArgs, &server_flag, &connectionUnixSocket, &disableTcp);
 
 	// get priority class from the config file
 	int priority = Config::getProcessPriorityLevel();
@@ -286,7 +290,7 @@ int WINAPI WinMain(HINSTANCE hThisInst, HINSTANCE /*hPrevInst*/, LPSTR lpszArgs,
 		{
 			if (server_flag & SRVR_inet)
 			{
-				port = INET_reconnect((SOCKET) connection_handle);
+				port = INET_reconnect((SOCKET) connection_handle, connectionUnixSocket);
 
 				if (port)
 				{
@@ -397,7 +401,7 @@ static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM)
 		rem_port* port = NULL;
 		try
 		{
-			port = INET_connect(protocol_inet, NULL, server_flag, 0, NULL);
+			port = INET_connect(protocol_inet, NULL, server_flag, 0, NULL, AF_UNSPEC, disableTcp);
 		}
 		catch (const Exception& ex)
 		{
@@ -423,6 +427,42 @@ static THREAD_ENTRY_DECLARE inet_connect_wait_thread(THREAD_ENTRY_PARAM)
 			port->disconnect(NULL, NULL);
 		}
 	}
+	return 0;
+}
+
+
+static THREAD_ENTRY_DECLARE inet_unix_connect_wait_thread(THREAD_ENTRY_PARAM)
+{
+/**************************************
+ *
+ *      i n e t _ u n i x _ c o n n e c t _ w a i t _ t h r e a d
+ *
+ **************************************
+ *
+ * Functional description
+ *      Accept Unix domain socket connections for Classic Server.
+ *
+ **************************************/
+	ThreadCounter counter;
+
+	while (!server_shutdown)
+	{
+		rem_port* port = nullptr;
+		try
+		{
+			port = INET_listenUnix(server_flag);
+		}
+		catch (const Exception& ex)
+		{
+			iscLogException("INET Unix listener", ex);
+		}
+
+		if (!port)
+			break;
+
+		service_connection(port);
+	}
+
 	return 0;
 }
 
@@ -509,6 +549,19 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 
 	if (server_flag & SRVR_inet)
 	{
+		if (!(server_flag & SRVR_multi_client) &&
+			INET_shouldListenUnix(protocol_inet, disableTcp))
+		{
+			try
+			{
+				Thread::start(inet_unix_connect_wait_thread, 0, THREAD_medium);
+			}
+			catch (const Exception& ex)
+			{
+				iscLogException("INET: can't start Unix listener thread", ex);
+			}
+		}
+
 		try
 		{
 			Thread::start(inet_connect_wait_thread, 0, THREAD_medium);
@@ -549,7 +602,8 @@ static THREAD_ENTRY_DECLARE start_connections_thread(THREAD_ENTRY_PARAM)
 }
 
 
-static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
+static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag, bool* connectionUnixSocket,
+	bool* disableTcp)
 {
 /**************************************
  *
@@ -662,11 +716,23 @@ static HANDLE parse_args(LPCSTR lpszArgs, USHORT* pserver_flag)
 						while (*p && *p != ' ' && pi < piend)
 							*pi++ = *p++;
 						*pi++ = '\0';
+
+						if (strcmp(protocol_inet, "/0") == 0)
+						{
+							*disableTcp = true;
+							protocol_inet[0] = '\0';
+						}
+						else
+							*disableTcp = false;
 					}
 					break;
 
 				case 'R':
 					*pserver_flag &= ~SRVR_high_priority;
+					break;
+
+				case 'U':
+					*connectionUnixSocket = true;
 					break;
 
 				case 'S':

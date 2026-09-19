@@ -4035,7 +4035,8 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				nullptr,
 				"format",
 				"ltt",
-				"field_names"
+				"field_names",
+				"index"
 			};
 
 			while ((blr_operator = control->ctl_blr_reader.getByte()) != blr_end)
@@ -4077,6 +4078,23 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 						{
 							blr_indent(control, level);
 							blr_print_name(control);
+							offset = blr_print_line(control, offset);
+						}
+
+						--level;
+						break;
+
+					case blr_dcl_local_table_index:
+						blr_print_name(control);
+						blr_print_byte(control);
+						n = blr_print_byte(control);
+						offset = blr_print_line(control, offset);
+						++level;
+
+						while (--n >= 0)
+						{
+							blr_indent(control, level);
+							blr_print_word(control);
 							offset = blr_print_line(control, offset);
 						}
 

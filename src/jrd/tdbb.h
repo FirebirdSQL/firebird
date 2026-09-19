@@ -61,6 +61,7 @@ class jrd_tra;
 class Request;
 class BufferDesc;
 class Lock;
+struct IndexCreation;
 
 
 #ifdef USE_ITIMER
@@ -248,6 +249,8 @@ public:
 	// BDB's held by thread
 	Firebird::HalfStaticArray<BufferDesc*, 16> tdbb_bdbs;
 	Firebird::ThreadSync* tdbb_thread;
+
+	IndexCreation* tdbb_indexCreation = nullptr;	// current thread creates index
 
 	MemoryPool* getDefaultPool() noexcept
 	{

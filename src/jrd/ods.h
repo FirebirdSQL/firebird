@@ -423,6 +423,9 @@ struct index_root_page
 
 		void setRoot(ULONG rootPage/*, ULONG pageSpaceId*/);
 		void setInProgress(TraNumber traNumber);
+		void setConcurrentlyTemp(ULONG rootPage, TraNumber traNumber);
+		void setConcurrentlyMain(ULONG rootPage, TraNumber traNumber);
+		void setConcurrentlyComplete(TraNumber traNumber);
 		void setRollback(ULONG rootPage/*, ULONG pageSpaceId*/, TraNumber traNumber);
 		void setRollback(TraNumber traNumber);
 		void setKill(TraNumber traNumber);
@@ -471,20 +474,24 @@ inline constexpr UCHAR irt_normal		= 3;	// normal working state of index
 inline constexpr UCHAR irt_kill			= 4;	// index to be removed when irt_transaction ended (both commit/rollback)
 inline constexpr UCHAR irt_commit		= 5;	// start index removal (switch to irt_drop) when irt_transaction committed
 inline constexpr UCHAR irt_drop			= 6;	// index to be removed when OAT > irt_transaction
+inline constexpr UCHAR irt_concurrently	= 7;	// creating index concurrently
+inline constexpr UCHAR irt_last			= 7;	// last possible state
 
 // irt_flags, must match the idx_flags (see btr.h)
-inline constexpr USHORT irt_unique			= 1;
-inline constexpr USHORT irt_descending		= 2;
-inline constexpr USHORT irt_foreign			= 4;
-inline constexpr USHORT irt_primary			= 8;
-inline constexpr USHORT irt_expression		= 16;
-inline constexpr USHORT irt_condition		= 32;
+inline constexpr USHORT irt_unique			= 0x01;
+inline constexpr USHORT irt_descending		= 0x02;
+inline constexpr USHORT irt_foreign			= 0x04;
+inline constexpr USHORT irt_primary			= 0x08;
+inline constexpr USHORT irt_expression		= 0x10;
+inline constexpr USHORT irt_condition		= 0x20;
+inline constexpr USHORT irt_complementary	= 0x40;		// temp index used by concurrent index creation
+
 
 /*
 	How does index state change:
 
 states for just created index:
-	irt_in_progress
+	irt_in_progress, irt_concurrently
 		create index / alter index active	=> irt_rollback
 	irt_rollback
 		on commit							=> irt_normal
@@ -513,7 +520,7 @@ access in SELECTs:
 
 inline void index_root_page::irt_repeat::setState(UCHAR newState)
 {
-	fb_assert(newState <= irt_drop);
+	fb_assert(newState <= irt_last);
 	irt_state = newState;
 }
 
@@ -523,13 +530,14 @@ inline bool index_root_page::irt_repeat::isUsed() const
 }
 
 inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
-{
-	fb_assert(getState() == irt_in_progress || getState() == irt_normal);
+{				// hvlad: is irt_in_progress possible here ?
+	fb_assert(getState() == irt_in_progress || getState() == irt_normal || getState() == irt_concurrently);
 	fb_assert(rootPage);
 
 	irt_page_num = rootPage;
 	irt_page_space_id = 0;
-	setState(irt_normal);
+	if (getState() == irt_in_progress)
+		setState(irt_normal);
 }
 
 inline void index_root_page::irt_repeat::setEmpty()
@@ -549,6 +557,44 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 	irt_page_space_id = 0;
 	irt_transaction = traNumber;
 	setState(irt_in_progress);
+}
+
+// Scan phase of concurrent index creation, set temp index root page and complementary flag
+inline void index_root_page::irt_repeat::setConcurrentlyTemp(ULONG rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_unused);
+
+	irt_page_num = rootPage;
+	irt_page_space_id = 0;
+	irt_transaction = traNumber;
+	irt_flags |= irt_complementary;
+	setState(irt_concurrently);
+}
+
+// Merge phase of concurrent index creation, set main index root page and clear complementary flag
+inline void index_root_page::irt_repeat::setConcurrentlyMain(ULONG rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_concurrently);
+	fb_assert(irt_transaction == traNumber);
+	fb_assert(irt_flags & irt_complementary);
+
+	irt_page_num = rootPage;
+	irt_page_space_id = 0;
+	irt_transaction = traNumber;
+	irt_flags &= ~irt_complementary;
+	setState(irt_concurrently);
+}
+
+// Concurrent index creation completed, set rollback state
+inline void index_root_page::irt_repeat::setConcurrentlyComplete(TraNumber traNumber)
+{
+	fb_assert(getState() == irt_concurrently);
+	fb_assert(irt_transaction == traNumber);
+	fb_assert(!(irt_flags & irt_complementary));
+	fb_assert(irt_page_num);
+
+	irt_transaction = traNumber;
+	setState(irt_rollback);
 }
 
 inline void index_root_page::irt_repeat::setRollback(ULONG rootPage, TraNumber traNumber)
@@ -590,7 +636,7 @@ inline void index_root_page::irt_repeat::setNormal()
 			// deleted by current tra
 			|| getState() == irt_commit
 			// deleted not long ago
-			|| getState() == irt_drop);
+			|| getState() == irt_drop);		// hvlad: is it possible ?
 	fb_assert(irt_page_num);
 	fb_assert(irt_transaction);
 

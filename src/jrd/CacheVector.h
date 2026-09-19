@@ -902,6 +902,13 @@ public:
 	void rollback(thread_db* tdbb)
 	{
 		ListEntry<Versioned>::rollback(tdbb, list, TransactionNumber::current(tdbb));
+		if (!list)
+		{
+			// No versions left after rollback- that means permanent part can never be accessed
+			// and should be removed right now.
+			releaseLocks(tdbb);
+			cleanup(tdbb);
+		}
 	}
 
 /*

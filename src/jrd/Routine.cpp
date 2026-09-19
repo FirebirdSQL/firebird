@@ -242,19 +242,10 @@ void Routine::makeRequests(thread_db* tdbb)
 
 bool Routine::hash(thread_db* tdbb, Firebird::sha512& digest)
 {
-	if (inputFields.hasData())
-	{
-		if (!inputFormat)
-			return false;
+	if (inputFormat)
 		inputFormat->hash(digest);
-	}
-
-	if (outputFields.hasData())
-	{
-		if (!outputFormat)
-			return false;
+	if (outputFormat)
 		outputFormat->hash(digest);
-	}
 
 	return true;
 }

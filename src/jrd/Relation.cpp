@@ -252,7 +252,7 @@ void RelationPermanent::checkPartners(thread_db* tdbb)
 	if (!(oldFlags & REL_check_partners))
 		LCK_release(tdbb, rel_partners_lock);
 
-	Lock tempLock(tdbb, 0, LCK_rel_partners);
+	Lock tempLock(tdbb, sizeof(SLONG), LCK_rel_partners);
 	tempLock.setKey(rel_id);
 
 	if (LCK_lock(tdbb, &tempLock, LCK_EX, LCK_WAIT))

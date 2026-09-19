@@ -53,8 +53,8 @@ class BtrPageGCLock;
 class Sort;
 class PartitionedSort;
 struct sort_key_def;
-
-enum class IdxCreate {AtOnce, ForRollback};
+struct record_param;
+struct win;
 
 // Dependencies from/to foreign references
 
@@ -142,12 +142,13 @@ inline constexpr int idx_offset_intl_range	= (0x7FFF + idx_first_intl_string);
 
 // these flags match the irt_flags in ods.h
 
-inline constexpr int idx_unique			= 1;
-inline constexpr int idx_descending		= 2;
-inline constexpr int idx_foreign		= 4;
-inline constexpr int idx_primary		= 8;
-inline constexpr int idx_expression		= 16;
-inline constexpr int idx_condition		= 32;
+inline constexpr int idx_unique			= 0x01;
+inline constexpr int idx_descending		= 0x02;
+inline constexpr int idx_foreign		= 0x04;
+inline constexpr int idx_primary		= 0x08;
+inline constexpr int idx_expression		= 0x10;
+inline constexpr int idx_condition		= 0x20;
+inline constexpr int idx_complementary	= 0x40;
 
 // these flags are for idx_runtime_flags
 
@@ -170,12 +171,15 @@ struct index_insertion
 	jrd_tra*	iib_transaction;	// insertion transaction
 	BtrPageGCLock*	iib_dont_gc_lock;	// lock to prevent removal of splitted page
 	UCHAR	iib_btr_level;			// target level to propagate split page to
+	bool iib_removed;				// true if the key was removed from leaf level
 };
 
 
 // these flags are for the key_flags
 
-inline constexpr int key_empty		= 1;	// Key contains empty data / empty string
+inline constexpr int key_empty		= 0x01;		// Key contains empty data / empty string
+inline constexpr int key_secondary	= 0x02;		// Key composed from secondary version of the record
+inline constexpr int key_newver		= 0x04;		// Key composed from the new version of the record
 
 // Temporary key block
 
@@ -332,6 +336,10 @@ private:
 
 // Struct used for index creation
 
+class IdxCreationHelper;
+
+enum class IdxCreate { AtOnce, ForRollback, Concurrently };
+
 struct IndexCreation
 {
 	jrd_rel* relation;
@@ -344,7 +352,17 @@ struct IndexCreation
 	USHORT nullIndLen;
 	SINT64 dup_recno;
 	Firebird::AtomicCounter duplicates;
-	IdxCreate forRollback;
+	IdxCreate createMethod;
+
+	bool isConcurrently() const
+	{
+		return createMethod == IdxCreate::Concurrently;
+	}
+
+	// concurrently helper
+	IdxCreationHelper* helper = nullptr;
+
+	bool lockWrites(SSHORT wait);
 };
 
 // Class used to report any index related errors
@@ -377,26 +395,6 @@ private:
 	const QualifiedName m_indexName;
 	Location m_location;
 	bool isLocationDefined = false;
-};
-
-
-// Index construction lock holder
-
-class IndexCreateLock : public Firebird::AutoStorage
-{
-public:
-	IndexCreateLock(thread_db* tdbb, MetaId relId);
-	~IndexCreateLock();
-
-	void exclusive(MetaId indexId);
-	void shared(MetaId indexId);
-
-private:
-	thread_db* tdbb;	// may be stored here cause IndexCreateLock is always on stack
-	MetaId relId;
-	Lock* lck = nullptr;
-
-	void makeLock(MetaId indexId);
 };
 
 
@@ -591,6 +589,46 @@ private:
 	const ValueExprNode* const* m_iterator;
 	USHORT m_segno = MAX_USHORT;
 };
+
+
+class IndexDuplicateScanner
+{
+public:
+	IndexDuplicateScanner(jrd_rel* relation, MetaId idxId) :
+		m_relation(relation),
+		m_indexId(idxId)
+	{}
+
+	~IndexDuplicateScanner();
+
+	bool find(thread_db* tdbb, RecordBitmap& recs);
+
+	bool checkRecord(thread_db* tdbb, record_param* rpb);
+
+	index_desc* getIndexDesc() { return &m_index; }
+
+private:
+	jrd_rel* m_relation;
+	MetaId m_indexId;
+
+	index_desc m_index;
+	bool m_initialized = false;
+
+	Firebird::UCharBuffer m_key;					// current key value
+	USHORT m_keyLength = 0;							// length of the current key value
+	Firebird::AutoPtr<temporary_key> m_nullKey;		// all NULLs key
+
+	// saved position
+	ULONG m_savePage = 0;						// index leaf page number
+	ULONG m_saveOffset = 0;						//   and offset of next node
+	SLONG m_saveIncarnation = 0;				//   and incarnation counter
+	Firebird::AutoPtr<BtrPageGCLock> m_gcLock;
+
+	UCHAR* init(thread_db* tdbb, win* window);
+	UCHAR* restorePosition(thread_db* tdbb, win* window);
+	void savePosition(thread_db* tdbb, win* window, ULONG offset);
+};
+
 
 } //namespace Jrd
 

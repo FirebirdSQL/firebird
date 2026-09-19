@@ -642,10 +642,10 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
 
 	for (const auto stream : rseStreams)
 	{
-		if (csb->csb_rpt[stream].csb_relation)
-			compileRelation(stream);
-		else if (csb->csb_rpt[stream].csb_local_table_number.has_value())
+		if (csb->csb_rpt[stream].csb_local_table_number.has_value())
 			compileLocalTable(stream);
+		else if (csb->csb_rpt[stream].csb_relation)
+			compileRelation(stream);
 	}
 }
 
@@ -1185,6 +1185,9 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			const auto tail = &csb->csb_rpt[compileStream];
 			tail->csb_flags |= csb_update;
 
+			if (tail->csb_local_table_number.has_value())
+				continue;
+
 			fb_assert(tail->csb_relation);
 
 			const SLONG ssRelationId = tail->csb_view ? tail->csb_view()->rel_id : 0;
@@ -1356,6 +1359,8 @@ void Optimizer::compileLocalTable(StreamType stream)
 	compileStreams.add(stream);
 
 	const auto tail = &csb->csb_rpt[stream];
+	// Declared LTT data is stored in a frame-scoped instance. No instance is active
+	// during optimization, so use the default estimate instead of reading relation pages.
 	tail->csb_cardinality = DEFAULT_CARDINALITY;
 	tail->csb_idx = nullptr;
 
@@ -1372,32 +1377,33 @@ void Optimizer::compileLocalTable(StreamType stream)
 	if (!localTable->useLtt)
 		return;
 
-	const bool needIndices = conjuncts.hasData() || (rse->rse_sorted || rse->rse_aggregate);
+	if (!tail->csb_relation)
+	{
+		const auto relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
+		tail->csb_relation = csb->csb_resources->relations.registerResource(relation);
+	}
+
+	const bool needIndices = conjuncts.hasData() || (rse->rse_sorted || rse->rse_aggregate) ||
+		(tail->csb_plan && tail->csb_plan->accessType);
 
 	if (!needIndices)
 		return;
 
-	const auto relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
-	const auto relPages = relation->getPages(tdbb);
+	const auto relation = tail->csb_relation;
 	IndexDescList idxList;
-	BTR_all(tdbb, relation, idxList, relPages, csb->csb_g_flags & csb_internal);
-
-	MetaId n = idxList.getCount();
-	while (n--)
+	for (FB_SIZE_T indexId = 0; indexId < localTable->indexes.getCount(); ++indexId)
 	{
-		auto id = idxList[n].idx_id;
-		auto* idv = relation->lookup_index(tdbb, id, CacheFlag::AUTOCREATE);
-		if (idv && idv->getActive() != MET_index_active)
-			idv = nullptr;
-		if (!idv)
-			idxList.remove(n);
+		index_desc idx;
+		localTable->getIndexDescription(tdbb, indexId, &idx);
+		idx.idx_fraction = MAXIMUM_SELECTIVITY;
+		idxList.add(idx);
 	}
 
 	if (idxList.hasData())
 		tail->csb_idx = FB_NEW_POOL(getPool()) IndexDescList(getPool(), idxList);
 
 	if (tail->csb_plan)
-		markIndices(tail, relation->getId());
+		markIndices(tail, relation()->getId());
 }
 
 
@@ -2029,9 +2035,9 @@ void Optimizer::checkIndices()
 		if (plan->type != PlanNode::TYPE_RETRIEVE)
 			continue;
 
-		auto* const relation = tail->csb_relation();
+		auto* const relation = tail->csb_relation ? tail->csb_relation() : nullptr;
 		if (!relation)
-			return;
+			continue;
 
 		// If there were no indices fetched at all but the user specified some,
 		// error out using the first index specified
@@ -2705,8 +2711,11 @@ void Optimizer::formRivers(const StreamList& streams,
 		// the stream into the river
 		fb_assert(planNode->type == PlanNode::TYPE_RETRIEVE);
 
-		if (!nodeIs<RelationSourceNode>(planNode->recordSourceNode))
+		if (!nodeIs<RelationSourceNode>(planNode->recordSourceNode) &&
+			!nodeIs<LocalTableSourceNode>(planNode->recordSourceNode))
+		{
 			continue;
+		}
 
 		const auto stream = planNode->recordSourceNode->getStream();
 
@@ -3051,6 +3060,9 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	const auto relation = tail->csb_relation;
 	fb_assert(relation);
 
+	const auto localTable = tail->csb_local_table_number.has_value() ?
+		csb->csb_localTables[tail->csb_local_table_number.value()] : nullptr;
+
 	const string alias = makeAlias(stream);
 	tail->activate();
 
@@ -3225,7 +3237,16 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 		}
 	}
 
-	return boolean ? FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, filterSelectivity) : rsb;
+	if (localTable && localTable->useLtt)
+	{
+		rsb = FB_NEW_POOL(getPool()) LocalTableRecordSource(csb, stream, rsb, localTable,
+			tail->csb_outer_local_table);
+	}
+
+	if (boolean)
+		rsb = FB_NEW_POOL(getPool()) FilteredStream(csb, rsb, boolean, filterSelectivity);
+
+	return rsb;
 }
 
 

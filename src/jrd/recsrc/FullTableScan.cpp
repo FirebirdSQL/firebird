@@ -57,7 +57,8 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open;
 
-	RLCK_reserve_relation(tdbb, request->req_transaction, m_relation(), false);
+	const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+	RLCK_reserve_relation(tdbb, transaction, m_relation(), false);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
@@ -148,7 +149,9 @@ bool FullTableScan::internalGetRecord(thread_db* tdbb) const
 
 	const RecordNumber* upper = impure->irsb_upper.isValid() ? &impure->irsb_upper : nullptr;
 
-	if (VIO_next_record(tdbb, rpb, request->req_transaction, request->req_pool, DPM_next_all, upper))
+	const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
+
+	if (VIO_next_record(tdbb, rpb, transaction, request->req_pool, DPM_next_all, upper))
 	{
 		rpb->rpb_number.setValid(true);
 		return true;
