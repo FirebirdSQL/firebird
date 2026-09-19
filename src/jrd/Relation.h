@@ -497,10 +497,10 @@ public:
 
 	void resetPointerPages(ULONG count, const ULONG* data)
 	{
-		setPointerPages(0, count, data);
+		updatePointerPages(0, count, data);
 	}
 
-	void setPointerPages(ULONG sequence, ULONG count, const ULONG* data)
+	void updatePointerPages(ULONG sequence, ULONG count, const ULONG* data)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 		auto accessor = m_pointerPages.writeAccessor();

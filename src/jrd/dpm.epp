@@ -142,6 +142,10 @@ namespace
 
 	void fixupRdbPages(thread_db* tdbb)
 	{
+		// Special case update of RDB$PAGES pointer page vector to avoid
+		// infinite recursion from this internal request when RDB$PAGES
+		// has been extended with another pointer page.
+
 		const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages,
 			CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
 		const auto relPages = relation->getBasePages();
@@ -165,7 +169,7 @@ namespace
 				CCH_RELEASE(tdbb, &window);
 
 				if (const auto newCount = (ULONG) newPointerPages.getCount())
-					relPages->setPointerPages(sequence, newCount, newPointerPages.begin());
+					relPages->updatePointerPages(sequence, newCount, newPointerPages.begin());
 			}
 
 			if (!relPages->hasIndices())
@@ -1146,6 +1150,8 @@ void DPM_delete_relation(thread_db* tdbb, RelationPermanent* relation, RelationP
  *	Get rid of an unloved, unwanted relation.
  *
  **************************************/
+	fb_assert(!(relation->rel_flags & REL_ltt_created));
+
 	if (relPages->hasData())
 		DPM_delete_relation_pages(tdbb, relation, relPages);
 
@@ -2217,7 +2223,8 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType)
  **************************************
  *
  * Functional description
- *	Scan RDB$PAGES.
+ *	Scan RDB$PAGES for the pages of the given type and update the cached page numbers.
+ *  While scanning, also handle the found deletion markers.
  *
  **************************************/
 	SET_TDBB(tdbb);
@@ -2231,54 +2238,7 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType)
 
 	fb_assert(pagType == 0 || pagType == pag_transactions || pagType == pag_ids);
 
-	// Special case update of RDB$PAGES pointer page vector to avoid
-	// infinite recursion from this internal request when RDB$PAGES
-	// has been extended with another pointer page.
 	fixupRdbPages(tdbb);
-
-	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages,
-		CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
-	const auto relPages = relation->getBasePages();
-	ULONG sequence;
-
-	if (const auto ppCount = relPages->getPointerPageCount())
-	{
-		sequence = ppCount - 1;
-
-		if (const auto ppNumber = relPages->getPointerPage(sequence))
-		{
-			WIN window(ppNumber.value());
-			pointer_page* ppage = (pointer_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_pointer);
-
-			HalfStaticArray<ULONG, 16> newPointerPages;
-			while (ppage->ppg_next)
-			{
-				newPointerPages.add(ppage->ppg_next);
-				ppage = (pointer_page*) CCH_HANDOFF(tdbb, &window, ppage->ppg_next, LCK_read, pag_pointer);
-			}
-
-			CCH_RELEASE(tdbb, &window);
-
-			if (const auto newCount = (ULONG) newPointerPages.getCount())
-				relPages->setPointerPages(sequence, newCount, newPointerPages.begin());
-		}
-
-		if (!relPages->hasIndices())
-		{
-			// Try to guess IRT number for RDB$PAGES, it should be next page after first PP
-			if (const auto firstPage = relPages->getPointerPage(0))
-			{
-				const auto firstPageNum = firstPage.value();
-				WIN window(firstPageNum.getPageSpaceID(), firstPageNum.getPageNum() + 1);
-				index_root_page* root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_undefined);
-
-				if (root->irt_header.pag_type == pag_root && root->irt_relation == rel_pages)
-					relPages->setIndexRootPage(window.win_page);
-
-				CCH_RELEASE(tdbb, &window);
-			}
-		}
-	}
 
 	HalfStaticArray<ULONG, 256> tipSeqList;
 	HalfStaticArray<ULONG, 4> genSeqList;
@@ -2289,7 +2249,7 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType)
 
 	FOR(REQUEST_HANDLE request) X IN RDB$PAGES
 	{
-		sequence = X.RDB$PAGE_SEQUENCE;
+		const ULONG sequence = X.RDB$PAGE_SEQUENCE;
 
 		switch (X.RDB$PAGE_TYPE)
 		{
@@ -2337,6 +2297,17 @@ void DPM_scan_pages(thread_db* tdbb, SCHAR pagType)
 
 void DPM_scan_pages(thread_db* tdbb, RelationPermanent* relation, RelationPages* relPages)
 {
+/**************************************
+ *
+ *	D P M _ s c a n _ p a g e s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Scan RDB$PAGES for the pages of the given pagespace and update the cached page numbers.
+ *  While scanning, also handle the found deletion markers.
+ *
+ **************************************/
 	const auto dbb = tdbb->getDatabase();
 	const auto attachment = tdbb->getAttachment();
 
@@ -2345,9 +2316,6 @@ void DPM_scan_pages(thread_db* tdbb, RelationPermanent* relation, RelationPages*
 		"DPM_scan_pages ()\n");
 #endif
 
-	// Special case update of RDB$PAGES pointer page vector to avoid
-	// infinite recursion from this internal request when RDB$PAGES
-	// has been extended with another pointer page.
 	fixupRdbPages(tdbb);
 
 	const auto pageSpaceId = relPages->getPageSpaceId();
@@ -3728,6 +3696,7 @@ static pointer_page* get_pointer_page(thread_db* tdbb,
 				break;			// we are in business again
 
 			const auto ppNumber = relPages->getPointerPage(ppCount - 1);
+			fb_assert(ppNumber);
 			if (!ppNumber)
 				return nullptr;
 
@@ -4374,7 +4343,6 @@ void DPM_copy_data(thread_db* tdbb, RelationPermanent* relation, RelationPages* 
 	Ods::pag* oldPage = CCH_FETCH(tdbb, &oldWindow, LCK_read, pag_root);
 
 	Ods::pag* newPage = DPM_allocate(tdbb, &newWindow);
-	CCH_MARK_MUST_WRITE(tdbb, &newWindow);
 	memcpy(newPage, oldPage, dbb->dbb_page_size);
 	const auto rootPage = newWindow.win_page;
 	newPage->pag_pageno = rootPage.getPageNum();
