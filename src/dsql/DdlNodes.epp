@@ -14769,10 +14769,12 @@ void DropIndexNode::drop(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_
 		if (dsqlScratch && indexName.package.isEmpty())
 			executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE, DDL_TRIGGER_DROP_INDEX, indexName, {});
 
-		if (indexRelation &&
+		// An exotic case with RDB$INDEX_ID==0 can take place when dropping just (in same statement)
+		// created constraint. Drop such index at once.
+
+		if (indexRelation && IDX.RDB$INDEX_ID &&
 			MetadataCache::getIndexStatus(IDX.RDB$INDEX_INACTIVE.NULL, IDX.RDB$INDEX_INACTIVE) == MET_index_active)
 		{
-			fb_assert(IDX.RDB$INDEX_ID);
 			idxId = IDX.RDB$INDEX_ID - 1;
 
 			auto ret = indexRelation->oldIndexVersion(tdbb, idxId, CacheFlag::OLD_DROP);
