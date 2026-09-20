@@ -69,6 +69,28 @@ GlobalPtr<EventManager::DbEventMgrMap> EventManager::g_emMap;
 GlobalPtr<Mutex> EventManager::g_mapMutex;
 
 
+// Check that the event parameter block is well formed before
+// changing the shared global region. Each item shall completely
+// fit into the buffer: one byte of the name length, the name
+// itself and four bytes of the prior count.
+static void validateEpb(USHORT eventsLength, const UCHAR* events)
+{
+	if (!eventsLength || !events)
+		return;
+
+	const UCHAR* p = events + 1;
+	const UCHAR* const end = events + eventsLength;
+
+	while (p < end)
+	{
+		if (end - p < 5 || p[0] > end - p - 5)
+			Arg::Gds(isc_bad_epb_form).raise();
+
+		p += 1 + p[0] + 4;
+	}
+}
+
+
 void EventManager::init(Attachment* attachment)
 {
 	Database* const dbb = attachment->att_database;
@@ -101,8 +123,14 @@ void EventManager::init(Attachment* attachment)
 		}
 	}
 
-	if (!attachment->att_event_session)
-		attachment->att_event_session = eventMgr->create_session();
+	SLONG expected = attachment->att_event_session;
+	if (expected)
+		return;
+
+	const SLONG session = eventMgr->create_session();
+
+	if (!attachment->att_event_session.compareExchange(expected, session))
+		eventMgr->deleteSession(session);	// another thread won the race
 }
 
 
@@ -276,6 +304,10 @@ SLONG EventManager::queEvents(SLONG session_id,
 	{
 		Firebird::Arg::Gds(isc_bad_epb_form).raise();
 	}
+
+	// Validate the EPB up front to avoid any changes of the shared global
+	// region in case of a malformed buffer
+	validateEpb(events_length, events);
 
 	acquire_shmem();
 
