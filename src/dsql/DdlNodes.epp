@@ -10929,6 +10929,10 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 			// The lock is held until the transaction end.
 			ProtectRelations protectRelations(tdbb, transaction, rel, false);
 
+			// Disable GC during page copying
+			GCLock::Exclusive gcLock(tdbb, rel);
+			gcLock.acquire(transaction->getLockWait() != 0);
+
 			// Copy pages to the new tablespace
 			DPM_copy_data(tdbb, newRel, orgPages, newPages);
 		}
@@ -14736,6 +14740,10 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 			// Protect relation from modification to create a consistent index copy.
 			// The lock is held until the transaction end.
 			ProtectRelations protectRelations(tdbb, transaction, relation, false);
+
+			// Disable GC during page copying
+			GCLock::Exclusive gcLock(tdbb, relation);
+			gcLock.acquire(transaction->getLockWait() != 0);
 
 			BTR_copy_index(tdbb, relation, idxId.value(), newPageSpaceId);
 		}
