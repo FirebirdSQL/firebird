@@ -49,6 +49,7 @@ public:
 	static void init(Attachment*);
 
 	void deleteSession(SLONG);
+	SLONG create_session();
 
 	SLONG queEvents(SLONG, USHORT, const UCHAR*, Firebird::IEventCallback*);
 	void cancelEvents(SLONG);
@@ -63,7 +64,6 @@ private:
 	void acquire_shmem();
 	frb* alloc_global(UCHAR type, ULONG length, bool recurse);
 	void create_process();
-	SLONG create_session();
 	void delete_event(evnt*);
 	void delete_process(SLONG);
 	void delete_request(evt_req*);
