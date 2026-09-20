@@ -41,6 +41,7 @@
 #include "ibase.h"
 #include "../jrd/ods.h"
 #include "../jrd/btn.h"
+#include "../jrd/pag.h"
 #include "../jrd/license.h"
 #include "../common/msg_encode.h"
 #include "../common/gdsassert.h"
@@ -100,6 +101,7 @@ struct dba_idx
 {
 	dba_idx* idx_next;
 	SSHORT idx_id;
+	ULONG idx_pagespace_id;
 	ULONG idx_root;
 	SSHORT idx_depth;
 	ULONG idx_leaf_buckets;
@@ -151,6 +153,7 @@ struct dba_rel
 	dba_rel* rel_next;
 	dba_idx* rel_indexes;
 	dba_fmt* rel_formats;
+	ULONG rel_pagespace_id;
 	ULONG rel_index_root;
 	ULONG rel_pointer_page;
 	ULONG rel_slots;
@@ -211,13 +214,9 @@ static ULONG lastUsedPage(ULONG);
 
 static USHORT get_format_length(ISC_STATUS*, isc_db_handle, isc_tr_handle, ISC_QUAD&);
 
-static dba_fil* db_open(const char*, USHORT);
-static const pag* db_read(ULONG page_number, bool ok_enc = false);
-#ifdef WIN_NT
-static void db_close(void* file_desc);
-#else
-static void db_close(int);
-#endif
+static void db_open(ULONG pageSpaceId, const MetaString& name, const PathName& fileName);
+static const pag* db_read(const PageNumber& page_number, bool ok_enc = false);
+static void db_close(dba_fil* file);
 [[noreturn]] static void dba_error(USHORT, const SafeArg& arg = SafeArg());
 static void dba_print(bool, USHORT, const SafeArg& arg = SafeArg());
 static void print_distribution(const SCHAR*, const ULONG*);
@@ -239,19 +238,26 @@ struct dba_mem
 	dba_mem* mem_next;
 };
 
+struct TableSpace
+{
+	ULONG id = INVALID_PAGE_SPACE;
+	MetaString name;
+	dba_fil* file = nullptr;
+};
+
 // threading declarations for thread data
 
 class tdba final : public ThreadData
 {
 public:
 	explicit tdba(Firebird::UtilSvc* us)
-		: ThreadData(tddDBA), uSvc(us)
+		: ThreadData(tddDBA), uSvc(us), tablespaces(us->getPool())
 	{
 		dba_status = dba_status_vector;
 	}
 
 	Firebird::UtilSvc* uSvc;
-	dba_fil* file = nullptr;
+	Firebird::Array<TableSpace> tablespaces;
 	dba_rel* relations = nullptr;
 	dba_schema* schemas = nullptr;
 	USHORT page_size = 0;
@@ -375,6 +381,7 @@ namespace
 		error: missing thread-safe version of ctime()
 #endif
 	}
+
 } // namespace
 
 constexpr USHORT GSTAT_MSG_FAC = FB_IMPL_MSG_FACILITY_GSTAT;
@@ -705,13 +712,13 @@ int gstat(Firebird::UtilSvc* uSvc)
 	expandDatabaseName(fileName, tempStr, NULL);
 	fileName = tempStr;
 
-	db_open(fileName.c_str(), fileName.length());
+	db_open(DB_PAGE_SPACE, PRIMARY_TABLESPACE_NAME, fileName);
 
 	alignas(DIRECT_IO_BLOCK_SIZE) SCHAR temp[MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE)];
 	tddba->page_size = MAX(RAW_HEADER_SIZE, DIRECT_IO_BLOCK_SIZE);
 	tddba->global_buffer = (pag*) temp;
 	tddba->page_number = -1;
-	const header_page* header = (const header_page*) db_read(HEADER_PAGE);
+	const header_page* header = (const header_page*) db_read(HEADER_PAGE_NUMBER);
 
 	if (!Ods::isSupported(header))
 	{
@@ -746,8 +753,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	// Print header page
 
-	ULONG page = HEADER_PAGE;
-	header = (const header_page*) db_read(page);
+	header = (const header_page*) db_read(HEADER_PAGE_NUMBER);
 	PPG_print_header(header, sw_nocreation, uSvc);
 
 	if (sw_header)
@@ -788,9 +794,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 		Statist data, index, blob, generator, other;
 
 		const ULONG last = lastUsedPage(header->hdr_page_size);
-		for (page = 0; page <= last; ++page)
+		for (ULONG page = 0; page <= last; ++page)
 		{
-			const pag* p = db_read(page, true);
+			const pag* p = db_read(PageNumber(DB_PAGE_SPACE, page), true);
 			if (!p)
 			{
 				break;
@@ -852,6 +858,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	isc_req_handle request2 = 0;
 	isc_req_handle request3 = 0;
 	isc_req_handle request4 = 0;
+	isc_req_handle request5 = 0;
+	isc_req_handle request6 = 0;
 
 	FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request1)
 		X IN RDB$RELATIONS
@@ -927,12 +935,24 @@ int gstat(Firebird::UtilSvc* uSvc)
 			Y IN RDB$PAGES WITH Y.RDB$RELATION_ID EQ relation->rel_id AND
 				Y.RDB$PAGE_SEQUENCE EQ 0
 		{
-			if (Y.RDB$PAGE_TYPE == pag_pointer) {
+			if (Y.RDB$PAGE_TYPE == pag_pointer)
 				relation->rel_pointer_page = Y.RDB$PAGE_NUMBER;
-			}
-			if (Y.RDB$PAGE_TYPE == pag_root) {
+
+			if (Y.RDB$PAGE_TYPE == pag_root)
 				relation->rel_index_root = Y.RDB$PAGE_NUMBER;
-			}
+		}
+		END_FOR
+		ON_ERROR
+			dba_exit(FINI_ERROR, tddba);
+		END_ERROR
+
+		relation->rel_pagespace_id = DB_PAGE_SPACE;
+
+		FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request5)
+			TS IN RDB$TABLESPACES
+			WITH TS.RDB$TABLESPACE_NAME = X.RDB$TABLESPACE_NAME
+		{
+			relation->rel_pagespace_id = TS.RDB$TABLESPACE_ID;
 		}
 		END_FOR
 		ON_ERROR
@@ -949,6 +969,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 			{
 				if (Y.RDB$INDEX_INACTIVE)
 					  continue;
+
 				dba_idx* index = (dba_idx*) alloc(sizeof(struct dba_idx));
 				index->idx_next = relation->rel_indexes;
 				relation->rel_indexes = index;
@@ -991,18 +1012,47 @@ int gstat(Firebird::UtilSvc* uSvc)
 		dba_exit(FINI_ERROR, tddba);
 	END_ERROR
 
-	if (request1) {
+	FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request6)
+		TS IN RDB$TABLESPACES
+	{
+		const char* const tsName = fb_utils::exact_name(TS.RDB$TABLESPACE_NAME);
+		const char* const fileName = fb_utils::exact_name(TS.RDB$FILE_NAME);
+		db_open(TS.RDB$TABLESPACE_ID, tsName, fileName);
+	}
+	END_FOR
+	ON_ERROR
+		dba_exit(FINI_ERROR, tddba);
+	END_ERROR
+
+	auto getTablespaceName = [&tddba](ULONG id) -> const char*
+	{
+		for (const auto& tablespace : tddba->tablespaces)
+		{
+			if (tablespace.id == id)
+				return tablespace.name.c_str();
+		}
+
+		fb_assert(false);
+		return "<unknown>";
+	};
+
+	if (request1)
 		isc_release_request(status_vector, &request1);
-	}
-	if (request2) {
+
+	if (request2)
 		isc_release_request(status_vector, &request2);
-	}
-	if (request3) {
+
+	if (request3)
 		isc_release_request(status_vector, &request3);
-	}
-	if (request4) {
+
+	if (request4)
 		isc_release_request(status_vector, &request4);
-	}
+
+	if (request5)
+		isc_release_request(status_vector, &request5);
+
+	if (request6)
+		isc_release_request(status_vector, &request6);
 
 	COMMIT transact1;
 	ON_ERROR
@@ -1076,6 +1126,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 		if (sw_data)
 		{
+			uSvc->printf(false, "    Tablespace: %s\n", getTablespaceName(relation->rel_pagespace_id));
+
 			dba_print(false, 11, SafeArg() << relation->rel_pointer_page << relation->rel_index_root);
 			// msg 11: "    Primary pointer page: %ld, Index root page: %ld"
 
@@ -1184,6 +1236,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 				QualifiedMetaString(index->idx_name, relation->rel_schema).toQuotedString().c_str() <<
 				index->idx_id);
 			// msg 14: "    Index %s (%d)"
+			uSvc->printf(false, "\tTablespace: %s\n", getTablespaceName(index->idx_pagespace_id));
 
 			uSvc->printf(false, "\tRoot page: %d, depth: %d, leaf buckets: %ld, nodes: %" UQUADFORMAT "\n",
 						 index->idx_root, index->idx_depth, index->idx_leaf_buckets, index->idx_nodes);
@@ -1271,8 +1324,11 @@ int gstat(Firebird::UtilSvc* uSvc)
 	}
 
 	// close file
-	if (tddba->file)
-		db_close(tddba->file->fil_desc);
+	while (tddba->tablespaces.hasData())
+	{
+		const auto tablespace = tddba->tablespaces.pop();
+		db_close(tablespace.file);
+	}
 
 	// free linked lists
 	while (tddba->head_of_mem_list != 0)
@@ -1306,7 +1362,7 @@ static ULONG lastUsedPage(ULONG pageSize)
 
 	while (true)
 	{
-		const pag* page = db_read(pipLast, true);
+		const pag* page = db_read(PageNumber(DB_PAGE_SPACE, pipLast), true);
 		if (page->pag_type != pag_pages)
 		{
 			dba_print(true, 61, SafeArg() << pipLast);
@@ -1411,15 +1467,18 @@ static void analyze_data( dba_rel* relation, bool sw_record)
 
 	for (ULONG next_pp = relation->rel_pointer_page; next_pp; next_pp = ptr_page->ppg_next)
 	{
+		PageNumber pageNum(relation->rel_pagespace_id, next_pp);
+
 		++relation->rel_pointer_pages;
-		memcpy(ptr_page, (const SCHAR*) db_read(next_pp), tddba->page_size);
+		memcpy(ptr_page, (const SCHAR*) db_read(pageNum), tddba->page_size);
 		const ULONG* ptr = ptr_page->ppg_page;
 		for (const ULONG* const end = ptr + ptr_page->ppg_count; ptr < end; ptr++)
 		{
 			++relation->rel_slots;
 			if (*ptr)
 			{
-				if (!analyze_data_page(relation, (const data_page*) db_read(*ptr), sw_record))
+				pageNum = *ptr;
+				if (!analyze_data_page(relation, (const data_page*) db_read(pageNum), sw_record))
 				{
 					dba_print(false, 18, SafeArg() << *ptr);
 					// msg 18: "    Expected data on page %ld"
@@ -1557,7 +1616,8 @@ static void analyze_blob(dba_rel* relation, const blh* blob, int length)
 
 			for (unsigned i = 0; i < slots; i++)
 			{
-				const auto bpage = (const blob_page*) db_read(pages[i]);
+				const PageNumber pageNum(relation->rel_pagespace_id, pages[i]);
+				const auto bpage = (const blob_page*) db_read(pageNum);
 				blobPages += bpage->blp_length / sizeof(ULONG);
 			}
 		}
@@ -1587,7 +1647,8 @@ static ULONG analyze_fragments(dba_rel* relation, const rhdf* header)
 	{
 		const ULONG f_page = header->rhdf_f_page;
 		const USHORT f_line = header->rhdf_f_line;
-		const data_page* page = (const data_page*) db_read(f_page);
+		const PageNumber pageNum(relation->rel_pagespace_id, f_page);
+		const data_page* page = (const data_page*) db_read(pageNum);
 		if (page->dpg_header.pag_type != pag_data || page->dpg_relation != relation->rel_id ||
 			page->dpg_count <= f_line)
 		{
@@ -1631,7 +1692,8 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
  **************************************/
 	const tdba* tddba = tdba::getSpecific();
 
-	const index_root_page* index_root = (const index_root_page*) db_read(relation->rel_index_root);
+	PageNumber pageNum(relation->rel_pagespace_id, relation->rel_index_root);
+	const index_root_page* index_root = (const index_root_page*) db_read(pageNum);
 
 	if (index_root->irt_count <= index->idx_id)
 		return;
@@ -1640,12 +1702,13 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 	if (!rootPageNumber)
 		return;
 
-	ULONG page = rootPageNumber.value().getPageNum();
+	pageNum = rootPageNumber.value();
 
 	// CVC: The two const_cast's for bucket can go away if BTreeNode's functions
 	// are overloaded for constness. They don't modify bucket and pointer's contents.
-	const btree_page* bucket = (const btree_page*) db_read(page);
-	index->idx_root = page;
+	const btree_page* bucket = (const btree_page*) db_read(pageNum);
+	index->idx_pagespace_id = pageNum.getPageSpaceID();
+	index->idx_root = pageNum.getPageNum();
 	index->idx_depth = bucket->btr_level + 1;
 
 	UCHAR* pointer;
@@ -1654,7 +1717,8 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 	{
 		pointer = const_cast<UCHAR*>(bucket->btr_nodes) + bucket->btr_jump_size;
 		node.readNode(pointer, false);
-		bucket = (const btree_page*) db_read(node.pageNumber);
+		pageNum = node.pageNumber;
+		bucket = (const btree_page*) db_read(pageNum);
 	}
 
 	bool firstLeafNode = true;
@@ -1676,9 +1740,8 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 		{
 			pointer = node.readNode(pointer, true);
 
-			if (node.isEndBucket || node.isEndLevel) {
+			if (node.isEndBucket || node.isEndLevel)
 				break;
-			}
 
 			++index->idx_nodes;
 			index->idx_total_length += pointer - node.nodePointer;
@@ -1727,39 +1790,37 @@ static void analyze_index( const dba_rel* relation, dba_idx* index)
 			}
 			else
 			{
-				if (duplicates > index->idx_max_duplicates) {
+				if (duplicates > index->idx_max_duplicates)
 					index->idx_max_duplicates = duplicates;
-				}
+
 				duplicates = 0;
 			}
 
 			key_length = l;
-			if (node.length) {
+			if (node.length)
 				memcpy(key + node.prefix, node.data, node.length);
-			}
 		}
 
-		if (duplicates > index->idx_max_duplicates) {
+		if (duplicates > index->idx_max_duplicates)
 			index->idx_max_duplicates = duplicates;
-		}
 
 		const USHORT header = (USHORT)(firstNode - (UCHAR*) bucket);
 		const USHORT space = bucket->btr_length - header;
 		USHORT n = (space * BUCKETS) / (tddba->page_size - header);
-		if (n == BUCKETS) {
+		if (n == BUCKETS)
 			--n;
-		}
+
 		++index->idx_fill_distribution[n];
 
-		if (node.isEndLevel) {
+		if (node.isEndLevel)
 			break;
-		}
-		number = page;
-		page = bucket->btr_sibling;
-		bucket = (const btree_page*) db_read(page);
+
+		number = pageNum.getPageNum();
+		pageNum = bucket->btr_sibling;
+		bucket = (const btree_page*) db_read(pageNum);
 		if (bucket->btr_header.pag_type != pag_index)
 		{
-			dba_print(false, 19, SafeArg() << page << number);
+			dba_print(false, 19, SafeArg() << pageNum.getPageNum() << number);
 			// mag 19: "    Expected b-tree bucket on page %ld from %ld"
 			break;
 		}
@@ -1786,7 +1847,8 @@ static ULONG analyze_versions( dba_rel* relation, const rhdf* header)
 
 	while (b_page)
 	{
-		const data_page* page = (const data_page*) db_read(b_page);
+		const PageNumber pageNum(relation->rel_pagespace_id, b_page);
+		const data_page* page = (const data_page*) db_read(pageNum);
 		if (page->dpg_header.pag_type != pag_data || page->dpg_relation != relation->rel_id ||
 			page->dpg_count <= b_line)
 		{
@@ -1855,7 +1917,7 @@ static USHORT get_format_length(ISC_STATUS* status_vector, isc_db_handle databas
 
 
 #ifdef WIN_NT
-static void db_close(void* file_desc)
+static void db_close(dba_fil* file)
 {
 /**************************************
  *
@@ -1867,7 +1929,7 @@ static void db_close(void* file_desc)
  *    Close an open file
  *
  **************************************/
-	CloseHandle(file_desc);
+	CloseHandle(file->fil_desc);
 }
 
 [[noreturn]] static void db_error( SLONG status)
@@ -1912,10 +1974,7 @@ static void db_close(void* file_desc)
 }
 
 
-// CVC: This function was using cast to char* for the first param always
-// and the callers had to cast their char*'s to UCHAR*, too. Since the
-// real parameter is char* and always the usage is char*, I changed signature.
-static dba_fil* db_open(const char* file_name, USHORT file_length)
+static void db_open(ULONG pageSpaceId, const MetaString& name, const PathName& fileName)
 {
 /**************************************
  *
@@ -1929,12 +1988,22 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
  **************************************/
 	tdba* tddba = tdba::getSpecific();
 
+	for (const auto& tablespace : tddba->tablespaces)
+	{
+		if (tablespace.id == pageSpaceId)
+		{
+			fb_assert(tablespace.file);
+			return;
+		}
+	}
+
+	const auto file_length = fileName.length();
 	const auto file = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
 
-	strcpy(file->fil_string, file_name);
+	strcpy(file->fil_string, fileName.c_str());
 	file->fil_length = file_length;
 
-	file->fil_desc = CreateFile(file_name,
+	file->fil_desc = CreateFile(fileName.c_str(),
 								GENERIC_READ,
 								FILE_SHARE_READ | FILE_SHARE_WRITE,
 								NULL,
@@ -1949,12 +2018,11 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
 		db_error(GetLastError());
 	}
 
-	tddba->file = file;
-	return file;
+	tddba->tablespaces.add({pageSpaceId, name, file});
 }
 
 
-static const pag* db_read( ULONG page_number, bool ok_enc)
+static const pag* db_read(const PageNumber& page_number, bool ok_enc)
 {
 /**************************************
  *
@@ -1971,14 +2039,28 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 	if (tddba->uSvc->finished())
 		dba_exit(FINI_OK, tddba);
 
-	if (tddba->page_number == page_number)
+	ULONG pageNum = page_number.getPageNum();
+
+	if (tddba->page_number == pageNum)
 		return tddba->global_buffer;
 
-	tddba->page_number = page_number;
+	tddba->page_number = pageNum;
+	dba_fil* file = nullptr;
+
+	for (const auto& tablespace : tddba->tablespaces)
+	{
+		if (tablespace.id == page_number.getPageSpaceID())
+		{
+			file = tablespace.file;
+			break;
+		}
+	}
+
+	fb_assert(file);
 
 	LARGE_INTEGER liOffset;
-	liOffset.QuadPart = UInt32x32To64((DWORD) page_number, (DWORD) tddba->page_size);
-	if (SetFilePointer(tddba->file->fil_desc, (LONG) liOffset.LowPart, &liOffset.HighPart, FILE_BEGIN) ==
+	liOffset.QuadPart = UInt32x32To64((DWORD) pageNum, (DWORD) tddba->page_size);
+	if (SetFilePointer(file->fil_desc, (LONG) liOffset.LowPart, &liOffset.HighPart, FILE_BEGIN) ==
 		(DWORD) -1)
 	{
 		const int lastError = GetLastError();
@@ -1991,7 +2073,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 	}
 
 	SLONG actual_length;
-	if (!ReadFile(	tddba->file->fil_desc,
+	if (!ReadFile(	file->fil_desc,
 					tddba->global_buffer,
 					tddba->page_size,
 					reinterpret_cast<LPDWORD>(&actual_length),
@@ -2022,7 +2104,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 
 
 #ifndef WIN_NT
-static void db_close( int file_desc)
+static void db_close(dba_fil* file)
 {
 /**************************************
  *
@@ -2034,7 +2116,7 @@ static void db_close( int file_desc)
  *    Close an open file
  *
  **************************************/
-	close(file_desc);
+	close(file->fil_desc);
 }
 
 [[noreturn]] static void db_error( int status)
@@ -2062,10 +2144,7 @@ static void db_close( int file_desc)
 }
 
 
-// CVC: This function was using cast to char* for the first param always
-// and the callers had to cast their char*'s to UCHAR*, too. Since the
-// real parameter is char* and always the usage is char*, I changed signature.
-static dba_fil* db_open(const char* file_name, USHORT file_length)
+static void db_open(ULONG pageSpaceId, const MetaString& name, const PathName& fileName)
 {
 /**************************************
  *
@@ -2080,24 +2159,33 @@ static dba_fil* db_open(const char* file_name, USHORT file_length)
  **************************************/
 	tdba* tddba = tdba::getSpecific();
 
+	for (const auto& tablespace : tddba->tablespaces)
+	{
+		if (tablespace.id == pageSpaceId)
+		{
+			fb_assert(tablespace.file);
+			return;
+		}
+	}
+
+	const auto file_length = fileName.length();
 	const auto file = (dba_fil*) alloc(sizeof(dba_fil) + file_length + 1);
 
-	strcpy(file->fil_string, file_name);
+	strcpy(file->fil_string, fileName.c_str());
 	file->fil_length = file_length;
 
-	if ((file->fil_desc = os_utils::open(file_name, O_RDONLY)) == -1)
+	if ((file->fil_desc = os_utils::open(fileName.c_str(), O_RDONLY)) == -1)
 	{
-		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << file_name);
+		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << fileName.c_str());
 		// msg 29: Can't open database file %s
 		db_error(errno);
 	}
 
-	tddba->file = file;
-	return file;
+	tddba->tablespaces.add({pageSpaceId, name, file});
 }
 
 
-static const pag* db_read( ULONG page_number, bool ok_enc)
+static const pag* db_read(const PageNumber& page_number, bool ok_enc)
 {
 /**************************************
  *
@@ -2111,13 +2199,27 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
  **************************************/
 	tdba* tddba = tdba::getSpecific();
 
-	if (tddba->page_number == page_number)
+	ULONG pageNum = page_number.getPageNum();
+
+	if (tddba->page_number == pageNum)
 		return tddba->global_buffer;
 
-	tddba->page_number = page_number;
+	tddba->page_number = pageNum;
+	dba_fil* file = nullptr;
 
-	const FB_UINT64 offset = ((FB_UINT64) page_number) * ((FB_UINT64) tddba->page_size);
-	if (os_utils::lseek (tddba->file->fil_desc, offset, 0) == -1)
+	for (const auto& tablespace : tddba->tablespaces)
+	{
+		if (tablespace.id == page_number.getPageSpaceID())
+		{
+			file = tablespace.file;
+			break;
+		}
+	}
+
+	fb_assert(file);
+
+	const FB_UINT64 offset = ((FB_UINT64) pageNum) * ((FB_UINT64) tddba->page_size);
+	if (os_utils::lseek(file->fil_desc, offset, 0) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page
@@ -2127,7 +2229,7 @@ static const pag* db_read( ULONG page_number, bool ok_enc)
 	USHORT length = tddba->page_size;
 	for (SCHAR* p = (SCHAR *) tddba->global_buffer; length > 0;)
 	{
-		const int l = read(tddba->file->fil_desc, p, length);
+		const int l = read(file->fil_desc, p, length);
 		if (l < 0)
 		{
 			tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
