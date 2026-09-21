@@ -47,7 +47,9 @@ extern "C"
 #include <string.h>
 #include <float.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 const DecimalStatus DecimalStatus::DEFAULT(FB_DEC_Errors);
 const NumericBinding NumericBinding::DEFAULT;
@@ -346,8 +348,6 @@ void setSpecial(decNumber* number, decClass cl, int sign)
 } // anonymous namespace
 
 
-
-namespace Firebird {
 
 void Decimal64::setScale(DecimalStatus decSt, int scale)
 {
@@ -1226,4 +1226,6 @@ string DecimalStatus::getTxtTraps()
 		return rc;
 	return "None";
 }
-} // namespace Firebird
+
+
+}  // namespace Firebird

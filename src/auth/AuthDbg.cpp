@@ -32,38 +32,42 @@
 
 #ifdef AUTH_DEBUG
 
+namespace Firebird::Auth
+{
+
+
 //#define AUTH_VERBOSE
 
 // register plugin
-static Firebird::SimpleFactory<Auth::DebugClient> clientFactory;
-static Firebird::SimpleFactory<Auth::DebugServer> serverFactory;
+static SimpleFactory<DebugClient> clientFactory;
+static SimpleFactory<DebugServer> serverFactory;
 
-extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
-	Firebird::CachedMasterInterface::set(master);
+	using namespace Firebird;
+
+	CachedMasterInterface::set(master);
 
 	const char* name = "Auth_Debug";
 
-	Firebird::PluginManagerInterfacePtr iPlugin;
+	PluginManagerInterfacePtr iPlugin;
 
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_CLIENT, name, &clientFactory);
-	iPlugin->registerPluginFactory(Firebird::IPluginManager::TYPE_AUTH_SERVER, name, &serverFactory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_CLIENT, name, &clientFactory);
+	iPlugin->registerPluginFactory(IPluginManager::TYPE_AUTH_SERVER, name, &serverFactory);
 }
 
 
-namespace Auth {
-
-DebugServer::DebugServer(Firebird::IPluginConfig* pConf)
+DebugServer::DebugServer(IPluginConfig* pConf)
 	: str(getPool())
 {
-	Firebird::LocalStatus ls;
-	Firebird::CheckStatusWrapper s(&ls);
+	LocalStatus ls;
+	CheckStatusWrapper s(&ls);
 	config.assignRefNoIncr(pConf->getDefaultConfig(&s));
 	check(&s);
 }
 
-int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sb,
-	Firebird::IWriter* writerInterface)
+int DebugServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb,
+	IWriter* writerInterface)
 {
 	try
 	{
@@ -85,7 +89,7 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 			fprintf(stderr, "DebugServer::authenticate1: %s\n", str.c_str());
 #endif
 			sb->putData(status, str.length(), str.c_str());
-			if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+			if (status->getState() & IStatus::STATE_ERRORS)
 			{
 				return AUTH_FAILED;
 			}
@@ -97,13 +101,13 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 #ifdef AUTH_VERBOSE
 		fprintf(stderr, "DebugServer::authenticate2: %s\n", str.c_str());
 #endif
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper s(&ls);
+		LocalStatus ls;
+		CheckStatusWrapper s(&ls);
 		writerInterface->add(&s, str.c_str());
 		check(&s);
 		str.erase();
 
-		Firebird::RefPtr<Firebird::IConfigEntry> group(Firebird::REF_NO_INCR, config->find(&s, "GROUP"));
+		RefPtr<IConfigEntry> group(REF_NO_INCR, config->find(&s, "GROUP"));
 		check(&s);
 		if (group)
 		{
@@ -113,7 +117,7 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 			check(&s);
 		}
 
-		Firebird::RefPtr<Firebird::IConfigEntry> multi(Firebird::REF_NO_INCR, config->find(&s, "MULTIGROUPS"));
+		RefPtr<IConfigEntry> multi(REF_NO_INCR, config->find(&s, "MULTIGROUPS"));
 		check(&s);
 		if (multi)
 		{
@@ -123,17 +127,17 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 			for (int n = 0; n < limit; ++n)
 			{
 				writerInterface->add(status, grName);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
 				writerInterface->setType(status, "Group");
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					return AUTH_FAILED;
 			}
 		}
 
 		return AUTH_SUCCESS;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
@@ -141,14 +145,14 @@ int DebugServer::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IS
 	return AUTH_FAILED;
 }
 
-void DebugServer::setDbCryptCallback(Firebird::CheckStatusWrapper*, Firebird::ICryptKeyCallback*)
+void DebugServer::setDbCryptCallback(CheckStatusWrapper*, ICryptKeyCallback*)
 { /* ignore it */ }
 
-DebugClient::DebugClient(Firebird::IPluginConfig*)
+DebugClient::DebugClient(IPluginConfig*)
 	: str(getPool())
 { }
 
-int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IClientBlock* cb)
+int DebugClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 {
 	try
 	{
@@ -183,7 +187,7 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 		fprintf(stderr, "DebugClient::authenticate: sending %s\n", str.c_str());
 #endif
 		cb->putData(status, str.length(), str.c_str());
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			return AUTH_FAILED;
 		}
@@ -193,7 +197,7 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 #endif
 		return AUTH_SUCCESS;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
@@ -201,6 +205,7 @@ int DebugClient::authenticate(Firebird::CheckStatusWrapper* status, Firebird::IC
 	return AUTH_FAILED;
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_DEBUG

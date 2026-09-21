@@ -98,10 +98,10 @@ BOOST_AUTO_TEST_CASE(FatalRangeTest)
 
 		BOOST_TEST_FAIL("Range exception is missing");
 	}
-	catch(Firebird::fatal_exception& ex)
+	catch(fatal_exception& ex)
 	{
 		std::string_view what = ex.what();
-		BOOST_TEST(what == "Firebird::string - pos out of range");
+		BOOST_TEST(what == "string - pos out of range");
 	}
 	catch(...)
 	{
@@ -598,7 +598,7 @@ BOOST_AUTO_TEST_CASE(LowerTest)
 static constexpr std::string_view EmptyString = "";
 static constexpr std::string_view SmallStringValue = "123";
 static constexpr std::string_view BigStringValue = "BiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiigString";
-static_assert(BigStringValue.length() > Firebird::string::INLINE_BUFFER_SIZE);
+static_assert(BigStringValue.length() > string::INLINE_BUFFER_SIZE);
 
 // Utils
 void checkMovedString(const string& moved)

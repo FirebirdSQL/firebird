@@ -2,29 +2,15 @@
  *	PROGRAM:	JRD Access Method
  *	MODULE:		obj.h
  *	DESCRIPTION:	Object types in meta-data
- *
- * The contents of this file are subject to the Interbase Public
- * License Version 1.0 (the "License"); you may not use this file
- * except in compliance with the License. You may obtain a copy
- * of the License at http://www.Inprise.com/IPL.html
- *
- * Software distributed under the License is distributed on an
- * "AS IS" basis, WITHOUT WARRANTY OF ANY KIND, either express
- * or implied. See the License for the specific language governing
- * rights and limitations under the License.
- *
- * The Original Code was created by Inprise Corporation
- * and its predecessors. Portions created by Inprise Corporation are
- * Copyright (C) Inprise Corporation.
- *
- * All Rights Reserved.
- * Contributor(s): ______________________________________.
  */
 
 #ifndef JRD_OBJ_H
 #define JRD_OBJ_H
 
 #include "../common/gdsassert.h"
+
+namespace Firebird::Jrd
+{
 
 // Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES and stored in backup.
 // Note: some values are hard coded in grant.gdl
@@ -281,5 +267,6 @@ inline const char* getObjectName(ObjectType objType)
 	}
 }
 
+} // namespace Firebird::Jrd
 
 #endif // JRD_OBJ_H

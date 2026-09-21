@@ -27,24 +27,21 @@
 #include "../jrd/intl_classes.h"
 #include "../jrd/req.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class DbKeyRangeNode;
 	class InversionNode;
 	struct Item;
 	class ItemInfo;
-}
 
-dsc*		EVL_assign_to(Jrd::thread_db* tdbb, const Jrd::ValueExprNode*);
-Jrd::RecordBitmap**	EVL_bitmap(Jrd::thread_db* tdbb, const Jrd::InversionNode*, Jrd::RecordBitmap*);
-void		EVL_dbkey_bounds(Jrd::thread_db* tdbb, const Firebird::Array<Jrd::DbKeyRangeNode*>&,
-							 Jrd::jrd_rel*, RecordNumber&, RecordNumber&);
-bool		EVL_field(Jrd::jrd_rel*, Jrd::Record*, USHORT, dsc*);
-void		EVL_make_value(Jrd::thread_db* tdbb, const dsc*, Jrd::impure_value*, MemoryPool* pool = NULL);
-void		EVL_validate(Jrd::thread_db*, const Jrd::Item&, const Jrd::ItemInfo*, dsc*, bool);
+	dsc*		EVL_assign_to(thread_db* tdbb, const ValueExprNode*);
+	RecordBitmap**	EVL_bitmap(thread_db* tdbb, const InversionNode*, RecordBitmap*);
+	void		EVL_dbkey_bounds(thread_db* tdbb, const Array<DbKeyRangeNode*>&,
+								jrd_rel*, RecordNumber&, RecordNumber&);
+	bool		EVL_field(jrd_rel*, Record*, USHORT, dsc*);
+	void		EVL_make_value(thread_db* tdbb, const dsc*, impure_value*, MemoryPool* pool = NULL);
+	void		EVL_validate(thread_db*, const Item&, const ItemInfo*, dsc*, bool);
 
-namespace Jrd
-{
 	// Evaluate a value expression.
 	inline dsc* EVL_expr(thread_db* tdbb, Request* request, const ValueExprNode* node)
 	{
@@ -57,6 +54,6 @@ namespace Jrd
 
 		return node->execute(tdbb, request);
 	}
-}
+}	// namespace Firebird::Jrd
 
 #endif // JRD_EVL_PROTO_H

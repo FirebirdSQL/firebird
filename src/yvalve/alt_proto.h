@@ -201,4 +201,3 @@ void		API_ROUTINE CVT_move(const dsc*, dsc*, FPTR_ERROR);
 } // extern "C"
 
 #endif //ALT_PROTO_H
-

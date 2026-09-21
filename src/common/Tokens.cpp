@@ -29,9 +29,13 @@
 
 #include "../common/StatusArg.h"
 
+namespace Firebird
+{
+
+
 namespace {
 
-constexpr Firebird::Tokens::Comment sqlComments[3] = {
+constexpr Tokens::Comment sqlComments[3] = {
 	{ "/*", "*/", false },
 	{ "--", "\n", true },
 	{ NULL, NULL, false }
@@ -41,8 +45,6 @@ constexpr const char* sqlSeps = "!\"#%&'()*+,-./:;<=>?@[\\]^`{|}~";
 constexpr const char* sqlQuotes = "\"'";
 
 } // anonymous namespace
-
-namespace Firebird {
 
 Tokens::Tokens()
 	: tokens(getPool()),

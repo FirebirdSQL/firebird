@@ -89,8 +89,9 @@
 
 #include "../jrd/optimizer/Optimizer.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 #ifdef OPT_DEBUG_RETRIEVAL
 #define OPT_DEBUG
@@ -3790,7 +3791,7 @@ void Optimizer::printf(const char* format, ...) noexcept
 
 	va_list arglist;
 	va_start(arglist, format);
-	Firebird::string str;
+	string str;
 	str.vprintf(format, arglist);
 	va_end(arglist);
 
@@ -3798,3 +3799,6 @@ void Optimizer::printf(const char* format, ...) noexcept
 	fflush(debugFile);
 #endif
 }
+
+
+}	// namespace Firebird::Jrd

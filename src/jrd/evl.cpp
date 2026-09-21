@@ -114,8 +114,8 @@
 #include "../common/classes/Aligner.h"
 #include "../jrd/Function.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 dsc* EVL_assign_to(thread_db* tdbb, const ValueExprNode* node)
@@ -671,3 +671,6 @@ void EVL_validate(thread_db* tdbb, const Item& item, const ItemInfo* itemInfo, d
 		ERR_post(Arg::Gds(status) << Arg::Str(arg) << Arg::Str(value));
 	}
 }
+
+
+} // namespace Firebird::Jrd

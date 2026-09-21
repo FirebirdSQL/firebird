@@ -33,7 +33,9 @@
 #include "sparse_bitmap.h"
 #include <stdio.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 const int BITMAP_ITEMS = 1000000;
 
@@ -41,7 +43,7 @@ void testBitmap()
 {
     MallocAllocator temp;
 
-    printf("Test Firebird::SparseBitmap\n");
+    printf("Test SparseBitmap\n");
 
     printf("Fill arrays with test data (%d items)...", BITMAP_ITEMS);
 	Vector<int, BITMAP_ITEMS> v1;
@@ -61,7 +63,7 @@ void testBitmap()
 	}
 	printf(" DONE\n");
 
-	Firebird::BePlusTree<int> tree(&temp), tree2(&temp);
+	BePlusTree<int> tree(&temp), tree2(&temp);
 	SparseBitmap<ULONG> bitmap(*getDefaultMemoryPool()), bitmap2(*getDefaultMemoryPool());
 
     printf("Verify SET, TEST operations");
@@ -173,7 +175,7 @@ struct Test
 void testBePlusTree()
 {
     MallocAllocator temp;
-    printf("Test Firebird::BePlusTree\n");
+    printf("Test BePlusTree\n");
 
     printf("Fill array with test data (%d items)...", (int)TEST_ITEMS);
 	Vector<int, TEST_ITEMS> v;
@@ -494,7 +496,7 @@ struct AllocItem
 
 void testAllocator()
 {
-	printf("Test Firebird::MemoryPool\n");
+	printf("Test MemoryPool\n");
 	MemoryPool* parent = getDefaultMemoryPool();
 	MemoryPool* pool = MemoryPool::createPool(parent);
 
@@ -601,3 +603,5 @@ int main()
 	testBitmap();
 }
 
+
+}  // namespace Firebird

@@ -33,14 +33,13 @@
 #include <limits>
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 	class jrd_tra;
 	class thread_db;
 	class ValueListNode;
 }
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 class Manager;
 class Provider;
@@ -70,10 +69,10 @@ enum TraScope {
 class CryptHash
 {
 public:
-	explicit CryptHash(Firebird::ICryptKeyCallback* callback);
+	explicit CryptHash(ICryptKeyCallback* callback);
 	CryptHash();
 
-	void assign(Firebird::ICryptKeyCallback* callback);
+	void assign(ICryptKeyCallback* callback);
 
 	bool isValid() const noexcept
 	{
@@ -95,19 +94,19 @@ public:
 	bool operator==(const CryptHash& h) const;
 
 private:
-	Firebird::UCharBuffer m_value;
+	UCharBuffer m_value;
 	bool m_valid = false;
 };
 
 
 class CryptCallbackRedirector :
-	public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<CryptCallbackRedirector, Firebird::CheckStatusWrapper>>
+	public VersionedIface<ICryptKeyCallbackImpl<CryptCallbackRedirector, CheckStatusWrapper>>
 {
 	public:
 		CryptCallbackRedirector() = default;
 
-		void setRedirect(Firebird::ICryptKeyCallback* originalCallback);
-		void resetRedirect(Firebird::ICryptKeyCallback* newCallback);
+		void setRedirect(ICryptKeyCallback* originalCallback);
+		void resetRedirect(ICryptKeyCallback* newCallback);
 		bool operator==(const CryptHash& h) const;
 
 		bool isValid() const noexcept
@@ -122,12 +121,12 @@ class CryptCallbackRedirector :
 			return m_keyCallback ? m_keyCallback->callback(dataLength, data, bufferLength, buffer) : 0;
 		}
 
-		int getHashLength(Firebird::CheckStatusWrapper* status) override
+		int getHashLength(CheckStatusWrapper* status) override
 		{
 			return m_hash.getLength();
 		}
 
-		void getHashData(Firebird::CheckStatusWrapper* status, void* h) override
+		void getHashData(CheckStatusWrapper* status, void* h) override
 		{
 			fb_assert(m_hash.isValid());
 			if (m_hash.isValid())
@@ -146,17 +145,17 @@ extern const char* INTERNAL_PROVIDER_NAME;
 
 
 // Manage providers
-class Manager : public Firebird::PermanentStorage
+class Manager : public PermanentStorage
 {
 public:
-	explicit Manager(Firebird::MemoryPool& pool);
+	explicit Manager(MemoryPool& pool);
 	~Manager();
 
 	static void addProvider(Provider* provider);
-	static Provider* getProvider(const Firebird::string& prvName);
+	static Provider* getProvider(const string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
-		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
+		const string& dataSource, const string& user,
+		const string& pwd, const string& role, TraScope tra_scope);
 
 	static ConnectionsPool* getConnPool(bool create);
 
@@ -166,8 +165,8 @@ public:
 	static int shutdown();
 
 private:
-	static Firebird::GlobalPtr<Manager> manager;
-	static Firebird::Mutex m_mutex;
+	static GlobalPtr<Manager> manager;
+	static Mutex m_mutex;
 	static Provider* m_providers;
 	static ConnectionsPool* m_connPool;
 };
@@ -175,7 +174,7 @@ private:
 
 // manages connections
 
-class Provider : public Firebird::GlobalStorage
+class Provider : public GlobalStorage
 {
 	friend class Manager;
 	friend class EngineCallbackGuard;
@@ -185,7 +184,7 @@ public:
 
 	// create new Connection
 	virtual Connection* createConnection(Jrd::thread_db* tdbb,
-		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
+		const PathName& dbName, ClumpletReader& dpb,
 		TraScope tra_scope);
 
 	// bind connection to the current attachment
@@ -193,7 +192,7 @@ public:
 
 	// get available connection already bound to the current attachment
 	Connection* getBoundConnection(Jrd::thread_db* tdbb,
-		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
+		const PathName& dbName, ClumpletReader& dpb,
 		TraScope tra_scope, bool isCurrent);
 
 	// Connection gets unused, release it into pool or delete it immediately
@@ -205,7 +204,7 @@ public:
 	// cancel execution of every connection
 	void cancelConnections();
 
-	const Firebird::string& getName() const noexcept { return m_name; }
+	const string& getName() const noexcept { return m_name; }
 
 	virtual void initialize() = 0;
 
@@ -213,9 +212,9 @@ public:
 	int getFlags() const noexcept { return m_flags; }
 
 	// Interprete status and put error description into passed string
-	virtual void getRemoteError(const Jrd::FbStatusVector* status, Firebird::string& err) const = 0;
+	virtual void getRemoteError(const Jrd::FbStatusVector* status, string& err) const = 0;
 
-	static const Firebird::string* generate(const Provider* item) noexcept
+	static const string* generate(const Provider* item) noexcept
 	{
 		return &item->m_name;
 	}
@@ -225,15 +224,15 @@ protected:
 	void clearConnections(Jrd::thread_db* tdbb);
 	virtual Connection* doCreateConnection() = 0;
 
-	void generateDPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb,
-		const Firebird::string& user, const Firebird::string& pwd,
-		const Firebird::string& role) const;
+	void generateDPB(Jrd::thread_db* tdbb, ClumpletWriter& dpb,
+		const string& user, const string& pwd,
+		const string& role) const;
 
 	// Protection against simultaneous attach database calls. Not sure we still
 	// need it, but I believe it will not harm
-	mutable Firebird::Mutex m_mutex;
+	mutable Mutex m_mutex;
 
-	Firebird::string m_name;
+	string m_name;
 	Provider* m_next = nullptr;
 
 	class AttToConn
@@ -264,7 +263,7 @@ protected:
 		}
 	};
 
-	typedef Firebird::BePlusTree<AttToConn, AttToConn, AttToConn, AttToConn>
+	typedef BePlusTree<AttToConn, AttToConn, AttToConn, AttToConn>
 		AttToConnMap;
 
 	AttToConnMap m_connections;
@@ -278,12 +277,12 @@ inline constexpr int prvTrustedAuth = 0x0001;	// supports trusted authentication
 class ConnectionsPool
 {
 public:
-	ConnectionsPool(Firebird::MemoryPool& pool);
+	ConnectionsPool(MemoryPool& pool);
 	~ConnectionsPool();
 
 	// find and return cached connection or NULL
-	Connection* getConnection(Jrd::thread_db* tdbb, Provider* prv, ULONG hash, const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb, const CryptHash& ch);
+	Connection* getConnection(Jrd::thread_db* tdbb, Provider* prv, ULONG hash, const PathName& dbName,
+		ClumpletReader& dpb, const CryptHash& ch);
 
 	// put unused connection into pool or destroy it
 	void putConnection(Jrd::thread_db* tdbb, Connection* conn);
@@ -386,13 +385,13 @@ public:
 			m_connPool = connPool;
 		}
 
-		Firebird::string print();
+		string print();
 		int verify(ConnectionsPool *connPool, bool active);
 	};
 
 private:
 	class IdleTimer final :
-		public Firebird::RefCntIface<Firebird::ITimerImpl<IdleTimer, Firebird::CheckStatusWrapper> >
+		public RefCntIface<ITimerImpl<IdleTimer, CheckStatusWrapper> >
 	{
 	public:
 		explicit IdleTimer(ConnectionsPool& connPool)
@@ -408,7 +407,7 @@ private:
 
 	private:
 		ConnectionsPool& m_connPool;
-		Firebird::Mutex m_mutex;
+		Mutex m_mutex;
 		time_t m_time;					// time when timer should fire, or zero
 	};
 
@@ -461,25 +460,25 @@ private:
 	void removeFromPool(Data* item, FB_SIZE_T pos);
 	Data* removeOldest();
 
-	void printPool(Firebird::string& s);
+	void printPool(string& s);
 	bool verifyPool();
 
 	// Array of Data*, sorted by [hash, lastUsed desc]
-	typedef Firebird::SortedArray<Data*, Firebird::EmptyStorage<Data*>, Data, Data, Data>
+	typedef SortedArray<Data*, EmptyStorage<Data*>, Data, Data, Data>
 		IdleArray;
 
-	Firebird::Mutex m_mutex;
+	Mutex m_mutex;
 	IdleArray m_idleArray;
 	Data* m_idleList;
 	Data* m_activeList;
 	ULONG m_allCount;
 	ULONG m_maxCount;
 	ULONG m_lifeTime;	// How long idle connection should wait before destroying, seconds
-	Firebird::RefPtr<IdleTimer> m_timer;
+	RefPtr<IdleTimer> m_timer;
 };
 
 
-class Connection : public Firebird::PermanentStorage
+class Connection : public PermanentStorage
 {
 protected:
 	friend class EngineCallbackGuard;
@@ -491,9 +490,9 @@ protected:
 	virtual ~Connection();
 
 	static void deleteConnection(Jrd::thread_db* tdbb, Connection* conn);
-	void setup(const Firebird::PathName& dbName, const Firebird::ClumpletReader& dpb);
+	void setup(const PathName& dbName, const ClumpletReader& dpb);
 
-	void setCallbackRedirect(Firebird::ICryptKeyCallback* attCallback)
+	void setCallbackRedirect(ICryptKeyCallback* attCallback)
 	{
 		m_cryptCallbackRedir.setRedirect(attCallback);
 	}
@@ -527,8 +526,8 @@ public:
 	virtual bool isConnected() const = 0;
 	virtual bool validate(Jrd::thread_db* tdbb) = 0;
 
-	virtual bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb, const CryptHash& ch) const;
+	virtual bool isSameDatabase(const PathName& dbName,
+		ClumpletReader& dpb, const CryptHash& ch) const;
 
 	// only Internal provider is able to create "current" connections
 	virtual bool isCurrent() const { return false; }
@@ -541,7 +540,7 @@ public:
 	// Search for existing transaction of given scope, may return NULL.
 	Transaction* findTransaction(Jrd::thread_db* tdbb, TraScope traScope) const;
 
-	const Firebird::string getDataSourceName() const
+	const string getDataSourceName() const
 	{
 		return m_provider.getName() + "::" + m_dbName.ToString();
 	}
@@ -564,7 +563,7 @@ public:
 	// statement into m_statements array, but don't delete freed statement
 	// immediately (as we did pooled statements). Instead keep it in
 	// m_freeStatements list for reuse later
-	Statement* createStatement(const Firebird::string& sql);
+	Statement* createStatement(const string& sql);
 	void releaseStatement(Jrd::thread_db* tdbb, Statement* stmt);
 
 	virtual Blob* createBlob() = 0;
@@ -576,7 +575,7 @@ public:
 	// Clear specified flag
 	void clearFeature(info_features value) noexcept { m_features[value] = false; }
 
-	void resetRedirect(Firebird::ICryptKeyCallback* originalCallback)
+	void resetRedirect(ICryptKeyCallback* originalCallback)
 	{
 		m_cryptCallbackRedir.resetRedirect(originalCallback);
 	}
@@ -596,15 +595,15 @@ protected:
 	virtual void doDetach(Jrd::thread_db* tdbb) = 0;
 
 	// Protection against simultaneous ISC API calls for the same connection
-	Firebird::Mutex m_mutex;
+	Mutex m_mutex;
 
 	Provider& m_provider;
-	Firebird::PathName m_dbName;
-	Firebird::UCharBuffer m_dpb;
+	PathName m_dbName;
+	UCharBuffer m_dpb;
 	Jrd::Attachment* m_boundAtt;
 
-	Firebird::Array<Transaction*> m_transactions;
-	Firebird::Array<Statement*> m_statements;
+	Array<Transaction*> m_transactions;
+	Array<Statement*> m_statements;
 	Statement* m_freeStatements;
 
 	ConnectionsPool::Data m_poolData;
@@ -621,7 +620,7 @@ protected:
 	CryptCallbackRedirector m_cryptCallbackRedir;
 };
 
-class Transaction : public Firebird::PermanentStorage
+class Transaction : public PermanentStorage
 {
 protected:
 	friend class Connection;
@@ -653,11 +652,11 @@ public:
 		bool commit, bool retain, bool force);
 
 protected:
-	virtual void generateTPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb,
+	virtual void generateTPB(Jrd::thread_db* tdbb, ClumpletWriter& tpb,
 		TraModes traMode, bool readOnly, bool wait, int lockTimeout) const;
 	void detachFromJrdTran();
 
-	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, Firebird::ClumpletWriter& tpb) = 0;
+	virtual void doStart(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, ClumpletWriter& tpb) = 0;
 	virtual void doPrepare(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, int info_len, const char* info) = 0;
 	virtual void doCommit(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain) = 0;
 	virtual void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain) = 0;
@@ -666,14 +665,14 @@ protected:
 	Connection& m_connection;
 	TraScope m_scope;
 	Transaction* m_nextTran;		// next common transaction
-	Firebird::RefPtr<Jrd::JTransaction> m_jrdTran;		// parent JRD transaction
+	RefPtr<Jrd::JTransaction> m_jrdTran;		// parent JRD transaction
 };
 
 
-typedef Firebird::Array<const Jrd::MetaName*> ParamNames;
-typedef Firebird::Array<USHORT> ParamNumbers;
+typedef Array<const Jrd::MetaName*> ParamNames;
+typedef Array<USHORT> ParamNumbers;
 
-class Statement : public Firebird::PermanentStorage
+class Statement : public PermanentStorage
 {
 protected:
 	friend class Connection;
@@ -691,7 +690,7 @@ public:
 
 	Transaction* getTransaction() noexcept { return m_transaction; }
 
-	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const Firebird::string& sql, bool named);
+	void prepare(Jrd::thread_db* tdbb, Transaction* tran, const string& sql, bool named);
 	void setTimeout(Jrd::thread_db* tdbb, unsigned int timeout);
 	void execute(Jrd::thread_db* tdbb, Transaction* tran,
 		const Jrd::MetaName* const* in_names, const Jrd::ValueListNode* in_params,
@@ -703,7 +702,7 @@ public:
 	void close(Jrd::thread_db* tdbb, bool invalidTran = false);
 	void deallocate(Jrd::thread_db* tdbb);
 
-	const Firebird::string& getSql() const noexcept { return m_sql; }
+	const string& getSql() const noexcept { return m_sql; }
 
 	void setCallerPrivileges(bool use) noexcept { m_callerPrivileges = use; }
 
@@ -720,7 +719,7 @@ public:
 	// Get error description from provider and put it with additional contex
 	// info into locally raised exception
 	void raise(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, const char* sWhere,
-		const Firebird::string* sQuery = NULL);
+		const string* sQuery = NULL);
 
 	// Active statement must be bound to parent jrd request
 	void bindToRequest(Jrd::Request* request, Statement** impure);
@@ -730,7 +729,7 @@ protected:
 	virtual const char* getParameterName(unsigned index) const { return nullptr; }
 
 protected:
-	virtual void doPrepare(Jrd::thread_db* tdbb, const Firebird::string& sql) = 0;
+	virtual void doPrepare(Jrd::thread_db* tdbb, const string& sql) = 0;
 	virtual void doSetTimeout(Jrd::thread_db* tdbb, unsigned int timeout) = 0;
 	virtual void doExecute(Jrd::thread_db* tdbb) = 0;
 	virtual void doOpen(Jrd::thread_db* tdbb) = 0;
@@ -742,7 +741,7 @@ protected:
 	virtual void getOutParams(Jrd::thread_db* tdbb, const Jrd::ValueListNode* params);
 
 	virtual void doSetInParams(Jrd::thread_db* tdbb, unsigned int count,
-		const Firebird::MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
+		const MetaString* const* names, const NestConst<Jrd::ValueExprNode>* params);
 
 	virtual void putExtBlob(Jrd::thread_db* tdbb, dsc& src, dsc& dst);
 	virtual void getExtBlob(Jrd::thread_db* tdbb, const dsc& src, dsc& dst);
@@ -751,7 +750,7 @@ protected:
 	// and remember correspondence between logical parameter names and unnamed
 	// placeholders numbers. This is needed only if provider didn't support
 	// named parameters natively.
-	void preprocess(const Firebird::string& sql, Firebird::string& ret);
+	void preprocess(const string& sql, string& ret);
 	void clearNames();
 
 
@@ -766,7 +765,7 @@ protected:
 	Statement* m_nextInReq;
 	Statement* m_prevInReq;
 
-	Firebird::string m_sql;
+	string m_sql;
 
 	// passed in open()
 	bool	m_singleton;
@@ -791,18 +790,18 @@ protected:
 	Jrd::Request* m_preparedByReq;
 
 	// set in preprocess
-	Firebird::SortedObjectsArray<const Firebird::MetaString> m_sqlParamNames;
-	Firebird::Array<const Firebird::MetaString*> m_sqlParamsMap;
+	SortedObjectsArray<const MetaString> m_sqlParamNames;
+	Array<const MetaString*> m_sqlParamsMap;
 
 	// set in prepare()
-	Firebird::UCharBuffer m_in_buffer;
-	Firebird::UCharBuffer m_out_buffer;
-	Firebird::Array<dsc> m_inDescs;
-	Firebird::Array<dsc> m_outDescs;
+	UCharBuffer m_in_buffer;
+	UCharBuffer m_out_buffer;
+	Array<dsc> m_inDescs;
+	Array<dsc> m_outDescs;
 };
 
 
-class Blob : public Firebird::PermanentStorage
+class Blob : public PermanentStorage
 {
 	friend class Connection;
 protected:
@@ -814,9 +813,9 @@ public:
 	virtual ~Blob() {}
 
 	virtual void open(Jrd::thread_db* tdbb, Transaction& tran, const dsc& desc,
-		const Firebird::UCharBuffer* bpb) = 0;
+		const UCharBuffer* bpb) = 0;
 	virtual void create(Jrd::thread_db* tdbb, Transaction& tran, dsc& desc,
-		const Firebird::UCharBuffer* bpb) = 0;
+		const UCharBuffer* bpb) = 0;
 	virtual USHORT read(Jrd::thread_db* tdbb, UCHAR* buff, USHORT len) = 0;
 	virtual void write(Jrd::thread_db* tdbb, const UCHAR* buff, USHORT len) = 0;
 	virtual void close(Jrd::thread_db* tdbb) = 0;
@@ -848,8 +847,8 @@ private:
 	void init(Jrd::thread_db* tdbb, Connection& conn, const char* from);
 
 	Jrd::thread_db* m_tdbb;
-	Firebird::RefPtr<Jrd::StableAttachmentPart> m_stable;
-	Firebird::Mutex* m_mutex;
+	RefPtr<Jrd::StableAttachmentPart> m_stable;
+	Mutex* m_mutex;
 	Connection* m_saveConnection;
 };
 

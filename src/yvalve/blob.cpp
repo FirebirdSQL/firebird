@@ -37,7 +37,7 @@
 #include "../yvalve/YObjects.h"
 #include "../common/StatusArg.h"
 #include "../common/utils_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 using namespace Firebird;
 
@@ -120,10 +120,17 @@ ISC_STATUS API_ROUTINE isc_blob_gen_bpb(ISC_STATUS* status,
 }
 
 
+namespace Firebird::Why
+{
+
+
 // Lookup the blob subtype, character set and segment size information from the metadata,
 // given a relation/procedure name and column/parameter name.
 // It will fill in the information in the BLOB_DESC.
-void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* transaction,
+
+
+void iscBlobLookupDescImpl(YAttachment* attachment,
+	YTransaction* transaction,
 	const UCHAR* relationName, const UCHAR* fieldName, ISC_BLOB_DESC* desc, UCHAR* global)
 {
 	LocalStatus status;
@@ -300,6 +307,9 @@ void iscBlobLookupDescImpl(Why::YAttachment* attachment, Why::YTransaction* tran
 	if (global)
 		copy_exact_name(fieldName, global, sizeof(desc->blob_desc_field_name));
 }
+
+
+}	// namespace Firebird::Why
 
 
 ISC_STATUS API_ROUTINE isc_blob_set_desc(ISC_STATUS* status,

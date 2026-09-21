@@ -24,7 +24,7 @@
 #ifndef DSQL_SYM_H
 #define DSQL_SYM_H
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // possible symbol types
 

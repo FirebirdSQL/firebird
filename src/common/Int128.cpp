@@ -40,7 +40,9 @@
 #include <string.h>
 #include <float.h>
 
-using namespace Firebird;
+
+namespace Firebird
+{
 
 #ifdef FB_USE_ABSEIL_INT128
 
@@ -54,8 +56,6 @@ const CInt128 minus1(-1);
 
 } // anonymous namespace
 
-
-namespace Firebird {
 
 Int128 Int128::set(const char* value)
 {
@@ -281,8 +281,6 @@ CInt128::CInt128(minmax mm)
 CInt128 MIN_Int128(CInt128::MkMin);
 CInt128 MAX_Int128(CInt128::MkMax);
 
-} // namespace Firebird
-
 #else // FB_USE_ABSEIL_INT128
 
 namespace {
@@ -292,12 +290,8 @@ constexpr double p2_32 = 4294967296.0;
 const I128limit i128limit;
 const CInt128 minus1(-1);
 
-
 } // anonymous namespace
 
-
-
-namespace Firebird {
 
 Int128 Int128::set(SLONG value, int scale)
 {
@@ -643,15 +637,10 @@ CInt128::CInt128(minmax mm)
 CInt128 MIN_Int128(CInt128::MkMin);
 CInt128 MAX_Int128(CInt128::MkMax);
 
-} // namespace Firebird
-
 #endif // FB_USE_ABSEIL_INT128
 
 
 // implementation independent part
-
-namespace Firebird
-{
 
 ULONG Int128::makeIndexKey(vary* buf, int exp)
 {
@@ -675,5 +664,5 @@ ULONG Int128::makeIndexKey(vary* buf, int exp)
 	return Decimal128::makeBcdKey(buf, coeff, sign() < 0, exp, BIAS, PMAX);
 }
 
-} // namespace Firebird
 
+}  // namespace Firebird

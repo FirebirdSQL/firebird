@@ -24,15 +24,10 @@
 #ifndef JRD_ENC_PROTO_H
 #define JRD_ENC_PROTO_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void ENC_crypt(TEXT*, size_t, const TEXT*, const TEXT*);
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif
+namespace Firebird
+{
+	void ENC_crypt(TEXT*, size_t, const TEXT*, const TEXT*);
+} // namespace Firebird
 
 #endif // JRD_ENC_PROTO_H
 

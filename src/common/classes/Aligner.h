@@ -40,7 +40,7 @@ class OutAligner
 private:
 	UCHAR* const userBuffer;
 #ifdef RISC_ALIGNMENT
-	Firebird::HalfStaticArray<C, S> localBuffer;
+	HalfStaticArray<C, S> localBuffer;
 	ULONG bSize;
 	C* bPointer;
 #endif
@@ -105,7 +105,7 @@ class Aligner
 {
 private:
 #ifdef RISC_ALIGNMENT
-	Firebird::HalfStaticArray<C, S> localBuffer;
+	HalfStaticArray<C, S> localBuffer;
 #endif
 	const C* bPointer;
 

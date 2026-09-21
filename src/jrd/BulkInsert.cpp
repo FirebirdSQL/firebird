@@ -33,7 +33,9 @@
 #include "../jrd/ods_proto.h"
 
 
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 using namespace Ods;
 
 static inline data_page* nextPage(data_page* ptr, ULONG pageSize)
@@ -42,9 +44,6 @@ static inline data_page* nextPage(data_page* ptr, ULONG pageSize)
 	p += pageSize;
 	return reinterpret_cast<data_page*>(p);
 };
-
-namespace Jrd
-{
 
 // How many bytes per record should be reserved, see SPACE_FUDGE in dpm.epp
 constexpr unsigned RESERVE_SIZE = (ROUNDUP(RHDF_SIZE, ODS_ALIGNMENT) + sizeof(data_page::dpg_repeat));
@@ -490,4 +489,4 @@ void BulkInsert::Buffer::flush(thread_db* tdbb)
 	CCH_RELEASE(tdbb, &ppWindow);
 }
 
-};	// namespace Jrd
+} // namespace Firebird::Jrd

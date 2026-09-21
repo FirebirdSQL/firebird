@@ -27,7 +27,7 @@
 #include "../dsql/Nodes.h"
 #include "../dsql/NodePrinter.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 // DENSE_RANK function.
@@ -46,7 +46,7 @@ public:
 		// nothing
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -75,7 +75,7 @@ public:
 		// nothing
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -108,7 +108,7 @@ public:
 		// nothing
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -143,7 +143,7 @@ public:
 		// nothing
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -173,7 +173,7 @@ public:
 		// nothing
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -197,7 +197,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_WIN_PASS_CALL;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -223,7 +223,7 @@ public:
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_WIN_PASS_CALL;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -264,7 +264,7 @@ public:
 		holder.add(from);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
@@ -302,7 +302,7 @@ public:
 		holder.add(outExpr);
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override = 0;
+	string internalPrint(NodePrinter& printer) const override = 0;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 
@@ -325,7 +325,7 @@ public:
 	explicit LagWinNode(MemoryPool& pool, ValueExprNode* aArg = NULL, ValueExprNode* aRows = NULL,
 		ValueExprNode* aOutExpr = NULL);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		LagLeadWinNode::internalPrint(printer);
 		return "LagWinNode";
@@ -344,7 +344,7 @@ public:
 	explicit LeadWinNode(MemoryPool& pool, ValueExprNode* aArg = NULL, ValueExprNode* aRows = NULL,
 		ValueExprNode* aOutExpr = NULL);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		LagLeadWinNode::internalPrint(printer);
 		return "LeadWinNode";
@@ -367,7 +367,7 @@ public:
 		return CAP_SUPPORTS_WINDOW_FRAME | CAP_WANTS_WIN_PASS_CALL;
 	}
 
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;

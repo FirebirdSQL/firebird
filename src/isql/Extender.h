@@ -38,6 +38,10 @@
 
 #include <memory.h>
 
+namespace Firebird::Isql
+{
+
+
 class Extender
 {
 public:
@@ -87,5 +91,7 @@ inline size_t Extender::getUsed() const
 	return m_pos - m_buf;
 }
 
-#endif // FB_EXTENDER_H
 
+} // namespace Firebird::Isql
+
+#endif // FB_EXTENDER_H

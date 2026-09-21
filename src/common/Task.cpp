@@ -28,7 +28,9 @@
 #include "../common/Task.h"
 #include "../common/isc_proto.h"
 
-namespace Firebird {
+namespace Firebird
+{
+
 
 /// class WorkerThread
 
@@ -75,7 +77,7 @@ int WorkerThread::threadRoutine()
 		}
 		return 0;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		iscLogException("Unexpected exception at WorkerThread", ex);
 	}
@@ -342,4 +344,4 @@ void Coordinator::releaseThread(WorkerThread* thd)
 }
 
 
-} // namespace Jrd
+} // namespace Firebird

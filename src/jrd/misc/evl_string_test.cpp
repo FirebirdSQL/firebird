@@ -32,12 +32,11 @@
 const isc_like_escape_invalid = 1;
 
 void ERR_post(...) {
-	throw Firebird::LongJump();
+	throw LongJump();
 }
 
 #include "evl_string.h"
 
-using namespace Firebird;
 
 class StringLikeEvaluator : public LikeEvaluator<char>
 {
@@ -133,7 +132,7 @@ int main()
 		StringLikeEvaluator t7(p, "%sosome_text\\?", '\\');
 		assert(false);
 	}
-	catch (const Firebird::Exception&) {
+	catch (const Exception&) {
 	}
 
 	// Test single '%' pattern

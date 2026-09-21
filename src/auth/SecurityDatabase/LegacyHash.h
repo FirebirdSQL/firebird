@@ -32,7 +32,9 @@
 #include "../common/os/guid.h"
 #include "../common/utils_proto.h"
 
-namespace Auth {
+namespace Firebird::Auth
+{
+
 
 inline constexpr size_t MAX_LEGACY_PASSWORD_LENGTH = 64;			// used to store passwords internally
 static inline constexpr const char* LEGACY_PASSWORD_SALT = "9z";	// for old ENC_crypt()
@@ -41,28 +43,26 @@ inline constexpr size_t SALT_LENGTH = 12;							// measured after base64 coding
 class LegacyHash
 {
 public:
-	static void hash(Firebird::string& h, const Firebird::string& userName, const TEXT* passwd)
+	static void hash(string& h, const string& userName, const TEXT* passwd)
 	{
-		Firebird::string salt;
+		string salt;
 		fb_utils::random64(salt, SALT_LENGTH);
 		hash(h, userName, passwd, salt);
 	}
 
-	static void hash(Firebird::string& h,
-					 const Firebird::string& userName,
-					 const Firebird::string& passwd,
-					 const Firebird::string& oldHash)
+	static void hash(string& h, const string& userName, const string& passwd, const string& oldHash)
 	{
-		Firebird::string salt(oldHash);
+		string salt(oldHash);
 		salt.resize(SALT_LENGTH, '=');
-		Firebird::string allData(salt);
+		string allData(salt);
 		allData += userName;
 		allData += passwd;
-		Firebird::Sha1::hashBased64(h, allData);
+		Sha1::hashBased64(h, allData);
 		h = salt + h;
 	}
 };
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // AUTH_LEGACY_SERVER_H

@@ -28,8 +28,9 @@
 #include "../common/classes/ParsedList.h"
 #include "../common/db_alias.h"
 
+namespace Firebird
+{
 
-using namespace Firebird;
 
 ParsedList::ParsedList(const PathName& list)
 {
@@ -114,3 +115,6 @@ PathName ParsedList::getNonLoopbackProviders(const PathName& aliasDb)
 
 	return providers;
 }
+
+
+}  // namespace Firebird

@@ -39,11 +39,12 @@
 #include "../common/classes/ClumpletReader.h"
 #include "../jrd/license.h"
 
+namespace Firebird::Jrd
+{
+
 
 namespace
 {
-	using namespace Firebird;
-
 	using MsgFormat::SafeArg;
 	constexpr USHORT TRACEMGR_MSG_FAC = FB_IMPL_MSG_FACILITY_FBTRACEMGR;
 
@@ -126,9 +127,6 @@ namespace
 	}
 }
 
-
-namespace Firebird
-{
 
 void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 {
@@ -430,8 +428,6 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 		}
 	}
 
-
-
 	traceSvc->setAttachInfo(svc_name, user, role, pwd, trusted);
 
 	switch (action_sw->in_sw)
@@ -461,4 +457,4 @@ void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc)
 	}
 }
 
-} // namespace Firebird
+} // namespace Firebird::Jrd

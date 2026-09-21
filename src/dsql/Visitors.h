@@ -26,7 +26,7 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/NestConst.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class CompilerScratch;
 class ExprNode;
@@ -51,12 +51,12 @@ enum FieldMatchType
 // Check for an aggregate expression in an expression. It could be buried in an expression
 // tree and therefore call itselfs again. The level parameters (currentLevel & deepestLevel)
 // are used to see how deep we are with passing sub-queries (= scope_level).
-class AggregateFinder : public Firebird::PermanentStorage
+class AggregateFinder : public PermanentStorage
 {
 public:
-	AggregateFinder(Firebird::MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, bool aWindow);
+	AggregateFinder(MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, bool aWindow);
 
-	static bool find(Firebird::MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, bool window, ExprNode* node);
+	static bool find(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, bool window, ExprNode* node);
 
 	bool visit(ExprNode* node);
 
@@ -83,13 +83,13 @@ public:
 //    NOTE 160 - outer reference is defined in Subclause 6.7, "<column reference>".
 // 2) The <search condition> shall not contain a <window function> without an intervening
 // <query expression>.
-class Aggregate2Finder : public Firebird::PermanentStorage
+class Aggregate2Finder : public PermanentStorage
 {
 public:
-	Aggregate2Finder(Firebird::MemoryPool& pool, USHORT aCheckScopeLevel,
+	Aggregate2Finder(MemoryPool& pool, USHORT aCheckScopeLevel,
 		FieldMatchType aMatchType, bool aWindowOnly);
 
-	static bool find(Firebird::MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, bool windowOnly,
+	static bool find(MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, bool windowOnly,
 		ExprNode* node);
 
 	bool visit(ExprNode* node);
@@ -103,12 +103,12 @@ public:
 
 // Check the fields inside an aggregate and check if the field scope_level meets the specified
 // conditions.
-class FieldFinder : public Firebird::PermanentStorage
+class FieldFinder : public PermanentStorage
 {
 public:
-	FieldFinder(Firebird::MemoryPool& pool, USHORT aCheckScopeLevel, FieldMatchType aMatchType);
+	FieldFinder(MemoryPool& pool, USHORT aCheckScopeLevel, FieldMatchType aMatchType);
 
-	static bool find(Firebird::MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, ExprNode* node);
+	static bool find(MemoryPool& pool, USHORT checkScopeLevel, FieldMatchType matchType, ExprNode* node);
 
 	bool visit(ExprNode* node);
 
@@ -150,13 +150,13 @@ public:
 // Called to map fields used in an aggregate-context after all pass1 calls
 // (SELECT-, ORDER BY-lists). Walk completly through the given node 'field' and map the fields
 // with same scope_level as the given context to the given context with the post_map function.
-class FieldRemapper : public Firebird::PermanentStorage
+class FieldRemapper : public PermanentStorage
 {
 public:
-	FieldRemapper(Firebird::MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
+	FieldRemapper(MemoryPool& pool, DsqlCompilerScratch* aDsqlScratch, dsql_ctx* aContext, bool aWindow,
 		WindowClause* aWindowNode = NULL);
 
-	static ExprNode* remap(Firebird::MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, dsql_ctx* context, bool window,
+	static ExprNode* remap(MemoryPool& pool, DsqlCompilerScratch* dsqlScratch, dsql_ctx* context, bool window,
 		ExprNode* field, WindowClause* windowNode = NULL)
 	{
 		// The bool value returned by the visitor is completely discarded in this class.
@@ -174,7 +174,7 @@ public:
 };
 
 // Search if a sub select is buried inside a select list from a query expression.
-class SubSelectFinder : public Firebird::PermanentStorage
+class SubSelectFinder : public PermanentStorage
 {
 public:
 	SubSelectFinder(MemoryPool& pool)
@@ -192,10 +192,10 @@ public:
 
 
 // Generic node copier.
-class NodeCopier : public Firebird::PermanentStorage
+class NodeCopier : public PermanentStorage
 {
 public:
-	NodeCopier(Firebird::MemoryPool& pool, CompilerScratch* aCsb, StreamType* aRemap)
+	NodeCopier(MemoryPool& pool, CompilerScratch* aCsb, StreamType* aRemap)
 		: PermanentStorage(pool),
 		  csb(aCsb),
 		  remap(aRemap),

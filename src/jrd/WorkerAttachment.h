@@ -41,8 +41,7 @@
 #include "../jrd/status.h"
 
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class WorkerAttachment;
 
@@ -55,7 +54,7 @@ public:
 	void fini();
 
 protected:
-	virtual void doOnIdleTimer(Firebird::TimerImpl* timer);
+	virtual void doOnIdleTimer(TimerImpl* timer);
 
 private:
 	explicit WorkerStableAttachment(FbStatusVector* status, Jrd::Attachment* att, WorkerAttachment* workers);
@@ -92,14 +91,14 @@ public:
 
 	static bool detachIdle(Jrd::StableAttachmentPart* sAtt);
 
-	static void incUserAtts(const Firebird::PathName& dbname);
-	static void decUserAtts(const Firebird::PathName& dbname);
+	static void incUserAtts(const PathName& dbname);
+	static void decUserAtts(const PathName& dbname);
 
 	static void shutdown();
 	static void shutdownDbb(Jrd::Database* dbb);
 
 private:
-	static WorkerAttachment* getByName(const Firebird::PathName& dbname);
+	static WorkerAttachment* getByName(const PathName& dbname);
 	Jrd::StableAttachmentPart* doAttach(FbStatusVector* status, Jrd::Database* dbb);
 	static void doDetach(FbStatusVector* status, Jrd::StableAttachmentPart* sAtt);
 	void clear(bool checkRefs);
@@ -109,17 +108,17 @@ private:
 	void waitForWorkers();
 
 
-	typedef Firebird::GenericMap<Firebird::Pair<Firebird::Left<Firebird::PathName, WorkerAttachment*> > >
+	typedef GenericMap<Pair<Left<PathName, WorkerAttachment*> > >
 		MapDbIdToWorkAtts;
 
-	static Firebird::GlobalPtr<Firebird::Mutex> m_mapMutex;
-	static Firebird::GlobalPtr<MapDbIdToWorkAtts> m_map;
+	static GlobalPtr<Mutex> m_mapMutex;
+	static GlobalPtr<MapDbIdToWorkAtts> m_map;
 	static bool m_shutdown;
 
-	Firebird::Mutex m_mutex;
-	Firebird::HalfStaticArray<Jrd::StableAttachmentPart*, 8> m_idleAtts;
-	Firebird::SortedArray<Jrd::StableAttachmentPart*,
-		Firebird::InlineStorage<Jrd::StableAttachmentPart*, 8> > m_activeAtts;
+	Mutex m_mutex;
+	HalfStaticArray<Jrd::StableAttachmentPart*, 8> m_idleAtts;
+	SortedArray<Jrd::StableAttachmentPart*,
+		InlineStorage<Jrd::StableAttachmentPart*, 8> > m_activeAtts;
 
 	// count of regular user attachments, used with non-shared Database
 	int m_cntUserAtts = 0;
@@ -128,9 +127,9 @@ private:
 	int m_cntWorkers = 0;
 
 	// used to wait for "no internal workers" condition
-	Firebird::Condition m_noWorkers;
+	Condition m_noWorkers;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_WORKER_ATTACHMENT_H

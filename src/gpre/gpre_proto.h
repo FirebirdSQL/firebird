@@ -26,6 +26,10 @@
 
 #include "../gpre/parse.h"
 
+namespace Firebird::Gpre
+{
+
+
 [[noreturn]] void CPR_abort();
 #ifdef DEV_BUILD
 [[noreturn]] void CPR_assert(const TEXT*, int);
@@ -41,5 +45,7 @@ void	CPR_get_text(TEXT*, const gpre_txt*);
 gpre_txt*	CPR_start_text();
 tok*	CPR_token();
 
-#endif // GPRE_GPRE_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_GPRE_PROTO_H

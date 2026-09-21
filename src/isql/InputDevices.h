@@ -31,6 +31,9 @@
 
 #include <stdio.h>
 
+namespace Firebird::Isql
+{
+
 // This is basically a stack of input files caused by the INPUT command,
 // because it can be invoked interactively and from a file. In turn, each file
 // (SQL script) can contain another INPUT command and so on.
@@ -51,7 +54,7 @@ public:
 		void init(const indev& src);
 		//~indev();
 		void copy_from(const indev* src);
-		Firebird::PathName fileName(bool display) const;
+		PathName fileName(bool display) const;
 		void close();
 		void drop();
 		void getPos(fpos_t* out) const;
@@ -64,13 +67,13 @@ public:
 	private:
 		void makeFullFileName();
 
-		Firebird::PathName indev_fn, indev_fn_display;
+		PathName indev_fn, indev_fn_display;
 
 		void operator=(const void*); // prevent surprises.
 	};
 
 	InputDevices();
-	explicit InputDevices(Firebird::MemoryPool&);
+	explicit InputDevices(MemoryPool&);
 	~InputDevices();
 	void clear(FILE* fpointer = 0);
 	//const indev* getHead();
@@ -93,20 +96,20 @@ private:
 	indev m_ifp;
 	indev m_ofp;
 
-	class Command : public Firebird::GlobalStorage
+	class Command : public GlobalStorage
 	{
 	public:
 		Command(const char* statement, const char* term);
 		void toFile(FILE* fpointer);
 	private:
-		Firebird::string m_statement;
+		string m_statement;
 	};
 
-	Firebird::HalfStaticArray<Command*, 32> commands;
+	HalfStaticArray<Command*, 32> commands;
 };
 
 
-inline Firebird::PathName InputDevices::indev::fileName(bool display) const
+inline PathName InputDevices::indev::fileName(bool display) const
 {
 	return display ? indev_fn_display : indev_fn;
 }
@@ -123,7 +126,7 @@ inline InputDevices::InputDevices()
 {
 }
 
-inline InputDevices::InputDevices(Firebird::MemoryPool& p)
+inline InputDevices::InputDevices(MemoryPool& p)
 	: m_count(0), m_head(0), m_ifp(0, "", ""), m_ofp(0, "", ""), commands(p)
 {
 }
@@ -153,5 +156,7 @@ inline size_t InputDevices::count() const
 	return m_count;
 }
 
-#endif // FB_INPUT_DEVICES_H
 
+} // namespace Firebird::Isql
+
+#endif // FB_INPUT_DEVICES_H

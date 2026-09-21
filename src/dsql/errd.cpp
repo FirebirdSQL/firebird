@@ -54,8 +54,8 @@
 #include "../yvalve/gds_proto.h"
 #include "../common/utils_proto.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 [[noreturn]] static void internal_post(const Arg::StatusVector& v);
@@ -140,11 +140,11 @@ using namespace Firebird;
     @param
 
  **/
-void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
+void ERRD_post_warning(const Arg::StatusVector& v)
 {
     fb_assert(v.value()[0] == isc_arg_warning);
 
-	Jrd::FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
+	FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
 
 	Arg::StatusVector cur(status_vector->getWarnings());
 	cur << v;
@@ -187,7 +187,7 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
 [[noreturn]] static void internal_post(const Arg::StatusVector& v)
 {
 	// start building resulting vector
-	Jrd::FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
+	FbStatusVector* status_vector = JRD_get_thread_data()->tdbb_status_vector;
 	Arg::StatusVector final(status_vector->getErrors());
 	if (final.length() == 0)
 	{
@@ -218,7 +218,7 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
 
 
  **/
-[[noreturn]] void ERRD_punt(const Jrd::FbStatusVector* local)
+[[noreturn]] void ERRD_punt(const FbStatusVector* local)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -230,3 +230,5 @@ void ERRD_post_warning(const Firebird::Arg::StatusVector& v)
 	// Give up whatever we were doing and return to the user.
 	status_exception::raise(tdbb->tdbb_status_vector);
 }
+
+} // namespace Firebird::Jrd

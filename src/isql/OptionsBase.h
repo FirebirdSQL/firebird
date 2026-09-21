@@ -27,6 +27,10 @@
 
 #include <stdio.h>
 
+namespace Firebird::Isql
+{
+
+
 class OptionsBase
 {
 public:
@@ -52,5 +56,7 @@ inline OptionsBase::OptionsBase(const optionsMap* inmap, size_t insize, int wron
 {
 }
 
-#endif // FB_OPTIONSBASE_H
 
+} // namespace Firebird::Isql
+
+#endif // FB_OPTIONSBASE_H

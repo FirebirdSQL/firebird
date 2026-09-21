@@ -31,9 +31,8 @@
 
 #include "../common/status.h"
 
-namespace Jrd
-{
-	typedef Firebird::CheckStatusWrapper FbStatusVector;
+namespace Firebird::Jrd {
+	typedef CheckStatusWrapper FbStatusVector;
 }
 
 #endif // JRD_STATUS_H

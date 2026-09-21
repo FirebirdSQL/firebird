@@ -205,8 +205,7 @@ private:
 	bool valid;
 };
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 /* Blob id.  A blob has two states -- temporary and permanent.  In each
    case, the blob id is 8 bytes (2 longwords) long.  In the case of a
    temporary blob, the first word is NULL and the second word points to
@@ -299,7 +298,7 @@ struct bid
 
 static_assert(sizeof(bid) == 8);	// make sure that compiler packed structure like we wanted
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_RECORDNUMBER_H

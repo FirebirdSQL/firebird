@@ -31,8 +31,9 @@
 #include "RecordSource.h"
 #include <string_view>
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 TableValueFunctionScan::TableValueFunctionScan(CompilerScratch* csb, StreamType stream,
 											   const string& alias)
@@ -532,3 +533,6 @@ bool GenSeriesFunctionScan::nextBuffer(thread_db* tdbb) const
 
 	return false;
 }
+
+
+}	// namespace Firebird::Jrd

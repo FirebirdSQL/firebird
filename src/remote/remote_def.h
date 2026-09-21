@@ -42,6 +42,10 @@
 
 #include "../remote/protocol.h"
 
+namespace Firebird::Remote
+{
+
+
 #if defined(__sun)
 #	ifdef sparc
 constexpr P_ARCH ARCHITECTURE	= arch_sun4;
@@ -88,5 +92,8 @@ inline constexpr USHORT SRVR_non_service		= 32;	// not running as an NT service
 inline constexpr USHORT SRVR_high_priority		= 64;	// fork off server at high priority
 inline constexpr USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
 inline constexpr USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
+
+
+}	// namespace Firebird::Remote
 
 #endif /* REMOTE_REMOTE_DEF_H */

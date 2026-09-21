@@ -33,7 +33,7 @@ DATABASE DB = STATIC FILENAME "rebuild.fdb";
 
 static void store_headers(RBDB);
 
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 
 
 void RSTORE( RBDB rbdb)

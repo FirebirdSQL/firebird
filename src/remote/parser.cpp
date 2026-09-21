@@ -36,7 +36,9 @@
 #include "../yvalve/gds_proto.h"	// gds__log()
 #endif
 
-using namespace Firebird;
+namespace Firebird::Remote
+{
+
 
 static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length);
 
@@ -395,3 +397,5 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 
 	return format.release();
 }
+
+} // namespace Firebird::Remote

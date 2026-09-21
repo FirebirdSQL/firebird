@@ -24,6 +24,10 @@
 #ifndef FB_PTRSENTRY_H
 #define FB_PTRSENTRY_H
 
+namespace Firebird::Isql
+{
+
+
 // Helper class to track allocation of single entities and arrays.
 // Hopefully scarcely used as we move to more objects.
 // It simply deletes the given pointer when the container (an object of this clas)
@@ -105,5 +109,6 @@ void PtrSentry<T>::forget()
 }
 
 
-#endif // FB_PTRSENTRY_H
+} // namespace Firebird::Isql
 
+#endif // FB_PTRSENTRY_H

@@ -60,10 +60,9 @@
 #define getpid _getpid
 #endif
 
+namespace Firebird::Jrd
+{
 
-using namespace Firebird;
-
-namespace Jrd {
 
 static constexpr FB_UINT64 TOUCH_INTERVAL = 60 * 60;	// in seconds, one hour should be enough
 
@@ -470,7 +469,7 @@ void ConfigStorage::compact()
 	check_used = check_size = sizeof(TraceCSHeader);
 
 	// Track undeleted slots from dead processes
-	Firebird::SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
+	SortedArray<ULONG, InlineStorage<ULONG, 16>> deadProcesses;
 
 	// collect used slots, sort them by offset
 	for (TraceCSHeader::Slot* slot = header->slots; slot < header->slots + header->slots_cnt; slot++)
@@ -733,7 +732,7 @@ void ConfigStorage::addSession(TraceSession& session)
 	writer.write(tagEnd, 0, NULL);
 }
 
-bool ConfigStorage::getSession(Firebird::TraceSession& session, GET_FLAGS getFlag)
+bool ConfigStorage::getSession(TraceSession& session, GET_FLAGS getFlag)
 {
 	ULONG idx;
 	if (!findSession(session.ses_id, idx))
@@ -1003,4 +1002,5 @@ void ConfigStorage::TouchFile::stop()
 	// ignore error in stop timer
 }
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd

@@ -29,10 +29,9 @@
 
 #include "firebird/Interface.h"
 
-namespace Auth {
-
-void registerLegacyServer(Firebird::IPluginManager* iPlugin);
-
-} // namespace Auth
+namespace Firebird::Auth
+{
+	void registerLegacyServer(IPluginManager* iPlugin);
+} // namespace Firebird::Auth
 
 #endif // AUTH_LEGACY_SERVER_H

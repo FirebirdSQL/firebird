@@ -92,8 +92,8 @@
 #include "../dsql/ExprNodes.h"
 #include "../dsql/StmtNodes.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 #ifdef CMP_DEBUG
@@ -157,7 +157,7 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 
 	try
 	{
-		Jrd::ContextPoolHolder context(tdbb, newPool);
+		JrdContextPoolHolder context(tdbb, newPool);
 
 		const auto csb = PAR_parse(tdbb, blr, blrLength, internalFlag, dbginfoLength, dbginfo);
 
@@ -187,7 +187,7 @@ Statement* CMP_compile(thread_db* tdbb, const UCHAR* blr, ULONG blrLength, bool 
 
 		delete csb;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(tdbb->tdbb_status_vector);
 		if (statement)
@@ -635,3 +635,6 @@ RecordSource* CMP_post_rse(thread_db* tdbb, CompilerScratch* csb, RseNode* rse)
 
 	return rsb;
 }
+
+
+}	// namespace Firebird::Jrd

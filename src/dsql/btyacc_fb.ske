@@ -29,8 +29,12 @@
 #include "../jrd/RecordSourceNodes.h"
 #include "../common/classes/PodOptional.h"
 #include "../common/classes/TriState.h"
-#include "parse.h"
 #include "../dsql/Parser.h"
+
+namespace Firebird::Jrd
+{
+#include "parse.h"
+}
 
 %% tables
 

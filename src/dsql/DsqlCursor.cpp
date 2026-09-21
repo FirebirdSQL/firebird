@@ -30,8 +30,9 @@
 #include "../dsql/DsqlCursor.h"
 #include "../dsql/StmtNodes.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 static const char* const SCRATCH = "fb_cursor_";
 static const ULONG PREFETCH_SIZE = 65536; // 64 KB
@@ -122,7 +123,7 @@ void DsqlCursor::close(thread_db* tdbb, DsqlCursor* cursor)
 
 			JRD_unwind_request(tdbb, dsqlRequest->getRequest());
 		}
-		catch (Firebird::Exception&)
+		catch (Exception&)
 		{} // no-op
 	}
 
@@ -424,3 +425,6 @@ bool DsqlCursor::cacheInput(thread_db* tdbb, UCHAR* buffer, FB_UINT64 position)
 
 	return (position < m_cachedCount);
 }
+
+
+}	// namespace Firebird::Jrd

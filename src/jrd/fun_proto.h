@@ -27,17 +27,19 @@
 #include "../dsql/Nodes.h"
 
 
-class IbUtil
+namespace Firebird::Jrd
 {
-public:
-	static void initialize();
+	class IbUtil
+	{
+	public:
+		static void initialize();
 
-	static void* alloc(long size);
-	static bool free(void* ptr);
-};
+		static void* alloc(long size);
+		static bool free(void* ptr);
+	};
 
-void FUN_evaluate(Jrd::thread_db*, const Jrd::Function*, const Jrd::NestValueArray&,
-	Jrd::impure_value*, Firebird::Array<UCHAR>& temp);
+	void FUN_evaluate(thread_db*, const Function*, const NestValueArray&, impure_value*, Array<UCHAR>& temp);
+} // namespace Firebird::Jrd
 
 
 #endif // JRD_FUN_PROTO_H

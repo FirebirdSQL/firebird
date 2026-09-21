@@ -35,6 +35,8 @@
 #include <locale.h>
 #endif
 
+using namespace Firebird;
+
 static void atexit_fb_shutdown()
 {
 	fb_shutdown(0, fb_shutrsn_app_stopped);
@@ -60,12 +62,12 @@ int CLIB_ROUTINE main(int argc, char* argv[])
 
 	try
 	{
-		Firebird::AutoPtr<Firebird::UtilSvc> uSvc(Firebird::UtilSvc::createStandalone(argc, argv));
- 		return gbak(uSvc);
+		AutoPtr<UtilSvc> uSvc(UtilSvc::createStandalone(argc, argv));
+		return Burp::gbak(uSvc);
  	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
  	{
- 		Firebird::StaticStatusVector st;
+ 		StaticStatusVector st;
 		ex.stuffException(st);
 		isc_print_status(st.begin());
  	}

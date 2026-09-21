@@ -37,8 +37,9 @@
 #include "../common/isc_proto.h"
 #include "../jrd/acl.h"
 
-using namespace Firebird;
-using namespace Why;
+namespace Firebird::Why
+{
+
 
 namespace {
 
@@ -515,9 +516,6 @@ DTransaction::~DTransaction()
 } // anonymous namespace
 
 
-namespace Why {
-
-
 void DtcStart::addAttachment(CheckStatusWrapper* status, IAttachment* att)
 {
 	this->addWithTpb(status, att, 0, NULL);
@@ -639,4 +637,5 @@ DtcStart* Dtc::startBuilder(CheckStatusWrapper* status)
 	return NULL;
 }
 
-} // namespace Why
+
+} // namespace Firebird::Why

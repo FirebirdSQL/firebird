@@ -33,7 +33,7 @@
 #include "../common/classes/fb_pair.h"
 #include "../common/classes/objects_array.h"
 #include "../common/StatusArg.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include <algorithm>
 #include <cctype>
 

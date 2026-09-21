@@ -24,6 +24,8 @@
 #ifndef ALICE_TDR_PROTO_H
 #define ALICE_TDR_PROTO_H
 
+namespace Firebird::Alice {
+
 void	TDR_list_limbo(FB_API_HANDLE, const TEXT*, const SINT64);
 bool	TDR_reconnect_multiple(FB_API_HANDLE, TraNumber, const TEXT*, SINT64);
 void	TDR_shutdown_databases(tdr*);
@@ -31,5 +33,6 @@ USHORT	TDR_analyze(const tdr*);
 bool	TDR_attach_database(ISC_STATUS*, tdr*, const TEXT*);
 void	TDR_get_states(tdr*);
 
-#endif // ALICE_TDR_PROTO_H
+} // namespace Firebird::Alice
 
+#endif // ALICE_TDR_PROTO_H

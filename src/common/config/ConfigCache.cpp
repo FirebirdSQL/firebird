@@ -40,7 +40,9 @@
 #include <errno.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 ConfigCache::ConfigCache(MemoryPool& p, const PathName& fName)
 	: PermanentStorage(p), files(FB_NEW_POOL(getPool()) ConfigCache::File(getPool(), fName))
@@ -72,12 +74,12 @@ void ConfigCache::checkLoadConfig()
 	loadConfig();
 }
 
-bool ConfigCache::addFile(const Firebird::PathName& fName)
+bool ConfigCache::addFile(const PathName& fName)
 {
 	return files->add(fName);
 }
 
-Firebird::PathName ConfigCache::getFileName()
+PathName ConfigCache::getFileName()
 {
 	return files->fileName;
 }
@@ -165,3 +167,6 @@ void ConfigCache::File::trim()
 	delete next;
 	next = NULL;
 }
+
+
+} // namespace Firebird

@@ -24,7 +24,11 @@
 #ifndef GSEC_GSECSWI_H
 #define GSEC_GSECSWI_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
+
+namespace Firebird::Gsec
+{
+
 
 /* Switch handling constants.  Note that the first IN_SW_DATA_ITEMS
    switch constants refer to data items.  The remaining switch constants
@@ -103,4 +107,8 @@ static inline constexpr struct Switches::in_sw_tab_t gsec_action_in_sw_table [] 
     {IN_SW_GSEC_DIS_ADM,	isc_action_svc_display_user_adm,"DISPLAY",	0, 0, 0, false,	false,	0,	2, NULL},	// display user(s) with admin
     {IN_SW_GSEC_0,			0,								NULL,		0, 0, 0, false,	false,	0,	0, NULL}	// End of List
 };
+
+
+} // namespace Firebird::Gsec
+
 #endif // GSEC_GSECSWI_H

@@ -32,8 +32,7 @@
 #include <algorithm>
 #include "SafeArg.h"
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 // This is just a silly convenience in case all arguments are of type int.
 SafeArg::SafeArg(const int val[], FB_SIZE_T v_size) noexcept

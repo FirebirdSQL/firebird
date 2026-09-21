@@ -19,19 +19,25 @@
 
 #endif // INTERNAL_FIREBIRD
 
+
+// FIXME: Move this file outside of Auth. It's not directly related to Auth.
+namespace Firebird
+{
+
+
 #ifdef INTERNAL_FIREBIRD
 // This class helps to work with metadata iface
-class Meta : public Firebird::RefPtr<Firebird::IMessageMetadata>
+class Meta : public RefPtr<IMessageMetadata>
 {
 public:
-	Meta(Firebird::IStatement* stmt, bool out)
+	Meta(IStatement* stmt, bool out)
 	{
-		Firebird::LocalStatus ls;
-		Firebird::CheckStatusWrapper st(&ls);
-		Firebird::IMessageMetadata* m = out ? stmt->getOutputMetadata(&st) : stmt->getInputMetadata(&st);
-		if (st.getState() & Firebird::IStatus::STATE_ERRORS)
+		LocalStatus ls;
+		CheckStatusWrapper st(&ls);
+		IMessageMetadata* m = out ? stmt->getOutputMetadata(&st) : stmt->getInputMetadata(&st);
+		if (st.getState() & IStatus::STATE_ERRORS)
 		{
-			Firebird::status_exception::raise(&st);
+			status_exception::raise(&st);
 		}
 		assignRefNoIncr(m);
 	}
@@ -55,7 +61,7 @@ class Message
 // : public AutoStorage
 {
 public:
-	Message(Firebird::IMessageMetadata* aMeta = NULL)
+	Message(IMessageMetadata* aMeta = NULL)
 #ifdef INTERNAL_FIREBIRD
 		: s(&st),
 #else
@@ -78,9 +84,9 @@ public:
 			}
 			else
 			{
-				Firebird::IMetadataBuilder* bld =
+				IMetadataBuilder* bld =
 #ifdef INTERNAL_FIREBIRD
-					Firebird::MasterInterfacePtr()->
+					MasterInterfacePtr()->
 #else
 					fb_get_master_interface()->
 #endif
@@ -131,7 +137,7 @@ public:
 			if (fieldCount >= l)
 			{
 #ifdef INTERNAL_FIREBIRD
-				(Firebird::Arg::Gds(isc_random) <<
+				(Arg::Gds(isc_random) <<
 					"Attempt to add to the message more variables than possible").raise();
 #else
 				fatalErrorHandler("Attempt to add to the message more variables than possible");
@@ -145,7 +151,7 @@ public:
 			if (!checkType<T>(t, sz))
 			{
 #ifdef INTERNAL_FIREBIRD
-				(Firebird::Arg::Gds(isc_random) << "Incompatible data type").raise();
+				(Arg::Gds(isc_random) << "Incompatible data type").raise();
 #else
 				fatalErrorHandler("Incompatible data type");
 #endif
@@ -173,12 +179,12 @@ public:
 		return fieldCount++;
 	}
 
-	static void check(Firebird::IStatus* status)
+	static void check(IStatus* status)
 	{
-		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+		if (status->getState() & IStatus::STATE_ERRORS)
 		{
 #ifdef INTERNAL_FIREBIRD
-			Firebird::status_exception::raise(status);
+			status_exception::raise(status);
 #else
 			char msg[100];
 			const ISC_STATUS* st = status->getErrors();
@@ -191,12 +197,12 @@ public:
 	// Attention!
 	// No addRef/release interface here!
 	// Lifetime is equal at least to Message lifetime
-	Firebird::IMessageMetadata* getMetadata()
+	IMessageMetadata* getMetadata()
 	{
 		if (!metadata)
 		{
 			fb_assert(builder);
-			Firebird::IMessageMetadata* aMeta = builder->getMetadata(&statusWrapper);
+			IMessageMetadata* aMeta = builder->getMetadata(&statusWrapper);
 			check(&statusWrapper);
 			metadata = aMeta;
 			builder->release();
@@ -230,7 +236,7 @@ public:
 	}
 
 private:
-	void createBuffer(Firebird::IMessageMetadata* aMeta)
+	void createBuffer(IMessageMetadata* aMeta)
 	{
 		unsigned l = aMeta->getMessageLength(&statusWrapper);
 		check(&statusWrapper);
@@ -238,20 +244,20 @@ private:
 	}
 
 public:
-	Firebird::IStatus* s;
+	IStatus* s;
 
 private:
-	Firebird::IMessageMetadata* metadata;
+	IMessageMetadata* metadata;
 	unsigned char* buffer;
-	Firebird::IMetadataBuilder* builder;
+	IMetadataBuilder* builder;
 	unsigned fieldCount;
 	FieldLink* fieldList;
 #ifdef INTERNAL_FIREBIRD
-	Firebird::LocalStatus st;
+	LocalStatus st;
 #endif
 
 public:
-	Firebird::CheckStatusWrapper statusWrapper;
+	CheckStatusWrapper statusWrapper;
 };
 
 
@@ -545,3 +551,6 @@ inline unsigned Message::getType<FB_BOOLEAN>(unsigned& sz)
 	sz = sizeof(FB_BOOLEAN);
 	return SQL_BOOLEAN;
 }
+
+
+}	// namespace Firebird

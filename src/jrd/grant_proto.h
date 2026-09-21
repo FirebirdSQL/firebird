@@ -26,8 +26,11 @@
 
 #include "../common/classes/fb_string.h"
 #include "../jrd/QualifiedName.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 
-void GRANT_privileges(Jrd::thread_db*, const Jrd::QualifiedName&, ObjectType, Jrd::jrd_tra*);
+namespace Firebird::Jrd
+{
+	void GRANT_privileges(thread_db*, const QualifiedName&, ObjectType, jrd_tra*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_GRANT_PROTO_H

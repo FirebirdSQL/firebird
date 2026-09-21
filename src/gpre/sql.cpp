@@ -33,7 +33,7 @@
 #include "../gpre/gpre.h"
 #include "ibase.h"
 #include "../jrd/intl.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../gpre/cme_proto.h"
 #include "../gpre/cmp_proto.h"
 #include "../gpre/exp_proto.h"
@@ -45,6 +45,9 @@
 #include "../gpre/sqe_proto.h"
 #include "../gpre/sql_proto.h"
 #include "../common/utils_proto.h"
+
+namespace Firebird::Gpre
+{
 
 
 constexpr int DEFAULT_BLOB_SEGMENT_LENGTH = 80;	// bytes
@@ -6867,3 +6870,6 @@ void SQL_dialect1_bad_type(USHORT field_dtype)
 		"Client SQL dialect 1 does not support reference to the %s datatype", s);
 	PAR_error(buffer);
 }
+
+
+} // namespace Firebird::Gpre

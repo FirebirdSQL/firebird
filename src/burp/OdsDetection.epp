@@ -27,6 +27,9 @@
 #include "../burp/burp_proto.h"
 #include "../burp/OdsDetection.h"
 
+namespace Firebird::Burp
+{
+
 
 namespace
 {
@@ -100,7 +103,7 @@ void detectRuntimeODS()
 	// and rdb$field_name = 'RDB$SYSTEM_FLAG';
 
 	int count = 0;
-	Firebird::IRequest* req_handle = nullptr;
+	IRequest* req_handle = nullptr;
 	FOR (REQUEST_HANDLE req_handle)
 		RFR IN RDB$RELATION_FIELDS
 		WITH (RFR.RDB$RELATION_NAME = 'RDB$RELATIONS' OR RFR.RDB$RELATION_NAME = 'RDB$RELATION_FIELDS') AND
@@ -118,7 +121,7 @@ void detectRuntimeODS()
 	if (count != 2)
 		return;
 
-	Firebird::IRequest* req_handle2 = nullptr;
+	IRequest* req_handle2 = nullptr;
 	for (const rel_field_t* rel = relations; rel->relation; ++rel)
 	{
 		FOR (REQUEST_HANDLE req_handle2)
@@ -140,7 +143,7 @@ void detectRuntimeODS()
 	if (tdgbl->runtimeODS < DB_VERSION_DDL8)
 		return;
 
-	Firebird::IRequest* req_handle3 = nullptr;
+	IRequest* req_handle3 = nullptr;
 	for (const rel_field_t* rf = rel_fields; rf->relation; ++rf)
 	{
 		FOR (REQUEST_HANDLE req_handle3)
@@ -181,3 +184,6 @@ namespace
 		BURP_abort(isc_status);
 	}
 }
+
+
+} // namespace Firebird::Burp

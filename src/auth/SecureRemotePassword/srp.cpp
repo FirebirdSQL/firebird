@@ -8,28 +8,30 @@
 #include "../common/classes/fb_string.h"
 #include "../common/sha.h"
 
-using namespace Firebird;
+namespace Firebird::Auth
+{
 
-namespace {
-const char* primeStr =	"E67D2E994B2F900C3F41F08F5BB2627ED0D49EE1FE767A52EFCD565C"
-						"D6E768812C3E1E9CE8F0A8BEA6CB13CD29DDEBF7A96D4A93B55D488D"
-						"F099A15C89DCB0640738EB2CBDD9A8F7BAB561AB1B0DC1C6CDABF303"
-						"264A08D1BCA932D1F1EE428B619D970F342ABA9A65793B8B2F041AE5"
-						"364350C16F735F56ECBCA87BD57B29E7";
-const char* genStr = "02";
+
+namespace
+{
+	const char* primeStr =	"E67D2E994B2F900C3F41F08F5BB2627ED0D49EE1FE767A52EFCD565C"
+							"D6E768812C3E1E9CE8F0A8BEA6CB13CD29DDEBF7A96D4A93B55D488D"
+							"F099A15C89DCB0640738EB2CBDD9A8F7BAB561AB1B0DC1C6CDABF303"
+							"264A08D1BCA932D1F1EE428B619D970F342ABA9A65793B8B2F041AE5"
+							"364350C16F735F56ECBCA87BD57B29E7";
+	const char* genStr = "02";
 } // anonumous namespace
 
-namespace Auth {
 
 class RemoteGroup
 {
 public:
 	BigInteger	prime, generator, k;
 
-	explicit RemoteGroup(Firebird::MemoryPool&)
+	explicit RemoteGroup(MemoryPool&)
 		: prime(primeStr), generator(genStr), k()
 	{
-		Auth::SecureHash<Firebird::Sha1> hash;
+		Auth::SecureHash<Sha1> hash;
 
 		hash.processInt(prime);
 		if (prime.length() > generator.length())
@@ -123,7 +125,7 @@ void RemotePassword::genClientKey(string& pubkey)
 	}
 }
 
-void RemotePassword::genServerKey(string& pubkey, const Firebird::UCharBuffer& verifier)
+void RemotePassword::genServerKey(string& pubkey, const UCharBuffer& verifier)
 {
 	for(;;)
 	{
@@ -229,7 +231,7 @@ BigInteger RemotePassword::setKey(const char* from)
 }
 
 #if SRP_DEBUG > 0
-void dumpIt(const char* name, const Firebird::UCharBuffer& data)
+void dumpIt(const char* name, const UCharBuffer& data)
 {
 	fprintf(stderr, "%s\n", name);
 	for (size_t x = 0; x<data.getCount(); ++x)
@@ -237,12 +239,12 @@ void dumpIt(const char* name, const Firebird::UCharBuffer& data)
 	fprintf(stderr, "\n");
 }
 
-void dumpIt(const char* name, const Firebird::string& str)
+void dumpIt(const char* name, const string& str)
 {
 	fprintf(stderr, "%s: '%s'\n", name, str.c_str());
 }
 
-void dumpBin(const char* name, const Firebird::string& str)
+void dumpBin(const char* name, const string& str)
 {
 	fprintf(stderr, "%s (%ld)\n", name, long(str.length()));
 	for (size_t x = 0; x < str.length(); ++x)
@@ -277,4 +279,5 @@ void checkStatusVectorForMissingTable(const ISC_STATUS* v, std::function<void ()
 	}
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth

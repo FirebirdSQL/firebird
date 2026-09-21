@@ -37,7 +37,9 @@
 #include <stdlib.h>
 #endif
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 bool ConfigFile::getLine(Stream* stream, String& str, unsigned int& number)
 {
@@ -110,7 +112,7 @@ public:
 
 private:
 	AutoPtr<FILE> file;
-	Firebird::PathName fileName;
+	PathName fileName;
 	unsigned int l;
 };
 
@@ -214,7 +216,7 @@ private:
 } // anonymous namespace
 
 
-ConfigFile::ConfigFile(const Firebird::PathName& file, USHORT fl, ConfigCache* cache)
+ConfigFile::ConfigFile(const PathName& file, USHORT fl, ConfigCache* cache)
 	: AutoStorage(),
 	  parameters(getPool()),
 	  flags(fl),
@@ -247,7 +249,7 @@ ConfigFile::ConfigFile(UseText, const char* configText, USHORT fl)
 	parse(&s);
 }
 
-ConfigFile::ConfigFile(MemoryPool& p, const Firebird::PathName& file, USHORT fl, ConfigCache* cache)
+ConfigFile::ConfigFile(MemoryPool& p, const PathName& file, USHORT fl, ConfigCache* cache)
 	: AutoStorage(p),
 	  parameters(getPool()),
 	  flags(fl),
@@ -574,7 +576,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		unsigned code;
 		const char* name;
 	} dirs[] = {
-#define NMDIR(a) {Firebird::IConfigManager::a, "FB_"#a},
+#define NMDIR(a) {IConfigManager::a, "FB_"#a},
 		NMDIR(DIR_CONF)
 		NMDIR(DIR_SECDB)
 		NMDIR(DIR_PLUGINS)
@@ -584,7 +586,7 @@ bool ConfigFile::substituteStandardDir(const String& from, String& to) const
 		NMDIR(DIR_INTL)
 		NMDIR(DIR_MSG)
 #undef NMDIR
-		{Firebird::IConfigManager::DIR_COUNT, NULL}
+		{IConfigManager::DIR_COUNT, NULL}
 	};
 
 	for (const Dir* d = dirs; d->name; ++d)
@@ -893,7 +895,7 @@ SINT64 ConfigFile::Parameter::asInteger() const
 	int sign = 1;
 	int state = 1; // 1 - sign, 2 - numbers, 3 - multiplier
 
-	Firebird::string trimmed = value;
+	string trimmed = value;
 	trimmed.trim(" \t");
 
 	if (trimmed.isEmpty())
@@ -967,3 +969,4 @@ bool ConfigFile::Parameter::asBoolean() const
 		value.equalsNoCase("yes") ||
 		value.equalsNoCase("y");
 }
+}  // namespace Firebird

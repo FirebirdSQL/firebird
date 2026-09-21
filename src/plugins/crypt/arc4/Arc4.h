@@ -33,6 +33,6 @@ namespace Crypt {
 
 void registerArc4(Firebird::IPluginManager* iPlugin);
 
-} // namespace Auth
+} // namespace Firebird::Auth
 
 #endif // CRYPT_ARC4_H

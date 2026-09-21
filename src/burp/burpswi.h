@@ -27,8 +27,12 @@
 #ifndef BURP_BURPSWI_H
 #define BURP_BURPSWI_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "ibase.h"
+
+namespace Firebird::Burp
+{
+
 
 /* Local copies of global variables.  They will be copied into
    a data structure. */
@@ -248,5 +252,6 @@ static inline constexpr const char* burp_repl_mode_sw_table[] =
 
 const int BURP_MAX_PARALLEL_WORKERS = 64;
 
-#endif // BURP_BURP_H
+}	// namespace Firebird::Burp
 
+#endif // BURP_BURP_H

@@ -34,7 +34,9 @@
 #include <unistd.h>
 #include <string>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 /// The POSIX implementation of the path_utils abstraction.
 
@@ -266,3 +268,6 @@ int PathUtils::makeDir(const PathName& path)
 
 	return rc;
 }
+
+
+}  // namespace Firebird

@@ -36,7 +36,9 @@
 #include "../common/os/os_utils.h"
 #include "unicode/ucal.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -433,7 +435,7 @@ USHORT TimeZoneUtil::getSystemTimeZone()
 	return cachedTimeZoneId;
 }
 
-void TimeZoneUtil::getDatabaseVersion(Firebird::string& str)
+void TimeZoneUtil::getDatabaseVersion(string& str)
 {
 	UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 	UErrorCode icuErrorCode = U_ZERO_ERROR;
@@ -1193,3 +1195,6 @@ static void skipSpaces(const char*& p, const char* end) noexcept
 	while (p < end && (*p == ' ' || *p == '\t'))
 		++p;
 }
+
+
+}  // namespace Firebird

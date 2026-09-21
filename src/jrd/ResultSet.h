@@ -33,7 +33,7 @@
 
 struct dsc;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;
@@ -106,9 +106,9 @@ public:
 		return value;
 	}
 
-	Firebird::string getString(thread_db* tdbb, unsigned param);
+	string getString(thread_db* tdbb, unsigned param);
 	MetaName getMetaName(thread_db* tdbb, unsigned param);
-	Firebird::MetaString getMetaString(thread_db* tdbb, unsigned param);
+	MetaString getMetaString(thread_db* tdbb, unsigned param);
 
 private:
 	void moveDesc(thread_db* tdbb, unsigned param, dsc& desc);
@@ -119,7 +119,7 @@ private:
 	bool firstFetchDone;
 };
 
-typedef Firebird::AutoPtr<ResultSet> AutoResultSet;
+typedef AutoPtr<ResultSet> AutoResultSet;
 
 
 }	// namespace
