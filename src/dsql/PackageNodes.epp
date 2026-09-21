@@ -965,8 +965,7 @@ DdlNode* CreateAlterPackageNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				type->name.schema = name.schema;
 				type->name.package = name.object;
 				type->privateFlag = false;
-				type->name.schema = name.schema;
-				type->name.package = name.object;
+				dsqlScratch->packagedTypesCache.add(type);
 				break;
 			}
 
