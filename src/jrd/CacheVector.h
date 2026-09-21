@@ -91,7 +91,7 @@ public:
 	virtual ObjectType getObjectType() = 0;
 	virtual void getObjectName(QualifiedName& name) = 0;
 	virtual void newVersion(thread_db* tdbb) = 0;
-	virtual bool ensureVersioned(thread_db* tdbb, ObjectBase::Flag fl) = 0;
+	virtual void makeVersion(thread_db* tdbb) = 0;
 	virtual void makeRequests(thread_db* tdbb) = 0;
 	virtual void commit(thread_db* tdbb, TraNumber curNumber = 0) = 0;
 	virtual MdcVersion getVersion(thread_db* tdbb) = 0;
@@ -683,9 +683,11 @@ public:
 		return getVersioned(tdbb, TransactionNumber::current(tdbb), fl);
 	}
 
-	bool ensureVersioned(thread_db* tdbb, ObjectBase::Flag fl) override
+	void makeVersion(thread_db* tdbb) override
 	{
-		return getVersioned(tdbb, fl);
+		newVersion(tdbb);
+		auto rc = getVersioned(tdbb, 0);
+		fb_assert(rc);
 	}
 
 	bool isReady(thread_db* tdbb)

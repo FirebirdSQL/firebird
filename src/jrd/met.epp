@@ -5685,23 +5685,79 @@ void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 		 AND D.RDB$DEPENDED_ON_NAME EQ object.c_str()
 		REDUCED TO D.RDB$DEPENDENT_TYPE, D.RDB$DEPENDENT_SCHEMA_NAME, D.RDB$PACKAGE_NAME, D.RDB$DEPENDENT_NAME
 	{
+		ElementBase* element = nullptr;
+
+		QualifiedName name;
+		name.schema = D.RDB$DEPENDENT_SCHEMA_NAME;
+		if (!D.RDB$PACKAGE_NAME.NULL)
+			name.package = D.RDB$PACKAGE_NAME;
+		name.object = D.RDB$DEPENDENT_NAME;
+
 		switch (D.RDB$DEPENDENT_TYPE)
 		{
 		case obj_procedure:
-			{
-				QualifiedName name;
-				name.schema = D.RDB$DEPENDENT_SCHEMA_NAME;
-				if (!D.RDB$PACKAGE_NAME.NULL)
-					name.package = D.RDB$PACKAGE_NAME;
-				name.object = D.RDB$DEPENDENT_NAME;
+			element = MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE);
+			break;
 
-				transaction->storeUpdate(MetadataCache::getPerm<Cached::Procedure>(tdbb, name, CacheFlag::AUTOCREATE), forceRecompile);
+		case obj_udf:
+			element = MetadataCache::getPerm<Cached::Function>(tdbb, name, CacheFlag::AUTOCREATE);
+			break;
+
+		case obj_relation:
+		case obj_view:
+			element = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+			break;
+
+		case obj_trigger:
+			{
+				// Distinguish between triggers on table and database-wide
+				bool found = false;
+				AUTO_HANDLE(trigHndl);
+				FOR (REQUEST_HANDLE trigHndl TRANSACTION_HANDLE metaTransaction)
+					TRG IN RDB$TRIGGERS
+					WITH TRG.RDB$SCHEMA_NAME EQ D.RDB$DEPENDENT_SCHEMA_NAME AND
+						 TRG.RDB$TRIGGER_NAME EQ D.RDB$DEPENDENT_NAME
+				{
+					if (TRG.RDB$RELATION_NAME.NULL)
+						element = MetadataCache::get(tdbb)->getTriggersSet(tdbb, TRG.RDB$TRIGGER_TYPE);
+					else
+					{
+						name.object = TRG.RDB$RELATION_NAME;
+						name.schema = TRG.RDB$SCHEMA_NAME;
+						name.package = "";
+						element = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+					}
+				}
+				END_FOR
+			}
+			break;
+
+		case obj_computed:
+			{
+				// should refresh ralations that have such computed fields
+				AUTO_HANDLE(compHndl);
+				FOR (REQUEST_HANDLE compHndl TRANSACTION_HANDLE metaTransaction)
+					FLD IN RDB$RELATION_FIELDS
+					WITH FLD.RDB$FIELD_SOURCE EQ D.RDB$DEPENDENT_NAME
+					 AND FLD.RDB$FIELD_SOURCE_SCHEMA_NAME EQ D.RDB$DEPENDENT_SCHEMA_NAME
+				{
+					name.object = FLD.RDB$RELATION_NAME;
+					name.schema = FLD.RDB$SCHEMA_NAME;
+					name.package = "";
+					auto e = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+					if (e)
+						transaction->storeUpdate(e, forceRecompile);
+				}
+				END_FOR
 			}
 			break;
 
 		default:
 			break;
 		}
+
+		if (element)
+			transaction->storeUpdate(element, forceRecompile);
 	}
 	END_FOR
 }

@@ -4531,9 +4531,7 @@ bool jrd_tra::processUpdates(thread_db* tdbb)
 				elem->fillDeps(tdbb, false);
 
 				// make new version and compile it
-				elem->newVersion(tdbb);
-				auto rc = elem->ensureVersioned(tdbb, 0);
-				fb_assert(rc);
+				elem->makeVersion(tdbb);
 
 				storeCommit(elem);
 			}
