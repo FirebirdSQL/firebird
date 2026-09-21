@@ -4069,6 +4069,7 @@ static bool delete_rfr(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tr
 				CROSS RFLD IN RDB$RELATION_FIELDS
 				WITH RFLD.RDB$SCHEMA_NAME EQ REL.RDB$SCHEMA_NAME AND
 					 RFLD.RDB$PACKAGE_NAME EQUIV REL.RDB$PACKAGE_NAME AND
+					 RFLD.RDB$RELATION_NAME EQ REL.RDB$RELATION_NAME AND
 					 REL.RDB$RELATION_ID EQ work->dfw_id
 			{
 				field_count++;
