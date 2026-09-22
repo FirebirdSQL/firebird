@@ -571,6 +571,23 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 	}
 }
 
+void DsqlCompilerScratch::resolveCompositeFields(dsql_fld* field, dsql_fld*& fields,
+	const QualifiedName* cachePackage)
+{
+	if (!METD_gen_composite_type_fields(getTransaction(), this, field->relationName, fields))
+	{
+		genCompositeTypeFromCache(field, fields);
+
+		if (cachePackage)
+		{
+			field->relationName.schema = cachePackage->schema;
+			field->relationName.package = cachePackage->object;
+		}
+	}
+
+	field->fieldSource = field->typeOfName;
+}
+
 bool DsqlCompilerScratch::genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld*& resFields)
 {
 	for (auto it : localCompositeTypeDeclarations)

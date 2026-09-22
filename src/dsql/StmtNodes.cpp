@@ -8155,10 +8155,7 @@ LocalDeclarationsNode* LocalDeclarationsNode::dsqlPass(DsqlCompilerScratch* dsql
 
 				if (!relation && field->packageName.object.hasData())
 				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, fld))
-						dsqlScratch->genCompositeTypeFromCache(field, fld);
-
-					field->fieldSource = field->typeOfName;
+					dsqlScratch->resolveCompositeFields(field, fld);
 					field->fld_sub_first = fld;
 				}
 				else if (auto compositeTypeDeclPtr = dsqlScratch->localCompositeTypeDeclarations.get(field->typeOfName.object))

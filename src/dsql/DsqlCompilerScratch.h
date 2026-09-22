@@ -204,6 +204,8 @@ public:
 
 	bool getTypeFromCache(dsql_fld* field, const MetaName& typeName);
 	bool genCompositeTypeFromCache(dsql_fld* srcField, dsql_fld*& resField);
+	void resolveCompositeFields(dsql_fld* field, dsql_fld*& fields,
+		const QualifiedName* cachePackage = nullptr);
 
 	void putOuterMaps();
 	dsql_var* makeVariable(dsql_fld*, const char*, const dsql_var::Type type, USHORT,

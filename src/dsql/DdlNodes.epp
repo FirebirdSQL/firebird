@@ -2201,6 +2201,37 @@ bool CreateAlterFunctionNode::executeCreate(thread_db* tdbb, DsqlCompilerScratch
 	return true;
 }
 
+static void resolveRoutineRowtype(DsqlCompilerScratch* dsqlScratch, dsql_fld* field)
+{
+	if (field->dtype != dtype_rowtype &&
+		(field->typeOfName.object.hasData() || field->typeOfTable.object.isEmpty()))
+	{
+		return;
+	}
+
+	if (field->fromCursor)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			Arg::Gds(isc_invalid_parameter_decl) <<
+			Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
+	}
+
+	const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, {obj_relation});
+	if (const auto relation = std::get_if<dsql_rel*>(&resolvedObject); relation && *relation)
+		field->fld_sub_first = (*relation)->rel_fields;
+	else if (field->packageName.object.hasData())
+		dsqlScratch->resolveCompositeFields(field, field->fld_sub_first, &dsqlScratch->package);
+
+	if (!field->fld_sub_first)
+	{
+		ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+			Arg::Gds(isc_invalid_parameter_decl) <<
+			Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object));
+	}
+
+	calculateCompositeFieldLength(*field);
+}
+
 bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction, bool create, bool secondPass, bool runTriggers)
 {
@@ -2424,52 +2455,9 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 		// ... and insert the new ones
 
-		auto processRowtype = [&](dsql_fld* field) {
-			if (field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData()))
-			{
-				if (field->fromCursor)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-						Arg::Gds(isc_invalid_parameter_decl) <<
-						Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
-				}
-
-				dsql_rel* relation = nullptr;
-				dsql_fld* fld = nullptr;
-
-				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
-
-				if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
-					relation = *resolvedRelation;
-
-				if (relation)
-					field->fld_sub_first = relation->rel_fields;
-				else if (field->packageName.object.hasData())
-				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
-					{
-						dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
-						field->relationName.schema = dsqlScratch->package.schema;
-						field->relationName.package = dsqlScratch->package.object;
-					}
-
-					field->fieldSource = field->typeOfName;
-				}
-
-				if (!field->fld_sub_first)
-				{
-					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-						Arg::Gds(isc_invalid_parameter_decl) <<
-						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object));
-				}
-
-				calculateCompositeFieldLength(*field);
-			}
-		};
-
 		if (returnType && returnType->type)
 		{
-			processRowtype(returnType->type);
+			resolveRoutineRowtype(dsqlScratch, returnType->type);
 			storeArgument(tdbb, dsqlScratch, transaction, 0, true, returnType, NULL);
 		}
 
@@ -2481,7 +2469,7 @@ bool CreateAlterFunctionNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 			// Find the original parameter to recreate in the new parameter.
 			collectedParameters.get(parameter->name, collectedParameter);
 
-			processRowtype(parameter->type);
+			resolveRoutineRowtype(dsqlScratch, parameter->type);
 			storeArgument(tdbb, dsqlScratch, transaction, i + 1, false, parameter, &collectedParameter);
 		}
 	}
@@ -3539,72 +3527,30 @@ bool CreateAlterProcedureNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch
 
 		// ... and insert the new ones
 
-		// Helper function to process rowtype fields
-		auto processRowtype = [&](dsql_fld* field) {
-			if (field->fromCursor)
-			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_cursor_notdef) << Arg::Str(field->typeOfTable.object));
-			}
-
-			dsql_rel* relation = nullptr;
-			const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(field->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
-			if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
-				relation = *resolvedRelation;
-
-			if (relation)
-				field->fld_sub_first = relation->rel_fields;
-			else if (field->packageName.object.hasData())
-			{
-				if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, field->relationName, field->fld_sub_first))
-				{
-					dsqlScratch->genCompositeTypeFromCache(field, field->fld_sub_first);
-					field->relationName.schema = dsqlScratch->package.schema;
-					field->relationName.package = dsqlScratch->package.object;
-				}
-
-				field->fieldSource = field->typeOfName;
-			}
-
-			if (!field->fld_sub_first)
-			{
-				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-					Arg::Gds(isc_invalid_parameter_decl) <<
-					Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object));
-			}
-
-			calculateCompositeFieldLength(*field);
-		};
-
-		// Helper function to process a parameter
-		auto processParameter = [&](ParameterClause& parameter, FB_SIZE_T paramIndex, SSHORT paramType) {
+		// Process input parameters
+		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+		{
+			ParameterClause parameter = *parameters[i];
 			CollectedParameter collectedParameter;
 
 			// Find the original parameter to recreate in the new parameter.
 			collectedParameters.get(parameter.name, collectedParameter);
 
-			auto field = parameter.type;
-			auto isRowtype = field->dtype == dtype_rowtype || (!field->typeOfName.object.hasData() && field->typeOfTable.object.hasData());
-
-			if (isRowtype)
-				processRowtype(field);
-
-			storeParameter(tdbb, dsqlScratch, transaction, paramType, paramIndex, &parameter, &collectedParameter);
-		};
-
-		// Process input parameters
-		for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
-		{
-			ParameterClause parameter = *parameters[i];
-			processParameter(parameter, i, 0);  // TYPE_INPUT_PARAMETER
+			resolveRoutineRowtype(dsqlScratch, parameter.type);
+			storeParameter(tdbb, dsqlScratch, transaction, 0, i, &parameter, &collectedParameter);
 		}
 
 		// Process output parameters
 		for (FB_SIZE_T i = 0; i < returns.getCount(); ++i)
 		{
 			ParameterClause parameter = *returns[i];
-			processParameter(parameter, i, 1);  // TYPE_OUTPUT_PARAMETER
+			CollectedParameter collectedParameter;
+
+			// Find the original parameter to recreate in the new parameter.
+			collectedParameters.get(parameter.name, collectedParameter);
+
+			resolveRoutineRowtype(dsqlScratch, parameter.type);
+			storeParameter(tdbb, dsqlScratch, transaction, 1, i, &parameter, &collectedParameter);
 		}
 
 		AutoCacheRequest requestHandle2(tdbb, drq_m_prm_view, DYN_REQUESTS);

@@ -14930,6 +14930,29 @@ string RowValueExpressionNode::internalPrint(NodePrinter& printer) const
 	return "RowValueExpressionNode";
 }
 
+static dsql_fld* resolveRowtypeFields(DsqlCompilerScratch* dsqlScratch,
+	dsql_fld* source, QualifiedName& relationName)
+{
+	if (!source)
+		return nullptr;
+
+	DDL_resolve_intl_type(dsqlScratch, source, source->collate);
+
+	const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(source->typeOfTable, {obj_relation});
+	if (const auto relation = std::get_if<dsql_rel*>(&resolvedObject); relation && *relation)
+	{
+		relationName = (*relation)->rel_name;
+		return (*relation)->rel_fields;
+	}
+
+	if (source->packageName.object.isEmpty() && source->typeOfName.object.isEmpty())
+		return nullptr;
+
+	dsqlScratch->resolveCompositeFields(source, source->fld_sub_first);
+	relationName = source->relationName.object.hasData() ? source->relationName : source->typeOfName;
+	return source->fld_sub_first;
+}
+
 ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
 	if (rowField)
@@ -14937,7 +14960,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 		// AB: This is an already processed node. This could be done in expand_select_list.
 		return this;
 	}
-	// TODO ROWTYPE refactor this method, it's ugly
+
 	auto& pool = dsqlScratch->getPool();
 
 	RowValueExpressionNode* node = FB_NEW_POOL(pool) RowValueExpressionNode(pool);
@@ -14949,9 +14972,7 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 		node->rowValueExpressionList = nodeAs<SubQueryNode>(node->subquery)->rse->dsqlSelectList;
 
 		if (!forcedMultiColumn && node->rowValueExpressionList->items.getCount() == 1)
-		{
 			return node->subquery;
-		}
 	}
 
 	node->rowField = FB_NEW_POOL(pool) dsql_fld(pool);
@@ -14959,117 +14980,87 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	node->rowField->scale = 0;
 	node->rowField->fld_name = "ROW";
 	node->rowField->fld_sub_count = node->rowValueExpressionList->items.getCount();
-	node->rowField->length = NULL_BYTES(rowDesc.dsc_sub_count);
 
-	// TODO ROWTYPE implement dsc generating via fromField() for rowtype fields
+	// TODO ROWTYPE implement dsc generating via fromField() or similar function for rowtype fields
 	delete rowDesc.dsc_sub_first;
 	rowDesc.clear();
 	rowDesc.dsc_dtype = dtype_rowtype;
 	rowDesc.dsc_sub_count = node->rowValueExpressionList->items.getCount();
-	rowDesc.dsc_length += NULL_BYTES(rowDesc.dsc_sub_count);
-	rowDesc.dsc_sub_first = FB_NEW_POOL(pool) dsc;
+	rowDesc.dsc_length = NULL_BYTES(rowDesc.dsc_sub_count);
 	rowDesc.setNullable(true);
-	auto nextDsc = &rowDesc.dsc_sub_first;
+	node->rowField->length = rowDesc.dsc_length;
 
+	auto nextDsc = &rowDesc.dsc_sub_first;
 	auto nextFld = &node->rowField->fld_sub_first;
-	auto subfieldSerialNumber = 0;
+	QualifiedName defaultRelation;
+	dsql_fld* defaultField = nullptr;
+	bool rowtypeFieldsResolved = false;
+	unsigned fieldIndex = 0;
 
 	for (auto& valueExprNode : node->rowValueExpressionList->items)
 	{
 		valueExprNode = doDsqlPass(dsqlScratch, valueExprNode);
-		if (!*nextDsc)
-			*nextDsc = FB_NEW_POOL(pool) dsc;
 
 		if (!valueExprNode)	// it's nullptr for DEFAULT
 		{
-			QualifiedName relationSource;
-			MetaName fieldName = "";
-			if (defaultSource)
+			if (!rowtypeFieldsResolved)
 			{
-				DDL_resolve_intl_type(dsqlScratch, defaultSource, defaultSource->collate);
-
-				dsql_rel* rel = nullptr;
-				const auto resolvedObject = dsqlScratch->resolveRoutineOrRelation(defaultSource->typeOfTable, std::initializer_list<ObjectType>{obj_relation});
-
-				if (const auto resolvedRelation = std::get_if<dsql_rel*>(&resolvedObject))
-					rel = *resolvedRelation;
-
-				if (rel)
-				{
-					dsql_fld* field = rel->rel_fields;
-					auto counter = subfieldSerialNumber;
-					while (counter-- && field)
-						field = field->fld_next;
-
-					if (field)
-					{
-						fieldName = field->fld_name;
-						relationSource = rel->rel_name;
-					}
-				}
-				else if (defaultSource->packageName.object.hasData() || defaultSource->typeOfName.object.hasData())
-				{
-					if (!METD_gen_composite_type_fields(dsqlScratch->getTransaction(), dsqlScratch, defaultSource->relationName, defaultSource->fld_sub_first))
-						dsqlScratch->genCompositeTypeFromCache(defaultSource, defaultSource->fld_sub_first);
-
-					defaultSource->fieldSource = defaultSource->typeOfName;
-
-					dsql_fld* field = defaultSource->fld_sub_first;
-					auto counter = subfieldSerialNumber;
-					while (counter-- && field)
-						field = field->fld_next;
-
-					if (field)
-					{
-						fieldName = field->fld_name;
-						relationSource = defaultSource->relationName.object.hasData() ? defaultSource->relationName : defaultSource->typeOfName;
-					}
-				}
+				defaultField = resolveRowtypeFields(dsqlScratch, defaultSource, defaultRelation);
+				for (unsigned i = 0; i < fieldIndex && defaultField; ++i)
+					defaultField = defaultField->fld_next;
+				rowtypeFieldsResolved = true;
 			}
 
-			if (relationSource.object.isEmpty() || fieldName.isEmpty())
+			if (defaultRelation.object.isEmpty() || !defaultField || defaultField->fld_name.isEmpty())
+			{
 				ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
 						  Arg::Gds(isc_dsql_field_err) <<
 						  Arg::Gds(isc_random) << Arg::Str("DEFAULT"));
+			}
 
-			valueExprNode = FB_NEW_POOL(pool) DefaultNode(pool, relationSource, fieldName);
+			valueExprNode = FB_NEW_POOL(pool) DefaultNode(pool, defaultRelation, defaultField->fld_name);
 			valueExprNode = doDsqlPass(dsqlScratch, valueExprNode, false);
 		}
 
-		DsqlDescMaker::fromNode(dsqlScratch, *nextDsc, valueExprNode, true);
+		const auto fieldDesc = FB_NEW_POOL(pool) dsc(pool);
+		*nextDsc = fieldDesc;
+		DsqlDescMaker::fromNode(dsqlScratch, fieldDesc, valueExprNode, true);
 
-		if ((*nextDsc)->dsc_dtype == dtype_rowtype)
+		if (fieldDesc->dsc_dtype == dtype_rowtype)
 		{
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-901) <<
 						Arg::Gds(isc_random) << Arg::Str("Nested ROW values are not supported"));
 		}
 
-		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
-			rowDesc.dsc_length = FB_ALIGN(rowDesc.dsc_length, type_alignments[(*nextDsc)->dsc_dtype]);
-
-		rowDesc.dsc_length += (*nextDsc)->dsc_length;
-
-		*nextFld = FB_NEW_POOL(pool) dsql_fld(pool);
-		(*nextFld)->dtype = (*nextDsc)->dsc_dtype;
-		(*nextFld)->scale = (*nextDsc)->dsc_scale;
-		(*nextFld)->subType = (*nextDsc)->dsc_sub_type;
-		(*nextFld)->charSetId = (*nextDsc)->getCharSet();
+		const auto field = FB_NEW_POOL(pool) dsql_fld(pool);
+		*nextFld = field;
+		field->dtype = fieldDesc->dsc_dtype;
+		field->scale = fieldDesc->dsc_scale;
+		field->subType = fieldDesc->dsc_sub_type;
+		field->charSetId = fieldDesc->getCharSet();
+		field->length = fieldDesc->dsc_length;
 
 		dsql_par dummyPar(pool);
 		valueExprNode->setParameterName(&dummyPar);
-		(*nextFld)->length = (*nextDsc)->dsc_length;
-		(*nextFld)->fld_name = dummyPar.par_alias;
-		(*nextFld)->resolve(dsqlScratch);
+		field->fld_name = dummyPar.par_alias;
+		field->resolve(dsqlScratch);
 
-		if ((*nextDsc)->dsc_dtype >= dtype_aligned)
-			node->rowField->length = FB_ALIGN(node->rowField->length, type_alignments[(*nextDsc)->dsc_dtype]);
+		if (fieldDesc->dsc_dtype >= dtype_aligned)
+		{
+			const auto alignment = type_alignments[fieldDesc->dsc_dtype];
+			rowDesc.dsc_length = FB_ALIGN(rowDesc.dsc_length, alignment);
+			node->rowField->length = FB_ALIGN(node->rowField->length, alignment);
+		}
 
-		node->rowField->length += (*nextFld)->length;
+		rowDesc.dsc_length += fieldDesc->dsc_length;
+		node->rowField->length += field->length;
 
-		nextFld = &(*nextFld)->fld_next;
-		nextDsc = &(*nextDsc)->dsc_next;
+		nextFld = &field->fld_next;
+		nextDsc = &fieldDesc->dsc_next;
 
-		subfieldSerialNumber++;
+		if (defaultField)
+			defaultField = defaultField->fld_next;
+		++fieldIndex;
 	}
 
 	node->dsqlDesc = node->rowDesc = rowDesc;
