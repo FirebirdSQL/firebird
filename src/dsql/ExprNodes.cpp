@@ -14981,7 +14981,6 @@ ValueExprNode* RowValueExpressionNode::dsqlPass(DsqlCompilerScratch* dsqlScratch
 	node->rowField->fld_name = "ROW";
 	node->rowField->fld_sub_count = node->rowValueExpressionList->items.getCount();
 
-	// TODO ROWTYPE implement dsc generating via fromField() or similar function for rowtype fields
 	delete rowDesc.dsc_sub_first;
 	rowDesc.clear();
 	rowDesc.dsc_dtype = dtype_rowtype;

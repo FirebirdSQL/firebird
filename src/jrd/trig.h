@@ -84,7 +84,7 @@ static inline constexpr Jrd::gen generators[] =
 	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name", ODS_13_0 },
 	{ PACKAGES_GENERATOR, 12, "Package ID", ODS_14_0 },
 	{ "RDB$RELATIONS", RELATIONS_GENERATOR, "Relation ID", ODS_14_0 },
-	{ "RDB$RELATION_NAME", 14, "Composite type fake relation name ID", ODS_14_0 },	// TODO ROWTYPE does this needed now?
+	{ "RDB$RELATION_NAME", 14, "Composite type fake relation name ID", ODS_14_0 },
 	{ nullptr, 0, nullptr, 0 }
 };
 

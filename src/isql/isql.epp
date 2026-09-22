@@ -7275,7 +7275,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 						break;
 					}
 
-	#if defined(MINGW)
+#if defined(MINGW)
 					if (value == 0)
 					{
 						snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)) - 1, value);
@@ -7290,12 +7290,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 							isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 						}
 					}
-	#else
+#else
 					snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(8, (length - 6)), value);
 					if (setValues.List) {
 						isqlGlob.printf("%.*g%s", FLOAT_LEN - 6, value, NEWLINE);
 					}
-	#endif
+#endif
 				}
 				break;
 
@@ -7351,7 +7351,7 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 					}
 					else
 					{
-	#if defined(MINGW)
+#if defined(MINGW)
 						if (value == 0)
 						{
 							snprintf(p, bufSize, "% #*.*g ", length,
@@ -7368,12 +7368,12 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 								isqlGlob.printf("%#.*g%s", DOUBLE_LEN - 7, value, NEWLINE);
 							}
 						}
-	#else
+#else
 						snprintf(p, bufSize, "% #*.*g ", length, (int) MIN(16, (length - 7)), value);
 						if (setValues.List) {
 							isqlGlob.printf("%#.*g%s", DOUBLE_LEN - 7, value, NEWLINE);
 						}
-	#endif
+#endif
 					}
 				}
 				break;
@@ -7645,26 +7645,6 @@ static unsigned print_item(TEXT** s, const IsqlVar* var, const unsigned length)
 				if (setValues.List)
 					isqlGlob.printf("%s%s", d, NEWLINE);
 				break;
-
-			case SQL_ROWTYPE:
-				// this is only for debug purposes, TODO ROWTYPE rewrite
-				{
-					// auto str2 = var->value.asChar;
-					// const ULONG hex_len = 2 * var->length;
-					// TEXT* buff2 = (TEXT*) ISQL_ALLOC(hex_len + 1);
-					// // Convert the string to hex digits
-					// for (unsigned i = 0; i < var->length; i++) {
-					// 	sprintf(&buff2[i * 2], "%02X", (UCHAR)str2[i]);
-					// }
-					// buff2[hex_len] = 0;
-					// if (setValues.List) {
-					// 	isqlGlob.printf("%-*s%s", var->length, buff2, NEWLINE);
-					// }
-					// else
-					// 	sprintf(p, "%-*s ", length, buff2);
-					// ISQL_FREE(buff2);
-					break;
-				}
 
 			default:
 				snprintf(d, sizeof(d), "Unknown type: %d", dtype);

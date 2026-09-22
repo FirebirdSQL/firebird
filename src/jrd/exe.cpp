@@ -383,11 +383,7 @@ void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
 
 	// Get descriptor of target field/parameter/variable, etc.
 	dsc* to_desc;
-	if (from_desc && from_desc->dsc_dtype == dtype_rowtype)	// this is dummy check for debug purposes	// TODO ROWTYPE remove
-		from_desc->dsc_dtype = dtype_rowtype;
 	to_desc = EVL_assign_to(tdbb, to);
-	if (to_desc && to_desc->dsc_dtype == dtype_rowtype)	// this is dummy check for debug purposes	// TODO ROWTYPE remove
-		to_desc->dsc_dtype = dtype_rowtype;
 
 	// NS: If we are assigning to NULL, we finished.
 	// This functionality is currently used to allow calling UDF routines
