@@ -214,7 +214,13 @@ void InnerJoin::estimateCost(unsigned position,
 	// its real cardinality during execution. So, unless we have some index-based
 	// filtering applied, let's better be pessimistic and avoid hash joining due to
 	// likely cardinality under-estimation.
-	const bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
+	bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
+
+	// If the user-defined plan is provided and we were able to utilize indices for this retrieval,
+	// then such indices were explicitly specified in the plan.
+	// It means the user seems to prefers a loop-join over a hash-join.
+	if (csb->csb_rpt[stream->number].csb_plan && candidate->indexes && candidate->dependencies)
+		avoidHashJoin = true;
 
 	// Consider whether the current stream can be hash-joined to the prior ones.
 	// Beware conditional retrievals, this is impossible for them.
