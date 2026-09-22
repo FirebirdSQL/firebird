@@ -193,7 +193,8 @@ protected:
 	void copyFrom(const Array<T, Storage>& source)
 	{
 		ensureCapacity(source.count, false);
-		memcpy(static_cast<void*>(data), source.data, sizeof(T) * source.count);
+		if (source.count)
+			memcpy(static_cast<void*>(data), source.data, sizeof(T) * source.count);
 		count = source.count;
 	}
 
@@ -260,8 +261,10 @@ public:
 		fb_assert(index <= count);
 		fb_assert(count < FB_MAX_SIZEOF);
 		ensureCapacity(count + 1);
-		memmove(static_cast<void*>(data + index + 1), data + index, sizeof(T) * (count++ - index));
+		if (count - index)
+			memmove(static_cast<void*>(data + index + 1), data + index, sizeof(T) * (count - index));
 		data[index] = item;
+		++count;
 	}
 
 	void insert(const size_type index, const Array<T, Storage>& items)
@@ -269,8 +272,10 @@ public:
 		fb_assert(index <= count);
 		fb_assert(count <= FB_MAX_SIZEOF - items.count);
 		ensureCapacity(count + items.count);
-		memmove(static_cast<void*>(data + index + items.count), data + index, sizeof(T) * (count - index));
-		memcpy(static_cast<void*>(data + index), items.data, items.count);
+		if (count - index)
+			memmove(static_cast<void*>(data + index + items.count), data + index, sizeof(T) * (count - index));
+		if (items.count)
+			memcpy(static_cast<void*>(data + index), items.data, sizeof(T) * items.count);
 		count += items.count;
 	}
 
@@ -279,8 +284,10 @@ public:
 		fb_assert(index <= count);
 		fb_assert(count <= FB_MAX_SIZEOF - itemsCount);
 		ensureCapacity(count + itemsCount);
-		memmove(static_cast<void*>(data + index + itemsCount), data + index, sizeof(T) * (count - index));
-		memcpy(static_cast<void*>(data + index), items, sizeof(T) * itemsCount);
+		if (count - index)
+			memmove(static_cast<void*>(data + index + itemsCount), data + index, sizeof(T) * (count - index));
+		if (itemsCount)
+			memcpy(static_cast<void*>(data + index), items, sizeof(T) * itemsCount);
 		count += itemsCount;
 	}
 
