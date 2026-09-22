@@ -1317,7 +1317,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 	// for a retrieval. Internal (system) requests used by the engine itself are
 	// often optimized using zero or non-actual statistics, so they are processed
 	// using somewhat relaxed rules.
-	const bool customPlan = csb->csb_rpt[stream].csb_plan;
+	const bool customPlan = (csb->csb_rpt[stream].csb_plan != nullptr);
 	const bool sysRequest = (csb->csb_g_flags & csb_internal);
 
 	double totalSelectivity = MAXIMUM_SELECTIVITY; // worst selectivity
