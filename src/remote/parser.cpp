@@ -299,7 +299,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			break;
 
 		case blr_int128:
-			if (blr_length < 1)
+			if (blr_length-- == 0)
 				return nullptr;
 			desc->dsc_dtype = dtype_int128;
 			desc->dsc_length = sizeof(Int128);
