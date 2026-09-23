@@ -48,6 +48,13 @@ using namespace Jrd;
 
 namespace
 {
+	// Below this threshold the temp buffer is small enough to fit in L3,
+	// so the cache-friendly sequential read path is faster and the extra
+	// memory is negligible. Above the threshold the extra memory starts
+	// to matter for concurrent connections, and we accept the cache cost
+	// of in-place redistribution.
+	constexpr ULONG IN_PLACE_THRESHOLD = 1 << 20;   // 1M entries = 8 MB
+	
 	// Predefined table sizes (all prime). Table sizing is done once, in build(),
 	// based on the actual number of collected entries.	
 	constexpr ULONG HASH_SIZES[] =
@@ -264,14 +271,18 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 	// This is the only place where O(n) temporary memory is needed.
 	// Peak footprint during build is roughly twice the size of the
 	// entries array; the temporary buffer is released right after.
-	if (n > 0)
+
+	if (n == 0)
+		return;
+
+	Array<ULONG> next(getPool(), tableSize);
+	next.grow(tableSize);
+	memcpy(next.begin(), bucketStart.begin(), tableSize * sizeof(ULONG));
+
+	if (n < IN_PLACE_THRESHOLD)
 	{
 		Array<Entry> temp(getPool(), n);
 		temp.grow(n);
-
-		Array<ULONG> next(getPool(), tableSize);
-		next.grow(tableSize);
-		memcpy(next.begin(), bucketStart.begin(), tableSize * sizeof(ULONG));
 
 		for (ULONG k = 0; k < n; k++)
 		{
@@ -280,6 +291,36 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 		}
 
 		entries.assign(temp);
+    }
+	else
+	{
+		// Try to rearrange array by placing entry in correct bucket without making copy.
+		// `tableSize - 1` is because after iterating over all buckets except the last one, the lasting elements will be
+		// already placed at the correct (last) bucket.
+		for (ULONG bucket = 0; bucket < tableSize - 1; bucket++)
+		{
+			// Iterate bucket by bucket and place entry in the correct spot.
+			// After placing entry, the bucket start point will be incremented, so when we are starting to process next bucket,
+			// we will skip entries, that already at the right bucket.
+			for (ULONG k = next[bucket]; k < bucketStart[bucket + 1]; k++)
+			{
+				Entry& e = entries[k];
+				const auto targetBucket = e.hash % tableSize;
+
+				// Already placed at correct bucket, just increment the pointer.
+				if (targetBucket == bucket)
+				{
+					++next[bucket];
+					continue;
+				}
+
+				// Place entry in correct bucket by swapping current entry with entry that is taking our spot.
+				std::swap(e, entries[next[targetBucket]++]);
+
+				// Due to the swap operation, we need to process newly arrived entry at the current position once more.
+				--k;
+			}
+		}
 	}
 
 	// Pass 4: sort each bucket by hash. Singletons are skipped.
@@ -288,10 +329,10 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 	// on the join key anyway.
 	auto compareHash = [](const Entry& a, const Entry& b) { return a.hash < b.hash; };
 
-	for (ULONG b = 0; b < tableSize; b++)
+	for (ULONG bucket = 0; bucket < tableSize; bucket++)
 	{
-		const ULONG start = bucketStart[b];
-		const ULONG end = bucketStart[b + 1];
+		const ULONG start = bucketStart[bucket];
+		const ULONG end = bucketStart[bucket + 1];
 		if (end > start + 1)
 			std::sort(entries.begin() + start, entries.begin() + end, compareHash);
 	}
