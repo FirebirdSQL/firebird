@@ -3670,6 +3670,16 @@ static bool create_relation(thread_db* tdbb, SSHORT phase, DeferredWork* work, j
 				// Mark relation in the cache as dropped
 				relation->rel_flags |= REL_deleted;
 			}
+
+			// RDB$FORMATS also worth cleaning
+			handle.reset();
+
+			FOR(REQUEST_HANDLE handle) F IN RDB$FORMATS WITH
+				F.RDB$RELATION_ID EQ X.RDB$RELATION_ID
+			{
+				ERASE F;
+			}
+			END_FOR
 		}
 		END_FOR
 
