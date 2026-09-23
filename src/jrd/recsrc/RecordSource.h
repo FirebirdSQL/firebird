@@ -1225,11 +1225,13 @@ namespace Jrd
 		};
 
 	public:
-		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb,
 				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
-		HashJoin(thread_db* tdbb, CompilerScratch* csb,
-				 BoolExprNode* boolean,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType, BoolExprNode* boolean,
+				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
+				 double selectivity = 0);
+		HashJoin(thread_db* tdbb, CompilerScratch* csb, BoolExprNode* boolean,
 				 RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 

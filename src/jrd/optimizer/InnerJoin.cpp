@@ -589,7 +589,7 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();

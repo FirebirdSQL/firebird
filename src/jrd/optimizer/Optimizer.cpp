@@ -2579,9 +2579,13 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 	if (orgCount < 2)
 		return false;
 
+	fb_assert(joinType == INNER_JOIN || orgCount == 2);
+
 	HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> scratch;
 	scratch.grow(baseConjuncts * orgCount);
 	ValueExprNode** classes = scratch.begin();
+
+	BoolExprNode* boolean = nullptr;
 
 	// Compute equivalence classes among streams. This involves finding groups
 	// of streams joined by field equalities.
@@ -2637,6 +2641,10 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 						last_class += orgCount;
 
 					iter |= Optimizer::CONJUNCT_JOINED;
+
+					boolean = boolean ?
+						FB_NEW_POOL(getPool()) BinaryBoolNode(getPool(), blr_and, boolean, *iter) :
+						*iter;
 				}
 			}
 		}
@@ -2785,7 +2793,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 			rsbs.add(river->getRecordSource());
 
 		finalRsb = FB_NEW_POOL(getPool())
-			HashJoin(tdbb, csb, joinType, rsbs.getCount(), rsbs.begin(), keys.begin());
+			HashJoin(tdbb, csb, joinType, boolean, rsbs.getCount(), rsbs.begin(), keys.begin());
 	}
 
 	// Pick up any boolean that may apply
