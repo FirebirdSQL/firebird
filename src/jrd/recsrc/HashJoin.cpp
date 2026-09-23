@@ -69,7 +69,7 @@ namespace
 	// Desired average number of entries per bucket. We sort each bucket
 	// by hash and use binary search on lookup, so even a moderately long
 	// bucket is cheap. A small factor here means more buckets and a larger
-	// bucketStart array; a large factor means longer buckets.
+	// bucketOffsets array; a large factor means longer buckets.
 	constexpr ULONG HASH_LOAD_FACTOR = 4;
 
 	constexpr ULONG nextHashSize(ULONG current)
@@ -111,13 +111,13 @@ class HashJoin::HashTable final : public PermanentStorage
 	struct Stream : public PermanentStorage
 	{
 		Array<Entry> entries;        // all records, grouped by bucket after build()
-		Array<ULONG> bucketStart;    // size = tableSize + 1; see build() for layout
+		Array<ULONG> bucketOffsets;  // size = tableSize + 1; see build() for layout
 		ULONG iterator;              // current cursor for iterate()
 
 		explicit Stream(MemoryPool& pool) 
 			: PermanentStorage(pool)
 			, entries(pool)
-			, bucketStart(pool)
+			, bucketOffsets(pool)
 			, iterator(0) 
 		{}
 
@@ -135,14 +135,14 @@ class HashJoin::HashTable final : public PermanentStorage
 		// estimate, so this runs exactly once and never re-runs.
 		//
 		// Each bucket is expressed as a half-open range
-		// [bucketStart[b], bucketStart[b + 1]). The extra (tableSize + 1)-th
+		// [bucketOffsets[b], bucketOffsets[b + 1]). The extra (tableSize + 1)-th
 		// element is needed so that the range of the last bucket can be
 		// written uniformly, without a special case.
 		void build(ULONG tableSize);
 
 		bool bucketEmpty(ULONG slot) const noexcept
 		{
-			return bucketStart[slot] == bucketStart[slot + 1];
+			return bucketOffsets[slot] == bucketOffsets[slot + 1];
 		}
 
 
@@ -151,8 +151,8 @@ class HashJoin::HashTable final : public PermanentStorage
 		// greater than it, and iterate() immediately returns false.
 		void reset(ULONG slot, ULONG hash)
 		{
-			ULONG lo = bucketStart[slot];
-			ULONG hi = bucketStart[slot + 1];
+			ULONG lo = bucketOffsets[slot];
+			ULONG hi = bucketOffsets[slot + 1];
 
 			while (lo < hi)
 			{
@@ -168,7 +168,7 @@ class HashJoin::HashTable final : public PermanentStorage
 
 		bool iterate(ULONG slot, ULONG hash, ULONG& position) noexcept
 		{
-			const ULONG end = bucketStart[slot + 1];
+			const ULONG end = bucketOffsets[slot + 1];
 
 			if (iterator >= end || entries[iterator].hash != hash)
 				return false;
@@ -245,39 +245,42 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 {
 	const ULONG n = entries.getCount();
 
-	bucketStart.grow(tableSize + 1);
-	memset(bucketStart.begin(), 0, (tableSize + 1) * sizeof(ULONG));
+	bucketOffsets.grow(tableSize + 1);
+	memset(bucketOffsets.begin(), 0, (tableSize + 1) * sizeof(ULONG));
 
 	// Pass 1: count how many entries fall into each bucket.
-	// bucketStart[b + 1] is used as a per-bucket counter, so after
-	// this pass bucketStart[b + 1] holds the size of bucket b.
+	// bucketOffsets[b + 1] is used as a per-bucket counter, so after
+	// this pass bucketOffsets[b + 1] holds the size of bucket b.
 	// The +1 offset lets us compute prefix sums below without
-	// touching bucketStart[0], which stays zero.
+	// touching bucketOffsets[0], which stays zero.
 	for (ULONG k = 0; k < n; k++)
-		bucketStart[entries[k].hash % tableSize + 1]++;
+		bucketOffsets[entries[k].hash % tableSize + 1]++;
 
 	// Pass 2: turn per-bucket counts into start offsets.
-	// After this pass bucketStart[b] is the index of the first
-	// entry of bucket b, and bucketStart[b + 1] is one past the last.
+	// After this pass bucketOffsets[b] is the index of the first
+	// entry of bucket b, and bucketOffsets[b + 1] is one past the last.
 	for (ULONG b = 0; b < tableSize; b++)
-		bucketStart[b + 1] += bucketStart[b];
+		bucketOffsets[b + 1] += bucketOffsets[b];
 
 	// Pass 3: physically move entries into their buckets. We cannot
 	// write into entries while still reading from it without
 	// corrupting data, so we allocate a temporary buffer and use a
-	// separate cursor array 'next' that starts as a copy of bucketStart
+	// separate cursor array 'next' that starts as a copy of bucketOffsets
 	// and is incremented as entries are placed.
 	//
-	// This is the only place where O(n) temporary memory is needed.
-	// Peak footprint during build is roughly twice the size of the
-	// entries array; the temporary buffer is released right after.
+	// Below IN_PLACE_THRESHOLD we use a temporary buffer, since at that
+	// size it fits in L3 and the sequential read path is faster; peak
+	// footprint during build is roughly twice the size of the entries
+	// array. Above the threshold the same redistribution is performed
+	// in place by swapping entries into their target bucket, trading
+	// some cache locality for a lower memory footprint.
 
 	if (n == 0)
 		return;
 
 	Array<ULONG> next(getPool(), tableSize);
 	next.grow(tableSize);
-	memcpy(next.begin(), bucketStart.begin(), tableSize * sizeof(ULONG));
+	memcpy(next.begin(), bucketOffsets.begin(), tableSize * sizeof(ULONG));
 
 	if (n < IN_PLACE_THRESHOLD)
 	{
@@ -302,23 +305,65 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 			// Iterate bucket by bucket and place entry in the correct spot.
 			// After placing entry, the bucket start point will be incremented, so when we are starting to process next bucket,
 			// we will skip entries, that already at the right bucket.
-			for (ULONG k = next[bucket]; k < bucketStart[bucket + 1]; k++)
-			{
-				Entry& e = entries[k];
-				const auto targetBucket = e.hash % tableSize;
+			const auto bucketEnd = bucketOffsets[bucket + 1];
 
-				// Already placed at correct bucket, just increment the pointer.
-				if (targetBucket == bucket)
+			// Multi-pass in-place redistribution:
+			//
+			//   - Next[bucket] is the boundary of the verified region: positions
+			//     [bucketOffsets[bucket], next[bucket]) already contain entries
+			//     belonging to this bucket.
+			//   - On each pass, we walk [next[bucket], bucketEnd) and for every
+			//     entry either advance the boundary (if it is already at its
+			//     target) or swap it with the next free slot in its target bucket.
+			//   - After the swap, the current position holds an entry from
+			//     another bucket. We deliberately do not reprocess it in this
+			//     pass; the outer loop will run another pass starting from the
+			//     current boundary until the bucket is complete.
+			//
+			// Multiple passes let the inner loop have no cross-iteration
+			// dependency on the just-swapped-in entry, which the CPU can pipeline
+			// more aggressively than the single-pass version.
+			while (true)
+			{
+				const auto start = next[bucket];
+				if (start == bucketEnd)
+					break;
+
+				// If only one slot remains, chase the correct entry directly rather
+				// than running another full pass of the for-loop.
+				if (bucketEnd - start == 1)
 				{
-					++next[bucket];
-					continue;
+					while (next[bucket] < bucketEnd)
+					{
+						Entry& e = entries[next[bucket]];
+						const auto targetBucket = e.hash % tableSize;
+
+						if (targetBucket == bucket)
+						{
+							++next[bucket];
+							break;
+						}
+
+						std::swap(e, entries[next[targetBucket]++]);
+					}
+					break;
 				}
 
-				// Place entry in correct bucket by swapping current entry with entry that is taking our spot.
-				std::swap(e, entries[next[targetBucket]++]);
+				for (ULONG k = start; k < bucketEnd; k++)
+				{
+					Entry& e = entries[k];
+					const auto targetBucket = e.hash % tableSize;
 
-				// Due to the swap operation, we need to process newly arrived entry at the current position once more.
-				--k;
+					// Self-target entries at the head of the unverified region would
+					// only self-swap, so skip them and advance the boundary.
+					if (k == next[bucket] && targetBucket == bucket)
+					{
+						++next[bucket];
+						continue;
+					}
+
+					std::swap(e, entries[next[targetBucket]++]);
+				}
 			}
 		}
 	}
@@ -331,8 +376,8 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 
 	for (ULONG bucket = 0; bucket < tableSize; bucket++)
 	{
-		const ULONG start = bucketStart[bucket];
-		const ULONG end = bucketStart[bucket + 1];
+		const ULONG start = bucketOffsets[bucket];
+		const ULONG end = bucketOffsets[bucket + 1];
 		if (end > start + 1)
 			std::sort(entries.begin() + start, entries.begin() + end, compareHash);
 	}
@@ -346,7 +391,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 
 		for (ULONG b = 0; b < tableSize; b++)
 		{
-			const ULONG cnt = bucketStart[b + 1] - bucketStart[b];
+			const ULONG cnt = bucketOffsets[b + 1] - bucketOffsets[b];
 			if (cnt == 0)
 				continue;
 
