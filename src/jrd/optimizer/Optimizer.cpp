@@ -1045,7 +1045,6 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 					// dependent rivers from hashing or sort/merging that happens below.
 
 					rivers.add(FB_NEW_POOL(getPool()) CrossJoin(this, rivers, INNER_JOIN));
-					rivers.back()->activate(csb);
 				}
 
 				// Now process streams dependent on rivers that are dependent themselves
