@@ -87,6 +87,7 @@ hdr_crypt_plugin 88
 hdr_att_high 120
 hdr_tra_high 124
 hdr_data 132
+hdr_padding 134
 
  *** struct page_inv_page 32
 pip_header 0
@@ -94,6 +95,7 @@ pip_min 16
 pip_extent 20
 pip_used 24
 pip_bits 28
+pip_padding 30
 
  *** struct scns_page 24
 scn_header 0
@@ -107,12 +109,14 @@ ppg_next 20
 ppg_count 24
 ppg_relation 26
 ppg_min_space 28
+ppg_padding 30
 ppg_page 32
 
  *** struct tx_inv_page 24
 tip_header 0
 tip_next 16
 tip_transactions 20
+tip_padding 22
 
  *** struct generator_page 32
 gpg_header 0
@@ -127,6 +131,7 @@ rhd_b_line 8
 rhd_flags 10
 rhd_format 12
 rhd_data 13
+rhd_padding 14
 
  *** struct rhde 20
 rhde_transaction 0
@@ -136,6 +141,7 @@ rhde_flags 10
 rhde_format 12
 rhde_tra_high 14
 rhde_data 16
+rhde_padding 18
 
  *** struct rhdf 24
 rhdf_transaction 0
@@ -154,6 +160,7 @@ blh_max_sequence 4
 blh_max_segment 8
 blh_flags 10
 blh_level 12
+blh_padding 14
 blh_count 16
 blh_length 20
 blh_sub_type 24
