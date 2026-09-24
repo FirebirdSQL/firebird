@@ -89,7 +89,7 @@ void		MET_activate_shadow(Jrd::thread_db*);
 ULONG		MET_align(const dsc*, ULONG);
 Jrd::Cached::Relation*	MET_change_fields(Jrd::thread_db*, Jrd::jrd_tra*, const dsc*, const dsc*);
 void		MET_delete_dependencies(Jrd::thread_db*, const Jrd::QualifiedName&, int);
-void		MET_eval_relation_fields_dependency(Jrd::thread_db*, Jrd::jrd_tra*, const dsc*);
+void		MET_eval_relation_fields_dependency(Jrd::thread_db*, Jrd::jrd_tra*, const Jrd::QualifiedName&);
 void		MET_delete_shadow(Jrd::thread_db*, USHORT);
 void		MET_error(const TEXT*, ...);
 bool		MET_get_char_coll_subtype_info(Jrd::thread_db*, USHORT, Jrd::SubtypeInfo* info);
@@ -144,6 +144,6 @@ bool MET_check_schema_exists(Jrd::thread_db* tdbb, const Jrd::MetaName& name);
 bool MET_get_ltt_index(Jrd::Attachment* attachment, const Jrd::QualifiedName& indexName,
 	Jrd::LocalTemporaryTable** outLtt = nullptr, Jrd::LocalTemporaryTable::Index** outIndex = nullptr);
 bool MET_get_composite_type(Jrd::thread_db*, MemoryPool&, const Jrd::QualifiedName&, dsc*,
-	Firebird::LeftPooledMap<Jrd::QualifiedNameMetaNamePair, Jrd::FieldInfo>* = nullptr);
+	Firebird::LeftPooledMap<Jrd::QualifiedNameMetaNamePair, Jrd::FieldInfo>* = nullptr, bool = false);
 
 #endif // JRD_MET_PROTO_H

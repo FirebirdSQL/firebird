@@ -127,7 +127,7 @@ static bool verify_TRG_ignore_perm(thread_db*, const QualifiedName&);
 
 
 bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const QualifiedName& name, dsc* desc,
-	MapFieldInfo* fieldInfoMap)
+	MapFieldInfo* fieldInfoMap, bool typeOfTable)
 {
 /**************************************
  *
@@ -150,55 +150,59 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 	FieldInfo* fieldInfo = nullptr;
 	FieldInfo** nextSubfieldInfo = nullptr;
 
-	FOR(REQUEST_HANDLE handle)
-		FLD IN RDB$FIELDS
-		WITH FLD.RDB$FIELD_NAME EQ name.object.c_str()
+	if (!typeOfTable)
 	{
-		if (DSC_make_descriptor(desc,
-								FLD.RDB$FIELD_TYPE,
-								FLD.RDB$FIELD_SCALE,
-								FLD.RDB$FIELD_LENGTH,
-								FLD.RDB$FIELD_SUB_TYPE,
-								CSetId(FLD.RDB$CHARACTER_SET_ID),
-								CollId(FLD.RDB$COLLATION_ID)))
+		FOR(REQUEST_HANDLE handle)
+			FLD IN RDB$FIELDS
+			WITH FLD.RDB$SCHEMA_NAME EQ name.schema.c_str()
+			AND FLD.RDB$FIELD_NAME EQ name.object.c_str()
 		{
-			found = true;
-			relationName = QualifiedName(FLD.RDB$RELATION_NAME, FLD.RDB$SCHEMA_NAME);
-
-			if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
-				desc->dsc_flags |= DSC_nullable;
-
-			if (fieldInfoMap)
+			if (DSC_make_descriptor(desc,
+									FLD.RDB$FIELD_TYPE,
+									FLD.RDB$FIELD_SCALE,
+									FLD.RDB$FIELD_LENGTH,
+									FLD.RDB$FIELD_SUB_TYPE,
+									CSetId(FLD.RDB$CHARACTER_SET_ID),
+									CollId(FLD.RDB$COLLATION_ID)))
 			{
-				QualifiedNameMetaNamePair namePair(name, "");
-				fieldInfo = fieldInfoMap->get(namePair);
-				if (!fieldInfo)
-					fieldInfo = fieldInfoMap->put(namePair);
+				found = true;
+				relationName = QualifiedName(FLD.RDB$RELATION_NAME, FLD.RDB$SCHEMA_NAME);
 
-				nextSubfieldInfo = &fieldInfo->subFirst;
+				if (FLD.RDB$NULL_FLAG.NULL && FLD.RDB$NULL_FLAG == 0)
+					desc->dsc_flags |= DSC_nullable;
 
-				fieldInfo->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
-
-				if (FLD.RDB$DEFAULT_VALUE.NULL)
-					fieldInfo->defaultValue = NULL;
-				else
-					fieldInfo->defaultValue = parse_field_default_blr(tdbb, name.schema, &FLD.RDB$DEFAULT_VALUE);
-
-				if (FLD.RDB$VALIDATION_BLR.NULL)
-					fieldInfo->validationExpr = NULL;
-				else
+				if (fieldInfoMap)
 				{
-					fieldInfo->validationExpr = parse_field_validation_blr(tdbb,
-						&FLD.RDB$VALIDATION_BLR, name);
+					QualifiedNameMetaNamePair namePair(name, "");
+					fieldInfo = fieldInfoMap->get(namePair);
+					if (!fieldInfo)
+						fieldInfo = fieldInfoMap->put(namePair);
+
+					nextSubfieldInfo = &fieldInfo->subFirst;
+
+					fieldInfo->nullable = FLD.RDB$NULL_FLAG.NULL || FLD.RDB$NULL_FLAG == 0;
+
+					if (FLD.RDB$DEFAULT_VALUE.NULL)
+						fieldInfo->defaultValue = NULL;
+					else
+						fieldInfo->defaultValue = parse_field_default_blr(tdbb, name.schema, &FLD.RDB$DEFAULT_VALUE);
+
+					if (FLD.RDB$VALIDATION_BLR.NULL)
+						fieldInfo->validationExpr = NULL;
+					else
+					{
+						fieldInfo->validationExpr = parse_field_validation_blr(tdbb,
+							&FLD.RDB$VALIDATION_BLR, name);
+					}
 				}
 			}
 		}
+		END_FOR
 	}
-	END_FOR
 
 	if (!found)
 	{
-		if (!MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE))
+		if (!typeOfTable || !MetadataCache::getVersioned<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE))
 			ERR_post(Arg::Gds(isc_dyn_composite_not_fount) << name.object.c_str());
 
 		if (DSC_make_descriptor(desc, blr_rowtype, 0, 0, 0, CSetId(0), CollId(0)))
@@ -218,6 +222,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 		FLD IN RDB$FIELDS
 		WITH REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str()
 		AND REL.RDB$RELATION_NAME EQ relationName.object.c_str()
+		AND FLD.RDB$SCHEMA_NAME EQ REL.RDB$FIELD_SOURCE_SCHEMA_NAME
 		AND FLD.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
 		SORTED BY REL.RDB$FIELD_POSITION
 	{
@@ -263,7 +268,7 @@ bool MET_get_composite_type(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 				if (!REL.RDB$DEFAULT_VALUE.NULL)
 					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, name.schema, &REL.RDB$DEFAULT_VALUE);
 				else if (!REL.RDB$FULL_DOMAIN.NULL && REL.RDB$FULL_DOMAIN == 1 && !FLD.RDB$DEFAULT_VALUE.NULL)
-					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, name.schema, &FLD.RDB$DEFAULT_VALUE);
+					(*nextSubfieldInfo)->defaultValue = parse_field_default_blr(tdbb, FLD.RDB$SCHEMA_NAME, &FLD.RDB$DEFAULT_VALUE);
 				else
 					(*nextSubfieldInfo)->defaultValue = NULL;
 
@@ -732,7 +737,7 @@ ULONG MET_align(const dsc* desc, ULONG value)
 	return FB_ALIGN(value, alignment);
 }
 
-void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, const dsc* relation)
+void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& relation)
 {
 /**************************************
  *
@@ -754,7 +759,8 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 
 	FOR(REQUEST_HANDLE request)
 		X IN RDB$RELATION_FIELDS WITH
-			X.RDB$RELATION_NAME EQ relation->dsc_address
+			X.RDB$SCHEMA_NAME EQ relation.schema.c_str() AND
+			X.RDB$RELATION_NAME EQ relation.object.c_str()
 	{
 		relation_name.makeText(sizeof(X.RDB$RELATION_NAME) - 1, CS_METADATA,
 			(UCHAR*) X.RDB$RELATION_NAME);
@@ -766,6 +772,7 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DEP IN RDB$DEPENDENCIES CROSS
 			PRC IN RDB$PROCEDURES
 				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 					 DEP.RDB$DEPENDENT_TYPE EQ obj_procedure AND
 					 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ PRC.RDB$SCHEMA_NAME AND
@@ -793,6 +800,7 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DEP IN RDB$DEPENDENCIES CROSS
 			TRG IN RDB$TRIGGERS
 				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 					 DEP.RDB$DEPENDENT_TYPE EQ obj_trigger AND
 					 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ TRG.RDB$SCHEMA_NAME AND
@@ -819,6 +827,7 @@ void MET_eval_relation_fields_dependency(thread_db* tdbb, jrd_tra* transaction, 
 			DEP IN RDB$DEPENDENCIES CROSS
 			FUN IN RDB$FUNCTIONS
 				WITH DEP.RDB$DEPENDED_ON_NAME EQ X.RDB$RELATION_NAME AND
+					 DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
 					 DEP.RDB$DEPENDED_ON_TYPE EQ obj_relation AND
 					 DEP.RDB$DEPENDENT_TYPE EQ obj_udf AND
 					 DEP.RDB$DEPENDENT_SCHEMA_NAME EQ FUN.RDB$SCHEMA_NAME AND
@@ -3154,7 +3163,10 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 					{
 						FieldInfo fieldInfo;
 						dsc desc;
-						MET_get_composite_type(tdbb, *attachment->att_pool, parameter->prm_field_source, &desc);
+						const bool typeOfTable = parameter->prm_type_of_table.object.hasData();
+						MET_get_composite_type(tdbb, *attachment->att_pool,
+							typeOfTable ? parameter->prm_type_of_table : parameter->prm_field_source,
+							&desc, nullptr, typeOfTable);
 						parameter->prm_desc = desc;
 					}
 

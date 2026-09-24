@@ -495,12 +495,14 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable)
 		{
 			appendUChar(blr_rt_type_of_table);
 			appendUShort(variable->contextNum);
+			appendMetaString(field->typeOfTable.schema.c_str());
 			appendMetaString(field->typeOfTable.object.c_str());
 		}
 		else if (field->fieldSource.object.hasData())
 		{
 			appendUChar(field->fullDomain ? blr_rt_packaged_type_full : blr_rt_packaged_type);
 			appendUShort(variable->contextNum);
+			appendMetaString(field->fieldSource.schema.c_str());
 			appendMetaString(field->fieldSource.object.c_str());
 		}
 		else if (field->typeOfName.object.hasData())
@@ -1126,12 +1128,14 @@ void DsqlCompilerScratch::putRowtypeParameter(const dsql_var* variable)
 	{
 		appendUChar(field->fullDomain ? blr_rt_packaged_type_full : blr_rt_packaged_type);
 		appendUShort(variable->contextNum);
+		appendMetaString(field->fieldSource.schema.c_str());
 		appendMetaString(field->fieldSource.object.c_str());
 	}
 	else if (field->typeOfTable.object.hasData())
 	{
 		appendUChar(blr_rt_type_of_table);
 		appendUShort(variable->contextNum);
+		appendMetaString(field->typeOfTable.schema.c_str());
 		appendMetaString(field->typeOfTable.object.c_str());
 	}
 	else

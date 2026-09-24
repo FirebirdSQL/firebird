@@ -936,6 +936,7 @@ int METD_gen_composite_type_fields(Jrd::jrd_tra* transaction, Jrd::DsqlCompilerS
 		FLX IN RDB$FIELDS
 		WITH REL.RDB$RELATION_NAME EQ relationName.object.c_str()
 		AND REL.RDB$SCHEMA_NAME EQ relationName.schema.c_str()
+		AND FLX.RDB$SCHEMA_NAME EQ REL.RDB$FIELD_SOURCE_SCHEMA_NAME
 		AND FLX.RDB$FIELD_NAME EQ REL.RDB$FIELD_SOURCE
 		SORTED BY REL.RDB$FIELD_POSITION
 	{
@@ -971,10 +972,10 @@ int METD_gen_composite_type_fields(Jrd::jrd_tra* transaction, Jrd::DsqlCompilerS
 		if (FLX.RDB$SYSTEM_FLAG == 1)
 			field->flags |= FLD_system;
 
-		field->typeOfName.object = FLX.RDB$FIELD_NAME;
+		field->typeOfName = QualifiedName(FLX.RDB$FIELD_NAME, FLX.RDB$SCHEMA_NAME);
 		field->fld_name = REL.RDB$FIELD_NAME;
 		field->typeOfTable = relationName;
-		field->fieldSource.object = REL.RDB$FIELD_SOURCE;
+		field->fieldSource = QualifiedName(REL.RDB$FIELD_SOURCE, REL.RDB$FIELD_SOURCE_SCHEMA_NAME);
 
 		convert_dtype(field, FLX.RDB$FIELD_TYPE);
 

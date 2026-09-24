@@ -2182,6 +2182,8 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 				DFW_post_work(transaction, dfw_delete_rfr, &desc2, &schemaDesc, r2->getId());
 			}
 
+			MET_eval_relation_fields_dependency(tdbb, transaction, object_name);
+
 			EVL_field(0, rpb->rpb_record, f_rfr_field_source_schema, &schemaDesc);
 			MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 			EVL_field(0, rpb->rpb_record, f_rfr_sname, &desc2);
@@ -2189,8 +2191,6 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 			if (fb_utils::implicit_domain(object_name.object.c_str()))
 				DFW_post_work(transaction, dfw_delete_global, &desc2, &schemaDesc, 0);
-
-			MET_eval_relation_fields_dependency(tdbb, transaction, &desc);
 
 			break;
 
@@ -4526,7 +4526,7 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			RelationPermanent::newVersion(tdbb, object_name);
 
 			set_system_flag(tdbb, rpb->rpb_record, f_rfr_sys_flag);
-			MET_eval_relation_fields_dependency(tdbb, transaction, &desc);
+			MET_eval_relation_fields_dependency(tdbb, transaction, object_name);
 			break;
 
 		case rel_classes:

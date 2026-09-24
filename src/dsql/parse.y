@@ -5781,10 +5781,10 @@ domain_type
 			$$->typeOfName = *$1;
 			$$->fullDomain = true;
 		}
-	| TYPE OF TABLE symbol_column_name
+	| TYPE OF TABLE symbol_table_name
 		{
 			$$ = newNode<dsql_fld>();
-			$$->typeOfTable = QualifiedName(*$4);
+			$$->typeOfTable = *$4;
 			$$->fromCursor = false;
 		}
 	| TYPE OF CURSOR symbol_column_name

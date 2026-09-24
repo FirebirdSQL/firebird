@@ -8181,14 +8181,8 @@ LocalDeclarationsNode* LocalDeclarationsNode::dsqlPass(DsqlCompilerScratch* dsql
 				auto cursorFound = false;
 				for (auto cursor : dsqlScratch->cursors)
 				{
-					if (cursor->dsqlName != field->typeOfTable.object)
+					if (!field->fromCursor || cursor->dsqlName != field->typeOfTable.object)
 						continue;
-					else if (!field->fromCursor)
-					{
-						ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
-						Arg::Gds(isc_relnotdef) << Arg::Str(field->typeOfTable.object) <<
-						Arg::Gds(isc_dsql_line_col_error) << Arg::Num(statement->line) << Arg::Num(statement->column));
-					}
 
 					field->dtype = dtype_rowtype;
 					auto next = &field->fld_sub_first;

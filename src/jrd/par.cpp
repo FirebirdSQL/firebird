@@ -622,11 +622,14 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 					auto context_num = csb->csb_blr_reader.getWord();
 
 					QualifiedName fieldSourceName;
+					csb->csb_blr_reader.getMetaName(fieldSourceName.schema);
 					csb->csb_blr_reader.getMetaName(fieldSourceName.object);
-					csb->qualifyExistingName(tdbb, fieldSourceName, obj_relation);
+					const bool typeOfTable = subrowtype == blr_rt_type_of_table;
+					csb->qualifyExistingName(tdbb, fieldSourceName, typeOfTable ? obj_relation : obj_field);
 
 					FieldInfo fieldInfo;
-					MET_get_composite_type(tdbb, csb->csb_pool, fieldSourceName, desc, itemInfo ? &csb->csb_map_field_info : nullptr);
+					MET_get_composite_type(tdbb, csb->csb_pool, fieldSourceName, desc,
+						itemInfo ? &csb->csb_map_field_info : nullptr, typeOfTable);
 
 					if (itemInfo)
 					{
@@ -647,11 +650,11 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 
 					if (csb->collectingDependencies())
 					{
-						auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, fieldSourceName, CacheFlag::AUTOCREATE);
-						if (relation)
+						if (typeOfTable)
 						{
 							Dependency dependency(obj_relation);
-							dependency.relation = relation;
+							dependency.relation = MetadataCache::getPerm<Cached::Relation>(tdbb,
+								fieldSourceName, CacheFlag::AUTOCREATE);
 							csb->addDependency(dependency);
 						}
 						else
