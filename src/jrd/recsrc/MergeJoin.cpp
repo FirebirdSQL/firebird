@@ -36,9 +36,9 @@ static const char* const SCRATCH = "fb_merge_";
 // Data access: merge join
 // -----------------------
 
-MergeJoin::MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
-					 SortedStream* const* args, const NestValueArray* const* keys)
-	: Join(csb, count, JoinType::INNER),
+MergeJoin::MergeJoin(CompilerScratch* csb, NestConst<BoolExprNode> joinBoolean,
+					 FB_SIZE_T count, SortedStream* const* args, const NestValueArray* const* keys)
+	: Join(csb, count, JoinType::INNER, joinBoolean),
 	  m_keys(csb->csb_pool, count)
 {
 	const size_t size = sizeof(struct Impure) + count * sizeof(Impure::irsb_mrg_repeat);
@@ -132,13 +132,173 @@ bool MergeJoin::internalGetRecord(thread_db* tdbb) const
 	if (!(impure->irsb_flags & irsb_open))
 		return false;
 
-	// If there is a record group already formed, fetch the next combination
+	while (true)
+	{
+		// If there is a record group already formed, fetch the next combination
 
-	if (fetchRecord(tdbb, m_args.getCount() - 1))
-		return true;
+		while (fetchRecord(tdbb, m_args.getCount() - 1))
+		{
+			if (checkJoinBoolean(tdbb))
+				return true;
+		}
 
+		// Once consumed the whole record group, form the new one and return first record from there
+
+		if (!formGroup(tdbb))
+			break;
+
+		if (checkJoinBoolean(tdbb))
+			return true;
+	}
+
+	return false;
+}
+
+void MergeJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
+{
+	level++;
+	plan += "MERGE (";
+	Join::getLegacyPlan(tdbb, plan, level);
+	plan += ")";
+}
+
+void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
+{
+	planEntry.className = "MergeJoin";
+
+	planEntry.lines.add().text = "Merge Join " + printType();
+
+	string extras;
+	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
+				  m_keys[0]->getCount(), m_args[0]->getKeyLength());
+
+	planEntry.lines.back().text += extras;
+
+	printOptInfo(planEntry.lines);
+
+	Join::internalGetPlan(tdbb, planEntry, level, recurse);
+}
+
+int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
+	const NestValueArray* node2) const
+{
+	const auto request = tdbb->getRequest();
+
+	const NestConst<ValueExprNode>* ptr1 = node1->begin();
+	const NestConst<ValueExprNode>* ptr2 = node2->begin();
+
+	for (const NestConst<ValueExprNode>* const end = node1->end(); ptr1 != end; ++ptr1, ++ptr2)
+	{
+		const auto desc1 = EVL_expr(tdbb, request, *ptr1);
+		const auto desc2 = EVL_expr(tdbb, request, *ptr2);
+
+		if (!desc1 && desc2)
+			return -1;
+
+		if (desc1 && !desc2)
+			return 1;
+
+		if (desc1 && desc2)
+		{
+			if (const int result = MOV_compare(tdbb, desc1, desc2))
+				return result;
+		}
+	}
+
+	return 0;
+}
+
+UCHAR* MergeJoin::getData(thread_db* /*tdbb*/, MergeFile* mfb, SLONG record) const
+{
+	fb_assert(record >= 0 && record < (SLONG) mfb->mfb_equal_records);
+
+	const ULONG merge_block = record / mfb->mfb_blocking_factor;
+	if (merge_block != mfb->mfb_current_block)
+	{
+		Sort::readBlock(mfb->mfb_space, mfb->mfb_block_size * merge_block,
+						mfb->mfb_block_data, mfb->mfb_block_size);
+		mfb->mfb_current_block = merge_block;
+	}
+
+	const ULONG merge_offset = (record % mfb->mfb_blocking_factor) * mfb->mfb_record_size;
+	return mfb->mfb_block_data + merge_offset;
+}
+
+SLONG MergeJoin::getRecordByIndex(thread_db* tdbb, FB_SIZE_T index) const
+{
+	Request* const request = tdbb->getRequest();
+	Impure* const impure = request->getImpure<Impure>(m_impure);
+
+	const SortedStream* const sort_rsb = m_args[index];
+	Impure::irsb_mrg_repeat* const tail = &impure->irsb_mrg_rpt[index];
+
+	const UCHAR* sort_data = sort_rsb->getData(tdbb);
+	if (!sort_data)
+		return -1;
+
+	MergeFile* const mfb = &tail->irsb_mrg_file;
+	const SLONG record = mfb->mfb_equal_records;
+
+	const ULONG merge_block = record / mfb->mfb_blocking_factor;
+	if (merge_block != mfb->mfb_current_block)
+	{
+		if (!mfb->mfb_space)
+		{
+			MemoryPool& pool = *getDefaultMemoryPool();
+			mfb->mfb_space = FB_NEW_POOL(pool) TempSpace(pool, SCRATCH, false);
+		}
+
+		Sort::writeBlock(mfb->mfb_space, mfb->mfb_block_size * mfb->mfb_current_block,
+						 mfb->mfb_block_data, mfb->mfb_block_size);
+		mfb->mfb_current_block = merge_block;
+	}
+
+	const ULONG merge_offset = (record % mfb->mfb_blocking_factor) * mfb->mfb_record_size;
+	UCHAR* merge_data = mfb->mfb_block_data + merge_offset;
+
+	memcpy(merge_data, sort_data, sort_rsb->getLength());
+	++mfb->mfb_equal_records;
+
+	return record;
+}
+
+bool MergeJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T index) const
+{
+	Request* const request = tdbb->getRequest();
+	Impure* const impure = request->getImpure<Impure>(m_impure);
+	Impure::irsb_mrg_repeat* tail = &impure->irsb_mrg_rpt[index];
+
+	const SSHORT m = tail->irsb_mrg_order;
+	tail = &impure->irsb_mrg_rpt[m];
+	const SortedStream* const sort_rsb = m_args[m];
+
+	SLONG record = tail->irsb_mrg_equal_current;
+	++record;
+
+	if (record > tail->irsb_mrg_equal_end)
+	{
+		if (index == 0 || !fetchRecord(tdbb, index - 1))
+			return false;
+
+		record = tail->irsb_mrg_equal;
+	}
+
+	tail->irsb_mrg_equal_current = record;
+
+	MergeFile* const mfb = &tail->irsb_mrg_file;
+	sort_rsb->mapData(tdbb, request, getData(tdbb, mfb, record));
+
+	return true;
+}
+
+bool MergeJoin::formGroup(thread_db* tdbb) const
+{
 	// Assuming we are done with the current value group, advance each
 	// stream one record. If any comes up dry, we're done.
+
+	Request* const request = tdbb->getRequest();
+	Impure* const impure = request->getImpure<Impure>(m_impure);
+
 	const NestConst<SortedStream>* highest_ptr = m_args.begin();
 	FB_SIZE_T highest_index = 0;
 
@@ -318,143 +478,6 @@ bool MergeJoin::internalGetRecord(thread_db* tdbb) const
 		best_tails.push(best_tail);
 		tail->irsb_mrg_order = best_tail - impure->irsb_mrg_rpt;
 	}
-
-	return true;
-}
-
-void MergeJoin::getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const
-{
-	level++;
-	plan += "MERGE (";
-	Join::getLegacyPlan(tdbb, plan, level);
-	plan += ")";
-}
-
-void MergeJoin::internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const
-{
-	planEntry.className = "MergeJoin";
-
-	planEntry.lines.add().text = "Merge Join " + printType();
-
-	string extras;
-	extras.printf(" (keys: %" ULONGFORMAT", total key length: %" ULONGFORMAT")",
-				  m_keys[0]->getCount(), m_args[0]->getKeyLength());
-
-	planEntry.lines.back().text += extras;
-
-	printOptInfo(planEntry.lines);
-
-	Join::internalGetPlan(tdbb, planEntry, level, recurse);
-}
-
-int MergeJoin::compare(thread_db* tdbb, const NestValueArray* node1,
-	const NestValueArray* node2) const
-{
-	const auto request = tdbb->getRequest();
-
-	const NestConst<ValueExprNode>* ptr1 = node1->begin();
-	const NestConst<ValueExprNode>* ptr2 = node2->begin();
-
-	for (const NestConst<ValueExprNode>* const end = node1->end(); ptr1 != end; ++ptr1, ++ptr2)
-	{
-		const auto desc1 = EVL_expr(tdbb, request, *ptr1);
-		const auto desc2 = EVL_expr(tdbb, request, *ptr2);
-
-		if (!desc1 && desc2)
-			return -1;
-
-		if (desc1 && !desc2)
-			return 1;
-
-		if (desc1 && desc2)
-		{
-			if (const int result = MOV_compare(tdbb, desc1, desc2))
-				return result;
-		}
-	}
-
-	return 0;
-}
-
-UCHAR* MergeJoin::getData(thread_db* /*tdbb*/, MergeFile* mfb, SLONG record) const
-{
-	fb_assert(record >= 0 && record < (SLONG) mfb->mfb_equal_records);
-
-	const ULONG merge_block = record / mfb->mfb_blocking_factor;
-	if (merge_block != mfb->mfb_current_block)
-	{
-		Sort::readBlock(mfb->mfb_space, mfb->mfb_block_size * merge_block,
-						mfb->mfb_block_data, mfb->mfb_block_size);
-		mfb->mfb_current_block = merge_block;
-	}
-
-	const ULONG merge_offset = (record % mfb->mfb_blocking_factor) * mfb->mfb_record_size;
-	return mfb->mfb_block_data + merge_offset;
-}
-
-SLONG MergeJoin::getRecordByIndex(thread_db* tdbb, FB_SIZE_T index) const
-{
-	Request* const request = tdbb->getRequest();
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-
-	const SortedStream* const sort_rsb = m_args[index];
-	Impure::irsb_mrg_repeat* const tail = &impure->irsb_mrg_rpt[index];
-
-	const UCHAR* sort_data = sort_rsb->getData(tdbb);
-	if (!sort_data)
-		return -1;
-
-	MergeFile* const mfb = &tail->irsb_mrg_file;
-	const SLONG record = mfb->mfb_equal_records;
-
-	const ULONG merge_block = record / mfb->mfb_blocking_factor;
-	if (merge_block != mfb->mfb_current_block)
-	{
-		if (!mfb->mfb_space)
-		{
-			MemoryPool& pool = *getDefaultMemoryPool();
-			mfb->mfb_space = FB_NEW_POOL(pool) TempSpace(pool, SCRATCH, false);
-		}
-
-		Sort::writeBlock(mfb->mfb_space, mfb->mfb_block_size * mfb->mfb_current_block,
-						 mfb->mfb_block_data, mfb->mfb_block_size);
-		mfb->mfb_current_block = merge_block;
-	}
-
-	const ULONG merge_offset = (record % mfb->mfb_blocking_factor) * mfb->mfb_record_size;
-	UCHAR* merge_data = mfb->mfb_block_data + merge_offset;
-
-	memcpy(merge_data, sort_data, sort_rsb->getLength());
-	++mfb->mfb_equal_records;
-
-	return record;
-}
-
-bool MergeJoin::fetchRecord(thread_db* tdbb, FB_SIZE_T index) const
-{
-	Request* const request = tdbb->getRequest();
-	Impure* const impure = request->getImpure<Impure>(m_impure);
-	Impure::irsb_mrg_repeat* tail = &impure->irsb_mrg_rpt[index];
-
-	const SSHORT m = tail->irsb_mrg_order;
-	tail = &impure->irsb_mrg_rpt[m];
-	const SortedStream* const sort_rsb = m_args[m];
-
-	SLONG record = tail->irsb_mrg_equal_current;
-	++record;
-
-	if (record > tail->irsb_mrg_equal_end)
-	{
-		if (index == 0 || !fetchRecord(tdbb, index - 1))
-			return false;
-
-		record = tail->irsb_mrg_equal;
-	}
-
-	tail->irsb_mrg_equal_current = record;
-
-	MergeFile* const mfb = &tail->irsb_mrg_file;
-	sort_rsb->mapData(tdbb, request, getData(tdbb, mfb, record));
 
 	return true;
 }

@@ -265,12 +265,6 @@ namespace
 		}
 	};
 
-	inline void compose(MemoryPool& pool, BoolExprNode** node1, BoolExprNode* node2)
-	{
-		if (node2)
-			*node1 = (*node1) ? FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, *node1, node2) : node2;
-	}
-
 	void classMask(unsigned count, ValueExprNode** eq_class, ULONG* mask)
 	{
 		// Given an sort/merge join equivalence class (vector of node pointers
@@ -883,7 +877,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 				iter->deterministic(tdbb) &&
 				iter->computable(csb, INVALID_STREAM, false))
 			{
-				compose(getPool(), &invariantBoolean, iter);
+				BinaryBoolNode::compose(getPool(), invariantBoolean, iter);
 				iter |= CONJUNCT_USED;
 			}
 		}
@@ -1063,7 +1057,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 		if (rivers.isEmpty() && dependentRivers.isEmpty())
 		{
 			// This case may look weird, but it's possible for recursive unions
-			rsb = FB_NEW_POOL(csb->csb_pool) NestedLoopJoin(csb, JoinType::INNER, 0, nullptr);
+			rsb = FB_NEW_POOL(csb->csb_pool) DummyJoin(csb);
 		}
 		else
 		{
@@ -2791,9 +2785,13 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 	if (orgCount < 2)
 		return false;
 
+	fb_assert(joinType == JoinType::INNER || orgCount == 2);
+
 	HalfStaticArray<ValueExprNode*, OPT_STATIC_ITEMS> scratch;
 	scratch.grow(baseConjuncts * orgCount);
 	ValueExprNode** classes = scratch.begin();
+
+	BoolExprNode* boolean = nullptr;
 
 	// Compute equivalence classes among streams. This involves finding groups
 	// of streams joined by field equalities.
@@ -2848,7 +2846,9 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 					if (eq_class == last_class)
 						last_class += orgCount;
 
+					// Mark matching booleans as used as they're checked inside the hash/merge join
 					iter |= Optimizer::CONJUNCT_JOINED;
+					BinaryBoolNode::compose(getPool(), boolean, *iter);
 				}
 			}
 		}
@@ -2975,7 +2975,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 		}
 
 		finalRsb = FB_NEW_POOL(getPool())
-			MergeJoin(csb, rsbs.getCount(), (SortedStream**) rsbs.begin(), keys.begin());
+			MergeJoin(csb, boolean, rsbs.getCount(), (SortedStream**) rsbs.begin(), keys.begin());
 	}
 	else
 	{
@@ -2997,7 +2997,7 @@ bool Optimizer::generateEquiJoin(RiverList& rivers, JoinType joinType)
 			rsbs.add(river->getRecordSource());
 
 		finalRsb = FB_NEW_POOL(getPool())
-			HashJoin(tdbb, csb, joinType, rsbs.getCount(), rsbs.begin(), keys.begin());
+			HashJoin(tdbb, csb, joinType, boolean, rsbs.getCount(), rsbs.begin(), keys.begin());
 	}
 
 	// Pick up any boolean that may apply
@@ -3191,7 +3191,7 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 			if ((inversion && iter->containsStream(stream)) ||
 				(!inversion && iter->computable(csb, stream, true)))
 			{
-				compose(getPool(), &boolean, iter);
+				BinaryBoolNode::compose(getPool(), boolean, iter);
 				iter |= CONJUNCT_USED;
 
 				if (!(iter & CONJUNCT_MATCHED))
@@ -3299,7 +3299,7 @@ RecordSource* Optimizer::applyResidualBoolean(RecordSource* rsb)
 	{
 		if (!(iter & CONJUNCT_USED))
 		{
-			compose(getPool(), &boolean, iter);
+			BinaryBoolNode::compose(getPool(), boolean, iter);
 			iter |= CONJUNCT_USED;
 
 			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
@@ -3323,7 +3323,7 @@ BoolExprNode* Optimizer::composeBoolean(ConjunctIterator& iter, BooleanList& fil
 			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 			iter->computable(csb, INVALID_STREAM, false))
 		{
-			compose(getPool(), &boolean, iter);
+			BinaryBoolNode::compose(getPool(), boolean, iter);
 			iter |= CONJUNCT_USED;
 
 			if (!(iter & (CONJUNCT_MATCHED | CONJUNCT_JOINED)))
