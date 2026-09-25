@@ -30,6 +30,7 @@ RELATION(nam_pages, rel_pages, ODS_8_0, rel_persistent)
 	FIELD(f_pag_id, nam_r_id, fld_r_id, 0, ODS_8_0)
 	FIELD(f_pag_seq, nam_p_sequence, fld_p_sequence, 0, ODS_8_0)
 	FIELD(f_pag_type, nam_p_type, fld_p_type, 0, ODS_8_0)
+	FIELD(f_pag_ts, nam_ts_id, fld_ts_id, 0, ODS_14_0)
 END_RELATION
 
 // Relation 1 (RDB$DATABASE)
@@ -109,6 +110,7 @@ RELATION(nam_indices, rel_indices, ODS_8_0, rel_persistent)
 	FIELD(f_idx_foreign_schema, nam_foreign_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_idx_format, nam_fmt, fld_format, 1, ODS_14_0)
 	FIELD(f_idx_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_idx_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 5 (RDB$RELATION_FIELDS)
@@ -137,6 +139,7 @@ RELATION(nam_r_fields, rel_rfr, ODS_8_0, rel_persistent)
 	FIELD(f_rfr_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_field_source_schema, nam_field_source_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rfr_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
+	FIELD(f_rfr_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 6 (RDB$RELATIONS)
@@ -162,6 +165,7 @@ RELATION(nam_relations, rel_relations, ODS_8_0, rel_persistent)
 	FIELD(f_rel_schema, nam_sch_name, fld_sch_name, 1, ODS_14_0)
 	FIELD(f_rel_pkg_name, nam_pkg_name, fld_pkg_name, 1, ODS_14_0)
 	FIELD(f_rel_private_flag, nam_private_flag, fld_flag_nullable, 1, ODS_14_0)
+	FIELD(f_rel_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
 END_RELATION
 
 // Relation 7 (RDB$VIEW_RELATIONS)
@@ -860,4 +864,25 @@ RELATION(nam_constants, rel_constants, ODS_14_0, rel_persistent)
 	FIELD(f_const_source, nam_const_source, fld_source, 1, ODS_14_0)
 	FIELD(f_const_package_schema, nam_sch_name, fld_sch_name, 0, ODS_14_0)
 	FIELD(f_const_description, nam_description, fld_description, 1, ODS_14_0)
+END_RELATION
+
+// Relation 60 (RDB$TABLESPACES)
+RELATION(nam_tablespaces, rel_tablespaces, ODS_14_0, rel_persistent)
+	FIELD(f_ts_id, nam_ts_id, fld_ts_id, 0, ODS_14_0)
+	FIELD(f_ts_name, nam_ts_name, fld_ts_name, 1, ODS_14_0)
+	FIELD(f_ts_class, nam_class, fld_class, 1, ODS_14_0)
+	FIELD(f_ts_sys_flag, nam_sys_flag, fld_flag, 1, ODS_14_0)
+	FIELD(f_ts_desc, nam_description, fld_description, 1, ODS_14_0)
+	FIELD(f_ts_owner, nam_owner, fld_user, 1, ODS_14_0)
+	FIELD(f_ts_file, nam_file_name, fld_file_name, 1, ODS_14_0)
+	FIELD(f_ts_offline, nam_ts_offline, fld_bool, 1, ODS_14_0)
+	FIELD(f_ts_readonly, nam_ts_readonly, fld_bool, 1, ODS_14_0)
+END_RELATION
+
+// Relation 61 (MON$TABLESPACE_STATS)
+RELATION(nam_mon_ts_stats, rel_mon_ts_stats, ODS_14_0, rel_virtual)
+	FIELD(f_mon_ts_stat_id, nam_mon_stat_id, fld_stat_id, 0, ODS_14_0)
+	FIELD(f_mon_ts_stat_group, nam_mon_stat_group, fld_stat_group, 0, ODS_14_0)
+	FIELD(f_mon_ts_name, nam_mon_ts_name, fld_ts_name, 0, ODS_14_0)
+	FIELD(f_mon_tab_io_stat_id, nam_mon_io_stat_id, fld_stat_id, 0, ODS_14_0)
 END_RELATION

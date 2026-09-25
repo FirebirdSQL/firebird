@@ -131,6 +131,8 @@
 #include "../jrd/CryptoManager.h"
 #include "../jrd/Mapping.h"
 #include "../jrd/shut_proto.h"
+#include "../jrd/Tablespace.h"
+#include "../jrd/vio_proto.h"
 #include "../jrd/ProtectRelations.h"
 
 #include "../jrd/Package.h"
@@ -419,6 +421,7 @@ static bool db_crypt(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_linger(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool clear_cache(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool change_repl_state(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
+static bool change_tablespace(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool set_statistics(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 static bool deps_to_disk(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
@@ -502,15 +505,14 @@ static void raiseObjectInUseError(const string& obj_type, const QualifiedName& o
 			 Arg::Gds(isc_obj_in_use) << name);
 }
 
-void DFW_raiseRelationInUseError(const Cached::Relation* relation)
+void DFW_raiseRelationInUseError(const jrd_rel* relation)
 {
-	const string obj_type =
-		relation->isView() ? "VIEW" : "TABLE";
+	const string obj_type = relation->isView() ? "VIEW" : "TABLE";
 
 	raiseObjectInUseError(obj_type, relation->getName());
 }
 
-void Jrd::ProtectRelations::relLock::takeLock(thread_db* tdbb, jrd_tra* transaction)
+void ProtectRelations::RelationLock::takeLock(thread_db* tdbb, jrd_tra* transaction)
 {
 	m_lock = RLCK_transaction_relation_lock(tdbb, transaction, m_relation);
 	m_level = m_lock->lck_logical;
@@ -538,7 +540,7 @@ void Jrd::ProtectRelations::relLock::takeLock(thread_db* tdbb, jrd_tra* transact
 }
 
 
-void Jrd::ProtectRelations::relLock::releaseLock(thread_db* tdbb, jrd_tra* transaction)
+void ProtectRelations::RelationLock::releaseLock(thread_db* tdbb, jrd_tra* transaction)
 {
 	// Internal "compatible" locks requires special handling, details in lck.cpp
 
@@ -1216,6 +1218,9 @@ static inline constexpr deferred_task task_table[] =
 	{ dfw_set_linger, set_linger },
 	{ dfw_clear_cache, clear_cache },
 	{ dfw_change_repl_state, change_repl_state },
+	{ dfw_create_tablespace, change_tablespace },
+	{ dfw_delete_tablespace, change_tablespace },
+	{ dfw_modify_tablespace, change_tablespace },
 	{ dfw_set_statistics, set_statistics },
 	{ dfw_create_package_constant, createOrAlterConstant },
 	{ dfw_modify_package_constant, createOrAlterConstant },
@@ -1530,6 +1535,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 		{
 		case dfw_post_event:
 		case dfw_delete_shadow:
+		case dfw_delete_tablespace:
 			break;
 
 		default:
@@ -1545,8 +1551,7 @@ void DFW_perform_work(thread_db* tdbb, jrd_tra* transaction)
 	}
 }
 
-
-void DFW_perform_post_commit_work(jrd_tra* transaction)
+void DFW_perform_post_commit_work(thread_db* tdbb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -1568,38 +1573,54 @@ void DFW_perform_post_commit_work(jrd_tra* transaction)
 
 	bool pending_events = false;
 
-	Database* dbb = GET_DBB();
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
 
 	for (DeferredWork* itr = transaction->tra_deferred_job->work; itr;)
 	{
-		DeferredWork* work = itr;
+		AutoPtr<DeferredWork> work(itr);
 		itr = itr->getNext();
 
-		switch (work->dfw_type)
+		try
 		{
-		case dfw_post_event:
-			EventManager::init(transaction->tra_attachment);
+			switch (work->dfw_type)
+			{
+			case dfw_post_event:
+				EventManager::init(transaction->tra_attachment);
 
-			dbb->eventManager()->postEvent(work->dfw_name.length(),
-										   work->dfw_name.c_str(),
-										   work->dfw_count);
+				dbb->eventManager()->postEvent(work->dfw_name.length(),
+												work->dfw_name.c_str(),
+												work->dfw_count);
 
-			delete work;
-			pending_events = true;
-			break;
-		case dfw_delete_shadow:
-			if (work->dfw_name.hasData())
-				unlink(work->dfw_name.c_str());
-			delete work;
-			break;
-		default:
-			break;
+				pending_events = true;
+				break;
+
+			case dfw_delete_tablespace:
+			case dfw_delete_shadow:
+				if (work->dfw_name.hasData())
+					unlink(work->dfw_name.c_str());
+				break;
+
+			default:
+				break;
+			}
+		}
+		catch (const Exception& ex)
+		{
+			iscLogException("Post-commit error", ex);
 		}
 	}
 
 	if (pending_events)
 	{
-		dbb->eventManager()->deliverEvents();
+		try
+		{
+			dbb->eventManager()->deliverEvents();
+		}
+		catch (const Exception& ex)
+		{
+			iscLogException("Event delivery error", ex);
+		}
 	}
 }
 
@@ -2758,7 +2779,7 @@ void DFW_reset_icu(thread_db* tdbb)
 
 				if (!tables.exists(rel_id))
 				{
-					if (auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, rel_id, CacheFlag::AUTOCREATE))
+					if (const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_id, CacheFlag::AUTOCREATE))
 						tables.addRelation(relation);
 				}
 			}
@@ -3616,19 +3637,19 @@ static bool set_statistics(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 			if (IDX.RDB$INDEX_ID && IDX.RDB$STATISTICS < 0.0)
 			{
 				// we need to know if this relation is temporary or not
-				Cached::Relation* relation =
-					MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::AUTOCREATE);
+				const auto relation =
+					MetadataCache::getVersioned<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::AUTOCREATE);
 
 				// no need to recalculate statistics for base instance of GTT
-				RelationPages* relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
+				const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
 				const bool isTempInstance = relation->isTemporary() &&
-					relPages && (relPages->rel_instance_id != 0);
+					relPages && (relPages->getInstanceId() != 0);
 
 				if (isTempInstance || !relation->isTemporary())
 				{
 					SelectivityList selectivity(*tdbb->getDefaultPool());
 					const USHORT id = IDX.RDB$INDEX_ID - 1;
-					IDX_statistics(tdbb, relation, id, selectivity);
+					BTR_selectivity(tdbb, relation, id, selectivity);
 					DFW_update_index(work->getQualifiedName(), id, selectivity, transaction);
 				}
 			}
@@ -3669,7 +3690,7 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 	case 3:
 		{
-			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
+			const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
 			if (!relation)
 				break;
 
@@ -3680,7 +3701,7 @@ static bool delete_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 	case 4:
 		{
-			auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
+			const auto relation = MetadataCache::getPerm<Cached::Relation>(tdbb, work->dfw_id, CacheFlag::ERASED);
 			if (!relation)
 				break;
 
@@ -4609,7 +4630,7 @@ static bool check_not_null(thread_db* tdbb, SSHORT phase, DeferredWork* work, jr
 				break;
 
 			// Protect relation from modification
-			ProtectRelations protectRelation(tdbb, transaction, relation->getPermanent());
+			ProtectRelations protectRelation(tdbb, transaction, relation);
 
 			SortedArray<int> fields;
 			AutoRequest handle;
@@ -5042,11 +5063,13 @@ static bool delete_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		// Get the relation pages
 		const auto relPages = relation->getPages(tdbb, MAX_TRA_NUMBER, false);
-		if (!relPages || !relPages->rel_index_root)
+		const auto rootPage = relPages ? relPages->getIndexRootPage() : std::nullopt;
+
+		if (!rootPage)
 			return false;
 
 		// Delete the index by its ID
-		WIN window(relPages->rel_pg_space_id, relPages->rel_index_root);
+		WIN window(rootPage.value());
 		CCH_FETCH(tdbb, &window, LCK_write, pag_root);
 
 		BTR_delete_index(tdbb, &window, indexId, false);
@@ -5112,9 +5135,9 @@ static bool modify_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		// Recalculate index statistics
 		SelectivityList selectivity(*tdbb->getDefaultPool());
-		IDX_statistics(tdbb, relation->getPermanent(), lttIndex->id, selectivity);
+		BTR_selectivity(tdbb, relation, lttIndex->id, selectivity);
 
-		// The selectivity is stored directly in the index root page by IDX_statistics,
+		// The selectivity is stored directly in the index root page by BTR_selectivity,
 		// so we don't need to update any system tables (LTT indexes don't have entries in RDB$INDICES)
 	}
 
@@ -5177,6 +5200,39 @@ static bool deps_to_disk(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 		MET_store_dependency(tdbb, dep.dependency, dep.dep_rel, dep.object_name, dep.dependency_type);
 
 	transaction->tra_dependencies.clear();
+
+	return false;
+}
+
+static bool change_tablespace(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_tra* transaction)
+{
+/**************************************
+ *
+ *	c h a n g e _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Make the tablespace modifications permanent.
+ *
+ **************************************/
+	const auto dbb = tdbb->getDatabase();
+
+	switch (phase)
+	{
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+		return true;
+
+	case 7:
+		if (const auto tableSpace = dbb->dbb_tablespaces.get(work->dfw_id))
+			tableSpace->commit(tdbb, transaction);
+		break;
+	}
 
 	return false;
 }

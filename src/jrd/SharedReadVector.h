@@ -103,6 +103,15 @@ public:
 			return count + needs <= capacity;
 		}
 
+		bool add(const T& value)
+		{
+			if (!hasSpace())
+				return false;
+			data[count] = value;
+			++count; // don't update the count before the assignment due to possible races with concurrent readers
+			return true;
+		}
+
 		bool add(const Generation* from)
 		{
 			if (!hasSpace(from->count))

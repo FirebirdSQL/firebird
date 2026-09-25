@@ -231,6 +231,10 @@ enum drq_type_t
 	drq_exception_exist,	// check if exception exists
 	drq_generator_exist,	// check if generator exists
 	drq_rel_field_exist,	// check if a field of relation or view exists
+	drq_s_tablespace,		// store tablespace
+	drq_m_tablespace,		// modify tablespace
+	drq_e_tablespace,		// erase tablespace
+	drq_g_nxt_ts_id,		// generate next tablespace id
 	drq_m_coll_attrs,		// modify collation attributes
 	drq_l_pub_mode,			// lookup publication auto-enable mode
 	drq_m_pub_state,		// modify publication state

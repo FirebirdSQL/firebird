@@ -51,11 +51,11 @@ LockState	CCH_fetch_lock(Jrd::thread_db*, Jrd::win*, int, int, SCHAR);
 void		CCH_fetch_page(Jrd::thread_db*, Jrd::win*, const bool);
 void		CCH_fini(Jrd::thread_db*);
 void		CCH_forget_page(Jrd::thread_db*, Jrd::win*);
-void		CCH_flush(Jrd::thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
+void		CCH_flush(Jrd::thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG page_space_id = Jrd::INVALID_PAGE_SPACE);
 bool		CCH_free_page(Jrd::thread_db*);
 SLONG		CCH_get_incarnation(Jrd::win*);
 void		CCH_get_related(Jrd::thread_db*, Jrd::PageNumber, Jrd::PagesArray&);
-Ods::pag*	CCH_handoff(Jrd::thread_db*, Jrd::win*, ULONG, int, SCHAR, int, const bool);
+Ods::pag*	CCH_handoff(Jrd::thread_db*, Jrd::win*, Jrd::PageNumber, int, SCHAR, int, const bool);
 void		CCH_init(Jrd::thread_db*, ULONG);
 void		CCH_init2(Jrd::thread_db*);
 void		CCH_mark(Jrd::thread_db*, Jrd::win*, bool, bool);
@@ -116,17 +116,22 @@ inline void CCH_MARK_SYSTEM(Jrd::thread_db* tdbb, Jrd::win* window)
 
 inline Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, 1, false);
+	return CCH_handoff (tdbb, window, Jrd::PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, 1, false);
 }
 
 inline Ods::pag* CCH_HANDOFF_TIMEOUT(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type, SSHORT latch_wait)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, latch_wait, false);
+	return CCH_handoff (tdbb, window, Jrd::PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, latch_wait, false);
 }
 
 inline Ods::pag* CCH_HANDOFF_TAIL(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, 1, true);
+	return CCH_handoff (tdbb, window, Jrd::PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, 1, true);
+}
+
+inline Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, Jrd::PageNumber pageNumber, SSHORT lock, SCHAR page_type)
+{
+	return CCH_handoff (tdbb, window, pageNumber, lock, page_type, 1, false);
 }
 
 inline void CCH_MARK_MUST_WRITE(Jrd::thread_db* tdbb, Jrd::win* window)

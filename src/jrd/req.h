@@ -66,7 +66,7 @@ struct RecordParameterBase
 		  rpb_b_page(0), rpb_b_line(0),
 		  rpb_address(NULL), rpb_length(0),
 		  rpb_flags(0), rpb_stream_flags(0), rpb_runtime_flags(0),
-		  rpb_org_scans(0), rpb_window(DB_PAGE_SPACE, -1)
+		  rpb_org_scans(0), rpb_window(DB_PAGE_SPACE)
 	{
 	}
 
@@ -123,8 +123,10 @@ struct record_param : public RecordParameterBase
 
 	inline WIN& getWindow(thread_db* tdbb)
 	{
-		if (rpb_relation) {
-			rpb_window.win_page.setPageSpaceID(getPermanent(rpb_relation)->getPages(tdbb)->rel_pg_space_id);
+		if (rpb_relation)
+		{
+			const auto relPages = rpb_relation->getPages(tdbb);
+			rpb_window.win_page.setPageSpaceID(relPages->getPageSpaceId());
 		}
 
 		return rpb_window;

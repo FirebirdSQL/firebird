@@ -78,6 +78,7 @@
 #include "../jrd/DbCreators.h"
 #include "../jrd/BulkInsert.h"
 #include "../common/os/fbsyslog.h"
+#include "../jrd/Tablespace.h"
 #include "../jrd/Resources.h"
 #include "firebird/impl/msg_helper.h"
 
@@ -548,7 +549,7 @@ void TRA_commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_flag
 
 	// Perform any post commit work
 
-	DFW_perform_post_commit_work(transaction);
+	DFW_perform_post_commit_work(tdbb, transaction);
 
 	// notify any waiting locks that this transaction is committing;
 	// there could be no lock if this transaction is being reconnected
@@ -582,12 +583,12 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 
 	// Start by fetching prior transaction page, if any
 	tx_inv_page* prior_tip = NULL;
-	WIN prior_window(DB_PAGE_SPACE, -1);
+	WIN prior_window(DB_PAGE_SPACE);
 	if (sequence)
 		prior_tip = fetch_inventory_page(tdbb, &prior_window, (sequence - 1), LCK_write);
 
 	// Allocate and format new page
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	tx_inv_page* tip = (tx_inv_page*) DPM_allocate(tdbb, &window);
 	tip->tip_header.pag_type = pag_transactions;
 
@@ -611,7 +612,7 @@ void TRA_extend_tip(thread_db* tdbb, ULONG sequence) //, WIN* precedence_window)
 
 	// Write into pages relation
 
-	DPM_pages(tdbb, 0, pag_transactions, sequence, pageNumber);
+	DPM_pages(tdbb, 0, pag_transactions, sequence, window.win_page);
 }
 
 
@@ -637,7 +638,7 @@ int TRA_fetch_state(thread_db* tdbb, TraNumber number)
 
 	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
 	const ULONG tip_seq = number / trans_per_tip;
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, tip_seq, LCK_read);
 
 	// calculate the state of the desired transaction
@@ -681,7 +682,7 @@ void TRA_get_inventory(thread_db* tdbb, UCHAR* bit_vector, TraNumber base, TraNu
 
 	// fetch the first inventory page
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence++, LCK_read);
 
 	// move the first page into the bit vector
@@ -967,9 +968,9 @@ void jrd_tra::postResources(thread_db* tdbb, const Resources* resources)
  **************************************/
 	SET_TDBB(tdbb);
 
-	for (auto& rel : resources->relations)
+	for (auto& relation : resources->relations)
 	{
-		if (auto* ext = rel()->getExtFile())
+		if (auto* ext = relation()->getExtFile())
 		{
 			FB_SIZE_T pos;
 			if (!traExtRel.find(ext, pos))
@@ -979,11 +980,11 @@ void jrd_tra::postResources(thread_db* tdbb, const Resources* resources)
 			}
 		}
 
-		if (rel()->rel_flags & REL_temp_ltt)
+		if (relation()->rel_flags & REL_temp_ltt)
 		{
 			FB_SIZE_T pos;
-			if (!traLttRel.find(rel(), pos))
-				traLttRel.insert(pos, rel());
+			if (!traLttRel.find(relation(), pos))
+				traLttRel.insert(pos, relation());
 		}
 	}
 }
@@ -1251,6 +1252,9 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 
 	MetadataCache::release_temp_tables(tdbb, transaction);
 
+	// Release tablespaces used by this transaction
+	transaction->releaseTablespaces(tdbb);
+
 	// Release the locks associated with the transaction
 
 	if (transaction->tra_alter_db_lock)
@@ -1339,6 +1343,7 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
  *
  **************************************/
 	SET_TDBB(tdbb);
+	const auto dbb = tdbb->getDatabase();
 
 	TraceTransactionEnd trace(transaction, false, retaining_flag);
 
@@ -1431,9 +1436,9 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 		state = tra_committed;
 	}
 
-	if (!(tdbb->getDatabase()->dbb_flags & DBB_dropping))
+	if (!(dbb->dbb_flags & DBB_dropping))
 	{
-		const jrd_tra* const sysTran = tdbb->getAttachment()->getSysTransaction();
+		const auto sysTran = tdbb->getAttachment()->getSysTransaction();
 		if (sysTran->tra_flags & TRA_write)
 			transaction_flush(tdbb, FLUSH_SYSTEM, 0);
 	}
@@ -1449,6 +1454,9 @@ void TRA_rollback(thread_db* tdbb, jrd_tra* transaction, const bool retaining_fl
 
 	REPL_trans_rollback(tdbb, transaction);
 	TRA_set_state(tdbb, transaction, transaction->tra_number, state);
+
+	// Undo any uncommitted changes in the tablespace cache
+	dbb->dbb_tablespaces.rollback(tdbb, transaction);
 
 	TRA_release_transaction(tdbb, transaction, &trace);
 }
@@ -1490,7 +1498,7 @@ void TRA_set_state(thread_db* tdbb, jrd_tra* transaction, TraNumber number, int 
 	const ULONG byte = TRANS_OFFSET(number % trans_per_tip);
 	const USHORT shift = TRANS_SHIFT(number);
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	tx_inv_page* tip = fetch_inventory_page(tdbb, &window, sequence, LCK_write);
 
 	UCHAR* address = tip->tip_transactions + byte;
@@ -2231,7 +2239,7 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra* transaction, jrd_rel* rel
 	}
 
 	// set up the lock on the relation/view
-	Lock* lock = RLCK_transaction_relation_lock(tdbb, transaction, getPermanent(relation));
+	Lock* lock = RLCK_transaction_relation_lock(tdbb, transaction, relation);
 	lock->lck_logical = lock_type;
 
 	if (!found)
@@ -2338,7 +2346,7 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 
 	while (sequence >= dbb->getKnownPagesCount(pag_transactions))
 	{
-		DPM_scan_pages(tdbb);
+		DPM_scan_pages(tdbb, pag_transactions);
 
 		const ULONG tipCount = dbb->getKnownPagesCount(pag_transactions);
 		if (sequence < tipCount)
@@ -2357,7 +2365,7 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 		// Type check it
 		tip = (tx_inv_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_transactions);
 		CCH_RELEASE(tdbb, &window);
-		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page.getPageNum());
+		DPM_pages(tdbb, 0, pag_transactions, tipCount, window.win_page);
 	}
 
 	return dbb->getKnownPage(pag_transactions, sequence);
@@ -2389,7 +2397,7 @@ static int limbo_transaction(thread_db* tdbb, TraNumber id)
 	const ULONG page = id / trans_per_tip;
 	const ULONG number = id % trans_per_tip;
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
 
 	const ULONG trans_offset = TRANS_OFFSET(number);
@@ -2463,24 +2471,24 @@ void MetadataCache::release_temp_tables(thread_db* tdbb, jrd_tra* transaction)
  *
  **************************************/
 	// Release GTTs (Global Temporary Tables) with transaction lifetime
-	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
+	for (const auto relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
-			relation->delPages(tdbb, transaction->tra_number);
+			relation->deletePages(tdbb, transaction->tra_number);
 	}
 
 	// Release LTTs (Local Temporary Tables) with transaction lifetime
-	Attachment* att = tdbb->getAttachment();
+	const auto att = tdbb->getAttachment();
 
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
-		const auto ltt = lttEntry.second;
-
-		if (ltt && ltt->relation)
+		if (const auto ltt = lttEntry.second)
 		{
-			auto *rel = ltt->relation->getPermanent();
-			if (rel->rel_flags & REL_temp_tran)
-				rel->delPages(tdbb, transaction->tra_number);
+			if (const auto relation = ltt->relation)
+			{
+				if (relation->checkFlags(REL_temp_tran))
+					relation->getPermanent()->deletePages(tdbb, transaction->tra_number);
+			}
 		}
 	}
 }
@@ -2502,21 +2510,28 @@ void MetadataCache::retain_temp_tables(thread_db* tdbb, jrd_tra* transaction, Tr
  **************************************/
 
 	// Retain GTTs (Global Temporary Tables) with transaction lifetime
-	for (auto* relation : MetadataCache::get(tdbb)->mdc_relations)
+	for (const auto relation : MetadataCache::get(tdbb)->mdc_relations)
 	{
 		if (relation->rel_flags & REL_temp_tran)
 			relation->retainPages(tdbb, transaction->tra_number, new_number);
 	}
 
 	// Retain LTTs (Local Temporary Tables) with transaction lifetime
-	Attachment* att = tdbb->getAttachment();
+	const auto att = tdbb->getAttachment();
 
 	for (const auto& lttEntry : att->att_local_temporary_tables)
 	{
-		const auto ltt = lttEntry.second;
+		if (const auto ltt = lttEntry.second)
+		{
+			if (const auto relation = ltt->relation)
+			{
+				const auto relPerm = ltt->relation->getPermanent();
+				fb_assert(relPerm);
 
-		if (ltt && ltt->relation && (ltt->relation->getPermanent()->rel_flags & REL_temp_tran))
-			ltt->relation->getPermanent()->retainPages(tdbb, transaction->tra_number, new_number);
+				if (relPerm->rel_flags & REL_temp_tran)
+					relPerm->retainPages(tdbb, transaction->tra_number, new_number);
+			}
+		}
 	}
 }
 
@@ -2582,7 +2597,7 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 	// Create a new transaction lock, inheriting oldest active from transaction being committed.
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	TraNumber new_number;
 #ifdef SUPERSERVER_V2
 	new_number = bump_transaction_id(tdbb, &window);
@@ -2638,6 +2653,12 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 
 		// Set the state on the inventory page
 		TRA_set_state(tdbb, transaction, old_number, state);
+
+		if (!commit)
+		{
+			// Undo any uncommitted changes in the tablespace cache
+			dbb->dbb_tablespaces.rollback(tdbb, transaction);
+		}
 	}
 
 	MetadataCache::retain_temp_tables(tdbb, transaction, new_number);
@@ -2659,7 +2680,7 @@ static void retain_context(thread_db* tdbb, jrd_tra* transaction, bool commit, i
 	// Perform any post commit work OR delete entries from deferred list
 
 	if (commit)
-		DFW_perform_post_commit_work(transaction);
+		DFW_perform_post_commit_work(tdbb, transaction);
 	else
 		DFW_delete_deferred(transaction, -1);
 
@@ -3550,7 +3571,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	SET_TDBB(tdbb);
 	Database* const dbb = tdbb->getDatabase();
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 
 	Lock* lock = FB_NEW_RPT(*tdbb->getDefaultPool(), 0) Lock(tdbb, sizeof(TraNumber), LCK_tra);
 

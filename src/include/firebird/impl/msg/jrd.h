@@ -1022,3 +1022,7 @@ FB_IMPL_MSG(JRD, 1019, dsql_agg_exit_group, -204, "42", "000", "EXIT is not allo
 FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowed in ON START DO, ON ACCUMULATE DO or ON FINISH DO sections of aggregate function; use EXIT instead")
 FB_IMPL_MSG(JRD, 1021, hypfun_args_non_equal_sort_item, -833, "42", "000", "Number of arguments of hypothetical-set aggregate function @1 must match number of sort items in WITHIN GROUP clause")
 FB_IMPL_MSG(JRD, 1022, old_format, -804, "07", "000", "Statement format outdated, need to be reprepared")
+FB_IMPL_MSG(JRD, 1023, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\" already exists")
+FB_IMPL_MSG(JRD, 1024, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 1025, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
+FB_IMPL_MSG(JRD, 1026, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")
