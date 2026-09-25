@@ -169,7 +169,6 @@ public:
 		count = 0;
 	}
 
-protected:
 	const T& getElement(size_type index) const noexcept
 	{
   		fb_assert(index < count);
@@ -182,6 +181,7 @@ protected:
   		return data[index];
 	}
 
+protected:
 	void freeData() noexcept
 	{
 		// CVC: Warning, after this call, "data" is an invalid pointer, be sure to reassign it
