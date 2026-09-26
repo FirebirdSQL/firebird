@@ -374,24 +374,30 @@ public:
 class DeclareLocalTableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>
 {
 public:
+	struct Segment
+	{
+		USHORT fieldId;
+		SSHORT length;
+	};
+
 	struct Index
 	{
 		explicit Index(MemoryPool& pool)
 			: name(pool),
-			  fieldIds(pool)
+			  segments(pool)
 		{
 		}
 
 		Index(MemoryPool& pool, const Index& other)
 			: name(pool, other.name),
-			  fieldIds(pool, other.fieldIds),
+			  segments(pool, other.segments),
 			  unique(other.unique),
 			  descending(other.descending)
 		{
 		}
 
 		MetaName name;
-		Firebird::Array<USHORT> fieldIds;
+		Firebird::Array<Segment> segments;
 		bool unique = false;
 		bool descending = false;
 	};

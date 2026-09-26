@@ -25,6 +25,7 @@
 
 #include "firebird.h"
 #include "../jrd/constants.h"
+#include "../jrd/IndexSegment.h"
 #include "../jrd/MetaName.h"
 #include "../jrd/QualifiedName.h"
 #include "../common/dsc.h"
@@ -82,19 +83,19 @@ namespace Jrd
 		public:
 			explicit Index(MemoryPool& pool)
 				: name(pool),
-				  columns(pool)
+				  segments(pool)
 			{
 			}
 
 			Index(MemoryPool& pool, const QualifiedName& aName)
 				: name(pool, aName),
-				  columns(pool)
+				  segments(pool)
 			{
 			}
 
 			Index(MemoryPool& pool, const Index& other)
 				: name(pool, other.name),
-				  columns(pool, other.columns),
+				  segments(pool, other.segments),
 				  unique(other.unique),
 				  descending(other.descending),
 				  inactive(other.inactive),
@@ -104,7 +105,7 @@ namespace Jrd
 
 		public:
 			QualifiedName name;
-			Firebird::ObjectsArray<MetaName> columns;
+			Firebird::ObjectsArray<IndexSegment> segments;
 			bool unique = false;
 			bool descending = false;
 			bool inactive = false;

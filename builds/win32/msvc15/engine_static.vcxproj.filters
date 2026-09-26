@@ -564,6 +564,7 @@
     <ClCompile Include="..\..\..\src\jrd\Resources.cpp">
       <Filter>JRD files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\gen\jrd\Package.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\jrd\recsrc\RecordSource.h">
@@ -1162,6 +1163,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\os\pio_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\IndexSegment.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>
