@@ -5853,7 +5853,8 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 	END_STORE
 
 	// Prepare for cleanup (shit happens sometimes)
-	DFW_post_work_arg(transaction, work, nullptr, format->fmt_version);
+	if (transaction && work)
+		DFW_post_work_arg(transaction, work, nullptr, format->fmt_version);
 
 	return format;
 }
