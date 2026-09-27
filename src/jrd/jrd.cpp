@@ -2815,9 +2815,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 
 			config->notify();
 
-			// Init complete - we can release dbInitMutex
+			// Init complete - we can release dbInitMutex & dbb_sync
 			dbb->dbb_flags &= ~(DBB_new | DBB_creating);
 			guardDbInit.leave();
+			dbbGuard.unlock();
 
 			// Report that we created attachment to Trace API
 			if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ATTACH))
