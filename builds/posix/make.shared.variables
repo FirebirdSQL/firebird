@@ -114,10 +114,10 @@ GFIX_Objects:= $(Svc_GFIX_Objects) $(call dirObjects,alice/main)
 AllObjects += $(GFIX_Objects)
 
 # gbak
-Svc_GBAK_Objects:= $(call dirObjects,burp)
-GBAK_Objects:= $(Svc_GBAK_Objects) $(call dirObjects,burp/main)
+Svc_GBAK_Objects:= $(call dirObjects,burp) $(call dirObjects,burp/engine)
+GBAK_Objects:= $(call dirObjects,burp) $(call dirObjects,burp/main)
 
-AllObjects += $(GBAK_Objects)
+AllObjects += $(GBAK_Objects) $(call dirObjects,burp/engine)
 
 # gsec
 Svc_GSEC_Objects:= $(call dirObjects,utilities/gsec)

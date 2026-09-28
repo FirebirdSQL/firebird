@@ -1122,7 +1122,7 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 	}
 
 	record->clearNull(fieldId);
-	jrd_tra* transaction = request->req_transaction;
+	jrd_tra* transaction = request ? request->req_transaction : tdbb->getTransaction();
 	transaction = transaction->getOuter();
 
 	// Declared LTT records live only in an execution frame, while their BLOB
@@ -1343,23 +1343,40 @@ void blb::move(thread_db* tdbb, dsc* from_desc, dsc* to_desc,
 
 		blobIndex->bli_materialized = true;
 		blobIndex->bli_blob_id = *destination;
-		// Assign temporary BLOB ownership to top-level request if it is not assigned yet
-		Request* own_request;
-		if (blobIndex->bli_request) {
-			own_request = blobIndex->bli_request;
-		}
-		else
+
+		if (request)
 		{
-			own_request = request;
-			while (own_request->req_caller)
-				own_request = own_request->req_caller;
-			blobIndex->bli_request = own_request;
-			own_request->req_blobs.add(blob->blb_temp_id);
+			// Assign temporary BLOB ownership to top-level request if it is not assigned yet
+			Request* own_request;
+			if (blobIndex->bli_request) {
+				own_request = blobIndex->bli_request;
+			}
+			else
+			{
+				own_request = request;
+				while (own_request->req_caller)
+					own_request = own_request->req_caller;
+				blobIndex->bli_request = own_request;
+				own_request->req_blobs.add(blob->blb_temp_id);
+			}
+			// Not sure that this ownership is entirely correct for arrays, but
+			// even if I make mistake here widening array lifetime this should not hurt much
+			if (array)
+				array->arr_request = own_request;
 		}
-		// Not sure that this ownership is entirely correct for arrays, but
-		// even if I make mistake here widening array lifetime this should not hurt much
-		if (array)
-			array->arr_request = own_request;
+		else if (array)
+		{
+			// Direct-VIO burp path (no request exists). The array payload has
+			// already been copied into the blob by store_array and the blob
+			// stored above, so the ArrayField is no longer needed. Release it
+			// immediately to keep memory bounded to the current batch instead
+			// of accumulating full array buffers until transaction end (the
+			// request-owned path releases at request end; here there is no
+			// request, so without this the 1MB message-batch limit would not
+			// bound engine allocations).
+			release_array(array);
+			array = nullptr;
+		}
 	}
 
 	const bool purgeBlob = !materialized_blob ||
@@ -1950,6 +1967,23 @@ void blb::release_array(ArrayField* array)
 	}
 
 	delete array;
+}
+
+
+void blb::releaseRequestlessArrays(jrd_tra* transaction)
+{
+	if (!transaction)
+		return;
+
+	for (ArrayField** ptr = &transaction->tra_arrays; *ptr;)
+	{
+		const auto array = *ptr;
+
+		if (!array->arr_request)
+			release_array(array);
+		else
+			ptr = &(*ptr)->arr_next;
+	}
 }
 
 
