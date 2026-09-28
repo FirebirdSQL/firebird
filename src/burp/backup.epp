@@ -294,8 +294,8 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		{
 			if (tdgbl->gbl_fast_path)
 			{
-				// msg 431 cannot obtain transaction snapshot number for FAST_PATH backup
-				BURP_error(431, true);
+				// msg 432 cannot obtain transaction snapshot number for FAST_PATH backup
+				BURP_error(432, true);
 			}
 
 			if (tdgbl->gbl_sw_par_workers > 1)
@@ -5397,18 +5397,15 @@ void ReadRelationReq::receive(CheckStatusWrapper* status)
 
 	memset(m_outMsg.begin(), 0, m_meta->m_outMsgLen);
 
+	// Aligned stride keeps descriptor alignment between packed records;
+	// serialization still uses m_outMsgLen.
+	FB_SIZE_T stride = m_meta->m_outMsgLen;
+
+	if (const USHORT maxAlign = m_meta->getLayout().getMaxAlignment())
+		stride = FB_ALIGN(stride, maxAlign);
+
 	if (m_fastPathBatchPosition == m_fastPathBatchRecords)
 	{
-		const FB_SIZE_T messageLength = m_meta->m_outMsgLen;
-
-		// Aligned stride keeps descriptor alignment between packed records;
-		// serialization still uses messageLength.
-		FB_SIZE_T stride = messageLength;
-
-		const USHORT maxAlign = m_meta->getLayout().getMaxAlignment();
-		if (maxAlign)
-			stride = FB_ALIGN(messageLength, maxAlign);
-
 		unsigned batchRecords = FAST_PATH_BACKUP_BATCH_MAX_RECORDS;
 
 		if (stride)
@@ -5423,20 +5420,10 @@ void ReadRelationReq::receive(CheckStatusWrapper* status)
 			m_fastPathBatch.getBuffer(static_cast<FB_SIZE_T>(batchRecords) * stride, false),
 			static_cast<RCRD_LENGTH>(stride), batchRecords);
 		m_fastPathBatchPosition = 0;
-
-		// Remember stride for extraction below via batch size; store it
-		// implicitly by keeping the buffer stride-aligned. The next block
-		// recomputes the same stride.
 	}
 
 	if (m_fastPathBatchPosition < m_fastPathBatchRecords)
 	{
-		FB_SIZE_T stride = m_meta->m_outMsgLen;
-
-		const USHORT maxAlign = m_meta->getLayout().getMaxAlignment();
-		if (maxAlign)
-			stride = FB_ALIGN((FB_SIZE_T) m_meta->m_outMsgLen, maxAlign);
-
 		memcpy(m_outMsg.begin(),
 			m_fastPathBatch.begin() + static_cast<FB_SIZE_T>(m_fastPathBatchPosition) * stride,
 			m_meta->m_outMsgLen);

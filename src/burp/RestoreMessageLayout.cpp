@@ -37,7 +37,7 @@ using namespace Firebird;
 namespace Burp {
 
 
-static bool makeMessageDescriptor(dsc& desc, const burp_fld* field)
+static bool makeMessageDescriptor(dsc& desc, const burp_fld* field, bool fixFssData, CSetId fixFssDataId)
 {
 	USHORT blrType = field->fld_type;
 	FLD_LENGTH length = field->fld_length;
@@ -75,16 +75,17 @@ static bool makeMessageDescriptor(dsc& desc, const burp_fld* field)
 		subType = 0;
 		charSet = CS_NONE;
 	}
+	else if (fixFssData && charSet == CS_UNICODE_FSS &&
+		(blrType == blr_text || blrType == blr_varying ||
+			(blrType == blr_blob && subType == isc_blob_text)))
+	{
+		// Same condition as the normal restore message builders: the stored data
+		// is in the given charset and is converted to UNICODE_FSS on store.
+		charSet = fixFssDataId;
+	}
 
 	return DSC_make_descriptor(&desc, blrType, field->fld_scale, length,
 		subType, charSet, field->fld_collation_id);
-}
-
-[[noreturn]] static void raiseInvalidField(const burp_rel* relation, const burp_fld* field,
-	const char* reason)
-{
-	(Arg::Gds(isc_gbak_inv_column) << Arg::Str(field->fld_name) <<
-		Arg::Str(relation->rel_name.toQuotedString()) << Arg::Str(reason)).raise();
 }
 
 [[noreturn]] static void raiseInvalidLength(const burp_rel* relation)
@@ -115,20 +116,6 @@ void RestoreMessageLayout::build(burp_rel* relation, bool fixFssData, CSetId fix
 
 	clear();
 
-	if (fixFssData)
-	{
-		for (burp_fld* field = relation->rel_fields; field; field = field->fld_next)
-		{
-			if (!(field->fld_flags & FLD_computed) &&
-				field->fld_character_set_id == CS_UNICODE_FSS &&
-				(field->fld_type == blr_blob || field->fld_type == blr_text ||
-					field->fld_type == blr_varying))
-			{
-				field->fld_character_set_id = fixFssDataId;
-			}
-		}
-	}
-
 	RCRD_OFFSET offset = 0;
 	USHORT peakAlignment = sizeof(SSHORT);
 
@@ -138,7 +125,7 @@ void RestoreMessageLayout::build(burp_rel* relation, bool fixFssData, CSetId fix
 			continue;
 
 		dsc descriptor;
-		if (!makeMessageDescriptor(descriptor, field))
+		if (!makeMessageDescriptor(descriptor, field, fixFssData, fixFssDataId))
 			(Arg::Gds(isc_gbak_unk_type) << Arg::Num(field->fld_type)).raise();
 
 		const auto alignment = type_alignments[descriptor.dsc_dtype];

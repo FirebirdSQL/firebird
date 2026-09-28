@@ -41,7 +41,7 @@ FastPathRecordWriter::~FastPathRecordWriter() = default;
 void FastPathRecordWriter::init(Firebird::IAttachment*, Firebird::ITransaction*, const burp_rel*,
 	const RestoreMessageLayout&)
 {
-	BURP_error(330, true, "FAST_PATH");
+	BURP_error(430, true);
 }
 
 void FastPathRecordWriter::writeRecords(const UCHAR*, RCRD_LENGTH, unsigned)

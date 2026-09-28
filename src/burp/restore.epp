@@ -3532,6 +3532,13 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 	{
 		BURP_abort(ex.getStatus());
 	}
+	catch (const status_exception& ex)
+	{
+		// Engine errors raised by the FAST_PATH direct writer.
+		FbLocalStatus status;
+		ex.stuffException(&status);
+		BURP_abort(&status);
+	}
 
 	if (tdgbl->gbl_sw_incremental)
 		commit_relation_data(tdgbl, relation);

@@ -427,3 +427,4 @@ FB_IMPL_MSG(GBAK, 428, gbak_inv_column, -901, "00", "000", "invalid column @1 in
 FB_IMPL_MSG(GBAK, 429, gbak_inv_record_length, -901, "00", "000", "invalid record length for table @1")
 FB_IMPL_MSG(GBAK, 430, gbak_fast_path_needs_service, -901, "00", "000", "FAST_PATH requires the -service option")
 FB_IMPL_MSG_NO_SYMBOL(GBAK, 431, "    @1FAST(_PATH)          fast-path data transfer (requires -service)")
+FB_IMPL_MSG(GBAK, 432, gbak_fast_path_no_snapshot, -901, "00", "000", "cannot obtain transaction snapshot number for FAST_PATH backup")

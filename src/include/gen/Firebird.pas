@@ -6347,6 +6347,7 @@ const
 	 isc_gbak_inv_column = 336331180;
 	 isc_gbak_inv_record_length = 336331181;
 	 isc_gbak_fast_path_needs_service = 336331182;
+	 isc_gbak_fast_path_no_snapshot = 336331184;
 	 isc_dsql_too_old_ods = 336397205;
 	 isc_dsql_table_not_found = 336397206;
 	 isc_dsql_view_not_found = 336397207;

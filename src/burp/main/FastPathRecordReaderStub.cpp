@@ -43,7 +43,7 @@ FastPathRecordReader::~FastPathRecordReader() = default;
 void FastPathRecordReader::init(Firebird::IAttachment*, Firebird::ITransaction*, const burp_rel*,
 	const RestoreMessageLayout&, bool)
 {
-	BURP_error(330, true, "FAST_PATH");
+	BURP_error(430, true);
 }
 
 void FastPathRecordReader::start(ULONG, ULONG)

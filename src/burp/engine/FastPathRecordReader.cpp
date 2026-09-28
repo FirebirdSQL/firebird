@@ -40,6 +40,8 @@
 #include "../jrd/mov_proto.h"
 #include "../jrd/req.h"
 #include "../jrd/rlck_proto.h"
+#include "../jrd/scl.h"
+#include "../jrd/scl_proto.h"
 #include "../jrd/tdbb.h"
 #include "../jrd/tra.h"
 #include "../jrd/vio_proto.h"
@@ -94,6 +96,37 @@ struct FastPathRecordReader::Imp
 	{
 		delete rpb.rpb_record;
 		rpb = record_param();
+	}
+
+	// The direct scan does not compile a request, so check the same privileges
+	// that a BLR FOR over the relation would verify: schema USAGE, relation
+	// SELECT and SELECT on every read column.
+	void checkAccess(thread_db* tdbb)
+	{
+		const auto& relName = relation->getName();
+		const auto& securityName = relation->getSecurityName();
+
+		SCL_check_schema(tdbb, relName.schema, SCL_usage);
+
+		if (const auto sClass = SCL_get_class(tdbb, securityName.object))
+			SCL_check_access(tdbb, sClass, 0, {}, SCL_select, obj_relations, false, relName);
+
+		const auto relFields = relation->rel_fields;
+
+		for (const auto& field : fields)
+		{
+			const jrd_fld* const jrdField = (relFields && field.fieldId < relFields->count()) ?
+				(*relFields)[field.fieldId] : nullptr;
+
+			if (!jrdField)
+				continue;
+
+			if (const auto sClass = SCL_get_class(tdbb, jrdField->fld_security_name))
+			{
+				SCL_check_access(tdbb, sClass, 0, {}, SCL_select, obj_column, false,
+					relName, jrdField->fld_name);
+			}
+		}
 	}
 
 	// Balance the rel_scan_count increment made in start(). Called on natural
@@ -208,6 +241,8 @@ void FastPathRecordReader::init(IAttachment* att, ITransaction* tra, const burp_
 		mapping.array = (field->fld_flags & FLD_array) != 0;
 		imp->fields.add(mapping);
 	}
+
+	imp->checkAccess(tdbb);
 
 	RLCK_reserve_relation(tdbb, imp->transaction, imp->relation->getPermanent(), false);
 	imp->initialized = true;
@@ -330,12 +365,20 @@ void FastPathRecordReader::clear()
 		return;
 
 	// Touching rel_scan_count requires the engine sync, also in this
-	// (possibly destructor) path.
+	// (possibly destructor) path. The attachment may already be shut down;
+	// never let that escape from here.
 	if (imp->scanActive && imp->jAtt && imp->relation)
 	{
-		FbLocalStatus status;
-		EngineContextHolder tdbb(&status, imp->jAtt, FB_FUNCTION);
-		imp->finishScan();
+		try
+		{
+			FbLocalStatus status;
+			EngineContextHolder tdbb(&status, imp->jAtt, FB_FUNCTION);
+			imp->finishScan();
+		}
+		catch (const Exception&)
+		{
+			imp->scanActive = false;
+		}
 	}
 
 	imp->att = nullptr;

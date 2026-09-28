@@ -112,6 +112,7 @@ struct FastPathRecordWriter::Imp
 				Arg::Str(burpRelation->rel_name.toQuotedString())).raise();
 		}
 
+		rpb.rpb_number.setValue(BOF_NUMBER);
 		rpb.rpb_record->nullify();
 
 		for (const auto& field : fields)
@@ -175,6 +176,11 @@ void FastPathRecordWriter::init(IAttachment* att, ITransaction* tra, const burp_
 
 	imp->initialized = false;
 	imp->fields.clear();
+
+	// Drop the record of a previous init(): VIO_record() would otherwise reuse
+	// rpb_record and assigning it back to the owning AutoPtr would free it.
+	imp->record = nullptr;
+	imp->rpb = record_param();
 	imp->messageLength = layout.getLength();
 	imp->att = att;
 	imp->tra = tra;
@@ -348,14 +354,21 @@ void FastPathRecordWriter::clear()
 		return;
 
 	// Touching the transaction's array list requires the engine sync, also in
-	// this (possibly destructor) path.
+	// this (possibly destructor) path. The attachment may already be shut
+	// down; never let that escape from here.
 	if (imp->initialized && imp->transaction && imp->jAtt)
 	{
-		FbLocalStatus status;
-		EngineContextHolder tdbb(&status, imp->jAtt, FB_FUNCTION);
-		tdbb->setTransaction(imp->transaction);
+		try
+		{
+			FbLocalStatus status;
+			EngineContextHolder tdbb(&status, imp->jAtt, FB_FUNCTION);
+			tdbb->setTransaction(imp->transaction);
 
-		blb::releaseRequestlessArrays(imp->transaction);
+			blb::releaseRequestlessArrays(imp->transaction);
+		}
+		catch (const Exception&)
+		{
+		}
 	}
 
 	imp->att = nullptr;

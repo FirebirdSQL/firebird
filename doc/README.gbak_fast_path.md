@@ -123,6 +123,15 @@ system relations with `RDB$SYSTEM_FLAG = 1` are excluded from the backed-up rela
 and external-table rows are omitted unless external-table conversion is requested. Temporary-table contents are not persistent
 database data.
 
+Restore uses the direct data path only for backups in format 8 or newer; tables from older backups are silently loaded through
+the normal restore path.
+
+Privileges are the same as for a normal backup: besides the `USE_GBAK_UTILITY` requirement for the attachment, the backup
+checks schema `USAGE`, table `SELECT` and column `SELECT` for every table it reads directly.
+
+Because `FAST_PATH` uses the engine provider directly instead of the provider list, database names must be local to the server
+(a path or an alias). Names with a remote prefix such as `host:path` or `inet://host/path` are not routed and fail.
+
 ## Architecture
 
 `FAST_PATH` selects the in-process engine provider. Direct VIO access needs an engine `JAttachment`, which the
