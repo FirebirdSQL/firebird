@@ -48,11 +48,12 @@ class UdrPluginImpl;
 
 static GlobalPtr<ObjectsArray<PathName> > paths;
 
-class Engine : public StdPlugin<IExternalEngineImpl<Engine, ThrowStatusWrapper> >
+class Engine final : public StdPlugin<IExternalEngineImpl<Engine, ThrowStatusWrapper> >
 {
 public:
 	explicit Engine(IPluginConfig* par)
 		: functions(getPool()),
+		  aggregates(getPool()),
 		  procedures(getPool()),
 		  triggers(getPool())
 	{
@@ -100,34 +101,37 @@ public:
 		SharedObjType* sharedObj, IExternalContext* context,
 		SortedArray<SharedObjType*>& sharedObjs, const PathName& moduleName);
 
-	template <typename ObjType> void deleteChildren(
-		GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >& children);
+	template <typename SharedObjType>
+	void sharedObjectCleanup(SharedObjType* sharedObj, SortedArray<SharedObjType*>& sharedObjs);
 
 	template <typename T> T* findNode(ThrowStatusWrapper* status,
 		const GenericMap<Pair<Left<string, T*> > >& nodes, const string& entryPoint);
 
 public:
-	void open(ThrowStatusWrapper* status, IExternalContext* context, char* name, unsigned nameSize);
-	void openAttachment(ThrowStatusWrapper* status, IExternalContext* context);
-	void closeAttachment(ThrowStatusWrapper* status, IExternalContext* context);
+	void open(ThrowStatusWrapper* status, IExternalContext* context, char* name, unsigned nameSize) override;
+	void openAttachment(ThrowStatusWrapper* status, IExternalContext* context) override;
+	void closeAttachment(ThrowStatusWrapper* status, IExternalContext* context) override;
 	IExternalFunction* makeFunction(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override;
+	IExternalAggregateFunction* makeAggregateFunction(ThrowStatusWrapper* status, IExternalContext* context,
+		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override;
 	IExternalProcedure* makeProcedure(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder) override;
 	IExternalTrigger* makeTrigger(ThrowStatusWrapper* status, IExternalContext* context,
-		IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder);
+		IRoutineMetadata* metadata, IMetadataBuilder* fieldsBuilder) override;
 
 private:
 	Mutex childrenMutex;
 
 public:
 	SortedArray<class SharedFunction*> functions;
+	SortedArray<class SharedAggregateFunction*> aggregates;
 	SortedArray<class SharedProcedure*> procedures;
 	SortedArray<class SharedTrigger*> triggers;
 };
 
 
-class ModulesMap : public GenericMap<Pair<Left<PathName, UdrPluginImpl*> > >
+class ModulesMap final : public GenericMap<Pair<Left<PathName, UdrPluginImpl*> > >
 {
 public:
 	explicit ModulesMap(MemoryPool& p)
@@ -149,7 +153,7 @@ static GlobalPtr<ModulesMap> modules;
 //--------------------------------------
 
 
-class UdrPluginImpl : public VersionedIface<IUdrPluginImpl<UdrPluginImpl, ThrowStatusWrapper> >
+class UdrPluginImpl final : public VersionedIface<IUdrPluginImpl<UdrPluginImpl, ThrowStatusWrapper> >
 {
 public:
 	UdrPluginImpl(const PathName& aModuleName, ModuleLoader::Module* aModule)
@@ -158,6 +162,7 @@ public:
 		  myUnloadFlag(FB_FALSE),
 		  theirUnloadFlag(NULL),
 		  functionsMap(*getDefaultMemoryPool()),
+		  aggregatesMap(*getDefaultMemoryPool()),
 		  proceduresMap(*getDefaultMemoryPool()),
 		  triggersMap(*getDefaultMemoryPool())
 	{
@@ -177,6 +182,12 @@ public:
 		}
 
 		{
+			GenericMap<Pair<Left<string, IUdrAggregateFactory*> > >::Accessor accessor(&aggregatesMap);
+			for (bool cont = accessor.getFirst(); cont; cont = accessor.getNext())
+				accessor.current()->second->dispose();
+		}
+
+		{
 			GenericMap<Pair<Left<string, IUdrProcedureFactory*> > >::Accessor accessor(&proceduresMap);
 			for (bool cont = accessor.getFirst(); cont; cont = accessor.getNext())
 				accessor.current()->second->dispose();
@@ -190,13 +201,13 @@ public:
 	}
 
 public:
-	IMaster* getMaster()
+	IMaster* getMaster() override
 	{
 		return MasterInterfacePtr();
 	}
 
 	void registerFunction(ThrowStatusWrapper* status, const char* name,
-		IUdrFunctionFactory* factory)
+		IUdrFunctionFactory* factory) override
 	{
 		if (functionsMap.exist(name))
 		{
@@ -213,8 +224,26 @@ public:
 		functionsMap.put(name, factory);
 	}
 
+	void registerAggregateFunction(ThrowStatusWrapper* status, const char* name,
+		IUdrAggregateFactory* factory) override
+	{
+		if (aggregatesMap.exist(name))
+		{
+			static const ISC_STATUS statusVector[] = {
+				isc_arg_gds, isc_random,
+				isc_arg_string, (ISC_STATUS) "Duplicate UDR aggregate function",
+				//// TODO: isc_arg_gds, isc_random, isc_arg_string, (ISC_STATUS) name,
+				isc_arg_end
+			};
+
+			throw FbException(status, statusVector);
+		}
+
+		aggregatesMap.put(name, factory);
+	}
+
 	void registerProcedure(ThrowStatusWrapper* status, const char* name,
-		IUdrProcedureFactory* factory)
+		IUdrProcedureFactory* factory) override
 	{
 		if (proceduresMap.exist(name))
 		{
@@ -232,7 +261,7 @@ public:
 	}
 
 	void registerTrigger(ThrowStatusWrapper* status, const char* name,
-		IUdrTriggerFactory* factory)
+		IUdrTriggerFactory* factory) override
 	{
 		if (triggersMap.exist(name))
 		{
@@ -256,13 +285,14 @@ private:
 public:
 	FB_BOOLEAN myUnloadFlag;
 	FB_BOOLEAN* theirUnloadFlag;
-	GenericMap<Pair<Left<string, IUdrFunctionFactory*> > > functionsMap;
-	GenericMap<Pair<Left<string, IUdrProcedureFactory*> > > proceduresMap;
-	GenericMap<Pair<Left<string, IUdrTriggerFactory*> > > triggersMap;
+	GenericMap<Pair<Left<string, IUdrFunctionFactory*>>> functionsMap;
+	GenericMap<Pair<Left<string, IUdrAggregateFactory*>>> aggregatesMap;
+	GenericMap<Pair<Left<string, IUdrProcedureFactory*>>> proceduresMap;
+	GenericMap<Pair<Left<string, IUdrTriggerFactory*>>> triggersMap;
 };
 
 
-class SharedFunction : public DisposeIface<IExternalFunctionImpl<SharedFunction, ThrowStatusWrapper> >
+class SharedFunction final : public DisposeIface<IExternalFunctionImpl<SharedFunction, ThrowStatusWrapper> >
 {
 public:
 	SharedFunction(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -285,12 +315,12 @@ public:
 
 	~SharedFunction()
 	{
-		engine->deleteChildren(children);
+		engine->sharedObjectCleanup(this, engine->functions);
 	}
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -301,7 +331,7 @@ public:
 			function->getCharSet(status, context, name, nameSize);
 	}
 
-	void execute(ThrowStatusWrapper* status, IExternalContext* context, void* inMsg, void* outMsg)
+	void execute(ThrowStatusWrapper* status, IExternalContext* context, void* inMsg, void* outMsg) override
 	{
 		IExternalFunction* function = engine->getChild<IUdrFunctionFactory, IExternalFunction>(
 			status, children, this, context, engine->functions, moduleName);
@@ -324,7 +354,71 @@ public:
 //--------------------------------------
 
 
-class SharedProcedure : public DisposeIface<IExternalProcedureImpl<SharedProcedure, ThrowStatusWrapper> >
+class SharedAggregateFunction final :
+	public DisposeIface<IExternalAggregateFunctionImpl<SharedAggregateFunction, ThrowStatusWrapper> >
+{
+public:
+	SharedAggregateFunction(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
+				IRoutineMetadata* aMetadata,
+				IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
+		: engine(aEngine),
+		  metadata(aMetadata),
+		  moduleName(*getDefaultMemoryPool()),
+		  entryPoint(*getDefaultMemoryPool()),
+		  info(*getDefaultMemoryPool()),
+		  children(*getDefaultMemoryPool())
+	{
+		module = engine->loadModule(status, metadata, &moduleName, &entryPoint);
+
+		IUdrAggregateFactory* factory = engine->findNode<IUdrAggregateFactory>(
+			status, module->aggregatesMap, entryPoint);
+
+		factory->setup(status, context, metadata, inBuilder, outBuilder);
+	}
+
+	~SharedAggregateFunction()
+	{
+		engine->sharedObjectCleanup(this, engine->aggregates);
+	}
+
+public:
+	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
+		char* name, unsigned nameSize) override
+	{
+		strncpy(name, context->getClientCharSet(), nameSize);
+
+		IExternalAggregateFunction* aggregateFunction =
+			engine->getChild<IUdrAggregateFactory, IExternalAggregateFunction>(
+				status, children, this, context, engine->aggregates, moduleName);
+
+		if (aggregateFunction)
+			aggregateFunction->getCharSet(status, context, name, nameSize);
+	}
+
+	IExternalAggregateInstance* newInstance(ThrowStatusWrapper* status, IExternalContext* context) override
+	{
+		IExternalAggregateFunction* aggregateFunction =
+			engine->getChild<IUdrAggregateFactory, IExternalAggregateFunction>(
+				status, children, this, context, engine->aggregates, moduleName);
+
+		return aggregateFunction ? aggregateFunction->newInstance(status, context) : nullptr;
+	}
+
+public:
+	Engine* engine;
+	IRoutineMetadata* metadata;
+	PathName moduleName;
+	string entryPoint;
+	string info;
+	GenericMap<Pair<NonPooled<IExternalContext*, IExternalAggregateFunction*> > > children;
+	UdrPluginImpl* module;
+};
+
+
+//--------------------------------------
+
+
+class SharedProcedure final : public DisposeIface<IExternalProcedureImpl<SharedProcedure, ThrowStatusWrapper> >
 {
 public:
 	SharedProcedure(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -347,12 +441,12 @@ public:
 
 	~SharedProcedure()
 	{
-		engine->deleteChildren(children);
+		engine->sharedObjectCleanup(this, engine->procedures);
 	}
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -364,7 +458,7 @@ public:
 	}
 
 	IExternalResultSet* open(ThrowStatusWrapper* status, IExternalContext* context,
-		void* inMsg, void* outMsg)
+		void* inMsg, void* outMsg) override
 	{
 		IExternalProcedure* procedure = engine->getChild<IUdrProcedureFactory, IExternalProcedure>(
 			status, children, this, context, engine->procedures, moduleName);
@@ -386,7 +480,7 @@ public:
 //--------------------------------------
 
 
-class SharedTrigger : public DisposeIface<IExternalTriggerImpl<SharedTrigger, ThrowStatusWrapper> >
+class SharedTrigger final : public DisposeIface<IExternalTriggerImpl<SharedTrigger, ThrowStatusWrapper> >
 {
 public:
 	SharedTrigger(ThrowStatusWrapper* status, Engine* aEngine, IExternalContext* context,
@@ -408,12 +502,12 @@ public:
 
 	~SharedTrigger()
 	{
-		engine->deleteChildren(children);
+		engine->sharedObjectCleanup(this, engine->triggers);
 	}
 
 public:
 	void getCharSet(ThrowStatusWrapper* status, IExternalContext* context,
-		char* name, unsigned nameSize)
+		char* name, unsigned nameSize) override
 	{
 		strncpy(name, context->getClientCharSet(), nameSize);
 
@@ -425,7 +519,7 @@ public:
 	}
 
 	void execute(ThrowStatusWrapper* status, IExternalContext* context,
-		unsigned action, void* oldMsg, void* newMsg)
+		unsigned action, void* oldMsg, void* newMsg) override
 	{
 		IExternalTrigger* trigger = engine->getChild<IUdrTriggerFactory, IExternalTrigger>(
 			status, children, this, context, engine->triggers, moduleName);
@@ -449,25 +543,31 @@ public:
 
 
 template <typename FactoryType> GenericMap<Pair<Left<string, FactoryType*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	fb_assert(false);
 }
 
 template <> GenericMap<Pair<Left<string, IUdrFunctionFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->functionsMap;
 }
 
+template <> GenericMap<Pair<Left<string, IUdrAggregateFactory*> > >& getFactoryMap(
+	UdrPluginImpl* udrPlugin) noexcept
+{
+	return udrPlugin->aggregatesMap;
+}
+
 template <> GenericMap<Pair<Left<string, IUdrProcedureFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->proceduresMap;
 }
 
 template <> GenericMap<Pair<Left<string, IUdrTriggerFactory*> > >& getFactoryMap(
-	UdrPluginImpl* udrPlugin)
+	UdrPluginImpl* udrPlugin) noexcept
 {
 	return udrPlugin->triggersMap;
 }
@@ -507,7 +607,9 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 
 	*moduleName = PathName(str.substr(0, pos).c_str());
 	// Do not allow module names with directory separators as a security measure.
-	if (moduleName->find_first_of("/\\") != string::npos)
+	if (moduleName->find_first_of("/\\") != string::npos ||
+		moduleName->equals(PathUtils::up_dir_link) ||
+		moduleName->isEmpty())
 	{
 		static const ISC_STATUS statusVector[] = {
 			isc_arg_gds, isc_random,
@@ -521,7 +623,7 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 
 	*entryPoint = str.substr(pos + 1);
 
-	string::size_type n = entryPoint->find('!');
+	const auto n = entryPoint->find('!');
 	*entryPoint = (n == string::npos ? *entryPoint : entryPoint->substr(0, n));
 
 	MutexLockGuard guard(modulesMutex, FB_FUNCTION);
@@ -541,8 +643,8 @@ UdrPluginImpl* Engine::loadModule(ThrowStatusWrapper* status, IRoutineMetadata* 
 			isc_arg_string, (ISC_STATUS) "UDR module not loaded",
 			isc_arg_end
 		};
-		const unsigned ARG_TEXT = 3;	// Keep both in sync
-		const unsigned ARG_END = 4;		// with status initializer!
+		constexpr unsigned ARG_TEXT = 3;	// Keep both in sync
+		constexpr unsigned ARG_END = 4;		// with status initializer!
 
 		ModuleLoader::Module* module = ModuleLoader::fixAndLoadModule(&statusArray[ARG_END], path);
 		if (!module)
@@ -592,7 +694,7 @@ template <typename NodeType, typename ObjType, typename SharedObjType> ObjType* 
 	ObjType* obj;
 	if (!children.get(context, obj))
 	{
-		GenericMap<Pair<Left<string, NodeType*> > >& nodes = getFactoryMap<NodeType>(
+		const GenericMap<Pair<Left<string, NodeType*> > >& nodes = getFactoryMap<NodeType>(
 			sharedObj->module);
 
 		NodeType* factory = findNode<NodeType>(status, nodes, sharedObj->entryPoint);
@@ -606,16 +708,17 @@ template <typename NodeType, typename ObjType, typename SharedObjType> ObjType* 
 }
 
 
-template <typename ObjType> void Engine::deleteChildren(
-	GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >& children)
+template <typename SharedObjType>
+void Engine::sharedObjectCleanup(SharedObjType* sharedObj, SortedArray<SharedObjType*>& sharedObjs)
 {
-	// No need to lock childrenMutex as if there are more threads simultaneously accessing
-	// these children in this moment there will be a memory corruption anyway.
+	MutexLockGuard guard(childrenMutex, FB_FUNCTION);
 
-	typedef typename GenericMap<Pair<NonPooled<IExternalContext*, ObjType*> > >::Accessor ChildrenAccessor;
-	ChildrenAccessor accessor(&children);
-	for (bool found = accessor.getFirst(); found; found = accessor.getNext())
-		accessor.current()->second->dispose();
+	for (auto child : sharedObj->children)
+		child.second->dispose();
+
+	FB_SIZE_T pos;
+	if (sharedObjs.find(sharedObj, pos))
+		sharedObjs.remove(pos);
 }
 
 
@@ -642,7 +745,7 @@ template <typename T> T* Engine::findNode(ThrowStatusWrapper* status,
 
 void Engine::open(ThrowStatusWrapper* /*status*/, IExternalContext* /*context*/, char* name, unsigned nameSize)
 {
-	strncpy(name, "UTF-8", nameSize);
+	strncpy(name, "SYSTEM.UTF8", nameSize);
 }
 
 
@@ -661,6 +764,16 @@ void Engine::closeAttachment(ThrowStatusWrapper* /*status*/, IExternalContext* c
 		if ((*i)->children.get(context, function))
 		{
 			function->dispose();
+			(*i)->children.remove(context);
+		}
+	}
+
+	for (SortedArray<SharedAggregateFunction*>::iterator i = aggregates.begin(); i != aggregates.end(); ++i)
+	{
+		IExternalAggregateFunction* aggregateFunction;
+		if ((*i)->children.get(context, aggregateFunction))
+		{
+			aggregateFunction->dispose();
 			(*i)->children.remove(context);
 		}
 	}
@@ -694,6 +807,13 @@ IExternalFunction* Engine::makeFunction(ThrowStatusWrapper* status, IExternalCon
 }
 
 
+IExternalAggregateFunction* Engine::makeAggregateFunction(ThrowStatusWrapper* status, IExternalContext* context,
+	IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
+{
+	return FB_NEW SharedAggregateFunction(status, this, context, metadata, inBuilder, outBuilder);
+}
+
+
 IExternalProcedure* Engine::makeProcedure(ThrowStatusWrapper* status, IExternalContext* context,
 	IRoutineMetadata* metadata, IMetadataBuilder* inBuilder, IMetadataBuilder* outBuilder)
 {
@@ -711,7 +831,7 @@ IExternalTrigger* Engine::makeTrigger(ThrowStatusWrapper* status, IExternalConte
 //--------------------------------------
 
 
-class IExternalEngineFactoryImpl : public SimpleFactory<Engine>
+class IExternalEngineFactoryImpl final : public SimpleFactory<Engine>
 {
 } factory;
 

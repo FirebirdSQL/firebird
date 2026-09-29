@@ -34,6 +34,12 @@ namespace Firebird {
 class BlrReader
 {
 public:
+	struct Flags
+	{
+		bool searchSystemSchema = false;
+	};
+
+public:
 	BlrReader(const UCHAR* buffer, unsigned maxLen)
 		: start(buffer),
 		  end(buffer + maxLen),
@@ -119,6 +125,50 @@ public:
 		const UCHAR b4 = getByte();
 
 		return (b4 << 24) | (b3 << 16) | (b2 << 8) | b1;
+	}
+
+	UCHAR parseHeader(Flags* flags = nullptr)
+	{
+		const auto version = getByte();
+
+		switch (version)
+		{
+			case blr_version4:
+			case blr_version5:
+			//case blr_version6:
+				break;
+
+			default:
+				status_exception::raise(
+					Arg::Gds(isc_metadata_corrupt) <<
+					Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
+						Arg::Num(version));
+		}
+
+		auto code = getByte();
+
+		if (code == blr_flags)
+		{
+			while ((code = getByte()) != blr_end)
+			{
+				if (flags)
+				{
+					switch (code)
+					{
+						case blr_flags_search_system_schema:
+							flags->searchSystemSchema = true;
+							break;
+					}
+				}
+
+				const auto len = getWord();
+				seekForward(len);
+			}
+		}
+		else
+			seekBackward(1);
+
+		return version;
 	}
 
 	UCHAR checkByte(UCHAR expected)

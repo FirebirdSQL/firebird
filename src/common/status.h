@@ -35,8 +35,8 @@
 #include "../common/utils_proto.h"
 #include <utility>
 
-const int MAX_ERRMSG_LEN	= 128;
-const int MAX_ERRSTR_LEN	= 1024;
+inline constexpr int MAX_ERRMSG_LEN = 128;
+inline constexpr int MAX_ERRSTR_LEN = 1024;
 
 namespace Firebird
 {
@@ -54,12 +54,12 @@ namespace Firebird
 			: localStatus(p), localStatusVector(&localStatus, std::forward<Args>(args)...)
 		{ }
 
-		SW* operator->()
+		SW* operator->() noexcept
 		{
 			return &localStatusVector;
 		}
 
-		SW* operator&()
+		SW* operator&() noexcept
 		{
 			return &localStatusVector;
 		}
@@ -70,12 +70,12 @@ namespace Firebird
 			return localStatusVector.getErrors()[n];
 		}
 
-		const SW* operator->() const
+		const SW* operator->() const noexcept
 		{
 			return &localStatusVector;
 		}
 
-		const SW* operator&() const
+		const SW* operator&() const noexcept
 		{
 			return &localStatusVector;
 		}
@@ -89,17 +89,17 @@ namespace Firebird
 			}
 		}
 
-		void copyTo(SW* to) const
+		void copyTo(SW* to) const noexcept
 		{
 			fb_utils::copyStatus(to, &localStatusVector);
 		}
 
-		void loadFrom(const SW* to)
+		void loadFrom(const SW* to) noexcept
 		{
 			fb_utils::copyStatus(&localStatusVector, to);
 		}
 
-		void raise() const
+		[[noreturn]] void raise() const
 		{
 			Firebird::status_exception::raise(&localStatus);
 		}
@@ -131,7 +131,7 @@ namespace Firebird
 		}
 
 	public:
-		static void checkException(LogWrapper* status)
+		static void checkException(const LogWrapper* status)
 		{
 			if (status->dirty && (status->getState() & IStatus::STATE_ERRORS))
 				iscLogStatus(status->text, status->status);
@@ -152,7 +152,7 @@ namespace Firebird
 		}
 
 	public:
-		static void checkException(ThrowWrapper* status)
+		static void checkException(const ThrowWrapper* status)
 		{
 			if (status->dirty && (status->getState() & IStatus::STATE_ERRORS))
 				status_exception::raise(status->status);
@@ -189,7 +189,7 @@ namespace Firebird
 			}
 			catch (...)
 			{
-				ISC_STATUS statusVector[] = {
+				const ISC_STATUS statusVector[] = {
 					isc_arg_gds, isc_random,
 					isc_arg_string, (ISC_STATUS) "Unrecognized C++ exception",
 					isc_arg_end};

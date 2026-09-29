@@ -40,23 +40,23 @@ class TimeStamp : public NoThrowTimeStamp
 {
 public:
 	// Constructors
-	TimeStamp()
+	TimeStamp() noexcept
 		: NoThrowTimeStamp()
 	{}
 
-	TimeStamp(const ISC_TIMESTAMP& from)
+	TimeStamp(const ISC_TIMESTAMP& from) noexcept
 		: NoThrowTimeStamp(from)
 	{}
 
-	TimeStamp(const NoThrowTimeStamp& from)
+	TimeStamp(const NoThrowTimeStamp& from) noexcept
 		: NoThrowTimeStamp(from)
 	{}
 
-	TimeStamp(ISC_DATE date, ISC_TIME time)
+	TimeStamp(ISC_DATE date, ISC_TIME time) noexcept
 		: NoThrowTimeStamp(date, time)
 	{}
 
-	explicit TimeStamp(const struct tm& times, int fractions = 0)
+	explicit TimeStamp(const struct tm& times, int fractions = 0) noexcept
 		: NoThrowTimeStamp(times, fractions)
 	{}
 
@@ -73,7 +73,7 @@ public:
 	}
 
 private:
-	static void report_error(const char* msg);
+	[[noreturn]] static void report_error(const char* msg);
 };
 
 }	// namespace Firebird

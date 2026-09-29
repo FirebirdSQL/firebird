@@ -36,31 +36,32 @@
 #define COMMON_FILE_PREFIX "60"
 
 // Per-database usage
-static const char* const EVENT_FILE		= "fb_event_%s";
-static const char* const LOCK_FILE		= "fb_lock_%s";
-static const char* const MONITOR_FILE	= "fb_monitor_%s";
-static const char* const REPL_FILE 		= "fb_repl_%s";
-static const char* const TPC_HDR_FILE	= "fb_tpc_%s";
-static const char* const TPC_BLOCK_FILE = "fb_tpc_%s_%" UQUADFORMAT;
-static const char* const SNAPSHOTS_FILE	= "fb_snap_%s";
-static const char* const PROFILER_FILE	= "fb_profiler_%s_%" UQUADFORMAT;
+static inline constexpr const char* EVENT_FILE		= "fb_event_%s";
+static inline constexpr const char* LOCK_FILE		= "fb_lock_%s";
+static inline constexpr const char* MONITOR_FILE	= "fb_monitor_%s";
+static inline constexpr const char* REPL_FILE 		= "fb_repl_%s";
+static inline constexpr const char* TPC_HDR_FILE	= "fb_tpc_%s";
+static inline constexpr const char* TPC_BLOCK_FILE	= "fb_tpc_%s_%" UQUADFORMAT;
+static inline constexpr const char* SNAPSHOTS_FILE	= "fb_snap_%s";
+static inline constexpr const char* PROFILER_FILE	= "fb_profiler_%s_%" UQUADFORMAT;
+static inline constexpr const char* IPC_CHAT_CLIENT_FILE = "fb_ipc_chat_%" UQUADFORMAT "_%" UQUADFORMAT;
 
 // Global usage
-static const char* const TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
-static const char* const USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
-static const char* const SHARED_EVENT	= "fb" COMMON_FILE_PREFIX "_process%u_signal%d";
+static inline constexpr const char* TRACE_FILE		= "fb" COMMON_FILE_PREFIX "_trace";
+static inline constexpr const char* USER_MAP_FILE	= "fb" COMMON_FILE_PREFIX "_user_mapping";
+static inline constexpr const char* SHARED_EVENT	= "fb" COMMON_FILE_PREFIX "_process%u_signal%d";
 
 // Per-log file usage (for audit logging)
-static const char* const FB_TRACE_LOG_MUTEX = "fb_trace_log_mutex";
+static inline constexpr const char* FB_TRACE_LOG_MUTEX = "fb_trace_log_mutex";
 
 // Per-trace session usage (for interactive trace)
-static const char* const FB_TRACE_FILE = "fb_trace.";
+static inline constexpr const char* FB_TRACE_FILE = "fb_trace.";
 
 
 #ifdef UNIX
-static const char* const INIT_FILE		= "fb_init";
-static const char* const SEM_FILE		= "fb_sem";
-static const char* const PORT_FILE		= "fb_port_%d";
+static inline constexpr const char* INIT_FILE	= "fb_init";
+static inline constexpr const char* SEM_FILE	= "fb_sem";
+static inline constexpr const char* PORT_FILE	= "fb_port_%d";
 #endif
 
 #ifdef HAVE_SYS_TYPES_H
@@ -80,22 +81,22 @@ static const char* const PORT_FILE		= "fb_port_%d";
 
 // keep MSG_FILE_LANG in sync with build_file.epp
 #if defined(WIN_NT)
-static const char* const WORKFILE	= "c:\\temp\\";
-static const char MSG_FILE_LANG[]	= "intl\\%.10s.msg";
+static inline constexpr const char* WORKFILE	= "c:\\temp\\";
+static inline constexpr char MSG_FILE_LANG[]	= "intl\\%.10s.msg";
 #elif defined(ANDROID)
-static const char* const WORKFILE	= "/data/local/tmp/";
-static const char MSG_FILE_LANG[]	= "intl/%.10s.msg";
+static inline constexpr const char* WORKFILE	= "/data/local/tmp/";
+static inline constexpr char MSG_FILE_LANG[]	= "intl/%.10s.msg";
 #else
-static const char* const WORKFILE	= "/tmp/";
-static const char MSG_FILE_LANG[]	= "intl/%.10s.msg";
+static inline constexpr const char* WORKFILE	= "/tmp/";
+static inline constexpr char MSG_FILE_LANG[]	= "intl/%.10s.msg";
 #endif
 
-static const char* const LOCKDIR	= "firebird";		// created in WORKFILE
-static const char* const LOGFILE	= FB_LOGFILENAME;
-static const char* const MSG_FILE	= "firebird.msg";
-static const char* const SECURITY_DB	= "security6.fdb";
+static inline constexpr const char* LOCKDIR		= "firebird";		// created in WORKFILE
+static inline constexpr const char* LOGFILE		= FB_LOGFILENAME;
+static inline constexpr const char* MSG_FILE	= "firebird.msg";
+static inline constexpr const char* SECURITY_DB	= "security6.fdb";
 
 // Keep in sync with MSG_FILE_LANG
-const int LOCALE_MAX	= 10;
+inline constexpr int LOCALE_MAX	= 10;
 
 #endif // COMMON_FILE_PARAMS_H

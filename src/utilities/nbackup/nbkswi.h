@@ -31,29 +31,29 @@
 
 // Switch handling constants
 
-const int IN_SW_NBK_0				= 0;
-const int IN_SW_NBK_LOCK			= 1;
-const int IN_SW_NBK_UNLOCK			= 2;
-const int IN_SW_NBK_FIXUP			= 3;
-const int IN_SW_NBK_BACKUP			= 4;
-const int IN_SW_NBK_RESTORE			= 5;
-const int IN_SW_NBK_NODBTRIG		= 6;
-const int IN_SW_NBK_USER_NAME		= 7;
-const int IN_SW_NBK_PASSWORD		= 8;
-const int IN_SW_NBK_SIZE			= 9;
-const int IN_SW_NBK_FETCH			= 10;
-const int IN_SW_NBK_VERSION			= 11;
-const int IN_SW_NBK_HELP			= 12;
-const int IN_SW_NBK_DIRECT			= 13;
-const int IN_SW_NBK_DECOMPRESS		= 14;
-const int IN_SW_NBK_ROLE			= 15;
-const int IN_SW_NBK_INPLACE			= 16;
-const int IN_SW_NBK_SEQUENCE		= 17;
-const int IN_SW_NBK_CLEAN_HISTORY	= 18;
-const int IN_SW_NBK_KEEP			= 19;
+inline constexpr int IN_SW_NBK_0				= 0;
+inline constexpr int IN_SW_NBK_LOCK				= 1;
+inline constexpr int IN_SW_NBK_UNLOCK			= 2;
+inline constexpr int IN_SW_NBK_FIXUP			= 3;
+inline constexpr int IN_SW_NBK_BACKUP			= 4;
+inline constexpr int IN_SW_NBK_RESTORE			= 5;
+inline constexpr int IN_SW_NBK_NODBTRIG			= 6;
+inline constexpr int IN_SW_NBK_USER_NAME		= 7;
+inline constexpr int IN_SW_NBK_PASSWORD			= 8;
+inline constexpr int IN_SW_NBK_SIZE				= 9;
+inline constexpr int IN_SW_NBK_FETCH			= 10;
+inline constexpr int IN_SW_NBK_VERSION			= 11;
+inline constexpr int IN_SW_NBK_HELP				= 12;
+inline constexpr int IN_SW_NBK_DIRECT			= 13;
+inline constexpr int IN_SW_NBK_DECOMPRESS		= 14;
+inline constexpr int IN_SW_NBK_ROLE				= 15;
+inline constexpr int IN_SW_NBK_INPLACE			= 16;
+inline constexpr int IN_SW_NBK_SEQUENCE			= 17;
+inline constexpr int IN_SW_NBK_CLEAN_HISTORY	= 18;
+inline constexpr int IN_SW_NBK_KEEP				= 19;
 
 
-static const struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
+static inline constexpr struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
 {
 	{IN_SW_NBK_NODBTRIG,	isc_spb_nbk_no_triggers,	"T",		0, 0, 0, false,	true,	0,	1, NULL},
 	{IN_SW_NBK_DIRECT,		isc_spb_nbk_direct,			"DIRECT",	0, 0, 0, false, false,	0,	1, NULL},
@@ -64,7 +64,7 @@ static const struct Switches::in_sw_tab_t nbackup_in_sw_table [] =
 
 enum NbakOptionType { nboGeneral, nboSpecial, nboExclusive };
 
-static const struct Switches::in_sw_tab_t nbackup_action_in_sw_table [] =
+static inline constexpr struct Switches::in_sw_tab_t nbackup_action_in_sw_table [] =
 {
 	{IN_SW_NBK_LOCK,		0,						"LOCK",				0, 0, 0, false, false,	8,	1,	NULL, nboExclusive},
 	{IN_SW_NBK_UNLOCK,		0,						"N",				0, 0, 0, false, false,	0,	1,	NULL, nboExclusive},

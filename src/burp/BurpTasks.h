@@ -37,24 +37,49 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/condition.h"
 #include "../common/classes/fb_atomic.h"
+#include "../burp/RestoreMessageLayout.h"
+#include "../burp/FastPathRecordWriter.h"
+#include "../burp/FastPathRecordReader.h"
+#include "../burp/FastPathBurpProvider.h"
 
 namespace Burp {
+
+constexpr unsigned FAST_PATH_BACKUP_BATCH_MAX_RECORDS = 1000;
+constexpr FB_SIZE_T FAST_PATH_BACKUP_BATCH_MAX_BYTES = 1024 * 1024;
+// Staging buffer for the restore direct writer: messages are accumulated here
+// so one engine attachment sync covers many rows. The BulkInsert object itself
+// stays alive across staging batches (it auto-flushes full extents) and is
+// finished only at table end, so staging size bounds memory/latency
+// without stranding a partial-extent tail per batch.
+constexpr unsigned FAST_PATH_RESTORE_BATCH_MAX_RECORDS = 8000;
+constexpr FB_SIZE_T FAST_PATH_RESTORE_BATCH_MAX_BYTES = 8 * 1024 * 1024;
 
 class ReadRelationMeta
 {
 public:
-	ReadRelationMeta() :
-		m_blr(*getDefaultMemoryPool())
+	ReadRelationMeta() noexcept :
+		m_blr(*getDefaultMemoryPool()),
+		m_layout(*getDefaultMemoryPool())
 	{
 		clear();
 	}
 
-	void setRelation(const burp_rel* relation, bool partition);
+	void setRelation(burp_rel* relation, bool partition, bool fastPath);
 	void clear();
 
-	bool haveInputs() const
+	bool haveInputs() const noexcept
 	{
 		return m_inMgsNum != m_outMgsNum;
+	}
+
+	bool isFastPath() const noexcept
+	{
+		return m_fastPath;
+	}
+
+	const RestoreMessageLayout& getLayout() const noexcept
+	{
+		return m_layout;
 	}
 
 //private:
@@ -63,6 +88,8 @@ public:
 	SSHORT m_inMgsNum;
 	SSHORT m_outMgsNum;
 	Firebird::HalfStaticArray<UCHAR, 256> m_blr;
+	RestoreMessageLayout m_layout;
+	bool m_fastPath = false;
 	RCRD_LENGTH m_outMsgLen;
 	RCRD_LENGTH m_outRecLen;
 	RCRD_OFFSET m_outEofOffset;
@@ -71,14 +98,10 @@ public:
 class ReadRelationReq
 {
 public:
-	ReadRelationReq() :
-		m_outMsg(*getDefaultMemoryPool())
+	ReadRelationReq() noexcept :
+		m_outMsg(*getDefaultMemoryPool()),
+		m_fastPathBatch(*getDefaultMemoryPool())
 	{
-		m_relation = NULL;
-		m_meta = NULL;
-		memset(&m_inMgs, 0, sizeof(m_inMgs));
-		m_eof = NULL;
-		m_request = 0;
 	}
 
 	~ReadRelationReq()
@@ -91,21 +114,22 @@ public:
 
 	void compile(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* db);
 	void setParams(ULONG loPP, ULONG hiPP);
-	void start(Firebird::CheckStatusWrapper* status, Firebird::ITransaction* tran);
+	void start(Firebird::CheckStatusWrapper* status, Firebird::IAttachment* att,
+		Firebird::ITransaction* tran);
 	void receive(Firebird::CheckStatusWrapper* status);
 	void release(Firebird::CheckStatusWrapper* status);
 
-	const ReadRelationMeta* getMeta() const
+	const ReadRelationMeta* getMeta() const noexcept
 	{
 		return m_meta;
 	}
 
-	const UCHAR* getData() const
+	const UCHAR* getData() const noexcept
 	{
 		return m_outMsg.begin();
 	}
 
-	bool eof() const
+	bool eof() const noexcept
 	{
 		return *m_eof;
 	}
@@ -117,25 +141,31 @@ private:
 		ULONG hiPP;
 	};
 
-	const burp_rel* m_relation;
-	const ReadRelationMeta* m_meta;
-	InMsg m_inMgs;
+	const burp_rel* m_relation = nullptr;
+	const ReadRelationMeta* m_meta = nullptr;
+	InMsg m_inMgs{};
 	Firebird::Array<UCHAR> m_outMsg;
-	SSHORT* m_eof;
-	Firebird::IRequest* m_request;
+	Firebird::Array<UCHAR> m_fastPathBatch;
+	SSHORT* m_eof = nullptr;
+	Firebird::IRequest* m_request = nullptr;
+	FastPathRecordReader m_fastPathReader;
+	unsigned m_fastPathBatchRecords = 0;
+	unsigned m_fastPathBatchPosition = 0;
+	bool m_usingFastPath = false;
 };
 
 
 class WriteRelationMeta
 {
 public:
-	WriteRelationMeta() :
+	WriteRelationMeta() noexcept :
+		m_messageLayout(*getDefaultMemoryPool()),
 		m_blr(*getDefaultMemoryPool())
 	{
 		clear();
 	}
 
-	void setRelation(BurpGlobals* tdgbl, const burp_rel* relation);
+	void setRelation(BurpGlobals* tdgbl, burp_rel* relation);
 	void clear();
 
 	Firebird::IBatch* createBatch(BurpGlobals* tdgbl, Firebird::IAttachment* att);
@@ -143,13 +173,22 @@ public:
 //private:
 	bool prepareBatch(BurpGlobals* tdgbl);
 	void prepareRequest(BurpGlobals* tdgbl);
+	void prepareMessageLayout(BurpGlobals* tdgbl);
+	void buildNonFastPathMode(BurpGlobals* tdgbl);
 
-	const burp_rel* m_relation;
+	const RestoreMessageLayout& getMessageLayout() const noexcept
+	{
+		return m_messageLayout;
+	}
+
+	burp_rel* m_relation;
 	Firebird::Mutex m_mutex;
 	bool m_batchMode;
+	bool m_fastPathMode;
 	bool m_batchOk;
-	ULONG m_inMsgLen;
+	RCRD_LENGTH m_inMsgLen;
 	ULONG m_blobCount;
+	RestoreMessageLayout m_messageLayout;
 
 	// batch mode
 	Firebird::string m_sqlStatement;
@@ -165,17 +204,11 @@ public:
 class WriteRelationReq
 {
 public:
-	WriteRelationReq() :
+	WriteRelationReq() noexcept :
 		m_inMsg(*getDefaultMemoryPool()),
-		m_batchMsg(*getDefaultMemoryPool())
+		m_batchMsg(*getDefaultMemoryPool()),
+		m_fastPathBatch(*getDefaultMemoryPool())
 	{
-		m_relation = nullptr;
-		m_meta = nullptr;
-		m_batch = nullptr;
-		m_request = nullptr;
-		m_recs = 0;
-		m_batchRecs = 0;
-		m_resync = true;
 	}
 
 	~WriteRelationReq()
@@ -186,51 +219,64 @@ public:
 	void reset(WriteRelationMeta* meta);
 	void clear();
 
+	void initFastPathWriter(Firebird::IAttachment* att, Firebird::ITransaction* tra,
+		const burp_rel* relation, const RestoreMessageLayout& layout);
+	void execFastPathBatch();
+
+	// Flush the bulk insert used by the fast-path writer and destroy the
+	// writer (it caches the raw engine transaction, which is replaced by
+	// commit_relation_data() in incremental restore). Runs in get_data()
+	// before that commit; safe to call when no writer exists.
+	void finishFastPathBulk();
+
 	void compile(BurpGlobals* tdgbl, Firebird::IAttachment* att);
 	void send(BurpGlobals* tdgbl, Firebird::ITransaction* tran, bool lastRec);
 	void execBatch(BurpGlobals * tdgbl);
 	void release();
 
-	ULONG getDataLength() const
+	RCRD_LENGTH getDataLength() const noexcept
 	{
 		return m_inMsg.getCount();
 	}
 
-	UCHAR* getData()
+	UCHAR* getData() noexcept
 	{
 		return m_inMsg.begin();
 	}
 
-	Firebird::IBatch* getBatch() const
+	Firebird::IBatch* getBatch() const noexcept
 	{
 		return m_batch;
 	}
 
-	ULONG getBatchMsgLength() const
+	ULONG getBatchMsgLength() const noexcept
 	{
 		return m_batchMsg.getCount();
 	}
 
-	UCHAR* getBatchMsgData()
+	UCHAR* getBatchMsgData() noexcept
 	{
 		return m_batchMsg.begin();
 	}
 
-	unsigned getBatchInlineBlobLimit() const
+	unsigned getBatchInlineBlobLimit() const noexcept
 	{
 		return m_meta->m_batchInlineBlobLimit;
 	}
 
 private:
-	const burp_rel* m_relation;
-	WriteRelationMeta* m_meta;
+	const burp_rel* m_relation = nullptr;
+	WriteRelationMeta* m_meta = nullptr;
 	Firebird::Array<UCHAR> m_inMsg;
 	Firebird::Array<UCHAR> m_batchMsg;
-	Firebird::IBatch* m_batch;
-	Firebird::IRequest* m_request;
-	int m_recs;							// total records sent
-	int m_batchRecs;					// records in current batch
-	bool m_resync;
+	Firebird::Array<UCHAR> m_fastPathBatch;
+	Firebird::IBatch* m_batch = nullptr;
+	Firebird::IRequest* m_request = nullptr;
+	Firebird::AutoPtr<FastPathRecordWriter> m_fastPathWriter;
+	unsigned m_fastPathBatchRecs = 0;
+	int m_recs = 0;						// total records sent
+	int m_batchRecs = 0;				// records in current batch
+	bool m_resync = true;
 };
 
 // forward declarations
@@ -246,7 +292,7 @@ class BurpTaskItem : public Firebird::Task::WorkItem
 public:
 	BurpTaskItem(BurpTask* task);
 
-	BurpTask* getBurpTask() const;
+	BurpTask* getBurpTask() const noexcept;
 };
 
 // Common base class for backup and restore tasks
@@ -257,7 +303,7 @@ public:
 		m_masterGbl(tdgbl)
 	{ }
 
-	static BurpTask* getBurpTask(BurpGlobals* tdgbl)
+	static BurpTask* getBurpTask(BurpGlobals* tdgbl) noexcept
 	{
 		if (tdgbl->taskItem)
 			return tdgbl->taskItem->getBurpTask();
@@ -265,12 +311,12 @@ public:
 		return nullptr;
 	}
 
-	BurpGlobals* getMasterGbl() const
+	BurpGlobals* getMasterGbl() const noexcept
 	{
 		return m_masterGbl;
 	}
 
-	bool isBackup() const
+	bool isBackup() const noexcept
 	{
 		switch (m_masterGbl->action->act_action)
 		{
@@ -278,19 +324,21 @@ public:
 		case ACT_backup_split:
 		case ACT_backup_fini:
 			return true;
+		default:
+			return false;
 		}
-		return false;
 	}
 
-	bool isRestore() const
+	bool isRestore() const noexcept
 	{
 		switch (m_masterGbl->action->act_action)
 		{
 		case ACT_restore:
 		case ACT_restore_join:
 			return true;
+		default:
+			return false;
 		}
-		return false;
 	}
 
 protected:
@@ -308,7 +356,7 @@ inline BurpTaskItem::BurpTaskItem(BurpTask* task) :
 {
 }
 
-inline BurpTask* BurpTaskItem::getBurpTask() const
+inline BurpTask* BurpTaskItem::getBurpTask() const noexcept
 {
 	return static_cast<BurpTask*>(m_task);
 }
@@ -322,28 +370,21 @@ public:
 
 	void SetRelation(burp_rel* relation);
 
-	bool handler(WorkItem& _item);
-	bool getWorkItem(WorkItem** pItem);
-	bool getResult(Firebird::IStatus* status);
-	int getMaxWorkers();
+	bool handler(WorkItem& _item) override;
+	bool getWorkItem(WorkItem** pItem) override;
+	bool getResult(Firebird::IStatus* status) override;
+	int getMaxWorkers() override;
 
 	class Item : public BurpTaskItem
 	{
 	public:
 		Item(BackupRelationTask* task, bool writer) : BurpTaskItem(task),
-			m_inuse(false),
 			m_writer(writer),
 			m_ownAttach(!writer),
-			m_gbl(NULL),
-			m_att(0),
-			m_tra(0),
-			m_relation(NULL),
-			m_ppSequence(0),
-			m_cleanBuffers(*getDefaultMemoryPool()),
-			m_buffer(NULL)
+			m_cleanBuffers(*getDefaultMemoryPool())
 		{}
 
-		BackupRelationTask* getBackupTask() const
+		BackupRelationTask* getBackupTask() const noexcept
 		{
 			return static_cast<BackupRelationTask*>(m_task);
 		}
@@ -351,30 +392,30 @@ public:
 		class EnsureUnlockBuffer
 		{
 		public:
-			EnsureUnlockBuffer(Item* item) : m_item(item) {}
+			EnsureUnlockBuffer(Item* item) noexcept : m_item(item) {}
 			~EnsureUnlockBuffer();
 
 		private:
 			Item* m_item;
 		};
 
-		bool m_inuse;
+		bool m_inuse = false;
 		bool m_writer;			// file writer or table reader
 		bool m_ownAttach;
-		BurpGlobals* m_gbl;
-		Firebird::IAttachment* m_att;
-		Firebird::ITransaction* m_tra;
-		burp_rel* m_relation;
+		BurpGlobals* m_gbl = nullptr;
+		Firebird::IAttachment* m_att = nullptr;
+		Firebird::ITransaction* m_tra = nullptr;
+		burp_rel* m_relation = nullptr;
 		ReadRelationReq m_request;
-		ULONG m_ppSequence;		// PP to read
+		ULONG m_ppSequence = 0;		// PP to read
 
 		Firebird::Mutex m_mutex;
 		Firebird::HalfStaticArray<IOBuffer*, 2> m_cleanBuffers;
-		IOBuffer* m_buffer;
+		IOBuffer* m_buffer = nullptr;
 		Firebird::Condition m_cleanCond;
 	};
 
-	static BackupRelationTask* getBackupTask(BurpGlobals* tdgbl)
+	static BackupRelationTask* getBackupTask(BurpGlobals* tdgbl) noexcept
 	{
 		auto task = BurpTask::getBurpTask(tdgbl);
 		fb_assert(!task || task->isBackup());
@@ -385,7 +426,7 @@ public:
 	static void recordAdded(BurpGlobals* tdgbl);			// reader
 	static IOBuffer* renewBuffer(BurpGlobals* tdgbl);		// reader
 
-	bool isStopped() const
+	bool isStopped() const noexcept
 	{
 		return m_stop;
 	}
@@ -412,8 +453,8 @@ private:
 
 	Firebird::Mutex m_mutex;
 	Firebird::HalfStaticArray<Item*, 8> m_items;
-	volatile bool m_stop;
-	bool m_error;
+	std::atomic_bool m_stop;
+	std::atomic_bool m_error;
 
 	Firebird::HalfStaticArray<IOBuffer*, 16> m_buffers;
 	Firebird::HalfStaticArray<IOBuffer*, 8> m_dirtyBuffers;
@@ -429,26 +470,20 @@ public:
 
 	void SetRelation(BurpGlobals* tdgbl, burp_rel* relation);
 
-	bool handler(WorkItem& _item);
-	bool getWorkItem(WorkItem** pItem);
-	bool getResult(Firebird::IStatus* status);
-	int getMaxWorkers();
+	bool handler(WorkItem& _item) override;
+	bool getWorkItem(WorkItem** pItem) override;
+	bool getResult(Firebird::IStatus* status) override;
+	int getMaxWorkers() override;
 
 	class Item : public BurpTaskItem
 	{
 	public:
 		Item(RestoreRelationTask* task, bool reader) : BurpTaskItem(task),
-			m_inuse(false),
 			m_reader(reader),
-			m_ownAttach(!reader),
-			m_gbl(NULL),
-			m_att(0),
-			m_tra(0),
-			m_relation(NULL),
-			m_buffer(NULL)
+			m_ownAttach(!reader)
 		{}
 
-		RestoreRelationTask* getRestoreTask() const
+		RestoreRelationTask* getRestoreTask() const noexcept
 		{
 			return static_cast<RestoreRelationTask*>(m_task);
 		}
@@ -456,24 +491,24 @@ public:
 		class EnsureUnlockBuffer
 		{
 		public:
-			EnsureUnlockBuffer(Item* item) : m_item(item) {}
+			EnsureUnlockBuffer(Item* item) noexcept : m_item(item) {}
 			~EnsureUnlockBuffer();
 
 		private:
 			Item* m_item;
 		};
 
-		bool m_inuse;
+		bool m_inuse = false;
 		bool m_reader;			// file reader or table writer
 		bool m_ownAttach;
-		BurpGlobals* m_gbl;
-		Firebird::IAttachment* m_att;
-		Firebird::ITransaction* m_tra;
-		burp_rel* m_relation;
+		BurpGlobals* m_gbl = nullptr;
+		Firebird::IAttachment* m_att = nullptr;
+		Firebird::ITransaction* m_tra = nullptr;
+		burp_rel* m_relation = nullptr;
 		WriteRelationReq m_request;
 
 		Firebird::Mutex m_mutex;
-		IOBuffer* m_buffer;
+		IOBuffer* m_buffer = nullptr;
 	};
 
 	class ExcReadDone : public Firebird::Exception
@@ -482,12 +517,12 @@ public:
 		ExcReadDone() noexcept : Firebird::Exception() { }
 		virtual void stuffByException(Firebird::StaticStatusVector& status_vector) const noexcept;
 		virtual const char* what() const noexcept;
-		static void raise();
+		[[noreturn]] static void raise();
 	};
 
-	static RestoreRelationTask* getRestoreTask(BurpGlobals* tdgbl)
+	static RestoreRelationTask* getRestoreTask(BurpGlobals* tdgbl) noexcept
 	{
-		auto task = BurpTask::getBurpTask(tdgbl);
+		const auto* task = BurpTask::getBurpTask(tdgbl);
 		fb_assert(!task || task->isRestore());
 
 		return static_cast<RestoreRelationTask*>(BurpTask::getBurpTask(tdgbl));
@@ -495,12 +530,12 @@ public:
 
 	static IOBuffer* renewBuffer(BurpGlobals* tdgbl);		// writer
 
-	bool isStopped() const
+	bool isStopped() const noexcept
 	{
 		return m_stop;
 	}
 
-	rec_type getLastRecord() const
+	rec_type getLastRecord() const noexcept
 	{
 		return m_lastRecord;
 	}
@@ -534,13 +569,15 @@ private:
 	rec_type	m_lastRecord;				// last backup record read for relation, usually rec_relation_end
 	WriteRelationMeta m_metadata;
 	int m_writers;			// number of active writers, could be less than items allocated
+	int m_waiters;			// number of writers waiting for the dirty buffer
 	bool m_readDone;		// all records was read
 
 	Firebird::Mutex m_mutex;
 	Firebird::HalfStaticArray<Item*, 8> m_items;
-	volatile bool m_stop;
-	bool m_error;
+	std::atomic_bool m_stop;
+	std::atomic_bool m_error;
 	Firebird::AtomicCounter m_records;		// records restored for the current relation
+	Firebird::Mutex m_verbMutex;
 	FB_UINT64 m_verbRecs;					// last records count reported
 
 	Firebird::HalfStaticArray<IOBuffer*, 16> m_buffers;
@@ -556,33 +593,33 @@ class IOBuffer
 public:
 	IOBuffer(BurpTaskItem*, FB_SIZE_T size);
 
-	UCHAR* getBuffer() const
+	UCHAR* getBuffer() const noexcept
 	{
 		return m_aligned;
 	}
 
-	FB_SIZE_T getSize() const
+	FB_SIZE_T getSize() const noexcept
 	{
 		return m_size;
 	}
 
-	FB_SIZE_T getRecs() const
+	FB_SIZE_T getRecs() const noexcept
 	{
 		return m_recs;
 	}
 
-	FB_SIZE_T getUsed() const
+	FB_SIZE_T getUsed() const noexcept
 	{
 		return m_used;
 	}
 
-	void setUsed(FB_SIZE_T used)
+	void setUsed(FB_SIZE_T used) noexcept
 	{
 		fb_assert(used <= m_size);
 		m_used = used;
 	}
 
-	void clear()
+	void clear() noexcept
 	{
 		m_used = 0;
 		m_recs = 0;
@@ -590,18 +627,18 @@ public:
 		m_linked = false;
 	}
 
-	void recordAdded()
+	void recordAdded() noexcept
 	{
 		m_recs++;
 	}
 
-	void linkNext(IOBuffer* buf)
+	void linkNext(IOBuffer* buf) noexcept
 	{
 		m_next = buf;
 		m_next->m_linked = true;
 	}
 
-	bool isLinked() const
+	bool isLinked() const noexcept
 	{
 		return m_linked;
 	}
@@ -637,12 +674,12 @@ public:
 		m_mutex.leave();
 	}
 
-	IOBuffer* getNext()
+	IOBuffer* getNext() noexcept
 	{
 		return m_next;
 	}
 
-	BurpTaskItem* getItem() const
+	BurpTaskItem* getItem() const noexcept
 	{
 		return m_item;
 	}
@@ -683,7 +720,7 @@ public:
 			m_task->burpOutMutex.leave();
 	}
 
-	BurpGlobals* get() const
+	BurpGlobals* get() const noexcept
 	{
 		return m_tdgbl;
 	}

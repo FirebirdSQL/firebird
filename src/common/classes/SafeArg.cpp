@@ -29,19 +29,18 @@
 // Localized messages type-safe printing facility.
 
 #include "firebird.h"
+#include <algorithm>
 #include "SafeArg.h"
 
 namespace MsgFormat
 {
 
 // This is just a silly convenience in case all arguments are of type int.
-SafeArg::SafeArg(const int val[], FB_SIZE_T v_size)
+SafeArg::SafeArg(const int val[], FB_SIZE_T v_size) noexcept
 	: m_extras(0)
 {
-	if (v_size > SAFEARG_MAX_ARG)
-		v_size = SAFEARG_MAX_ARG; // Simply truncate.
-
-	m_count = v_size;
+	// Simply truncate
+	m_count = std::min(v_size, SAFEARG_MAX_ARG);
 
 	for (FB_SIZE_T a_count = 0; a_count < m_count; ++a_count)
 	{
@@ -51,7 +50,7 @@ SafeArg::SafeArg(const int val[], FB_SIZE_T v_size)
 }
 
 // Here follows the list of overloads to insert the basic data types.
-SafeArg& SafeArg::operator<<(char c)
+SafeArg& SafeArg::operator<<(char c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -62,7 +61,7 @@ SafeArg& SafeArg::operator<<(char c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(unsigned char c)
+SafeArg& SafeArg::operator<<(unsigned char c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -74,7 +73,7 @@ SafeArg& SafeArg::operator<<(unsigned char c)
 }
 
 /*
-SafeArg& SafeArg::operator<<(_int16 c)
+SafeArg& SafeArg::operator<<(_int16 c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -86,7 +85,7 @@ SafeArg& SafeArg::operator<<(_int16 c)
 }
 */
 
-SafeArg& SafeArg::operator<<(short c)
+SafeArg& SafeArg::operator<<(short c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -97,7 +96,7 @@ SafeArg& SafeArg::operator<<(short c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(unsigned short c)
+SafeArg& SafeArg::operator<<(unsigned short c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -109,7 +108,7 @@ SafeArg& SafeArg::operator<<(unsigned short c)
 }
 
 /*
-SafeArg& SafeArg::operator<<(_int32 c)
+SafeArg& SafeArg::operator<<(_int32 c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -121,7 +120,7 @@ SafeArg& SafeArg::operator<<(_int32 c)
 }
 */
 
-SafeArg& SafeArg::operator<<(int c)
+SafeArg& SafeArg::operator<<(int c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -132,7 +131,7 @@ SafeArg& SafeArg::operator<<(int c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(unsigned int c)
+SafeArg& SafeArg::operator<<(unsigned int c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -143,7 +142,7 @@ SafeArg& SafeArg::operator<<(unsigned int c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(long int c)
+SafeArg& SafeArg::operator<<(long int c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -154,7 +153,7 @@ SafeArg& SafeArg::operator<<(long int c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(unsigned long int c)
+SafeArg& SafeArg::operator<<(unsigned long int c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -165,7 +164,7 @@ SafeArg& SafeArg::operator<<(unsigned long int c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(SINT64 c)
+SafeArg& SafeArg::operator<<(SINT64 c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -176,7 +175,7 @@ SafeArg& SafeArg::operator<<(SINT64 c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(FB_UINT64 c)
+SafeArg& SafeArg::operator<<(FB_UINT64 c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -189,7 +188,7 @@ SafeArg& SafeArg::operator<<(FB_UINT64 c)
 
 
 /*
-SafeArg& SafeArg::operator<<(long c)
+SafeArg& SafeArg::operator<<(long c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -201,7 +200,7 @@ SafeArg& SafeArg::operator<<(long c)
 }
 */
 
-SafeArg& SafeArg::operator<<(SINT128 c)
+SafeArg& SafeArg::operator<<(SINT128 c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -212,7 +211,7 @@ SafeArg& SafeArg::operator<<(SINT128 c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(double c)
+SafeArg& SafeArg::operator<<(double c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -223,7 +222,7 @@ SafeArg& SafeArg::operator<<(double c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(const char* c)
+SafeArg& SafeArg::operator<<(const char* c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -234,7 +233,7 @@ SafeArg& SafeArg::operator<<(const char* c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(const unsigned char* c)
+SafeArg& SafeArg::operator<<(const unsigned char* c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -245,7 +244,7 @@ SafeArg& SafeArg::operator<<(const unsigned char* c)
 	return *this;
 }
 
-SafeArg& SafeArg::operator<<(void* c)
+SafeArg& SafeArg::operator<<(void* c) noexcept
 {
 	if (m_count < SAFEARG_MAX_ARG)
 	{
@@ -262,7 +261,7 @@ SafeArg& SafeArg::operator<<(void* c)
 // converted to null pointer and void* to TEXT*. Supposedly, the caller has
 // information on the real types of the values. This can be done with a loop
 // using getCount() and getCell() and looking at the safe_cell's type data member.
-void SafeArg::dump(const TEXT* target[], FB_SIZE_T v_size) const
+void SafeArg::dump(const TEXT* target[], FB_SIZE_T v_size) const noexcept
 {
 	for (FB_SIZE_T i = 0; i < v_size; ++i)
 	{
@@ -307,9 +306,9 @@ void SafeArg::dump(const TEXT* target[], FB_SIZE_T v_size) const
 
 // Get one specific cell. If out of range, a cell with invalid type (at_none)
 // is returned.
-const safe_cell& SafeArg::getCell(FB_SIZE_T index) const
+const safe_cell& SafeArg::getCell(FB_SIZE_T index) const noexcept
 {
-	static safe_cell aux_cell = {safe_cell::at_none, {0}};
+	static constexpr safe_cell aux_cell = {safe_cell::at_none, {0}};
 
 	if (index < m_count)
 		return m_arguments[index];

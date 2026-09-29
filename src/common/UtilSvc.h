@@ -42,7 +42,7 @@ namespace MsgFormat {
 
 namespace Firebird {
 
-const TEXT SVC_TRMNTR = '\377';	// ASCII 255
+inline constexpr TEXT SVC_TRMNTR = '\377';	// ASCII 255
 
 class ClumpletWriter;
 
@@ -62,7 +62,7 @@ public:
 			mutex->enter(FB_FUNCTION);
 		}
 
-		StatusAccessor()
+		StatusAccessor() noexcept
 			: mutex(nullptr), status(nullptr), uSvc(nullptr)
 		{ }
 
@@ -74,12 +74,12 @@ public:
 			sa.status = nullptr;
 		}
 
-		operator const Firebird::CheckStatusWrapper*() const
+		operator const Firebird::CheckStatusWrapper*() const noexcept
 		{
 			return status;
 		}
 
-		const Firebird::CheckStatusWrapper* operator->() const
+		const Firebird::CheckStatusWrapper* operator->() const noexcept
 		{
 			return status;
 		}
@@ -143,12 +143,13 @@ public:
 	virtual void hidePasswd(ArgvType&, int) = 0;
 	virtual void fillDpb(Firebird::ClumpletWriter& dpb) = 0;
 	virtual bool finished() = 0;
+	virtual bool hasAuthBlock() = 0;
 	virtual unsigned int getAuthBlock(const unsigned char** bytes) = 0;
 	virtual bool utf8FileNames() = 0;
 	virtual Firebird::ICryptKeyCallback* getCryptCallback() = 0;
 	virtual int getParallelWorkers() = 0;
 
-	void setDataMode(bool value)
+	void setDataMode(bool value) noexcept
 	{
 		usvcDataMode = value;
 	}

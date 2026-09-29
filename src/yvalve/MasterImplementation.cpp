@@ -137,7 +137,7 @@ void abortShutdown()
 	abortShutdownFlag = true;
 }
 
-Thread::Handle timerThreadHandle = 0;
+Thread timerThread;
 
 FB_BOOLEAN MasterImplementation::getProcessExiting()
 {
@@ -149,7 +149,7 @@ FB_BOOLEAN MasterImplementation::getProcessExiting()
 	// be terminated already, wait for its handle with zero timeout returns WAIT_TIMEOUT.
 	// Usage of small non-zero timeout seems fixed such cases.
 
-	if (timerThreadHandle && WaitForSingleObject(timerThreadHandle, 10) != WAIT_TIMEOUT)
+	if (timerThread.waitFor(10))
 		return true;
 #endif
 
@@ -180,7 +180,7 @@ struct TimerEntry
 
 	static void init()
 	{
-		Thread::start(timeThread, 0, THREAD_high, &timerThreadHandle);
+		Thread::start(timeThread, 0, THREAD_high, &timerThread);
 	}
 
 	static void cleanup();
@@ -201,7 +201,7 @@ void TimerEntry::cleanup()
 	}
 
 	timerCleanup->tryEnter(5);
-	Thread::waitForCompletion(timerThreadHandle);
+	timerThread.waitForCompletion();
 
 	while (timerQueue->hasData())
 	{
@@ -251,10 +251,20 @@ THREAD_ENTRY_DECLARE TimerEntry::timeThread(THREAD_ENTRY_PARAM)
 	// and the code that is currently running, leading to AV.
 	// To prevent such scenario we increment usage count of fbclient.dll and
 	// will decrement it in safe way at the end of the timer thread.
+	//
+	// hDllInst is 0 when fbclient is statically linked into the host
+	// application (there is no separate DLL to be unloaded out from under us
+	// this way - an EXE's own main module isn't unloaded this way), so skip
+	// the whole workaround in that case.
 
-	char buff[MAX_PATH];
-	GetModuleFileName(hDllInst, buff, sizeof(buff));
-	HMODULE hDll = LoadLibrary(buff);
+	HMODULE hDll = nullptr;
+
+	if (Firebird::hDllInst)
+	{
+		char buff[MAX_PATH];
+		GetModuleFileName(hDllInst, buff, sizeof(buff));
+		hDll = LoadLibrary(buff);
+	}
 #endif
 
 	while (stopTimerThread.value() == 0
@@ -306,15 +316,18 @@ THREAD_ENTRY_DECLARE TimerEntry::timeThread(THREAD_ENTRY_PARAM)
 	timerCleanup->release();
 
 #ifdef WIN_NT
-	if (Firebird::dDllUnloadTID)
+	if (hDll)
 	{
-		// fb_shutdown is called as result of FreeLibrary, not by application.
-		// Sooner of all we are the last user of fbclient.dll, and code will be
-		// physically unloaded as result of FreeLibrary() call.
-		FreeLibraryAndExitThread(hDll, 0);
+		if (Firebird::dDllUnloadTID)
+		{
+			// fb_shutdown is called as result of FreeLibrary, not by application.
+			// Sooner of all we are the last user of fbclient.dll, and code will be
+			// physically unloaded as result of FreeLibrary() call.
+			FreeLibraryAndExitThread(hDll, 0);
+		}
+		else
+			FreeLibrary(hDll);	// It is safe to decrement usage count here
 	}
-	else
-		FreeLibrary(hDll);	// It is safe to decrement usage count here
 #endif
 
 	return 0;

@@ -29,7 +29,7 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 
 @mkdir %FB_BIN_DIR%\tzdata 2>nul
 
-call :interfaces
+@if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 
 call :LibTom
@@ -144,10 +144,12 @@ goto :EOF
 @echo.
 @echo Building LibTomMath (%FB_OBJ_DIR%)...
 @call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
-if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
+if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR% & goto :EOF
+@if defined FBBUILD_WITHOUT_TOMCRYPT goto :LibTomDone
 @echo Building LibTomCrypt (%FB_OBJ_DIR%)...
 @call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
 if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
+:LibTomDone
 goto :EOF
 
 ::===================
@@ -203,8 +205,16 @@ goto :EOF
 ::===================
 :: Build CLOOP and generate interface headers
 :interfaces
+@if defined FBBUILD_WITHOUT_CLOOP_GENERATION goto :EOF
 @echo.
 @echo Building CLOOP and generating interfaces...
+@mkdir %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop 2>nul
+@pushd %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop
+@cmake -G "%MSVC_CMAKE_GENERATOR%" -A %FB_TARGET_PLATFORM% -S %FB_ROOT_PATH%\extern\cloop -DCLOOP_BUILD_TESTS=OFF
+if errorlevel 1 call :boot2 interfaces
+@cmake --build %FB_GEN_DIR%\%FB_TARGET_PLATFORM%\cloop --target ALL_BUILD --config %FB_CONFIG% > cloop_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log
+if errorlevel 1 call :boot2 interfaces
+@popd
 @nmake /s /x interfaces_%FB_TARGET_PLATFORM%.log /f gen_helper.nmake updateCloopInterfaces
 if errorlevel 1 call :boot2 interfaces
 goto :EOF
@@ -236,6 +246,7 @@ goto :EOF
 @echo.
 @echo Building engine (%FB_OBJ_DIR%)...
 @call compile.bat builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log DLLs\engine
+if errorlevel 1 call :boot2 engine & goto :EOF
 @call compile.bat builds\win32\%VS_VER%\Firebird engine_%FB_TARGET_PLATFORM%.log DLLs\ib_util
 if errorlevel 1 call :boot2 engine
 @goto :EOF

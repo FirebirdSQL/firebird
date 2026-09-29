@@ -57,19 +57,19 @@ namespace Firebird {
 class NoThrowTimeStamp
 {
 public:
-	static const ISC_DATE MIN_DATE = -678575;	// 01.01.0001
-	static const ISC_DATE MAX_DATE = 2973483;	// 31.12.9999
-	static const ISC_DATE UNIX_DATE = 40587;	// 01.01.1970
+	static constexpr ISC_DATE MIN_DATE = -678575;	// 01.01.0001
+	static constexpr ISC_DATE MAX_DATE = 2973483;	// 31.12.9999
+	static constexpr ISC_DATE UNIX_DATE = 40587;	// 01.01.1970
 
-	static const SINT64 SECONDS_PER_DAY = 24 * 60 * 60;
-	static const SINT64 ISC_TICKS_PER_DAY = SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION;
+	static constexpr SINT64 SECONDS_PER_DAY = 24 * 60 * 60;
+	static constexpr SINT64 ISC_TICKS_PER_DAY = SECONDS_PER_DAY * ISC_TIME_SECONDS_PRECISION;
 
 	static const ISC_TIMESTAMP MIN_TIMESTAMP;
 	static const ISC_TIMESTAMP MAX_TIMESTAMP;
 
 private:
-	static const ISC_DATE BAD_DATE = MAX_SLONG;
-	static const ISC_TIME BAD_TIME = MAX_ULONG;
+	static constexpr ISC_DATE BAD_DATE = MAX_SLONG;
+	static constexpr ISC_TIME BAD_TIME = MAX_ULONG;
 
 public:
 	// Number of the first day of UNIX epoch in GDS counting
@@ -78,39 +78,39 @@ public:
 	static const ISC_TIME POW_10_TABLE[];
 
 	// Constructors
-	NoThrowTimeStamp()
+	NoThrowTimeStamp() noexcept
 	{
 		invalidate();
 	}
 
-	NoThrowTimeStamp(const ISC_TIMESTAMP& from)
+	NoThrowTimeStamp(const ISC_TIMESTAMP& from) noexcept
 		: mValue(from)
 	{}
 
-	NoThrowTimeStamp(ISC_DATE date, ISC_TIME time)
+	NoThrowTimeStamp(ISC_DATE date, ISC_TIME time) noexcept
 	{
 		mValue.timestamp_date = date;
 		mValue.timestamp_time = time;
 	}
 
-	explicit NoThrowTimeStamp(const struct tm& times, int fractions = 0)
+	explicit NoThrowTimeStamp(const struct tm& times, int fractions = 0) noexcept
 	{
 		encode(&times, fractions);
 	}
 
-	bool isValid() const
+	bool isValid() const noexcept
 	{
 		return isValidTimeStamp(mValue);
 	}
 
 	// Check if timestamp contains a non-existing value
-	bool isEmpty() const
+	bool isEmpty() const noexcept
 	{
 		return (mValue.timestamp_date == BAD_DATE && mValue.timestamp_time == BAD_TIME);
 	}
 
 	// Set value of timestamp to a non-existing value
-	void invalidate()
+	void invalidate() noexcept
 	{
 		mValue.timestamp_date = BAD_DATE;
 		mValue.timestamp_time = BAD_TIME;
@@ -126,32 +126,32 @@ public:
 	}
 
 	// Encode timestamp from UNIX datetime structure
-	void encode(const struct tm* times, int fractions = 0);
+	void encode(const struct tm* times, int fractions = 0) noexcept;
 
 	// Decode timestamp into UNIX datetime structure
-	void decode(struct tm* times, int* fractions = NULL) const;
+	void decode(struct tm* times, int* fractions = NULL) const noexcept;
 
 	// Write access to timestamp structure we wrap
-	ISC_TIMESTAMP& value() { return mValue; }
+	ISC_TIMESTAMP& value() noexcept { return mValue; }
 
 	// Read access to timestamp structure we wrap
-	const ISC_TIMESTAMP& value() const { return mValue; }
+	const ISC_TIMESTAMP& value() const noexcept { return mValue; }
 
 	// Return current timestamp value
 	static NoThrowTimeStamp getCurrentTimeStamp(const char** error) noexcept;
 
 	// Validation routines
-	static bool isValidDate(const ISC_DATE ndate)
+	static constexpr bool isValidDate(const ISC_DATE ndate) noexcept
 	{
 		return (ndate >= MIN_DATE && ndate <= MAX_DATE);
 	}
 
-	static bool isValidTime(const ISC_TIME ntime)
+	static constexpr bool isValidTime(const ISC_TIME ntime) noexcept
 	{
 		return (ntime < 24 * 3600 * ISC_TIME_SECONDS_PRECISION);
 	}
 
-	static bool isValidTimeStamp(const ISC_TIMESTAMP ts)
+	static constexpr bool isValidTimeStamp(const ISC_TIMESTAMP ts) noexcept
 	{
 		return (isValidDate(ts.timestamp_date) && isValidTime(ts.timestamp_time));
 	}
@@ -165,25 +165,24 @@ public:
 	static void decode_time(ISC_TIME ntime, int* hours, int* minutes, int* seconds, int* fractions = NULL) noexcept;
 	static void decode_timestamp(const ISC_TIMESTAMP ntimestamp, struct tm* times, int* fractions = NULL) noexcept;
 
-	static void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier);
-	static void round_time(ISC_TIME& ntime, const int precision);
+	static void add10msec(ISC_TIMESTAMP* v, SINT64 msec, SINT64 multiplier) noexcept;
+	static void round_time(ISC_TIME& ntime, const int precision) noexcept;
 
-	static int convertGregorianDateToWeekDate(const struct tm& times);
-	static int convertGregorianDateToJulianDate(int year, int month, int day);
-	static void convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay);
+	static int convertGregorianDateToWeekDate(const struct tm& times) noexcept;
+	static int convertGregorianDateToJulianDate(int year, int month, int day) noexcept;
+	static void convertJulianDateToGregorianDate(int jdn, int& outYear, int& outMonth, int& outDay) noexcept;
 
-	static inline bool isLeapYear(const int year) noexcept
+	static constexpr bool isLeapYear(const int year) noexcept
 	{
 		return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 	}
 
-	static SINT64 timeStampToTicks(ISC_TIMESTAMP ts)
+	static constexpr SINT64 timeStampToTicks(ISC_TIMESTAMP ts) noexcept
 	{
-		const SINT64 ticks = (ts.timestamp_date - MIN_DATE) * ISC_TICKS_PER_DAY + ts.timestamp_time;
-		return ticks;
+		return (static_cast<SINT64>(ts.timestamp_date) - MIN_DATE) * ISC_TICKS_PER_DAY + ts.timestamp_time;
 	}
 
-	static ISC_TIMESTAMP ticksToTimeStamp(SINT64 ticks)
+	static constexpr ISC_TIMESTAMP ticksToTimeStamp(SINT64 ticks) noexcept
 	{
 		ISC_TIMESTAMP ts;
 		ts.timestamp_date = (ticks / ISC_TICKS_PER_DAY) + MIN_DATE;

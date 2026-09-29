@@ -207,7 +207,7 @@
 //-----------------------------------------------------------------
 */
 
-static const unsigned SortOrderTblEntrySecondaryBits = 5;
+static inline constexpr unsigned SortOrderTblEntrySecondaryBits = 5;
 
 struct SortOrderTblEntry {
 	// It's important that Secondary + Tertiary fits in a byte.

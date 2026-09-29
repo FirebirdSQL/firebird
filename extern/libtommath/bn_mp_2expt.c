@@ -1,48 +1,35 @@
-#include <tommath.h>
+#include "tommath_private.h"
 #ifdef BN_MP_2EXPT_C
-/* LibTomMath, multiple-precision integer library -- Tom St Denis
- *
- * LibTomMath is a library that provides multiple-precision
- * integer arithmetic as well as number theoretic functionality.
- *
- * The library was designed directly after the MPI library by
- * Michael Fromberger but has been written from scratch with
- * additional optimizations in place.
- *
- * The library is free for all purposes without any express
- * guarantee it works.
- *
- * Tom St Denis, tomstdenis@gmail.com, http://libtom.org
- */
+/* LibTomMath, multiple-precision integer library -- Tom St Denis */
+/* SPDX-License-Identifier: Unlicense */
 
-/* computes a = 2**b 
+/* computes a = 2**b
  *
  * Simple algorithm which zeroes the int, grows it then just sets one bit
  * as required.
  */
-int
-mp_2expt (mp_int * a, int b)
+mp_err mp_2expt(mp_int *a, int b)
 {
-  int     res;
+   mp_err    err;
 
-  /* zero a as per default */
-  mp_zero (a);
+   if (b < 0) {
+      return MP_VAL;
+   }
 
-  /* grow a to accomodate the single bit */
-  if ((res = mp_grow (a, b / DIGIT_BIT + 1)) != MP_OKAY) {
-    return res;
-  }
+   /* zero a as per default */
+   mp_zero(a);
 
-  /* set the used count of where the bit will go */
-  a->used = b / DIGIT_BIT + 1;
+   /* grow a to accomodate the single bit */
+   if ((err = mp_grow(a, (b / MP_DIGIT_BIT) + 1)) != MP_OKAY) {
+      return err;
+   }
 
-  /* put the single bit in its place */
-  a->dp[b / DIGIT_BIT] = ((mp_digit)1) << (b % DIGIT_BIT);
+   /* set the used count of where the bit will go */
+   a->used = (b / MP_DIGIT_BIT) + 1;
 
-  return MP_OKAY;
+   /* put the single bit in its place */
+   a->dp[b / MP_DIGIT_BIT] = (mp_digit)1 << (mp_digit)(b % MP_DIGIT_BIT);
+
+   return MP_OKAY;
 }
 #endif
-
-/* $Source$ */
-/* $Revision: 0.41 $ */
-/* $Date: 2007-04-18 09:58:18 +0000 $ */

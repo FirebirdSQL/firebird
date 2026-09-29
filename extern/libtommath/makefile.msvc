@@ -1,40 +1,93 @@
-#MSVC Makefile
+# MAKEFILE for MS Windows (nmake + Windows SDK)
 #
-#Tom St Denis
+# BEWARE: variable OBJECTS is updated via helper.pl
 
-CFLAGS = /I. /Ox /DWIN32 /W3 /Fo$@
+### USAGE:
+# Open a command prompt with WinSDK variables set and start:
+#
+# nmake -f makefile.msvc all
+# test.exe
+# nmake -f makefile.msvc PREFIX=c:\devel\libtom install
 
-default: library
+#The following can be overridden from command line e.g. make -f makefile.msvc CC=gcc ARFLAGS=rcs
+PREFIX    = c:\devel
+CFLAGS    = /Ox
 
-OBJECTS=bncore.obj bn_mp_init.obj bn_mp_clear.obj bn_mp_exch.obj bn_mp_grow.obj bn_mp_shrink.obj \
-bn_mp_clamp.obj bn_mp_zero.obj  bn_mp_set.obj bn_mp_set_int.obj bn_mp_init_size.obj bn_mp_copy.obj \
-bn_mp_init_copy.obj bn_mp_abs.obj bn_mp_neg.obj bn_mp_cmp_mag.obj bn_mp_cmp.obj bn_mp_cmp_d.obj \
-bn_mp_rshd.obj bn_mp_lshd.obj bn_mp_mod_2d.obj bn_mp_div_2d.obj bn_mp_mul_2d.obj bn_mp_div_2.obj \
-bn_mp_mul_2.obj bn_s_mp_add.obj bn_s_mp_sub.obj bn_fast_s_mp_mul_digs.obj bn_s_mp_mul_digs.obj \
-bn_fast_s_mp_mul_high_digs.obj bn_s_mp_mul_high_digs.obj bn_fast_s_mp_sqr.obj bn_s_mp_sqr.obj \
-bn_mp_add.obj bn_mp_sub.obj bn_mp_karatsuba_mul.obj bn_mp_mul.obj bn_mp_karatsuba_sqr.obj \
-bn_mp_sqr.obj bn_mp_div.obj bn_mp_mod.obj bn_mp_add_d.obj bn_mp_sub_d.obj bn_mp_mul_d.obj \
-bn_mp_div_d.obj bn_mp_mod_d.obj bn_mp_expt_d.obj bn_mp_addmod.obj bn_mp_submod.obj \
-bn_mp_mulmod.obj bn_mp_sqrmod.obj bn_mp_gcd.obj bn_mp_lcm.obj bn_fast_mp_invmod.obj bn_mp_invmod.obj \
-bn_mp_reduce.obj bn_mp_montgomery_setup.obj bn_fast_mp_montgomery_reduce.obj bn_mp_montgomery_reduce.obj \
-bn_mp_exptmod_fast.obj bn_mp_exptmod.obj bn_mp_2expt.obj bn_mp_n_root.obj bn_mp_jacobi.obj bn_reverse.obj \
-bn_mp_count_bits.obj bn_mp_read_unsigned_bin.obj bn_mp_read_signed_bin.obj bn_mp_to_unsigned_bin.obj \
-bn_mp_to_signed_bin.obj bn_mp_unsigned_bin_size.obj bn_mp_signed_bin_size.obj  \
-bn_mp_xor.obj bn_mp_and.obj bn_mp_or.obj bn_mp_rand.obj bn_mp_montgomery_calc_normalization.obj \
-bn_mp_prime_is_divisible.obj bn_prime_tab.obj bn_mp_prime_fermat.obj bn_mp_prime_miller_rabin.obj \
-bn_mp_prime_is_prime.obj bn_mp_prime_next_prime.obj bn_mp_dr_reduce.obj \
-bn_mp_dr_is_modulus.obj bn_mp_dr_setup.obj bn_mp_reduce_setup.obj \
-bn_mp_toom_mul.obj bn_mp_toom_sqr.obj bn_mp_div_3.obj bn_s_mp_exptmod.obj \
-bn_mp_reduce_2k.obj bn_mp_reduce_is_2k.obj bn_mp_reduce_2k_setup.obj \
-bn_mp_reduce_2k_l.obj bn_mp_reduce_is_2k_l.obj bn_mp_reduce_2k_setup_l.obj \
-bn_mp_radix_smap.obj bn_mp_read_radix.obj bn_mp_toradix.obj bn_mp_radix_size.obj \
-bn_mp_fread.obj bn_mp_fwrite.obj bn_mp_cnt_lsb.obj bn_error.obj \
-bn_mp_init_multi.obj bn_mp_clear_multi.obj bn_mp_exteuclid.obj bn_mp_toradix_n.obj \
-bn_mp_prime_random_ex.obj bn_mp_get_int.obj bn_mp_sqrt.obj bn_mp_is_square.obj \
-bn_mp_init_set.obj bn_mp_init_set_int.obj bn_mp_invmod_slow.obj bn_mp_prime_rabin_miller_trials.obj \
-bn_mp_to_signed_bin_n.obj bn_mp_to_unsigned_bin_n.obj
+#Compilation flags
+LTM_CFLAGS  = /nologo /I./ /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_DEPRECATE /D__STDC_WANT_SECURE_LIB__=1 /D_CRT_HAS_CXX17=0 /Wall /wd4146 /wd4127 /wd4668 /wd4710 /wd4711 /wd4820 /wd5045 /WX $(CFLAGS)
+LTM_LDFLAGS = advapi32.lib
 
-HEADERS=tommath.h tommath_class.h tommath_superclass.h
+#Libraries to be created (this makefile builds only static libraries)
+LIBMAIN_S =tommath.lib
 
-library: $(OBJECTS)
-	lib /out:tommath.lib $(OBJECTS)
+#List of objects to compile (all goes to tommath.lib)
+OBJECTS=bn_cutoffs.obj bn_deprecated.obj bn_mp_2expt.obj bn_mp_abs.obj bn_mp_add.obj bn_mp_add_d.obj bn_mp_addmod.obj \
+bn_mp_and.obj bn_mp_clamp.obj bn_mp_clear.obj bn_mp_clear_multi.obj bn_mp_cmp.obj bn_mp_cmp_d.obj bn_mp_cmp_mag.obj \
+bn_mp_cnt_lsb.obj bn_mp_complement.obj bn_mp_copy.obj bn_mp_count_bits.obj bn_mp_decr.obj bn_mp_div.obj bn_mp_div_2.obj \
+bn_mp_div_2d.obj bn_mp_div_d.obj bn_mp_dr_is_modulus.obj bn_mp_dr_reduce.obj bn_mp_dr_setup.obj \
+bn_mp_error_to_string.obj bn_mp_exch.obj bn_mp_expt_n.obj bn_mp_exptmod.obj bn_mp_exteuclid.obj bn_mp_fread.obj \
+bn_mp_from_sbin.obj bn_mp_from_ubin.obj bn_mp_fwrite.obj bn_mp_gcd.obj bn_mp_get_double.obj bn_mp_get_i32.obj \
+bn_mp_get_i64.obj bn_mp_get_l.obj bn_mp_get_mag_u32.obj bn_mp_get_mag_u64.obj bn_mp_get_mag_ul.obj bn_mp_grow.obj \
+bn_mp_incr.obj bn_mp_init.obj bn_mp_init_copy.obj bn_mp_init_i32.obj bn_mp_init_i64.obj bn_mp_init_l.obj \
+bn_mp_init_multi.obj bn_mp_init_set.obj bn_mp_init_size.obj bn_mp_init_u32.obj bn_mp_init_u64.obj bn_mp_init_ul.obj \
+bn_mp_invmod.obj bn_mp_is_square.obj bn_mp_iseven.obj bn_mp_isodd.obj bn_mp_kronecker.obj bn_mp_lcm.obj bn_mp_log_n.obj \
+bn_mp_lshd.obj bn_mp_mod.obj bn_mp_mod_2d.obj bn_mp_mod_d.obj bn_mp_montgomery_calc_normalization.obj \
+bn_mp_montgomery_reduce.obj bn_mp_montgomery_setup.obj bn_mp_mul.obj bn_mp_mul_2.obj bn_mp_mul_2d.obj bn_mp_mul_d.obj \
+bn_mp_mulmod.obj bn_mp_neg.obj bn_mp_or.obj bn_mp_pack.obj bn_mp_pack_count.obj bn_mp_prime_fermat.obj \
+bn_mp_prime_frobenius_underwood.obj bn_mp_prime_is_prime.obj bn_mp_prime_miller_rabin.obj \
+bn_mp_prime_next_prime.obj bn_mp_prime_rabin_miller_trials.obj bn_mp_prime_rand.obj \
+bn_mp_prime_strong_lucas_selfridge.obj bn_mp_radix_size.obj bn_mp_radix_smap.obj bn_mp_rand.obj \
+bn_mp_read_radix.obj bn_mp_reduce.obj bn_mp_reduce_2k.obj bn_mp_reduce_2k_l.obj bn_mp_reduce_2k_setup.obj \
+bn_mp_reduce_2k_setup_l.obj bn_mp_reduce_is_2k.obj bn_mp_reduce_is_2k_l.obj bn_mp_reduce_setup.obj \
+bn_mp_root_n.obj bn_mp_rshd.obj bn_mp_sbin_size.obj bn_mp_set.obj bn_mp_set_double.obj bn_mp_set_i32.obj \
+bn_mp_set_i64.obj bn_mp_set_l.obj bn_mp_set_u32.obj bn_mp_set_u64.obj bn_mp_set_ul.obj bn_mp_shrink.obj \
+bn_mp_signed_rsh.obj bn_mp_sqr.obj bn_mp_sqrmod.obj bn_mp_sqrt.obj bn_mp_sqrtmod_prime.obj bn_mp_sub.obj bn_mp_sub_d.obj \
+bn_mp_submod.obj bn_mp_to_radix.obj bn_mp_to_sbin.obj bn_mp_to_ubin.obj bn_mp_ubin_size.obj bn_mp_unpack.obj \
+bn_mp_xor.obj bn_mp_zero.obj bn_prime_tab.obj bn_s_mp_add.obj bn_s_mp_balance_mul.obj bn_s_mp_div_3.obj \
+bn_s_mp_exptmod.obj bn_s_mp_exptmod_fast.obj bn_s_mp_get_bit.obj bn_s_mp_invmod_fast.obj bn_s_mp_invmod_slow.obj \
+bn_s_mp_karatsuba_mul.obj bn_s_mp_karatsuba_sqr.obj bn_s_mp_log.obj bn_s_mp_log_2expt.obj bn_s_mp_log_d.obj \
+bn_s_mp_montgomery_reduce_fast.obj bn_s_mp_mul_digs.obj bn_s_mp_mul_digs_fast.obj bn_s_mp_mul_high_digs.obj \
+bn_s_mp_mul_high_digs_fast.obj bn_s_mp_prime_is_divisible.obj bn_s_mp_rand_jenkins.obj \
+bn_s_mp_rand_platform.obj bn_s_mp_reverse.obj bn_s_mp_sqr.obj bn_s_mp_sqr_fast.obj bn_s_mp_sub.obj \
+bn_s_mp_toom_mul.obj bn_s_mp_toom_sqr.obj
+
+HEADERS_PUB=tommath.h
+HEADERS=tommath_private.h tommath_class.h tommath_superclass.h tommath_cutoffs.h $(HEADERS_PUB)
+
+#The default rule for make builds the tommath.lib library (static)
+default: $(LIBMAIN_S)
+
+#Dependencies on *.h
+$(OBJECTS): $(HEADERS)
+
+.c.obj:
+	$(CC) $(LTM_CFLAGS) /c $< /Fo$@
+
+#Create tommath.lib
+$(LIBMAIN_S): $(OBJECTS)
+	lib /out:$(LIBMAIN_S) $(OBJECTS)
+
+#Build test suite
+test.exe: $(LIBMAIN_S) demo/shared.obj demo/test.obj
+	cl $(LTM_CFLAGS) $(TOBJECTS) $(LIBMAIN_S) $(LTM_LDFLAGS) demo/shared.c demo/test.c /Fe$@
+	@echo NOTICE: start the tests by launching test.exe
+
+test_standalone: test.exe
+	@echo test_standalone is deprecated, please use make-target 'test.exe'
+
+all: $(LIBMAIN_S) test.exe
+
+tune: $(LIBMAIN_S)
+	$(MAKE) -C etc tune
+	$(MAKE)
+
+clean:
+	@-cmd /c del /Q /S *.OBJ *.LIB *.EXE *.DLL 2>nul
+
+#Install the library + headers
+install: $(LIBMAIN_S)
+	cmd /c if not exist "$(PREFIX)\bin" mkdir "$(PREFIX)\bin"
+	cmd /c if not exist "$(PREFIX)\lib" mkdir "$(PREFIX)\lib"
+	cmd /c if not exist "$(PREFIX)\include" mkdir "$(PREFIX)\include"
+	copy /Y $(LIBMAIN_S) "$(PREFIX)\lib"
+	copy /Y tommath*.h "$(PREFIX)\include"

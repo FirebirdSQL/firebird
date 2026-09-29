@@ -70,7 +70,7 @@ public:
 	static ULONG cvtUtf16ToUtf8(csconvert* obj, ULONG nSrc, const UCHAR* pSrc,
 		ULONG nDest, UCHAR* pDest, USHORT* err_code, ULONG* err_position);
 
-	static INTL_BOOL asciiWellFormed(charset* cs, ULONG len, const UCHAR* str, ULONG* offendingPos);
+	static INTL_BOOL asciiWellFormed(charset* cs, ULONG len, const UCHAR* str, ULONG* offendingPos) noexcept;
 	static INTL_BOOL utf8WellFormed(charset* cs, ULONG len, const UCHAR* str, ULONG* offendingPos);
 
 	static ULONG utf8SubString(charset* cs, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst,

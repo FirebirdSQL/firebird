@@ -67,15 +67,30 @@ public:
 	explicit SecurityAttributes(MemoryPool& pool)
 		: m_pool(pool)
 	{
+		attributes.nLength = sizeof(attributes);
+		attributes.lpSecurityDescriptor = NULL;
+		attributes.bInheritHandle = TRUE;
+
+		static bool initializing = false;
+
+		// initializing == true means recursive call of SecurityAttributes constructor.
+		// It happens if first instance throws an exception and handling code accesses
+		// SecurityAttributes. Avoid recursion and leave null at attributes.lpSecurityDescriptor
+		// in this case.
+
+		if (initializing)
+			return;
+
+		initializing = true;
+
 		// Ensure that our process has the SYNCHRONIZE privilege granted to everyone
 		PSECURITY_DESCRIPTOR pOldSD = NULL;
 		PACL pOldACL = NULL;
 
 		// Pseudo-handles do not work on WinNT. Need real process handle.
-		HANDLE hCurrentProcess = OpenProcess(READ_CONTROL | WRITE_DAC, FALSE, GetCurrentProcessId());
-		if (hCurrentProcess == NULL) {
-			Firebird::system_call_failed::raise("OpenProcess");
-		}
+		// hvlad: it have PROCESS_ALL_ACCESS access right since Vista, also it is not
+		// affected by impersonation
+		HANDLE hCurrentProcess = GetCurrentProcess();
 
 		DWORD result = GetSecurityInfo(hCurrentProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
 							NULL, NULL, &pOldACL, NULL, &pOldSD);
@@ -88,10 +103,7 @@ public:
 		}
 
 		if (result != ERROR_SUCCESS)
-		{
-			CloseHandle(hCurrentProcess);
 			Firebird::system_call_failed::raise("GetSecurityInfo", result);
-		}
 
 		// NULL pOldACL means all privileges. If we assign pNewACL in this case
 		// we'll lost all privileges except assigned SYNCHRONIZE
@@ -117,19 +129,15 @@ public:
 			SetSecurityInfo(hCurrentProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
 							NULL, NULL, pNewACL, NULL);
 
-			if (pSID) {
+			if (pSID)
 				FreeSid(pSID);
-			}
-			if (pNewACL) {
+
+			if (pNewACL)
 				LocalFree(pNewACL);
-			}
 		}
 
-		CloseHandle(hCurrentProcess);
-
-		if (pOldSD) {
+		if (pOldSD)
 			LocalFree(pOldSD);
-		}
 
 		// Create and initialize the default security descriptor
 		// to be assigned to various IPC objects.
@@ -140,16 +148,16 @@ public:
 		PSECURITY_DESCRIPTOR p_security_desc = static_cast<PSECURITY_DESCRIPTOR>(
 			FB_NEW_POOL(m_pool) char[SECURITY_DESCRIPTOR_MIN_LENGTH]);
 
-		attributes.nLength = sizeof(attributes);
-		attributes.lpSecurityDescriptor = p_security_desc;
-		attributes.bInheritHandle = TRUE;
-
 		if (!InitializeSecurityDescriptor(p_security_desc, SECURITY_DESCRIPTOR_REVISION) ||
 			!SetSecurityDescriptorDacl(p_security_desc, TRUE, NULL, FALSE))
 		{
 			delete p_security_desc;
-			attributes.lpSecurityDescriptor = NULL;
 		}
+		else
+		{
+			attributes.lpSecurityDescriptor = p_security_desc;
+		}
+		initializing = false;
 	}
 
 	~SecurityAttributes()

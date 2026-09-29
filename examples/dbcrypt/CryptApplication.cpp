@@ -32,7 +32,7 @@ using namespace Firebird;
 class CryptKey : public ICryptKeyCallbackImpl<CryptKey, CheckStatusWrapper>
 {
 public:
-	unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer)
+	unsigned int callback(unsigned int, const void*, unsigned int length, void* buffer) override
 	{
 		if (length > 0 && buffer)
 		{
@@ -56,15 +56,14 @@ private:
 	static const char k;
 };
 
-const char CryptKey::k = 0x5a;
+constexpr char CryptKey::k = 0x5a;
 
 class App
 {
 public:
 	App() :
 		master(fb_get_master_interface()),
-		statusWrapper(master->getStatus()), status(&statusWrapper),
-		p(NULL), att(NULL), tra(NULL)
+		statusWrapper(master->getStatus()), status(&statusWrapper)
 	{ }
 
 	~App()
@@ -113,7 +112,7 @@ public:
 			throw "setDbCryptCallback";
 
 		char s[256];
-		sprintf(s, "localhost:%s", dbName);
+		snprintf(s, sizeof(s), "localhost:%s", dbName);
 		att = p->attachDatabase(status, s, 0, NULL);
 		if (status->getState() & IStatus::STATE_ERRORS)
 			throw "attachDatabase";
@@ -174,6 +173,9 @@ public:
 			curs = NULL;
 			break;
 		  }
+		case NONE:
+			// nothing to do
+			break;
 		}
 
 		if (tra)
@@ -185,7 +187,7 @@ public:
 		}
 
 		printf("\nProviding key for crypt plugin - press enter to continue ...");
-		getchar();
+		(void) getchar();
 
 		att->detach(status);
 		if (status->getState() & IStatus::STATE_ERRORS)
@@ -206,10 +208,10 @@ private:
 	IMaster* master;
 	CheckStatusWrapper statusWrapper;
 	CheckStatusWrapper* status;
-	IProvider* p;
-	IAttachment* att;
-	ITransaction* tra;
-	IResultSet* curs;
+	IProvider* p = nullptr;
+	IAttachment* att = nullptr;
+	ITransaction* tra = nullptr;
+	IResultSet* curs = nullptr;
 
 	CryptKey key;
 };

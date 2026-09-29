@@ -172,8 +172,8 @@ namespace
 	#undef CVT_FORMAT2
 	#undef CVT_FORMAT_FLAG
 
-	constexpr const char* const TO_DATETIME_PATTERNS[] = {
-		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::Q, FormatStr::MM,
+	constexpr const char* const TO_STRING_PATTERNS[] = {
+		FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::YEAR, FormatStr::Q, FormatStr::MM,
 		FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::WW, FormatStr::W, FormatStr::D, FormatStr::DAY,
 		FormatStr::DD, FormatStr::DDD, FormatStr::DY, FormatStr::J, FormatStr::HH, FormatStr::HH12, FormatStr::HH24,
 		FormatStr::MI, FormatStr::SS, FormatStr::SSSSS, FormatStr::FF1, FormatStr::FF2, FormatStr::FF3, FormatStr::FF4,
@@ -181,8 +181,8 @@ namespace
 		FormatStr::TZR, FormatStr::AM, FormatStr::PM
 	};
 
-	constexpr const char* const TO_STRING_PATTERNS[] = {
-		FormatStr::YEAR, FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::RRRR, FormatStr::RR,
+	constexpr const char* const TO_DATETIME_PATTERNS[] = {
+		FormatStr::YYYY, FormatStr::YYY, FormatStr::YY, FormatStr::Y, FormatStr::RRRR, FormatStr::RR,
 		FormatStr::MM, FormatStr::MON, FormatStr::MONTH, FormatStr::RM, FormatStr::DD, FormatStr::J, FormatStr::HH,
 		FormatStr::HH12, FormatStr::HH24, FormatStr::MI, FormatStr::SS, FormatStr::SSSSS, FormatStr::FF1, FormatStr::FF2,
 		FormatStr::FF3, FormatStr::FF4, FormatStr::TZH, FormatStr::TZM, FormatStr::TZR, FormatStr::AM, FormatStr::PM
@@ -241,6 +241,7 @@ namespace
 			case '.':
 			case '/':
 			case ',':
+			case '\'':
 			case ';':
 			case ':':
 			case ' ':
@@ -487,12 +488,12 @@ namespace
 
 	void invalidPatternException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Arg::Gds(isc_invalid_date_format) << string(pattern.data(), pattern.length()));
+		cb->err(Arg::Gds(isc_invalid_date_format) << pattern);
 	}
 
 	void incompatibleDateFormatException(std::string_view pattern, Callbacks* cb)
 	{
-		cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << string(pattern.data(), pattern.length()));
+		cb->err(Arg::Gds(isc_incompatible_date_format_with_current_date_type) << pattern);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------
@@ -605,7 +606,7 @@ namespace
 				continue;
 			}
 
-			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_DATETIME_PATTERNS, formatLength,
+			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_STRING_PATTERNS, formatLength,
 				formatOffset, i);
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
@@ -715,6 +716,122 @@ namespace
 		return string(timezoneBuffer, length);
 	}
 
+	string yearToWords(unsigned year, Callbacks* cb)
+	{
+		static constexpr const char* ZERO = "ZERO";
+		static constexpr const char* ONES[] = {
+			"", "ONE", "TWO", "THREE", "FOUR", "FIVE",
+			"SIX", "SEVEN", "EIGHT", "NINE", "TEN",
+			"ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN",
+			"SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"
+		};
+		static constexpr const char* TENS[] = {
+			"", "", "TWENTY", "THIRTY", "FORTY", "FIFTY",
+			"SIXTY", "SEVENTY", "EIGHTY", "NINETY"
+		};
+
+		auto twoDigits = [&](unsigned n, string& result) -> void
+		{
+			fb_assert(n < 100);
+
+			if (n == 0)
+			{
+				result += ZERO;
+				return;
+			}
+			if (n < 20)
+			{
+				result += ONES[n];
+				return;
+			}
+
+			result += TENS[n / 10];
+			if (n % 10)
+			{
+				result += "-";
+				result += ONES[n % 10];
+			}
+		};
+
+		// Not possible in our date implementation, but anyway handle 0 value just in case.
+		if (year == 0)
+			return ZERO;
+
+		string result;
+		result.reserve(30);
+
+		if (year < 100)
+		{
+			twoDigits(year, result);
+		}
+		else if (year < 1000)
+		{
+			const unsigned hi = year / 100;
+			const unsigned lo = year % 100;
+			result = ONES[hi];
+			if (lo < 10)
+			{
+				// 900 -> "nine hundred"
+				result += " HUNDRED";
+				if (lo != 0)
+				{
+					// 905 -> "nine hundred five"
+					result += " ";
+					result += ONES[lo];
+				}
+			}
+			else
+			{
+				// 925 -> "nine twenty-five"
+				result += " ";
+				twoDigits(lo, result);
+			}
+		}
+		else if (year < 10000)
+		{
+			const unsigned hi = year / 100;
+			const unsigned lo = year % 100;
+			if (lo < 10)
+			{
+				const unsigned hihi = hi / 10;
+				const unsigned hilo = hi % 10;
+				// 1000 -> "one thousand"
+				result += ONES[hihi];
+				result += " THOUSAND";
+				if (hilo != 0)
+				{
+					// 1900 -> "one thousand nine hundred"
+					result += " ";
+					result += ONES[hilo];
+					result += " HUNDRED";
+				}
+				if (lo != 0)
+				{
+					// 1905 -> "one thousand nine hundred five"
+					result += " ";
+					result += ONES[lo];
+				}
+			}
+			else
+			{
+				// 1985 -> "nineteen eighty-five"
+				// 2685 -> "twenty-six eighty-five"
+				twoDigits(hi, result);
+				result += " ";
+				twoDigits(lo, result);
+			}
+		}
+		else
+		{
+			// Currently we don't support dates >9999
+			fb_assert(false);
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range)
+				<< FormatStr::YEAR << Arg::Num(1) << Arg::Num(9999));
+		}
+
+		return result;
+	}
+
 	string processDateTimeToStringTokens(const dsc* desc, const std::vector<Token>& tokens, const struct tm& times, int fractions, Callbacks* cb)
 	{
 		string result;
@@ -739,8 +856,11 @@ namespace
 					patternResult.printf("%04d", (times.tm_year + 1900) % 10000);
 					break;
 				case Format::YEAR:
-					patternResult.printf("%d", (times.tm_year + 1900));
+				{
+					const string year = yearToWords(times.tm_year + 1900, cb);
+					patternResult.printf("%s", year.data());
 					break;
+				}
 
 				case Format::Q:
 				{
@@ -915,7 +1035,7 @@ namespace
 
 					if (format[0] == '\"')
 					{
-						patternResult.resize(format.length(), '\0');
+						patternResult.resize(static_cast<string::size_type>(format.length()), '\0');
 						for (FB_SIZE_T i = 1, j = 0; i < format.length(); i++, j++)
 						{
 							if (format[i] == '\"')
@@ -928,7 +1048,7 @@ namespace
 						patternResult.recalculate_length();
 					}
 					else
-						patternResult.assign(format.data(), format.length());
+						patternResult.assign(format);
 					break;
 				}
 
@@ -951,7 +1071,7 @@ namespace
 	void throwExceptionOnEmptyValue(std::optional<T> value, std::string_view pattern, Callbacks* cb)
 	{
 		if (!value.has_value())
-			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << string(pattern.data(), pattern.length()));
+			cb->err(Arg::Gds(isc_missing_value_for_format_pattern) << pattern);
 	}
 
 	std::vector<Token> parseStringToDateTimeFormat(const dsc* desc, const string& formatUpper, Format::Patterns& outFormatPatterns, Callbacks* cb)
@@ -975,14 +1095,25 @@ namespace
 			if (i == formatLength)
 				break;
 
-			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_STRING_PATTERNS, formatLength,
+			std::string_view patternStr = getPatternFromFormat(formatUpper.c_str(), TO_DATETIME_PATTERNS, formatLength,
 				formatOffset, i);
 
 			const Format::Patterns pattern = mapFormatStrToFormatPattern(patternStr);
 			if (pattern == Format::NONE)
-				invalidPatternException(patternStr, cb);
+			{
+				// An invalid `patternStr` may be incomplete, so just parse it from the beginning up to the separator.
+				// Since patterns can be combined without separators, we can print multiple patterns, but it's fine.
+				const FB_SIZE_T patternBeginPos = i - patternStr.length();
+				for (; i < formatLength; i++)
+				{
+					if (isSeparator(formatUpper[i]))
+						break;
+				}
+				std::string_view errorPattern(formatUpper.data() + patternBeginPos, i - patternBeginPos);
+				invalidPatternException(errorPattern, cb);
+			}
 			if (outFormatPatterns & pattern)
-				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << string(patternStr.data(), patternStr.length()));
+				cb->err(Arg::Gds(isc_can_not_use_same_pattern_twice) << patternStr);
 			if (!patternIsCompatibleWithDscType(desc, pattern))
 				incompatibleDateFormatException(patternStr, cb);
 
@@ -1000,7 +1131,7 @@ namespace
 	constexpr void validateFormatFlags(Format::Patterns formatFlags, Callbacks* cb)
 	{
 		// CT shall contain at most one of each of the following: <datetime template year>
-		if (Format::Patterns value = formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY | Format::YEAR))
+		if (Format::Patterns value = formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY))
 		{
 			switch (value)
 			{
@@ -1008,10 +1139,9 @@ namespace
 				case Format::YY:
 				case Format::YYY:
 				case Format::YYYY:
-				case Format::YEAR:
 					break;
 				default:
-					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("Y/YY/YYY/YYYY/YEAR"));
+					cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("Y/YY/YYY/YYYY"));
 			}
 		}
 
@@ -1020,8 +1150,8 @@ namespace
 			cb->err(Arg::Gds(isc_only_one_pattern_can_be_used) << Arg::Str("RR/RRRR"));
 
 		// CT shall not contain both <datetime template year> and <datetime template rounded year>
-		if ((formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY | Format::YEAR)) && (formatFlags & (Format::RR | Format::RRRR)))
-			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("Y/YY/YYY/YYYY/YEAR") << Arg::Str("RR/RRRR"));
+		if ((formatFlags & (Format::Y | Format::YY | Format::YYY | Format::YYYY)) && (formatFlags & (Format::RR | Format::RRRR)))
+			cb->err(Arg::Gds(isc_incompatible_format_patterns) << Arg::Str("Y/YY/YYY/YYYY") << Arg::Str("RR/RRRR"));
 
 		// If CT contains <datetime template day of year>, then CT shall not contain <datetime template month>
 		// or <datetime template day of month>.
@@ -1136,7 +1266,7 @@ namespace
 		else if (period == FormatStr::PM)
 			return twelveHours == 12 ? twelveHours : 12 + twelveHours;
 
-		cb->err(Arg::Gds(isc_incorrect_hours_period) << string(period.data(), period.length()));
+		cb->err(Arg::Gds(isc_incorrect_hours_period) << period);
 		return 0; // suppress compiler warning/error
 	}
 
@@ -1275,8 +1405,8 @@ namespace
 
 		if (minutes.value() > 59)
 		{
-			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-				string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+			cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr << Arg::Num(0) <<
+				Arg::Num(59));
 		}
 
 		if (!TimeZoneUtil::isValidOffset(sign, hours.value(), minutes.value()))
@@ -1347,7 +1477,7 @@ namespace
 					break;
 			}
 			if (strOffset >= strLength)
-				cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr.data()));
+				cb->err(Arg::Gds(isc_data_for_format_is_exhausted) << string(it->patternStr));
 
 			std::string_view patternStr = it->patternStr;
 
@@ -1391,19 +1521,6 @@ namespace
 					outTimes.tm_year = year.value() - 1900;
 					break;
 				}
-				case Format::YEAR:
-				{
-					const std::optional<int> year = getIntFromString(str, strLength, strOffset, strLength - strOffset);
-					throwExceptionOnEmptyValue(year, patternStr, cb);
-
-					if (year > 9999)
-					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(9999));
-					}
-					outTimes.tm_year = year.value() - 1900;
-					break;
-				}
 				case Format::MI:
 				{
 					const std::optional<int> minutes = getIntFromString(str, strLength, strOffset, 2);
@@ -1411,8 +1528,8 @@ namespace
 
 					if (minutes > 59)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_min = minutes.value();
@@ -1425,8 +1542,8 @@ namespace
 
 					if (month < 1 || month > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month.value() - 1;
@@ -1450,7 +1567,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthShortName.data(), monthShortName.length()));
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthShortName);
 					break;
 				}
 				case Format::MONTH:
@@ -1471,7 +1588,7 @@ namespace
 					}
 
 					if (!isFound)
-						cb->err(Arg::Gds(isc_month_name_mismatch) << string(monthFullName.data(), monthFullName.length()));
+						cb->err(Arg::Gds(isc_month_name_mismatch) << monthFullName);
 					break;
 				}
 
@@ -1503,8 +1620,8 @@ namespace
 					const int month = romanToInt(str, strLength, strOffset);
 					if (month == 0 || month > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_mon = month - 1;
@@ -1518,8 +1635,8 @@ namespace
 
 					if (day == 0 || day > 31)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(31));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(31));
 					}
 
 					outTimes.tm_mday = day.value();
@@ -1535,8 +1652,8 @@ namespace
 					constexpr int maxJDN = 5373484; // 31.12.9999
 					if (JDN < minJDN || JDN > maxJDN)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(minJDN) << Arg::Num(maxJDN));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(minJDN) << Arg::Num(maxJDN));
 					}
 
 					int year = 0, month = 0, day = 0;
@@ -1555,8 +1672,8 @@ namespace
 
 					if (hours < 1 || hours > 12)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(1) << Arg::Num(12));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(1) << Arg::Num(12));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1569,8 +1686,8 @@ namespace
 
 					if (hours > 23)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(23));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(23));
 					}
 
 					outTimes.tm_hour = hours.value();
@@ -1584,8 +1701,8 @@ namespace
 
 					if (seconds > 59)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(59));
 					}
 
 					outTimes.tm_sec = seconds.value();
@@ -1601,8 +1718,8 @@ namespace
 					const int secondsInDayValue = secondsInDay.value();
 					if (secondsInDayValue > maximumSecondsInDay)
 					{
-						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-							string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(maximumSecondsInDay));
+						cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+							Arg::Num(0) << Arg::Num(maximumSecondsInDay));
 					}
 
 					const int hours = secondsInDayValue / 24;
@@ -1677,8 +1794,8 @@ namespace
 
 						if (minutes > 59)
 						{
-							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes += sign(outTimezoneInMinutes) * minutes.value();
@@ -1691,8 +1808,8 @@ namespace
 						const int minutesValue = minutes.value();
 						if (abs(minutesValue) > 59)
 						{
-							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) <<
-								string(patternStr.data(), patternStr.length()) << Arg::Num(0) << Arg::Num(59));
+							cb->err(Arg::Gds(isc_value_for_pattern_is_out_of_range) << patternStr <<
+								Arg::Num(0) << Arg::Num(59));
 						}
 
 						outTimezoneInMinutes = minutesValue;
@@ -1717,8 +1834,8 @@ namespace
 						}
 
 						std::string_view timezoneName = getTimezoneNameFromString(str, strLength, oldOffset);
-						status_exception::raise(Arg::Gds(isc_invalid_timezone_region_or_displacement)
-							<< string(timezoneName.data(), timezoneName.length()));
+						status_exception::raise(
+							Arg::Gds(isc_invalid_timezone_region_or_displacement) << timezoneName);
 					}
 
 					strOffset += parsedTimezoneNameLength;
@@ -1849,7 +1966,7 @@ ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::
 	if (format.isEmpty())
 		cb->err(Arg::Gds(isc_sysf_invalid_null_empty) << Arg::Str(STRINGIZE(format)));
 
-	USHORT dtype;
+	TTypeId dtype;
 	UCHAR* sourceString;
 	const USHORT stringLength = CVT_get_string_ptr_common(desc, &dtype, &sourceString, nullptr, 0, 0, cb);
 

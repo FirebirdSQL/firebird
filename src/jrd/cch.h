@@ -66,11 +66,11 @@ class BCBHashTable;
 
 // Page buffer cache size constraints.
 
-const ULONG MIN_PAGE_BUFFERS = 50;
+inline constexpr ULONG MIN_PAGE_BUFFERS = 50;
 #if SIZEOF_VOID_P == 4
-const ULONG MAX_PAGE_BUFFERS = 131072;
+inline constexpr ULONG MAX_PAGE_BUFFERS = 131072;
 #else
-const ULONG MAX_PAGE_BUFFERS = MAX_SLONG - 1;
+inline constexpr ULONG MAX_PAGE_BUFFERS = MAX_SLONG - 1;
 #endif
 
 // BufferControl -- Buffer control block -- one per system
@@ -174,16 +174,16 @@ public:
 	Firebird::Array<BDBBlock>	bcb_bdbBlocks;		// all allocated BufferDesc's
 };
 
-const int BCB_keep_pages	= 1;	// set during btc_flush(), pages not removed from dirty binary tree
-const int BCB_cache_writer	= 2;	// cache writer thread has been started
-const int BCB_writer_start  = 4;    // cache writer thread is starting now
-const int BCB_writer_active	= 8;	// no need to post writer event count
+inline constexpr int BCB_keep_pages		= 1;	// set during btc_flush(), pages not removed from dirty binary tree
+inline constexpr int BCB_cache_writer	= 2;	// cache writer thread has been started
+inline constexpr int BCB_writer_start	= 4;    // cache writer thread is starting now
+inline constexpr int BCB_writer_active	= 8;	// no need to post writer event count
 #ifdef SUPERSERVER_V2
-const int BCB_cache_reader	= 16;	// cache reader thread has been started
-const int BCB_reader_active	= 32;	// cache reader not blocked on event
+inline constexpr int BCB_cache_reader	= 16;	// cache reader thread has been started
+inline constexpr int BCB_reader_active	= 32;	// cache reader not blocked on event
 #endif
-const int BCB_free_pending	= 64;	// request cache writer to free pages
-const int BCB_exclusive		= 128;	// there is only BCB in whole system
+inline constexpr int BCB_free_pending	= 64;	// request cache writer to free pages
+inline constexpr int BCB_exclusive		= 128;	// there is only BCB in whole system
 
 
 // BufferDesc -- Buffer descriptor block
@@ -273,28 +273,28 @@ public:
 
 // to set/clear BDB_dirty use set_dirty_flag()/clear_dirty_flag()
 // These constants should really be of type USHORT.
-const int BDB_dirty				= 0x0001;	// page has been updated but not written yet
-const int BDB_garbage_collect	= 0x0002;	// left by scan for garbage collector
-const int BDB_writer			= 0x0004;	// someone is updating the page
-const int BDB_marked			= 0x0008;	// page has been updated
-const int BDB_must_write		= 0x0010;	// forces a write as soon as the page is released
-const int BDB_faked				= 0x0020;	// page was just allocated
-//const int BDB_merge			= 0x0040;
-const int BDB_system_dirty 		= 0x0080;	// system transaction has marked dirty
-const int BDB_io_error	 		= 0x0100;	// page i/o error
-const int BDB_read_pending 		= 0x0200;	// read is pending
-const int BDB_free_pending 		= 0x0400;	// buffer being freed for reuse
-const int BDB_not_valid			= 0x0800;	// i/o error invalidated buffer
-const int BDB_db_dirty 			= 0x1000;	// page must be written to database
-//const int BDB_checkpoint		= 0x2000;	// page must be written by next checkpoint
-const int BDB_prefetch			= 0x4000;	// page has been prefetched but not yet referenced
-const int BDB_no_blocking_ast	= 0x8000;	// No blocking AST registered with page lock
-const int BDB_lru_chained		= 0x10000;	// buffer is in pending LRU chain
-const int BDB_nbak_state_lock	= 0x20000;	// nbak state lock should be released after buffer is written
+inline constexpr int BDB_dirty				= 0x0001;	// page has been updated but not written yet
+inline constexpr int BDB_garbage_collect	= 0x0002;	// left by scan for garbage collector
+inline constexpr int BDB_writer				= 0x0004;	// someone is updating the page
+inline constexpr int BDB_marked				= 0x0008;	// page has been updated
+inline constexpr int BDB_must_write			= 0x0010;	// forces a write as soon as the page is released
+inline constexpr int BDB_faked				= 0x0020;	// page was just allocated
+//inline constexpr int BDB_merge			= 0x0040;
+inline constexpr int BDB_system_dirty 		= 0x0080;	// system transaction has marked dirty
+inline constexpr int BDB_io_error	 		= 0x0100;	// page i/o error
+inline constexpr int BDB_read_pending 		= 0x0200;	// read is pending
+inline constexpr int BDB_free_pending 		= 0x0400;	// buffer being freed for reuse
+inline constexpr int BDB_not_valid			= 0x0800;	// i/o error invalidated buffer
+inline constexpr int BDB_db_dirty 			= 0x1000;	// page must be written to database
+//inline constexpr int BDB_checkpoint		= 0x2000;	// page must be written by next checkpoint
+inline constexpr int BDB_prefetch			= 0x4000;	// page has been prefetched but not yet referenced
+inline constexpr int BDB_no_blocking_ast	= 0x8000;	// No blocking AST registered with page lock
+inline constexpr int BDB_lru_chained		= 0x10000;	// buffer is in pending LRU chain
+inline constexpr int BDB_nbak_state_lock	= 0x20000;	// nbak state lock should be released after buffer is written
 
 // bdb_ast_flags
 
-const int BDB_blocking 			= 0x01;		// a blocking ast was sent while page locked
+inline constexpr int BDB_blocking 			= 0x01;		// a blocking ast was sent while page locked
 
 
 // PRE -- Precedence block
@@ -309,7 +309,7 @@ public:
 	SSHORT			pre_flags;
 };
 
-const int PRE_cleared	= 1;
+inline constexpr int PRE_cleared	= 1;
 
 /* Compatibility matrix for latch types.
 
@@ -353,9 +353,9 @@ enum LATCH
 
 // Constants used by prefetch mechanism
 
-const int PREFETCH_MAX_TRANSFER	= 16384;	// maximum block I/O transfer (bytes)
+inline constexpr int PREFETCH_MAX_TRANSFER	= 16384;	// maximum block I/O transfer (bytes)
 // maximum pages allowed per prefetch request
-const int PREFETCH_MAX_PAGES	= (2 * PREFETCH_MAX_TRANSFER / MIN_PAGE_SIZE);
+inline constexpr int PREFETCH_MAX_PAGES		= (2 * PREFETCH_MAX_TRANSFER / MIN_PAGE_SIZE);
 
 // Prefetch block
 
@@ -374,7 +374,7 @@ public:
 	SCHAR		prf_unaligned_buffer[PREFETCH_MAX_TRANSFER + MIN_PAGE_SIZE];
 };
 
-const int PRF_active	= 1;		// prefetch block currently in use
+inline constexpr int PRF_active = 1;		// prefetch block currently in use
 #endif // SUPERSERVER_V2
 
 typedef Firebird::SortedArray<SLONG, Firebird::InlineStorage<SLONG, 256>, SLONG> PagesArray;

@@ -96,6 +96,9 @@ void BaseAggWinStream<ThisType, NextType>::close(thread_db* tdbb) const
 
 	if (impure->irsb_flags & irsb_open)
 	{
+		if (m_groupMap)
+			aggFinish(tdbb, request, m_groupMap);
+
 		impure->irsb_flags &= ~irsb_open;
 
 		m_next->close(tdbb);
@@ -341,7 +344,7 @@ int BaseAggWinStream<ThisType, NextType>::lookForChange(thread_db* tdbb, Request
 		dsc* desc = EVL_expr(tdbb, request, from);
 		int n;
 
-		if (request->req_flags & req_null)
+		if (!desc)
 		{
 			if (vtemp->vlu_desc.dsc_address)
 				return -1 * nullsPlacement;

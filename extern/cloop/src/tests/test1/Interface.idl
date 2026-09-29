@@ -39,12 +39,19 @@ interface Status : Disposable
 	void setCode(int code);
 }
 
+interface StatusFactory : Disposable
+{
+	Status createStatus();
+}
+
 interface Factory : Disposable
 {
 	Status createStatus();
 	Calculator createCalculator(Status status);
 	Calculator2 createCalculator2(Status status);
 	Calculator createBrokenCalculator(Status status);
+
+	void setStatusFactory(StatusFactory statusFactory);
 }
 
 interface Calculator : Disposable

@@ -26,26 +26,26 @@
 
 // flags for RDB$FILE_FLAGS. Do not change as they are part of backups
 
-const USHORT FILE_shadow		= 1;
-const USHORT FILE_inactive		= 2;
-const USHORT FILE_manual		= 4;
-const USHORT FILE_conditional 	= 16;
-const USHORT FILE_nodelete		= 32;
+inline constexpr USHORT FILE_shadow			= 1;
+inline constexpr USHORT FILE_inactive		= 2;
+inline constexpr USHORT FILE_manual			= 4;
+inline constexpr USHORT FILE_conditional 	= 16;
+inline constexpr USHORT FILE_nodelete		= 32;
 
 // Flags for backup difference files
 // File is difference
-const USHORT FILE_difference 	= 32;
+inline constexpr USHORT FILE_difference		= 32;
 // Actively used for backup purposes (ALTER DATABASE BEGIN BACKUP issued)
-const USHORT FILE_backing_up	= 64;
+inline constexpr USHORT FILE_backing_up		= 64;
 
 
 // flags for RDB$RELATIONS
 
-const USHORT REL_sql			= 0x0001;
+inline constexpr USHORT REL_sql			= 0x0001;
 
 // flags for RDB$TRIGGERS
 
-const USHORT TRG_sql			= 0x1;
-const USHORT TRG_ignore_perm	= 0x2;		// trigger ignores permissions checks
+inline constexpr USHORT TRG_sql			= 0x1;
+inline constexpr USHORT TRG_ignore_perm	= 0x2;		// trigger ignores permissions checks
 
 #endif // JRD_FLAGS_H

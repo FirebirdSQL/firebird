@@ -19,6 +19,7 @@
  */
 
 #include "firebird.h"
+#include "../dsql/AggNodes.h"
 #include "../dsql/DsqlCompilerScratch.h"
 #include "../dsql/DdlNodes.h"
 #include "../dsql/ExprNodes.h"
@@ -30,7 +31,9 @@
 #include "../dsql/errd_proto.h"
 #include "../dsql/gen_proto.h"
 #include "../dsql/make_proto.h"
+#include "../dsql/metd_proto.h"
 #include "../dsql/pass1_proto.h"
+#include <unordered_set>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -52,11 +55,174 @@ void DsqlCompilerScratch::dumpContextStack(const DsqlContextStack* stack)
 			context->ctx_context,
 			(context->ctx_flags & CTX_system) != 0,
 			(context->ctx_flags & CTX_returning) != 0,
-			MAX_SQL_IDENTIFIER_SIZE, MAX_SQL_IDENTIFIER_SIZE, context->ctx_alias.c_str(),
-			MAX_SQL_IDENTIFIER_SIZE, MAX_SQL_IDENTIFIER_SIZE, context->ctx_internal_alias.c_str());
+			MAX_SQL_IDENTIFIER_SIZE, MAX_SQL_IDENTIFIER_SIZE, context->ctx_alias[0].toQuotedString().c_str(),
+			MAX_SQL_IDENTIFIER_SIZE, MAX_SQL_IDENTIFIER_SIZE, context->ctx_internal_alias.toQuotedString().c_str());
 	}
 }
 #endif
+
+
+void DsqlCompilerScratch::qualifyNewName(QualifiedName& name) const
+{
+	const auto tdbb = JRD_get_thread_data();
+
+	if (!dbb->dbb_attachment->qualifyNewName(tdbb, name))
+	{
+		if (name.schema.isEmpty())
+			status_exception::raise(Arg::Gds(isc_dyn_cannot_infer_schema));
+		else
+			status_exception::raise(Arg::Gds(isc_dyn_schema_not_found) << name.schema.toQuotedString());
+	}
+}
+
+void DsqlCompilerScratch::qualifyExistingName(QualifiedName& name, std::initializer_list<ObjectType> objectTypes)
+{
+	if (!(name.schema.isEmpty() && name.object.hasData()))
+		return;
+
+	const auto tdbb = JRD_get_thread_data();
+	const auto attachment = tdbb->getAttachment();
+
+	if (ddlSchema.hasData())
+	{
+		if (!cachedDdlSchemaSearchPath)
+		{
+			cachedDdlSchemaSearchPath = FB_NEW_POOL(getPool()) ObjectsArray<MetaString>(getPool(), {ddlSchema});
+
+			if (const auto& searchPath = *attachment->att_schema_search_path;
+				std::find(searchPath.begin(), searchPath.end(), SYSTEM_SCHEMA) != searchPath.end())
+			{
+				cachedDdlSchemaSearchPath->push(SYSTEM_SCHEMA);
+			}
+		}
+
+		attachment->qualifyExistingName(tdbb, name, objectTypes, cachedDdlSchemaSearchPath);
+	}
+	else
+		attachment->qualifyExistingName(tdbb, name, objectTypes);
+}
+
+
+std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> DsqlCompilerScratch::resolveRoutineOrRelation(
+	QualifiedName& name, std::initializer_list<ObjectType> objectTypes)
+{
+	const std::unordered_set<ObjectType> objectTypesSet(objectTypes);
+	const bool searchProcedures = objectTypesSet.find(obj_procedure) != objectTypesSet.end();
+	const bool searchRelations = objectTypesSet.find(obj_relation) != objectTypesSet.end();
+	const bool searchFunctions = objectTypesSet.find(obj_udf) != objectTypesSet.end();
+	fb_assert((searchProcedures || searchRelations) != searchFunctions);
+
+	std::variant<std::monostate, dsql_prc*, dsql_rel*, dsql_udf*> object;
+
+	const auto notFound = [&]()
+	{
+		return std::holds_alternative<std::monostate>(object);
+	};
+
+	const auto setObject = [&](const auto value)
+	{
+		if (value)
+			object = value;
+	};
+
+	// search subroutine: name
+	if (name.schema.isEmpty() &&
+		name.package.isEmpty())
+	{
+		if (searchProcedures)
+		{
+			if (const auto subProcedure = getSubProcedure(name.object))
+				setObject(subProcedure->dsqlProcedure);
+		}
+
+		if (searchFunctions)
+		{
+			if (const auto subFunction = getSubFunction(name.object))
+				setObject(subFunction->dsqlFunction);
+		}
+	}
+
+	// search packaged routine or packaged table in the same package: name, same_package.name
+	if (notFound() &&
+		package.object.hasData() &&
+		name.package.isEmpty() &&
+		(name.schema.isEmpty() ||
+			(!name.isUnambiguous() && name.schema == package.object)))
+	{
+		const QualifiedName routineName(name.object, package.schema, package.object);
+
+		if (searchProcedures)
+			setObject(METD_get_procedure(getTransaction(), this, routineName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, routineName));
+
+		if (searchFunctions)
+			setObject(METD_get_function(getTransaction(), this, routineName));
+	}
+
+	// search standalone routine or relation: name, name1%schema.name2, name1.name2
+	if (notFound() &&
+		name.package.isEmpty())
+	{
+		auto qualifiedName = name;
+		qualifyExistingName(qualifiedName, objectTypes);
+
+		if (searchProcedures)
+			setObject(METD_get_procedure(getTransaction(), this, qualifiedName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, qualifiedName));
+
+		if (searchFunctions)
+			setObject(METD_get_function(getTransaction(), this, qualifiedName));
+	}
+
+	// search packaged routine or packaged table: name1%package.name2, name1.name2.name3
+	if (notFound() &&
+		name.package.hasData())
+	{
+		auto qualifiedName = name;
+		qualifyExistingName(qualifiedName, objectTypes);
+
+		if (searchProcedures)
+			setObject(METD_get_procedure(getTransaction(), this, qualifiedName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, qualifiedName));
+
+		if (searchFunctions)
+			setObject(METD_get_function(getTransaction(), this, qualifiedName));
+	}
+
+	// search packaged routine or LTT: name1.name2
+	if (notFound() &&
+		!name.isUnambiguous() &&
+		name.schema.hasData() &&
+		name.package.isEmpty())
+	{
+		QualifiedName qualifiedName(name.object, {}, name.schema);
+		qualifyExistingName(qualifiedName, objectTypes);
+
+		if (searchProcedures)
+			setObject(METD_get_procedure(getTransaction(), this, qualifiedName));
+
+		if (searchRelations)
+			setObject(METD_get_relation(getTransaction(), this, qualifiedName));
+
+		if (searchFunctions)
+			setObject(METD_get_function(getTransaction(), this, qualifiedName));
+	}
+
+	if (const auto procedure = std::get_if<dsql_prc*>(&object))
+		name = (*procedure)->prc_name;
+	else if (const auto relation = std::get_if<dsql_rel*>(&object))
+		name = (*relation)->rel_name;
+	else if (const auto function = std::get_if<dsql_udf*>(&object))
+		name = (*function)->udf_name;
+
+	return object;
+}
 
 
 void DsqlCompilerScratch::putBlrMarkers(ULONG marks)
@@ -82,210 +248,179 @@ void DsqlCompilerScratch::putBlrMarkers(ULONG marks)
 
 // Write out field data type.
 // Taking special care to declare international text.
-void DsqlCompilerScratch::putDtype(const TypeClause* field, bool useSubType)
+void DsqlCompilerScratch::putType(const dsql_fld* field, bool useSubType)
 {
-#ifdef DEV_BUILD
-	// Check if the field describes a known datatype
-
-	if (field->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[field->dtype])
-	{
-		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in BlockNode::putDtype", field->dtype);
-		ERRD_bugcheck(buffer);
-	}
-#endif
-
-	if (field->notNull)
-		appendUChar(blr_not_nullable);
-
-	if (field->typeOfName.hasData())
-	{
-		if (field->typeOfTable.hasData())
-		{
-			if (field->explicitCollation)
-			{
-				appendUChar(blr_column_name2);
-				appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(field->typeOfTable.c_str());
-				appendMetaString(field->typeOfName.c_str());
-				appendUShort(field->textType);
-			}
-			else
-			{
-				appendUChar(blr_column_name);
-				appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(field->typeOfTable.c_str());
-				appendMetaString(field->typeOfName.c_str());
-			}
-		}
-		else
-		{
-			if (field->explicitCollation)
-			{
-				appendUChar(blr_domain_name2);
-				appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(field->typeOfName.c_str());
-				appendUShort(field->textType);
-			}
-			else
-			{
-				appendUChar(blr_domain_name);
-				appendUChar(field->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(field->typeOfName.c_str());
-			}
-		}
-
-		return;
-	}
-
-	switch (field->dtype)
-	{
-		case dtype_cstring:
-		case dtype_text:
-		case dtype_varying:
-		case dtype_blob:
-			if (!useSubType)
-				appendUChar(blr_dtypes[field->dtype]);
-			else if (field->dtype == dtype_varying)
-			{
-				appendUChar(blr_varying2);
-				appendUShort(field->textType);
-			}
-			else if (field->dtype == dtype_cstring)
-			{
-				appendUChar(blr_cstring2);
-				appendUShort(field->textType);
-			}
-			else if (field->dtype == dtype_blob)
-			{
-				appendUChar(blr_blob2);
-				appendUShort(field->subType);
-				appendUShort(field->textType);
-			}
-			else
-			{
-				appendUChar(blr_text2);
-				appendUShort(field->textType);
-			}
-
-			if (field->dtype == dtype_varying)
-				appendUShort(field->length - sizeof(USHORT));
-			else if (field->dtype != dtype_blob)
-				appendUShort(field->length);
-			break;
-
-		default:
-			appendUChar(blr_dtypes[field->dtype]);
-			if (DTYPE_IS_EXACT(field->dtype) || (dtype_quad == field->dtype))
-				appendUChar(field->scale);
-			break;
-	}
+	fb_assert(field);
+	putType(*field, useSubType, field->explicitCollation);
 }
 
 void DsqlCompilerScratch::putType(const TypeClause* type, bool useSubType)
 {
+	fb_assert(type);
+	putType(*type, useSubType, type->collate.object.hasData());
+}
+
+void DsqlCompilerScratch::putType(const TypeClause& type, bool useSubType, bool useExplicitCollate)
+{
 #ifdef DEV_BUILD
 	// Check if the field describes a known datatype
-	if (type->dtype > FB_NELEM(blr_dtypes) || !blr_dtypes[type->dtype])
+
+	if (type.dtype >= FB_NELEM(blr_dtypes) || !blr_dtypes[type.dtype])
 	{
 		SCHAR buffer[100];
-
-		sprintf(buffer, "Invalid dtype %d in put_dtype", type->dtype);
+		snprintf(buffer, sizeof(buffer), "Invalid dtype %d in DsqlCompilerScratch::putField", type.dtype);
 		ERRD_bugcheck(buffer);
 	}
 #endif
+	fb_assert(type.dtype < FB_NELEM(blr_dtypes) && blr_dtypes[type.dtype]);
 
-	if (type->notNull)
+	if (type.notNull)
 		appendUChar(blr_not_nullable);
 
-	if (type->typeOfName.hasData())
+	if (type.typeOfName.object.hasData())
 	{
-		if (type->typeOfTable.hasData())
+		if (type.typeOfTable.object.hasData())
 		{
-			if (type->collate.hasData())
-			{
-				appendUChar(blr_column_name2);
-				appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(type->typeOfTable.c_str());
-				appendMetaString(type->typeOfName.c_str());
-				appendUShort(type->textType);
-			}
-			else
-			{
-				appendUChar(blr_column_name);
-				appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(type->typeOfTable.c_str());
-				appendMetaString(type->typeOfName.c_str());
-			}
+			putTypeName<true>(type, useExplicitCollate);
 		}
 		else
 		{
-			if (type->collate.hasData())
-			{
-				appendUChar(blr_domain_name2);
-				appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(type->typeOfName.c_str());
-				appendUShort(type->textType);
-			}
-			else
-			{
-				appendUChar(blr_domain_name);
-				appendUChar(type->fullDomain ? blr_domain_full : blr_domain_type_of);
-				appendMetaString(type->typeOfName.c_str());
-			}
+			putTypeName<false>(type, useExplicitCollate);
 		}
-
 		return;
 	}
 
-	switch (type->dtype)
+	// Maybe it is possible to use GEN_descriptor here?
+	putDtype(type, useSubType);
+}
+
+void DsqlCompilerScratch::putDtype(const TypeClause& type, const bool useSubType)
+{
+	switch (type.dtype)
 	{
 		case dtype_cstring:
 		case dtype_text:
 		case dtype_varying:
 		case dtype_blob:
 			if (!useSubType)
-				appendUChar(blr_dtypes[type->dtype]);
-			else if (type->dtype == dtype_varying)
+				appendUChar(blr_dtypes[type.dtype]);
+			else if (type.dtype == dtype_varying)
 			{
 				appendUChar(blr_varying2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
-			else if (type->dtype == dtype_cstring)
+			else if (type.dtype == dtype_cstring)
 			{
 				appendUChar(blr_cstring2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
-			else if (type->dtype == dtype_blob)
+			else if (type.dtype == dtype_blob)
 			{
 				appendUChar(blr_blob2);
-				appendUShort(type->subType);
-				appendUShort(type->textType);
+				appendUShort(type.subType);
+				appendUShort(type.textType);
 			}
 			else
 			{
 				appendUChar(blr_text2);
-				appendUShort(type->textType);
+				appendUShort(type.textType);
 			}
 
-			if (type->dtype == dtype_varying)
-				appendUShort(type->length - sizeof(USHORT));
-			else if (type->dtype != dtype_blob)
-				appendUShort(type->length);
+			if (type.dtype == dtype_varying)
+				appendUShort(type.length - sizeof(USHORT));
+			else if (type.dtype != dtype_blob)
+				appendUShort(type.length);
 			break;
 
 		default:
-			appendUChar(blr_dtypes[type->dtype]);
-			if (DTYPE_IS_EXACT(type->dtype) || dtype_quad == type->dtype)
-				appendUChar(type->scale);
+			appendUChar(blr_dtypes[type.dtype]);
+			if (DTYPE_IS_EXACT(type.dtype) || dtype_quad == type.dtype)
+				appendUChar(type.scale);
 			break;
+	}
+}
+
+template<bool THasTableName>
+void DsqlCompilerScratch::putTypeName(const TypeClause& type, const bool useExplicitCollate)
+{
+	struct BlrNameSet
+	{
+		UCHAR name;
+		UCHAR name2;
+		UCHAR name3;
+	};
+
+	static constexpr BlrNameSet BLR_COLUMN_SET
+	{
+		blr_column_name,
+		blr_column_name2,
+		blr_column_name3,
+	};
+
+	static constexpr BlrNameSet BLR_DOMAIN_SET
+	{
+		blr_domain_name,
+		blr_domain_name2,
+		blr_domain_name3,
+	};
+
+	constexpr BlrNameSet blrSet = []()
+	{
+		if constexpr (THasTableName)
+			return BLR_COLUMN_SET;
+		else
+			return BLR_DOMAIN_SET;
+	}();
+
+	bool differentSchema;
+	if constexpr (THasTableName)
+		differentSchema = type.typeOfTable.schema != ddlSchema;
+	else
+		differentSchema = type.typeOfName.schema != ddlSchema;
+
+	const UCHAR domainBlr = type.fullDomain ? blr_domain_full : blr_domain_type_of;
+	if (differentSchema)
+	{
+		appendUChar(blrSet.name3);
+		appendUChar(domainBlr);
+		if constexpr (THasTableName)
+		{
+			appendMetaString(type.typeOfTable.schema.c_str());
+			appendMetaString(type.typeOfTable.object.c_str());
+		}
+		else
+			appendMetaString(type.typeOfName.schema.c_str());
+
+		appendMetaString(type.typeOfName.object.c_str());
+
+		if (useExplicitCollate)
+		{
+			appendUChar(1);
+			appendUShort(type.textType);
+		}
+		else
+			appendUChar(0);
+	}
+	else
+	{
+		const UCHAR nameBlr = useExplicitCollate ? blrSet.name2 : blrSet.name;
+
+		appendUChar(nameBlr);
+		appendUChar(domainBlr);
+
+		if constexpr (THasTableName)
+			appendMetaString(type.typeOfTable.object.c_str());
+
+		appendMetaString(type.typeOfName.object.c_str());
+
+		if (useExplicitCollate)
+			appendUShort(type.textType);
 	}
 }
 
 // Write out local variable field data type.
 void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariableNode* hostParam,
-	const MetaName& collationName)
+	QualifiedName& collationName)
 {
 	const auto field = variable->field;
 
@@ -293,7 +428,7 @@ void DsqlCompilerScratch::putLocalVariableDecl(dsql_var* variable, DeclareVariab
 	appendUShort(variable->number);
 	DDL_resolve_intl_type(this, field, collationName);
 
-	putDtype(field, true);
+	putType(field, true);
 
 	if (variable->field->fld_name.hasData())	// Not a function return value
 		putDebugVariable(variable->number, variable->field->fld_name);
@@ -351,7 +486,7 @@ void DsqlCompilerScratch::putLocalVariableInit(dsql_var* variable, const Declare
 // Put maps in subroutines for outer variables/parameters usage.
 void DsqlCompilerScratch::putOuterMaps()
 {
-	if (!outerMessagesMap.count() && !outerVarsMap.count())
+	if (outerMessagesMap.isEmpty() && outerVarsMap.isEmpty() && outerLocalTablesMap.isEmpty())
 		return;
 
 	appendUChar(blr_outer_map);
@@ -368,6 +503,13 @@ void DsqlCompilerScratch::putOuterMaps()
 		appendUChar(blr_outer_map_message);
 		appendUShort(inner);
 		appendUShort(outer);
+	}
+
+	for (auto& [outer, inner] : outerLocalTablesMap)
+	{
+		appendUChar(blr_outer_map_local_table);
+		appendUShort(outer);
+		appendUShort(inner);
 	}
 
 	appendUChar(blr_end);
@@ -416,6 +558,41 @@ dsql_var* DsqlCompilerScratch::resolveVariable(const MetaName& varName)
 	}
 
 	return NULL;
+}
+
+DeclareLocalTableNode* DsqlCompilerScratch::getLocalTable(const MetaName& name, bool* outerDecl)
+{
+	DeclareLocalTableNode* table = nullptr;
+	localTableNames.get(name, table);
+
+	if (outerDecl)
+		*outerDecl = false;
+
+	if (!table && mainScratch)
+	{
+		table = mainScratch->getLocalTable(name);
+
+		if (table && outerDecl)
+			*outerDecl = true;
+	}
+
+	return table;
+}
+
+USHORT DsqlCompilerScratch::getOuterLocalTableNumber(USHORT tableNumber)
+{
+	if (const auto innerNumber = outerLocalTablesMap.get(tableNumber))
+		return *innerNumber;
+
+	const auto innerNumber = localTableNumber++;
+	outerLocalTablesMap.put(tableNumber, innerNumber);
+
+	return innerNumber;
+}
+
+void DsqlCompilerScratch::putLocalTable(DeclareLocalTableNode* table)
+{
+	localTableNames.put(table->dsqlName, table);
 }
 
 // Generate BLR for a return.
@@ -504,6 +681,198 @@ void DsqlCompilerScratch::genParameters(Array<NestConst<ParameterClause> >& para
 	// Add slot for EOS.
 	appendUChar(blr_short);
 	appendUChar(0);
+}
+
+void DsqlCompilerScratch::compileAggregateFunction(Array<NestConst<ParameterClause> >& parameters,
+	ParameterClause* returnParameter, NestConst<LocalDeclarationsNode>& localDeclList,
+	NestConst<StmtNode>& aggregateOnStartBody, NestConst<StmtNode>& aggregateOnAccumulateBody,
+	NestConst<StmtNode>& aggregateOnGroupBody, NestConst<StmtNode>& aggregateOnFinishBody,
+	bool reserveInitialReturnVarNumber)
+{
+	beginDebug();
+	getBlrData().clear();
+
+	if (isVersion4())
+		appendUChar(blr_version4);
+	else
+		appendUChar(blr_version5);
+
+	appendUChar(blr_begin);
+
+	appendUChar(blr_message);
+	appendUChar(CustomAggNode::MESSAGE_ACCUMULATE);
+	appendUShort(2 * parameters.getCount());
+
+	for (FB_SIZE_T i = 0; i < parameters.getCount(); ++i)
+	{
+		ParameterClause* parameter = parameters[i];
+		putDebugArgument(fb_dbg_arg_input, i, parameter->name.c_str());
+		putType(parameter->type, true);
+
+		// Add slot for null flag (parameter2).
+		appendUChar(blr_short);
+		appendUChar(0);
+
+		makeVariable(parameter->type, parameter->name.c_str(),
+			dsql_var::TYPE_INPUT, CustomAggNode::MESSAGE_ACCUMULATE, (USHORT) (2 * i), 0);
+	}
+
+	appendUChar(blr_message);
+	appendUChar(CustomAggNode::MESSAGE_OUTPUT);
+	appendUShort(3);
+
+	putDebugArgument(fb_dbg_arg_output, 0, returnParameter->name.c_str());
+	putType(returnParameter->type, true);
+
+	// Add slot for null flag (parameter2).
+	appendUChar(blr_short);
+	appendUChar(0);
+
+	makeVariable(returnParameter->type, returnParameter->name.c_str(),
+		dsql_var::TYPE_OUTPUT, CustomAggNode::MESSAGE_OUTPUT, 0, 0);
+
+	if (reserveInitialReturnVarNumber)
+		reserveInitialVarNumbers(1);
+
+	// Add slot for EOS.
+	appendUChar(blr_short);
+	appendUChar(0);
+
+	const auto genEmptyMessage = [this](UCHAR number)
+	{
+		appendUChar(blr_message);
+		appendUChar(number);
+		appendUShort(0);
+	};
+
+	genEmptyMessage(CustomAggNode::MESSAGE_START);
+	genEmptyMessage(CustomAggNode::MESSAGE_GROUP);
+	genEmptyMessage(CustomAggNode::MESSAGE_FINISH);
+
+	appendUChar(blr_begin);
+
+	for (const auto variable : outputVariables)
+		putLocalVariable(variable);
+
+	setPsql(true);
+
+	if (localDeclList)
+	{
+		localDeclList = localDeclList->dsqlPass(this);
+		localDeclList->genBlr(this);
+	}
+
+	loopLevel = 0;
+	cursorNumber = 0;
+
+	const auto compileBody = [this](NestConst<StmtNode>& body, AggregateFunctionPhase phase)
+	{
+		if (!body)
+			return;
+
+		AutoSetRestore<std::optional<AggregateFunctionPhase>> autoAggregatePhase(
+			&aggregatePhase, phase);
+		body = body->dsqlPass(this);
+	};
+
+	compileBody(aggregateOnStartBody, AggregateFunctionPhase::START);
+	compileBody(aggregateOnAccumulateBody, AggregateFunctionPhase::ACCUMULATE);
+	compileBody(aggregateOnGroupBody, AggregateFunctionPhase::GROUP);
+	compileBody(aggregateOnFinishBody, AggregateFunctionPhase::FINISH);
+
+	putOuterMaps();
+	GEN_hidden_variables(this);
+
+	const auto genReceive = [this, &parameters](UCHAR message, StmtNode* body, bool validateInputs)
+	{
+		appendUChar(blr_receive);
+		appendUChar(message);
+		appendUChar(blr_begin);
+
+		if (validateInputs)
+		{
+			for (unsigned i = 0; i < parameters.getCount(); ++i)
+			{
+				ParameterClause* parameter = parameters[i];
+
+				if (parameter->type->fullDomain || parameter->type->notNull)
+				{
+					// ASF: To validate input parameters we need only to read its value.
+					// Assigning it to null is an easy way to do this.
+					appendUChar(blr_assignment);
+					appendUChar(blr_parameter2);
+					appendUChar(CustomAggNode::MESSAGE_ACCUMULATE);
+					appendUShort(i * 2);
+					appendUShort(i * 2 + 1);
+					appendUChar(blr_null);
+				}
+			}
+		}
+
+		if (body)
+		{
+			appendUChar(blr_label);
+			appendUChar(0);
+			appendUChar(blr_begin);
+
+			AutoSetRestore<bool> autoAggregatePhaseReturn(&aggregatePhaseReturn, true);
+			AutoSetRestore<USHORT> autoAggregatePhaseLabel(&aggregatePhaseLabel, 0);
+
+			body->genBlr(this);
+
+			appendUChar(blr_end);
+		}
+
+		appendUChar(blr_send);
+		appendUChar(CustomAggNode::MESSAGE_OUTPUT);
+		appendUChar(blr_begin);
+
+		for (const auto variable : outputVariables)
+		{
+			appendUChar(blr_assignment);
+			appendUChar(blr_variable);
+			appendUShort(variable->number);
+			appendUChar(blr_parameter2);
+			appendUChar(variable->msgNumber);
+			appendUShort(variable->msgItem);
+			appendUShort(variable->msgItem + 1);
+		}
+
+		appendUChar(blr_continue_loop);
+		appendUChar(1);
+		appendUChar(blr_end);
+		appendUChar(blr_end);
+	};
+
+	appendUChar(blr_label);
+	appendUChar(1);
+	appendUChar(blr_loop);
+	appendUChar(blr_begin);
+
+	for (const auto variable : outputVariables)
+	{
+		appendUChar(blr_assignment);
+		appendUChar(blr_null);
+		appendUChar(blr_variable);
+		appendUShort(variable->number);
+	}
+
+	appendUChar(blr_select);
+
+	genReceive(CustomAggNode::MESSAGE_START, aggregateOnStartBody, false);
+	genReceive(CustomAggNode::MESSAGE_ACCUMULATE, aggregateOnAccumulateBody, true);
+	genReceive(CustomAggNode::MESSAGE_GROUP, aggregateOnGroupBody, false);
+	genReceive(CustomAggNode::MESSAGE_FINISH, aggregateOnFinishBody, false);
+
+	appendUChar(blr_end);
+	appendUChar(blr_end);
+
+	getDsqlStatement()->setType(DsqlStatement::TYPE_DDL);
+	appendUChar(blr_end);
+	appendUChar(blr_end);
+	appendUChar(blr_eoc);
+
+	endDebug();
 }
 
 void DsqlCompilerScratch::addCTEs(WithClause* withClause)
@@ -923,12 +1292,12 @@ RseNode* DsqlCompilerScratch::pass1RseIsRecursive(RseNode* input)
 // Check if table reference is recursive i.e. its name is equal to the name of current processing CTE.
 bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 {
-	MetaName relName;
+	QualifiedName relName;
 	string relAlias;
 
 	if (auto procNode = nodeAs<ProcedureSourceNode>(input))
 	{
-		relName = procNode->dsqlName.identifier;
+		relName = procNode->dsqlName;
 		relAlias = procNode->alias;
 	}
 	else if (auto relNode = nodeAs<RelationSourceNode>(input))
@@ -938,7 +1307,7 @@ bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 	}
 	else if (auto tableValueFunctionNode = nodeAs<TableValueFunctionSourceNode>(input))
 	{
-		relName = tableValueFunctionNode->dsqlName;
+		relName.object = tableValueFunctionNode->dsqlName;
 		relAlias = tableValueFunctionNode->alias.c_str();
 	}
 	//// TODO: LocalTableSourceNode
@@ -947,10 +1316,10 @@ bool DsqlCompilerScratch::pass1RelProcIsRecursive(RecordSourceNode* input)
 
 	fb_assert(currCtes.hasData());
 	const SelectExprNode* currCte = currCtes.object();
-	const bool recursive = currCte->alias == relName.c_str();
+	const bool recursive = relName.schema.isEmpty() && currCte->alias == relName.object.c_str();
 
 	if (recursive)
-		addCTEAlias(relAlias.hasData() ? relAlias.c_str() : relName.c_str());
+		addCTEAlias(relAlias.hasData() ? relAlias.c_str() : relName.object.c_str());
 
 	return recursive;
 }
@@ -1043,4 +1412,20 @@ BoolExprNode* DsqlCompilerScratch::pass1JoinIsRecursive(RecordSourceNode*& input
 	}
 
 	return NULL;
+}
+
+// hvlad: each member of recursive CTE can refer to CTE itself (only once) via
+// CTE name or via alias. We need to substitute this aliases when processing CTE
+// member to resolve field names. Therefore we store all aliases in order of
+// occurrence and later use it in backward order (since our parser is right-to-left).
+// Also we put CTE name after all such aliases to distinguish aliases for
+// different CTE's.
+// We also need to repeat this process if main select expression contains union with
+// recursive CTE
+
+void DsqlCompilerScratch::addCTEAlias(const string& alias)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+	fb_assert(currCteAlias == NULL);
+	cteAliases.add(FB_NEW_POOL(*tdbb->getDefaultPool()) string(*tdbb->getDefaultPool(), alias));
 }

@@ -62,6 +62,8 @@ namespace Replication
 
 		Firebird::PathName dbName;
 		ULONG bufferSize;
+		Firebird::string includeSchemaFilter;
+		Firebird::string excludeSchemaFilter;
 		Firebird::string includeFilter;
 		Firebird::string excludeFilter;
 		ULONG segmentSize;
@@ -78,6 +80,7 @@ namespace Replication
 		bool verboseLogging;
 		ULONG applyIdleTimeout;
 		ULONG applyErrorTimeout;
+		Firebird::string schemaSearchPath;
 		Firebird::string pluginName;
 		bool logErrors;
 		bool reportErrors;

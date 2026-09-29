@@ -148,7 +148,7 @@
 #   endif
 #endif
 
-#if CDS_OS_TYPE == CDS_OS_MINGW
+#if CDS_OS_TYPE == CDS_OS_MINGW || CDS_OS_TYPE == CDS_OS_WIN64 || CDS_OS_TYPE == CDS_OS_WIN32
 #   ifdef CDS_BUILD_LIB
 #       define CDS_EXPORT_API          __declspec(dllexport)
 #   elif !defined(CDS_BUILD_STATIC_LIB)

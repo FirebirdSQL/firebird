@@ -37,8 +37,10 @@
 
 #include "firebird.h"
 #include <cmath>
+#include <cstddef>
 #include <stdio.h>
 #include <string.h>
+#include <string_view>
 #include <stdlib.h>
 #include <ctype.h>
 #include "iberror.h"
@@ -117,19 +119,53 @@ using namespace Firebird;
  * less than the number of bits in the type: one bit is for the sign,
  * and the other is because we divide by 5, rather than 10.  */
 
-const SSHORT SHORT_LIMIT = ((1 << 14) / 5);
-const SLONG LONG_LIMIT = ((1L << 30) / 5);
+constexpr SSHORT SHORT_LIMIT = ((1 << 14) / 5);
+constexpr SLONG LONG_LIMIT = ((1L << 30) / 5);
 
 // NOTE: The syntax for the below line may need modification to ensure
 // the result of 1 << 62 is a quad
 
 //#define QUAD_LIMIT      ((((SINT64) 1) << 62) / 5)
-const SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
+constexpr SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
 
-#define TODAY           "TODAY"
-#define NOW             "NOW"
-#define TOMORROW        "TOMORROW"
-#define YESTERDAY       "YESTERDAY"
+namespace {
+
+struct SpecialDateTimeName
+{
+	std::string_view name;
+	SpecialDateTime value;
+};
+
+constexpr SpecialDateTimeName SPECIAL_DATETIME_NAMES[] =
+{
+	{"NOW", SpecialDateTime::NOW},
+	{"TODAY", SpecialDateTime::TODAY},
+	{"TOMORROW", SpecialDateTime::TOMORROW},
+	{"YESTERDAY", SpecialDateTime::YESTERDAY}
+};
+
+constexpr FB_SIZE_T maxSpecialDateTimeLength()
+{
+	FB_SIZE_T result = 0;
+	for (const auto& it : SPECIAL_DATETIME_NAMES)
+	{
+		if (it.name.length() > result)
+			result = it.name.length();
+	}
+
+	for (const TEXT* const* month = FB_LONG_MONTHS_UPPER; *month; ++month)
+	{
+		const FB_SIZE_T length = std::string_view(*month).length();
+		if (length > result)
+			result = length;
+	}
+
+	return result;
+}
+
+constexpr FB_SIZE_T MAX_DATETIME_WORD_LENGTH = maxSpecialDateTimeLength();
+
+} // anonymous namespace
 
 #define CVT_COPY_BUFF(from, to, len) \
 {if (len) {memcpy(to, from, len); from += len; to += len;} }
@@ -143,7 +179,7 @@ static void integer_to_text(const dsc*, dsc*, Callbacks*);
 static void int128_to_text(const dsc*, dsc*, Callbacks* cb);
 static void localError(const Firebird::Arg::StatusVector&);
 static SSHORT cvt_get_short(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorFunction err);
-static void make_null_string(const dsc*, USHORT, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
+static void make_null_string(const dsc*, TTypeId, const char**, vary*, USHORT, Firebird::DecimalStatus, ErrorFunction);
 
 namespace {
 	class RetPtr;
@@ -201,13 +237,13 @@ public:
 
 	void truncate8() override
 	{
-		ULONG mask = 0xFFFFFFFF;
+		constexpr ULONG mask = 0xFFFFFFFF;
 		value &= mask;
 	}
 
 	void truncate16() override
 	{
-		FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
+		constexpr FB_UINT64 mask = 0xFFFFFFFFFFFFFFFF;
 		value &= mask;
 	}
 
@@ -243,8 +279,8 @@ protected:
 
 } // anonymous namespace
 
-static const double eps_double = 1e-14;
-static const double eps_float  = 1e-5;
+static constexpr double eps_double = 1e-14;
+static constexpr double eps_float  = 1e-5;
 
 
 static void validateTimeStamp(const ISC_TIMESTAMP timestamp, const EXPECT_DATETIME expectedType, const dsc* desc,
@@ -290,6 +326,32 @@ static void timeStampToUtc(ISC_TIMESTAMP_TZ& timestampTZ, USHORT sessionTimeZone
 		else if (expectedType == expect_timestamp)
 			*(ISC_TIMESTAMP*) &timestampTZ = TimeZoneUtil::timeStampTzToTimeStamp(timestampTZ, sessionTimeZone);
 	}
+}
+
+
+static void zeroTzPadding(dsc* to)
+{
+	if (!to || !to->dsc_address)
+		return;
+
+	size_t logicalLength = 0;
+
+	switch (to->dsc_dtype)
+	{
+		case dtype_sql_time_tz:
+			logicalLength = offsetof(ISC_TIME_TZ, time_zone) + sizeof(ISC_USHORT);
+			break;
+
+		case dtype_timestamp_tz:
+			logicalLength = offsetof(ISC_TIMESTAMP_TZ, time_zone) + sizeof(ISC_USHORT);
+			break;
+
+		default:
+			return;
+	}
+
+	if (to->dsc_length > logicalLength)
+		memset(to->dsc_address + logicalLength, 0, to->dsc_length - logicalLength);
 }
 
 
@@ -412,7 +474,7 @@ static void float_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	dsc intermediate;
 	intermediate.dsc_dtype = dtype_text;
-	intermediate.dsc_ttype() = ttype_ascii;
+	intermediate.setTextType(ttype_ascii);
 	// CVC: If you think this is dangerous, replace the "else" with a call to
 	// MEMMOVE(temp, temp + 1, chars_printed) or something cleverer.
 	// Paranoid assumption:
@@ -457,9 +519,9 @@ static void decimal_float_to_text(const dsc* from, dsc* to, DecimalStatus decSt,
 
 	dsc intermediate;
 	intermediate.dsc_dtype = dtype_text;
-	intermediate.dsc_ttype() = ttype_ascii;
+	intermediate.setTextType(ttype_ascii);
 	intermediate.dsc_address = reinterpret_cast<UCHAR*>(temp);
-	intermediate.dsc_length = strlen(temp);
+	intermediate.dsc_length = static_cast<USHORT>(strlen(temp));
 
 	CVT_move_common(&intermediate, to, 0, cb);
 }
@@ -485,9 +547,9 @@ static void int128_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	dsc intermediate;
 	intermediate.dsc_dtype = dtype_text;
-	intermediate.dsc_ttype() = ttype_ascii;
+	intermediate.setTextType(ttype_ascii);
 	intermediate.dsc_address = reinterpret_cast<UCHAR*>(temp);
-	intermediate.dsc_length = strlen(temp);
+	intermediate.dsc_length = static_cast<USHORT>(strlen(temp));
 
 	CVT_move_common(&intermediate, to, 0, cb);
 }
@@ -628,7 +690,7 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 		ULONG trailing = ULONG(to->dsc_length) - length;
 		if (trailing > 0)
 		{
-			CHARSET_ID chid = cb->getChid(to); // : DSC_GET_CHARSET(to);
+			CSetId chid = cb->getChid(to); // : to->getCharSet();
 
 			const char pad = chid == ttype_binary ? '\0' : ' ';
 			memset(q, pad, trailing);
@@ -644,6 +706,49 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	// dtype_varying
 	*(USHORT*) (to->dsc_address) = static_cast<USHORT>(q - to->dsc_address - sizeof(SSHORT));
+}
+
+SpecialDateTime CVT_get_special_datetime(const char* str, FB_SIZE_T length)
+{
+/**************************************
+ *
+ *    C V T _ g e t _ s p e c i a l _ d a t e t i m e
+ *
+ **************************************
+ *
+ * Functional description
+ *    Recognize a special date/time expression such as 'NOW' or 'TODAY'.
+ *    Leading and trailing blanks are ignored, the comparison is case
+ *    insensitive. Return SpecialDateTime::NONE if the string is not one
+ *    of the special expressions.
+ *
+ **************************************/
+	const char* p = str;
+	const char* end = str + length;
+
+	while (p < end && (*p == ' ' || *p == '\t'))
+		++p;
+
+	while (end > p && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\0'))
+		--end;
+
+	const FB_SIZE_T len = end - p;
+
+	for (const auto& item : SPECIAL_DATETIME_NAMES)
+	{
+		if (len != item.name.length())
+			continue;
+
+		FB_SIZE_T pos = 0;
+
+		while (pos < len && UPPER7(p[pos]) == item.name[pos])
+			++pos;
+
+		if (pos == len)
+			return item.value;
+	}
+
+	return SpecialDateTime::NONE;
 }
 
 
@@ -710,8 +815,8 @@ void CVT_string_to_datetime(const dsc* desc,
 	//   0 means missing
 	// ENGLISH_MONTH for the presence of an English month name
 	// SPECIAL       for a special date verb
-	const int ENGLISH_MONTH	= -1;
-	const int SPECIAL		= -2; // CVC: I see it set, but never tested.
+	constexpr int ENGLISH_MONTH	= -1;
+	constexpr int SPECIAL		= -2; // CVC: I see it set, but never tested.
 
 	unsigned int position_year = 0;
 	unsigned int position_month = 1;
@@ -766,14 +871,21 @@ void CVT_string_to_datetime(const dsc* desc,
 		}
 		else if (LETTER7_UPPER(c) && !have_english_month && i - start_component < 2)
 		{
-			TEXT temp[sizeof(YESTERDAY) + 1];
+			TEXT temp[MAX_DATETIME_WORD_LENGTH + 1];
 
 			TEXT* t = temp;
-			while ((p < end) && (t < &temp[sizeof(temp) - 1]))
+			while (p < end)
 			{
 				c = UPPER7(*p);
 				if (!LETTER7_UPPER(c))
 					break;
+
+				if (t >= &temp[sizeof(temp) - 1])
+				{
+					CVT_conversion_error(desc, cb->err);
+					return;
+				}
+
 				*t++ = c;
 				p++;
 			}
@@ -812,10 +924,15 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					description[i] = SPECIAL;
 
-					while (++p < end)
+					// Note: p points to the first character not consumed as a part of
+					// the word, so it must be checked too.
+
+					while (p < end)
 					{
 						if (*p != ' ' && *p != '\t' && *p != '\0')
 							CVT_conversion_error(desc, cb->err);
+
+						++p;
 					}
 
 					// fetch the current datetime
@@ -841,7 +958,9 @@ void CVT_string_to_datetime(const dsc* desc,
 							break;
 					}
 
-					if (strcmp(temp, NOW) == 0)
+					const SpecialDateTime special = CVT_get_special_datetime(temp, strlen(temp));
+
+					if (special == SpecialDateTime::NOW)
 						return;
 
 					if (expect_type == expect_sql_time || expect_type == expect_sql_time_tz)
@@ -852,23 +971,23 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					date->utc_timestamp.timestamp_time = 0;
 
-					if (strcmp(temp, TODAY) == 0)
+					switch (special)
+					{
+					case SpecialDateTime::TODAY:
 						return;
 
-					if (strcmp(temp, TOMORROW) == 0)
-					{
+					case SpecialDateTime::TOMORROW:
 						++date->utc_timestamp.timestamp_date;
 						return;
-					}
 
-					if (strcmp(temp, YESTERDAY) == 0)
-					{
+					case SpecialDateTime::YESTERDAY:
 						--date->utc_timestamp.timestamp_date;
 						return;
-					}
 
-					CVT_conversion_error(desc, cb->err);
-					return;
+					default:
+						CVT_conversion_error(desc, cb->err);
+						return;
+					}
 				}
 			}
 			n = month_ptr - FB_LONG_MONTHS_UPPER;
@@ -1384,7 +1503,7 @@ bool CVT_get_boolean(const dsc* desc, ErrorFunction err)
 			else if (len == 5 && fb_utils::strnicmp(p, "FALSE", len) == 0)
 				return false;
 
-			// fall into
+			[[fallthrough]];
 		}
 
 		default:
@@ -1648,7 +1767,7 @@ double CVT_get_double(const dsc* desc, DecimalStatus decSt, ErrorFunction err, b
 }
 
 
-void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* cb)
+void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* cb, bool trustedSource)
 {
 /**************************************
  *
@@ -1669,11 +1788,18 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 	// optimal, it would cost more to find the fast move than the
 	// fast move would gain.
 
-	if (DSC_EQUIV(from, to, false))
+	// But do not do it for strings because their length has not been validated until this moment
+	// (real source length must be validated against target maximum length
+	// and this is the first common place where both are present).
+
+	// ...unless these strings are coming from a trusted source (for example a cached record buffer)
+
+	if (DSC_EQUIV(from, to, false) && (trustedSource || !DTYPE_IS_TEXT(from->dsc_dtype)))
 	{
 		if (length) {
 			memcpy(p, q, length);
 		}
+		zeroTzPadding(to);
 		return;
 	}
 
@@ -1681,11 +1807,11 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 	if ((from->dsc_dtype == dtype_text &&
 		 to->dsc_dtype == dtype_dbkey &&
-		 from->dsc_ttype() == ttype_binary &&
+		 from->getTextType() == ttype_binary &&
 		 from->dsc_length == to->dsc_length) ||
 		(to->dsc_dtype == dtype_text &&
 		 from->dsc_dtype == dtype_dbkey &&
-		 to->dsc_ttype() == ttype_binary &&
+		 to->getTextType() == ttype_binary &&
 		 from->dsc_length == to->dsc_length))
 	{
 		memcpy(p, q, length);
@@ -1764,31 +1890,37 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				CVT_string_to_datetime(from, &date, NULL, expect_timestamp_tz, true, cb);
 				*((ISC_TIMESTAMP_TZ*) to->dsc_address) = date;
 			}
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_time:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::timeToTimeStampTz(*(ISC_TIME*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_time_tz:
 		case dtype_sql_time_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) =
 				TimeZoneUtil::timeTzToTimeStampTz(*(ISC_TIME_TZ*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_timestamp_tz:
 			*((ISC_TIMESTAMP_TZ*) to->dsc_address) = *((ISC_TIMESTAMP_TZ*) from->dsc_address);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_date:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::dateToTimeStampTz(*(GDS_DATE*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIMESTAMP_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampToTimeStampTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		default:
@@ -1872,26 +2004,31 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				((ISC_TIME_TZ*) to->dsc_address)->utc_time = date.utc_timestamp.timestamp_time;
 				((ISC_TIME_TZ*) to->dsc_address)->time_zone = date.time_zone;
 			}
+			zeroTzPadding(to);
 			return;
 
 		case dtype_sql_time:
 			*(ISC_TIME_TZ*) to->dsc_address = TimeZoneUtil::timeToTimeTz(*(ISC_TIME*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp:
 			*(ISC_TIME_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampToTimeTz(*(ISC_TIMESTAMP*) from->dsc_address, cb);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_timestamp_tz:
 		case dtype_ex_timestamp_tz:
 			*(ISC_TIME_TZ*) to->dsc_address =
 				TimeZoneUtil::timeStampTzToTimeTz(*(ISC_TIMESTAMP_TZ*) from->dsc_address);
+			zeroTzPadding(to);
 			return;
 
 		case dtype_ex_time_tz:
 			*(ISC_TIME_TZ*) to->dsc_address = *(ISC_TIME_TZ*) from->dsc_address;
-			 return;
+			zeroTzPadding(to);
+			return;
 
 		default:
 			CVT_conversion_error(from, cb->err);
@@ -1901,7 +2038,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 	case dtype_varying:
 		MOVE_CLEAR(to->dsc_address, to->dsc_length);
-		// fall through ...
+		[[fallthrough]];
 	case dtype_text:
 	case dtype_cstring:
 		switch (from->dsc_dtype)
@@ -1979,12 +2116,15 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				 * unless really required is a good optimization.
 				 */
 
-				CHARSET_ID charset2;
+				CSetId charset2;
 				if (cb->transliterate(from, to, charset2))
 					return;
 
+				// At this point both `from` and `to` are guaranteed to have the same charset and this is stored in charset2
+				// Because of this we can freely use `toCharset` against `from`.
+
 				{ // scope
-					USHORT strtype_unused;
+					TTypeId strtype_unused;
 					UCHAR *ptr;
 					length = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
 					q = ptr;
@@ -1993,8 +2133,23 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 				const USHORT to_size = TEXT_LEN(to);
 				CharSet* toCharset = cb->getToCharset(charset2);
 
-				cb->validateData(toCharset, length, q);
-				ULONG toLength = cb->validateLength(toCharset, charset2, length, q, to_size);
+				ULONG toLength = length;
+
+				if (!trustedSource)
+				{
+					// Most likely data already has been validated once or twice, but another validation won't hurt much.
+					cb->validateData(toCharset, length, q);
+					toLength = cb->validateLength(toCharset, charset2, length, q, to_size);
+				}
+				else
+				{
+					// Silently truncate. In the wild this should never happen
+					if (length > to_size)
+					{
+						fb_assert(from->dsc_dtype == dtype_text);
+						toLength = to_size;
+					}
+				}
 
 				switch (to->dsc_dtype)
 				{
@@ -2074,7 +2229,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 
 				dsc intermediate;
 				intermediate.dsc_dtype = dtype_text;
-				intermediate.dsc_ttype() = ttype_ascii;
+				intermediate.setTextType(ttype_ascii);
 				intermediate.makeText(static_cast<USHORT>(strlen(text)), CS_ASCII,
 					reinterpret_cast<UCHAR*>(text));
 
@@ -2083,8 +2238,8 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 			}
 
 		default:
-			fb_assert(false);		// Fall into ...
-
+			fb_assert(false);
+			[[fallthrough]];
 		case dtype_blob:
 			CVT_conversion_error(from, cb->err);
 			return;
@@ -2145,7 +2300,7 @@ void CVT_move_common(const dsc* from, dsc* to, DecimalStatus decSt, Callbacks* c
 	case dtype_dbkey:
 		if (from->isText())
 		{
-			USHORT strtype_unused;
+			TTypeId strtype_unused;
 			UCHAR* ptr;
 			USHORT len = CVT_get_string_ptr_common(from, &strtype_unused, &ptr, NULL, 0, decSt, cb);
 
@@ -2222,7 +2377,7 @@ void CVT_conversion_error(const dsc* desc, ErrorFunction err, const Exception* o
  **************************************/
 	string message;
 
-	if (desc->dsc_dtype >= DTYPE_TYPE_MAX)
+	if (desc->isUnknown() || desc->dsc_dtype >= DTYPE_TYPE_MAX)
 	{
 		fb_assert(false);
 		err(Arg::Gds(isc_badblk));
@@ -2320,7 +2475,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	memset(&times, 0, sizeof(struct tm));
 
 	int	fractions = 0;
-	USHORT timezone;
+	USHORT timezone = TimeZoneUtil::GMT_ZONE;
 
 	switch (from->dsc_dtype)
 	{
@@ -2361,70 +2516,75 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 	// Decode the timestamp into human readable terms
 
-	// yyyy-mm-dd hh:mm:ss.tttt +th:tm OR dd-MMM-yyyy hh:mm:ss.tttt +th:tm
-	TEXT temp[27 + TimeZoneUtil::MAX_LEN];
-	TEXT* p = temp;
+	string temp;
+	// yyyy-mm-dd hh:mm:ss.tttt [{ +th:tm | zone-name }] OR dd-MMM-yyyy hh:mm:ss.tttt [{ +th:tm | zone-name }]
+	temp.reserve(26 + TimeZoneUtil::MAX_LEN);
 
 	// Make a textual date for data types that include it
 
 	if (!from->isTime())
 	{
+		string dateStr;
+		// yyyy-mm-dd OR dd-MMM-yyyy
+		dateStr.reserve(11);
 		if (from->dsc_dtype == dtype_sql_date || !version4)
 		{
-			sprintf(p, "%4.4d-%2.2d-%2.2d",
+			dateStr.printf("%4.4d-%2.2d-%2.2d",
 					times.tm_year + 1900, times.tm_mon + 1, times.tm_mday);
 		}
 		else
 		{
 			// Prior to BLR version 5 timestamps were converted to text in the dd-MMM-yyyy format
-			sprintf(p, "%2.2d-%.3s-%4.4d",
+			dateStr.printf("%2.2d-%.3s-%4.4d",
 					times.tm_mday,
 					FB_LONG_MONTHS_UPPER[times.tm_mon], times.tm_year + 1900);
 		}
-
-		while (*p)
-			p++;
+		temp.append(dateStr);
 	}
 
 	// Put in a space to separate date & time components
 
 	if (from->isTimeStamp() && !version4)
-		*p++ = ' ';
+		temp.append(" ");
 
 	// Add the time part for data types that include it
 
 	if (from->dsc_dtype != dtype_sql_date)
 	{
+		string timeStr;
+		// hh:mm:ss.tttt
+		timeStr.reserve(13);
 		if (from->isTime() || !version4)
 		{
-			sprintf(p, "%2.2d:%2.2d:%2.2d.%4.4d",
+			timeStr.printf("%2.2d:%2.2d:%2.2d.%4.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
 		else if (times.tm_hour || times.tm_min || times.tm_sec || fractions)
 		{
 			// Timestamp formating prior to BLR Version 5 is slightly different
-			sprintf(p, " %d:%.2d:%.2d.%.4d",
+			timeStr.printf(" %d:%.2d:%.2d.%.4d",
 					times.tm_hour, times.tm_min, times.tm_sec, fractions);
 		}
-
-		while (*p)
-			p++;
+		temp.append(timeStr);
 	}
 
 	if (from->isDateTimeTz())
 	{
-		*p++ = ' ';
-		p += TimeZoneUtil::format(p, sizeof(temp) - (p - temp), timezone, !tzLookup);
+		temp.append(" ");
+		// [{ +th:tm | zone-name }] + nul-termination
+		char tzStr[TimeZoneUtil::MAX_LEN + 1];
+		TimeZoneUtil::format(tzStr, sizeof(tzStr), timezone, !tzLookup);
+		temp.append(tzStr);
 	}
 
 	// Move the text version of the date/time value into the destination
 
 	dsc desc;
 	MOVE_CLEAR(&desc, sizeof(desc));
-	desc.dsc_address = (UCHAR*) temp;
+	desc.dsc_address = (UCHAR*) temp.c_str();
 	desc.dsc_dtype = dtype_text;
-	desc.dsc_ttype() = ttype_ascii;
-	desc.dsc_length = (p - temp);
+	desc.setTextType(ttype_ascii);
+	desc.dsc_length = static_cast<USHORT>(temp.length());
 
 	if (from->isTimeStamp() && version4)
 	{
@@ -2443,7 +2603,7 @@ static void datetime_to_text(const dsc* from, dsc* to, Callbacks* cb)
 
 
 void make_null_string(const dsc*    desc,
-					  USHORT        to_interp,
+					  TTypeId       to_interp,
 					  const char**  address,
 					  vary*         temp,
 					  USHORT        length,
@@ -2491,7 +2651,7 @@ void make_null_string(const dsc*    desc,
 
 
 USHORT CVT_make_string(const dsc*    desc,
-					   USHORT        to_interp,
+					   TTypeId       to_interp,
 					   const char**  address,
 					   vary*         temp,
 					   USHORT        length,
@@ -2627,7 +2787,7 @@ static SSHORT cvt_decompose(const char*	string,
 	dsc errd;
 	MOVE_CLEAR(&errd, sizeof(errd));
 	errd.dsc_dtype = dtype_text;
-	errd.dsc_ttype() = ttype_ascii;
+	errd.setTextType(ttype_ascii);
 	errd.dsc_length = length;
 	errd.dsc_address = reinterpret_cast<UCHAR*>(const_cast<char*>(string));
 
@@ -2893,7 +3053,7 @@ Int128 CVT_hex_to_int128(const char* str, USHORT len)
 }
 
 
-USHORT CVT_get_string_ptr_common(const dsc* desc, USHORT* ttype, UCHAR** address,
+USHORT CVT_get_string_ptr_common(const dsc* desc, TTypeId* ttype, UCHAR** address,
 								 vary* temp, USHORT length, DecimalStatus decSt, Callbacks* cb)
 {
 /**************************************
@@ -3156,7 +3316,7 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 {
 /**************************************
  *
- *      C V T _ g e t _ d e c 1 2 8
+ *      C V T _ g e t _ i n t 1 2 8
  *
  **************************************
  *
@@ -3169,10 +3329,10 @@ Int128 CVT_get_int128(const dsc* desc, SSHORT scale, DecimalStatus decSt, ErrorF
 	Decimal128 tmp;
 	double d, eps;
 
-	static const double I128_MIN_dbl = -1.701411834604692e+38;
-	static const double I128_MAX_dbl =  1.701411834604692e+38;
+	static constexpr double I128_MIN_dbl = -1.7014118346046923e+38;
+	static constexpr double I128_MAX_dbl =  1.7014118346046921e+38;
 	static const CDecimal128 I128_MIN_dcft("-1.701411834604692317316873037158841E+38", decSt);
-	static const CDecimal128 I128_MAX_dcft("1.701411834604692317316873037158841E+38", decSt);
+	static const CDecimal128 I128_MAX_dcft( "1.701411834604692317316873037158841E+38", decSt);
 	static const CDecimal128 DecFlt_05("0.5", decSt);
 
 	// adjust exact numeric values to same scaling
@@ -3334,7 +3494,7 @@ const UCHAR* CVT_get_bytes(const dsc* desc, unsigned& size)
 			}
 
 		case dtype_cstring:
-			size = strlen((const char*) desc->dsc_address);
+			size = static_cast<unsigned>(strlen((const char*) desc->dsc_address));
 			return desc->dsc_address;
 
 		default:
@@ -3656,11 +3816,11 @@ namespace
 		}
 
 	public:
-		virtual bool transliterate(const dsc* from, dsc* to, CHARSET_ID&);
-		virtual CHARSET_ID getChid(const dsc* d);
-		virtual CharSet* getToCharset(CHARSET_ID charset2);
+		virtual bool transliterate(const dsc* from, dsc* to, CSetId&);
+		virtual CSetId getChid(const dsc* d);
+		virtual CharSet* getToCharset(CSetId charset2);
 		virtual void validateData(CharSet* toCharset, SLONG length, const UCHAR* q);
-		virtual ULONG validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+		virtual ULONG validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 			const USHORT size);
 		virtual SLONG getLocalDate();
 		virtual ISC_TIMESTAMP getCurrentGmtTimeStamp();
@@ -3668,13 +3828,13 @@ namespace
 		virtual void isVersion4(bool& v4);
 	} commonCallbacks(status_exception::raise);
 
-	bool CommonCallbacks::transliterate(const dsc*, dsc* to, CHARSET_ID& charset2)
+	bool CommonCallbacks::transliterate(const dsc*, dsc* to, CSetId& charset2)
 	{
 		charset2 = INTL_TTYPE(to);
 		return false;
 	}
 
-	CharSet* CommonCallbacks::getToCharset(CHARSET_ID)
+	CharSet* CommonCallbacks::getToCharset(CSetId)
 	{
 		return NULL;
 	}
@@ -3683,7 +3843,7 @@ namespace
 	{
 	}
 
-	ULONG CommonCallbacks::validateLength(CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	ULONG CommonCallbacks::validateLength(CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 		const USHORT size)
 	{
 		if (length > size)
@@ -3711,7 +3871,7 @@ namespace
 		return MIN(length, size);
 	}
 
-	CHARSET_ID CommonCallbacks::getChid(const dsc* d)
+	CSetId CommonCallbacks::getChid(const dsc* d)
 	{
 		return INTL_TTYPE(d);
 	}
@@ -3740,7 +3900,7 @@ namespace Firebird {
 	Callbacks* CVT_commonCallbacks  = &commonCallbacks;
 }
 
-USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
+USHORT CVT_get_string_ptr(const dsc* desc, TTypeId* ttype, UCHAR** address,
 						  vary* temp, USHORT length, DecimalStatus decSt, ErrorFunction err)
 {
 /**************************************
@@ -3772,7 +3932,7 @@ USHORT CVT_get_string_ptr(const dsc* desc, USHORT* ttype, UCHAR** address,
 }
 
 
-void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err)
+void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err, bool trustedSource)
 {
 /**************************************
  *
@@ -3785,5 +3945,5 @@ void CVT_move(const dsc* from, dsc* to, DecimalStatus decSt, ErrorFunction err)
  *
  **************************************/
 	CommonCallbacks callbacks(err);
-	CVT_move_common(from, to, decSt, &callbacks);
+	CVT_move_common(from, to, decSt, &callbacks, trustedSource);
 }

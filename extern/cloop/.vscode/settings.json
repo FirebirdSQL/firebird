@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "build": true
+  },
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+  "cmake.generator": "Ninja",
+  "cmake.configureSettings": {
+    "CMAKE_VERBOSE_MAKEFILE": "ON",
+    "CMAKE_BUILD_TYPE": "${buildType}",
+    "CMAKE_CXX_COMPILER": "${buildKitTriple}"
+  },
+  "editor.tabSize": 4,
+  "[cpp]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "xaver.clang-format"
+  }
+}

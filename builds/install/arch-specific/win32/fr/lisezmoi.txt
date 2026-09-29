@@ -64,18 +64,12 @@ Avant de rapporter un bug :
  o Quelqu'un a-t-il déjà rapporté ce bug? Regardez
    la liste de bugs rapportés ici:
 
-    http://tracker.firebirdsql.org/browse/CORE
+    https://github.com/FirebirdSQL/firebird/issues
 
  o Si vous avez un doute pourquoi ne pas en parler à la liste
    Firebird-devel ? Vous pouvez vous inscrire ici:
 
-    http://lists.sourceforge.net/lists/listinfo/firebird-devel
-
-   et les messages de la liste sont accessible par newsgroup
-   ici:
-
-    news://news.atkin.com/
-
+    https://groups.google.com/g/firebird-devel
 
 
 L'équipe Firebird.

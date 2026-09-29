@@ -18,6 +18,7 @@ type
 
 	Disposable = class;
 	Status = class;
+	StatusFactory = class;
 	Factory = class;
 	Calculator = class;
 	Calculator2 = class;
@@ -42,10 +43,12 @@ end;
 	Disposable_disposePtr = procedure(this: Disposable); cdecl;
 	Status_getCodePtr = function(this: Status): Integer; cdecl;
 	Status_setCodePtr = procedure(this: Status; code: Integer); cdecl;
+	StatusFactory_createStatusPtr = function(this: StatusFactory): Status; cdecl;
 	Factory_createStatusPtr = function(this: Factory): Status; cdecl;
 	Factory_createCalculatorPtr = function(this: Factory; status: Status): Calculator; cdecl;
 	Factory_createCalculator2Ptr = function(this: Factory; status: Status): Calculator2; cdecl;
 	Factory_createBrokenCalculatorPtr = function(this: Factory; status: Status): Calculator; cdecl;
+	Factory_setStatusFactoryPtr = procedure(this: Factory; statusFactory: StatusFactory); cdecl;
 	Calculator_sumPtr = function(this: Calculator; status: Status; n1: Integer; n2: Integer): Integer; cdecl;
 	Calculator_getMemoryPtr = function(this: Calculator): Integer; cdecl;
 	Calculator_setMemoryPtr = procedure(this: Calculator; n: Integer); cdecl;
@@ -96,11 +99,29 @@ end;
 		procedure setCode(code: Integer); virtual; abstract;
 	end;
 
+	StatusFactoryVTable = class(DisposableVTable)
+		createStatus: StatusFactory_createStatusPtr;
+	end;
+
+	StatusFactory = class(Disposable)
+		const VERSION = 2;
+
+		function createStatus(): Status;
+	end;
+
+	StatusFactoryImpl = class(StatusFactory)
+		constructor create;
+
+		procedure dispose(); virtual; abstract;
+		function createStatus(): Status; virtual; abstract;
+	end;
+
 	FactoryVTable = class(DisposableVTable)
 		createStatus: Factory_createStatusPtr;
 		createCalculator: Factory_createCalculatorPtr;
 		createCalculator2: Factory_createCalculator2Ptr;
 		createBrokenCalculator: Factory_createBrokenCalculatorPtr;
+		setStatusFactory: Factory_setStatusFactoryPtr;
 	end;
 
 	Factory = class(Disposable)
@@ -110,6 +131,7 @@ end;
 		function createCalculator(status: Status): Calculator;
 		function createCalculator2(status: Status): Calculator2;
 		function createBrokenCalculator(status: Status): Calculator;
+		procedure setStatusFactory(statusFactory: StatusFactory);
 	end;
 
 	FactoryImpl = class(Factory)
@@ -120,6 +142,7 @@ end;
 		function createCalculator(status: Status): Calculator; virtual; abstract;
 		function createCalculator2(status: Status): Calculator2; virtual; abstract;
 		function createBrokenCalculator(status: Status): Calculator; virtual; abstract;
+		procedure setStatusFactory(statusFactory: StatusFactory); virtual; abstract;
 	end;
 
 	CalculatorVTable = class(DisposableVTable)
@@ -192,6 +215,11 @@ begin
 	StatusVTable(vTable).setCode(Self, code);
 end;
 
+function StatusFactory.createStatus(): Status;
+begin
+	Result := StatusFactoryVTable(vTable).createStatus(Self);
+end;
+
 function Factory.createStatus(): Status;
 begin
 	Result := FactoryVTable(vTable).createStatus(Self);
@@ -213,6 +241,11 @@ function Factory.createBrokenCalculator(status: Status): Calculator;
 begin
 	Result := FactoryVTable(vTable).createBrokenCalculator(Self, status);
 	CalcException.checkException(status);
+end;
+
+procedure Factory.setStatusFactory(statusFactory: StatusFactory);
+begin
+	FactoryVTable(vTable).setStatusFactory(Self, statusFactory);
 end;
 
 function Calculator.sum(status: Status; n1: Integer; n2: Integer): Integer;
@@ -324,6 +357,33 @@ begin
 	vTable := StatusImpl_vTable;
 end;
 
+procedure StatusFactoryImpl_disposeDispatcher(this: StatusFactory); cdecl;
+begin
+	try
+		StatusFactoryImpl(this).dispose();
+	except
+		on e: Exception do CalcException.catchException(nil, e);
+	end
+end;
+
+function StatusFactoryImpl_createStatusDispatcher(this: StatusFactory): Status; cdecl;
+begin
+	Result := nil;
+	try
+		Result := StatusFactoryImpl(this).createStatus();
+	except
+		on e: Exception do CalcException.catchException(nil, e);
+	end
+end;
+
+var
+	StatusFactoryImpl_vTable: StatusFactoryVTable;
+
+constructor StatusFactoryImpl.create;
+begin
+	vTable := StatusFactoryImpl_vTable;
+end;
+
 procedure FactoryImpl_disposeDispatcher(this: Factory); cdecl;
 begin
 	try
@@ -370,6 +430,15 @@ begin
 		Result := FactoryImpl(this).createBrokenCalculator(status);
 	except
 		on e: Exception do CalcException.catchException(status, e);
+	end
+end;
+
+procedure FactoryImpl_setStatusFactoryDispatcher(this: Factory; statusFactory: StatusFactory); cdecl;
+begin
+	try
+		FactoryImpl(this).setStatusFactory(statusFactory);
+	except
+		on e: Exception do CalcException.catchException(nil, e);
 	end
 end;
 
@@ -563,6 +632,11 @@ initialization
 	StatusImpl_vTable.getCode := @StatusImpl_getCodeDispatcher;
 	StatusImpl_vTable.setCode := @StatusImpl_setCodeDispatcher;
 
+	StatusFactoryImpl_vTable := StatusFactoryVTable.create;
+	StatusFactoryImpl_vTable.version := 2;
+	StatusFactoryImpl_vTable.dispose := @StatusFactoryImpl_disposeDispatcher;
+	StatusFactoryImpl_vTable.createStatus := @StatusFactoryImpl_createStatusDispatcher;
+
 	FactoryImpl_vTable := FactoryVTable.create;
 	FactoryImpl_vTable.version := 2;
 	FactoryImpl_vTable.dispose := @FactoryImpl_disposeDispatcher;
@@ -570,6 +644,7 @@ initialization
 	FactoryImpl_vTable.createCalculator := @FactoryImpl_createCalculatorDispatcher;
 	FactoryImpl_vTable.createCalculator2 := @FactoryImpl_createCalculator2Dispatcher;
 	FactoryImpl_vTable.createBrokenCalculator := @FactoryImpl_createBrokenCalculatorDispatcher;
+	FactoryImpl_vTable.setStatusFactory := @FactoryImpl_setStatusFactoryDispatcher;
 
 	CalculatorImpl_vTable := CalculatorVTable.create;
 	CalculatorImpl_vTable.version := 4;
@@ -593,6 +668,7 @@ initialization
 finalization
 	DisposableImpl_vTable.destroy;
 	StatusImpl_vTable.destroy;
+	StatusFactoryImpl_vTable.destroy;
 	FactoryImpl_vTable.destroy;
 	CalculatorImpl_vTable.destroy;
 	Calculator2Impl_vTable.destroy;

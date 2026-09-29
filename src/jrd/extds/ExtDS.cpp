@@ -83,11 +83,11 @@ Mutex Manager::m_mutex;
 Provider* Manager::m_providers = NULL;
 ConnectionsPool* Manager::m_connPool = NULL;
 
-const ULONG MIN_CONNPOOL_SIZE		= 0;
-const ULONG MAX_CONNPOOL_SIZE		= 1000;
+inline constexpr ULONG MIN_CONNPOOL_SIZE = 0;
+inline constexpr ULONG MAX_CONNPOOL_SIZE = 1000;
 
-const ULONG MIN_LIFE_TIME		= 1;
-const ULONG MAX_LIFE_TIME		= 60 * 60 * 24;	// one day
+inline constexpr ULONG MIN_LIFE_TIME = 1;
+inline constexpr ULONG MAX_LIFE_TIME = 60 * 60 * 24;	// one day
 
 Manager::Manager(MemoryPool& pool) :
 	PermanentStorage(pool)
@@ -231,7 +231,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 		CryptHash ch(att->att_crypt_callback);
 		hash = DefaultHash<UCHAR>::hash(dbName.c_str(), dbName.length(), MAX_ULONG) +
 			   DefaultHash<UCHAR>::hash(dpb.getBuffer(), dpb.getBufferLength(), MAX_ULONG) +
-			   DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG);
+			   (ch.isValid() ? DefaultHash<UCHAR>::hash(ch.getValue(), ch.getLength(), MAX_ULONG) : 0);
 
 		while (true)
 		{
@@ -297,8 +297,7 @@ int Manager::shutdown()
 
 Provider::Provider(const char* prvName) :
 	m_name(getPool()),
-	m_connections(getPool()),
-	m_flags(0)
+	m_connections(getPool())
 {
 	m_name = prvName;
 }
@@ -342,7 +341,7 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 		attachment->att_user->populateDpb(dpb, false);
 	}
 
-	CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
+	const CharSet* const cs = INTL_charset_lookup(tdbb, attachment->att_charset);
 	if (cs) {
 		dpb.insertString(isc_dpb_lc_ctype, cs->getName());
 	}
@@ -387,7 +386,7 @@ void Provider::bindConnection(thread_db* tdbb, Connection* conn)
 		m_connections.fastRemove();
 
 	conn->setBoundAtt(attachment);
-	bool ret = m_connections.add(AttToConn(attachment, conn));
+	const bool ret = m_connections.add(AttToConn(attachment, conn));
 	fb_assert(ret);
 }
 
@@ -395,7 +394,6 @@ Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
 	const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
 	TraScope tra_scope, bool isCurrentAtt)
 {
-	Database* dbb = tdbb->getDatabase();
 	Attachment* att = tdbb->getAttachment();
 	CryptHash ch;
 	if (!isCurrentAtt)
@@ -517,6 +515,8 @@ void Provider::releaseConnection(thread_db* tdbb, Connection& conn, bool inPool)
 				}
 			}
 		}
+		// commented out till final solution because it caused regressions
+		// status->init();		// ????????????
 	}
 
 	if (inPool)
@@ -842,7 +842,7 @@ void Connection::raise(const FbStatusVector* status, thread_db* /*tdbb*/, const 
 }
 
 
-bool Connection::getWrapErrors(const ISC_STATUS* status)
+bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 {
 	// Detect if connection is broken
 	switch (status[1])
@@ -851,24 +851,24 @@ bool Connection::getWrapErrors(const ISC_STATUS* status)
 		case isc_net_read_err:
 		case isc_net_write_err:
 			m_broken = true;
-			break;
+			return m_wrapErrors;
 
 		// Always wrap shutdown errors, else user application will disconnect
 		case isc_att_shutdown:
 		case isc_shutdown:
 			m_broken = true;
 			return true;
-	}
 
-	return m_wrapErrors;
+		default:
+			return m_wrapErrors;
+	}
 }
 
 
 /// ConnectionsPool
 
 ConnectionsPool::ConnectionsPool(MemoryPool& pool)
-	: m_pool(pool),
-	  m_idleArray(pool),
+	: m_idleArray(pool),
 	  m_idleList(NULL),
 	  m_activeList(NULL),
 	  m_allCount(0),
@@ -933,7 +933,7 @@ Connection* ConnectionsPool::getConnection(thread_db* tdbb, Provider* prv, ULONG
 {
 	MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-	Data data(hash);
+	const Data data(hash);
 
 	FB_SIZE_T pos;
 	m_idleArray.find(data, pos);
@@ -1010,6 +1010,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 		{
 			FB_SIZE_T pos;
 			fb_assert(m_idleArray.find(*item, pos));
+			FB_UNUSED_VAR(pos); // Silence compiler warning
 
 #ifdef EDS_DEBUG
 			const bool ok = verifyPool();
@@ -1176,7 +1177,7 @@ void ConnectionsPool::clearIdle(thread_db* tdbb, bool all)
 		{
 			while (!m_idleArray.isEmpty())
 			{
-				FB_SIZE_T pos = m_idleArray.getCount() - 1;
+				const FB_SIZE_T pos = m_idleArray.getCount() - 1;
 				Data* item = m_idleArray[pos];
 				removeFromPool(item, pos);
 
@@ -1243,7 +1244,7 @@ void ConnectionsPool::clear(thread_db* tdbb)
 
 	while (m_idleArray.getCount())
 	{
-		FB_SIZE_T i = m_idleArray.getCount() - 1;
+		const FB_SIZE_T i = m_idleArray.getCount() - 1;
 		Data* data = m_idleArray[i];
 		Connection* conn = data->m_conn;
 
@@ -1639,15 +1640,30 @@ void Transaction::rollback(thread_db* tdbb, bool retain)
 	doRollback(&status, tdbb, retain);
 
 	Connection& conn = m_connection;
-	if (!retain)
+	const bool hasErrors = status->getState() & IStatus::STATE_ERRORS;
+
+	const auto cleanup = [&]()
 	{
-		detachFromJrdTran();
-		m_connection.deleteTransaction(tdbb, this);
+		if (!retain)
+		{
+			detachFromJrdTran();
+			m_connection.deleteTransaction(tdbb, this);
+		}
+	};
+
+	try
+	{
+		if (hasErrors) {
+			conn.raise(&status, tdbb, "transaction rollback");
+		}
+	}
+	catch (const Exception&)
+	{
+		cleanup();
+		throw;
 	}
 
-	if (status->getState() & IStatus::STATE_ERRORS) {
-		conn.raise(&status, tdbb, "transaction rollback");
-	}
+	cleanup();
 }
 
 Transaction* Transaction::getTransaction(thread_db* tdbb, Connection* conn, TraScope tra_scope)
@@ -1825,6 +1841,27 @@ void Statement::prepare(thread_db* tdbb, Transaction* tran, const string& sql, b
 	m_sql = sql;
 	m_sql.trim();
 	m_preparedByReq = m_callerPrivileges ? tdbb->getRequest() : NULL;
+
+	if (m_sqlParamNames.isEmpty() && getInputs() > 0)
+	{
+		fb_assert(m_sqlParamsMap.isEmpty());
+
+		// Populate parameters from metadata if preprocessing was skipped
+
+		const unsigned count = getInputs();
+		const MetaString empty;
+
+		for (unsigned i = 0; i < count; ++i)
+		{
+			const MetaString parameterName(getParameterName(i));
+			FB_SIZE_T n = 0;
+
+			if (!m_sqlParamNames.find(parameterName, n))
+				n = m_sqlParamNames.add(parameterName);
+
+			m_sqlParamsMap.add(&m_sqlParamNames[n]);
+		}
+	}
 }
 
 void Statement::setTimeout(thread_db* tdbb, unsigned int timeout)
@@ -1987,12 +2024,12 @@ void Statement::deallocate(thread_db* tdbb)
 
 enum TokenType {ttNone, ttWhite, ttComment, ttBrokenComment, ttString, ttParamMark, ttIdent, ttOther};
 
-static TokenType getToken(const char** begin, const char* end)
+static TokenType getToken(const char** begin, const char* end) noexcept
 {
 	TokenType ret = ttNone;
 	const char* p = *begin;
 
-	char c = *p++;
+	const char c = *p++;
 	switch (c)
 	{
 	case ':':
@@ -2174,7 +2211,7 @@ void Statement::preprocess(const string& sql, string& ret)
 				}
 
 				FB_SIZE_T n = 0;
-				MetaString name(ident);
+				const MetaString name(ident);
 				if (!m_sqlParamNames.find(name, n))
 					n = m_sqlParamNames.add(name);
 
@@ -2201,7 +2238,7 @@ void Statement::preprocess(const string& sql, string& ret)
 					return;
 				}
 			}
-			// fall thru
+			[[fallthrough]];
 
 		case ttWhite:
 		case ttComment:
@@ -2261,7 +2298,9 @@ void Statement::setInParams(thread_db* tdbb, const MetaName* const* names,
 		}
 	}
 
-	if (sqlCount || names && count > 0)
+	// When names is provided (named parameters), do named matching
+	// When names is nullptr (unnamed parameters), do positional matching even if SQL has named parameters
+	if (names && count > 0 && sqlCount)
 	{
 		const unsigned int mapCount = m_sqlParamsMap.getCount();
 		// Here NestConst plays against its objective. It temporary unconstifies the values.
@@ -2325,12 +2364,7 @@ void Statement::doSetInParams(thread_db* tdbb, unsigned int count, const MetaStr
 			paramDescs.put(*jrdVar, src);
 
 			if (src)
-			{
-				if (request->req_flags & req_null)
-					src->setNull();
-				else
-					src->clearNull();
-			}
+				src->clearNull();
 		}
 
 		const bool srcNull = !src || src->isNull();
@@ -2413,7 +2447,7 @@ void Statement::getOutParams(thread_db* tdbb, const ValueListNode* params)
 		}
 
 		// and assign to the target
-		EXE_assignment(tdbb, *jrdVar, local, srcNull, NULL, NULL);
+		EXE_assignment(tdbb, *jrdVar, (srcNull ? nullptr : local), nullptr, nullptr);
 	}
 }
 
@@ -2436,7 +2470,7 @@ void Statement::getExtBlob(thread_db* tdbb, const dsc& src, dsc& dst)
 		destBlob->blb_charset = src.getCharSet();
 
 		Array<UCHAR> buffer;
-		const int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
+		constexpr int bufSize = 32 * 1024 - 2/*input->getMaxSegment()*/;
 		UCHAR* buff = buffer.getBuffer(bufSize);
 
 		while (true)
@@ -2483,7 +2517,7 @@ void Statement::putExtBlob(thread_db* tdbb, dsc& src, dsc& dst)
 
 		while (true)
 		{
-			USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
+			const USHORT length = srcBlob->BLB_get_segment(tdbb, buff, srcBlob->getMaxSegment());
 			if (srcBlob->blb_flags & BLB_eof) {
 				break;
 			}
@@ -2663,7 +2697,7 @@ void CryptHash::assign(ICryptKeyCallback* callback)
 
 	FbLocalStatus status;
 
-	int len = callback->getHashLength(&status);
+	const int len = callback->getHashLength(&status);
 	if (len > 0 && status.isSuccess())
 		callback->getHashData(&status, m_value.getBuffer(len));
 

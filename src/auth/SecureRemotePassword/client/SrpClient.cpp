@@ -110,7 +110,7 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		{
 			Arg::Gds(isc_auth_data).raise();
 		}
-		const unsigned expectedLength =
+		constexpr unsigned expectedLength =
 			(RemotePassword::SRP_SALT_SIZE + RemotePassword::SRP_KEY_SIZE + 2) * 2;
 		if (length > expectedLength)
 		{
@@ -141,9 +141,12 @@ int SrpClient::authenticate(CheckStatusWrapper* status, IClientBlock* cb)
 		key.assign(saltAndKey, charSize);
 		dumpIt("Clnt: key(srvPub)", key);
 
+		// validate server pubkey
+		client->serverPublicKey = client->setKey(key.c_str());
+
 		dumpIt("Clnt: login", string(cb->getLogin()));
 		dumpIt("Clnt: pass", string(cb->getPassword()));
-		client->clientSessionKey(sessionKey, cb->getLogin(), salt.c_str(), cb->getPassword(), key.c_str());
+		client->clientSessionKey(sessionKey, cb->getLogin(), salt.c_str(), cb->getPassword());
 		dumpIt("Clnt: sessionKey", sessionKey);
 
 		BigInteger cProof = client->clientProof(cb->getLogin(), salt.c_str(), sessionKey);

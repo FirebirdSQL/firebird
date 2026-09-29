@@ -42,7 +42,7 @@ using namespace Jrd;
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
 			USHORT aClientDialect, USHORT aDbDialect, bool aRequireSemicolon,
-			const TEXT* string, size_t length, SSHORT charSetId)
+			const TEXT* string, size_t length, CSetId charSetId)
 	: PermanentStorage(pool),
 	  statementPool(aStatementPool),
 	  scratch(aScratch),
@@ -276,7 +276,7 @@ int Parser::yylex()
 
 	// Lets skip spaces before store lastLine/lastColumn. This is necessary to avoid yyReducePosn
 	// produce invalid line/column information - CORE-4381.
-	bool spacesSkipped = yylexSkipSpaces();
+	const bool spacesSkipped = yylexSkipSpaces();
 
 	yyposn.lastLine = lex.lines;
 	yyposn.lastColumn = lex.ptr - lex.line_start;
@@ -621,7 +621,6 @@ int Parser::yylexAux()
 
 		bool hexerror = false;
 		Firebird::string temp;
-		int leadNibble = -1;
 
 		// Scan over the hex string converting adjacent bytes into nibble values.
 		// Every other nibble, write the saved byte to the temp space.
@@ -718,15 +717,14 @@ int Parser::yylexAux()
 
 		if (introducerCharSetName)
 		{
-			const auto symbol = METD_get_charset(scratch->getTransaction(),
-				introducerCharSetName->length(), introducerCharSetName->c_str());
+			const auto symbol = METD_get_charset(scratch->getTransaction(), *introducerCharSetName);
 
 			if (!symbol)
 			{
 				// character set name is not defined
 				ERRD_post(
 					Arg::Gds(isc_sqlerr) << Arg::Num(-504) <<
-					Arg::Gds(isc_charset_not_found) << *introducerCharSetName);
+					Arg::Gds(isc_charset_not_found) << introducerCharSetName->toQuotedString());
 			}
 
 			currentCharSet = INTL_charset_lookup(tdbb, symbol->intlsym_ttype);

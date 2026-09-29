@@ -9,15 +9,94 @@
 
 @echo off
 
-set FB_CLEAN=
+@set FB_CLEAN=
 
-for %%v in ( %* )  do (
-  ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
-  ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
-  ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )
-  ( if /I "%%v"=="CLIENT_ONLY" (set FB_CLIENT_ONLY=TRUE) )
-  ( if /I "%%v"=="CLIENT_ONLY=FALSE" (set FB_CLIENT_ONLY=) )
+:: Parse args with SHIFT /1 rather than "for %%v in (%*)".
+:: cmd.exe treats '=' as a parameter delimiter, so unquoted CLIENT_ONLY=STATIC
+:: arrives as two tokens (CLIENT_ONLY and STATIC). A for-loop over %* has the
+:: same problem. Handle both the split form and a quoted "CLIENT_ONLY=...".
+:: Use SHIFT /1 (not plain SHIFT) so %0 / %~dp0 stay as this script's path;
+:: plain SHIFT moves %1 into %0, which breaks "cd %~dp0" later in this file.
+:parse_args
+if "%~1"=="" goto :parse_args_done
+
+if /I "%~1"=="DEBUG" (
+  set FB_DBG=TRUE
+  set FB_CONFIG=debug
+  shift /1
+  goto :parse_args
 )
+if /I "%~1"=="WITHOUT_TOMCRYPT" (
+  set FBBUILD_WITHOUT_TOMCRYPT=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="WITHOUT_CLOOP_GENERATION" (
+  set FBBUILD_WITHOUT_CLOOP_GENERATION=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="CLEAN" (
+  set FB_CLEAN=:rebuild
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="RELEASE" (
+  set FB_DBG=
+  set FB_CONFIG=release
+  shift /1
+  goto :parse_args
+)
+
+:: Quoted form: "CLIENT_ONLY=STATIC" (or DLL / FALSE)
+if /I "%~1"=="CLIENT_ONLY=STATIC" (
+  set FB_CLIENT_ONLY=STATIC
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="CLIENT_ONLY=DLL" (
+  set FB_CLIENT_ONLY=DLL
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="CLIENT_ONLY=FALSE" (
+  set FB_CLIENT_ONLY=
+  shift /1
+  goto :parse_args
+)
+
+:: Unquoted CLIENT_ONLY=VALUE is split into CLIENT_ONLY + VALUE
+if /I "%~1"=="CLIENT_ONLY" (
+  if /I "%~2"=="STATIC" (
+    set FB_CLIENT_ONLY=STATIC
+    shift /1
+    shift /1
+    goto :parse_args
+  )
+  if /I "%~2"=="DLL" (
+    set FB_CLIENT_ONLY=DLL
+    shift /1
+    shift /1
+    goto :parse_args
+  )
+  if /I "%~2"=="FALSE" (
+    set FB_CLIENT_ONLY=
+    shift /1
+    shift /1
+    goto :parse_args
+  )
+  :: bare CLIENT_ONLY defaults to DLL
+  set FB_CLIENT_ONLY=DLL
+  shift /1
+  goto :parse_args
+)
+
+shift /1
+goto :parse_args
+
+:parse_args_done
+
+@if /I not "%FB_CLIENT_ONLY%"=="STATIC" set FBBUILD_WITHOUT_TOMCRYPT=
 
 @if not defined FB_CONFIG (
   set FB_DBG=
@@ -46,16 +125,20 @@ for %%v in ( %* )  do (
 ::
 
 @if not DEFINED FB_VSCOMNTOOLS (
-  if DEFINED VS170COMNTOOLS (
-    set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
+  if DEFINED VS180COMNTOOLS (
+    set "FB_VSCOMNTOOLS=%VS180COMNTOOLS%"
   ) else (
-    if DEFINED VS160COMNTOOLS (
-      set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
+    if DEFINED VS170COMNTOOLS (
+      set "FB_VSCOMNTOOLS=%VS170COMNTOOLS%"
     ) else (
-      if DEFINED VS150COMNTOOLS (
-        set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+      if DEFINED VS160COMNTOOLS (
+        set "FB_VSCOMNTOOLS=%VS160COMNTOOLS%"
       ) else (
-        goto :HELP
+        if DEFINED VS150COMNTOOLS (
+          set "FB_VSCOMNTOOLS=%VS150COMNTOOLS%"
+        ) else (
+          goto :HELP
+        )
       )
     )
   )
@@ -64,6 +147,10 @@ for %%v in ( %* )  do (
 :: Now set some firebird build specific variables that depend upon the
 :: version of Visual Studio that is being used for the build.
 @if DEFINED FB_VSCOMNTOOLS (
+  if "%FB_VSCOMNTOOLS%" == "%VS180COMNTOOLS%" (
+    set MSVC_VERSION=15
+    set MSVC_CMAKE_GENERATOR=Visual Studio 18 2026
+  )
   if "%FB_VSCOMNTOOLS%" == "%VS170COMNTOOLS%" (
     set MSVC_VERSION=15
     set MSVC_CMAKE_GENERATOR=Visual Studio 17 2022
@@ -83,10 +170,10 @@ for %%v in ( %* )  do (
 :: Run vsvarsall just once during the build...
 @if DEFINED FB_VSCOMNTOOLS (
   @if not defined VCToolsVersion (
-    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    call "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
   ) else (
     @echo    The file:
-    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %PROCESSOR_ARCHITECTURE%
+    @echo      "%FB_VSCOMNTOOLS%\..\..\VC\Auxiliary\Build\vcvarsall.bat" %FB_PROCESSOR_ARCHITECTURE%
     @echo    has already been executed.
   )
 )
@@ -160,6 +247,17 @@ rem NOTE 2 This code is likely to break again in the future !!!!
 @set FIREBIRD_BOOT_BUILD=1
 
 @set FB_OBJ_DIR=%FB_TARGET_PLATFORM%\%FB_CONFIG%
+@if /I "%FB_CLIENT_ONLY%"=="STATIC" (
+  @if /I "%FB_DBG%"=="TRUE" (
+    @set FB_STATIC_CONFIG=DebugStatic
+  ) else (
+    @set FB_STATIC_CONFIG=ReleaseStatic
+  )
+  @set FB_STATIC_OBJ_DIR=%FB_TARGET_PLATFORM%\%FB_STATIC_CONFIG%
+) else (
+  @set FB_STATIC_CONFIG=
+  @set FB_STATIC_OBJ_DIR=
+)
 @set FB_BIN_DIR=%FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird
 
 
@@ -195,6 +293,11 @@ goto :END
 @echo    vs_ver=%VS_VER%
 @echo    FB_VSCOMNTOOLS=%FB_VSCOMNTOOLS%
 @echo    platform=%FB_TARGET_PLATFORM%
+@if defined FBBUILD_WITHOUT_CLOOP_GENERATION echo    without_cloop_generation=yes
+@if /I "%FB_CLIENT_ONLY%"=="STATIC" (
+  @echo    fbclient_static_config=%FB_STATIC_CONFIG%
+  @if defined FBBUILD_WITHOUT_TOMCRYPT echo    without_tomcrypt=yes
+)
 @echo    msvc_version=%MSVC_VERSION%
 @echo    db_path=%FB_DB_PATH%
 @echo    root_path=%FB_ROOT_PATH%

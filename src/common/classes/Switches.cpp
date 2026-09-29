@@ -27,7 +27,7 @@
 
 namespace
 {
-	const char switch_char = '-';
+	constexpr char switch_char = '-';
 }
 
 Switches::Switches(const in_sw_tab_t* table, FB_SIZE_T count, bool copy, bool minLength)
@@ -157,7 +157,7 @@ Switches::in_sw_tab_t* Switches::findSwitchMod(Firebird::string& sw, bool* inval
 	return NULL;
 }
 
-const Switches::in_sw_tab_t* Switches::getTable() const
+const Switches::in_sw_tab_t* Switches::getTable() const noexcept
 {
 	return m_base;
 }

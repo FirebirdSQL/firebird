@@ -1,0 +1,18 @@
+{
+  "configurations": [
+    {
+      "name": "Debug",
+      "includePath": [
+        "${workspaceFolder}/**"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/clang",
+      "cStandard": "c11",
+      "cppStandard": "c++20",
+      "intelliSenseMode": "clang-x64",
+      "compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
+      "configurationProvider": "ms-vscode.cmake-tools"
+    }
+  ],
+  "version": 4
+}

@@ -311,7 +311,7 @@ void RecursiveStream::cleanupLevel(Request* request, Impure* impure) const
 	{
 		record_param* const rpb = &request->req_rpb[stream];
 		Record* const tempRecord = rpb->rpb_record;
-		memmove(rpb, p, sizeof(record_param));
+		memmove(static_cast<void*>(rpb), p, sizeof(record_param));
 		p += sizeof(record_param);
 
 		// We just restored record of current recursion level, delete record

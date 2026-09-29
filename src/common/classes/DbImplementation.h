@@ -37,9 +37,9 @@ namespace Firebird {
 class DbImplementation
 {
 public:
-	explicit DbImplementation(const Ods::header_page* h);
+	explicit DbImplementation(const Ods::header_page* h) noexcept;
 
-	DbImplementation(UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags)
+	DbImplementation(UCHAR p_cpu, UCHAR p_os, UCHAR p_cc, UCHAR p_flags) noexcept
 		: di_cpu(p_cpu), di_os(p_os), di_cc(p_cc), di_flags(p_flags)
 	{ }
 
@@ -50,18 +50,18 @@ private:
 	UCHAR di_cpu, di_os, di_cc, di_flags;
 
 public:
-	const char* cpu() const;
-	const char* os() const;
-	const char* cc() const;
-	const char* endianess() const;
+	const char* cpu() const noexcept;
+	const char* os() const noexcept;
+	const char* cc() const noexcept;
+	const char* endianess() const noexcept;
 	string implementation() const;
 
-	bool compatible(const DbImplementation& v) const;
-	void store(Ods::header_page* h) const;
-	void stuff(UCHAR** info) const;
-	static DbImplementation pick(const UCHAR* info);
-	UCHAR backwardCompatibleImplementation() const;
-	static DbImplementation fromBackwardCompatibleByte(UCHAR bcImpl);
+	bool compatible(const DbImplementation& v) const noexcept;
+	void store(Ods::header_page* h) const noexcept;
+	void stuff(UCHAR** info) const noexcept;
+	static DbImplementation pick(const UCHAR* info) noexcept;
+	UCHAR backwardCompatibleImplementation() const noexcept;
+	static DbImplementation fromBackwardCompatibleByte(UCHAR bcImpl) noexcept;
 
 	static const DbImplementation current;
 };

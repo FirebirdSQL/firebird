@@ -38,8 +38,8 @@
 
 namespace Firebird {
 
-static const int WRITER_INCR	= 0x00010000L;
-static const int READERS_MASK	= 0x0000FFFFL;
+static constexpr int WRITER_INCR	= 0x00010000L;
+static constexpr int READERS_MASK	= 0x0000FFFFL;
 
 bool SyncObject::lock(Sync* sync, SyncType type, const char* from, int timeOut)
 {
@@ -282,7 +282,7 @@ bool SyncObject::wait(SyncType type, ThreadSync* thread, Sync* sync, int timeOut
 	thread->lockPending = sync;
 	mutex.leave();
 
-	bool wakeup = false;
+	[[maybe_unused]] bool wakeup = false;
 	while (timeOut && !thread->lockGranted)
 	{
 		const int wait = timeOut > 10000 ? 10000 : timeOut;
@@ -296,7 +296,6 @@ bool SyncObject::wait(SyncType type, ThreadSync* thread, Sync* sync, int timeOut
 		if (thread->lockGranted)
 			return true;
 
-		(void) wakeup;
 		//if (!wakeup)
 		//	stalled(thread);
 
@@ -423,6 +422,9 @@ void SyncObject::validate(SyncType lockType) const
 
 	case SYNC_EXCLUSIVE:
 		fb_assert(lockState == -1);
+		break;
+	case SYNC_INVALID:
+		// ignore
 		break;
 	}
 }

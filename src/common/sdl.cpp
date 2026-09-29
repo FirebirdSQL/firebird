@@ -30,7 +30,7 @@
 #include "../common/sdl_proto.h"
 #include "../common/StatusArg.h"
 
-const int COMPILE_SIZE	= 256;
+constexpr int COMPILE_SIZE = 256;
 
 using namespace Jrd;
 using namespace Firebird;
@@ -51,13 +51,14 @@ struct sdl_arg
 
 // Structure to compute ranges
 
+constexpr size_t INTERNAL_MAX_ARRAY_DIMENSION = 64;
 // Let's stop this insanity! The header rng.h defined rng for the purposes
 // of refresh range and emulation of file-based data formats like Pdx.
 // Therefore, I renamed this struct array_range.
 struct array_range
 {
-	SLONG rng_minima[64];
-	SLONG rng_maxima[64];
+	SLONG rng_minima[INTERNAL_MAX_ARRAY_DIMENSION];
+	SLONG rng_maxima[INTERNAL_MAX_ARRAY_DIMENSION];
 	sdl_info* rng_info;
 };
 
@@ -66,7 +67,7 @@ static ISC_STATUS error(CheckStatusWrapper* status_vector, const Arg::StatusVect
 static bool execute(sdl_arg*);
 static const UCHAR* get_range(const UCHAR*, array_range*, SLONG*, SLONG*);
 
-inline SSHORT get_word(const UCHAR*& ptr)
+inline SSHORT get_word(const UCHAR*& ptr) noexcept
 {
 /**************************************
  *
@@ -89,18 +90,18 @@ static const UCHAR* sdl_desc(const UCHAR*, DSC*);
 static IPTR* stuff(IPTR, sdl_arg*);
 
 
-const int op_literal	= 1;
-const int op_variable	= 2;
-const int op_add		= 3;
-const int op_subtract	= 4;
-const int op_multiply	= 5;
-const int op_divide		= 6;
-const int op_iterate	= 7;
-const int op_goto		= 8;
-const int op_element	= 9;
-const int op_loop		= 10;
-const int op_exit		= 11;
-const int op_scalar		= 12;
+constexpr int op_literal	= 1;
+constexpr int op_variable	= 2;
+constexpr int op_add		= 3;
+constexpr int op_subtract	= 4;
+constexpr int op_multiply	= 5;
+constexpr int op_divide		= 6;
+constexpr int op_iterate	= 7;
+constexpr int op_goto		= 8;
+constexpr int op_element	= 9;
+constexpr int op_loop		= 10;
+constexpr int op_exit		= 11;
+constexpr int op_scalar		= 12;
 
 /*
    The structure for a loop is:
@@ -157,7 +158,7 @@ SLONG SDL_compute_subscript(CheckStatusWrapper* status_vector,
 
 
 ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
-					const UCHAR* sdl, sdl_info* info, SLONG* vector)
+					const UCHAR* sdl, sdl_info* info, const SLONG* vector)
 {
 /**************************************
  *
@@ -175,7 +176,8 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 
 	const UCHAR* p = sdl;
 	info->sdl_info_fid = info->sdl_info_rid = 0;
-	info->sdl_info_relation = info->sdl_info_field = "";
+	info->sdl_info_relation.clear();
+	info->sdl_info_field.clear();
 
 	if (*p++ != isc_sdl_version1)
 		return error(status_vector, Arg::Gds(isc_invalid_sdl) << Arg::Num(0));
@@ -207,9 +209,15 @@ ISC_STATUS SDL_info(CheckStatusWrapper* status_vector,
 			p += n;
 			break;
 
+		case isc_sdl_schema:
+			n = *p++;
+			info->sdl_info_relation.schema.assign(reinterpret_cast<const char*>(p), n);
+			p += n;
+			break;
+
 		case isc_sdl_relation:
 			n = *p++;
-			info->sdl_info_relation.assign(reinterpret_cast<const char*>(p), n);
+			info->sdl_info_relation.object.assign(reinterpret_cast<const char*>(p), n);
 			p += n;
 			break;
 
@@ -281,6 +289,7 @@ int	SDL_walk(CheckStatusWrapper* status_vector,
 			break;
 
 		case isc_sdl_field:
+		case isc_sdl_schema:
 		case isc_sdl_relation:
 			n = *p++;
 			p += n;
@@ -399,12 +408,15 @@ static const UCHAR* compile(const UCHAR* sdl, sdl_arg* arg)
 
 	case isc_sdl_add:
 		sdl_operator = op_add;
+		[[fallthrough]];
 	case isc_sdl_subtract:
 		if (!sdl_operator)
 			sdl_operator = op_subtract;
+		[[fallthrough]];
 	case isc_sdl_multiply:
 		if (!sdl_operator)
 			sdl_operator = op_multiply;
+		[[fallthrough]];
 	case isc_sdl_divide:
 		if (!sdl_operator)
 			sdl_operator = op_divide;
@@ -575,6 +587,12 @@ static bool execute(sdl_arg* arg)
 		case op_scalar:
 			{
 				value = *next++;
+				if (value >= array_desc->iad_dimensions)
+				{
+					error(arg->sdl_arg_status_vector, Arg::Gds(isc_invalid_dimension)
+						<< Arg::Num(arg->sdl_arg_desc->iad_dimensions) << Arg::Num(value));
+					return false;
+				}
 				next++;				// Skip count, unsupported.
 				SLONG subscript = 0;
 				for (const Ods::InternalArrayDesc::iad_repeat* range = array_desc->iad_rpt;
@@ -661,6 +679,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 	case isc_sdl_do2:
 	case isc_sdl_do3:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		if (op == isc_sdl_do1)
 			arg->rng_minima[variable] = 1;
 		else
@@ -679,6 +699,8 @@ static const UCHAR* get_range(const UCHAR* sdl, array_range* arg,
 
 	case isc_sdl_variable:
 		variable = *p++;
+		if (static_cast<ULONG>(variable) >= INTERNAL_MAX_ARRAY_DIMENSION)
+			return nullptr;
 		*min = arg->rng_minima[variable];
 		*max = arg->rng_maxima[variable];
 		return p;
@@ -780,7 +802,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	{
 	case blr_text2:
 		desc->dsc_dtype = dtype_text;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		break;
 
 	case blr_text:
@@ -791,7 +813,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 
 	case blr_cstring2:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		break;
 
 	case blr_cstring:
@@ -802,7 +824,7 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 
 	case blr_varying2:
 		desc->dsc_dtype = dtype_cstring;
-		desc->setTextType(get_word(sdl));
+		desc->setTextType(TTypeId(get_word(sdl)));
 		desc->dsc_length = sizeof(USHORT);
 		break;
 
@@ -917,8 +939,13 @@ static const UCHAR* sdl_desc(const UCHAR* ptr, DSC* desc)
 	case dtype_text:
 	case dtype_cstring:
 	case dtype_varying:
-		desc->dsc_length += get_word(sdl);
+	{
+		const auto length = get_word(sdl);
+		desc->dsc_length += length;
+		if (length == 0 || desc->dsc_length == 0)
+			return nullptr;
 		break;
+	}
 
 	default:
 		break;

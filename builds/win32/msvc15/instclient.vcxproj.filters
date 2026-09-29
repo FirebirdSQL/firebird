@@ -25,6 +25,9 @@
     <ClInclude Include="..\..\..\src\utilities\install\install_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\utilities\install\install_nt.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\..\src\jrd\version.rc">

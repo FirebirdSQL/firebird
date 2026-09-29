@@ -39,6 +39,7 @@
 #define DSC_nullable  	4	/* not stored. instead, is derived
 							   from metadata primarily to flag
 							   SQLDA (in DSQL)               */
+#define DSC_computed  128	/* not stored, used in RelationNode::makeFormat() */
 
 #define dtype_unknown	0
 #define dtype_text		1

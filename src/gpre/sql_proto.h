@@ -27,7 +27,7 @@
 act*	SQL_action(const TEXT*);
 void	SQL_adjust_field_dtype(gpre_fld*);
 void	SQL_dialect1_bad_type(USHORT);
-void	SQL_init();
+void	SQL_init() noexcept;
 void	SQL_par_field_collate(gpre_req*, gpre_fld*);
 void	SQL_par_field_dtype(gpre_req*, gpre_fld*, bool);
 gpre_prc* SQL_procedure(gpre_req*, const TEXT*, const TEXT*, const TEXT*, bool);

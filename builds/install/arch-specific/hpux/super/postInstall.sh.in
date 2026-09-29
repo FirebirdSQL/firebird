@@ -137,7 +137,7 @@ writeNewPassword() {
     if [ $NewPasswd = "masterkey" ]
       then
         echo "# for install on `hostname` at time `date`" >> $DBAPasswordFile
-        echo "# You should change this password at the earliest oportunity" >> $DBAPasswordFile
+        echo "# You should change this password at the earliest opportunity" >> $DBAPasswordFile
       else 
         echo "# generated on `hostname` at time `date`" >> $DBAPasswordFile
     fi

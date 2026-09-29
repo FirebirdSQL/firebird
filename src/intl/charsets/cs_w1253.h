@@ -229,7 +229,7 @@ static const USHORT to_unicode_map[256] = {
 /* C8 */  0x0398 /*                    GREEK CAPITAL LETTER THETA */,
 /* C9 */  0x0399 /*                     GREEK CAPITAL LETTER IOTA */,
 /* CA */  0x039A /*                    GREEK CAPITAL LETTER KAPPA */,
-/* CB */  0x039B /*                    GREEK CAPITAL LETTER LAMDA */,
+/* CB */  0x039B /*                    GREEK CAPITAL LETTER LAMBDA */,
 /* CC */  0x039C /*                       GREEK CAPITAL LETTER MU */,
 /* CD */  0x039D /*                       GREEK CAPITAL LETTER NU */,
 /* CE */  0x039E /*                       GREEK CAPITAL LETTER XI */,
@@ -261,7 +261,7 @@ static const USHORT to_unicode_map[256] = {
 /* E8 */  0x03B8 /*                      GREEK SMALL LETTER THETA */,
 /* E9 */  0x03B9 /*                       GREEK SMALL LETTER IOTA */,
 /* EA */  0x03BA /*                      GREEK SMALL LETTER KAPPA */,
-/* EB */  0x03BB /*                      GREEK SMALL LETTER LAMDA */,
+/* EB */  0x03BB /*                      GREEK SMALL LETTER LAMBDA */,
 /* EC */  0x03BC /*                         GREEK SMALL LETTER MU */,
 /* ED */  0x03BD /*                         GREEK SMALL LETTER NU */,
 /* EE */  0x03BE /*                         GREEK SMALL LETTER XI */,
@@ -1209,7 +1209,7 @@ static const UCHAR from_unicode_mapping_array[] = {
 /* U+0398 */	0xC8	/*                    GREEK CAPITAL LETTER THETA */,/* 920 */
 /* U+0399 */	0xC9	/*                     GREEK CAPITAL LETTER IOTA */,/* 921 */
 /* U+039A */	0xCA	/*                    GREEK CAPITAL LETTER KAPPA */,/* 922 */
-/* U+039B */	0xCB	/*                    GREEK CAPITAL LETTER LAMDA */,/* 923 */
+/* U+039B */	0xCB	/*                    GREEK CAPITAL LETTER LAMBDA */,/* 923 */
 /* U+039C */	0xCC	/*                       GREEK CAPITAL LETTER MU */,/* 924 */
 /* U+039D */	0xCD	/*                       GREEK CAPITAL LETTER NU */,/* 925 */
 /* U+039E */	0xCE	/*                       GREEK CAPITAL LETTER XI */,/* 926 */
@@ -1241,7 +1241,7 @@ static const UCHAR from_unicode_mapping_array[] = {
 /* U+03B8 */	0xE8	/*                      GREEK SMALL LETTER THETA */,/* 952 */
 /* U+03B9 */	0xE9	/*                       GREEK SMALL LETTER IOTA */,/* 953 */
 /* U+03BA */	0xEA	/*                      GREEK SMALL LETTER KAPPA */,/* 954 */
-/* U+03BB */	0xEB	/*                      GREEK SMALL LETTER LAMDA */,/* 955 */
+/* U+03BB */	0xEB	/*                      GREEK SMALL LETTER LAMBDA */,/* 955 */
 /* U+03BC */	0xEC	/*                         GREEK SMALL LETTER MU */,/* 956 */
 /* U+03BD */	0xED	/*                         GREEK SMALL LETTER NU */,/* 957 */
 /* U+03BE */	0xEE	/*                         GREEK SMALL LETTER XI */,/* 958 */

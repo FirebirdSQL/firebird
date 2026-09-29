@@ -29,6 +29,79 @@
 
 namespace Jrd {
 
+class dsql_udf;
+
+class CustomAggNode final : public AggNode
+{
+public:
+	// These are stored in BLR
+	inline static constexpr UCHAR MESSAGE_ACCUMULATE = 0;
+	inline static constexpr UCHAR MESSAGE_OUTPUT = 1;
+	inline static constexpr UCHAR MESSAGE_START = 2;
+	inline static constexpr UCHAR MESSAGE_GROUP = 3;
+	inline static constexpr UCHAR MESSAGE_FINISH = 4;
+
+private:
+	struct Impure
+	{
+		Request* funcRequest = nullptr;
+		Firebird::IExternalAggregateInstance* externalAggregate = nullptr;
+		bool active = false;
+	};
+
+public:
+	explicit CustomAggNode(MemoryPool& pool, const QualifiedName& aName = {},
+		ValueListNode* aArgs = nullptr);
+
+	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
+
+	unsigned getCapabilities() const override
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		AggNode::getChildren(holder, dsql);
+		holder.add(args);
+		holder.add(dsqlFilter);
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+	void setParameterName(dsql_par* parameter) const override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggFinish(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) override;
+
+private:
+	bool invoke(thread_db* tdbb, Request* request, AggregateFunctionPhase phase) const;
+	void cleanupRequest(thread_db* tdbb, Impure* impure) const;
+
+public:
+	QualifiedName name;
+	NestConst<ValueListNode> args;
+	NestConst<BoolExprNode> dsqlFilter;
+	NestConst<Firebird::ObjectsArray<MetaName>> dsqlArgNames;
+	SubRoutine<Function> function;
+	dsql_udf* dsqlFunction = nullptr;
+
+private:
+	ULONG inputImpure = 0;
+	ULONG outputImpure = 0;
+	ULONG customImpure = 0;
+};
+
 
 class AnyValueAggNode final : public AggNode
 {
@@ -64,28 +137,28 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual const char* getCompatDialectVerb()
+	const char* getCompatDialectVerb() override
 	{
 		return "avg";
 	}
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 private:
 	void outputDesc(dsc* desc) const;
@@ -95,38 +168,184 @@ private:
 class ListAggNode final : public AggNode
 {
 public:
-	explicit ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg = NULL,
-		ValueExprNode* aDelimiter = NULL);
+	explicit ListAggNode(MemoryPool& pool, bool aDistinct, ValueExprNode* aArg = nullptr,
+			ValueExprNode* aDelimiter = nullptr, ValueListNode* aOrderClause = nullptr);
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		AggNode::getChildren(holder, dsql);
 		holder.add(delimiter);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual bool setParameterType(DsqlCompilerScratch* dsqlScratch,
-		std::function<void (dsc*)> makeDesc, bool forceVarChar);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+	bool setParameterType(DsqlCompilerScratch* dsqlScratch,
+		std::function<void (dsc*)> makeDesc, bool forceVarChar) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 private:
 	NestConst<ValueExprNode> delimiter;
+	NestConst<ValueListNode> dsqlOrderClause;
+};
+
+class PercentileAggNode final : public AggNode
+{
+public:
+	enum PercentileType : UCHAR
+	{
+		TYPE_PERCENTILE_CONT,
+		TYPE_PERCENTILE_DISC
+	};
+
+	struct PercentileImpure
+	{
+		SINT64 vlux_count;
+		double percentile;
+		double rn;
+		SINT64 crn;
+		SINT64 frn;
+	};
+
+	explicit PercentileAggNode(MemoryPool& pool, PercentileType aType, ValueExprNode* aArg = nullptr,
+		ValueListNode* aOrderClause = nullptr);
+
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
+
+	unsigned getCapabilities() const override
+	{
+		return CAP_WANTS_AGG_CALLS;
+	}
+
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		AggNode::getChildren(holder, dsql);
+		holder.add(valueArg);
+	}
+
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+	void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
+private:
+	const PercentileType type;
+	NestConst<ValueExprNode> valueArg;
+	NestConst<ValueListNode> dsqlOrderClause;
+	ULONG percentileImpureOffset = 0;
+};
+
+class RankAggNode final : public AggNode
+{
+public:
+	enum RankType : UCHAR
+	{
+		TYPE_RANK,
+		TYPE_DENSE_RANK,
+		TYPE_PERCENT_RANK,
+		TYPE_CUME_DIST
+	};
+
+	struct Impure
+	{
+		impure_value* orderValues;
+		uint64_t vlux_count;
+		uint64_t vlux_rank;
+		uint64_t vlux_dense_rank;
+	};
+
+	explicit RankAggNode(MemoryPool& pool, RankType aType,
+		ValueListNode* aArgList = nullptr, ValueListNode* aOrderClause = nullptr);
+
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
+
+	unsigned getCapabilities() const override
+	{
+		return 0;
+	}
+
+	bool isVariadicArgs() const override
+	{
+		return true;
+	}
+
+	bool dsqlMatch(DsqlCompilerScratch* dsqlScratch, const ExprNode* other, bool ignoreMapCast) const override;
+
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
+	{
+		ValueExprNode::getChildren(holder, dsql);
+
+		for (FB_SIZE_T i = 0; i < valueListArg->items.getCount(); i++)
+			holder.add(valueListArg->items[i]);
+	}
+
+	bool dsqlInvalidReferenceFinder(InvalidReferenceFinder& visitor) override;
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+
+	void makeSortDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	int lookForChange(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const;
+	void cacheValues(thread_db* tdbb, Request* request, UCHAR* data, impure_value* values) const;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggFinish(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	dsc* execute(thread_db* tdbb, Request* request) const override;
+
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
+private:
+	const RankType type;
+	NestConst<ValueListNode> valueListArg;
+	NestConst<ValueListNode> dsqlOrderClause;
+	ULONG impureArgsOffset = 0;
+	ULONG m_impureOrder = 0;
 };
 
 class CountAggNode final : public AggNode
@@ -136,23 +355,23 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 };
 
 class SumAggNode final : public AggNode
@@ -162,27 +381,27 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual const char* getCompatDialectVerb()
+	const char* getCompatDialectVerb() override
 	{
 		return "sum";
 	}
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 };
 
 class MaxMinAggNode final : public AggNode
@@ -198,25 +417,61 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 public:
 	const MaxMinType type;
+};
+
+class BinAggNode final : public AggNode
+{
+public:
+    enum BinType : UCHAR
+	{
+        TYPE_BIN_AND,
+		TYPE_BIN_OR,
+		TYPE_BIN_XOR,
+		TYPE_BIN_XOR_DISTINCT
+	};
+
+	explicit BinAggNode(MemoryPool& pool, BinType aType, ValueExprNode* aArg = nullptr);
+
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
+
+	unsigned getCapabilities() const override
+	{
+		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
+	}
+
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+protected:
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
+
+public:
+	const BinType type;
 };
 
 class StdDevAggNode final : public AggNode
@@ -244,25 +499,25 @@ public:
 
 	explicit StdDevAggNode(MemoryPool& pool, StdDevType aType, ValueExprNode* aArg = NULL);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 public:
 	const StdDevType type;
@@ -296,32 +551,32 @@ public:
 	explicit CorrAggNode(MemoryPool& pool, CorrType aType,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		AggNode::getChildren(holder, dsql);
 		holder.add(arg2);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual bool aggPass(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 public:
 	const CorrType type;
@@ -361,32 +616,32 @@ public:
 	explicit RegrAggNode(MemoryPool& pool, RegrType aType,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		AggNode::getChildren(holder, dsql);
 		holder.add(arg2);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
-	virtual AggNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual bool aggPass(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 public:
 	const RegrType type;
@@ -402,31 +657,31 @@ public:
 	explicit RegrCountAggNode(MemoryPool& pool,
 		ValueExprNode* aArg = NULL, ValueExprNode* aArg2 = NULL);
 
-	virtual unsigned getCapabilities() const
+	unsigned getCapabilities() const override
 	{
 		return CAP_RESPECTS_WINDOW_FRAME | CAP_WANTS_AGG_CALLS;
 	}
 
-	virtual void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count);
+	void parseArgs(thread_db* tdbb, CompilerScratch* csb, unsigned count) override;
 
-	virtual void getChildren(NodeRefsHolder& holder, bool dsql) const
+	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		AggNode::getChildren(holder, dsql);
 		holder.add(arg2);
 	}
 
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
-	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
-	virtual void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc);
-	virtual ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const;
+	Firebird::string internalPrint(NodePrinter& printer) const override;
+	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
+	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
+	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
-	virtual void aggInit(thread_db* tdbb, Request* request) const;
-	virtual bool aggPass(thread_db* tdbb, Request* request) const;
-	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const;
-	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const;
+	void aggInit(thread_db* tdbb, Request* request) const override;
+	bool aggPass(thread_db* tdbb, Request* request) const override;
+	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
+	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
 protected:
-	virtual AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/;
+	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
 public:
 	NestConst<ValueExprNode> arg2;

@@ -33,26 +33,28 @@ namespace Jrd
 	class jrd_rel;
 	class jrd_tra;
 	struct record_param;
-	class IndexBlock;
 	struct index_desc;
 	class CompilerScratch;
 	class thread_db;
 }
 
-void IDX_check_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::jrd_rel*, Jrd::jrd_rel*);
-bool IDX_check_master_types (Jrd::thread_db*, Jrd::index_desc&, Jrd::jrd_rel*, int&);
-void IDX_create_index(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::index_desc*, const TEXT*,
-					  USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
-Jrd::IndexBlock* IDX_create_index_block(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
-void IDX_delete_index(Jrd::thread_db*, Jrd::jrd_rel*, USHORT);
-void IDX_delete_indices(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::RelationPages*);
+bool IDX_activate_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
+void IDX_check_access(Jrd::thread_db*, Jrd::CompilerScratch*, Jrd::Cached::Relation*, Jrd::Cached::Relation*);
+bool IDX_check_master_types (Jrd::thread_db*, Jrd::index_desc&, Jrd::Cached::Relation*, int&);
+void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*,
+					  const Jrd::QualifiedName&, USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
+bool IDX_mark_index(Jrd::thread_db*, Jrd::Cached::Relation*, MetaId);
+void IDX_mark_temp(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, MetaId id, Jrd::Attachment* current,
+				   TraNumber tran);
+void IDX_delete_indices(Jrd::thread_db*, Jrd::RelationPermanent*, Jrd::RelationPages*, bool);
 void IDX_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_garbage_collect(Jrd::thread_db*, Jrd::record_param*, Jrd::RecordStack&, Jrd::RecordStack&);
 void IDX_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_modify_check_constraints(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_statistics(Jrd::thread_db*, Jrd::jrd_rel*, USHORT, Jrd::SelectivityList&);
+void IDX_statistics(Jrd::thread_db*, Jrd::Cached::Relation*, USHORT, Jrd::SelectivityList&);
 void IDX_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_modify_flag_uk_modified(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
+bool IDX_validate_unique(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, MetaId id);
 
 
 #endif // JRD_IDX_PROTO_H

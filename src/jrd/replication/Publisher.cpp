@@ -26,6 +26,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/req.h"
 #include "../jrd/tra.h"
+#include "../jrd/met.h"
 #include "firebird/impl/blr.h"
 #include "../jrd/trig.h"
 #include "../jrd/Database.h"
@@ -35,9 +36,9 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../common/isc_proto.h"
-
 #include "Publisher.h"
 #include "Replicator.h"
+#include <numeric>
 
 using namespace Firebird;
 using namespace Jrd;
@@ -226,7 +227,7 @@ namespace
 		{
 			const auto savepoint = *iter;
 
-			if (savepoint->isReplicated() || savepoint->isRoot())
+			if (savepoint->isReplicated())
 				break;
 
 			transaction->tra_replicator->startSavepoint(&status);
@@ -253,11 +254,11 @@ namespace
 			const auto attachment = tdbb->getAttachment();
 			const auto matcher = attachment->att_repl_matcher.get();
 
-			if (matcher && !matcher->matchTable(relation->rel_name))
+			if (matcher && !matcher->matchTable(relation->getName()))
 				return false;
 		}
 		// Do not replicate RDB$BACKUP_HISTORY as it describes physical-level things
-		else if (relation->rel_id == rel_backup_history)
+		else if (relation->getId() == rel_backup_history)
 			return false;
 
 		return true;
@@ -265,7 +266,7 @@ namespace
 
 	Record* upgradeRecord(thread_db* tdbb, jrd_rel* relation, Record* record)
 	{
-		const auto format = MET_current(tdbb, relation);
+		const auto format = relation->currentFormat(tdbb);
 
 		if (record->getFormat()->fmt_version == format->fmt_version)
 			return record;
@@ -403,8 +404,9 @@ void REPL_attach(thread_db* tdbb, bool cleanupTransactions)
 
 	fb_assert(!attachment->att_repl_matcher);
 	auto& pool = *attachment->att_pool;
-	attachment->att_repl_matcher = FB_NEW_POOL(pool)
-		TableMatcher(pool, replConfig->includeFilter, replConfig->excludeFilter);
+	attachment->att_repl_matcher = FB_NEW_POOL(pool) TableMatcher(pool,
+		replConfig->includeSchemaFilter, replConfig->excludeSchemaFilter,
+		replConfig->includeFilter, replConfig->excludeFilter);
 
 	fb_assert(!attachment->att_replicator);
 	attachment->att_flags |= ATT_replicating;
@@ -527,9 +529,10 @@ void REPL_store(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
-	replicator->insertRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replRecord);
+	replicator->insertRecord2(&status,
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
+							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -577,9 +580,10 @@ void REPL_modify(thread_db* tdbb, const record_param* orgRpb,
 	ReplicatedRecordImpl replOrgRecord(tdbb, relation, orgRecord);
 	ReplicatedRecordImpl replNewRecord(tdbb, relation, newRecord);
 
-	replicator->updateRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replOrgRecord, &replNewRecord);
+	replicator->updateRecord2(&status,
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
+							  &replOrgRecord, &replNewRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -611,14 +615,15 @@ void REPL_erase(thread_db* tdbb, const record_param* rpb, jrd_tra* transaction)
 
 	ReplicatedRecordImpl replRecord(tdbb, relation, record);
 
-	replicator->deleteRecord(&status,
-							 relation->rel_name.c_str(),
-							 &replRecord);
+	replicator->deleteRecord2(&status,
+							  relation->getName().schema.c_str(),
+							  relation->getName().object.c_str(),
+							  &replRecord);
 
 	checkStatus(tdbb, status, transaction);
 }
 
-void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
+void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value, jrd_tra* transaction)
 {
 	if (tdbb->tdbb_flags & (TDBB_dont_post_dfw | TDBB_repl_in_progress))
 		return;
@@ -637,26 +642,33 @@ void REPL_gen_id(thread_db* tdbb, SLONG genId, SINT64 value)
 	if (!replicator)
 		return;
 
-	const auto attachment = tdbb->getAttachment();
+	FbLocalStatus status;
 
-	MetaName genName;
-	if (!attachment->att_generators.lookup(genId, genName))
+	// Create IReplicatedTransaction object for current transaction
+	// without any operations before changing generator
+	if (transaction && !transaction->tra_replicator)
+		getReplicator(tdbb, status, transaction);
+
+	const auto database = tdbb->getDatabase();
+
+	QualifiedName genName;
+	if (!database->dbb_mdc->getSequence(tdbb, genId, genName))
 	{
 		MET_lookup_generator_id(tdbb, genId, genName, nullptr);
-		attachment->att_generators.store(genId, genName);
+		database->dbb_mdc->setSequence(tdbb, genId, genName);
 	}
 
-	fb_assert(genName.hasData());
+	fb_assert(genName.object.hasData());
 
 	AutoSetRestoreFlag<ULONG> noRecursion(&tdbb->tdbb_flags, TDBB_repl_in_progress, true);
 
-	FbLocalStatus status;
-	replicator->setSequence(&status, genName.c_str(), value);
+	replicator->setSequence2(&status, genName.schema.c_str(), genName.object.c_str(), value);
 
 	checkStatus(tdbb, status);
 }
 
-void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql)
+void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql,
+	const ObjectsArray<MetaString>& schemaSearchPath)
 {
 	fb_assert(tdbb->tdbb_flags & TDBB_repl_in_progress);
 
@@ -673,7 +685,21 @@ void REPL_exec_sql(thread_db* tdbb, jrd_tra* transaction, const string& sql)
 
 	// This place is already protected from recursion in calling code
 
-	replicator->executeSqlIntl(&status, charset, sql.c_str());
+	string schemaSearchPathStr;
+
+	if (schemaSearchPath.hasData())
+	{
+		schemaSearchPathStr = std::accumulate(
+			std::next(schemaSearchPath.begin()),
+			schemaSearchPath.end(),
+			schemaSearchPath[0].toQuotedString(),
+			[](const auto& a, const auto& b) {
+				return a + ", " + b.toQuotedString();
+			}
+		);
+	}
+
+	replicator->executeSqlIntl2(&status, charset, schemaSearchPathStr.c_str(), sql.c_str());
 
 	checkStatus(tdbb, status, transaction);
 }
@@ -687,4 +713,10 @@ void REPL_journal_switch(thread_db* tdbb)
 		return;
 
 	replMgr->forceJournalSwitch();
+}
+
+void REPL_journal_cleanup(Database* dbb)
+{
+	if (const auto replMgr = dbb->replManager(true))
+		replMgr->journalCleanup();
 }

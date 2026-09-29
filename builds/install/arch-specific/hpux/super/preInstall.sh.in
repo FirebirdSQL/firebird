@@ -21,7 +21,7 @@
 
 	stopServerIfRunning() {
 
-	    checkString=`ps -ef | egrep "(fbserver|fbguard)" |grep -v grep`
+	    checkString=`ps -ef | grep -E "(fbserver|fbguard)" |grep -v grep`
 
 	    if [ ! -z "$checkString" ] 
 	      then
@@ -42,7 +42,7 @@
 	    stopServerIfRunning
 
 
-	    checkString=`ps -ef | egrep "(fbserver|fbguard)" |grep -v grep`
+	    checkString=`ps -ef | grep -E "(fbserver|fbguard)" |grep -v grep`
 
 	    if [ ! -z "$checkString" ] 
 	      then
@@ -54,7 +54,7 @@
 
 
 
-	    checkString=`ps -ef | egrep "(fb_inet_server|fb_smp_server)" |grep -v grep`
+	    checkString=`ps -ef | grep -E "(fb_inet_server|fb_smp_server)" |grep -v grep`
 
 	    if [ ! -z "$checkString" ] 
 	      then
@@ -67,7 +67,7 @@
 
 # Stop lock manager if it is the only thing running.
 
-	    for i in `ps -ef | egrep "fb_lock_mgr" | awk '{print $2}' `
+	    for i in `ps -ef | grep -E "fb_lock_mgr" | awk '{print $2}' `
 	     do
 		kill $i
 	     done

@@ -86,7 +86,7 @@ connect 'localhost:/tmp/59.fdb' user us password 'pas';
 select f(3) from rdb$database;
 
 
-Example 3. It's enought to grant only EXECUTE privilege to user US for procedure P.
+Example 3. It's enough to grant only EXECUTE privilege to user US for procedure P.
 In case of INVOKER it will require also INSERT for table T to either user US or procedure P.
 
 set term ^;
@@ -104,7 +104,7 @@ connect 'localhost:/tmp/17.fdb' user us password 'pas';
 execute procedure p(1);
 
 
-Example 4. It's enought to grant only INSERT privilege to user US for table TR.
+Example 4. It's enough to grant only INSERT privilege to user US for table TR.
 In case of INVOKER it will require also INSERT for table T to user US.
 
 create table tr (i integer);
@@ -142,7 +142,7 @@ connect 'localhost:/tmp/29.fdb' user us password 'pas';
 insert into tr values(2);
 
 
-Example 5. It's enought to grant only EXECUTE privilege to user US for package PK.
+Example 5. It's enough to grant only EXECUTE privilege to user US for package PK.
 In case of INVOKER it will require also INSERT for table T to user US.
 
 create table t (i integer);

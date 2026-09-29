@@ -19,23 +19,23 @@
 #ifndef ISCGUARD_H
 #define ISCGUARD_H
 
-static const char* const GUARDIAN_APP_NAME		= "Firebird Guardian";
-static const char* const GUARDIAN_APP_LABEL		= "Firebird Guardian";
-static const char* const GUARDIAN_CLASS_NAME	= "FB_Guard";
-static const char* const FBSERVER				= "firebird.exe";
+static inline constexpr const char* GUARDIAN_APP_NAME	= "Firebird Guardian";
+static inline constexpr const char* GUARDIAN_APP_LABEL	= "Firebird Guardian";
+static inline constexpr const char* GUARDIAN_CLASS_NAME	= "FB_Guard";
+static inline constexpr const char* FBSERVER			= "firebird.exe";
 
 // Help Constants
-const DWORD ibs_server_directory	= 8060;
-const DWORD ibs_guard_version		= 8080;
-const DWORD ibs_guard_log			= 8090;
+inline constexpr DWORD ibs_server_directory	= 8060;
+inline constexpr DWORD ibs_guard_version	= 8080;
+inline constexpr DWORD ibs_guard_log		= 8090;
 
 #define WM_SWITCHICONS  WM_USER + 3
 
-const short START_ONCE		= 0;
-const short START_FOREVER	= 1;
+inline constexpr short START_ONCE		= 0;
+inline constexpr short START_FOREVER	= 1;
 
-const DWORD NORMAL_EXIT		= 0;
-const DWORD CRASHED			= (DWORD) -1;
+inline constexpr DWORD NORMAL_EXIT		= 0;
+inline constexpr DWORD CRASHED			= (DWORD) -1;
 
 typedef void (*FPTR_VOID) ();
 

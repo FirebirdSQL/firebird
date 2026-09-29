@@ -59,21 +59,13 @@ public:
 	};
 
 	// Statement flags.
-	static const unsigned FLAG_NO_BATCH		= 0x01;
-	static const unsigned FLAG_SELECTABLE	= 0x02;
+	static inline constexpr unsigned FLAG_NO_BATCH		= 0x01;
+	static inline constexpr unsigned FLAG_SELECTABLE	= 0x02;
 
 	static void rethrowDdlException(Firebird::status_exception& ex, bool metadataUpdate, DdlNode* node);
 
 public:
-	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
-		: PermanentStorage(pool),
-		  dsqlAttachment(aDsqlAttachment),
-		  type(TYPE_SELECT),
-		  flags(0),
-		  blrVersion(5)
-	{
-		pool.setStatsGroup(memoryStats);
-	}
+	DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment);
 
 protected:
 	virtual ~DsqlStatement() = default;
@@ -95,9 +87,9 @@ public:
 			case TYPE_SELECT_UPD:
 			case TYPE_RETURNING_CURSOR:
 				return true;
+			default:
+				return false;
 		}
-
-		return false;
 	}
 
 	Type getType() const { return type; }
@@ -128,6 +120,8 @@ public:
 	Firebird::RefStrPtr getCacheKey() { return cacheKey; }
 	void setCacheKey(Firebird::RefStrPtr& value) { cacheKey = value; }
 	void resetCacheKey() { cacheKey = nullptr; }
+
+	const auto getSchemaSearchPath() const { return schemaSearchPath; }
 
 public:
 	virtual bool isDml() const
@@ -164,15 +158,16 @@ protected:
 protected:
 	dsql_dbb* dsqlAttachment;
 	Firebird::MemoryStats memoryStats;
-	Type type;					// Type of statement
-	ULONG flags;				// generic flag
-	unsigned blrVersion;
+	Type type = TYPE_SELECT;	// Type of statement
+	ULONG flags = 0;			// generic flag
+	unsigned blrVersion = blr_version5;
 	Firebird::RefStrPtr sqlText;
 	Firebird::RefStrPtr orgText;
 	Firebird::RefStrPtr cacheKey;
 	dsql_msg* sendMsg = nullptr;				// Message to be sent to start request
 	dsql_msg* receiveMsg = nullptr;				// Per record message to be received
 	DsqlCompilerScratch* scratch = nullptr;
+	Firebird::RefPtr<Firebird::AnyRef<Firebird::ObjectsArray<Firebird::MetaString>>> schemaSearchPath;
 
 private:
 	Firebird::AtomicCounter refCounter;

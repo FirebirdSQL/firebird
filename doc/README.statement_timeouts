@@ -42,7 +42,7 @@ stop execution of SQL statement when it running longer than given timeout value.
   - if not set at statement level, look at connection level
   - if not set at connection level, look at database level
   - in any case can't be greater than value set at database level 
-  i.e. value of statement timeout could be overriden by application developer at lower 
+  i.e. value of statement timeout could be overridden by application developer at lower
   scope but it can't relax limit set by DBA (in config)
 - zero timeout means no timeout, i.e. timer will not start
 - while statement timeout is set in milliseconds at API level, we can't promise 

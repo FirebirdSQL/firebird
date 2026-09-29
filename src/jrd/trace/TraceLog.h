@@ -33,9 +33,9 @@
 
 namespace Jrd {
 
-struct TraceLogHeader : public Firebird::MemoryHeader
+struct TraceLogHeader final : public Firebird::MemoryHeader
 {
-	static const USHORT TRACE_LOG_VERSION = 2;
+	static constexpr USHORT TRACE_LOG_VERSION = 2;
 
 	ULONG readPos;
 	ULONG writePos;
@@ -44,7 +44,7 @@ struct TraceLogHeader : public Firebird::MemoryHeader
 	ULONG flags;
 };
 
-class TraceLog : public Firebird::IpcObject
+class TraceLog final : public Firebird::IpcObject
 {
 public:
 	TraceLog(Firebird::MemoryPool& pool, const Firebird::PathName& fileName, bool reader);
@@ -58,8 +58,8 @@ public:
 
 private:
 	// flags in header
-	const ULONG FLAG_FULL = 0x0001;		// log is full, set by writer, reset by reader
-	const ULONG FLAG_DONE = 0x0002;		// set when reader is gone
+	static constexpr ULONG FLAG_FULL = 0x0001;	// log is full, set by writer, reset by reader
+	static constexpr ULONG FLAG_DONE = 0x0002;	// set when reader is gone
 
 	void mutexBug(int osErrorCode, const char* text) override;
 	bool initialize(Firebird::SharedMemoryBase*, bool) override;

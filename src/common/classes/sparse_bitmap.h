@@ -31,6 +31,7 @@
 #define SPARSE_BITMAP_H
 
 #include "../common/classes/alloc.h"
+#include "../common/classes/tree.h"
 
 namespace Firebird {
 

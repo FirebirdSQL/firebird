@@ -36,6 +36,7 @@
 #include "../../common/isc_s_proto.h"
 #include "../../jrd/jrd.h"
 #include "../../jrd/tra.h"
+#include "../../jrd/met.h"
 #include "../../jrd/DataTypeUtil.h"
 #include "../../dsql/ExprNodes.h"
 #include "../../dsql/StmtNodes.h"
@@ -61,7 +62,7 @@ namespace
 
 // Convert text descriptor into UTF8 string.
 // Binary data converted into HEX representation.
-bool descToUTF8(const dsc* param, string& result)
+bool descToUTF8(const paramdsc* param, string& result)
 {
 	UCHAR* address;
 	USHORT length;
@@ -83,7 +84,7 @@ bool descToUTF8(const dsc* param, string& result)
 		return false;
 	}
 
-	if (param->getCharSet() == CS_BINARY)
+	if (param->dsc_sub_type == CS_BINARY)
 	{
 		// Convert OCTETS and [VAR]BINARY to HEX string
 
@@ -104,7 +105,7 @@ bool descToUTF8(const dsc* param, string& result)
 
 	try
 	{
-		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, param->dsc_sub_type, status_exception::raise))
+		if (!Jrd::DataTypeUtil::convertToUTF8(src, result, CSetId(param->dsc_sub_type), status_exception::raise))
 			result = src;
 	}
 	catch (const Firebird::Exception&)
@@ -128,6 +129,26 @@ const char* StatementHolder::ensurePlan(bool explained)
 	}
 
 	return m_plan.c_str();
+}
+
+
+/// StatementHolder
+
+Firebird::string StatementHolder::getName() const
+{
+	if (m_statement)
+	{
+		if (m_statement->procedure)
+			return m_statement->procedure->getName().toQuotedString();
+
+		if (m_statement->function)
+			return m_statement->function->getName().toQuotedString();
+
+		if (m_statement->triggerName.hasData())
+			return m_statement->triggerName.toQuotedString();
+	}
+
+	return "";
 }
 
 
@@ -210,27 +231,21 @@ int TraceTransactionImpl::getWait()
 
 unsigned TraceTransactionImpl::getIsolation()
 {
-	switch (m_tran->tra_flags & (TRA_read_committed | TRA_rec_version | TRA_degree3 | TRA_read_consistency))
-	{
-	case TRA_degree3:
+	if (m_tran->tra_flags & TRA_degree3)
 		return ISOLATION_CONSISTENCY;
 
-	case TRA_read_committed:
+	if (m_tran->tra_flags & TRA_read_committed)
+	{
+		if (m_tran->tra_flags & TRA_read_consistency)
+			return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
+
+		if (m_tran->tra_flags & TRA_rec_version)
+			return ISOLATION_READ_COMMITTED_RECVER;
+
 		return ISOLATION_READ_COMMITTED_NORECVER;
-
-	case TRA_read_committed | TRA_rec_version:
-		return ISOLATION_READ_COMMITTED_RECVER;
-
-	case TRA_read_committed | TRA_rec_version | TRA_read_consistency:
-		return ISOLATION_READ_COMMITTED_READ_CONSISTENCY;
-
-	case 0:
-		return ISOLATION_CONCURRENCY;
-
-	default:
-		fb_assert(false);
-		return ISOLATION_CONCURRENCY;
 	}
+
+	return ISOLATION_CONCURRENCY;
 }
 
 ISC_INT64 TraceTransactionImpl::getInitialID()
@@ -265,16 +280,6 @@ const char* TraceSQLStatementImpl::getTextUTF8()
 	}
 
 	return m_textUTF8.c_str();
-}
-
-PerformanceInfo* TraceSQLStatementImpl::getPerf()
-{
-	return m_perf;
-}
-
-ITraceParams* TraceSQLStatementImpl::getInputs()
-{
-	return &m_inputs;
 }
 
 
@@ -312,15 +317,19 @@ void TraceSQLStatementImpl::DSQLParamsImpl::fillParams()
 			if (idx >= m_descs.getCount())
 				m_descs.getBuffer(idx + 1);
 
-			dsc& desc = m_descs[idx];
+			auto& desc = m_descs[idx];
 
 			desc = fmt->fmt_desc[parameter->par_parameter];
+
 			// Use descriptor for nulls signaling
-			if (parameter->par_null)
+			if (const auto nullParam = parameter->par_null)
 			{
-				if (*(SSHORT*) (m_buffer + (IPTR) fmt->fmt_desc[parameter->par_null->par_parameter].dsc_address))
+				const auto& nullDesc = fmt->fmt_desc[nullParam->par_parameter];
+
+				if (*(SSHORT*) (m_buffer + (IPTR) nullDesc.dsc_address))
 					desc.dsc_flags |= DSC_null;
 			}
+
 			// Even if plugin try to change data in buffer (which is pointless)
 			// most likely it is safe because client buffer is writeble though
 			// in EXE_send() it is declared as const.
@@ -336,11 +345,11 @@ FB_SIZE_T TraceSQLStatementImpl::DSQLParamsImpl::getCount()
 	return m_descs.getCount();
 }
 
-const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 {
 	fillParams();
 
-	if (idx >= 0 && idx < m_descs.getCount())
+	if (idx < m_descs.getCount())
 		return &m_descs[idx];
 
 	return NULL;
@@ -348,7 +357,7 @@ const dsc* TraceSQLStatementImpl::DSQLParamsImpl::getParam(FB_SIZE_T idx)
 
 const char* TraceSQLStatementImpl::DSQLParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
+	const paramdsc* const param = getParam(idx);
 
 	if (descToUTF8(param, m_tempUTF8))
 		return m_tempUTF8.c_str();
@@ -378,14 +387,14 @@ FB_SIZE_T TraceParamsImpl::getCount()
 	return m_descs->getCount();
 }
 
-const dsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
+const paramdsc* TraceParamsImpl::getParam(FB_SIZE_T idx)
 {
 	return m_descs->getParam(idx);
 }
 
 const char* TraceParamsImpl::getTextUTF8(CheckStatusWrapper* status, FB_SIZE_T idx)
 {
-	const dsc* param = getParam(idx);
+	const paramdsc* const param = getParam(idx);
 
 	if (descToUTF8(param, m_tempUTF8))
 		return m_tempUTF8.c_str();
@@ -465,7 +474,7 @@ void TraceDscFromMsg::fillParams()
 	const dsc* fmtDesc = m_format->fmt_desc.begin();
 	const dsc* const fmtEnd = m_format->fmt_desc.end();
 
-	dsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
+	paramdsc* desc = m_descs.getBuffer(m_format->fmt_count / 2);
 
 	for (; fmtDesc < fmtEnd; fmtDesc += 2, desc++)
 	{
@@ -477,7 +486,7 @@ void TraceDscFromMsg::fillParams()
 		const ULONG nullOffset = (IPTR) fmtDesc[1].dsc_address;
 		const SSHORT* const nullPtr = (const SSHORT*) (m_inMsg + nullOffset);
 		if (*nullPtr == -1)
-			desc->setNull();
+			desc->dsc_flags |= DSC_null;
 	}
 }
 
@@ -635,23 +644,58 @@ const char* TraceServiceImpl::getRemoteProcessName()
 
 /// TraceRuntimeStats
 
-TraceRuntimeStats::TraceRuntimeStats(Attachment* att, RuntimeStatistics* baseline, RuntimeStatistics* stats,
-	SINT64 clock, SINT64 records_fetched)
+TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
+									 RuntimeStatistics* baseline, RuntimeStatistics* stats,
+									 SINT64 clock, SINT64 recordsFetched)
 {
+	memset(&m_info, 0, sizeof(m_info));
 	m_info.pin_time = clock * 1000 / fb_utils::query_performance_frequency();
-	m_info.pin_records_fetched = records_fetched;
+	m_info.pin_records_fetched = recordsFetched;
+	m_info.pin_counters = m_globalCounters;
 
 	if (baseline && stats)
-		baseline->computeDifference(att, *stats, m_info, m_counts);
+	{
+		baseline->setToDiff(*stats);
+
+		m_globalCounters[PerformanceInfo::FETCHES] = (*baseline)[PageStatType::FETCHES];
+		m_globalCounters[PerformanceInfo::READS] = (*baseline)[PageStatType::READS];
+		m_globalCounters[PerformanceInfo::MARKS] = (*baseline)[PageStatType::MARKS];
+		m_globalCounters[PerformanceInfo::WRITES] = (*baseline)[PageStatType::WRITES];
+
+		auto getTablespaceName = [&](MetaId id) -> Firebird::string
+		{
+			return ""; // TODO
+		};
+
+		m_pageCounters.reset(&baseline->getPageCounters(), getTablespaceName);
+
+		auto getTableName = [&](MetaId id) -> Firebird::string
+		{
+			auto* mdc = attachment->att_database->dbb_mdc;
+			if (const auto* relation = mdc->lookupRelationNoChecks(id))
+				return relation->getName().toQuotedString();
+
+			return "";
+		};
+
+		m_tableCounters.reset(&baseline->getTableCounters(), getTableName);
+
+		m_legacyCounts.resize(m_tableCounters.getObjectCount());
+		m_info.pin_tables = m_legacyCounts.begin();
+		m_info.pin_count = m_legacyCounts.getCount();
+
+		for (FB_SIZE_T i = 0; i < m_info.pin_count; i++)
+		{
+			m_info.pin_tables[i].trc_relation_id = m_tableCounters.getObjectId(i);
+			m_info.pin_tables[i].trc_relation_name = m_tableCounters.getObjectName(i);
+			m_info.pin_tables[i].trc_counters = m_tableCounters.getObjectCounters(i);
+		}
+	}
 	else
 	{
-		// Report all zero counts for the moment.
-		memset(&m_info, 0, sizeof(m_info));
-		m_info.pin_counters = m_dummy_counts;
+		memset(m_globalCounters, 0, sizeof(m_globalCounters));
 	}
 }
-
-SINT64 TraceRuntimeStats::m_dummy_counts[RuntimeStatistics::TOTAL_ITEMS] = {0};
 
 
 /// TraceStatusVectorImpl

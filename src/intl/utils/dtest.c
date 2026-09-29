@@ -89,9 +89,9 @@ int main(int argc, char** argv)
 			Firebird::PathName path;
 			char entry[200];
 			const int t_type = atoi(vector[i]);
-			sprintf(module, INTL_MODULE, t_type);
+			snprintf(module, sizeof(module), INTL_MODULE, t_type);
 			path = fb_utils::getPrefix(Firebird::IConfigManager::FB_DIR_LIB, module);
-			sprintf(entry, INTL_INIT_ENTRY, t_type);
+			snprintf(entry, sizeof(entry), INTL_INIT_ENTRY, t_type);
 			printf("path=%s entry=%s\n", path.c_str(), entry);
 			func = (FPTR_INT) ISC_lookup_entrypoint(path.c_str(), entry, NULL);
 		}

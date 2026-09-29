@@ -51,10 +51,10 @@ struct tok
 	gpre_sym* tok_charset;		// Character set of token
 };
 
-const size_t TOK_LEN = sizeof(tok);
+inline constexpr size_t TOK_LEN = sizeof(tok);
 
 // CVC: This function doesn't unescape embedded quotes.
-inline void strip_quotes(tok& tkn)
+inline void strip_quotes(tok& tkn) noexcept
 {
 	int ij;
 	for (ij = 1; ij < tkn.tok_length - 1; ij++)
@@ -64,7 +64,7 @@ inline void strip_quotes(tok& tkn)
 	tkn.tok_length = ij;
 }
 
-inline bool isQuoted(const int typ)
+inline bool isQuoted(const int typ) noexcept
 {
 	return (typ == tok_sglquoted || typ == tok_dblquoted);
 }

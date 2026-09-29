@@ -91,7 +91,7 @@ public:
 	{
 		va_list arglist;
 		va_start(arglist, format);
-		int rc = ::vfprintf((usvcDataMode || err) ? stderr : stdout, format, arglist);
+		const int rc = ::vfprintf((usvcDataMode || err) ? stderr : stdout, format, arglist);
 		va_end(arglist);
 
 		if (rc < 0)
@@ -122,6 +122,11 @@ public:
 	void checkService() override
 	{
 		status_exception::raise(Arg::Gds(isc_utl_trusted_switch));
+	}
+
+	bool hasAuthBlock() override
+	{
+		return false;
 	}
 
 	unsigned int getAuthBlock(const unsigned char** bytes) override

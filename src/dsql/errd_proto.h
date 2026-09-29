@@ -27,14 +27,14 @@
 #include "../jrd/status.h"
 
 #ifdef DEV_BUILD
-void ERRD_assert_msg(const char*, const char*, ULONG);
+[[noreturn]] void ERRD_assert_msg(const char*, const char*, ULONG);
 #endif
 
-void ERRD_bugcheck(const char*);
-void ERRD_error(const char*);
-void ERRD_post(const Firebird::Arg::StatusVector& v);
+[[noreturn]] void ERRD_bugcheck(const char*);
+[[noreturn]] void ERRD_error(const char*);
+[[noreturn]] void ERRD_post(const Firebird::Arg::StatusVector& v);
 void ERRD_post_warning(const Firebird::Arg::StatusVector& v);
-void ERRD_punt(const Jrd::FbStatusVector* = 0);
+[[noreturn]] void ERRD_punt(const Jrd::FbStatusVector* = 0);
 
 #endif // DSQL_ERRD_PROTO_H
 

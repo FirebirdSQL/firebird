@@ -43,18 +43,9 @@
 
 using namespace Firebird;
 
-namespace
-{
-	static const char* const NTRACE_PREFIX = "fbtrace";
-}
-
 namespace Jrd {
 
 GlobalPtr<StorageInstance, InstanceControl::PRIORITY_DELETE_FIRST> TraceManager::storageInstance;
-TraceManager::Factories* TraceManager::factories = NULL;
-GlobalPtr<RWLock> TraceManager::init_factories_lock;
-volatile bool TraceManager::init_factories;
-
 
 bool TraceManager::check_result(ITracePlugin* plugin, const char* module, const char* function,
 	bool result)
@@ -126,51 +117,14 @@ void TraceManager::init()
 {
 	// ensure storage is initialized
 	getStorage();
-	load_plugins();
+
+	// Initialize all trace needs to false
+	trace_needs = 0;
 	changeNumber = 0;
 }
 
-void TraceManager::load_plugins()
-{
-	// Initialize all trace needs to false
-	trace_needs = 0;
-
-	if (init_factories)
-		return;
-
-	WriteLockGuard guard(init_factories_lock, FB_FUNCTION);
-	if (init_factories)
-		return;
-
-	factories = FB_NEW_POOL(*getDefaultMemoryPool()) TraceManager::Factories(*getDefaultMemoryPool());
-	for (GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE); traceItr.hasData(); traceItr.next())
-	{
-		FactoryInfo info;
-		info.factory = traceItr.plugin();
-		info.factory->addRef();
-		string name(traceItr.name());
-		name.copyTo(info.name, sizeof(info.name));
-		factories->add(info);
-	}
-
-	init_factories = true;
-}
-
-
 void TraceManager::shutdown()
 {
-	if (init_factories)
-	{
-		WriteLockGuard guard(init_factories_lock, FB_FUNCTION);
-
-		if (init_factories)
-		{
-			init_factories = false;
-			delete factories;
-			factories = NULL;
-		}
-	}
-
 	getStorage()->shutdown();
 }
 
@@ -224,7 +178,7 @@ void TraceManager::update_sessions()
 		}
 		else
 		{
-			trace_sessions[i].plugin->release();
+			trace_sessions[i].release();
 			trace_sessions.remove(i);
 		}
 	}
@@ -366,31 +320,36 @@ void TraceManager::update_session(const TraceSession& session)
 		}
 	}
 
-	ReadLockGuard guard(init_factories_lock, FB_FUNCTION);
-	if (!factories)
-		return;
+	TraceInitInfoImpl attachInfo(session, attachment, filename);
 
-	for (FactoryInfo* info = factories->begin(); info != factories->end(); ++info)
+	for (GetPlugins<ITraceFactory> traceItr(IPluginManager::TYPE_TRACE, session.getPluginsList());
+		traceItr.hasData(); traceItr.next())
 	{
-		TraceInitInfoImpl attachInfo(session, attachment, filename);
 		FbLocalStatus status;
-		ITracePlugin* plugin = info->factory->trace_create(&status, &attachInfo);
+		ITraceFactory* factory = traceItr.plugin();
 
+		ITracePlugin* plugin = factory->trace_create(&status, &attachInfo);
 		if (plugin)
 		{
-			plugin->addRef();
 			SessionInfo sesInfo;
 			sesInfo.plugin = plugin;
-			sesInfo.factory_info = info;
+			sesInfo.plugin->addRef();
+
+			sesInfo.factory = factory;
+			sesInfo.factory->addRef();
+
+			string name(traceItr.name());
+			name.copyTo(sesInfo.pluginName, sizeof(sesInfo.pluginName));
+
 			sesInfo.ses_id = session.ses_id;
 			trace_sessions.add(sesInfo);
 
-			new_needs |= info->factory->trace_needs();
+			new_needs |= sesInfo.factory->trace_needs();
 		}
 		else if (status->getState() & IStatus::STATE_ERRORS)
 		{
 			string header;
-			header.printf("Trace plugin %s returned error on call trace_create.", info->name);
+			header.printf("Trace plugin %s returned error on call trace_create.", traceItr.name());
 			iscLogStatus(header.c_str(), &status);
 		}
 	}
@@ -455,13 +414,13 @@ void TraceManager::event_dsql_restart(Attachment* att, jrd_tra* transaction,
 	while (i < trace_sessions.getCount()) \
 	{ \
 		SessionInfo* plug_info = &trace_sessions[i]; \
-		if (check_result(plug_info->plugin, plug_info->factory_info->name, #METHOD, \
+		if (check_result(plug_info->plugin, plug_info->pluginName, #METHOD, \
 			plug_info->plugin->METHOD PARAMS)) \
 		{ \
 			i++; /* Move to next plugin */ \
 		} \
 		else { \
-			plug_info->plugin->release(); \
+			plug_info->release(); \
 			trace_sessions.remove(i); /* Remove broken plugin from the list */ \
 		} \
 	}

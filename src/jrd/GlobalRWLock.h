@@ -33,7 +33,7 @@
 #include "../common/classes/alloc.h"
 #include "../jrd/jrd.h"
 #include "../jrd/lck.h"
-#include "../jrd/lck_proto.h"
+#include "../jrd/lck.h"
 #include "fb_types.h"
 #include "os/pio.h"
 #include "../common/classes/condition.h"
@@ -52,7 +52,7 @@ DEFINE_TRACE_ROUTINE(cos_trace);
 
 namespace Jrd {
 
-enum lck_t;
+enum lck_t : UCHAR;
 
 class GlobalRWLock : public Firebird::PermanentStorage
 {

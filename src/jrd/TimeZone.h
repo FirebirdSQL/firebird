@@ -46,10 +46,10 @@ public:
 class TimeZonesTableScan final : public VirtualTableScan
 {
 public:
-	TimeZonesTableScan(CompilerScratch* csb, const Firebird::string& alias, StreamType stream, jrd_rel* relation);
+	TimeZonesTableScan(CompilerScratch* csb, const Firebird::string& alias, StreamType stream, Rsc::Rel relation);
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
 	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position, Record* record) const override;
 };
 

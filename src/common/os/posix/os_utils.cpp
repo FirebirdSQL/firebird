@@ -55,13 +55,7 @@
 #include <fcntl.h>
 #endif
 
-#ifdef AIX_PPC
-#define _UNIX95
-#endif
 #include <grp.h>
-#ifdef AIX_PPC
-#undef _UNIX95
-#endif
 
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -282,31 +276,9 @@ static void raiseError(int errCode, const char* filename)
 // open (or create if missing) and set appropriate access rights
 int openCreateSharedFile(const char* pathname, int flags)
 {
-	int fd = os_utils::open(pathname, flags | O_RDWR | O_CREAT, S_IREAD | S_IWRITE);
+	int fd = os_utils::open(pathname, flags | O_RDWR | O_CREAT | O_NOFOLLOW, S_IREAD | S_IWRITE);
 	if (fd < 0)
 		raiseError(ERRNO, pathname);
-
-	// Security check - avoid symbolic links in /tmp.
-	// Malicious user can create a symlink with this name pointing to say
-	// security2.fdb and when the lock file is created the file will be damaged.
-
-	struct STAT st;
-	int rc;
-
-	rc = os_utils::fstat(fd, &st);
-
-	if (rc != 0)
-	{
-		const int e = ERRNO;
-		close(fd);
-		raiseError(e, pathname);
-	}
-
-	if (S_ISLNK(st.st_mode))
-	{
-		close(fd);
-		raiseError(ELOOP, pathname);
-	}
 
 	changeFileRights(pathname, 0660);
 
@@ -455,6 +427,33 @@ CtrlCHandler::~CtrlCHandler()
 void CtrlCHandler::handler(void*)
 {
 	terminated = true;
+}
+
+/// class StopHandler
+
+bool* StopHandler::stopPtr = nullptr;
+
+StopHandler::StopHandler(bool* stop)
+{
+	fb_assert(!stopPtr);
+	stopPtr = stop;
+	ISC_signal(SIGTSTP, handler, 0);
+}
+
+StopHandler::StopHandler(MemoryPool&)
+{
+	ISC_signal(SIGTSTP, handler, 0);
+}
+
+StopHandler::~StopHandler()
+{
+	ISC_signal_cancel(SIGTSTP, handler, 0);
+}
+
+void StopHandler::handler(void*)
+{
+	if (stopPtr)
+		*stopPtr = true;
 }
 
 } // namespace os_utils

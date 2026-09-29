@@ -110,11 +110,11 @@ public:
 	{}
 
 public:
-	bool transliterate(const dsc* from, dsc* to, CHARSET_ID&) override { return true; }
-	CHARSET_ID getChid(const dsc* d) override { return 0; }
-	Firebird::CharSet* getToCharset(CHARSET_ID charset2) override { return nullptr; }
+	bool transliterate(const dsc* from, dsc* to, CSetId&) override { return true; }
+	CSetId getChid(const dsc* d) override { return CSetId(0); }
+	Firebird::CharSet* getToCharset(CSetId charset2) override { return nullptr; }
 	void validateData(Firebird::CharSet* toCharset, SLONG length, const UCHAR* q) override { }
-	ULONG validateLength(Firebird::CharSet* charSet, CHARSET_ID charSetId, ULONG length, const UCHAR* start,
+	ULONG validateLength(Firebird::CharSet* charSet, CSetId charSetId, ULONG length, const UCHAR* start,
 		const USHORT size) override { return 0; }
 
 	SLONG getLocalDate() override

@@ -23,6 +23,7 @@
 #ifndef JRD_RECORD_BUFFER_H
 #define JRD_RECORD_BUFFER_H
 
+#include "firebird.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/File.h"

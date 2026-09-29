@@ -32,6 +32,8 @@
 
 #include "../common/gdsassert.h"
 #include <string.h>
+#include <functional>
+#include <initializer_list>
 
 namespace Firebird {
 
@@ -41,6 +43,10 @@ class Vector
 {
 public:
 	Vector() : count(0) {}
+	Vector(const std::initializer_list<T> items) : count(0)
+	{
+		push(items.begin(), items.size());
+	}
 
 	T& operator[](FB_SIZE_T index) noexcept
 	{
@@ -114,6 +120,14 @@ public:
 		return data;
 	}
 
+	void grow(FB_SIZE_T cntL) noexcept
+	{
+		fb_assert(cntL <= Capacity);
+		fb_assert(cntL > count);
+		memset(data + count, 0, sizeof(T) * (cntL - count));
+		count = cntL;
+	}
+
 	void push(const T& item)
 	{
 		add(item);
@@ -174,6 +188,16 @@ public:
 	static bool greaterThan(const T& i1, const T& i2)
 	{
 	    return i1 > i2;
+	}
+};
+
+template <typename T>
+class DefaultComparator<T*>
+{
+public:
+	static bool greaterThan(const T* i1, const T* i2)
+	{
+	    return std::greater{}(i1, i2);
 	}
 };
 

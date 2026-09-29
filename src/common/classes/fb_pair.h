@@ -47,6 +47,7 @@ template<typename parLeft, typename parRight>
 			: first(v1), second(v2) { }
 		explicit NonPooled(MemoryPool&, const NonPooled& lp)
 			: first(lp.first), second(lp.second) { }
+		NonPooled(const NonPooled& lp) = default;
 		parLeft first;
 		parRight second;
 	};
@@ -64,6 +65,8 @@ template<typename parLeft, typename parRight>
 			: first(v1), second(p, v2) { }
 		explicit Right(MemoryPool& p, const Right& lp)
 			: first(lp.first), second(p, lp.second) { }
+		Right(const Right& lp)
+			: first(lp.first), second(AutoStorage::getAutoMemoryPool(), lp.second) { }
 		parLeft first;
 		parRight second;
 	};
@@ -81,6 +84,8 @@ template<typename parLeft, typename parRight>
 			: first(p, v1), second(v2) { }
 		explicit Left(MemoryPool& p, const Left& lp)
 			: first(p, lp.first), second(lp.second) { }
+		Left(const Left& lp)
+			: first(AutoStorage::getAutoMemoryPool(), lp.first), second(lp.second) { }
 		parLeft first;
 		parRight second;
 	};
@@ -97,6 +102,9 @@ template<typename parLeft, typename parRight>
 			: first(p, v1), second(p, v2) { }
 		explicit Full(MemoryPool& p, const Full& lp)
 			: first(p, lp.first), second(p, lp.second) { }
+		Full(const Full& lp)
+			: first(AutoStorage::getAutoMemoryPool(), lp.first),
+			  second(AutoStorage::getAutoMemoryPool(), lp.second) { }
 		parLeft first;
 		parRight second;
 	};
@@ -116,8 +124,7 @@ template<typename BasePair>
 		Pair() : BasePair(AutoStorage::getAutoMemoryPool()) { }
 		Pair(const Pair_first_type& v1, const Pair_second_type& v2)
 			: BasePair(AutoStorage::getAutoMemoryPool(), v1, v2) { }
-		Pair(const Pair& lp)
-			: BasePair(AutoStorage::getAutoMemoryPool(), lp) { }
+		Pair(const Pair& lp) = default;
 		bool operator==(const Pair& v) const
 		{
 			return this->first == v.first && this->second == v.second;

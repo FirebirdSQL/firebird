@@ -28,28 +28,28 @@ template <typename T>
 class NestConst
 {
 public:
-	NestConst(T* aPtr = NULL)
+	NestConst(T* aPtr = NULL) noexcept
 		: ptr(aPtr)
 	{
 	}
 
-	NestConst<T>& operator =(T* aPtr)
+	NestConst<T>& operator =(T* aPtr) noexcept
 	{
 		ptr = aPtr;
 		return *this;
 	}
 
-	T** getAddress() { return &ptr; }
-	const T* const* getAddress() const { return &ptr; }
+	T** getAddress() noexcept { return &ptr; }
+	const T* const* getAddress() const noexcept { return &ptr; }
 
-	T* getObject() { return ptr; }
-	const T* getObject() const { return ptr; }
+	T* getObject() noexcept { return ptr; }
+	const T* getObject() const noexcept { return ptr; }
 
-	operator T*() { return ptr; }
-	operator const T*() const { return ptr; }
+	operator T*() noexcept { return ptr; }
+	operator const T*() const noexcept { return ptr; }
 
-	T* operator ->() { return ptr; }
-	const T* operator ->() const { return ptr; }
+	T* operator ->() noexcept { return ptr; }
+	const T* operator ->() const noexcept { return ptr; }
 
 private:
 	T* ptr;

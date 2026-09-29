@@ -39,6 +39,7 @@
 #include "../mov_proto.h"
 #include "../PreparedStatement.h"
 #include "../Function.h"
+#include "../Statement.h"
 
 #include "InternalDS.h"
 #include "ValidatePassword.h"
@@ -228,8 +229,6 @@ bool InternalConnection::cancelExecution(bool /*forced*/)
 
 bool InternalConnection::resetSession(thread_db* tdbb)
 {
-	fb_assert(isCurrent());
-
 	if (isCurrent())
 		return true;
 
@@ -270,7 +269,7 @@ bool InternalConnection::isSameDatabase(const PathName& dbName, ClumpletReader& 
 {
 	if (isCurrent())
 	{
-		const Attachment* att = m_attachment->getHandle();
+		Attachment* att = m_attachment->getHandle();
 		const MetaString& attUser = att->getUserName();
 		const MetaString& attRole = att->getSqlRole();
 
@@ -474,23 +473,24 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 				tran->getHandle()->tra_caller_name =
 					CallerName(obj_trigger, statement->triggerName, statement->triggerInvoker->getUserName());
 			}
-			else if (statement->triggerName.hasData())
+			else if (statement->triggerName.object.hasData())
 			{
 				tran->getHandle()->tra_caller_name =
 					CallerName(obj_trigger, statement->triggerName, "");
 			}
-			else if ((routine = statement->getRoutine()) && routine->getName().identifier.hasData())
+			else if ((routine = statement->getRoutine()) && routine->getName().object.hasData())
 			{
 				const MetaString& userName = routine->invoker ? routine->invoker->getUserName() : "";
+
 				if (routine->getName().package.isEmpty())
 				{
 					tran->getHandle()->tra_caller_name = CallerName(routine->getObjectType(),
-						routine->getName().identifier, userName);
+						routine->getName(), userName);
 				}
 				else
 				{
 					tran->getHandle()->tra_caller_name = CallerName(obj_package_header,
-						routine->getName().package, userName);
+						routine->getName().getSchemaAndPackage(), userName);
 				}
 			}
 		}
@@ -577,6 +577,7 @@ void InternalStatement::doPrepare(thread_db* tdbb, const string& sql)
 	case DsqlStatement::TYPE_SET_GENERATOR:
 	case DsqlStatement::TYPE_SAVEPOINT:
 	case DsqlStatement::TYPE_EXEC_BLOCK:
+	case DsqlStatement::TYPE_SESSION_MANAGEMENT:
 		break;
 	}
 }

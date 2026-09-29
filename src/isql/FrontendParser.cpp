@@ -55,7 +55,7 @@ FrontendParser::AnyNode FrontendParser::internalParse()
 
 	if (command == TOKEN_ADD)
 	{
-		if (auto tableName = parseName())
+		if (auto tableName = parseQualifiedName())
 		{
 			AddNode node;
 			node.tableName = std::move(tableName.value());
@@ -123,12 +123,12 @@ FrontendParser::AnyNode FrontendParser::internalParse()
 	{
 		CopyNode node;
 
-		if (auto source = parseName())
+		if (auto source = parseQualifiedName())
 			node.source = std::move(source.value());
 		else
 			return InvalidNode();
 
-		if (auto destination = parseName())
+		if (auto destination = parseQualifiedName())
 			node.destination = std::move(destination.value());
 		else
 			return InvalidNode();
@@ -344,7 +344,7 @@ FrontendParser::AnySetNode FrontendParser::parseSet()
 			else if (text == TOKEN_NAMES)
 			{
 				SetNamesNode node;
-				node.name = parseName();
+				node.name = parseQualifiedName();
 
 				if (parseEof())
 					return node;
@@ -423,6 +423,9 @@ FrontendParser::AnySetNode FrontendParser::parseSet()
 
 			break;
 		}
+
+		default:
+			break;
 	}
 
 	return InvalidNode();
@@ -459,6 +462,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_COLLATIONS("COLLATIONS");
 	static constexpr std::string_view TOKEN_COMMENTS("COMMENTS");
 	static constexpr std::string_view TOKEN_DATABASE("DATABASE");
+	static constexpr std::string_view TOKEN_DB("DB");
 	static constexpr std::string_view TOKEN_DEPENDENCIES("DEPENDENCIES");
 	static constexpr std::string_view TOKEN_DEPENDENCY("DEPENDENCY");
 	static constexpr std::string_view TOKEN_DOMAINS("DOMAINS");
@@ -474,6 +478,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_PROCEDURES("PROCEDURES");
 	static constexpr std::string_view TOKEN_PUBLICATIONS("PUBLICATIONS");
 	static constexpr std::string_view TOKEN_ROLES("ROLES");
+	static constexpr std::string_view TOKEN_SCHEMAS("SCHEMAS");
 	static constexpr std::string_view TOKEN_SECCLASSES("SECCLASSES");
 	static constexpr std::string_view TOKEN_SEQUENCES("SEQUENCES");
 	static constexpr std::string_view TOKEN_SQL("SQL");
@@ -486,6 +491,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_VIEWS("VIEWS");
 	static constexpr std::string_view TOKEN_WIRE_STATISTICS("WIRE_STATISTICS");
 	static constexpr std::string_view TOKEN_WIRE_STATS("WIRE_STATS");
+	static constexpr std::string_view TOKEN_CONSTANTS("CONSTANTS");
 
 	switch (const auto showCommandToken = lexer.getToken(); showCommandToken.type)
 	{
@@ -496,95 +502,53 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 		{
 			const auto& text = showCommandToken.processedText;
 
-			if (const auto parsed = parseShowOptName<ShowChecksNode>(text, TOKEN_CHECKS, 5))
+			if (const auto parsed = parseShowOptQualifiedName<ShowChecksNode>(text, TOKEN_CHECKS, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowCollationsNode>(text, TOKEN_COLLATES, 7))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATES, 7, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowCollationsNode>(text, TOKEN_COLLATIONS, 9))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowCollationsNode>(text, TOKEN_COLLATIONS, 9, false))
 				return parsed.value();
 			else if (text.length() >= 7 && TOKEN_COMMENTS.find(text) == 0)
 			{
 				if (parseEof())
 					return ShowCommentsNode();
 			}
-			else if (text == TOKEN_DATABASE)
+			else if (text == TOKEN_DATABASE || text == TOKEN_DB)
 			{
 				if (parseEof())
 					return ShowDatabaseNode();
 			}
-			else if (const auto parsed = parseShowOptName<ShowDependenciesNode>(text, TOKEN_DEPENDENCIES, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCIES, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowDependenciesNode>(text, TOKEN_DEPENDENCY, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDependenciesNode>(text, TOKEN_DEPENDENCY, 5, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowDomainsNode>(text, TOKEN_DOMAINS, 6))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowDomainsNode>(text, TOKEN_DOMAINS, 6, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowExceptionsNode>(text, TOKEN_EXCEPTIONS, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowExceptionsNode>(text, TOKEN_EXCEPTIONS, 5, false))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowFiltersNode>(text, TOKEN_FILTERS, 6))
 				return parsed.value();
-			else if (text.length() >= 4 && TOKEN_FUNCTIONS.find(text) == 0)
-			{
-				ShowFunctionsNode node;
-				node.name = parseName();
-
-				if (node.name)
-				{
-					if (const auto token = lexer.getToken();
-						token.type == Token::TYPE_OTHER && token.rawText == ".")
-					{
-						node.package = node.name;
-						node.name = parseName();
-
-						if (parseEof())
-							return node;
-					}
-					else if (token.type == Token::TYPE_EOF)
-					{
-						return node;
-					}
-				}
-				else
-					return node;
-			}
-			else if (const auto parsed = parseShowOptName<ShowIndexesNode>(text, TOKEN_INDEXES, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowFunctionsNode>(text, TOKEN_FUNCTIONS, 4, true))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowIndexesNode>(text, TOKEN_INDICES, 0))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDEXES, 3, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowGeneratorsNode>(text, TOKEN_GENERATORS, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowIndexesNode>(text, TOKEN_INDICES, 0, false))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowGrantsNode>(text, TOKEN_GRANTS, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_GENERATORS, 3, false))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGrantsNode>(text, TOKEN_GRANTS, 5, false))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowMappingsNode>(text, TOKEN_MAPPINGS, 3))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowPackagesNode>(text, TOKEN_PACKAGES, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowPackagesNode>(text, TOKEN_PACKAGES, 4, false))
 				return parsed.value();
-			else if (text.length() >= 4 && TOKEN_PROCEDURES.find(text) == 0)
-			{
-				ShowProceduresNode node;
-				node.name = parseName();
-
-				if (node.name)
-				{
-					if (const auto token = lexer.getToken();
-						token.type == Token::TYPE_OTHER && token.rawText == ".")
-					{
-						node.package = node.name;
-						node.name = parseName();
-
-						if (parseEof())
-							return node;
-					}
-					else if (token.type == Token::TYPE_EOF)
-					{
-						return node;
-					}
-				}
-				else
-					return node;
-			}
+			else if (const auto parsed = parseShowOptQualifiedName<ShowProceduresNode>(text, TOKEN_PROCEDURES, 4, true))
+				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowPublicationsNode>(text, TOKEN_PUBLICATIONS, 3))
 				return parsed.value();
 			else if (const auto parsed = parseShowOptName<ShowRolesNode>(text, TOKEN_ROLES, 4))
+				return parsed.value();
+			else if (const auto parsed = parseShowOptName<ShowSchemasNode>(text, TOKEN_SCHEMAS, 4))
 				return parsed.value();
 			else if (text.length() >= 6 && TOKEN_SECCLASSES.find(text) == 0)
 			{
@@ -596,7 +560,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (!(token.type == Token::TYPE_OTHER && token.rawText == "*"))
 				{
 					lexer.setPos(lexerPos);
-					node.name = parseName();
+					node.name = parseQualifiedName();
 
 					if (!node.name)
 						return InvalidNode();
@@ -611,7 +575,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return node;
 			}
-			else if (const auto parsed = parseShowOptName<ShowGeneratorsNode>(text, TOKEN_SEQUENCES, 3))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_SEQUENCES, 3, false))
 				return parsed.value();
 			else if (text == TOKEN_SQL)
 			{
@@ -641,6 +605,8 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 						node.objType = obj_relation;
 					else if (objectTypeText.length() >= 4 && TOKEN_ROLES.find(objectTypeText) == 0)
 						node.objType = obj_sql_role;
+					else if (objectTypeText.length() >= 4 && TOKEN_SCHEMAS.find(objectTypeText) == 0)
+						node.objType = obj_schema;
 					else if (objectTypeText.length() >= 4 && TOKEN_PROCEDURES.find(objectTypeText) == 0)
 						node.objType = obj_procedure;
 					else if (objectTypeText.length() >= 4 && TOKEN_PACKAGES.find(objectTypeText) == 0)
@@ -656,9 +622,9 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 
 				return node;
 			}
-			else if (const auto parsed = parseShowOptName<ShowTablesNode>(text, TOKEN_TABLES, 5))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowTablesNode>(text, TOKEN_TABLES, 5, true))
 				return parsed.value();
-			else if (const auto parsed = parseShowOptName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowTriggersNode>(text, TOKEN_TRIGGERS, 4, false))
 				return parsed.value();
 			else if (text == TOKEN_USERS)
 			{
@@ -670,7 +636,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowVersionNode();
 			}
-			else if (const auto parsed = parseShowOptName<ShowViewsNode>(text, TOKEN_VIEWS, 4))
+			else if (const auto parsed = parseShowOptQualifiedName<ShowViewsNode>(text, TOKEN_VIEWS, 4, false))
 				return parsed.value();
 			else if (text.length() >= 9 && TOKEN_WIRE_STATISTICS.find(text) == 0 ||
 				text == TOKEN_WIRE_STATS)
@@ -678,9 +644,29 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowWireStatsNode();
 			}
+			else if (text.length() >= 5 && TOKEN_CONSTANTS.find(text) == 0)
+			{
+				ShowConstantsNode node;
+				node.name = parseQualifiedName(true);
+
+				if (node.name.has_value() && node.name->package.isEmpty())
+				{
+					// It is expecting to get package = <PACKAGE> and object = <CONSTANT>
+					// But it is getting package = <SCHEMA> and object = <CONSTANT>
+					// Fix the name
+					node.name->package = node.name->schema;
+					node.name->schema = "";
+				}
+
+				if (parseEof())
+					return node;
+			}
 
 			break;
 		}
+
+		default:
+			break;
 	}
 
 	return InvalidNode();
@@ -696,6 +682,26 @@ std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptName(std:
 	{
 		Node node;
 		node.name = parseName();
+
+		if (!parseEof())
+			return InvalidNode();
+
+		return node;
+	}
+
+	return std::nullopt;
+}
+
+template <typename Node>
+std::optional<FrontendParser::AnyShowNode> FrontendParser::parseShowOptQualifiedName(std::string_view showCommand,
+	std::string_view testCommand, unsigned testCommandMinLen, bool allowPackage)
+{
+	if (showCommand == testCommand ||
+		(testCommandMinLen && showCommand.length() >= testCommandMinLen &&
+			std::string(testCommand).find(showCommand) == 0))
+	{
+		Node node;
+		node.name = parseQualifiedName(allowPackage);
 
 		if (!parseEof())
 			return InvalidNode();

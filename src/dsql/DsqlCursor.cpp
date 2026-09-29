@@ -135,6 +135,14 @@ int DsqlCursor::fetchNext(thread_db* tdbb, UCHAR* buffer)
 {
 	if (!(m_flags & IStatement::CURSOR_TYPE_SCROLLABLE))
 	{
+		if (m_state == EOS)
+		{
+			fb_assert(m_eof);
+			return 1;
+		}
+
+		fb_assert(!m_eof);
+
 		m_eof = !m_dsqlRequest->fetch(tdbb, buffer);
 
 		if (m_eof)

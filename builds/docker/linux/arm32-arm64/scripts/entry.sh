@@ -1,6 +1,4 @@
 #!/bin/sh
 set -e
 
-trap exit INT TERM
-/build.sh &
-wait $!
+exec /entry-common.sh /build.sh

@@ -236,6 +236,11 @@ public:
 			status_exception::raise(s);
 	}
 
+	bool hasErrors() const
+	{
+		return getState() & IStatus::STATE_ERRORS;
+	}
+
 protected:
 	void clear()
 	{
@@ -325,10 +330,10 @@ public:
 	}
 
 	static void setVersionError(IStatus* status, const char* interfaceName,
-		unsigned currentVersion, unsigned expectedVersion)
+		uintptr_t currentVersion, unsigned expectedVersion)
 	{
 		BaseStatusWrapper<LocalStatus>::setVersionError(
-			status, interfaceName,currentVersion, expectedVersion);
+			status, interfaceName, currentVersion, expectedVersion);
 	}
 };
 

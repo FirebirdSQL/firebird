@@ -36,6 +36,15 @@ using namespace Jrd;
 
 // Class DsqlStatement
 
+DsqlStatement::DsqlStatement(MemoryPool& pool, dsql_dbb* aDsqlAttachment)
+	: PermanentStorage(pool),
+	  dsqlAttachment(aDsqlAttachment)
+{
+	pool.setStatsGroup(memoryStats);
+
+	schemaSearchPath = dsqlAttachment->dbb_attachment->att_schema_search_path;
+}
+
 // Rethrow an exception with isc_no_meta_update and prefix codes.
 void DsqlStatement::rethrowDdlException(status_exception& ex, bool metadataUpdate, DdlNode* node)
 {
@@ -76,6 +85,7 @@ void DsqlStatement::release()
 
 void DsqlStatement::doRelease()
 {
+	fb_assert(!cacheKey.hasData());
 	setSqlText(nullptr);
 	setOrgText(nullptr, 0);
 
@@ -138,8 +148,6 @@ void DsqlDmlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		scratch->getDsqlStatement()->setBlrVersion(4);
 
 	GEN_statement(scratch, node);
-
-	unsigned messageNumber = 0;
 
 	// have the access method compile the statement
 
@@ -246,14 +254,15 @@ void DsqlDdlStatement::dsqlPass(thread_db* tdbb, DsqlCompilerScratch* scratch, n
 		rethrowDdlException(ex, false, node);
 	}
 
-	if (dbb->readOnly())
+	if (dbb->readOnly() && node->disallowedInReadOnlyDatabase())
 		ERRD_post(Arg::Gds(isc_read_only_database));
 
 	// In read-only replica, only replicator is allowed to execute DDL.
 	// As an exception, not replicated DDL statements are also allowed.
 	if (dbb->isReplica(REPLICA_READ_ONLY) &&
 		!(tdbb->tdbb_flags & TDBB_replicator) &&
-		node->mustBeReplicated())
+		node->mustBeReplicated() &&
+		node->disallowedInReadOnlyDatabase())
 	{
 		ERRD_post(Arg::Gds(isc_read_only_trans));
 	}

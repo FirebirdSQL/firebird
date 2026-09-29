@@ -265,7 +265,7 @@ namespace
 
 			PathName confName = getFileName();
 			const char* rootDir = Config::getRootDirectory();
-			const FB_SIZE_T rootLen = strlen(rootDir);
+			const FB_SIZE_T rootLen = fb_strlen(rootDir);
 
 			if ((confName.length() > rootLen) && (confName.compare(0, rootLen, rootDir, rootLen) == 0))
 				confName.erase(0, rootLen);
@@ -278,6 +278,12 @@ namespace
 				const ConfigFile::Parameter* par = &params[n];
 
 				PathName file(par->value.ToPathName());
+				if (file.empty())
+				{
+					gds__log("Alias %s has no value, ignored", par->name.c_str());
+					continue;
+				}
+
 				PathUtils::fixupSeparators(file);
 				if (PathUtils::isRelative(file) && !ISC_check_if_remote(file, false))
 				{

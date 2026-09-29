@@ -23,6 +23,16 @@ CLOOP_EXTERN_C void CALC_IStatus_setCode(struct CALC_IStatus* self, int code)
 	self->vtable->setCode(self, code);
 }
 
+CLOOP_EXTERN_C void CALC_IStatusFactory_dispose(struct CALC_IStatusFactory* self)
+{
+	self->vtable->dispose(self);
+}
+
+CLOOP_EXTERN_C struct CALC_IStatus* CALC_IStatusFactory_createStatus(struct CALC_IStatusFactory* self)
+{
+	return self->vtable->createStatus(self);
+}
+
 CLOOP_EXTERN_C void CALC_IFactory_dispose(struct CALC_IFactory* self)
 {
 	self->vtable->dispose(self);
@@ -46,6 +56,11 @@ CLOOP_EXTERN_C struct CALC_ICalculator2* CALC_IFactory_createCalculator2(struct 
 CLOOP_EXTERN_C struct CALC_ICalculator* CALC_IFactory_createBrokenCalculator(struct CALC_IFactory* self, struct CALC_IStatus* status)
 {
 	return self->vtable->createBrokenCalculator(self, status);
+}
+
+CLOOP_EXTERN_C void CALC_IFactory_setStatusFactory(struct CALC_IFactory* self, struct CALC_IStatusFactory* statusFactory)
+{
+	self->vtable->setStatusFactory(self, statusFactory);
 }
 
 CLOOP_EXTERN_C void CALC_ICalculator_dispose(struct CALC_ICalculator* self)

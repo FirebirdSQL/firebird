@@ -79,7 +79,7 @@ namespace Firebird
 
 	BigInteger::BigInteger(const BigInteger& val)
 	{
-		CHECK_MP(mp_init_copy(&t, const_cast<mp_int*>(&val.t) ));
+		CHECK_MP(mp_init_copy(&t, &val.t));
 	}
 
 	BigInteger::~BigInteger()
@@ -89,7 +89,7 @@ namespace Firebird
 
 	BigInteger& BigInteger::operator= (const BigInteger& val)
 	{
-		CHECK_MP(mp_copy(const_cast<mp_int*>(&val.t), &t));
+		CHECK_MP(mp_copy(&val.t, &t));
 		return *this;
 	}
 
@@ -102,107 +102,119 @@ namespace Firebird
 
 	void BigInteger::assign(unsigned int count, const unsigned char* bytes)
 	{
-		CHECK_MP(mp_read_unsigned_bin(&t, bytes, count));
+		CHECK_MP(mp_from_ubin(&t, bytes, count));
 	}
 
 	BigInteger BigInteger::operator+ (const BigInteger& val) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_add(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t), &rc.t));
+		CHECK_MP(mp_add(&t, &val.t, &rc.t));
 		return rc;
 	}
 
 	BigInteger BigInteger::operator- (const BigInteger& val) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_sub(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t), &rc.t));
+		CHECK_MP(mp_sub(&t, &val.t, &rc.t));
 		return rc;
 	}
 
 	BigInteger BigInteger::operator* (const BigInteger& val) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_mul(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t), &rc.t));
+		CHECK_MP(mp_mul(&t, &val.t, &rc.t));
 		return rc;
 	}
 
 	BigInteger BigInteger::operator/ (const BigInteger& val) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_div(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t), &rc.t, NULL));
+		CHECK_MP(mp_div(&t, &val.t, &rc.t, NULL));
 		return rc;
 	}
 
 	BigInteger BigInteger::operator% (const BigInteger& val) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_mod(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t), &rc.t));
+		CHECK_MP(mp_mod(&t, &val.t, &rc.t));
 		return rc;
 	}
 
 	BigInteger& BigInteger::operator+= (const BigInteger& val)
 	{
-		CHECK_MP(mp_add(&t, const_cast<mp_int*>(&val.t), &t));
+		CHECK_MP(mp_add(&t, &val.t, &t));
 		return *this;
 	}
 
 	BigInteger& BigInteger::operator-= (const BigInteger& val)
 	{
-		CHECK_MP(mp_sub(&t, const_cast<mp_int*>(&val.t), &t));
+		CHECK_MP(mp_sub(&t, &val.t, &t));
 		return *this;
 	}
 
 	BigInteger& BigInteger::operator*= (const BigInteger& val)
 	{
-		CHECK_MP(mp_mul(&t, const_cast<mp_int*>(&val.t), &t));
+		CHECK_MP(mp_mul(&t, &val.t, &t));
 		return *this;
 	}
 
 	BigInteger& BigInteger::operator/= (const BigInteger& val)
 	{
-		CHECK_MP(mp_div(&t, const_cast<mp_int*>(&val.t), &t, NULL));
+		CHECK_MP(mp_div(&t, &val.t, &t, NULL));
 		return *this;
 	}
 
 	BigInteger& BigInteger::operator%= (const BigInteger& val)
 	{
-		CHECK_MP(mp_mod(&t, const_cast<mp_int*>(&val.t), &t));
+		CHECK_MP(mp_mod(&t, &val.t, &t));
 		return *this;
 	}
 
 	bool BigInteger::operator== (const BigInteger& val) const
 	{
-		return mp_cmp(const_cast<mp_int*>(&t), const_cast<mp_int*>(&val.t)) == 0;
+		return mp_cmp(&t, &val.t) == MP_EQ;
+	}
+
+	bool BigInteger::operator< (int val) const
+	{
+		BigInteger bVal;
+		mp_set_i32(&bVal.t, val);
+		return mp_cmp(&t, &bVal.t) == MP_LT;
+	}
+
+	bool BigInteger::operator> (int val) const
+	{
+		BigInteger bVal;
+		mp_set_i32(&bVal.t, val);
+		return mp_cmp(&t, &bVal.t) == MP_GT;
 	}
 
 	void BigInteger::getBytes(Firebird::UCharBuffer& bytes) const
 	{
-		CHECK_MP(mp_to_unsigned_bin(const_cast<mp_int*>(&t), bytes.getBuffer(length())));
+		size_t len = length();
+		size_t written = 0;
+		CHECK_MP(mp_to_ubin(&t, bytes.getBuffer(len), len, &written));
+		fb_assert(written == len);
 	}
 
 	unsigned int BigInteger::length() const
 	{
-		int rc = mp_unsigned_bin_size(const_cast<mp_int*>(&t));
-		if (rc < 0)
-		{
-			check(rc, "mp_unsigned_bin_size(&t)");
-		}
-		return static_cast<unsigned int>(rc);
+		return static_cast<unsigned int>(mp_ubin_size(&t));
 	}
 
 	void BigInteger::getText(string& str, unsigned int radix) const
 	{
 		int size;
-		CHECK_MP(mp_radix_size(const_cast<mp_int*>(&t), radix, &size));
+		CHECK_MP(mp_radix_size(&t, radix, &size));
 		str.resize(size - 1, ' ');
-		CHECK_MP(mp_toradix(const_cast<mp_int*>(&t), str.begin(), radix));
+		size_t written = 0;
+		CHECK_MP(mp_to_radix(&t, str.begin(), size, &written, radix));
 	}
 
 	BigInteger BigInteger::modPow(const BigInteger& pow, const BigInteger& mod) const
 	{
 		BigInteger rc;
-		CHECK_MP(mp_exptmod(const_cast<mp_int*>(&t), const_cast<mp_int*>(&pow.t),
-							const_cast<mp_int*>(&mod.t), &rc.t));
+		CHECK_MP(mp_exptmod(&t, &pow.t, &mod.t, &rc.t));
 		return rc;
 	}
 

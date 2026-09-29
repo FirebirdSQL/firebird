@@ -171,9 +171,9 @@ static SLONG get_key(const TEXT* filename)
 	TEXT expanded_filename[128], hostname[64];
 
 #ifdef NOHOSTNAME
-	strcpy(expanded_filename, filename);
+	strncpy(expanded_filename, filename, std::min(sizeof(expanded_filename), strlen(filename)));
 #else
-	sprintf(expanded_filename, filename, ISC_get_host(hostname, sizeof(hostname)));
+	snprintf(expanded_filename, sizeof(expanded_filename), filename, ISC_get_host(hostname, sizeof(hostname)));
 #endif
 
 	// Produce shared memory key for file

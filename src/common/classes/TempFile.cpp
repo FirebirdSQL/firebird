@@ -56,8 +56,8 @@ namespace Firebird {
 
 // Const definitions
 
-static const char* ENV_VAR = "FIREBIRD_TMP";
-static const char* DEFAULT_PATH =
+static constexpr const char* ENV_VAR = "FIREBIRD_TMP";
+static constexpr const char* DEFAULT_PATH =
 #if defined(UNIX)
 	"/tmp/";
 #elif defined(ANDROID)
@@ -68,11 +68,11 @@ static const char* DEFAULT_PATH =
 	NULL;
 #endif
 
-static const char* const NAME_PATTERN = "XXXXXX";
+static constexpr const char* NAME_PATTERN = "XXXXXX";
 
 #ifdef WIN_NT
-static const char* const NAME_LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
-static const FB_SIZE_T MAX_TRIES = 256;
+static constexpr const char* NAME_LETTERS = "abcdefghijklmnopqrstuvwxyz0123456789";
+static constexpr FB_SIZE_T MAX_TRIES = 256;
 #endif
 
 // we need a class here only to return memory on shutdown and avoid
@@ -388,7 +388,7 @@ FB_SIZE_T TempFile::write(offset_t offset, const void* buffer, FB_SIZE_T length)
 // Unlinks the file
 //
 
-void TempFile::unlink()
+void TempFile::unlink() noexcept
 {
 #if defined(WIN_NT)
 	doUnlink = true;

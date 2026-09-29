@@ -28,6 +28,8 @@
 #include "../common/classes/objects_array.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/auto.h"
+#include "../common/utils_proto.h"
+
 
 /**
 	Since the original (isc.cpp) code wasn't able to provide powerful and
@@ -50,14 +52,17 @@ class ConfigCache;
 
 class ConfigFile : public Firebird::AutoStorage, public Firebird::RefCounted
 {
+	using StreamName = fb_utils::SafePointer<const char>;
+
 public:
 	// flags for config file
-	static const USHORT HAS_SUB_CONF	= 0x01;
-	static const USHORT ERROR_WHEN_MISS	= 0x02;
-	static const USHORT NATIVE_ORDER	= 0x04;
-	static const USHORT NO_COMMENTS		= 0x08;
-	static const USHORT CUSTOM_MACROS	= 0x10;
-	static const USHORT REGEXP_SUPPORT	= 0x20;
+	static inline constexpr USHORT HAS_SUB_CONF		= 0x01;
+	static inline constexpr USHORT ERROR_WHEN_MISS	= 0x02;
+	static inline constexpr USHORT NATIVE_ORDER		= 0x04;
+	static inline constexpr USHORT NO_COMMENTS		= 0x08;
+	static inline constexpr USHORT CUSTOM_MACROS	= 0x10;
+	static inline constexpr USHORT REGEXP_SUPPORT	= 0x20;
+	static inline constexpr USHORT DENY_INCLUDE		= 0x40;
 
 	// enum to distinguish ctors
 	enum UseText {USE_TEXT};
@@ -125,7 +130,7 @@ public:
 	}
 
 	// Substitute macro values in a string
-	bool macroParse(String& value, const char* fileName) const;
+	bool macroParse(String& value, const StreamName fileName) const;
 
 private:
 	enum LineType {LINE_BAD, LINE_REGULAR, LINE_START_SUB, LINE_END_SUB, LINE_INCLUDE};
@@ -134,19 +139,19 @@ private:
 	USHORT flags;
 	unsigned includeLimit;
 	ConfigCache* filesCache;
-	static const unsigned INCLUDE_LIMIT = 64;
+	static inline constexpr unsigned INCLUDE_LIMIT = 64;
 
 	// utilities
 	bool getLine(Stream* stream, String&, unsigned int&);
 	void parse(Stream* stream);
-	LineType parseLine(const char* fileName, const String& input, Parameter& par);
-	bool translate(const char* fileName, const String& from, String& to) const;
-	[[noreturn]] void badLine(const char* fileName, const String& line);
-	void include(const char* currentFileName, const Firebird::PathName& path);
-	bool wildCards(const char* currentFileName, const Firebird::PathName& pathPrefix, FilesArray& components);
+	LineType parseLine(const StreamName fileName, const String& input, Parameter& par);
+	bool translate(const StreamName fileName, const String& from, String& to) const;
+	[[noreturn]] void badLine(const StreamName fileName, const String& line);
+	void include(const StreamName currentFileName, const Firebird::PathName& path);
+	bool wildCards(const Firebird::PathName& pathPrefix, FilesArray& components);
 	bool substituteStandardDir(const String& from, String& to) const;
 	void adjustMacroReplacePositions(const String& value, const String& macro, String::size_type& from, String::size_type& to) const;
-	unsigned getDirSeparatorLength(const String& value, size_t subFrom) const;
+	unsigned getDirSeparatorLength(const String& value, String::size_type subFrom) const;
 };
 
 #endif	// CONFIG_CONFIG_FILE_H

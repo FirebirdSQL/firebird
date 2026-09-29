@@ -63,8 +63,11 @@ this case engine will use value of ParallelWorkers setting when building
 indices, i.e. this phase could be run in parallel by the engine itself. To 
 fully avoid parallel operations when restoring database, use -PARALLEL 1.
 
-  Note, gbak not uses firebird.conf by itself and ParallelWorkers setting does
+  Note: gbak not uses firebird.conf by itself and ParallelWorkers setting does
 not affect its operations.
+
+  Note: the upper limit for the number of parallel workers is 64 and applied by
+both backup and restore.
 
 
 Examples.

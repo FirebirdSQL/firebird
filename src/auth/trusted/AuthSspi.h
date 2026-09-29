@@ -58,7 +58,7 @@ public:
 	typedef Firebird::UCharBuffer Key;
 
 private:
-	enum {BUFSIZE = 4096};
+	static constexpr size_t BUFSIZE = 4096;
 
 	SecHandle secHndl;
 	bool hasCredentials;
@@ -82,7 +82,7 @@ private:
 	ACCEPT_SECURITY_CONTEXT_FN fAcceptSecurityContext;
 
 	bool checkAdminPrivilege();
-	bool initEntries();
+	bool initEntries() noexcept;
 
 public:
 	typedef Firebird::Array<unsigned char> DataHolder;
@@ -92,7 +92,7 @@ public:
 
 	// true when has non-empty security context,
 	// ready to be sent to the other side
-	bool isActive() const
+	bool isActive() const noexcept
 	{
 		return hasContext;
 	}
@@ -107,7 +107,7 @@ public:
 	bool getLogin(Firebird::string& login, bool& wh, GroupsList& grNames);
 
 	// returns session key for wire encryption
-	const Key* getKey() const;
+	const Key* getKey() const noexcept;
 };
 
 class WinSspiServer :
@@ -117,7 +117,7 @@ public:
 	// IServer implementation
 	int authenticate(Firebird::CheckStatusWrapper* status, Firebird::IServerBlock* sBlock,
 		Firebird::IWriter* writerInterface);
-	void setDbCryptCallback(Firebird::CheckStatusWrapper* status, Firebird::ICryptKeyCallback* callback) {}; // do nothing
+	void setDbCryptCallback(Firebird::CheckStatusWrapper* status, Firebird::ICryptKeyCallback* callback) noexcept {}; // do nothing
 
 	WinSspiServer(Firebird::IPluginConfig*);
 
@@ -147,7 +147,7 @@ void registerTrustedServer(Firebird::IPluginManager* iPlugin);
 
 // Set per-thread flag that specify which security package should be used by
 // newly created plugin instances: true - use NTLM, false - use Negotiate.
-void setLegacySSP(bool value);
+void setLegacySSP(bool value) noexcept;
 
 } // namespace Auth
 

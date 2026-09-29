@@ -32,6 +32,7 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/GenericMap.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../common/classes/NestConst.h"
 #include "../common/classes/auto.h"
 #include "../common/classes/rwlock.h"
@@ -56,6 +57,7 @@ class Function;
 class DeclareVariableNode;
 class StmtNode;
 class ValueExprNode;
+struct CallerName;
 struct impure_value;
 struct record_param;
 
@@ -74,7 +76,6 @@ private:
 	public:
 		explicit RoutineMetadata(MemoryPool& pool)
 			: PermanentStorage(pool),
-			  package(pool),
 			  name(pool),
 			  entryPoint(pool),
 			  body(pool),
@@ -85,12 +86,12 @@ private:
 
 		const char* getPackage(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return package.nullStr();
+			return name.package.nullStr();
 		}
 
 		const char* getName(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return name.c_str();
+			return name.object.c_str();
 		}
 
 		const char* getEntryPoint(Firebird::CheckStatusWrapper* /*status*/) const
@@ -120,7 +121,7 @@ private:
 
 		const char* getTriggerTable(Firebird::CheckStatusWrapper* /*status*/) const
 		{
-			return triggerTable.c_str();
+			return triggerTable.object.c_str();
 		}
 
 		unsigned getTriggerType(Firebird::CheckStatusWrapper* /*status*/) const
@@ -128,15 +129,19 @@ private:
 			return triggerType;
 		}
 
+		const char* getSchema(Firebird::CheckStatusWrapper* /*status*/) const
+		{
+			return name.schema.c_str();
+		}
+
 	public:
-		MetaName package;
-		MetaName name;
+		QualifiedName name;
 		Firebird::string entryPoint;
 		Firebird::string body;
 		Firebird::RefPtr<Firebird::IMessageMetadata> inputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> outputParameters;
 		Firebird::RefPtr<Firebird::IMessageMetadata> triggerFields;
-		MetaName triggerTable;
+		QualifiedName triggerTable;
 		unsigned triggerType;
 
 	private:
@@ -210,7 +215,7 @@ private:
 
 		Firebird::IExternalEngine* engine;
 		Firebird::AutoPtr<ExternalContextImpl> context;
-		USHORT adminCharSet;
+		TTypeId adminCharSet;
 	};
 
 public:
@@ -266,6 +271,46 @@ public:
 		std::optional<ULONG> extOutputImpureOffset;
 	};
 
+	class AggregateFunction final : public ExtRoutine
+	{
+	private:
+		struct Impl;
+
+	public:
+		AggregateFunction(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb,
+			ExtEngineManager* aExtManager,
+			Firebird::IExternalEngine* aEngine,
+			RoutineMetadata* aMetadata,
+			Firebird::IExternalAggregateFunction* aFunction,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extInputParameters,
+			Firebird::RefPtr<Firebird::IMessageMetadata> extOutputParameters,
+			const Jrd::Function* aUdf);
+		~AggregateFunction() override;
+
+		Firebird::IExternalAggregateInstance* newInstance(thread_db* tdbb) const;
+		void disposeInstance(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+
+		void start(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+		void accumulate(thread_db* tdbb, Request* request, Firebird::IExternalAggregateInstance* aggregate,
+			UCHAR* inMsg) const;
+		bool group(thread_db* tdbb, Request* request, Firebird::IExternalAggregateInstance* aggregate,
+			UCHAR* outMsg) const;
+		void finish(thread_db* tdbb, Firebird::IExternalAggregateInstance* aggregate) const;
+
+	private:
+		static CallerName getCallerName(const Jrd::Function* udf);
+
+		void validateParameters(thread_db* tdbb, UCHAR* msg, bool input) const;
+		void initializeOutput(thread_db* tdbb, Request* request, UCHAR* outMsg) const;
+
+	private:
+		Firebird::IExternalAggregateFunction* function;
+		const Jrd::Function* udf;
+		Firebird::AutoPtr<Format> extInputFormat;
+		Firebird::AutoPtr<Format> extOutputFormat;
+		Firebird::AutoPtr<Impl> impl;
+	};
+
 	class ResultSet;
 
 	class Procedure final : public ExtRoutine
@@ -301,7 +346,7 @@ public:
 		bool firstFetch;
 		EngineAttachmentInfo* attInfo;
 		Firebird::IExternalResultSet* resultSet;
-		USHORT charSet;
+		CSetId charSet;
 	};
 
 	class Trigger final : public ExtRoutine
@@ -342,6 +387,9 @@ public:
 	void closeAttachment(thread_db* tdbb, Attachment* attachment);
 
 	void makeFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
+		const MetaName& engine, const Firebird::string& entryPoint,
+		const Firebird::string& body);
+	void makeAggregateFunction(thread_db* tdbb, CompilerScratch* csb, Jrd::Function* udf,
 		const MetaName& engine, const Firebird::string& entryPoint,
 		const Firebird::string& body);
 	void makeProcedure(thread_db* tdbb, CompilerScratch* csb, jrd_prc* prc,

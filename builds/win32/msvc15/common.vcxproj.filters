@@ -141,6 +141,9 @@
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp">
       <Filter>classes</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\classes\ThreadCleanup.cpp">
+      <Filter>classes</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp">
       <Filter>classes</Filter>
     </ClCompile>
@@ -296,9 +299,6 @@
     <ClInclude Include="..\..\..\src\common\dsc_proto.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\dsc_pub.h">
-      <Filter>headers</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\src\common\dyntable.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -449,7 +449,7 @@
     <ClInclude Include="..\..\..\src\common\classes\objects_array.h">
       <Filter>headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\src\common\classes\QualifiedName.h">
+    <ClInclude Include="..\..\..\src\common\classes\PodOptional.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\RefCounted.h">
@@ -477,6 +477,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\TempFile.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\ThreadCleanup.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\timestamp.h">
@@ -584,6 +587,9 @@
     <ClInclude Include="..\..\..\src\common\DecFloat.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\DeindentedStr.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\BatchCompletionState.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -611,6 +617,9 @@
     <ClInclude Include="..\..\..\src\common\classes\ParsedList.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\common\classes\QualifiedMetaString.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\common\Int128.h">
       <Filter>headers</Filter>
     </ClInclude>
@@ -621,6 +630,21 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\common\classes\TimerImpl.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\firebird\impl\dsc_pub.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\include\fb_exception.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcChat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcMessage.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\common\ipc\IpcNamedSignal.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>

@@ -79,14 +79,14 @@ constexpr P_ARCH ARCHITECTURE	= arch_arm;
 
 // port_server_flags
 
-constexpr USHORT SRVR_server			= 1;	// server
-constexpr USHORT SRVR_multi_client		= 2;	// multi-client server
-constexpr USHORT SRVR_debug				= 4;	// debug run
-constexpr USHORT SRVR_inet				= 8;	// Inet protocol
-constexpr USHORT SRVR_xnet				= 16;	// Xnet protocol (Win32)
-constexpr USHORT SRVR_non_service		= 32;	// not running as an NT service
-constexpr USHORT SRVR_high_priority		= 64;	// fork off server at high priority
-constexpr USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
-constexpr USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
+inline constexpr USHORT SRVR_server				= 1;	// server
+inline constexpr USHORT SRVR_multi_client		= 2;	// multi-client server
+inline constexpr USHORT SRVR_debug				= 4;	// debug run
+inline constexpr USHORT SRVR_inet				= 8;	// Inet protocol
+inline constexpr USHORT SRVR_xnet				= 16;	// Xnet protocol (Win32)
+inline constexpr USHORT SRVR_non_service		= 32;	// not running as an NT service
+inline constexpr USHORT SRVR_high_priority		= 64;	// fork off server at high priority
+inline constexpr USHORT SRVR_thread_per_port	= 128;	// bind thread to a port
+inline constexpr USHORT SRVR_no_icon			= 256;	// tell the server not to show the icon
 
 #endif /* REMOTE_REMOTE_DEF_H */

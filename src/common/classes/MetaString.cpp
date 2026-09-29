@@ -28,13 +28,14 @@
 
 #include "firebird.h"
 
+#include <algorithm>
 #include <stdarg.h>
 
 #include "../common/classes/MetaString.h"
 
 namespace Firebird {
 
-MetaString& MetaString::assign(const char* s, FB_SIZE_T l)
+MetaString& MetaString::assign(const char* s, FB_SIZE_T l) noexcept
 {
 	init();
 	if (s)
@@ -49,20 +50,20 @@ MetaString& MetaString::assign(const char* s, FB_SIZE_T l)
 	return *this;
 }
 
-char* MetaString::getBuffer(const FB_SIZE_T l)
+char* MetaString::getBuffer(const FB_SIZE_T l) noexcept
 {
-	fb_assert (l < MAX_SQL_IDENTIFIER_SIZE);
+	fb_assert(l < MAX_SQL_IDENTIFIER_SIZE);
 	init();
 	count = l;
 	return data;
 }
 
-int MetaString::compare(const char* s, FB_SIZE_T l) const
+int MetaString::compare(const char* s, FB_SIZE_T l) const noexcept
 {
 	if (s)
 	{
 		adjustLength(s, l);
-		FB_SIZE_T x = length() < l ? length() : l;
+		const FB_SIZE_T x = std::min(length(), l);
 		int rc = memcmp(c_str(), s, x);
 		if (rc)
 		{
@@ -72,7 +73,7 @@ int MetaString::compare(const char* s, FB_SIZE_T l) const
 	return length() - l;
 }
 
-void MetaString::adjustLength(const char* const s, FB_SIZE_T& l)
+void MetaString::adjustLength(const char* const s, FB_SIZE_T& l) noexcept
 {
 	fb_assert(s);
 	if (l > MAX_SQL_IDENTIFIER_LEN)
@@ -98,7 +99,7 @@ void MetaString::printf(const char* format, ...)
 	init();
 	va_list params;
 	va_start(params, format);
-	int l = VSNPRINTF(data, MAX_SQL_IDENTIFIER_LEN, format, params);
+	int l = vsnprintf(data, MAX_SQL_IDENTIFIER_LEN, format, params);
 	if (l < 0 || FB_SIZE_T(l) > MAX_SQL_IDENTIFIER_LEN)
 	{
 		l = MAX_SQL_IDENTIFIER_LEN;
@@ -112,10 +113,7 @@ FB_SIZE_T MetaString::copyTo(char* to, FB_SIZE_T toSize) const
 {
 	fb_assert(to);
 	fb_assert(toSize);
-	if (--toSize > length())
-	{
-		toSize = length();
-	}
+	toSize = std::min(toSize - 1, length());
 	memcpy(to, c_str(), toSize);
 	to[toSize] = 0;
 	return toSize;

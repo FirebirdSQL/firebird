@@ -37,7 +37,7 @@ void	SDW_get_shadows(Jrd::thread_db* tdbb);
 void	SDW_init(Jrd::thread_db* tdbb, bool, bool);
 bool	SDW_lck_update(Jrd::thread_db*, SLONG);
 void	SDW_notify(Jrd::thread_db* tdbb);
-bool	SDW_rollover_to_shadow(Jrd::thread_db* tdbb, Jrd::jrd_file*, const bool);
+bool	SDW_rollover_to_shadow(Jrd::thread_db* tdbb, const Jrd::jrd_file*, const bool);
 // It's never called directly, but through SDW_check().
 //void	SDW_shutdown_shadow(Jrd::Shadow*);
 void	SDW_start(Jrd::thread_db* tdbb, const TEXT*, USHORT, USHORT, bool);

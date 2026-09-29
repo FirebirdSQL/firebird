@@ -51,8 +51,8 @@ Installation
 ============
 
 Installation issues are covered in detail in the
-Installation Guide available in the doc directory 
-after install. A brief summary of installation issues 
+Installation Guide available in the doc directory
+after install. A brief summary of installation issues
 can also be found in the installation_readme.txt, also
 available from the doc directory after installation.
 
@@ -68,18 +68,12 @@ Before you report a bug:
  o Perhaps someone has already reported this? Browse
    existing bug reports here:
 
-    http://tracker.firebirdsql.org/browse/CORE
+    https://github.com/FirebirdSQL/firebird/issues
 
  o If in doubt why not discuss the problem on the
    Firebird-devel list? You can subscribe here:
 
-    http://lists.sourceforge.net/lists/listinfo/firebird-devel
-
-   and the list is viewable via a newsgroup interface
-   here:
-
-    news://news.atkin.com/
-
+    https://groups.google.com/g/firebird-devel
 
 
 From the Firebird team.

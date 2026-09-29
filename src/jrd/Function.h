@@ -24,77 +24,102 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 #include "../common/classes/NestConst.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/val.h"
 #include "../dsql/Nodes.h"
+#include "../jrd/CacheVector.h"
+#include "../jrd/lck.h"
 
 namespace Jrd
 {
 	class ValueListNode;
-	class QualifiedName;
 
 	class Function final : public Routine
 	{
 		static const char* const EXCEPTION_MESSAGE;
 
 	public:
-		static Function* lookup(thread_db* tdbb, USHORT id, bool return_deleted, bool noscan, USHORT flags);
-		static Function* lookup(thread_db* tdbb, const QualifiedName& name, bool noscan);
+		static const enum lck_t LOCKTYPE = LCK_fun_rescan;
 
-		void releaseLocks(thread_db* tdbb);
+		static Function* lookup(thread_db* tdbb, MetaId id, ObjectBase::Flag flags);
+		static Function* lookup(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 
-		explicit Function(MemoryPool& p)
-			: Routine(p),
-			  fun_entrypoint(NULL),
-			  fun_inputs(0),
-			  fun_return_arg(0),
-			  fun_temp_length(0),
-			  fun_exception_message(p),
-			  fun_deterministic(false),
-			  fun_external(NULL)
+	private:
+		explicit Function(Cached::Function* perm)
+			: Routine(perm->getPool()),
+			  cachedFunction(perm),
+			  fun_exception_message(perm->getPool())
 		{
 		}
-
-		static Function* loadMetadata(thread_db* tdbb, USHORT id, bool noscan, USHORT flags);
-		static int blockingAst(void*);
 
 	public:
-		int getObjectType() const override
+		Function(MemoryPool& p)
+			: Routine(p),
+			  cachedFunction(FB_NEW_POOL(p) Cached::Function(p)),
+			  fun_exception_message(p)
 		{
-			return obj_udf;
 		}
 
-		SLONG getSclType() const override
+		static Function* create(thread_db* tdbb, MemoryPool& pool, Cached::Function* perm);
+		ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
+		static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<> name);
+		void checkReload(thread_db* tdbb) const override;
+
+		static const char* objectFamily(void*)
+		{
+			return "function";
+		}
+
+	public:
+		int getObjectType() const noexcept override
+		{
+			return objectType();
+		}
+
+		SLONG getSclType() const noexcept override
 		{
 			return obj_functions;
 		}
 
-		bool checkCache(thread_db* tdbb) const override;
-		void clearCache(thread_db* tdbb) override;
+		static ObjectType objectType() noexcept;
 
+	private:
 		~Function() override
 		{
 			delete fun_external;
-		}
-
-		void releaseExternal() override
-		{
-			delete fun_external;
-			fun_external = NULL;
+			delete fun_external_aggregate;
 		}
 
 	public:
-		int (*fun_entrypoint)();				// function entrypoint
-		USHORT fun_inputs;						// input arguments
-		USHORT fun_return_arg;					// return argument
-		ULONG fun_temp_length;					// temporary space required
+		void releaseExternal() override
+		{
+			delete fun_external;
+			fun_external = nullptr;
+			delete fun_external_aggregate;
+			fun_external_aggregate = nullptr;
+		}
+
+	public:
+		Cached::Function* cachedFunction;		// entry in the cache
+		int (*fun_entrypoint)() = nullptr;		// function entrypoint
+		USHORT fun_inputs = 0;					// input arguments
+		USHORT fun_return_arg = 0;				// return argument
+		ULONG fun_temp_length = 0;				// temporary space required
 
 		Firebird::string fun_exception_message;	// message containing the exception error message
 
-		bool fun_deterministic;
-		const ExtEngineManager::Function* fun_external;
+		bool fun_private = false;
+		bool fun_deterministic = false;
+		bool fun_aggregate = false;
+		const ExtEngineManager::Function* fun_external = nullptr;
+		const ExtEngineManager::AggregateFunction* fun_external_aggregate = nullptr;
 
-	protected:
-		bool reload(thread_db* tdbb) override;
+		Cached::Function* getPermanent() const noexcept override
+		{
+			return cachedFunction;
+		}
+
+		ScanResult reload(thread_db* tdbb, ObjectBase::Flag fl);
 	};
 }
 

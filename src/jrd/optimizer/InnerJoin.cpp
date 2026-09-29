@@ -108,7 +108,6 @@ void InnerJoin::calculateStreamInfo()
 		innerStream->baseIndexes = candidate->indexes;
 		innerStream->baseUnique = candidate->unique;
 		innerStream->baseNavigated = candidate->navigated;
-		innerStream->baseConjuncts = candidate->conjuncts;
 
 		csb->csb_rpt[innerStream->number].deactivate();
 	}
@@ -187,32 +186,41 @@ void InnerJoin::estimateCost(unsigned position,
 	fb_assert(!position || candidate->dependencies);
 
 	// Remember selectivity of this stream
-	joinedStreams[position].selectivity = candidate->selectivity;
+	joinedStreams[position].selectivity = candidate->matchSelectivity;
+
+	// Calculate the nested loop cost, it's our default option
+	const auto loopCost = candidate->cost * cardinality;
+	cost = loopCost;
 
 	// Get the stream cardinality
 	const auto streamCardinality = csb->csb_rpt[stream->number].csb_cardinality;
+
+	// Calculate the retrieval cardinality
+	auto currentCardinality = streamCardinality * candidate->selectivity;
+
+	// Given the "first-rows" mode specified (or implied)
+	// and unless an external sort is to be applied afterwards,
+	// fake the expected cardinality to look as low as possible
+	// to estimate the cost just for a single row being produced.
+	// The same rule is used if the retrieval is unique.
+
+	const bool firstRows = (optimizer->favorFirstRows() &&
+		(!sortPtr || !*sortPtr || candidate->navigated));
+
+	if ((candidate->unique || firstRows) && currentCardinality > MINIMUM_CARDINALITY)
+		currentCardinality = MINIMUM_CARDINALITY;
 
 	// If the table looks like empty during preparation time, we cannot be sure about
 	// its real cardinality during execution. So, unless we have some index-based
 	// filtering applied, let's better be pessimistic and avoid hash joining due to
 	// likely cardinality under-estimation.
-	const bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
+	bool avoidHashJoin = (streamCardinality <= MINIMUM_CARDINALITY && !stream->baseIndexes);
 
-	auto currentCardinality = candidate->unique ?
-		MINIMUM_CARDINALITY : streamCardinality * candidate->selectivity;
-	auto currentCost = candidate->cost;
-
-	// Given the "first-rows" mode specified (or implied)
-	// and unless an external sort is to be applied afterwards,
-	// fake the expected cardinality to look as low as possible
-	// to estimate the cost just for a single row being produced
-
-	if ((!sort || candidate->navigated) && optimizer->favorFirstRows())
-		currentCardinality = MINIMUM_CARDINALITY;
-
-	// Calculate the nested loop cost, it's our default option
-	const auto loopCost = currentCost * cardinality;
-	cost = loopCost;
+	// If the user-defined plan is provided and we were able to utilize indices for this retrieval,
+	// then such indices were explicitly specified in the plan.
+	// It means the user seems to prefers a loop-join over a hash-join.
+	if (csb->csb_rpt[stream->number].csb_plan && candidate->indexes && candidate->dependencies)
+		avoidHashJoin = true;
 
 	// Consider whether the current stream can be hash-joined to the prior ones.
 	// Beware conditional retrievals, this is impossible for them.
@@ -269,7 +277,7 @@ void InnerJoin::estimateCost(unsigned position,
 		}
 	}
 
-	cardinality = MAX(currentCardinality, MINIMUM_CARDINALITY);
+	cardinality = currentCardinality;
 }
 
 
@@ -535,7 +543,7 @@ River* InnerJoin::formRiver()
 
 			// Create a nested loop join from the priorly processed streams
 			const auto priorRsb = (rsbs.getCount() == 1) ? rsbs[0] :
-				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+				FB_NEW_POOL(getPool()) NestedLoopJoin(csb, JoinType::INNER, rsbs.getCount(), rsbs.begin());
 
 			// Prepare record sources and corresponding equivalence keys for hash-joining
 			RecordSource* hashJoinRsbs[] = {priorRsb, rsb};
@@ -580,7 +588,7 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, INNER_JOIN, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, JoinType::INNER, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
@@ -597,7 +605,7 @@ River* InnerJoin::formRiver()
 
 	// Create a nested loop join from the processed streams
 	rsb = (rsbs.getCount() == 1) ? rsbs[0] :
-		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, rsbs.getCount(), rsbs.begin());
+		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, JoinType::INNER, rsbs.getCount(), rsbs.begin());
 
 	// Ensure matching booleans are rechecked early
 	if (equiMatches.hasData())

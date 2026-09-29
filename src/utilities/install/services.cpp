@@ -72,7 +72,7 @@ USHORT SERVICES_install(SC_HANDLE manager,
 
 	char path_name[MAX_PATH * 2];
 	const char* path_format = (strchr(exe_name, ' ') ? "\"%s\"" : "%s");
-	sprintf(path_name, path_format, exe_name);
+	snprintf(path_name, sizeof(path_name), path_format, exe_name);
 
 	if (switches)
 	{
@@ -558,21 +558,3 @@ USHORT SERVICES_grant_access_rights(const char* service_name, const TEXT* accoun
 
 	return FB_SUCCESS;
 }
-
-//
-// Until the fb_assert could be converted to a function/object linked with each module
-// we need this ugly workaround.
-//
-extern "C" void API_ROUTINE gds__log(const TEXT* text, ...)
-{
-	va_list ptr;
-
-	va_start(ptr, text);
-	vprintf(text, ptr);
-	va_end(ptr);
-	printf("\n\n");
-}
-
-//
-// EOF
-//

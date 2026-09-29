@@ -69,6 +69,11 @@ string RemotePassword::pluginName(unsigned bits)
 RemotePassword::RemotePassword()
 	: group(RemoteGroup::getGroup())
 {
+	makePrivate();
+}
+
+void RemotePassword::makePrivate()
+{
 #if SRP_DEBUG > 1
 	privateKey = BigInteger("60975527035CF2AD1989806F0407210BC81EDC04E2762A56AFD529DDDA2D4393");
 #else
@@ -103,23 +108,40 @@ BigInteger RemotePassword::computeVerifier(const string& account, const string& 
 
 void RemotePassword::genClientKey(string& pubkey)
 {
-	dumpIt("privateKey(C)", privateKey);
-	clientPublicKey = group->generator.modPow(privateKey, group->prime);
-	clientPublicKey.getText(pubkey);
-	dumpIt("clientPublicKey", clientPublicKey);
+	for(;;)
+	{
+		dumpIt("privateKey(C)", privateKey);
+		clientPublicKey = group->generator.modPow(privateKey, group->prime);
+		dumpIt("clientPublicKey", clientPublicKey);
+		if (clientPublicKey > 1)
+		{
+			clientPublicKey.getText(pubkey);
+			break;
+		}
+		dumpIt("remake private key", "");
+		makePrivate();
+	}
 }
 
 void RemotePassword::genServerKey(string& pubkey, const Firebird::UCharBuffer& verifier)
 {
-	dumpIt("privateKey(S)", privateKey);
-	BigInteger gb(group->generator.modPow(privateKey, group->prime));	// g^b
-	dumpIt("gb", gb);
-	BigInteger v(verifier);												// v
-	BigInteger kv = (group->k * v) % group->prime;
-	dumpIt("kv", kv);
-	serverPublicKey = (kv + gb) % group->prime;
-	serverPublicKey.getText(pubkey);
-	dumpIt("serverPublicKey", serverPublicKey);
+	for(;;)
+	{
+		dumpIt("privateKey(S)", privateKey);
+		BigInteger gb(group->generator.modPow(privateKey, group->prime));	// g^b
+		dumpIt("gb", gb);
+		BigInteger v(verifier);												// v
+		BigInteger kv = (group->k * v) % group->prime;
+		dumpIt("kv", kv);
+		serverPublicKey = (kv + gb) % group->prime;
+		dumpIt("serverPublicKey", serverPublicKey);
+		if (serverPublicKey > 1)
+		{
+			serverPublicKey.getText(pubkey);
+			break;
+		}
+		makePrivate();
+	}
 }
 
 void RemotePassword::computeScramble()
@@ -133,10 +155,8 @@ void RemotePassword::computeScramble()
 }
 
 void RemotePassword::clientSessionKey(UCharBuffer& sessionKey, const char* account,
-									  const char* salt, const char* password,
-									  const char* serverPubKey)
+									  const char* salt, const char* password)
 {
-	serverPublicKey = BigInteger(serverPubKey);
 	computeScramble();
 	dumpIt("scramble", scramble);
 	dumpIt("password", password);
@@ -158,10 +178,8 @@ void RemotePassword::clientSessionKey(UCharBuffer& sessionKey, const char* accou
 	hash.getHash(sessionKey);
 }
 
-void RemotePassword::serverSessionKey(UCharBuffer& sessionKey, const char* clientPubKey,
-									  const UCharBuffer& verifier)
+void RemotePassword::serverSessionKey(UCharBuffer& sessionKey, const UCharBuffer& verifier)
 {
-	clientPublicKey = BigInteger(clientPubKey);
 	computeScramble();
 	dumpIt("scramble", scramble);
 	BigInteger v = BigInteger(verifier);
@@ -201,6 +219,15 @@ BigInteger RemotePassword::clientProof(const char* account, const char* salt, co
 RemotePassword::~RemotePassword()
 { }
 
+BigInteger RemotePassword::setKey(const char* from)
+{
+	BigInteger key(from);
+	if (key % group->prime < 2)
+		(Arg::Gds(isc_random) << "Trivial public key").raise();
+
+	return key;
+}
+
 #if SRP_DEBUG > 0
 void dumpIt(const char* name, const Firebird::UCharBuffer& data)
 {
@@ -217,7 +244,7 @@ void dumpIt(const char* name, const Firebird::string& str)
 
 void dumpBin(const char* name, const Firebird::string& str)
 {
-	fprintf(stderr, "%s (%ld)\n", name, str.length());
+	fprintf(stderr, "%s (%ld)\n", name, long(str.length()));
 	for (size_t x = 0; x < str.length(); ++x)
 		fprintf(stderr, "%02x ", str[x]);
 	fprintf(stderr, "\n");

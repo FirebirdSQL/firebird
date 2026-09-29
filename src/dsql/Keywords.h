@@ -39,7 +39,7 @@ namespace Jrd
 		public:
 			static Keywords* create();
 
-			static void destroy(Keywords* instance)
+			static void destroy(Keywords* instance) noexcept
 			{
 				delete instance;
 			}

@@ -51,7 +51,7 @@
 #include "../common/StatusHolder.h"
 
 #include "../jrd/jrd_proto.h"	// gds__log()
-#include <stdio.h>				// sprintf()
+#include <stdio.h>				// snprintf()
 
 using namespace Firebird;
 
@@ -277,12 +277,12 @@ static void RefreshUserCount(HWND hDlg)
 	ULONG num_att, num_dbs, num_svc;
 	SRVR_enum_attachments(num_att, num_dbs, num_svc);
 
-	char szText[BUFFER_MEDIUM];
-	sprintf(szText, "%d", num_att);
+	char szText[20];
+	snprintf(szText, sizeof(szText), "%d", num_att);
 	SetDlgItemText(hDlg, IDC_STAT2, szText);
-	sprintf(szText, "%d", num_dbs);
+	snprintf(szText, sizeof(szText), "%d", num_dbs);
 	SetDlgItemText(hDlg, IDC_STAT3, szText);
-	sprintf(szText, "%d", num_svc);
+	snprintf(szText, sizeof(szText), "%d", num_svc);
 	SetDlgItemText(hDlg, IDC_STAT4, szText);
 
 	SetCursor(hOldCursor);

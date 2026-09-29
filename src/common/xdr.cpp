@@ -45,19 +45,19 @@ inline void XDR_FREEA(void* block)
 }
 
 #ifdef DEBUG_XDR_MEMORY
-inline void DEBUG_XDR_ALLOC(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_ALLOC(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len) noexcept
 {
 	xdr_debug_memory(xdrs, XDR_DECODE, xdrvar, addr, len)
 }
-inline void DEBUG_XDR_FREE(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len)
+inline void DEBUG_XDR_FREE(xdr_t* xdrs, const void* xdrvar, const void* addr, ULONG len) noexcept
 {
-	xdr_debug_memory (xdrs, XDR_FREE, xdrvar, addr, (ULONG) len);
+	xdr_debug_memory(xdrs, XDR_FREE, xdrvar, addr, (ULONG) len);
 }
 #else
-inline void DEBUG_XDR_ALLOC(xdr_t*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_ALLOC(xdr_t*, const void*, const void*, ULONG) noexcept
 {
 }
-inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG)
+inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG) noexcept
 {
 }
 #endif // DEBUG_XDR_MEMORY
@@ -67,7 +67,7 @@ inline void DEBUG_XDR_FREE(xdr_t*, const void*, const void*, ULONG)
 // sufficient.
 // This setting may be related to our max DSQL statement size.
 
-const unsigned MAXSTRING_FOR_WRAPSTRING	= 65535;
+constexpr unsigned MAXSTRING_FOR_WRAPSTRING = 65535;
 
 
 #define GETBYTES	 xdrs->x_getbytes
@@ -90,8 +90,6 @@ inline bool_t PUTLONG(xdr_t* xdrs, const SLONG* lp)
 	const SLONG l = xdrs->x_local ? *lp : htonl(*lp);
 	return xdrs->x_putbytes(reinterpret_cast<const char*>(&l), 4);
 }
-
-static SCHAR zeros[4] = { 0, 0, 0, 0 };
 
 
 bool_t xdr_hyper( xdr_t* xdrs, void* pi64)
@@ -175,7 +173,7 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 	case dtype_dbkey:
 		fb_assert(false);	// dbkey should not get outside jrd,
 		// but in case it happenned in production server treat it as text
-		// Fall through ...
+		[[fallthrough]];
 
 	case dtype_text:
 	case dtype_boolean:
@@ -185,7 +183,8 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 
 	case dtype_varying:
 		{
-			fb_assert(desc->dsc_length >= sizeof(USHORT));
+			if (desc->dsc_length < sizeof(USHORT))
+				return FALSE;
 			vary* v = reinterpret_cast<vary*>(p);
 			if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(&v->vary_length)))
 			{
@@ -207,12 +206,16 @@ bool_t xdr_datum( xdr_t* xdrs, const dsc* desc, UCHAR* buffer)
 	    {
 			//SSHORT n;
 			USHORT n;
+			if (desc->dsc_length < 1)
+				return FALSE;
 			if (xdrs->x_op == XDR_ENCODE)
 			{
 				n = MIN(static_cast<ULONG>(strlen(reinterpret_cast<char*>(p))), (ULONG)(desc->dsc_length - 1));
 			}
 			if (!xdr_short(xdrs, reinterpret_cast<SSHORT*>(&n)))
 				return FALSE;
+			n = MIN(n, desc->dsc_length - 1);
+
 			if (!xdr_opaque(xdrs, reinterpret_cast<SCHAR*>(p), n))
 				return FALSE;
 			if (xdrs->x_op == XDR_DECODE)
@@ -446,40 +449,7 @@ bool_t xdr_int128(xdr_t* xdrs, Firebird::Int128* ip)
 #endif
 }
 
-
-bool_t xdr_enum(xdr_t* xdrs, xdr_op* ip)
-{
-/**************************************
- *
- *	x d r _ e n u m
- *
- **************************************
- *
- * Functional description
- *	Map from external to internal representation (or vice versa).
- *
- **************************************/
-	SLONG temp;
-
-	switch (xdrs->x_op)
-	{
-	case XDR_ENCODE:
-		temp = (SLONG) *ip;
-		return PUTLONG(xdrs, &temp);
-
-	case XDR_DECODE:
-		if (!GETLONG(xdrs, &temp))
-			return FALSE;
-		*ip = (xdr_op) temp;
-		return TRUE;
-
-	case XDR_FREE:
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
+// xdr_enum is now a template function in xdr_proto.h
 
 bool_t xdr_float(xdr_t* xdrs, float* ip)
 {
@@ -869,7 +839,7 @@ bool_t xdr_wrapstring(xdr_t* xdrs, SCHAR** strp)
 }
 
 
-int xdr_t::create(SCHAR* addr, unsigned len, xdr_op op)
+int xdr_t::create(SCHAR* addr, unsigned len, xdr_op op) noexcept
 {
 /**************************************
  *

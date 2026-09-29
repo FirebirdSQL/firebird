@@ -38,7 +38,7 @@
 
 using namespace Firebird;
 
-const unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
+constexpr unsigned int SHUTDOWN_TIMEOUT = 10 * 1000;	// 10 seconds
 
 static void WINAPI control_thread(DWORD);
 
@@ -136,7 +136,7 @@ void CNTL_shutdown_service( const TEXT* message)
 	const char* strings[2];
 
 	char buffer[BUFFER_LARGE];
-	sprintf(buffer, "%s error: %lu", service_name->c_str(), GetLastError());
+	snprintf(buffer, sizeof(buffer), "%s error: %lu", service_name->c_str(), GetLastError());
 
 	HANDLE event_source = RegisterEventSource(NULL, service_name->c_str());
 	if (event_source)
@@ -171,7 +171,7 @@ static void WINAPI control_thread( DWORD action)
  *	Process a service control request.
  *
  **************************************/
-	const DWORD state = SERVICE_RUNNING;
+	constexpr DWORD state = SERVICE_RUNNING;
 
 	switch (action)
 	{
@@ -190,7 +190,7 @@ static void WINAPI control_thread( DWORD action)
 		hMutex = OpenMutex(SYNCHRONIZE, FALSE, mutex_name->c_str());
 		if (hMutex)
 		{
-			UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
+			constexpr UINT error_mode = SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
 				SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT;
 			SetErrorMode(error_mode);
 			WaitForSingleObject(hMutex, INFINITE);

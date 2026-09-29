@@ -47,7 +47,7 @@ using namespace Firebird;
 namespace {
 
 const CInt128 i64max(MAX_SINT64), i64min(MIN_SINT64);
-const double p2_32 = 4294967296.0;
+constexpr double p2_32 = 4294967296.0;
 const I128limit i128limit;
 const CInt128 minus1(-1);
 
@@ -166,7 +166,7 @@ void Int128::toString(int scale, string& to) const
 		}
 		else
 		{
-			unsigned posScale = -scale;
+			const unsigned posScale = -scale;
 			if (posScale > to.length())
 			{
 				string tmp(posScale - to.length(), '0');
@@ -241,12 +241,12 @@ Int128 Int128::div(Int128 op2, int scale) const
 	return op1;
 }
 
-void Int128::zerodivide()
+[[noreturn]] void Int128::zerodivide()
 {
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
 }
 
-void Int128::overflow()
+[[noreturn]] void Int128::overflow()
 {
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }
@@ -288,7 +288,7 @@ CInt128 MAX_Int128(CInt128::MkMax);
 namespace {
 
 const CInt128 i64max(MAX_SINT64), i64min(MIN_SINT64);
-const double p2_32 = 4294967296.0;
+constexpr double p2_32 = 4294967296.0;
 const I128limit i128limit;
 const CInt128 minus1(-1);
 
@@ -425,7 +425,7 @@ void Int128::toString(int scale, unsigned length, char* to) const
 void Int128::toString(int scale, string& to) const
 {
 	v.ToStringBase(to);
-	bool sgn = to[0] == '-';
+	const bool sgn = to[0] == '-';
 	if (sgn)
 		to.erase(0, 1);
 
@@ -444,7 +444,7 @@ void Int128::toString(int scale, string& to) const
 		}
 		else
 		{
-			unsigned posScale = -scale;
+			const unsigned posScale = -scale;
 			if (posScale > to.length())
 			{
 				string tmp(posScale - to.length(), '0');
@@ -511,7 +511,7 @@ Int128 Int128::div(Int128 op2, int scale) const
 
 	// Scale op1 by as many of the needed powers of 10 as possible without an overflow.
 	CInt128 op1(*this);
-	int sign1 = op1.sign();
+	const int sign1 = op1.sign();
 	while ((scale < 0) && (sign1 >= 0 ? op1.compare(MAX_BY10) <= 0 : op1.compare(MIN_BY10) >= 0))
 	{
 		op1 *= 10;
@@ -537,17 +537,17 @@ Int128 Int128::div(Int128 op2, int scale) const
 	return op1;
 }
 
-void Int128::getTable32(unsigned* dwords) const
+void Int128::getTable32(unsigned* dwords) const noexcept
 {
 	static_assert((sizeof(v.table[0]) == 4) || (sizeof(v.table[0]) == 8),
 		"Unsupported size of integer in ttmath");
 
-	if (sizeof(v.table[0]) == 4)
+	if constexpr (sizeof(v.table[0]) == 4)
 	{
 		for (int i = 0; i < 4; ++i)
 			dwords[i] = v.table[i];
 	}
-	else if (sizeof(v.table[0]) == 8)
+	else if constexpr (sizeof(v.table[0]) == 8)
 	{
 		for (int i = 0; i < 2; ++i)
 		{
@@ -557,12 +557,12 @@ void Int128::getTable32(unsigned* dwords) const
 	}
 }
 
-void Int128::setTable32(const unsigned* dwords)
+void Int128::setTable32(const unsigned* dwords) noexcept
 {
 	static_assert((sizeof(v.table[0]) == 4) || (sizeof(v.table[0]) == 8),
 		"Unsupported size of integer in ttmath");
 
-	if (sizeof(v.table[0]) == 4)
+	if constexpr (sizeof(v.table[0]) == 4)
 	{
 		for (int i = 0; i < 4; ++i)
 			v.table[i] = dwords[i];
@@ -582,7 +582,7 @@ Int128 Int128::operator&=(FB_UINT64 mask)
 {
 	v.table[0] &= mask;
 	unsigned i = 1;
-	if (sizeof(v.table[0]) == 4)
+	if constexpr (sizeof(v.table[0]) == 4)
 	{
 		i = 2;
 		v.table[1] &= (mask >> 32);
@@ -602,12 +602,12 @@ Int128 Int128::operator&=(ULONG mask)
 	return *this;
 }
 
-void Int128::zerodivide()
+[[noreturn]] void Int128::zerodivide()
 {
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_divide_by_zero)).raise();
 }
 
-void Int128::overflow()
+[[noreturn]] void Int128::overflow()
 {
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }

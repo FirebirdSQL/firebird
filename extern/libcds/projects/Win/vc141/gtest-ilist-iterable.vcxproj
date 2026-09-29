@@ -378,7 +378,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4503</DisableSpecificWarnings>
       <AdditionalOptions>/Zc:inline /permissive- %(AdditionalOptions)</AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -447,7 +447,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4503</DisableSpecificWarnings>
       <AdditionalOptions>/Zc:inline /permissive- %(AdditionalOptions)</AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -526,7 +526,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4503</DisableSpecificWarnings>
       <AdditionalOptions>/Zc:inline /permissive- %(AdditionalOptions)</AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -611,7 +611,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)..\..\..;$(GTEST_ROOT)/include;$(SolutionDir)..\..\..\test\include;$(BOOST_PATH);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4503</DisableSpecificWarnings>
       <AdditionalOptions>/Zc:inline /permissive- %(AdditionalOptions)</AdditionalOptions>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

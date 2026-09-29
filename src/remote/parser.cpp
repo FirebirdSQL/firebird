@@ -181,13 +181,16 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			break;
 
 		case blr_varying:
+		{
 			if (blr_length < 2)
 				return NULL;
 			blr_length -= 2;
 			desc->dsc_dtype = dtype_varying;
-			desc->dsc_length = *blr++ + sizeof(SSHORT);
-			desc->dsc_length += (*blr++) << 8;
+			unsigned length = sizeof(USHORT) + *blr++;
+			length += (*blr++) << 8;
+			desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
 			break;
+		}
 
 		case blr_cstring:
 			if (blr_length < 2)
@@ -196,6 +199,8 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_dtype = dtype_cstring;
 			desc->dsc_length = *blr++;
 			desc->dsc_length += (*blr++) << 8;
+			if (desc->dsc_length == 0)
+				desc->dsc_length = 1;
 			break;
 
 			// Parse the tagged blr types correctly
@@ -212,15 +217,18 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			break;
 
 		case blr_varying2:
+		{
 			if (blr_length < 4)
 				return NULL;
 			blr_length -= 4;
 			desc->dsc_dtype = dtype_varying;
 			desc->dsc_scale = *blr++;
 			desc->dsc_scale += (*blr++) << 8;
-			desc->dsc_length = *blr++ + sizeof(SSHORT);
-			desc->dsc_length += (*blr++) << 8;
+			unsigned length = sizeof(USHORT) + *blr++;
+			length += (*blr++) << 8;
+			desc->dsc_length = length <= MAX_USHORT ? static_cast<USHORT>(length) : MAX_USHORT;
 			break;
+		}
 
 		case blr_cstring2:
 			if (blr_length < 4)
@@ -231,6 +239,8 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			desc->dsc_scale += (*blr++) << 8;
 			desc->dsc_length = *blr++;
 			desc->dsc_length += (*blr++) << 8;
+			if (desc->dsc_length == 0)
+				desc->dsc_length = 1;
 			break;
 
 		case blr_short:
@@ -289,12 +299,14 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 			break;
 
 		case blr_int128:
+			if (blr_length-- == 0)
+				return nullptr;
 			desc->dsc_dtype = dtype_int128;
 			desc->dsc_length = sizeof(Int128);
 			desc->dsc_scale = *blr++;
 			break;
 
-		// this case cannot occur as switch paramater is char and blr_blob
+		// this case cannot occur as switch parameter is char and blr_blob
         // is 261. blob_ids are actually passed around as blr_quad.
 
 	    //case blr_blob:
@@ -314,7 +326,7 @@ static rem_fmt* parse_format(const UCHAR*& blr, size_t& blr_length)
 
 				USHORT textType = *blr++;
 				textType += (*blr++) << 8;
-				desc->setTextType(textType);
+				desc->setTextType(TTypeId(textType));
 
 				format->fmt_blob_idx.add(desc - begin);
 			}

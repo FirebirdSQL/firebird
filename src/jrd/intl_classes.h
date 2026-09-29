@@ -42,7 +42,7 @@ namespace Jrd {
 class PatternMatcher
 {
 public:
-	PatternMatcher(MemoryPool& aPool, Firebird::TextType* aTextType)
+	PatternMatcher(MemoryPool& aPool, Firebird::TextType* aTextType) noexcept
 		: pool(aPool),
 		  textType(aTextType)
 	{
@@ -64,7 +64,7 @@ protected:
 class BaseSubstringSimilarMatcher : public PatternMatcher
 {
 public:
-	BaseSubstringSimilarMatcher(MemoryPool& pool, Firebird::TextType* ttype)
+	BaseSubstringSimilarMatcher(MemoryPool& pool, Firebird::TextType* ttype) noexcept
 		: PatternMatcher(pool, ttype)
 	{
 	}
@@ -75,7 +75,7 @@ public:
 class NullStrConverter
 {
 public:
-	NullStrConverter(MemoryPool& /*pool*/, const Firebird::TextType* /*obj*/, const UCHAR* /*str*/, SLONG /*len*/)
+	NullStrConverter(MemoryPool& /*pool*/, const Firebird::TextType* /*obj*/, const UCHAR* /*str*/, SLONG /*len*/) noexcept
 	{
 	}
 };
@@ -87,7 +87,7 @@ public:
 	UpcaseConverter(MemoryPool& pool, Firebird::TextType* obj, const UCHAR*& str, SLONG& len)
 		: PrevConverter(pool, obj, str, len)
 	{
-		const auto charSet = obj->getCharSet();
+		const auto* charSet = obj->getCharSet();
 		const auto bufferSize = len / charSet->minBytesPerChar() * charSet->maxBytesPerChar();
 
 		len = obj->str_to_upper(len, str, bufferSize, tempBuffer.getBuffer(bufferSize, false));

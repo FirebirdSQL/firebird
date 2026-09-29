@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../common/file_params.h"
+#include "../jrd/lck.h"
 #include "../jrd/que.h"
 #include "../jrd/pag.h"
 #include "../lock/lock_proto.h"
@@ -46,50 +47,6 @@
 #include "../common/isc_s_proto.h"
 #include "../common/StatusHolder.h"
 #include "../common/os/os_utils.h"
-
-namespace Jrd {
-// Lock types
-
-enum lck_t {
-	LCK_database = 1,			// Root of lock tree
-	LCK_relation,				// Individual relation lock
-	LCK_bdb,					// Individual buffer block
-	LCK_tra,					// Individual transaction lock
-	LCK_rel_exist,				// Relation existence lock
-	LCK_idx_exist,				// Index existence lock
-	LCK_attachment,				// Attachment lock
-	LCK_shadow,					// Lock to synchronize addition of shadows
-	LCK_sweep,					// Sweep lock for single sweeper
-	LCK_expression,				// Expression index caching mechanism
-	LCK_prc_exist,				// Procedure existence lock
-	LCK_update_shadow,			// shadow update sync lock
-	LCK_backup_alloc,           // Lock for page allocation table in backup spare file
-	LCK_backup_database,        // Lock to protect writing to database file
-	LCK_backup_end,				// Lock to protect end_backup consistency
-	LCK_rel_partners,			// Relation partners lock
-	LCK_page_space,				// Page space ID lock
-	LCK_dsql_cache,				// DSQL cache lock
-	LCK_monitor,				// Lock to dump the monitoring data
-	LCK_tt_exist,				// TextType existence lock
-	LCK_cancel,					// Cancellation lock
-	LCK_btr_dont_gc,			// Prevent removal of b-tree page from index
-	LCK_shared_counter,			// Database-wide shared counter
-	LCK_tra_pc,					// Precommitted transaction lock
-	LCK_rel_gc,					// Allow garbage collection for relation
-	LCK_fun_exist,				// Function existence lock
-	LCK_rel_rescan,				// Relation forced rescan lock
-	LCK_crypt,					// Crypt lock for single crypt thread
-	LCK_crypt_status,			// Notifies about changed database encryption status
-	LCK_record_gc				// Record-level GC lock
-};
-
-// Lock owner types
-
-enum lck_owner_t {
-	LCK_OWNER_database = 1,		// A database is the owner of the lock
-	LCK_OWNER_attachment		// An attachment is the owner of the lock
-};
-}
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -123,10 +80,10 @@ enum lck_owner_t {
 
 typedef FILE* OUTFILE;
 
-const USHORT SW_I_ACQUIRE	= 1;
-const USHORT SW_I_OPERATION	= 2;
-const USHORT SW_I_TYPE		= 4;
-const USHORT SW_I_WAIT		= 8;
+constexpr USHORT SW_I_ACQUIRE	= 1;
+constexpr USHORT SW_I_OPERATION	= 2;
+constexpr USHORT SW_I_TYPE		= 4;
+constexpr USHORT SW_I_WAIT		= 8;
 
 #define SRQ_BASE                    ((UCHAR*) LOCK_header)
 
@@ -186,9 +143,9 @@ bool sw_html_format = false;
 static void prt_html_begin(OUTFILE);
 static void prt_html_end(OUTFILE);
 
-static const TEXT preOwn[] = "own";
-static const TEXT preRequest[] = "request";
-static const TEXT preLock[] = "lock";
+static constexpr TEXT preOwn[] = "own";
+static constexpr TEXT preRequest[] = "request";
+static constexpr TEXT preLock[] = "lock";
 
 
 class HtmlLink
@@ -197,21 +154,24 @@ public:
 	HtmlLink(const TEXT* prefix, const SLONG value)
 	{
 		if (sw_html_format && value && prefix)
-			sprintf(strBuffer, "<a href=\"#%s%" SLONGFORMAT"\">%6" SLONGFORMAT"</a>", prefix, value, value);
+			snprintf(strBuffer, sizeof(strBuffer),
+				"<a href=\"#%s%" SLONGFORMAT"\">%6" SLONGFORMAT "</a>", prefix, value, value);
 		else
-			sprintf(strBuffer, "%6" SLONGFORMAT, value);
+			snprintf(strBuffer, sizeof(strBuffer), "%6" SLONGFORMAT, value);
 	}
-	operator const TEXT*()
+
+	HtmlLink(const HtmlLink&) = delete;
+
+	operator const TEXT*() noexcept
 	{
 		return strBuffer;
 	}
 private:
 	TEXT strBuffer[256];
-	HtmlLink(const HtmlLink&) {}
 };
 
 
-static const TEXT history_names[][10] =
+static constexpr TEXT history_names[][10] =
 {
 	"n/a", "ENQ", "DEQ", "CONVERT", "SIGNAL", "POST", "WAIT",
 	"DEL_PROC", "DEL_LOCK", "DEL_REQ", "DENY", "GRANT", "LEAVE",
@@ -219,7 +179,7 @@ static const TEXT history_names[][10] =
 };
 
 
-static const char* usage =
+static constexpr const char* usage =
 	"Firebird lock print utility.\n"
 	"Usage: fb_lock_print (-d | -f) [<parameters>]\n"
 	"\n"
@@ -258,7 +218,7 @@ static const char* usage =
 
 
 // The same table is in lock.cpp, maybe worth moving to a common file?
-static const UCHAR compatibility[LCK_max][LCK_max] =
+static constexpr UCHAR compatibility[LCK_max][LCK_max] =
 {
 
 /*							Shared	Prot	Shared	Prot
@@ -521,7 +481,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 									NULL, OPEN_EXISTING, 0, 0);
 		if (h == INVALID_HANDLE_VALUE)
 		{
-			FPRINTF(outfile, "Unable to open the database file (%d).\n", GetLastError());
+			FPRINTF(outfile, "Unable to open the database file (%u).\n", GetLastError());
 			return FINI_OK;
 		}
 		os_utils::getUniqueFileId(h, buffer);
@@ -534,7 +494,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		for (FB_SIZE_T i = 0; i < buffer.getCount(); i++)
 		{
 			char hex[3];
-			sprintf(hex, "%02x", (int) buffer[i]);
+			snprintf(hex, sizeof(hex), "%02x", (int) buffer[i]);
 			file_id.append(hex);
 		}
 
@@ -799,7 +759,7 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 			times.tm_hour, times.tm_min, times.tm_sec);
 
 	FPRINTF(outfile,
-			"\tActive owner: %s, Length: %6" SLONGFORMAT", Used: %6" SLONGFORMAT"\n",
+			"\tActive owner: %s, Length: %6" ULONGFORMAT ", Used: %6" ULONGFORMAT "\n",
 			(const TEXT*)HtmlLink(preOwn, LOCK_header->lhb_active_owner),
 			LOCK_header->lhb_length, LOCK_header->lhb_used);
 
@@ -834,8 +794,8 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 	SLONG hash_max_count = 0;
 	SLONG hash_min_count = 10000000;
 	USHORT i = 0;
-	static const int MAX_MAX_COUNT_STATS = 21;
-	static const int LAST_MAX_COUNT_INDEX = MAX_MAX_COUNT_STATS - 1;
+	static constexpr int MAX_MAX_COUNT_STATS = 21;
+	static constexpr int LAST_MAX_COUNT_INDEX = MAX_MAX_COUNT_STATS - 1;
 	unsigned int distribution[MAX_MAX_COUNT_STATS] = {0}; // C++11 default brace initialization to zero
 	for (const srq* slot = LOCK_header->lhb_hash; i < LOCK_header->lhb_hash_slots; slot++, i++)
 	{
@@ -867,10 +827,10 @@ int CLIB_ROUTINE main( int argc, char *argv[])
 		hash_max_count = LAST_MAX_COUNT_INDEX - 1;
 	for (int i = hash_min_count; i<=hash_max_count; ++i)
 	{
-		FPRINTF(outfile, "\t\t%-2d : %8u\t(%d%%)\n", i, distribution[i], distribution[i] * 100 / LOCK_header->lhb_hash_slots);
+		FPRINTF(outfile, "\t\t%-2d : %8u\t(%u%%)\n", i, distribution[i], distribution[i] * 100 / LOCK_header->lhb_hash_slots);
 	}
 	if (hash_max_count == LAST_MAX_COUNT_INDEX - 1)
-		FPRINTF(outfile, "\t\t>  : %8u\t(%d%%)\n", distribution[LAST_MAX_COUNT_INDEX], distribution[LAST_MAX_COUNT_INDEX] * 100 / LOCK_header->lhb_hash_slots);
+		FPRINTF(outfile, "\t\t>  : %8u\t(%u%%)\n", distribution[LAST_MAX_COUNT_INDEX], distribution[LAST_MAX_COUNT_INDEX] * 100 / LOCK_header->lhb_hash_slots);
 
 	const shb* a_shb = (shb*) SRQ_ABS_PTR(LOCK_header->lhb_secondary);
 	FPRINTF(outfile,
@@ -960,7 +920,7 @@ static void prt_lock_activity(OUTFILE outfile,
 		FPRINTF(outfile, "enqueue/s convert/s downgrd/s dequeue/s readata/s wrtdata/s qrydata/s ");
 
 	if (flag & SW_I_TYPE)
-		FPRINTF(outfile, "  dblop/s  rellop/s pagelop/s tranlop/s relxlop/s idxxlop/s misclop/s ");
+		FPRINTF(outfile, "  dblop/s  rellop/s pagelop/s tranlop/s  attlop/s misclop/s ");
 
 	if (flag & SW_I_WAIT)
 		FPRINTF(outfile, "   wait/s  reject/s timeout/s blckast/s  wakeup/s dlkscan/s deadlck/s ");
@@ -1049,8 +1009,7 @@ static void prt_lock_activity(OUTFILE outfile,
 		if (flag & SW_I_TYPE)
 		{
 			FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
-					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
-					" %9" UQUADFORMAT" ",
+					" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
 					(LOCK_header->lhb_operations[Jrd::LCK_database] -
 					 	prior.lhb_operations[Jrd::LCK_database]) / seconds,
 					(LOCK_header->lhb_operations[Jrd::LCK_relation] -
@@ -1059,18 +1018,15 @@ static void prt_lock_activity(OUTFILE outfile,
 					 	prior.lhb_operations[Jrd::LCK_bdb]) / seconds,
 					(LOCK_header->lhb_operations[Jrd::LCK_tra] -
 					 	prior.lhb_operations[Jrd::LCK_tra]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_rel_exist] -
-					 	prior.lhb_operations[Jrd::LCK_rel_exist]) / seconds,
-					(LOCK_header->lhb_operations[Jrd::LCK_idx_exist] -
-					 	prior.lhb_operations[Jrd::LCK_idx_exist]) / seconds,
+					(LOCK_header->lhb_operations[Jrd::LCK_attachment] -
+						prior.lhb_operations[Jrd::LCK_attachment]) / seconds,
 					(LOCK_header->lhb_operations[0] - prior.lhb_operations[0]) / seconds);
 
 			prior.lhb_operations[Jrd::LCK_database] = LOCK_header->lhb_operations[Jrd::LCK_database];
 			prior.lhb_operations[Jrd::LCK_relation] = LOCK_header->lhb_operations[Jrd::LCK_relation];
 			prior.lhb_operations[Jrd::LCK_bdb] = LOCK_header->lhb_operations[Jrd::LCK_bdb];
 			prior.lhb_operations[Jrd::LCK_tra] = LOCK_header->lhb_operations[Jrd::LCK_tra];
-			prior.lhb_operations[Jrd::LCK_rel_exist] = LOCK_header->lhb_operations[Jrd::LCK_rel_exist];
-			prior.lhb_operations[Jrd::LCK_idx_exist] = LOCK_header->lhb_operations[Jrd::LCK_idx_exist];
+			prior.lhb_operations[Jrd::LCK_attachment] = LOCK_header->lhb_operations[Jrd::LCK_attachment];
 			prior.lhb_operations[0] = LOCK_header->lhb_operations[0];
 		}
 
@@ -1135,8 +1091,7 @@ static void prt_lock_activity(OUTFILE outfile,
 	if (flag & SW_I_TYPE)
 	{
 		FPRINTF(outfile, "%9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
-				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT
-				" %9" UQUADFORMAT" ",
+				" %9" UQUADFORMAT" %9" UQUADFORMAT" %9" UQUADFORMAT" ",
 				(LOCK_header->lhb_operations[Jrd::LCK_database] -
 				 	base.lhb_operations[Jrd::LCK_database]) / factor,
 				(LOCK_header->lhb_operations[Jrd::LCK_relation] -
@@ -1145,10 +1100,8 @@ static void prt_lock_activity(OUTFILE outfile,
 				 	base.lhb_operations[Jrd::LCK_bdb]) / factor,
 				(LOCK_header->lhb_operations[Jrd::LCK_tra] -
 				 	base.lhb_operations[Jrd::LCK_tra]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_rel_exist] -
-				 	base.lhb_operations[Jrd::LCK_rel_exist]) / factor,
-				(LOCK_header->lhb_operations[Jrd::LCK_idx_exist] -
-				 	base.lhb_operations[Jrd::LCK_idx_exist]) / factor,
+				(LOCK_header->lhb_operations[Jrd::LCK_attachment] -
+					base.lhb_operations[Jrd::LCK_attachment]) / factor,
 				(LOCK_header->lhb_operations[0] - base.lhb_operations[0]) / factor);
 	}
 
@@ -1262,7 +1215,6 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 		FPRINTF(outfile, "\tKey: %04" ULONGFORMAT":%09" SQUADFORMAT",", rel_id, instance_id);
 	}
 	else if ((lock->lbl_series == Jrd::LCK_tra ||
-			  lock->lbl_series == Jrd::LCK_tra_pc ||
 			  lock->lbl_series == Jrd::LCK_attachment ||
 			  lock->lbl_series == Jrd::LCK_monitor ||
 			  lock->lbl_series == Jrd::LCK_cancel) &&
@@ -1284,7 +1236,7 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 
 		FPRINTF(outfile, "\tKey: %06" ULONGFORMAT":%04" ULONGFORMAT",", pageno, line);
 	}
-	else if ((lock->lbl_series == Jrd::LCK_idx_exist || lock->lbl_series == Jrd::LCK_expression) &&
+	else if (lock->lbl_series == Jrd::LCK_idx_rescan &&
 		lock->lbl_length == sizeof(SLONG))
 	{
 		SLONG key;
@@ -1324,7 +1276,7 @@ static void prt_lock(OUTFILE outfile, const lhb* LOCK_header, const lbl* lock, U
 			else
 			{
 				char buf[6] = "";
-				int n = sprintf(buf, "<%d>", c);
+				int n = snprintf(buf, sizeof(buf), "<%d>", c);
 				if (n < 1 || p + n >= end_temp)
 				{
 					while (p < end_temp)
@@ -1390,7 +1342,7 @@ static void prt_owner(OUTFILE outfile,
 		FPRINTF(outfile, "<a name=\"%s%" SLONGFORMAT"\">OWNER BLOCK %6" SLONGFORMAT"</a>\n",
 				preOwn, rel_owner, rel_owner);
 	}
-	FPRINTF(outfile, "\tOwner id: %6" QUADFORMAT"d, Type: %1d\n",
+	FPRINTF(outfile, "\tOwner id: %6" QUADFORMAT "u, Type: %1d\n",
 			owner->own_owner_id, owner->own_owner_type);
 
 	FPRINTF(outfile, "\tProcess id: %6d (%s), Thread id: %6" SIZEFORMAT"\n",

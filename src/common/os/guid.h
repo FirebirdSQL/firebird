@@ -51,8 +51,7 @@ static_assert(sizeof(UUID) == 16, "Guid size mismatch");
 
 namespace Firebird {
 
-const int GUID_BUFF_SIZE = 39;
-const int GUID_BODY_SIZE = 36;
+inline constexpr int GUID_BUFF_SIZE = 39;
 
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size);
 
@@ -65,28 +64,27 @@ void GenerateGuid(UUID* guid);
 class Guid
 {
 	// Some versions of MSVC cannot recognize hh specifier but MSVC 2015 has it
-	static constexpr const char* GUID_FORMAT =
-		"{%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}";
+#define GUID_FORMAT_BASE "%08X-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX"
+	static constexpr const char* GUID_FORMAT = "{" GUID_FORMAT_BASE "}";
+	static constexpr const char* GUID_FORMAT_WITHOUT_BRACKETS = GUID_FORMAT_BASE;
+#undef GUID_FORMAT_BASE
 	static constexpr int GUID_FORMAT_ARGS = 11;
 
-	Guid()
-	{
-		memset(&m_data, 0, SIZE);
-	}
+	Guid() noexcept {}
 
 public:
 	static constexpr ULONG SIZE = sizeof(UUID);
 
-	static Guid empty()
+	static Guid empty() noexcept
 	{
 		return Guid();
 	}
 
-	Guid(const Guid& other)
+	Guid(const Guid& other) noexcept
 		: m_data(other.m_data)
 	{}
 
-	Guid(const UUID& uuid)
+	Guid(const UUID& uuid) noexcept
 		: m_data(uuid)
 	{}
 
@@ -95,7 +93,7 @@ public:
 		memcpy(&m_data, data, SIZE);
 	}
 
-	Guid& operator=(const Guid& other)
+	Guid& operator=(const Guid& other) noexcept
 	{
 		m_data = other.m_data; // copy struct by value
 		return *this;
@@ -111,7 +109,7 @@ public:
 		return !(*this == other);
 	}
 
-	const UCHAR* getData() const
+	const UCHAR* getData() const noexcept
 	{
 		return reinterpret_cast<const UCHAR*>(&m_data);
 	}
@@ -121,25 +119,26 @@ public:
 		memcpy(&m_data, buffer, SIZE);
 	}
 
-	void toString(char* buffer) const
+	template<typename T>
+	void toString(T& str, bool withBrackets = true) const
 	{
-		sprintf(buffer, GUID_FORMAT,
+		str.printf(withBrackets ? GUID_FORMAT : GUID_FORMAT_WITHOUT_BRACKETS,
 			m_data.Data1, m_data.Data2, m_data.Data3,
 			m_data.Data4[0], m_data.Data4[1], m_data.Data4[2], m_data.Data4[3],
 			m_data.Data4[4], m_data.Data4[5], m_data.Data4[6], m_data.Data4[7]);
 	}
 
-	Firebird::string toString() const
+	Firebird::string toString(bool withBrackets = true) const
 	{
 		Firebird::string result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1));
+		toString(result, withBrackets);
 		return result;
 	}
 
-	Firebird::PathName toPathName() const
+	Firebird::PathName toPathName(bool withBrackets = true) const
 	{
 		Firebird::PathName result;
-		toString(result.getBuffer(GUID_BUFF_SIZE - 1));
+		toString(result, withBrackets);
 		return result;
 	}
 
@@ -161,7 +160,7 @@ public:
 		return fromString(str.nullStr());
 	}
 
-	void copyTo(UUID& ptr) const
+	void copyTo(UUID& ptr) const noexcept
 	{
 		ptr = m_data; // copy struct by value
 	}
@@ -173,7 +172,7 @@ public:
 
 	// Convert platform-dependent GUID into platform-independent form according to RFC 4122
 
-	void convert(UCHAR* data) const
+	void convert(UCHAR* data) const noexcept
 	{
 		data[0] = (m_data.Data1 >> 24) & 0xFF;
 		data[1] = (m_data.Data1 >> 16) & 0xFF;
@@ -203,7 +202,7 @@ public:
 	}
 
 private:
-	UUID m_data;
+	UUID m_data{};
 };
 
 }	// namespace

@@ -1,14 +1,14 @@
-Firebird 4 Server for Linux
+Firebird 6 Server for Linux
 
 
 More information can be found about the Firebird 
 database engine from: 
-http://www.firebirdsql.org/
-http://sourceforge.net/projects/firebird
+https://www.firebirdsql.org/
+https://github.com/FirebirdSQL/firebird
 
 or affiliated sites: 
 
-http://www.ibphoenix.com
+https://www.ibphoenix.com
 
 Firebird is a relational database offering many ANSI SQL standard features that
 runs on Linux, Windows, and a variety of Unix platforms. Firebird offers
@@ -16,7 +16,7 @@ excellent concurrency, high performance, and powerful language support for
 stored procedures and triggers. It has been used in production systems, under a
 variety of names, since 1981.
 
-http://www.firebirdsql.org/en/about-firebird/
+https://www.firebirdsql.org/en/about-firebird/
 
 
 

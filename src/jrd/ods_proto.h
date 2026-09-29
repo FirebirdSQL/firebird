@@ -25,22 +25,22 @@
 
 namespace Ods {
 
-	bool isSupported(const header_page* hdr);
+	bool isSupported(const header_page* hdr) noexcept;
 
 	// NS: ODS code logic should never depend on host platform pointer size.
 	// this is why data type for these things is ULONG (32-bit unsigned integer)
-	ULONG bytesBitPIP(ULONG page_size);
-	ULONG pagesPerPIP(ULONG page_size);
-	ULONG pagesPerSCN(ULONG page_size);
-	ULONG maxPagesPerSCN(ULONG page_size);
-	ULONG transPerTIP(ULONG page_size);
-	ULONG gensPerPage(ULONG page_size);
-	ULONG dataPagesPerPP(ULONG page_size);
-	ULONG maxRecsPerDP(ULONG page_size);
-	ULONG maxIndices(ULONG page_size);
+	ULONG bytesBitPIP(ULONG page_size) noexcept;
+	ULONG pagesPerPIP(ULONG page_size) noexcept;
+	ULONG pagesPerSCN(ULONG page_size) noexcept;
+	ULONG maxPagesPerSCN(ULONG page_size) noexcept;
+	ULONG transPerTIP(ULONG page_size) noexcept;
+	ULONG gensPerPage(ULONG page_size) noexcept;
+	ULONG dataPagesPerPP(ULONG page_size) noexcept;
+	ULONG maxRecsPerDP(ULONG page_size) noexcept;
+	ULONG maxIndices(ULONG page_size) noexcept;
 
-	TraNumber getTraNum(const void* ptr);
-	void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size);
+	TraNumber getTraNum(const void* ptr) noexcept;
+	void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size) noexcept;
 
 } // namespace
 

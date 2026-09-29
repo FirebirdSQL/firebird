@@ -62,7 +62,7 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 
 	while (!bad_format && (data < end))
 	{
-		UCHAR code = *data++;
+		const UCHAR code = *data++;
 
 		switch (code)
 		{
@@ -124,7 +124,7 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 				index |= *data++ << 8;
 
 				// variable/cursor name string length
-				USHORT length = *data++;
+				const USHORT length = *data++;
 
 				if (data + length > end)
 				{
@@ -158,7 +158,7 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 				offset |= *data++ << 24;
 
 				// variable/cursor name string length
-				USHORT length = *data++;
+				const USHORT length = *data++;
 
 				if (data + length > end)
 				{
@@ -191,7 +191,7 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 				info.index |= *data++ << 8;
 
 				// argument name string length
-				USHORT length = *data++;
+				const USHORT length = *data++;
 
 				if (data + length > end)
 				{
@@ -224,7 +224,7 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 					break;
 				}
 
-				MetaName name((const TEXT*) data, length);
+				const MetaName name((const TEXT*) data, length);
 				data += length;
 
 				if (data + 4 >= end)

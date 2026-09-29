@@ -43,92 +43,42 @@ class MemoryPool;
 class Condition
 {
 private:
-	AtomicCounter waiters;
-
-	enum
-	{
-		SIGNAL = 0,
-		BROADCAST,
-		MAX_EVENTS
-	};
-
-	HANDLE events[MAX_EVENTS];
+	CONDITION_VARIABLE m_condvar;
 
 	void init()
 	{
-		events[SIGNAL] = CreateEvent(NULL,  // no security
-			                         FALSE, // auto-reset event
-									 FALSE, // non-signaled initially
-    	                             NULL); // unnamed
-
-		if (!events[SIGNAL])
-			system_call_failed::raise("CreateEvent(SIGNAL)");
-
-		// Create a manual-reset event.
-		events[BROADCAST] = CreateEvent(NULL,  // no security
-    	                                TRUE,  // manual-reset
-    	                                FALSE, // non-signaled initially
-    	                                NULL); // unnamed
-
-		if (!events[BROADCAST])
-		{
-			CloseHandle(events[SIGNAL]);
-			system_call_failed::raise("CreateEvent(BROADCAST)");
-		}
+		InitializeConditionVariable(&m_condvar);
 	}
 
-	// Forbid copying
-	Condition(const Condition&);
-	Condition& operator=(const Condition&);
-
 public:
-	Condition()	{ init(); }
+	Condition() { init(); }
 	explicit Condition(MemoryPool&) { init(); }
 
 	~Condition()
 	{
-		if (events[SIGNAL] && !CloseHandle(events[SIGNAL]))
-			system_call_failed::raise("CloseHandle(SIGNAL)");
-		if (events[BROADCAST] && !CloseHandle(events[BROADCAST]))
-			system_call_failed::raise("CloseHandle(BROADCAST)");
 	}
+
+	// Forbid copying
+	Condition(const Condition&) = delete;
+	Condition& operator=(const Condition&) = delete;
 
 	void wait(Mutex& m)
 	{
-		++waiters;
-
-		m.leave();
-
-		if (WaitForMultipleObjects((DWORD) MAX_EVENTS, events, FALSE, INFINITE) == WAIT_FAILED)
-			system_call_failed::raise("WaitForMultipleObjects");
-
-		if (--waiters == 0)
-		{
-			if (!ResetEvent(events[BROADCAST]))
-				system_call_failed::raise("ResetEvent(BROADCAST)");
-		}
-
-		m.enter("Condition::wait");
+		if (!SleepConditionVariableCS(&m_condvar, &m.spinlock, INFINITE))
+			system_call_failed::raise("SleepConditionVariableCS");
 	}
 
 	void notifyOne()
 	{
-		if (waiters.value() > 0)
-		{
-			if (!SetEvent(events[SIGNAL]))
-				system_call_failed::raise("SetEvent(SIGNAL)");
-		}
+		WakeConditionVariable(&m_condvar);
 	}
 
 	void notifyAll()
 	{
-		if (waiters.value() > 0)
-		{
-			if (!SetEvent(events[BROADCAST]))
-				system_call_failed::raise("SetEvent");
-		}
+		WakeAllConditionVariable(&m_condvar);
 	}
 };
+
 
 } // namespace Firebird
 
@@ -155,10 +105,6 @@ private:
 		}
 	}
 
-	// Forbid copying
-	Condition(const Condition&);
-	Condition& operator=(const Condition&);
-
 public:
 	Condition() { init(); }
 	explicit Condition(MemoryPool&) { init(); }
@@ -172,6 +118,10 @@ public:
 			//system_call_failed::raise("pthread_cond_destroy", err);
 		}
 	}
+
+	// Forbid copying
+	Condition(const Condition&) = delete;
+	Condition& operator=(const Condition&) = delete;
 
 	void notifyOne()
 	{

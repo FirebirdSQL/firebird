@@ -29,16 +29,16 @@ using namespace Jrd;
 using namespace Firebird;
 
 
-RecordBuffer* KeywordsTable::getRecords(thread_db* tdbb, jrd_rel* relation)
+RecordBuffer* KeywordsTable::getRecords(thread_db* tdbb, RelationPermanent* relation)
 {
 	fb_assert(relation);
-	fb_assert(relation->rel_id == rel_keywords);
+	fb_assert(relation->getId() == rel_keywords);
 
 	auto recordBuffer = getData(relation);
 	if (recordBuffer)
 		return recordBuffer;
 
-	recordBuffer = allocBuffer(tdbb, *tdbb->getDefaultPool(), relation->rel_id);
+	recordBuffer = allocBuffer(tdbb, *tdbb->getDefaultPool(), relation->getId());
 
 	const auto record = recordBuffer->getTempRecord();
 
@@ -78,7 +78,7 @@ void KeywordsTableScan::close(thread_db* tdbb) const
 	VirtualTableScan::close(tdbb);
 }
 
-const Format* KeywordsTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) const
+const Format* KeywordsTableScan::getFormat(thread_db* tdbb, RelationPermanent* relation) const
 {
 	const auto records = getRecords(tdbb, relation);
 	return records->getFormat();
@@ -87,11 +87,11 @@ const Format* KeywordsTableScan::getFormat(thread_db* tdbb, jrd_rel* relation) c
 bool KeywordsTableScan::retrieveRecord(thread_db* tdbb, jrd_rel* relation,
 	FB_UINT64 position, Record* record) const
 {
-	const auto records = getRecords(tdbb, relation);
+	const auto records = getRecords(tdbb, relation->getPermanent());
 	return records->fetch(position, record);
 }
 
-RecordBuffer* KeywordsTableScan::getRecords(thread_db* tdbb, jrd_rel* relation) const
+RecordBuffer* KeywordsTableScan::getRecords(thread_db* tdbb, RelationPermanent* relation) const
 {
 	const auto request = tdbb->getRequest();
 	const auto impure = request->getImpure<Impure>(impureOffset);

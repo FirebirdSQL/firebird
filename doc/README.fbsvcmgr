@@ -51,7 +51,7 @@ SHUT2                                                                    0    0
 QATEST                                                                   0    0
 And:
 # fbsvcmgr service_mgr -user sysdba -password masterke -info_server_version -info_implementation
-will report both server version and it's implemenation:
+will report both server version and it's implementation:
 Server version: LI-T2.1.0.15740 Firebird 2.1 Alpha 1
 Server implementation: Firebird/linux AMD64
 But attempt to mix all of this in single command line:

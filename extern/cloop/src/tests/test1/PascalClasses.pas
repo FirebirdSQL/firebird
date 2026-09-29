@@ -76,6 +76,10 @@ type
 		function createCalculator(status: Status): Calculator; override;
 		function createCalculator2(status: Status): Calculator2; override;
 		function createBrokenCalculator(status: Status): Calculator; override;
+		procedure setStatusFactory(statusFactory: StatusFactory); override;
+
+	private
+		statusFactory: StatusFactory;
 	end;
 
 implementation
@@ -225,7 +229,10 @@ end;
 
 function MyFactoryImpl.createStatus(): Status;
 begin
-	Result := MyStatusImpl.create;
+	if (statusFactory = nil) then
+		Result := MyStatusImpl.create
+	else
+		Result := statusFactory.createStatus();
 end;
 
 function MyFactoryImpl.createCalculator(status: Status): Calculator;
@@ -241,6 +248,11 @@ end;
 function MyFactoryImpl.createBrokenCalculator(status: Status): Calculator;
 begin
 	Result := MyBrokenCalculatorImpl.create;
+end;
+
+procedure MyFactoryImpl.setStatusFactory(statusFactory: StatusFactory);
+begin
+	self.statusFactory := statusFactory;
 end;
 
 

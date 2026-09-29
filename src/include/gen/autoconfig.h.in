@@ -330,6 +330,9 @@
 /* Define to 1 if you have the <sys/signal.h> header file. */
 #cmakedefine HAVE_SYS_SIGNAL_H 1
 
+/* Define to 1 if you have the <afunix.h> header file. */
+#cmakedefine HAVE_AFUNIX_H 1
+
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #cmakedefine HAVE_SYS_SOCKET_H 1
 
@@ -350,6 +353,9 @@
 
 /* Define to 1 if you have the <sys/types.h> header file. */
 #cmakedefine HAVE_SYS_TYPES_H 1
+
+/* Define to 1 if you have the <sys/un.h> header file. */
+#cmakedefine HAVE_SYS_UN_H 1
 
 /* Define to 1 if you have the <sys/uio.h> header file. */
 #cmakedefine HAVE_SYS_UIO_H 1
@@ -377,6 +383,9 @@
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #cmakedefine HAVE_ZLIB_H 1
+
+/* Define to 1 if libtomcrypt is in use. */
+#cmakedefine HAVE_TOMCRYPT 1
 
 
 /******************************************************************************
@@ -481,14 +490,14 @@
 /* Define to 1 if you have the `pthread_mutexattr_setprotocol' function. */
 #cmakedefine HAVE_PTHREAD_MUTEXATTR_SETPROTOCOL 1
 
-/* Define to 1 if you have the `pthread_mutexattr_setrobust_np' function. */
-#cmakedefine HAVE_PTHREAD_MUTEXATTR_SETROBUST_NP 1
+/* Define to 1 if you have the `pthread_mutexattr_setrobust' function. */
+#cmakedefine HAVE_PTHREAD_MUTEXATTR_SETROBUST 1
 
-/* Define to 1 if you have the `pthread_mutex_consistent_np' function. */
-#cmakedefine HAVE_PTHREAD_MUTEX_CONSISTENT_NP 1
+/* Define to 1 if you have the `pthread_mutex_consistent' function. */
+#cmakedefine HAVE_PTHREAD_MUTEX_CONSISTENT 1
 
-/* Define to 1 if you have the `pthread_rwlockattr_setkind_np' function. */
-#cmakedefine HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP 1
+/* Define to 1 if you have the `pthread_rwlockattr_setkind' function. */
+#cmakedefine HAVE_PTHREAD_RWLOCKATTR_SETKIND 1
 
 /* Define to 1 if you have the `qsort_r' function. */
 #cmakedefine HAVE_QSORT_R 1

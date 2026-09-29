@@ -433,9 +433,9 @@ static void checksum( rbdb* rbdb, ULONG lower, ULONG upper, bool sw_fix)
 		if (sw_fix)
 			page->pag_checksum = new_checksum;
 		if (new_checksum == old_checksum)
-			sprintf(s, "checksum %5d is OK", old_checksum);
+			snprintf(s, sizeof(s), "checksum %5d is OK", old_checksum);
 		else
-			sprintf(s, "stored checksum %5d\tcomputed checksum %5d\t%s",
+			snprintf(s, sizeof(s), "stored checksum %5d\tcomputed checksum %5d\t%s",
 					old_checksum, new_checksum, sw_fix ? "fixed" : "");
 		printf("page %9d\t%s\n", page_number, s);
 	}

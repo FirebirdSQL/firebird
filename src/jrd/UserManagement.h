@@ -41,12 +41,12 @@ class UsersTableScan: public VirtualTableScan
 {
 public:
 	UsersTableScan(CompilerScratch* csb, const Firebird::string& alias,
-				   StreamType stream, jrd_rel* relation)
+				   StreamType stream, Rsc::Rel relation)
 		: VirtualTableScan(csb, alias, stream, relation)
 	{}
 
 protected:
-	const Format* getFormat(thread_db* tdbb, jrd_rel* relation) const override;
+	const Format* getFormat(thread_db* tdbb, RelationPermanent* relation) const override;
 	bool retrieveRecord(thread_db* tdbb, jrd_rel* relation, FB_UINT64 position,
 		Record* record) const override;
 };
@@ -65,7 +65,7 @@ public:
 	// commit transaction in security database
 	void commit();
 	// return users list for SEC$USERS
-	RecordBuffer* getList(thread_db* tdbb, jrd_rel* relation);
+	RecordBuffer* getList(thread_db* tdbb, RelationPermanent* relation);
 	// callback for users display
 	void list(Firebird::IUser* u, unsigned cachePosition);
 

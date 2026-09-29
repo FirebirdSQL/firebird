@@ -17,7 +17,9 @@
 
 
 #ifndef CLOOP_CONSTEXPR
-#if __cplusplus >= 201103L
+#if __cplusplus >= 201703L
+#define CLOOP_CONSTEXPR inline constexpr
+#elif __cplusplus >= 201103L
 #define CLOOP_CONSTEXPR constexpr
 #else
 #define CLOOP_CONSTEXPR const
@@ -45,6 +47,7 @@ namespace calc
 
 	class IDisposable;
 	class IStatus;
+	class IStatusFactory;
 	class IFactory;
 	class ICalculator;
 	class ICalculator2;
@@ -124,6 +127,36 @@ namespace calc
 		}
 	};
 
+#define CALC_ISTATUS_FACTORY_VERSION 2u
+
+	class IStatusFactory : public IDisposable
+	{
+	public:
+		struct VTable : public IDisposable::VTable
+		{
+			IStatus* (CLOOP_CARG *createStatus)(IStatusFactory* self) CLOOP_NOEXCEPT;
+		};
+
+	protected:
+		IStatusFactory(DoNotInherit)
+			: IDisposable(DoNotInherit())
+		{
+		}
+
+		~IStatusFactory()
+		{
+		}
+
+	public:
+		static CLOOP_CONSTEXPR unsigned VERSION = CALC_ISTATUS_FACTORY_VERSION;
+
+		IStatus* createStatus()
+		{
+			IStatus* ret = static_cast<VTable*>(this->cloopVTable)->createStatus(this);
+			return ret;
+		}
+	};
+
 #define CALC_IFACTORY_VERSION 2u
 
 	class IFactory : public IDisposable
@@ -135,6 +168,7 @@ namespace calc
 			ICalculator* (CLOOP_CARG *createCalculator)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
 			ICalculator2* (CLOOP_CARG *createCalculator2)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
 			ICalculator* (CLOOP_CARG *createBrokenCalculator)(IFactory* self, IStatus* status) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setStatusFactory)(IFactory* self, IStatusFactory* statusFactory) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -178,6 +212,11 @@ namespace calc
 			ICalculator* ret = static_cast<VTable*>(this->cloopVTable)->createBrokenCalculator(this, status);
 			StatusType::checkException(status);
 			return ret;
+		}
+
+		void setStatusFactory(IStatusFactory* statusFactory)
+		{
+			static_cast<VTable*>(this->cloopVTable)->setStatusFactory(this, statusFactory);
 		}
 	};
 
@@ -425,6 +464,69 @@ namespace calc
 	};
 
 	template <typename Name, typename StatusType, typename Base>
+	class IStatusFactoryBaseImpl : public Base
+	{
+	public:
+		typedef IStatusFactory Declaration;
+
+		IStatusFactoryBaseImpl(DoNotInherit = DoNotInherit())
+		{
+			static struct VTableImpl : Base::VTable
+			{
+				VTableImpl()
+				{
+					this->version = Base::VERSION;
+					this->dispose = &Name::cloopdisposeDispatcher;
+					this->createStatus = &Name::cloopcreateStatusDispatcher;
+				}
+			} vTable;
+
+			this->cloopVTable = &vTable;
+		}
+
+		static IStatus* CLOOP_CARG cloopcreateStatusDispatcher(IStatusFactory* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::createStatus();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<IStatus*>(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::dispose();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+	};
+
+	template <typename Name, typename StatusType, typename Base = IDisposableImpl<Name, StatusType, Inherit<IStatusFactory> > >
+	class IStatusFactoryImpl : public IStatusFactoryBaseImpl<Name, StatusType, Base>
+	{
+	protected:
+		IStatusFactoryImpl(DoNotInherit = DoNotInherit())
+		{
+		}
+
+	public:
+		virtual ~IStatusFactoryImpl()
+		{
+		}
+
+		virtual IStatus* createStatus() = 0;
+	};
+
+	template <typename Name, typename StatusType, typename Base>
 	class IFactoryBaseImpl : public Base
 	{
 	public:
@@ -442,6 +544,7 @@ namespace calc
 					this->createCalculator = &Name::cloopcreateCalculatorDispatcher;
 					this->createCalculator2 = &Name::cloopcreateCalculator2Dispatcher;
 					this->createBrokenCalculator = &Name::cloopcreateBrokenCalculatorDispatcher;
+					this->setStatusFactory = &Name::cloopsetStatusFactoryDispatcher;
 				}
 			} vTable;
 
@@ -506,6 +609,18 @@ namespace calc
 			}
 		}
 
+		static void CLOOP_CARG cloopsetStatusFactoryDispatcher(IFactory* self, IStatusFactory* statusFactory) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::setStatusFactory(statusFactory);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -536,6 +651,7 @@ namespace calc
 		virtual ICalculator* createCalculator(StatusType* status) = 0;
 		virtual ICalculator2* createCalculator2(StatusType* status) = 0;
 		virtual ICalculator* createBrokenCalculator(StatusType* status) = 0;
+		virtual void setStatusFactory(IStatusFactory* statusFactory) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

@@ -258,9 +258,13 @@ dsc* PercentRankWinNode::winPass(thread_db* /*tdbb*/, Request* request, SlidingW
 {
 	impure_value_ex* impureTemp = request->getImpure<impure_value_ex>(tempImpure);
 
-	double partitionSize = window->getPartitionSize();
+	const double dividend = impureTemp->vlux_count - 1;
+	const double divisor = window->getPartitionSize() - 1;
 
-	impureTemp->vlu_misc.vlu_double = 1 / (partitionSize - 1) * (impureTemp->vlux_count - 1);
+	impureTemp->vlu_misc.vlu_double = divisor == 0 ?
+		0 :
+		dividend / divisor;
+
 	return &impureTemp->vlu_desc;
 }
 
@@ -432,12 +436,12 @@ void FirstValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 dsc* FirstValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	if (!window->moveWithinFrame(-window->getInFrameOffset()))
-		return NULL;
+	if (!window->moveToFrameStart())
+		return nullptr;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	return desc;
 }
@@ -493,12 +497,12 @@ void LastValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 dsc* LastValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
-	if (!window->moveWithinFrame(window->getFrameEnd() - window->getRecordPosition()))
-		return NULL;
+	if (!window->moveToFrameEnd())
+		return nullptr;
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	return desc;
 }
@@ -569,8 +573,8 @@ void NthValueWinNode::aggInit(thread_db* tdbb, Request* request) const
 dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
 	dsc* desc = EVL_expr(tdbb, request, row);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records <= 0)
@@ -583,16 +587,16 @@ dsc* NthValueWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* 
 	const SLONG fromPos = desc ? MOV_get_long(tdbb, desc, 0) : FROM_FIRST;
 
 	if (fromPos == FROM_FIRST)
-		records -= window->getInFrameOffset() + 1;
+		--records;
 	else
-		records = window->getFrameEnd() - window->getRecordPosition() - records + 1;
+		records = window->getEffectiveFrameSize() - records;
 
-	if (!window->moveWithinFrame(records))
-		return NULL;
+	if (!window->moveToFrameOffset(records))
+		return nullptr;
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	return desc;
 }
@@ -660,8 +664,8 @@ void LagLeadWinNode::aggInit(thread_db* tdbb, Request* request) const
 dsc* LagLeadWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* window) const
 {
 	dsc* desc = EVL_expr(tdbb, request, rows);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	SINT64 records = MOV_get_int64(tdbb, desc, 0);
 	if (records < 0)
@@ -673,15 +677,15 @@ dsc* LagLeadWinNode::winPass(thread_db* tdbb, Request* request, SlidingWindow* w
 	if (!window->moveWithinPartition(records * direction))
 	{
 		desc = EVL_expr(tdbb, request, outExpr);
-		if (!desc || (request->req_flags & req_null))
-			return NULL;
+		if (!desc)
+			return nullptr;
 
 		return desc;
 	}
 
 	desc = EVL_expr(tdbb, request, arg);
-	if (!desc || (request->req_flags & req_null))
-		return NULL;
+	if (!desc)
+		return nullptr;
 
 	return desc;
 }
@@ -830,7 +834,7 @@ void NTileWinNode::aggInit(thread_db* tdbb, Request* request) const
 
 	dsc* desc = EVL_expr(tdbb, request, arg);
 
-	if (!desc || (request->req_flags & req_null))
+	if (!desc)
 	{
 		status_exception::raise(
 			Arg::Gds(isc_sysf_argnmustbe_positive) <<

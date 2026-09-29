@@ -47,55 +47,54 @@
 #include <unicode/uchar.h>
 #include <unicode/ucol.h>
 #include <unicode/uversion.h>
-
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-#	include <unicode/utf_old.h>
-#endif
+#include <unicode/utf_old.h>
 
 
 using namespace Firebird;
 
 namespace {
 #if defined(WIN_NT)
-const char* const inTemplate = "icuin%s.dll";
-const char* const ucTemplate = "icuuc%s.dll";
+constexpr const char* inTemplate = "icuin%s.dll";
+constexpr const char* ucTemplate = "icuuc%s.dll";
 #elif defined(DARWIN)
-const char* const inTemplate = "lib/libicui18n.%s.dylib";
-const char* const ucTemplate = "lib/libicuuc.%s.dylib";
+constexpr const char* inTemplate = "lib/libicui18n.%s.dylib";
+constexpr const char* ucTemplate = "lib/libicuuc.%s.dylib";
 #elif defined(HPUX)
-const char* const inTemplate = "libicui18n.sl.%s";
-const char* const ucTemplate = "libicuuc.sl.%s";
+constexpr const char* inTemplate = "libicui18n.sl.%s";
+constexpr const char* ucTemplate = "libicuuc.sl.%s";
 #elif defined(ANDROID)
-const char* const inTemplate = "libicui18n.%s.so";
-const char* const ucTemplate = "libicuuc.%s.so";
+constexpr const char* inTemplate = "libicui18n.%s.so";
+constexpr const char* ucTemplate = "libicuuc.%s.so";
 // In Android we need to load this library before others.
-const char* const dataTemplate = "libicudata.%s.so";
+constexpr const char* dataTemplate = "libicudata.%s.so";
 #else
-const char* const inTemplate = "libicui18n.so.%s";
-const char* const ucTemplate = "libicuuc.so.%s";
+constexpr const char* inTemplate = "libicui18n.so.%s";
+constexpr const char* ucTemplate = "libicuuc.so.%s";
 #endif
 
 // encapsulate ICU library
 struct BaseICU
 {
-private:
-	BaseICU(const BaseICU&);				// not implemented
-	BaseICU& operator =(const BaseICU&);	// not implemented
-
 public:
-	BaseICU(int aMajorVersion, int aMinorVersion)
+	BaseICU(int aMajorVersion, int aMinorVersion) noexcept
 		: majorVersion(aMajorVersion),
 		  minorVersion(aMinorVersion),
 		  isSystem(aMajorVersion == 0)
 	{
 	}
 
-	ModuleLoader::Module* formatAndLoad(const char* templateName);
-	void initialize(ModuleLoader::Module* module);
+	BaseICU(const BaseICU&) = delete;
+	BaseICU& operator =(const BaseICU&) = delete;
 
-	template <typename T> string getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
-		bool optional = false)
+	ModuleLoader::Module* formatAndLoad(const char* templateName);
+	bool initialize(LocalStatus& status, ModuleLoader::Module* module);
+
+	template <typename T> string getEntryPoint(LocalStatus& status, const char* name, ModuleLoader::Module* module,
+		T& ptr, bool optional = false)
 	{
+		if (status.hasErrors())
+			return "";
+
 		// System-wide ICU have no version number at entries names
 		if (!majorVersion)
 		{
@@ -105,7 +104,7 @@ public:
 		else
 		{
 			// ICU has several schemas for entries names
-			const char* const patterns[] =
+			constexpr const char* patterns[] =
 			{
 				"%s_%d", "%s_%d_%d", "%s_%d%d", "%s"
 			};
@@ -121,7 +120,7 @@ public:
 		}
 
 		if (!optional)
-			(Arg::Gds(isc_icu_entrypoint) << name).raise();
+			(Arg::Gds(isc_icu_entrypoint) << name).copyTo(&status);
 
 		return "";
 	}
@@ -189,9 +188,12 @@ ModuleLoader::Module* BaseICU::formatAndLoad(const char* templateName)
 	return module;
 }
 
-void BaseICU::initialize(ModuleLoader::Module* module)
+bool BaseICU::initialize(LocalStatus& status, ModuleLoader::Module* module)
 {
-	getEntryPoint("u_getVersion", module, u_getVersion);
+	getEntryPoint(status, "u_getVersion", module, u_getVersion);
+
+	if (status.hasErrors())
+		return false;
 
 	UVersionInfo versionInfo;
 	u_getVersion(versionInfo);
@@ -204,7 +206,9 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 			(int) versionInfo[0], (int) versionInfo[1],
 			this->majorVersion, this->minorVersion);
 
-		(Arg::Gds(isc_random) << Arg::Str(err)).raise();
+		(Arg::Gds(isc_random) << Arg::Str(err)).copyTo(&status);
+
+		return false;
 	}
 
 	majorVersion = versionInfo[0];
@@ -214,9 +218,10 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	void (U_EXPORT2 *uSetTimeZoneFilesDirectory)(const char* path, UErrorCode* status);
 	void (U_EXPORT2 *uSetDataDirectory)(const char* directory);
 
-	getEntryPoint("u_init", module, uInit, true);
-	getEntryPoint("u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
-	const auto uSetDataDirectorySymbolName = getEntryPoint("u_setDataDirectory", module, uSetDataDirectory, true);
+	getEntryPoint(status, "u_init", module, uInit, true);
+	getEntryPoint(status, "u_setTimeZoneFilesDirectory", module, uSetTimeZoneFilesDirectory, true);
+	const auto uSetDataDirectorySymbolName = getEntryPoint(status, "u_setDataDirectory", module,
+		uSetDataDirectory, true);
 
 	if (uSetDataDirectory)
 	{
@@ -262,13 +267,16 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 
 	if (uInit)
 	{
-		UErrorCode status = U_ZERO_ERROR;
-		uInit(&status);
-		if (status != U_ZERO_ERROR)
+		UErrorCode errorCode = U_ZERO_ERROR;
+		uInit(&errorCode);
+		if (errorCode != U_ZERO_ERROR)
 		{
 			string diag;
-			diag.printf("u_init() error %d", status);
-			(Arg::Gds(isc_random) << diag).raise();
+			diag.printf("u_init() error %d", errorCode);
+
+			(Arg::Gds(isc_random) << diag).copyTo(&status);
+
+			return false;
 		}
 	}
 
@@ -277,9 +285,11 @@ void BaseICU::initialize(ModuleLoader::Module* module)
 	// safe. See comments in fb_utils::setenv.
 	if (uSetTimeZoneFilesDirectory && TimeZoneUtil::getTzDataPath().hasData())
 	{
-		UErrorCode status = U_ZERO_ERROR;
-		uSetTimeZoneFilesDirectory(TimeZoneUtil::getTzDataPath().c_str(), &status);
+		UErrorCode errorCode = U_ZERO_ERROR;
+		uSetTimeZoneFilesDirectory(TimeZoneUtil::getTzDataPath().c_str(), &errorCode);
 	}
+
+	return true;
 }
 
 }
@@ -400,7 +410,7 @@ public:
 class ImplementConversionICU : public UnicodeUtil::ConversionICU, BaseICU
 {
 private:
-	ImplementConversionICU(int aMajorVersion, int aMinorVersion)
+	ImplementConversionICU(LocalStatus& status, int aMajorVersion, int aMinorVersion)
 		: BaseICU(aMajorVersion, aMinorVersion)
 	{
 #ifdef ANDROID
@@ -416,52 +426,58 @@ private:
 		if (!module)
 			return;
 
-		initialize(module);
+		if (!initialize(status, module))
+			return;
 
-		getEntryPoint("ucnv_open", module, ucnv_open);
-		getEntryPoint("ucnv_close", module, ucnv_close);
-		getEntryPoint("ucnv_fromUChars", module, ucnv_fromUChars);
-		getEntryPoint("u_tolower", module, u_tolower);
-		getEntryPoint("u_toupper", module, u_toupper);
-		getEntryPoint("u_strCompare", module, u_strCompare);
-		getEntryPoint("u_countChar32", module, u_countChar32);
-		getEntryPoint("utf8_nextCharSafeBody", module, utf8_nextCharSafeBody);
+		getEntryPoint(status, "ucnv_open", module, ucnv_open);
+		getEntryPoint(status, "ucnv_close", module, ucnv_close);
+		getEntryPoint(status, "ucnv_fromUChars", module, ucnv_fromUChars);
+		getEntryPoint(status, "u_tolower", module, u_tolower);
+		getEntryPoint(status, "u_toupper", module, u_toupper);
+		getEntryPoint(status, "u_strCompare", module, u_strCompare);
+		getEntryPoint(status, "u_countChar32", module, u_countChar32);
+		getEntryPoint(status, "utf8_nextCharSafeBody", module, utf8_nextCharSafeBody);
 
-		getEntryPoint("UCNV_TO_U_CALLBACK_STOP", module, UCNV_TO_U_CALLBACK_STOP);
-		getEntryPoint("ucnv_fromUnicode", module, ucnv_fromUnicode);
-		getEntryPoint("ucnv_toUnicode", module, ucnv_toUnicode);
-		getEntryPoint("ucnv_getInvalidChars", module, ucnv_getInvalidChars);
-		getEntryPoint("ucnv_getMaxCharSize", module, ucnv_getMaxCharSize);
-		getEntryPoint("ucnv_getMinCharSize", module, ucnv_getMinCharSize);
-		getEntryPoint("ucnv_setFromUCallBack", module, ucnv_setFromUCallBack);
-		getEntryPoint("ucnv_setToUCallBack", module, ucnv_setToUCallBack);
+		getEntryPoint(status, "UCNV_TO_U_CALLBACK_STOP", module, UCNV_TO_U_CALLBACK_STOP);
+		getEntryPoint(status, "ucnv_fromUnicode", module, ucnv_fromUnicode);
+		getEntryPoint(status, "ucnv_toUnicode", module, ucnv_toUnicode);
+		getEntryPoint(status, "ucnv_getInvalidChars", module, ucnv_getInvalidChars);
+		getEntryPoint(status, "ucnv_getMaxCharSize", module, ucnv_getMaxCharSize);
+		getEntryPoint(status, "ucnv_getMinCharSize", module, ucnv_getMinCharSize);
+		getEntryPoint(status, "ucnv_setFromUCallBack", module, ucnv_setFromUCallBack);
+		getEntryPoint(status, "ucnv_setToUCallBack", module, ucnv_setToUCallBack);
 
-		getEntryPoint("u_strcmp", module, ustrcmp);
+		getEntryPoint(status, "u_strcmp", module, ustrcmp);
+
+		if (status.hasErrors())
+			return;
 
 		inModule = formatAndLoad(inTemplate);
 		if (!inModule)
 			return;
 
-		getEntryPoint("ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
-		getEntryPoint("ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
-		getEntryPoint("ucal_open", inModule, ucalOpen);
-		getEntryPoint("ucal_close", inModule, ucalClose);
-		getEntryPoint("ucal_setAttribute", inModule, ucalSetAttribute);
-		getEntryPoint("ucal_setMillis", inModule, ucalSetMillis);
-		getEntryPoint("ucal_get", inModule, ucalGet);
-		getEntryPoint("ucal_setDateTime", inModule, ucalSetDateTime);
+		getEntryPoint(status, "ucal_getTZDataVersion", inModule, ucalGetTZDataVersion);
+		getEntryPoint(status, "ucal_getDefaultTimeZone", inModule, ucalGetDefaultTimeZone);
+		getEntryPoint(status, "ucal_open", inModule, ucalOpen);
+		getEntryPoint(status, "ucal_close", inModule, ucalClose);
+		getEntryPoint(status, "ucal_setAttribute", inModule, ucalSetAttribute);
+		getEntryPoint(status, "ucal_setMillis", inModule, ucalSetMillis);
+		getEntryPoint(status, "ucal_get", inModule, ucalGet);
+		getEntryPoint(status, "ucal_setDateTime", inModule, ucalSetDateTime);
 
-		getEntryPoint("ucal_getNow", inModule, ucalGetNow);
-		getEntryPoint("ucal_getTimeZoneTransitionDate", inModule, ucalGetTimeZoneTransitionDate);
+		getEntryPoint(status, "ucal_getNow", inModule, ucalGetNow);
+		getEntryPoint(status, "ucal_getTimeZoneTransitionDate", inModule, ucalGetTimeZoneTransitionDate);
 	}
 
 public:
-	static ImplementConversionICU* create(int majorVersion, int minorVersion)
+	static ImplementConversionICU* create(LocalStatus& status, int majorVersion, int minorVersion)
 	{
-		ImplementConversionICU* o = FB_NEW_POOL(*getDefaultMemoryPool()) ImplementConversionICU(
-			majorVersion, minorVersion);
+		status.init();
 
-		if (!o->module)
+		ImplementConversionICU* o = FB_NEW_POOL(*getDefaultMemoryPool()) ImplementConversionICU(
+			status, majorVersion, minorVersion);
+
+		if (!o->module || status.hasErrors())
 		{
 			delete o;
 			o = NULL;
@@ -550,7 +566,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 
 
 // BOCU-1
-USHORT UnicodeUtil::utf16KeyLength(USHORT len)
+USHORT UnicodeUtil::utf16KeyLength(USHORT len) noexcept
 {
 	return (len / 2) * 4;
 }
@@ -565,15 +581,15 @@ USHORT UnicodeUtil::utf16ToKey(USHORT srcLen, const USHORT* src, USHORT dstLen, 
 	if (dstLen < srcLen / sizeof(*src) * 4)
 		return INTL_BAD_KEY_LENGTH;
 
-	UErrorCode status = U_ZERO_ERROR;
+	UErrorCode errorCode = U_ZERO_ERROR;
 	ConversionICU& cIcu(getConversionICU());
-	UConverter* conv = cIcu.ucnv_open("BOCU-1", &status);
-	fb_assert(U_SUCCESS(status));
+	UConverter* conv = cIcu.ucnv_open("BOCU-1", &errorCode);
+	fb_assert(U_SUCCESS(errorCode));
 
 	const int32_t len = cIcu.ucnv_fromUChars(conv, reinterpret_cast<char*>(dst), dstLen,
 		// safe cast - alignment not changed
-		reinterpret_cast<const UChar*>(src), srcLen / sizeof(*src), &status);
-	fb_assert(U_SUCCESS(status));
+		reinterpret_cast<const UChar*>(src), srcLen / sizeof(*src), &errorCode);
+	fb_assert(U_SUCCESS(errorCode));
 
 	cIcu.ucnv_close(conv);
 
@@ -718,7 +734,7 @@ ULONG UnicodeUtil::utf16UpperCase(ULONG srcLen, const USHORT* src, ULONG dstLen,
 
 
 ULONG UnicodeUtil::utf16ToUtf8(ULONG srcLen, const USHORT* src, ULONG dstLen, UCHAR* dst,
-							   USHORT* err_code, ULONG* err_position)
+							   USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -849,7 +865,7 @@ ULONG UnicodeUtil::utf8ToUtf16(ULONG srcLen, const UCHAR* src, ULONG dstLen, USH
 
 
 ULONG UnicodeUtil::utf16ToUtf32(ULONG srcLen, const USHORT* src, ULONG dstLen, ULONG* dst,
-								USHORT* err_code, ULONG* err_position)
+								USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -900,7 +916,7 @@ ULONG UnicodeUtil::utf16ToUtf32(ULONG srcLen, const USHORT* src, ULONG dstLen, U
 
 
 ULONG UnicodeUtil::utf32ToUtf16(ULONG srcLen, const ULONG* src, ULONG dstLen, USHORT* dst,
-								USHORT* err_code, ULONG* err_position)
+								USHORT* err_code, ULONG* err_position) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL || dst == NULL);
@@ -966,8 +982,8 @@ SSHORT UnicodeUtil::utf16Compare(ULONG len1, const USHORT* str1, ULONG len2, con
 	*error_flag = false;
 
 	// safe casts - alignment not changed
-	int32_t cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1), len1 / sizeof(*str1),
-		reinterpret_cast<const UChar*>(str2), len2 / sizeof(*str2), true);
+	const int32_t cmp = getConversionICU().u_strCompare(reinterpret_cast<const UChar*>(str1),
+		len1 / sizeof(*str1), reinterpret_cast<const UChar*>(str2), len2 / sizeof(*str2), true);
 
 	return (cmp < 0 ? -1 : (cmp > 0 ? 1 : 0));
 }
@@ -982,7 +998,7 @@ ULONG UnicodeUtil::utf16Length(ULONG len, const USHORT* str)
 
 
 ULONG UnicodeUtil::utf16Substring(ULONG srcLen, const USHORT* src, ULONG dstLen, USHORT* dst,
-								  ULONG startPos, ULONG length)
+								  ULONG startPos, ULONG length) noexcept
 {
 	fb_assert(srcLen % sizeof(*src) == 0);
 	fb_assert(src != NULL && dst != NULL);
@@ -1059,7 +1075,7 @@ INTL_BOOL UnicodeUtil::utf8WellFormed(ULONG len, const UCHAR* str, ULONG* offend
 }
 
 
-INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position)
+INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offending_position) noexcept
 {
 	fb_assert(str != NULL);
 	fb_assert(len % sizeof(*str) == 0);
@@ -1085,7 +1101,7 @@ INTL_BOOL UnicodeUtil::utf16WellFormed(ULONG len, const USHORT* str, ULONG* offe
 }
 
 
-INTL_BOOL UnicodeUtil::utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position)
+INTL_BOOL UnicodeUtil::utf32WellFormed(ULONG len, const ULONG* str, ULONG* offending_position) noexcept
 {
 	fb_assert(str != NULL);
 	fb_assert(len % sizeof(*str) == 0);
@@ -1115,7 +1131,7 @@ void UnicodeUtil::utf8Normalize(UCharBuffer& data)
 	HalfStaticArray<USHORT, BUFFER_MEDIUM> utf16Buffer(data.getCount());
 	USHORT errCode;
 	ULONG errPosition;
-	ULONG utf16BufferLen = utf8ToUtf16(data.getCount(), data.begin(), data.getCount() * sizeof(USHORT),
+	const ULONG utf16BufferLen = utf8ToUtf16(data.getCount(), data.begin(), data.getCount() * sizeof(USHORT),
 		utf16Buffer.getBuffer(data.getCount()), &errCode, &errPosition);
 
 	UTransliterator* trans = icu->getCiAiTransliterator();
@@ -1143,6 +1159,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 {
 	ObjectsArray<string> versions;
 	getVersions(configInfo, versions);
+	LocalStatus loadStatus;
 
 	if (versions.isEmpty())
 		gds__log("No ICU versions specified");
@@ -1154,7 +1171,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 	for (ObjectsArray<string>::const_iterator i(versions.begin()); i != versions.end(); ++i)
 	{
 		int majorVersion, minorVersion;
-		int n = sscanf((*i == "default" ? version : *i).c_str(), "%d.%d",
+		const int n = sscanf((*i == "default" ? version : *i).c_str(), "%d.%d",
 			&majorVersion, &minorVersion);
 
 		if (n == 1)
@@ -1197,50 +1214,55 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 			continue;
 		}
 
-		try
+		loadStatus.init();
+
+		if (!icu->initialize(loadStatus, icu->ucModule))
 		{
-			icu->initialize(icu->ucModule);
-
-			icu->inModule = icu->formatAndLoad(inTemplate);
-			if (!icu->inModule)
-			{
-				gds__log("failed to load IN icu module version %s", configVersion.c_str());
-				delete icu;
-				continue;
-			}
-
-			icu->getEntryPoint("u_versionToString", icu->ucModule, icu->uVersionToString);
-			icu->getEntryPoint("uloc_countAvailable", icu->ucModule, icu->ulocCountAvailable);
-			icu->getEntryPoint("uloc_getAvailable", icu->ucModule, icu->ulocGetAvailable);
-			icu->getEntryPoint("uset_close", icu->ucModule, icu->usetClose);
-			icu->getEntryPoint("uset_getItem", icu->ucModule, icu->usetGetItem);
-			icu->getEntryPoint("uset_getItemCount", icu->ucModule, icu->usetGetItemCount);
-			icu->getEntryPoint("uset_open", icu->ucModule, icu->usetOpen);
-
-			icu->getEntryPoint("ucol_close", icu->inModule, icu->ucolClose);
-			icu->getEntryPoint("ucol_getContractionsAndExpansions", icu->inModule,
-				icu->ucolGetContractionsAndExpansions);
-			icu->getEntryPoint("ucol_getRules", icu->inModule, icu->ucolGetRules);
-			icu->getEntryPoint("ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
-			icu->getEntryPoint("ucol_open", icu->inModule, icu->ucolOpen);
-			icu->getEntryPoint("ucol_openRules", icu->inModule, icu->ucolOpenRules);
-			icu->getEntryPoint("ucol_setAttribute", icu->inModule, icu->ucolSetAttribute);
-			icu->getEntryPoint("ucol_strcoll", icu->inModule, icu->ucolStrColl);
-			icu->getEntryPoint("ucol_getVersion", icu->inModule, icu->ucolGetVersion);
-			icu->getEntryPoint("utrans_openU", icu->inModule, icu->utransOpenU);
-			icu->getEntryPoint("utrans_close", icu->inModule, icu->utransClose);
-			icu->getEntryPoint("utrans_transUChars", icu->inModule, icu->utransTransUChars);
-		}
-		catch (const status_exception& s)
-		{
-			iscLogStatus("ICU load error", s.value());
+			iscLogStatus("ICU load error", &loadStatus);
 			delete icu;
 			continue;
 		}
 
-		UErrorCode status = U_ZERO_ERROR;
+		icu->inModule = icu->formatAndLoad(inTemplate);
+		if (!icu->inModule)
+		{
+			gds__log("failed to load IN icu module version %s", configVersion.c_str());
+			delete icu;
+			continue;
+		}
 
-		UCollator* collator = icu->ucolOpen("", &status);
+		icu->getEntryPoint(loadStatus, "u_versionToString", icu->ucModule, icu->uVersionToString);
+		icu->getEntryPoint(loadStatus, "uloc_countAvailable", icu->ucModule, icu->ulocCountAvailable);
+		icu->getEntryPoint(loadStatus, "uloc_getAvailable", icu->ucModule, icu->ulocGetAvailable);
+		icu->getEntryPoint(loadStatus, "uset_close", icu->ucModule, icu->usetClose);
+		icu->getEntryPoint(loadStatus, "uset_getItem", icu->ucModule, icu->usetGetItem);
+		icu->getEntryPoint(loadStatus, "uset_getItemCount", icu->ucModule, icu->usetGetItemCount);
+		icu->getEntryPoint(loadStatus, "uset_open", icu->ucModule, icu->usetOpen);
+
+		icu->getEntryPoint(loadStatus, "ucol_close", icu->inModule, icu->ucolClose);
+		icu->getEntryPoint(loadStatus, "ucol_getContractionsAndExpansions", icu->inModule,
+			icu->ucolGetContractionsAndExpansions);
+		icu->getEntryPoint(loadStatus, "ucol_getRules", icu->inModule, icu->ucolGetRules);
+		icu->getEntryPoint(loadStatus, "ucol_getSortKey", icu->inModule, icu->ucolGetSortKey);
+		icu->getEntryPoint(loadStatus, "ucol_open", icu->inModule, icu->ucolOpen);
+		icu->getEntryPoint(loadStatus, "ucol_openRules", icu->inModule, icu->ucolOpenRules);
+		icu->getEntryPoint(loadStatus, "ucol_setAttribute", icu->inModule, icu->ucolSetAttribute);
+		icu->getEntryPoint(loadStatus, "ucol_strcoll", icu->inModule, icu->ucolStrColl);
+		icu->getEntryPoint(loadStatus, "ucol_getVersion", icu->inModule, icu->ucolGetVersion);
+		icu->getEntryPoint(loadStatus, "utrans_openU", icu->inModule, icu->utransOpenU);
+		icu->getEntryPoint(loadStatus, "utrans_close", icu->inModule, icu->utransClose);
+		icu->getEntryPoint(loadStatus, "utrans_transUChars", icu->inModule, icu->utransTransUChars);
+
+		if (loadStatus.getState() & IStatus::STATE_ERRORS)
+		{
+			iscLogStatus("ICU load error", &loadStatus);
+			delete icu;
+			continue;
+		}
+
+		UErrorCode errorCode = U_ZERO_ERROR;
+
+		UCollator* collator = icu->ucolOpen("", &errorCode);
 		if (!collator)
 		{
 			gds__log("ucolOpen failed");
@@ -1273,7 +1295,7 @@ UnicodeUtil::ICU* UnicodeUtil::loadICU(const string& icuVersion, const string& c
 }
 
 
-void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion)
+void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion) noexcept
 {
 	majorVersion = icu->majorVersion;
 	minorVersion = icu->minorVersion;
@@ -1283,85 +1305,53 @@ void UnicodeUtil::getICUVersion(ICU* icu, int& majorVersion, int& minorVersion)
 UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 {
 	if (convIcu)
-	{
 		return *convIcu;
-	}
 
 	MutexLockGuard g(convIcuMutex, "UnicodeUtil::getConversionICU");
 
 	if (convIcu)
-	{
 		return *convIcu;
-	}
 
-	// Try "favorite" (distributed on windows) version first
-	const int favMaj = 77;
-	const int favMin = 1;
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(favMaj, favMin)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+	// Try "favorite" (distributed on Windows) version first
+	constexpr int favMaj = 77;
+	constexpr int favMin = 1;
+	LocalStatus probeStatus;
+
+	if ((convIcu = ImplementConversionICU::create(probeStatus, favMaj, favMin)))
+		return *convIcu;
 
 	// Try system-wide version
-	try
-	{
-		if ((convIcu = ImplementConversionICU::create(0, 0)))
-			return *convIcu;
-	}
-	catch (const Exception&)
-	{ }
+	if ((convIcu = ImplementConversionICU::create(probeStatus, 0, 0)))
+		return *convIcu;
 
 	// Do a regular search
 	LocalStatus ls;
 	CheckStatusWrapper lastError(&ls);
 	string version;
 
-	// According to http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
-	// we using two ranges of version numbers: 3.0 - 4.8 and 49 - 79.
-	// Note 1: the most current version for now is 64, thus it is seems as enough to
-	// limit upper bound by value of 79. It should be enlarged when necessary in the
-	// future.
-	// Note 2: the required function ucal_getTZDataVersion() is available since 3.8.
+	// Note: the most current version for now is 78, thus it is seems as enough to limit upper bound by value of 99.
+	// It should be enlarged when necessary in the future.
 
-	for (int major = 79; major >= 3;)
+	for (int major = 99; major >= 53;)
 	{
-#ifdef WIN_NT
-		int minor = 0;
-#else
 		int minor = 9;
-#endif
-
-		if (major == 4)
-			minor = 8;
-		else if (major <= 4)
-			minor = 9;
 
 		for (; minor >= 0; --minor)
 		{
 			if ((major == favMaj) && (minor == favMin))
-			{
 				continue;
-			}
 
-			try
+			if ((convIcu = ImplementConversionICU::create(probeStatus, major, minor)))
+				return *convIcu;
+
+			if (probeStatus.getState() & IStatus::STATE_ERRORS)
 			{
-				if ((convIcu = ImplementConversionICU::create(major, minor)))
-					return *convIcu;
-			}
-			catch (const Exception& ex)
-			{
-				ex.stuffException(&lastError);
+				fb_utils::copyStatus(&lastError, &probeStatus);
 				version.printf("Error loading ICU library version %d.%d", major, minor);
 			}
 		}
 
-		if (major == 49)
-			major = 4;
-		else
-			major--;
+		--major;
 	}
 
 	Arg::Gds err(isc_icu_library);
@@ -1382,7 +1372,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 string UnicodeUtil::getDefaultIcuVersion()
 {
 	string rc;
-	UnicodeUtil::ConversionICU& icu(UnicodeUtil::getConversionICU());
+	const UnicodeUtil::ConversionICU& icu(UnicodeUtil::getConversionICU());
 
 	if (icu.vMajor >= 10 && icu.vMinor == 0)
 		rc.printf("%d", icu.vMajor);
@@ -1603,7 +1593,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	// status not verified here.
 	icu->ucolGetContractionsAndExpansions(partialCollator, contractions, nullptr, false, &status);
 
-	int contractionsCount = icu->usetGetItemCount(contractions);
+	const int contractionsCount = icu->usetGetItemCount(contractions);
 
 	for (int contractionIndex = 0; contractionIndex < contractionsCount; ++contractionIndex)
 	{
@@ -1611,7 +1601,8 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 		UChar32 start, end;
 
 		status = U_ZERO_ERROR;
-		int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, strChars, sizeof(strChars), &status);
+		const int len = icu->usetGetItem(contractions, contractionIndex, &start, &end, strChars,
+			sizeof(strChars), &status);
 
 		if (len >= 2)
 		{
@@ -1619,7 +1610,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 				len - 1 : obj->maxContractionsPrefixLength;
 
 			UCHAR key[100];
-			int keyLen = icu->ucolGetSortKey(partialCollator, strChars, len, key, sizeof(key));
+			const int keyLen = icu->ucolGetSortKey(partialCollator, strChars, len, key, sizeof(key));
 
 			for (int prefixLen = 1; prefixLen < len; ++prefixLen)
 			{
@@ -1631,7 +1622,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 					keySet = obj->contractionsPrefix.put(str);
 
 					UCHAR prefixKey[100];
-					int prefixKeyLen = icu->ucolGetSortKey(partialCollator,
+					const int prefixKeyLen = icu->ucolGetSortKey(partialCollator,
 						strChars, prefixLen, prefixKey, sizeof(prefixKey));
 
 					keySet->add(Array<UCHAR>(prefixKey, prefixKeyLen));
@@ -1654,8 +1645,8 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 			continue;
 
 		fb_assert(accessor.current()->first.hasData());
-		USHORT firstCh = accessor.current()->first.front();
-		USHORT lastCh = accessor.current()->first.back();
+		const USHORT firstCh = accessor.current()->first.front();
+		const USHORT lastCh = accessor.current()->first.back();
 
 		if ((firstCh >= 0xFDD0 && firstCh <= 0xFDEF) || UTF_IS_SURROGATE(lastCh))
 		{
@@ -1707,7 +1698,7 @@ UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 					++secondKeyDataIt;
 				}
 
-				unsigned backSize = commonKeys.back().getCount();
+				const unsigned backSize = commonKeys.back().getCount();
 
 				if (common > backSize)
 					commonKeys.back().append(secondKeyIt->begin() + backSize, common - backSize);
@@ -1755,7 +1746,7 @@ UnicodeUtil::Utf16Collation::~Utf16Collation()
 }
 
 
-USHORT UnicodeUtil::Utf16Collation::keyLength(USHORT len) const
+USHORT UnicodeUtil::Utf16Collation::keyLength(USHORT len) const noexcept
 {
 	return (len / 4) * 6;
 }
@@ -1842,7 +1833,7 @@ USHORT UnicodeUtil::Utf16Collation::stringToKey(USHORT srcLen, const USHORT* src
 		}
 
 		auto originalDst = dst;
-		auto originalDstLen = dstLen;
+		const auto originalDstLen = dstLen;
 
 		if (!trailingNumbersRemoved)
 		{
@@ -2031,13 +2022,13 @@ UnicodeUtil::ICU* UnicodeUtil::Utf16Collation::loadICU(
 
 			if (avail < 0)
 			{
-				UErrorCode status = U_ZERO_ERROR;
-				UCollator* testCollator = icu->ucolOpen(locale.c_str(), &status);
+				UErrorCode errorCode = U_ZERO_ERROR;
+				UCollator* testCollator = icu->ucolOpen(locale.c_str(), &errorCode);
 				if (!testCollator)
 					continue;
 
 				icu->ucolClose(testCollator);
-				if (status != U_ZERO_ERROR)
+				if (errorCode != U_ZERO_ERROR)
 					continue;
 			}
 		}

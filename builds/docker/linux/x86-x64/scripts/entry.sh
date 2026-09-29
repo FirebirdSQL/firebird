@@ -1,6 +1,4 @@
 #!/bin/sh
 set -e
 
-trap exit INT TERM
-setarch $SET_ARCH /build.sh &
-wait $!
+exec /entry-common.sh setarch $SET_ARCH /build.sh

@@ -50,6 +50,7 @@ public:
 	{
 		explicit Item(MemoryPool& pool)
 			: field(pool),
+			  schema(pool),
 			  relation(pool),
 			  owner(pool),
 			  alias(pool),
@@ -67,6 +68,7 @@ public:
 
 		Item(MemoryPool& pool, const Item& v)
 			: field(pool, v.field),
+			  schema(pool, v.schema),
 			  relation(pool, v.relation),
 			  owner(pool, v.owner),
 			  alias(pool, v.alias),
@@ -83,6 +85,7 @@ public:
 		}
 
 		string field;
+		string schema;
 		string relation;
 		string owner;
 		string alias;
@@ -135,12 +138,12 @@ public:
 		return items[n];
 	}
 
-	unsigned getMessageLength()
+	unsigned getMessageLength() const noexcept
 	{
 		return length;
 	}
 
-	unsigned getCount()
+	unsigned getCount() const noexcept
 	{
 		return items.getCount();
 	}
@@ -151,12 +154,12 @@ public:
 	}
 
 	// IMessageMetadata implementation
-	unsigned getCount(CheckStatusWrapper* /*status*/)
+	unsigned getCount(CheckStatusWrapper* /*status*/) override
 	{
 		return (unsigned) items.getCount();
 	}
 
-	const char* getField(CheckStatusWrapper* status, unsigned index)
+	const char* getField(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].field.c_str();
@@ -165,7 +168,16 @@ public:
 		return NULL;
 	}
 
-	const char* getRelation(CheckStatusWrapper* status, unsigned index)
+	const char* getSchema(CheckStatusWrapper* status, unsigned index) override
+	{
+		if (index < items.getCount())
+			return items[index].schema.c_str();
+
+		raiseIndexError(status, index, "getSchema");
+		return NULL;
+	}
+
+	const char* getRelation(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].relation.c_str();
@@ -174,7 +186,7 @@ public:
 		return NULL;
 	}
 
-	const char* getOwner(CheckStatusWrapper* status, unsigned index)
+	const char* getOwner(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].owner.c_str();
@@ -183,7 +195,7 @@ public:
 		return NULL;
 	}
 
-	const char* getAlias(CheckStatusWrapper* status, unsigned index)
+	const char* getAlias(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].alias.c_str();
@@ -192,7 +204,7 @@ public:
 		return NULL;
 	}
 
-	unsigned getType(CheckStatusWrapper* status, unsigned index)
+	unsigned getType(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].type;
@@ -201,7 +213,7 @@ public:
 		return 0;
 	}
 
-	FB_BOOLEAN isNullable(CheckStatusWrapper* status, unsigned index)
+	FB_BOOLEAN isNullable(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].nullable;
@@ -210,7 +222,7 @@ public:
 		return false;
 	}
 
-	int getSubType(CheckStatusWrapper* status, unsigned index)
+	int getSubType(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].subType;
@@ -219,7 +231,7 @@ public:
 		return 0;
 	}
 
-	unsigned getLength(CheckStatusWrapper* status, unsigned index)
+	unsigned getLength(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].length;
@@ -228,7 +240,7 @@ public:
 		return 0;
 	}
 
-	int getScale(CheckStatusWrapper* status, unsigned index)
+	int getScale(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].scale;
@@ -237,7 +249,7 @@ public:
 		return 0;
 	}
 
-	unsigned getCharSet(CheckStatusWrapper* status, unsigned index)
+	unsigned getCharSet(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].charSet;
@@ -246,7 +258,7 @@ public:
 		return 0;
 	}
 
-	unsigned getOffset(CheckStatusWrapper* status, unsigned index)
+	unsigned getOffset(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].offset;
@@ -255,7 +267,7 @@ public:
 		return 0;
 	}
 
-	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index)
+	unsigned getNullOffset(CheckStatusWrapper* status, unsigned index) override
 	{
 		if (index < items.getCount())
 			return items[index].nullInd;
@@ -264,19 +276,19 @@ public:
 		return 0;
 	}
 
-	IMetadataBuilder* getBuilder(CheckStatusWrapper* status);
+	IMetadataBuilder* getBuilder(CheckStatusWrapper* status) override;
 
-	unsigned getMessageLength(CheckStatusWrapper* /*status*/)
+	unsigned getMessageLength(CheckStatusWrapper* /*status*/) override
 	{
 		return length;
 	}
 
-	unsigned getAlignment(CheckStatusWrapper* /*status*/)
+	unsigned getAlignment(CheckStatusWrapper* /*status*/) override
 	{
 		return alignment;
 	}
 
-	unsigned getAlignedLength(CheckStatusWrapper* /*status*/)
+	unsigned getAlignedLength(CheckStatusWrapper* /*status*/) override
 	{
 		return alignedLength;
 	}
@@ -318,20 +330,21 @@ public:
 	MetadataBuilder(unsigned fieldCount);
 
 	// IMetadataBuilder implementation
-	void setType(CheckStatusWrapper* status, unsigned index, unsigned type);
-	void setSubType(CheckStatusWrapper* status, unsigned index, int subType);
-	void setLength(CheckStatusWrapper* status, unsigned index, unsigned length);
-	void setCharSet(CheckStatusWrapper* status, unsigned index, unsigned charSet);
-	void setScale(CheckStatusWrapper* status, unsigned index, int scale);
-	void truncate(CheckStatusWrapper* status, unsigned count);
-	void remove(CheckStatusWrapper* status, unsigned index);
-	void moveNameToIndex(CheckStatusWrapper* status, const char* name, unsigned index);
-	unsigned addField(CheckStatusWrapper* status);
-	IMessageMetadata* getMetadata(CheckStatusWrapper* status);
-	void setField(CheckStatusWrapper* status, unsigned index, const char* field);
-	void setRelation(CheckStatusWrapper* status, unsigned index, const char* relation);
-	void setOwner(CheckStatusWrapper* status, unsigned index, const char* owner);
-	void setAlias(CheckStatusWrapper* status, unsigned index, const char* alias);
+	void setType(CheckStatusWrapper* status, unsigned index, unsigned type) override;
+	void setSubType(CheckStatusWrapper* status, unsigned index, int subType) override;
+	void setLength(CheckStatusWrapper* status, unsigned index, unsigned length) override;
+	void setCharSet(CheckStatusWrapper* status, unsigned index, unsigned charSet) override;
+	void setScale(CheckStatusWrapper* status, unsigned index, int scale) override;
+	void truncate(CheckStatusWrapper* status, unsigned count) override;
+	void remove(CheckStatusWrapper* status, unsigned index) override;
+	void moveNameToIndex(CheckStatusWrapper* status, const char* name, unsigned index) override;
+	unsigned addField(CheckStatusWrapper* status) override;
+	IMessageMetadata* getMetadata(CheckStatusWrapper* status) override;
+	void setField(CheckStatusWrapper* status, unsigned index, const char* field) override;
+	void setSchema(CheckStatusWrapper* status, unsigned index, const char* schema) override;
+	void setRelation(CheckStatusWrapper* status, unsigned index, const char* relation) override;
+	void setOwner(CheckStatusWrapper* status, unsigned index, const char* owner) override;
+	void setAlias(CheckStatusWrapper* status, unsigned index, const char* alias) override;
 
 private:
 	RefPtr<MsgMetadata> msgMetadata;

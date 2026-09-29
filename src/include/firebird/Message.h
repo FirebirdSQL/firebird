@@ -77,32 +77,32 @@
 			return desc.getMetadata();	\
 		}	\
 		\
-		void clear()	\
+		void clear() noexcept	\
 		{	\
 			memset(&data, 0, sizeof(data));	\
 		}	\
 		\
-		Type* getData()	\
+		Type* getData() noexcept	\
 		{	\
 			return &data;	\
 		}	\
 		\
-		const Type* getData() const	\
+		const Type* getData() const noexcept	\
 		{	\
 			return &data;	\
 		}	\
 		\
-		Type* operator ->()	\
+		Type* operator ->() noexcept	\
 		{	\
 			return getData();	\
 		}	\
 		\
-		const Type* operator ->() const	\
+		const Type* operator ->() const noexcept	\
 		{	\
 			return getData();	\
 		}	\
 		\
-		Type data;	\
+		Type data{};	\
 		::Firebird::MessageDesc desc;	\
 	}
 
@@ -161,11 +161,11 @@
 	builder->setLength(status, index, sizeof(FB_BOOLEAN));
 
 #define FB__META_FB_DATE	\
-	builder->setType(status, index, SQL_DATE);	\
+	builder->setType(status, index, SQL_TYPE_DATE);	\
 	builder->setLength(status, index, sizeof(::Firebird::FbDate));
 
 #define FB__META_FB_TIME	\
-	builder->setType(status, index, SQL_TIME);	\
+	builder->setType(status, index, SQL_TYPE_TIME);	\
 	builder->setLength(status, index, sizeof(::Firebird::FbTime));
 
 #define FB__META_FB_TIME_TZ	\

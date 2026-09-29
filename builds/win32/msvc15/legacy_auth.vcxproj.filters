@@ -24,4 +24,12 @@
       <Filter>AUTH files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyServer.h">
+      <Filter>AUTH files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h">
+      <Filter>AUTH files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

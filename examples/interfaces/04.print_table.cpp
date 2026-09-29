@@ -106,7 +106,7 @@ int main()
 
 			default:
 				{
-					sprintf(s, "Unknown type %d for %s", t, meta->getField(&status, j));
+					snprintf(s, sizeof(s), "Unknown type %d for %s", t, meta->getField(&status, j));
 					throw s;
 				}
 				continue;

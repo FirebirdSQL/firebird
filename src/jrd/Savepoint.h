@@ -22,12 +22,14 @@
 
 #include "../common/classes/File.h"
 #include "../jrd/MetaName.h"
+#include "../jrd/QualifiedName.h"
 #include "../jrd/Record.h"
 #include "../jrd/RecordNumber.h"
 
 namespace Jrd
 {
 	class jrd_tra;
+	class LocalTemporaryTable;
 
 	// Verb actions
 
@@ -78,20 +80,17 @@ namespace Jrd
 	class VerbAction
 	{
 	public:
-		VerbAction()
-			: vct_next(NULL), vct_relation(NULL), vct_records(NULL), vct_undo(NULL)
-		{}
-
 		~VerbAction()
 		{
 			delete vct_records;
 			delete vct_undo;
 		}
 
-		VerbAction* 	vct_next;		// Next action within verb
-		jrd_rel*		vct_relation;	// Relation involved
-		RecordBitmap*	vct_records;	// Record involved
-		UndoItemTree*	vct_undo;		// Data for undo records
+		VerbAction* 	vct_next = nullptr;		// Next action within verb
+		jrd_rel*		vct_relation = nullptr;	// Relation involved
+		RecordBitmap*	vct_records = nullptr;	// Record involved
+		UndoItemTree*	vct_undo = nullptr;		// Data for undo records
+		FB_UINT64		vct_temp_instance_id = 0;	// Frame-scoped temporary relation instance
 
 		void mergeTo(thread_db* tdbb, jrd_tra* transaction, VerbAction* nextAction);
 		void undo(thread_db* tdbb, jrd_tra* transaction, bool preserveLocks,
@@ -99,8 +98,31 @@ namespace Jrd
 		void garbageCollectIdxLite(thread_db* tdbb, jrd_tra* transaction, SINT64 recordNumber,
 								   VerbAction* nextAction, Record* goingRecord);
 
-	private:
-		void release(jrd_tra* transaction);
+		void discard(jrd_tra* transaction);
+	};
+
+	// LTT undo item - stores original state of a LocalTemporaryTable for savepoint rollback
+	class LttUndoItem
+	{
+	public:
+		enum UndoType
+		{
+			LTT_UNDO_CREATE,	// LTT was created - on rollback, remove it
+			LTT_UNDO_ALTER,		// LTT was altered - on rollback, restore original state
+			LTT_UNDO_DROP		// LTT was dropped - on rollback, restore it
+		};
+
+		LttUndoItem(UndoType aType, const QualifiedName& aName, LocalTemporaryTable* aOriginal = nullptr)
+			: type(aType),
+			  name(aName),
+			  original(aOriginal),
+			  next(nullptr)
+		{}
+
+		UndoType type;
+		QualifiedName name;
+		Firebird::AutoPtr<LocalTemporaryTable> original;	// Original LTT state (for ALTER/DROP), nullptr for CREATE
+		LttUndoItem* next;
 	};
 
 	// Savepoint class
@@ -119,8 +141,7 @@ namespace Jrd
 
 	public:
 		explicit Savepoint(jrd_tra* transaction)
-			: m_transaction(transaction), m_number(0), m_flags(0), m_count(0),
-			  m_next(NULL), m_actions(NULL), m_freeActions(NULL)
+			: m_transaction(transaction)
 		{}
 
 		~Savepoint()
@@ -138,6 +159,13 @@ namespace Jrd
 				delete m_freeActions;
 				m_freeActions = next;
 			}
+
+			while (m_lttActions)
+			{
+				LttUndoItem* next = m_lttActions->next;
+				delete m_lttActions;
+				m_lttActions = next;
+			}
 		}
 
 		void init(SavNumber number, bool root, Savepoint* next)
@@ -148,13 +176,13 @@ namespace Jrd
 			fb_assert(m_next != this);
 		}
 
-		VerbAction* getAction(const jrd_rel* relation) const
+		VerbAction* getAction(const jrd_rel* relation, FB_UINT64 tempInstanceId = 0) const
 		{
 			// Find and return (if exists) action that belongs to the given relation
 
 			for (VerbAction* action = m_actions; action; action = action->vct_next)
 			{
-				if (action->vct_relation == relation)
+				if (action->vct_relation == relation && action->vct_temp_instance_id == tempInstanceId)
 					return action;
 			}
 
@@ -228,9 +256,12 @@ namespace Jrd
 			return next;
 		}
 
-		VerbAction* createAction(jrd_rel* relation);
+		VerbAction* createAction(thread_db* tdbb, jrd_rel* relation, FB_UINT64 tempInstanceId = 0);
+		void createLttAction(LttUndoItem::UndoType type, const QualifiedName& name,
+			LocalTemporaryTable* original = nullptr);
 
 		void cleanupTempData();
+		void discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempInstanceId);
 
 		Savepoint* rollback(thread_db* tdbb, Savepoint* prior = NULL, bool preserveLocks = false);
 		Savepoint* rollforward(thread_db* tdbb, Savepoint* prior = NULL);
@@ -321,16 +352,15 @@ namespace Jrd
 		bool isLarge() const;
 		Savepoint* release(Savepoint* prior = NULL);
 
-		jrd_tra* const m_transaction; 	// transaction this savepoint belongs to
-		SavNumber m_number;				// savepoint number
-		USHORT m_flags;					// misc flags
-		USHORT m_count;					// active verb count
-		MetaName m_name; 		// savepoint name
-		Savepoint* m_next;				// next savepoint in the list
-
-
-		VerbAction* m_actions;			// verb action list
-		VerbAction* m_freeActions;		// free verb actions
+		jrd_tra* const m_transaction; 			// transaction this savepoint belongs to
+		SavNumber m_number = 0;					// savepoint number
+		USHORT m_flags = 0;						// misc flags
+		USHORT m_count = 0;						// active verb count
+		MetaName m_name; 						// savepoint name
+		Savepoint* m_next = nullptr;			// next savepoint in the list
+		VerbAction* m_actions = nullptr;		// verb action list
+		VerbAction* m_freeActions = nullptr;	// free verb actions
+		LttUndoItem* m_lttActions = nullptr;	// LTT undo action list
 	};
 
 	// Start a savepoint and rollback it in destructor,
@@ -351,13 +381,17 @@ namespace Jrd
 		SavNumber m_number;
 	};
 
-	// Conditional savepoint used to ensure cursor stability in sub-queries
+	// Conditional savepoint used to ensure cursor stability in sub-queries and record sources
 
-	class StableCursorSavePoint
+	class StableCursorSavePoint final
 	{
 	public:
-		StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool start);
+		StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool shouldStart);
 		~StableCursorSavePoint() {} // undo is left up to the callers
+
+	public:
+		static SavNumber startSavepoint(jrd_tra* trans);
+		static void releaseSavepoint(thread_db* tdbb, jrd_tra* trans, SavNumber& number);
 
 		void release();
 

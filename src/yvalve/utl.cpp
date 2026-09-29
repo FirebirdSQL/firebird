@@ -70,6 +70,7 @@
 #include "../common/StatusHolder.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/fb_tls.h"
+#include "../common/classes/ThreadCleanup.h"
 #include "../common/os/os_utils.h"
 
 #ifdef HAVE_UNISTD_H
@@ -97,15 +98,15 @@ ITransaction* handleToITransaction(CheckStatusWrapper*, FB_API_HANDLE*);
 // Bug 7119 - BLOB_load will open external file for read in BINARY mode.
 
 #ifdef WIN_NT
-static const char* const FOPEN_READ_TYPE		= "rb";
-static const char* const FOPEN_WRITE_TYPE		= "wb";
-static const char* const FOPEN_READ_TYPE_TEXT	= "rt";
-static const char* const FOPEN_WRITE_TYPE_TEXT	= "wt";
+static inline constexpr const char* FOPEN_READ_TYPE			= "rb";
+static inline constexpr const char* FOPEN_WRITE_TYPE		= "wb";
+static inline constexpr const char* FOPEN_READ_TYPE_TEXT	= "rt";
+static inline constexpr const char* FOPEN_WRITE_TYPE_TEXT	= "wt";
 #else
-static const char* const FOPEN_READ_TYPE		= "r";
-static const char* const FOPEN_WRITE_TYPE		= "w";
-static const char* const FOPEN_READ_TYPE_TEXT	= FOPEN_READ_TYPE;
-static const char* const FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
+static inline constexpr const char* FOPEN_READ_TYPE			= "r";
+static inline constexpr const char* FOPEN_WRITE_TYPE		= "w";
+static inline constexpr const char* FOPEN_READ_TYPE_TEXT	= FOPEN_READ_TYPE;
+static inline constexpr const char* FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
 #endif
 
 #define LOWER7(c) ( (c >= 'A' && c<= 'Z') ? c + 'a' - 'A': c )
@@ -113,17 +114,16 @@ static const char* const FOPEN_WRITE_TYPE_TEXT	= FOPEN_WRITE_TYPE;
 
 // Blob stream stuff
 
-const int BSTR_input	= 0;
-const int BSTR_output	= 1;
-const int BSTR_alloc	= 2;
+inline constexpr int BSTR_input		= 0;
+inline constexpr int BSTR_output	= 1;
+inline constexpr int BSTR_alloc		= 2;
 
-static void get_ods_version(CheckStatusWrapper*, IAttachment*, USHORT*, USHORT*);
 static void isc_expand_dpb_internal(const UCHAR** dpb, SSHORT* dpb_size, ...);
 
 
 // Blob info stuff
 
-static const char blob_items[] =
+static inline constexpr char blob_items[] =
 {
 	isc_info_blob_max_segment, isc_info_blob_num_segments,
 	isc_info_blob_total_length
@@ -132,13 +132,13 @@ static const char blob_items[] =
 
 // gds__version stuff
 
-static const unsigned char info[] =
+static inline constexpr unsigned char info[] =
 	{ isc_info_firebird_version, isc_info_implementation, fb_info_implementation, isc_info_end };
 
-static const unsigned char ods_info[] =
+static inline constexpr unsigned char ods_info[] =
 	{ isc_info_ods_version, isc_info_ods_minor_version, isc_info_end };
 
-static const TEXT* const impl_class[] =
+static inline constexpr const TEXT* impl_class[] =
 {
 	NULL,						// 0
 	"access method",			// 1
@@ -253,13 +253,12 @@ void dump(CheckStatusWrapper* status, ISC_QUAD* blobId, IAttachment* att, ITrans
 
 	// Copy data from blob to scratch file
 
-	SCHAR buffer[256];
-	const SSHORT short_length = sizeof(buffer);
+	SCHAR buffer[8192];
 
 	for (bool cond = true; cond; )
 	{
 		unsigned l = 0;
-		switch (blob->getSegment(status, short_length, buffer, &l))
+		switch (blob->getSegment(status, sizeof(buffer), buffer, &l))
 		{
 		case Firebird::IStatus::RESULT_ERROR:
 		case Firebird::IStatus::RESULT_NO_DATA:
@@ -487,7 +486,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 
 				case isc_info_truncated:
 					redo = true;
-					// fall down...
+					[[fallthrough]];
 				case isc_info_end:
 					break;
 
@@ -556,7 +555,7 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 		}
 
 		USHORT ods_version, ods_minor_version;
-		get_ods_version(status, att, &ods_version, &ods_minor_version);
+		UTL_get_ods_version(status, att, &ods_version, &ods_minor_version);
 		if (status->getState() & Firebird::IStatus::STATE_ERRORS)
 			return;
 
@@ -569,9 +568,9 @@ void UtilInterface::getFbVersion(CheckStatusWrapper* status, IAttachment* att,
 	}
 }
 
-YAttachment* UtilInterface::executeCreateDatabase(
+YAttachment* UtilInterface::executeCreateDatabase2(
 	Firebird::CheckStatusWrapper* status, unsigned stmtLength, const char* creatDBstatement,
-	unsigned dialect, FB_BOOLEAN* stmtIsCreateDb)
+	unsigned dialect, unsigned dpbLength, const unsigned char* dpb, FB_BOOLEAN* stmtIsCreateDb)
 {
 	try
 	{
@@ -582,9 +581,9 @@ YAttachment* UtilInterface::executeCreateDatabase(
 			*stmtIsCreateDb = FB_FALSE;
 
 		string statement(creatDBstatement,
-			(stmtLength == 0 && creatDBstatement ? strlen(creatDBstatement) : stmtLength));
+			(stmtLength == 0 && creatDBstatement ? fb_strlen(creatDBstatement) : stmtLength));
 
-		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect))
+		if (!PREPARSE_execute(status, &att, statement, &stmtEaten, dialect, dpbLength, dpb))
 			return NULL;
 
 		if (stmtIsCreateDb)
@@ -603,8 +602,6 @@ YAttachment* UtilInterface::executeCreateDatabase(
 			att->dropDatabase(&tempCheckStatusWrapper);
 			return NULL;
 		}
-
-		bool v3Error = false;
 
 		if (!stmtEaten)
 		{
@@ -717,7 +714,7 @@ void UtilInterface::encodeTimeTz(CheckStatusWrapper* status, ISC_TIME_TZ* timeTz
 	try
 	{
 		timeTz->utc_time = encodeTime(hours, minutes, seconds, fractions);
-		timeTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		timeTz->time_zone = TimeZoneUtil::parse(timeZone, fb_strlen(timeZone));
 		TimeZoneUtil::localTimeToUtc(*timeTz);
 	}
 	catch (const Exception& ex)
@@ -791,8 +788,45 @@ void UtilInterface::encodeTimeStampTz(CheckStatusWrapper* status, ISC_TIMESTAMP_
 	{
 		timeStampTz->utc_timestamp.timestamp_date = encodeDate(year, month, day);
 		timeStampTz->utc_timestamp.timestamp_time = encodeTime(hours, minutes, seconds, fractions);
-		timeStampTz->time_zone = TimeZoneUtil::parse(timeZone, strlen(timeZone));
+		timeStampTz->time_zone = TimeZoneUtil::parse(timeZone, fb_strlen(timeZone));
 		TimeZoneUtil::localTimeStampToUtc(*timeStampTz);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+void UtilInterface::convert(Firebird::CheckStatusWrapper* status,
+	unsigned sourceType, unsigned sourceScale, unsigned sourceLength, const void* source,
+	unsigned targetType, unsigned targetScale, unsigned targetLength, void* target)
+{
+	dsc sourceDesc;
+	memset(&sourceDesc, 0, sizeof(sourceDesc));
+	sourceDesc.dsc_dtype = fb_utils::sqlTypeToDscType(sourceType);
+	sourceDesc.dsc_scale = sourceScale;
+	sourceDesc.dsc_length = sourceLength;
+	if (sourceDesc.isText())
+		sourceDesc.setTextType(CS_dynamic);
+	sourceDesc.dsc_address = (UCHAR*) source;
+
+	dsc targetDesc;
+	memset(&targetDesc, 0, sizeof(targetDesc));
+	targetDesc.dsc_dtype = fb_utils::sqlTypeToDscType(targetType);
+	targetDesc.dsc_scale = targetScale;
+	targetDesc.dsc_length = targetLength;
+	if (targetDesc.isText())
+		targetDesc.setTextType(CS_dynamic);
+	targetDesc.dsc_address = static_cast<UCHAR*>(target);
+
+	try
+	{
+		CVT_move(&sourceDesc, &targetDesc, 0,
+			[](const Arg::StatusVector& status)
+			{
+				status.raise();
+			}
+		);
 	}
 	catch (const Exception& ex)
 	{
@@ -1002,7 +1036,7 @@ public:
 	{
 		try
 		{
-			pb->insertString(tag, str, strlen(str));
+			pb->insertString(tag, str, fb_strlen(str));
 		}
 		catch (const Exception& ex)
 		{
@@ -1193,7 +1227,7 @@ public:
 
 private:
 	AutoPtr<ClumpletWriter> pb;
-	unsigned char nextTag;
+	unsigned char nextTag = 0;
 	string strVal;
 };
 
@@ -1230,7 +1264,7 @@ public:
 			{
 				char temp[STRING_SIZE];
 				decDoubleToString(reinterpret_cast<const decDouble*>(from), temp);
-				unsigned int len = strlen(temp);
+				unsigned int len = fb_strlen(temp);
 				if (len < bufSize)
 					strncpy(buffer, temp, bufSize);
 				else
@@ -1291,7 +1325,7 @@ public:
 			{
 				char temp[STRING_SIZE];
 				decQuadToString(reinterpret_cast<const decQuad*>(from), temp);
-				unsigned int len = strlen(temp);
+				unsigned int len = fb_strlen(temp);
 				if (len < bufSize)
 					strncpy(buffer, temp, bufSize);
 				else
@@ -2940,7 +2974,14 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 	int rc = 0;
 	try
 	{
-		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, (Thread::Handle*) thd_id);
+		Thread thread;
+		Thread::start((ThreadEntryPoint*) entrypoint, arg, priority, &thread);
+
+		if (thd_id)
+		{
+			*static_cast<Thread::Handle*>(thd_id) = thread.getHandle();
+			thread.detach(false);
+		}
 	}
 	catch (const status_exception& status)
 	{
@@ -2954,7 +2995,7 @@ int API_ROUTINE gds__thread_start(FPTR_INT_VOID_PTR* entrypoint,
 #endif
 
 
-static void get_ods_version(CheckStatusWrapper* status, IAttachment* att,
+void UTL_get_ods_version(CheckStatusWrapper* status, IAttachment* att,
 	USHORT* ods_version, USHORT* ods_minor_version)
 {
 /**************************************
@@ -3176,6 +3217,10 @@ void setLogin(ClumpletWriter& dpb, bool spbFlag)
 	const UCHAR utf8Tag = spbFlag ? isc_spb_utf8_filename : isc_dpb_utf8_filename;
 	// username and password tags match for both SPB and DPB
 
+	// We should not use environment variables when user explicitly requested
+	// trusted authentication (trusted_auth), on network server (address_path)
+	// and when authentication block is present (auth_block). The latter
+	// typically happens only on network server but extra protection won't hurt.
 	if (!(dpb.find(trusted_auth) || dpb.find(address_path) || dpb.find(auth_block)))
 	{
 		bool utf8 = dpb.find(utf8Tag);
@@ -3193,10 +3238,6 @@ void setLogin(ClumpletWriter& dpb, bool spbFlag)
 //
 // circularAlloc()
 //
-
-#ifdef WIN_NT
-#include <windows.h>
-#endif
 
 namespace {
 
@@ -3232,43 +3273,20 @@ private:
 ThreadCleanup* ThreadCleanup::chain = NULL;
 GlobalPtr<Mutex> ThreadCleanup::cleanupMutex;
 
-#ifdef USE_POSIX_THREADS
-
-pthread_key_t key;
-pthread_once_t keyOnce = PTHREAD_ONCE_INIT;
-bool keySet = false;
-
-void makeKey()
-{
-	int err = pthread_key_create(&key, ThreadCleanup::destructor);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_key_create", err);
-	}
-	keySet = true;
-}
+GlobalPtr<ThreadCleanupCallback> threadExitCallback([] (MemoryPool& p) {
+	return FB_NEW_POOL(p) ThreadCleanupCallback(p, ThreadCleanup::destructor);
+});
 
 void ThreadCleanup::initThreadCleanup()
 {
-	int err = pthread_once(&keyOnce, makeKey);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_once", err);
-	}
-
-	err = pthread_setspecific(key, &key);
-	if (err)
-	{
-		Firebird::system_call_failed::raise("pthread_setspecific", err);
-	}
+	threadExitCallback->enable();
 }
 
 void ThreadCleanup::finiThreadCleanup()
 {
-	pthread_setspecific(key, NULL);
+	threadExitCallback->disable();
 	PluginManager::threadDetach();
 }
-
 
 class FiniThreadCleanup
 {
@@ -3279,29 +3297,10 @@ public:
 	~FiniThreadCleanup()
 	{
 		ThreadCleanup::assertNoCleanupChain();
-		if (keySet)
-		{
-			int err = pthread_key_delete(key);
-			if (err)
-				gds__log("pthread_key_delete failed with error %d", err);
-		}
 	}
 };
 
 Firebird::GlobalPtr<FiniThreadCleanup> thrCleanup;		// needed to call dtor
-
-#endif // USE_POSIX_THREADS
-
-#ifdef WIN_NT
-void ThreadCleanup::initThreadCleanup()
-{
-}
-
-void ThreadCleanup::finiThreadCleanup()
-{
-	PluginManager::threadDetach();
-}
-#endif // #ifdef WIN_NT
 
 ThreadCleanup** ThreadCleanup::findCleanup(FPTR_VOID_PTR cleanup, void* arg)
 {
@@ -3360,8 +3359,8 @@ void ThreadCleanup::remove(FPTR_VOID_PTR cleanup, void* arg)
 class ThreadBuffer : public GlobalStorage
 {
 private:
-	const static size_t BUFFER_SIZE = 8192;		// make it match with call stack limit == 2048
-	char buffer[BUFFER_SIZE];
+	static inline constexpr size_t BUFFER_SIZE = 8192;	// make it match with call stack limit == 2048
+	char buffer[BUFFER_SIZE]{};
 	char* buffer_ptr;
 
 public:
@@ -3430,7 +3429,7 @@ public:
 };
 Firebird::GlobalPtr<Strings> cleanStrings;
 
-const char* circularAlloc(const char* s, unsigned len)
+const char* circularAlloc(const char* s, size_t len)
 {
 	return getThreadBuffer()->alloc(s, len);
 }
@@ -3501,14 +3500,3 @@ void makePermanentVector(ISC_STATUS* v) noexcept
 {
 	makePermanentVector(v, v);
 }
-
-#ifdef WIN_NT
-namespace Why
-{
-	// This is called from ibinitdll.cpp:DllMain()
-	void threadCleanup()
-	{
-		ThreadCleanup::destructor(NULL);
-	}
-}
-#endif

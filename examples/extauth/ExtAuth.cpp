@@ -32,9 +32,9 @@
 
 #define HANDSHAKE_DEBUG(A)
 
-const unsigned LOGINSIZE = 128u;
-const unsigned RANDSIZE = 32u;
-const unsigned SALTLEN = 8u;
+constexpr unsigned LOGINSIZE = 128u;
+constexpr unsigned RANDSIZE = 32u;
+constexpr unsigned SALTLEN = 8u;
 
 typedef unsigned int ULong;
 
@@ -138,7 +138,7 @@ protected:
 
 	PseudoRandom pseudoRand;
 	HashSha256 hash;
-	rsa_key privateKey;
+	rsa_key privateKey{};
 	int iniLvl;
 };
 
@@ -253,7 +253,7 @@ int ExtAuthClient::authenticate(ThrowStatusWrapper* status, IClientBlock* cBlock
 			error(status, "Malformed data from server - missing random block");
 
 		// next append login to random block
-		unsigned len = strlen(login);
+		unsigned len = static_cast<unsigned>(strlen(login));
 		if (len > LOGINSIZE)
 			len = LOGINSIZE;
 		memcpy(&bytes[RANDSIZE], login, len);
@@ -340,7 +340,7 @@ public:
 	}
 
 private:
-	unsigned char msg[RANDSIZE + LOGINSIZE];
+	unsigned char msg[RANDSIZE + LOGINSIZE]{};
 	bool sentData;
 };
 
@@ -377,7 +377,7 @@ int ExtAuthServer::authenticate(ThrowStatusWrapper* status, IServerBlock* sBlock
 
 		// decompose message
 		const char* login = reinterpret_cast<const char*>(data);
-		unsigned len = strnlen(login, dl);
+		unsigned len = static_cast<unsigned>(strnlen(login, dl));
 		if (len == dl)
 			error(status, "Wrong data from client - no signature in a message");
 		if (len == 0)

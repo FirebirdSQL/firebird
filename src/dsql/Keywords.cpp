@@ -26,7 +26,7 @@
 #include "../common/Token.h"
 
 #define _yacc_defines_yystype
-#include "gen/parse.h"
+#include "parse.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -35,7 +35,7 @@ using namespace Jrd;
 #define PARSER_TOKEN(ident, str, nonReserved) \
 	{ident, str, nonReserved},
 
-static const Token tokens[] =
+static constexpr Token tokens[] =
 {
 #include "../common/ParserTokens.h"
 	{0, NULL, false}

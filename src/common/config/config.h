@@ -78,24 +78,24 @@ extern const char*	GCPolicyCooperative;
 extern const char*	GCPolicyBackground;
 extern const char*	GCPolicyCombined;
 
-const int WIRE_CRYPT_DISABLED = 0;
-const int WIRE_CRYPT_ENABLED = 1;
-const int WIRE_CRYPT_REQUIRED = 2;
+inline constexpr int WIRE_CRYPT_DISABLED = 0;
+inline constexpr int WIRE_CRYPT_ENABLED = 1;
+inline constexpr int WIRE_CRYPT_REQUIRED = 2;
 
 enum WireCryptMode {WC_CLIENT, WC_SERVER};		// Have different defaults
 
-const int MODE_SUPER = 0;
-const int MODE_SUPERCLASSIC = 1;
-const int MODE_CLASSIC = 2;
+inline constexpr int MODE_SUPER = 0;
+inline constexpr int MODE_SUPERCLASSIC = 1;
+inline constexpr int MODE_CLASSIC = 2;
 
-const char* const CONFIG_FILE = "firebird.conf";
+inline constexpr const char* CONFIG_FILE = "firebird.conf";
 
 struct ConfigValue
 {
-	ConfigValue() : intVal(0) {};
-	constexpr ConfigValue(const char* val) : strVal(val) {};
-	constexpr ConfigValue(bool val) : boolVal(val) {};
-	constexpr ConfigValue(int val) : intVal(val) {};
+	ConfigValue() noexcept : intVal(0) {};
+	constexpr ConfigValue(const char* val) noexcept : strVal(val) {};
+	constexpr ConfigValue(bool val) noexcept : boolVal(val) {};
+	constexpr ConfigValue(int val) noexcept : intVal(val) {};
 
 	union
 	{
@@ -105,12 +105,12 @@ struct ConfigValue
 	};
 
 	// simple bitwise comparison
-	bool operator== (const ConfigValue& other) const
+	bool operator== (const ConfigValue& other) const noexcept
 	{
 		return this->intVal == other.intVal;
 	}
 
-	bool operator!= (const ConfigValue& other) const
+	bool operator!= (const ConfigValue& other) const noexcept
 	{
 		return !(*this == other);
 	}
@@ -136,6 +136,7 @@ enum ConfigKey
 	KEY_DEADLOCK_TIMEOUT,
 	KEY_REMOTE_SERVICE_NAME,
 	KEY_REMOTE_SERVICE_PORT,
+	KEY_REMOTE_SERVICE_UNIX_SOCKET,
 	KEY_IPC_NAME,
 	KEY_MAX_UNFLUSHED_WRITES,
 	KEY_MAX_UNFLUSHED_WRITE_TIME,
@@ -150,7 +151,6 @@ enum ConfigKey
 	KEY_TRACE_DSQL,
 	KEY_LEGACY_HASH,
 	KEY_GC_POLICY,
-	KEY_REDIRECTION,
 	KEY_DATABASE_GROWTH_INCREMENT,
 	KEY_TRACE_CONFIG,
 	KEY_MAX_TRACELOG_SIZE,
@@ -187,6 +187,7 @@ enum ConfigKey
 	KEY_PARALLEL_WORKERS,
 	KEY_MAX_PARALLEL_WORKERS,
 	KEY_OPTIMIZE_FOR_FIRST_ROWS,
+	KEY_ALLOW_UPDATE_OVERWRITE,
 	MAX_CONFIG_KEY		// keep it last
 };
 
@@ -209,7 +210,7 @@ struct ConfigEntry
 	ConfigValue default_value;
 };
 
-constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
+inline constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 {
 	{TYPE_INTEGER,	"TempBlockSize",			true,	1048576},	// bytes
 	{TYPE_INTEGER,	"TempCacheLimit",			false,	-1},		// bytes
@@ -229,6 +230,7 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"DeadlockTimeout",			false,	10},		// seconds
 	{TYPE_STRING,	"RemoteServiceName",		false,	FB_SERVICE_NAME},
 	{TYPE_INTEGER,	"RemoteServicePort",		false,	0},
+	{TYPE_STRING,	"RemoteServiceUnixSocket",	true,	nullptr},
 	{TYPE_STRING,	"IpcName",					false,	FB_IPC_NAME},
 #ifdef WIN_NT
 	{TYPE_INTEGER,	"MaxUnflushedWrites",		false,	100},
@@ -252,7 +254,6 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"TraceDSQL",				true,	0},			// bitmask
 	{TYPE_BOOLEAN,	"LegacyHash",				true,	true},		// let use old passwd hash verification
 	{TYPE_STRING,	"GCPolicy",					false,	nullptr},	// garbage collection policy
-	{TYPE_BOOLEAN,	"Redirection",				true,	false},
 	{TYPE_INTEGER,	"DatabaseGrowthIncrement",	false,	128 * 1048576},	// bytes
 	{TYPE_STRING,	"AuditTraceConfigFile",		true,	""},		// location of audit trace configuration file
 	{TYPE_INTEGER,	"MaxUserTraceLogSize",		true,	10},		// maximum size of user session trace log
@@ -300,7 +301,8 @@ constexpr ConfigEntry entries[MAX_CONFIG_KEY] =
 	{TYPE_INTEGER,	"MaxStatementCacheSize",	false,	2 * 1048576},	// bytes
 	{TYPE_INTEGER,	"ParallelWorkers",			true,	1},
 	{TYPE_INTEGER,	"MaxParallelWorkers",		true,	1},
-	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false}
+	{TYPE_BOOLEAN,	"OptimizeForFirstRows",		false,	false},
+	{TYPE_BOOLEAN,	"AllowUpdateOverwrite",		false,	true}
 };
 
 
@@ -358,10 +360,10 @@ private:
 	HalfStaticArray<const char*, 4> valuesSource;
 
 	// Index of value source, zero if not set
-	UCHAR sourceIdx[MAX_CONFIG_KEY];
+	UCHAR sourceIdx[MAX_CONFIG_KEY]{};
 
 	// test if given key value was set in config
-	bool testKey(unsigned int key) const
+	bool testKey(unsigned int key) const noexcept
 	{
 		return sourceIdx[key] != 0;
 	}
@@ -391,7 +393,7 @@ public:
 	// cases firebird.conf may be also used to specify root.
 
 	static void setRootDirectoryFromCommandLine(const PathName& newRoot);
-	static const PathName* getCommandLineRootDirectory();
+	static const PathName* getCommandLineRootDirectory() noexcept;
 
 	// Master config - needed to provide per-database config
 	static const RefPtr<const Config>& getDefaultConfig();
@@ -407,20 +409,20 @@ public:
 	bool getBoolean(unsigned int key) const;
 
 	// Number of known keys
-	static unsigned int getKeyCount()
+	static inline constexpr unsigned int getKeyCount() noexcept
 	{
 		return MAX_CONFIG_KEY;
 	}
 
-	static const char* getKeyName(unsigned int key);
+	static const char* getKeyName(unsigned int key) noexcept;
 
 	// false if value is null or key is not exists
 	bool getValue(unsigned int key, string& str) const;
 	static bool getDefaultValue(unsigned int key, string& str);
 	// return true if value is set at some level
-	bool getIsSet(unsigned int key) const { return testKey(key); }
+	bool getIsSet(unsigned int key) const noexcept { return testKey(key); }
 
-	const char* getValueSource(unsigned int key) const
+	const char* getValueSource(unsigned int key) const noexcept
 	{
 		return valuesSource[sourceIdx[key]];
 	}
@@ -521,6 +523,9 @@ public:
 	// Service port for INET
 	CONFIG_GET_PER_DB_KEY(unsigned short, getRemoteServicePort, KEY_REMOTE_SERVICE_PORT, getInt);
 
+	// Unix domain socket for remote protocol
+	CONFIG_GET_GLOBAL_STR(getRemoteServiceUnixSocket, KEY_REMOTE_SERVICE_UNIX_SOCKET);
+
 	// Name for IPC-related objects
 	CONFIG_GET_PER_DB_STR(getIpcName, KEY_IPC_NAME);
 
@@ -562,9 +567,6 @@ public:
 
 	// GC policy
 	CONFIG_GET_PER_DB_STR(getGCPolicy, KEY_GC_POLICY);
-
-	// Redirection
-	CONFIG_GET_GLOBAL_BOOL(getRedirection, KEY_REDIRECTION);
 
 	CONFIG_GET_PER_DB_INT(getDatabaseGrowthIncrement, KEY_DATABASE_GROWTH_INCREMENT);
 
@@ -624,6 +626,8 @@ public:
 	CONFIG_GET_GLOBAL_INT(getMaxParallelWorkers, KEY_MAX_PARALLEL_WORKERS);
 
 	CONFIG_GET_PER_DB_BOOL(getOptimizeForFirstRows, KEY_OPTIMIZE_FOR_FIRST_ROWS);
+
+	CONFIG_GET_PER_DB_BOOL(getAllowUpdateOverwrite, KEY_ALLOW_UPDATE_OVERWRITE);
 };
 
 // Implementation of interface to access master configuration file
@@ -640,7 +644,7 @@ public:
 	SINT64 asInteger(unsigned int key);
 	const char* asString(unsigned int key);
 	FB_BOOLEAN asBoolean(unsigned int key);
-	unsigned int getVersion(CheckStatusWrapper* status);
+	unsigned int getVersion(CheckStatusWrapper* status) noexcept;
 
 private:
 	RefPtr<const Config> config;

@@ -61,11 +61,11 @@ struct xdr_t
 	unsigned x_handy;	// extra private word
 	bool	x_local;	// transmission is known to be local (bytes are in the host order)
 
-	xdr_t() :
+	xdr_t() noexcept :
 		x_op(XDR_ENCODE), x_private(0), x_base(0), x_handy(0), x_local(false)
 	{ }
 
-	int create(SCHAR* addr, unsigned len, xdr_op op);
+	int create(SCHAR* addr, unsigned len, xdr_op op) noexcept;
 };
 
 #endif // COMMON_XDR_H

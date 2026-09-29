@@ -80,10 +80,10 @@ namespace Firebird {
 			system_call_failed::raise("CloseHandle");
 	}
 
-	bool Semaphore::tryEnter(const int seconds , int milliseconds)
+	bool Semaphore::tryEnter(const int seconds, int milliseconds)
 	{
 		milliseconds += seconds * 1000;
-		DWORD result = WaitForSingleObject(hSemaphore, milliseconds >= 0 ? milliseconds : INFINITE);
+		const DWORD result = WaitForSingleObject(hSemaphore, milliseconds >= 0 ? milliseconds : INFINITE);
 		if (result == WAIT_FAILED)
 			system_call_failed::raise("WaitForSingleObject");
 		return result != WAIT_TIMEOUT;
@@ -119,7 +119,7 @@ namespace Firebird {
 #ifdef COMMON_CLASSES_SEMAPHORE_POSIX_RT
 
 #ifndef WORKING_SEM_INIT
-static const char* semName = "/firebird_temp_sem";
+static constexpr const char* semName = "/firebird_temp_sem";
 #endif
 
 #ifndef SEM_FAILED

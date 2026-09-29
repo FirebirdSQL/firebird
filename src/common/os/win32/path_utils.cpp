@@ -3,19 +3,20 @@
 #include "../common/os/path_utils.h"
 #include <io.h> 		// _access
 #include <direct.h>		// _mkdir
+#include <string>
 
 using namespace Firebird;
 
 /// The Win32 implementation of the path_utils abstraction.
 
 const char PathUtils::dir_sep = '\\';
-const char* PathUtils::curr_dir_link = ".";
-const char* PathUtils::up_dir_link = "..";
+const char* const PathUtils::curr_dir_link = ".";
+const char* const PathUtils::up_dir_link = "..";
 const char PathUtils::dir_list_sep = ';';
-const size_t PathUtils::curr_dir_link_len = strlen(curr_dir_link);
-const size_t PathUtils::up_dir_link_len = strlen(up_dir_link);
+const size_t PathUtils::curr_dir_link_len = std::char_traits<char>::length(curr_dir_link);
+const size_t PathUtils::up_dir_link_len = std::char_traits<char>::length(up_dir_link);
 
-class Win32DirIterator : public PathUtils::DirIterator
+class Win32DirIterator final : public PathUtils::DirIterator
 {
 public:
 	Win32DirIterator(MemoryPool& p, const PathName& path)
@@ -32,9 +33,9 @@ public:
 
 	~Win32DirIterator();
 
-	const PathUtils::DirIterator& operator++();
-	const PathName& operator*() { return file; }
-	operator bool() { return !done; }
+	const PathUtils::DirIterator& operator++() override;
+	const PathName& operator*() noexcept override { return file; }
+	operator bool() noexcept override { return !done; }
 
 private:
 	HANDLE dir;
@@ -55,7 +56,8 @@ void Win32DirIterator::init()
 
 	if (dir == INVALID_HANDLE_VALUE)
 	{
-		if (GetLastError() != ERROR_FILE_NOT_FOUND)
+		auto const last_error = GetLastError();
+		if (last_error != ERROR_FILE_NOT_FOUND && last_error != ERROR_PATH_NOT_FOUND)
 			system_call_failed::raise("FindFirstFile");
 
 		dir = 0;
@@ -202,7 +204,7 @@ void PathUtils::ensureSeparator(PathName& in_out)
 		in_out += PathUtils::dir_sep;
 }
 
-void PathUtils::fixupSeparators(char* path)
+void PathUtils::fixupSeparators(char* path) noexcept
 {
 	for (; *path; ++path)
 	{

@@ -25,6 +25,7 @@
 
 #include "firebird.h"
 #include "../common/status.h"
+#include "../common/dsc.h"
 #include "../common/classes/init.h"
 #include "../common/classes/array.h"
 #include "../common/classes/objects_array.h"
@@ -179,6 +180,33 @@ namespace Jrd
 		SystemFunctionReturnType returnType;
 	};
 
+	struct SystemConstant
+	{
+		SystemConstant(
+			Firebird::MemoryPool& pool,
+			const char* aName,
+			const USHORT aFieldId,
+			const char* aValueSource = nullptr,
+			const std::initializer_list<UCHAR> aValueBlr = {}
+		)
+			: name(aName),
+			  fieldId(aFieldId),
+			  valueSource(aValueSource),
+			  valueBlr(pool, aValueBlr)
+		{ }
+
+		SystemConstant(Firebird::MemoryPool& pool, const SystemConstant& other)
+			: valueBlr(pool)
+		{
+			*this = other;
+		}
+
+		const char* name;
+		USHORT fieldId;
+		const char* valueSource = nullptr;
+		Firebird::Array<UCHAR> valueBlr;
+	};
+
 	struct SystemPackage
 	{
 		SystemPackage(
@@ -186,18 +214,21 @@ namespace Jrd
 			const char* aName,
 			USHORT aOdsVersion,
 			std::initializer_list<SystemProcedure> aProcedures,
-			std::initializer_list<SystemFunction> aFunctions
+			std::initializer_list<SystemFunction> aFunctions,
+			std::initializer_list<SystemConstant> aConstants = {}
 		)
 			: name(aName),
 			  odsVersion(aOdsVersion),
 			  procedures(pool, aProcedures),
-			  functions(pool, aFunctions)
+			  functions(pool, aFunctions),
+			  constants(pool, aConstants)
 		{
 		}
 
 		SystemPackage(Firebird::MemoryPool& pool, const SystemPackage& other)
 			: procedures(pool),
-			  functions(pool)
+			  functions(pool),
+			  constants(pool)
 		{
 			*this = other;
 		}
@@ -206,6 +237,7 @@ namespace Jrd
 		USHORT odsVersion;
 		Firebird::ObjectsArray<SystemProcedure> procedures;
 		Firebird::ObjectsArray<SystemFunction> functions;
+		Firebird::ObjectsArray<SystemConstant> constants;
 
 		static Firebird::ObjectsArray<SystemPackage>& get();
 

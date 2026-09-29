@@ -34,9 +34,9 @@
 
 namespace Auth {
 
-const size_t MAX_LEGACY_PASSWORD_LENGTH = 64;			// used to store passwords internally
-static const char* const LEGACY_PASSWORD_SALT = "9z";	// for old ENC_crypt()
-const size_t SALT_LENGTH = 12;					// measured after base64 coding
+inline constexpr size_t MAX_LEGACY_PASSWORD_LENGTH = 64;			// used to store passwords internally
+static inline constexpr const char* LEGACY_PASSWORD_SALT = "9z";	// for old ENC_crypt()
+inline constexpr size_t SALT_LENGTH = 12;							// measured after base64 coding
 
 class LegacyHash
 {

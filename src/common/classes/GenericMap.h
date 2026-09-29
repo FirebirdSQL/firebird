@@ -60,6 +60,12 @@ private:
 	class BaseIterator
 	{
 	public:
+		using iterator_category	= std::forward_iterator_tag;
+		using value_type		= TKeyValuePair;
+		using difference_type	= std::ptrdiff_t;
+		using pointer			= TKeyValuePair*;
+		using reference			= TKeyValuePair&;
+
 		BaseIterator(TGenericMap* map, bool initFinished = false)
 			: accessor(map),
 			  finished(initFinished)

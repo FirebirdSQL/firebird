@@ -386,6 +386,24 @@ namespace os_utils
 #endif
 	};
 
+	class StopHandler
+	{
+	public:
+#ifdef WIN_NT
+		explicit StopHandler(bool*)
+		{ }
+#else
+		explicit StopHandler(bool* stop);
+		explicit StopHandler(Firebird::MemoryPool&);
+		~StopHandler();
+
+	private:
+		static bool* stopPtr;
+
+		static void handler(void*);
+#endif
+	};
+
 } // namespace os_utils
 
 #endif // INCLUDE_OS_FILE_UTILS_H

@@ -47,7 +47,8 @@ ALTER DATABASE EXCLUDE ALL FROM PUBLICATION
 -- to disable replication of specific tables: 
 ALTER DATABASE EXCLUDE TABLE T1, T2, T3 FROM PUBLICATION 
 
-Tables enabled for replicated can be additionally filtered using two settings in the configuration file: include\_filter and exclude\_filter. They are regular expressions that are applied to table names and define rules for inclusion table\(s\) into the replication set or excluding them from the replication set.
+Tables enabled for replicated can be additionally filtered using four settings in the configuration file: include\_schema\_filter, exclude\_schema\_filter, include\_filter and exclude\_filter.
+They are regular expressions that are applied to schema and table names and define rules for inclusion table\(s\) into the replication set or excluding them from the replication set.
 
 Synchronous replication can be turned on using the sync\_replica setting \(multiple entries are allowed\). It must specify a connection string to the replica database, prefixed with username/password. In SuperServer and SuperClassic architectures, replica database is being internally attached when the first user gets connected to the master database and detached when the last user disconnects from the master database. In Classic Server architecture, every server process keeps an active connection to the replica database.
 

@@ -54,6 +54,7 @@
 #include "../jrd/ods.h"
 #include "../jrd/ini.h"
 #include "../jrd/cvt_proto.h"
+#include "../jrd/cvt2_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../common/dsc_proto.h"
 #include "../yvalve/why_proto.h"
@@ -128,8 +129,8 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 								SSHORT scale,
 								SSHORT subType,
 								FLD_LENGTH length,
-								SSHORT charsetId,
-								SSHORT collationId,
+								CSetId charsetId,
+								CollId collationId,
 								bool nullable)
 {
 	desc->clear();
@@ -139,8 +140,7 @@ void DsqlDescMaker::composeDesc(dsc* desc,
 	desc->dsc_length = length;
 	desc->dsc_flags = nullable ? DSC_nullable : 0;
 
-	if (desc->isText() || desc->isBlob())
-		desc->setTextType(INTL_CS_COLL_TO_TTYPE(charsetId, collationId));
+	desc->setTextType(TTypeId(charsetId, collationId));
 }
 
 
@@ -256,7 +256,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 			tmp.dsc_dtype = dtype_text;
 			tmp.dsc_scale = 0;
 			tmp.dsc_flags = 0;
-			tmp.dsc_ttype() = ttype_ascii;
+			tmp.setTextType(ttype_ascii);
 			tmp.dsc_length = static_cast<USHORT>(strlen(str));
 			tmp.dsc_address = (UCHAR*) str;
 
@@ -282,6 +282,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 				case CONSTANT_TIMESTAMP:
 					literal->litDesc.dsc_dtype = tz ? dtype_timestamp_tz : dtype_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			literal->litDesc.dsc_sub_type = 0;
@@ -312,6 +316,10 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 					else
 						*(ISC_TIMESTAMP*) literal->litDesc.dsc_address = ts.utc_timestamp;
 					break;
+
+				default:
+					fb_assert(false);
+					return NULL;
 			}
 
 			break;
@@ -330,6 +338,65 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
 }
 
 
+ValueExprNode* MAKE_constant_from_literal(LiteralNode* from, const dsc* reference)
+{
+	if (from->litDesc.dsc_dtype != dtype_text)
+		return nullptr;
+
+	if (CVT2_compare_priority[from->litDesc.dsc_dtype] >=
+		CVT2_compare_priority[reference->dsc_dtype])
+	{
+		return nullptr;
+	}
+
+	dsql_constant_type to;
+
+	switch (reference->dsc_dtype)
+	{
+	case dtype_double:
+		to = CONSTANT_DOUBLE;
+		break;
+	case dtype_dec64:
+	case dtype_dec128:
+		to = CONSTANT_DECIMAL;
+		break;
+	case dtype_int128:
+		to = CONSTANT_NUM128;
+		break;
+	case dtype_sql_date:
+		to = CONSTANT_DATE;
+		break;
+	case dtype_sql_time:
+	case dtype_sql_time_tz:
+		to = CONSTANT_TIME;
+		break;
+	case dtype_timestamp:
+	case dtype_timestamp_tz:
+		to = CONSTANT_TIMESTAMP;
+		break;
+	default:
+		return nullptr;
+	}
+
+	switch (to)
+	{
+	case CONSTANT_DATE:
+	case CONSTANT_TIME:
+	case CONSTANT_TIMESTAMP:
+		if (CVT_get_special_datetime(reinterpret_cast<const char*>(from->litDesc.dsc_address),
+				from->litDesc.dsc_length) != SpecialDateTime::NONE)
+		{
+			return nullptr;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return MAKE_constant(reinterpret_cast<const char*>(from->litDesc.dsc_address), to, 0);
+}
+
+
 /**
 
  	MAKE_str_constant
@@ -342,7 +409,7 @@ ValueExprNode* MAKE_constant(const char* str, dsql_constant_type numeric_flag, S
     @param character_set
 
  **/
-LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
+LiteralNode* MAKE_str_constant(IntlString* constant, CSetId character_set)
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
@@ -354,7 +421,7 @@ LiteralNode* MAKE_str_constant(const IntlString* constant, SSHORT character_set)
 	literal->litDesc.dsc_scale = 0;
 	literal->litDesc.dsc_length = static_cast<USHORT>(str.length());
 	literal->litDesc.dsc_address = (UCHAR*) str.c_str();
-	literal->litDesc.dsc_ttype() = character_set;
+	literal->litDesc.setTextType(character_set);
 
 	literal->dsqlStr = constant;
 
@@ -443,15 +510,10 @@ void MAKE_field(dsql_fld* field, const dsc* desc)
 	field->subType = desc->dsc_sub_type;
 	field->length = desc->dsc_length;
 
-	if (desc->dsc_dtype <= dtype_any_text)
+	if (desc->dsc_dtype <= dtype_any_text || desc->dsc_dtype == dtype_blob)
 	{
-		field->collationId = DSC_GET_COLLATE(desc);
-		field->charSetId = DSC_GET_CHARSET(desc);
-	}
-	else if (desc->dsc_dtype == dtype_blob)
-	{
-		field->charSetId = desc->dsc_scale;
-		field->collationId = desc->dsc_flags >> 8;
+		field->charSetId = desc->getCharSet();
+		field->collationId = desc->getCollation();
 	}
 
 	if (desc->dsc_flags & DSC_nullable)
@@ -514,8 +576,6 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 		}
 	}
 
-	thread_db* tdbb = JRD_get_thread_data();
-
 	if (message->msg_parameter == MAX_USHORT)
 	{
 		string msg;
@@ -531,9 +591,9 @@ dsql_par* MAKE_parameter(dsql_msg* message, bool sqlda_flag, bool null_flag,
 	message->msg_parameters.insert(0, parameter);
 	parameter->par_parameter = message->msg_parameter++;
 
-	parameter->par_rel_name = NULL;
-	parameter->par_owner_name = NULL;
-	parameter->par_rel_alias = NULL;
+	parameter->par_rel_name.clear();
+	parameter->par_owner_name = nullptr;
+	parameter->par_rel_alias = nullptr;
 
 	if (node)
 		MAKE_parameter_names(parameter, node);

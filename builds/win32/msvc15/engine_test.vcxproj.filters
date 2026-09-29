@@ -18,10 +18,16 @@
     <ClCompile Include="..\..\..\src\jrd\tests\CompressorTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\jrd\tests\EventManagerTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\tests\EngineTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\jrd\tests\RecordNumberTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\lock\tests\LockManagerTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
   </ItemGroup>

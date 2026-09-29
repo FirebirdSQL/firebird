@@ -31,9 +31,9 @@
 // Version 2 of the debug information replaces 16-bit values
 // inside the fb_dbg_map_src2blr tag with 32-bit ones.
 // Also, it introduces some new tags.
-const UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
-const UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
-const UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
+inline constexpr UCHAR DBG_INFO_VERSION_1 = UCHAR(1);
+inline constexpr UCHAR DBG_INFO_VERSION_2 = UCHAR(2);
+inline constexpr UCHAR CURRENT_DBG_INFO_VERSION = DBG_INFO_VERSION_2;
 
 namespace Jrd {
 class MetaName;
@@ -48,7 +48,7 @@ public:
 	ULONG mbs_src_line;
 	ULONG mbs_src_col;
 
-	static ULONG generate(const MapBlrToSrcItem& Item)
+	static ULONG generate(const MapBlrToSrcItem& Item) noexcept
 	{ return Item.mbs_offset; }
 };
 
@@ -60,13 +60,13 @@ typedef Firebird::SortedArray<
 
 struct ArgumentInfo
 {
-	ArgumentInfo(UCHAR aType, USHORT aIndex)
+	ArgumentInfo(UCHAR aType, USHORT aIndex) noexcept
 		: type(aType),
 		  index(aIndex)
 	{
 	}
 
-	ArgumentInfo()
+	ArgumentInfo() noexcept
 		: type(0),
 		  index(0)
 	{
@@ -75,7 +75,7 @@ struct ArgumentInfo
 	UCHAR type;
 	USHORT index;
 
-	bool operator >(const ArgumentInfo& x) const
+	bool operator >(const ArgumentInfo& x) const noexcept
 	{
 		if (type == x.type)
 			return index > x.index;

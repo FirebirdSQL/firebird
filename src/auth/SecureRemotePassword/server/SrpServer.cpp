@@ -45,7 +45,7 @@ namespace {
 
 GlobalPtr<PluginDatabases> instances;
 
-const unsigned int SZ_LOGIN = 63;
+constexpr unsigned int SZ_LOGIN = 63;
 
 struct Metadata
 {
@@ -81,8 +81,8 @@ public:
 	{ }
 
 	// IServer implementation
-	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface);
-	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback);
+	int authenticate(CheckStatusWrapper* status, IServerBlock* sBlock, IWriter* writerInterface) override;
+	void setDbCryptCallback(CheckStatusWrapper* status, ICryptKeyCallback* callback) override;
 
 	~SrpServer()
 	{
@@ -106,7 +106,7 @@ protected:
 };
 
 
-class SecurityDatabase : public VSecDb
+class SecurityDatabase final : public VSecDb
 {
 public:
 	// VSecDb implementation
@@ -158,7 +158,7 @@ public:
 			p->attachDatabase(&status, secDbName.c_str(), dpb.getBufferLength(), dpb.getBuffer()));
 		check(&status);
 
-		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName));
+		HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: gfix-like attach to sec db %s\n", secDbName.c_str()));
 	}
 
 	SecurityDatabase(CachedSecurityDatabase::Instance& instance, ICryptKeyCallback* cryptCallback)
@@ -183,7 +183,7 @@ public:
 			check(&status);
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv SRP: attached sec db %s\n", instance->secureDbName));
 
-			const UCHAR tpb[] =
+			constexpr UCHAR tpb[] =
 			{
 				isc_tpb_version1,
 				isc_tpb_read,
@@ -196,7 +196,7 @@ public:
 			HANDSHAKE_DEBUG(fprintf(stderr, "Srv: SRP1: started transaction\n"));
 
 			const char* sql =
-				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
+				"SELECT PLG$VERIFIER, PLG$SALT FROM PLG$SRP%SCHEMA.PLG$SRP WHERE PLG$USER_NAME = ? AND PLG$ACTIVE";
 			stmt = att->prepare(&status, tra, 0, sql, 3, IStatement::PREPARE_PREFETCH_METADATA);
 			if (status->getState() & IStatus::STATE_ERRORS)
 			{
@@ -289,6 +289,12 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				return AUTH_MORE_DATA;
 			}
 
+			// create SRP-calculating server
+			server = remotePasswordFactory();
+
+			// validate client pubkey
+			server->clientPublicKey = server->setKey(clientPubKey.c_str());
+
 			// load verifier and salt from security database
 			Metadata messages;
 			messages.param->login.set(account.c_str());
@@ -319,8 +325,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 			BigInteger(s).getText(salt);
 			dumpIt("Srv: salt", salt);
 
-			// create SRP-calculating server
-			server = remotePasswordFactory();
+			// calculate serverPubKey
 			server->genServerKey(serverPubKey, verifier);
 
 			// Ready to prepare data for client and calculate session key
@@ -341,7 +346,7 @@ int SrpServer::authenticate(CheckStatusWrapper* status, IServerBlock* sb, IWrite
 				return AUTH_FAILED;
 			}
 
-			server->serverSessionKey(sessionKey, clientPubKey.c_str(), verifier);
+			server->serverSessionKey(sessionKey, verifier);
 			dumpIt("Srv: sessionKey", sessionKey);
 			return AUTH_MORE_DATA;
 		}

@@ -1,4 +1,4 @@
-SQL Language Extension: default paremeters in stored procedures
+SQL Language Extension: default parameters in stored procedures
 
 Function:
 	allow input parameters of stored procedures to have optional default values

@@ -70,8 +70,8 @@ protected:
 		virtual void clear() noexcept { }
 		virtual void append(const StatusVector&) noexcept { }
 		virtual void prepend(const StatusVector&) noexcept { }
-		virtual void assign(const StatusVector& ex) noexcept { }
-		virtual void assign(const Exception& ex) noexcept { }
+		virtual void assign(const StatusVector&) noexcept { }
+		virtual void assign(const Exception&) noexcept { }
 		virtual ISC_STATUS copyTo(ISC_STATUS*) const noexcept { return 0; }
 		virtual void copyTo(IStatus*) const noexcept { }
 		virtual void appendTo(IStatus*) const noexcept { }
@@ -218,6 +218,12 @@ public:
 	StatusVector& operator<<(const MetaString& text) noexcept
 	{
 		implementation->shiftLeft(text);
+		return *this;
+	}
+
+	StatusVector& operator<<(std::string_view text) noexcept
+	{
+		implementation->shiftLeft(string(text.data(), static_cast<string::size_type>(text.length())));
 		return *this;
 	}
 

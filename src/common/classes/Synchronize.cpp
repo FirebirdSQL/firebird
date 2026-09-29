@@ -221,7 +221,7 @@ private:
 TLS_DECLARE(ThreadSync*, threadIndex);
 
 ThreadSync::ThreadSync(const char* desc)
-	: threadId(getCurrentThreadId()), nextWaiting(NULL), prevWaiting(NULL),
+	: threadId(getThreadId()), nextWaiting(NULL), prevWaiting(NULL),
 	  lockType(SYNC_NONE), lockGranted(false), lockPending(NULL), locks(NULL),
 	  description(desc)
 {
@@ -261,11 +261,6 @@ void ThreadSync::setThread(ThreadSync* thread)
 	}
 
 	TLS_SET(threadIndex, thread);
-}
-
-ThreadId ThreadSync::getCurrentThreadId()
-{
-	return getThreadId();
 }
 
 const char* ThreadSync::getWhere() const

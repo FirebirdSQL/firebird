@@ -63,9 +63,9 @@
 #include <locale.h>
 #endif
 
-static const int mode_read	= O_RDONLY;
-static const int mode_write	= O_WRONLY | O_CREAT;
-static const int mask		= 0666;
+static constexpr int mode_read	= O_RDONLY;
+static constexpr int mode_write	= O_WRONLY | O_CREAT;
+static constexpr int mask		= 0666;
 
 static DESC open_platf(const char* name, int writeFlag)
 {
@@ -123,7 +123,7 @@ enum gsplit_option
 };
 
 
-const static Switches::in_sw_tab_t spit_in_sw_table[] =
+constexpr static Switches::in_sw_tab_t spit_in_sw_table[] =
 {
 	{IN_SW_SPIT_SP,	0,	"SPLIT_BK_FILE", 0, 0, 0, false, 0, 0, 0},
 	{IN_SW_SPIT_JT,	0,	"JOIN_BK_FILE",	 0, 0, 0, false, 0, 0, 0},
@@ -145,8 +145,8 @@ struct header_rec
 	TEXT fl_name[MAX_FILE_NM_LEN];
 };
 
-const size_t header_rec_len = sizeof(header_rec);
-static const char* const header_rec_name = "InterBase/gsplit, ";
+constexpr size_t header_rec_len = sizeof(header_rec);
+static constexpr const char* header_rec_name = "InterBase/gsplit, ";
 
 
 // backup files structure
@@ -159,12 +159,12 @@ struct b_fil
 	SINT64 b_fil_size;
 };
 
-const size_t b_fil_len = sizeof(b_fil);
+constexpr size_t b_fil_len = sizeof(b_fil);
 
 
 // local function declarations
 
-static int conv_ntoc(SLONG, TEXT*);
+static int conv_ntoc(SLONG, TEXT*) noexcept;
 static int free_file_list(b_fil*);
 static int final_flush_io_buff(const UCHAR*, SLONG, FILE_DESC);
 static int final_read_and_write(FILE_DESC, FILE_DESC, const TEXT*, SLONG, UCHAR**, bool*);
@@ -173,8 +173,8 @@ static int get_file_name(const SCHAR*, SINT64, b_fil**);
 static int get_file_size(const SCHAR*, const SCHAR*, SINT64*);
 static int get_function_option(const SCHAR*, gsplit_option*, const SCHAR*, const Switches&);
 static int gen_multy_bakup_files(b_fil*, FILE_DESC, SLONG);
-static int set_hdr_str(TEXT*, const TEXT*, SLONG, SLONG);
-static int join_multy_bakup_files(b_fil*);
+static int set_hdr_str(TEXT*, const TEXT*, SLONG, SLONG) noexcept;
+static int join_multy_bakup_files(const b_fil*);
 static void print_clo(const TEXT*);
 static int read_and_write(FILE_DESC, FILE_DESC, /*const TEXT*,*/ SLONG,
 						  SINT64, UCHAR**, bool*, SINT64*, SLONG*);
@@ -605,7 +605,7 @@ static int gen_multy_bakup_files(b_fil* file_list, FILE_DESC input_file_desc, SL
 		hdr_rec.name[indx] = BLANK;
 
 	pos = pos + sizeof(hdr_rec.name);
-	time_t clock = time(0);  // was SLONG
+	const time_t clock = time(0);  // was SLONG
 	ret_cd = set_hdr_str(header_str, ctime(&clock), pos, sizeof(hdr_rec.date_time));
 	for (indx = 0; indx < sizeof(hdr_rec.date_time); indx++)
 		hdr_rec.date_time[indx] = BLANK;
@@ -953,7 +953,7 @@ static int final_read_and_write(FILE_DESC input_file_desc,
 }
 
 
-static int join_multy_bakup_files( b_fil* file_list)
+static int join_multy_bakup_files(const b_fil* file_list)
 {
 /********************************************************************
 **
@@ -994,7 +994,7 @@ static int join_multy_bakup_files( b_fil* file_list)
 		next_fl = fl_ptr->b_fil_next;
 		const TEXT* file_name = fl_ptr->b_fil_name;
 
-		SLONG ret_cd = read_and_write_for_join(output_fl_desc, file_name, io_buffer, cnt, &total_int);
+		const SLONG ret_cd = read_and_write_for_join(output_fl_desc, file_name, io_buffer, cnt, &total_int);
 
 		if (ret_cd == FB_FAILURE)
 		{
@@ -1002,7 +1002,7 @@ static int join_multy_bakup_files( b_fil* file_list)
 			return FB_FAILURE;
 		}
 
-	}							// end of for loop
+	}
 
 	free(io_buffer);
 	return FB_SUCCESS;
@@ -1050,7 +1050,7 @@ static int read_and_write_for_join(FILE_DESC output_fl_desc,
 	}
 
 	const TEXT* char_ptr1 = reinterpret_cast<char*>(io_buffer);
-	SLONG ret_cd = strncmp(char_ptr1, header_rec_name, sizeof(hdr_rec.name) - 1);
+	const SLONG ret_cd = strncmp(char_ptr1, header_rec_name, sizeof(hdr_rec.name) - 1);
 	if (ret_cd != 0)
 	{
 		close_platf(input_fl_desc);
@@ -1059,8 +1059,8 @@ static int read_and_write_for_join(FILE_DESC output_fl_desc,
 		return FB_FAILURE;
 	}
 
-	const SLONG skip_to_num = sizeof(hdr_rec.name) + sizeof(hdr_rec.date_time) + sizeof(hdr_rec.text1);
-	const SLONG skip_to_total = skip_to_num + sizeof(hdr_rec.num) + sizeof(hdr_rec.text2);
+	constexpr SLONG skip_to_num = sizeof(hdr_rec.name) + sizeof(hdr_rec.date_time) + sizeof(hdr_rec.text1);
+	constexpr SLONG skip_to_total = skip_to_num + sizeof(hdr_rec.num) + sizeof(hdr_rec.text2);
 
 	char_ptr1 = reinterpret_cast<char*>(io_buffer + skip_to_num);
 	const TEXT* char_ptr2 = reinterpret_cast<char*>(io_buffer + skip_to_total);
@@ -1110,7 +1110,7 @@ static int read_and_write_for_join(FILE_DESC output_fl_desc,
 			break;
 		}
 
-		SLONG write_cnt = write_platf(output_fl_desc, io_buffer, read_cnt);
+		const SLONG write_cnt = write_platf(output_fl_desc, io_buffer, read_cnt);
 
 		switch (write_cnt)
 		{
@@ -1129,7 +1129,7 @@ static int read_and_write_for_join(FILE_DESC output_fl_desc,
 }
 
 
-static int conv_ntoc( SLONG numeric_in, TEXT char_out[])
+static int conv_ntoc(SLONG numeric_in, TEXT char_out[]) noexcept
 {
 /********************************************************************
 **
@@ -1209,7 +1209,7 @@ static int write_header(const b_fil* fl_ptr,
 	ret_cd = set_hdr_str(header_str, file_name, pos, static_cast<SLONG>(strlen(file_name)));
 
 	SLONG end, indx;
-	SLONG write_cnt = write_platf(output_fl_desc, header_str, header_rec_len);
+	const SLONG write_cnt = write_platf(output_fl_desc, header_str, header_rec_len);
 	switch (write_cnt)
 	{
 	case -1:					// write failed
@@ -1304,7 +1304,7 @@ static int final_flush_io_buff(const UCHAR* remaining_io,
 *********************************************************************
 */
 
-	SLONG write_cnt = write_platf(output_fl_desc, remaining_io, remaining_io_len);
+	const SLONG write_cnt = write_platf(output_fl_desc, remaining_io, remaining_io_len);
 	switch (write_cnt)
 	{
 	case -1:					// write failed
@@ -1348,7 +1348,7 @@ static void print_clo(const TEXT* prog_name)
 }
 
 
-static int set_hdr_str(TEXT header_str[], const TEXT* in_str, SLONG pos, SLONG len)
+static int set_hdr_str(TEXT header_str[], const TEXT* in_str, SLONG pos, SLONG len) noexcept
 {
 /********************************************************************
 **
