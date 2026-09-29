@@ -1863,6 +1863,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				// Init complete - we can release dbInitMutex
 				dbb->dbb_flags &= ~DBB_new;
 				guardDbInit.leave();
+				initGuard.leave();
 			}
 			else
 			{
@@ -1881,6 +1882,8 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
 				INI_init(tdbb);
+				initGuard.leave();
+
 				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
@@ -1892,7 +1895,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			// Basic DBB initialization complete
-			initGuard.leave();
 
 			// Attachments to a ReadOnly database need NOT do garbage collection
 			if (dbb->readOnly())
