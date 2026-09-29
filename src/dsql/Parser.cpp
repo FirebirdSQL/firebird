@@ -399,7 +399,7 @@ int Parser::yylexAux()
 	MemoryPool& pool = *tdbb->getDefaultPool();
 
 	SSHORT c = lex.ptr[-1];
-	USHORT tok_class = classes(c);
+	const USHORT tok_class = classes(c);
 	char string[MAX_TOKEN_LEN];
 
 	// Depending on tok_class of token, parse token
@@ -408,32 +408,17 @@ int Parser::yylexAux()
 
 	if (tok_class & CHR_INTRODUCER)
 	{
+		if (lex.ptr >= lex.end)
+			return -1;
+
 		// restriction for underscores before numeric literals
 		if ((classes(*lex.ptr) & CHR_DIGIT) || *lex.ptr == '.')
 			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
 
-		// The Introducer (_) is skipped, all other idents are copied
-		// to become the name of the character set.
-		char* p = string;
-		for (; lex.ptr < lex.end && (classes(*lex.ptr) & CHR_IDENT); lex.ptr++)
-		{
-			if (lex.ptr >= lex.end)
-				return -1;
+		if (classes(*lex.ptr) & (CHR_IDENT | CHR_QUOTE))
+			return TOK_INTRODUCER;
 
-			check_copy_incr(p, UPPER7(*lex.ptr), string);
-		}
-
-		check_bound(p, string);
-
-		if (p > string + MAX_SQL_IDENTIFIER_LEN || p > string + METADATA_IDENTIFIER_CHAR_LEN)
-			yyabandon(yyposn, -104, isc_dyn_name_longer);
-
-		*p = 0;
-
-		// make a string value to hold the name, the name is resolved in pass1_constant.
-		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, string, p - string);
-
-		return TOK_INTRODUCER;
+		return (UCHAR) c;
 	}
 
 	// parse a quoted string, being sure to look for double quotes
@@ -771,7 +756,7 @@ int Parser::yylexAux()
 				memcmp(lex.ptr, endChar, endCharSize) == 0 &&
 				lex.ptr[endCharSize] == '\'')
 			{
-				size_t len = lex.ptr - start;
+				const FB_SIZE_T len = lex.ptr - start;
 
 				if (len > MAX_STR_SIZE)
 				{
@@ -802,13 +787,13 @@ int Parser::yylexAux()
 	}
 
 	// Non-decimal integer literals (SQL:2023 T661)
-	// Underscores in numeric literal support (SQ:2023 T662)
+	// Underscores in numeric literal support (SQL:2023 T662)
 	// See README.decimal_and_non_decimal_literals
 
 	if (c == '0' && lex.ptr + 1 < lex.end)
 	{
 		auto base = 0;
-		SSHORT currExpcChar;
+		SSHORT currExpcChar = 0;
 
 		if (*lex.ptr == 'x' || *lex.ptr == 'X')
 		{
@@ -898,7 +883,10 @@ int Parser::yylexAux()
 				Firebird::string strValue;
 				value128.toString(0, strValue);
 				yylval.lim64ptr = newLim64String(strValue, 0);
-				return TOK_NUM128;
+
+				// Special case - exactly (MAX_SINT64 + 1), see decimal literals below
+				tmp += 1U;
+				return (value128 == tmp) ? TOK_LIMIT64_INT : TOK_NUM128;
 			}
 
 			tmp.set(MAX_SLONG);
@@ -922,19 +910,20 @@ int Parser::yylexAux()
 	{
 		Firebird::string pureString;
 		auto isLastIntroducer = false;
-		SCHAR scale = 0;
+		int scale = 0;
 		auto exponentValue = 0;
 		auto isOverExponent64b = false;
 		auto isOverMantisa64b = false;
 		auto isOverMantisa128b = false;
 		auto signExponent = 0;
+		auto hasExponentDigit = false;
 
 		Int128 mantisaValue;
 		mantisaValue.set(0.0);
 
 		const auto decimalConversion = 10;
-		const CInt128 MAX_MANTISA_128(MAX_Int128 / decimalConversion);
-		const CInt128 MAX_MANTISA_64(MAX_SINT64 / decimalConversion);
+		static const CInt128 MAX_MANTISA_128(MAX_Int128 / decimalConversion);
+		static const CInt128 MAX_MANTISA_64(MAX_SINT64 / decimalConversion);
 
 		enum
 		{
@@ -973,6 +962,8 @@ int Parser::yylexAux()
 
 				if (state == state_exponent)
 				{
+					hasExponentDigit = true;
+
 					if (signExponent == 0)
 						signExponent = 1;
 
@@ -985,7 +976,7 @@ int Parser::yylexAux()
 
 					if (!isOverExponent64b)
 					{
-						if (exponentValue > DBL_MAX_10_EXP || exponentValue < DBL_MIN_10_EXP)
+						if (exponentValue > DBL_MAX_10_EXP || exponentValue < -DBL_MAX_10_EXP)
 							isOverExponent64b = true;
 					}
 					else if (exponentValue > DECQUAD_Emax || exponentValue < DECQUAD_Emin)
@@ -997,7 +988,9 @@ int Parser::yylexAux()
 					{
 						if (mantisaValue >= MAX_MANTISA_64 &&
 							((mantisaValue > MAX_MANTISA_64) || (c >= '8')))
+						{
 							isOverMantisa64b = true;
+						}
 					}
 					else if (!isOverMantisa128b)
 					{
@@ -1016,16 +1009,7 @@ int Parser::yylexAux()
 					}
 
 					if (state == state_precision)
-					{
 						--scale;
-						// protection against too low precision over 15 characters
-						// next, we assume that the number is "Decimal 128-bit"
-						if (-scale > DBL_DIG)
-						{
-							isOverMantisa128b = true;
-							isOverExponent64b = true;
-						}
-					}
 				}
 			}
 			else if (c == '.')
@@ -1064,7 +1048,7 @@ int Parser::yylexAux()
 						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 			}
-			else if ((classes(c) & CHR_IDENT) && (c != '{') && (c != '}'))
+			else if ((classes(c) & CHR_IDENT) && !(classes(c) & CHR_BRACE))
 			{
 				exceptionNumericLiterals(
 					Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
@@ -1094,11 +1078,16 @@ int Parser::yylexAux()
 		if (isLastIntroducer)
 			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
 
-		if (state == state_exponent && signExponent == 0)
+		// The exponent must contain at least one digit: 1e, 1e+, 1e- are invalid
+		if (state == state_exponent && !hasExponentDigit)
 			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
 
-		if (state == state_precision && scale == 0)
-			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+		// Too many digits after the period for an exact numeric - use DECFLOAT
+		if (scale < MIN_SCHAR)
+		{
+			isOverMantisa128b = true;
+			isOverExponent64b = true;
+		}
 
 		lex.last_token_bk = lex.last_token;
 		lex.line_start_bk = lex.line_start;
@@ -1118,14 +1107,22 @@ int Parser::yylexAux()
 			}
 
 			yylval.stringPtr = newString(pureString);
-			// Long double or double
-			return isOverExponent64b ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
+			// Mantissa wider than 64 bits does not fit into double without loss
+			return (isOverExponent64b || isOverMantisa64b) ? TOK_DECIMAL_NUMBER : TOK_FLOAT_NUMBER;
 		}
 
 		// 128-bit
 		if (isOverMantisa64b)
 		{
 			yylval.lim64ptr = newLim64String(pureString, scale);
+
+			// Special case - on the border of positive number: exactly (MAX_SINT64 + 1)
+			Int128 limit;
+			limit.set(MAX_SINT64, 0);
+			limit += 1U;
+			if (mantisaValue == limit)
+				return scale ? TOK_LIMIT64_NUMBER : TOK_LIMIT64_INT;
+
 			return TOK_NUM128;
 		}
 

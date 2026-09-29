@@ -21,21 +21,21 @@
  * Contributor(s): ______________________________________.
  */
 
-const SSHORT CHR_LETTER		= (1 << 0);
-const SSHORT CHR_DIGIT		= (1 << 1);
-const SSHORT CHR_IDENT		= (1 << 2);
-const SSHORT CHR_QUOTE		= (1 << 3);
-const SSHORT CHR_WHITE		= (1 << 4);
-const SSHORT CHR_HEX		= (1 << 5);
-const SSHORT CHR_INTRODUCER	= (1 << 6);
-const SSHORT CHR_BIN		= (1 << 7);
-const SSHORT CHR_OCT		= (1 << 8);
-const SSHORT CHR_BRACE		= (1 << 9);
+inline constexpr SSHORT CHR_LETTER		= (1 << 0);
+inline constexpr SSHORT CHR_DIGIT		= (1 << 1);
+inline constexpr SSHORT CHR_IDENT		= (1 << 2);
+inline constexpr SSHORT CHR_QUOTE		= (1 << 3);
+inline constexpr SSHORT CHR_WHITE		= (1 << 4);
+inline constexpr SSHORT CHR_HEX			= (1 << 5);
+inline constexpr SSHORT CHR_INTRODUCER	= (1 << 6);
+inline constexpr SSHORT CHR_BIN			= (1 << 7);
+inline constexpr SSHORT CHR_OCT			= (1 << 8);
+inline constexpr SSHORT CHR_BRACE		= (1 << 9);
 
 
 // Use the functions at the end of this file; do not reference the array directly.
 
-static const SSHORT classes_array[] = {
+static inline constexpr SSHORT classes_array[] = {
 /* 000     */ 0,
 /* 001     */ 0,
 /* 002     */ 0,
@@ -294,12 +294,12 @@ static const SSHORT classes_array[] = {
 /* 255     */ 0
 };
 
-inline SSHORT classes(int idx)
+inline SSHORT classes(int idx) noexcept
 {
 	return classes_array[(UCHAR) idx];
 }
 
-inline SSHORT classes(UCHAR idx)
+inline SSHORT classes(UCHAR idx) noexcept
 {
 	return classes_array[idx];
 }
