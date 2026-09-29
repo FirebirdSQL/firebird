@@ -214,7 +214,7 @@ public:
 		return getPermanent()->id;
 	}
 
-	int getObjectType() const noexcept
+	ObjectType getObjectType() const noexcept
 	{
 		return objectType();
 	}
@@ -225,6 +225,8 @@ public:
 	}
 
 	static ObjectType objectType() noexcept;
+
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
 
 	bool hash(thread_db* tdbb, Firebird::sha512& digest);
 

@@ -71,7 +71,7 @@ namespace Jrd
 		}
 
 	public:
-		int getObjectType() const noexcept override
+		ObjectType getObjectType() const noexcept override
 		{
 			return objectType();
 		}
