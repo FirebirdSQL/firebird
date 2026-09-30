@@ -1296,7 +1296,15 @@ void Applier::doInsert(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	// This allows to use RDB$RECORD_VERSION in indices.
 	rpb->rpb_record->setTransactionNumber(transaction->tra_number);
 
-	VIO_store(tdbb, rpb, transaction);
+	try
+	{
+		VIO_store(tdbb, rpb, transaction);
+	}
+	catch (const Exception&)
+	{
+		CCH_unwind(tdbb, false);
+		throw;
+	}
 	IDX_store(tdbb, rpb, transaction);
 	if (m_enableCascade)
 		REPL_store(tdbb, rpb, transaction);
@@ -1396,7 +1404,15 @@ void Applier::doUpdate(thread_db* tdbb, record_param* orgRpb, record_param* newR
 	// This allows to use NEW.RDB$RECORD_VERSION in indices.
 	newRpb->rpb_record->setTransactionNumber(transaction->tra_number);
 
-	VIO_modify(tdbb, orgRpb, newRpb, transaction);
+	try
+	{
+		VIO_modify(tdbb, orgRpb, newRpb, transaction);
+	}
+	catch (const Exception&)
+	{
+		CCH_unwind(tdbb, false);
+		throw;
+	}
 	IDX_modify(tdbb, orgRpb, newRpb, transaction);
 	if (m_enableCascade)
 		REPL_modify(tdbb, orgRpb, newRpb, transaction);
@@ -1410,7 +1426,16 @@ void Applier::doDelete(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 
 	Savepoint::ChangeMarker marker(transaction->tra_save_point);
 
-	VIO_erase(tdbb, rpb, transaction);
+	try
+	{
+		VIO_erase(tdbb, rpb, transaction);
+	}
+	catch (const Exception&)
+	{
+		CCH_unwind(tdbb, false);
+		throw;
+	}
+
 	if (m_enableCascade)
 		REPL_erase(tdbb, rpb, transaction);
 }

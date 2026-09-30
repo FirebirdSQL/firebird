@@ -472,6 +472,7 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 		tdbb->setTransaction(old_tran);
 		m_transaction->tra_flags |= TRA_invalidated;
 		error.prepend(Arg::Gds(isc_savepoint_backout_err));
+		CCH_unwind(tdbb, false);
 		error.raise();
 	}
 
