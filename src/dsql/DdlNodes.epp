@@ -164,33 +164,15 @@ void ExecInSecurityDb::executeInSecurityDb(jrd_tra* localTransaction)
 		secDbContext = localTransaction->setSecDbContext(att, tra);
 	}
 
-	// run all statements under savepoint control
-	string savePoint;
-	savePoint.printf("ExecInSecurityDb%d", secDbContext->savePoint++);
-	secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0, ("SAVEPOINT " + savePoint).c_str(),
-		SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
-	check(&statusWrapper);
-
 	try
 	{
 		runInSecurityDb(secDbContext);
 
-		secDbContext->att->execute(&statusWrapper, secDbContext->tra, 0,
-			("RELEASE SAVEPOINT " + savePoint).c_str(),
-			SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
-		savePoint.erase();
-		check(&statusWrapper);
+		secDbContext->releaseSavePoint();
 	}
 	catch (const Exception&)
 	{
-		if (savePoint.hasData())
-		{
-			LocalStatus tmp;
-			CheckStatusWrapper tmpCheckStatusWrapper(&tmp);
-			secDbContext->att->execute(&tmpCheckStatusWrapper, secDbContext->tra, 0,
-				("ROLLBACK TO SAVEPOINT " + savePoint).c_str(),
-				SQL_DIALECT_V6, NULL, NULL, NULL, NULL);
-		}
+		secDbContext->rollbackSavePoint();
 
 		throw;
 	}
@@ -15689,6 +15671,8 @@ void MappingNode::runInSecurityDb(SecDbContext* secDbContext)
 	{
 		try
 		{
+			secDbContext->setSavePoint();
+
 			// try direct access to rdb$auth_mapping table in secure db
 			LocalStatus s2;
 			CheckStatusWrapper statusWrapper2(&s2);
@@ -16369,6 +16353,8 @@ void GrantRevokeNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 
 void GrantRevokeNode::runInSecurityDb(SecDbContext* secDbContext)
 {
+	secDbContext->setSavePoint();
+
 	for (unsigned n = 0; n < createDbJobs.getCount(); ++n)
 	{
 		CreateDbJob& j = createDbJobs[n];

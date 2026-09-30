@@ -76,12 +76,19 @@ class BulkInsert;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
+	SecDbContext(MemoryPool& p, Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
 	~SecDbContext();
 
 	Firebird::IAttachment* att;
 	Firebird::ITransaction* tra;
-	int savePoint;
+
+	void setSavePoint();
+	void releaseSavePoint();
+	void rollbackSavePoint() noexcept;
+
+private:
+	int savePointNumber = 0;
+	Firebird::string savePoint;
 };
 
 // Blobs active in transaction identified by bli_temp_id. Please keep this
