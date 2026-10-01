@@ -49,6 +49,18 @@ class jrd_rel;
 class thread_db;
 
 
+// Regular expressions (SIMILAR TO syntax) passed by gfix -skip_data, -include_data,
+// -skip_schema_data and -include_schema_data. Records of relations filtered out by
+// them are not validated, but their pages are still walked.
+
+struct ValidationDataFilters
+{
+	Firebird::string skipData;
+	Firebird::string includeData;
+	Firebird::string skipSchemaData;
+	Firebird::string includeSchemaData;
+};
+
 // Validation/garbage collection/repair control block
 
 class Validation
@@ -168,6 +180,12 @@ private:
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_excl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_incl;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_excl;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_skip_data;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_include_data;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_skip_schema_data;
+	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_include_schema_data;
+	bool vdr_skip_rel_data;		// records of the current relation are not walked due to data filters
+	bool vdr_data_skipped;		// records of some relations were not walked due to data filters
 	int vdr_lock_tout;
 	void checkDPinPP(jrd_rel *relation, ULONG page_number);
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
@@ -176,6 +194,7 @@ public:
 	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL);
 	~Validation();
 
+	void setDataFilters(thread_db* tdbb, const ValidationDataFilters& filters);
 	bool run(thread_db* tdbb, USHORT flags);
 	ULONG getInfo(UCHAR item);
 
@@ -206,6 +225,7 @@ private:
 	FETCH_CODE fetch_page(bool mark, ULONG, USHORT, WIN*, void*);
 	void release_page(WIN*);
 	void garbage_collect();
+	bool skipRelationData(const jrd_rel* relation) const;
 
 	void parse_args(thread_db*);
 	void output(const char*, ...);

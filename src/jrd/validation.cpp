@@ -592,7 +592,7 @@ static void print_rhd(USHORT, const rhd*);
 #endif
 
 
-static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern)
+static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern, unsigned flags = 0)
 {
 	SimilarToRegex* matcher = NULL;
 	try
@@ -604,7 +604,7 @@ static SimilarToRegex* createPatternMatcher(thread_db* tdbb, const char* pattern
 			//// TODO: Should this be different than trace and replication
 			//// and use case sensitive matcher?
 			matcher = FB_NEW_POOL(*tdbb->getDefaultPool()) SimilarToRegex(
-				*tdbb->getDefaultPool(), 0,
+				*tdbb->getDefaultPool(), flags,
 				pattern, len,
 				"\\", 1);
 		}
@@ -661,7 +661,7 @@ static void explain_pp_bits(const UCHAR bits, Firebird::string& names)
 }
 
 
-bool VAL_validate(thread_db* tdbb, USHORT switches)
+bool VAL_validate(thread_db* tdbb, USHORT switches, const ValidationDataFilters& filters)
 {
 /**************************************
  *
@@ -689,6 +689,8 @@ bool VAL_validate(thread_db* tdbb, USHORT switches)
 
 	if (!(switches & isc_dpb_no_update))
 		flags |= Validation::VDR_update;
+
+	att->att_validation->setDataFilters(tdbb, filters);
 
 	return att->att_validation->run(tdbb, flags);
 }
@@ -877,6 +879,8 @@ Validation::Validation(thread_db* tdbb, UtilSvc* uSvc)
 	vdr_rel_records = NULL;
 	vdr_idx_records = NULL;
 	vdr_page_bitmap = NULL;
+	vdr_skip_rel_data = false;
+	vdr_data_skipped = false;
 
 	vdr_service = uSvc;
 	vdr_lock_tout = -10;
@@ -1015,6 +1019,76 @@ void Validation::output(const char* format, ...)
 }
 
 
+void Validation::setDataFilters(thread_db* tdbb, const ValidationDataFilters& filters)
+{
+/**************************************
+ *
+ *	s e t D a t a F i l t e r s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Compile patterns of relations to validate records of,
+ *	they are case insensitive as in gbak -skip_data / -include_data.
+ *
+ **************************************/
+	const unsigned flags = SimilarToFlag::CASE_INSENSITIVE;
+
+	vdr_skip_data = createPatternMatcher(tdbb, filters.skipData.nullStr(), flags);
+	vdr_include_data = createPatternMatcher(tdbb, filters.includeData.nullStr(), flags);
+	vdr_skip_schema_data = createPatternMatcher(tdbb, filters.skipSchemaData.nullStr(), flags);
+	vdr_include_schema_data = createPatternMatcher(tdbb, filters.includeSchemaData.nullStr(), flags);
+}
+
+
+namespace
+{
+	enum Pattern { NOT_SET = 0, MATCH = 1, NOT_MATCH = 2 };
+
+	template <typename Name>
+	Pattern checkPattern(const AutoPtr<SimilarToRegex>& matcher, const Name& name)
+	{
+		if (!matcher)
+			return NOT_SET;
+
+		return matcher->matches(name.c_str(), name.length()) ? MATCH : NOT_MATCH;
+	}
+}
+
+bool Validation::skipRelationData(const jrd_rel* relation) const
+{
+/**************************************
+ *
+ *	s k i p R e l a t i o n D a t a
+ *
+ **************************************
+ *
+ * Functional description
+ *	Check if records of relation should not be validated.
+ *	Uses the same rules as BurpGlobals::skipRelation().
+ *
+ **************************************/
+
+	// Fine-grained table controlling cases when data must be skipped for a table
+	static const bool result[3][3] = {
+		// Include filter
+		//	NS    M      NM           S
+		{ false, false, true}, // NS  k
+		{ true,  true,  true}, // M   i
+		{ false, false, true}  // NM  p
+	};
+
+	const QualifiedName& name = relation->getName();
+
+	const Pattern res1sch = checkPattern(vdr_skip_schema_data, name.schema);
+	const Pattern res1obj = checkPattern(vdr_skip_data, name.object);
+	const Pattern res2sch = checkPattern(vdr_include_schema_data, name.schema);
+	const Pattern res2obj = checkPattern(vdr_include_data, name.object);
+
+	return result[res1sch][res2sch] || result[res1obj][res2obj];
+}
+
+
 bool Validation::run(thread_db* tdbb, USHORT flags)
 {
 /**************************************
@@ -1038,6 +1112,7 @@ bool Validation::run(thread_db* tdbb, USHORT flags)
 		Jrd::ContextPoolHolder context(tdbb, val_pool);
 
 		vdr_flags = flags;
+		vdr_data_skipped = false;
 
 		// initialize validate errors
 		vdr_errors = vdr_warns = vdr_fixed = 0;
@@ -1374,10 +1449,12 @@ void Validation::garbage_collect()
 						}
 					}
 				}
-				else if (!(byte & 1) && (vdr_flags & VDR_records))
+				else if (!(byte & 1) && (vdr_flags & VDR_records) && !vdr_data_skipped)
 				{
 					// Page is potentially an orphan - but don't declare it as such
-					// unless we think we walked all pages
+					// unless we think we walked all pages.
+					// Pages of large records and blobs of relations filtered out by
+					// data filters were not walked.
 
 					corrupt(VAL_PAG_ORPHAN, 0, number);
 					if (vdr_flags & VDR_update)
@@ -1849,7 +1926,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
 					print_rhd(line->dpg_length, header);
 			}
 #endif
-			if (!(header->rhd_flags & rhd_chain) &&
+			if (!(header->rhd_flags & rhd_chain) && !vdr_skip_rel_data &&
 				((header->rhd_flags & rhd_large) || (vdr_flags & VDR_records)))
 			{
 				const RTN result = (header->rhd_flags & rhd_blob) ?
@@ -3104,6 +3181,17 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 	}
 
 	vdr_cond_idx.clear();
+
+	// Don't walk records (including large records and blobs) of user relation filtered out
+	// by -skip_data / -include_data and so on, its pointer, data and index pages are walked
+	// as usual but without the checks of full validation
+	const bool skipData = (vdr_flags & VDR_records) && !relation->isSystem() &&
+		skipRelationData(relation);
+	AutoSetRestoreFlag<USHORT> dataFlags(&vdr_flags, skipData ? VDR_records : 0, false);
+	AutoSetRestore<bool> skipRelData(&vdr_skip_rel_data, skipData);
+
+	if (skipData)
+		vdr_data_skipped = true;
 
 	const bool idxRootOk = (vdr_flags & VDR_records) && !relation->isSystem() ?
 		walk_root(relation, true) == rtn_ok : true;

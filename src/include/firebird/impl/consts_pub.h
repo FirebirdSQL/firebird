@@ -138,6 +138,10 @@
 #define isc_dpb_search_path				 105
 #define isc_dpb_blr_request_search_path	 106
 #define isc_dpb_gbak_restore_has_schema	 107
+#define isc_dpb_verify_skip_data		 108
+#define isc_dpb_verify_include_data		 109
+#define isc_dpb_verify_skip_schema_data	 110
+#define isc_dpb_verify_include_schema_data	 111
 
 
 /**************************************************/
@@ -537,6 +541,10 @@
 #define isc_spb_rpr_rollback_trans_64	50
 #define isc_spb_rpr_recover_two_phase_64	51
 #define isc_spb_rpr_par_workers			52
+#define isc_spb_rpr_skip_data			53
+#define isc_spb_rpr_include_data		54
+#define isc_spb_rpr_skip_schema_data	55
+#define isc_spb_rpr_include_schema_data	56
 
 #define isc_spb_rpr_validate_db			0x01
 #define isc_spb_rpr_sweep_db			0x02
