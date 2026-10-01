@@ -1122,17 +1122,6 @@ void PAG_header(thread_db* tdbb, bool info)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	jrd_rel* relation = MET_relation(tdbb, 0);
-	RelationPages* relPages = relation->getBasePages();
-	if (!relPages->rel_pages)
-	{
-		// NS: There's no need to reassign first page for RDB$PAGES relation since
-		// current code cannot change its location after database creation.
-		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
-		relPages->rel_pages = vector;
-		(*vector)[0] = header->hdr_PAGES;
-	}
-
 	dbb->dbb_next_transaction = next_transaction;
 
 	if (!info || dbb->dbb_oldest_transaction < oldest_transaction)
@@ -1334,6 +1323,7 @@ void PAG_header_init(thread_db* tdbb)
 
 	dbb->dbb_page_size = header->hdr_page_size;
 	dbb->dbb_page_buffers = header->hdr_page_buffers;
+	dbb->dbb_rdb_pages = header->hdr_PAGES;
 }
 
 
