@@ -485,6 +485,7 @@ public:
 	USHORT dbb_dp_per_pp;				// data pages per pointer page
 	USHORT dbb_max_records;				// max record per data page
 	USHORT dbb_max_idx;					// max number of indexes on a root page
+	ULONG dbb_rdb_pages;				// cached number of first PP of RDB$PAGES relation, see hdr_PAGES
 
 #ifdef SUPERSERVER_V2
 	USHORT dbb_prefetch_sequence;		// sequence to pace frequency of prefetch requests

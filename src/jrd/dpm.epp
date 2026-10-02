@@ -596,6 +596,7 @@ void DPM_create_relation_pages(thread_db* tdbb, jrd_rel* relation, RelationPages
 		header_page* header = (header_page*) CCH_FETCH(tdbb, &root_window, LCK_write, pag_header);
 		CCH_MARK(tdbb, &root_window);
 		header->hdr_PAGES = window.win_page.getPageNum();
+		dbb->dbb_rdb_pages = header->hdr_PAGES;
 
 		CCH_RELEASE(tdbb, &root_window);
 	}

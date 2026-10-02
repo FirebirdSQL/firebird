@@ -1825,9 +1825,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
+				PAG_header_init(tdbb);
 				INI_init(tdbb);
 				SHUT_init(tdbb);
-				PAG_header_init(tdbb);
 				INI_init2(tdbb);
 				PAG_init(tdbb);
 
@@ -1888,7 +1888,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 				INI_init(tdbb);
 				INI_init2(tdbb);
-				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
 
