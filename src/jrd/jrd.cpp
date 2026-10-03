@@ -1069,6 +1069,7 @@ namespace Jrd
 		string	dpb_decfloat_round;
 		string	dpb_decfloat_traps;
 		string	dpb_owner;
+		ValidationDataFilters	dpb_verify_filters;
 		Firebird::ObjectsArray<Firebird::MetaString> dpb_schema_search_path;
 		Firebird::ObjectsArray<Firebird::MetaString> dpb_blr_request_schema_search_path;
 
@@ -2096,7 +2097,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				AutoSetRestoreFlag<ULONG> noCleanup(&attachment->att_flags, ATT_no_cleanup, true);
 				VIO_fini(tdbb);
 
-				if (!VAL_validate(tdbb, options.dpb_verify))
+				if (!VAL_validate(tdbb, options.dpb_verify, options.dpb_verify_filters))
 					ERR_punt();
 			}
 
@@ -7048,6 +7049,22 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			dpb_verify = (USHORT) rdr.getInt();
 			if (dpb_verify & isc_dpb_ignore)
 				dpb_flags |= DBB_damaged;
+			break;
+
+		case isc_dpb_verify_skip_data:
+			getString(rdr, dpb_verify_filters.skipData);
+			break;
+
+		case isc_dpb_verify_include_data:
+			getString(rdr, dpb_verify_filters.includeData);
+			break;
+
+		case isc_dpb_verify_skip_schema_data:
+			getString(rdr, dpb_verify_filters.skipSchemaData);
+			break;
+
+		case isc_dpb_verify_include_schema_data:
+			getString(rdr, dpb_verify_filters.includeSchemaData);
 			break;
 
 		case isc_dpb_trace:
