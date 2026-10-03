@@ -13,11 +13,6 @@ project(RE2 CXX)
 include(CTest)
 include(GNUInstallDirs)
 
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 11)
-  set(CMAKE_CXX_STANDARD_REQUIRED ON)
-endif()
-
 option(BUILD_SHARED_LIBS "build shared libraries" OFF)
 option(USEPCRE "use PCRE in tests and benchmarks" OFF)
 
@@ -88,6 +83,9 @@ set(RE2_SOURCES
     )
 
 add_library(re2 ${RE2_SOURCES})
+set_property(TARGET re2 PROPERTY C_STANDARD 11)
+set_property(TARGET re2 PROPERTY C_STANDARD_REQUIRED ON)
+set_property(TARGET re2 PROPERTY C_EXTENSIONS OFF)
 target_include_directories(re2 PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 set_target_properties(re2 PROPERTIES SOVERSION ${SONAME} VERSION ${SONAME}.0.0)
 add_library(re2::re2 ALIAS re2)

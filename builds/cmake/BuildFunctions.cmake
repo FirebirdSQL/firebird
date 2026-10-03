@@ -114,7 +114,6 @@ function(epp_process type files)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${dir}
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different metadata.fdb ${dir}/yachts.lnk
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different security.fdb ${dir}/security.fdb
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different msg.fdb ${dir}/msg.fdb
                 COMMAND ${ARGN} -b ${dir}/ ${in} ${out}
             )
         endif()
@@ -315,8 +314,7 @@ function(create_boot_commands)
         boot_gpre
         boot_gbak
         boot_gfix
-        build_msg
-        codes
+        build_file
         gpre_boot
     )
     foreach(cmd ${cmd_list})
