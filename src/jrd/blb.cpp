@@ -2911,23 +2911,21 @@ static void slice_callback(array_slice* arg, ULONG /*count*/, DSC* descriptors)
 
 		// The individual elements of a varying string array may not be aligned
 		// correctly.  If they aren't, some RISC machines may break.  In those
-		// cases, calculate the actual length and then move the length and text manually.
+		// cases, move the value into an aligned temporary and then copy the length and text.
+		// Don't use MOV_make_string here, it doesn't transliterate between character sets.
 
 		if (array_desc->dsc_dtype == dtype_varying &&
 			array_desc->dsc_address !=
 				FB_ALIGN(array_desc->dsc_address, (MIN(sizeof(USHORT), FB_ALIGNMENT))))
 		{
-			// Note: cannot remove this JRD_get_thread_data without api change
-			// to slice callback routines
-			/*thread_db* tdbb = */ JRD_get_thread_data();
-
 			DynamicVaryStr<1024> tmp_buffer;
-			const USHORT tmp_len = array_desc->dsc_length;
-			const char* p;
-			const USHORT len = MOV_make_string(tdbb, slice_desc, array_desc->getTextType(), &p,
-											   tmp_buffer.getBuffer(tmp_len), tmp_len);
-			memcpy(array_desc->dsc_address, &len, sizeof(USHORT));
-			memcpy(array_desc->dsc_address + sizeof(USHORT), p, (int) len);
+			vary* const tmp = tmp_buffer.getBuffer(array_desc->dsc_length);
+
+			dsc tmp_desc = *array_desc;
+			tmp_desc.dsc_address = reinterpret_cast<UCHAR*>(tmp);
+			MOV_move(tdbb, slice_desc, &tmp_desc);
+
+			memcpy(array_desc->dsc_address, tmp, sizeof(USHORT) + tmp->vary_length);
 		}
 		else
 		{
