@@ -5915,6 +5915,21 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				ERASE F;
 			}
 			END_FOR
+
+			relation = MET_lookup_relation(tdbb, work->dfw_name);
+			if (relation)
+			{
+				vec<Format*>* vector = relation->rel_formats;
+				if (arg->dfw_id < vector->count())
+				{
+					Format* format = (*vector)[arg->dfw_id];
+					(*vector)[arg->dfw_id] = NULL;
+
+					vector->trimNulls();
+
+					delete format;
+				}
+			}
 		}
 		break;
 

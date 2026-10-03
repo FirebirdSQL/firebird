@@ -130,6 +130,20 @@ public:
 
 	void operator delete(void* mem) { MemoryPool::globalFree(mem); }
 
+	// strip unused nulls in the end
+	void trimNulls()
+	{
+		auto* e = v.end();
+		for (; e != v.begin(); --e)
+		{
+			if (e[-1])
+				break;
+		}
+
+		if (e != v.end())
+			v.resize(e - v.begin());
+	}
+
 protected:
 	vec_base(MemoryPool& p, int len)
 		: v(p, len)
