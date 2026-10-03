@@ -486,11 +486,24 @@ BoolExprNode* ComparativeBoolNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				literalArg = value;
 		};
 
-	convertLiteralToOperand(procArg1, procArg2);
-	convertLiteralToOperand(procArg2, procArg1);
+	// Pattern matching operators (LIKE, CONTAINING, etc) compare strings, so their literals are kept as is
+	switch (blrOp)
+	{
+		case blr_eql:
+		case blr_neq:
+		case blr_gtr:
+		case blr_geq:
+		case blr_lss:
+		case blr_leq:
+		case blr_equiv:
+		case blr_between:
+			convertLiteralToOperand(procArg1, procArg2);
+			convertLiteralToOperand(procArg2, procArg1);
 
-	if (blrOp == blr_between)
-		convertLiteralToOperand(procArg3, procArg1);
+			if (blrOp == blr_between)
+				convertLiteralToOperand(procArg3, procArg1);
+			break;
+	}
 
 	ComparativeBoolNode* node = FB_NEW_POOL(dsqlScratch->getPool()) ComparativeBoolNode(dsqlScratch->getPool(), blrOp,
 		procArg1,
