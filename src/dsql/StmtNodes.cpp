@@ -10247,6 +10247,16 @@ string StoreNode::internalPrint(NodePrinter& printer) const
 
 void StoreNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
+	if ((dsqlScratch->flags & DsqlCompilerScratch::FLAG_BULK_INSERT) &&
+		dsqlRse && !dsqlReturning && !overrideClause.has_value())
+	{
+		dsqlScratch->appendUChar(blr_bulk_insert);
+		GEN_expr(dsqlScratch, dsqlRse);
+		GEN_expr(dsqlScratch, target);
+		statement->genBlr(dsqlScratch);
+		return;
+	}
+
 	const bool useInternalAutoTrans =
 		(dsqlScratch->flags & DsqlCompilerScratch::FLAG_IN_AUTO_TRANS_BLOCK) &&
 		dsqlReturning && !dsqlScratch->isPsql() && dsqlReturningLocalTableNumber.has_value() &&

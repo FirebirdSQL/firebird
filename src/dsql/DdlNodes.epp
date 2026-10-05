@@ -10132,6 +10132,25 @@ void CreateRelationNode::defineQueryColumns(thread_db* tdbb, DsqlCompilerScratch
 	dsqlScratch->derivedContext.clear();
 }
 
+// Check whether a domain has a CHECK constraint (validation).
+static bool domainHasCheck(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& domainName)
+{
+	AUTO_HANDLE(request);
+	bool hasCheck = false;
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+		FIRST 1
+		FLD IN RDB$FIELDS
+		WITH FLD.RDB$SCHEMA_NAME EQ domainName.schema.c_str() AND
+			 FLD.RDB$FIELD_NAME EQ domainName.object.c_str()
+	{
+		hasCheck = !FLD.RDB$VALIDATION_BLR.NULL;
+	}
+	END_FOR
+
+	return hasCheck;
+}
+
 void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	jrd_tra* transaction)
 {
@@ -10140,12 +10159,22 @@ void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsq
 
 	bool first = true;
 
+	// Bulk insert does not run domain CHECK constraints, so use it only when no column
+	// references a domain that has one.
+	bool useBulkInsert = true;
+
 	for (const auto& clause : clauses)
 	{
 		if (clause->type != Clause::TYPE_ADD_COLUMN)
 			continue;
 
 		const auto addColumnClause = static_cast<const AddColumnClause*>(clause.getObject());
+
+		if (useBulkInsert && addColumnClause->field->typeOfName.object.hasData() &&
+			domainHasCheck(tdbb, transaction, addColumnClause->field->typeOfName))
+		{
+			useBulkInsert = false;
+		}
 
 		if (!first)
 			sql += ", ";
@@ -10168,7 +10197,8 @@ void CreateRelationNode::executeInsert(thread_db* tdbb, DsqlCompilerScratch* dsq
 	AutoSetRestoreFlag<ULONG> noDbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
 
 	DSQL_execute_immediate(tdbb, attachment, &traHandle, sql.length(), sql.c_str(),
-		dsqlScratch->clientDialect, nullptr, nullptr, nullptr, nullptr, true);
+		dsqlScratch->clientDialect, nullptr, nullptr, nullptr, nullptr, true,
+		(useBulkInsert ? DsqlCompilerScratch::FLAG_BULK_INSERT : 0));
 
 	fb_assert(traHandle == transaction);
 }
