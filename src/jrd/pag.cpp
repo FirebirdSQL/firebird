@@ -1141,22 +1141,6 @@ void PAG_header(thread_db* tdbb, bool info)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	jrd_rel* relation = MET_relation(tdbb, 0);
-	RelationPages* relPages = relation->getBasePages();
-	if (!relPages->rel_pages)
-	{
-		// 21-Dec-2003 Nickolay Samofatov
-		// No need to re-set first page for RDB$PAGES relation since
-		// current code cannot change its location after database creation.
-		// Currently, this change only affects isc_database_info call,
-		// the only call which may call PAG_header multiple times.
-		// In fact, this isc_database_info behavior seems dangerous to me,
-		// but let somebody else fix that problem, I just fix the memory leak.
-		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
-		relPages->rel_pages = vector;
-		(*vector)[0] = header->hdr_PAGES;
-	}
-
 	dbb->dbb_next_transaction = next_transaction;
 
 	if (!info || dbb->dbb_oldest_transaction < oldest_transaction)
@@ -1313,6 +1297,7 @@ void PAG_header_init(thread_db* tdbb)
 
 	dbb->dbb_page_size = header->hdr_page_size;
 	dbb->dbb_page_buffers = header->hdr_page_buffers;
+	dbb->dbb_rdb_pages = header->hdr_PAGES;
 }
 
 

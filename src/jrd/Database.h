@@ -417,6 +417,7 @@ public:
 	USHORT dbb_dp_per_pp;				// data pages per pointer page
 	USHORT dbb_max_records;				// max record per data page
 	USHORT dbb_max_idx;					// max number of indexes on a root page
+	ULONG dbb_rdb_pages;				// cached number of first PP of RDB$PAGES relation, see hdr_PAGES
 	Firebird::DbImplementation	dbb_implementation;	// implementation
 
 #ifdef SUPERSERVER_V2
