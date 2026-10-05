@@ -5920,14 +5920,19 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 			if (relation)
 			{
 				vec<Format*>* vector = relation->rel_formats;
-				if (arg->dfw_id < vector->count())
+				if (vector && (arg->dfw_id < vector->count()))
 				{
 					Format* format = (*vector)[arg->dfw_id];
-					(*vector)[arg->dfw_id] = NULL;
+					if (format)
+					{
+						(*vector)[arg->dfw_id] = NULL;
+						vector->trimNulls();
+						delete format;
 
-					vector->trimNulls();
-
-					delete format;
+						fb_assert(vector->count() > 1);
+						relation->rel_current_fmt = vector->count() - 1;
+						relation->rel_current_format = (*vector)[relation->rel_current_fmt];
+					}
 				}
 			}
 		}
