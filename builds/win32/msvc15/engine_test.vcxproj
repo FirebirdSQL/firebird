@@ -274,6 +274,9 @@
     <ClCompile Include="..\..\..\src\jrd\tests\RecordNumberTest.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\src\jrd\tests\TimeZoneUtilTest.cpp" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="..\..\..\src\lock\tests\LockManagerTest.cpp" />
   </ItemGroup>
   <ItemGroup>

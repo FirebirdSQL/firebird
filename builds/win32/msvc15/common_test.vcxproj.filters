@@ -27,9 +27,6 @@
     <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\src\common\tests\TimeZoneUtilTest.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
