@@ -502,12 +502,12 @@ IndexCondition::IndexCondition(thread_db* tdbb, index_desc* idx)
 	if (!(idx->idx_flags & idx_condition))
 		return;
 
-	fb_assert(idx->idx_condition_node);
-	m_condition = idx->idx_condition_node;
+	fb_assert(idx->idx_code && idx->idx_code->condition);
+	m_condition = idx->idx_code->condition;
 
-	fb_assert(idx->idx_condition_statement);
+	fb_assert(idx->idx_code->condition_statement);
 	const auto orgRequest = tdbb->getRequest();
-	m_request = idx->idx_condition_statement->findRequest(tdbb, true);
+	m_request = idx->idx_code->condition_statement->findRequest(tdbb, true);
 
 	if (!m_request)
 		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index condition recursively");
@@ -605,12 +605,12 @@ IndexExpression::IndexExpression(thread_db* tdbb, index_desc* idx)
 	if (!(idx->idx_flags & idx_expression))
 		return;
 
-	fb_assert(idx->idx_expression_node);
-	m_expression = idx->idx_expression_node;
+	fb_assert(idx->idx_code->expression);
+	m_expression = idx->idx_code->expression;
 
-	fb_assert(idx->idx_expression_statement);
+	fb_assert(idx->idx_code->expression_statement);
 	const auto orgRequest = tdbb->getRequest();
-	m_request = idx->idx_expression_statement->findRequest(tdbb, true);
+	m_request = idx->idx_code->expression_statement->findRequest(tdbb, true);
 
 	if (!m_request)
 		ERR_post(Arg::Gds(isc_random) << "Attempt to evaluate index expression recursively");
@@ -1691,10 +1691,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	idx->idx_foreign_dep.clear();
 	idx->idx_primary_relation = 0;
 	idx->idx_primary_index = 0;
-	idx->idx_expression_node = nullptr;
-	idx->idx_expression_statement = nullptr;
-	idx->idx_condition_node = nullptr;
-	idx->idx_condition_statement = nullptr;
+	idx->idx_code = nullptr;
 	idx->idx_fraction = 1.0;
 	idx->idx_state = irt_desc->getState();
 
@@ -1714,11 +1711,17 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	ISC_STATUS error = 0;
 	if (idx->idx_flags & (idx_expression | idx_condition))
 	{
-		auto* idp = relation->ensureIndex(tdbb, idx->idx_id);
-		if (idp)
-			idp->lookupIndexCode(tdbb, relation, idx, irt_desc);
+		auto* idv = relation->lookup_index(tdbb, idx->idx_id, CacheFlag::AUTOCREATE);
+		if (idv)
+			idv->lookupIndexCode(tdbb, relation, idx, irt_desc);
+		else
+		{
+			auto* idp = relation->ensureIndex(tdbb, idx->idx_id);
+			fb_assert(idp);
+			idx->idx_code = idp->refreshIndexCode(tdbb, relation, irt_desc, nullptr);
+		}
 
-		if (idx->idx_flags & idx_expression && !idx->idx_expression_node)
+		if (idx->idx_flags & idx_expression && !idx->idx_code->expression)
 		{
 			if (tdbb->tdbb_flags & TDBB_sweeper)
 				return false;
@@ -1726,7 +1729,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 			// Definition of index expression is not found for index @1
 			error = isc_idx_expr_not_found;
 		}
-		else if (idx->idx_flags & idx_condition && !idx->idx_condition_node)
+		else if (idx->idx_flags & idx_condition && !idx->idx_code->condition)
 		{
 			if (tdbb->tdbb_flags & TDBB_sweeper)
 				return false;
@@ -2382,9 +2385,9 @@ USHORT BTR_key_length(thread_db* tdbb, jrd_rel* relation, index_desc* idx)
 		default:
 			if (idx->idx_flags & idx_expression)
 			{
-				fb_assert(idx->idx_expression_node);
-				length = idx->idx_expression_desc.dsc_length;
-				if (idx->idx_expression_desc.dsc_dtype == dtype_varying)
+				fb_assert(idx->idx_code->expression);
+				length = idx->idx_code->expression_desc.dsc_length;
+				if (idx->idx_code->expression_desc.dsc_dtype == dtype_varying)
 				{
 					length = length - sizeof(SSHORT);
 				}

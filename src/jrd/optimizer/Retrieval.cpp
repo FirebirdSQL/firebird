@@ -859,9 +859,9 @@ bool Retrieval::betterInversion(const InversionCandidate* inv1,
 
 bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 {
-	fb_assert(idx.idx_condition_node);
+	fb_assert(idx.idx_code->condition);
 
-	if (!idx.idx_condition_node->containsStream(0, true))
+	if (!idx.idx_code->condition->containsStream(0, true))
 		return false;
 
 	fb_assert(matches.isEmpty());
@@ -869,7 +869,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition_node, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_code->condition, idxConjuncts);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;
@@ -944,11 +944,11 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 
 bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node) const
 {
-	fb_assert(idx && idx->idx_expression_node);
+	fb_assert(idx && idx->idx_code->expression);
 
 	// The desired expression can be hidden inside a derived expression node,
 	// so try to recover it (see CORE-4118).
-	while (!idx->idx_expression_node->sameAs(node, true))
+	while (!idx->idx_code->expression->sameAs(node, true))
 	{
 		const auto derivedExpr = nodeAs<DerivedExprNode>(node);
 		const auto cast = nodeAs<CastNode>(node);
@@ -963,7 +963,7 @@ bool Retrieval::checkIndexExpression(const index_desc* idx, ValueExprNode* node)
 
 	// Check the index for matching both the given stream and the given expression tree
 
-	return idx->idx_expression_node->containsStream(0, true) &&
+	return idx->idx_code->expression->containsStream(0, true) &&
 		node->containsStream(stream, true);
 }
 
@@ -1501,7 +1501,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 				for (auto otherInversion : inversions)
 				{
 					if (otherInversion->boolean &&
-						idx->idx_condition_node->sameAs(otherInversion->boolean, true))
+						idx->idx_code->condition->sameAs(otherInversion->boolean, true))
 					{
 						otherInversion->used = true;
 					}
@@ -1806,7 +1806,7 @@ bool Retrieval::matchBoolean(IndexScratch* indexScratch,
 	{
 		// If index condition matches the boolean, this should not be
 		// considered a match. Full index scan will be used instead.
-		if (idx->idx_condition_node->sameAs(boolean, true))
+		if (idx->idx_code->condition->sameAs(boolean, true))
 			return false;
 	}
 

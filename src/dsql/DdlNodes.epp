@@ -13134,7 +13134,7 @@ void StoreIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 
 	auto id = expressionIndex ? createExpression(tdbb, transaction) : create(tdbb, transaction);
 	if (id < tdbb->getDatabase()->dbb_max_idx)
-		indexRelation->newIndexVersion(tdbb, id, CacheFlag::MINISCAN);
+		indexRelation->newIndexVersion(tdbb, id);
 }
 
 
@@ -13161,7 +13161,10 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 
 	index_desc idx;
 	idx.idx_count = 0;
+	idx.idx_code = nullptr;
 	int key_count = 0;
+
+	Cleanup idxCode([&]() {if (idx.idx_code) IndexCode::release(tdbb, idx.idx_code);});
 
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
@@ -13235,9 +13238,6 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 			END_FOR
 		}
 
-		idx.idx_condition_node = nullptr;
-		idx.idx_condition_statement = nullptr;
-
 		if (!IDX.RDB$CONDITION_BLR.NULL)
 		{
 			// Allocate a new pool to contain the expression tree
@@ -13253,8 +13253,9 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 					nullptr, &csb, indexName, obj_index_condition, 0,
 					transaction);
 
-				idx.idx_condition_statement = Statement::makeBoolExpression(tdbb,
-					idx.idx_condition_node, csb, false);
+				idx.idx_code = FB_NEW_POOL(*dbb->dbb_permanent) IndexCode;
+				idx.idx_code->condition_statement = Statement::makeBoolExpression(tdbb,
+					idx.idx_code->condition, csb, false);
 
 				idx.idx_flags |= idx_condition;
 			}
@@ -13431,6 +13432,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		fb_assert(idxId <= dbb->dbb_max_idx);
 		idx.idx_id = idxId;
 		SelectivityList selectivity(*tdbb->getDefaultPool());
+
 		IDX_create_index(tdbb,
 			concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
 			relation, &idx, indexName, &idxId, transaction, selectivity);
@@ -13444,9 +13446,6 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 	}
 	else
 		fb_assert(idxId == dbb->dbb_max_idx);
-
-	if (idx.idx_condition_statement)
-		idx.idx_condition_statement->release(tdbb);
 
 	if (partnerRelation)
 	{
@@ -13490,6 +13489,9 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 	CompilerScratch* csb = nullptr;
 
 	const auto dbb = tdbb->getDatabase();
+	idx.idx_code = FB_NEW_POOL(*dbb->dbb_permanent) IndexCode;
+	Cleanup idxCode([&]() {IndexCode::release(tdbb, idx.idx_code);});
+
 	const auto attachment = tdbb->getAttachment();
 	MetaId idxId = dbb->dbb_max_idx;
 	bool active = false;
@@ -13543,8 +13545,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 				nullptr, &csb, indexName, obj_index_expression, 0,
 				transaction);
 
-			idx.idx_expression_statement = Statement::makeValueExpression(tdbb,
-				idx.idx_expression_node, idx.idx_expression_desc, csb, false);
+			idx.idx_code->expression_statement = Statement::makeValueExpression(tdbb,
+				idx.idx_code->expression, idx.idx_code->expression_desc, csb, false);
 
 			// fake a description of the index
 
@@ -13552,8 +13554,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 			idx.idx_flags |= idx_expression;
 			idx.idx_rpt[0].idx_itype =
 				DFW_assign_index_type(tdbb, indexName,
-					idx.idx_expression_desc.dsc_dtype,
-					idx.idx_expression_desc.getTextType());
+					idx.idx_code->expression_desc.dsc_dtype,
+					idx.idx_code->expression_desc.getTextType());
 			idx.idx_rpt[0].idx_selectivity = 0;
 		}
 		catch (const Exception&)
@@ -13576,8 +13578,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 					nullptr, &csb, indexName, obj_index_condition, 0,
 					transaction);
 
-				idx.idx_condition_statement = Statement::makeBoolExpression(tdbb,
-					idx.idx_condition_node, csb, false);
+				idx.idx_code->condition_statement = Statement::makeBoolExpression(tdbb,
+					idx.idx_code->condition, csb, false);
 
 				idx.idx_flags |= idx_condition;
 			}
@@ -13620,6 +13622,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		{
 			fb_assert(idxId <= dbb->dbb_max_idx);
 			idx.idx_id = idxId;
+
 			IDX_create_index(tdbb,
 				concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
 				relation, &idx, indexName, &idxId, transaction, selectivity);
@@ -13629,9 +13632,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		catch (const Exception&)
 		{
 			// Get rid of the expression/condition statements
-			idx.idx_expression_statement->release(tdbb);
-			if (idx.idx_condition_statement)
-				idx.idx_condition_statement->release(tdbb);
+			IndexCode::release(tdbb, idx.idx_code);
 
 			throw;
 		}
@@ -13646,9 +13647,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		fb_assert(idxId == dbb->dbb_max_idx);
 
 	// Get rid of the expression/condition statements
-	idx.idx_expression_statement->release(tdbb);
-	if (idx.idx_condition_statement)
-		idx.idx_condition_statement->release(tdbb);
+	IndexCode::release(tdbb, idx.idx_code);
 
 	return idxId;
 }
@@ -14496,7 +14495,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 	else
 		IDX_mark_index(tdbb, indexRelation, idxId.value());
 
-	indexRelation->newIndexVersion(tdbb, idxId.value(), CacheFlag::MINISCAN);
+	indexRelation->newIndexVersion(tdbb, idxId.value());
 }
 
 // Alter an index on a Local Temporary Table (ACTIVE/INACTIVE).

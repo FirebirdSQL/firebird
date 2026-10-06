@@ -2224,9 +2224,79 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 	return id;
 }
 
-
-void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
+/*
+IndexCode* IndexVersion::refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
 	const Ods::index_root_page::irt_repeat* irt_desc)
+{
+	auto* code = perm->refreshIndexCode(tdbb, relation, irt_desc);
+
+	if (code)
+	{
+		auto* idv = relation->lookup_index(tdbb, getId(), CacheFlag::AUTOCREATE);
+		if (!idv->idv_code)
+		{
+			code->addRef();
+			idv->idv_code = code;
+		}
+	}
+
+	return code;
+}
+
+*/
+IndexCode* IndexPermanent::refreshIndexCode(thread_db* tdbb, RelationPermanent* relation,
+	const Ods::index_root_page::irt_repeat& irt_desc)
+{
+	SET_TDBB(tdbb);
+	IndexCode* code = nullptr;
+
+	MutexLockGuard g(idp_code_mutex, FB_FUNCTION);
+/*
+	if (iCode && irt_desc)
+	{
+		if ((idp_state == Ods::irt_unused) &&			// permanent index block in cache just created
+			(getTraNum() == 0) &&						// recheck just created fact
+			(irt_desc->getState() == Ods::irt_normal))	// no current DDL activity on index
+		{
+			setTraNum(irt_desc->getTransaction());
+			setState(Ods::irt_normal);
+			return iCode;
+		}
+	}
+*/
+	if ((irt_desc.getState() != idp_state) || (irt_desc.getTransaction() != idp_tranum))
+	{
+		if (irt_desc.getState() == Ods::)
+		{
+			relation->newIndexVersion(tdbb, getId());
+			auto* idv = relation->lookup_index(tdbb, getId(), CacheFlag::AUTOCREATE);
+			return 
+
+		// Переделать в buildIndexCode который вызывать из lookupIndexCode и Index::scan()
+
+		if (!idv->idv_code)
+		{
+			code->addRef();
+			idv->idv_code = code;
+		}
+	}
+
+		if (irt_desc)
+		{
+			idp_state = irt_desc.getState();
+			idp_tranum = irt_desc.getTransaction();
+		}
+
+		if (code)
+		{
+			auto* old_code = idp_latest_code;
+			idp_latest_code = code;
+			if (old_code)
+				IndexCode::release(tdbb, old_code);
+		}
+
+
+void IndexPermanent::buildIndexCode(thread_db* tdbb, Cached::Relation* relation)
 {
 /***********************************************
 *
@@ -2239,85 +2309,84 @@ void IndexPermanent::refreshIndexCode(thread_db* tdbb, Cached::Relation* relatio
 *
 **************************************/
 	SET_TDBB(tdbb);
+	Database* dbb = tdbb->getDatabase();
+	Attachment* attachment = tdbb->getAttachment();
 
-	MutexLockGuard g(idp_code_mutex, FB_FUNCTION);
+	bid expression, condition;
+	expression.clear();
+	condition.clear();
 
-	if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
+	MetaId relId = relation->getId();
+
+	Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
+
+	AUTO_HANDLE(handle);
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
+		IND IN RDB$INDICES
+		CROSS REL IN RDB$RELATIONS
+		WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
+			 REL.RDB$RELATION_ID EQ relId AND
+			 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
+			 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
+			 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
 	{
-		Database* dbb = tdbb->getDatabase();
-		Attachment* attachment = tdbb->getAttachment();
-
-		bid expression, condition;
-		expression.clear();
-		condition.clear();
-
-		MetaId relId = relation->getId();
-
-		Jrd::ContextPoolHolder context(tdbb, dbb->dbb_permanent);
-
-		AUTO_HANDLE(handle);
-		FOR(REQUEST_HANDLE handle)		// Use system transaction
-			IND IN RDB$INDICES
-			CROSS REL IN RDB$RELATIONS
-			WITH IND.RDB$INDEX_ID EQ getId() + 1 AND
-				 REL.RDB$RELATION_ID EQ relId AND
-				 REL.RDB$SCHEMA_NAME EQ IND.RDB$SCHEMA_NAME AND
-				 REL.RDB$PACKAGE_NAME EQUIV IND.RDB$PACKAGE_NAME AND
-				 REL.RDB$RELATION_NAME EQ IND.RDB$RELATION_NAME
-		{
-			if (!IND.RDB$EXPRESSION_BLR.NULL)
-				expression = IND.RDB$EXPRESSION_BLR;
-			if (!IND.RDB$CONDITION_BLR.NULL)
-				condition = IND.RDB$CONDITION_BLR;
-		}
-		END_FOR
-
-		releaseStatements(tdbb);
-
-		idp_expression_bid = expression;
-		idp_condition_bid = condition;
-
-		if (expression.hasData())
-		{
-			MemoryPool* stmtPool = dbb->createPool();
-			try
-			{
-				Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-				CompilerScratch* csb = nullptr;
-				Cleanup cc([csb]() {delete csb;});
-				MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
-				idp_expression_statement = Statement::makeValueExpression(tdbb, idp_expression, idp_expression_desc, csb, false);
-			}
-			catch (const Exception&)
-			{
-				dbb->deletePool(stmtPool);
-				throw;
-			}
-		}
-
-		if (condition.hasData())
-		{
-			MemoryPool* stmtPool = dbb->createPool();
-			try
-			{
-				Jrd::ContextPoolHolder context(tdbb, stmtPool);
-
-				CompilerScratch* csb = nullptr;
-				Cleanup cc([csb]() {delete csb;});
-				MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
-				idp_condition_statement = Statement::makeBoolExpression(tdbb, idp_condition, csb, false);
-			}
-			catch (const Exception&)
-			{
-				dbb->deletePool(stmtPool);
-				throw;
-			}
-		}
-
-		idp_state = irt_desc->getState();
-		idp_tranum = irt_desc->getTransaction();
+		if (!IND.RDB$EXPRESSION_BLR.NULL)
+			expression = IND.RDB$EXPRESSION_BLR;
+		if (!IND.RDB$CONDITION_BLR.NULL)
+			condition = IND.RDB$CONDITION_BLR;
 	}
+	END_FOR
+
+	if (!(expression.hasData() || condition.hasData()))
+		return;
+
+	auto* code = FB_NEW_POOL(*dbb->dbb_permanent) IndexCode;
+	code->expression_bid = expression;
+	code->condition_bid = condition;
+
+	if (expression.hasData())
+	{
+		MemoryPool* stmtPool = dbb->createPool();
+		try
+		{
+			Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+			CompilerScratch* csb = nullptr;
+			Cleanup cc([csb]() {delete csb;});
+			MET_parse_blob(tdbb, &relation->getName().schema, relation, &expression, &csb, nullptr, false, false);
+			code->expression_statement =
+				Statement::makeValueExpression(tdbb, code->expression, code->expression_desc, csb, false);
+		}
+		catch (const Exception&)
+		{
+			dbb->deletePool(stmtPool);
+			throw;
+		}
+	}
+
+	if (condition.hasData())
+	{
+		MemoryPool* stmtPool = dbb->createPool();
+		try
+		{
+			Jrd::ContextPoolHolder context(tdbb, stmtPool);
+
+			CompilerScratch* csb = nullptr;
+			Cleanup cc([csb]() {delete csb;});
+			MET_parse_blob(tdbb, &relation->getName().schema, relation, &condition, &csb, nullptr, false, false);
+			code->condition_statement = Statement::makeBoolExpression(tdbb, code->condition, csb, false);
+		}
+		catch (const Exception&)
+		{
+			dbb->deletePool(stmtPool);
+			throw;
+		}
+	}
+
+	auto* old_code = idp_latest_code;
+	idp_latest_code = code;
+	if (old_code)
+		IndexCode::release(tdbb, old_code);
 }
 
 
@@ -5158,14 +5227,16 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	}
 	END_FOR
 
-	if (idv_name.isEmpty())
+	if (idv_name.isEmpty() || !found)
 	{
 		idv_active = MET_index_inactive;
 		return ScanResult::MISS;
 	}
 
+	auto* code = buildIndexCode(tdbb, MetadataCache::getPerm<Cached::Relation>(tdbb, relId, 0), nullptr);
+	replaceCodeConditional(tdbb, code);
 
-	return found ? ScanResult::COMPLETE : ScanResult::MISS;
+	return ScanResult::COMPLETE;
 }
 
 void IndexVersion::setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
@@ -5686,6 +5757,7 @@ void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 		REDUCED TO D.RDB$DEPENDENT_TYPE, D.RDB$DEPENDENT_SCHEMA_NAME, D.RDB$PACKAGE_NAME, D.RDB$DEPENDENT_NAME
 	{
 		ElementBase* element = nullptr;
+		AutoRequest request;
 
 		QualifiedName name;
 		name.schema = D.RDB$DEPENDENT_SCHEMA_NAME;
@@ -5711,9 +5783,7 @@ void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 		case obj_trigger:
 			{
 				// Distinguish between triggers on table and database-wide
-				bool found = false;
-				AUTO_HANDLE(trigHndl);
-				FOR (REQUEST_HANDLE trigHndl TRANSACTION_HANDLE metaTransaction)
+				FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 					TRG IN RDB$TRIGGERS
 					WITH TRG.RDB$SCHEMA_NAME EQ D.RDB$DEPENDENT_SCHEMA_NAME AND
 						 TRG.RDB$TRIGGER_NAME EQ D.RDB$DEPENDENT_NAME
@@ -5735,8 +5805,7 @@ void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 		case obj_computed:
 			{
 				// should refresh ralations that have such computed fields
-				AUTO_HANDLE(compHndl);
-				FOR (REQUEST_HANDLE compHndl TRANSACTION_HANDLE metaTransaction)
+				FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 					FLD IN RDB$RELATION_FIELDS
 					WITH FLD.RDB$FIELD_SOURCE EQ D.RDB$DEPENDENT_NAME
 					 AND FLD.RDB$FIELD_SOURCE_SCHEMA_NAME EQ D.RDB$DEPENDENT_SCHEMA_NAME
@@ -5747,6 +5816,37 @@ void ElementBase::fillDeps(thread_db* tdbb, bool forceRecompile)
 					auto e = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
 					if (e)
 						transaction->storeUpdate(e, forceRecompile);
+				}
+				END_FOR
+			}
+			break;
+
+		case obj_index_expression:
+		case obj_index_condition:
+			{
+				// should reload that index
+
+				// skip dependencies from relation - expect to be processed in DDL node
+				if (D.RDB$DEPENDED_ON_TYPE == obj_relation)
+					break;
+
+				FOR (REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
+					IND IN RDB$INDICES
+					WITH IND.RDB$INDEX_NAME EQ D.RDB$DEPENDENT_NAME
+					 AND IND.RDB$SCHEMA_NAME EQ D.RDB$DEPENDENT_SCHEMA_NAME
+					 AND IND.RDB$PACKAGE_NAME EQUIV NULLIF(D.RDB$PACKAGE_NAME, "")
+				{
+					name.object = IND.RDB$RELATION_NAME;
+					name.schema = IND.RDB$SCHEMA_NAME;
+					name.package = IND.RDB$PACKAGE_NAME.NULL ? "" : IND.RDB$PACKAGE_NAME;
+					auto rel = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::AUTOCREATE);
+					if (rel)
+					{
+						fb_assert(IND.RDB$INDEX_ID > 0);
+						auto index = rel->lookupIndex(tdbb, IND.RDB$INDEX_ID - 1, CacheFlag::AUTOCREATE);
+						printf("Process index\n");
+						transaction->storeUpdate(index, forceRecompile);
+					}
 				}
 				END_FOR
 			}

@@ -596,24 +596,12 @@ public:
 			}
 
 			FbLocalStatus status;
-			if (m_tra || m_idx.idx_expression_statement || m_idx.idx_condition_statement)
+			if (m_tra)
 			{
 				BackgroundContextHolder tdbb(att->att_database, att, &status, FB_FUNCTION);
 
 				if (m_tra)
 					TRA_commit(tdbb, m_tra, false);
-
-				if (m_idx.idx_expression_statement)
-				{
-					m_idx.idx_expression_statement->release(tdbb);
-					m_idx.idx_expression_statement = NULL;
-				}
-
-				if (m_idx.idx_condition_statement)
-				{
-					m_idx.idx_condition_statement->release(tdbb);
-					m_idx.idx_condition_statement = NULL;
-				}
 			}
 
 			WorkerAttachment::releaseAttachment(&status, m_attStable);
@@ -665,15 +653,6 @@ public:
 			if (!m_sort)
 			{
 				m_idx = *creation->index;	// copy
-				if (m_ownAttach)
-				{
-					m_idx.idx_expression_node = NULL;
-					m_idx.idx_expression_statement = NULL;
-					m_idx.idx_foreign_dep.clear();
-					m_idx.idx_condition_node = NULL;
-					m_idx.idx_condition_statement = NULL;
-				}
-
 				FPTR_REJECT_DUP_CALLBACK callback = NULL;
 				void* callback_arg = NULL;
 
@@ -815,32 +794,43 @@ bool IndexCreateTask::handler(WorkItem& _item)
 		partner_index_id = idx->idx_primary_index;
 	}
 
-	if ((idx->idx_flags & idx_expression) && (idx->idx_expression_node == NULL))
+	// Assertion checks block
+	if (idx->idx_flags & (idx_expression | idx_condition))
+		fb_assert(idx->idx_code);
+	if (idx->idx_flags & idx_expression)
+		fb_assert(idx->idx_code->expression);
+	if (idx->idx_flags & idx_condition)
+		fb_assert(idx->idx_code->condition);
+/*
+	if ((idx->idx_flags & (idx_expression|idx_condition)) && (idx->idx_code == NULL))
+		idx->idx_code = FB_NEW_POOL(*dbb->dbb_permanent) IndexCode();
+
+	if ((idx->idx_flags & idx_expression) && (idx->idx_code->expression == NULL))
 	{
 		fb_assert(!m_exprBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
 		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
 
-		idx->idx_expression_node = static_cast<ValueExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
-			getPermanent(relation), &m_exprBlob, &csb, &idx->idx_expression_statement, false, false));
+		idx->idx_code->expression = static_cast<ValueExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
+			getPermanent(relation), &m_exprBlob, &csb, &idx->idx_code->expression_statement, false, false));
 
 		delete csb;
 	}
 
-	if ((idx->idx_flags & idx_condition) && (idx->idx_condition_node == NULL))
+	if ((idx->idx_flags & idx_condition) && (idx->idx_code->condition == NULL))
 	{
 		fb_assert(!m_condBlob.isEmpty());
 
 		CompilerScratch* csb = NULL;
 		Jrd::ContextPoolHolder context(tdbb, dbb->createPool());
 
-		idx->idx_condition_node = static_cast<BoolExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
-			getPermanent(relation), &m_condBlob, &csb, &idx->idx_condition_statement, false, false));
+		idx->idx_code->condition = static_cast<BoolExprNode*> (MET_parse_blob(tdbb, &relation->getName().schema,
+			getPermanent(relation), &m_condBlob, &csb, &idx->idx_code->condition_statement, false, false));
 
 		delete csb;
 	}
-
+*/
 	RecordStack stack(*transaction->tra_pool), free(*transaction->tra_pool);
 
 	if (m_flags & IS_LARGE_SCAN)
@@ -2044,7 +2034,7 @@ static bool cmpRecordKeys(thread_db* tdbb,
 				// So we must save the first result into another dsc.
 
 				tempDesc = *idxDesc;
-				const auto idxDscLength = idx2->idx_expression_desc.dsc_length;
+				const auto idxDscLength = idx2->idx_code->expression_desc.dsc_length;
 				tempDesc.dsc_address = tmp.getBuffer(idxDscLength + FB_DOUBLE_ALIGN);
 				tempDesc.dsc_address = FB_ALIGN(tempDesc.dsc_address, FB_DOUBLE_ALIGN);
 				fb_assert(idxDesc->dsc_length <= idxDscLength);

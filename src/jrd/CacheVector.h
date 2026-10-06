@@ -53,6 +53,10 @@ class ObjectBase
 {
 public:
 	typedef unsigned Flag;
+
+public:
+	virtual ~ObjectBase()
+	{ }
 };
 
 

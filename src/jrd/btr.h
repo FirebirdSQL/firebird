@@ -55,6 +55,7 @@ class PartitionedSort;
 struct sort_key_def;
 struct record_param;
 struct win;
+struct IndexCode;
 
 // Dependencies from/to foreign references
 
@@ -95,11 +96,7 @@ struct index_desc
 	MetaId	idx_primary_relation;			// id for primary key partner relation
 	USHORT	idx_count;						// number of keys
 	dep		idx_foreign_dep;				// foreign key partner
-	ValueExprNode* idx_expression_node;		// node tree for indexed expression
-	dsc		idx_expression_desc;			// descriptor for expression result
-	Statement* idx_expression_statement;	// stored statement for expression evaluation
-	BoolExprNode* idx_condition_node;		// node tree for index condition
-	Statement* idx_condition_statement;		// stored statement for index condition
+	IndexCode* idx_code;					// support of expression / condition index
 	float	idx_fraction;					// fraction of keys included in the index
 	UCHAR	idx_state;						// state from irt_rpt
 	// This structure should exactly match IRTD structure for current ODS
