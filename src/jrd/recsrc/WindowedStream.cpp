@@ -483,6 +483,7 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 	  m_invariantOffsets(0)
 {
 	// Separate nodes that requires the winPass call.
+	// While here, verify if some node depends on the frame. If none, it should not be evaluated.
 
 	const NestConst<ValueExprNode>* const sourceEnd = m_windowMap->sourceList.end();
 
@@ -507,6 +508,13 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 			{
 				m_winPassSources.add(*source);
 				m_winPassTargets.add(*target);
+			}
+
+			if ((capabilities & AggNode::CAP_WANTS_AGG_CALLS) ||
+				(capabilities & AggNode::CAP_USES_WINDOW_FRAME) ||
+				(capabilities & AggNode::CAP_RESPECTS_WINDOW_FRAME) == AggNode::CAP_RESPECTS_WINDOW_FRAME)
+			{
+				m_needsFrame = true;
 			}
 		}
 	}
@@ -653,7 +661,27 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 	exclusion1.invalidate();
 	exclusion2.invalidate();
 
-	if (impure->rangePending > 0 && m_exclusion == Exclusion::NO_OTHERS)
+	// Reposition the stream in the current record if it was moved.
+	// Use force when the stream was located without fetching, as then its position does not
+	// reflect the record buffer contents.
+	const auto syncCurrentRecord = [&](bool force = false)
+	{
+		if (force || (SINT64) m_next->getPosition(request) != position + 1)
+		{
+			m_next->locate(tdbb, position);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+		}
+	};
+
+	if (!m_needsFrame)
+	{
+		// No function depends on the frame, so there is no need to evaluate it.
+		if (position == impure->partitionBlock.startPosition)
+			aggInit(tdbb, request, m_windowMap);
+	}
+	else if (impure->rangePending > 0 && m_exclusion == Exclusion::NO_OTHERS)
 		--impure->rangePending;
 	else
 	{
@@ -758,28 +786,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
 			m_frameExtent->frame2->bound == Frame::Bound::CURRENT_ROW)
 		{
-			SINT64 rangePos = position;
-			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
-				DummyAdjustFunctor());
-
-			while (++rangePos <= impure->partitionBlock.endPosition)
-			{
-				if (!m_next->getRecord(tdbb))
-					fb_assert(false);
-
-				if (lookForChange(tdbb, request, &m_order->expressions, m_order,
-						impure->orderValues))
-				{
-					break;
-				}
-			}
-
-			impure->windowBlock.endPosition = rangePos - 1;
-
-			m_next->locate(tdbb, position);
-
-			if (!m_next->getRecord(tdbb))
-				fb_assert(false);
+			impure->windowBlock.endPosition = locatePeerGroupEnd(tdbb, request, impure, position);
 		}
 		// range between ... and <n> {preceding | following}
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
@@ -806,31 +813,15 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 			(m_frameExtent->unit == FrameExtent::Unit::RANGE ||
 			 m_frameExtent->unit == FrameExtent::Unit::GROUPS))
 		{
-			SINT64 rangePos = position;
-			cacheValues(tdbb, request, &m_order->expressions, impure->orderValues,
-				DummyAdjustFunctor());
+			// {range | groups} between ... and current row: the window end is the peer group end.
+			const SINT64 peerGroupEnd = m_frameExtent->frame2->bound == Frame::Bound::CURRENT_ROW ?
+				impure->windowBlock.endPosition :
+				locatePeerGroupEnd(tdbb, request, impure, position);
 
-			while (++rangePos <= impure->partitionBlock.endPosition)
-			{
-				if (!m_next->getRecord(tdbb))
-					fb_assert(false);
-
-				if (lookForChange(tdbb, request, &m_order->expressions, m_order,
-						impure->orderValues))
-				{
-					break;
-				}
-			}
-
-			impure->rangePending = rangePos - position - 1;
+			impure->rangePending = peerGroupEnd - position;
 		}
 
-		m_next->locate(tdbb, position);
-
-		if (!m_next->getRecord(tdbb))
-			fb_assert(false);
-
-		//// TODO: There is no need to pass record by record when m_aggSources.isEmpty()
+		syncCurrentRecord();
 
 		const bool invalidFrame = !impure->windowBlock.isValid() ||
 			impure->windowBlock.endPosition < impure->windowBlock.startPosition ||
@@ -875,10 +866,16 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 
-				m_next->locate(tdbb, position);
-
-				if (!m_next->getRecord(tdbb))
-					fb_assert(false);
+				syncCurrentRecord();
+			}
+			else if (lastWindow.isValid() &&
+				impure->windowBlock.startPosition == lastWindow.startPosition &&
+				impure->windowBlock.endPosition == position &&
+				lastWindow.endPosition == position - 1)
+			{
+				// The window grows only by the current record, which is already fetched.
+				aggPass(tdbb, request, m_aggSources, m_aggTargets);
+				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 			}
 			else
 			{
@@ -886,6 +883,8 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				//
 				// This may be incompatible with some function like LIST, but currently LIST cannot
 				// be used in ordered windows anyway.
+
+				bool recordMoved = false;
 
 				if (!lastWindow.isValid() ||
 					impure->windowBlock.startPosition > lastWindow.startPosition ||
@@ -898,6 +897,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				{
 					if (impure->windowBlock.startPosition < lastWindow.startPosition)
 					{
+						recordMoved = true;
 						m_next->locate(tdbb, impure->windowBlock.startPosition);
 						SINT64 pending = lastWindow.startPosition - impure->windowBlock.startPosition;
 
@@ -925,10 +925,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 
-				m_next->locate(tdbb, position);
-
-				if (!m_next->getRecord(tdbb))
-					fb_assert(false);
+				syncCurrentRecord(recordMoved);
 			}
 		}
 	}
@@ -1243,6 +1240,25 @@ SINT64 WindowedStream::WindowStream::locateFrameGroups(thread_db* tdbb, Request*
 	}
 
 	return restoreAndReturn(startFrame ? groupBlock.startPosition : groupBlock.endPosition);
+}
+
+// Returns the last position of the peer group of the current record. The stream is not repositioned.
+SINT64 WindowedStream::WindowStream::locatePeerGroupEnd(thread_db* tdbb, Request* request,
+	Impure* impure, SINT64 position) const
+{
+	SINT64 rangePos = position;
+	cacheValues(tdbb, request, &m_order->expressions, impure->orderValues, DummyAdjustFunctor());
+
+	while (++rangePos <= impure->partitionBlock.endPosition)
+	{
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
+
+		if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues))
+			break;
+	}
+
+	return rangePos - 1;
 }
 
 SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,

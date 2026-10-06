@@ -1186,6 +1186,8 @@ namespace Jrd
 			SINT64 locateFrameGroups(thread_db* tdbb, Request* request, Impure* impure,
 				const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
 				bool startFrame) const;
+			SINT64 locatePeerGroupEnd(thread_db* tdbb, Request* request, Impure* impure,
+				SINT64 position) const;
 
 		private:
 			NestConst<SortNode> m_order;
@@ -1196,6 +1198,7 @@ namespace Jrd
 			NestValueArray m_winPassSources, m_winPassTargets;
 			Exclusion m_exclusion;
 			UCHAR m_invariantOffsets;	// 0x1 | 0x2 bitmask
+			bool m_needsFrame = false;	// some function depends on the frame
 		};
 
 	public:
