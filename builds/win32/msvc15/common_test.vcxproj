@@ -262,6 +262,7 @@
     <ClCompile Include="..\..\..\src\common\tests\CvtTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\DeindentedStrTest.cpp" />
     <ClCompile Include="..\..\..\src\common\tests\StringTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\tests\TimeZoneUtilTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\ArrayTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\ClumpletTest.cpp" />
