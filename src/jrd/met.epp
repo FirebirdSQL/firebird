@@ -1048,7 +1048,7 @@ const Format* RelationPermanent::getFormat(thread_db* tdbb, USHORT number)
 		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ getId() AND
 			X.RDB$FORMAT EQ number
 	{
-		blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &X.RDB$DESCRIPTOR);
+		blb* blob = blb::open(tdbb, metaTransaction, &X.RDB$DESCRIPTOR);
 
 		// Use generic representation of formats with 32-bit offsets
 
@@ -2637,7 +2637,7 @@ DmlNode* MET_parse_blob(thread_db*					tdbb,
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
-	blb* blob = blb::open(tdbb, attachment->getSysTransaction(), blob_id);
+	blb* blob = blb::open(tdbb, attachment->getMetaTransaction(tdbb), blob_id);
 	ULONG length = blob->blb_length + 10;
 	HalfStaticArray<UCHAR, 512> tmp;
 	UCHAR* temp = tmp.getBuffer(length);
@@ -2977,6 +2977,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			{
 				// If the BLR was marked as invalid but the procedure was compiled,
 				// mark the BLR as valid.
+				// Record is updated in place by system transaction.
 
 				AutoRequest request;
 
