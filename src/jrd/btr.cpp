@@ -2955,8 +2955,8 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		break;
 
 	case irt_drop:
-		// drop index when OAT >= irtTrans
-		if (oldestActive < irtTrans)
+		// drop index when OAT > irtTrans
+		if (oldestActive <= irtTrans)
 			return false;
 		if (indexId != SKIP_IN_PROGRESS)
 			CCH_RELEASE(tdbb, window);
@@ -3063,8 +3063,8 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		return ModifyIrtRepeatValue::Skip;
 
 	case irt_drop:
-		// drop index when OAT >= irtTrans
-		if (oldestActive >= irtTrans)
+		// drop index when OAT > irtTrans
+		if (oldestActive > irtTrans)
 			break;
 		return ModifyIrtRepeatValue::Skip;
 
