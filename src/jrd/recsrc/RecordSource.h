@@ -1090,6 +1090,12 @@ namespace Jrd
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
+
+	public:
+		// Called by evaluateGroup for each record that belongs to the group being evaluated.
+		void groupRecord(thread_db* /*tdbb*/, Request* /*request*/, bool /*first*/) const
+		{
+		}
 	};
 
 	class WindowedStream : public RecordSource
@@ -1143,6 +1149,14 @@ namespace Jrd
 				SINT64 partitionPending, rangePending;
 				Block partitionBlock, windowBlock;
 				impure_value_ex startOffset, endOffset;
+
+				// Last positions of the peer groups of the partition, found when it is evaluated.
+				// Bit n is set when the record at position peerBase + n ends its peer group.
+				FB_UINT64* peerBits;
+				ULONG peerCapacity;		// allocated words
+				ULONG peerUsed;			// words that may have bits set
+				SINT64 peerBase;
+				bool peerOverflow;		// the partition is too big for the bitmap
 			};
 
 		public:
@@ -1160,6 +1174,8 @@ namespace Jrd
 			void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 			bool isDependent(const StreamList& streams) const override;
 			void nullRecords(thread_db* tdbb) const override;
+
+			void groupRecord(thread_db* tdbb, Request* request, bool first) const;
 
 		protected:
 			void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1199,6 +1215,7 @@ namespace Jrd
 			Exclusion m_exclusion;
 			UCHAR m_invariantOffsets;	// 0x1 | 0x2 bitmask
 			bool m_needsFrame = false;	// some function depends on the frame
+			bool m_usesPeerGroupEnd = false;	// peer group ends are found when evaluating the partition
 		};
 
 	public:
