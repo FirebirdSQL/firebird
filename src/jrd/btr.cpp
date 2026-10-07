@@ -55,6 +55,7 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/exe_proto.h"
+#include "../jrd/dfw_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/jrd_proto.h"
@@ -691,6 +692,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	const auto dbb = m_tdbb->getDatabase();
 	const auto maxKeyLength = dbb->getMaxIndexKeyLength();
+	constexpr auto indexDropStates = (1 << Ods::irt_drop) | (1 << Ods::irt_commit);
 
 	temporary_key temp;
 	temp.key_flags = 0;
@@ -705,15 +707,33 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	const bool descending = (m_index->idx_flags & idx_descending);
 
-	if ((m_index->idx_state == Ods::irt_drop) && skipNewFormat)
+	if ((indexDropStates & (1 << m_index->idx_state)) && skipNewFormat)
 	{
-		auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id,
-			CacheFlag::AUTOCREATE | CacheFlag::ERASED);
-		if (idp && idp->getFormat() &&
-			(record->getFormat()->fmt_version > idp->getFormat()))
-		{
-			// tried to insert fresh formatted record into old index - skip this
+		// Treat expression/condition BLR as black boxes now.
+		// May be later using dependencies...
+		if (m_index->idx_expression_node || m_index->idx_condition_node)
 			return idx_e_skip;
+
+		auto* format = record->getFormat();
+		if (!(format))
+			return idx_e_skip;
+		auto& desc = format->fmt_desc;
+
+		auto* tdbb = JRD_get_thread_data();
+
+		for (USHORT n = 0; n < m_index->idx_count; ++n)
+		{
+			if (n >= desc.getCount())
+				return idx_e_skip;
+
+			auto& dsc = desc[n];
+			if (dsc.dsc_dtype == dtype_unknown)
+				return idx_e_skip;
+
+			auto iType = DFW_assign_index_type(tdbb, QualifiedName("index for composed key"),
+				dsc.dsc_dtype, dsc.isText() ? dsc.getTextType() : ttype_none);
+			if (tail[n].idx_itype != iType)
+				return idx_e_skip;
 		}
 	}
 

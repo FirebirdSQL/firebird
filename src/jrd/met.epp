@@ -5154,8 +5154,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		idv_foreignKey = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
 
 		idv_active = MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE);
-
-		perm->setFormat(IND.RDB$FORMAT.NULL ? 1 : IND.RDB$FORMAT);
 	}
 	END_FOR
 

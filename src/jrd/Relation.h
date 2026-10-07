@@ -497,7 +497,6 @@ private:
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
 	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
-	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
 
@@ -521,16 +520,6 @@ public:
 	void setState(UCHAR state) noexcept
 	{
 		idp_state = state;
-	}
-
-	UCHAR getFormat() const noexcept
-	{
-		return idp_formatNumber;
-	}
-
-	void setFormat(UCHAR fmt) noexcept
-	{
-		idp_formatNumber = fmt;
 	}
 
 private:

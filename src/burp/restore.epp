@@ -6833,7 +6833,6 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$CONDITION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		X.RDB$FORMAT.NULL = TRUE;
 
 		if (relation->rel_name.schema.hasData())
 		{

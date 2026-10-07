@@ -5518,7 +5518,6 @@ void upgradeSingleIndex(thread_db* tdbb,
 		INEW IN RDB$INDICES
 	{
 		INEW.RDB$INDEX_ID.NULL = TRUE;
-		INEW.RDB$FORMAT.NULL = TRUE;		// Leave it till DFW_update_index()
 
 		assign(INEW.RDB$INDEX_NAME, INEW.RDB$INDEX_NAME.NULL, index_name);
 		assign(INEW.RDB$RELATION_NAME, INEW.RDB$RELATION_NAME.NULL, relation_name);
@@ -13467,7 +13466,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 
 		fb_assert(idxId == idx.idx_id);
 		if (!tempConn)
-			DFW_update_index(indexName, idxId, selectivity, transaction, relation);
+			DFW_update_index(indexName, idxId, selectivity, transaction);
 
 		if (concurrently && (idx.idx_flags & idx_unique))
 			validateUniqueIndex(tdbb, transaction, true);
@@ -13707,7 +13706,6 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		IDX IN RDB$INDICES
 	{
 		IDX.RDB$INDEX_ID.NULL = TRUE;
-		IDX.RDB$FORMAT.NULL = TRUE;			// will be set in DFW_update_index
 		IDX.RDB$UNIQUE_FLAG.NULL = TRUE;
 		IDX.RDB$INDEX_INACTIVE.NULL = TRUE;
 		IDX.RDB$INDEX_TYPE.NULL = TRUE;
