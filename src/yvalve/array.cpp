@@ -61,6 +61,7 @@ struct gen_t
 
 static void adjust_length(ISC_ARRAY_DESC*) noexcept;
 static void copy_exact_name (const char*, char*, SSHORT) noexcept;
+static SLONG get_attachment_charset(Why::YAttachment*);
 static ISC_STATUS error(ISC_STATUS* status, const Arg::StatusVector& v) noexcept;
 static ISC_STATUS gen_sdl(ISC_STATUS*, const ISC_ARRAY_DESC*, SSHORT*, UCHAR**, SSHORT*, bool);
 static ISC_STATUS stuff_args(gen_t*, SSHORT, ...);
@@ -249,13 +250,17 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		       f.rdb$field_type,
 		       f.rdb$field_scale,
 		       f.rdb$field_length,
-		       f.rdb$dimensions
+		       f.rdb$dimensions,
+		       f.rdb$character_length,
+		       cs.rdb$bytes_per_character
 		    from search_path sp
 		    join system.rdb$relation_fields rf
 		      on rf.rdb$schema_name = sp.name
 		    join system.rdb$fields f
 		      on f.rdb$schema_name = rf.rdb$field_source_schema_name and
 		         f.rdb$field_name = rf.rdb$field_source
+		    left join system.rdb$character_sets cs
+		      on cs.rdb$character_set_id = ?
 		    where rf.rdb$relation_name = ? and
 		          rf.rdb$field_name = ?
 		    order by sp.rn
@@ -267,10 +272,14 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		       f.rdb$field_type,
 		       f.rdb$field_scale,
 		       f.rdb$field_length,
-		       f.rdb$dimensions
+		       f.rdb$dimensions,
+		       f.rdb$character_length,
+		       cs.rdb$bytes_per_character
 		    from rdb$relation_fields rf
 		    join rdb$fields f
 		      on f.rdb$field_name = rf.rdb$field_source
+		    left join rdb$character_sets cs
+		      on cs.rdb$character_set_id = ?
 		    where rf.rdb$relation_name = ? and
 		          rf.rdb$field_name = ?
 	)""";
@@ -278,6 +287,7 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 	const auto sql = majorOdsVersion >= ODS_VERSION14 ? sqlSchemas : sqlNoSchemas;
 
 	FB_MESSAGE(InputMessage, CheckStatusWrapper,
+		(FB_INTEGER, charSetId)
 		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), relationName)
 		(FB_VARCHAR(MAX_SQL_IDENTIFIER_LEN), fieldName)
 	) inputMessage(&statusWrapper, MasterInterfacePtr());
@@ -289,7 +299,13 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		(FB_INTEGER, fieldScale)
 		(FB_INTEGER, fieldLength)
 		(FB_INTEGER, dimensions)
+		(FB_INTEGER, characterLength)
+		(FB_INTEGER, bytesPerCharacter)
 	) outputMessage(&statusWrapper, MasterInterfacePtr());
+
+	const SLONG charSetId = get_attachment_charset(attachment);
+	inputMessage->charSetIdNull = charSetId < 0 ? FB_TRUE : FB_FALSE;
+	inputMessage->charSetId = charSetId;
 
 	inputMessage->relationNameNull = FB_FALSE;
 	inputMessage->relationName.set((const char*) relationName);
@@ -310,6 +326,24 @@ void iscArrayLookupDescImpl(Why::YAttachment* attachment,
 		desc->array_desc_dtype = outputMessage->fieldTypeNull ? 0 : outputMessage->fieldType;
 		desc->array_desc_scale = outputMessage->fieldScaleNull ? 0 : outputMessage->fieldScale;
 		desc->array_desc_length = outputMessage->fieldLengthNull ? 0 : outputMessage->fieldLength;
+
+		// Text elements are exchanged in the attachment character set (blr_text, blr_varying),
+		// so the length must hold the declared number of characters in it, as in DSQL messages.
+		switch (desc->array_desc_dtype)
+		{
+		case blr_text:
+		case blr_varying:
+		case blr_cstring:
+			if (!outputMessage->characterLengthNull && !outputMessage->bytesPerCharacterNull)
+			{
+				const ULONG length = MIN((ULONG) outputMessage->characterLength *
+					outputMessage->bytesPerCharacter, MAX_VARY_COLUMN_SIZE);
+
+				if (length > desc->array_desc_length)
+					desc->array_desc_length = (USHORT) length;
+			}
+			break;
+		}
 
 		adjust_length(desc);
 		desc->array_desc_dimensions = outputMessage->dimensionsNull ? 0 : outputMessage->dimensions;
@@ -471,6 +505,34 @@ static void adjust_length(ISC_ARRAY_DESC*) noexcept
  *	Make architectural adjustment to fixed datatypes.
  *
  **************************************/
+}
+
+
+static SLONG get_attachment_charset(Why::YAttachment* attachment)
+{
+/**************************************
+ *
+ *	g e t _ a t t a c h m e n t _ c h a r s e t
+ *
+ **************************************
+ *
+ * Functional description
+ *	Return the character set of the attachment or -1 if unknown.
+ *
+ **************************************/
+	LocalStatus status;
+	CheckStatusWrapper statusWrapper(&status);
+
+	const UCHAR items[] = {frb_info_att_charset, isc_info_end};
+	UCHAR buffer[16];
+
+	attachment->getInfo(&statusWrapper, sizeof(items), items, sizeof(buffer), buffer);
+
+	if ((status.getState() & IStatus::STATE_ERRORS) || buffer[0] != frb_info_att_charset)
+		return -1;
+
+	const SSHORT length = (SSHORT) gds__vax_integer(buffer + 1, 2);
+	return gds__vax_integer(buffer + 3, length);
 }
 
 
