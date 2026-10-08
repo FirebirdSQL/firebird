@@ -55,7 +55,7 @@ USHORT REGISTRY_install(HKEY hkey_rootnode, const TEXT* directory, pfnRegError e
 	SLONG status = RegCreateKeyEx(hkey_rootnode,
 			REG_KEY_ROOT_INSTANCES,
 			0,
-			"",
+			NULL,
 			REG_OPTION_NON_VOLATILE,
 			KEY_WRITE,
 			NULL, &hkey_instances, &disp);
