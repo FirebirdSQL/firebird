@@ -28,8 +28,8 @@
 #include "cv_unicode_fss.h"
 #include "ld_proto.h"
 
-typedef USHORT fss_wchar_t;
-typedef SLONG fss_size_t;
+using fss_wchar_t = USHORT;
+using fss_size_t = SLONG;
 
 static fss_size_t fss_mbtowc( fss_wchar_t* p, const UCHAR* s, fss_size_t n);
 static fss_size_t fss_wctomb(UCHAR* s, fss_wchar_t wc);
@@ -231,7 +231,7 @@ ULONG fss_to_unicode(ULONG src_len,
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (dest_ptr == NULL)
+	if (dest_ptr == nullptr)
 		return (src_len * 2);	// All single byte narrow characters
 
 	const UNICODE* const start = dest_ptr;
@@ -265,10 +265,10 @@ ULONG CS_UTFFSS_fss_to_unicode_cc(csconvert* obj,
 								USHORT* err_code,
 								ULONG* err_position)
 {
-	fb_assert(src_ptr != NULL || dest_ptr == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
-	fb_assert(obj != NULL);
+	fb_assert(src_ptr != nullptr || dest_ptr == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
+	fb_assert(obj != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CS_UTFFSS_fss_to_unicode_cc);
 
 	return fss_to_unicode(src_len, src_ptr,
@@ -284,17 +284,17 @@ ULONG CS_UTFFSS_unicode_to_fss(csconvert* obj,
 								USHORT* err_code,
 								ULONG* err_position)
 {
-	fb_assert(p_unicode_str != NULL || fss_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
-	fb_assert(obj != NULL);
+	fb_assert(p_unicode_str != nullptr || fss_str == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
+	fb_assert(obj != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CS_UTFFSS_unicode_to_fss);
 
 	const ULONG src_start = unicode_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (fss_str == NULL)
+	if (fss_str == nullptr)
 		return ((ULONG) (unicode_len + 1) / 2 * 3);	// worst case - all han character input
 
 	Firebird::Aligner<UNICODE> s(p_unicode_str, unicode_len);
