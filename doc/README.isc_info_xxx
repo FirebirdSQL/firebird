@@ -96,3 +96,10 @@ New items for isc_transaction_info:
 
 6. isc_info_tra_lock_timeout
 	return lock timeout of current transaction
+
+New items for isc_dsql_sql_info:
+
+1. isc_info_sql_exec_path_nodes
+	return execution nodes tree formatted as XML.
+	The response can be span over multiple chunks to exceed the response
+	length limit.
