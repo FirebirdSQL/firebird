@@ -2719,6 +2719,7 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
 		try
 		{
 			stmt = CMP_compile(tdbb, blr, blr_length, false, 0, nullptr);
+			stmt->blr.assign(blr, blr_length);
 
 			const auto attachment = tdbb->getAttachment();
 			const auto rootRequest = stmt->getRequest(tdbb, 0);
