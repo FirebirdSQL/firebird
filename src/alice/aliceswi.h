@@ -67,10 +67,14 @@ inline constexpr SINT64 sw_icu				= QUADCONST(0x0000002000000000);
 inline constexpr SINT64 sw_role				= QUADCONST(0x0000004000000000);
 inline constexpr SINT64 sw_replica			= QUADCONST(0x0000008000000000);
 inline constexpr SINT64 sw_upgrade			= QUADCONST(0x0000010000000000);
+inline constexpr SINT64 sw_skip_data		= QUADCONST(0x0000020000000000);
+inline constexpr SINT64 sw_include_data		= QUADCONST(0x0000040000000000);
+inline constexpr SINT64 sw_skip_schema_data	= QUADCONST(0x0000080000000000);
+inline constexpr SINT64 sw_include_schema_data	= QUADCONST(0x0000100000000000);
 
 // Popular combination of compatible switches
 inline constexpr SINT64 sw_auth_set = sw_user | sw_password | sw_role | sw_fetch_password | sw_trusted_auth;
-
+inline constexpr SINT64 sw_data_filters = sw_skip_data | sw_include_data | sw_skip_schema_data | sw_include_schema_data;
 
 enum alice_switches
 {
@@ -128,7 +132,11 @@ enum alice_switches
 	IN_SW_ALICE_ROLE				=	49,
 	IN_SW_ALICE_REPLICA				=	50,
 	IN_SW_ALICE_PARALLEL_WORKERS	=	51,
-	IN_SW_ALICE_UPGRADE				=	52
+	IN_SW_ALICE_UPGRADE				=	52,
+	IN_SW_ALICE_SKIP_DATA			=	53,
+	IN_SW_ALICE_INCLUDE_DATA		=	54,
+	IN_SW_ALICE_SKIP_SCHEMA_DATA	=	55,
+	IN_SW_ALICE_INCLUDE_SCHEMA_DATA	=	56
 };
 
 static inline constexpr const char* ALICE_SW_ASYNC	= "ASYNC";
@@ -190,6 +198,12 @@ static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 	{IN_SW_ALICE_ICU, isc_spb_rpr_icu, "ICU", sw_icu,
 		0, sw_shut, false, true, 131, 3, NULL},
 	// msg 131: \t-icu\t\tfix database to be usable with present ICU version
+	{IN_SW_ALICE_INCLUDE_DATA, isc_spb_rpr_include_data, "INCLUDE_DATA", sw_include_data,
+		0, sw_include_data, false, false, 139, 7, NULL},
+	// msg 139: -include(_data) validate records of matching tables only (-full)
+	{IN_SW_ALICE_INCLUDE_SCHEMA_DATA, isc_spb_rpr_include_schema_data, "INCLUDE_SCHEMA_DATA", sw_include_schema_data,
+		0, sw_include_schema_data, false, false, 141, 16, NULL},
+	// msg 141: -include_schema_d(ata) validate records of tables in matching schemas only (-full)
 	{IN_SW_ALICE_KILL, isc_spb_rpr_kill_shadows, "KILL_SHADOW", sw_kill,
 		0, 0, false, true, 36, 1, NULL},
 	// msg 36: \t-kill\t\tkill all unavailable shadow files
@@ -197,7 +211,7 @@ static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 		0, ~(sw_list | sw_auth_set | sw_nolinger), false, true, 37, 1, NULL},
 	// msg 37: \t-list\t\tshow limbo transactions
 	{IN_SW_ALICE_MEND, isc_spb_rpr_mend_db, "MEND", sw_mend | sw_validate | sw_full,
-		0, ~(sw_no_update | sw_auth_set | sw_nolinger), false, true, 38, 2, NULL},
+		0, ~(sw_no_update | sw_auth_set | sw_nolinger | sw_data_filters), false, true, 38, 2, NULL},
 	// msg 38: \t-mend\t\tprepare corrupt database for backup
 	{IN_SW_ALICE_MODE, 0, "MODE", sw_mode,
 		0, ~(sw_mode | sw_auth_set | sw_nolinger), false, false, 109, 2, NULL},
@@ -240,6 +254,12 @@ static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 	{IN_SW_ALICE_SET_DB_SQL_DIALECT, isc_spb_prp_set_sql_dialect, "SQL_DIALECT", sw_set_db_dialect,
 		0, 0, false, false, 111, 2, NULL},
 	// msg 111: \t-SQL_dialect\t\set dataabse dialect n
+	{IN_SW_ALICE_SKIP_DATA, isc_spb_rpr_skip_data, "SKIP_DATA", sw_skip_data,
+		0, sw_skip_data, false, false, 138, 6, NULL},
+	// msg 138: -skip_d(ata) skip records validation of matching tables (-full)
+	{IN_SW_ALICE_SKIP_SCHEMA_DATA, isc_spb_rpr_skip_schema_data, "SKIP_SCHEMA_DATA", sw_skip_schema_data,
+		0, sw_skip_schema_data, false, false, 140, 13, NULL},
+	// msg 140: -skip_schema_d(ata) skip records validation of tables in matching schemas (-full)
 	{IN_SW_ALICE_SWEEP, isc_spb_rpr_sweep_db, "SWEEP", sw_sweep,
 		0, ~(sw_sweep | sw_auth_set | sw_nolinger), false, true, 45, 2, NULL},
 	// msg 45: \t-sweep\t\tforce garbage collection
@@ -268,7 +288,7 @@ static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 		0, sw_trusted_auth, false, false, 50, 4, NULL},
 	// msg 50: \t-user\t\tdefault user name
 	{IN_SW_ALICE_VALIDATE, isc_spb_rpr_validate_db, "VALIDATE", sw_validate,
-		0, ~(sw_validate | sw_auth_set | sw_nolinger), false, true, 51, 1, NULL},
+		0, ~(sw_validate | sw_auth_set | sw_nolinger | sw_data_filters), false, true, 51, 1, NULL},
 	// msg 51: \t-validate\tvalidate database structure
 	{IN_SW_ALICE_WRITE, 0, "WRITE", sw_write,
 		0, ~(sw_write | sw_auth_set | sw_nolinger), false, false, 52, 1, NULL},
@@ -280,6 +300,7 @@ static inline constexpr Switches::in_sw_tab_t alice_in_sw_table[] =
 #endif
 	{IN_SW_ALICE_VERSION, 0, "Z", 0,
 		0, 0, false, false, 54, 1, NULL},
+
 	// msg 54: \t-z\t\tprint software version number
 /************************************************************************/
 // WARNING: All new switches should be added right before this comments

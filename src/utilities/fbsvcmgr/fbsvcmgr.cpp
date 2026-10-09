@@ -510,6 +510,10 @@ constexpr SvcSwitches repairOptions[] =
 	{"rpr_icu", putOption, 0, isc_spb_rpr_icu, 0},
 	{"rpr_par_workers", putIntArgument, 0, isc_spb_rpr_par_workers, 0},
 	{"rpr_upgrade_db", putOption, 0, isc_spb_rpr_upgrade_db, 0},
+	{"rpr_skip_data", putStringArgument, 0, isc_spb_rpr_skip_data, 0},
+	{"rpr_include_data", putStringArgument, 0, isc_spb_rpr_include_data, 0},
+	{"rpr_skip_schema_data", putStringArgument, 0, isc_spb_rpr_skip_schema_data, 0},
+	{"rpr_include_schema_data", putStringArgument, 0, isc_spb_rpr_include_schema_data, 0},
 	{0, 0, 0, 0, 0}
 };
 

@@ -196,6 +196,10 @@ IntlParametersBlock::TagType IntlDpb::checkTag(UCHAR tag, const char** tagName) 
 	FB_IPB_TAG(isc_dpb_os_user);
 	FB_IPB_TAG(isc_dpb_owner);
 	FB_IPB_TAG(isc_dpb_search_path);
+	FB_IPB_TAG(isc_dpb_verify_skip_data);
+	FB_IPB_TAG(isc_dpb_verify_include_data);
+	FB_IPB_TAG(isc_dpb_verify_skip_schema_data);
+	FB_IPB_TAG(isc_dpb_verify_include_schema_data);
 		return TAG_STRING;
 	default:
 		return TAG_SKIP;
@@ -276,6 +280,10 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 		switch (tag)
 		{
 		FB_IPB_TAG(isc_spb_tra_db_path);
+		FB_IPB_TAG(isc_spb_rpr_skip_data);
+		FB_IPB_TAG(isc_spb_rpr_include_data);
+		FB_IPB_TAG(isc_spb_rpr_skip_schema_data);
+		FB_IPB_TAG(isc_spb_rpr_include_schema_data);
 			return TAG_STRING;
 		}
 		break;
