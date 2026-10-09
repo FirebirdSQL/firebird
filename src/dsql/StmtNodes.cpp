@@ -2858,6 +2858,10 @@ DmlNode* ErrorHandlerNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScra
 					PAR_error(csb, Arg::Gds(isc_codnotdef) << item.name);
 				break;
 
+			case blr_exception2:
+				csb->csb_blr_reader.skipMetaName();
+				[[fallthrough]];
+
 			case blr_exception:
 			{
 				csb->csb_blr_reader.getString(item.name);
@@ -2989,79 +2993,241 @@ const StmtNode* ErrorHandlerNode::execute(thread_db* /*tdbb*/, Request* request,
 
 
 static RegisterNode<ExecProcedureNode> regExecProcedureNode(
-	{blr_exec_proc, blr_exec_proc2, blr_exec_pid, blr_exec_subproc});
+	{blr_exec_proc, blr_exec_proc2, blr_exec_pid, blr_exec_subproc, blr_invoke_procedure});
 
 // Parse an execute procedure reference.
 DmlNode* ExecProcedureNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp)
 {
+	const auto predateCheck = [&](bool condition, const char* preVerb, const char* postVerb)
+	{
+		if (!condition)
+		{
+			string str;
+			str.printf("%s should predate %s", preVerb, postVerb);
+			PAR_error(csb, Arg::Gds(isc_random) << str);
+		}
+	};
+
 	SET_TDBB(tdbb);
 
-	const auto blrStartPos = csb->csb_blr_reader.getPos();
-	jrd_prc* procedure = NULL;
+	auto& blrReader = csb->csb_blr_reader;
+	const auto blrStartPos = blrReader.getPos();
+
+	USHORT inArgCount = 0;
+	USHORT outArgCount = 0;
 	QualifiedName name;
 
-	if (blrOp == blr_exec_pid)
-	{
-		const USHORT pid = csb->csb_blr_reader.getWord();
-		if (!(procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
-			name.identifier.printf("id %d", pid);
-	}
-	else
-	{
-		if (blrOp == blr_exec_proc2)
-			csb->csb_blr_reader.getMetaName(name.package);
+	const auto node = FB_NEW_POOL(pool) ExecProcedureNode(pool);
 
-		csb->csb_blr_reader.getMetaName(name.identifier);
-
-		if (blrOp == blr_exec_subproc)
+	switch (blrOp)
+	{
+		case blr_invoke_procedure:
 		{
-			DeclareSubProcNode* declareNode;
+			UCHAR subCode;
 
-			for (auto curCsb = csb; curCsb && !procedure; curCsb = curCsb->mainCsb)
+			while ((subCode = blrReader.getByte()) != blr_end)
 			{
-				if (curCsb->subProcedures.get(name.identifier, declareNode))
-					procedure = declareNode->routine;
+				switch (subCode)
+				{
+					case blr_invsel_procedure_id:
+					{
+						UCHAR procedureIdCode;
+
+						while ((procedureIdCode = blrReader.getByte()) != blr_end)
+						{
+							switch (procedureIdCode)
+							{
+								case blr_invsel_procedure_id_schema:
+									blrReader.skipMetaName();
+									break;
+
+								case blr_invsel_procedure_id_package:
+									blrReader.getMetaName(name.package);
+									break;
+
+								case blr_invsel_procedure_id_name:
+									blrReader.getMetaName(name.identifier);
+									break;
+
+								case blr_invsel_procedure_id_sub:
+									PAR_error(csb, Arg::Gds(isc_random) <<
+										"blr_invsel_procedure_id_sub is not supported in this version");
+									break;
+
+								default:
+									PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invsel_procedure_id");
+									break;
+							}
+						}
+
+						if (!node->procedure)
+							node->procedure = MET_lookup_procedure(tdbb, name, false);
+
+						break;
+					}
+
+					case blr_invsel_procedure_in_arg_names:
+						PAR_error(csb, Arg::Gds(isc_random) <<
+							"blr_invsel_procedure_in_arg_names is not supported in this version");
+						break;
+
+					case blr_invsel_procedure_in_args:
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_in_args");
+						inArgCount = blrReader.getWord();
+						node->inputSources = PAR_args(tdbb, csb, inArgCount,
+							MAX(inArgCount, node->procedure->getInputFields().getCount()));
+						break;
+
+					case blr_invsel_procedure_out_arg_names:
+						PAR_error(csb, Arg::Gds(isc_random) <<
+							"blr_invsel_procedure_out_arg_names is not supported in this version");
+						break;
+
+					case blr_invsel_procedure_out_args:
+						predateCheck(node->procedure, "blr_invsel_procedure_id", "blr_invsel_procedure_out_args");
+						outArgCount = blrReader.getWord();
+						node->outputTargets = PAR_args(tdbb, csb, outArgCount, outArgCount);
+						break;
+
+					case blr_invsel_procedure_inout_arg_names:
+						PAR_error(csb, Arg::Gds(isc_random) <<
+							"blr_invsel_procedure_inout_arg_names is not supported in this version");
+						break;
+
+					case blr_invsel_procedure_inout_args:
+						PAR_error(csb, Arg::Gds(isc_random) <<
+							"blr_invsel_procedure_inout_args is not supported in this version");
+						break;
+
+					default:
+						PAR_error(csb, Arg::Gds(isc_random) << "Invalid blr_invoke_procedure sub code");
+				}
 			}
-		}
-		else
-			procedure = MET_lookup_procedure(tdbb, name, false);
-	}
 
-	if (!procedure)
-		PAR_error(csb, Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()));
-	else
-	{
-		if (procedure->isImplemented() && !procedure->isDefined())
+			break;
+		}
+
+		case blr_exec_pid:
 		{
-			if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+			const USHORT pid = blrReader.getWord();
+			if (!(node->procedure = MET_lookup_procedure_id(tdbb, pid, false, false, 0)))
+				name.identifier.printf("id %d", pid);
+			break;
+		}
+
+		default:
+			if (blrOp == blr_exec_proc2)
+				blrReader.getMetaName(name.package);
+
+			blrReader.getMetaName(name.identifier);
+
+			if (blrOp == blr_exec_subproc)
 			{
-				PAR_warning(
-					Arg::Warning(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Warning(isc_modnotfound));
+				for (auto curCsb = csb; curCsb && !node->procedure; curCsb = curCsb->mainCsb)
+				{
+					if (const auto declareNode = curCsb->subProcedures.get(name.identifier))
+						node->procedure = (*declareNode)->routine;
+				}
 			}
 			else
-			{
-				csb->csb_blr_reader.setPos(blrStartPos);
-				PAR_error(csb,
-					Arg::Gds(isc_prcnotdef) << Arg::Str(name.toString()) <<
-					Arg::Gds(isc_modnotfound));
-			}
+				node->procedure = MET_lookup_procedure(tdbb, name, false);
+
+			break;
+	}
+
+	if (!node->procedure)
+	{
+		blrReader.setPos(blrStartPos);
+		PAR_error(csb, Arg::Gds(isc_prcnotdef) << name.toString());
+	}
+
+	if (blrOp != blr_invoke_procedure)
+	{
+		inArgCount = blrReader.getWord();
+		node->inputSources = PAR_args(tdbb, csb, inArgCount, inArgCount);
+
+		outArgCount = blrReader.getWord();
+		node->outputTargets = PAR_args(tdbb, csb, outArgCount, outArgCount);
+	}
+
+	if (!node->inputSources)
+		node->inputSources = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (!node->outputTargets)
+		node->outputTargets = FB_NEW_POOL(pool) ValueListNode(pool);
+
+	if (node->procedure->isImplemented() && !node->procedure->isDefined())
+	{
+		if (tdbb->getAttachment()->isGbak() || (tdbb->tdbb_flags & TDBB_replicator))
+		{
+			PAR_warning(
+				Arg::Warning(isc_prcnotdef) << name.toString() <<
+				Arg::Warning(isc_modnotfound));
+		}
+		else
+		{
+			csb->csb_blr_reader.setPos(blrStartPos);
+			PAR_error(csb,
+				Arg::Gds(isc_prcnotdef) << name.toString() <<
+				Arg::Gds(isc_modnotfound));
 		}
 	}
 
-	ExecProcedureNode* node = FB_NEW_POOL(pool) ExecProcedureNode(pool);
-	node->procedure = procedure;
+	node->inputTargets = FB_NEW_POOL(pool) ValueListNode(pool, node->procedure->getInputFields().getCount());
 
-	PAR_procedure_parms(tdbb, csb, procedure, node->inputMessage.getAddress(),
-		node->inputSources.getAddress(), node->inputTargets.getAddress(), true);
-	PAR_procedure_parms(tdbb, csb, procedure, node->outputMessage.getAddress(),
-		node->outputSources.getAddress(), node->outputTargets.getAddress(), false);
+	Arg::StatusVector mismatchStatus;
 
-	if (csb->collectingDependencies() && !procedure->isSubRoutine())
+	CMP_procedure_arguments(
+		tdbb,
+		csb,
+		node->procedure,
+		true,
+		inArgCount,
+		node->inputSources,
+		node->inputTargets,
+		node->inputMessage,
+		mismatchStatus);
+
+	CMP_procedure_arguments(
+		tdbb,
+		csb,
+		node->procedure,
+		false,
+		outArgCount,
+		node->outputTargets,
+		node->outputSources,
+		node->outputMessage,
+		mismatchStatus);
+
+	if (mismatchStatus.hasData())
+	{
+		status_exception::raise(Arg::Gds(isc_prcmismat) <<
+			node->procedure->getName().toString() << mismatchStatus);
+	}
+
+	if (csb->collectingDependencies() && !node->procedure->isSubRoutine())
 	{
 		CompilerScratch::Dependency dependency(obj_procedure);
-		dependency.procedure = procedure;
+		dependency.procedure = node->procedure;
 		csb->addDependency(dependency);
+	}
+
+	if (node->inputSources && node->inputSources->items.isEmpty())
+	{
+		delete node->inputSources.getObject();
+		node->inputSources = nullptr;
+
+		delete node->inputTargets.getObject();
+		node->inputTargets = nullptr;
+	}
+
+	if (node->outputSources && node->outputSources->items.isEmpty())
+	{
+		delete node->outputSources.getObject();
+		node->outputSources = nullptr;
+
+		delete node->outputTargets.getObject();
+		node->outputTargets = nullptr;
 	}
 
 	return node;
@@ -4668,6 +4834,11 @@ DmlNode* ExceptionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 					PAR_error(csb, Arg::Gds(isc_codnotdef) << item->name);
 				break;
 
+			case blr_exception2:
+			case blr_exception3:
+				csb->csb_blr_reader.skipMetaName();
+				[[fallthrough]];
+
 			case blr_exception:
 			case blr_exception_msg:
 			case blr_exception_params:
@@ -4682,6 +4853,18 @@ DmlNode* ExceptionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 						dependency.number = item->code;
 						csb->addDependency(dependency);
 					}
+
+					if (codeType == blr_exception_msg ||
+						(codeType == blr_exception3 && csb->csb_blr_reader.getByte() != 0))
+					{
+						node->messageExpr = PAR_parse_value(tdbb, csb);
+					}
+
+					if (codeType == blr_exception_params || codeType == blr_exception3)
+					{
+						const USHORT count = csb->csb_blr_reader.getWord();
+						node->parameters = PAR_args(tdbb, csb, count, count);
+					}
 				}
 				break;
 
@@ -4692,14 +4875,6 @@ DmlNode* ExceptionNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 
 		node->exception = item;
 	}
-
-	if (type == blr_exception_params)
-	{
-		const USHORT count = csb->csb_blr_reader.getWord();
-		node->parameters = PAR_args(tdbb, csb, count, count);
-	}
-	else if (type == blr_exception_msg)
-		node->messageExpr = PAR_parse_value(tdbb, csb);
 
 	return node;
 }
