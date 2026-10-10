@@ -115,6 +115,27 @@ namespace Jrd
 
 using namespace Jrd;
 
+namespace Jrd {
+
+// Validate that an external file path is allowed by the configured
+// ExternalFileAccess policy.  Raises isc_conf_access_denied otherwise.
+// Used at metadata load time (met.epp) and at file open time so that
+// paths escaping the allowed directory list are rejected consistently,
+// regardless of whether the external table was just created or loaded
+// from an existing database.
+void checkExternalFileAccess(Database* dbb, const Firebird::PathName& fileName)
+{
+	ExternalFileDirectoryList::create(dbb);
+
+	if (!dbb->dbb_external_file_directory_list->isPathInList(fileName))
+	{
+		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("external file") <<
+													 Arg::Str(fileName.c_str()));
+	}
+}
+
+} // namespace Jrd
+
 namespace {
 
 #ifdef WIN_NT
@@ -131,13 +152,7 @@ void ExternalFile::open(Database* dbb)
 {
 	fb_assert(ext_sync.locked());
 
-	ExternalFileDirectoryList::create(dbb);
-
-	if (!dbb->dbb_external_file_directory_list->isPathInList(ext_filename))
-	{
-		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("external file") <<
-													 Arg::Str(ext_filename));
-	}
+	checkExternalFileAccess(dbb, Firebird::PathName(static_cast<const char*>(ext_filename)));
 
 	// If the database is updateable then try opening the external files in RW mode.
 	ext_flags = 0;
