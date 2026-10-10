@@ -83,7 +83,7 @@ namespace
 
 	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub, StreamType stream)
 	{
-		if (boolean->sameAs(sub, true) && boolean->containsStream(stream))
+		if (boolean->sameAs(sub, true) && sub->containsStream(stream, true))
 			return true;
 
 		auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
