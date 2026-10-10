@@ -651,6 +651,17 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
 }
 
 
+Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb)
+	: PermanentStorage(*aTdbb->getDefaultPool()),
+	tdbb(aTdbb), csb(aCsb), rse(nullptr),
+	compileStreams(getPool()),
+	bedStreams(getPool()),
+	keyStreams(getPool()),
+	outerStreams(getPool()),
+	conjuncts(getPool())
+{
+}
+
 //
 // Destructor
 //
@@ -1274,24 +1285,26 @@ void Optimizer::compileRelation(StreamType stream)
 
 
 //
-// Decompose a boolean into a stack of conjuctions.
+// Decompose a boolean into a stack of conjunctions.
+//
+// If the boolean already transformed, don't transform it again.
 //
 
-unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack)
+unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack, bool transformed)
 {
 	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
 	{
 		if (binaryNode->blrOp == blr_and)
 		{
-			auto count = decomposeBoolean(binaryNode->arg1, stack);
-			count += decomposeBoolean(binaryNode->arg2, stack);
+			auto count = decomposeBoolean(binaryNode->arg1, stack, transformed);
+			count += decomposeBoolean(binaryNode->arg2, stack, transformed);
 			return count;
 		}
-		else if (binaryNode->blrOp == blr_or)
+		else if ((binaryNode->blrOp == blr_or) && !transformed)
 		{
 			BoolExprNodeStack or_stack;
 
-			if (decomposeBoolean(binaryNode->arg1, or_stack) >= 2)
+			if (decomposeBoolean(binaryNode->arg1, or_stack, transformed) >= 2)
 			{
 				binaryNode->arg1 = or_stack.pop();
 
@@ -1308,7 +1321,7 @@ unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& 
 
 			or_stack.clear();
 
-			if (decomposeBoolean(binaryNode->arg2, or_stack) >= 2)
+			if (decomposeBoolean(binaryNode->arg2, or_stack, transformed) >= 2)
 			{
 				binaryNode->arg2 = or_stack.pop();
 
@@ -1330,6 +1343,8 @@ unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& 
 
 		if (cmpNode->blrOp == blr_between)
 		{
+			fb_assert(!transformed);
+
 			auto newCmpNode = FB_NEW_POOL(getPool()) ComparativeBoolNode(getPool(), blr_geq);
 			newCmpNode->arg1 = cmpNode->arg1;
 			newCmpNode->arg2 = cmpNode->arg2;
@@ -1350,7 +1365,7 @@ unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& 
 
 		ValueExprNode* arg;
 
-		if ((cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar) &&
+		if ((cmpNode->blrOp == blr_like || cmpNode->blrOp == blr_similar) && !transformed &&
 			(arg = optimizeLikeSimilar(cmpNode)))
 		{
 			const auto newCmpNode =
@@ -1368,6 +1383,57 @@ unsigned Optimizer::decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& 
 	stack.push(boolNode);
 
 	return 1;
+}
+
+
+//
+// Transform boolean expression into form better suitable for later matching against
+// another expression being optimized. Used with conditional indices.
+//
+
+BoolExprNode* Optimizer::transformBoolean(thread_db* tdbb, CompilerScratch* csb)
+{
+	fb_assert(csb->csb_node->getKind() == DmlNode::KIND_BOOLEAN);
+
+	auto* node = static_cast<BoolExprNode*>(csb->csb_node);
+
+	Optimizer opt(tdbb, csb);
+	node = opt.transformBoolExpr(tdbb, node);
+	csb->csb_node = node;
+	return node;
+}
+
+
+BoolExprNode* Optimizer::transformBoolExpr(thread_db* tdbb, BoolExprNode* boolNode)
+{
+	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
+	{
+		binaryNode->arg1 = transformBoolExpr(tdbb, binaryNode->arg1);
+		binaryNode->arg2 = transformBoolExpr(tdbb, binaryNode->arg2);
+		return binaryNode;
+	}
+
+	if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
+	{
+		// turn a between into (a greater than or equal) AND (a less than  or equal)
+
+		if (cmpNode->blrOp == blr_between)
+		{
+			MemoryPool& pool = getPool();
+
+			auto geq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_geq);
+			geq->arg1 = cmpNode->arg1;
+			geq->arg2 = cmpNode->arg2;
+
+			auto leq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_leq);
+			leq->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
+			leq->arg2 = cmpNode->arg3;
+
+			return  FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, geq, leq);
+		}
+	}
+
+	return boolNode;
 }
 
 

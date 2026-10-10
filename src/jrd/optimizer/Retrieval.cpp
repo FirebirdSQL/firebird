@@ -734,7 +734,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, MatchedBooleanList& matches
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition, idxConjuncts, true);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;
