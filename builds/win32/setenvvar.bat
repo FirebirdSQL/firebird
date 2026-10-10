@@ -15,6 +15,10 @@ for %%v in ( %* )  do (
   ( if /I "%%v"=="DEBUG" ( (set FB_DBG=TRUE) && (set FB_CONFIG=debug) ) )
   ( if /I "%%v"=="WITHOUT_CLOOP_GENERATION" (set FBBUILD_WITHOUT_CLOOP_GENERATION=1) )
   ( if /I "%%v"=="WITH_SYSTEM_BOOST" (set FBBUILD_WITH_SYSTEM_BOOST=1) )
+  ( if /I "%%v"=="WITH_SYSTEM_TOMMATH" (set FBBUILD_WITH_SYSTEM_TOMMATH=1) )
+  ( if /I "%%v"=="WITH_SYSTEM_TOMCRYPT" (set FBBUILD_WITH_SYSTEM_TOMCRYPT=1) )
+  ( if /I "%%v"=="WITH_SYSTEM_ZLIB" (set FBBUILD_WITH_SYSTEM_ZLIB=1) )
+  ( if /I "%%v"=="WITH_SYSTEM_ICU" (set FBBUILD_WITH_SYSTEM_ICU=1) )
   ( if /I "%%v"=="CLEAN" (set FB_CLEAN=:rebuild) )
   ( if /I "%%v"=="RELEASE" ( (set FB_DBG=) && (set FB_CONFIG=release) ) )
   ( if /I "%%v"=="CLIENT_ONLY" (set FB_CLIENT_ONLY=TRUE) )
@@ -207,6 +211,10 @@ goto :END
 @echo    platform=%FB_TARGET_PLATFORM%
 @if defined FBBUILD_WITHOUT_CLOOP_GENERATION echo    without_cloop_generation=yes
 @if defined FBBUILD_WITH_SYSTEM_BOOST echo    with_system_boost=yes
+@if defined FBBUILD_WITH_SYSTEM_TOMMATH echo    with_system_tommath=yes
+@if defined FBBUILD_WITH_SYSTEM_TOMCRYPT echo    with_system_tomcrypt=yes
+@if defined FBBUILD_WITH_SYSTEM_ZLIB echo    with_system_zlib=yes
+@if defined FBBUILD_WITH_SYSTEM_ICU echo    with_system_icu=yes
 @echo    msvc_version=%MSVC_VERSION%
 @echo    db_path=%FB_DB_PATH%
 @echo    root_path=%FB_ROOT_PATH%
