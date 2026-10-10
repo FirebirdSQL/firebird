@@ -328,6 +328,7 @@ add_library                 (alice ${alice_src} ${alice_generated_src_master})
 ########################################
 
 file(GLOB burp_src "burp/*.cpp" "burp/*.h")
+file(GLOB burp_engine_src "burp/engine/*.cpp" "burp/engine/*.h")
 
 set(burp_generated_src
     burp/backup.epp
@@ -337,9 +338,15 @@ set(burp_generated_src
 add_epp_suffix(burp_generated_src boot)
 add_epp_suffix(burp_generated_src master)
 
+set(burp_stub_src
+    burp/main/FastPathBurpProviderStub.cpp
+    burp/main/FastPathRecordReaderStub.cpp
+    burp/main/FastPathRecordWriterStub.cpp
+)
+
 if (NOT CMAKE_CROSSCOMPILING)
 
-add_library                 (boot_burp ${burp_src} ${burp_generated_src_boot})
+add_library                 (boot_burp ${burp_src} ${burp_stub_src} ${burp_generated_src_boot})
 project_group               (boot_burp Boot)
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
@@ -349,7 +356,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 # LIBRARY burp
 ########################################
 
-add_library                 (burp ${burp_src} ${burp_generated_src_master})
+add_library                 (burp ${burp_src} ${burp_stub_src} ${burp_generated_src_master})
 
 
 ########################################
@@ -488,6 +495,7 @@ set(engine_src ${engine_src}
     utilities/gsec/gsec.cpp
     utilities/gstat/ppg.cpp
     utilities/nbackup/nbackup.cpp
+    ${burp_engine_src}
     # parse
     ${GENERATED_DIR}/dsql/parse.cpp
 
@@ -815,7 +823,7 @@ target_link_libraries       (gfix alice common yvalve yvalve_common remote)
 # EXECUTABLE boot_gbak
 ########################################
 
-file(GLOB gbak_include "burp/*.h")
+file(GLOB gbak_include "burp/*.h" "burp/engine/*.h")
 
 file(GLOB gbak_src     
     remote/*.cpp
@@ -827,7 +835,7 @@ file(GLOB gbak_src
 
 if (NOT CMAKE_CROSSCOMPILING)
 
-add_executable              (boot_gbak burp/main/burpMain.cpp $<TARGET_OBJECTS:yvalve_common> ${gbak_src} ${gbak_include} ${VERSION_RC})
+add_executable              (boot_gbak burp/main/burpMain.cpp  $<TARGET_OBJECTS:yvalve_common> ${gbak_src} ${gbak_include} ${VERSION_RC})
 target_link_libraries       (boot_gbak boot_burp common boot_yvalve)
 set_output_directory        (boot_gbak . CURRENT_DIR)
 project_group               (boot_gbak Boot)
@@ -839,9 +847,8 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 # EXECUTABLE gbak
 ########################################
 
-add_executable              (gbak burp/main/burpMain.cpp ${gbak_include} ${VERSION_RC})
-target_link_libraries       (gbak burp common yvalve yvalve_common remote)
-
+add_executable              (gbak burp/main/burpMain.cpp $<TARGET_OBJECTS:yvalve_common> ${gbak_src} ${gbak_include} ${VERSION_RC})
+target_link_libraries       (gbak burp common yvalve)
 
 ########################################
 # EXECUTABLE gsplit
