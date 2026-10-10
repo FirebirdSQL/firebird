@@ -41,6 +41,9 @@ include     $(ROOT)/gen/make.shared.variables
 # Others are run locally these need to know the path back to the
 # root of the build tree.
 
+# Build flavour (Release/Debug) whose output is packaged; read by makeInstallImage.sh
+export TARGET
+
 BuildRoot=$(GEN_ROOT)
 CLIENT_ONLY_FLG=@CLIENT_ONLY_FLG@
 WITH_TOMCRYPT=@WITH_TOMCRYPT@
