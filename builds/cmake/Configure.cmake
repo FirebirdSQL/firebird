@@ -39,10 +39,12 @@ endfunction(check_functions)
 ########################################
 function(check_type_alignment type var)
     if (NOT DEFINED ${var})
-        check_c_source_runs("main(){struct s{char a;${type} b;};exit((int)&((struct s*)0)->b);}" ${var})
-        #message(STATUS "Performing Test ${var} - It's still OK.")
-        message(STATUS "Performing Test ${var} - Success")
-        set(${var} ${${var}_EXITCODE} CACHE STRING "${type} alignment" FORCE)
+        check_type_size(${type} SIZEOF) # ALIGNOF is typically equal to SIZEOF for primitives
+        set(ALIGNOF ${SIZEOF})
+        set(${var} ${ALIGNOF} CACHE STRING "${type} alignment" FORCE)
+        # check_c_source_runs("void int main(){struct s{char a;${type} b;}; return ((int)&((struct s*)0)->b); }" ${var})
+        # message(STATUS "Performing Test ${var} = [${${var}_EXITCODE}] - It's still OK.")
+        # set(${var} ${${var}_EXITCODE} CACHE STRING "${type} alignment" FORCE)
     endif()
 endfunction(check_type_alignment)
 
@@ -96,25 +98,21 @@ set(HAVE_TOMCRYPT 1)
 string(TOUPPER ${CMAKE_SYSTEM_NAME} CMAKE_SYSTEM_NAME_UPPER)
 set(${CMAKE_SYSTEM_NAME_UPPER} 1)
 
-string(TOUPPER ${CMAKE_SYSTEM_PROCESSOR} CMAKE_SYSTEM_PROCESSOR_UPPER)
-string(FIND ${CMAKE_SYSTEM_PROCESSOR} "arm" ARM)
-if (NOT ${ARM} EQUAL -1)
-    set(ARM 1)
-else()
-    set(ARM)
-endif()
-if (${CMAKE_SYSTEM_PROCESSOR_UPPER} STREQUAL "X86_64" OR
-    ${CMAKE_SYSTEM_PROCESSOR_UPPER} STREQUAL "AMD64")
-    set(AMD64 1)
-    set(I386 1)
-endif()
-set(${CMAKE_SYSTEM_PROCESSOR_UPPER} 1)
-
 set(SHRLIB_EXT ${CMAKE_SHARED_LIBRARY_SUFFIX})
 string(REPLACE "." "" SHRLIB_EXT ${SHRLIB_EXT})
 
 set(CASE_SENSITIVITY "true")
-set(SUPPORT_RAW_DEVICES 1)
+
+if (UNIX)
+    # We always use Editline library or create our own.
+    set(HAVE_EDITLINE_H 1 CACHE INTERNAL "editline")
+endif()
+
+if (APPLE)
+    set(SUPPORT_RAW_DEVICES 0)
+else()
+    set(SUPPORT_RAW_DEVICES 1)
+endif()
 
 set(include_files_list
     afunix.h
@@ -186,18 +184,15 @@ set(include_files_list
     sys/wait.h
     termio.h
     termios.h
+    time.h
     unistd.h
     varargs.h
     vfork.h
     winsock2.h
     zlib.h
+    tomcrypt.h
 )
 check_includes(include_files_list)
-
-#if test "$EDITLINE_FLG" = "Y"; then
-#  AC_HEADER_DIRENT
-#  AC_DEFINE(HAVE_EDITLINE_H, 1, [Define this if editline is in use])
-#fi
 
 set(functions_list
     accept4
@@ -225,9 +220,9 @@ set(functions_list
     pthread_cancel
     pthread_keycreate pthread_key_create
     pthread_mutexattr_setprotocol
-    pthread_mutexattr_setrobust_np
-    pthread_mutex_consistent_np
-    pthread_rwlockattr_setkind_np
+    pthread_mutexattr_setrobust
+    pthread_mutex_consistent
+    pthread_rwlockattr_setkind
     qsort_r
     setitimer
     semtimedop
@@ -253,7 +248,7 @@ if (APPLE)
     set(HAVE_QSORT_R 0 CACHE STRING "Disabled on OS X" FORCE)
 endif()
 
-check_cxx_source_compiles("#include <unistd.h>\nmain(){fdatasync(0);}" HAVE_FDATASYNC)
+check_cxx_source_compiles("#include <unistd.h>\nvoid main(){fdatasync(0);}" HAVE_FDATASYNC)
 
 check_library_exists(dl dladdr "${CMAKE_LIBRARY_PREFIX}" HAVE_DLADDR)
 check_library_exists(m fegetenv "${CMAKE_LIBRARY_PREFIX}" HAVE_FEGETENV)
@@ -262,7 +257,7 @@ check_library_exists(pthread sem_init "${CMAKE_LIBRARY_PREFIX}" HAVE_SEM_INIT)
 check_library_exists(pthread sem_timedwait "${CMAKE_LIBRARY_PREFIX}" HAVE_SEM_TIMEDWAIT)  
 
 check_type_size(caddr_t HAVE_CADDR_T)
-check_c_source_compiles("#include <sys/sem.h>\nmain(){union semun s;return 0;}" HAVE_SEMUN)
+check_c_source_compiles("#include <sys/sem.h>\nint main(){union semun s;return 0;}" HAVE_SEMUN)
 set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h sys/types.h)
 check_type_size(socklen_t HAVE_SOCKLEN_T)
 set(CMAKE_EXTRA_INCLUDE_FILES)
@@ -291,7 +286,7 @@ check_type_size("char[MAX_PATH]" MAXPATHLEN)
 set(CMAKE_EXTRA_INCLUDE_FILES)
 
 set(TIMEZONE_TYPE "struct timezone")
-if (APPLE OR MINGW)
+if (APPLE OR MINGW OR LINUX)
     set(TIMEZONE_TYPE "void")
 endif()
 check_prototype_definition(
@@ -312,14 +307,14 @@ check_prototype_definition(
 
 check_struct_has_member("struct dirent" d_type dirent.h HAVE_STRUCT_DIRENT_D_TYPE)
 
-check_c_source_compiles("#include <unistd.h>\nmain(){getpgrp();}" GETPGRP_VOID)
-check_c_source_compiles("#include <unistd.h>\nmain(){setpgrp();}" SETPGRP_VOID)
+check_c_source_compiles("#include <unistd.h>\nvoid main(){getpgrp();}" GETPGRP_VOID)
+check_c_source_compiles("#include <unistd.h>\nvoid main(){setpgrp();}" SETPGRP_VOID)
 
-check_c_source_compiles("__thread int a = 42;main(){a = a + 1;}" HAVE___THREAD)
-check_c_source_compiles("#include <sys/time.h>\n#include <time.h>\nmain(){}" TIME_WITH_SYS_TIME)
+check_c_source_compiles("__thread int a = 42;void main(){a = a + 1;}" HAVE___THREAD)
+check_c_source_compiles("#include <sys/time.h>\n#include <time.h>\nvoid main(){}" TIME_WITH_SYS_TIME)
 
 set(CMAKE_REQUIRED_LIBRARIES pthread)
-check_c_source_compiles("#include <semaphore.h>\nmain(){sem_t s;sem_init(&s,0,0);}" WORKING_SEM_INIT)
+check_c_source_compiles("#include <semaphore.h>\nvoid main(){sem_t s;sem_init(&s,0,0);}" WORKING_SEM_INIT)
 set(CMAKE_REQUIRED_LIBRARIES)
 
 if (EXISTS "/proc/self/exe")
