@@ -29,6 +29,8 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 
 @mkdir %FB_BIN_DIR%\tzdata 2>nul
 
+call :boost_config
+
 @if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 
@@ -128,6 +130,21 @@ for %%v in (firebird plugins) do (
 @call :NEXT_STEP
 @goto :END
 
+
+::===================
+:: Record the boost headers choice in a props file used by all later builds (including the IDE)
+:boost_config
+@mkdir %FB_TEMP_DIR% 2>nul
+@set BOOST_PROPS=%FB_TEMP_DIR%\FirebirdSystemBoost.props
+@if defined FBBUILD_WITH_SYSTEM_BOOST (
+	@echo Using system boost headers
+	@(echo ^<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"^>
+	  echo   ^<PropertyGroup^>^<FbBoostIncludeDir^>^</FbBoostIncludeDir^>^</PropertyGroup^>
+	  echo ^</Project^>) > "%BOOST_PROPS%"
+) else (
+	@del "%BOOST_PROPS%" 2>nul
+)
+@goto :EOF
 
 ::===================
 :: BUILD btyacc
