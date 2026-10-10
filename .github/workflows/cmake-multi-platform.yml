@@ -40,6 +40,12 @@ jobs:
     - name: Build
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target all  -j 8
 
-    - name: runTest
+    - name: RunTest
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target run_tests  -j 8
 
+
+    - name: Upload zip 
+      uses: actions/upload-artifact@v4
+      with:
+          name: firebird-snapshot-${{ matrix.os }}
+          path: distr/firebird-*.snapshot-*.zip
