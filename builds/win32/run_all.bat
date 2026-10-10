@@ -12,6 +12,7 @@ set FBBUILD_BUILD_ONLY=0
 set FBBUILD_KITS=ISX ZIP
 set FBBUILD_TEST_ONLY=
 set FBBUILD_WITHOUT_CLOOP_GENERATION=
+set FBBUILD_WITH_SYSTEM_BOOST=
 set FB2_SNAPSHOT=
 
 ::Check if on-line help is required
@@ -83,6 +84,9 @@ goto :END
 @echo    NOCLEAN   - don't run CLEAN_ALL.BAT
 @echo.
 @echo    WITHOUT_CLOOP_GENERATION - omit Cloop build and interface generation
+@echo.
+@echo    WITH_SYSTEM_BOOST - use boost headers from the system include path
+@echo                        instead of extern\boost
 @echo.
 @echo    REALCLEAN - Run CLEAN_ALL.BAT REALCLEAN
 @echo                This will do a deeper clean.
