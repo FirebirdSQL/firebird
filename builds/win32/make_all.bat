@@ -104,7 +104,7 @@ copy %FB_GEN_DIR%\iberror_c.h %FB_OUTPUT_DIR%\include\firebird\impl > nul
 xcopy /y %FB_ROOT_PATH%\src\include\firebird %FB_OUTPUT_DIR%\include\firebird /e > nul
 
 :: With system boost, do not distribute the embedded copy and make Message.h use <boost/...> and BOOST_PP_
-@if exist %FB_TEMP_DIR%\FirebirdSystemBoost.props (
+@if exist %FB_TEMP_DIR%\FirebirdSystemLibs.props (
 	rmdir /S /Q %FB_OUTPUT_DIR%\include\firebird\impl\boost 2>nul
 	powershell -NoProfile -Command "(Get-Content '%FB_ROOT_PATH%\src\include\firebird\Message.h') -replace '^#include \"\./impl/boost/(.+)\"', '#include <boost/$1>' -replace '\bFB_BOOST_PP_', 'BOOST_PP_' | Set-Content -Encoding ascii '%FB_OUTPUT_DIR%\include\firebird\Message.h'"
 )
