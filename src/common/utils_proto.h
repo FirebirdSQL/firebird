@@ -333,6 +333,31 @@ namespace fb_utils
 	private:
 		int reason;
 	};
+
+	bool isLoopbackAddress(const std::string_view address);
+
+	template<class T>
+	requires(!std::is_pointer_v<T>)
+	class SafePointer
+	{
+	public:
+		constexpr SafePointer(T* value) :
+			m_value(value)
+		{ }
+
+		constexpr T* value_or(T* defaultValue) const noexcept
+		{
+			return m_value != nullptr ? m_value : defaultValue;
+		}
+
+		constexpr bool has_value() const noexcept
+		{
+			return m_value != nullptr;
+		}
+
+	private:
+		T* m_value;
+	};
 } // namespace fb_utils
 
 #endif // INCLUDE_UTILS_PROTO_H

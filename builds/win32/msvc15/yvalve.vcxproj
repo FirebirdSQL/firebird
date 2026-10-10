@@ -81,6 +81,7 @@
     <ClInclude Include="..\..\..\src\auth\SecurityDatabase\LegacyHash.h" />
     <ClInclude Include="..\..\..\src\auth\trusted\AuthSspi.h" />
     <ClInclude Include="..\..\..\src\plugins\crypt\arc4\Arc4.h" />
+    <ClInclude Include="..\..\..\src\plugins\crypt\chacha\ChaCha.h" />
     <ClInclude Include="..\..\..\src\remote\client\BlrFromMessage.h" />
     <ClInclude Include="..\..\..\src\yvalve\alt_proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\array_proto.h" />
@@ -94,6 +95,11 @@
     <ClInclude Include="..\..\..\src\yvalve\user__proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\utl_proto.h" />
     <ClInclude Include="..\..\..\src\yvalve\why_proto.h" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)'=='DebugStatic' Or '$(Configuration)'=='ReleaseStatic'">
+    <ClCompile Include="..\..\..\src\plugins\crypt\chacha\ChaCha.cpp">
+      <ExcludedFromBuild Condition="'$(FBBUILD_WITHOUT_TOMCRYPT)'=='1'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="common.vcxproj">

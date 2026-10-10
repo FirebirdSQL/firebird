@@ -84,16 +84,16 @@ namespace
 		return newValue;
 	}
 
-	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub)
+	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub, StreamType stream)
 	{
-		if (boolean->sameAs(sub, true))
+		if (boolean->sameAs(sub, true) && boolean->containsStream(stream))
 			return true;
 
 		auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
 		if (binaryNode && binaryNode->blrOp == blr_or)
 		{
-			if (matchSubset(binaryNode->arg1, sub) ||
-				matchSubset(binaryNode->arg2, sub))
+			if (matchSubset(binaryNode->arg1, sub, stream) ||
+				matchSubset(binaryNode->arg2, sub, stream))
 			{
 				return true;
 			}
@@ -101,8 +101,8 @@ namespace
 			binaryNode = nodeAs<BinaryBoolNode>(sub);
 			if (binaryNode && binaryNode->blrOp == blr_or)
 			{
-				if (matchSubset(boolean, binaryNode->arg1) &&
-					matchSubset(boolean, binaryNode->arg2))
+				if (matchSubset(boolean, binaryNode->arg1, stream) &&
+					matchSubset(boolean, binaryNode->arg2, stream))
 				{
 					return true;
 				}
@@ -159,6 +159,14 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 	const auto tail = &csb->csb_rpt[stream];
 	relation = tail->csb_relation;
 
+	if (tail->csb_local_table_number.has_value())
+	{
+		const auto tableNumber = tail->csb_local_table_number.value();
+
+		if (tableNumber < csb->csb_localTables.getCount())
+			localTable = csb->csb_localTables[tableNumber];
+	}
+
 	if (!tail->csb_idx)
 		return;
 
@@ -173,7 +181,8 @@ Retrieval::Retrieval(thread_db* aTdbb, Optimizer* opt, StreamType streamNumber,
 		if ((index.idx_flags & idx_condition) && !checkIndexCondition(index, matches))
 			continue;
 
-		const auto length = ROUNDUP(BTR_key_length(tdbb, relation(tdbb), &index), sizeof(SLONG));
+		const auto relationForKey = localTable ? localTable->getRelation(tdbb, nullptr) : relation(tdbb);
+		const auto length = ROUNDUP(BTR_key_length(tdbb, relationForKey, &index), sizeof(SLONG));
 
 		// AB: Calculate the cardinality which should reflect the total number
 		// of index pages for this index.
@@ -417,8 +426,9 @@ IndexTableScan* Retrieval::getNavigation()
 
 	const auto indexNode = makeIndexScanNode(scratch);
 
+	const auto relationForKey = localTable ? localTable->getRelation(tdbb, nullptr) : relation(tdbb);
 	const USHORT keyLength =
-		ROUNDUP(BTR_key_length(tdbb, relation(tdbb), scratch->index), sizeof(SLONG));
+		ROUNDUP(BTR_key_length(tdbb, relationForKey, scratch->index), sizeof(SLONG));
 
 	return FB_NEW_POOL(getPool())
 		IndexTableScan(csb, getAlias(), stream, relation, indexNode, keyLength,
@@ -878,7 +888,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 			if (!iter->containsStream(stream))
 				continue;
 
-			if (matchSubset(boolean, *iter))
+			if (matchSubset(boolean, *iter, stream))
 			{
 				matches.add(*iter);
 				break;
@@ -901,15 +911,23 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 				if (cmpNode && cmpNode->blrOp != blr_equiv)
 				{
-					if (cmpNode->arg1->sameAs(missingNode->arg, true) ||
-						cmpNode->arg2->sameAs(missingNode->arg, true))
+					if (cmpNode->arg1->sameAs(missingNode->arg, true) &&
+						cmpNode->arg1->containsStream(stream))
+					{
+						matches.add(*iter);
+						break;
+					}
+
+					if (cmpNode->arg2->sameAs(missingNode->arg, true) &&
+						cmpNode->arg2->containsStream(stream))
 					{
 						matches.add(*iter);
 						break;
 					}
 
 					if (cmpNode->arg3 &&
-						cmpNode->arg3->sameAs(missingNode->arg, true))
+						cmpNode->arg3->sameAs(missingNode->arg, true) &&
+						cmpNode->arg3->containsStream(stream))
 					{
 						matches.add(*iter);
 						break;
@@ -1439,7 +1457,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 	// for a retrieval. Internal (system) requests used by the engine itself are
 	// often optimized using zero or non-actual statistics, so they are processed
 	// using somewhat relaxed rules.
-	const bool customPlan = csb->csb_rpt[stream].csb_plan;
+	const bool customPlan = (csb->csb_rpt[stream].csb_plan != nullptr);
 	const bool sysRequest = (csb->csb_g_flags & csb_internal);
 
 	double totalSelectivity = MAXIMUM_SELECTIVITY; // worst selectivity

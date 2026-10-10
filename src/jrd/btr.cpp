@@ -55,6 +55,7 @@
 #include "../jrd/err_proto.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/exe_proto.h"
+#include "../jrd/dfw_proto.h"
 #include "../yvalve/gds_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../jrd/jrd_proto.h"
@@ -242,6 +243,7 @@ static UCHAR* find_area_start_point(btree_page*, const temporary_key*, UCHAR*, U
 static ULONG find_page(btree_page*, const temporary_key*, const index_desc*, RecordNumber = NO_VALUE,
 					   int = 0);
 
+static void format_first_leaf(btree_page*, USHORT, USHORT, USHORT);
 static contents garbage_collect(thread_db*, WIN*, ULONG);
 static void generate_jump_nodes(thread_db*, btree_page*, JumpNodeList*, USHORT,
 								USHORT*, USHORT*, USHORT*, USHORT);
@@ -264,7 +266,14 @@ static void checkForLowerKeySkip(bool&, const bool, const IndexNode&, const temp
 								 const index_desc&, const IndexRetrieval*);
 
 namespace {
-enum class ModifyIrtRepeatValue { Skip, Modified, Relock, Deleted };
+
+enum class ModifyIrtRepeatValue
+{
+	Skip,		// index descriptor was not modified, page buffer remains locked, maybe it was refetched
+	Modified,	// index descriptor was modified, page buffer remains locked
+	Relock,		// index descriptor was modified, page lock was released
+	Deleted		// index was deleted, descriptor was modified, page lock was released
+};
 
 class Flags
 {
@@ -424,7 +433,10 @@ void IndexErrorContext::raise(thread_db* tdbb, idx_e result, Record* record)
 	}
 
 	if (indexName.object.hasData())
-		MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	{
+		if (!relation->isLTT())
+			MET_lookup_cnstrt_for_index(tdbb, constraintName, indexName);
+	}
 	else
 		indexName.object = "***unknown***";
 
@@ -680,6 +692,7 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	const auto dbb = m_tdbb->getDatabase();
 	const auto maxKeyLength = dbb->getMaxIndexKeyLength();
+	constexpr auto indexDropStates = (1 << Ods::irt_drop) | (1 << Ods::irt_commit);
 
 	temporary_key temp;
 	temp.key_flags = 0;
@@ -694,15 +707,33 @@ idx_e IndexKey::compose(Record* record, bool skipNewFormat)
 
 	const bool descending = (m_index->idx_flags & idx_descending);
 
-	if (skipNewFormat)
+	if ((indexDropStates & (1 << m_index->idx_state)) && skipNewFormat)
 	{
-		auto* idp = m_relation->getPermanent()->lookupIndex(m_tdbb, m_index->idx_id,
-			CacheFlag::AUTOCREATE | CacheFlag::ERASED);
-		if (idp && (m_index->idx_state == Ods::irt_drop) && idp->getFormat() &&
-			(record->getFormat()->fmt_version > idp->getFormat()))
-		{
-			// tried to insert fresh formatted record into old index - skip this
+		// Treat expression/condition BLR as black boxes now.
+		// May be later using dependencies...
+		if (m_index->idx_expression_node || m_index->idx_condition_node)
 			return idx_e_skip;
+
+		auto* format = record->getFormat();
+		if (!(format))
+			return idx_e_skip;
+		auto& desc = format->fmt_desc;
+
+		auto* tdbb = JRD_get_thread_data();
+
+		for (USHORT n = 0; n < m_index->idx_count; ++n)
+		{
+			if (n >= desc.getCount())
+				return idx_e_skip;
+
+			auto& dsc = desc[n];
+			if (dsc.dsc_dtype == dtype_unknown)
+				return idx_e_skip;
+
+			auto iType = DFW_assign_index_type(tdbb, QualifiedName("index for composed key"),
+				dsc.dsc_dtype, dsc.isText() ? dsc.getTextType() : ttype_none);
+			if (tail[n].idx_itype != iType)
+				return idx_e_skip;
 		}
 	}
 
@@ -956,6 +987,262 @@ void IndexScanListIterator::makeKeys(thread_db* tdbb, temporary_key* lower, temp
 }
 
 
+/// class IndexDuplicateScanner
+
+IndexDuplicateScanner::~IndexDuplicateScanner()
+{
+	if (m_gcLock && m_gcLock->isActive())
+		m_gcLock->enablePageGC(JRD_get_thread_data());
+}
+
+bool IndexDuplicateScanner::find(thread_db* tdbb, RecordBitmap& recs)
+{
+	recs.clear();
+
+	win window(m_relation->getPages(tdbb)->rel_pg_space_id, 0);
+
+	UCHAR* pointer = m_initialized ? restorePosition(tdbb, &window) : init(tdbb, &window);
+	if (!pointer)
+		return false;
+
+	const bool descending = (m_index.idx_flags & idx_descending);
+	UCHAR* currentKey = m_key.begin();
+
+	auto page = (Ods::btree_page*) window.win_buffer;
+
+	IndexNode node;
+	bool first = (pointer == page->btr_nodes + page->btr_jump_size);	// first node on bucket
+	bool duplicate = false;
+	bool allNulls = false;
+	SINT64 prevRecno = BOF_NUMBER;			// previous node record number
+	while (true)
+	{
+		while (true)
+		{
+			pointer = node.readNode(pointer, true);
+			if (node.isEndBucket || node.isEndLevel)
+				break;
+
+			if (!node.length && !node.prefix && !descending)  // all nulls key
+				continue;
+
+			const bool prevDup = duplicate;
+
+			duplicate = (node.length + node.prefix == m_keyLength) &&
+				(!node.length || !node.prefix && first && (memcmp(currentKey, node.data, m_keyLength) == 0));
+
+			if (duplicate)
+			{
+				fb_assert(prevDup || !recs.getFirst());
+
+				// prior node was not known as duplicate
+				if (!prevDup)
+					recs.set(prevRecno);
+
+				recs.set(node.recordNumber.getValue());
+			}
+			else // new key
+			{
+				if (prevDup)
+				{
+					// End of duplicates chain, save position and return
+					fb_assert(recs.getFirst());
+
+					savePosition(tdbb, &window, node.nodePointer - (UCHAR*) page);
+					CCH_RELEASE(tdbb, &window);
+					return true;
+				}
+			}
+
+			m_keyLength = node.length + node.prefix;
+			memcpy(currentKey + node.prefix, node.data, node.length);
+			prevRecno = node.recordNumber.getValue();
+			first = false;
+
+			if (!duplicate && descending && (node.length + node.prefix == m_nullKey->key_length))
+			{
+				allNulls = (memcmp(currentKey, m_nullKey->key_data, m_nullKey->key_length) == 0);
+
+				if (allNulls)
+					break;
+			}
+		}
+
+		if (node.isEndLevel || !(page->btr_sibling))
+			break;
+
+		if (descending && allNulls)
+			break;
+
+		page = (btree_page*) CCH_HANDOFF(tdbb, &window, page->btr_sibling, LCK_read, pag_index);
+		pointer = page->btr_nodes + page->btr_jump_size;
+		first = true;
+
+		// release gc lock
+		savePosition(tdbb, nullptr, 0);
+	}
+
+	if (duplicate)
+	{
+		fb_assert(recs.getFirst());
+		savePosition(tdbb, &window, node.nodePointer - (UCHAR*) page);
+	}
+	else
+		savePosition(tdbb, nullptr, 0);
+
+	CCH_RELEASE(tdbb, &window);
+	return duplicate;
+}
+
+UCHAR* IndexDuplicateScanner::init(thread_db* tdbb, win* window)
+{
+	m_initialized = true;
+
+	auto relPerm = m_relation->getPermanent();
+
+	auto root = fetch_root(tdbb, window, relPerm, m_relation->getPages(tdbb));
+	if (!BTR_description(tdbb, relPerm, root, &m_index, m_indexId))
+	{
+		CCH_RELEASE(tdbb, window);
+		return nullptr;
+	}
+
+	m_key.getBuffer(BTR_key_length(tdbb, m_relation, &m_index));
+	m_keyLength = 0;
+
+	fb_assert(m_index.idx_flags & idx_unique);
+	const bool descending = (m_index.idx_flags & idx_descending);
+
+	if (descending)
+	{
+		m_nullKey = FB_NEW_POOL(*tdbb->getDefaultPool()) temporary_key;
+		BTR_make_null_key(tdbb, &m_index, m_nullKey);
+	}
+
+	// todo: faster skip all-nulls key in asc index
+
+	auto page = (Ods::btree_page*) CCH_HANDOFF(tdbb, window, m_index.idx_root, LCK_read, pag_index);
+
+	IndexNode node;
+	UCHAR* pointer = page->btr_nodes + page->btr_jump_size;
+	while (page->btr_level > 0)
+	{
+		node.readNode(pointer, false);
+		page = (btree_page*) CCH_HANDOFF(tdbb, window, node.pageNumber, LCK_read, pag_index);
+		pointer = page->btr_nodes + page->btr_jump_size;
+	}
+
+	return pointer;
+}
+
+UCHAR* IndexDuplicateScanner::restorePosition(thread_db* tdbb, win* window)
+{
+	fb_assert(m_initialized);
+	fb_assert(m_savePage && m_saveOffset);
+
+	window->win_page = m_savePage;
+	auto page = (Ods::btree_page*) CCH_FETCH(tdbb, window, LCK_read, pag_index);
+	if (CCH_get_incarnation(window) == m_saveIncarnation)
+		return (UCHAR*) page + m_saveOffset;
+
+	// page was changed
+	temporary_key findKey;
+	findKey.key_length = m_keyLength;
+	memcpy(findKey.key_data, m_key.begin(), m_keyLength);
+
+	UCHAR* pointer = nullptr;
+	USHORT prefix = 0;
+	while (!(pointer = find_node_start_point(page, &findKey, 0, &prefix,
+		(m_index.idx_flags & idx_descending), 0, false)))
+	{
+		page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+	}
+
+	// Found node with the less or equal key value, skip this node and its duplicates
+
+	IndexNode node;
+	bool skip = true;
+	bool first = (pointer == page->btr_nodes + page->btr_jump_size);
+
+	while (true)
+	{
+		pointer = node.readNode(pointer, true);
+		if (node.isEndLevel)
+		{
+			CCH_RELEASE(tdbb, window);
+			return nullptr;
+		}
+
+		if (node.isEndBucket)
+		{
+			page = (btree_page*) CCH_HANDOFF(tdbb, window, page->btr_sibling, LCK_read, pag_index);
+			pointer = page->btr_nodes + page->btr_jump_size;
+			first = true;
+			continue;
+		}
+
+		if (skip)
+		{
+			skip = false;
+			continue;
+		}
+
+		const bool duplicate = (!node.length && (node.prefix == m_keyLength)) ||
+			(first && (node.length == m_keyLength) && (memcmp(m_key.begin(), node.data, m_keyLength) == 0));
+
+		if (!duplicate)
+			return node.nodePointer;
+
+		first = false;
+	}
+
+	fb_assert(false);
+	return nullptr;
+}
+
+void IndexDuplicateScanner::savePosition(thread_db* tdbb, win* window, ULONG offset)
+{
+	const auto newPage = window ? window->win_page.getPageNum() : 0;
+
+	if (m_savePage != newPage)
+	{
+		if (m_savePage)
+			m_gcLock->enablePageGC(tdbb);
+
+		if (newPage)
+		{
+			if (!m_gcLock)
+				m_gcLock = FB_NEW_RPT(*tdbb->getDefaultPool(), 0) BtrPageGCLock(tdbb);
+
+			m_gcLock->disablePageGC(tdbb, window->win_page);
+		}
+	}
+
+	m_savePage = newPage;
+	m_saveIncarnation = newPage ? CCH_get_incarnation(window) : 0;
+	m_saveOffset = offset;
+}
+
+
+bool IndexDuplicateScanner::checkRecord(thread_db* tdbb, record_param* rpb)
+{
+	fb_assert(m_relation == rpb->rpb_relation);
+
+	// check if record key still the same as index key
+	IndexKey key(tdbb, m_relation, &m_index);
+	key.compose(rpb->rpb_record);
+
+	if ((key->key_length != m_keyLength) || (memcmp(key->key_data, m_key.begin(), m_keyLength) != 0))
+		return false;
+
+	IndexCondition condition(tdbb, &m_index);
+	auto checkResult = condition.check(rpb->rpb_record);
+
+	fb_assert(checkResult.isAssigned());
+	return checkResult.asBool();
+}
+
+
 void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList, RelationPages* relPages, bool sysRq)
 {
 /**************************************
@@ -981,7 +1268,8 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 		return;
 
 	Cleanup release_root([&] {
-		CCH_RELEASE(tdbb, &window);
+		if (window.win_bdb)
+			CCH_RELEASE(tdbb, &window);
 	});
 
 	for (MetaId id = 0; id < root->irt_count; id++)
@@ -995,6 +1283,7 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 			break;
 
 		case irt_in_progress:			// index creation - skip
+		case irt_concurrently:
 		case irt_drop:					// index removal - skip
 			continue;
 
@@ -1017,15 +1306,23 @@ void BTR_all(thread_db* tdbb, Cached::Relation* relation, IndexDescList& idxList
 			break;
 		}
 
-		if (!relation->lookup_index(tdbb, id, CacheFlag::AUTOCREATE))
-			continue;
-
 		index_desc idx;
 		if (BTR_description(tdbb, relation, root, &idx, id,
 			BTR_DESCRIBE_NO_THROW | (sysRq ? BTR_DESCRIBE_SYSTEM_RQ : 0)))
 		{
 			idxList.add(idx);
 		}
+	}
+
+	CCH_RELEASE(tdbb, &window);
+
+	for (auto n = 0u; n < idxList.getCount(); )
+	{
+		auto& idx = idxList[n];
+		if (!relation->lookup_index(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
+			idxList.remove(n);
+		else
+			++n;
 	}
 }
 
@@ -1076,21 +1373,34 @@ void BTR_create(thread_db* tdbb,
 	// Now that the index id has been checked out, create the index.
 	idx->idx_root = fast_load(tdbb, creation, selectivity);
 
+	if (creation.isConcurrently())
+		creation.lockWrites(LCK_WAIT);
+
 	// Index is created.  Go back to the index root page and update it to
 	// point to the index.
 	WIN window(relation->getPermanent()->getIndexRootPage(tdbb));
 	index_root_page* const root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 	CCH_MARK(tdbb, &window);
 
-	switch(creation.forRollback)
+	const jrd_tra* tra = creation.transaction;
+	auto* const irt_desc = root->irt_rpt + idx->idx_id;
+
+	switch(creation.createMethod)
 	{
 	case IdxCreate::AtOnce:
-		root->irt_rpt[idx->idx_id].setNormal(idx->idx_root);
+		irt_desc->setNormal(idx->idx_root);
 		break;
+
 	case IdxCreate::ForRollback:
-		jrd_tra* tra = tdbb->getTransaction();
 		fb_assert(tra && tra->tra_number);
-		root->irt_rpt[idx->idx_id].setRollback(idx->idx_root, tra ? tra->tra_number : 0);
+		irt_desc->setRollback(idx->idx_root, tra ? tra->tra_number : 0);
+		break;
+
+	case IdxCreate::Concurrently:
+		fb_assert(tra && irt_desc->getTransaction() == tra->tra_number);
+		// put root page of the new index into irt_desc
+		irt_desc->setConcurrentlyMain(idx->idx_root, tra->tra_number);
+		idx->idx_flags = irt_desc->irt_flags;
 		break;
 	}
 
@@ -1147,6 +1457,12 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, MetaId id, bool withCleanup)
 
 	CCH_RELEASE(tdbb, window);
 	return false;
+}
+
+
+void BTR_delete_tree(thread_db* tdbb, USHORT rel_id, USHORT idx_id, PageNumber next)
+{
+	delete_tree(tdbb, rel_id, idx_id, next, ZERO_PAGE_NUMBER);
 }
 
 
@@ -1211,6 +1527,9 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 			switch(modifyIrtRepeat(tdbb, irt_desc, rel, window, id))
 			{
 			case ModifyIrtRepeatValue::Skip:
+				// buffer could be released and refetched by modifyIrtRepeat
+				root = (index_root_page*) window->win_buffer;
+				irt_desc = root->irt_rpt + id;
 				break;
 
 			case ModifyIrtRepeatValue::Modified:
@@ -1241,6 +1560,7 @@ void BTR_mark_index_for_delete(thread_db* tdbb, RelationPermanent* rel, MetaId i
 				[[fallthrough]];
 
 			case irt_in_progress:
+			case irt_concurrently:
 			case irt_kill:
 				badState(irt_desc, "not irt_rollback/irt_normal", msg);
 
@@ -1288,8 +1608,6 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 	{
 		auto* irt_desc = root->irt_rpt + id;
 
-		CCH_MARK(tdbb, &window);
-
 		jrd_tra* tra = tdbb->getTransaction();
 		fb_assert(tra);
 
@@ -1300,6 +1618,9 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 			switch(modifyIrtRepeat(tdbb, irt_desc, relation, &window, id, true))
 			{
 			case ModifyIrtRepeatValue::Skip:
+				// buffer could be released and refetched by modifyIrtRepeat
+				root = (index_root_page*) window.win_buffer;
+				irt_desc = root->irt_rpt + id;
 				break;
 
 			case ModifyIrtRepeatValue::Modified:
@@ -1323,9 +1644,10 @@ bool BTR_activate_index(thread_db* tdbb, Cached::Relation* relation, MetaId id)
 				break;
 
 			case irt_in_progress:
+			case irt_concurrently:
 			case irt_rollback:
 			case irt_normal:
-				badState(irt_desc, "irt_in_progress/irt_rollback/irt_normal", msg);
+				badState(irt_desc, "irt_in_progress/irt_concurrently/irt_rollback/irt_normal", msg);
 
 			case irt_commit:		// removed not long ago
 				checkTransactionNumber(irt_desc, tra->tra_number, msg);
@@ -2519,6 +2841,91 @@ void BTR_make_null_key(thread_db* tdbb, const index_desc* idx, temporary_key* ke
 }
 
 
+// Merge b-tree with root page srcRootPage into index described by idx.
+// The source b-tree is complementary index.
+
+void BTR_merge_index(thread_db* tdbb, jrd_tra* transaction, jrd_rel* relation, index_desc* idx,
+	PageNumber srcRootPage)
+{
+	index_desc srcIdx = *idx;
+	srcIdx.idx_root = srcRootPage.getPageNum();
+	ULONG srcPage = srcIdx.idx_root;
+
+	WIN srcWindow(srcRootPage);
+
+	btree_page* srcBucket = (btree_page*) CCH_FETCH(tdbb, &srcWindow, LCK_read, pag_index);
+	const unsigned srcHeight = srcBucket->btr_level + 1;
+	UCHAR* pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
+	IndexNode node;
+
+	while (srcBucket->btr_level)
+	{
+		node.readNode(pointer, false);
+		srcBucket = (btree_page*) CCH_HANDOFF(tdbb, &srcWindow, node.pageNumber, LCK_read, pag_index);
+		pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
+		srcPage = node.pageNumber;
+	}
+
+	temporary_key key;
+	key.key_flags = 0;
+	key.key_length = 0;
+
+	index_insertion insertion;
+	insertion.iib_relation = relation;
+	insertion.iib_descriptor = idx;
+	insertion.iib_transaction = transaction;
+	insertion.iib_key = &key;
+
+	auto relPerm = relation->getPermanent();
+	RelationPages* relPages = relPerm->getPages(tdbb);
+	FB_UINT64 cntNodes = 0;
+
+	while (srcPage)
+	{
+		pointer = node.readNode(pointer, true);
+		while (true)
+		{
+			if (node.isEndBucket || (cntNodes % 100 == 0))
+				JRD_reschedule(tdbb);
+
+			if (node.isEndBucket || node.isEndLevel)
+				break;
+
+			key.key_length = node.length + node.prefix;
+			memcpy(key.key_data + node.prefix, node.data, node.length);
+
+			// Complementary index uses lower bit of record number to mark deleted nodes.
+			// Get correct record number and deleted flag
+			const auto recno = node.recordNumber.getValue() >> 1;
+			const bool deleted = node.recordNumber.getValue() & 1;
+
+			insertion.iib_number.setValue(recno);
+			insertion.iib_btr_level = 0;
+			insertion.iib_duplicates = nullptr;
+
+			WIN dstWindow(relPages->rel_pg_space_id, -1);
+			fetch_root(tdbb, &dstWindow, relPerm, relPages);
+
+			if (!deleted)
+				BTR_insert(tdbb, &dstWindow, &insertion);
+			else
+				BTR_remove(tdbb, &dstWindow, &insertion);
+
+			cntNodes++;
+			pointer = node.readNode(pointer, true);
+		}
+
+		if (node.isEndLevel || !(srcPage = srcBucket->btr_sibling))
+			break;
+
+		srcBucket = (btree_page*) CCH_HANDOFF(tdbb, &srcWindow, srcPage, LCK_read, pag_index);
+		pointer = srcBucket->btr_nodes + srcBucket->btr_jump_size;
+	}
+
+	CCH_RELEASE(tdbb, &srcWindow);
+}
+
+
 // checks is there a need to modify index descriptor
 // if yes - we release index root window
 
@@ -2536,18 +2943,19 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		return false;
 
 	case irt_in_progress:
+	case irt_concurrently:
 		if (indexId == SKIP_IN_PROGRESS)
 			return false;
 
-		// index creation - should wait to know what to do
-		CCH_RELEASE(tdbb, window);
-
-		// Wait for completion
+		// index creation - check transaction state to know what to do
 		{
-			IndexCreateLock crtLock(tdbb, relation->getId());
-			crtLock.shared(indexId);
+			const auto state = TPC_cache_state(tdbb, irtTrans);
+			if (state == tra_active)
+				return false;
 		}
-		break;
+
+		CCH_RELEASE(tdbb, window);
+		return true;
 
 	case irt_rollback:
 	case irt_commit:
@@ -2567,8 +2975,8 @@ static bool checkIrtRepeat(thread_db* tdbb, const index_root_page::irt_repeat* i
 		break;
 
 	case irt_drop:
-		// drop index when OAT >= irtTrans
-		if (oldestActive < irtTrans)
+		// drop index when OAT > irtTrans
+		if (oldestActive <= irtTrans)
 			return false;
 		if (indexId != SKIP_IN_PROGRESS)
 			CCH_RELEASE(tdbb, window);
@@ -2592,7 +3000,8 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 	const TraNumber irtTrans = irt_desc->getTransaction();
 	const TraNumber oldestActive = tdbb->getDatabase()->dbb_oldest_active;
 
-	switch (irt_desc->getState())
+	const auto irtDescState = irt_desc->getState();
+	switch (irtDescState)
 	{
 	case irt_unused:
 	case irt_normal:
@@ -2600,16 +3009,29 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		return ModifyIrtRepeatValue::Skip;
 
 	case irt_in_progress:
-		// index creation - should wait to know what to do
+	case irt_concurrently:
+		// index creation - check transaction state to know what to do
 		CCH_RELEASE(tdbb, window);
-
-		// Wait for completion
 		{
-			IndexCreateLock crtLock(tdbb, relation->getId());
-			crtLock.shared(indexId);
-		}
+			auto transaction = tdbb->getTransaction();
+			const auto state = transaction && (transaction->tra_number == irtTrans) ? tra_active :
+				TRA_wait(tdbb, transaction, irtTrans, tra_probe);
 
-		return ModifyIrtRepeatValue::Relock;
+			auto root = (index_root_page*) CCH_FETCH(tdbb, window, LCK_write, pag_root);
+
+			if (state == tra_active)
+				return ModifyIrtRepeatValue::Skip;
+
+			if (root->irt_rpt[indexId].getState() != irtDescState)
+			{
+				CCH_RELEASE(tdbb, window);
+				return ModifyIrtRepeatValue::Relock;
+			}
+
+			// drop index
+			BTR_delete_index(tdbb, window, indexId, false);
+			return ModifyIrtRepeatValue::Deleted;
+		}
 
 	case irt_rollback:
 		switch (transactionState(tdbb, irtTrans, relation, indexId, true))
@@ -2661,8 +3083,8 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 		return ModifyIrtRepeatValue::Skip;
 
 	case irt_drop:
-		// drop index when OAT >= irtTrans
-		if (oldestActive >= irtTrans)
+		// drop index when OAT > irtTrans
+		if (oldestActive > irtTrans)
 			break;
 		return ModifyIrtRepeatValue::Skip;
 
@@ -2794,6 +3216,10 @@ bool BTR_cleanup_index(thread_db* tdbb, const QualifiedName& relName, jrd_tra* t
 		{
 		case ModifyIrtRepeatValue::Skip:
 		case ModifyIrtRepeatValue::Modified:
+			// buffer could be released and refetched by modifyIrtRepeat
+			root_write = (index_root_page*) window.win_buffer;
+			irt_write = root_write->irt_rpt + id;
+
 			if (irt_write->getState() == irt_drop)
 				rc = true;
 			CCH_RELEASE(tdbb, &window);
@@ -2829,6 +3255,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
  **************************************/
 
 	//const Database* dbb = tdbb->getDatabase();
+	insertion->iib_removed = false;
 	index_desc* idx = insertion->iib_descriptor;
 	RelationPages* relPages = insertion->iib_relation->getPages(tdbb);
 	WIN window(relPages->rel_pg_space_id, idx->idx_root);
@@ -2899,7 +3326,7 @@ void BTR_remove(thread_db* tdbb, WIN* root_window, index_insertion* insertion)
 }
 
 
-void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock& createLock)
+void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation)
 {
 /**************************************
  *
@@ -2985,6 +3412,9 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 					case ModifyIrtRepeatValue::Skip:
 					case ModifyIrtRepeatValue::Modified:
 						fb_assert(window.win_bdb);
+						// buffer could be released and refetched by modifyIrtRepeat
+						root = (index_root_page*) window.win_buffer;
+						root_idx = root->irt_rpt + id;
 						break;
 
 					case ModifyIrtRepeatValue::Relock:
@@ -3043,14 +3473,40 @@ void BTR_reserve_slot(thread_db* tdbb, IndexCreation& creation, IndexCreateLock&
 	fb_assert(idx->idx_count <= MAX_UCHAR);
 	slot->irt_keys = (UCHAR) idx->idx_count;
 	slot->irt_flags = idx->idx_flags;
-	slot->setInProgress(transaction->tra_number);
+
+	switch (creation.createMethod)
+	{
+	case IdxCreate::AtOnce:
+	case IdxCreate::ForRollback:
+		slot->setInProgress(transaction->tra_number);
+		break;
+
+	case IdxCreate::Concurrently:
+		{
+			// Allocate and format root page of the temp index
+
+			WIN leaf(relPages->rel_pg_space_id, 0);
+			btree_page* bucket = (btree_page*) DPM_allocate(tdbb, &leaf);
+			idx->idx_root = leaf.win_page.getPageNum();
+
+			format_first_leaf(bucket, rel->getId(), idx->idx_id, creation.key_length);
+
+			IndexNode node;
+			UCHAR* pointer = bucket->btr_nodes + bucket->btr_jump_size;
+			node.setEndLevel();
+			pointer = node.writeNode(pointer, true);
+			bucket->btr_length = pointer - (UCHAR*) bucket;
+
+			CCH_RELEASE(tdbb, &leaf);
+
+			slot->setConcurrentlyTemp(leaf.win_page.getPageNum(), transaction->tra_number);
+			idx->idx_flags = slot->irt_flags;
+			break;
+		}
+	}
 
 	// Exploit the fact idx_repeat structure matches ODS IRTD one
 	memcpy(desc, idx->idx_rpt, len);
-
-	// Take creation lock on new index before releasing a window
-	// Will be always taken cause nobody except us knows about this index ID
-	createLock.exclusive(idx->idx_id);
 	CCH_RELEASE(tdbb, &window);
 }
 
@@ -4444,29 +4900,10 @@ static ULONG fast_load(thread_db* tdbb,
 
 	// leaf-page and pointer-page size limits, we always need to
 	// leave room for the END_LEVEL node.
-	const USHORT lp_fill_limit = dbb->dbb_page_size - BTN_LEAF_SIZE;
-	const USHORT pp_fill_limit = dbb->dbb_page_size - BTN_PAGE_SIZE;
-
-	// AB: Let's try to determine to size between the jumps to speed up
-	// index search. Of course the size depends on the key_length. The
-	// bigger the key, the less jumps we can make. (Although we must
-	// not forget that mostly the keys are compressed and much smaller
-	// than the maximum possible key!).
-	// These values can easily change without effect on previous created
-	// indices, cause this value is stored on each page.
-	// Remember, the lower the value how more jumpkeys are generated and
-	// how faster jumpkeys are recalculated on insert.
-
-	const USHORT jumpAreaSize = 512 + ((int) sqrt((float) key_length) * 16);
-
-	//  key_size  |  jumpAreaSize
-	//  ----------+-----------------
-	//         4  |    544
-	//         8  |    557
-	//        16  |    576
-	//        64  |    640
-	//       128  |    693
-	//       256  |    768
+	// When index is created concurrently, leave a bit more free space on page
+	// to make likely merge of keys from complementary index more efficient.
+	const USHORT lp_fill_limit = dbb->dbb_page_size - (creation.isConcurrently() ? (dbb->dbb_page_size / 20) : BTN_LEAF_SIZE);
+	const USHORT pp_fill_limit = dbb->dbb_page_size - (creation.isConcurrently() ? (dbb->dbb_page_size / 20) : BTN_PAGE_SIZE);
 
 	WIN* window = NULL;
 	bool error = false;
@@ -4484,6 +4921,10 @@ static ULONG fast_load(thread_db* tdbb,
 	HalfStaticArray<FB_UINT64, 4> duplicatesList(pool);
 	HalfStaticArray<FastLoadLevel, 4> levels(pool);
 
+	// Don't include allocated pages into dirty queue, else user transaction's flash
+	// will wait on latches until we finish
+	tdbb->tdbb_flags |= TDBB_sweeper;
+
 	try
 	{
 		levels.resize(1);
@@ -4492,21 +4933,11 @@ static ULONG fast_load(thread_db* tdbb,
 		// Initialize level
 		leafLevel->window.win_page.setPageSpaceID(pageSpaceID);
 
-		// Allocate and format the first leaf level bucket.  Awkwardly,
-		// the bucket header has room for only a byte of index id and that's
-		// part of the ODS.  So, for now, we'll just record the first byte
-		// of the id and hope for the best.  Index buckets are (almost) always
-		// located through the index structure (dmp being an exception used
-		// only for debug) so the id is actually redundant.
+		// Allocate and format the first leaf level bucket.
 		btree_page* bucket = (btree_page*) DPM_allocate(tdbb, &leafLevel->window);
-		bucket->btr_header.pag_type = pag_index;
-		bucket->btr_relation = relation->getId();
-		bucket->btr_id = (UCHAR)(idx->idx_id % 256);
-		bucket->btr_level = 0;
-		bucket->btr_length = BTR_SIZE;
-		bucket->btr_jump_interval = jumpAreaSize;
-		bucket->btr_jump_size = 0;
-		bucket->btr_jump_count = 0;
+		format_first_leaf(bucket, relation->getId(), idx->idx_id, key_length);
+
+		const USHORT jumpAreaSize = bucket->btr_jump_interval;
 
 #ifdef DEBUG_BTR_PAGES
 		snprintf(debugtext, sizeof(debugtext), "\t new page (%d)", windows[0].win_page);
@@ -4777,7 +5208,7 @@ static ULONG fast_load(thread_db* tdbb,
 			if (duplicate && (count > 1))
 			{
 				++duplicates;
-				if (unique && primarySeen && isPrimary && !(isr->isr_flags & ISR_null))
+				if (unique && primarySeen && isPrimary && !(isr->isr_flags & ISR_null) && !creation.isConcurrently())
 				{
 					++creation.duplicates;
 					creation.dup_recno = isr->isr_record_number;
@@ -5151,7 +5582,7 @@ static ULONG fast_load(thread_db* tdbb,
 		error = true;
 	}
 
-	tdbb->tdbb_flags &= ~TDBB_no_cache_unwind;
+	tdbb->tdbb_flags &= ~(TDBB_no_cache_unwind | TDBB_sweeper);
 
 	// If index flush fails, try to delete the index tree.
 	// If the index delete fails, just go ahead and punt.
@@ -5769,6 +6200,48 @@ static ULONG find_page(btree_page* bucket, const temporary_key* key,
 
 	// NOTREACHED
 	return ~0;	// superfluous return to shut lint up
+}
+
+
+static void format_first_leaf(btree_page* bucket, USHORT rel_id, USHORT idx_id, USHORT key_length)
+{
+	// AB: Let's try to determine to size between the jumps to speed up
+	// index search. Of course the size depends on the key_length. The
+	// bigger the key, the less jumps we can make. (Although we must
+	// not forget that mostly the keys are compressed and much smaller
+	// than the maximum possible key!).
+	// These values can easily change without effect on previous created
+	// indices, cause this value is stored on each page.
+	// Remember, the lower the value how more jumpkeys are generated and
+	// how faster jumpkeys are recalculated on insert.
+
+	const USHORT jumpAreaSize = 512 + ((int) sqrt((float) key_length) * 16);
+
+	//  key_size  |  jumpAreaSize
+	//  ----------+-----------------
+	//         4  |    544
+	//         8  |    557
+	//        16  |    576
+	//        64  |    640
+	//       128  |    693
+	//       256  |    768
+
+
+	// Format the first leaf level bucket. Awkwardly,
+	// the bucket header has room for only a byte of index id and that's
+	// part of the ODS.  So, for now, we'll just record the first byte
+	// of the id and hope for the best.  Index buckets are (almost) always
+	// located through the index structure (dmp being an exception used
+	// only for debug) so the id is actually redundant.
+
+	bucket->btr_header.pag_type = pag_index;
+	bucket->btr_relation = rel_id;
+	bucket->btr_id = (UCHAR) (idx_id % 256);
+	bucket->btr_level = 0;
+	bucket->btr_length = BTR_SIZE;
+	bucket->btr_jump_interval = jumpAreaSize;
+	bucket->btr_jump_size = 0;
+	bucket->btr_jump_count = 0;
 }
 
 
@@ -7340,7 +7813,8 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 		{
 			pointer = node.readNode(pointer, true);
 
-			if (node.length != 0 || node.prefix != key->key_length)
+			if (node.length != 0 || node.prefix != key->key_length ||
+				!validateDuplicates && (insertion->iib_number < node.recordNumber))
 			{
 #ifdef DEBUG_BTR
 				CCH_RELEASE(tdbb, window);
@@ -7388,6 +7862,7 @@ static contents remove_leaf_node(thread_db* tdbb, index_insertion* insertion, WI
 	if (pages > 75)
 		CCH_expand(tdbb, pages + 25);
 
+	insertion->iib_removed = true;
 	return delete_node(tdbb, window, node.nodePointer);
 }
 
@@ -7640,41 +8115,3 @@ void update_selectivity(index_root_page* root, MetaId id, const SelectivityList&
 	for (int i = 0; i < idx_count; i++, key_descriptor++)
 		key_descriptor->irtd_selectivity = selectivity[i];
 }
-
-
-IndexCreateLock::IndexCreateLock(thread_db* tdbb, MetaId relId)
-	: tdbb(tdbb), relId(relId)
-{ }
-
-IndexCreateLock::~IndexCreateLock()
-{
-	if (lck)
-	{
-		LCK_release(tdbb, lck);
-		delete lck;
-	}
-}
-
-void IndexCreateLock::exclusive(MetaId indexId)
-{
-	makeLock(indexId);
-	bool rc = LCK_lock(tdbb, lck, LCK_EX, LCK_NO_WAIT);
-	fb_assert(rc);
-}
-
-void IndexCreateLock::shared(MetaId indexId)
-{
-	makeLock(indexId);
-	auto* tra = tdbb->getTransaction();
-	auto wait = tra ? tra->getLockWait() : LCK_WAIT;
-	if (!LCK_lock(tdbb, lck, LCK_SR, wait))
-		fatal_exception::raise("Timeout waiting for index to be created");
-}
-
-void IndexCreateLock::makeLock(MetaId indexId)
-{
-	fb_assert(!lck);
-	lck = FB_NEW_RPT(getPool(), 0) Lock(tdbb, 0, LCK_idx_create);
-	lck->setKey(IndexPermanent::makeLockId(relId, indexId));
-}
-

@@ -161,7 +161,9 @@ struct IndexNode
 					if (tmp >= 128)
 					{
 						tmp = *localPointer++;
-						number |= (FB_UINT64) (tmp & 0x7F) << 33;
+						//number |= (FB_UINT64) (tmp & 0x7F) << 33;
+						number |= (FB_UINT64) (tmp & 0xFF) << 33;	// allow 41 bit
+
 	/*
 		Uncomment this if you need more bits in record number
 							if (tmp >= 128)

@@ -36,9 +36,10 @@ using namespace Firebird;
 
 void TraceCfgReader::readTraceConfiguration(const char* text,
 		const PathName& databaseName,
-		TracePluginConfig& config)
+		TracePluginConfig& config,
+		const bool isLocalSession)
 {
-	TraceCfgReader cfgReader(text, databaseName, config);
+	TraceCfgReader cfgReader(text, databaseName, config, isLocalSession);
 	cfgReader.readConfig();
 }
 
@@ -72,8 +73,9 @@ void TraceCfgReader::readTraceConfiguration(const char* text,
 
 void TraceCfgReader::readConfig()
 {
+	const USHORT extraFlags = m_isLocalSession ? 0 : ConfigFile::DENY_INCLUDE;
 	ConfigFile cfgFile(ConfigFile::USE_TEXT, m_text,
-		ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::REGEXP_SUPPORT);
+		ConfigFile::HAS_SUB_CONF | ConfigFile::NATIVE_ORDER | ConfigFile::REGEXP_SUPPORT | extraFlags);
 
 	m_subpatterns[0].start = 0;
 	m_subpatterns[0].end = m_databaseName.length();

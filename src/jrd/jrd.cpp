@@ -2705,6 +2705,7 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
 				&attachment->att_schema_search_path, attachment->att_blr_request_schema_search_path);
 
 			stmt = CMP_compile(tdbb, blr, blr_length, false, 0, nullptr);
+			stmt->blr.assign(blr, blr_length);
 
 			const auto rootRequest = stmt->makeRootRequest(tdbb);
 			rootRequest->setAttachment(attachment);
@@ -3218,9 +3219,10 @@ JAttachment* JProvider::createDatabase(CheckStatusWrapper* user_status, const ch
 			// Initialize TIP cache
 			dbb->dbb_tip_cache = TipCache::create(tdbb);
 
-			// Init complete - we can release dbInitMutex
+			// Init complete - we can release dbInitMutex & dbb_sync
 			dbb->dbb_flags &= ~(DBB_new | DBB_creating);
 			guardDbInit.leave();
+			dbbGuard.unlock();
 
 			REPL_attach(tdbb, false);
 

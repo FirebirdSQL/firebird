@@ -40,6 +40,7 @@
 #include <cstddef>
 #include <stdio.h>
 #include <string.h>
+#include <string_view>
 #include <stdlib.h>
 #include <ctype.h>
 #include "iberror.h"
@@ -127,10 +128,44 @@ constexpr SLONG LONG_LIMIT = ((1L << 30) / 5);
 //#define QUAD_LIMIT      ((((SINT64) 1) << 62) / 5)
 constexpr SINT64 INT64_LIMIT = ((((SINT64) 1) << 62) / 5);
 
-#define TODAY           "TODAY"
-#define NOW             "NOW"
-#define TOMORROW        "TOMORROW"
-#define YESTERDAY       "YESTERDAY"
+namespace {
+
+struct SpecialDateTimeName
+{
+	std::string_view name;
+	SpecialDateTime value;
+};
+
+constexpr SpecialDateTimeName SPECIAL_DATETIME_NAMES[] =
+{
+	{"NOW", SpecialDateTime::NOW},
+	{"TODAY", SpecialDateTime::TODAY},
+	{"TOMORROW", SpecialDateTime::TOMORROW},
+	{"YESTERDAY", SpecialDateTime::YESTERDAY}
+};
+
+constexpr FB_SIZE_T maxSpecialDateTimeLength()
+{
+	FB_SIZE_T result = 0;
+	for (const auto& it : SPECIAL_DATETIME_NAMES)
+	{
+		if (it.name.length() > result)
+			result = it.name.length();
+	}
+
+	for (const TEXT* const* month = FB_LONG_MONTHS_UPPER; *month; ++month)
+	{
+		const FB_SIZE_T length = std::string_view(*month).length();
+		if (length > result)
+			result = length;
+	}
+
+	return result;
+}
+
+constexpr FB_SIZE_T MAX_DATETIME_WORD_LENGTH = maxSpecialDateTimeLength();
+
+} // anonymous namespace
 
 #define CVT_COPY_BUFF(from, to, len) \
 {if (len) {memcpy(to, from, len); from += len; to += len;} }
@@ -673,6 +708,49 @@ static void integer_to_text(const dsc* from, dsc* to, Callbacks* cb)
 	*(USHORT*) (to->dsc_address) = static_cast<USHORT>(q - to->dsc_address - sizeof(SSHORT));
 }
 
+SpecialDateTime CVT_get_special_datetime(const char* str, FB_SIZE_T length)
+{
+/**************************************
+ *
+ *    C V T _ g e t _ s p e c i a l _ d a t e t i m e
+ *
+ **************************************
+ *
+ * Functional description
+ *    Recognize a special date/time expression such as 'NOW' or 'TODAY'.
+ *    Leading and trailing blanks are ignored, the comparison is case
+ *    insensitive. Return SpecialDateTime::NONE if the string is not one
+ *    of the special expressions.
+ *
+ **************************************/
+	const char* p = str;
+	const char* end = str + length;
+
+	while (p < end && (*p == ' ' || *p == '\t'))
+		++p;
+
+	while (end > p && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\0'))
+		--end;
+
+	const FB_SIZE_T len = end - p;
+
+	for (const auto& item : SPECIAL_DATETIME_NAMES)
+	{
+		if (len != item.name.length())
+			continue;
+
+		FB_SIZE_T pos = 0;
+
+		while (pos < len && UPPER7(p[pos]) == item.name[pos])
+			++pos;
+
+		if (pos == len)
+			return item.value;
+	}
+
+	return SpecialDateTime::NONE;
+}
+
 
 void CVT_string_to_datetime(const dsc* desc,
 							   ISC_TIMESTAMP_TZ* date, bool* timezone_present,
@@ -793,14 +871,21 @@ void CVT_string_to_datetime(const dsc* desc,
 		}
 		else if (LETTER7_UPPER(c) && !have_english_month && i - start_component < 2)
 		{
-			TEXT temp[sizeof(YESTERDAY) + 1];
+			TEXT temp[MAX_DATETIME_WORD_LENGTH + 1];
 
 			TEXT* t = temp;
-			while ((p < end) && (t < &temp[sizeof(temp) - 1]))
+			while (p < end)
 			{
 				c = UPPER7(*p);
 				if (!LETTER7_UPPER(c))
 					break;
+
+				if (t >= &temp[sizeof(temp) - 1])
+				{
+					CVT_conversion_error(desc, cb->err);
+					return;
+				}
+
 				*t++ = c;
 				p++;
 			}
@@ -839,10 +924,15 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					description[i] = SPECIAL;
 
-					while (++p < end)
+					// Note: p points to the first character not consumed as a part of
+					// the word, so it must be checked too.
+
+					while (p < end)
 					{
 						if (*p != ' ' && *p != '\t' && *p != '\0')
 							CVT_conversion_error(desc, cb->err);
+
+						++p;
 					}
 
 					// fetch the current datetime
@@ -868,7 +958,9 @@ void CVT_string_to_datetime(const dsc* desc,
 							break;
 					}
 
-					if (strcmp(temp, NOW) == 0)
+					const SpecialDateTime special = CVT_get_special_datetime(temp, strlen(temp));
+
+					if (special == SpecialDateTime::NOW)
 						return;
 
 					if (expect_type == expect_sql_time || expect_type == expect_sql_time_tz)
@@ -879,23 +971,23 @@ void CVT_string_to_datetime(const dsc* desc,
 
 					date->utc_timestamp.timestamp_time = 0;
 
-					if (strcmp(temp, TODAY) == 0)
+					switch (special)
+					{
+					case SpecialDateTime::TODAY:
 						return;
 
-					if (strcmp(temp, TOMORROW) == 0)
-					{
+					case SpecialDateTime::TOMORROW:
 						++date->utc_timestamp.timestamp_date;
 						return;
-					}
 
-					if (strcmp(temp, YESTERDAY) == 0)
-					{
+					case SpecialDateTime::YESTERDAY:
 						--date->utc_timestamp.timestamp_date;
 						return;
-					}
 
-					CVT_conversion_error(desc, cb->err);
-					return;
+					default:
+						CVT_conversion_error(desc, cb->err);
+						return;
+					}
 				}
 			}
 			n = month_ptr - FB_LONG_MONTHS_UPPER;

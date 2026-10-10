@@ -135,7 +135,7 @@ public:
 
 	unsigned getCapabilities() const override
 	{
-		return CAP_SUPPORTS_WINDOW_FRAME | CAP_WANTS_WIN_PASS_CALL;
+		return CAP_SUPPORTS_WINDOW_FRAME | CAP_USES_WINDOW_FRAME | CAP_WANTS_WIN_PASS_CALL;
 	}
 
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override

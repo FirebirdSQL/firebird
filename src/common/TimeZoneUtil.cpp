@@ -38,15 +38,35 @@
 
 using namespace Firebird;
 
+static const UDate MIN_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MIN_TIMESTAMP);
+static const UDate MAX_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MAX_TIMESTAMP);
+
 namespace
 {
 	class TimeZoneDesc
 	{
+	private:
+		// UTC interval in which the zone has a fixed displacement.
+		struct OffsetInterval
+		{
+			static const UDate& generate(const OffsetInterval* item) noexcept
+			{
+				return item->start;
+			}
+
+			UDate start;	// inclusive
+			UDate end;		// exclusive
+			int32_t offset;	// milliseconds, used by ICU in wall time conversions
+			SSHORT displacement;	// minutes
+		};
+
+		static constexpr unsigned RECENT_INTERVALS = 2;
+
 	public:
 		TimeZoneDesc(MemoryPool& pool)
 			: asciiName(pool),
 			  unicodeName(pool),
-			  icuCachedCalendar(nullptr)
+			  intervals(pool)
 		{
 		}
 
@@ -57,6 +77,9 @@ namespace
 				auto& icuLib = UnicodeUtil::getConversionICU();
 				icuLib.ucalClose(calendar);
 			}
+
+			for (const auto interval : intervals)
+				delete interval;
 		}
 
 	public:
@@ -91,10 +114,169 @@ namespace
 			return IcuCalendarWrapper(calendar, &icuCachedCalendar);
 		}
 
+		// Gets the displacement (in minutes) of an UTC instant.
+		SSHORT getDisplacement(const UnicodeUtil::ConversionICU& icuLib, UDate icuDate) const
+		{
+			const auto matches = [icuDate](const OffsetInterval* interval) {
+				return icuDate >= interval->start && icuDate < interval->end;
+			};
+
+			if (const auto interval = findInterval(matches, icuDate))
+				return interval->displacement;
+
+			return fetchDisplacement(icuLib, icuDate);
+		}
+
+		// Gets the displacement (in minutes) of a local wall time (with whole seconds) if it can be
+		// determined from the cached intervals with the same result ICU gives with UCAL_WALLTIME_FIRST.
+		bool getLocalDisplacement(UDate localIcuDate, SSHORT* displacement) const
+		{
+			// An interval gives the right displacement if the wall time exists in it (UTC candidate inside
+			// the interval) and it does not exist in a previous interval, otherwise UCAL_WALLTIME_FIRST
+			// would choose the previous one. The latter is guaranteed if the UTC candidate is after the
+			// interval start by more than the maximum difference between two offsets.
+			static constexpr UDate START_MARGIN = 2.0 * U_MILLIS_PER_DAY;
+
+			const auto matches = [localIcuDate](const OffsetInterval* interval) {
+				const UDate candidate = localIcuDate - interval->offset;
+				return candidate >= interval->start + START_MARGIN && candidate < interval->end;
+			};
+
+			if (const auto interval = findInterval(matches, localIcuDate))
+			{
+				*displacement = interval->displacement;
+				return true;
+			}
+
+			return false;
+		}
+
+	private:
+		// Gets the position of the last interval starting at or before icuDate, or -1.
+		int locateInterval(UDate icuDate) const noexcept
+		{
+			FB_SIZE_T pos;
+			return intervals.find(icuDate, pos) ? int(pos) : int(pos) - 1;
+		}
+
+		template <typename Matches>
+		const OffsetInterval* findInterval(const Matches& matches, UDate icuDate) const
+		{
+			for (const auto& recent : recentIntervals)
+			{
+				const auto interval = recent.load(std::memory_order_acquire);
+
+				if (interval && matches(interval))
+					return interval;
+			}
+
+			const OffsetInterval* found = nullptr;
+
+			{	// scope
+				ReadLockGuard guard(intervalsLock, FB_FUNCTION);
+
+				// Also test the neighbors, as wall times are searched for by its local value.
+				const int pos = locateInterval(icuDate);
+
+				for (int i = MAX(pos - 1, 0); i <= pos + 1 && i < int(intervals.getCount()); ++i)
+				{
+					if (matches(intervals[i]))
+					{
+						found = intervals[i];
+						break;
+					}
+				}
+			}
+
+			if (found)
+				publishInterval(found);
+
+			return found;
+		}
+
+		// Gets the displacement of an UTC instant from ICU and caches its interval.
+		SSHORT fetchDisplacement(const UnicodeUtil::ConversionICU& icuLib, UDate icuDate) const
+		{
+			UErrorCode icuErrorCode = U_ZERO_ERROR;
+
+			auto icuCalendar = getCalendar(icuLib, &icuErrorCode);
+
+			if (!icuCalendar)
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+
+			icuLib.ucalSetMillis(icuCalendar, icuDate, &icuErrorCode);
+
+			if (U_FAILURE(icuErrorCode))
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
+
+			const int32_t offset = icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
+				icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode);
+			const SSHORT displacement = offset / U_MILLIS_PER_MINUTE;
+
+			if (U_FAILURE(icuErrorCode))
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+
+			UDate start, end;
+
+			const UBool hasPrevious = icuLib.ucalGetTimeZoneTransitionDate(icuCalendar,
+				UCAL_TZ_TRANSITION_PREVIOUS_INCLUSIVE, &start, &icuErrorCode);
+
+			const UBool hasNext = icuLib.ucalGetTimeZoneTransitionDate(icuCalendar,
+				UCAL_TZ_TRANSITION_NEXT, &end, &icuErrorCode);
+
+			if (U_FAILURE(icuErrorCode))
+				return displacement;	// do not cache
+
+			// Without transitions, the interval covers the whole valid range (end is exclusive).
+			if (!hasPrevious)
+				start = MIN_ICU_TIMESTAMP;
+
+			if (!hasNext)
+				end = MAX_ICU_TIMESTAMP + 1;
+
+			if (!(icuDate >= start && icuDate < end))
+			{
+				fb_assert(false);
+				return displacement;	// do not cache
+			}
+
+			const OffsetInterval* interval;
+
+			{	// scope
+				WriteLockGuard guard(intervalsLock, FB_FUNCTION);
+
+				const int pos = locateInterval(icuDate);
+
+				if (pos >= 0 && icuDate < intervals[pos]->end)
+					interval = intervals[pos];
+				else
+				{
+					interval = FB_NEW_POOL(intervals.getPool()) OffsetInterval{start, end, offset, displacement};
+					intervals.add(interval);
+				}
+			}
+
+			fb_assert(interval->displacement == displacement);
+			publishInterval(interval);
+
+			return displacement;
+		}
+
+		void publishInterval(const OffsetInterval* interval) const noexcept
+		{
+			const auto slot = recentIntervalsNext.fetch_add(1, std::memory_order_relaxed) % RECENT_INTERVALS;
+			recentIntervals[slot].store(interval, std::memory_order_release);
+		}
+
 	private:
 		string asciiName;
 		Array<UChar> unicodeName;
-		mutable std::atomic<UCalendar*>	icuCachedCalendar;
+		mutable std::atomic<UCalendar*>	icuCachedCalendar{nullptr};
+		mutable RWLock intervalsLock;
+		mutable SortedArray<const OffsetInterval*, EmptyStorage<const OffsetInterval*>, UDate,
+			OffsetInterval> intervals;	// never removed
+		mutable std::atomic<const OffsetInterval*> recentIntervals[RECENT_INTERVALS] = {};
+		mutable std::atomic<unsigned> recentIntervalsNext = 0;
 	};
 }
 
@@ -296,8 +478,6 @@ namespace
 
 //-------------------------------------
 
-static const UDate MIN_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MIN_TIMESTAMP);
-static const UDate MAX_ICU_TIMESTAMP = TimeZoneUtil::timeStampToIcuDate(TimeStamp::MAX_TIMESTAMP);
 static constexpr unsigned ONE_DAY = 24 * 60 - 1;	// used for offset encoding
 static InitInstance<TimeZoneDataPath> timeZoneDataPath;
 static InitInstance<TimeZoneStartup> timeZoneStartup;
@@ -613,25 +793,10 @@ void TimeZoneUtil::extractOffset(const ISC_TIMESTAMP_TZ& timeStampTz, SSHORT* of
 		displacement = offsetZoneToDisplacement(timeStampTz.time_zone);
 	else
 	{
-		UErrorCode icuErrorCode = U_ZERO_ERROR;
-
 		UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
-
-		if (!icuCalendar)
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
-
-		icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
-
-		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
-
-		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
-			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
-
-		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+		displacement = getDesc(timeStampTz.time_zone)->getDisplacement(
+			icuLib, timeStampToIcuDate(timeStampTz.utc_timestamp));
 	}
 
 	*offset = displacement;
@@ -710,32 +875,53 @@ void TimeZoneUtil::localTimeStampToUtc(ISC_TIMESTAMP_TZ& timeStampTz)
 		displacement = offsetZoneToDisplacement(timeStampTz.time_zone);
 	else
 	{
-		tm times;
-		TimeStamp::decode_timestamp(*(ISC_TIMESTAMP*) &timeStampTz, &times, nullptr);
+		const auto desc = getDesc(timeStampTz.time_zone);
 
-		UErrorCode icuErrorCode = U_ZERO_ERROR;
+		// ICU is given the wall time in whole seconds.
+		const auto localTicks = TimeStamp::timeStampToTicks(timeStampTz.utc_timestamp);
+		const auto localSecondTicks = localTicks - localTicks % ISC_TIME_SECONDS_PRECISION;
+		SSHORT cachedDisplacement;
 
-		UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
+		if (desc->getLocalDisplacement(timeStampToIcuDate(TimeStamp::ticksToTimeStamp(localSecondTicks)),
+				&cachedDisplacement))
+		{
+			displacement = cachedDisplacement;
+		}
+		else
+		{
+			tm times;
+			TimeStamp::decode_timestamp(*(ISC_TIMESTAMP*) &timeStampTz, &times, nullptr);
 
-		auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
+			UErrorCode icuErrorCode = U_ZERO_ERROR;
 
-		if (!icuCalendar)
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
+			UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-		icuLib.ucalSetAttribute(icuCalendar, UCAL_REPEATED_WALL_TIME, UCAL_WALLTIME_FIRST);
-		icuLib.ucalSetAttribute(icuCalendar, UCAL_SKIPPED_WALL_TIME, UCAL_WALLTIME_FIRST);
+			auto icuCalendar = desc->getCalendar(icuLib, &icuErrorCode);
 
-		icuLib.ucalSetDateTime(icuCalendar, 1900 + times.tm_year, times.tm_mon, times.tm_mday,
-			times.tm_hour, times.tm_min, times.tm_sec, &icuErrorCode);
+			if (!icuCalendar)
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
 
-		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setDateTime.");
+			icuLib.ucalSetAttribute(icuCalendar, UCAL_REPEATED_WALL_TIME, UCAL_WALLTIME_FIRST);
+			icuLib.ucalSetAttribute(icuCalendar, UCAL_SKIPPED_WALL_TIME, UCAL_WALLTIME_FIRST);
 
-		displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
-			icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
+			icuLib.ucalSetDateTime(icuCalendar, 1900 + times.tm_year, times.tm_mon, times.tm_mday,
+				times.tm_hour, times.tm_min, times.tm_sec, &icuErrorCode);
 
-		if (U_FAILURE(icuErrorCode))
-			status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+			if (U_FAILURE(icuErrorCode))
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setDateTime.");
+
+			displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
+				icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
+
+			if (U_FAILURE(icuErrorCode))
+				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+
+			// Cache the interval of the result, so next conversions of near wall times may use it.
+			const auto utcSecondTicks = localSecondTicks - (displacement * 60 * ISC_TIME_SECONDS_PRECISION);
+
+			if (utcSecondTicks >= 0 && utcSecondTicks < TimeStamp::timeStampToTicks(TimeStamp::MAX_TIMESTAMP))
+				desc->getDisplacement(icuLib, timeStampToIcuDate(TimeStamp::ticksToTimeStamp(utcSecondTicks)));
+		}
 	}
 
 	const auto ticks = TimeStamp::timeStampToTicks(timeStampTz.utc_timestamp) -
@@ -767,8 +953,6 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 		displacement = offsetZoneToDisplacement(timeStampTz.time_zone);
 	else
 	{
-		UErrorCode icuErrorCode = U_ZERO_ERROR;
-
 		try
 		{
 #ifdef DEV_BUILD
@@ -777,21 +961,8 @@ bool TimeZoneUtil::decodeTimeStamp(const ISC_TIMESTAMP_TZ& timeStampTz, bool gmt
 #endif
 			UnicodeUtil::ConversionICU& icuLib = UnicodeUtil::getConversionICU();
 
-			auto icuCalendar = getDesc(timeStampTz.time_zone)->getCalendar(icuLib, &icuErrorCode);
-
-			if (!icuCalendar)
-				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_open.");
-
-			icuLib.ucalSetMillis(icuCalendar, timeStampToIcuDate(timeStampTz.utc_timestamp), &icuErrorCode);
-
-			if (U_FAILURE(icuErrorCode))
-				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_setMillis.");
-
-			displacement = (icuLib.ucalGet(icuCalendar, UCAL_ZONE_OFFSET, &icuErrorCode) +
-				icuLib.ucalGet(icuCalendar, UCAL_DST_OFFSET, &icuErrorCode)) / U_MILLIS_PER_MINUTE;
-
-			if (U_FAILURE(icuErrorCode))
-				status_exception::raise(Arg::Gds(isc_random) << "Error calling ICU's ucal_get.");
+			displacement = getDesc(timeStampTz.time_zone)->getDisplacement(
+				icuLib, timeStampToIcuDate(timeStampTz.utc_timestamp));
 		}
 		catch (const Exception&)
 		{

@@ -1048,7 +1048,7 @@ const Format* RelationPermanent::getFormat(thread_db* tdbb, USHORT number)
 		X IN RDB$FORMATS WITH X.RDB$RELATION_ID EQ getId() AND
 			X.RDB$FORMAT EQ number
 	{
-		blb* blob = blb::open(tdbb, attachment->getSysTransaction(), &X.RDB$DESCRIPTOR);
+		blb* blob = blb::open(tdbb, metaTransaction, &X.RDB$DESCRIPTOR);
 
 		// Use generic representation of formats with 32-bit offsets
 
@@ -2409,7 +2409,7 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 					IND.RDB$SCHEMA_NAME EQ IDX.RDB$FOREIGN_KEY_SCHEMA_NAME AND
 					IND.RDB$PACKAGE_NAME MISSING AND
 					IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
-					IND.RDB$UNIQUE_FLAG = 1
+					IND.RDB$UNIQUE_FLAG = IDX_UNIQUE
 			{
 				const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
 
@@ -2637,7 +2637,7 @@ DmlNode* MET_parse_blob(thread_db*					tdbb,
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 
-	blb* blob = blb::open(tdbb, attachment->getSysTransaction(), blob_id);
+	blb* blob = blb::open(tdbb, attachment->getMetaTransaction(tdbb), blob_id);
 	ULONG length = blob->blb_length + 10;
 	HalfStaticArray<UCHAR, 512> tmp;
 	UCHAR* temp = tmp.getBuffer(length);
@@ -2977,6 +2977,7 @@ ScanResult jrd_prc::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			{
 				// If the BLR was marked as invalid but the procedure was compiled,
 				// mark the BLR as valid.
+				// Record is updated in place by system transaction.
 
 				AutoRequest request;
 
@@ -4327,7 +4328,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			IND.RDB$INDEX_NAME EQ IDX.RDB$FOREIGN_KEY AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
-			IND.RDB$UNIQUE_FLAG = 1
+			IND.RDB$UNIQUE_FLAG = IDX_UNIQUE
 		{
 			const QualifiedName partnerRelationName(IND.RDB$RELATION_NAME, IND.RDB$SCHEMA_NAME);
 
@@ -4364,7 +4365,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 		FOR(REQUEST_HANDLE request)
 			IDX IN RDB$INDICES CROSS
 			IND IN RDB$INDICES WITH
-			IDX.RDB$UNIQUE_FLAG = 1 AND
+			IDX.RDB$UNIQUE_FLAG = IDX_UNIQUE AND
 			IDX.RDB$INDEX_ID > 0 AND
 			IND.RDB$INDEX_ID > 0 AND
 			IDX.RDB$SCHEMA_NAME EQ getName().schema.c_str() AND
@@ -5153,8 +5154,6 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 		idv_foreignKey = QualifiedName(IND.RDB$FOREIGN_KEY, IND.RDB$FOREIGN_KEY_SCHEMA_NAME);
 
 		idv_active = MetadataCache::getIndexStatus(IND.RDB$INDEX_INACTIVE.NULL, IND.RDB$INDEX_INACTIVE);
-
-		perm->setFormat(IND.RDB$FORMAT.NULL ? 1 : IND.RDB$FORMAT);
 	}
 	END_FOR
 
@@ -5168,17 +5167,18 @@ ScanResult IndexVersion::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	return found ? ScanResult::COMPLETE : ScanResult::MISS;
 }
 
-void IndexVersion::setLtt(thread_db* tdbb, LocalTemporaryTable::Index* lttIndex)
+void IndexVersion::setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+	USHORT segmentCount, bool inactive)
 {
 	SET_TDBB(tdbb);
 
 	fb_assert(getPermanent()->getRelation()->rel_flags & REL_temp_ltt);
 
-	idv_name = lttIndex->name;
-	idv_uniqFlag = lttIndex->unique;
-	idv_segmentCount = lttIndex->columns.getCount();
-	idv_type = lttIndex->descending;
-	idv_active = lttIndex->inactive ? MET_index_inactive : MET_index_active;
+	idv_name = name;
+	idv_uniqFlag = unique;
+	idv_segmentCount = segmentCount;
+	idv_type = descending;
+	idv_active = inactive ? MET_index_inactive : MET_index_active;
 }
 
 IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags)

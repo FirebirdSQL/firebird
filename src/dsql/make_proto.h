@@ -91,4 +91,6 @@ Jrd::dsql_par* MAKE_parameter(Jrd::dsql_msg*, bool, bool, USHORT, const Jrd::Val
 void MAKE_parameter_names(Jrd::dsql_par*, const Jrd::ValueExprNode*);
 Jrd::LiteralNode* MAKE_system_privilege(const char*);
 
+Jrd::ValueExprNode* MAKE_constant_from_literal(Jrd::LiteralNode*, const dsc*);
+
 #endif // DSQL_MAKE_PROTO_H

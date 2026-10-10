@@ -731,6 +731,8 @@ using namespace Firebird;
 %token <metaNamePtr> WITHIN
 %token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> CONSTANT
+%token <metaNamePtr> CONCURRENTLY
+%token <metaNamePtr> VALIDATE
 
 // precedence declarations for expression evaluation
 
@@ -863,6 +865,7 @@ using namespace Firebird;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;
+	Jrd::AlterIndexNode* alterIndexNode;
 	Jrd::AlterDatabaseNode* alterDatabaseNode;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
@@ -1919,9 +1922,10 @@ unique_opt
 
 %type index_definition(<createIndexNode>)
 index_definition($createIndexNode)
-	: index_column_expr($createIndexNode) index_condition_opt
+	: index_column_expr($createIndexNode) index_condition_opt concurrently_opt
 		{
 			$createIndexNode->partial = $2;
+			$createIndexNode->concurrently = $3;
 		}
 	;
 
@@ -1950,6 +1954,12 @@ index_condition_opt
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+%type <boolVal> concurrently_opt
+concurrently_opt
+	: /* nothing */		{ $$ = false; }
+	| CONCURRENTLY		{ $$ = true; }
 	;
 
 // CREATE SHADOW
@@ -2579,26 +2589,26 @@ packaged_table_clause
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) packaged_table_indexes_opt($2)
+		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) inline_table_indexes_opt($2)
 			{
 				$$ = $2;
 			}
 	;
 
-%type packaged_table_indexes_opt(<createRelationNode>)
-packaged_table_indexes_opt($createRelationNode)
+%type inline_table_indexes_opt(<createRelationNode>)
+inline_table_indexes_opt($createRelationNode)
 	: /* nothing */
-	| packaged_table_indexes($createRelationNode)
+	| inline_table_indexes($createRelationNode)
 	;
 
-%type packaged_table_indexes(<createRelationNode>)
-packaged_table_indexes($createRelationNode)
-	: packaged_table_index($createRelationNode)
-	| packaged_table_indexes packaged_table_index($createRelationNode)
+%type inline_table_indexes(<createRelationNode>)
+inline_table_indexes($createRelationNode)
+	: inline_table_index($createRelationNode)
+	| inline_table_indexes inline_table_index($createRelationNode)
 	;
 
-%type packaged_table_index(<createRelationNode>)
-packaged_table_index($createRelationNode)
+%type inline_table_index(<createRelationNode>)
+inline_table_index($createRelationNode)
 	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] column_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
@@ -2606,7 +2616,7 @@ packaged_table_index($createRelationNode)
 			node->descending = $2;
 			node->columns = $6;
 
-			auto clause = newNode<RelationNode::AddPackagedTableIndexClause>(node);
+			auto clause = newNode<RelationNode::AddInlineTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);
 		}
 	;
@@ -3666,7 +3676,7 @@ local_nonforward_declaration
 				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($<createRelationNode>6) ')' ';'
+		'(' table_elements($<createRelationNode>6) ')' [YYVALID;] inline_table_indexes_opt($<createRelationNode>6) ';'
 		{
 			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
 			node->dsqlName = *$5;
@@ -5184,11 +5194,17 @@ drop_behaviour
 	| CASCADE		{ $$ = true; }
 	;
 
-%type <ddlNode>	alter_index_clause
+%type <alterIndexNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name index_active concurrently_opt
 		{
 			$$ = newNode<AlterIndexNode>(*$1, $2);
+			$$->concurrently = $3;
+		}
+	| symbol_index_name VALIDATE UNIQUE
+		{
+			$$ = newNode<AlterIndexNode>(*$1, false);
+			$$->validateUnique = true;
 		}
 	;
 
@@ -7161,7 +7177,7 @@ table_proc_inputs
 
 %type <relSourceNode> table_name
 table_name
-	: symbol_table_name correlation_name_opt
+	: scoped_qualified_name correlation_name_opt
 		{
 			RelationSourceNode* node = newNode<RelationSourceNode>(*$1);
 			if ($2)
@@ -7385,13 +7401,13 @@ plan_item
 
 %type <qualifiedNameArray> table_or_alias_list
 table_or_alias_list
-	: symbol_table_name
+	: scoped_qualified_name
 		{
 			const auto node = newNode<ObjectsArray<QualifiedName>>();
 			node->add(*$1);
 			$$ = node;
 		}
-	| table_or_alias_list symbol_table_name
+	| table_or_alias_list scoped_qualified_name
 		{
 			const auto node = $1;
 			node->add(*$2);
@@ -7407,7 +7423,7 @@ access_type
 			'(' index_list($2) ')'
 		{ $$ = $2; }
 	| ORDER { $$ = newNode<PlanNode::AccessType>(PlanNode::AccessType::TYPE_NAVIGATIONAL); }
-			symbol_index_name extra_indices_opt($2)
+			scoped_qualified_name extra_indices_opt($2)
 		{
 			$$ = $2;
 			$$->items.insert(0).indexName = *$3;
@@ -7416,12 +7432,12 @@ access_type
 
 %type index_list(<accessType>)
 index_list($accessType)
-	: symbol_index_name
+	: scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$1;
 		}
-	| index_list ',' symbol_index_name
+	| index_list ',' scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$3;
@@ -7568,10 +7584,10 @@ insert
 
 %type <storeNode> insert_start
 insert_start
-	: INSERT INTO simple_table_name
+	: INSERT INTO scoped_qualified_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->target = $3;
+			node->target = newNode<RelationSourceNode>(*$3);
 			$$ = node;
 		}
 	;
@@ -7771,10 +7787,10 @@ update_positioned
 
 %type <updInsNode> update_or_insert
 update_or_insert
-	: UPDATE OR INSERT INTO simple_table_name
+	: UPDATE OR INSERT INTO scoped_qualified_name
 			{
 				UpdateOrInsertNode* node = $$ = newNode<UpdateOrInsertNode>();
-				node->relation = $5;
+				node->relation = newNode<RelationSourceNode>(*$5);
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
 				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
@@ -10591,6 +10607,8 @@ non_reserved_word
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| CONCURRENTLY
+	| VALIDATE
 	;
 
 %%

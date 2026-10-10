@@ -497,7 +497,6 @@ private:
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
 	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
-	UCHAR				idp_formatNumber = 0;
 
 	[[noreturn]] void errIndexGone();
 
@@ -521,16 +520,6 @@ public:
 	void setState(UCHAR state) noexcept
 	{
 		idp_state = state;
-	}
-
-	UCHAR getFormat() const noexcept
-	{
-		return idp_formatNumber;
-	}
-
-	void setFormat(UCHAR fmt) noexcept
-	{
-		idp_formatNumber = fmt;
 	}
 
 private:
@@ -608,7 +597,8 @@ public:
 		return true;
 	}
 
-	void setLtt(thread_db* tdbb, LocalTemporaryTable::Index* ltt);
+	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
+		USHORT segmentCount, bool inactive = false);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 
@@ -843,7 +833,7 @@ public:
 			dropTempPages(tdbb);
 	}
 
-	void makeLocks(thread_db* tdbb, Cached::Relation* relation);
+	// void makeLocks(thread_db* tdbb, Cached::Relation* relation);		// hvlad: not implemented
 	static constexpr USHORT getRelLockKeyLength() noexcept;
 	Lock* createLock(thread_db* tdbb, lck_t, bool);
 	Lock* createLock(thread_db* tdbb, MemoryPool& pool, lck_t, bool);

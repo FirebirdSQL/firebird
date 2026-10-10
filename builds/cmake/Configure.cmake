@@ -115,6 +115,7 @@ else()
 endif()
 
 set(include_files_list
+    afunix.h
     aio.h
     assert.h
     atomic.h
@@ -178,6 +179,7 @@ set(include_files_list
     sys/time.h
     sys/timeb.h
     sys/types.h
+    sys/un.h
     sys/uio.h
     sys/wait.h
     termio.h

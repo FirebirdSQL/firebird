@@ -75,6 +75,9 @@
     <ClCompile Include="..\..\..\src\plugins\crypt\arc4\Arc4.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\plugins\crypt\chacha\ChaCha.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\remote\client\BlrFromMessage.cpp">
       <Filter>Remote client</Filter>
     </ClCompile>
@@ -140,6 +143,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\plugins\crypt\arc4\Arc4.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\plugins\crypt\chacha\ChaCha.h">
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\remote\client\BlrFromMessage.h">

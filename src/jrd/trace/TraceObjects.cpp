@@ -684,7 +684,7 @@ TraceRuntimeStats::TraceRuntimeStats(Attachment* attachment,
 		m_info.pin_tables = m_legacyCounts.begin();
 		m_info.pin_count = m_legacyCounts.getCount();
 
-		for (MetaId i = 0; i < m_info.pin_count; i++)
+		for (FB_SIZE_T i = 0; i < m_info.pin_count; i++)
 		{
 			m_info.pin_tables[i].trc_relation_id = m_tableCounters.getObjectId(i);
 			m_info.pin_tables[i].trc_relation_name = m_tableCounters.getObjectName(i);

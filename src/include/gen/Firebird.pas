@@ -691,6 +691,7 @@ type
 	ITraceInitInfo_getDatabaseNamePtr = function(this: ITraceInitInfo): PAnsiChar; cdecl;
 	ITraceInitInfo_getConnectionPtr = function(this: ITraceInitInfo): ITraceDatabaseConnection; cdecl;
 	ITraceInitInfo_getLogWriterPtr = function(this: ITraceInitInfo): ITraceLogWriter; cdecl;
+	ITraceInitInfo_getTraceSessionFlagsPtr = function(this: ITraceInitInfo): Cardinal; cdecl;
 	ITracePlugin_trace_get_errorPtr = function(this: ITracePlugin): PAnsiChar; cdecl;
 	ITracePlugin_trace_attachPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; create_db: Boolean; att_result: Cardinal): Boolean; cdecl;
 	ITracePlugin_trace_detachPtr = function(this: ITracePlugin; connection: ITraceDatabaseConnection; drop_db: Boolean): Boolean; cdecl;
@@ -3540,10 +3541,16 @@ type
 		getDatabaseName: ITraceInitInfo_getDatabaseNamePtr;
 		getConnection: ITraceInitInfo_getConnectionPtr;
 		getLogWriter: ITraceInitInfo_getLogWriterPtr;
+		getTraceSessionFlags: ITraceInitInfo_getTraceSessionFlagsPtr;
 	end;
 
 	ITraceInitInfo = class(IVersioned)
 		const VERSION = 2;
+		const SESSION_FLAG_ADMIN = Cardinal($1);
+		const SESSION_FLAG_ACTIVE = Cardinal($2);
+		const SESSION_FLAG_SYSTEM = Cardinal($4);
+		const SESSION_FLAG_LOG_FULL = Cardinal($8);
+		const SESSION_FLAG_LOCAL = Cardinal($10);
 
 		function getConfigText(): PAnsiChar;
 		function getTraceSessionID(): Integer;
@@ -3552,6 +3559,7 @@ type
 		function getDatabaseName(): PAnsiChar;
 		function getConnection(): ITraceDatabaseConnection;
 		function getLogWriter(): ITraceLogWriter;
+		function getTraceSessionFlags(): Cardinal;
 	end;
 
 	ITraceInitInfoImpl = class(ITraceInitInfo)
@@ -3564,6 +3572,7 @@ type
 		function getDatabaseName(): PAnsiChar; virtual; abstract;
 		function getConnection(): ITraceDatabaseConnection; virtual; abstract;
 		function getLogWriter(): ITraceLogWriter; virtual; abstract;
+		function getTraceSessionFlags(): Cardinal; virtual; abstract;
 	end;
 
 	TracePluginVTable = class(ReferenceCountedVTable)
@@ -4504,6 +4513,7 @@ const
 	isc_spb_bkp_no_triggers = $8000;
 	isc_spb_bkp_zip = $010000;
 	isc_spb_bkp_direct_io = $020000;
+	isc_spb_bkp_fast_path = $040000;
 	isc_spb_prp_page_buffers = byte(5);
 	isc_spb_prp_sweep_interval = byte(6);
 	isc_spb_prp_shutdown_db = byte(7);
@@ -6064,6 +6074,7 @@ const
 	 isc_dsql_agg_return = 335545340;
 	 isc_hypfun_args_non_equal_sort_item = 335545341;
 	 isc_old_format = 335545342;
+	 isc_user_savepoint = 335545343;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6333,6 +6344,10 @@ const
 	 isc_gbak_writing_constant = 336331176;
 	 isc_gbak_constant = 336331177;
 	 isc_gbak_restoring_constant = 336331178;
+	 isc_gbak_inv_column = 336331180;
+	 isc_gbak_inv_record_length = 336331181;
+	 isc_gbak_fast_path_needs_service = 336331182;
+	 isc_gbak_fast_path_no_snapshot = 336331184;
 	 isc_dsql_too_old_ods = 336397205;
 	 isc_dsql_table_not_found = 336397206;
 	 isc_dsql_view_not_found = 336397207;
@@ -9807,6 +9822,11 @@ end;
 function ITraceInitInfo.getLogWriter(): ITraceLogWriter;
 begin
 	Result := TraceInitInfoVTable(vTable).getLogWriter(Self);
+end;
+
+function ITraceInitInfo.getTraceSessionFlags(): Cardinal;
+begin
+	Result := TraceInitInfoVTable(vTable).getTraceSessionFlags(Self);
 end;
 
 function ITracePlugin.trace_get_error(): PAnsiChar;
@@ -16876,6 +16896,16 @@ begin
 	end
 end;
 
+function ITraceInitInfoImpl_getTraceSessionFlagsDispatcher(this: ITraceInitInfo): Cardinal; cdecl;
+begin
+	Result := 0;
+	try
+		Result := ITraceInitInfoImpl(this).getTraceSessionFlags();
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	ITraceInitInfoImpl_vTable: TraceInitInfoVTable;
 
@@ -19174,6 +19204,7 @@ initialization
 	ITraceInitInfoImpl_vTable.getDatabaseName := @ITraceInitInfoImpl_getDatabaseNameDispatcher;
 	ITraceInitInfoImpl_vTable.getConnection := @ITraceInitInfoImpl_getConnectionDispatcher;
 	ITraceInitInfoImpl_vTable.getLogWriter := @ITraceInitInfoImpl_getLogWriterDispatcher;
+	ITraceInitInfoImpl_vTable.getTraceSessionFlags := @ITraceInitInfoImpl_getTraceSessionFlagsDispatcher;
 
 	ITracePluginImpl_vTable := TracePluginVTable.create;
 	ITracePluginImpl_vTable.version := 5;

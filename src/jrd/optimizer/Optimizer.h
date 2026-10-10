@@ -79,6 +79,7 @@ inline constexpr double DEFAULT_INDEX_COST = 3.0;
 struct index_desc;
 class jrd_rel;
 class IndexTableScan;
+class DeclareLocalTableNode;
 class ComparativeBoolNode;
 class InversionNode;
 class PlanNode;
@@ -809,6 +810,7 @@ private:
 	const bool outerFlag;
 	SortNode* const sort;
 	Rsc::Rel relation;
+	const DeclareLocalTableNode* localTable = nullptr;
 	const bool createIndexScanNodes;
 	const bool setConjunctionsMatched;
 	Firebird::string alias;

@@ -1006,6 +1006,8 @@ public:
 	static constexpr unsigned CAP_WANTS_AGG_CALLS		= 0x04;
 	// wants winPass call in a window
 	static constexpr unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
+	// depends on the window frame boundaries, even when not respecting a user-defined frame
+	static constexpr unsigned CAP_USES_WINDOW_FRAME		= 0x10;
 
 protected:
 	struct AggInfo

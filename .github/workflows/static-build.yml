@@ -3,6 +3,10 @@ name: Static Client Build
 on:
   workflow_dispatch:
 
+env:
+  ISC_USER: sysdba
+  ISC_PASSWORD: masterkey
+
 jobs:
 
   build-linux-static-client:
@@ -19,6 +23,34 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 10
+
+      - name: Firebird install
+        env:
+          FB_ARCH: ${{ matrix.arch }}
+        run: |
+          set -e
+          if [ "$FB_ARCH" = "x86" ]; then
+            sudo dpkg --add-architecture i386 && sudo apt-get update
+            FB_LIBS="libicu74:i386 libtommath1:i386 libz1:i386"
+          else
+            FB_LIBS="libtommath1"
+          fi
+          sudo apt-get install -y $FB_LIBS
+          FB_PACKAGE="Firebird-5.0.4.1812-0-linux-${FB_ARCH}.tar.gz"
+          FB_DIR="Firebird-5.0.4.1812-0-linux-${FB_ARCH}"
+          wget -nv -O "$FB_PACKAGE" "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/$FB_PACKAGE"
+          tar xzvf "$FB_PACKAGE"
+          (cd "$FB_DIR"; sudo ./install.sh -silent)
+          FB_PASSWORD=$(sudo awk -F= '$1 == "ISC_PASSWORD" {print $2}' /opt/firebird/SYSDBA.password)
+          sudo /opt/firebird/bin/gsec -user sysdba -password "$FB_PASSWORD" -modify sysdba -pw masterkey
+          sudo sed -i \
+            -e 's/^ISC_PASSWORD=.*/ISC_PASSWORD=masterkey/' \
+            -e 's/^ISC_PASSWD=.*/ISC_PASSWD=masterkey/' \
+            /opt/firebird/SYSDBA.password
+          sudo usermod -a -G firebird "$(whoami)"
+          sudo gpasswd -r firebird
+          sudo mkdir -p /tmp/firebird-static
+          sudo chmod 777 /tmp/firebird-static
 
       - name: Write build script
         run: |
@@ -52,8 +84,8 @@ jobs:
             -I/home/ctng/firebird-build/gen/Release/firebird/include \
             -L/home/ctng/firebird-build/gen/Release/firebird/lib \
             -L/home/ctng/firebird-build/temp/Release \
-            -lfbclient -ltommath -lz -ldl -pthread \
-            -o /tmp/01.create
+            -lfbclient -ltommath -ltomcrypt -lz -ldl -pthread \
+            -o /home/ctng/firebird-build/gen/01.create
           EOF
           chmod +x /tmp/build-static-client.sh
 
@@ -65,6 +97,13 @@ jobs:
             -v ${{ github.workspace }}/gen:/home/ctng/firebird-build/gen \
             -v /tmp/build-static-client.sh:/build.sh:ro \
             firebirdsql/firebird-builder-linux:fb6-${{ matrix.arch }}-ng-v2
+
+      - name: Run interface example
+        run: |
+          mkdir -p static-client
+          cp -a gen/01.create /opt/firebird/lib/libtom* static-client/
+          LD_LIBRARY_PATH="$PWD/static-client" \
+            ISC_PATH=localhost:/tmp/firebird-static static-client/01.create
 
       - name: Upload static library
         uses: actions/upload-artifact@v4
@@ -82,16 +121,33 @@ jobs:
         with:
           fetch-depth: 10
 
+      - name: Firebird install
+        run: |
+          set -e
+          sudo apt-get install -y libtommath-dev libtomcrypt-dev
+          FB_PACKAGE=Firebird-5.0.4.1812-0-linux-arm64.tar.gz
+          FB_DIR=Firebird-5.0.4.1812-0-linux-arm64
+          wget -nv -O "$FB_PACKAGE" "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/$FB_PACKAGE"
+          tar xzvf "$FB_PACKAGE"
+          (cd "$FB_DIR"; sudo ./install.sh -silent)
+          FB_PASSWORD=$(sudo awk -F= '$1 == "ISC_PASSWORD" {print $2}' /opt/firebird/SYSDBA.password)
+          sudo /opt/firebird/bin/gsec -user sysdba -password "$FB_PASSWORD" -modify sysdba -pw masterkey
+          sudo sed -i \
+            -e 's/^ISC_PASSWORD=.*/ISC_PASSWORD=masterkey/' \
+            -e 's/^ISC_PASSWD=.*/ISC_PASSWD=masterkey/' \
+            /opt/firebird/SYSDBA.password
+          sudo usermod -a -G firebird "$(whoami)"
+          sudo gpasswd -r firebird
+          sudo mkdir -p /tmp/firebird-static
+          sudo chmod 777 /tmp/firebird-static
+
       - name: Prepare
         run: |
-          sudo apt-get update
           sudo apt-get install -y libtool-bin automake autoconf-archive libtool libicu-dev zlib1g-dev cmake
 
       - name: Build
         run: |
           ./autogen.sh \
-            --with-builtin-tommath \
-            --with-builtin-tomcrypt \
             --without-editline \
             --enable-binreloc \
             --prefix=/opt/firebird \
@@ -105,8 +161,12 @@ jobs:
             -Igen/Release/firebird/include \
             -Lgen/Release/firebird/lib \
             -Ltemp/Release \
-            -lfbclient -ltommath -lz -ldl -pthread \
+            -lfbclient -ltommath -ltomcrypt -lz -ldl -pthread \
             -o /tmp/01.create
+
+      - name: Run interface example
+        run: |
+          ISC_PATH=localhost:/tmp/firebird-static /tmp/01.create
 
       - name: Upload static library
         uses: actions/upload-artifact@v4
@@ -132,8 +192,19 @@ jobs:
 
       - name: Prepare - Install tools
         run: |
-          brew install --quiet automake autoconf-archive libtool ninja llvm
-          echo "${{ (matrix.arch == 'arm64' && '/opt/homebrew/opt/llvm/bin') || '/usr/local/opt/llvm/bin' }}" >> $GITHUB_PATH
+          brew install --quiet automake autoconf-archive libtool ninja python-setuptools
+
+      - name: Firebird install
+        env:
+          FB_ARCH: ${{ matrix.arch }}
+        run: |
+          set -e
+          sudo chmod +a "everyone allow read,write,execute,delete,add_file,add_subdirectory,file_inherit,directory_inherit" /tmp
+          FB_PACKAGE="Firebird-5.0.4.1812-0-macos-${FB_ARCH}.pkg"
+          wget -nv -O "$FB_PACKAGE" "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/$FB_PACKAGE"
+          sudo installer -verbose -pkg "$FB_PACKAGE" -target /
+          sudo mkdir -p /tmp/firebird-static
+          sudo chmod 777 /tmp/firebird-static
 
       - name: Restore vcpkg cache
         uses: actions/cache/restore@v4
@@ -159,9 +230,15 @@ jobs:
             -Igen/Release/firebird/include \
             -Lgen/Release/firebird/lib \
             -Ltemp/Release \
-            -lfbclient -ltommath -lz \
+            -lfbclient -ltommath -ltomcrypt -lz \
             -liconv -lobjc -framework CoreFoundation -framework Foundation -framework Security \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/gen/Release/firebird" \
+            -dead_strip \
             -o /tmp/01.create
+
+      - name: Run interface example
+        run: |
+          ISC_PATH=localhost:/tmp/firebird-static /tmp/01.create
 
       - name: Upload static library
         uses: actions/upload-artifact@v4
@@ -215,6 +292,27 @@ jobs:
           echo FB_PROCESSOR_ARCHITECTURE=%FB_PROCESSOR_ARCHITECTURE%>>%GITHUB_ENV%
           echo FB_LIBRARY_PLATFORM=%FB_LIBRARY_PLATFORM%>>%GITHUB_ENV%
 
+      # No 5.0.4 for ARM64 in Windows yet
+      #- name: Firebird install
+      #  shell: cmd
+      #  env:
+      #    PLATFORM: ${{ matrix.platform }}
+      #  run: |
+      #    set FB_ZIP=Firebird-5.0.4.1812-0-windows-%PLATFORM%.zip
+      #    powershell Invoke-WebRequest "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/$env:FB_ZIP" -OutFile "$env:FB_ZIP"
+      #    7z x -oC:\Firebird %FB_ZIP%
+      #    echo C:\Firebird>>%GITHUB_PATH%
+      #    set "PATH=C:\Firebird;%PATH%"
+      #    cd /d C:\Firebird
+      #    instreg install -z
+      #    > init-security.sql echo create user SYSDBA password 'masterkey';
+      #    >> init-security.sql echo quit;
+      #    isql -user sysdba employee -i init-security.sql
+      #    del init-security.sql
+      #    instsvc install -z
+      #    instsvc start
+      #    powershell -NoProfile -Command "Start-Sleep -Seconds 2"
+
       - name: Build
         shell: cmd
         env:
@@ -233,7 +331,16 @@ jobs:
           VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\${{ (matrix.platform == 'arm64' && '2022') || '18' }}\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
-          cl /nologo /EHsc /MD /Isrc\include /Ioutput_%FB_LIBRARY_PLATFORM%_release\include examples\interfaces\01.create.cpp output_%FB_LIBRARY_PLATFORM%_release\lib\fbclient_static_ms.lib extern\libtommath\lib\%FB_LIBRARY_PLATFORM%\Release\tommath.lib advapi32.lib bcrypt.lib legacy_stdio_definitions.lib mpr.lib ole32.lib psapi.lib shell32.lib user32.lib ws2_32.lib /Fe:%TEMP%\01.create.exe
+          cl /nologo /EHsc /MD /Isrc\include /Ioutput_%FB_LIBRARY_PLATFORM%_release\include examples\interfaces\01.create.cpp output_%FB_LIBRARY_PLATFORM%_release\lib\fbclient_static_ms.lib extern\libtommath\lib\%FB_LIBRARY_PLATFORM%\Release\tommath.lib extern\libtomcrypt\lib\%FB_LIBRARY_PLATFORM%\Release\tomcrypt.lib advapi32.lib bcrypt.lib legacy_stdio_definitions.lib mpr.lib ole32.lib psapi.lib shell32.lib user32.lib ws2_32.lib /Fe:%TEMP%\01.create.exe
+
+      # No 5.0.4 for ARM64 in Windows yet
+      #- name: Run interface example
+      #  shell: cmd
+      #  run: |
+      #    set "PATH=C:\Firebird;%PATH%"
+      #    if not exist C:\Windows\Temp\firebird-static mkdir C:\Windows\Temp\firebird-static
+      #    set ISC_PATH=localhost:C:/Windows/Temp/firebird-static
+      #    "%TEMP%\01.create.exe"
 
       - name: Upload static library
         uses: actions/upload-artifact@v4

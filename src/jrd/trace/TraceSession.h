@@ -36,10 +36,11 @@
 
 namespace Firebird {
 
-inline constexpr int trs_admin		= 0x0001;	// session created by server administrator
-inline constexpr int trs_active		= 0x0002;	// session is active
-inline constexpr int trs_system		= 0x0004;	// session created by engine itself
-inline constexpr int trs_log_full	= 0x0008;	// session trace log is full
+inline constexpr int trs_admin		= Firebird::ITraceInitInfo::SESSION_FLAG_ADMIN;	// session created by server administrator
+inline constexpr int trs_active		= Firebird::ITraceInitInfo::SESSION_FLAG_ACTIVE;	// session is active
+inline constexpr int trs_system		= Firebird::ITraceInitInfo::SESSION_FLAG_SYSTEM;	// session created by engine itself
+inline constexpr int trs_log_full	= Firebird::ITraceInitInfo::SESSION_FLAG_LOG_FULL;	// session trace log is full
+inline constexpr int trs_local		= Firebird::ITraceInitInfo::SESSION_FLAG_LOCAL;	// session is running on the same machine as the server
 
 class TraceSession
 {

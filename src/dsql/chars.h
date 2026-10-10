@@ -21,17 +21,21 @@
  * Contributor(s): ______________________________________.
  */
 
-inline constexpr SCHAR CHR_LETTER		= 1;
-inline constexpr SCHAR CHR_DIGIT		= 2;
-inline constexpr SCHAR CHR_IDENT		= 4;
-inline constexpr SCHAR CHR_QUOTE		= 8;
-inline constexpr SCHAR CHR_WHITE		= 16;
-inline constexpr SCHAR CHR_HEX			= 32;
-inline constexpr SCHAR CHR_INTRODUCER	= 64;
+inline constexpr SSHORT CHR_LETTER		= (1 << 0);
+inline constexpr SSHORT CHR_DIGIT		= (1 << 1);
+inline constexpr SSHORT CHR_IDENT		= (1 << 2);
+inline constexpr SSHORT CHR_QUOTE		= (1 << 3);
+inline constexpr SSHORT CHR_WHITE		= (1 << 4);
+inline constexpr SSHORT CHR_HEX			= (1 << 5);
+inline constexpr SSHORT CHR_INTRODUCER	= (1 << 6);
+inline constexpr SSHORT CHR_BIN			= (1 << 7);
+inline constexpr SSHORT CHR_OCT			= (1 << 8);
+inline constexpr SSHORT CHR_BRACE		= (1 << 9);
+
 
 // Use the functions at the end of this file; do not reference the array directly.
 
-static inline constexpr SCHAR classes_array[] = {
+static inline constexpr SSHORT classes_array[] = {
 /* 000     */ 0,
 /* 001     */ 0,
 /* 002     */ 0,
@@ -80,14 +84,14 @@ static inline constexpr SCHAR classes_array[] = {
 /* 045  -  */ 0,
 /* 046  .  */ 0,
 /* 047  /  */ 0,
-/* 048  0  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 049  1  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 050  2  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 051  3  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 052  4  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 053  5  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 054  6  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
-/* 055  7  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
+/* 048  0  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT | CHR_BIN,
+/* 049  1  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT | CHR_BIN,
+/* 050  2  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 051  3  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 052  4  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 053  5  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 054  6  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
+/* 055  7  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX | CHR_OCT,
 /* 056  8  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
 /* 057  9  */ 0 | CHR_DIGIT | CHR_IDENT | CHR_HEX,
 /* 058  :  */ 0,
@@ -155,9 +159,9 @@ static inline constexpr SCHAR classes_array[] = {
 /* 120  x  */ 0 | CHR_LETTER | CHR_IDENT,
 /* 121  y  */ 0 | CHR_LETTER | CHR_IDENT,
 /* 122  z  */ 0 | CHR_LETTER | CHR_IDENT,
-/* 123  {  */ 0 | CHR_LETTER | CHR_IDENT,
+/* 123  {  */ 0 | CHR_LETTER | CHR_IDENT | CHR_BRACE,
 /* 124  |  */ 0,
-/* 125  }  */ 0 | CHR_LETTER | CHR_IDENT,
+/* 125  }  */ 0 | CHR_LETTER | CHR_IDENT | CHR_BRACE,
 /* 126  ~  */ 0,
 /* 127     */ 0,
 /* 128     */ 0,
@@ -290,12 +294,12 @@ static inline constexpr SCHAR classes_array[] = {
 /* 255     */ 0
 };
 
-inline SCHAR classes(int idx) noexcept
+inline SSHORT classes(int idx) noexcept
 {
 	return classes_array[(UCHAR) idx];
 }
 
-inline SCHAR classes(UCHAR idx) noexcept
+inline SSHORT classes(UCHAR idx) noexcept
 {
 	return classes_array[idx];
 }

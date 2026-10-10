@@ -38,10 +38,10 @@ static void common_8bit_init(charset* csptr,
 	csptr->charset_max_bytes_per_char = 1;
 	csptr->charset_space_length = 1;
 	csptr->charset_space_character = (const BYTE*) " ";
-	csptr->charset_fn_well_formed = NULL;
+	csptr->charset_fn_well_formed = nullptr;
 	CV_convert_init(&csptr->charset_to_unicode,
 					CV_nc_to_unicode,
-					to_unicode_tbl, NULL);
+					to_unicode_tbl, nullptr);
 	CV_convert_init(&csptr->charset_from_unicode,
 					CV_unicode_to_nc,
 					from_unicode_tbl1, from_unicode_tbl2);
@@ -57,85 +57,85 @@ CHARSET_ENTRY(CS_iso_ISO8859_1)
 	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_2)
+CHARSET_ENTRY(CS_iso_ISO8859_2)
 {
 #include "../intl/charsets/cs_iso8859_2.h"
 
-    common_8bit_init (csptr, "ISO88592", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88592", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_3)
+CHARSET_ENTRY(CS_iso_ISO8859_3)
 {
 #include "../intl/charsets/cs_iso8859_3.h"
 
-    common_8bit_init (csptr, "ISO88593", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88593", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_4)
+CHARSET_ENTRY(CS_iso_ISO8859_4)
 {
 #include "../intl/charsets/cs_iso8859_4.h"
 
-    common_8bit_init (csptr, "ISO88594", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88594", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_5)
+CHARSET_ENTRY(CS_iso_ISO8859_5)
 {
 #include "../intl/charsets/cs_iso8859_5.h"
 
-    common_8bit_init (csptr, "ISO88595", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88595", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_6)
+CHARSET_ENTRY(CS_iso_ISO8859_6)
 {
 #include "../intl/charsets/cs_iso8859_6.h"
 
-    common_8bit_init (csptr, "ISO88596", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88596", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_7)
+CHARSET_ENTRY(CS_iso_ISO8859_7)
 {
 #include "../intl/charsets/cs_iso8859_7.h"
 
-    common_8bit_init (csptr, "ISO88597", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88597", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_8)
+CHARSET_ENTRY(CS_iso_ISO8859_8)
 {
 #include "../intl/charsets/cs_iso8859_8.h"
 
-    common_8bit_init (csptr, "ISO88598", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88598", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_9)
+CHARSET_ENTRY(CS_iso_ISO8859_9)
 {
 #include "../intl/charsets/cs_iso8859_9.h"
 
-    common_8bit_init (csptr, "ISO88599", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO88599", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
-CHARSET_ENTRY (CS_iso_ISO8859_13)
+CHARSET_ENTRY(CS_iso_ISO8859_13)
 {
 #include "../intl/charsets/cs_iso8859_13.h"
 
-    common_8bit_init (csptr, "ISO885913", to_unicode_map,
-                      from_unicode_mapping_array, from_unicode_map);
-    CHARSET_RETURN;
+	common_8bit_init(csptr, "ISO885913", to_unicode_map,
+					 from_unicode_mapping_array, from_unicode_map);
+	CHARSET_RETURN;
 }
 
 CHARSET_ENTRY(CS_dos_437)
