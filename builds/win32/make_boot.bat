@@ -37,6 +37,12 @@ if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ICU (
   goto :END
 )
 
+if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ZLIB (
+  echo Windows/ARM64 build requires WITH_SYSTEM_ZLIB: no bundled zlib binaries are available for arm64.
+  set ERRLEV=1
+  goto :END
+)
+
 @if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 

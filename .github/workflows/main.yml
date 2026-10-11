@@ -234,10 +234,10 @@ jobs:
           REM choco uninstall --no-progress --yes innosetup
           choco install --no-progress --yes innosetup --version=6.4.0
 
-      - name: Install ICU (system)
+      - name: Install ICU and zlib (system)
         shell: cmd
         run: |
-          vcpkg install icu:arm64-windows
+          vcpkg install icu:arm64-windows zlib:arm64-windows
           echo INCLUDE=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\include;%INCLUDE%>> %GITHUB_ENV%
           echo LIB=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\lib;%LIB%>> %GITHUB_ENV%
           echo PATH=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\bin;%PATH%>> %GITHUB_ENV%
@@ -253,7 +253,7 @@ jobs:
           set FB_PROCESSOR_ARCHITECTURE=ARM64
           call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
           cd builds\win32
-          call run_all.bat PDB WITH_SYSTEM_ICU
+          call run_all.bat PDB WITH_SYSTEM_ICU WITH_SYSTEM_ZLIB
           call run_tests.bat
 
       - name: Upload zip
