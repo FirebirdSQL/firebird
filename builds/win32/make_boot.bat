@@ -159,6 +159,7 @@ for %%v in (firebird plugins) do (
 @if defined FBBUILD_WITH_SYSTEM_BOOST set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_TOMMATH set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_TOMCRYPT set SYSLIBS_ANY=1
+@if defined FBBUILD_WITHOUT_TOMCRYPT set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_ZLIB set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_ICU set SYSLIBS_ANY=1
 @if not defined SYSLIBS_ANY goto :EOF
@@ -181,6 +182,12 @@ for %%v in (firebird plugins) do (
 	@echo Using system libtomcrypt
 	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
 	@echo     ^<FbTomCryptLib^>tomcrypt.lib^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITHOUT_TOMCRYPT (
+	@echo Building without libtomcrypt
+	@echo     ^<FbWithoutTomCrypt^>true^</FbWithoutTomCrypt^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
 )
 @if defined FBBUILD_WITH_SYSTEM_ZLIB (
 	@echo Using system zlib
@@ -227,7 +234,7 @@ goto :EOF
 	@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
 	if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 )
-@if not defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
+@if not defined FBBUILD_WITH_SYSTEM_TOMCRYPT if not defined FBBUILD_WITHOUT_TOMCRYPT (
 	@echo Building LibTomCrypt ^(%FB_OBJ_DIR%^)...
 	@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
 	if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%

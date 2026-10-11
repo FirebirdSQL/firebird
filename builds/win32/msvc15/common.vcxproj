@@ -56,7 +56,7 @@
     <ClCompile Include="..\..\..\src\common\classes\TempFile.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\TimerImpl.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\timestamp.cpp" />
-    <ClCompile Include="..\..\..\src\common\classes\TomCryptHash.cpp" />
+    <ClCompile Include="..\..\..\src\common\classes\TomCryptHash.cpp" Condition="'$(FbWithoutTomCrypt)'!='true'" />
     <ClCompile Include="..\..\..\src\common\classes\UserBlob.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\zip.cpp" />
     <ClCompile Include="..\..\..\src\common\config\config.cpp" />
@@ -410,7 +410,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;SUPERSERVER;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;$(FbTomMathLib);$(FbTomCryptLib);../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|arm64'">
@@ -424,7 +424,7 @@
       </PrecompiledHeader>
     </ClCompile>
     <Lib>
-      <AdditionalDependencies>ws2_32.lib;../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib;../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib;../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;$(FbTomMathLib);$(FbTomCryptLib);../../../extern/decNumber/lib/$(PlatformName)\$(Configuration)\decnumber.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

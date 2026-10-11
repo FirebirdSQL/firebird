@@ -18,6 +18,8 @@ set ERRLEV=0
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
+) else if defined FBBUILD_WITHOUT_TOMCRYPT (
+	call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log DLLs\yvalve
 ) else (
 	call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log DLLs\yvalve DLLs\chacha
 )
@@ -104,7 +106,8 @@ copy %FB_GEN_DIR%\iberror_c.h %FB_OUTPUT_DIR%\include\firebird\impl > nul
 xcopy /y %FB_ROOT_PATH%\src\include\firebird %FB_OUTPUT_DIR%\include\firebird /e > nul
 
 :: With system boost, do not distribute the embedded copy and make Message.h use <boost/...> and BOOST_PP_
-@if exist %FB_TEMP_DIR%\FirebirdSystemLibs.props (
+@findstr /C:"<FbBoostIncludeDir>" "%FB_TEMP_DIR%\FirebirdSystemLibs.props" >nul 2>&1
+@if not errorlevel 1 (
 	rmdir /S /Q %FB_OUTPUT_DIR%\include\firebird\impl\boost 2>nul
 	powershell -NoProfile -Command "(Get-Content '%FB_ROOT_PATH%\src\include\firebird\Message.h') -replace '^#include \x22\./impl/boost/(.+)\x22', '#include <boost/$1>' -replace '\bFB_BOOST_PP_', 'BOOST_PP_' | Set-Content -Encoding ascii '%FB_OUTPUT_DIR%\include\firebird\Message.h'"
 )

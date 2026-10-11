@@ -11,6 +11,7 @@
     <FbTomMathDefines></FbTomMathDefines>
     <FbTomCryptIncludeDir>../../../extern/libtomcrypt/src/headers;</FbTomCryptIncludeDir>
     <FbTomCryptLib>../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib</FbTomCryptLib>
+    <FbWithoutTomCrypt>false</FbWithoutTomCrypt>
     <FbZlibIncludeDir>../../../extern/zlib;</FbZlibIncludeDir>
     <FbIcuIncludeDir>../../../extern/icu/include;</FbIcuIncludeDir>
   </PropertyGroup>
