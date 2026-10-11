@@ -8,6 +8,7 @@
     <FbBoostIncludeDir>../../../extern/boost;</FbBoostIncludeDir>
     <FbTomMathIncludeDir>../../../extern/libtommath;</FbTomMathIncludeDir>
     <FbTomMathLib>../../../extern/libtommath/lib/$(PlatformName)\$(Configuration)\tommath.lib</FbTomMathLib>
+    <FbTomMathDefines></FbTomMathDefines>
     <FbTomCryptIncludeDir>../../../extern/libtomcrypt/src/headers;</FbTomCryptIncludeDir>
     <FbTomCryptLib>../../../extern/libtomcrypt/lib/$(PlatformName)\$(Configuration)\tomcrypt.lib</FbTomCryptLib>
     <FbZlibIncludeDir>../../../extern/zlib;</FbZlibIncludeDir>
@@ -36,7 +37,7 @@
       <CompileAs>Default</CompileAs>
       <UseFullPaths>false</UseFullPaths>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;$(FbTomMathDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SuppressStartupBanner>true</SuppressStartupBanner>

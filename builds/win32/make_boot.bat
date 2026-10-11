@@ -160,6 +160,7 @@ for %%v in (firebird plugins) do (
 	@echo Using system libtommath
 	@echo     ^<FbTomMathIncludeDir^>^</FbTomMathIncludeDir^>>> "%SYSLIBS_PROPS%"
 	@echo     ^<FbTomMathLib^>tommath.lib^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	call :tommath_probe
 )
 @if defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
 	@echo Using system libtomcrypt
@@ -176,6 +177,21 @@ for %%v in (firebird plugins) do (
 )
 @echo   ^</PropertyGroup^>>> "%SYSLIBS_PROPS%"
 @echo ^</Project^>>> "%SYSLIBS_PROPS%"
+@goto :EOF
+
+:: Check whether the system libtommath has the 1.2+ API (mp_to_ubin and others)
+:tommath_probe
+@set TOMMATH_PROBE=%FB_TEMP_DIR%\tommath_probe.cpp
+@echo #include ^<tommath.h^>> "%TOMMATH_PROBE%"
+@echo int main() { mp_int a; size_t n; return (int) mp_to_ubin(^&a, 0, 0, ^&n); }>> "%TOMMATH_PROBE%"
+@cl /nologo /Zs /TP "%TOMMATH_PROBE%" >nul 2>&1
+@if errorlevel 1 (
+	@echo     libtommath 1.2+ API not found
+) else (
+	@echo     libtommath 1.2+ API found
+	@echo     ^<FbTomMathDefines^>HAVE_TOMMATH_1_2_API;^</FbTomMathDefines^>>> "%SYSLIBS_PROPS%"
+)
+@del "%TOMMATH_PROBE%" 2>nul
 @goto :EOF
 
 ::===================
