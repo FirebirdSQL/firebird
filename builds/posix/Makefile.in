@@ -764,6 +764,9 @@ $(INCLUDE_DEST)/ib_util.h : $(SRC_OtherDistribHeaders)
 	$(CP) $^ $(INCLUDE_DEST)/
 
 NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
+ifeq ($(SYSTEM_BOOST_FLG),Y)
+NEW_INCLUDES_SRC := $(filter-out $(SRC_ROOT)/include/firebird/impl/boost/%,$(NEW_INCLUDES_SRC))
+endif
 NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
 
 include_generic: $(NEW_INCLUDES_DEST) $(INCLUDE_DEST)/ib_util.h
