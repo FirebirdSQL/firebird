@@ -175,13 +175,15 @@ for %%v in (firebird plugins) do (
 @if defined FBBUILD_WITH_SYSTEM_TOMMATH (
 	@echo Using system libtommath
 	@echo     ^<FbTomMathIncludeDir^>^</FbTomMathIncludeDir^>>> "%SYSLIBS_PROPS%"
-	@echo     ^<FbTomMathLib^>tommath.lib^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathLib^>^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathSysLib^>tommath.lib^</FbTomMathSysLib^>>> "%SYSLIBS_PROPS%"
 	call :tommath_probe
 )
 @if defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
 	@echo Using system libtomcrypt
 	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
-	@echo     ^<FbTomCryptLib^>tomcrypt.lib^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptSysLib^>tomcrypt.lib^</FbTomCryptSysLib^>>> "%SYSLIBS_PROPS%"
 )
 @if defined FBBUILD_WITHOUT_TOMCRYPT (
 	@echo Building without libtomcrypt
