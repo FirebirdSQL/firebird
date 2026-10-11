@@ -237,7 +237,7 @@ jobs:
       - name: Install ICU and zlib (system)
         shell: cmd
         run: |
-          vcpkg install icu:arm64-windows zlib:arm64-windows
+          vcpkg install --classic icu:arm64-windows zlib:arm64-windows
           echo INCLUDE=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\include;%INCLUDE%>> %GITHUB_ENV%
           echo LIB=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\lib;%LIB%>> %GITHUB_ENV%
           echo PATH=%VCPKG_INSTALLATION_ROOT%\installed\arm64-windows\bin;%PATH%>> %GITHUB_ENV%
