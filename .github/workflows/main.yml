@@ -211,8 +211,8 @@ jobs:
           name: firebird-windows-vs-${{ env.VS_VERSION }}-${{ matrix.platform }}-installer
           path: builds/install_images/*-windows-${{ matrix.platform }}.exe
 
-  # Windows ARM container is not yet available, so official build is done directly in Windows 11 runner
-  build-windows-arm64:
+  # Windows ARM container is not yet available
+  build-windows-arm64-non-official:
     #if: github.ref_type != 'tag'
     runs-on: windows-11-arm
     env:
