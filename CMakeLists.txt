@@ -331,6 +331,8 @@ endif()
 #
 ################################################################################
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 if (WIN32)
     set(OS_DIR win32)
     set(VERSION_RC ${CMAKE_CURRENT_SOURCE_DIR}/src/jrd/version.rc)
@@ -469,8 +471,10 @@ set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE}   ${COMMON_FLAGS} ${PROD_F
 set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   ${COMMON_FLAGS} ${DEV_FLAGS}" )
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_FLAGS} ${PROD_FLAGS}")
 
-message("== CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE}")
+message("== CMAKE_C_FLAGS_RELEASE   ${CMAKE_C_FLAGS_RELEASE}")
 message("== CMAKE_CXX_FLAGS_DEBUG   ${CMAKE_CXX_FLAGS_DEBUG}")
+message("== CMAKE_C_FLAGS_DEBUG     ${CMAKE_C_FLAGS_DEBUG}")
+message("== CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE}")
 
 ################################################################################
 #
