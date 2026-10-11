@@ -162,6 +162,9 @@ for %%v in (firebird plugins) do (
 @if defined FBBUILD_WITH_SYSTEM_ZLIB set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_ICU set SYSLIBS_ANY=1
 @if not defined SYSLIBS_ANY goto :EOF
+:: Optional extra include directory for system ICU/zlib headers (e.g. vcpkg), since MSBuild ignores %INCLUDE%
+@set SYSLIBS_INCDIR=
+@if defined FBBUILD_SYSTEM_INCLUDE_DIR set SYSLIBS_INCDIR=%FBBUILD_SYSTEM_INCLUDE_DIR%;
 @echo ^<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"^>> "%SYSLIBS_PROPS%"
 @echo   ^<PropertyGroup^>>> "%SYSLIBS_PROPS%"
 @if defined FBBUILD_WITH_SYSTEM_BOOST (
@@ -181,11 +184,11 @@ for %%v in (firebird plugins) do (
 )
 @if defined FBBUILD_WITH_SYSTEM_ZLIB (
 	@echo Using system zlib
-	@echo     ^<FbZlibIncludeDir^>^</FbZlibIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbZlibIncludeDir^>%SYSLIBS_INCDIR%^</FbZlibIncludeDir^>>> "%SYSLIBS_PROPS%"
 )
 @if defined FBBUILD_WITH_SYSTEM_ICU (
 	@echo Using system ICU
-	@echo     ^<FbIcuIncludeDir^>^</FbIcuIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbIcuIncludeDir^>%SYSLIBS_INCDIR%^</FbIcuIncludeDir^>>> "%SYSLIBS_PROPS%"
 )
 @echo   ^</PropertyGroup^>>> "%SYSLIBS_PROPS%"
 @echo ^</Project^>>> "%SYSLIBS_PROPS%"
