@@ -123,7 +123,7 @@ jobs:
   build-alpine-x64:
     if: github.ref_type != 'tag'
     runs-on: ubuntu-22.04
-    container: alpine:3.14
+    container: alpine:3.22.1
 
     steps:
       - name: Checkout

@@ -102,7 +102,11 @@ namespace Firebird
 
 	void BigInteger::assign(unsigned int count, const unsigned char* bytes)
 	{
+#ifdef HAVE_TOMMATH_1_2_API
+		CHECK_MP(mp_from_ubin(&t, bytes, count));
+#else
 		CHECK_MP(mp_read_unsigned_bin(&t, bytes, count));
+#endif
 	}
 
 	BigInteger BigInteger::operator+ (const BigInteger& val) const
@@ -191,17 +195,26 @@ namespace Firebird
 
 	void BigInteger::getBytes(Firebird::UCharBuffer& bytes) const
 	{
+#ifdef HAVE_TOMMATH_1_2_API
+		const unsigned int len = length();
+		CHECK_MP(mp_to_ubin(&t, bytes.getBuffer(len), len, NULL));
+#else
 		CHECK_MP(mp_to_unsigned_bin(const_cast<mp_int*>(&t), bytes.getBuffer(length())));
+#endif
 	}
 
 	unsigned int BigInteger::length() const
 	{
+#ifdef HAVE_TOMMATH_1_2_API
+		return static_cast<unsigned int>(mp_ubin_size(&t));
+#else
 		int rc = mp_unsigned_bin_size(const_cast<mp_int*>(&t));
 		if (rc < 0)
 		{
 			check(rc, "mp_unsigned_bin_size(&t)");
 		}
 		return static_cast<unsigned int>(rc);
+#endif
 	}
 
 	void BigInteger::getText(string& str, unsigned int radix) const
@@ -209,7 +222,11 @@ namespace Firebird
 		int size;
 		CHECK_MP(mp_radix_size(const_cast<mp_int*>(&t), radix, &size));
 		str.resize(size - 1, ' ');
+#ifdef HAVE_TOMMATH_1_2_API
+		CHECK_MP(mp_to_radix(&t, str.begin(), size, NULL, radix));
+#else
 		CHECK_MP(mp_toradix(const_cast<mp_int*>(&t), str.begin(), radix));
+#endif
 	}
 
 	BigInteger BigInteger::modPow(const BigInteger& pow, const BigInteger& mod) const

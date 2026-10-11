@@ -1002,6 +1002,8 @@ else
 	LIBS=
 	AC_CHECK_LIB(tommath, mp_init, MATHLIB=-ltommath,
 		AC_MSG_ERROR(Library tommath not found - please install development tommath package or use --with-builtin-tommath))
+	AC_CHECK_LIB(tommath, mp_to_ubin,
+		AC_DEFINE(HAVE_TOMMATH_1_2_API, 1, [Define this if libtommath has the 1.2+ API (mp_to_ubin, mp_from_ubin, mp_to_radix)]))
 	XE_RESTORE_ENV()
 fi
 AC_SUBST(MATHLIB)
