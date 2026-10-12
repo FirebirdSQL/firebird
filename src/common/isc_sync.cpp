@@ -2601,7 +2601,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 			!FlushViewOfFile(sh_mem_header, 0))
 		{
 			error(statusVector, "SetFilePointer", GetLastError());
-			return NULL;
+			return false;
 		}
 	}
 
@@ -2644,7 +2644,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (file_obj == NULL)
 	{
 		error(statusVector, "CreateFileMapping", GetLastError());
-		return NULL;
+		return false;
 	}
 
 	MemoryHeader* const address = (MemoryHeader*) MapViewOfFile(file_obj, FILE_MAP_WRITE, 0, 0, 0);
@@ -2653,7 +2653,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	{
 		error(statusVector, "MapViewOfFile", GetLastError());
 		CloseHandle(file_obj);
-		return NULL;
+		return false;
 	}
 
 	if (flag)
@@ -2672,7 +2672,7 @@ bool SharedMemoryBase::remapFile(CheckStatusWrapper* statusVector,
 	if (!sh_mem_length_mapped)
 	{
 		error(statusVector, "sh_mem_length_mapped is 0", 0);
-		return NULL;
+		return false;
 	}
 
 	return (address);
