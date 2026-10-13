@@ -967,20 +967,22 @@ int Parser::yylexAux()
 					if (signExponent == 0)
 						signExponent = 1;
 
-					exponentValue *= decimalConversion;
-
-					if (signExponent == 1)
-						exponentValue += ch;
-					else
-						exponentValue -= ch;
-
+					// The exponent is needed only to choose between DOUBLE PRECISION and DECFLOAT.
+					// The DECFLOAT range is checked when the literal is converted: it depends on
+					// the mantissa digits and the scale too (0.1e6145 = 1e6144), subnormal values
+					// (1e-6176) are allowed. Stopping here also prevents integer overflow.
 					if (!isOverExponent64b)
 					{
+						exponentValue *= decimalConversion;
+
+						if (signExponent == 1)
+							exponentValue += ch;
+						else
+							exponentValue -= ch;
+
 						if (exponentValue > DBL_MAX_10_EXP || exponentValue < -DBL_MAX_10_EXP)
 							isOverExponent64b = true;
 					}
-					else if (exponentValue > DECQUAD_Emax || exponentValue < DECQUAD_Emin)
-						exceptionNumericLiterals(Firebird::string("Overflow of the exponent"));
 				}
 				else
 				{
