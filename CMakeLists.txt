@@ -341,7 +341,6 @@ set(WARNING_FLAGS
     -Wno-unused-variable 
     -Wno-narrowing 
     -Wno-unused-local-typedefs 
-    -Werror=return-type 
     -Wno-unknown-warning-option
 ) 
 set(WARNING_FLAGS_C ${WARNING_FLAGS} 
@@ -350,7 +349,6 @@ set(WARNING_FLAGS_C ${WARNING_FLAGS}
 set(WARNING_FLAGS_CXX ${WARNING_FLAGS} 
     -Wno-invalid-offsetof 
     -Wno-class-memaccess
-    -Werror=delete-incomplete 
 )
 
 
