@@ -333,6 +333,31 @@ endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+set(WARNING_FLAGS
+    -Wall 
+    -Wno-switch 
+    -Wno-parentheses 
+    -Wno-unknown-pragmas 
+    -Wno-unused-variable 
+    -Wno-narrowing 
+    -Wno-unused-local-typedefs 
+    -Werror=return-type 
+) 
+set(WARNING_FLAGS_C ${WARNING_FLAGS} 
+
+)
+set(WARNING_FLAGS_CXX ${WARNING_FLAGS} 
+    -Wno-invalid-offsetof 
+    -Wno-class-memaccess
+    -Werror=delete-incomplete 
+)
+
+
+
+string(REPLACE ";" " " WARNING_FLAGS_C   "${WARNING_FLAGS_C}")
+string(REPLACE ";" " " WARNING_FLAGS_CXX "${WARNING_FLAGS_CXX}")
+
+
 if (WIN32)
     set(OS_DIR win32)
     set(VERSION_RC ${CMAKE_CURRENT_SOURCE_DIR}/src/jrd/version.rc)
@@ -447,7 +472,7 @@ if (UNIX)
         set(LIB_tinfo   tinfo)
         set(COMMON_FLAGS "${COMMON_FLAGS} -DLINUX -pipe -fmessage-length=0")
         set(PROD_FLAGS   "${PROD_FLAGS} -O3") 
-        set(DEV_FLAGS    "${DEV_FLAGS}  -ggdb -Wall -Wno-non-virtual-dtor -DDEV_BUILD")    
+        set(DEV_FLAGS    "${DEV_FLAGS}  -ggdb -DDEV_BUILD  ")    
         
         if (CPU_IS_ARM AND CPU_IS_64)
             set(COMMON_FLAGS "${COMMON_FLAGS} -DARM64")
@@ -466,9 +491,9 @@ if (UNIX)
     endif()
 endif()
 
-set(CMAKE_C_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG}     ${COMMON_FLAGS} ${DEV_FLAGS}" )
+set(CMAKE_C_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG}     ${COMMON_FLAGS} ${DEV_FLAGS} ${WARNING_FLAGS_C}" )
 set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE}   ${COMMON_FLAGS} ${PROD_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   ${COMMON_FLAGS} ${DEV_FLAGS}" )
+set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   ${COMMON_FLAGS} ${DEV_FLAGS} ${WARNING_FLAGS_CXX}")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${COMMON_FLAGS} ${PROD_FLAGS}")
 
 message("== CMAKE_C_FLAGS_RELEASE   ${CMAKE_C_FLAGS_RELEASE}")
