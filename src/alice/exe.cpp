@@ -83,7 +83,7 @@ int EXE_action(const TEXT* database, const SINT64 switches)
 
 		// generate the database parameter block for the attach,
 		// based on the various switches
-		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE);
+		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		buildDpb(dpb, switches);
 
 		FB_API_HANDLE handle = 0;
@@ -159,7 +159,7 @@ int EXE_two_phase(const TEXT* database, const SINT64 switches)
 
 		// generate the database parameter block for the attach,
 		// based on the various switches
-		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::Tagged, MAX_DPB_SIZE);
+		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
 		buildDpb(dpb, switches);
 
 		FB_API_HANDLE handle = 0;
@@ -231,6 +231,20 @@ static void buildDpb(Firebird::ClumpletWriter& dpb, const SINT64 switches)
 		if (switches & sw_ignore)
 			b |= isc_dpb_ignore;
 		dpb.insertByte(isc_dpb_verify, b);
+
+		const user_action& ua = tdgbl->ALICE_data;
+
+		if (switches & sw_skip_data)
+			dpb.insertString(isc_dpb_verify_skip_data, ua.ua_skip_data);
+
+		if (switches & sw_include_data)
+			dpb.insertString(isc_dpb_verify_include_data, ua.ua_include_data);
+
+		if (switches & sw_skip_schema_data)
+			dpb.insertString(isc_dpb_verify_skip_schema_data, ua.ua_skip_schema_data);
+
+		if (switches & sw_include_schema_data)
+			dpb.insertString(isc_dpb_verify_include_schema_data, ua.ua_include_schema_data);
 	}
 	else if (switches & sw_housekeeping) {
 		dpb.insertInt(isc_dpb_sweep_interval, tdgbl->ALICE_data.ua_sweep_interval);

@@ -4341,6 +4341,10 @@ const
 	isc_dpb_search_path = byte(105);
 	isc_dpb_blr_request_search_path = byte(106);
 	isc_dpb_gbak_restore_has_schema = byte(107);
+	isc_dpb_verify_skip_data = byte(108);
+	isc_dpb_verify_include_data = byte(109);
+	isc_dpb_verify_skip_schema_data = byte(110);
+	isc_dpb_verify_include_schema_data = byte(111);
 	isc_dpb_address = byte(1);
 	isc_dpb_addr_protocol = byte(1);
 	isc_dpb_addr_endpoint = byte(2);
@@ -4570,6 +4574,10 @@ const
 	isc_spb_rpr_rollback_trans_64 = byte(50);
 	isc_spb_rpr_recover_two_phase_64 = byte(51);
 	isc_spb_rpr_par_workers = byte(52);
+	isc_spb_rpr_skip_data = byte(53);
+	isc_spb_rpr_include_data = byte(54);
+	isc_spb_rpr_skip_schema_data = byte(55);
+	isc_spb_rpr_include_schema_data = byte(56);
 	isc_spb_rpr_validate_db = $01;
 	isc_spb_rpr_sweep_db = $02;
 	isc_spb_rpr_mend_db = $04;

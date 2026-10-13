@@ -3047,6 +3047,18 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				}
 				get_action_svc_data(spb, switches, bigint);
 				break;
+
+			case isc_spb_rpr_skip_data:
+			case isc_spb_rpr_include_data:
+			case isc_spb_rpr_skip_schema_data:
+			case isc_spb_rpr_include_schema_data:
+				if (!get_action_svc_parameter(spb.getClumpTag(), alice_in_sw_table, switches))
+				{
+					return false;
+				}
+				get_action_svc_string(spb, switches);
+				break;
+
 			case isc_spb_prp_write_mode:
 			case isc_spb_prp_access_mode:
 			case isc_spb_prp_reserve_space:

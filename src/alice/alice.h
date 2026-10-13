@@ -93,6 +93,10 @@ struct user_action
 	alice_shut_mode ua_shutdown_mode;
 	alice_repl_mode ua_replica_mode;
 	SSHORT ua_parallel_workers;
+	const char* ua_skip_data;
+	const char* ua_include_data;
+	const char* ua_skip_schema_data;
+	const char* ua_include_schema_data;
 };
 
 

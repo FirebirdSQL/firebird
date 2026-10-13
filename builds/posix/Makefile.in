@@ -691,7 +691,7 @@ $(GSPLIT):		$(GSPLIT_Objects) $(COMMON_LIB)
 gfix:			$(GFIX)
 
 $(GFIX):		$(GFIX_Objects) $(COMMON_LIB)
-	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ $(FIREBIRD_LIBRARY_LINK) $(LINK_LIBS) $(RE2LIB)
 
 gsec:			$(GSEC)
 

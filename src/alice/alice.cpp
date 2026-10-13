@@ -50,6 +50,8 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/Switches.h"
 #include "../common/SimpleStatusVector.h"
+#include "../common/SimilarToRegex.h"
+#include "../common/isc_f_proto.h"
 #include "../alice/aliceswi.h"
 
 #ifdef HAVE_UNISTD_H
@@ -95,6 +97,37 @@ constexpr int ALICE_MSG_FAC = FB_IMPL_MSG_FACILITY_GFIX;
 
 static void alice_output(bool error, const SCHAR*, ...) ATTRIBUTE_FORMAT(2,3);
 
+//____________________________________________________________
+//
+//	Get regular expression argument of -skip_data / -include_data
+//	and similar switches and check it can be compiled.
+//
+
+static const char* get_data_filter(Firebird::UtilSvc* uSvc, const char**& argv, int& argc,
+	USHORT missingMsg)
+{
+	if (--argc <= 0)
+		ALICE_error(missingMsg);
+
+	const char* const pattern = *argv++;
+
+	try
+	{
+		Firebird::string filter(pattern);
+		if (!uSvc->utf8FileNames())
+			ISC_systemToUtf8(filter);
+
+		Firebird::SimilarToRegex matcher(*getDefaultMemoryPool(),
+			Firebird::SimilarToFlag::CASE_INSENSITIVE,
+			filter.c_str(), filter.length(), "\\", 1);
+	}
+	catch (const Firebird::Exception&)
+	{
+		ALICE_error(146, SafeArg() << pattern);	// msg 146: invalid regular expression "@1"
+	}
+
+	return pattern;
+}
 
 
 //____________________________________________________________
@@ -143,6 +176,10 @@ int alice(Firebird::UtilSvc* uSvc)
 	tdgbl->ALICE_data.ua_user = NULL;
 	tdgbl->ALICE_data.ua_role = NULL;
 	tdgbl->ALICE_data.ua_password = NULL;
+	tdgbl->ALICE_data.ua_skip_data = NULL;
+	tdgbl->ALICE_data.ua_include_data = NULL;
+	tdgbl->ALICE_data.ua_skip_schema_data = NULL;
+	tdgbl->ALICE_data.ua_include_schema_data = NULL;
 #ifdef TRUSTED_AUTH
 	tdgbl->ALICE_data.ua_trusted = false;
 #endif
@@ -477,6 +514,30 @@ int alice(Firebird::UtilSvc* uSvc)
 			else
 				ALICE_error(135);	// msg 135: replica mode (none / read_only / read_write) required
 		}
+
+		if (table->in_sw_value & sw_skip_data)
+		{
+			tdgbl->ALICE_data.ua_skip_data = get_data_filter(uSvc, argv, argc, 142);
+			// msg 142: missing regular expression to skip tables
+		}
+
+		if (table->in_sw_value & sw_include_data)
+		{
+			tdgbl->ALICE_data.ua_include_data = get_data_filter(uSvc, argv, argc, 143);
+			// msg 143: missing regular expression to include tables
+		}
+
+		if (table->in_sw_value & sw_skip_schema_data)
+		{
+			tdgbl->ALICE_data.ua_skip_schema_data = get_data_filter(uSvc, argv, argc, 144);
+			// msg 144: missing regular expression to skip schemas
+		}
+
+		if (table->in_sw_value & sw_include_schema_data)
+		{
+			tdgbl->ALICE_data.ua_include_schema_data = get_data_filter(uSvc, argv, argc, 145);
+			// msg 145: missing regular expression to include schemas
+		}
 	}
 
 	// put this here since to put it above overly complicates the parsing.
@@ -521,6 +582,15 @@ int alice(Firebird::UtilSvc* uSvc)
 			ALICE_print(22);	// msg 22: \n    qualifiers show the major option in parenthesis
 		}
 		ALICE_exit(FINI_ERROR, tdgbl);
+	}
+
+	// Data filters affect records validation only, so they are useless without -full.
+	// Can't use in_sw_requires since it only looks backwards on command line,
+	// and services API puts switches on command line in the order of SPB items.
+	if ((flags & sw_data_filters) && !(flags & sw_full))
+	{
+		ALICE_error(147);
+		// msg 147: -skip_data, -include_data, -skip_schema_data and -include_schema_data require -full
 	}
 
 	if (!database) {

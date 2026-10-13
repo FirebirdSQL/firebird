@@ -24,7 +24,12 @@
 #ifndef JRD_VAL_PROTO_H
 #define JRD_VAL_PROTO_H
 
-bool VAL_validate(Jrd::thread_db*, USHORT);
+namespace Jrd
+{
+	struct ValidationDataFilters;
+}
+
+bool VAL_validate(Jrd::thread_db*, USHORT, const Jrd::ValidationDataFilters&);
 int VAL_service(Firebird::UtilSvc*);
 
 inline constexpr int IN_SW_VAL_TAB_INCL		= 1;

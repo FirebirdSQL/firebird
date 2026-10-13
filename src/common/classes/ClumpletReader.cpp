@@ -346,6 +346,10 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			switch (tag)
 			{
 			case isc_spb_dbname:
+			case isc_spb_rpr_skip_data:
+			case isc_spb_rpr_include_data:
+			case isc_spb_rpr_skip_schema_data:
+			case isc_spb_rpr_include_schema_data:
 				return StringSpb;
 			case isc_spb_options:
 			case isc_spb_rpr_commit_trans:
