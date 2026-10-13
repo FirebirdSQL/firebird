@@ -872,6 +872,7 @@ AttNumber PAG_attachment_id(thread_db* tdbb)
 		const AttNumber att_id =
 			((AttNumber) header->hdr_att_high << BITS_PER_LONG | header->hdr_attachment_id) + 1;
 		attachment->att_attachment_id = att_id;
+		dbb->dbb_attachment_id = att_id;
 		header->hdr_att_high = att_id >> BITS_PER_LONG;
 		header->hdr_attachment_id = (ULONG) (att_id & MAX_ULONG);
 
