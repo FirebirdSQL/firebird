@@ -342,6 +342,7 @@ set(WARNING_FLAGS
     -Wno-narrowing 
     -Wno-unused-local-typedefs 
     -Werror=return-type 
+    -Wno-unknown-warning-option
 ) 
 set(WARNING_FLAGS_C ${WARNING_FLAGS} 
 
