@@ -2234,36 +2234,52 @@ static idx_e check_foreign_key(thread_db* tdbb,
 		result = check_partner_index(tdbb, relation, record, transaction, idx,
 									 partner_relation, index_id);
 	}
-	else if ((idx->idx_flags & (idx_primary | idx_unique)) && (idx->idx_foreign_dep.dep_reference_id >= 0))
+	else if (idx->idx_flags & (idx_primary | idx_unique))
 	{
-		const auto& frgn = idx->idx_foreign_dep;
+		const auto dependencies = relation->getPermanent()->rel_primary_dpnds;
+		if (!dependencies)
+			return result;
 
-		partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, frgn.dep_relation, CacheFlag::AUTOCREATE);
-		fb_assert(partner_relation);
-		auto* partnerRelation = partner_relation->getPermanent();
-		index_id = frgn.dep_index;
+		// Check every foreign key referencing this primary or unique key
 
-		if ((relation->getPermanent()->rel_flags & REL_temp_conn) &&
-			(partnerRelation->rel_flags & REL_temp_tran))
+		for (const auto& frgn : *dependencies)
 		{
-			RelationPermanent::RelPagesSnapshot pagesSnapshot(tdbb, partnerRelation);
-			partnerRelation->fillPagesSnapshot(pagesSnapshot, true);
+			if (frgn.dep_reference_id != idx->idx_id)
+				continue;
 
-			for (FB_SIZE_T i = 0; i < pagesSnapshot.getCount(); i++)
+			partner_relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, frgn.dep_relation, CacheFlag::AUTOCREATE);
+			fb_assert(partner_relation);
+			auto* partnerRelation = partner_relation->getPermanent();
+			index_id = frgn.dep_index;
+
+			if ((relation->getPermanent()->rel_flags & REL_temp_conn) &&
+				(partnerRelation->rel_flags & REL_temp_tran))
 			{
-				RelationPages* partnerPages = pagesSnapshot[i];
-				tdbb->tdbb_temp_traid = partnerPages->rel_instance_id;
-				if ( (result = check_partner_index(tdbb, relation, record,
-							transaction, idx, partner_relation, index_id)) )
+				RelationPermanent::RelPagesSnapshot pagesSnapshot(tdbb, partnerRelation);
+				partnerRelation->fillPagesSnapshot(pagesSnapshot, true);
+
+				for (FB_SIZE_T i = 0; i < pagesSnapshot.getCount(); i++)
 				{
-					break;
+					RelationPages* partnerPages = pagesSnapshot[i];
+					tdbb->tdbb_temp_traid = partnerPages->rel_instance_id;
+					if ( (result = check_partner_index(tdbb, relation, record,
+								transaction, idx, partner_relation, index_id)) )
+					{
+						break;
+					}
 				}
+
+				tdbb->tdbb_temp_traid = 0;
+			}
+			else
+			{
+				result = check_partner_index(tdbb, relation, record, transaction, idx,
+					partner_relation, index_id);
 			}
 
-			tdbb->tdbb_temp_traid = 0;
+			if (result)
+				break;
 		}
-		else
-			result = check_partner_index(tdbb, relation, record, transaction, idx, partner_relation, index_id);
 	}
 
 	if (result)
