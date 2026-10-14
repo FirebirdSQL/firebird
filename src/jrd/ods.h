@@ -458,13 +458,15 @@ struct irtd
 {
 	USHORT irtd_field;
 	USHORT irtd_itype;
+	USHORT irtd_length;				// length in characters, if not zero
 	float irtd_selectivity;
 };
 
-static_assert(sizeof(struct irtd) == 8, "struct irtd size mismatch");
+static_assert(sizeof(struct irtd) == 12, "struct irtd size mismatch");
 static_assert(offsetof(struct irtd, irtd_field) == 0, "irtd_field offset mismatch");
 static_assert(offsetof(struct irtd, irtd_itype) == 2, "irtd_itype offset mismatch");
-static_assert(offsetof(struct irtd, irtd_selectivity) == 4, "irtd_selectivity offset mismatch");
+static_assert(offsetof(struct irtd, irtd_length) == 4, "irtd_length offset mismatch");
+static_assert(offsetof(struct irtd, irtd_selectivity) == 8, "irtd_selectivity offset mismatch");
 
 // possible index states
 inline constexpr UCHAR irt_unused		= 0;	// empty slot

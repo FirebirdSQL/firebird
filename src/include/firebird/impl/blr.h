@@ -467,6 +467,8 @@
 #define blr_dcl_local_table_index		(unsigned char) 4
 #define blr_dcl_local_table_index_unique		(unsigned char) 1
 #define blr_dcl_local_table_index_descending	(unsigned char) 2
+#define blr_dcl_local_table_index_segment		(unsigned char) 3
+#define blr_dcl_local_table_index_seg_length	(unsigned char) 4
 
 #define blr_local_table_truncate	(unsigned char) 219
 #define blr_local_table_id			(unsigned char) 220
