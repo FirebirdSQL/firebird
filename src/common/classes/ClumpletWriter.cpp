@@ -175,6 +175,7 @@ ClumpletWriter::ClumpletWriter(MemoryPool& given_pool, Kind k, FB_SIZE_T limit,
 							   const UCHAR* buffer, FB_SIZE_T buffLen, UCHAR tag)
 	: ClumpletReader(given_pool, k, NULL, 0),
 	  sizeLimit(limit),
+	  kindList(NULL),
 	  dynamic_buffer(getPool()),
 	  flag_overflow(false)
 {
