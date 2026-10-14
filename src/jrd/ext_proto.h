@@ -27,6 +27,7 @@
 #include "fb_blk.h"
 #include "../common/classes/alloc.h"
 #include "../common/classes/locks.h"
+#include "../common/classes/fb_string.h"
 
 #ifndef JRD_EXT_PROTO_H
 #define JRD_EXT_PROTO_H
@@ -42,6 +43,10 @@ class Database;
 class thread_db;
 
 // External file access block
+
+// Validate external file path against ExternalFileAccess policy,
+// raise isc_conf_access_denied if not allowed.
+void checkExternalFileAccess(Database* dbb, const Firebird::PathName& fileName);
 
 class ExternalFile : public pool_alloc_rpt<SCHAR, type_ext>
 {
