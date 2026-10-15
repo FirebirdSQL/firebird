@@ -459,7 +459,7 @@ public:
 		// preserving the page working sets of other attachments.
 		if (att != m_dbb->dbb_attachments || att->att_next)
 		{
-			if (att->isGbak() || DPM_data_pages(tdbb, getPermanent(m_creation->relation)) > m_dbb->dbb_bcb->bcb_count)
+			if (att->isGbak() || DPM_data_pages(tdbb, m_creation->relation) > m_dbb->dbb_bcb->bcb_count)
 				m_flags |= IS_LARGE_SCAN;
 		}
 
