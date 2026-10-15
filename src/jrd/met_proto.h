@@ -62,6 +62,7 @@ namespace Jrd
 	class GeneratorItem;
 	class BlobFilter;
 	class RelationPermanent;
+	class Tablespace;
 	class Triggers;
 	class TrigArray;
 
@@ -141,5 +142,12 @@ std::optional<ObjectType> MET_qualify_existing_name(Jrd::thread_db* tdbb, Jrd::Q
 bool MET_check_schema_exists(Jrd::thread_db* tdbb, const Jrd::MetaName& name);
 bool MET_get_ltt_index(Jrd::Attachment* attachment, const Jrd::QualifiedName& indexName,
 	Jrd::LocalTemporaryTable** outLtt = nullptr, Jrd::LocalTemporaryTable::Index** outIndex = nullptr);
+
+ULONG MET_rel_pagespace(Jrd::thread_db* tdbb, USHORT rel_id);
+ULONG MET_index_pagespace(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, USHORT idx_id);
+ULONG MET_tablespace_id(Jrd::thread_db* tdbb, const Jrd::MetaName& name, Firebird::PathName& fileName);
+bool MET_tablespace(Jrd::thread_db* tdbb, ULONG id, Jrd::MetaName& name, Firebird::PathName& fileName);
+void MET_get_ts_files(Jrd::thread_db* tdbb, Firebird::ObjectsArray<Firebird::PathName> &files);
+void MET_scan_tablespaces(Jrd::thread_db*);
 
 #endif // JRD_MET_PROTO_H

@@ -2260,6 +2260,8 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 	if (relation)
 		return relation;
 
+	const auto dbb = tdbb->getDatabase();
+
 	auto& pool = request ? *request->req_pool : *tdbb->getDefaultPool();
 
 	if (tableNumber >= MAX_DECLARED_LTT_COUNT)
@@ -2277,12 +2279,12 @@ jrd_rel* DeclareLocalTableNode::getRelation(thread_db* tdbb, Request* request) c
 	const auto permanent = FB_NEW_POOL(pool) Cached::Relation(tdbb, pool, id);
 	permanent->rel_name = name;
 	permanent->rel_flags = REL_sql_relation | REL_temp_ltt | REL_temp_frame;
-	permanent->getBasePages()->rel_pg_space_id = tdbb->getDatabase()->dbb_page_manager.getTempPageSpaceID(tdbb);
 
 	const auto newRelation = FB_NEW_POOL(pool) jrd_rel(pool, permanent);
 	newRelation->rel_current_fmt = 1;
 	newRelation->rel_dbkey_length = 8;
 	newRelation->rel_fields = vec<jrd_fld*>::newVector(pool, newRelation->rel_fields, format->fmt_count);
+	newRelation->setPageSpaceId(dbb->dbb_page_manager.getTempPageSpaceID(tdbb));
 
 	const auto relFormat = Format::newFormat(pool, format->fmt_count);
 	relFormat->fmt_length = format->fmt_length;
@@ -2432,7 +2434,7 @@ void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
 
 		try
 		{
-			permanent->delPages(tdbb, tempInstanceId);
+			permanent->deletePages(tdbb, tempInstanceId);
 
 			if (transaction)
 				transaction->discardTempFrameActions(relation, tempInstanceId);

@@ -291,7 +291,7 @@ void SDW_dump_pages(thread_db* tdbb)
 
 	// none of these pages should need any alteration
 	// since header pages for extend files are not handled at this level
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	window.win_flags = WIN_large_scan;
 	window.win_scans = 1;
 
@@ -824,7 +824,7 @@ void SDW_start(thread_db* tdbb, const TEXT* file_name,
 	Array<UCHAR> temp;
 	UCHAR* const spare_page = temp.getAlignedBuffer(dbb->dbb_page_size, dbb->getIOBlockSize());
 
-	WIN window(DB_PAGE_SPACE, -1);
+	WIN window(DB_PAGE_SPACE);
 	jrd_file* shadow_file = 0;
 
 	try {
