@@ -1,9 +1,9 @@
 name: CMake on multiple platforms
 
 # it is termorary, for check run error
-on: [push, pull_request]
-# on:
-#     workflow_dispatch:
+# on: [push, pull_request]
+on:
+    workflow_dispatch:
 
 jobs:
   build:
