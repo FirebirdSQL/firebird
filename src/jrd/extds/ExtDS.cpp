@@ -2557,14 +2557,11 @@ void Statement::raise(FbStatusVector* status, thread_db* tdbb, const char* sWher
 	}
 
 	string rem_err;
-	if (status)
-	{
-		m_provider.getRemoteError(status, rem_err);
+	m_provider.getRemoteError(status, rem_err);
 
-		if (status == tdbb->tdbb_status_vector)
-		{
-			status->init();
-		}
+	if (status == tdbb->tdbb_status_vector)
+	{
+		status->init();
 	}
 
 	// Execute statement error at @1 :\n@2Statement : @3\nData source : @4
