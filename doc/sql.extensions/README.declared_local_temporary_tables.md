@@ -20,7 +20,8 @@ Declared Local Temporary Tables are declared in the same declaration section as 
 DECLARE [LOCAL] TEMPORARY TABLE <table_name>
 (
     <column_definition> [, ...]
-);
+)
+[[UNIQUE] [ASC | DESC] INDEX <index_name> (<column_name> [, ...])]...;
 ```
 
 There is no `ON COMMIT` clause.
@@ -35,7 +36,8 @@ as
     declare local temporary table t (
         id integer not null,
         val varchar(20)
-    );
+    )
+    index idx_t_id (id);
 begin
     insert into t(id, val) values (1, 'a');
     insert into t(id, val) values (2, 'b');
@@ -59,7 +61,8 @@ create procedure p_count_values returns (n integer)
 as
     declare local temporary table t (
         id integer not null
-    );
+    )
+    unique index uq_t_id (id);
 begin
     insert into t(id) values (1);
     insert into t(id) values (2);
@@ -214,6 +217,17 @@ delete from t where ...;
 
 They can be used in subqueries, joins and cursor loops like other record sources, subject to the restrictions below.
 
+Indexes can be declared inline as part of the table declaration:
+
+```sql
+declare local temporary table t (
+    id integer not null,
+    val varchar(20)
+)
+    index idx_t_id (id)
+    descending index idx_t_val_desc (val);
+```
+
 ## Restrictions
 
 Declared Local Temporary Tables intentionally support a small table definition surface.
@@ -237,7 +251,7 @@ Constraint restrictions:
 Other restrictions:
 
 - A single PSQL statement, procedure, function or trigger may declare at most 1024 local temporary tables.
-- Indexes are not supported.
+- Expression-based indexes and partial indexes are not supported.
 - Triggers on declared local temporary tables are not supported.
 - Explicit privileges are not supported.
 - `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, `ALTER INDEX` and `DROP INDEX` are not valid for declared local

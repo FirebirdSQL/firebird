@@ -47,6 +47,7 @@ set(epp_boot_gds_files
     dsql/metd.epp
     dsql/DdlNodes.epp
     dsql/PackageNodes.epp
+    dsql/TablespaceNodes.epp
     jrd/dfw.epp
     jrd/dpm.epp
     jrd/dyn_util.epp
@@ -323,6 +324,7 @@ add_library                 (alice ${alice_src} ${alice_generated_src_master})
 ########################################
 
 file(GLOB burp_src "burp/*.cpp" "burp/*.h")
+file(GLOB burp_engine_src "burp/engine/*.cpp" "burp/engine/*.h")
 
 set(burp_generated_src
     burp/backup.epp
@@ -459,6 +461,7 @@ set(engine_src ${engine_src}
     utilities/gsec/gsec.cpp
     utilities/gstat/ppg.cpp
     utilities/nbackup/nbackup.cpp
+    ${burp_engine_src}
     # parse
     ${GENERATED_DIR}/dsql/parse.cpp
 )
@@ -469,6 +472,7 @@ set(engine_generated_src
     dsql/DdlNodes.epp
     dsql/metd.epp
     dsql/PackageNodes.epp
+    dsql/TablespaceNodes.epp
     jrd/dfw.epp
     jrd/dpm.epp
     jrd/dyn_util.epp
@@ -761,11 +765,17 @@ target_link_libraries       (gfix alice common yvalve)
 # EXECUTABLE boot_gbak
 ########################################
 
-file(GLOB gbak_include "burp/*.h")
+file(GLOB gbak_include "burp/*.h" "burp/engine/*.h")
+
+set(gbak_stub_src
+    burp/main/FastPathBurpProviderStub.cpp
+    burp/main/FastPathRecordReaderStub.cpp
+    burp/main/FastPathRecordWriterStub.cpp
+)
 
 if (NOT CMAKE_CROSSCOMPILING)
 
-add_executable              (boot_gbak burp/main/burpMain.cpp ${gbak_include} ${VERSION_RC})
+add_executable              (boot_gbak burp/main/burpMain.cpp ${gbak_stub_src} ${gbak_include} ${VERSION_RC})
 target_link_libraries       (boot_gbak boot_burp common boot_yvalve)
 set_output_directory        (boot_gbak . CURRENT_DIR)
 project_group               (boot_gbak Boot)
@@ -777,7 +787,7 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 # EXECUTABLE gbak
 ########################################
 
-add_executable              (gbak burp/main/burpMain.cpp ${gbak_include} ${VERSION_RC})
+add_executable              (gbak burp/main/burpMain.cpp ${gbak_stub_src} ${gbak_include} ${VERSION_RC})
 target_link_libraries       (gbak burp common yvalve)
 
 

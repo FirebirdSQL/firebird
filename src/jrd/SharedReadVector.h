@@ -51,6 +51,7 @@ public:
 			: count(0), capacity(size)
 		{ }
 
+	// TODO: protect increment of count with barrier.
 		FB_SIZE_T count, capacity;
 		T data[1];
 
@@ -100,6 +101,15 @@ public:
 		bool hasSpace(FB_SIZE_T needs = 1) const
 		{
 			return count + needs <= capacity;
+		}
+
+		bool add(const T& value)
+		{
+			if (!hasSpace())
+				return false;
+			data[count] = value;
+			++count; // don't update the count before the assignment due to possible races with concurrent readers
+			return true;
 		}
 
 		bool add(const Generation* from)

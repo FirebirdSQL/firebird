@@ -381,13 +381,17 @@ namespace Jrd
 		SavNumber m_number;
 	};
 
-	// Conditional savepoint used to ensure cursor stability in sub-queries
+	// Conditional savepoint used to ensure cursor stability in sub-queries and record sources
 
-	class StableCursorSavePoint
+	class StableCursorSavePoint final
 	{
 	public:
-		StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool start);
+		StableCursorSavePoint(thread_db* tdbb, jrd_tra* trans, bool shouldStart);
 		~StableCursorSavePoint() {} // undo is left up to the callers
+
+	public:
+		static SavNumber startSavepoint(jrd_tra* trans);
+		static void releaseSavepoint(thread_db* tdbb, jrd_tra* trans, SavNumber& number);
 
 		void release();
 

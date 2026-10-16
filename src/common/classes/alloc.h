@@ -481,7 +481,19 @@ namespace Firebird
 		using void_pointer = void* ;
 		using const_void_pointer = const void*;
 		using difference_type = std::ptrdiff_t;
-		using is_always_equal = std::true_type;
+
+		// We are using stateful allocator, so they are not always equal by definition.
+		using is_always_equal = std::false_type;
+
+		// Do not propagate allocator on any type of assignment or swap (but remember, swap on two objects with
+		// different allocators is UB if swap propagation is false, so be careful with it), because it can lead
+		// to accidental misuse or undesired behavior, e.g.:
+		// `std::string str1(default_pool, std::move(std::string(req_pool, "some string")));`
+		// Where `str1` will borrow a pointer from `req_pool`, but `str1` can live longer then `req_pool`, so
+		// when `req_pool` is gone, we will have a dead pointer.
+		using propagate_on_container_copy_assignment = std::false_type;
+		using propagate_on_container_move_assignment = std::false_type;
+		using propagate_on_container_swap = std::false_type;
 
 		template <typename U>
 		struct rebind

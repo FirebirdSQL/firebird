@@ -159,6 +159,7 @@ inline constexpr const char* FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
 inline constexpr const char* PACKAGES_GENERATOR = "RDB$PACKAGES";
 
 inline constexpr SLONG RELATIONS_GENERATOR = 13;
+inline constexpr SLONG TABLESPACES_GENERATOR = 14;
 
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
 inline constexpr const char* IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
@@ -435,6 +436,9 @@ static inline constexpr const char* DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"CREATE", "SCHEMA"},
 	{"ALTER", "SCHEMA"},
 	{"DROP", "SCHEMA"},
+	{"CREATE", "TABLESPACE"},
+	{"ALTER", "TABLESPACE"},
+	{"DROP", "TABLESPACE"},
 	{"CREATE", "SERVER"},
 	{"ALTER", "SERVER"},
 	{"DROP", "SERVER"},
@@ -496,12 +500,15 @@ inline constexpr int DDL_TRIGGER_DROP_MAPPING			= 47;
 inline constexpr int DDL_TRIGGER_CREATE_SCHEMA			= 48;
 inline constexpr int DDL_TRIGGER_ALTER_SCHEMA			= 49;
 inline constexpr int DDL_TRIGGER_DROP_SCHEMA			= 50;
-inline constexpr int DDL_TRIGGER_CREATE_FOREIGN_SERVER		= 51;
-inline constexpr int DDL_TRIGGER_ALTER_FOREIGN_SERVER		= 52;
-inline constexpr int DDL_TRIGGER_DROP_FOREIGN_SERVER		= 53;
-inline constexpr int DDL_TRIGGER_CREATE_USER_MAPPING		= 54;
-inline constexpr int DDL_TRIGGER_ALTER_USER_MAPPING		= 55;
-inline constexpr int DDL_TRIGGER_DROP_USER_MAPPING		= 56;
+inline constexpr int DDL_TRIGGER_CREATE_TABLESPACE		= 51;
+inline constexpr int DDL_TRIGGER_ALTER_TABLESPACE		= 52;
+inline constexpr int DDL_TRIGGER_DROP_TABLESPACE		= 53;
+inline constexpr int DDL_TRIGGER_CREATE_FOREIGN_SERVER	= 54;
+inline constexpr int DDL_TRIGGER_ALTER_FOREIGN_SERVER	= 55;
+inline constexpr int DDL_TRIGGER_DROP_FOREIGN_SERVER	= 56;
+inline constexpr int DDL_TRIGGER_CREATE_USER_MAPPING	= 57;
+inline constexpr int DDL_TRIGGER_ALTER_USER_MAPPING		= 58;
+inline constexpr int DDL_TRIGGER_DROP_USER_MAPPING		= 59;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -538,6 +545,10 @@ inline constexpr int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
 inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
+
+// Tablespaces
+const char* const PRIMARY_TABLESPACE_NAME = "PRIMARY";
+const char* const TEMP_TABLESPACE_NAME = "TEMPORARY";
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";

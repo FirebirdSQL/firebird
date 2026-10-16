@@ -346,18 +346,38 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 			break;
 		}
 
+		case obj_tablespace:
+		{
+			fb_assert(object_name.schema.isEmpty());
+
+			static const CachedRequestId tablespaceHandleId;
+			requestHandle.reset(tdbb, tablespaceHandleId);
+
+			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
+				TS IN RDB$TABLESPACES
+				WITH TS.RDB$TABLESPACE_NAME EQ object_name.object.c_str()
+			{
+				*errorCode = 326;	// isc_dyn_dup_tablespace
+			}
+			END_FOR
+
+			break;
+		}
+
 		case obj_foreign_server:
+		{
 			requestHandle.reset(tdbb, drq_l_f_server_name, DYN_REQUESTS);
 
 			FOR(REQUEST_HANDLE requestHandle TRANSACTION_HANDLE transaction)
 				FS IN RDB$FOREIGN_SERVERS
 				WITH FS.RDB$FOREIGN_SERVER_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 334;	// isc_dyn_foreign_server_already_exists
+				*errorCode = 339;	// isc_dyn_foreign_server_already_exists
 			}
 			END_FOR
 
 			break;
+		}
 
 		default:
 			fb_assert(false);

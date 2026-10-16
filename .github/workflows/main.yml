@@ -215,7 +215,8 @@ jobs:
     #if: github.ref_type != 'tag'
     runs-on: windows-11-arm
     env:
-      VS_VERSION: 2022
+      VS_VERSION: 2026
+      VS_VERSION_NUMBER: 18
 
     steps:
       - name: Checkout
@@ -235,7 +236,7 @@ jobs:
       - name: Build
         shell: cmd
         env:
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION_NUMBER%\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           set SEVENZIP=C:\Program Files\7-Zip
           set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6

@@ -74,12 +74,19 @@ class BulkInsert;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
+	SecDbContext(MemoryPool& p, Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
 	~SecDbContext();
 
 	Firebird::IAttachment* att;
 	Firebird::ITransaction* tra;
-	int savePoint;
+
+	void setSavePoint();
+	void releaseSavePoint();
+	void rollbackSavePoint() noexcept;
+
+private:
+	int savePointNumber = 0;
+	Firebird::string savePoint;
 };
 
 // Blobs active in transaction identified by bli_temp_id. Please keep this
@@ -218,6 +225,7 @@ public:
 		tra_dbcreators_list(nullptr),
 		tra_autonomous_pool(NULL),
 		tra_autonomous_cnt(0),
+		tra_tablespaces(*p),
 		tra_dependencies(*p)
 	{
 	}
@@ -353,6 +361,8 @@ private:
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 	BulkInsert* tra_bulkInsert = nullptr;
 
+	Tablespace::UsageList tra_tablespaces;
+
 public:
 	Firebird::Array<WildDependency> tra_dependencies;
 
@@ -440,6 +450,16 @@ public:
 			tra_gen_ids = FB_NEW_POOL(*tra_pool) GenIdCache(*tra_pool);
 
 		return tra_gen_ids;
+	}
+
+	void lockTablespace(thread_db* tdbb, ULONG pageSpaceId)
+	{
+		tra_tablespaces.add(tdbb, pageSpaceId);
+	}
+
+	void releaseTablespaces(thread_db* tdbb)
+	{
+		tra_tablespaces.releaseAll(tdbb);
 	}
 
 	// Get existing or create new BulkInsert for the relation.
@@ -575,6 +595,9 @@ enum dfw_t : int {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_create_tablespace,
+	dfw_delete_tablespace,
+	dfw_modify_tablespace,
 	dfw_delete_foreign_server,
 
 	// deferred works argument types

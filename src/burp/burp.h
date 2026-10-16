@@ -49,7 +49,8 @@
 #include "../common/status.h"
 #include "../common/sha.h"
 #include "../common/classes/ImplementHelper.h"
-#include "../jrd/intl.h"
+#include "../common/classes/GenericMap.h"
+//#include "../jrd/intl.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -126,6 +127,7 @@ enum rec_type {
 	rec_pub_table,			// Publication table
 	rec_schema,				// Schema
 	rec_constants,			// Constants
+	rec_tablespace,			// Tablespace
 	rec_foreign_server,		// Foreign server
 	rec_foreign_server_option,	// Foreign server option
 	rec_foreign_table_option,	// Foreign table option
@@ -218,7 +220,7 @@ Version 11: FB4.0.
 			SQL SECURITY feature, tables RDB$PUBLICATIONS/RDB$PUBLICATION_TABLES.
 
 Version 12: FB6.0.
-			Schemas.
+			Schemas and tablespaces.
 
 			Packaged constants.
 
@@ -311,6 +313,7 @@ enum att_type {
 	att_relation_schema_name,
 	att_relation_package_name,
 	att_relation_private_flag,
+	att_relation_tablespace_name,
 	att_relation_foreign_server_name,	// table is foreign
 
 	// Field attributes (used for both global and local fields)
@@ -372,6 +375,7 @@ enum att_type {
 	att_field_generator_name,
 	att_field_identity_type,
 	att_field_schema_name,
+	att_field_tablespace_name,
 
 	// Index attributes
 
@@ -389,6 +393,7 @@ enum att_type {
 	att_index_condition_source,
 	att_index_condition_blr,
 	att_index_foreign_key_schema_name,
+	att_index_tablespace_name,
 
 	// Data record
 
@@ -735,6 +740,15 @@ enum att_type {
 	att_constant_schema_name,
 	att_constant_description,
 
+	// Tablespace attributes
+	att_ts_name = SERIES,
+	att_ts_security_class,
+	att_ts_description,
+	att_ts_owner_name,
+	att_ts_file,
+	att_ts_offline,
+	att_ts_readonly,
+
 	// Foreign server attributes
 	att_foreign_server_name = SERIES,
 	att_foreign_server_data_wrapper_name,
@@ -749,14 +763,12 @@ enum att_type {
 	att_foreign_server_option_type,
 
 	// Foreign table option attributes
-
 	att_foreign_table_option_schema_name = SERIES,
 	att_foreign_table_option_table_name,
 	att_foreign_table_option_name,
 	att_foreign_table_option_value,
 
 	// Foreign table field option attributes
-
 	att_foreign_table_field_option_schema_name = SERIES,
 	att_foreign_table_field_option_table_name,
 	att_foreign_table_field_option_field_name,
@@ -764,18 +776,16 @@ enum att_type {
 	att_foreign_table_field_option_value,
 
 	// Foreign user mapping attributes
-
 	att_foreign_user_mapping_user = SERIES,
 	att_foreign_user_mapping_server_name,
 	att_foreign_user_mapping_description,
 
 	// Foreign mapping option attributes
-
 	att_foreign_mapping_option_user = SERIES,
 	att_foreign_mapping_option_server_name,
 	att_foreign_mapping_option_name,
 	att_foreign_mapping_option_value,
-	att_foreign_mapping_option_type,
+	att_foreign_mapping_option_type
 };
 
 
@@ -847,6 +857,7 @@ struct burp_fld
 	CollId		fld_collation_id;
 	RCRD_OFFSET	fld_sql;
 	RCRD_OFFSET	fld_null;
+	TEXT		fld_tablespace[GDS_NAME_LEN];
 };
 
 enum fld_flags_vals {
@@ -866,7 +877,9 @@ struct burp_rel
 	burp_rel*	rel_next;
 	burp_fld*	rel_fields;
 	SSHORT		rel_flags;
+	bool		rel_system;		// set on restore; backup relies on BURP_alloc_zero (false = user table)
 	SSHORT		rel_id;
+	SSHORT		rel_type;		// RDB$RELATION_TYPE (rel_persistent, rel_view, ...); zero == persistent
 	Firebird::QualifiedMetaString rel_name;
 	Firebird::QualifiedMetaString rel_foreign_server;
 	GDS_NAME	rel_owner;		// relation owner, if not us
@@ -876,7 +889,8 @@ struct burp_rel
 enum burp_rel_flags_vals {
 	REL_view		= 1,
 	REL_external	= 2,
-	REL_foreign		= 4
+	REL_has_tablespace_name = 4,
+	REL_foreign		= 8
 };
 
 // package definition
@@ -1095,7 +1109,8 @@ public:
 		  flag_on_line(true),
 		  firstMap(true),
 		  firstDbc(true),
-		  stdIoMode(false)
+		  stdIoMode(false),
+		  tablespace_mapping(*getDefaultMemoryPool())
 	{
 		// this is VERY dirty hack to keep current (pre-FB2) behaviour
 		memset (&gbl_database_file_name, 0,
@@ -1160,6 +1175,7 @@ public:
 	redirect_vals	sw_redirect;
 	bool		burp_throw;
 	std::optional<ReplicaMode>	gbl_sw_replica;
+	bool		gbl_sw_ts_orig_paths;
 
 	UCHAR*		blk_io_ptr;
 	int			blk_io_cnt;
@@ -1283,8 +1299,11 @@ public:
 	Firebird::IRequest*	handles_get_trigger_req_handle1;
 	Firebird::IRequest*	handles_get_trigger_req_handle2;
 	Firebird::IRequest*	handles_get_type_req_handle1;
+	Firebird::IRequest*	handles_get_constant_req_handle1;
 	Firebird::IRequest*	handles_get_user_privilege_req_handle1;
 	Firebird::IRequest*	handles_get_view_req_handle1;
+	Firebird::IRequest*	handles_get_ts_req_handle1;
+	Firebird::IRequest* handles_get_ts_req_handle2;
 	Firebird::IRequest* handles_activateIndex_req_handle1;
 
 	// The handles_put.. are for backup.
@@ -1308,6 +1327,9 @@ public:
 	TEXT			database_security_class[GDS_NAME_LEN]; // To save database security class for deferred update
 	unsigned		batchInlineBlobLimit;
 
+	typedef Firebird::GenericMap<Firebird::Pair<
+		Firebird::Full<Firebird::string, Firebird::string> > > StringMap;
+
 	static inline BurpGlobals* getSpecific()
 	{
 		return (BurpGlobals*) ThreadData::getSpecific();
@@ -1320,6 +1342,9 @@ public:
 	{
 		ThreadData::restoreSpecific();
 	}
+
+	void loadMapping(const char* mapping_file, StringMap& map, bool clearMap = true, bool caseSensitive = true);
+
 	void setupSkipIncludePattern(const Firebird::string& regexp, USHORT alreadySetErrorCode,
 		Firebird::AutoPtr<Firebird::SimilarToRegex>& matcher);
 	bool skipRelation(const Firebird::QualifiedMetaString& name);
@@ -1345,6 +1370,7 @@ public:
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeSchemaDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
+	StringMap tablespace_mapping;	// Will be used to overwrite filename of tablespace with given name
 
 public:
 	Firebird::string toSystem(const Firebird::PathName& from);
@@ -1362,6 +1388,7 @@ public:
 
 	bool gbl_use_no_auto_undo = true;
 	bool gbl_use_auto_release_temp_blobid = true;
+	bool gbl_fast_path = false;
 };
 
 // CVC: This aux routine declared here to not force inclusion of burp.h with burp_proto.h

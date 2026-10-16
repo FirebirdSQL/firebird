@@ -36,12 +36,12 @@ CHARSET_ENTRY(CS_unicode_ucs2)
 	csptr->charset_max_bytes_per_char = 2;
 	csptr->charset_space_length = sizeof(space);
 	csptr->charset_space_character = (const BYTE*) &space;	// 0x0020
-	csptr->charset_fn_well_formed = NULL;
+	csptr->charset_fn_well_formed = nullptr;
 	CV_convert_init(&csptr->charset_to_unicode,
 					CV_wc_copy,
-					NULL, NULL);
+					nullptr, nullptr);
 	CV_convert_init(&csptr->charset_from_unicode,
 					CV_wc_copy,
-					NULL, NULL);
+					nullptr, nullptr);
 	CHARSET_RETURN;
 }

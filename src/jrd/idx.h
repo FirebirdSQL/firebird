@@ -496,7 +496,7 @@ static inline constexpr struct ini_idx_t indices[] =
 	// define index RDB$INDEX_91 for RDB$RELATION_CONSTRAINTS RDB$SCHEMA_NAME, RDB$INDEX_NAME;
 	INDEX(91, rel_rcon, 0, 2, ODS_14_0)
 		SEGMENT(f_rcon_schema, idx_metadata),	// schema name
-		SEGMENT(f_rcon_iname, idx_metadata),	// index name
+		SEGMENT(f_rcon_iname, idx_metadata)		// index name
 	}},
 	// define index RDB$INDEX_92 for RDB$PACKAGES unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME;
 	INDEX(92, rel_packages, idx_unique, 2, ODS_14_0)
@@ -542,34 +542,47 @@ static inline constexpr struct ini_idx_t indices[] =
 	INDEX(99, rel_packages, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_pkg_id, idx_numeric)				// constant id
 	}},
-	// define index RDB$INDEX_100 for RDB$FOREIGN_SERVERS RDB$FOREIGN_SERVER_NAME;
-	INDEX(100, rel_foreign_servers, idx_unique, 1, ODS_14_0)
+	// define index RDB$INDEX_98 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
+	INDEX(100, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
+	}},
+	// define index RDB$INDEX_99 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(101, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
+	}},
+	// define index RDB$INDEX_100 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(102, rel_pages, 0, 2, ODS_14_0)
+		SEGMENT(f_pag_type, idx_numeric),	// page type
+		SEGMENT(f_pag_id, idx_numeric)		// relation id
+	}},
+	// define index RDB$INDEX_103 for RDB$FOREIGN_SERVERS RDB$FOREIGN_SERVER_NAME;
+	INDEX(103, rel_foreign_servers, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_fs_name, idx_metadata),	// foreign server name
 	}},
-	// define index RDB$INDEX_101 for RDB$FOREIGN_SERVERS_OPTIONS RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
-	INDEX(101, rel_foreign_server_options, idx_unique, 2, ODS_14_0)
+	// define index RDB$INDEX_104 for RDB$FOREIGN_SERVERS_OPTIONS RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(104, rel_foreign_server_options, idx_unique, 2, ODS_14_0)
 		SEGMENT(f_fso_server_name, idx_metadata),	// foreign server name
 		SEGMENT(f_fso_name, idx_metadata),	// foreign server option name
 	}},
-	// define index RDB$INDEX_102 for RDB$FOREIGN_TABLE_OPTIONS RDB$TABLE_NAME, RDB$FOREIGN_TABLE_OPTION;
-	INDEX(102, rel_foreign_tbl_options, idx_unique, 3, ODS_14_0)
+	// define index RDB$INDEX_105 for RDB$FOREIGN_TABLE_OPTIONS RDB$TABLE_NAME, RDB$FOREIGN_TABLE_OPTION;
+	INDEX(105, rel_foreign_tbl_options, idx_unique, 3, ODS_14_0)
 		SEGMENT(f_fto_sch_name, idx_metadata),	// foreign table schema
 		SEGMENT(f_fto_tbl_name, idx_metadata),	// foreign table name
 		SEGMENT(f_fto_name, idx_metadata),	// foreign table option name
 	}},
-	// define index RDB$INDEX_103 for RDB$FOREIGN_USER_MAPPINGS RDB$USER, RDB$FOREIGN_SERVER_NAME;
-	INDEX(103, rel_foreign_user_mappings, idx_unique, 2, ODS_14_0)
+	// define index RDB$INDEX_106 for RDB$FOREIGN_USER_MAPPINGS RDB$USER, RDB$FOREIGN_SERVER_NAME;
+	INDEX(106, rel_foreign_user_mappings, idx_unique, 2, ODS_14_0)
 		SEGMENT(f_fum_user, idx_metadata),	// user
 		SEGMENT(f_fum_server_name, idx_metadata),	// foreign server name
 	}},
-	// define index RDB$INDEX_104 for RDB$FOREIGN_MAPPING_OPTIONS RDB$USER, RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
-	INDEX(104, rel_foreign_mapping_options, idx_unique, 3, ODS_14_0)
+	// define index RDB$INDEX_107 for RDB$FOREIGN_MAPPING_OPTIONS RDB$USER, RDB$FOREIGN_SERVER_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(107, rel_foreign_mapping_options, idx_unique, 3, ODS_14_0)
 		SEGMENT(f_fmo_user, idx_metadata),	// user
 		SEGMENT(f_fmo_server_name, idx_metadata),	// foreign server name
 		SEGMENT(f_fmo_name, idx_metadata),	// user mapping option name
 	}},
-	// define index RDB$INDEX_105 for RDB$FOREIGN_TABLE_FIELD_OPTIONS RDB$TABLE_NAME, RDB$FIELD_NAME, RDB$FOREIGN_OPTION_NAME;
-	INDEX(105, rel_foreign_tbl_f_options, idx_unique, 4, ODS_14_0)
+	// define index RDB$INDEX_108 for RDB$FOREIGN_TABLE_FIELD_OPTIONS RDB$TABLE_NAME, RDB$FIELD_NAME, RDB$FOREIGN_OPTION_NAME;
+	INDEX(108, rel_foreign_tbl_f_options, idx_unique, 4, ODS_14_0)
 		SEGMENT(f_ftfo_sch_name, idx_metadata),	// foreign table schema
 		SEGMENT(f_ftfo_tbl_name, idx_metadata),	// foreign table name
 		SEGMENT(f_ftfo_fld_name, idx_metadata),	// foreign table field name

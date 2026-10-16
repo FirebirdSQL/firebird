@@ -85,6 +85,7 @@
 #include "../jrd/tpc_proto.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../jrd/os/pio_proto.h"
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/Function.h"
 #include "../common/StatusArg.h"
@@ -411,9 +412,9 @@ private:
 
 bool SweepTask::handler(WorkItem& _item)
 {
-	Item* item = reinterpret_cast<Item*>(&_item);
+	const auto item = reinterpret_cast<Item*>(&_item);
 
-	ThreadContextHolder tdbb(NULL);
+	ThreadContextHolder tdbb;
 
 	if (!item->init(tdbb))
 	{
@@ -422,24 +423,26 @@ bool SweepTask::handler(WorkItem& _item)
 	}
 
 	WorkerContextHolder wrkHolder(tdbb, FB_FUNCTION);
+	const auto dbb = tdbb->getDatabase();
 
 	record_param rpb;
-	jrd_rel* relation = NULL;
+	Cached::Relation* relation = nullptr;
 
 	try
 	{
 		RelInfo* relInfo = item->m_relInfo;
 
-		Database* dbb = tdbb->getDatabase();
-
-		relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relInfo->rel_id, CacheFlag::AUTOCREATE);
+		const auto relVersion = MetadataCache::getVersioned<Cached::Relation>(tdbb, relInfo->rel_id,
+																			  CacheFlag::AUTOCREATE);
+		relation = getPermanent(relVersion);
+		const auto relPages = relVersion->getPages(tdbb);
 
 		if (relation &&
-			!getPermanent(relation)->isDropped() &&
+			!relation->isDropped() &&
 			!relation->isTemporary() &&
-			relation->getPages(tdbb)->rel_pages)
+			relPages && relPages->hasData())
 		{
-			GCLock::Shared gcGuard(tdbb, getPermanent(relation));
+			GCLock::Shared gcGuard(tdbb, relation);
 			if (!gcGuard.gcEnabled())
 			{
 				string str;
@@ -450,10 +453,10 @@ bool SweepTask::handler(WorkItem& _item)
 			jrd_tra* tran = tdbb->getTransaction();
 
 			if (relInfo->countPP == 0)
-				relInfo->countPP = relation->getPages(tdbb)->rel_pages->count();
+				relInfo->countPP = relPages->getPointerPageCount();
 
-			rpb.rpb_relation = relation;
-			rpb.rpb_org_scans = getPermanent(relation)->rel_scan_count++;
+			rpb.rpb_relation = relVersion;
+			rpb.rpb_org_scans = relation->rel_scan_count++;
 			rpb.rpb_record = NULL;
 			rpb.rpb_stream_flags = RPB_s_no_data | RPB_s_sweeper;
 			rpb.getWindow(tdbb).win_flags = WIN_large_scan;
@@ -469,7 +472,7 @@ bool SweepTask::handler(WorkItem& _item)
 			{
 				CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
 
-				if (getPermanent(relation)->isDropped())
+				if (relation->isDropped())
 					break;
 
 				if (rpb.rpb_number >= lastRecNo)
@@ -484,7 +487,7 @@ bool SweepTask::handler(WorkItem& _item)
 			}
 
 			delete rpb.rpb_record;
-			--getPermanent(relation)->rel_scan_count;
+			--relation->rel_scan_count;
 		}
 
 		return !m_stop;
@@ -494,12 +497,9 @@ bool SweepTask::handler(WorkItem& _item)
 		ex.stuffException(tdbb->tdbb_status_vector);
 
 		delete rpb.rpb_record;
-		if (relation)
-		{
-			if (getPermanent(relation)->rel_scan_count) {
-				--getPermanent(relation)->rel_scan_count;
-			}
-		}
+
+		if (relation && relation->rel_scan_count)
+			--relation->rel_scan_count;
 	}
 
 	setError(tdbb->tdbb_status_vector, true);
@@ -627,7 +627,7 @@ static bool assert_gc_enabled(const jrd_tra* transaction, const jrd_rel* relatio
  *  in this case online validation is not run against given relation.
  *
  **************************************/
-	switch (getPermanent(relation)->rel_gc_lock.isGCEnabled())
+	switch (relation->getPermanent()->rel_gc_lock.isGCEnabled())
 	{
 	case GCLock::State::enabled:
 		return true;
@@ -647,7 +647,8 @@ static bool assert_gc_enabled(const jrd_tra* transaction, const jrd_rel* relatio
 	if (!lock)
 		return false;
 
-	return (lock->lck_physical == LCK_SW) || (lock->lck_physical == LCK_EX);
+	// SW, PW, EX modes are incompatible with PR that's taken by the online validation
+	return (lock->lck_physical >= LCK_SW);
 }
 #endif //DEV_BUILD
 
@@ -683,13 +684,15 @@ inline void check_gbak_cheating_delete(thread_db* tdbb, const jrd_rel* relation)
 			if (tdbb->tdbb_flags & TDBB_dont_post_dfw)
 				return;
 
-			// There are 2 tables whose contents gbak might delete:
+			// There are 3 tables whose contents gbak might delete:
 			// - RDB$INDEX_SEGMENTS if it detects inconsistencies while restoring
 			// - RDB$FILES if switch -k is set
+			// - RDB$TABLESPACES if errors occur while restoring tablespaces
 			switch(relation->getId())
 			{
 			case rel_segments:
 			case rel_files:
+			case rel_tablespaces:
 				return;
 
 			// fix_plugins_schemas may also delete these objects:
@@ -1270,7 +1273,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			 ((tdbb->tdbb_flags & TDBB_sweeper) && state == tra_committed &&
 				rpb->rpb_b_page != 0 && rpb->rpb_transaction_nr >= oldest_snapshot)))
 		{
-			GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+			GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 			int_gc_done = true;
 			if (gcGuard.gcEnabled())
@@ -1382,7 +1385,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 
 		case tra_precommitted:
 			{	// scope
-			GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+			GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 			if ((attachment->att_flags & ATT_NO_CLEANUP) || !gcGuard.gcEnabled() ||
 				(rpb->rpb_flags & (rpb_chained | rpb_gc_active)))
@@ -1638,7 +1641,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					{
 						CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
-						GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+						GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 						if (!gcGuard.gcEnabled())
 							return false;
@@ -1686,7 +1689,7 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 			}
 
 			{ // scope
-				GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+				GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 				if (!gcGuard.gcEnabled())
 					return true;
@@ -2368,6 +2371,13 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			DFW_post_work(transaction, dfw_delete_package_constant, &desc, &schemaDesc, 0, object_name.package);
 			break;
 
+		case rel_tablespaces:
+			protect_system_table_delupd(tdbb, relation, "DELETE");
+			EVL_field(0, rpb->rpb_record, f_ts_id, &desc);
+			id = MOV_get_long(tdbb, &desc, 0);
+			EVL_field(0, rpb->rpb_record, f_ts_file, &desc);
+			DFW_post_work(transaction, dfw_delete_tablespace, &desc, nullptr, id);
+
 		case rel_foreign_servers:
 			protect_system_table_delupd(tdbb, relation, "DELETE");
 			if (EVL_field(0, rpb->rpb_record, f_fs_name, &desc))
@@ -2506,7 +2516,7 @@ bool VIO_erase(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 	if (backVersion && !(tdbb->getAttachment()->att_flags & ATT_no_cleanup) &&
 		(dbb->dbb_flags & DBB_gc_cooperative))
 	{
-		GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+		GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 		if (gcGuard.gcEnabled())
 		{
 			temp = *rpb;
@@ -2754,7 +2764,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(PageNumber(relPages->rel_pg_space_id, staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toPageNumber(staying_chain_rpb.rpb_page));
 		++const_i;
 	}
 
@@ -2778,7 +2788,7 @@ void VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 
 		staying_chain_rpb.rpb_number = rpb->rpb_number;
 		DPM_store(tdbb, &staying_chain_rpb, precedence_stack, DPM_secondary);
-		precedence_stack.push(PageNumber(relPages->rel_pg_space_id, staying_chain_rpb.rpb_page));
+		precedence_stack.push(relPages->toPageNumber(staying_chain_rpb.rpb_page));
 	}
 
 	// Read head version with write lock and check if it is still the same version
@@ -2870,7 +2880,7 @@ bool VIO_garbage_collect(thread_db* tdbb, record_param* rpb, jrd_tra* transactio
 		rpb->rpb_f_page, rpb->rpb_f_line);
 #endif
 
-	GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+	GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 	if ((attachment->att_flags & ATT_no_cleanup) || !gcGuard.gcEnabled())
 		return true;
@@ -3110,7 +3120,7 @@ bool VIO_get_current(thread_db* tdbb,
 			//	return !foreign_key;
 
 			{
-				GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+				GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 				if (!gcGuard.gcEnabled())
 					return !foreign_key;
@@ -3208,7 +3218,7 @@ bool VIO_get_current(thread_db* tdbb,
 			//	return !foreign_key;
 
 			{
-				GCLock::Shared gcGuard(tdbb, getPermanent(rpb->rpb_relation));
+				GCLock::Shared gcGuard(tdbb, rpb->rpb_relation->getPermanent());
 
 				if (!gcGuard.gcEnabled())
 					return !foreign_key;
@@ -3668,30 +3678,33 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 				EVL_field(0, new_rpb->rpb_record, f_idx_relation, &desc2);
 				EVL_field(0, new_rpb->rpb_record, f_idx_id, &dscId);
 
-				MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
-				MOV_get_metaname(tdbb, &desc2, object_name.object);
-				auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name, CacheFlag::AUTOCREATE);
-				fb_assert(irel);
-				int idxId = MOV_get_long(tdbb, &dscId, 0);
+				if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_ts_name, true))
+				{
+					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+					MOV_get_metaname(tdbb, &desc2, object_name.object);
+					auto* irel = MetadataCache::getPerm<Cached::Relation>(tdbb, object_name, CacheFlag::AUTOCREATE);
+					fb_assert(irel);
+					const int idxId = MOV_get_long(tdbb, &dscId, 0);
 
-				if (EVL_field(0, new_rpb->rpb_record, f_idx_statistics, &desc2) &&
-					MOV_get_double(tdbb, &desc2) < 0)
-				{
-					indexDfw(transaction, dfw_set_statistics, desc1, schemaDesc, irel, idxId);
-				}
-				else
-				{
-					bool nullFl = !EVL_field(0, new_rpb->rpb_record, f_idx_inactive, &desc2);
-					auto newStat = nullFl ? 0 : MOV_get_long(tdbb, &desc2, 0);
-					if (newStat == MET_index_deferred_drop)
+					if (EVL_field(0, new_rpb->rpb_record, f_idx_statistics, &desc2) &&
+						MOV_get_double(tdbb, &desc2) < 0)
 					{
-						nullFl = !EVL_field(0, org_rpb->rpb_record, f_idx_inactive, &desc2);
-						auto oldStat = nullFl ? 0 : MOV_get_long(tdbb, &desc2, 0);
-						if (newStat != oldStat)
-							indexDfw(transaction, dfw_delete_index, desc1, schemaDesc, irel, idxId);
+						indexDfw(transaction, dfw_set_statistics, desc1, schemaDesc, irel, idxId);
 					}
 					else
-						indexDfw(transaction, dfw_create_index, desc1, schemaDesc, irel, idxId);
+					{
+						bool nullFl = !EVL_field(0, new_rpb->rpb_record, f_idx_inactive, &desc2);
+						auto newStat = nullFl ? 0 : MOV_get_long(tdbb, &desc2, 0);
+						if (newStat == MET_index_deferred_drop)
+						{
+							nullFl = !EVL_field(0, org_rpb->rpb_record, f_idx_inactive, &desc2);
+							auto oldStat = nullFl ? 0 : MOV_get_long(tdbb, &desc2, 0);
+							if (newStat != oldStat)
+								indexDfw(transaction, dfw_delete_index, desc1, schemaDesc, irel, idxId);
+						}
+						else
+							indexDfw(transaction, dfw_create_index, desc1, schemaDesc, irel, idxId);
+					}
 				}
 			}
 			break;
@@ -3795,6 +3808,19 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 			DFW_post_work(transaction, dfw_modify_package_constant, &desc1, &schemaDesc, 0, object_name.package);
 			break;
+
+		case rel_tablespaces:
+			protect_system_table_delupd(tdbb, relation, "UPDATE");
+			check_class(tdbb, transaction, org_rpb, new_rpb, f_ts_class);
+			check_owner(tdbb, transaction, org_rpb, new_rpb, f_ts_owner);
+
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_ts_desc, true))
+			{
+				EVL_field(0, new_rpb->rpb_record, f_ts_id, &desc1);
+				const ULONG id = MOV_get_long(tdbb, &desc1, 0);
+				EVL_field(0, new_rpb->rpb_record, f_ts_file, &desc1);
+				DFW_post_work(transaction, dfw_modify_tablespace, &desc1, nullptr, id);
+			}
 
 		case rel_foreign_servers:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
@@ -3905,7 +3931,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 	if (backVersion && !(tdbb->getAttachment()->att_flags & ATT_no_cleanup) &&
 		(dbb->dbb_flags & DBB_gc_cooperative))
 	{
-		GCLock::Shared gcGuard(tdbb, getPermanent(org_rpb->rpb_relation));
+		GCLock::Shared gcGuard(tdbb, org_rpb->rpb_relation->getPermanent());
 		if (gcGuard.gcEnabled())
 		{
 			temp.rpb_number = org_rpb->rpb_number;
@@ -4758,6 +4784,19 @@ void VIO_store(thread_db* tdbb, record_param* rpb, jrd_tra* transaction)
 			DFW_post_work(transaction, dfw_create_package_constant, &desc, &schemaDesc, 0, object_name.package);
 			break;
 
+		case rel_tablespaces:
+		{
+			protect_system_table_insert(tdbb, request, relation);
+			EVL_field(0, rpb->rpb_record, f_ts_name, &desc);
+			object_id = set_metadata_id(tdbb, rpb->rpb_record,
+										f_ts_id, drq_g_nxt_ts_id, "RDB$TABLESPACES");
+			DFW_post_work(transaction, dfw_create_tablespace, &desc, nullptr, object_id);
+			set_system_flag(tdbb, rpb->rpb_record, f_ts_sys_flag);
+			set_owner_name(tdbb, rpb->rpb_record, f_ts_owner);
+			if (set_security_class(tdbb, rpb->rpb_record, f_ts_class))
+				DFW_post_work(transaction, dfw_grant, &desc, nullptr, obj_tablespace);
+			break;
+		}
 
 		case rel_foreign_servers:
 			protect_system_table_insert(tdbb, request, relation);
@@ -4882,8 +4921,6 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 	// hvlad: restore tdbb->transaction since it can be used later
 	tdbb->setTransaction(transaction);
 
-	jrd_rel* relation;
-
 	record_param rpb;
 	rpb.rpb_record = NULL;
 	rpb.rpb_stream_flags = RPB_s_no_data | RPB_s_sweeper;
@@ -4892,27 +4929,32 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 	GarbageCollector* gc = dbb->dbb_garbage_collector;
 	bool ret = true;
 
-	try {
+	Cached::Relation* relation = nullptr;
+
+	try
+	{
 		MetadataCache* mdc = MetadataCache::get(tdbb);
 		for (FB_SIZE_T i = 1; i < mdc->relCount(); i++)
 		{
-			relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, i, CacheFlag::AUTOCREATE);
+			const auto relVersion = MetadataCache::getVersioned<Cached::Relation>(tdbb, i, CacheFlag::AUTOCREATE);
+			relation = relVersion->getPermanent();
+			const auto relPages = relVersion->getPages(tdbb);
 
 			if (relation &&
-				!(relation->getPermanent()->isDropped()) &&
+				!relation->isDropped() &&
 				!relation->isTemporary() &&
-				relation->getPermanent()->getPages(tdbb)->rel_pages)
+				relPages && relPages->hasData())
 			{
-				GCLock::Shared gcGuard(tdbb, getPermanent(relation));
+				GCLock::Shared gcGuard(tdbb, relation);
 				if (!gcGuard.gcEnabled())
 				{
 					ret = false;
 					break;
 				}
 
-				rpb.rpb_relation = relation;
+				rpb.rpb_relation = relVersion;
 				rpb.rpb_number.setValue(BOF_NUMBER);
-				rpb.rpb_org_scans = relation->getPermanent()->rel_scan_count++;
+				rpb.rpb_org_scans = relation->rel_scan_count++;
 
 				traceSweep->beginSweepRelation(relation);
 
@@ -4924,7 +4966,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 				{
 					CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
 
-					if (relation->getPermanent()->isDropped())
+					if (relation->isDropped())
 						break;
 
 					JRD_reschedule(tdbb);
@@ -4936,7 +4978,7 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 
 				traceSweep->endSweepRelation();
 
-				relation->getPermanent()->rel_scan_count--;
+				relation->rel_scan_count--;
 			}
 		}
 
@@ -4947,11 +4989,8 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 	{
 		delete rpb.rpb_record;
 
-		if (relation)
-		{
-			if (getPermanent(relation)->rel_scan_count)
-				--getPermanent(relation)->rel_scan_count;
-		}
+		if (relation && relation->rel_scan_count)
+			--relation->rel_scan_count;
 
 		ERR_punt();
 	}
@@ -5129,7 +5168,7 @@ WriteLockResult VIO_writelock(thread_db* tdbb, record_param* org_rpb, jrd_tra* t
 	if (backVersion && !(tdbb->getAttachment()->att_flags & ATT_no_cleanup) &&
 		(dbb->dbb_flags & DBB_gc_cooperative))
 	{
-		GCLock::Shared gcGuard(tdbb, getPermanent(org_rpb->rpb_relation));
+		GCLock::Shared gcGuard(tdbb, org_rpb->rpb_relation->getPermanent());
 		if (gcGuard.gcEnabled())
 		{
 			temp.rpb_number = org_rpb->rpb_number;
@@ -5841,7 +5880,9 @@ void Database::garbage_collector(Database* dbb)
 					(gc_bitmap = gc->getPages(dbb->dbb_oldest_snapshot, relID)))
 				{
 					relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relID, CacheFlag::AUTOCREATE);
-					if (!relation || getPermanent(relation)->isDropped())
+					const auto relPerm = getPermanent(relation);
+
+					if (!relation || relPerm->isDropped())
 					{
 						delete gc_bitmap;
 						gc_bitmap = NULL;
@@ -5850,7 +5891,7 @@ void Database::garbage_collector(Database* dbb)
 
 					if (gc_bitmap)
 					{
-						GCLock::Shared gcGuard(tdbb, getPermanent(relation));
+						GCLock::Shared gcGuard(tdbb, relPerm);
 						if (!gcGuard.gcEnabled())
 							continue;
 
@@ -5900,13 +5941,13 @@ void Database::garbage_collector(Database* dbb)
 									break;
 								}
 
-								if (getPermanent(relation)->isDropped())
+								if (relPerm->isDropped())
 								{
 									rel_exit = true;
 									break;
 								}
 
-								if (getPermanent(relation)->rel_gc_lock.checkDisabled())
+								if (relPerm->rel_gc_lock.checkDisabled())
 								{
 									rel_exit = true;
 									break;
@@ -6865,7 +6906,7 @@ static PrepareResult prepare_update(thread_db* tdbb, jrd_tra* transaction, TraNu
 			}
 
 			{
-				const USHORT pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
+				const ULONG pageSpaceID = temp->getWindow(tdbb).win_page.getPageSpaceID();
 				stack.push(PageNumber(pageSpaceID, temp->rpb_page));
 			}
 			return PrepareResult::SUCCESS;
@@ -7172,31 +7213,30 @@ static void refresh_changed_fields(thread_db* tdbb, Record* old_rec, record_para
 	const Database* dbb = tdbb->getDatabase();
 	const auto allowOverwrite = dbb->dbb_config->getAllowUpdateOverwrite();
 
-	jrd_rel* relation = cur_rpb->rpb_relation;
-	auto* relPerm = relation->getPermanent();
+	jrd_rel* const relation = cur_rpb->rpb_relation;
+	const auto relPerm = relation->getPermanent();
 
 	relPerm->scanPartners(tdbb);
 
 	// Collect all fields of self-referenced foreign keys
-	SortedArray<int, InlineStorage<int, 16> > fields;
+	SortedArray<USHORT, InlineStorage<USHORT, 16> > fields;
 
 	if (const auto* frgn = relPerm->rel_foreign_refs)
 	{
-		RelationPages* relPages = relation->getPages(tdbb);
 		for (auto& dep : *frgn)
 		{
-			if (dep.dep_relation == relPerm->getId())
+			if (dep.dep_relation == relation->getId())
 			{
 				index_desc idx;
 				idx.idx_id = idx_invalid;
 
-				if (BTR_lookup(tdbb, relPerm, dep.dep_reference_id, &idx, relPages))
+				if (BTR_lookup(tdbb, relation, dep.dep_reference_id, &idx))
 				{
 					fb_assert(idx.idx_flags & idx_foreign);
 
-					for (int fld = 0; fld < idx.idx_count; fld++)
+					for (USHORT fld = 0; fld < idx.idx_count; fld++)
 					{
-						const int fldNum = idx.idx_rpt[fld].idx_field;
+						const USHORT fldNum = idx.idx_rpt[fld].idx_field;
 						if (!fields.exist(fldNum))
 							fields.add(fldNum);
 					}
@@ -7220,13 +7260,14 @@ static void refresh_changed_fields(thread_db* tdbb, Record* old_rec, record_para
 		// Else compare field-by-field
 	}
 
-	for (FB_SIZE_T fld = 0, frn = 0; fld < relation->rel_current_format->fmt_count; fld++)
+	FB_SIZE_T frn = 0;
+	for (USHORT fld = 0; fld < relation->rel_current_format->fmt_count; fld++)
 	{
 		dsc dsc_old;
 		const bool flag_old = EVL_field(relation, old_rec, fld, &dsc_old);
 
-		const bool is_fk = (frn < fields.getCount() && fields[frn] == fld);
-		if (!is_fk)
+		const bool isFK = (frn < fields.getCount() && fields[frn] == fld);
+		if (!isFK)
 		{
 			if (allowOverwrite)
 				continue;
@@ -7478,8 +7519,11 @@ void VIO_update_in_place(thread_db* tdbb,
 		temp2.rpb_number = org_rpb->rpb_number;
 		DPM_store(tdbb, &temp2, *stack, DPM_secondary);
 
-		const USHORT pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
-		stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
+		if (stack)
+		{
+			const ULONG pageSpaceID = temp2.getWindow(tdbb).win_page.getPageSpaceID();
+			stack->push(PageNumber(pageSpaceID, temp2.rpb_page));
+		}
 	}
 
 	if (!DPM_get(tdbb, org_rpb, LCK_write))

@@ -178,7 +178,10 @@ bool BaseAggWinStream<ThisType, NextType>::evaluateGroup(thread_db* tdbb) const
 			}
 		}
 		else
+		{
 			cacheValues(tdbb, request, m_group, impure->groupValues, DummyAdjustFunctor());
+			static_cast<const ThisType*>(this)->groupRecord(tdbb, request, true);
+		}
 
 		// Loop thru records until either a value change or EOF
 
@@ -193,6 +196,8 @@ bool BaseAggWinStream<ThisType, NextType>::evaluateGroup(thread_db* tdbb) const
 
 				if (lookForChange(tdbb, request, m_group, NULL, impure->groupValues))
 					impure->state = STATE_FETCHED;
+				else
+					static_cast<const ThisType*>(this)->groupRecord(tdbb, request, false);
 			}
 			else
 				impure->state = STATE_EOF;
