@@ -1716,7 +1716,8 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 		throw;
 	}
 
-	if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_START))
+	if (!(flags & TRA_meta) &&
+		attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_START))
 	{
 		TraceConnectionImpl conn(attachment);
 		TraceTransactionImpl tran(transaction);
