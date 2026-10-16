@@ -15,6 +15,7 @@ set FBBUILD_WITHOUT_CLOOP_GENERATION=
 set FBBUILD_WITH_SYSTEM_BOOST=
 set FBBUILD_WITH_SYSTEM_TOMMATH=
 set FBBUILD_WITH_SYSTEM_TOMCRYPT=
+set FBBUILD_WITHOUT_TOMCRYPT=
 set FBBUILD_WITH_SYSTEM_ZLIB=
 set FBBUILD_WITH_SYSTEM_ICU=
 set FB2_SNAPSHOT=
@@ -97,6 +98,9 @@ goto :END
 @echo.
 @echo    WITH_SYSTEM_TOMCRYPT - use libtomcrypt headers and tomcrypt.lib from the system
 @echo                           include/lib paths instead of extern\libtomcrypt
+@echo.
+@echo    WITHOUT_TOMCRYPT - do not build or use libtomcrypt, and do not build the chacha
+@echo                       plugin (allowed only with CLIENT_ONLY)
 @echo.
 @echo    WITH_SYSTEM_ZLIB - use zlib headers from the system include path and do not
 @echo                       distribute zlib1.dll (instead of extern\zlib)

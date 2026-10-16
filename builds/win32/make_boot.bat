@@ -31,6 +31,18 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 
 call :system_libs_config
 
+if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ICU (
+  echo Windows/ARM64 build requires WITH_SYSTEM_ICU: no bundled ICU binaries are available for arm64.
+  set ERRLEV=1
+  goto :END
+)
+
+if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ZLIB (
+  echo Windows/ARM64 build requires WITH_SYSTEM_ZLIB: no bundled zlib binaries are available for arm64.
+  set ERRLEV=1
+  goto :END
+)
+
 @if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 
@@ -147,9 +159,13 @@ for %%v in (firebird plugins) do (
 @if defined FBBUILD_WITH_SYSTEM_BOOST set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_TOMMATH set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_TOMCRYPT set SYSLIBS_ANY=1
+@if defined FBBUILD_WITHOUT_TOMCRYPT set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_ZLIB set SYSLIBS_ANY=1
 @if defined FBBUILD_WITH_SYSTEM_ICU set SYSLIBS_ANY=1
 @if not defined SYSLIBS_ANY goto :EOF
+:: Optional extra include directory for system ICU/zlib headers (e.g. vcpkg), since MSBuild ignores %INCLUDE%
+@set SYSLIBS_INCDIR=
+@if defined FBBUILD_SYSTEM_INCLUDE_DIR set SYSLIBS_INCDIR=%FBBUILD_SYSTEM_INCLUDE_DIR%;
 @echo ^<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"^>> "%SYSLIBS_PROPS%"
 @echo   ^<PropertyGroup^>>> "%SYSLIBS_PROPS%"
 @if defined FBBUILD_WITH_SYSTEM_BOOST (
@@ -159,21 +175,29 @@ for %%v in (firebird plugins) do (
 @if defined FBBUILD_WITH_SYSTEM_TOMMATH (
 	@echo Using system libtommath
 	@echo     ^<FbTomMathIncludeDir^>^</FbTomMathIncludeDir^>>> "%SYSLIBS_PROPS%"
-	@echo     ^<FbTomMathLib^>tommath.lib^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathLib^>^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathSysLib^>tommath.lib^</FbTomMathSysLib^>>> "%SYSLIBS_PROPS%"
 	call :tommath_probe
 )
 @if defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
 	@echo Using system libtomcrypt
 	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
-	@echo     ^<FbTomCryptLib^>tomcrypt.lib^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptSysLib^>tomcrypt.lib^</FbTomCryptSysLib^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITHOUT_TOMCRYPT (
+	@echo Building without libtomcrypt
+	@echo     ^<FbWithoutTomCrypt^>true^</FbWithoutTomCrypt^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
 )
 @if defined FBBUILD_WITH_SYSTEM_ZLIB (
 	@echo Using system zlib
-	@echo     ^<FbZlibIncludeDir^>^</FbZlibIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbZlibIncludeDir^>%SYSLIBS_INCDIR%^</FbZlibIncludeDir^>>> "%SYSLIBS_PROPS%"
 )
 @if defined FBBUILD_WITH_SYSTEM_ICU (
 	@echo Using system ICU
-	@echo     ^<FbIcuIncludeDir^>^</FbIcuIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbIcuIncludeDir^>%SYSLIBS_INCDIR%^</FbIcuIncludeDir^>>> "%SYSLIBS_PROPS%"
 )
 @echo   ^</PropertyGroup^>>> "%SYSLIBS_PROPS%"
 @echo ^</Project^>>> "%SYSLIBS_PROPS%"
@@ -212,7 +236,7 @@ goto :EOF
 	@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
 	if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
 )
-@if not defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
+@if not defined FBBUILD_WITH_SYSTEM_TOMCRYPT if not defined FBBUILD_WITHOUT_TOMCRYPT (
 	@echo Building LibTomCrypt ^(%FB_OBJ_DIR%^)...
 	@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
 	if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
@@ -245,10 +269,13 @@ goto :EOF
 @echo.
 @echo Building ttmath (%FB_OBJ_DIR%)...
 @mkdir %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG% 2>nul
-if /I "%FB_CONFIG%"=="debug" (
-  @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
-) else (
-  @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+
+if not "%FB_TARGET_PLATFORM%"=="arm64" (
+  if /I "%FB_CONFIG%"=="debug" (
+    @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  ) else (
+    @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  )
 )
 if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 goto :EOF

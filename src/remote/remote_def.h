@@ -64,6 +64,8 @@ const P_ARCH ARCHITECTURE	= arch_netbsd;
 const P_ARCH ARCHITECTURE	= arch_darwin_ppc;
 #elif defined(WIN_NT) && defined(AMD64)
 const P_ARCH ARCHITECTURE	= arch_winnt_64;
+#elif defined(WIN_NT) && defined(ARM64)
+const P_ARCH ARCHITECTURE	= arch_winnt_arm64;
 #elif defined(I386)
 const P_ARCH ARCHITECTURE	= arch_intel_32;
 #elif defined(DARWIN64)

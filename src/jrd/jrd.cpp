@@ -385,8 +385,10 @@ static void threadDetach()
 	ThreadSync* thd = ThreadSync::findThread();
 	delete thd;
 
+#ifndef CDS_UNAVAILABLE
 	if (cds::threading::Manager::isThreadAttached())
 		cds::threading::Manager::detachThread();
+#endif
 }
 
 static void shutdownBeforeUnload()

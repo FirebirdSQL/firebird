@@ -1019,7 +1019,7 @@ else
 			AC_MSG_ERROR(Include file for tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
 		XE_RESTORE_ENV()
 		XE_SAVE_ENV()
-		LIBS=
+		LIBS=$MATHLIB
 		AC_CHECK_LIB(tomcrypt, sha1_init, CRYPTLIB=-ltomcrypt,
 			AC_MSG_ERROR(Library tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
 		XE_RESTORE_ENV()
