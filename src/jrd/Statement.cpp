@@ -37,6 +37,7 @@
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
 #include "../jrd/recsrc/Cursor.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -351,7 +352,7 @@ Statement* Statement::makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
 	return makeStatement(tdbb, csb, internalFlag,
 		[&]
 		{
-			node = static_cast<BoolExprNode*>(csb->csb_node);
+			node = Optimizer::transformBoolean(tdbb, csb);
 		});
 }
 

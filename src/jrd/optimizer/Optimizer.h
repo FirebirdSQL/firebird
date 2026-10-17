@@ -500,7 +500,10 @@ public:
 
 	RecordSource* compile(RseNode* subRse, BoolExprNodeStack* parentStack);
 	void compileRelation(StreamType stream);
-	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack);
+	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack, bool transformed = false);
+
+	static BoolExprNode* transformBoolean(thread_db* tdbb, CompilerScratch* csb);
+
 	void generateAggregateDistincts(MapNode* map);
 	RecordSource* generateRetrieval(StreamType stream,
 									SortNode** sortClause,
@@ -569,6 +572,7 @@ public:
 private:
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, const BoolExprNodeStack& stack);
+	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
@@ -603,6 +607,7 @@ private:
 									ValueListNode* list);
 
 	ValueExprNode* optimizeLikeSimilar(ComparativeBoolNode* cmpNode);
+	BoolExprNode* transformBoolExpr(thread_db* tdbb, BoolExprNode* boolNode);
 
 	thread_db* const tdbb;
 	CompilerScratch* const csb;
