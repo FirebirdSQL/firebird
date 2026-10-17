@@ -1432,7 +1432,7 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	// mark the index as utilized for the purposes of this compile
 	idx->idx_runtime_flags |= idx_used;
 
-	const ULONG impure = csb ? csb->allocImpure<impure_inversion>() : 0;
+	const ULONG impure = csb->allocImpure<impure_inversion>();
 	return FB_NEW_POOL(getPool()) InversionNode(retrieval, impure);
 }
 

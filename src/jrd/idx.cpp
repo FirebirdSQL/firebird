@@ -455,21 +455,18 @@ public:
 		m_items[0]->m_attStable = att->getStable();
 		m_items[0]->m_tra = m_creation->transaction;
 
-		if (m_creation)
+		// Unless this is the only attachment or a database restore, worry about
+		// preserving the page working sets of other attachments.
+		if (att != m_dbb->dbb_attachments || att->att_next)
 		{
-			// Unless this is the only attachment or a database restore, worry about
-			// preserving the page working sets of other attachments.
-			if (att && (att != m_dbb->dbb_attachments || att->att_next))
-			{
-				if (att->isGbak() || DPM_data_pages(tdbb, m_creation->relation) > m_dbb->dbb_bcb->bcb_count)
-					m_flags |= IS_LARGE_SCAN;
-			}
-
-			m_countPP = DPM_pointer_pages(tdbb, m_creation->relation);
-
-			if ((m_creation->index->idx_flags & (idx_expression | idx_condition)) && (workers > 1))
-				MET_lookup_index_expr_cond_blr(tdbb, m_creation->index_name, m_exprBlob, m_condBlob);
+			if (att->isGbak() || DPM_data_pages(tdbb, m_creation->relation) > m_dbb->dbb_bcb->bcb_count)
+				m_flags |= IS_LARGE_SCAN;
 		}
+
+		m_countPP = DPM_pointer_pages(tdbb, m_creation->relation);
+
+		if ((m_creation->index->idx_flags & (idx_expression | idx_condition)) && (workers > 1))
+			MET_lookup_index_expr_cond_blr(tdbb, m_creation->index_name, m_exprBlob, m_condBlob);
 	}
 
 	virtual ~IndexCreateTask()

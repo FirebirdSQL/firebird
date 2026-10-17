@@ -14516,6 +14516,8 @@ IBatch* WriteRelationMeta::createBatch(BurpGlobals* tdgbl, IAttachment* att)
 			if (m_blobCount)
 				m_batchStep /= m_blobCount;
 
+			m_batchStep = MAX(m_batchStep, 1);
+
 			// determine maximum blob size for inline transfer
 			m_batchInlineBlobLimit = bufSize / m_batchStep;
 			// take into an account:  blob alignment   header size

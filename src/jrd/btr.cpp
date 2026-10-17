@@ -6765,9 +6765,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 		{
 			CCH_RELEASE(tdbb, &parent_window);
 
-			if (left_page)
-				CCH_RELEASE(tdbb, &left_window);
-
+			CCH_RELEASE(tdbb, &left_window);
 			CCH_RELEASE(tdbb, window);
 			CCH_RELEASE(tdbb, &right_window);
 #ifdef DEBUG_BTR
@@ -6945,8 +6943,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	// Set up the precedence so that the parent will be written first.
 	if (right_page)
 	{
-		if (parent_page)
-			CCH_precedence(tdbb, &right_window, parent_window.win_page);
+		CCH_precedence(tdbb, &right_window, parent_window.win_page);
 
 		CCH_MARK(tdbb, &right_window);
 		right_page->btr_left_sibling = left_window.win_page.getPageNum();
@@ -6958,7 +6955,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	// from the tree.  Set the precedence so the right sibling will be written first.
 	if (right_page)
 		CCH_precedence(tdbb, &left_window, right_window.win_page);
-	else if (parent_page)
+	else
 		CCH_precedence(tdbb, &left_window, parent_window.win_page);
 
 	CCH_MARK(tdbb, &left_window);
@@ -7006,7 +7003,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	string s;
 	s.printf("page %ld is removed from index. parent %ld, left %ld, right %ld",
 		window->win_page.getPageNum(), parent_window.win_page.getPageNum(),
-		left_page ? left_window.win_page.getPageNum() : 0,
+		left_window.win_page.getPageNum(),
 		right_page ? right_window.win_page.getPageNum() : 0 );
 	gds__trace(s.c_str());
 #endif
@@ -7017,8 +7014,7 @@ static contents garbage_collect(thread_db* tdbb, WIN* window, ULONG parent_numbe
 	gc_page->btr_header.pag_flags |= btr_released;
 
 	CCH_RELEASE(tdbb, window);
-	PAG_release_page(tdbb, window->win_page, left_page ? left_window.win_page :
-		right_page ? right_window.win_page : parent_window.win_page);
+	PAG_release_page(tdbb, window->win_page, left_window.win_page);
 
 	// if the parent page needs to be garbage collected, that means we need to
 	// re-fetch the parent and check to see whether it is still garbage-collectable;
