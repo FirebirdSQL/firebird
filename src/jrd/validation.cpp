@@ -3151,7 +3151,7 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	// If it's a view, external file or virtual table, skip this
 
-	if (relPerm->isView() || relPerm->getExtFile() || relPerm->isVirtual())
+	if (relPerm->isView() || relPerm->getExtFile() || relPerm->isVirtual() || relPerm->getForeignAdapter())
 		return rtn_ok;
 
 	AutoLock lckRead(vdr_tdbb);

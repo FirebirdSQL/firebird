@@ -88,6 +88,7 @@
 #include "../jrd/ConfigTable.h"
 
 #include "../jrd/optimizer/Optimizer.h"
+#include "../jrd/ForeignServer.h"
 
 using namespace Jrd;
 using namespace Firebird;
@@ -1300,7 +1301,7 @@ void Optimizer::compileRelation(StreamType stream)
 
 	tail->csb_idx = nullptr;
 
-	if (needIndices && !relation()->getExtFile() && !relation()->isVirtual())
+	if (needIndices && !relation()->getExtFile() && !relation()->isVirtual() && !relation()->getForeignAdapter())
 	{
 		const auto relPages = relation(tdbb)->getPages(tdbb);
 
@@ -1802,10 +1803,7 @@ SortedStream* Optimizer::generateSort(const StreamList& streams,
 		{
 			const auto* relation = csb->csb_rpt[item.stream].csb_relation();
 
-			if (relation &&
-				!relation->getExtFile() &&
-				!relation->isView() &&
-				!relation->isVirtual())
+			if (relation && relation->isPageBased())
 			{
 				item.desc = nullptr;
 				--fieldCount;
@@ -3074,6 +3072,7 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	// inversion component of the boolean.
 
 	RecordSource* rsb = nullptr;
+	ForeignTableScan* foreignRsb = nullptr;
 	InversionNode* inversion = nullptr;
 	BoolExprNode* condition = nullptr;
 	Array<DbKeyRangeNode*> dbkeyRanges;
@@ -3084,6 +3083,11 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 	{
 		// External table
 		rsb = FB_NEW_POOL(getPool()) ExternalTableScan(csb, alias, stream, relation);
+	}
+	else if (relation()->getForeignAdapter())
+	{
+		// Foreign table
+		rsb = foreignRsb = FB_NEW_POOL(getPool()) ForeignTableScan(csb, alias, stream, relation);
 	}
 	else if (relation()->isVirtual())
 	{
@@ -3162,6 +3166,22 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 		}
 	}
 
+	if (foreignRsb && sortClause)
+	{
+		// If this stream corresponds to a foreign table, check whether the sort
+		// (if locally computable) can be distributed to the foreign server level
+
+		if (const auto sortNode = *sortClause)
+		{
+			if (sortNode->containsStream(stream) &&
+				sortNode->computable(csb, stream, true) &&
+				foreignRsb->applySort(tdbb, sortNode))
+			{
+				*sortClause = nullptr;
+			}
+		}
+	}
+
 	if (outerFlag)
 	{
 		// Now make another pass thru the outer conjuncts only, finding unused,
@@ -3184,13 +3204,29 @@ RecordSource* Optimizer::generateRetrieval(StreamType stream,
 			!(iter->nodFlags & ExprNode::FLAG_RESIDUAL) &&
 			iter->computable(csb, INVALID_STREAM, false))
 		{
+			const bool containsStream = iter->containsStream(stream);
+			const bool locallyComputable = iter->computable(csb, stream, true);
+
+			// If this stream corresponds to a foreign table
+			// and if this conjunct is locally computable,
+			// try applying the condition at the foreign server level
+
+			if (foreignRsb &&
+				containsStream &&
+				locallyComputable &&
+				foreignRsb->applyBoolean(tdbb, *iter))
+			{
+				fb_assert(!inversion);
+				iter |= CONJUNCT_USED;
+				continue;
+			}
+
 			// If inversion is available, utilize all conjuncts that refer to
 			// the stream being retrieved. Otherwise, utilize only conjuncts
 			// that are local to this stream. The remaining ones are left in piece
 			// as possible candidates for a merge/hash join.
 
-			if ((inversion && iter->containsStream(stream)) ||
-				(!inversion && iter->computable(csb, stream, true)))
+			if ((inversion && containsStream) || (!inversion && locallyComputable))
 			{
 				compose(getPool(), &boolean, iter);
 				iter |= CONJUNCT_USED;

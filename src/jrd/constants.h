@@ -110,6 +110,7 @@ inline constexpr const char* REL_SCOPE_GTT_DELETE	= "global temporary table %s o
 inline constexpr const char* REL_SCOPE_EXTERNAL		= "external table %s";
 inline constexpr const char* REL_SCOPE_VIEW			= "view %s";
 inline constexpr const char* REL_SCOPE_VIRTUAL		= "virtual table %s";
+inline constexpr const char* REL_SCOPE_FOREIGN		= "foreign table %s";
 
 // literal strings in rdb$ref_constraints to be used to identify
 // the cascade actions for referential constraints. Used
@@ -254,7 +255,8 @@ enum rel_t {
 	rel_external = 2,
 	rel_virtual = 3,
 	rel_temp_preserve = 4,
-	rel_temp_delete = 5
+	rel_temp_delete = 5,
+	rel_foreign = 6
 };
 
 // procedure types
@@ -436,7 +438,13 @@ static inline constexpr const char* DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "SCHEMA"},
 	{"CREATE", "TABLESPACE"},
 	{"ALTER", "TABLESPACE"},
-	{"DROP", "TABLESPACE"}
+	{"DROP", "TABLESPACE"},
+	{"CREATE", "SERVER"},
+	{"ALTER", "SERVER"},
+	{"DROP", "SERVER"},
+	{"CREATE", "USER MAPPING FOR"},
+	{"ALTER", "USER MAPPING FOR"},
+	{"DROP", "USER MAPPING FOR"}
 };
 
 inline constexpr int DDL_TRIGGER_BEFORE	= 0;
@@ -495,6 +503,12 @@ inline constexpr int DDL_TRIGGER_DROP_SCHEMA			= 50;
 inline constexpr int DDL_TRIGGER_CREATE_TABLESPACE		= 51;
 inline constexpr int DDL_TRIGGER_ALTER_TABLESPACE		= 52;
 inline constexpr int DDL_TRIGGER_DROP_TABLESPACE		= 53;
+inline constexpr int DDL_TRIGGER_CREATE_FOREIGN_SERVER	= 54;
+inline constexpr int DDL_TRIGGER_ALTER_FOREIGN_SERVER	= 55;
+inline constexpr int DDL_TRIGGER_DROP_FOREIGN_SERVER	= 56;
+inline constexpr int DDL_TRIGGER_CREATE_USER_MAPPING	= 57;
+inline constexpr int DDL_TRIGGER_ALTER_USER_MAPPING		= 58;
+inline constexpr int DDL_TRIGGER_DROP_USER_MAPPING		= 59;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -538,5 +552,15 @@ const char* const TEMP_TABLESPACE_NAME = "TEMPORARY";
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
+
+// How many times request can be restarted in attempts to sync formats in it
+inline constexpr int EXEC_RESTARTS = 8;
+
+enum ExternalValueType
+{
+	TYPE_STRING = 0,
+	TYPE_ENV = 1,
+	TYPE_FILE = 2
+};
 
 #endif // JRD_CONSTANTS_H
