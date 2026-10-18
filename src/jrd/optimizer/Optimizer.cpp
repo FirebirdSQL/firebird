@@ -653,17 +653,6 @@ Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse,
 }
 
 
-Optimizer::Optimizer(thread_db* aTdbb, CompilerScratch* aCsb)
-	: PermanentStorage(*aTdbb->getDefaultPool()),
-	tdbb(aTdbb), csb(aCsb), rse(nullptr),
-	compileStreams(getPool()),
-	bedStreams(getPool()),
-	keyStreams(getPool()),
-	outerStreams(getPool()),
-	conjuncts(getPool())
-{
-}
-
 //
 // Destructor
 //

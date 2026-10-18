@@ -572,7 +572,6 @@ public:
 private:
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, bool parentFirstRows);
 	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb, RseNode* aRse, const BoolExprNodeStack& stack);
-	Optimizer(thread_db* aTdbb, CompilerScratch* aCsb);
 
 	RecordSource* compile(BoolExprNodeStack* parentStack);
 
