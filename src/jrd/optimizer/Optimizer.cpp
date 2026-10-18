@@ -1421,15 +1421,15 @@ BoolExprNode* Optimizer::transformBoolExpr(thread_db* tdbb, BoolExprNode* boolNo
 		{
 			MemoryPool& pool = getPool();
 
-			auto geq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_geq);
+			const auto geq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_geq);
 			geq->arg1 = cmpNode->arg1;
 			geq->arg2 = cmpNode->arg2;
 
-			auto leq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_leq);
+			const auto leq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_leq);
 			leq->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
 			leq->arg2 = cmpNode->arg3;
 
-			return  FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, geq, leq);
+			return FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, geq, leq);
 		}
 	}
 
