@@ -40,6 +40,8 @@
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
+#include <functional>
+
 #include "../jrd/jrd.h"
 #include "../jrd/align.h"
 #include "../jrd/val.h"
@@ -1395,45 +1397,42 @@ BoolExprNode* Optimizer::transformBoolean(thread_db* tdbb, CompilerScratch* csb)
 {
 	fb_assert(csb->csb_node->getKind() == DmlNode::KIND_BOOLEAN);
 
-	auto* node = static_cast<BoolExprNode*>(csb->csb_node);
-
-	Optimizer opt(tdbb, csb);
-	node = opt.transformBoolExpr(tdbb, node);
-	csb->csb_node = node;
-	return node;
-}
-
-
-BoolExprNode* Optimizer::transformBoolExpr(thread_db* tdbb, BoolExprNode* boolNode)
-{
-	if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
+	std::function<BoolExprNode*(BoolExprNode* boolNode)> transformBoolExpr =
+		[&](BoolExprNode* boolNode) -> BoolExprNode*
 	{
-		binaryNode->arg1 = transformBoolExpr(tdbb, binaryNode->arg1);
-		binaryNode->arg2 = transformBoolExpr(tdbb, binaryNode->arg2);
-		return binaryNode;
-	}
-
-	if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
-	{
-		// turn a between into (a greater than or equal) AND (a less than  or equal)
-
-		if (cmpNode->blrOp == blr_between)
+		if (const auto binaryNode = nodeAs<BinaryBoolNode>(boolNode))
 		{
-			MemoryPool& pool = getPool();
-
-			const auto geq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_geq);
-			geq->arg1 = cmpNode->arg1;
-			geq->arg2 = cmpNode->arg2;
-
-			const auto leq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_leq);
-			leq->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
-			leq->arg2 = cmpNode->arg3;
-
-			return FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, geq, leq);
+			binaryNode->arg1 = transformBoolExpr(binaryNode->arg1);
+			binaryNode->arg2 = transformBoolExpr(binaryNode->arg2);
+			return binaryNode;
 		}
-	}
 
-	return boolNode;
+		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolNode))
+		{
+			// turn a between into (a greater than or equal) AND (a less than  or equal)
+
+			if (cmpNode->blrOp == blr_between)
+			{
+				MemoryPool& pool = csb->csb_pool;
+
+				const auto geq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_geq);
+				geq->arg1 = cmpNode->arg1;
+				geq->arg2 = cmpNode->arg2;
+
+				const auto leq = FB_NEW_POOL(pool) ComparativeBoolNode(pool, blr_leq);
+				leq->arg1 = CMP_clone_node_opt(tdbb, csb, cmpNode->arg1);
+				leq->arg2 = cmpNode->arg3;
+
+				return FB_NEW_POOL(pool) BinaryBoolNode(pool, blr_and, geq, leq);
+			}
+		}
+
+		return boolNode;
+	};
+
+	auto* node = static_cast<BoolExprNode*>(csb->csb_node);
+	csb->csb_node = transformBoolExpr(node);
+	return node;
 }
 
 

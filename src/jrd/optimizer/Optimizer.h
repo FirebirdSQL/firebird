@@ -607,7 +607,6 @@ private:
 									ValueListNode* list);
 
 	ValueExprNode* optimizeLikeSimilar(ComparativeBoolNode* cmpNode);
-	BoolExprNode* transformBoolExpr(thread_db* tdbb, BoolExprNode* boolNode);
 
 	thread_db* const tdbb;
 	CompilerScratch* const csb;
