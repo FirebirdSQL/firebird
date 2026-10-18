@@ -753,7 +753,8 @@ SpecialDateTime CVT_get_special_datetime(const char* str, FB_SIZE_T length)
 
 
 void CVT_string_to_datetime(const dsc* desc,
-							   ISC_TIMESTAMP_TZ* date, bool* timezone_present,
+							   ISC_TIMESTAMP_TZ* date,
+							   CvtStringContains::TypeFlags* outFormatFlags,
 							   const EXPECT_DATETIME expect_type, bool allow_special, Callbacks* cb)
 {
 /**************************************
@@ -835,8 +836,8 @@ void CVT_string_to_datetime(const dsc* desc,
 	memset(components, 0, sizeof(components));
 	memset(description, 0, sizeof(description));
 
-	if (timezone_present)
-		*timezone_present = false;
+	if (outFormatFlags)
+		*outFormatFlags = CvtStringContains::NONE;
 
 	// Parse components
 	// The 7 components are Year, Month, Day, Hours, Minutes, Seconds, Thou
@@ -1040,6 +1041,9 @@ void CVT_string_to_datetime(const dsc* desc,
 			continue;
 		else if (i >= 3 && i <= 5)
 		{
+			if (outFormatFlags)
+				*outFormatFlags |= CvtStringContains::TIME;
+
 			if (*p == ':')
 			{
 				p++;
@@ -1090,8 +1094,8 @@ void CVT_string_to_datetime(const dsc* desc,
 		{
 			zone = TimeZoneUtil::parse(p, end - p);
 
-			if (timezone_present)
-				*timezone_present = true;
+			if (outFormatFlags)
+				*outFormatFlags |= CvtStringContains::TIMEZONE;
 		}
 	}
 	else
@@ -1167,6 +1171,9 @@ void CVT_string_to_datetime(const dsc* desc,
 		times.tm_year = components[position_year];
 		times.tm_mon = components[position_month];
 		times.tm_mday = components[position_day];
+
+		if (outFormatFlags)
+			*outFormatFlags |= CvtStringContains::DATE;
 
 		// Fetch current date/time
 		tm times2;

@@ -141,6 +141,9 @@ public:
 	static ISC_TIME_TZ timeStampToTimeTz(const ISC_TIMESTAMP& timeStamp, Callbacks* cb);
 
 	static ISC_TIMESTAMP_TZ dateToTimeStampTz(const ISC_DATE& date, Callbacks* cb);
+
+	static int compareTimeStamps(ISC_TIMESTAMP_TZ lhs, ISC_TIMESTAMP_TZ rhs);
+	static int compareUtcTimeStamps(const ISC_TIMESTAMP lhs, const ISC_TIMESTAMP rhs);
 };
 
 class IcuCalendarWrapper

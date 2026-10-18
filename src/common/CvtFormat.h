@@ -6,6 +6,7 @@
 
 Firebird::string CVT_format_datetime_to_string(const dsc* desc, const Firebird::string& format, Firebird::Callbacks* cb);
 ISC_TIMESTAMP_TZ CVT_format_string_to_datetime(const dsc* desc, const Firebird::string& format,
-	const Firebird::EXPECT_DATETIME expectedType, Firebird::Callbacks* cb);
+	const Firebird::EXPECT_DATETIME expectedType, Firebird::Callbacks* cb,
+	Firebird::CvtStringContains::TypeFlags* outFormat = nullptr);
 
 #endif // COMMON_CVT_FORMAT_H

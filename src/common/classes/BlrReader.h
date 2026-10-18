@@ -201,16 +201,28 @@ public:
 		return word;
 	}
 
-	void getString(string& s)
+	inline void getString(string& s, const unsigned len)
 	{
-		const unsigned len = getByte();
-
 		if (pos + len >= end)
 			(Arg::Gds(isc_invalid_blr) << Arg::Num(getOffset())).raise();
 
 		s.assign(pos, len);
 
 		seekForward(len);
+	}
+
+
+	inline void getString(string& s)
+	{
+		const unsigned len = getByte();
+		getString(s, len);
+	}
+
+	inline void getVerbString(string& s)
+	{
+		getByte(); // verb
+		const unsigned len = getWord();
+		getString(s, len);
 	}
 
 	template <typename STR>
