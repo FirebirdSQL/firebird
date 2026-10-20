@@ -95,7 +95,7 @@ UCHAR* MSC_alloc(int size)
 		const int n = MAX(size, 4096);
 		gpre_space* next = (gpre_space*) gds__alloc((SLONG) (n + sizeof(gpre_space)));
 		if (!next)
-			CPR_error("virtual memory exhausted");
+			CPR_error("virtual memory exhausted", true);
 #ifdef DEBUG_GDS_ALLOC
 		// For V4.0 we don't care about gpre specific memory leaks
 		gds_alloc_flag_unfreed(next);
@@ -127,7 +127,7 @@ UCHAR* MSC_alloc_permanent(int size)
 		const int n = MAX(size, 4096);
 		gpre_space* next = (gpre_space*) gds__alloc((SLONG) (n + sizeof(gpre_space)));
 		if (!next)
-			CPR_error("virtual memory exhausted");
+			CPR_error("virtual memory exhausted", true);
 #ifdef DEBUG_GDS_ALLOC
 		// For V4.0 we don't care about gpre specific memory leaks
 		gds_alloc_flag_unfreed(next);

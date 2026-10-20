@@ -522,7 +522,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 	}
 
 	parseSQLDA(m_out_xsqlda, m_out_buffer, m_outDescs);
-	m_outputs = m_out_xsqlda ? m_out_xsqlda->sqld : 0;
+	m_outputs = m_out_xsqlda->sqld;
 
 	// get input parameters
 	if (!m_in_xsqlda)
@@ -564,7 +564,7 @@ void IscStatement::doPrepare(thread_db* tdbb, const string& sql)
 	}
 
 	parseSQLDA(m_in_xsqlda, m_in_buffer, m_inDescs);
-	m_inputs = m_in_xsqlda ? m_in_xsqlda->sqld : 0;
+	m_inputs = m_in_xsqlda->sqld;
 
 	// get statement type
 	const unsigned char stmt_info[] = {isc_info_sql_stmt_type};
