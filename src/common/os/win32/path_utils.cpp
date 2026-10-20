@@ -19,14 +19,14 @@ const size_t PathUtils::up_dir_link_len = std::char_traits<char>::length(up_dir_
 class Win32DirIterator final : public PathUtils::DirIterator
 {
 public:
-	Win32DirIterator(MemoryPool& p, const PathName& path)
-		: DirIterator(p, path), dir(0), file(getPool()), done(false)
+	Win32DirIterator(MemoryPool& p, const PathName& path, const PathUtils::DirIterator::Flags flags)
+		: DirIterator(p, path, flags), file(getPool()), tmp_buffer(getPool())
 	{
 		init();
 	}
 
-	Win32DirIterator(const PathName& path)
-		: DirIterator(path), dir(0), file(getPool()), done(false)
+	Win32DirIterator(const PathName& path, const PathUtils::DirIterator::Flags flags)
+		: DirIterator(path, flags), file(getPool()), tmp_buffer(getPool())
 	{
 		init();
 	}
@@ -38,43 +38,65 @@ public:
 	operator bool() noexcept override { return !done; }
 
 private:
-	HANDLE dir;
-	WIN32_FIND_DATA fd;
-	PathName file;
-	bool done;
-
 	void init();
+	void setCurrentFile();
+
+	bool isRegularFile() const
+	{
+		return !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+	}
+
+private:
+	HANDLE dir = INVALID_HANDLE_VALUE;
+	WIN32_FIND_DATA fd;
+
+	PathName file;
+	// Used to minimize reallocation on every iteration.
+	PathName tmp_buffer;
+
+	bool done = false;
 };
 
 void Win32DirIterator::init()
 {
 	PathName mask(dirPrefix);
 	PathUtils::ensureSeparator(mask);
-	mask += "*.*";
+	mask += '*';
 
-	dir = FindFirstFile(mask.c_str(), &fd);
+	// `FindExInfoBasic` skips the short name lookup (legacy stuff) and `FIND_FIRST_EX_LARGE_FETCH`
+	// makes the kernel return entries in larger batches, so fewer system calls are made.
+	// Both are rejected with `ERROR_INVALID_PARAMETER` before Windows 7, fall back then.
+	dir = FindFirstFileEx(mask.c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch,
+		NULL, FIND_FIRST_EX_LARGE_FETCH);
+
+	if (dir == INVALID_HANDLE_VALUE && GetLastError() == ERROR_INVALID_PARAMETER)
+	{
+		dir = FindFirstFileEx(mask.c_str(), FindExInfoStandard, &fd, FindExSearchNameMatch,
+			NULL, 0);
+	}
 
 	if (dir == INVALID_HANDLE_VALUE)
 	{
-		auto const last_error = GetLastError();
-		if (last_error != ERROR_FILE_NOT_FOUND && last_error != ERROR_PATH_NOT_FOUND)
-			system_call_failed::raise("FindFirstFile");
+		const DWORD lastError = GetLastError();
+		if (lastError != ERROR_FILE_NOT_FOUND && lastError != ERROR_PATH_NOT_FOUND)
+			system_call_failed::raise("FindFirstFileEx", lastError);
 
-		dir = 0;
 		done = true;
+		return;
 	}
-	else if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-		++(*this);
+
+	if (isRegularFile())
+		setCurrentFile();
 	else
-		PathUtils::concatPath(file, dirPrefix, fd.cFileName);
+		++(*this);
 }
 
 Win32DirIterator::~Win32DirIterator()
 {
-	if (dir)
+	if (dir != INVALID_HANDLE_VALUE)
 	{
 		FindClose(dir);
-		dir = 0;
+		dir = INVALID_HANDLE_VALUE;
 	}
 
 	done = true;
@@ -82,29 +104,26 @@ Win32DirIterator::~Win32DirIterator()
 
 const PathUtils::DirIterator& Win32DirIterator::operator++()
 {
-	if (!done)
-	{
-		while (true)
-		{
-			if (!FindNextFile(dir, &fd))
-			{
-				done = true;
-				break;
-			}
-			else if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-				break;
-		}
+	if (done)
+		return *this;
 
-		if (!done)
-			PathUtils::concatPath(file, dirPrefix, fd.cFileName);
+	while (FindNextFile(dir, &fd))
+	{
+		if (!isRegularFile())
+			continue;
+
+		setCurrentFile();
+		return *this;
 	}
 
+	done = true;
 	return *this;
 }
 
-PathUtils::DirIterator* PathUtils::newDirIterator(MemoryPool& p, const PathName& path)
+PathUtils::DirIterator* PathUtils::newDirIterator(MemoryPool& p, const PathName& path,
+	const DirIterator::Flags flags)
 {
-	return FB_NEW_POOL(p) Win32DirIterator(p, path);
+	return FB_NEW_POOL(p) Win32DirIterator(p, path, flags);
 }
 
 void PathUtils::splitLastComponent(PathName& path, PathName& file,
