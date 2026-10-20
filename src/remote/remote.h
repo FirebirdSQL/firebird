@@ -1078,7 +1078,7 @@ private:
 	{
 	public:
 		ClientCrypt()
-			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, "NoDefault"),
+			: pluginItr(Firebird::IPluginManager::TYPE_KEY_HOLDER, ""),
 			  currentIface(nullptr), afterIface(nullptr),
 			  triedPlugins(getPool())
 		{ }
