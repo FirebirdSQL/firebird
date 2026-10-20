@@ -582,8 +582,11 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 			}
 
 			idx.idx_root = 0;
+
+			IndexCreation creation(IdxCreate::AtOnce, relation, &idx, idx_name, idxTran);
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, idx_name, NULL, idxTran, selectivity);
+
+			IDX_create_index(tdbb, creation, nullptr, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
@@ -743,30 +746,30 @@ bool RelationPermanent::fillPagesSnapshot(PagesSnapshot& snapshot, const bool at
 
 	for (const auto relPages : *rel_pages_inst)
 	{
-		if (!attachmentOnly)
-		{
-			snapshot.add(relPages);
-			relPages->addRef();
-		}
-		else if ((rel_flags & REL_temp_conn) &&
-			PAG_attachment_id(snapshot.spt_tdbb) == relPages->getInstanceId())
-		{
-			snapshot.add(relPages);
-			relPages->addRef();
-		}
-		else if (rel_flags & REL_temp_tran)
-		{
-			const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
-			for (; tran; tran = tran->tra_next)
+			if (!attachmentOnly)
 			{
-				if (tran->tra_number == relPages->getInstanceId())
+				snapshot.add(relPages);
+				relPages->addRef();
+			}
+			else if ((rel_flags & REL_temp_conn) &&
+			PAG_attachment_id(snapshot.spt_tdbb) == relPages->getInstanceId())
+			{
+				snapshot.add(relPages);
+				relPages->addRef();
+			}
+			else if (rel_flags & REL_temp_tran)
+			{
+				const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
+				for (; tran; tran = tran->tra_next)
 				{
-					snapshot.add(relPages);
-					relPages->addRef();
+					if (tran->tra_number == relPages->getInstanceId())
+					{
+						snapshot.add(relPages);
+						relPages->addRef();
+					}
 				}
 			}
 		}
-	}
 
 	return true;
 }
@@ -1146,7 +1149,7 @@ Triggers& TrigArray::operator[](int t)
 
 	case TRIGGER_POST_ERASE:
 		return postErase;
-	}
+		}
 
 	fb_assert(false);
 	fatal_exception::raise("Invalid trigger type");

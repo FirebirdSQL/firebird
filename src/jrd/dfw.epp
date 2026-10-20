@@ -4942,7 +4942,7 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	memset(&idx, 0, sizeof(idx));
 
 	idx.idx_id = lttIndex->id;
-	idx.idx_count = lttIndex->columns.getCount();
+	idx.idx_count = lttIndex->segments.getCount();
 	idx.idx_flags = 0;
 
 	if (lttIndex->unique)
@@ -4953,14 +4953,14 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	// Build the index key descriptors from LTT field info
 	int keyPos = 0;
 
-	for (const auto& colName : lttIndex->columns)
+	for (const auto& segment : lttIndex->segments)
 	{
 		// Find the field in the LTT
 		bool found = false;
 
 		for (const auto& field : ltt->fields)
 		{
-			if (field.name == colName)
+			if (field.name == segment.name)
 			{
 				idx.idx_rpt[keyPos].idx_field = field.id;
 
@@ -4970,7 +4970,9 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 					DTYPE_IS_TEXT(field.desc.dsc_dtype) ?
 						TTypeId(field.charSetId.value_or(CS_NONE), field.collationId.value_or(COLLATE_NONE)) :
 						ttype_none);
+
 				idx.idx_rpt[keyPos].idx_itype = idxType;
+				idx.idx_rpt[keyPos].idx_length = segment.length;
 
 				found = true;
 				break;
@@ -4989,9 +4991,10 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	{	// scope
 		AutoSetRestoreFlag<ULONG> dbPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, true);
 
+		IndexCreation creation(IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(), transaction);
 		SelectivityList selectivity(*tdbb->getDefaultPool());
-		IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(),
-			&lttIndex->id, transaction, selectivity);
+
+		IDX_create_index(tdbb, creation, &lttIndex->id, selectivity);
 	}
 
 	// Update index on the current instance if it exists
@@ -5001,10 +5004,11 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 
 		if (relation->getPages(tdbb, 0, false))
 		{
+			IndexCreation creation(IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(), transaction);
 			SelectivityList selectivity(*tdbb->getDefaultPool());
+
 			idx.idx_root = 0;
-			IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, work->getQualifiedName(),
-				&lttIndex->id, transaction, selectivity);
+			IDX_create_index(tdbb, creation, &lttIndex->id, selectivity);
 		}
 	}
 
@@ -5015,7 +5019,7 @@ static bool create_ltt_index(thread_db* tdbb, SSHORT phase, DeferredWork* work, 
 	auto& attPool = *attachment->att_pool;
 	AutoPtr<IndexVersion> idv = FB_NEW_POOL(attPool) IndexVersion(attPool, idp);
 	idv->setLtt(tdbb, lttIndex->name, lttIndex->unique, lttIndex->descending,
-		lttIndex->columns.getCount(), lttIndex->inactive);
+		lttIndex->segments.getCount(), lttIndex->inactive);
 
 	idp->storeObject(tdbb, idv, 0);
 	idv.release();

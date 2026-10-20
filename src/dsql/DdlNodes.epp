@@ -7873,7 +7873,10 @@ void RelationNode::defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 				if (constraint.index->descending)
 					definition.descending = true;
 				definition.inactive = false;
-				definition.columns = constraint.columns;
+
+				for (const auto& column : constraint.columns)
+					definition.segments.add().name = column;
+
 				definition.refRelation = constraint.refRelation;
 				definition.refColumns = constraint.refColumns;
 				definition.tableSpace = constraint.tableSpace;
@@ -9916,15 +9919,11 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 					definition.descending = indexNode->descending;
 					definition.inactive = !indexNode->active;
 
-					fb_assert(indexNode->columns);
+					fb_assert(indexNode->segments && indexNode->segments->hasData());
 					fb_assert(!indexNode->computed);
 					fb_assert(!indexNode->partial);
 
-					for (const auto indexColumn : indexNode->columns->items)
-					{
-						MetaName& column = definition.columns.add();
-						column = nodeAs<FieldNode>(indexColumn)->dsqlName;
-					}
+					definition.segments = *indexNode->segments;
 
 					indexList.push(CreateIndexNode::store(tdbb, indexList.getPool(), transaction,
 						addInlineTableIndexClause->indexNode->name, definition));
@@ -13158,12 +13157,15 @@ void ModifyIndexNode::modify(thread_db* tdbb, jrd_tra* transaction)
 
 	if (operation != OP_ACTIVE)
 		step2(tdbb, transaction);
+	else if (deferredValidation)
+		validateUniqueIndex(tdbb, transaction, concurrently);
 }
 
 string ModifyIndexNode::print(Jrd::NodePrinter& printer) const
 {
 	NODE_PRINT(printer, indexName);
 	NODE_PRINT(printer, operation);
+	NODE_PRINT(printer, concurrently);
 	NODE_PRINT(printer, tableSpace);
 
 	return "ModifyIndexNode";
@@ -13226,7 +13228,7 @@ void ModifyIndexNode::validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction,
 
 			fb_assert(IDX.RDB$UNIQUE_FLAG & IDX_UNIQUE);
 
-			if (!(IDX.RDB$UNIQUE_FLAG & IDX_NOT_VALIDATED))
+			if (!(IDX.RDB$UNIQUE_FLAG & IDX_NOT_VALIDATED) && !deferredValidation)
 				status_exception::raise(Arg::Gds(isc_dyn_index_already_validated));
 				// msg 330: "Index uniqueness already validated"
 
@@ -13235,12 +13237,44 @@ void ModifyIndexNode::validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction,
 			QualifiedName relName(IDX.RDB$RELATION_NAME, IDX.RDB$SCHEMA_NAME);
 			jrd_rel* relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, relName, CacheFlag::AUTOCREATE);
 
-			if (relation && IDX_validate_unique(tdbb, relation, idxId))
+			if (relation)
 			{
-				MODIFY IDX
-					IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
-					IDX.RDB$UNIQUE_FLAG &= ~IDX_NOT_VALIDATED;
-				END_MODIFY
+				FbLocalStatus status;
+				bool valid = true;
+				{
+					AutoSetRestoreFlag flagPageSpace(&tdbb->tdbb_flags, TDBB_use_db_page_space, !relation->isTemporary());
+					try
+					{
+						IDX_validate_unique(tdbb, transaction, relation, idxId);
+					}
+					catch (const Exception& ex)
+					{
+						if (!silent)
+						{
+							if (operation == OP_ACTIVE)
+								IDX_mark_index(tdbb, relation, idxId);
+							throw;
+						}
+
+						ex.stuffException(&status);
+						valid = false;
+					}
+				}
+
+				const bool validated = !(IDX.RDB$UNIQUE_FLAG & IDX_NOT_VALIDATED);
+				if (valid != validated)
+				{
+					MODIFY IDX
+						IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
+						if (valid)
+							IDX.RDB$UNIQUE_FLAG &= ~IDX_NOT_VALIDATED;
+						else
+							IDX.RDB$UNIQUE_FLAG |= IDX_NOT_VALIDATED;
+					END_MODIFY
+				}
+
+				if (!valid)
+					status.raise();
 			}
 		}
 		END_FOR
@@ -13325,20 +13359,20 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		// Msg308: can't create index %s
 	}
 
-	index_desc idx;
-	idx.idx_count = 0;
-	int key_count = 0;
-
 	SET_TDBB(tdbb);
 	Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	MetaId idxId = dbb->dbb_max_idx;
 	bool active = false;
+	bool havePartialSegments = false;
 	const bool tempConn = !(tdbb->tdbb_flags & TDBB_use_db_page_space);
 	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
 
-	idx.idx_flags = 0;
-	idx.idx_pg_space_id = DB_PAGE_SPACE;
+	index_desc idx;
+	MOVE_CLEAR(&idx, sizeof(index_desc));
+	idx.idx_pg_space_id = tempConn ? TEMP_PAGE_SPACE : DB_PAGE_SPACE;
+
+	int key_count = 0;
 
 	// Fetch the information necessary to create the index.
 	request.reset(tdbb, irq_c_index, IRQ_REQUESTS);
@@ -13506,11 +13540,14 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 				collate = COLLATE_NONE;
 
 			const TTypeId text_type(CSetId(FLD.RDB$CHARACTER_SET_ID), collate);
-			idx.idx_rpt[SEG.RDB$FIELD_POSITION].idx_itype =
-				DFW_assign_index_type(tdbb, indexName, gds_cvt_blr_dtype[FLD.RDB$FIELD_TYPE], text_type);
+			auto& tail = idx.idx_rpt[SEG.RDB$FIELD_POSITION];
+
+			tail.idx_itype = DFW_assign_index_type(tdbb, indexName, gds_cvt_blr_dtype[FLD.RDB$FIELD_TYPE], text_type);
+			tail.idx_length = SEG.RDB$CHARACTER_LENGTH;
+			havePartialSegments = (tail.idx_length != 0);
 
 			// Initialize selectivity to zero. Otherwise random rubbish makes its way into database
-			idx.idx_rpt[SEG.RDB$FIELD_POSITION].idx_selectivity = 0;
+			tail.idx_selectivity = 0;
 		}
 		END_FOR
 	}
@@ -13568,7 +13605,7 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 			if (!IDX_check_master_types(tdbb, idx, relVer, bad_segment))
 			{
 				ERR_post(Arg::Gds(isc_no_meta_update) <<
-						Arg::Gds(isc_partner_idx_incompat_type) << Arg::Num(bad_segment + 1));
+							Arg::Gds(isc_partner_idx_incompat_type) << Arg::Num(bad_segment + 1));
 			}
 		}
 	}
@@ -13582,17 +13619,21 @@ MetaId StoreIndexNode::create(thread_db* tdbb, jrd_tra* transaction)
 		fb_assert(idxId <= dbb->dbb_max_idx);
 		idx.idx_id = idxId;
 
-		SelectivityList selectivity(*tdbb->getDefaultPool());
-		IDX_create_index(tdbb,
-						 concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
-						 relation, &idx, indexName, &idxId, transaction, selectivity);
+		IndexCreation creation(concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
+							   relation, &idx, indexName, transaction);
+		if ((idx.idx_flags & idx_unique) && (concurrently || havePartialSegments))
+		{
+			creation.checkDuplicates = IdxCheckDups::AfterBuild;
+			deferredValidation = true;
+		}
 
+		SelectivityList selectivity(*tdbb->getDefaultPool());
+
+		IDX_create_index(tdbb, creation, &idxId, selectivity);
 		fb_assert(idxId == idx.idx_id);
+
 		if (!tempConn)
 			DFW_update_index(indexName, idxId, selectivity, transaction);
-
-		if (concurrently && (idx.idx_flags & idx_unique))
-			validateUniqueIndex(tdbb, transaction, true);
 	}
 	else
 		fb_assert(idxId == dbb->dbb_max_idx);
@@ -13635,12 +13676,6 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		// Msg308: can't create index %s
 	}
 
-	index_desc idx;
-	MOVE_CLEAR(&idx, sizeof(index_desc));
-	idx.idx_flags = 0;
-	idx.idx_count = 0;
-	idx.idx_pg_space_id = DB_PAGE_SPACE;
-
 	CompilerScratch* csb = nullptr;
 
 	const auto dbb = tdbb->getDatabase();
@@ -13649,6 +13684,10 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 	bool active = false;
 	const bool tempConn = !(tdbb->tdbb_flags & TDBB_use_db_page_space);
 	auto* metaTransaction = tdbb->getAttachment()->getMetaTransaction(tdbb);
+
+	index_desc idx;
+	MOVE_CLEAR(&idx, sizeof(index_desc));
+	idx.idx_pg_space_id = tempConn ? TEMP_PAGE_SPACE : DB_PAGE_SPACE;
 
 	AutoCacheRequest request(tdbb, irq_c_exp_index, IRQ_REQUESTS);
 
@@ -13713,6 +13752,7 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 				DFW_assign_index_type(tdbb, indexName,
 					idx.idx_expression_desc.dsc_dtype,
 					idx.idx_expression_desc.getTextType());
+			idx.idx_rpt[0].idx_length = 0;
 			idx.idx_rpt[0].idx_selectivity = 0;
 		}
 		catch (const Exception&)
@@ -13770,6 +13810,15 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 			protectRelation.lock();
 		}
 
+		IndexCreation creation(concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
+			relation, & idx, indexName, transaction);
+
+		if ((idx.idx_flags & idx_unique) && concurrently)
+		{
+			creation.checkDuplicates = IdxCheckDups::AfterBuild;
+			deferredValidation = true;
+		}
+
 		SelectivityList selectivity(*tdbb->getDefaultPool());
 
 		AutoSave2<jrd_tra*, thread_db> currentTransaction(tdbb, &thread_db::getTransaction, &thread_db::setTransaction);
@@ -13779,10 +13828,8 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 		{
 			fb_assert(idxId <= dbb->dbb_max_idx);
 			idx.idx_id = idxId;
-			IDX_create_index(tdbb,
-				concurrently ? IdxCreate::Concurrently : IdxCreate::ForRollback,
-				relation, &idx, indexName, &idxId, transaction, selectivity);
 
+			IDX_create_index(tdbb, creation, &idxId, selectivity);
 			fb_assert(idxId == idx.idx_id);
 		}
 		catch (const Exception&)
@@ -13797,9 +13844,6 @@ MetaId StoreIndexNode::createExpression(thread_db* tdbb, jrd_tra* transaction)
 
 		if (!tempConn)
 			DFW_update_index(indexName, idx.idx_id, selectivity, transaction);
-
-		if (concurrently && (idx.idx_flags & idx_unique))
-			validateUniqueIndex(tdbb, transaction, true);
 	}
 	else
 		fb_assert(idxId == dbb->dbb_max_idx);
@@ -13892,11 +13936,6 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 		{
 			IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
 			IDX.RDB$UNIQUE_FLAG = definition.unique.asBool() ? IDX_UNIQUE : 0;
-
-			if (definition.unique.asBool() && definition.concurrently.asBool())
-			{
-				IDX.RDB$UNIQUE_FLAG |= IDX_NOT_VALIDATED;
-			}
 		}
 
 		if (definition.inactive.isAssigned())
@@ -13935,15 +13974,15 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 		request2.reset(tdbb, drq_l_lfield, DYN_REQUESTS);
 
-		for (FB_SIZE_T i = 0; i < definition.columns.getCount(); ++i)
+		for (FB_SIZE_T i = 0; i < definition.segments.getCount(); ++i)
 		{
 			for (FB_SIZE_T j = 0; j < i; ++j)
 			{
-				if (definition.columns[i] == definition.columns[j])
+				if (definition.segments[i].name == definition.segments[j].name)
 				{
 					// msg 240 "Field %s cannot be used twice in index %s"
 					status_exception::raise(
-						Arg::PrivateDyn(240) << definition.columns[i] << IDX.RDB$INDEX_NAME);
+						Arg::PrivateDyn(240) << definition.segments[i].name << IDX.RDB$INDEX_NAME);
 				}
 			}
 
@@ -13955,11 +13994,12 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				WITH F.RDB$SCHEMA_NAME EQ IDX.RDB$SCHEMA_NAME AND
 					 F.RDB$PACKAGE_NAME EQUIV NULLIF(definition.relation.package.c_str(), '') AND
 					 F.RDB$RELATION_NAME EQ IDX.RDB$RELATION_NAME AND
-					 F.RDB$FIELD_NAME EQ definition.columns[i].c_str() AND
+					 F.RDB$FIELD_NAME EQ definition.segments[i].name.c_str() AND
 					 GF.RDB$SCHEMA_NAME EQ F.RDB$FIELD_SOURCE_SCHEMA_NAME AND
 					 GF.RDB$FIELD_NAME EQ F.RDB$FIELD_SOURCE
 			{
 				ULONG length = 0;
+				const SSHORT segmentLen = definition.segments[i].length;
 
 				if (GF.RDB$FIELD_TYPE == blr_blob)
 				{
@@ -13981,25 +14021,42 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 					// Compute the length of the key segment allowing for international
 					// information. Note that we we must convert a <character set, collation>
 					// type to an index type in order to compute the length.
+
+					if (!segmentLen)
+						length = GF.RDB$FIELD_LENGTH;
+					else if (segmentLen > GF.RDB$CHARACTER_LENGTH)
+						status_exception::raise(Arg::Gds(isc_random) << "segment length greater than field length ");
+					else
+						length = segmentLen * GF.RDB$FIELD_LENGTH / GF.RDB$CHARACTER_LENGTH;
+
 					if (!F.RDB$COLLATION_ID.NULL)
 					{
 						length = INTL_key_length(tdbb,
 							INTL_TEXT_TO_INDEX(TTypeId(CSetId(GF.RDB$CHARACTER_SET_ID),
 								CollId(F.RDB$COLLATION_ID))),
-							GF.RDB$FIELD_LENGTH);
+							length);
 					}
 					else if (!GF.RDB$COLLATION_ID.NULL)
 					{
 						length = INTL_key_length(tdbb,
 							INTL_TEXT_TO_INDEX(TTypeId(CSetId(GF.RDB$CHARACTER_SET_ID),
 								CollId(GF.RDB$COLLATION_ID))),
-							GF.RDB$FIELD_LENGTH);
+							length);
 					}
-					else
-						length = GF.RDB$FIELD_LENGTH;
 				}
 				else
+				{
+					if (segmentLen)
+					{
+						string msg;
+						msg.printf("attempt to specify a length for non-text field %s in index %s",
+							definition.segments[i].name.c_str(), idxName.toQuotedString().c_str());
+
+						status_exception::raise(Arg::Gds(isc_random) << msg);
+					}
+
 					length = sizeof(double);
+				}
 
 				if (keyLength)
 				{
@@ -14039,15 +14096,13 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			status_exception::raise(Arg::PrivateDyn(118) << idxName.toQuotedString());
 		}
 
-		if (definition.columns.hasData())
+		if (definition.segments.hasData())
 		{
 			request2.reset(tdbb, drq_s_idx_segs, DYN_REQUESTS);
 
 			SSHORT position = 0;
 
-			for (ObjectsArray<MetaName>::const_iterator segment(definition.columns.begin());
-				 segment != definition.columns.end();
-				 ++segment)
+			for (const auto& segment : definition.segments)
 			{
 				STORE(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 					X IN RDB$INDEX_SEGMENTS
@@ -14059,7 +14114,11 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 						strcpy(X.RDB$PACKAGE_NAME, IDX.RDB$PACKAGE_NAME);
 
 					strcpy(X.RDB$INDEX_NAME, IDX.RDB$INDEX_NAME);
-					strcpy(X.RDB$FIELD_NAME, segment->c_str());
+					strcpy(X.RDB$FIELD_NAME, segment.name.c_str());
+
+					X.RDB$CHARACTER_LENGTH.NULL = (segment.length > 0 ? FALSE : TRUE);
+					X.RDB$CHARACTER_LENGTH = segment.length;
+
 					X.RDB$FIELD_POSITION = position++;
 				}
 				END_STORE
@@ -14080,7 +14139,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 
 			// If referring columns count <> referred columns return error.
 
-			if (definition.columns.getCount() != definition.refColumns.getCount())
+			if (definition.segments.getCount() != definition.refColumns.getCount())
 			{
 				// msg 133: "Number of referencing columns do not equal number of
 				// referenced columns
@@ -14205,7 +14264,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 				// of columns in referring index.
 
 				fb_assert(IND.RDB$SEGMENT_COUNT >= 0);
-				if (definition.columns.getCount() != ULONG(IND.RDB$SEGMENT_COUNT))
+				if (definition.segments.getCount() != ULONG(IND.RDB$SEGMENT_COUNT))
 				{
 					// msg 133: "Number of referencing columns do not equal number of
 					// referenced columns"
@@ -14233,7 +14292,7 @@ ModifyIndexNode* CreateIndexNode::store(thread_db* tdbb, MemoryPool& p, jrd_tra*
 			}
 		}
 
-		IDX.RDB$SEGMENT_COUNT = SSHORT(definition.columns.getCount());
+		IDX.RDB$SEGMENT_COUNT = SSHORT(definition.segments.getCount());
 	}
 	END_STORE
 
@@ -14279,7 +14338,7 @@ string CreateIndexNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, active);
 	NODE_PRINT(printer, concurrently);
 	NODE_PRINT(printer, relation);
-	NODE_PRINT(printer, columns);
+	NODE_PRINT(printer, segments);
 	NODE_PRINT(printer, computed);
 	NODE_PRINT(printer, partial);
 	NODE_PRINT(printer, createIfNotExistsOnly);
@@ -14330,16 +14389,9 @@ void CreateIndexNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch,
 	definition.inactive = !active;
 	definition.concurrently = concurrently;
 
-	if (columns)
+	if (segments && segments->hasData())
 	{
-		const NestConst<ValueExprNode>* ptr = columns->items.begin();
-		const NestConst<ValueExprNode>* const end = columns->items.end();
-
-		for (; ptr != end; ++ptr)
-		{
-			MetaName& column = definition.columns.add();
-			column = nodeAs<FieldNode>(*ptr)->dsqlName;
-		}
+		definition.segments = *segments;
 	}
 	else if (computed)
 	{
@@ -14430,28 +14482,29 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 		status_exception::raise(Arg::Gds(isc_no_dup) << name.toQuotedString());
 	}
 
-	if (columns->items.getCount() > MAX_INDEX_SEGMENTS)
-		status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
-
 	const auto& fields = ltt->hasPendingChanges ? ltt->pendingFields : ltt->fields;
 
-	for (const auto& col : columns->items)
+	if (segments)
 	{
-		const auto& colName = nodeAs<FieldNode>(col)->dsqlName;
+		if (segments->getCount() > MAX_INDEX_SEGMENTS)
+			status_exception::raise(Arg::Gds(isc_idx_key_err) << name.toQuotedString());
 
-		auto fieldIt = std::find_if(fields.begin(), fields.end(),
-			[&colName](const auto& field) { return field.name == colName; });
-
-		if (fieldIt == fields.end())
+		for (const auto& seg : *segments)
 		{
-			// Column not found in LTT
-			status_exception::raise(
-				Arg::Gds(isc_dyn_column_does_not_exist) << colName.c_str() << ltt->name.toQuotedString());
-		}
+			auto fieldIt = std::find_if(fields.begin(), fields.end(),
+				[&seg](const auto& field) { return field.name == seg.name; });
 
-		// Check if field type is indexable (no blobs or arrays)
-		if (fieldIt->desc.dsc_dtype == dtype_blob)
-			status_exception::raise(Arg::Gds(isc_blob_idx_err) << colName.c_str());
+			if (fieldIt == fields.end())
+			{
+				// Column not found in LTT
+				status_exception::raise(
+					Arg::Gds(isc_dyn_column_does_not_exist) << seg.name.c_str() << ltt->name.toQuotedString());
+			}
+
+			// Check if field type is indexable (no blobs or arrays)
+			if (fieldIt->desc.dsc_dtype == dtype_blob)
+				status_exception::raise(Arg::Gds(isc_blob_idx_err) << seg.name.c_str());
+		}
 	}
 
 	// Register undo action with the savepoint
@@ -14483,8 +14536,11 @@ void CreateIndexNode::defineLocalTempIndex(thread_db* tdbb, DsqlCompilerScratch*
 	newIndex.inactive = !active;
 	newIndex.id = ltt->nextIndexId++;
 
-	for (const auto& col : columns->items)
-		newIndex.columns.add(nodeAs<FieldNode>(col)->dsqlName);
+	if (segments)
+	{
+		for (const auto& seg : *segments)
+			newIndex.segments.add(seg);
+	}
 
 	// Post deferred work to create the actual B-tree structure
 	DFW_post_work(transaction, dfw_create_ltt_index, string(name.object.c_str()), name.schema, 0);
@@ -14525,7 +14581,6 @@ string AlterIndexNode::internalPrint(NodePrinter& printer) const
 	ModifyIndexNode::print(printer);
 
 	NODE_PRINT(printer, idxId);
-	NODE_PRINT(printer, concurrently);
 
 	return "AlterIndexNode";
 }
@@ -14675,6 +14730,14 @@ bool AlterIndexNode::step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 				fb_assert(ret);
 			}
 
+			// When we going to activate unique index, there could be few cases:
+			// - re-activation is possible (see step2)
+			//	 - index was validated: no new validation necessary as index was maintained
+			//   - index was not validated : validation is required
+			// - re-activation is not possible, index will be build:
+			//   - validation is required and performed by rebuild procedure (storeNode.modify)
+			deferredValidation = (operation == OP_ACTIVE) && idxId.has_value() && (IDX.RDB$UNIQUE_FLAG & IDX_NOT_VALIDATED);
+
 			MODIFY IDX
 				IDX.RDB$INDEX_INACTIVE.NULL = FALSE;
 				IDX.RDB$INDEX_INACTIVE = desiredStatus;
@@ -14683,6 +14746,12 @@ bool AlterIndexNode::step1(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jr
 				{
 					IDX.RDB$STATISTICS.NULL = FALSE;
 					IDX.RDB$STATISTICS = -1.0;
+
+					if (IDX.RDB$UNIQUE_FLAG & IDX_UNIQUE)
+					{
+						IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
+						IDX.RDB$UNIQUE_FLAG &= ~IDX_NOT_VALIDATED;
+					}
 				}
 			END_MODIFY
 		}
@@ -14722,6 +14791,12 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 						IDX.RDB$STATISTICS.NULL = FALSE;
 						IDX.RDB$STATISTICS = 0.0;
 						IDX.RDB$INDEX_ID.NULL = TRUE;
+
+						if (IDX.RDB$UNIQUE_FLAG & IDX_UNIQUE)
+						{
+							IDX.RDB$UNIQUE_FLAG.NULL = FALSE;
+							IDX.RDB$UNIQUE_FLAG &= ~IDX_NOT_VALIDATED;
+						}
 					END_MODIFY
 				}
 				END_FOR
@@ -14736,6 +14811,7 @@ void AlterIndexNode::step2(thread_db* tdbb, jrd_tra* transaction)
 			StoreIndexNode storeNode(indexName, indexRelation, expressionIndex, concurrently);
 			fb_assert(relation->getBasePages()->getIndexRootPage());
 			storeNode.step2(tdbb, transaction);
+			setDeferredValidationFrom(storeNode);
 			return;
 		}
 	}

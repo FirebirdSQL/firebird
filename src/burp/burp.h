@@ -225,6 +225,9 @@ Version 12: FB6.0.
 			RDB$INDICES.RDB$PACKAGE_NAME and
 			RDB$INDEX_SEGMENTS.RDB$PACKAGE_NAME.
 
+			Optional length for index segments:
+			RDB$INDEX_SEGMENTS.RDB$CHARACTER_LENGTH
+
 			Custom aggregate function.
 */
 
@@ -387,6 +390,7 @@ enum att_type {
 	att_index_condition_blr,
 	att_index_foreign_key_schema_name,
 	att_index_tablespace_name,
+	att_index_field_char_length,	// length of segment in characters, optional
 
 	// Data record
 

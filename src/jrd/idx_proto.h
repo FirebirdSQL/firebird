@@ -39,8 +39,7 @@ namespace Jrd
 }
 
 bool IDX_check_master_types(Jrd::thread_db*, Jrd::index_desc&, Jrd::jrd_rel*, int&);
-void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*,
-					  const Jrd::QualifiedName&, USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
+void IDX_create_index(Jrd::thread_db*, Jrd::IndexCreation&, USHORT*, Jrd::SelectivityList&);
 bool IDX_mark_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId);
 void IDX_mark_temp(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, MetaId id, Jrd::Attachment* current,
 				   TraNumber tran);
@@ -51,7 +50,7 @@ void IDX_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jr
 void IDX_modify_check_constraints(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
 void IDX_modify_flag_uk_modified(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-bool IDX_validate_unique(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, MetaId id);
+bool IDX_validate_unique(Jrd::thread_db* tdbb, Jrd::jrd_tra*, Jrd::jrd_rel* relation, MetaId id);
 
 
 #endif // JRD_IDX_PROTO_H
