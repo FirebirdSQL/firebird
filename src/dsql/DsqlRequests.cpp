@@ -855,18 +855,11 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 		checkD(&st);
 		desc.dsc_sub_type = meta->getSubType(&st, index);
 		checkD(&st);
-		const auto textType = CSetId(meta->getCharSet(&st, index));
+		TTypeId textType = CSetId(meta->getCharSet(&st, index));
 		checkD(&st);
+		if (desc.isText() && textType == ttype_dynamic)
+			textType = oldFormat->fmt_desc[param->par_parameter].getTextType();
 		desc.setTextType(textType);
-
-		// ASF: Older than 2.5 engine hasn't validating strings in DSQL. After this has been
-		// implemented in 2.5, selecting a NONE column with UTF-8 attachment charset started
-		// failing. The real problem is that the client encodes SQL_TEXT/SQL_VARYING using
-		// blr_text/blr_varying (i.e. with the connection charset). I'm reseting the charset
-		// here at the server as a way to make older (and not yet changed) client work
-		// correctly.
-		if (desc.isText() && desc.getTextType() == ttype_dynamic)
-			desc.setTextType(ttype_none);
 		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
 		checkD(&st);
 		++assigned;
