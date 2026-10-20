@@ -1683,9 +1683,16 @@ public:
 		return NULL;
 	}
 
-	virtual bool isProfileAware() const
+	enum class ProfileMode : UCHAR
 	{
-		return true;
+		NONE,				// not profiled (wrapper and declaration nodes)
+		EVALUATE,			// profiled when evaluated
+		EVALUATE_RETURN		// also profiled on req_return/req_sync (loops that fetch there)
+	};
+
+	virtual ProfileMode getProfileMode() const
+	{
+		return ProfileMode::EVALUATE;
 	}
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;
