@@ -823,6 +823,24 @@ namespace
 	{
 		return callback ? callback : &defCallback;
 	}
+
+	bool dropFile(const Database* dbb, const PathName& fileName)
+	{
+		FbLocalStatus status;
+
+		if (unlink(fileName.c_str()))
+		{
+			ERR_build_status(&status,
+							 Arg::Gds(isc_io_error) << Arg::Str("unlink") << Arg::Str(fileName) <<
+							 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
+
+			const auto pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
+			iscDbLogStatus(pageSpace->file->fil_string, &status);
+		}
+
+		return status->getState() & IStatus::STATE_ERRORS ? true : false;
+	}
+
 } // anonymous
 
 
@@ -1291,7 +1309,6 @@ private:
 
 static void			check_database(thread_db* tdbb, bool async = false);
 static void			commit(thread_db*, jrd_tra*, const bool);
-static bool			drop_file(const Database*, const jrd_file*);
 static void			find_intl_charset(thread_db*, Jrd::Attachment*, const DatabaseOptions*);
 static void			init_database_lock(thread_db*);
 static void			run_commit_triggers(thread_db* tdbb, jrd_tra* transaction);
@@ -3455,6 +3472,11 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 			Ods::header_page* header = NULL;
 			XThreadEnsureUnlock threadGuard(dbb->dbb_thread_mutex, FB_FUNCTION);
 
+			// Use the default memory pool instead of the dbb permanent memory pool
+			// because the last one will be destroyed below in this function
+			// before ~ObjectsArray call.
+			ObjectsArray<PathName> tsFiles(*getDefaultMemoryPool());
+
 			try
 			{
 				Sync sync(&dbb->dbb_sync, "JAttachment::dropDatabase()");
@@ -3509,6 +3531,9 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 				// dbb->dbb_extManager->closeAttachment(tdbb, attachment);
 				// To be reviewed by Adriano - it will be anyway called in release_attachment
 
+				// Now under exclusive lock we can get a list of tablespace files to delete them later
+				MET_get_ts_files(tdbb, tsFiles);
+
 				// Forced release of all transactions
 				dbb->dbb_flags |= DBB_dropping;
 				attachment->purgeTransactions(tdbb, true);
@@ -3556,12 +3581,13 @@ void JAttachment::internalDropDatabase(CheckStatusWrapper* user_status)
 
 			if (JRD_shutdown_database(dbb))
 			{
-				// This point on database is useless
+				// At this point the database becomes useless, so drop all its files
 
-				// drop the files here
-				bool err = drop_file(dbb, file);
+				bool err = dropFile(dbb, file->fil_string);
 				for (; shadow; shadow = shadow->sdw_next)
-					err = drop_file(dbb, shadow->sdw_file) || err;
+					err = dropFile(dbb, shadow->sdw_file->fil_string) || err;
+				while (tsFiles.hasData())
+					err = dropFile(dbb, tsFiles.pop()) || err;
 
 				tdbb->setDatabase(NULL);
 				Database::destroy(dbb);
@@ -6883,34 +6909,6 @@ static void commit(thread_db* tdbb, jrd_tra* transaction, const bool retaining_f
 }
 
 
-static bool drop_file(const Database* dbb, const jrd_file* file)
-{
-/**************************************
- *
- *	d r o p _ f i l e
- *
- **************************************
- *
- * Functional description
- *	Drop a file.
- *
- **************************************/
-	FbLocalStatus status;
-
-	if (unlink(file->fil_string))
-	{
-		ERR_build_status(&status, Arg::Gds(isc_io_error) << Arg::Str("unlink") <<
-														   Arg::Str(file->fil_string) <<
-								 Arg::Gds(isc_io_delete_err) << SYS_ERR(errno));
-
-		const PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(DB_PAGE_SPACE);
-		iscDbLogStatus(pageSpace->file->fil_string, &status);
-	}
-
-	return status->getState() & IStatus::STATE_ERRORS ? true : false;
-}
-
-
 static void find_intl_charset(thread_db* tdbb, Jrd::Attachment* attachment, const DatabaseOptions* options)
 {
 /**************************************
@@ -8163,9 +8161,14 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	// Release the system requests
 	dbb->releaseSystemRequests(tdbb);
 
-	CCH_shutdown(tdbb);
+	// Release cached metadata objects (procedures, functions, etc.) while
+	// the buffer manager and lock manager are still alive.
+	// This is needed because Statement::release may require page access
+	// (e.g. for LTT cleanup via IDX_delete_indices).
+	dbb->dbb_mdc->cleanup(tdbb);
+	dbb->dbb_tablespaces.release(tdbb);
 
-	dbb->dbb_mdc->releaseLocks(tdbb);
+	CCH_shutdown(tdbb);
 
 	if (dbb->dbb_tip_cache)
 		dbb->dbb_tip_cache->finalizeTpc(tdbb);
@@ -8195,18 +8198,7 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 		LCK_release(tdbb, dbb->dbb_lock);
 
 	delete dbb->dbb_crypto_manager;
-	dbb->dbb_crypto_manager = NULL;
-
-	MetadataCache::clear(tdbb);
-
-	// Shut down any extern relations
-	dbb->dbb_mdc->releaseRelations(tdbb);
-
-	// Release cached metadata objects (procedures, functions, etc.) while
-	// the buffer manager and lock manager are still alive.
-	// This is needed because Statement::release may require page access
-	// (e.g. for LTT cleanup via IDX_delete_indices).
-	dbb->dbb_mdc->cleanup(tdbb);
+	dbb->dbb_crypto_manager = nullptr;
 
 	LCK_fini(tdbb, LCK_OWNER_database);
 

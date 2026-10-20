@@ -106,6 +106,10 @@ inline constexpr int IN_SW_BURP_SKIP_SCHEMA_DATA	= 56;	// skip data from schema
 inline constexpr int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
 inline constexpr int IN_SW_BURP_FAST_PATH			= 58;	// fast-path backup/restore via VIO
 
+inline constexpr int IN_SW_BURP_TS_MAPPING_FILE		= 59;	// mapping file for tablespaces
+inline constexpr int IN_SW_BURP_TS_ORIGINAL_PATHS	= 60;	// restore tablespaces to their original paths
+inline constexpr int IN_SW_BURP_TS_PATH				= 61;	// set a path for a tablespace
+
 /**************************************************************************/
 
 static inline constexpr const char* BURP_SW_MODE_NONE = "NONE";
@@ -241,6 +245,9 @@ static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	415, 6, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	418, 2, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	417, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

@@ -17,16 +17,16 @@ The Firebird Project is a commercially independent project of C/C++ programmers,
 ## Downloads
 
 * [Firebird Server Packages](https://firebirdsql.org/en/server-packages)
-  * [Firebird 5.0](https://www.firebirdsql.org/en/firebird-5-0)
-  * [Firebird 4.0](https://www.firebirdsql.org/en/firebird-4-0)
-  * [Firebird 3.0](https://www.firebirdsql.org/en/firebird-3-0)
+  * [Firebird 5.0](https://firebirdsql.org/en/firebird-5-0)
+  * [Firebird 4.0](https://firebirdsql.org/en/firebird-4-0)
+  * [Firebird 3.0](https://firebirdsql.org/en/firebird-3-0)
 * [Docker images](https://hub.docker.com/r/firebirdsql/firebird)
-* [Connectivity](https://www.firebirdsql.org/en/connectivity) (drivers)
+* [Connectivity](https://firebirdsql.org/en/connectivity) (drivers)
 
 ## Documentation
 
 * https://firebirdsql.org/en/documentation/
-  * [Firebird 5 Quick Start Guide](https://www.firebirdsql.org/file/documentation/html/en/firebirddocs/qsg5/firebird-5-quickstartguide.html)
+  * [Firebird 5 Quick Start Guide](https://firebirdsql.org/file/documentation/html/en/firebirddocs/qsg5/firebird-5-quickstartguide.html)
   * [Firebird 5.0 Language Reference](https://firebirdsql.org/file/documentation/html/en/refdocs/fblangref50/firebird-50-language-reference.html)
   * [Firebird 5.0.x Release Notes](https://firebirdsql.org/file/documentation/release_notes/html/en/5_0/rlsnotes50.html)
   * [Firebird Configuration Reference](https://firebirdsql.org/file/documentation/html/en/refdocs/fbconf/firebird-configuration-reference.html)
