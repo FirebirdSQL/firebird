@@ -41,7 +41,7 @@ private:
 	void init();
 	void setCurrentFile();
 
-	bool isRegularFile() const
+	bool isRegularFile() const noexcept
 	{
 		return !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	}
@@ -89,6 +89,17 @@ void Win32DirIterator::init()
 		setCurrentFile();
 	else
 		++(*this);
+}
+
+void Win32DirIterator::setCurrentFile()
+{
+	if (flags & PathUtils::DirIterator::F_RETURN_ONLY_FILENAME)
+		file = fd.cFileName;
+	else
+	{
+		tmp_buffer = fd.cFileName;
+		PathUtils::concatPath(file, dirPrefix, tmp_buffer);
+	}
 }
 
 Win32DirIterator::~Win32DirIterator()
