@@ -72,6 +72,9 @@
 #include "../auth/SecureRemotePassword/client/SrpClient.h"
 #include "../auth/trusted/AuthSspi.h"
 #include "../plugins/crypt/arc4/Arc4.h"
+#if defined(STATIC_CLIENT) && defined(HAVE_TOMCRYPT) && !defined(WITHOUT_TOMCRYPT)
+#include "../plugins/crypt/chacha/ChaCha.h"
+#endif
 #include "BlrFromMessage.h"
 #include "../dsql/DsqlBatch.h"
 
@@ -1100,6 +1103,9 @@ void registerRedirector(IPluginManager* iPlugin)
 #endif
 
 	Crypt::registerArc4(iPlugin);
+#if defined(STATIC_CLIENT) && defined(HAVE_TOMCRYPT) && !defined(WITHOUT_TOMCRYPT)
+	Crypt::registerChaCha(iPlugin);
+#endif
 }
 
 } // namespace Remote
