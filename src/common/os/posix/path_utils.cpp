@@ -53,7 +53,7 @@ class PosixDirIterator : public PathUtils::DirIterator
 public:
 	PosixDirIterator(MemoryPool& p, const PathName& path, const PathUtils::DirIterator::Flags flags)
 		: DirIterator(p, path, flags),
-		  m_file(p), m_tmp_buffer(p)
+		  m_file(p), m_tmpBuffer(p)
 	{
 		init();
 	}
@@ -75,12 +75,12 @@ private:
 
 private:
 	DIR* m_dir = nullptr;
-	int m_dir_fd = -1;
+	int m_dirFd = -1;
 	dirent* m_ent = nullptr;
 
 	PathName m_file;
 	// Used to minimize reallocation on every iteration.
-	PathName m_tmp_buffer;
+	PathName m_tmpBuffer;
 
 	bool m_done = false;
 };
@@ -92,7 +92,7 @@ void PosixDirIterator::init()
 	if (!m_dir)
 		system_call_failed::raise("opendir");
 
-	m_dir_fd = dirfd(m_dir);
+	m_dirFd = dirfd(m_dir);
 
 	++(*this);
 }
@@ -114,46 +114,46 @@ const PosixDirIterator& PosixDirIterator::operator++()
 	{
 		while ( (m_ent = os_utils::readdir(m_dir)) )
 		{
-			std::optional<bool> is_reg_file;
+			std::optional<bool> isRegFile;
 
 #ifdef _DIRENT_HAVE_D_TYPE
 			// Fast path of checking is file a regular file.
 			if (m_ent->d_type == DT_REG)
-				is_reg_file = true;
+				isRegFile = true;
 			else if (m_ent->d_type != DT_UNKNOWN)
-				is_reg_file = false;
+				isRegFile = false;
 #endif
-			if (!is_reg_file.has_value())
+			if (!isRegFile.has_value())
 			{
 				// Slow path, should be taken rarely because most of the FS support and fill `d_type` with actual value.
-				struct stat stat_buf;
-				if (m_dir_fd >= 0)
+				struct stat statBuf;
+				if (m_dirFd >= 0)
 				{
-					if (fstatat(m_dir_fd, m_ent->d_name, &stat_buf, AT_SYMLINK_NOFOLLOW) != 0)
+					if (fstatat(m_dirFd, m_ent->d_name, &statBuf, AT_SYMLINK_NOFOLLOW) != 0)
 						continue;
 				}
 				else
 				{
 					// Very slow path, `dirfd` has failed, so the full path must be resolved by the kernel.
 					// Shouldn't happen on modern systems, but POSIX allows it.
-					m_tmp_buffer = m_ent->d_name;
-					PathUtils::concatPath(m_file, dirPrefix, m_tmp_buffer);
-					if (lstat(m_file.c_str(), &stat_buf) != 0)
+					m_tmpBuffer = m_ent->d_name;
+					PathUtils::concatPath(m_file, dirPrefix, m_tmpBuffer);
+					if (lstat(m_file.c_str(), &statBuf) != 0)
 						continue;
 				}
 
-				is_reg_file = S_ISREG(stat_buf.st_mode);
+				isRegFile = S_ISREG(statBuf.st_mode);
 			}
 
-			if (is_reg_file.value() == false)
+			if (isRegFile.value() == false)
 				continue;
 
 			if (flags & PathUtils::DirIterator::F_RETURN_ONLY_FILENAME)
 				m_file = m_ent->d_name;
 			else
 			{
-				m_tmp_buffer = m_ent->d_name;
-				PathUtils::concatPath(m_file, dirPrefix, m_tmp_buffer);
+				m_tmpBuffer = m_ent->d_name;
+				PathUtils::concatPath(m_file, dirPrefix, m_tmpBuffer);
 			}
 
 			break;

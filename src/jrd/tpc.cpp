@@ -67,7 +67,7 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 
 	// Purge every existing TSB for this database, they can contain garbage values after the crash
 	// or after unfortunate shutdown.
-	m_cache->purgeTransactionStatusBlock(*dbb);
+	m_cache->purgeTransactionStatusBlocks(*dbb);
 
 	// Initialize the shared data header
 	initHeader(header);
@@ -177,7 +177,7 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	{
 		if (LCK_convert(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
 		{
-			purgeTransactionStatusBlock(*tdbb->getDatabase());
+			purgeTransactionStatusBlocks(*tdbb->getDatabase());
 			LCK_convert(tdbb, m_lock, LCK_SW, LCK_WAIT);
 		}
 		else
@@ -212,7 +212,7 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 }
 
 // We are the last or first one who holds the `GlobalTpcHeader`, so remove all related TSB from disk.
-void TipCache::purgeTransactionStatusBlock(Database& dbb)
+void TipCache::purgeTransactionStatusBlocks(Database& dbb)
 {
 	PathName filenameTemplate = StatusBlockData::makeSharedMemoryFileName(&dbb, 0, false);
 	// Drop block number from the filename.
