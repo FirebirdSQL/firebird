@@ -108,6 +108,8 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 
 	TransactionStatusBlock* header = static_cast<TransactionStatusBlock*>(sm->sh_mem_header);
 
+	// See if TSB is already has been initialized, if it is, do not memset it's content
+	// because it contains valid information about CN.
 	if (!checkHeader(header, false))
 	{
 		// Initialize the shared data header
@@ -175,6 +177,8 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 
 	if (m_tpcHeader)
 	{
+		// Check if we are the last one who holds the TipCache. If so, it's time
+		// to cleanup all related TSBs.
 		if (LCK_convert(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
 		{
 			purgeTransactionStatusBlocks(*tdbb->getDatabase());
