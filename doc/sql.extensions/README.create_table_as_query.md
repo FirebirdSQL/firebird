@@ -48,6 +48,16 @@ query expression.
 String literals use the connection character set, so columns created from string literals inherit the connection
 character set.
 
+## Bulk insert
+
+With `WITH DATA`, the rows are loaded using the same bulk insert mechanism used by `gbak` restore. Data pages are
+filled directly instead of storing each row through the regular record store path, which is considerably faster for
+large results. This applies to regular, global temporary and local temporary tables.
+
+Bulk insert does not evaluate domain `CHECK` constraints. When a new column references a named domain that has a
+`CHECK` constraint, the rows are loaded with a regular `INSERT` instead, so the constraint is still enforced. `NOT NULL`
+is always enforced. Domains without a `CHECK` constraint do not prevent the use of bulk insert.
+
 ## Examples
 
 ```sql

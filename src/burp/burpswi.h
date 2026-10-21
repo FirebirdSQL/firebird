@@ -108,6 +108,11 @@ inline constexpr int IN_SW_BURP_DIRECT_IO			= 55;	// direct IO for backup files
 
 inline constexpr int IN_SW_BURP_SKIP_SCHEMA_DATA	= 56;	// skip data from schema
 inline constexpr int IN_SW_BURP_INCLUDE_SCHEMA_DATA	= 57;	// backup data from schemas
+inline constexpr int IN_SW_BURP_FAST_PATH			= 58;	// fast-path backup/restore via VIO
+
+inline constexpr int IN_SW_BURP_TS_MAPPING_FILE		= 59;	// mapping file for tablespaces
+inline constexpr int IN_SW_BURP_TS_ORIGINAL_PATHS	= 60;	// restore tablespaces to their original paths
+inline constexpr int IN_SW_BURP_TS_PATH				= 61;	// set a path for a tablespace
 
 /**************************************************************************/
 
@@ -137,6 +142,8 @@ static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 				// msg 97: @1EXPAND no data compression
 	{IN_SW_BURP_FA,   isc_spb_bkp_factor,		"FACTOR",			0, 0, 0, false, false,	181,	2, NULL, boBackup},
 				/* msg 181; @1FACTOR  blocking factor */
+	{IN_SW_BURP_FAST_PATH, isc_spb_bkp_fast_path, "FAST_PATH", 0, 0, 0, false, true, 431, 4, NULL, boGeneral},
+				// msg 431: @1FAST(_PATH)          fast-path data transfer
 	{IN_SW_BURP_FETCHPASS, 0,					"FETCH_PASSWORD",	0, 0, 0, false, false,	306,	2, NULL, boGeneral},
 				// msg 306: @1FE(TCH_PASSWORD)	   fetch password from file
 	{IN_SW_BURP_FIX_FSS_DATA,		isc_spb_res_fix_fss_data,
@@ -242,6 +249,9 @@ static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
+	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	415, 6, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	418, 2, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	417, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

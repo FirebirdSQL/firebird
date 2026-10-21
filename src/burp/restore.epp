@@ -49,6 +49,7 @@
 #include "../burp/mvol_proto.h"
 #include "../burp/resto_proto.h"
 #include "../burp/BurpTasks.h"
+#include "../burp/FastPathRecordWriter.h"
 #include "../common/gdsassert.h"
 #include "../common/constants.h"
 #include "../remote/protocol.h"
@@ -62,10 +63,13 @@
 #include "memory_routines.h"
 #include "../burp/OdsDetection.h"
 #include "../auth/trusted/AuthSspi.h"
+#include "../common/os/path_utils.h"
 #include "../common/dsc_proto.h"
 #include "../common/ThreadStart.h"
+#include "../common/db_alias.h"
 #include "../common/msg_encode.h"
 #include "../common/classes/BatchCompletionState.h"
+#include "../burp/FastPathBurpProvider.h"
 
 namespace Firebird::Burp
 {
@@ -147,6 +151,7 @@ void	get_misc_blob(BurpGlobals* tdgbl, ISC_QUAD&, bool);
 SLONG	get_int32(BurpGlobals* tdgbl);
 SINT64  get_int64(BurpGlobals* tdgbl);
 bool	get_package(BurpGlobals* tdgbl);
+bool	get_tablespace(BurpGlobals* tdgbl);
 bool	get_procedure(BurpGlobals* tdgbl);
 bool	get_procedure_prm(BurpGlobals* tdgbl, const QualifiedMetaString&);
 bool	get_publication(BurpGlobals* tdgbl);
@@ -353,8 +358,26 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	IRequest* req_handle3 = nullptr;
 	QualifiedMetaString indexName;
 
-	DispatcherPtr provider;
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
+	FastPathBurpProvider burpProvider(tdgbl->gbl_fast_path);
+
+	IProvider* provider = burpProvider.get();
+
+	// The fast-path provider bypasses the y-valve, so the crypt callback held by
+	// the service (normally installed as y-valve TLS state by fillDpb) is not
+	// picked up automatically. Set it explicitly, unless the backup itself
+	// supplied the keys (KEYHOLDER).
+	if (tdgbl->gbl_fast_path && !tdgbl->gbl_sw_keyholder)
+	{
+		if (const auto cryptCb = tdgbl->uSvc->getCryptCallback())
+		{
+			FbLocalStatus status;
+			provider->setDbCryptCallback(&status, cryptCb);
+			if (status->getState() & IStatus::STATE_ERRORS)
+				BURP_abort(&status);
+		}
+	}
+
 	tdgbl->gbl_sw_transportable = tdgbl->gbl_sw_compress = false;
 
 	if (!restore(tdgbl, provider, file_name, database_name))
@@ -3501,10 +3524,24 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 			if (batch)
 				req->execBatch(tdgbl);
 		}
+
+		req->execFastPathBatch();
+
+		// Flush and destroy the fast-path writer while the transaction is
+		// still valid. Must run before the incremental commit below: the
+		// commit destroys the engine transaction held by the writer.
+		req->finishFastPathBulk();
 	}
 	catch (const FbException& ex)
 	{
 		BURP_abort(ex.getStatus());
+	}
+	catch (const status_exception& ex)
+	{
+		// Engine errors raised by the FAST_PATH direct writer.
+		FbLocalStatus status;
+		ex.stuffException(&status);
+		BURP_abort(&status);
 	}
 
 	if (tdgbl->gbl_sw_incremental)
@@ -3917,6 +3954,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 				X.RDB$PACKAGE_NAME.NULL = FALSE;
 			}
 
+			strcpy(X.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
+			X.RDB$TABLESPACE_NAME.NULL = FALSE;
+
 			skip_init(&scan_next_attr);
 			while (get_attribute(&attribute, tdgbl) != att_end)
 			{
@@ -4093,6 +4133,20 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					X.RDB$IDENTITY_TYPE.NULL = FALSE;
 					X.RDB$IDENTITY_TYPE = field->fld_identity_type;
 					break;
+
+				// ODS 14
+
+				case att_field_tablespace_name:
+				{
+					BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+					GET_TEXT(tablespaceName);
+					const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+					if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+						strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
+					break;
+				}
 
 				default:
 					bad_attribute(scan_next_attr, attribute, 84);
@@ -6781,8 +6835,9 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 	STORE (REQUEST_HANDLE tdgbl->handles_get_index_req_handle1)
 		X IN RDB$INDICES
 	{
-		strcpy (X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
+		strcpy(X.RDB$RELATION_NAME, relation->rel_name.object.c_str());
 		X.RDB$UNIQUE_FLAG = 0;
+
 		if (!tdgbl->gbl_sw_deactivate_indexes)
 			X.RDB$INDEX_INACTIVE = FALSE;
 		else
@@ -6800,7 +6855,9 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 		X.RDB$CONDITION_BLR.NULL = TRUE;
 		X.RDB$SYSTEM_FLAG = 0;
 		X.RDB$SYSTEM_FLAG.NULL = FALSE;
-		X.RDB$FORMAT.NULL = TRUE;
+
+		strcpy(X.RDB$TABLESPACE_NAME, PRIMARY_TABLESPACE_NAME);
+		X.RDB$TABLESPACE_NAME.NULL = !(relation->rel_flags & REL_has_tablespace_name);
 
 		if (relation->rel_name.schema.hasData())
 		{
@@ -6940,6 +6997,20 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				X.RDB$FOREIGN_KEY.NULL = FALSE;
 				GET_TEXT(X.RDB$FOREIGN_KEY);
 				break;
+
+			// ODS 14
+
+			case att_index_tablespace_name:
+			{
+				BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+				GET_TEXT(tablespaceName);
+				const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+				if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+					strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
+				break;
+			}
 
 			default:
 				bad_attribute(scan_next_attr, attribute, 93);
@@ -7202,6 +7273,185 @@ bool get_package(BurpGlobals* tdgbl)
 	END_STORE
 	ON_ERROR
 		general_on_error();
+	END_ERROR
+
+	return true;
+}
+
+bool get_tablespace(BurpGlobals* tdgbl)
+{
+/**************************************
+ *
+ *	g e t _ t a b l e s p a c e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Reconstruct a tablespace.
+ *
+ **************************************/
+	if (tdgbl->RESTORE_format < 13) // Probably this check is not needed
+		return false;
+
+	ISC_QUAD tablespace_desc = fbBlobNull;
+	bool tablespace_desc_null = true;
+	GDS_NAME owner_name;
+	SLONG sys_flag = fb_sysflag_user;
+	FB_BOOLEAN offline = FB_FALSE;
+	FB_BOOLEAN read_only = FB_FALSE;
+
+	BASED_ON RDB$TABLESPACES.RDB$TABLESPACE_NAME tablespace_name;
+	tablespace_name[0] = '\0';
+
+	BASED_ON RDB$TABLESPACES.RDB$SECURITY_CLASS security_class;
+	security_class[0] = '\0';
+	bool security_class_null = true;
+
+	BASED ON RDB$TABLESPACES.RDB$FILE_NAME tablespace_file;
+	tablespace_file[0] = '\0';
+
+	att_type attribute;
+	scan_attr_t scan_next_attr;
+
+	bool moveToPrimary = false;
+
+	skip_init(&scan_next_attr);
+	while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
+	{
+		switch (attribute)
+		{
+		case att_ts_name:
+		{
+			TEXT temp[GDS_NAME_LEN];
+			SSHORT len = GET_TEXT(tablespace_name);
+			MISC_terminate(tablespace_name, temp, len, sizeof(temp));
+
+			const auto str = tdgbl->tablespace_mapping.get(tablespace_name);
+			if (str && str->equals(PRIMARY_TABLESPACE_NAME))
+				moveToPrimary = true;		// Move the contents of this TS to PRIMARY
+			else
+				BURP_verbose(1019, temp);	// msg 1019 restoring tablespace %s
+			break;
+		}
+		case att_ts_security_class:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+			{
+				GET_TEXT(security_class);
+				fix_security_class_name(tdgbl, security_class, false);
+			}
+			break;
+
+		case att_ts_description:
+			if (moveToPrimary)
+				eat_blob(tdgbl);
+			else
+			{
+				tablespace_desc_null = false;
+				get_source_blob(tdgbl, tablespace_desc, true);
+			}
+			break;
+
+		case att_ts_owner_name:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+				GET_TEXT(owner_name);
+			break;
+
+		case att_ts_file:
+			if (moveToPrimary)
+				eat_text(tdgbl);
+			else
+				GET_TEXT(tablespace_file);
+			break;
+
+		case att_ts_offline:
+			offline = get_boolean(tdgbl, false);
+			break;
+
+		case att_ts_readonly:
+			read_only = get_boolean(tdgbl, false);
+			break;
+
+		default:
+			bad_attribute(scan_next_attr, attribute, 1020);	// msg 1020 tablespace
+			break;
+		}
+	}
+
+	// Do not add a tablespace if its contents are moved to the PRIMARY when restoring it
+	if (moveToPrimary)
+		return true;
+
+//	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+
+	STORE (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle1)
+		X IN RDB$TABLESPACES
+	{
+		X.RDB$TABLESPACE_NAME.NULL = FALSE;
+		strcpy(X.RDB$TABLESPACE_NAME, tablespace_name);
+
+		X.RDB$SECURITY_CLASS.NULL = security_class_null;
+		strcpy(X.RDB$SECURITY_CLASS, security_class);
+
+		X.RDB$SYSTEM_FLAG.NULL = FALSE;
+		X.RDB$SYSTEM_FLAG = sys_flag;
+
+		X.RDB$DESCRIPTION.NULL = tablespace_desc_null;
+		X.RDB$DESCRIPTION = tablespace_desc;
+
+		X.RDB$OWNER_NAME.NULL = FALSE;
+		strcpy(X.RDB$OWNER_NAME, owner_name);
+
+		X.RDB$FILE_NAME.NULL = FALSE;
+		strcpy(X.RDB$FILE_NAME, tablespace_file);
+
+		X.RDB$OFFLINE.NULL = FALSE;
+		X.RDB$OFFLINE = (USHORT) offline;
+
+		X.RDB$READ_ONLY.NULL = FALSE;
+		X.RDB$READ_ONLY = (USHORT) read_only;
+
+		string newFile;
+		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
+		{
+			PathUtils::fixupSeparators(newFile.begin());
+			PathName ts_file_name;
+
+			if (PathUtils::isRelative(newFile.c_str()))
+			{
+				PathName expanded_db;
+				expandDatabaseName(tdgbl->gbl_database_file_name, expanded_db, NULL);
+
+				PathName db_path, db_file;
+				PathUtils::splitLastComponent(db_path, db_file, expanded_db);
+				PathUtils::concatPath(ts_file_name, db_path, newFile.c_str());
+			}
+			else
+				ts_file_name = newFile.c_str();
+
+			if (ts_file_name.length() >= sizeof(X.RDB$FILE_NAME))
+			{
+				BURP_error(46, false); // msg 46 string truncated
+				return false;
+			}
+
+			X.RDB$FILE_NAME.NULL = FALSE;
+			strcpy(X.RDB$FILE_NAME, ts_file_name.c_str());
+		}
+		else if (!tdgbl->gbl_sw_ts_orig_paths)
+		{
+			BURP_error(416, false, SafeArg() << X.RDB$TABLESPACE_NAME << X.RDB$FILE_NAME);
+			// msg 416 path to tablespace @1 is not specified (original path: "@2")
+			return false;
+		}
+	}
+	END_STORE
+	ON_ERROR
+		BURP_print_status(&tdgbl->status_vector);
+		return false;
 	END_ERROR
 
 	return true;
@@ -8120,6 +8370,9 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	ext_file_name[0] = '\0';
 	bool		ext_file_name_null = true;
 
+	BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tableSpace;
+	strcpy(tableSpace, PRIMARY_TABLESPACE_NAME);
+
 	// Before starting to restore relations, commit everything that was restored
 	// prior to this point. This ensures that no pending error can later affect
 	// other metadata being restored.
@@ -8236,7 +8489,10 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 		case att_relation_type:
 			if (tdgbl->RESTORE_format >= 8)
+			{
 				type = get_int32(tdgbl);
+				relation->rel_flags |= fb_utils::hasTablespaceName(rel_t(type)) ? REL_has_tablespace_name : 0;
+			}
 			else
 				bad_attribute(scan_next_attr, attribute, 111);
 			break;
@@ -8252,12 +8508,29 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			private_flag = (USHORT) get_int32(tdgbl);
 			break;
 
+		case att_relation_tablespace_name:
+		{
+			BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
+
+			GET_TEXT(tablespaceName);
+
+			const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+
+			if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+				strcpy(tableSpace, tablespaceName);
+
+			break;
+		}
+
 		default:
 			bad_attribute(scan_next_attr, attribute, 111);
 			// msg 111 table
 			break;
 		}
 	}
+
+	relation->rel_system = (sys_flag != fb_sysflag_user);
+	relation->rel_type = (SSHORT) type;
 
 	// If this is a view and there is a global transaction then use it
 	ITransaction* local_trans;
@@ -8286,6 +8559,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$SQL_SECURITY.NULL = sql_security_null;
 			X.RDB$PACKAGE_NAME.NULL = TRUE;
 			X.RDB$PRIVATE_FLAG.NULL = private_flag_null;
+			X.RDB$TABLESPACE_NAME.NULL = TRUE;
 
 			X.RDB$SYSTEM_FLAG = (USHORT) sys_flag;
 			X.RDB$FLAGS = (USHORT) rel_flags;
@@ -8313,8 +8587,14 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 			X.RDB$RELATION_TYPE = (USHORT) type;
 			X.RDB$SQL_SECURITY = (FB_BOOLEAN) sql_security;
 			X.RDB$PRIVATE_FLAG = private_flag;
+
+			if (fb_utils::hasTablespaceName(rel_t(type)))
+			{
+				X.RDB$TABLESPACE_NAME.NULL = FALSE;
+				strcpy(X.RDB$TABLESPACE_NAME, tableSpace);
+			}
 		}
-		END_STORE
+		END_STORE;
 		ON_ERROR
 			general_on_error ();
 		END_ERROR
@@ -10653,7 +10933,7 @@ bool get_constants(BurpGlobals* tdgbl)
 	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	STORE (TRANSACTION_HANDLE local_trans
-			REQUEST_HANDLE tdgbl->handles_get_type_req_handle1)
+			REQUEST_HANDLE tdgbl->handles_get_constant_req_handle1)
 		CONST IN RDB$CONSTANTS
 	{
 		CONST.RDB$PACKAGE_NAME.NULL = TRUE;
@@ -11386,13 +11666,37 @@ bool restore(BurpGlobals* tdgbl, IProvider* provider, const TEXT* file_name, con
 
 	bool flag_norel = true;	// To fix bug 10098
 	bool flag = false;
+	bool ts_error = false;
 	rec_type record;
 
 	Coordinator coord(getDefaultMemoryPool());
 	RestoreRelationTask task(tdgbl);
 
-	while (get_record(&record, tdgbl) != rec_end)
+	while (true)
 	{
+		get_record(&record, tdgbl);
+
+		if (ts_error && record != rec_tablespace)
+		{
+			// Clean up RDB$TABLESPACES to prevent creation of files during DFW
+			FOR (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle2)
+				X IN RDB$TABLESPACES WITH
+				(X.RDB$SYSTEM_FLAG MISSING OR X.RDB$SYSTEM_FLAG NE RDB_system)
+				ERASE X;
+				ON_ERROR
+					general_on_error();
+				END_ERROR;
+			END_FOR;
+			ON_ERROR
+				general_on_error();
+			END_ERROR;
+
+			return false;
+		}
+
+		if (record == rec_end)
+			break;
+
 		switch (record)
 		{
 		case rec_charset:
@@ -11453,6 +11757,12 @@ bool restore(BurpGlobals* tdgbl, IProvider* provider, const TEXT* file_name, con
 		case rec_package:
 			if (!get_package(tdgbl))
 				return false;
+			flag = true;
+			break;
+
+		case rec_tablespace:
+			if (!get_tablespace(tdgbl))
+				ts_error = true;
 			flag = true;
 			break;
 
@@ -14049,18 +14359,38 @@ void WriteRelationMeta::clear()
 {
 	m_relation = nullptr;
 	m_batchMode = false;
+	m_fastPathMode = false;
 	m_batchOk = false;
 	m_batchMeta = nullptr;
 	m_sqlStatement.clear();
 	m_blr.clear();
+	m_messageLayout.clear();
 	m_inMgsNum = 0;
 	m_inMsgLen = 0;
 	m_blobCount = 0;
 }
 
-void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation)
+void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, burp_rel* relation)
 {
 	m_relation = relation;
+
+	if (tdgbl->gbl_fast_path && tdgbl->RESTORE_format >= 8 &&
+		!relation->rel_system &&
+		!(relation->rel_flags & (REL_view | REL_external)) &&
+		relation->rel_type == rel_persistent)
+	{
+		m_fastPathMode = true;
+		m_batchMode = false;
+		prepareMessageLayout(tdgbl);
+		return;
+	}
+
+	buildNonFastPathMode(tdgbl);
+}
+
+void WriteRelationMeta::buildNonFastPathMode(BurpGlobals* tdgbl)
+{
+	m_fastPathMode = false;
 	m_batchMode = true;
 	m_batchOk = false;
 
@@ -14078,7 +14408,7 @@ void WriteRelationMeta::setRelation(BurpGlobals* tdgbl, const burp_rel* relation
 		bool sysDomFlag = false;
 		burp_fld* field;
 
-		for (field = relation->rel_fields; field && !sysDomFlag; field = field->fld_next)
+		for (field = m_relation->rel_fields; field && !sysDomFlag; field = field->fld_next)
 		{
 			if (field->fld_flags & FLD_computed)
 				continue;
@@ -14346,6 +14676,16 @@ bool WriteRelationMeta::prepareBatch(BurpGlobals* tdgbl)
 	return true;
 }
 
+void WriteRelationMeta::prepareMessageLayout(BurpGlobals* tdgbl)
+{
+	m_batchMode = false;
+	m_inMgsNum = 0;
+
+	m_messageLayout.build(m_relation, tdgbl->gbl_sw_fix_fss_data,
+		CSetId(tdgbl->gbl_sw_fix_fss_data_id));
+	m_inMsgLen = m_messageLayout.getLength();
+}
+
 void WriteRelationMeta::prepareRequest(BurpGlobals* tdgbl)
 {
 	const bool use_bulk_insert = (tdgbl->runtimeODS >= DB_VERSION_DDL14);
@@ -14609,6 +14949,7 @@ void WriteRelationReq::reset(WriteRelationMeta* meta)
 		m_request = 0;
 		m_recs = 0;
 		m_batchRecs = 0;
+		m_fastPathBatchRecs = 0;
 		m_resync = true;
 	}
 }
@@ -14619,6 +14960,7 @@ void WriteRelationReq::clear()
 	m_meta = NULL;
 	m_recs = 0;
 	m_batchRecs = 0;
+	m_fastPathBatchRecs = 0;
 	m_resync = true;
 
 	if (m_batch)
@@ -14632,10 +14974,76 @@ void WriteRelationReq::clear()
 		release();
 		m_request = nullptr;
 	}
+
+	m_fastPathWriter = nullptr;
+	m_fastPathBatch.clear();
+}
+
+void WriteRelationReq::initFastPathWriter(IAttachment* att, ITransaction* tra,
+	const burp_rel* relation, const RestoreMessageLayout& layout)
+{
+	if (!m_fastPathWriter)
+		m_fastPathWriter = FB_NEW_POOL(*getDefaultMemoryPool()) FastPathRecordWriter();
+
+	m_fastPathWriter->init(att, tra, relation, layout);
+}
+
+void WriteRelationReq::execFastPathBatch()
+{
+	if (!m_fastPathWriter || !m_fastPathBatchRecs)
+		return;
+
+	const unsigned recordCount = m_fastPathBatchRecs;
+	const RCRD_LENGTH recordLength = m_inMsg.getCount();
+
+	// In-memory stride preserves descriptor alignment between packed records;
+	// the serialized backup format still uses recordLength.
+	RCRD_LENGTH stride = recordLength;
+
+	if (m_meta)
+	{
+		const RCRD_LENGTH layoutStride = m_meta->getMessageLayout().getStride();
+		if (layoutStride > stride)
+			stride = layoutStride;
+	}
+
+	const UCHAR* const batchBuffer = m_fastPathBatch.begin();
+	m_fastPathBatchRecs = 0;
+
+	// The direct writer is fail-fast. Any conversion or engine error aborts
+	// the restore instead of continuing with a partially isolated row.
+	m_fastPathWriter->writeRecords(batchBuffer, stride, recordCount);
+
+	// Do not finish the bulk insert here: the BulkInsert object auto-flushes
+	// full extents internally and stays alive across message batches. Forcing
+	// a flush per staging batch would strand a partial-extent tail each time
+	// (thousands of empty pages on large tables). Flushing happens at table end
+	// via finishFastPathBulk() and at commit. Arrays are released eagerly in blb::move;
+	// releaseRequestlessArrays() handles any remaining request-less arrays.
+	m_fastPathWriter->releaseRequestlessArrays();
+
+	m_fastPathBatch.clear();
+}
+
+void WriteRelationReq::finishFastPathBulk()
+{
+	if (m_fastPathWriter)
+	{
+		m_fastPathWriter->finishBulk();
+
+		// Destroy the writer after flushing: it caches the raw engine
+		// transaction, which gets replaced by commit_relation_data() in
+		// incremental restore. initFastPathWriter() creates a fresh writer for
+		// every table.
+		m_fastPathWriter = nullptr;
+	}
 }
 
 void WriteRelationReq::compile(BurpGlobals* tdgbl, IAttachment* att)
 {
+	if (m_meta->m_fastPathMode)
+		return;
+
 	if (m_meta->m_batchMode)
 		m_batch = m_meta->createBatch(tdgbl, att);
 
@@ -14655,6 +15063,40 @@ void WriteRelationReq::compile(BurpGlobals* tdgbl, IAttachment* att)
 void WriteRelationReq::send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec)
 {
 	m_recs++;
+
+	if (m_meta->m_fastPathMode)
+	{
+		fb_assert(m_fastPathWriter);
+
+		const RCRD_LENGTH recordLength = m_inMsg.getCount();
+		RCRD_LENGTH stride = recordLength;
+		const RCRD_LENGTH layoutStride = m_meta->getMessageLayout().getStride();
+		if (layoutStride > stride)
+			stride = layoutStride;
+
+		if (m_fastPathBatchRecs &&
+			(m_fastPathBatchRecs >= FAST_PATH_RESTORE_BATCH_MAX_RECORDS ||
+			 m_fastPathBatch.getCount() + stride > FAST_PATH_RESTORE_BATCH_MAX_BYTES))
+		{
+			execFastPathBatch();
+		}
+
+		const FB_SIZE_T base = m_fastPathBatch.getCount();
+		m_fastPathBatch.add(m_inMsg.begin(), recordLength);
+		// Pad to the aligned stride so the next record keeps field alignment.
+		// Array<UCHAR>::grow zero-fills the new tail.
+		if (stride > recordLength)
+			m_fastPathBatch.grow(base + stride);
+		++m_fastPathBatchRecs;
+
+		if (lastRec || m_fastPathBatchRecs >= FAST_PATH_RESTORE_BATCH_MAX_RECORDS ||
+			m_fastPathBatch.getCount() >= FAST_PATH_RESTORE_BATCH_MAX_BYTES)
+		{
+			execFastPathBatch();
+		}
+
+		return;
+	}
 
 	if (m_batch)
 	{
@@ -14706,6 +15148,9 @@ void WriteRelationReq::execBatch(BurpGlobals * tdgbl)
 
 void WriteRelationReq::release()
 {
+	// Release fast-path record while the engine attachment is still valid.
+	m_fastPathWriter = nullptr;
+
 	if (m_batch)
 	{
 		m_batch->release();
@@ -15128,6 +15573,11 @@ bool RestoreRelationTask::tableWriter(BurpGlobals* tdgbl, Item& item)
 {
 	item.m_request.reset(&m_metadata);
 
+	if (m_metadata.m_fastPathMode)
+	{
+		item.m_request.initFastPathWriter(tdgbl->db_handle, tdgbl->tr_handle,
+			item.m_relation, m_metadata.getMessageLayout());
+	}
 	get_data(tdgbl, item.m_relation, &item.m_request);
 
 	item.getRestoreTask()->releaseBuffer(item);

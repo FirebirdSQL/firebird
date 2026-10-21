@@ -28,6 +28,7 @@
 #ifndef CLASSES_STACK_H
 #define CLASSES_STACK_H
 
+#include "../common/classes/alloc.h"
 #include "../common/classes/vector.h"
 
 namespace Firebird {

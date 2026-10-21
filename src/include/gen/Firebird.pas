@@ -4513,6 +4513,7 @@ const
 	isc_spb_bkp_no_triggers = $8000;
 	isc_spb_bkp_zip = $010000;
 	isc_spb_bkp_direct_io = $020000;
+	isc_spb_bkp_fast_path = $040000;
 	isc_spb_prp_page_buffers = byte(5);
 	isc_spb_prp_sweep_interval = byte(6);
 	isc_spb_prp_shutdown_db = byte(7);
@@ -6073,6 +6074,11 @@ const
 	 isc_dsql_agg_return = 335545340;
 	 isc_hypfun_args_non_equal_sort_item = 335545341;
 	 isc_old_format = 335545342;
+	 isc_user_savepoint = 335545343;
+	 isc_ts_file_exists = 335545344;
+	 isc_tablespace_name = 335545345;
+	 isc_ts_file_not_exists = 335545346;
+	 isc_ts_file_dup = 335545347;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6240,6 +6246,11 @@ const
 	 isc_dyn_cannot_infer_schema = 336068929;
 	 isc_dyn_column_name_exists = 336068931;
 	 isc_dyn_function_mismatch = 336068935;
+	 isc_dyn_ts_not_found = 336068940;
+	 isc_dyn_cant_set_ts_table = 336068941;
+	 isc_dyn_cant_set_ts_index = 336068942;
+	 isc_dyn_dup_tablespace = 336068943;
+	 isc_dyn_cannot_mod_sys_ts = 336068944;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -6342,6 +6353,10 @@ const
 	 isc_gbak_writing_constant = 336331176;
 	 isc_gbak_constant = 336331177;
 	 isc_gbak_restoring_constant = 336331178;
+	 isc_gbak_inv_column = 336331180;
+	 isc_gbak_inv_record_length = 336331181;
+	 isc_gbak_fast_path_needs_service = 336331182;
+	 isc_gbak_fast_path_no_snapshot = 336331184;
 	 isc_dsql_too_old_ods = 336397205;
 	 isc_dsql_table_not_found = 336397206;
 	 isc_dsql_view_not_found = 336397207;
@@ -6481,6 +6496,11 @@ const
 	 isc_dsql_create_const_failed = 336397341;
 	 isc_dsql_alter_const_failed = 336397342;
 	 isc_dsql_create_alter_const_failed = 336397343;
+	 isc_dsql_create_ts_failed = 336397344;
+	 isc_dsql_alter_ts_failed = 336397345;
+	 isc_dsql_create_alter_ts_failed = 336397346;
+	 isc_dsql_drop_ts_failed = 336397347;
+	 isc_dsql_recreate_ts_failed = 336397348;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;

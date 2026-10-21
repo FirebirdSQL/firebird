@@ -155,6 +155,7 @@ public:
 
 private:
 	Resources* resources;				// Resources (relations, routines, etc.)
+	Array<ULONG> tablespaces;	// Tablespaces used by the statement
 	RefPtr<VersionedObjects> latestVer;
 	Mutex lvMutex;			// Protects upgrade of latestVer
 	Array<MessageNode*> messages;	// Input/output messages

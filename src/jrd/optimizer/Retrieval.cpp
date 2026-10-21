@@ -84,16 +84,16 @@ namespace
 		return newValue;
 	}
 
-	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub)
+	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub, StreamType stream)
 	{
-		if (boolean->sameAs(sub, true))
+		if (boolean->sameAs(sub, true) && sub->containsStream(stream, true))
 			return true;
 
 		auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
 		if (binaryNode && binaryNode->blrOp == blr_or)
 		{
-			if (matchSubset(binaryNode->arg1, sub) ||
-				matchSubset(binaryNode->arg2, sub))
+			if (matchSubset(binaryNode->arg1, sub, stream) ||
+				matchSubset(binaryNode->arg2, sub, stream))
 			{
 				return true;
 			}
@@ -101,8 +101,8 @@ namespace
 			binaryNode = nodeAs<BinaryBoolNode>(sub);
 			if (binaryNode && binaryNode->blrOp == blr_or)
 			{
-				if (matchSubset(boolean, binaryNode->arg1) &&
-					matchSubset(boolean, binaryNode->arg2))
+				if (matchSubset(boolean, binaryNode->arg1, stream) &&
+					matchSubset(boolean, binaryNode->arg2, stream))
 				{
 					return true;
 				}
@@ -869,7 +869,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition_node, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_condition_node, idxConjuncts, true);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;
@@ -888,7 +888,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 			if (!iter->containsStream(stream))
 				continue;
 
-			if (matchSubset(boolean, *iter))
+			if (matchSubset(boolean, *iter, stream))
 			{
 				matches.add(*iter);
 				break;
@@ -911,15 +911,23 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 				const auto cmpNode = nodeAs<ComparativeBoolNode>(*iter);
 				if (cmpNode && cmpNode->blrOp != blr_equiv)
 				{
-					if (cmpNode->arg1->sameAs(missingNode->arg, true) ||
-						cmpNode->arg2->sameAs(missingNode->arg, true))
+					if (cmpNode->arg1->sameAs(missingNode->arg, true) &&
+						cmpNode->arg1->containsStream(stream))
+					{
+						matches.add(*iter);
+						break;
+					}
+
+					if (cmpNode->arg2->sameAs(missingNode->arg, true) &&
+						cmpNode->arg2->containsStream(stream))
 					{
 						matches.add(*iter);
 						break;
 					}
 
 					if (cmpNode->arg3 &&
-						cmpNode->arg3->sameAs(missingNode->arg, true))
+						cmpNode->arg3->sameAs(missingNode->arg, true) &&
+						cmpNode->arg3->containsStream(stream))
 					{
 						matches.add(*iter);
 						break;
@@ -1449,7 +1457,7 @@ InversionCandidate* Retrieval::makeInversion(InversionCandidateList& inversions)
 	// for a retrieval. Internal (system) requests used by the engine itself are
 	// often optimized using zero or non-actual statistics, so they are processed
 	// using somewhat relaxed rules.
-	const bool customPlan = csb->csb_rpt[stream].csb_plan;
+	const bool customPlan = (csb->csb_rpt[stream].csb_plan != nullptr);
 	const bool sysRequest = (csb->csb_g_flags & csb_internal);
 
 	double totalSelectivity = MAXIMUM_SELECTIVITY; // worst selectivity

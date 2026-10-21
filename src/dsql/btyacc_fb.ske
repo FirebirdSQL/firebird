@@ -24,6 +24,7 @@
 #include "../dsql/BoolNodes.h"
 #include "../dsql/ExprNodes.h"
 #include "../dsql/PackageNodes.h"
+#include "../dsql/TablespaceNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../dsql/WinNodes.h"
 #include "../jrd/RecordSourceNodes.h"

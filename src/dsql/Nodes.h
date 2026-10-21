@@ -202,6 +202,12 @@ public:
 	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& name, int type);
 
+	static inline bool applyTablespacesDdl(thread_db* tdbb)
+	{
+		return !(tdbb->tdbb_flags & TDBB_replicator) ||
+			tdbb->getDatabase()->replConfig()->applyTablespacesDdl;
+	}
+
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
@@ -1006,6 +1012,8 @@ public:
 	static constexpr unsigned CAP_WANTS_AGG_CALLS		= 0x04;
 	// wants winPass call in a window
 	static constexpr unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
+	// depends on the window frame boundaries, even when not respecting a user-defined frame
+	static constexpr unsigned CAP_USES_WINDOW_FRAME		= 0x10;
 
 protected:
 	struct AggInfo
@@ -1675,9 +1683,16 @@ public:
 		return NULL;
 	}
 
-	virtual bool isProfileAware() const
+	enum class ProfileMode : UCHAR
 	{
-		return true;
+		NONE,				// not profiled (wrapper and declaration nodes)
+		EVALUATE,			// profiled when evaluated
+		EVALUATE_RETURN		// also profiled on req_return/req_sync (loops that fetch there)
+	};
+
+	virtual ProfileMode getProfileMode() const
+	{
+		return ProfileMode::EVALUATE;
 	}
 
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;

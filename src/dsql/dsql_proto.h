@@ -40,7 +40,7 @@ namespace Firebird::Jrd {
 
 void DSQL_execute(thread_db*, jrd_tra**, DsqlRequest*, IMessageMetadata*, const UCHAR*, IMessageMetadata*, UCHAR*);
 void DSQL_execute_immediate(thread_db*, Attachment*, jrd_tra**, ULONG, const TEXT*, USHORT,
-	IMessageMetadata*, const UCHAR*, IMessageMetadata*, UCHAR*, bool);
+	IMessageMetadata*, const UCHAR*, IMessageMetadata*, UCHAR*, bool, unsigned scratchFlags = 0);
 void DSQL_free_statement(thread_db*, DsqlRequest*, USHORT);
 DsqlRequest* DSQL_prepare(thread_db*, Attachment*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned,
 	Array<UCHAR>*, Array<UCHAR>*, bool);

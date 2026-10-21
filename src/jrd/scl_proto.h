@@ -56,6 +56,7 @@ namespace Firebird::Jrd
 	bool SCL_check_schema(thread_db* tdbb, const MetaName&, SecurityClass::flags_t);
 	bool SCL_check_view(thread_db* tdbb, const QualifiedName& name, SecurityClass::flags_t);
 	void SCL_check_role(thread_db* tdbb, const MetaName&, SecurityClass::flags_t);
+	void SCL_check_tablespace(thread_db* tdbb, const MetaName&, SecurityClass::flags_t);
 	SecurityClass* SCL_get_class(thread_db*, const MetaName& name);
 	SecurityClass::flags_t SCL_get_mask(thread_db* tdbb, const QualifiedName&, const TEXT*);
 	void SCL_clear_classes(thread_db*, const MetaName&);

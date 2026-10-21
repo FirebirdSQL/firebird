@@ -41,8 +41,8 @@ namespace Firebird::Jrd {
 	SortedArray<int>& DFW_get_ids(DeferredWork* work);
 	void DFW_merge_work(jrd_tra*, SavNumber, SavNumber);
 	void DFW_perform_work(thread_db*, jrd_tra*);
-	void DFW_perform_post_commit_work(jrd_tra*);
-	void DFW_raiseRelationInUseError(const Cached::Relation*);
+	void DFW_perform_post_commit_work(thread_db*, jrd_tra*);
+	void DFW_raiseRelationInUseError(const RelationPermanent*);
 	DeferredWork* DFW_post_work(jrd_tra*, dfw_t, const dsc* nameDesc, const dsc* schemaDesc, USHORT,
 		const MetaName& package = {});
 	DeferredWork* DFW_post_work(jrd_tra*, dfw_t, const string&, const MetaName& schema,
@@ -51,8 +51,7 @@ namespace Firebird::Jrd {
 	USHORT);
 	DeferredWork* DFW_post_work_arg(jrd_tra*, DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
 	USHORT, dfw_t);
-	void DFW_update_index(const QualifiedName&, USHORT, const SelectivityList&, jrd_tra*,
-		jrd_rel* relation = nullptr);
+	void DFW_update_index(const QualifiedName&, USHORT, const SelectivityList&, jrd_tra*);
 	void DFW_reset_icu(thread_db*);
 	string DFW_remove_icu_info_from_attributes(const QualifiedName&, const string&);
 } // namespace Firebird::Jrd

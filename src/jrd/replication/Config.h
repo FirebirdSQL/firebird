@@ -60,6 +60,8 @@ namespace Firebird::Jrd::Replication
 		static void splitConnectionString(const string& input, string& database,
 										  string& username, string& password);
 
+		bool isMaster() const;
+
 		PathName dbName;
 		ULONG bufferSize;
 		string includeSchemaFilter;
@@ -86,6 +88,7 @@ namespace Firebird::Jrd::Replication
 		bool reportErrors;
 		bool disableOnError;
 		bool cascadeReplication;
+		bool applyTablespacesDdl;
 	};
 };
 

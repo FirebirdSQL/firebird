@@ -53,7 +53,7 @@ void PAG_init(thread_db*);
 void PAG_init2(thread_db*);
 SLONG PAG_last_page(thread_db* tdbb);
 void PAG_release_page(thread_db* tdbb, const PageNumber&, const PageNumber&);
-void PAG_release_pages(thread_db* tdbb, USHORT pageSpaceID, int cntRelease, const ULONG* pgNums, const ULONG prior_page);
+void PAG_release_pages(thread_db* tdbb, ULONG pageSpaceID, int cntRelease, const ULONG* pgNums, const ULONG prior_page);
 void PAG_set_db_guid(thread_db* tdbb, const Guid&);
 void PAG_set_force_write(thread_db* tdbb, bool);
 void PAG_set_no_reserve(thread_db* tdbb, bool);

@@ -96,13 +96,13 @@ namespace Firebird::Jrd
 
 	void Database::assignLatestAttachmentId(AttNumber number)
 	{
-		if (dbb_tip_cache)
+		if (dbb_tip_cache && dbb_tip_cache->isInitialized())
 			dbb_tip_cache->assignLatestAttachmentId(number);
 	}
 
 	StmtNumber Database::generateStatementId()
 	{
-		if (!dbb_tip_cache)
+		if (!dbb_tip_cache || !dbb_tip_cache->isInitialized())
 			return 0;
 		return dbb_tip_cache->generateStatementId();
 	}
@@ -116,14 +116,14 @@ namespace Firebird::Jrd
 
 	AttNumber Database::getLatestAttachmentId() const
 	{
-		if (!dbb_tip_cache)
+		if (!dbb_tip_cache || !dbb_tip_cache->isInitialized())
 			return 0;
 		return dbb_tip_cache->getLatestAttachmentId();
 	}
 
 	StmtNumber Database::getLatestStatementId() const
 	{
-		if (!dbb_tip_cache)
+		if (!dbb_tip_cache || !dbb_tip_cache->isInitialized())
 			return 0;
 		return dbb_tip_cache->getLatestStatementId();
 	}
@@ -430,7 +430,9 @@ namespace Firebird::Jrd
 
 	bool Database::isReplicating(thread_db* tdbb)
 	{
-		if (!replConfig())
+		const auto config = replConfig();
+
+		if (!config || (!config->isMaster() && config->pluginName.isEmpty()))
 			return false;
 
 		Sync sync(&dbb_repl_sync, FB_FUNCTION);
@@ -858,6 +860,7 @@ namespace Firebird::Jrd
 	:	dbb_permanent(p),
 		dbb_guid(Guid::empty()),
 		dbb_page_manager(this, *p),
+		dbb_tablespaces(*p),
 		dbb_file_id(*p),
 		dbb_modules(*p),
 		dbb_internal(*p),

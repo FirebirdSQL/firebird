@@ -37,20 +37,17 @@ namespace Firebird::Jrd
 	class CompilerScratch;
 	class thread_db;
 
-	bool IDX_activate_index(thread_db*, Cached::Relation*, MetaId);
-	void IDX_check_access(thread_db*, CompilerScratch*, Cached::Relation*, Cached::Relation*);
-	bool IDX_check_master_types (thread_db*, index_desc&, Cached::Relation*, int&);
+	bool IDX_check_master_types(thread_db*, index_desc&, jrd_rel*, int&);
 	void IDX_create_index(thread_db*, IdxCreate createMethod, jrd_rel*, index_desc*,
 					  const QualifiedName&, USHORT*, jrd_tra*, SelectivityList&);
-	bool IDX_mark_index(thread_db*, Cached::Relation*, MetaId);
+	bool IDX_mark_index(thread_db*, jrd_rel*, MetaId);
 	void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current,
 				   TraNumber tran);
-	void IDX_delete_indices(thread_db*, RelationPermanent*, RelationPages*, bool);
+	void IDX_delete_indices(thread_db*, const PageNumber&, bool);
 	void IDX_erase(thread_db*, record_param*, jrd_tra*);
 	void IDX_garbage_collect(thread_db*, record_param*, RecordStack&, RecordStack&);
 	void IDX_modify(thread_db*, record_param*, record_param*, jrd_tra*);
 	void IDX_modify_check_constraints(thread_db*, record_param*, record_param*, jrd_tra*);
-	void IDX_statistics(thread_db*, Cached::Relation*, USHORT, SelectivityList&);
 	void IDX_store(thread_db*, record_param*, jrd_tra*);
 	void IDX_modify_flag_uk_modified(thread_db*, record_param*, record_param*, jrd_tra*);
 	bool IDX_validate_unique(thread_db* tdbb, jrd_rel* relation, MetaId id);

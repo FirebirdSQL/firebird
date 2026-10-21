@@ -186,7 +186,7 @@ namespace Firebird::Jrd::Replication {
 						const string& sql,
 						const MetaName& owner);
 
-		bool lookupKey(thread_db* tdbb, Cached::Relation* relation, index_desc& idx);
+		bool lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& idx);
 		bool compareKey(thread_db* tdbb, jrd_rel* relation,
 						const index_desc& idx,
 						Record* record1, Record* record2);

@@ -241,7 +241,8 @@ Config::Config()
 	  logErrors(true),
 	  reportErrors(DEFAULT_REPORT_ERRORS),
 	  disableOnError(true),
-	  cascadeReplication(false)
+	  cascadeReplication(false),
+	  applyTablespacesDdl(true)
 {
 }
 
@@ -270,7 +271,8 @@ Config::Config(const Config& other)
 	  logErrors(other.logErrors),
 	  reportErrors(other.reportErrors),
 	  disableOnError(other.disableOnError),
-	  cascadeReplication(other.cascadeReplication)
+	  cascadeReplication(other.cascadeReplication),
+	  applyTablespacesDdl(other.applyTablespacesDdl)
 {
 }
 
@@ -446,6 +448,10 @@ Config* Config::get(const PathName& lookupName)
 				{
 					parseBoolean(value, config->cascadeReplication);
 				}
+				else if (key == "apply_tablespaces_ddl")
+				{
+					parseBoolean(value, config->applyTablespacesDdl);
+				}
 				else if ((key != "journal_source_directory") &&
 						(key != "source_guid") &&
 						(key != "verbose_logging") &&
@@ -473,7 +479,7 @@ Config* Config::get(const PathName& lookupName)
 		if (config->pluginName.hasData())
 			return config.release();
 
-		if (config->journalDirectory.hasData() || config->syncReplicas.hasData())
+		if (config->isMaster())
 		{
 			// If either journal_directory or sync_replicas is specified,
 			// then replication is enabled
@@ -593,6 +599,10 @@ void Config::enumerate(ReplicaList& replicas)
 				{
 					parseLong(value, config->applyErrorTimeout);
 				}
+				else if (key == "apply_tablespaces_ddl")
+				{
+					parseBoolean(value, config->applyTablespacesDdl);
+				}
 				else if (key == "schema_search_path")
 					config->schemaSearchPath = value;
 			}
@@ -616,6 +626,11 @@ void Config::enumerate(ReplicaList& replicas)
 
 	if (localStatus->getState() & IStatus::STATE_ERRORS)
 		logReplicaStatus(dbName, &localStatus);
+}
+
+bool Config::isMaster() const
+{
+	return journalDirectory.hasData() || syncReplicas.hasData();
 }
 
 // This routine is used for split input connection string to parts

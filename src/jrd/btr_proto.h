@@ -32,14 +32,15 @@
 
 namespace Firebird::Jrd
 {
-	void	BTR_all(thread_db*, Cached::Relation*, IndexDescList&, RelationPages*, bool sysRq = false);
-	bool	BTR_activate_index(thread_db*, Cached::Relation*, MetaId);
+	void	BTR_all(thread_db*, jrd_rel*, IndexDescList&, bool sysRq = false);
+	bool	BTR_activate_index(thread_db*, jrd_rel*, MetaId);
 	bool	BTR_cleanup_index(thread_db*, const QualifiedName&, jrd_tra*, MetaId);
 	void	BTR_complement_key(temporary_key*);
 	void	BTR_create(thread_db*, IndexCreation&, SelectivityList&);
 	bool	BTR_delete_index(thread_db*, win*, MetaId, bool);
+	void	BTR_delete_tree(thread_db*, USHORT, USHORT, PageNumber);
 	bool	BTR_description(thread_db*, Cached::Relation*, const Ods::index_root_page*, index_desc*,
-						MetaId, USHORT flags = 0);
+							MetaId, USHORT flags = 0);
 	DSC*	BTR_eval_expression(thread_db*, index_desc*, Record*);
 	void	BTR_evaluate(thread_db*, const IndexRetrieval*, RecordBitmap**, RecordBitmap*);
 	UCHAR*	BTR_find_leaf(Ods::btree_page*, temporary_key*, UCHAR*, USHORT*, bool, int);
@@ -48,24 +49,24 @@ namespace Firebird::Jrd
 	void	BTR_insert(thread_db*, win*, index_insertion*);
 	USHORT	BTR_key_length(thread_db*, jrd_rel*, index_desc*);
 	Ods::btree_page*	BTR_left_handoff(thread_db*, win*, Ods::btree_page*, SSHORT);
-	bool	BTR_lookup(thread_db*, Cached::Relation*, MetaId, index_desc*, RelationPages*);
+	bool	BTR_lookup(thread_db*, jrd_rel*, MetaId, index_desc*);
 	bool	BTR_make_bounds(thread_db*, const IndexRetrieval*, IndexScanListIterator*,
-						temporary_key*, temporary_key*, USHORT&);
+							temporary_key*, temporary_key*, USHORT&);
 	idx_e	BTR_make_key(thread_db*, USHORT, const ValueExprNode* const*, const SSHORT*,
-						 const index_desc*, temporary_key*, USHORT, bool*);
+							 const index_desc*, temporary_key*, USHORT, bool*);
 	void	BTR_make_null_key(thread_db*, const index_desc*, temporary_key*);
 	void	BTR_mark_index_for_delete(thread_db*, RelationPermanent*, MetaId, win*, Ods::index_root_page*,
-								  TraNumber tran);
-	bool	BTR_next_index(thread_db*, Cached::Relation*, jrd_tra*, index_desc*, win*,
-					   RelationPages* = nullptr);
+									  TraNumber tran);
+	void	BTR_merge_index(thread_db* tdbb, const IndexCreation&, const PageNumber& srcRootPage);
+	bool	BTR_next_index(thread_db*, jrd_rel*, jrd_tra*, index_desc*, win*,
+						   RelationPages* = nullptr);
 	void	BTR_remove(thread_db*, win*, index_insertion*);
 	void	BTR_reserve_slot(thread_db*, IndexCreation&);
-	void	BTR_selectivity(thread_db*, Cached::Relation*, MetaId, SelectivityList&);
+	void	BTR_selectivity(thread_db*, jrd_rel*, MetaId, SelectivityList&);
 	bool	BTR_types_comparable(const dsc& target, const dsc& source);
+	void	BTR_copy_index(thread_db*, jrd_rel*, MetaId, ULONG);
 	Ods::index_root_page* BTR_fetch_root_for_update(const char* from, thread_db* tdbb, win* window);
 	const Ods::index_root_page* BTR_fetch_root(const char* from, thread_db* tdbb, win* window);
-	void	BTR_delete_tree(thread_db*, USHORT, USHORT, PageNumber);
-	void	BTR_merge_index(thread_db*, jrd_tra*, jrd_rel*, index_desc*, PageNumber);
 
 	inline constexpr USHORT BTR_DESCRIBE_NO_THROW =		0x0001;
 	inline constexpr USHORT BTR_DESCRIBE_SYSTEM_RQ =	0x0002;

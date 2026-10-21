@@ -603,6 +603,41 @@ dsql_ctx* PlanNode::dsqlPassAlias(DsqlCompilerScratch* dsqlScratch, DsqlContextS
 		}
 	}
 
+	if (!result_context && alias.schema.hasData() && alias.package.isEmpty())
+	{
+		// Fallback for packaged relations referenced as package.table: the qualifier
+		// names a package, not a schema. Mirrors the name1.name2 handling in
+		// DsqlCompilerScratch::resolveRoutineOrRelation. Kept local to PLAN matching
+		// so field-qualification semantics elsewhere are unchanged.
+		for (DsqlContextStack::iterator itr(stack); itr.hasData(); ++itr)
+		{
+			dsql_ctx* context = itr.object();
+			if (context->ctx_scope_level != dsqlScratch->scopeLevel)
+				continue;
+
+			if (context->ctx_internal_alias.object.hasData())
+				continue;
+
+			if ((context->ctx_relation &&
+					context->ctx_relation->rel_name.object == alias.object &&
+					context->ctx_relation->rel_name.package == alias.schema) ||
+				(context->ctx_procedure &&
+					context->ctx_procedure->prc_name.object == alias.object &&
+					context->ctx_procedure->prc_name.package == alias.schema))
+			{
+				if (result_context)
+				{
+					// the table %s is referenced twice; use aliases to differentiate
+					ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+							  Arg::Gds(isc_dsql_command_err) <<
+							  Arg::Gds(isc_dsql_self_join) << alias.toQuotedString());
+				}
+
+				result_context = context;
+			}
+		}
+	}
+
 	return result_context;
 }
 

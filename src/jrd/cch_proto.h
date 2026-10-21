@@ -60,11 +60,11 @@ LockState	CCH_fetch_lock(thread_db*, win*, int, int, SCHAR);
 void		CCH_fetch_page(thread_db*, win*, const bool);
 void		CCH_fini(thread_db*);
 void		CCH_forget_page(thread_db*, win*);
-void		CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number);
+void		CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG page_space_id = INVALID_PAGE_SPACE);
 bool		CCH_free_page(thread_db*);
 SLONG		CCH_get_incarnation(win*);
 void		CCH_get_related(thread_db*, PageNumber, Jrd::PagesArray&);
-Ods::pag*	CCH_handoff(thread_db*, win*, ULONG, int, SCHAR, int, const bool);
+Ods::pag*	CCH_handoff(thread_db*, win*, PageNumber, int, SCHAR, int, const bool);
 void		CCH_init(thread_db*, ULONG);
 void		CCH_init2(thread_db*);
 void		CCH_mark(thread_db*, win*, bool, bool);
@@ -124,17 +124,22 @@ inline void CCH_MARK_SYSTEM(thread_db* tdbb, win* window)
 
 inline Ods::pag* CCH_HANDOFF(thread_db* tdbb, win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, 1, false);
+	return CCH_handoff (tdbb, window, PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, 1, false);
 }
 
 inline Ods::pag* CCH_HANDOFF_TIMEOUT(thread_db* tdbb, win* window, ULONG page, SSHORT lock, SCHAR page_type, SSHORT latch_wait)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, latch_wait, false);
+	return CCH_handoff (tdbb, window, PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, latch_wait, false);
 }
 
 inline Ods::pag* CCH_HANDOFF_TAIL(thread_db* tdbb, win* window, ULONG page, SSHORT lock, SCHAR page_type)
 {
-	return CCH_handoff (tdbb, window, page, lock, page_type, 1, true);
+	return CCH_handoff (tdbb, window, PageNumber(window->win_page.getPageSpaceID(), page), lock, page_type, 1, true);
+}
+
+inline Ods::pag* CCH_HANDOFF(thread_db* tdbb, win* window, PageNumber pageNumber, SSHORT lock, SCHAR page_type)
+{
+	return CCH_handoff (tdbb, window, pageNumber, lock, page_type, 1, false);
 }
 
 inline void CCH_MARK_MUST_WRITE(thread_db* tdbb, win* window)

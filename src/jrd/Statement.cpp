@@ -36,9 +36,11 @@
 #include "../jrd/met_proto.h"
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
+#include "../jrd/Tablespace.h"
 #include "../jrd/met.h"
 #include "../jrd/recsrc/Cursor.h"
 #include "../common/classes/auto.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 namespace Firebird::Jrd
 {
@@ -79,6 +81,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 	  blr(*p),
 	  mapFieldInfo(*p),
 	  resources(nullptr),
+	  tablespaces(*p),
 	  messages(*p, 2) // Most statements have two messages, preallocate space for them
 {
 	if (csb->csb_resources)
@@ -166,6 +169,7 @@ Statement::Statement(thread_db* tdbb, MemoryPool* p, CompilerScratch* csb)
 		// versioned metadata support
 		if (csb->csb_g_flags & csb_internal)
 			flags |= FLAG_INTERNAL;
+
 		loadResources(tdbb, nullptr, false);
 
 		messages.grow(csb->csb_rpt.getCount());
@@ -410,7 +414,7 @@ Statement* Statement::makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
 	return makeStatement(tdbb, csb, internalFlag,
 		[&]
 		{
-			node = static_cast<BoolExprNode*>(csb->csb_node);
+			node = Optimizer::transformBoolean(tdbb, csb);
 		});
 }
 
@@ -764,7 +768,7 @@ void Statement::release(thread_db* tdbb)
 {
 	SET_TDBB(tdbb);
 
-	// Release sub statements.
+	// Release sub statements
 	for (Statement** subStatement = subStatements.begin();
 		 subStatement != subStatements.end();
 		 ++subStatement)

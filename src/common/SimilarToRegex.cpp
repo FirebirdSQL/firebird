@@ -830,7 +830,7 @@ bool SimilarToRegex::matches(const char* buffer, unsigned bufferLen, Array<Match
 			for (const auto& resSp : resSps)
 			{
 				matchPosArray->push(MatchPos{
-					static_cast<unsigned>(resSp.data() - sp.begin()),
+					static_cast<unsigned>(resSp.data() - sp.data()),
 					static_cast<unsigned>(resSp.length())
 				});
 			}
@@ -878,7 +878,7 @@ bool SubstringSimilarRegex::matches(const char* buffer, unsigned bufferLen,
 
 	if (RE2::FullMatch(sp, *regexp.get(), nullptr, &spResult, nullptr))
 	{
-		*resultStart = spResult.begin() - buffer;
+		*resultStart = spResult.data() - buffer;
 		*resultLength = static_cast<unsigned>(spResult.length());
 		return true;
 	}

@@ -72,7 +72,7 @@ static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 	cIcu.ucnv_setFromUCallBack(
 		conv,
 		FB_UCNV_FROM_U_CALLBACK_STOP,
-		NULL,
+		nullptr,
 		&oldFromAction,
 		&oldContext,
 		status);
@@ -81,7 +81,7 @@ static UConverter* create_converter(csconvert* cv, UErrorCode* status)
 	cIcu.ucnv_setToUCallBack(
 		conv,
 		cIcu.UCNV_TO_U_CALLBACK_STOP,
-		NULL,
+		nullptr,
 		&oldToAction,
 		&oldContext,
 		status);
@@ -122,7 +122,7 @@ static ULONG unicode_to_icu(csconvert* cv,
 	char* target = reinterpret_cast<char*>(dst);
 	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_fromUnicode(conv, &target, target + dstLen, &source,
-		source + srcLen / sizeof(UChar), NULL, TRUE, &status);
+		source + srcLen / sizeof(UChar), nullptr, TRUE, &status);
 
 	*errPosition = static_cast<ULONG>((source - alignedSource) * sizeof(UChar));
 
@@ -178,7 +178,7 @@ static ULONG icu_to_unicode(csconvert* cv,
 	UChar* target = alignedTarget;
 	Firebird::UnicodeUtil::ConversionICU& cIcu(Firebird::UnicodeUtil::getConversionICU());
 	cIcu.ucnv_toUnicode(conv, &target, target + dstLen / sizeof(UChar), &source,
-		source + srcLen, NULL, TRUE, &status);
+		source + srcLen, nullptr, TRUE, &status);
 
 	*errPosition = source - reinterpret_cast<const char*>(src);
 

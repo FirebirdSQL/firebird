@@ -58,10 +58,10 @@ namespace Ods
 	void	DPM_backout_mark(thread_db*, record_param*, const jrd_tra*);
 	double	DPM_cardinality(thread_db*, jrd_rel*, const Format*);
 	bool	DPM_chain(thread_db*, record_param*, record_param*);
-	void	DPM_create_relation(thread_db*, Cached::Relation*);
-	ULONG	DPM_data_pages(thread_db*, Cached::Relation*);
+	void	DPM_create_relation(thread_db*, jrd_rel*);
+	ULONG	DPM_data_pages(thread_db*, jrd_rel*);
 	void	DPM_delete(thread_db*, record_param*, ULONG);
-	void	DPM_delete_relation(thread_db*, RelationPermanent*);
+	void	DPM_delete_relation(thread_db*, RelationPermanent*, RelationPages*);
 	USHORT	DPM_reserve_pages(thread_db*, jrd_rel*, win*);
 	bool	DPM_fetch(thread_db*, record_param*, USHORT);
 	bool	DPM_fetch_back(thread_db*, record_param*, USHORT, SSHORT);
@@ -69,14 +69,15 @@ namespace Ods
 	SINT64	DPM_gen_id(thread_db*, SLONG, bool, SINT64);
 	bool	DPM_get(thread_db*, record_param*, SSHORT);
 	ULONG	DPM_get_blob(thread_db*, blb*, jrd_rel*, RecordNumber, bool, ULONG);
-	void	DPM_mark_relation(thread_db*, Cached::Relation*);
+	void	DPM_mark_relation(thread_db*, jrd_rel*);
 	bool	DPM_next(thread_db*, record_param*, USHORT, FindNextRecordScope);
-	void	DPM_pages(thread_db*, SSHORT, int, ULONG, ULONG);
+	void	DPM_pages(thread_db*, MetaId, int, ULONG, const PageNumber&);
 #ifdef SUPERSERVER_V2
 	SLONG DPM_prefetch_bitmap(thread_db*, jrd_rel*, PageBitmap*, SLONG);
 #endif
 	ULONG DPM_pointer_pages(thread_db*, jrd_rel*);
-	void DPM_scan_pages(thread_db*);
+	void DPM_scan_pages(thread_db*, SCHAR pagType = 0);
+	void DPM_scan_pages(thread_db*, RelationPermanent*, RelationPages*);
 	void DPM_store(thread_db*, record_param*, PageStack&, const RecordStorageType type);
 	RecordNumber DPM_store_blob(thread_db*, blb*, jrd_rel*, Record*);
 	void DPM_rewrite_header(thread_db*, record_param*);
@@ -85,7 +86,9 @@ namespace Ods
 
 	void DPM_create_relation_pages(thread_db*, RelationPermanent*, RelationPages*);
 	void DPM_delete_relation_pages(thread_db*, RelationPermanent*, RelationPages*);
-} // namespace Firebird::Jrd
 
+	void DPM_copy_data(thread_db* tdbb, RelationPermanent*,
+		RelationPages* orgPages, RelationPages* newPages);
+} // namespace Firebird::Jrd
 
 #endif // JRD_DPM_PROTO_H

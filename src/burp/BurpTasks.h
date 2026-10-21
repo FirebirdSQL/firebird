@@ -37,26 +37,51 @@
 #include "../common/classes/auto.h"
 #include "../common/classes/condition.h"
 #include "../common/classes/fb_atomic.h"
+#include "../burp/RestoreMessageLayout.h"
+#include "../burp/FastPathRecordWriter.h"
+#include "../burp/FastPathRecordReader.h"
+#include "../burp/FastPathBurpProvider.h"
 
 namespace Firebird::Burp
 {
 
 
+constexpr unsigned FAST_PATH_BACKUP_BATCH_MAX_RECORDS = 1000;
+constexpr FB_SIZE_T FAST_PATH_BACKUP_BATCH_MAX_BYTES = 1024 * 1024;
+// Staging buffer for the restore direct writer: messages are accumulated here
+// so one engine attachment sync covers many rows. The BulkInsert object itself
+// stays alive across staging batches (it auto-flushes full extents) and is
+// finished only at table end, so staging size bounds memory/latency
+// without stranding a partial-extent tail per batch.
+constexpr unsigned FAST_PATH_RESTORE_BATCH_MAX_RECORDS = 8000;
+constexpr FB_SIZE_T FAST_PATH_RESTORE_BATCH_MAX_BYTES = 8 * 1024 * 1024;
+
 class ReadRelationMeta
 {
 public:
 	ReadRelationMeta() noexcept :
-		m_blr(*getDefaultMemoryPool())
+		m_blr(*getDefaultMemoryPool()),
+		m_layout(*getDefaultMemoryPool())
 	{
 		clear();
 	}
 
-	void setRelation(const burp_rel* relation, bool partition);
+	void setRelation(burp_rel* relation, bool partition, bool fastPath);
 	void clear();
 
 	bool haveInputs() const noexcept
 	{
 		return m_inMgsNum != m_outMgsNum;
+	}
+
+	bool isFastPath() const noexcept
+	{
+		return m_fastPath;
+	}
+
+	const RestoreMessageLayout& getLayout() const noexcept
+	{
+		return m_layout;
 	}
 
 //private:
@@ -65,6 +90,8 @@ public:
 	SSHORT m_inMgsNum;
 	SSHORT m_outMgsNum;
 	HalfStaticArray<UCHAR, 256> m_blr;
+	RestoreMessageLayout m_layout;
+	bool m_fastPath = false;
 	RCRD_LENGTH m_outMsgLen;
 	RCRD_LENGTH m_outRecLen;
 	RCRD_OFFSET m_outEofOffset;
@@ -74,7 +101,8 @@ class ReadRelationReq
 {
 public:
 	ReadRelationReq() noexcept :
-		m_outMsg(*getDefaultMemoryPool())
+		m_outMsg(*getDefaultMemoryPool()),
+		m_fastPathBatch(*getDefaultMemoryPool())
 	{
 	}
 
@@ -88,7 +116,8 @@ public:
 
 	void compile(CheckStatusWrapper* status, IAttachment* db);
 	void setParams(ULONG loPP, ULONG hiPP);
-	void start(CheckStatusWrapper* status, ITransaction* tran);
+	void start(CheckStatusWrapper* status, IAttachment* att,
+		ITransaction* tran);
 	void receive(CheckStatusWrapper* status);
 	void release(CheckStatusWrapper* status);
 
@@ -118,8 +147,13 @@ private:
 	const ReadRelationMeta* m_meta = nullptr;
 	InMsg m_inMgs{};
 	Array<UCHAR> m_outMsg;
+	Array<UCHAR> m_fastPathBatch;
 	SSHORT* m_eof = nullptr;
 	IRequest* m_request = nullptr;
+	FastPathRecordReader m_fastPathReader;
+	unsigned m_fastPathBatchRecords = 0;
+	unsigned m_fastPathBatchPosition = 0;
+	bool m_usingFastPath = false;
 };
 
 
@@ -127,12 +161,13 @@ class WriteRelationMeta
 {
 public:
 	WriteRelationMeta() noexcept :
+		m_messageLayout(*getDefaultMemoryPool()),
 		m_blr(*getDefaultMemoryPool())
 	{
 		clear();
 	}
 
-	void setRelation(BurpGlobals* tdgbl, const burp_rel* relation);
+	void setRelation(BurpGlobals* tdgbl, burp_rel* relation);
 	void clear();
 
 	IBatch* createBatch(BurpGlobals* tdgbl, IAttachment* att);
@@ -140,13 +175,22 @@ public:
 //private:
 	bool prepareBatch(BurpGlobals* tdgbl);
 	void prepareRequest(BurpGlobals* tdgbl);
+	void prepareMessageLayout(BurpGlobals* tdgbl);
+	void buildNonFastPathMode(BurpGlobals* tdgbl);
 
-	const burp_rel* m_relation;
+	const RestoreMessageLayout& getMessageLayout() const noexcept
+	{
+		return m_messageLayout;
+	}
+
+	burp_rel* m_relation;
 	Mutex m_mutex;
 	bool m_batchMode;
+	bool m_fastPathMode;
 	bool m_batchOk;
-	ULONG m_inMsgLen;
+	RCRD_LENGTH m_inMsgLen;
 	ULONG m_blobCount;
+	RestoreMessageLayout m_messageLayout;
 
 	// batch mode
 	string m_sqlStatement;
@@ -164,7 +208,8 @@ class WriteRelationReq
 public:
 	WriteRelationReq() noexcept :
 		m_inMsg(*getDefaultMemoryPool()),
-		m_batchMsg(*getDefaultMemoryPool())
+		m_batchMsg(*getDefaultMemoryPool()),
+		m_fastPathBatch(*getDefaultMemoryPool())
 	{
 	}
 
@@ -176,12 +221,22 @@ public:
 	void reset(WriteRelationMeta* meta);
 	void clear();
 
+	void initFastPathWriter(IAttachment* att, ITransaction* tra,
+		const burp_rel* relation, const RestoreMessageLayout& layout);
+	void execFastPathBatch();
+
+	// Flush the bulk insert used by the fast-path writer and destroy the
+	// writer (it caches the raw engine transaction, which is replaced by
+	// commit_relation_data() in incremental restore). Runs in get_data()
+	// before that commit; safe to call when no writer exists.
+	void finishFastPathBulk();
+
 	void compile(BurpGlobals* tdgbl, IAttachment* att);
 	void send(BurpGlobals* tdgbl, ITransaction* tran, bool lastRec);
 	void execBatch(BurpGlobals * tdgbl);
 	void release();
 
-	ULONG getDataLength() const noexcept
+	RCRD_LENGTH getDataLength() const noexcept
 	{
 		return m_inMsg.getCount();
 	}
@@ -216,8 +271,11 @@ private:
 	WriteRelationMeta* m_meta = nullptr;
 	Array<UCHAR> m_inMsg;
 	Array<UCHAR> m_batchMsg;
+	Array<UCHAR> m_fastPathBatch;
 	IBatch* m_batch = nullptr;
 	IRequest* m_request = nullptr;
+	AutoPtr<FastPathRecordWriter> m_fastPathWriter;
+	unsigned m_fastPathBatchRecs = 0;
 	int m_recs = 0;						// total records sent
 	int m_batchRecs = 0;				// records in current batch
 	bool m_resync = true;
@@ -397,8 +455,8 @@ private:
 
 	Mutex m_mutex;
 	HalfStaticArray<Item*, 8> m_items;
-	volatile bool m_stop;
-	bool m_error;
+	std::atomic_bool m_stop;
+	std::atomic_bool m_error;
 
 	HalfStaticArray<IOBuffer*, 16> m_buffers;
 	HalfStaticArray<IOBuffer*, 8> m_dirtyBuffers;
@@ -518,9 +576,10 @@ private:
 
 	Mutex m_mutex;
 	HalfStaticArray<Item*, 8> m_items;
-	volatile bool m_stop;
-	bool m_error;
+	std::atomic_bool m_stop;
+	std::atomic_bool m_error;
 	AtomicCounter m_records;		// records restored for the current relation
+	Mutex m_verbMutex;
 	FB_UINT64 m_verbRecs;					// last records count reported
 
 	HalfStaticArray<IOBuffer*, 16> m_buffers;

@@ -32,19 +32,9 @@
 #include "../intl/country_codes.h"
 #include "../intl/ld.h"
 #include "../common/classes/Aligner.h"
+#include <algorithm>
 
-#undef DEBUG
-
-typedef USHORT UNICODE;
-
-#ifndef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#endif
-#ifndef MAX
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-#endif
-
-
+using UNICODE = USHORT;
 
 #define	TEXTTYPE_ENTRY(name)	INTL_BOOL name (texttype* cache, charset* cs,										\
 												const ASCII* /*tt_name*/, const ASCII* /*cs_name*/,					\
@@ -63,14 +53,6 @@ typedef USHORT UNICODE;
 												USHORT attributes,													\
 												const UCHAR* specific_attributes, ULONG specific_attributes_length,	\
 												const ASCII* /*config_info*/)
-
-
-#ifdef NOT_USED_OR_REPLACED
-#define CONVERT_ENTRY(cs1, cs2, name)	INTL_BOOL	name (csconvert* csptr, const ASCII* dest_cs, const ASCII* source_cs)
-
-#define	CONVERT_RETURN	return (true)
-#endif
-
 
 
 #define CHARSET_ENTRY(name)	INTL_BOOL	name (charset* csptr, const ASCII* /*cs_name*/)

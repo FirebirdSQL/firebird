@@ -445,6 +445,7 @@
 #define isc_spb_bkp_no_triggers			 0x8000
 #define isc_spb_bkp_zip					 0x010000
 #define isc_spb_bkp_direct_io			 0x020000
+#define isc_spb_bkp_fast_path			 0x040000
 
 /********************************************
  * Parameters for isc_action_svc_properties *
@@ -575,6 +576,7 @@
 #define isc_spb_res_replace				0x1000
 #define isc_spb_res_create				0x2000
 #define isc_spb_res_use_all_space		0x4000
+#define isc_spb_res_fast_path			isc_spb_bkp_fast_path
 #define isc_spb_res_direct_io			isc_spb_bkp_direct_io
 #define isc_spb_res_replica_mode		20
 

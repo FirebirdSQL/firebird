@@ -44,6 +44,7 @@
  */
 
 #include "firebird.h"
+#include <optional>
 #ifdef TIME_WITH_SYS_TIME
 # include <sys/time.h>
 # include <time.h>
@@ -1770,30 +1771,37 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 					request->req_src_line = node->line;
 					request->req_src_column = node->column;
 				}
+			}
 
-				if (attachment->isProfilerActive() && !request->hasInternalStatement())
+			std::optional<StmtNode::ProfileMode> cachedProfileMode;
+
+			if (attachment->isProfilerActive() && !request->hasInternalStatement() &&
+				(request->req_operation == Request::req_evaluate ||
+					((request->req_operation == Request::req_return ||
+					  request->req_operation == Request::req_sync) &&
+					 *(cachedProfileMode = node->getProfileMode()) == StmtNode::ProfileMode::EVALUATE_RETURN)))
+			{
+				if (!profilerInitialTicks)
 				{
-					if (!profilerInitialTicks)
-					{
-						profilerManager = attachment->getProfilerManager(tdbb);
-						profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
-						profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
-							profilerManager->getAccumulatedOverhead();
-					}
+					profilerManager = attachment->getProfilerManager(tdbb);
+					profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
+					profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+						profilerManager->getAccumulatedOverhead();
+				}
 
-					if (node->hasLineColumn &&
-						node->isProfileAware() &&
-						(exeState.forceProfileNextEvaluate ||
-						 !profileNode ||
-						 !(node->line == profileNode->line && node->column == profileNode->column)))
-					{
-						profilerLastTicks = profilerCallAfterPsqlLineColumn();
-						profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
-						profileNode = node;
-						exeState.forceProfileNextEvaluate = false;
+				if (node->hasLineColumn &&
+					(exeState.forceProfileNextEvaluate ||
+					 !profileNode ||
+					 !(node->line == profileNode->line && node->column == profileNode->column)) &&
+					(cachedProfileMode.has_value() ? *cachedProfileMode : node->getProfileMode()) !=
+						StmtNode::ProfileMode::NONE)
+				{
+					profilerLastTicks = profilerCallAfterPsqlLineColumn();
+					profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
+					profileNode = node;
+					exeState.forceProfileNextEvaluate = false;
 
-						profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
-					}
+					profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
 				}
 			}
 

@@ -69,6 +69,7 @@ namespace Firebird::Jrd
 	}
 	#endif
 	bool	PIO_write(thread_db*, jrd_file*, BufferDesc*, Ods::pag*, FbStatusVector*);
+	bool	PIO_file_exists(const PathName&);
 }	// namespace Firebird::Jrd
 
 #endif // JRD_PIO_PROTO_H

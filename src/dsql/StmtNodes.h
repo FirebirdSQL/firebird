@@ -233,9 +233,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	string internalPrint(NodePrinter& printer) const override;
@@ -465,9 +465,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	string internalPrint(NodePrinter& printer) const override;
@@ -528,9 +528,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	string internalPrint(NodePrinter& printer) const override;
@@ -747,6 +747,12 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	ExecStatementNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	ExecStatementNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	ProfileMode getProfileMode() const override
+	{
+		return ProfileMode::EVALUATE_RETURN;
+	}
+
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
@@ -968,6 +974,12 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	StmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	StmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	ProfileMode getProfileMode() const override
+	{
+		return ProfileMode::EVALUATE_RETURN;
+	}
+
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 	bool isWriteLockMode(Request* request) const;

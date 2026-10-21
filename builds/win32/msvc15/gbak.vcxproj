@@ -285,6 +285,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\burp\main\burpMain.cpp" />
+    <ClCompile Include="..\..\..\src\burp\main\FastPathBurpProviderStub.cpp" />
+    <ClCompile Include="..\..\..\src\burp\main\FastPathRecordWriterStub.cpp" />
+    <ClCompile Include="..\..\..\src\burp\main\FastPathRecordReaderStub.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
