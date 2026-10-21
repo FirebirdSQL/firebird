@@ -127,8 +127,21 @@ const PosixDirIterator& PosixDirIterator::operator++()
 			{
 				// Slow path, should be taken rarely because most of the FS support and fill `d_type` with actual value.
 				struct stat stat_buf;
-				if (fstatat(m_dir_fd, m_ent->d_name, &stat_buf, AT_SYMLINK_NOFOLLOW) != 0)
-					continue;
+				if (m_dir_fd >= 0)
+				{
+					if (fstatat(m_dir_fd, m_ent->d_name, &stat_buf, AT_SYMLINK_NOFOLLOW) != 0)
+						continue;
+				}
+				else
+				{
+					// Very slow path, `dirfd` has failed, so the full path must be resolved by the kernel.
+					// Shouldn't happen on modern systems, but POSIX allows it.
+					m_tmp_buffer = m_ent->d_name;
+					PathUtils::concatPath(m_file, dirPrefix, m_tmp_buffer);
+					if (lstat(m_file.c_str(), &stat_buf) != 0)
+						continue;
+				}
+
 				is_reg_file = S_ISREG(stat_buf.st_mode);
 			}
 
