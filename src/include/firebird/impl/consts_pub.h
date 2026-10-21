@@ -241,7 +241,7 @@
 
 #define RDB_system                         1
 #define RDB_id_assigned                    2
-/* 2 is for QLI. See jrd/constants.h for more Firebird-specific values. */
+/* 2 is for QLI. See common/constants.h for more Firebird-specific values. */
 
 
 /*************************************/

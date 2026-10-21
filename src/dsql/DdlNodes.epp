@@ -80,7 +80,7 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../jrd/ini.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/GarbageCollector.h"
 #include "../jrd/ProtectRelations.h"
 #include "../dsql/PackageNodes.h"

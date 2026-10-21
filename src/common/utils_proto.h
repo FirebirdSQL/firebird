@@ -38,7 +38,7 @@
 #include "iberror.h"
 #include "firebird/Interface.h"
 #include "memory_routines.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 namespace Firebird::fb_utils {
 	char* copy_terminate(char* dest, const char* src, size_t bufsize) noexcept;

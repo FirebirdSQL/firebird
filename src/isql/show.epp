@@ -3594,7 +3594,7 @@ static void show_db()
 // *********************************
 // s h o w _ d e p e n d e n c i e s   (front-end)
 // *********************************
-// Iterate through all types of objects types (as per jrd/obj.h) calling the
+// Iterate through all types of objects types (as per common/obj.h) calling the
 // overloaded routine. We try to fetch all possible object types that share
 // the same name.
 static processing_state show_dependencies(const std::optional<QualifiedMetaString>& name)

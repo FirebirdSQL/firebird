@@ -96,7 +96,7 @@
 #include "../common/Task.h"
 #include "../jrd/WorkerAttachment.h"
 #include "../jrd/Package.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #ifdef VIO_DEBUG
 #include <stdio.h>

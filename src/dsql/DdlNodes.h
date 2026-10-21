@@ -26,7 +26,7 @@
 #include <functional>
 #include <optional>
 #include "firebird/impl/blr.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
 #include "../dsql/make_proto.h"

@@ -40,7 +40,7 @@
 
 #include "../common/dsc_proto.h" // DSC_make_descriptor
 #include "../jrd/Package.h" // Constant
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 #include "../dsql/metd_proto.h" // METD_get_domain
 #include "../common/classes/VaryStr.h" // METD_get_domain

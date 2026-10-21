@@ -39,7 +39,7 @@
 #include "../../common/utils_proto.h"
 #include "../../common/UtilSvc.h"
 #include "../../jrd/svc_undoc.h"
-#include "../../jrd/constants.h"
+#include "../../common/constants.h"
 #include "../../common/os/path_utils.h"
 #include "firebird/impl/inf_pub.h"
 #include "firebird/impl/sqlda_pub.h"

@@ -24,7 +24,7 @@
  *
  */
 
-#include "../../jrd/constants.h"
+#include "../../common/constants.h"
 
 namespace Firebird::Jrd
 {

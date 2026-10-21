@@ -24,7 +24,7 @@
 #ifndef JRD_TRIG_H
 #define JRD_TRIG_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
 /* This file contains the trigger blr for the system-defined triggers
    on system relations.  The GDEF source for these triggers is in

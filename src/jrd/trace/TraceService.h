@@ -35,7 +35,7 @@
 #include "../../common/classes/ClumpletReader.h"
 #include "../../common/StatusArg.h"
 #include "../../common/UtilSvc.h"
-#include "../../jrd/constants.h"
+#include "../../common/constants.h"
 #include "../../common/ThreadData.h"
 #include "../../jrd/trace/TraceSession.h"
 

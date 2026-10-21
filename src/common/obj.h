@@ -83,7 +83,9 @@ inline constexpr ObjectType obj_index_condition = 37;
 inline constexpr ObjectType obj_schema = 38;
 inline constexpr ObjectType obj_schemas = 39;
 
-inline constexpr ObjectType obj_type_MAX = 40;
+inline constexpr ObjectType obj_package_constant = 40;
+
+inline constexpr ObjectType obj_type_MAX = 41;
 
 // used in the parser only / no relation with obj_type_MAX (should be greater)
 inline constexpr ObjectType obj_user_or_role = 100;
@@ -110,6 +112,7 @@ inline bool isSchemaBoundObject(ObjectType objectType) noexcept
 		case obj_udf:
 		case obj_collation:
 		case obj_package_header:
+		case obj_package_constant:
 			return true;
 
 		default:
@@ -274,6 +277,8 @@ inline const char* getObjectName(ObjectType objType)
 			return "FILTER";
 		case obj_schema:
 			return "SCHEMA";
+		case obj_package_constant:
+			return "PACKAGE CONSTANT";
 		default:
 			fb_assert(false);
 			return "<unknown object type>";

@@ -42,7 +42,7 @@
 #include "../jrd/BulkInsert.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/req.h"
 #include "../jrd/rlck_proto.h"
 #include "../jrd/tdbb.h"
