@@ -376,6 +376,8 @@ private:
 	SnapshotHandle allocateSnapshotSlot();
 	void deallocateSnapshotSlot(SnapshotHandle slotNumber);
 	void remapSnapshots(bool sync);
+
+	void purgeTransactionStatusBlocks(Database& dbb);
 };
 
 
