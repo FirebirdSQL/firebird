@@ -157,6 +157,7 @@
 #undef HAVE_WINSOCK2_H
 #define HAVE_FLOAT_H
 #define HAVE_ZLIB_H
+#define HAVE_TOMCRYPT
 
 /* Functions */
 #undef HAVE_GETTIMEOFDAY

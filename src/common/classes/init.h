@@ -147,6 +147,13 @@ public:
 		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
 	}
 
+	template <typename TFunc, std::enable_if_t<std::is_invocable_r_v<T*, TFunc, MemoryPool&>, int> = 0>
+	GlobalPtr(TFunc initializationFunc)
+	{
+		instance = initializationFunc(*getDefaultMemoryPool());
+		FB_NEW InstanceControl::InstanceLink<GlobalPtr, P>(this);
+	}
+
 	T* operator->() throw()
 	{
 		return instance;

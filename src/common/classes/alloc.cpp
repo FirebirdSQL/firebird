@@ -3126,3 +3126,15 @@ void operator delete[](void* mem) noexcept
 {
 	MemoryPool::globalFree(mem);
 }
+
+#ifdef DEBUG_GDS_ALLOC
+void operator delete(void* mem, std::size_t s) noexcept
+{
+	MemoryPool::globalFree(mem);
+}
+
+void operator delete[](void* mem, std::size_t s) noexcept
+{
+	MemoryPool::globalFree(mem);
+}
+#endif
