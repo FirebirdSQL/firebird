@@ -858,7 +858,10 @@ void DsqlDmlRequest::metadataToFormat(Firebird::IMessageMetadata* meta, const ds
 		TTypeId textType = CSetId(meta->getCharSet(&st, index));
 		checkD(&st);
 		if (desc.isText() && textType == ttype_dynamic)
-			textType = oldFormat->fmt_desc[param->par_parameter].getTextType();
+		{
+			const dsc& oldDesc = oldFormat->fmt_desc[param->par_parameter];
+			textType = oldDesc.isText() ? oldDesc.getTextType() : TTypeId(ttype_none);
+		}
 		desc.setTextType(textType);
 		desc.dsc_address = (UCHAR*)(IPTR) meta->getOffset(&st, index);
 		checkD(&st);
