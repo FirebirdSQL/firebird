@@ -1634,11 +1634,14 @@ public:
 	};
 
 public:
+	static constexpr UCHAR FLAG_LINE_COLUMN			= 0x01;	// line/column are set
+	static constexpr UCHAR FLAG_NOT_PROFILED		= 0x02;	// not profiled (wrapper and declaration nodes)
+	static constexpr UCHAR FLAG_PROFILE_ON_RETURN	= 0x04;	// also profiled on req_return/req_sync (loops that fetch there)
+
+	static constexpr ULONG MAX_PROFILE_SLOT = (1 << 24) - 1;
+
 	explicit StmtNode(Type aType, MemoryPool& pool)
-		: DmlNode(pool),
-		  parentStmt(NULL),
-		  impureOffset(0),
-		  hasLineColumn(false)
+		: DmlNode(pool)
 	{
 	}
 
@@ -1683,24 +1686,13 @@ public:
 		return NULL;
 	}
 
-	enum class ProfileMode : UCHAR
-	{
-		NONE,				// not profiled (wrapper and declaration nodes)
-		EVALUATE,			// profiled when evaluated
-		EVALUATE_RETURN		// also profiled on req_return/req_sync (loops that fetch there)
-	};
-
-	virtual ProfileMode getProfileMode() const
-	{
-		return ProfileMode::EVALUATE;
-	}
-
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;
 
 public:
 	NestConst<StmtNode> parentStmt;
-	ULONG impureOffset;	// Inpure offset from request block.
-	bool hasLineColumn;
+	ULONG impureOffset = 0;	// Inpure offset from request block.
+	ULONG flags : 8 = 0;
+	ULONG profileSlot : 24 = 0;	// Dense index of line/column in the statement, used by the sampling profiler
 };
 
 

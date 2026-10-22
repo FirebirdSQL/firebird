@@ -1891,6 +1891,8 @@ interface ProfilerPlugin : PluginBase
 
 interface ProfilerSession : Disposable
 {
+	// Flags of the per-event before* and after* calls, which are made only when timings are measured.
+	// When they are sampled (see setSamplingInterval), these flags are ignored.
 	const uint FLAG_BEFORE_EVENTS = 0x1;
 	const uint FLAG_AFTER_EVENTS = 0x2;
 
@@ -1933,6 +1935,20 @@ version:	// 5.0 => 6.0 Alpha1
 	void defineStatement2(Status status, int64 statementId, int64 parentStatementId,
 		const string type, const string schemaName, const string packageName, const string routineName,
 		const string sqlText);
+
+	// Aggregated statistics, used when timings are sampled instead of measured for every event.
+	// counter is exact and may be zero when only elapsed time is reported. Min/max are unknown.
+	void addPsqlLineColumnStats(int64 statementId, int64 requestId, uint line, uint column,
+		uint64 counter, uint64 elapsedTicks);
+	void addRecordSourceOpenStats(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		uint64 counter, uint64 elapsedTicks);
+	void addRecordSourceGetRecordStats(int64 statementId, int64 requestId, uint cursorId, uint recSourceId,
+		uint64 counter, uint64 elapsedTicks);
+
+	// Called after the session starts. 0 means every event is measured and reported with the after* methods.
+	// Otherwise timings are sampled with this interval (in microseconds) and reported with the add*Stats methods,
+	// and no before* or after* method is called, whatever getFlags returns.
+	void setSamplingInterval(uint microseconds);
 }
 
 interface ProfilerStats : Versioned

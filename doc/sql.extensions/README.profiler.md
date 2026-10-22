@@ -4,7 +4,7 @@ The profiler allows users to measure performance cost of SQL and PSQL code. It's
 
 This documentation treats the engine and plugin parts as a single thing, in the way the default profiler (`Default_Profiler`) is going to be used.
 
-The `RDB$PROFILER` package can profile execution of PSQL code, collecting statistics of how many times each line was executed along with its minimum, maximum and accumulated execution times (with nanoseconds precision), as well as open and fetch statistics of implicit and explicit SQL cursors.
+The `RDB$PROFILER` package can profile execution of PSQL code, collecting statistics of how many times each line was executed along with its accumulated execution times (with nanoseconds precision), as well as open and fetch statistics of implicit and explicit SQL cursors. When requested, it also collects minimum and maximum execution times (see "Timing modes").
 
 To collect profile data, a user must first start a profile session with `RDB$PROFILER.START_SESSION`. This function returns a profile session ID which is later stored in the profiler snapshot tables to be queried and analyzed by the user. A profiler session may be local (same attachment) or remote (another attachment).
 
@@ -22,12 +22,53 @@ A new session may be started when a session is already active. In that case, it 
 
 To analyze the collected data, the user must flush the data to the snapshot tables, which can be done by finishing or pausing a session (with `FLUSH` parameter set to `TRUE`), or calling `RDB$PROFILER.FLUSH`. Data is flushed using an autonomous transaction (a transaction started and finished for the specific purpose of profiler data update).
 
+## Timing modes (FB 6.0)
+
+The profiler collects timings in one of two modes, chosen per session with the `SAMPLING_INTERVAL` parameter of `RDB$PROFILER.START_SESSION`. In both modes, the counters (`COUNTER`, `OPEN_COUNTER` and `FETCH_COUNTER`) are exact, as every event (PSQL statement execution, record source open and fetch) is counted. The modes differ in how elapsed times are obtained.
+
+The mode used by each session is stored in `PLG$PROF_SESSIONS.SAMPLING_INTERVAL`.
+
+### Sampled timings (default)
+
+With `SAMPLING_INTERVAL` greater than `0` (the default is `100`), elapsed times are sampled. Events are not timed individually: a background thread wakes up about every `SAMPLING_INTERVAL` microseconds (the interval is randomly varied by up to 25%, so code that repeats at a similar period is not systematically missed or over-counted), records which request, PSQL line/column and record sources each profiled attachment is executing at that moment, and charges the wall time elapsed since its previous sample to each of them.
+
+As there is no clock read and no plugin call for each event, the overhead is low: in typical PSQL loops and queries, a profiled run takes about 10% more than an unprofiled one.
+
+Consequences:
+- Elapsed times are statistical. The accumulated time of a line, record source or request is accurate when it adds up to many sampling intervals, no matter whether it comes from a few long executions or from many executions shorter than the interval. The relative error is about `1 / sqrt(number of samples)`: about 10% for an item with 10 ms in total at the default interval, and about 3% for 100 ms. Items with only about a millisecond in total are approximate, and may get no time at all.
+- Times are inclusive, like in measured mode: the time of a line or record source includes the routines it calls and the record sources it reads from.
+- Times include the small overhead of the profiler while the statements run, but not the time spent by the profiler flushing its data.
+- `MIN_ELAPSED_TIME`, `MAX_ELAPSED_TIME`, `OPEN_MIN_ELAPSED_TIME`, `OPEN_MAX_ELAPSED_TIME`, `FETCH_MIN_ELAPSED_TIME` and `FETCH_MAX_ELAPSED_TIME` are `NULL`, as individual executions are not timed. The average time of an execution can still be calculated from the accumulated time and the counter, like the `AVG_ELAPSED_TIME` columns of the auxiliary views do.
+
+A smaller interval gives more samples, so more precise times for short items. From `1000` down to the default `100`, the overhead is practically the same; at `50`, it may be slightly higher. Valid values are from `50` to `1000000` microseconds.
+
+### Measured timings
+
+With `SAMPLING_INTERVAL` set to `0`, the elapsed time of every event is measured by reading the clock before and after it, as in previous versions.
+
+```sql
+select rdb$profiler.start_session('Measured', sampling_interval => 0) from rdb$database;
+```
+
+Consequences:
+- Minimum and maximum times of individual executions are reported.
+- The overhead is much higher: a profiled run may take about two or three times the unprofiled time, as each event reads the clock and calls the profiler plugin.
+- The time spent by the profiler itself is measured and subtracted from the reported times, so they approximate the times without profiler. The correction is approximate: deeply nested record sources with very frequent fetches may be under-reported by 10% to 15%.
+
+### Choosing a mode
+
+Use the default sampled timings to find where time is spent, which is what accumulated times are for. Use measured timings when the minimum and maximum times of individual executions are needed, preferably in a session limited to the code being analyzed, as its overhead is higher.
+
+Profiler plugins that do not implement the `IProfilerSession` methods for aggregated statistics (`addPsqlLineColumnStats`, `addRecordSourceOpenStats` and `addRecordSourceGetRecordStats`) always receive measured timings, whatever `SAMPLING_INTERVAL` is.
+
+Plugins that implement them receive no per-event calls when timings are sampled: `beforePsqlLineColumn`, `afterPsqlLineColumn`, `beforeRecordSourceOpen`, `afterRecordSourceOpen`, `beforeRecordSourceGetRecord` and `afterRecordSourceGetRecord` are not called, whatever flags `IProfilerSession::getFlags` returns, and the statistics are delivered with the `add*Stats` methods instead. The interval is passed to `IProfilerSession::setSamplingInterval` when the session starts. A plugin that needs the per-event calls should be used with `SAMPLING_INTERVAL` set to `0`.
+
 ## Important
 
 When the profiler is active, there is an overhead that makes everything slower.
 This overhead varies depending on OS, kernel version and CPU hardware and it's difficult to predict.
 
-But sometimes this overhead may be very high, say, greater than 100%.
+But sometimes this overhead may be very high, say, greater than 100%, mainly when timings are measured (`SAMPLING_INTERVAL` set to `0`).
 
 If this happens in Linux, you may see what clock source it's using with this command:
 
@@ -160,12 +201,15 @@ When `DETAILED_REQUESTS` is used, `PLG$PROF_REQUESTS` will store detailed reques
 
 When `DETAILED_REQUESTS` is not used (the default), `PLG$PROF_REQUESTS` stores an aggregated record per statement, using `REQUEST_ID = 0`.
 
+`SAMPLING_INTERVAL` chooses how elapsed times are collected (see "Timing modes"). A value from `50` to `1000000` samples the timings with that interval in microseconds; `0` measures every event, also reporting minimum and maximum times. `NULL` means the default `100`. Other values raise an error.
+
 Input parameters:
  - `DESCRIPTION` type `VARCHAR(255) CHARACTER SET UTF8` default `NULL`
  - `FLUSH_INTERVAL` type `INTEGER` default `NULL`
  - `ATTACHMENT_ID` type `BIGINT` default `NULL` (meaning `CURRENT_CONNECTION`)
  - `PLUGIN_NAME` type `VARCHAR(255) CHARACTER SET UTF8` default `NULL`
  - `PLUGIN_OPTIONS` type `VARCHAR(255) CHARACTER SET UTF8` default `NULL`
+ - `SAMPLING_INTERVAL` type `INTEGER` default `100`
 
 Return type: `BIGINT NOT NULL`.
 
@@ -265,6 +309,8 @@ Below is the list of snapshot views that expose profile data.
  - `DESCRIPTION` type `VARCHAR(255) CHARACTER SET UTF8` - Description passed in `RDB$PROFILER.START_SESSION`
  - `START_TIMESTAMP` type `TIMESTAMP WITH TIME ZONE` - Moment the profile session was started
  - `FINISH_TIMESTAMP` type `TIMESTAMP WITH TIME ZONE` - Moment the profile session was finished (NULL when not finished)
+ - `SAMPLING_INTERVAL` type `INTEGER` - Interval (in microseconds) of sampled timings, `0` when timings were measured
+   for every event, NULL for sessions recorded by previous versions
  - Primary key: `PROFILE_ID`
 
 ## Table `PLG$PROF_STATEMENTS`
@@ -325,8 +371,8 @@ Below is the list of snapshot views that expose profile data.
  - `LINE_NUM` type `INTEGER` - Line number of the statement
  - `COLUMN_NUM` type `INTEGER` - Column number of the statement
  - `COUNTER` type `BIGINT` - Number of executed times of the line/column
- - `MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a line/column execution
- - `MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a line/column execution
+ - `MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a line/column execution, `NULL` when timings are sampled
+ - `MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a line/column execution, `NULL` when timings are sampled
  - `TOTAL_ELAPSED_TIME` type `BIGINT` - Accumulated elapsed time (in nanoseconds) of the line/column executions
  - Primary key: `PROFILE_ID, STATEMENT_ID, REQUEST_ID, LINE_NUM, COLUMN_NUM`
 
@@ -339,12 +385,12 @@ Below is the list of snapshot views that expose profile data.
  - `CURSOR_ID` type `INTEGER` - Cursor ID
  - `RECORD_SOURCE_ID` type `INTEGER` - Record source ID
  - `OPEN_COUNTER` type `BIGINT` - Number of open times of the record source
- - `OPEN_MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a record source open
- - `OPEN_MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a record source open
+ - `OPEN_MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a record source open, `NULL` when timings are sampled
+ - `OPEN_MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a record source open, `NULL` when timings are sampled
  - `OPEN_TOTAL_ELAPSED_TIME` type `BIGINT` - Accumulated elapsed time (in nanoseconds) of the record source openings
  - `FETCH_COUNTER` type `BIGINT` - Number of fetch times of the record source
- - `FETCH_MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a record source fetch
- - `FETCH_MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a record source fetch
+ - `FETCH_MIN_ELAPSED_TIME` type `BIGINT` - Minimal elapsed time (in nanoseconds) of a record source fetch, `NULL` when timings are sampled
+ - `FETCH_MAX_ELAPSED_TIME` type `BIGINT` - Maximum elapsed time (in nanoseconds) of a record source fetch, `NULL` when timings are sampled
  - `FETCH_TOTAL_ELAPSED_TIME` type `BIGINT` - Accumulated elapsed time (in nanoseconds) of the record source fetches
  - Primary key: `PROFILE_ID, STATEMENT_ID, REQUEST_ID, CURSOR_ID, RECORD_SOURCE_ID`
 

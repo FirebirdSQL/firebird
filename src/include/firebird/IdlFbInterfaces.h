@@ -7649,6 +7649,10 @@ namespace Firebird
 			void (CLOOP_CARG *beforeRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *afterRecordSourceGetRecord)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *defineStatement2)(IProfilerSession* self, IStatus* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *addPsqlLineColumnStats)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *addRecordSourceOpenStats)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *addRecordSourceGetRecordStats)(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setSamplingInterval)(IProfilerSession* self, unsigned microseconds) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7764,6 +7768,42 @@ namespace Firebird
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->defineStatement2(this, status, statementId, parentStatementId, type, schemaName, packageName, routineName, sqlText);
 			StatusType::checkException(status);
+		}
+
+		void addPsqlLineColumnStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, ISC_UINT64 counter, ISC_UINT64 elapsedTicks)
+		{
+			if (cloopVTable->version < 4)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->addPsqlLineColumnStats(this, statementId, requestId, line, column, counter, elapsedTicks);
+		}
+
+		void addRecordSourceOpenStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks)
+		{
+			if (cloopVTable->version < 4)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->addRecordSourceOpenStats(this, statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+		}
+
+		void addRecordSourceGetRecordStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks)
+		{
+			if (cloopVTable->version < 4)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->addRecordSourceGetRecordStats(this, statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+		}
+
+		void setSamplingInterval(unsigned microseconds)
+		{
+			if (cloopVTable->version < 4)
+			{
+				return;
+			}
+			static_cast<VTable*>(this->cloopVTable)->setSamplingInterval(this, microseconds);
 		}
 	};
 
@@ -22204,6 +22244,10 @@ namespace Firebird
 					this->beforeRecordSourceGetRecord = &Name::cloopbeforeRecordSourceGetRecordDispatcher;
 					this->afterRecordSourceGetRecord = &Name::cloopafterRecordSourceGetRecordDispatcher;
 					this->defineStatement2 = &Name::cloopdefineStatement2Dispatcher;
+					this->addPsqlLineColumnStats = &Name::cloopaddPsqlLineColumnStatsDispatcher;
+					this->addRecordSourceOpenStats = &Name::cloopaddRecordSourceOpenStatsDispatcher;
+					this->addRecordSourceGetRecordStats = &Name::cloopaddRecordSourceGetRecordStatsDispatcher;
+					this->setSamplingInterval = &Name::cloopsetSamplingIntervalDispatcher;
 				}
 			} vTable;
 
@@ -22416,6 +22460,54 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopaddPsqlLineColumnStatsDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::addPsqlLineColumnStats(statementId, requestId, line, column, counter, elapsedTicks);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopaddRecordSourceOpenStatsDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::addRecordSourceOpenStats(statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopaddRecordSourceGetRecordStatsDispatcher(IProfilerSession* self, ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::addRecordSourceGetRecordStats(statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
+		static void CLOOP_CARG cloopsetSamplingIntervalDispatcher(IProfilerSession* self, unsigned microseconds) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				static_cast<Name*>(self)->Name::setSamplingInterval(microseconds);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+			}
+		}
+
 		static void CLOOP_CARG cloopdisposeDispatcher(IDisposable* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -22458,6 +22550,10 @@ namespace Firebird
 		virtual void beforeRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId) = 0;
 		virtual void afterRecordSourceGetRecord(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, IProfilerStats* stats) = 0;
 		virtual void defineStatement2(StatusType* status, ISC_INT64 statementId, ISC_INT64 parentStatementId, const char* type, const char* schemaName, const char* packageName, const char* routineName, const char* sqlText) = 0;
+		virtual void addPsqlLineColumnStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned line, unsigned column, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) = 0;
+		virtual void addRecordSourceOpenStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) = 0;
+		virtual void addRecordSourceGetRecordStats(ISC_INT64 statementId, ISC_INT64 requestId, unsigned cursorId, unsigned recSourceId, ISC_UINT64 counter, ISC_UINT64 elapsedTicks) = 0;
+		virtual void setSamplingInterval(unsigned microseconds) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

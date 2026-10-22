@@ -1083,7 +1083,7 @@ void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* re
 		auto assign = nodeAs<AssignmentNode>(stmt);
 		//EXE_assignment(tdbb, assign);
 
-		if (assign->hasLineColumn)
+		if (assign->flags & FLAG_LINE_COLUMN)
 		{
 			request->req_src_line = assign->line;
 			request->req_src_column = assign->column;
@@ -1277,7 +1277,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 			{
 				const StmtNode* stmt = i->getObject();
 
-				if (stmt->hasLineColumn)
+				if (stmt->flags & FLAG_LINE_COLUMN)
 				{
 					request->req_src_line = stmt->line;
 					request->req_src_column = stmt->column;
@@ -6718,7 +6718,7 @@ void ExitNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(blr_begin);
 
-		if (hasLineColumn)
+		if (flags & FLAG_LINE_COLUMN)
 			dsqlScratch->putDebugSrcInfo(line, column);
 
 		dsqlScratch->appendUChar(blr_leave);
@@ -6856,7 +6856,7 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(dsqlLabelNumber);
 
 		// Put src info for blr_for.
-		if (hasLineColumn)
+		if (flags & FLAG_LINE_COLUMN)
 			dsqlScratch->putDebugSrcInfo(line, column);
 	}
 
@@ -6992,7 +6992,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 
 		case Request::req_sync:
 			{
-				if (hasLineColumn)
+				if (flags & FLAG_LINE_COLUMN)
 				{
 					request->req_src_line = line;
 					request->req_src_column = column;
@@ -7224,7 +7224,7 @@ void ForRangeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	fb_assert(dsqlLabelNumber < MAX_UCHAR);
 	dsqlScratch->appendUChar((UCHAR) dsqlLabelNumber);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_for_range);
@@ -7565,7 +7565,7 @@ LineColumnNode* LineColumnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	statement->line = line;
 	statement->column = column;
-	statement->hasLineColumn = true;
+	statement->flags |= FLAG_LINE_COLUMN;
 
 	return this;
 }
@@ -7799,7 +7799,7 @@ void LoopNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_loop);
 	dsqlScratch->appendUChar(blr_begin);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_if);
@@ -8366,7 +8366,7 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	// Put src info for blr_for.
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	// Generate FOR loop
@@ -11274,7 +11274,7 @@ void ReturnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_begin);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_assignment);
