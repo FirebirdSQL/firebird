@@ -32,7 +32,7 @@
 #if (!defined(FB_JRD_PROTECT_RELATIONS))
 #define FB_JRD_PROTECT_RELATIONS
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class thread_db;
 class jrd_tra;
@@ -121,9 +121,9 @@ private:
 	thread_db* const m_tdbb;
 	jrd_tra* const m_transaction;
 	const bool m_release;
-	Firebird::SortedArray<RelationLock, Firebird::InlineStorage<RelationLock, 2>, USHORT, RelationLock> m_locks;
+	SortedArray<RelationLock, InlineStorage<RelationLock, 2>, USHORT, RelationLock> m_locks;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // FB_JRD_PROTECT_RELATIONS

@@ -27,7 +27,7 @@
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/auto.h"
 
-namespace Burp {
+namespace Firebird::Burp {
 
 class FastPathBurpProvider
 {
@@ -42,21 +42,21 @@ public:
 	FastPathBurpProvider& operator=(const FastPathBurpProvider&) = delete;
 
 public:
-	Firebird::IProvider* get() noexcept
+	IProvider* get() noexcept
 	{
 		return provider;
 	}
 
-	static Firebird::IAttachment* attachWorker(Firebird::CheckStatusWrapper* status,
+	static IAttachment* attachWorker(CheckStatusWrapper* status,
 		const char* dbName, unsigned dpbLen, const unsigned char* dpb,
-		Firebird::ICryptKeyCallback* cryptCallback);
+		ICryptKeyCallback* cryptCallback);
 
 private:
-	Firebird::DispatcherPtr dispatcher;
-	Firebird::AutoPtr<EngineHolder> engineHolder;
-	Firebird::IProvider* provider;
+	DispatcherPtr dispatcher;
+	AutoPtr<EngineHolder> engineHolder;
+	IProvider* provider;
 };
 
-} // namespace Burp
+} // namespace Firebird::Burp
 
 #endif // BURP_FAST_PATH_BURP_PROVIDER_H

@@ -27,6 +27,9 @@
 #ifndef DSQL_UTLD_PROTO_H
 #define DSQL_UTLD_PROTO_H
 
-USHORT		UTLD_char_length_to_byte_length(USHORT lengthInChars, USHORT maxBytesPerChar, USHORT overhead);
+namespace Firebird::Jrd {
+USHORT UTLD_char_length_to_byte_length(USHORT lengthInChars, USHORT maxBytesPerChar, USHORT overhead);
+}
+
 
 #endif //  DSQL_UTLD_PROTO_H

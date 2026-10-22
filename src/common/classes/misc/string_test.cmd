@@ -2,7 +2,7 @@
 
 :	PROGRAM:	Class library integrity tests
 :	MODULE:		string_test.cmd
-:	DESCRIPTION:	test class Firebird::string
+:	DESCRIPTION:	test class string
 :
 :  The contents of this file are subject to the Initial
 :  Developer's Public License Version 1.0 (the "License");
@@ -28,7 +28,7 @@
 : DEV_BUILD makes single iteration, validating all string results.
 :   When not defined, makes 100000 iterations (a few seconds runtime at P-4),
 :   and reports time of that test.
-: FIRESTR - use Firebird::string, if not defined - STL basic_string is used.
+: FIRESTR - use string, if not defined - STL basic_string is used.
 :   In the latter case some checks are not performed, because not supported by STL
 :   or give AV with it (at least MS VC6 implementation).
 : Without DEV_BUILD this checks are also not performed to give compareable results
@@ -43,10 +43,10 @@ set cc=cl -GR -GX
 : This line tests our test using std::basic_string
 : set flags=-DDEV_BUILD
 
-: This line tests correctness of Firebird::string
+: This line tests correctness of string
 set flags=-DFIRESTR -DDEV_BUILD
 
-: This line tests speed of Firebird::string
+: This line tests speed of string
 : set flags=-Ox -DFIRESTR
 
 : This line tests speed of std::basic_string for comparison

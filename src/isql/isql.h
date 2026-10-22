@@ -34,12 +34,16 @@
 #define ISQL_ISQL_H
 
 #include "../jrd/flags.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/intl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <firebird/Interface.h>
 #include "firebird/impl/msg_helper.h"
+
+namespace Firebird::Isql
+{
+
 
 // Define lengths used in isql.e
 
@@ -241,9 +245,9 @@ public:
 	USHORT major_ods;
 	USHORT minor_ods;
 	CSetId att_charset;
-	Firebird::IDecFloat16* df16;
-	Firebird::IDecFloat34* df34;
-	Firebird::IInt128* i128;
+	IDecFloat16* df16;
+	IDecFloat34* df34;
+	IInt128* i128;
 	void printf(const char* buffer, ...);
 	void prints(const char* buffer);
 
@@ -317,7 +321,7 @@ struct IsqlVar
 class IsqlWireStats
 {
 public:
-	explicit IsqlWireStats(Firebird::IAttachment* att) noexcept :
+	explicit IsqlWireStats(IAttachment* att) noexcept :
 		m_att(att)
 	{}
 
@@ -326,7 +330,7 @@ public:
 
 private:
 
-	Firebird::IAttachment* m_att;
+	IAttachment* m_att;
 	FB_UINT64 m_snd_packets = 0;
 	FB_UINT64 m_rcv_packets = 0;
 	FB_UINT64 m_out_packets = 0;
@@ -337,5 +341,8 @@ private:
 	FB_UINT64 m_in_bytes = 0;
 	FB_UINT64 m_roundtrips = 0;
 };
+
+
+} // namespace Firebird::Isql
 
 #endif // ISQL_ISQL_H

@@ -35,7 +35,7 @@
 #include "../utilities/gsec/gsec.h"
 #include "../utilities/gsec/gsec_proto.h"
 #include "../jrd/license.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/security.h"
 #include "../common/classes/Switches.h"
 #include "../utilities/gsec/gsecswi.h"
@@ -46,10 +46,6 @@
 #include "../common/classes/MsgPrint.h"
 #include "../common/StatusHolder.h"
 
-using MsgFormat::SafeArg;
-using namespace Auth;
-
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -57,6 +53,13 @@ using namespace Auth;
 #ifdef HAVE_IO_H
 #include <io.h>
 #endif
+
+namespace Firebird::Gsec
+{
+
+using namespace Auth;
+using MsgFormat::SafeArg;
+
 
 constexpr int MAXSTUFF = 1000;	// longest interactive command line
 
@@ -1768,3 +1771,6 @@ static void get_security_error(ISC_STATUS* status, int gsec_err)
 		return;
 	}
 }
+
+
+} // namespace Firebird::Gsec

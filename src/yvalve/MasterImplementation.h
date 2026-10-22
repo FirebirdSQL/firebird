@@ -40,29 +40,29 @@ namespace Firebird
 	class Mutex;
 }
 
-namespace Why
+namespace Firebird::Why
 {
 	class MasterImplementation :
-		public Firebird::AutoIface<Firebird::IMasterImpl<MasterImplementation, Firebird::CheckStatusWrapper> >
+		public AutoIface<IMasterImpl<MasterImplementation, CheckStatusWrapper> >
 	{
 	public:
-		static Firebird::Static<Dtc> dtc;
+		static Static<Dtc> dtc;
 
 	public:
 		// IMaster implementation
-		Firebird::IStatus* getStatus();
-		Firebird::IProvider* getDispatcher();
-		Firebird::IPluginManager* getPluginManager();
-		Firebird::ITimerControl* getTimerControl();
-		Firebird::IAttachment* registerAttachment(Firebird::IProvider* provider,
-			Firebird::IAttachment* attachment);
-		Firebird::ITransaction* registerTransaction(Firebird::IAttachment* attachment,
-			Firebird::ITransaction* transaction);
+		IStatus* getStatus();
+		IProvider* getDispatcher();
+		IPluginManager* getPluginManager();
+		ITimerControl* getTimerControl();
+		IAttachment* registerAttachment(IProvider* provider,
+			IAttachment* attachment);
+		ITransaction* registerTransaction(IAttachment* attachment,
+			ITransaction* transaction);
 		Dtc* getDtc();
-		Firebird::IMetadataBuilder* getMetadataBuilder(Firebird::CheckStatusWrapper* status, unsigned fieldCount);
+		IMetadataBuilder* getMetadataBuilder(CheckStatusWrapper* status, unsigned fieldCount);
 		int serverMode(int mode);
-		Firebird::IUtil* getUtilInterface();
-		Firebird::IConfigManager* getConfigManager();
+		IUtil* getUtilInterface();
+		IConfigManager* getConfigManager();
 		FB_BOOLEAN getProcessExiting();
 	};
 
@@ -71,9 +71,9 @@ namespace Why
 
 	void shutdownTimers();
 
-	Firebird::Mutex& pauseTimer();
+	Mutex& pauseTimer();
 
 	bool timerThreadStopped();
-} // namespace Why
+} // namespace Firebird::Why
 
 #endif // YVALVE_MASTER_IMPLEMENTATION_H

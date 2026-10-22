@@ -26,7 +26,9 @@
 
 #include "../include/fb_blk.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 /* Note: The BlobControl class is the internal version of the
  * blob control structure (ISC_BLOB_CTL) which is in ibase.h.
@@ -63,7 +65,7 @@ public:
 	ISC_STATUS*		ctl_status;			// Address of status vector
 	IPTR		ctl_data[8];			// Application specific data
 	void*	ctl_internal[3];			// Firebird internal-use only
-	Firebird::string	ctl_exception_message;	// Message to use in case of filter exception
+	string	ctl_exception_message;	// Message to use in case of filter exception
 public:
 	explicit BlobControl(MemoryPool& p)
 		: ctl_exception_message(p)
@@ -72,7 +74,6 @@ public:
 		: ctl_exception_message()
 	{ }
 };
-
 
 
 // Blob filter management
@@ -84,7 +85,7 @@ class BlobFilter : public pool_alloc<type_blf>
 	SSHORT		blf_from;				// Source sub-type
 	SSHORT		blf_to;					// Target sub-type
 	FPTR_BFILTER_CALLBACK	blf_filter;	// Entrypoint of filter
-	Firebird::string	blf_exception_message;	// message to be used in case of filter exception
+	string	blf_exception_message;	// message to be used in case of filter exception
     public:
 	explicit BlobFilter(MemoryPool& p)
 		: blf_exception_message(p)
@@ -109,6 +110,7 @@ static const char* const EXCEPTION_MESSAGE = "The blob filter: \t\t%s\n"
 										"\t             in module: \t%s\n"
 										"\tcaused the fatal exception:";
 
-} //namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_BLF_H

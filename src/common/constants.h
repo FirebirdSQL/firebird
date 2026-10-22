@@ -24,8 +24,11 @@
  *   for automatically created triggers that aren't system triggers.
  */
 
-#ifndef JRD_CONSTANTS_H
-#define JRD_CONSTANTS_H
+#ifndef COMMON_CONSTANTS_H
+#define COMMON_CONSTANTS_H
+
+namespace Firebird
+{
 
 // BLOb Subtype definitions
 
@@ -139,8 +142,8 @@ inline constexpr const char* PLG_LEGACY_SEC_SCHEMA = "PLG$LEGACY_SEC";
 
 // Automatically created security classes for SQL objects.
 // Keep in sync with trig.h
-inline constexpr const char* DATABASE_CLASS				= "SQL$DATABASE";
 inline constexpr const char* DEFAULT_CLASS				= "SQL$DEFAULT";
+inline constexpr const char* DATABASE_CLASS				= "SQL$DATABASE";
 inline constexpr const char* SQL_SECCLASS_GENERATOR		= "RDB$SECURITY_CLASS";
 inline constexpr const char* SQL_SECCLASS_PREFIX		= "SQL$";
 inline constexpr int SQL_SECCLASS_PREFIX_LEN			= 4;
@@ -211,11 +214,10 @@ inline constexpr int MAX_INDEX_SEGMENTS = 16;
 inline constexpr ULONG MAX_KEY = 8192; // Maximum page size possible divide by 4 (MAX_PAGE_SIZE / 4)
 
 // RDB$INDICES.RDB$UNIQUE_FLAG values
-inline constexpr SSHORT IDX_UNIQUE			= 0x01;		// Unique index
-inline constexpr SSHORT IDX_NOT_VALIDATED	= 0x02;		// Unique not validated
+inline constexpr SSHORT IDX_UNIQUE			= 0x01;
+inline constexpr SSHORT IDX_NOT_VALIDATED	= 0x02;
 
 inline constexpr SSHORT IDX_UNIQUE_NOT_VALIDATED = IDX_UNIQUE | IDX_NOT_VALIDATED;
-
 
 inline constexpr USHORT SQL_MATCH_1_CHAR	= '_';
 inline constexpr USHORT SQL_MATCH_ANY_CHARS	= '%';
@@ -539,4 +541,10 @@ const char* const TEMP_TABLESPACE_NAME = "TEMPORARY";
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";
 
-#endif // JRD_CONSTANTS_H
+
+inline constexpr int EPB_version1 = 1;
+
+
+} // namespace Firebird
+
+#endif // COMMON_CONSTANTS_H

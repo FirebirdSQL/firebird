@@ -42,7 +42,7 @@
 #include "../jrd/BulkInsert.h"
 #include "../jrd/evl_proto.h"
 #include "../jrd/mov_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/req.h"
 #include "../jrd/rlck_proto.h"
 #include "../jrd/tdbb.h"
@@ -50,10 +50,9 @@
 #include "../jrd/vio_proto.h"
 #include "../jrd/val.h"
 
-using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
-namespace Burp {
+namespace Firebird::Burp {
 
 
 struct FastPathRecordWriter::Imp
@@ -387,4 +386,4 @@ void FastPathRecordWriter::clear()
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

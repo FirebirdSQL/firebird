@@ -26,8 +26,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // --------------------------
 // Data access: regular union
@@ -222,3 +223,6 @@ bool Union::isDependent(const StreamList& streams) const
 
 	return false;
 }
+
+
+}	// namespace Firebird::Jrd

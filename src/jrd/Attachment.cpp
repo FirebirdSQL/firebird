@@ -61,12 +61,13 @@
 #include "../common/classes/RefMutex.h"
 
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
+
 
 /// class ActiveSnapshots
 
-ActiveSnapshots::ActiveSnapshots(Firebird::MemoryPool& p) :
+ActiveSnapshots::ActiveSnapshots(MemoryPool& p) :
 	m_snapshots(p),
 	m_lastCommit(CN_ACTIVE),
 	m_releaseCount(0),
@@ -91,7 +92,7 @@ CommitNumber ActiveSnapshots::getSnapshotForVersion(CommitNumber version_cn)
 
 
 // static method
-Jrd::Attachment* Jrd::Attachment::create(Database* dbb, JProvider* provider)
+Attachment* Attachment::create(Database* dbb, JProvider* provider)
 {
 	MemoryPool* const pool = dbb->createPool(false);
 
@@ -101,7 +102,7 @@ Jrd::Attachment* Jrd::Attachment::create(Database* dbb, JProvider* provider)
 		pool->setStatsGroup(attachment->att_memory_stats);
 		return attachment;
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		dbb->deletePool(pool);
 		throw;
@@ -110,7 +111,7 @@ Jrd::Attachment* Jrd::Attachment::create(Database* dbb, JProvider* provider)
 
 
 // static method
-void Jrd::Attachment::destroy(Attachment* const attachment)
+void Attachment::destroy(Attachment* const attachment)
 {
 	if (!attachment)
 		return;
@@ -143,7 +144,7 @@ void Jrd::Attachment::destroy(Attachment* const attachment)
 	}
 
 	MemoryPool* const pool = attachment->att_pool;
-	Firebird::MemoryStats temp_stats;
+	MemoryStats temp_stats;
 	pool->setStatsGroup(temp_stats);
 
 	delete attachment;
@@ -152,7 +153,7 @@ void Jrd::Attachment::destroy(Attachment* const attachment)
 }
 
 
-bool Jrd::Attachment::backupStateWriteLock(thread_db* tdbb, SSHORT wait)
+bool Attachment::backupStateWriteLock(thread_db* tdbb, SSHORT wait)
 {
 	if (att_backup_state_counter++)
 		return true;
@@ -165,14 +166,14 @@ bool Jrd::Attachment::backupStateWriteLock(thread_db* tdbb, SSHORT wait)
 }
 
 
-void Jrd::Attachment::backupStateWriteUnLock(thread_db* tdbb)
+void Attachment::backupStateWriteUnLock(thread_db* tdbb)
 {
 	if (--att_backup_state_counter == 0)
 		att_database->dbb_backup_manager->unlockStateWrite(tdbb);
 }
 
 
-bool Jrd::Attachment::backupStateReadLock(thread_db* tdbb, SSHORT wait)
+bool Attachment::backupStateReadLock(thread_db* tdbb, SSHORT wait)
 {
 	if (att_backup_state_counter++)
 		return true;
@@ -185,14 +186,14 @@ bool Jrd::Attachment::backupStateReadLock(thread_db* tdbb, SSHORT wait)
 }
 
 
-void Jrd::Attachment::backupStateReadUnLock(thread_db* tdbb)
+void Attachment::backupStateReadUnLock(thread_db* tdbb)
 {
 	if (--att_backup_state_counter == 0)
 		att_database->dbb_backup_manager->unlockStateRead(tdbb);
 }
 
 
-Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider)
+Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider)
 	: att_pool(pool),
 	  att_memory_stats(&dbb->dbb_memory_stats),
 	  att_database(dbb),
@@ -246,7 +247,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 }
 
 
-Jrd::Attachment::~Attachment()
+Attachment::~Attachment()
 {
 	if (att_idle_timer)
 		att_idle_timer->stop();
@@ -272,31 +273,31 @@ bool Attachment::locksmith(thread_db* tdbb, SystemPrivilege sp) const
 	return (user && user->locksmith(tdbb, sp));
 }
 
-Jrd::PreparedStatement* Jrd::Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
-	const string& text, Firebird::MemoryPool* pool)
+PreparedStatement* Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
+	const string& text, MemoryPool* pool)
 {
 	pool = pool ? pool : tdbb->getDefaultPool();
 	return FB_NEW_POOL(*pool) PreparedStatement(tdbb, *pool, this, transaction, text, true);
 }
 
 
-Jrd::PreparedStatement* Jrd::Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
-	const PreparedStatement::Builder& builder, Firebird::MemoryPool* pool)
+PreparedStatement* Attachment::prepareStatement(thread_db* tdbb, jrd_tra* transaction,
+	const PreparedStatement::Builder& builder, MemoryPool* pool)
 {
 	pool = pool ? pool : tdbb->getDefaultPool();
 	return FB_NEW_POOL(*pool) PreparedStatement(tdbb, *pool, this, transaction, builder, true);
 }
 
 
-PreparedStatement* Jrd::Attachment::prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
-	const string& text, Firebird::MemoryPool* pool)
+PreparedStatement* Attachment::prepareUserStatement(thread_db* tdbb, jrd_tra* transaction,
+	const string& text, MemoryPool* pool)
 {
 	pool = pool ? pool : tdbb->getDefaultPool();
 	return FB_NEW_POOL(*pool) PreparedStatement(tdbb, *pool, this, transaction, text, false);
 }
 
 
-MetaName Jrd::Attachment::nameToMetaCharSet(thread_db* tdbb, const MetaName& name)
+MetaName Attachment::nameToMetaCharSet(thread_db* tdbb, const MetaName& name)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
 		return name;
@@ -310,7 +311,7 @@ MetaName Jrd::Attachment::nameToMetaCharSet(thread_db* tdbb, const MetaName& nam
 }
 
 
-MetaName Jrd::Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& name)
+MetaName Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& name)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
 		return name;
@@ -324,7 +325,7 @@ MetaName Jrd::Attachment::nameToUserCharSet(thread_db* tdbb, const MetaName& nam
 }
 
 
-string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
+string Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
 {
 	if (att_charset == CS_METADATA || att_charset == CS_NONE)
 		return str;
@@ -338,7 +339,7 @@ string Jrd::Attachment::stringToUserCharSet(thread_db* tdbb, const string& str)
 
 
 // We store in CS_METADATA.
-void Jrd::Attachment::storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
+void Attachment::storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
 	bid* blobId, const string& text, USHORT fromCharSet)
 {
 	UCharBuffer bpb;
@@ -361,7 +362,7 @@ void Jrd::Attachment::storeMetaDataBlob(thread_db* tdbb, jrd_tra* transaction,
 
 
 // We store raw stuff; don't attempt to translate.
-void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
+void Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	bid* blobId, const ByteChunk& chunk)
 {
 	blb* blob = blb::create2(tdbb, transaction, blobId, 0, NULL);
@@ -378,13 +379,13 @@ void Jrd::Attachment::storeBinaryBlob(thread_db* tdbb, jrd_tra* transaction,
 	blob->BLB_close(tdbb);
 }
 
-void Jrd::Attachment::releaseBatches()
+void Attachment::releaseBatches()
 {
 	while (att_batches.hasData())
 		delete att_batches.pop();
 }
 
-void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
+void Attachment::releaseLocalTempTables(thread_db* tdbb)
 {
 	for (auto& lttEntry : att_local_temporary_tables)
 	{
@@ -397,7 +398,7 @@ void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
 	}
 }
 
-void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
+void Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 {
 	jrd_tra* oldTran = traHandle ? *traHandle : nullptr;
 	if (att_transactions)
@@ -514,7 +515,7 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 }
 
 
-void Jrd::Attachment::signalCancel()
+void Attachment::signalCancel()
 {
 	att_flags |= ATT_cancel_raise;
 
@@ -525,7 +526,7 @@ void Jrd::Attachment::signalCancel()
 }
 
 
-void Jrd::Attachment::signalShutdown(ISC_STATUS code)
+void Attachment::signalShutdown(ISC_STATUS code)
 {
 	att_flags |= ATT_shutdown;
 	if (getStable())
@@ -538,7 +539,7 @@ void Jrd::Attachment::signalShutdown(ISC_STATUS code)
 }
 
 
-void Jrd::Attachment::mergeStats(bool pageStatsOnly)
+void Attachment::mergeStats(bool pageStatsOnly)
 {
 	MutexLockGuard guard(att_database->dbb_stats_mutex, FB_FUNCTION);
 
@@ -569,7 +570,7 @@ bool Attachment::hasActiveRequests() const noexcept
 }
 
 
-void Jrd::Attachment::initLocks(thread_db* tdbb)
+void Attachment::initLocks(thread_db* tdbb)
 {
 	// Take out lock on attachment id
 
@@ -606,7 +607,7 @@ void Jrd::Attachment::initLocks(thread_db* tdbb)
 	}
 }
 
-void Jrd::Attachment::releaseLocks(thread_db* tdbb)
+void Attachment::releaseLocks(thread_db* tdbb)
 {
 	// Release the DSQL cache locks
 
@@ -637,7 +638,7 @@ void Jrd::Attachment::releaseLocks(thread_db* tdbb)
 		LCK_release(tdbb, att_profiler_listener_lock);
 }
 
-void Jrd::Attachment::detachLocks()
+void Attachment::detachLocks()
 {
 /**************************************
  *
@@ -666,9 +667,9 @@ void Jrd::Attachment::detachLocks()
 	att_long_locks = NULL;
 }
 
-int Jrd::Attachment::blockingAstShutdown(void* ast_object)
+int Attachment::blockingAstShutdown(void* ast_object)
 {
-	Jrd::Attachment* const attachment = static_cast<Jrd::Attachment*>(ast_object);
+	Attachment* const attachment = static_cast<Attachment*>(ast_object);
 
 	try
 	{
@@ -686,9 +687,9 @@ int Jrd::Attachment::blockingAstShutdown(void* ast_object)
 	return 0;
 }
 
-int Jrd::Attachment::blockingAstCancel(void* ast_object)
+int Attachment::blockingAstCancel(void* ast_object)
 {
-	Jrd::Attachment* const attachment = static_cast<Jrd::Attachment*>(ast_object);
+	Attachment* const attachment = static_cast<Attachment*>(ast_object);
 
 	try
 	{
@@ -706,9 +707,9 @@ int Jrd::Attachment::blockingAstCancel(void* ast_object)
 	return 0;
 }
 
-int Jrd::Attachment::blockingAstMonitor(void* ast_object)
+int Attachment::blockingAstMonitor(void* ast_object)
 {
-	const auto attachment = static_cast<Jrd::Attachment*>(ast_object);
+	const auto attachment = static_cast<Attachment*>(ast_object);
 
 	try
 	{
@@ -737,7 +738,7 @@ int Jrd::Attachment::blockingAstMonitor(void* ast_object)
 	return 0;
 }
 
-void Jrd::Attachment::SyncGuard::init(const char* f, bool
+void Attachment::SyncGuard::init(const char* f, bool
 #ifdef DEV_BUILD
 	optional
 #endif
@@ -962,3 +963,6 @@ void Attachment::qualifyExistingName(thread_db* tdbb, QualifiedName& name,
 		}
 	}
 }
+
+
+}	// namespace Firebird::Jrd

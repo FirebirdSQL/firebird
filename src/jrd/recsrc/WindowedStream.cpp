@@ -32,8 +32,9 @@
 #include <bit>
 #include <exception>
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ------------------------------
 // Data access: window expression
@@ -58,7 +59,7 @@ namespace
 		bool refetchRecord(thread_db* tdbb) const override;
 		WriteLockResult lockRecord(thread_db* tdbb) const override;
 
-		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+		void getLegacyPlan(thread_db* tdbb, string& plan, unsigned level) const override;
 
 		void markRecursive() override;
 		void invalidateRecords(Request* request) const override;
@@ -1630,3 +1631,5 @@ SINT64 SlidingWindow::getEffectiveFrameSize() const
 
 	return size;
 }
+
+} // namespace Firebird::Jrd

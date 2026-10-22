@@ -51,7 +51,7 @@
 #include "../common/isc_f_proto.h"
 #include "../common/utils_proto.h"
 #include "../common/classes/ClumpletWriter.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods_proto.h"
 #include "../common/classes/MsgPrint.h"
 #include "../common/classes/QualifiedMetaString.h"
@@ -71,7 +71,7 @@
 # endif
 #endif
 
-using MsgFormat::SafeArg;
+using Firebird::MsgFormat::SafeArg;
 
 
 #ifdef HAVE_UNISTD_H
@@ -84,7 +84,7 @@ using MsgFormat::SafeArg;
 
 using namespace Firebird;
 using namespace Jrd;
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 
 
 // For Netware the follow DB handle and isc_status is #defined to be a
@@ -720,7 +720,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 	tddba->page_number = -1;
 	const header_page* header = (const header_page*) db_read(HEADER_PAGE_NUMBER);
 
-	if (!Ods::isSupported(header))
+	if (!Jrd::Ods::isSupported(header))
 	{
 		const int oversion = (header->hdr_ods_version & ~ODS_FIREBIRD_FLAG);
 		dba_error(3, SafeArg() << ODS_VERSION << oversion);
@@ -739,8 +739,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 	fl_print_complete = true;
 
 	tddba->page_size = header->hdr_page_size;
-	tddba->dp_per_pp = Ods::dataPagesPerPP(tddba->page_size);
-	tddba->max_records = Ods::maxRecsPerDP(tddba->page_size);
+	tddba->dp_per_pp = Jrd::Ods::dataPagesPerPP(tddba->page_size);
+	tddba->max_records = Jrd::Ods::maxRecsPerDP(tddba->page_size);
 	{ // scope
 		char* buff = alloc(tddba->page_size * 3 + DIRECT_IO_BLOCK_SIZE);
 		buff = FB_ALIGN(buff, DIRECT_IO_BLOCK_SIZE);
@@ -1356,8 +1356,8 @@ static ULONG lastUsedPage(ULONG pageSize)
 {
 	constexpr ULONG pipFirst = FIRST_PIP_PAGE;
 	ULONG pipLast = pipFirst;
-	const ULONG pagesPerPIP = Ods::pagesPerPIP(pageSize);
-	const ULONG bytesBitPIP = Ods::bytesBitPIP(pageSize);
+	const ULONG pagesPerPIP = Jrd::Ods::pagesPerPIP(pageSize);
+	const ULONG bytesBitPIP = Jrd::Ods::bytesBitPIP(pageSize);
 	page_inv_page* pip;
 
 	while (true)
@@ -1911,7 +1911,7 @@ static USHORT get_format_length(ISC_STATUS* status_vector, isc_db_handle databas
 	buffer.resize(return_length);
 
 	const USHORT count = buffer[0] | (buffer[1] << 8);
-	const Ods::Descriptor* const desc = (Ods::Descriptor*) &buffer[2] + count - 1;
+	const Jrd::Ods::Descriptor* const desc = (Jrd::Ods::Descriptor*) &buffer[2] + count - 1;
 	return desc->dsc_offset + desc->dsc_length;
 }
 
@@ -2093,7 +2093,7 @@ static const pag* db_read(const PageNumber& page_number, bool ok_enc)
 		// msg 4: Unexpected end of database file.
 	}
 
-	if (tddba->global_buffer->pag_flags & Ods::crypted_page && !ok_enc)
+	if (tddba->global_buffer->pag_flags & Jrd::Ods::crypted_page && !ok_enc)
 	{
 		dba_error(55);
 	}
@@ -2174,7 +2174,7 @@ static void db_open(ULONG pageSpaceId, const MetaString& name, const PathName& f
 	strcpy(file->fil_string, fileName.c_str());
 	file->fil_length = file_length;
 
-	if ((file->fil_desc = os_utils::open(fileName.c_str(), O_RDONLY)) == -1)
+	if ((file->fil_desc = Firebird::os_utils::open(fileName.c_str(), O_RDONLY)) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 29, SafeArg() << fileName.c_str());
 		// msg 29: Can't open database file %s
@@ -2219,7 +2219,7 @@ static const pag* db_read(const PageNumber& page_number, bool ok_enc)
 	fb_assert(file);
 
 	const FB_UINT64 offset = ((FB_UINT64) pageNum) * ((FB_UINT64) tddba->page_size);
-	if (os_utils::lseek(file->fil_desc, offset, 0) == -1)
+	if (Firebird::os_utils::lseek(file->fil_desc, offset, 0) == -1)
 	{
 		tddba->uSvc->getStatusAccessor().setServiceStatus(GSTAT_MSG_FAC, 30, SafeArg());
 		// msg 30: Can't read a database page
@@ -2249,7 +2249,7 @@ static const pag* db_read(const PageNumber& page_number, bool ok_enc)
 		length -= l;
 	}
 
-	if (tddba->global_buffer->pag_flags & Ods::crypted_page && !ok_enc)
+	if (tddba->global_buffer->pag_flags & Jrd::Ods::crypted_page && !ok_enc)
 	{
 		dba_error(55);
 	}

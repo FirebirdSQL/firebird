@@ -26,7 +26,6 @@
 #include <windows.h>
 #include "../../../common/dllinst.h"
 
-
 using namespace Firebird;
 
 

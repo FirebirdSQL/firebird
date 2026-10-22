@@ -35,7 +35,9 @@
 #include "../common/os/path_utils.h"
 #include "binreloc.h"
 
-typedef Firebird::PathName string;
+namespace Firebird::Why
+{
+
 
 /******************************************************************************
  *
@@ -72,7 +74,7 @@ void ConfigRoot::osConfigInstallDir()
 #ifdef ANDROID
 			install_dir = temp;
 #else
-			string dummy;
+			PathName dummy;
 			PathUtils::splitLastComponent(install_dir, dummy, temp);
 #endif
 			free(temp);
@@ -82,5 +84,8 @@ void ConfigRoot::osConfigInstallDir()
 #endif
 
     // As a last resort get it from the default install directory
-	install_dir = string(FB_PREFIX);
+	install_dir = PathName(FB_PREFIX);
 }
+
+
+}	// namespace Firebird::Why

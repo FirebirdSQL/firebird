@@ -29,6 +29,10 @@
 #include <string_view>
 #include <variant>
 
+namespace Firebird::Isql
+{
+
+
 class FrontendLexer
 {
 public:
@@ -120,5 +124,8 @@ private:
 	std::string::const_iterator end;
 	std::string::const_iterator deletePos;
 };
+
+
+} // namespace Firebird::Isql
 
 #endif	// FB_ISQL_FRONTEND_LEXER_H

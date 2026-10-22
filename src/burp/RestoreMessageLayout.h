@@ -26,10 +26,10 @@
 #include "../common/classes/array.h"
 #include "../common/dsc.h"
 
+namespace Firebird::Burp {
+
 struct burp_fld;
 struct burp_rel;
-
-namespace Burp {
 
 class RestoreMessageLayout
 {
@@ -44,7 +44,7 @@ public:
 	};
 
 public:
-	explicit RestoreMessageLayout(Firebird::MemoryPool& pool)
+	explicit RestoreMessageLayout(MemoryPool& pool)
 		: fields(pool)
 	{
 	}
@@ -86,11 +86,11 @@ public:
 	}
 
 private:
-	Firebird::HalfStaticArray<Field, 16> fields;
+	HalfStaticArray<Field, 16> fields;
 	RCRD_LENGTH length = 0;
 	USHORT maxAlignment = 0;
 };
 
-} // namespace Burp
+} // namespace Firebird::Burp
 
 #endif // BURP_RESTORE_MESSAGE_LAYOUT_H

@@ -31,12 +31,15 @@
 #include "../burp/burp_proto.h"
 #include "../burp/misc_proto.h"
 
+namespace Firebird::Burp
+{
+
 
 // Since this code appears everywhere, it makes more sense to isolate it
 // in a function visible to all gbak components.
 // Given a request, if it's non-zero (compiled), deallocate it but
 // without caring about a possible error.
-void MISC_release_request_silent(Firebird::IRequest*& req_handle)
+void MISC_release_request_silent(IRequest*& req_handle)
 {
 	if (req_handle)
 	{
@@ -112,3 +115,6 @@ void MISC_terminate(const TEXT* from, TEXT* to, ULONG length, ULONG max_length)
 		*--to = '\0';
 	}
 }
+
+
+} // namespace Firebird::Burp

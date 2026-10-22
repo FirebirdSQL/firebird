@@ -24,7 +24,9 @@
 #include "../common/unicode_util.h"
 #include <unicode/utf8.h>
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 namespace
 {
@@ -771,9 +773,6 @@ namespace
 	};
 }	// namespace
 
-namespace Firebird {
-
-
 SimilarToRegex::SimilarToRegex(MemoryPool& pool, unsigned flags,
 		const char* patternStr, unsigned patternLen, const char* escapeStr, unsigned escapeLen)
 	: PermanentStorage(pool)
@@ -888,4 +887,4 @@ bool SubstringSimilarRegex::matches(const char* buffer, unsigned bufferLen,
 }
 
 
-}	// namespace Firebird
+}  // namespace Firebird

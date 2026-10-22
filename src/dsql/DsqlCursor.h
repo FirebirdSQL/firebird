@@ -25,7 +25,7 @@
 
 #include "../jrd/TempSpace.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class DsqlDmlRequest;
 class JResultSet;

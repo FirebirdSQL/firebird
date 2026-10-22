@@ -28,8 +28,11 @@
 #include "firebird.h"
 #include "../FileObject.h"
 
-using namespace Firebird;
-Firebird::Mutex open_mutex;
+namespace Firebird::Ntrace
+{
+
+
+Mutex open_mutex;
 
 void FileObject::open(int flags, int pflags)
 {
@@ -224,7 +227,7 @@ void FileObject::writeHeader(const void* buffer, size_t bytesToWrite)
 		ReleaseMutex(append_mutex);
 }
 
-bool FileObject::renameFile(const Firebird::PathName new_filename)
+bool FileObject::renameFile(const PathName new_filename)
 {
 	if (append_mutex != INVALID_HANDLE_VALUE)
 	{
@@ -286,3 +289,6 @@ SINT64 FileObject::seek(SINT64 newOffset, SeekOrigin origin)
 
 	return offset.QuadPart;
 }
+
+
+} // namespace Firebird::Ntrace

@@ -202,6 +202,7 @@
     <ClInclude Include="..\..\..\src\common\classes\vector.h" />
     <ClInclude Include="..\..\..\src\common\classes\zip.h" />
     <ClInclude Include="..\..\..\src\common\common.h" />
+    <ClInclude Include="..\..\..\src\common\constants.h" />
     <ClInclude Include="..\..\..\src\common\config\config.h" />
     <ClInclude Include="..\..\..\src\common\config\ConfigCache.h" />
     <ClInclude Include="..\..\..\src\common\config\config_file.h" />
@@ -241,6 +242,7 @@
     <ClInclude Include="..\..\..\src\common\os\os_utils.h" />
     <ClInclude Include="..\..\..\src\common\os\path_utils.h" />
     <ClInclude Include="..\..\..\src\common\ParserTokens.h" />
+    <ClInclude Include="..\..\..\src\common\obj.h" />
     <ClInclude Include="..\..\..\src\common\prett_proto.h" />
     <ClInclude Include="..\..\..\src\common\ScanDir.h" />
     <ClInclude Include="..\..\..\src\common\sdl.h" />

@@ -24,7 +24,11 @@
  *
  */
 
-#include "../../jrd/constants.h"
+#include "../../common/constants.h"
+
+namespace Firebird::Jrd
+{
+
 
 inline constexpr int IN_SW_TRACE_START			= 1;
 inline constexpr int IN_SW_TRACE_STOP			= 2;
@@ -78,3 +82,6 @@ static inline constexpr struct Switches::in_sw_tab_t trace_auth_in_sw_table [] =
 	{IN_SW_TRACE_ROLE,			0,	"ROLE",					0, 0, 0, false, false,  0,  3, NULL},
 	{0,							0,	NULL,					0, 0, 0, false,	false, 0,	0, NULL}	// End of List
 };
+
+
+} // namespace Firebird::Jrd

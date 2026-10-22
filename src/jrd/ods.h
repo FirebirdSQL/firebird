@@ -248,7 +248,7 @@ inline constexpr USHORT MAX_PAGE_SIZE		= 32768;
 
 inline constexpr USHORT DEFAULT_PAGE_SIZE	= 8192;
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 
 // Crypt page by type
 
@@ -428,24 +428,24 @@ struct index_root_page
 		}
 
 		bool isUsed() const;
-		std::optional<Jrd::PageNumber> getRootPage() const;
-		void setRootPage(const Jrd::PageNumber& rootPage);
+		std::optional<PageNumber> getRootPage() const;
+		void setRootPage(const PageNumber& rootPage);
 
-		void setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setInProgress(const PageNumber& rootPage, TraNumber traNumber);
 		void setInProgress(TraNumber traNumber);
-		void setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber);
-		void setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setConcurrentlyTemp(const PageNumber& rootPage, TraNumber traNumber);
+		void setConcurrentlyMain(const PageNumber& rootPage, TraNumber traNumber);
 		void setConcurrentlyComplete(TraNumber traNumber);
-		void setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setRollback(const PageNumber& rootPage, TraNumber traNumber);
 		void setRollback(TraNumber traNumber);
 		void setKill();
-		void setKill(const Jrd::PageNumber& rootPage);
+		void setKill(const PageNumber& rootPage);
 		void setKill(TraNumber traNumber);
 		void setNormal();
-		void setNormal(const Jrd::PageNumber& rootPage);
+		void setNormal(const PageNumber& rootPage);
 		void setCommit(TraNumber traNumber);
 		void setDrop(TraNumber traNumber);
-		void setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot);
+		void setMigrate(const PageNumber& rootPage, TraNumber traNumber, USHORT slot);
 		void setEmpty();
 	} irt_rpt[1];
 
@@ -543,17 +543,17 @@ inline bool index_root_page::irt_repeat::isUsed() const
 	return (irt_state != irt_unused);
 }
 
-inline std::optional<Jrd::PageNumber> index_root_page::irt_repeat::getRootPage() const
+inline std::optional<PageNumber> index_root_page::irt_repeat::getRootPage() const
 {
 	if (irt_page_num && irt_page_space_id)
-		return Jrd::PageNumber(irt_page_space_id, irt_page_num);
+		return PageNumber(irt_page_space_id, irt_page_num);
 
 	fb_assert(!irt_page_num && !irt_page_space_id);
 	fb_assert(irt_state == irt_unused || irt_state == irt_in_progress);
 	return std::nullopt;
 }
 
-inline void index_root_page::irt_repeat::setRootPage(const Jrd::PageNumber& rootPage)
+inline void index_root_page::irt_repeat::setRootPage(const PageNumber& rootPage)
 {
 	// hvlad: is irt_in_progress possible here ?
 	fb_assert(getState() == irt_in_progress ||
@@ -585,7 +585,7 @@ inline void index_root_page::irt_repeat::setEmpty()
 	irt_backslot = 0;
 }
 
-inline void index_root_page::irt_repeat::setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setInProgress(const PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
@@ -610,7 +610,7 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 }
 
 // Scan phase of concurrent index creation, set temp index root page and complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyTemp(const PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_unused);
 
@@ -624,7 +624,7 @@ inline void index_root_page::irt_repeat::setConcurrentlyTemp(const Jrd::PageNumb
 }
 
 // Merge phase of concurrent index creation, set main index root page and clear complementary flag
-inline void index_root_page::irt_repeat::setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setConcurrentlyMain(const PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_concurrently);
 	fb_assert(irt_transaction == traNumber);
@@ -651,7 +651,7 @@ inline void index_root_page::irt_repeat::setConcurrentlyComplete(TraNumber traNu
 	setState(irt_rollback);
 }
 
-inline void index_root_page::irt_repeat::setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+inline void index_root_page::irt_repeat::setRollback(const PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
@@ -683,7 +683,7 @@ inline void index_root_page::irt_repeat::setKill()
 	setState(irt_kill);
 }
 
-inline void index_root_page::irt_repeat::setKill(const Jrd::PageNumber& rootPage)
+inline void index_root_page::irt_repeat::setKill(const PageNumber& rootPage)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(irt_transaction);
@@ -722,7 +722,7 @@ inline void index_root_page::irt_repeat::setNormal()
 	setState(irt_normal);
 }
 
-inline void index_root_page::irt_repeat::setNormal(const Jrd::PageNumber& rootPage)
+inline void index_root_page::irt_repeat::setNormal(const PageNumber& rootPage)
 {
 			// create index mode AtOnce
 	fb_assert(getState() == irt_in_progress
@@ -760,7 +760,7 @@ inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 	irt_flags &= ~(irt_unique | irt_foreign | irt_primary);
 }
 
-inline void index_root_page::irt_repeat::setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot)
+inline void index_root_page::irt_repeat::setMigrate(const PageNumber& rootPage, TraNumber traNumber, USHORT slot)
 {
 	fb_assert(getState() == irt_normal || getState() == irt_rollback || getState() == irt_migrate);
 	fb_assert(irt_page_num && irt_page_space_id);
@@ -841,9 +841,9 @@ static_assert(offsetof(struct header_page, hdr_crypt_page) == 112, "hdr_crypt_pa
 static_assert(offsetof(struct header_page, hdr_crypt_plugin) == 116, "hdr_crypt_plugin offset mismatch");
 static_assert(offsetof(struct header_page, hdr_data) == 148, "hdr_data offset mismatch");
 
-static_assert(sizeof(header_page::hdr_guid) == Firebird::Guid::SIZE, "hdr_guid size mismatch");
+static_assert(sizeof(header_page::hdr_guid) == Guid::SIZE, "hdr_guid size mismatch");
 
-#define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Ods::header_page, hdr_data[0]))
+#define HDR_SIZE static_cast<FB_SIZE_T>(offsetof(Firebird::Jrd::Ods::header_page, hdr_data[0]))
 
 // Header page clumplets
 
@@ -1237,9 +1237,9 @@ inline int IAD_LEN(int count)
 #define IAD_LEN(count)	(sizeof (Ods::InternalArrayDesc) + \
 	(count ? count - 1: count) * sizeof (Ods::InternalArrayDesc::iad_repeat))
 
-Firebird::string pagtype(UCHAR type);
+string pagtype(UCHAR type);
 
-} //namespace Ods
+} // namespace Firebird::Jrd::Ods
 
 // alignment for raw page access
 inline constexpr USHORT PAGE_ALIGNMENT = 1024;

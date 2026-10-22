@@ -41,14 +41,14 @@ namespace Firebird {
 void GenerateRandomBytes(void* buffer, FB_SIZE_T size)
 {
 	if (BCryptGenRandom(nullptr, static_cast<UCHAR*>(buffer), size, BCRYPT_USE_SYSTEM_PREFERRED_RNG) != S_OK)
-		Firebird::system_call_failed::raise("BCryptGenRandom");
+		system_call_failed::raise("BCryptGenRandom");
 }
 
 void GenerateGuid(UUID* guid)
 {
 	const HRESULT error = CoCreateGuid(guid);
 	if (!SUCCEEDED(error))
-		Firebird::system_call_failed::raise("CoCreateGuid", error);
+		system_call_failed::raise("CoCreateGuid", error);
 }
 
 

@@ -25,12 +25,10 @@
 #include "../burp/FastPathBurpProvider.h"
 #include "../common/utils_proto.h"
 
-using namespace Firebird;
-
-namespace Burp {
+namespace Firebird::Burp {
 
 
-// Complete type for Firebird::AutoPtr<EngineHolder>. The real definition lives in
+// Complete type for AutoPtr<EngineHolder>. The real definition lives in
 // burp/engine/FastPathBurpUtil.cpp, which is not linked into standalone gbak.
 struct FastPathBurpProvider::EngineHolder
 {
@@ -57,4 +55,4 @@ IAttachment* FastPathBurpProvider::attachWorker(CheckStatusWrapper* status, cons
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

@@ -44,10 +44,9 @@
 #include "InternalDS.h"
 #include "ValidatePassword.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd::EDS
+{
 
-namespace EDS {
 
 const char* INTERNAL_PROVIDER_NAME = "Internal";
 
@@ -882,4 +881,4 @@ void InternalBlob::cancel(thread_db* tdbb)
 }
 
 
-} // namespace EDS
+} // namespace Firebird::Jrd::EDS

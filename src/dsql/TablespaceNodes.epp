@@ -45,11 +45,11 @@
 
 #include "../dsql/TablespaceNodes.h"
 
-using namespace Firebird;
-
-namespace Jrd {
 
 DATABASE DB = STATIC "ODS.RDB";
+
+
+namespace Firebird::Jrd {
 
 
 //----------------------
@@ -428,4 +428,4 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 }
 
 
-}	// namespace Jrd
+}	// namespace Firebird::Jrd

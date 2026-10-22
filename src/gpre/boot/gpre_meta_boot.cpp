@@ -41,6 +41,10 @@
 #include "../gpre/par_proto.h"
 #include "../yvalve/gds_proto.h"
 
+namespace Firebird::Gpre
+{
+
+
 /*____________________________________________________________
  *
  *		Lookup a field by name in a context.
@@ -676,6 +680,10 @@ bool MET_trigger_exists(gpre_dbb* /*db*/, const TEXT* /*trigger_name*/)
 	fb_assert(0);
 	return false;
 }
+
+
+} // namespace Firebird::Gpre
+
 
 #include "firebird/Interface.h"
 

@@ -340,9 +340,9 @@ public:
 		return object.isEmpty();
 	}
 
-	Firebird::string toQuotedString() const
+	string toQuotedString() const
 	{
-		Firebird::string s;
+		string s;
 
 		const auto appendName = [&s](const T& name) {
 			if (name.hasData())
@@ -374,7 +374,7 @@ private:
 	bool unambiguous = false;
 };
 
-using QualifiedMetaString = Firebird::BaseQualifiedName<MetaString>;
+using QualifiedMetaString = BaseQualifiedName<MetaString>;
 
 } // namespace Firebird
 

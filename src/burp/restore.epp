@@ -39,7 +39,7 @@
 #include "../jrd/align.h"
 #include "../jrd/flags.h"
 #include "../jrd/license.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/ods.h"
 #include "../common/DeindentedStr.h"
 #include "../common/stuff.h"
@@ -51,7 +51,7 @@
 #include "../burp/BurpTasks.h"
 #include "../burp/FastPathRecordWriter.h"
 #include "../common/gdsassert.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../remote/protocol.h"
 #ifdef DEBUG
 #include "../common/prett_proto.h"
@@ -71,9 +71,10 @@
 #include "../common/classes/BatchCompletionState.h"
 #include "../burp/FastPathBurpProvider.h"
 
+namespace Firebird::Burp
+{
+
 using MsgFormat::SafeArg;
-using namespace Firebird;
-using namespace Burp;
 
 
 //  For service APIs the follow DB handle is a value stored
@@ -114,10 +115,10 @@ enum scan_attr_t
 	AFTER_SKIP	= 2	// After skipping and after scanning next byte for valid attribute
 };
 
-void	add_access_dpb(BurpGlobals* tdgbl, Firebird::ClumpletWriter& dpb);
+void	add_access_dpb(BurpGlobals* tdgbl, ClumpletWriter& dpb);
 void	add_files(BurpGlobals* tdgbl, const char*);
 void	bad_attribute(scan_attr_t, att_type, USHORT);
-void	create_database(BurpGlobals* tdgbl, Firebird::IProvider*, const TEXT*);
+void	create_database(BurpGlobals* tdgbl, IProvider*, const TEXT*);
 void	decompress(BurpGlobals* tdgbl, UCHAR*, ULONG);
 void	eat_blob(BurpGlobals* tdgbl);
 void	eat_text(BurpGlobals* tdgbl);
@@ -181,7 +182,7 @@ void	realign(BurpGlobals* tdgbl, UCHAR*, const burp_rel*);
 #ifdef sparc
 USHORT	recompute_length(BurpGlobals* tdgbl, burp_rel*);
 #endif
-bool	restore(BurpGlobals* tdgbl, Firebird::IProvider*, const TEXT*, const TEXT*);
+bool	restore(BurpGlobals* tdgbl, IProvider*, const TEXT*, const TEXT*);
 void	restore_security_class(BurpGlobals* tdgbl, const TEXT*, const TEXT*);
 USHORT	get_view_base_relation_count(BurpGlobals* tdgbl, const QualifiedMetaString&, USHORT, bool* error);
 void	store_blr_gen_id(BurpGlobals* tdgbl, const QualifiedMetaString& gen_name, SINT64 value, SINT64 initial_value,
@@ -353,8 +354,8 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
  *	Recreate a database from a backup.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
-	Firebird::IRequest* req_handle3 = nullptr;
+	IRequest* req_handle1 = nullptr;
+	IRequest* req_handle3 = nullptr;
 	QualifiedMetaString indexName;
 
 	BurpGlobals* tdgbl = BurpGlobals::getSpecific();
@@ -456,7 +457,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 		if (gds_status->hasData())
 			general_on_error ();
 		// Check to see if there is a warning
-		if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
+		if (gds_status->getState() & IStatus::STATE_WARNINGS)
 		{
 			BURP_print_warning(gds_status);
 		}
@@ -625,7 +626,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	END_ERROR;
 
 	// Check to see if there is a warning
-	if (gds_status->getState() & Firebird::IStatus::STATE_WARNINGS)
+	if (gds_status->getState() & IStatus::STATE_WARNINGS)
 	{
 		BURP_print_warning(gds_status);
 	}
@@ -650,7 +651,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 
 	BURP_verbose(360);
 
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	add_access_dpb(tdgbl, dpb);
 
 	if (tdgbl->flag_on_line)
@@ -663,7 +664,7 @@ int RESTORE_restore (const TEXT* file_name, const TEXT* database_name)
 	if (tdgbl->gbl_sw_replica.has_value())
 		dpb.insertByte(isc_dpb_set_db_replica, tdgbl->gbl_sw_replica.value());
 
-	Firebird::IAttachment* db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
+	IAttachment* db_handle = provider->attachDatabase(&tdgbl->status_vector, database_name,
 		dpb.getBufferLength(), dpb.getBuffer());
 	if (tdgbl->status_vector->hasData())
 		general_on_error();
@@ -710,7 +711,7 @@ namespace // unnamed, private
 {
 
 // Add the common DPB params to the two attach calls in RESTORE_restore()
-void add_access_dpb(BurpGlobals* tdgbl, Firebird::ClumpletWriter& dpb)
+void add_access_dpb(BurpGlobals* tdgbl, ClumpletWriter& dpb)
 {
 	tdgbl->uSvc->fillDpb(dpb);
 
@@ -748,7 +749,7 @@ void add_files(BurpGlobals* tdgbl, const char* file_name)
  *	addresses & commit this much.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	// store the RDB$FILES records
 
@@ -865,7 +866,7 @@ namespace {
 // and not to stdout if IUtil::version gets called
 
 class ProtocolVersion :
-	public Firebird::AutoIface<Firebird::IVersionCallbackImpl<ProtocolVersion, Firebird::CheckStatusWrapper> >
+	public AutoIface<IVersionCallbackImpl<ProtocolVersion, CheckStatusWrapper>>
 {
 public:
 	ProtocolVersion(unsigned* v)
@@ -875,7 +876,7 @@ public:
 	}
 
 	// IVersionCallback implementation
-	void callback(Firebird::CheckStatusWrapper*, const char* text)
+	void callback(CheckStatusWrapper*, const char* text)
 	{
 		const char* pm = ")/P";
 		const char* pp = strstr(text, pm);
@@ -891,7 +892,7 @@ private:
 };
 
 class EngineVersion :
-	public Firebird::AutoIface<Firebird::IVersionCallbackImpl<EngineVersion, Firebird::CheckStatusWrapper> >
+	public AutoIface<IVersionCallbackImpl<EngineVersion, CheckStatusWrapper>>
 {
 public:
 	EngineVersion(char* v)
@@ -901,7 +902,7 @@ public:
 	}
 
 	// IVersionCallback implementation
-	void callback(Firebird::CheckStatusWrapper*, const char* text)
+	void callback(CheckStatusWrapper*, const char* text)
 	{
 		if (!version[0])
 			strcpy(version, text);
@@ -915,7 +916,7 @@ private:
 
 
 
-void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file_name)
+void create_database(BurpGlobals* tdgbl, IProvider* provider, const TEXT* file_name)
 {
 /**************************************
  *
@@ -1038,7 +1039,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 	if (tdgbl->gbl_sw_page_buffers)
 		page_buffers = tdgbl->gbl_sw_page_buffers;
 
-	Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 	tdgbl->uSvc->fillDpb(dpb);
 
 	const UCHAR* authBlock;
@@ -1142,14 +1143,14 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		// msg 33 failed to create database %s
 	}
 
-	if (status_vector->getState() & Firebird::IStatus::STATE_WARNINGS)
+	if (status_vector->getState() & IStatus::STATE_WARNINGS)
 	{
 		BURP_print_warning(&status_vector);
 	}
 
 	// get remote protocol version
 	ProtocolVersion pv(&tdgbl->gbl_network_protocol);
-	Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, DB, &pv);
+	UtilInterfacePtr()->getFbVersion(&status_vector, DB, &pv);
 
 	// treat errors as old provider missing new calls
 	if (status_vector->hasData())
@@ -1163,7 +1164,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		BURP_message(139, SafeArg() << file_name);
 		// msg 139 Version(s) for database "%s"
 		OutputVersion outputVersion("\t%s\n");
-		Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, DB, &outputVersion);
+		UtilInterfacePtr()->getFbVersion(&status_vector, DB, &outputVersion);
 	}
 
 	tdgbl->gbl_database_file_name = file_name;
@@ -1176,7 +1177,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 		// check server version
 		char buf[256];
 		EngineVersion ev(buf);
-		Firebird::UtilInterfacePtr()->getFbVersion(&status_vector, DB, &ev);
+		UtilInterfacePtr()->getFbVersion(&status_vector, DB, &ev);
 
 		const char* ptr = strstr(buf, "version \"");
 		int v = 0;
@@ -1207,9 +1208,9 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 
 		if (!(ptr && *ptr))
 		{
-			Firebird::string x;
+			string x;
 			x.printf("Undefined or too small server version: %s, need at least 3.0.4", buf);
-			(Firebird::Arg::Gds(isc_random) << x).raise();
+			(Arg::Gds(isc_random) << x).raise();
 		}
 
 		EXEC SQL SET TRANSACTION;
@@ -1222,7 +1223,7 @@ void create_database(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TE
 			// Unknown crypt plugin name - use -CRYPT switch
 		}
 
-		Firebird::string sql;
+		string sql;
 		const char* dQuote = SQL_dialect >= SQL_DIALECT_V6 ? "\"" : "";
 		sql.printf("ALTER DATABASE ENCRYPT WITH %s%s%s", dQuote, tdgbl->gbl_sw_crypt, dQuote);
 		if (tdgbl->gbl_sw_keyname && tdgbl->gbl_sw_keyname[0])
@@ -1478,7 +1479,7 @@ void fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field)
 
 	FbLocalStatus status_vector;
 
-	Firebird::IRequest*& handle = tdgbl->handles_fix_security_class_name_req_handle1;
+	IRequest*& handle = tdgbl->handles_fix_security_class_name_req_handle1;
 
 	if (!handle)
 	{
@@ -1575,8 +1576,8 @@ void general_on_error()
 
 	if (isc_status->getErrors()[1] == isc_malformed_string)
 	{
-		Firebird::Arg::StatusVector oldVector(isc_status);
-		Firebird::Arg::Gds newVector(isc_gbak_invalid_metadata);
+		Arg::StatusVector oldVector(isc_status);
+		Arg::Gds newVector(isc_gbak_invalid_metadata);
 		newVector.append(oldVector);
 		newVector.copyTo(isc_status);
 	}
@@ -1798,7 +1799,7 @@ void get_array(BurpGlobals* tdgbl, burp_rel* relation, UCHAR* record_buffer)
 	xdr_buffer.lstr_allocated = 0;
 	xdr_buffer.lstr_address = NULL;
 
-	Firebird::Cleanup datClean( [&] {
+	Cleanup datClean( [&] {
 		if (buffer && *buffer)
 			BURP_free(*buffer);
 		if (tdgbl->gbl_sw_transportable && xdr_buffer.lstr_allocated)
@@ -2472,7 +2473,7 @@ void get_blr_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans)
 
 	// Create new blob
 
-	Firebird::ITransaction* local_trans = (glb_trans && tdgbl->global_trans) ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = (glb_trans && tdgbl->global_trans) ? tdgbl->global_trans : gds_trans;
 
 	FbLocalStatus	status_vector;
 	BlobWrapper blob(&status_vector);
@@ -3246,7 +3247,7 @@ static void commit_relation_data(BurpGlobals* tdgbl, burp_rel* relation)
 		ISC_STATUS error_code;
 		while ((error_code = tdgbl->status_vector[1]) != 0)
 		{
-			Firebird::IRequest* req_handle = 0;
+			IRequest* req_handle = 0;
 			QualifiedMetaString indexName;
 
 			switch (error_code)
@@ -3382,7 +3383,7 @@ void get_data(BurpGlobals* tdgbl, burp_rel* relation, WriteRelationReq* req)
 	data.lstr_allocated = 0;
 	data.lstr_address = NULL;
 
-	Firebird::Cleanup datClean( [&] {
+	Cleanup datClean( [&] {
 		if (data.lstr_address)
 			BURP_free(data.lstr_address);
 	} );
@@ -3895,7 +3896,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 
 	// If it is a view and there is a global transaction then use it
 	bool global_tr = false;
-	Firebird::ITransaction* local_trans;
+	ITransaction* local_trans;
 	if ((relation->rel_flags & REL_view) && tdgbl->global_trans)
 	{
 		local_trans = tdgbl->global_trans;
@@ -4610,7 +4611,7 @@ bool get_function(BurpGlobals* tdgbl)
 
 	bool existFlag = false;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
@@ -5013,7 +5014,7 @@ void get_function_arg(BurpGlobals* tdgbl, bool skip_arguments)
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	if (skip_arguments)
 	{
@@ -7085,7 +7086,7 @@ void get_misc_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans)
 
 	// Create new blob
 
-	Firebird::ITransaction* local_trans;
+	ITransaction* local_trans;
 	if (glb_trans && tdgbl->global_trans)
 		local_trans = tdgbl->global_trans;
 	else
@@ -7182,7 +7183,7 @@ bool get_package(BurpGlobals* tdgbl)
 	if (tdgbl->RESTORE_format < 10)
 		return false;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	burp_pkg* package = (burp_pkg*) BURP_alloc_zero(sizeof(burp_pkg));
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
@@ -7384,7 +7385,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 	if (moveToPrimary)
 		return true;
 
-//	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+//	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	STORE (REQUEST_HANDLE tdgbl->handles_get_ts_req_handle1)
 		X IN RDB$TABLESPACES
@@ -7413,18 +7414,18 @@ bool get_tablespace(BurpGlobals* tdgbl)
 		X.RDB$READ_ONLY.NULL = FALSE;
 		X.RDB$READ_ONLY = (USHORT) read_only;
 
-		Firebird::string newFile;
+		string newFile;
 		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
 		{
 			PathUtils::fixupSeparators(newFile.begin());
-			Firebird::PathName ts_file_name;
+			PathName ts_file_name;
 
 			if (PathUtils::isRelative(newFile.c_str()))
 			{
-				Firebird::PathName expanded_db;
+				PathName expanded_db;
 				expandDatabaseName(tdgbl->gbl_database_file_name, expanded_db, NULL);
 
-				Firebird::PathName db_path, db_file;
+				PathName db_path, db_file;
 				PathUtils::splitLastComponent(db_path, db_file, expanded_db);
 				PathUtils::concatPath(ts_file_name, db_path, newFile.c_str());
 			}
@@ -7474,7 +7475,7 @@ bool get_procedure(BurpGlobals* tdgbl)
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	burp_prc* procedure = (burp_prc*) BURP_alloc_zero (sizeof(burp_prc));
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
@@ -7812,7 +7813,7 @@ bool get_procedure_prm(BurpGlobals* tdgbl, const QualifiedMetaString& name)
 	att_type	attribute;
 	scan_attr_t		scan_next_attr;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
 	{
@@ -8532,7 +8533,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	relation->rel_type = (SSHORT) type;
 
 	// If this is a view and there is a global transaction then use it
-	Firebird::ITransaction* local_trans;
+	ITransaction* local_trans;
 	if (view_blr_null || !tdgbl->global_trans)
 		local_trans = gds_trans;
 	else
@@ -9207,7 +9208,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 	scan_attr_t		scan_next_attr;
 	TEXT			temp[GDS_NAME_LEN];
 	SSHORT			l;
-	Firebird::string role;
+	string role;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
@@ -9335,7 +9336,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 		constexpr unsigned MATCH_TO_TYPE = 0x10;
 		constexpr unsigned MATCH_TO = 0x20;
 		constexpr unsigned MATCH_ALL = 0x3f;
-		Firebird::NoCaseString txt;
+		NoCaseString txt;
 
 		skip_init(&scan_next_attr);
 		while (skip_scan(&scan_next_attr), get_attribute(&attribute, tdgbl) != att_end)
@@ -9427,7 +9428,7 @@ bool get_mapping(BurpGlobals* tdgbl)
 
 		BURP_verbose(298, MetaString(ADMIN_ROLE).toQuotedString());
 		// msg 298, restoring map @1
-		Firebird::string sql;
+		string sql;
 		sql.printf("%s ('%s', %d) %s",
 			"UPDATE OR INSERT INTO RDB$ROLES(RDB$ROLE_NAME, RDB$SYSTEM_FLAG) VALUES",
 			ADMIN_ROLE, 6,		// constant 6 turns on auto admin mapping in FB 2.5
@@ -9649,7 +9650,7 @@ void get_source_blob(BurpGlobals* tdgbl, ISC_QUAD& blob_id, bool glb_trans)
 	// Create new blob
 
 	BlobWrapper blob(&status_vector);
-	Firebird::ITransaction* local_trans;
+	ITransaction* local_trans;
 	if (glb_trans && tdgbl->global_trans)
 		local_trans = tdgbl->global_trans;
 	else
@@ -9916,7 +9917,7 @@ bool get_trigger(BurpGlobals* tdgbl)
 	scan_attr_t scan_next_attr;
 	bool skipTrig = false;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
 	{
@@ -10349,7 +10350,7 @@ bool get_trigger_message(BurpGlobals* tdgbl)
 	if (tdgbl->runtimeODS < DB_VERSION_DDL11)
 		message[78] = 0;
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	STORE (TRANSACTION_HANDLE local_trans
 			REQUEST_HANDLE tdgbl->handles_get_trigger_message_req_handle2)
@@ -10571,7 +10572,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		relation.schema = PUBLIC_SCHEMA;
 
 	// Check if object exists
-	Firebird::ITransaction*	local_trans = nullptr;
+	ITransaction*	local_trans = nullptr;
 	bool exists = false;
 	// if grantor is not set than it's system privilege which should not be restored
 	if (grantor[0])
@@ -10779,7 +10780,7 @@ bool get_view(BurpGlobals* tdgbl, burp_rel* relation)
 
 	// If there is a global transaction then use it
 
-	Firebird::ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
+	ITransaction* local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL12)
 	{
@@ -11347,7 +11348,7 @@ USHORT recompute_length(BurpGlobals* tdgbl, burp_rel* relation)
 }
 #endif
 
-bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file_name, const TEXT* database_name)
+bool restore(BurpGlobals* tdgbl, IProvider* provider, const TEXT* file_name, const TEXT* database_name)
 {
 /**************************************
  *
@@ -11409,16 +11410,16 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	// msg 129 started transaction
 
 	att_type	attribute;
-	Firebird::IRequest* req_handle2 = nullptr;
-	Firebird::IRequest* req_handle3 = nullptr;
-	Firebird::IRequest* req_handle4 = nullptr;
-	Firebird::IRequest* req_handle5 = nullptr;
-	Firebird::IRequest* reqHandleDflCharSetSchema = nullptr;
+	IRequest* req_handle2 = nullptr;
+	IRequest* req_handle3 = nullptr;
+	IRequest* req_handle4 = nullptr;
+	IRequest* req_handle5 = nullptr;
+	IRequest* reqHandleDflCharSetSchema = nullptr;
 
 	// Collect system fields
 	{
-		Firebird::IRequest* req_handle = nullptr;
-		tdgbl->systemFields.setSortMode(Firebird::FB_ARRAY_SORT_MANUAL);
+		IRequest* req_handle = nullptr;
+		tdgbl->systemFields.setSortMode(FB_ARRAY_SORT_MANUAL);
 
 		FOR(REQUEST_HANDLE req_handle)
 			X IN RDB$FIELDS WITH
@@ -11605,7 +11606,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	if (tdgbl->gbl_sw_fix_fss_data)
 	{
 		bool found = false;
-		Firebird::string name = tdgbl->gbl_sw_fix_fss_data;
+		string name = tdgbl->gbl_sw_fix_fss_data;
 		name.upper();
 
 		req_handle3 = 0;
@@ -11632,7 +11633,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	if (tdgbl->gbl_sw_fix_fss_metadata)
 	{
 		bool found = false;
-		Firebird::string name = tdgbl->gbl_sw_fix_fss_metadata;
+		string name = tdgbl->gbl_sw_fix_fss_metadata;
 		name.upper();
 
 		req_handle3 = 0;
@@ -11896,6 +11897,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	if (tdgbl->defaultCollations.hasData())
 	{
+		IRequest* req_handle5 = nullptr;
 		NonPooledMap<MetaString, MetaString> collationSchemas;
 
 		if (tdgbl->runtimeODS >= DB_VERSION_DDL14 &&
@@ -11916,7 +11918,6 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 			MISC_release_request_silent(req_handle_coll);
 		}
 
-		Firebird::IRequest* req_handle5 = nullptr;
 
 		FOR (REQUEST_HANDLE req_handle5)
 			CS IN RDB$CHARACTER_SETS
@@ -11981,7 +11982,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 
 	if (tdgbl->gbl_sw_kill)
 	{
-		Firebird::IRequest* req_handle5 = nullptr;
+		IRequest* req_handle5 = nullptr;
 
 		FOR (REQUEST_HANDLE req_handle5)
 			FIL IN RDB$FILES WITH FIL.RDB$SHADOW_NUMBER NOT MISSING
@@ -11999,7 +12000,7 @@ bool restore(BurpGlobals* tdgbl, Firebird::IProvider* provider, const TEXT* file
 	}
 
 	// update statistics for system indices
-	Firebird::IRequest* req_handle6 = nullptr;
+	IRequest* req_handle6 = nullptr;
 
 	FOR (REQUEST_HANDLE req_handle6)
 		IND IN RDB$INDICES WITH IND.RDB$SYSTEM_FLAG EQ 1
@@ -12034,7 +12035,7 @@ void restore_security_class(BurpGlobals* tdgbl, const TEXT* owner_nm, const TEXT
  *	restore the ownership of the relation in the ACL list
  *
  **************************************/
-	Firebird::IRequest* req_handle2 = nullptr;
+	IRequest* req_handle2 = nullptr;
 
 	//isc_tr_handle local_trans = gds_trans;
 
@@ -12091,7 +12092,7 @@ USHORT get_view_base_relation_count(BurpGlobals* tdgbl,
 		return 0;
 	}
 
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	USHORT result = 0;
 	fb_assert(current_view_name.package.isEmpty());
@@ -12310,7 +12311,7 @@ void store_blr_gen_id(BurpGlobals* tdgbl, const QualifiedMetaString& gen_name, S
 	fb_assert(blr_length <= sizeof(blr_buffer));
 
 	FbLocalStatus status_vector;
-	Firebird::RefPtr<Firebird::IRequest> gen_id_reqh(Firebird::REF_NO_INCR,
+	RefPtr<IRequest> gen_id_reqh(REF_NO_INCR,
 		DB->compileRequest(&status_vector, blr_length, blr_buffer));
 	if (status_vector->hasData())
 	{
@@ -12345,7 +12346,7 @@ void update_global_field(BurpGlobals* tdgbl)
  *	The blobs have been created already.
  *
  **************************************/
-	Firebird::IRequest* req_handle1 = nullptr;
+	IRequest* req_handle1 = nullptr;
 
 	for (gfld* gfield = tdgbl->gbl_global_fields; gfield; )
 	{
@@ -12414,9 +12415,9 @@ void update_global_field(BurpGlobals* tdgbl)
 
 void update_ownership(BurpGlobals* tdgbl)
 {
-	Firebird::IRequest* req_handle2 = nullptr;
-	Firebird::IRequest* req_handle4 = nullptr;
-	Firebird::IRequest* req_handle6 = nullptr;
+	IRequest* req_handle2 = nullptr;
+	IRequest* req_handle4 = nullptr;
+	IRequest* req_handle6 = nullptr;
 	BURP_verbose(358);
 
 	// Change ownership of any packages
@@ -12562,7 +12563,7 @@ void update_view_dbkey_lengths(BurpGlobals* tdgbl)
  *  numeric overflow, or string truncation" error.
  *
  **************************************/
-	Firebird::IRequest* req_handle2 = nullptr;
+	IRequest* req_handle2 = nullptr;
 
 	BURP_verbose(357);
 
@@ -12608,8 +12609,8 @@ void fix_missing_privileges(BurpGlobals* tdgbl)
 	BURP_verbose(359);
 
 	GDS_NAME owner_name;
-	Firebird::IRequest* req_handle1 = nullptr;
-	Firebird::IRequest* req_handle2 = nullptr;
+	IRequest* req_handle1 = nullptr;
+	IRequest* req_handle2 = nullptr;
 
 	FOR (REQUEST_HANDLE req_handle1)
 		REL IN RDB$RELATIONS
@@ -12702,7 +12703,7 @@ void fix_generator(BurpGlobals* tdgbl, const FixGenerator* g)
 
 	int start = static_cast<int>(strlen(g->prefix) + 1);
 
-	Firebird::string sql;
+	string sql;
 	sql.printf("EXECUTE BLOCK AS "
 			   "DECLARE VARIABLE maxInTable INT; "
 			   "DECLARE VARIABLE currentGen INT; "
@@ -14351,8 +14352,6 @@ void set_transaction(BurpGlobals* tdgbl)
 
 } // namespace
 
-namespace Burp
-{
 
 /// class WriteRelationMeta
 
@@ -15597,4 +15596,5 @@ bool RestoreRelationTask::tableWriter(BurpGlobals* tdgbl, Item& item)
 	return true;
 }
 
-} // namespace Burp
+
+} // namespace Firebird::Burp

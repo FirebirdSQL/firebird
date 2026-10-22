@@ -36,8 +36,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // -----------------------------
 // Data access: external sorting
@@ -620,3 +621,6 @@ void SortedStream::mapData(thread_db* tdbb, Request* request, UCHAR* data) const
 		VIO_copy_record(tdbb, relation, tempRecord, record);
 	}
 }
+
+
+}	// namespace Firebird::Jrd

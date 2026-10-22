@@ -27,6 +27,10 @@
 #ifndef JRD_IRQ_H
 #define JRD_IRQ_H
 
+namespace Firebird::Jrd
+{
+
+
 enum irq_type_t
 {
 	irq_format1,			// make a new format for a record
@@ -193,5 +197,8 @@ enum irq_type_t
 
 	irq_MAX
 };
+
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_IRQ_H

@@ -23,7 +23,7 @@
 #include "firebird.h"
 #include "firebird/Message.h"
 #include "../common/common.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "ibase.h"
 #include "../jrd/license.h"
 #include "../jrd/ods.h"
@@ -65,8 +65,11 @@
 //#define NO_DATABASE
 //#define PRESERVE_LOG
 
-using namespace Firebird;
-using namespace Replication;
+namespace Firebird::Remote
+{
+
+using namespace Jrd::Replication;
+
 
 namespace
 {
@@ -339,7 +342,7 @@ namespace
 	class Target : public GlobalStorage
 	{
 	public:
-		explicit Target(const Replication::Config* config)
+		explicit Target(const Jrd::Replication::Config* config)
 			: m_config(config),
 			  m_attachment(nullptr), m_replicator(nullptr),
 			  m_sequence(0), m_connected(false),
@@ -352,7 +355,7 @@ namespace
 			shutdown();
 		}
 
-		const Replication::Config* getConfig() const
+		const Jrd::Replication::Config* getConfig() const
 		{
 			return m_config;
 		}
@@ -503,7 +506,7 @@ namespace
 		}
 
 	private:
-		AutoPtr<const Replication::Config> m_config;
+		AutoPtr<const Jrd::Replication::Config> m_config;
 		IAttachment* m_attachment;
 		IReplicator* m_replicator;
 		FB_UINT64 m_sequence;
@@ -1045,7 +1048,7 @@ namespace
 }
 
 
-bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaList& replicas, bool wait)
+bool REPL_server(CheckStatusWrapper* status, const Jrd::Replication::Config::ReplicaList& replicas, bool wait)
 {
 	try
 	{
@@ -1075,3 +1078,6 @@ bool REPL_server(CheckStatusWrapper* status, const Replication::Config::ReplicaL
 
 	return true;
 }
+
+
+}	// namespace Firebird::Remote

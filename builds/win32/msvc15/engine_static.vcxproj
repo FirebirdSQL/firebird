@@ -261,7 +261,6 @@
     <ClInclude Include="..\..\..\src\jrd\Coercion.h" />
     <ClInclude Include="..\..\..\src\jrd\Collation.h" />
     <ClInclude Include="..\..\..\src\jrd\ConfigTable.h" />
-    <ClInclude Include="..\..\..\src\jrd\constants.h" />
     <ClInclude Include="..\..\..\src\jrd\CryptoManager.h" />
     <ClInclude Include="..\..\..\src\jrd\cvt2_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\cvt_proto.h" />
@@ -332,7 +331,6 @@
     <ClInclude Include="..\..\..\src\jrd\names.h" />
     <ClInclude Include="..\..\..\src\jrd\nbak.h" />
     <ClInclude Include="..\..\..\src\jrd\ntrace.h" />
-    <ClInclude Include="..\..\..\src\jrd\obj.h" />
     <ClInclude Include="..\..\..\src\jrd\ods.h" />
     <ClInclude Include="..\..\..\src\jrd\ods_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\optimizer\Optimizer.h" />

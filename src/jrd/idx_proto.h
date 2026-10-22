@@ -28,7 +28,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/req.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class jrd_rel;
 	class jrd_tra;
@@ -36,22 +36,22 @@ namespace Jrd
 	struct index_desc;
 	class CompilerScratch;
 	class thread_db;
-}
 
-bool IDX_check_master_types(Jrd::thread_db*, Jrd::index_desc&, Jrd::jrd_rel*, int&);
-void IDX_create_index(Jrd::thread_db*, Jrd::IdxCreate createMethod, Jrd::jrd_rel*, Jrd::index_desc*,
-					  const Jrd::QualifiedName&, USHORT*, Jrd::jrd_tra*, Jrd::SelectivityList&);
-bool IDX_mark_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId);
-void IDX_mark_temp(Jrd::thread_db* tdbb, Jrd::RelationPermanent* relation, MetaId id, Jrd::Attachment* current,
+	bool IDX_check_master_types(thread_db*, index_desc&, jrd_rel*, int&);
+	void IDX_create_index(thread_db*, IdxCreate createMethod, jrd_rel*, index_desc*,
+					  const QualifiedName&, USHORT*, jrd_tra*, SelectivityList&);
+	bool IDX_mark_index(thread_db*, jrd_rel*, MetaId);
+	void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current,
 				   TraNumber tran);
-void IDX_delete_indices(Jrd::thread_db*, const Jrd::PageNumber&, bool);
-void IDX_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_garbage_collect(Jrd::thread_db*, Jrd::record_param*, Jrd::RecordStack&, Jrd::RecordStack&);
-void IDX_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_modify_check_constraints(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-void IDX_modify_flag_uk_modified(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-bool IDX_validate_unique(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, MetaId id);
+	void IDX_delete_indices(thread_db*, const PageNumber&, bool);
+	void IDX_erase(thread_db*, record_param*, jrd_tra*);
+	void IDX_garbage_collect(thread_db*, record_param*, RecordStack&, RecordStack&);
+	void IDX_modify(thread_db*, record_param*, record_param*, jrd_tra*);
+	void IDX_modify_check_constraints(thread_db*, record_param*, record_param*, jrd_tra*);
+	void IDX_store(thread_db*, record_param*, jrd_tra*);
+	void IDX_modify_flag_uk_modified(thread_db*, record_param*, record_param*, jrd_tra*);
+	bool IDX_validate_unique(thread_db* tdbb, jrd_rel* relation, MetaId id);
 
+} // namespace Firebird::Jrd
 
 #endif // JRD_IDX_PROTO_H

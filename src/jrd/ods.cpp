@@ -24,9 +24,9 @@
 #include "../jrd/ods.h"
 #include "../jrd/ods_proto.h"
 
-using namespace Firebird;
+namespace Firebird::Jrd::Ods
+{
 
-namespace Ods {
 
 bool isSupported(const header_page* hdr) noexcept
 {
@@ -128,7 +128,7 @@ ULONG maxIndices(ULONG page_size) noexcept
 		(sizeof(index_root_page::irt_repeat) + sizeof(irtd)));
 }
 
-Firebird::string pagtype(UCHAR type)
+string pagtype(UCHAR type)
 {
 	// Print pretty name for database page type
 
@@ -146,7 +146,7 @@ Firebird::string pagtype(UCHAR type)
 		"SCN inventory"
 	};
 
-	Firebird::string rc;
+	string rc;
 	if (type < FB_NELEM(nameArray))
 		rc = nameArray[type];
 	else
@@ -196,8 +196,6 @@ void writeTraNum(void* ptr, TraNumber number, FB_SIZE_T header_size) noexcept
 	}
 }
 
-} // namespace
-
 
 #ifdef DEV_BUILD
 namespace
@@ -222,3 +220,6 @@ namespace
 	static CheckODS doCheck;
 }
 #endif // DEV_BUILD
+
+
+} // namespace Firebird::Jrd::Ods

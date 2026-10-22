@@ -82,7 +82,7 @@ public:
 
 	static USHORT getSystemTimeZone();
 
-	static void getDatabaseVersion(Firebird::string& str);
+	static void getDatabaseVersion(string& str);
 
 	static void iterateRegions(std::function<void (USHORT, const char*)> func);
 

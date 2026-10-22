@@ -27,7 +27,7 @@
 //
 // general purpose queue
 //
-namespace Jrd {
+namespace Firebird::Jrd {
 
 struct que
 {
@@ -81,7 +81,7 @@ inline bool QUE_EMPTY(const que& aque)
 	return aque.que_forward == &aque;
 }
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 
 // QUE_LOOP to visit every node.

@@ -26,7 +26,7 @@
 
 #include "firebird.h"
 #include "../common/classes/alloc.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/unicode_util.h"
 #include "../common/isc_proto.h"
 #include "../common/CharSet.h"
@@ -49,8 +49,9 @@
 #include <unicode/uversion.h>
 #include <unicode/utf_old.h>
 
+namespace Firebird
+{
 
-using namespace Firebird;
 
 namespace {
 #if defined(WIN_NT)
@@ -292,9 +293,8 @@ bool BaseICU::initialize(LocalStatus& status, ModuleLoader::Module* module)
 	return true;
 }
 
-}
+}	// namespace
 
-namespace Firebird {
 
 // encapsulate ICU collations libraries
 struct UnicodeUtil::ICU : public BaseICU
@@ -534,7 +534,7 @@ static void getVersions(const string& configInfo, ObjectsArray<string>& versions
 	charset cs;
 	IntlUtil::initAsciiCharset(&cs);
 
-	AutoPtr<CharSet> ascii(Firebird::CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
+	AutoPtr<CharSet> ascii(CharSet::createInstance(*getDefaultMemoryPool(), 0, &cs));
 
 	IntlUtil::SpecificAttributesMap config;
 	IntlUtil::parseSpecificAttributes(ascii, configInfo.length(),
@@ -1356,7 +1356,7 @@ UnicodeUtil::ConversionICU& UnicodeUtil::getConversionICU()
 
 	Arg::Gds err(isc_icu_library);
 
-	if (lastError.getState() & Firebird::IStatus::STATE_ERRORS)
+	if (lastError.getState() & IStatus::STATE_ERRORS)
 	{
 		err << Arg::StatusVector(lastError.getErrors()) <<
 			   Arg::Gds(isc_random) << Arg::Str(version);
@@ -1383,8 +1383,8 @@ string UnicodeUtil::getDefaultIcuVersion()
 }
 
 
-UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const Firebird::string& icuVersion,
-	const Firebird::string& configInfo, Firebird::string& collVersion)
+UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const string& icuVersion,
+	const string& configInfo, string& collVersion)
 {
 	ICU* icu = loadICU(icuVersion, configInfo);
 
@@ -1404,7 +1404,7 @@ UnicodeUtil::ICU* UnicodeUtil::getCollVersion(const Firebird::string& icuVersion
 
 UnicodeUtil::Utf16Collation* UnicodeUtil::Utf16Collation::create(
 	texttype* tt, USHORT attributes,
-	Firebird::IntlUtil::SpecificAttributesMap& specificAttributes, const Firebird::string& configInfo)
+	IntlUtil::SpecificAttributesMap& specificAttributes, const string& configInfo)
 {
 	int attributeCount = 0;
 	bool error;
@@ -2101,4 +2101,4 @@ void UnicodeUtil::Utf16Collation::normalize(ULONG* strLen, const USHORT** str, b
 }
 
 
-}	// namespace Firebird
+}  // namespace Firebird

@@ -24,10 +24,10 @@
 #include "../burp/FastPathRecordWriter.h"
 #include "../burp/burp_proto.h"
 
-namespace Burp {
+namespace Firebird::Burp {
 
 
-// Complete type for Firebird::AutoPtr<Imp>. The real definition lives in
+// Complete type for AutoPtr<Imp>. The real definition lives in
 // burp/engine/FastPathRecordWriter.cpp, which is not linked into standalone gbak.
 struct FastPathRecordWriter::Imp
 {
@@ -38,7 +38,7 @@ FastPathRecordWriter::FastPathRecordWriter() = default;
 
 FastPathRecordWriter::~FastPathRecordWriter() = default;
 
-void FastPathRecordWriter::init(Firebird::IAttachment*, Firebird::ITransaction*, const burp_rel*,
+void FastPathRecordWriter::init(IAttachment*, ITransaction*, const burp_rel*,
 	const RestoreMessageLayout&)
 {
 	BURP_error(430, true);
@@ -63,4 +63,4 @@ void FastPathRecordWriter::clear()
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

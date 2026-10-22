@@ -26,15 +26,14 @@
 #include "../common/common.h"
 #include "../common/classes/auto.h"
 
-struct burp_rel;
-
 namespace Firebird {
 	class IAttachment;
 	class ITransaction;
 }
 
-namespace Burp {
+namespace Firebird::Burp {
 
+struct burp_rel;
 class RestoreMessageLayout;
 
 class FastPathRecordWriter
@@ -49,7 +48,7 @@ public:
 public:
 	// The caller must route only persistent user tables to direct VIO. Other
 	// problems raise an error.
-	void init(Firebird::IAttachment* att, Firebird::ITransaction* tra,
+	void init(IAttachment* att, ITransaction* tra,
 		const burp_rel* relation, const RestoreMessageLayout& layout);
 
 	// Convert and buffer a batch of messages using a single engine attachment
@@ -73,9 +72,9 @@ public:
 
 private:
 	struct Imp;
-	Firebird::AutoPtr<Imp> imp;
+	AutoPtr<Imp> imp;
 };
 
-} // namespace Burp
+} // namespace Firebird::Burp
 
 #endif // BURP_FAST_PATH_RECORD_WRITER_H

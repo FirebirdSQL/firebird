@@ -35,8 +35,7 @@
 
 //#define DEBUG_CDS_MEMORY
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class InitCDS
 {
@@ -47,7 +46,7 @@ public:
 
 	// Creates memory pool that will not be deleted until cds finish its work.
 	// Should be used to allocate structures by cds classes.
-	static Firebird::MemoryPool* createPool();
+	static MemoryPool* createPool();
 
 private:
 	static void* alloc(size_t size)
@@ -60,9 +59,9 @@ private:
 		m_pool->deallocate(p);
 	}
 
-	static Firebird::Array<Firebird::MemoryPool*>* m_pools;
-	static Firebird::MemoryPool* m_pool;
-	static Firebird::MemoryStats m_stats;
+	static Array<MemoryPool*>* m_pools;
+	static MemoryPool* m_pool;
+	static MemoryStats m_stats;
 };
 
 class InitPool
@@ -101,10 +100,10 @@ public:
 	}
 
 private:
-	Firebird::MemoryPool* m_pool;
-	Firebird::MemoryStats& m_stats;
+	MemoryPool* m_pool;
+	MemoryStats& m_stats;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// FB_INIT_CDSLIB_H

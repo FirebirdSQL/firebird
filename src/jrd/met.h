@@ -40,7 +40,7 @@
 
 #include "../jrd/CharSetContainer.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Record types for record summary blob records
 
@@ -94,13 +94,13 @@ public:
 inline constexpr int TFB_computed			= 1;
 inline constexpr int TFB_array				= 2;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #include "../jrd/exe_proto.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../dsql/sym.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 // Forward decl
 
@@ -226,13 +226,13 @@ struct DSqlCacheItem;
 
 typedef std::atomic<Cached::Triggers*> TriggersSet;
 
-class MetadataCache : public Firebird::PermanentStorage
+class MetadataCache : public PermanentStorage
 {
 	friend class CharSetContainer;
 
 public:
 	MetadataCache(MemoryPool& pool)
-		: Firebird::PermanentStorage(pool),
+		: PermanentStorage(pool),
 		  mdc_generators(getPool()),
 		  mdc_relations(getPool()),
 		  mdc_procedures(getPool()),
@@ -531,7 +531,7 @@ private:
 
 	class GeneratorFinder
 	{
-		typedef Firebird::MutexLockGuard Guard;
+		typedef MutexLockGuard Guard;
 
 	public:
 		explicit GeneratorFinder(MemoryPool& pool)
@@ -583,8 +583,8 @@ private:
 		}
 
 	private:
-		Firebird::Array<QualifiedName> m_objects;
-		Firebird::Mutex m_tx;
+		Array<QualifiedName> m_objects;
+		Mutex m_tx;
 	};
 
 	class CleanupQueue
@@ -619,8 +619,8 @@ private:
 			{ }
 		};
 
-		Firebird::Mutex cq_mutex;
-		Firebird::HalfStaticArray<Stored, 32> cq_data;
+		Mutex cq_mutex;
+		HalfStaticArray<Stored, 32> cq_data;
 		TraNumber cq_traNum = MAX_TRA_NUMBER;
 		FB_SIZE_T cq_pos = 0;
 
@@ -697,6 +697,6 @@ inline bool CacheElement<CharSetVers, CharSetContainer>::nameIs(const QualifiedN
 }
 
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_MET_H

@@ -25,8 +25,10 @@
 #ifndef JRD_FLU_PROTO_H
 #define JRD_FLU_PROTO_H
 
-FPTR_INT BUILTIN_entrypoint(const TEXT*, const TEXT*);
-FPTR_INT FUNCTIONS_entrypoint(const char*, const char*);
+namespace Firebird::Jrd
+{
+	FPTR_INT BUILTIN_entrypoint(const TEXT*, const TEXT*);
+	FPTR_INT FUNCTIONS_entrypoint(const char*, const char*);
+} // namespace Firebird::Jrd
 
 #endif // JRD_FLU_PROTO_H
-

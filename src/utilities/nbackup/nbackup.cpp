@@ -82,11 +82,14 @@
 #define O_LARGEFILE 0
 #endif
 
-using namespace Firebird;
+namespace Firebird::Nbackup
+{
+
+using MsgFormat::SafeArg;
+
 
 namespace
 {
-	using MsgFormat::SafeArg;
 	constexpr USHORT nbackup_msg_fac = FB_IMPL_MSG_FACILITY_NBACKUP;
 
 	void printMsg(USHORT number, const SafeArg& arg, bool newLine = true)
@@ -836,17 +839,17 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 
 	HalfStaticArray<UCHAR, MIN_PAGE_SIZE> header_buffer;
 	auto size = HDR_SIZE;
-	auto header = reinterpret_cast<Ods::header_page*>(header_buffer.getBuffer(size));
+	auto header = reinterpret_cast<Jrd::Ods::header_page*>(header_buffer.getBuffer(size));
 
 	if (read_file(dbase, header, size) != size)
 		status_exception::raise(Arg::Gds(isc_nbackup_err_eofdb) << dbname.c_str());
 
 	const auto page_size = header->hdr_page_size;
 
-	if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
+	if (header->hdr_backup_mode != Jrd::Ods::hdr_nbak_stalled)
 	{
 		status_exception::raise(Arg::Gds(isc_nbackup_fixup_wrongstate) << dbname.c_str() <<
-			Arg::Num(Ods::hdr_nbak_stalled));
+			Arg::Num(Jrd::Ods::hdr_nbak_stalled));
 	}
 
 	if (!repl_seq)
@@ -855,7 +858,7 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 		Guid::generate().copyTo(header->hdr_guid);
 
 		size = page_size;
-		header = reinterpret_cast<Ods::header_page*>(header_buffer.getBuffer(size));
+		header = reinterpret_cast<Jrd::Ods::header_page*>(header_buffer.getBuffer(size));
 
 		seek_file(dbase, 0);
 
@@ -867,9 +870,9 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 
 		auto p = header->hdr_data;
 		const auto* end = (UCHAR*) header + header->hdr_page_size;
-		while (p < end && *p != Ods::HDR_end)
+		while (p < end && *p != Jrd::Ods::HDR_end)
 		{
-			if (*p == Ods::HDR_repl_seq)
+			if (*p == Jrd::Ods::HDR_repl_seq)
 			{
 				// Reset the sequence counter
 				constexpr FB_UINT64 sequence = 0;
@@ -884,10 +887,10 @@ void NBackup::fixup_database(bool repl_seq, bool set_readonly)
 
 	// Update the backup mode and flags, write the header page back
 
-	header->hdr_backup_mode = Ods::hdr_nbak_normal;
+	header->hdr_backup_mode = Jrd::Ods::hdr_nbak_normal;
 
 	if (set_readonly)
-		header->hdr_flags |= Ods::hdr_read_only;
+		header->hdr_flags |= Jrd::Ods::hdr_read_only;
 
 	seek_file(dbase, 0);
 	write_file(dbase, header, size);
@@ -1343,13 +1346,13 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		const ULONG headerSize = MAX(RAW_HEADER_SIZE, ioBlockSize);
 
 		Array<UCHAR> header_buffer;
-		Ods::header_page* header = reinterpret_cast<Ods::header_page*>
+		Jrd::Ods::header_page* header = reinterpret_cast<Jrd::Ods::header_page*>
 			(header_buffer.getAlignedBuffer(headerSize, ioBlockSize));
 
 		if (read_file(dbase, header, headerSize) != headerSize)
 			status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdrdb) << dbname.c_str() << Arg::Num(1));
 
-		if (!Ods::isSupported(header))
+		if (!Jrd::Ods::isSupported(header))
 		{
 			const USHORT ods_version = header->hdr_ods_version & ~ODS_FIREBIRD_FLAG;
 			status_exception::raise(Arg::Gds(isc_wrong_ods) << Arg::Str(database.c_str()) <<
@@ -1359,11 +1362,11 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 									Arg::Num(ODS_CURRENT));
 		}
 
-		if (header->hdr_backup_mode != Ods::hdr_nbak_stalled)
+		if (header->hdr_backup_mode != Jrd::Ods::hdr_nbak_stalled)
 			status_exception::raise(Arg::Gds(isc_nbackup_db_notlock) << Arg::Num(header->hdr_flags));
 
 		Array<UCHAR> page_buffer;
-		Ods::pag* page_buff = reinterpret_cast<Ods::pag*>
+		Jrd::Ods::pag* page_buff = reinterpret_cast<Jrd::Ods::pag*>
 			(page_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		ULONG db_size = db_size_pages;
@@ -1375,11 +1378,11 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 		page_reads++;
 
 		std::optional<Guid> backup_guid;
-		auto p = reinterpret_cast<Ods::header_page*>(page_buff)->hdr_data;
+		auto p = reinterpret_cast<Jrd::Ods::header_page*>(page_buff)->hdr_data;
 		const auto* end = reinterpret_cast<UCHAR*>(page_buff) + header->hdr_page_size;
-		while (p < end && *p != Ods::HDR_end)
+		while (p < end && *p != Jrd::Ods::HDR_end)
 		{
-			if (*p == Ods::HDR_backup_guid)
+			if (*p == Jrd::Ods::HDR_backup_guid)
 			{
 				if (p[1] == Guid::SIZE)
 					backup_guid = Guid(p + 2);
@@ -1418,14 +1421,14 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 
 		ULONG curPage = 0;
 		ULONG lastPage = FIRST_PIP_PAGE;
-		const ULONG pagesPerPIP = Ods::pagesPerPIP(header->hdr_page_size);
+		const ULONG pagesPerPIP = Jrd::Ods::pagesPerPIP(header->hdr_page_size);
 
 		ULONG scnsSlot = 0;
-		const ULONG pagesPerSCN = Ods::pagesPerSCN(header->hdr_page_size);
+		const ULONG pagesPerSCN = Jrd::Ods::pagesPerSCN(header->hdr_page_size);
 
 		Array<UCHAR> scns_buffer;
-		Ods::scns_page* scns = NULL;
-		Ods::scns_page* scns_buf = reinterpret_cast<Ods::scns_page*>
+		Jrd::Ods::scns_page* scns = NULL;
+		Jrd::Ods::scns_page* scns_buf = reinterpret_cast<Jrd::Ods::scns_page*>
 			(scns_buffer.getAlignedBuffer(header->hdr_page_size, ioBlockSize));
 
 		while (true)
@@ -1510,7 +1513,7 @@ void NBackup::backup_database(int level, const string& guidStr, const PathName& 
 				// where stored number of pages allocated from this pointer page.
 				if (page_buff->pag_type == pag_pages)
 				{
-					Ods::page_inv_page* pip = (Ods::page_inv_page*) page_buff;
+					Jrd::Ods::page_inv_page* pip = (Jrd::Ods::page_inv_page*) page_buff;
 					if (lastPage == FIRST_PIP_PAGE)
 						lastPage = pip->pip_used - 1;
 					else
@@ -1778,7 +1781,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					if (bytesDone != bakheader.page_size) {
 						status_exception::raise(Arg::Gds(isc_nbackup_err_eofbk) << bakname.c_str());
 					}
-					const SINT64 pageNum = reinterpret_cast<Ods::pag*>(page_ptr)->pag_pageno;
+					const SINT64 pageNum = reinterpret_cast<Jrd::Ods::pag*>(page_ptr)->pag_pageno;
 					seek_file(dbase, pageNum * bakheader.page_size);
 					write_file(dbase, page_ptr, bakheader.page_size);
 					checkCtrlC(uSvc);
@@ -1805,7 +1808,7 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					open_database_write(true);
 
 				// Read database header
-				Ods::header_page header;
+				Jrd::Ods::header_page header;
 				if (read_file(dbase, &header, HDR_SIZE) != HDR_SIZE)
 					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(1));
 
@@ -1817,11 +1820,11 @@ void NBackup::restore_database(const BackupFiles& files, bool repl_seq, bool inc
 					status_exception::raise(Arg::Gds(isc_nbackup_err_eofhdr_restdb) << Arg::Num(2));
 
 				prev_guid.reset();
-				auto p = reinterpret_cast<Ods::header_page*>(page_ptr)->hdr_data;
+				auto p = reinterpret_cast<Jrd::Ods::header_page*>(page_ptr)->hdr_data;
 				const auto end = page_ptr + header.hdr_page_size;
-				while (p < end && *p != Ods::HDR_end)
+				while (p < end && *p != Jrd::Ods::HDR_end)
 				{
-					if (*p == Ods::HDR_backup_guid)
+					if (*p == Jrd::Ods::HDR_backup_guid)
 					{
 						if (p[1] == Guid::SIZE)
 							prev_guid = Guid(p + 2);
@@ -2218,3 +2221,6 @@ void nbackup(UtilSvc* uSvc)
 		throw;
 	}
 }
+
+
+} // namespace Firebird::Nbackup

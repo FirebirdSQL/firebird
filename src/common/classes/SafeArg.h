@@ -61,8 +61,7 @@ struct DoubleQuad
 typedef DoubleQuad SINT128;
 
 
-namespace MsgFormat
-{
+namespace Firebird::MsgFormat {
 
 // For now we allow 9 parameters; @1..@9 in MsgPrint.
 inline constexpr FB_SIZE_T SAFEARG_MAX_ARG = 9;

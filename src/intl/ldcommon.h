@@ -26,7 +26,7 @@
 
 #include "../common/classes/alloc.h"
 #include "../common/intlobj_new.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/gdsassert.h"
 #include "../intl/charsets.h"
 #include "../intl/country_codes.h"

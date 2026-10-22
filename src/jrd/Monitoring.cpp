@@ -59,8 +59,8 @@
 
 constexpr const char* SCRATCH = "fb_monitor_";
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -1861,3 +1861,6 @@ void Monitoring::cleanupAttachment(thread_db* tdbb)
 		}
 	}
 }
+
+
+}	// namespace Firebird::Jrd

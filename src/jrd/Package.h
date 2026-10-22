@@ -31,12 +31,12 @@
 #include "firebird.h"
 #include "../jrd/CacheVector.h"
 #include "../jrd/Resources.h"
-#include "../jrd/obj.h"
+#include "../common/obj.h"
 #include "../jrd/val.h"
 #include "../jrd/lck.h"
 #include "../common/classes/GenericMap.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 class CompilerScratch;
 class DsqlCompilerScratch;
@@ -265,6 +265,6 @@ private:
 	bool m_callReload = true;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PACKAGE_H

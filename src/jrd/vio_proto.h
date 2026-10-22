@@ -26,7 +26,7 @@
 #ifndef JRD_VIO_PROTO_H
 #define JRD_VIO_PROTO_H
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class jrd_rel;
 	class jrd_tra;
@@ -50,30 +50,30 @@ namespace Jrd
 		CONFLICTED,
 		SKIPPED
 	};
-}
 
-void	VIO_backout(Jrd::thread_db*, Jrd::record_param*, const Jrd::jrd_tra*);
-bool	VIO_chase_record_version(Jrd::thread_db*, Jrd::record_param*,
-									Jrd::jrd_tra*, MemoryPool*, bool, bool);
-void	VIO_copy_record(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::Record*, Jrd::Record*);
-void	VIO_data(Jrd::thread_db*, Jrd::record_param*, MemoryPool*);
-bool	VIO_erase(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-void	VIO_fini(Jrd::thread_db*);
-bool	VIO_garbage_collect(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-bool	VIO_get(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*);
-bool	VIO_get_current(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*,
-						MemoryPool*, bool, bool&);
-void	VIO_init(Jrd::thread_db*);
-Jrd::WriteLockResult VIO_writelock(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-bool	VIO_modify(Jrd::thread_db*, Jrd::record_param*, Jrd::record_param*, Jrd::jrd_tra*);
-bool	VIO_next_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, MemoryPool*,
-						Jrd::FindNextRecordScope, const RecordNumber* = nullptr);
-Jrd::Record*	VIO_record(Jrd::thread_db*, Jrd::record_param*, const Jrd::Format*, MemoryPool*);
-bool	VIO_refetch_record(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*, bool, bool);
-void	VIO_store(Jrd::thread_db*, Jrd::record_param*, Jrd::jrd_tra*);
-bool	VIO_sweep(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::TraceSweepEvent*);
-void	VIO_intermediate_gc(Jrd::thread_db* tdbb, Jrd::record_param* rpb, Jrd::jrd_tra* transaction);
-void	VIO_garbage_collect_idx(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::record_param*, Jrd::Record*);
-void	VIO_update_in_place(Jrd::thread_db*, Jrd::jrd_tra*, Jrd::record_param*, Jrd::record_param*);
+	void	VIO_backout(thread_db*, record_param*, const jrd_tra*);
+	bool	VIO_chase_record_version(thread_db*, record_param*,
+										jrd_tra*, MemoryPool*, bool, bool);
+	void	VIO_copy_record(thread_db*, jrd_rel*, Record*, Record*);
+	void	VIO_data(thread_db*, record_param*, MemoryPool*);
+	bool	VIO_erase(thread_db*, record_param*, jrd_tra*);
+	void	VIO_fini(thread_db*);
+	bool	VIO_garbage_collect(thread_db*, record_param*, jrd_tra*);
+	bool	VIO_get(thread_db*, record_param*, jrd_tra*, MemoryPool*);
+	bool	VIO_get_current(thread_db*, record_param*, jrd_tra*,
+							MemoryPool*, bool, bool&);
+	void	VIO_init(thread_db*);
+	WriteLockResult VIO_writelock(thread_db*, record_param*, jrd_tra*);
+	bool	VIO_modify(thread_db*, record_param*, record_param*, jrd_tra*);
+	bool	VIO_next_record(thread_db*, record_param*, jrd_tra*, MemoryPool*,
+							FindNextRecordScope, const RecordNumber* = nullptr);
+	Record*	VIO_record(thread_db*, record_param*, const Format*, MemoryPool*);
+	bool	VIO_refetch_record(thread_db*, record_param*, jrd_tra*, bool, bool);
+	void	VIO_store(thread_db*, record_param*, jrd_tra*);
+	bool	VIO_sweep(thread_db*, jrd_tra*, TraceSweepEvent*);
+	void	VIO_intermediate_gc(thread_db* tdbb, record_param* rpb, jrd_tra* transaction);
+	void	VIO_garbage_collect_idx(thread_db*, jrd_tra*, record_param*, Record*);
+	void	VIO_update_in_place(thread_db*, jrd_tra*, record_param*, record_param*);
+}	// namespace Firebird::Jrd
 
 #endif // JRD_VIO_PROTO_H

@@ -32,7 +32,7 @@
 
 // req.h defines struct record_param
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class traRpbListElement
 {
@@ -60,20 +60,20 @@ public:
 };
 
 
-typedef Firebird::SortedArray<traRpbListElement,
-	Firebird::InlineStorage<traRpbListElement, 16>, traRpbListElement,
+typedef SortedArray<traRpbListElement,
+	InlineStorage<traRpbListElement, 16>, traRpbListElement,
 	traRpbListElement, traRpbListElement> traRpbArray;
 class traRpbList : public traRpbArray
 {
 public:
-	explicit traRpbList(Firebird::MemoryPool& p)
+	explicit traRpbList(MemoryPool& p)
 		: traRpbArray(p)
 	{}
 	int PushRpb(record_param* value);
 	bool PopRpb(record_param* value, int Level);
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	//JRD_RPB_CHAIN_H
 

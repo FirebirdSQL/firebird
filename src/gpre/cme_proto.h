@@ -24,6 +24,10 @@
 #ifndef GPRE_CME_PROTO_H
 #define GPRE_CME_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 void	CME_expr(gpre_nod*, gpre_req*);
 void	CME_get_dtype(const gpre_nod*, gpre_fld*);
 void	CME_relation(gpre_ctx*, gpre_req*);
@@ -33,5 +37,8 @@ inline void	CME_rse(gpre_nod* node, gpre_req* request)
 {
 	CME_rse((gpre_rse*) node, request);
 }
+
+
+} // namespace Firebird::Gpre
 
 #endif // GPRE_CME_PROTO_H

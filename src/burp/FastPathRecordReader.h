@@ -26,15 +26,14 @@
 #include "../common/common.h"
 #include "../common/classes/auto.h"
 
-struct burp_rel;
-
 namespace Firebird {
 	class IAttachment;
 	class ITransaction;
 }
 
-namespace Burp {
+namespace Firebird::Burp {
 
+struct burp_rel;
 class RestoreMessageLayout;
 
 class FastPathRecordReader
@@ -50,7 +49,7 @@ public:
 	FastPathRecordReader& operator=(const FastPathRecordReader&) = delete;
 
 public:
-	void init(Firebird::IAttachment* att, Firebird::ITransaction* tra,
+	void init(IAttachment* att, ITransaction* tra,
 		const burp_rel* relation, const RestoreMessageLayout& layout, bool partition);
 
 	void start(ULONG loPP, ULONG hiPP);
@@ -60,9 +59,9 @@ public:
 	void clear();
 
 private:
-	Firebird::AutoPtr<Imp> imp;
+	AutoPtr<Imp> imp;
 };
 
-} // namespace Burp
+} // namespace Firebird::Burp
 
 #endif // BURP_FAST_PATH_RECORD_READER_H

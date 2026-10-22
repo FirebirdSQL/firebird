@@ -50,11 +50,11 @@ DEFINE_TRACE_ROUTINE(cch_trace);
 #define CCH_TRACEE_AST(message) // nothing
 #endif
 
-namespace Ods {
+namespace Firebird::Jrd::Ods {
 	struct pag;
 }
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class Lock;
 class Precedence;
@@ -77,7 +77,7 @@ inline constexpr ULONG MAX_PAGE_BUFFERS = MAX_SLONG - 1;
 
 class BufferControl : public pool_alloc<type_bcb>
 {
-	BufferControl(MemoryPool& p, Firebird::MemoryStats& parentStats)
+	BufferControl(MemoryPool& p, MemoryStats& parentStats)
 		: bcb_bufferpool(&p),
 		  bcb_memory_stats(&parentStats),
 		  bcb_memory(p),
@@ -111,8 +111,8 @@ public:
 
 	Database*	bcb_database;
 
-	Firebird::MemoryPool* bcb_bufferpool;
-	Firebird::MemoryStats bcb_memory_stats;
+	MemoryPool* bcb_bufferpool;
+	MemoryStats bcb_memory_stats;
 
 	UCharStack	bcb_memory;			// Large block partitioned into buffers
 	que			bcb_in_use;			// Que of buffers in use, main LRU que
@@ -128,7 +128,7 @@ public:
 	SLONG		bcb_dirty_count;	// count of pages in dirty page btree
 
 	Precedence*	bcb_free;			// Free precedence blocks
-	Firebird::AtomicCounter	bcb_flags;	// see below
+	AtomicCounter	bcb_flags;	// see below
 	SSHORT		bcb_free_minimum;	// Threshold to activate cache writer
 	ULONG		bcb_count;			// Number of buffers allocated
 	ULONG		bcb_inuse;			// Number of buffers in use
@@ -136,32 +136,32 @@ public:
 	ULONG		bcb_page_size;		// Database page size in bytes
 	ULONG		bcb_page_incarnation;	// Cache page incarnation counter
 
-	Firebird::SyncObject	bcb_syncObject;
-	Firebird::SyncObject	bcb_syncDirtyBdbs;
-	Firebird::SyncObject	bcb_syncEmpty;
-	Firebird::SyncObject	bcb_syncPrecedence;
-	Firebird::SyncObject	bcb_syncLRU;
+	SyncObject	bcb_syncObject;
+	SyncObject	bcb_syncDirtyBdbs;
+	SyncObject	bcb_syncEmpty;
+	SyncObject	bcb_syncPrecedence;
+	SyncObject	bcb_syncLRU;
 
 	// If we make bcb_flags atomic this mutex will become unneeded: XCHG of bcb_flags is enough
-	Firebird::Mutex			bcb_threadStartup;
+	Mutex			bcb_threadStartup;
 
 	typedef ThreadFinishSync<BufferControl*> BcbThreadSync;
 
 	static void cache_writer(BufferControl* bcb);
-	Firebird::Semaphore bcb_writer_sem;		// Wake up cache writer
-	Firebird::Semaphore bcb_writer_init;	// Cache writer initialization
+	Semaphore bcb_writer_sem;		// Wake up cache writer
+	Semaphore bcb_writer_init;	// Cache writer initialization
 	BcbThreadSync bcb_writer_fini;			// Cache writer finalization
 #ifdef SUPERSERVER_V2
 	static void cache_reader(BufferControl* bcb);
 	// the code in cch.cpp is not tested for semaphore instead event !!!
-	Firebird::Semaphore bcb_reader_sem;		// Wake up cache reader
-	Firebird::Semaphore bcb_reader_init;	// Cache reader initialization
+	Semaphore bcb_reader_sem;		// Wake up cache reader
+	Semaphore bcb_reader_init;	// Cache reader initialization
 	BcbThreadSync bcb_reader_fini;			// Cache reader finalization
 
 	PageBitmap*	bcb_prefetch;		// Bitmap of pages to prefetch
 #endif
 
-	void exceptionHandler(const Firebird::Exception& ex, BcbThreadSync::ThreadRoutine* routine);
+	void exceptionHandler(const Exception& ex, BcbThreadSync::ThreadRoutine* routine);
 
 	BCBHashTable* bcb_hashTable;
 
@@ -171,7 +171,7 @@ public:
 		BufferDesc* m_bdbs;
 		ULONG m_count;
 	};
-	Firebird::Array<BDBBlock>	bcb_bdbBlocks;		// all allocated BufferDesc's
+	Array<BDBBlock>	bcb_bdbBlocks;		// all allocated BufferDesc's
 };
 
 inline constexpr int BCB_keep_pages		= 1;	// set during btc_flush(), pages not removed from dirty binary tree
@@ -215,9 +215,9 @@ public:
 		bdb_prec_walk_mark = 0;
 	}
 
-	bool addRef(thread_db* tdbb, Firebird::SyncType syncType, int wait = 1);
-	bool addRefConditional(thread_db* tdbb, Firebird::SyncType syncType);
-	void downgrade(Firebird::SyncType syncType);
+	bool addRef(thread_db* tdbb, SyncType syncType, int wait = 1);
+	bool addRefConditional(thread_db* tdbb, SyncType syncType);
+	void downgrade(SyncType syncType);
 	void release(thread_db* tdbb, bool repost);
 
 	void lockIO(thread_db*);
@@ -239,7 +239,7 @@ public:
 	}
 
 	BufferControl*	bdb_bcb;
-	Firebird::SyncObject	bdb_syncPage;
+	SyncObject	bdb_syncPage;
 	Lock*		bdb_lock;				// Lock block for buffer
 	que			bdb_que;				// Either mod que in hash table or bcb_empty que if never used
 	que			bdb_in_use;				// queue of buffers in use
@@ -256,15 +256,15 @@ public:
 
 private:
 	thread_db*				bdb_io;				// thread holding io latch
-	Firebird::SyncObject	bdb_syncIO;
+	SyncObject	bdb_syncIO;
 
 public:
-	Firebird::AtomicCounter	bdb_ast_flags;		// flags manipulated at AST level
-	Firebird::AtomicCounter	bdb_flags;
-	Firebird::AtomicCounter	bdb_use_count;		// Number of active users
+	AtomicCounter	bdb_ast_flags;		// flags manipulated at AST level
+	AtomicCounter	bdb_flags;
+	AtomicCounter	bdb_use_count;		// Number of active users
 	SSHORT		bdb_writers;					// Number of recursively taken exclusive locks
 	SSHORT		bdb_io_locks;					// Number of recursively taken IO locks
-	Firebird::AtomicCounter	bdb_scan_count;		// concurrent sequential scans
+	AtomicCounter	bdb_scan_count;		// concurrent sequential scans
 	ULONG       bdb_difference_page;			// Number of page in difference file, NBAK
 	ULONG		bdb_prec_walk_mark;				// mark value used in precedence graph walk
 };
@@ -377,9 +377,9 @@ public:
 inline constexpr int PRF_active = 1;		// prefetch block currently in use
 #endif // SUPERSERVER_V2
 
-typedef Firebird::SortedArray<SLONG, Firebird::InlineStorage<SLONG, 256>, SLONG> PagesArray;
+typedef SortedArray<SLONG, InlineStorage<SLONG, 256>, SLONG> PagesArray;
 
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_CCH_H

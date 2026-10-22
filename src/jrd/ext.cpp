@@ -80,9 +80,7 @@ __int64 __cdecl _ftelli64(FILE*);
 #define FSEEK64 fseeko
 #endif
 
-using namespace Firebird;
-
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class ExternalFileDirectoryList : public DirectoryList
 	{
@@ -111,21 +109,18 @@ namespace Jrd
 	private:
 		RefPtr<const Config> config;
 	};
-}
 
-using namespace Jrd;
-
-namespace {
-
+	namespace
+	{
 #ifdef WIN_NT
-	static const char* const FOPEN_TYPE			= "a+b";
-	static const char* const FOPEN_READ_ONLY	= "rb";
+		static const char* const FOPEN_TYPE			= "a+b";
+		static const char* const FOPEN_READ_ONLY	= "rb";
 #else
-	static const char* const FOPEN_TYPE			= "a+";
-	static const char* const FOPEN_READ_ONLY	= "r";
+		static const char* const FOPEN_TYPE			= "a+";
+		static const char* const FOPEN_READ_ONLY	= "r";
 #endif
+	} // namespace
 
-} // namespace
 
 void ExternalFile::open(Database* dbb)
 {
@@ -567,3 +562,6 @@ void ExternalFile::checkOpened()
 	if (!ext_ifi)
 		ERR_post(Arg::Gds(isc_random) << "Error accessing external table's file");
 }
+
+
+} // namespace Firebird::Jrd

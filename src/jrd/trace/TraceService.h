@@ -35,15 +35,15 @@
 #include "../../common/classes/ClumpletReader.h"
 #include "../../common/StatusArg.h"
 #include "../../common/UtilSvc.h"
-#include "../../jrd/constants.h"
+#include "../../common/constants.h"
 #include "../../common/ThreadData.h"
 #include "../../jrd/trace/TraceSession.h"
 
+namespace Firebird::Jrd
+{
 
-int TRACE_main(Firebird::UtilSvc*);
 
-
-namespace Firebird {
+int TRACE_main(UtilSvc*);
 
 class TraceSvcIntf
 {
@@ -61,7 +61,7 @@ public:
 
 void fbtrace(UtilSvc* uSvc, TraceSvcIntf* traceSvc);
 
-} // namespace Firebird
 
+} // namespace Firebird::Jrd
 
 #endif // JRD_TRACESERVICE_H

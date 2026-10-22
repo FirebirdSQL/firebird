@@ -63,7 +63,7 @@ public:
 	FB_SIZE_T getSize() const noexcept { return bufSize; }
 
 private:
-	Firebird::Array<char> buffer;
+	Array<char> buffer;
 	char* bufAligned;
 	FB_SIZE_T bufSize;
 };

@@ -45,8 +45,9 @@
 #include "../common/status.h"
 #include "fb_types.h"
 
+namespace Firebird::Burp
+{
 
-using Firebird::FbLocalStatus;
 
 struct BurpXdr : public xdr_t
 {
@@ -177,17 +178,17 @@ ULONG CAN_encode_decode(burp_rel* relation, lstring* buffer, UCHAR* data, bool d
 			break;
 
 		case dtype_dec64:
-			if (!xdr_dec64(xdrs, (Firebird::Decimal64*) p))
+			if (!xdr_dec64(xdrs, (Decimal64*) p))
 				return FALSE;
 			break;
 
 		case dtype_dec128:
-			if (!xdr_dec128(xdrs, (Firebird::Decimal128*) p))
+			if (!xdr_dec128(xdrs, (Decimal128*) p))
 				return FALSE;
 			break;
 
 		case dtype_int128:
-			if (!xdr_int128(xdrs, (Firebird::Int128*) p))
+			if (!xdr_int128(xdrs, (Int128*) p))
 				return FALSE;
 			break;
 
@@ -483,3 +484,6 @@ static bool_t xdr_slice(BurpXdr* xdrs, lstring* slice, /*USHORT sdl_length,*/ co
 
 	return TRUE;
 }
+
+
+} // namespace Firebird::Burp

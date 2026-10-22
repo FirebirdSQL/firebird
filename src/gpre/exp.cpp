@@ -43,6 +43,10 @@
 #include "../gpre/sqe_proto.h"
 #include "../gpre/sql_proto.h"
 
+namespace Firebird::Gpre
+{
+
+
 constexpr int ZERO_BASED	= 0;
 constexpr int ONE_BASED		= 1;
 
@@ -1645,3 +1649,5 @@ static gpre_nod* par_value( gpre_req* request, gpre_fld* field)
 	}
 }
 
+
+} // namespace Firebird::Gpre

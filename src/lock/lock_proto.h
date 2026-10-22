@@ -48,6 +48,17 @@
 #include "../common/file_params.h"
 #include "../jrd/que.h"
 
+namespace Firebird {
+	class AtomicCounter;
+	class Mutex;
+	class RWLock;
+	class Config;
+}
+
+namespace Firebird::Jrd
+{
+
+
 typedef FB_UINT64 LOCK_OWNER_T; // Data type for the Owner ID
 typedef SINT64 LOCK_DATA_T;
 
@@ -105,7 +116,7 @@ inline constexpr USHORT LHB_VERSION = BASE_LHB_VERSION;
 
 // Lock header block -- one per lock file, lives up front
 
-struct lhb : public Firebird::MemoryHeader
+struct lhb : public MemoryHeader
 {
 	USHORT lhb_type;				// memory tag - always type_lhb
 	SRQ_PTR lhb_secondary;			// Secondary lock header block
@@ -215,7 +226,7 @@ struct prc
 	int prc_process_id;				// Process ID
 	srq prc_lhb_processes;			// Process que
 	srq prc_owners;					// Owners
-	Firebird::event_t prc_blocking;	// Blocking event block
+	event_t prc_blocking;	// Blocking event block
 	USHORT prc_flags;				// Unused. Misc flags
 };
 
@@ -237,7 +248,7 @@ struct own
 	FB_UINT64 own_acquire_time;		// lhb_acquires when owner last tried acquire()
 	USHORT own_waits;				// Number of requests we are waiting on
 	USHORT own_ast_count;			// Number of ASTs being delivered
-	Firebird::event_t own_wakeup;	// Wakeup event block
+	event_t own_wakeup;	// Wakeup event block
 	USHORT own_flags;				// Misc stuff
 };
 
@@ -281,16 +292,8 @@ inline constexpr UCHAR his_cleanup		= 18;
 inline constexpr UCHAR his_del_owner	= 19;
 inline constexpr UCHAR his_MAX			= his_del_owner;
 
-namespace Firebird {
-	class AtomicCounter;
-	class Mutex;
-	class RWLock;
-	class Config;
-}
 
-namespace Jrd {
-
-class LockManager final : public Firebird::GlobalStorage, public Firebird::IpcObject
+class LockManager final : public GlobalStorage, public IpcObject
 {
 public:
 	class Callbacks
@@ -329,7 +332,7 @@ private:
 
 				m_lm->m_localMutex.leave();
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				DtorException::devHalt();
 			}
@@ -379,7 +382,7 @@ private:
 
 				m_lm->acquire_shmem(m_owner);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				DtorException::devHalt();
 			}
@@ -401,16 +404,16 @@ private:
 	const int PID;
 
 public:
-	explicit LockManager(const Firebird::string&, const Firebird::Config* conf);
+	explicit LockManager(const string&, const Config* conf);
 	~LockManager();
 
-	bool initializeOwner(Firebird::CheckStatusWrapper*, LOCK_OWNER_T, UCHAR, SRQ_PTR*);
+	bool initializeOwner(CheckStatusWrapper*, LOCK_OWNER_T, UCHAR, SRQ_PTR*);
 	void shutdownOwner(const Callbacks&, SRQ_PTR*);
 
-	SRQ_PTR enqueue(const Callbacks&, Firebird::CheckStatusWrapper*, SRQ_PTR, const USHORT,
+	SRQ_PTR enqueue(const Callbacks&, CheckStatusWrapper*, SRQ_PTR, const USHORT,
 		const UCHAR*, const USHORT, UCHAR, lock_ast_t, void*, LOCK_DATA_T, SSHORT, SRQ_PTR);
-	bool convert(const Callbacks&, Firebird::CheckStatusWrapper*, SRQ_PTR, UCHAR, SSHORT, lock_ast_t, void*);
-	UCHAR downgrade(const Callbacks&, Firebird::CheckStatusWrapper*, const SRQ_PTR);
+	bool convert(const Callbacks&, CheckStatusWrapper*, SRQ_PTR, UCHAR, SSHORT, lock_ast_t, void*);
+	UCHAR downgrade(const Callbacks&, CheckStatusWrapper*, const SRQ_PTR);
 	bool dequeue(const SRQ_PTR);
 
 	void repost(const Callbacks&, lock_ast_t, void*, SRQ_PTR);
@@ -421,18 +424,18 @@ public:
 	LOCK_DATA_T readData2(USHORT, const UCHAR*, USHORT, SRQ_PTR);
 	LOCK_DATA_T writeData(SRQ_PTR, LOCK_DATA_T);
 
-	void exceptionHandler(const Firebird::Exception& ex, ThreadFinishSync<LockManager*>::ThreadRoutine* routine);
+	void exceptionHandler(const Exception& ex, ThreadFinishSync<LockManager*>::ThreadRoutine* routine);
 
 private:
 	void acquire_shmem(SRQ_PTR);
-	UCHAR* alloc(USHORT, Firebird::CheckStatusWrapper*);
-	lbl* alloc_lock(USHORT, Firebird::CheckStatusWrapper*);
+	UCHAR* alloc(USHORT, CheckStatusWrapper*);
+	lbl* alloc_lock(USHORT, CheckStatusWrapper*);
 	void blocking_action(const Callbacks&, SRQ_PTR);
 	void blocking_action_thread();
-	void bug(Firebird::CheckStatusWrapper*, const TEXT*);
+	void bug(CheckStatusWrapper*, const TEXT*);
 	void bug_assert(const TEXT*, ULONG);
-	SRQ_PTR create_owner(Firebird::CheckStatusWrapper*, LOCK_OWNER_T, UCHAR);
-	bool create_process(Firebird::CheckStatusWrapper*);
+	SRQ_PTR create_owner(CheckStatusWrapper*, LOCK_OWNER_T, UCHAR);
+	bool create_process(CheckStatusWrapper*);
 	void deadlock_clear();
 	lrq* deadlock_scan(own*, lrq*);
 	lrq* deadlock_walk(lrq*, bool*);
@@ -441,10 +444,10 @@ private:
 	lrq* get_request(SRQ_PTR);
 	void grant(lrq*, lbl*);
 	bool grant_or_que(const Callbacks&, lrq*, lbl*, SSHORT);
-	bool init_owner_block(Firebird::CheckStatusWrapper*, own*, UCHAR, LOCK_OWNER_T);
+	bool init_owner_block(CheckStatusWrapper*, own*, UCHAR, LOCK_OWNER_T);
 	void insert_data_que(lbl*);
 	void insert_tail(SRQ, SRQ);
-	bool internal_convert(const Callbacks&, Firebird::CheckStatusWrapper*, SRQ_PTR, UCHAR, SSHORT,
+	bool internal_convert(const Callbacks&, CheckStatusWrapper*, SRQ_PTR, UCHAR, SSHORT,
 		lock_ast_t, void*);
 	void internal_dequeue(SRQ_PTR);
 	static USHORT lock_state(const lbl*);
@@ -469,19 +472,19 @@ private:
 	void validate_shb(const SRQ_PTR);
 
 	void wait_for_request(const Callbacks&, lrq*, SSHORT);
-	bool init_shared_file(Firebird::CheckStatusWrapper*);
-	void get_shared_file_name(Firebird::PathName&, ULONG extend = 0) const;
+	bool init_shared_file(CheckStatusWrapper*);
+	void get_shared_file_name(PathName&, ULONG extend = 0) const;
 
 	static void blocking_action_thread(LockManager* lockMgr)
 	{
 		lockMgr->blocking_action_thread();
 	}
 
-	bool initialize(Firebird::SharedMemoryBase* sm, bool init) override;
+	bool initialize(SharedMemoryBase* sm, bool init) override;
 	void mutexBug(int osErrorCode, const char* text) override;
-	bool checkHeader(const Firebird::MemoryHeader* header, bool raiseError = true) override;
+	bool checkHeader(const MemoryHeader* header, bool raiseError = true) override;
 
-	USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_LOCK_MANAGER; }
+	USHORT getType() const override { return SharedMemoryBase::SRAM_LOCK_MANAGER; }
 	USHORT getVersion() const override { return LHB_VERSION; }
 	const char* getName() const override { return "LockManager"; }
 
@@ -489,21 +492,21 @@ private:
 	prc* m_process;
 	SRQ_PTR m_processOffset;
 
-	Firebird::Mutex m_localMutex;
-	Firebird::RWLock m_remapSync;
-	Firebird::AtomicCounter m_waitingOwners;
+	Mutex m_localMutex;
+	RWLock m_remapSync;
+	AtomicCounter m_waitingOwners;
 
 	ThreadFinishSync<LockManager*> m_cleanupSync;
-	Firebird::Semaphore m_startupSemaphore;
+	Semaphore m_startupSemaphore;
 
 public:
-	Firebird::AutoPtr<Firebird::SharedMemory<lhb> > m_sharedMemory;
+	AutoPtr<SharedMemory<lhb> > m_sharedMemory;
 
 private:
 	bool m_blockage;
 
-	const Firebird::string& m_dbId;
-	const Firebird::Config* const m_config;
+	const string& m_dbId;
+	const Config* const m_config;
 
 	// configurations parameters - cached values
 	const ULONG m_acquireSpins;
@@ -512,7 +515,7 @@ private:
 	const bool m_useBlockingThread;
 
 #ifdef USE_SHMEM_EXT
-	struct SecondaryFile : public Jrd::MemoryHeader
+	struct SecondaryFile : public MemoryHeader
 	{
 	};
 
@@ -520,14 +523,14 @@ private:
 	{
 	public:
 		Extent() { }
-		explicit Extent(Firebird::MemoryPool&) { }
+		explicit Extent(MemoryPool&) { }
 
 		Extent(const SharedMemoryBase& p)
 		{
 			assign(p);
 		}
 
-		Extent(Firebird::MemoryPool&, const SharedMemoryBase& p)
+		Extent(MemoryPool&, const SharedMemoryBase& p)
 		{
 			assign(p);
 		}
@@ -549,7 +552,7 @@ private:
 		void mutexBug(int osErrorCode, const char* text);
 	};
 
-	Firebird::ObjectsArray<Extent> m_extents;
+	ObjectsArray<Extent> m_extents;
 
 	ULONG getTotalMapped() const
 	{
@@ -572,6 +575,7 @@ private:
 #endif
 };
 
-} // namespace
+
+} // namespace Firebird::Jrd
 
 #endif // LOCK_LOCK_PROTO_H

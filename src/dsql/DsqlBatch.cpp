@@ -36,14 +36,15 @@
 #include "../common/utils_proto.h"
 #include "../common/classes/BatchCompletionState.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 namespace {
 	const char* const TEMP_NAME = "fb_batch";
 	const UCHAR initBlobParameters[] = {isc_bpb_version1, isc_bpb_type, 1, isc_bpb_type_stream};
 
-	class JTransliterate : public Firebird::Transliterate
+	class JTransliterate : public Transliterate
 	{
 	public:
 		JTransliterate(thread_db* tdbb)
@@ -182,7 +183,7 @@ DsqlBatch* DsqlBatch::open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadat
 	unsigned parLength, const UCHAR* par)
 {
 	SET_TDBB(tdbb);
-	Jrd::ContextPoolHolder context(tdbb, &req->getPool());
+	JrdContextPoolHolder context(tdbb, &req->getPool());
 
 	// Validate cursor or batch being not already open
 
@@ -438,7 +439,7 @@ void DsqlBatch::registerBlob(const ISC_QUAD* engineBlob, const ISC_QUAD* batchBl
 	*idPtr = *engineBlob;
 }
 
-Firebird::IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
+IBatchCompletionState* DsqlBatch::execute(thread_db* tdbb)
 {
 	// todo - add new trace event here
 	// TraceDSQLExecute trace(req_dbb->dbb_attachment, this);
@@ -1101,3 +1102,5 @@ void DsqlBatch::info(thread_db* tdbb, unsigned int itemsLength, const unsigned c
 	memcpy(buffer, out.getBuffer(), out.getBufferLength());
 }
 
+
+}	// namespace Firebird::Jrd
