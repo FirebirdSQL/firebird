@@ -51,6 +51,7 @@ class jrd_tra;
 class Savepoint;
 class Cursor;
 class thread_db;
+class ProfilerRequestProfile;
 
 
 // record parameter block
@@ -436,6 +437,9 @@ public:
 	RuntimeStatistics	req_base_stats;
 	AffectedRows req_records_affected;	// records affected by the last statement
 	FB_UINT64 req_profiler_ticks;		// profiler ticks
+	ProfilerRequestProfile* req_profiler_profile = nullptr;	// sampling profiler counters, owned by ProfilerManager
+	ULONG req_profiler_generation = 0;	// ProfilerManager generation of req_profiler_profile
+	bool req_profiler_sampled = false;	// executed while the profiler samples timings
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements

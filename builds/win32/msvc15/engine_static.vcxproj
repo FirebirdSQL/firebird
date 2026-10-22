@@ -126,6 +126,7 @@
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />
     <ClCompile Include="..\..\..\src\jrd\PreparedStatement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ProfilerManager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\ProfilerSampler.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RandomGenerator.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RecordBuffer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RecordSourceNodes.cpp" />
@@ -344,6 +345,7 @@
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\PreparedStatement.h" />
     <ClInclude Include="..\..\..\src\jrd\ProfilerManager.h" />
+    <ClInclude Include="..\..\..\src\jrd\ProfilerSampler.h" />
     <ClInclude Include="..\..\..\src\jrd\QualifiedName.h" />
     <ClInclude Include="..\..\..\src\jrd\que.h" />
     <ClInclude Include="..\..\..\src\jrd\RandomGenerator.h" />

@@ -23,6 +23,8 @@
 #include "firebird.h"
 #include "firebird/Message.h"
 #include <optional>
+#include <unordered_map>
+#include <vector>
 #include "../common/DeindentedStr.h"
 #include "../common/Int128.h"
 #include "../common/classes/ImplementHelper.h"
@@ -50,6 +52,9 @@ static constexpr UCHAR STREAM_BLOB_BPB[] = {
 	isc_bpb_version1,
 	isc_bpb_type, 1, isc_bpb_type_stream,
 };
+
+static constexpr auto SESSIONS_VIEW_COLUMNS =
+	"profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp, sampling_interval";
 
 static const CInt128 ONE_SECOND_IN_NS{1'000'000'000};
 static CInt128 ticksFrequency{0};
@@ -95,10 +100,24 @@ struct Stats
 		++counter;
 	}
 
+	// Aggregated hits with sampled time, so min and max are unknown.
+	void add(FB_UINT64 hits, FB_UINT64 elapsedTicks) noexcept
+	{
+		totalElapsedTicks += elapsedTicks;
+		counter += hits;
+		sampled = true;
+	}
+
+	bool isEmpty() const noexcept
+	{
+		return counter == 0 && totalElapsedTicks == 0;
+	}
+
 	FB_UINT64 counter = 0;
 	FB_UINT64 minElapsedTicks = 0;
 	FB_UINT64 maxElapsedTicks = 0;
 	FB_UINT64 totalElapsedTicks = 0;
+	bool sampled = false;
 };
 
 struct Cursor
@@ -121,6 +140,17 @@ struct RecordSourceStats
 	Stats fetchStats;
 };
 
+// Record source stats of a cursor, indexed by record source id (dense, starts at 1).
+struct CursorStats
+{
+	explicit CursorStats(MemoryPool& pool)
+		: bySequence(PoolAllocator<RecordSourceStats>(pool))
+	{
+	}
+
+	std::vector<RecordSourceStats, PoolAllocator<RecordSourceStats>> bySequence;
+};
+
 struct Statement
 {
 	unsigned level = 0;
@@ -132,8 +162,32 @@ struct Statement
 	string sqlText{defaultPool()};
 };
 
-using LineColumnKey = NonPooledPair<unsigned, unsigned>;
-using CursorRecSourceKey = NonPooledPair<unsigned, unsigned>;
+struct UIntPairKey
+{
+	unsigned first;
+	unsigned second;
+
+	bool operator==(const UIntPairKey& o) const noexcept
+	{
+		return first == o.first && second == o.second;
+	}
+};
+
+struct UIntPairKeyHash
+{
+	size_t operator()(const UIntPairKey& k) const noexcept
+	{
+		const uint64_t h = (uint64_t(k.first) << 32 | k.second) * 0x9E3779B97F4A7C15ull;
+		return size_t(h ^ (h >> 32));	// fold high bits into the low ones, used by power of two bucket counts
+	}
+};
+
+template <typename T>
+using UIntPairMap = std::unordered_map<UIntPairKey, T, UIntPairKeyHash, std::equal_to<UIntPairKey>,
+	PoolAllocator<std::pair<const UIntPairKey, T>>>;
+
+using LineColumnKey = UIntPairKey;
+using CursorRecSourceKey = UIntPairKey;
 
 struct Request
 {
@@ -145,8 +199,22 @@ struct Request
 	ISC_TIMESTAMP_TZ startTimestamp{};
 	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
 	std::optional<FB_UINT64> totalElapsedTicks;
-	NonPooledMap<CursorRecSourceKey, RecordSourceStats> recordSourcesStats{defaultPool()};
-	NonPooledMap<LineColumnKey, Stats> psqlStats{defaultPool()};
+	// Indexed by cursor id (dense, starts at 1).
+	std::vector<CursorStats, PoolAllocator<CursorStats>> recordSourcesStats{PoolAllocator<CursorStats>(defaultPool())};
+	UIntPairMap<Stats> psqlStats{defaultPool()};
+
+	RecordSourceStats& getRecordSourceStats(unsigned cursorId, unsigned recSourceId)
+	{
+		if (cursorId >= recordSourcesStats.size())
+			recordSourcesStats.resize(cursorId + 1);
+
+		auto& bySequence = recordSourcesStats[cursorId].bySequence;
+
+		if (recSourceId >= bySequence.size())
+			bySequence.resize(recSourceId + 1);
+
+		return bySequence[recSourceId];
+	}
 };
 
 using StatementCursorKey = NonPooledPair<SINT64, unsigned>;
@@ -225,10 +293,33 @@ public:
 		const char* type, const char* schemaName, const char* packageName, const char* routineName,
 		const char* sqlText) override;
 
+	void addPsqlLineColumnStats(SINT64 statementId, SINT64 requestId, unsigned line, unsigned column,
+		FB_UINT64 counter, FB_UINT64 elapsedTicks) override;
+
+	void addRecordSourceOpenStats(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+		FB_UINT64 counter, FB_UINT64 elapsedTicks) override;
+
+	void addRecordSourceGetRecordStats(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+		FB_UINT64 counter, FB_UINT64 elapsedTicks) override;
+
+	void setSamplingInterval(unsigned microseconds) override
+	{
+		samplingInterval = microseconds;
+		dirty = true;
+	}
+
 private:
 	Request* getRequest(SINT64 statementId, SINT64 requestId)
 	{
-		return requests.get(detailedRequests ? requestId : -statementId);
+		const SINT64 key = detailedRequests ? requestId : -statementId;
+
+		if (lastRequest && lastRequestKey == key)
+			return lastRequest;
+
+		lastRequest = requests.get(key);
+		lastRequestKey = key;
+
+		return lastRequest;
 	}
 
 public:
@@ -241,8 +332,18 @@ public:
 	ISC_TIMESTAMP_TZ startTimestamp;
 	std::optional<ISC_TIMESTAMP_TZ> finishTimestamp;
 	string description{defaultPool()};
+	std::optional<unsigned> samplingInterval;	// microseconds, 0 = measured timings
 	bool detailedRequests = false;
 	bool dirty = true;
+
+	void resetRequestCache() noexcept
+	{
+		lastRequest = nullptr;
+	}
+
+private:
+	Request* lastRequest = nullptr;
+	SINT64 lastRequestKey = 0;
 };
 
 class ProfilerPlugin final : public StdPlugin<IProfilerPluginImpl<ProfilerPlugin, ThrowStatusExceptionWrapper>>
@@ -264,10 +365,14 @@ private:
 		RefPtr<ITransaction> transaction);
 	void upgradeMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 		RefPtr<ITransaction> transaction);
+	void migrateMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+		RefPtr<ITransaction> transaction, bool minMaxNotNull, bool samplingIntervalMissing);
 	void createMetadataTables(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 		RefPtr<ITransaction> transaction);
 	void recreateSnapshotViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 		RefPtr<ITransaction> transaction);
+	void recreateSnapshotView(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+		RefPtr<ITransaction> transaction, const char* viewName, const char* selectList, const char* tableName);
 	void recreateAggregateViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 		RefPtr<ITransaction> transaction);
 
@@ -300,6 +405,21 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 		                     rdb$relation_name = 'PLG$PROF_STATEMENTS_DATA' and
 		                     rdb$field_name = 'USER_NAME'
 		       ) secure_metadata_created,
+		       exists(
+		           select true
+		               from system.rdb$relation_fields
+		               where rdb$schema_name = 'PLG$PROFILER' and
+		                     rdb$relation_name = 'PLG$PROF_PSQL_STATS_DATA' and
+		                     rdb$field_name = 'MIN_ELAPSED_TIME' and
+		                     rdb$null_flag = 1
+		       ) min_max_not_null,
+		       not exists(
+		           select true
+		               from system.rdb$relation_fields
+		               where rdb$schema_name = 'PLG$PROFILER' and
+		                     rdb$relation_name = 'PLG$PROF_SESSIONS_DATA' and
+		                     rdb$field_name = 'SAMPLING_INTERVAL'
+		       ) sampling_interval_missing,
 		       rdb$get_context('SYSTEM', 'DB_NAME') db_name,
 		       (select rdb$owner_name
 		            from system.rdb$relations
@@ -314,6 +434,8 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 	FB_MESSAGE(message, ThrowStatusExceptionWrapper,
 		(FB_BOOLEAN, metadataCreated)
 		(FB_BOOLEAN, secureMetadataCreated)
+		(FB_BOOLEAN, minMaxNotNull)
+		(FB_BOOLEAN, samplingIntervalMissing)
 		(FB_INTL_VARCHAR(MAXPATHLEN * 4, CS_METADATA), dbName)
 		(FB_INTL_VARCHAR(MAX_SQL_IDENTIFIER_LEN, CS_METADATA), ownerName)
 		(FB_INTL_VARCHAR(MAX_SQL_IDENTIFIER_LEN, CS_METADATA), currentRole)
@@ -346,8 +468,11 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 
 			roleInUse = message->roleInUse;
 
-			if (message->metadataCreated && message->secureMetadataCreated)
+			if (message->metadataCreated && message->secureMetadataCreated &&
+				!message->minMaxNotNull && !message->samplingIntervalMissing)
+			{
 				break;
+			}
 
 			auto dispatcher = makeNoIncRef(MasterInterfacePtr()->getDispatcher());
 			const auto util = MasterInterfacePtr()->getUtilInterface();
@@ -371,6 +496,11 @@ void ProfilerPlugin::init(ThrowStatusExceptionWrapper* status, IAttachment* atta
 		createInitialMetadata(status, refAttachment, refTransaction);
 	else if (!message->secureMetadataCreated)
 		upgradeMetadata(status, refAttachment, refTransaction);
+	else if (message->minMaxNotNull || message->samplingIntervalMissing)
+	{
+		migrateMetadata(status, refAttachment, refTransaction,
+			message->minMaxNotNull, message->samplingIntervalMissing);
+	}
 
 	if (!roleInUse)
 	{
@@ -425,8 +555,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 {
 	static constexpr auto sessionSql = deindentStr(R"""(
 		update or insert into plg$profiler.plg$prof_sessions
-		    (profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp)
-		    values (?, current_connection, default, ?, ?, ?)
+		    (profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp, sampling_interval)
+		    values (?, current_connection, default, ?, ?, ?, ?)
 		    matching (profile_id)
 	)""");
 
@@ -435,6 +565,7 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 		(FB_INTL_VARCHAR(255 * 4, CS_UTF8), description)
 		(FB_TIMESTAMP_TZ, startTimestamp)
 		(FB_TIMESTAMP_TZ, finishTimestamp)
+		(FB_INTEGER, samplingInterval)
 	) sessionMessage(status, MasterInterfacePtr());
 	sessionMessage.clear();
 
@@ -691,6 +822,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 			if (session->finishTimestamp.has_value())
 				sessionMessage->finishTimestamp = session->finishTimestamp.value();
 
+			sessionMessage->samplingIntervalNull = !session->samplingInterval.has_value();
+			sessionMessage->samplingInterval = (ISC_LONG) session->samplingInterval.value_or(0);
+
 			sessionStmt->execute(status, transaction, sessionMessage.getMetadata(),
 				sessionMessage.getData(), nullptr, nullptr);
 
@@ -902,48 +1036,58 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					profileRequest.dirty = false;
 				}
 
-				for (const auto& [cursorRecSource, stats] : profileRequest.recordSourcesStats)
+				for (unsigned cursorId = 0; cursorId < profileRequest.recordSourcesStats.size(); ++cursorId)
 				{
-					recSrcStatMessage->profileIdNull = FB_FALSE;
-					recSrcStatMessage->profileId = session->getId();
+					const auto& cursorStats = profileRequest.recordSourcesStats[cursorId].bySequence;
 
-					recSrcStatMessage->statementIdNull = FB_FALSE;
-					recSrcStatMessage->statementId = profileRequest.statementId;
+					for (unsigned recSourceId = 0; recSourceId < cursorStats.size(); ++recSourceId)
+					{
+						const auto& stats = cursorStats[recSourceId];
 
-					recSrcStatMessage->requestIdNull = FB_FALSE;
-					recSrcStatMessage->requestId = profileRequestId;
+						if (stats.openStats.isEmpty() && stats.fetchStats.isEmpty())
+							continue;
 
-					recSrcStatMessage->cursorIdNull = FB_FALSE;
-					recSrcStatMessage->cursorId = cursorRecSource.first;
+						recSrcStatMessage->profileIdNull = FB_FALSE;
+						recSrcStatMessage->profileId = session->getId();
 
-					recSrcStatMessage->recordSourceIdNull = FB_FALSE;
-					recSrcStatMessage->recordSourceId = cursorRecSource.second;
+						recSrcStatMessage->statementIdNull = FB_FALSE;
+						recSrcStatMessage->statementId = profileRequest.statementId;
 
-					recSrcStatMessage->openCounterNull = FB_FALSE;
-					recSrcStatMessage->openCounter = stats.openStats.counter;
+						recSrcStatMessage->requestIdNull = FB_FALSE;
+						recSrcStatMessage->requestId = profileRequestId;
 
-					recSrcStatMessage->openMinElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openMinElapsedTime = ticksToNanoseconds(stats.openStats.minElapsedTicks);
+						recSrcStatMessage->cursorIdNull = FB_FALSE;
+						recSrcStatMessage->cursorId = cursorId;
 
-					recSrcStatMessage->openMaxElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openMaxElapsedTime = ticksToNanoseconds(stats.openStats.maxElapsedTicks);
+						recSrcStatMessage->recordSourceIdNull = FB_FALSE;
+						recSrcStatMessage->recordSourceId = recSourceId;
 
-					recSrcStatMessage->openTotalElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->openTotalElapsedTime = ticksToNanoseconds(stats.openStats.totalElapsedTicks);
+						recSrcStatMessage->openCounterNull = FB_FALSE;
+						recSrcStatMessage->openCounter = stats.openStats.counter;
 
-					recSrcStatMessage->fetchCounterNull = FB_FALSE;
-					recSrcStatMessage->fetchCounter = stats.fetchStats.counter;
+						recSrcStatMessage->openMinElapsedTimeNull = stats.openStats.sampled;
+						recSrcStatMessage->openMinElapsedTime = ticksToNanoseconds(stats.openStats.minElapsedTicks);
 
-					recSrcStatMessage->fetchMinElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchMinElapsedTime = ticksToNanoseconds(stats.fetchStats.minElapsedTicks);
+						recSrcStatMessage->openMaxElapsedTimeNull = stats.openStats.sampled;
+						recSrcStatMessage->openMaxElapsedTime = ticksToNanoseconds(stats.openStats.maxElapsedTicks);
 
-					recSrcStatMessage->fetchMaxElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchMaxElapsedTime = ticksToNanoseconds(stats.fetchStats.maxElapsedTicks);
+						recSrcStatMessage->openTotalElapsedTimeNull = FB_FALSE;
+						recSrcStatMessage->openTotalElapsedTime = ticksToNanoseconds(stats.openStats.totalElapsedTicks);
 
-					recSrcStatMessage->fetchTotalElapsedTimeNull = FB_FALSE;
-					recSrcStatMessage->fetchTotalElapsedTime = ticksToNanoseconds(stats.fetchStats.totalElapsedTicks);
+						recSrcStatMessage->fetchCounterNull = FB_FALSE;
+						recSrcStatMessage->fetchCounter = stats.fetchStats.counter;
 
-					addBatch(recSrcStatBatch, recSrcStatBatchSize, recSrcStatMessage);
+						recSrcStatMessage->fetchMinElapsedTimeNull = stats.fetchStats.sampled;
+						recSrcStatMessage->fetchMinElapsedTime = ticksToNanoseconds(stats.fetchStats.minElapsedTicks);
+
+						recSrcStatMessage->fetchMaxElapsedTimeNull = stats.fetchStats.sampled;
+						recSrcStatMessage->fetchMaxElapsedTime = ticksToNanoseconds(stats.fetchStats.maxElapsedTicks);
+
+						recSrcStatMessage->fetchTotalElapsedTimeNull = FB_FALSE;
+						recSrcStatMessage->fetchTotalElapsedTime = ticksToNanoseconds(stats.fetchStats.totalElapsedTicks);
+
+						addBatch(recSrcStatBatch, recSrcStatBatchSize, recSrcStatMessage);
+					}
 				}
 
 				profileRequest.recordSourcesStats.clear();
@@ -970,10 +1114,10 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 					psqlStatMessage->counterNull = FB_FALSE;
 					psqlStatMessage->counter = statsIt.second.counter;
 
-					psqlStatMessage->minElapsedTimeNull = FB_FALSE;
+					psqlStatMessage->minElapsedTimeNull = statsIt.second.sampled;
 					psqlStatMessage->minElapsedTime = ticksToNanoseconds(statsIt.second.minElapsedTicks);
 
-					psqlStatMessage->maxElapsedTimeNull = FB_FALSE;
+					psqlStatMessage->maxElapsedTimeNull = statsIt.second.sampled;
 					psqlStatMessage->maxElapsedTime = ticksToNanoseconds(statsIt.second.maxElapsedTicks);
 
 					psqlStatMessage->totalElapsedTimeNull = FB_FALSE;
@@ -994,6 +1138,8 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 			for (const auto requestId : finishedRequests)
 				session->requests.remove(requestId);
+
+			session->resetRequestCache();
 
 			++sessionIdx;
 		}
@@ -1033,6 +1179,45 @@ void ProfilerPlugin::createInitialMetadata(ThrowStatusExceptionWrapper* status, 
 	createMetadataTables(status, attachment, transaction);
 	recreateSnapshotViews(status, attachment, transaction);
 	recreateAggregateViews(status, attachment, transaction);
+
+	transaction->commit(status);
+	transaction.clear();
+}
+
+// Brings the secure metadata (created by createInitialMetadata or upgradeMetadata of older versions)
+// to the current version. Each step is applied only when the database doesn't have it yet.
+void ProfilerPlugin::migrateMetadata(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+	RefPtr<ITransaction> transaction, bool minMaxNotNull, bool samplingIntervalMissing)
+{
+	const auto execute = [&](const char* sql)
+	{
+		attachment->execute(status, transaction, 0, sql, SQL_DIALECT_CURRENT, nullptr, nullptr, nullptr, nullptr);
+	};
+
+	// Min/max times are unknown when timings are sampled, so they are stored as NULL.
+	if (minMaxNotNull)
+	{
+		execute("alter table plg$profiler.plg$prof_psql_stats_data alter column min_elapsed_time drop not null");
+		execute("alter table plg$profiler.plg$prof_psql_stats_data alter column max_elapsed_time drop not null");
+		execute("alter table plg$profiler.plg$prof_record_source_stats_data "
+			"alter column open_min_elapsed_time drop not null");
+		execute("alter table plg$profiler.plg$prof_record_source_stats_data "
+			"alter column open_max_elapsed_time drop not null");
+		execute("alter table plg$profiler.plg$prof_record_source_stats_data "
+			"alter column fetch_min_elapsed_time drop not null");
+		execute("alter table plg$profiler.plg$prof_record_source_stats_data "
+			"alter column fetch_max_elapsed_time drop not null");
+	}
+
+	// Sampling interval of the session, NULL for sessions recorded before this column existed.
+	if (samplingIntervalMissing)
+	{
+		execute("alter table plg$profiler.plg$prof_sessions_data add sampling_interval integer");
+
+		// No other view depends on it, so it can be recreated alone.
+		recreateSnapshotView(status, attachment, transaction,
+			"plg$prof_sessions", SESSIONS_VIEW_COLUMNS, "plg$prof_sessions_data");
+	}
 
 	transaction->commit(status);
 	transaction.clear();
@@ -1174,6 +1359,7 @@ void ProfilerPlugin::createMetadataTables(ThrowStatusExceptionWrapper* status, R
 		    description varchar(255) character set utf8,
 		    start_timestamp timestamp with time zone not null,
 		    finish_timestamp timestamp with time zone,
+		    sampling_interval integer,
 		    constraint plg$prof_sessions_data_profile_user_uk
 		        unique (profile_id, user_name)
 		        using index plg$prof_sessions_data_profile_user
@@ -1322,8 +1508,8 @@ void ProfilerPlugin::createMetadataTables(ThrowStatusExceptionWrapper* status, R
 		    line_num integer not null,
 		    column_num integer not null,
 		    counter bigint not null,
-		    min_elapsed_time bigint not null,
-		    max_elapsed_time bigint not null,
+		    min_elapsed_time bigint,
+		    max_elapsed_time bigint,
 		    total_elapsed_time bigint not null,
 		    constraint plg$prof_psql_stats_data_pk
 		        primary key (profile_id, statement_id, request_id, line_num, column_num)
@@ -1354,12 +1540,12 @@ void ProfilerPlugin::createMetadataTables(ThrowStatusExceptionWrapper* status, R
 		    cursor_id integer not null,
 		    record_source_id integer not null,
 		    open_counter bigint not null,
-		    open_min_elapsed_time bigint not null,
-		    open_max_elapsed_time bigint not null,
+		    open_min_elapsed_time bigint,
+		    open_max_elapsed_time bigint,
 		    open_total_elapsed_time bigint not null,
 		    fetch_counter bigint not null,
-		    fetch_min_elapsed_time bigint not null,
-		    fetch_max_elapsed_time bigint not null,
+		    fetch_min_elapsed_time bigint,
+		    fetch_max_elapsed_time bigint,
 		    fetch_total_elapsed_time bigint not null,
 		    constraint plg$prof_record_source_stats_data_pk
 		        primary key (profile_id, statement_id, request_id, cursor_id, record_source_id)
@@ -1411,31 +1597,12 @@ void ProfilerPlugin::createMetadataTables(ThrowStatusExceptionWrapper* status, R
 void ProfilerPlugin::recreateSnapshotViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
 	RefPtr<ITransaction> transaction)
 {
-	constexpr auto visibilityPredicate =
-		"user_name = current_user or rdb$system_privilege(profile_any_attachment)";
-
-	string statementsSql;
 	const auto addView = [&](const char* viewName, const char* selectList, const char* tableName)
 	{
-		statementsSql.printf(
-			"recreate view plg$profiler.%s as "
-			"select %s from plg$profiler.%s where %s with check option",
-			viewName, selectList, tableName, visibilityPredicate);
-
-		attachment->execute(status, transaction, 0, statementsSql.c_str(), SQL_DIALECT_CURRENT,
-			nullptr, nullptr, nullptr, nullptr);
-
-		statementsSql.printf(
-			"grant select, update, insert, delete on table plg$profiler.%s to plg$profiler",
-			viewName);
-
-		attachment->execute(status, transaction, 0, statementsSql.c_str(), SQL_DIALECT_CURRENT,
-			nullptr, nullptr, nullptr, nullptr);
+		recreateSnapshotView(status, attachment, transaction, viewName, selectList, tableName);
 	};
 
-	addView("plg$prof_sessions",
-		"profile_id, attachment_id, user_name, description, start_timestamp, finish_timestamp",
-		"plg$prof_sessions_data");
+	addView("plg$prof_sessions", SESSIONS_VIEW_COLUMNS, "plg$prof_sessions_data");
 
 	addView("plg$prof_statements",
 		"user_name, profile_id, statement_id, parent_statement_id, statement_type, schema_name, package_name, "
@@ -1465,6 +1632,30 @@ void ProfilerPlugin::recreateSnapshotViews(ThrowStatusExceptionWrapper* status, 
 		"open_min_elapsed_time, open_max_elapsed_time, open_total_elapsed_time, fetch_counter, "
 		"fetch_min_elapsed_time, fetch_max_elapsed_time, fetch_total_elapsed_time",
 		"plg$prof_record_source_stats_data");
+}
+
+void ProfilerPlugin::recreateSnapshotView(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
+	RefPtr<ITransaction> transaction, const char* viewName, const char* selectList, const char* tableName)
+{
+	constexpr auto visibilityPredicate =
+		"user_name = current_user or rdb$system_privilege(profile_any_attachment)";
+
+	string statementsSql;
+
+	statementsSql.printf(
+		"recreate view plg$profiler.%s as "
+		"select %s from plg$profiler.%s where %s with check option",
+		viewName, selectList, tableName, visibilityPredicate);
+
+	attachment->execute(status, transaction, 0, statementsSql.c_str(), SQL_DIALECT_CURRENT,
+		nullptr, nullptr, nullptr, nullptr);
+
+	statementsSql.printf(
+		"grant select, update, insert, delete on table plg$profiler.%s to plg$profiler",
+		viewName);
+
+	attachment->execute(status, transaction, 0, statementsSql.c_str(), SQL_DIALECT_CURRENT,
+		nullptr, nullptr, nullptr, nullptr);
 }
 
 void ProfilerPlugin::recreateAggregateViews(ThrowStatusExceptionWrapper* status, RefPtr<IAttachment> attachment,
@@ -1768,6 +1959,8 @@ void Session::defineRecordSource(SINT64 statementId, unsigned cursorId, unsigned
 void Session::onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
 	SINT64 callerStatementId, SINT64 callerRequestId, ISC_TIMESTAMP_TZ timestamp)
 {
+	resetRequestCache();
+
 	const auto request = requests.put(detailedRequests ? requestId : -statementId);
 
 	if (!request)
@@ -1799,7 +1992,7 @@ void Session::afterPsqlLineColumn(SINT64 statementId, SINT64 requestId,
 {
 	if (const auto request = getRequest(statementId, requestId))
 	{
-		const auto profileStats = request->psqlStats.getOrPut({line, column});
+		const auto profileStats = &request->psqlStats[{line, column}];
 		profileStats->hit(stats->getElapsedTicks());
 	}
 }
@@ -1809,7 +2002,7 @@ void Session::afterRecordSourceOpen(SINT64 statementId, SINT64 requestId, unsign
 {
 	if (const auto request = getRequest(statementId, requestId))
 	{
-		const auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
+		const auto profileStats = &request->getRecordSourceStats(cursorId, recSourceId);
 		profileStats->openStats.hit(stats->getElapsedTicks());
 	}
 }
@@ -1819,9 +2012,30 @@ void Session::afterRecordSourceGetRecord(SINT64 statementId, SINT64 requestId, u
 {
 	if (const auto request = getRequest(statementId, requestId))
 	{
-		const auto profileStats = request->recordSourcesStats.getOrPut({cursorId, recSourceId});
+		const auto profileStats = &request->getRecordSourceStats(cursorId, recSourceId);
 		profileStats->fetchStats.hit(stats->getElapsedTicks());
 	}
+}
+
+void Session::addPsqlLineColumnStats(SINT64 statementId, SINT64 requestId, unsigned line, unsigned column,
+	FB_UINT64 counter, FB_UINT64 elapsedTicks)
+{
+	if (const auto request = getRequest(statementId, requestId))
+		request->psqlStats[{line, column}].add(counter, elapsedTicks);
+}
+
+void Session::addRecordSourceOpenStats(SINT64 statementId, SINT64 requestId, unsigned cursorId, unsigned recSourceId,
+	FB_UINT64 counter, FB_UINT64 elapsedTicks)
+{
+	if (const auto request = getRequest(statementId, requestId))
+		request->getRecordSourceStats(cursorId, recSourceId).openStats.add(counter, elapsedTicks);
+}
+
+void Session::addRecordSourceGetRecordStats(SINT64 statementId, SINT64 requestId, unsigned cursorId,
+	unsigned recSourceId, FB_UINT64 counter, FB_UINT64 elapsedTicks)
+{
+	if (const auto request = getRequest(statementId, requestId))
+		request->getRecordSourceStats(cursorId, recSourceId).fetchStats.add(counter, elapsedTicks);
 }
 
 //--------------------------------------

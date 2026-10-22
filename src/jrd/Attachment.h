@@ -402,6 +402,8 @@ typedef Firebird::RaiiUnlockGuard<StableAttachmentPart::Sync> AttSyncUnlockGuard
 //
 class Attachment : public pool_alloc<type_att>
 {
+	friend class ProfilerManager;
+
 public:
 	class SyncGuard
 	{
@@ -781,8 +783,12 @@ public:
 	}
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
-	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
-	bool isProfilerActive();
+
+	bool isProfilerActive() const noexcept
+	{
+		return att_profiler_active;
+	}
+
 	void releaseProfilerManager(thread_db* tdbb);
 	void purgeTransactions(thread_db* tdbb, const bool force_flag);
 
@@ -811,6 +817,7 @@ private:
 	InitialOptions att_initial_options;	// Initial session options
 	DebugOptions att_debug_options;
 	Firebird::AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager
+	bool att_profiler_active = false;	// att_profiler_manager has an active (not paused) session
 
 	JProvider* att_provider;	// Provider which created this attachment
 
