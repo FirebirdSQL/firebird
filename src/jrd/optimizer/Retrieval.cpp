@@ -1133,6 +1133,8 @@ ValueExprNode* Retrieval::findDbKey(ValueExprNode* dbkey, SLONG* position) const
 
 InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 {
+	fb_assert(csb);
+
 	if (!createIndexScanNodes)
 		return nullptr;
 
@@ -1140,13 +1142,7 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	auto& segments = indexScratch->segments;
 
 	// Check whether this is during a compile or during a SET INDEX operation
-	if (csb)
-		CMP_post_resource(&csb->csb_resources, relation, Resource::rsc_index, idx->idx_id);
-	else
-	{
-		CMP_post_resource(&tdbb->getRequest()->getStatement()->resources, relation,
-			Resource::rsc_index, idx->idx_id);
-	}
+	CMP_post_resource(&csb->csb_resources, relation, Resource::rsc_index, idx->idx_id);
 
 	// For external requests, determine index name (to be reported in plans)
 	MetaName indexName;
@@ -1300,7 +1296,7 @@ InversionNode* Retrieval::makeIndexScanNode(IndexScratch* indexScratch) const
 	// mark the index as utilized for the purposes of this compile
 	idx->idx_runtime_flags |= idx_used;
 
-	const ULONG impure = csb ? csb->allocImpure<impure_inversion>() : 0;
+	const ULONG impure = csb->allocImpure<impure_inversion>();
 	return FB_NEW_POOL(getPool()) InversionNode(retrieval, impure);
 }
 

@@ -9590,6 +9590,14 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
+	// to guarantee dsqlParameter existence
+	if (!dsqlParameter)
+	{
+		dsqlParameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getSendMsg(), true, true,
+			dsqlParameterIndex, NULL);
+		dsqlParameterIndex = dsqlParameter->par_index;
+	}
+
 	const dsc oldDesc = dsqlParameter->par_desc;
 
 	if (!makeDesc)
@@ -9643,13 +9651,6 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 				dsqlParameter->par_desc.setTextType(toCharSet);
 			}
 		}
-	}
-
-	if (!dsqlParameter)
-	{
-		dsqlParameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getSendMsg(), true, true,
-			dsqlParameterIndex, NULL);
-		dsqlParameterIndex = dsqlParameter->par_index;
 	}
 
 	// In case of RETURNING in MERGE and UPDATE OR INSERT, a single parameter is used in
@@ -12308,7 +12309,7 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 		// Special handling for system function MAKE_DBKEY:
 		// convert constant relation name into ID at the parsing time
 
-		auto literal = node->args->items.getCount() ? 
+		auto literal = node->args->items.getCount() ?
 			nodeAs<LiteralNode>(node->args->items[0]) : nullptr;
 
 		if (literal && literal->litDesc.isText())
