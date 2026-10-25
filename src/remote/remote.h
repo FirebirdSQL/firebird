@@ -1070,7 +1070,6 @@ private:
 	Firebird::PathName dpbPlugins;				// User's plugin list
 	Firebird::RefPtr<const Firebird::Config> clntConfig;	// Used to get plugins list and pass to port
 	Firebird::AutoPtr<RmtAuthBlock> remAuthBlock;	//Authentication block if present
-	unsigned nextKey;							// First key to be analyzed
 
 	class ClientCrypt final :
 		public Firebird::VersionedIface<Firebird::ICryptKeyCallbackImpl<ClientCrypt, Firebird::CheckStatusWrapper> >,

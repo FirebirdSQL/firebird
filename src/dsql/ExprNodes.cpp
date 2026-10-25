@@ -9731,6 +9731,14 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 {
 	thread_db* tdbb = JRD_get_thread_data();
 
+	// to guarantee dsqlParameter existence
+	if (!dsqlParameter)
+	{
+		dsqlParameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getSendMsg(), true, true,
+			dsqlParameterIndex, NULL);
+		dsqlParameterIndex = dsqlParameter->par_index;
+	}
+
 	const dsc oldDesc = dsqlParameter->par_desc;
 
 	if (!makeDesc)
@@ -9784,13 +9792,6 @@ bool ParameterNode::setParameterType(DsqlCompilerScratch* dsqlScratch,
 				dsqlParameter->par_desc.setTextType(toCharSet);
 			}
 		}
-	}
-
-	if (!dsqlParameter)
-	{
-		dsqlParameter = MAKE_parameter(dsqlScratch->getDsqlStatement()->getSendMsg(), true, true,
-			dsqlParameterIndex, NULL);
-		dsqlParameterIndex = dsqlParameter->par_index;
 	}
 
 	// In case of RETURNING in MERGE and UPDATE OR INSERT, a single parameter is used in
