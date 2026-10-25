@@ -221,7 +221,8 @@ namespace
 		return TipCache::traState(tdbb, descTrans, checkPresence, creating);
 	}
 
-	const index_root_page::irt_repeat* getIndexSlot(thread_db* tdbb, const index_root_page* root, MetaId indexId)
+	const index_root_page::irt_repeat* getIndexSlot(thread_db* tdbb, const index_root_page* root,
+		WIN* window, MetaId indexId)
 	{
 		const auto rpt = &root->irt_rpt[indexId];
 
@@ -235,7 +236,10 @@ namespace
 			{
 				const auto backSlot = root->getBackSlot(rpt);
 				if (!backSlot)
+				{
+					CCH_RELEASE(tdbb, window);
 					BUGCHECK(204);		// msg 204 index inconsistent
+				}
 
 				return backSlot;
 			}
@@ -334,7 +338,7 @@ void dumpIndexRoot(const char* up, const char* from, thread_db* tdbb, WIN* windo
 		for (MetaId i = 0; i < root->irt_count; ++i)
 		{
 			const auto* idp = rel->lookupIndex(tdbb, i, 0);
-			const auto& rpt = *getIndexSlot(tdbb, root, i);
+			const auto& rpt = *getIndexSlot(tdbb, root, window, i);
 			const auto page = rpt.getRootPage();
 
 			printf("Index %d '%s' root %d:%d tra %" SQUADFORMAT " %s\n",
@@ -1137,7 +1141,7 @@ UCHAR* IndexDuplicateScanner::init(thread_db* tdbb, win* window)
 
 	const auto relPerm = m_relation->getPermanent();
 
-	if (!BTR_description(tdbb, relPerm, root, &m_index, m_indexId))
+	if (!BTR_description(tdbb, relPerm, root, window, &m_index, m_indexId))
 	{
 		CCH_RELEASE(tdbb, window);
 		return nullptr;
@@ -1313,7 +1317,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 
 	for (MetaId id = 0; id < root->irt_count; id++)
 	{
-		const auto irt_desc = getIndexSlot(tdbb, root, id);
+		const auto irt_desc = getIndexSlot(tdbb, root, &window, id);
 		const TraNumber descTrans = irt_desc->getTransaction();
 
 		switch (irt_desc->getState())
@@ -1347,7 +1351,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 		}
 
 		index_desc idx;
-		if (BTR_description(tdbb, relPerm, root, &idx, id,
+		if (BTR_description(tdbb, relPerm, root, &window, &idx, id,
 			BTR_DESCRIBE_NO_THROW | (sysRq ? BTR_DESCRIBE_SYSTEM_RQ : 0)))
 		{
 			idxList.add(idx);
@@ -1745,8 +1749,8 @@ bool BTR_activate_index(thread_db* tdbb, jrd_rel* relation, MetaId id)
 }
 
 
-bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_root_page* root, index_desc* idx,
-					 MetaId id, USHORT flags)
+bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_root_page* root, WIN* window,
+					 index_desc* idx, MetaId id, USHORT flags)
 {
 /**************************************
  *
@@ -1765,7 +1769,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	if (id >= root->irt_count)
 		return false;
 
-	const auto irt_desc = getIndexSlot(tdbb, root, id);
+	const auto irt_desc = getIndexSlot(tdbb, root, window, id);
 
 	const auto rootPage = irt_desc->getRootPage();
 	if (!rootPage)
@@ -2166,7 +2170,7 @@ btree_page* BTR_find_page(thread_db* tdbb,
 	window->win_page = rootPage.value();
 	const index_root_page* rpage = BTR_fetch_root(FB_FUNCTION, tdbb, window);
 
-	if (!BTR_description(tdbb, retrieval->getPermRelation(), rpage, idx, retrieval->irb_index))
+	if (!BTR_description(tdbb, retrieval->getPermRelation(), rpage, window, idx, retrieval->irb_index))
 	{
 		CCH_RELEASE(tdbb, window);
 		IBERROR(260);	// msg 260 index unexpectedly deleted
@@ -2587,7 +2591,7 @@ bool BTR_lookup(thread_db* tdbb, jrd_rel* relation, MetaId id, index_desc* buffe
 	WIN window(rootPage.value());
 	const index_root_page* const root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
-	const bool result = (id < root->irt_count && BTR_description(tdbb, relation->getPermanent(), root, buffer, id));
+	const bool result = (id < root->irt_count && BTR_description(tdbb, relation->getPermanent(), root, &window, buffer, id));
 	CCH_RELEASE(tdbb, &window);
 	return result;
 }
@@ -3188,11 +3192,15 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 			if (state != tra_committed && state != tra_dead)
 				return ModifyIrtRepeatValue::Skip;
 
-			CCH_MARK(tdbb, window);
 			const auto backId = irt_desc->irt_backslot;
 			const auto backIrtDesc = root->getBackSlot(irt_desc);
 			if (!backIrtDesc)
+			{
+				CCH_RELEASE(tdbb, window);
 				BUGCHECK(204);		// msg 204 index inconsistent
+			}
+
+			CCH_MARK(tdbb, window);
 
 			if (state == tra_committed)
 			{
@@ -3271,7 +3279,7 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 	{
 		for (; id < root->irt_count; ++id)
 		{
-			const auto irt_desc = getIndexSlot(tdbb, root, id);
+			const auto irt_desc = getIndexSlot(tdbb, root, window, id);
 
 			if (checkIrtRepeat(tdbb, irt_desc, relation->getPermanent(), window, id))
 			{
@@ -3292,7 +3300,7 @@ bool BTR_next_index(thread_db* tdbb, jrd_rel* relation, jrd_tra* transaction, in
 					continue;
 			}
 
-			if (BTR_description(tdbb, relation->getPermanent(), root, idx, id))
+			if (BTR_description(tdbb, relation->getPermanent(), root, window, idx, id))
 				return true;
 		}
 
@@ -3676,7 +3684,7 @@ void BTR_selectivity(thread_db* tdbb, jrd_rel* relation, MetaId id, SelectivityL
 		return;
 	}
 
-	const auto indexRpt = getIndexSlot(tdbb, root, id);
+	const auto indexRpt = getIndexSlot(tdbb, root, &window, id);
 
 	const auto pageNumber = indexRpt->getRootPage();
 	if (!pageNumber)
@@ -4030,7 +4038,7 @@ void BTR_copy_index(thread_db* tdbb, jrd_rel* relation, MetaId indexId, ULONG pa
 	}
 
 	index_desc idx;
-	if (BTR_description(tdbb, relation->getPermanent(), root, &idx, indexId))
+	if (BTR_description(tdbb, relation->getPermanent(), root, &rootWindow, &idx, indexId))
 	{
 		CCH_RELEASE(tdbb, &rootWindow);
 

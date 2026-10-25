@@ -226,7 +226,7 @@ private:
 	RTN walk_data_page(jrd_rel*, ULONG, ULONG, UCHAR&);
 	void walk_database();
 	void walk_generators();
-	RTN walk_index(jrd_rel*, Ods::index_root_page*, USHORT);
+	RTN walk_index(jrd_rel*, Ods::index_root_page*, WIN*, USHORT);
 	void walk_pip();
 	RTN walk_pointer_page(jrd_rel*, ULONG);
 	RTN walk_record(jrd_rel*, const Ods::rhd*, USHORT, RecordNumber, bool);
