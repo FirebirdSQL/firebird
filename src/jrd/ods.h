@@ -793,12 +793,8 @@ inline const index_root_page::irt_repeat* index_root_page::getBackSlot(const irt
 
 inline index_root_page::irt_repeat* index_root_page::getBackSlot(const irt_repeat* rpt)
 {
-	fb_assert(rpt->getState() == irt_migrate);
-
-	if (rpt->getState() != irt_migrate || rpt->irt_backslot >= irt_count)
-		return nullptr;
-
-	return &irt_rpt[rpt->irt_backslot];
+	return const_cast<irt_repeat*>(
+		static_cast<const index_root_page*>(this)->getBackSlot(rpt));
 }
 
 inline constexpr int STUFF_COUNT		= 4;
