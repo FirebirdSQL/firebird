@@ -449,6 +449,20 @@ struct index_root_page
 		void setEmpty();
 	} irt_rpt[1];
 
+	// Return the backing slot referenced by a migrating index slot,
+	// or NULL when the stored slot number points outside this page.
+	const irt_repeat* getBackSlot(const irt_repeat* rpt) const
+	{
+		const auto slot = rpt->irt_backslot;
+		return slot < irt_count ? &irt_rpt[slot] : nullptr;
+	}
+
+	irt_repeat* getBackSlot(const irt_repeat* rpt)
+	{
+		const auto slot = rpt->irt_backslot;
+		return slot < irt_count ? &irt_rpt[slot] : nullptr;
+	}
+
 	static_assert(sizeof(struct irt_repeat) == 24, "struct irt_repeat size mismatch");
 	static_assert(offsetof(struct irt_repeat, irt_transaction) == 0, "irt_transaction offset mismatch");
 	static_assert(offsetof(struct irt_repeat, irt_page_num) == 8, "irt_root offset mismatch");
