@@ -30,14 +30,26 @@ static index_root_page* makeRootPage(unsigned count)
 	return &image.page;
 }
 
+// Bring a slot into the irt_migrate state through the regular state
+// transitions, ending with the given backing slot number
+static index_root_page::irt_repeat* makeMigratedSlot(index_root_page::irt_repeat* slot, USHORT backSlot)
+{
+	slot->setInProgress(12);
+	slot->setInProgress(PageNumber(1, 77), 12);
+	slot->setKill();
+	slot->setRollback(12);
+	slot->setMigrate(PageNumber(1, 99), 12, backSlot);
+	return slot;
+}
+
 BOOST_AUTO_TEST_CASE(BackSlotInRange)
 {
 	auto root = makeRootPage(4);
 
-	root->irt_rpt[1].irt_backslot = 2;
+	makeMigratedSlot(&root->irt_rpt[1], 2);
 	BOOST_TEST(root->getBackSlot(&root->irt_rpt[1]) == &root->irt_rpt[2]);
 
-	root->irt_rpt[1].irt_backslot = 3;		// last valid slot
+	root->irt_rpt[1].setMigrate(PageNumber(1, 99), 12, 3);		// last valid slot
 	BOOST_TEST(root->getBackSlot(&root->irt_rpt[1]) == &root->irt_rpt[3]);
 }
 
@@ -45,14 +57,31 @@ BOOST_AUTO_TEST_CASE(BackSlotOutOfRange)
 {
 	auto root = makeRootPage(4);
 
-	root->irt_rpt[0].irt_backslot = 4;		// == irt_count
+	makeMigratedSlot(&root->irt_rpt[0], 4);		// == irt_count
 	BOOST_TEST(root->getBackSlot(&root->irt_rpt[0]) == nullptr);
 
-	root->irt_rpt[0].irt_backslot = 0xFFFF;
+	root->irt_rpt[0].setMigrate(PageNumber(1, 99), 12, 0xFFFF);
 	BOOST_TEST(root->getBackSlot(&root->irt_rpt[0]) == nullptr);
 
 	root->irt_count = 0;		// no slot may resolve anymore
 	BOOST_TEST(root->getBackSlot(&root->irt_rpt[0]) == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(BackSlotNotMigrating)
+{
+	auto root = makeRootPage(4);
+
+	// slot in the regular working state: the backing slot number is
+	// meaningless and must not resolve even when in range
+	auto slot = &root->irt_rpt[1];
+	slot->setInProgress(12);
+	slot->setInProgress(PageNumber(1, 77), 12);
+	slot->setKill();
+	slot->setRollback(12);
+	slot->setNormal();
+	slot->irt_backslot = 2;
+
+	BOOST_TEST(root->getBackSlot(slot) == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// BackSlotTests
