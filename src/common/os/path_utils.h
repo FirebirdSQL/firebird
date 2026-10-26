@@ -65,14 +65,19 @@ public:
 	class DirIterator : protected Firebird::AutoStorage
 	{
 	public:
+		using Flags = uint32_t;
+		static constexpr Flags F_NONE                 = 0;
+		static constexpr Flags F_RETURN_ONLY_FILENAME = 1 << 0;
+
+	public:
 		// The constructor requires a string that is the path of the directory being iterated.
 		// DirIterator may be located on stack, therefore use AutoStorage.
-		DirIterator(MemoryPool& p, const Firebird::PathName& dir)
-			: AutoStorage(p), dirPrefix(getPool(), dir)
+		DirIterator(MemoryPool& p, const Firebird::PathName& dir, const Flags flags)
+			: AutoStorage(p), dirPrefix(getPool(), dir), flags(flags)
 		{}
 
-		DirIterator(const Firebird::PathName& dir)
-			: AutoStorage(), dirPrefix(getPool(), dir)
+		DirIterator(const Firebird::PathName& dir, const Flags flags)
+			: AutoStorage(), dirPrefix(getPool(), dir), flags(flags)
 		{}
 
 		// Destructor provided for memory cleanup
@@ -103,6 +108,7 @@ public:
 	protected:
 		// Stores the path to the directory as given in the constructor
 		const Firebird::PathName dirPrefix;
+		const Flags flags = F_NONE;
 	};
 
 	/** isRelative returns true if the given path is relative, and false if not.
@@ -171,7 +177,8 @@ public:
 		All errors result in either exceptions being thrown, or a valid empty
 		DirIterator being returned.
 	**/
-	static DirIterator* newDirIterator(MemoryPool&, const Firebird::PathName&);
+	static DirIterator* newDirIterator(MemoryPool&, const Firebird::PathName&,
+		const DirIterator::Flags flags = DirIterator::F_NONE);
 
 	/** makeDir creates directory passed as parameter.
 		return value is 0 on success or error code on error.

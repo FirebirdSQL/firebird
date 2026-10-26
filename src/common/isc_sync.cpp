@@ -1703,6 +1703,32 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 		}
 	}
 
+	if (init_flag)
+	{
+		// We created the event, so no process in our IPC namespace uses this file.
+		// If somebody still has it open, it's another engine instance (e.g. in another
+		// Windows session with its own object namespace), so don't touch the file.
+		HANDLE probe_handle = CreateFile(expanded_filename,
+			GENERIC_READ,
+			0,					// no sharing: fails if anyone has the file open
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+
+		if (probe_handle != INVALID_HANDLE_VALUE)
+			CloseHandle(probe_handle);
+		else if (GetLastError() == ERROR_SHARING_VIOLATION)
+		{
+			if (retry_count < 50)	// 0.5 sec
+				goto retry;
+
+			CloseHandle(event_handle);
+			Arg::Gds(isc_instance_conflict).raise();
+		}
+		// ERROR_FILE_NOT_FOUND is the normal case, other errors are reported by CreateFile below.
+	}
+
 	HANDLE file_handle = CreateFile(expanded_filename,
 							 GENERIC_READ | GENERIC_WRITE,
 							 FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -1730,43 +1756,19 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	if (init_flag)
 	{
-		if (err == ERROR_ALREADY_EXISTS)
+		LARGE_INTEGER file_size;
+		file_size.QuadPart = 0;
+
+		if (err == ERROR_ALREADY_EXISTS && !GetFileSizeEx(file_handle, &file_size))
 		{
-			const DWORD file_size = GetFileSize(file_handle, NULL);
-			if (file_size == INVALID_FILE_SIZE)
-			{
-				err = GetLastError();
-				CloseHandle(event_handle);
-				CloseHandle(file_handle);
-				system_call_failed::raise("GetFileSize", err);
-			}
-
-			if (length == 0)
-			{
-				length = file_size;
-			}
-			else if (file_size &&
-					 SetFilePointer(file_handle, 0, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
-					 !SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
-			{
-				err = GetLastError();
-				CloseHandle(file_handle);
-
-				if (err == ERROR_USER_MAPPED_FILE)
-				{
-					if (retry_count < 50)	// 0.5 sec
-						goto retry;
-
-					CloseHandle(event_handle);
-					Arg::Gds(isc_instance_conflict).raise();
-				}
-				else
-				{
-					CloseHandle(event_handle);
-					system_call_failed::raise("SetFilePointer", err);
-				}
-			}
+			err = GetLastError();
+			CloseHandle(event_handle);
+			CloseHandle(file_handle);
+			system_call_failed::raise("GetFileSizeEx", err);
 		}
+
+		if (length == 0)
+			length = static_cast<ULONG>(file_size.QuadPart);
 
 		if (length == 0)
 		{
@@ -1782,16 +1784,33 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 			(Arg::Gds(isc_random) << Arg::Str("File for memory mapping is empty.")).raise();
 		}
 
-		LARGE_INTEGER offset;
-		offset.QuadPart = length;
-
-		if (SetFilePointer(file_handle, offset.LowPart, &offset.HighPart, FILE_BEGIN) == INVALID_SET_FILE_POINTER ||
-			!SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
+		// Only adjust the size: initializing the content is the job of
+		// IpcObject::initialize(), the same as with ftruncate() on POSIX.
+		if (file_size.QuadPart != static_cast<LONGLONG>(length))
 		{
-			err = GetLastError();
-			CloseHandle(event_handle);
-			CloseHandle(file_handle);
-			system_call_failed::raise("SetFilePointer", err);
+			LARGE_INTEGER offset;
+			offset.QuadPart = length;
+
+			if (!SetFilePointerEx(file_handle, offset, NULL, FILE_BEGIN) ||
+				!SetEndOfFile(file_handle) || !FlushFileBuffers(file_handle))
+			{
+				err = GetLastError();
+				CloseHandle(file_handle);
+
+				// The file is still mapped by a killed process that hasn't released
+				// its mappings yet, wait a bit.
+				if (err == ERROR_USER_MAPPED_FILE)
+				{
+					if (retry_count < 50)	// 0.5 sec
+						goto retry;
+
+					CloseHandle(event_handle);
+					Arg::Gds(isc_instance_conflict).raise();
+				}
+
+				CloseHandle(event_handle);
+				system_call_failed::raise("SetEndOfFile", err);
+			}
 		}
 	}
 
