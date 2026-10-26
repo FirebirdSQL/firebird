@@ -5728,12 +5728,11 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 						(*vector)[arg->dfw_id] = NULL;
 						vector->trimNulls();
 						delete format;
-
-						fb_assert(vector->count() > 1);
-						relation->rel_current_fmt = vector->count() - 1;
-						relation->rel_current_format = (*vector)[relation->rel_current_fmt];
 					}
 				}
+
+				relation->rel_current_format = NULL;
+				relation->rel_flags &= ~REL_scanned;
 			}
 		}
 		break;
