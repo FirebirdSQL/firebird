@@ -44,6 +44,7 @@
 #include "../jrd/trace/TraceManager.h"
 #include "../jrd/trace/TraceJrdHelpers.h"
 #include "../jrd/cmp_proto.h"
+#include "../jrd/cch_proto.h"
 #include "../jrd/dfw_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/evl_proto.h"
@@ -2753,7 +2754,19 @@ const StmtNode* EraseNode::erase(thread_db* tdbb, Request* request, WhichTrigger
 		// setting req_update_conflict flag) so re-fetch should see new data.
 		// b) record is locked by another transaction and should be skipped.
 
-		if (!VIO_erase(tdbb, rpb, transaction))
+		bool erased;
+
+		try
+		{
+			erased = VIO_erase(tdbb, rpb, transaction);
+		}
+		catch (const Exception&)
+		{
+			CCH_unwind(tdbb, false);
+			throw;
+		}
+
+		if (!erased)
 		{
 			// Record was not deleted, flow control should be passed to the parent
 			// ForNode. Note, If RETURNING clause was specified and SKIP LOCKED was
@@ -7132,7 +7145,19 @@ const StmtNode* ModifyNode::modify(thread_db* tdbb, Request* request, WhichTrigg
 					// setting req_update_conflict flag) so re-fetch should see new data.
 					// b) record is locked by another transaction and should be skipped.
 
-					if (!VIO_modify(tdbb, orgRpb, newRpb, transaction))
+					bool modified;
+
+					try
+					{
+						modified = VIO_modify(tdbb, orgRpb, newRpb, transaction);
+					}
+					catch (const Exception&)
+					{
+						CCH_unwind(tdbb, false);
+						throw;
+					}
+
+					if (!modified)
 					{
 						if (!skipLocked)
 						{
@@ -8215,7 +8240,16 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 					VirtualTable::store(tdbb, rpb);
 				else if (!relation->rel_view_rse)
 				{
-					VIO_store(tdbb, rpb, transaction);
+					try
+					{
+						VIO_store(tdbb, rpb, transaction);
+					}
+					catch (const Exception&)
+					{
+						CCH_unwind(tdbb, false);
+						throw;
+					}
+
 					IDX_store(tdbb, rpb, transaction);
 					REPL_store(tdbb, rpb, transaction);
 				}
