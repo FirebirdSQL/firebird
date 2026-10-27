@@ -127,7 +127,7 @@ public:
 	// strip unused nulls in the end
 	void trimNulls()
 	{
-		auto* e = v.end();
+		T* e = v.end();
 		for (; e != v.begin(); --e)
 		{
 			if (e[-1])
