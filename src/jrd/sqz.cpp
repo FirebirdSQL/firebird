@@ -344,7 +344,7 @@ ULONG Compressor::truncateTail(ULONG outLength)
  *	Return the number of trailing input bytes that fit the given output length.
  *
  **************************************/
-	fb_assert(m_length > outLength);
+	[[maybe_unused]] const bool truncateAll = m_length <= outLength;
 
 	if (m_runs.isEmpty())
 	{
@@ -394,7 +394,7 @@ ULONG Compressor::truncateTail(ULONG outLength)
 		m_runs.pop();
 	}
 
-	fb_assert(m_runs.hasData());
+	fb_assert(truncateAll || m_runs.hasData());
 
 	if (m_allowUnpacked)
 	{
