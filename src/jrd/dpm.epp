@@ -4182,6 +4182,7 @@ static void store_big_record(thread_db* tdbb,
 	// Fill up data pages tail first until what's left fits on a single page.
 
 	auto size = dcc.getPackedLength();
+	fb_assert(size > max_data - (RHDE_SIZE - RHD_SIZE));
 
 	do
 	{
