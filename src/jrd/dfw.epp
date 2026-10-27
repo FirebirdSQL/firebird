@@ -5672,7 +5672,11 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 
 	// Prepare for cleanup (shit happens sometimes)
 	if (transaction && work)
-		DFW_post_work_arg(transaction, work, nullptr, format->fmt_version);
+	{
+		auto arg = DFW_post_work_arg(transaction, work, nullptr, format->fmt_version);
+		if (arg)
+			arg->dfw_id = format->fmt_version;
+	}
 
 	return format;
 }
