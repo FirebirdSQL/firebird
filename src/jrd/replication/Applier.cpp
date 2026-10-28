@@ -1084,7 +1084,7 @@ bool Applier::lookupKey(thread_db* tdbb, jrd_rel* relation, index_desc& key)
 
 	for (USHORT i = 0; i < root->irt_count; i++)
 	{
-		if (BTR_description(tdbb, relation->getPermanent(), root, &window, &idx, i))
+		if (BTR_description(tdbb, relation->getPermanent(), root, &idx, i))
 		{
 			if (idx.idx_flags & idx_primary)
 			{

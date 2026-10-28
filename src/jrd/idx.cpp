@@ -112,7 +112,7 @@ bool IDX_check_master_types(thread_db* tdbb, index_desc& idx, jrd_rel* partner_r
 	const auto root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
 
 	// get the description of the partner index
-	const bool ok = BTR_description(tdbb, partner_relation->getPermanent(), root, &window, &partner_idx, idx.idx_primary_index);
+	const bool ok = BTR_description(tdbb, partner_relation->getPermanent(), root, &partner_idx, idx.idx_primary_index);
 	CCH_RELEASE(tdbb, &window);
 
 	if (!ok)
@@ -1399,7 +1399,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 
 	for (USHORT id = 0; id < root->irt_count; id++)
 	{
-		if (BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &window, &idx, id))
+		if (BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id))
 		{
 			const bool isComplementary = (idx.idx_flags & irt_complementary) == irt_complementary;
 			const IndexCreation* creation = tdbb->tdbb_indexCreation;
@@ -1497,7 +1497,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 				if (isComplementary && !creatingIndex && !insertion.iib_removed)
 				{
 					root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
-					BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &window, &idx, id);
+					BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id);
 
 					// set 'deleted' node marker in lower bit and insert key into b-tree
 					insertion.iib_number.increment();
@@ -1508,7 +1508,7 @@ void IDX_garbage_collect(thread_db* tdbb, record_param* rpb, RecordStack& going,
 				insertion.iib_number.setValue(recno);
 
 				root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
-				BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &window, &idx, id);
+				BTR_description(tdbb, getPermanent(rpb->rpb_relation), root, &idx, id);
 			}
 		}
 	}
@@ -2234,7 +2234,7 @@ static idx_e check_partner_index(thread_db* tdbb,
 	// get the description of the partner index
 
 	index_desc partner_idx;
-	if (!BTR_description(tdbb, getPermanent(partner_relation), root, &window, &partner_idx, index_id))
+	if (!BTR_description(tdbb, getPermanent(partner_relation), root, &partner_idx, index_id))
 	{
 		CCH_RELEASE(tdbb, &window);
 		BUGCHECK(175);			// msg 175 partner index description not found

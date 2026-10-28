@@ -2041,7 +2041,7 @@ void Validation::walk_generators()
 	}
 }
 
-Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, WIN* rootWindow, USHORT id)
+Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_page, USHORT id)
 {
 /**************************************
  *
@@ -2085,7 +2085,7 @@ Validation::RTN Validation::walk_index(jrd_rel* relation, index_root_page* root_
 			AutoSetRestoreFlag flags(&root_page->irt_rpt[id].irt_flags,
 				irt_expression | irt_condition, false);
 
-			BTR_description(vdr_tdbb, getPermanent(relation), root_page, rootWindow, &idx, id);
+			BTR_description(vdr_tdbb, getPermanent(relation), root_page, &idx, id);
 		}
 
 		null_key = &nullKey;
@@ -3369,14 +3369,14 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
 				AutoSetRestoreFlag flag(&page->irt_rpt[i].irt_flags, irt_expression, false);
 
 				IdxInfo info;
-				if (BTR_description(vdr_tdbb, getPermanent(relation), page, &window, &info.m_desc, i))
+				if (BTR_description(vdr_tdbb, getPermanent(relation), page, &info.m_desc, i))
 					vdr_cond_idx.add(info);
 			}
 			continue;
 		}
 
 		output("Index %d (%s)\n", i + 1, index.toQuotedString().c_str());
-		walk_index(relation, page, &window, i);
+		walk_index(relation, page, i);
 	}
 
 	release_page(&window);
