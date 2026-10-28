@@ -87,10 +87,12 @@ using namespace Firebird;
 
 static ULONG	get_request_info(thread_db*, DsqlRequest*, ULONG, UCHAR*);
 static dsql_dbb*	init(Jrd::thread_db*, Jrd::Attachment*);
-static DsqlRequest* prepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
-static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool);
+static DsqlRequest* prepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool,
+	unsigned scratchFlags = 0);
+static DsqlRequest* safePrepareRequest(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT, unsigned, bool,
+	unsigned scratchFlags = 0);
 static RefPtr<DsqlStatement> prepareStatement(thread_db*, dsql_dbb*, jrd_tra*, ULONG, const TEXT*, USHORT,
-	unsigned, bool, ntrace_result_t* traceResult);
+	unsigned, bool, ntrace_result_t* traceResult, unsigned scratchFlags = 0);
 static UCHAR*	put_item(UCHAR, const USHORT, const UCHAR*, UCHAR*, const UCHAR* const);
 static void		sql_info(thread_db*, DsqlRequest*, ULONG, const UCHAR*, ULONG, UCHAR*);
 static UCHAR*	var_info(const dsql_msg*, const UCHAR*, const UCHAR* const, UCHAR*,
@@ -339,7 +341,7 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 	ULONG length, const TEXT* string, USHORT dialect,
 	IMessageMetadata* in_meta, const UCHAR* in_msg,
 	IMessageMetadata* out_meta, UCHAR* out_msg,
-	bool isInternalRequest)
+	bool isInternalRequest, unsigned scratchFlags)
 {
 	SET_TDBB(tdbb);
 
@@ -349,7 +351,7 @@ void DSQL_execute_immediate(thread_db* tdbb, Jrd::Attachment* attachment, jrd_tr
 	try
 	{
 		dsqlRequest = safePrepareRequest(tdbb, database, *tra_handle, length, string, dialect,
-			0, isInternalRequest);
+			0, isInternalRequest, scratchFlags);
 
 		const auto dsqlStatement = dsqlRequest->getDsqlStatement();
 
@@ -454,10 +456,14 @@ static dsql_dbb* init(thread_db* tdbb, Jrd::Attachment* attachment)
 
 // Use SEH frame when preparing user requests to catch possible stack overflows
 static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
-	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest)
+	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest,
+	unsigned scratchFlags)
 {
 	if (isInternalRequest)
-		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, true);
+	{
+		return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, true,
+			scratchFlags);
+	}
 
 //#define SQL_LOG_PRINT
 #ifdef SQL_LOG_PRINT		// for debugging
@@ -467,7 +473,8 @@ static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_
 #ifdef WIN_NT
 	START_CHECK_FOR_EXCEPTIONS(NULL);
 #endif
-	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, false);
+	return prepareRequest(tdbb, database, transaction, textLength, text, clientDialect, prepareFlags, false,
+		scratchFlags);
 
 #ifdef WIN_NT
 	END_CHECK_FOR_EXCEPTIONS(NULL);
@@ -478,7 +485,8 @@ static DsqlRequest* safePrepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_
 // Prepare a request for execution.
 // Note: caller is responsible for pool handling.
 static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
-	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest)
+	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest,
+	unsigned scratchFlags)
 {
 	TraceDSQLPrepare trace(database->dbb_attachment, transaction, textLength, text, isInternalRequest);
 
@@ -486,7 +494,7 @@ static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra*
 	try
 	{
 		auto statement = prepareStatement(tdbb, database, transaction, textLength, text,
-			clientDialect, prepareFlags, isInternalRequest, &traceResult);
+			clientDialect, prepareFlags, isInternalRequest, &traceResult, scratchFlags);
 
 		auto dsqlRequest = statement->createRequest(tdbb, database);
 
@@ -518,7 +526,7 @@ static DsqlRequest* prepareRequest(thread_db* tdbb, dsql_dbb* database, jrd_tra*
 // Note: caller is responsible for pool handling.
 static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* database, jrd_tra* transaction,
 	ULONG textLength, const TEXT* text, USHORT clientDialect, unsigned prepareFlags, bool isInternalRequest,
-	ntrace_result_t* traceResult)
+	ntrace_result_t* traceResult, unsigned scratchFlags)
 {
 	Database* const dbb = tdbb->getDatabase();
 
@@ -562,7 +570,7 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 	}
 
 	string textStr(text, textLength);
-	const bool isStatementCacheActive = database->dbb_statement_cache->isActive() &&
+	const bool isStatementCacheActive = database->dbb_statement_cache->isActive() && !scratchFlags &&
 		(transaction ? (!transaction->isDdl()) : true);
 
 	RefPtr<DsqlStatement> dsqlStatement;
@@ -604,6 +612,8 @@ static RefPtr<DsqlStatement> prepareStatement(thread_db* tdbb, dsql_dbb* databas
 
 			if (isInternalRequest)
 				scratch->flags |= DsqlCompilerScratch::FLAG_INTERNAL_REQUEST;
+
+			scratch->flags |= scratchFlags;
 
 			Parser parser(tdbb, *scratchPool, statementPool, scratch, clientDialect,
 				dbDialect,

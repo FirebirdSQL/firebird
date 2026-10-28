@@ -43,8 +43,8 @@ void DFW_delete_deferred(Jrd::jrd_tra*, SavNumber);
 Firebird::SortedArray<int>& DFW_get_ids(Jrd::DeferredWork* work);
 void DFW_merge_work(Jrd::jrd_tra*, SavNumber, SavNumber);
 void DFW_perform_work(Jrd::thread_db*, Jrd::jrd_tra*);
-void DFW_perform_post_commit_work(Jrd::jrd_tra*);
-void DFW_raiseRelationInUseError(const Jrd::Cached::Relation*);
+void DFW_perform_post_commit_work(Jrd::thread_db*, Jrd::jrd_tra*);
+void DFW_raiseRelationInUseError(const Jrd::RelationPermanent*);
 Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const dsc* nameDesc, const dsc* schemaDesc, USHORT,
 	const Jrd::MetaName& package = {});
 Jrd::DeferredWork* DFW_post_work(Jrd::jrd_tra*, Jrd::dfw_t, const Firebird::string&, const Jrd::MetaName& schema,
@@ -53,8 +53,7 @@ Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const ds
 	USHORT);
 Jrd::DeferredWork* DFW_post_work_arg(Jrd::jrd_tra*, Jrd::DeferredWork*, const dsc* nameDesc, const dsc* schemaDesc,
 	USHORT, Jrd::dfw_t);
-void DFW_update_index(const Jrd::QualifiedName&, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*,
-	Jrd::jrd_rel* relation = nullptr);
+void DFW_update_index(const Jrd::QualifiedName&, USHORT, const Jrd::SelectivityList&, Jrd::jrd_tra*);
 void DFW_reset_icu(Jrd::thread_db*);
 Firebird::string DFW_remove_icu_info_from_attributes(const Jrd::QualifiedName&, const Firebird::string&);
 

@@ -38,13 +38,7 @@
 
 using namespace Firebird;
 
-// Commented out to make Linux version work because it is inaccessiable on all
-// known platforms. Nickolay Samofatov, 10 Sept 2002
-// void gds__log(UCHAR*, ...);
-
-
 #define	EXTERN_texttype(name)	INTL_BOOL name (texttype*, charset*, const ASCII*, const ASCII*, USHORT, const UCHAR*, ULONG, const ASCII*)
-// #define EXTERN_convert(name)	INTL_BOOL name (csconvert*, const ASCII*, const ASCII*)
 #define EXTERN_charset(name)	INTL_BOOL name (charset*, const ASCII*)
 
 EXTERN_texttype(DOS101_init);
@@ -320,7 +314,7 @@ struct
 	{"KOI8U", CS_koi8u},
 	{"WIN1258", CS_win1258},
 	// ICU charsets should not be listed here
-	{NULL, NULL}
+	{nullptr, nullptr}
 };
 
 
@@ -465,7 +459,7 @@ struct
 	{"KOI8U", "KOI8U_UA", KOI8U_c1_init},
 	{"WIN1258", "WIN1258", WIN1258_c0_init},
 	// ICU collations should not be listed here
-	{NULL, NULL, NULL}
+	{nullptr, nullptr, nullptr}
 };
 
 
@@ -501,7 +495,7 @@ FB_DLL_EXPORT INTL_BOOL LD_lookup_texttype_with_status(char* status_buffer, ULON
 	if (ignore_attributes)
 	{
 		attributes = TEXTTYPE_ATTR_PAD_SPACE;
-		specific_attributes = NULL;
+		specific_attributes = nullptr;
 		specific_attributes_length = 0;
 	}
 

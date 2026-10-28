@@ -80,6 +80,7 @@ public:
 	static const unsigned FLAG_ALLOW_CREATED_LTT_REFERENCE	= 0x020000;
 	static const unsigned FLAG_USING_STATEMENT		= 0x040000;
 	static const unsigned FLAG_ACTUAL_LTT_DDL		= 0x080000;
+	static const unsigned FLAG_BULK_INSERT			= 0x100000;
 
 	static const unsigned MAX_NESTING = 512;
 

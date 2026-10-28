@@ -74,12 +74,19 @@ class BulkInsert;
 class SecDbContext
 {
 public:
-	SecDbContext(Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
+	SecDbContext(MemoryPool& p, Firebird::IAttachment* a, Firebird::ITransaction* t) noexcept;
 	~SecDbContext();
 
 	Firebird::IAttachment* att;
 	Firebird::ITransaction* tra;
-	int savePoint;
+
+	void setSavePoint();
+	void releaseSavePoint();
+	void rollbackSavePoint() noexcept;
+
+private:
+	int savePointNumber = 0;
+	Firebird::string savePoint;
 };
 
 // Blobs active in transaction identified by bli_temp_id. Please keep this
@@ -199,6 +206,7 @@ public:
 		tra_dbcreators_list(nullptr),
 		tra_autonomous_pool(NULL),
 		tra_autonomous_cnt(0),
+		tra_tablespaces(*p),
 		tra_dependencies(*p)
 	{
 	}
@@ -333,6 +341,8 @@ private:
 	static constexpr USHORT TRA_AUTONOMOUS_PER_POOL = 64;
 	BulkInsert* tra_bulkInsert = nullptr;
 
+	Tablespace::UsageList tra_tablespaces;
+
 public:
 	Firebird::Array<WildDependency> tra_dependencies;
 
@@ -422,6 +432,21 @@ public:
 		return tra_gen_ids;
 	}
 
+	bool isTablespaceLocked(ULONG pageSpaceId) const
+	{
+		return tra_tablespaces.exist(pageSpaceId);
+	}
+
+	void lockTablespace(thread_db* tdbb, ULONG pageSpaceId)
+	{
+		tra_tablespaces.add(tdbb, pageSpaceId);
+	}
+
+	void releaseTablespaces(thread_db* tdbb)
+	{
+		tra_tablespaces.releaseAll(tdbb);
+	}
+
 	// Get existing or create new BulkInsert for the relation.
 	BulkInsert* getBulkInsert(thread_db* tdbb, jrd_rel* relation, bool create);
 
@@ -465,7 +490,8 @@ inline constexpr ULONG TRA_meta					= 0x1000000L;	// transaction is used to load
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
-	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests | TRA_auto_release_temp_blobid);
+	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests |
+	TRA_auto_release_temp_blobid | TRA_meta);
 
 inline constexpr int TRA_MASK				= 3;
 //inline constexpr int TRA_BITS_PER_TRANS	= 2;
@@ -555,6 +581,9 @@ enum dfw_t : int {
 	dfw_store_view_context_type,
 	dfw_set_generator,
 	dfw_change_repl_state,
+	dfw_create_tablespace,
+	dfw_delete_tablespace,
+	dfw_modify_tablespace,
 
 	// deferred works argument types
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory

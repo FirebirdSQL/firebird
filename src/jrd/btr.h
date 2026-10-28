@@ -100,13 +100,15 @@ struct index_desc
 	Statement* idx_expression_statement;	// stored statement for expression evaluation
 	BoolExprNode* idx_condition_node;		// node tree for index condition
 	Statement* idx_condition_statement;		// stored statement for index condition
-	float	idx_fraction;					// fraction of keys included in the index
+	float idx_fraction;						// fraction of keys included in the index
 	UCHAR	idx_state;						// state from irt_rpt
+	ULONG	idx_pg_space_id;				// page space of index pages
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{
 		USHORT idx_field;					// field id
 		USHORT idx_itype;					// data of field in index
+		USHORT idx_length;					// data length in characters, if set (non zero)
 		float idx_selectivity;				// segment selectivity
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
@@ -339,20 +341,30 @@ private:
 class IdxCreationHelper;
 
 enum class IdxCreate { AtOnce, ForRollback, Concurrently };
+enum class IdxCheckDups { WhenBuild, AfterBuild };
 
 struct IndexCreation
 {
+	IndexCreation(IdxCreate aMethod, jrd_rel* aRelation, index_desc* aIdx, const QualifiedName& aNname, jrd_tra* aTran) :
+		createMethod(aMethod),
+		relation(aRelation),
+		index(aIdx),
+		index_name(aNname),
+		transaction(aTran)
+	{}
+
+	IdxCreate createMethod;
+	IdxCheckDups checkDuplicates = IdxCheckDups::WhenBuild;
 	jrd_rel* relation;
 	index_desc* index;
 	QualifiedName index_name;
 	jrd_tra* transaction;
-	PartitionedSort* sort;
-	sort_key_def* key_desc;
-	USHORT key_length;
-	USHORT nullIndLen;
-	SINT64 dup_recno;
+	PartitionedSort* sort = nullptr;
+	sort_key_def* key_desc = nullptr;
+	USHORT key_length = 0;
+	USHORT nullIndLen = 0;
+	SINT64 dup_recno = -1;
 	Firebird::AtomicCounter duplicates;
-	IdxCreate createMethod;
 
 	bool isConcurrently() const
 	{

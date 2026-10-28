@@ -82,6 +82,7 @@ static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isS
 static PlanNode* par_plan(thread_db*, CompilerScratch*);
 static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb);
 static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffset);
+static void propagateNodeLineColumn(StmtNode* wrapper);
 static void checkIndexStatus(CompilerScratch* csb, bool isGbak, IndexStatus idx_status, const QualifiedName& name,
 	Cached::Relation* relation);
 
@@ -1759,6 +1760,38 @@ static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffs
 		node->column = i.mbs_src_col;
 
 		if (node->getKind() == DmlNode::KIND_STATEMENT)
-			static_cast<StmtNode*>(node)->hasLineColumn = true;
+		{
+			const auto stmt = static_cast<StmtNode*>(node);
+			stmt->hasLineColumn = true;
+			propagateNodeLineColumn(stmt);
+		}
 	}
+}
+
+// DSQL may wrap a source statement with BLR nodes that are not profiler aware (e.g. the savepoint
+// enclosure and blr_label). The source mapping is then attached to the wrapper, so pass it down
+// to the wrapped statements that have no mapping of their own.
+static void propagateNodeLineColumn(StmtNode* wrapper)
+{
+	const auto inherit = [wrapper](StmtNode* child)
+	{
+		if (!child || child->hasLineColumn)
+			return;
+
+		child->line = wrapper->line;
+		child->column = wrapper->column;
+		child->hasLineColumn = true;
+
+		propagateNodeLineColumn(child);
+	};
+
+	if (const auto compound = nodeAs<CompoundStmtNode>(wrapper))
+	{
+		for (auto child : compound->statements)
+			inherit(child);
+	}
+	else if (const auto label = nodeAs<LabelNode>(wrapper))
+		inherit(label->statement);
+	else if (const auto savepoint = nodeAs<SavepointEncloseNode>(wrapper))
+		inherit(savepoint->statement);
 }

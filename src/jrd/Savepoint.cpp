@@ -513,8 +513,6 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 							auto permanent = relation->getPermanent();
 
 							permanent->rollback(tdbb);
-							RelationPermanent::destroy(tdbb, permanent);
-							delete permanent;
 						}
 
 						delete *lttPtr;

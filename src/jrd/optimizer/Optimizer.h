@@ -511,7 +511,10 @@ public:
 	RecordSource* compile(RseNode* subRse, BoolExprNodeStack* parentStack);
 	void compileLocalTable(StreamType stream);
 	void compileRelation(StreamType stream);
-	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack);
+	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack, bool transformed = false);
+
+	static BoolExprNode* transformBoolean(thread_db* tdbb, CompilerScratch* csb);
+
 	void generateAggregateDistincts(MapNode* map);
 	void generateAggregateSort(AggNode* aggNode);
 	RecordSource* generateRetrieval(StreamType stream,

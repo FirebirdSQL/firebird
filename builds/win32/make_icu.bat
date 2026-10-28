@@ -22,7 +22,14 @@ if not defined FB_UNZIP (
 
 if not exist "%FB_UNZIP%" set FB_UNZIP=
 
-if not defined FB_UNZIP (
+if defined FBBUILD_WITH_SYSTEM_ICU (
+  @echo Using system ICU, extracting tzdata only
+  if not defined FB_UNZIP (
+    cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\tzdata\le.zip %FB_ROOT_PATH%\extern\icu\tzdata-extract
+  ) else (
+    "%FB_UNZIP%" -o %FB_ROOT_PATH%\extern\icu\tzdata\le.zip -d %FB_ROOT_PATH%\extern\icu\tzdata-extract
+  )
+) else if not defined FB_UNZIP (
   cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\icu_windows.zip %FB_ROOT_PATH%\extern\icu
   cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\icudt.zip %FB_ROOT_PATH%\extern\icu
   cscript /nologo unzip.vbs %FB_ROOT_PATH%\extern\icu\tzdata\le.zip %FB_ROOT_PATH%\extern\icu\tzdata-extract
