@@ -5937,6 +5937,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 				relation->rel_current_format = NULL;
 				relation->rel_flags &= ~REL_scanned;
+				relation->rel_bad_tran = transaction->tra_number;
 			}
 		}
 		break;

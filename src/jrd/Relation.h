@@ -267,6 +267,7 @@ public:
 	TriState	rel_repl_state;			// replication state
 
 	Firebird::Mutex rel_drop_mutex;
+	TraNumber	rel_bad_tran = MAX_TRA_NUMBER;
 
 	bool isSystem() const;
 	bool isTemporary() const;
