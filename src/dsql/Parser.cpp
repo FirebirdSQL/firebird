@@ -748,10 +748,20 @@ int Parser::yylexAux()
 
 		const auto start = lex.ptr + endCharSize;
 		ULONG charSize = endCharSize;
+		const auto savedLines = lex.lines;
+		const auto savedLineStart = lex.line_start;
 
 		while (IntlUtil::readOneChar(currentCharSet, reinterpret_cast<const UCHAR**>(&lex.ptr),
 					reinterpret_cast<const UCHAR*>(lex.end), &charSize))
 		{
+			// Care about multi-line constants
+			if (charSize == 1 && (*lex.ptr == '\n' ||
+				(*lex.ptr == '\r' && (lex.ptr + 1 >= lex.end || lex.ptr[1] != '\n'))))
+			{
+				lex.lines++;
+				lex.line_start = lex.ptr + 1;
+			}
+
 			if (charSize == endCharSize &&
 				memcmp(lex.ptr, endChar, endCharSize) == 0 &&
 				lex.ptr[endCharSize] == '\'')
@@ -784,6 +794,8 @@ int Parser::yylexAux()
 
 		c = *lex.last_token;
 		lex.ptr = lex.last_token + 1;
+		lex.lines = savedLines;
+		lex.line_start = savedLineStart;
 	}
 
 	// Non-decimal integer literals (SQL:2023 T661)

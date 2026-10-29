@@ -595,7 +595,7 @@ namespace
 					}
 				}
 			}
-		}
+			}
 
 	private:
 		AutoRequest handle;
@@ -1118,6 +1118,14 @@ void INI_init(thread_db* tdbb)
 		fb_assert(currentFormat < formats->getCount());
 		relVers->rel_current_fmt = currentFormat;
 		relVers->rel_current_format = formats->value(currentFormat);
+	}
+
+	if (dbb->dbb_rdb_pages)
+	{
+		const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
+		const auto relPages = relation->getBasePages();
+		fb_assert(!relPages->hasData());
+		relPages->init(dbb->dbb_rdb_pages);
 	}
 }
 
@@ -1763,6 +1771,7 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 					PAD(field->fld_name, Y.RDB$FIELD_NAME);
 					tail->idx_field = segment->ini_idx_rfld_id;
 					tail->idx_itype = segment->ini_idx_type;
+					tail->idx_length = 0;
 				    tail->idx_selectivity = 0;
 				}
 				END_STORE
@@ -1771,10 +1780,11 @@ static void store_indices(thread_db* tdbb, USHORT odsVersion)
 			idx.idx_count = index->ini_idx_segment_count;
 			idx.idx_flags = index->ini_idx_flags;
 			idx.idx_pg_space_id = DB_PAGE_SPACE;
+
+			IndexCreation creation(IdxCreate::AtOnce, relVers, &idx, indexName, transaction);
 			SelectivityList selectivity(*tdbb->getDefaultPool());
 
-			IDX_create_index(tdbb, IdxCreate::AtOnce, relVers, &idx, indexName, NULL,
-				transaction, selectivity);
+			IDX_create_index(tdbb, creation, nullptr, selectivity);
 
 			X.RDB$INDEX_ID = idx.idx_id + 1;
 

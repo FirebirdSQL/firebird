@@ -568,7 +568,7 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 		const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, getId(), CacheFlag::AUTOCREATE);
 		fb_assert(relation);
 
-		const auto basePages = relation->getBasePages();
+		const auto basePages = relation->getBasePages(tdbb);
 
 		WIN window(basePages->getPageSpaceId());
 		index_desc idx;
@@ -590,8 +590,11 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 			}
 
 			idx.idx_root = 0;
+
+			IndexCreation creation(IdxCreate::AtOnce, relation, &idx, idx_name, idxTran);
 			SelectivityList selectivity(*pool);
-			IDX_create_index(tdbb, IdxCreate::AtOnce, relation, &idx, idx_name, NULL, idxTran, selectivity);
+
+			IDX_create_index(tdbb, creation, nullptr, selectivity);
 
 #ifdef VIO_DEBUG
 			VIO_trace(DEBUG_WRITES,
@@ -751,30 +754,30 @@ bool RelationPermanent::fillPagesSnapshot(PagesSnapshot& snapshot, const bool at
 
 	for (const auto relPages : *rel_pages_inst)
 	{
-		if (!attachmentOnly)
-		{
-			snapshot.add(relPages);
-			relPages->addRef();
-		}
-		else if ((rel_flags & REL_temp_conn) &&
-			PAG_attachment_id(snapshot.spt_tdbb) == relPages->getInstanceId())
-		{
-			snapshot.add(relPages);
-			relPages->addRef();
-		}
-		else if (rel_flags & REL_temp_tran)
-		{
-			const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
-			for (; tran; tran = tran->tra_next)
+			if (!attachmentOnly)
 			{
-				if (tran->tra_number == relPages->getInstanceId())
+				snapshot.add(relPages);
+				relPages->addRef();
+			}
+			else if ((rel_flags & REL_temp_conn) &&
+			PAG_attachment_id(snapshot.spt_tdbb) == relPages->getInstanceId())
+			{
+				snapshot.add(relPages);
+				relPages->addRef();
+			}
+			else if (rel_flags & REL_temp_tran)
+			{
+				const jrd_tra* tran = snapshot.spt_tdbb->getAttachment()->att_transactions;
+				for (; tran; tran = tran->tra_next)
 				{
-					snapshot.add(relPages);
-					relPages->addRef();
+					if (tran->tra_number == relPages->getInstanceId())
+					{
+						snapshot.add(relPages);
+						relPages->addRef();
+					}
 				}
 			}
 		}
-	}
 
 	return true;
 }
@@ -949,7 +952,7 @@ void jrd_rel::releaseTriggers(thread_db* tdbb, bool destroy)
 		rel_triggers[n].release(tdbb, destroy);
 }
 
-RelationPages* jrd_rel::getPages(thread_db* tdbb, RelationPages::InstanceId instanceId, bool allocPages)
+RelationPages* jrd_rel::getBasePages(thread_db* tdbb)
 {
 	const auto relPages = getBasePages();
 
@@ -958,12 +961,12 @@ RelationPages* jrd_rel::getPages(thread_db* tdbb, RelationPages::InstanceId inst
 
 	Tablespace::lock(tdbb, relPages->getPageSpaceId());
 
-	return rel_perm->useTempPages(tdbb) ? rel_perm->getTempPages(tdbb, instanceId, allocPages) : relPages;
+	return relPages;
 }
 
 void jrd_rel::deletePages(thread_db* tdbb)
 {
-	DPM_delete_relation(tdbb, rel_perm, getBasePages());
+	DPM_delete_relation(tdbb, rel_perm, getBasePages(tdbb));
 }
 
 const char* jrd_rel::objectFamily(RelationPermanent* perm)
@@ -1154,7 +1157,7 @@ Triggers& TrigArray::operator[](int t)
 
 	case TRIGGER_POST_ERASE:
 		return postErase;
-	}
+		}
 
 	fb_assert(false);
 	fatal_exception::raise("Invalid trigger type");

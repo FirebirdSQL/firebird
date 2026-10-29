@@ -339,6 +339,8 @@ void MetadataCache::update_partners(thread_db* tdbb)
 // Done before MDC is deleted
 void MetadataCache::cleanup(thread_db* tdbb)
 {
+	releaseLocks(tdbb);
+
 	// Shut down any extern relations
 
 	for (auto relation : mdc_relations)

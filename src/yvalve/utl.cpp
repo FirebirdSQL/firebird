@@ -70,7 +70,7 @@
 #include "../common/StatusHolder.h"
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/fb_tls.h"
-#include "../common/classes/ThreadCleanup.h"
+#include "../common/classes/ThreadCleanupCallback.h"
 #include "../common/os/os_utils.h"
 
 #ifdef HAVE_UNISTD_H

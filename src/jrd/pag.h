@@ -186,7 +186,7 @@ private:
 	Firebird::RWLock* pageSpacesLock;
 	Firebird::MemoryPool& pool;
 	Firebird::Mutex	initTmpMtx;
-	USHORT tempPageSpaceID;
+	ULONG tempPageSpaceID;
 	bool tempFileCreated;
 };
 

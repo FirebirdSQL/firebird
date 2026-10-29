@@ -58,11 +58,15 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open;
 
 	const auto transaction = m_relation()->isLTT() ? tdbb->getTransaction() : request->req_transaction;
-	const auto relation = m_relation(tdbb);
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), false);
+	RLCK_reserve_relation(tdbb, transaction, m_relation(), false);
 
 	record_param* const rpb = &request->req_rpb[m_stream];
 	rpb->getWindow(tdbb).win_flags = 0;
+	rpb->rpb_number.setValue(BOF_NUMBER);
+
+	const auto relation = m_relation(tdbb);
+	if (!relation)
+		return;
 
 	// Unless this is the only attachment, limit the cache flushing
 	// effect of large sequential scans on the page working sets of
@@ -87,8 +91,6 @@ void FullTableScan::internalOpen(thread_db* tdbb) const
 			rpb->rpb_org_scans = relation->getPermanent()->rel_scan_count++;
 		}
 	}
-
-	rpb->rpb_number.setValue(BOF_NUMBER);
 
 	if (m_dbkeyRanges.hasData())
 	{

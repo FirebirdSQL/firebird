@@ -257,7 +257,7 @@ jobs:
     name: build-windows-static-client-${{ matrix.platform }}
     runs-on: ${{ (matrix.platform == 'arm64' && 'windows-11-arm') || 'windows-2025' }}
     env:
-      VS_VERSION: ${{ (matrix.platform == 'arm64' && '2022') || '2026' }}
+      VS_VERSION: 2026
 
     strategy:
       fail-fast: false
@@ -317,7 +317,7 @@ jobs:
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\${{ (matrix.platform == 'arm64' && '2022') || '18' }}\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
           set "PATH=%VSINSTALLDIR%VC\Tools\Llvm\x64\bin;%PATH%"
@@ -328,7 +328,7 @@ jobs:
         shell: cmd
         env:
           PLATFORM: ${{ matrix.platform }}
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\${{ (matrix.platform == 'arm64' && '2022') || '18' }}\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           call "%VS_SCRIPT%" -arch=%FB_VS_ARCH%
           cl /nologo /EHsc /MD /Isrc\include /Ioutput_%FB_LIBRARY_PLATFORM%_release\include examples\interfaces\01.create.cpp output_%FB_LIBRARY_PLATFORM%_release\lib\fbclient_static_ms.lib extern\libtommath\lib\%FB_LIBRARY_PLATFORM%\Release\tommath.lib extern\libtomcrypt\lib\%FB_LIBRARY_PLATFORM%\Release\tomcrypt.lib advapi32.lib bcrypt.lib legacy_stdio_definitions.lib mpr.lib ole32.lib psapi.lib shell32.lib user32.lib ws2_32.lib /Fe:%TEMP%\01.create.exe

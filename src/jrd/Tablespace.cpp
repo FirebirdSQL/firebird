@@ -42,6 +42,12 @@ Tablespace::~Tablespace()
 	fb_assert(m_useCount == 0);
 }
 
+bool Tablespace::isUsedExclusively(const jrd_tra* transaction) const
+{
+	fb_assert(transaction);
+	return (m_useCount == 1 && transaction->isTablespaceLocked(m_id));
+}
+
 void Tablespace::lock(thread_db* tdbb, ULONG pageSpaceId)
 {
 	fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
@@ -122,7 +128,8 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	fb_assert(m_lock && m_lock->lck_logical >= LCK_SR);
 
 	// Get the EX lock to prevent other attachments from using this tablespace
-	if (isUsed() || !LCK_convert(tdbb, m_lock, LCK_EX, transaction->getLockWait()))
+	if ((isUsed() && !isUsedExclusively(transaction)) ||
+		!LCK_convert(tdbb, m_lock, LCK_EX, transaction->getLockWait()))
 	{
 		string name;
 		name.printf("TABLESPACE \"%s\"", m_name.c_str());
@@ -131,8 +138,6 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	}
 
 	fb_assert(!m_transaction || m_transaction == transaction);
-	fb_assert(m_useCount == 0);
-
 	m_transaction = transaction;
 
 	if (operation == Operation::CREATE)
@@ -164,6 +169,7 @@ void Tablespace::commit(thread_db* tdbb, jrd_tra* transaction)
 
 	fb_assert(m_flags & (CREATED | MODIFIED | DELETED));
 	fb_assert(m_lock && m_lock->lck_logical == LCK_EX);
+	fb_assert(!isUsed() || isUsedExclusively(transaction));
 
 	if (m_flags & DELETED)
 	{
@@ -196,7 +202,7 @@ void Tablespace::rollback(thread_db* tdbb, jrd_tra* transaction)
 
 	fb_assert(m_flags & (CREATED | MODIFIED | DELETED));
 	fb_assert(m_lock && m_lock->lck_logical == LCK_EX);
-	fb_assert(m_useCount == 0);
+	fb_assert(!isUsed() || isUsedExclusively(transaction));
 
 	if (m_flags & CREATED)
 	{
@@ -354,6 +360,8 @@ Tablespace* Tablespace::init(thread_db* tdbb, ULONG id, const MetaName& name,
 
 	if (name.isEmpty() && !MET_tablespace(tdbb, id, tsName, fileName))
 	{
+		LCK_release(tdbb, lock);
+
 		string errName;
 		errName.printf("TABLESPACE (id=%)" ULONGFORMAT, id);
 

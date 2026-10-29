@@ -435,60 +435,60 @@ bool SweepTask::handler(WorkItem& _item)
 		const auto relVersion = MetadataCache::getVersioned<Cached::Relation>(tdbb, relInfo->rel_id,
 																			  CacheFlag::AUTOCREATE);
 		relation = getPermanent(relVersion);
+
+		if (!relation || relation->isDropped() || relation->isTemporary())
+			return !m_stop;
+
 		const auto relPages = relVersion->getPages(tdbb);
+		if (!relPages || !relPages->hasData())
+			return !m_stop;
 
-		if (relation &&
-			!relation->isDropped() &&
-			!relation->isTemporary() &&
-			relPages && relPages->hasData())
+		GCLock::Shared gcGuard(tdbb, relation);
+		if (!gcGuard.gcEnabled())
 		{
-			GCLock::Shared gcGuard(tdbb, relation);
-			if (!gcGuard.gcEnabled())
-			{
-				string str;
-				str.printf("Acquire garbage collection lock failed (%s)", relation->getName().toQuotedString().c_str());
-				status_exception::raise(Arg::Gds(isc_random) << Arg::Str(str));
-			}
-
-			jrd_tra* tran = tdbb->getTransaction();
-
-			if (relInfo->countPP == 0)
-				relInfo->countPP = relPages->getPointerPageCount();
-
-			rpb.rpb_relation = relVersion;
-			rpb.rpb_org_scans = relation->rel_scan_count++;
-			rpb.rpb_record = NULL;
-			rpb.rpb_stream_flags = RPB_s_no_data | RPB_s_sweeper;
-			rpb.getWindow(tdbb).win_flags = WIN_large_scan;
-
-			rpb.rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_firstPP);
-			rpb.rpb_number.decrement();
-
-			RecordNumber lastRecNo;
-			lastRecNo.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_lastPP + 1);
-			lastRecNo.decrement();
-
-			while (VIO_next_record(tdbb, &rpb, tran, NULL, DPM_next_pointer_page))
-			{
-				CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
-
-				if (relation->isDropped())
-					break;
-
-				if (rpb.rpb_number >= lastRecNo)
-					break;
-
-				if (m_stop)
-					break;
-
-				JRD_reschedule(tdbb);
-
-				tran->tra_oldest_active = dbb->dbb_oldest_snapshot;
-			}
-
-			delete rpb.rpb_record;
-			--relation->rel_scan_count;
+			string str;
+			str.printf("Acquire garbage collection lock failed (%s)", relation->getName().toQuotedString().c_str());
+			status_exception::raise(Arg::Gds(isc_random) << Arg::Str(str));
 		}
+
+		const auto tran = tdbb->getTransaction();
+
+		if (relInfo->countPP == 0)
+			relInfo->countPP = relPages->getPointerPageCount();
+
+		rpb.rpb_relation = relVersion;
+		rpb.rpb_org_scans = relation->rel_scan_count++;
+		rpb.rpb_record = NULL;
+		rpb.rpb_stream_flags = RPB_s_no_data | RPB_s_sweeper;
+		rpb.getWindow(tdbb).win_flags = WIN_large_scan;
+
+		rpb.rpb_number.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_firstPP);
+		rpb.rpb_number.decrement();
+
+		RecordNumber lastRecNo;
+		lastRecNo.compose(dbb->dbb_max_records, dbb->dbb_dp_per_pp, 0, 0, item->m_lastPP + 1);
+		lastRecNo.decrement();
+
+		while (VIO_next_record(tdbb, &rpb, tran, NULL, DPM_next_pointer_page))
+		{
+			CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
+
+			if (relation->isDropped())
+				break;
+
+			if (rpb.rpb_number >= lastRecNo)
+				break;
+
+			if (m_stop)
+				break;
+
+			JRD_reschedule(tdbb);
+
+			tran->tra_oldest_active = dbb->dbb_oldest_snapshot;
+		}
+
+		delete rpb.rpb_record;
+		--relation->rel_scan_count;
 
 		return !m_stop;
 	}
@@ -4937,49 +4937,48 @@ bool VIO_sweep(thread_db* tdbb, jrd_tra* transaction, TraceSweepEvent* traceSwee
 		for (FB_SIZE_T i = 1; i < mdc->relCount(); i++)
 		{
 			const auto relVersion = MetadataCache::getVersioned<Cached::Relation>(tdbb, i, CacheFlag::AUTOCREATE);
-			relation = relVersion->getPermanent();
+			relation = getPermanent(relVersion);
+
+			if (!relation || relation->isDropped() || relation->isTemporary())
+				continue;
+
 			const auto relPages = relVersion->getPages(tdbb);
+			if (!relPages || !relPages->hasData())
+				continue;
 
-			if (relation &&
-				!relation->isDropped() &&
-				!relation->isTemporary() &&
-				relPages && relPages->hasData())
+			GCLock::Shared gcGuard(tdbb, relation);
+			if (!gcGuard.gcEnabled())
 			{
-				GCLock::Shared gcGuard(tdbb, relation);
-				if (!gcGuard.gcEnabled())
-				{
-					ret = false;
-					break;
-				}
-
-				rpb.rpb_relation = relVersion;
-				rpb.rpb_number.setValue(BOF_NUMBER);
-				rpb.rpb_org_scans = relation->rel_scan_count++;
-
-				traceSweep->beginSweepRelation(relation);
-
-				if (gc) {
-					gc->sweptRelation(transaction->tra_oldest_active, relation->getId());
-				}
-
-				while (VIO_next_record(tdbb, &rpb, transaction, 0, DPM_next_all))
-				{
-					CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
-
-					if (relation->isDropped())
-						break;
-
-					JRD_reschedule(tdbb);
-
-					transaction->tra_oldest_active = dbb->dbb_oldest_snapshot;
-					if (TipCache* cache = dbb->dbb_tip_cache)
-						cache->updateActiveSnapshots(tdbb, &attachment->att_active_snapshots);
-				}
-
-				traceSweep->endSweepRelation();
-
-				relation->rel_scan_count--;
+				ret = false;
+				break;
 			}
+
+			rpb.rpb_relation = relVersion;
+			rpb.rpb_number.setValue(BOF_NUMBER);
+			rpb.rpb_org_scans = relation->rel_scan_count++;
+
+			traceSweep->beginSweepRelation(relation);
+
+			if (gc)
+				gc->sweptRelation(transaction->tra_oldest_active, relation->getId());
+
+			while (VIO_next_record(tdbb, &rpb, transaction, 0, DPM_next_all))
+			{
+				CCH_RELEASE(tdbb, &rpb.getWindow(tdbb));
+
+				if (relation->isDropped())
+					break;
+
+				JRD_reschedule(tdbb);
+
+				transaction->tra_oldest_active = dbb->dbb_oldest_snapshot;
+				if (TipCache* cache = dbb->dbb_tip_cache)
+					cache->updateActiveSnapshots(tdbb, &attachment->att_active_snapshots);
+			}
+
+			traceSweep->endSweepRelation();
+
+			relation->rel_scan_count--;
 		}
 
 		delete rpb.rpb_record;

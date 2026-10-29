@@ -1536,7 +1536,7 @@ Validation::RTN Validation::walk_blob(jrd_rel* relation, const blh* header, USHO
 		corrupt(VAL_BLOB_UNKNOWN_LEVEL, relation, number.getValue(), header->blh_level);
 	}
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	// Level 1 blobs are a little more complicated
@@ -1606,7 +1606,7 @@ Validation::RTN Validation::walk_chain(jrd_rel* relation, const rhd* header,
 	USHORT counter = 0;
 #endif
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	ULONG page_number = header->rhd_b_page;
@@ -1743,7 +1743,7 @@ void Validation::walk_database()
 			// All we can check is that page is not double allocated at the same relation.
 			if (vdr_flags & VDR_online)
 			{
-				const auto relPages = relation->getBasePages();
+				const auto relPages = relation->getBasePages(vdr_tdbb);
 				if (const auto pageSpaceInfo = vdr_page_spaces.get(relPages->getPageSpaceId()))
 				{
 					if (pageSpaceInfo->bitmap)
@@ -1782,7 +1782,7 @@ Validation::RTN Validation::walk_data_page(jrd_rel* relation, ULONG page_number,
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	WIN window(pageSpaceId);
@@ -2648,7 +2648,7 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
  **************************************/
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 
 	pointer_page* page = nullptr;
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
@@ -2767,8 +2767,6 @@ Validation::RTN Validation::walk_pointer_page(jrd_rel* relation, ULONG sequence)
 		{
 			// relation could be extended before we acquired its lock in PR mode
 			// let's re-read pointer pages and check again
-
-			DPM_scan_pages(vdr_tdbb, relation->getPermanent(), relPages);
 
 			ppNumber = relPages->getPointerPage(--sequence);
 			if (!ppNumber)
@@ -2902,7 +2900,7 @@ Validation::RTN Validation::walk_record(jrd_rel* relation, const rhd* header, US
 	USHORT line_number = fragment->rhdf_f_line;
 	USHORT flags = fragment->rhdf_flags;
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	data_page* page = 0;
@@ -3011,7 +3009,7 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	* Early in walk_chain we observed that this page in related to the relation so we skip such kind of check here.
 	**************************************/
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	WIN window(pageSpaceId, page_number);
@@ -3093,7 +3091,7 @@ void Validation::checkDPinPIP(jrd_rel* relation, ULONG page_number)
 
 	Database* dbb = vdr_tdbb->getDatabase();
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
 
 	PageManager& pageMgr = dbb->dbb_page_manager;
@@ -3192,10 +3190,8 @@ Validation::RTN Validation::walk_relation(jrd_rel* relation)
 
 	vdr_cond_idx.clear();
 
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const ULONG pageSpaceId = relPages->getPageSpaceId();
-
-	DPM_scan_pages(vdr_tdbb, relPerm, relPages);
 
 	const bool idxRootOk = (vdr_flags & VDR_records) && !relPerm->isSystem() ?
 		walk_root(relation, true) == rtn_ok : true;
@@ -3317,7 +3313,7 @@ Validation::RTN Validation::walk_root(jrd_rel* relation, bool getInfo)
  **************************************/
 
 	// If the relation has an index root, walk it
-	const auto relPages = relation->getBasePages();
+	const auto relPages = relation->getBasePages(vdr_tdbb);
 	const auto rootPage = relPages->getIndexRootPage();
 
 	if (!rootPage)

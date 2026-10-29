@@ -1819,9 +1819,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
+				PAG_header_init(tdbb);
 				INI_init(tdbb);
 				SHUT_init(tdbb);
-				PAG_header_init(tdbb);
 				PAG_init(tdbb);
 
 				if (options.dpb_set_page_buffers)
@@ -1893,6 +1893,12 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 					ERR_post(Arg::Gds(isc_no_user_att_while_restore));
 			}
 
+			if (newDb)
+				INI_init_sys_relations(tdbb);
+
+			// Basic DBB initialization complete
+			initGuard.leave();
+
 			// Attachments to a ReadOnly database need NOT do garbage collection
 			if (dbb->readOnly())
 				attachment->att_flags |= ATT_no_cleanup;
@@ -1913,12 +1919,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 			}
 
 			PAG_attachment_id(tdbb);
-
-			if (newDb)
-				INI_init_sys_relations(tdbb);
-
-			// Basic DBB initialization complete
-			initGuard.leave();
 
 			bool cleanupTransactions = false;
 
@@ -8161,9 +8161,14 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 	// Release the system requests
 	dbb->releaseSystemRequests(tdbb);
 
-	CCH_shutdown(tdbb);
+	// Release cached metadata objects (procedures, functions, etc.) while
+	// the buffer manager and lock manager are still alive.
+	// This is needed because Statement::release may require page access
+	// (e.g. for LTT cleanup via IDX_delete_indices).
+	dbb->dbb_mdc->cleanup(tdbb);
+	dbb->dbb_tablespaces.release(tdbb);
 
-	dbb->dbb_mdc->releaseLocks(tdbb);
+	CCH_shutdown(tdbb);
 
 	if (dbb->dbb_tip_cache)
 		dbb->dbb_tip_cache->finalizeTpc(tdbb);
@@ -8193,16 +8198,7 @@ bool JRD_shutdown_database(Database* dbb, const unsigned flags)
 		LCK_release(tdbb, dbb->dbb_lock);
 
 	delete dbb->dbb_crypto_manager;
-	dbb->dbb_crypto_manager = NULL;
-
-	dbb->dbb_mdc->cleanup(tdbb);
-	dbb->dbb_tablespaces.release(tdbb);
-
-	// Release cached metadata objects (procedures, functions, etc.) while
-	// the buffer manager and lock manager are still alive.
-	// This is needed because Statement::release may require page access
-	// (e.g. for LTT cleanup via IDX_delete_indices).
-	dbb->dbb_mdc->cleanup(tdbb);
+	dbb->dbb_crypto_manager = nullptr;
 
 	LCK_fini(tdbb, LCK_OWNER_database);
 

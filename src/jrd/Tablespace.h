@@ -61,6 +61,11 @@ namespace Jrd
 				fb_assert(m_tablespaces.isEmpty());
 			}
 
+			bool exist(ULONG pageSpaceId) const
+			{
+				return test(pageSpaceId);
+			}
+
 			void add(thread_db* tdbb, ULONG pageSpaceId)
 			{
 				fb_assert(PageSpace::isTablespace(pageSpaceId));
@@ -94,7 +99,7 @@ namespace Jrd
 				m_bits[id / BITS_PER_LONG] |= (1UL << (id % BITS_PER_LONG));
 			}
 
-			inline bool test(ULONG id)
+			inline bool test(ULONG id) const
 			{
 				return (m_bits[id / BITS_PER_LONG] & (1UL << (id % BITS_PER_LONG))) != 0;
 			}
@@ -186,6 +191,8 @@ namespace Jrd
 		{
 			return (m_useCount != 0);
 		}
+
+		bool isUsedExclusively(const jrd_tra* transaction) const;
 
 	private:
 		const ULONG m_id;						// tablespace ID (aka pagespace ID)

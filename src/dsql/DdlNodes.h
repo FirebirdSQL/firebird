@@ -36,6 +36,7 @@
 #include "../common/classes/array.h"
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/TriState.h"
+#include "../jrd/IndexSegment.h"
 #include "../jrd/Relation.h"
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
@@ -2142,20 +2143,23 @@ class ModifyIndexNode
 public:
 	enum OP { OP_ACTIVE, OP_INACTIVE, OP_VALIDATE_UNIQUE, OP_SET_TABLESPACE };
 
-	ModifyIndexNode(const QualifiedName& indexName, Cached::Relation* rel, OP op, bool expression)
+	ModifyIndexNode(const QualifiedName& indexName, Cached::Relation* rel, OP op, bool expression, bool concurrently)
 		: indexName(indexName),
 		  indexRelation(rel),
 		  operation(op),
-		  expressionIndex(expression)
+		  expressionIndex(expression),
+		  concurrently(concurrently)
 	{
 		fb_assert(indexRelation);
 	}
 
-	ModifyIndexNode(const QualifiedName& indexName, OP op, bool expression)
+	ModifyIndexNode(const QualifiedName& indexName, OP op, bool expression, bool concurrently)
 		: indexName(indexName),
 		  operation(op),
-		  expressionIndex(expression)
-	{ }
+		  expressionIndex(expression),
+		  concurrently(concurrently)
+	{
+	}
 
 	virtual ~ModifyIndexNode()
 	{
@@ -2181,10 +2185,17 @@ protected:
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
 	virtual void step2(thread_db* tdbb, jrd_tra* transaction) = 0;
 
+	void setDeferredValidationFrom(const ModifyIndexNode& other)
+	{
+		deferredValidation = other.deferredValidation;
+	}
+
 	QualifiedName indexName;
 	Cached::Relation* indexRelation = nullptr;
 	const OP operation;
 	bool expressionIndex;
+	bool deferredValidation = false;
+	bool concurrently;
 
 public:
 	MetaName tableSpace;
@@ -2194,6 +2205,27 @@ public:
 class CreateIndexNode final : public DdlNode
 {
 public:
+	struct Segment: Jrd::IndexSegment, Printable
+	{
+		Segment(MemoryPool& pool) : Jrd::IndexSegment(pool)
+		{}
+
+		Segment(MemoryPool& pool, const IndexSegment& other) :
+			Jrd::IndexSegment(pool, other)
+		{}
+
+		Firebird::string internalPrint(NodePrinter& printer) const override
+		{
+			NODE_PRINT(printer, name);
+			if (length)
+				NODE_PRINT(printer, length);
+			return "Segment";
+		}
+	};
+
+	typedef Firebird::ObjectsArray<Segment> Segments;
+
+
 	struct Definition
 	{
 		Definition()
@@ -2207,7 +2239,7 @@ public:
 
 		QualifiedName index;
 		QualifiedName relation;
-		Firebird::ObjectsArray<MetaName> columns;
+		Segments segments;
 		Firebird::TriState unique;
 		Firebird::TriState descending;
 		Firebird::TriState inactive;
@@ -2260,7 +2292,7 @@ public:
 	bool active = true;
 	bool concurrently = false;
 	NestConst<RelationSourceNode> relation;
-	NestConst<ValueListNode> columns;
+	NestConst<Segments> segments;
 	NestConst<ValueSourceClause> computed;
 	NestConst<BoolSourceClause> partial;
 	bool createIfNotExistsOnly = false;
@@ -2272,8 +2304,7 @@ class StoreIndexNode final : public ModifyIndexNode
 {
 public:
 	StoreIndexNode(const QualifiedName& indexName, Cached::Relation* rel, bool expressionIndex, bool concurrently)
-		: ModifyIndexNode(indexName, rel, OP_ACTIVE, expressionIndex),
-		  concurrently(concurrently)
+		: ModifyIndexNode(indexName, rel, OP_ACTIVE, expressionIndex, concurrently)
 	{ }
 
 public:
@@ -2282,16 +2313,14 @@ public:
 private:
 	MetaId create(thread_db* tdbb, jrd_tra* transaction);
 	MetaId createExpression(thread_db* tdbb, jrd_tra* transaction);
-
-	bool concurrently;
 };
 
 
 class AlterIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
-	AlterIndexNode(MemoryPool& p, const QualifiedName& name, OP op)
-		: ModifyIndexNode(name, op, false),
+	AlterIndexNode(MemoryPool& p, const QualifiedName& name, OP op, bool concurrently)
+		: ModifyIndexNode(name, op, false, concurrently),
 		  DdlNode(p)
 	{
 	}
@@ -2329,9 +2358,6 @@ protected:
 	}
 
 	std::optional<MetaId> idxId;
-
-public:
-	bool concurrently = false;
 };
 
 
@@ -2382,7 +2408,7 @@ class DropIndexNode final : public ModifyIndexNode, public DdlNode
 {
 public:
 	DropIndexNode(MemoryPool& p, const QualifiedName& name)
-		: ModifyIndexNode(name, OP_INACTIVE, false),
+		: ModifyIndexNode(name, OP_INACTIVE, false, false),
 		  DdlNode(p)
 	{ }
 

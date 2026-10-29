@@ -121,8 +121,7 @@ jobs:
           uploadFiles: gen/Firebird-*-source.tar.xz
 
   build-alpine-x64:
-    # Disabled
-    if: ${{ false && github.ref_type != 'tag' }}
+    if: ${{ github.ref_type != 'tag' }}
     runs-on: ubuntu-24.04
     container: alpine:3.22.1
 
@@ -133,7 +132,7 @@ jobs:
           fetch-depth: 10
 
       - name: Prepare
-        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar sed
+        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev icu-data-full ncurses-dev libedit-dev linux-headers tar sed
 
       - name: Adjust snapshot build number
         uses: ./.github/actions/adjust-snapshot-buildno

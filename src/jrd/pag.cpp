@@ -965,15 +965,6 @@ void PAG_header(thread_db* tdbb, bool info, const TriState newForceWrite)
 	if (header->hdr_flags & hdr_SQL_dialect_3)
 		dbb->dbb_flags |= DBB_DB_SQL_dialect_3;
 
-	const auto relation = MetadataCache::getVersioned<Cached::Relation>(tdbb, rel_pages, CacheFlag::AUTOCREATE | CacheFlag::NOSCAN);
-	const auto relPages = relation->getBasePages();
-	if (!relPages->hasData())
-	{
-		// NS: There's no need to reassign first page for RDB$PAGES relation since
-		// current code cannot change its location after database creation.
-		relPages->init(header->hdr_PAGES);
-	}
-
 	dbb->dbb_next_transaction = next_transaction;
 
 	if (!info || dbb->dbb_oldest_transaction < oldest_transaction)
@@ -1166,6 +1157,7 @@ void PAG_header_init(thread_db* tdbb)
 
 	dbb->dbb_page_size = header->hdr_page_size;
 	dbb->dbb_page_buffers = header->hdr_page_buffers;
+	dbb->dbb_rdb_pages = header->hdr_PAGES;
 }
 
 
@@ -2116,11 +2108,10 @@ void PageManager::deletePageSpace(const ULONG pageSpace, bool deleteFile)
 
 void PageManager::closeAll()
 {
-	for (FB_SIZE_T i = 0; i < pageSpaces.getCount(); i++)
+	for (const auto pageSpace : pageSpaces)
 	{
-		if (pageSpaces[i]->file) {
-			PIO_close(pageSpaces[i]->file);
-		}
+		if (pageSpace->file)
+			PIO_close(pageSpace->file);
 	}
 }
 

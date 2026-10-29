@@ -452,6 +452,11 @@ public:
 		return tra_gen_ids;
 	}
 
+	bool isTablespaceLocked(ULONG pageSpaceId) const
+	{
+		return tra_tablespaces.exist(pageSpaceId);
+	}
+
 	void lockTablespace(thread_db* tdbb, ULONG pageSpaceId)
 	{
 		tra_tablespaces.add(tdbb, pageSpaceId);
@@ -505,7 +510,8 @@ inline constexpr ULONG TRA_meta					= 0x1000000L;	// transaction is used to load
 
 // flags derived from TPB, see also transaction_options() at tra.cpp
 inline constexpr ULONG TRA_OPTIONS_MASK = (TRA_degree3 | TRA_readonly | TRA_ignore_limbo | TRA_read_committed |
-	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests | TRA_auto_release_temp_blobid);
+	TRA_autocommit | TRA_rec_version | TRA_read_consistency | TRA_no_auto_undo | TRA_restart_requests |
+	TRA_auto_release_temp_blobid | TRA_meta);
 
 inline constexpr int TRA_MASK				= 3;
 //inline constexpr int TRA_BITS_PER_TRANS	= 2;
