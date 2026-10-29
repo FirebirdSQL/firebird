@@ -346,14 +346,16 @@ ULONG Compressor::truncateTail(ULONG outLength)
  **************************************/
 	[[maybe_unused]] const bool truncateAll = m_length <= outLength;
 
+	ULONG inLength = 0;
+
 	if (m_runs.isEmpty())
 	{
-		m_length -= outLength;
-		return outLength;
+		inLength = MIN(outLength, m_length);
+		m_length -= inLength;
+		return inLength;
 	}
 
 	auto space = (int) outLength;
-	ULONG inLength = 0;
 
 	while (m_runs.hasData())
 	{
