@@ -891,6 +891,7 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 {
 	if (!att_meta_transaction)
 	{
+		// TRA_meta is not stored in tra_flags by TRA_start(), it's set below after unlinkFromAttachment
 		att_meta_transaction = TRA_start(tdbb,
 			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version | TRA_meta,
 			DEFAULT_LOCK_TIMEOUT);

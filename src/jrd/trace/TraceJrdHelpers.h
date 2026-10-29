@@ -48,7 +48,8 @@ public:
 		m_baseline(NULL)
 	{
 		Attachment* attachment = m_transaction->tra_attachment;
-		m_need_trace = attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_END);
+		m_need_trace = !(m_transaction->tra_flags & TRA_meta) &&
+			attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_END);
 		if (!m_need_trace)
 			return;
 
