@@ -31,12 +31,28 @@ public:
 	IReferenceCounted* getOwner() override;
 
 	// IReplicatedSession implementation
-	IStatus* getStatus() override;
-	void setAttachment(IAttachment* attachment) override;
-	IReplicatedTransaction* startTransaction(ITransaction* transaction, ISC_INT64 number) override;
-	FB_BOOLEAN cleanupTransaction(ISC_INT64 number) override;
-	FB_BOOLEAN deprecatedSetSequence(const char* name, ISC_INT64 value) override;
-	FB_BOOLEAN setSequence2(const char* schemaName, const char* genName, ISC_INT64 value) override;
+	FB_BOOLEAN init(Firebird::CheckStatusWrapper* /*status*/, Firebird::IAttachment* attachment) override
+	{
+		WriteLog(log, "%p\tAssigned attachment %p\n", this, attachment);
+		att = attachment;
+		att->addRef();
+		CheckStatusWrapper ExtStatus(status);
+		const unsigned char items[] = { fb_info_db_guid };
+		unsigned char response[80];
+		att->getInfo(&ExtStatus, sizeof(items), items, sizeof(response), response);
+		if (status->getState() == 0)
+		{
+			dumpInfo(response, sizeof(response));
+		}
+		return FB_TRUE;
+	}
+	Firebird::IReplicatedTransaction* startTransaction(Firebird::CheckStatusWrapper* status,
+		Firebird::ITransaction* trans, ISC_INT64 number) override;
+	void cleanupTransaction(Firebird::CheckStatusWrapper* status, ISC_INT64 number) override;
+	void deprecatedSetSequence(Firebird::CheckStatusWrapper* status, const char* name, ISC_INT64 value) override;
+	void setSequence2(Firebird::CheckStatusWrapper* status, const char* schemaName, const char* genName,
+		ISC_INT64 value) override;
+
 
 private:
 	friend class ReplTransaction;
@@ -59,23 +75,26 @@ public:
 	void dispose() override;
 
 	// IReplicatedTransaction implementation
-	FB_BOOLEAN prepare() override;
-	FB_BOOLEAN commit() override;
-	FB_BOOLEAN rollback() override;
-	FB_BOOLEAN startSavepoint() override;
-	FB_BOOLEAN releaseSavepoint() override;
-	FB_BOOLEAN rollbackSavepoint() override;
-	FB_BOOLEAN deprecatedInsertRecord(const char* name, IReplicatedRecord* record) override;
-	FB_BOOLEAN insertRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record) override;
-	FB_BOOLEAN deprecatedUpdateRecord(const char* name,
+	void prepare(CheckStatusWrapper* status) override;
+	void commit(CheckStatusWrapper* status) override;
+	void rollback(CheckStatusWrapper* status) override;
+	void startSavepoint(CheckStatusWrapper* status) override;
+	void releaseSavepoint(CheckStatusWrapper* status) override;
+	void rollbackSavepoint(CheckStatusWrapper* status) override;
+	void deprecatedInsertRecord(CheckStatusWrapper* status, const char* name, IReplicatedRecord* record) override;
+	void deprecatedUpdateRecord(CheckStatusWrapper* status, const char* name,
 		IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) override;
-	FB_BOOLEAN updateRecord2(const char* schemaName, const char* tableName,
+	void deprecatedDeleteRecord(CheckStatusWrapper* status, const char* name, IReplicatedRecord* record) override;
+	void deprecatedExecuteSql(CheckStatusWrapper* status, const char* sql) override;
+	void deprecatedExecuteSqlIntl(CheckStatusWrapper* status, unsigned charset, const char* sql) override;
+	void insertRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+		IReplicatedRecord* record) override;
+	void updateRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
 		IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord) override;
-	FB_BOOLEAN deprecatedDeleteRecord(const char* name, IReplicatedRecord* record) override;
-	FB_BOOLEAN deleteRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record) override;
-	FB_BOOLEAN deprecatedExecuteSql(const char* sql) override;
-	FB_BOOLEAN deprecatedExecuteSqlIntl(unsigned charset, const char* sql) override;
-	FB_BOOLEAN executeSqlIntl2(unsigned charset, const char* schemaSearchPath, const char* sql) override;
+	void deleteRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+		IReplicatedRecord* record) override;
+	void executeSqlIntl2(CheckStatusWrapper* status, unsigned charset,
+		const char* schemaSearchPath, const char* sql) override;
 
 private:
 	ReplPlugin* parent;
@@ -118,8 +137,10 @@ extern "C"
 
 static std::atomic_int logCounter;
 
-static const ISC_STATUS err[] = { isc_arg_gds, isc_random, isc_arg_string, (ISC_STATUS)"Intolerable integer value", isc_arg_end };
-static const ISC_STATUS wrn[] = { isc_arg_gds, isc_random, isc_arg_string, (ISC_STATUS)"Just a warning", isc_arg_end };
+static const ISC_STATUS err[] = { isc_arg_gds, isc_random, isc_arg_string,
+	(ISC_STATUS)"Intolerable integer value", isc_arg_end };
+static const ISC_STATUS wrn[] = { isc_arg_gds, isc_random, isc_arg_string,
+	(ISC_STATUS)"Just a warning", isc_arg_end };
 
 ReplPlugin::ReplPlugin(IPluginConfig* conf)
 {
@@ -171,12 +192,6 @@ IReferenceCounted* ReplPlugin::getOwner()
 	return owner;
 }
 
-IStatus* ReplPlugin::getStatus()
-{
-	WriteLog(log, "%p\tgetStatus()\n", this);
-	return status;
-}
-
 void ReplPlugin::dumpInfo(const unsigned char* buffer, size_t length)
 {
 	const unsigned char* p = buffer;
@@ -225,43 +240,27 @@ void ReplPlugin::dumpInfo(const unsigned char* buffer, size_t length)
 	WriteLog(log, "\t\tSuspicious exit from info parse loop\n");
 }
 
-void ReplPlugin::setAttachment(IAttachment* attachment)
-{
-	WriteLog(log, "%p\tAssigned attachment %p\n", this, attachment);
-	att = attachment;
-	att->addRef();
-	CheckStatusWrapper ExtStatus(status);
-	const unsigned char items[] = { fb_info_db_guid };
-	unsigned char response[80];
-	att->getInfo(&ExtStatus, sizeof(items), items, sizeof(response), response);
-	if (status->getState() == 0)
-	{
-		dumpInfo(response, sizeof(response));
-	}
-}
-
-IReplicatedTransaction* ReplPlugin::startTransaction(ITransaction* transaction, ISC_INT64 number)
+IReplicatedTransaction* ReplPlugin::startTransaction(CheckStatusWrapper* status,
+	ITransaction* transaction, ISC_INT64 number)
 {
 	WriteLog(log, "%p\tstartTransaction(%p, %lld)\n", this, transaction, number);
 	return new ReplTransaction(this, transaction, number);
 }
 
-FB_BOOLEAN ReplPlugin::cleanupTransaction(ISC_INT64 number)
+void ReplPlugin::cleanupTransaction(CheckStatusWrapper* status, ISC_INT64 number)
 {
 	WriteLog(log, "%p\tcleanupTransaction(%lld)\n", this, number);
-	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplPlugin::deprecatedSetSequence(const char* name, ISC_INT64 value)
+void ReplPlugin::deprecatedSetSequence(CheckStatusWrapper* status, const char* genName, ISC_INT64 value)
 {
-	WriteLog(log, "%p\tdeprecatedSetSequence(%s, %lld)\n", this, name, value);
-	return FB_TRUE;
+	WriteLog(log, "%p\tdeprecatedSetSequence(%s, %lld)\n", this, genName, value);
 }
 
-FB_BOOLEAN ReplPlugin::setSequence2(const char* schemaName, const char* genName, ISC_INT64 value)
+void ReplPlugin::setSequence2(Firebird::CheckStatusWrapper* status, const char* schemaName,
+	const char* genName, ISC_INT64 value)
 {
-	WriteLog(log, "%p\tsetSequence2(%s.%s, %lld)\n", this, schemaName, genName, value);
-	return FB_TRUE;
+	WriteLog(log, "%p\tdeprecatedSetSequence(%s, %s, %lld)\n", this, schemaName, genName, value);
 }
 
 ReplTransaction::ReplTransaction(ReplPlugin* session, ITransaction* transaction, ISC_INT64 number):
@@ -285,41 +284,35 @@ void ReplTransaction::dispose()
 	delete this;
 }
 
-FB_BOOLEAN ReplTransaction::prepare()
+void ReplTransaction::prepare(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\tprepare()\n", this);
-	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplTransaction::commit()
+void ReplTransaction::commit(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\tcommit()\n", this);
-	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplTransaction::rollback()
+void ReplTransaction::rollback(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\trollback()\n", this);
 	parent->status->setWarnings(wrn);
-	return FB_FALSE;
 }
 
-FB_BOOLEAN ReplTransaction::startSavepoint()
+void ReplTransaction::startSavepoint(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\tstartSavepoint()\n", this);
-	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplTransaction::releaseSavepoint()
+void ReplTransaction::releaseSavepoint(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\treleaseSavepoint()\n", this);
-	return FB_TRUE;
 }
 
-FB_BOOLEAN ReplTransaction::rollbackSavepoint()
+void ReplTransaction::rollbackSavepoint(CheckStatusWrapper* status)
 {
 	WriteLog(parent->log, "%p\trollbackSavepoint()\n", this);
-	return FB_TRUE;
 }
 
 bool ReplTransaction::dumpData(IReplicatedRecord* record)
@@ -335,6 +328,17 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 		unsigned fieldType = field->getType();
 
 		WriteLog(parent->log, "\tfield %u (%s), type %u:\n", i, field->getName(), fieldType);
+
+		unsigned int position;
+		FB_BOOLEAN isPrimary = field->isPrimary(&position);
+
+		WriteLog(parent->log, "\tfield %u (%s), is primary %u, field position in the key %d\n",
+			i, field->getName(), isPrimary, position);
+
+		FB_BOOLEAN isUnique = field->isUnique(&position);
+
+		WriteLog(parent->log, "\tfield %u (%s), is unique %u, field position in the key %d\n",
+			i, field->getName(), isUnique, position);
 
 		const void* fieldData = field->getData();
 		if (fieldData == nullptr)
@@ -359,7 +363,8 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 						WriteLog(parent->log, "\n");
 					}
 					else
-						WriteLog(parent->log, "\t\tTEXT with charset %u, length %u: \"%.*s\"\n", charSet, length, length, reinterpret_cast<const char*>(fieldData));
+						WriteLog(parent->log, "\t\tTEXT with charset %u, length %u: \"%.*s\"\n", charSet,
+							length, length, reinterpret_cast<const char*>(fieldData));
 
 					break;
 				}
@@ -376,13 +381,15 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 						WriteLog(parent->log, "\n");
 					}
 					else
-						WriteLog(parent->log, "\t\tVARCHAR with charset %u, length %u: \"%.*s\"\n", charSet, data->vary_length, data->vary_length, data->vary_string);
+						WriteLog(parent->log, "\t\tVARCHAR with charset %u, length %u: \"%.*s\"\n", charSet,
+							data->vary_length, data->vary_length, data->vary_string);
 
 					break;
 				}
 			case SQL_SHORT:
 				{
-					WriteLog(parent->log, "\t\tSMALLINT with scale %u: %d\n", field->getScale(), *reinterpret_cast<const int16_t*>(fieldData));
+					WriteLog(parent->log, "\t\tSMALLINT with scale %u: %d\n", field->getScale(),
+					*reinterpret_cast<const int16_t*>(fieldData));
 					break;
 				}
 			case SQL_LONG:
@@ -415,7 +422,7 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 					if (ExtStatus.getState() & IStatus::STATE_ERRORS)
 						return false;
 
-					char buffer[USHRT_MAX];
+					char buffer[1024];
 					do
 					{
 						unsigned length;
@@ -483,12 +490,14 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 					unsigned year, month, day, hours, minutes, seconds, fractions;
 					utl->decodeDate(value.timestamp_date, &year, &month, &day);
 					utl->decodeTime(value.timestamp_time, &hours, &minutes, &seconds, &fractions);
-					WriteLog(parent->log, "\t\tTIMESTAMP: %04u-%02u-%02u %02u:%02u:%02u.%04u\n", year, month, day, hours, minutes, seconds, fractions);
+					WriteLog(parent->log, "\t\tTIMESTAMP: %04u-%02u-%02u %02u:%02u:%02u.%04u\n",
+						year, month, day, hours, minutes, seconds, fractions);
 					break;
 				}
 			case SQL_INT64:
 				{
-					WriteLog(parent->log, "\t\tBIGINT with scale %u: %lld\n", field->getScale(), *reinterpret_cast<const int64_t*>(fieldData));
+					WriteLog(parent->log, "\t\tBIGINT with scale %u: %lld\n", field->getScale(),
+						*reinterpret_cast<const int64_t*>(fieldData));
 					break;
 				}
 			case SQL_BOOLEAN:
@@ -519,114 +528,109 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 	return true;
 }
 
-FB_BOOLEAN ReplTransaction::deprecatedInsertRecord(const char* name, IReplicatedRecord* record)
+void ReplTransaction::deprecatedInsertRecord(CheckStatusWrapper* status, const char* name, IReplicatedRecord* record)
 {
-	WriteLog(parent->log, "%p\tdeprecated Insert record into %s\n", this, name);
+	WriteLog(parent->log, "%p\tInsert record into %s\n", this, name);
 	try
 	{
-		return dumpData(record) ? FB_TRUE : FB_FALSE;
+		dumpData(record);
 	}
 	catch (const int)
 	{
 		parent->status->setErrors(err);
-		return FB_FALSE;
 	}
 }
 
-FB_BOOLEAN ReplTransaction::insertRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record)
+void ReplTransaction::deprecatedUpdateRecord(CheckStatusWrapper* status, const char* name,
+	IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
+{
+	WriteLog(parent->log, "%p\tUpdate %s\nOldData:\n", this, name);
+	try
+	{
+		if (!dumpData(orgRecord))
+			return;
+
+		WriteLog(parent->log, "NewData:\n");
+		dumpData(newRecord);
+	}
+	catch (const int)
+	{
+		parent->status->setErrors(err);
+	}
+}
+
+void ReplTransaction::deprecatedDeleteRecord(CheckStatusWrapper* status, const char* name, IReplicatedRecord* record)
+{
+	WriteLog(parent->log, "%p\tDelete from %s\n", this, name);
+	try
+	{
+		dumpData(record);
+	}
+	catch (const int)
+	{
+		parent->status->setErrors(err);
+	}
+}
+
+void ReplTransaction::deprecatedExecuteSql(CheckStatusWrapper* status, const char* sql)
+{
+	WriteLog(parent->log, "%p\tExecuteSql(%s)\n", this, sql);
+}
+
+void ReplTransaction::deprecatedExecuteSqlIntl(CheckStatusWrapper* status, unsigned charset, const char* sql)
+{
+	WriteLog(parent->log, "%p\tExecuteSqlIntl(%u, %s)\n", this, charset, sql);
+}
+
+void ReplTransaction::insertRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+	IReplicatedRecord* record)
 {
 	WriteLog(parent->log, "%p\tInsert record into %s.%s\n", this, schemaName, tableName);
 	try
 	{
-		return dumpData(record) ? FB_TRUE : FB_FALSE;
+		dumpData(record);
 	}
 	catch (const int)
 	{
 		parent->status->setErrors(err);
-		return FB_FALSE;
 	}
 }
 
-FB_BOOLEAN ReplTransaction::deprecatedUpdateRecord(const char* name,
-	IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
-{
-	WriteLog(parent->log, "%p\tdeprecated Update %s\nOldData:\n", this, name);
-	try
-	{
-		if (!dumpData(orgRecord))
-			return FB_FALSE;
 
-		WriteLog(parent->log, "NewData:\n");
-		return dumpData(newRecord) ? FB_TRUE : FB_FALSE;
-	}
-	catch (const int)
-	{
-		parent->status->setErrors(err);
-		return FB_FALSE;
-	}
-}
-
-FB_BOOLEAN ReplTransaction::updateRecord2(const char* schemaName, const char* tableName,
+void ReplTransaction::updateRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
 	IReplicatedRecord* orgRecord, IReplicatedRecord* newRecord)
 {
 	WriteLog(parent->log, "%p\tUpdate %s.%s\nOldData:\n", this, schemaName, tableName);
 	try
 	{
 		if (!dumpData(orgRecord))
-			return FB_FALSE;
+			return;
 
 		WriteLog(parent->log, "NewData:\n");
-		return dumpData(newRecord) ? FB_TRUE : FB_FALSE;
+		dumpData(newRecord);
 	}
 	catch (const int)
 	{
 		parent->status->setErrors(err);
-		return FB_FALSE;
 	}
 }
 
-FB_BOOLEAN ReplTransaction::deprecatedDeleteRecord(const char* name, IReplicatedRecord* record)
-{
-	WriteLog(parent->log, "%p\tdeprecated Delete from %s\n", this, name);
-	try
-	{
-		return dumpData(record) ? FB_TRUE : FB_FALSE;
-	}
-	catch (const int)
-	{
-		parent->status->setErrors(err);
-		return FB_FALSE;
-	}
-}
-
-FB_BOOLEAN ReplTransaction::deleteRecord2(const char* schemaName, const char* tableName, IReplicatedRecord* record)
+void ReplTransaction::deleteRecord2(CheckStatusWrapper* status, const char* schemaName, const char* tableName,
+	IReplicatedRecord* record)
 {
 	WriteLog(parent->log, "%p\tDelete from %s.%s\n", this, schemaName, tableName);
 	try
 	{
-		return dumpData(record) ? FB_TRUE : FB_FALSE;
+		dumpData(record);
 	}
 	catch (const int)
 	{
 		parent->status->setErrors(err);
-		return FB_FALSE;
 	}
 }
 
-FB_BOOLEAN ReplTransaction::deprecatedExecuteSql(const char* sql)
-{
-	WriteLog(parent->log, "%p\tdeprecatedExecuteSql(%s)\n", this, sql);
-	return FB_TRUE;
-}
-
-FB_BOOLEAN ReplTransaction::deprecatedExecuteSqlIntl(unsigned charset, const char* sql)
-{
-	WriteLog(parent->log, "%p\tdeprecatedExecuteSqlIntl(%u, %s)\n", this, charset, sql);
-	return FB_TRUE;
-}
-
-FB_BOOLEAN ReplTransaction::executeSqlIntl2(unsigned charset, const char* schemaSearchPath, const char* sql)
+void ReplTransaction::executeSqlIntl2(CheckStatusWrapper* status, unsigned charset, const char* schemaSearchPath,
+	const char* sql)
 {
 	WriteLog(parent->log, "%p\tExecuteSqlIntl2(%u, %s, %s)\n", this, charset, schemaSearchPath, sql);
-	return FB_TRUE;
 }
