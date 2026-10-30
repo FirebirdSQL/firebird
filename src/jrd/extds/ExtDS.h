@@ -49,7 +49,6 @@ class ConnectionsPool;
 class Transaction;
 class Statement;
 class Blob;
-struct Timeouts;
 
 enum TraModes {
 	traReadCommited,
@@ -157,8 +156,7 @@ public:
 	static Provider* getProvider(const Firebird::string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope,
-		const Timeouts& timeouts);
+		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
 
 	static ConnectionsPool* getConnPool(bool create);
 
@@ -229,9 +227,7 @@ protected:
 
 	void generateDPB(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb,
 		const Firebird::string& user, const Firebird::string& pwd,
-		const Firebird::string& role, const Timeouts& timeouts) const;
-
-	static void generateTimeout(ULONG timeout, UCHAR tag, Firebird::ClumpletWriter& dpb);
+		const Firebird::string& role) const;
 
 	// Protection against simultaneous attach database calls. Not sure we still
 	// need it, but I believe it will not harm
@@ -855,16 +851,6 @@ private:
 	Firebird::RefPtr<Jrd::StableAttachmentPart> m_stable;
 	Firebird::Mutex* m_mutex;
 	Connection* m_saveConnection;
-};
-
-struct Timeouts
-{
-	Timeouts()
-	{ }
-
-	ULONG connect = 0;
-	ULONG send = 0;
-	ULONG receive = 0;
 };
 
 } // namespace EDS

@@ -5243,18 +5243,6 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						node->role = PAR_parse_value(tdbb, csb);
 						break;
 
-					case blr_exec_stmt_connect:
-						node->connectTimeout = PAR_parse_value(tdbb, csb);
-						break;
-
-					case blr_exec_stmt_send:
-						node->sendTimeout = PAR_parse_value(tdbb, csb);
-						break;
-
-					case blr_exec_stmt_receive:
-						node->receiveTimeout = PAR_parse_value(tdbb, csb);
-						break;
-
 					case blr_exec_stmt_tran:
 						PAR_syntax_error(csb, "external transaction parameters");
 						break;
@@ -5398,9 +5386,6 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->role = doDsqlPass(dsqlScratch, role);
 	node->traScope = traScope;
 	node->useCallerPrivs = useCallerPrivs;
-	node->connectTimeout = doDsqlPass(dsqlScratch, connectTimeout);
-	node->sendTimeout = doDsqlPass(dsqlScratch, sendTimeout);
-	node->receiveTimeout = doDsqlPass(dsqlScratch, receiveTimeout);
 
 	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 }
@@ -5419,9 +5404,6 @@ string ExecStatementNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, innerStmt);
 	NODE_PRINT(printer, inputs);
 	NODE_PRINT(printer, outputs);
-	NODE_PRINT(printer, connectTimeout);
-	NODE_PRINT(printer, sendTimeout);
-	NODE_PRINT(printer, receiveTimeout);
 	NODE_PRINT(printer, useCallerPrivs);
 	NODE_PRINT(printer, traScope);
 	NODE_PRINT(printer, inputNames);
@@ -5439,7 +5421,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 
 	// If no new features of EXECUTE STATEMENT are used, lets generate old BLR.
 	if (!dataSource && !userName && !password && !role && !useCallerPrivs && !inputs &&
-		!connectTimeout && !sendTimeout && !receiveTimeout && traScope == EDS::traNotSet)
+		 traScope == EDS::traNotSet)
 	{
 		if (outputs)
 		{
@@ -5498,11 +5480,6 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_user, userName);
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_pwd, password);
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_role, role);
-
-		// Timeouts
-		genOptionalExpr(dsqlScratch, blr_exec_stmt_connect, connectTimeout);
-		genOptionalExpr(dsqlScratch, blr_exec_stmt_send, sendTimeout);
-		genOptionalExpr(dsqlScratch, blr_exec_stmt_receive,  receiveTimeout);
 
 		// dsqlScratch's transaction behavior.
 		if (traScope != EDS::traNotSet)
@@ -5631,12 +5608,7 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 		string sRole;
 		getString(tdbb, request, role, sRole);
 
-		EDS::Timeouts timeouts;
-		timeouts.connect = getLong(tdbb, request, connectTimeout);
-		timeouts.send = getLong(tdbb, request, sendTimeout);
-		timeouts.receive = getLong(tdbb, request, receiveTimeout);
-
-		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope, timeouts);
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);
@@ -5711,24 +5683,6 @@ void ExecStatementNode::getString(thread_db* tdbb, Request* request, const Value
 
 	str.assign((char*) p, len);
 	str.trim();
-}
-
-
-ULONG ExecStatementNode::getLong(thread_db* tdbb, Request* request, const ValueExprNode* node) const
-{
-	if (!node)
-		return 0;
-
-	const dsc* dsc = EVL_expr(tdbb, request, node);
-
-	if (!dsc)
-		return 0;
-
-	SLONG val = MOV_get_long(tdbb, dsc, 0);
-	if (val < 0)
-		ERR_post(Arg::Gds(isc_random) << "Negative timeout value not acceptable");
-
-	return static_cast<ULONG>(val);
 }
 
 
