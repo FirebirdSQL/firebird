@@ -231,10 +231,14 @@ namespace
 
 			if (traNumber && rpt->getTransaction() != traNumber)
 			{
-				const auto backId = rpt->irt_backslot;
-				fb_assert(backId < root->irt_count);
+				const auto backSlot = root->getBackSlot(rpt);
+				if (!backSlot)
+				{
+					CCH_unwind(tdbb, false);
+					BUGCHECK(204);		// msg 204 index inconsistent
+				}
 
-				return &root->irt_rpt[backId];
+				return backSlot;
 			}
 		}
 
@@ -3172,10 +3176,15 @@ static ModifyIrtRepeatValue modifyIrtRepeat(thread_db* tdbb, index_root_page::ir
 			if (state != tra_committed && state != tra_dead)
 				return ModifyIrtRepeatValue::Skip;
 
-			CCH_MARK(tdbb, window);
 			const auto backId = irt_desc->irt_backslot;
-			fb_assert(backId < root->irt_count);
-			const auto backIrtDesc = &root->irt_rpt[backId];
+			const auto backIrtDesc = root->getBackSlot(irt_desc);
+			if (!backIrtDesc)
+			{
+				CCH_RELEASE(tdbb, window);
+				BUGCHECK(204);		// msg 204 index inconsistent
+			}
+
+			CCH_MARK(tdbb, window);
 
 			if (state == tra_committed)
 			{
