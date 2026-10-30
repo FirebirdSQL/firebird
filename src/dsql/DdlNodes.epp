@@ -13150,8 +13150,7 @@ void ModifyIndexNode::modify(thread_db* tdbb, jrd_tra* transaction)
 	{
 		AutoSetRestoreFlag preserveFlags(&tdbb->tdbb_flags, TDBB_use_db_page_space, false);
 
-		const auto relation = indexRelation->getVersioned(tdbb, CacheFlag::AUTOCREATE);
-		if (relation && relation->getPages(tdbb, MAX_TRA_NUMBER, false))
+		if (indexRelation->getTempPages(tdbb, MAX_TRA_NUMBER, false))
 			step2(tdbb, transaction);
 	}
 

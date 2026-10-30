@@ -1401,7 +1401,7 @@ public:
 		if (rel_perm->useTempPages(tdbb))
 		{
 			const auto tempPages = rel_perm->getTempPages(tdbb, instanceId, allocPages);
-			return tempPages ? tempPages : getBasePages(tdbb);
+			return tempPages ? tempPages : (allocPages ? getBasePages(tdbb) : nullptr);
 		}
 
 		return getBasePages(tdbb);
