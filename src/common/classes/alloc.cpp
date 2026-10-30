@@ -1965,30 +1965,34 @@ MemBlock* FreeObjects<ListBuilder, Limits>::newBlock(MemPool* pool, unsigned slo
 {
 	size_t size = Limits::getSize(slot);
 
-	if (currentExtent && currentExtent->spaceRemaining < size)
+	if (!currentExtent || currentExtent->spaceRemaining < size)
 	{
-		// put remaining memory into appr. slots
-		while (currentExtent->spaceRemaining >= Limits::getSize(0) &&
-			   currentExtent->spaceRemaining > ListBuilder::MEM_OVERHEAD)
-		{
-			unsigned sl1 = Limits::getSlot(currentExtent->spaceRemaining, SLOT_FREE);
-			if (sl1 == ~0u)
-				break;
+		Extent* const oldExtent = currentExtent;
 
-			unsigned size1 = Limits::getSize(sl1);
-			MemBlock* b = currentExtent->newBlock(size1);
-
-			listBuilder.putElement(&freeObjects[sl1], b);
-		}
-		currentExtent->spaceRemaining = 0;
-		listBuilder.decrUsage(currentExtent, pool);
-	}
-
-	if (!(currentExtent && currentExtent->spaceRemaining))
-	{
+		// Allocate new extent before retiring the old one: if newExtent() throws,
+		// old extent keeps its usage reference and is retired by the next call
 		size_t size2 = size;
 		pool->newExtent(size2, &currentExtent);
 		currentExtent->incrUsage();
+
+		if (oldExtent)
+		{
+			// put remaining memory into appr. slots
+			while (oldExtent->spaceRemaining >= Limits::getSize(0) &&
+				   oldExtent->spaceRemaining > ListBuilder::MEM_OVERHEAD)
+			{
+				unsigned sl1 = Limits::getSlot(oldExtent->spaceRemaining, SLOT_FREE);
+				if (sl1 == ~0u)
+					break;
+
+				unsigned size1 = Limits::getSize(sl1);
+				MemBlock* b = oldExtent->newBlock(size1);
+
+				listBuilder.putElement(&freeObjects[sl1], b);
+			}
+			oldExtent->spaceRemaining = 0;
+			listBuilder.decrUsage(oldExtent, pool);
+		}
 	}
 
 	return currentExtent->newBlock(size);
