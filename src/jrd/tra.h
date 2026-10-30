@@ -156,6 +156,24 @@ struct CallerName
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ULONG> > > ReplBlobMap;
 typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SLONG, blb*> > > BlobUtilMap;
 
+// Structure for preparing to create a foreign blob.
+// There is no need to create the foreign blob in advance,
+// since there is no guarantee that it will be used
+struct ForeignBlob
+{
+	ForeignBlob() { }
+
+	ForeignBlob(EDS::Connection* conn, EDS::Transaction* tran, dsc desc) :
+		m_connection(conn), m_transaction(tran), m_descriptor(desc)
+	{ }
+
+	EDS::Connection* m_connection;
+	EDS::Transaction* m_transaction;
+	dsc m_descriptor;
+};
+
+typedef Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<SINT64, ForeignBlob> > > ForeignBlobMap;
+
 inline constexpr SSHORT DEFAULT_LOCK_TIMEOUT = -1; // infinite
 inline constexpr const char* TRA_BLOB_SPACE = "fb_blob_";
 inline constexpr const char* TRA_UNDO_SPACE = "fb_undo_";
@@ -179,6 +197,7 @@ public:
 		tra_fetched_blobs(*p),
 		tra_repl_blobs(*p),
 		tra_blob_util_map(*p),
+		tra_foreign_blob_map(*p),
 		tra_arrays(NULL),
 		tra_deferred_job(NULL),
 		traExtRel(*p),
@@ -286,6 +305,7 @@ public:
 	FetchedBlobIdTree tra_fetched_blobs;	// list of fetched blobs
 	ReplBlobMap tra_repl_blobs;			// map of blob IDs replicated in this transaction
 	BlobUtilMap tra_blob_util_map;		// map of blob IDs for RDB$BLOB_UTIL package
+	ForeignBlobMap tra_foreign_blob_map;	// map of foreign blobs
 	ArrayField*	tra_arrays;				// Linked list of active arrays
 	Lock*		tra_lock;				// lock for transaction - may be NULL for special transactions
 	Lock*		tra_alter_db_lock;		// lock for ALTER DATABASE statement(s)
@@ -584,6 +604,7 @@ enum dfw_t : int {
 	dfw_create_tablespace,
 	dfw_delete_tablespace,
 	dfw_modify_tablespace,
+	dfw_delete_foreign_server,
 
 	// deferred works argument types
 	dfw_arg_proc_name,		// procedure name for dfw_delete_prm, mandatory
