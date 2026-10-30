@@ -310,6 +310,7 @@ The following system tables have been added:
 | RDB$FOREIGN_SERVER_WRAPPER | CHAR \(63\)          | Provider (plugin) used to connect to a foreign server      |
 | RDB$SECURITY_CLASS         | CHAR \(63\)          | Security class                                             |
 | RDB$OWNER_NAME             | CHAR \(63\)          | The username of the user who created the server originally |
+| RDB$DESCRIPTION            | BLOB SUB_TYPE TEXT   | The foreign server description                             |
 
 `RDB$FOREIGN_SERVER_OPTIONS` - contains a description of all options defined for the foreign servers in the database:
 
@@ -326,6 +327,7 @@ The following system tables have been added:
 |----------------------------|----------------------|------------------------------------------------------------|
 | RDB$USER                   | CHAR \(63\)          | The user name to map                                       |
 | RDB$FOREIGN_SERVER_NAME    | CHAR \(63\)          | The foreign server name to map                             |
+| RDB$DESCRIPTION            | BLOB SUB_TYPE TEXT   | The map description                                        |
 
 `RDB$FOREIGN_MAPPING_OPTIONS` - contains a description of all options defined for user mappings to foreign servers in the database:
 
