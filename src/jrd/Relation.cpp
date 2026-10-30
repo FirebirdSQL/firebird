@@ -26,6 +26,7 @@
 #include "../jrd/met.h"
 #include "../jrd/tra.h"
 #include "../jrd/btr_proto.h"
+#include "../jrd/cch_proto.h"
 #include "../jrd/dpm_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../jrd/lck.h"
@@ -565,6 +566,11 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 		WIN window(basePages->getPageSpaceId());
 		index_desc idx;
 		idx.idx_id = idx_invalid;
+
+		Cleanup releaseIndexRoot([&] {
+			if (window.win_bdb)
+				CCH_RELEASE(tdbb, &window);
+		});
 
 		while (BTR_next_index(tdbb, relation, idxTran, &idx, &window, basePages))
 		{
