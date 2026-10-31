@@ -1,5 +1,6 @@
 temp/
 /gen/
+/.openbsd-check/
 output_Win32_*/
 output_x64_*/
 examples/prebuilt/

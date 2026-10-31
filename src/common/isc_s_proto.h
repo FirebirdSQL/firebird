@@ -61,7 +61,9 @@
 
 #include "fb_pthread.h"
 
+#ifndef OPENBSD
 #define HAVE_SHARED_MUTEX_SECTION
+#endif
 
 namespace Firebird {
 
@@ -72,10 +74,15 @@ struct mtx
 
 struct event_t
 {
+#ifdef OPENBSD
+	uint32_t event_count;
+	int event_pid;
+#else
 	SLONG event_count;
 	int event_pid;
 	pthread_mutex_t event_mutex[1];
 	pthread_cond_t event_cond[1];
+#endif
 };
 
 #endif // UNIX
@@ -130,7 +137,11 @@ struct event_t
 class MemoryHeader
 {
 public:
+#ifdef OPENBSD
+	static const USHORT HEADER_VERSION = 3;
+#else
 	static const USHORT HEADER_VERSION = 2;
+#endif
 
 	// Values for mhb_flags
 	static const USHORT FLAG_DELETED = 1;	// Shared file has been deleted
@@ -313,6 +324,9 @@ public:
 
 private:
 	IpcObject* sh_mem_callback;
+#ifdef OPENBSD
+	Firebird::RefPtr<SharedFileInfo> sh_mem_fileMutex;
+#endif
 #ifdef WIN_NT
 	bool sh_mem_unlink;
 #endif

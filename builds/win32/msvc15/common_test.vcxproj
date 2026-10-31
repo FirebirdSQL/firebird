@@ -182,6 +182,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp" />
+    <ClCompile Include="..\..\..\src\common\tests\SockAddrTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\ArrayTest.cpp" />
     <ClCompile Include="..\..\..\src\common\classes\tests\DoublyLinkedListTest.cpp" />

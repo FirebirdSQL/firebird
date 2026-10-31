@@ -427,15 +427,26 @@ void PIO_force_write(jrd_file* file, const bool forcedWrites, const bool notUseF
 	// Since all SUPERSERVER_V2 database and shadow I/O is synchronous, this is a no-op.
 
 #ifndef SUPERSERVER_V2
+#ifndef O_DIRECT
+	if (notUseFSCache)
+	{
+		errno = ENOTSUP;
+		unix_error("direct I/O", file, isc_io_access_err);
+	}
+#endif
+
 	const bool oldForce = (file->fil_flags & FIL_force_write) != 0;
 	const bool oldNotUseCache = (file->fil_flags & FIL_no_fs_cache) != 0;
 
 	if (forcedWrites != oldForce || notUseFSCache != oldNotUseCache)
 	{
 
-		const int control = (forcedWrites ? SYNC : 0) | (notUseFSCache ? O_DIRECT : 0);
-
 #ifndef FCNTL_BROKEN
+		int control = forcedWrites ? SYNC : 0;
+#ifdef O_DIRECT
+		if (notUseFSCache)
+			control |= O_DIRECT;
+#endif
 		if (fcntl(file->fil_desc, F_SETFL, control) == -1)
 		{
 			unix_error("fcntl() SYNC/DIRECT", file, isc_io_access_err);
@@ -906,7 +917,14 @@ static int openFile(const PathName& name, const bool forcedWrites,
 	if (forcedWrites)
 		flag |= SYNC;
 	if (notUseFSCache)
+	{
+#ifdef O_DIRECT
 		flag |= O_DIRECT;
+#else
+		errno = ENOTSUP;
+		return -1;
+#endif
+	}
 #endif
 
 	return os_utils::open(name.c_str(), flag);

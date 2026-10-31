@@ -222,6 +222,11 @@ ifeq ($(TOMMATH_BUILD_FLG),Y)
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtommath.dylib" $(TOMMATH)/.libs/libtommath.0.dylib
 	cp $(TOMMATH)/.libs/libtommath.0.dylib $(LIB)/libtommath.dylib
+else ifeq ($(PLATFORM),OPENBSD)
+	name=`sed -n "s/^dlname='\(.*\)'/\1/p" $(TOMMATH)/libtommath.la`; \
+		test -n "$$name" && test -f "$(TOMMATH)/.libs/$$name" && \
+		ln -sf "$(TOMMATH)/.libs/$$name" "$(LIB)/$$name" && \
+		ln -sf "$$name" "$(LIB)/libtommath.so"
 else
 	ln -sf $(TOMMATH_SO).$(TOMMATH_VER) $(LIB)
 	ln -sf $(TOMMATH_SO) $(LIB)
@@ -234,6 +239,11 @@ ifeq ($(TOMCRYPT_BUILD_FLG),Y)
 ifeq ($(PLATFORM),DARWIN)
 	install_name_tool -id "@rpath/lib/libtomcrypt.dylib" $(TOMCRYPT)/.libs/libtomcrypt.1.dylib
 	cp $(TOMCRYPT)/.libs/libtomcrypt.1.dylib $(LIB)/libtomcrypt.dylib
+else ifeq ($(PLATFORM),OPENBSD)
+	name=`sed -n "s/^dlname='\(.*\)'/\1/p" $(TOMCRYPT)/libtomcrypt.la`; \
+		test -n "$$name" && test -f "$(TOMCRYPT)/.libs/$$name" && \
+		ln -sf "$(TOMCRYPT)/.libs/$$name" "$(LIB)/$$name" && \
+		ln -sf "$$name" "$(LIB)/libtomcrypt.so"
 else
 	ln -sf $(TOMCRYPT_SO).$(TOMCRYPT_VER) $(LIB)
 	ln -sf $(TOMCRYPT_SO) $(LIB)
@@ -337,12 +347,12 @@ master_process:
 	$(MAKE) external
 	$(MAKE) updateCloopInterfaces
 	$(MAKE) rest
+	$(MAKE) include_generic
 	$(MAKE) yvalve
 ifeq ($(CLIENT_ONLY_FLG),Y)
 ifeq ($(WITH_TOMCRYPT),Y)
 	$(MAKE) chacha
 endif
-	$(MAKE) include_generic
 endif
 ifeq ($(CLIENT_ONLY_FLG),N)
 	$(MAKE) boot
@@ -740,25 +750,21 @@ gbak_files: $(GBAK_FILES)
 
 INCLUDE_DEST=   $(FB_BUILD)/include
 
-# ib_util.h actually is a marker for a number of headers
-
-# Copy all the other headers to the distribution directory. We use
-# ib_util.h as the marker for all the files.
-
 OtherDistribHeaders = include/ib_util.h \
 					  include/iberror.h \
 					  include/ibase.h
 
-SRC_OtherDistribHeaders = $(addprefix $(SRC_ROOT)/, $(OtherDistribHeaders))
+DEST_OtherDistribHeaders = $(addprefix $(FB_BUILD)/, $(OtherDistribHeaders))
 
-$(INCLUDE_DEST)/ib_util.h : $(SRC_OtherDistribHeaders)
+$(DEST_OtherDistribHeaders): $(INCLUDE_DEST)/%: $(SRC_ROOT)/include/%
 	mkdir -p $(INCLUDE_DEST)
-	$(CP) $^ $(INCLUDE_DEST)/
+	$(CP) $< $@
 
 NEW_INCLUDES_SRC = $(shell find $(SRC_ROOT)/include/firebird -type f)
 NEW_INCLUDES_DEST = $(patsubst $(SRC_ROOT)/include/firebird/%, $(INCLUDE_DEST)/firebird/%, $(NEW_INCLUDES_SRC))
 
-include_generic: $(NEW_INCLUDES_DEST) $(INCLUDE_DEST)/ib_util.h
+.PHONY: include_generic
+include_generic: $(NEW_INCLUDES_DEST) $(DEST_OtherDistribHeaders)
 
 ifeq ($(SYSTEM_BOOST_FLG),Y)
 $(INCLUDE_DEST)/firebird/Message.h : $(SRC_ROOT)/include/firebird/Message.h

@@ -835,7 +835,7 @@ rem_port* INET_analyze(ClntAuthBlock* cBlock,
 	delete port->port_version;
 	port->port_version = REMOTE_make_string(temp.c_str());
 
-	if (accept->p_acpt_architecture == ARCHITECTURE) {
+	if (ARCHITECTURE != arch_generic && accept->p_acpt_architecture == ARCHITECTURE) {
 		port->port_flags |= PORT_symmetric;
 	}
 
@@ -968,7 +968,7 @@ rem_port* INET_connect(const TEXT* name,
 #endif
 
 	gai_hints.ai_flags =
-#ifndef ANDROID
+#if defined(AI_V4MAPPED) && !defined(ANDROID)
 		((af == AF_UNSPEC) ? AI_V4MAPPED : 0) |
 #endif
 			AI_ADDRCONFIG | (packet ? 0 : AI_PASSIVE);
@@ -1566,8 +1566,13 @@ static rem_port* aux_connect(rem_port* port, PACKET* packet)
 		inet_error(false, port, "socket", isc_net_event_connect_err, savedError);
 	}
 
-	SockAddr resp_address(response->p_resp_data.cstr_address, response->p_resp_data.cstr_length);
-	address.setPort(resp_address.port());
+	unsigned short auxPort;
+	if (!SockAddr::getPort(response->p_resp_data.cstr_address,
+		response->p_resp_data.cstr_length, auxPort))
+	{
+		inet_error(false, port, "event port", isc_net_event_connect_err, EINVAL);
+	}
+	address.setPort(auxPort);
 
 	// Set up new socket
 
@@ -1679,24 +1684,32 @@ static rem_port* aux_request( rem_port* port, PACKET* packet)
 
 	port_address.setPort(our_address.port());
 
-	// CORE-5902: MacOS has sockaddr struct layout different than one found in POSIX/Windows.
-	// This prevent usage of events when client or server is MacOS but the other end is not.
+	// CORE-5902: BSD systems have sockaddr layouts different from POSIX/Windows.
+	// Match the peer's layout for clients that decode the whole sockaddr.
 	// Here we try to make this case work. However it's not bullet-proof for others platforms and architectures.
 	// A proper solution would be to just send the port number in a protocol friendly way.
 
-	bool macOsClient =
+	const bool bsdClient =
+		port->port_client_arch == arch_freebsd ||
+		port->port_client_arch == arch_netbsd ||
 		port->port_client_arch == arch_darwin_ppc ||
 		port->port_client_arch == arch_darwin_x64 ||
 		port->port_client_arch == arch_darwin_ppc64;
 
-	bool macOsServer =
+	const bool bsdServer =
+#ifdef OPENBSD
+		true;
+#else
+		ARCHITECTURE == arch_freebsd ||
+		ARCHITECTURE == arch_netbsd ||
 		ARCHITECTURE == arch_darwin_ppc ||
 		ARCHITECTURE == arch_darwin_x64 ||
 		ARCHITECTURE == arch_darwin_ppc64;
+#endif
 
-	if (macOsServer && !macOsClient)
+	if (bsdServer && !bsdClient)
 		port_address.convertFromMacOsToPosixWindows();
-	else if (!macOsServer && macOsClient)
+	else if (!bsdServer && bsdClient)
 		port_address.convertFromPosixWindowsToMacOs();
 
 	response->p_resp_data.cstr_length = (ULONG) port_address.length();
