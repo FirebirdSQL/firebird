@@ -44,7 +44,6 @@
  */
 
 #include "firebird.h"
-#include <optional>
 #ifdef TIME_WITH_SYS_TIME
 # include <sys/time.h>
 # include <time.h>
@@ -998,6 +997,10 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	const auto dbb = tdbb->getDatabase();
 	const auto statement = request->getStatement();
 
+	// A request finished while its profiler session was paused keeps the profile of its previous id.
+	if (request->req_profiler_profile)
+		request->req_attachment->getProfilerManager(tdbb)->releaseStaleRequestProfile(request);
+
 	// Generate request id.
 	request->setRequestId(
 		request->isRequestIdUnassigned() && request->isRoot() ?
@@ -1029,6 +1032,7 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 		rpb.rpb_runtime_flags = 0;
 
 	request->req_profiler_ticks = 0;
+	request->req_profiler_sampled = false;
 
 	// Store request start time for timestamp work
 	request->validateTimeStamp();
@@ -1084,9 +1088,16 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 
 			const auto profilerManager = attachment->isProfilerActive() && !request->hasInternalStatement() ?
 				attachment->getProfilerManager(tdbb) : nullptr;
-			const SINT64 profilerInitialTicks = profilerManager ? profilerManager->queryTicks() : 0;
-			const SINT64 profilerInitialAccumulatedOverhead = profilerManager ?
+			const bool profilerSampled = profilerManager && profilerManager->isSampled();
+			const SINT64 profilerInitialTicks = profilerManager && !profilerSampled ?
+				profilerManager->beginInterval() : 0;
+			const SINT64 profilerInitialAccumulatedOverhead = profilerManager && !profilerSampled ?
 				profilerManager->getAccumulatedOverhead() : 0;
+
+			ProfilerManager::RequestFrame profilerFrame;
+
+			if (profilerSampled)
+				profilerFrame.push(profilerManager, request);
 
 			try
 			{
@@ -1118,11 +1129,12 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 
 			if (profilerInitialTicks && attachment->isProfilerActive())
 			{
-				const SINT64 currentProfilerTicks = profilerManager->queryTicks();
-				const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
-					currentProfilerTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+				const SINT64 overheadStartTicks = profilerManager->queryTicks();
 
-				request->req_profiler_ticks += elapsedTicks;
+				request->req_profiler_ticks += profilerManager->getElapsedTicksAndAdjustOverhead(
+					overheadStartTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+				profilerManager->endOverhead(overheadStartTicks);
 			}
 
 			request->adjustCallerStats();
@@ -1133,7 +1145,9 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 			request->req_flags &= ~req_active;
 			request->invalidateTimeStamp();
 
-			if (profilerInitialTicks && attachment->isProfilerActive())
+			profilerFrame.pop();
+
+			if ((profilerInitialTicks || profilerSampled) && attachment->isProfilerActive())
 			{
 				ProfilerManager::Stats stats(request->req_profiler_ticks);
 				profilerManager->onRequestFinish(request, stats);
@@ -1257,7 +1271,8 @@ void EXE_unwind(thread_db* tdbb, Request* request)
 
 		const auto attachment = request->req_attachment;
 
-		if (request->req_profiler_ticks && attachment->isProfilerActive() && !request->hasInternalStatement())
+		if ((request->req_profiler_ticks || request->req_profiler_sampled) &&
+			attachment->isProfilerActive() && !request->hasInternalStatement())
 		{
 			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			attachment->getProfilerManager(tdbb)->onRequestFinish(request, stats);
@@ -1723,24 +1738,37 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 	// Execute stuff until we drop
 
-	ProfilerManager* profilerManager;
-	SINT64 profilerInitialTicks, profilerInitialAccumulatedOverhead, profilerLastTicks, profilerLastAccumulatedOverhead;
+	ProfilerManager* profilerManager = nullptr;
+	SINT64 profilerInitialTicks = 0;
+	SINT64 profilerInitialAccumulatedOverhead = 0;
+	SINT64 profilerLastTicks = 0;
+	SINT64 profilerLastAccumulatedOverhead = 0;
+	bool profilerStarted = false;
 
-	if (attachment->isProfilerActive() && !request->hasInternalStatement())
-	{
+	// When sampling, the frame of this request is published for the sampler.
+	ProfilerManager::RequestFrame profilerFrame;
+
+	const auto profilerStart = [&] {
 		profilerManager = attachment->getProfilerManager(tdbb);
-		profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
-		profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
-			profilerManager->getAccumulatedOverhead();
-	}
-	else
-	{
-		profilerManager = nullptr;
-		profilerInitialTicks = 0;
-		profilerLastTicks = 0;
-		profilerInitialAccumulatedOverhead = 0;
-		profilerLastAccumulatedOverhead = 0;
-	}
+		profilerStarted = true;
+
+		if (profilerManager->isSampled())
+		{
+			profilerFrame.push(profilerManager, request);
+			profilerInitialTicks = 0;
+		}
+		else
+		{
+			profilerInitialTicks = profilerLastTicks = profilerManager->beginInterval();
+			profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
+				profilerManager->getAccumulatedOverhead();
+		}
+	};
+
+	const bool profilerCanBeActive = !request->hasInternalStatement();
+
+	if (profilerCanBeActive && attachment->isProfilerActive())
+		profilerStart();
 
 	const StmtNode* profileNode = nullptr;
 
@@ -1766,42 +1794,52 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 			{
 				JRD_reschedule(tdbb);
 
-				if (node->hasLineColumn)
+				if (node->flags & StmtNode::FLAG_LINE_COLUMN)
 				{
 					request->req_src_line = node->line;
 					request->req_src_column = node->column;
 				}
 			}
 
-			std::optional<StmtNode::ProfileMode> cachedProfileMode;
-
-			if (attachment->isProfilerActive() && !request->hasInternalStatement() &&
+			if (profilerCanBeActive && attachment->isProfilerActive() &&
 				(request->req_operation == Request::req_evaluate ||
 					((request->req_operation == Request::req_return ||
 					  request->req_operation == Request::req_sync) &&
-					 *(cachedProfileMode = node->getProfileMode()) == StmtNode::ProfileMode::EVALUATE_RETURN)))
+					 (node->flags & StmtNode::FLAG_PROFILE_ON_RETURN))))
 			{
-				if (!profilerInitialTicks)
+				// Also restart the profiling when the request started a session with the other timing mode.
+				if (!profilerStarted || profilerManager->isSampled() != profilerFrame.isPushed())
 				{
-					profilerManager = attachment->getProfilerManager(tdbb);
-					profilerInitialTicks = profilerLastTicks = profilerManager->queryTicks();
-					profilerInitialAccumulatedOverhead = profilerLastAccumulatedOverhead =
-						profilerManager->getAccumulatedOverhead();
+					profilerFrame.pop();
+					profilerStart();
+					profileNode = nullptr;
 				}
 
-				if (node->hasLineColumn &&
+				if ((node->flags & (StmtNode::FLAG_LINE_COLUMN | StmtNode::FLAG_NOT_PROFILED)) ==
+						StmtNode::FLAG_LINE_COLUMN &&
 					(exeState.forceProfileNextEvaluate ||
 					 !profileNode ||
-					 !(node->line == profileNode->line && node->column == profileNode->column)) &&
-					(cachedProfileMode.has_value() ? *cachedProfileMode : node->getProfileMode()) !=
-						StmtNode::ProfileMode::NONE)
+					 !(node->line == profileNode->line && node->column == profileNode->column)))
 				{
-					profilerLastTicks = profilerCallAfterPsqlLineColumn();
-					profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
-					profileNode = node;
-					exeState.forceProfileNextEvaluate = false;
+					if (profilerFrame.isPushed())
+					{
+						profileNode = node;
+						exeState.forceProfileNextEvaluate = false;
 
-					profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
+						profilerManager->hitPsqlLine(request, profilerFrame.getState(), profilerFrame.getIndex(),
+							node->profileSlot, node->line, node->column);
+					}
+					else if (profilerInitialTicks)
+					{
+						const SINT64 overheadStartTicks = profilerCallAfterPsqlLineColumn();
+						profileNode = node;
+						exeState.forceProfileNextEvaluate = false;
+
+						profilerManager->beforePsqlLineColumn(request, profileNode->line, profileNode->column);
+
+						profilerLastTicks = profilerManager->endOverhead(overheadStartTicks);
+						profilerLastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
+					}
 				}
 			}
 
@@ -1809,12 +1847,14 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 
 			if (exeState.exit)
 			{
-				if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+				if (profilerInitialTicks && profilerCanBeActive && attachment->isProfilerActive())
 				{
-					const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
-						profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+					const SINT64 overheadStartTicks = profilerCallAfterPsqlLineColumn();
 
-					request->req_profiler_ticks += elapsedTicks;
+					request->req_profiler_ticks += profilerManager->getElapsedTicksAndAdjustOverhead(
+						overheadStartTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+					profilerManager->endOverhead(overheadStartTicks);
 				}
 
 				return node;
@@ -1857,12 +1897,14 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		}
 	} // while()
 
-	if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+	if (profilerInitialTicks && profilerCanBeActive && attachment->isProfilerActive())
 	{
-		const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
-			profilerCallAfterPsqlLineColumn(), profilerInitialTicks, profilerInitialAccumulatedOverhead);
+		const SINT64 overheadStartTicks = profilerCallAfterPsqlLineColumn();
 
-		request->req_profiler_ticks += elapsedTicks;
+		request->req_profiler_ticks += profilerManager->getElapsedTicksAndAdjustOverhead(
+			overheadStartTicks, profilerInitialTicks, profilerInitialAccumulatedOverhead);
+
+		profilerManager->endOverhead(overheadStartTicks);
 	}
 
 	request->adjustCallerStats();
@@ -1890,7 +1932,10 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		request->invalidateTimeStamp();
 		release_blobs(tdbb, request);
 
-		if (profilerInitialTicks && attachment->isProfilerActive() && !request->hasInternalStatement())
+		// The frame must be gone before the request finishes, so no sample is taken after its stats are delivered.
+		profilerFrame.pop();
+
+		if (profilerStarted && profilerCanBeActive && attachment->isProfilerActive())
 		{
 			ProfilerManager::Stats stats(request->req_profiler_ticks);
 			profilerManager->onRequestFinish(request, stats);

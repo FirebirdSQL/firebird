@@ -114,6 +114,7 @@
 #include "../jrd/ThreadCollect.h"
 
 #include "../jrd/Database.h"
+#include "../jrd/ProfilerSampler.h"
 #include "../jrd/WorkerAttachment.h"
 
 #include "../common/config/config.h"
@@ -4740,6 +4741,8 @@ void JProvider::shutdown(CheckStatusWrapper* status, unsigned int timeout, const
 			{
 				shutdown_thread(NULL);
 			}
+
+			ProfilerSampler::shutdown();
 
 			// Do not put it into separate shutdown thread - during shutdown of TraceManager
 			// PluginManager wants to lock a mutex, which is sometimes already locked in current thread
