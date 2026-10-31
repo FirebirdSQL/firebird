@@ -250,6 +250,7 @@ namespace Replication
 		WaitForSingleObject(seInfo.hProcess, INFINITE);
 		DWORD exitCode = 0;
 		GetExitCodeProcess(seInfo.hProcess, &exitCode);
+		CloseHandle(seInfo.hProcess);
 		return (int) exitCode;
 #else
 		return system(command.c_str());
