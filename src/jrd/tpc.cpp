@@ -72,9 +72,9 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 	header->monitor_generation.store(0, std::memory_order_relaxed);
 	header->tpc_block_size = dbb->dbb_config->getTipCacheBlockSize();
 
+	AutoSetRestore setExcl(&m_cache->m_exclusive, true);
 	m_cache->initTransactionsPerBlock(header->tpc_block_size);
 	m_cache->loadInventoryPages(tdbb, header);
-
 	return true;
 }
 
@@ -103,10 +103,15 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 
 	TransactionStatusBlock* header = static_cast<TransactionStatusBlock*>(sm->sh_mem_header);
 
-	// Initialize the shared data header
-	initHeader(header);
+	// If mapped file exists already, check its contents to make sure it is ok to use it
+	const bool doInit = !m_fileExists || (sm->sh_mem_length_mapped < m_blockSize) || !checkHeader(header, false);
 
-	memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+	if (doInit)
+	{
+		// Initialize the shared data header
+		initHeader(header);
+		memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+	}
 
 	fb_assert(header->data->is_lock_free());
 
@@ -114,8 +119,9 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 }
 
 TipCache::TipCache(Database* dbb)
-	: m_tpcHeader(NULL), m_snapshots(NULL), m_transactionsPerBlock(0), m_lock(nullptr),
-	  globalTpcInitializer(this), snapshotsInitializer(this), memBlockInitializer(this),
+	: m_tpcHeader(NULL), m_snapshots(NULL), m_transactionsPerBlock(0),
+	  m_lock(nullptr), m_exclusive(false),
+	  globalTpcInitializer(this), snapshotsInitializer(this),
 	  m_blocks_memory(*dbb->dbb_permanent)
 {
 }
@@ -147,6 +153,8 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	if (!LCK_convert(tdbb, m_lock, LCK_SW, LCK_WAIT))
 		ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 
+	m_exclusive = LCK_convert(tdbb, m_lock, LCK_EX, LCK_NO_WAIT);
+
 	// Release locks and deallocate all shared memory structures
 	if (m_blocks_memory.getFirst())
 	{
@@ -157,17 +165,23 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 		} while (m_blocks_memory.getNext());
 	}
 
-	PathName nmSnap, nmHdr;
+	if (m_exclusive && m_tpcHeader)
+		releaseSharedMemory(tdbb, 0, 0);
+
 	if (m_snapshots)
 	{
-		nmSnap = m_snapshots->getMapFileName();
+		if (m_exclusive)
+			m_snapshots->removeMapFile();
+
 		delete m_snapshots;
 		m_snapshots = NULL;
 	}
 
 	if (m_tpcHeader)
 	{
-		nmHdr = m_tpcHeader->getMapFileName();
+		if (m_exclusive)
+			m_tpcHeader->removeMapFile();
+
 		delete m_tpcHeader;
 		m_tpcHeader = NULL;
 	}
@@ -175,23 +189,7 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	m_blocks_memory.clear();
 	m_transactionsPerBlock = 0;
 
-    if (nmSnap.hasData() || nmHdr.hasData())
-    {
-    	if (LCK_lock(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
-		{
-			if (nmSnap.hasData())
-				SharedMemoryBase::unlinkFile(nmSnap.c_str());
-			if (nmHdr.hasData())
-				SharedMemoryBase::unlinkFile(nmHdr.c_str());
-
-			LCK_release(tdbb, m_lock);
-		}
-		else
-			tdbb->tdbb_status_vector->init();
-	}
-	else
-		LCK_release(tdbb, m_lock);
-
+	LCK_release(tdbb, m_lock);
 	m_lock.reset();
 }
 
@@ -385,18 +383,32 @@ TipCache::StatusBlockData::StatusBlockData(thread_db* tdbb, TipCache* tipCache, 
 
 	PathName fileName = makeSharedMemoryFileName(dbb, blockNumber, false);
 
+	// File for block "blockNumber" may have already been created by another process.
+	// If that process has gone, it could be that nobody holds lock on that file and
+	// we will be asked to initialize new memory mapping.
+	// Take care to not clear contents of a valid file in such case.
+
+	bool fileExists = false;
+	if (!cache->m_exclusive)
+	{
+		PathName fullName = makeSharedMemoryFileName(dbb, blockNumber, true);
+		struct stat fileStat;
+
+		if (os_utils::stat(fullName.c_str(), &fileStat) == 0)
+			fileExists = (fileStat.st_size >= blockSize);
+	}
+
 	try
 	{
-		// Here SharedMemory constructor is called with skipLock parameter set to true.
-		// Appropriate locking is performed by existenceLock using LM.
-		// This should be in sync with SharedMemoryBase::unlinkFile() call
-		// in TipCache::StatusBlockData::clear().
+		MemBlockInitializer initializer(cache, blockSize, fileExists);
+
 		memory = FB_NEW_POOL(*dbb->dbb_permanent) SharedMemory<TransactionStatusBlock>(
-			fileName.c_str(), blockSize,
-			&cache->memBlockInitializer, true);
+			fileName.c_str(),
+			fileExists ? 0 : blockSize,		// pass zero to preserve contents of existing file
+			&initializer);
 
 		const auto* header = memory->getHeader();
-		cache->memBlockInitializer.checkHeader(header);
+		initializer.checkHeader(header);
 
 		LCK_convert(tdbb, &existenceLock, LCK_SR, LCK_WAIT);	// never fails
 		acceptAst = true;
@@ -455,31 +467,24 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			}
 		}
 
-		if (blockNumber < oldest / cache->m_transactionsPerBlock &&			// old block => send AST
-			!LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
+		const bool oldBlock = blockNumber < (oldest / cache->m_transactionsPerBlock);
+
+		// old block => send AST
+		if (oldBlock && !LCK_convert(tdbb, &existenceLock, LCK_SW, LCK_WAIT))
 		{
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 		}
 
-		fName = memory->getMapFileName();
+		if (oldBlock || cache->m_exclusive)
+		{
+			if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
+				memory->removeMapFile();
+			else
+				tdbb->tdbb_status_vector->init();
+		}
+
 		delete memory;
 		memory = NULL;
-	}
-
-	if (fName.hasData())
-	{
-		// Here file is removed from SharedMemory created with skipLock parameter
-		// set to true. That means internal file lock is turned off.
-		// Appropriate locking is performed by existenceLock using LM.
-		// This should be in sync with SharedMemory constructor called
-		// in TipCache::StatusBlockData constructor.
-		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
-			SharedMemoryBase::unlinkFile(fName.c_str());
-		else
-		{
-			tdbb->tdbb_status_vector->init();
-			return;
-		}
 	}
 
 	LCK_release(tdbb, &existenceLock);
@@ -524,9 +529,27 @@ TipCache::TransactionStatusBlock* TipCache::getTransactionStatusBlock(GlobalTpcH
 		else
 		{
 			// Check if block might be too old to be created.
-			TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
+			const TraNumber oldest = header->oldest_transaction.load(std::memory_order_relaxed);
 			if (blockNumber >= oldest / m_transactionsPerBlock)
+			{
 				block = createTransactionStatusBlock(header->tpc_block_size, blockNumber);
+
+				// Check if the block is not obsolete at the moment
+				const TraNumber oldest2 = header->oldest_transaction.load(std::memory_order_relaxed);
+
+				if (blockNumber < oldest2 / m_transactionsPerBlock)
+				{
+					if (m_blocks_memory.locate(blockNumber))
+					{
+						auto data = m_blocks_memory.current();
+						m_blocks_memory.fastRemove();
+						delete data;
+					}
+
+					sync.unlock();
+					return nullptr;
+				}
+			}
 			else
 				sync.unlock();
 		}
@@ -635,6 +658,14 @@ CommitNumber TipCache::setState(TraNumber number, int state)
 
 			// We verified for all other cases, transaction must either be Active or in Limbo
 			fb_assert(oldStateCn == CN_ACTIVE || oldStateCn == CN_LIMBO);
+
+			// Paranoid check against CN_ACTIVE state got from obsolete re-created TPC block.
+			if ((oldStateCn == CN_ACTIVE) && (number < header->oldest_transaction.load(std::memory_order_relaxed)))
+			{
+				gds__log("TPC BUG: Rejected attempt to generate new CN for old committed transaction %" UQUADFORMAT, number);
+				fb_assert(false);
+				return CN_PREHISTORIC;
+			}
 
 			// Generate new commit number
 			CommitNumber newCommitNumber = header->latest_commit_number++ + 1;
@@ -768,21 +799,33 @@ int TipCache::tpc_block_blocking_ast(void* arg)
 	return 0;
 }
 
-
-
-
 void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNumber oldest_new)
 {
 	Database* dbb = tdbb->getDatabase();
 
-	TpcBlockNumber lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
+	TpcBlockNumber lastInterestingBlockNumber;
+	if (m_exclusive)
+	{
+		lastInterestingBlockNumber =
+			MAX(dbb->dbb_next_transaction, m_tpcHeader->getHeader()->latest_transaction_id.load()) /
+			m_transactionsPerBlock;
+	}
+	else
+	{
+		lastInterestingBlockNumber = oldest_new / m_transactionsPerBlock;
 
-	// If we didn't cross block boundary - there is nothing to do.
-	// Note that due to the fuzziness of our caller's memory access to variables
-	// there is an unlikely possibility that we might lose one such event.
-	// This is not too bad, and next such event will clean things up.
-	if (oldest_old / m_transactionsPerBlock == lastInterestingBlockNumber)
-		return;
+		// If we didn't cross block boundary - there is nothing to do.
+		// Note that due to the fuzziness of our caller's memory access to variables
+		// there is an unlikely possibility that we might lose one such event.
+		// This is not too bad, and next such event will clean things up.
+		if (oldest_old / m_transactionsPerBlock == lastInterestingBlockNumber)
+			return;
+
+		if (lastInterestingBlockNumber < SAFETY_GAP_BLOCKS + 1)
+			return;
+
+		lastInterestingBlockNumber -= SAFETY_GAP_BLOCKS + 1;
+	}
 
 	// Populate array of blocks that might be unmapped and deleted.
 	// We scan for blocks to clean up in descending order, but delete them in
@@ -790,18 +833,19 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	PathName fileName;
 	HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
-	for (TpcBlockNumber cleanupCounter = lastInterestingBlockNumber - SAFETY_GAP_BLOCKS;
-		cleanupCounter; cleanupCounter--)
+	for (TpcBlockNumber blockNumber = lastInterestingBlockNumber; ;)
 	{
-		TpcBlockNumber blockNumber = cleanupCounter - 1;
 		PathName fileName = StatusBlockData::makeSharedMemoryFileName(dbb, blockNumber, true);
 
 		struct stat st;
 		// If file is not found -- look no further
-		if (stat(fileName.c_str(), &st) != 0)
+		if (os_utils::stat(fileName.c_str(), &st) != 0)
 			break;
 
 		blocksToCleanup.add(blockNumber);
+
+		if (blockNumber-- == 0)
+			break;
 	}
 
 	if (blocksToCleanup.isEmpty())
