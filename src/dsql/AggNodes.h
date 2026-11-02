@@ -74,6 +74,7 @@ public:
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 	void getDesc(thread_db* tdbb, CompilerScratch* csb, dsc* desc) override;
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
+	AggNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	AggNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
 
 	void aggInit(thread_db* tdbb, Request* request) const override;
