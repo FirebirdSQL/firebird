@@ -219,7 +219,7 @@ void BulkInsert::Buffer::fragmentRecord(thread_db* tdbb, record_param* rpb, Comp
 	// Fill up data pages tail first until what's left fits on a single page.
 
 	auto size = dcc->getPackedLength();
-	fb_assert(size > max_data);
+	fb_assert(size > max_data - (RHDE_SIZE - RHD_SIZE));
 
 	do
 	{
