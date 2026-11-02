@@ -3716,7 +3716,10 @@ static void store_big_record(thread_db* tdbb,
 	// The last fragment should have rhd header because rhd_incomplete flag won't be set for it.
 	// It's important for get_header() function which relies on rhd_incomplete flag to determine header size.
 	FB_SIZE_T header_size = RHD_SIZE;
-	USHORT max_data = dbb->dbb_page_size - (static_cast<USHORT>(sizeof(data_page)) + header_size);
+	// We can have a big record that is not fitting into single page with RHDE header, but with RHD header
+	// it does fit into single page, so to handle such case use `size` as maximum possible data, write whole
+	// data in tail with RHD, and create head with no data at all.
+	USHORT max_data = MIN(dbb->dbb_page_size - (static_cast<USHORT>(sizeof(data_page)) + header_size), size);
 
 	// Fill up data pages tail first until what's left fits on a single page.
 
