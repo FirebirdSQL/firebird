@@ -35,6 +35,7 @@
 
 #include "SyncObject.h"
 #include "Synchronize.h"
+#include "../jrd/err_proto.h"
 
 namespace Firebird {
 
@@ -91,6 +92,13 @@ bool SyncObject::lock(Sync* sync, SyncType type, const char* from, int timeOut)
 
 		thread = ThreadSync::findThread();
 		fb_assert(thread);
+
+		if (thread == exclusiveThread)
+		{
+			--waiters;
+			mutex.leave();
+			ERR_post(Arg::Gds(isc_sync_object_self_deadlock));
+		}
 	}
 	else
 	{

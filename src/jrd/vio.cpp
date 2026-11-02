@@ -834,160 +834,212 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		relation->rel_id, rpb->rpb_number.getValue(), transaction ? transaction->tra_number : 0);
 #endif
 
-	// If there is data in the record, fetch it now.  If the old version
-	// is a differences record, we will need it sooner.  In any case, we
-	// will need it eventually to clean up blobs and indices. If the record
-	// has changed in between, stop now before things get worse.
-
-	record_param temp = *rpb;
-	if (!DPM_get(tdbb, &temp, LCK_read))
-		return;
-
-#ifdef VIO_DEBUG
-	VIO_trace(DEBUG_WRITES_INFO,
-		"   record  %" SLONGFORMAT":%d, rpb_trans %" SQUADFORMAT
-		", flags %d, back %" SLONGFORMAT":%d, fragment %" SLONGFORMAT":%d\n",
-		temp.rpb_page, temp.rpb_line, temp.rpb_transaction_nr,
-		temp.rpb_flags, temp.rpb_b_page, temp.rpb_b_line,
-		temp.rpb_f_page, temp.rpb_f_line);
-
-	if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
-		temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
+	try
 	{
+		// If there is data in the record, fetch it now.  If the old version
+		// is a differences record, we will need it sooner.  In any case, we
+		// will need it eventually to clean up blobs and indices. If the record
+		// has changed in between, stop now before things get worse.
+
+		record_param temp = *rpb;
+		if (!DPM_get(tdbb, &temp, LCK_read))
+			return;
+
+	#ifdef VIO_DEBUG
 		VIO_trace(DEBUG_WRITES_INFO,
-			"    wrong record!)\n");
-	}
-#endif
+			"   record  %" SLONGFORMAT":%d, rpb_trans %" SQUADFORMAT
+			", flags %d, back %" SLONGFORMAT":%d, fragment %" SLONGFORMAT":%d\n",
+			temp.rpb_page, temp.rpb_line, temp.rpb_transaction_nr,
+			temp.rpb_flags, temp.rpb_b_page, temp.rpb_b_line,
+			temp.rpb_f_page, temp.rpb_f_line);
 
-	if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
-		temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
-	{
-		CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
-		return;
-	}
-
-	AutoLock gcLockGuard(tdbb, lockGCActive(tdbb, transaction, &temp));
-
-	if (!gcLockGuard)
-	{
-		CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
-		return;
-	}
-
-	RecordStack going, staying;
-	Record* data = NULL;
-	Record* old_data = NULL;
-
-	AutoTempRecord gc_rec1;
-	AutoTempRecord gc_rec2;
-
-	bool samePage;
-	bool deleted;
-
-	if ((temp.rpb_flags & rpb_deleted) && (!(temp.rpb_flags & rpb_delta)))
-		CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
-	else
-	{
-		temp.rpb_record = gc_rec1 = VIO_gc_record(tdbb, relation);
-		VIO_data(tdbb, &temp, relation->rel_pool);
-		data = temp.rpb_prior;
-		old_data = temp.rpb_record;
-		rpb->rpb_prior = temp.rpb_prior;
-		going.push(temp.rpb_record);
-	}
-
-	// Set up an extra record parameter block.  This will be used to preserve
-	// the main record information while we chase fragments.
-
-	record_param temp2 = temp = *rpb;
-
-	// If there is an old version of the record, fetch it's data now.
-
-	RuntimeStatistics::Accumulator backversions(tdbb, relation,
-												RuntimeStatistics::RECORD_BACKVERSION_READS);
-
-	if (rpb->rpb_b_page)
-	{
-		temp.rpb_record = gc_rec2 = VIO_gc_record(tdbb, relation);
-
-		while (true)
+		if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
+			temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
 		{
-			if (!DPM_get(tdbb, &temp, LCK_read))
-				return;
-
-			if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
-				temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
-			{
-				CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
-				return;
-			}
-
-			if (temp.rpb_flags & rpb_delta)
-				temp.rpb_prior = data;
-
-			if (!DPM_fetch_back(tdbb, &temp, LCK_read, -1))
-			{
-				fb_utils::init_status(tdbb->tdbb_status_vector);
-				continue;
-			}
-
-			++backversions;
-
-			if (temp.rpb_flags & rpb_deleted)
-				CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
-			else
-				VIO_data(tdbb, &temp, relation->rel_pool);
-
-			temp.rpb_page = rpb->rpb_b_page;
-			temp.rpb_line = rpb->rpb_b_line;
-
-			break;
+			VIO_trace(DEBUG_WRITES_INFO,
+				"    wrong record!)\n");
 		}
-	}
+	#endif
 
-	// Re-fetch the record.
+		if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
+			temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
+		{
+			CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
+			return;
+		}
 
-	if (!DPM_get(tdbb, rpb, LCK_write))
-		return;
+		AutoLock gcLockGuard(tdbb, lockGCActive(tdbb, transaction, &temp));
 
-#ifdef VIO_DEBUG
-	if (temp2.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
-		temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
-	{
-		VIO_trace(DEBUG_WRITES_INFO,
-			"    record changed!)\n");
-	}
-#endif
+		if (!gcLockGuard)
+		{
+			CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
+			return;
+		}
 
-	// If the record is in any way suspicious, release the record and give up.
+		RecordStack going, staying;
+		Record* data = NULL;
+		Record* old_data = NULL;
 
-	if (rpb->rpb_b_page != temp2.rpb_b_page || rpb->rpb_b_line != temp2.rpb_b_line ||
-		rpb->rpb_transaction_nr != temp2.rpb_transaction_nr)
-	{
-		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-		return;
-	}
+		AutoTempRecord gc_rec1;
+		AutoTempRecord gc_rec2;
 
-	// even if the record isn't suspicious, it may have changed a little
+		bool samePage;
+		bool deleted;
 
-	temp2 = *rpb;
-	rpb->rpb_undo = old_data;
+		if ((temp.rpb_flags & rpb_deleted) && (!(temp.rpb_flags & rpb_delta)))
+			CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
+		else
+		{
+			temp.rpb_record = gc_rec1 = VIO_gc_record(tdbb, relation);
+			VIO_data(tdbb, &temp, relation->rel_pool);
+			data = temp.rpb_prior;
+			old_data = temp.rpb_record;
+			rpb->rpb_prior = temp.rpb_prior;
+			going.push(temp.rpb_record);
+		}
 
-	if (rpb->rpb_flags & rpb_delta)
-		rpb->rpb_prior = data;
+		// Set up an extra record parameter block.  This will be used to preserve
+		// the main record information while we chase fragments.
 
-	// Handle the case of no old version simply.
+		record_param temp2 = temp = *rpb;
 
-	if (!rpb->rpb_b_page)
-	{
-		if (!(rpb->rpb_flags & rpb_deleted))
+		// If there is an old version of the record, fetch it's data now.
+
+		RuntimeStatistics::Accumulator backversions(tdbb, relation,
+													RuntimeStatistics::RECORD_BACKVERSION_READS);
+
+		if (rpb->rpb_b_page)
+		{
+			temp.rpb_record = gc_rec2 = VIO_gc_record(tdbb, relation);
+
+			while (true)
+			{
+				if (!DPM_get(tdbb, &temp, LCK_read))
+					return;
+
+				if (temp.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
+					temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
+				{
+					CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
+					return;
+				}
+
+				if (temp.rpb_flags & rpb_delta)
+					temp.rpb_prior = data;
+
+				if (!DPM_fetch_back(tdbb, &temp, LCK_read, -1))
+				{
+					fb_utils::init_status(tdbb->tdbb_status_vector);
+					continue;
+				}
+
+				++backversions;
+
+				if (temp.rpb_flags & rpb_deleted)
+					CCH_RELEASE(tdbb, &temp.getWindow(tdbb));
+				else
+					VIO_data(tdbb, &temp, relation->rel_pool);
+
+				temp.rpb_page = rpb->rpb_b_page;
+				temp.rpb_line = rpb->rpb_b_line;
+
+				break;
+			}
+		}
+
+		// Re-fetch the record.
+
+		if (!DPM_get(tdbb, rpb, LCK_write))
+			return;
+
+	#ifdef VIO_DEBUG
+		if (temp2.rpb_b_page != rpb->rpb_b_page || temp.rpb_b_line != rpb->rpb_b_line ||
+			temp.rpb_transaction_nr != rpb->rpb_transaction_nr)
+		{
+			VIO_trace(DEBUG_WRITES_INFO,
+				"    record changed!)\n");
+		}
+	#endif
+
+		// If the record is in any way suspicious, release the record and give up.
+
+		if (rpb->rpb_b_page != temp2.rpb_b_page || rpb->rpb_b_line != temp2.rpb_b_line ||
+			rpb->rpb_transaction_nr != temp2.rpb_transaction_nr)
+		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+			return;
+		}
+
+		// even if the record isn't suspicious, it may have changed a little
+
+		temp2 = *rpb;
+		rpb->rpb_undo = old_data;
+
+		if (rpb->rpb_flags & rpb_delta)
+			rpb->rpb_prior = data;
+
+		// Handle the case of no old version simply.
+
+		if (!rpb->rpb_b_page)
+		{
+			if (!(rpb->rpb_flags & rpb_deleted))
+			{
+				DPM_backout_mark(tdbb, rpb, transaction);
+
+				RecordStack empty_staying;
+				IDX_garbage_collect(tdbb, rpb, going, empty_staying);
+				BLB_garbage_collect(tdbb, going, empty_staying, rpb->rpb_page, relation);
+				going.pop();
+
+				if (!DPM_get(tdbb, rpb, LCK_write))
+				{
+					fb_assert(false);
+					return;
+				}
+
+				if (rpb->rpb_b_page != temp2.rpb_b_page || rpb->rpb_b_line != temp2.rpb_b_line ||
+					rpb->rpb_transaction_nr != temp2.rpb_transaction_nr)
+				{
+					fb_assert(false);
+					CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+					return;
+				}
+
+				fb_assert(rpb->rpb_flags & rpb_gc_active);
+				rpb->rpb_flags &= ~rpb_gc_active;
+
+				temp2 = *rpb;
+				rpb->rpb_undo = old_data;
+
+				if (rpb->rpb_flags & rpb_delta)
+					rpb->rpb_prior = data;
+			}
+
+			gcLockGuard.release();
+			delete_record(tdbb, rpb, 0, NULL);
+
+			tdbb->bumpRelStats(RuntimeStatistics::RECORD_BACKOUTS, relation->rel_id);
+			return;
+		}
+
+		// If both record versions are on the same page, things are a little simpler
+
+		samePage = (rpb->rpb_page == temp.rpb_page && !rpb->rpb_prior);
+		deleted = (temp2.rpb_flags & rpb_deleted);
+
+		if (!deleted)
 		{
 			DPM_backout_mark(tdbb, rpb, transaction);
 
-			RecordStack empty_staying;
-			IDX_garbage_collect(tdbb, rpb, going, empty_staying);
-			BLB_garbage_collect(tdbb, going, empty_staying, rpb->rpb_page, relation);
-			going.pop();
+			rpb->rpb_prior = NULL;
+			list_staying_fast(tdbb, rpb, staying, &temp);
+			IDX_garbage_collect(tdbb, rpb, going, staying);
+			BLB_garbage_collect(tdbb, going, staying, rpb->rpb_page, relation);
+
+			if (going.hasData())
+				going.pop();
+
+			clearRecordStack(staying);
 
 			if (!DPM_get(tdbb, rpb, LCK_write))
 			{
@@ -1014,94 +1066,50 @@ void VIO_backout(thread_db* tdbb, record_param* rpb, const jrd_tra* transaction)
 		}
 
 		gcLockGuard.release();
-		delete_record(tdbb, rpb, 0, NULL);
 
-		tdbb->bumpRelStats(RuntimeStatistics::RECORD_BACKOUTS, relation->rel_id);
-		return;
-	}
-
-	// If both record versions are on the same page, things are a little simpler
-
-	samePage = (rpb->rpb_page == temp.rpb_page && !rpb->rpb_prior);
-	deleted = (temp2.rpb_flags & rpb_deleted);
-
-	if (!deleted)
-	{
-		DPM_backout_mark(tdbb, rpb, transaction);
-
-		rpb->rpb_prior = NULL;
-		list_staying_fast(tdbb, rpb, staying, &temp);
-		IDX_garbage_collect(tdbb, rpb, going, staying);
-		BLB_garbage_collect(tdbb, going, staying, rpb->rpb_page, relation);
-
-		if (going.hasData())
-			going.pop();
-
-		clearRecordStack(staying);
-
-		if (!DPM_get(tdbb, rpb, LCK_write))
+		if (samePage)
 		{
-			fb_assert(false);
-			return;
+			DPM_backout(tdbb, rpb);
+
+			if (!deleted)
+				delete_tail(tdbb, &temp2, rpb->rpb_page);
 		}
-
-		if (rpb->rpb_b_page != temp2.rpb_b_page || rpb->rpb_b_line != temp2.rpb_b_line ||
-			rpb->rpb_transaction_nr != temp2.rpb_transaction_nr)
-		{
-			fb_assert(false);
-			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
-			return;
-		}
-
-		fb_assert(rpb->rpb_flags & rpb_gc_active);
-		rpb->rpb_flags &= ~rpb_gc_active;
-
-		temp2 = *rpb;
-		rpb->rpb_undo = old_data;
-
-		if (rpb->rpb_flags & rpb_delta)
-			rpb->rpb_prior = data;
-	}
-
-	gcLockGuard.release();
-
-	if (samePage)
-	{
-		DPM_backout(tdbb, rpb);
-
-		if (!deleted)
-			delete_tail(tdbb, &temp2, rpb->rpb_page);
-	}
-	else
-	{
-		// Bring the old version forward.  If the outgoing version was deleted,
-		// there is no garbage collection to be done.
-
-		rpb->rpb_address = temp.rpb_address;
-		rpb->rpb_length = temp.rpb_length;
-		rpb->rpb_flags = temp.rpb_flags & rpb_deleted;
-		if (temp.rpb_prior)
-			rpb->rpb_flags |= rpb_delta;
-		rpb->rpb_b_page = temp.rpb_b_page;
-		rpb->rpb_b_line = temp.rpb_b_line;
-		rpb->rpb_transaction_nr = temp.rpb_transaction_nr;
-		rpb->rpb_format_number = temp.rpb_format_number;
-
-		if (deleted)
-			replace_record(tdbb, rpb, 0, transaction);
 		else
 		{
-			// There is cleanup to be done.  Bring the old version forward first
-			DPM_update(tdbb, rpb, 0, transaction);
-			delete_tail(tdbb, &temp2, rpb->rpb_page);
+			// Bring the old version forward.  If the outgoing version was deleted,
+			// there is no garbage collection to be done.
+
+			rpb->rpb_address = temp.rpb_address;
+			rpb->rpb_length = temp.rpb_length;
+			rpb->rpb_flags = temp.rpb_flags & rpb_deleted;
+			if (temp.rpb_prior)
+				rpb->rpb_flags |= rpb_delta;
+			rpb->rpb_b_page = temp.rpb_b_page;
+			rpb->rpb_b_line = temp.rpb_b_line;
+			rpb->rpb_transaction_nr = temp.rpb_transaction_nr;
+			rpb->rpb_format_number = temp.rpb_format_number;
+
+			if (deleted)
+				replace_record(tdbb, rpb, 0, transaction);
+			else
+			{
+				// There is cleanup to be done.  Bring the old version forward first
+				DPM_update(tdbb, rpb, 0, transaction);
+				delete_tail(tdbb, &temp2, rpb->rpb_page);
+			}
+
+			// Next, delete the old copy of the now current version.
+
+			if (!DPM_fetch(tdbb, &temp, LCK_write))
+				BUGCHECK(291);		// msg 291 cannot find record back version
+
+			delete_record(tdbb, &temp, rpb->rpb_page, NULL);
 		}
-
-		// Next, delete the old copy of the now current version.
-
-		if (!DPM_fetch(tdbb, &temp, LCK_write))
-			BUGCHECK(291);		// msg 291 cannot find record back version
-
-		delete_record(tdbb, &temp, rpb->rpb_page, NULL);
+	}
+	catch (const Exception&)
+	{
+		CCH_unwind(tdbb, false);
+		throw;
 	}
 
 	tdbb->bumpRelStats(RuntimeStatistics::RECORD_BACKOUTS, relation->rel_id);
