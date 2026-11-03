@@ -54,16 +54,15 @@ namespace
 	// to matter for concurrent connections, and we accept the cache cost
 	// of in-place redistribution.
 	constexpr ULONG IN_PLACE_THRESHOLD = 1 << 20;   // 1M entries = 8 MB
-	
+
 	// Predefined table sizes (all prime). Table sizing is done once, in build(),
-	// based on the actual number of collected entries.	
+	// based on the actual number of collected entries.
 	constexpr ULONG HASH_SIZES[] =
 	{
 		1009, 2003, 4001, 8009, 16001, 32003,
 		64007, 128021, 256019, 512009, 1000003
 	};
 
-	constexpr ULONG MIN_HASH_SIZE = HASH_SIZES[0];
 	constexpr ULONG MAX_HASH_SIZE = HASH_SIZES[std::size(HASH_SIZES) - 1];
 
 	// Desired average number of entries per bucket. We sort each bucket
@@ -76,7 +75,7 @@ namespace
 	{
 		for (const ULONG size : HASH_SIZES)
 		{
-			if (size > current)
+			if (size >= current)
 				return size;
 		}
 		return MAX_HASH_SIZE;
@@ -114,11 +113,11 @@ class HashJoin::HashTable final : public PermanentStorage
 		Array<ULONG> bucketOffsets;  // size = tableSize + 1; see build() for layout
 		ULONG iterator;              // current cursor for iterate()
 
-		explicit Stream(MemoryPool& pool) 
+		explicit Stream(MemoryPool& pool)
 			: PermanentStorage(pool)
 			, entries(pool)
 			, bucketOffsets(pool)
-			, iterator(0) 
+			, iterator(0)
 		{}
 
 		// Collect one raw entry. No bucket logic here, so this can be
@@ -245,8 +244,9 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 {
 	const ULONG n = entries.getCount();
 
+	fb_assert(bucketOffsets.getCount() == 0);
+
 	bucketOffsets.grow(tableSize + 1);
-	memset(bucketOffsets.begin(), 0, (tableSize + 1) * sizeof(ULONG));
 
 	// Pass 1: count how many entries fall into each bucket.
 	// bucketOffsets[b + 1] is used as a per-bucket counter, so after
@@ -268,8 +268,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 	// separate cursor array 'next' that starts as a copy of bucketOffsets
 	// and is incremented as entries are placed.
 	//
-	// Below IN_PLACE_THRESHOLD we use a temporary buffer, since at that
-	// size it fits in L3 and the sequential read path is faster; peak
+	// Below IN_PLACE_THRESHOLD we use a temporary buffer, peak
 	// footprint during build is roughly twice the size of the entries
 	// array. Above the threshold the same redistribution is performed
 	// in place by swapping entries into their target bucket, trading
@@ -279,8 +278,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 		return;
 
 	Array<ULONG> next(getPool(), tableSize);
-	next.grow(tableSize);
-	memcpy(next.begin(), bucketOffsets.begin(), tableSize * sizeof(ULONG));
+	next.assign(bucketOffsets.begin(), tableSize);
 
 	if (n < IN_PLACE_THRESHOLD)
 	{
@@ -294,7 +292,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 		}
 
 		entries.assign(temp);
-    }
+	}
 	else
 	{
 		// Try to rearrange array by placing entry in correct bucket without making copy.
@@ -439,7 +437,7 @@ bool HashJoin::HashTable::setup(ULONG hash)
 
 	// Every stream must have at least one entry in this bucket, otherwise
 	// the join cannot produce output for this leader row. This is a cheap
-	// O(1) check on bucketStart and lets us skip binary searches for the
+	// O(1) check on bucket bounds and lets us skip binary searches for the
 	// common case of a leader row with no counterpart.
 	for (auto* s : m_streams)
 	{
