@@ -285,7 +285,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 
 	if (n < IN_PLACE_THRESHOLD)
 	{
-		Array<Entry> temp(getPool(), n);
+		HalfStaticArray<Entry, 1024> temp(getPool(), n);
 		temp.grow(n);
 
 		for (ULONG k = 0; k < n; k++)
@@ -294,7 +294,7 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 			temp[next[e.hash % tableSize]++] = e;
 		}
 
-		entries.assign(temp);
+		entries.assign(temp.begin(), n);
 	}
 	else
 	{
