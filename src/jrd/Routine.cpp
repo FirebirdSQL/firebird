@@ -177,7 +177,7 @@ void Routine::parseBlr(thread_db* tdbb, CompilerScratch* csb, const bid* blob_id
 void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blrReader)
 {
 	if (blrReader.getLength() < 2)
-		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
+		PAR_error(csb, Arg::Gds(isc_metadata_corrupt));
 
 	csb->csb_schema = getName().schema;
 	csb->csb_blr_reader = blrReader;
@@ -185,7 +185,7 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 	PAR_getBlrVersionAndFlags(csb);
 
 	if (csb->csb_blr_reader.getByte() != blr_begin)
-		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
+		PAR_error(csb, Arg::Gds(isc_metadata_corrupt));
 
 	while (csb->csb_blr_reader.getByte() == blr_message)
 	{
@@ -235,19 +235,10 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 
 bool Routine::hash(thread_db* tdbb, Firebird::sha512& digest)
 {
-	if (inputFields.hasData())
-	{
-		if (!inputFormat)
-			return false;
+	if (inputFormat)
 		inputFormat->hash(digest);
-	}
-
-	if (outputFields.hasData())
-	{
-		if (!outputFormat)
-			return false;
+	if (outputFormat)
 		outputFormat->hash(digest);
-	}
 
 	return true;
 }

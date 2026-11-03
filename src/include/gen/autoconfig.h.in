@@ -155,6 +155,9 @@
 /* security database DIR (PREFIX) */
 #define FB_SECDBDIR "@FB_SECDBDIR@"
 
+/* tzdata DIR (PREFIX) */
+#define FB_TZDATADIR "@FB_TZDATADIR@"
+
 
 /******************************************************************************
  *
@@ -330,6 +333,9 @@
 /* Define to 1 if you have the <sys/signal.h> header file. */
 #cmakedefine HAVE_SYS_SIGNAL_H 1
 
+/* Define to 1 if you have the <afunix.h> header file. */
+#cmakedefine HAVE_AFUNIX_H 1
+
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #cmakedefine HAVE_SYS_SOCKET_H 1
 
@@ -350,6 +356,9 @@
 
 /* Define to 1 if you have the <sys/types.h> header file. */
 #cmakedefine HAVE_SYS_TYPES_H 1
+
+/* Define to 1 if you have the <sys/un.h> header file. */
+#cmakedefine HAVE_SYS_UN_H 1
 
 /* Define to 1 if you have the <sys/uio.h> header file. */
 #cmakedefine HAVE_SYS_UIO_H 1
@@ -377,6 +386,9 @@
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #cmakedefine HAVE_ZLIB_H 1
+
+/* Define to 1 if libtomcrypt is in use. */
+#cmakedefine HAVE_TOMCRYPT 1
 
 
 /******************************************************************************

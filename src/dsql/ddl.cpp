@@ -244,13 +244,6 @@ void DDL_resolve_intl_type(DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
 			field->subType = blob_sub_type;
 		}
 
-		if (field->subType > isc_blob_text)
-		{
-			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-204) <<
-					  Arg::Gds(isc_dsql_datatype_err) <<
-					  Arg::Gds(isc_subtype_for_internal_use));
-		}
-
 		if (field->charSet.object.hasData() && (field->subType == isc_blob_untyped))
 			field->subType = isc_blob_text;
 

@@ -927,6 +927,40 @@ fixFilePermissions() {
 
 	rm -f $tmp1 $tmp2 $tmp3 $tmp4
 
+	# fb_guard 
+    cd @FB_BINDIR@
+    for FileName in fbguard
+    do
+		# check need fcontext 
+		if [ "$(ls -Z / | grep usr | grep system_u:)" != "" ]; then
+
+		    # check fcontext for fbguard not bin_t
+            if [ "$(ls -Z ${fb_install_prefix}/bin/$FileName | grep bin_t)" == "" ]; then
+
+				# echo "before $(ls -Z ${fb_install_prefix}/bin/$FileName)"
+
+	            # check semanage exists
+				if [ "$(command -v semanage)" != "" ]; then
+
+					semanage fcontext --delete \"${fb_install_prefix}/bin/$FileName\"? > /dev/null
+					restorecon -vRF ${fb_install_prefix}/bin/$FileName  > /dev/null
+
+					semanage fcontext --add -t bin_t \"${fb_install_prefix}/bin/$FileName\"? > /dev/null
+					restorecon -vRF ${fb_install_prefix}/bin/$FileName  > /dev/null
+
+     				# echo "after $(ls -Z ${fb_install_prefix}/bin/$FileName)"
+
+				else
+
+    				echo "!!! SELinux context error: $(ls -Z ${fb_install_prefix}/bin/$FileName)"
+					echo "!!! Please install 'semanage' and 'restorecon' and reinstall firebird"
+					echo "!!! for '$FileName' may be run as service."
+
+				fi
+			fi
+		fi
+    done
+
     # Lock files
     cd @FB_GUARDDIR@
     for FileName in fb_guard

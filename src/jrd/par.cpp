@@ -82,6 +82,7 @@ static void par_error(BlrReader& blrReader, const Arg::StatusVector& v, bool isS
 static PlanNode* par_plan(thread_db*, CompilerScratch*);
 static void parseSubRoutines(thread_db* tdbb, CompilerScratch* csb);
 static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffset);
+static void propagateNodeLineColumn(StmtNode* wrapper);
 static void checkIndexStatus(CompilerScratch* csb, bool isGbak, IndexStatus idx_status, const QualifiedName& name,
 	Cached::Relation* relation);
 
@@ -164,27 +165,6 @@ namespace
 	private:
 		AutoPtr<CompilerScratch> m_csb;
 		CompilerScratch** const m_csbPtr;
-	};
-
-	class VldTTypeId : public TTypeId
-	{
-	public:
-		VldTTypeId(thread_db* tdbb, USHORT a_id) : TTypeId(a_id)
-		{
-			TTypeId parm1(a_id);
-			if (parm1 == ttype_dynamic)
-				parm1 = tdbb->getCharSet();
-
-			auto* vers = MetadataCache::getVersioned<Cached::CharSet>(tdbb, parm1, CacheFlag::AUTOCREATE);
-			if (vers)
-			{
-				CollId coll(parm1);
-				if (USHORT(coll) == 0 || vers->getCollation(coll))
-					return;
-			}
-
-			ERR_post(Arg::Gds(isc_text_subtype) << Arg::Num(parm1));
-		}
 	};
 }	// namespace
 
@@ -309,20 +289,20 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			break;
 
 		case blr_text2:
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->makeText(blrReader.getWord(), textType);
 			break;
 
 		case blr_cstring2:
 			desc->dsc_dtype = dtype_cstring;
-			desc->setTextType(VldTTypeId(tdbb, blrReader.getWord()));
+			desc->setTextType(TTypeId(blrReader.getWord()));
 			desc->dsc_length = blrReader.getWord();
 			if (desc->dsc_length == 0)
 				desc->dsc_length = 1;
 			break;
 
 		case blr_varying2:
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->makeVarying(blrReader.getWord(), textType);
 			break;
 
@@ -416,7 +396,7 @@ USHORT PAR_datatype(thread_db* tdbb, BlrReader& blrReader, dsc* desc)
 			desc->dsc_dtype = dtype_blob;
 			desc->dsc_length = sizeof(ISC_QUAD);
 			desc->dsc_sub_type = blrReader.getWord();
-			textType = VldTTypeId(tdbb, blrReader.getWord());
+			textType = TTypeId(blrReader.getWord());
 			desc->dsc_scale = textType & 0xFF;		// BLOB character set
 			desc->dsc_flags = textType & 0xFF00;	// BLOB collation
 			break;
@@ -496,7 +476,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 			{
 				explicitCollation = true;
 
-				const auto ttype = VldTTypeId(tdbb, csb->csb_blr_reader.getWord());
+				const auto ttype = TTypeId(csb->csb_blr_reader.getWord());
 
 				switch (desc->dsc_dtype)
 				{
@@ -566,7 +546,7 @@ USHORT PAR_desc(thread_db* tdbb, CompilerScratch* csb, dsc* desc, ItemInfo* item
 				(dtype == blr_column_name3 && csb->csb_blr_reader.getByte() != 0))
 			{
 				explicitCollation = true;
-				const auto ttype = VldTTypeId(tdbb, csb->csb_blr_reader.getWord());
+				const auto ttype = TTypeId(csb->csb_blr_reader.getWord());
 
 				switch (desc->dsc_dtype)
 				{
@@ -1044,6 +1024,25 @@ static void checkIndexStatus(CompilerScratch* csb, bool isGbak, IndexStatus idx_
 	}
 }
 
+static ElementBase::ReturnedId lookupPlanIndex(thread_db* tdbb, Cached::Relation* relation,
+	const QualifiedName& name, MetaId& foundRelationId, IndexStatus& idxStatus)
+{
+	if (relation->isLTT())
+	{
+		if (const auto index = relation->lookup_index(tdbb, name, 0))
+		{
+			foundRelationId = relation->getId();
+			idxStatus = index->getActive();
+			return index->getId();
+		}
+
+		idxStatus = MET_index_state_unknown;
+		return 0;
+	}
+
+	return MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idxStatus);
+}
+
 
 static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 {
@@ -1127,7 +1126,21 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 			}
 
 			case blr_local_table_id:
-				// TODO
+			{
+				const auto localTableNode = LocalTableSourceNode::parse(tdbb, csb, blrOp, false);
+				plan->recordSourceNode = localTableNode;
+
+				if (localTableNode->tableNumber >= csb->csb_localTables.getCount() ||
+					!csb->csb_localTables[localTableNode->tableNumber])
+				{
+					PAR_error(csb, Arg::Gds(isc_bad_loctab_num) << Arg::Num(localTableNode->tableNumber));
+				}
+
+				const auto localTable = csb->csb_localTables[localTableNode->tableNumber];
+				if (localTable->useLtt)
+					relation = localTable->getRelation(tdbb, nullptr)->getPermanent();
+				break;
+			}
 
 			default:
 				PAR_syntax_error(csb, "TABLE or PROCEDURE");
@@ -1162,6 +1175,9 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				if (procedure)
 					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
 
+				if (!relation)
+					PAR_error(csb, Arg::Gds(isc_random) << "Index access plans are not supported for non-LTT local tables");
+
 				plan->accessType = FB_NEW_POOL(csb->csb_pool) PlanNode::AccessType(csb->csb_pool,
 					PlanNode::AccessType::TYPE_NAVIGATIONAL);
 
@@ -1170,11 +1186,12 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				QualifiedName name;
 				csb->csb_blr_reader.getMetaName(name.object);
 				name.schema = relation->rel_name.schema;
+				name.package = relation->rel_name.package;
 
 				IndexStatus idx_status;
 				MetaId foundRelationId;
 				const ElementBase::ReturnedId index_id =
-					MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idx_status);
+					lookupPlanIndex(tdbb, relation, name, foundRelationId, idx_status);
 				checkIndexStatus(csb, isGbak, idx_status, name, relation);
 
 				// save both the relation id and the index id, since
@@ -1186,7 +1203,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				item.indexId = index_id;
 				item.indexName = name;
 
-				if (csb->collectingDependencies())
+				if (csb->collectingDependencies() && !relation->isLTT())
 				{
 					Dependency dependency(obj_index);
 					dependency.name = item.indexName;
@@ -1205,6 +1222,9 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 				if (procedure)
 					PAR_error(csb, Arg::Gds(isc_wrong_proc_plan));
 
+				if (!relation)
+					PAR_error(csb, Arg::Gds(isc_random) << "Index access plans are not supported for non-LTT local tables");
+
 				if (plan->accessType)
 					csb->csb_blr_reader.getByte(); // skip blr_indices
 				else
@@ -1222,11 +1242,12 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					QualifiedName name;
 					csb->csb_blr_reader.getMetaName(name.object);
 					name.schema = relation->rel_name.schema;
+					name.package = relation->rel_name.package;
 
 					IndexStatus idx_status;
 					MetaId foundRelationId;
 					const ElementBase::ReturnedId index_id =
-						MetadataCache::lookup_index_name(tdbb, name, &foundRelationId, &idx_status);
+						lookupPlanIndex(tdbb, relation, name, foundRelationId, idx_status);
 					checkIndexStatus(csb, isGbak, idx_status, name, relation);
 
 					// save both the relation id and the index id, since
@@ -1238,7 +1259,7 @@ static PlanNode* par_plan(thread_db* tdbb, CompilerScratch* csb)
 					item.indexId = index_id;
 					item.indexName = name;
 
-					if (csb->collectingDependencies())
+					if (csb->collectingDependencies() && !relation->isLTT())
 					{
 						Dependency dependency(obj_index);
 						dependency.name = item.indexName;
@@ -1739,6 +1760,38 @@ static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffs
 		node->column = i.mbs_src_col;
 
 		if (node->getKind() == DmlNode::KIND_STATEMENT)
-			static_cast<StmtNode*>(node)->hasLineColumn = true;
+		{
+			const auto stmt = static_cast<StmtNode*>(node);
+			stmt->hasLineColumn = true;
+			propagateNodeLineColumn(stmt);
+		}
 	}
+}
+
+// DSQL may wrap a source statement with BLR nodes that are not profiler aware (e.g. the savepoint
+// enclosure and blr_label). The source mapping is then attached to the wrapper, so pass it down
+// to the wrapped statements that have no mapping of their own.
+static void propagateNodeLineColumn(StmtNode* wrapper)
+{
+	const auto inherit = [wrapper](StmtNode* child)
+	{
+		if (!child || child->hasLineColumn)
+			return;
+
+		child->line = wrapper->line;
+		child->column = wrapper->column;
+		child->hasLineColumn = true;
+
+		propagateNodeLineColumn(child);
+	};
+
+	if (const auto compound = nodeAs<CompoundStmtNode>(wrapper))
+	{
+		for (auto child : compound->statements)
+			inherit(child);
+	}
+	else if (const auto label = nodeAs<LabelNode>(wrapper))
+		inherit(label->statement);
+	else if (const auto savepoint = nodeAs<SavepointEncloseNode>(wrapper))
+		inherit(savepoint->statement);
 }

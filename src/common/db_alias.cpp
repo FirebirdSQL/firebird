@@ -278,6 +278,12 @@ namespace
 				const ConfigFile::Parameter* par = &params[n];
 
 				PathName file(par->value.ToPathName());
+				if (file.empty())
+				{
+					gds__log("Alias %s has no value, ignored", par->name.c_str());
+					continue;
+				}
+
 				PathUtils::fixupSeparators(file);
 				if (PathUtils::isRelative(file) && !ISC_check_if_remote(file, false))
 				{

@@ -204,7 +204,7 @@ void ElementBase::setLock(thread_db* tdbb, MetaId id, const char* family)
 void ElementBase::releaseLock(thread_db* tdbb)
 {
 	bool t = true;
-	if (lock && locked.compare_exchange_strong(t,false))
+	if (lock && locked.compare_exchange_strong(t, false))
 		LCK_release(tdbb, lock);
 }
 

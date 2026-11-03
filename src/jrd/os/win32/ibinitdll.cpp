@@ -25,12 +25,19 @@
 #include "firebird.h"
 #include <windows.h>
 #include "../../../common/dllinst.h"
-#include "../../../yvalve/utl_proto.h"
 
 
 using namespace Firebird;
 
 
+// Per-thread cleanup used to run from the DLL_THREAD_DETACH case here, but
+// that only ever fires when this code is actually linked into a real DLL.
+// It is now handled uniformly (DLL or static build) via Fiber-Local Storage -
+// see ThreadCleanup in yvalve/utl.cpp. This DllMain is therefore not compiled
+// into the static client library (see fbclient_static.vcxproj) - hDllInst,
+// bDllProcessExiting and dDllUnloadTID simply keep their safe default values
+// (0 / false) in that build, which is the correct behavior for code linked
+// directly into the host application (see doc/README.StaticClient.md).
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved)
 {
 	switch (reason)
@@ -38,12 +45,6 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved)
 		case DLL_PROCESS_ATTACH:
 			hDllInst = h;
 			break;
-
-		case DLL_THREAD_DETACH:
-		{
-			Why::threadCleanup();
-			break;
-		}
 
 		case DLL_PROCESS_DETACH:
 			bDllProcessExiting = (reserved != NULL);

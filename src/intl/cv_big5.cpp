@@ -35,22 +35,22 @@ ULONG CVBIG5_big5_to_unicode(csconvert* obj,
 							 USHORT* err_code,
 							 ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(src_ptr != NULL || p_dest_ptr == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(src_ptr != nullptr || p_dest_ptr == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVBIG5_big5_to_unicode);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = src_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (p_dest_ptr == NULL)
+	if (p_dest_ptr == nullptr)
 		return (src_len * sizeof(USHORT));
 
 	Firebird::OutAligner<USHORT> d(p_dest_ptr, dest_len);
@@ -124,22 +124,22 @@ ULONG CVBIG5_unicode_to_big5(csconvert* obj,
 							 USHORT* err_code,
 							 ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(p_unicode_str != NULL || big5_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(p_unicode_str != nullptr || big5_str == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVBIG5_unicode_to_big5);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = unicode_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (big5_str == NULL)
+	if (big5_str == nullptr)
 		return unicode_len;	// worst case - all han character input
 
 	Firebird::Aligner<USHORT> s(p_unicode_str, unicode_len);

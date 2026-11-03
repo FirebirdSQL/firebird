@@ -53,8 +53,8 @@ class BtrPageGCLock;
 class Sort;
 class PartitionedSort;
 struct sort_key_def;
-
-enum class IdxCreate {AtOnce, ForRollback};
+struct record_param;
+struct win;
 
 // Dependencies from/to foreign references
 
@@ -100,13 +100,15 @@ struct index_desc
 	Statement* idx_expression_statement;	// stored statement for expression evaluation
 	BoolExprNode* idx_condition_node;		// node tree for index condition
 	Statement* idx_condition_statement;		// stored statement for index condition
-	float	idx_fraction;					// fraction of keys included in the index
+	float idx_fraction;						// fraction of keys included in the index
 	UCHAR	idx_state;						// state from irt_rpt
+	ULONG	idx_pg_space_id;				// page space of index pages
 	// This structure should exactly match IRTD structure for current ODS
 	struct idx_repeat
 	{
 		USHORT idx_field;					// field id
 		USHORT idx_itype;					// data of field in index
+		USHORT idx_length;					// data length in characters, if set (non zero)
 		float idx_selectivity;				// segment selectivity
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
@@ -142,12 +144,13 @@ inline constexpr int idx_offset_intl_range	= (0x7FFF + idx_first_intl_string);
 
 // these flags match the irt_flags in ods.h
 
-inline constexpr int idx_unique			= 1;
-inline constexpr int idx_descending		= 2;
-inline constexpr int idx_foreign		= 4;
-inline constexpr int idx_primary		= 8;
-inline constexpr int idx_expression		= 16;
-inline constexpr int idx_condition		= 32;
+inline constexpr int idx_unique			= 0x01;
+inline constexpr int idx_descending		= 0x02;
+inline constexpr int idx_foreign		= 0x04;
+inline constexpr int idx_primary		= 0x08;
+inline constexpr int idx_expression		= 0x10;
+inline constexpr int idx_condition		= 0x20;
+inline constexpr int idx_complementary	= 0x40;
 
 // these flags are for idx_runtime_flags
 
@@ -170,12 +173,15 @@ struct index_insertion
 	jrd_tra*	iib_transaction;	// insertion transaction
 	BtrPageGCLock*	iib_dont_gc_lock;	// lock to prevent removal of splitted page
 	UCHAR	iib_btr_level;			// target level to propagate split page to
+	bool iib_removed;				// true if the key was removed from leaf level
 };
 
 
 // these flags are for the key_flags
 
-inline constexpr int key_empty		= 1;	// Key contains empty data / empty string
+inline constexpr int key_empty		= 0x01;		// Key contains empty data / empty string
+inline constexpr int key_secondary	= 0x02;		// Key composed from secondary version of the record
+inline constexpr int key_newver		= 0x04;		// Key composed from the new version of the record
 
 // Temporary key block
 
@@ -332,19 +338,43 @@ private:
 
 // Struct used for index creation
 
+class IdxCreationHelper;
+
+enum class IdxCreate { AtOnce, ForRollback, Concurrently };
+enum class IdxCheckDups { WhenBuild, AfterBuild };
+
 struct IndexCreation
 {
+	IndexCreation(IdxCreate aMethod, jrd_rel* aRelation, index_desc* aIdx, const QualifiedName& aNname, jrd_tra* aTran) :
+		createMethod(aMethod),
+		relation(aRelation),
+		index(aIdx),
+		index_name(aNname),
+		transaction(aTran)
+	{}
+
+	IdxCreate createMethod;
+	IdxCheckDups checkDuplicates = IdxCheckDups::WhenBuild;
 	jrd_rel* relation;
 	index_desc* index;
 	QualifiedName index_name;
 	jrd_tra* transaction;
-	PartitionedSort* sort;
-	sort_key_def* key_desc;
-	USHORT key_length;
-	USHORT nullIndLen;
-	SINT64 dup_recno;
+	PartitionedSort* sort = nullptr;
+	sort_key_def* key_desc = nullptr;
+	USHORT key_length = 0;
+	USHORT nullIndLen = 0;
+	SINT64 dup_recno = -1;
 	Firebird::AtomicCounter duplicates;
-	IdxCreate forRollback;
+
+	bool isConcurrently() const
+	{
+		return createMethod == IdxCreate::Concurrently;
+	}
+
+	// concurrently helper
+	IdxCreationHelper* helper = nullptr;
+
+	bool lockWrites(SSHORT wait);
 };
 
 // Class used to report any index related errors
@@ -377,26 +407,6 @@ private:
 	const QualifiedName m_indexName;
 	Location m_location;
 	bool isLocationDefined = false;
-};
-
-
-// Index construction lock holder
-
-class IndexCreateLock : public Firebird::AutoStorage
-{
-public:
-	IndexCreateLock(thread_db* tdbb, MetaId relId);
-	~IndexCreateLock();
-
-	void exclusive(MetaId indexId);
-	void shared(MetaId indexId);
-
-private:
-	thread_db* tdbb;	// may be stored here cause IndexCreateLock is always on stack
-	MetaId relId;
-	Lock* lck = nullptr;
-
-	void makeLock(MetaId indexId);
 };
 
 
@@ -591,6 +601,46 @@ private:
 	const ValueExprNode* const* m_iterator;
 	USHORT m_segno = MAX_USHORT;
 };
+
+
+class IndexDuplicateScanner
+{
+public:
+	IndexDuplicateScanner(jrd_rel* relation, MetaId idxId) :
+		m_relation(relation),
+		m_indexId(idxId)
+	{}
+
+	~IndexDuplicateScanner();
+
+	bool find(thread_db* tdbb, RecordBitmap& recs);
+
+	bool checkRecord(thread_db* tdbb, record_param* rpb);
+
+	index_desc* getIndexDesc() { return &m_index; }
+
+private:
+	jrd_rel* m_relation;
+	MetaId m_indexId;
+
+	index_desc m_index;
+	bool m_initialized = false;
+
+	Firebird::UCharBuffer m_key;					// current key value
+	USHORT m_keyLength = 0;							// length of the current key value
+	Firebird::AutoPtr<temporary_key> m_nullKey;		// all NULLs key
+
+	// saved position
+	ULONG m_savePage = 0;						// index leaf page number
+	ULONG m_saveOffset = 0;						//   and offset of next node
+	SLONG m_saveIncarnation = 0;				//   and incarnation counter
+	Firebird::AutoPtr<BtrPageGCLock> m_gcLock;
+
+	UCHAR* init(thread_db* tdbb, win* window);
+	UCHAR* restorePosition(thread_db* tdbb, win* window);
+	void savePosition(thread_db* tdbb, win* window, ULONG offset);
+};
+
 
 } //namespace Jrd
 

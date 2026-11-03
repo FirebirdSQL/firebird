@@ -6065,7 +6065,6 @@ void YAttachment::ping(CheckStatusWrapper* status)
 			if (!savedStatus.getError())
 				savedStatus.save(status);
 
-			entry.next()->release();
 			next = nullptr;
 
 			status_exception::raise(savedStatus.value());

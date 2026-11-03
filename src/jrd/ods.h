@@ -33,6 +33,7 @@
 #ifndef JRD_ODS_H
 #define JRD_ODS_H
 
+#include "../jrd/PageNumber.h"
 #include "../jrd/RecordNumber.h"
 #include "../common/classes/fb_string.h"
 #include "../common/classes/Uuid.h"
@@ -410,28 +411,49 @@ struct index_root_page
 		USHORT irt_flags;				// index flags
 		UCHAR irt_state;				// index state
 		UCHAR irt_keys;					// number of keys in index
-		USHORT irt_dummy;				// alignment to 8-byte boundary
+		USHORT irt_backslot;			// slot with original page number
 
 	private:
 		void setState(UCHAR newState);
 
 	public:
-		ULONG getRoot() const;
-		TraNumber getTransaction() const;
-		bool isUsed() const;
-		UCHAR getState() const;
+		TraNumber getTransaction() const
+		{
+			return irt_transaction;
+		}
 
-		void setRoot(ULONG rootPage/*, ULONG pageSpaceId*/);
+		UCHAR getState() const
+		{
+			return irt_state;
+		}
+
+		bool isUsed() const;
+		std::optional<Jrd::PageNumber> getRootPage() const;
+		void setRootPage(const Jrd::PageNumber& rootPage);
+
+		void setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber);
 		void setInProgress(TraNumber traNumber);
-		void setRollback(ULONG rootPage/*, ULONG pageSpaceId*/, TraNumber traNumber);
+		void setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber);
+		void setConcurrentlyComplete(TraNumber traNumber);
+		void setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber);
 		void setRollback(TraNumber traNumber);
+		void setKill();
+		void setKill(const Jrd::PageNumber& rootPage);
 		void setKill(TraNumber traNumber);
 		void setNormal();
-		void setNormal(ULONG rootPage/*, ULONG pageSpaceId*/);
+		void setNormal(const Jrd::PageNumber& rootPage);
 		void setCommit(TraNumber traNumber);
 		void setDrop(TraNumber traNumber);
+		void setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot);
 		void setEmpty();
 	} irt_rpt[1];
+
+	// Return the backing slot referenced by a migrating index slot,
+	// or NULL when the slot is not in the irt_migrate state or the
+	// stored slot number points outside this page
+	const irt_repeat* getBackSlot(const irt_repeat* rpt) const;
+	irt_repeat* getBackSlot(const irt_repeat* rpt);
 
 	static_assert(sizeof(struct irt_repeat) == 24, "struct irt_repeat size mismatch");
 	static_assert(offsetof(struct irt_repeat, irt_transaction) == 0, "irt_transaction offset mismatch");
@@ -455,13 +477,15 @@ struct irtd
 {
 	USHORT irtd_field;
 	USHORT irtd_itype;
+	USHORT irtd_length;				// length in characters, if not zero
 	float irtd_selectivity;
 };
 
-static_assert(sizeof(struct irtd) == 8, "struct irtd size mismatch");
+static_assert(sizeof(struct irtd) == 12, "struct irtd size mismatch");
 static_assert(offsetof(struct irtd, irtd_field) == 0, "irtd_field offset mismatch");
 static_assert(offsetof(struct irtd, irtd_itype) == 2, "irtd_itype offset mismatch");
-static_assert(offsetof(struct irtd, irtd_selectivity) == 4, "irtd_selectivity offset mismatch");
+static_assert(offsetof(struct irtd, irtd_length) == 4, "irtd_length offset mismatch");
+static_assert(offsetof(struct irtd, irtd_selectivity) == 8, "irtd_selectivity offset mismatch");
 
 // possible index states
 inline constexpr UCHAR irt_unused		= 0;	// empty slot
@@ -471,20 +495,25 @@ inline constexpr UCHAR irt_normal		= 3;	// normal working state of index
 inline constexpr UCHAR irt_kill			= 4;	// index to be removed when irt_transaction ended (both commit/rollback)
 inline constexpr UCHAR irt_commit		= 5;	// start index removal (switch to irt_drop) when irt_transaction committed
 inline constexpr UCHAR irt_drop			= 6;	// index to be removed when OAT > irt_transaction
+inline constexpr UCHAR irt_concurrently	= 7;	// creating index concurrently
+inline constexpr UCHAR irt_migrate		= 8;	// index is being migrated to another tablespace
+inline constexpr UCHAR irt_last			= 8;	// last possible state
 
 // irt_flags, must match the idx_flags (see btr.h)
-inline constexpr USHORT irt_unique			= 1;
-inline constexpr USHORT irt_descending		= 2;
-inline constexpr USHORT irt_foreign			= 4;
-inline constexpr USHORT irt_primary			= 8;
-inline constexpr USHORT irt_expression		= 16;
-inline constexpr USHORT irt_condition		= 32;
+inline constexpr USHORT irt_unique			= 0x01;
+inline constexpr USHORT irt_descending		= 0x02;
+inline constexpr USHORT irt_foreign			= 0x04;
+inline constexpr USHORT irt_primary			= 0x08;
+inline constexpr USHORT irt_expression		= 0x10;
+inline constexpr USHORT irt_condition		= 0x20;
+inline constexpr USHORT irt_complementary	= 0x40;		// temp index used by concurrent index creation
+
 
 /*
 	How does index state change:
 
 states for just created index:
-	irt_in_progress
+	irt_in_progress, irt_concurrently
 		create index / alter index active	=> irt_rollback
 	irt_rollback
 		on commit							=> irt_normal
@@ -497,7 +526,13 @@ states for just created index:
 states for existing index:
 	irt_normal
 		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			=> irt_migrate
 		on commit / on rollback				no action
+	irt_migrate
+		alter index inactive / drop index	=> irt_commit
+		alter index set tablespace			create and link a new slot
+		on commit							=> irt_normal (for a new slot), irt_kill (for an old slot)
+		on rollback							=> irt_kill (for a new slot), irt_normal (for an old slot)
 	irt_commit
 		on commit							=> irt_drop
 		on rollback							=> irt_normal
@@ -511,25 +546,41 @@ access in SELECTs:
 	irt_commit		- other transactions
  */
 
-inline void index_root_page::irt_repeat::setState(UCHAR newState)
-{
-	fb_assert(newState <= irt_drop);
-	irt_state = newState;
-}
-
 inline bool index_root_page::irt_repeat::isUsed() const
 {
-	return getState() != irt_unused;
+	return (irt_state != irt_unused);
 }
 
-inline void index_root_page::irt_repeat::setRoot(ULONG rootPage)
+inline std::optional<Jrd::PageNumber> index_root_page::irt_repeat::getRootPage() const
 {
-	fb_assert(getState() == irt_in_progress || getState() == irt_normal);
-	fb_assert(rootPage);
+	if (irt_page_num && irt_page_space_id)
+		return Jrd::PageNumber(irt_page_space_id, irt_page_num);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = 0;
-	setState(irt_normal);
+	fb_assert(!irt_page_num && !irt_page_space_id);
+	fb_assert(irt_state == irt_unused || irt_state == irt_in_progress);
+	return std::nullopt;
+}
+
+inline void index_root_page::irt_repeat::setRootPage(const Jrd::PageNumber& rootPage)
+{
+	// hvlad: is irt_in_progress possible here ?
+	fb_assert(getState() == irt_in_progress ||
+			  getState() == irt_rollback ||
+			  getState() == irt_normal ||
+			  getState() == irt_concurrently);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	if (getState() == irt_in_progress)
+		setState(irt_normal);
+}
+
+inline void index_root_page::irt_repeat::setState(UCHAR newState)
+{
+	fb_assert(newState <= irt_last);
+	irt_state = newState;
 }
 
 inline void index_root_page::irt_repeat::setEmpty()
@@ -539,6 +590,21 @@ inline void index_root_page::irt_repeat::setEmpty()
 	irt_page_num = 0;
 	irt_page_space_id = 0;
 	irt_flags = 0;
+	irt_backslot = 0;
+}
+
+inline void index_root_page::irt_repeat::setInProgress(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(traNumber == irt_transaction);
+	fb_assert(!irt_page_num && !irt_page_space_id);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	irt_transaction = traNumber;
+	setState(irt_in_progress);
 }
 
 inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
@@ -551,14 +617,58 @@ inline void index_root_page::irt_repeat::setInProgress(TraNumber traNumber)
 	setState(irt_in_progress);
 }
 
-inline void index_root_page::irt_repeat::setRollback(ULONG rootPage, TraNumber traNumber)
+// Scan phase of concurrent index creation, set temp index root page and complementary flag
+inline void index_root_page::irt_repeat::setConcurrentlyTemp(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_unused);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	irt_transaction = traNumber;
+	irt_flags |= irt_complementary;
+	setState(irt_concurrently);
+}
+
+// Merge phase of concurrent index creation, set main index root page and clear complementary flag
+inline void index_root_page::irt_repeat::setConcurrentlyMain(const Jrd::PageNumber& rootPage, TraNumber traNumber)
+{
+	fb_assert(getState() == irt_concurrently);
+	fb_assert(irt_transaction == traNumber);
+	fb_assert(irt_flags & irt_complementary);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	irt_transaction = traNumber;
+	irt_flags &= ~irt_complementary;
+	setState(irt_concurrently);
+}
+
+// Concurrent index creation completed, set rollback state
+inline void index_root_page::irt_repeat::setConcurrentlyComplete(TraNumber traNumber)
+{
+	fb_assert(getState() == irt_concurrently);
+	fb_assert(irt_transaction == traNumber);
+	fb_assert(!(irt_flags & irt_complementary));
+	fb_assert(irt_page_num && irt_page_space_id);
+
+	irt_transaction = traNumber;
+	setState(irt_rollback);
+}
+
+inline void index_root_page::irt_repeat::setRollback(const Jrd::PageNumber& rootPage, TraNumber traNumber)
 {
 	fb_assert(getState() == irt_in_progress);
 	fb_assert(traNumber == irt_transaction);
-	fb_assert(!irt_page_num);
+	fb_assert(!irt_page_num && !irt_page_space_id);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
 	irt_transaction = traNumber;
 	setState(irt_rollback);
 }
@@ -567,16 +677,36 @@ inline void index_root_page::irt_repeat::setRollback(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_kill);
 	fb_assert(traNumber == irt_transaction);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 
 	irt_transaction = traNumber;
 	setState(irt_rollback);
 }
 
+inline void index_root_page::irt_repeat::setKill()
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(irt_transaction);
+
+	setState(irt_kill);
+}
+
+inline void index_root_page::irt_repeat::setKill(const Jrd::PageNumber& rootPage)
+{
+	fb_assert(getState() == irt_in_progress);
+	fb_assert(irt_transaction);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	setState(irt_kill);
+}
+
 inline void index_root_page::irt_repeat::setKill(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_rollback);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 	fb_assert(traNumber == irt_transaction);
 
 	irt_transaction = traNumber;
@@ -585,34 +715,42 @@ inline void index_root_page::irt_repeat::setKill(TraNumber traNumber)
 
 inline void index_root_page::irt_repeat::setNormal()
 {
-			//create index mode ForRollback
+			// create index mode ForRollback
 	fb_assert(getState() == irt_rollback
 			// deleted by current tra
 			|| getState() == irt_commit
 			// deleted not long ago
-			|| getState() == irt_drop);
-	fb_assert(irt_page_num);
+			|| getState() == irt_drop);		// hvlad: is it possible ?
+	fb_assert(irt_page_num && irt_page_space_id);
 	fb_assert(irt_transaction);
+
+	irt_transaction = 0;
+	irt_backslot = 0;
 
 	setState(irt_normal);
 }
 
-inline void index_root_page::irt_repeat::setNormal(ULONG rootPage)
+inline void index_root_page::irt_repeat::setNormal(const Jrd::PageNumber& rootPage)
 {
-			//create index mode AtOnce
-	fb_assert(getState() == irt_in_progress);
-	fb_assert(!irt_page_num);
-	fb_assert(rootPage);
+			// create index mode AtOnce
+	fb_assert(getState() == irt_in_progress
+			// completed migration
+			|| getState() == irt_migrate);
 
-	irt_page_num = rootPage;
-	irt_page_space_id = 0;
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	irt_transaction = 0;
+	irt_backslot = 0;
+
 	setState(irt_normal);
 }
 
 inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 {
-	fb_assert(getState() == irt_normal);
-	fb_assert(irt_page_num);
+	fb_assert(getState() == irt_normal || getState() == irt_migrate);
+	fb_assert(irt_page_num && irt_page_space_id);
 
 	irt_transaction = traNumber;
 	setState(irt_commit);
@@ -621,7 +759,7 @@ inline void index_root_page::irt_repeat::setCommit(TraNumber traNumber)
 inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 {
 	fb_assert(getState() == irt_commit);
-	fb_assert(irt_page_num);
+	fb_assert(irt_page_num && irt_page_space_id);
 	irt_transaction = traNumber;
 	setState(irt_drop);
 
@@ -630,19 +768,35 @@ inline void index_root_page::irt_repeat::setDrop(TraNumber traNumber)
 	irt_flags &= ~(irt_unique | irt_foreign | irt_primary);
 }
 
-inline UCHAR index_root_page::irt_repeat::getState() const
+inline void index_root_page::irt_repeat::setMigrate(const Jrd::PageNumber& rootPage, TraNumber traNumber, USHORT slot)
 {
-	return irt_state;
+	fb_assert(getState() == irt_normal || getState() == irt_rollback || getState() == irt_migrate);
+	fb_assert(irt_page_num && irt_page_space_id);
+
+	fb_assert(rootPage.getPageNum());
+	irt_page_num = rootPage.getPageNum();
+	irt_page_space_id = rootPage.getPageSpaceID();
+
+	irt_transaction = traNumber;
+	irt_backslot = slot;
+
+	setState(irt_migrate);
 }
 
-inline ULONG index_root_page::irt_repeat::getRoot() const
+inline const index_root_page::irt_repeat* index_root_page::getBackSlot(const irt_repeat* rpt) const
 {
-	return getState() == irt_unused ? 0 : irt_page_num;
+	fb_assert(rpt->getState() == irt_migrate);
+
+	if (rpt->getState() != irt_migrate || rpt->irt_backslot >= irt_count)
+		return nullptr;
+
+	return &irt_rpt[rpt->irt_backslot];
 }
 
-inline TraNumber index_root_page::irt_repeat::getTransaction() const
+inline index_root_page::irt_repeat* index_root_page::getBackSlot(const irt_repeat* rpt)
 {
-	return irt_transaction;
+	return const_cast<irt_repeat*>(
+		static_cast<const index_root_page*>(this)->getBackSlot(rpt));
 }
 
 inline constexpr int STUFF_COUNT		= 4;

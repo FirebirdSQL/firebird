@@ -136,8 +136,8 @@ static USHORT LCKSC_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInC
 	USHORT iOutLen, BYTE *pOutChar,
 	USHORT /*key_type*/)
 {
-	fb_assert(pOutChar != NULL);
-	fb_assert(pInChar != NULL);
+	fb_assert(pOutChar != nullptr);
+	fb_assert(pInChar != nullptr);
 	fb_assert(iOutLen >= LCKSC_key_length(obj, iInLen));
 
 	const BYTE* inbuff = pInChar + iInLen - 1;
@@ -264,7 +264,7 @@ static USHORT LCKSC_key_length(texttype* /*obj*/, USHORT inLen)
 */
 static SSHORT LCKSC_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, const BYTE* s2, INTL_BOOL* error_flag)
 {
-	fb_assert(error_flag != NULL);
+	fb_assert(error_flag != nullptr);
 
 	BYTE key1[LANGKSC_MAX_KEY];
 	BYTE key2[LANGKSC_MAX_KEY];

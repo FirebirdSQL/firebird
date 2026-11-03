@@ -158,6 +158,7 @@ inline constexpr const char* FUNCTIONS_GENERATOR = "RDB$FUNCTIONS";
 inline constexpr const char* PACKAGES_GENERATOR = "RDB$PACKAGES";
 
 inline constexpr SLONG RELATIONS_GENERATOR = 13;
+inline constexpr SLONG TABLESPACES_GENERATOR = 14;
 
 // Automatically created check constraints for unnamed PRIMARY and UNIQUE declarations.
 inline constexpr const char* IMPLICIT_INTEGRITY_PREFIX = "INTEG_";
@@ -208,6 +209,13 @@ inline constexpr int MAX_INDEX_SEGMENTS = 16;
 
 // Maximum index key length (must be in sync with MAX_PAGE_SIZE in ods.h)
 inline constexpr ULONG MAX_KEY = 8192; // Maximum page size possible divide by 4 (MAX_PAGE_SIZE / 4)
+
+// RDB$INDICES.RDB$UNIQUE_FLAG values
+inline constexpr SSHORT IDX_UNIQUE			= 0x01;		// Unique index
+inline constexpr SSHORT IDX_NOT_VALIDATED	= 0x02;		// Unique not validated
+
+inline constexpr SSHORT IDX_UNIQUE_NOT_VALIDATED = IDX_UNIQUE | IDX_NOT_VALIDATED;
+
 
 inline constexpr USHORT SQL_MATCH_1_CHAR	= '_';
 inline constexpr USHORT SQL_MATCH_ANY_CHARS	= '%';
@@ -425,7 +433,10 @@ static inline constexpr const char* DDL_TRIGGER_ACTION_NAMES[][2] =
 	{"DROP", "MAPPING"},
 	{"CREATE", "SCHEMA"},
 	{"ALTER", "SCHEMA"},
-	{"DROP", "SCHEMA"}
+	{"DROP", "SCHEMA"},
+	{"CREATE", "TABLESPACE"},
+	{"ALTER", "TABLESPACE"},
+	{"DROP", "TABLESPACE"}
 };
 
 inline constexpr int DDL_TRIGGER_BEFORE	= 0;
@@ -481,6 +492,9 @@ inline constexpr int DDL_TRIGGER_DROP_MAPPING			= 47;
 inline constexpr int DDL_TRIGGER_CREATE_SCHEMA			= 48;
 inline constexpr int DDL_TRIGGER_ALTER_SCHEMA			= 49;
 inline constexpr int DDL_TRIGGER_DROP_SCHEMA			= 50;
+inline constexpr int DDL_TRIGGER_CREATE_TABLESPACE		= 51;
+inline constexpr int DDL_TRIGGER_ALTER_TABLESPACE		= 52;
+inline constexpr int DDL_TRIGGER_DROP_TABLESPACE		= 53;
 
 // that's how database trigger action types are encoded
 //    (TRIGGER_TYPE_DB | type)
@@ -517,6 +531,10 @@ inline constexpr int WITH_ADMIN_OPTION = 2;
 
 // Max length of the string returned by ERROR_TEXT context variable
 inline constexpr USHORT MAX_ERROR_MSG_LENGTH = 1024 * METADATA_BYTES_PER_CHAR; // 1024 UTF-8 characters
+
+// Tablespaces
+const char* const PRIMARY_TABLESPACE_NAME = "PRIMARY";
+const char* const TEMP_TABLESPACE_NAME = "TEMPORARY";
 
 // Prefix of index that's getting dropped
 inline constexpr const char* TEMP_DEPEND = "RDB$TEMP_DEPEND";

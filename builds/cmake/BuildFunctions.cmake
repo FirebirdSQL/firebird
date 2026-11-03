@@ -4,6 +4,32 @@
 #
 ################################################################################
 
+
+function(replace_in_file SOURCE TARGET FILE_PATH)
+    file(READ "${FILE_PATH}" FILE_CONTENT)
+    string(REPLACE "${SOURCE}" "${TARGET}" FILE_CONTENT "${FILE_CONTENT}" )
+    file(WRITE "${FILE_PATH}" "${FILE_CONTENT}")
+endfunction()
+
+
+function(fix_win_crlf FILE_PATH)
+    if (NOT WIN32)
+        replace_in_file("\\r\\n" "\\n" "${FILE_PATH}")
+    endif()        
+endfunction()
+
+function(crlf_dos_to_unix FILE_PATH)
+
+    file(GLOB_RECURSE files_all "${FILE_PATH}/*")
+
+    foreach(file_path ${files_all})
+        replace_in_file("\\r\\n" "\\n" "${file_path}")
+        # execute_process(COMMAND sed -i "s/\r//g" ${file_path}  WORKING_DIRECTORY ${FILE_PATH})
+    endforeach()
+
+endfunction()
+
+
 ########################################
 # FUNCTION set_output_directory
 ########################################
@@ -31,6 +57,18 @@ function(set_output_directory target dir)
     endif()
 endfunction(set_output_directory)
 
+
+########################################
+# FUNCTION set_output_directory
+########################################
+function(set_tests_directory target)
+    add_custom_command(TARGET ${target} PRE_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${test_dir})
+    set_target_properties(${target} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${test_dir})
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${test_dir})
+    set_target_properties(${target} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${test_dir})
+endfunction(set_tests_directory)
+
+
 ########################################
 # FUNCTION set_output_directory_unix
 ########################################
@@ -54,9 +92,8 @@ if (WIN32)
         if (NOT "${def_file}" STREQUAL "")
             if (MSVC)
                 set_target_properties(${target} PROPERTIES LINK_FLAGS "/DEF:\"${CMAKE_SOURCE_DIR}/builds/win32/defs/${def_file}\"")
-            endif()
-            if (MINGW)
-                #set_target_properties(${target} PROPERTIES LINK_FLAGS "-Wl,${CMAKE_SOURCE_DIR}/builds/win32/defs/${def_file}")
+            else()    
+                # set_target_properties(${target} PROPERTIES LINK_FLAGS "-Wl,${CMAKE_SOURCE_DIR}/builds/win32/defs/${def_file}")
             endif()
         endif()
     endfunction(set_exported_symbols)
@@ -73,7 +110,10 @@ if (UNIX)
             if (APPLE)
                 set(wl_option "-exported_symbols_list")
             endif()
-            set_target_properties(${target} PROPERTIES LINK_FLAGS -Wl,${wl_option},${CMAKE_BINARY_DIR}/builds/posix/${def_file})
+
+            set(VERS_DIR "${CMAKE_BINARY_DIR}${OWNER_RROJECTS_TREE}")
+            # message(" ---- ${VERS_DIR} ")
+            set_target_properties(${target} PROPERTIES LINK_FLAGS -Wl,${wl_option},${VERS_DIR}/builds/posix/${def_file})
         endif()
     endfunction(set_exported_symbols)
 endif(UNIX)
@@ -222,7 +262,7 @@ function(set_generated_directory)
     if (NOT CMAKE_CROSSCOMPILING)
         set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR} PARENT_SCOPE)
     else()
-        string(REPLACE "${CMAKE_BINARY_DIR}" "${NATIVE_BUILD_DIR}" GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR})
+        string(REPLACE "${CMAKE_CURRENT_BINARY_DIR}" "${NATIVE_BUILD_DIR}" GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR})
         set(GENERATED_DIR ${GENERATED_DIR} PARENT_SCOPE)
     endif()
 endfunction(set_generated_directory)
@@ -250,7 +290,7 @@ endfunction(add_dependencies_unix_cc)
 ########################################
 function(crosscompile_prebuild_steps)
     if (CMAKE_CROSSCOMPILING)
-        execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NATIVE_BUILD_DIR}/src/include/gen/parse.h ${CMAKE_BINARY_DIR}/src/include/gen/parse.h)
+        execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different ${NATIVE_BUILD_DIR}/src/include/gen/parse.h ${CMAKE_CURRENT_BINARY_DIR}/src/include/gen/parse.h)
     endif()
 endfunction(crosscompile_prebuild_steps)
 
@@ -286,7 +326,7 @@ function(create_command command type out)
         set(options %*)
     endif()
     set(cmd_name ${cmd_name}${conf}${ext})
-    set(cmd_name ${CMAKE_BINARY_DIR}/src/${cmd_name})
+    set(cmd_name ${CMAKE_CURRENT_BINARY_DIR}/src/${cmd_name})
 
     set(content)
     foreach(e ${env})
@@ -316,7 +356,7 @@ function(create_boot_commands)
         boot_gbak
         boot_gfix
         build_msg
-        codes
+        # codes
         gpre_boot
     )
     foreach(cmd ${cmd_list})
@@ -341,3 +381,36 @@ function(create_master_commands)
 endfunction(create_master_commands)
 
 ################################################################################
+
+function(display_inventory)
+
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    message(STATUS "       project : ${CMAKE_PROJECT_NAME}")    
+    message(STATUS "       version : major ${PROJECT_VERSION_MAJOR} minor ${PROJECT_VERSION_MINOR} patch ${PROJECT_VERSION_PATCH} build ${PROJECT_VERSION_BUILD}")
+    message(STATUS "      IPC name : ${FB_IPC_NAME}")
+    message(STATUS "      log name : ${FB_LOGFILENAME}")
+    message(STATUS "     conf name : ${FB_CONFILENAME}")
+    message(STATUS "  service name : ${FB_SERVICE_NAME}")
+    message(STATUS "  service port : ${FB_SERVICE_PORT}")
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    message(STATUS "   platform ID : ${platform_ID}")    
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+#    message(STATUS "toolchain file : ${CMAKE_TOOLCHAIN_FILE}")
+    message(STATUS "           CPU : ${CMAKE_SYSTEM_PROCESSOR}")
+    message(STATUS "            OS : ${CMAKE_SYSTEM_NAME}")
+    message(STATUS "OS pointer len : ${CMAKE_SIZEOF_VOID_P}")
+    message(STATUS " debug/release : ${CMAKE_BUILD_TYPE}")
+    message(STATUS "   generator`s : [${CMAKE_GENERATOR}]")
+    message(STATUS "   source from : [${CMAKE_SOURCE_DIR}]")
+    message(STATUS "   building in : [${CMAKE_BINARY_DIR}]")
+    message(STATUS "   output   to : [${CMAKE_SOURCE_DIR}/distr]")
+    message(STATUS "   by compiler : [${CMAKE_CXX_COMPILER_ID}]::[${CMAKE_BUILD_TYPE}]")
+    message(STATUS "   rc compiler : [${CMAKE_RC_COMPILER}]")    
+    message(STATUS "  asm compiler : [${CMAKE_ASM_COMPILER}]")    
+    message(STATUS "   with linker : [${CMAKE_LINKER}]")    
+    message(STATUS "   install  to : [${CMAKE_INSTALL_PREFIX}]")
+    message(STATUS "   with  rpath : [${CMAKE_INSTALL_RPATH}]")
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+    message(STATUS "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+endfunction()

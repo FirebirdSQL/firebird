@@ -709,6 +709,8 @@ using namespace Firebird;
 %token <metaNamePtr> BIN_XOR_AGG
 %token <metaNamePtr> BTRIM
 %token <metaNamePtr> CALL
+%token <metaNamePtr> CONCURRENTLY
+%token <metaNamePtr> CONSTANT
 %token <metaNamePtr> CURRENT_SCHEMA
 %token <metaNamePtr> DOWNTO
 %token <metaNamePtr> ERROR
@@ -723,14 +725,15 @@ using namespace Firebird;
 %token <metaNamePtr> NAMED_ARG_ASSIGN
 %token <metaNamePtr> PERCENTILE_CONT
 %token <metaNamePtr> PERCENTILE_DISC
+%token <metaNamePtr> RDB_RESET_CONTEXT
 %token <metaNamePtr> RTRIM
 %token <metaNamePtr> SCHEMA
 %token <metaNamePtr> SEARCH_PATH
+%token <metaNamePtr> TABLESPACE
 %token <metaNamePtr> TRUNCATE
 %token <metaNamePtr> UNLIST
+%token <metaNamePtr> VALIDATE
 %token <metaNamePtr> WITHIN
-%token <metaNamePtr> RDB_RESET_CONTEXT
-%token <metaNamePtr> CONSTANT
 
 // precedence declarations for expression evaluation
 
@@ -863,6 +866,7 @@ using namespace Firebird;
 	Jrd::CreateRelationNode* createRelationNode;
 	Jrd::CreateAlterViewNode* createAlterViewNode;
 	Jrd::CreateIndexNode* createIndexNode;
+	Jrd::AlterIndexNode* alterIndexNode;
 	Jrd::AlterDatabaseNode* alterDatabaseNode;
 	Jrd::ExecBlockNode* execBlockNode;
 	Jrd::StoreNode* storeNode;
@@ -899,6 +903,10 @@ using namespace Firebird;
 	Jrd::SessionResetNode* sessionResetNode;
 	Jrd::ForRangeNode::Direction forRangeDirection;
 	Jrd::CreatePackageConstantNode* createPackageConstantNode;
+	Jrd::CreateAlterTablespaceNode* createAlterTablespaceNode;
+	Jrd::DropTablespaceNode* dropTablespaceNode;
+	Jrd::CreateIndexNode::Segments* indexSegments;
+	Jrd::CreateIndexNode::Segment* indexSegment;
 }
 
 %include types.y
@@ -1151,6 +1159,8 @@ schemaless_object
 		{ $$ = newNode<GranteeClause>(obj_filters, QualifiedName(getDdlSecurityName(obj_filters))); }
 	| SCHEMA
 		{ $$ = newNode<GranteeClause>(obj_schemas, QualifiedName(getDdlSecurityName(obj_schemas))); }
+	| TABLESPACE
+		{ $$ = newNode<GranteeClause>(obj_tablespaces, QualifiedName(getDdlSecurityName(obj_tablespaces))); }
 	;
 
 table_noise
@@ -1680,8 +1690,11 @@ create_clause
 				node->relation = $8;
 				$$ = node;
 			}
-		index_definition(static_cast<CreateIndexNode*>($9))
+		index_definition(static_cast<CreateIndexNode*>($9)) tablespace_name_clause_opt
 			{
+				if ($11)
+					static_cast<CreateIndexNode*>($9)->tableSpace = *$11;
+
 				$$ = $9;
 			}
 	| FUNCTION if_not_exists_opt function_clause
@@ -1806,6 +1819,12 @@ create_clause
 			node->createIfNotExistsOnly = $2;
 			$$ = node;
 		}
+	| TABLESPACE if_not_exists_opt tablespace_clause
+		{
+			const auto node = $3;
+			node->createIfNotExistsOnly = $2;
+			$$ = node;
+		}
 	;
 
 
@@ -1842,6 +1861,8 @@ recreate_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
 	| SEQUENCE generator_clause
 		{ $$ = newNode<RecreateSequenceNode>($2); }
+	| TABLESPACE tablespace_clause
+		{ $$ = newNode<RecreateTablespaceNode>($2); }
 	| USER create_user_clause
 		{ $$ = newNode<RecreateUserNode>($2); }
 	| SCHEMA schema_clause
@@ -1869,6 +1890,7 @@ replace_clause
 	| MAPPING replace_map_clause(false)			{ $$ = $2; }
 	| GLOBAL MAPPING replace_map_clause(true)	{ $$ = $3; }
 	| SCHEMA replace_schema_clause				{ $$ = $2; }
+	| TABLESPACE replace_tablespace_clause		{ $$ = $2; }
 	;
 
 
@@ -1919,18 +1941,19 @@ unique_opt
 
 %type index_definition(<createIndexNode>)
 index_definition($createIndexNode)
-	: index_column_expr($createIndexNode) index_condition_opt
+	: index_column_expr($createIndexNode) index_condition_opt concurrently_opt
 		{
 			$createIndexNode->partial = $2;
+			$createIndexNode->concurrently = $3;
 		}
 	;
 
 %type index_column_expr(<createIndexNode>)
 index_column_expr($createIndexNode)
-	: column_list
-		{ $createIndexNode->columns = $1; }
-	| column_parens
-		{ $createIndexNode->columns = $1; }
+	: segment_list
+		{ $createIndexNode->segments = $1; }
+	| segment_parens
+		{ $createIndexNode->segments = $1; }
 	| computed_by '(' value ')'
 		{
  			$createIndexNode->computed = newNode<ValueSourceClause>();
@@ -1938,6 +1961,45 @@ index_column_expr($createIndexNode)
 			$createIndexNode->computed->source = makeParseStr(YYPOSNARG(2), YYPOSNARG(4));
 		}
 	;
+
+
+%type <indexSegments> segment_parens
+segment_parens
+	: '(' segment_list ')'	{ $$ = $2; }
+	;
+
+%type <indexSegments> segment_list
+segment_list
+	: single_segment
+		{
+			$$ = newNode<CreateIndexNode::Segments>();
+			$$->add(*$1);
+		}
+	| segment_list ',' single_segment
+		{
+			$1->add(*$3);
+			$$ = $1;
+		}
+	;
+
+
+%type <indexSegment> single_segment
+single_segment
+	: symbol_column_name
+		{
+			auto* segment = newNode<CreateIndexNode::Segment>();
+			segment->name = *$1;
+			$$ = segment;
+		}
+	| symbol_column_name '(' pos_short_integer ')'
+		{
+			auto* segment = newNode<CreateIndexNode::Segment>();
+			segment->name = *$1;
+			segment->length = $3;
+			$$ = segment;
+		}
+	;
+
 
 %type <boolSourceClause> index_condition_opt
 index_condition_opt
@@ -1950,6 +2012,12 @@ index_condition_opt
 			clause->source = makeParseStr(YYPOSNARG(1), YYPOSNARG(2));
 			$$ = clause;
 		}
+	;
+
+%type <boolVal> concurrently_opt
+concurrently_opt
+	: /* nothing */		{ $$ = false; }
+	| CONCURRENTLY		{ $$ = true; }
 	;
 
 // CREATE SHADOW
@@ -2458,14 +2526,18 @@ table_clause
 			{
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1, $2);
 			}
-		'(' table_elements($3) ')' table_attributes($3)
+		'(' table_elements($3) ')' table_attributes_opt($3)
 			{
 				$$ = $3;
 			}
 	| table_as_query_clause
 		{
-			$$ = $1;
+				$<createRelationNode>$ = $1;
 		}
+		table_attributes_opt($2)
+			{
+				$$ = $2;
+			}
 	;
 
 %type <boolVal> with_data_opt
@@ -2475,10 +2547,10 @@ with_data_opt
 	| WITH NO DATA		{ $$ = false; }
 	;
 
-%type table_attributes(<relationNode>)
-table_attributes($relationNode)
+%type table_attributes_opt(<relationNode>)
+table_attributes_opt($relationNode)
 	: /* nothing */
-	| table_attribute($relationNode) table_attributes($relationNode)
+	| table_attribute($relationNode) table_attributes_opt($relationNode)
 	;
 
 %type table_attribute(<relationNode>)
@@ -2487,6 +2559,8 @@ table_attribute($relationNode)
 		{ setClause($relationNode->ssDefiner, "SQL SECURITY", $1); }
 	| publication_state
 		{ setClause($relationNode->replicationState, "PUBLICATION", $1); }
+	| tablespace_name_clause
+		{ setClause($relationNode->tableSpace, "TABLESPACE", *$1); }
 	;
 
 %type <boolVal> sql_security_clause
@@ -2579,34 +2653,34 @@ packaged_table_clause
 				$<createRelationNode>$ = newNode<CreateRelationNode>($1);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) packaged_table_indexes_opt($2)
+		'(' table_elements($2) ')' [YYVALID;] ltt_subclause_opt($2) inline_table_indexes_opt($2)
 			{
 				$$ = $2;
 			}
 	;
 
-%type packaged_table_indexes_opt(<createRelationNode>)
-packaged_table_indexes_opt($createRelationNode)
+%type inline_table_indexes_opt(<createRelationNode>)
+inline_table_indexes_opt($createRelationNode)
 	: /* nothing */
-	| packaged_table_indexes($createRelationNode)
+	| inline_table_indexes($createRelationNode)
 	;
 
-%type packaged_table_indexes(<createRelationNode>)
-packaged_table_indexes($createRelationNode)
-	: packaged_table_index($createRelationNode)
-	| packaged_table_indexes packaged_table_index($createRelationNode)
+%type inline_table_indexes(<createRelationNode>)
+inline_table_indexes($createRelationNode)
+	: inline_table_index($createRelationNode)
+	| inline_table_indexes inline_table_index($createRelationNode)
 	;
 
-%type packaged_table_index(<createRelationNode>)
-packaged_table_index($createRelationNode)
-	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] column_parens
+%type inline_table_index(<createRelationNode>)
+inline_table_index($createRelationNode)
+	: unique_opt order_direction INDEX valid_symbol_name [YYVALID;] segment_parens
 		{
 			const auto node = newNode<CreateIndexNode>(QualifiedName(*$4));
 			node->unique = $1;
 			node->descending = $2;
-			node->columns = $6;
+			node->segments = $6;
 
-			auto clause = newNode<RelationNode::AddPackagedTableIndexClause>(node);
+			auto clause = newNode<RelationNode::AddInlineTableIndexClause>(node);
 			$createRelationNode->clauses.add(clause);
 		}
 	;
@@ -2821,7 +2895,7 @@ column_constraint($addColumnClause)
 			constraint.check = $1;
 		}
 	| REFERENCES symbol_table_name column_parens_opt
-			referential_trigger_action constraint_index_opt
+			referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2840,18 +2914,27 @@ column_constraint($addColumnClause)
 			}
 
 			constraint.index = $5;
+
+			if ($6)
+				constraint.tableSpace = *$6;
 		}
-	| UNIQUE constraint_index_opt
+	| UNIQUE constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
 			constraint.index = $2;
+
+			if ($3)
+				constraint.tableSpace = *$3;
 		}
-	| PRIMARY KEY constraint_index_opt
+	| PRIMARY KEY constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = $addColumnClause->constraints.add();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
 			constraint.index = $3;
+
+			if ($4)
+				constraint.tableSpace = *$4;
 		}
 	;
 
@@ -2876,7 +2959,7 @@ constraint_name_opt
 
 %type <addConstraintClause> table_constraint(<relationNode>)
 table_constraint($relationNode)
-	: UNIQUE column_parens constraint_index_opt
+	: UNIQUE column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_UNIQUE;
@@ -2889,10 +2972,13 @@ table_constraint($relationNode)
 
 			constraint.index = $3;
 
+			if ($4)
+				constraint.tableSpace = *$4;
+
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
 		}
-	| PRIMARY KEY column_parens constraint_index_opt
+	| PRIMARY KEY column_parens constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_PK;
@@ -2905,11 +2991,14 @@ table_constraint($relationNode)
 
 			constraint.index = $4;
 
+			if ($5)
+				constraint.tableSpace = *$5;
+
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
 		}
 	| FOREIGN KEY column_parens REFERENCES symbol_table_name column_parens_opt
-		referential_trigger_action constraint_index_opt
+		referential_trigger_action constraint_index_opt tablespace_name_clause_opt
 		{
 			RelationNode::AddConstraintClause& constraint = *newNode<RelationNode::AddConstraintClause>();
 			constraint.constraintType = RelationNode::AddConstraintClause::CTYPE_FK;
@@ -2933,6 +3022,9 @@ table_constraint($relationNode)
 			}
 
 			constraint.index = $8;
+
+			if ($9)
+				constraint.tableSpace = *$9;
 
 			$relationNode->clauses.add(&constraint);
 			$$ = &constraint;
@@ -3666,7 +3758,7 @@ local_nonforward_declaration
 				$<createRelationNode>$ = newNode<CreateRelationNode>(relationNode);
 				$<createRelationNode>$->tempFlag = REL_temp_ltt;
 			}
-		'(' table_elements($<createRelationNode>6) ')' ';'
+		'(' table_elements($<createRelationNode>6) ')' [YYVALID;] inline_table_indexes_opt($<createRelationNode>6) ';'
 		{
 			DeclareLocalTableNode* node = newNode<DeclareLocalTableNode>();
 			node->dsqlName = *$5;
@@ -4726,6 +4818,9 @@ trigger_ddl_type_items
 	| CREATE MAPPING		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_MAPPING); }
 	| ALTER MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_MAPPING); }
 	| DROP MAPPING			{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_MAPPING); }
+	| CREATE TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_CREATE_TABLESPACE); }
+	| ALTER TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_ALTER_TABLESPACE); }
+	| DROP TABLESPACE		{ $$ = TRIGGER_TYPE_DDL | (1LL << DDL_TRIGGER_DROP_TABLESPACE); }
 	| trigger_ddl_type OR
 		trigger_ddl_type	{ $$ = $1 | $3; }
 	;
@@ -4800,6 +4895,7 @@ alter_clause
 	| GLOBAL MAPPING alter_map_clause(true)	{ $$ = $3; }
 	| EXTERNAL CONNECTIONS POOL alter_eds_conn_pool_clause	{ $$ = $4; }
 	| SCHEMA alter_schema_clause			{ $$ = $2; }
+	| TABLESPACE alter_tablespace_clause	{ $$ = $2; }
 	;
 
 %type <alterDomainNode> alter_domain
@@ -5006,6 +5102,13 @@ alter_op($relationNode)
 				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_ALTER_PUBLICATION);
 			$relationNode->clauses.add(clause);
 		}
+	| SET TABLESPACE to_opt symbol_tablespace_name
+		{
+			setClause($relationNode->tableSpace, "TABLESPACE", *$4);
+			RelationNode::Clause* clause =
+				newNode<RelationNode::Clause>(RelationNode::Clause::TYPE_SET_TABLESPACE);
+			$relationNode->clauses.add(clause);
+		}
 	;
 
 %type <metaNamePtr> alter_column_name
@@ -5184,11 +5287,21 @@ drop_behaviour
 	| CASCADE		{ $$ = true; }
 	;
 
-%type <ddlNode>	alter_index_clause
+%type <alterIndexNode>	alter_index_clause
 alter_index_clause
-	: symbol_index_name index_active
+	: symbol_index_name index_active concurrently_opt
 		{
-			$$ = newNode<AlterIndexNode>(*$1, $2);
+			const auto operation = ($2 == true) ? AlterIndexNode::OP_ACTIVE : AlterIndexNode::OP_INACTIVE;
+			$$ = newNode<AlterIndexNode>(*$1, operation, $3);
+		}
+	| symbol_index_name VALIDATE UNIQUE
+		{
+			$$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_VALIDATE_UNIQUE, false);
+		}
+	| symbol_index_name SET TABLESPACE to_opt symbol_tablespace_name
+		{
+			$$ = newNode<AlterIndexNode>(*$1, AlterIndexNode::OP_SET_TABLESPACE, false);
+			$$->tableSpace = *$5;
 		}
 	;
 
@@ -5536,6 +5649,12 @@ drop_clause
 			node->cascade = $4;
 			$$ = node;
 		}
+	| TABLESPACE if_exists_opt drop_tablespace_clause
+		{
+			const auto node = $3;
+			node->silent = $2;
+			$$ = node;
+		}
 	;
 
 %type <boolVal> if_exists_opt
@@ -5742,7 +5861,7 @@ without_time_zone_opt
 
 %type <legacyField> blob_type
 blob_type
-	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause
+	: BLOB { $$ = newNode<dsql_fld>(); } blob_subtype(NOTRIAL($2)) blob_segsize charset_clause /*tablespace_name_clause_opt*/
 		{
 			$$ = $2;
 			$$->dtype = dtype_blob;
@@ -5753,16 +5872,22 @@ blob_type
 				$$->charSet = *$5;
 				$$->flags |= FLD_has_chset;
 			}
+
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
-	| BLOB '(' unsigned_short_integer ')'
+	| BLOB '(' unsigned_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
 			$$->length = sizeof(ISC_QUAD);
 			$$->segLength = (USHORT) $3;
 			$$->subType = 0;
+
+			//if ($5)
+			//	$$->fld_ts_name = *$5;
 		}
-	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')'
+	| BLOB '(' unsigned_short_integer ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5770,8 +5895,11 @@ blob_type
 			$$->segLength = (USHORT) $3;
 			$$->subType = (USHORT) $5;
 			$$->flags |= FLD_has_sub;
+
+			//if ($7)
+			//	$$->fld_ts_name = *$7;
 		}
-	| BLOB '(' ',' signed_short_integer ')'
+	| BLOB '(' ',' signed_short_integer ')' /*tablespace_name_clause_opt*/
 		{
 			$$ = newNode<dsql_fld>();
 			$$->dtype = dtype_blob;
@@ -5779,6 +5907,9 @@ blob_type
 			$$->segLength = 80;
 			$$->subType = (USHORT) $4;
 			$$->flags |= FLD_has_sub;
+
+			//if ($6)
+			//	$$->fld_ts_name = *$6;
 		}
 	;
 
@@ -6630,6 +6761,7 @@ ddl_type1_schema
 	| CHARACTER SET			{ $$ = obj_charset; }
 	| COLLATION				{ $$ = obj_collation; }
 	| PACKAGE				{ $$ = obj_package_header; }
+	| TABLESPACE			{ $$ = obj_tablespace; }
 	;
 
 %type <intVal> ddl_type1_noschema
@@ -7161,7 +7293,7 @@ table_proc_inputs
 
 %type <relSourceNode> table_name
 table_name
-	: symbol_table_name correlation_name_opt
+	: scoped_qualified_name correlation_name_opt
 		{
 			RelationSourceNode* node = newNode<RelationSourceNode>(*$1);
 			if ($2)
@@ -7385,13 +7517,13 @@ plan_item
 
 %type <qualifiedNameArray> table_or_alias_list
 table_or_alias_list
-	: symbol_table_name
+	: scoped_qualified_name
 		{
 			const auto node = newNode<ObjectsArray<QualifiedName>>();
 			node->add(*$1);
 			$$ = node;
 		}
-	| table_or_alias_list symbol_table_name
+	| table_or_alias_list scoped_qualified_name
 		{
 			const auto node = $1;
 			node->add(*$2);
@@ -7407,7 +7539,7 @@ access_type
 			'(' index_list($2) ')'
 		{ $$ = $2; }
 	| ORDER { $$ = newNode<PlanNode::AccessType>(PlanNode::AccessType::TYPE_NAVIGATIONAL); }
-			symbol_index_name extra_indices_opt($2)
+			scoped_qualified_name extra_indices_opt($2)
 		{
 			$$ = $2;
 			$$->items.insert(0).indexName = *$3;
@@ -7416,12 +7548,12 @@ access_type
 
 %type index_list(<accessType>)
 index_list($accessType)
-	: symbol_index_name
+	: scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$1;
 		}
-	| index_list ',' symbol_index_name
+	| index_list ',' scoped_qualified_name
 		{
 			PlanNode::AccessItem& item = $accessType->items.add();
 			item.indexName = *$3;
@@ -7568,10 +7700,10 @@ insert
 
 %type <storeNode> insert_start
 insert_start
-	: INSERT INTO simple_table_name
+	: INSERT INTO scoped_qualified_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->target = $3;
+			node->target = newNode<RelationSourceNode>(*$3);
 			$$ = node;
 		}
 	;
@@ -7771,10 +7903,10 @@ update_positioned
 
 %type <updInsNode> update_or_insert
 update_or_insert
-	: UPDATE OR INSERT INTO simple_table_name
+	: UPDATE OR INSERT INTO scoped_qualified_name
 			{
 				UpdateOrInsertNode* node = $$ = newNode<UpdateOrInsertNode>();
-				node->relation = $5;
+				node->relation = newNode<RelationSourceNode>(*$5);
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
 				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
@@ -8522,6 +8654,96 @@ map_role
 	| USER		{ $$ = false; }
 	;
 
+// TABLESPACE
+%type <createAlterTablespaceNode> tablespace_clause
+tablespace_clause
+	: symbol_tablespace_name FILE utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->fileName = $3->c_str();
+			//$$->offline = $4;
+			//$$->readonly = $5;
+		}
+	;
+
+to_opt
+	: // nothing
+	| TO
+	;
+
+in_opt
+	: // nothing
+	| IN
+	;
+
+%type <metaNamePtr> symbol_tablespace_name
+symbol_tablespace_name
+	: valid_symbol_name
+	;
+
+//%type <boolVal> tablespace_offline_clause
+//tablespace_offline_clause
+//	: { $$ = false; }
+//	| OFFLINE	{ $$ = true; }
+//	| ONLINE	{ $$ = false; }
+//	;
+
+//%type <boolVal> tablespace_readonly_clause
+//tablespace_readonly_clause
+//	:				{ $$ = false; }
+//	| READ ONLY		{ $$ = true; }
+//	| READ WRITE	{ $$ = false; }
+//	;
+
+%type <createAlterTablespaceNode> alter_tablespace_clause
+alter_tablespace_clause
+	: symbol_tablespace_name SET FILE to_opt utf_string /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->create = false;
+			$$->alter = true;
+			$$->fileName = $5->c_str();
+			//$$->offline = $6;
+			//$$->readonly = $7;
+		}
+	| symbol_tablespace_name /*tablespace_offline_clause tablespace_readonly_clause*/
+		{
+			$$ = newNode<CreateAlterTablespaceNode>(*$1);
+			$$->create = false;
+			$$->alter = true;
+			//$$->offline = $2;
+			//$$->readonly = $3;
+		}
+	;
+
+%type <createAlterTablespaceNode> replace_tablespace_clause
+replace_tablespace_clause
+	: tablespace_clause
+		{
+			$$ = $1;
+			$$->alter = true;
+		}
+	;
+
+%type <metaNamePtr> tablespace_name_clause
+tablespace_name_clause
+	: in_opt TABLESPACE symbol_tablespace_name { $$ = $3; }
+	;
+
+%type <metaNamePtr> tablespace_name_clause_opt
+tablespace_name_clause_opt
+	: /* nothing */ { $$ = NULL; }
+	| tablespace_name_clause { $$ = $1; }
+	;
+
+%type <dropTablespaceNode> drop_tablespace_clause
+drop_tablespace_clause
+	: symbol_tablespace_name
+		{
+			DropTablespaceNode* node = newNode<DropTablespaceNode>(*$1);
+			$$ = node;
+		}
+	;
 
 // value types
 
@@ -10588,9 +10810,13 @@ non_reserved_word
 	| FORMAT
 	| GENERATE_SERIES
 	| OWNER
+	| PRIMARY
+	| TABLESPACE
 	| SEARCH_PATH
 	| SCHEMA
 	| UNLIST
+	| CONCURRENTLY
+	| VALIDATE
 	;
 
 %%

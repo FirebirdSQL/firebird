@@ -977,6 +977,15 @@ void DsqlDdlRequest::execute(thread_db* tdbb, jrd_tra** traHandle,
 			//// Doing it in DFW_perform_work to avoid problems with DDL+DML in the same transaction.
 			/// req_dbb->dbb_attachment->att_dsql_instance->dbb_statement_cache->purgeAllAttachments(tdbb);
 
+			// Check for presence of user savepoints
+			for (Savepoint::Iterator iter(req_transaction->tra_save_point); *iter; ++iter)
+			{
+				Savepoint* const current = *iter;
+
+				if (!current->isSystem())
+					(Arg::Gds(isc_user_savepoint) << current->getName().c_str()).raise();
+			}
+
 			node->executeDdl(tdbb, internalScratch, req_transaction);
 
 			const bool isInternalRequest =

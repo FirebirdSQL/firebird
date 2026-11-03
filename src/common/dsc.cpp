@@ -1713,6 +1713,12 @@ void dsc::getSqlInfo(SLONG* sqlLength, SLONG* sqlSubType, SLONG* sqlScale, SLONG
 			*sqlScale = dsc_scale;
 			break;
 
+		case dtype_cstring:
+			*sqlType = SQL_VARYING;
+			*sqlLength -= 1; // Zero-terminator
+			*sqlSubType = dsc_sub_type;
+			break;
+
 		case dtype_varying:
 			*sqlType = SQL_VARYING;
 			*sqlLength -= sizeof(USHORT);

@@ -150,11 +150,6 @@ USHORT LC_NARROW_key_length(texttype* obj, USHORT inLen)
 
 
 
-#ifdef DEBUG
-#include <stdio.h>
-static ULONG do_debug = 0;
-#endif
-
 /*
  *
  *  Convert a user string to a sequence that will collate bytewise.
@@ -165,20 +160,11 @@ static ULONG do_debug = 0;
 USHORT LC_NARROW_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar, USHORT iOutLen, BYTE *pOutChar,
 							   USHORT key_type)
 {
-	fb_assert(pOutChar != NULL);
-	fb_assert(pInChar != NULL);
+	fb_assert(pOutChar != nullptr);
+	fb_assert(pInChar != nullptr);
 	fb_assert(iOutLen >= LC_NARROW_key_length(obj, iInLen));
 
 	TextTypeImpl* impl = static_cast<TextTypeImpl*>(obj->texttype_impl);
-
-#ifdef DEBUG
-	// Dump out the input string
-	if (do_debug)
-	{
-		printf("string: (%02d) '%*s'\n", iInLen, iInLen, pInChar);
-		fflush(stdout);
-	}
-#endif	// DEBUG
 
 	BYTE* outbuff = pOutChar;
 	USHORT lprimary = 0;
@@ -369,18 +355,6 @@ USHORT LC_NARROW_string_to_key(texttype* obj, USHORT iInLen, const BYTE* pInChar
 		}
 	}
 
-#ifdef DEBUG
-	// Dump out the computed key
-	if (do_debug)
-	{
-		printf("   key: (%02d) ", (outbuff - pOutChar));
-		for (const UCHAR* p = pOutChar; p < outbuff; p++)
-			printf("%2x ", *p);
-		printf("\n");
-		fflush(stdout);
-	}
-#endif
-
 	// return length of key
 	return (outbuff - pOutChar);
 }
@@ -481,7 +455,7 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 		return stat->stat_waiting;
 	}
 
-	stat->stat_waiting = NULL;
+	stat->stat_waiting = nullptr;
 	while (*l)
 	{
 		const SortOrderTblEntry* col =
@@ -553,7 +527,7 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 		++*p;
 		return col;
 	}
-	return NULL;
+	return nullptr;
 }
 
 
@@ -563,10 +537,10 @@ static const SortOrderTblEntry* get_coltab_entry(texttype* obj, const UCHAR** p,
 SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, const BYTE* s2,
 	INTL_BOOL* error_flag)
 {
-	fb_assert(obj != NULL);
-	fb_assert(s1 != NULL);
-	fb_assert(s2 != NULL);
-	fb_assert(error_flag != NULL);
+	fb_assert(obj != nullptr);
+	fb_assert(s1 != nullptr);
+	fb_assert(s2 != nullptr);
+	fb_assert(error_flag != nullptr);
 
 	TextTypeImpl* impl = static_cast<TextTypeImpl*>(obj->texttype_impl);
 
@@ -638,7 +612,7 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 
 	// One of the strings ended
 	fb_assert(l1 == 0 || l2 == 0);
-	fb_assert(col1 == NULL || col2 == NULL);
+	fb_assert(col1 == nullptr || col2 == nullptr);
 
 	if (col1 && !col2)
 		return 500;
@@ -671,80 +645,10 @@ SSHORT LC_NARROW_compare(texttype* obj, ULONG l1, const BYTE* s1, ULONG l2, cons
 
 
 
-#ifdef DEBUG_COMPARE
-
-/*
- * Debugging only
- * Routine used for comparing results from comparison algorithm
- * to results from key creation algorithm
- */
-static SSHORT old_fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,
-	ULONG l2, const BYTE* s2, INTL_BOOL* error_flag)
-{
-	BYTE key1[LANGFAM2_MAX_KEY];
-	BYTE key2[LANGFAM2_MAX_KEY];
-
-	fb_assert(obj != NULL);
-	fb_assert(s1 != NULL);
-	fb_assert(s2 != NULL);
-
-	const ULONG len1 = LC_NARROW_string_to_key(obj, l1, s1, sizeof(key1), key1, INTL_KEY_SORT);
-	const ULONG len2 = LC_NARROW_string_to_key(obj, l2, s2, sizeof(key2), key2, INTL_KEY_SORT);
-	const ULONG len = MIN(len1, len2);
-	for (ULONG i = 0; i < len; i++)
-	{
-		if (key1[i] == key2[i])
-			continue;
-		if (key1[i] < key2[i])
-			return (-1);
-
-		return (1);
-	}
-
-	if (len1 < len2)
-		return (-1);
-	if (len1 > len2)
-		return (1);
-
-	return (0);
-}
-#endif	// DEBUG_COMPARE
-
-
-#ifdef DEBUG_COMPARE
-
-#define	SIGN(x)	(((x) < 0) ? -1 : (((x) == 0) ? 0 : 1))
-
-/*
- * Debugging only
- * Routine used for comparing results from comparison algorithm
- * to results from key creation algorithm
- */
-static SSHORT fam2_compare(texttype* obj, ULONG l1, const BYTE* s1,
-	ULONG l2, const BYTE* s2, INTL_BOOL* error_flag)
-{
-	SSHORT res1 = old_fam2_compare(obj, l1, s1, l2, s2);
-	SSHORT res2 = LC_NARROW_compare(obj, l1, s1, l2, s2);
-
-	if (SIGN(res1) != SIGN(res2))
-	{
-		printf("different compares:\n%d %s\n%d %s\nold = %d new = %d\n",
-				  l1, s1, l2, s2, res1, res2);
-		fflush(stdout);
-		do_debug = 1;
-		res1 = old_fam2_compare(obj, l1, s1, l2, s2);
-		res2 = LC_NARROW_compare(obj, l1, s1, l2, s2);
-		do_debug = 0;
-	}
-	return res2;
-}
-
-#endif	// DEBUG_COMPARE
-
 ULONG LC_NARROW_canonical(texttype* obj, ULONG srcLen, const UCHAR* src, ULONG dstLen, UCHAR* dst)
 {
-	fb_assert(dst != NULL);
-	fb_assert(src != NULL);
+	fb_assert(dst != nullptr);
+	fb_assert(src != nullptr);
 	fb_assert(dstLen >= obj->texttype_canonical_width * srcLen);
 
 	TextTypeImpl* impl = static_cast<TextTypeImpl*>(obj->texttype_impl);
@@ -830,7 +734,7 @@ bool LC_NARROW_family2(
 	impl->texttype_bytes_per_key	= 0;
 
 	IntlUtil::SpecificAttributesMap map;
-	Firebird::CharSet* charSet = NULL;
+	Firebird::CharSet* charSet = nullptr;
 
 	try
 	{
@@ -952,7 +856,7 @@ bool LC_NARROW_family3(
 	bool multiLevel = false;
 
 	IntlUtil::SpecificAttributesMap map;
-	Firebird::CharSet* charSet = NULL;
+	Firebird::CharSet* charSet = nullptr;
 	string newSpecificAttributes;
 
 	try
@@ -1044,8 +948,8 @@ bool LC_NARROW_family3(
  */
 static ULONG fam2_str_to_upper(texttype* obj, ULONG iLen, const BYTE* pStr, ULONG iOutLen, BYTE *pOutStr)
 {
-	fb_assert(pStr != NULL);
-	fb_assert(pOutStr != NULL);
+	fb_assert(pStr != nullptr);
+	fb_assert(pOutStr != nullptr);
 	fb_assert(iOutLen >= iLen);
 	const BYTE* const p = pOutStr;
 	while (iLen && iOutLen)
@@ -1066,8 +970,8 @@ static ULONG fam2_str_to_upper(texttype* obj, ULONG iLen, const BYTE* pStr, ULON
  */
 static ULONG fam2_str_to_lower(texttype* obj, ULONG iLen, const BYTE* pStr, ULONG iOutLen, BYTE *pOutStr)
 {
-	fb_assert(pStr != NULL);
-	fb_assert(pOutStr != NULL);
+	fb_assert(pStr != nullptr);
+	fb_assert(pOutStr != nullptr);
 	fb_assert(iOutLen >= iLen);
 	const BYTE* const p = pOutStr;
 	while (iLen && iOutLen)

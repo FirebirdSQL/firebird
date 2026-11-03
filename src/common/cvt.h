@@ -81,6 +81,15 @@ enum EXPECT_DATETIME
 	expect_sql_time_tz
 };
 
+enum class SpecialDateTime
+{
+	NONE,
+	NOW,
+	TODAY,
+	TOMORROW,
+	YESTERDAY
+};
+
 class Int128;
 
 } // namespace Firebird
@@ -103,6 +112,7 @@ USHORT CVT_get_string_ptr(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird
 USHORT CVT_get_string_ptr_common(const dsc*, TTypeId*, UCHAR**, vary*, USHORT, Firebird::DecimalStatus, Firebird::Callbacks*);
 SINT64 CVT_get_int64(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
 SQUAD CVT_get_quad(const dsc*, SSHORT, Firebird::DecimalStatus, ErrorFunction);
+Firebird::SpecialDateTime CVT_get_special_datetime(const char*, FB_SIZE_T);
 void CVT_string_to_datetime(const dsc*, ISC_TIMESTAMP_TZ*, bool*, const Firebird::EXPECT_DATETIME,
 	bool, Firebird::Callbacks*);
 const UCHAR* CVT_get_bytes(const dsc*, unsigned&);

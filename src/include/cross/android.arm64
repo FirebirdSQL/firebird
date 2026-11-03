@@ -22,6 +22,9 @@
 /* Use binary relocation? */
 #define ENABLE_BINRELOC
 
+/* Use TomCrypt library */
+#define HAVE_TOMCRYPT
+
 /* Alignment of long */
 #define FB_ALIGNMENT 8
 

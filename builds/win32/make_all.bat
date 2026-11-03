@@ -18,10 +18,21 @@ set ERRLEV=0
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log
+	if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log for details
 ) else (
-	call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log DLLs\yvalve DLLs\chacha
+	@if /I "%FB_CLIENT_ONLY%"=="STATIC" (
+		@if exist "%FB_ROOT_PATH%\temp\%FB_STATIC_OBJ_DIR%\yvalve\fbclient_static.lib" del /f /q "%FB_ROOT_PATH%\temp\%FB_STATIC_OBJ_DIR%\yvalve\fbclient_static.lib"
+		call compile_static.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%_static.log DLLs\yvalve
+		if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%_static.log for details
+		if not "%ERRLEV%"=="1" (
+			call "%FB_ROOT_PATH%\builds\win32\fix_fbclient_static.bat" "%FB_ROOT_PATH%\temp\%FB_STATIC_OBJ_DIR%\yvalve\fbclient_static.lib"
+			if errorlevel 1 call :ERROR fix_fbclient_static.bat failed
+		)
+	) else (
+		call compile.bat builds\win32\%VS_VER%\Firebird make_all_%FB_TARGET_PLATFORM%.log DLLs\yvalve DLLs\chacha
+		if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log for details
+	)
 )
-if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log for details
 
 @if "%ERRLEV%"=="1" (
   @goto :EOF
@@ -59,6 +70,10 @@ if errorlevel 1 call :ERROR build failed - see make_all_%FB_TARGET_PLATFORM%.log
 @copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\system32\* %FB_OUTPUT_DIR%\system32 >nul
 @copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\plugins\*.dll %FB_OUTPUT_DIR%\plugins >nul
 @copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\yvalve\fbclient.lib %FB_OUTPUT_DIR%\lib\fbclient_ms.lib >nul
+
+@if /I "%FB_CLIENT_ONLY%"=="STATIC" (
+	@copy %FB_ROOT_PATH%\temp\%FB_STATIC_OBJ_DIR%\yvalve\fbclient_static.lib %FB_OUTPUT_DIR%\lib\fbclient_static_ms.lib >nul
+)
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	copy %FB_ROOT_PATH%\temp\%FB_OBJ_DIR%\firebird\intl\* %FB_OUTPUT_DIR%\intl >nul
@@ -102,6 +117,13 @@ copy %FB_GEN_DIR%\iberror_c.h %FB_OUTPUT_DIR%\include\firebird\impl > nul
 
 :: New API headers
 xcopy /y %FB_ROOT_PATH%\src\include\firebird %FB_OUTPUT_DIR%\include\firebird /e > nul
+
+:: With system boost, do not distribute the embedded copy and make Message.h use <boost/...> and BOOST_PP_
+@findstr /C:"<FbBoostIncludeDir>" "%FB_TEMP_DIR%\FirebirdSystemLibs.props" >nul 2>&1
+@if not errorlevel 1 (
+	rmdir /S /Q %FB_OUTPUT_DIR%\include\firebird\impl\boost 2>nul
+	powershell -NoProfile -Command "(Get-Content '%FB_ROOT_PATH%\src\include\firebird\Message.h') -replace '^#include \x22\./impl/boost/(.+)\x22', '#include <boost/$1>' -replace '\bFB_BOOST_PP_', 'BOOST_PP_' | Set-Content -Encoding ascii '%FB_OUTPUT_DIR%\include\firebird\Message.h'"
+)
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	:: UDR

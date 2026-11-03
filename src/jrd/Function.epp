@@ -418,11 +418,19 @@ ScanResult Function::scan(thread_db* tdbb, ObjectBase::Flag flags)
 			{
 				// If the BLR was marked as invalid but the function was compiled,
 				// mark the BLR as valid.
+				// Record is updated in place by system transaction.
 
-				MODIFY X USING
-					X.RDB$VALID_BLR = TRUE;
-					X.RDB$VALID_BLR.NULL = FALSE;
-				END_MODIFY
+				AutoRequest request;
+
+				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getSysTransaction())
+					FF IN RDB$FUNCTIONS WITH FF.RDB$FUNCTION_ID EQ getId()
+				{
+					MODIFY FF USING
+						FF.RDB$VALID_BLR = TRUE;
+						FF.RDB$VALID_BLR.NULL = FALSE;
+					END_MODIFY
+				}
+				END_FOR
 			}
 		}
 		END_FOR

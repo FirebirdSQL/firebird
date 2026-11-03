@@ -120,6 +120,8 @@ static void shutdown_handler(int);
 static TEXT protocol[128];
 static int INET_SERVER_start = 0;
 
+static void cleanupUnixSocket();
+
 #if defined(HAVE_SETRLIMIT) && defined(HAVE_GETRLIMIT)
 #define FB_RAISE_LIMITS 1
 static void raiseLimit(int resource);
@@ -158,6 +160,81 @@ static int closePort(const int reason, const int, void* arg)
 	return 0;
 }
 
+static void registerAuthPlugins()
+{
+	PluginManagerInterfacePtr pi;
+	Auth::registerSrpServer(pi);
+}
+
+static void terminateProcess(int pid)
+{
+	if (pid <= 0)
+		return;
+
+	kill(pid, SIGTERM);
+
+	int status = 0;
+	bool reaped = false;
+
+	for (unsigned n = 0; n < 10; ++n)
+	{
+		const auto res = waitpid(pid, &status, WNOHANG);
+		if (res == pid)
+		{
+			reaped = true;
+			break;
+		}
+
+		if (res < 0)
+		{
+			if (SYSCALL_INTERRUPTED(errno))
+				continue;
+
+			if (errno == ECHILD)
+				return;
+
+			break;
+		}
+
+		Thread::sleep(100);
+	}
+
+	if (!reaped)
+		kill(pid, SIGKILL);
+
+	while (true)
+	{
+		const auto res = waitpid(pid, &status, 0);
+		if (res == pid || (res < 0 && errno == ECHILD))
+			break;
+
+		if (res < 0 && !SYSCALL_INTERRUPTED(errno))
+			break;
+	}
+}
+
+static void cleanupUnixSocket()
+{
+#ifdef HAVE_SYS_UN_H
+	const char* const socketPath = Config::getDefaultConfig()->getRemoteServiceUnixSocket();
+	if (!socketPath || !socketPath[0])
+		return;
+
+	struct STAT socketStat;
+	if (lstat(socketPath, &socketStat) == 0 && S_ISSOCK(socketStat.st_mode))
+		unlink(socketPath);
+#endif
+}
+
+static void terminateUnixListener(int pid)
+{
+	if (pid <= 0)
+		return;
+
+	terminateProcess(pid);
+	cleanupUnixSocket();
+}
+
 bool check_fd(int fd)
 {
     return fcntl(fd, F_GETFL) != -1 || errno != EBADF;
@@ -180,6 +257,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 	try
 	{
 		RemPortPtr port;
+		const pid_t serverPid = getpid();
 
 		// We should support 3 modes:
 		// 1. Standalone single-process listener (like SS).
@@ -190,6 +268,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		bool super = false;
 
 		int replPid = 0;
+		int unixPid = 0;
 
 		// It's very easy to detect that we are spawned - just check fd 0 to be a socket.
 		const int channel = 0;
@@ -203,6 +282,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 		const TEXT* const* const end = argc + argv;
 		argv++;
 		bool debug = false;
+		bool disableTcp = false;
 		USHORT INET_SERVER_flag = 0;
 		protocol[0] = 0;
 
@@ -243,7 +323,17 @@ int CLIB_ROUTINE main( int argc, char** argv)
 						{
 							if (!classic)
 							{
-								fb_utils::snprintf(protocol, sizeof(protocol), "/%s", *argv++);
+								const TEXT* const port = *argv++;
+								if (strcmp(port, "0") == 0)
+								{
+									disableTcp = true;
+									protocol[0] = 0;
+								}
+								else
+								{
+									disableTcp = false;
+									fb_utils::snprintf(protocol, sizeof(protocol), "/%s", port);
+								}
 							}
 							else
 							{
@@ -260,7 +350,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 					case '?':
 						printf("Firebird TCP/IP server options are:\n");
 						printf("  -d        : debug on\n");
-						printf("  -p <port> : specify port to listen on\n");
+						printf("  -p <port> : specify port to listen on (0 disables TCP)\n");
 						printf("  -z        : print version and exit\n");
 						printf("  -h|?      : print this help\n");
 		                printf("\n");
@@ -468,15 +558,55 @@ int CLIB_ROUTINE main( int argc, char** argv)
 				}
 			}
 
+			if (standaloneClassic && INET_shouldListenUnix(protocol, disableTcp))
+			{
+				unixPid = fork();
+
+				if (unixPid == 0)
+				{
+					try
+					{
+						RemPortPtr unixPort(INET_listenUnix(INET_SERVER_flag));
+
+						if (unixPort)
+						{
+							signal(SIGTERM, SIG_DFL);
+							signal(SIGINT, SIG_DFL);
+							fb_shutdown_callback(nullptr, closePort, fb_shut_exit, unixPort);
+							registerAuthPlugins();
+							SRVR_multi_thread(unixPort, INET_SERVER_flag);
+						}
+					}
+					catch (const Exception& ex)
+					{
+						iscLogException("INET Unix listener startup error", ex);
+						cleanupUnixSocket();
+					}
+
+					fb_shutdown(10000, fb_shutrsn_exit_called);
+					return FINI_OK;
+				}
+				else if (unixPid < 0)
+				{
+					gds__log("Unable to start Unix listener process");
+					unixPid = 0;
+				}
+			}
+
 			// Start the network listener
 
 			try
 			{
-				port = INET_connect(protocol, 0, INET_SERVER_flag, 0, NULL);
+				port = INET_connect(protocol, 0, INET_SERVER_flag, 0, NULL, AF_UNSPEC, disableTcp);
 			}
 			catch (const Exception& ex)
 			{
 				iscLogException("INET server startup error", ex);
+				if (getpid() == serverPid)
+				{
+					terminateUnixListener(unixPid);
+					terminateProcess(replPid);
+				}
 				exit(STARTUP_ERROR);
 			}
 
@@ -485,30 +615,16 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 			if (!port && replPid > 0) // this implies standaloneClassic being true
 			{
-				if (!kill(replPid, SIGTERM))
-				{
-					int status = 0;
+				terminateProcess(replPid);
+				terminateUnixListener(unixPid);
 
-					// Wait up to one second for the replicator process to finish gracefully
-					for (unsigned n = 0; n < 10; n++)
-					{
-						Thread::sleep(100); // milliseconds
+				fb_shutdown(10000, fb_shutrsn_exit_called);
+				return FINI_OK;
+			}
 
-						const auto res = waitpid(replPid, &status, WNOHANG);
-
-						if (res == replPid) // process is terminated
-							break;
-
-						if (res < 0 && !SYSCALL_INTERRUPTED(errno)) // error
-							break;
-
-						// continue waiting otherwise
-					}
-
-					// Force terminating the replicator process if it's still alive
-					if (!WIFEXITED(status))
-						kill(replPid, SIGKILL);
-				}
+			if (!port && unixPid > 0)
+			{
+				terminateUnixListener(unixPid);
 
 				fb_shutdown(10000, fb_shutrsn_exit_called);
 				return FINI_OK;
@@ -533,10 +649,7 @@ int CLIB_ROUTINE main( int argc, char** argv)
 			}
 		}
 
-		{ // scope for interface ptr
-			PluginManagerInterfacePtr pi;
-			Auth::registerSrpServer(pi);
-		}
+		registerAuthPlugins();
 
 		if (super)
 		{
@@ -581,7 +694,13 @@ int CLIB_ROUTINE main( int argc, char** argv)
 
 		SRVR_multi_thread(port, INET_SERVER_flag);
 
-		// perform atexit shutdown here when all globals in embedded library are active
+		if (getpid() == serverPid)
+		{
+			terminateUnixListener(unixPid);
+			terminateProcess(replPid);
+		}
+
+		// perform shutdown here when all globals in embedded library are active
 		// also sync with possibly already running shutdown in dedicated thread
 		fb_shutdown(10000, fb_shutrsn_exit_called);
 

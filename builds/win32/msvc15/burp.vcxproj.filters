@@ -24,6 +24,9 @@
     <ClCompile Include="..\..\..\src\burp\canonical.cpp">
       <Filter>BURP files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\burp\RestoreMessageLayout.cpp">
+      <Filter>BURP files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\burp\misc.cpp">
       <Filter>BURP files</Filter>
     </ClCompile>
@@ -70,6 +73,15 @@
     <ClInclude Include="..\..\..\src\burp\canon_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\burp\FastPathBurpProvider.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\burp\FastPathRecordReader.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\burp\FastPathRecordWriter.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\burp\misc_proto.h">
       <Filter>Header files</Filter>
     </ClInclude>
@@ -80,6 +92,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\burp\resto_proto.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\burp\RestoreMessageLayout.h">
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\src\burp\BurpTasks.h">

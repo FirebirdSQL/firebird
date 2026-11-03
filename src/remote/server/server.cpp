@@ -40,6 +40,7 @@
 #include "../common/file_params.h"
 #include "../common/ThreadStart.h"
 #include "../common/classes/timestamp.h"
+#include "../remote/inet_proto.h"
 #include "../remote/merge_proto.h"
 #include "../remote/parse_proto.h"
 #include "../remote/remot_proto.h"
@@ -163,8 +164,12 @@ public:
 		p.p_cc.p_cc_reply = bufferLength;
 		port->send(&p);
 
+#ifdef DEV_BUILD
+		sem.enter();
+#else
 		if (!sem.tryEnter(60))
 			return 0;
+#endif
 
 		return replyLength;
 	}
@@ -1700,6 +1705,8 @@ void SRVR_multi_thread( rem_port* main_port, USHORT flags)
 	try
 	{
 		set_server(main_port, flags);
+		if (flags & SRVR_multi_client)
+			INET_addUnixListener(main_port, flags);
 
 		constexpr size_t MAX_PACKET_SIZE = MAX_SSHORT;
 		const SSHORT bufSize = MIN(main_port->port_buff_size, MAX_PACKET_SIZE);
@@ -2615,6 +2622,12 @@ void DatabaseAuth::accept(PACKET* send, Auth::WriterImplementation* authBlock)
 
 			authPort->port_server_crypt_callback->stop();
 		}
+	}
+
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	{
+		delete authPort->port_server_crypt_callback;
+		authPort->port_server_crypt_callback = nullptr;
 	}
 
 	CSTRING* const s = &send->p_resp.p_resp_data;
@@ -6512,6 +6525,12 @@ ISC_STATUS rem_port::service_attach(const char* service_name,
 			port_server_crypt_callback->stop();
 		}
 	}
+
+	if (status_vector.getState() & IStatus::STATE_ERRORS)
+	{
+		delete port_server_crypt_callback;
+		port_server_crypt_callback = nullptr;
+ 	}
 
 	return this->send_response(sendL, 0, sendL->p_resp.p_resp_data.cstr_length, &status_vector,
 		false);

@@ -427,6 +427,7 @@ constexpr SvcSwitches backupOptions[] =
 	{"bkp_zip", putOption, 0, isc_spb_bkp_zip, 0 },
 	{"bkp_parallel_workers", putIntArgument, 0, isc_spb_bkp_parallel_workers, 0},
 	{"bkp_direct_io", putOption, 0, isc_spb_bkp_direct_io, 0},
+	{"bkp_fast_path", putOption, 0, isc_spb_bkp_fast_path, 0},
 	{0, 0, 0, 0, 0}
 };
 
@@ -460,6 +461,7 @@ constexpr SvcSwitches restoreOptions[] =
 	{"res_crypt", putStringArgument, 0, isc_spb_res_crypt, 0 },
 	{"res_replica_mode", putReplicaMode, 0, isc_spb_res_replica_mode, 0},
 	{"res_parallel_workers", putIntArgument, 0, isc_spb_res_parallel_workers, 0},
+	{"res_fast_path", putOption, 0, isc_spb_res_fast_path, 0},
 	{"res_direct_io", putOption, 0, isc_spb_res_direct_io, 0},
 	{0, 0, 0, 0, 0}
 };

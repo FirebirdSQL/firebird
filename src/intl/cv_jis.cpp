@@ -37,22 +37,22 @@ ULONG CVJIS_eucj_to_unicode(csconvert* obj,
 							USHORT* err_code,
 							ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(src_ptr != NULL || p_dest_ptr == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(src_ptr != nullptr || p_dest_ptr == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVJIS_eucj_to_unicode);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = src_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (p_dest_ptr == NULL)
+	if (p_dest_ptr == nullptr)
 		return sizeof(USHORT) * src_len;
 
 	Firebird::OutAligner<USHORT> d(p_dest_ptr, dest_len);
@@ -143,22 +143,22 @@ ULONG CVJIS_sjis_to_unicode(csconvert* obj,
 							USHORT* err_code,
 							ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(sjis_str != NULL || p_dest_ptr == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(sjis_str != nullptr || p_dest_ptr == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVJIS_sjis_to_unicode);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = sjis_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (p_dest_ptr == NULL)
+	if (p_dest_ptr == nullptr)
 		return sjis_len * 2;	// worst case - all ascii input
 
 	Firebird::OutAligner<USHORT> d(p_dest_ptr, dest_len);
@@ -422,22 +422,22 @@ ULONG CVJIS_unicode_to_sjis(csconvert* obj,
 							USHORT* err_code,
 							ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(p_unicode_str != NULL || sjis_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(p_unicode_str != nullptr || sjis_str == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVJIS_unicode_to_sjis);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = unicode_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (sjis_str == NULL)
+	if (sjis_str == nullptr)
 		return unicode_len;	// worst case - all han character input
 
 	Firebird::Aligner<USHORT> s(p_unicode_str, unicode_len);
@@ -511,22 +511,22 @@ ULONG CVJIS_unicode_to_eucj(csconvert* obj, ULONG unicode_len, const UCHAR* p_un
 							ULONG eucj_len, UCHAR* eucj_str,
 							USHORT* err_code, ULONG* err_position)
 {
-	fb_assert(obj != NULL);
+	fb_assert(obj != nullptr);
 
 	CsConvertImpl* impl = obj->csconvert_impl;
 
-	fb_assert(p_unicode_str != NULL || eucj_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
+	fb_assert(p_unicode_str != nullptr || eucj_str == nullptr);
+	fb_assert(err_code != nullptr);
+	fb_assert(err_position != nullptr);
 	fb_assert(obj->csconvert_fn_convert == CVJIS_unicode_to_eucj);
-	fb_assert(impl->csconvert_datatable != NULL);
-	fb_assert(impl->csconvert_misc != NULL);
+	fb_assert(impl->csconvert_datatable != nullptr);
+	fb_assert(impl->csconvert_misc != nullptr);
 
 	const ULONG src_start = unicode_len;
 	*err_code = 0;
 
 	// See if we're only after a length estimate
-	if (eucj_str == NULL)
+	if (eucj_str == nullptr)
 		return (unicode_len);	// worst case - all han character input
 
 	Firebird::Aligner<USHORT> s(p_unicode_str, unicode_len);
@@ -667,209 +667,3 @@ INTL_BOOL CVJIS_check_sjis(charset* /*cs*/, ULONG sjis_len, const UCHAR* sjis_st
 	return true;
 }
 
-
-#ifdef NOT_USED_OR_REPLACED
-static USHORT CVJIS_euc2sjis(csconvert* obj, UCHAR *sjis_str, USHORT sjis_len,
-							const UCHAR* euc_str,
-							 USHORT euc_len, SSHORT *err_code, USHORT *err_position)
-{
-/**************************************
- *
- *      K A N J I _ e u c 2 s j i s
- *
- **************************************
- *
- * Functional description
- *      Convert euc_len number of bytes in euc_str to sjis_str .
- *	sjis_len is the maximum size of the sjis buffer.
- *
- **************************************/
-	fb_assert(euc_str != NULL || sjis_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
-	fb_assert(obj != NULL);
-
-	const USHORT src_start = euc_len;
-	*err_code = 0;
-
-	// Length estimate needed?
-	if (sjis_str == NULL)
-		return euc_len;		// worst case
-
-	const UCHAR* const sjis_start = sjis_str;
-	while (euc_len && sjis_len)
-	{
-		if (*euc_str & 0x80)
-		{
-			// Non-Ascii - High bit set
-
-			UCHAR c1 = *euc_str++;
-
-			if (EUC1(c1))
-			{
-				// It is a EUC
-				if (euc_len == 1) {
-					*err_code = CS_BAD_INPUT;	// truncated EUC
-					break;
-				}
-				UCHAR c2 = *euc_str++;
-				if (!(EUC2(c2))) {
-					*err_code = CS_BAD_INPUT;	// Bad EUC
-					break;
-				}
-				if (c1 == 0x8e)
-				{
-					// Kana
-					sjis_len--;
-					*sjis_str++ = c2;
-					euc_len -= 2;
-				}
-				else
-				{
-					// Kanji
-
-					if (sjis_len < 2) {
-						// buffer full
-						*err_code = CS_TRUNCATION_ERROR;
-						break;
-					}
-					sjis_len -= 2;
-					euc_len -= 2;
-					c1 ^= 0x80;
-					c2 ^= 0x80;
-					*sjis_str++ = (USHORT) (c1 - 0x21) / 2 + ((c1 <= 0x5e) ? 0x81 : 0xc1);
-					if (c1 & 1)	// odd
-						*sjis_str++ = c2 + ((c2 <= 0x5f) ? 0x1f : 0x20);
-					else
-						*sjis_str++ = c2 + 0x7e;
-				}
-			}
-			else
-			{
-				// It is some bad character
-
-				*err_code = CS_BAD_INPUT;
-				break;
-			}
-		}
-		else
-		{
-			// ASCII
-			euc_len--;
-			sjis_len--;
-			*sjis_str++ = *euc_str++;
-		}
-	}
-	if (euc_len && !*err_code)
-		*err_code = CS_TRUNCATION_ERROR;
-	*err_position = src_start - euc_len;
-	return (sjis_str - sjis_start);
-}
-
-
-static USHORT CVJIS_sjis2euc(csconvert* obj, UCHAR *euc_str, USHORT euc_len,
-							const UCHAR* sjis_str,
-							 USHORT sjis_len, SSHORT *err_code, USHORT *err_position)
-{
-/**************************************
- *
- *      K A N J I _ s j i s 2 e u c
- *
- **************************************
- *
- * Functional description
- *      Convert sjis_len number of bytes in sjis_str to euc_str .
- *
- **************************************/
-	fb_assert(sjis_str != NULL || euc_str == NULL);
-	fb_assert(err_code != NULL);
-	fb_assert(err_position != NULL);
-	fb_assert(obj != NULL);
-
-	const USHORT src_start = sjis_len;
-	*err_code = 0;
-	if (euc_str == NULL)
-		return 2 * sjis_len;	// worst case
-
-	const UCHAR* const euc_start = euc_str;
-	while (sjis_len && euc_len)
-	{
-
-		if (*sjis_str & 0x80)
-		{
-			// Non-Ascii - High bit set
-			const UCHAR c1 = *sjis_str++;
-			if (SJIS1(c1))
-			{
-				// First byte is a KANJI
-				if (sjis_len == 1) {
-					// truncated KANJI
-					*err_code = CS_BAD_INPUT;
-					break;
-				}
-				const UCHAR c2 = *sjis_str++;
-				if (!(SJIS2(c2))) {
-					// Bad second byte
-					*err_code = CS_BAD_INPUT;
-					break;
-				}
-				if (euc_len < 2) {
-					// buffer full
-					*err_code = CS_TRUNCATION_ERROR;
-					break;
-				}
-				S2E(c1, c2, *euc_str, *(euc_str + 1));
-				euc_str += 2;
-				euc_len -= 2;
-				sjis_len -= 2;
-			}
-			else if (SJIS_SINGLE(c1))
-			{
-				if (euc_len < 2) {
-					// buffer full
-					*err_code = CS_TRUNCATION_ERROR;
-					break;
-				}
-				euc_len -= 2;	// Kana
-				sjis_len--;
-				*euc_str++ = 0x8e;
-				*euc_str++ = c1;
-			}
-			else
-			{
-				// It is some bad character
-				*err_code = CS_BAD_INPUT;
-				break;
-			}
-		}
-		else
-		{
-			// it is a ASCII
-			euc_len--;
-			sjis_len--;
-			*euc_str++ = *sjis_str++;
-		}
-	}
-	if (sjis_len && !*err_code)
-		*err_code = CS_TRUNCATION_ERROR;
-	*err_position = src_start - sjis_len;
-	return (euc_str - euc_start);
-}
-#endif
-
-
-#ifdef NOT_USED_OR_REPLACED
-CONVERT_ENTRY(CS_SJIS, CS_EUCJ, CVJIS_sjis_x_eucj)
-{
-	if (dest_cs == CS_EUCJ)
-		CV_convert_init(csptr, dest_cs, source_cs,
-						CVJIS_sjis2euc,
-						NULL, NULL);
-	else
-		CV_convert_init(csptr, dest_cs, source_cs,
-						CVJIS_euc2sjis,
-						NULL, NULL);
-
-	CONVERT_RETURN;
-}
-#endif

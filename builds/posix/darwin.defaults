@@ -20,7 +20,7 @@
 # Options
 #FirebirdInstallPrefix=
 LIB_BUNDLE_OPTIONS=$(LD_FLAGS) -bundle
-LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib
+LIB_LINK_OPTIONS=$(LD_FLAGS) -dynamiclib $(call LINK_DARWIN_RPATH,..)
 LIB_LINK_SONAME:=-current_version @FIREBIRD_VERSION@ -compatibility_version @FIREBIRD_VERSION@
 LIB_LINK_MAPFILE=-Wl,-exported_symbols_list,$(1)
 
@@ -35,3 +35,8 @@ PLATFORM_FALLBACK=os/posix
 STATIC_CXX_SUPPORT = -lsupc++ $(GCCS) -lgcc_eh -lSystem
 
 INLINE_EDIT_SED:= -i ""
+
+# Mach-O static-client processing uses native ld64. The exported symbols list
+# both retains the public API and localizes all other definitions, so no
+# external objcopy-compatible tool is needed.
+STATIC_CLIENT_SLIM_MODE = darwin

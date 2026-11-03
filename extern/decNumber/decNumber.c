@@ -595,7 +595,7 @@ decNumber * decNumberFromString(decNumber *dn, const char chars[],
       firstexp=c;                            // save exponent digit place
       for (; ;c++) {
         if (*c<'0' || *c>'9') break;         // not a digit
-        exponent=X10(exponent)+(Int)*c-(Int)'0';
+        exponent=(Int)(X10((uInt)exponent)+(uInt)((Int)*c-(Int)'0'));  // unsigned to avoid signed overflow (clipped below)
         } // c
       // if not now on a '\0', *c must not be a digit
       if (*c!='\0') break;
@@ -2199,7 +2199,7 @@ decNumber * decNumberPower(decNumber *res, const decNumber *lhs,
           }
         // [the following two lines revealed an optimizer bug in a C++
         // compiler, with symptom: 5**3 -> 25, when n=n+n was used]
-        n=n<<1;                    // move next bit to testable position
+        n=(Int)((uInt)n<<1);       // move next bit to testable position
         if (n<0) {                 // top bit is set
           seenbit=1;               // OK, significant bit seen
           decMultiplyOp(dac, dac, lhs, &aset, &status); // dac=dac*x
@@ -5466,7 +5466,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
         // abandon if have had overflow or terminal underflow
         if (*status & (DEC_Overflow|DEC_Underflow)) { // interesting?
           if (*status&DEC_Overflow || ISZERO(t)) break;}
-        n=n<<1;                    // move next bit to testable position
+        n=(Int)((uInt)n<<1);       // move next bit to testable position
         if (n<0) {                 // top bit is set
           seenbit=1;               // OK, have a significant bit
           decMultiplyOp(t, t, a, &aset, status); // acc=acc*x

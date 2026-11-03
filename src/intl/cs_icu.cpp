@@ -58,7 +58,7 @@ bool CSICU_charset_init(charset* cs,
 		cs->charset_min_bytes_per_char = cIcu.ucnv_getMinCharSize(conv);
 		cs->charset_max_bytes_per_char = cIcu.ucnv_getMaxCharSize(conv);
 		cs->charset_fn_destroy = charset_destroy;
-		cs->charset_fn_well_formed = NULL;
+		cs->charset_fn_well_formed = nullptr;
 
 		const UChar unicodeSpace = 32;
 

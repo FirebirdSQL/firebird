@@ -229,6 +229,125 @@ namespace Jrd
 
 	// Primary (table scan) access methods
 
+	class LocalTableContext final
+	{
+	public:
+		LocalTableContext(thread_db* tdbb, Request* request,
+			const DeclareLocalTableNode* table, bool outerDecl);
+		~LocalTableContext();
+
+		LocalTableContext(const LocalTableContext&) = delete;
+		LocalTableContext& operator= (const LocalTableContext&) = delete;
+
+	public:
+		jrd_tra* getTransaction() const noexcept
+		{
+			return m_transaction;
+		}
+
+		Request* getLocalTableRequest() const noexcept
+		{
+			return m_localTableRequest;
+		}
+
+		Request* getRequest() const noexcept
+		{
+			return m_request;
+		}
+
+		FB_UINT64 getFrameId() const noexcept
+		{
+			return m_frameId;
+		}
+
+	private:
+		thread_db* m_tdbb;
+		Request* m_request;
+		Request* m_localTableRequest;
+		jrd_tra* m_oldTransaction;
+		jrd_tra* m_transaction;
+		FB_UINT64 m_oldFrameId;
+		FB_UINT64 m_frameId;
+		Request::SnapshotData m_oldSnapshot;
+		bool m_restoreSnapshot = false;
+		bool m_switched = false;
+	};
+
+	class LocalTableScan : public RecordStream
+	{
+	protected:
+		struct LocalImpure : public RecordSource::Impure
+		{
+			Request* localTableRequest = nullptr;
+			jrd_tra* cursorTransaction = nullptr;
+			SavNumber cursorSavepoint;
+		};
+
+	protected:
+		LocalTableScan(CompilerScratch* csb, StreamType stream,
+			const DeclareLocalTableNode* table = nullptr, bool outerDecl = false,
+			const Format* format = nullptr);
+
+	protected:
+		void setupLocalTable(thread_db* tdbb, const LocalTableContext& context) const;
+		void initializeLocalTable(const LocalTableContext& context) const;
+		void closeLocalTable(thread_db* tdbb) const;
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+		void nullRecords(thread_db* tdbb) const override;
+
+	protected:
+		const DeclareLocalTableNode* m_localTable;
+		const bool m_outerDecl;
+		const ULONG m_localImpure;
+	};
+
+	class LocalTableRecordSource final : public RecordSource
+	{
+		struct Impure : public RecordSource::Impure
+		{
+			Request* localTableRequest = nullptr;
+			jrd_tra* cursorTransaction = nullptr;
+			SavNumber cursorSavepoint;
+		};
+
+	public:
+		LocalTableRecordSource(CompilerScratch* csb, StreamType stream, RecordSource* next,
+			const DeclareLocalTableNode* table, bool outerDecl);
+
+	public:
+		void close(thread_db* tdbb) const override;
+
+		bool refetchRecord(thread_db* tdbb) const override;
+		WriteLockResult lockRecord(thread_db* tdbb) const override;
+
+		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+		void markRecursive() override;
+		void invalidateRecords(Request* request) const override;
+
+		void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
+		bool isDependent(const StreamList& streams) const override;
+		void nullRecords(thread_db* tdbb) const override;
+
+		void setAnyBoolean(BoolExprNode* anyBoolean, bool ansiAny, bool ansiNot) override
+		{
+			m_next->setAnyBoolean(anyBoolean, ansiAny, ansiNot);
+		}
+
+	protected:
+		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
+		void internalOpen(thread_db* tdbb) const override;
+		bool internalGetRecord(thread_db* tdbb) const override;
+
+	private:
+		const StreamType m_stream;
+		NestConst<RecordSource> m_next;
+		const DeclareLocalTableNode* m_localTable;
+		const bool m_outerDecl;
+	};
+
 	class FullTableScan final : public RecordStream
 	{
 		struct Impure : public RecordSource::Impure
@@ -971,6 +1090,12 @@ namespace Jrd
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
+
+	public:
+		// Called by evaluateGroup for each record that belongs to the group being evaluated.
+		void groupRecord(thread_db* /*tdbb*/, Request* /*request*/, bool /*first*/) const
+		{
+		}
 	};
 
 	class WindowedStream : public RecordSource
@@ -1024,6 +1149,14 @@ namespace Jrd
 				SINT64 partitionPending, rangePending;
 				Block partitionBlock, windowBlock;
 				impure_value_ex startOffset, endOffset;
+
+				// Last positions of the peer groups of the partition, found when it is evaluated.
+				// Bit n is set when the record at position peerBase + n ends its peer group.
+				FB_UINT64* peerBits;
+				ULONG peerCapacity;		// allocated words
+				ULONG peerUsed;			// words that may have bits set
+				SINT64 peerBase;
+				bool peerOverflow;		// the partition is too big for the bitmap
 			};
 
 		public:
@@ -1041,6 +1174,8 @@ namespace Jrd
 			void findUsedStreams(StreamList& streams, bool expandAll = false) const override;
 			bool isDependent(const StreamList& streams) const override;
 			void nullRecords(thread_db* tdbb) const override;
+
+			void groupRecord(thread_db* tdbb, Request* request, bool first) const;
 
 		protected:
 			void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -1067,6 +1202,8 @@ namespace Jrd
 			SINT64 locateFrameGroups(thread_db* tdbb, Request* request, Impure* impure,
 				const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
 				bool startFrame) const;
+			SINT64 locatePeerGroupEnd(thread_db* tdbb, Request* request, Impure* impure,
+				SINT64 position) const;
 
 		private:
 			NestConst<SortNode> m_order;
@@ -1077,6 +1214,8 @@ namespace Jrd
 			NestValueArray m_winPassSources, m_winPassTargets;
 			Exclusion m_exclusion;
 			UCHAR m_invariantOffsets;	// 0x1 | 0x2 bitmask
+			bool m_needsFrame = false;	// some function depends on the frame
+			bool m_usesPeerGroupEnd = false;	// peer group ends are found when evaluating the partition
 		};
 
 	public:
@@ -1449,7 +1588,7 @@ namespace Jrd
 		Firebird::Array<const NestValueArray*> m_keys;
 	};
 
-	class LocalTableStream final : public RecordStream
+	class LocalTableStream final : public LocalTableScan
 	{
 	public:
 		LocalTableStream(CompilerScratch* csb, StreamType stream, const DeclareLocalTableNode* table,
@@ -1463,19 +1602,11 @@ namespace Jrd
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
 	protected:
+		using Impure = LocalTableScan::LocalImpure;
+
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		void internalOpen(thread_db* tdbb) const override;
 		bool internalGetRecord(thread_db* tdbb) const override;
-
-		struct Impure : public RecordSource::Impure
-		{
-			Request* localTableRequest;
-			SavNumber cursorSavepoint;
-		};
-
-	private:
-		const DeclareLocalTableNode* m_table;
-		bool m_outerDecl = false;
 	};
 
 	class Union final : public RecordStream

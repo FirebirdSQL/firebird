@@ -121,8 +121,7 @@ jobs:
           uploadFiles: gen/Firebird-*-source.tar.xz
 
   build-alpine-x64:
-    # Disabled
-    if: ${{ false && github.ref_type != 'tag' }}
+    if: ${{ github.ref_type != 'tag' }}
     runs-on: ubuntu-24.04
     container: alpine:3.22.1
 
@@ -133,7 +132,7 @@ jobs:
           fetch-depth: 10
 
       - name: Prepare
-        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev ncurses-dev libedit-dev linux-headers tar sed
+        run: apk update && apk --no-cache --update add build-base libtool git autoconf automake cmake zlib-dev icu-dev icu-data-full ncurses-dev libedit-dev linux-headers tar sed
 
       - name: Adjust snapshot build number
         uses: ./.github/actions/adjust-snapshot-buildno
@@ -215,7 +214,8 @@ jobs:
     #if: github.ref_type != 'tag'
     runs-on: windows-11-arm
     env:
-      VS_VERSION: 2022
+      VS_VERSION: 2026
+      VS_VERSION_NUMBER: 18
 
     steps:
       - name: Checkout
@@ -235,7 +235,7 @@ jobs:
       - name: Build
         shell: cmd
         env:
-          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION%\Enterprise\Common7\Tools\VsDevCmd.bat
+          VS_SCRIPT: C:\Program Files\Microsoft Visual Studio\%VS_VERSION_NUMBER%\Enterprise\Common7\Tools\VsDevCmd.bat
         run: |
           set SEVENZIP=C:\Program Files\7-Zip
           set INNO6_SETUP_PATH=C:\Program Files (x86)\Inno Setup 6
@@ -306,6 +306,22 @@ jobs:
 
       - name: Get Release Notes
         uses: ./.github/actions/get-release-notes
+
+      - name: Start Docker
+        shell: powershell
+        run: |
+          Start-Service docker
+
+          for ($i = 0; $i -lt 30; $i++) {
+            docker info 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            Start-Sleep -Seconds 2
+          }
+
+          throw "Docker failed to start"
 
       # firebirdsql/firebird-builder-windows image is private
       - name: Login to Docker Hub

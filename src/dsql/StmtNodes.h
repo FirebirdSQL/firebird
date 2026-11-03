@@ -44,6 +44,7 @@ class RecordBuffer;
 class RelationSourceNode;
 class SelectNode;
 class GeneratorItem;
+struct index_desc;
 
 
 class ExceptionItem final : public Firebird::PermanentStorage, public Printable
@@ -232,9 +233,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -373,6 +374,34 @@ public:
 class DeclareLocalTableNode final : public TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>
 {
 public:
+	struct Segment
+	{
+		USHORT fieldId;
+		SSHORT length;
+	};
+
+	struct Index
+	{
+		explicit Index(MemoryPool& pool)
+			: name(pool),
+			  segments(pool)
+		{
+		}
+
+		Index(MemoryPool& pool, const Index& other)
+			: name(pool, other.name),
+			  segments(pool, other.segments),
+			  unique(other.unique),
+			  descending(other.descending)
+		{
+		}
+
+		MetaName name;
+		Firebird::Array<Segment> segments;
+		bool unique = false;
+		bool descending = false;
+	};
+
 	struct Impure
 	{
 		RecordBuffer* recordBuffer;
@@ -383,7 +412,8 @@ public:
 		: TypedNode<StmtNode, StmtNode::TYPE_DECLARE_LOCAL_TABLE>(pool),
 		  dsqlName(pool),
 		  notNullFields(pool),
-		  fieldNames(pool)
+		  fieldNames(pool),
+		  indexes(pool)
 	{
 	}
 
@@ -408,6 +438,9 @@ public:
 
 	Impure* getImpure(thread_db* tdbb, Request* request, bool createWhenDead = true) const;
 	jrd_rel* getRelation(thread_db* tdbb, Request* request) const;
+	void getIndexDescription(thread_db* tdbb, FB_SIZE_T indexId, index_desc* idx) const;
+	void createFrameIndexes(thread_db* tdbb, Request* request) const;
+	void createFrameIndex(thread_db* tdbb, FB_SIZE_T indexId, jrd_tra* transaction) const;
 	void reset(thread_db* tdbb, Request* request) const;
 	void destroyRelation(thread_db* tdbb) const;
 
@@ -418,6 +451,7 @@ public:
 	NestConst<Format> format;
 	Firebird::Array<UCHAR> notNullFields;
 	Firebird::Array<MetaName> fieldNames;
+	Firebird::ObjectsArray<Index> indexes;
 	mutable jrd_rel* relation = nullptr;
 	USHORT tableNumber = 0;
 	bool useLtt = false;
@@ -437,9 +471,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -500,9 +534,9 @@ public:
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
-	bool isProfileAware() const override
+	ProfileMode getProfileMode() const override
 	{
-		return false;
+		return ProfileMode::NONE;
 	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
@@ -719,6 +753,12 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	ExecStatementNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	ExecStatementNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	ProfileMode getProfileMode() const override
+	{
+		return ProfileMode::EVALUATE_RETURN;
+	}
+
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 private:
@@ -940,6 +980,12 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	StmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	StmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
+
+	ProfileMode getProfileMode() const override
+	{
+		return ProfileMode::EVALUATE_RETURN;
+	}
+
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
 	bool isWriteLockMode(Request* request) const;

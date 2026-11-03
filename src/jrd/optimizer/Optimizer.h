@@ -79,6 +79,7 @@ inline constexpr double DEFAULT_INDEX_COST = 3.0;
 struct index_desc;
 class jrd_rel;
 class IndexTableScan;
+class DeclareLocalTableNode;
 class ComparativeBoolNode;
 class InversionNode;
 class PlanNode;
@@ -510,7 +511,10 @@ public:
 	RecordSource* compile(RseNode* subRse, BoolExprNodeStack* parentStack);
 	void compileLocalTable(StreamType stream);
 	void compileRelation(StreamType stream);
-	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack);
+	unsigned decomposeBoolean(BoolExprNode* boolNode, BoolExprNodeStack& stack, bool transformed = false);
+
+	static BoolExprNode* transformBoolean(thread_db* tdbb, CompilerScratch* csb);
+
 	void generateAggregateDistincts(MapNode* map);
 	void generateAggregateSort(AggNode* aggNode);
 	RecordSource* generateRetrieval(StreamType stream,
@@ -809,6 +813,7 @@ private:
 	const bool outerFlag;
 	SortNode* const sort;
 	Rsc::Rel relation;
+	const DeclareLocalTableNode* localTable = nullptr;
 	const bool createIndexScanNodes;
 	const bool setConjunctionsMatched;
 	Firebird::string alias;
