@@ -426,8 +426,8 @@ void HashJoin::HashTable::Stream::build()
 
 void HashJoin::HashTable::build()
 {
-    for (auto* s : m_streams)
-        s->build();
+	for (auto* s : m_streams)
+		s->build();
 }
 
 bool HashJoin::HashTable::setup(ULONG hash)
