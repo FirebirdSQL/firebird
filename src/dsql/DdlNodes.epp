@@ -50,6 +50,7 @@
 #include "../jrd/dpm_proto.h"
 #include "../jrd/dyn_ut_proto.h"
 #include "../jrd/exe_proto.h"
+#include "../jrd/ext_proto.h"
 #include "../jrd/idx_proto.h"
 #include "../jrd/intl_proto.h"
 #include "../common/isc_f_proto.h"
@@ -9799,6 +9800,8 @@ void CreateRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 
 				if (ISC_check_if_remote(externalFile->c_str(), false))
 					status_exception::raise(Arg::PrivateDyn(163));
+
+				ExternalFile::checkAccess(dbb, externalFile->c_str());
 
 				REL.RDB$EXTERNAL_FILE.NULL = FALSE;
 				strcpy(REL.RDB$EXTERNAL_FILE, externalFile->c_str());
