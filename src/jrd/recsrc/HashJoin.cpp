@@ -84,9 +84,10 @@ namespace
 
 unsigned HashJoin::maxCapacity() noexcept
 {
-	// Upper bound on the number of records the optimizer may reasonably
-	// feed into a single hash join. Above this the bucket scan starts
-	// to dominate and the optimizer should pick a different join method.
+	// Upper bound on the number of records per stream that the hash table
+	// can reasonably hold in memory. Above this the bucket scan starts to
+	// dominate and the optimizer should pick a different join method for
+	// that stream.
 	return MAX_HASH_SIZE * HASH_LOAD_FACTOR;
 }
 
@@ -111,12 +112,14 @@ class HashJoin::HashTable final : public PermanentStorage
 		Array<Entry> entries;        // all records, grouped by bucket after build()
 		Array<ULONG> bucketOffsets;  // size = tableSize + 1; see build() for layout
 		ULONG iterator;              // current cursor for iterate()
+		ULONG tableSize;             // table size for THIS stream
 
 		explicit Stream(MemoryPool& pool)
 			: PermanentStorage(pool)
 			, entries(pool)
 			, bucketOffsets(pool)
 			, iterator(0)
+			, tableSize(0)
 		{}
 
 		// Collect one raw entry. No bucket logic here, so this can be
@@ -128,27 +131,30 @@ class HashJoin::HashTable final : public PermanentStorage
 
 		// Group entries by bucket and sort each bucket by hash.
 		//
-		// The table size is chosen by HashTable::build() from the total
-		// number of entries across all streams, not from any cardinality
-		// estimate, so this runs exactly once and never re-runs.
+		// The table size for this stream is chosen from its own entry count,
+		// not from the total across all streams. This is what makes streams
+		// of very different sizes (as in star-schema joins) each get a bucket
+		// array appropriate to their cardinality, instead of everyone sharing
+		// the same average size.
 		//
 		// Each bucket is expressed as a half-open range
 		// [bucketOffsets[b], bucketOffsets[b + 1]). The extra (tableSize + 1)-th
 		// element is needed so that the range of the last bucket can be
 		// written uniformly, without a special case.
-		void build(ULONG tableSize);
+		void build();
 
-		bool bucketEmpty(ULONG slot) const noexcept
+		bool bucketEmpty(ULONG hash) const noexcept
 		{
+			const ULONG slot = hash % tableSize;
 			return bucketOffsets[slot] == bucketOffsets[slot + 1];
 		}
 
 
 		// Position the cursor at the first entry with hash >= the target.
-		// If the target is absent, the cursor ends up at the first entry
-		// greater than it, and reset() returns false.
-		bool reset(ULONG slot, ULONG hash)
+		// Returns false if the target is not present in this stream.
+		bool reset(ULONG hash)
 		{
+			const ULONG slot = hash % tableSize;
 			const ULONG end = bucketOffsets[slot + 1];
 
 			ULONG lo = bucketOffsets[slot];
@@ -168,8 +174,9 @@ class HashJoin::HashTable final : public PermanentStorage
 			return (iterator < end && entries[iterator].hash == hash);
 		}
 
-		bool iterate(ULONG slot, ULONG hash, ULONG& position) noexcept
+		bool iterate(ULONG hash, ULONG& position) noexcept
 		{
+			const ULONG slot = hash % tableSize;
 			const ULONG end = bucketOffsets[slot + 1];
 
 			if (iterator >= end || entries[iterator].hash != hash)
@@ -227,25 +234,28 @@ public:
 	{
 		fb_assert(stream < m_streams.getCount());
 
-		return m_streams[stream]->reset(m_slot, hash);
+		return m_streams[stream]->reset(hash);
 	}
 
 	bool iterate(ULONG stream, ULONG hash, ULONG& position) noexcept
 	{
 		fb_assert(stream < m_streams.getCount());
 
-		return m_streams[stream]->iterate(m_slot, hash, position);
+		return m_streams[stream]->iterate(hash, position);
 	}
 
 private:
 	Array<Stream*> m_streams;
-	ULONG m_tableSize = 0;
-	ULONG m_slot = 0;
 };
 
-void HashJoin::HashTable::Stream::build(ULONG tableSize)
+void HashJoin::HashTable::Stream::build()
 {
 	const ULONG n = entries.getCount();
+
+	// Per-stream table size. This is what makes streams of wildly
+	// different cardinality each get their own bucket array.
+	const ULONG desired = n / HASH_LOAD_FACTOR;
+	tableSize = nextHashSize(desired);
 
 	fb_assert(bucketOffsets.getCount() == 0);
 
@@ -416,47 +426,28 @@ void HashJoin::HashTable::Stream::build(ULONG tableSize)
 
 void HashJoin::HashTable::build()
 {
-	// The table size is chosen from the *actual* number of collected
-	// entries, not from any cardinality estimate. Estimates for table
-	// functions and stored procedures use a fixed default and may be
-	// off by orders of magnitude; getting the size wrong is exactly
-	// what a dynamic resizing scheme would be paying for later.
-	// Since all inner streams are fully materialized by the time
-	// build() runs, we can afford to decide once and for all.
-	ULONG total = 0;
-	for (auto* s : m_streams)
-		total += s->entries.getCount();
-
-	const ULONG desired = total / (m_streams.getCount() * HASH_LOAD_FACTOR);
-	m_tableSize = nextHashSize(desired);
-
-	for (auto* s : m_streams)
-		s->build(m_tableSize);
+    for (auto* s : m_streams)
+        s->build();
 }
 
 bool HashJoin::HashTable::setup(ULONG hash)
 {
-	const ULONG slot = hash % m_tableSize;
-
-	// Every stream must have at least one entry in this bucket, otherwise
-	// the join cannot produce output for this leader row. This is a cheap
-	// O(1) check on bucket bounds and lets us skip binary searches for the
-	// common case of a leader row with no counterpart.
+	// Every stream must have a non-empty bucket for this hash, otherwise
+	// the join cannot produce output for this leader row. Each stream
+	// hashes to its own slot, because each has its own table size.
 	for (auto* s : m_streams)
 	{
-		if (s->bucketEmpty(slot))
+		if (s->bucketEmpty(hash))
 			return false;
 	}
-
-	m_slot = slot;
 
 	// Prime the cursor of each stream to the first entry with the target
 	// hash (or to its insertion point if the target is absent).
 	for (ULONG i = 0; i < m_streams.getCount(); i++)
 	{
 		// If the hash is not found, use the fast path and immediately stop the search.
-		if (!reset(i, hash))
-			return false;
+        if (!m_streams[i]->reset(hash))
+            return false;
 	}
 
 	return true;
