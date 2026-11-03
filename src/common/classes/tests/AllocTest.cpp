@@ -2,7 +2,14 @@
 #include "boost/test/unit_test.hpp"
 #include "../common/classes/alloc.h"
 
-#ifdef LINUX
+// The test needs RLIMIT_AS. On Android ARM builds the tests run through the
+// emulator's binary translator, which aborts when its own mmap() hits the limit.
+#if defined(LINUX) && !defined(ANDROID)
+#define ALLOC_FAILURE_TEST
+#endif
+
+#ifdef ALLOC_FAILURE_TEST
+#include <sys/mman.h>
 #include <sys/resource.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +24,7 @@ BOOST_AUTO_TEST_SUITE(AllocSuite)
 
 BOOST_AUTO_TEST_SUITE(AllocTests)
 
-#ifdef LINUX
+#ifdef ALLOC_FAILURE_TEST
 
 namespace
 {
@@ -46,13 +53,40 @@ namespace
 		return kb * 1024;
 	}
 
-	// Makes any new mapping fail until restored
-	void limitAddressSpace(bool limit)
+	// Makes any new mapping fail until restored. Returns false if the limit can't be changed.
+	bool limitAddressSpace(bool limit)
 	{
 		struct rlimit lim;
-		getrlimit(RLIMIT_AS, &lim);
-		lim.rlim_cur = limit ? getVmSize() + 16 * 1024 : lim.rlim_max;
-		setrlimit(RLIMIT_AS, &lim);
+		if (getrlimit(RLIMIT_AS, &lim) != 0)
+			return false;
+
+		if (limit)
+		{
+			const size_t vmSize = getVmSize();
+			if (!vmSize)
+				return false;
+
+			lim.rlim_cur = vmSize + 16 * 1024;
+		}
+		else
+			lim.rlim_cur = lim.rlim_max;
+
+		return setrlimit(RLIMIT_AS, &lim) == 0;
+	}
+
+	// RLIMIT_AS is not enforced everywhere, e.g. QEMU user-mode emulation ignores it
+	bool addressSpaceLimitWorks()
+	{
+		if (!limitAddressSpace(true))
+			return false;
+
+		const size_t probeSize = 64 * 1024;
+		void* probe = mmap(NULL, probeSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		const bool works = (probe == MAP_FAILED);
+		if (!works)
+			munmap(probe, probeSize);
+
+		return limitAddressSpace(false) && works;
 	}
 }
 
@@ -61,6 +95,12 @@ namespace
 // allocated from it are still in use and unlinkBlocks() treats them as free.
 BOOST_AUTO_TEST_CASE(MediumExtentAllocationFailure)
 {
+	if (!addressSpaceLimitWorks())
+	{
+		BOOST_TEST_MESSAGE("RLIMIT_AS is not enforced, test skipped");
+		return;
+	}
+
 	// Empty the cache of released extents, so that next extent comes from the OS
 	MemoryPool* drainPool = MemoryPool::createPool();
 	for (unsigned i = 0; i < 32; ++i)
@@ -78,7 +118,7 @@ BOOST_AUTO_TEST_CASE(MediumExtentAllocationFailure)
 
 	// Allocation of next extent fails twice
 	unsigned failures = 0;
-	limitAddressSpace(true);
+	BOOST_REQUIRE(limitAddressSpace(true));
 	for (unsigned i = 0; i < 2; ++i)
 	{
 		try
@@ -90,7 +130,7 @@ BOOST_AUTO_TEST_CASE(MediumExtentAllocationFailure)
 			++failures;
 		}
 	}
-	limitAddressSpace(false);
+	BOOST_REQUIRE(limitAddressSpace(false));
 	BOOST_REQUIRE_EQUAL(failures, 2u);
 
 	// Fill second extent and move to the third one
@@ -116,7 +156,7 @@ BOOST_AUTO_TEST_CASE(MediumExtentAllocationFailure)
 	MemoryPool::deletePool(drainPool);
 }
 
-#endif // LINUX
+#endif // ALLOC_FAILURE_TEST
 
 BOOST_AUTO_TEST_SUITE_END()	// AllocTests
 
