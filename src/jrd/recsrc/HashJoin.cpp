@@ -48,10 +48,9 @@ using namespace Jrd;
 
 namespace
 {
-	// Below this threshold the temp buffer is small enough to fit in L3,
-	// so the cache-friendly sequential read path is faster and the extra
+	// Below this threshold the temp buffer is small and the extra
 	// memory is negligible. Above the threshold the extra memory starts
-	// to matter for concurrent connections, and we accept the cache cost
+	// to matter for concurrent connections, and we accept the cost
 	// of in-place redistribution.
 	constexpr ULONG IN_PLACE_THRESHOLD = 1 << 20;   // 1M entries = 8 MB
 
@@ -147,9 +146,11 @@ class HashJoin::HashTable final : public PermanentStorage
 
 		// Position the cursor at the first entry with hash >= the target.
 		// If the target is absent, the cursor ends up at the first entry
-		// greater than it, and iterate() immediately returns false.
-		void reset(ULONG slot, ULONG hash)
+		// greater than it, and reset() returns false.
+		bool reset(ULONG slot, ULONG hash)
 		{
+			const ULONG end = bucketOffsets[slot + 1];
+
 			ULONG lo = bucketOffsets[slot];
 			ULONG hi = bucketOffsets[slot + 1];
 
@@ -163,6 +164,8 @@ class HashJoin::HashTable final : public PermanentStorage
 			}
 
 			iterator = lo;
+
+			return (iterator < end && entries[iterator].hash == hash);
 		}
 
 		bool iterate(ULONG slot, ULONG hash, ULONG& position) noexcept
@@ -220,11 +223,11 @@ public:
 
 	bool setup(ULONG hash);
 
-	void reset(ULONG stream, ULONG hash)
+	bool reset(ULONG stream, ULONG hash)
 	{
 		fb_assert(stream < m_streams.getCount());
 
-		m_streams[stream]->reset(m_slot, hash);
+		return m_streams[stream]->reset(m_slot, hash);
 	}
 
 	bool iterate(ULONG stream, ULONG hash, ULONG& position) noexcept
@@ -450,7 +453,11 @@ bool HashJoin::HashTable::setup(ULONG hash)
 	// Prime the cursor of each stream to the first entry with the target
 	// hash (or to its insertion point if the target is absent).
 	for (ULONG i = 0; i < m_streams.getCount(); i++)
-		reset(i, hash);
+	{
+		// If the hash is not found, use the fast path and immediately stop the search.
+		if (!reset(i, hash))
+			return false;
+	}
 
 	return true;
 }
