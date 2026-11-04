@@ -633,7 +633,7 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 {
 	string temp;
 
-	temp.printf("%7" QUADFORMAT"d ms", stats->getElapsedTime());
+	temp.printf("%7" UQUADFORMAT" ms" NEWLINE, stats->getElapsedTime());
 	record.append(temp);
 
 	const auto pageCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_PAGES);
@@ -641,43 +641,40 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 
 	if (const auto count = pageCounters->getObjectCount())
 	{
-		// Holds counters: IPerformanceCounters::PAGE_{FETCHES|READS|MARKS|WRITES}
-		static constexpr unsigned GLOBAL_COUNTERS = 4;
-		SINT64 globalCounters[GLOBAL_COUNTERS] = {0};
-
 		for (unsigned i = 0; i < count; i++)
 		{
 			const auto counters = pageCounters->getObjectCounters(i);
-			for (unsigned j = 0; j < GLOBAL_COUNTERS; j++)
-				globalCounters[j] += counters[j];
-		}
+			const auto name = pageCounters->getObjectName(i);
 
-		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_READS])
-		{
-			temp.printf(", %" QUADFORMAT"d read(s)", cnt);
-			record.append(temp);
-		}
+			temp.clear();
 
-		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_WRITES])
-		{
-			temp.printf(", %" QUADFORMAT"d write(s)", cnt);
-			record.append(temp);
-		}
+			auto addStat = [&](unsigned index, const char* suffix)
+			{
+				if (const auto cnt = counters[index])
+				{
+					const bool firstStat = temp.isEmpty();
+					if (firstStat && name)
+						temp.printf("%s: ", name);
 
-		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_FETCHES])
-		{
-			temp.printf(", %" QUADFORMAT"d fetch(es)", cnt);
-			record.append(temp);
-		}
+					const auto prefix = firstStat ? "" : ", ";
+					string stat;
+					stat.printf("%s%" SQUADFORMAT" %s", prefix, cnt, suffix);
+					temp += stat;
+				}
+			};
 
-		if (const auto cnt = globalCounters[IPerformanceCounters::PAGE_MARKS])
-		{
-			temp.printf(", %" QUADFORMAT"d mark(s)", cnt);
-			record.append(temp);
+			addStat(IPerformanceCounters::PAGE_READS, "read(s)");
+			addStat(IPerformanceCounters::PAGE_WRITES, "write(s)");
+			addStat(IPerformanceCounters::PAGE_FETCHES, "fetch(es)");
+			addStat(IPerformanceCounters::PAGE_MARKS, "mark(s)");
+
+			if (temp.hasData())
+			{
+				record.append(temp);
+				record.append(NEWLINE);
+			}
 		}
 	}
-
-	record.append(NEWLINE);
 }
 
 void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
@@ -743,7 +740,7 @@ void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
 			{
 				//fb_utils::exactNumericToStr(counterVector[j], 0, temp);
 				//record.append(' ', 10 - temp.length());
-				temp.printf("%10" QUADFORMAT"d", counters[j]);
+				temp.printf("%10" SQUADFORMAT, counters[j]);
 				line.append(temp);
 				nonZero = true;
 			}
