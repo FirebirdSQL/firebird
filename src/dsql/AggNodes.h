@@ -158,6 +158,9 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
+	bool supportsAggRemove() const override;
+	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
+
 protected:
 	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
@@ -371,6 +374,9 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
+	bool supportsAggRemove() const override;
+	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
+
 protected:
 	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 };
@@ -401,6 +407,9 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
+	bool supportsAggRemove() const override;
+	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
+
 protected:
 	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 };
@@ -429,14 +438,39 @@ public:
 	ValueExprNode* copy(thread_db* tdbb, NodeCopier& copier) const override;
 
 	void aggInit(thread_db* tdbb, Request* request) const override;
+	void aggFinish(thread_db* tdbb, Request* request) const override;
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
+
+	bool supportsAggRemove() const override
+	{
+		return true;
+	}
+
+	bool supportsUnorderedAggRemove() const override
+	{
+		return false;
+	}
+
+	void prepareAggRemove(CompilerScratch* csb) override;
+	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
 
 protected:
 	AggNode* dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/ override;
 
+private:
+	class MonotonicQueue;
+
+	struct QueueImpure
+	{
+		MonotonicQueue* queue;
+	};
+
 public:
 	const MaxMinType type;
+
+private:
+	ULONG queueImpure = 0;	// QueueImpure offset, when aggRemove may be used
 };
 
 class BinAggNode final : public AggNode

@@ -493,6 +493,22 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 	return true;
 }
 
+void AggNode::aggRemove(thread_db* tdbb, Request* request) const
+{
+	fb_assert(supportsAggRemove() && !distinct && !sort);
+
+	dsc* desc = nullptr;
+
+	if (arg)
+	{
+		desc = EVL_expr(tdbb, request, arg);
+		if (!desc)
+			return;
+	}
+
+	aggRemove(tdbb, request, desc);
+}
+
 void AggNode::aggFinish(thread_db* /*tdbb*/, Request* request) const
 {
 	if (asb)
@@ -1752,6 +1768,20 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
+bool AvgAggNode::supportsAggRemove() const
+{
+	// Approximate numerics are not exactly reversible.
+	return !distinct && !dialect1 && !(nodFlags & (FLAG_DOUBLE | FLAG_DECFLOAT));
+}
+
+void AvgAggNode::aggRemove(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	--impure->vlux_count;
+
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_subtract, dialect1, nodScale, nodFlags);
+}
+
 dsc* AvgAggNode::aggExecute(thread_db* tdbb, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -2986,6 +3016,21 @@ void CountAggNode::aggPass(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/)
 		++impure->vlu_misc.vlu_int64;
 }
 
+bool CountAggNode::supportsAggRemove() const
+{
+	return !distinct;
+}
+
+void CountAggNode::aggRemove(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+
+	if (dialect1)
+		--impure->vlu_misc.vlu_long;
+	else
+		--impure->vlu_misc.vlu_int64;
+}
+
 dsc* CountAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -3245,6 +3290,20 @@ void SumAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
+bool SumAggNode::supportsAggRemove() const
+{
+	// Approximate numerics are not exactly reversible.
+	return !distinct && !dialect1 && !(nodFlags & (FLAG_DOUBLE | FLAG_DECFLOAT));
+}
+
+void SumAggNode::aggRemove(thread_db* tdbb, Request* request, dsc* desc) const
+{
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	--impure->vlux_count;
+
+	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_subtract, dialect1, nodScale, nodFlags);
+}
+
 dsc* SumAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
@@ -3310,18 +3369,170 @@ string MaxMinAggNode::internalPrint(NodePrinter& printer) const
 	return "MaxMinAggNode";
 }
 
+// Values passed to a MIN/MAX in a sliding window frame that may still become its result when the
+// older ones are removed, in the order they were passed. Each one is better than all the later ones,
+// so the first one is the result. Values are removed in the order they were passed, so it costs
+// amortized O(1) per value.
+class MaxMinAggNode::MonotonicQueue
+{
+private:
+	struct Entry
+	{
+		FB_UINT64 number;
+		impure_value value;
+	};
+
+public:
+	explicit MonotonicQueue(MemoryPool& aPool)
+		: pool(aPool),
+		  entries(aPool)
+	{
+	}
+
+	~MonotonicQueue()
+	{
+		clear();
+	}
+
+public:
+	void clear()
+	{
+		for (auto i = head; i < entries.getCount(); ++i)
+			delete entries[i].value.vlu_string;
+
+		entries.clear();
+		head = 0;
+		passed = removed = 0;
+	}
+
+	bool isEmpty() const
+	{
+		return head == entries.getCount();
+	}
+
+	// The descriptor of the first value. Entries move in memory, so it's built here.
+	dsc* getFirst()
+	{
+		fb_assert(!isEmpty());
+
+		Entry& entry = entries[head];
+
+		entry.value.vlu_desc.dsc_address = entry.value.vlu_string ?
+			entry.value.vlu_string->str_data : reinterpret_cast<UCHAR*>(&entry.value.vlu_misc);
+
+		return &entry.value.vlu_desc;
+	}
+
+	void pass(thread_db* tdbb, const dsc* desc, MaxMinType type)
+	{
+		// Remove the values that cannot become the result anymore.
+		while (!isEmpty())
+		{
+			Entry& last = entries.back();
+
+			dsc lastDesc = last.value.vlu_desc;
+			lastDesc.dsc_address = last.value.vlu_string ?
+				last.value.vlu_string->str_data : reinterpret_cast<UCHAR*>(&last.value.vlu_misc);
+
+			const int result = MOV_compare(tdbb, desc, &lastDesc);
+
+			if (!((type == TYPE_MAX && result > 0) || (type == TYPE_MIN && result < 0)))
+				break;
+
+			delete last.value.vlu_string;
+			entries.shrink(entries.getCount() - 1);
+		}
+
+		// Reclaim the space of the removed entries.
+		if (head >= 64 && head >= entries.getCount() / 2)
+		{
+			entries.removeCount(0, head);
+			head = 0;
+		}
+
+		Entry& entry = entries.add();
+		entry.number = passed++;
+		EVL_make_value(tdbb, desc, &entry.value, &pool);
+	}
+
+	void remove()
+	{
+		if (!isEmpty() && entries[head].number == removed)
+		{
+			delete entries[head].value.vlu_string;
+			++head;
+		}
+
+		++removed;
+	}
+
+private:
+	MemoryPool& pool;
+	Array<Entry> entries;
+	FB_SIZE_T head = 0;
+	FB_UINT64 passed = 0;
+	FB_UINT64 removed = 0;
+};
+
+void MaxMinAggNode::prepareAggRemove(CompilerScratch* csb)
+{
+	if (!queueImpure)
+		queueImpure = csb->allocImpure<QueueImpure>();
+}
+
 void MaxMinAggNode::aggInit(thread_db* tdbb, Request* request) const
 {
 	AggNode::aggInit(tdbb, request);
 
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	impure->vlu_desc.dsc_dtype = 0;
+
+	if (queueImpure)
+	{
+		const auto queueImpureValue = request->getImpure<QueueImpure>(queueImpure);
+
+		if (queueImpureValue->queue)
+			queueImpureValue->queue->clear();
+		else
+		{
+			queueImpureValue->queue = FB_NEW_POOL(*tdbb->getDefaultPool())
+				MonotonicQueue(*tdbb->getDefaultPool());
+		}
+	}
+}
+
+void MaxMinAggNode::aggFinish(thread_db* tdbb, Request* request) const
+{
+	AggNode::aggFinish(tdbb, request);
+
+	if (queueImpure)
+	{
+		const auto queueImpureValue = request->getImpure<QueueImpure>(queueImpure);
+		delete queueImpureValue->queue;
+		queueImpureValue->queue = nullptr;
+	}
+}
+
+void MaxMinAggNode::aggRemove(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/) const
+{
+	fb_assert(queueImpure);
+
+	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
+	--impure->vlux_count;
+
+	request->getImpure<QueueImpure>(queueImpure)->queue->remove();
 }
 
 void MaxMinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 {
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	++impure->vlux_count;
+
+	if (queueImpure)
+	{
+		request->getImpure<QueueImpure>(queueImpure)->queue->pass(tdbb, desc, type);
+		return;
+	}
 
 	if (!impure->vlu_desc.dsc_dtype)
 	{
@@ -3341,6 +3552,9 @@ dsc* MaxMinAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 
 	if (!impure->vlux_count)
 		return NULL;
+
+	if (queueImpure)
+		return request->getImpure<QueueImpure>(queueImpure)->queue->getFirst();
 
 	return &impure->vlu_desc;
 }
