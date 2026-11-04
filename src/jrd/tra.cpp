@@ -944,8 +944,6 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 			Ods::writeNT(header, dbb->dbb_next_transaction);
 	}
 
-	CCH_RELEASE(tdbb, &window);
-
 	// Update dbb counters used to correctly finalize TIP cache.
 
 	if (dbb->dbb_next_transaction < next_transaction)
@@ -953,6 +951,8 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 
 	if (dbb->dbb_oldest_transaction < oldest_transaction)
 		dbb->dbb_oldest_transaction = oldest_transaction;
+
+	CCH_RELEASE(tdbb, &window);
 }
 
 
