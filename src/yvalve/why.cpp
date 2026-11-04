@@ -1555,6 +1555,29 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
+ISC_STATUS API_ROUTINE fb_reset_attachment(ISC_STATUS* userStatus, isc_db_handle* dbHandle, short dpbLength, const ISC_UCHAR* dpb)
+{
+	StatusVector status(userStatus);
+	CheckStatusWrapper statusWrapper(&status);
+
+	try
+	{
+		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
+
+		attachment->reset(&statusWrapper, dpbLength, dpb);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(&statusWrapper);
+	}
+
+	return status[1];
+}
+
+
+//-------------------------------------
+
+
 Firebird::IAttachment* handleToIAttachment(CheckStatusWrapper* status, isc_db_handle* handle)
 {
 	try
@@ -6330,6 +6353,20 @@ void YAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size
 	{
 		YEntry<YAttachment> entry(status, this);
 		entry.next()->setMaxInlineBlobSize(status, size);
+	}
+	catch (const Exception& e)
+	{
+		e.stuffException(status);
+	}
+}
+
+
+void YAttachment::reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
+{
+	try
+	{
+		YEntry<YAttachment> entry(status, this);
+		entry.next()->reset(status, dpbLength, dpb);
 	}
 	catch (const Exception& e)
 	{

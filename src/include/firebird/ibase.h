@@ -1165,6 +1165,12 @@ int  ISC_EXPORT isc_get_client_minor_version ();
 
 ISC_STATUS ISC_EXPORT fb_database_crypt_callback(ISC_STATUS*, void*);
 
+/*******************************************/
+/* Reset attachment with new defaults      */
+/*******************************************/
+
+ISC_STATUS ISC_EXPORT fb_reset_attachment(ISC_STATUS*, isc_db_handle*, short, const ISC_UCHAR*);
+
 #ifdef __cplusplus
 }	/* extern "C" */
 #endif

@@ -115,9 +115,11 @@ inline constexpr USHORT PROTOCOL_INLINE_BLOB = PROTOCOL_VERSION19;
 
 // Protocol 20:
 //	- supports passing flags to IStatement::prepare
+//	- supports attachment reset
 
 inline constexpr USHORT PROTOCOL_VERSION20 = (FB_PROTOCOL_FLAG | 20);
 inline constexpr USHORT PROTOCOL_PREPARE_FLAG = PROTOCOL_VERSION20;
+inline constexpr USHORT PROTOCOL_ATTACHMENT_RESET = PROTOCOL_VERSION20;
 
 // Architecture types
 
@@ -336,6 +338,7 @@ enum P_OP
 	op_info_cursor			= 113,
 
 	op_inline_blob			= 114,
+	op_att_reset			= 115,
 
 	op_max
 };
@@ -788,6 +791,14 @@ typedef struct p_inline_blob
 	RemBlobBuffer*	p_blob_data;		// blob data
 } P_INLINE_BLOB;
 
+// Reset attachment
+
+typedef struct p_reset
+{
+	OBJCT	p_reset_database;		// Database object id
+	CSTRING_CONST	p_reset_dpb;	// Reset parameter block
+} P_RESET;
+
 
 // Generalize packet (sic!)
 
@@ -841,6 +852,7 @@ typedef struct packet
 	P_BATCH_SETBPB p_batch_setbpb;		// Set default BPB for batch
 	P_REPLICATE p_replicate;	// replicate
 	P_INLINE_BLOB p_inline_blob;		// inline blob
+	P_RESET p_reset;			// reset attachment
 
 public:
 	packet() noexcept

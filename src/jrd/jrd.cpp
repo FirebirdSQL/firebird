@@ -2303,6 +2303,108 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 }
 
 
+void JAttachment::reset(CheckStatusWrapper* user_status, unsigned dpbLength, const unsigned char* dpb)
+{
+	static UCHAR blackList[] = {
+		isc_dpb_user_name,
+		isc_dpb_address_path,
+		isc_dpb_config,
+		isc_dpb_set_page_buffers,
+		isc_dpb_num_buffers,
+		isc_dpb_page_size,
+		isc_dpb_sweep,
+		isc_dpb_sweep_interval,
+		isc_dpb_no_garbage_collect,
+		isc_dpb_activate_shadow,
+		isc_dpb_delete_shadow,
+		isc_dpb_force_write,
+		isc_dpb_no_reserve,
+		isc_dpb_interp,
+		isc_dpb_shutdown,
+		isc_dpb_shutdown_delay,
+		isc_dpb_online,
+		isc_dpb_reserved,
+		isc_dpb_overwrite,
+		isc_dpb_nolinger,
+		isc_dpb_reset_icu,
+		isc_dpb_sec_attach,
+		isc_dpb_map_attach,
+		isc_dpb_gbak_attach,
+		isc_dpb_gstat_attach,
+		isc_dpb_gfix_attach,
+		isc_dpb_set_db_sql_dialect,
+		isc_dpb_set_db_readonly,
+		isc_dpb_set_db_charset,
+		isc_dpb_address_path,
+		isc_dpb_no_db_triggers,
+		isc_dpb_config,
+		isc_dpb_set_db_replica,
+		isc_dpb_upgrade_db,
+		isc_dpb_owner
+	};
+
+	// grey zone - could be processed, silently ignored meanwhile
+/*			case isc_dpb_sql_role_name:
+				break;
+
+			case isc_dpb_lc_ctype:
+				break;
+
+			case isc_dpb_sql_dialect:
+				break;
+
+			case isc_dpb_process_id:
+				break;
+
+			case isc_dpb_process_name:
+				break;
+
+			case isc_dpb_host_name:
+				break;
+
+			case isc_dpb_ext_call_depth:
+				break;
+*/
+
+
+	try
+	{
+		EngineContextHolder tdbb(user_status, this, FB_FUNCTION);
+		check_database(tdbb);
+
+		if (dpbLength > 0 && !dpb)
+		{
+			status_exception::raise(Arg::Gds(isc_bad_dpb_form));
+		}
+
+		// check for items that can't be processed
+		ClumpletReader rdr(ClumpletReader::dpbList, dpb, dpbLength);
+		for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
+		{
+			for (unsigned n = 0; n < FB_NELEM(blackList); ++n)
+			{
+				if (rdr.getClumpTag() == blackList[n])
+					fatal_exception::raiseFmt("Attachment::reset() does not support DPB item %d", blackList[n]);
+			}
+		}
+
+		// process valid items
+		DatabaseOptions options;
+		bool dummy;
+		options.get(dpb, dpbLength, dummy);
+
+		tdbb->getAttachment()->resetSession(tdbb, nullptr, &options);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(user_status);
+		return;
+	}
+
+	successful_completion(user_status);
+}
+
+
 void JBlob::getInfo(CheckStatusWrapper* user_status,
 				   unsigned int itemsLength, const unsigned char* items,
 				   unsigned int bufferLength, unsigned char* buffer)

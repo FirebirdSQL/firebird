@@ -488,6 +488,11 @@ public:
 	virtual ISC_STATUS API_ROUTINE fb_dsql_set_timeout(Jrd::FbStatusVector*,
 										isc_stmt_handle*,
 										ULONG);
+
+	virtual ISC_STATUS ISC_EXPORT fb_reset_attachment(Jrd::FbStatusVector*,
+									  isc_db_handle*,
+									  unsigned short,
+									  const unsigned char*);
 };
 
 

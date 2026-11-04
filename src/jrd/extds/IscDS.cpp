@@ -1655,6 +1655,17 @@ ISC_STATUS ISC_EXPORT IscProvider::fb_dsql_set_timeout(FbStatusVector* user_stat
 	return notImplemented(user_status);
 }
 
+ISC_STATUS ISC_EXPORT IscProvider::fb_reset_attachment(FbStatusVector* user_status,
+	isc_db_handle* db_handle,
+	unsigned short dpbLength,
+	const unsigned char* dpb)
+{
+	if (m_api.reset_attachment)
+		return m_api.reset_attachment(IscStatus(user_status), db_handle, dpbLength, dpb);
+
+	return notImplemented(user_status);
+}
+
 void IscProvider::loadAPI()
 {
 	FbLocalStatus status;
@@ -1752,7 +1763,8 @@ static FirebirdApiPointers isc_callbacks =
 	PROTO(fb, interpret),
 	PROTO(fb, cancel_operation),
 	PROTO(fb, database_crypt_callback),
-	PROTO(fb, dsql_set_timeout)
+	PROTO(fb, dsql_set_timeout),
+	PROTO(fb, reset_attachment)
 };
 #if defined __GNUC__
 #pragma GCC diagnostic pop

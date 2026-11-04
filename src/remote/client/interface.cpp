@@ -939,6 +939,8 @@ public:
 	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override;
 	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override;
 
+	void reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb) override;
+
 public:
 	Attachment(Rdb* handle, const PathName& path)
 		: replicator(nullptr), rdb(handle), dbPath(getPool(), path)
@@ -1234,11 +1236,6 @@ static constexpr unsigned ANALYZE_LOOPBACK	= 0x02;
 static constexpr unsigned ANALYZE_MOUNTS	= 0x04;
 static constexpr unsigned ANALYZE_EMP_NAME	= 0x08;
 
-inline static void reset(IStatus* status) noexcept
-{
-	status->init();
-}
-
 #define SET_OBJECT(rdb, object, id) rdb->rdb_port->setHandle(object, id)
 
 inline static void defer_packet(rem_port* port, PACKET* packet, bool sent = false)
@@ -1277,7 +1274,7 @@ IAttachment* RProvider::attach(CheckStatusWrapper* status, const char* filename,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
@@ -1380,7 +1377,7 @@ void Blob::getInfo(CheckStatusWrapper* status,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
 
@@ -1463,7 +1460,7 @@ void Blob::internalCancel(CheckStatusWrapper* status)
  *	Abort a partially completed blob.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -1496,7 +1493,7 @@ void Blob::internalClose(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
 
@@ -1632,7 +1629,7 @@ void Events::internalCancel(CheckStatusWrapper* status)
  *	Cancel an outstanding event.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -1665,7 +1662,7 @@ void Transaction::internalCommit(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
@@ -1713,7 +1710,7 @@ void Transaction::commitRetaining(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
 		Rdb* rdb = transaction->rtr_rdb;
@@ -1745,7 +1742,7 @@ ITransaction* Transaction::join(CheckStatusWrapper* status, ITransaction* tra)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
 		return DtcInterfacePtr()->join(status, this, tra);
@@ -1798,7 +1795,7 @@ IRequest* Attachment::compileRequest(CheckStatusWrapper* status,
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -1889,7 +1886,7 @@ IBlob* Attachment::createBlob(CheckStatusWrapper* status, ITransaction* apiTra, 
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -1967,7 +1964,7 @@ IAttachment* RProvider::create(CheckStatusWrapper* status, const char* filename,
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, dpb, dpb_length);
 		unsigned flags = ANALYZE_MOUNTS;
@@ -2143,7 +2140,7 @@ void Attachment::getInfo(CheckStatusWrapper* status,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		HalfStaticArray<UCHAR, 1024> temp;
 
@@ -2197,7 +2194,7 @@ void Attachment::executeDyn(CheckStatusWrapper* status, ITransaction* apiTra, un
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -2292,7 +2289,7 @@ void Attachment::freeClientData(CheckStatusWrapper* status, bool force)
 		{
 			iscLogStatus("REMOTE INTERFACE/gds__detach: Unsuccessful detach from "
 					"database.\n\tUncommitted work may have been lost.", status);
-			reset(status);
+			status->init();
 		}
 
 		disconnect(port);
@@ -2317,7 +2314,7 @@ void Attachment::internalDetach(CheckStatusWrapper* status)
  *	Close down a database.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -2350,7 +2347,7 @@ void Attachment::internalDropDatabase(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -2571,7 +2568,7 @@ unsigned Attachment::getMaxBlobCacheSize(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 
 		if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
@@ -2591,7 +2588,7 @@ void Attachment::setMaxBlobCacheSize(CheckStatusWrapper* status, unsigned size)
 {
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 
 		if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
@@ -2610,7 +2607,7 @@ unsigned Attachment::getMaxInlineBlobSize(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 
 		if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
@@ -2630,7 +2627,7 @@ void Attachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 {
 	try
 	{
-		reset(status);
+		status->init();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 
 		if (rdb->rdb_port->port_protocol < PROTOCOL_INLINE_BLOB)
@@ -2648,11 +2645,102 @@ void Attachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 }
 
 
+void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
+{
+	static UCHAR blackList[] = {
+		isc_dpb_dummy_packet_interval,
+		isc_dpb_user_name,
+		isc_dpb_auth_block,
+		isc_dpb_password,
+		isc_dpb_password_enc,
+		isc_dpb_trusted_auth,
+		isc_dpb_auth_plugin_name,
+		isc_dpb_auth_plugin_list,
+		isc_dpb_specific_auth_data,
+		isc_dpb_address_path,
+		isc_dpb_process_id,
+		isc_dpb_process_name,
+		isc_dpb_encrypt_key,
+		isc_dpb_client_version,
+		isc_dpb_remote_protocol,
+		isc_dpb_host_name,
+		isc_dpb_os_user,
+		isc_dpb_config,
+		isc_dpb_utf8_filename,
+		isc_dpb_map_attach
+	};
+
+	try
+	{
+		status->init();
+		CHECK_HANDLE(rdb, isc_bad_db_handle);
+
+		// Validate data length
+		CHECK_LENGTH(rdb->rdb_port, dpbLength);
+
+		if (rdb->rdb_port->port_protocol < PROTOCOL_ATTACHMENT_RESET)
+			unsupported();
+
+		if (dpbLength > 0 && !dpb)
+		{
+			status_exception::raise(Arg::Gds(isc_bad_dpb_form));
+		}
+
+		ClumpletReader rdr(ClumpletReader::dpbList, dpb, dpbLength);
+		for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
+		{
+			for (unsigned n = 0; n < FB_NELEM(blackList); ++n)
+			{
+				if (rdr.getClumpTag() == blackList[n])
+					fatal_exception::raiseFmt("Attachment::reset() does not support DPB item %d", blackList[n]);
+			}
+		}
+
+		rem_port* port = rdb->rdb_port;
+		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+		for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
+		{
+			switch(rdr.getClumpTag())
+			{
+			case isc_dpb_connect_timeout:
+				port->port_connect_timeout = rdr.getInt();
+				break;
+
+			case isc_dpb_send_timeout:
+				port->port_send_timeout = rdr.getInt();
+				break;
+
+			case isc_dpb_receive_timeout:
+				port->port_receive_timeout = rdr.getInt();
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		PACKET* packet = &rdb->rdb_packet;
+		packet->p_operation = op_att_reset;
+		P_RESET* reset = &packet->p_reset;
+		reset->p_reset_database = rdb->rdb_id;
+		reset->p_reset_dpb.cstr_length = dpbLength;
+		reset->p_reset_dpb.cstr_address = dpb;
+
+		send_and_receive(status, rdb, packet);
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
+	}
+}
+
+
 unsigned Statement::getMaxInlineBlobSize(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		Rsr* statement = getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -2677,7 +2765,7 @@ void Statement::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		Rsr* statement = getStatement();
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -2715,7 +2803,7 @@ Batch* Statement::createBatch(CheckStatusWrapper* status, IMessageMetadata* inMe
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 		CHECK_HANDLE(statement, isc_bad_req_handle);
@@ -3261,7 +3349,7 @@ void Batch::setServerInfo()
 
 IMessageMetadata* Batch::getMetadata(CheckStatusWrapper* status)
 {
-	reset(status);
+	status->init();
 
 	format->addRef();
 	return format;
@@ -3460,7 +3548,7 @@ void Batch::freeClientData(CheckStatusWrapper* status, bool force)
 
 void Batch::internalClose(CheckStatusWrapper* status)
 {
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -3576,7 +3664,7 @@ Replicator* Attachment::createReplicator(CheckStatusWrapper* status)
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
@@ -3604,7 +3692,7 @@ void Replicator::process(CheckStatusWrapper* status, unsigned length, const unsi
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		Rdb* rdb = attachment->getRdb();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
@@ -3636,7 +3724,7 @@ void Replicator::process(CheckStatusWrapper* status, unsigned length, const unsi
 
 void Replicator::internalClose(CheckStatusWrapper* status)
 {
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -3659,7 +3747,7 @@ void Replicator::freeClientData(CheckStatusWrapper* status, bool force)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		if (attachment && attachment->replicator)
 		{
@@ -3714,7 +3802,7 @@ ITransaction* Statement::execute(CheckStatusWrapper* status, ITransaction* apiTr
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -3903,7 +3991,7 @@ ResultSet* Statement::openCursor(CheckStatusWrapper* status, ITransaction* apiTr
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4139,7 +4227,7 @@ ITransaction* Attachment::execute(CheckStatusWrapper* status, ITransaction* apiT
 			dialect /= 10;
 		}
 
-		reset(status);
+		status->init();
 
 		Rsr* statement = port->port_statement;
 		if (!statement) {
@@ -4362,7 +4450,7 @@ void Statement::internalFree(CheckStatusWrapper* status)
  *
  **************************************/
 
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -4383,7 +4471,7 @@ void Statement::deprecatedFree(CheckStatusWrapper* status)
 
 Statement* Attachment::createStatement(CheckStatusWrapper* status, unsigned dialect)
 {
-	reset(status);
+	status->init();
 
 	Rsr* statement = NULL;
 	if (rdb->rdb_port->port_flags & PORT_lazy)
@@ -4440,7 +4528,7 @@ Statement* Attachment::prepare(CheckStatusWrapper* status, ITransaction* apiTra,
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4588,7 +4676,7 @@ void Statement::getInfo(CheckStatusWrapper* status,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4620,7 +4708,7 @@ unsigned Statement::getType(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4646,7 +4734,7 @@ unsigned Statement::getFlags(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4691,7 +4779,7 @@ const char* Statement::getPlan(CheckStatusWrapper* status, FB_BOOLEAN detailed)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4717,7 +4805,7 @@ IMessageMetadata* Statement::getInputMetadata(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4743,7 +4831,7 @@ IMessageMetadata* Statement::getOutputMetadata(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4769,7 +4857,7 @@ ISC_UINT64 Statement::getAffectedRecords(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4818,7 +4906,7 @@ void Statement::setCursorName(CheckStatusWrapper* status, const char* cursor)
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -4878,7 +4966,7 @@ void ResultSet::setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetad
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 		if (!delayedFormat)
@@ -4909,7 +4997,7 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
  *
  **************************************/
 
-	reset(status);
+	status->init();
 
 	// Check and validate handles, etc.
 
@@ -5424,7 +5512,7 @@ FB_BOOLEAN ResultSet::isEof(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -5453,7 +5541,7 @@ FB_BOOLEAN ResultSet::isBof(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -5486,7 +5574,7 @@ IMessageMetadata* ResultSet::getMetadata(CheckStatusWrapper* status)
 		return NULL;
 	}
 
-	reset(status);
+	status->init();
 
 	outputFormat->addRef();
 	return outputFormat;
@@ -5498,7 +5586,7 @@ void ResultSet::getInfo(CheckStatusWrapper* status,
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -5616,7 +5704,7 @@ void ResultSet::internalClose(CheckStatusWrapper* status)
  *
  **************************************/
 
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -5662,7 +5750,7 @@ int Blob::getSegment(CheckStatusWrapper* status, unsigned int bufferLength, void
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		UCHAR* bufferPtr = static_cast<UCHAR*>(buffer);
 
@@ -5870,7 +5958,7 @@ int Attachment::getSlice(CheckStatusWrapper* status, ITransaction* apiTra, ISC_Q
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -5949,7 +6037,7 @@ IBlob* Attachment::openBlob(CheckStatusWrapper* status, ITransaction* apiTra, IS
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -6154,7 +6242,7 @@ void Transaction::prepare(CheckStatusWrapper* status, unsigned int msg_length, c
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
@@ -6200,7 +6288,7 @@ void Blob::putSegment(CheckStatusWrapper* status, unsigned int segment_length, c
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		const UCHAR* segmentPtr = static_cast<const UCHAR*>(segment);
 
@@ -6277,7 +6365,7 @@ void Attachment::putSlice(CheckStatusWrapper* status, ITransaction* apiTra, ISC_
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -6348,7 +6436,7 @@ IEvents* Attachment::queEvents(CheckStatusWrapper* status, IEventCallback* callb
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -6431,7 +6519,7 @@ void Request::receive(CheckStatusWrapper* status, int level, unsigned int msg_ty
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check handles and environment, then set up error handling
 
@@ -6582,7 +6670,7 @@ ITransaction* Attachment::reconnectTransaction(CheckStatusWrapper* status,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -6665,7 +6753,7 @@ void Request::internalFree(CheckStatusWrapper* status)
  *	Release a request.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -6700,7 +6788,7 @@ void Request::getInfo(CheckStatusWrapper* status, int level,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rq, isc_bad_req_handle);
 		Rrq* request = REMOTE_find_request(rq, level);
@@ -6791,7 +6879,7 @@ void Transaction::rollbackRetaining(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
@@ -6863,7 +6951,7 @@ void Transaction::internalRollback(CheckStatusWrapper* status)
  *	Abort a transaction.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -6886,7 +6974,7 @@ void Transaction::internalDisconnect(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
@@ -6930,7 +7018,7 @@ int Blob::seek(CheckStatusWrapper* status, int mode, int offset)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(blob, isc_bad_segstr_handle);
 
@@ -7038,7 +7126,7 @@ void Request::send(CheckStatusWrapper* status, int level, unsigned int msg_type,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rq, isc_bad_req_handle);
 		Rrq* request = REMOTE_find_request(rq, level);
@@ -7096,7 +7184,7 @@ IService* RProvider::attachSvc(CheckStatusWrapper* status, const char* service,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		PathName node_name, expanded_name(service);
 
@@ -7195,7 +7283,7 @@ void Service::freeClientData(CheckStatusWrapper* status, bool force)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -7237,7 +7325,7 @@ void Service::internalDetach(CheckStatusWrapper* status)
  *	Close down a connection to a Firebird service.
  *
  **************************************/
-	reset(status);
+	status->init();
 	freeClientData(status);
 }
 
@@ -7273,7 +7361,7 @@ void Service::query(CheckStatusWrapper* status,
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -7296,7 +7384,7 @@ void Service::cancel(CheckStatusWrapper* status)
 {
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 		CHECK_HANDLE(rdb, isc_bad_svc_handle);
@@ -7330,7 +7418,7 @@ void Service::start(CheckStatusWrapper* status,
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		// Check and validate handles, etc.
 
@@ -7362,7 +7450,7 @@ void Request::startAndSend(CheckStatusWrapper* status, ITransaction* apiTra, int
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rq, isc_bad_req_handle);
 		Rrq* request = REMOTE_find_request(rq, level);
@@ -7440,7 +7528,7 @@ void Request::start(CheckStatusWrapper* status, ITransaction* apiTra, int level)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rq, isc_bad_req_handle);
 		Rrq* request = REMOTE_find_request(rq, level);
@@ -7503,7 +7591,7 @@ ITransaction* Attachment::startTransaction(CheckStatusWrapper* status, unsigned 
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -7556,7 +7644,7 @@ void Attachment::transactRequest(CheckStatusWrapper* status, ITransaction* apiTr
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -7663,7 +7751,7 @@ void Transaction::getInfo(CheckStatusWrapper* status,
 
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(transaction, isc_bad_trans_handle);
 
@@ -7699,7 +7787,7 @@ void Request::unwind(CheckStatusWrapper* status, int level)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		Rrq* request = REMOTE_find_request(rq, level);
 		CHECK_HANDLE(request, isc_bad_req_handle);
@@ -7730,7 +7818,7 @@ void Attachment::ping(CheckStatusWrapper* status)
  **************************************/
 	try
 	{
-		reset(status);
+		status->init();
 
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		rem_port* port = rdb->rdb_port;
@@ -10088,7 +10176,7 @@ void Attachment::cancelOperation(CheckStatusWrapper* status, int kind)
  **************************************/
 
 	try {
-		reset(status);
+		status->init();
 		CHECK_HANDLE(rdb, isc_bad_db_handle);
 		RemPortPtr port(rdb->rdb_port);
 

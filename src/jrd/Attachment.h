@@ -670,7 +670,7 @@ public:
 
 	void releaseBatches();
 	void releaseLocalTempTables(thread_db* tdbb);
-	void resetSession(thread_db* tdbb, jrd_tra** traHandle);
+	void resetSession(thread_db* tdbb, jrd_tra** traHandle, const DatabaseOptions* = nullptr);
 
 	void signalCancel();
 	void signalShutdown(ISC_STATUS code);

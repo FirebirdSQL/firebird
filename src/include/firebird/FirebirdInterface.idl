@@ -733,6 +733,8 @@ version:	// 6.0
 	// Inline blob transfer
 	uint getMaxInlineBlobSize(Status status);
 	void setMaxInlineBlobSize(Status status, uint size);
+
+	void reset(Status status, uint dpbLength, const uchar* dpb);
 }
 
 interface Service : ReferenceCounted

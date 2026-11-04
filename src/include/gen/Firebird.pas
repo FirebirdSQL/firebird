@@ -427,6 +427,7 @@ type
 	IAttachment_setMaxBlobCacheSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
 	IAttachment_getMaxInlineBlobSizePtr = function(this: IAttachment; status: IStatus): Cardinal; cdecl;
 	IAttachment_setMaxInlineBlobSizePtr = procedure(this: IAttachment; status: IStatus; size: Cardinal); cdecl;
+	IAttachment_resetPtr = procedure(this: IAttachment; status: IStatus; dpbLength: Cardinal; dpb: BytePtr); cdecl;
 	IService_deprecatedDetachPtr = procedure(this: IService; status: IStatus); cdecl;
 	IService_queryPtr = procedure(this: IService; status: IStatus; sendLength: Cardinal; sendItems: BytePtr; receiveLength: Cardinal; receiveItems: BytePtr; bufferLength: Cardinal; buffer: BytePtr); cdecl;
 	IService_startPtr = procedure(this: IService; status: IStatus; spbLength: Cardinal; spb: BytePtr); cdecl;
@@ -1858,6 +1859,7 @@ type
 		setMaxBlobCacheSize: IAttachment_setMaxBlobCacheSizePtr;
 		getMaxInlineBlobSize: IAttachment_getMaxInlineBlobSizePtr;
 		setMaxInlineBlobSize: IAttachment_setMaxInlineBlobSizePtr;
+		reset: IAttachment_resetPtr;
 	end;
 
 	IAttachment = class(IReferenceCounted)
@@ -1893,6 +1895,7 @@ type
 		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal);
 		function getMaxInlineBlobSize(status: IStatus): Cardinal;
 		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal);
+		procedure reset(status: IStatus; dpbLength: Cardinal; dpb: BytePtr);
 	end;
 
 	IAttachmentImpl = class(IAttachment)
@@ -1930,6 +1933,7 @@ type
 		procedure setMaxBlobCacheSize(status: IStatus; size: Cardinal); virtual; abstract;
 		function getMaxInlineBlobSize(status: IStatus): Cardinal; virtual; abstract;
 		procedure setMaxInlineBlobSize(status: IStatus; size: Cardinal); virtual; abstract;
+		procedure reset(status: IStatus; dpbLength: Cardinal; dpb: BytePtr); virtual; abstract;
 	end;
 
 	ServiceVTable = class(ReferenceCountedVTable)
@@ -8128,6 +8132,17 @@ begin
 	FbException.checkException(status);
 end;
 
+procedure IAttachment.reset(status: IStatus; dpbLength: Cardinal; dpb: BytePtr);
+begin
+	if (vTable.version < 6) then begin
+		FbException.setVersionError(status, 'IAttachment', vTable.version, 6);
+	end
+	else begin
+		AttachmentVTable(vTable).reset(Self, status, dpbLength, dpb);
+	end;
+	FbException.checkException(status);
+end;
+
 procedure IService.deprecatedDetach(status: IStatus);
 begin
 	ServiceVTable(vTable).deprecatedDetach(Self, status);
@@ -13107,6 +13122,15 @@ procedure IAttachmentImpl_setMaxInlineBlobSizeDispatcher(this: IAttachment; stat
 begin
 	try
 		IAttachmentImpl(this).setMaxInlineBlobSize(status, size);
+	except
+		on e: Exception do FbException.catchException(status, e);
+	end
+end;
+
+procedure IAttachmentImpl_resetDispatcher(this: IAttachment; status: IStatus; dpbLength: Cardinal; dpb: BytePtr); cdecl;
+begin
+	try
+		IAttachmentImpl(this).reset(status, dpbLength, dpb);
 	except
 		on e: Exception do FbException.catchException(status, e);
 	end
@@ -18711,6 +18735,7 @@ initialization
 	IAttachmentImpl_vTable.setMaxBlobCacheSize := @IAttachmentImpl_setMaxBlobCacheSizeDispatcher;
 	IAttachmentImpl_vTable.getMaxInlineBlobSize := @IAttachmentImpl_getMaxInlineBlobSizeDispatcher;
 	IAttachmentImpl_vTable.setMaxInlineBlobSize := @IAttachmentImpl_setMaxInlineBlobSizeDispatcher;
+	IAttachmentImpl_vTable.reset := @IAttachmentImpl_resetDispatcher;
 
 	IServiceImpl_vTable := ServiceVTable.create;
 	IServiceImpl_vTable.version := 5;

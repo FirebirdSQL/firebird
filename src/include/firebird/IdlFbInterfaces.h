@@ -2601,6 +2601,7 @@ namespace Firebird
 			void (CLOOP_CARG *setMaxBlobCacheSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getMaxInlineBlobSize)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *setMaxInlineBlobSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *reset)(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2921,6 +2922,19 @@ namespace Firebird
 			}
 			StatusType::clearException(status);
 			static_cast<VTable*>(this->cloopVTable)->setMaxInlineBlobSize(this, status, size);
+			StatusType::checkException(status);
+		}
+
+		template <typename StatusType> void reset(StatusType* status, unsigned dpbLength, const unsigned char* dpb)
+		{
+			if (cloopVTable->version < 6)
+			{
+				StatusType::setVersionError(status, "IAttachment", cloopVTable->version, 6);
+				StatusType::checkException(status);
+				return;
+			}
+			StatusType::clearException(status);
+			static_cast<VTable*>(this->cloopVTable)->reset(this, status, dpbLength, dpb);
 			StatusType::checkException(status);
 		}
 	};
@@ -12358,6 +12372,7 @@ namespace Firebird
 					this->setMaxBlobCacheSize = &Name::cloopsetMaxBlobCacheSizeDispatcher;
 					this->getMaxInlineBlobSize = &Name::cloopgetMaxInlineBlobSizeDispatcher;
 					this->setMaxInlineBlobSize = &Name::cloopsetMaxInlineBlobSizeDispatcher;
+					this->reset = &Name::cloopresetDispatcher;
 				}
 			} vTable;
 
@@ -12800,6 +12815,20 @@ namespace Firebird
 			}
 		}
 
+		static void CLOOP_CARG cloopresetDispatcher(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT
+		{
+			StatusType status2(status);
+
+			try
+			{
+				static_cast<Name*>(self)->Name::reset(&status2, dpbLength, dpb);
+			}
+			catch (...)
+			{
+				StatusType::catchException(&status2);
+			}
+		}
+
 		static void CLOOP_CARG cloopaddRefDispatcher(IReferenceCounted* self) CLOOP_NOEXCEPT
 		{
 			try
@@ -12869,6 +12898,7 @@ namespace Firebird
 		virtual void setMaxBlobCacheSize(StatusType* status, unsigned size) = 0;
 		virtual unsigned getMaxInlineBlobSize(StatusType* status) = 0;
 		virtual void setMaxInlineBlobSize(StatusType* status, unsigned size) = 0;
+		virtual void reset(StatusType* status, unsigned dpbLength, const unsigned char* dpb) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

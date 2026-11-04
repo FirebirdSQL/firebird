@@ -3917,8 +3917,13 @@ static bool setNoNagleOption(rem_port* port)
 	return true;
 }
 
-static bool setTimeout(SOCKET s, int timeout, int optname)
+static bool setTimeout(SOCKET s, rem_port* port, int timeout, int optname)
 {
+	if (!timeout)
+		timeout = port->port_connect_timeout;
+	if (!timeout)
+		return true;
+
 #ifdef WIN_NT
 	DWORD tv = timeout * 1000;
 #else
@@ -3950,17 +3955,11 @@ static bool setKeepAlive(SOCKET s, rem_port* port)
 
 	if (port)
 	{
-		if (port->port_send_timeout)
-		{
-			if (!setTimeout(s, port->port_send_timeout, SO_SNDTIMEO))
-				return false;
-		}
+		if (!setTimeout(s, port, port->port_send_timeout, SO_SNDTIMEO))
+			return false;
 
-		if (port->port_receive_timeout)
-		{
-			if (!setTimeout(s, port->port_receive_timeout, SO_RCVTIMEO))
-				return false;
-		}
+		if (!setTimeout(s, port, port->port_receive_timeout, SO_RCVTIMEO))
+			return false;
 	}
 
 	return true;

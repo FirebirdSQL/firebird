@@ -397,7 +397,7 @@ void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
 	}
 }
 
-void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
+void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle, const DatabaseOptions* opt)
 {
 	jrd_tra* oldTran = traHandle ? *traHandle : nullptr;
 	if (att_transactions)
@@ -454,6 +454,8 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle)
 				Arg::Gds(isc_ses_reset_tran_rollback));
 		}
 
+		if (opt)
+			setInitialOptions(tdbb, *opt, false);
 		att_initial_options.resetAttachment(this);
 
 		// reset timeouts
