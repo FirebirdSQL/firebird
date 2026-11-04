@@ -2035,7 +2035,7 @@ static bool accept_connection(rem_port* port, P_CNCT* connect, PACKET* send)
 	delete port->port_version;
 	port->port_version = REMOTE_make_string(buffer.c_str());
 
-	if (architecture == ARCHITECTURE)
+	if (ARCHITECTURE != arch_generic && architecture == ARCHITECTURE)
 		port->port_flags |= PORT_symmetric;
 	if (type != ptype_out_of_band)
 		port->port_flags |= PORT_no_oob;

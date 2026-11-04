@@ -1000,6 +1000,9 @@ int gbak(Firebird::UtilSvc* uSvc)
 			tdgbl->gbl_sw_convert_ext_tables = true;
 			break;
 		case IN_SW_BURP_DIRECT_IO:
+#if !defined(WIN_NT) && !defined(O_DIRECT)
+			BURP_error(411, true);
+#endif
 			if (tdgbl->gbl_sw_direct_io)
 				BURP_error(334, true, SafeArg() << in_sw_tab->in_sw_name);
 			tdgbl->gbl_sw_direct_io = true;
@@ -2188,7 +2191,11 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 				if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_WRITE, CREATE_ALWAYS)) == INVALID_HANDLE_VALUE)
 #else
-				const int wmode = MODE_WRITE | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+				int wmode = MODE_WRITE;
+#ifdef O_DIRECT
+				if (tdgbl->gbl_sw_direct_io)
+					wmode |= O_DIRECT;
+#endif
 				if ((fil->fil_fd = open(fil->fil_name.c_str(), wmode, open_mask)) == -1)
 #endif // WIN_NT
 				{
@@ -2298,7 +2305,11 @@ static gbak_action open_files(const TEXT* file1,
 #ifdef WIN_NT
 		if ((fil->fil_fd = NT_tape_open(nm.c_str(), MODE_READ, OPEN_EXISTING)) == INVALID_HANDLE_VALUE)
 #else
-		const int rmode = MODE_READ | (tdgbl->gbl_sw_direct_io ? O_DIRECT : 0);
+		int rmode = MODE_READ;
+#ifdef O_DIRECT
+		if (tdgbl->gbl_sw_direct_io)
+			rmode |= O_DIRECT;
+#endif
 		if ((fil->fil_fd = os_utils::open(nm.c_str(), rmode)) == INVALID_HANDLE_VALUE)
 #endif
 		{

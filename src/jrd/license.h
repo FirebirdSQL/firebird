@@ -122,6 +122,10 @@
 #define FB_PLATFORM     "NB"	// NetBSD
 #endif
 
+#ifdef OPENBSD
+#define FB_PLATFORM     "OB"	// OpenBSD
+#endif
+
 #ifdef DARWIN
 #if defined(i386) || defined(__x86_64__)
 #define FB_PLATFORM		"UI"	// Darwin/Intel

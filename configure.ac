@@ -494,6 +494,15 @@ dnl CPU_TYPE=ppc64
     SHRLIB_EXT=so
     ;;
 
+  x86_64-*-openbsd* | i?86-*-openbsd*)
+    MAKEFILE_PREFIX=openbsd
+    PLATFORM=OPENBSD
+    AC_DEFINE(OPENBSD, 1, [Define this if OS is OpenBSD])
+    EDITLINE_FLG=Y
+    RAW_DEVICES_FLG=N
+    SHRLIB_EXT=so
+    ;;
+
   *-*-netbsd*)
     MAKEFILE_PREFIX=netbsd
     PLATFORM=NETBSD
@@ -908,6 +917,12 @@ AC_CHECK_TOOL([RANLIB], [ranlib])
 AC_CHECK_TOOL([READELF], [readelf])
 AC_CHECK_TOOL([NM], [nm])
 LT_INIT([dlopen win32-dll])
+
+if test "$PLATFORM" = "OPENBSD"; then
+    AC_CHECK_HEADERS([sys/futex.h], [], [AC_MSG_ERROR([OpenBSD futex support is required])],
+        [[#include <sys/time.h>]])
+    AC_CHECK_FUNCS([futex], [], [AC_MSG_ERROR([OpenBSD futex support is required])])
+fi
 
 dnl Check for system header files
 AC_HEADER_DIRENT

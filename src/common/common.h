@@ -342,6 +342,32 @@
 
 
 /*****************************************************
+* OpenBSD
+*****************************************************/
+#ifdef OPENBSD
+
+#define FB_OS OsOpenBsd
+#define FB_CC CcGcc
+#define ASYMMETRIC_PROTOCOLS_ONLY
+#define UNIX
+#define IEEE
+#define QUADFORMAT "ll"
+#define QUADCONST(n) (n##LL)
+
+#if defined(__x86_64__)
+#define AMD64
+#define FB_CPU CpuAmd
+#elif defined(__i386__)
+#define I386
+#define FB_CPU CpuIntel
+#else
+#error Unsupported OpenBSD CPU
+#endif
+
+#endif /* OPENBSD */
+
+
+/*****************************************************
 * Android
 *****************************************************/
 #ifdef ANDROID

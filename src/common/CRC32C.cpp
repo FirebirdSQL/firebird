@@ -33,6 +33,9 @@
 
 #include <nmmintrin.h>
 
+#ifdef __clang__
+__attribute__((target("sse4.2")))
+#endif
 unsigned int CRC32C(unsigned int length, const unsigned char* value)
 {
 	unsigned int hash_value = 0;

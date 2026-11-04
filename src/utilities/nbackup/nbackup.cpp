@@ -1192,6 +1192,12 @@ void NBackup::unlock_database()
 
 void NBackup::backup_database(int level, Guid& guid, const PathName& fname)
 {
+#ifdef OPENBSD
+	if (direct_io)
+		status_exception::raise(Arg::Gds(isc_wish_list) <<
+			Arg::Gds(isc_random) << "Direct I/O is not supported on OpenBSD");
+#endif
+
 	bool database_locked = false;
 	// We set this flag when backup file is in inconsistent state
 	bool delete_backup = false;

@@ -1,0 +1,16 @@
+ROOT=$(shell cd ..; pwd)
+TARGET ?= Release
+
+include $(ROOT)/gen/make.defaults
+include $(ROOT)/gen/make.platform
+
+.PHONY: install
+
+# Stage files only. Account creation and service activation belong to packaging.
+install:
+	@test -n "$(DESTDIR)" || { echo 'Specify DESTDIR for a staging installation.'; exit 1; }
+	@case "$(DESTDIR)" in /*) ;; *) echo 'DESTDIR must be an absolute path.'; exit 1;; esac
+	@test "$(DESTDIR)" != / || { echo 'DESTDIR must not be the filesystem root.'; exit 1; }
+	@test ! -e "$(DESTDIR)@prefix@" || { echo 'The staging prefix already exists.'; exit 1; }
+	mkdir -p "$(DESTDIR)@prefix@"
+	cp -RLp "$(FB_BUILD)/." "$(DESTDIR)@prefix@/"

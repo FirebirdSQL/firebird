@@ -1159,11 +1159,14 @@ void PAG_header(thread_db* tdbb, bool info)
 	bool present;
 	bool useFSCache = dbb->dbb_config->getUseFileSystemCache(&present);
 
+#ifndef OPENBSD
+	// OpenBSD has no direct I/O; only an explicit cache setting may request it.
 	if (!present)
 	{
 		useFSCache = dbb->dbb_bcb->bcb_count <
 			ULONG(dbb->dbb_config->getFileSystemCacheThreshold());
 	}
+#endif
 
 	if ((header->hdr_flags & hdr_force_write) || !useFSCache)
 	{

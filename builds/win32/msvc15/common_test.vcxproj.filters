@@ -18,6 +18,9 @@
     <ClCompile Include="..\..\..\src\common\tests\CommonTest.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\common\tests\SockAddrTest.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\common\classes\tests\AlignerTest.cpp">
       <Filter>source</Filter>
     </ClCompile>

@@ -1047,7 +1047,12 @@ SINT64 query_performance_counter()
 
 	// Use high-resolution clock
 	struct timespec tp;
-	if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) != 0)
+#ifdef CLOCK_MONOTONIC_RAW
+	constexpr clockid_t clockId = CLOCK_MONOTONIC_RAW;
+#else
+	constexpr clockid_t clockId = CLOCK_MONOTONIC;
+#endif
+	if (clock_gettime(clockId, &tp) != 0)
 		return 0;
 
 	return static_cast<SINT64>(tp.tv_sec) * BILLION + tp.tv_nsec;

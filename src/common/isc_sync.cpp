@@ -98,6 +98,12 @@ static int process_id;
 
 #include <sys/mman.h>
 
+#ifdef OPENBSD
+#include <sys/time.h>
+#include <sys/futex.h>
+#include <limits.h>
+#endif
+
 #endif // UNIX
 
 #ifdef HAVE_SYS_PARAM_H
@@ -608,6 +614,14 @@ int SharedMemoryBase::eventInit(event_t* event)
 
 	return (event->event_handle) ? FB_SUCCESS : FB_FAILURE;
 
+#elif defined(OPENBSD)
+
+	static_assert(__atomic_always_lock_free(sizeof(event->event_count), nullptr),
+		"Shared events require lock-free counters");
+	__atomic_store_n(&event->event_count, 0, __ATOMIC_RELAXED);
+	event->event_pid = getpid();
+	return FB_SUCCESS;
+
 #else // pthread-based event
 
 	event->event_count = 0;
@@ -660,6 +674,11 @@ void SharedMemoryBase::eventFini(event_t* event)
 		CloseHandle(event->event_handle);
 	}
 
+#elif defined(OPENBSD)
+
+	// The shared counter owns no kernel object; callers have stopped all waiters.
+	FB_UNUSED(event);
+
 #else // pthread-based event
 
 	if (event->event_pid == getpid())
@@ -698,6 +717,10 @@ SLONG SharedMemoryBase::eventClear(event_t* event)
 	ResetEvent(event->event_handle);
 
 	return event->event_count + 1;
+
+#elif defined(OPENBSD)
+
+	return static_cast<SLONG>(__atomic_load_n(&event->event_count, __ATOMIC_ACQUIRE) + 1);
 
 #else // pthread-based event
 
@@ -747,6 +770,52 @@ int SharedMemoryBase::eventWait(event_t* event, const SLONG value, const SLONG m
 
 		if (status != WAIT_OBJECT_0)
 			return FB_FAILURE;
+	}
+
+#elif defined(OPENBSD)
+
+	constexpr SINT64 billion = 1000000000;
+	SINT64 deadline = 0;
+	if (micro_seconds > 0)
+	{
+		timespec now;
+		if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+			return FB_FAILURE;
+		deadline = now.tv_sec * billion + now.tv_nsec + SINT64(micro_seconds) * 1000;
+	}
+
+	for (;;)
+	{
+		const uint32_t count = __atomic_load_n(&event->event_count, __ATOMIC_ACQUIRE);
+		if (static_cast<SLONG>(count - static_cast<uint32_t>(value)) >= 0)
+			return FB_SUCCESS;
+
+		timespec remaining;
+		if (micro_seconds > 0)
+		{
+			timespec now;
+			if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+				return FB_FAILURE;
+			const SINT64 nanos = deadline - (now.tv_sec * billion + now.tv_nsec);
+			if (nanos <= 0)
+				return event_blocked(event, value) ? FB_FAILURE : FB_SUCCESS;
+			remaining.tv_sec = nanos / billion;
+			remaining.tv_nsec = nanos % billion;
+		}
+
+		// Do not use FUTEX_PRIVATE_FLAG: another process may map this file elsewhere.
+		if (futex(&event->event_count, FUTEX_WAIT, static_cast<int>(count),
+			micro_seconds > 0 ? &remaining : nullptr, nullptr) == -1)
+		{
+			const int err = errno;
+			if (err == ETIMEDOUT)
+				return event_blocked(event, value) ? FB_FAILURE : FB_SUCCESS;
+			if (err != EINTR && err != ECANCELED && err != EAGAIN)
+			{
+				gds__log("ISC_event_wait: futex failed with errno = %d", err);
+				return FB_FAILURE;
+			}
+		}
 	}
 
 #else // pthread-based event
@@ -838,6 +907,16 @@ int SharedMemoryBase::eventPost(event_t* event)
 		return ISC_kill(event->event_pid, event->event_id, event->event_handle) == 0 ? FB_SUCCESS : FB_FAILURE;
 
 	return SetEvent(event->event_handle) ? FB_SUCCESS : FB_FAILURE;
+
+#elif defined(OPENBSD)
+
+	__atomic_fetch_add(&event->event_count, 1, __ATOMIC_RELEASE);
+	if (futex(&event->event_count, FUTEX_WAKE, INT_MAX, nullptr, nullptr) == -1)
+	{
+		gds__log("ISC_event_post: futex failed with errno = %d", errno);
+		return FB_FAILURE;
+	}
+	return FB_SUCCESS;
 
 #else // pthread-based event
 
@@ -1178,6 +1257,15 @@ void SharedMemoryBase::unlinkFile(const TEXT* expanded_filename) noexcept
 
 	if (hFile != INVALID_HANDLE_VALUE)
 		CloseHandle(hFile);
+#elif defined(OPENBSD)
+	// Do not replace the mutex of a mapping that could not be removed.
+	if (unlink(expanded_filename) == 0 || errno == ENOENT)
+	{
+		char mutexFile[MAXPATHLEN + sizeof(".mutex")];
+		const int len = snprintf(mutexFile, sizeof(mutexFile), "%s.mutex", expanded_filename);
+		if (len > 0 && static_cast<size_t>(len) < sizeof(mutexFile))
+			unlink(mutexFile);
+	}
 #else
 	unlink(expanded_filename);
 #endif // WIN_NT
@@ -1329,6 +1417,12 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 
 	// create lock in order to have file autoclosed on error
 	mainLock.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(expanded_filename));
+
+#ifdef OPENBSD
+	// Lifetime locks on the mapping file must not interfere with its data mutex.
+	sh_mem_fileMutex = RefPtr<SharedFileInfo>(REF_NO_INCR,
+		SharedFileInfo::get((PathName(expanded_filename) + ".mutex").c_str()));
+#endif
 
 	if (length == 0)
 	{
@@ -2771,6 +2865,14 @@ void SharedMemoryBase::mutexLock()
 
 	int state = ISC_mutex_lock(sh_mem_mutex);
 
+#elif defined(OPENBSD)
+
+	int state;
+	do
+	{
+		state = sh_mem_fileMutex->lock(false, true, nullptr);
+	} while (state == EINTR);
+
 #else // POSIX SHARED MUTEX
 
 	int state = pthread_mutex_lock(sh_mem_mutex->mtx_mutex);
@@ -2799,6 +2901,13 @@ bool SharedMemoryBase::mutexLockCond()
 
 	return ISC_mutex_lock_cond(sh_mem_mutex) == 0;
 
+#elif defined(OPENBSD)
+
+	const int state = sh_mem_fileMutex->lock(false, false, nullptr);
+	if (state > 0)
+		sh_mem_callback->mutexBug(state, "mutexLockCond");
+	return state == 0;
+
 #else // POSIX SHARED MUTEX
 
 	int state = pthread_mutex_trylock(sh_mem_mutex->mtx_mutex);
@@ -2823,6 +2932,11 @@ void SharedMemoryBase::mutexUnlock()
 #if defined(WIN_NT)
 
 	int state = ISC_mutex_unlock(sh_mem_mutex);
+
+#elif defined(OPENBSD)
+
+	sh_mem_fileMutex->unlock();
+	const int state = 0;
 
 #else // POSIX SHARED MUTEX
 
@@ -2883,7 +2997,12 @@ static bool event_blocked(const event_t* event, const SLONG value)
  *
  **************************************/
 
+#ifdef OPENBSD
+	const uint32_t count = __atomic_load_n(&event->event_count, __ATOMIC_ACQUIRE);
+	if (static_cast<SLONG>(count - static_cast<uint32_t>(value)) >= 0)
+#else
 	if (event->event_count >= value)
+#endif
 	{
 #ifdef DEBUG_ISC_SYNC
 		printf("event_blocked: FALSE (eg something to report)\n");

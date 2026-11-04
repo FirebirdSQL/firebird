@@ -190,6 +190,19 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 		return NULL;
 	}
 
+#ifdef OPENBSD
+	// ld.so may resolve an unversioned name to a versioned file. Compare objects,
+	// not their requested names, and still reject symbols from dependencies.
+	void* symbolModule = dlopen(info.dli_fname, RTLD_LAZY | RTLD_NOLOAD);
+	const bool sameModule = symbolModule && symbolModule == module;
+	if (symbolModule)
+		dlclose(symbolModule);
+	if (!sameModule)
+	{
+		makeErrorStatus(status, "Actual module does not match requested");
+		return NULL;
+	}
+#else
 	const auto& libraryPath = realPath.isEmpty() ? fileName : realPath;
 
 	char symbolPathBuffer[PATH_MAX];
@@ -216,6 +229,7 @@ void* DlfcnModule::findSymbol(ISC_STATUS* status, const Firebird::string& symNam
 		makeErrorStatus(status, errText);
 		return NULL;
 	}
+#endif // OPENBSD
 #endif
 
 	return result;

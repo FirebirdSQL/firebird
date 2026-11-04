@@ -150,7 +150,7 @@ namespace {
 
 	class Mnt : public Firebird::MutexLockGuard		// Protect static values returned by getmntinfo()/getmntent()
 	{
-#ifdef DARWIN
+#if defined(DARWIN) || defined(OPENBSD)
 	private:
 		struct statfs* mnt_info;
 		int mnt_cnt;
@@ -1423,7 +1423,7 @@ bool Mnt::get()
 }
 #endif //Solaris
 
-#ifdef DARWIN
+#if defined(DARWIN) || defined(OPENBSD)
 #define GET_MOUNTS
 bool Mnt::get()
 {
