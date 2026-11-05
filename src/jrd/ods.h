@@ -449,6 +449,12 @@ struct index_root_page
 		void setEmpty();
 	} irt_rpt[1];
 
+	// Return the backing slot referenced by a migrating index slot,
+	// or NULL when the slot is not in the irt_migrate state or the
+	// stored slot number points outside this page
+	const irt_repeat* getBackSlot(const irt_repeat* rpt) const;
+	irt_repeat* getBackSlot(const irt_repeat* rpt);
+
 	static_assert(sizeof(struct irt_repeat) == 24, "struct irt_repeat size mismatch");
 	static_assert(offsetof(struct irt_repeat, irt_transaction) == 0, "irt_transaction offset mismatch");
 	static_assert(offsetof(struct irt_repeat, irt_page_num) == 8, "irt_root offset mismatch");
@@ -471,13 +477,15 @@ struct irtd
 {
 	USHORT irtd_field;
 	USHORT irtd_itype;
+	USHORT irtd_length;				// length in characters, if not zero
 	float irtd_selectivity;
 };
 
-static_assert(sizeof(struct irtd) == 8, "struct irtd size mismatch");
+static_assert(sizeof(struct irtd) == 12, "struct irtd size mismatch");
 static_assert(offsetof(struct irtd, irtd_field) == 0, "irtd_field offset mismatch");
 static_assert(offsetof(struct irtd, irtd_itype) == 2, "irtd_itype offset mismatch");
-static_assert(offsetof(struct irtd, irtd_selectivity) == 4, "irtd_selectivity offset mismatch");
+static_assert(offsetof(struct irtd, irtd_length) == 4, "irtd_length offset mismatch");
+static_assert(offsetof(struct irtd, irtd_selectivity) == 8, "irtd_selectivity offset mismatch");
 
 // possible index states
 inline constexpr UCHAR irt_unused		= 0;	// empty slot
@@ -773,6 +781,22 @@ inline void index_root_page::irt_repeat::setMigrate(const PageNumber& rootPage, 
 	irt_backslot = slot;
 
 	setState(irt_migrate);
+}
+
+inline const index_root_page::irt_repeat* index_root_page::getBackSlot(const irt_repeat* rpt) const
+{
+	fb_assert(rpt->getState() == irt_migrate);
+
+	if (rpt->getState() != irt_migrate || rpt->irt_backslot >= irt_count)
+		return nullptr;
+
+	return &irt_rpt[rpt->irt_backslot];
+}
+
+inline index_root_page::irt_repeat* index_root_page::getBackSlot(const irt_repeat* rpt)
+{
+	return const_cast<irt_repeat*>(
+		static_cast<const index_root_page*>(this)->getBackSlot(rpt));
 }
 
 inline constexpr int STUFF_COUNT		= 4;

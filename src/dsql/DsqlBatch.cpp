@@ -26,6 +26,7 @@
 
 #include "../jrd/EngineInterface.h"
 #include "../jrd/jrd.h"
+#include "../jrd/tra.h"
 #include "../jrd/status.h"
 #include "../jrd/exe_proto.h"
 #include "../dsql/dsql.h"
@@ -416,7 +417,7 @@ void DsqlBatch::addBlobStream(thread_db* tdbb, unsigned length, const void* inBu
 	m_blobs.put(inBuffer, length);
 }
 
-void DsqlBatch::registerBlob(thread_db*, const ISC_QUAD* existingBlob, ISC_QUAD* blobId)
+void DsqlBatch::registerBlob(thread_db* tdbb, const ISC_QUAD* existingBlob, ISC_QUAD* blobId)
 {
 	blobCheckMeta();
 
@@ -722,6 +723,9 @@ private:
 				}
 
 				m_blobMap.remove(*id);
+
+				transaction->checkBlob(tdbb, reinterpret_cast<const bid*>(&newId), NULL, true);
+
 				*id = newId;
 			}
 

@@ -1397,9 +1397,13 @@ public:
 	RelationPages* getPages(thread_db* tdbb, RelationPages::InstanceId instanceId = MAX_TRA_NUMBER,
 							bool allocPages = true)
 	{
-		return rel_perm->useTempPages(tdbb) ?
-			rel_perm->getTempPages(tdbb, instanceId, allocPages) :
-			getBasePages(tdbb);
+		if (rel_perm->useTempPages(tdbb))
+		{
+			const auto tempPages = rel_perm->getTempPages(tdbb, instanceId, allocPages);
+			return tempPages ? tempPages : (allocPages ? getBasePages(tdbb) : nullptr);
+		}
+
+		return getBasePages(tdbb);
 	}
 
 	void deletePages(thread_db* tdbb);

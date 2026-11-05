@@ -38,8 +38,7 @@ namespace Firebird::Jrd
 	class thread_db;
 
 	bool IDX_check_master_types(thread_db*, index_desc&, jrd_rel*, int&);
-	void IDX_create_index(thread_db*, IdxCreate createMethod, jrd_rel*, index_desc*,
-					  const QualifiedName&, USHORT*, jrd_tra*, SelectivityList&);
+	void IDX_create_index(thread_db*, IndexCreation&, USHORT*, SelectivityList&);
 	bool IDX_mark_index(thread_db*, jrd_rel*, MetaId);
 	void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current,
 				   TraNumber tran);
@@ -50,7 +49,7 @@ namespace Firebird::Jrd
 	void IDX_modify_check_constraints(thread_db*, record_param*, record_param*, jrd_tra*);
 	void IDX_store(thread_db*, record_param*, jrd_tra*);
 	void IDX_modify_flag_uk_modified(thread_db*, record_param*, record_param*, jrd_tra*);
-	bool IDX_validate_unique(thread_db* tdbb, jrd_rel* relation, MetaId id);
+	bool IDX_validate_unique(thread_db* tdbb, jrd_tra*, jrd_rel* relation, MetaId id);
 
 } // namespace Firebird::Jrd
 

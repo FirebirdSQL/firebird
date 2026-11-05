@@ -139,10 +139,7 @@ public:
 				break;
 
 			default:
-				status_exception::raise(
-					Arg::Gds(isc_metadata_corrupt) <<
-					Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
-						Arg::Num(version));
+				return version;
 		}
 
 		auto code = getByte();
