@@ -209,6 +209,15 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	bool found = false;
 	FieldFinder fieldFinder(visitor.getPool(), visitor.checkScopeLevel, visitor.matchType);
 
+	// Fields used inside sub-selects of our arguments say nothing about the scope
+	// level this aggregate itself belongs to - they are checked when the sub-select
+	// is processed. Note that AggNode::dsqlAggregateFinder() treats an aggregate
+	// like this as belonging to the context where it's written (see the
+	// localDeepestLevel == 0 case there). Ignoring them here allows an aggregate
+	// like LIST(DISTINCT (SELECT ...)) to escape the checks that use this visitor,
+	// which makes it run without a sort block allocated. See #8012 in the tracker.
+	fieldFinder.ignoreSubSelects = true;
+
 	NodeRefsHolder holder(visitor.getPool());
 	getChildren(holder, true);
 
@@ -383,6 +392,8 @@ void AggNode::aggInit(thread_db* tdbb, Request* request) const
 	{
 		// Initialize a sort to reject duplicate values.
 
+		fb_assert(asb);
+
 		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 
 		// Get rid of the old sort areas if this request has been used already.
@@ -515,6 +526,8 @@ dsc* AggNode::execute(thread_db* tdbb, Request* request) const
 
 	if (distinct || sort)
 	{
+		fb_assert(asb);
+
 		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 		dsc desc = asb->desc;
 
