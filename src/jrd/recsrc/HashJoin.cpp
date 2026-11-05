@@ -379,11 +379,17 @@ void HashJoin::HashTable::Stream::build()
 		}
 	}
 
-	// Pass 4: sort each bucket by hash. Singletons are skipped.
-	// Records with equal hashes may end up in any order relative to
-	// each other, which is fine for the join: they all compare equal
-	// on the join key anyway.
-	auto compareHash = [](const Entry& a, const Entry& b) { return a.hash < b.hash; };
+	// Pass 4: Sort each bucket by hash. Ties are broken by position, so that entries
+	// sharing the same hash (either from duplicate keys or from genuine hash
+	// collisions) end up in ascending position order. This keeps subsequent
+	// BufferedStream::locate() calls in insertion order, which matters when
+	// the stream has spilled to a temporary file: sequential reads instead
+	// of random seeks.
+	auto compareHash = [](const Entry& a, const Entry& b) {
+		if (a.hash < b.hash) return true;
+		if (a.hash > b.hash) return false;
+		return a.position < b.position;
+	};
 
 	for (ULONG bucket = 0; bucket < tableSize; bucket++)
 	{
