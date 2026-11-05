@@ -26,7 +26,7 @@
 #include "../jrd/Record.h"
 #include "../jrd/RecordNumber.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class jrd_tra;
 	class LocalTemporaryTable;
@@ -75,7 +75,7 @@ namespace Jrd
 		const Format* m_format;
 	};
 
-	typedef Firebird::BePlusTree<UndoItem, SINT64, UndoItem> UndoItemTree;
+	typedef BePlusTree<UndoItem, SINT64, UndoItem> UndoItemTree;
 
 	class VerbAction
 	{
@@ -121,7 +121,7 @@ namespace Jrd
 
 		UndoType type;
 		QualifiedName name;
-		Firebird::AutoPtr<LocalTemporaryTable> original;	// Original LTT state (for ALTER/DROP), nullptr for CREATE
+		AutoPtr<LocalTemporaryTable> original;	// Original LTT state (for ALTER/DROP), nullptr for CREATE
 		LttUndoItem* next;
 	};
 
@@ -400,7 +400,6 @@ namespace Jrd
 		jrd_tra* const m_transaction;
 		SavNumber m_number;
 	};
-
-} // namespace
+} // namespace Firebird::Jrd
 
 #endif // JRD_SAVEPOINT_H

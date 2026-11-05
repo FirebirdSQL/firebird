@@ -29,10 +29,9 @@
 
 #include "firebird/Interface.h"
 
-namespace Auth {
-
-void registerSrpClient(Firebird::IPluginManager* iPlugin);
-
-} // namespace Auth
+namespace Firebird::Auth
+{
+	void registerSrpClient(IPluginManager* iPlugin);
+} // namespace Firebird::Auth
 
 #endif // AUTH_SRP_CLIENT_H

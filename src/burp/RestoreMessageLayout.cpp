@@ -32,9 +32,7 @@
 #include "../jrd/align.h"
 #include "../jrd/val.h"
 
-using namespace Firebird;
-
-namespace Burp {
+namespace Firebird::Burp {
 
 
 static bool makeMessageDescriptor(dsc& desc, const burp_fld* field, bool fixFssData, CSetId fixFssDataId)
@@ -97,13 +95,13 @@ static bool makeMessageDescriptor(dsc& desc, const burp_fld* field, bool fixFssD
 static RCRD_OFFSET alignField(const burp_rel* relation, RCRD_OFFSET offset,
 	USHORT alignment, USHORT length)
 {
-	if (offset > MAX_RECORD_SIZE)
+	if (offset > Jrd::MAX_RECORD_SIZE)
 		raiseInvalidLength(relation);
 
 	if (alignment)
 		offset = FB_ALIGN(offset, alignment);
 
-	if (offset > MAX_RECORD_SIZE || length > MAX_RECORD_SIZE - offset)
+	if (offset > Jrd::MAX_RECORD_SIZE || length > Jrd::MAX_RECORD_SIZE - offset)
 		raiseInvalidLength(relation);
 
 	return offset;
@@ -169,4 +167,4 @@ void RestoreMessageLayout::clear() noexcept
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

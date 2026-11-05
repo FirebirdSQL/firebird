@@ -52,6 +52,8 @@ int CLIB_ROUTINE main(int argc, char* argv[])
  *	Invoke real nbackup main function
  *
  **************************************/
+	using namespace Firebird;
+
 #ifdef HAVE_LOCALE_H
 	// Pick up the system locale to allow SYSTEM<->UTF8 conversions
 	setlocale(LC_CTYPE, "");
@@ -60,10 +62,10 @@ int CLIB_ROUTINE main(int argc, char* argv[])
 
 	try
 	{
-		Firebird::AutoPtr<Firebird::UtilSvc> uSvc(Firebird::UtilSvc::createStandalone(argc, argv));
- 		nbackup(uSvc);
+		AutoPtr<UtilSvc> uSvc(UtilSvc::createStandalone(argc, argv));
+		Nbackup::nbackup(uSvc);
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		// should be already printed, no need to print once more here
 		return FINI_ERROR;

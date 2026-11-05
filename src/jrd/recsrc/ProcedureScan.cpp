@@ -34,8 +34,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // ---------------------------
 // Data access: procedure scan
@@ -384,3 +385,6 @@ void ProcedureScan::assignParams(thread_db* tdbb,
 		}
 	}
 }
+
+
+}	// namespace Firebird::Jrd

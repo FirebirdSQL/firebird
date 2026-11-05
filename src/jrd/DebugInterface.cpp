@@ -25,8 +25,10 @@
 #include "../jrd/DebugInterface.h"
 #include "../jrd/blb_proto.h"
 
-using namespace Jrd;
-using namespace Firebird;
+
+namespace Firebird::Jrd
+{
+
 
 void DBG_parse_debug_info(thread_db* tdbb, bid* blob_id, DbgInfo& dbgInfo)
 {
@@ -272,3 +274,6 @@ void DBG_parse_debug_info(ULONG length, const UCHAR* data, DbgInfo& dbgInfo)
 		ERR_post_warning(Arg::Warning(isc_bad_debug_format));
 	}
 }
+
+
+} // namespace Firebird::Jrd

@@ -49,10 +49,9 @@
 #include "../jrd/blb.h"
 #include "../jrd/evl_proto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
-namespace Burp {
+namespace Firebird::Burp {
 
 
 struct FastPathRecordReader::Imp
@@ -399,4 +398,4 @@ void FastPathRecordReader::clear()
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

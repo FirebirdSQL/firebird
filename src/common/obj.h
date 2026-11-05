@@ -21,10 +21,14 @@
  * Contributor(s): ______________________________________.
  */
 
-#ifndef JRD_OBJ_H
-#define JRD_OBJ_H
+#ifndef COMMON_OBJ_H
+#define COMMON_OBJ_H
 
 #include "../common/gdsassert.h"
+
+namespace Firebird
+{
+
 
 // Object types used in RDB$DEPENDENCIES and RDB$USER_PRIVILEGES and stored in backup.
 // Note: some values are hard coded in grant.gdl
@@ -282,4 +286,6 @@ inline const char* getObjectName(ObjectType objType)
 }
 
 
-#endif // JRD_OBJ_H
+} // namespace Firebird
+
+#endif // COMMON_OBJ_H

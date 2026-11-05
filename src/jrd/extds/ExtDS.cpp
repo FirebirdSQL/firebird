@@ -70,11 +70,9 @@
 
 #endif
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd::EDS
+{
 
-
-namespace EDS {
 
 // Manager
 
@@ -391,7 +389,7 @@ void Provider::bindConnection(thread_db* tdbb, Connection* conn)
 }
 
 Connection* Provider::getBoundConnection(Jrd::thread_db* tdbb,
-	const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
+	const PathName& dbName, ClumpletReader& dpb,
 	TraScope tra_scope, bool isCurrentAtt)
 {
 	Attachment* att = tdbb->getAttachment();
@@ -964,7 +962,7 @@ void ConnectionsPool::putConnection(thread_db* tdbb, Connection* conn)
 	fb_assert(conn->getConnPool() == this);
 
 	Connection* oldConn = NULL;
-	Firebird::RefPtr<IdleTimer>	timer;
+	RefPtr<IdleTimer>	timer;
 
 	if (m_maxCount > 0)
 	{
@@ -1487,7 +1485,7 @@ void ConnectionsPool::IdleTimer::handler()
 void ConnectionsPool::IdleTimer::start()
 {
 	FbLocalStatus s;
-	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
+	ITimerControl* timerCtrl = TimerInterfacePtr();
 
 	const time_t expTime = m_connPool.getIdleExpireTime();
 	if (expTime == 0)
@@ -1521,7 +1519,7 @@ void ConnectionsPool::IdleTimer::stop()
 	m_time = 0;
 
 	FbLocalStatus s;
-	ITimerControl* timerCtrl = Firebird::TimerInterfacePtr();
+	ITimerControl* timerCtrl = TimerInterfacePtr();
 	timerCtrl->stop(&s, this);
 }
 
@@ -2712,7 +2710,7 @@ bool CryptHash::operator==(const CryptHash& h) const
 
 // CryptCallbackRedirector
 
-void CryptCallbackRedirector::setRedirect(Firebird::ICryptKeyCallback* originalCallback)
+void CryptCallbackRedirector::setRedirect(ICryptKeyCallback* originalCallback)
 {
 	m_hash.assign(originalCallback);
 
@@ -2720,7 +2718,7 @@ void CryptCallbackRedirector::setRedirect(Firebird::ICryptKeyCallback* originalC
 		m_keyCallback = originalCallback;
 }
 
-void CryptCallbackRedirector::resetRedirect(Firebird::ICryptKeyCallback* newCallback)
+void CryptCallbackRedirector::resetRedirect(ICryptKeyCallback* newCallback)
 {
 #ifdef DEV_BUILD
 	CryptHash ch(newCallback);
@@ -2737,4 +2735,5 @@ bool CryptCallbackRedirector::operator==(const CryptHash& ch) const
 	return m_hash == ch;
 }
 
-} // namespace EDS
+
+} // namespace Firebird::Jrd::EDS

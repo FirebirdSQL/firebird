@@ -27,7 +27,7 @@
 #include "../jrd/MetaName.h"
 #include "../common/classes/alloc.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 
 struct IndexSegment
@@ -47,6 +47,6 @@ struct IndexSegment
 	SSHORT length = 0;		// Length in characters, if zero - equal to the field's length
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_INDEX_SEGMENT_H

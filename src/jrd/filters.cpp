@@ -41,8 +41,9 @@
 #include "../jrd/DebugInterface.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 static ISC_STATUS caller(USHORT, BlobControl*, USHORT, UCHAR*, USHORT*);
 static void dump_blr(void*, SSHORT, const char*);
@@ -944,7 +945,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 	case isc_blob_filter_put_segment:
 		{
 			USHORT len = control->ctl_buffer_length;
-			Firebird::HalfStaticArray<BYTE, BUFFER_MEDIUM> buffer;
+			HalfStaticArray<BYTE, BUFFER_MEDIUM> buffer;
 			bool first = true;
 			BYTE* p;
 
@@ -985,7 +986,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 					result_length = aux->ctlaux_obj1.convert(len, p,
 						aux->ctlaux_buffer1_len, aux->ctlaux_buffer1, &err_position);
 				}
-				catch (const Firebird::status_exception&)
+				catch (const status_exception&)
 				{
 					return isc_transliteration_failed;
 				}
@@ -1112,7 +1113,7 @@ ISC_STATUS filter_transliterate_text(USHORT action, BlobControl* control)
 						control->ctl_buffer_length, control->ctl_buffer,
 						&err_position);
 	}
-	catch (const Firebird::status_exception&)
+	catch (const status_exception&)
 	{
 		return isc_transliteration_failed;
 	}
@@ -1571,3 +1572,6 @@ ISC_STATUS filter_debug_info(USHORT action, BlobControl* control)
 
 	return FB_SUCCESS;
 }
+
+
+} // namespace Firebird::Jrd

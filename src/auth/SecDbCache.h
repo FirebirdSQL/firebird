@@ -35,7 +35,9 @@
 #include "../common/classes/auto.h"
 
 
-namespace Auth {
+namespace Firebird::Auth
+{
+
 
 class VSecDb
 {
@@ -56,12 +58,12 @@ public:
 class PluginDatabases;
 
 class CachedSecurityDatabase final
-	: public Firebird::RefCntIface<Firebird::ITimerImpl<CachedSecurityDatabase, Firebird::CheckStatusWrapper> >
+	: public RefCntIface<ITimerImpl<CachedSecurityDatabase, CheckStatusWrapper>>
 {
 public:
 	char secureDbName[MAXPATHLEN + 1];
 
-	CachedSecurityDatabase(PluginDatabases* l, const Firebird::PathName& nm)
+	CachedSecurityDatabase(PluginDatabases* l, const PathName& nm)
 		: secDb(nullptr), list(l)
 	{
 		nm.copyTo(secureDbName, sizeof secureDbName);
@@ -71,13 +73,13 @@ public:
 	void handler();
 	void close();
 
-	Firebird::Mutex mutex;
-	Firebird::AutoPtr<VSecDb> secDb;
+	Mutex mutex;
+	AutoPtr<VSecDb> secDb;
 	PluginDatabases* list;
 
 public:
 	// Related RAII holder
-	class Instance : public Firebird::RefPtr<CachedSecurityDatabase>
+	class Instance : public RefPtr<CachedSecurityDatabase>
 	{
 	public:
 		Instance()
@@ -121,15 +123,16 @@ public:
 	{ }
 
 private:
-	Firebird::HalfStaticArray<CachedSecurityDatabase*, 4> dbArray;
-	Firebird::Mutex arrayMutex;
+	HalfStaticArray<CachedSecurityDatabase*, 4> dbArray;
+	Mutex arrayMutex;
 
 public:
-	void getInstance(Firebird::IPluginConfig* pluginConfig, CachedSecurityDatabase::Instance& instance);
+	void getInstance(IPluginConfig* pluginConfig, CachedSecurityDatabase::Instance& instance);
 	int shutdown();
 	void handler(CachedSecurityDatabase* tgt);
 };
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
 
 #endif // FB_SECDBCACHE_H

@@ -24,7 +24,11 @@
 #ifndef ALICE_EXE_PROTO_H
 #define ALICE_EXE_PROTO_H
 
+namespace Firebird::Alice {
+
 int EXE_action(const TEXT*, const SINT64);
 int EXE_two_phase(const TEXT*, const SINT64);
+
+} // namespace Firebird::Alice
 
 #endif // ALICE_EXE_PROTO_H

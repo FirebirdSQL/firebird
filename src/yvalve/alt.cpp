@@ -46,7 +46,9 @@
 
 #include "../jrd/event.h"
 #include "../yvalve/alt_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
+
+using namespace Firebird;
 
 static ISC_STATUS executeSecurityCommand(ISC_STATUS*, const USER_SEC_DATA*, Auth::UserData&);
 
@@ -827,8 +829,8 @@ namespace {
 template <typename T1, typename T2>
 void copyField(T1& f, T2 from, short flag)
 {
-	Firebird::LocalStatus s;
-	Firebird::CheckStatusWrapper statusWrapper(&s);
+	LocalStatus s;
+	CheckStatusWrapper statusWrapper(&s);
 
 	if (flag && from)
 	{
@@ -864,25 +866,25 @@ ISC_STATUS API_ROUTINE isc_add_user(ISC_STATUS* status, const USER_SEC_DATA* inp
  **************************************/
 	Auth::UserData userInfo;
 	userInfo.op = Auth::ADD_OPER;
-	Firebird::LocalStatus s;
-	Firebird::CheckStatusWrapper statusWrapper(&s);
+	LocalStatus s;
+	CheckStatusWrapper statusWrapper(&s);
 
 	if (input_user_data->user_name)
 	{
-		Firebird::string work = input_user_data->user_name;
+		string work = input_user_data->user_name;
 		if (work.length() > USERNAME_LENGTH) {
 			return user_error(status, isc_usrname_too_long);
 		}
 
 		const auto l = work.find(' ');
-		if (l != Firebird::string::npos) {
+		if (l != string::npos) {
 			work.resize(l);
 		}
 
 		userInfo.user.set(&statusWrapper, work.c_str());
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 		userInfo.user.setEntered(&statusWrapper, 1);
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 	}
 	else {
 		return user_error(status, isc_usrname_required);
@@ -891,9 +893,9 @@ ISC_STATUS API_ROUTINE isc_add_user(ISC_STATUS* status, const USER_SEC_DATA* inp
 	if (input_user_data->password)
 	{
 		userInfo.pass.set(&statusWrapper, input_user_data->password);
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 		userInfo.pass.setEntered(&statusWrapper, 1);
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 	}
 	else {
 		return user_error(status, isc_password_required);
@@ -927,25 +929,25 @@ ISC_STATUS API_ROUTINE isc_delete_user(ISC_STATUS* status, const USER_SEC_DATA* 
  **************************************/
 	Auth::UserData userInfo;
 	userInfo.op = Auth::DEL_OPER;
-	Firebird::LocalStatus s;
-	Firebird::CheckStatusWrapper statusWrapper(&s);
+	LocalStatus s;
+	CheckStatusWrapper statusWrapper(&s);
 
 	if (input_user_data->user_name)
 	{
-		Firebird::string work = input_user_data->user_name;
+		string work = input_user_data->user_name;
 		if (work.length() > USERNAME_LENGTH) {
 			return user_error(status, isc_usrname_too_long);
 		}
 
 		const auto l = work.find(' ');
-		if (l != Firebird::string::npos) {
+		if (l != string::npos) {
 			work.resize(l);
 		}
 
 		userInfo.user.set(&statusWrapper, work.c_str());
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 		userInfo.user.setEntered(&statusWrapper, 1);
-		Firebird::check(&statusWrapper);
+		check(&statusWrapper);
 	}
 	else {
 		return user_error(status, isc_usrname_required);
@@ -972,18 +974,18 @@ ISC_STATUS API_ROUTINE isc_modify_user(ISC_STATUS* status, const USER_SEC_DATA* 
  **************************************/
 	Auth::UserData userInfo;
 	userInfo.op = Auth::MOD_OPER;
-	Firebird::LocalStatus s;
-	Firebird::CheckStatusWrapper statusWrapper(&s);
+	LocalStatus s;
+	CheckStatusWrapper statusWrapper(&s);
 
 	if (input_user_data->user_name)
 	{
-		Firebird::string work = input_user_data->user_name;
+		string work = input_user_data->user_name;
 		if (work.length() > USERNAME_LENGTH) {
 			return user_error(status, isc_usrname_too_long);
 		}
 
 		const auto l = work.find(' ');
-		if (l != Firebird::string::npos) {
+		if (l != string::npos) {
 			work.resize(l);
 		}
 
@@ -1040,7 +1042,7 @@ static ISC_STATUS executeSecurityCommand(ISC_STATUS* status,
 	if (handle)
 	{
 		callRemoteServiceManager(status, handle, userInfo, NULL);
-		makePermanentVector(status);
+		Why::makePermanentVector(status);
 
 		ISC_STATUS_ARRAY user_status;
 		detachRemoteServiceManager(user_status, handle);

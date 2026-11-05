@@ -27,10 +27,9 @@
 #include "../common/classes/GetPlugins.h"
 #include "../jrd/EngineInterface.h"
 
-using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
-namespace Burp {
+namespace Firebird::Burp {
 
 
 struct FastPathBurpProvider::EngineHolder
@@ -66,4 +65,4 @@ IAttachment* FastPathBurpProvider::attachWorker(CheckStatusWrapper* status, cons
 }
 
 
-} // namespace Burp
+} // namespace Firebird::Burp

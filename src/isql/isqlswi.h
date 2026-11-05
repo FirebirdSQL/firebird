@@ -26,7 +26,11 @@
 #define ISQL_ISQLSWI_H
 
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
+
+namespace Firebird::Isql
+{
+
 
 enum isql_switches
 {
@@ -108,5 +112,8 @@ static const Switches::in_sw_tab_t isql_in_sw_table[] =
 	{IN_SW_ISQL_HELP 		, 0, "?"				, 0, 0, 0, false, false, 0		, 1, NULL, iqoArgNone},
 	{IN_SW_ISQL_0			, 0, NULL				, 0, 0, 0, false, false, 0		, 0, NULL, iqoArgNone}
 };
+
+
+} // namespace Firebird::Isql
 
 #endif // ISQL_ISQLSWI_H

@@ -24,7 +24,9 @@
 #ifndef GPRE_JRDME_PROTO_H
 #define GPRE_JRDME_PROTO_H
 
-void	JRDMET_init(gpre_dbb*);
+namespace Firebird::Gpre
+{
+	void	JRDMET_init(gpre_dbb*);
+} // namespace Firebird::Gpre
 
 #endif // GPRE_JRDME_PROTO_H
-

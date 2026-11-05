@@ -50,7 +50,7 @@ namespace Firebird
 		{ }
 
 		template <typename... Args>
-		explicit LocalStatusWrapper(Firebird::MemoryPool& p, Args&&... args)
+		explicit LocalStatusWrapper(MemoryPool& p, Args&&... args)
 			: localStatus(p), localStatusVector(&localStatus, std::forward<Args>(args)...)
 		{ }
 
@@ -84,7 +84,7 @@ namespace Firebird
 		{
 			if (localStatusVector.isDirty())
 			{
-				if (localStatus.getState() & Firebird::IStatus::STATE_ERRORS)
+				if (localStatus.getState() & IStatus::STATE_ERRORS)
 					raise();
 			}
 		}
@@ -101,7 +101,7 @@ namespace Firebird
 
 		[[noreturn]] void raise() const
 		{
-			Firebird::status_exception::raise(&localStatus);
+			status_exception::raise(&localStatus);
 		}
 
 		bool isEmpty() const
@@ -115,7 +115,7 @@ namespace Firebird
 		}
 
 	private:
-		Firebird::LocalStatus localStatus;
+		LocalStatus localStatus;
 		SW localStatusVector;
 	};
 

@@ -26,7 +26,7 @@
 //#include "../jrd/ods.h"
 #include "../jrd/lls.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	// Possible page space IDs:
 	//	- DB_PAGE_SPACE == 1 is a main database pagespace (primary tablespace)
@@ -50,7 +50,7 @@ namespace Jrd
 			: m_pageNumber(pageNumber), m_pageSpaceID(pageSpaceID)
 		{}
 
-		// Required to be able to keep it in Firebird::Stack
+		// Required to be able to keep it in Stack
 		inline PageNumber() noexcept
 			: m_pageNumber(0), m_pageSpaceID(INVALID_PAGE_SPACE)
 		{}
@@ -145,8 +145,8 @@ namespace Jrd
 		ULONG m_pageSpaceID;
 	};
 
-	typedef Firebird::Stack<PageNumber> PageStack;
+	typedef Stack<PageNumber> PageStack;
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif	// JRD_PAGE_NUMBER_H

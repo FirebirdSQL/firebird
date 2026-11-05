@@ -55,7 +55,9 @@
 
 //#define DEBUG_PLUGINS
 
-using namespace Firebird;
+namespace Firebird::Why
+{
+
 
 namespace
 {
@@ -163,7 +165,7 @@ namespace
 			{
 				return confFile.hasData() ? newParam(confFile->findParameter(name)) : NULL;
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -176,7 +178,7 @@ namespace
 			{
 				return confFile.hasData() ? newParam(confFile->findParameter(name, value)) : NULL;
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -206,7 +208,7 @@ namespace
 
 				return newParam(&p[n + pos]);
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -240,7 +242,7 @@ namespace
 				return rc;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -304,7 +306,7 @@ namespace
 	};
 
 	// Controls module, containing plugins.
-	class PluginModule : public Firebird::RefCounted, public GlobalStorage
+	class PluginModule : public RefCounted, public GlobalStorage
 	{
 	public:
 		PluginModule(ModuleLoader::Module* pmodule, const PathName& pname);
@@ -401,15 +403,15 @@ namespace
 			if (cleanup)
 			{
 				// Pause timer thread for cleanup period
-				MutexLockGuard timerPause(Why::pauseTimer(), FB_FUNCTION);
+				MutexLockGuard timerPause(pauseTimer(), FB_FUNCTION);
 
 				cleanup->doClean();
 			}
 		}
 
 		PathName name;
-		Firebird::AutoPtr<ModuleLoader::Module> module;
-		Firebird::IPluginModule* cleanup;
+		AutoPtr<ModuleLoader::Module> module;
+		IPluginModule* cleanup;
 		ObjectsArray<RegisteredPlugin> regPlugins;
 		PluginModule* next;
 		PluginModule** prev;
@@ -609,7 +611,7 @@ namespace
 		FbLocalStatus ls;
 		IPluginBase* plugin = module->getPlugin(regPlugin).factory->createPlugin(&ls, par);
 
-		if (plugin && !(ls->getState() & Firebird::IStatus::STATE_ERRORS))
+		if (plugin && !(ls->getState() & IStatus::STATE_ERRORS))
 		{
 			plugin->setOwner(par);
 			return plugin;
@@ -716,7 +718,7 @@ namespace
 				if (refCounter != 0)
 					return 1;
 
-				if (Why::timerThreadStopped() && !processingDelayedDelete && delayedDelete)
+				if (timerThreadStopped() && !processingDelayedDelete && delayedDelete)
 				{
 					// delay delete
 					addRef();
@@ -848,7 +850,7 @@ namespace
 				namesList.alltrim(" \t");
 				next(status);
 			}
-			catch (const Firebird::Exception& ex)
+			catch (const Exception& ex)
 			{
 				ex.stuffException(status);
 			}
@@ -949,7 +951,7 @@ namespace
 				return;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -1017,11 +1019,11 @@ namespace
 					return p;
 
 				next(status);
-				if (status->getState() & Firebird::IStatus::STATE_ERRORS)
+				if (status->getState() & IStatus::STATE_ERRORS)
 					break;
 			}
 		}
-		catch (const Firebird::Exception& ex)
+		catch (const Exception& ex)
 		{
 			ex.stuffException(status);
 		}
@@ -1044,8 +1046,6 @@ namespace
 	};
 } // anonymous namespace
 
-
-namespace Firebird {
 
 PluginManager::PluginManager()
 {
@@ -1142,8 +1142,8 @@ void PluginManager::unregisterModule(IPluginModule* cleanup)
 	// exit() is called by client of embedded server. Shutdown ourselves.
 
 #ifdef WIN_NT
-	if (!Firebird::dDllUnloadTID)
-		Firebird::dDllUnloadTID = GetCurrentThreadId();
+	if (!dDllUnloadTID)
+		dDllUnloadTID = GetCurrentThreadId();
 #endif
 
 	fb_shutdown(10000, fb_shutrsn_exit_called);
@@ -1201,7 +1201,7 @@ IConfig* PluginManager::getConfig(CheckStatusWrapper* status, const char* filena
 		rc->addRef();
 		return rc;
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(status);
 	}
@@ -1258,7 +1258,6 @@ void PluginManager::deleteDelayed()
 	ConfiguredPlugin::processDelayedDelete();
 }
 
-}	// namespace Firebird
 
 namespace {
 
@@ -1296,8 +1295,6 @@ private:
 InitInstance<DataCache> dataCache;
 
 }	// anonymous namespace
-
-namespace Firebird {
 
 /******************************************************************************
 *
@@ -1354,7 +1351,7 @@ public:
 		try
 		{
 			PathName dummy;
-			Firebird::RefPtr<const Firebird::Config> config;
+			RefPtr<const Config> config;
 			expandDatabaseName(dbName, dummy, &config);
 
 			IFirebirdConf* firebirdConf = FB_NEW FirebirdConf(config);
@@ -1387,4 +1384,5 @@ public:
 static ConfigManager configManager;
 IConfigManager* iConfigManager(&configManager);
 
-}	// namespace Firebird
+
+}	// namespace Firebird::Why

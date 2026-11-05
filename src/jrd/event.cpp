@@ -61,9 +61,8 @@
 
 #define SRQ_BASE                  ((UCHAR*) m_sharedMemory->getHeader())
 
-using namespace Firebird;
-
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 
 // Check that the event parameter block is well formed before
@@ -1391,4 +1390,5 @@ void EventManager::exceptionHandler(const Exception& ex, ThreadFinishSync<EventM
 	iscLogException("Error closing event watcher thread\n", ex);
 }
 
-} // namespace
+
+} // namespace Firebird::Jrd

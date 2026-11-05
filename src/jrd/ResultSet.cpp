@@ -30,9 +30,8 @@
 #include "../dsql/dsql_proto.h"
 #include "../jrd/mov_proto.h"
 
-using namespace Firebird;
-
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 
 ResultSet::ResultSet(thread_db* tdbb, PreparedStatement* aStmt, jrd_tra* aTransaction)
@@ -99,7 +98,7 @@ dsc& ResultSet::getDesc(unsigned param)
 }
 
 
-Firebird::string ResultSet::getString(thread_db* tdbb, unsigned param)
+string ResultSet::getString(thread_db* tdbb, unsigned param)
 {
 	fb_assert(param > 0);
 
@@ -121,7 +120,7 @@ MetaName ResultSet::getMetaName(thread_db* tdbb, unsigned param)
 }
 
 
-Firebird::MetaString ResultSet::getMetaString(thread_db* tdbb, unsigned param)
+MetaString ResultSet::getMetaString(thread_db* tdbb, unsigned param)
 {
 	return getString(tdbb, param);
 }
@@ -143,4 +142,4 @@ void ResultSet::moveDesc(thread_db* tdbb, unsigned param, dsc& desc)
 }
 
 
-}	// namespace
+}	// namespace Firebird::Jrd

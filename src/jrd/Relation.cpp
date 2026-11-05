@@ -41,8 +41,8 @@
 // Pick up relation ids
 #include "../jrd/ini.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 //
@@ -552,7 +552,7 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 
 		if (poolCreated)
 			pool = dbb->createPool(false);
-		Jrd::ContextPoolHolder context(tdbb, pool);
+		JrdContextPoolHolder context(tdbb, pool);
 
 		jrd_tra* idxTran = tdbb->getTransaction();
 		if (!idxTran)
@@ -1194,7 +1194,7 @@ const Triggers& TrigArray::operator[](int t) const
 //
 
 DbTriggersHeader::DbTriggersHeader(thread_db* tdbb, MemoryPool& p, MetaId& t, NoData)
-	: Firebird::PermanentStorage(p),
+	: PermanentStorage(p),
 	  type(t)
 { }
 
@@ -1222,3 +1222,5 @@ ObjectType DbTriggers::objectType() noexcept
 {
 	return obj_trigger;
 }
+
+} // namespace Firebird::Jrd

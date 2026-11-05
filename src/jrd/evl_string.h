@@ -346,7 +346,7 @@ LikeEvaluator<CharType>::LikeEvaluator(
 					continue;
 				}
 			}
-			Firebird::Arg::Gds(isc_escape_invalid).raise();
+			Arg::Gds(isc_escape_invalid).raise();
 		}
 		// percent sign
 		if (sql_match_any && c == sql_match_any)

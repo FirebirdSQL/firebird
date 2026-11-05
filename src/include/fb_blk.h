@@ -6,6 +6,10 @@
 #include <source_location>
 #endif
 
+namespace Firebird
+{
+
+
 enum BlockType
 {
 	type_unknown = 0,
@@ -184,5 +188,8 @@ private:
 	void* operator new(size_t);
 	void* operator new[](size_t);
 };
+
+
+} // namespace Firebird
 
 #endif	// INCLUDE_FB_BLK

@@ -24,6 +24,10 @@
 #ifndef GPRE_PAR_PROTO_H
 #define GPRE_PAR_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 act*	PAR_action(const TEXT*);
 SSHORT	PAR_blob_subtype(gpre_dbb*);
 act*	PAR_database(bool, const TEXT*);
@@ -42,5 +46,7 @@ gpre_sym*	PAR_symbol(sym_t);
 [[noreturn]] void PAR_unwind();
 void	PAR_using_db();
 
-#endif // GPRE_PAR_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_PAR_PROTO_H

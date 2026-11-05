@@ -26,7 +26,7 @@
 #include "../dsql/DdlNodes.h"
 #include "../common/classes/array.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 
 class CreateAlterTablespaceNode : public DdlNode
@@ -44,15 +44,15 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual void checkPermission(thread_db* tdbb);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	virtual void putErrorPrefix(Arg::StatusVector& statusVector)
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_ts_failed, isc_dsql_alter_ts_failed,
 					isc_dsql_create_alter_ts_failed)) <<
 				name;
@@ -65,7 +65,7 @@ private:
 
 public:
 	MetaName name;
-	Firebird::PathName fileName;
+	PathName fileName;
 	bool create;
 	bool alter;
 	bool offline;
@@ -83,14 +83,14 @@ public:
 	}
 
 public:
-	virtual Firebird::string internalPrint(NodePrinter& printer) const;
+	virtual string internalPrint(NodePrinter& printer) const;
 	virtual void checkPermission(thread_db* tdbb);
 	virtual void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 protected:
-	virtual void putErrorPrefix(Firebird::Arg::StatusVector& statusVector)
+	virtual void putErrorPrefix(Arg::StatusVector& statusVector)
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_ts_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_ts_failed) << name;
 	}
 
 private:
@@ -115,6 +115,6 @@ inline RecreateNode<CreateAlterTablespaceNode, DropTablespaceNode, isc_dsql_recr
 typedef RecreateNode<CreateAlterTablespaceNode, DropTablespaceNode, isc_dsql_recreate_ts_failed>
 	RecreateTablespaceNode;
 
-} // namespace
+} // namespace Firebird::Jrd
 
 #endif // DSQL_TABLESPACE_NODES_H

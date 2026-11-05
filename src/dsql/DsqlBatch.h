@@ -30,14 +30,14 @@
 #include "../common/classes/GenericMap.h"
 
 
-namespace Firebird {
-
-class ClumpletReader;
-
+namespace Firebird
+{
+	class ClumpletReader;
 }
 
+namespace Firebird::Jrd
+{
 
-namespace Jrd {
 
 class DsqlDmlRequest;
 class dsql_msg;
@@ -48,8 +48,8 @@ class Attachment;
 class DsqlBatch
 {
 public:
-	DsqlBatch(DsqlDmlRequest* req, const dsql_msg* message, Firebird::IMessageMetadata* inMetadata,
-		Firebird::ClumpletReader& pb);
+	DsqlBatch(DsqlDmlRequest* req, const dsql_msg* message, IMessageMetadata* inMetadata,
+		ClumpletReader& pb);
 	~DsqlBatch();
 
 	static const ULONG RAM_BATCH = 128 * 1024;
@@ -59,7 +59,7 @@ public:
 	static const ULONG SIZEOF_BLOB_HEAD = sizeof(ISC_QUAD) + 2 * sizeof(ULONG);
 	static const unsigned BLOB_STREAM_ALIGN = 4;
 
-	static DsqlBatch* open(thread_db* tdbb, DsqlDmlRequest* req, Firebird::IMessageMetadata* inMetadata,
+	static DsqlBatch* open(thread_db* tdbb, DsqlDmlRequest* req, IMessageMetadata* inMetadata,
 		unsigned parLength, const UCHAR* par);
 
 	Attachment* getAttachment() const;
@@ -70,8 +70,8 @@ public:
 	void appendBlobData(thread_db* tdbb, ULONG length, const void* inBuffer);
 	void addBlobStream(thread_db* tdbb, unsigned length, const void* inBuffer);
 	void registerBlob(thread_db* tdbb, const ISC_QUAD* existingBlob, ISC_QUAD* blobId);
-	Firebird::IBatchCompletionState* execute(thread_db* tdbb);
-	Firebird::IMessageMetadata* getMetadata(thread_db* tdbb);
+	IBatchCompletionState* execute(thread_db* tdbb);
+	IMessageMetadata* getMetadata(thread_db* tdbb);
 	void cancel(thread_db* tdbb);
 	void setDefaultBpb(thread_db* tdbb, unsigned parLength, const unsigned char* par);
 	void info(thread_db* tdbb, unsigned int itemsLength, const unsigned char* items,
@@ -101,9 +101,9 @@ private:
 
 	DsqlDmlRequest* const m_dsqlRequest;
 	JBatch* m_batch = nullptr;
-	Firebird::IMessageMetadata* const m_meta;
+	IMessageMetadata* const m_meta;
 
-	class DataCache : public Firebird::PermanentStorage
+	class DataCache : public PermanentStorage
 	{
 	public:
 		DataCache(MemoryPool& p)
@@ -126,9 +126,9 @@ private:
 		void flush();
 
 	private:
-		typedef Firebird::Array<UCHAR> Cache;
+		typedef Array<UCHAR> Cache;
 		Cache m_cache;
-		Firebird::AutoPtr<TempSpace> m_space;
+		AutoPtr<TempSpace> m_space;
 		ULONG m_used = 0;
 		ULONG m_got = 0;
 		ULONG m_limit = 0;
@@ -152,9 +152,9 @@ private:
 
 	DataCache m_messages;
 	DataCache m_blobs;
-	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ISC_QUAD, ISC_QUAD>>, QuadComparator> m_blobMap;
-	Firebird::HalfStaticArray<BlobMeta, 4> m_blobMeta;
-	typedef Firebird::HalfStaticArray<UCHAR, 64> Bpb;
+	GenericMap<Pair<NonPooled<ISC_QUAD, ISC_QUAD>>, QuadComparator> m_blobMap;
+	HalfStaticArray<BlobMeta, 4> m_blobMeta;
+	typedef HalfStaticArray<UCHAR, 64> Bpb;
 	Bpb m_defaultBpb;
 	ISC_QUAD m_genId;
 	ULONG m_messageSize = 0;
@@ -165,9 +165,10 @@ private:
 	ULONG m_bufferSize = BUFFER_LIMIT;
 	ULONG m_lastBlob = MAX_ULONG;
 	bool m_setBlobSize = false;
-	UCHAR m_blobPolicy = Firebird::IBatch::BLOB_NONE;
+	UCHAR m_blobPolicy = IBatch::BLOB_NONE;
 };
 
-} // namespace
+
+} // namespace Firebird::Jrd
 
 #endif // DSQL_BATCH_H

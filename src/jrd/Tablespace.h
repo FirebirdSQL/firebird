@@ -28,7 +28,7 @@
 #include "../jrd/pag.h"
 #include "../jrd/SharedReadVector.h"
 
-namespace Jrd
+namespace Firebird::Jrd
 {
 	class thread_db;
 	class jrd_tra;
@@ -92,7 +92,7 @@ namespace Jrd
 			static const auto TABLESPACE_CAPACITY = ROUNDUP_LONG(MAX_TABLESPACE_ID);
 			static_assert(TABLESPACE_CAPACITY % BITS_PER_LONG == 0);
 			ULONG m_bits[TABLESPACE_CAPACITY / BITS_PER_LONG];
-			Firebird::Array<Tablespace*> m_tablespaces;
+			Array<Tablespace*> m_tablespaces;
 
 			inline void set(ULONG id)
 			{
@@ -133,17 +133,17 @@ namespace Jrd
 			// Broadcast the Tablespace::rollback() call through all the cached tablespaces
 			void rollback(thread_db* tdbb, jrd_tra* transaction);
 
-			class LockGuard : public Firebird::MutexLockGuard
+			class LockGuard : public MutexLockGuard
 			{
 			public:
 				LockGuard(Cache& cache, const char* reason)
-					: Firebird::MutexLockGuard(cache.m_mutex, reason)
+					: MutexLockGuard(cache.m_mutex, reason)
 				{}
 			};
 
 		private:
 			SharedReadVector<Tablespace*, 8> m_tablespaces;
-			Firebird::Mutex m_mutex;
+			Mutex m_mutex;
 		};
 
 		Tablespace(MemoryPool& pool, ULONG id)
@@ -180,7 +180,7 @@ namespace Jrd
 			return DB_PAGE_SPACE;
 		}
 
-		void mark(thread_db* tdbb, Operation operation, jrd_tra* transaction, const Firebird::PathName& fileName);
+		void mark(thread_db* tdbb, Operation operation, jrd_tra* transaction, const PathName& fileName);
 		void commit(thread_db* tdbb, jrd_tra* transaction);
 		void rollback(thread_db* tdbb, jrd_tra* transaction);
 
@@ -197,14 +197,14 @@ namespace Jrd
 	private:
 		const ULONG m_id;						// tablespace ID (aka pagespace ID)
 		MetaName m_name;						// tablespace name
-		Firebird::PathName m_fileName;			// file name
-		Firebird::AutoPtr<Lock> m_lock;			// existence lock
+		PathName m_fileName;			// file name
+		AutoPtr<Lock> m_lock;			// existence lock
 		std::atomic<int> m_useCount = 0;
 		std::atomic<unsigned> m_flags = 0;
 		jrd_tra* m_transaction = nullptr;
-		Firebird::Mutex m_mutex;
+		Mutex m_mutex;
 
-		void init(const MetaName& name, const Firebird::PathName& fileName, Lock* lock)
+		void init(const MetaName& name, const PathName& fileName, Lock* lock)
 		{
 			fb_assert(m_name.isEmpty() && m_fileName.isEmpty() && !m_lock);
 
@@ -244,12 +244,12 @@ namespace Jrd
 			{
 				tableSpace->astHandler();
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{} // no-op
 
 			return 0;
 		}
 	};
-}
+} // namespace Firebird::Jrd
 
 #endif // JRD_TABLESPACE_H

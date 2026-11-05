@@ -29,6 +29,10 @@
 #include "../jrd/flu_proto.h"
 #include "../yvalve/gds_proto.h"
 
+namespace Firebird::Jrd
+{
+
+
 struct FN
 {
 	const TEXT* fn_module;
@@ -117,3 +121,5 @@ FPTR_INT BUILTIN_entrypoint(const TEXT* module, const TEXT* entrypoint)
 	return NULL;
 }
 
+
+} // namespace Firebird::Jrd

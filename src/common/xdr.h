@@ -44,6 +44,10 @@ typedef	char* caddr_t;
 #include <arpa/inet.h>
 #endif
 
+namespace Firebird
+{
+
+
 typedef int XDR_INT;
 typedef int bool_t;
 
@@ -67,5 +71,8 @@ struct xdr_t
 
 	int create(SCHAR* addr, unsigned len, xdr_op op) noexcept;
 };
+
+
+} // namespace Firebird
 
 #endif // COMMON_XDR_H

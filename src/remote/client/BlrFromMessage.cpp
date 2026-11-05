@@ -33,10 +33,9 @@
 #include "firebird/impl/sqlda_pub.h"
 #include "../remote/protocol.h"
 
-using namespace Firebird;
-
-namespace Remote
+namespace Firebird::Remote
 {
+
 
 BlrFromMessage::BlrFromMessage(IMessageMetadata* metadata, unsigned aDialect, unsigned aProtocol)
 	: BlrWriter(*getDefaultMemoryPool()),
@@ -276,4 +275,5 @@ bool BlrFromMessage::isVersion4()
 	return dialect <= 1;
 }
 
-}
+
+}	// namespace Firebird::Remote

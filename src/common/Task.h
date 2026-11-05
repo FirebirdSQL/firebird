@@ -194,6 +194,6 @@ private:
 	Thread m_thread;
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // COMMON_TASK_H

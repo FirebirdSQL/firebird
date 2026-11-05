@@ -36,8 +36,8 @@
 #define DBL_MAX_10_EXP          308
 #endif
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, DsqlCompilerScratch* aScratch,
@@ -400,7 +400,7 @@ int Parser::yylexAux()
 
 	SSHORT c = lex.ptr[-1];
 	const USHORT tok_class = classes(c);
-	char string[MAX_TOKEN_LEN];
+	char str[MAX_TOKEN_LEN];
 
 	// Depending on tok_class of token, parse token
 
@@ -413,7 +413,7 @@ int Parser::yylexAux()
 
 		// restriction for underscores before numeric literals
 		if ((classes(*lex.ptr) & CHR_DIGIT) || *lex.ptr == '.')
-			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+			exceptionNumericLiterals(string(lex.last_token, lex.ptr - lex.last_token + 1));
 
 		if (classes(*lex.ptr) & (CHR_IDENT | CHR_QUOTE))
 			return TOK_INTRODUCER;
@@ -428,8 +428,8 @@ int Parser::yylexAux()
 		StrMark mark;
 		mark.pos = lex.last_token - lex.start;
 
-		char* buffer = string;
-		SLONG buffer_len = sizeof(string);
+		char* buffer = str;
+		SLONG buffer_len = sizeof(str);
 		const char* buffer_end = buffer + buffer_len - 1;
 		char* p = buffer;
 
@@ -439,7 +439,7 @@ int Parser::yylexAux()
 			{
 				if (lex.ptr >= lex.end)
 				{
-					if (buffer != string)
+					if (buffer != str)
 						gds__free (buffer);
 					yyerror("unterminated string");
 					return -1;
@@ -459,12 +459,12 @@ int Parser::yylexAux()
 					// FREE: at outer block
 					if (!new_buffer)		// NOMEM:
 					{
-						if (buffer != string)
+						if (buffer != str)
 							gds__free (buffer);
 						return -1;
 					}
 					memcpy (new_buffer, buffer, buffer_len);
-					if (buffer != string)
+					if (buffer != str)
 						gds__free (buffer);
 					buffer = new_buffer;
 					p = buffer + buffer_len;
@@ -488,7 +488,7 @@ int Parser::yylexAux()
 
 		if (p - buffer > MAX_STR_SIZE)
 		{
-			if (buffer != string)
+			if (buffer != str)
 				gds__free (buffer);
 
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
@@ -506,7 +506,7 @@ int Parser::yylexAux()
 
 			if (client_dialect == SQL_DIALECT_V6_TRANSITION)
 			{
-				if (buffer != string)
+				if (buffer != str)
 					gds__free (buffer);
 				yyabandon(yyposn, -104, isc_invalid_string_constant);
 			}
@@ -514,19 +514,19 @@ int Parser::yylexAux()
 			{
 				if (p - buffer >= MAX_TOKEN_LEN)
 				{
-					if (buffer != string)
+					if (buffer != str)
 						gds__free (buffer);
 					yyabandon(yyposn, -104, isc_token_too_long);
 				}
 				else if (p > &buffer[MAX_SQL_IDENTIFIER_LEN])
 				{
-					if (buffer != string)
+					if (buffer != str)
 						gds__free (buffer);
 					yyabandon(yyposn, -104, isc_dyn_name_longer);
 				}
 				else if (p - buffer == 0)
 				{
-					if (buffer != string)
+					if (buffer != str)
 						gds__free (buffer);
 					yyabandon(yyposn, -104, isc_dyn_zero_len_id);
 				}
@@ -544,14 +544,14 @@ int Parser::yylexAux()
 
 				yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, name);
 
-				if (buffer != string)
+				if (buffer != str)
 					gds__free (buffer);
 
 				return TOK_SYMBOL;
 			}
 		}
-		yylval.intlStringPtr = newIntlString(Firebird::string(buffer, p - buffer));
-		if (buffer != string)
+		yylval.intlStringPtr = newIntlString(string(buffer, p - buffer));
+		if (buffer != str)
 			gds__free (buffer);
 
 		mark.length = lex.ptr - lex.last_token;
@@ -605,7 +605,7 @@ int Parser::yylexAux()
 		++lex.ptr;
 
 		bool hexerror = false;
-		Firebird::string temp;
+		string temp;
 
 		// Scan over the hex string converting adjacent bytes into nibble values.
 		// Every other nibble, write the saved byte to the temp space.
@@ -776,7 +776,7 @@ int Parser::yylexAux()
 							  Arg::Num(MAX_STR_SIZE));
 				}
 
-				yylval.intlStringPtr = newIntlString(Firebird::string(start, len));
+				yylval.intlStringPtr = newIntlString(string(start, len));
 
 				lex.ptr += endCharSize + 1;
 
@@ -842,7 +842,7 @@ int Parser::yylexAux()
 					if (isLastIntroducer)
 					{
 						exceptionNumericLiterals(
-							Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+							string(lex.last_token, lex.ptr - lex.last_token + 1));
 					}
 
 					isLastIntroducer = true;
@@ -851,7 +851,7 @@ int Parser::yylexAux()
 				{
 					// check overflow
 					if (value128 > MAX_VALUE)
-						exceptionNumericLiterals(Firebird::string("Overflow of the number"));
+						exceptionNumericLiterals(string("Overflow of the number"));
 
 					auto ch = UPPER(c);
 					if (ch >= 'A')
@@ -867,7 +867,7 @@ int Parser::yylexAux()
 				else if ((classes(c) & CHR_IDENT) && !(classes(c) & CHR_BRACE))
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 				else // We have reached the separator
 					break;
@@ -878,21 +878,21 @@ int Parser::yylexAux()
 			if ((lex.ptr - lex.last_token) < minimalLength)
 			{
 				exceptionNumericLiterals(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+					string(lex.last_token, lex.ptr - lex.last_token));
 			}
 
 			// Error of having '_' at the end
 			if (isLastIntroducer)
 			{
 				exceptionNumericLiterals(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+					string(lex.last_token, lex.ptr - lex.last_token));
 			}
 
 			Int128 tmp;
 			tmp.set(MAX_SINT64, 0);
 			if (value128 > tmp)
 			{
-				Firebird::string strValue;
+				string strValue;
 				value128.toString(0, strValue);
 				yylval.lim64ptr = newLim64String(strValue, 0);
 
@@ -920,7 +920,7 @@ int Parser::yylexAux()
 	if ((tok_class & CHR_DIGIT) ||
 		((c == '.') && (lex.ptr < lex.end) && (classes(*lex.ptr) & CHR_DIGIT)))
 	{
-		Firebird::string pureString;
+		string pureString;
 		auto isLastIntroducer = false;
 		int scale = 0;
 		auto exponentValue = 0;
@@ -953,7 +953,7 @@ int Parser::yylexAux()
 				if (isLastIntroducer)
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 
 				const char lastSymbol = *(lex.ptr - 1);
@@ -961,7 +961,7 @@ int Parser::yylexAux()
 					(lastSymbol == '+'))
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 
 				isLastIntroducer = true;
@@ -1031,7 +1031,7 @@ int Parser::yylexAux()
 				if (isLastIntroducer)
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 
 				pureString += static_cast<string::char_type>(c);
@@ -1041,7 +1041,7 @@ int Parser::yylexAux()
 				else
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 			}
 			else if (UPPER(c) == 'E')
@@ -1049,7 +1049,7 @@ int Parser::yylexAux()
 				if (isLastIntroducer)
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 
 				pureString += static_cast<string::char_type>(c);
@@ -1059,13 +1059,13 @@ int Parser::yylexAux()
 				else
 				{
 					exceptionNumericLiterals(
-						Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+						string(lex.last_token, lex.ptr - lex.last_token + 1));
 				}
 			}
 			else if ((classes(c) & CHR_IDENT) && !(classes(c) & CHR_BRACE))
 			{
 				exceptionNumericLiterals(
-					Firebird::string(lex.last_token, lex.ptr - lex.last_token + 1));
+					string(lex.last_token, lex.ptr - lex.last_token + 1));
 			}
 			else // We have reached the separator
 			{
@@ -1090,11 +1090,11 @@ int Parser::yylexAux()
 		// We have reached the separator or the end of the line
 
 		if (isLastIntroducer)
-			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+			exceptionNumericLiterals(string(lex.last_token, lex.ptr - lex.last_token));
 
 		// The exponent must contain at least one digit: 1e, 1e+, 1e- are invalid
 		if (state == state_exponent && !hasExponentDigit)
-			exceptionNumericLiterals(Firebird::string(lex.last_token, lex.ptr - lex.last_token));
+			exceptionNumericLiterals(string(lex.last_token, lex.ptr - lex.last_token));
 
 		// Too many digits after the period for an exact numeric - use DECFLOAT
 		if (scale < MIN_SCHAR)
@@ -1165,7 +1165,7 @@ int Parser::yylexAux()
 			 * of our message database.
 			 */
 			ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous) << Arg::Str(
-								  Firebird::string(lex.last_token, lex.ptr - lex.last_token)));
+								  string(lex.last_token, lex.ptr - lex.last_token)));
 			ERRD_post_warning(Arg::Warning(isc_dsql_warning_number_ambiguous1));
 		}
 
@@ -1191,24 +1191,24 @@ int Parser::yylexAux()
 
 	if (tok_class & CHR_LETTER)
 	{
-		char* p = string;
-		check_copy_incr(p, UPPER (c), string);
+		char* p = str;
+		check_copy_incr(p, UPPER (c), str);
 		for (; lex.ptr < lex.end && (classes(*lex.ptr) & CHR_IDENT); lex.ptr++)
 		{
 			if (lex.ptr >= lex.end)
 				return -1;
-			check_copy_incr(p, UPPER (*lex.ptr), string);
+			check_copy_incr(p, UPPER (*lex.ptr), str);
 		}
 
-		check_bound(p, string);
+		check_bound(p, str);
 		*p = 0;
 
-		if (p > &string[MAX_SQL_IDENTIFIER_LEN] || p > &string[METADATA_IDENTIFIER_CHAR_LEN])
+		if (p > &str[MAX_SQL_IDENTIFIER_LEN] || p > &str[METADATA_IDENTIFIER_CHAR_LEN])
 			yyabandon(yyposn, -104, isc_dyn_name_longer);
 
-		const MetaName str(string, p - string);
+		const MetaName metaName(str, p - str);
 
-		if (const auto keyVer = dbb->dbb_keywords().get(str);
+		if (const auto keyVer = dbb->dbb_keywords().get(metaName);
 			keyVer && (keyVer->keyword != TOK_COMMENT || lex.prev_keyword == -1))
 		{
 			yylval.metaNamePtr = keyVer->str;
@@ -1218,7 +1218,7 @@ int Parser::yylexAux()
 			return keyVer->keyword;
 		}
 
-		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, str);
+		yylval.metaNamePtr = FB_NEW_POOL(pool) MetaName(pool, metaName);
 		lex.last_token_bk = lex.last_token;
 		lex.line_start_bk = lex.line_start;
 		lex.lines_bk = lex.lines;
@@ -1229,9 +1229,9 @@ int Parser::yylexAux()
 
 	if (lex.last_token + 1 < lex.end && !fb_utils::isspace(lex.last_token[1]))
 	{
-		const MetaName str(lex.last_token, 2);
+		const MetaName metaName(lex.last_token, 2);
 
-		if (const auto keyVer = dbb->dbb_keywords().get(str))
+		if (const auto keyVer = dbb->dbb_keywords().get(metaName))
 		{
 			++lex.ptr;
 			return keyVer->keyword;
@@ -1357,3 +1357,6 @@ void Parser::checkTimeDialect()
 																  Arg::Str("TIME"));
 	}
 }
+
+
+}	// namespace Firebird::Jrd

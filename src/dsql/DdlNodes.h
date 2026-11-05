@@ -26,6 +26,7 @@
 #include <functional>
 #include <optional>
 #include "firebird/impl/blr.h"
+#include "../common/constants.h"
 #include "../jrd/dyn.h"
 #include "../common/msg_encode.h"
 #include "../dsql/make_proto.h"
@@ -41,7 +42,7 @@
 #include "../jrd/Savepoint.h"
 #include "../dsql/errd_proto.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 enum SqlSecurity
 {
@@ -68,7 +69,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, value);
 		NODE_PRINT(printer, source);
@@ -78,7 +79,7 @@ public:
 
 public:
 	NestConst<BoolExprNode> value;
-	Firebird::string source;
+	string source;
 };
 
 
@@ -92,7 +93,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, value);
 		NODE_PRINT(printer, source);
@@ -102,7 +103,7 @@ public:
 
 public:
 	NestConst<ValueExprNode> value;
-	Firebird::string source;
+	string source;
 };
 
 
@@ -124,7 +125,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		NODE_PRINT(printer, name);
 		NODE_PRINT(printer, engine);
@@ -134,9 +135,9 @@ public:
 	}
 
 public:
-	Firebird::string name;
+	string name;
 	MetaName engine;
-	Firebird::string udfModule;
+	string udfModule;
 };
 
 
@@ -147,7 +148,7 @@ public:
 		ValueSourceClause* aDefaultClause = NULL, ValueExprNode* aParameterExpr = NULL);
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 
 public:
 	MetaName name;
@@ -172,7 +173,7 @@ struct CollectedParameter
 	bid defaultValue;
 };
 
-typedef Firebird::LeftPooledMap<MetaName, CollectedParameter> CollectedParameterMap;
+typedef LeftPooledMap<MetaName, CollectedParameter> CollectedParameterMap;
 
 
 class ExecInSecurityDb
@@ -201,7 +202,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		Node::internalPrint(printer);
 
@@ -246,9 +247,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(ERROR_CODE) << createNode->name.toQuotedString();
+		statusVector << Arg::Gds(ERROR_CODE) << createNode->name.toQuotedString();
 	}
 
 protected:
@@ -283,9 +284,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_charset_failed) << charSet.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_charset_failed) << charSet.toQuotedString();
 	}
 
 private:
@@ -317,9 +318,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		// TODO: statusVector << Firebird::Arg::Gds(??);
+		// TODO: statusVector << Arg::Gds(??);
 	}
 
 private:
@@ -333,7 +334,7 @@ class AlterEDSPoolClearNode final : public DdlNode
 public:
 	enum PARAM { POOL_ALL, POOL_OLDEST, POOL_DB };
 
-	AlterEDSPoolClearNode(MemoryPool& pool, PARAM prm, const Firebird::string& val = "")
+	AlterEDSPoolClearNode(MemoryPool& pool, PARAM prm, const string& val = "")
 		: DdlNode(pool),
 		  m_param(prm),
 		  m_value(pool)
@@ -352,14 +353,14 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		// TODO: statusVector << Firebird::Arg::Gds(??);
+		// TODO: statusVector << Arg::Gds(??);
 	}
 
 private:
 	PARAM m_param;
-	Firebird::string m_value;
+	string m_value;
 };
 
 
@@ -368,7 +369,7 @@ class CommentOnNode final : public DdlNode
 public:
 	CommentOnNode(MemoryPool& pool, ObjectType aObjType,
 				const QualifiedName& aName, const MetaName& aSubName,
-				const Firebird::string aText)
+				const string aText)
 		: DdlNode(pool),
 		  objType(aObjType),
 		  name(pool, aName),
@@ -379,27 +380,27 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		str = name.toQuotedString();
 
 		if (subName.hasData())
 			str.append(".").append(subName.c_str());
 
-		statusVector << Firebird::Arg::Gds(isc_dsql_comment_on_failed) << str;
+		statusVector << Arg::Gds(isc_dsql_comment_on_failed) << str;
 	}
 
 private:
 	ObjectType objType;
 	QualifiedName name;
 	MetaName subName;
-	Firebird::string text, str;
+	string text, str;
 };
 
 
@@ -417,16 +418,16 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_func_failed, isc_dsql_alter_func_failed,
 					isc_dsql_create_alter_func_failed)) <<
 				name.toQuotedString();
@@ -462,7 +463,7 @@ public:
 	Firebird::Array<NestConst<ParameterClause>> aggregateParameters;
 	NestConst<ParameterClause> returnType;
 	NestConst<LocalDeclarationsNode> localDeclList;
-	Firebird::string source;
+	string source;
 	NestConst<StmtNode> body;
 	NestConst<StmtNode> aggregateOnStartBody;
 	NestConst<StmtNode> aggregateOnAccumulateBody;
@@ -506,9 +507,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_func_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_func_failed) << name.toQuotedString();
 	}
 
 public:
@@ -531,15 +532,15 @@ public:
 	static void dropArguments(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& functionName);
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_func_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_func_failed) << name.toQuotedString();
 	}
 
 public:
@@ -576,16 +577,16 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_proc_failed, isc_dsql_alter_proc_failed,
 					isc_dsql_create_alter_proc_failed)) <<
 				name.toQuotedString();
@@ -610,9 +611,9 @@ public:
 	bool alter;
 	bool createIfNotExistsOnly = false;
 	NestConst<ExternalClause> external;
-	Firebird::Array<NestConst<ParameterClause> > parameters;
-	Firebird::Array<NestConst<ParameterClause> > returns;
-	Firebird::string source;
+	Array<NestConst<ParameterClause> > parameters;
+	Array<NestConst<ParameterClause> > returns;
+	string source;
 	NestConst<LocalDeclarationsNode> localDeclList;
 	NestConst<StmtNode> body;
 	bool compiled;
@@ -641,15 +642,15 @@ public:
 	static void dropParameters(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& procedureName);
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_proc_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_proc_failed) << name.toQuotedString();
 	}
 
 public:
@@ -698,12 +699,12 @@ public:
 	QualifiedName name;
 	QualifiedName relationName;
 	std::optional<FB_UINT64> type;
-	Firebird::TriState active;
+	TriState active;
 	std::optional<int> position;
 	NestConst<ExternalClause> external;
-	Firebird::string source;
-	Firebird::ByteChunk blrData;
-	Firebird::ByteChunk debugData;
+	string source;
+	ByteChunk blrData;
+	ByteChunk debugData;
 	USHORT systemFlag;
 	bool fkTrigger;
 	std::optional<SqlSecurity> ssDefiner;
@@ -727,16 +728,16 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_trigger_failed, isc_dsql_alter_trigger_failed,
 					isc_dsql_create_alter_trigger_failed)) <<
 				name.toQuotedString();
@@ -802,15 +803,15 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_trigger_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_trigger_failed) << name.toQuotedString();
 	}
 
 public:
@@ -859,7 +860,7 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
@@ -869,7 +870,6 @@ public:
 		if ((attributesOn | attributesOff) & attribute)
 		{
 			// msg: 222: "Invalid collation attributes"
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
@@ -881,7 +881,6 @@ public:
 		if ((attributesOn | attributesOff) & attribute)
 		{
 			// msg: 222: "Invalid collation attributes"
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) << Arg::PrivateDyn(222));
 		}
 
@@ -889,9 +888,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_collation_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_collation_failed) << name.toQuotedString();
 	}
 
 public:
@@ -934,9 +933,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_collation_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_collation_failed) << name.toQuotedString();
 	}
 
 public:
@@ -973,9 +972,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_domain_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1022,9 +1021,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_domain_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1035,8 +1034,8 @@ public:
 	NestConst<BoolSourceClause> setConstraint;
 	NestConst<ValueSourceClause> setDefault;
 	MetaName renameTo;
-	Firebird::AutoPtr<dsql_fld> type;
-	Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
+	AutoPtr<dsql_fld> type;
+	TriState notNullFlag;	// true = NOT NULL / false = NULL
 	bool dropConstraint = false;
 	bool dropDefault = false;
 };
@@ -1069,9 +1068,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_domain_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1087,7 +1086,7 @@ class CreateAlterExceptionNode final : public DdlNode
 {
 public:
 	CreateAlterExceptionNode(MemoryPool& p, const QualifiedName& aName,
-				const Firebird::string& aMessage)
+				const string& aMessage)
 		: DdlNode(p),
 		  name(p, aName),
 		  message(p, aMessage),
@@ -1115,10 +1114,10 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_except_failed, isc_dsql_alter_except_failed,
 					isc_dsql_create_alter_except_failed)) <<
 				name.toQuotedString();
@@ -1130,7 +1129,7 @@ private:
 
 public:
 	QualifiedName name;
-	Firebird::string message;
+	string message;
 	bool create;
 	bool alter;
 	bool createIfNotExistsOnly = false;
@@ -1166,9 +1165,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_except_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_except_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1198,7 +1197,6 @@ public:
 		/*
 		if (!aValue.specified && !aStep.specified)
 		{
-			using namespace Firebird;
 			ERRD_post(Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
 					  // Unexpected end of command
 					  Arg::Gds(isc_command_end_err2) << Arg::Num(this->line) <<
@@ -1233,7 +1231,7 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override;
+	void putErrorPrefix(Arg::StatusVector& statusVector) override;
 
 private:
 	void executeCreate(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
@@ -1282,9 +1280,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_sequence_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_sequence_failed) << name.toQuotedString();
 	}
 
 public:
@@ -1329,7 +1327,7 @@ public:
 	}
 
 private:
-	Firebird::HalfStaticArray<ModifyIndexNode*, 8> nodes;
+	HalfStaticArray<ModifyIndexNode*, 8> nodes;
 };
 
 
@@ -1360,10 +1358,10 @@ public:
 		QualifiedName identitySequence;
 		std::optional<IdentityType> identityType;
 		std::optional<CollId> collationId;
-		Firebird::TriState notNullFlag;	// true = NOT NULL / false = NULL
+		TriState notNullFlag;	// true = NOT NULL / false = NULL
 		std::optional<USHORT> position;
-		Firebird::string defaultSource;
-		Firebird::ByteChunk defaultValue;
+		string defaultSource;
+		ByteChunk defaultValue;
 		std::optional<USHORT> viewContext;
 		MetaName baseField;
 		MetaName tableSpace;
@@ -1386,11 +1384,11 @@ public:
 		enum Type { TYPE_CHECK, TYPE_NOT_NULL, TYPE_PK, TYPE_UNIQUE, TYPE_FK };
 
 		// Specialized BlrWriter for constraints.
-		class BlrWriter final : public Jrd::BlrDebugWriter
+		class BlrWriter final : public BlrDebugWriter
 		{
 		public:
 			explicit BlrWriter(MemoryPool& p)
-				: Jrd::BlrDebugWriter(p),
+				: BlrDebugWriter(p),
 				  dsqlScratch(NULL)
 			{
 			}
@@ -1427,14 +1425,14 @@ public:
 		}
 
 		Constraint::Type type;
-		Firebird::ObjectsArray<MetaName> columns;
+		ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
 		QualifiedName refRelation;
-		Firebird::ObjectsArray<MetaName> refColumns;
+		ObjectsArray<MetaName> refColumns;
 		const char* refUpdateAction;
 		const char* refDeleteAction;
-		Firebird::ObjectsArray<TriggerDefinition> triggers;
-		Firebird::ObjectsArray<BlrWriter> blrWritersHolder;
+		ObjectsArray<TriggerDefinition> triggers;
+		ObjectsArray<BlrWriter> blrWritersHolder;
 		MetaName tableSpace;
 	};
 
@@ -1446,7 +1444,7 @@ public:
 		}
 
 		MetaName name;
-		Firebird::AutoPtr<Constraint> create;
+		AutoPtr<Constraint> create;
 		bool silent = false;
 	};
 
@@ -1532,10 +1530,10 @@ public:
 
 		MetaName name;
 		ConstraintType constraintType;
-		Firebird::ObjectsArray<MetaName> columns;
+		ObjectsArray<MetaName> columns;
 		NestConst<IndexConstraintClause> index;
 		QualifiedName refRelation;
-		Firebird::ObjectsArray<MetaName> refColumns;
+		ObjectsArray<MetaName> refColumns;
 		NestConst<RefActionClause> refAction;
 		NestConst<BoolSourceClause> check;
 		bool createIfNotExistsOnly = false;
@@ -1577,7 +1575,7 @@ public:
 
 		dsql_fld* field;
 		NestConst<ValueSourceClause> defaultValue;
-		Firebird::ObjectsArray<AddConstraintClause> constraints;
+		ObjectsArray<AddConstraintClause> constraints;
 		QualifiedName collate;
 		NestConst<ValueSourceClause> computed;
 		NestConst<IdentityOptions> identityOptions;
@@ -1692,7 +1690,7 @@ protected:
 	static void validateLttClauses(const Firebird::Array<NestConst<Clause>>& clauses);
 	static void validateLttColumnClause(const AddColumnClause* addColumnClause);
 
-	Firebird::string internalPrint(NodePrinter& printer) const override
+	string internalPrint(NodePrinter& printer) const override
 	{
 		DdlNode::internalPrint(printer);
 
@@ -1705,11 +1703,11 @@ protected:
 
 	void defineField(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		AddColumnClause* clause, SSHORT position,
-		const Firebird::ObjectsArray<MetaName>* pkcols);
+		const ObjectsArray<MetaName>* pkcols);
 	bool defineDefault(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, dsql_fld* field,
-		ValueSourceClause* clause, Firebird::string& source, BlrDebugWriter::BlrData& value);
+		ValueSourceClause* clause, string& source, BlrDebugWriter::BlrData& value);
 	void makeConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
-		AddConstraintClause* clause, Firebird::ObjectsArray<CreateDropConstraint>& constraints,
+		AddConstraintClause* clause, ObjectsArray<CreateDropConstraint>& constraints,
 		bool* notNull = NULL);
 	void defineConstraint(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction,
 		MetaName& constraintName, Constraint& constraint);
@@ -1725,7 +1723,7 @@ protected:
 	void defineUpdateCascadeTrigger(DsqlCompilerScratch* dsqlScratch, Constraint& constraint);
 	void generateUnnamedTriggerBeginning(Constraint& constraint, bool onUpdate,
 		BlrDebugWriter& blrWriter);
-	void stuffDefaultBlr(const Firebird::ByteChunk& defaultBlr, BlrDebugWriter& blrWriter);
+	void stuffDefaultBlr(const ByteChunk& defaultBlr, BlrDebugWriter& blrWriter);
 	void stuffMatchingBlr(Constraint& constraint, BlrDebugWriter& blrWriter);
 	void stuffTriggerFiringCondition(const Constraint& constraint, BlrDebugWriter& blrWriter);
 
@@ -1756,11 +1754,11 @@ public:
 
 	NestConst<RelationSourceNode> dsqlNode;
 	QualifiedName name;
-	Firebird::Array<NestConst<Clause> > clauses;
+	Array<NestConst<Clause> > clauses;
 	std::optional<ULONG> tempFlag;	// REL_temp_gtt, REL_temp_ltt
 	std::optional<ULONG> tempRowsFlag;	// REL_temp_tran, REL_temp_conn
-	Firebird::TriState ssDefiner;
-	Firebird::TriState replicationState;
+	TriState ssDefiner;
+	TriState replicationState;
 	MetaName tableSpace;
 	ModifyIndexList indexList;
 };
@@ -1770,7 +1768,7 @@ class CreateRelationNode final : public RelationNode
 {
 public:
 	CreateRelationNode(MemoryPool& p, RelationSourceNode* aDsqlNode,
-				const Firebird::string* aExternalFile = NULL)
+				const string* aExternalFile = NULL)
 		: RelationNode(p, aDsqlNode),
 		  externalFile(aExternalFile),
 		  querySource(p)
@@ -1802,9 +1800,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_table_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1814,7 +1812,7 @@ private:
 	void defineLocalTempTable(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction);
 
 public:
-	const Firebird::string* externalFile;
+	const string* externalFile;
 	bool createIfNotExistsOnly = false;
 	bool packagePrivate = false;
 	NestConst<ValueListNode> queryColumns;
@@ -1852,9 +1850,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_table_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_table_failed) << name.toQuotedString();
 	}
 
 private:
@@ -1901,9 +1899,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(view ? isc_dsql_drop_view_failed : isc_dsql_drop_table_failed) <<
+		statusVector << Arg::Gds(view ? isc_dsql_drop_view_failed : isc_dsql_drop_table_failed) <<
 			name.toQuotedString();
 	}
 
@@ -1935,16 +1933,16 @@ public:
 	}
 
 public:
-	Firebird::string internalPrint(NodePrinter& printer) const override;
+	string internalPrint(NodePrinter& printer) const override;
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 	void checkPermission(thread_db* tdbb) override;
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_view_failed, isc_dsql_alter_view_failed,
 					isc_dsql_create_alter_view_failed)) <<
 				name.toQuotedString();
@@ -1960,7 +1958,7 @@ public:
 	bool createIfNotExistsOnly = false;
 	NestConst<ValueListNode> viewFields;
 	NestConst<SelectExprNode> selectExpr;
-	Firebird::string source;
+	string source;
 	bool withCheckOption;
 };
 
@@ -2023,7 +2021,7 @@ public:
 	void validateUniqueIndex(thread_db* tdbb, jrd_tra* transaction, bool silent);
 
 protected:
-	Firebird::string print(NodePrinter& printer) const;
+	string print(NodePrinter& printer) const;
 	static Cached::Relation* getRelByIndex(thread_db* tdbb, const QualifiedName& index, jrd_tra* transaction);
 	virtual void step2(thread_db* tdbb, jrd_tra* transaction) = 0;
 
@@ -2082,17 +2080,17 @@ public:
 		QualifiedName index;
 		QualifiedName relation;
 		Segments segments;
-		Firebird::TriState unique;
-		Firebird::TriState descending;
-		Firebird::TriState inactive;
-		Firebird::TriState concurrently;
+		TriState unique;
+		TriState descending;
+		TriState inactive;
+		TriState concurrently;
 		SSHORT type;
 		bid expressionBlr;
 		bid expressionSource;
 		bid conditionBlr;
 		bid conditionSource;
 		QualifiedName refRelation;
-		Firebird::ObjectsArray<MetaName> refColumns;
+		ObjectsArray<MetaName> refColumns;
 		MetaName tableSpace;
 	};
 
@@ -2122,9 +2120,9 @@ public:
 		jrd_tra* transaction, LocalTemporaryTable* ltt) const;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_index_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_create_index_failed) << name.toQuotedString();
 	}
 
 public:
@@ -2194,9 +2192,9 @@ private:
 	void step2(thread_db* tdbb, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 	std::optional<MetaId> idxId;
@@ -2235,10 +2233,10 @@ private:
 		jrd_tra* transaction, LocalTemporaryTable* ltt, LocalTemporaryTable::Index* lttIndex);
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		// ASF: using ALTER INDEX's code.
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_alter_index_failed) << indexName.toQuotedString();
 	}
 
 public:
@@ -2284,9 +2282,9 @@ private:
 	void step2(thread_db* tdbb, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_index_failed) << indexName.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_index_failed) << indexName.toQuotedString();
 	}
 
 public:
@@ -2316,7 +2314,7 @@ public:
 		}
 
 	public:
-		Firebird::string internalPrint(NodePrinter& printer) const override
+		string internalPrint(NodePrinter& printer) const override
 		{
 			NODE_PRINT(printer, name);
 			NODE_PRINT(printer, number);
@@ -2344,17 +2342,17 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_filter_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_create_filter_failed) << name;
 	}
 
 public:
 	MetaName name;
 	NestConst<NameNumber> inputFilter;
 	NestConst<NameNumber> outputFilter;
-	Firebird::string entryPoint;
-	Firebird::string moduleName;
+	string entryPoint;
+	string moduleName;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -2374,9 +2372,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_filter_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_filter_failed) << name;
 	}
 
 public:
@@ -2389,7 +2387,7 @@ class CreateShadowNode final : public DdlNode
 {
 public:
 	CreateShadowNode(MemoryPool& p, SSHORT aNumber, bool aManual, bool aConditional,
-					 const Firebird::string& aFileName)
+					 const string& aFileName)
 		: DdlNode(p),
 		  number(aNumber),
 		  manual(aManual),
@@ -2409,16 +2407,16 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_create_shadow_failed) << Firebird::Arg::Num(number);
+		statusVector << Arg::Gds(isc_dsql_create_shadow_failed) << Arg::Num(number);
 	}
 
 public:
 	SSHORT number;
 	bool manual;
 	bool conditional;
-	Firebird::string fileName;
+	string fileName;
 	bool createIfNotExistsOnly = false;
 };
 
@@ -2444,9 +2442,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_shadow_failed) << Firebird::Arg::Num(number);
+		statusVector << Arg::Gds(isc_dsql_drop_shadow_failed) << Arg::Num(number);
 	}
 
 public:
@@ -2486,9 +2484,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(createFlag ? isc_dsql_create_role_failed :
+		statusVector << Arg::Gds(createFlag ? isc_dsql_create_role_failed :
 			isc_dsql_alter_role_failed) << name;
 	}
 
@@ -2508,7 +2506,7 @@ public:
 	}
 
 private:
-	Firebird::HalfStaticArray<MetaName, 4> privileges;
+	HalfStaticArray<MetaName, 4> privileges;
 };
 
 
@@ -2541,9 +2539,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_mapping_failed) << name <<
+		statusVector << Arg::Gds(isc_dsql_mapping_failed) << name <<
 			(op == MAP_ADD ? "CREATE" : op == MAP_MOD ?
 			 "ALTER" : op == MAP_RPL ? "CREATE OR ALTER" : op == MAP_DROP ?
 			 "DROP" : "COMMENT ON");
@@ -2551,17 +2549,17 @@ protected:
 	void runInSecurityDb(SecDbContext* secDbContext) override;
 
 private:
-	void addItem(Firebird::string& ddl, const char* text, char quote = '"');
+	void addItem(string& ddl, const char* text, char quote = '"');
 
 public:
 	MetaName name;
-	Firebird::string fromUtf8;
+	string fromUtf8;
 	MetaName* plugin = nullptr;
 	MetaName* db = nullptr;
 	MetaName* fromType = nullptr;
 	IntlString* from = nullptr;
 	MetaName* to = nullptr;
-	Firebird::string* comment = nullptr;
+	string* comment = nullptr;
 	OP op;
 	char mode = '#';	// * - any source, P - plugin, M - mapping, S - any serverwide plugin
 	bool global = false;
@@ -2586,9 +2584,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_role_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_role_failed) << name;
 	}
 
 public:
@@ -2638,9 +2636,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(mode == USER_ADD ?
+		statusVector << Arg::Gds(mode == USER_ADD ?
 			isc_dsql_create_user_failed : isc_dsql_alter_user_failed) << name;
 	}
 
@@ -2653,23 +2651,23 @@ public:
 		{ }
 
 		MetaName property;
-		Firebird::string value;
+		string value;
 	};
 
-	Firebird::ObjectsArray<Property> properties;
+	ObjectsArray<Property> properties;
 	const MetaName name;
-	Firebird::string* password;
-	Firebird::string* firstName;
-	Firebird::string* middleName;
-	Firebird::string* lastName;
+	string* password;
+	string* firstName;
+	string* middleName;
+	string* lastName;
 	MetaName* plugin;
-	Firebird::string* comment;
-	Firebird::TriState adminRole;
-	Firebird::TriState active;
+	string* comment;
+	TriState adminRole;
+	TriState active;
 	Mode mode;
 	bool createIfNotExistsOnly = false;
 
-	void addProperty(MetaName* pr, Firebird::string* val = NULL)
+	void addProperty(MetaName* pr, string* val = NULL)
 	{
 		fb_assert(pr);
 
@@ -2707,9 +2705,9 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_user_failed) << name;
+		statusVector << Arg::Gds(isc_dsql_drop_user_failed) << name;
 	}
 
 public:
@@ -2734,8 +2732,8 @@ typedef RecreateNode<CreateAlterUserNode, DropUserNode, isc_dsql_recreate_user_f
 	RecreateUserNode;
 
 
-typedef Firebird::NonPooledPair<char, Firebird::ObjectsArray<MetaName>*> PrivilegeClause;
-typedef Firebird::NonPooledPair<ObjectType, QualifiedName> GranteeClause;
+typedef NonPooledPair<char, ObjectsArray<MetaName>*> PrivilegeClause;
+typedef NonPooledPair<ObjectType, QualifiedName> GranteeClause;
 
 class GrantRevokeNode final : public PrivilegesNode, private ExecInSecurityDb
 {
@@ -2762,7 +2760,7 @@ public:
 
 	DdlNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override
 	{
-		Firebird::Array<GranteeClause*> grantees;
+		Array<GranteeClause*> grantees;
 
 		if (object)
 			grantees.add(object);
@@ -2835,10 +2833,10 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(isGrant ? isc_dsql_grant_failed : isc_dsql_revoke_failed);
+			Arg::Gds(isGrant ? isc_dsql_grant_failed : isc_dsql_revoke_failed);
 	}
 
 	void runInSecurityDb(SecDbContext* secDbContext) override;
@@ -2896,15 +2894,15 @@ private:
 		SSHORT userType;
 		MetaName user, revoker;
 	};
-	Firebird::Array<CreateDbJob> createDbJobs;
+	Array<CreateDbJob> createDbJobs;
 
 public:
 	bool isGrant;
-	Firebird::Array<PrivilegeClause> privileges;
-	Firebird::Array<GranteeClause> roles;
-	Firebird::Array<bool> defaultRoles;
+	Array<PrivilegeClause> privileges;
+	Array<GranteeClause> roles;
+	Array<bool> defaultRoles;
 	NestConst<GranteeClause> object;
-	Firebird::Array<GranteeClause> users;
+	Array<GranteeClause> users;
 	bool grantAdminOption;
 	NestConst<MetaName> grantor;
 	// ddl rights
@@ -2963,27 +2961,27 @@ public:
 	}
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_alter_database_failed);
+		statusVector << Arg::Gds(isc_dsql_alter_database_failed);
 	}
 
 private:
 	static void changeBackupMode(thread_db* tdbb, jrd_tra* transaction, unsigned clause);
-	static void defineDifference(thread_db* tdbb, jrd_tra* transaction, const Firebird::PathName& file);
+	static void defineDifference(thread_db* tdbb, jrd_tra* transaction, const PathName& file);
 	void checkClauses(thread_db* tdbb);
 
 public:
 	bool create = false;	// Is the node created with a CREATE DATABASE command?
 	SLONG linger = -1;
 	unsigned clauses = 0;
-	Firebird::string differenceFile;
+	string differenceFile;
 	QualifiedName setDefaultCharSet;
 	QualifiedName setDefaultCollation;
 	MetaName cryptPlugin;
 	MetaName keyName;
-	Firebird::TriState ssDefiner;
-	Firebird::Array<QualifiedName> pubTables;
+	TriState ssDefiner;
+	Array<QualifiedName> pubTables;
 };
 
 
@@ -3003,10 +3001,10 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
 		statusVector <<
-			Firebird::Arg::Gds(createAlterCode(create, alter,
+			Arg::Gds(createAlterCode(create, alter,
 					isc_dsql_create_schema_failed, isc_dsql_alter_schema_failed,
 					isc_dsql_create_alter_schema_failed)) <<
 				name.toQuotedString();
@@ -3041,9 +3039,9 @@ public:
 	void execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratch, jrd_tra* transaction) override;
 
 protected:
-	void putErrorPrefix(Firebird::Arg::StatusVector& statusVector) override
+	void putErrorPrefix(Arg::StatusVector& statusVector) override
 	{
-		statusVector << Firebird::Arg::Gds(isc_dsql_drop_schema_failed) << name.toQuotedString();
+		statusVector << Arg::Gds(isc_dsql_drop_schema_failed) << name.toQuotedString();
 	}
 
 private:

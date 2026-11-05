@@ -27,6 +27,9 @@
 #include <algorithm>
 #include <cctype>
 
+namespace Firebird::Isql
+{
+
 
 std::string FrontendLexer::trim(std::string_view str)
 {
@@ -464,3 +467,6 @@ void FrontendLexer::skipSpacesAndComments()
 		}
 	}
 }
+
+
+} // namespace Firebird::Isql

@@ -27,38 +27,35 @@
 #include "../jrd/cmp_proto.h"
 #include <atomic>
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Request;
 	class jrd_tra;
 	class AssignmentNode;
 
 	enum InternalRequest : USHORT;
-}
 
-void EXE_assignment(Jrd::thread_db*, const Jrd::AssignmentNode*);
-void EXE_assignment(Jrd::thread_db*, const Jrd::ValueExprNode*, const Jrd::ValueExprNode*);
-void EXE_assignment(Jrd::thread_db* tdbb, const Jrd::ValueExprNode* to, dsc* from_desc,
-	const Jrd::ValueExprNode* missing_node, const Jrd::ValueExprNode* missing2_node);
+	void EXE_assignment(thread_db*, const AssignmentNode*);
+	void EXE_assignment(thread_db*, const ValueExprNode*, const ValueExprNode*);
+	void EXE_assignment(thread_db* tdbb, const ValueExprNode* to, dsc* from_desc,
+		const ValueExprNode* missing_node, const ValueExprNode* missing2_node);
 
-void EXE_execute_db_triggers(Jrd::thread_db*, Jrd::jrd_tra*, enum TriggerAction);
-void EXE_execute_ddl_triggers(Jrd::thread_db* tdbb, Jrd::jrd_tra* transaction,
-	bool preTriggers, int action);
-void EXE_execute_triggers(Jrd::thread_db*, const Jrd::Triggers&, Jrd::record_param*, Jrd::record_param*,
-	enum TriggerAction, Jrd::StmtNode::WhichTrigger, int = 0);
-void EXE_execute_function(Jrd::thread_db* tdbb, Jrd::Request* request, Jrd::jrd_tra* transaction,
-	ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg);
-bool EXE_get_stack_trace(const Jrd::Request* request, Firebird::string& sTrace);
+	void EXE_execute_db_triggers(thread_db*, jrd_tra*, enum TriggerAction);
+	void EXE_execute_ddl_triggers(thread_db* tdbb, jrd_tra* transaction,
+		bool preTriggers, int action);
+	void EXE_execute_triggers(thread_db*, const Triggers&, record_param*, record_param*,
+		enum TriggerAction, StmtNode::WhichTrigger, int = 0);
+	void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transaction,
+		ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg);
+	bool EXE_get_stack_trace(const Request* request, string& sTrace);
 
-const Jrd::StmtNode* EXE_looper(Jrd::thread_db* tdbb, Jrd::Request* request,
-	const Jrd::StmtNode* in_node);
-void EXE_receive(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, void*, bool = false);
-void EXE_release(Jrd::thread_db*, Jrd::Request*);
-void EXE_send(Jrd::thread_db*, Jrd::Request*, USHORT, ULONG, const void*);
-void EXE_start(Jrd::thread_db*, Jrd::Request*, Jrd::jrd_tra*);
-void EXE_unwind(Jrd::thread_db*, Jrd::Request*);
+	const StmtNode* EXE_looper(thread_db* tdbb, Request* request,
+		const StmtNode* in_node);
+	void EXE_receive(thread_db*, Request*, USHORT, ULONG, void*, bool = false);
+	void EXE_release(thread_db*, Request*);
+	void EXE_send(thread_db*, Request*, USHORT, ULONG, const void*);
+	void EXE_start(thread_db*, Request*, jrd_tra*);
+	void EXE_unwind(thread_db*, Request*);
 
-namespace Jrd
-{
 	class CachedRequestId
 	{
 	public:
@@ -218,6 +215,6 @@ namespace Jrd
 	private:
 		Request* request;
 	};
-}
+}	// namespace Firebird::Jrd
 
 #endif // JRD_EXE_PROTO_H

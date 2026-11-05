@@ -37,16 +37,18 @@
 #include "../common/classes/condition.h"
 
 #include "../jrd/SharedReadVector.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/tra_proto.h"
 #include "../jrd/QualifiedName.h"
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
 
 class thread_db;
 class Lock;
 class MetadataCache;
 enum lck_t : UCHAR;
+
 
 class ObjectBase
 {
@@ -750,7 +752,7 @@ public:
 			{
 				newEntry = FB_NEW ListEntry<Versioned>(obj, traNum, fl & ~CacheFlag::ERASED);
 			}
-			catch (const Firebird::Exception&)
+			catch (const Exception&)
 			{
 				if (obj)	// Versioned::create() formally might return nullptr
 					Versioned::destroy(tdbb, obj);
@@ -848,7 +850,7 @@ public:
 	{
 		auto obj = Versioned::create(tdbb, Permanent::getPool(), this);
 		if (!obj)
-			(Firebird::Arg::Gds(isc_random) << "Object create failed in makeObject()").raise();
+			(Arg::Gds(isc_random) << "Object create failed in makeObject()").raise();
 
 		switch (storeObject(tdbb, obj, fl & ~CacheFlag::ERASED))
 		{
@@ -1046,7 +1048,7 @@ struct ExName
 };
 
 template <class StoredElement, unsigned SUBARRAY_SHIFT = 8, typename EXTEND = NoData>
-class CacheVector : public Firebird::PermanentStorage
+class CacheVector : public PermanentStorage
 {
 public:
 	static const unsigned SUBARRAY_SIZE = 1 << SUBARRAY_SHIFT;
@@ -1059,7 +1061,7 @@ public:
 	typedef SharedReadVector<ArrayData, 4> Storage;
 
 	explicit CacheVector(MemoryPool& pool, EXTEND extend = NoData())
-		: Firebird::PermanentStorage(pool),
+		: PermanentStorage(pool),
 		  m_objects(),
 		  m_extend(extend)
 	{}
@@ -1086,7 +1088,7 @@ private:
 		fb_assert(reqSize > 0);
 		reqSize = ((reqSize - 1) >> SUBARRAY_SHIFT) + 1;
 
-		Firebird::MutexLockGuard g(m_objectsGrowMutex, FB_FUNCTION);
+		MutexLockGuard g(m_objectsGrowMutex, FB_FUNCTION);
 
 		m_objects.grow(reqSize, false);
 		auto wa = m_objects.writeAccessor();
@@ -1407,7 +1409,7 @@ public:
 
 private:
 	Storage m_objects;
-	Firebird::Mutex m_objectsGrowMutex;
+	Mutex m_objectsGrowMutex;
 	EXTEND m_extend;
 };
 
@@ -1417,6 +1419,7 @@ auto getPermanent(T* t) -> decltype(t->getPermanent())
 	return t ? t->getPermanent() : nullptr;
 }
 
-} // namespace Jrd
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_CACHEVECTOR_H

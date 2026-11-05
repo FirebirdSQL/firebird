@@ -27,7 +27,7 @@
 #ifndef JRD_BTR_H
 #define JRD_BTR_H
 
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../common/classes/array.h"
 #include "../include/fb_blk.h"
 
@@ -41,7 +41,7 @@
 
 struct dsc;
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 class jrd_rel;
 class jrd_tra;
@@ -75,11 +75,11 @@ struct dep
 // Primary dependencies from all foreign references to relation's
 // primary/unique keys
 
-typedef Firebird::HalfStaticArray<dep, 8> PrimaryDeps;
+typedef HalfStaticArray<dep, 8> PrimaryDeps;
 
 // Foreign references to other relations' primary/unique keys
 
-typedef Firebird::HalfStaticArray<dep, 8> ForeignRefs;
+typedef HalfStaticArray<dep, 8> ForeignRefs;
 
 
 // Index descriptor block -- used to hold info from index root page
@@ -113,7 +113,7 @@ struct index_desc
 	} idx_rpt[MAX_INDEX_SEGMENTS];
 };
 
-typedef Firebird::HalfStaticArray<index_desc, 16> IndexDescList;
+typedef HalfStaticArray<index_desc, 16> IndexDescList;
 
 inline constexpr USHORT idx_invalid = USHORT(~0);		// Applies to idx_id as special value
 
@@ -196,7 +196,7 @@ struct temporary_mini_key
 
 struct temporary_key : public temporary_mini_key
 {
-	Firebird::AutoPtr<temporary_key> key_next;	// next key (INTL_KEY_MULTI_STARTING)
+	AutoPtr<temporary_key> key_next;	// next key (INTL_KEY_MULTI_STARTING)
 };
 
 
@@ -290,7 +290,7 @@ inline constexpr int irb_unique		= 512;				// Unique match (currently used only 
 inline constexpr int irb_force_lower	= irb_exclude_lower;
 inline constexpr int irb_force_upper	= irb_exclude_upper;
 
-typedef Firebird::HalfStaticArray<float, 4> SelectivityList;
+typedef HalfStaticArray<float, 4> SelectivityList;
 
 class BtrPageGCLock : public Lock
 {
@@ -313,17 +313,17 @@ public:
 	static bool isPageGCAllowed(thread_db* tdbb, const PageNumber& page);
 
 #ifdef DEBUG_LCK_LIST
-	BtrPageGCLock(thread_db* tdbb, Firebird::MemoryPool* pool)
+	BtrPageGCLock(thread_db* tdbb, MemoryPool* pool)
 		: Lock(tdbb, PageNumber::getLockLen(), LCK_btr_dont_gc), m_pool(pool)
 	{
 	}
 
-	static bool checkPool(const Lock* lock, Firebird::MemoryPool* pool)
+	static bool checkPool(const Lock* lock, MemoryPool* pool)
 	{
 		if (!pool || !lock)
 			return false;
 
-		const Firebird::MemoryPool* pool2 = NULL;
+		const MemoryPool* pool2 = NULL;
 
 		if (lock && (lock->lck_type == LCK_btr_dont_gc))
 			pool2 = reinterpret_cast<const BtrPageGCLock*>(lock)->m_pool;
@@ -332,7 +332,7 @@ public:
 	}
 
 private:
-	const Firebird::MemoryPool* m_pool;
+	const MemoryPool* m_pool;
 #endif
 };
 
@@ -364,7 +364,7 @@ struct IndexCreation
 	USHORT key_length = 0;
 	USHORT nullIndLen = 0;
 	SINT64 dup_recno = -1;
-	Firebird::AtomicCounter duplicates;
+	AtomicCounter duplicates;
 
 	bool isConcurrently() const
 	{
@@ -423,14 +423,14 @@ public:
 
 	~IndexCondition();
 
-	Firebird::TriState check(Record* record, idx_e* errCode = nullptr);
+	TriState check(Record* record, idx_e* errCode = nullptr);
 
 private:
 	thread_db* const m_tdbb;
 	BoolExprNode* m_condition = nullptr;
 	Request* m_request = nullptr;
 
-	Firebird::TriState evaluate(Record* record) const;
+	TriState evaluate(Record* record) const;
 };
 
 class IndexExpression
@@ -452,7 +452,7 @@ private:
 	Request* m_request = nullptr;
 };
 
-typedef Firebird::AutoPtr<IndexExpression> AutoIndexExpression;
+typedef AutoPtr<IndexExpression> AutoIndexExpression;
 
 // Index key wrapper
 
@@ -595,13 +595,12 @@ private:
 	void makeKeys(thread_db* tdbb, temporary_key* lower, temporary_key* upper);
 
 	const IndexRetrieval* const m_retrieval;
-	Firebird::HalfStaticArray<const ValueExprNode*, 16> m_listValues;
-	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_lowerValues;
-	Firebird::HalfStaticArray<const ValueExprNode*, 4> m_upperValues;
+	HalfStaticArray<const ValueExprNode*, 16> m_listValues;
+	HalfStaticArray<const ValueExprNode*, 4> m_lowerValues;
+	HalfStaticArray<const ValueExprNode*, 4> m_upperValues;
 	const ValueExprNode* const* m_iterator;
 	USHORT m_segno = MAX_USHORT;
 };
-
 
 class IndexDuplicateScanner
 {
@@ -626,15 +625,15 @@ private:
 	index_desc m_index;
 	bool m_initialized = false;
 
-	Firebird::UCharBuffer m_key;					// current key value
+	UCharBuffer m_key;					// current key value
 	USHORT m_keyLength = 0;							// length of the current key value
-	Firebird::AutoPtr<temporary_key> m_nullKey;		// all NULLs key
+	AutoPtr<temporary_key> m_nullKey;		// all NULLs key
 
 	// saved position
 	ULONG m_savePage = 0;						// index leaf page number
 	ULONG m_saveOffset = 0;						//   and offset of next node
 	SLONG m_saveIncarnation = 0;				//   and incarnation counter
-	Firebird::AutoPtr<BtrPageGCLock> m_gcLock;
+	AutoPtr<BtrPageGCLock> m_gcLock;
 
 	UCHAR* init(thread_db* tdbb, win* window);
 	UCHAR* restorePosition(thread_db* tdbb, win* window);
@@ -642,6 +641,8 @@ private:
 };
 
 
-} //namespace Jrd
+
+
+} // namespace Firebird::Jrd
 
 #endif // JRD_BTR_H

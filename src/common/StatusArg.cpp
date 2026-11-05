@@ -49,7 +49,6 @@ namespace {
 }
 
 namespace Firebird {
-
 namespace Arg {
 
 Base::Base(ISC_STATUS k, ISC_STATUS c) :

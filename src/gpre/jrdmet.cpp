@@ -28,7 +28,7 @@
 
 #include "firebird.h"
 #include "ibase.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 #include "../jrd/ods.h"
 
 #include "../gpre/gpre.h"
@@ -39,6 +39,9 @@
 #include "../gpre/jrdme_proto.h"
 #include "../gpre/msc_proto.h"
 
+namespace Firebird::Gpre
+{
+
 
 //____________________________________________________________
 //
@@ -47,6 +50,8 @@
 
 void JRDMET_init( gpre_dbb* db)
 {
+	using namespace Jrd;
+
 	const int* relfld = relfields;
 
 	while (relfld[RFLD_R_NAME])
@@ -142,3 +147,5 @@ void JRDMET_init( gpre_dbb* db)
 	}
 }
 
+
+} // namespace Firebird::Gpre

@@ -3,7 +3,7 @@
 #include "../jrd/sqz.h"
 
 using namespace Firebird;
-using namespace Jrd;
+using namespace Firebird::Jrd;
 
 BOOST_AUTO_TEST_SUITE(EngineSuite)
 BOOST_AUTO_TEST_SUITE(CompressorSuite)

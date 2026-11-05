@@ -28,8 +28,12 @@
 #include "../common/classes/MsgPrint.h"
 #include "../common/UtilSvc.h"
 
-int		ALICE_main(Firebird::UtilSvc*);
-int		alice(Firebird::UtilSvc*);
+namespace Firebird::Alice
+{
+
+
+int		ALICE_main(UtilSvc*);
+int		alice(UtilSvc*);
 
 class AliceGlobals;
 
@@ -38,5 +42,8 @@ void	ALICE_print(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 [[noreturn]] void ALICE_error(USHORT, const MsgFormat::SafeArg& arg = MsgFormat::SafeArg());
 void	ALICE_print_status(bool error, const ISC_STATUS*);
 [[noreturn]] void ALICE_exit(int, AliceGlobals*);
+
+
+} // namespace Firebird::Alice
 
 #endif // ALICE_ALICE_PROTO_H

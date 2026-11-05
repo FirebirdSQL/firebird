@@ -29,8 +29,8 @@
 
 #include "../jrd/Tablespace.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
 
 
 //
@@ -524,3 +524,5 @@ void Tablespace::Cache::rollback(thread_db* tdbb, jrd_tra* transaction)
 			tableSpace->rollback(tdbb, transaction);
 	}
 }
+
+} // namespace Firebird::Jrd

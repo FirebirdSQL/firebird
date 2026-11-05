@@ -28,8 +28,11 @@
 #define rem_port void
 #endif
 
-void SRVR_main(rem_port*, USHORT);
-void SRVR_multi_thread(rem_port*, USHORT);
-void SRVR_enum_attachments(ULONG& att_cnt, ULONG& dbs_cnt, ULONG& svc_cnt);
+namespace Firebird::Remote
+{
+	void SRVR_main(rem_port*, USHORT);
+	void SRVR_multi_thread(rem_port*, USHORT);
+	void SRVR_enum_attachments(ULONG& att_cnt, ULONG& dbs_cnt, ULONG& svc_cnt);
+} // namespace Firebird::Remote
 
 #endif	// REMOTE_SERVE_PROTO_H

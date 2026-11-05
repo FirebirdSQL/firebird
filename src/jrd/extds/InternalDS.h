@@ -26,7 +26,7 @@
 
 #include "ExtDS.h"
 
-namespace EDS {
+namespace Firebird::Jrd::EDS {
 
 class InternalProvider : public Provider
 {
@@ -74,8 +74,8 @@ public:
 	bool isConnected() const override { return (m_attachment != 0); }
 	bool validate(Jrd::thread_db* tdbb) override;
 
-	bool isSameDatabase(const Firebird::PathName& dbName,
-		Firebird::ClumpletReader& dpb, const CryptHash& ch) const override;
+	bool isSameDatabase(const PathName& dbName,
+		ClumpletReader& dpb, const CryptHash& ch) const override;
 
 	bool isCurrent() const override { return m_dpb.isEmpty(); }
 
@@ -88,8 +88,8 @@ protected:
 	Statement* doCreateStatement() override;
 	void doDetach(Jrd::thread_db* tdbb) override;
 
-	Firebird::AutoPlugin<Jrd::JProvider> m_provider;
-	Firebird::RefPtr<Jrd::JAttachment> m_attachment;
+	AutoPlugin<Jrd::JProvider> m_provider;
+	RefPtr<Jrd::JAttachment> m_attachment;
 };
 
 
@@ -116,7 +116,7 @@ protected:
 	void doRollback(Jrd::FbStatusVector* status, Jrd::thread_db* tdbb, bool retain) override;
 
 	InternalConnection& m_IntConnection;
-	Firebird::RefPtr<Jrd::JTransaction> m_transaction;
+	RefPtr<Jrd::JTransaction> m_transaction;
 };
 
 
@@ -140,7 +140,7 @@ protected:
 	{
 		if (m_inMetadata && index < m_inMetadata->getCount())
 		{
-			Firebird::FbLocalStatus status;
+			FbLocalStatus status;
 			return m_inMetadata->getAlias(&status, index);
 		}
 
@@ -158,9 +158,9 @@ protected:
 	InternalConnection& m_intConnection;
 	InternalTransaction* m_intTransaction;
 
-	Firebird::RefPtr<Jrd::JStatement> m_request;
-	Firebird::RefPtr<Jrd::JResultSet> m_cursor;
-	Firebird::RefPtr<Firebird::MsgMetadata> m_inMetadata, m_outMetadata;
+	RefPtr<Jrd::JStatement> m_request;
+	RefPtr<Jrd::JResultSet> m_cursor;
+	RefPtr<MsgMetadata> m_inMetadata, m_outMetadata;
 };
 
 
@@ -183,7 +183,7 @@ public:
 
 private:
 	InternalConnection& m_connection;
-	Firebird::RefPtr<Jrd::JBlob> m_blob;
+	RefPtr<Jrd::JBlob> m_blob;
 	ISC_QUAD m_blob_id;
 };
 

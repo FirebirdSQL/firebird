@@ -25,19 +25,19 @@
 
 #include "../common/classes/stack.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 	class Record;
 	class BoolExprNode;
 	class ValueExprNode;
 	class RecordSourceNode;
 	class StmtNode;
 
-	typedef Firebird::Stack<Record*> RecordStack;
-	typedef Firebird::Stack<BoolExprNode*> BoolExprNodeStack;
-	typedef Firebird::Stack<ValueExprNode*> ValueExprNodeStack;
-	typedef Firebird::Stack<RecordSourceNode*> RecordSourceNodeStack;
-	typedef Firebird::Stack<StmtNode*> StmtNodeStack;
-	typedef Firebird::Stack<UCHAR*> UCharStack;
+	typedef Stack<Record*> RecordStack;
+	typedef Stack<BoolExprNode*> BoolExprNodeStack;
+	typedef Stack<ValueExprNode*> ValueExprNodeStack;
+	typedef Stack<RecordSourceNode*> RecordSourceNodeStack;
+	typedef Stack<StmtNode*> StmtNodeStack;
+	typedef Stack<UCHAR*> UCharStack;
 }
 
 #endif // JRD_LLS_H

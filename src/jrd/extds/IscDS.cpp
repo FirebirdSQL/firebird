@@ -40,12 +40,9 @@
 #include "../mov_proto.h"
 #include "../common/utils_proto.h"
 
-
-using namespace Jrd;
-using namespace Firebird;
-
-namespace EDS
+namespace Firebird::Jrd::EDS
 {
+
 
 const char* FIREBIRD_PROVIDER_NAME = "Firebird";
 
@@ -62,7 +59,7 @@ public:
 static RegisterFBProvider reg;
 
 static bool isConnectionBrokenError(FbStatusVector* status);
-static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc>& descs);
+static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Array<dsc>& descs);
 
 // 	IscProvider
 
@@ -354,7 +351,7 @@ void IscTransaction::generateTPB(thread_db* tdbb, ClumpletWriter& tpb,
 	Transaction::generateTPB(tdbb, tpb, traMode, readOnly, wait, lockTimeout);
 }
 
-void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, Firebird::ClumpletWriter& tpb)
+void IscTransaction::doStart(FbStatusVector* status, thread_db* tdbb, ClumpletWriter& tpb)
 {
 	fb_assert(!m_handle);
 	FB_API_HANDLE& db_handle = m_iscConnection.getAPIHandle();
@@ -1507,7 +1504,7 @@ ISC_STATUS ISC_EXPORT_VARARG IscProvider::isc_start_transaction(FbStatusVector* 
 	if (!m_api.start_multiple)				// !!!
 		return notImplemented(user_status);
 
-	Firebird::HalfStaticArray<why_teb, 16> tebs;
+	HalfStaticArray<why_teb, 16> tebs;
 	why_teb* teb = tebs.getBuffer(count);
 
 	const why_teb* const end = teb + count;
@@ -1782,7 +1779,7 @@ static bool isConnectionBrokenError(FbStatusVector* status)
 }
 
 
-static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &descs)
+static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Array<dsc> &descs)
 {
 	FB_SIZE_T offset = 0;
 	XSQLVAR* xVar = xsqlda->sqlvar;
@@ -1850,5 +1847,4 @@ static void parseSQLDA(XSQLDA* xsqlda, UCharBuffer& buff, Firebird::Array<dsc> &
 }
 
 
-
-} // namespace EDS
+} // namespace Firebird::Jrd::EDS

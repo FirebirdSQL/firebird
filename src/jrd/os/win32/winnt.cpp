@@ -54,12 +54,14 @@
 
 #include <windows.h>
 
-namespace Jrd {
+namespace Firebird::Jrd
+{
+
 
 class FileExtendLockGuard
 {
 public:
-	FileExtendLockGuard(Firebird::RWLock* lock, bool exclusive) :
+	FileExtendLockGuard(RWLock* lock, bool exclusive) :
 	  m_lock(lock), m_exclusive(exclusive)
 	{
 		if (m_exclusive) {
@@ -90,15 +92,10 @@ public:
 	FileExtendLockGuard& operator=(const FileExtendLockGuard&) = delete;
 
 private:
-	Firebird::RWLock* const m_lock;
+	RWLock* const m_lock;
 	const bool m_exclusive;
 };
 
-
-} // namespace Jrd
-
-using namespace Jrd;
-using namespace Firebird;
 
 #ifdef TEXT
 #undef TEXT
@@ -107,7 +104,7 @@ using namespace Firebird;
 
 static bool	maybeCloseFile(HANDLE&);
 static bool seek_file(jrd_file*, const BufferDesc*, OVERLAPPED*);
-static jrd_file* setup_file(Database*, const Firebird::PathName&, HANDLE, USHORT);
+static jrd_file* setup_file(Database*, const PathName&, HANDLE, USHORT);
 static bool nt_error(const TEXT*, const jrd_file*, ISC_STATUS, FbStatusVector* const);
 
 inline static DWORD getShareFlags(const bool shared_access, bool temporary = false) noexcept
@@ -135,7 +132,7 @@ void PIO_close(jrd_file* file)
 }
 
 
-jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
+jrd_file* PIO_create(thread_db* tdbb, const PathName& string,
 					 const bool overwrite, const bool temporary)
 {
 /**************************************
@@ -185,7 +182,7 @@ jrd_file* PIO_create(thread_db* tdbb, const Firebird::PathName& string,
 	// File open succeeded.  Now expand the file name.
 	// workspace is the expanded name here
 
-	Firebird::PathName workspace(string);
+	PathName workspace(string);
 	ISC_expand_filename(workspace, false);
 
 	const USHORT flags =
@@ -378,7 +375,7 @@ bool PIO_header(thread_db* tdbb, UCHAR* address, unsigned length)
 
 // we need a class here only to return memory on shutdown and avoid
 // false memory leak reports
-static Firebird::InitInstance<ZeroBuffer> zeros;
+static InitInstance<ZeroBuffer> zeros;
 
 
 USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vector,
@@ -453,8 +450,8 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vec
 
 
 jrd_file* PIO_open(thread_db* tdbb,
-				   const Firebird::PathName& string,
-				   const Firebird::PathName& file_name)
+				   const PathName& string,
+				   const PathName& file_name)
 {
 /**************************************
  *
@@ -756,7 +753,7 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 }
 
 
-bool PIO_file_exists(const Firebird::PathName& fileName)
+bool PIO_file_exists(const PathName& fileName)
 {
 	const HANDLE fd = CreateFile(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
 					NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -798,7 +795,7 @@ static bool seek_file(jrd_file*	file, const BufferDesc* bdb, OVERLAPPED* overlap
 }
 
 
-static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, HANDLE desc, USHORT flags)
+static jrd_file* setup_file(Database* dbb, const PathName& file_name, HANDLE desc, USHORT flags)
 {
 /**************************************
  *
@@ -825,9 +822,9 @@ static jrd_file* setup_file(Database* dbb, const Firebird::PathName& file_name, 
 		if (pageSpace && pageSpace->file)
 			return file;
 
-		file->fil_ext_lock = FB_NEW_POOL(*dbb->dbb_permanent) Firebird::RWLock();
+		file->fil_ext_lock = FB_NEW_POOL(*dbb->dbb_permanent) RWLock();
 	}
-	catch (const Firebird::Exception&)
+	catch (const Exception&)
 	{
 		CloseHandle(desc);
 		delete file;
@@ -893,3 +890,6 @@ static bool nt_error(const TEXT* string,
 
 	return false;
 }
+
+
+}	// namespace Firebird::Jrd

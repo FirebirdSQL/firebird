@@ -38,8 +38,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // Disabled so far, should be uncommented for debugging/testing
 //#define PRINT_OPT_INFO	// print optimizer info (cardinality, cost) in plans
@@ -355,3 +356,6 @@ void RecordStream::nullRecords(thread_db* tdbb) const
 
 	record->fakeNulls();
 }
+
+
+}	// namespace Firebird::Jrd

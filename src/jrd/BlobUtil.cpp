@@ -25,8 +25,8 @@
 #include "../jrd/blb.h"
 #include "../jrd/tra.h"
 
-using namespace Jrd;
-using namespace Firebird;
+namespace Firebird::Jrd
+{
 
 
 namespace
@@ -59,7 +59,6 @@ namespace
 	}
 }
 
-namespace Jrd {
 
 //--------------------------------------
 
@@ -200,7 +199,7 @@ void BlobUtilPackage::readDataFunction(ThrowStatusExceptionWrapper* status,
 //--------------------------------------
 
 
-BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
+BlobUtilPackage::BlobUtilPackage(MemoryPool& pool)
 	: SystemPackage(
 		pool,
 		"RDB$BLOB_UTIL",
@@ -299,4 +298,5 @@ BlobUtilPackage::BlobUtilPackage(Firebird::MemoryPool& pool)
 {
 }
 
-}	// namespace Jrd
+
+}	// namespace Firebird::Jrd

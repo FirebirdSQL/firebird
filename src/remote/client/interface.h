@@ -29,9 +29,14 @@
 #ifndef REMOTE_CLIENT_INTERFACE_H
 #define REMOTE_CLIENT_INTERFACE_H
 
-namespace Remote
+namespace Firebird
 {
-	void registerRedirector(Firebird::IPluginManager* iPlugin);
+	class IPluginManager;
+}
+
+namespace Firebird::Remote
+{
+	void registerRedirector(IPluginManager* iPlugin);
 }
 
 #endif // REMOTE_CLIENT_INTERFACE_H

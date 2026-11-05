@@ -38,7 +38,7 @@
 #include "../utilities/gstat/ppg_proto.h"
 
 // gstat directly reads database files, therefore
-using namespace Ods;
+using namespace Firebird::Jrd::Ods;
 using Firebird::Guid;
 
 void PPG_print_header(const header_page* header, bool nocreation, Firebird::UtilSvc* uSvc)
@@ -185,10 +185,10 @@ void PPG_print_header(const header_page* header, bool nocreation, Firebird::Util
 
 			switch (nbakMode)
 			{
-			case Ods::hdr_nbak_stalled:
+			case hdr_nbak_stalled:
 				uSvc->printf(false, "backup lock");
 				break;
-			case Ods::hdr_nbak_merge:
+			case hdr_nbak_merge:
 				uSvc->printf(false, "backup merge");
 				break;
 			default:
@@ -203,10 +203,10 @@ void PPG_print_header(const header_page* header, bool nocreation, Firebird::Util
 
 			switch (replMode)
 			{
-			case Ods::hdr_replica_read_only:
+			case hdr_replica_read_only:
 				uSvc->printf(false, "read-only replica");
 				break;
-			case Ods::hdr_replica_read_write:
+			case hdr_replica_read_write:
 				uSvc->printf(false, "read-write replica");
 				break;
 			default:

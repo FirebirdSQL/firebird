@@ -37,6 +37,10 @@
 #define NEWLINE "\n"
 #endif
 
+namespace Firebird::Ntrace
+{
+
+
 enum FileOpenFlags
 {
 	fo_rdonly = 0x0000,			// open for reading only
@@ -66,10 +70,10 @@ enum SeekOrigin
 	so_from_end
 };
 
-class FileObject : public Firebird::AutoStorage
+class FileObject : public AutoStorage
 {
 public:
-	FileObject(const Firebird::PathName& afilename, int flags, int pflags = 0666) :
+	FileObject(const PathName& afilename, int flags, int pflags = 0666) :
 		filename(getPool(), afilename),
 #ifdef WIN_NT
 		file(INVALID_HANDLE_VALUE),
@@ -81,8 +85,8 @@ public:
 		open(flags, pflags);
 	}
 
-	FileObject(Firebird::MemoryPool& pool, const Firebird::PathName& afilename, int flags, int pflags = 0666) :
-		Firebird::AutoStorage(pool), filename(getPool(), afilename),
+	FileObject(MemoryPool& pool, const PathName& afilename, int flags, int pflags = 0666) :
+		AutoStorage(pool), filename(getPool(), afilename),
 #ifdef WIN_NT
 		file(INVALID_HANDLE_VALUE),
 		append_mutex(INVALID_HANDLE_VALUE)
@@ -104,11 +108,11 @@ public:
 
 	//This method used when log file was renamed by another process
 	void reopen();
-	bool renameFile(const Firebird::PathName new_filename);
+	bool renameFile(const PathName new_filename);
 
 	// Generic stuff. Let it be inline for the moment.
 	// If there will be a more than a few such methods we need to use inheritance
-	bool readLine(Firebird::string& dest)
+	bool readLine(string& dest)
 	{
 		// This method is not very efficient, but is still much better than
 		// reading characters one-by-one. Plus it can handle line breaks in
@@ -156,10 +160,10 @@ public:
 		return dest.length() || bytesRead;
 	}
 
-	void writeLine(const Firebird::string& from)
+	void writeLine(const string& from)
 	{
 		// Line should be written in a single BlockWrite call to handle file append properly
-		Firebird::string temp = from.substr(0, from.max_length() - 2) + NEWLINE;
+		string temp = from.substr(0, from.max_length() - 2) + NEWLINE;
 		blockWrite(temp.c_str(), temp.length());
 	}
 
@@ -170,7 +174,7 @@ private:
 
 	void open(int flags, int pflags);
 
-	Firebird::PathName filename;
+	PathName filename;
 #ifdef WIN_NT
 	HANDLE file;
 	HANDLE append_mutex;
@@ -178,5 +182,8 @@ private:
 	int file;
 #endif
 };
+
+
+} // namespace Firebird::Ntrace
 
 #endif // OS_FILEOBJECT_H

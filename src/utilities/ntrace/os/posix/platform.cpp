@@ -34,6 +34,10 @@
 #endif
 #include <stdlib.h>
 
+namespace Firebird::Ntrace
+{
+
+
 #define TEST
 //#undef TEST
 
@@ -47,7 +51,7 @@ public:
 	}
 };
 
-Firebird::TlsValue<char*, MallocClear> error_value;
+TlsValue<char*, MallocClear> error_value;
 
 const char* get_error_string()
 {
@@ -106,3 +110,6 @@ SLONG get_process_id()
 {
 	return getpid();
 }
+
+
+} // namespace Firebird::Ntrace

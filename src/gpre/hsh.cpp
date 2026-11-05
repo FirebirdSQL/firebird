@@ -33,6 +33,9 @@
 #include "../gpre/gpre_proto.h"
 #include "../gpre/msc_proto.h"
 
+namespace Firebird::Gpre
+{
+
 
 static int hash(const SCHAR*);
 static bool scompare(const SCHAR*, const SCHAR*);
@@ -273,3 +276,5 @@ static bool scompare2(const SCHAR* string1, const SCHAR* string2)
 	return true;
 }
 
+
+} // namespace Firebird::Gpre

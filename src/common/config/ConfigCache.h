@@ -32,21 +32,25 @@
 #include "../common/classes/fb_string.h"
 #include "../common/classes/rwlock.h"
 
-class ConfigCache : public Firebird::PermanentStorage
+namespace Firebird
+{
+
+
+class ConfigCache : public PermanentStorage
 {
 public:
-	ConfigCache(Firebird::MemoryPool& p, const Firebird::PathName& fName);
+	ConfigCache(MemoryPool& p, const PathName& fName);
 	virtual ~ConfigCache();
 
 	void checkLoadConfig();
-	bool addFile(const Firebird::PathName& fName);	// Returns true if file was added.
-	Firebird::PathName getFileName();
+	bool addFile(const PathName& fName);	// Returns true if file was added.
+	PathName getFileName();
 
 protected:
 	virtual void loadConfig() = 0;
 
 private:
-	class File : public Firebird::PermanentStorage
+	class File : public PermanentStorage
 	{
 		class PreciseTime
 		{
@@ -82,15 +86,15 @@ private:
 		};
 
 	public:
-		File(Firebird::MemoryPool& p, const Firebird::PathName& fName);
+		File(MemoryPool& p, const PathName& fName);
 		~File();
 
 		bool checkLoadConfig(bool set);
-		bool add(const Firebird::PathName& fName);	// Returns true if file was added.
+		bool add(const PathName& fName);	// Returns true if file was added.
 		void trim();
 
 	public:
-		Firebird::PathName fileName;
+		PathName fileName;
 
 	private:
 		PreciseTime fileTime;
@@ -100,7 +104,10 @@ private:
 	File* files;
 
 public:
-	Firebird::RWLock rwLock;
+	RWLock rwLock;
 };
+
+
+} // namespace Firebird
 
 #endif // COMMON_CONFIG_CACHE_H

@@ -32,9 +32,12 @@
 #define rem_port void
 #endif
 
-rem_port* XNET_analyze(ClntAuthBlock*, const Firebird::PathName&, bool, Firebird::RefPtr<const Firebird::Config>*,
-	const Firebird::PathName*);
-rem_port* XNET_connect(struct packet*, USHORT, Firebird::RefPtr<const Firebird::Config>*);
-rem_port* XNET_reconnect(ULONG);
+namespace Firebird::Remote
+{
+	rem_port* XNET_analyze(ClntAuthBlock*, const PathName&, bool, RefPtr<const Config>*,
+		const PathName*);
+	rem_port* XNET_connect(struct packet*, USHORT, RefPtr<const Config>*);
+	rem_port* XNET_reconnect(ULONG);
+} // namespace Firebird::Remote
 
 #endif // REMOTE_XNET_PROTO_H

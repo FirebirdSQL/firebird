@@ -30,25 +30,27 @@
 
 #if defined(DEV_BUILD)
 
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 thread_db* JRD_get_thread_data()
 {
-	Firebird::ThreadData* p1 = Firebird::ThreadData::getSpecific();
-	if (p1 && p1->getType() == Firebird::ThreadData::tddDBB)
+	ThreadData* p1 = ThreadData::getSpecific();
+	if (p1 && p1->getType() == ThreadData::tddDBB)
 	{
-		Jrd::thread_db* p2 = (Jrd::thread_db*) p1;
+		thread_db* p2 = (thread_db*) p1;
 		if (p2->getDatabase() && !p2->getDatabase()->checkHandle())
 		{
 			BUGCHECK(147);
 		}
 	}
-	return (Jrd::thread_db*) p1;
+	return (thread_db*) p1;
 }
 
-void CHECK_TDBB(const Jrd::thread_db* tdbb)
+void CHECK_TDBB(const thread_db* tdbb)
 {
-	fb_assert(tdbb && (tdbb->getType() == Firebird::ThreadData::tddDBB) &&
+	fb_assert(tdbb && (tdbb->getType() == ThreadData::tddDBB) &&
 		(!tdbb->getDatabase() || tdbb->getDatabase()->checkHandle()));
 }
 
@@ -56,5 +58,8 @@ void CHECK_DBB(const Database* dbb)
 {
 	fb_assert(dbb && dbb->checkHandle());
 }
+
+
+}	// namespace Firebird::Jrd
 
 #endif // DEV_BUILD

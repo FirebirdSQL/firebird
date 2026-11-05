@@ -32,8 +32,9 @@
 
 #include "RecordSource.h"
 
-using namespace Firebird;
-using namespace Jrd;
+namespace Firebird::Jrd
+{
+
 
 // --------------------------
 // Data access: record buffer
@@ -391,3 +392,6 @@ FB_UINT64 BufferedStream::getCount(thread_db* tdbb) const
 
 	return impure->irsb_buffer ? impure->irsb_buffer->getCount() : 0;
 }
+
+
+}	// namespace Firebird::Jrd

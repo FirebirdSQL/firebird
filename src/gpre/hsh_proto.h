@@ -24,6 +24,10 @@
 #ifndef GPRE_HSH_PROTO_H
 #define GPRE_HSH_PROTO_H
 
+namespace Firebird::Gpre
+{
+
+
 void		HSH_fini();
 void		HSH_init();
 void		HSH_insert(gpre_sym*);
@@ -31,5 +35,7 @@ gpre_sym*	HSH_lookup(const SCHAR*);
 gpre_sym*	HSH_lookup2(const SCHAR*);
 void		HSH_remove(gpre_sym*);
 
-#endif // GPRE_HSH_PROTO_H
 
+} // namespace Firebird::Gpre
+
+#endif // GPRE_HSH_PROTO_H

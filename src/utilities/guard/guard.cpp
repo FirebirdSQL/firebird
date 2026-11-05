@@ -56,6 +56,9 @@ int errno = -1;
 #include "../utilities/guard/util_proto.h"
 #include "../common/classes/fb_string.h"
 
+using namespace Firebird;
+
+
 const USHORT FOREVER	= 1;
 const USHORT ONETIME	= 2;
 const USHORT IGNORE		= 3;
@@ -212,7 +215,7 @@ int CLIB_ROUTINE main( int argc, char **argv)
 
 		if (pidfilename)
 		{
-			FILE *pf = os_utils::fopen(pidfilename, "w");
+			FILE *pf = Firebird::os_utils::fopen(pidfilename, "w");
 			if (pf)
 			{
 				fprintf(pf, "%d", child_pid);

@@ -40,8 +40,7 @@ namespace Firebird
 class UtilSvc;
 }
 
-namespace Jrd
-{
+namespace Firebird::Jrd {
 
 class Attachment;
 class Database;
@@ -150,7 +149,7 @@ private:
 		ULONG maxPage = 0;
 	};
 
-	typedef	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<ULONG, PageSpaceInfo> > > PageSpaceMap;
+	typedef	GenericMap<Pair<NonPooled<ULONG, PageSpaceInfo> > > PageSpaceMap;
 
 	thread_db* vdr_tdbb;
 	USHORT vdr_flags;
@@ -168,23 +167,23 @@ private:
 
 	RecordBitmap* vdr_rel_records;			// 1 bit per valid record
 	RecordBitmap* vdr_idx_records;			// 1 bit per index item
-	Firebird::Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
+	Array<IdxInfo> vdr_cond_idx;	// one entry per condition index for current relation
 	PageSpaceMap vdr_page_spaces;			// fetched pages and max page number in every tablespace
 	ULONG vdr_err_counts[VAL_MAX_ERROR];
 
-	Firebird::UtilSvc* vdr_service;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_sch_incl;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_sch_excl;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_incl;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_tab_excl;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_incl;
-	Firebird::AutoPtr<Firebird::SimilarToRegex> vdr_idx_excl;
+	UtilSvc* vdr_service;
+	AutoPtr<SimilarToRegex> vdr_sch_incl;
+	AutoPtr<SimilarToRegex> vdr_sch_excl;
+	AutoPtr<SimilarToRegex> vdr_tab_incl;
+	AutoPtr<SimilarToRegex> vdr_tab_excl;
+	AutoPtr<SimilarToRegex> vdr_idx_incl;
+	AutoPtr<SimilarToRegex> vdr_idx_excl;
 	int vdr_lock_tout;
 	void checkDPinPP(jrd_rel *relation, ULONG page_number);
 	void checkDPinPIP(jrd_rel *relation, ULONG page_number);
 
 public:
-	explicit Validation(thread_db*, Firebird::UtilSvc* uSvc = NULL);
+	explicit Validation(thread_db*, UtilSvc* uSvc = NULL);
 	~Validation();
 
 	bool run(thread_db* tdbb, USHORT flags);
@@ -204,9 +203,9 @@ private:
 		}
 	};
 
-	typedef Firebird::SortedArray<
+	typedef SortedArray<
 				UsedBdb,
-				Firebird::EmptyStorage<UsedBdb>,
+				EmptyStorage<UsedBdb>,
 				PageNumber,
 				UsedBdb> UsedBdbs;
 
@@ -236,6 +235,6 @@ private:
 	RTN walk_tip(TraNumber);
 };
 
-} // namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif

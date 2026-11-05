@@ -57,6 +57,10 @@
 #include <string.h>
 #endif
 
+namespace Firebird::Gpre
+{
+
+
 static const char* const COMMIT			= "commit";
 static const char* const ROLLBACK		= "rollback";
 
@@ -4287,3 +4291,6 @@ static void t_start_auto(const gpre_req* request,
 
 	set_sqlcode(action);
 }
+
+
+} // namespace Firebird::Gpre

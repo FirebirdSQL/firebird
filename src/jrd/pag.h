@@ -42,7 +42,7 @@
 #include "../jrd/lls.h"
 #include "../jrd/PageNumber.h"
 
-namespace Jrd {
+namespace Firebird::Jrd {
 
 const PageNumber ZERO_PAGE_NUMBER(INVALID_PAGE_SPACE, 0);
 const PageNumber HEADER_PAGE_NUMBER(DB_PAGE_SPACE, HEADER_PAGE);
@@ -73,8 +73,8 @@ public:
 	~PageSpace();
 
 	ULONG pageSpaceID;
-	Firebird::AtomicCounter pipHighWater;		// Lowest PIP with space
-	Firebird::AtomicCounter pipWithExtent;		// Lowest PIP with free extent
+	AtomicCounter pipHighWater;		// Lowest PIP with space
+	AtomicCounter pipWithExtent;		// Lowest PIP with free extent
 	ULONG pipFirst;								// First pointer page
 	ULONG scnFirst;								// First SCN's page
 
@@ -149,7 +149,7 @@ private:
 class PageManager : public pool_alloc<type_PageManager>
 {
 public:
-	explicit PageManager(Database* aDbb, Firebird::MemoryPool& aPool);
+	explicit PageManager(Database* aDbb, MemoryPool& aPool);
 
 	~PageManager()
 	{
@@ -164,7 +164,7 @@ public:
 	void initTempPageSpace(thread_db* tdbb);
 	ULONG getTempPageSpaceID(thread_db* tdbb);
 
-	void allocatePageSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const Firebird::PathName& fileName);
+	void allocatePageSpace(thread_db* tdbb, ULONG pageSpaceID, bool create, const PathName& fileName);
 	void deletePageSpace(const ULONG pageSpaceID, bool deleteFile = false);
 
 	void closeAll();
@@ -176,20 +176,20 @@ public:
 	ULONG pagesPerSCN;			// Slots per SCN's page
 
 private:
-	typedef Firebird::SortedArray<PageSpace*, Firebird::EmptyStorage<PageSpace*>,
+	typedef SortedArray<PageSpace*, EmptyStorage<PageSpace*>,
 		ULONG, PageSpace> PageSpaceArray;
 
 	PageSpace* addPageSpace(const ULONG pageSpaceID);
 
 	Database* dbb;
 	PageSpaceArray pageSpaces;
-	Firebird::RWLock* pageSpacesLock;
-	Firebird::MemoryPool& pool;
-	Firebird::Mutex	initTmpMtx;
+	RWLock* pageSpacesLock;
+	MemoryPool& pool;
+	Mutex	initTmpMtx;
 	ULONG tempPageSpaceID;
 	bool tempFileCreated;
 };
 
-} //namespace Jrd
+} // namespace Firebird::Jrd
 
 #endif // JRD_PAG_H

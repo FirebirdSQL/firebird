@@ -28,9 +28,11 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "../common/utils_proto.h"
-#include "../jrd/constants.h"
+#include "../common/constants.h"
 
-using namespace Firebird;
+namespace Firebird
+{
+
 
 constexpr FB_SIZE_T SERVICE_SIZE = 256;
 constexpr FB_SIZE_T SERVER_PART = 200;
@@ -94,7 +96,7 @@ static bool serverSizeValidate(ISC_STATUS* status, const TEXT* server)
 }
 
 
-static int typeBuffer(ISC_STATUS*, char*, int, Auth::UserData&, Firebird::IListUsers*, Firebird::string&);
+static int typeBuffer(ISC_STATUS*, char*, int, Auth::UserData&, IListUsers*, string&);
 
 
 // all this spb-writing functions should be gone
@@ -327,7 +329,7 @@ static void userInfoToSpb(char*& spb, Auth::UserData& userData)
 }
 
 
-static void setAttr(string& a, const char* nm, Firebird::IIntUserField* f)
+static void setAttr(string& a, const char* nm, IIntUserField* f)
 {
 	if (f->entered())
 	{
@@ -368,7 +370,7 @@ static void setAttr(CheckStatusWrapper* status, Auth::UserData* u)
 void callRemoteServiceManager(ISC_STATUS* status,
 							  isc_svc_handle handle,
 							  Auth::UserData& userData,
-							  Firebird::IListUsers* callback)
+							  IListUsers* callback)
 {
 	char spb_buffer[1024];
 	char* spb = spb_buffer;
@@ -454,7 +456,7 @@ void callRemoteServiceManager(ISC_STATUS* status,
 	stuffSpbLong(spb, 10);
 
 	char resultBuffer[RESULT_BUF_SIZE + 4];
-	Firebird::string text;
+	string text;
 
 	ISC_STATUS_ARRAY temp_status;
 	ISC_STATUS* local_status = status[1] ? temp_status : status;
@@ -618,8 +620,8 @@ static void parseLong(const char*& p, Auth::IntField& f, FB_SIZE_T& loop)
 
  **/
 static int typeBuffer(ISC_STATUS* status, char* buf, int offset,
-					   Auth::UserData& uData, Firebird::IListUsers* callback,
-					   Firebird::string& text)
+					   Auth::UserData& uData, IListUsers* callback,
+					   string& text)
 {
 	const char* p = &buf[offset];
 
@@ -778,3 +780,6 @@ static void checkServerUsersVersion(isc_svc_handle svc_handle, char& server_user
 		}
 	}
 }
+
+
+} // namespace Firebird

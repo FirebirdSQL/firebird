@@ -24,7 +24,9 @@
 #ifndef GPRE_CMD_PROTO_H
 #define GPRE_CMD_PROTO_H
 
-int CMD_compile_ddl(gpre_req*);
+namespace Firebird::Gpre
+{
+	int CMD_compile_ddl(gpre_req*);
+} // namespace Firebird::Gpre
 
 #endif // GPRE_CMD_PROTO_H
-

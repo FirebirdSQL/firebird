@@ -45,22 +45,23 @@
 #include "../common/classes/ParsedList.h"
 #include "firebird/Interface.h"
 
-using namespace Firebird;
-
 // Here we use version-independent symbolic link (or copy) of actual database
 DATABASE database = STATIC FILENAME "security.fdb";
 
-static Firebird::GlobalPtr<Firebird::Mutex> execLineMutex;	// protects various gpre generated structures
+namespace Firebird::Auth
+{
 
-static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_API_HANDLE trans,
-							 Firebird::IUser* user)
+
+static GlobalPtr<Mutex> execLineMutex;	// protects various gpre generated structures
+
+static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_API_HANDLE trans, IUser* user)
 {
 	if (!user->admin()->entered())
 	{
 		return true;
 	}
 
-	Firebird::string userName(user->userName()->get());
+	string userName(user->userName()->get());
 	for (unsigned i = 0; i < userName.length(); ++i)
 	{
 		if (userName[i] == '"')
@@ -69,7 +70,7 @@ static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_
 		}
 	}
 
-	Firebird::string sql;
+	string sql;
 	sql.printf((user->admin()->get() ? "GRANT %s TO \"%s\"" : "REVOKE %s FROM \"%s\""),
 			ADMIN_ROLE, userName.c_str());
 	isc_dsql_execute_immediate(isc_status, &database, &trans, sql.length(), sql.c_str(), SQL_DIALECT_V6, NULL);
@@ -102,20 +103,18 @@ static bool grantRevokeAdmin(ISC_STATUS* isc_status, FB_API_HANDLE database, FB_
 }
 
 
-static Firebird::GlobalPtr<Firebird::ConfigKeys> keys;
+static GlobalPtr<ConfigKeys> keys;
 
-namespace Auth {
-
-SecurityDatabaseManagement::SecurityDatabaseManagement(Firebird::IPluginConfig* par)
+SecurityDatabaseManagement::SecurityDatabaseManagement(IPluginConfig* par)
 	: database(0), transaction(0)
 {
-	Firebird::LocalStatus s;
-	Firebird::CheckStatusWrapper statusWrapper(&s);
+	LocalStatus s;
+	CheckStatusWrapper statusWrapper(&s);
 	config.assignRefNoIncr(par->getFirebirdConf(&statusWrapper));
 	check(&s);
 }
 
-void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebird::ILogonInfo* logonInfo)
+void SecurityDatabaseManagement::start(CheckStatusWrapper* st, ILogonInfo* logonInfo)
 {
 	try
 	{
@@ -125,12 +124,12 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		const char* secDbName = config->asString(secDbKey);
 		if (!(secDbName && secDbName[0]))
 		{
-			Firebird::Arg::Gds(isc_secdb_name).raise();
+			Arg::Gds(isc_secdb_name).raise();
 		}
 
-		Firebird::ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+		ClumpletWriter dpb(ClumpletReader::dpbList, MAX_DPB_SIZE);
 		dpb.insertByte(isc_dpb_sec_attach, TRUE);
-		dpb.insertString(isc_dpb_config, Firebird::ParsedList::getNonLoopbackProviders(secDbName));
+		dpb.insertString(isc_dpb_config, ParsedList::getNonLoopbackProviders(secDbName));
 
 		string schemaSearchPath;
 		schemaSearchPath.printf("%s, %s", PLG_LEGACY_SEC_SCHEMA, SYSTEM_SCHEMA);
@@ -156,21 +155,21 @@ void SecurityDatabaseManagement::start(Firebird::CheckStatusWrapper* st, Firebir
 		if (isc_attach_database(status, 0, secDbName, &database,
 								dpb.getBufferLength(), reinterpret_cast<const char*>(dpb.getBuffer())))
 		{
-			Firebird::status_exception::raise(status);
+			status_exception::raise(status);
 		}
 
 		if (isc_start_transaction(status, &transaction, 1, &database, 0, NULL))
 		{
-			Firebird::status_exception::raise(status);
+			status_exception::raise(status);
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
 }
 
-void SecurityDatabaseManagement::commit(Firebird::CheckStatusWrapper* st)
+void SecurityDatabaseManagement::commit(CheckStatusWrapper* st)
 {
 	try
 	{
@@ -181,17 +180,17 @@ void SecurityDatabaseManagement::commit(Firebird::CheckStatusWrapper* st)
 		{
 			if (isc_commit_transaction(status, &transaction))
 			{
-				Firebird::status_exception::raise(status);
+				status_exception::raise(status);
 			}
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
 }
 
-void SecurityDatabaseManagement::rollback(Firebird::CheckStatusWrapper* st)
+void SecurityDatabaseManagement::rollback(CheckStatusWrapper* st)
 {
 	try
 	{
@@ -202,11 +201,11 @@ void SecurityDatabaseManagement::rollback(Firebird::CheckStatusWrapper* st)
 		{
 			if (isc_rollback_transaction(status, &transaction))
 			{
-				Firebird::status_exception::raise(status);
+				status_exception::raise(status);
 			}
 		}
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
@@ -231,7 +230,7 @@ int SecurityDatabaseManagement::release()
 
 #define STR_STORE(to, from) fb_utils::copy_terminate(to, from, sizeof(to))
 #define STR_VSTORE(to, from) string2vary(&to, from, sizeof(to))
-static void string2vary(void* to, const Firebird::string& from, size_t to_size)
+static void string2vary(void* to, const string& from, size_t to_size)
 {
 	const size_t len = MIN(to_size - sizeof(USHORT), from.size());
 	paramvary* v = reinterpret_cast<paramvary*>(to);
@@ -240,8 +239,7 @@ static void string2vary(void* to, const Firebird::string& from, size_t to_size)
 }
 
 
-int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebird::IUser* user,
-	Firebird::IListUsers* callback)
+int SecurityDatabaseManagement::execute(CheckStatusWrapper* st, IUser* user, IListUsers* callback)
 {
 /*************************************
  *
@@ -311,10 +309,10 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 		fb_utils::init_status(isc_status);
 		st->init();
 
-		Firebird::MutexLockGuard guard(execLineMutex, FB_FUNCTION);
+		MutexLockGuard guard(execLineMutex, FB_FUNCTION);
 
 		SCHAR encrypted1[MAX_LEGACY_PASSWORD_LENGTH + 2];
-		Firebird::string encrypted2;
+		string encrypted2;
 		bool found;
 
 		// check for non-printable characters in user name
@@ -322,7 +320,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 		{
 			if (!isprint(*p))
 			{
-				return GsecMsg75;  // Add special error message for this case ?
+				return Gsec::GsecMsg75;  // Add special error message for this case ?
 			}
 		}
 
@@ -331,21 +329,21 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 
 		switch (user->operation())
 		{
-		case Firebird::IUser::OP_USER_DROP_MAP:
-		case Firebird::IUser::OP_USER_SET_MAP:
+		case IUser::OP_USER_DROP_MAP:
+		case IUser::OP_USER_SET_MAP:
 			{
-				Firebird::string sql;
+				string sql;
 				sql.printf("ALTER ROLE " ADMIN_ROLE " %s AUTO ADMIN MAPPING",
-					user->operation() == Firebird::IUser::OP_USER_SET_MAP ? "SET" : "DROP");
+					user->operation() == IUser::OP_USER_SET_MAP ? "SET" : "DROP");
 				isc_dsql_execute_immediate(isc_status, &database, &transaction, sql.length(), sql.c_str(), 1, NULL);
 				if (isc_status[1] != 0)
 				{
-					ret = GsecMsg97;
+					ret = Gsec::GsecMsg97;
 				}
 			}
 			break;
 
-		case Firebird::IUser::OP_USER_ADD:
+		case IUser::OP_USER_ADD:
 			// this checks the "entered" flags for each parameter (except the name)
 			// and makes all non-entered parameters null valued
 
@@ -411,15 +409,15 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 					U.PLG$LAST_NAME.NULL = ISC_TRUE;
 			END_STORE
 			ON_ERROR
-				ret = GsecMsg19;	// gsec - add record error
+				ret = Gsec::GsecMsg19;	// gsec - add record error
 			END_ERROR;
 			if (ret == 0 && !grantRevokeAdmin(isc_status, database, transaction, user))
 			{
-				ret = GsecMsg19;	// gsec - add record error
+				ret = Gsec::GsecMsg19;	// gsec - add record error
 			}
 			break;
 
-		case Firebird::IUser::OP_USER_MODIFY:
+		case IUser::OP_USER_MODIFY:
 			// this updates an existing record, replacing all fields that are
 			// entered, and for those that were specified but not entered, it
 			// changes the current value to the null value
@@ -499,30 +497,30 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 						U.PLG$LAST_NAME.NULL = ISC_TRUE;
 				END_MODIFY
 				ON_ERROR
-					ret = GsecMsg20;
+					ret = Gsec::GsecMsg20;
 				END_ERROR;
 			}
 			END_FOR
 			ON_ERROR
-				ret = GsecMsg21;
+				ret = Gsec::GsecMsg21;
 			END_ERROR;
 
 			if (!ret && !found)
-				ret = GsecMsg22;
+				ret = Gsec::GsecMsg22;
 
 			if (ret == 0 && !grantRevokeAdmin(isc_status, database, transaction, user))
 			{
-				ret = GsecMsg21;
+				ret = Gsec::GsecMsg21;
 			}
 			break;
 
-		case Firebird::IUser::OP_USER_DELETE:
+		case IUser::OP_USER_DELETE:
 			// looks up the specified user record and deletes it
 
 			found = false;
 			// Do not allow SYSDBA user to be deleted
 			if (!fb_utils::stricmp(user->userName()->get(), DBA_USER_NAME))
-				ret = GsecMsg23;
+				ret = Gsec::GsecMsg23;
 			else
 			{
 				FOR (TRANSACTION_HANDLE transaction REQUEST_HANDLE request) U IN PLG$VIEW_USERS
@@ -531,17 +529,17 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 					found = true;
 					ERASE U
 					ON_ERROR
-						ret = GsecMsg23;	// gsec - delete record error
+						ret = Gsec::GsecMsg23;	// gsec - delete record error
 					END_ERROR;
 				}
 				END_FOR
 				ON_ERROR
-					ret = GsecMsg24;	// gsec - find/delete record error
+					ret = Gsec::GsecMsg24;	// gsec - find/delete record error
 				END_ERROR;
 			}
 
 			if (!ret && !found)
-				ret = GsecMsg22;	// gsec - record not found for user:
+				ret = Gsec::GsecMsg22;	// gsec - record not found for user:
 
 			user->admin()->set(st, 0);
 			check(st);
@@ -549,25 +547,25 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			check(st);
 			if (ret == 0 && !grantRevokeAdmin(isc_status, database, transaction, user))
 			{
-				ret = GsecMsg24;
+				ret = Gsec::GsecMsg24;
 			}
 			break;
 
-		case Firebird::IUser::OP_USER_DISPLAY:
+		case IUser::OP_USER_DISPLAY:
 			// gets either the desired record, or all records, and displays them
 
 			found = false;
 			if (!user->userName()->entered())
 			{
-				Firebird::LocalStatus s2;
-				Firebird::CheckStatusWrapper statusWrapper2(&s2);
-				Firebird::CheckStatusWrapper* s = st;
+				LocalStatus s2;
+				CheckStatusWrapper statusWrapper2(&s2);
+				CheckStatusWrapper* s = st;
 
 				FOR (TRANSACTION_HANDLE transaction REQUEST_HANDLE request) U IN PLG$VIEW_USERS
 					try
 					{
 						{
-							Firebird::string attr, a1, a2, a3;
+							string attr, a1, a2, a3;
 
 							if (!U.PLG$UID.NULL)
 								a1.printf("Uid=%d\n", U.PLG$UID);
@@ -627,14 +625,14 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 
 						found = true;
 					}
-					catch (const Firebird::Exception& ex)
+					catch (const Exception& ex)
 					{
 					  	ex.stuffException(s);
 					  	s = &statusWrapper2;
 					}
 				END_FOR
 				ON_ERROR
-					ret = GsecMsg28;	// gsec - find/display record error
+					ret = Gsec::GsecMsg28;	// gsec - find/display record error
 				END_ERROR;
 
 				// real error raise - out of gpre's FOR loop
@@ -642,10 +640,10 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			}
 			else
 			{
-				Firebird::string attr, a1, a2, a3;
-				Firebird::LocalStatus s2;
-				Firebird::CheckStatusWrapper statusWrapper2(&s2);
-				Firebird::CheckStatusWrapper* s = st;
+				string attr, a1, a2, a3;
+				LocalStatus s2;
+				CheckStatusWrapper statusWrapper2(&s2);
+				CheckStatusWrapper* s = st;
 
 				FOR (TRANSACTION_HANDLE transaction REQUEST_HANDLE request) U IN PLG$VIEW_USERS
 						WITH U.PLG$USER_NAME EQ user->userName()->get()
@@ -709,14 +707,14 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 
 						found = true;
 					}
-					catch (const Firebird::Exception& ex)
+					catch (const Exception& ex)
 					{
 					  	ex.stuffException(s);
 					  	s = &statusWrapper2;
 					}
 				END_FOR
 				ON_ERROR
-					ret = GsecMsg28;	// gsec - find/display record error
+					ret = Gsec::GsecMsg28;	// gsec - find/display record error
 				END_ERROR;
 
 				// real error raise - out of gpre's FOR loop
@@ -725,7 +723,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			break;
 
 		default:
-			ret = GsecMsg16;		// gsec - error in switch specifications
+			ret = Gsec::GsecMsg16;		// gsec - error in switch specifications
 			break;
 		}
 
@@ -736,7 +734,7 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			{
 				if (! ret)
 				{
-					ret = GsecMsg94;	// error releasing request in security database
+					ret = Gsec::GsecMsg94;	// error releasing request in security database
 				}
 			}
 		}
@@ -748,14 +746,14 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 			{
 				if (! ret)
 				{
-					ret = GsecMsg94;	// error releasing request in security database
+					ret = Gsec::GsecMsg94;	// error releasing request in security database
 				}
 			}
 		}
 
 		fb_utils::setIStatus(st, isc_status);
 	}
-	catch (const Firebird::Exception& ex)
+	catch (const Exception& ex)
 	{
 		ex.stuffException(st);
 	}
@@ -763,15 +761,19 @@ int SecurityDatabaseManagement::execute(Firebird::CheckStatusWrapper* st, Firebi
 	return ret;
 }
 
-} // namespace Auth
+
+} // namespace Firebird::Auth
+
+
+using namespace Firebird;
 
 // register plugin
-static Firebird::SimpleFactory<Auth::SecurityDatabaseManagement> factory;
+static SimpleFactory<Auth::SecurityDatabaseManagement> factory;
 
-extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
+extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(IMaster* master)
 {
-	Firebird::CachedMasterInterface::set(master);
-	Firebird::PluginManagerInterfacePtr()->registerPluginFactory(
-		Firebird::IPluginManager::TYPE_AUTH_USER_MANAGEMENT, "Legacy_UserManager", &factory);
-	Firebird::getUnloadDetector()->registerMe();
+	CachedMasterInterface::set(master);
+	PluginManagerInterfacePtr()->registerPluginFactory(
+		IPluginManager::TYPE_AUTH_USER_MANAGEMENT, "Legacy_UserManager", &factory);
+	getUnloadDetector()->registerMe();
 }
