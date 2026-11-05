@@ -732,6 +732,10 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 				 PPR.RDB$PARAMETER_NAME EQ local_name
 		{
 			found = true;
+
+			fb_utils::exact_name_limit(PPR.RDB$FIELD_SOURCE_SCHEMA_NAME, sizeof(PPR.RDB$FIELD_SOURCE_SCHEMA_NAME));
+			strcpy(output_field_schema_name, PPR.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
 			fb_utils::exact_name_limit(PPR.RDB$FIELD_SOURCE, sizeof(PPR.RDB$FIELD_SOURCE));
 			strcpy(output_field_name, PPR.RDB$FIELD_SOURCE);
 		}
