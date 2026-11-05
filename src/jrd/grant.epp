@@ -1196,6 +1196,18 @@ static SecurityClass::flags_t squeeze_acl(Acl& acl, const QualifiedName& user, S
 						hit = false;
 					break;
 
+				case id_package:
+					if (user_type != obj_package_header)
+						hit = false;
+
+					if (check_string(a, user.schema))
+						hit = false;
+					a += *a + 1;
+
+					if (check_string(a, user.object))
+						hit = false;
+					break;
+
 				default:
 					BUGCHECK(293);	// bad ACL
 				}
