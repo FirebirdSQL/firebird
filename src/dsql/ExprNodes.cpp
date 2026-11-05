@@ -11418,7 +11418,9 @@ bool SubQueryNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 
 bool SubQueryNode::dsqlFieldFinder(FieldFinder& visitor)
 {
-	return visitor.visit(rse);	// Pass only the rse.
+	// Fields inside a sub-select are not related to the scope level being checked,
+	// see AggNode::dsqlAggregate2Finder() and SubQueryNode::dsqlAggregateFinder().
+	return !visitor.ignoreSubSelects && visitor.visit(rse);	// Pass only the rse.
 }
 
 ValueExprNode* SubQueryNode::dsqlFieldRemapper(FieldRemapper& visitor)
