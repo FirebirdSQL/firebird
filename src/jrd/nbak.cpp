@@ -35,6 +35,7 @@
 #include "lck.h"
 #include "cch.h"
 #include "lck.h"
+#include "jrd_proto.h"
 #include "pag_proto.h"
 #include "err_proto.h"
 #include "cch_proto.h"
@@ -223,6 +224,14 @@ void BackupManager::generateFilename()
 void BackupManager::openDelta(thread_db* tdbb)
 {
 	fb_assert(!diff_file);
+
+	// Verify difference file path against DatabaseAccess entry of firebird.conf
+	if (!JRD_verify_database_access(diff_name))
+	{
+		ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("difference file") <<
+													 Arg::Str(diff_name));
+	}
+
 	diff_file = PIO_open(tdbb, diff_name, diff_name);
 }
 
@@ -276,6 +285,14 @@ void BackupManager::beginBackup(thread_db* tdbb)
 	{
 		// Create file
 		NBAK_TRACE(("Creating difference file %s", diff_name.c_str()));
+
+		// Verify difference file path against DatabaseAccess entry of firebird.conf
+		if (!JRD_verify_database_access(diff_name))
+		{
+			ERR_post(Arg::Gds(isc_conf_access_denied) << Arg::Str("difference file") <<
+														 Arg::Str(diff_name));
+		}
+
 		diff_file = PIO_create(tdbb, diff_name, true, false);
 	}
 	catch (const Firebird::Exception&)
