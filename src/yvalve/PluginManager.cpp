@@ -905,16 +905,26 @@ namespace
 				currentPlugin = NULL;
 			}
 
-			// Avoid concurrent load of the same module
-			static Static<Mutex> loadModuleMutex;
-			MutexLockGuard lmGuard(*(&loadModuleMutex), FB_FUNCTION);
-
-			MutexLockGuard g(plugins->mutex, FB_FUNCTION);
-
 			while (currentName.getWord(namesList, " \t,;"))
 			{
-				// First check - may be currentName is present among already configured plugins
 				ConfiguredPlugin* tmp = NULL;
+				{
+					MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
+					// First check - may be currentName is present among already configured plugins
+					if (plugins->get(MapKey(interfaceType, currentName), tmp))
+					{
+						currentPlugin = tmp;
+						break;
+					}
+				}
+
+				// Avoid concurrent load of the same module
+				static Static<Mutex> loadModuleMutex;
+				MutexLockGuard lmGuard(*(&loadModuleMutex), FB_FUNCTION);
+
+				MutexLockGuard g(plugins->mutex, FB_FUNCTION);
+
 				if (plugins->get(MapKey(interfaceType, currentName), tmp))
 				{
 					currentPlugin = tmp;
