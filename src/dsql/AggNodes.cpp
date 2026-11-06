@@ -1256,6 +1256,7 @@ dsc* CustomAggNode::aggExecute(thread_db* tdbb, Request* request) const
 
 bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionPhase phase) const
 {
+	const auto attachment = tdbb->getAttachment();
 	const auto func = function(request->getResources());
 	auto* const aggImpure = request->getImpure<Impure>(customImpure);
 
@@ -1280,6 +1281,11 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 	}
 
 	func->checkReload(tdbb);
+
+	// Replace the effective user according to the function's SQL SECURITY clause,
+	// so that dynamic SQL (EXECUTE STATEMENT) is checked against the proper user
+	const auto invoker = func->invoker ? func->invoker : attachment->att_ss_user;
+	AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, invoker);
 
 	const ULONG inMsgLength = func->getInputFormat() ? func->getInputFormat()->fmt_length : 0;
 	const ULONG outMsgLength = func->getOutputFormat()->fmt_length;

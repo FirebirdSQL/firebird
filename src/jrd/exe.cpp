@@ -1053,7 +1053,10 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transaction,
 	ULONG inMsgLength, UCHAR* inMsg, ULONG outMsgLength, UCHAR* outMsg)
 {
-	if (const auto function = request->getStatement()->function; function && function->fun_external)
+	const auto attachment = tdbb->getAttachment();
+	const auto function = request->getStatement()->function;
+
+	if (function && function->fun_external)
 	{
 		activate_request(tdbb, request, transaction);
 
@@ -1180,6 +1183,11 @@ void EXE_execute_function(thread_db* tdbb, Request* request, jrd_tra* transactio
 	}
 	else
 	{
+		// Replace the effective user according to the function's SQL SECURITY clause,
+		// so that dynamic SQL (EXECUTE STATEMENT) is checked against the proper user
+		const auto invoker = (function && function->invoker) ? function->invoker : attachment->att_ss_user;
+		AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, invoker);
+
 		EXE_start(tdbb, request, transaction);
 
 		if (inMsgLength != 0)
