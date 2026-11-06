@@ -173,7 +173,7 @@ static const struct
 	{"retrieve", two},
 	{"relation2", relation2},
 	{"rid2", rid2},
-	{NULL, NULL},
+	{"relation3", relation3},
 	{NULL, NULL},
 	{"set_generator", gen_id},	// 150
 	{"ansi_any", one},
@@ -255,5 +255,17 @@ static const struct
 	{"outer_map", outer_map},
 	{NULL, NULL},	// blr_json_function
 	{"skip_locked", zero},
+	// New BLR in FB6.0
+	{"invoke_function", invoke_function},
+	{"invoke_procedure", invsel_procedure},
+	{"select_procedure", invsel_procedure},
+	{NULL, NULL},	// default_arg
+	{NULL, NULL},	// cast_format
+	{NULL, NULL},	// table_value_fun
+	{NULL, NULL},	// for_range
+	{"gen_id3", gen_id3},
+	{"default2", default2},
+	{NULL, NULL},	// current_schema
+	{NULL, NULL},	// flags - part of header
 	{0, 0}
 };
