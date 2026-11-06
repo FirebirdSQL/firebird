@@ -434,7 +434,7 @@ public:
 		Firebird::RefPtr<StableAttachmentPart> jStable;
 	};
 
-	class InitialOptions
+	class InitialOptions		// Keep EDS::dpbOptions in sync with this class
 	{
 	public:
 		InitialOptions(MemoryPool& pool)

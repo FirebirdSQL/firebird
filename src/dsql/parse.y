@@ -723,6 +723,7 @@ using namespace Firebird;
 %token <metaNamePtr> LISTAGG
 %token <metaNamePtr> LTRIM
 %token <metaNamePtr> NAMED_ARG_ASSIGN
+%token <metaNamePtr> OPTIONS
 %token <metaNamePtr> PERCENTILE_CONT
 %token <metaNamePtr> PERCENTILE_DISC
 %token <metaNamePtr> RDB_RESET_CONTEXT
@@ -827,6 +828,8 @@ using namespace Firebird;
 	Jrd::RowsClause* rowsClause;
 	Jrd::FieldNode* fieldNode;
 	Jrd::DecodeNode* decodeNode;
+	Jrd::FreeOption* freeOption;
+	Jrd::FreeOptionsList* freeOptionsList;
 	Firebird::Array<Jrd::FieldNode*>* fieldArray;
 	Firebird::Array<NestConst<Jrd::FieldNode> >* nestFieldArray;
 	Jrd::NamedWindowClause* namedWindowClause;
@@ -4255,14 +4258,22 @@ exec_stmt_option($execStatementNode)
 	| WITH TWO_PHASE TRANSACTION
 		{ setClause($execStatementNode->traScope, "TRANSACTION", EDS::traTwoPhase); }
 	*/
-	/*
-	| CONNECT timeout_noise value
-		{ setClause($execStatementNode->connectTimeout, "CONNECT TIMEOUT", $3); }
-	| SEND timeout_noise value
-		{ setClause($execStatementNode->sendTimeout, "SEND TIMEOUT", $3); }
-	| RECEIVE timeout_noise value
-		{ setClause($execStatementNode->receiveTimeout, "RECEIVE TIMEOUT", $3); }
-	*/
+	| OPTIONS '(' free_opts ')'
+		{ setClause($execStatementNode->opts, "OPTIONS", EDS::makeOptions($3)); }
+	;
+
+%type <freeOptionsList> free_opts
+free_opts
+	: option_name_value
+		{ $$ = FB_NEW_POOL(getPool()) FreeOptionsList(getPool()); $$->push(*$1); }
+	| free_opts ',' option_name_value
+		{ $$ = $1; $$->push(*$3); }
+	;
+
+%type <freeOption> option_name_value
+option_name_value
+	: valid_symbol_name '=' value
+		{ $$ = FB_NEW_POOL(getPool()) FreeOption(*$1, $3); }
 	;
 
 %type <stmtNode> if_then_else
@@ -10827,6 +10838,7 @@ non_reserved_word
 	| UNLIST
 	| CONCURRENTLY
 	| VALIDATE
+	| OPTIONS
 	;
 
 %%

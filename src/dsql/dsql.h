@@ -37,6 +37,7 @@
 #include <numeric>
 #include "../common/classes/array.h"
 #include "../common/classes/fb_atomic.h"
+#include "../common/classes/fb_pair.h"
 #include "../common/classes/GenericMap.h"
 #include "../jrd/MetaName.h"
 #include "../common/classes/stack.h"
@@ -918,6 +919,8 @@ enum class AggregateFunctionPhase : UCHAR
 	FINISH = 3
 };
 
+typedef Firebird::NonPooledPair<MetaName, ValueExprNode*> FreeOption;
+typedef Firebird::HalfStaticArray<FreeOption, 16> FreeOptionsList;
 
 } // namespace
 

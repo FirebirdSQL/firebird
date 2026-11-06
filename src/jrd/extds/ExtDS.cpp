@@ -74,6 +74,34 @@ using namespace Jrd;
 using namespace Firebird;
 
 
+namespace {
+
+struct DpbOption
+{
+	UCHAR tag;
+	MetaName /*const char**/ name;
+	bool intFormat;
+};
+
+// Keep this list in sync with options supported by
+// Attachment::InitialOptions and Remote::Attachment::reset()
+DpbOption dpbOptions[] = {
+#define DPB_OPTION(o,i) { o, STRINGIZE(o), i }
+	DPB_OPTION(isc_dpb_decfloat_round, false),
+	DPB_OPTION(isc_dpb_decfloat_traps, false),
+	DPB_OPTION(isc_dpb_set_bind, false),
+	DPB_OPTION(isc_dpb_search_path, false),
+	DPB_OPTION(isc_dpb_blr_request_search_path, false),
+	DPB_OPTION(isc_dpb_session_time_zone, false),
+	DPB_OPTION(isc_dpb_connect_timeout, true),
+	DPB_OPTION(isc_dpb_send_timeout, true),
+	DPB_OPTION(isc_dpb_receive_timeout, true)
+#undef DPB_OPTION
+};
+
+} // anonymous
+
+
 namespace EDS {
 
 // Manager
@@ -195,7 +223,7 @@ static bool isCurrentAccount(UserId* currUserID,
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
-	const string& user, const string& pwd, const string& role, TraScope tra_scope)
+	const string& user, const string& pwd, const string& role, TraScope tra_scope, const ExecOpts* opts)
 {
 	Attachment* att = tdbb->getAttachment();
 	if (att->att_ext_call_depth >= MAX_CALLBACKS)
@@ -217,7 +245,10 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	// look up at connections already bound to current attachment
 	Connection* conn = prv->getBoundConnection(tdbb, dbName, dpb, tra_scope, isCurrentAtt);
 	if (conn)
+	{
+		conn->setOptions(tdbb, opts);
 		return conn;
+	}
 
 	// if could be pooled, ask connections pool
 
@@ -260,6 +291,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	}
 
 	fb_assert(conn != NULL);
+	conn->setOptions(tdbb, opts);
 	return conn;
 }
 
@@ -861,6 +893,38 @@ bool Connection::getWrapErrors(const ISC_STATUS* status) noexcept
 
 		default:
 			return m_wrapErrors;
+	}
+}
+
+
+void Connection::setOptions(thread_db* tdbb, const ExecOpts* opts)
+{
+	if (!opts)
+		return;		// Suspicious - system defaults to be restored ???
+
+	ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
+	Request* request = tdbb->getRequest();
+
+	for (auto& option : *opts)
+	{
+		for (unsigned n = 0; n < FB_NELEM(dpbOptions); ++n)
+		{
+			if (dpbOptions[n].tag == option.first)
+			{
+				auto dsc = EVL_expr(tdbb, request, option.second);
+
+				if (dpbOptions[n].intFormat)
+					dpb.insertInt(dpbOptions[n].tag, MOV_get_long(tdbb, dsc, 0));
+				else
+				{
+					string s;
+					MOV_get_string(tdbb, dsc, s);
+					dpb.insertString(dpbOptions[n].tag, s);
+				}
+
+				break;
+			}
+		}
 	}
 }
 
@@ -2735,6 +2799,32 @@ void CryptCallbackRedirector::resetRedirect(Firebird::ICryptKeyCallback* newCall
 bool CryptCallbackRedirector::operator==(const CryptHash& ch) const
 {
 	return m_hash == ch;
+}
+
+
+ExecOpts* makeOptions(Jrd::FreeOptionsList* freeOptions)
+{
+	AutoPtr rc(FB_NEW_POOL(freeOptions->getPool()) ExecOpts(freeOptions->getPool()));
+
+	for (auto freeOpt : *freeOptions)
+	{
+		UCHAR tag = 0;
+		for (unsigned n = 0; n < FB_NELEM(dpbOptions); ++n)
+		{
+			if (freeOpt.first == dpbOptions[n].name)
+			{
+				tag = dpbOptions[n].tag;
+				break;
+			}
+		}
+
+		if (!tag)
+			fatal_exception::raiseFmt("Unknown option %s", freeOpt.first.c_str());
+
+		rc->push(ExecOpts::value_type(tag, freeOpt.second));
+	}
+
+	return rc.release();
 }
 
 } // namespace EDS

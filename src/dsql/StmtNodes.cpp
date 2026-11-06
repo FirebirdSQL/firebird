@@ -5305,6 +5305,19 @@ DmlNode* ExecStatementNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScr
 						break;
 					}
 
+					case blr_exec_stmt_opts:
+					{
+						const USHORT count = csb->csb_blr_reader.getWord();
+						node->opts = FB_NEW_POOL(pool) EDS::ExecOpts(pool);
+						for (USHORT i = 0; i < count; i++)
+						{
+							UCHAR tag = csb->csb_blr_reader.getByte();
+							auto val = PAR_parse_value(tdbb, csb);
+							node->opts->push(EDS::ExecOpts::value_type(tag, val));
+						}
+						break;
+					}
+
 					case blr_end:
 						break;
 
@@ -5481,6 +5494,18 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_pwd, password);
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_role, role);
 
+		// Reset options
+		if (opts && opts->getCount() > 0)
+		{
+			dsqlScratch->appendUChar(blr_exec_stmt_opts);
+			dsqlScratch->appendUShort(opts->getCount());
+			for (auto& option : *opts)
+			{
+				dsqlScratch->appendUChar(option.first);
+				GEN_expr(dsqlScratch, option.second);
+			}
+		}
+
 		// dsqlScratch's transaction behavior.
 		if (traScope != EDS::traNotSet)
 		{
@@ -5608,7 +5633,7 @@ const StmtNode* ExecStatementNode::execute(thread_db* tdbb, Request* request, Ex
 		string sRole;
 		getString(tdbb, request, role, sRole);
 
-		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope);
+		EDS::Connection* conn = EDS::Manager::getConnection(tdbb, sDataSrc, sUser, sPwd, sRole, traScope, opts);
 
 		stmt = conn->createStatement(sSql);
 		stmt->bindToRequest(request, stmtPtr);

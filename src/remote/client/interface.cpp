@@ -2701,6 +2701,7 @@ void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const uns
 
 		for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
 		{
+			// Keep EDS::dpbOptions in sync with this switch
 			switch(rdr.getClumpTag())
 			{
 			case isc_dpb_connect_timeout:

@@ -3701,7 +3701,8 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 				"privs",
 				"in_params",
 				"in_params2",
-				"out_params"
+				"out_params",
+				"reset options"
 			};
 
 			int inputs = 0;
@@ -3780,6 +3781,22 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 						offset = blr_print_line(control, offset);
 					}
 					level--;
+				break;
+
+				case blr_exec_stmt_opts:
+				{
+					int num = blr_print_word(control);
+					offset = blr_print_line(control, offset);
+					level++;
+					while (num--)
+					{
+						blr_indent(control, level);
+						blr_print_byte(control);
+						blr_print_verb(control, level);
+						offset = blr_print_line(control, offset);
+					}
+					level--;
+				}
 				break;
 
 				default:

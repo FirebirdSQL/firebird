@@ -29,6 +29,7 @@
 #include "../../common/classes/ClumpletWriter.h"
 #include "../../common/classes/locks.h"
 #include "../../common/utils_proto.h"
+#include "../../dsql/dsql.h"
 
 #include <limits>
 
@@ -38,6 +39,7 @@ namespace Jrd
 	class jrd_tra;
 	class thread_db;
 	class ValueListNode;
+	class ValueExprNode;
 }
 
 namespace EDS {
@@ -49,6 +51,7 @@ class ConnectionsPool;
 class Transaction;
 class Statement;
 class Blob;
+typedef Firebird::HalfStaticArray<Firebird::NonPooledPair<UCHAR, Jrd::ValueExprNode*>, 16> ExecOpts;
 
 enum TraModes {
 	traReadCommited,
@@ -156,7 +159,8 @@ public:
 	static Provider* getProvider(const Firebird::string& prvName);
 	static Connection* getConnection(Jrd::thread_db* tdbb,
 		const Firebird::string& dataSource, const Firebird::string& user,
-		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope);
+		const Firebird::string& pwd, const Firebird::string& role, TraScope tra_scope,
+		const ExecOpts* opts);
 
 	static ConnectionsPool* getConnPool(bool create);
 
@@ -586,6 +590,8 @@ public:
 		return m_cryptCallbackRedir.isValid();
 	}
 
+	void setOptions(Jrd::thread_db* tdbb, const ExecOpts* opts);
+
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
@@ -672,6 +678,9 @@ protected:
 
 typedef Firebird::Array<const Jrd::MetaName*> ParamNames;
 typedef Firebird::Array<USHORT> ParamNumbers;
+
+ExecOpts* makeOptions(Jrd::FreeOptionsList* freeOptions);
+
 
 class Statement : public Firebird::PermanentStorage
 {

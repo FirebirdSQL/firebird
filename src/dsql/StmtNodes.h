@@ -782,6 +782,7 @@ public:
 	USHORT dsqlLabelNumber;
 	bool useCallerPrivs;
 	EDS::TraScope traScope;
+	EDS::ExecOpts* opts = nullptr;
 };
 
 
