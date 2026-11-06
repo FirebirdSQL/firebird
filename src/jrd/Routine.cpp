@@ -190,21 +190,7 @@ void Routine::parseMessages(thread_db* tdbb, CompilerScratch* csb, BlrReader blr
 
 	csb->csb_blr_reader = blrReader;
 
-	const SSHORT version = csb->csb_blr_reader.getByte();
-
-	switch (version)
-	{
-		case blr_version4:
-		case blr_version5:
-		//case blr_version6:
-			break;
-
-		default:
-			status_exception::raise(
-				Arg::Gds(isc_metadata_corrupt) <<
-				Arg::Gds(isc_wroblrver2) << Arg::Num(blr_version4) << Arg::Num(blr_version5/*6*/) <<
-					Arg::Num(version));
-	}
+	PAR_getBlrVersionAndFlags(csb);
 
 	if (csb->csb_blr_reader.getByte() != blr_begin)
 		status_exception::raise(Arg::Gds(isc_metadata_corrupt));
