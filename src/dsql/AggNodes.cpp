@@ -2401,13 +2401,20 @@ dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
 
 AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(dsqlScratch->getPool(), type,
-		doDsqlPass(dsqlScratch, arg),
-		doDsqlPass(dsqlScratch, dsqlOrderClause) );
+	PercentileAggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(
+		dsqlScratch->getPool(), type, doDsqlPass(dsqlScratch, arg),
+		doDsqlPass(dsqlScratch, dsqlOrderClause));
 
 	PASS1_set_parameter_type(dsqlScratch, node->arg,
 		[&](dsc* desc) { desc->makeDouble(); },
 		false);
+
+	// The value argument is the same node as the WITHIN GROUP sort expression
+	// (aliased in the constructor). Passing it along with the order clause would
+	// leave it as the very node emitted by GEN_sort, so genBlr() would write the
+	// same sub-select context twice into the BLR and it would fail to parse with
+	// isc_ctxinuse. Pass it separately to get a distinct node with its own context.
+	node->valueArg = doDsqlPass(dsqlScratch, valueArg);
 
 	return node;
 }
