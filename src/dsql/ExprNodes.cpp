@@ -12962,6 +12962,11 @@ dsc* UdfCallNode::execute(thread_db* tdbb, jrd_req* request) const
 
 		Jrd::Attachment* attachment = tdbb->getAttachment();
 
+		// Replace the effective user according to the function's SQL SECURITY clause,
+		// so that dynamic SQL (EXECUTE STATEMENT) is checked against the proper user
+		UserId* invoker = function->invoker ? function->invoker : attachment->att_ss_user;
+		AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, invoker);
+
 		const ULONG inMsgLength = function->getInputFormat() ? function->getInputFormat()->fmt_length : 0;
 		const ULONG outMsgLength = function->getOutputFormat()->fmt_length;
 		UCHAR* const inMsg = FB_ALIGN(impure + sizeof(impure_value), FB_ALIGNMENT);
