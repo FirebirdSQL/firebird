@@ -1150,6 +1150,22 @@ namespace Jrd
 				Block partitionBlock, windowBlock;
 				impure_value_ex startOffset, endOffset;
 
+				// Positions where the scans for RANGE frame bounds with invariant offsets stopped in the
+				// partition, for the frame start and end.
+				SINT64 rangeScan[2];
+				bool rangeScanCurrent[2];	// the last search found the bound at the current record
+
+				// Peer group of the current record, for RANGE frames with exclusion and GROUPS frames.
+				SINT64 peerGroupStart, peerGroupEnd;
+				SINT64 groupIndex;		// index of the peer group of the current record in the partition
+
+				// Peer groups where the searches for GROUPS frame bounds stopped, for the frame start and end.
+				SINT64 groupScanIndex[2];
+				SINT64 groupScanStart[2];
+
+				// Exclusion blocks of the last window, for frames with exclusion.
+				Block lastExclusion1, lastExclusion2;
+
 				// Last positions of the peer groups of the partition, found when it is evaluated.
 				// Bit n is set when the record at position peerBase + n ends its peer group.
 				FB_UINT64* peerBits;
@@ -1196,6 +1212,8 @@ namespace Jrd
 			void getExclusionBlocks(thread_db* tdbb, Request* request, Impure* impure,
 				SINT64 position, Block* exclusion1, Block* exclusion2) const;
 			bool isExcluded(SINT64 position, const Block& exclusion1, const Block& exclusion2) const;
+			unsigned getIncludedBlocks(const Block& window, const Block& exclusion1, const Block& exclusion2,
+				Block* included) const;
 
 			SINT64 locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
 				const Frame* frame, const dsc* offsetDesc, SINT64 position) const;
@@ -1204,6 +1222,10 @@ namespace Jrd
 				bool startFrame) const;
 			SINT64 locatePeerGroupEnd(thread_db* tdbb, Request* request, Impure* impure,
 				SINT64 position) const;
+			bool hasPeerBits(const Impure* impure) const;
+			SINT64 getPeerBitsStart(const Impure* impure, SINT64 position) const;
+			SINT64 getPeerBitsEnd(const Impure* impure, SINT64 position) const;
+			void aggRemove(thread_db* tdbb, Request* request) const;
 
 		private:
 			NestConst<SortNode> m_order;
@@ -1216,6 +1238,8 @@ namespace Jrd
 			UCHAR m_invariantOffsets;	// 0x1 | 0x2 bitmask
 			bool m_needsFrame = false;	// some function depends on the frame
 			bool m_usesPeerGroupEnd = false;	// peer group ends are found when evaluating the partition
+			bool m_supportsAggRemove = false;	// all aggregate functions support aggRemove
+			bool m_supportsExclusionRemove = false;	// excluded records may be removed from the aggregation
 		};
 
 	public:
