@@ -2502,7 +2502,8 @@ private:
 			flow.newBlob(*blobSize, *bpbSize);
 			localStrm.curBpb.clear();
 
-			if (!flow.bpbSize)
+			// Continuation headers have a zero BLOB ID: retain the previous BLOB type.
+			if (!flow.bpbSize && (batchBlobId->gds_quad_high || batchBlobId->gds_quad_low))
 				localStrm.segmented = statement->rsr_batch_flags & (1 << Jrd::DsqlBatch::FLAG_DEFAULT_SEGMENTED);
 
 			continue;
