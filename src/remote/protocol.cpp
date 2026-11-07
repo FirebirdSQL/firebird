@@ -27,6 +27,17 @@
  *
  */
 
+/*
+ * IBatch BLOB-kind invariant (issue #9251):
+ *   NEW  : nonzero BLOB ID + no BPB -> use batch default kind flag.
+ *   BPB  : nonzero BLOB ID + BPB    -> decode the explicit kind from BPB.
+ *   CONT : zero BLOB ID            -> preserve the current BLOB kind.
+ *
+ * Build diagnostics: keep compiler warnings visible. They help detect unsafe
+ * conversions and flag handling; suppressing them cannot fix protocol bugs.
+ * The guard below adds no dependency, allocation or public ABI change.
+ */
+
 #include "firebird.h"
 #include <stdio.h>
 #include <string.h>
@@ -2291,6 +2302,15 @@ static Rsr* getStatement(RemoteXdr* xdrs, USHORT statement_id)
 	return port->port_statement;
 }
 
+// One action: apply the default kind only to a new BLOB without an explicit BPB.
+// Continuations retain the kind established by the preceding BLOB header.
+static inline void applyDefaultBlobKind(Rsr::BatchStream& stream, const ISC_QUAD& blobId,
+	ULONG bpbSize, ULONG batchFlags) noexcept
+{
+	if (!bpbSize && (blobId.gds_quad_high || blobId.gds_quad_low))
+		stream.segmented = (batchFlags & (1U << Jrd::DsqlBatch::FLAG_DEFAULT_SEGMENTED)) != 0;
+}
+
 static bool_t xdr_blob_stream(RemoteXdr* xdrs, SSHORT statement_id, CSTRING* strmPortion)
 {
 	if (xdrs->x_op == XDR_FREE)
@@ -2438,8 +2458,7 @@ private:
 			flow.newBlob(*blobSize, *bpbSize);
 			localStrm.curBpb.clear();
 
-			if (!flow.bpbSize)
-				localStrm.segmented = statement->rsr_batch_flags & (1 << Jrd::DsqlBatch::FLAG_DEFAULT_SEGMENTED);
+			applyDefaultBlobKind(localStrm, *batchBlobId, flow.bpbSize, statement->rsr_batch_flags);
 
 			continue;
 		}
