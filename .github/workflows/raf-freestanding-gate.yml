@@ -1,0 +1,56 @@
+# Isolated host-only experimental gate; never deploy, merge or release.
+name: RAFAELIA freestanding evidence gate (scoped)
+on:
+  pull_request:
+    paths:
+      - 'contrib/raf_freestanding_gate/**'
+      - '.github/workflows/raf-freestanding-gate.yml'
+  push:
+    branches:
+      - research/9251-freestanding-audit-gate-v1
+    paths:
+      - 'contrib/raf_freestanding_gate/**'
+      - '.github/workflows/raf-freestanding-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-host-scoped:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - name: Checkout pinned
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Compile freestanding core, zero external symbols
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          set -euo pipefail
+          cd contrib/raf_freestanding_gate
+          "${CC}" -std=c11 -O2 -ffreestanding -fno-builtin \
+            -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror \
+            -Iinclude -c src/raf_gate.c -o "${RUNNER_TEMP}/raf_gate.o"
+          if [[ -n "$(nm -u "${RUNNER_TEMP}/raf_gate.o")" ]]; then
+            echo "Core has forbidden undefined symbols"; exit 1
+          fi
+      - name: Adversarial host tests (not Firebird E2E)
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          set -euo pipefail
+          cd contrib/raf_freestanding_gate
+          "${CC}" -std=c11 -O1 -g -Wall -Wextra -Wpedantic \
+            -Wconversion -Wsign-conversion -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iinclude src/raf_gate.c tests/test_raf_gate.c \
+            -o "${RUNNER_TEMP}/test_raf_gate"
+          "${RUNNER_TEMP}/test_raf_gate"
