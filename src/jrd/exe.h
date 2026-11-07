@@ -594,8 +594,9 @@ public:
 	USHORT			csb_g_flags;
 	MemoryPool&		csb_pool;					// Memory pool to be used by csb
 	Firebird::AutoPtr<Firebird::DbgInfo> csb_dbg_info;	// Debug information
-	MapFieldInfo		csb_map_field_info;		// Map field name to field info
-	MapItemInfo			csb_map_item_info;		// Map item to item info
+	ULONG			csb_profile_slots = 0;	// Number of StmtNode::profileSlot values assigned
+	MapFieldInfo	csb_map_field_info;		// Map field name to field info
+	MapItemInfo		csb_map_item_info;		// Map item to item info
 
 	// Map of message number to field number to pad for external routines.
 	Firebird::GenericMap<Firebird::Pair<Firebird::NonPooled<USHORT, USHORT> > > csb_message_pad;

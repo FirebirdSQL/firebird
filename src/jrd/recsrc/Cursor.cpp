@@ -51,7 +51,7 @@ namespace
 	{
 	public:
 		ProfilerSelectPrepare(thread_db* tdbb, const Select* select)
-			: profilerManager(tdbb->getAttachment()->getActiveProfilerManagerForNonInternalStatement(tdbb))
+			: profilerManager(ProfilerManager::getActiveForNonInternalStatement(tdbb))
 		{
 			const auto request = tdbb->getRequest();
 

@@ -81,7 +81,7 @@ namespace
 	{
 		static_assert(std::is_same<decltype(attachmentId), FB_UINT64>::value);
 
-		static constexpr USHORT VERSION = 3;
+		static constexpr USHORT VERSION = 4;
 
 		const auto database = tdbb->getDatabase();
 
@@ -116,6 +116,20 @@ namespace
 
 		if (LCK_lock(tdbb, &tempLock, LCK_SR, LCK_WAIT))
 			LCK_release(tdbb, &tempLock);
+	}
+
+	// Generations identify the ProfilerRequestProfile pointers stored in requests. They are unique in the
+	// process, so a pointer left in a request by a previous session or manager is never taken as valid.
+	ULONG newProfileGeneration()
+	{
+		// Process-wide: a manager can be recreated while requests still hold profile pointers of the old one.
+		static std::atomic<ULONG> lastGeneration = 0;
+		ULONG generation;
+
+		while ((generation = ++lastGeneration) == 0)
+			;
+
+		return generation;
 	}
 
 	const auto& checkResponseIsNotException(const std::optional<IpcResponseMessage>& responseMessageOpt)
@@ -369,11 +383,14 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 		std::nullopt : std::optional{in->flushInterval});
 	const PathName pluginName(in->pluginName.str, in->pluginNameNull ? 0 : in->pluginName.length);
 	const string pluginOptions(in->pluginOptions.str, in->pluginOptionsNull ? 0 : in->pluginOptions.length);
+	const std::optional<SLONG> samplingInterval(in->samplingIntervalNull ?
+		std::nullopt : std::optional{in->samplingInterval});
 
 	const auto profilerManager = attachment->getProfilerManager(tdbb);
 
 	out->sessionIdNull = FB_FALSE;
-	out->sessionId = profilerManager->startSession(tdbb, flushInterval, pluginName, description, pluginOptions);
+	out->sessionId = profilerManager->startSession(tdbb, flushInterval, pluginName, description, pluginOptions,
+		samplingInterval);
 }
 
 
@@ -381,13 +398,17 @@ void ProfilerPackage::startSessionFunction(ThrowStatusExceptionWrapper* /*status
 
 
 ProfilerManager::ProfilerManager(thread_db* tdbb)
-	: activePlugins(*tdbb->getAttachment()->att_pool)
+	: attachment(tdbb->getAttachment()),
+	  activePlugins(*attachment->att_pool),
+	  requestCallStatus(*attachment->att_pool),
+	  requestProfiles(*attachment->att_pool),
+	  freeRequestProfiles(*attachment->att_pool),
+	  requestSampledTicks(*attachment->att_pool),
+	  profileGeneration(newProfileGeneration())
 {
-	const auto attachment = tdbb->getAttachment();
-
 	flushTimer = FB_NEW TimerImpl();
 
-	flushTimer->setOnTimer([this, attachment](auto) {
+	flushTimer->setOnTimer([this](auto) {
 		FbLocalStatus statusVector;
 		EngineContextHolder innerTdbb(&statusVector, attachment->getInterface(), FB_FUNCTION);
 
@@ -398,7 +419,12 @@ ProfilerManager::ProfilerManager(thread_db* tdbb)
 
 ProfilerManager::~ProfilerManager()
 {
+	attachment->att_profiler_active = false;
 	flushTimer->stop();
+	stopSampling();
+
+	for (const auto profile : freeRequestProfiles)
+		delete profile;
 }
 
 ProfilerManager* ProfilerManager::create(thread_db* tdbb)
@@ -432,20 +458,32 @@ int ProfilerManager::blockingAst(void* astObject)
 }
 
 SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
-	const PathName& pluginName, const string& description, const string& options)
+	const PathName& pluginName, const string& description, const string& options,
+	std::optional<SLONG> samplingInterval)
 {
 	if (flushInterval.has_value())
 		checkFlushInterval(flushInterval.value());
 
-	AutoSetRestore<bool> pauseProfiler(&paused, true);
+	if (samplingInterval.has_value())
+		checkSamplingInterval(samplingInterval.value());
 
-	const auto attachment = tdbb->getAttachment();
+	const bool oldPaused = paused;
+	setPaused(true);
+	Cleanup restorePaused([&] { setPaused(oldPaused); });
+
+	resetCache();
+
 	ThrowLocalStatus status;
 
 	const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(attachment->att_current_timezone);
 
 	if (currentSession)
 	{
+		if (sampled)
+			deliverProfiles(nullptr);
+
+		stopSampling();
+
 		currentSession->pluginSession->finish(&status, timestamp);
 		currentSession = nullptr;
 	}
@@ -491,7 +529,18 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flush
 	currentSession->plugin = std::move(plugin);
 	currentSession->flags = currentSession->pluginSession->getFlags();
 
-	paused = false;
+	// Plugins that don't know the aggregated stats methods get every event measured.
+	if (currentSession->pluginSession->cloopVTable->version >= IProfilerSession::VERSION)
+	{
+		const ULONG interval = (ULONG) samplingInterval.value_or(DEFAULT_SAMPLING_INTERVAL);
+
+		currentSession->pluginSession->setSamplingInterval(interval);
+
+		if (interval)
+			startSampling(interval);
+	}
+
+	setPaused(false);
 
 	if (flushInterval.has_value())
 		setFlushInterval(flushInterval.value());
@@ -505,6 +554,13 @@ void ProfilerManager::prepareCursor(thread_db* tdbb, Request* request, const Sel
 
 	if (!profileStatement)
 		return;
+
+	// Fast path for every fetch after the first: a defined record source implies a defined cursor.
+	if (profileStatement->getRecSourceSequence(select->getRecSourceId()))
+		return;
+
+	const SINT64 overheadStartTicks = queryTicks();
+	Cleanup endOverheadCleanup([&] { endOverhead(overheadStartTicks); });
 
 	const auto cursorId = select->getCursorId();
 
@@ -526,7 +582,7 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 	if (!profileStatement)
 		return;
 
-	if (profileStatement->recSourceSequence.exist(recordSource->getRecSourceId()))
+	if (profileStatement->getRecSourceSequence(recordSource->getRecSourceId()))
 		return;
 
 	fb_assert(profileStatement->definedCursors.exist(recordSource->getCursorId()));
@@ -557,46 +613,319 @@ void ProfilerManager::prepareRecSource(thread_db* tdbb, Request* request, const 
 		currentSession->pluginSession->defineRecordSource(profileStatement->id, cursorId,
 			*sequencePtr, planEntry->level, accessPath.c_str(), parentSequence);
 
-		profileStatement->recSourceSequence.put(recSourceId, *sequencePtr);
+		profileStatement->setRecSourceSequence(recSourceId, *sequencePtr);
 	}
 }
 
 void ProfilerManager::onRequestFinish(Request* request, Stats& stats)
 {
+	// The overhead is subtracted only from measured timings, so it's not accounted when sampling.
+	const bool accountOverhead = !sampled;
+	const SINT64 overheadStartTicks = accountOverhead ? queryTicks() : 0;
+
+	Cleanup endOverheadCleanup([&] {
+		if (accountOverhead)
+			endOverhead(overheadStartTicks);
+	});
+
 	if (const auto profileRequestId = getRequest(request, 0))
 	{
 		const auto* profileStatement = getStatement(request);
 		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(request->req_attachment->att_current_timezone);
 
-		LogLocalStatus status("Profiler onRequestFinish");
-		currentSession->pluginSession->onRequestFinish(&status, profileStatement->id, profileRequestId,
-			timestamp, &stats);
+		RequestCallStatus status(this, "Profiler onRequestFinish");
+
+		if (const auto profile = sampled ? getRequestProfile(request) : nullptr)
+		{
+			deliverProfiles(profile);
+
+			FB_UINT64 sampledTicks = 0;
+
+			if (const auto ticksPtr = requestSampledTicks.get(profileRequestId))
+			{
+				sampledTicks = *ticksPtr;
+				requestSampledTicks.remove(profileRequestId);
+			}
+
+			Stats sampledStats(sampledTicks);
+			currentSession->pluginSession->onRequestFinish(&status, profileStatement->id, profileRequestId,
+				timestamp, &sampledStats);
+
+			request->req_profiler_profile = nullptr;
+			request->req_profiler_sampled = false;
+			releaseRequestProfile(profile);
+		}
+		else
+		{
+			currentSession->pluginSession->onRequestFinish(&status, profileStatement->id, profileRequestId,
+				timestamp, &stats);
+		}
 
 		currentSession->requests.findAndRemove(profileRequestId);
+		resetCache();
 	}
+}
+
+// Releases the profile of a request that finished without onRequestFinish, as when its session was paused,
+// before the request gets a new id. Its pending counters are delivered with the previous id.
+void ProfilerManager::releaseStaleRequestProfile(Request* request)
+{
+	const auto profile = request->req_profiler_profile;
+
+	request->req_profiler_profile = nullptr;
+	request->req_profiler_sampled = false;
+
+	if (request->req_profiler_generation != profileGeneration)
+		return;
+
+	if (sampled && currentSession)
+	{
+		deliverProfiles(profile);
+		requestSampledTicks.remove(profile->requestId);
+	}
+
+	releaseRequestProfile(profile);
+}
+
+ProfilerRequestProfile* ProfilerManager::createRequestProfile(Request* request)
+{
+	if (!sampled)
+		return nullptr;
+
+	const auto profileRequestId = getRequest(request, 0);
+
+	if (!profileRequestId)
+		return nullptr;
+
+	const auto profileStatement = getStatement(request);
+
+	if (!profileStatement)
+		return nullptr;
+
+	// A request with a profile of the current generation doesn't get here, and profiles of finished requests
+	// and of other generations are not active, so the request has no active profile to look up.
+	const auto profile = freeRequestProfiles.hasData() ?
+		freeRequestProfiles.pop() :
+		FB_NEW_POOL(*attachment->att_pool) ProfilerRequestProfile(*attachment->att_pool);
+
+	profile->reset(profileStatement->id, profileRequestId);
+	profile->activeIndex = requestProfiles.add(profile);
+
+	request->req_profiler_profile = profile;
+	request->req_profiler_generation = profileGeneration;
+
+	return profile;
+}
+
+void ProfilerManager::releaseRequestProfile(ProfilerRequestProfile* profile)
+{
+	fb_assert(requestProfiles[profile->activeIndex] == profile);
+
+	const auto last = requestProfiles.pop();
+
+	if (last != profile)
+	{
+		requestProfiles[profile->activeIndex] = last;
+		last->activeIndex = profile->activeIndex;
+	}
+
+	freeRequestProfiles.add(profile);
+}
+
+// Delivers the counters of one or all request profiles to the plugin, together with the times sampled
+// since the last call. Sampled request totals are accumulated in requestSampledTicks until the request finishes.
+void ProfilerManager::deliverProfiles(ProfilerRequestProfile* onlyProfile)
+{
+	using Key = ProfilerSampleState::Key;
+	using KeyKind = ProfilerSampleState::KeyKind;
+
+	ProfilerSampleState::SampleMap samples(*getDefaultMemoryPool());
+
+	// A finished request has its frames already popped, and requests usually finish much more often than
+	// samples are taken, so the samples are taken only when the sampler may have added something.
+	if (!onlyProfile || sampleState->mayHaveSamples())
+		sampleState->takeSamples(samples);
+
+	const auto takeTicks = [&](const Key& key) -> FB_UINT64
+	{
+		if (const auto ticksPtr = samples.get(key))
+		{
+			const FB_UINT64 ticks = *ticksPtr;
+			samples.remove(key);
+			return ticks;
+		}
+
+		return 0;
+	};
+
+	const auto deliverCounters = [&](ProfilerRequestProfile& profile)
+	{
+		const auto statementId = profile.statementId;
+		const auto requestId = profile.requestId;
+
+		for (auto& lineCounter : profile.lines)
+		{
+			if (!lineCounter.counter)
+				continue;
+
+			const auto ticks = takeTicks({statementId, requestId, lineCounter.line, lineCounter.column, KeyKind::LINE});
+
+			currentSession->pluginSession->addPsqlLineColumnStats(statementId, requestId,
+				lineCounter.line, lineCounter.column, lineCounter.counter, ticks);
+
+			lineCounter.counter = 0;
+		}
+
+		for (ULONG recSourceId = 0; recSourceId < profile.recSources.getCount(); ++recSourceId)
+		{
+			auto& recSourceCounter = profile.recSources[recSourceId];
+
+			if (recSourceCounter.openCounter)
+			{
+				const auto ticks = takeTicks(
+					{statementId, requestId, recSourceId, recSourceCounter.cursorId, KeyKind::OPEN});
+
+				deliverRecSourceStats(statementId, requestId, recSourceCounter.cursorId, recSourceId,
+					true, recSourceCounter.openCounter, ticks);
+
+				recSourceCounter.openCounter = 0;
+			}
+
+			if (recSourceCounter.fetchCounter)
+			{
+				const auto ticks = takeTicks(
+					{statementId, requestId, recSourceId, recSourceCounter.cursorId, KeyKind::FETCH});
+
+				deliverRecSourceStats(statementId, requestId, recSourceCounter.cursorId, recSourceId,
+					false, recSourceCounter.fetchCounter, ticks);
+
+				recSourceCounter.fetchCounter = 0;
+			}
+		}
+	};
+
+	if (onlyProfile)
+		deliverCounters(*onlyProfile);
+	else
+	{
+		for (const auto profile : requestProfiles)
+			deliverCounters(*profile);
+	}
+
+	// Times of keys without new hits.
+	for (const auto& [key, ticks] : samples)
+	{
+		switch (key.kind)
+		{
+			case KeyKind::REQUEST:
+				*requestSampledTicks.getOrPut(key.requestId) += ticks;
+				break;
+
+			case KeyKind::LINE:
+				currentSession->pluginSession->addPsqlLineColumnStats(key.statementId, key.requestId,
+					key.a, key.b, 0, ticks);
+				break;
+
+			case KeyKind::OPEN:
+			case KeyKind::FETCH:
+				deliverRecSourceStats(key.statementId, key.requestId, key.b, key.a,
+					key.kind == KeyKind::OPEN, 0, ticks);
+				break;
+		}
+	}
+}
+
+void ProfilerManager::deliverRecSourceStats(SINT64 statementId, SINT64 requestId, ULONG cursorId, ULONG recSourceId,
+	bool open, FB_UINT64 counter, FB_UINT64 elapsedTicks)
+{
+	const auto profileStatement = currentSession->statements.get(StmtNumber(statementId));
+
+	if (!profileStatement)
+		return;
+
+	// Record sources not yet defined to the plugin are not reported, like in the measured mode.
+	if (const auto sequence = profileStatement->getRecSourceSequence(recSourceId))
+	{
+		if (open)
+		{
+			currentSession->pluginSession->addRecordSourceOpenStats(statementId, requestId,
+				cursorId, sequence, counter, elapsedTicks);
+		}
+		else
+		{
+			currentSession->pluginSession->addRecordSourceGetRecordStats(statementId, requestId,
+				cursorId, sequence, counter, elapsedTicks);
+		}
+	}
+}
+
+void ProfilerManager::startSampling(ULONG interval)
+{
+	if (!sampleState)
+		sampleState = FB_NEW ProfilerSampleState();
+
+	sampleState->setInterval(interval);
+	sampled = true;
+	ProfilerSampler::add(sampleState);
+	updateActive();
+}
+
+void ProfilerManager::stopSampling()
+{
+	if (sampled)
+	{
+		ProfilerSampler::remove(sampleState);
+		sampled = false;
+	}
+
+	if (sampleState)
+	{
+		sampleState->setActive(false);
+		sampleState->clearSamples();
+	}
+
+	// Their counters may be pending, but they are discarded with the generation and reset when reused.
+	for (const auto profile : requestProfiles)
+		freeRequestProfiles.add(profile);
+
+	requestProfiles.clear();
+	requestSampledTicks.clear();
+	profileGeneration = newProfileGeneration();
 }
 
 void ProfilerManager::cancelSession()
 {
+	resetCache();
+
 	if (currentSession)
 	{
+		stopSampling();
+
 		LogLocalStatus status("Profiler cancelSession");
 
 		currentSession->pluginSession->cancel(&status);
 		currentSession = nullptr;
+		updateActive();
 	}
 }
 
 void ProfilerManager::finishSession(thread_db* tdbb, bool flushData)
 {
+	resetCache();
+
 	if (currentSession)
 	{
-		const auto* attachment = tdbb->getAttachment();
-		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(attachment->att_current_timezone);
+		if (sampled)
+			deliverProfiles(nullptr);
+
+		stopSampling();
+
+		const auto timestamp = TimeZoneUtil::getCurrentTimeStamp(tdbb->getAttachment()->att_current_timezone);
 		LogLocalStatus status("Profiler finish");
 
 		currentSession->pluginSession->finish(&status, timestamp);
 		currentSession = nullptr;
+		updateActive();
 	}
 
 	if (flushData)
@@ -606,7 +935,7 @@ void ProfilerManager::finishSession(thread_db* tdbb, bool flushData)
 void ProfilerManager::pauseSession(bool flushData)
 {
 	if (currentSession)
-		paused = true;
+		setPaused(true);
 
 	if (flushData)
 		flush();
@@ -616,7 +945,7 @@ void ProfilerManager::resumeSession()
 {
 	if (currentSession)
 	{
-		paused = false;
+		setPaused(false);
 		updateFlushTimer();
 	}
 }
@@ -632,14 +961,23 @@ void ProfilerManager::setFlushInterval(SLONG interval)
 
 void ProfilerManager::discard()
 {
+	resetCache();
+	stopSampling();
+
 	currentSession = nullptr;
+	updateActive();
 	activePlugins.clear();
 }
 
 void ProfilerManager::flush(bool updateTimer)
 {
+	if (sampled && currentSession)
+		deliverProfiles(nullptr);
+
 	{	// scope
-		AutoSetRestore<bool> pauseProfiler(&paused, true);
+		const bool oldPaused = paused;
+		setPaused(true);
+		Cleanup restorePaused([&] { setPaused(oldPaused); });
 
 		auto pluginAccessor = activePlugins.accessor();
 
@@ -661,6 +999,14 @@ void ProfilerManager::flush(bool updateTimer)
 		updateFlushTimer();
 }
 
+void ProfilerManager::updateActive()
+{
+	attachment->att_profiler_active = isActive();
+
+	if (sampleState)
+		sampleState->setActive(sampled && isActive());
+}
+
 void ProfilerManager::updateFlushTimer(bool canStopTimer)
 {
 	if (currentSession && !paused && currentFlushInterval)
@@ -669,15 +1015,20 @@ void ProfilerManager::updateFlushTimer(bool canStopTimer)
 		flushTimer->stop();
 }
 
-ProfilerManager::Statement* ProfilerManager::getStatement(Request* request)
+ProfilerManager::Statement* ProfilerManager::lookupStatement(Request* request)
 {
-	if (!isActive())
-		return nullptr;
-
-	auto mainProfileStatement = currentSession->statements.get(request->getStatement()->getStatementId());
+	const StmtNumber mainStatementId = request->getStatement()->getStatementId();
+	auto mainProfileStatement = currentSession->statements.get(mainStatementId);
 
 	if (mainProfileStatement)
+	{
+		lastStatement = mainProfileStatement;
+		lastStatementId = mainStatementId;
+
 		return mainProfileStatement;
+	}
+
+	lastStatement = nullptr;	// the map is about to change
 
 	for (const auto* statement = request->getStatement();
 		 statement && !currentSession->statements.exist(statement->getStatementId());
@@ -869,10 +1220,12 @@ IpcResponseMessage ProfilerListener::processCommand(thread_db* tdbb, const IpcRe
 				message.pluginNameNull ? 0 : message.pluginName.length);
 			const string pluginOptions(message.pluginOptions.str,
 				message.pluginOptionsNull ? 0 : message.pluginOptions.length);
+			const std::optional<SLONG> samplingInterval(message.samplingIntervalNull ?
+				std::nullopt : std::optional{message.samplingInterval});
 
 			return ProfilerPackage::StartSessionOutput::Type{
 				.sessionId = profilerManager->startSession(tdbb, flushInterval,
-					pluginName, description, pluginOptions),
+					pluginName, description, pluginOptions, samplingInterval),
 				.sessionIdNull = FB_FALSE,
 			};
 		},
@@ -998,6 +1351,7 @@ ProfilerPackage::ProfilerPackage(MemoryPool& pool)
 					{"ATTACHMENT_ID", fld_att_id, true, "null", {blr_null}},
 					{"PLUGIN_NAME", fld_file_name2, true, "null", {blr_null}},
 					{"PLUGIN_OPTIONS", fld_short_description, true, "null", {blr_null}},
+					{"SAMPLING_INTERVAL", fld_integer, true, "100", {blr_literal, blr_long, 0, 0x64, 0, 0, 0}},
 				},
 				{fld_prof_ses_id, false}
 			)

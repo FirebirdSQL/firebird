@@ -122,6 +122,12 @@ RecordSource::RecordSource(CompilerScratch* csb)
 
 void RecordSource::open(thread_db* tdbb) const
 {
+	if (!tdbb->getAttachment()->isProfilerActive())
+	{
+		internalOpen(tdbb);
+		return;
+	}
+
 	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
 		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
@@ -130,6 +136,9 @@ void RecordSource::open(thread_db* tdbb) const
 
 bool RecordSource::getRecord(thread_db* tdbb) const
 {
+	if (!tdbb->getAttachment()->isProfilerActive())
+		return internalGetRecord(tdbb);
+
 	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
 		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
