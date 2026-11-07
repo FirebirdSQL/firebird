@@ -468,6 +468,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_DOMAINS("DOMAINS");
 	static constexpr std::string_view TOKEN_EXCEPTIONS("EXCEPTIONS");
 	static constexpr std::string_view TOKEN_FILTERS("FILTERS");
+	static constexpr std::string_view TOKEN_SERVERS("SERVERS");
 	static constexpr std::string_view TOKEN_FUNCTIONS("FUNCTIONS");
 	static constexpr std::string_view TOKEN_INDEXES("INDEXES");
 	static constexpr std::string_view TOKEN_INDICES("INDICES");
@@ -487,6 +488,7 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 	static constexpr std::string_view TOKEN_TABLESPACES("TABLESPACES");
 	static constexpr std::string_view TOKEN_TRIGGERS("TRIGGERS");
 	static constexpr std::string_view TOKEN_USERS("USERS");
+	static constexpr std::string_view TOKEN_USER_MAPPINGS("USER_MAPPINGS");
 	static constexpr std::string_view TOKEN_VER("VER");
 	static constexpr std::string_view TOKEN_VERSION("VERSION");
 	static constexpr std::string_view TOKEN_VIEWS("VIEWS");
@@ -578,6 +580,8 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 			}
 			else if (const auto parsed = parseShowOptQualifiedName<ShowGeneratorsNode>(text, TOKEN_SEQUENCES, 3, false))
 				return parsed.value();
+			else if (const auto parsed = parseShowOptName<ShowForeignServersNode>(text, TOKEN_SERVERS, 6))
+				return parsed.value();
 			else if (text == TOKEN_SQL)
 			{
 				if (const auto dialectToken = lexer.getToken();
@@ -634,6 +638,8 @@ FrontendParser::AnyShowNode FrontendParser::parseShow()
 				if (parseEof())
 					return ShowUsersNode();
 			}
+			else if (const auto parsed = parseShowOptName<ShowForeignUserMappingsNode>(text, TOKEN_USER_MAPPINGS, 8))
+				return parsed.value();
 			else if (text == TOKEN_VER || text == TOKEN_VERSION)
 			{
 				if (parseEof())

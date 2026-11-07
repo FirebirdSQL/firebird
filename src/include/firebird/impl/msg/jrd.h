@@ -1027,3 +1027,6 @@ FB_IMPL_MSG(JRD, 1024, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\
 FB_IMPL_MSG(JRD, 1025, tablespace_name, -901, "42", "000", "TABLESPACE @1")
 FB_IMPL_MSG(JRD, 1026, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
 FB_IMPL_MSG(JRD, 1027, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")
+FB_IMPL_MSG(JRD, 1028, foreign_server, -901, "42", "000", "foreign server @1")
+FB_IMPL_MSG(JRD, 1029, foreign_provider_not_found, -901, "42", "000", "Foreign provider '@1' for server '@2' not found")
+FB_IMPL_MSG(JRD, 1030, foreign_option_length_err, -901, "22", "000", "foreign option length @1 exceeds limit @2")
