@@ -32,7 +32,10 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
+
 #include <string>
+#include <optional>
 
 using namespace Firebird;
 
@@ -48,14 +51,15 @@ const size_t PathUtils::up_dir_link_len = std::char_traits<char>::length(up_dir_
 class PosixDirIterator : public PathUtils::DirIterator
 {
 public:
-	PosixDirIterator(MemoryPool& p, const PathName& path)
-		: DirIterator(p, path), dir(nullptr), ent(nullptr), file(p), done(false)
+	PosixDirIterator(MemoryPool& p, const PathName& path, const PathUtils::DirIterator::Flags flags)
+		: DirIterator(p, path, flags),
+		  m_file(p), m_tmpBuffer(p)
 	{
 		init();
 	}
 
-	PosixDirIterator(const PathName& path)
-		: DirIterator(path), dir(0), done(false)
+	PosixDirIterator(const PathName& path, const PathUtils::DirIterator::Flags flags)
+		: DirIterator(path, flags)
 	{
 		init();
 	}
@@ -63,65 +67,111 @@ public:
 	~PosixDirIterator();
 
 	const PosixDirIterator& operator++() override;
-	const PathName& operator*() noexcept override { return file; }
-	operator bool() noexcept override { return !done; }
+	const PathName& operator*() noexcept override { return m_file; }
+	operator bool() noexcept override { return !m_done; }
 
 private:
-	DIR* dir;
-	dirent* ent;
-	PathName file;
-	bool done;
-
 	void init();
+
+private:
+	DIR* m_dir = nullptr;
+	int m_dirFd = -1;
+	dirent* m_ent = nullptr;
+
+	PathName m_file;
+	// Used to minimize reallocation on every iteration.
+	PathName m_tmpBuffer;
+
+	bool m_done = false;
 };
 
 void PosixDirIterator::init()
 {
-	dir = opendir(dirPrefix.c_str());
+	m_dir = opendir(dirPrefix.c_str());
 
-	if (!dir)
+	if (!m_dir)
 		system_call_failed::raise("opendir");
+
+	m_dirFd = dirfd(m_dir);
 
 	++(*this);
 }
 
 PosixDirIterator::~PosixDirIterator()
 {
-	if (dir)
+	if (m_dir)
 	{
-		closedir(dir);
-		dir = nullptr;
+		closedir(m_dir);
+		m_dir = nullptr;
 	}
 
-	done = true;
+	m_done = true;
 }
 
 const PosixDirIterator& PosixDirIterator::operator++()
 {
-	if (!done)
+	if (!m_done)
 	{
-		while ( (ent = os_utils::readdir(dir)) )
+		while ( (m_ent = os_utils::readdir(m_dir)) )
 		{
-			PathUtils::concatPath(file, dirPrefix, ent->d_name);
+			std::optional<bool> isRegFile;
 
-			struct stat stats;
-			if (!stat(file.c_str(), &stats) && S_ISREG(stats.st_mode))
-				break;
+#ifdef _DIRENT_HAVE_D_TYPE
+			// Fast path of checking is file a regular file.
+			if (m_ent->d_type == DT_REG)
+				isRegFile = true;
+			else if (m_ent->d_type != DT_UNKNOWN)
+				isRegFile = false;
+#endif
+			if (!isRegFile.has_value())
+			{
+				// Slow path, should be taken rarely because most of the FS support and fill `d_type` with actual value.
+				struct stat statBuf;
+				if (m_dirFd >= 0)
+				{
+					if (fstatat(m_dirFd, m_ent->d_name, &statBuf, AT_SYMLINK_NOFOLLOW) != 0)
+						continue;
+				}
+				else
+				{
+					// Very slow path, `dirfd` has failed, so the full path must be resolved by the kernel.
+					// Shouldn't happen on modern systems, but POSIX allows it.
+					m_tmpBuffer = m_ent->d_name;
+					PathUtils::concatPath(m_file, dirPrefix, m_tmpBuffer);
+					if (lstat(m_file.c_str(), &statBuf) != 0)
+						continue;
+				}
+
+				isRegFile = S_ISREG(statBuf.st_mode);
+			}
+
+			if (isRegFile.value() == false)
+				continue;
+
+			if (flags & PathUtils::DirIterator::F_RETURN_ONLY_FILENAME)
+				m_file = m_ent->d_name;
+			else
+			{
+				m_tmpBuffer = m_ent->d_name;
+				PathUtils::concatPath(m_file, dirPrefix, m_tmpBuffer);
+			}
+
+			break;
 		}
 
-		if (!ent)
+		if (!m_ent)
 		{
-			done = true;
-			file.clear();
+			m_done = true;
+			m_file.clear();
 		}
 	}
 
 	return *this;
 }
 
-PathUtils::DirIterator* PathUtils::newDirIterator(MemoryPool& p, const PathName& path)
+PathUtils::DirIterator* PathUtils::newDirIterator(MemoryPool& p, const PathName& path, const DirIterator::Flags flags)
 {
-	return FB_NEW_POOL(p) PosixDirIterator(p, path);
+	return FB_NEW_POOL(p) PosixDirIterator(p, path, flags);
 }
 
 void PathUtils::splitLastComponent(PathName& path, PathName& file,

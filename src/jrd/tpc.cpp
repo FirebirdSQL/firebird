@@ -33,6 +33,7 @@
 #include "../jrd/tra_proto.h"
 #include "../jrd/replication/Publisher.h"
 #include "../common/isc_proto.h"
+#include "../common/os/path_utils.h"
 
 #include <sys/stat.h>
 
@@ -62,7 +63,11 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 	}
 
 	thread_db* tdbb = JRD_get_thread_data();
-	const Database* dbb = tdbb->getDatabase();
+	Database* dbb = tdbb->getDatabase();
+
+	// Purge every existing TSB for this database, they can contain garbage values after the crash
+	// or after unfortunate shutdown.
+	m_cache->purgeTransactionStatusBlocks(*dbb);
 
 	// Initialize the shared data header
 	initHeader(header);
@@ -103,10 +108,15 @@ bool TipCache::MemBlockInitializer::initialize(SharedMemoryBase* sm, bool initFl
 
 	TransactionStatusBlock* header = static_cast<TransactionStatusBlock*>(sm->sh_mem_header);
 
-	// Initialize the shared data header
-	initHeader(header);
+	// See if TSB is already has been initialized, if it is, do not memset it's content
+	// because it contains valid information about CN.
+	if (!checkHeader(header, false))
+	{
+		// Initialize the shared data header
+		initHeader(header);
 
-	memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+		memset(header->data, 0, sm->sh_mem_length_mapped - offsetof(TransactionStatusBlock, data[0]));
+	}
 
 	fb_assert(header->data->is_lock_free());
 
@@ -167,6 +177,16 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 
 	if (m_tpcHeader)
 	{
+		// Check if we are the last one who holds the TipCache. If so, it's time
+		// to cleanup all related TSBs.
+		if (LCK_convert(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
+		{
+			purgeTransactionStatusBlocks(*tdbb->getDatabase());
+			LCK_convert(tdbb, m_lock, LCK_SW, LCK_WAIT);
+		}
+		else
+			tdbb->tdbb_status_vector->init();
+
 		nmHdr = m_tpcHeader->getMapFileName();
 		delete m_tpcHeader;
 		m_tpcHeader = NULL;
@@ -175,9 +195,9 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 	m_blocks_memory.clear();
 	m_transactionsPerBlock = 0;
 
-    if (nmSnap.hasData() || nmHdr.hasData())
-    {
-    	if (LCK_lock(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
+	if (nmSnap.hasData() || nmHdr.hasData())
+	{
+		if (LCK_lock(tdbb, m_lock, LCK_EX, LCK_NO_WAIT))
 		{
 			if (nmSnap.hasData())
 				SharedMemoryBase::unlinkFile(nmSnap.c_str());
@@ -193,6 +213,41 @@ void TipCache::finalizeTpc(thread_db* tdbb)
 		LCK_release(tdbb, m_lock);
 
 	m_lock.reset();
+}
+
+// We are the last or first one who holds the `GlobalTpcHeader`, so remove all related TSB from disk.
+void TipCache::purgeTransactionStatusBlocks(Database& dbb)
+{
+	PathName filenameTemplate = StatusBlockData::makeSharedMemoryFileName(&dbb, 0, false);
+	// Drop block number from the filename.
+	filenameTemplate.erase(filenameTemplate.length() - 1, 1);
+
+	TEXT tmpDirBuffer[MAXPATHLEN];
+	gds__prefix_lock(tmpDirBuffer, "");
+
+	const PathName tmpDir = tmpDirBuffer;
+	PathName fullTmpPathname;
+	try
+	{
+		for (AutoPtr<PathUtils::DirIterator> iter = PathUtils::newDirIterator(*getDefaultMemoryPool(), tmpDir, PathUtils::DirIterator::F_RETURN_ONLY_FILENAME);
+			*iter; ++(*iter))
+		{
+			const auto& tmpFilename = **iter;
+			if (filenameTemplate.length() >= tmpFilename.length())
+				continue;
+			if (filenameTemplate.compare(tmpFilename.data(), filenameTemplate.length()))
+				continue;
+
+			PathUtils::concatPath(fullTmpPathname, tmpDir, tmpFilename);
+
+			SharedMemoryBase::unlinkFile(fullTmpPathname.data());
+		}
+	}
+	catch (...)
+	{
+		gds__log("An error occurred while clearing the TSB during the TipCache initialization or shutdown procedure, "
+				 "which may result in some `tpc` files remaining in the tmp folder.");
+	}
 }
 
 CommitNumber TipCache::cacheState(TraNumber number)
@@ -426,7 +481,6 @@ TipCache::StatusBlockData::~StatusBlockData()
 void TipCache::StatusBlockData::clear(thread_db* tdbb)
 {
 	// memory could be already released at tpc_block_blocking_ast
-	PathName fName;
 	if (memory)
 	{
 		// wait for all initializing processes (PR)
@@ -455,25 +509,8 @@ void TipCache::StatusBlockData::clear(thread_db* tdbb)
 			ERR_bugcheck_msg("Unable to convert TPC lock (SW)");
 		}
 
-		fName = memory->getMapFileName();
 		delete memory;
 		memory = NULL;
-	}
-
-	if (fName.hasData())
-	{
-		// Here file is removed from SharedMemory created with skipLock parameter
-		// set to true. That means internal file lock is turned off.
-		// Appropriate locking is performed by existenceLock using LM.
-		// This should be in sync with SharedMemory constructor called
-		// in TipCache::StatusBlockData constructor.
-		if (LCK_lock(tdbb, &existenceLock, LCK_EX, LCK_NO_WAIT))
-			SharedMemoryBase::unlinkFile(fName.c_str());
-		else
-		{
-			tdbb->tdbb_status_vector->init();
-			return;
-		}
 	}
 
 	LCK_release(tdbb, &existenceLock);
