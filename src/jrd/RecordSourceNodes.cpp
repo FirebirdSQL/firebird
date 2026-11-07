@@ -2248,7 +2248,25 @@ bool AggregateSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
 	rse->rse_sorted = group;
-	return rse->computable(csb, stream, allowOnlyCurrentStream, NULL);
+
+	if (!rse->computable(csb, stream, allowOnlyCurrentStream, NULL))
+		return false;
+
+	// Aggregate expressions live in map->sourceList, which is not a part of
+	// rse and therefore is not checked above
+	if (map)
+	{
+		for (auto& source : map->sourceList)
+		{
+			if (!source->computable(csb, stream, allowOnlyCurrentStream, NULL))
+				return false;
+		}
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the aggregate stream
+	}
+
+	return true;
 }
 
 void AggregateSourceNode::findDependentFromStreams(const CompilerScratch* csb,
@@ -2256,6 +2274,17 @@ void AggregateSourceNode::findDependentFromStreams(const CompilerScratch* csb,
 {
 	rse->rse_sorted = group;
 	rse->findDependentFromStreams(csb, currentStream, streamList);
+
+	// Aggregate expressions live in map->sourceList, which is not a part of
+	// rse and therefore is not checked above
+	if (map)
+	{
+		for (auto& source : map->sourceList)
+			source->findDependentFromStreams(csb, currentStream, streamList);
+
+		// dimitr: no need to process also map->targetList,
+		// as its nodes are purely local to the aggregate stream
+	}
 }
 
 
@@ -2948,7 +2977,27 @@ RecordSource* WindowSourceNode::compile(thread_db* tdbb, Optimizer* opt, bool /*
 bool WindowSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
-	return rse->computable(csb, stream, allowOnlyCurrentStream, NULL);
+	if (!rse->computable(csb, stream, allowOnlyCurrentStream, NULL))
+		return false;
+
+	// Window expressions live in each window's map->sourceList, which is not
+	// a part of rse and therefore is not checked above
+	for (auto& window : windows)
+	{
+		if (!window.map)
+			continue;
+
+		for (auto& source : window.map->sourceList)
+		{
+			if (!source->computable(csb, stream, allowOnlyCurrentStream, NULL))
+				return false;
+		}
+
+		// dimitr: no need to process also window.map->targetList,
+		// as its nodes are purely local to the window stream
+	}
+
+	return true;
 }
 
 void WindowSourceNode::computeRseStreams(StreamList& streamList) const
@@ -2965,6 +3014,20 @@ void WindowSourceNode::findDependentFromStreams(const CompilerScratch* csb,
 	StreamType currentStream, SortedStreamList* streamList)
 {
 	rse->findDependentFromStreams(csb, currentStream, streamList);
+
+	// Window expressions live in each window's map->sourceList, which is not
+	// a part of rse and therefore is not checked above
+	for (auto& window : windows)
+	{
+		if (!window.map)
+			continue;
+
+		for (auto& source : window.map->sourceList)
+			source->findDependentFromStreams(csb, currentStream, streamList);
+
+		// dimitr: no need to process also window.map->targetList,
+		// as its nodes are purely local to the window stream
+	}
 }
 
 
