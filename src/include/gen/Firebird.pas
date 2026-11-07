@@ -749,6 +749,8 @@ type
 	IReplicatedField_getLengthPtr = function(this: IReplicatedField): Cardinal; cdecl;
 	IReplicatedField_getCharSetPtr = function(this: IReplicatedField): Cardinal; cdecl;
 	IReplicatedField_getDataPtr = function(this: IReplicatedField): Pointer; cdecl;
+	IReplicatedField_isPrimaryPtr = function(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
+	IReplicatedField_isUniquePtr = function(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
 	IReplicatedRecord_getCountPtr = function(this: IReplicatedRecord): Cardinal; cdecl;
 	IReplicatedRecord_getFieldPtr = function(this: IReplicatedRecord; index: Cardinal): IReplicatedField; cdecl;
 	IReplicatedRecord_getRawLengthPtr = function(this: IReplicatedRecord): Cardinal; cdecl;
@@ -3909,10 +3911,12 @@ type
 		getLength: IReplicatedField_getLengthPtr;
 		getCharSet: IReplicatedField_getCharSetPtr;
 		getData: IReplicatedField_getDataPtr;
+		isPrimary: IReplicatedField_isPrimaryPtr;
+		isUnique: IReplicatedField_isUniquePtr;
 	end;
 
 	IReplicatedField = class(IVersioned)
-		const VERSION = 2;
+		const VERSION = 3;
 
 		function getName(): PAnsiChar;
 		function getType(): Cardinal;
@@ -3921,6 +3925,8 @@ type
 		function getLength(): Cardinal;
 		function getCharSet(): Cardinal;
 		function getData(): Pointer;
+		function isPrimary(position: CardinalPtr): Boolean;
+		function isUnique(position: CardinalPtr): Boolean;
 	end;
 
 	IReplicatedFieldImpl = class(IReplicatedField)
@@ -3933,6 +3939,8 @@ type
 		function getLength(): Cardinal; virtual; abstract;
 		function getCharSet(): Cardinal; virtual; abstract;
 		function getData(): Pointer; virtual; abstract;
+		function isPrimary(position: CardinalPtr): Boolean; virtual; abstract;
+		function isUnique(position: CardinalPtr): Boolean; virtual; abstract;
 	end;
 
 	ReplicatedRecordVTable = class(VersionedVTable)
@@ -10170,6 +10178,26 @@ end;
 function IReplicatedField.getData(): Pointer;
 begin
 	Result := ReplicatedFieldVTable(vTable).getData(Self);
+end;
+
+function IReplicatedField.isPrimary(position: CardinalPtr): Boolean;
+begin
+	if (vTable.version < 3) then begin
+		Result := false;
+	end
+	else begin
+		Result := ReplicatedFieldVTable(vTable).isPrimary(Self, position);
+	end;
+end;
+
+function IReplicatedField.isUnique(position: CardinalPtr): Boolean;
+begin
+	if (vTable.version < 3) then begin
+		Result := false;
+	end
+	else begin
+		Result := ReplicatedFieldVTable(vTable).isUnique(Self, position);
+	end;
 end;
 
 function IReplicatedRecord.getCount(): Cardinal;
@@ -17653,6 +17681,26 @@ begin
 	end
 end;
 
+function IReplicatedFieldImpl_isPrimaryDispatcher(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := IReplicatedFieldImpl(this).isPrimary(position);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+function IReplicatedFieldImpl_isUniqueDispatcher(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
+begin
+	Result := false;
+	try
+		Result := IReplicatedFieldImpl(this).isUnique(position);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	IReplicatedFieldImpl_vTable: ReplicatedFieldVTable;
 
@@ -19311,7 +19359,7 @@ initialization
 	IInt128Impl_vTable.fromString := @IInt128Impl_fromStringDispatcher;
 
 	IReplicatedFieldImpl_vTable := ReplicatedFieldVTable.create;
-	IReplicatedFieldImpl_vTable.version := 2;
+	IReplicatedFieldImpl_vTable.version := 3;
 	IReplicatedFieldImpl_vTable.getName := @IReplicatedFieldImpl_getNameDispatcher;
 	IReplicatedFieldImpl_vTable.getType := @IReplicatedFieldImpl_getTypeDispatcher;
 	IReplicatedFieldImpl_vTable.getSubType := @IReplicatedFieldImpl_getSubTypeDispatcher;
@@ -19319,6 +19367,8 @@ initialization
 	IReplicatedFieldImpl_vTable.getLength := @IReplicatedFieldImpl_getLengthDispatcher;
 	IReplicatedFieldImpl_vTable.getCharSet := @IReplicatedFieldImpl_getCharSetDispatcher;
 	IReplicatedFieldImpl_vTable.getData := @IReplicatedFieldImpl_getDataDispatcher;
+	IReplicatedFieldImpl_vTable.isPrimary := @IReplicatedFieldImpl_isPrimaryDispatcher;
+	IReplicatedFieldImpl_vTable.isUnique := @IReplicatedFieldImpl_isUniqueDispatcher;
 
 	IReplicatedRecordImpl_vTable := ReplicatedRecordVTable.create;
 	IReplicatedRecordImpl_vTable.version := 2;

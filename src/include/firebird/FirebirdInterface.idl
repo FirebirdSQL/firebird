@@ -1814,6 +1814,10 @@ interface ReplicatedField : Versioned
 	uint getCharSet();
 	// Return pointer to data (or nullptr for NULL values)
 	const void* getData();
+
+version:	// 5.0 => 6.0 Alpha1
+	boolean isPrimary(uint* position);
+	boolean isUnique(uint* position);
 }
 
 interface ReplicatedRecord : Versioned

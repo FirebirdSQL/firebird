@@ -31,8 +31,11 @@
 #include "../jrd/trig.h"
 #include "../jrd/Database.h"
 #include "../jrd/blb_proto.h"
+#include "../jrd/btr_proto.h"
 #include "../jrd/cch_proto.h"
+#include "../jrd/dpm_proto.h"
 #include "../jrd/evl_proto.h"
+#include "../jrd/idx_proto.h"
 #include "../jrd/met_proto.h"
 #include "../jrd/mov_proto.h"
 #include "../common/isc_proto.h"
@@ -297,9 +300,10 @@ namespace
 		public IReplicatedFieldImpl<ReplicatedRecordImpl, CheckStatusWrapper>
 	{
 	public:
-		ReplicatedRecordImpl(thread_db* tdbb, const jrd_rel* relation, const Record* record)
+		ReplicatedRecordImpl(thread_db* tdbb, jrd_rel* relation, const Record* record)
 			: m_record(record),
-			  m_relation(relation)
+			  m_relation(relation),
+			  m_tdbb(tdbb)
 		{
 		}
 
@@ -352,6 +356,16 @@ namespace
 			return m_record->getData() + (IPTR) m_desc->dsc_address;
 		}
 
+		FB_BOOLEAN isPrimary(unsigned* position) override
+		{
+			return isKey(idx_primary, position);
+		}
+
+		FB_BOOLEAN isUnique(unsigned* position) override
+		{
+			return isKey(idx_unique, position);
+		}
+
 		IReplicatedField* getField(unsigned index) override
 		{
 			const auto format = m_record->getFormat();
@@ -384,11 +398,44 @@ namespace
 
 	private:
 		const Record* const m_record;
-		const jrd_rel* const m_relation;
+		jrd_rel* const m_relation;
 		const dsc* m_desc = nullptr; // optimization
 		unsigned m_fieldIndex = 0;
 		SLONG m_fieldLength = 0;
 		SLONG m_fieldType = 0;
+
+		std::optional<IndexDescList> m_idxList;
+		thread_db* const m_tdbb;
+
+		FB_BOOLEAN isKey(int flag, unsigned* position)
+		{
+			if (!m_idxList.has_value())
+			{
+				m_idxList.emplace();
+				const auto relPages = m_relation->getPages(m_tdbb);
+				BTR_all(m_tdbb, m_relation, *m_idxList, relPages);
+			}
+
+			*position = idx_invalid;
+
+			for (const auto& idx : m_idxList.value())
+			{
+				if (idx.idx_id != idx_invalid && idx.idx_flags & flag)
+				{
+					for (int fld = 0; fld < idx.idx_count; fld++)
+					{
+						const int fldNum = idx.idx_rpt[fld].idx_field;
+						if (m_fieldIndex == fldNum)
+						{
+							*position = fld;
+							return FB_TRUE;
+						}
+					}
+				}
+			}
+
+			return FB_FALSE;
+		}
 	};
 }
 
