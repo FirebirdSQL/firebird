@@ -50,6 +50,8 @@ void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
 bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initFlag)
 {
 	GlobalTpcHeader* header = static_cast<GlobalTpcHeader*>(sm->sh_mem_header);
+	thread_db* tdbb = JRD_get_thread_data();
+	Database* dbb = tdbb->getDatabase();
 
 	if (!initFlag)
 	{
@@ -57,12 +59,9 @@ bool TipCache::GlobalTpcInitializer::initialize(SharedMemoryBase* sm, bool initF
 			return false;
 
 		m_cache->initTransactionsPerBlock(header->tpc_block_size);
-		m_cache->mapInventoryPages(header);
+		m_cache->mapInventoryPages(tdbb, header);
 		return true;
 	}
-
-	thread_db* tdbb = JRD_get_thread_data();
-	Database* dbb = tdbb->getDatabase();
 
 	// Initialize the shared data header
 	initHeader(header);
@@ -355,10 +354,13 @@ void TipCache::loadInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 	}
 }
 
-void TipCache::mapInventoryPages(GlobalTpcHeader* header)
+void TipCache::mapInventoryPages(thread_db* tdbb, GlobalTpcHeader* header)
 {
+	const Database* dbb = tdbb->getDatabase();
+
 	TpcBlockNumber blockNumber = header->oldest_transaction / m_transactionsPerBlock;
-	const TpcBlockNumber lastNumber = header->latest_transaction_id / m_transactionsPerBlock;
+	const TpcBlockNumber lastNumber =
+		MAX(header->latest_transaction_id.load(), dbb->dbb_next_transaction) / m_transactionsPerBlock;
 
 	for (; blockNumber <= lastNumber; blockNumber++)
 	{
