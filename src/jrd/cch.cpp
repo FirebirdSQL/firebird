@@ -1088,10 +1088,12 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 	BufferDesc* bdb = window->win_bdb;
 	Database* dbb = tdbb->getDatabase();
 
+	fb_assert(bdb && bdb->ourExclusiveLock());
+
 	if (window->win_page != bdb->bdb_page || bdb->bdb_buffer->pag_type != pag_undefined)
 		return;	// buffer was reassigned or page was reused
 
-	window->win_bdb = NULL;
+	window->win_bdb = nullptr;
 
 	if (bdb->bdb_flags & BDB_io_error)
 		dbb->dbb_flags &= ~DBB_suspend_bgio;
@@ -1126,10 +1128,9 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 	}
 #endif
 
+	bdb->bdb_page.clear();
 	bdb->bdb_flags = 0;
-
-	if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-		bdb->release(tdbb, true);
+	bdb->release(tdbb, true);
 }
 
 
@@ -2290,6 +2291,45 @@ void CCH_shutdown(thread_db* tdbb)
 
 	dbb->dbb_page_manager.closeAll();
 	SDW_close();
+}
+
+bool CCH_try_write(thread_db* tdbb, WIN* window)
+{
+/**************************************
+ *
+ *	C C H _ t r y _ w r i t e
+ *
+ **************************************
+ *
+ * Functional description
+ *   Try to write just faked page to disk. Release buffer if successful.
+ *
+ **************************************/
+	BufferDesc* const bdb = window->win_bdb;
+	BLKCHK(bdb, type_bdb);
+
+	BufferControl* bcb = bdb->bdb_bcb;
+
+	constexpr auto FLAGS = (BDB_writer | BDB_marked | BDB_faked);
+
+	fb_assert((bdb->bdb_flags & FLAGS) == FLAGS);
+	fb_assert(bdb->bdb_writers == 1);
+	fb_assert(bdb->ourExclusiveLock());
+	fb_assert(bdb->ourIOLock());
+	fb_assert(QUE_EMPTY(bdb->bdb_higher));
+
+	bdb->bdb_flags &= ~FLAGS;
+
+	bool result = write_page(tdbb, bdb, tdbb->tdbb_status_vector, false);
+
+	bdb->unLockIO(tdbb);
+	if (result)
+	{
+		bdb->release(tdbb, true);
+		window->win_bdb = nullptr;
+	}
+
+	return result;
 }
 
 void CCH_unwind(thread_db* tdbb, const bool punt)
