@@ -2310,17 +2310,17 @@ bool CCH_try_write(thread_db* tdbb, WIN* window)
 
 	BufferControl* bcb = bdb->bdb_bcb;
 
-	constexpr auto FLAGS = (BDB_writer | BDB_marked | BDB_faked);
+	constexpr auto CLEAR_FLAGS = (BDB_writer | BDB_marked | BDB_faked);
 
-	fb_assert((bdb->bdb_flags & FLAGS) == FLAGS);
+	fb_assert((bdb->bdb_flags & CLEAR_FLAGS) == CLEAR_FLAGS);
 	fb_assert(bdb->bdb_writers == 1);
 	fb_assert(bdb->ourExclusiveLock());
 	fb_assert(bdb->ourIOLock());
 	fb_assert(QUE_EMPTY(bdb->bdb_higher));
 
-	bdb->bdb_flags &= ~FLAGS;
+	bdb->bdb_flags &= ~CLEAR_FLAGS;
 
-	bool result = write_page(tdbb, bdb, tdbb->tdbb_status_vector, false);
+	const bool result = write_page(tdbb, bdb, tdbb->tdbb_status_vector, false);
 
 	bdb->unLockIO(tdbb);
 	if (result)
