@@ -1108,6 +1108,7 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 		SyncLockGuard lruSync(&bcb->bcb_syncLRU, SYNC_EXCLUSIVE, FB_FUNCTION);
 		requeueRecentlyUsed(bcb);
 		QUE_DELETE(bdb->bdb_in_use);
+		QUE_INIT(bdb->bdb_in_use);
 	}
 
 	// remove from hash table and put into empty list
