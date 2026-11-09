@@ -1030,7 +1030,9 @@ void ProfilerPlugin::flush(ThrowStatusExceptionWrapper* status)
 
 					addBatch(requestBatch, requestBatchSize, requestMessage);
 
-					if (profileRequest.finishTimestamp.has_value())
+					// Aggregated requests are kept, as their row is rewritten with the accumulated time
+					// and the start timestamp of the first execution.
+					if (session->detailedRequests && profileRequest.finishTimestamp.has_value())
 						finishedRequests.add(requestIt->first);
 
 					profileRequest.dirty = false;
@@ -1979,11 +1981,16 @@ void Session::onRequestStart(ThrowStatusExceptionWrapper* status, SINT64 stateme
 void Session::onRequestFinish(ThrowStatusExceptionWrapper* status, SINT64 statementId, SINT64 requestId,
 	ISC_TIMESTAMP_TZ timestamp, IProfilerStats* stats)
 {
-	if (const auto request = requests.get(requestId))
+	if (const auto request = getRequest(statementId, requestId))
 	{
+		const FB_UINT64 elapsedTicks = stats->getElapsedTicks();
+
 		request->dirty = true;
 		request->finishTimestamp = timestamp;
-		request->totalElapsedTicks = stats->getElapsedTicks();
+
+		// The aggregated request of a statement accumulates the time of all its executions.
+		request->totalElapsedTicks = detailedRequests ?
+			elapsedTicks : request->totalElapsedTicks.value_or(0) + elapsedTicks;
 	}
 }
 
