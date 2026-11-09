@@ -1948,6 +1948,8 @@ version:	// 5.0 => 6.0 Alpha1
 	// Called after the session starts. 0 means every event is measured and reported with the after* methods.
 	// Otherwise timings are sampled with this interval (in microseconds) and reported with the add*Stats methods,
 	// and no before* or after* method is called, whatever getFlags returns.
+	// The timing mode is the user's choice, so plugins implementing this version must support both modes.
+	// Plugins of previous versions always get every event measured.
 	void setSamplingInterval(uint microseconds);
 }
 
