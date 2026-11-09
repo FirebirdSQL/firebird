@@ -65,6 +65,7 @@ namespace Jrd
 	class Tablespace;
 	class Triggers;
 	class TrigArray;
+	class ForeignServer;
 
 	typedef Firebird::HalfStaticArray<QualifiedName, 4> CharsetVariants;
 
@@ -149,5 +150,8 @@ ULONG MET_tablespace_id(Jrd::thread_db* tdbb, const Jrd::MetaName& name, Firebir
 bool MET_tablespace(Jrd::thread_db* tdbb, ULONG id, Jrd::MetaName& name, Firebird::PathName& fileName);
 void MET_get_ts_files(Jrd::thread_db* tdbb, Firebird::ObjectsArray<Firebird::PathName> &files);
 void MET_scan_tablespaces(Jrd::thread_db*);
+
+Jrd::ForeignServer* MET_get_foreign_server(Jrd::thread_db* tdbb, const Jrd::MetaName& foreignServerName);
+void MET_load_table_options(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation);
 
 #endif // JRD_MET_PROTO_H

@@ -240,10 +240,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 
 			rpb->rpb_runtime_flags &= ~RPB_CLEAR_FLAGS;
 
-			if (relation &&
-				!relation->getExtFile() &&
-				!relation->isView() &&
-				!relation->isVirtual())
+			if (relation && relation->isPageBased())
 			{
 				rpb->rpb_runtime_flags |= RPB_refetch;
 			}
