@@ -238,26 +238,40 @@ namespace
 	class AutoActivateResetStreams : public AutoStorage
 	{
 	public:
+		explicit AutoActivateResetStreams(CompilerScratch* csb)
+			: m_csb(csb), m_streams(getPool()), m_flags(getPool())
+		{
+		}
+
 		AutoActivateResetStreams(CompilerScratch* csb, const RseNode* rse)
 			: m_csb(csb), m_streams(getPool()), m_flags(getPool())
 		{
-			rse->computeRseStreams(m_streams);
-
-			m_flags.resize(m_streams.getCount());
-
-			FB_SIZE_T pos = 0;
-			for (const auto stream : m_streams)
-			{
-				m_flags[pos++] = m_csb->csb_rpt[stream].csb_flags;
-				m_csb->csb_rpt[stream].csb_flags |= (csb_active | csb_sub_stream);
-			}
+			add(rse);
 		}
 
 		~AutoActivateResetStreams()
 		{
+			fb_assert(m_streams.getCount() == m_flags.getCount());
+
 			FB_SIZE_T pos = 0;
 			for (const auto stream : m_streams)
 				m_csb->csb_rpt[stream].csb_flags = m_flags[pos++];
+		}
+
+		void add(const RseNode* rse)
+		{
+			StreamList streams;
+			rse->computeRseStreams(streams);
+
+			FB_SIZE_T pos = m_streams.getCount();
+			m_streams.join(streams);
+			m_flags.resize(m_streams.getCount());
+
+			for (const auto stream : streams)
+			{
+				m_flags[pos++] = m_csb->csb_rpt[stream].csb_flags;
+				m_csb->csb_rpt[stream].csb_flags |= (csb_active | csb_sub_stream);
+			}
 		}
 
 	private:
@@ -2252,6 +2266,10 @@ bool AggregateSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	if (!rse->computable(csb, stream, allowOnlyCurrentStream, NULL))
 		return false;
 
+	// The underlying RSE is already known to be computable, so we may activate its sub-streams
+	// to allow references from mappings also be treated as computable
+	AutoActivateResetStreams activator(csb, rse);
+
 	// Aggregate expressions live in map->sourceList, which is not a part of
 	// rse and therefore is not checked above
 	if (map)
@@ -2598,10 +2616,16 @@ void UnionSourceNode::computeDbKeyStreams(StreamList& streamList) const
 bool UnionSourceNode::computable(CompilerScratch* csb, StreamType stream,
 	bool allowOnlyCurrentStream, ValueExprNode* /*value*/)
 {
+	// The underlying RSEs are already known to be computable, so we may activate their sub-streams
+	// to allow references from mappings also be treated as computable
+	AutoActivateResetStreams activator(csb);
+
 	for (auto& clause : clauses)
 	{
 		if (!clause->computable(csb, stream, allowOnlyCurrentStream, NULL))
 			return false;
+
+		activator.add(clause);
 	}
 
 	for (auto& map : maps)
@@ -2979,6 +3003,10 @@ bool WindowSourceNode::computable(CompilerScratch* csb, StreamType stream,
 {
 	if (!rse->computable(csb, stream, allowOnlyCurrentStream, NULL))
 		return false;
+
+	// The underlying RSE is already known to be computable, so we may activate its sub-streams
+	// to allow references from mappings also be treated as computable
+	AutoActivateResetStreams activator(csb, rse);
 
 	// Window expressions live in each window's map->sourceList, which is not
 	// a part of rse and therefore is not checked above
