@@ -195,7 +195,7 @@ namespace Jrd
 			: m_record(record)
 		{
 			// validate record and its flag
-			fb_assert(!record || record->m_temp_active);
+			fb_assert(!record || record->isTempActive());
 		}
 
 		~AutoTempRecord()
@@ -208,7 +208,7 @@ namespace Jrd
 			// class object can be initialized just once
 			fb_assert(!m_record);
 			// validate record and its flag
-			fb_assert(!record || record->m_temp_active);
+			fb_assert(!record || record->isTempActive());
 
 			m_record = record;
 			return m_record;
@@ -218,7 +218,7 @@ namespace Jrd
 		{
 			if (m_record)
 			{
-				fb_assert(m_record->m_temp_active);
+				fb_assert(m_record->isTempActive());
 				m_record->releaseTempActive();
 				m_record = nullptr;
 			}
