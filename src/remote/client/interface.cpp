@@ -939,7 +939,7 @@ public:
 	unsigned getMaxInlineBlobSize(CheckStatusWrapper* status) override;
 	void setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size) override;
 
-	void reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb) override;
+	void setOptions(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb) override;
 
 public:
 	Attachment(Rdb* handle, const PathName& path)
@@ -2645,7 +2645,7 @@ void Attachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size)
 }
 
 
-void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
+void Attachment::setOptions(CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
 {
 	static UCHAR blackList[] = {
 		isc_dpb_dummy_packet_interval,
@@ -2678,7 +2678,7 @@ void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const uns
 		// Validate data length
 		CHECK_LENGTH(rdb->rdb_port, dpbLength);
 
-		if (rdb->rdb_port->port_protocol < PROTOCOL_ATTACHMENT_RESET)
+		if (rdb->rdb_port->port_protocol < PROTOCOL_ATTACHMENT_OPTIONS)
 			unsupported();
 
 		if (dpbLength > 0 && !dpb)
@@ -2692,7 +2692,7 @@ void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const uns
 			for (unsigned n = 0; n < FB_NELEM(blackList); ++n)
 			{
 				if (rdr.getClumpTag() == blackList[n])
-					fatal_exception::raiseFmt("Attachment::reset() does not support DPB item %d", blackList[n]);
+					fatal_exception::raiseFmt("Attachment::setOptions() does not support DPB item %d", blackList[n]);
 			}
 		}
 
@@ -2722,13 +2722,20 @@ void Attachment::reset(CheckStatusWrapper* status, unsigned dpbLength, const uns
 		}
 
 		PACKET* packet = &rdb->rdb_packet;
-		packet->p_operation = op_att_reset;
-		P_RESET* reset = &packet->p_reset;
-		reset->p_reset_database = rdb->rdb_id;
-		reset->p_reset_dpb.cstr_length = dpbLength;
-		reset->p_reset_dpb.cstr_address = dpb;
+		packet->p_operation = op_att_options;
+		P_OPTIONS* options = &packet->p_options;
+		options->p_options_dpb.cstr_length = dpbLength;
+		options->p_options_dpb.cstr_address = dpb;
 
-		send_and_receive(status, rdb, packet);
+		if (port->port_flags & PORT_lazy)
+		{
+			send_partial_packet(port, packet);
+			defer_packet(port, packet, true);
+		}
+		else {
+			send_and_receive(status, rdb, packet);
+		}
+
 	}
 	catch (const Exception& ex)
 	{

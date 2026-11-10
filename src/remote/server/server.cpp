@@ -3903,6 +3903,38 @@ void rem_port::replicate(P_REPLICATE* repl, PACKET* sendL)
 }
 
 
+void rem_port::set_options(P_OPTIONS* optionsL, PACKET* sendL)
+{
+/**************************************
+ *
+ *	s e t _ o p t i o n s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Execute setOptions() call.
+ *
+ **************************************/
+	LocalStatus ls;
+	CheckStatusWrapper status_vector(&ls);
+	Rdb* attachment;
+
+	Rdb* rdb = this->port_context;
+	if (bad_db(&status_vector, rdb))
+	{
+		this->send_response(sendL, 0, 0, &status_vector, false);
+		return;
+	}
+
+	const UCHAR* dpb = optionsL->p_options_dpb.cstr_address;
+	const ULONG dpb_length = optionsL->p_options_dpb.cstr_length;
+
+	rdb->rdb_iface->setOptions(&status_vector, dpb_length, dpb);
+
+	this->send_response(sendL, 0, 0, &status_vector, true);
+}
+
+
 ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* sendL)
 {
 /*****************************************
@@ -5361,6 +5393,10 @@ static bool process_packet(rem_port* port, PACKET* sendL, PACKET* receive, rem_p
 
 		case op_repl_data:
 			port->replicate(&receive->p_replicate, sendL);
+			break;
+
+		case op_att_options:
+			port->set_options(&receive->p_options, sendL);
 			break;
 
 		///case op_insert:

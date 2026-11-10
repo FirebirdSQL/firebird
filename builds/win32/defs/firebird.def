@@ -358,7 +358,7 @@ EXPORTS
 	fb_get_transaction_interface
 	fb_get_statement_interface
 	fb_database_crypt_callback
-	fb_reset_attachment
+	fb_set_options
 
 	gds__trace
 	gds__trace_raw

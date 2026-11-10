@@ -103,7 +103,7 @@ struct FirebirdApiPointers
 	decltype(&fb_cancel_operation) cancel_operation;
 	decltype(&fb_database_crypt_callback) database_crypt_callback;
 	decltype(&fb_dsql_set_timeout) dsql_set_timeout;
-	decltype(&fb_reset_attachment) reset_attachment;
+	decltype(&fb_set_options) set_options;
 };
 #if defined __GNUC__
 #pragma GCC diagnostic pop

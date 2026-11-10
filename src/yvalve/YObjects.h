@@ -588,7 +588,7 @@ public:
 	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
 	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
 
-	void reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb);
+	void setOptions(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb);
 
 public:
 	Firebird::IProvider* provider;

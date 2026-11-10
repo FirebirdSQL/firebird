@@ -51,7 +51,7 @@ class ConnectionsPool;
 class Transaction;
 class Statement;
 class Blob;
-typedef Firebird::HalfStaticArray<Firebird::NonPooledPair<UCHAR, Jrd::ValueExprNode*>, 16> ExecOpts;
+typedef Firebird::HalfStaticArray<Firebird::NonPooledPair<UCHAR, NestConst<Jrd::ValueExprNode>>, 16> ExecOpts;
 
 enum TraModes {
 	traReadCommited,
@@ -595,6 +595,7 @@ public:
 protected:
 	virtual Transaction* doCreateTransaction() = 0;
 	virtual Statement* doCreateStatement() = 0;
+	virtual void doSetOptions(Jrd::thread_db* tdbb, const Firebird::ClumpletReader& dpb) = 0;
 
 	void clearTransactions(Jrd::thread_db* tdbb);
 	void clearStatements(Jrd::thread_db* tdbb);

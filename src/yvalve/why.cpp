@@ -1555,7 +1555,7 @@ ISC_STATUS API_ROUTINE fb_database_crypt_callback(ISC_STATUS* userStatus, void* 
 //-------------------------------------
 
 
-ISC_STATUS API_ROUTINE fb_reset_attachment(ISC_STATUS* userStatus, isc_db_handle* dbHandle, short dpbLength, const ISC_UCHAR* dpb)
+ISC_STATUS API_ROUTINE fb_set_options(ISC_STATUS* userStatus, isc_db_handle* dbHandle, short dpbLength, const ISC_UCHAR* dpb)
 {
 	StatusVector status(userStatus);
 	CheckStatusWrapper statusWrapper(&status);
@@ -1564,7 +1564,7 @@ ISC_STATUS API_ROUTINE fb_reset_attachment(ISC_STATUS* userStatus, isc_db_handle
 	{
 		RefPtr<YAttachment> attachment(translateHandle(attachments, dbHandle));
 
-		attachment->reset(&statusWrapper, dpbLength, dpb);
+		attachment->setOptions(&statusWrapper, dpbLength, dpb);
 	}
 	catch (const Exception& e)
 	{
@@ -6361,12 +6361,12 @@ void YAttachment::setMaxInlineBlobSize(CheckStatusWrapper* status, unsigned size
 }
 
 
-void YAttachment::reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
+void YAttachment::setOptions(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb)
 {
 	try
 	{
 		YEntry<YAttachment> entry(status, this);
-		entry.next()->reset(status, dpbLength, dpb);
+		entry.next()->setOptions(status, dpbLength, dpb);
 	}
 	catch (const Exception& e)
 	{

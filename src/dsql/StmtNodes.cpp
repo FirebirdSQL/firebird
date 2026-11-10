@@ -5400,6 +5400,18 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 	node->traScope = traScope;
 	node->useCallerPrivs = useCallerPrivs;
 
+	if (opts && opts->hasData())
+	{
+		node->opts = FB_NEW_POOL(dsqlScratch->getPool()) EDS::ExecOpts(dsqlScratch->getPool());
+		for (auto& option : *opts)
+		{
+			EDS::ExecOpts::value_type newOpt;
+			newOpt.first = option.first;
+			newOpt.second = doDsqlPass(dsqlScratch, option.second);
+			node->opts->push(newOpt);
+		}
+	}
+
 	return SavepointEncloseNode::make(dsqlScratch->getPool(), dsqlScratch, node);
 }
 
@@ -5420,6 +5432,7 @@ string ExecStatementNode::internalPrint(NodePrinter& printer) const
 	NODE_PRINT(printer, useCallerPrivs);
 	NODE_PRINT(printer, traScope);
 	NODE_PRINT(printer, inputNames);
+	//NODE_PRINT(printer, opts);
 
 	return "ExecStatementNode";
 }
@@ -5495,7 +5508,7 @@ void ExecStatementNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		genOptionalExpr(dsqlScratch, blr_exec_stmt_role, role);
 
 		// Reset options
-		if (opts && opts->getCount() > 0)
+		if (opts && opts->hasData())
 		{
 			dsqlScratch->appendUChar(blr_exec_stmt_opts);
 			dsqlScratch->appendUShort(opts->getCount());
@@ -5580,6 +5593,11 @@ ExecStatementNode* ExecStatementNode::pass1(thread_db* tdbb, CompilerScratch* cs
 	doPass1(tdbb, csb, innerStmt.getAddress());
 	doPass1(tdbb, csb, inputs.getAddress());
 	doPass1(tdbb, csb, outputs.getAddress());
+	if (opts)
+	{
+		for (auto& option : *opts)
+			doPass1(tdbb, csb, option.second.getAddress());
+	}
 	return this;
 }
 
@@ -5602,6 +5620,12 @@ ExecStatementNode* ExecStatementNode::pass2(thread_db* tdbb, CompilerScratch* cs
 		{
 			AssignmentNode::validateTarget(tdbb, csb, *i);
 		}
+	}
+
+	if (opts)
+	{
+		for (auto& option : *opts)
+			ExprNode::doPass2(tdbb, csb, option.second.getAddress());
 	}
 
 	impureOffset = csb->allocImpure<EDS::Statement*>();

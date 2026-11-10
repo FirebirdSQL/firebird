@@ -1184,11 +1184,10 @@ bool_t xdr_protocol(RemoteXdr* xdrs, PACKET* p)
 			return P_TRUE(xdrs, p);
 		}
 
-	case op_att_reset:
+	case op_att_options:
 		{
-			P_RESET* reset = &p->p_reset;
-			MAP(xdr_short, reinterpret_cast<SSHORT&>(reset->p_reset_database));
-			MAP(xdr_cstring_const, reset->p_reset_dpb);
+			P_OPTIONS* options = &p->p_options;
+			MAP(xdr_cstring_const, options->p_options_dpb);
 			DEBUG_PRINTSIZE(xdrs, p->p_operation);
 
 			return P_TRUE(xdrs, p);

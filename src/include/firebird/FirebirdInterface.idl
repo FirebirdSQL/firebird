@@ -734,7 +734,7 @@ version:	// 6.0
 	uint getMaxInlineBlobSize(Status status);
 	void setMaxInlineBlobSize(Status status, uint size);
 
-	void reset(Status status, uint dpbLength, const uchar* dpb);
+	void setOptions(Status status, uint dpbLength, const uchar* dpb);
 }
 
 interface Service : ReferenceCounted

@@ -468,7 +468,7 @@ public:
 	unsigned getMaxInlineBlobSize(Firebird::CheckStatusWrapper* status) override;
 	void setMaxInlineBlobSize(Firebird::CheckStatusWrapper* status, unsigned size) override;
 
-	void reset(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb) override;
+	void setOptions(Firebird::CheckStatusWrapper* status, unsigned dpbLength, const unsigned char* dpb) override;
 
 public:
 	explicit JAttachment(StableAttachmentPart* js);

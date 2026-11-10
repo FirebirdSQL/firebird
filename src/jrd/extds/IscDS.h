@@ -489,7 +489,7 @@ public:
 										isc_stmt_handle*,
 										ULONG);
 
-	virtual ISC_STATUS ISC_EXPORT fb_reset_attachment(Jrd::FbStatusVector*,
+	virtual ISC_STATUS ISC_EXPORT fb_set_options(Jrd::FbStatusVector*,
 									  isc_db_handle*,
 									  unsigned short,
 									  const unsigned char*);
@@ -539,6 +539,7 @@ protected:
 	virtual Transaction* doCreateTransaction();
 	virtual Statement* doCreateStatement();
 	virtual void doDetach(Jrd::thread_db* tdbb);
+	void doSetOptions(Jrd::thread_db* tdbb, const Firebird::ClumpletReader& dpb) override;
 
 	IscProvider& m_iscProvider;
 	FB_API_HANDLE m_handle;

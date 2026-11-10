@@ -79,14 +79,14 @@ namespace {
 struct DpbOption
 {
 	UCHAR tag;
-	MetaName /*const char**/ name;
+	const char* name;
 	bool intFormat;
 };
 
 // Keep this list in sync with options supported by
 // Attachment::InitialOptions and Remote::Attachment::reset()
 DpbOption dpbOptions[] = {
-#define DPB_OPTION(o,i) { o, STRINGIZE(o), i }
+#define DPB_OPTION(o,i) { o, #o, i }
 	DPB_OPTION(isc_dpb_decfloat_round, false),
 	DPB_OPTION(isc_dpb_decfloat_traps, false),
 	DPB_OPTION(isc_dpb_set_bind, false),
@@ -926,6 +926,8 @@ void Connection::setOptions(thread_db* tdbb, const ExecOpts* opts)
 			}
 		}
 	}
+
+	doSetOptions(tdbb, dpb);
 }
 
 
@@ -2808,10 +2810,14 @@ ExecOpts* makeOptions(Jrd::FreeOptionsList* freeOptions)
 
 	for (auto freeOpt : *freeOptions)
 	{
+		string optLow = freeOpt.first.c_str();
+		optLow.lower();
+		string optExt = "isc_dpb_" + optLow;
+
 		UCHAR tag = 0;
 		for (unsigned n = 0; n < FB_NELEM(dpbOptions); ++n)
 		{
-			if (freeOpt.first == dpbOptions[n].name)
+			if (optLow == dpbOptions[n].name || optExt == dpbOptions[n].name)
 			{
 				tag = dpbOptions[n].tag;
 				break;

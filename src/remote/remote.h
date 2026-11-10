@@ -1756,6 +1756,7 @@ public:
 	void		batch_sync(PACKET*);
 	void		batch_bpb(P_BATCH_SETBPB*, PACKET*);
 	void		replicate(P_REPLICATE*, PACKET*);
+	void		set_options(P_OPTIONS*, PACKET*);
 
 	Firebird::string getRemoteId() const;
 	void auxAcceptError(PACKET* packet);

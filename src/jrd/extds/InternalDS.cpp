@@ -298,6 +298,11 @@ Transaction* InternalConnection::doCreateTransaction()
 	return FB_NEW InternalTransaction(*this);
 }
 
+void InternalConnection::doSetOptions(thread_db*, const Firebird::ClumpletReader&)
+{
+	fatal_exception::raise("OPTIONS unsupported for InternalConnection");
+}
+
 Statement* InternalConnection::doCreateStatement()
 {
 	return FB_NEW InternalStatement(*this);

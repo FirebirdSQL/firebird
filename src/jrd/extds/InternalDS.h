@@ -87,6 +87,7 @@ protected:
 	Transaction* doCreateTransaction() override;
 	Statement* doCreateStatement() override;
 	void doDetach(Jrd::thread_db* tdbb) override;
+	void doSetOptions(Jrd::thread_db* tdbb, const Firebird::ClumpletReader& dpb) override;
 
 	Firebird::AutoPlugin<Jrd::JProvider> m_provider;
 	Firebird::RefPtr<Jrd::JAttachment> m_attachment;

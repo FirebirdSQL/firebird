@@ -2601,7 +2601,7 @@ namespace Firebird
 			void (CLOOP_CARG *setMaxBlobCacheSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getMaxInlineBlobSize)(IAttachment* self, IStatus* status) CLOOP_NOEXCEPT;
 			void (CLOOP_CARG *setMaxInlineBlobSize)(IAttachment* self, IStatus* status, unsigned size) CLOOP_NOEXCEPT;
-			void (CLOOP_CARG *reset)(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT;
+			void (CLOOP_CARG *setOptions)(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -2925,7 +2925,7 @@ namespace Firebird
 			StatusType::checkException(status);
 		}
 
-		template <typename StatusType> void reset(StatusType* status, unsigned dpbLength, const unsigned char* dpb)
+		template <typename StatusType> void setOptions(StatusType* status, unsigned dpbLength, const unsigned char* dpb)
 		{
 			if (cloopVTable->version < 6)
 			{
@@ -2934,7 +2934,7 @@ namespace Firebird
 				return;
 			}
 			StatusType::clearException(status);
-			static_cast<VTable*>(this->cloopVTable)->reset(this, status, dpbLength, dpb);
+			static_cast<VTable*>(this->cloopVTable)->setOptions(this, status, dpbLength, dpb);
 			StatusType::checkException(status);
 		}
 	};
@@ -12372,7 +12372,7 @@ namespace Firebird
 					this->setMaxBlobCacheSize = &Name::cloopsetMaxBlobCacheSizeDispatcher;
 					this->getMaxInlineBlobSize = &Name::cloopgetMaxInlineBlobSizeDispatcher;
 					this->setMaxInlineBlobSize = &Name::cloopsetMaxInlineBlobSizeDispatcher;
-					this->reset = &Name::cloopresetDispatcher;
+					this->setOptions = &Name::cloopsetOptionsDispatcher;
 				}
 			} vTable;
 
@@ -12815,13 +12815,13 @@ namespace Firebird
 			}
 		}
 
-		static void CLOOP_CARG cloopresetDispatcher(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT
+		static void CLOOP_CARG cloopsetOptionsDispatcher(IAttachment* self, IStatus* status, unsigned dpbLength, const unsigned char* dpb) CLOOP_NOEXCEPT
 		{
 			StatusType status2(status);
 
 			try
 			{
-				static_cast<Name*>(self)->Name::reset(&status2, dpbLength, dpb);
+				static_cast<Name*>(self)->Name::setOptions(&status2, dpbLength, dpb);
 			}
 			catch (...)
 			{
@@ -12898,7 +12898,7 @@ namespace Firebird
 		virtual void setMaxBlobCacheSize(StatusType* status, unsigned size) = 0;
 		virtual unsigned getMaxInlineBlobSize(StatusType* status) = 0;
 		virtual void setMaxInlineBlobSize(StatusType* status, unsigned size) = 0;
-		virtual void reset(StatusType* status, unsigned dpbLength, const unsigned char* dpb) = 0;
+		virtual void setOptions(StatusType* status, unsigned dpbLength, const unsigned char* dpb) = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

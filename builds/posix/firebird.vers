@@ -352,7 +352,7 @@ fb_get_statement_interface
 
 fb_database_crypt_callback
 fb_dsql_set_timeout
-fb_reset_attachment
+fb_set_options
 
 # Other misc functions
 

@@ -2303,7 +2303,7 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 }
 
 
-void JAttachment::reset(CheckStatusWrapper* user_status, unsigned dpbLength, const unsigned char* dpb)
+void JAttachment::setOptions(CheckStatusWrapper* user_status, unsigned dpbLength, const unsigned char* dpb)
 {
 	static UCHAR blackList[] = {
 		isc_dpb_user_name,
@@ -2393,7 +2393,8 @@ void JAttachment::reset(CheckStatusWrapper* user_status, unsigned dpbLength, con
 		bool dummy;
 		options.get(dpb, dpbLength, dummy);
 
-		tdbb->getAttachment()->resetSession(tdbb, nullptr, &options);
+		auto* attachment = tdbb->getAttachment();
+		attachment->setInitialOptions(tdbb, options, false);
 	}
 	catch (const Exception& ex)
 	{

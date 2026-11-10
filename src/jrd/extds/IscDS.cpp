@@ -343,6 +343,18 @@ Statement* IscConnection::doCreateStatement()
 	return FB_NEW IscStatement(*this);
 }
 
+void IscConnection::doSetOptions(thread_db* tdbb, const Firebird::ClumpletReader& dpb)
+{
+	FbLocalStatus status;
+	{
+		EngineCallbackGuard guard(tdbb, *this, FB_FUNCTION);
+		m_iscProvider.fb_set_options(&status, &m_handle, dpb.getBufferLength(), dpb.getBuffer());
+	}
+
+	if (status->getState() & IStatus::STATE_ERRORS)
+		raise(&status, tdbb, "fb_set_options");
+}
+
 // IscTransaction
 
 void IscTransaction::generateTPB(thread_db* tdbb, ClumpletWriter& tpb,
@@ -1655,13 +1667,13 @@ ISC_STATUS ISC_EXPORT IscProvider::fb_dsql_set_timeout(FbStatusVector* user_stat
 	return notImplemented(user_status);
 }
 
-ISC_STATUS ISC_EXPORT IscProvider::fb_reset_attachment(FbStatusVector* user_status,
+ISC_STATUS ISC_EXPORT IscProvider::fb_set_options(FbStatusVector* user_status,
 	isc_db_handle* db_handle,
 	unsigned short dpbLength,
 	const unsigned char* dpb)
 {
-	if (m_api.reset_attachment)
-		return m_api.reset_attachment(IscStatus(user_status), db_handle, dpbLength, dpb);
+	if (m_api.set_options)
+		return m_api.set_options(IscStatus(user_status), db_handle, dpbLength, dpb);
 
 	return notImplemented(user_status);
 }
@@ -1764,7 +1776,7 @@ static FirebirdApiPointers isc_callbacks =
 	PROTO(fb, cancel_operation),
 	PROTO(fb, database_crypt_callback),
 	PROTO(fb, dsql_set_timeout),
-	PROTO(fb, reset_attachment)
+	PROTO(fb, set_options)
 };
 #if defined __GNUC__
 #pragma GCC diagnostic pop
