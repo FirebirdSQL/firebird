@@ -218,6 +218,12 @@ public:
 		: pageNum(from.pageNum), pageSpaceID(from.pageSpaceID)
 	{ }
 
+	inline void clear()
+	{
+		pageNum = 0;
+		pageSpaceID = INVALID_PAGE_SPACE;
+	}
+
 	inline ULONG getPageNum() const
 	{
 		// fb_assert(pageSpaceID != INVALID_PAGE_SPACE);
