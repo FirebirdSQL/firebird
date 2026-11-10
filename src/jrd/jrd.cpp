@@ -2394,7 +2394,11 @@ void JAttachment::setOptions(CheckStatusWrapper* user_status, unsigned dpbLength
 		options.get(dpb, dpbLength, dummy);
 
 		auto* attachment = tdbb->getAttachment();
-		attachment->setInitialOptions(tdbb, options, false);
+		Attachment::InitialOptions newOptions(attachment->getPool());
+		attachment->saveOptions(newOptions);
+		newOptions.setInitialOptions(tdbb, options);
+		newOptions.resetAttachment(attachment);
+		//attachment->setInitialOptions(tdbb, options, false);
 	}
 	catch (const Exception& ex)
 	{

@@ -683,6 +683,12 @@ public:
 	bool backupStateReadLock(thread_db* tdbb, SSHORT wait);
 	void backupStateReadUnLock(thread_db* tdbb);
 
+	MemoryPool& getPool() noexcept
+	{
+		fb_assert(att_pool);
+		return *att_pool;
+	}
+
 	StableAttachmentPart* getStable() noexcept
 	{
 		return att_stable;
@@ -769,6 +775,7 @@ public:
 	}
 
 	void setInitialOptions(thread_db* tdbb, const DatabaseOptions& options, bool newDb);
+	void saveOptions(InitialOptions& newOptions);
 
 	const CoercionArray* getInitialBindings() const noexcept
 	{

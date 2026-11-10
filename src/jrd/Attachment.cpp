@@ -516,6 +516,12 @@ void Jrd::Attachment::resetSession(thread_db* tdbb, jrd_tra** traHandle, const D
 }
 
 
+void Jrd::Attachment::saveOptions(Jrd::Attachment::InitialOptions& newOptions)
+{
+	newOptions = att_initial_options;
+}
+
+
 void Jrd::Attachment::signalCancel()
 {
 	att_flags |= ATT_cancel_raise;
