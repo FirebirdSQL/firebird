@@ -329,22 +329,11 @@ namespace
 			// one page and handle IO errors if any.
 			WIN window(pageNum);
 			CCH_fake(tdbb, &window, 1);
-			CCH_must_write(tdbb, &window);
-			try
+			if (!CCH_try_write(tdbb, &window))
 			{
-				CCH_RELEASE(tdbb, &window);
-			}
-			catch (const status_exception&)
-			{
-				// forget about this page as if we never tried to fake it
 				CCH_forget_page(tdbb, &window);
-
-				// normally all page buffers now released by CCH_unwind
-				// only exception is when TDBB_no_cache_unwind flag is set
-				if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-					CCH_RELEASE(tdbb, pipWindow);
-
-				throw;
+				CCH_RELEASE(tdbb, pipWindow);
+				CCH_unwind(tdbb, true);
 			}
 
 			return relativeBit + 1;
