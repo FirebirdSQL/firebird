@@ -163,6 +163,15 @@ namespace
 
 			{	// scope
 				MutexLockGuard statesGuard(statesMutex, FB_FUNCTION);
+
+				// A second registration would sample the state twice and leak a reference.
+				FB_SIZE_T pos;
+				if (states.find(state, pos))
+				{
+					fb_assert(false);
+					return;
+				}
+
 				states.add(state);
 				state->addRef();
 			}
