@@ -1762,7 +1762,14 @@ static void setNodeLineColumn(CompilerScratch* csb, DmlNode* node, ULONG blrOffs
 		if (node->getKind() == DmlNode::KIND_STATEMENT)
 		{
 			const auto stmt = static_cast<StmtNode*>(node);
-			stmt->hasLineColumn = true;
+			stmt->flags |= StmtNode::FLAG_LINE_COLUMN;
+
+			// Statements past the limit share the last slot, which merges their line counters.
+			stmt->profileSlot = MIN(csb->csb_profile_slots, StmtNode::MAX_PROFILE_SLOT);
+
+			if (csb->csb_profile_slots < StmtNode::MAX_PROFILE_SLOT)
+				++csb->csb_profile_slots;
+
 			propagateNodeLineColumn(stmt);
 		}
 	}
@@ -1775,12 +1782,13 @@ static void propagateNodeLineColumn(StmtNode* wrapper)
 {
 	const auto inherit = [wrapper](StmtNode* child)
 	{
-		if (!child || child->hasLineColumn)
+		if (!child || (child->flags & StmtNode::FLAG_LINE_COLUMN))
 			return;
 
 		child->line = wrapper->line;
 		child->column = wrapper->column;
-		child->hasLineColumn = true;
+		child->profileSlot = wrapper->profileSlot;
+		child->flags |= StmtNode::FLAG_LINE_COLUMN;
 
 		propagateNodeLineColumn(child);
 	};

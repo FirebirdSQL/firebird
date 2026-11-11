@@ -32,6 +32,9 @@
 #include <cctype>
 #include <string.h>
 #include <type_traits>
+#if !defined(WIN_NT) && defined(HAVE_CLOCK_GETTIME)
+#include <time.h>
+#endif
 
 #include "../common/classes/fb_string.h"
 #include "../common/classes/array.h"
@@ -208,8 +211,21 @@ namespace fb_utils
 	};
 	FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& password);
 
+	inline constexpr SINT64 BILLION = 1'000'000'000;
+
 	// Returns current value of performance counter
-	SINT64 query_performance_counter();
+#if !defined(WIN_NT) && defined(HAVE_CLOCK_GETTIME)
+	inline SINT64 query_performance_counter() noexcept
+	{
+		struct timespec tp;
+		if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) != 0)
+			return 0;
+
+		return static_cast<SINT64>(tp.tv_sec) * BILLION + tp.tv_nsec;
+	}
+#else
+	SINT64 query_performance_counter() noexcept;
+#endif
 
 	// Returns frequency of performance counter in Hz
 	SINT64 query_performance_frequency();

@@ -33,6 +33,7 @@
 #include "../common/classes/TimerImpl.h"
 #include "../jrd/recsrc/RecordSource.h"
 #include "../jrd/req.h"
+#include "../jrd/ProfilerSampler.h"
 #include "../jrd/SystemPackages.h"
 #include "../jrd/Statement.h"
 
@@ -45,6 +46,81 @@ class Select;
 class thread_db;
 
 class ProfilerListener;
+
+
+// Exact hit counters of a request, used when timings are sampled.
+// They are delivered to the plugin in batches instead of per event.
+class ProfilerRequestProfile final
+{
+public:
+	struct LineCounter
+	{
+		ULONG line = 0;
+		ULONG column = 0;
+		FB_UINT64 counter = 0;
+	};
+
+	struct RecSourceCounter
+	{
+		ULONG cursorId = 0;
+		FB_UINT64 openCounter = 0;
+		FB_UINT64 fetchCounter = 0;
+	};
+
+public:
+	explicit ProfilerRequestProfile(MemoryPool& pool)
+		: lines(pool),
+		  recSources(pool)
+	{
+	}
+
+	ProfilerRequestProfile(const ProfilerRequestProfile&) = delete;
+	ProfilerRequestProfile& operator=(const ProfilerRequestProfile&) = delete;
+
+public:
+	// Prepares a new or recycled profile for a request, keeping the memory of the arrays.
+	void reset(SINT64 aStatementId, SINT64 aRequestId)
+	{
+		statementId = aStatementId;
+		requestId = aRequestId;
+		lines.clear();
+		recSources.clear();
+	}
+
+	void hitLine(ULONG slot, ULONG line, ULONG column)
+	{
+		if (slot >= lines.getCount())
+			lines.grow(slot + 1);
+
+		auto& lineCounter = lines[slot];
+
+		// The position of a slot never changes, so it's stored by its first hit. A new entry is zeroed.
+		if (!lineCounter.counter)
+		{
+			lineCounter.line = line;
+			lineCounter.column = column;
+		}
+
+		++lineCounter.counter;
+	}
+
+	RecSourceCounter& getRecSource(ULONG recSourceId, ULONG cursorId)
+	{
+		if (recSourceId >= recSources.getCount())
+			recSources.grow(recSourceId + 1);
+
+		auto& recSourceCounter = recSources[recSourceId];
+		recSourceCounter.cursorId = cursorId;
+		return recSourceCounter;
+	}
+
+public:
+	SINT64 statementId = 0;
+	SINT64 requestId = 0;
+	Firebird::Array<LineCounter> lines;				// indexed by StmtNode::profileSlot
+	Firebird::Array<RecSourceCounter> recSources;	// indexed by record source id
+	FB_SIZE_T activeIndex = 0;						// position in ProfilerManager::requestProfiles
+};
 
 
 class ProfilerManager final : public Firebird::PerformanceStopWatch
@@ -70,6 +146,57 @@ public:
 		FB_UINT64 elapsedTicks;
 	};
 
+	// Publishes the frame of an executing request for the sampler, popping it when destroyed.
+	class RequestFrame final
+	{
+	public:
+		RequestFrame() = default;
+
+		~RequestFrame()
+		{
+			pop();
+		}
+
+		RequestFrame(const RequestFrame&) = delete;
+		RequestFrame& operator=(const RequestFrame&) = delete;
+
+	public:
+		// Does nothing when timings are not sampled.
+		void push(ProfilerManager* profilerManager, Request* request)
+		{
+			fb_assert(!state);
+			state = profilerManager->pushRequestFrame(request, depth);
+		}
+
+		void pop() noexcept
+		{
+			if (state)
+			{
+				state->popTo(depth);
+				state = nullptr;
+			}
+		}
+
+		bool isPushed() const noexcept
+		{
+			return state != nullptr;
+		}
+
+		ProfilerSampleState* getState() const noexcept
+		{
+			return state;
+		}
+
+		unsigned getIndex() const noexcept
+		{
+			return depth;
+		}
+
+	private:
+		ProfilerSampleState* state = nullptr;
+		unsigned depth = 0;
+	};
+
 	class RecordSourceStopWatcher final
 	{
 	public:
@@ -81,8 +208,7 @@ public:
 
 	public:
 		RecordSourceStopWatcher(thread_db* tdbb, const RecordSource* recordSource, Event aEvent)
-			: RecordSourceStopWatcher(tdbb, tdbb->getAttachment()->getActiveProfilerManagerForNonInternalStatement(tdbb),
-				recordSource, aEvent)
+			: RecordSourceStopWatcher(tdbb, getActiveForNonInternalStatement(tdbb), recordSource, aEvent)
 		{
 		}
 
@@ -93,17 +219,35 @@ public:
 			  recordSource(recordSource),
 			  event(aEvent)
 		{
+			if (profilerManager && profilerManager->sampled)
+			{
+				sampledProfilerManager = profilerManager;
+				sampleState = profilerManager->sampleState;
+
+				frameDepth = sampleState->push(profilerManager->makeFrame(request,
+					recordSource->getRecSourceId(), recordSource->getCursorId(),
+					(event == Event::OPEN ?
+						ProfilerSampleState::FrameKind::OPEN :
+						ProfilerSampleState::FrameKind::FETCH)));
+
+				profilerManager = nullptr;
+			}
+
 			if (profilerManager)
 			{
-				lastTicks = profilerManager->queryTicks();
-
 				if (profilerManager->currentSession->flags & Firebird::IProfilerSession::FLAG_BEFORE_EVENTS)
 				{
+					const SINT64 overheadStartTicks = profilerManager->queryTicks();
+
 					if (event == Event::OPEN)
 						profilerManager->beforeRecordSourceOpen(request, recordSource);
 					else
 						profilerManager->beforeRecordSourceGetRecord(request, recordSource);
+
+					lastTicks = profilerManager->endOverhead(overheadStartTicks);
 				}
+				else
+					lastTicks = profilerManager->beginInterval();
 
 				lastAccumulatedOverhead = profilerManager->getAccumulatedOverhead();
 			}
@@ -111,7 +255,24 @@ public:
 
 		~RecordSourceStopWatcher()
 		{
-			if (profilerManager)
+			if (sampleState)
+			{
+				sampleState->popTo(frameDepth);
+
+				// Counted after the event, like the measured events, so a session paused or finished
+				// during the event doesn't count it.
+				if (const auto profile = sampledProfilerManager->isActive() ?
+						sampledProfilerManager->getRequestProfile(request) : nullptr)
+				{
+					auto& counter = profile->getRecSource(recordSource->getRecSourceId(), recordSource->getCursorId());
+
+					if (event == Event::OPEN)
+						++counter.openCounter;
+					else
+						++counter.fetchCounter;
+				}
+			}
+			else if (profilerManager && !profilerManager->sampled)	// a session started during the event may sample
 			{
 				const SINT64 currentTicks = profilerManager->queryTicks();
 				const SINT64 elapsedTicks = profilerManager->getElapsedTicksAndAdjustOverhead(
@@ -122,6 +283,8 @@ public:
 					profilerManager->afterRecordSourceOpen(request, recordSource, stats);
 				else
 					profilerManager->afterRecordSourceGetRecord(request, recordSource, stats);
+
+				profilerManager->endOverhead(currentTicks);
 			}
 		}
 
@@ -129,8 +292,11 @@ public:
 		Request* request;
 		ProfilerManager* profilerManager;
 		const AccessPath* recordSource;
+		ProfilerManager* sampledProfilerManager = nullptr;
+		ProfilerSampleState* sampleState = nullptr;
 		SINT64 lastTicks = 0;
 		SINT64 lastAccumulatedOverhead = 0;
+		unsigned frameDepth = 0;
 		Event event;
 	};
 
@@ -145,13 +311,26 @@ private:
 		{
 		}
 
+		ULONG getRecSourceSequence(ULONG recSourceId) const
+		{
+			return recSourceId < recSourceSequence.getCount() ? recSourceSequence[recSourceId] : 0;
+		}
+
+		void setRecSourceSequence(ULONG recSourceId, ULONG sequence)
+		{
+			if (recSourceId >= recSourceSequence.getCount())
+				recSourceSequence.grow(recSourceId + 1);
+
+			recSourceSequence[recSourceId] = sequence;
+		}
+
 		Statement(const Statement&) = delete;
 		void operator=(const Statement&) = delete;
 
 		SINT64 id = 0;
 		Firebird::NonPooledMap<ULONG, ULONG> cursorNextSequence;
 		Firebird::SortedArray<ULONG> definedCursors;
-		Firebird::NonPooledMap<ULONG, ULONG> recSourceSequence;
+		Firebird::Array<ULONG> recSourceSequence;	// indexed by record source id, 0 = not defined
 	};
 
 	class Session final
@@ -173,6 +352,24 @@ private:
 		unsigned flags = 0;
 	};
 
+	// Status of the plugin calls done for every request, which share ProfilerManager::requestCallStatus,
+	// as constructing a LocalStatus for each of them is not cheap. Errors are logged, like LogLocalStatus.
+	class RequestCallStatus final : public Firebird::LogWrapper
+	{
+	public:
+		RequestCallStatus(ProfilerManager* manager, const char* text)
+			: LogWrapper(&manager->requestCallStatus, text)
+		{
+		}
+
+		~RequestCallStatus()
+		{
+			// Don't leave errors or warnings in the shared status.
+			if (isDirty())
+				status->init();
+		}
+	};
+
 private:
 	ProfilerManager(thread_db* tdbb);
 
@@ -182,6 +379,15 @@ public:
 public:
 	static ProfilerManager* create(thread_db* tdbb);
 
+	static ProfilerManager* getActiveForNonInternalStatement(thread_db* tdbb)
+	{
+		const auto attachment = tdbb->getAttachment();
+
+		return attachment->isProfilerActive() && !tdbb->getRequest()->hasInternalStatement() ?
+			attachment->att_profiler_manager.get() :
+			nullptr;
+	}
+
 	static int blockingAst(void* astObject);
 
 	ProfilerManager(const ProfilerManager&) = delete;
@@ -189,10 +395,61 @@ public:
 
 public:
 	SINT64 startSession(thread_db* tdbb, std::optional<SLONG> flushInterval,
-		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options);
+		const Firebird::PathName& pluginName, const Firebird::string& description, const Firebird::string& options,
+		std::optional<SLONG> samplingInterval);
 
 	void prepareCursor(thread_db* tdbb, Request* request, const Select* select);
 	void onRequestFinish(Request* request, Stats& stats);
+	void releaseStaleRequestProfile(Request* request);
+
+	// Timings are sampled by ProfilerSampler instead of measured for every event.
+	bool isSampled() const
+	{
+		return sampled;
+	}
+
+	ProfilerRequestProfile* getRequestProfile(Request* request)
+	{
+		if (request->req_profiler_profile && request->req_profiler_generation == profileGeneration)
+			return request->req_profiler_profile;
+
+		return createRequestProfile(request);
+	}
+
+	// Publishes that the request is executing. Returns the state where the frame was pushed, or nullptr.
+	// Used by RequestFrame, which restores the state with popTo(depth).
+	// The request is not defined to the plugin here, but only with its first statement or record source,
+	// as it's done when every event is measured.
+	ProfilerSampleState* pushRequestFrame(Request* request, unsigned& depth)
+	{
+		if (!sampled)
+			return nullptr;
+
+		request->req_profiler_sampled = true;
+		depth = sampleState->push(makeFrame(request, 0, 0, ProfilerSampleState::FrameKind::REQUEST));
+
+		return sampleState;
+	}
+
+	ProfilerSampleState::Frame makeFrame(Request* request, ULONG a, ULONG b, ProfilerSampleState::FrameKind kind)
+	{
+		if (request->req_profiler_profile && request->req_profiler_generation == profileGeneration)
+		{
+			const auto profile = request->req_profiler_profile;
+			return {profile->statementId, profile->requestId, a, b, kind};
+		}
+
+		return {(SINT64) request->getStatement()->getStatementId(), (SINT64) request->getRequestId(), a, b, kind};
+	}
+
+	void hitPsqlLine(Request* request, ProfilerSampleState* state, unsigned frameIndex,
+		ULONG slot, ULONG line, ULONG column)
+	{
+		if (const auto profile = getRequestProfile(request))
+			profile->hitLine(slot, line, column);
+
+		state->setLine(frameIndex, line, column);
+	}
 
 	void beforePsqlLineColumn(Request* request, ULONG line, ULONG column)
 	{
@@ -219,10 +476,10 @@ public:
 		{
 			const auto* profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			if (const auto sequence = profileStatement->getRecSourceSequence(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->beforeRecordSourceOpen(
-					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), sequence);
 			}
 		}
 	}
@@ -233,10 +490,10 @@ public:
 		{
 			const auto* profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			if (const auto sequence = profileStatement->getRecSourceSequence(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->afterRecordSourceOpen(
-					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), sequence, &stats);
 			}
 		}
 	}
@@ -247,10 +504,10 @@ public:
 		{
 			const auto* profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			if (const auto sequence = profileStatement->getRecSourceSequence(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->beforeRecordSourceGetRecord(
-					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), sequence);
 			}
 		}
 	}
@@ -261,10 +518,10 @@ public:
 		{
 			const auto* profileStatement = getStatement(request);
 
-			if (const auto sequencePtr = profileStatement->recSourceSequence.get(recordSource->getRecSourceId()))
+			if (const auto sequence = profileStatement->getRecSourceSequence(recordSource->getRecSourceId()))
 			{
 				currentSession->pluginSession->afterRecordSourceGetRecord(
-					profileStatement->id, profileRequestId, recordSource->getCursorId(), *sequencePtr, &stats);
+					profileStatement->id, profileRequestId, recordSource->getCursorId(), sequence, &stats);
 			}
 		}
 	}
@@ -277,6 +534,22 @@ public:
 	bool haveListener() const
 	{
 		return listener.hasData();
+	}
+
+	static constexpr SLONG DEFAULT_SAMPLING_INTERVAL = 100;		// microseconds
+	static constexpr SLONG MIN_SAMPLING_INTERVAL = 50;			// microseconds
+	static constexpr SLONG MAX_SAMPLING_INTERVAL = 1'000'000;	// microseconds
+
+	// 0 means every event is measured.
+	static void checkSamplingInterval(SLONG interval)
+	{
+		if (interval != 0 && (interval < MIN_SAMPLING_INTERVAL || interval > MAX_SAMPLING_INTERVAL))
+		{
+			Firebird::status_exception::raise(
+				Firebird::Arg::Gds(isc_not_valid_for_var) <<
+				"\"SAMPLING_INTERVAL\"" <<
+				Firebird::Arg::Num(interval));
+		}
 	}
 
 	static void checkFlushInterval(SLONG interval)
@@ -293,6 +566,30 @@ public:
 private:
 	void prepareRecSource(thread_db* tdbb, Request* request, const AccessPath* recordSource);
 
+	ProfilerRequestProfile* createRequestProfile(Request* request);
+	void releaseRequestProfile(ProfilerRequestProfile* profile);
+	void deliverProfiles(ProfilerRequestProfile* onlyProfile);
+	void deliverRecSourceStats(SINT64 statementId, SINT64 requestId, ULONG cursorId, ULONG recSourceId,
+		bool open, FB_UINT64 counter, FB_UINT64 elapsedTicks);
+	void startSampling(ULONG interval);
+	void stopSampling();
+
+	void resetCache()
+	{
+		lastRequest = nullptr;
+		lastRequestId = 0;
+		lastStatement = nullptr;
+		lastStatementId = 0;
+	}
+
+	void setPaused(bool value)
+	{
+		paused = value;
+		updateActive();
+	}
+
+	void updateActive();
+
 	void cancelSession();
 	void finishSession(thread_db* tdbb, bool flushData);
 	void pauseSession(bool flushData);
@@ -303,7 +600,18 @@ private:
 
 	void updateFlushTimer(bool canStopTimer = true);
 
-	Statement* getStatement(Request* request);
+	Statement* getStatement(Request* request)
+	{
+		if (!isActive())
+			return nullptr;
+
+		if (lastStatement && request->getStatement()->getStatementId() == lastStatementId)
+			return lastStatement;
+
+		return lookupStatement(request);
+	}
+
+	Statement* lookupStatement(Request* request);
 
 	SINT64 getRequest(Request* request, unsigned flags)
 	{
@@ -312,7 +620,11 @@ private:
 		if (!isActive() || (flags && !(currentSession->flags & flags)))
 			return 0;
 
+		const auto mainRequest = request;
 		const auto mainRequestId = request->getRequestId();
+
+		if (request == lastRequest && mainRequestId == lastRequestId)
+			return mainRequestId;
 
 		if (!currentSession->requests.exist(mainRequestId))
 		{
@@ -326,7 +638,7 @@ private:
 					request->req_caller->getStatement()->getStatementId() : 0;
 				const StmtNumber callerRequestId = request->req_caller ? request->req_caller->getRequestId() : 0;
 
-				LogLocalStatus status("Profiler onRequestStart");
+				RequestCallStatus status(this, "Profiler onRequestStart");
 				currentSession->pluginSession->onRequestStart(&status,
 					(SINT64) request->getStatement()->getStatementId(), (SINT64) request->getRequestId(),
 					(SINT64) callerStatementId, (SINT64) callerRequestId, timestamp);
@@ -337,16 +649,42 @@ private:
 			} while (request && !currentSession->requests.exist(request->getRequestId()));
 		}
 
+		lastRequest = mainRequest;
+		lastRequestId = mainRequestId;
+
 		return mainRequestId;
 	}
 
 private:
+	Attachment* const attachment;
 	Firebird::AutoPtr<ProfilerListener> listener;
 	Firebird::LeftPooledMap<Firebird::PathName, Firebird::AutoPlugin<Firebird::IProfilerPlugin>> activePlugins;
 	Firebird::AutoPtr<Session> currentSession;
+	Firebird::LocalStatus requestCallStatus;	// see RequestCallStatus
 	Firebird::RefPtr<Firebird::TimerImpl> flushTimer;
 	unsigned currentFlushInterval = 0;
 	bool paused = false;
+	bool sampled = false;
+
+	// Sampling state. sampleState lives as long as the manager, so frames pushed in one session
+	// are popped correctly even when the session changes in the middle of a request.
+	Firebird::RefPtr<ProfilerSampleState> sampleState;
+	// Profiles of unfinished requests and finished ones kept for reuse, so requests don't allocate them.
+	// Both own their profiles.
+	Firebird::Array<ProfilerRequestProfile*> requestProfiles;
+	Firebird::Array<ProfilerRequestProfile*> freeRequestProfiles;
+	Firebird::NonPooledMap<SINT64, FB_UINT64> requestSampledTicks;	// sampled totals of unfinished requests
+	ULONG profileGeneration;	// changed when requestProfiles is cleared, unique in the process
+
+	// Last request known to the current session, to avoid repeated lookups on every event.
+	Request* lastRequest = nullptr;
+	StmtNumber lastRequestId = 0;
+
+	// Last statement looked up in the current session. It's keyed by the statement id instead of by
+	// lastRequest, as sampled timings don't call getRequest for every event, so lastRequest may be
+	// another request, like the caller of a procedure that fetches from a cursor.
+	Statement* lastStatement = nullptr;
+	StmtNumber lastStatementId = 0;
 };
 
 
@@ -434,6 +772,7 @@ public:
 		(FB_BIGINT, attachmentId)
 		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginName)
 		(FB_INTL_VARCHAR(255 * METADATA_BYTES_PER_CHAR, CS_METADATA), pluginOptions)
+		(FB_INTEGER, samplingInterval)
 	);
 
 	FB_MESSAGE(StartSessionOutput, Firebird::ThrowStatusExceptionWrapper,
