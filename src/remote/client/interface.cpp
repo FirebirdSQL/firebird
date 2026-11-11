@@ -2699,13 +2699,15 @@ void Attachment::setOptions(CheckStatusWrapper* status, unsigned dpbLength, cons
 		rem_port* port = rdb->rdb_port;
 		RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
+		bool other = false;
+		if (rdr.find(isc_dpb_connect_timeout))
+			port->port_send_timeout = port->port_receive_timeout = port->port_connect_timeout = rdr.getInt();
 		for (rdr.rewind(); !rdr.isEof(); rdr.moveNext())
 		{
 			// Keep EDS::dpbOptions in sync with this switch
 			switch(rdr.getClumpTag())
 			{
 			case isc_dpb_connect_timeout:
-				port->port_connect_timeout = rdr.getInt();
 				break;
 
 			case isc_dpb_send_timeout:
@@ -2717,23 +2719,26 @@ void Attachment::setOptions(CheckStatusWrapper* status, unsigned dpbLength, cons
 				break;
 
 			default:
+				other = true;
 				break;
 			}
 		}
 
-		PACKET* packet = &rdb->rdb_packet;
-		packet->p_operation = op_att_options;
-		P_OPTIONS* options = &packet->p_options;
-		options->p_options_dpb.cstr_length = dpbLength;
-		options->p_options_dpb.cstr_address = dpb;
-
-		if (port->port_flags & PORT_lazy)
+		if (other)
 		{
-			send_partial_packet(port, packet);
-			defer_packet(port, packet, true);
-		}
-		else {
-			send_and_receive(status, rdb, packet);
+			PACKET* packet = &rdb->rdb_packet;
+			packet->p_operation = op_att_options;
+			P_OPTIONS* options = &packet->p_options;
+			options->p_options_dpb.cstr_length = dpbLength;
+			options->p_options_dpb.cstr_address = dpb;
+
+			if (port->port_flags & PORT_lazy)
+			{
+				send_partial_packet(port, packet);
+				defer_packet(port, packet, true);
+			}
+			else
+				send_and_receive(status, rdb, packet);
 		}
 
 	}

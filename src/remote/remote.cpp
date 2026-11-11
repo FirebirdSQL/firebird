@@ -380,8 +380,8 @@ void REMOTE_get_timeout_params(rem_port* port, ClumpletReader* pb, const Paramet
 	port->port_connect_timeout = pb && pb->find(par->connect_timeout) ?
 		pb->getInt() : port->getPortConfig()->getConnectionTimeout();
 
-	port->port_send_timeout = pb && pb->find(par->send_timeout) ? pb->getInt() : 0;
-	port->port_receive_timeout = pb && pb->find(par->receive_timeout) ? pb->getInt() : 0;
+	port->port_send_timeout = pb && pb->find(par->send_timeout) ? pb->getInt() : port->port_connect_timeout;
+	port->port_receive_timeout = pb && pb->find(par->receive_timeout) ? pb->getInt() : port->port_connect_timeout;
 
 	port->port_flags |= PORT_dummy_pckt_set;
 	port->port_dummy_packet_interval = port->getPortConfig()->getDummyPacketInterval();
