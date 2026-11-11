@@ -416,7 +416,8 @@ namespace
 				BTR_all(m_tdbb, m_relation, *m_idxList, relPages);
 			}
 
-			*position = idx_invalid;
+			if (position)
+				*position = idx_invalid;
 
 			for (const auto& idx : m_idxList.value())
 			{
@@ -427,7 +428,9 @@ namespace
 						const int fldNum = idx.idx_rpt[fld].idx_field;
 						if (m_fieldIndex == fldNum)
 						{
-							*position = fld;
+							if (position)
+								*position = fld;
+
 							return FB_TRUE;
 						}
 					}
