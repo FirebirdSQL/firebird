@@ -529,15 +529,23 @@ SINT64 ProfilerManager::startSession(thread_db* tdbb, std::optional<SLONG> flush
 	currentSession->plugin = std::move(plugin);
 	currentSession->flags = currentSession->pluginSession->getFlags();
 
-	// Plugins that don't know the aggregated stats methods get every event measured.
-	if (currentSession->pluginSession->cloopVTable->version >= IProfilerSession::VERSION)
+	try
 	{
-		const ULONG interval = (ULONG) samplingInterval.value_or(DEFAULT_SAMPLING_INTERVAL);
+		// Plugins that don't know the aggregated stats methods get every event measured.
+		if (currentSession->pluginSession->cloopVTable->version >= IProfilerSession::VERSION)
+		{
+			const ULONG interval = (ULONG) samplingInterval.value_or(DEFAULT_SAMPLING_INTERVAL);
 
-		currentSession->pluginSession->setSamplingInterval(interval);
+			currentSession->pluginSession->setSamplingInterval(interval);
 
-		if (interval)
-			startSampling(interval);
+			if (interval)
+				startSampling(interval);
+		}
+	}
+	catch (...)
+	{
+		cancelSession();
+		throw;
 	}
 
 	setPaused(false);
@@ -865,8 +873,8 @@ void ProfilerManager::startSampling(ULONG interval)
 		sampleState = FB_NEW ProfilerSampleState();
 
 	sampleState->setInterval(interval);
-	sampled = true;
 	ProfilerSampler::add(sampleState);
+	sampled = true;
 	updateActive();
 }
 

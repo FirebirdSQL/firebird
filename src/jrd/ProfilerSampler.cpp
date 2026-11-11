@@ -163,14 +163,31 @@ namespace
 
 			{	// scope
 				MutexLockGuard statesGuard(statesMutex, FB_FUNCTION);
-				state->addRef();
 				states.add(state);
+				state->addRef();
 			}
 
 			if (!thread.isValid())
 			{
 				stopRequested = false;
-				Thread::start(threadRoutine, this, THREAD_high, &thread);
+
+				try
+				{
+					Thread::start(threadRoutine, this, THREAD_high, &thread);
+				}
+				catch (...)
+				{
+					MutexLockGuard statesGuard(statesMutex, FB_FUNCTION);
+
+					FB_SIZE_T pos;
+					if (states.find(state, pos))
+					{
+						states.remove(pos);
+						state->release();
+					}
+
+					throw;
+				}
 			}
 		}
 
