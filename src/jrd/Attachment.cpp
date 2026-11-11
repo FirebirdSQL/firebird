@@ -867,20 +867,6 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	return profilerManager;
 }
 
-ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
-{
-	const auto* request = tdbb->getRequest();
-
-	return isProfilerActive() && !request->hasInternalStatement() ?
-		getProfilerManager(tdbb) :
-		nullptr;
-}
-
-bool Attachment::isProfilerActive()
-{
-	return att_profiler_manager && att_profiler_manager->isActive();
-}
-
 void Attachment::releaseProfilerManager(thread_db* tdbb)
 {
 	if (!att_profiler_manager)

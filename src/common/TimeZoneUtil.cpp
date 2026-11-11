@@ -991,8 +991,6 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentSystemTimeStamp()
 
 ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentGmtTimeStamp()
 {
-	NoThrowTimeStamp now;
-
 	// ASF: This comment is copied from NoThrowTimeStamp::getCurrentTimeStamp.
 	// NS: We round generated timestamps to whole millisecond.
 	// Not many applications can deal with fractional milliseconds properly and
@@ -1000,14 +998,31 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentGmtTimeStamp()
 	// is going to to be somewhere in range between 1 ms (like on UNIX/Risc)
 	// and 53 ms (such as Win9X)
 
-	int milliseconds;
+	// The system time is a linear count from an epoch, without leap seconds, so it's converted directly
+	// instead of being decoded to a calendar date and encoded back. This is called for every request when
+	// profiling, so it must be cheap.
+
+	constexpr SINT64 MILLISECONDS_PER_DAY = NoThrowTimeStamp::SECONDS_PER_DAY * 1000;
+
+	SINT64 days;
+	SINT64 millisecondsOfDay;
 
 #ifdef WIN_NT
-	SYSTEMTIME stUtc;
-	GetSystemTime(&stUtc);
-	milliseconds = stUtc.wMilliseconds;
+	constexpr ISC_DATE FILETIME_DATE = NoThrowTimeStamp::UNIX_DATE - 134774;	// 01.01.1601
+
+	FILETIME ftUtc;
+	GetSystemTimeAsFileTime(&ftUtc);	// in 100ns units since 01.01.1601
+
+	ULARGE_INTEGER ftValue;
+	ftValue.LowPart = ftUtc.dwLowDateTime;
+	ftValue.HighPart = ftUtc.dwHighDateTime;
+
+	const SINT64 milliseconds = SINT64(ftValue.QuadPart / 10000);
+	days = FILETIME_DATE + milliseconds / MILLISECONDS_PER_DAY;
+	millisecondsOfDay = milliseconds % MILLISECONDS_PER_DAY;
 #else
-	time_t seconds; // UTC time
+	SINT64 seconds;	// UTC time since 01.01.1970
+	int milliseconds;
 
 #ifdef HAVE_GETTIMEOFDAY
 	struct timeval tp;
@@ -1020,42 +1035,14 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::getCurrentGmtTimeStamp()
 	seconds = time_buffer.time;
 	milliseconds = time_buffer.millitm;
 #endif
+
+	days = NoThrowTimeStamp::UNIX_DATE + seconds / NoThrowTimeStamp::SECONDS_PER_DAY;
+	millisecondsOfDay = (seconds % NoThrowTimeStamp::SECONDS_PER_DAY) * 1000 + milliseconds;
 #endif // WIN_NT
-
-	const int fractions = milliseconds * ISC_TIME_SECONDS_PRECISION / 1000;
-
-#ifdef WIN_NT
-	// Manually convert SYSTEMTIME to "struct tm" used below
-
-	struct tm times, *ptimes = &times;
-
-	times.tm_sec = stUtc.wSecond;			// seconds after the minute - [0,59]
-	times.tm_min = stUtc.wMinute;			// minutes after the hour - [0,59]
-	times.tm_hour = stUtc.wHour;			// hours since midnight - [0,23]
-	times.tm_mday = stUtc.wDay;				// day of the month - [1,31]
-	times.tm_mon = stUtc.wMonth - 1;		// months since January - [0,11]
-	times.tm_year = stUtc.wYear - 1900;		// years since 1900
-	times.tm_wday = stUtc.wDayOfWeek;		// days since Sunday - [0,6]
-
-	// --- no used for encoding below
-	times.tm_yday = 0;						// days since January 1 - [0,365]
-	times.tm_isdst = -1;					// daylight savings time flag
-#else
-#ifdef HAVE_GMTIME_R
-	struct tm times, *ptimes = &times;
-	if (!gmtime_r(&seconds, &times))
-		system_call_failed::raise("gmtime_r");
-#else
-	struct tm *ptimes = gmtime(&seconds);
-	if (!ptimes)
-		system_call_failed::raise("gmtime");
-#endif
-#endif // WIN_NT
-
-	now.encode(ptimes, fractions);
 
 	ISC_TIMESTAMP_TZ tsTz;
-	tsTz.utc_timestamp = now.value();
+	tsTz.utc_timestamp.timestamp_date = ISC_DATE(days);
+	tsTz.utc_timestamp.timestamp_time = ISC_TIME(millisecondsOfDay * (ISC_TIME_SECONDS_PRECISION / 1000));
 	tsTz.time_zone = GMT_ZONE;
 
 	return tsTz;
