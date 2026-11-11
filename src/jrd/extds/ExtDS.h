@@ -190,7 +190,7 @@ public:
 	// create new Connection
 	virtual Connection* createConnection(Jrd::thread_db* tdbb,
 		const Firebird::PathName& dbName, Firebird::ClumpletReader& dpb,
-		TraScope tra_scope);
+		TraScope tra_scope, const ExecOpts* opts);
 
 	// bind connection to the current attachment
 	void bindConnection(Jrd::thread_db* tdbb, Connection* conn);
@@ -512,7 +512,7 @@ public:
 	ConnectionsPool* getConnPool() noexcept { return m_poolData.getConnPool(); }
 	ConnectionsPool::Data* getPoolData() noexcept { return &m_poolData; }
 
-	virtual void attach(Jrd::thread_db* tdbb) = 0;
+	virtual void attach(Jrd::thread_db* tdbb, const ExecOpts* opts) = 0;
 	virtual void detach(Jrd::thread_db* tdbb);
 
 	virtual bool cancelExecution(bool forced) = 0;
@@ -591,6 +591,7 @@ public:
 	}
 
 	void setOptions(Jrd::thread_db* tdbb, const ExecOpts* opts);
+	void getOptions(Jrd::thread_db* tdbb, Firebird::ClumpletWriter& dpb, const ExecOpts* opts);
 
 protected:
 	virtual Transaction* doCreateTransaction() = 0;

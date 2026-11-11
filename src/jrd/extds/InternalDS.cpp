@@ -127,9 +127,10 @@ InternalConnection::~InternalConnection()
 {
 }
 
-void InternalConnection::attach(thread_db* tdbb)
+void InternalConnection::attach(thread_db* tdbb, const ExecOpts* opts)
 {
 	fb_assert(!m_attachment);
+	fb_assert(!opts);
 	Database* dbb = tdbb->getDatabase();
 	Attachment* attachment = tdbb->getAttachment();
 	fb_assert(m_dbName.isEmpty() || m_dbName == dbb->dbb_database_name.c_str());

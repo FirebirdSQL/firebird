@@ -104,11 +104,11 @@ IscConnection::~IscConnection()
 {
 }
 
-void IscConnection::attach(thread_db* tdbb)
+void IscConnection::attach(thread_db* tdbb, const ExecOpts* opts)
 {
 	Attachment* attachment = tdbb->getAttachment();
 
-	// Avoid change of m_dpb by validatePassword() below
+	// Avoid change of m_dpb
 	ClumpletWriter newDpb(ClumpletReader::dpbList, MAX_DPB_SIZE, m_dpb.begin(), m_dpb.getCount());
 	if (validatePassword(tdbb, m_dbName, newDpb))
 	{
@@ -127,6 +127,7 @@ void IscConnection::attach(thread_db* tdbb)
 						   address_stack_buffer.getBufferLength());
 	}
 	newDpb.insertInt(isc_dpb_ext_call_depth, attachment->att_ext_call_depth + 1);
+	getOptions(tdbb, newDpb, opts);
 
 	if (newDpb.getBufferLength() > MAX_USHORT)
 	{

@@ -522,7 +522,7 @@ protected:
 public:
 	FB_API_HANDLE& getAPIHandle() { return m_handle; }
 
-	virtual void attach(Jrd::thread_db* tdbb);
+	virtual void attach(Jrd::thread_db* tdbb, const ExecOpts* opts);
 
 	virtual bool cancelExecution(bool forced);
 	virtual bool resetSession(Jrd::thread_db* tdbb);

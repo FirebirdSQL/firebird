@@ -64,7 +64,7 @@ protected:
 	~InternalConnection() override;
 
 public:
-	void attach(Jrd::thread_db* tdbb) override;
+	void attach(Jrd::thread_db* tdbb, const ExecOpts* opts) override;
 
 	bool cancelExecution(bool forced) override;
 	bool resetSession(Jrd::thread_db* tdbb) override;

@@ -285,7 +285,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	if (!conn)
 	{
 		// finally, create new connection
-		conn = prv->createConnection(tdbb, dbName, dpb, tra_scope);
+		conn = prv->createConnection(tdbb, dbName, dpb, tra_scope, opts);
 		if (!isCurrentAtt)
 			m_connPool->addConnection(tdbb, conn, hash);
 	}
@@ -386,7 +386,7 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 }
 
 Connection* Provider::createConnection(thread_db* tdbb,
-	const PathName& dbName, ClumpletReader& dpb, TraScope tra_scope)
+	const PathName& dbName, ClumpletReader& dpb, TraScope tra_scope, const ExecOpts* opts)
 {
 	Connection* conn = doCreateConnection();
 	conn->setup(dbName, dpb);
@@ -395,7 +395,7 @@ Connection* Provider::createConnection(thread_db* tdbb,
 
 	try
 	{
-		conn->attach(tdbb);
+		conn->attach(tdbb, opts);
 	}
 	catch (...)
 	{
@@ -903,8 +903,17 @@ void Connection::setOptions(thread_db* tdbb, const ExecOpts* opts)
 		return;		// Suspicious - system defaults to be restored ???
 
 	ClumpletWriter dpb(Firebird::ClumpletReader::dpbList, MAX_DPB_SIZE);
-	Request* request = tdbb->getRequest();
+	getOptions(tdbb, dpb, opts);
+	doSetOptions(tdbb, dpb);
+}
 
+
+void Connection::getOptions(thread_db* tdbb, ClumpletWriter& dpb, const ExecOpts* opts)
+{
+	if (!opts)
+		return;		// Suspicious - system defaults to be restored ???
+
+	Request* request = tdbb->getRequest();
 	for (auto& option : *opts)
 	{
 		for (unsigned n = 0; n < FB_NELEM(dpbOptions); ++n)
@@ -926,8 +935,6 @@ void Connection::setOptions(thread_db* tdbb, const ExecOpts* opts)
 			}
 		}
 	}
-
-	doSetOptions(tdbb, dpb);
 }
 
 
