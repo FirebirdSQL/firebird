@@ -5402,6 +5402,9 @@ StmtNode* ExecStatementNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	if (opts && opts->hasData())
 	{
+		if (!dataSource)
+			fatal_exception::raise("OPTIONS clause in EXECUTE STATEMENT requires ON EXTERNAL");
+
 		node->opts = FB_NEW_POOL(dsqlScratch->getPool()) EDS::ExecOpts(dsqlScratch->getPool());
 		for (auto& option : *opts)
 		{
