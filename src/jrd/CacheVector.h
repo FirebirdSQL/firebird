@@ -1253,11 +1253,11 @@ public:
 			for (SubArrayData* const end = &sub[SUBARRAY_SIZE]; sub < end; ++sub)
 			{
 				StoredElement* ptr = sub->load(atomics::memory_order_relaxed);
-				if (ptr)
+				if (ptr && ptr->nameIs(name))
 				{
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
 
-					if (listEntry && ptr->nameIs(name))
+					if (listEntry)
 					{
 						if (!(fl & (CacheFlag::ERASED | CacheFlag::MINISCAN)))
 							ptr->reload(tdbb, fl);		// found object to be reloaded w/o MINISCAN flag
