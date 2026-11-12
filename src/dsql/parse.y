@@ -7302,6 +7302,12 @@ table_name
 		}
 	;
 
+%type <relSourceNode> scoped_table_name
+scoped_table_name
+	: scoped_qualified_name
+		{ $$ = newNode<RelationSourceNode>(*$1); }
+	;
+
 %type <relSourceNode> simple_table_name
 simple_table_name
 	: symbol_table_name
@@ -7700,10 +7706,10 @@ insert
 
 %type <storeNode> insert_start
 insert_start
-	: INSERT INTO scoped_qualified_name
+	: INSERT INTO scoped_table_name
 		{
 			StoreNode* node = newNode<StoreNode>();
-			node->target = newNode<RelationSourceNode>(*$3);
+			node->target = $3;
 			$$ = node;
 		}
 	;
@@ -7903,10 +7909,10 @@ update_positioned
 
 %type <updInsNode> update_or_insert
 update_or_insert
-	: UPDATE OR INSERT INTO scoped_qualified_name
+	: UPDATE OR INSERT INTO scoped_table_name
 			{
 				UpdateOrInsertNode* node = $$ = newNode<UpdateOrInsertNode>();
-				node->relation = newNode<RelationSourceNode>(*$5);
+				node->relation = $5;
 			}
 		ins_column_parens_opt(NOTRIAL(&$6->fields)) override_opt VALUES '(' value_or_default_list ')'
 				update_or_insert_matching_opt(NOTRIAL(&$6->matching))
