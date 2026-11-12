@@ -237,7 +237,7 @@ public:
 class SharedMemoryBase
 {
 public:
-	SharedMemoryBase(const TEXT* fileName, ULONG size, IpcObject* cb, bool skipLock);
+	SharedMemoryBase(const TEXT* fileName, ULONG size, IpcObject* cb);
 	~SharedMemoryBase();
 
 #ifdef HAVE_OBJECT_MAP
@@ -246,7 +246,6 @@ public:
 #endif
 	bool remapFile(Firebird::CheckStatusWrapper* status, ULONG newSize, bool truncateFlag);
 	void removeMapFile();
-	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	Firebird::PathName getMapFileName();
 
 	void mutexLock();
@@ -295,6 +294,7 @@ private:
 	bool sh_mem_unlink;
 #endif
 	void unlinkFile();
+	static void unlinkFile(const TEXT* expanded_filename) noexcept;
 	void internalUnmap();
 
 public:
@@ -320,8 +320,8 @@ template <class Header>		// Header must be "public MemoryHeader"
 class SharedMemory : public SharedMemoryBase
 {
 public:
-	SharedMemory(const TEXT* fileName, ULONG size, IpcObject* cb, bool skipLock = false)
-		: SharedMemoryBase(fileName, size, cb, skipLock)
+	SharedMemory(const TEXT* fileName, ULONG size, IpcObject* cb)
+		: SharedMemoryBase(fileName, size, cb)
 	{ }
 
 #ifdef HAVE_OBJECT_MAP

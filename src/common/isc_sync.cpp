@@ -1231,7 +1231,7 @@ void SharedMemoryBase::internalUnmap()
 	}
 }
 
-SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback, bool skipLock)
+SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* callback)
 	:
 #ifdef HAVE_SHARED_MUTEX_SECTION
 	sh_mem_mutex(0),
@@ -1272,11 +1272,9 @@ SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject
 	// open the init lock file
 	MutexLockGuard guard(openFdInit, FB_FUNCTION);
 
-	if (!skipLock)
-		initFile.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(init_filename));
+	initFile.reset(FB_NEW_POOL(*getDefaultMemoryPool()) FileLock(init_filename));
 
-	// get an exclusive lock on the INIT file with blocking except TransactionStatusBlock
-	// since its initialized under FileLock
+	// get an exclusive lock on the INIT file with blocking
 	FileLockHolder initLock(initFile);
 
 	// create lock in order to have file autoclosed on error
@@ -1550,7 +1548,7 @@ void SharedMemoryBase::internalUnmap()
 		unlinkFile();
 }
 
-SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb, bool /*skipLock*/)
+SharedMemoryBase::SharedMemoryBase(const TEXT* filename, ULONG length, IpcObject* cb)
   :	sh_mem_mutex(0), sh_mem_length_mapped(0),
 	sh_mem_handle(INVALID_HANDLE_VALUE), sh_mem_object(0), sh_mem_interest(0), sh_mem_hdr_object(0),
 	sh_mem_hdr_address(0), sh_mem_header(NULL), sh_mem_callback(cb), sh_mem_unlink(false)
