@@ -383,6 +383,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	BURP_verbose(msgVerbose_write_collations);
 	write_collations();
 
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write tablespaces
+		BURP_verbose(433);	// msg 433 writing tablespaces
+		write_tablespaces();
+	}
+
 	// Write relations
 
 	BURP_verbose(154);
@@ -425,13 +432,6 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		// Write packages
 		BURP_verbose(336);	// msg 336 writing packages
 		write_packages();
-	}
-
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
-	{
-		// Write tablespaces
-		BURP_verbose(433);	// msg 433 writing tablespaces
-		write_tablespaces();
 	}
 
 	// Now go back and write all data
