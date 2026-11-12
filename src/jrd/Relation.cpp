@@ -861,20 +861,21 @@ Cached::Relation* RelationPermanent::newVersion(thread_db* tdbb, const Qualified
 {
 	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::MINISCAN);
 
-	if (relation)
-		relation->newVersion(tdbb);
-	else
+	if (!relation)
 	{
 		auto id = jrd_rel::getIdByName(tdbb, name);
 		if (id.has_value())
 		{
-			relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
+			relation = MetadataCache::getPerm<Cached::Relation>(tdbb, id.value(), CacheFlag::MINISCAN | CacheFlag::AUTOCREATE);
 			fb_assert(relation);
 		}
 	}
 
 	if (relation)
+	{
+		relation->newVersion(tdbb);
 		DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, relation->getId());
+	}
 
 	return relation;
 }

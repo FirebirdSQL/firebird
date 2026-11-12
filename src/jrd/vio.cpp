@@ -5188,17 +5188,18 @@ static void check_rel_field_class(thread_db* tdbb,
  **************************************/
 	SET_TDBB(tdbb);
 
-	DSC schemaDesc, desc;
-	EVL_field(0, rpb->rpb_record, f_rfr_schema, &schemaDesc);
-	EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
-
+	DSC desc;
 	QualifiedName object_name;
-	MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
+
+	EVL_field(0, rpb->rpb_record, f_rfr_schema, &desc);
+	MOV_get_metaname(tdbb, &desc, object_name.schema);
+
+	EVL_field(0, rpb->rpb_record, f_rfr_rname, &desc);
+	MOV_get_metaname(tdbb, &desc, object_name.object);
 
 	if (EVL_field(0, rpb->rpb_record, f_rfr_pkg_name, &desc))
 		MOV_get_metaname(tdbb, &desc, object_name.package);
 
-	MOV_get_metaname(tdbb, &desc, object_name.object);
 	RelationPermanent::newVersion(tdbb, object_name);
 }
 
