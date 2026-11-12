@@ -7314,7 +7314,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
  *	Reconstruct a tablespace.
  *
  **************************************/
-	if (tdgbl->RESTORE_format < 13) // Probably this check is not needed
+	if (tdgbl->RESTORE_format < 12)
 		return false;
 
 	ISC_QUAD tablespace_desc = fbBlobNull;
