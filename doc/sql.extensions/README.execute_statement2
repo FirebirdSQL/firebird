@@ -12,6 +12,7 @@ Syntax and notes :
 
 [FOR] EXECUTE STATEMENT <query_text> [(<input_parameters>)]
     [ON EXTERNAL [DATA SOURCE] <connection_string>]
+    [OPTIONS (<name>=<value> [, <name>=<value> ...])]
     [WITH AUTONOMOUS | COMMON TRANSACTION]
     [AS USER <user_name>]
     [PASSWORD <password>]
@@ -21,6 +22,7 @@ Syntax and notes :
     
 - Order of clauses below is not fixed :
     [ON EXTERNAL [DATA SOURCE] <connection_string>]
+    [OPTIONS (<name>=<value> [, <name>=<value> [, ...]])]
     [WITH AUTONOMOUS TRANSACTION | COMMON TRANSACTION]
     [AS USER <user_name>]
     [PASSWORD <password>]
@@ -57,13 +59,20 @@ Syntax and notes :
 	then the statement is executed in current connection context
 	c) if <user_name> is not equal to CURRENT_USER or <role_name> not equal to CURRENT_ROLE
 	then the statement is executed in separate connection established inside the same
-	engine instance (i.e. created new internal connection without Y-Valve and remote layers).
+	engine instance (i.e. created new internal connection without Y-Valve and remote layers)
+	d) OPTIONS clause may not be used.
 
 - <connection_string> is usual connection string accepted by isc_attach_database, 
     i.e. [<host_name><protocol_delimiter>]database_path.
 
 - connection to the external data source is made using the same character set as
 	current (local) connection is used.
+
+- OPTIONS makes it possible to pass some additional DPB items,
+	currently the following items supported: decfloat_round, decfloat_traps,
+	set_bind, search_path, blr_request_search_path, session_time_zone,
+	connect_timeout, send_timeout, receive_timeout. Setting connect timeout also affects
+	send & receive timeouts (have same value) if not set separately.
 
 - AUTONOMOUS TRANSACTION started new transaction with the same parameters as current 
 	transaction. This transaction will be committed if the statement is executed ok or rolled 
