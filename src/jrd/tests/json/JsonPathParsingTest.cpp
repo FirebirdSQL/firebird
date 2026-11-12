@@ -67,7 +67,6 @@ BOOST_AUTO_TEST_CASE(UnwrapFlagTest)
 BOOST_AUTO_TEST_CASE(KeyValueMethodTest)
 {
 	const JsonExprNode* expr = nullptr;
-	const PathVariable* var = nullptr;
 
 	PathWrapper holder;
 	expr = holder.getPathTailNodes("$.keyvalue()");
@@ -110,7 +109,6 @@ BOOST_AUTO_TEST_CASE(KeyValue_PathTest)
 BOOST_AUTO_TEST_CASE(KeyValue_KeyValueTest)
 {
 	const JsonExprNode* expr = nullptr;
-	const PathVariable* var = nullptr;
 
 	PathWrapper holder;
 	expr = holder.getPathTailNodes("$.keyvalue().keyvalue()");
@@ -310,7 +308,6 @@ BOOST_AUTO_TEST_CASE(MultipleKeyValuesTest)
 BOOST_AUTO_TEST_CASE(KeyValueMethodWithFilterTest)
 {
 	const JsonExprNode* expr = nullptr;
-	const PathVariable* var = nullptr;
 
 	PathWrapper holder;
 	expr = holder.getPathTailNodes("$.keyvalue() ? (@ > 3)");
@@ -334,8 +331,6 @@ BOOST_AUTO_TEST_CASE(KeyValueMethodWithFilterTest)
 
 BOOST_AUTO_TEST_CASE(FilterForZeroPathTest)
 {
-	const PathVariable* var = nullptr;
-
 	PathWrapper pathWrapper("$ ? (@ == 42)");
 	auto* path = pathWrapper.jpath->getJsonPath()->getRootNode();
 	BOOST_REQUIRE(path);
@@ -387,12 +382,12 @@ BOOST_AUTO_TEST_CASE(SyntaxTest)
 		BOOST_CHECK_THROW(parser.parseNoCheck("$[to 2]"), Firebird::Exception);
 		BOOST_CHECK_THROW(parser.parseNoCheck("$[2 to]"), Firebird::Exception);
 
-		
+
 		BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.name ? (@.value > 3)"));
 		BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.name ? (@.value > 3).hello"));
 		BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.name ? (@.value > 3).hello ? (@.r == 2)"));
 		BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.name ? (@.value > 3).hello ? (@.r == 2)[1,2,3]"));
-		
+
 		BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.abs()"));
 		BOOST_CHECK_THROW(parser.parseNoCheck("$.kfds()"), Firebird::Exception);
 		BOOST_CHECK_THROW(parser.parseNoCheck("$.abs().value"), Firebird::Exception);
@@ -445,6 +440,297 @@ BOOST_AUTO_TEST_CASE(SyntaxTest)
 	}
 }
 
+BOOST_AUTO_TEST_CASE(BracketsArithmeticGroupTest)
+{
+	PathWrapper parser;
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("($.a + 1) * 2"));
+
+	const JsonExprNode* math = parser.jpath->getMath();
+	BOOST_REQUIRE(math != nullptr);
+	BOOST_REQUIRE(math->testType(JsonExprNode::CALCULATION_NODE));
+	BOOST_REQUIRE(math->getChildrenCount() == 2u);
+
+	const JsonExprNode* group = math->getFirstChild();
+	BOOST_REQUIRE(group->testType(JsonExprNode::CALCULATION_NODE));
+	BOOST_TEST(group->getChildrenCount() == 2u);
+	BOOST_CHECK(math->getSecondChild()->testType(JsonExprNode::SCALAR_NODE));
+}
+
+BOOST_AUTO_TEST_CASE(BracketsBooleanGroupTest)
+{
+	PathWrapper parser;
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$ ? ((@.a > 1 || @.b > 2) && @.c > 3)"));
+
+	const JsonExprNode* filter = parser.jpath->getJsonPath()->getRootNode()->filterNode.get();
+	BOOST_REQUIRE(filter != nullptr);
+	BOOST_REQUIRE(filter->testType(JsonExprNode::CALCULATION_NODE));
+
+	// (<group>) && @.c > 3: the group, @.c and 3
+	BOOST_REQUIRE(filter->getChildrenCount() == 3u);
+	BOOST_REQUIRE(filter->getFirstChild()->testType(JsonExprNode::CALCULATION_NODE));
+	BOOST_TEST(filter->getFirstChild()->getChildrenCount() == 4u);
+}
+
+BOOST_AUTO_TEST_CASE(BracketsIsUnknownGroupTest)
+{
+	PathWrapper parser;
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$ ? ((@.a > 1) is unknown)"));
+
+	const JsonExprNode* filter = parser.jpath->getJsonPath()->getRootNode()->filterNode.get();
+	BOOST_REQUIRE(filter != nullptr);
+	BOOST_REQUIRE(filter->testType(JsonExprNode::CALCULATION_NODE));
+
+	BOOST_REQUIRE(filter->getChildrenCount() == 1u);
+	BOOST_REQUIRE(filter->getFirstChild()->testType(JsonExprNode::CALCULATION_NODE));
+	BOOST_TEST(filter->getFirstChild()->getChildrenCount() == 2u);
+}
+
+BOOST_AUTO_TEST_CASE(ArraySubscriptRangesTest)
+{
+	PathWrapper parser;
+
+	{
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[1 to 3]"));
+		const JsonPath* path = parser.jpath->getJsonPath();
+		const PathNode* root = path->getRootNode();
+		BOOST_TEST(root->ranges.isEmpty());
+
+		const PathNode* index = root->next;
+		BOOST_REQUIRE(index != nullptr);
+		BOOST_CHECK(index->type == ItemType::ARRAY_ELEMENT);
+		BOOST_TEST(index->ranges.getCount() == 1u);
+		if (index->ranges.hasData())
+		{
+			BOOST_TEST(index->ranges[0].down == 1);
+			BOOST_TEST(index->ranges[0].up == 3);
+		}
+
+		BOOST_TEST(path->hasIndexes());
+		BOOST_TEST(!path->hasComplexRange());
+	}
+
+	{
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$.a[2].b"));
+		const PathNode* field = parser.jpath->getJsonPath()->getRootNode()->next;
+		BOOST_REQUIRE(field != nullptr);
+		BOOST_CHECK(field->type == ItemType::FIELD);
+		BOOST_TEST(field->ranges.isEmpty());
+
+		const PathNode* index = field->next;
+		BOOST_REQUIRE(index != nullptr);
+		BOOST_CHECK(index->type == ItemType::ARRAY_ELEMENT);
+		BOOST_TEST(index->ranges.getCount() == 1u);
+	}
+
+	{ // Flags from the ranges
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[last]"));
+		BOOST_TEST(parser.jpath->getJsonPath()->hasIndexes());
+		BOOST_TEST(parser.jpath->getJsonPath()->hasComplexRange());
+
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[1, 2]"));
+		BOOST_TEST(parser.jpath->getJsonPath()->hasComplexRange());
+
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("lax $[0].a"));
+		const PathNode* index = parser.jpath->getJsonPath()->getRootNode()->next;
+		BOOST_REQUIRE(index != nullptr);
+		BOOST_TEST(index->matchWrapPattern());
+	}
+}
+
+BOOST_AUTO_TEST_CASE(RangeInjectionTest)
+{
+	PathWrapper parser;
+	parser.keys.put("pass");
+
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$.a[1, $pass to 5]"));
+
+	const PathNode* field = parser.jpath->getJsonPath()->getRootNode()->next;
+	BOOST_REQUIRE(field != nullptr);
+	const PathNode* index = field->next;
+	BOOST_REQUIRE(index != nullptr);
+	BOOST_CHECK(index->type == ItemType::ARRAY_ELEMENT);
+	BOOST_REQUIRE(index->ranges.getCount() == 2u);
+	BOOST_TEST(index->ranges[0].down == 1);
+	BOOST_TEST(index->ranges[1].up == 5);
+	BOOST_TEST(index->depth == 2);
+}
+
+BOOST_AUTO_TEST_CASE(UnaryGroupTest)
+{
+	PathWrapper parser;
+
+	{
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$ ? (!(@.a > 1 || @.b > 2))"));
+
+		const JsonExprNode* filter = parser.jpath->getJsonPath()->getRootNode()->filterNode.get();
+		BOOST_REQUIRE(filter != nullptr);
+		BOOST_REQUIRE(filter->getChildrenCount() == 1u);
+		BOOST_REQUIRE(filter->getFirstChild()->testType(JsonExprNode::CALCULATION_NODE));
+		BOOST_TEST(filter->getFirstChild()->getChildrenCount() == 4u);
+	}
+
+	{
+		BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$ ? (exists(@.a + 1))"));
+
+		const JsonExprNode* filter = parser.jpath->getJsonPath()->getRootNode()->filterNode.get();
+		BOOST_REQUIRE(filter != nullptr);
+		BOOST_REQUIRE(filter->getChildrenCount() == 1u);
+		BOOST_REQUIRE(filter->getFirstChild()->testType(JsonExprNode::CALCULATION_NODE));
+		BOOST_TEST(filter->getFirstChild()->getChildrenCount() == 2u);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(BracketsSingleValueTest)
+{
+	PathWrapper parser;
+
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("($.a)"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("($.a).abs()"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("($.a + 1).abs() * 2"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("-(1) + $.a"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[(1)]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$ ? (@.a == (1 + 2) * 3)"));
+}
+
+BOOST_AUTO_TEST_CASE(UnaryOperatorOnScalarTest)
+{
+	PathWrapper parser;
+
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[+1]"));
+	{
+		// Do not depend on the node the range is attached to (see ArraySubscriptRangesTest)
+		const PathNode* index = parser.jpath->getJsonPath()->getRootNode();
+		while (index && index->ranges.isEmpty())
+			index = index->next;
+
+		BOOST_REQUIRE(index != nullptr);
+		BOOST_REQUIRE(index->ranges.getCount() == 1u);
+		BOOST_TEST(index->ranges[0].down == 1);
+		BOOST_TEST(index->ranges[0].up == 1);
+	}
+
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[- 1]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$ ? (@ > +1)"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$ ? (@ > + 1.5)"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$.a + +1"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("+1 + $.a"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("+1 * 2 + $.a"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("-(1 + 2) + $.a"));
+}
+
+BOOST_AUTO_TEST_CASE(KeywordsAsFieldNamesTest)
+{
+	const char* const paths[] = {
+		"$.last", "$.to", "$.null", "$.true", "$.false", "$.lax", "$.strict",
+		"$.starts", "$.with", "$.like_regex", "$.is", "$.unknown", "$.flags", "$.exists",
+		"$.keyvalue", "$.datetime", "$.time", "$.time_tz", "$.timestamp", "$.timestamp_tz", "$.decimal",
+		"$.type", "$.size", "$.double", "$.ceiling", "$.floor", "$.abs", "$.date", "$.string",
+		"$.boolean", "$.bigint", "$.integer", "$.number",
+		"$.data.time", "$ ? (@.last > 1)", "$.last1", "$.to_do", "$.time.last.to"
+	};
+
+	PathWrapper parser;
+	for (const char* path : paths)
+	{
+		BOOST_TEST_INFO("Path: " << path);
+		BOOST_CHECK_NO_THROW(parser.parseNoCheck(path));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(NulTerminatedTest)
+{
+	PathWrapper parser;
+
+	{ // '(' right after the view must not turn the last key into a method call
+		const char buffer[] = "$.size()";
+		const std::string_view path(buffer, 6); // $.size
+
+		parser.jpath.reset();
+		BOOST_CHECK_NO_THROW(parser.parseNoCheck(path));
+		if (parser.jpath.hasData())
+		{
+			const PathNode* field = parser.jpath->getJsonPath()->getRootNode()->next;
+			BOOST_REQUIRE(field != nullptr);
+			BOOST_TEST((field->field == "size"));
+		}
+	}
+
+	{
+		const char buffer[] = "$.abc()";
+		const std::string_view path(buffer, 5); // $.abc
+
+		parser.jpath.reset();
+		BOOST_CHECK_NO_THROW(parser.parseNoCheck(path));
+		if (parser.jpath.hasData())
+		{
+			const PathNode* field = parser.jpath->getJsonPath()->getRootNode()->next;
+			BOOST_REQUIRE(field != nullptr);
+			BOOST_TEST((field->field == "abc"));
+		}
+	}
+
+	{ // The error message must not quote the memory after the path
+		const char buffer[] = "$.a ? (@ >) SECRET_TAIL";
+		const std::string_view path(buffer, 11); // $.a ? (@ >)
+
+		Firebird::string message;
+		try
+		{
+			PathParser pathParser(*getDefaultMemoryPool(), path);
+			Firebird::AutoPtr<JsonPathExpr> expr(pathParser.parse(nullptr));
+			BOOST_ERROR("Syntax error is expected");
+		}
+		catch (const Firebird::Exception& ex)
+		{
+			FbLocalStatus status;
+			ex.stuffException(&status);
+
+			const ISC_STATUS* vector = status->getErrors();
+			SCHAR line[BUFFER_LARGE];
+			while (fb_interpret(line, sizeof(line), &vector))
+			{
+				message += line;
+				message += "\n";
+			}
+		}
+
+		BOOST_TEST_INFO(message.c_str());
+		BOOST_TEST((message.find("SECRET") == Firebird::string::npos));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(BigArrayIndexTest)
+{
+	PathWrapper parser;
+
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[32767]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[32768]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[100000]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[0 to 100000]"));
+	BOOST_CHECK_NO_THROW(parser.parseNoCheck("$[last - 40000]"));
+
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[100000]"));
+	const PathNode* index = parser.jpath->getJsonPath()->getRootNode()->next;
+	BOOST_REQUIRE(index != nullptr);
+	BOOST_REQUIRE(index->ranges.getCount() == 1u);
+	BOOST_TEST(index->ranges[0].down == 100000);
+
+	BOOST_REQUIRE_NO_THROW(parser.parseNoCheck("$[last - 40000]"));
+	index = parser.jpath->getJsonPath()->getRootNode()->next;
+	BOOST_REQUIRE(index != nullptr);
+	BOOST_REQUIRE(index->ranges.getCount() == 1u);
+	BOOST_TEST(index->ranges[0].down == -40001);
+
+	BOOST_CHECK_THROW(parser.parseNoCheck("$[2147483648]"), Firebird::Exception);
+}
+
+BOOST_AUTO_TEST_CASE(MismatchedQuotesTest)
+{
+	PathWrapper parser;
+
+	BOOST_CHECK_THROW(parser.parseNoCheck("$.'abc\""), Firebird::Exception);
+	BOOST_CHECK_THROW(parser.parseNoCheck("$ ? (@ == 'abc\")"), Firebird::Exception);
+}
 
 BOOST_AUTO_TEST_SUITE_END()	// PathParsingTests
 

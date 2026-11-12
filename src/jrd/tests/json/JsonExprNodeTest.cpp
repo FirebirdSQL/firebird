@@ -3,6 +3,7 @@
 #include "../jrd/json/path/JsonPath.h"
 
 #include "../TestContext.h"
+#include "JsonTestUtils.h"
 
 using namespace FBJSON;
 
@@ -226,7 +227,6 @@ BOOST_AUTO_TEST_CASE(SetScalarTest)
 {
 	MemoryPool& pool = *getDefaultMemoryPool();
 
-	ULONG id = 0;
 	//ContextVariables ctx(id, {});
 	{ // int
 		const auto test = 10;
@@ -632,8 +632,6 @@ BOOST_AUTO_TEST_CASE(HelperTest)
 	}
 
 	{ // No Tail, empty variable
-		FBJSON::JsonExprNode* lastNode = nullptr;
-
 		FBJSON::JsonExprNode node(pool, FBJSON::JsonExprNode::VARIABLE_NODE);
 		node.unwrap(); // nothing
 		BOOST_CHECK(node.getChildrenCount() == 0);
@@ -641,8 +639,6 @@ BOOST_AUTO_TEST_CASE(HelperTest)
 	}
 
 	{ // Variable
-		FBJSON::JsonExprNode* lastNode = nullptr;
-
 		FBJSON::JsonExprNode node(pool, new PathVariable(pool));
 
 		BOOST_CHECK(node.getVariable()->path == nullptr);
@@ -652,8 +648,6 @@ BOOST_AUTO_TEST_CASE(HelperTest)
 	}
 
 	{ // Variable with path
-		FBJSON::JsonExprNode* lastNode = nullptr;
-
 		auto var = new PathVariable(pool);
 		var->path = new JsonPath(pool);
 		FBJSON::JsonExprNode node(pool, var);
@@ -723,13 +717,65 @@ BOOST_AUTO_TEST_CASE(ScalarHelpersTest)
 	{
 		FBJSON::JsonExprNode node(pool, JsonExprNode::SCALAR_NODE);
 		node.set(4000000);
-		BOOST_CHECK_THROW(node.getRangeNumber(), json_fatal_exception);
+		BOOST_CHECK(node.getRangeNumber() == 4000000);
 		node.set(-4000000);
+		BOOST_CHECK(node.getRangeNumber() == -4000000);
+
+		// Out of the index range
+		node.set(SINT64(4000000000));
+		BOOST_CHECK_THROW(node.getRangeNumber(), json_fatal_exception);
+		node.set(SINT64(-4000000000));
 		BOOST_CHECK_THROW(node.getRangeNumber(), json_fatal_exception);
 	}
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(NodeLifetimeTests)
+
+BOOST_AUTO_TEST_CASE(MakeKeepsFlagTest)
+{
+	MemoryPool& pool = *getDefaultMemoryPool();
+
+	JsonExprNode root(pool, JsonExprNode::CALCULATION_NODE);
+	JsonExprNode* child = JsonExprNode::make<JsonExprNode::CALCULATION_NODE>(pool, JsonExprNode::FLAG_SOLID);
+
+	// A solid node is kept as a child, a non-solid one is merged into the parent and deleted
+	const bool added = root.addChild(child);
+	BOOST_TEST(added == true);
+	BOOST_TEST(root.getChildrenCount() == 1u);
+}
+
+BOOST_AUTO_TEST_CASE(UnaryMinusOnNonNumberScalarTest)
+{
+	MemoryPool& pool = *getDefaultMemoryPool();
+
+	{ // string: the scalar keeps a pointer to the string in the same union as the double value
+		JsonExprNode node(pool, JsonExprNode::SCALAR_NODE);
+		node.set("abc");
+
+		const bool applied = node.applyUnaryOp(JsonExprOperation::UNARY_MINUS);
+		if (applied)
+			node.applyUnaryOp(JsonExprOperation::UNARY_MINUS); // Restore the pointer bits to let the destructor work
+
+		BOOST_TEST(applied == false);
+	}
+
+	{ // boolean
+		JsonExprNode node(pool, JsonExprNode::SCALAR_NODE);
+		node.set(true);
+		BOOST_TEST(node.applyUnaryOp(JsonExprOperation::UNARY_MINUS) == false);
+	}
+
+	{ // null
+		JsonExprNode node(pool, JsonExprNode::SCALAR_NODE);
+		node.setNull();
+		BOOST_TEST(node.applyUnaryOp(JsonExprOperation::UNARY_MINUS) == false);
+	}
+}
+
+
+BOOST_AUTO_TEST_SUITE_END()	// NodeLifetimeTests
 
 BOOST_AUTO_TEST_SUITE(FilterTests)
 
@@ -764,7 +810,7 @@ BOOST_AUTO_TEST_CASE(FilterTrueFalseTest)
 		node.addChild(JsonExprNode::SCALAR_NODE)->set(low);
 		node.finish();
 
-		ULONG id = 0;
+		// ULONG id = 0;
 		// ContextVariables ctx(id, {});
 		// auto res = JsonExprNode::passFilter(ctx, &node);
 
@@ -778,7 +824,7 @@ BOOST_AUTO_TEST_CASE(FilterTrueFalseTest)
 		node.addChild(JsonExprNode::SCALAR_NODE)->set("");
 		node.finish();
 
-		ULONG id = 0;
+		// ULONG id = 0;
 		// ContextVariables ctx(id, {});
 		// auto res = JsonExprNode::passFilter(ctx, &node);
 

@@ -1,5 +1,6 @@
 #include "boost/test/unit_test.hpp"
 #include "../../TestContext.h"
+#include "../JsonTestUtils.h"
 
 #include "../jrd/json/classes/JsonTypes.h"
 #include "../jrd/json/classes/JsonScalar.h"
@@ -368,6 +369,166 @@ BOOST_AUTO_TEST_CASE(StringViewDsc)
 
 	BOOST_REQUIRE((*view).isString());
 	BOOST_REQUIRE((*view).getStringView() == "123");
+}
+
+BOOST_AUTO_TEST_CASE(SelfAssignmentTest)
+{
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+	const Firebird::string longValue(1000, 'x');
+
+	JsonScalar scalar(pool);
+	scalar.set(longValue.ToStringView());
+
+	const JsonScalar& alias = scalar;
+	scalar = alias;
+
+	BOOST_REQUIRE(scalar.isString());
+	BOOST_TEST((scalar.getStringView() == longValue.ToStringView()));
+
+	JsonScalar& moveAlias = scalar;
+	scalar = std::move(moveAlias);
+
+	BOOST_REQUIRE(scalar.isString());
+	BOOST_TEST((scalar.getStringView() == longValue.ToStringView()));
+}
+
+BOOST_AUTO_TEST_CASE(ReleaseExtendTest)
+{
+	class ScalarReleaseCounter : public JsonScalar
+	{
+	public:
+		using JsonScalar::JsonScalar;
+
+		~ScalarReleaseCounter() override
+		{
+			reset(ValueType::JNULL);
+		}
+
+		int releaseCalls = 0;
+
+	protected:
+		void releaseExtend() override
+		{
+			++releaseCalls;
+		}
+	};
+
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+	ScalarReleaseCounter scalar(pool);
+
+	scalar.setToNull();
+	scalar.set(true);
+	scalar.set(42);
+	scalar.set("text");
+	scalar.setToDatetime();
+	scalar.set(1);
+	BOOST_TEST(scalar.releaseCalls == 0);
+
+	scalar.set(42.42);
+	scalar.set(1); // Releases the double value
+	BOOST_TEST(scalar.releaseCalls == 0);
+}
+
+BOOST_AUTO_TEST_CASE(ReadScalarTest)
+{
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+
+	{
+		JsonScalar source(pool);
+		source.setToNull();
+
+		TestBlrBuffer buffer;
+		source.writeScalarAsBytes(buffer);
+		buffer.appendUChar(0); // dummy end
+
+		JsonScalar target(pool);
+		target.set(42);
+		target.readScalarFromBytes(buffer.getReader());
+
+		BOOST_CHECK(target.isNull());
+	}
+
+	{ // string
+		JsonScalar scalar(pool);
+		scalar.set("12345");
+
+		TestBlrBuffer buffer;
+		scalar.writeScalarAsBytes(buffer);
+
+		scalar.setToNull();
+		BOOST_CHECK_NO_THROW(scalar.readScalarFromBytes(buffer.getReader()));
+		BOOST_REQUIRE(scalar.isString());
+		BOOST_TEST(scalar.getStringView() == "12345");
+	}
+
+	{ // integer
+		JsonScalar scalar(pool);
+		scalar.set(42);
+
+		TestBlrBuffer buffer;
+		scalar.writeScalarAsBytes(buffer);
+
+		scalar.setToNull();
+		BOOST_CHECK_NO_THROW(scalar.readScalarFromBytes(buffer.getReader()));
+		BOOST_REQUIRE(scalar.getType() == ValueType::INT);
+		BOOST_TEST(scalar.getValue().integer == 42);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(ReadWriteLongStringTest)
+{
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+	const Firebird::string longValue(70000, 'x');
+
+	JsonScalar scalar(pool);
+	scalar.set(longValue.ToStringView());
+	writeReadBytes(scalar);
+
+	BOOST_REQUIRE(scalar.isString());
+	BOOST_TEST(scalar.getStringView().length() == longValue.length());
+	BOOST_TEST((scalar.getStringView() == longValue.ToStringView()));
+}
+
+BOOST_AUTO_TEST_CASE(ReadTruncatedBufferTest)
+{
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+
+	// The storage is bigger than the readers below are told about to keep the test itself memory-safe
+	UCHAR storage[64] = {};
+
+	{ // integer: 8 bytes are expected, 3 are available
+		storage[0] = static_cast<UCHAR>(ValueType::INT);
+		Firebird::BlrReader reader(storage, 4);
+
+		JsonScalar scalar(pool);
+		BOOST_CHECK_THROW(scalar.readScalarFromBytes(reader), Firebird::Exception);
+	}
+
+	{ // double
+		storage[0] = static_cast<UCHAR>(ValueType::DOUBLE);
+		Firebird::BlrReader reader(storage, 4);
+
+		JsonScalar scalar(pool);
+		BOOST_CHECK_THROW(scalar.readScalarFromBytes(reader), Firebird::Exception);
+	}
+
+	{ // string: the length is bigger than the rest of the buffer
+		storage[0] = static_cast<UCHAR>(ValueType::STRING);
+		storage[1] = 100;
+		Firebird::BlrReader reader(storage, 8);
+
+		JsonScalar scalar(pool);
+		BOOST_CHECK_THROW(scalar.readScalarFromBytes(reader), Firebird::Exception);
+		storage[1] = 0;
+	}
+
+	{ // datetime: the timestamp, the string and the flags are expected
+		storage[0] = static_cast<UCHAR>(ValueType::DATETIME);
+		Firebird::BlrReader reader(storage, 4);
+
+		JsonScalar scalar(pool);
+		BOOST_CHECK_THROW(scalar.readScalarFromBytes(reader), Firebird::Exception);
+	}
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// JsonScalarTests

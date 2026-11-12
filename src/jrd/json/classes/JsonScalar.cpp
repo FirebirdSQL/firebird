@@ -40,6 +40,9 @@ using namespace FBJSON;
 
 JsonScalar& JsonScalar::operator=(const JsonScalar& rhs)
 {
+	if (this == &rhs)
+		return *this;
+
 	reset(rhs.type);
 	flags = rhs.flags;
 
@@ -109,6 +112,15 @@ JsonDatetime& JsonScalar::setToDatetime()
 	return *value.datetime;
 }
 
+static SINT64 readInt64(Firebird::BlrReader& array)
+{
+	const UCHAR* buffer = array.getPos();
+	array.seekForward(sizeof(SINT64));
+	array.peekByte(); // Validate
+
+	return isc_portable_integer(buffer, sizeof(SINT64));
+}
+
 void JsonScalar::writeScalarAsBytes(Firebird::BlrWriter& array) const
 {
 	static constexpr USHORT ushortSizeInBits = sizeof(USHORT) * CHAR_BIT;
@@ -137,7 +149,9 @@ void JsonScalar::writeScalarAsBytes(Firebird::BlrWriter& array) const
 			break;
 		}
 		case ValueType::STRING:
-			array.appendString(1, *value.string);
+			// The length does not fit into USHORT
+			array.appendULong(value.string->length());
+			array.appendBytes(reinterpret_cast<const UCHAR*>(value.string->data()), value.string->length());
 			break;
 		case ValueType::DATETIME:
 			value.datetime->storeAsBytes(array);
@@ -155,33 +169,40 @@ void JsonScalar::readScalarFromBytes(Firebird::BlrReader& array)
 	switch (rtype)
 	{
 		case ValueType::JNULL:
+			setToNull();
 			break;
 		case ValueType::BOOL:
 			set(array.getByte() == 1);
 			break;
 		case ValueType::INT:
-		{
-			const SSHORT len = sizeof(SINT64);
-			SINT64 buffer = isc_portable_integer(array.getPos(), len);
-			array.seekForward(len);
-
-			set(buffer);
+			set(readInt64(array));
 			break;
-		}
 		case ValueType::DOUBLE:
 		{
-			const SSHORT len = sizeof(SINT64);
-			SINT64 buffer = isc_portable_integer(array.getPos(), len);
-			array.seekForward(len);
+			const SINT64 buffer = readInt64(array);
 
-			double dval = *((double*)(&buffer));
+			double dval;
+			memcpy(&dval, &buffer, sizeof(dval));
 			set(dval);
 			break;
 		}
 		case ValueType::STRING:
 		{
-			set("");
-			array.getVerbString(*value.string);
+			const ULONG length = array.getLong();
+			if (length > array.getLength() - array.getOffset())
+				(Firebird::Arg::Gds(isc_invalid_blr) << Firebird::Arg::Num(array.getOffset())).raise();
+
+			if (length == 0)
+			{
+				set("");
+				break;
+			}
+
+			set(std::string_view(reinterpret_cast<const char*>(array.getPos()), length));
+
+			// BlrReader does not allow to seek right to the end so split read
+			array.seekForward(length - 1);
+			array.getByte();
 			break;
 		}
 		case ValueType::DATETIME: // keep it as the last scalar type
@@ -234,6 +255,7 @@ void JsonScalar::reset(const ValueType newType) noexcept
 	case ValueType::EMPTY:
 	case ValueType::BOOL:
 	case ValueType::INT:
+	case ValueType::DOUBLE:
 	case ValueType::JNULL:
 		break;
 	case ValueType::STRING:

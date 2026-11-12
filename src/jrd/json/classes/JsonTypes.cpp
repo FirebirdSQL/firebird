@@ -29,6 +29,7 @@
 #include "../dsql/chars.h"
 #include <cmath>
 #include <cstring>
+#include <iterator>
 
 #ifdef HAVE_FLOAT_H
 #include <float.h>
@@ -52,7 +53,8 @@ static inline bool addToValue(SINT64& value, const char c, const bool hasMinus)
 			return false;
 	}
 
-	value = value * 10 + (c - '0');
+	// Avoid overflow
+	value = static_cast<SINT64>(static_cast<FB_UINT64>(value) * 10 + (c - '0'));
 	return true;
 }
 
@@ -183,30 +185,27 @@ void FBJSON::JsonScalarParser<TView>::parseQuotedString(TView input, TextPos& cu
 			}
 			case ControlType::SLASH:
 			{
-				// Prefetch chunk for possible unicode
+				// Part before the escape sequence
+				if (hasOutput)
+					*output += chunk.substr(startPos, i - (startPos + 1));
+
+				// Prefetch chunk for possible unicode: the sequence can be cut by the end of the chunk
 				const USHORT lengthWithPrefetchedSize = i + UNICODE_UTF16_SEQUENCE_LENGTH;
-				if (lengthWithPrefetchedSize >= chunk.length()  && current + lengthWithPrefetchedSize < end)
+				if (lengthWithPrefetchedSize >= chunk.length() && current + chunk.length() < end)
 				{
-					// Part before the escape sequence
-					const auto appendSize = i - (startPos + 1);
-
-					if (hasOutput)
-						*output += chunk.substr(startPos, appendSize);
-
-					current += appendSize;
+					// Start the new chunk from the slash. `current` still points to the start of the chunk
+					current += i - 1;
 					chunk = input.getStringView(current, chunkSize);
 					i = 1; // symbol after slash
 					fb_assert(chunk[0] == '\\');
-
-					if (current >= end)
-					{
-						initError() << JsonStatusMsg(isc_jparser_invalid_quoted_string);
-						return;
-					}
 				}
-				else if (hasOutput)
+
+				if (i >= chunk.length())
 				{
-					*output += chunk.substr(startPos, i - (startPos + 1));
+					// The slash is the last symbol of the input
+					initError() << JsonStatusMsg(isc_jparser_invalid_sequence) << JsonStatusMsgStrArg("");
+					current += i;
+					return;
 				}
 
 				c = chunk[i++];
@@ -294,6 +293,10 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 	// Delay overflow error print to lex the full number range and put it into error
 	bool hasOverflow = false;
 
+	// A text without digits or with an unfinished exponent is not a number
+	bool hasDigits = false;
+	bool hasIncompleteExponent = false;
+
 	// First part
 	for (; current < end; ++current)
 	{
@@ -301,6 +304,8 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 
 		if (!(classes(c) & CHR_DIGIT))
 			break;
+
+		hasDigits = true;
 
 		if (!addToValue(lex.value, c, hasUnaryMinus))
 		{
@@ -313,15 +318,26 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 	{
 		++current;
 		lex.isDouble = true;
+
+		// The mantissa keeps about 18 digits, it is more than a double can represent.
+		// The rest of the fractional digits cannot change the value noticeably, so they are skipped.
+		bool isMantissaFull = hasOverflow;
+
 		for (; current < end; ++current)
 		{
 			const char c = input[current];
 			if (!(classes(c) & CHR_DIGIT))
 				break;
 
+			hasDigits = true;
+
+			if (isMantissaFull)
+				continue;
+
 			if (!addToValue(lex.value, c, hasUnaryMinus))
 			{
-				hasOverflow = true;
+				isMantissaFull = true;
+				continue;
 			}
 
 			--lex.scale;
@@ -355,14 +371,21 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 				haveExponentSign = true;
 			}
 
+			bool hasExponentDigits = false;
 			for (; current < end; ++current)
 			{
 				const char c = input[current];
 				if (!(classes(c) & CHR_DIGIT))
 					break;
 
-				expValue = expValue * 10 + (c - '0');
+				hasExponentDigits = true;
+
+				// Any value above the limit is an overflow, so stop the accumulation to stay inside of SLONG
+				if (expValue <= DBL_MAX_10_EXP)
+					expValue = expValue * 10 + (c - '0');
 			}
+
+			hasIncompleteExponent = !hasExponentDigits;
 
 			if (expValue > DBL_MAX_10_EXP)
 			{
@@ -374,6 +397,8 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 				expValue = -expValue;
 			}
 		}
+		else
+			hasIncompleteExponent = true;
 
 		const double maxNum = DBL_MAX / static_cast<double>(std::pow(10, expValue));
 		if (double(lex.value) > maxNum)
@@ -393,10 +418,18 @@ ParsedNumber FBJSON::JsonScalarParser<TView>::parseNumber(TView input, TextPos& 
 	}
 
 	if (hasUnaryMinus)
-		lex.value = -lex.value;
+		lex.value = static_cast<SINT64>(0 - static_cast<FB_UINT64>(lex.value)); // Avoid overflowed
 
 	if (strictMode)
 	{
+		if (!hasDigits || hasIncompleteExponent)
+		{
+			initError() << JsonStatusMsg(isc_jparser_invalid_number_parse) <<
+				JsonStatusMsgStrArg(input.getErrorSubstring(start));
+
+			return lex;
+		}
+
 		for (; current < end; ++current)
 		{
 			const char c = input[current];

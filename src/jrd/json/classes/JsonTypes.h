@@ -42,7 +42,7 @@
 namespace FBJSON {
 
 using ArraySize = ULONG;
-using RangeSize = SSHORT;
+using RangeSize = SLONG;
 
 // JsonPath Extention: Negative values supported
 using PathArrayIndex = SLONG;
@@ -314,7 +314,7 @@ public:
 	static constexpr auto getHexToDecTable()
 	{
 		// Cant use std::optional in constexpr
-		std::array<UCHAR, UCHAR_MAX> hexToDec{};
+		std::array<UCHAR, UCHAR_MAX + 1> hexToDec{};
 		for (USHORT c = 0; c < hexToDec.size(); ++c)
 			hexToDec[c] = INVALID_HEX; // Cannot use fill in constexpr
 
@@ -333,7 +333,7 @@ public:
 	static constexpr auto getEscapeResolverTable()
 	{
 		// Cant use std::optional in constexpr
-		std::array<char, UCHAR_MAX> resolveTable{};
+		std::array<char, UCHAR_MAX + 1> resolveTable{};
 		resolveTable['\\'] = '\\';
 		resolveTable['"'] = '"';
 		resolveTable['/'] = '/';
@@ -377,11 +377,9 @@ public:
 		constexpr static auto hetToDecTable = getHexToDecTable();
 
 		ParsedUnicode::ValueType hexValue = 0;
-		char c;
 		for (USHORT i = 0; i < UNICODE_HEX_SEQUENCE_LENGTH; ++i)
 		{
-			c = sequence[i];
-			const auto dec = hetToDecTable[c];
+			const auto dec = hetToDecTable[static_cast<UCHAR>(sequence[i])];
 			if (dec != INVALID_HEX)
 			{
 				hexValue = (hexValue << 4) + dec;
@@ -455,7 +453,7 @@ public:
 	{
 		static constexpr auto resolver = getEscapeResolverTable();
 
-		const auto escaped = resolver[c];
+		const auto escaped = resolver[static_cast<UCHAR>(c)];
 		if (FB_UNLIKELY(escaped == INVALID_ESCAPE))
 			initError() << JsonStatusMsg(isc_jparser_invalid_sequence) << JsonStatusMsgStrArg(std::string_view(&c, 1));
 
@@ -470,7 +468,7 @@ public:
 
 		ParsedUnicode::ValueType hexValue = 0;
 		for (USHORT i = 0; i < UNICODE_HEX_SEQUENCE_LENGTH; ++i)
-			hexValue = (hexValue << 4) + hetToDecTable[sequence[i]];
+			hexValue = (hexValue << 4) + hetToDecTable[static_cast<UCHAR>(sequence[i])];
 
 		return hexValue;
 	}

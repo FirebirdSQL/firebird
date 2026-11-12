@@ -127,7 +127,7 @@ public:
 	requires(T != JsonExprNode::Type::METHOD_NODE && T != JsonExprNode::Type::VARIABLE_NODE)
 	static JsonExprNode* make(MemoryPool& pool, const UCHAR flag = FLAG_NONE)
 	{
-		return FB_NEW_POOL(pool) JsonExprNode(pool, T);
+		return FB_NEW_POOL(pool) JsonExprNode(pool, T, flag);
 	}
 
 	// It is better to use `make` function to create a new node
@@ -288,7 +288,7 @@ public:// Checkers
 			{
 				auto& children = m_data.calculationBlock->children;
 				auto& operations = m_data.calculationBlock->operations;
-				return (children.isEmpty() || children.getCount() == 1 && children[0]->isRootEmpty()) && operations.isEmpty();
+				return (children.isEmpty() || (children.getCount() == 1 && children[0]->isRootEmpty())) && operations.isEmpty();
 			}
 			case JsonExprNode::COMPOUND_NODE:
 			case JsonExprNode::FILTER_NODE:
@@ -361,19 +361,24 @@ public:// Checkers
 		if (!testType(SCALAR_NODE))
 			return false;
 
+		JsonScalar& scalar = m_data.scalarBlock->value;
+		if (!scalar.isNumber())
+			return false;
+
 		if (op == JsonExprOperation::UNARY_PLUS)
 			return true;
 
-		if (m_data.scalarBlock->value.getType() == ValueType::INT)
+		if (scalar.getType() == ValueType::INT)
 		{
-			m_data.scalarBlock->value.getValue().integer = -m_data.scalarBlock->value.getValue().integer;
-			return true;
+			if (scalar.getValue().integer == MIN_SINT64)
+				return false; // Cannot be negated
+
+			scalar.getValue().integer = -scalar.getValue().integer;
 		}
 		else
-		{
-			m_data.scalarBlock->value.getValue().doubleValue = -m_data.scalarBlock->value.getValue().doubleValue;
-			return true;
-		}
+			scalar.getValue().doubleValue = -scalar.getValue().doubleValue;
+
+		return true;
 	}
 
 	std::optional<RangeSize> getRangeNumber() const

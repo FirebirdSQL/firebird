@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE(NodeMethodsTest)
 
 	{ // removeThis with temporally
 		Firebird::AutoPtr<PathNode> first = new PathNode(pool);
-		PathNode* last = first->add();
+		first->add();
 		auto* middle = first->insertUnwrapNode();
 		middle->filterNode = makeDummyNode();
 
@@ -421,7 +421,7 @@ BOOST_AUTO_TEST_CASE(NodeMethodsTest)
 		first->matched = true;
 		PathNode* middle = first->add();
 		middle->matched = true;
-		PathNode* last = middle->add();
+		middle->add(); // last
 
 		BOOST_CHECK(first->moveTo(10) == nullptr);
 	}
@@ -937,6 +937,42 @@ BOOST_AUTO_TEST_CASE(NodeMethodsTest)
 	}
 }
 
+BOOST_AUTO_TEST_CASE(TemporaryNodeWithFilterTest)
+{
+	Firebird::MemoryPool& pool = *getDefaultMemoryPool();
+	// insertUnwrapNode() moves the filter to the temporary [*] node,
+	// update() of the temporary node removes it and has to give the filter back.
+
+	{ // The temporary node is in the middle
+		PathNode node(pool);
+		PathNode* middle = node.add();
+		PathNode* last = middle->add();
+
+		middle->filterNode = makeDummyNode();
+		PathNode* temp = middle->insertUnwrapNode();
+		BOOST_REQUIRE(temp->filterNode.hasData());
+		BOOST_REQUIRE(!middle->filterNode.hasData());
+
+		PathNode* updated = temp->update(); // deletes temp
+		BOOST_CHECK(updated == last);
+		BOOST_CHECK(middle->next == last);
+		BOOST_CHECK(middle->filterNode.hasData());
+	}
+
+	{ // The temporary node is the last one
+		PathNode node(pool);
+		PathNode* last = node.add();
+
+		last->filterNode = makeDummyNode();
+		PathNode* temp = last->insertUnwrapNode();
+		BOOST_REQUIRE(temp->filterNode.hasData());
+
+		PathNode* updated = temp->update(); // deletes temp
+		BOOST_CHECK(updated == last);
+		BOOST_CHECK(last->next == nullptr);
+		BOOST_CHECK(last->filterNode.hasData());
+	}
+}
 
 BOOST_AUTO_TEST_SUITE_END()	// PathNodeTests
 

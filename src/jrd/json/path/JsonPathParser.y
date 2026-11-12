@@ -125,6 +125,7 @@ using namespace FBJSON;
 
 	SSHORT int16Val;
 	Firebird::PodOptional<SSHORT> int16ValOpt;
+	Firebird::PodOptional<SLONG> int32ValOpt;
 	FBJSON::PathMethod methodType;
 	FBJSON::JsonExprNode* exprNode;
 	FBJSON::PathVariable* variable;
@@ -217,8 +218,9 @@ path_accessor
 		}
 	| '(' json_path_arithmetic ')'
 		{
+			// The group is a complete expression: keep it as a separate node and prepare its operations
 			$2->addFlag(JsonExprNode::FLAG_SOLID);
-			$$ = $2;
+			$$ = $2->finish();
 		}
 	;
 
@@ -376,11 +378,14 @@ accessor($context)
 
 			$context->main->setFieldsFlag();
 		}
-	| '[' ranges($context) ']'
+	| '['
 		{
+			// The ranges belong to the node of the array accessor, so create it before they are parsed
 			$context->current = $context->current->add();
 			$context->current->type = ItemType::ARRAY_ELEMENT;
-
+		}
+	  ranges($context) ']'
+		{
 			const USHORT size = $context->current->ranges.getCount();
 
 			bool isComplex = false;
@@ -460,7 +465,7 @@ index($context)
 	;
 
 // Use TO <value> instead of <value> TO <value> to resolve conflicts
-%type <int16ValOpt> range_opt(<jpathContext>)
+%type <int32ValOpt> range_opt(<jpathContext>)
 range_opt($context)
 	: /* nothing */
 		{ $$ = std::nullopt; }
@@ -468,13 +473,13 @@ range_opt($context)
 		{ $$ = $2; }
 	;
 
-%type <int16Val> single_index(<jpathContext>, <passingPos>)
+%type <int32Val> single_index(<jpathContext>, <passingPos>)
 single_index($context, $passType)
 	: LAST
 		{ $$ = -1; }
-	| LAST '-' INTEGER16
+	| LAST '-' last_offset
 		{ $$ = -1 - $3; }
-	| LAST '+' INTEGER16 // Allow this obvious out of range value in case of modification (appending element)
+	| LAST '+' last_offset // Allow this obvious out of range value in case of last_offset is negative
 		{ $$ = -1 + $3; }
 	| json_path_arithmetic_finished // Get number or an expression
 		{
@@ -485,13 +490,23 @@ single_index($context, $passType)
 			}
 			else
 			{
+				// The current node is the node of the array accessor: the value is injected into its range
 				auto& injection = addPathInjection($context, $1);
+				injection.depth = $context->current->depth;
 				injection.position = $passType;
 				injection.rangeIndex = $context->current->ranges.getCount();
 
 				$$ = 1; // Return non zero to do not match unwrap pattern
 			}
 		}
+	;
+
+%type <int32Val> last_offset
+last_offset
+	: INTEGER16
+		{ $$ = $1; }
+	| INTEGER32
+		{ $$ = $1; }
 	;
 
 
@@ -647,6 +662,9 @@ unary_predicate
 	: predicate	{ $$ = $1; }
 	| not_arg predicate
 		{
+			// The predicate is the operand: do not merge its operations with the negation
+			$2->addFlag(JsonExprNode::FLAG_SOLID);
+
 			auto* root = mkNode<JsonExprNode::CALCULATION_NODE>();
 			root->addOperation($1);
 			root->addChild($2);
@@ -715,6 +733,8 @@ filter_function
 		}
 	| EXISTS '(' json_path_arithmetic_finished ')'
 		{
+			$3->addFlag(JsonExprNode::FLAG_SOLID);
+
 			auto* root = mkNode<JsonExprNode::CALCULATION_NODE>();
 			root->addOperation(JsonExprOperation::EXISTS);
 			root->addChild($3);
@@ -722,6 +742,8 @@ filter_function
 		}
 	| '(' boolean_expression ')' IS UNKNOWN
 		{
+			$2->addFlag(JsonExprNode::FLAG_SOLID);
+
 			auto* root = mkNode<JsonExprNode::CALCULATION_NODE>();
 			root->addChild($2);
 			root->addOperation(JsonExprOperation::IS_UNKNOWN);

@@ -962,13 +962,39 @@ void CVT_string_to_datetime(const dsc* desc,
 					const SpecialDateTime special = CVT_get_special_datetime(temp, strlen(temp));
 
 					if (special == SpecialDateTime::NOW)
+					{
+						if (outFormatFlags)
+						{
+							// NOW is defined by the expected type
+							switch (expect_type)
+							{
+								case expect_sql_date:
+									*outFormatFlags = CvtStringContains::DATE;
+									break;
+
+								case expect_sql_time:
+								case expect_sql_time_tz:
+									*outFormatFlags = CvtStringContains::TIME;
+									break;
+
+								default:
+									*outFormatFlags = CvtStringContains::DATE | CvtStringContains::TIME;
+									break;
+							}
+						}
+
 						return;
+					}
 
 					if (expect_type == expect_sql_time || expect_type == expect_sql_time_tz)
 					{
 						CVT_conversion_error(desc, cb->err);
 						return;
 					}
+
+					// TODAY, TOMORROW and YESTERDAY are dates
+					if (outFormatFlags)
+						*outFormatFlags = CvtStringContains::DATE;
 
 					date->utc_timestamp.timestamp_time = 0;
 

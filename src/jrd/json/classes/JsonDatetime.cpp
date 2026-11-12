@@ -211,16 +211,19 @@ Firebird::EXPECT_DATETIME JsonDatetime::getFormat() const
 
 void JsonDatetime::storeAsBytes(Firebird::BlrWriter& array) const
 {
-	array.appendBytes(reinterpret_cast<const UCHAR*>(&m_ts), TIMEZONE_SIZE);
+	//  The raw structure has padding and depends on the platform
+	array.appendULong(static_cast<ULONG>(m_ts.utc_timestamp.timestamp_date));
+	array.appendULong(m_ts.utc_timestamp.timestamp_time);
+	array.appendUShort(m_ts.time_zone);
 	array.appendMetaString(m_stringRepresentation.c_str());
 	array.appendUChar(m_flags);
 }
 
 void JsonDatetime::readFromBytes(Firebird::BlrReader& array)
 {
-	const UCHAR* pos = array.getPos();
-	array.seekForward(TIMEZONE_SIZE);
-	m_ts = *reinterpret_cast<const ISC_TIMESTAMP_TZ*>(pos);
+	m_ts.utc_timestamp.timestamp_date = static_cast<ISC_DATE>(array.getLong());
+	m_ts.utc_timestamp.timestamp_time = array.getLong();
+	m_ts.time_zone = array.getWord();
 
 	array.getString(m_stringRepresentation);
 	m_flags = static_cast<Flags>(array.getByte());

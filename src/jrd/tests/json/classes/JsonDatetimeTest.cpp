@@ -367,6 +367,68 @@ BOOST_FIXTURE_TEST_CASE(SetFromDscTests, EngineHolder)
 	}
 }
 
+BOOST_AUTO_TEST_CASE(SpecialValuesTests)
+{
+	using namespace std::string_view_literals;
+	CvtTestUtils::MockCallback cb(errFunc, std::bind(CvtTestUtils::mockGetLocalDate, YEAR));
+
+	{
+		JsonDatetime datetime(*getDefaultMemoryPool());
+		BOOST_CHECK_NO_THROW(datetime.set("today"sv, ""sv, &cb));
+		BOOST_TEST(datetime.getTypeName() == Tokens::TypeName::DATE);
+	}
+
+	{
+		JsonDatetime datetime(*getDefaultMemoryPool());
+		BOOST_CHECK_NO_THROW(datetime.set("tomorrow"sv, ""sv, &cb));
+		BOOST_TEST(datetime.getTypeName() == Tokens::TypeName::DATE);
+	}
+
+	{
+		JsonDatetime datetime(*getDefaultMemoryPool());
+		BOOST_CHECK_NO_THROW(datetime.set("yesterday"sv, ""sv, &cb));
+		BOOST_TEST(datetime.getTypeName() == Tokens::TypeName::DATE);
+	}
+
+	{
+		JsonDatetime datetime(*getDefaultMemoryPool());
+		// The same type as the literal `timestamp 'now'` has
+		BOOST_CHECK_NO_THROW(datetime.set("now"sv, ""sv, &cb));
+		BOOST_TEST(datetime.getTypeName() == Tokens::TypeName::TIMESTAMP_WITHOUT_TZ);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(DifferentTimeZonesTests)
+{
+	const ISC_TIMESTAMP_TZ utcNoon = CvtTestUtils::createTimeStampTZ(2023, 6, 1, 12, 0, 0, 0);
+	const ISC_TIMESTAMP_TZ sameInstant = CvtTestUtils::createTimeStampTZ(2023, 6, 1, 15, 0, 0, 180); // 15:00 +03:00
+	const ISC_TIMESTAMP_TZ hourLater = CvtTestUtils::createTimeStampTZ(2023, 6, 1, 16, 0, 0, 180); // 13:00 UTC
+	const ISC_TIMESTAMP_TZ hourEarlier = CvtTestUtils::createTimeStampTZ(2023, 6, 1, 6, 0, 0, -300); // 11:00 UTC
+
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(utcNoon, utcNoon) == 0);
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(utcNoon, sameInstant) == 0);
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(sameInstant, utcNoon) == 0);
+
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(hourLater, utcNoon) == 1);
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(utcNoon, hourLater) == -1);
+
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(hourEarlier, utcNoon) == -1);
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(utcNoon, hourEarlier) == 1);
+	BOOST_TEST(TimeZoneUtil::compareTimeStamps(hourEarlier, sameInstant) == -1);
+}
+
+BOOST_AUTO_TEST_CASE(CompareUtcTimeStampsTests)
+{
+	const ISC_TIMESTAMP early = CvtTestUtils::createTimeStamp(2023, 6, 1, 12, 0, 0);
+	const ISC_TIMESTAMP late = CvtTestUtils::createTimeStamp(2023, 6, 1, 12, 0, 1);
+	const ISC_TIMESTAMP nextDay = CvtTestUtils::createTimeStamp(2023, 6, 2, 0, 0, 0);
+
+	BOOST_TEST(TimeZoneUtil::compareUtcTimeStamps(early, early) == 0);
+	BOOST_TEST(TimeZoneUtil::compareUtcTimeStamps(early, late) == -1);
+	BOOST_TEST(TimeZoneUtil::compareUtcTimeStamps(late, early) == 1);
+	BOOST_TEST(TimeZoneUtil::compareUtcTimeStamps(nextDay, late) == 1);
+	BOOST_TEST(TimeZoneUtil::compareUtcTimeStamps(late, nextDay) == -1);
+}
 
 BOOST_AUTO_TEST_SUITE_END()	// JsonDatetimeTests
 

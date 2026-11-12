@@ -93,7 +93,7 @@ JsonExprNode::JsonExprNode(MemoryPool& pool, PathVariable* var) :
 	JsonExprNode(pool, JsonExprNode::VARIABLE_NODE)
 {
 	fb_assert(var);
-	m_data.varBlock = FB_NEW_POOL(pool) VariableBlock(pool);
+
 	m_data.varBlock->variable.reset(var);
 }
 
@@ -101,8 +101,6 @@ JsonExprNode::JsonExprNode(MemoryPool& pool, PathVariable* var) :
 JsonExprNode::JsonExprNode(MemoryPool& pool, const PathMethod method):
 	JsonExprNode(pool, JsonExprNode::METHOD_NODE)
 {
-	m_data.methodBlock = FB_NEW_POOL(pool) MethodBlock(pool);
-
 	m_data.methodBlock->method = method;
 	m_data.methodBlock->children.add(nullptr);
 }
@@ -137,7 +135,7 @@ JsonExprNode::~JsonExprNode()
 			delete m_data.filterBlock;
 			break;
 		case COMPOUND_NODE:
-			delete m_data.filterBlock;
+			delete m_data.childrenBlock;
 			break;
 		default:
 			fb_assert(false);

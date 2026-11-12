@@ -117,9 +117,6 @@ public:
 	bool operator!=(const JsonDatetime& right) const;
 
 private:
-	static constexpr FB_SIZE_T TIMEZONE_SIZE = sizeof(ISC_TIMESTAMP_TZ);
-
-private:
 	static ISC_TIMESTAMP_TZ convertToTimeStamp(const std::string_view source, const std::string_view format,
 		Flags& flags, Firebird::Callbacks* callback = nullptr);
 

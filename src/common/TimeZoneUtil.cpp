@@ -1229,12 +1229,7 @@ ISC_TIMESTAMP_TZ TimeZoneUtil::dateToTimeStampTz(const ISC_DATE& date, Callbacks
 
 int TimeZoneUtil::compareTimeStamps(ISC_TIMESTAMP_TZ lhs, ISC_TIMESTAMP_TZ rhs)
 {
-	if (lhs.time_zone != rhs.time_zone)
-	{
-		localTimeStampToUtc(lhs);
-		localTimeStampToUtc(rhs);
-	}
-
+	// Both values keep the timestamp should be in UTC
 	return compareUtcTimeStamps(lhs.utc_timestamp, rhs.utc_timestamp);
 }
 

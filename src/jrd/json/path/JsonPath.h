@@ -74,13 +74,13 @@ public:
 
 		// Support negative indexes
 		// Return signed because the index can be negative even after array size adding
-		constexpr JsonArrayIndex getPreparedUp(const ArraySize size) const noexcept
+		constexpr PathArrayIndex getPreparedUp(const ArraySize size) const noexcept
 		{
 			return up >= 0 ? up : PathArrayIndex(size) + up;
 		}
 
 		// Return signed because the index can be negative even after array size adding
-		constexpr JsonArrayIndex getPreparedDown(const ArraySize size) const noexcept
+		constexpr PathArrayIndex getPreparedDown(const ArraySize size) const noexcept
 		{
 			return down >= 0 ? down : down + static_cast<PathArrayIndex>(size);
 		}
@@ -492,7 +492,7 @@ public: // Checkers
 		return false;
 	}
 
-	inline bool isInSimpleRange(const JsonArrayIndex index) const
+	inline bool isInSimpleRange(const PathArrayIndex index) const
 	{
 		if (ranges.isEmpty())
 			return false;

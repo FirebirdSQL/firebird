@@ -230,7 +230,237 @@ BOOST_AUTO_TEST_CASE(TestUnsafeStringOverflowBug)
 	StringParser::parseStringUnsafe({view}, output);
 	BOOST_TEST(output.data() == "Hello  ");
 }
+
+BOOST_AUTO_TEST_CASE(TwoEscapesAtChunkBorderTest)
+{
+	const ULONG tailLengths[] = {300, 12, 8, 4, 2, 1, 0};
+
+	for (const ULONG tailLength : tailLengths)
+	{
+		for (ULONG secondEscapePos = 240; secondEscapePos < 258; ++secondEscapePos)
+		{
+			SmallString source = "ab\\n";
+			source.append(secondEscapePos - source.length(), 'x');
+			source += "\\u0041"; // 'A'
+			source.append(tailLength, 'y');
+
+			SmallString expected = "ab\n";
+			expected.append(secondEscapePos - 4, 'x');
+			expected += "A";
+			expected.append(tailLength, 'y');
+
+			TextPos pos = 0;
+			SmallString output;
+			StringParser parser;
+			parser.parseQuotedString({source.ToStringView()}, pos, false, false, &output);
+
+			BOOST_TEST_INFO("Position of the second escape: " << secondEscapePos << ", tail: " << tailLength);
+			BOOST_TEST(!parser.hasError());
+			BOOST_TEST_INFO("Position of the second escape: " << secondEscapePos << ", tail: " << tailLength);
+			BOOST_TEST((output == expected));
+			BOOST_TEST_INFO("Position of the second escape: " << secondEscapePos << ", tail: " << tailLength);
+			BOOST_TEST(pos == TextPos(source.length()));
+		}
+	}
+}
+BOOST_AUTO_TEST_CASE(BackslashAtTheEndTest)
+{
+	const char buffer[] = "abc\\n";
+	const std::string_view view(buffer, 4); // abc + backslash, 'n' is outside of the view
+
+	TextPos pos = 0;
+	SmallString output;
+	StringParser parser;
+	BOOST_CHECK_NO_THROW(parser.parseQuotedString({view}, pos, false, false, &output));
+	BOOST_TEST(parser.hasError());
+	BOOST_TEST(pos <= view.length());
+}
+
+BOOST_AUTO_TEST_CASE(NonAsciiByteTest)
+{
+	{
+		TextPos pos = 0;
+		SmallString output;
+		StringParser parser;
+		parser.parseQuotedString({"\\u00\xC3\xA9 tail"}, pos, false, false, &output);
+		BOOST_TEST(parser.hasError());
+	}
+
+	{
+		TextPos pos = 0;
+		SmallString output;
+		StringParser parser;
+		parser.parseQuotedString({"\\\xC3\xA9 tail"}, pos, false, false, &output);
+		BOOST_TEST(parser.hasError());
+	}
+
+}
+
 BOOST_AUTO_TEST_SUITE_END()	// StringParseTests
+
+
+BOOST_AUTO_TEST_SUITE(NumberParseTests)
+
+struct NumberParseResult
+{
+	ParsedNumber number;
+	bool hasError = false;
+};
+
+static NumberParseResult parseNumberStrict(const std::string_view text)
+{
+	TextPos pos = 0;
+	StringParser parser;
+
+	NumberParseResult result;
+	result.number = parser.parseNumber({text}, pos, true);
+	result.hasError = parser.hasError();
+	return result;
+}
+
+BOOST_AUTO_TEST_CASE(IntegerTest)
+{
+	{
+		const auto result = parseNumberStrict("0");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(!result.number.isDouble);
+		BOOST_TEST(result.number.value == 0);
+	}
+
+	{
+		const auto result = parseNumberStrict("  42  ");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(!result.number.isDouble);
+		BOOST_TEST(result.number.value == 42);
+	}
+
+	{
+		const auto result = parseNumberStrict("-42");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.value == -42);
+	}
+
+	{
+		const auto result = parseNumberStrict("9223372036854775807");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.value == MAX_SINT64);
+	}
+
+	{
+		const auto result = parseNumberStrict("-9223372036854775808");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.value == MIN_SINT64);
+	}
+
+	BOOST_TEST(parseNumberStrict("9223372036854775808").hasError);
+	BOOST_TEST(parseNumberStrict("-9223372036854775809").hasError);
+	BOOST_TEST(parseNumberStrict("12abc").hasError);
+	BOOST_TEST(parseNumberStrict("").hasError);
+}
+
+BOOST_AUTO_TEST_CASE(NonStrictStopTest)
+{
+	TextPos pos = 0;
+	StringParser parser;
+	const ParsedNumber number = parser.parseNumber({"123 + 4"}, pos, false);
+
+	BOOST_TEST(!parser.hasError());
+	BOOST_TEST(number.value == 123);
+	BOOST_TEST(pos == TextPos(3));
+}
+
+BOOST_AUTO_TEST_CASE(DoubleTest)
+{
+	// These values are exactly representable, so the conversion has to be exact as well
+	{
+		const auto result = parseNumberStrict("1.5");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.isDouble);
+		BOOST_TEST(result.number.getDouble() == 1.5);
+	}
+
+	{
+		const auto result = parseNumberStrict("-0.25");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.getDouble() == -0.25);
+	}
+
+	{
+		const auto result = parseNumberStrict("1e3");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.isDouble);
+		BOOST_TEST(result.number.getDouble() == 1000.0);
+	}
+
+	{
+		const auto result = parseNumberStrict("25E-2");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.getDouble() == 0.25);
+	}
+
+	{
+		const auto result = parseNumberStrict("1.5e+2");
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST(result.number.getDouble() == 150.0);
+	}
+
+	BOOST_TEST(parseNumberStrict("1e400").hasError);
+}
+
+BOOST_AUTO_TEST_CASE(DoubleIsCorrectlyRoundedTest)
+{
+	const char* const values[] = {"0.07", "0.57", "123.456", "1.005", "9.995", "0.0003", "0.000001", "3.3e-7"};
+
+	for (const char* text : values)
+	{
+		const auto result = parseNumberStrict(text);
+
+		BOOST_TEST_INFO("Number: " << text);
+		BOOST_TEST(!result.hasError);
+		BOOST_TEST_INFO("Number: " << text);
+		BOOST_TEST(result.number.getDouble() == strtod(text, nullptr));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(LongFractionIsNotOverflowTest)
+{
+	const char* const values[] = {"3.14159265358979323846", "0.1234567890123456789012", "1.00000000000000000000"};
+
+	for (const char* text : values)
+	{
+		const auto result = parseNumberStrict(text);
+
+		BOOST_TEST_INFO("Number: " << text);
+		BOOST_TEST(!result.hasError);
+
+		if (!result.hasError)
+		{
+			BOOST_TEST_INFO("Number: " << text);
+			BOOST_TEST(result.number.getDouble() == strtod(text, nullptr));
+		}
+	}
+}
+
+BOOST_AUTO_TEST_CASE(BigExponentIsOverflowTest)
+{
+	// The exponent is accumulated in SLONG without a limit: 2^32 + 1 wraps to 1 and the value becomes 10
+	BOOST_TEST(parseNumberStrict("1e4294967297").hasError);
+	BOOST_TEST(parseNumberStrict("1e99999999999999999999").hasError);
+}
+
+BOOST_AUTO_TEST_CASE(StrictModeRejectionsTest)
+{
+	// Strict mode must not convert a text without digits (or with an unfinished exponent) to zero
+	const char* const values[] = {"-", ".", "-.", "e5", "1e", "1e-", "1e+"};
+
+	for (const char* text : values)
+	{
+		BOOST_TEST_INFO("Text: " << text);
+		BOOST_TEST(parseNumberStrict(text).hasError);
+	}
+}
+
+BOOST_AUTO_TEST_SUITE_END()	// NumberParseTests
 
 BOOST_AUTO_TEST_SUITE_END()	// ParseTests
 BOOST_AUTO_TEST_SUITE_END()	// JsonSuite

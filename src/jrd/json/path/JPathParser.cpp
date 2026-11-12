@@ -368,13 +368,12 @@ int PathParser::yylexAux()
 	}
 
 
-	// Parse a quoted string, being sure to look for double quotes
-	if (tok_class & CHR_QUOTE)
+	// Parse a quoted string. Only double quotes are used in a JSON Path
+	if (c == '"')
 	{
 		StringParser scalarParser;
 		TextPos offset = 0;
 		std::string_view view(lex.ptr, lex.end - lex.ptr);
-		StringParseView viewp{view};
 		string* stringPtr = mkTempString("");
 		scalarParser.parseQuotedString({view}, offset, false, true, stringPtr);
 
@@ -458,7 +457,7 @@ int PathParser::yylexAux()
 	{
 		const char* methodStart = skipSpaces(lex.ptr, lex.end);
 		const char* end = readToken(methodStart, lex.end, '(');
-		if (*end == '(')
+		if (end < lex.end && *end == '(')
 		{
 			return TOK_METHOD_DOT;
 		}
@@ -472,7 +471,12 @@ int PathParser::yylexAux()
 		lex.ptr = readToken(lex.ptr, lex.end);
 
 		string rawStr(start, lex.ptr - start);
-		const int* keyVer = getKeyword(rawStr);
+
+		// A name right after the member accessor is a key: `$.last`, `$.time`.
+		// A method call does not get here with a plain dot, it starts with TOK_METHOD_DOT.
+		const bool isKeyName = lex.prev_keyword == static_cast<int>('.');
+
+		const int* keyVer = isKeyName ? nullptr : getKeyword(rawStr);
 		if (keyVer)
 		{
 			lex.last_token_bk = lex.last_token;
@@ -485,12 +489,10 @@ int PathParser::yylexAux()
 			if (method)
 			{
 				const TEXT* src = lex.ptr;
-				for (; lex.ptr < lex.end && isspace(*lex.ptr); lex.ptr++)
-				{
-					if (lex.ptr >= lex.end)
-						return -1;
-				}
-				if (*lex.ptr == '(')
+				while (lex.ptr < lex.end && isspace(static_cast<UCHAR>(*lex.ptr)))
+					lex.ptr++;
+
+				if (lex.ptr < lex.end && *lex.ptr == '(')
 				{
 					yylval.methodType = *method;
 					lex.last_token_bk = lex.last_token;
@@ -531,12 +533,13 @@ int PathParser::yylexAux()
 
 void PathParser::raiseFullErrorVector(const JsonStatusMsg& error, const YYPOSN& posn)
 {
-	string token(posn.firstPos);
-	if (token.length() > JSON_MAX_REPORT_SIZE)
-	{
-		token.resize(JSON_MAX_REPORT_SIZE);
+	// The path is not NUL-terminated
+	const char* const tokenStart = MIN(posn.firstPos, lex.end);
+	const FB_SIZE_T tokenLength = lex.end - tokenStart;
+
+	string token(tokenStart, std::min<string::size_type>(tokenLength, JSON_MAX_REPORT_SIZE));
+	if (tokenLength > JSON_MAX_REPORT_SIZE)
 		token += "...";
-	}
 
 	if (posn.firstLine == 1)
 	{

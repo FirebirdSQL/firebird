@@ -185,7 +185,6 @@ PathNode* PathNode::update()
 		PathNode* newCurrent = next ? next : prev;
 
 		fb_assert(prev);
-		prev->filterNode.reset(filterNode.release());
 		removeThis();
 		return newCurrent;
 	}

@@ -124,7 +124,11 @@ public:
 
 	JsonScalar& operator=(JsonScalar&& rhs)
 	{
-		type = rhs.type;
+		if (this == &rhs)
+			return *this;
+
+		// Release the current value before taking the new one
+		reset(rhs.type);
 		flags = rhs.flags;
 		memcpy(&value, &rhs.value, sizeof(DataVariant));
 		rhs.value = {};
