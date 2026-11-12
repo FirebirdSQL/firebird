@@ -21,7 +21,7 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\..\temp\$(Platform)\FirebirdSystemLibs.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\..\temp\$(Platform)\FirebirdSystemLibs.props')" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalOptions>/EHsc- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/EHsc- /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <OmitFramePointers>true</OmitFramePointers>
       <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;$(FbTomCryptIncludeDir)$(FbTomMathIncludeDir)$(FbIcuIncludeDir)$(FbZlibIncludeDir)../../../extern/re2;$(FbBoostIncludeDir)%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ExceptionHandling>

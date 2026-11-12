@@ -378,25 +378,11 @@ inline void operator delete[](void* mem, Firebird::MemoryPool& pool ALLOC_PARAMS
 	MemoryPool::globalFree(mem);
 }
 
-inline void operator delete(void* mem, std::size_t s ALLOC_PARAMS) noexcept
-{
-	MemoryPool::globalFree(mem);
-}
-
-inline void operator delete[](void* mem, std::size_t s ALLOC_PARAMS) noexcept
-{
-	MemoryPool::globalFree(mem);
-}
-
-#ifdef DEBUG_GDS_ALLOC
-
 extern void operator delete(void* mem) noexcept;
 extern void operator delete[](void* mem) noexcept;
 
 extern void operator delete(void* mem, std::size_t s) noexcept;
 extern void operator delete[](void* mem, std::size_t s) noexcept;
-
-#endif // DEBUG_GDS_ALLOC
 
 namespace Firebird
 {
