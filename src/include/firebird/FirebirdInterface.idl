@@ -1817,7 +1817,7 @@ interface ReplicatedField : Versioned
 
 version:	// 5.0 => 6.0 Alpha1
 	boolean isPrimary(uint* position);
-	boolean isUnique(uint* position);
+	boolean isUnique();
 }
 
 interface ReplicatedRecord : Versioned

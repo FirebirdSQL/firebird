@@ -7232,7 +7232,7 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getCharSet)(IReplicatedField* self) CLOOP_NOEXCEPT;
 			const void* (CLOOP_CARG *getData)(IReplicatedField* self) CLOOP_NOEXCEPT;
 			FB_BOOLEAN (CLOOP_CARG *isPrimary)(IReplicatedField* self, unsigned* position) CLOOP_NOEXCEPT;
-			FB_BOOLEAN (CLOOP_CARG *isUnique)(IReplicatedField* self, unsigned* position) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *isUnique)(IReplicatedField* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7300,13 +7300,13 @@ namespace Firebird
 			return ret;
 		}
 
-		FB_BOOLEAN isUnique(unsigned* position)
+		FB_BOOLEAN isUnique()
 		{
 			if (cloopVTable->version < 3)
 			{
 				return 0;
 			}
-			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->isUnique(this, position);
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->isUnique(this);
 			return ret;
 		}
 	};
@@ -21496,11 +21496,11 @@ namespace Firebird
 			}
 		}
 
-		static FB_BOOLEAN CLOOP_CARG cloopisUniqueDispatcher(IReplicatedField* self, unsigned* position) CLOOP_NOEXCEPT
+		static FB_BOOLEAN CLOOP_CARG cloopisUniqueDispatcher(IReplicatedField* self) CLOOP_NOEXCEPT
 		{
 			try
 			{
-				return static_cast<Name*>(self)->Name::isUnique(position);
+				return static_cast<Name*>(self)->Name::isUnique();
 			}
 			catch (...)
 			{
@@ -21531,7 +21531,7 @@ namespace Firebird
 		virtual unsigned getCharSet() = 0;
 		virtual const void* getData() = 0;
 		virtual FB_BOOLEAN isPrimary(unsigned* position) = 0;
-		virtual FB_BOOLEAN isUnique(unsigned* position) = 0;
+		virtual FB_BOOLEAN isUnique() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

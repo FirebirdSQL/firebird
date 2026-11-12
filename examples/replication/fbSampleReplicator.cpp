@@ -335,10 +335,9 @@ bool ReplTransaction::dumpData(IReplicatedRecord* record)
 		WriteLog(parent->log, "\tfield %u (%s), is primary %u, field position in the key %d\n",
 			i, field->getName(), isPrimary, position);
 
-		FB_BOOLEAN isUnique = field->isUnique(&position);
+		FB_BOOLEAN isUnique = field->isUnique();
 
-		WriteLog(parent->log, "\tfield %u (%s), is unique %u, field position in the key %d\n",
-			i, field->getName(), isUnique, position);
+		WriteLog(parent->log, "\tfield %u (%s), is unique %u\n", i, field->getName(), isUnique);
 
 		const void* fieldData = field->getData();
 		if (fieldData == nullptr)

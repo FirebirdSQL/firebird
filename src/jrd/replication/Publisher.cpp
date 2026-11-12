@@ -361,9 +361,9 @@ namespace
 			return isKey(idx_primary, position);
 		}
 
-		FB_BOOLEAN isUnique(unsigned* position) override
+		FB_BOOLEAN isUnique() override
 		{
-			return isKey(idx_unique, position);
+			return isKey(idx_unique, nullptr);
 		}
 
 		IReplicatedField* getField(unsigned index) override

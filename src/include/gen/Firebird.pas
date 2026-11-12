@@ -750,7 +750,7 @@ type
 	IReplicatedField_getCharSetPtr = function(this: IReplicatedField): Cardinal; cdecl;
 	IReplicatedField_getDataPtr = function(this: IReplicatedField): Pointer; cdecl;
 	IReplicatedField_isPrimaryPtr = function(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
-	IReplicatedField_isUniquePtr = function(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
+	IReplicatedField_isUniquePtr = function(this: IReplicatedField): Boolean; cdecl;
 	IReplicatedRecord_getCountPtr = function(this: IReplicatedRecord): Cardinal; cdecl;
 	IReplicatedRecord_getFieldPtr = function(this: IReplicatedRecord; index: Cardinal): IReplicatedField; cdecl;
 	IReplicatedRecord_getRawLengthPtr = function(this: IReplicatedRecord): Cardinal; cdecl;
@@ -3926,7 +3926,7 @@ type
 		function getCharSet(): Cardinal;
 		function getData(): Pointer;
 		function isPrimary(position: CardinalPtr): Boolean;
-		function isUnique(position: CardinalPtr): Boolean;
+		function isUnique(): Boolean;
 	end;
 
 	IReplicatedFieldImpl = class(IReplicatedField)
@@ -3940,7 +3940,7 @@ type
 		function getCharSet(): Cardinal; virtual; abstract;
 		function getData(): Pointer; virtual; abstract;
 		function isPrimary(position: CardinalPtr): Boolean; virtual; abstract;
-		function isUnique(position: CardinalPtr): Boolean; virtual; abstract;
+		function isUnique(): Boolean; virtual; abstract;
 	end;
 
 	ReplicatedRecordVTable = class(VersionedVTable)
@@ -10190,13 +10190,13 @@ begin
 	end;
 end;
 
-function IReplicatedField.isUnique(position: CardinalPtr): Boolean;
+function IReplicatedField.isUnique(): Boolean;
 begin
 	if (vTable.version < 3) then begin
 		Result := false;
 	end
 	else begin
-		Result := ReplicatedFieldVTable(vTable).isUnique(Self, position);
+		Result := ReplicatedFieldVTable(vTable).isUnique(Self);
 	end;
 end;
 
@@ -17691,11 +17691,11 @@ begin
 	end
 end;
 
-function IReplicatedFieldImpl_isUniqueDispatcher(this: IReplicatedField; position: CardinalPtr): Boolean; cdecl;
+function IReplicatedFieldImpl_isUniqueDispatcher(this: IReplicatedField): Boolean; cdecl;
 begin
 	Result := false;
 	try
-		Result := IReplicatedFieldImpl(this).isUnique(position);
+		Result := IReplicatedFieldImpl(this).isUnique();
 	except
 		on e: Exception do FbException.catchException(nil, e);
 	end
