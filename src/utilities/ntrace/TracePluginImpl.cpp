@@ -633,7 +633,7 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 {
 	string temp;
 
-	temp.printf("%7" UQUADFORMAT" ms" NEWLINE, stats->getElapsedTime());
+	temp.printf("%7" UQUADFORMAT" ms", stats->getElapsedTime());
 	record.append(temp);
 
 	const auto pageCounters = stats->getCounters(IPerformanceStats::COUNTER_GROUP_PAGES);
@@ -641,40 +641,70 @@ void TracePluginImpl::appendGlobalCounts(IPerformanceStats* stats)
 
 	if (const auto count = pageCounters->getObjectCount())
 	{
+		// Holds counters: IPerformanceCounters::PAGE_{FETCHES|READS|MARKS|WRITES}
+		static constexpr unsigned GLOBAL_COUNTERS = 4;
+		SINT64 globalCounters[GLOBAL_COUNTERS] = {0};
+
+		// First pass: summarize counters and report them as a one-liner
+
 		for (unsigned i = 0; i < count; i++)
 		{
 			const auto counters = pageCounters->getObjectCounters(i);
-			const auto name = pageCounters->getObjectName(i);
+			for (unsigned j = 0; j < GLOBAL_COUNTERS; j++)
+				globalCounters[j] += counters[j];
 
-			temp.clear();
+		}
 
-			auto addStat = [&](unsigned index, const char* suffix)
+		auto addSummaryStat = [&](unsigned index, const char* suffix)
+		{
+			if (const auto cnt = globalCounters[index])
 			{
-				if (const auto cnt = counters[index])
-				{
-					const bool firstStat = temp.isEmpty();
-					if (firstStat && name)
-						temp.printf("%s: ", name);
-
-					const auto prefix = firstStat ? "" : ", ";
-					string stat;
-					stat.printf("%s%" SQUADFORMAT" %s", prefix, cnt, suffix);
-					temp += stat;
-				}
-			};
-
-			addStat(IPerformanceCounters::PAGE_READS, "read(s)");
-			addStat(IPerformanceCounters::PAGE_WRITES, "write(s)");
-			addStat(IPerformanceCounters::PAGE_FETCHES, "fetch(es)");
-			addStat(IPerformanceCounters::PAGE_MARKS, "mark(s)");
-
-			if (temp.hasData())
-			{
+				temp.printf(", %" QUADFORMAT"d read(s)", cnt);
 				record.append(temp);
+			}
+		};
+
+		addSummaryStat(IPerformanceCounters::PAGE_READS, "read(s)");
+		addSummaryStat(IPerformanceCounters::PAGE_WRITES, "write(s)");
+		addSummaryStat(IPerformanceCounters::PAGE_FETCHES, "fetch(es)");
+		addSummaryStat(IPerformanceCounters::PAGE_MARKS, "mark(s)");
+
+		record.append(NEWLINE);
+
+		if (config.print_perf)
+		{
+			// Second pass: report one line per tablespace
+
+			for (unsigned i = 0; i < count; i++)
+			{
+				const auto counters = pageCounters->getObjectCounters(i);
+				const auto name = pageCounters->getObjectName(i);
+
+				temp.printf("%s: ", name);
+				record.append(temp);
+				unsigned position = 0;
+
+				auto addTablespaceStat = [&](unsigned index, const char* suffix)
+				{
+					if (const auto cnt = counters[index])
+					{
+						const auto prefix = position++ ? ", " : "";
+						temp.printf("%s%" SQUADFORMAT" %s", prefix, cnt, suffix);
+						record.append(temp);
+					}
+				};
+
+				addTablespaceStat(IPerformanceCounters::PAGE_READS, "read(s)");
+				addTablespaceStat(IPerformanceCounters::PAGE_WRITES, "write(s)");
+				addTablespaceStat(IPerformanceCounters::PAGE_FETCHES, "fetch(es)");
+				addTablespaceStat(IPerformanceCounters::PAGE_MARKS, "mark(s)");
+
 				record.append(NEWLINE);
 			}
 		}
 	}
+	else
+		record.append(NEWLINE);
 }
 
 void TracePluginImpl::appendTableCounts(IPerformanceStats* stats)
