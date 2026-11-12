@@ -1621,6 +1621,39 @@ void afterInsertRelation(thread_db* tdbb, Record* record)
 	}
 }
 
+
+void afterInsertTablespace(thread_db* tdbb, Record* record)
+{
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
+
+	if (!attachment->isRWGbak())
+		return;
+
+	dsc desc;
+	if (!EVL_field(nullptr, record, f_ts_id, &desc))
+	{
+		fb_assert(false);
+		return;
+	}
+
+	const auto tsId(static_cast<ULONG>(MOV_get_long(tdbb, &desc, 0)));
+	fb_assert(PageSpace::isTablespace(tsId)); // this is user tablespace
+
+	// Get the tablespace file name from the record
+	if (!EVL_field(nullptr, record, f_ts_file, &desc))
+	{
+		fb_assert(false);
+		return;
+	}
+
+	string fileName;
+	MOV_get_string(tdbb, &desc, fileName);
+
+	// Allocate the page space (create file if needed)
+	dbb->dbb_page_manager.allocatePageSpace(tdbb, tsId, true, fileName.ToPathName());
+}
+
 template<USHORT Field, class CachedType, class IdType = MetaId>
 void populateCache(thread_db* tdbb, Record* record)
 {
@@ -1865,6 +1898,10 @@ void SystemTriggers::executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relati
 
 		case rel_packages:
 			populateCache<f_pkg_id, Cached::Package>(tdbb, record);
+			break;
+
+		case rel_tablespaces:
+			afterInsertTablespace(tdbb, record);
 			break;
 	}
 }
