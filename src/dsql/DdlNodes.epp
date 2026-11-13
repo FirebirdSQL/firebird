@@ -8947,7 +8947,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 					tfb->tfb_id = RFR.RDB$FIELD_ID;
 
 					if ((n = FLD.RDB$DIMENSIONS))
-						setupArray(tdbb, blob, FLD.RDB$FIELD_NAME, n, tfb);
+						setupArray(tdbb, blob, FLD.RDB$FIELD_NAME, n, tfb, transaction);
 
 					if (external_flag)
 					{
@@ -8975,7 +8975,7 @@ void RelationNode::makeVersion(thread_db* tdbb, jrd_tra* transaction, const Qual
 			 				 Arg::Gds(isc_must_have_phys_field));
 				}
 
-				blob = setupTriggers(tdbb, relation, null_view, triggers, blob);
+				blob = setupTriggers(tdbb, relation, null_view, triggers, blob, transaction);
 
 				blob->BLB_close(tdbb);
 				USHORT version = REL.RDB$FORMAT.NULL ? 0 : REL.RDB$FORMAT;
@@ -9160,7 +9160,7 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 
 
 blb* RelationNode::setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
-	TrigArray* triggers, blb* blob)
+	TrigArray* triggers, blb* blob, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -9194,7 +9194,7 @@ blb* RelationNode::setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_v
 
 	request_fmtx.reset(tdbb, irq_format4, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request_fmtx)
+	FOR (REQUEST_HANDLE request_fmtx TRANSACTION_HANDLE transaction)
 		TRG IN RDB$TRIGGERS
 		WITH TRG.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
 			 TRG.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
@@ -9210,7 +9210,7 @@ blb* RelationNode::setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_v
 
 	request_fmtx.reset(tdbb, irq_format5, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request_fmtx)
+	FOR (REQUEST_HANDLE request_fmtx TRANSACTION_HANDLE transaction)
 		TRG IN RDB$TRIGGERS
 		WITH TRG.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
 			 TRG.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
@@ -9241,7 +9241,7 @@ blb* RelationNode::setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_v
 
 	request_fmtx.reset(tdbb, irq_format6, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request_fmtx)
+	FOR (REQUEST_HANDLE request_fmtx TRANSACTION_HANDLE transaction)
 		TRG IN RDB$TRIGGERS
 		WITH TRG.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
 			 TRG.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
@@ -9398,7 +9398,7 @@ bool RelationNode::validateTextType(thread_db* tdbb, const TemporaryField* tfb)
 
 
 void RelationNode::setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name, USHORT n,
-	TemporaryField* tfb)
+	TemporaryField* tfb, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -9421,12 +9421,12 @@ void RelationNode::setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name
 	array->iad_dimensions = n;
 	array->iad_struct_count = 1;
 	array->iad_rpt[0].iad_desc = tfb->tfb_desc;
-	getArrayDesc(tdbb, field_name, array);
+	getArrayDesc(tdbb, field_name, array, transaction);
 	putSummaryRecord(tdbb, blob, RSR_array_desc, (UCHAR*) array, array->iad_length);
 }
 
 
-void RelationNode::getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc)
+void RelationNode::getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -9444,7 +9444,7 @@ void RelationNode::getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::In
 	AutoCacheRequest request(tdbb, irq_r_fld_dim, IRQ_REQUESTS);
 
 	Ods::InternalArrayDesc::iad_repeat* ranges = 0;
-	FOR (REQUEST_HANDLE request)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		D IN RDB$FIELD_DIMENSIONS WITH D.RDB$FIELD_NAME EQ field_name
 	{
 		if (D.RDB$DIMENSION >= 0 && D.RDB$DIMENSION < desc->iad_dimensions)
