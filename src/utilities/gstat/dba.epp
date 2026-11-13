@@ -1111,9 +1111,10 @@ int gstat(Firebird::UtilSvc* uSvc)
 			uSvc->printf(false, "    Pointer pages: %ld, data page slots: %ld\n",
 						 relation->rel_pointer_pages, relation->rel_slots);
 
-			const double average = (relation->rel_data_pages) ?
+			const auto nonEmptyPages = relation->rel_data_pages - relation->rel_empty_pages;
+			const double average = nonEmptyPages ?
 				(double) relation->rel_total_space * 100 /
-				((double) relation->rel_data_pages * (tddba->page_size - DPG_SIZE)) : 0.0;
+				((double) nonEmptyPages * (tddba->page_size - DPG_SIZE)) : 0.0;
 			sprintf((char*) buf, "%.0f%%", average);
 			//dba_print(false, 12, SafeArg() << relation->rel_data_pages << relation->rel_slots << buf);
 			// msg 12: "    Data pages: %ld, data page slots: %ld, average fill: %s
@@ -1432,7 +1433,6 @@ static void analyze_data( dba_rel* relation, bool sw_record)
 			++relation->rel_slots;
 			if (*ptr)
 			{
-				++relation->rel_data_pages;
 				if (!analyze_data_page(relation, (const data_page*) db_read(*ptr), sw_record))
 				{
 					dba_print(false, 18, SafeArg() << *ptr);
@@ -1472,6 +1472,8 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 	if (page->dpg_header.pag_type != pag_data)
 		return false;
 
+	++relation->rel_data_pages;
+
 	if (sw_record)
 	{
 		memcpy(tddba->buffer2, (const SCHAR*) page, tddba->page_size);
@@ -1485,7 +1487,7 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 	{
 		if (tail->dpg_offset && tail->dpg_length)
 		{
-			space += tail->dpg_length;
+			space += FB_ALIGN(tail->dpg_length, ODS_ALIGNMENT);
 
 			if (sw_record)
 			{
