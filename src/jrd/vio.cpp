@@ -100,6 +100,8 @@
 using namespace Jrd;
 using namespace Firebird;
 
+enum class UpdateKind {IRRELEVANT, MISSING, REGULAR};
+
 static void check_class(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
 static bool check_nullify_source(thread_db*, record_param*, record_param*, int, int = -1);
 static void check_owner(thread_db*, jrd_tra*, record_param*, record_param*, USHORT);
@@ -109,8 +111,8 @@ static void check_rel_field_class(thread_db*, record_param*, jrd_tra*);
 static void delete_record(thread_db*, record_param*, ULONG, MemoryPool*);
 static UCHAR* delete_tail(thread_db*, record_param*, ULONG, UCHAR* = nullptr, const UCHAR* = nullptr);
 static void expunge(thread_db*, record_param*, const jrd_tra*, ULONG);
-static bool dfw_should_know(thread_db*, record_param* org_rpb, record_param* new_rpb,
-	USHORT irrelevant_field, bool void_update_is_relevant = false);
+static UpdateKind dfw_should_know(thread_db*, record_param* org_rpb, record_param* new_rpb,
+	USHORT irrelevant_field);
 static void garbage_collect(thread_db*, record_param*, ULONG, RecordStack&);
 
 
@@ -3450,7 +3452,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_rel_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_rel_owner);
-			RelationPermanent::newVersion(tdbb, object_name);
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_rel_desc) == UpdateKind::REGULAR)
+				RelationPermanent::newVersion(tdbb, object_name);
 			break;
 
 		case rel_packages:
@@ -3500,7 +3503,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_prc_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_prc_owner);
 
-			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_prc_desc, true))
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_prc_desc) != UpdateKind::IRRELEVANT)
 			{
 				EVL_field(0, org_rpb->rpb_record, f_prc_id, &desc2);
 				const USHORT id = MOV_get_long(tdbb, &desc2, 0);
@@ -3536,7 +3539,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_fun_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_fun_owner);
 
-			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_fun_desc, true))
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_fun_desc) != UpdateKind::IRRELEVANT)
 			{
 				EVL_field(0, org_rpb->rpb_record, f_fun_id, &desc2);
 				const USHORT id = MOV_get_long(tdbb, &desc2, 0);
@@ -3553,8 +3556,11 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_rfr:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 			{
-				check_rel_field_class(tdbb, org_rpb, transaction);
-				check_rel_field_class(tdbb, new_rpb, transaction);
+				if (dfw_should_know(tdbb, org_rpb, new_rpb, f_rfr_desc) == UpdateKind::REGULAR)
+				{
+					check_rel_field_class(tdbb, org_rpb, transaction);
+					check_rel_field_class(tdbb, new_rpb, transaction);
+				}
 				check_class(tdbb, transaction, org_rpb, new_rpb, f_rfr_class);
 
 				bool rc1 = EVL_field(NULL, org_rpb->rpb_record, f_rfr_null_flag, &desc1);
@@ -3591,7 +3597,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_fields:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 
-			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_fld_desc, true))
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_fld_desc) != UpdateKind::IRRELEVANT)
 			{
 				EVL_field(0, org_rpb->rpb_record, f_fld_schema, &schemaDesc);
 				EVL_field(0, org_rpb->rpb_record, f_fld_name, &desc1);
@@ -3649,7 +3655,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 		case rel_indices:
 			protect_system_table_delupd(tdbb, relation, "UPDATE");
 
-			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_desc, true))
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_desc) != UpdateKind::IRRELEVANT)
 			{
 				dsc dscId;
 				EVL_field(0, new_rpb->rpb_record, f_idx_schema, &schemaDesc);
@@ -3661,7 +3667,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 				EVL_field(0, new_rpb->rpb_record, f_idx_relation, &desc2);
 				EVL_field(0, new_rpb->rpb_record, f_idx_id, &dscId);
 
-				if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_ts_name, true))
+				if (dfw_should_know(tdbb, org_rpb, new_rpb, f_idx_ts_name) != UpdateKind::IRRELEVANT)
 				{
 					MOV_get_metaname(tdbb, &schemaDesc, object_name.schema);
 					MOV_get_metaname(tdbb, &desc2, object_name.object);
@@ -3706,7 +3712,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 				else if (onRelation)
 					SCL_check_relation(tdbb, object_name, SCL_control | SCL_alter);
 
-				if (dfw_should_know(tdbb, org_rpb, new_rpb, f_trg_desc, true))
+				auto upKind = dfw_should_know(tdbb, org_rpb, new_rpb, f_trg_desc);
+				if (upKind != UpdateKind::IRRELEVANT)
 				{
 					USHORT trg_type = EVL_field(0, org_rpb->rpb_record, f_trg_type, &desc2) ?
 						(USHORT) MOV_get_int64(tdbb, &desc2, 0) : 0;
@@ -3716,7 +3723,8 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 
 					if (onRelation)
 					{
-						RelationPermanent::newVersion(tdbb, object_name);
+						if (upKind == UpdateKind::REGULAR)
+							RelationPermanent::newVersion(tdbb, object_name);
 
 						USHORT new_trg_type = EVL_field(0, new_rpb->rpb_record, f_trg_type, &desc2) ?
 							(USHORT) MOV_get_int64(tdbb, &desc2, 0) : 0;
@@ -3797,7 +3805,7 @@ bool VIO_modify(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb, j
 			check_class(tdbb, transaction, org_rpb, new_rpb, f_ts_class);
 			check_owner(tdbb, transaction, org_rpb, new_rpb, f_ts_owner);
 
-			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_ts_desc, true))
+			if (dfw_should_know(tdbb, org_rpb, new_rpb, f_ts_desc) != UpdateKind::IRRELEVANT)
 			{
 				EVL_field(0, new_rpb->rpb_record, f_ts_id, &desc1);
 				const ULONG id = MOV_get_long(tdbb, &desc1, 0);
@@ -5499,11 +5507,8 @@ static UCHAR* delete_tail(thread_db* tdbb,
 }
 
 
-static bool dfw_should_know(thread_db* tdbb,
-							record_param* org_rpb,
-							record_param* new_rpb,
-							USHORT irrelevant_field,
-							bool void_update_is_relevant)
+static UpdateKind dfw_should_know(thread_db* tdbb, record_param* org_rpb, record_param* new_rpb,
+	USHORT irrelevant_field)
 {
 /**************************************
  *
@@ -5515,9 +5520,9 @@ static bool dfw_should_know(thread_db* tdbb,
  * Not all operations on system tables are relevant to inform DFW.
  * In particular, changing comments on objects is irrelevant.
  * Engine often performs empty update to force some tasks (e.g. to
- * recreate index after field type change). So we must return true
- * if relevant field changed or if no fields changed. Or we must
- * return false if only irrelevant field changed.
+ * recreate index after field type change). So we must return REGULAR
+ * if relevant field changed, or MISSING if no fields changed, or
+ * IRRELEVANT if only irrelevant field changed.
  *
  **************************************/
 	dsc desc2, desc3;
@@ -5529,12 +5534,12 @@ static bool dfw_should_know(thread_db* tdbb,
 		if (flag_org != flag_new || (flag_new && MOV_compare(tdbb, &desc2, &desc3)))
 		{
 			if (iter != irrelevant_field)
-				return true;
+				return UpdateKind::REGULAR;
 
 			irrelevant_changed = true;
 		}
 	}
-	return void_update_is_relevant ? !irrelevant_changed : false;
+	return irrelevant_changed ? UpdateKind::IRRELEVANT : UpdateKind::MISSING;
 }
 
 
