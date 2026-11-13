@@ -177,6 +177,12 @@ bool putFileFromArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 
 	fseek(file, 0, SEEK_END);
 	const long len = ftell(file);
+	if (len < 0)
+	{
+		auto err = errno;
+		fclose(file);
+		(Arg::Gds(isc_fbsvcmgr_fp_read) << *av << Arg::Unix(err)).raise();
+	}
 	if (len == 0)
 	{
 		fclose(file);

@@ -1933,10 +1933,16 @@ static void cmp_value( const gpre_nod* node, gpre_req* request)
 	const ref* reference = (ref*) node->nod_arg[0];
 
 	if (!reference)
+	{
 		puts("cmp_value: missing reference");
+		return;
+	}
 
 	if (!reference->ref_port)
+	{
 		puts("cmp_value: port missing");
+		return;
+	}
 
 	const ref* flag = reference->ref_null;
 	if (flag)
