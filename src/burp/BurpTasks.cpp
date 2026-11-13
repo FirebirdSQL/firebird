@@ -648,7 +648,7 @@ bool BackupRelationTask::fileWriter(Item& item)
 		{
 			verb = (records / tdgbl->verboseInterval);
 			verbRecs = verb * tdgbl->verboseInterval;
-			BURP_verbose(108, SafeArg() << (verbRecs) /*records*/);
+			BURP_verbose(108, SafeArg() << (verbRecs));
 		}
 	}
 
