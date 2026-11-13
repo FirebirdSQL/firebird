@@ -131,7 +131,7 @@ public:
 	MemoryPool&		dbb_pool;			// The current pool for the dbb
 	Attachment*		dbb_attachment;
 	MetaName dbb_dfl_charset;
-	bool			dbb_no_charset;
+	bool			dbb_no_charset = false;
 
 	dsql_dbb(MemoryPool& p, Attachment* attachment);
 	~dsql_dbb();

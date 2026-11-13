@@ -107,7 +107,6 @@ private:
 	Firebird::Semaphore m_startupSemaphore;
 	ThreadFinishSync<EventManager*> m_cleanupSync;
 
-	bool m_sharedFileCreated;
 	bool m_exiting;
 };
 

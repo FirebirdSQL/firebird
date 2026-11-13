@@ -9278,6 +9278,16 @@ static processing_state process_statement(const TEXT* str2)
 	{
 		header = (TEXT*) ISQL_ALLOC(linelength);
 		header2 = (TEXT*) ISQL_ALLOC(linelength);
+		if (!header || !header2)
+		{
+			Firebird::Arg::Gds(isc_virmemexh).copyTo(fbStatus);
+			ISQL_errmsg(fbStatus);
+			ISQL_FREE(header);
+			ISQL_FREE(header2);
+
+			return ps_ERR;
+		}
+
 		*header = '\0';
 		*header2 = '\0';
 
