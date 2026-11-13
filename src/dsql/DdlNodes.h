@@ -1739,14 +1739,16 @@ public:
 
 private:
 	static blb* setupTriggers(thread_db* tdbb, jrd_rel* relation, bool null_view,
-		TrigArray* triggers, blb* blob);
+		TrigArray* triggers, blb* blob, jrd_tra* transaction);
 	static void setupTriggerDetails(thread_db* tdbb, jrd_rel* relation, blb* blob, TrigArray* triggers,
 		const QualifiedName& trigger_name, bool null_view);
 	static void putSummaryRecord(thread_db* tdbb, blb* blob, rsr_t type, const UCHAR* data, ULONG length);
 	static void putSummaryBlob(thread_db* tdbb, blb* blob, rsr_t type, bid* blob_id, jrd_tra* transaction);
 	static bool validateTextType(thread_db* tdbb, const TemporaryField* tfb);
-	static void setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name, USHORT n, TemporaryField* tfb);
-	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc);
+	static void setupArray(thread_db* tdbb, blb* blob, const TEXT* field_name, USHORT n, TemporaryField* tfb,
+		jrd_tra* transaction);
+	static void getArrayDesc(thread_db* tdbb, const TEXT* field_name, Ods::InternalArrayDesc* desc,
+		jrd_tra* transaction);
 
 public:
 	bool isCreatedLtt() const
