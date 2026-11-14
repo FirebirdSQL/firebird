@@ -351,7 +351,8 @@ public:
 				 unsigned int bufferLength, unsigned char* buffer) override;
 
 	ResultSet(Statement* s, IMessageMetadata* outFmt, unsigned f)
-		: stmt(s), flags(f), tmpStatement(false), delayedFormat(outFmt == DELAYED_OUT_FORMAT)
+		: stmt(s), flags(f), cachedBlr(getPool()), tmpStatement(false),
+		  delayedFormat(outFmt == DELAYED_OUT_FORMAT)
 	{
 		if (!delayedFormat)
 			outputFormat = outFmt;
@@ -366,6 +367,15 @@ private:
 	Statement* stmt;
 	const unsigned flags;
 	RefPtr<IMessageMetadata> outputFormat;
+
+	// outputFormat is fixed for the cursor (it only changes through
+	// setDelayedOutputFormat), so its BLR and parsed format are built once,
+	// not on every fetch: per-row allocations from the default memory pool
+	// serialize fetches done by several threads in one process.
+	UCharBuffer cachedBlr;
+	unsigned cachedMsgLength = 0;
+	bool blrCached = false;
+	rem_fmt* parsedUserFormat = nullptr;
 
 public:
 	bool tmpStatement, delayedFormat;
@@ -4886,6 +4896,10 @@ void ResultSet::setDelayedOutputFormat(CheckStatusWrapper* status, IMessageMetad
 			(Arg::Gds(isc_dsql_cursor_err) << Arg::Gds(isc_bad_req_handle)).raise();
 		}
 
+		// Defensive: fetch() raises while delayedFormat is set, so nothing is cached yet.
+		// Reset before clearing delayedFormat, so no fetch can build the cache in between.
+		blrCached = false;
+		parsedUserFormat = nullptr;
 		outputFormat = format;
 		delayedFormat = false;
 	}
@@ -4934,18 +4948,25 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 	const bool relative =
 		(operation == fetch_next || operation == fetch_prior || operation == fetch_relative);
 
-	BlrFromMessage outBlr(outputFormat, stmt->getDialect(), port->port_protocol);
-	unsigned int blr_length = outBlr.getLength();
-	const UCHAR* blr = outBlr.getBytes();
-	const unsigned int msg_length = outBlr.getMsgLength();
+	RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
+
+	// Built under the port lock: the cache is shared by every caller of this result set.
+	if (!blrCached)
+	{
+		BlrFromMessage outBlr(outputFormat, stmt->getDialect(), port->port_protocol);
+		cachedBlr.assign(outBlr.getBytes(), outBlr.getLength());
+		cachedMsgLength = outBlr.getMsgLength();
+		blrCached = true;
+	}
+	unsigned int blr_length = cachedBlr.getCount();
+	const UCHAR* blr = cachedBlr.begin();
+	const unsigned int msg_length = cachedMsgLength;
 	UCHAR* msg = static_cast<UCHAR*>(buffer);
 
 	// Validate data length
 
 	CHECK_LENGTH(port, blr_length);
 	CHECK_LENGTH(port, msg_length);
-
-	RefMutexGuard portGuard(*port->port_sync, FB_FUNCTION);
 
 	if (!statement->rsr_flags.test(Rsr::FETCHED))
 	{
@@ -5004,13 +5025,21 @@ bool ResultSet::fetch(CheckStatusWrapper* status, void* buffer, P_FETCH operatio
 
 	if (blr_length)
 	{
-		if (statement->rsr_user_select_format &&
-			statement->rsr_user_select_format != statement->rsr_select_format)
+		// Parse once per result set. Before the first fetch (FETCHED not set) the
+		// parsed format becomes rsr_select_format below, replacing the old one,
+		// so it must be a fresh object even if one was parsed already.
+		if (!statement->rsr_flags.test(Rsr::FETCHED) || !parsedUserFormat ||
+			statement->rsr_user_select_format != parsedUserFormat)
 		{
-			delete statement->rsr_user_select_format;
-		}
+			if (statement->rsr_user_select_format &&
+				statement->rsr_user_select_format != statement->rsr_select_format)
+			{
+				delete statement->rsr_user_select_format;
+			}
 
-		statement->rsr_user_select_format = PARSE_msg_format(blr, blr_length);
+			statement->rsr_user_select_format = PARSE_msg_format(blr, blr_length);
+			parsedUserFormat = statement->rsr_user_select_format;
+		}
 
 		if (statement->rsr_flags.test(Rsr::FETCHED))
 			blr_length = 0;
