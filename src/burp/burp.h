@@ -1067,7 +1067,8 @@ public:
 		  firstMap(true),
 		  firstDbc(true),
 		  stdIoMode(false),
-		  tablespace_mapping(*getDefaultMemoryPool())
+		  tablespaceFileMap(*getDefaultMemoryPool()),
+		  metaDictionary(*getDefaultMemoryPool())
 	{
 		// this is VERY dirty hack to keep current (pre-FB2) behaviour
 		memset (&gbl_database_file_name, 0,
@@ -1321,9 +1322,43 @@ public:
 	Firebird::AutoPtr<Firebird::SimilarToRegex> skipDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeSchemaDataMatcher;
 	Firebird::AutoPtr<Firebird::SimilarToRegex> includeDataMatcher;
-	StringMap tablespace_mapping;	// Will be used to overwrite filename of tablespace with given name
+	StringMap tablespaceFileMap;	// Will be used to overwrite filename of tablespace with given name
 
-public:
+	union MetaObjectValue
+	{
+		burp_pkg* package;
+		burp_rel* relation;
+		burp_prc* procedure;
+		burp_meta_obj* object;
+
+		MetaObjectValue(burp_pkg* value) : package(value) {}
+		MetaObjectValue(burp_rel* value) : relation(value) {}
+		MetaObjectValue(burp_prc* value) : procedure(value) {}
+		MetaObjectValue(burp_meta_obj* value) : object(value) {}
+	};
+
+	typedef Firebird::RightPooledPair<SSHORT, Firebird::QualifiedMetaString> MetaObjectKey;
+	typedef Firebird::LeftPooledMap<MetaObjectKey, MetaObjectValue> MetaDictionary;
+
+	MetaDictionary metaDictionary;
+
+	template <typename T>
+	void putToDictionary(SSHORT type, const Firebird::QualifiedMetaString& name, T* value)
+	{
+		fb_assert(name.hasData() && value != nullptr);
+		metaDictionary.put({type, name}, value);
+	}
+
+	burp_meta_obj* getMetaObject(SSHORT type, const Firebird::QualifiedMetaString& name) const
+	{
+		const auto result = metaDictionary.get({type, name});
+		return result ? result->object : nullptr;
+	}
+
+	burp_pkg* getPackage(const Firebird::QualifiedMetaString& name) const;
+	burp_rel* getRelation(const Firebird::QualifiedMetaString& name) const;
+	burp_prc* getProcedure(const Firebird::QualifiedMetaString& name) const;
+
 	Firebird::string toSystem(const Firebird::PathName& from);
 
 	enum StatCounter { TIME_TOTAL = 0, TIME_DELTA, READS, WRITES, LAST_COUNTER};
