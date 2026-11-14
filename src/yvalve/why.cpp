@@ -28,6 +28,7 @@
  */
 
 #include "firebird.h"
+#include <atomic>
 #include <utility>
 
 #define FB_UsedInYValve true
@@ -50,6 +51,7 @@
 #include "../common/os/path_utils.h"
 #include "../common/os/os_utils.h"
 #include "../common/classes/alloc.h"
+#include "../common/classes/auto.h"
 #include "../common/classes/array.h"
 #include "../common/classes/stack.h"
 #include "../common/classes/fb_string.h"
@@ -132,11 +134,13 @@ class SQLDAMetadata final :
 	public RefCntIface<IMessageMetadataImpl<SQLDAMetadata, CheckStatusWrapper> >
 {
 friend class SQLDAMetadataLauncher;
+friend class SQLDAFetchCache;
 private:
 	int detach(); // is called from launcher class when it goes off
 
 	// Fool-proof requested by Alex
-	// Private memory operators to be sure that this class is used in heap only with launcher
+	// Private memory operators to be sure that this class is used in heap only through
+	// SQLDAMetadataLauncher or SQLDAFetchCache, which manage its binding to the XSQLDA
 	void* operator new (size_t s, Firebird::MemoryPool& pool ALLOC_PARAMS) { return pool.allocate(s ALLOC_PASS_ARGS); }
 	void operator delete (void* mem, Firebird::MemoryPool& ALLOC_PARAMS_DEF) { MemoryPool::globalFree(mem); }
 	void operator delete (void* mem) { MemoryPool::globalFree(mem); }
@@ -521,7 +525,7 @@ void SQLDAMetadata::gatherData(DataBuffer& to)
 		return;
 	}
 
-	const unsigned l = getMessageLength(NULL);
+	const unsigned l = getMessageLength(nullptr);
 	if (speedHackEnabled)
 	{
 		to.assign(reinterpret_cast<UCHAR*>(sqlda->sqlvar[0].sqldata), l);
@@ -628,7 +632,7 @@ UCHAR* SQLDAMetadataLauncher::getBuffer()
 	if (metadata)
 	{
 		// ASF: It's important to call getMessageLength before check speedHackEnabled.
-		const unsigned length = metadata->getMessageLength(NULL);
+		const unsigned length = metadata->getMessageLength(nullptr);
 
 		if (metadata->speedHackEnabled)
 			return reinterpret_cast<UCHAR*>(metadata->sqlda->sqlvar[0].sqldata);
@@ -641,6 +645,146 @@ UCHAR* SQLDAMetadataLauncher::getBuffer()
 		return NULL;
 	}
 }
+
+// Per-statement SQLDAMetadata for isc_dsql_fetch. Building a new one on every
+// fetch allocates from the default memory pool several times per row, and that
+// pool's mutex serializes fetches done by several threads of one process. The
+// metadata is reused while the caller passes an XSQLDA of the same shape (the
+// fields SQLDAMetadata::assign() reads: sqld, type, subtype, scale, length and
+// data locations). Like SQLDAMetadataLauncher::detach(), it is unbound from the
+// XSQLDA after every call, so it never refers to the caller's XSQLDA outside a
+// call. One thread uses the cache at a time; a concurrent fetch on the same
+// handle (tryAcquire() fails) takes the launcher path, as before.
+class SQLDAFetchCache
+{
+public:
+	explicit SQLDAFetchCache(MemoryPool& p)
+		: shape(p), buffer(p)
+	{ }
+
+	~SQLDAFetchCache()
+	{
+		reset();
+	}
+
+	static bool usable(const XSQLDA* sqlda)
+	{
+		return sqlda && sqlda->version == SQLDA_VERSION1 && sqlda->sqld > 0 && sqlda->sqld <= sqlda->sqln;
+	}
+
+	bool tryAcquire()
+	{
+		bool expected = false;
+		return busy.compare_exchange_strong(expected, true, std::memory_order_acquire);
+	}
+
+	// Unbinds the metadata from the caller's XSQLDA and frees the cache for the next call.
+	void unlock()
+	{
+		unbind();
+		busy.store(false, std::memory_order_release);
+	}
+
+	SQLDAMetadata* bind(const XSQLDA* sqlda)
+	{
+		if (!metadata || !sameShape(sqlda))
+		{
+			reset();
+			metadata = FB_NEW SQLDAMetadata(sqlda);
+			metadata->addRef();
+			metadata->getMessageLength(nullptr);	// assign(): offsets and the speed hack
+			speedHack = metadata->speedHackEnabled;
+			saveShape(sqlda);
+		}
+
+		metadata->sqlda = sqlda;
+		metadata->speedHackEnabled = speedHack;
+		return metadata;
+	}
+
+	UCHAR* getBuffer()
+	{
+		const unsigned length = metadata->getMessageLength(nullptr);
+
+		if (metadata->speedHackEnabled)
+			return reinterpret_cast<UCHAR*>(metadata->sqlda->sqlvar[0].sqldata);
+
+		return buffer.getBuffer(length, false);
+	}
+
+	void scatterData()
+	{
+		metadata->scatterData(buffer);
+	}
+
+private:
+	struct VarShape
+	{
+		ISC_SHORT type, subType, scale, length;
+		const void* data;
+		const void* ind;
+	};
+
+	void unbind()
+	{
+		if (metadata)
+		{
+			metadata->sqlda = nullptr;
+			metadata->speedHackEnabled = false;
+		}
+	}
+
+	void reset()
+	{
+		if (metadata)
+		{
+			unbind();
+			metadata->release();
+			metadata = nullptr;
+		}
+		shape.clear();
+	}
+
+	static VarShape shapeOf(const XSQLVAR& v)
+	{
+		VarShape r = {v.sqltype, v.sqlsubtype, v.sqlscale, v.sqllen, v.sqldata, v.sqlind};
+		return r;
+	}
+
+	bool sameShape(const XSQLDA* sqlda) const
+	{
+		if (shape.getCount() != (FB_SIZE_T) sqlda->sqld)
+			return false;
+
+		for (FB_SIZE_T i = 0; i < shape.getCount(); ++i)
+		{
+			const VarShape a = shapeOf(sqlda->sqlvar[i]);
+			const VarShape& b = shape[i];
+			if (a.type != b.type || a.subType != b.subType || a.scale != b.scale ||
+				a.length != b.length || a.data != b.data || a.ind != b.ind)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void saveShape(const XSQLDA* sqlda)
+	{
+		// Size first: if that throws, the shape stays empty and can't match anything.
+		shape.clear();
+		shape.resize(sqlda->sqld);
+		for (int i = 0; i < sqlda->sqld; ++i)
+			shape[i] = shapeOf(sqlda->sqlvar[i]);
+	}
+
+	SQLDAMetadata* metadata = nullptr;
+	bool speedHack = false;
+	std::atomic<bool> busy{false};
+	HalfStaticArray<VarShape, 16> shape;
+	SQLDAMetadata::DataBuffer buffer;
+};
 
 IMetadataBuilder* SQLDAMetadata::getBuilder(CheckStatusWrapper* status)
 {
@@ -1235,6 +1379,7 @@ namespace Why
 		explicit IscStatement(YAttachment* aAttachment) noexcept
 			: attachment(aAttachment),
 			  cursorName(getPool()),
+			  fetchCache(getPool()),
 			  statement(NULL),
 			  userHandle(NULL),
 			  pseudoOpened(false),
@@ -1287,6 +1432,7 @@ namespace Why
 
 		AtomicAttPtr attachment;
 		string cursorName;
+		SQLDAFetchCache fetchCache;	// isc_dsql_fetch only
 		YStatement* statement;
 		isc_stmt_handle* userHandle;
 		bool pseudoOpened, delayedFormat;
@@ -2555,12 +2701,30 @@ ISC_STATUS API_ROUTINE isc_dsql_fetch(ISC_STATUS* userStatus, isc_stmt_handle* s
 
 		RefPtr<IscStatement> statement(translateHandle(statements, stmtHandle));
 
-		SQLDAMetadataLauncher outMessage(sqlda);
+		SQLDAFetchCache& cache = statement->fetchCache;
 
-		if (statement->fetch(&statusWrapper, outMessage.metadata, outMessage.getBuffer()))
-			outMessage.scatterData();
-		else if (!(status.getState() & IStatus::STATE_ERRORS))
-			return 100;
+		if (SQLDAFetchCache::usable(sqlda) && cache.tryAcquire())
+		{
+			Cleanup unlockCache([&cache] { cache.unlock(); });
+
+			// bind() before getBuffer(): argument evaluation order is unspecified.
+			SQLDAMetadata* const outMetadata = cache.bind(sqlda);
+			UCHAR* const outBuffer = cache.getBuffer();
+
+			if (statement->fetch(&statusWrapper, outMetadata, outBuffer))
+				cache.scatterData();
+			else if (!(status.getState() & IStatus::STATE_ERRORS))
+				return 100;
+		}
+		else
+		{
+			SQLDAMetadataLauncher outMessage(sqlda);
+
+			if (statement->fetch(&statusWrapper, outMessage.metadata, outMessage.getBuffer()))
+				outMessage.scatterData();
+			else if (!(status.getState() & IStatus::STATE_ERRORS))
+				return 100;
+		}
 	}
 	catch (const Exception& e)
 	{
