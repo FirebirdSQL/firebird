@@ -216,7 +216,16 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 {
 	const auto csb = opt->getCompilerScratch();
 
-	m_next = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next);
+	// The base buffer is needed only by windows without partition and order.
+	for (const auto& window : windows)
+	{
+		if (!window.group && !window.order)
+		{
+			m_next = FB_NEW_POOL(csb->csb_pool) BufferedStream(csb, next);
+			break;
+		}
+	}
+
 	m_impure = csb->allocImpure<Impure>();
 	m_cardinality = next->getCardinality();
 
@@ -276,7 +285,7 @@ WindowedStream::WindowedStream(thread_db* tdbb, Optimizer* opt,
 	}
 
 	if (!m_joinedStream)
-		m_joinedStream = FB_NEW_POOL(csb->csb_pool) BufferedStreamWindow(csb, m_next);
+		m_joinedStream = next;
 
 	// Process ordered windows.
 
@@ -372,7 +381,9 @@ void WindowedStream::internalOpen(thread_db* tdbb) const
 
 	impure->irsb_flags = irsb_open;
 
-	m_next->open(tdbb);
+	if (m_next)
+		m_next->open(tdbb);
+
 	m_joinedStream->open(tdbb);
 }
 
@@ -388,7 +399,9 @@ void WindowedStream::close(thread_db* tdbb) const
 	{
 		impure->irsb_flags &= ~irsb_open;
 		m_joinedStream->close(tdbb);
-		m_next->close(tdbb);
+
+		if (m_next)
+			m_next->close(tdbb);
 	}
 }
 
@@ -520,9 +533,80 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 		}
 	}
 
-	// Peer group ends are needed by RANGE ... AND CURRENT ROW frames and by the pending range of frames
-	// without exclusion. They are found during the partition evaluation, which already reads all
-	// its records, avoiding a look-ahead (and returning back) for each record.
+	// Records are removed from the aggregation only when the frame start moves forward, without
+	// exclusion.
+	m_supportsAggRemove = m_aggSources.hasData() && m_frameExtent &&
+		m_exclusion == Exclusion::NO_OTHERS &&
+		!(m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value) &&
+		!(!m_order && m_frameExtent->unit == FrameExtent::Unit::RANGE);
+
+	// ROWS frames of up to two records with literal offsets never slide with fewer changes than their
+	// size, so they are always aggregated again and do not need what aggRemove costs during aggPass.
+	if (m_supportsAggRemove && m_frameExtent->unit == FrameExtent::Unit::ROWS)
+	{
+		const auto getLiteralOffset = [&](const Frame* frame, SINT64& offset)
+		{
+			if (frame->bound == Frame::Bound::CURRENT_ROW)
+			{
+				offset = 0;
+				return true;
+			}
+
+			const auto literal = nodeAs<LiteralNode>(frame->value);
+
+			if (!literal)
+				return false;
+
+			offset = MOV_get_int64(tdbb, &literal->litDesc, 0);
+
+			if (offset < 0)
+				return false;
+
+			if (frame->bound == Frame::Bound::PRECEDING)
+				offset = -offset;
+
+			return true;
+		};
+
+		SINT64 startOffset, endOffset;
+
+		if (getLiteralOffset(m_frameExtent->frame1, startOffset) &&
+			getLiteralOffset(m_frameExtent->frame2, endOffset) &&
+			endOffset - startOffset + 1 <= 2)
+		{
+			m_supportsAggRemove = false;
+		}
+	}
+
+	// aggRemove evaluates the arguments again, so they must return the same values as when passed.
+	for (const auto source : m_aggSources)
+	{
+		const auto aggNode = nodeAs<AggNode>(source);
+
+		if (!aggNode->supportsAggRemove() || !aggNode->deterministic(tdbb))
+			m_supportsAggRemove = false;
+	}
+
+	if (m_supportsAggRemove)
+	{
+		for (auto& source : m_aggSources)
+			nodeAs<AggNode>(source.getObject())->prepareAggRemove(csb);
+	}
+
+	// With exclusion, records are removed from the aggregation in any order.
+	m_supportsExclusionRemove = m_aggSources.hasData() && m_exclusion != Exclusion::NO_OTHERS;
+
+	for (const auto source : m_aggSources)
+	{
+		const auto aggNode = nodeAs<AggNode>(source);
+
+		if (!aggNode->supportsUnorderedAggRemove() || !aggNode->deterministic(tdbb))
+			m_supportsExclusionRemove = false;
+	}
+
+	// Peer groups are needed by RANGE and GROUPS frame bounds, by the pending range of frames without
+	// exclusion and by the exclusion of peers. Their ends are found during the partition evaluation,
+	// which already reads all its records, avoiding a look-around (and returning back) for each record.
 	if (m_order && m_needsFrame)
 	{
 		const bool rangeOrGroups = m_frameExtent->unit == FrameExtent::Unit::RANGE ||
@@ -531,11 +615,8 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 			m_frameExtent->frame1->bound == Frame::Bound::PRECEDING && !m_frameExtent->frame1->value &&
 			m_frameExtent->frame2->bound == Frame::Bound::FOLLOWING && !m_frameExtent->frame2->value;
 
-		m_usesPeerGroupEnd =
-			(m_frameExtent->unit == FrameExtent::Unit::RANGE &&
-				m_frameExtent->frame2->bound == Frame::Bound::CURRENT_ROW) ||
-			(rangeOrGroups && m_exclusion == Exclusion::NO_OTHERS && !unboundedFrame &&
-				m_frameExtent->frame2->bound != Frame::Bound::CURRENT_ROW);
+		m_usesPeerGroupEnd = (rangeOrGroups && !unboundedFrame) ||
+			m_exclusion == Exclusion::GROUP || m_exclusion == Exclusion::TIES;
 	}
 
 	m_arithNodes.resize(2);
@@ -591,6 +672,12 @@ void WindowedStream::WindowStream::internalOpen(thread_db* tdbb) const
 	impure->partitionBlock.startPosition = impure->partitionBlock.endPosition =
 		impure->partitionPending = impure->rangePending = 0;
 	impure->windowBlock.invalidate();
+	impure->rangeScan[0] = impure->rangeScan[1] = MIN_SINT64;
+	impure->rangeScanCurrent[0] = impure->rangeScanCurrent[1] = true;
+	impure->peerGroupStart = impure->peerGroupEnd = MIN_SINT64;
+	impure->groupIndex = -1;
+	impure->groupScanIndex[0] = impure->groupScanIndex[1] = 0;
+	impure->groupScanStart[0] = impure->groupScanStart[1] = MIN_SINT64;
 
 	unsigned impureCount = m_order ? m_order->expressions.getCount() : 0;
 
@@ -746,6 +833,9 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 
 		fb_assert(impure->partitionPending > 0);
 
+		impure->rangeScan[0] = impure->rangeScan[1] = MIN_SINT64;
+		impure->rangeScanCurrent[0] = impure->rangeScanCurrent[1] = true;
+
 		m_next->locate(tdbb, position);
 		impure->state = STATE_GROUPING;
 	}
@@ -771,6 +861,23 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		}
 	};
 
+	// Add or remove the records from start to end in the aggregation.
+	const auto aggregateRecords = [&](SINT64 start, SINT64 end, bool remove)
+	{
+		m_next->locate(tdbb, start);
+
+		for (SINT64 aggPos = start; aggPos <= end; ++aggPos)
+		{
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+
+			if (remove)
+				aggRemove(tdbb, request);
+			else
+				aggPass(tdbb, request, m_aggSources, m_aggTargets);
+		}
+	};
+
 	if (!m_needsFrame)
 	{
 		// No function depends on the frame, so there is no need to evaluate it.
@@ -782,6 +889,19 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 	else
 	{
 		Block lastWindow = impure->windowBlock;
+
+		// RANGE frames are located for each record when there is exclusion, instead of once for the
+		// peer group. Their start is the start of the peer group in cases where it would be the
+		// current record, so keep track of the peer group of the current record.
+		if (m_order && m_frameExtent->unit == FrameExtent::Unit::RANGE &&
+			m_exclusion != Exclusion::NO_OTHERS &&
+			(m_frameExtent->frame1->bound == Frame::Bound::CURRENT_ROW || m_frameExtent->frame1->value) &&
+			position > impure->peerGroupEnd)
+		{
+			impure->peerGroupStart = position;
+			impure->peerGroupEnd = locatePeerGroupEnd(tdbb, request, impure, position);
+			syncCurrentRecord();
+		}
 
 		// Find the window start.
 
@@ -825,7 +945,8 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
 			m_frameExtent->frame1->bound == Frame::Bound::CURRENT_ROW)
 		{
-			impure->windowBlock.startPosition = position;
+			impure->windowBlock.startPosition = m_exclusion == Exclusion::NO_OTHERS ?
+				position : impure->peerGroupStart;
 		}
 		// range between <n> {preceding | following} and ...
 		else if (m_frameExtent->unit == FrameExtent::Unit::RANGE &&
@@ -941,24 +1062,113 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				MIN(impure->windowBlock.endPosition, impure->partitionBlock.endPosition);
 
 			if (m_exclusion != Exclusion::NO_OTHERS)
-			{
 				getExclusionBlocks(tdbb, request, impure, position, &exclusion1, &exclusion2);
 
-				aggInit(tdbb, request, m_windowMap);
-				m_next->locate(tdbb, impure->windowBlock.startPosition);
+			if (m_aggSources.isEmpty())
+			{
+				// Only functions using the frame bounds (FIRST_VALUE, etc.), no aggregation needed,
+				// but their impure areas still need to be initialized.
+				if (!lastWindow.isValid() || position == impure->partitionBlock.startPosition)
+					aggInit(tdbb, request, m_windowMap);
 
-				SINT64 aggPos = impure->windowBlock.startPosition;
+				syncCurrentRecord();
+			}
+			else if (m_exclusion != Exclusion::NO_OTHERS)
+			{
+				bool aggregated = false;
 
-				while (aggPos <= impure->windowBlock.endPosition)
+				if (m_supportsExclusionRemove && lastWindow.isValid() &&
+					lastWindow.startPosition >= impure->partitionBlock.startPosition)
 				{
-					if (!m_next->getRecord(tdbb))
-						fb_assert(false);
+					// Remove the records that are not in the window anymore or became excluded, and add the
+					// ones that entered the window or are not excluded anymore.
 
-					if (!isExcluded(aggPos, exclusion1, exclusion2))
-						aggPass(tdbb, request, m_aggSources, m_aggTargets);
+					Block lastIncluded[3], included[3];
+					const unsigned lastIncludedCount = getIncludedBlocks(lastWindow,
+						impure->lastExclusion1, impure->lastExclusion2, lastIncluded);
+					const unsigned includedCount = getIncludedBlocks(impure->windowBlock,
+						exclusion1, exclusion2, included);
 
-					++aggPos;
+					// Calls func for the parts of the blocks of the first set not in the second one.
+					const auto forEachDifference = [](const Block* blocks, unsigned count,
+						const Block* others, unsigned otherCount, auto func)
+					{
+						for (unsigned i = 0; i < count; ++i)
+						{
+							SINT64 start = blocks[i].startPosition;
+							const SINT64 end = blocks[i].endPosition;
+
+							for (unsigned j = 0; j < otherCount && start <= end; ++j)
+							{
+								if (others[j].endPosition < start || others[j].startPosition > end)
+									continue;
+
+								if (others[j].startPosition > start)
+									func(start, others[j].startPosition - 1);
+
+								start = others[j].endPosition + 1;
+							}
+
+							if (start <= end)
+								func(start, end);
+						}
+					};
+
+					SINT64 changes = 0;
+					SINT64 size = 0;
+
+					const auto countChanges = [&](SINT64 start, SINT64 end)
+					{
+						changes += end - start + 1;
+					};
+
+					forEachDifference(lastIncluded, lastIncludedCount, included, includedCount, countChanges);
+					forEachDifference(included, includedCount, lastIncluded, lastIncludedCount, countChanges);
+
+					for (unsigned i = 0; i < includedCount; ++i)
+						size += included[i].endPosition - included[i].startPosition + 1;
+
+					if (changes < size)
+					{
+						// Removing first keeps the intermediate results within the values of the last window.
+
+						forEachDifference(lastIncluded, lastIncludedCount, included, includedCount,
+							[&](SINT64 start, SINT64 end)
+							{
+								aggregateRecords(start, end, true);
+							});
+
+						forEachDifference(included, includedCount, lastIncluded, lastIncludedCount,
+							[&](SINT64 start, SINT64 end)
+							{
+								aggregateRecords(start, end, false);
+							});
+
+						aggregated = true;
+					}
 				}
+
+				if (!aggregated)
+				{
+					aggInit(tdbb, request, m_windowMap);
+					m_next->locate(tdbb, impure->windowBlock.startPosition);
+
+					SINT64 aggPos = impure->windowBlock.startPosition;
+
+					while (aggPos <= impure->windowBlock.endPosition)
+					{
+						if (!m_next->getRecord(tdbb))
+							fb_assert(false);
+
+						if (!isExcluded(aggPos, exclusion1, exclusion2))
+							aggPass(tdbb, request, m_aggSources, m_aggTargets);
+
+						++aggPos;
+					}
+				}
+
+				impure->lastExclusion1 = exclusion1;
+				impure->lastExclusion2 = exclusion2;
 
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 
@@ -973,6 +1183,26 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				aggPass(tdbb, request, m_aggSources, m_aggTargets);
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 			}
+			else if (m_supportsAggRemove && lastWindow.isValid() &&
+				lastWindow.startPosition >= impure->partitionBlock.startPosition &&
+				impure->windowBlock.startPosition > lastWindow.startPosition &&
+				impure->windowBlock.endPosition >= lastWindow.endPosition &&
+				(impure->windowBlock.startPosition - lastWindow.startPosition) +
+					(impure->windowBlock.endPosition - lastWindow.endPosition) <
+					impure->windowBlock.endPosition - impure->windowBlock.startPosition + 1)
+			{
+				// The window slides: remove the records that left it and add the ones that entered it.
+				// Removing first keeps the intermediate results within the values of the last window.
+
+				aggregateRecords(lastWindow.startPosition, impure->windowBlock.startPosition - 1, true);
+
+				if (impure->windowBlock.endPosition > lastWindow.endPosition)
+					aggregateRecords(lastWindow.endPosition + 1, impure->windowBlock.endPosition, false);
+
+				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
+
+				syncCurrentRecord();
+			}
 			else
 			{
 				// If possible, reuse the last window aggregation.
@@ -981,43 +1211,30 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				// be used in ordered windows anyway.
 
 				bool recordMoved = false;
+				SINT64 passStart;
 
+				// Records removed from the aggregation must be the first passed, so with aggRemove, do not
+				// pass records before the last window.
 				if (!lastWindow.isValid() ||
 					impure->windowBlock.startPosition > lastWindow.startPosition ||
-					impure->windowBlock.endPosition < lastWindow.endPosition)
+					impure->windowBlock.endPosition < lastWindow.endPosition ||
+					(m_supportsAggRemove && impure->windowBlock.startPosition < lastWindow.startPosition))
 				{
 					aggInit(tdbb, request, m_windowMap);
-					m_next->locate(tdbb, impure->windowBlock.startPosition);
+					passStart = impure->windowBlock.startPosition;
 				}
 				else
 				{
 					if (impure->windowBlock.startPosition < lastWindow.startPosition)
 					{
 						recordMoved = true;
-						m_next->locate(tdbb, impure->windowBlock.startPosition);
-						SINT64 pending = lastWindow.startPosition - impure->windowBlock.startPosition;
-
-						while (pending-- > 0)
-						{
-							if (!m_next->getRecord(tdbb))
-								fb_assert(false);
-
-							aggPass(tdbb, request, m_aggSources, m_aggTargets);
-						}
+						aggregateRecords(impure->windowBlock.startPosition, lastWindow.startPosition - 1, false);
 					}
 
-					m_next->locate(tdbb, lastWindow.endPosition + 1);
+					passStart = lastWindow.endPosition + 1;
 				}
 
-				SINT64 aggPos = (SINT64) m_next->getPosition(request);
-
-				while (aggPos++ <= impure->windowBlock.endPosition)
-				{
-					if (!m_next->getRecord(tdbb))
-						fb_assert(false);
-
-					aggPass(tdbb, request, m_aggSources, m_aggTargets);
-				}
+				aggregateRecords(passStart, impure->windowBlock.endPosition, false);
 
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 
@@ -1173,6 +1390,13 @@ WindowedStream::WindowStream::Block WindowedStream::WindowStream::getPeerBlock(
 		return peerBlock;
 	}
 
+	if (hasPeerBits(impure))
+	{
+		peerBlock.startPosition = getPeerBitsStart(impure, position);
+		peerBlock.endPosition = getPeerBitsEnd(impure, position);
+		return peerBlock;
+	}
+
 	if ((SINT64) m_next->getPosition(request) != position + 1)
 	{
 		m_next->locate(tdbb, position);
@@ -1282,6 +1506,38 @@ bool WindowedStream::WindowStream::isExcluded(SINT64 position, const Block& excl
 			position >= exclusion2.startPosition && position <= exclusion2.endPosition);
 }
 
+// Returns the blocks of the window that are not excluded, in order.
+unsigned WindowedStream::WindowStream::getIncludedBlocks(const Block& window, const Block& exclusion1,
+	const Block& exclusion2, Block* included) const
+{
+	unsigned count = 0;
+	SINT64 next = window.startPosition;
+
+	for (const Block* exclusion : {&exclusion1, &exclusion2})
+	{
+		if (!exclusion->isValid())
+			continue;
+
+		if (exclusion->startPosition > next)
+		{
+			included[count].startPosition = next;
+			included[count].endPosition = exclusion->startPosition - 1;
+			++count;
+		}
+
+		next = MAX(next, exclusion->endPosition + 1);
+	}
+
+	if (next <= window.endPosition)
+	{
+		included[count].startPosition = next;
+		included[count].endPosition = window.endPosition;
+		++count;
+	}
+
+	return count;
+}
+
 SINT64 WindowedStream::WindowStream::locateFrameGroups(thread_db* tdbb, Request* request,
 	Impure* impure, const Frame* frame, const impure_value_ex* offsetValue, SINT64 position,
 	bool startFrame) const
@@ -1294,6 +1550,67 @@ SINT64 WindowedStream::WindowStream::locateFrameGroups(thread_db* tdbb, Request*
 
 		if (frame->bound == Frame::Bound::PRECEDING)
 			offset = -offset;
+	}
+
+	if (hasPeerBits(impure))
+	{
+		const SINT64 partitionStart = impure->partitionBlock.startPosition;
+		const SINT64 partitionEnd = impure->partitionBlock.endPosition;
+
+		// Track the peer group of the current record.
+		if (position > impure->peerGroupEnd)
+		{
+			if (impure->peerGroupEnd < partitionStart)
+			{
+				impure->groupIndex = -1;
+				impure->peerGroupEnd = partitionStart - 1;
+			}
+
+			while (position > impure->peerGroupEnd)
+			{
+				impure->peerGroupStart = impure->peerGroupEnd + 1;
+				impure->peerGroupEnd = getPeerBitsEnd(impure, impure->peerGroupStart);
+				++impure->groupIndex;
+			}
+		}
+
+		const SINT64 target = impure->groupIndex + offset;
+
+		if (target < 0)
+			return startFrame ? partitionStart : partitionStart - 1;
+
+		// Search from where the previous search stopped, or from the current peer group when it is
+		// closer. With invariant offsets, the search only goes forward.
+		const unsigned frameIndex = startFrame ? 0 : 1;
+		SINT64& scanIndex = impure->groupScanIndex[frameIndex];
+		SINT64& scanStart = impure->groupScanStart[frameIndex];
+
+		if (scanStart < partitionStart ||
+			(target > scanIndex ? target - scanIndex : scanIndex - target) >
+				(offset < 0 ? -offset : offset))
+		{
+			scanIndex = impure->groupIndex;
+			scanStart = impure->peerGroupStart;
+		}
+
+		while (scanIndex > target)
+		{
+			scanStart = getPeerBitsStart(impure, scanStart - 1);
+			--scanIndex;
+		}
+
+		while (scanIndex < target)
+		{
+			const SINT64 groupEnd = getPeerBitsEnd(impure, scanStart);
+
+			if (groupEnd >= partitionEnd)
+				return startFrame ? partitionEnd + 1 : partitionEnd;
+
+			scanStart = groupEnd + 1;
+			++scanIndex;
+		}
+
+		return startFrame ? scanStart : getPeerBitsEnd(impure, scanStart);
 	}
 
 	Block groupBlock = getPeerBlock(tdbb, request, impure, position);
@@ -1338,30 +1655,20 @@ SINT64 WindowedStream::WindowStream::locateFrameGroups(thread_db* tdbb, Request*
 	return restoreAndReturn(startFrame ? groupBlock.startPosition : groupBlock.endPosition);
 }
 
+// Removes the current record from the aggregate functions.
+void WindowedStream::WindowStream::aggRemove(thread_db* tdbb, Request* request) const
+{
+	for (const auto source : m_aggSources)
+		nodeAs<AggNode>(source)->aggRemove(tdbb, request);
+}
+
 // Returns the last position of the peer group of the current record. The stream is not repositioned
 // when the peer group ends were found during the partition evaluation.
 SINT64 WindowedStream::WindowStream::locatePeerGroupEnd(thread_db* tdbb, Request* request,
 	Impure* impure, SINT64 position) const
 {
-	if (m_usesPeerGroupEnd && !impure->peerOverflow)
-	{
-		const SINT64 first = position - impure->peerBase;
-		const SINT64 words = impure->peerUsed;
-
-		for (SINT64 word = first / 64; word < words; ++word)
-		{
-			FB_UINT64 bits = impure->peerBits[word];
-
-			if (word == first / 64)
-				bits &= ~FB_UINT64(0) << (first % 64);
-
-			if (bits)
-				return impure->peerBase + word * 64 + (SINT64) std::countr_zero(bits);
-		}
-
-		// The last peer group of the partition.
-		return impure->partitionBlock.endPosition;
-	}
+	if (hasPeerBits(impure))
+		return getPeerBitsEnd(impure, position);
 
 	SINT64 rangePos = position;
 	cacheValues(tdbb, request, &m_order->expressions, impure->orderValues, DummyAdjustFunctor());
@@ -1378,6 +1685,57 @@ SINT64 WindowedStream::WindowStream::locatePeerGroupEnd(thread_db* tdbb, Request
 	return rangePos - 1;
 }
 
+// Tells whether the peer group ends of the partition are in the bitmap.
+bool WindowedStream::WindowStream::hasPeerBits(const Impure* impure) const
+{
+	return m_usesPeerGroupEnd && !impure->peerOverflow;
+}
+
+// Returns the first position of the peer group of a record, using the bitmap.
+SINT64 WindowedStream::WindowStream::getPeerBitsStart(const Impure* impure, SINT64 position) const
+{
+	// Look for the end of the previous peer group.
+	const SINT64 last = position - 1 - impure->peerBase;
+
+	if (last < 0)
+		return impure->partitionBlock.startPosition;
+
+	for (SINT64 word = MIN(last / 64, (SINT64) impure->peerUsed - 1); word >= 0; --word)
+	{
+		FB_UINT64 bits = impure->peerBits[word];
+
+		if (word == last / 64)
+			bits &= ~FB_UINT64(0) >> (63 - last % 64);
+
+		if (bits)
+			return impure->peerBase + word * 64 + 63 - (SINT64) std::countl_zero(bits) + 1;
+	}
+
+	// The first peer group of the partition.
+	return impure->partitionBlock.startPosition;
+}
+
+// Returns the last position of the peer group of a record, using the bitmap.
+SINT64 WindowedStream::WindowStream::getPeerBitsEnd(const Impure* impure, SINT64 position) const
+{
+	const SINT64 first = position - impure->peerBase;
+	const SINT64 words = impure->peerUsed;
+
+	for (SINT64 word = first / 64; word < words; ++word)
+	{
+		FB_UINT64 bits = impure->peerBits[word];
+
+		if (word == first / 64)
+			bits &= ~FB_UINT64(0) << (first % 64);
+
+		if (bits)
+			return impure->peerBase + word * 64 + (SINT64) std::countr_zero(bits);
+	}
+
+	// The last peer group of the partition.
+	return impure->partitionBlock.endPosition;
+}
+
 SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* request, Impure* impure,
 	const Frame* frame, const dsc* offsetDesc, SINT64 position) const
 {
@@ -1388,6 +1746,7 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* 
 	}
 
 	SINT64 rangePos = position;
+	bool restoreRecord = true;	// the stream was moved from the current record
 
 	if (offsetDesc)
 	{
@@ -1419,6 +1778,89 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* 
 
 			--rangePos;
 		}
+	}
+	else if (m_invariantOffsets & (frame == m_frameExtent->frame1 ? 0x1 : 0x2))
+	{
+		// With an invariant offset, the bound value never decreases (in the sort order) for the next
+		// records of the partition. So the search for the first record not before the bound value
+		// (frame start) or after it (frame end) does not need to go before the position where it ended
+		// for the previous record. For FOLLOWING, the frame start is never before the current record.
+
+		const unsigned frameIndex = frame == m_frameExtent->frame1 ? 0 : 1;
+		const int bound = (int) frameIndex;
+
+		restoreRecord = false;
+
+		const auto compareAt = [&](SINT64 pos)
+		{
+			if ((SINT64) m_next->getPosition(request) != pos)
+				m_next->locate(tdbb, pos);
+
+			if (!m_next->getRecord(tdbb))
+				fb_assert(false);
+
+			return lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues);
+		};
+
+		// The current record is already fetched, and the stream is positioned after it.
+		if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues) < bound)
+		{
+			// The bound is after the current record.
+
+			rangePos = MAX(impure->rangeScan[frameIndex], position + 1);
+
+			if (rangePos <= impure->partitionBlock.endPosition)
+			{
+				if (rangePos != position + 1)
+					m_next->locate(tdbb, rangePos);
+
+				restoreRecord = true;
+
+				for (; rangePos <= impure->partitionBlock.endPosition; ++rangePos)
+				{
+					if (!m_next->getRecord(tdbb))
+						fb_assert(false);
+
+					if (lookForChange(tdbb, request, &m_order->expressions, m_order, impure->orderValues) >=
+							bound)
+					{
+						break;
+					}
+				}
+			}
+		}
+		else if (frame->bound == Frame::Bound::FOLLOWING)
+			rangePos = position;
+		else
+		{
+			// The bound is at or before the current record. Scan forward from where the search ended for
+			// the previous record. But when that search found the bound at its current record, as usual
+			// for small frames, check first if it is again at the current record.
+
+			const SINT64 first = MAX(impure->rangeScan[frameIndex], impure->partitionBlock.startPosition);
+			rangePos = position;
+
+			if (first < position)
+			{
+				restoreRecord = true;
+
+				if (!impure->rangeScanCurrent[frameIndex] || compareAt(position - 1) >= bound)
+				{
+					for (rangePos = first; rangePos < position; ++rangePos)
+					{
+						if (compareAt(rangePos) >= bound)
+							break;
+					}
+				}
+			}
+
+			impure->rangeScanCurrent[frameIndex] = rangePos == position;
+		}
+
+		impure->rangeScan[frameIndex] = rangePos;
+
+		if (frameIndex == 1)
+			--rangePos;
 	}
 	else if (frame->bound == Frame::Bound::FOLLOWING)
 	{
@@ -1483,10 +1925,18 @@ SINT64 WindowedStream::WindowStream::locateFrameRange(thread_db* tdbb, Request* 
 		}
 	}
 
-	m_next->locate(tdbb, position);
+	// The frame start found as the current record (offset 0 or NULL value) is the start of its peer
+	// group. Without exclusion the frame is located for the first record of the peer group.
+	if (frame == m_frameExtent->frame1 && rangePos == position && m_exclusion != Exclusion::NO_OTHERS)
+		rangePos = impure->peerGroupStart;
 
-	if (!m_next->getRecord(tdbb))
-		fb_assert(false);
+	if (restoreRecord)
+	{
+		m_next->locate(tdbb, position);
+
+		if (!m_next->getRecord(tdbb))
+			fb_assert(false);
+	}
 
 	return rangePos;
 }
