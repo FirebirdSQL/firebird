@@ -929,13 +929,22 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			StreamList localStreams;
 			rsb->findUsedStreams(localStreams);
 
-			bool computable = false;
+			bool independent = false;
 
 			// AB: Save all outer-part streams
 			if (isInnerJoin() || !innerSubStream)
 			{
-				if (node->computable(csb, INVALID_STREAM, false))
-					computable = true;
+				const auto rseNode = nodeAs<RseNode>(node);
+				const bool lateralRse = rseNode && rseNode->isLateral();
+
+				// A lateral RSE that references any of the preceding (outer)
+				// streams must never be treated as an independent river,
+				// so don't even try checking its computability
+				if (!(lateralRse && rsb->isDependent(outerStreams)) &&
+					node->computable(csb, INVALID_STREAM, false))
+				{
+					independent = true;
+				}
 
 				// Apply local booleans, if any. Note that it's done
 				// only for inner joins and outer streams of left joins.
@@ -946,7 +955,7 @@ RecordSource* Optimizer::compile(BoolExprNodeStack* parentStack)
 			const auto river = FB_NEW_POOL(getPool()) River(csb, rsb, node, localStreams);
 			river->deactivate(csb);
 
-			if (computable)
+			if (independent)
 			{
 				outerStreams.join(localStreams);
 				rivers.add(river);

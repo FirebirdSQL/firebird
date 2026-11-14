@@ -35,6 +35,12 @@
 using namespace Firebird;
 using namespace Jrd;
 
+bool IndexTableScan::isDependent(const StreamList& streams) const
+{
+	return isInversionDependent(m_index, streams) ||
+		   isInversionDependent(m_inversion, streams);
+}
+
 // ------------------------------------
 // Data access: index driven table scan
 // ------------------------------------

@@ -48,6 +48,26 @@ FullTableScan::FullTableScan(CompilerScratch* csb, const string& alias,
 	m_cardinality = csb->csb_rpt[stream].csb_cardinality;
 }
 
+bool FullTableScan::isDependent(const StreamList& streams) const
+{
+	for (const auto range : m_dbkeyRanges)
+	{
+		if (const auto value = range->lower)
+		{
+			if (value->containsAnyStream(streams))
+				return true;
+		}
+
+		if (const auto value = range->upper)
+		{
+			if (value->containsAnyStream(streams))
+				return true;
+		}
+	}
+
+	return false;
+}
+
 void FullTableScan::internalOpen(thread_db* tdbb) const
 {
 	Database* const dbb = tdbb->getDatabase();
