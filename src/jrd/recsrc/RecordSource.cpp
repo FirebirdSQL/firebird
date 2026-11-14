@@ -155,6 +155,62 @@ string RecordSource::printName(thread_db* tdbb, const string& name, const string
 	return result;
 }
 
+// Report stream dependencies carried by an inversion tree. Booleans matched
+// to an index are normally re-checked by a FilteredStream, but ORDER BY /
+// GROUP BY navigation may consume them into the index bounds instead, so the
+// dependency must be collected from the inversion expressions themselves.
+bool RecordSource::isInversionDependent(const InversionNode* node, const StreamList& streams)
+{
+	if (!node)
+		return false;
+
+	if (node->type == InversionNode::TYPE_INDEX)
+	{
+		const auto retrieval = node->retrieval;
+		fb_assert(retrieval);
+
+		if (retrieval->irb_value)
+		{
+			const auto count = retrieval->irb_desc.idx_count;
+
+			for (unsigned i = 0; i < retrieval->irb_lower_count; i++)
+			{
+				const auto value = retrieval->irb_value[i];
+
+				if (value && value->containsAnyStream(streams))
+					return true;
+			}
+
+			for (unsigned i = 0; i < retrieval->irb_upper_count; i++)
+			{
+				const auto value = retrieval->irb_value[count + i];
+
+				if (value && value->containsAnyStream(streams))
+					return true;
+			}
+		}
+
+		if (retrieval->irb_list)
+		{
+			for (const auto value : *retrieval->irb_list)
+			{
+				if (value && value->containsAnyStream(streams))
+					return true;
+			}
+		}
+	}
+	else if (node->type == InversionNode::TYPE_DBKEY)
+	{
+		fb_assert(node->value);
+
+		if (node->value->containsAnyStream(streams))
+			return true;
+	}
+
+	return isInversionDependent(node->node1, streams) ||
+			isInversionDependent(node->node2, streams);
+}
+
 void RecordSource::printInversion(thread_db* tdbb, const InversionNode* inversion,
 	ObjectsArray<PlanEntry::Line>& planLines, bool detailed, unsigned level, bool navigation)
 {
