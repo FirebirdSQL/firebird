@@ -146,7 +146,7 @@ void MET_get_domain(thread_db* tdbb, MemoryPool& csbPool, const QualifiedName& n
 
 	AutoCacheRequest handle(tdbb, irq_l_domain, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE handle)
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		FLD IN RDB$FIELDS
 		WITH FLD.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 FLD.RDB$FIELD_NAME EQ name.object.c_str()
@@ -249,7 +249,7 @@ void MET_get_relation_field(thread_db* tdbb, MemoryPool& csbPool, const Qualifie
 	static const CachedRequestId handle1CacheId;
 	AutoCacheRequest handle1(tdbb, handle1CacheId);
 
-	FOR(REQUEST_HANDLE handle1)
+	FOR(REQUEST_HANDLE handle1 TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		RFL IN RDB$RELATION_FIELDS CROSS
 		FLD IN RDB$FIELDS WITH
 			RFL.RDB$SCHEMA_NAME EQ relationName.schema.c_str() AND
@@ -596,7 +596,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	AutoCacheRequest request(tdbb, irq_m_fields, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		X IN RDB$RELATION_FIELDS
 		CROSS R IN RDB$RELATIONS
 		WITH X.RDB$FIELD_SOURCE_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -620,7 +620,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 		AutoCacheRequest request2(tdbb, irq_m_fields4, IRQ_REQUESTS);
 
-		FOR(REQUEST_HANDLE request2)
+		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			DEP IN RDB$DEPENDENCIES
 			CROSS PRC IN RDB$PROCEDURES
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
@@ -647,7 +647,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 		request2.reset(tdbb, irq_m_fields5, IRQ_REQUESTS);
 
-		FOR(REQUEST_HANDLE request2)
+		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			DEP IN RDB$DEPENDENCIES
 			CROSS TRG IN RDB$TRIGGERS
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
@@ -672,7 +672,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 		request2.reset(tdbb, irq_m_fields8, IRQ_REQUESTS);
 
-		FOR(REQUEST_HANDLE request2)
+		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE transaction)
 			DEP IN RDB$DEPENDENCIES
 			CROSS FUN IN RDB$FUNCTIONS
 			WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ X.RDB$SCHEMA_NAME AND
@@ -701,7 +701,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	request.reset(tdbb, irq_m_fields2, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES
 		CROSS PRC IN RDB$PROCEDURES
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -727,7 +727,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	request.reset(tdbb, irq_m_fields6, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES
 		CROSS PRC IN RDB$PROCEDURES
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -753,7 +753,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	request.reset(tdbb, irq_m_fields3, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES CROSS
 		TRG IN RDB$TRIGGERS
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -777,7 +777,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	request.reset(tdbb, irq_m_fields7, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES CROSS
 		FUN IN RDB$FUNCTIONS
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -803,7 +803,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 
 	request.reset(tdbb, irq_m_fields9, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES CROSS
 		FUN IN RDB$FUNCTIONS
 		WITH DEP.RDB$DEPENDED_ON_SCHEMA_NAME EQ schemaName->dsc_address AND
@@ -830,7 +830,7 @@ Cached::Relation* MET_change_fields(thread_db* tdbb, jrd_tra* transaction, const
 	request.reset(tdbb, irq_m_fields10, IRQ_REQUESTS);
 
 	Package* package = nullptr;
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		DEP IN RDB$DEPENDENCIES
 		CROSS CONST IN RDB$CONSTANTS
 		CROSS FLD IN RDB$FIELDS
@@ -1167,7 +1167,7 @@ bool MET_get_char_coll_subtype_info(thread_db* tdbb, USHORT id, SubtypeInfo* inf
 	bool found = false;
 	info->charsetName.clear();
 
-	FOR(REQUEST_HANDLE request) FIRST 1
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb)) FIRST 1
 		CL IN RDB$COLLATIONS CROSS
 		CS IN RDB$CHARACTER_SETS
 		WITH CL.RDB$CHARACTER_SET_ID EQ charset_id AND
@@ -1262,7 +1262,7 @@ DmlNode* MET_get_dependencies(thread_db* tdbb,
 		static const CachedRequestId cachedHandleId;
 		AutoCacheRequest handle(tdbb, cachedHandleId);
 
-		FOR(REQUEST_HANDLE handle)
+		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE transaction)
 			RFL IN RDB$RELATION_FIELDS CROSS
 				FLD IN RDB$FIELDS
 				WITH RFL.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
@@ -1673,7 +1673,7 @@ void MET_lookup_index_for_cnstrt(thread_db* tdbb,
 
 	AutoCacheRequest request(tdbb, irq_l_index_cnstrt, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$RELATION_CONSTRAINTS
 		WITH X.RDB$SCHEMA_NAME EQ constraint_name.schema.c_str() AND
 			 X.RDB$CONSTRAINT_NAME EQ constraint_name.object.c_str()
@@ -1710,7 +1710,7 @@ void MET_lookup_cnstrt_for_index(thread_db* tdbb,
 
 	AutoCacheRequest request(tdbb, irq_l_cnstrt, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$RELATION_CONSTRAINTS
 		WITH X.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
 			 X.RDB$INDEX_NAME EQ index_name.object.c_str()
@@ -1751,12 +1751,12 @@ void MET_lookup_cnstrt_for_trigger(thread_db* tdbb,
 	// that the trigger is defined on, even if we don't
 	// have a check constraint defined for that trigger
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		Y IN RDB$TRIGGERS
 		WITH Y.RDB$SCHEMA_NAME EQ trigger_name.schema.c_str() AND
 			 Y.RDB$TRIGGER_NAME EQ trigger_name.object.c_str()
 	{
-		FOR(REQUEST_HANDLE request2)
+		FOR(REQUEST_HANDLE request2 TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			X IN RDB$CHECK_CONSTRAINTS
 			WITH X.RDB$SCHEMA_NAME EQ Y.RDB$SCHEMA_NAME AND
 				 X.RDB$TRIGGER_NAME EQ Y.RDB$TRIGGER_NAME
@@ -1797,7 +1797,7 @@ void MET_lookup_exception(thread_db* tdbb,
 	if (message)
 		message->clear();
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$EXCEPTIONS WITH X.RDB$EXCEPTION_NUMBER = number
 	{
 		if (!X.RDB$EXCEPTION_NAME.NULL)
@@ -1829,7 +1829,7 @@ bool MET_load_exception(thread_db* tdbb, ExceptionItem& item)
 
 	AutoCacheRequest request(tdbb, irq_l_except_no, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		XCP IN RDB$EXCEPTIONS
 		CROSS SCH IN RDB$SCHEMAS
 		WITH XCP.RDB$SCHEMA_NAME = item.name.schema.c_str() AND
@@ -1912,7 +1912,7 @@ ElementBase::ReturnedId MET_lookup_field(thread_db* tdbb, jrd_rel* relation, con
 	static const CachedRequestId request1CacheId;
 	AutoCacheRequest request1(tdbb, request1CacheId);
 
-	FOR(REQUEST_HANDLE request1)
+	FOR(REQUEST_HANDLE request1 TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$RELATION_FIELDS
 		WITH X.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
 			 X.RDB$RELATION_NAME EQ relation->getName().object.c_str() AND
@@ -1947,7 +1947,7 @@ BlobFilter* MET_lookup_filter(thread_db* tdbb, SSHORT from, SSHORT to)
 
 	AutoCacheRequest request(tdbb, irq_r_filters, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$FILTERS WITH X.RDB$INPUT_SUB_TYPE EQ from AND
 		X.RDB$OUTPUT_SUB_TYPE EQ to
 	{
@@ -1997,7 +1997,7 @@ bool MET_load_generator(thread_db* tdbb, GeneratorItem& item, bool* sysGen, SLON
 
 	AutoCacheRequest request(tdbb, irq_r_gen_id, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		GEN IN RDB$GENERATORS
 		CROSS SCH IN RDB$SCHEMAS
 		WITH GEN.RDB$SCHEMA_NAME EQ item.name.schema.c_str() AND
@@ -2046,7 +2046,7 @@ SLONG MET_lookup_generator(thread_db* tdbb, const QualifiedName& name, bool* sys
 
 	AutoCacheRequest request(tdbb, irq_l_gen_id, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$GENERATORS
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$GENERATOR_NAME EQ name.object.c_str()
@@ -2085,7 +2085,7 @@ bool MET_lookup_generator_id(thread_db* tdbb, SLONG gen_id, QualifiedName& name,
 
 	AutoCacheRequest request(tdbb, irq_r_gen_id_num, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$GENERATORS WITH X.RDB$GENERATOR_ID EQ gen_id
 	{
 		if (sysGen)
@@ -2116,7 +2116,7 @@ void MET_update_generator_increment(thread_db* tdbb, SLONG gen_id, SLONG step)
 
 	AutoCacheRequest request(tdbb, irq_upd_gen_id_increm, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$GENERATORS WITH X.RDB$GENERATOR_ID EQ gen_id
 
 		// We never accept changing the step in sys gens.
@@ -2210,7 +2210,7 @@ ElementBase::ReturnedId MetadataCache::lookup_index_name(thread_db* tdbb, const 
 
 	*status = MET_index_state_unknown;
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$INDICES
 		WITH X.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
 			 X.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
@@ -2357,7 +2357,7 @@ bool MET_lookup_index_expr_cond_blr(thread_db* tdbb, const QualifiedName& index_
 	bool found = false;
 	AutoCacheRequest request(tdbb, irq_l_exp_index_blr, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$SCHEMA_NAME EQ index_name.schema.c_str() AND
 			 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(index_name.package.c_str(), '') AND
@@ -2412,7 +2412,7 @@ bool MET_lookup_partner(thread_db* tdbb, RelationPermanent* relation, index_desc
 			bool found = false;
 			AutoRequest request;
 
-			FOR(REQUEST_HANDLE request)
+			FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 				IDX IN RDB$INDICES CROSS
 					IND IN RDB$INDICES WITH
 					IDX.RDB$SCHEMA_NAME EQ relation->getName().schema.c_str() AND
@@ -2503,7 +2503,7 @@ std::optional<MetaId> jrd_prc::getIdByName(thread_db* tdbb, ExName<> nm)
 
 	AUTO_HANDLE(request);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		P IN RDB$PROCEDURES
 		WITH P.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 P.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
@@ -2539,7 +2539,7 @@ std::optional<MetaId> Function::getIdByName(thread_db* tdbb, ExName<> nm)
 
 	AUTO_HANDLE(request);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$FUNCTIONS
 		WITH X.RDB$FUNCTION_NAME EQ name.object.c_str() AND
 			 X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -2565,7 +2565,7 @@ std::optional<MetaId> jrd_rel::getIdByName(thread_db* tdbb, ExName<> nm)
 
 	AUTO_HANDLE(request);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$RELATIONS
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
@@ -2593,7 +2593,7 @@ std::optional<MetaId> CharSetVers::getIdByName(thread_db* tdbb, ExName<> nm)
 
 		AUTO_HANDLE(request);
 
-		FOR(REQUEST_HANDLE request)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			T IN RDB$TYPES
 			WITH T.RDB$FIELD_NAME EQ "RDB$CHARACTER_SET_NAME" AND
 			 	 T.RDB$TYPE_NAME EQ name.object.c_str()
@@ -2609,7 +2609,7 @@ std::optional<MetaId> CharSetVers::getIdByName(thread_db* tdbb, ExName<> nm)
 
 		AUTO_HANDLE(request);
 
-		FOR(REQUEST_HANDLE request)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			X IN RDB$CHARACTER_SETS
 			WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 				 X.RDB$CHARACTER_SET_NAME EQ name.object.c_str()
@@ -3630,7 +3630,7 @@ void MET_trigger_msg(thread_db* tdbb, string& msg, const QualifiedName& name, US
 
 	AutoCacheRequest request(tdbb, irq_s_msgs, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		MSG IN RDB$TRIGGER_MESSAGES
 		WITH MSG.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 MSG.RDB$TRIGGER_NAME EQ name.object.c_str() AND
@@ -3915,7 +3915,7 @@ static bool get_type(thread_db* tdbb, USHORT* id, const MetaName& name, const TE
 
 	AutoRequest handle;
 
-	FOR(REQUEST_HANDLE handle)
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		FIRST 1 T IN RDB$TYPES WITH
 			T.RDB$FIELD_NAME EQ field AND
 			T.RDB$TYPE_NAME EQ name.c_str()
@@ -3947,7 +3947,7 @@ static void lookup_view_contexts( thread_db* tdbb, jrd_rel* view)
 	Database* dbb = tdbb->getDatabase();
 	AutoCacheRequest request(tdbb, irq_view_context, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		V IN RDB$VIEW_RELATIONS
 		WITH V.RDB$SCHEMA_NAME EQ view->getName().schema.c_str() AND
 			 V.RDB$VIEW_NAME EQ view->getName().object.c_str()
@@ -4115,7 +4115,7 @@ bool MetadataCache::resolve_charset_and_collation(thread_db* tdbb,
 
 	bool found = false;
 
-	FOR(REQUEST_HANDLE handle)
+	FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		FIRST 1 COL IN RDB$COLLATIONS
 		WITH COL.RDB$SCHEMA_NAME EQ collationName.schema.c_str() AND
 			 COL.RDB$COLLATION_NAME EQ collationName.object.c_str()
@@ -4141,7 +4141,7 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	{
 		perm->names.push(getName());
 
-		FOR(REQUEST_HANDLE handle)
+		FOR(REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			T IN RDB$TYPES
 			WITH T.RDB$FIELD_NAME EQ "RDB$CHARACTER_SET_NAME"
 			 AND T.RDB$TYPE EQ getId()
@@ -4156,7 +4156,7 @@ ScanResult CharSetVers::scan(thread_db* tdbb, ObjectBase::Flag flags)
 	if (flags & CacheFlag::MINISCAN)
 		return ScanResult::REPEAT;
 
-	FOR(REQUEST_HANDLE handle2)
+	FOR(REQUEST_HANDLE handle2 TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		CS IN RDB$CHARACTER_SETS
 			CROSS COL IN RDB$COLLATIONS OVER RDB$CHARACTER_SET_ID
 		WITH CS.RDB$CHARACTER_SET_ID EQ getId()
@@ -4351,7 +4351,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			rel_foreign_refs = NULL;
 		}
 
-		FOR(REQUEST_HANDLE request)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			IDX IN RDB$INDICES CROSS
 			RC IN RDB$RELATION_CONSTRAINTS
 			OVER RDB$SCHEMA_NAME, RDB$INDEX_NAME CROSS
@@ -4399,7 +4399,7 @@ void RelationPermanent::scanPartners(thread_db* tdbb)
 			rel_primary_dpnds = NULL;
 		}
 
-		FOR(REQUEST_HANDLE request)
+		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 			IDX IN RDB$INDICES CROSS
 			IND IN RDB$INDICES WITH
 			IDX.RDB$UNIQUE_FLAG = IDX_UNIQUE AND
@@ -4757,7 +4757,7 @@ static bool verify_TRG_ignore_perm(thread_db* tdbb, const QualifiedName& trig_na
 
 	AutoCacheRequest request(tdbb, irq_c_trg_perm, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		CHK IN RDB$CHECK_CONSTRAINTS CROSS
 			REF IN RDB$REF_CONSTRAINTS WITH
 			CHK.RDB$SCHEMA_NAME EQ trig_name.schema.c_str() AND
@@ -4803,7 +4803,7 @@ int MET_get_linger(thread_db* tdbb)
 
 	AutoCacheRequest request(tdbb, irq_linger, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		DAT IN RDB$DATABASE
 	{
 		if (!DAT.RDB$LINGER.NULL)
@@ -4832,7 +4832,7 @@ TriState MET_get_ss_definer(Jrd::thread_db* tdbb, const MetaName& schemaName)
 
 	AutoCacheRequest request(tdbb, irq_dbb_ss_definer, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		SCH IN RDB$SCHEMAS
 		CROSS DBB IN RDB$DATABASE
 		WITH SCH.RDB$SCHEMA_NAME EQ schemaName.c_str()
@@ -5220,7 +5220,7 @@ std::optional<MetaId> IndexVersion::getIdByName(thread_db* tdbb, ExName<Relation
 	// We need to look up the index name in RDB$INDICES
 	AUTO_HANDLE(request);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		IDX IN RDB$INDICES
 		WITH IDX.RDB$INDEX_NAME EQ name.object.c_str() AND
 			IDX.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
@@ -5251,6 +5251,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 	fb_assert(name.object.hasData() && name.schema.isEmpty());
 
 	const auto attachment = tdbb->getAttachment();
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb);
 	AutoCacheRequest handle;
 
 	if (!schemaSearchPath)
@@ -5294,7 +5295,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId charSetHandleId;
 					handle.reset(tdbb, charSetHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						CS IN RDB$CHARACTER_SETS
 						WITH CS.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 CS.RDB$CHARACTER_SET_NAME EQ name.object.c_str()
@@ -5314,7 +5315,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId collationHandleId;
 					handle.reset(tdbb, collationHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						COLL IN RDB$COLLATIONS
 						WITH COLL.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 COLL.RDB$COLLATION_NAME EQ name.object.c_str()
@@ -5334,7 +5335,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId exceptionHandleId;
 					handle.reset(tdbb, exceptionHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						XCP IN RDB$EXCEPTIONS
 						WITH XCP.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 XCP.RDB$EXCEPTION_NAME EQ name.object.c_str()
@@ -5354,7 +5355,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId fieldHandleId;
 					handle.reset(tdbb, fieldHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						FLD IN RDB$FIELDS
 						WITH FLD.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 FLD.RDB$FIELD_NAME EQ name.object.c_str()
@@ -5374,7 +5375,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId generatorHandleId;
 					handle.reset(tdbb, generatorHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						GEN IN RDB$GENERATORS
 						WITH GEN.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 GEN.RDB$GENERATOR_NAME EQ name.object.c_str()
@@ -5418,7 +5419,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 						static const CachedRequestId indexHandleId;
 						handle.reset(tdbb, indexHandleId);
 
-						FOR (REQUEST_HANDLE handle)
+						FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 							IDX IN RDB$INDICES
 							WITH IDX.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 								 IDX.RDB$PACKAGE_NAME EQUIV NULLIF(name.package.c_str(), '') AND
@@ -5440,7 +5441,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId packageHandleId;
 					handle.reset(tdbb, packageHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						PKG IN RDB$PACKAGES
 						WITH PKG.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 PKG.RDB$PACKAGE_NAME EQ name.object.c_str()
@@ -5458,7 +5459,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId procedureHandleId;
 					handle.reset(tdbb, procedureHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						PRC IN RDB$PROCEDURES
 						WITH PRC.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 PRC.RDB$PROCEDURE_NAME EQ name.object.c_str() AND
@@ -5493,7 +5494,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 							static const CachedRequestId relationHandleId;
 							handle.reset(tdbb, relationHandleId);
 
-							FOR (REQUEST_HANDLE handle)
+							FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 								REL IN RDB$RELATIONS
 								WITH REL.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 									 REL.RDB$RELATION_NAME EQ name.object.c_str()
@@ -5514,7 +5515,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId triggerHandleId;
 					handle.reset(tdbb, triggerHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						TRG IN RDB$TRIGGERS
 						WITH TRG.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 TRG.RDB$TRIGGER_NAME EQ name.object.c_str()
@@ -5532,7 +5533,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId udfHandleId;
 					handle.reset(tdbb, udfHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						FUN IN RDB$FUNCTIONS
 						WITH FUN.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 FUN.RDB$FUNCTION_NAME EQ name.object.c_str() AND
@@ -5551,7 +5552,7 @@ std::optional<ObjectType> MET_qualify_existing_name(thread_db* tdbb, QualifiedNa
 					static const CachedRequestId constantHandleId;
 					handle.reset(tdbb, constantHandleId);
 
-					FOR (REQUEST_HANDLE handle)
+					FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE metaTransaction)
 						CONST IN RDB$CONSTANTS
 						WITH CONST.RDB$SCHEMA_NAME EQ searchSchema.c_str() AND
 							 CONST.RDB$CONSTANT_NAME EQ name.object.c_str() AND
@@ -5591,7 +5592,7 @@ bool MET_check_schema_exists(thread_db* tdbb, const MetaName& name)
 	static const CachedRequestId cachedHandleId;
 	AutoCacheRequest handle(tdbb, cachedHandleId);
 
-	FOR (REQUEST_HANDLE handle)
+	FOR (REQUEST_HANDLE handle TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		SCH IN RDB$SCHEMAS
 		WITH SCH.RDB$SCHEMA_NAME EQ name.c_str()
 	{
