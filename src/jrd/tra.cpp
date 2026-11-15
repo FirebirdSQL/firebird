@@ -3622,21 +3622,11 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			trans->tra_flags |= (TRA_readonly | TRA_precommitted);
 		}
 
-		// Next, take a snapshot of all transactions between the oldest interesting
-		// transaction and the current.  Don't bother to get a snapshot for
-		// read-committed transactions; they use the snapshot off the dbb block
-		// since they need to know what is currently committed.
-
-		if (!(trans->tra_flags & TRA_read_committed))
-		{
-			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
-				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
-		}
-
 		// Next task is to find the oldest active transaction on the system.  This
 		// is needed for garbage collection.  Things are made ever so slightly
 		// more complicated by the fact that existing transaction may have oldest
 		// actives older than they are.
+		// Take into account in-limbo transactions too.
 
 		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra, trans);
 
@@ -3648,16 +3638,16 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		for (; active < number; active++)
 		{
 			//oldest_state = TPC_cache_state(tdbb, active);
-			const ULONG mask = (1 << tra_active);
+			const ULONG mask = (1 << tra_active) | (1 << tra_limbo);
 			active = TPC_find_states(tdbb, active, number, mask, oldest_state);
 			if (!active)
 			{
 				active = number;
 				break;
 			}
-			fb_assert(oldest_state == tra_active);
+			fb_assert(oldest_state == tra_active || oldest_state == tra_limbo);
 
-			if (oldest_state == tra_active)
+			if (oldest_state == tra_active || oldest_state == tra_limbo)
 			{
 				temp_lock.setKey(active);
 				TraNumber data = LCK_read_data(tdbb, &temp_lock);
@@ -3802,6 +3792,17 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			if (!(trans->tra_flags & TRA_read_consistency))
 				LCK_write_data(tdbb, lock, 0); // Fully disinhibit GC for this transaction
 			trans->tra_flags |= TRA_precommitted;
+		}
+
+		// Next, take a snapshot of all transactions between the oldest interesting
+		// transaction and the current.  Don't bother to get a snapshot for
+		// read-committed transactions; they use the snapshot off the dbb block
+		// since they need to know what is currently committed.
+
+		if (!(trans->tra_flags & TRA_read_committed))
+		{
+			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
+				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
 		}
 
 		if (dbb->isReplicating(tdbb))
