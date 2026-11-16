@@ -231,14 +231,25 @@ namespace
 
 			if (traNumber && rpt->getTransaction() != traNumber)
 			{
-				const auto backSlot = root->getBackSlot(rpt);
-				if (!backSlot)
-				{
-					CCH_unwind(tdbb, false);
-					BUGCHECK(204);		// msg 204 index inconsistent
-				}
+				// While the migration transaction is still active, other
+				// transactions must continue to see the old index (back slot).
+				// Once the migration is definitely committed, the migrate slot
+				// must be visible instead: it holds the new index and callers
+				// rely on checkIrtRepeat()/modifyIrtRepeat() to finalize the
+				// migration (set the slot to irt_normal and kill the back slot).
 
-				return backSlot;
+				const auto state = TPC_cache_state(tdbb, rpt->getTransaction());
+				if (state != tra_committed)
+				{
+					const auto backSlot = root->getBackSlot(rpt);
+					if (!backSlot)
+					{
+						CCH_unwind(tdbb, false);
+						BUGCHECK(204);	// msg 204 index inconsistent
+					}
+
+					return backSlot;
+				}
 			}
 		}
 
