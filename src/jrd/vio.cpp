@@ -4031,10 +4031,23 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 		(void*) pool);
 #endif
 
-	// If format wasn't given, look one up
+	Record* record = rpb->rpb_record;
+
+	// If format wasn't given, look one up. Every record may have its own format,
+	// but the common case is a rarely changed format. Try reusing the one the already
+	// allocated record was built with and thus avoiding an expensive metadata lookup.
+	//
+	// reset() below is kept unconditional - it is trivial and clears the fake-nulls state.
 
 	if (!format)
-		format = rpb->rpb_relation->getPermanent()->getFormat(tdbb, rpb->rpb_format_number);
+	{
+		const auto recordFormat = record ? record->getFormat() : nullptr;
+		if (recordFormat && recordFormat->fmt_version == rpb->rpb_format_number)
+			format = recordFormat;
+
+		if (!format)
+			format = rpb->rpb_relation->getPermanent()->getFormat(tdbb, rpb->rpb_format_number);
+	}
 
 	fb_assert(format);
 	if (!format)
@@ -4042,8 +4055,6 @@ Record* VIO_record(thread_db* tdbb, record_param* rpb, const Format* format, Mem
 		fatal_exception::raiseFmt("Format %d missing for relation %s", rpb->rpb_format_number,
 			rpb->rpb_relation->getName().toQuotedString().c_str());
 	}
-
-	Record* record = rpb->rpb_record;
 
 	if (!record)
 	{
