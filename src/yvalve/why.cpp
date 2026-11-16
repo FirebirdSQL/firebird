@@ -1291,8 +1291,8 @@ namespace Why
 		YStatement* statement;
 		isc_stmt_handle* userHandle;
 		bool pseudoOpened, delayedFormat;
-		// Length of the output message the open cursor writes on every fetch,
-		// fixed by its first fetch (0 until then).
+		// Length of the output message the open cursor writes on every fetch:
+		// fixed at open, or by the first fetch when the format is delayed.
 		unsigned cursorMessageLength;
 	};
 
@@ -4668,7 +4668,7 @@ void IscStatement::openCursor(CheckStatusWrapper* status, isc_tr_handle* traHand
 	fb_assert(statement->cursor);
 
 	delayedFormat = (outMetadata == DELAYED_OUT_FORMAT);
-	cursorMessageLength = 0;
+	cursorMessageLength = (!delayedFormat && outMetadata) ? outMetadata->getMessageLength(status) : 0;
 }
 
 void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
