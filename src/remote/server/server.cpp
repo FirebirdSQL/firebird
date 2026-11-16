@@ -3946,18 +3946,21 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 	unsigned flags = statement->rsr_iface->getFlags(&status_vector);
 	check(&status_vector);
 
-	statement->rsr_iface->setTimeout(&status_vector, sqldata->p_sqldata_timeout);
-	if ((status_vector.getState() & IStatus::STATE_ERRORS) &&
-		(status_vector.getErrors()[1] == isc_interface_version_too_old))
+	if (port_protocol >= PROTOCOL_STMT_TOUT)
 	{
-		if (sqldata->p_sqldata_timeout)
+		statement->rsr_iface->setTimeout(&status_vector, sqldata->p_sqldata_timeout);
+		if ((status_vector.getState() & IStatus::STATE_ERRORS) &&
+			(status_vector.getErrors()[1] == isc_interface_version_too_old))
 		{
-			(Arg::Gds(isc_wish_list) <<
-			 Arg::Gds(isc_random) << "Timeouts not supported by selected on server provider").raise();
+			if (sqldata->p_sqldata_timeout)
+			{
+				(Arg::Gds(isc_wish_list) <<
+				Arg::Gds(isc_random) << "Timeouts not supported by selected on server provider").raise();
+			}
 		}
+		else
+			check(&status_vector);
 	}
-	else
-		check(&status_vector);
 
 	if ((flags & IStatement::FLAG_HAS_CURSOR) && (out_msg_length == 0))
 	{
