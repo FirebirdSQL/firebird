@@ -3583,21 +3583,11 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			trans->tra_flags |= (TRA_readonly | TRA_precommitted);
 		}
 
-		// Next, take a snapshot of all transactions between the oldest interesting
-		// transaction and the current.  Don't bother to get a snapshot for
-		// read-committed transactions; they use the snapshot off the dbb block
-		// since they need to know what is currently committed.
-
-		if (!(trans->tra_flags & TRA_read_committed))
-		{
-			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
-				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
-		}
-
 		// Next task is to find the oldest active transaction on the system.  This
 		// is needed for garbage collection.  Things are made ever so slightly
 		// more complicated by the fact that existing transaction may have oldest
 		// actives older than they are.
+		// Take into account in-limbo transactions too.
 
 		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra, trans);
 
@@ -3609,16 +3599,16 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		for (; active < number; active++)
 		{
 			//oldest_state = TPC_cache_state(tdbb, active);
-			const ULONG mask = (1 << tra_active);
+			const ULONG mask = (1 << tra_active) | (1 << tra_limbo);
 			active = TPC_find_states(tdbb, active, number, mask, oldest_state);
 			if (!active)
 			{
 				active = number;
 				break;
 			}
-			fb_assert(oldest_state == tra_active);
+			fb_assert(oldest_state == tra_active || oldest_state == tra_limbo);
 
-			if (oldest_state == tra_active)
+			if (oldest_state == tra_active || oldest_state == tra_limbo)
 			{
 				temp_lock.setKey(active);
 				TraNumber data = LCK_read_data(tdbb, &temp_lock);
@@ -3627,8 +3617,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 					if (cleanup)
 					{
 						if (TRA_wait(tdbb, trans, active, jrd_tra::tra_no_wait) == tra_committed)
+						{
 							cleanup = false;
-						continue;
+							continue;
+						}
 					}
 
 					data = active;
@@ -3744,12 +3736,6 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (!(trans->tra_flags & TRA_system) && !(trans->tra_flags & TRA_no_auto_undo))
 			trans->startSavepoint(true);
 
-		// if the user asked us to restart all requests in this attachment,
-		// do so now using the new transaction
-
-		if (trans->tra_flags & TRA_restart_requests)
-			restart_requests(tdbb, trans);
-
 		// If the transaction is read-only and read committed, it can be
 		// precommitted because it can't modify any records.
 		// 2014-08-26 NS XXX: with latest changes in TIP cache semantics and read
@@ -3765,8 +3751,25 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			trans->tra_flags |= TRA_precommitted;
 		}
 
+		// Next, take a snapshot of all transactions between the oldest interesting
+		// transaction and the current.  Don't bother to get a snapshot for
+		// read-committed transactions; they use the snapshot off the dbb block
+		// since they need to know what is currently committed.
+
+		if (!(trans->tra_flags & TRA_read_committed))
+		{
+			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
+				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
+		}
+
 		if (dbb->isReplicating(tdbb))
 			trans->tra_flags |= TRA_replicating;
+
+		// if the user asked us to restart all requests in this attachment,
+		// do so now using the new transaction
+
+		if (trans->tra_flags & TRA_restart_requests)
+			restart_requests(tdbb, trans);
 	}
 	catch (const Firebird::Exception&)
 	{
