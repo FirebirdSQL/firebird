@@ -1013,6 +1013,7 @@ static void activate_request(thread_db* tdbb, Request* request, jrd_tra* transac
 	provide transaction stability by preventing a relation from being
 	dropped after it has been referenced from an active transaction. */
 
+	statement->loadResources(tdbb, request);
 	transaction->postResources(tdbb, statement->getResources());
 
 	TRA_attach_request(transaction, request);

@@ -123,6 +123,13 @@ private:
 	void loadResources(thread_db* tdbb, Request* req, bool withLock);
 
 public:
+	void loadResources(thread_db* tdbb, Request* req)
+	{
+		fb_assert(req);
+		loadResources(tdbb, req, true);
+	}
+
+public:
 	MemoryPool* pool;
 	unsigned flags;						// statement flags
 	unsigned blrVersion;
