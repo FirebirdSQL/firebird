@@ -412,8 +412,7 @@ namespace
 			if (!m_idxList.has_value())
 			{
 				m_idxList.emplace();
-				const auto relPages = m_relation->getPages(m_tdbb);
-				BTR_all(m_tdbb, m_relation, *m_idxList, relPages);
+				BTR_load_keys(m_tdbb, m_relation, *m_idxList);
 			}
 
 			if (position)
