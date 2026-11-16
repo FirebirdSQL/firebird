@@ -4021,6 +4021,10 @@ ISC_STATUS rem_port::execute_statement(P_OP op, P_SQLDATA* sqldata, PACKET* send
 			iMsgBuffer.metadata, iMsgBuffer.buffer, oMsgBuffer.metadata, oMsgBuffer.buffer);
 	}
 
+	// timeout is consumed by setTimeout() above; clear it so that
+	// a stale value is not left in the reused receive packet
+	sqldata->p_sqldata_timeout = 0;
+
 	statement->rsr_inline_blob_size = sqldata->p_sqldata_inline_blob_size;
 
 	if (op == op_execute2)
