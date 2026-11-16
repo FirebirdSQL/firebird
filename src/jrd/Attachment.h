@@ -525,6 +525,7 @@ public:
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
 	jrd_tra*	att_meta_transaction;		// metadata read transaction
+	TraNumber	att_meta_number = 0;		// Number with which metadata transaction was started
 	StableAttachmentPart* att_stable;
 
 public:
