@@ -161,7 +161,7 @@ template <class Versioned>
 class ListEntry : public HazardObject
 {
 public:
-	enum State { INITIAL, RELOAD, MISSING, SCANNING, READY };
+	enum State { INITIAL, RELOAD, SCANNING, READY };
 
 	ListEntry(Versioned* object, TraNumber traNumber, ObjectBase::Flag fl, ListEntry* link = nullptr)
 		: object(object), traNumber(traNumber), cacheFlags(fl), state(INITIAL)
@@ -492,8 +492,6 @@ public:
 						break;
 
 					case ScanResult::SKIP:
-						if (savedState == MISSING)
-							result = ScanResult::MISS;
 						state = savedState;
 						break;
 
@@ -834,6 +832,9 @@ public:
 
 			case ScanResult::MISS:
 				rc = StoreResult::MISS;
+				break;
+
+			case ScanResult::SKIP:
 				break;
 			}
 		}
