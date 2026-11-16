@@ -3656,8 +3656,10 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 					if (cleanup)
 					{
 						if (TRA_wait(tdbb, trans, active, jrd_tra::tra_no_wait) == tra_committed)
+						{
 							cleanup = false;
-						continue;
+							continue;
+						}
 					}
 
 					data = active;
