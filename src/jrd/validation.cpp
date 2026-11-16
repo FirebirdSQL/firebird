@@ -3024,55 +3024,50 @@ void Validation::checkDPinPP(jrd_rel* relation, ULONG page_number)
 	Database* dbb = vdr_tdbb->getDatabase();
 	DECOMPOSE(sequence, dbb->dbb_dp_per_pp, pp_sequence, slot);
 
-	pointer_page* ppage = 0;
-	if (pp_sequence < relPages->getPointerPageCount())
+	pointer_page* ppage = nullptr;
+	if (const auto ppNumber = relPages->getPointerPage(pp_sequence))
 	{
-		if (const auto ppNumber = relPages->getPointerPage(pp_sequence))
+		fetch_page(false, ppNumber.value(), pag_pointer, &window, &ppage);
+
+		if (slot >= ppage->ppg_count)
 		{
-			fetch_page(false, ppNumber.value(), pag_pointer, &window, &ppage);
-
-			if (slot >= ppage->ppg_count)
+			corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, pageSpaceId, page_number,
+					window.win_page.getPageNum(), slot);
+			if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
 			{
-				corrupt(VAL_DATA_PAGE_SLOT_NOT_FOUND, relation, pageSpaceId, page_number,
-						window.win_page.getPageNum(), slot);
-				if ((vdr_flags & VDR_update) && slot < dbb->dbb_dp_per_pp)
+				CCH_MARK(vdr_tdbb, &window);
+				for (USHORT i = ppage->ppg_count; i < slot; i++)
 				{
-					CCH_MARK(vdr_tdbb, &window);
-					for (USHORT i = ppage->ppg_count; i < slot; i++)
-					{
-						ppage->ppg_page[i] = 0;
+					ppage->ppg_page[i] = 0;
 
-						// Clear control fields
-						UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-						*byte = 0;
-					}
-					ppage->ppg_page[slot] = page_number;
-					ppage->ppg_count = slot + 1;
-
-					// Restore control fields
+					// Clear control fields
 					UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-					restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-					vdr_fixed++;
+					*byte = 0;
 				}
-			}
-			else if (page_number != ppage->ppg_page[slot])
-			{
-				corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, pageSpaceId, page_number,
-						window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
-				if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
-				{
-					CCH_MARK(vdr_tdbb, &window);
-					ppage->ppg_page[slot] = page_number;
+				ppage->ppg_page[slot] = page_number;
+				ppage->ppg_count = slot + 1;
 
-					// Restore control fields
-					UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
-					restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
-					vdr_fixed++;
-				}
+				// Restore control fields
+				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
+				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
+				vdr_fixed++;
 			}
 		}
-		else
-			corrupt(VAL_DATA_PAGE_HASNO_PP, relation, pageSpaceId, page_number, dpage->dpg_sequence);
+		else if (page_number != ppage->ppg_page[slot])
+		{
+			corrupt(VAL_DATA_PAGE_SLOT_BAD_VAL, relation, pageSpaceId, page_number,
+					window.win_page.getPageNum(), slot, ppage->ppg_page[slot]);
+			if ((vdr_flags & VDR_update) && !ppage->ppg_page[slot])
+			{
+				CCH_MARK(vdr_tdbb, &window);
+				ppage->ppg_page[slot] = page_number;
+
+				// Restore control fields
+				UCHAR* byte = &PPG_DP_BITS_BYTE((UCHAR*) &ppage->ppg_page[dbb->dbb_dp_per_pp], slot);
+				restoreFlags(byte, dpage->dpg_header.pag_flags, dpEmpty);
+				vdr_fixed++;
+			}
+		}
 	}
 	else
 		corrupt(VAL_DATA_PAGE_HASNO_PP, relation, pageSpaceId, page_number, dpage->dpg_sequence);

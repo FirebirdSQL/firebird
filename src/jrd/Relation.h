@@ -345,16 +345,34 @@ public:
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
+		// Self-assignment would wipe the source before copying it; setPages()
+		// is responsible for skipping that case, so assert it never happens
+
+		fb_assert(this != &from);
 		fb_assert(m_pageSpaceId == from.m_pageSpaceId);
 
-		m_pointerPages.clear();
+		clearPointerPages();
 
 		const auto readAccessor = from.m_pointerPages.readAccessor();
 		const auto pageCount = readAccessor->getCount();
-		m_pointerPages.grow(pageCount, true);
+
+		// Reserve room for the pages only: growing the count here would make
+		// add() append them after a run of empty slots
+
+		if (pageCount)
+			m_pointerPages.grow(pageCount, false);
 
 		const auto writeAccessor = m_pointerPages.writeAccessor();
+		fb_assert(writeAccessor->hasSpace(pageCount));
 		writeAccessor->add(readAccessor.getPointer());
+		fb_assert(writeAccessor->getCount() == pageCount);
+
+		m_pageCount.store(pageCount, std::memory_order_release);
+
+		// The count mirror must match the real vector whenever the writer
+		// releases m_mutex (the vector side is checked above)
+
+		fb_assert(m_pageCount.load(std::memory_order_relaxed) == pageCount);
 
 		m_indexRootPage = from.m_indexRootPage;
 		rel_data_pages = from.rel_data_pages;
@@ -387,7 +405,7 @@ public:
 
 		m_pageSpaceId = pageSpaceId;
 
-		m_pointerPages.clear();
+		clearPointerPages();
 		m_indexRootPage = 0;
 
 		rel_data_pages = 0;
@@ -428,14 +446,10 @@ public:
 
 		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE);
 
+		if (!m_pageCount.load(std::memory_order_relaxed))
+			growPointerPages(1);
+
 		auto accessor = m_pointerPages.writeAccessor();
-
-		if (!accessor->getCount())
-		{
-			m_pointerPages.grow(1, true);
-			accessor = m_pointerPages.writeAccessor();
-		}
-
 		auto& value = accessor->value(0);
 		fb_assert(!value || value == pageNo);
 		value = pageNo;
@@ -486,32 +500,71 @@ public:
 		m_indexRootPage = pageNo;
 	}
 
-	bool hasData() const
+	bool hasData() const noexcept
 	{
-		return (m_pointerPages.readAccessor()->getCount() != 0);
+		return m_pageCount.load(std::memory_order_acquire) != 0;
 	}
 
-	HazardPtr<PageList::Generation> getPointerPages()
+	// For callers that need only the count. Callers that also read the page
+	// numbers should hold one getPointerPages() accessor instead and use the
+	// getPointerPage() overload below, so one hazard pointer covers both.
+
+	ULONG getPointerPageCount() const noexcept
+	{
+		return m_pageCount.load(std::memory_order_acquire);
+	}
+
+	bool isKnownPage(ULONG sequence) const
+	{
+		return sequence < m_pageCount.load(std::memory_order_acquire);
+	}
+
+	PageList::ReadAccessor getPointerPages() const
 	{
 		return m_pointerPages.readAccessor();
 	}
 
-	ULONG getPointerPageCount()
-	{
-		const auto accessor = m_pointerPages.readAccessor();
-		return accessor->getCount();
-	}
+	// Resolve a pointer page through an accessor the caller already holds, so
+	// that a single hazard pointer covers both the count and the value lookup
 
-	std::optional<PageNumber> getPointerPage(ULONG sequence)
+	std::optional<PageNumber> getPointerPage(const PageList::ReadAccessor& pages,
+											 ULONG sequence) const
 	{
-		const auto accessor = m_pointerPages.readAccessor();
-		if (sequence >= accessor->getCount())
+		if (sequence >= pages->getCount())
 			return std::nullopt;
 
-		const auto pageNo = accessor->value(sequence);
+		const auto pageNo = pages->value(sequence);
 		fb_assert(m_pageSpaceId != INVALID_PAGE_SPACE && pageNo);
 
 		return PageNumber(m_pageSpaceId, pageNo);
+	}
+
+	std::optional<PageNumber> getFirstPointerPage(const PageList::ReadAccessor& pages) const
+	{
+		return getPointerPage(pages, 0);
+	}
+
+	std::optional<PageNumber> getLastPointerPage(const PageList::ReadAccessor& pages) const
+	{
+		if (const auto count = pages->getCount())
+			return getPointerPage(pages, count - 1);
+
+		return std::nullopt;
+	}
+
+	std::optional<PageNumber> getPointerPage(ULONG sequence) const
+	{
+		return getPointerPage(m_pointerPages.readAccessor(), sequence);
+	}
+
+	std::optional<PageNumber> getFirstPointerPage() const
+	{
+		return getFirstPointerPage(m_pointerPages.readAccessor());
+	}
+
+	std::optional<PageNumber> getLastPointerPage() const
+	{
+		return getLastPointerPage(m_pointerPages.readAccessor());
 	}
 
 	void resetPointerPages(ULONG count, const ULONG* data)
@@ -522,13 +575,11 @@ public:
 	void updatePointerPages(ULONG sequence, ULONG count, const ULONG* data)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
-		auto accessor = m_pointerPages.writeAccessor();
 
-		if (sequence + count > accessor->getCount())
-		{
-			m_pointerPages.grow(sequence + count, true);
-			accessor = m_pointerPages.writeAccessor();
-		}
+		if (sequence + count > m_pageCount.load(std::memory_order_relaxed))
+			growPointerPages(sequence + count);
+
+		auto accessor = m_pointerPages.writeAccessor();
 
 #ifdef DEV_BUILD
 		for (unsigned i = 0; i < count; i++)
@@ -548,14 +599,11 @@ public:
 		fb_assert(pageNo);
 
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+
+		if (sequence >= m_pageCount.load(std::memory_order_relaxed))
+			growPointerPages(sequence + 1);
+
 		auto accessor = m_pointerPages.writeAccessor();
-
-		if (sequence >= accessor->getCount())
-		{
-			m_pointerPages.grow(sequence + 1, true);
-			accessor = m_pointerPages.writeAccessor();
-		}
-
 		auto& value = accessor->value(sequence);
 		fb_assert(!value || value == pageNo);
 		value = pageNo;
@@ -569,6 +617,7 @@ public:
 	RelationPages* reuse(ULONG pageSpaceId, InstanceId instanceId)
 	{
 		fb_assert(m_useCount == 0);
+		fb_assert(!m_pageCount.load(std::memory_order_relaxed));  // recycled objects start empty
 
 		m_pageSpaceId = pageSpaceId;
 		m_instanceId = instanceId;
@@ -654,6 +703,7 @@ private:
 	InstanceId m_instanceId; // 0 or att_attachment_id or tra_number
 
 	PageList m_pointerPages;
+	std::atomic<ULONG> m_pageCount = 0;
 	ULONG m_indexRootPage = 0;
 	RelationPages* m_freePages = nullptr;
 	std::atomic<int> m_useCount = 0;
@@ -675,6 +725,38 @@ private:
 
 	Firebird::SortedArray<DPItem, Firebird::InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> m_dpMap;
 	ULONG m_dpMapMark = 0;
+
+	// Acquiring a SharedReadVector hazard pointer just to check for non-empty or get a count
+	// is too expensive, so maintain a cheap mirror count refreshed by the pointer-page writers,
+	// all of which hold m_mutex. Lock-free readers use an acquire load.
+	//
+	// The counter is stored only after the vector itself is updated, so a non-zero read also
+	// makes the new generation visible to the reader. The actual page numbers are still read
+	// through a hazard pointer.
+	//
+	// Callers that already hold m_mutex read the counter with a plain relaxed load: the lock
+	// itself provides the acquire/release ordering, so no atomic ordering is needed there.
+
+	void clearPointerPages()
+	{
+		m_pageCount.store(0, std::memory_order_release);
+		m_pointerPages.clear();
+
+		fb_assert(!m_pageCount.load(std::memory_order_relaxed));
+		fb_assert(!m_pointerPages.readAccessor()->getCount());
+	}
+
+	void growPointerPages(FB_SIZE_T count)
+	{
+		// grow() never shrinks, so the new count must not be below the mirror
+		fb_assert(count >= m_pageCount.load(std::memory_order_relaxed));
+
+		m_pointerPages.grow(count, true);
+		m_pageCount.store(count, std::memory_order_release);
+
+		fb_assert(m_pointerPages.readAccessor()->getCount() == count);
+		fb_assert(m_pageCount.load(std::memory_order_relaxed) == count);
+	}
 };
 
 
@@ -1453,7 +1535,10 @@ public:
 	{
 		fb_assert(relation && relation->m_basePages);
 		setPageSpaceId(relation->m_basePages->getPageSpaceId());
-		m_basePages->assign(*relation->m_basePages);
+
+		const auto pages = getBasePages();
+		if (pages != relation->m_basePages)
+			pages->assign(*relation->m_basePages);
 	}
 
 	ULONG getPageSpaceId() const noexcept
@@ -1463,8 +1548,11 @@ public:
 
 	void setPageSpaceId(ULONG pageSpaceId)
 	{
-		m_pageSpaceId = pageSpaceId;
-		m_basePages = rel_perm->getPages(pageSpaceId);
+		if (m_pageSpaceId != pageSpaceId)
+		{
+			m_pageSpaceId = pageSpaceId;
+			m_basePages = rel_perm->getPages(pageSpaceId);
+		}
 	}
 
 	std::optional<PageNumber> getIndexRootPage(thread_db* tdbb)

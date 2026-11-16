@@ -646,7 +646,7 @@ bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = null
 		return false;
 
 #ifdef VIO_DEBUG
-	const auto firstPointerPage = pages->getPointerPage(0);
+	const auto firstPointerPage = pages->getFirstPointerPage();
 	const auto ppNumber = firstPointerPage ? firstPointerPage.value().getPageNum() : 0;
 	const auto rootPage = pages->getIndexRootPage();
 	const auto irpNumber = rootPage ? rootPage.value().getPageNum() : 0;
