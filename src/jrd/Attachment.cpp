@@ -893,6 +893,7 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 		{
 			LCK_release(tdbb, att_meta_transaction->tra_lock);
 			att_meta_transaction->tra_lock = nullptr;
+			att_meta_number = att_meta_transaction->tra_number;
 		}
 	}
 }
@@ -918,6 +919,7 @@ void Attachment::rollbackMetaTransaction(thread_db* tdbb)
 	if (auto trans_meta = att_meta_transaction)
 	{
 		att_meta_transaction = nullptr;
+		trans_meta->tra_number = att_meta_number;
 		TRA_rollback(tdbb, trans_meta, false, true);
 	}
 }
