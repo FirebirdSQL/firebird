@@ -3773,12 +3773,6 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (!(trans->tra_flags & TRA_system) && !(trans->tra_flags & TRA_no_auto_undo))
 			trans->startSavepoint(true);
 
-		// if the user asked us to restart all requests in this attachment,
-		// do so now using the new transaction
-
-		if (trans->tra_flags & TRA_restart_requests)
-			restart_requests(tdbb, trans);
-
 		// If the transaction is read-only and read committed, it can be
 		// precommitted because it can't modify any records.
 		// 2014-08-26 NS XXX: with latest changes in TIP cache semantics and read
@@ -3807,6 +3801,12 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 
 		if (dbb->isReplicating(tdbb))
 			trans->tra_flags |= TRA_replicating;
+
+		// if the user asked us to restart all requests in this attachment,
+		// do so now using the new transaction
+
+		if (trans->tra_flags & TRA_restart_requests)
+			restart_requests(tdbb, trans);
 	}
 	catch (const Firebird::Exception&)
 	{
