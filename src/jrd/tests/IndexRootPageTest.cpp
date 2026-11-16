@@ -81,7 +81,13 @@ BOOST_AUTO_TEST_CASE(BackSlotNotMigrating)
 	slot->setNormal();
 	slot->irt_backslot = 2;
 
+	// getBackSlot() asserts the migrate state in developer builds, where calling
+	// it for a slot in another state is a caller bug; returning nullptr for such a
+	// slot is only the release-build safety net
+
+#ifndef DEV_BUILD
 	BOOST_TEST(root->getBackSlot(slot) == nullptr);
+#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()	// BackSlotTests
