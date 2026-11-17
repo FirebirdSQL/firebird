@@ -1097,9 +1097,14 @@ void IndexPermanent::reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
 
 void Trigger::free(thread_db* tdbb)
 {
+	MutexLockGuard guard(compileMutex, FB_FUNCTION);
+
+	if (releaseInProgress)
+		return;
+
 	extTrigger.reset();
 
-	if (releaseInProgress || !statement)
+	if (!statement)
 		return;
 
 	AutoSetRestore<bool> autoProgressFlag(&releaseInProgress, true);
