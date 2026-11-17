@@ -4111,6 +4111,10 @@ void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescL
 	win window(rootPage.value());
 	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
+	Cleanup releaseWindow([&] {
+		CCH_RELEASE(tdbb, &window);
+	});
+
 	const auto relPerm = relation->getPermanent();
 
 	for (USHORT i = 0; i < root->irt_count; i++)
@@ -4130,8 +4134,6 @@ void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescL
 		if (BTR_description(tdbb, relPerm, root, &idx, i, BTR_DESCRIBE_NO_THROW))
 			idxList.add(idx);
 	}
-
-	CCH_RELEASE(tdbb, &window);
 }
 
 
