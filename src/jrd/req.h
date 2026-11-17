@@ -124,12 +124,25 @@ struct record_param : public RecordParameterBase
 
 	inline WIN& getWindow(thread_db* tdbb)
 	{
-		if (rpb_relation)
+		// A window holding a page already has its page space initialized,
+		// so there is no need to resolve the relation pages
+
+		if (rpb_relation && !rpb_window.win_bdb)
 		{
 			const auto relPages = rpb_relation->getPages(tdbb);
 			rpb_window.win_page.setPageSpaceID(relPages->getPageSpaceId());
 		}
 
+		return rpb_window;
+	}
+
+	// Assigns the given page space to the window. Unlike the overload above,
+	// it does not resolve the relation pages, so the page space may come from
+	// any source (e.g. an index page space), not necessarily the relation.
+
+	inline WIN& getWindow(ULONG pageSpaceId)
+	{
+		rpb_window.win_page.setPageSpaceID(pageSpaceId);
 		return rpb_window;
 	}
 
