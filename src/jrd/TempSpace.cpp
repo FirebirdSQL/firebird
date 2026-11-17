@@ -583,8 +583,12 @@ offset_t TempSpace::allocateSpace(FB_SIZE_T size)
 		if (!freeSegments.locate(best->position))
 			fb_assert(false);
 
-		delete freeSegments.current();
+		// The tree key is generated from the Segment object itself.
+		// Remove it from the tree first, otherwise fastRemove() (and the
+		// iterator advance) read the key from an already freed object.
+		Segment* const segment = freeSegments.current();
 		freeSegments.fastRemove();
+		delete segment;
 	}
 	else
 		freeSegmentsBySize.addSegment(best);
@@ -626,8 +630,10 @@ void TempSpace::releaseSpace(offset_t position, FB_SIZE_T size)
 				next_seg->position -= prior_seg->size;
 				next_seg->size += prior_seg->size;
 
-				delete prior_seg;
+				// The tree key is generated from the Segment object itself,
+				// so it must be removed from the tree before being freed.
 				freeSegments.fastRemove();
+				delete prior_seg;
 			}
 		}
 
@@ -811,8 +817,10 @@ ULONG TempSpace::allocateBatch(ULONG count, FB_SIZE_T minSize, FB_SIZE_T maxSize
 
 			if (!freeSpace->size)
 			{
-				delete freeSegments.current();
+				// The tree key is generated from the Segment object itself,
+				// so it must be removed from the tree before being freed.
 				is_positioned = freeSegments.fastRemove();
+				delete freeSpace;
 			}
 			else
 				freeSegmentsBySize.addSegment(freeSpace);
