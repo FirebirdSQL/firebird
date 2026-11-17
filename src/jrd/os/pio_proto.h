@@ -67,6 +67,7 @@ inline bool PIO_on_raw_device(const Firebird::PathName&)
 }
 #endif
 bool	PIO_write(Jrd::thread_db*, Jrd::jrd_file*, Jrd::BufferDesc*, Ods::pag*, Jrd::FbStatusVector*);
+bool	PIO_file_exists(const Firebird::PathName&);
 
 #endif // JRD_PIO_PROTO_H
 

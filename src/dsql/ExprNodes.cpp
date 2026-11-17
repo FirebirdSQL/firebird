@@ -6869,17 +6869,6 @@ ValueExprNode* FieldNode::pass1(thread_db* tdbb, CompilerScratch* csb)
 		}
 	}
 
-	// if this is a modify or store, check REFERENCES access to any foreign keys
-
-	/* CVC: This is against the SQL standard. REFERENCES should be enforced only at the
-		time the FK is defined in DDL, not when a DML is going to be executed.
-	if (((tail->csb_flags & csb_modify) || (tail->csb_flags & csb_store)) &&
-		!(relation->rel_view_rse || relation->rel_file))
-	{
-		IDX_check_access(tdbb, csb, tail->csb_view, relation);
-	}
-	*/
-
 	// Unless this is a validation expression, post the required privilege access
 	// to the current relation and field
 
@@ -11429,7 +11418,9 @@ bool SubQueryNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 
 bool SubQueryNode::dsqlFieldFinder(FieldFinder& visitor)
 {
-	return visitor.visit(rse);	// Pass only the rse.
+	// Fields inside a sub-select are not related to the scope level being checked,
+	// see AggNode::dsqlAggregate2Finder() and SubQueryNode::dsqlAggregateFinder().
+	return !visitor.ignoreSubSelects && visitor.visit(rse);	// Pass only the rse.
 }
 
 ValueExprNode* SubQueryNode::dsqlFieldRemapper(FieldRemapper& visitor)

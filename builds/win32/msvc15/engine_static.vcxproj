@@ -30,6 +30,7 @@
     <ClCompile Include="..\..\..\gen\dsql\DdlNodes.cpp" />
     <ClCompile Include="..\..\..\gen\dsql\metd.cpp" />
     <ClCompile Include="..\..\..\gen\dsql\PackageNodes.cpp" />
+    <ClCompile Include="..\..\..\gen\dsql\TablespaceNodes.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dfw.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dpm.cpp" />
     <ClCompile Include="..\..\..\gen\jrd\dyn_util.cpp" />
@@ -125,6 +126,7 @@
     <ClCompile Include="..\..\..\src\jrd\par.cpp" />
     <ClCompile Include="..\..\..\src\jrd\PreparedStatement.cpp" />
     <ClCompile Include="..\..\..\src\jrd\ProfilerManager.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\ProfilerSampler.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RandomGenerator.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RecordBuffer.cpp" />
     <ClCompile Include="..\..\..\src\jrd\RecordSourceNodes.cpp" />
@@ -177,6 +179,7 @@
     <ClCompile Include="..\..\..\src\jrd\sys-packages\SqlPackage.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SysFunction.cpp" />
     <ClCompile Include="..\..\..\src\jrd\SystemPackages.cpp" />
+    <ClCompile Include="..\..\..\src\jrd\Tablespace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TempSpace.cpp" />
     <ClCompile Include="..\..\..\src\jrd\TimeZone.cpp" />
     <ClCompile Include="..\..\..\src\jrd\tpc.cpp" />
@@ -234,6 +237,7 @@
     <ClInclude Include="..\..\..\src\dsql\sqlda_pub.h" />
     <ClInclude Include="..\..\..\src\dsql\StmtNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\sym.h" />
+    <ClInclude Include="..\..\..\src\dsql\TablespaceNodes.h" />
     <ClInclude Include="..\..\..\src\dsql\utld_proto.h" />
     <ClInclude Include="..\..\..\src\dsql\Visitors.h" />
     <ClInclude Include="..\..\..\src\dsql\WinNodes.h" />
@@ -300,6 +304,7 @@
     <ClInclude Include="..\..\..\src\jrd\ibsetjmp.h" />
     <ClInclude Include="..\..\..\src\jrd\idx.h" />
     <ClInclude Include="..\..\..\src\jrd\idx_proto.h" />
+    <ClInclude Include="..\..\..\src\jrd\IndexSegment.h" />
     <ClInclude Include="..\..\..\src\jrd\inf_proto.h" />
     <ClInclude Include="..\..\..\src\include\firebird\impl\inf_pub.h" />
     <ClInclude Include="..\..\..\src\jrd\ini.h" />
@@ -341,6 +346,7 @@
     <ClInclude Include="..\..\..\src\jrd\par_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\PreparedStatement.h" />
     <ClInclude Include="..\..\..\src\jrd\ProfilerManager.h" />
+    <ClInclude Include="..\..\..\src\jrd\ProfilerSampler.h" />
     <ClInclude Include="..\..\..\src\jrd\QualifiedName.h" />
     <ClInclude Include="..\..\..\src\jrd\que.h" />
     <ClInclude Include="..\..\..\src\jrd\RandomGenerator.h" />
@@ -381,6 +387,7 @@
     <ClInclude Include="..\..\..\src\jrd\SysFunction.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemPackages.h" />
     <ClInclude Include="..\..\..\src\jrd\SystemTriggers.h" />
+    <ClInclude Include="..\..\..\src\jrd\Tablespace.h" />
     <ClInclude Include="..\..\..\src\jrd\TempSpace.h" />
     <ClInclude Include="..\..\..\src\jrd\TimeZone.h" />
     <ClInclude Include="..\..\..\src\jrd\tpc_proto.h" />
@@ -410,6 +417,7 @@
     <None Include="..\..\..\src\dsql\DdlNodes.epp" />
     <None Include="..\..\..\src\dsql\metd.epp" />
     <None Include="..\..\..\src\dsql\PackageNodes.epp" />
+    <None Include="..\..\..\src\dsql\TablespaceNodes.epp" />
     <None Include="..\..\..\src\dsql\parse.y">
       <FileType>Document</FileType>
     </None>
@@ -562,7 +570,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;$(FbIcuIncludeDir)../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_LIB;SUPERSERVER;DEV_BUILD;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
@@ -572,7 +580,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;$(FbIcuIncludeDir)../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_LIB;SUPERSERVER;DEV_BUILD;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
@@ -588,7 +596,7 @@
       <TargetEnvironment>X64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;$(FbIcuIncludeDir)../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_LIB;SUPERSERVER;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -599,7 +607,7 @@
       <TargetEnvironment>ARM64</TargetEnvironment>
     </Midl>
     <ClCompile>
-      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;../../../extern/icu/include;../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../src/include;../../../src/include/gen;$(FbIcuIncludeDir)../../../src/vulcan;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_LIB;SUPERSERVER;NAMESPACE=Vulcan;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>
       </PrecompiledHeader>

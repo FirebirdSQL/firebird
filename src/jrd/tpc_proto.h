@@ -161,6 +161,11 @@ public:
 		return m_tpcHeader->getHeader()->monitor_generation++ + 1;
 	}
 
+	bool isInitialized()
+	{
+		return m_tpcHeader;
+	}
+
 	static int cacheState(thread_db* tdbb, TraNumber number)
 	{
 		auto* tipCache = tdbb->getDatabase()->dbb_tip_cache;
@@ -309,11 +314,18 @@ private:
 	class MemBlockInitializer final : public MemoryInitializer
 	{
 	public:
-		explicit MemBlockInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
+		explicit MemBlockInitializer(TipCache *cache, ULONG blockSize, bool fileExists) noexcept
+			: MemoryInitializer(cache),
+			m_blockSize(blockSize),
+			m_fileExists(fileExists)
+		{}
 		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
 
 		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_BLOCK; }
 		const char* getName() const override { return "TipCache:TranBlock"; }
+
+		const ULONG m_blockSize;
+		const bool m_fileExists;
 	};
 
 	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
@@ -326,10 +338,10 @@ private:
 	ULONG m_transactionsPerBlock; // final. When set, we assume TPC has been initialized.
 
 	Firebird::AutoPtr<Lock> m_lock;
+	bool m_exclusive;					// have exclusive access
 
 	GlobalTpcInitializer globalTpcInitializer;
 	SnapshotsInitializer snapshotsInitializer;
-	MemBlockInitializer memBlockInitializer;
 
 	// Tree with TIP cache memory blocks
 	// Reads and writes to the tree are protected with m_sync_status.
@@ -364,7 +376,7 @@ private:
 	// Populate TIP cache from disk
 	void loadInventoryPages(thread_db *tdbb, GlobalTpcHeader* header);
 	// Init mapping for existing TIP blocks
-	void mapInventoryPages(const GlobalTpcHeader* header);
+	void mapInventoryPages(thread_db* tdbb, const GlobalTpcHeader* header);
 
 	static int tpc_block_blocking_ast(void* arg);
 

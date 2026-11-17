@@ -775,35 +775,25 @@ FetchPassResult fetchPassword(const Firebird::PathName& name, const char*& passw
 
 #ifdef WIN_NT
 static SINT64 saved_frequency = 0;
-#elif defined(HAVE_CLOCK_GETTIME)
-constexpr SINT64 BILLION = 1'000'000'000;
 #endif
 
 // Returns current value of performance counter
-SINT64 query_performance_counter()
+#if defined(WIN_NT) || !defined(HAVE_CLOCK_GETTIME)
+SINT64 query_performance_counter() noexcept
 {
 #if defined(WIN_NT)
-
 	// Use Windows performance counters
 	LARGE_INTEGER counter;
 	if (QueryPerformanceCounter(&counter) == 0)
 		return 0;
 
 	return counter.QuadPart;
-#elif defined(HAVE_CLOCK_GETTIME)
-
-	// Use high-resolution clock
-	struct timespec tp;
-	if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) != 0)
-		return 0;
-
-	return static_cast<SINT64>(tp.tv_sec) * BILLION + tp.tv_nsec;
 #else
-
 	// This is not safe because of possible wrapping and very imprecise
 	return clock();
 #endif
 }
+#endif
 
 
 // Returns frequency of performance counter in Hz

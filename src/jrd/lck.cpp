@@ -588,6 +588,7 @@ static lck_owner_t get_owner_type(enum lck_t lock_type)
 	case LCK_cs_rescan:
 	case LCK_dbwide_triggers:
 	case LCK_repl_tables:
+	case LCK_tablespace:
 		owner_type = LCK_OWNER_database;
 		break;
 

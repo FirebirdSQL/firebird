@@ -31,6 +31,7 @@
 #include "../dsql/AggNodes.h"
 #include "../dsql/WinNodes.h"
 #include "../dsql/PackageNodes.h"
+#include "../dsql/TablespaceNodes.h"
 #include "../dsql/StmtNodes.h"
 #include "../jrd/RecordSourceNodes.h"
 #include "../common/classes/PodOptional.h"

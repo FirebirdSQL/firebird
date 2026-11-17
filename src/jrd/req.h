@@ -51,6 +51,7 @@ class jrd_tra;
 class Savepoint;
 class Cursor;
 class thread_db;
+class ProfilerRequestProfile;
 
 
 // record parameter block
@@ -66,7 +67,7 @@ struct RecordParameterBase
 		  rpb_b_page(0), rpb_b_line(0),
 		  rpb_address(NULL), rpb_length(0),
 		  rpb_flags(0), rpb_stream_flags(0), rpb_runtime_flags(0),
-		  rpb_org_scans(0), rpb_window(DB_PAGE_SPACE, -1)
+		  rpb_org_scans(0), rpb_window(DB_PAGE_SPACE)
 	{
 	}
 
@@ -123,8 +124,10 @@ struct record_param : public RecordParameterBase
 
 	inline WIN& getWindow(thread_db* tdbb)
 	{
-		if (rpb_relation) {
-			rpb_window.win_page.setPageSpaceID(getPermanent(rpb_relation)->getPages(tdbb)->rel_pg_space_id);
+		if (rpb_relation)
+		{
+			const auto relPages = rpb_relation->getPages(tdbb);
+			rpb_window.win_page.setPageSpaceID(relPages->getPageSpaceId());
 		}
 
 		return rpb_window;
@@ -434,6 +437,9 @@ public:
 	RuntimeStatistics	req_base_stats;
 	AffectedRows req_records_affected;	// records affected by the last statement
 	FB_UINT64 req_profiler_ticks;		// profiler ticks
+	ProfilerRequestProfile* req_profiler_profile = nullptr;	// sampling profiler counters, owned by ProfilerManager
+	ULONG req_profiler_generation = 0;	// ProfilerManager generation of req_profiler_profile
+	bool req_profiler_sampled = false;	// executed while the profiler samples timings
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements

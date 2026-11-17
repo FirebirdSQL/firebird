@@ -123,6 +123,13 @@ private:
 	void loadResources(thread_db* tdbb, Request* req, bool withLock);
 
 public:
+	void loadResources(thread_db* tdbb, Request* req)
+	{
+		fb_assert(req);
+		loadResources(tdbb, req, true);
+	}
+
+public:
 	MemoryPool* pool;
 	unsigned flags;						// statement flags
 	unsigned blrVersion;
@@ -155,6 +162,7 @@ public:
 
 private:
 	Resources* resources;				// Resources (relations, routines, etc.)
+	Firebird::Array<ULONG> tablespaces;	// Tablespaces used by the statement
 	Firebird::RefPtr<VersionedObjects> latestVer;
 	Firebird::Mutex lvMutex;			// Protects upgrade of latestVer
 	Firebird::Array<MessageNode*> messages;	// Input/output messages

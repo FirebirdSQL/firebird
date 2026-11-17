@@ -191,7 +191,7 @@ static inline void removeDirty(BufferControl* bcb, BufferDesc* bdb)
 }
 
 static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_only);
-static void flushAll(thread_db* tdbb, USHORT flush_flag);
+static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id);
 static void flushPages(thread_db* tdbb, USHORT flush_flag, BufferDesc** begin, FB_SIZE_T count);
 
 static void recentlyUsed(BufferDesc* bdb);
@@ -301,11 +301,11 @@ void CCH_clean_page(thread_db* tdbb, PageNumber page)
  *
  **************************************/
 	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
+	const auto dbb = tdbb->getDatabase();
 
 	fb_assert(page.getPageNum() > 0);
-	fb_assert(page.isTemporary());
-	if (!page.isTemporary())
+	fb_assert(PageSpace::isTemporary(page.getPageSpaceID()));
+	if (!PageSpace::isTemporary(page.getPageSpaceID()))
 		return;
 
 	BufferControl* bcb = dbb->dbb_bcb;
@@ -1097,10 +1097,12 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 	BufferDesc* bdb = window->win_bdb;
 	Database* dbb = tdbb->getDatabase();
 
+	fb_assert(bdb && bdb->ourExclusiveLock());
+
 	if (window->win_page != bdb->bdb_page || bdb->bdb_buffer->pag_type != pag_undefined)
 		return;	// buffer was reassigned or page was reused
 
-	window->win_bdb = NULL;
+	window->win_bdb = nullptr;
 
 	if (bdb->bdb_flags & BDB_io_error)
 		dbb->dbb_flags &= ~DBB_suspend_bgio;
@@ -1115,6 +1117,7 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 		SyncLockGuard lruSync(&bcb->bcb_syncLRU, SYNC_EXCLUSIVE, FB_FUNCTION);
 		requeueRecentlyUsed(bcb);
 		QUE_DELETE(bdb->bdb_in_use);
+		QUE_INIT(bdb->bdb_in_use);
 	}
 
 	// remove from hash table and put into empty list
@@ -1135,10 +1138,9 @@ void CCH_forget_page(thread_db* tdbb, WIN* window)
 	}
 #endif
 
+	bdb->bdb_page.clear();
 	bdb->bdb_flags = 0;
-
-	if (tdbb->tdbb_flags & TDBB_no_cache_unwind)
-		bdb->release(tdbb, true);
+	bdb->release(tdbb, true);
 }
 
 
@@ -1189,7 +1191,7 @@ void CCH_fini(thread_db* tdbb)
 }
 
 
-void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
+void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number, ULONG page_space_id)
 {
 /**************************************
  *
@@ -1231,7 +1233,7 @@ void CCH_flush(thread_db* tdbb, USHORT flush_flag, TraNumber tra_number)
 			flushDirty(tdbb, transaction_mask, sys_only);
 	}
 	else
-		flushAll(tdbb, flush_flag);
+		flushAll(tdbb, flush_flag, page_space_id);
 
 	//
 	// Check if flush needed
@@ -1440,7 +1442,7 @@ void CCH_get_related(thread_db* tdbb, PageNumber page, PagesArray &lowPages)
 }
 
 
-pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_type,
+pag* CCH_handoff(thread_db*	tdbb, WIN* window, PageNumber pageNumber, int lock, SCHAR page_type,
 	int wait, const bool release_tail)
 {
 /**************************************
@@ -1474,8 +1476,9 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 
 	SET_TDBB(tdbb);
 
-	CCH_TRACE(("HANDOFF %d:%06d->%06d, %s",
-		window->win_page.getPageSpaceID(), window->win_page.getPageNum(), page, (lock >= LCK_write) ? "EX" : "SH"));
+	CCH_TRACE(("HANDOFF %d:%06d->%d:%06d, %s",
+		window->win_page.getPageSpaceID(), window->win_page.getPageNum(),
+		pageNumber.getPageSpaceID(), pageNumber.getPageNum(), (lock >= LCK_write) ? "EX" : "SH"));
 
 	BufferDesc *bdb = window->win_bdb;
 
@@ -1489,7 +1492,7 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	// If the 'from-page' and 'to-page' of the handoff are the
 	// same and the latch requested is shared then downgrade it.
 
-	if ((window->win_page.getPageNum() == page) && (lock == LCK_read))
+	if ((window->win_page == pageNumber) && (lock == LCK_read))
 	{
 		if (bdb->ourExclusiveLock())
 			bdb->downgrade(SYNC_SHARED);
@@ -1498,7 +1501,7 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	}
 
 	WIN temp = *window;
-	window->win_page = PageNumber(window->win_page.getPageSpaceID(), page);
+	window->win_page = pageNumber;
 
 	LockState must_read;
 	if (bdb->bdb_bcb->bcb_flags & BCB_exclusive)
@@ -1797,14 +1800,13 @@ void CCH_must_write(thread_db* tdbb, WIN* window)
 	}
 
 	bdb->bdb_flags |= BDB_must_write | BDB_dirty;
-	fb_assert((bdb->bdb_flags & BDB_nbak_state_lock) ||
-			  PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
+	fb_assert((bdb->bdb_flags & BDB_nbak_state_lock) || PageSpace::isTemporary(bdb->bdb_page));
 }
 
 
 void CCH_precedence(thread_db* tdbb, WIN* window, ULONG pageNum)
 {
-	const USHORT pageSpaceID = pageNum > FIRST_PIP_PAGE ?
+	const ULONG pageSpaceID = pageNum > FIRST_PIP_PAGE ?
 		window->win_page.getPageSpaceID() : DB_PAGE_SPACE;
 
 	CCH_precedence(tdbb, window, PageNumber(pageSpaceID, pageNum));
@@ -1845,12 +1847,11 @@ void CCH_precedence(thread_db* tdbb, WIN* window, PageNumber page)
  *
  **************************************/
 	// If the page is zero, the caller isn't really serious
-
 	if (page.getPageNum() == 0)
 		return;
 
-	// no need to support precedence for temporary pages
-	if (page.isTemporary() || window->win_page.isTemporary())
+	// No need to support precedence for temporary pages
+	if (PageSpace::isTemporary(page) || PageSpace::isTemporary(window->win_page))
 		return;
 
 	check_precedence(tdbb, window, page);
@@ -1945,9 +1946,7 @@ bool set_diff_page(thread_db* tdbb, BufferDesc* bdb)
 	BackupManager* const bm = dbb->dbb_backup_manager;
 
 	// Temporary pages don't write to delta and need no SCN
-	PageSpace* pageSpace = dbb->dbb_page_manager.findPageSpace(bdb->bdb_page.getPageSpaceID());
-	fb_assert(pageSpace);
-	if (pageSpace->isTemporary())
+	if (PageSpace::isTemporary(bdb->bdb_page))
 		return true;
 
 	// Take backup state lock
@@ -2299,6 +2298,45 @@ void CCH_shutdown(thread_db* tdbb)
 
 	dbb->dbb_page_manager.closeAll();
 	SDW_close();
+}
+
+bool CCH_try_write(thread_db* tdbb, WIN* window)
+{
+/**************************************
+ *
+ *	C C H _ t r y _ w r i t e
+ *
+ **************************************
+ *
+ * Functional description
+ *   Try to write just faked page to disk. Release buffer if successful.
+ *
+ **************************************/
+	BufferDesc* const bdb = window->win_bdb;
+	BLKCHK(bdb, type_bdb);
+
+	BufferControl* bcb = bdb->bdb_bcb;
+
+	constexpr auto CLEAR_FLAGS = (BDB_writer | BDB_marked | BDB_faked);
+
+	fb_assert((bdb->bdb_flags & CLEAR_FLAGS) == CLEAR_FLAGS);
+	fb_assert(bdb->bdb_writers == 1);
+	fb_assert(bdb->ourExclusiveLock());
+	fb_assert(bdb->ourIOLock());
+	fb_assert(QUE_EMPTY(bdb->bdb_higher));
+
+	bdb->bdb_flags &= ~CLEAR_FLAGS;
+
+	const bool result = write_page(tdbb, bdb, tdbb->tdbb_status_vector, false);
+
+	bdb->unLockIO(tdbb);
+	if (result)
+	{
+		bdb->release(tdbb, true);
+		window->win_bdb = nullptr;
+	}
+
+	return result;
 }
 
 void CCH_unwind(thread_db* tdbb, const bool punt)
@@ -2711,7 +2749,7 @@ static void flushDirty(thread_db* tdbb, SLONG transaction_mask, const bool sys_o
 // Collect pages modified by garbage collector or all dirty pages or release page
 // locks - depending of flush_flag, and write it to disk.
 // See also comments in flushPages.
-static void flushAll(thread_db* tdbb, USHORT flush_flag)
+static void flushAll(thread_db* tdbb, USHORT flush_flag, ULONG page_space_id)
 {
 	SET_TDBB(tdbb);
 	Database* dbb = tdbb->getDatabase();
@@ -2733,28 +2771,32 @@ static void flushAll(thread_db* tdbb, USHORT flush_flag)
 			{
 				BufferDesc* bdb = &blk.m_bdbs[i];
 
-				if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
+				if (page_space_id == INVALID_PAGE_SPACE ||
+					(bdb->bdb_page.isValid() && bdb->bdb_page.getPageSpaceID() == page_space_id))
 				{
-					if (bdb->bdb_flags & BDB_dirty)
-						flush.add(bdb);
-					else if (bdb->bdb_flags & BDB_db_dirty)
+					if (bdb->bdb_flags & (BDB_db_dirty | BDB_dirty))
 					{
-						// pages modified by sweep\garbage collector are not in dirty list
-						const bool dirty_list = (bdb->bdb_dirty.que_forward != &bdb->bdb_dirty);
-
-						if (all_flag || (sweep_flag && !dirty_list))
+						if (bdb->bdb_flags & BDB_dirty)
 							flush.add(bdb);
+						else if (bdb->bdb_flags & BDB_db_dirty)
+						{
+							// pages modified by sweep\garbage collector are not in dirty list
+							const bool dirty_list = (bdb->bdb_dirty.que_forward != &bdb->bdb_dirty);
+
+							if (all_flag || (sweep_flag && !dirty_list))
+								flush.add(bdb);
+						}
 					}
-				}
-				else if (release_flag)
-				{
-					bdb->addRef(tdbb, SYNC_EXCLUSIVE);
+					else if (release_flag)
+					{
+						bdb->addRef(tdbb, SYNC_EXCLUSIVE);
 
-					if (bdb->bdb_use_count > 1)
-						BUGCHECK(210);	// msg 210 page in use during flush
+						if (bdb->bdb_use_count > 1)
+							BUGCHECK(210);	// msg 210 page in use during flush
 
-					PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
-					bdb->release(tdbb, false);
+						PAGE_LOCK_RELEASE(tdbb, bcb, bdb->bdb_lock);
+						bdb->release(tdbb, false);
+					}
 				}
 			}
 		}
@@ -3202,7 +3244,9 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 
 	// If this is really a transaction id, sort things out
 
-	switch(page.getPageSpaceID())
+	const ULONG pageSpaceId = page.getPageSpaceID();
+
+	switch (pageSpaceId)
 	{
 		case DB_PAGE_SPACE:
 			break;
@@ -3214,6 +3258,8 @@ static void check_precedence(thread_db* tdbb, WIN* window, PageNumber page)
 			break;
 
 		default:
+			if (PageSpace::isTablespace(pageSpaceId))
+				break;
 			fb_assert(false);
 			return;
 	}
@@ -5097,7 +5143,7 @@ static void clear_dirty_flag_and_nbak_state(thread_db* tdbb, BufferDesc* bdb)
 		tdbb->getDatabase()->dbb_backup_manager->unlockStateRead(tdbb);
 	}
 	else if ((oldFlags & BDB_dirty) && bdb->bdb_page != HEADER_PAGE_NUMBER)
-		fb_assert(PageSpace::isTemporary(bdb->bdb_page.getPageSpaceID()));
+		fb_assert(PageSpace::isTemporary(bdb->bdb_page));
 }
 
 void recentlyUsed(BufferDesc* bdb)

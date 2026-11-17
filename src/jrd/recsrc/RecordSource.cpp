@@ -122,6 +122,12 @@ RecordSource::RecordSource(CompilerScratch* csb)
 
 void RecordSource::open(thread_db* tdbb) const
 {
+	if (!tdbb->getAttachment()->isProfilerActive())
+	{
+		internalOpen(tdbb);
+		return;
+	}
+
 	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
 		ProfilerManager::RecordSourceStopWatcher::Event::OPEN);
 
@@ -130,6 +136,9 @@ void RecordSource::open(thread_db* tdbb) const
 
 bool RecordSource::getRecord(thread_db* tdbb) const
 {
+	if (!tdbb->getAttachment()->isProfilerActive())
+		return internalGetRecord(tdbb);
+
 	ProfilerManager::RecordSourceStopWatcher profilerRecordSourceStopWatcher(tdbb, this,
 		ProfilerManager::RecordSourceStopWatcher::Event::GET_RECORD);
 
@@ -318,7 +327,7 @@ WriteLockResult RecordStream::lockRecord(thread_db* tdbb) const
 
 	fb_assert(relation && !relation->rel_view_rse);
 
-	RLCK_reserve_relation(tdbb, transaction, relation->getPermanent(), true);
+	RLCK_reserve_relation(tdbb, transaction, getPermanent(relation), true);
 
 	return VIO_writelock(tdbb, rpb, transaction);
 }

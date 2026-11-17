@@ -496,7 +496,7 @@ static inline constexpr struct ini_idx_t indices[] =
 	// define index RDB$INDEX_91 for RDB$RELATION_CONSTRAINTS RDB$SCHEMA_NAME, RDB$INDEX_NAME;
 	INDEX(91, rel_rcon, 0, 2, ODS_14_0)
 		SEGMENT(f_rcon_schema, idx_metadata),	// schema name
-		SEGMENT(f_rcon_iname, idx_metadata),	// index name
+		SEGMENT(f_rcon_iname, idx_metadata)		// index name
 	}},
 	// define index RDB$INDEX_92 for RDB$PACKAGES unique RDB$SCHEMA_NAME, RDB$PACKAGE_NAME;
 	INDEX(92, rel_packages, idx_unique, 2, ODS_14_0)
@@ -541,6 +541,19 @@ static inline constexpr struct ini_idx_t indices[] =
 	// define index RDB$INDEX_100 for RDB$PACKAGES unique RDB$PACKAGE_ID;
 	INDEX(99, rel_packages, idx_unique, 1, ODS_14_0)
 		SEGMENT(f_pkg_id, idx_numeric)				// constant id
+	}},
+	// define index RDB$INDEX_98 for RDB$TABLESPACES unique RDB$TABLESPACE_NAME;
+	INDEX(100, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_name, idx_metadata)		// tablespace name
+	}},
+	// define index RDB$INDEX_99 for RDB$TABLESPACES unique RDB$TABLESPACE_ID;
+	INDEX(101, rel_tablespaces, idx_unique, 1, ODS_14_0)
+		SEGMENT(f_ts_id, idx_numeric)		// tablespace id
+	}},
+	// define index RDB$INDEX_100 for RDB$PAGES RDB$PAGE_TYPE, RDB$RELATION_ID;
+	INDEX(102, rel_pages, 0, 2, ODS_14_0)
+		SEGMENT(f_pag_type, idx_numeric),	// page type
+		SEGMENT(f_pag_id, idx_numeric)		// relation id
 	}}
 };
 

@@ -20,8 +20,8 @@
  *  Contributor(s): ______________________________________.
  */
 
-#ifndef CLASSES_THREAD_CLEANUP_H
-#define CLASSES_THREAD_CLEANUP_H
+#ifndef CLASSES_THREAD_CLEANUP_CALLBACK_H
+#define CLASSES_THREAD_CLEANUP_CALLBACK_H
 
 #include "firebird.h"
 
@@ -76,4 +76,4 @@ private:
 
 } // namespace Firebird
 
-#endif // CLASSES_THREAD_CLEANUP_H
+#endif // CLASSES_THREAD_CLEANUP_CALLBACK_H

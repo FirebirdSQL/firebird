@@ -21,7 +21,7 @@
  */
 
 #include "firebird.h"
-#include "../common/classes/ThreadCleanup.h"
+#include "../common/classes/ThreadCleanupCallback.h"
 #include "fb_exception.h"
 #include "../yvalve/gds_proto.h"
 

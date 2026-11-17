@@ -74,6 +74,7 @@
 #include "../common/classes/Synchronize.h"
 #include "../jrd/replication/Manager.h"
 #include "../jrd/SharedReadVector.h"
+#include "../jrd/Tablespace.h"
 #include "../dsql/Keywords.h"
 #include "fb_types.h"
 
@@ -296,8 +297,8 @@ public:
 
 	struct DelPagesMarker
 	{
-		TraNumber			tran;
-		RelationPermanent*	relation;
+		TraNumber tran;
+		RelationPermanent* relation;
 
 		static TraNumber generate(const DelPagesMarker& item)
 		{
@@ -368,6 +369,8 @@ public:
 
 	MonitoringData*			dbb_monitoring_data;	// monitoring data
 
+	Tablespace::Cache dbb_tablespaces;		// Tablespaces cache
+
 private:
 	Firebird::string dbb_file_id;		// system-wide unique file ID
 	Firebird::RefPtr<GlobalObjectHolder> dbb_gblobj_holder;
@@ -398,6 +401,7 @@ public:
 	USHORT dbb_dp_per_pp;				// data pages per pointer page
 	USHORT dbb_max_records;				// max record per data page
 	USHORT dbb_max_idx;					// max number of indexes on a root page
+	ULONG dbb_rdb_pages;				// cached number of first PP of RDB$PAGES relation, see hdr_PAGES
 
 #ifdef SUPERSERVER_V2
 	USHORT dbb_prefetch_sequence;		// sequence to pace frequency of prefetch requests
@@ -475,7 +479,7 @@ private:
 
 	Firebird::SortedArray<DelPagesMarker, Firebird::EmptyStorage<DelPagesMarker>,
 		TraNumber, DelPagesMarker> dbb_del_pages;
-	Firebird::Mutex  dbb_del_pages_mutex;
+	Firebird::Mutex dbb_del_pages_mutex;
 
 public:
 	// returns true if primary file is located on raw device

@@ -792,6 +792,10 @@ type
 	IProfilerSession_beforeRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); cdecl;
 	IProfilerSession_afterRecordSourceGetRecordPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); cdecl;
 	IProfilerSession_defineStatement2Ptr = procedure(this: IProfilerSession; status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); cdecl;
+	IProfilerSession_addPsqlLineColumnStatsPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+	IProfilerSession_addRecordSourceOpenStatsPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+	IProfilerSession_addRecordSourceGetRecordStatsPtr = procedure(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+	IProfilerSession_setSamplingIntervalPtr = procedure(this: IProfilerSession; microseconds: Cardinal); cdecl;
 	IProfilerStats_getElapsedTicksPtr = function(this: IProfilerStats): QWord; cdecl;
 	IPerformanceCounters_getObjectCountPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
 	IPerformanceCounters_getMaxCounterIndexPtr = function(this: IPerformanceCounters): Cardinal; cdecl;
@@ -4094,6 +4098,10 @@ type
 		beforeRecordSourceGetRecord: IProfilerSession_beforeRecordSourceGetRecordPtr;
 		afterRecordSourceGetRecord: IProfilerSession_afterRecordSourceGetRecordPtr;
 		defineStatement2: IProfilerSession_defineStatement2Ptr;
+		addPsqlLineColumnStats: IProfilerSession_addPsqlLineColumnStatsPtr;
+		addRecordSourceOpenStats: IProfilerSession_addRecordSourceOpenStatsPtr;
+		addRecordSourceGetRecordStats: IProfilerSession_addRecordSourceGetRecordStatsPtr;
+		setSamplingInterval: IProfilerSession_setSamplingIntervalPtr;
 	end;
 
 	IProfilerSession = class(IDisposable)
@@ -4117,6 +4125,10 @@ type
 		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal);
 		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats);
 		procedure defineStatement2(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar);
+		procedure addPsqlLineColumnStats(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; counter: QWord; elapsedTicks: QWord);
+		procedure addRecordSourceOpenStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord);
+		procedure addRecordSourceGetRecordStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord);
+		procedure setSamplingInterval(microseconds: Cardinal);
 	end;
 
 	IProfilerSessionImpl = class(IProfilerSession)
@@ -4139,6 +4151,10 @@ type
 		procedure beforeRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal); virtual; abstract;
 		procedure afterRecordSourceGetRecord(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; stats: IProfilerStats); virtual; abstract;
 		procedure defineStatement2(status: IStatus; statementId: Int64; parentStatementId: Int64; type_: PAnsiChar; schemaName: PAnsiChar; packageName: PAnsiChar; routineName: PAnsiChar; sqlText: PAnsiChar); virtual; abstract;
+		procedure addPsqlLineColumnStats(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; counter: QWord; elapsedTicks: QWord); virtual; abstract;
+		procedure addRecordSourceOpenStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); virtual; abstract;
+		procedure addRecordSourceGetRecordStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); virtual; abstract;
+		procedure setSamplingInterval(microseconds: Cardinal); virtual; abstract;
 	end;
 
 	ProfilerStatsVTable = class(VersionedVTable)
@@ -6075,6 +6091,10 @@ const
 	 isc_hypfun_args_non_equal_sort_item = 335545341;
 	 isc_old_format = 335545342;
 	 isc_user_savepoint = 335545343;
+	 isc_ts_file_exists = 335545344;
+	 isc_tablespace_name = 335545345;
+	 isc_ts_file_not_exists = 335545346;
+	 isc_ts_file_dup = 335545347;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;
@@ -6242,6 +6262,11 @@ const
 	 isc_dyn_cannot_infer_schema = 336068929;
 	 isc_dyn_column_name_exists = 336068931;
 	 isc_dyn_function_mismatch = 336068935;
+	 isc_dyn_ts_not_found = 336068940;
+	 isc_dyn_cant_set_ts_table = 336068941;
+	 isc_dyn_cant_set_ts_index = 336068942;
+	 isc_dyn_dup_tablespace = 336068943;
+	 isc_dyn_cannot_mod_sys_ts = 336068944;
 	 isc_gbak_unknown_switch = 336330753;
 	 isc_gbak_page_size_missing = 336330754;
 	 isc_gbak_page_size_toobig = 336330755;
@@ -6487,6 +6512,11 @@ const
 	 isc_dsql_create_const_failed = 336397341;
 	 isc_dsql_alter_const_failed = 336397342;
 	 isc_dsql_create_alter_const_failed = 336397343;
+	 isc_dsql_create_ts_failed = 336397344;
+	 isc_dsql_alter_ts_failed = 336397345;
+	 isc_dsql_create_alter_ts_failed = 336397346;
+	 isc_dsql_drop_ts_failed = 336397347;
+	 isc_dsql_recreate_ts_failed = 336397348;
 	 isc_gsec_cant_open_db = 336723983;
 	 isc_gsec_switches_error = 336723984;
 	 isc_gsec_no_op_spec = 336723985;
@@ -10430,6 +10460,42 @@ begin
 		ProfilerSessionVTable(vTable).defineStatement2(Self, status, statementId, parentStatementId, type_, schemaName, packageName, routineName, sqlText);
 	end;
 	FbException.checkException(status);
+end;
+
+procedure IProfilerSession.addPsqlLineColumnStats(statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; counter: QWord; elapsedTicks: QWord);
+begin
+	if (vTable.version < 4) then begin
+	end
+	else begin
+		ProfilerSessionVTable(vTable).addPsqlLineColumnStats(Self, statementId, requestId, line, column, counter, elapsedTicks);
+	end;
+end;
+
+procedure IProfilerSession.addRecordSourceOpenStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord);
+begin
+	if (vTable.version < 4) then begin
+	end
+	else begin
+		ProfilerSessionVTable(vTable).addRecordSourceOpenStats(Self, statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+	end;
+end;
+
+procedure IProfilerSession.addRecordSourceGetRecordStats(statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord);
+begin
+	if (vTable.version < 4) then begin
+	end
+	else begin
+		ProfilerSessionVTable(vTable).addRecordSourceGetRecordStats(Self, statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+	end;
+end;
+
+procedure IProfilerSession.setSamplingInterval(microseconds: Cardinal);
+begin
+	if (vTable.version < 4) then begin
+	end
+	else begin
+		ProfilerSessionVTable(vTable).setSamplingInterval(Self, microseconds);
+	end;
 end;
 
 function IProfilerStats.getElapsedTicks(): QWord;
@@ -18169,6 +18235,42 @@ begin
 	end
 end;
 
+procedure IProfilerSessionImpl_addPsqlLineColumnStatsDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; line: Cardinal; column: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).addPsqlLineColumnStats(statementId, requestId, line, column, counter, elapsedTicks);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IProfilerSessionImpl_addRecordSourceOpenStatsDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).addRecordSourceOpenStats(statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IProfilerSessionImpl_addRecordSourceGetRecordStatsDispatcher(this: IProfilerSession; statementId: Int64; requestId: Int64; cursorId: Cardinal; recSourceId: Cardinal; counter: QWord; elapsedTicks: QWord); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).addRecordSourceGetRecordStats(statementId, requestId, cursorId, recSourceId, counter, elapsedTicks);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
+procedure IProfilerSessionImpl_setSamplingIntervalDispatcher(this: IProfilerSession; microseconds: Cardinal); cdecl;
+begin
+	try
+		IProfilerSessionImpl(this).setSamplingInterval(microseconds);
+	except
+		on e: Exception do FbException.catchException(nil, e);
+	end
+end;
+
 var
 	IProfilerSessionImpl_vTable: ProfilerSessionVTable;
 
@@ -19373,6 +19475,10 @@ initialization
 	IProfilerSessionImpl_vTable.beforeRecordSourceGetRecord := @IProfilerSessionImpl_beforeRecordSourceGetRecordDispatcher;
 	IProfilerSessionImpl_vTable.afterRecordSourceGetRecord := @IProfilerSessionImpl_afterRecordSourceGetRecordDispatcher;
 	IProfilerSessionImpl_vTable.defineStatement2 := @IProfilerSessionImpl_defineStatement2Dispatcher;
+	IProfilerSessionImpl_vTable.addPsqlLineColumnStats := @IProfilerSessionImpl_addPsqlLineColumnStatsDispatcher;
+	IProfilerSessionImpl_vTable.addRecordSourceOpenStats := @IProfilerSessionImpl_addRecordSourceOpenStatsDispatcher;
+	IProfilerSessionImpl_vTable.addRecordSourceGetRecordStats := @IProfilerSessionImpl_addRecordSourceGetRecordStatsDispatcher;
+	IProfilerSessionImpl_vTable.setSamplingInterval := @IProfilerSessionImpl_setSamplingIntervalDispatcher;
 
 	IProfilerStatsImpl_vTable := ProfilerStatsVTable.create;
 	IProfilerStatsImpl_vTable.version := 2;

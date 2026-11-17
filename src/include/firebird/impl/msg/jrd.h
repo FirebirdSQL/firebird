@@ -1023,3 +1023,7 @@ FB_IMPL_MSG(JRD, 1020, dsql_agg_return, -204, "42", "000", "RETURN is not allowe
 FB_IMPL_MSG(JRD, 1021, hypfun_args_non_equal_sort_item, -833, "42", "000", "Number of arguments of hypothetical-set aggregate function @1 must match number of sort items in WITHIN GROUP clause")
 FB_IMPL_MSG(JRD, 1022, old_format, -804, "07", "000", "Statement format outdated, need to be reprepared")
 FB_IMPL_MSG(JRD, 1023, user_savepoint, -901, "0A", "000", "Running under user savepoint @1, DDL prohibited")
+FB_IMPL_MSG(JRD, 1024, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\" already exists")
+FB_IMPL_MSG(JRD, 1025, tablespace_name, -901, "42", "000", "TABLESPACE @1")
+FB_IMPL_MSG(JRD, 1026, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
+FB_IMPL_MSG(JRD, 1027, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")

@@ -32,6 +32,7 @@
 #include "../jrd/PreparedStatement.h"
 #include "../jrd/tra.h"
 #include "../jrd/intl.h"
+#include "../jrd/Tablespace.h"
 
 #include "../jrd/blb_proto.h"
 #include "../jrd/exe_proto.h"
@@ -385,19 +386,14 @@ void Jrd::Attachment::releaseBatches()
 
 void Jrd::Attachment::releaseLocalTempTables(thread_db* tdbb)
 {
-	HalfStaticArray<Cached::Relation*, 8> tempRelations;
-
 	for (auto& lttEntry : att_local_temporary_tables)
 	{
 		const auto ltt = lttEntry.second;
 		if (ltt->relation)
-			tempRelations.add(ltt->relation->getPermanent());
-	}
-
-	for (const auto tempRelation : tempRelations)
-	{
-		if (tempRelation->rel_flags & REL_temp_conn)
-			tempRelation->delPages(tdbb);
+		{
+			if (ltt->relation->checkFlags(REL_temp_conn))
+				ltt->relation->getPermanent()->deletePages(tdbb);
+		}
 	}
 }
 
@@ -863,20 +859,6 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	return profilerManager;
 }
 
-ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
-{
-	const auto* request = tdbb->getRequest();
-
-	return isProfilerActive() && !request->hasInternalStatement() ?
-		getProfilerManager(tdbb) :
-		nullptr;
-}
-
-bool Attachment::isProfilerActive()
-{
-	return att_profiler_manager && att_profiler_manager->isActive();
-}
-
 void Attachment::releaseProfilerManager(thread_db* tdbb)
 {
 	if (!att_profiler_manager)
@@ -896,16 +878,15 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 	if (!att_meta_transaction)
 	{
 		att_meta_transaction = TRA_start(tdbb,
-			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version, DEFAULT_LOCK_TIMEOUT);
+			TRA_readonly | TRA_ignore_limbo | TRA_read_committed | TRA_rec_version | TRA_meta,
+			DEFAULT_LOCK_TIMEOUT);
 
 		if (att_meta_transaction && att_meta_transaction->tra_lock)
 		{
 			LCK_release(tdbb, att_meta_transaction->tra_lock);
 			att_meta_transaction->tra_lock = nullptr;
+			att_meta_number = att_meta_transaction->tra_number;
 		}
-
-		att_meta_transaction->unlinkFromAttachment();
-		att_meta_transaction->tra_flags |= TRA_meta;
 	}
 }
 
@@ -930,6 +911,7 @@ void Attachment::rollbackMetaTransaction(thread_db* tdbb)
 	if (auto trans_meta = att_meta_transaction)
 	{
 		att_meta_transaction = nullptr;
+		trans_meta->tra_number = att_meta_number;
 		TRA_rollback(tdbb, trans_meta, false, true);
 	}
 }

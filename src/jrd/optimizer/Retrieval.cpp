@@ -86,7 +86,7 @@ namespace
 
 	bool matchSubset(const BoolExprNode* boolean, const BoolExprNode* sub, StreamType stream)
 	{
-		if (boolean->sameAs(sub, true) && boolean->containsStream(stream))
+		if (boolean->sameAs(sub, true) && sub->containsStream(stream, true))
 			return true;
 
 		auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
@@ -869,7 +869,7 @@ bool Retrieval::checkIndexCondition(index_desc& idx, BooleanList& matches) const
 	auto iter = optimizer->getConjuncts(outerFlag, innerFlag);
 
 	BoolExprNodeStack idxConjuncts;
-	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_code->condition, idxConjuncts);
+	const auto conjunctCount = optimizer->decomposeBoolean(idx.idx_code->condition, idxConjuncts, true);
 	fb_assert(conjunctCount);
 
 	idx.idx_fraction = MAXIMUM_SELECTIVITY;

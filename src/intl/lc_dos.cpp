@@ -543,8 +543,8 @@ TEXTTYPE_ENTRY3(CYRL_c2_init)
  */
 ULONG fam1_str_to_upper(texttype* obj, ULONG iLen, const BYTE* pStr, ULONG iOutLen, BYTE *pOutStr)
 {
-	fb_assert(pStr != NULL);
-	fb_assert(pOutStr != NULL);
+	fb_assert(pStr != nullptr);
+	fb_assert(pOutStr != nullptr);
 	fb_assert(iOutLen >= iLen);
 	const BYTE* const p = pOutStr;
 	while (iLen && iOutLen)
@@ -565,8 +565,8 @@ ULONG fam1_str_to_upper(texttype* obj, ULONG iLen, const BYTE* pStr, ULONG iOutL
  */
 ULONG fam1_str_to_lower(texttype* obj, ULONG iLen, const BYTE* pStr, ULONG iOutLen, BYTE *pOutStr)
 {
-	fb_assert(pStr != NULL);
-	fb_assert(pOutStr != NULL);
+	fb_assert(pStr != nullptr);
+	fb_assert(pOutStr != nullptr);
 	fb_assert(iOutLen >= iLen);
 	const BYTE* const p = pOutStr;
 	while (iLen && iOutLen)

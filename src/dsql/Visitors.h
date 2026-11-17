@@ -65,6 +65,10 @@ public:
 	bool window;
 	USHORT currentLevel;
 	USHORT deepestLevel;
+	// Do not look for aggregates inside sub-selects. It's set while the arguments
+	// of an aggregate are being scanned (see AggNode::dsqlAggregateFinder()), so
+	// that its deepestLevel is determined only by the fields used in the query
+	// block where the aggregate is written.
 	bool ignoreSubSelects;
 };
 
@@ -122,6 +126,10 @@ public:
 	const USHORT checkScopeLevel;
 	const FieldMatchType matchType;
 	bool field;
+	// Do not look for fields inside sub-selects, like AggregateFinder does. Fields
+	// over there are not related to the scope level we are checking - they are
+	// verified when the sub-select itself is processed.
+	bool ignoreSubSelects;
 };
 
 // Validate that an expanded field / context pair is in a specified list. This is used in one

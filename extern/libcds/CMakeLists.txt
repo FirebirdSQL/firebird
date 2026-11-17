@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.10.0)
 
 cmake_policy(SET CMP0016 NEW)
 if(POLICY CMP0042)
@@ -101,14 +101,23 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Default build type to Debug" FORCE)
 endif()
 
+# if the user passed LIBCDS_CXX_STANDARD on the command line, use it
+# otherwise default to cxx 11
+if (NOT LIBCDS_CXX_STANDARD)
+    set(LIBCDS_CXX_STANDARD 11 CACHE string "Preferred C++ standard")
+endif()
+message("C++ std: -std=c++${LIBCDS_CXX_STANDARD}")
+
+set(CMAKE_CXX_STANDARD ${LIBCDS_CXX_STANDARD})
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    string(REGEX MATCHALL "-std=[^ ]+" cxx_std_found ${CMAKE_CXX_FLAGS} " dummy@rg")
-    if(cxx_std_found)
-        message("C++ std: ${cxx_std_found}")
-    else()
-        list(APPEND LIBCDS_PUBLIC_CXX_FLAGS "-std=c++11")
-        message("C++ std: -std=c++11 (default)")
-    endif()
+    # string(REGEX MATCHALL "-std=[^ ]+" cxx_std_found ${CMAKE_CXX_FLAGS} " dummy@rg")
+    # if(cxx_std_found)
+    #     message("C++ std: ${cxx_std_found}")
+    # else()
+    #     list(APPEND LIBCDS_PUBLIC_CXX_FLAGS "-std=c++11")
+    #     message("C++ std: -std=c++11 (default)")
+    # endif()
 
     list(APPEND LIBCDS_PRIVATE_CXX_FLAGS "-Wall" "-Wextra" "-pedantic")
 

@@ -5,7 +5,7 @@ Monitoring tables
   Function:
     Allow to monitor server-side activity happening inside a particular database.
 
-  Concept:    
+  Concept:
     The engine offers a set of so called "virtual" tables that provides the user
     with a snapshot of the current activity within the given database. The word
     "virtual" means that the table data doesn't exist until explicitly asked for.
@@ -25,7 +25,7 @@ Monitoring tables
     To refresh the snapshot, the current transaction should be finished and the
     monitoring tables should be queried in the new transaction context. Creation
     of a snapshot is usually quite fast operation, but some delay should be
-    expected under high load (especially in the Classic Server). 
+    expected under high load (especially in the Classic Server).
 
     A valid database connection is required in order to retrieve the monitoring
     data. The monitoring tables return information about the attached database
@@ -249,12 +249,18 @@ Monitoring tables
 
     MON$COMPILED_STATEMENTS (compiled statements)
       - MON$COMPILED_STATEMENT_ID (compiled statement ID)
-	  - MON$SQL_TEXT (statement text, if appropriate)
-	  - MON$EXPLAINED_PLAN (explained query plan)
-	  - MON$OBJECT_NAME (PSQL object name)
-	  - MON$OBJECT_TYPE (PSQL object type)
-	  - MON$PACKAGE_NAME (PSQL object package name)
-	  - MON$STAT_ID (statistics ID)
+	    - MON$SQL_TEXT (statement text, if appropriate)
+	    - MON$EXPLAINED_PLAN (explained query plan)
+	    - MON$OBJECT_NAME (PSQL object name)
+	    - MON$OBJECT_TYPE (PSQL object type)
+	    - MON$PACKAGE_NAME (PSQL object package name)
+	    - MON$STAT_ID (statistics ID)
+
+    MON$TABLESPACE_STATS (per tablespace page-level statistics)
+      - MON$STAT_ID (statistics ID)
+      - MON$STAT_GROUP (statistics group)
+      - MON$TABLESPACE_NAME (tablespace name)
+      - MON$IO_STAT_ID (page-level statistics ID, refers to MON$IO_STATS)
 
   Notes:
     1) Textual descriptions of all "state" and "mode" values can be found
@@ -370,7 +376,7 @@ Modifications of the monitoring tables
        receives the isc_att_shutdown error code. Subsequent attempts to use this connection
        handle will cause network read/write errors.
 
-    3) System attachment can not be cancelled, so engine silently skip system attachments 
+    3) System attachment can not be cancelled, so engine silently skip system attachments
        affected by DELETE FROM MON$ATTACHMENTS statements
 
   Example(s):
@@ -435,7 +441,7 @@ Limitations and known issues
        Prior to FB v2.5, every blob occupied <page size> bytes of memory even if its contents is
        in fact smaller. So, with a huge number of prepared statements in the system, it becomes
        possible to get this failure.
-       
+
        Another possible reason could be the temporary (very short in practice) growth of the
        transaction pool which caches the monitoring data while merging the clusters into a single
        fragment.

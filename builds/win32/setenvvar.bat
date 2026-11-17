@@ -36,6 +36,31 @@ if /I "%~1"=="WITHOUT_CLOOP_GENERATION" (
   shift /1
   goto :parse_args
 )
+if /I "%~1"=="WITH_SYSTEM_BOOST" (
+  set FBBUILD_WITH_SYSTEM_BOOST=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="WITH_SYSTEM_TOMMATH" (
+  set FBBUILD_WITH_SYSTEM_TOMMATH=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="WITH_SYSTEM_TOMCRYPT" (
+  set FBBUILD_WITH_SYSTEM_TOMCRYPT=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="WITH_SYSTEM_ZLIB" (
+  set FBBUILD_WITH_SYSTEM_ZLIB=1
+  shift /1
+  goto :parse_args
+)
+if /I "%~1"=="WITH_SYSTEM_ICU" (
+  set FBBUILD_WITH_SYSTEM_ICU=1
+  shift /1
+  goto :parse_args
+)
 if /I "%~1"=="CLEAN" (
   set FB_CLEAN=:rebuild
   shift /1
@@ -294,6 +319,11 @@ goto :END
 @echo    FB_VSCOMNTOOLS=%FB_VSCOMNTOOLS%
 @echo    platform=%FB_TARGET_PLATFORM%
 @if defined FBBUILD_WITHOUT_CLOOP_GENERATION echo    without_cloop_generation=yes
+@if defined FBBUILD_WITH_SYSTEM_BOOST echo    with_system_boost=yes
+@if defined FBBUILD_WITH_SYSTEM_TOMMATH echo    with_system_tommath=yes
+@if defined FBBUILD_WITH_SYSTEM_TOMCRYPT echo    with_system_tomcrypt=yes
+@if defined FBBUILD_WITH_SYSTEM_ZLIB echo    with_system_zlib=yes
+@if defined FBBUILD_WITH_SYSTEM_ICU echo    with_system_icu=yes
 @if /I "%FB_CLIENT_ONLY%"=="STATIC" (
   @echo    fbclient_static_config=%FB_STATIC_CONFIG%
   @if defined FBBUILD_WITHOUT_TOMCRYPT echo    without_tomcrypt=yes

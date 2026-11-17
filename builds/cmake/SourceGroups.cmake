@@ -1,7 +1,7 @@
 #include(SourceGroups)
 
-set(SSRC ${CMAKE_SOURCE_DIR}/src)
-set(BSRC ${CMAKE_BINARY_DIR}/src)
+set(SSRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(BSRC ${CMAKE_CURRENT_BINARY_DIR}/src)
 
 set(EPP_TXT "GPRE files")
 set(GEN_TXT "GPRE cpp")

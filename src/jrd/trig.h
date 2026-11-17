@@ -84,6 +84,7 @@ static inline constexpr Jrd::gen generators[] =
 	{ "RDB$GENERATOR_NAME", 11, "Implicit generator name", ODS_13_0 },
 	{ PACKAGES_GENERATOR, 12, "Package ID", ODS_14_0 },
 	{ "RDB$RELATIONS", RELATIONS_GENERATOR, "Relation ID", ODS_14_0 },
+	{ "RDB$TABLESPACES", TABLESPACES_GENERATOR, "Tablespace ID", ODS_14_0 },
 	{ nullptr, 0, nullptr, 0 }
 };
 

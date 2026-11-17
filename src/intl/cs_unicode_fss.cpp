@@ -37,12 +37,12 @@ CHARSET_ENTRY(CS_unicode_fss)
 	csptr->charset_max_bytes_per_char = 3;
 	csptr->charset_space_length = 1;
 	csptr->charset_space_character = (const BYTE*) " ";	// 0x20
-	csptr->charset_fn_well_formed = NULL;
+	csptr->charset_fn_well_formed = nullptr;
 	CV_convert_init(&csptr->charset_to_unicode,
 					CS_UTFFSS_fss_to_unicode_cc,
-					NULL, NULL);
+					nullptr, nullptr);
 	CV_convert_init(&csptr->charset_from_unicode,
 					CS_UTFFSS_unicode_to_fss,
-					NULL, NULL);
+					nullptr, nullptr);
 	CHARSET_RETURN;
 }

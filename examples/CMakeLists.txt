@@ -1,4 +1,3 @@
-include(SourceGroups)
 
 ###############################################################################
 #
@@ -18,7 +17,7 @@ add_custom_command(
         isql
         ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbld.sql
     COMMAND ${CMAKE_COMMAND} -E remove empbuild.fdb
-    COMMAND ${ISQL_CMD} -q -i ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbld.sql
+    COMMAND ${BOOT_ISQL_CMD} -q -i ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbld.sql
     COMMAND ${CMAKE_COMMAND} -E copy_if_different empbuild.fdb empbuild_.fdb
     COMMAND ${CMAKE_COMMAND} -E remove empbuild.fdb
     COMMAND ${CMAKE_COMMAND} -E copy_if_different empbuild_.fdb empbuild.fdb
@@ -30,11 +29,11 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp
         empbuild.fdb
     COMMENT "Calling GPRE for empbuild.epp"
-    COMMAND ${GPRE_CMD} -r -m -n ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp empbuild.cpp
+    COMMAND ${BOOT_GPRE_CMD} -r -m -n ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp empbuild.cpp
 )
 
 add_executable          (empbuild empbuild.cpp empbuild.fdb ${CMAKE_CURRENT_SOURCE_DIR}/empbuild/empbuild.epp)
-target_link_libraries   (empbuild yvalve)
+target_link_libraries   (empbuild yvalve  yvalve_common srp ${cds} ${LIB_atomic_ID})
 set_output_directory    (empbuild . CURRENT_DIR)
 add_dependencies_cc     (empbuild engine)
 project_group           (empbuild Examples)
@@ -66,6 +65,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different employe2_.fdb employe2.fdb
 )
 add_custom_target       (employee_db ALL DEPENDS employe2.fdb SOURCES ${files})
+add_dependencies        (employee_db empbuild)
+
 project_group           (employee_db "Examples/Custom build steps")
 
 endif() # if (NOT CMAKE_CROSSCOMPILING)
@@ -75,10 +76,12 @@ endif() # if (NOT CMAKE_CROSSCOMPILING)
 # SHARED LIBRARY udrcpp_example
 ########################################
 
-file(GLOB udrcpp_example_src "udr/*")
+file(GLOB udrcpp_example_src "udr/*"
+    ../src/auth/SecureRemotePassword/manage/SrpManagement.cpp
+)
 
-add_library             (udrcpp_example SHARED ${udrcpp_example_src})
-target_link_libraries   (udrcpp_example yvalve)
+add_library             (udrcpp_example SHARED ${udrcpp_example_src} )
+target_link_libraries   (udrcpp_example yvalve common yvalve_common remote)
 set_exported_symbols    (udrcpp_example udr_plugin)
 set_output_directory    (udrcpp_example plugins/udr)
 project_group           (udrcpp_example Examples)

@@ -427,7 +427,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vec
 			write_pages = leftPages;
 
 		if (!seek_file(file, &bdb, &overlapped))
-			return 0;
+			break;
 
 		const DWORD to_write = (DWORD) write_pages * dbb->dbb_page_size;
 		DWORD written;
@@ -753,6 +753,18 @@ ULONG PIO_get_number_of_pages(const jrd_file* file, const USHORT pagesize)
 
     const ULONGLONG ullFileSize = (((ULONGLONG) dwFileSizeHigh) << 32) + dwFileSizeLow;
 	return ullFileSize / pagesize;
+}
+
+
+bool PIO_file_exists(const Firebird::PathName& fileName)
+{
+	const HANDLE fd = CreateFile(fileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
+					NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (fd == INVALID_HANDLE_VALUE)
+		return false;
+
+	CloseHandle(fd);
+	return true;
 }
 
 

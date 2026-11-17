@@ -313,7 +313,6 @@ void LocalTableStream::internalOpen(thread_db* tdbb) const
 	impure->irsb_flags = irsb_open;
 
 	const auto rpb = &request->req_rpb[m_stream];
-	rpb->getWindow(tdbb).win_flags = 0;
 	rpb->rpb_number.setValue(BOF_NUMBER);
 }
 

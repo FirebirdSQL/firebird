@@ -202,6 +202,12 @@ public:
 	static void deletePrivilegesByRelName(thread_db* tdbb, jrd_tra* transaction,
 		const QualifiedName& name, int type);
 
+	static inline bool applyTablespacesDdl(thread_db* tdbb)
+	{
+		return !(tdbb->tdbb_flags & TDBB_replicator) ||
+			tdbb->getDatabase()->replConfig()->applyTablespacesDdl;
+	}
+
 public:
 	// Check permission on DDL operation. Return true if everything is OK.
 	// Raise an exception for bad permission.
@@ -1006,6 +1012,8 @@ public:
 	static constexpr unsigned CAP_WANTS_AGG_CALLS		= 0x04;
 	// wants winPass call in a window
 	static constexpr unsigned CAP_WANTS_WIN_PASS_CALL	= 0x08;
+	// depends on the window frame boundaries, even when not respecting a user-defined frame
+	static constexpr unsigned CAP_USES_WINDOW_FRAME		= 0x10;
 
 protected:
 	struct AggInfo
@@ -1626,11 +1634,14 @@ public:
 	};
 
 public:
+	static constexpr UCHAR FLAG_LINE_COLUMN			= 0x01;	// line/column are set
+	static constexpr UCHAR FLAG_NOT_PROFILED		= 0x02;	// not profiled (wrapper and declaration nodes)
+	static constexpr UCHAR FLAG_PROFILE_ON_RETURN	= 0x04;	// also profiled on req_return/req_sync (loops that fetch there)
+
+	static constexpr ULONG MAX_PROFILE_SLOT = (1 << 24) - 1;
+
 	explicit StmtNode(Type aType, MemoryPool& pool)
-		: DmlNode(pool),
-		  parentStmt(NULL),
-		  impureOffset(0),
-		  hasLineColumn(false)
+		: DmlNode(pool)
 	{
 	}
 
@@ -1675,17 +1686,13 @@ public:
 		return NULL;
 	}
 
-	virtual bool isProfileAware() const
-	{
-		return true;
-	}
-
 	virtual const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const = 0;
 
 public:
 	NestConst<StmtNode> parentStmt;
-	ULONG impureOffset;	// Inpure offset from request block.
-	bool hasLineColumn;
+	ULONG impureOffset = 0;	// Inpure offset from request block.
+	ULONG flags : 8 = 0;
+	ULONG profileSlot : 24 = 0;	// Dense index of line/column in the statement, used by the sampling profiler
 };
 
 

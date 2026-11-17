@@ -39,7 +39,7 @@ CHARSET_ENTRY(CS_jis_0208_1990)
 	csptr->charset_max_bytes_per_char = 2;
 	csptr->charset_space_length = 2;
 	csptr->charset_space_character = (const BYTE*) &space;	// 0x20
-	csptr->charset_fn_well_formed = NULL;
+	csptr->charset_fn_well_formed = nullptr;
 
 	CV_convert_init(&csptr->charset_to_unicode,
 					CV_wc_to_wc,
@@ -54,7 +54,7 @@ CHARSET_ENTRY(CS_jis_0208_1990)
 
 CHARSET_ENTRY(CS_sjis)
 {
-	CS_jis_0208_1990(csptr, NULL); //, cs_name); Second param is unused
+	CS_jis_0208_1990(csptr, nullptr); //, cs_name); Second param is unused
 	csptr->charset_name = "SJIS";
 	csptr->charset_min_bytes_per_char = 1;
 	csptr->charset_space_length = 1;
@@ -68,7 +68,7 @@ CHARSET_ENTRY(CS_sjis)
 
 CHARSET_ENTRY(CS_euc_j)
 {
-	CS_jis_0208_1990(csptr, NULL); //cs_name); Second param is unused
+	CS_jis_0208_1990(csptr, nullptr); //cs_name); Second param is unused
 	csptr->charset_name = "EUC-J";
 	csptr->charset_min_bytes_per_char = 1;
 	csptr->charset_space_length = 1;
