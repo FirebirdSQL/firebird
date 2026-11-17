@@ -112,6 +112,23 @@ void RuntimeStatistics::GroupedCountsArray<Counts>::adjust(const GroupedCountsAr
 	}
 }
 
+template <class Counts>
+auto RuntimeStatistics::GroupedCountsArray<Counts>::findOrAdd(ID id) -> Counts&
+{
+	if (!m_counts.find(id, m_lastPos))
+	{
+		Counts counts(id);
+		m_counts.insert(m_lastPos, counts);
+	}
+
+	return m_counts[m_lastPos];
+}
+
+template class RuntimeStatistics::GroupedCountsArray<
+	RuntimeStatistics::CountsGroup<PageStatType, ULONG> >;
+template class RuntimeStatistics::GroupedCountsArray<
+	RuntimeStatistics::CountsGroup<RecordStatType, SLONG> >;
+
 void RuntimeStatistics::setToDiff(const RuntimeStatistics& newStats)
 {
 	for (size_t i = 0; i < GLOBAL_ITEMS; i++)
