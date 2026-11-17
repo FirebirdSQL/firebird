@@ -1,0 +1,16 @@
+# OpenBSD amd64/i386, using the base-system C/C++ compiler.
+
+PROD_FLAGS=-O2 -pipe -MMD -fPIC
+DEV_FLAGS=-g -DDEBUG_GDS_ALLOC -pipe -MMD -fPIC -Wall -Werror=delete-incomplete
+
+ifeq ($(CpuType),x86_64)
+PROD_FLAGS += -mcx16
+DEV_FLAGS += -mcx16
+endif
+
+%/CRC32C.o: CXXFLAGS += -msse4.2
+
+# Use the configured GNU libtool, not OpenBSD's unrelated /usr/bin/libtool.
+export LIBTOOL=$(ROOT)/libtool
+
+export LD_LIBRARY_PATH:=$(LIB):/usr/local/lib$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH))

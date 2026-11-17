@@ -62,6 +62,7 @@ static const UCHAR OsAix = 5;
 static const UCHAR OsMms = 6;
 static const UCHAR OsFreeBsd = 7;
 static const UCHAR OsNetBsd = 8;
+static const UCHAR OsOpenBsd = 9;
 
 static const UCHAR CcMsvc = 0;
 static const UCHAR CcGcc = 1;
@@ -107,7 +108,8 @@ const char* operatingSystem[] = {
 	"AIX",
 	"MVS",
 	"FreeBSD",
-	"NetBSD"
+	"NetBSD",
+	"OpenBSD"
 };
 
 const char* compiler[] = {
@@ -131,7 +133,8 @@ const UCHAR backwardTable[FB_NELEM(hardware) * FB_NELEM(operatingSystem)] =
 /* AIX */		0,		0,		0,		35,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
 /* MVS */		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
 /* FreeBSD */	61,		67,		0,		92,		91,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		89,		0,		0,		0,		0,
-/* NetBSD */	62,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0
+/* NetBSD */	62,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,
+/* OpenBSD */	0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0,		0
 };
 
 

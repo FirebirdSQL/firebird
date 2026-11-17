@@ -96,8 +96,13 @@ public:
 	template <typename T> string getEntryPoint(const char* name, ModuleLoader::Module* module, T& ptr,
 		bool optional = false)
 	{
+		int symbolMajorVersion = majorVersion;
+#ifdef OPENBSD
+		if (!symbolMajorVersion)
+			symbolMajorVersion = U_ICU_VERSION_MAJOR_NUM;
+#endif
 		// System-wide ICU have no version number at entries names
-		if (!majorVersion)
+		if (!symbolMajorVersion)
 		{
 			if (module->findSymbol(NULL, name, ptr))
 				return name;
@@ -114,7 +119,7 @@ public:
 
 			for (auto pattern : patterns)
 			{
-				symbol.printf(pattern, name, majorVersion, minorVersion);
+				symbol.printf(pattern, name, symbolMajorVersion, minorVersion);
 				if (module->findSymbol(NULL, symbol, ptr))
 					return symbol;
 			}
@@ -137,7 +142,12 @@ ModuleLoader::Module* BaseICU::formatAndLoad(const char* templateName)
 	ModuleLoader::Module* module = nullptr;
 
 	// System-wide ICU have no version number at file names
-	if (isSystem)
+	if (isSystem
+#ifdef OPENBSD
+		// OpenBSD's shared-library ABI version is unrelated to the ICU version.
+		|| majorVersion == U_ICU_VERSION_MAJOR_NUM
+#endif
+	)
 	{
 		PathName filename;
 		filename.printf(templateName, "");
