@@ -1600,7 +1600,6 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		relation->getId(), rpb->rpb_number.getValue(), lock_type);
 #endif
 
-	WIN* window = &rpb->getWindow(tdbb);
 	rpb->rpb_prior = NULL;
 
 	// Find starting point
@@ -1614,6 +1613,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 		return false;
 
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
+	WIN* window = &rpb->getWindow(relPages->getPageSpaceId());
 
 	const ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
 	ULONG page_number = relPages->getDPNumber(dpSequence);
@@ -1834,8 +1834,8 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		relation->getId(), rpb->rpb_number.getValue());
 #endif
 
-	WIN* window = &rpb->getWindow(tdbb);
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
+	WIN* window = &rpb->getWindow(relPages->getPageSpaceId());
 
 	if (window->win_flags & WIN_large_scan)
 	{
@@ -2853,8 +2853,8 @@ static void check_swept(thread_db* tdbb, record_param* rpb)
  **************************************/
 	Database* dbb = tdbb->getDatabase();
 	jrd_tra* transaction = tdbb->getTransaction();
-	WIN* window = &rpb->getWindow(tdbb);
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
+	WIN* window = &rpb->getWindow(relPages->getPageSpaceId());
 
 	ULONG pp_sequence;
 	USHORT slot, line;
@@ -3752,7 +3752,7 @@ static rhd* locate_space(thread_db* tdbb,
 	CHECK_DBB(dbb);
 
 	const auto relPages = rpb->rpb_relation->getPages(tdbb);
-	WIN* window = &rpb->getWindow(tdbb);
+	WIN* window = &rpb->getWindow(relPages->getPageSpaceId());
 
 	// If there is a preferred page, try there first
 
