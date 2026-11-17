@@ -118,6 +118,7 @@ public:
 	Firebird::HalfStaticArray<UCHAR, 128> debugInfo;	// Debug info
 	Statement* statement = nullptr;						// Compiled statement
 	bool releaseInProgress = false;
+	Firebird::Mutex compileMutex;
 	fb_sysflag sysTrigger = fb_sysflag_user;			// See fb_sysflag in constants.h
 	FB_UINT64 type = 0;					// Trigger type
 	USHORT flags = 0;					// Flags as they are in RDB$TRIGGERS table

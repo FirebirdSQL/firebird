@@ -4984,6 +4984,8 @@ const Triggers* MetadataCache::getTriggers(thread_db* tdbb, MetaId triggerId)
 
 void Trigger::compile(thread_db* tdbb)
 {
+	MutexLockGuard guard(compileMutex, FB_FUNCTION);
+
 	if (extTrigger || statement)
 		return;
 
@@ -5037,8 +5039,12 @@ void Trigger::compile(thread_db* tdbb)
 	{
 		if (statement)
 		{
+			// Same protection as in Trigger::free(): the statement release may
+			// re-enter trigger release, which must not release it again
+			AutoSetRestore<bool> autoProgressFlag(&releaseInProgress, true);
+
 			statement->release(tdbb);
-			statement = NULL;
+			statement = nullptr;
 		}
 		else
 			dbb->deletePool(new_pool);
