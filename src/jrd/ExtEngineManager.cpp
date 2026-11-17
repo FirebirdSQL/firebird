@@ -2235,31 +2235,31 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 		status.check();
 	}
 
-	IExternalTrigger* externalTrigger;
-
-	{	// scope
-		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
-
-		FbLocalStatus status;
-		externalTrigger = attInfo->engine->makeTrigger(&status, attInfo->context, metadata,
-			fieldsBuilder);
-		status.check();
-
-		if (!externalTrigger)
-		{
-			status_exception::raise(
-				Arg::Gds(isc_eem_trig_not_returned) << trg->name.toQuotedString() << engine);
-		}
-
-		if (relation)
-		{
-			metadata->triggerFields = fieldsBuilder->getMetadata(&status);
-			status.check();
-		}
-	}
+	IExternalTrigger* externalTrigger = nullptr;
 
 	try
 	{
+		{	// scope
+			EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
+
+			FbLocalStatus status;
+			externalTrigger = attInfo->engine->makeTrigger(&status, attInfo->context, metadata,
+				fieldsBuilder);
+			status.check();
+
+			if (!externalTrigger)
+			{
+				status_exception::raise(
+					Arg::Gds(isc_eem_trig_not_returned) << trg->name.toQuotedString() << engine);
+			}
+
+			if (relation)
+			{
+				metadata->triggerFields = fieldsBuilder->getMetadata(&status);
+				status.check();
+			}
+		}
+
 		const auto extTrigger = FB_NEW_POOL(pool) Trigger(tdbb, pool, csb, this, attInfo->engine,
 			metadata.release(), externalTrigger, trg);
 
@@ -2278,7 +2278,16 @@ void ExtEngineManager::makeTrigger(thread_db* tdbb, CompilerScratch* csb, Jrd::T
 	catch (...)
 	{
 		EngineCheckout cout(tdbb, FB_FUNCTION, checkoutType(attInfo->engine));
-		externalTrigger->dispose();
+
+		// The external trigger must be disposed exactly once: through the
+		// wrapper once it has been installed (as its destructor does that),
+		// or directly if the wrapper has not been created
+
+		if (trg->extTrigger)
+			trg->extTrigger.reset();
+		else if (externalTrigger)
+			externalTrigger->dispose();
+
 		throw;
 	}
 }
