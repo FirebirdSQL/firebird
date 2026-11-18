@@ -9089,7 +9089,7 @@ void RelationNode::makeLttVersion(thread_db* tdbb, jrd_tra* transaction, LocalTe
 		AutoPtr<jrd_rel> versRel = FB_NEW_POOL(attPool) jrd_rel(attPool, relation->getPermanent());
 		versRel->rel_current_fmt = relation->rel_current_fmt + 1;
 		versRel->rel_dbkey_length = relation->rel_dbkey_length;
-		versRel->setPages(relation);
+		versRel->setPageSpaceId(relation->getPageSpaceId());
 		relation->getPermanent()->storeObject(tdbb, versRel, CacheFlag::NOCOMMIT);
 
 		relation = versRel.release();
