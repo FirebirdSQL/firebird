@@ -8554,7 +8554,7 @@ static void finalize(rem_port* port)
 	// gracefully terminates.
 
 	Rdb* rdb = port->port_context;
-	if (rdb)
+	if (rdb && !(port->port_flags & PORT_rdb_shutdown))
 	{
 		PACKET* packet = &rdb->rdb_packet;
 
@@ -9875,7 +9875,7 @@ static void send_packet(rem_port* port, PACKET* packet)
 
 	RefMutexGuard guard(*port->port_write_sync, FB_FUNCTION);
 
-	if (port->port_flags & PORT_detached || port->port_state == rem_port::BROKEN)
+	if (port->port_flags & (PORT_rdb_shutdown | PORT_detached) || port->port_state == rem_port::BROKEN)
 	{
 		(Arg::Gds(isc_net_write_err)
 #ifdef DEV_BUILD
@@ -9934,7 +9934,7 @@ static void send_partial_packet(rem_port* port, PACKET* packet)
 
 	RefMutexGuard guard(*port->port_write_sync, FB_FUNCTION);
 
-	if (port->port_flags & PORT_detached || port->port_state == rem_port::BROKEN)
+	if (port->port_flags & (PORT_rdb_shutdown | PORT_detached) || port->port_state == rem_port::BROKEN)
 	{
 		(Arg::Gds(isc_net_write_err)
 #ifdef DEV_BUILD
