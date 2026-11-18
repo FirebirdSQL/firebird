@@ -1313,6 +1313,16 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 		}
 	}
 
+	// Release the snapshot before the transaction lock. The lock data protects
+	// the snapshot, see shared snapshot handling in transaction_start().
+
+	if (!(transaction->tra_flags & TRA_read_committed) &&
+		!(transaction->tra_flags & TRA_reconnected))
+	{
+		dbb->dbb_tip_cache->endSnapshot(tdbb, transaction->tra_snapshot_handle,
+			transaction->tra_attachment->att_attachment_id);
+	}
+
 	++transaction->tra_use_count;
 
 	if (transaction->tra_lock)
@@ -1351,13 +1361,6 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 
 	while (transaction->tra_open_cursors.hasData())
 		DsqlCursor::close(tdbb, transaction->tra_open_cursors.pop());
-
-	if (!(transaction->tra_flags & TRA_read_committed) &&
-		!(transaction->tra_flags & TRA_reconnected))
-	{
-		dbb->dbb_tip_cache->endSnapshot(tdbb, transaction->tra_snapshot_handle,
-			transaction->tra_attachment->att_attachment_id);
-	}
 
 	// Release the transaction and its pool
 
@@ -3670,27 +3673,6 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			}
 		}
 
-		// Calculate attachment-local oldest active and oldest snapshot numbers
-		// looking at current attachment's transactions only. Calculated values
-		// are used to determine garbage collection threshold for attachment-local
-		// data such as temporary tables (GTT's).
-
-		trans->tra_att_oldest_active = number;
-		TraNumber att_oldest_active = number;
-		TraNumber att_oldest_snapshot = number;
-
-		for (jrd_tra* tx_att = attachment->att_transactions; tx_att; tx_att = tx_att->tra_next)
-		{
-			att_oldest_active = MIN(att_oldest_active, tx_att->tra_number);
-			att_oldest_snapshot = MIN(att_oldest_snapshot, tx_att->tra_att_oldest_active);
-		}
-
-		trans->tra_att_oldest_active = ((trans->tra_flags & TRA_read_committed) &&
-			!(trans->tra_flags & TRA_read_consistency)) ? number : att_oldest_active;
-
-		if (attachment->att_oldest_snapshot < att_oldest_snapshot)
-			attachment->att_oldest_snapshot = att_oldest_snapshot;
-
 		// Put the TID of the oldest active transaction (just calculated)
 		// in the new transaction's lock.
 		// hvlad: for read-committed transaction put tra_number to prevent
@@ -3710,6 +3692,59 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		const TraNumber data = LCK_query_data(tdbb, LCK_tra, LCK_MIN);
 		if (data && data < trans->tra_oldest_active)
 			trans->tra_oldest_active = data;
+
+		// A transaction started AT SNAPSHOT NUMBER shares a snapshot taken earlier by
+		// another transaction. The OIT and OAT read from the header page can already be
+		// past transactions that were active when that snapshot was taken and committed
+		// after it, so they must not be used to consider such transactions as committed.
+		//
+		// The lock data of every transaction that uses the snapshot is not greater than
+		// the oldest transaction that was active when the snapshot was taken. While such
+		// a lock exists, the OST can't move past that transaction. Thus the TIP cache keeps
+		// the commit numbers (see TipCache::updateOldestTransaction) and the garbage
+		// collection keeps the record versions that the snapshot needs, even when the OIT
+		// has moved further.
+		//
+		// The snapshot is attached at the end of this routine. If it still exists then,
+		// a transaction that uses it holds its lock now (the lock is released after the
+		// snapshot, see TRA_release_transaction), and the minimum lock data just queried
+		// accounts for it. Put this value into our own lock, to keep protecting
+		// the snapshot after its owner ends.
+
+		const bool sharedSnapshot =
+			!(trans->tra_flags & TRA_read_committed) && trans->tra_snapshot_number;
+
+		if (sharedSnapshot && lock->lck_data != (SINT64) trans->tra_oldest_active)
+			LCK_write_data(tdbb, lock, trans->tra_oldest_active);
+
+		// Calculate attachment-local oldest active and oldest snapshot numbers
+		// looking at current attachment's transactions only. Calculated values
+		// are used to determine garbage collection threshold for attachment-local
+		// data such as temporary tables (GTT's).
+		// A shared snapshot needs the same boundary here as in the transaction lock,
+		// else the record versions of GTT that it must see can be garbage collected.
+
+		const TraNumber att_boundary = sharedSnapshot ? trans->tra_oldest_active : number;
+
+		trans->tra_att_oldest_active = att_boundary;
+		TraNumber att_oldest_active = number;
+		TraNumber att_oldest_snapshot = number;
+
+		for (jrd_tra* tx_att = attachment->att_transactions; tx_att; tx_att = tx_att->tra_next)
+		{
+			att_oldest_active = MIN(att_oldest_active, tx_att->tra_number);
+			att_oldest_snapshot = MIN(att_oldest_snapshot, tx_att->tra_att_oldest_active);
+		}
+
+		trans->tra_att_oldest_active = ((trans->tra_flags & TRA_read_committed) &&
+			!(trans->tra_flags & TRA_read_consistency)) ? number : MIN(att_oldest_active, att_boundary);
+
+		// A shared snapshot can need record versions below the current threshold of
+		// the attachment, so the threshold is lowered for it. Record versions that
+		// were garbage collected before this moment are lost for the snapshot anyway.
+
+		if (sharedSnapshot || attachment->att_oldest_snapshot < att_oldest_snapshot)
+			attachment->att_oldest_snapshot = att_oldest_snapshot;
 
 		// Finally, scan transactions looking for the oldest interesting transaction -- the oldest
 		// non-commited transaction.  This will not be updated immediately, but saved until the
@@ -3738,6 +3773,12 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 
 		if (--oldest > dbb->dbb_oldest_transaction)
 			dbb->dbb_oldest_transaction = oldest;
+
+		// Transactions below the shared snapshot boundary are committed in that snapshot.
+		// Transactions above it must be checked against the snapshot commit number.
+
+		if (sharedSnapshot && trans->tra_oldest_active < trans->tra_oldest)
+			trans->tra_oldest = trans->tra_oldest_active;
 
 		if (oldest_active > dbb->dbb_oldest_active)
 			dbb->dbb_oldest_active = oldest_active;
