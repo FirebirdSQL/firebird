@@ -357,7 +357,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 				TS IN RDB$TABLESPACES
 				WITH TS.RDB$TABLESPACE_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 326;	// isc_dyn_dup_tablespace
+				*errorCode = 335;	// isc_dyn_dup_tablespace
 			}
 			END_FOR
 
