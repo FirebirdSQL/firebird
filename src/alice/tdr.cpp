@@ -49,6 +49,7 @@
 
 using MsgFormat::SafeArg;
 
+const SINT64 NO_RESPONSE = ~SINT64(0);
 
 static SINT64 ask();
 static void print_description(const tdr*);
@@ -457,7 +458,7 @@ bool TDR_reconnect_multiple(FB_API_HANDLE handle, TraNumber id, const TEXT* name
 	}
 
     bool error = false;
-	if (switches != ULONG(~0))
+	if (switches != NO_RESPONSE)
 	{
 		// now do the required operation with all the subtransactions
 
@@ -645,9 +646,7 @@ static SINT64 ask()
 {
 	AliceGlobals* tdgbl = AliceGlobals::getSpecific();
 	if (tdgbl->uSvc->isService())
-	{
-		return ~SINT64(0);
-	}
+		return NO_RESPONSE;
 
 	char response[32];
 	SINT64 switches = 0;
@@ -662,7 +661,7 @@ static SINT64 ask()
 		while ((c = getchar()) != '\n' && !feof(stdin) && !ferror(stdin) && p < end)
 			*p++ = c;
 		if (p == response)
-			return ~SINT64(0);
+			return NO_RESPONSE;
 		*p = 0;
 		ALICE_upper_case(response, response, sizeof(response));
 		if (!strcmp(response, "N") || !strcmp(response, "C") || !strcmp(response, "R"))
@@ -843,7 +842,7 @@ static bool reconnect(FB_API_HANDLE handle, TraNumber number, const TEXT* name, 
 		ALICE_print(91, SafeArg() << number);
 		// msg 91: Transaction %ld:
 		switches = ask();
-		if (switches == ~SINT64(0))
+		if (switches == NO_RESPONSE)
 		{
 			ALICE_print(84);
 			// msg 84: unexpected end of input
