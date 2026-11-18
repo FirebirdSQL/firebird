@@ -2957,15 +2957,24 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 					// the necessary nodes.
 					castNode->setDsqlDesc(desc);
 
-					if ((aliasNode = nodeAs<DsqlAliasNode>(select_item)))
+					// Don't modify the select_item in place. Instead, copy the node
+					// using the DSQL pass, then attach the cast to the created copy.
+					// The original node may be shared by several select items (e.g. a
+					// recursive CTE column referenced more than once) and must stay intact.
+
+					if (nodeIs<DsqlAliasNode>(select_item))
 					{
+						aliasNode = nodeAs<DsqlAliasNode>(select_item->dsqlPass(dsqlScratch));
 						aliasNode->value = castNode;
 						aliasNode->setDsqlDesc(desc);
+						list->items[position] = aliasNode;
 					}
-					else if ((derivedField = nodeAs<DerivedFieldNode>(select_item)))
+					else if (nodeIs<DerivedFieldNode>(select_item))
 					{
+						derivedField = nodeAs<DerivedFieldNode>(select_item->dsqlPass(dsqlScratch));
 						derivedField->value = castNode;
 						derivedField->setDsqlDesc(desc);
+						list->items[position] = derivedField;
 					}
 					else
 					{

@@ -8771,9 +8771,13 @@ string DerivedFieldNode::internalPrint(NodePrinter& printer) const
 	return "DerivedFieldNode";
 }
 
-ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
+ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
-	return this;
+	auto node = FB_NEW_POOL(dsqlScratch->getPool()) DerivedFieldNode(
+		dsqlScratch->getPool(), name, scope, doDsqlPass(dsqlScratch, value));
+	node->context = context;
+	node->setDsqlDesc(getDsqlDesc());
+	return node;
 }
 
 bool DerivedFieldNode::dsqlAggregateFinder(AggregateFinder& visitor)
