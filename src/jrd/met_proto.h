@@ -127,6 +127,8 @@ void		MET_store_dependencies(Jrd::thread_db*, Firebird::Array<Jrd::Dependency>&,
 	const Jrd::QualifiedName&, int);
 void		MET_store_dependency(Jrd::thread_db*, Jrd::Dependency&, const Jrd::jrd_rel*,
 	const Jrd::QualifiedName&, int);
+Jrd::MetaName	MET_dep_field_name(Jrd::thread_db* tdbb, const Jrd::Dependency& dependency,
+	Jrd::Cached::Relation* relation, Jrd::Cached::Procedure* procedure);
 void		MET_trigger_msg(Jrd::thread_db*, Firebird::string&, const Jrd::QualifiedName&, USHORT);
 void		MET_update_shadow(Jrd::thread_db*, Jrd::Shadow*, USHORT);
 void		MET_update_transaction(Jrd::thread_db*, Jrd::jrd_tra*, const bool);

@@ -427,8 +427,7 @@ static bool deps_to_disk(thread_db*, SSHORT, DeferredWork*, jrd_tra*);
 
 // ----------------------------------------------------------------
 
-static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& fieldName);
+static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& fieldName);
 static void check_filename(thread_db*, const Firebird::string&, bool);
 static bool	find_depend_in_dfw(thread_db*, const QualifiedName&, USHORT, USHORT, jrd_tra*);
 static void get_trigger_dependencies(DeferredWork*, bool, jrd_tra*);
@@ -2882,8 +2881,7 @@ static string get_string(const dsc* desc)
 }
 
 
-static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
-	const QualifiedName& fieldName)
+static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction, const QualifiedName& fieldName)
 {
 /**************************************
  *
@@ -2906,6 +2904,43 @@ static void check_computed_dependencies(thread_db* tdbb, jrd_tra* transaction,
 
 	for (FB_SIZE_T pos = 0; !err && pos < names.getCount(); ++pos)
 	{
+		for (auto& dep : transaction->tra_dependencies)
+		{
+			if (dep.dependency_type == obj_computed &&
+				dep.dependency.objType == obj_relation &&
+				dep.object_name == names[pos])
+			{
+				AUTO_HANDLE(request);
+				auto& dpdo_name = dep.dependency.relation->getName();
+				MetaName field_name = MET_dep_field_name(tdbb, dep.dependency, dep.dependency.relation, nullptr);
+
+				FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
+					RFL IN RDB$RELATION_FIELDS
+					WITH RFL.RDB$SCHEMA_NAME = dpdo_name.schema.c_str() AND
+						 RFL.RDB$RELATION_NAME = dpdo_name.object.c_str() AND
+						 RFL.RDB$FIELD_NAME = field_name.c_str()
+				{
+					const QualifiedName fieldSource(RFL.RDB$FIELD_SOURCE, RFL.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
+					if (fieldName == fieldSource)
+					{
+						err = true;
+						break;
+					}
+
+					if (!sortedNames.exist(fieldSource))
+					{
+						sortedNames.add(fieldSource);
+						names.add(fieldSource);
+					}
+				}
+				END_FOR
+			}
+		}
+
+		if (err)
+			break;
+
 		AutoCacheRequest request(tdbb, irq_comp_circ_dpd, IRQ_REQUESTS);
 
 		FOR(REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
@@ -3331,9 +3366,10 @@ static bool modify_field(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 	case 2:
 	case 3:
+	case 4:
 		return true;
 
-	case 4:	// after scan_relation (phase 3)
+	case 5:	// after store dependencies (phase 3 & 4)
 		check_computed_dependencies(tdbb, transaction, work->getQualifiedName());
 		break;
 	}
