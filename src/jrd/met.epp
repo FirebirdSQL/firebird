@@ -4614,32 +4614,7 @@ void MET_store_dependency(thread_db* tdbb,
 		break;
 	}
 
-	MetaName field_name;
-
-	if (dependency.subNumber || dependency.subName.hasData())
-	{
-		if (dependency.subNumber)
-		{
-			const SSHORT fld_id = (SSHORT) dependency.subNumber;
-			if (relation)
-			{
-				const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
-				if (field)
-					field_name = field->fld_name;
-			}
-			else if (procedure)
-			{
-				const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
-				// CVC: Setting the field var here didn't make sense alone,
-				// so I thought the missing code was to try to extract
-				// the field name that's in this case an output var from a proc.
-				if (param)
-					field_name = param->prm_name;
-			}
-		}
-		else
-			field_name = dependency.subName;
-	}
+	MetaName field_name = MET_dep_field_name(tdbb, dependency, relation, procedure);
 
 	bool found = false;
 	if (field_name.hasData())
@@ -4730,6 +4705,38 @@ void MET_store_dependency(thread_db* tdbb,
 		DEP.RDB$DEPENDENT_TYPE = dependency_type;
 	}
 	END_STORE
+}
+
+
+MetaName MET_dep_field_name(thread_db* tdbb, const Dependency& dependency,
+	Cached::Relation* relation, Cached::Procedure* procedure)
+{
+	if (dependency.subNumber || dependency.subName.hasData())
+	{
+		if (dependency.subNumber)
+		{
+			const SSHORT fld_id = (SSHORT) dependency.subNumber;
+			if (relation)
+			{
+				const jrd_fld* field = MET_get_field(relation->getVersioned(tdbb, CacheFlag::AUTOCREATE), fld_id);
+				if (field)
+					return field->fld_name;
+			}
+			else if (procedure)
+			{
+				const Parameter* param = procedure->getVersioned(tdbb, CacheFlag::AUTOCREATE)->getOutputFields()[fld_id];
+				// CVC: Setting the field var here didn't make sense alone,
+				// so I thought the missing code was to try to extract
+				// the field name that's in this case an output var from a proc.
+				if (param)
+					return param->prm_name;
+			}
+		}
+		else
+			return dependency.subName;
+	}
+
+	return "";
 }
 
 
