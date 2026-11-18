@@ -4310,6 +4310,7 @@ variable
 		{
 			VariableNode* node = newNode<VariableNode>();
 			node->dsqlName = *$2;
+			node->dsqlNamedParamIndex = getNamedParamIndex(*$2);
 			$$ = node;
 		}
 	;
@@ -4580,7 +4581,13 @@ block_parameter($parameters)
 	: column_domain_or_non_array_type collate_clause '=' parameter
 		{
 			setCollate($1, $2);
-			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) NULL, $4));
+			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) nullptr, $4));
+		}
+	| column_domain_or_non_array_type collate_clause '=' ':' symbol_variable_name
+		{
+			setCollate($1, $2);
+			$parameters->add(newNode<ParameterClause>($1, (ValueSourceClause*) nullptr,
+				makeNamedParameter(*$5)));
 		}
 	;
 
@@ -7070,16 +7077,22 @@ limit_clause
 
 %type <valueExprNode> first_clause
 first_clause
-	: FIRST long_integer	{ $$ = MAKE_const_slong($2); }
-	| FIRST '(' value ')'	{ $$ = $3; }
-	| FIRST parameter		{ $$ = $2; }
+	: FIRST long_integer			{ $$ = MAKE_const_slong($2); }
+	| FIRST '(' value ')'			{ $$ = $3; }
+	| FIRST parameter_or_variable	{ $$ = $2; }
 	;
 
 %type <valueExprNode> skip_clause
 skip_clause
-	: SKIP long_integer		{ $$ = MAKE_const_slong($2); }
-	| SKIP '(' value ')'	{ $$ = $3; }
-	| SKIP parameter		{ $$ = $2; }
+	: SKIP long_integer				{ $$ = MAKE_const_slong($2); }
+	| SKIP '(' value ')'			{ $$ = $3; }
+	| SKIP parameter_or_variable	{ $$ = $2; }
+	;
+
+%type <valueExprNode> parameter_or_variable
+parameter_or_variable
+	: parameter	{ $$ = $1; }
+	| variable	{ $$ = $1; }
 	;
 
 %type <valueListNode> distinct_clause

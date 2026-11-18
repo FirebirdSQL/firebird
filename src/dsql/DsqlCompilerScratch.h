@@ -81,6 +81,8 @@ public:
 	static const unsigned FLAG_USING_STATEMENT		= 0x040000;
 	static const unsigned FLAG_ACTUAL_LTT_DDL		= 0x080000;
 	static const unsigned FLAG_BULK_INSERT			= 0x100000;
+	static const unsigned FLAG_POSITIONAL_PARAMS	= 0x200000;
+	static const unsigned FLAG_NAMED_PARAMS			= 0x400000;
 
 	static const unsigned MAX_NESTING = 512;
 

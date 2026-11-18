@@ -1740,6 +1740,7 @@ public:
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 
 public:
+	MetaName dsqlName;
 	dsql_par* dsqlParameter = nullptr;
 	NestConst<MessageNode> message;
 	NestConst<ParameterNode> argFlag;
@@ -2430,6 +2431,7 @@ public:
 	NestConst<DeclareVariableNode> varDecl;
 	NestConst<ItemInfo> varInfo;
 	USHORT varId = 0;
+	USHORT dsqlNamedParamIndex = 0;
 	bool outerDecl = false;
 };
 

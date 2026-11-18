@@ -6164,6 +6164,9 @@ const
 	 isc_upd_ins_cannot_default = 336003113;
 	 isc_dsql_ltt_invalid_reference = 336003114;
 	 isc_dsql_using_statement_must_contain_clause = 336003115;
+	 isc_dsql_mixed_named_positional_params = 336003116;
+	 isc_dsql_param_datatype_unknown = 336003117;
+	 isc_dsql_named_param_output_conflict = 336003118;
 	 isc_dyn_filter_not_found = 336068645;
 	 isc_dyn_func_not_found = 336068649;
 	 isc_dyn_index_not_found = 336068656;

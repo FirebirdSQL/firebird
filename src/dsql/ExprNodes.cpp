@@ -9670,7 +9670,8 @@ ValueExprNode* OverNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 static RegisterNode<ParameterNode> regParameterNode({blr_parameter, blr_parameter2});
 
 ParameterNode::ParameterNode(MemoryPool& pool)
-	: TypedNode<ValueExprNode, ExprNode::TYPE_PARAMETER>(pool)
+	: TypedNode<ValueExprNode, ExprNode::TYPE_PARAMETER>(pool),
+	  dsqlName(pool)
 {
 }
 
@@ -9696,6 +9697,7 @@ string ParameterNode::internalPrint(NodePrinter& printer) const
 {
 	ValueExprNode::internalPrint(printer);
 
+	NODE_PRINT(printer, dsqlName);
 	NODE_PRINT(printer, dsqlParameterIndex);
 	NODE_PRINT(printer, dsqlParameter);
 	NODE_PRINT(printer, message);
@@ -9715,13 +9717,35 @@ ValueExprNode* ParameterNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 					Arg::Gds(isc_dsql_command_err));
 	}
 
-	auto msg = dsqlParameter ? dsqlParameter->par_message :
-		dsqlScratch->getDsqlStatement()->getSendMsg();
+	const auto sendMsg = dsqlScratch->getDsqlStatement()->getSendMsg();
+	const auto msg = dsqlParameter ? dsqlParameter->par_message : sendMsg;
+
+	// Checked here and not in the parser, as positional output arguments of CALL are not input parameters.
+	if (msg == sendMsg)
+	{
+		const auto paramFlag = dsqlName.hasData() ?
+			DsqlCompilerScratch::FLAG_NAMED_PARAMS : DsqlCompilerScratch::FLAG_POSITIONAL_PARAMS;
+		const auto otherParamFlag = dsqlName.hasData() ?
+			DsqlCompilerScratch::FLAG_POSITIONAL_PARAMS : DsqlCompilerScratch::FLAG_NAMED_PARAMS;
+
+		if (dsqlScratch->flags & otherParamFlag)
+		{
+			ERRD_post(
+				Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+				Arg::Gds(isc_dsql_mixed_named_positional_params));
+		}
+
+		dsqlScratch->flags |= paramFlag;
+	}
 
 	auto node = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
+	node->dsqlName = dsqlName;
 	node->dsqlParameter = MAKE_parameter(msg, true, true, dsqlParameterIndex, nullptr);
 	node->dsqlParameterIndex = dsqlParameterIndex;
 	node->outerDecl = outerDecl;
+
+	if (dsqlName.hasData())
+		node->dsqlParameter->par_name = node->dsqlParameter->par_alias = dsqlName;
 
 	return node;
 }
@@ -14250,6 +14274,23 @@ ValueExprNode* VariableNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 				return FB_NEW_POOL(dsqlScratch->getPool()) PackageReferenceNode(dsqlScratch->getPool(),
 					constantFullName, blr_pkg_reference_to_constant, constantDsc);
 			}
+		}
+
+		// In DSQL (not PSQL) statements, an unresolved :name is a named parameter.
+		// That includes the DO part of USING, where :name may also be a declared parameter.
+		if (!node->dsqlVar &&
+			dsqlNamedParamIndex &&
+			!dsqlScratch->isPsql() &&
+			!dsqlScratch->mainScratch &&
+			!(dsqlScratch->flags & (DsqlCompilerScratch::FLAG_DDL | DsqlCompilerScratch::FLAG_EXEC_BLOCK)))
+		{
+			delete node;
+
+			const auto paramNode = FB_NEW_POOL(dsqlScratch->getPool()) ParameterNode(dsqlScratch->getPool());
+			paramNode->dsqlName = dsqlName;
+			paramNode->dsqlParameterIndex = dsqlNamedParamIndex;
+
+			return paramNode->dsqlPass(dsqlScratch);
 		}
 
 		PASS1_field_unknown(NULL, dsqlName.toQuotedString().c_str(), this);

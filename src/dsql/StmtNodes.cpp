@@ -4567,6 +4567,8 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	auto& pool = dsqlScratch->getPool();
 
+	SortedObjectsArray<MetaName> namedOutputs;
+
 	if (dsqlCallSyntax && !dsqlScratch->isPsql() && inputSources && inputSources->items.hasData())
 	{
 		const auto positionalArgCount = inputSources->items.getCount() -
@@ -4626,6 +4628,28 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			if (outputTargets && outputTargets->items.hasData())
 			{
+				// In DSQL, an unresolved :name used as output argument is the same as a question mark.
+				for (auto& target : outputTargets->items)
+				{
+					if (const auto varNode = nodeAs<VariableNode>(target);
+						varNode &&
+						varNode->dsqlNamedParamIndex &&
+						!dsqlScratch->mainScratch &&
+						!dsqlScratch->resolveVariable(varNode->dsqlName))
+					{
+						if (namedOutputs.exist(varNode->dsqlName))
+						{
+							ERRD_post(
+								Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+								Arg::Gds(isc_dsql_named_param_output_conflict) <<
+									Arg::Str(varNode->dsqlName.toQuotedString()));
+						}
+
+						namedOutputs.add(varNode->dsqlName);
+						target = FB_NEW_POOL(pool) ParameterNode(pool);
+					}
+				}
+
 				auto targetArgIt = outputTargets->items.begin();
 				const auto targetArgEnd = outputTargets->items.end();
 				const auto positionalArgCount = outputTargets->items.getCount() -
@@ -4766,6 +4790,22 @@ ExecProcedureNode* ExecProcedureNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			if (mismatchStatus.hasData())
 				status_exception::raise(Arg::Gds(isc_prcmismat) << dsqlName.toQuotedString() << mismatchStatus);
+		}
+	}
+
+	// A named output argument cannot also be an input parameter.
+
+	if (namedOutputs.hasData())
+	{
+		for (const auto parameter : dsqlScratch->getDsqlStatement()->getSendMsg()->msg_parameters)
+		{
+			if (parameter->par_name.hasData() && namedOutputs.exist(parameter->par_name))
+			{
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-104) <<
+					Arg::Gds(isc_dsql_named_param_output_conflict) <<
+						Arg::Str(parameter->par_name.toQuotedString()));
+			}
 		}
 	}
 
@@ -6151,15 +6191,25 @@ ExecBlockNode* ExecBlockNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 		newParam->type->fld_id = paramIt - node->parameters.begin();
 
+		dsql_var* variable = nullptr;
+
 		if (!(dsqlScratch->flags & DsqlCompilerScratch::FLAG_SUB_ROUTINE))
 		{
 			newParam->type->resolve(dsqlScratch);
 
-			dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
+			variable = dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
 				dsql_var::TYPE_INPUT, 0, (USHORT) (2 * index), index);
 		}
 
 		newParam->parameterExpr = doDsqlPass(dsqlScratch, newParam->parameterExpr);
+
+		// A named parameter may be shared by more than one input, so the input must be read
+		// from the message item of its parameter.
+		if (const auto paramNode = nodeAs<ParameterNode>(newParam->parameterExpr);
+			variable && paramNode && paramNode->dsqlParameter)
+		{
+			variable->msgItem = paramNode->dsqlParameter->par_parameter;
+		}
 
 		if (newParam->defaultClause)
 			newParam->defaultClause->value = doDsqlPass(dsqlScratch, newParam->defaultClause->value);
@@ -12370,7 +12420,7 @@ StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 			if (const auto paramNode = nodeAs<ParameterNode>(temp))
 			{
-				if (paramNode->dsqlParameter)
+				if (paramNode->dsqlParameter && paramNode->dsqlName.isEmpty())
 				{
 					paramNode->dsqlParameter->par_name = newParam->name;
 					paramNode->dsqlParameter->par_alias = newParam->name;
@@ -12378,8 +12428,18 @@ StmtNode* UsingNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 			}
 		}
 
+		USHORT msgItem = (USHORT) (2 * index);
+
+		// A named parameter may be shared by more than one input, so the input must be read
+		// from the message item of its parameter.
+		if (const auto paramNode = nodeAs<ParameterNode>(newParam->parameterExpr);
+			paramNode && paramNode->dsqlParameter)
+		{
+			msgItem = paramNode->dsqlParameter->par_parameter;
+		}
+
 		dsqlScratch->makeVariable(newParam->type, newParam->name.c_str(),
-			dsql_var::TYPE_INPUT, 0, (USHORT) (2 * index), index);
+			dsql_var::TYPE_INPUT, 0, msgItem, index);
 
 		++index;
 	}

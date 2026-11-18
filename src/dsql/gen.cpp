@@ -237,6 +237,22 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 				+ sizeof(USHORT));
 		}
 
+		if (parameter->par_desc.isUnknown())
+		{
+			// Input parameters have the name of the parameter. Output ones (as in "select :p")
+			// have it in the associated node.
+			const auto paramNode = nodeAs<ParameterNode>(parameter->par_node);
+			const auto& name = paramNode ? paramNode->dsqlName : parameter->par_name;
+
+			if (name.hasData())
+			{
+				ERRD_post(
+					Arg::Gds(isc_sqlerr) << Arg::Num(-804) <<
+					Arg::Gds(isc_dsql_datatype_err) <<
+					Arg::Gds(isc_dsql_param_datatype_unknown) << Arg::Str(name.toQuotedString()));
+			}
+		}
+
 		const USHORT align = type_alignments[parameter->par_desc.dsc_dtype];
 		if (align)
 			offset = FB_ALIGN(offset, align);
@@ -247,12 +263,15 @@ void GEN_port(DsqlCompilerScratch* dsqlScratch, dsql_msg* message)
 
 	message->msg_length = offset;
 
-	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax).
+	// Remove gaps in par_index due to output parameters using question-marks (CALL syntax)
+	// and to names that turned out to be variables instead of named parameters.
 
 	USHORT parIndex = 0;
 
 	for (auto dsqlParam : dsqlParams)
 		dsqlParam->par_index = ++parIndex;
+
+	message->msg_index = parIndex;
 }
 
 

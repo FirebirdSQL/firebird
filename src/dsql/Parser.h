@@ -236,6 +236,8 @@ private:
 	void transformString(const char* start, unsigned length, Firebird::string& dest);
 	Firebird::string makeParseStr(const Position& p1, const Position& p2);
 	ParameterNode* make_parameter();
+	ParameterNode* makeNamedParameter(const MetaName& name);
+	USHORT getNamedParamIndex(const MetaName& name);
 
 	// Set the value of a clause, checking if it was already specified.
 
@@ -397,6 +399,7 @@ private:
 	Firebird::CharSet* metadataCharSet;
 	Firebird::string transformedString;
 	Firebird::GenericMap<Firebird::NonPooled<IntlString*, StrMark> > strMarks;
+	Firebird::LeftPooledMap<MetaName, USHORT> namedParams;
 	bool stmt_ambiguous;
 	DsqlStatement* parsedStatement = nullptr;
 
