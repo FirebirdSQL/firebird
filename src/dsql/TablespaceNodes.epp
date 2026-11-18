@@ -402,7 +402,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});
 
-		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, true);
+		// Don't open the backing file here: dropping a tablespace only needs its metadata and lock
+		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, false);
 		tableSpace->mark(tdbb, Tablespace::Operation::DROP, transaction, "");
 
 		ERASE X;
