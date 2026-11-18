@@ -340,51 +340,6 @@ public:
 		  m_dpMap(pool)
 	{}
 
-	void assign(const RelationPages& from)
-	{
-		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
-		// Self-assignment would wipe the source before copying it; setPages()
-		// is responsible for skipping that case, so assert it never happens
-
-		fb_assert(this != &from);
-		fb_assert(m_pageSpaceId == from.m_pageSpaceId);
-
-		clearPointerPages();
-
-		const auto readAccessor = from.m_pointerPages.readAccessor();
-		const auto pageCount = readAccessor->getCount();
-
-		// Reserve room for the pages only: growing the count here would make
-		// add() append them after a run of empty slots
-
-		if (pageCount)
-			m_pointerPages.grow(pageCount, false);
-
-		const auto writeAccessor = m_pointerPages.writeAccessor();
-		fb_assert(writeAccessor->hasSpace(pageCount));
-		writeAccessor->add(readAccessor.getPointer());
-		fb_assert(writeAccessor->getCount() == pageCount);
-
-		m_pageCount.store(pageCount, std::memory_order_release);
-
-		// The count mirror must match the real vector whenever the writer
-		// releases m_mutex (the vector side is checked above)
-
-		fb_assert(m_pageCount.load(std::memory_order_relaxed) == pageCount);
-
-		m_indexRootPage = from.m_indexRootPage;
-		rel_data_pages = from.rel_data_pages;
-		rel_slot_space = from.rel_slot_space;
-		rel_pri_data_space = from.rel_pri_data_space;
-		rel_sec_data_space = from.rel_sec_data_space;
-		rel_last_free_pri_dp = from.rel_last_free_pri_dp;
-		rel_last_free_blb_dp = from.rel_last_free_blb_dp;
-
-		m_dpMap.assign(from.m_dpMap);
-		m_dpMapMark = from.m_dpMapMark;
-	}
-
 	void free(RelationPages*& nextFree)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
@@ -1491,16 +1446,6 @@ public:
 	}
 
 	void deletePages(thread_db* tdbb);
-
-	void setPages(const jrd_rel* relation)
-	{
-		fb_assert(relation && relation->m_basePages);
-		setPageSpaceId(relation->m_basePages->getPageSpaceId());
-
-		const auto pages = getBasePages();
-		if (pages != relation->m_basePages)
-			pages->assign(*relation->m_basePages);
-	}
 
 	ULONG getPageSpaceId() const noexcept
 	{
