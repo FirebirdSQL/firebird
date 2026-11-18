@@ -2828,9 +2828,6 @@ public:
 					fb_assert(false);
 					break;
 			}
-
-			if (grantee == object)
-				dsqlScratch->ddlSchema = object->second.schema;
 		}
 
 		return PrivilegesNode::dsqlPass(dsqlScratch);
