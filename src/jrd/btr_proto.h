@@ -66,6 +66,8 @@ void	BTR_copy_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId, ULONG);
 Ods::index_root_page* BTR_fetch_root_for_update(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
 const Ods::index_root_page* BTR_fetch_root(const char* from, Jrd::thread_db* tdbb, Jrd::win* window);
 
+void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescList& idxList);
+
 inline constexpr USHORT BTR_DESCRIBE_NO_THROW =		0x0001;
 inline constexpr USHORT BTR_DESCRIBE_SYSTEM_RQ =	0x0002;
 
