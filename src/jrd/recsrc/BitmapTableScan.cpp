@@ -47,6 +47,11 @@ BitmapTableScan::BitmapTableScan(CompilerScratch* csb, const string& alias,
 	m_cardinality = csb->csb_rpt[stream].csb_cardinality * selectivity;
 }
 
+bool BitmapTableScan::isDependent(const StreamList& streams) const
+{
+	return isInversionDependent(m_inversion, streams);
+}
+
 void BitmapTableScan::internalOpen(thread_db* tdbb) const
 {
 	Request* const request = tdbb->getRequest();

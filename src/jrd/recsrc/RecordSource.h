@@ -181,6 +181,7 @@ namespace Jrd
 		static Firebird::string printName(thread_db* tdbb, const Firebird::string& name,
 										  const Firebird::string& alias = {});
 
+		static bool isInversionDependent(const InversionNode* node, const StreamList& streams);
 		static void printInversion(thread_db* tdbb, const InversionNode* inversion,
 								   Firebird::ObjectsArray<PlanEntry::Line>& planLines,
 								   bool detailed, unsigned level, bool navigation);
@@ -365,6 +366,8 @@ namespace Jrd
 
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
 
+		bool isDependent(const StreamList& streams) const override;
+
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
 		void internalOpen(thread_db* tdbb) const override;
@@ -391,6 +394,8 @@ namespace Jrd
 		void close(thread_db* tdbb) const override;
 
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
+
+		bool isDependent(const StreamList& streams) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
@@ -440,6 +445,8 @@ namespace Jrd
 			m_inversion = inversion;
 			m_condition = condition;
 		}
+
+		bool isDependent(const StreamList& streams) const override;
 
 	protected:
 		void internalGetPlan(thread_db* tdbb, PlanEntry& planEntry, unsigned level, bool recurse) const override;
