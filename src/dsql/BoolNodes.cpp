@@ -864,8 +864,9 @@ bool ComparativeBoolNode::stringBoolean(thread_db* tdbb, Request* request, dsc* 
 
 	USHORT type1;
 
+	// Non-text value is treated here as NONE, not ASCII, so a non-ASCII pattern doesn't fail to convert
 	if (!desc1->isBlob())
-		type1 = INTL_TEXT_TYPE(*desc1);
+		type1 = desc1->getTextType();
 	else
 	{
 		// No MATCHES support for blob
