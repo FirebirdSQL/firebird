@@ -872,7 +872,7 @@ void EXE_start(thread_db* tdbb, Request* request, jrd_tra* transaction)
 	TRA_post_resources(tdbb, transaction, statement->resources);
 
 	TRA_attach_request(transaction, request);
-	request->req_flags &= req_in_use | req_restart_ready;
+	request->req_flags &= req_in_use | req_restart_ready | req_stop;	// zero the rest of flags
 	request->req_flags |= req_active;
 	request->req_flags &= ~req_reserved;
 
@@ -1386,6 +1386,9 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 	if (!node)
 		BUGCHECK(147);
 
+	if (request->req_flags & req_stop)
+		Statement::stopped();
+
 	// Save the old pool and request to restore on exit
 	StmtNode::ExeState exeState(tdbb, request, request->req_transaction);
 	Jrd::ContextPoolHolder context(tdbb, request->req_pool);
@@ -1580,8 +1583,13 @@ const StmtNode* EXE_looper(thread_db* tdbb, Request* request, const StmtNode* no
 		ERR_punt();
 	}
 
-	if (request->req_flags & req_abort)
-		ERR_post(Arg::Gds(isc_req_sync));
+	if (request->req_flags & (req_abort | req_stop))
+	{
+		if (request->req_flags & req_abort)
+			ERR_post(Arg::Gds(isc_req_sync));
+		else
+			Statement::stopped();
+	}
 
 	return node;
 }

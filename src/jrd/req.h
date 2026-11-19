@@ -551,6 +551,7 @@ const ULONG req_same_tx_upd		= 0x800L;		// record was updated by same transactio
 const ULONG req_reserved		= 0x1000L;		// Request reserved for client
 const ULONG req_update_conflict	= 0x2000L;		// We need to restart request due to update conflict
 const ULONG req_restart_ready	= 0x4000L;		// Request is ready to restart in case of update conflict
+const ULONG req_stop			= 0x8000L;		// Stopped due to inconsistent state
 
 
 // Index lock block

@@ -5901,12 +5901,12 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	switch (phase)
 	{
 	case 0:
-		// Remove just created format
 		{
 			const DeferredWork* arg = work->findArg(work->dfw_type);
 			if (!arg)
 				break;
 
+			// Remove just created format
 			handle.reset();
 			int rel_id = -1;
 
@@ -5938,6 +5938,28 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				relation->rel_current_format = NULL;
 				relation->rel_flags &= ~REL_scanned;
 				relation->rel_bad_tran = transaction->tra_number;
+
+				// Terminate statements that deal with relation
+				for (auto* stmt : attachment->att_statements)
+				{
+					bool found = false;
+					for (auto& resource : stmt->resources)
+					{
+						if (resource.rsc_type == Resource::rsc_relation &&
+							resource.rsc_rel == relation)
+						{
+							found = true;
+							break;
+						}
+					}
+
+					if (found)
+					{
+						stmt->flags |= Statement::FLAG_STOP;
+						for (auto* req : stmt->requests)
+							req->req_flags |= req_stop;
+					}
+				}
 			}
 		}
 		break;
