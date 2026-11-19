@@ -2467,7 +2467,11 @@ void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
 
 		try
 		{
-			permanent->deletePages(tdbb, tempInstanceId);
+			{	// scope
+				// getTempPages() resolves frame relation pages using tdbb_temp_frame_id
+				AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
+				permanent->deletePages(tdbb, tempInstanceId);
+			}
 
 			if (transaction)
 				transaction->discardTempFrameActions(relation, tempInstanceId);
