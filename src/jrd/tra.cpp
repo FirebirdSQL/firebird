@@ -98,7 +98,6 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra*, jrd_rel*, UCHAR lock_typ
 static tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
 static const char* get_lockname_v3(const UCHAR lock);
 static ULONG inventory_page(thread_db*, ULONG);
-static int limbo_transaction(thread_db*, TraNumber id);
 static void release_temp_tables(thread_db*, jrd_tra*);
 static void retain_temp_tables(thread_db*, jrd_tra*, TraNumber);
 static void restart_requests(thread_db*, jrd_tra*);
@@ -1161,8 +1160,74 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 	if (number > dbb->dbb_next_transaction)
 		PAG_header(tdbb, true);
 
-	const int state = (number > dbb->dbb_next_transaction) ?
-		255 : limbo_transaction(tdbb, number);
+	MemoryPool* const pool = attachment->createPool();
+	jrd_tra* trans;
+	Lock* lock;
+
+	{	// scope
+		Jrd::ContextPoolHolder context(tdbb, pool);
+		trans = jrd_tra::create(pool, attachment, NULL);
+		trans->tra_number = number;
+
+		// Lock data is not zero to show other attachments that the transaction
+		// is in use: they must not mark it dead or take it as finished.
+		lock = FB_NEW_RPT(*pool, 0) Lock(tdbb, sizeof(TraNumber), LCK_tra, trans);
+		lock->setKey(number);
+		lock->lck_data = number;
+		trans->tra_lock = lock;
+	}
+
+	// Release the lock and the transaction if the reconnect fails
+	bool reconnected = false;
+
+	Cleanup cleanup([&]
+	{
+		if (!reconnected)
+		{
+			if (lock->lck_id)
+				LCK_release(tdbb, lock);
+
+			jrd_tra::destroy(attachment, trans);
+		}
+	});
+
+	int state = 255;
+	bool locked = false;
+
+	if (number <= dbb->dbb_next_transaction)
+	{
+		// Take the transaction lock. It prevents concurrent reconnect to the
+		// same transaction and makes other attachments see the transaction as
+		// active until it is committed or rolled back.
+		// Other attachments take this lock for a short time when they check the
+		// state of the transaction, so make a few attempts with timeouts of
+		// 1, 2, 4 and 8 seconds. After every attempt read the actual state from
+		// TIP: if the transaction is not in limbo anymore, there is nothing to
+		// wait for.
+
+		for (SSHORT timeout = 1; timeout < 10; timeout *= 2)
+		{
+			{	// scope
+				ThreadStatusGuard temp_status(tdbb);
+				locked = LCK_lock(tdbb, lock, LCK_write, -timeout);
+			}
+
+			state = TRA_fetch_state(tdbb, number);
+
+			if (locked || state != tra_limbo)
+				break;
+		}
+	}
+
+	if (state == tra_limbo && !locked)
+	{
+		// The transaction is in limbo, but somebody else uses it: its owner is
+		// still attached or another attachment has reconnected to it
+
+		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+		ERR_post(Arg::Gds(isc_random) << Arg::Str("cannot reconnect, transaction is in use") <<
+				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str("in limbo"));
+	}
 
 	if (state != tra_limbo)
 	{
@@ -1193,13 +1258,10 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str(text));
 	}
 
-	MemoryPool* const pool = attachment->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
-	jrd_tra* const trans = jrd_tra::create(pool, attachment, NULL);
-	trans->tra_number = number;
 	trans->tra_flags |= TRA_prepared | TRA_reconnected | TRA_write;
 
 	trans->linkToAttachment(attachment);
+	reconnected = true;
 
 	return trans;
 }
@@ -1997,47 +2059,31 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, jrd_tra::wait_t 
 	// Create, wait on, and release lock on target transaction.  If
 	// we can't get the lock due to deadlock
 
-	if (wait != jrd_tra::tra_no_wait)
+	if (wait == jrd_tra::tra_no_wait)
+		return TRA_get_state(tdbb, number);
+
+	Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
+	temp_lock.setKey(number);
+
+	const SSHORT timeout = (wait == jrd_tra::tra_wait) ? trans->getLockWait() : 0;
+
+	if (!LCK_lock(tdbb, &temp_lock, LCK_read, timeout))
 	{
-		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
-		temp_lock.setKey(number);
+		fb_utils::init_status(tdbb->tdbb_status_vector);
+		return tra_active;
+	}
 
-		const SSHORT timeout = (wait == jrd_tra::tra_wait) ? trans->getLockWait() : 0;
-
-		if (!LCK_lock(tdbb, &temp_lock, LCK_read, timeout))
-		{
-			fb_utils::init_status(tdbb->tdbb_status_vector);
-			return tra_active;
-		}
-
+	Cleanup releaseLock([&]
+	{
 		LCK_release(tdbb, &temp_lock);
-	}
+	});
 
-	int state = TRA_get_state(tdbb, number);
+	// We hold the lock: the transaction has no owner now and nobody can reconnect
+	// to it (transaction in limbo could be reconnected by gfix, for example).
+	// Get the state while the lock is held. If the transaction is still marked
+	// active on disk, it is marked dead there. The TIP cache is updated as well.
 
-	if (wait != jrd_tra::tra_no_wait && state == tra_committed)
-		return state;
-
-	if (state == tra_precommitted)
-		return state;
-
-	// If the recorded state of the transaction is active, we know better.  If
-	// it were active, he'd be alive now.  Mark him dead.
-
-	if (state == tra_active)
-	{
-		state = tra_dead;
-		REPL_trans_cleanup(tdbb, number);
-		TRA_set_state(tdbb, 0, number, tra_dead);
-	}
-
-	// If the transaction disappeared into limbo, died, for constructively
-	// died, tweak the transaction state snapshot to reflect the new state.
-	// This is guaranteed safe.
-
-	TPC_set_state(tdbb, number, state);
-
-	return state;
+	return TPC_locked_state(tdbb, number);
 }
 
 
@@ -2410,44 +2456,6 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 	}
 
 	return dbb->getKnownPage(pag_transactions, sequence);
-}
-
-
-static int limbo_transaction(thread_db* tdbb, TraNumber id)
-{
-/**************************************
- *
- *	l i m b o _ t r a n s a c t i o n
- *
- **************************************
- *
- * Functional description
- *
- *	limbo_state is called when reconnecting
- *	to an existing transaction to assure that
- *	the transaction is actually in limbo.
- *	It returns the transaction state.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
-
-	const ULONG page = id / trans_per_tip;
-	const ULONG number = id % trans_per_tip;
-
-	WIN window(DB_PAGE_SPACE, -1);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
-
-	const ULONG trans_offset = TRANS_OFFSET(number);
-	const UCHAR* byte = tip->tip_transactions + trans_offset;
-	const USHORT shift = TRANS_SHIFT(number);
-	const int state = (*byte >> shift) & TRA_MASK;
-	CCH_RELEASE(tdbb, &window);
-
-	return state;
 }
 
 
