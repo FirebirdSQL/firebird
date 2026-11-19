@@ -466,8 +466,11 @@
 #define blr_dcl_local_table_ltt			(unsigned char) 2
 #define blr_dcl_local_table_field_names	(unsigned char) 3
 #define blr_dcl_local_table_index		(unsigned char) 4
+// flags of blr_dcl_local_table_index
 #define blr_dcl_local_table_index_unique		(unsigned char) 1
 #define blr_dcl_local_table_index_descending	(unsigned char) 2
+// blr_dcl_local_table_index: name, flags, segment count, segments, blr_end
+// segment: blr_dcl_local_table_index_segment, field id [, blr_dcl_local_table_index_seg_length, length]
 #define blr_dcl_local_table_index_segment		(unsigned char) 3
 #define blr_dcl_local_table_index_seg_length	(unsigned char) 4
 

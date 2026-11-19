@@ -4111,10 +4111,24 @@ static void blr_print_verb(gds_ctl* control, SSHORT level)
 						while (--n >= 0)
 						{
 							blr_indent(control, level);
+							if (blr_print_byte(control) != blr_dcl_local_table_index_segment)
+								blr_error(control, "*** invalid blr_dcl_local_table_index segment code ***");
+
 							blr_print_word(control);
+
+							if (control->ctl_blr_reader.peekByte() == blr_dcl_local_table_index_seg_length)
+							{
+								blr_print_byte(control);
+								blr_print_word(control);
+							}
+
 							offset = blr_print_line(control, offset);
 						}
 
+						if (control->ctl_blr_reader.peekByte() != blr_end)
+							blr_error(control, "*** invalid blr_dcl_local_table_index terminator ***");
+
+						blr_print_verb(control, level - 1);
 						--level;
 						break;
 
