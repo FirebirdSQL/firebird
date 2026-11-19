@@ -8771,13 +8771,12 @@ string DerivedFieldNode::internalPrint(NodePrinter& printer) const
 	return "DerivedFieldNode";
 }
 
-ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
+ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
-	auto node = FB_NEW_POOL(dsqlScratch->getPool()) DerivedFieldNode(
-		dsqlScratch->getPool(), name, scope, doDsqlPass(dsqlScratch, value));
-	node->context = context;
-	node->setDsqlDesc(getDsqlDesc());
-	return node;
+	// The value is already resolved by pass1 (derived fields are created while
+	// compiling a derived table / CTE), so it must not be passed again. Doing so
+	// would re-resolve field and dbkey references in a wrong context scope.
+	return this;
 }
 
 bool DerivedFieldNode::dsqlAggregateFinder(AggregateFinder& visitor)
@@ -10180,6 +10179,11 @@ string RecordKeyNode::internalPrint(NodePrinter& printer) const
 // Resolve a dbkey to an available context.
 ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	// Already resolved during the initial pass. The relation context it refers to
+	// is no longer on the current scope stack, so re-resolving it would fail.
+	if (dsqlRelation)
+		return this;
+
 	DsqlContextStack contexts;
 	ValueExprNode* node = nullptr;
 
