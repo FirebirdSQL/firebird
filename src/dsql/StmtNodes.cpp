@@ -1828,18 +1828,22 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 
 				for (USHORT i = 0; i < segmentCount; ++i)
 				{
-					const auto code = blrReader.getByte();
-					if (code == blr_dcl_local_table_index_segment)
-						index.segments.add({ blrReader.getWord(), 0 });
-					else
+					if (blrReader.getByte() != blr_dcl_local_table_index_segment)
 						PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index segment subcode");
+
+					auto& segment = index.segments.add();
+					segment.fieldId = blrReader.getWord();
+					segment.length = 0;
 
 					if (blrReader.peekByte() == blr_dcl_local_table_index_seg_length)
 					{
 						blrReader.getByte();
-						index.segments.back().length = blrReader.getWord();
+						segment.length = blrReader.getWord();
 					}
 				}
+
+				if (blrReader.getByte() != blr_end)
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index terminator");
 
 				break;
 			}
@@ -2208,6 +2212,8 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					dsqlScratch->appendUShort(segment.length);
 				}
 			}
+
+			dsqlScratch->appendUChar(blr_end);
 		}
 
 		dsqlScratch->appendUChar(blr_end);
