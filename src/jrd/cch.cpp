@@ -356,6 +356,8 @@ int CCH_down_grade_dbb(void* ast_object)
 				for (const bcb_repeat* const end = tail + bcb->bcb_count; tail < end; ++tail)
 				{
 					BufferDesc* bdb = tail->bcb_bdb;
+					if (!bdb)		// first non-initialized BDB, abandon following checks
+						break;
 
 					// Acquire EX latch to avoid races with LCK_release (called by CCH_release)
 					// or LCK_lock (by lock_buffer) in main thread. Take extra care to avoid
@@ -1226,6 +1228,9 @@ void CCH_flush_ast(thread_db* tdbb)
 		for (ULONG i = 0; (bcb = dbb->dbb_bcb) && i < bcb->bcb_count; i++)
 		{
 			BufferDesc* bdb = bcb->bcb_rpt[i].bcb_bdb;
+			if (!bdb)		// first non-initialized BDB, abandon following checks
+				break;
+
 			if (bdb->bdb_flags & (BDB_dirty | BDB_db_dirty))
 				down_grade(tdbb, bdb, 1);
 		}
@@ -2162,6 +2167,8 @@ void CCH_shutdown(thread_db* tdbb)
 			for (; tail < end; tail++)
 			{
 				BufferDesc* const bdb = tail->bcb_bdb;
+				if (!bdb)		// first non-initialized BDB, abandon following checks
+					break;
 
 				if (dbb->dbb_flags & DBB_bugcheck)
 				{
@@ -4065,7 +4072,13 @@ static ULONG get_prec_walk_mark(BufferControl* bcb)
 	if (++bcb->bcb_prec_walk_mark == 0)
 	{
 		for (ULONG i = 0; i < bcb->bcb_count; i++)
-			bcb->bcb_rpt[i].bcb_bdb->bdb_prec_walk_mark = 0;
+		{
+			BufferDesc* bdb = bcb->bcb_rpt[i].bcb_bdb;
+			if (!bdb)		// first non-initialized BDB, abandon following checks
+				break;
+
+			bdb->bdb_prec_walk_mark = 0;
+		}
 
 		bcb->bcb_prec_walk_mark = 1;
 	}
