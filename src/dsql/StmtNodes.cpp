@@ -1657,7 +1657,7 @@ DeclareSubFuncNode* DeclareSubFuncNode::dsqlPass(DsqlCompilerScratch* dsqlScratc
 		if (!implemetingForward)
 		{
 			// ASF: dsqlFunction->udf_arguments is only checked for its count for now.
-			dsqlFunction->udf_arguments.add(dsc());
+			dsqlFunction->udf_arguments.add(dsql_udf_arg(pool, dsc(), nullptr));
 		}
 
 		if (param->defaultClause)
