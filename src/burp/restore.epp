@@ -94,7 +94,6 @@ using namespace Burp;
 
 DATABASE DB = STATIC FILENAME "yachts.lnk";
 
-
 namespace // unnamed, private
 {
 
@@ -122,7 +121,6 @@ void	decompress(BurpGlobals* tdgbl, UCHAR*, ULONG);
 void	eat_blob(BurpGlobals* tdgbl);
 void	eat_text(BurpGlobals* tdgbl);
 void	eat_text2(BurpGlobals* tdgbl);
-burp_rel*	find_relation(BurpGlobals* tdgbl, const QualifiedMetaString&);
 void	fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field);
 // CVC: when do these functions return false indeed???
 // get_acl and get_index are the only exceptions but ironically their
@@ -283,6 +281,7 @@ static inline void collect_missing_privs(BurpGlobals* tdgbl, USHORT type, const 
 	object->obj_name = name;
 	object->obj_class = hasSecClass;
 	tdgbl->miss_privs = object;
+	tdgbl->putToDictionary(type, name, object);
 }
 
 } // namespace
@@ -1424,33 +1423,6 @@ void eat_text2(BurpGlobals* tdgbl)
 	USHORT len = (USHORT) gds__vax_integer(lenstr, sizeof(lenstr));
 	if (len)
 		MVOL_skip_block(tdgbl, len);
-}
-
-burp_rel* find_relation(BurpGlobals* tdgbl, const QualifiedMetaString& name)
-{
-/**************************************
- *
- *	f i n d _ r e l a t i o n
- *
- **************************************
- *
- * Functional description
- *	Given a relation name, find the relation block.  If there isn't
- *	one, produce a fatal error.
- *
- **************************************/
-
-	// Why isn't strcmp used here?
-	for (burp_rel* relation = tdgbl->relations; relation; relation = relation->rel_next)
-	{
-		if (relation->rel_name == name)
-			return relation;
-	}
-
-	BURP_error(35, true, SafeArg() << name.toQuotedString().c_str());
-	// msg 35 can't find relation %s
-
-	return NULL;
 }
 
 void fix_security_class_name(BurpGlobals* tdgbl, TEXT* sec_class, bool is_field)
@@ -4140,7 +4112,7 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
 
 					GET_TEXT(tablespaceName);
-					const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+					const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
 					if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
 						strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
@@ -7013,7 +6985,7 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				BASED_ON RDB$RELATIONS.RDB$TABLESPACE_NAME tablespaceName;
 
 				GET_TEXT(tablespaceName);
-				const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+				const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
 				if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
 					strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
@@ -7213,9 +7185,6 @@ bool get_package(BurpGlobals* tdgbl)
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 		package->pkg_name.schema = PUBLIC_SCHEMA;
 
-	package->pkg_next = tdgbl->packages;
-	tdgbl->packages = package;
-
 	STORE (TRANSACTION_HANDLE local_trans REQUEST_HANDLE tdgbl->handles_get_package_req_handle1)
 		X IN RDB$PACKAGES
 	{
@@ -7299,6 +7268,12 @@ bool get_package(BurpGlobals* tdgbl)
 		general_on_error();
 	END_ERROR
 
+	// Package object is now populated, register it in the dictionary
+	tdgbl->putToDictionary(obj_package_header, package->pkg_name, package);
+
+	package->pkg_next = tdgbl->packages;
+	tdgbl->packages = package;
+
 	return true;
 }
 
@@ -7350,7 +7325,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 			SSHORT len = GET_TEXT(tablespace_name);
 			MISC_terminate(tablespace_name, temp, len, sizeof(temp));
 
-			const auto str = tdgbl->tablespace_mapping.get(tablespace_name);
+			const auto str = tdgbl->tablespaceFileMap.get(tablespace_name);
 			if (str && str->equals(PRIMARY_TABLESPACE_NAME))
 				moveToPrimary = true;		// Move the contents of this TS to PRIMARY
 			else
@@ -7439,7 +7414,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 		X.RDB$READ_ONLY = (USHORT) read_only;
 
 		Firebird::string newFile;
-		if (tdgbl->tablespace_mapping.get(X.RDB$TABLESPACE_NAME, newFile))
+		if (tdgbl->tablespaceFileMap.get(X.RDB$TABLESPACE_NAME, newFile))
 		{
 			PathUtils::fixupSeparators(newFile.begin());
 			Firebird::PathName ts_file_name;
@@ -7504,9 +7479,6 @@ bool get_procedure(BurpGlobals* tdgbl)
 	burp_prc* procedure = (burp_prc*) BURP_alloc_zero (sizeof(burp_prc));
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 		procedure->prc_name.schema = PUBLIC_SCHEMA;
-
-	procedure->prc_next = tdgbl->procedures;
-	tdgbl->procedures = procedure;
 
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL11_1)
 	{
@@ -7810,6 +7782,14 @@ bool get_procedure(BurpGlobals* tdgbl)
 			general_on_error ();
 		END_ERROR
 	}
+
+	// Procedure object is now populated, register it in the dictionary
+	// (unless this procedure is packaged)
+	if (procedure->prc_name.package.isEmpty())
+		tdgbl->putToDictionary(obj_procedure, procedure->prc_name, procedure);
+
+	procedure->prc_next = tdgbl->procedures;
+	tdgbl->procedures = procedure;
 
 	// at the end of prms for a procedure is the rec_procedure_end marker
 
@@ -8419,9 +8399,6 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
 		relation->rel_name.schema = PUBLIC_SCHEMA;
 
-	relation->rel_next = tdgbl->relations;
-	tdgbl->relations = relation;
-
 	TEXT temp[GDS_NAME_LEN];
 	att_type attribute;
 	scan_attr_t scan_next_attr;
@@ -8538,7 +8515,7 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 			GET_TEXT(tablespaceName);
 
-			const auto str = tdgbl->tablespace_mapping.get(tablespaceName);
+			const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
 			if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
 				strcpy(tableSpace, tablespaceName);
@@ -8555,6 +8532,12 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 	relation->rel_system = (sys_flag != fb_sysflag_user);
 	relation->rel_type = (SSHORT) type;
+
+	// Relation object is now populated, register it in the dictionary
+	tdgbl->putToDictionary(obj_relation, relation->rel_name, relation);
+
+	relation->rel_next = tdgbl->relations;
+	tdgbl->relations = relation;
 
 	// If this is a view and there is a global transaction then use it
 	Firebird::ITransaction* local_trans;
@@ -8859,7 +8842,12 @@ bool get_relation_data(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTa
 		case att_relation_name:
 			GET_TEXT(temp);
 			name.object = temp;
-			relation = find_relation(tdgbl, name);
+			relation = tdgbl->getRelation(name);
+			if (!relation)
+			{
+				BURP_error(35, true, SafeArg() << name.toQuotedString().c_str());
+				// msg 35 can't find relation %s
+			}
 			break;
 
 		default:
@@ -10509,7 +10497,7 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 	scan_attr_t		scan_next_attr;
 	USHORT		flags = 0;
 
-	QualifiedMetaString user, relation;
+	QualifiedMetaString user, object_name;
 	TEXT temp[GDS_NAME_LEN];
 	BASED_ON RDB$USER_PRIVILEGES.RDB$GRANTOR grantor;
 	BASED_ON RDB$USER_PRIVILEGES.RDB$PRIVILEGE privilege;
@@ -10558,14 +10546,14 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 
 		case att_priv_object_schema_name:
 			GET_TEXT(temp);
-			relation.schema = temp;
+			object_name.schema = temp;
 			break;
 
 		case att_priv_object_name:
 			flags |= USER_PRIV_OBJECT_NAME;
 			// default OBJECT_TYPE to RELATION
 			GET_TEXT(temp);
-			relation.object = temp;
+			object_name.object = temp;
 			break;
 
 		case att_priv_field_name:
@@ -10592,8 +10580,8 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		}
 	}
 
-	if (relation.schema.isEmpty() && tdgbl->runtimeODS >= DB_VERSION_DDL14 && isSchemaBoundObject(object_type))
-		relation.schema = PUBLIC_SCHEMA;
+	if (object_name.schema.isEmpty() && tdgbl->runtimeODS >= DB_VERSION_DDL14 && isSchemaBoundObject(object_type))
+		object_name.schema = PUBLIC_SCHEMA;
 
 	// Check if object exists
 	Firebird::ITransaction*	local_trans = nullptr;
@@ -10604,39 +10592,28 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		switch (object_type)
 		{
 		case obj_package_header:
-			for (const burp_pkg* pkg = tdgbl->packages; pkg; pkg = pkg->pkg_next)
+			if (tdgbl->getPackage(object_name))
 			{
-				if (pkg->pkg_name == relation)
-				{
-					exists = true;
-					local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
-					break;
-				}
+				exists = true;
+				local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 			}
 			break;
 
 		case obj_procedure:
-			for (const burp_prc* proc = tdgbl->procedures; proc; proc = proc->prc_next)
+			if (const auto procedure = tdgbl->getProcedure(object_name))
 			{
-				if (proc->prc_name.package.isEmpty() && proc->prc_name == relation)
-				{
-					exists = true;
-					local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
-					break;
-				}
+				fb_assert(procedure->prc_name.package.isEmpty());
+				exists = true;
+				local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 			}
 			break;
 
 		case obj_relation:
-			for (const burp_rel* rel = tdgbl->relations; rel; rel = rel->rel_next)
+			if (const auto relation = tdgbl->getRelation(object_name))
 			{
-				if (rel->rel_name == relation)
-				{
-					exists = true;
-					if (rel->rel_flags & REL_view)
-						local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
-					break;
-				}
+				exists = true;
+				if (relation->rel_flags & REL_view)
+					local_trans = tdgbl->global_trans ? tdgbl->global_trans : gds_trans;
 			}
 			break;
 
@@ -10647,14 +10624,10 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 		case obj_field:
 		case obj_generator:
 		case obj_schema:
-			for (burp_meta_obj* object = tdgbl->miss_privs; object; object = object->obj_next)
+			if (const auto metaObject = tdgbl->getMetaObject(object_type, object_name))
 			{
-				if (object->obj_type == object_type && object->obj_name == relation)
-				{
-					if (object->obj_class)
-						exists = true;
-					break;
-				}
+				if (metaObject->obj_class)
+					exists = true;
 			}
 			break;
 
@@ -10727,14 +10700,14 @@ bool get_user_privilege(BurpGlobals* tdgbl)
 				X.RDB$GRANT_OPTION = grant_option;
 			}
 
-			if (relation.schema.hasData())
+			if (object_name.schema.hasData())
 			{
-				strcpy(X.RDB$RELATION_SCHEMA_NAME, relation.schema.c_str());
+				strcpy(X.RDB$RELATION_SCHEMA_NAME, object_name.schema.c_str());
 				X.RDB$RELATION_SCHEMA_NAME.NULL = FALSE;
 			}
 
 			if (flags & USER_PRIV_OBJECT_NAME)
-				strcpy(X.RDB$RELATION_NAME, relation.object.c_str());
+				strcpy(X.RDB$RELATION_NAME, object_name.object.c_str());
 
 			if (flags & USER_PRIV_FIELD_NAME)
 			{
