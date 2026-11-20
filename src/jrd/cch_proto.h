@@ -108,12 +108,12 @@ inline void CCH_RELEASE_TAIL(Jrd::thread_db* tdbb, Jrd::win* window)
 
 inline void CCH_MARK(Jrd::thread_db* tdbb, Jrd::win* window)
 {
-	CCH_mark (tdbb, window, 0, 0);
+	CCH_mark (tdbb, window, false, false);
 }
 
 inline void CCH_MARK_SYSTEM(Jrd::thread_db* tdbb, Jrd::win* window)
 {
-	CCH_mark (tdbb, window, 1, 0);
+	CCH_mark (tdbb, window, true, false);
 }
 
 inline void CCH_MARK_MERGE(Jrd::thread_db* tdbb, Jrd::win* window)
@@ -143,7 +143,7 @@ inline Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, Jrd::PageNu
 
 inline void CCH_MARK_MUST_WRITE(Jrd::thread_db* tdbb, Jrd::win* window)
 {
-	CCH_mark(tdbb, window, 0, 1);
+	CCH_mark(tdbb, window, false, true);
 }
 
 #ifdef SUPERSERVER_V2
@@ -152,21 +152,6 @@ inline void CCH_PREFETCH(Jrd::thread_db* tdbb, SLONG* pages, SSHORT count)
 	CCH_prefetch (tdbb, pages, count);
 }
 #endif
-
-//#define CCH_FETCH(tdbb, window, lock, type)		  CCH_fetch (tdbb, window, lock, type, 1, true)
-//#define CCH_FETCH_NO_SHADOW(tdbb, window, lock, type)		  CCH_fetch (tdbb, window, lock, type, 1, false)
-//#define CCH_FETCH_TIMEOUT(tdbb, window, lock, type, latch_wait)   CCH_fetch (tdbb, window, lock, type, latch_wait, true)
-//#define CCH_FETCH_LOCK(tdbb, window, lock, wait, type) CCH_fetch_lock (tdbb, window, lock, wait, type)
-//#define CCH_FETCH_PAGE(tdbb, window, read_shadow)       CCH_fetch_page (tdbb, window, read_shadow)
-//#define CCH_RELEASE(tdbb, window)                         CCH_release (tdbb, window, false)
-//#define CCH_RELEASE_TAIL(tdbb, window)                    CCH_release (tdbb, window, true)
-//#define CCH_MARK(tdbb, window)                            CCH_mark (tdbb, window, 0)
-//#define CCH_MARK_SYSTEM(tdbb, window)                     CCH_mark (tdbb, window, 1)
-//#define CCH_HANDOFF(tdbb, window, page, lock, type)       CCH_handoff (tdbb, window, page, lock, type, 1, false)
-//#define CCH_HANDOFF_TIMEOUT(tdbb, window, page, lock, type, latch_wait)   CCH_handoff (tdbb, window, page, lock, type, latch_wait, false)
-//#define CCH_HANDOFF_TAIL(tdbb, window, page, lock, type)  CCH_handoff (tdbb, window, page, lock, type, 1, true)
-//#define CCH_MARK_MUST_WRITE(tdbb, window)                 CCH_mark_must_write (tdbb, window)
-//#define CCH_PREFETCH(tdbb, pages, count)            CCH_prefetch (tdbb, pages, count)
 
 // Flush flags
 
