@@ -3868,13 +3868,6 @@ jrd_tra::~jrd_tra()
 	while (tra_undo_records.hasData())
 		delete tra_undo_records.pop();
 
-	while (tra_action_free)
-	{
-		auto action = tra_action_free;
-		tra_action_free = action->vct_next;
-		delete action;
-	}
-
 	delete tra_undo_space;
 	delete tra_user_management;
 	delete tra_timezone_snapshot;
