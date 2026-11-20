@@ -40,3 +40,6 @@ FB_IMPL_MSG(DSQL, 40, dsql_invalid_drop_ss_clause, -817, "42", "000", "Invalid D
 FB_IMPL_MSG(DSQL, 41, upd_ins_cannot_default, -313, "42", "000", "UPDATE OR INSERT value for field @1, part of the implicit or explicit MATCHING clause, cannot be DEFAULT")
 FB_IMPL_MSG(DSQL, 42, dsql_ltt_invalid_reference, -607, "42", "000", "LOCAL TEMPORARY TABLE @1 cannot be referenced in @2")
 FB_IMPL_MSG(DSQL, 43, dsql_using_statement_must_contain_clause, -104, "42", "000", "USING statement must contain at least one clause")
+FB_IMPL_MSG(DSQL, 44, dsql_mixed_named_positional_params, -104, "42", "000", "Named and positional parameters cannot be mixed")
+FB_IMPL_MSG(DSQL, 45, dsql_param_datatype_unknown, -804, "HY", "004", "Cannot determine the data type of parameter @1")
+FB_IMPL_MSG(DSQL, 46, dsql_named_param_output_conflict, -104, "42", "000", "Named parameter @1 cannot be used more than once as CALL output argument or also as input")

@@ -51,6 +51,7 @@ Parser::Parser(thread_db* tdbb, MemoryPool& pool, MemoryPool* aStatementPool, Ds
 	  requireSemicolon(aRequireSemicolon),
 	  transformedString(pool),
 	  strMarks(pool),
+	  namedParams(pool),
 	  stmt_ambiguous(false)
 {
 	charSet = INTL_charset_lookup(tdbb, charSetId);
@@ -222,6 +223,42 @@ ParameterNode* Parser::make_parameter()
 	node->dsqlParameterIndex = lex.param_number++;
 
 	return node;
+}
+
+
+// Make named parameter node.
+ParameterNode* Parser::makeNamedParameter(const MetaName& name)
+{
+	thread_db* tdbb = JRD_get_thread_data();
+
+	ParameterNode* node = FB_NEW_POOL(*tdbb->getDefaultPool()) ParameterNode(*tdbb->getDefaultPool());
+	node->dsqlParameterIndex = getNamedParamIndex(name);
+	node->dsqlName = name;
+
+	return node;
+}
+
+
+// Get the index of a named parameter, assigning a new one in the order of first appearance.
+// Names that turn out to be variables leave gaps, removed later by GEN_port.
+USHORT Parser::getNamedParamIndex(const MetaName& name)
+{
+	if (const auto index = namedParams.get(name))
+		return *index;
+
+	// Same limit of MAKE_parameter.
+	if (namedParams.count() >= MAX_USHORT / 2)
+	{
+		string msg;
+		msg.printf("Maximum number of parameters: %d", MAX_USHORT / 2);
+
+		ERRD_post(Arg::Gds(isc_imp_exc) << Arg::Gds(isc_random) << msg);
+	}
+
+	const USHORT index = static_cast<USHORT>(namedParams.count() + 1);
+	namedParams.put(name, index);
+
+	return index;
 }
 
 

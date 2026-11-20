@@ -521,6 +521,7 @@ inline constexpr unsigned OPT_STATIC_STREAMS = 64;
 // Features set for current version of engine provider
 #define ENGINE_FEATURES {fb_feature_multi_statements, \
 						 fb_feature_multi_transactions, \
+						 fb_feature_named_parameters, \
 						 fb_feature_session_reset, \
 						 fb_feature_read_consistency, \
 						 fb_feature_statement_timeout, \
