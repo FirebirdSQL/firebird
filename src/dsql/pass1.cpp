@@ -2957,15 +2957,32 @@ static void pass1_union_auto_cast(DsqlCompilerScratch* dsqlScratch, ExprNode* in
 					// the necessary nodes.
 					castNode->setDsqlDesc(desc);
 
-					if ((aliasNode = nodeAs<DsqlAliasNode>(select_item)))
+					// Don't modify the select_item in place, as the original node may be
+					// shared by several select items (e.g. a recursive CTE column
+					// referenced more than once) and must stay intact. Create a shallow
+					// copy of the wrapper and attach the cast to it.
+					// NB: dsqlPass() must not be used for copying here. The underlying
+					// value is already resolved, so passing it again would re-resolve
+					// fields (and rdb$db_key) in the current, wrong scope.
+
+					if (auto orgAliasNode = nodeAs<DsqlAliasNode>(select_item))
 					{
+						aliasNode = FB_NEW_POOL(*tdbb->getDefaultPool()) DsqlAliasNode(
+							*tdbb->getDefaultPool(), orgAliasNode->name, NULL);
+						aliasNode->implicitJoin = orgAliasNode->implicitJoin;
 						aliasNode->value = castNode;
 						aliasNode->setDsqlDesc(desc);
+						list->items[position] = aliasNode;
 					}
-					else if ((derivedField = nodeAs<DerivedFieldNode>(select_item)))
+					else if (auto orgDerivedField = nodeAs<DerivedFieldNode>(select_item))
 					{
+						derivedField = FB_NEW_POOL(*tdbb->getDefaultPool()) DerivedFieldNode(
+							*tdbb->getDefaultPool(), orgDerivedField->name,
+							orgDerivedField->scope, NULL);
+						derivedField->context = orgDerivedField->context;
 						derivedField->value = castNode;
 						derivedField->setDsqlDesc(desc);
+						list->items[position] = derivedField;
 					}
 					else
 					{
