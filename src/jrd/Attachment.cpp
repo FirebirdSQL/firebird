@@ -209,6 +209,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_timestamp(TimeZoneUtil::getCurrentSystemTimeStamp()),
 	  att_context_vars(*pool),
 	  ddlTriggersContext(*pool),
+	  att_address_path(*pool),
 	  att_network_protocol(*pool),
 	  att_remote_crypt(*pool),
 	  att_remote_address(*pool),
