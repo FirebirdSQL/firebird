@@ -1336,11 +1336,15 @@ namespace Jrd
 	class Join : public RecordSource
 	{
 	public:
-		Join(CompilerScratch* csb, FB_SIZE_T count, JoinType joinType, BoolExprNode* boolean = nullptr)
-			: RecordSource(csb), m_joinType(joinType), m_boolean(boolean),
-			  m_args(csb->csb_pool, count)
+		Join(CompilerScratch* csb, FB_SIZE_T count, JoinType joinType,
+			 NestConst<BoolExprNode> joinBoolean = nullptr, NestConst<BoolExprNode> outerBoolean = nullptr)
+			: RecordSource(csb),
+			  m_joinType(joinType),
+			  m_args(csb->csb_pool, count),
+			  m_joinBoolean(joinBoolean),
+			  m_outerBoolean(outerBoolean)
 		{
-			fb_assert(!m_boolean || m_joinType == JoinType::OUTER);
+			fb_assert(!m_outerBoolean || m_joinType == JoinType::OUTER);
 		}
 
 		void close(thread_db* tdbb) const override
@@ -1382,7 +1386,8 @@ namespace Jrd
 					return true;
 			}
 
-			return (m_boolean && m_boolean->containsAnyStream(streams));
+			return (m_joinBoolean && m_joinBoolean->containsAnyStream(streams)) ||
+				(m_outerBoolean && m_outerBoolean->containsAnyStream(streams));
 		}
 
 		void invalidateRecords(Request* request) const override
@@ -1443,10 +1448,27 @@ namespace Jrd
 			return "";
 		}
 
+		bool checkJoinBoolean(thread_db* tdbb) const
+		{
+			return m_joinBoolean ?
+				m_joinBoolean->execute(tdbb, tdbb->getRequest()) == Firebird::TriState(true) :
+				true;
+		}
+
+		bool checkOuterBoolean(thread_db* tdbb) const
+		{
+			return m_outerBoolean ?
+				m_outerBoolean->execute(tdbb, tdbb->getRequest()) == Firebird::TriState(true) :
+				true;
+		}
+
 	protected:
 		const JoinType m_joinType;
-		const NestConst<BoolExprNode> m_boolean;
 		Firebird::Array<NestConst<Arg>> m_args;
+
+	private:
+		const NestConst<BoolExprNode> m_joinBoolean;
+		const NestConst<BoolExprNode> m_outerBoolean;
 	};
 
 	class NestedLoopJoin : public Join<RecordSource>
@@ -1454,8 +1476,8 @@ namespace Jrd
 	public:
 		NestedLoopJoin(CompilerScratch* csb, JoinType joinType,
 					   FB_SIZE_T count, RecordSource* const* args);
-		NestedLoopJoin(CompilerScratch* csb, RecordSource* outer, RecordSource* inner,
-					   BoolExprNode* boolean);
+		NestedLoopJoin(CompilerScratch* csb, NestConst<BoolExprNode> outerBoolean,
+					   RecordSource* outer, RecordSource* inner);
 
 		void close(thread_db* tdbb) const override;
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
@@ -1467,6 +1489,14 @@ namespace Jrd
 
 	private:
 		bool fetchRecord(thread_db*, FB_SIZE_T) const;
+	};
+
+	class DummyJoin : public NestedLoopJoin
+	{
+	public:
+		explicit DummyJoin(CompilerScratch* csb)
+			: NestedLoopJoin(csb, JoinType::INNER, 0, nullptr)
+		{}
 	};
 
 	class FullOuterJoin : public Join<RecordSource>
@@ -1512,12 +1542,13 @@ namespace Jrd
 		};
 
 	public:
-		HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
-				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
+		HashJoin(thread_db* tdbb, CompilerScratch* csb,
+				 NestConst<BoolExprNode> joinBoolean, NestConst<BoolExprNode> outerBoolean,
+				 RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 		HashJoin(thread_db* tdbb, CompilerScratch* csb,
-				 BoolExprNode* boolean,
-				 RecordSource* const* args, NestValueArray* const* keys,
+				 JoinType joinType, NestConst<BoolExprNode> joinBoolean,
+				 FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				 double selectivity = 0);
 
 		void close(thread_db* tdbb) const override;
@@ -1573,9 +1604,8 @@ namespace Jrd
 		static const FB_SIZE_T MERGE_BLOCK_SIZE = 65536;
 
 	public:
-		MergeJoin(CompilerScratch* csb, FB_SIZE_T count,
-				  SortedStream* const* args,
-				  const NestValueArray* const* keys);
+		MergeJoin(CompilerScratch* csb, NestConst<BoolExprNode> joinBoolean,
+				  FB_SIZE_T count, SortedStream* const* args, const NestValueArray* const* keys);
 
 		void close(thread_db* tdbb) const override;
 		void getLegacyPlan(thread_db* tdbb, Firebird::string& plan, unsigned level) const override;
@@ -1591,6 +1621,7 @@ namespace Jrd
 		UCHAR* getData(thread_db* tdbb, MergeFile* mfb, SLONG record) const;
 		SLONG getRecordByIndex(thread_db* tdbb, FB_SIZE_T index) const;
 		bool fetchRecord(thread_db* tdbb, FB_SIZE_T index) const;
+		bool formGroup(thread_db* tdbb) const;
 
 		Firebird::Array<const NestValueArray*> m_keys;
 	};

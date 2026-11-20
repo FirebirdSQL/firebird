@@ -844,6 +844,24 @@ IndexVersion* RelationPermanent::lookup_index(thread_db* tdbb, MetaId id, Object
 	return rel_indices.getVersioned(tdbb, id, flags);
 }
 
+void IndexVersion::replaceCodeConditional(thread_db* tdbb, IndexCode* newCode)
+{
+	if (newCode && (newCode != idv_code))
+	{
+		auto* oldCode = idv_code;
+		newCode->addRef();
+		idv_code = newCode;
+		if (oldCode)
+			IndexCode::release(tdbb, oldCode);
+	}
+}
+
+void IndexVersion::destroy(thread_db* tdbb, IndexVersion* idv)
+{
+	if (idv->idv_code)
+		IndexCode::release(tdbb, idv->idv_code);
+ 	delete idv;
+}
 
 Cached::Index* RelationPermanent::lookupIndex(thread_db* tdbb, MetaId id, ObjectBase::Flag flags)
 {
@@ -1056,20 +1074,13 @@ FB_UINT64 IndexPermanent::makeLockId(MetaId relId, MetaId indexId)
 	return (FB_UINT64(relId) << REL_ID_KEY_OFFSET) + indexId;
 }
 
-void IndexPermanent::releaseStatements(thread_db* tdbb)
+void IndexCode::releaseStatements(thread_db* tdbb)
 {
-	if (idp_expression_statement)
-	{
-		idp_expression_statement->release(tdbb);
-		idp_expression_statement = nullptr;
-		idp_expression = nullptr;
-	}
-	if (idp_condition_statement)
-	{
-		idp_condition_statement->release(tdbb);
-		idp_condition_statement = nullptr;
-		idp_condition = nullptr;
-	}
+	if (expression_statement)
+		expression_statement->release(tdbb);
+
+	if (condition_statement)
+		condition_statement->release(tdbb);
 }
 
 void IndexPermanent::reloadAst(thread_db* tdbb, TraNumber tran, bool erase)

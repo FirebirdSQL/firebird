@@ -548,6 +548,7 @@ River* InnerJoin::formRiver()
 			// Prepare record sources and corresponding equivalence keys for hash-joining
 			RecordSource* hashJoinRsbs[] = {priorRsb, rsb};
 
+			BoolExprNode* boolean = nullptr;
 			HalfStaticArray<NestValueArray*, OPT_STATIC_ITEMS> keys;
 
 			keys.add(FB_NEW_POOL(getPool()) NestValueArray(getPool()));
@@ -573,6 +574,7 @@ River* InnerJoin::formRiver()
 				keys[1]->add(node2);
 
 				equiMatches.add(match);
+				BinaryBoolNode::compose(getPool(), boolean, match);
 			}
 
 			// Ensure the smallest stream is the one to be hashed,
@@ -588,7 +590,7 @@ River* InnerJoin::formRiver()
 
 			// Create a hash join
 			rsb = FB_NEW_POOL(getPool())
-				HashJoin(tdbb, csb, JoinType::INNER, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
+				HashJoin(tdbb, csb, JoinType::INNER, boolean, 2, hashJoinRsbs, keys.begin(), stream.selectivity);
 
 			// Clear priorly processed rsb's, as they're already incorporated into a hash join
 			rsbs.clear();
@@ -607,7 +609,7 @@ River* InnerJoin::formRiver()
 	rsb = (rsbs.getCount() == 1) ? rsbs[0] :
 		FB_NEW_POOL(getPool()) NestedLoopJoin(csb, JoinType::INNER, rsbs.getCount(), rsbs.begin());
 
-	// Ensure matching booleans are rechecked early
+	// Mark matching booleans as used as they're checked inside the hash join
 	if (equiMatches.hasData())
 	{
 		auto iter = optimizer->getConjuncts();

@@ -150,7 +150,7 @@ RecordSource* OuterJoin::generate()
 
 RecordSource* OuterJoin::process()
 {
-	BoolExprNode* boolean = nullptr;
+	BoolExprNode* outerBoolean = nullptr;
 
 	auto& outer = joinStreams[0];
 	auto& inner = joinStreams[1];
@@ -164,7 +164,7 @@ RecordSource* OuterJoin::process()
 	if (outer.number != INVALID_STREAM)
 	{
 		outerRsb = optimizer->generateRetrieval(outer.number,
-			optimizer->isFullJoin() ? nullptr : sortPtr, true, false, &boolean);
+			optimizer->isFullJoin() ? nullptr : sortPtr, true, false, &outerBoolean);
 	}
 	else
 	{
@@ -178,7 +178,7 @@ RecordSource* OuterJoin::process()
 		}
 
 		// Collect booleans computable for the outer sub-stream, it must be active now
-		boolean = optimizer->composeBoolean();
+		outerBoolean = optimizer->composeBoolean();
 	}
 
 	fb_assert(outerRsb);
@@ -214,5 +214,5 @@ RecordSource* OuterJoin::process()
 
 	// Allocate and return the join record source
 
-	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerRsb, innerRsb, boolean);
+	return FB_NEW_POOL(getPool()) NestedLoopJoin(csb, outerBoolean, outerRsb, innerRsb);
 };

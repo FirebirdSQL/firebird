@@ -39,6 +39,12 @@ public:
 
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
+	static void compose(MemoryPool& pool, BoolExprNode*& node1, BoolExprNode* node2, UCHAR blrOp = blr_and)
+	{
+		if (node2)
+			node1 = node1 ? FB_NEW_POOL(pool) BinaryBoolNode(pool, blrOp, node1, node2) : node2;
+	}
+
 	void getChildren(NodeRefsHolder& holder, bool dsql) const override
 	{
 		BoolExprNode::getChildren(holder, dsql);

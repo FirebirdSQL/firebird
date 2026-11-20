@@ -553,6 +553,8 @@ void DsqlDmlRequest::doExecute(thread_db* tdbb, jrd_tra** traHandle,
 	firstRowFetched = false;
 	const dsql_msg* message = dsqlStatement->getSendMsg();
 
+	req_transaction->processUpdates(tdbb);
+
 	if (!message)
 	{
 		JRD_start(tdbb, request, req_transaction);

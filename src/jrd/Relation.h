@@ -258,6 +258,8 @@ public:
 
 	static ObjectType objectType() noexcept;
 
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
+
 private:
 	DbTriggersHeader* perm;
 
@@ -728,6 +730,46 @@ enum IndexStatus
 
 // Index block
 
+struct IndexCode
+{
+public:
+	IndexCode()
+	{
+		expression_bid.clear();
+		condition_bid.clear();
+		addRef();				// first reference always comes from IndexPermanent
+	}
+
+	bid					expression_bid;
+	ValueExprNode*		expression = nullptr;			// node tree for index expression
+	Statement*			expression_statement = nullptr;	// statement for index expression evaluation
+	dsc					expression_desc;				// descriptor for expression result
+
+	bid					condition_bid;
+	BoolExprNode*		condition = nullptr;			// node tree for index condition
+	Statement*			condition_statement = nullptr;	// statement for index condition evaluation
+
+	void addRef()
+	{
+		++cnt;
+	}
+
+	static void release(thread_db* tdbb, IndexCode*& code)
+	{
+		if (code && --code->cnt == 0)
+		{
+			code->releaseStatements(tdbb);
+			delete code;
+			code = nullptr;
+		}
+	}
+
+private:
+	void releaseStatements(thread_db* tdbb);
+	std::atomic<int> cnt = 0;
+};
+
+
 class IndexPermanent : public Firebird::PermanentStorage
 {
 public:
@@ -736,8 +778,6 @@ public:
 		  idp_relation(rel),
 		  idp_id(id)
 	{
-		idp_expression_bid.clear();
-		idp_condition_bid.clear();
 	}
 
 	~IndexPermanent()
@@ -745,7 +785,8 @@ public:
 
 	static bool destroy(thread_db* tdbb, IndexPermanent* idp)
 	{
-		idp->releaseStatements(tdbb);
+		if (idp->idp_latest_code)
+			IndexCode::release(tdbb, idp->idp_latest_code);
 		return false;
 	}
 
@@ -765,50 +806,42 @@ public:
 	static FB_UINT64 makeLockId(MetaId relId, MetaId indexId);
 	const QualifiedName& getName();
 
+public:
+	Firebird::Mutex		idp_code_mutex;			// Delays concurrent threads till the end of code refresh
+
 private:
 	RelationPermanent*	idp_relation;
+	IndexCode*			idp_latest_code = nullptr;
 	MetaId				idp_id;
 	TraNumber			idp_tranum = 0;
 	UCHAR				idp_state = 0;		// Makes limited sense for segmented indices
 
 	[[noreturn]] void errIndexGone();
 
-	void releaseStatements(thread_db* tdbb);
-
 public:
-	void lookupIndexCode(thread_db* tdbb, Cached::Relation* relation, index_desc* idx,
-		const Ods::index_root_page::irt_repeat* irt_desc)
-	{
-		if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
-			refreshIndexCode(tdbb, relation, idx, irt_desc);
-
-		idx->idx_condition_node = idp_condition;
-		idx->idx_condition_statement = idp_condition_statement;
-
-		idx->idx_expression_node = idp_expression;
-		idx->idx_expression_statement = idp_expression_statement;
-		memcpy(&idx->idx_expression_desc, &idp_expression_desc, sizeof(struct dsc));
-	}
-
 	void setState(UCHAR state) noexcept
 	{
 		idp_state = state;
 	}
 
-private:
-	void refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
-		index_desc* idx, const Ods::index_root_page::irt_repeat* irt_desc);
+	UCHAR getState() const noexcept
+	{
+		return idp_state;
+	}
 
-	Firebird::Mutex		idp_code_mutex;			// Delays concurrent threads till the end of code refresh
+	void setTraNum(TraNumber num) noexcept
+	{
+		idp_tranum = num;
+	}
 
-	bid					idp_expression_bid;
-	ValueExprNode*		idp_expression = nullptr;			// node tree for index expression
-	Statement*			idp_expression_statement = nullptr;	// statement for index expression evaluation
-	dsc					idp_expression_desc;				// descriptor for expression result
+	TraNumber getTraNum() const noexcept
+	{
+		return idp_tranum;
+	}
 
-	bid					idp_condition_bid;
-	BoolExprNode*		idp_condition = nullptr;			// node tree for index condition
-	Statement*			idp_condition_statement = nullptr;	// statement for index condition evaluation
+	IndexCode* refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		const Ods::index_root_page::irt_repeat* irt_desc);
+	IndexCode* buildIndexCode(thread_db* tdbb, Cached::Relation* relation);
 };
 
 
@@ -824,18 +857,17 @@ public:
 		return FB_NEW_POOL(p) IndexVersion(p, idp);
 	}
 
-	static void destroy(thread_db* tdbb, IndexVersion* idv)
-	{
-		delete idv;
-	}
+	static void destroy(thread_db* tdbb, IndexVersion* idv);
 
-	ObjectType objectType() noexcept
+	static ObjectType objectType() noexcept
 	{
 		return obj_index;
 	}
 
 	ScanResult scan(thread_db* tdbb, ObjectBase::Flag flags);
 	static std::optional<MetaId> getIdByName(thread_db* tdbb, ExName<RelationPermanent*> name);
+
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
 
 	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
 	{
@@ -882,11 +914,17 @@ public:
 
 	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
 		USHORT segmentCount, bool inactive = false);
+	IndexCode* lookupIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		const Ods::index_root_page::irt_repeat* irt_desc);
+	void replaceCodeConditional(thread_db* tdbb, IndexCode* newCode);
+	IndexCode* refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		const Ods::index_root_page::irt_repeat* irt_desc);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 
 private:
 	Cached::Index* perm;
+	IndexCode* idv_code = nullptr;
 	QualifiedName idv_name;
 	SSHORT idv_uniqFlag = 0;
 	SSHORT idv_segmentCount = 0;
@@ -1068,7 +1106,7 @@ public:
 	Cached::Index* lookupIndex(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 	Cached::Index* ensureIndex(thread_db* tdbb, MetaId id);
 
-	void newIndexVersion(thread_db* tdbb, MetaId id, ObjectBase::Flag scanType)
+	void newIndexVersion(thread_db* tdbb, MetaId id)
 	{
 		[[maybe_unused]] auto chk = rel_indices.newVersion(tdbb, id);
 		fb_assert(chk);
@@ -1410,6 +1448,8 @@ public:
 		return isView() ? obj_view : obj_relation;
 	}
 
+	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
+
 	static void destroy(thread_db* tdbb, jrd_rel *rel);
 	static jrd_rel* create(thread_db* tdbb, MemoryPool& p, Cached::Relation* perm);
 
@@ -1512,6 +1552,18 @@ inline bool GCLock::Exclusive::acquire(int wait)
 inline void GCLock::Exclusive::release()
 {
 	return m_relation->rel_gc_lock.enable(m_tdbb, m_lock);
+}
+
+
+/// class IndexVersion
+
+inline IndexCode* IndexVersion::lookupIndexCode(thread_db* tdbb, Cached::Relation* relation,
+		const Ods::index_root_page::irt_repeat* irt_desc)
+{
+	if ((irt_desc->getState() != perm->getState()) || (irt_desc->getTransaction() != perm->getTraNum()))
+		return perm->refreshIndexCode(tdbb, relation, irt_desc);
+	else
+		return idv_code;
 }
 
 
