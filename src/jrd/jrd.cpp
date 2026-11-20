@@ -1072,6 +1072,7 @@ namespace Jrd
 		QualifiedMetaString	dpb_lc_ctype;
 		PathName	dpb_working_directory;
 		string	dpb_set_db_charset;
+		Firebird::UCharBuffer	dpb_address_path;
 		string	dpb_network_protocol;
 		PathName	dpb_remote_crypt;
 		string	dpb_remote_address;
@@ -7387,6 +7388,8 @@ void DatabaseOptions::get(const UCHAR* dpb, FB_SIZE_T dpb_length, bool& invalid_
 			{
 				ClumpletReader address_stack(ClumpletReader::UnTagged,
 											 rdr.getBytes(), rdr.getClumpLength());
+				rdr.getData(dpb_address_path);
+
 				while (!address_stack.isEof())
 				{
 					if (address_stack.getClumpTag() != isc_dpb_address)
@@ -7780,6 +7783,7 @@ static JAttachment* create_attachment(const PathName& alias_name,
 	}
 
 	attachment->att_filename = alias_name;
+	attachment->att_address_path = options.dpb_address_path;
 	attachment->att_network_protocol = options.dpb_network_protocol;
 	attachment->att_remote_crypt = options.dpb_remote_crypt;
 	attachment->att_remote_address = options.dpb_remote_address;

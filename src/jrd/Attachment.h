@@ -569,6 +569,7 @@ public:
 	ISC_TIMESTAMP_TZ	att_timestamp;	    // Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
+	Firebird::UCharBuffer att_address_path;	// Full address stack on incoming connection
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
 	Firebird::PathName att_remote_crypt;	// Name of wire crypt plugin (if any)
 	Firebird::string att_remote_address;	// Protocol-specific address of remote client
