@@ -476,6 +476,10 @@ $(COMMON_LIB):	$(Common_Objects)
 $(COMMON_TEST): $(Common_Test_Objects) $(COMMON_LIB)
 	$(EXE_LINK) $(EXE_LINK_OPTIONS) $^ -o $@ -L$(LIB) -L$(STATIC_LIB) $(LINK_LIBS)
 
+$(ALLOC_BENCH): $(Alloc_Bench_Objects) $(COMMON_LIB) $(LIBFIREBIRD_BASENAME)
+	mkdir -p $(@D)
+	$(EXE_LINK) $(EXE_LINK_OPTIONS) $(Alloc_Bench_Objects) $(COMMON_LIB) -o $@ -L$(LIB) -L$(STATIC_LIB) $(LINK_LIBS) -lfbclient
+
 #___________________________________________________________________________
 # gpre_boot
 #
@@ -918,6 +922,23 @@ run_tests_process: tests_process
 	$(COMMON_TEST) --log_level=$(LOG_LEVEL)
 	$(ENGINE_TEST) --log_level=$(LOG_LEVEL)
 	$(ISQL_TEST) --log_level=$(LOG_LEVEL)
+
+#___________________________________________________________________________
+# benchmarks
+#
+# Build separately, or run with e.g. BENCH_ARGS="--strategy mixed --allocs 100000".
+.PHONY: alloc_bench alloc_bench_process run_alloc_bench run_alloc_bench_process
+
+alloc_bench:
+	$(MAKE) TARGET?=$(DefaultTarget) alloc_bench_process
+
+alloc_bench_process: $(ALLOC_BENCH)
+
+run_alloc_bench:
+	$(MAKE) TARGET?=$(DefaultTarget) run_alloc_bench_process
+
+run_alloc_bench_process: alloc_bench_process
+	$(ALLOC_BENCH) $(BENCH_ARGS)
 
 
 #___________________________________________________________________________
