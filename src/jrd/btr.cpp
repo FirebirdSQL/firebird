@@ -4019,14 +4019,18 @@ void BTR_copy_index(thread_db* tdbb, jrd_rel* relation, MetaId indexId, ULONG pa
 
 	auto indexRpt = &root->irt_rpt[indexId];
 
-	if (checkIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, indexId))
+	if (checkIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, false))
 	{
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &rootWindow);
+		indexRpt = &root->irt_rpt[indexId];
 
 		switch (modifyIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, indexId))
 		{
 		case ModifyIrtRepeatValue::Skip:
 		case ModifyIrtRepeatValue::Modified:
+			// buffer could be released and refetched by modifyIrtRepeat
+			root = (index_root_page*) rootWindow.win_buffer;
+			indexRpt = &root->irt_rpt[indexId];
 			if (indexRpt->getState() == irt_drop)
 			{
 				CCH_RELEASE(tdbb, &rootWindow);
