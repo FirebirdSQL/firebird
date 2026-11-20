@@ -36,3 +36,5 @@ extern/ttmath/release/
 /.cache/clangd
 # Compilation database generated for clangd
 /compile_commands.json
+
+__pycache__
