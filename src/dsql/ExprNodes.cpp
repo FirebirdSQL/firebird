@@ -8441,6 +8441,9 @@ string DerivedFieldNode::internalPrint(NodePrinter& printer) const
 
 ValueExprNode* DerivedFieldNode::dsqlPass(DsqlCompilerScratch* /*dsqlScratch*/)
 {
+	// The value is already resolved by pass1 (derived fields are created while
+	// compiling a derived table / CTE), so it must not be passed again. Doing so
+	// would re-resolve field and dbkey references in a wrong context scope.
 	return this;
 }
 
@@ -9784,6 +9787,11 @@ string RecordKeyNode::internalPrint(NodePrinter& printer) const
 // Resolve a dbkey to an available context.
 ValueExprNode* RecordKeyNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 {
+	// Already resolved during the initial pass. The relation context it refers to
+	// is no longer on the current scope stack, so re-resolving it would fail.
+	if (dsqlRelation)
+		return this;
+
 	thread_db* tdbb = JRD_get_thread_data();
 
 	if (dsqlQualifier.isEmpty())
