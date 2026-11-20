@@ -59,6 +59,7 @@ Ods::pag*	CCH_handoff(Jrd::thread_db*, Jrd::win*, Jrd::PageNumber, int, SCHAR, i
 void		CCH_init(Jrd::thread_db*, ULONG);
 void		CCH_init2(Jrd::thread_db*);
 void		CCH_mark(Jrd::thread_db*, Jrd::win*, bool, bool);
+void		CCH_mark_merge(Jrd::thread_db*, Jrd::win*);
 void		CCH_must_write(Jrd::thread_db*, Jrd::win*);
 void		CCH_precedence(Jrd::thread_db*, Jrd::win*, ULONG);
 void		CCH_precedence(Jrd::thread_db*, Jrd::win*, Jrd::PageNumber);
@@ -113,6 +114,11 @@ inline void CCH_MARK(Jrd::thread_db* tdbb, Jrd::win* window)
 inline void CCH_MARK_SYSTEM(Jrd::thread_db* tdbb, Jrd::win* window)
 {
 	CCH_mark (tdbb, window, 1, 0);
+}
+
+inline void CCH_MARK_MERGE(Jrd::thread_db* tdbb, Jrd::win* window)
+{
+	CCH_mark_merge (tdbb, window);
 }
 
 inline Ods::pag* CCH_HANDOFF(Jrd::thread_db* tdbb, Jrd::win* window, ULONG page, SSHORT lock, SCHAR page_type)
