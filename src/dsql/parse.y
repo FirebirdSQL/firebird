@@ -5244,9 +5244,7 @@ keyword_or_column
 	| LTRIM
 	| PERCENTILE_CONT
 	| PERCENTILE_DISC
-	| RECEIVE
 	| RTRIM
-	| SEND
 	| TRUNCATE
 	| WITHIN
 	;
