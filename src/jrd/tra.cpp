@@ -3534,6 +3534,9 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 	WIN window(DB_PAGE_SPACE, -1);
 
+	const bool sharedSnapshot =
+		!(trans->tra_flags & TRA_read_committed) && trans->tra_snapshot_number;
+
 	Lock* lock = FB_NEW_RPT(*tdbb->getDefaultPool(), 0) Lock(tdbb, sizeof(TraNumber), LCK_tra);
 
 	// Read header page and allocate transaction number.  Since
@@ -3711,8 +3714,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		// accounts for it. Put this value into our own lock, to keep protecting
 		// the snapshot after its owner ends.
 
-		const bool sharedSnapshot =
-			!(trans->tra_flags & TRA_read_committed) && trans->tra_snapshot_number;
+		fb_assert(sharedSnapshot || !trans->tra_snapshot_number);
 
 		if (sharedSnapshot && lock->lck_data != (SINT64) trans->tra_oldest_active)
 			LCK_write_data(tdbb, lock, trans->tra_oldest_active);
