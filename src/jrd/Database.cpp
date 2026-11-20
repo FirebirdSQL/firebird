@@ -901,8 +901,14 @@ namespace Jrd
 		dbb_dyn_req.grow(drq_MAX);
 	}
 
-	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size)
+	bool Database::GlobalObjectHolder::incTempCacheUsage(FB_SIZE_T size, bool force)
 	{
+		if (force)
+		{
+			m_tempCacheUsage.fetch_add(size);
+			return true;
+		}
+
 		if (m_tempCacheUsage + size > m_tempCacheLimit)
 			return false;
 
