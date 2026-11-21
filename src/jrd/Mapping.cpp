@@ -1040,6 +1040,13 @@ public:
 		return c && (*c)->getPrivileges(name, sqlRole, trusted_role, system_privileges);
 	}
 
+	bool getForeignUserOptions(Jrd::Attachment* att, const string& name, const string& server,
+		GenericMap<MetaStringOptionPair>*& options)
+	{
+		AutoPtr<DbCache>* c = databases.get(att->att_database->dbb_filename);
+		return c && (*c)->getForeignUserOptions(name, server, options);
+	}
+
 	void populate(const PathName& db, Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
 		const string& trusted_role)
 	{
@@ -1060,6 +1067,25 @@ public:
 		setupIpc();
 	}
 
+	void populateForeignUserOptions(Jrd::Attachment* att, const string& name, const string& server)
+	{
+		AutoPtr<DbCache>* ptr = databases.get(att->att_database->dbb_filename);
+		DbCache* c = nullptr;
+		if (ptr)
+		{
+			c = ptr->get();
+			fb_assert(c);
+		}
+		else
+		{
+			c = FB_NEW_POOL(getPool()) DbCache(getPool());
+			*(databases.put(att->att_database->dbb_filename)) = c;
+		}
+		c->populateForeignUserOptions(att, name, server);
+
+		setupIpc();
+	}
+
 	void invalidate(const PathName& db)
 	{
 		AutoPtr<DbCache>* c = databases.get(db);
@@ -1074,7 +1100,8 @@ private:
 		DbCache(MemoryPool& p)
 			: logins(p, userSql),
 			  roles(p, roleSql),
-			  pairs(p)
+			  pairs(p),
+			  users(p)
 		{ }
 
 		bool getPrivileges(const string& name, const string* sqlRole, const string& trusted_role,
@@ -1094,6 +1121,23 @@ private:
 			return roles.getPrivileges((granted ? *sqlRole : trusted_role), system_privileges);
 		}
 
+		bool getForeignUserOptions(const string& name, const string& server,
+			GenericMap<MetaStringOptionPair>*& options)
+		{
+			string key;
+			key.append(name);
+			key.append(server);
+
+			UserOptions* userOptions;
+			if (users.get(key, userOptions))
+			{
+				options = userOptions->getOptions();
+				if (options && !options->isEmpty())
+					return true;
+			}
+			return false;
+		}
+
 		void populate(Mapping::DbHandle& iDb, const string& name, const string* sqlRole,
 			const string& trusted_role)
 		{
@@ -1104,11 +1148,17 @@ private:
 			pairs.populate(name, sqlRole, iDb);
 		}
 
+		void populateForeignUserOptions(Jrd::Attachment* att, const string& name, const string& server)
+		{
+			users.populate(name, server, att);
+		}
+
 		void invalidate()
 		{
 			logins.invalidate();
 			roles.invalidate();
 			pairs.invalidate();
+			users.invalidate();
 		}
 
 	private:
@@ -1256,8 +1306,117 @@ private:
 			}
 		};
 
+		class UserOptions
+		{
+		public:
+			UserOptions(MemoryPool& p)
+				:options(p)
+			{ }
+
+			void addOption(MetaString& name, string& value, ExternalValueType type)
+			{
+				ForeignOption* option = options.getOrPut(name);
+				option->m_name = name;
+				option->m_value = value;
+				option->m_type = type;
+			}
+
+			FullPooledMap<MetaString, ForeignOption>* getOptions()
+			{
+				return &options;
+			}
+
+		private:
+			FullPooledMap<MetaString, ForeignOption> options;
+		};
+
+		class UserMappingCache : public GenericMap<LeftPooledPair<string, UserOptions* > >
+		{
+		public:
+			UserMappingCache(MemoryPool& p)
+				: GenericMap(p)
+			{ }
+
+			~UserMappingCache()
+			{
+				deleteOptions();
+			}
+
+			void populate(const MetaString& name, const MetaName& server, Jrd::Attachment* att)
+			{
+				MAP_DEBUG(fprintf(stderr, "populate user mapping options for %s server %s\n",
+					name.c_str(), server.c_str()));
+				if (name.isEmpty() || server.isEmpty())
+					return;
+
+				IAttachment* attachment = att->getInterface();
+				ThrowLocalStatus st;
+				RefPtr<ITransaction> tra(REF_NO_INCR, attachment->startTransaction(&st, 0, nullptr));
+
+				Message par;
+				Field<Varying> user(par, MAX_SQL_IDENTIFIER_SIZE);
+				Field<Varying> foreignServer(par, MAX_SQL_IDENTIFIER_SIZE);
+				user = name.c_str();
+				foreignServer = server.c_str();
+
+				Message cols;
+				Field<Varying> option(cols, MAX_SQL_IDENTIFIER_SIZE);
+				Field<Varying> value(cols, MAX_VARY_COLUMN_SIZE);
+				Field<SSHORT> type(cols);
+
+				const char* sql = "select RDB$FOREIGN_OPTION_NAME, RDB$FOREIGN_OPTION_VALUE, "
+					"RDB$FOREIGN_OPTION_TYPE "
+					"from RDB$FOREIGN_MAPPING_OPTIONS "
+					"where RDB$USER = ? and RDB$FOREIGN_SERVER_NAME = ?";
+
+				RefPtr<IResultSet> curs(REF_NO_INCR, attachment->openCursor(&st, tra, 0, sql, 3,
+					par.getMetadata(), par.getBuffer(), cols.getMetadata(), nullptr, 0));
+
+				void* buffer = cols.getBuffer();
+
+				UserOptions* options = FB_NEW_POOL(getPool()) UserOptions(getPool());
+
+				while (curs->fetchNext(&st, buffer) == IStatus::RESULT_OK)
+				{
+					MetaString optionName = (const char*) option;
+					string optionValue = (const char*) value;
+					optionValue.trim();
+					ExternalValueType optionType = ExternalValueType::TYPE_STRING;
+					if (!type.null)
+						optionType = ExternalValueType(SSHORT(type));
+
+					MAP_DEBUG(fprintf(stderr, "populate user mapping option %s - '%s' with type %d\n",
+						optionName.c_str(), optionValue.c_str(), optionType));
+
+					options->addOption(optionName, optionValue, optionType);
+				}
+
+				string key;
+				key.append(name.c_str());
+				key.append(server.c_str());
+
+				put(key, options);
+			}
+
+			void invalidate()
+			{
+				deleteOptions();
+
+				clear();
+			}
+
+			void deleteOptions()
+			{
+				Accessor accessor(this);
+				for (bool found = accessor.getFirst(); found; found = accessor.getNext())
+					delete accessor.current()->second;
+			}
+		};
+
+
 		NameCache logins, roles;
 		RoleCache pairs;
+		UserMappingCache users;
 	};
 
 	SyncObject sync;
@@ -1652,6 +1811,33 @@ ULONG Mapping::mapUser(string& name, string& trustedRole)
 	}
 
 	return rc;
+}
+
+bool Mapping::getForeignUserMap(Jrd::Attachment* att, const string& name, const string& server,
+	GenericMap<MetaStringOptionPair>*& options)
+{
+	Sync sync(spCache().getSync(), FB_FUNCTION);
+	sync.lock(SYNC_SHARED);
+
+	MAP_DEBUG(fprintf(stderr, "Get user mapping: name=%s server=%s\n",
+		name.c_str(), server.c_str()));
+
+	bool res = spCache().getForeignUserOptions(att, name, server, options);
+
+	if (!res)
+	{
+		sync.unlock();
+		sync.lock(SYNC_EXCLUSIVE);
+
+		res = spCache().getForeignUserOptions(att, name, server, options);
+		if (!res)
+		{
+			spCache().populateForeignUserOptions(att, name, server);
+			res = spCache().getForeignUserOptions(att, name, server, options);
+		}
+	}
+
+	return res;
 }
 
 void Mapping::clearCache(const char* dbName, USHORT index)

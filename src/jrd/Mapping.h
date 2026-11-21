@@ -35,6 +35,7 @@
 #include "../common/classes/Hash.h"
 #include "../common/classes/GenericMap.h"
 #include "../jrd/recsrc/RecordSource.h"
+#include "../jrd/ForeignServer.h"
 #include "../jrd/Monitoring.h"
 #include "../jrd/scl.h"
 
@@ -72,6 +73,9 @@ public:
 	static constexpr ULONG MAP_DOWN = 2;
 	// Now mapper is ready to perform main task and provide mapped login and trusted role.
 	ULONG mapUser(Firebird::string& name, Firebird::string& trustedRole);
+	// Get option map for connecting to an foreign server for user.
+	bool getForeignUserMap(Jrd::Attachment* att, const Firebird::string& name, const Firebird::string& server,
+		Firebird::GenericMap<Jrd::MetaStringOptionPair>*& options);
 
 	// Do not keep mainHandle opened longer than needed
 	void clearMainHandle();

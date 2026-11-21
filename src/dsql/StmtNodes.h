@@ -596,6 +596,13 @@ public:
 
 class EraseNode final : public TypedNode<StmtNode, StmtNode::TYPE_ERASE>
 {
+private:
+	struct Impure
+	{
+		impure_state state;
+		EDS::Statement* statement;
+	};
+
 public:
 	explicit EraseNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_ERASE>(pool),
@@ -729,7 +736,8 @@ public:
 		  excessInputs(NULL),
 		  dsqlLabelNumber(0),
 		  useCallerPrivs(false),
-		  traScope(EDS::traNotSet)	// not defined
+		  traScope(EDS::traNotSet),	// not defined
+		  server(pool)
 	{
 		flags |= FLAG_PROFILE_ON_RETURN;
 	}
@@ -766,6 +774,7 @@ public:
 	USHORT dsqlLabelNumber;
 	bool useCallerPrivs;
 	EDS::TraScope traScope;
+	MetaName server;
 };
 
 
@@ -1294,6 +1303,13 @@ private:
 
 class ModifyNode final : public TypedNode<StmtNode, StmtNode::TYPE_MODIFY>
 {
+private:
+	struct Impure
+	{
+		impure_state state;
+		EDS::Statement* statement;
+	};
+
 public:
 	explicit ModifyNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_MODIFY>(pool),
@@ -1431,6 +1447,13 @@ public:
 
 class StoreNode final : public TypedNode<StmtNode, StmtNode::TYPE_STORE>
 {
+private:
+	struct Impure
+	{
+		impure_state state;
+		EDS::Statement* statement;
+	};
+
 public:
 	explicit StoreNode(MemoryPool& pool)
 		: TypedNode<StmtNode, StmtNode::TYPE_STORE>(pool),
