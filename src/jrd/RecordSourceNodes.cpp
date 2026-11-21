@@ -51,6 +51,8 @@ static void genDeliverUnmapped(CompilerScratch* csb, const BoolExprNodeStack& pa
 	BoolExprNodeStack& deliverStack, MapNode* map, StreamType shellStream);
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
+static void collectAllStreams(const ExprNode* node, SortedStreamList& streams);
+static bool hidesStreams(const ExprNode* node, const StreamList& streams);
 
 namespace
 {
@@ -88,9 +90,14 @@ namespace
 	// Search through the list of ANDed booleans to find comparisons
 	// referring streams of the parent select expression.
 	// Extract those booleans and return them to the caller.
+	// A comparison that refers to a stream of the parent or of the sub-query
+	// itself only from inside a nested record source (a derived table, an
+	// aggregate, a union, etc) stays in the sub-query: the join would not see
+	// that reference and would evaluate the comparison with a stale record.
 
 	bool findDependentBooleans(CompilerScratch* csb,
 							   const StreamList& rseStreams,
+							   const StreamList& subStreams,
 							   BoolExprNode** parentBoolean,
 							   BoolExprNodeStack& booleanStack)
 	{
@@ -99,9 +106,9 @@ namespace
 		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
 		if (binaryNode && binaryNode->blrOp == blr_and)
 		{
-			const bool found1 = findDependentBooleans(csb, rseStreams,
+			const bool found1 = findDependentBooleans(csb, rseStreams, subStreams,
 				binaryNode->arg1.getAddress(), booleanStack);
-			const bool found2 = findDependentBooleans(csb, rseStreams,
+			const bool found2 = findDependentBooleans(csb, rseStreams, subStreams,
 				binaryNode->arg2.getAddress(), booleanStack);
 
 			if (!binaryNode->arg1 && !binaryNode->arg2)
@@ -116,7 +123,8 @@ namespace
 
 		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean))
 		{
-			if (cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv)
+			if ((cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv) &&
+				!hidesStreams(cmpNode, rseStreams) && !hidesStreams(cmpNode, subStreams))
 			{
 				SortedStreamList streams;
 				cmpNode->collectStreams(streams);
@@ -177,8 +185,11 @@ namespace
 			{
 				// Find booleans convertable into semi-joins
 
+				StreamList subStreams;
+				rse->computeRseStreams(subStreams);
+
 				BoolExprNodeStack booleans;
-				if (findDependentBooleans(csb, rseStreams,
+				if (findDependentBooleans(csb, rseStreams, subStreams,
 										  rse->rse_boolean.getAddress(),
 										  booleans))
 				{
@@ -197,9 +208,12 @@ namespace
 
 					// Ensure that no external references are left inside the subquery.
 					// If so, mark the RSE as joined and add it to the stack.
+					// The nested record sources are searched, too: a reference
+					// inside a derived table, an aggregate, a union, a window or
+					// a sort of the sub-query keeps it a sub-query.
 
 					SortedStreamList streams;
-					rse->collectStreams(streams);
+					collectAllStreams(rse, streams);
 
 					bool dependent = false;
 					for (const auto stream : streams)
