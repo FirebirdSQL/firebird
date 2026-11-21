@@ -267,6 +267,7 @@
     <ClInclude Include="..\..\..\src\jrd\cvt2_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\cvt_proto.h" />
     <ClInclude Include="..\..\..\src\jrd\Database.h" />
+    <ClInclude Include="..\..\..\src\jrd\DataPageNumberCache.h" />
     <ClInclude Include="..\..\..\src\jrd\DataTypeUtil.h" />
     <ClInclude Include="..\..\..\src\jrd\DebugInterface.h" />
     <ClInclude Include="..\..\..\src\jrd\dflt.h" />
