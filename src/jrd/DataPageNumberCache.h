@@ -86,7 +86,7 @@ namespace Jrd
 		{
 			Key key{};
 			ULONG pageNumber = 0;		// 0 is not a valid data page number
-			bool used = false;			// clock reference bit, set on any access
+			bool referenced = false;	// clock reference bit, set on any access
 			bool linked = false;		// present in the hash table
 			Item* nextFree = nullptr;	// free list link, used when not linked
 
@@ -142,7 +142,7 @@ namespace Jrd
 		{
 			if (const auto item = m_map.lookup(Key{pageSetId, sequence}))
 			{
-				item->used = true; // give the entry a second chance
+				item->referenced = true; // give the entry a second chance
 				fb_assert(item->pageNumber);
 				return item->pageNumber;
 			}
@@ -163,13 +163,13 @@ namespace Jrd
 			if (const auto item = m_map.lookup(key))
 			{
 				item->pageNumber = pageNumber;
-				item->used = true;
+				item->referenced = true;
 				return;
 			}
 
 			Item* const item = acquire(key);
 			item->pageNumber = pageNumber;
-			item->used = true;
+			item->referenced = true;
 			item->linked = true;
 			const bool added = m_map.add(item);
 			fb_assert(added);
@@ -205,7 +205,7 @@ namespace Jrd
 		void release(Item* item) noexcept
 		{
 			item->unLink();
-			item->used = false;
+			item->referenced = false;
 			item->linked = false;
 			item->pageNumber = 0;
 			item->nextFree = m_free;
@@ -239,8 +239,8 @@ namespace Jrd
 			//   - a linked slot with the reference bit clear is the victim: unlink it
 			//     from the hash table and let the caller refill it in place.
 			//
-			// The sweep cannot loop forever: each used bit it meets is cleared, so
-			// after at most one full revolution only clear bits remain and the next
+			// The sweep cannot loop forever: each reference bit it meets is cleared,
+			// so after at most one full revolution only clear bits remain and the next
 			// examined slot is evicted. Since a hit costs a single bit store, the
 			// replacement policy stays amortized O(1) and no LRU list or timestamp
 			// needs to be maintained on the hit path.
@@ -253,9 +253,9 @@ namespace Jrd
 				if (!item.linked)
 					continue;
 
-				if (item.used)
+				if (item.referenced)
 				{
-					item.used = false;
+					item.referenced = false;
 					continue;
 				}
 
