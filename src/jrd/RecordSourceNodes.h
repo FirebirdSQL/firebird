@@ -467,6 +467,8 @@ public:
 		return checkStream == stream;
 	}
 
+	void collectNestedStreams(SortedStreamList& streamList) const override;
+
 	void computeDbKeyStreams(StreamList& /*streamList*/) const override
 	{
 	}
@@ -554,6 +556,8 @@ public:
 	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb);
 	virtual bool containsStream(StreamType checkStream) const;
 
+	void collectNestedStreams(SortedStreamList& streamList) const override;
+
 	virtual void computeDbKeyStreams(StreamList& /*streamList*/) const
 	{
 	}
@@ -621,6 +625,7 @@ public:
 	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb);
 	virtual bool containsStream(StreamType checkStream) const;
 	virtual void computeDbKeyStreams(StreamList& streamList) const;
+	void collectNestedStreams(SortedStreamList& streamList) const override;
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 	virtual void findDependentFromStreams(const CompilerScratch* csb,
@@ -692,6 +697,8 @@ public:
 	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb);
 	virtual bool containsStream(StreamType checkStream) const;
 	virtual void collectStreams(SortedStreamList& streamList) const;
+
+	void collectNestedStreams(SortedStreamList& streamList) const override;
 
 	virtual void computeDbKeyStreams(StreamList& /*streamList*/) const
 	{
@@ -877,6 +884,7 @@ public:
 	virtual void pass2Rse(thread_db* tdbb, CompilerScratch* csb);
 	virtual bool containsStream(StreamType checkStream) const;
 	virtual void computeDbKeyStreams(StreamList& streamList) const;
+	void collectNestedStreams(SortedStreamList& streamList) const override;
 	virtual void computeRseStreams(StreamList& streamList) const;
 	virtual bool computable(CompilerScratch* csb, StreamType stream,
 		bool allowOnlyCurrentStream, ValueExprNode* value);
