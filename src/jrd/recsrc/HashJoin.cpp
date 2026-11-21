@@ -249,12 +249,11 @@ private:
 };
 
 
-HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb,
 				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
 	: RecordSource(csb),
-	  m_joinType(joinType),
-	  m_boolean(nullptr),
+	  m_joinType(INNER_JOIN),
 	  m_args(csb->csb_pool, count - 1)
 {
 	fb_assert(count >= 2);
@@ -262,8 +261,20 @@ HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType,
 	init(tdbb, csb, count, args, keys, selectivity);
 }
 
-HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb,
-				   BoolExprNode* boolean,
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, JoinType joinType, BoolExprNode* boolean,
+				   FB_SIZE_T count, RecordSource* const* args, NestValueArray* const* keys,
+				   double selectivity)
+	: RecordSource(csb),
+	  m_joinType(joinType),
+	  m_boolean(boolean),
+	  m_args(csb->csb_pool, count - 1)
+{
+	fb_assert(count >= 2);
+
+	init(tdbb, csb, count, args, keys, selectivity);
+}
+
+HashJoin::HashJoin(thread_db* tdbb, CompilerScratch* csb, BoolExprNode* boolean,
 				   RecordSource* const* args, NestValueArray* const* keys,
 				   double selectivity)
 	: RecordSource(csb),
@@ -424,7 +435,7 @@ bool HashJoin::internalGetRecord(thread_db* tdbb) const
 			if (!m_leader.source->getRecord(tdbb))
 				return false;
 
-			if (m_boolean && !m_boolean->execute(tdbb, request))
+			if (m_joinType == OUTER_JOIN && m_boolean && !m_boolean->execute(tdbb, request))
 			{
 				// The boolean pertaining to the left sub-stream is false
 				// so just join sub-stream to a null valued right sub-stream
@@ -741,35 +752,47 @@ ULONG HashJoin::computeHash(thread_db* tdbb,
 
 bool HashJoin::fetchRecord(thread_db* tdbb, Impure* impure, FB_SIZE_T stream) const
 {
+	const bool isSpecialJoin = (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN);
+
+	Request* const request = tdbb->getRequest();
 	HashTable* const hashTable = impure->irsb_hash_table;
 
 	const BufferedStream* const arg = m_args[stream].buffer;
 
 	ULONG position;
-	if (hashTable->iterate(stream, impure->irsb_leader_hash, position))
+	while (hashTable->iterate(stream, impure->irsb_leader_hash, position))
 	{
 		arg->locate(tdbb, position);
 
 		if (arg->getRecord(tdbb))
+		{
+			if (isSpecialJoin && m_boolean && !m_boolean->execute(tdbb, request))
+				continue;
+
 			return true;
+		}
 	}
 
-	if (m_joinType == SEMI_JOIN || m_joinType == ANTI_JOIN)
+	if (isSpecialJoin)
 		return false;
 
-	while (true)
+	while (stream != 0 && fetchRecord(tdbb, impure, stream - 1))
 	{
-		if (stream == 0 || !fetchRecord(tdbb, impure, stream - 1))
-			return false;
-
 		hashTable->reset(stream, impure->irsb_leader_hash);
 
-		if (hashTable->iterate(stream, impure->irsb_leader_hash, position))
+		while (hashTable->iterate(stream, impure->irsb_leader_hash, position))
 		{
 			arg->locate(tdbb, position);
 
 			if (arg->getRecord(tdbb))
+			{
+				if (isSpecialJoin && m_boolean && !m_boolean->execute(tdbb, request))
+					continue;
+
 				return true;
+			}
 		}
 	}
+
+	return false;
 }

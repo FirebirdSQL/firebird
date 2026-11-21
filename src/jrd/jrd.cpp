@@ -385,8 +385,10 @@ static void threadDetach()
 	ThreadSync* thd = ThreadSync::findThread();
 	delete thd;
 
+#ifndef CDS_UNAVAILABLE
 	if (cds::threading::Manager::isThreadAttached())
 		cds::threading::Manager::detachThread();
+#endif
 }
 
 static void shutdownBeforeUnload()
@@ -1820,9 +1822,9 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
+				PAG_header_init(tdbb);
 				INI_init(tdbb);
 				SHUT_init(tdbb);
-				PAG_header_init(tdbb);
 				PAG_init(tdbb);
 
 				if (options.dpb_set_page_buffers)
@@ -1881,7 +1883,6 @@ JAttachment* JProvider::internalAttach(CheckStatusWrapper* user_status, const ch
 				jAtt->getStable()->manualAsyncUnlock(attachment->att_flags);
 
 				INI_init(tdbb);
-				PAG_header(tdbb, true);
 				dbb->dbb_crypto_manager->attach(tdbb, attachment);
 			}
 
@@ -2720,6 +2721,7 @@ JRequest* JAttachment::compileRequest(CheckStatusWrapper* user_status,
 		try
 		{
 			stmt = CMP_compile(tdbb, blr, blr_length, false, 0, nullptr);
+			stmt->blr.assign(blr, blr_length);
 
 			const auto attachment = tdbb->getAttachment();
 			const auto rootRequest = stmt->getRequest(tdbb, 0);

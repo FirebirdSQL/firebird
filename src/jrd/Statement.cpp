@@ -37,6 +37,7 @@
 #include "../jrd/scl_proto.h"
 #include "../jrd/Collation.h"
 #include "../jrd/recsrc/Cursor.h"
+#include "../jrd/optimizer/Optimizer.h"
 
 using namespace Firebird;
 using namespace Jrd;
@@ -351,7 +352,7 @@ Statement* Statement::makeBoolExpression(thread_db* tdbb, BoolExprNode*& node,
 	return makeStatement(tdbb, csb, internalFlag,
 		[&]
 		{
-			node = static_cast<BoolExprNode*>(csb->csb_node);
+			node = Optimizer::transformBoolean(tdbb, csb);
 		});
 }
 
@@ -462,6 +463,9 @@ Request* Statement::getRequest(thread_db* tdbb, USHORT level)
 		return requests[level];
 
 	// Create the request.
+	if (flags & FLAG_STOP)
+		stopped();
+
 	AutoMemoryPool reqPool(MemoryPool::createPool(pool));
 	const auto request = FB_NEW_POOL(*reqPool) Request(reqPool, attachment, this);
 
@@ -928,6 +932,11 @@ template <typename T> static void makeSubRoutines(thread_db* tdbb, Statement* st
 
 		statement->subStatements.add(subStatement);
 	}
+}
+
+void Statement::stopped()
+{
+	fatal_exception::raiseFmt("Can not access relation from statement or request, release it");
 }
 
 

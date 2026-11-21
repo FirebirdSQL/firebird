@@ -4071,6 +4071,15 @@ static void scan_relation(thread_db* tdbb, jrd_rel* relation)
 	jrd_tra* depTrans = tdbb->getTransaction() ?
 		tdbb->getTransaction() : attachment->getSysTransaction();
 
+	if (relation->rel_bad_tran == depTrans->tra_number)
+	{
+		string name(relation->rel_name);
+		if (name.isEmpty())
+			name.printf("id %d", relation->rel_id);
+		fatal_exception::raiseFmt("Can not access relation %s from transaction %" UQUADFORMAT ", rollback it",
+			name.c_str(), relation->rel_bad_tran);
+	}
+
 	// If anything errors, catch it to reset the scan flag.  This will
 	// make sure that the error will be caught if the operation is tried again.
 

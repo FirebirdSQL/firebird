@@ -237,7 +237,8 @@ FieldFinder::FieldFinder(MemoryPool& pool, USHORT aCheckScopeLevel, FieldMatchTy
 	: PermanentStorage(pool),
 	  checkScopeLevel(aCheckScopeLevel),
 	  matchType(aMatchType),
-	  field(false)
+	  field(false),
+	  ignoreSubSelects(false)
 {
 }
 

@@ -29,7 +29,21 @@ for %%v in ( alice auth burp dsql gpre isql jrd misc msgs examples yvalve utilit
 
 @mkdir %FB_BIN_DIR%\tzdata 2>nul
 
-call :interfaces
+call :system_libs_config
+
+if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ICU (
+  echo Windows/ARM64 build requires WITH_SYSTEM_ICU: no bundled ICU binaries are available for arm64.
+  set ERRLEV=1
+  goto :END
+)
+
+if "%FB_TARGET_PLATFORM%"=="arm64" if not defined FBBUILD_WITH_SYSTEM_ZLIB (
+  echo Windows/ARM64 build requires WITH_SYSTEM_ZLIB: no bundled zlib binaries are available for arm64.
+  set ERRLEV=1
+  goto :END
+)
+
+@if not defined FBBUILD_WITHOUT_CLOOP_GENERATION call :interfaces
 if "!ERRLEV!"=="1" goto :END
 
 call :LibTom
@@ -41,8 +55,10 @@ if "!ERRLEV!"=="1" goto :END
 if "%FB_TARGET_PLATFORM%"=="x64" call :ttmath
 if "!ERRLEV!"=="1" goto :END
 
-call :zlib
-if "!ERRLEV!"=="1" goto :END
+@if not defined FBBUILD_WITH_SYSTEM_ZLIB (
+	call :zlib
+	if "!ERRLEV!"=="1" goto :END
+)
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	call :re2
@@ -101,10 +117,14 @@ for %%v in (firebird plugins) do (
 )
 
 :: Copy ICU and zlib to the output directory
-@copy %FB_ROOT_PATH%\extern\icu\icudt???.dat %FB_BIN_DIR% >nul 2>&1
-@copy %FB_ICU_SOURCE_BIN%\*.dll %FB_BIN_DIR% >nul 2>&1
+@if not defined FBBUILD_WITH_SYSTEM_ICU (
+	@copy %FB_ROOT_PATH%\extern\icu\icudt???.dat %FB_BIN_DIR% >nul 2>&1
+	@copy %FB_ICU_SOURCE_BIN%\*.dll %FB_BIN_DIR% >nul 2>&1
+)
 @copy %FB_ROOT_PATH%\extern\icu\tzdata-extract\* %FB_BIN_DIR%\tzdata >nul 2>&1
-@copy %FB_ROOT_PATH%\extern\zlib\%FB_TARGET_PLATFORM%\*.dll %FB_BIN_DIR% >nul 2>&1
+@if not defined FBBUILD_WITH_SYSTEM_ZLIB (
+	@copy %FB_ROOT_PATH%\extern\zlib\%FB_TARGET_PLATFORM%\*.dll %FB_BIN_DIR% >nul 2>&1
+)
 
 @if "%FB_CLIENT_ONLY%"=="" (
 	::=======
@@ -130,6 +150,75 @@ for %%v in (firebird plugins) do (
 
 
 ::===================
+:: Record the system libraries choice in a props file used by all later builds (including the IDE)
+:system_libs_config
+@mkdir %FB_TEMP_DIR% 2>nul
+@set SYSLIBS_PROPS=%FB_TEMP_DIR%\FirebirdSystemLibs.props
+@del "%SYSLIBS_PROPS%" 2>nul
+@set SYSLIBS_ANY=
+@if defined FBBUILD_WITH_SYSTEM_BOOST set SYSLIBS_ANY=1
+@if defined FBBUILD_WITH_SYSTEM_TOMMATH set SYSLIBS_ANY=1
+@if defined FBBUILD_WITH_SYSTEM_TOMCRYPT set SYSLIBS_ANY=1
+@if defined FBBUILD_WITHOUT_TOMCRYPT set SYSLIBS_ANY=1
+@if defined FBBUILD_WITH_SYSTEM_ZLIB set SYSLIBS_ANY=1
+@if defined FBBUILD_WITH_SYSTEM_ICU set SYSLIBS_ANY=1
+@if not defined SYSLIBS_ANY goto :EOF
+:: Optional extra include directory for system ICU/zlib headers (e.g. vcpkg), since MSBuild ignores %INCLUDE%
+@set SYSLIBS_INCDIR=
+@if defined FBBUILD_SYSTEM_INCLUDE_DIR set SYSLIBS_INCDIR=%FBBUILD_SYSTEM_INCLUDE_DIR%;
+@echo ^<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"^>> "%SYSLIBS_PROPS%"
+@echo   ^<PropertyGroup^>>> "%SYSLIBS_PROPS%"
+@if defined FBBUILD_WITH_SYSTEM_BOOST (
+	@echo Using system boost headers
+	@echo     ^<FbBoostIncludeDir^>^</FbBoostIncludeDir^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITH_SYSTEM_TOMMATH (
+	@echo Using system libtommath
+	@echo     ^<FbTomMathIncludeDir^>^</FbTomMathIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathLib^>^</FbTomMathLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomMathSysLib^>tommath.lib^</FbTomMathSysLib^>>> "%SYSLIBS_PROPS%"
+	call :tommath_probe
+)
+@if defined FBBUILD_WITH_SYSTEM_TOMCRYPT (
+	@echo Using system libtomcrypt
+	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptSysLib^>tomcrypt.lib^</FbTomCryptSysLib^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITHOUT_TOMCRYPT (
+	@echo Building without libtomcrypt
+	@echo     ^<FbWithoutTomCrypt^>true^</FbWithoutTomCrypt^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptIncludeDir^>^</FbTomCryptIncludeDir^>>> "%SYSLIBS_PROPS%"
+	@echo     ^<FbTomCryptLib^>^</FbTomCryptLib^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITH_SYSTEM_ZLIB (
+	@echo Using system zlib
+	@echo     ^<FbZlibIncludeDir^>%SYSLIBS_INCDIR%^</FbZlibIncludeDir^>>> "%SYSLIBS_PROPS%"
+)
+@if defined FBBUILD_WITH_SYSTEM_ICU (
+	@echo Using system ICU
+	@echo     ^<FbIcuIncludeDir^>%SYSLIBS_INCDIR%^</FbIcuIncludeDir^>>> "%SYSLIBS_PROPS%"
+)
+@echo   ^</PropertyGroup^>>> "%SYSLIBS_PROPS%"
+@echo ^</Project^>>> "%SYSLIBS_PROPS%"
+@goto :EOF
+
+:: Check whether the system libtommath has the 1.2+ API (mp_to_ubin and others)
+:tommath_probe
+@set TOMMATH_PROBE=%FB_TEMP_DIR%\tommath_probe.cpp
+@echo #include ^<tommath.h^>> "%TOMMATH_PROBE%"
+@echo int main() { mp_int a; size_t n; return (int) mp_to_ubin(^&a, 0, 0, ^&n); }>> "%TOMMATH_PROBE%"
+@cl /nologo /Zs /TP "%TOMMATH_PROBE%" >nul 2>&1
+@if errorlevel 1 (
+	@echo     libtommath 1.2+ API not found
+) else (
+	@echo     libtommath 1.2+ API found
+	@echo     ^<FbTomMathDefines^>HAVE_TOMMATH_1_2_API;^</FbTomMathDefines^>>> "%SYSLIBS_PROPS%"
+)
+@del "%TOMMATH_PROBE%" 2>nul
+@goto :EOF
+
+::===================
 :: BUILD btyacc
 :btyacc
 @echo.
@@ -142,12 +231,16 @@ goto :EOF
 :: BUILD LibTom
 :LibTom
 @echo.
-@echo Building LibTomMath (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
-if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
-@echo Building LibTomCrypt (%FB_OBJ_DIR%)...
-@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
-if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
+@if not defined FBBUILD_WITH_SYSTEM_TOMMATH (
+	@echo Building LibTomMath ^(%FB_OBJ_DIR%^)...
+	@call compile.bat extern\libtommath\libtommath_MSVC%MSVC_VERSION% libtommath_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtommath
+	if errorlevel 1 call :boot2 libtommath_%FB_OBJ_DIR%
+)
+@if not defined FBBUILD_WITH_SYSTEM_TOMCRYPT if not defined FBBUILD_WITHOUT_TOMCRYPT (
+	@echo Building LibTomCrypt ^(%FB_OBJ_DIR%^)...
+	@call compile.bat extern\libtomcrypt\libtomcrypt_MSVC%MSVC_VERSION% libtomcrypt_%FB_CONFIG%_%FB_TARGET_PLATFORM%.log libtomcrypt
+	if errorlevel 1 call :boot2 libtomcrypt_%FB_OBJ_DIR%
+)
 goto :EOF
 
 ::===================
@@ -176,10 +269,13 @@ goto :EOF
 @echo.
 @echo Building ttmath (%FB_OBJ_DIR%)...
 @mkdir %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG% 2>nul
-if /I "%FB_CONFIG%"=="debug" (
-  @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
-) else (
-  @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+
+if not "%FB_TARGET_PLATFORM%"=="arm64" (
+  if /I "%FB_CONFIG%"=="debug" (
+    @ml64.exe /c /Zi /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  ) else (
+    @ml64.exe /c /Fo %FB_ROOT_PATH%\extern\ttmath\%FB_CONFIG%\ttmathuint_x86_64_msvc.obj %FB_ROOT_PATH%\extern\ttmath\ttmathuint_x86_64_msvc.asm
+  )
 )
 if errorlevel 1 call :boot2 ttmath_%FB_OBJ_DIR%
 goto :EOF
@@ -200,6 +296,7 @@ goto :EOF
 ::===================
 :: Build CLOOP and generate interface headers
 :interfaces
+@if defined FBBUILD_WITHOUT_CLOOP_GENERATION goto :EOF
 @echo.
 @echo Building CLOOP and generating interfaces...
 @nmake /s /x interfaces_%FB_TARGET_PLATFORM%.log /f gen_helper.nmake updateCloopInterfaces

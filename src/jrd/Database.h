@@ -130,6 +130,20 @@ public:
 
 	void operator delete(void* mem) { MemoryPool::globalFree(mem); }
 
+	// strip unused nulls in the end
+	void trimNulls()
+	{
+		auto* e = v.end();
+		for (; e != v.begin(); --e)
+		{
+			if (e[-1])
+				break;
+		}
+
+		if (e != v.end())
+			v.resize(e - v.begin());
+	}
+
 protected:
 	vec_base(MemoryPool& p, int len)
 		: v(p, len)
@@ -482,6 +496,7 @@ public:
 	USHORT dbb_dp_per_pp;				// data pages per pointer page
 	USHORT dbb_max_records;				// max record per data page
 	USHORT dbb_max_idx;					// max number of indexes on a root page
+	ULONG dbb_rdb_pages;				// cached number of first PP of RDB$PAGES relation, see hdr_PAGES
 
 #ifdef SUPERSERVER_V2
 	USHORT dbb_prefetch_sequence;		// sequence to pace frequency of prefetch requests

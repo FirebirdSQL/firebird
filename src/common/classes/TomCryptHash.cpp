@@ -23,6 +23,9 @@
  */
 
 #include "firebird.h"
+
+#if defined(HAVE_TOMCRYPT) && !defined(WITHOUT_TOMCRYPT)
+
 #include "../common/classes/Hash.h"
 #include "../common/dsc.h"
 #include "../intl/charsets.h"
@@ -163,3 +166,4 @@ void Crc32HashContext::finish(dsc& result)
 	result.makeLong(0, &hash);
 }
 
+#endif // HAVE_TOMCRYPT && !WITHOUT_TOMCRYPT

@@ -32,7 +32,8 @@ fb_install_prefix=@prefix@
 
 # Making an assumption that this program is being run in the gen directory
 BuildRootDir=..
-BuiltFBDir=Release/firebird  # Where the just build fb exists.
+BuiltFBDir=${TARGET:-Release}/firebird  # Where the just build fb exists.
+ScriptsDir=Release/firebird/bin  # configure generates the install scripts only here, whatever TARGET is
 TargetDir=buildroot    # Where we want to build the install image
 SecurityDatabase=security5.fdb
 TomMathBuild="@TOMMATH_BUILD@"
@@ -68,10 +69,10 @@ addLibs() {
 	for i in posixLibrary.sh linuxLibrary.sh
 	do
 		echo "# $i" >>$libTarget
-		cat $libSdir/$i >>$libTarget
+		cat $ScriptsDir/$i >>$libTarget
 		echo "" >>$libTarget	# avoid missing linefeed
 	done
-	cat $libSdir/$libScript >>$libTarget
+	cat $ScriptsDir/$libScript >>$libTarget
 }
 
 
@@ -204,8 +205,8 @@ copyFiles() {
 		copyIfExists $BuiltFBDir/bin/fb_lock_print ${TargetDir}@FB_SBINDIR@
 
 		addLibs $BuiltFBDir/bin changeServerMode.sh ${TargetDir}@FB_SBINDIR@
-		cp $BuiltFBDir/bin/registerDatabase.sh ${TargetDir}@FB_SBINDIR@
-		cp $BuiltFBDir/bin/fb_config ${TargetDir}@FB_SBINDIR@
+		cp $ScriptsDir/registerDatabase.sh ${TargetDir}@FB_SBINDIR@
+		cp $ScriptsDir/fb_config ${TargetDir}@FB_SBINDIR@
 		addLibs $BuiltFBDir/bin FirebirdUninstall.sh ${TargetDir}@FB_SBINDIR@
 
 		chmod 0755 ${TargetDir}@FB_SBINDIR@/*

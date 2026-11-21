@@ -2509,7 +2509,8 @@ private:
 			flow.newBlob(*blobSize, *bpbSize);
 			localStrm.curBpb.clear();
 
-			if (!flow.bpbSize)
+			// A zero BLOB ID continues the preceding BLOB; keep its decoded kind.
+			if (!flow.bpbSize && (batchBlobId->gds_quad_high || batchBlobId->gds_quad_low))
 				localStrm.segmented = statement->rsr_batch_flags & (1 << Jrd::DsqlBatch::FLAG_DEFAULT_SEGMENTED);
 
 			continue;

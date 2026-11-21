@@ -63,6 +63,7 @@ void		CCH_must_write(Jrd::thread_db*, Jrd::win*);
 void		CCH_precedence(Jrd::thread_db*, Jrd::win*, ULONG);
 void		CCH_precedence(Jrd::thread_db*, Jrd::win*, Jrd::PageNumber);
 void		CCH_tra_precedence(Jrd::thread_db*, Jrd::win*, TraNumber traNum);
+bool		CCH_try_write(Jrd::thread_db*, Jrd::win*);
 #ifdef SUPERSERVER_V2
 void		CCH_prefetch(Jrd::thread_db*, SLONG*, SSHORT);
 bool		CCH_prefetch_pages(Jrd::thread_db*);

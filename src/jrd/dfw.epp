@@ -504,7 +504,7 @@ static bool formatsAreEqual(const Format*, const Format*);
 static bool	find_depend_in_dfw(thread_db*, TEXT*, USHORT, USHORT, jrd_tra*);
 static void get_array_desc(thread_db*, const TEXT*, Ods::InternalArrayDesc*);
 static void get_trigger_dependencies(DeferredWork*, bool, jrd_tra*);
-static Format*	make_format(thread_db*, jrd_rel*, USHORT *, TemporaryField*);
+static Format* make_format(thread_db*, jrd_rel*, USHORT *, TemporaryField*, DeferredWork* = nullptr, jrd_tra* = nullptr);
 static void put_summary_blob(thread_db* tdbb, blb*, enum rsr_t, bid*, jrd_tra*);
 static void put_summary_record(thread_db* tdbb, blb*, enum rsr_t, const UCHAR*, ULONG);
 static void	setup_array(thread_db*, blb*, const TEXT*, USHORT, TemporaryField*);
@@ -5655,7 +5655,8 @@ static void get_trigger_dependencies(DeferredWork* work, bool compile, jrd_tra* 
 }
 
 
-static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, TemporaryField* stack)
+static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, TemporaryField* stack,
+	DeferredWork* work, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -5851,6 +5852,14 @@ static Format* make_format(thread_db* tdbb, jrd_rel* relation, USHORT* version, 
 	}
 	END_STORE
 
+	// Prepare for cleanup (shit happens sometimes)
+	if (transaction && work)
+	{
+		auto arg = DFW_post_work_arg(transaction, work, nullptr, format->fmt_version);
+		if (arg)
+			arg->dfw_id = format->fmt_version;
+	}
+
 	return format;
 }
 
@@ -5887,9 +5896,74 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 	Jrd::Attachment* attachment = tdbb->getAttachment();
 	Database* dbb = tdbb->getDatabase();
 	bool null_view;
+	AutoRequest handle;
 
 	switch (phase)
 	{
+	case 0:
+		{
+			const DeferredWork* arg = work->findArg(work->dfw_type);
+			if (!arg)
+				break;
+
+			// Remove just created format
+			handle.reset();
+			int rel_id = -1;
+
+			FOR(REQUEST_HANDLE handle)
+				REL IN RDB$RELATIONS
+					CROSS F IN RDB$FORMATS OVER RDB$RELATION_ID
+				WITH REL.RDB$RELATION_NAME EQ work->dfw_name.c_str()
+				 AND F.RDB$FORMAT EQ arg->dfw_id
+			{
+				ERASE F;
+			}
+			END_FOR
+
+			relation = MET_lookup_relation(tdbb, work->dfw_name);
+			if (relation)
+			{
+				vec<Format*>* vector = relation->rel_formats;
+				if (vector && (arg->dfw_id < vector->count()))
+				{
+					Format* format = (*vector)[arg->dfw_id];
+					if (format)
+					{
+						(*vector)[arg->dfw_id] = NULL;
+						vector->trimNulls();
+						delete format;
+					}
+				}
+
+				relation->rel_current_format = NULL;
+				relation->rel_flags &= ~REL_scanned;
+				relation->rel_bad_tran = transaction->tra_number;
+
+				// Terminate statements that deal with relation
+				for (auto* stmt : attachment->att_statements)
+				{
+					bool found = false;
+					for (auto& resource : stmt->resources)
+					{
+						if (resource.rsc_type == Resource::rsc_relation &&
+							resource.rsc_rel == relation)
+						{
+							found = true;
+							break;
+						}
+					}
+
+					if (found)
+					{
+						stmt->flags |= Statement::FLAG_STOP;
+						for (auto* req : stmt->requests)
+							req->req_flags |= req_stop;
+					}
+				}
+			}
+		}
+		break;
+
 	case 1:
 	case 2:
 		return true;
@@ -6245,7 +6319,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 				blob->BLB_close(tdbb);
 				USHORT version = REL.RDB$FORMAT.NULL ? 0 : REL.RDB$FORMAT;
 				version++;
-				relation->rel_current_format = make_format(tdbb, relation, &version, stack);
+				relation->rel_current_format = make_format(tdbb, relation, &version, stack, work, transaction);
 				REL.RDB$FORMAT.NULL = FALSE;
 				REL.RDB$FORMAT = version;
 
@@ -6255,7 +6329,7 @@ static bool make_version(thread_db* tdbb, SSHORT phase, DeferredWork* work, jrd_
 
 					REL.RDB$DBKEY_LENGTH = 0;
 
-					AutoRequest handle;
+					handle.reset();
 					FOR(REQUEST_HANDLE handle)
 						Z IN RDB$VIEW_RELATIONS
 						CROSS R IN RDB$RELATIONS OVER RDB$RELATION_NAME

@@ -1199,8 +1199,13 @@ void SCL_clear_classes(thread_db* tdbb, const TEXT* string)
 
 	while (list->current()->sclClassUser.first == string)
 	{
-		delete list->current();
-		if (!list->fastRemove())	// removing moves current item to the next one
+		// The tree key is generated from the SecurityClass object itself.
+		// Remove it from the tree first, otherwise fastRemove() (and the
+		// iterator advance) read the key from an already freed object.
+		const auto s_class = list->current();
+		const bool hasNext = list->fastRemove();	// moves current to the next item
+		delete s_class;
+		if (!hasNext)
 			break;
 	}
 }

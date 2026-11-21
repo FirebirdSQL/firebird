@@ -1094,6 +1094,17 @@ void INI_init(thread_db* tdbb)
 		relation->rel_current_fmt = currentFormat;
 		relation->rel_current_format = (*relation->rel_formats)[currentFormat];
 	}
+
+	if (dbb->dbb_rdb_pages)
+	{
+		jrd_rel* relation = MET_relation(tdbb, 0);
+		RelationPages* relPages = relation->getBasePages();
+		fb_assert(!relPages->rel_pages);
+
+		vcl* vector = vcl::newVector(*relation->rel_pool, 1);
+		relPages->rel_pages = vector;
+		(*vector)[0] = dbb->dbb_rdb_pages;
+	}
 }
 
 

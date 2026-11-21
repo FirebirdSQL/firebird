@@ -661,6 +661,16 @@ AC_ARG_WITH(tomcrypt,
    esac])
 AC_SUBST(WITH_TOMCRYPT)
 
+CLOOP_GENERATION=Y
+AC_ARG_WITH(cloop-generation,
+  [  --without-cloop-generation do not build cloop or update generated interface files (default=no)],
+  [case "$withval" in
+     yes) CLOOP_GENERATION=Y;;
+     no)  CLOOP_GENERATION=N;;
+     *)   AC_MSG_ERROR(bad value '${withval}' for --with-cloop-generation);;
+   esac])
+AC_SUBST(CLOOP_GENERATION)
+
 TOMCRYPT_BUILD=N
 AC_ARG_WITH(builtin-tomcrypt,
   [  --with-builtin-tomcrypt build libtomcrypt library from firebird tree],
@@ -896,6 +906,7 @@ AC_CHECK_TOOL([OBJCOPY], [objcopy])
 AC_CHECK_TOOL([OBJDUMP], [objdump])
 AC_CHECK_TOOL([RANLIB], [ranlib])
 AC_CHECK_TOOL([READELF], [readelf])
+AC_CHECK_TOOL([NM], [nm])
 LT_INIT([dlopen win32-dll])
 
 dnl Check for system header files
@@ -992,6 +1003,8 @@ else
 	LIBS=
 	AC_CHECK_LIB(tommath, mp_init, MATHLIB=-ltommath,
 		AC_MSG_ERROR(Library tommath not found - please install development tommath package or use --with-builtin-tommath))
+	AC_CHECK_LIB(tommath, mp_to_ubin,
+		AC_DEFINE(HAVE_TOMMATH_1_2_API, 1, [Define this if libtommath has the 1.2+ API (mp_to_ubin, mp_from_ubin, mp_to_radix)]))
 	XE_RESTORE_ENV()
 fi
 AC_SUBST(MATHLIB)
@@ -1007,11 +1020,14 @@ else
 			AC_MSG_ERROR(Include file for tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
 		XE_RESTORE_ENV()
 		XE_SAVE_ENV()
-		LIBS=
+		LIBS=$MATHLIB
 		AC_CHECK_LIB(tomcrypt, sha1_init, CRYPTLIB=-ltomcrypt,
 			AC_MSG_ERROR(Library tomcrypt not found - please install development tomcrypt package or use --with-builtin-tomcrypt))
 		XE_RESTORE_ENV()
 	fi
+fi
+if test "$WITH_TOMCRYPT" = "Y"; then
+	AC_DEFINE(HAVE_TOMCRYPT, 1, [Define this if libtomcrypt is in use])
 fi
 AC_SUBST(CRYPTLIB)
 
@@ -1521,6 +1537,7 @@ fi
 
 AC_CONFIG_FILES([
 gen/vers.sh:builds/posix/vers.sh.in
+gen/static_client.sh:builds/posix/static_client.sh.in
 ])
 
 dnl: Platform Specific Files
@@ -1686,6 +1703,12 @@ echo           "                   Service name : $FB_SERVICE_NAME"
 echo           "                   Service port : $FB_SERVICE_PORT"
 
 echo           "                   GPRE modules : c_cxx.cpp$GPRE_LANGUAGE_MODULES"
+
+case $CLOOP_GENERATION in
+ Y)       echo "               Cloop generation : enabled";;
+ N)       echo "               Cloop generation : disabled";;
+esac
+
 echo
 
 echo           "                    Install Dir : $prefix"

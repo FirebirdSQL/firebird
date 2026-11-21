@@ -38,7 +38,7 @@ namespace
 	{
 		const Request* const request = tdbb->getRequest();
 
-		if (request->req_flags & req_abort)
+		if (request->req_flags & (req_abort | req_stop))
 			return false;
 
 		if (!request->req_transaction)

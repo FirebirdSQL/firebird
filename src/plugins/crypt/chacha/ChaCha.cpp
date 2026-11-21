@@ -28,6 +28,7 @@
 
 #include "../common/classes/ImplementHelper.h"
 #include "../common/classes/auto.h"
+#include "ChaCha.h"
 #include <tomcrypt.h>
 #include <../common/os/guid.h>
 
@@ -189,10 +190,20 @@ SimpleFactory<ChaCha<8> > factory64;
 
 } // anonymous namespace
 
+namespace Crypt
+{
+	void registerChaCha(IPluginManager* iPlugin)
+	{
+		iPlugin->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha", &factory);
+		iPlugin->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha64", &factory64);
+	}
+} // namespace Crypt
+
+#ifndef STATIC_CLIENT
 extern "C" FB_DLL_EXPORT void FB_PLUGIN_ENTRY_POINT(Firebird::IMaster* master)
 {
 	CachedMasterInterface::set(master);
-	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha", &factory);
-	PluginManagerInterfacePtr()->registerPluginFactory(IPluginManager::TYPE_WIRE_CRYPT, "ChaCha64", &factory64);
+	Crypt::registerChaCha(PluginManagerInterfacePtr());
 	getUnloadDetector()->registerMe();
 }
+#endif

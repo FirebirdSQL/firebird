@@ -11266,7 +11266,9 @@ bool SubQueryNode::dsqlSubSelectFinder(SubSelectFinder& /*visitor*/)
 
 bool SubQueryNode::dsqlFieldFinder(FieldFinder& visitor)
 {
-	return visitor.visit(rse);	// Pass only the rse.
+	// Fields inside a sub-select are not related to the scope level being checked,
+	// see AggNode::dsqlAggregate2Finder() and SubQueryNode::dsqlAggregateFinder().
+	return !visitor.ignoreSubSelects && visitor.visit(rse);	// Pass only the rse.
 }
 
 ValueExprNode* SubQueryNode::dsqlFieldRemapper(FieldRemapper& visitor)
@@ -12308,7 +12310,7 @@ DmlNode* SysFuncCallNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScrat
 		// Special handling for system function MAKE_DBKEY:
 		// convert constant relation name into ID at the parsing time
 
-		auto literal = node->args->items.getCount() ? 
+		auto literal = node->args->items.getCount() ?
 			nodeAs<LiteralNode>(node->args->items[0]) : nullptr;
 
 		if (literal && literal->litDesc.isText())
@@ -13209,6 +13211,11 @@ dsc* UdfCallNode::execute(thread_db* tdbb, Request* request) const
 		const_cast<Function*>(function.getObject())->checkReload(tdbb);
 
 		Jrd::Attachment* attachment = tdbb->getAttachment();
+
+		// Replace the effective user according to the function's SQL SECURITY clause,
+		// so that dynamic SQL (EXECUTE STATEMENT) is checked against the proper user
+		UserId* invoker = function->invoker ? function->invoker : attachment->att_ss_user;
+		AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, invoker);
 
 		const ULONG inMsgLength = function->getInputFormat() ? function->getInputFormat()->fmt_length : 0;
 		const ULONG outMsgLength = function->getOutputFormat()->fmt_length;
