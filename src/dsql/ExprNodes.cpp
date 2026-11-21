@@ -3324,7 +3324,11 @@ void AtNode::make(DsqlCompilerScratch* dsqlScratch, dsc* desc)
 	else if (dateTimeDesc.isTimeStamp())
 		desc->makeTimestampTz();
 	else
-		ERRD_post(Arg::Gds(isc_expression_eval_err));	//// TODO: more info
+	{
+		ERRD_post(Arg::Gds(isc_expression_eval_err) <<
+			Arg::Gds(isc_at_argmustbe_time_timestamp) <<
+			Arg::Str(DSC_dtype_tostring(dateTimeDesc.dsc_dtype)));
+	}
 
 	desc->setNullable(dateTimeDesc.isNullable() || (zoneArg && zoneDesc.isNullable()));
 }
@@ -3405,7 +3409,11 @@ dsc* AtNode::execute(thread_db* tdbb, Request* request) const
 		impure->vlu_misc.vlu_sql_time_tz.time_zone = zone;
 	}
 	else
-		ERR_post(Arg::Gds(isc_expression_eval_err));	//// TODO: more info
+	{
+		ERR_post(Arg::Gds(isc_expression_eval_err) <<
+			Arg::Gds(isc_at_argmustbe_time_timestamp) <<
+			Arg::Str(DSC_dtype_tostring(dateTimeDesc->dsc_dtype)));
+	}
 
 	return &impure->vlu_desc;
 }
