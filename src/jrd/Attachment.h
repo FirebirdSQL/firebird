@@ -36,6 +36,7 @@
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/Coercion.h"
 #include "../jrd/LocalTemporaryTable.h"
+#include "../jrd/DataPageNumberCache.h"
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
@@ -609,6 +610,17 @@ public:
 	Firebird::TriState att_opt_first_rows;
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
+
+	// Single per-attachment cache of relation data page numbers, shared by all relations
+	DataPageNumberCache* att_dp_number_cache = nullptr;
+
+	DataPageNumberCache* getDPNumberCache()
+	{
+		if (!att_dp_number_cache)
+			att_dp_number_cache = FB_NEW_POOL(*att_pool) DataPageNumberCache();
+
+		return att_dp_number_cache;
+	}
 
 	Firebird::LeftPooledMap<QualifiedName, LocalTemporaryTable*> att_local_temporary_tables;
 	std::optional<USHORT> att_next_ltt_id;		// Next available LTT relation ID

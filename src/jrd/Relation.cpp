@@ -523,7 +523,7 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 		if (!newPages)
 			newPages = FB_NEW_POOL(getPool()) RelationPages(getPool(), pageSpaceId, instanceId);
 		else
-			rel_pages_free = newPages->reuse(pageSpaceId, instanceId);
+			rel_pages_free = newPages->reuse(tdbb, pageSpaceId, instanceId);
 
 		newPages->addRef();
 
@@ -677,7 +677,7 @@ bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = null
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
-	pages->free(rel_pages_free);
+	pages->free(tdbb, rel_pages_free);
 	return true;
 }
 
@@ -697,7 +697,7 @@ void RelationPermanent::freePages(thread_db* tdbb)
 		if (pages->hasData())
 			DPM_delete_relation_pages(tdbb, this, pages);
 
-		pages->free(rel_pages_free);
+		pages->free(tdbb, rel_pages_free);
 	}
 }
 

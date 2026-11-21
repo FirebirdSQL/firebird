@@ -1104,7 +1104,7 @@ void DPM_delete( thread_db* tdbb, record_param* rpb, ULONG prior_page)
 		if (relPages->rel_last_free_blb_dp == pages[i])
 			relPages->rel_last_free_blb_dp = 0;
 
-		relPages->setDPNumber(dpSequence + s, 0);
+		relPages->invalidateDPNumber(tdbb, dpSequence + s);
 	}
 
 	if (relPages->rel_data_pages)
@@ -1252,7 +1252,7 @@ void DPM_delete_relation_pages(thread_db* tdbb, RelationPermanent* relation, Rel
 	fb_assert(rootPage);
 	PAG_release_page(tdbb, rootPage.value(), ZERO_PAGE_NUMBER);
 
-	relPages->reset();
+	relPages->reset(tdbb);
 }
 
 // Reserve pages for bulk insert, return count of reserved pages.
@@ -1616,7 +1616,7 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 	WIN* window = &rpb->getWindow(relPages->getPageSpaceId());
 
 	const ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
-	ULONG page_number = relPages->getDPNumber(dpSequence);
+	ULONG page_number = relPages->getDPNumber(tdbb, dpSequence);
 
 	if (page_number)
 	{
@@ -1640,6 +1640,8 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 
 		if (pageOk)
 			return false;
+
+		relPages->invalidateDPNumber(tdbb, dpSequence);
 	}
 
 	// Find the pointer page, data page, and record
@@ -1655,10 +1657,10 @@ bool DPM_get(thread_db* tdbb, record_param* rpb, SSHORT lock_type)
 #endif
 
 	page_number = page->ppg_page[slot];
-	relPages->setDPNumber(dpSequence, page_number);
 
 	if (page_number)
 	{
+		relPages->setDPNumber(tdbb, dpSequence, page_number);
 		CCH_HANDOFF(tdbb, window, page_number, lock_type, pag_data);
 		if (get_header(window, line, rpb) &&
 			!(rpb->rpb_flags & (rpb_blob | rpb_chained | rpb_fragment)))
@@ -1880,7 +1882,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 	}
 
 	ULONG dpSequence = rpb->rpb_number.getValue() / dbb->dbb_max_records;
-	ULONG page_number = relPages->getDPNumber(dpSequence);
+	ULONG page_number = relPages->getDPNumber(tdbb, dpSequence);
 
 	if (page_number)
 	{
@@ -1914,6 +1916,9 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 		}
 
 		CCH_RELEASE(tdbb, window);
+
+		if (!pageOk)
+			relPages->invalidateDPNumber(tdbb, dpSequence);
 	}
 
 	// Find the next pointer page, data page, and record
@@ -1958,7 +1963,7 @@ bool DPM_next(thread_db* tdbb, record_param* rpb, USHORT lock_type, FindNextReco
 				}
 #endif
 				dpSequence = ppage->ppg_sequence * dbb->dbb_dp_per_pp + slot;
-				relPages->setDPNumber(dpSequence, page_number);
+				relPages->setDPNumber(tdbb, dpSequence, page_number);
 				const data_page* dpage = (data_page*) CCH_HANDOFF(tdbb, window,
 									page_number, lock_type, pag_data);
 
