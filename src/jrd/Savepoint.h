@@ -120,7 +120,7 @@ namespace Jrd
 	public:
 		explicit Savepoint(jrd_tra* transaction)
 			: m_transaction(transaction), m_number(0), m_flags(0), m_count(0),
-			  m_next(NULL), m_actions(NULL), m_freeActions(NULL)
+			  m_next(NULL), m_actions(NULL)
 		{}
 
 		~Savepoint()
@@ -130,13 +130,6 @@ namespace Jrd
 				VerbAction* next = m_actions->vct_next;
 				delete m_actions;
 				m_actions = next;
-			}
-
-			while (m_freeActions)
-			{
-				VerbAction* next = m_freeActions->vct_next;
-				delete m_freeActions;
-				m_freeActions = next;
 			}
 		}
 
@@ -318,10 +311,7 @@ namespace Jrd
 		USHORT m_count;					// active verb count
 		MetaName m_name; 		// savepoint name
 		Savepoint* m_next;				// next savepoint in the list
-
-
 		VerbAction* m_actions;			// verb action list
-		VerbAction* m_freeActions;		// free verb actions
 	};
 
 	// Start a savepoint and rollback it in destructor,
