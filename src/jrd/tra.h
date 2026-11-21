@@ -293,6 +293,7 @@ public:
 	TransactionBitmap*	tra_commit_sub_trans;	// committed sub-transactions
 	Savepoint*	tra_save_point;			// list of savepoints
 	Savepoint*	tra_save_free;			// free savepoints
+	VerbAction* tra_action_free;		// free verb actions
 	SavNumber tra_save_point_number;	// next save point number to use
 	ULONG tra_flags;
 	DeferredJob*	tra_deferred_job;	// work deferred to commit time
@@ -400,6 +401,23 @@ public:
 		tra_undo_records.add(record);
 
 		return record;
+	}
+
+	VerbAction* getVerbAction()
+	{
+		auto action = tra_action_free;
+		if (action)
+			tra_action_free = action->vct_next;
+		else
+			action = FB_NEW_POOL(*tra_pool) VerbAction();
+
+		return action;
+	}
+
+	void freeVerbAction(VerbAction* action)
+	{
+		action->vct_next = tra_action_free;
+		tra_action_free = action;
 	}
 
 	void unlinkFromAttachment();

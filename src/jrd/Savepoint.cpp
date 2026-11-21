@@ -403,11 +403,7 @@ VerbAction* Savepoint::createAction(thread_db* tdbb, jrd_rel* relation, FB_UINT6
 
 	if (!action)
 	{
-		if ( (action = m_freeActions) )
-			m_freeActions = action->vct_next;
-		else
-			action = FB_NEW_POOL(*m_transaction->tra_pool) VerbAction();
-
+		action = m_transaction->getVerbAction();
 		action->vct_next = m_actions;
 		m_actions = action;
 
@@ -452,8 +448,7 @@ void Savepoint::discardTempFrameActions(const jrd_rel* relation, FB_UINT64 tempI
 		{
 			action->discard(m_transaction);
 			*actionPtr = action->vct_next;
-			action->vct_next = m_freeActions;
-			m_freeActions = action;
+			m_transaction->freeVerbAction(action);
 		}
 		else
 			actionPtr = &action->vct_next;
@@ -488,8 +483,7 @@ Savepoint* Savepoint::rollback(thread_db* tdbb, Savepoint* prior, bool preserveL
 			action->undo(tdbb, m_transaction, preserveLocks, preserveAction);
 
 			m_actions = action->vct_next;
-			action->vct_next = m_freeActions;
-			m_freeActions = action;
+			m_transaction->freeVerbAction(action);
 		}
 
 		// Undo LTT changes
@@ -623,8 +617,7 @@ Savepoint* Savepoint::rollforward(thread_db* tdbb, Savepoint* prior)
 
 			// and release it afterwards
 			m_actions = action->vct_next;
-			action->vct_next = m_freeActions;
-			m_freeActions = action;
+			m_transaction->freeVerbAction(action);
 		}
 
 		// Merge LTT undo data to parent savepoint
