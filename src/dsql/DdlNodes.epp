@@ -10933,7 +10933,7 @@ void AlterRelationNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScratc
 
 			fb_assert(newPages->getPageSpaceId() == pageSpaceId.value());
 			fb_assert(newPages->getPageSpaceId() != orgPages->getPageSpaceId());
-			newPages->reset(pageSpaceId.value());
+			newPages->reset(tdbb, pageSpaceId.value());
 
 			// Protect relation from modification to create a consistent table copy.
 			// The lock is held until the transaction end.

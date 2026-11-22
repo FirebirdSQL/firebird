@@ -786,6 +786,9 @@
     <ClInclude Include="..\..\..\src\jrd\Database.h">
       <Filter>Header files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\jrd\DataPageNumberCache.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\src\jrd\DataTypeUtil.h">
       <Filter>Header files</Filter>
     </ClInclude>

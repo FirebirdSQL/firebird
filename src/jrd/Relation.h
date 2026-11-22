@@ -336,28 +336,35 @@ public:
 	RelationPages(Firebird::MemoryPool& pool, ULONG pageSpaceId, InstanceId instanceId = 0)
 		: Firebird::PermanentStorage(pool),
 		  m_pageSpaceId(pageSpaceId),
-		  m_instanceId(instanceId),
-		  m_dpMap(pool)
+		  m_instanceId(instanceId)
 	{}
 
-	void free(RelationPages*& nextFree)
+	// Identity of the current incarnation of this page set, used as the page set
+	// part of the key in DataPageNumberCache. A fresh monotonic ID is assigned
+	// on construction and whenever the page set is reset or reused, so entries
+	// cached for a previous incarnation become unreachable in every attachment's
+	// cache.
+
+	DataPageNumberCache::PageSetId getPageSetId() const noexcept
+	{
+		return m_pageSetId.load(std::memory_order_relaxed);
+	}
+
+	void free(thread_db* tdbb, RelationPages*& nextFree)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-		reset();
+		reset(tdbb);
 
 		m_freePages = nextFree;
 		nextFree = this;
-
-		m_dpMap.clear();
-		m_dpMapMark = 0;
 	}
 
-	void reset(ULONG pageSpaceId = INVALID_PAGE_SPACE)
+	void reset(thread_db* tdbb, ULONG pageSpaceId = INVALID_PAGE_SPACE)
 	{
 		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
 
-		m_pageSpaceId = pageSpaceId;
+		resetPageSpaceId(tdbb, pageSpaceId);
 
 		clearPointerPages();
 		m_indexRootPage = 0;
@@ -368,25 +375,11 @@ public:
 		rel_sec_data_space = 0;
 		rel_last_free_pri_dp = 0;
 		rel_last_free_blb_dp = 0;
-
-		m_dpMap.clear();
-		m_dpMapMark = 0;
 	}
 
 	ULONG getPageSpaceId() const noexcept
 	{
 		return m_pageSpaceId;
-	}
-
-	void setPageSpace(ULONG pageSpaceId)
-	{
-		if (m_pageSpaceId != pageSpaceId)
-		{
-			fb_assert(pageSpaceId != INVALID_PAGE_SPACE);
-			fb_assert(m_instanceId == 0);
-
-			reset(pageSpaceId);
-		}
 	}
 
 	// Ensure that at least one slot is allocated inside the page vector and
@@ -414,7 +407,7 @@ public:
 		return m_instanceId;
 	}
 
-	void setInstanceId(InstanceId instanceId)
+	void setInstanceId(InstanceId instanceId) noexcept
 	{
 		m_instanceId = instanceId;
 	}
@@ -568,13 +561,12 @@ public:
 		return ++m_useCount;
 	}
 
-	RelationPages* reuse(ULONG pageSpaceId, InstanceId instanceId)
+	RelationPages* reuse(thread_db* tdbb, ULONG pageSpaceId, InstanceId instanceId)
 	{
 		fb_assert(m_useCount == 0);
 		fb_assert(!m_pageCount.load(std::memory_order_relaxed));  // recycled objects start empty
 
-		m_pageSpaceId = pageSpaceId;
-		m_instanceId = instanceId;
+		resetIdentity(tdbb, pageSpaceId, instanceId);
 
 		const auto freePages = m_freePages;
 		m_freePages = nullptr;
@@ -586,75 +578,58 @@ public:
 		return item->m_instanceId;
 	}
 
-	ULONG getDPNumber(ULONG dpSequence)
+	ULONG getDPNumber(thread_db* tdbb, ULONG dpSequence) const
 	{
-		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		const auto attachment = tdbb->getAttachment();
+		fb_assert(attachment);
 
-		FB_SIZE_T pos;
-		if (m_dpMap.find(dpSequence, pos))
-		{
-			if (m_dpMap[pos].mark != m_dpMapMark)
-				m_dpMap[pos].mark = ++m_dpMapMark;
-			return m_dpMap[pos].physNum;
-		}
-
-		return 0;
+		return attachment->getDPNumberCache()->getDPNumber(getPageSetId(), dpSequence);
 	}
 
-	void setDPNumber(ULONG dpSequence, ULONG dpNumber)
+	void setDPNumber(thread_db* tdbb, ULONG dpSequence, ULONG dpNumber) const
 	{
-		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
+		const auto attachment = tdbb->getAttachment();
+		fb_assert(attachment);
 
-		FB_SIZE_T pos;
-		if (m_dpMap.find(dpSequence, pos))
+		attachment->getDPNumberCache()->setDPNumber(getPageSetId(), dpSequence, dpNumber);
+	}
+
+	void invalidateDPNumber(thread_db* tdbb, ULONG dpSequence) const
+	{
+		const auto attachment = tdbb->getAttachment();
+		fb_assert(attachment);
+
+		if (const auto cache = attachment->att_dp_number_cache)
+			cache->invalidateDPNumber(getPageSetId(), dpSequence);
+	}
+
+	void invalidateDPNumbers(thread_db* tdbb) const
+	{
+		if (m_pageSpaceId != INVALID_PAGE_SPACE)
 		{
-			if (dpNumber)
+			if (const auto attachment = tdbb ? tdbb->getAttachment() : nullptr)
 			{
-				m_dpMap[pos].physNum = dpNumber;
-				m_dpMap[pos].mark = ++m_dpMapMark;
+				if (const auto cache = attachment->att_dp_number_cache)
+					cache->invalidateDPNumbers(getPageSetId());
 			}
-			else
-				m_dpMap.remove(pos);
 		}
-		else if (dpNumber)
-		{
-			m_dpMap.insert(pos, {dpSequence, dpNumber, ++m_dpMapMark});
-
-			if (m_dpMap.getCount() == MAX_DPMAP_ITEMS)
-				freeOldestMapItems();
-		}
-	}
-
-	void freeOldestMapItems() noexcept
-	{
-		Firebird::MutexLockGuard guard(m_mutex, FB_FUNCTION);
-
-		ULONG minMark = MAX_ULONG;
-		FB_SIZE_T i;
-
-		for (i = 0; i < m_dpMap.getCount(); i++)
-		{
-			if (minMark > m_dpMap[i].mark)
-				minMark = m_dpMap[i].mark;
-		}
-
-		minMark = (minMark + m_dpMapMark) / 2;
-
-		i = 0;
-		while (i < m_dpMap.getCount())
-		{
-			if (m_dpMap[i].mark > minMark)
-				m_dpMap[i++].mark -= minMark;
-			else
-				m_dpMap.remove(i);
-		}
-
-		m_dpMapMark -= minMark;
 	}
 
 private:
 	ULONG m_pageSpaceId;
 	InstanceId m_instanceId; // 0 or att_attachment_id or tra_number
+
+	// Process-wide monotonic identifier of the current incarnation of this page set,
+	// refreshed whenever the page set is reset or reused. Atomic so that lock-free
+	// readers in getDPNumber()/setDPNumber() cannot race with reset().
+
+	static inline std::atomic<DataPageNumberCache::PageSetId> g_nextPageSetId = 0;
+	std::atomic<DataPageNumberCache::PageSetId> m_pageSetId{generatePageSetId()};
+
+	static DataPageNumberCache::PageSetId generatePageSetId() noexcept
+	{
+		return g_nextPageSetId.fetch_add(1, std::memory_order_relaxed) + 1;
+	}
 
 	PageList m_pointerPages;
 	std::atomic<ULONG> m_pageCount = 0;
@@ -663,22 +638,29 @@ private:
 	std::atomic<int> m_useCount = 0;
 	Firebird::Mutex m_mutex;
 
-	static constexpr ULONG MAX_DPMAP_ITEMS = 64;
+	// These helpers update the page-set identity when the page set is reset or recycled,
+	// assigning a fresh m_pageSetId so that entries cached for its previous incarnation
+	// become unreachable.
+	//
+	// setInstanceId() is intentionally excluded: retainPages() preserves the existing
+	// physical pages across a retaining commit.
 
-	struct DPItem
+	void resetIdentity(thread_db* tdbb, ULONG pageSpaceId, InstanceId instanceId) noexcept
 	{
-		ULONG seqNum;
-		ULONG physNum;
-		ULONG mark;
+		invalidateDPNumbers(tdbb);
 
-		static ULONG generate(const DPItem& item) noexcept
-		{
-			return item.seqNum;
-		}
-	};
+		m_pageSpaceId = pageSpaceId;
+		m_instanceId = instanceId;
+		m_pageSetId.store(generatePageSetId(), std::memory_order_relaxed);
+	}
 
-	Firebird::SortedArray<DPItem, Firebird::InlineStorage<DPItem, MAX_DPMAP_ITEMS>, ULONG, DPItem> m_dpMap;
-	ULONG m_dpMapMark = 0;
+	void resetPageSpaceId(thread_db* tdbb, ULONG pageSpaceId) noexcept
+	{
+		invalidateDPNumbers(tdbb);
+
+		m_pageSpaceId = pageSpaceId;
+		m_pageSetId.store(generatePageSetId(), std::memory_order_relaxed);
+	}
 
 	// Acquiring a SharedReadVector hazard pointer just to check for non-empty or get a count
 	// is too expensive, so maintain a cheap mirror count refreshed by the pointer-page writers,
