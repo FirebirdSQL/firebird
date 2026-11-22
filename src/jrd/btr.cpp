@@ -279,6 +279,18 @@ namespace
 		return false;
 	}
 
+	void removeUncachedIndices(thread_db* tdbb, RelationPermanent* rel, IndexDescList& idxList)
+	{
+		for (auto n = 0u; n < idxList.getCount(); )
+		{
+			auto& idx = idxList[n];
+			if (!rel->lookup_index(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
+				idxList.remove(n);
+			else
+				++n;
+		}
+	}
+
 } // namespace
 
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
@@ -1367,14 +1379,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 
 	CCH_RELEASE(tdbb, &window);
 
-	for (auto n = 0u; n < idxList.getCount(); )
-	{
-		auto& idx = idxList[n];
-		if (!relation->getPermanent()->lookup_index(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
-			idxList.remove(n);
-		else
-			++n;
-	}
+	removeUncachedIndices(tdbb, relPerm, idxList);
 }
 
 
@@ -4112,7 +4117,8 @@ void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescL
 	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
 
 	Cleanup releaseWindow([&] {
-		CCH_RELEASE(tdbb, &window);
+		if (window.win_bdb)
+			CCH_RELEASE(tdbb, &window);
 	});
 
 	const auto relPerm = relation->getPermanent();
@@ -4125,15 +4131,16 @@ void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescL
 		if (!isIndexSlotStable(tdbb, root, relPerm, i))
 			continue;
 
-		if (!relPerm->lookup_index(tdbb, i, CacheFlag::AUTOCREATE))
-			continue;
-
 		index_desc idx;
 		idx.idx_id = idx_invalid;
 
 		if (BTR_description(tdbb, relPerm, root, &idx, i, BTR_DESCRIBE_NO_THROW))
 			idxList.add(idx);
 	}
+
+	CCH_RELEASE(tdbb, &window);
+
+	removeUncachedIndices(tdbb, relPerm, idxList);
 }
 
 
