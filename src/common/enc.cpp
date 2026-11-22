@@ -737,8 +737,9 @@ static int des_cipher(const C_block* in, C_block* out, SLONG salt, int num_iter)
 	}
 
 	// store the encrypted (or decrypted) result
-	L0 = ((L0 >> 3) & 0x0f0f0f0fL) | ((L1 << 1) & 0xf0f0f0f0L);
-	L1 = ((R0 >> 3) & 0x0f0f0f0fL) | ((R1 << 1) & 0xf0f0f0f0L);
+	// Cast to ULONG before left shift to avoid UB on negative signed values
+	L0 = ((L0 >> 3) & 0x0f0f0f0fL) | ((static_cast<ULONG>(L1) << 1) & 0xf0f0f0f0L);
+	L1 = ((R0 >> 3) & 0x0f0f0f0fL) | ((static_cast<ULONG>(R1) << 1) & 0xf0f0f0f0L);
 	STORE(L, L0, L1, B);
 	PERM6464(L, L0, L1, B.b, (const C_block *) CF6464);
 #if defined(MUST_ALIGN)
