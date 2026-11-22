@@ -1275,8 +1275,7 @@ void Monitoring::putRequest(SnapshotData::DumpRecord& record, const Request* req
 	// request id
 	record.storeInteger(f_mon_stmt_id, request->getRequestId());
 	// attachment id
-	if (request->req_attachment)
-		record.storeInteger(f_mon_stmt_att_id, request->req_attachment->att_attachment_id);
+	record.storeInteger(f_mon_stmt_att_id, request->req_attachment->att_attachment_id);
 	// state, transaction ID, timestamp
 	if (request->req_transaction && (request->req_flags & req_active))
 	{
