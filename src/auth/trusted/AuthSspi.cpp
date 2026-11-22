@@ -119,7 +119,7 @@ AuthSspi::AuthSspi()
 {
 	TimeStamp timeOut;
 	hasCredentials = initEntries() && (fAcquireCredentialsHandle(0,
-					legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A,
+					const_cast<SEC_CHAR*>(legacySSP ? NTLMSP_NAME_A : NEGOSSP_NAME_A),
 					SECPKG_CRED_BOTH, 0, 0, 0, 0,
 					&secHndl, &timeOut) == SEC_E_OK);
 }
