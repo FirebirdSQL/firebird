@@ -100,7 +100,8 @@ namespace Firebird
 		: max_length(static_cast<internal_size_type>(limit))
 	{
 		initialize(sizeL);
-		memcpy(stringBuffer, dataL, sizeL);
+		if (sizeL)
+			memcpy(stringBuffer, dataL, sizeL);
 	}
 
 	AbstractString::AbstractString(const size_type limit, const_pointer p1, const size_type n1,
