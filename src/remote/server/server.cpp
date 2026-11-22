@@ -1141,7 +1141,7 @@ private:
 		friend class SpecificPlugins;
 	public:
 		explicit CryptKeyType(MemoryPool& p)
-			: PermanentStorage(p), keyType(getPool()), plugins(getPool())
+			: PermanentStorage(p), keyType(getPool()), plugins(getPool()), hasSpecificData(0)
 		{ }
 
 		bool operator==(const PathName& t) const

@@ -32,7 +32,7 @@
 #endif
 [[noreturn]] void CPR_bugcheck(const TEXT*);
 void	CPR_end_text(gpre_txt*) noexcept;
-int		CPR_error(const TEXT*);
+int		CPR_error(const TEXT*, bool punt = true);
 [[noreturn]] void CPR_exit(int);
 void	CPR_warn(const TEXT*);
 tok*	CPR_eol_token();

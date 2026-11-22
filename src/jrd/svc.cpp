@@ -1861,6 +1861,8 @@ void Service::query(USHORT			send_item_length,
 			// with an indication that more is available.
 
 			info = INF_put_item(item, length, info + 3, info, end);
+			if (!info)
+				return;
 
 			if (svc_timeout)
 				*info++ = isc_info_svc_timeout;

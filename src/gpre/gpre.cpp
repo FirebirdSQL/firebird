@@ -940,10 +940,13 @@ void CPR_end_text(gpre_txt* text) noexcept
 //		Issue an error message.
 //
 
-int CPR_error(const TEXT* string)
+int CPR_error(const TEXT* string, bool punt)
 {
 	fprintf(stderr, "(E) %s:%d: %s\n", file_name, line_global + 1, string);
 	gpreGlob.errors_global++;
+
+	if (punt)
+		throw gpre_exception(string);
 
 	return 0;
 }

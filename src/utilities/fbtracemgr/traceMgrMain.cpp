@@ -139,9 +139,9 @@ void TraceSvcUtil::startSession(TraceSession& session, bool /*interactive*/)
 
 		fseek(file, 0, SEEK_END);
 		len = ftell(file);
-		if (len == 0)
+		if (len < 0)
 		{
-			(Arg::Gds(isc_io_error) << Arg::Str("fread") << Arg::Str(fileName) <<
+			(Arg::Gds(isc_io_error) << Arg::Str("ftell") << Arg::Str(fileName) <<
 				Arg::Gds(isc_io_read_err) << Arg::OsError()).raise();
 		}
 
