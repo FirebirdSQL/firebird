@@ -1521,6 +1521,7 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, MetaId id, bool withCleanup)
 		}
 
 		// remove the pointer to the top-level index page before we delete it
+		CCH_MARK(tdbb, window);
 		irt_desc->setEmpty();
 
 		const PageNumber prior(window->win_page);
