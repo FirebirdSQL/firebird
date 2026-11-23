@@ -4114,7 +4114,9 @@ burp_fld* get_field(BurpGlobals* tdgbl, burp_rel* relation, USHORT id)
 					GET_TEXT(tablespaceName);
 					const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
-					if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+					// Keep the tablespace name unless the tablespace is explicitly
+					// mapped to PRIMARY by the -TS/-TS_MAP options
+					if (!str || !str->equals(PRIMARY_TABLESPACE_NAME))
 						strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
 					break;
 				}
@@ -6987,7 +6989,9 @@ bool get_index(BurpGlobals* tdgbl, const burp_rel* relation)
 				GET_TEXT(tablespaceName);
 				const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
-				if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+				// Keep the tablespace name unless the tablespace is explicitly
+				// mapped to PRIMARY by the -TS/-TS_MAP options
+				if (!str || !str->equals(PRIMARY_TABLESPACE_NAME))
 					strcpy(X.RDB$TABLESPACE_NAME, tablespaceName);
 				break;
 			}
@@ -8517,7 +8521,9 @@ bool get_relation(BurpGlobals* tdgbl, Coordinator* coord, RestoreRelationTask* t
 
 			const auto str = tdgbl->tablespaceFileMap.get(tablespaceName);
 
-			if (str && !str->equals(PRIMARY_TABLESPACE_NAME))
+			// Keep the tablespace name unless the tablespace is explicitly
+			// mapped to PRIMARY by the -TS/-TS_MAP options
+			if (!str || !str->equals(PRIMARY_TABLESPACE_NAME))
 				strcpy(tableSpace, tablespaceName);
 
 			break;
