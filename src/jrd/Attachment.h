@@ -648,8 +648,8 @@ public:
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
 
 	jrd_tra* getSysTransaction() noexcept;
-	void setSysTransaction(jrd_tra* trans) noexcept;		// used only by TRA_init
-	jrd_tra* getMetaTransaction(thread_db* tdbb);			// RORC to read metadata
+	void setSysTransaction(jrd_tra* trans) noexcept;					// used only by TRA_init
+	jrd_tra* getMetaTransaction(thread_db* tdbb, bool noStore = false);	// RORC to read metadata
 	void createMetaTransaction(thread_db* tdbb);
 	void rollbackMetaTransaction(thread_db* tdbb);
 

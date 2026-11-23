@@ -1997,7 +1997,9 @@ bool MET_load_generator(thread_db* tdbb, GeneratorItem& item, bool* sysGen, SLON
 
 	AutoCacheRequest request(tdbb, irq_r_gen_id, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	auto* metaTransaction = attachment->getMetaTransaction(tdbb, tdbb->getAttachment()->isRWGbak());
+
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE metaTransaction)
 		GEN IN RDB$GENERATORS
 		CROSS SCH IN RDB$SCHEMAS
 		WITH GEN.RDB$SCHEMA_NAME EQ item.name.schema.c_str() AND
@@ -2046,7 +2048,7 @@ SLONG MET_lookup_generator(thread_db* tdbb, const QualifiedName& name, bool* sys
 
 	AutoCacheRequest request(tdbb, irq_l_gen_id, IRQ_REQUESTS);
 
-	FOR(REQUEST_HANDLE request)
+	FOR(REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$GENERATORS
 		WITH X.RDB$SCHEMA_NAME EQ name.schema.c_str() AND
 			 X.RDB$GENERATOR_NAME EQ name.object.c_str()
@@ -2085,7 +2087,7 @@ bool MET_lookup_generator_id(thread_db* tdbb, SLONG gen_id, QualifiedName& name,
 
 	AutoCacheRequest request(tdbb, irq_r_gen_id_num, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE attachment->getMetaTransaction(tdbb))
 		X IN RDB$GENERATORS WITH X.RDB$GENERATOR_ID EQ gen_id
 	{
 		if (sysGen)
@@ -2098,7 +2100,7 @@ bool MET_lookup_generator_id(thread_db* tdbb, SLONG gen_id, QualifiedName& name,
 	return name.object.hasData();
 }
 
-void MET_update_generator_increment(thread_db* tdbb, SLONG gen_id, SLONG step)
+void MET_update_generator_increment(thread_db* tdbb, SLONG gen_id, SLONG step, jrd_tra* transaction)
 {
 /**************************************
  *
@@ -2116,7 +2118,7 @@ void MET_update_generator_increment(thread_db* tdbb, SLONG gen_id, SLONG step)
 
 	AutoCacheRequest request(tdbb, irq_upd_gen_id_increm, IRQ_REQUESTS);
 
-	FOR (REQUEST_HANDLE request)
+	FOR (REQUEST_HANDLE request TRANSACTION_HANDLE transaction)
 		X IN RDB$GENERATORS WITH X.RDB$GENERATOR_ID EQ gen_id
 
 		// We never accept changing the step in sys gens.

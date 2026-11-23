@@ -111,7 +111,8 @@ Jrd::BlobFilter*	MET_lookup_filter(Jrd::thread_db*, SSHORT, SSHORT);
 bool		MET_load_generator(Jrd::thread_db*, Jrd::GeneratorItem&, bool* sysGen = 0, SLONG* step = 0);
 SLONG		MET_lookup_generator(Jrd::thread_db*, const Jrd::QualifiedName&, bool* sysGen = 0, SLONG* step = 0);
 bool		MET_lookup_generator_id(Jrd::thread_db*, SLONG, Jrd::QualifiedName&, bool* sysGen = 0);
-void		MET_update_generator_increment(Jrd::thread_db* tdbb, SLONG gen_id, SLONG step);
+void		MET_update_generator_increment(Jrd::thread_db* tdbb, SLONG gen_id, SLONG step,
+	Jrd::jrd_tra* transaction);
 bool		MET_lookup_index_expr_cond_blr(Jrd::thread_db* tdbb, const Jrd::QualifiedName& index_name,
 				Jrd::bid& expr_blob_id, Jrd::bid& cond_blob_id);
 

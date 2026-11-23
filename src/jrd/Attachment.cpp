@@ -891,17 +891,22 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 	}
 }
 
-jrd_tra* Attachment::getMetaTransaction(thread_db* tdbb)
+// noStore parameter means that data found by retuned transaction will never be stored in the cache
+// therefore in a case of missing user transaction system one can be used in more active way
+// this helps when access to uncommitted data from user transaction is needed (generators)
+
+jrd_tra* Attachment::getMetaTransaction(thread_db* tdbb, bool noStore)
 {
 	jrd_tra* tra = tdbb->getTransaction();
 
-	if (!att_meta_transaction)
+	if (noStore || !att_meta_transaction)
 	{
 		if ((tra == nullptr) || (tra == getSysTransaction()))
 			return getSysTransaction();
-
-		createMetaTransaction(tdbb);
 	}
+
+	if (!att_meta_transaction)
+		createMetaTransaction(tdbb);
 
 	att_meta_transaction->tra_number = tra && tra->tra_number ? tra->tra_number : 1;
     return att_meta_transaction;

@@ -6497,7 +6497,7 @@ bool CreateAlterSequenceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratch*
 
 			// Perhaps it's better to move this to DFW?
 			if (newStep != oldStep)
-				MET_update_generator_increment(tdbb, id, newStep);
+				MET_update_generator_increment(tdbb, id, newStep, transaction);
 		}
 
 		transaction->getGenIdCache()->put(id, val);
@@ -11203,7 +11203,7 @@ void AlterRelationNode::modifyField(thread_db* tdbb, DsqlCompilerScratch* dsqlSc
 						}
 
 						MET_update_generator_increment(tdbb, id,
-							clause->identityOptions->increment.value());
+							clause->identityOptions->increment.value(), transaction);
 					}
 
 					dsc schemaDesc, nameDesc;
