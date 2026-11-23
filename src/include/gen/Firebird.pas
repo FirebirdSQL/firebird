@@ -6095,6 +6095,7 @@ const
 	 isc_tablespace_name = 335545345;
 	 isc_ts_file_not_exists = 335545346;
 	 isc_ts_file_dup = 335545347;
+	 isc_at_argmustbe_time_timestamp = 335545348;
 	 isc_gfix_db_name = 335740929;
 	 isc_gfix_invalid_sw = 335740930;
 	 isc_gfix_incmp_sw = 335740932;

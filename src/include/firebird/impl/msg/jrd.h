@@ -1027,3 +1027,4 @@ FB_IMPL_MSG(JRD, 1024, ts_file_exists, -902, "08", "001", "Tablespace file \"@1\
 FB_IMPL_MSG(JRD, 1025, tablespace_name, -901, "42", "000", "TABLESPACE @1")
 FB_IMPL_MSG(JRD, 1026, ts_file_not_exists, -902, "08", "001", "Tablespace file \"@1\" does not exist")
 FB_IMPL_MSG(JRD, 1027, ts_file_dup, -902, "08", "001", "Tablespace file \"@1\" is already used by tablespace @2")
+FB_IMPL_MSG(JRD, 1028, at_argmustbe_time_timestamp, -833, "42", "000", "Argument for AT TIME ZONE or AT LOCAL must be of type TIME or TIMESTAMP, but @1 was given")
