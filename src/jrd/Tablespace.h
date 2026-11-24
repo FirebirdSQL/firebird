@@ -180,6 +180,19 @@ namespace Jrd
 			return DB_PAGE_SPACE;
 		}
 
+		// Max data length of RDB$TABLESPACES.RDB$FILE_NAME,
+		// currently defined as VARCHAR(255) CHARACTER SET NONE
+		static constexpr FB_SIZE_T FILE_NAME_MAX_LENGTH = 255;
+
+		// Raise error if a tablespace file name does not fit
+		static void checkFileNameLength(FB_SIZE_T fileNameLength);
+
+		// Normalize the separators of a tablespace file name and, if it turns out
+		// to be relative, resolve it against the directory of the database file,
+		// the way CREATE/ALTER TABLESPACE do. Both steps depend on the local file
+		// naming rules, so this has to run on the machine owning the file.
+		static void resolveFileName(thread_db* tdbb, Firebird::PathName& fileName);
+
 		void mark(thread_db* tdbb, Operation operation, jrd_tra* transaction, const Firebird::PathName& fileName);
 		void commit(thread_db* tdbb, jrd_tra* transaction);
 		void rollback(thread_db* tdbb, jrd_tra* transaction);
