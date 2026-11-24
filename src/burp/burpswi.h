@@ -245,9 +245,9 @@ static inline constexpr Switches::in_sw_tab_t reference_burp_in_sw_table[] =
 	{IN_SW_BURP_HIDDEN_RDONLY,	isc_spb_res_am_readonly,	"MODE READ_ONLY",	0, 0, 0, false, false,	0, 14, NULL, boRestore},
 	{IN_SW_BURP_HIDDEN_RDWRITE, isc_spb_res_am_readwrite,	"MODE READ_WRITE",	0, 0, 0, false, false,	0, 15, NULL, boRestore},
 /**************************************************************************/
-	{IN_SW_BURP_TS_MAPPING_FILE,	0,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	437, 6, NULL, boRestore},
-	{IN_SW_BURP_TS_PATH,	0,	"TS",	0, 0, 0, false, false,	440, 2, NULL, boRestore},
-	{IN_SW_BURP_TS_ORIGINAL_PATHS,	0,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, false,	439, 7, NULL, boRestore},
+	{IN_SW_BURP_TS_MAPPING_FILE,	isc_spb_res_ts_mapping_file,	"TS_MAPPING_FILE",	0, 0, 0, false, false,	437, 6, NULL, boRestore},
+	{IN_SW_BURP_TS_PATH,	isc_spb_res_ts_path,	"TS",	0, 0, 0, false, false,	440, 2, NULL, boRestore},
+	{IN_SW_BURP_TS_ORIGINAL_PATHS,	isc_spb_res_ts_org_paths,	"TS_ORIGINAL_PATHS",	0, 0, 0, false, true,	439, 7, NULL, boRestore},
 	{IN_SW_BURP_0,		 0, NULL,			0, 0, 0, false, false,	0, 0, NULL, boGeneral}
 };
 

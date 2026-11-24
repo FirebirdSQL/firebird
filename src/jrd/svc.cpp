@@ -2991,6 +2991,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 				break;
 			case isc_spb_res_fix_fss_data:
 			case isc_spb_res_fix_fss_metadata:
+			case isc_spb_res_ts_mapping_file:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
 			case isc_spb_bkp_include_data:
@@ -3004,6 +3005,15 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 					return false;
 				}
 				get_action_svc_string(spb, switches);
+				break;
+			case isc_spb_res_ts_path:
+				if (!get_action_svc_parameter(spb.getClumpTag(), reference_burp_in_sw_table, switches))
+				{
+					return false;
+				}
+				get_action_svc_string(spb, switches); // tablespace name
+				spb.moveNext();
+				get_action_svc_string(spb, switches); // path to tablespace
 				break;
 			default:
 				return false;
