@@ -3647,7 +3647,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		trans->tra_oldest_active = number;
 		oldest_active = number;
 		bool cleanup = !(number % TRA_ACTIVE_CLEANUP);
-		int oldest_state;
+		int oldest_state = tra_active;
 
 		for (; active < number; active++)
 		{
@@ -3664,7 +3664,7 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			if (oldest_state == tra_active || oldest_state == tra_limbo)
 			{
 				temp_lock.setKey(active);
-				TraNumber data = LCK_read_data(tdbb, &temp_lock);
+				const TraNumber data = LCK_read_data(tdbb, &temp_lock);
 				if (!data)
 				{
 					if (cleanup)
@@ -3675,8 +3675,6 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 							continue;
 						}
 					}
-
-					data = active;
 				}
 
 				oldest_active = active;
@@ -3700,7 +3698,15 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		// Query the minimum lock data for all active transaction locks.
 		// This will be the oldest active snapshot used for regulating garbage collection.
 
-		const TraNumber data = LCK_query_data(tdbb, LCK_tra, LCK_MIN);
+		TraNumber data = LCK_query_data(tdbb, LCK_tra, LCK_MIN);
+
+		if (oldest_state == tra_limbo)
+		{
+			// Preserve versions created by in-limbo transaction
+			if (!data || data > oldest_active)
+				data = oldest_active;
+		}
+
 		if (data && data < trans->tra_oldest_active)
 			trans->tra_oldest_active = data;
 
