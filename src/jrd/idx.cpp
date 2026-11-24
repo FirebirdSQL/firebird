@@ -864,6 +864,12 @@ void IDX_create_index(thread_db* tdbb,
 		ERR_post(Arg::Gds(isc_no_meta_update) <<
 				 Arg::Gds(isc_wish_list));
 	}
+	else if (relation->isSystem() && (idx->idx_flags & (idx_expression | idx_condition)))
+	{
+		ERR_post(Arg::Gds(isc_no_meta_update) <<
+				 Arg::Gds(isc_random) << "Expression indices are not supported for system tables");
+	}
+
 
 	get_root_page(tdbb, relation);
 
