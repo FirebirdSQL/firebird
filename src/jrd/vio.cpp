@@ -1370,9 +1370,15 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 					return false;
 				}
 
-				record_param temp = *rpb;
-				if ((!(rpb->rpb_flags & rpb_deleted)) || (rpb->rpb_flags & rpb_delta))
+				if (rpb->rpb_flags & rpb_chained)
 				{
+					// Keep the back version's page locked, see the tra_active case below
+					if ((!(rpb->rpb_flags & rpb_deleted)) || (rpb->rpb_flags & rpb_delta))
+						VIO_data(tdbb, rpb, pool, true);
+				}
+				else if ((!(rpb->rpb_flags & rpb_deleted)) || (rpb->rpb_flags & rpb_delta))
+				{
+					record_param temp = *rpb;
 					VIO_data(tdbb, rpb, pool);
 					rpb->rpb_page = temp.rpb_page;
 					rpb->rpb_line = temp.rpb_line;
@@ -1499,22 +1505,26 @@ bool VIO_chase_record_version(thread_db* tdbb, record_param* rpb,
 				// the first record back may disappear because the primary record was backed
 				// out, and now the first backup back in the primary record's place.
 
-				record_param temp = *rpb;
-				VIO_data(tdbb, rpb, pool);
-				if (temp.rpb_flags & rpb_chained)
+				if (rpb->rpb_flags & rpb_chained)
 				{
-					rpb->rpb_page = temp.rpb_b_page;
-					rpb->rpb_line = temp.rpb_b_line;
-					if (!DPM_fetch(tdbb, rpb, LCK_read))
+					// A back version cannot be re-checked after its page is released:
+					// intermediate GC of another attachment may replace the version
+					// chain meanwhile, and the slot at the saved back pointer may get
+					// a version of another record. So keep the page latched and
+					// follow the back pointer with a handoff.
+
+					VIO_data(tdbb, rpb, pool, true);
+
+					if (!DPM_fetch_back(tdbb, rpb, LCK_read, -1))
 					{
-						// Things have changed, start all over again.
 						if (!DPM_get(tdbb, rpb, LCK_read))
-							return false;	// entire record disappeared
-						break;	// start from the primary version again
+							return false;
 					}
 				}
 				else
 				{
+					record_param temp = *rpb;
+					VIO_data(tdbb, rpb, pool);
 					rpb->rpb_page = temp.rpb_page;
 					rpb->rpb_line = temp.rpb_line;
 					if (!DPM_fetch(tdbb, rpb, LCK_read))
@@ -1758,7 +1768,7 @@ void VIO_copy_record(thread_db* tdbb, jrd_rel* relation, Record* orgRecord, Reco
 }
 
 
-void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
+void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool, bool keepActive)
 {
 /**************************************
  *
@@ -1773,6 +1783,10 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
  *	an INactive record_param.  Yes, Virginia, getting the data for a
  *	record means losing control of the record.  This turns out
  *	to matter a lot.
+ *
+ *	If keepActive is true, the record_param stays active: the page with
+ *	the last fragment of the record stays locked, so the caller can
+ *	follow the back pointer with a handoff.
  **************************************/
 	SET_TDBB(tdbb);
 
@@ -1857,7 +1871,8 @@ void VIO_data(thread_db* tdbb, record_param* rpb, MemoryPool* pool)
 		rpb->rpb_f_line = save_f_line;
 	}
 
-	CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+	if (!keepActive)
+		CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
 
 	// If this is a delta version, apply changes
 	ULONG length;
