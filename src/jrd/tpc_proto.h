@@ -113,6 +113,12 @@ public:
 	//   If transaction is marked active on disk, mark it dead.
 	CommitNumber snapshotState(thread_db* tdbb, TraNumber number);
 
+	// Same as snapshotState(), for a caller that holds the transaction lock (LCK_tra).
+	// While the lock is held, the transaction has no owner and nobody can reconnect
+	// to it. So the lock data is not queried (it could be stale) and the state read
+	// from TIP can't change.
+	CommitNumber lockedState(thread_db* tdbb, TraNumber number);
+
 	// If engine has recalculated Oldest (interesting) transaction or Oldest Snapshot
 	// number for the database (via Sweep or during regular transaction start) it
 	// needs to notify TPC, so that it can release cache resources. Any transaction
@@ -403,6 +409,7 @@ inline void TPC_set_state(thread_db* tdbb, TraNumber number, int state)
 }
 
 int TPC_snapshot_state(thread_db* tdbb, TraNumber number);
+int TPC_locked_state(thread_db* tdbb, TraNumber number);
 
 } // namespace Jrd
 

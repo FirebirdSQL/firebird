@@ -40,6 +40,24 @@ using namespace Firebird;
 
 namespace Jrd {
 
+static int stateFromCommitNumber(CommitNumber stateCn)
+{
+	switch (stateCn)
+	{
+	case CN_ACTIVE:
+		return tra_active;
+
+	case CN_LIMBO:
+		return tra_limbo;
+
+	case CN_DEAD:
+		return tra_dead;
+
+	default:
+		return tra_committed;
+	}
+}
+
 void TipCache::MemoryInitializer::mutexBug(int osErrorCode, const char* text)
 {
 	string msg;
@@ -729,21 +747,51 @@ CommitNumber TipCache::snapshotState(thread_db* tdbb, TraNumber number)
 	if (LCK_read_data(tdbb, &temp_lock))
 		return CN_ACTIVE;
 
+	// Transaction in limbo could be reconnected (by gfix, for example) and then
+	// committed or rolled back while we read its state from TIP. Reconnected
+	// transaction holds its lock in write mode, so take the lock in read mode to
+	// make sure the state does not change until it is put into the cache.
+	// Do not wait for the lock: caller could hold a page latch.
+	{	// scope
+		ThreadStatusGuard temp_status(tdbb);
+
+		if (!LCK_lock(tdbb, &temp_lock, LCK_read, LCK_NO_WAIT))
+			return CN_ACTIVE;
+	}
+
+	Cleanup releaseLock([&]
+	{
+		LCK_release(tdbb, &temp_lock);
+	});
+
+	return lockedState(tdbb, number);
+}
+
+CommitNumber TipCache::lockedState(thread_db* tdbb, TraNumber number)
+{
+	// Can only be called on initialized TipCache
+	fb_assert(m_tpcHeader);
+
+	// The state could be put into the cache before the caller got the lock
+	const CommitNumber stateCn = cacheState(number);
+
+	if (stateCn == CN_DEAD || (stateCn >= CN_PREHISTORIC && stateCn <= CN_MAX_NUMBER))
+		return stateCn;
+
 	// Go to disk, and obtain state of our transaction from TIP
 	const int state = TRA_fetch_state(tdbb, number);
 
-	// We already know for sure that this transaction cannot be active, so mark it dead now
-	// to avoid more work in the future
 	if (state == tra_active)
 	{
+		// We already know for sure that this transaction cannot be active,
+		// so mark it dead now to avoid more work in the future
 		REPL_trans_cleanup(tdbb, number);
 		TRA_set_state(tdbb, 0, number, tra_dead); // This will update TIP cache
 		return CN_DEAD;
 	}
 
 	// Update cache and return new state
-	stateCn = setState(number, state);
-	return stateCn;
+	return setState(number, state);
 }
 
 void TipCache::updateOldestTransaction(thread_db *tdbb, TraNumber oldest, TraNumber oldestSnapshot)
@@ -1280,22 +1328,32 @@ int TPC_snapshot_state(thread_db* tdbb, TraNumber number)
 	if (!cache)
 		return TRA_fetch_state(tdbb, number);
 
-	const CommitNumber stateCn = cache->snapshotState(tdbb, number);
-	switch (stateCn)
-	{
-	case CN_ACTIVE:
-		return tra_active;
-
-	case CN_LIMBO:
-		return tra_limbo;
-
-	case CN_DEAD:
-		return tra_dead;
-
-	default:
-		return tra_committed;
-	}
+	return stateFromCommitNumber(cache->snapshotState(tdbb, number));
 }
 
+int TPC_locked_state(thread_db* tdbb, TraNumber number)
+{
+	TipCache* cache = tdbb->getDatabase()->dbb_tip_cache;
+
+	// This function might be called early during database initialization when
+	// TIP cache does not exist yet (the system transaction changes RDB$FILES
+	// in SDW_init). Do the same work as TipCache::lockedState(), without the cache.
+	if (!cache)
+	{
+		int state = TRA_fetch_state(tdbb, number);
+
+		if (state == tra_active)
+		{
+			// The caller holds the transaction lock, so this transaction has no owner
+			REPL_trans_cleanup(tdbb, number);
+			TRA_set_state(tdbb, 0, number, tra_dead);
+			state = tra_dead;
+		}
+
+		return state;
+	}
+
+	return stateFromCommitNumber(cache->lockedState(tdbb, number));
+}
 
 } // namespace Jrd
