@@ -803,6 +803,11 @@ public:
 		return idp_relation;
 	}
 
+	IndexCode* getCode() noexcept
+	{
+		return idp_latest_code;
+	}
+
 	static FB_UINT64 makeLockId(MetaId relId, MetaId indexId);
 	const QualifiedName& getName();
 
@@ -829,19 +834,15 @@ public:
 		return idp_state;
 	}
 
-	void setTraNum(TraNumber num) noexcept
-	{
-		idp_tranum = num;
-	}
-
 	TraNumber getTraNum() const noexcept
 	{
 		return idp_tranum;
 	}
 
-	IndexCode* refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+	IndexCode* refreshIndexCode(thread_db* tdbb, RelationPermanent* relation,
 		const Ods::index_root_page::irt_repeat* irt_desc);
-	IndexCode* buildIndexCode(thread_db* tdbb, Cached::Relation* relation);
+	bool createIndexCode(thread_db* tdbb, RelationPermanent* relation, bid& expression, bid& condition);
+	bool loadIndexCode(thread_db* tdbb, RelationPermanent* relation, IndexCode* code);
 };
 
 
@@ -869,10 +870,7 @@ public:
 
 	void makeRequests(thread_db* tdbb) {/*!!!!!!!!!!!!!!!*/}
 
-	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags)
-	{
-		return scan(tdbb, flags);
-	}
+	ScanResult reload(thread_db* tdbb, ObjectBase::Flag flags);
 
 	const QualifiedName& getName() const noexcept
 	{
@@ -914,10 +912,10 @@ public:
 
 	void setLtt(thread_db* tdbb, const QualifiedName& name, bool unique, bool descending,
 		USHORT segmentCount, bool inactive = false);
-	IndexCode* lookupIndexCode(thread_db* tdbb, Cached::Relation* relation,
+	IndexCode* lookupIndexCode(thread_db* tdbb, RelationPermanent* relation,
 		const Ods::index_root_page::irt_repeat* irt_desc);
 	void replaceCodeConditional(thread_db* tdbb, IndexCode* newCode);
-	IndexCode* refreshIndexCode(thread_db* tdbb, Cached::Relation* relation,
+	IndexCode* refreshIndexCode(thread_db* tdbb, RelationPermanent* relation,
 		const Ods::index_root_page::irt_repeat* irt_desc);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
@@ -1106,10 +1104,11 @@ public:
 	Cached::Index* lookupIndex(thread_db* tdbb, const QualifiedName& name, ObjectBase::Flag flags);
 	Cached::Index* ensureIndex(thread_db* tdbb, MetaId id);
 
-	void newIndexVersion(thread_db* tdbb, MetaId id)
+	Cached::Index* newIndexVersion(thread_db* tdbb, MetaId id)
 	{
-		[[maybe_unused]] auto chk = rel_indices.newVersion(tdbb, id);
-		fb_assert(chk);
+		auto index = rel_indices.newVersion(tdbb, id);
+		fb_assert(index);
+		return index;
 	}
 
 	IndexVersion* oldIndexVersion(thread_db* tdbb, MetaId id, ObjectBase::Flag scanType)
@@ -1557,7 +1556,7 @@ inline void GCLock::Exclusive::release()
 
 /// class IndexVersion
 
-inline IndexCode* IndexVersion::lookupIndexCode(thread_db* tdbb, Cached::Relation* relation,
+inline IndexCode* IndexVersion::lookupIndexCode(thread_db* tdbb, RelationPermanent* relation,
 		const Ods::index_root_page::irt_repeat* irt_desc)
 {
 	if ((irt_desc->getState() != perm->getState()) || (irt_desc->getTransaction() != perm->getTraNum()))
