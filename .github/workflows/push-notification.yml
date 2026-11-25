@@ -1,0 +1,20 @@
+name: Push email notification
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.repository == 'FirebirdSQL/firebird'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: FirebirdSQL/actions/push-notification@main
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
