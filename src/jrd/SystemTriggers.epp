@@ -42,6 +42,7 @@
 #include "../jrd/met.h"
 #include "../jrd/IntlManager.h"
 #include "../jrd/Tablespace.h"
+#include "../jrd/os/pio_proto.h"
 #include "../common/os/path_utils.h"
 
 
@@ -1649,6 +1650,10 @@ void beforeInsertTablespace(thread_db* tdbb, Record* record)
 	// message CREATE/ALTER TABLESPACE uses, rather than let the store below fail
 	// with a generic conversion error.
 	Tablespace::checkFileNameLength(resolved.length());
+
+	// File with tablespace should not exist
+	if (PIO_file_exists(resolved))
+		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(resolved));
 
 	dsc src;
 	src.makeText((USHORT) resolved.length(), ttype_none, (UCHAR*) resolved.c_str());

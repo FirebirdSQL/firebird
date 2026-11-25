@@ -183,8 +183,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 	DYN_UTIL_check_unique_name(tdbb, QualifiedName(name), obj_tablespace);
 
-	// File with tablespace should not exist. Checking it in DFW is silent and causes
-	// cleanup of existing files at phase 0. Early checking preserves existing files.
+	// File with tablespace should not exist
 	if (PIO_file_exists(fileName.c_str()))
 		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(fileName));
 

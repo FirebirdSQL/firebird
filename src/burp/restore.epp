@@ -7441,8 +7441,7 @@ bool get_tablespace(BurpGlobals* tdgbl)
 	}
 	END_STORE
 	ON_ERROR
-		BURP_print_status(&tdgbl->status_vector);
-		return false;
+		general_on_error ();
 	END_ERROR
 
 	return true;
