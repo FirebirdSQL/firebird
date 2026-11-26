@@ -36,6 +36,8 @@ class Format;
 class Record;
 class thread_db;
 
+// Not thread-safe. fetch() changes the cache, so the same buffer cannot be read concurrently,
+// even when it's already filled.
 class RecordBuffer : public Firebird::PermanentStorage
 {
 public:
