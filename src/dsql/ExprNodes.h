@@ -224,6 +224,14 @@ public:
 	{
 	}
 
+	virtual bool ignoreNulls(const StreamList& /*streams*/) const
+	{
+		// A boolean value expression can turn NULL operands into a non-NULL
+		// result (e.g. FALSE AND NULL = FALSE), so it cannot be generally
+		// treated as NULL-propagating
+		return false;
+	}
+
 	virtual void genBlr(DsqlCompilerScratch* dsqlScratch);
 	virtual void make(DsqlCompilerScratch* dsqlScratch, dsc* desc);
 
