@@ -87,6 +87,7 @@ offset_t RecordBuffer::store(const Record* new_record)
 bool RecordBuffer::fetch(offset_t position, Record* to_record)
 {
 	const ULONG length = record->getLength();
+	fb_assert(to_record->getLength() == length);
 
 	if (position >= count)
 		return false;
@@ -158,6 +159,7 @@ void RecordBuffer::reserveCache()
 	fb_assert(!cacheReserved);
 
 	const ULONG length = record->getLength();
+	fb_assert(length);
 	const offset_t records = MAX(CACHE_SIZE / length, 1);
 	// One more chunk for the batched writes.
 	const FB_SIZE_T size = (CACHE_CHUNKS + 1) * records * length;
