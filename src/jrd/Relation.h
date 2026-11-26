@@ -915,8 +915,6 @@ public:
 	IndexCode* lookupIndexCode(thread_db* tdbb, RelationPermanent* relation,
 		const Ods::index_root_page::irt_repeat* irt_desc);
 	void replaceCodeConditional(thread_db* tdbb, IndexCode* newCode);
-	IndexCode* refreshIndexCode(thread_db* tdbb, RelationPermanent* relation,
-		const Ods::index_root_page::irt_repeat* irt_desc);
 
 	static const enum lck_t LOCKTYPE = LCK_idx_rescan;
 

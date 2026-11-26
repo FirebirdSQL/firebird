@@ -1297,7 +1297,7 @@ bool IndexDuplicateScanner::checkRecord(thread_db* tdbb, record_param* rpb)
 }
 
 
-void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sysRq)
+bool BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sysRq)
 {
 /**************************************
  *
@@ -1317,7 +1317,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 
 	const auto rootPage = relation->getIndexRootPage(tdbb);
 	if (!rootPage)
-		return;
+		return true;
 
 	WIN window(rootPage.value());
 	const index_root_page* const root = BTR_fetch_root(FB_FUNCTION, tdbb, &window);
@@ -1328,6 +1328,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 	});
 
 	const auto relPerm = relation->getPermanent();
+	bool reload = false;
 
 	for (MetaId id = 0; id < root->irt_count; id++)
 	{
@@ -1370,6 +1371,8 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 		{
 			idxList.add(idx);
 		}
+		else if ((idx.idx_flags & (idx_expression | idx_condition)) && !idx.idx_code)
+			reload = true;
 	}
 
 	CCH_RELEASE(tdbb, &window);
@@ -1382,6 +1385,8 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 		else
 			++n;
 	}
+
+	return !reload;
 }
 
 
@@ -1781,6 +1786,14 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	SET_TDBB(tdbb);
 	bool sysRq = flags & BTR_DESCRIBE_SYSTEM_RQ;
 
+	idx->idx_flags = 0;
+	idx->idx_runtime_flags = 0;
+	idx->idx_foreign_dep.clear();
+	idx->idx_primary_relation = 0;
+	idx->idx_primary_index = 0;
+	idx->idx_code = nullptr;
+	idx->idx_fraction = 1.0;
+
 	if (id >= root->irt_count)
 		return false;
 
@@ -1802,12 +1815,6 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 	idx->idx_pg_space_id = pageSpaceId;
 	idx->idx_count = irt_desc->irt_keys;
 	idx->idx_flags = irt_desc->irt_flags;
-	idx->idx_runtime_flags = 0;
-	idx->idx_foreign_dep.clear();
-	idx->idx_primary_relation = 0;
-	idx->idx_primary_index = 0;
-	idx->idx_code = nullptr;
-	idx->idx_fraction = 1.0;
 	idx->idx_state = irt_desc->getState();
 
 	// pick up field ids and type descriptions for each of the fields
@@ -1837,7 +1844,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 			idx->idx_code = idp->refreshIndexCode(tdbb, relation, irt_desc);
 		}
 
-		if (idx->idx_flags & idx_expression && !idx->idx_code->expression)
+		if (idx->idx_flags & idx_expression && !(idx->idx_code && idx->idx_code->expression))
 		{
 			if (tdbb->tdbb_flags & TDBB_sweeper)
 				return false;
@@ -1845,7 +1852,7 @@ bool BTR_description(thread_db* tdbb, Cached::Relation* relation, const index_ro
 			// Definition of index expression is not found for index @1
 			error = isc_idx_expr_not_found;
 		}
-		else if (idx->idx_flags & idx_condition && !idx->idx_code->condition)
+		else if (idx->idx_flags & idx_condition && !(idx->idx_code && idx->idx_code->condition))
 		{
 			if (tdbb->tdbb_flags & TDBB_sweeper)
 				return false;

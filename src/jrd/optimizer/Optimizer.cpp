@@ -1310,7 +1310,8 @@ void Optimizer::compileRelation(StreamType stream)
 		const auto relPages = relation(tdbb)->getPages(tdbb);
 
 		IndexDescList idxList;
-		BTR_all(tdbb, relation(tdbb), idxList, csb->csb_g_flags & csb_internal);
+		if (!BTR_all(tdbb, relation(tdbb), idxList, csb->csb_g_flags & csb_internal))
+			csb->csb_g_flags |= csb_reload;
 
 		MetaId n = idxList.getCount();
 		while (n--)
@@ -1346,7 +1347,8 @@ void Optimizer::compileRelation(StreamType stream)
 			if (updated)
 			{
 				idxList.clear();
-				BTR_all(tdbb, relation(tdbb), idxList, csb->csb_g_flags & csb_internal);
+				if (!BTR_all(tdbb, relation(tdbb), idxList, csb->csb_g_flags & csb_internal))
+					csb->csb_g_flags |= csb_reload;
 			}
 		}
 

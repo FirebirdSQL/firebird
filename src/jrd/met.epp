@@ -2261,9 +2261,11 @@ IndexCode* IndexPermanent::refreshIndexCode(thread_db* tdbb, RelationPermanent* 
 		}
 	}
 
+	bool codeOk = true;
+
 	if ((irt_desc->getState() != idp_state) || (irt_desc->getTransaction() != idp_tranum))
 	{
-		if (irt_desc->getState() != Ods::irt_drop /* ???????????????? */)
+		if (idp_latest_code && irt_desc->getState() != Ods::irt_drop /* ???????????????? */)
 		{
 			auto* index = relation->newIndexVersion(tdbb, getId());
 			if (index)
@@ -2297,16 +2299,14 @@ IndexCode* IndexPermanent::refreshIndexCode(thread_db* tdbb, RelationPermanent* 
 			}
 			END_FOR
 
-			[[maybe_unused]]
-				auto rc = createIndexCode(tdbb, relation, expression, condition);
-			fb_assert(rc);
+			codeOk = createIndexCode(tdbb, relation, expression, condition);
 		}
 	}
 
 	idp_state = irt_desc->getState();
 	idp_tranum = irt_desc->getTransaction();
 
-	return idp_latest_code;
+	return codeOk ? idp_latest_code : nullptr;
 }
 
 

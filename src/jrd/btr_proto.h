@@ -30,7 +30,7 @@
 #include "../jrd/exe.h"
 #include "../jrd/QualifiedName.h"
 
-void	BTR_all(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::IndexDescList&, bool sysRq = false);
+bool	BTR_all(Jrd::thread_db*, Jrd::jrd_rel*, Jrd::IndexDescList&, bool sysRq = false);
 bool	BTR_activate_index(Jrd::thread_db*, Jrd::jrd_rel*, MetaId);
 bool	BTR_cleanup_index(Jrd::thread_db*, const Jrd::QualifiedName&, Jrd::jrd_tra*, MetaId);
 void	BTR_complement_key(Jrd::temporary_key*);
