@@ -27,6 +27,7 @@
 #include "../jrd/exe_proto.h"
 #include "../jrd/par_proto.h"
 #include "../jrd/vio_proto.h"
+#include "../common/utils_proto.h"
 #include "../jrd/optimizer/Optimizer.h"
 #include "RecordSource.h"
 #include <bit>
@@ -41,6 +42,17 @@ using namespace Jrd;
 
 namespace
 {
+	// Arithmetic errors that partial results of the incremental aggregation may raise even when
+	// the aggregation of the whole frame does not.
+	bool isArithmeticOverflow(const status_exception& ex)
+	{
+		const auto status = ex.value();
+
+		return fb_utils::containsErrorCode(status, isc_exception_integer_overflow) ||
+			fb_utils::containsErrorCode(status, isc_numeric_out_of_range) ||
+			fb_utils::containsErrorCode(status, isc_arith_except);
+	}
+
 	// This stream makes possible to reuse a BufferedStream, so each usage maintains a different
 	// cursor position.
 	class BufferedStreamWindow : public BaseBufferedStream
@@ -1135,21 +1147,32 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 
 					if (changes < size)
 					{
-						// Removing first keeps the intermediate results within the values of the last window.
+						// Partial results may overflow even when the result of the window does not.
+						// In this case, aggregate the whole window again.
 
-						forEachDifference(lastIncluded, lastIncludedCount, included, includedCount,
-							[&](SINT64 start, SINT64 end)
-							{
-								aggregateRecords(start, end, true);
-							});
+						try
+						{
+							forEachDifference(lastIncluded, lastIncludedCount, included, includedCount,
+								[&](SINT64 start, SINT64 end)
+								{
+									aggregateRecords(start, end, true);
+								});
 
-						forEachDifference(included, includedCount, lastIncluded, lastIncludedCount,
-							[&](SINT64 start, SINT64 end)
-							{
-								aggregateRecords(start, end, false);
-							});
+							forEachDifference(included, includedCount, lastIncluded, lastIncludedCount,
+								[&](SINT64 start, SINT64 end)
+								{
+									aggregateRecords(start, end, false);
+								});
 
-						aggregated = true;
+							aggregated = true;
+						}
+						catch (const status_exception& ex)
+						{
+							if (!isArithmeticOverflow(ex))
+								throw;
+
+							tdbb->tdbb_status_vector->clearException();
+						}
 					}
 				}
 
@@ -1197,12 +1220,26 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 					impure->windowBlock.endPosition - impure->windowBlock.startPosition + 1)
 			{
 				// The window slides: remove the records that left it and add the ones that entered it.
-				// Removing first keeps the intermediate results within the values of the last window.
+				// Partial results may overflow even when the result of the window does not.
+				// In this case, aggregate the whole window again.
 
-				aggregateRecords(lastWindow.startPosition, impure->windowBlock.startPosition - 1, true);
+				try
+				{
+					aggregateRecords(lastWindow.startPosition, impure->windowBlock.startPosition - 1, true);
 
-				if (impure->windowBlock.endPosition > lastWindow.endPosition)
-					aggregateRecords(lastWindow.endPosition + 1, impure->windowBlock.endPosition, false);
+					if (impure->windowBlock.endPosition > lastWindow.endPosition)
+						aggregateRecords(lastWindow.endPosition + 1, impure->windowBlock.endPosition, false);
+				}
+				catch (const status_exception& ex)
+				{
+					if (!isArithmeticOverflow(ex))
+						throw;
+
+					tdbb->tdbb_status_vector->clearException();
+
+					aggInit(tdbb, request, m_windowMap);
+					aggregateRecords(impure->windowBlock.startPosition, impure->windowBlock.endPosition, false);
+				}
 
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 
