@@ -214,7 +214,8 @@ class Database : public pool_alloc<type_dbb>
 			return m_replConfig.get();
 		}
 
-		bool incTempCacheUsage(FB_SIZE_T size, bool force = false);
+		bool incTempCacheUsage(FB_SIZE_T size);
+		void reserveTempCache(FB_SIZE_T size);
 		void decTempCacheUsage(FB_SIZE_T size);
 
 	private:
@@ -613,10 +614,15 @@ public:
 		return dbb_gblobj_holder->getReplConfig();
 	}
 
-	// With force, the usage is counted even when it exceeds the limit.
-	bool incTempCacheUsage(FB_SIZE_T size, bool force = false)
+	bool incTempCacheUsage(FB_SIZE_T size)
 	{
-		return dbb_gblobj_holder->incTempCacheUsage(size, force);
+		return dbb_gblobj_holder->incTempCacheUsage(size);
+	}
+
+	// Counts the usage even when it exceeds the limit.
+	void reserveTempCache(FB_SIZE_T size)
+	{
+		dbb_gblobj_holder->reserveTempCache(size);
 	}
 
 	void decTempCacheUsage(FB_SIZE_T size)

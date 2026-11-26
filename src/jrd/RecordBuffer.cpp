@@ -165,7 +165,7 @@ void RecordBuffer::reserveCache(thread_db* tdbb)
 	const FB_SIZE_T size = (CACHE_CHUNKS + 1) * records * length;
 	const auto dbb = tdbb->getDatabase();
 
-	dbb->incTempCacheUsage(size, true);
+	dbb->reserveTempCache(size);
 
 	try
 	{
