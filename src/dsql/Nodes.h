@@ -1181,7 +1181,9 @@ public:
 	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const = 0;
 
 	// Inverse of aggPass, removing a value from the aggregation. Used for sliding window frames.
-	// The result must be exactly the same as aggregating again without the removed values.
+	// The result must be the same as aggregating again without the removed values, except that
+	// partial results may raise arithmetic overflow errors that the aggregation of the whole frame
+	// would not. The caller handles these errors by aggregating the whole frame again.
 	// With ignoreOrder, values may be removed in any order, not only in the order they were passed.
 	virtual bool supportsAggRemove(bool /*ignoreOrder*/) const
 	{
