@@ -31,8 +31,10 @@
 
 namespace Jrd {
 
+class Database;
 class Format;
 class Record;
+class thread_db;
 
 class RecordBuffer : public Firebird::PermanentStorage
 {
@@ -53,11 +55,11 @@ public:
 	const Format* getFormat() const;
 
 	void reset();
-	offset_t store(const Record*);
+	offset_t store(thread_db*, const Record*);
 	bool fetch(offset_t, Record*);
 
 private:
-	void reserveCache();
+	void reserveCache(thread_db* tdbb);
 	void releaseCache();
 	void flush();
 
@@ -81,6 +83,7 @@ private:
 	CacheChunk cacheChunks[CACHE_CHUNKS];
 	FB_UINT64 cacheUse = 0;
 	FB_SIZE_T cacheReserved = 0;	// bytes counted in the temp cache usage
+	Database* cacheDbb = nullptr;	// database where cacheReserved is counted
 	offset_t chunkRecords = 0;		// records per chunk
 	unsigned cacheChunkCount = 0;	// number of usable chunks
 	bool batchWrites = false;		// records are written in chunks after the space spilled

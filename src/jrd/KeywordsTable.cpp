@@ -56,7 +56,7 @@ RecordBuffer* KeywordsTable::getRecords(thread_db* tdbb, RelationPermanent* rela
 			const bool reserved = !token.second.nonReserved;
 			putField(tdbb, record, DumpField(f_keyword_reserved, VALUE_BOOLEAN, 1, &reserved));
 
-			recordBuffer->store(record);
+			recordBuffer->store(tdbb, record);
 		}
 	}
 

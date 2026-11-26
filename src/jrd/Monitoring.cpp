@@ -702,7 +702,7 @@ MonitoringSnapshot::MonitoringSnapshot(thread_db* tdbb, MemoryPool& pool)
 				}
 			}
 
-			buffer->store(record);
+			buffer->store(tdbb, record);
 		}
 	}
 }

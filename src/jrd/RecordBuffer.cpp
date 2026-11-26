@@ -52,7 +52,7 @@ void RecordBuffer::reset()
 	space.reset();
 }
 
-offset_t RecordBuffer::store(const Record* new_record)
+offset_t RecordBuffer::store(thread_db* tdbb, const Record* new_record)
 {
 	const ULONG length = record->getLength();
 	fb_assert(new_record->getLength() == length);
@@ -77,7 +77,7 @@ offset_t RecordBuffer::store(const Record* new_record)
 		if (!spilled && !space->inMemory(count * length + length - 1, 1))
 		{
 			spilled = true;
-			reserveCache();
+			reserveCache(tdbb);
 		}
 	}
 
@@ -154,7 +154,7 @@ bool RecordBuffer::fetch(offset_t position, Record* to_record)
 // Allocate the cache after the space spilled to disk. It is counted in the temp cache usage, so
 // other temp spaces spill earlier, but it is allocated even when that exceeds the limit, which
 // is usually the reason of the spill.
-void RecordBuffer::reserveCache()
+void RecordBuffer::reserveCache(thread_db* tdbb)
 {
 	fb_assert(!cacheReserved);
 
@@ -163,7 +163,7 @@ void RecordBuffer::reserveCache()
 	const offset_t records = MAX(CACHE_SIZE / length, 1);
 	// One more chunk for the batched writes.
 	const FB_SIZE_T size = (CACHE_CHUNKS + 1) * records * length;
-	const auto dbb = GET_DBB();
+	const auto dbb = tdbb->getDatabase();
 
 	dbb->incTempCacheUsage(size, true);
 
@@ -178,6 +178,7 @@ void RecordBuffer::reserveCache()
 	}
 
 	cacheReserved = size;
+	cacheDbb = dbb;
 	chunkRecords = records;
 	cacheChunkCount = CACHE_CHUNKS;
 	batchWrites = true;
@@ -197,8 +198,10 @@ void RecordBuffer::releaseCache()
 
 	if (cacheReserved)
 	{
-		GET_DBB()->decTempCacheUsage(cacheReserved);
+		fb_assert(cacheDbb);
+		cacheDbb->decTempCacheUsage(cacheReserved);
 		cacheReserved = 0;
+		cacheDbb = nullptr;
 	}
 }
 
