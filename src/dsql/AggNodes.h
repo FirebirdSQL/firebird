@@ -158,7 +158,7 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
-	bool supportsAggRemove() const override;
+	bool supportsAggRemove(bool ignoreOrder) const override;
 	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
 
 protected:
@@ -374,7 +374,7 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
-	bool supportsAggRemove() const override;
+	bool supportsAggRemove(bool ignoreOrder) const override;
 	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
 
 protected:
@@ -407,7 +407,7 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
-	bool supportsAggRemove() const override;
+	bool supportsAggRemove(bool ignoreOrder) const override;
 	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
 
 protected:
@@ -442,14 +442,9 @@ public:
 	void aggPass(thread_db* tdbb, Request* request, dsc* desc) const override;
 	dsc* aggExecute(thread_db* tdbb, Request* request) const override;
 
-	bool supportsAggRemove() const override
+	bool supportsAggRemove(bool ignoreOrder) const override
 	{
-		return true;
-	}
-
-	bool supportsUnorderedAggRemove() const override
-	{
-		return false;
+		return !ignoreOrder;
 	}
 
 	void prepareAggRemove(CompilerScratch* csb) override;

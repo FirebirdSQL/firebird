@@ -495,7 +495,7 @@ bool AggNode::aggPass(thread_db* tdbb, Request* request) const
 
 void AggNode::aggRemove(thread_db* tdbb, Request* request) const
 {
-	fb_assert(supportsAggRemove() && !distinct && !sort);
+	fb_assert(supportsAggRemove(false) && !distinct && !sort);
 
 	dsc* desc = nullptr;
 
@@ -1768,7 +1768,7 @@ void AvgAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
-bool AvgAggNode::supportsAggRemove() const
+bool AvgAggNode::supportsAggRemove(bool /*ignoreOrder*/) const
 {
 	// Approximate numerics are not exactly reversible.
 	return !distinct && !dialect1 && !(nodFlags & (FLAG_DOUBLE | FLAG_DECFLOAT));
@@ -3016,7 +3016,7 @@ void CountAggNode::aggPass(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/)
 		++impure->vlu_misc.vlu_int64;
 }
 
-bool CountAggNode::supportsAggRemove() const
+bool CountAggNode::supportsAggRemove(bool /*ignoreOrder*/) const
 {
 	return !distinct;
 }
@@ -3290,7 +3290,7 @@ void SumAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 	ArithmeticNode::add(tdbb, desc, &impure->vlu_desc, impure, blr_add, dialect1, nodScale, nodFlags);
 }
 
-bool SumAggNode::supportsAggRemove() const
+bool SumAggNode::supportsAggRemove(bool /*ignoreOrder*/) const
 {
 	// Approximate numerics are not exactly reversible.
 	return !distinct && !dialect1 && !(nodFlags & (FLAG_DOUBLE | FLAG_DECFLOAT));

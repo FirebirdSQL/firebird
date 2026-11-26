@@ -1182,15 +1182,10 @@ public:
 
 	// Inverse of aggPass, removing a value from the aggregation. Used for sliding window frames.
 	// The result must be exactly the same as aggregating again without the removed values.
-	virtual bool supportsAggRemove() const
+	// With ignoreOrder, values may be removed in any order, not only in the order they were passed.
+	virtual bool supportsAggRemove(bool /*ignoreOrder*/) const
 	{
 		return false;
-	}
-
-	// Tells whether aggRemove may remove values in any order, not only in the order they were passed.
-	virtual bool supportsUnorderedAggRemove() const
-	{
-		return supportsAggRemove();
 	}
 
 	// Called during compilation when aggRemove may be used, so the node can allocate what it needs.

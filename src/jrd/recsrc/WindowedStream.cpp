@@ -583,7 +583,7 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 	{
 		const auto aggNode = nodeAs<AggNode>(source);
 
-		if (!aggNode->supportsAggRemove() || !aggNode->deterministic(tdbb))
+		if (!aggNode->supportsAggRemove(false) || !aggNode->deterministic(tdbb))
 			m_supportsAggRemove = false;
 	}
 
@@ -600,7 +600,7 @@ WindowedStream::WindowStream::WindowStream(thread_db* tdbb, CompilerScratch* csb
 	{
 		const auto aggNode = nodeAs<AggNode>(source);
 
-		if (!aggNode->supportsUnorderedAggRemove() || !aggNode->deterministic(tdbb))
+		if (!aggNode->supportsAggRemove(true) || !aggNode->deterministic(tdbb))
 			m_supportsExclusionRemove = false;
 	}
 
