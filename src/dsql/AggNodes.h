@@ -448,6 +448,7 @@ public:
 	}
 
 	void prepareAggRemove(CompilerScratch* csb) override;
+	bool isAggRemoveAvailable(Request* request) const override;
 	void aggRemove(thread_db* tdbb, Request* request, dsc* desc) const override;
 
 protected:
@@ -459,6 +460,7 @@ private:
 	struct QueueImpure
 	{
 		MonotonicQueue* queue;
+		bool disabled;	// the queue used too much memory, until aggFinish
 	};
 
 public:

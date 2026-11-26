@@ -895,6 +895,21 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 		}
 	};
 
+	// Aggregate functions may give up aggRemove while aggregating, for example to limit memory usage.
+	bool supportsAggRemove = m_supportsAggRemove;
+
+	if (supportsAggRemove)
+	{
+		for (const auto source : m_aggSources)
+		{
+			if (!nodeAs<AggNode>(source)->isAggRemoveAvailable(request))
+			{
+				supportsAggRemove = false;
+				break;
+			}
+		}
+	}
+
 	if (!m_needsFrame)
 	{
 		// No function depends on the frame, so there is no need to evaluate it.
@@ -1211,7 +1226,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				aggPass(tdbb, request, m_aggSources, m_aggTargets);
 				aggExecute(tdbb, request, m_aggSources, m_aggTargets);
 			}
-			else if (m_supportsAggRemove && lastWindow.isValid() &&
+			else if (supportsAggRemove && lastWindow.isValid() &&
 				lastWindow.startPosition >= impure->partitionBlock.startPosition &&
 				impure->windowBlock.startPosition > lastWindow.startPosition &&
 				impure->windowBlock.endPosition >= lastWindow.endPosition &&
@@ -1260,7 +1275,7 @@ bool WindowedStream::WindowStream::internalGetRecord(thread_db* tdbb) const
 				if (!lastWindow.isValid() ||
 					impure->windowBlock.startPosition > lastWindow.startPosition ||
 					impure->windowBlock.endPosition < lastWindow.endPosition ||
-					(m_supportsAggRemove && impure->windowBlock.startPosition < lastWindow.startPosition))
+					(supportsAggRemove && impure->windowBlock.startPosition < lastWindow.startPosition))
 				{
 					aggInit(tdbb, request, m_windowMap);
 					passStart = impure->windowBlock.startPosition;

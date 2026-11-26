@@ -3383,6 +3383,10 @@ private:
 	};
 
 public:
+	// Memory limit of the queue. Above it, the queue is given up and the window aggregates again.
+	static constexpr FB_SIZE_T MAX_MEMORY = 4 * 1024 * 1024;
+
+public:
 	explicit MonotonicQueue(MemoryPool& aPool)
 		: pool(aPool),
 		  entries(aPool)
@@ -3403,6 +3407,7 @@ public:
 		entries.clear();
 		head = 0;
 		passed = removed = 0;
+		stringBytes = 0;
 	}
 
 	bool isEmpty() const
@@ -3423,7 +3428,8 @@ public:
 		return &entry.value.vlu_desc;
 	}
 
-	void pass(thread_db* tdbb, const dsc* desc, MaxMinType type)
+	// Returns false when the memory used passed the limit. The queue is still consistent.
+	bool pass(thread_db* tdbb, const dsc* desc, MaxMinType type)
 	{
 		// Remove the values that cannot become the result anymore.
 		while (!isEmpty())
@@ -3439,7 +3445,7 @@ public:
 			if (!((type == TYPE_MAX && result > 0) || (type == TYPE_MIN && result < 0)))
 				break;
 
-			delete last.value.vlu_string;
+			releaseString(last.value);
 			entries.shrink(entries.getCount() - 1);
 		}
 
@@ -3453,13 +3459,18 @@ public:
 		Entry& entry = entries.add();
 		entry.number = passed++;
 		EVL_make_value(tdbb, desc, &entry.value, &pool);
+
+		if (entry.value.vlu_string)
+			stringBytes += sizeof(VaryingString) + entry.value.vlu_string->str_length;
+
+		return entries.getCapacity() * sizeof(Entry) + stringBytes <= MAX_MEMORY;
 	}
 
 	void remove()
 	{
 		if (!isEmpty() && entries[head].number == removed)
 		{
-			delete entries[head].value.vlu_string;
+			releaseString(entries[head].value);
 			++head;
 		}
 
@@ -3467,8 +3478,20 @@ public:
 	}
 
 private:
+	void releaseString(impure_value& value)
+	{
+		if (value.vlu_string)
+		{
+			stringBytes -= sizeof(VaryingString) + value.vlu_string->str_length;
+			delete value.vlu_string;
+			value.vlu_string = nullptr;
+		}
+	}
+
+private:
 	MemoryPool& pool;
 	Array<Entry> entries;
+	FB_SIZE_T stringBytes = 0;
 	FB_SIZE_T head = 0;
 	FB_UINT64 passed = 0;
 	FB_UINT64 removed = 0;
@@ -3493,7 +3516,7 @@ void MaxMinAggNode::aggInit(thread_db* tdbb, Request* request) const
 
 		if (queueImpureValue->queue)
 			queueImpureValue->queue->clear();
-		else
+		else if (!queueImpureValue->disabled)
 		{
 			queueImpureValue->queue = FB_NEW_POOL(*tdbb->getDefaultPool())
 				MonotonicQueue(*tdbb->getDefaultPool());
@@ -3510,7 +3533,13 @@ void MaxMinAggNode::aggFinish(thread_db* tdbb, Request* request) const
 		const auto queueImpureValue = request->getImpure<QueueImpure>(queueImpure);
 		delete queueImpureValue->queue;
 		queueImpureValue->queue = nullptr;
+		queueImpureValue->disabled = false;
 	}
+}
+
+bool MaxMinAggNode::isAggRemoveAvailable(Request* request) const
+{
+	return !queueImpure || !request->getImpure<QueueImpure>(queueImpure)->disabled;
 }
 
 void MaxMinAggNode::aggRemove(thread_db* /*tdbb*/, Request* request, dsc* /*desc*/) const
@@ -3520,7 +3549,9 @@ void MaxMinAggNode::aggRemove(thread_db* /*tdbb*/, Request* request, dsc* /*desc
 	impure_value_ex* impure = request->getImpure<impure_value_ex>(impureOffset);
 	--impure->vlux_count;
 
-	request->getImpure<QueueImpure>(queueImpure)->queue->remove();
+	const auto queue = request->getImpure<QueueImpure>(queueImpure)->queue;
+	fb_assert(queue);
+	queue->remove();
 }
 
 void MaxMinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
@@ -3530,8 +3561,23 @@ void MaxMinAggNode::aggPass(thread_db* tdbb, Request* request, dsc* desc) const
 
 	if (queueImpure)
 	{
-		request->getImpure<QueueImpure>(queueImpure)->queue->pass(tdbb, desc, type);
-		return;
+		const auto queueImpureValue = request->getImpure<QueueImpure>(queueImpure);
+
+		if (const auto queue = queueImpureValue->queue)
+		{
+			if (!queue->pass(tdbb, desc, type))
+			{
+				// The queue uses too much memory. Its first value is the result of the values not
+				// removed yet, so continue as a plain aggregation and make the caller stop removing.
+				EVL_make_value(tdbb, queue->getFirst(), impure);
+
+				delete queue;
+				queueImpureValue->queue = nullptr;
+				queueImpureValue->disabled = true;
+			}
+
+			return;
+		}
 	}
 
 	if (!impure->vlu_desc.dsc_dtype)
@@ -3554,7 +3600,10 @@ dsc* MaxMinAggNode::aggExecute(thread_db* /*tdbb*/, Request* request) const
 		return NULL;
 
 	if (queueImpure)
-		return request->getImpure<QueueImpure>(queueImpure)->queue->getFirst();
+	{
+		if (const auto queue = request->getImpure<QueueImpure>(queueImpure)->queue)
+			return queue->getFirst();
+	}
 
 	return &impure->vlu_desc;
 }

@@ -1200,6 +1200,14 @@ public:
 		fb_assert(false);
 	}
 
+	// aggRemove may become unavailable while aggregating (for example, by a memory limit). The result
+	// stays correct for the values passed and not removed yet, but the caller must not call aggRemove
+	// anymore until aggFinish.
+	virtual bool isAggRemoveAvailable(Request* /*request*/) const
+	{
+		return true;
+	}
+
 	AggNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 
 protected:
