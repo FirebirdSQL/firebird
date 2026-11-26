@@ -243,6 +243,14 @@ public:
 		parameter->par_name = parameter->par_alias = "BOOL";
 	}
 
+	bool ignoreNulls(const StreamList& /*streams*/) const override
+	{
+		// A boolean value expression can turn NULL operands into a non-NULL
+		// result (e.g. FALSE AND NULL = FALSE), so it cannot be generally
+		// treated as NULL-propagating
+		return false;
+	}
+
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	void make(DsqlCompilerScratch* dsqlScratch, dsc* desc) override;
 
