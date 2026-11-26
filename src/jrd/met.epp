@@ -2668,7 +2668,16 @@ void MET_lookup_index_condition(thread_db* tdbb, jrd_rel* relation, index_desc* 
 	}
 	END_FOR
 
+	const bool reload = csb && (csb->csb_g_flags & csb_reload);
 	delete csb;
+
+	// The condition was compiled while the relation is being scanned and it references
+	// fields whose definitions are not loaded yet (e.g. a computed field calls a procedure
+	// that reads the same relation). Use it as is, but do not cache it: the expression
+	// will be compiled again after the relation is scanned completely.
+
+	if (reload)
+		return;
 
 	// If there is no existing index block for this index, create
 	// one and link it in with the index blocks for this relation
@@ -2759,7 +2768,16 @@ void MET_lookup_index_expression(thread_db* tdbb, jrd_rel* relation, index_desc*
 	}
 	END_FOR
 
+	const bool reload = csb && (csb->csb_g_flags & csb_reload);
 	delete csb;
+
+	// The expression was compiled while the relation is being scanned and it references
+	// fields whose definitions are not loaded yet (e.g. a computed field calls a procedure
+	// that reads the same relation). Use it as is, but do not cache it: the expression
+	// will be compiled again after the relation is scanned completely.
+
+	if (reload)
+		return;
 
 	// if there is no existing index block for this index, create
 	// one and link it in with the index blocks for this relation
