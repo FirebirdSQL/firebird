@@ -162,7 +162,9 @@ void RecordBuffer::reserveCache(thread_db* tdbb)
 	fb_assert(length);
 	const offset_t records = MAX(CACHE_SIZE / length, 1);
 	// One more chunk for the batched writes.
-	const FB_SIZE_T size = (CACHE_CHUNKS + 1) * records * length;
+	const FB_UINT64 size64 = FB_UINT64(CACHE_CHUNKS + 1) * records * length;
+	fb_assert(size64 <= MAX_ULONG);
+	const ULONG size = static_cast<ULONG>(size64);
 	const auto dbb = tdbb->getDatabase();
 
 	dbb->reserveTempCache(size);

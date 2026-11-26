@@ -82,7 +82,7 @@ private:
 	Firebird::Array<UCHAR> cache;
 	CacheChunk cacheChunks[CACHE_CHUNKS];
 	FB_UINT64 cacheUse = 0;
-	FB_SIZE_T cacheReserved = 0;	// bytes counted in the temp cache usage
+	ULONG cacheReserved = 0;		// bytes counted in the temp cache usage
 	Database* cacheDbb = nullptr;	// database where cacheReserved is counted
 	offset_t chunkRecords = 0;		// records per chunk
 	unsigned cacheChunkCount = 0;	// number of usable chunks
