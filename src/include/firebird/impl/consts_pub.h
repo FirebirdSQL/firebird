@@ -623,6 +623,7 @@
 
 #define isc_spb_sts_table			64
 #define isc_spb_sts_schema			65
+#define isc_spb_sts_tablespace		66
 
 #define isc_spb_sts_data_pages		0x01
 #define isc_spb_sts_db_log			0x02
@@ -633,6 +634,7 @@
 //#define isc_spb_sts_table			0x40
 #define isc_spb_sts_nocreation		0x80
 #define isc_spb_sts_encryption	   0x100
+#define isc_spb_sts_user_tablespaces	0x200
 
 /***********************************/
 /* Server configuration key values */

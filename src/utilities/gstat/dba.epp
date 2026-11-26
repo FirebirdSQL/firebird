@@ -232,17 +232,48 @@ static void print_help();
 
 #include "../utilities/gstat/dba_proto.h"
 
+namespace
+{
+
+	// Check the length of a name specified for the -t, -sch or -ts switch.
+	// Names longer than the metadata can store are reported truncated.
+
+	void checkNameLength(const char* name, USHORT msg)
+	{
+		if (strlen(name) <= MAX_SQL_IDENTIFIER_LEN)
+			return;
+
+		char shortName[MAX_SQL_IDENTIFIER_LEN + 5];
+		fb_utils::copy_terminate(shortName, name, MAX_SQL_IDENTIFIER_SIZE);
+		memcpy(shortName + MAX_SQL_IDENTIFIER_LEN, "...\0", 4);
+		dba_error(msg, SafeArg() << shortName);
+	}
+
+} // namespace
+
+
 struct dba_mem
 {
 	char* memory;
 	dba_mem* mem_next;
 };
 
-struct TableSpace
+struct Tablespace
 {
 	ULONG id = INVALID_PAGE_SPACE;
 	MetaString name;
 	dba_fil* file = nullptr;
+
+	// Used for SortedArray::find
+	static ULONG generate(const Tablespace* tablespace) { return tablespace->id; }
+};
+
+// Tablespace explicitly specified by the user with the -ts switch
+
+struct SpecifiedTablespace
+{
+	ULONG id = INVALID_PAGE_SPACE;
+	MetaString name;
 };
 
 // threading declarations for thread data
@@ -251,13 +282,16 @@ class tdba final : public ThreadData
 {
 public:
 	explicit tdba(Firebird::UtilSvc* us)
-		: ThreadData(tddDBA), uSvc(us), tablespaces(us->getPool())
+		: ThreadData(tddDBA), uSvc(us), tablespaces(us->getPool()),
+		  specifiedTablespaces(us->getPool())
 	{
 		dba_status = dba_status_vector;
 	}
 
 	Firebird::UtilSvc* uSvc;
-	Firebird::Array<TableSpace> tablespaces;
+	Firebird::Array<Tablespace> tablespaces;
+	Firebird::Array<SpecifiedTablespace> specifiedTablespaces;
+	bool sw_tablespace = false;	// the -ts switch is in effect
 	dba_rel* relations = nullptr;
 	dba_schema* schemas = nullptr;
 	USHORT page_size = 0;
@@ -276,16 +310,209 @@ public:
 	{
 		return (tdba*) ThreadData::getSpecific();
 	}
+
 	static inline void putSpecific(tdba* &tddba, tdba* thd_context)
 	{
 		tddba = thd_context;
 		tddba->ThreadData::putSpecific();
 	}
+
 	static inline void restoreSpecific()
 	{
 		ThreadData::restoreSpecific();
 	}
+
+	// Tablespace support: handling of the -ts switch, id lookup, filtering of
+	// the objects it selects and the "Tablespaces:" report
+
+	void specifyTablespace(const char* name);
+	ULONG findTablespaceId(const char* name) const;
+	bool checkTablespaceFilter(ULONG pageSpaceId) const;
+	void printRelationHeader(const dba_rel* relation) const;
+	void printTablespacesInfo() const;
+
+private:
+	bool printTablespaceTables(ULONG tablespaceId) const;
+	bool printTablespaceIndices(ULONG tablespaceId) const;
+	void printTablespaceInfo(const Tablespace& tablespace) const;
 };
+
+
+// Remember a tablespace specified with the -ts switch. Its id is resolved later,
+// when RDB$TABLESPACES is read.
+
+void tdba::specifyTablespace(const char* name)
+{
+	checkNameLength(name, 71);
+	// msg 71: option -ts got a too long tablespace name @1
+
+	const MetaString tsName(name);
+
+	for (const auto& tablespace : specifiedTablespaces)
+	{
+		if (tablespace.name == tsName)
+			return; // the same tablespace may be specified more than once
+	}
+
+	specifiedTablespaces.add({INVALID_PAGE_SPACE, tsName});
+}
+
+
+// Find the id of a tablespace by its name. Objects that have no tablespace
+// assigned are always located in the primary tablespace.
+
+ULONG tdba::findTablespaceId(const char* name) const
+{
+	if (!name)
+		return DB_PAGE_SPACE;
+
+	for (const auto& tablespace : tablespaces)
+	{
+		if (tablespace.name == name)
+			return tablespace.id;
+	}
+
+	// The metadata refers to a tablespace that doesn't exist. Better report the
+	// object as located in an unknown tablespace than attribute it to a real one.
+
+	fb_assert(false);
+	return INVALID_PAGE_SPACE;
+}
+
+
+// Check if the objects located in the given tablespace should be analyzed and
+// printed when the -ts switch is in effect. When no tablespace names are given,
+// everything but the primary tablespace is included.
+
+bool tdba::checkTablespaceFilter(ULONG pageSpaceId) const
+{
+	if (!sw_tablespace)
+		return true;
+
+	if (specifiedTablespaces.isEmpty())
+		return (pageSpaceId != DB_PAGE_SPACE);
+
+	for (const auto& tablespace : specifiedTablespaces)
+	{
+		if (tablespace.id == pageSpaceId)
+			return true;
+	}
+
+	return false;
+}
+
+
+// Print the header of a relation
+
+void tdba::printRelationHeader(const dba_rel* relation) const
+{
+	uSvc->printf(false, "%s (%d)\n",
+		QualifiedMetaString(relation->rel_name, relation->rel_schema).toQuotedString().c_str(),
+		relation->rel_id);
+}
+
+
+// Print the tables located in the given tablespace. Relations named with -t but
+// missing in the database are skipped, only the ones read from the metadata have
+// a tablespace assigned.
+
+bool tdba::printTablespaceTables(ULONG tablespaceId) const
+{
+	bool printed = false;
+
+	for (const dba_rel* relation = relations; relation; relation = relation->rel_next)
+	{
+		if (relation->rel_id == -1 || relation->rel_pagespace_id != tablespaceId)
+			continue;
+
+		if (!printed)
+		{
+			uSvc->printf(false, "    Tables:\n");
+			printed = true;
+		}
+
+		uSvc->printf(false, "\t%s\n",
+			QualifiedMetaString(relation->rel_name, relation->rel_schema)
+				.toQuotedString().c_str());
+	}
+
+	return printed;
+}
+
+
+// Print the indices located in the given tablespace
+
+bool tdba::printTablespaceIndices(ULONG tablespaceId) const
+{
+	bool printed = false;
+
+	for (const dba_rel* relation = relations; relation; relation = relation->rel_next)
+	{
+		for (const dba_idx* index = relation->rel_indexes; index; index = index->idx_next)
+		{
+			if (index->idx_pagespace_id != tablespaceId)
+				continue;
+
+			if (!printed)
+			{
+				uSvc->printf(false, "    Indices:\n");
+				printed = true;
+			}
+
+			uSvc->printf(false, "\t%s (%s)\n",
+				QualifiedMetaString(index->idx_name, relation->rel_schema)
+					.toQuotedString().c_str(),
+				QualifiedMetaString(relation->rel_name, relation->rel_schema)
+					.toQuotedString().c_str());
+		}
+	}
+
+	return printed;
+}
+
+
+// Print a tablespace along with the objects it contains
+
+void tdba::printTablespaceInfo(const Tablespace& tablespace) const
+{
+	uSvc->printf(false, "%s (%u)\n", tablespace.name.c_str(), tablespace.id);
+	uSvc->printf(false, "    Full path: %s\n", tablespace.file->fil_string);
+
+	// The tablespace of a table is known from its metadata, therefore the tables
+	// are reported even when their data pages are not analyzed
+
+	const bool printedTables = printTablespaceTables(tablespace.id);
+	const bool printedIndices = printTablespaceIndices(tablespace.id);
+
+	if (!printedTables && !printedIndices)
+		uSvc->printf(false, "    Tablespace is empty\n");
+
+	uSvc->printf(false, "\n");
+}
+
+
+// Print the tablespaces selected with the -ts switch or all of them
+
+void tdba::printTablespacesInfo() const
+{
+	// Keep the tablespaces sorted by their ids to make the output predictable
+	SortedArray<const Tablespace*, InlineStorage<const Tablespace*, 8>, ULONG, Tablespace>
+		selectedTablespaces(uSvc->getPool());
+
+	for (const auto& tablespace : tablespaces)
+	{
+		if (checkTablespaceFilter(tablespace.id))
+			selectedTablespaces.add(&tablespace);
+	}
+
+	if (!selectedTablespaces.hasData())
+		return;
+
+	uSvc->printf(false, "\nTablespaces:\n");
+
+	for (const auto& tablespace : selectedTablespaces)
+		printTablespaceInfo(*tablespace);
+}
 
 
 [[noreturn]] void inline dba_exit(int code, tdba* tddba)
@@ -583,14 +810,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 			sw_relation = true;
 			while (argv < end && **argv != '-')
 			{
-				if (strlen(*argv) > MAX_SQL_IDENTIFIER_LEN)
-				{
-					char tbname[MAX_SQL_IDENTIFIER_LEN + 5];
-					fb_utils::copy_terminate(tbname, *argv, MAX_SQL_IDENTIFIER_SIZE);
-					memcpy(tbname + MAX_SQL_IDENTIFIER_LEN, "...\0", 4);
-					dba_error(42, SafeArg() << tbname);	// option -t got a too long table name @1
-					break;
-				}
+				checkNameLength(*argv, 42);	// option -t got a too long table name @1
 
 				dba_rel* relation = (dba_rel*) alloc(sizeof(struct dba_rel));
 				strcpy(relation->rel_name, *argv++);
@@ -603,7 +823,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 				*next = relation;
 
 				// CVC: If the db name wasn't given yet, only one table name can be specified
-				// after -t to avoid ambiguity.
+				// after -t to avoid ambiguity
 				if (!name)
 					break;
 			}
@@ -613,14 +833,7 @@ int gstat(Firebird::UtilSvc* uSvc)
 			sw_schema = true;
 			while (argv < end && **argv != '-')
 			{
-				if (strlen(*argv) > MAX_SQL_IDENTIFIER_LEN)
-				{
-					char schname[MAX_SQL_IDENTIFIER_LEN + 5];
-					fb_utils::copy_terminate(schname, *argv, MAX_SQL_IDENTIFIER_SIZE);
-					memcpy(schname + MAX_SQL_IDENTIFIER_LEN, "...\0", 4);
-					dba_error(67, SafeArg() << schname);	// option -sch got a too long schema name @1
-					break;
-				}
+				checkNameLength(*argv, 67);	// option -sch got a too long schema name @1
 
 				dba_schema* schema = (dba_schema*) alloc(sizeof(struct dba_schema));
 				strcpy(schema->name, *argv++);
@@ -632,7 +845,20 @@ int gstat(Firebird::UtilSvc* uSvc)
 				*next = schema;
 
 				// If the db name wasn't given yet, only one schema name can be specified
-				// after -s to avoid ambiguity.
+				// after -s to avoid ambiguity
+				if (!name)
+					break;
+			}
+			break;
+
+		case IN_SW_DBA_TABLESPACE:
+			tddba->sw_tablespace = true;
+			while (argv < end && **argv != '-')
+			{
+				tddba->specifyTablespace(*argv++);
+
+				// If the db name wasn't given yet, only one tablespace name can be specified
+				// after -ts to avoid ambiguity
 				if (!name)
 					break;
 			}
@@ -859,7 +1085,38 @@ int gstat(Firebird::UtilSvc* uSvc)
 	isc_req_handle request3 = 0;
 	isc_req_handle request4 = 0;
 	isc_req_handle request5 = 0;
-	isc_req_handle request6 = 0;
+
+	// Open the tablespace files and resolve the tablespaces specified with -ts
+
+	FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request5)
+		TS IN RDB$TABLESPACES
+	{
+		const char* const tsName = fb_utils::exact_name(TS.RDB$TABLESPACE_NAME);
+		const char* const tsFileName = fb_utils::exact_name(TS.RDB$FILE_NAME);
+		db_open(TS.RDB$TABLESPACE_ID, tsName, tsFileName);
+
+		for (auto& tablespace : tddba->specifiedTablespaces)
+		{
+			if (tablespace.name == tsName)
+				tablespace.id = TS.RDB$TABLESPACE_ID;
+		}
+	}
+	END_FOR
+	ON_ERROR
+		dba_exit(FINI_ERROR, tddba);
+	END_ERROR
+
+	if (tddba->sw_tablespace)
+	{
+		for (const auto& tablespace : tddba->specifiedTablespaces)
+		{
+			if (tablespace.id == INVALID_PAGE_SPACE)
+			{
+				dba_error(70, SafeArg() << tablespace.name.c_str());
+				// msg 70: tablespace @1 not found
+			}
+		}
+	}
 
 	FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request1)
 		X IN RDB$RELATIONS
@@ -946,18 +1203,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 			dba_exit(FINI_ERROR, tddba);
 		END_ERROR
 
-		relation->rel_pagespace_id = DB_PAGE_SPACE;
-
-		FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request5)
-			TS IN RDB$TABLESPACES
-			WITH TS.RDB$TABLESPACE_NAME = X.RDB$TABLESPACE_NAME
-		{
-			relation->rel_pagespace_id = TS.RDB$TABLESPACE_ID;
-		}
-		END_FOR
-		ON_ERROR
-			dba_exit(FINI_ERROR, tddba);
-		END_ERROR
+		const char* const relationTsName = X.RDB$TABLESPACE_NAME.NULL ?
+			nullptr : fb_utils::exact_name(X.RDB$TABLESPACE_NAME);
+		relation->rel_pagespace_id = tddba->findTablespaceId(relationTsName);
 
 		if (sw_index)
 		{
@@ -970,12 +1218,20 @@ int gstat(Firebird::UtilSvc* uSvc)
 				if (Y.RDB$INDEX_INACTIVE)
 					  continue;
 
+				const char* const indexTsName = Y.RDB$TABLESPACE_NAME.NULL ?
+					nullptr : fb_utils::exact_name(Y.RDB$TABLESPACE_NAME);
+				const ULONG indexPagespaceId = tddba->findTablespaceId(indexTsName);
+
+				if (!tddba->checkTablespaceFilter(indexPagespaceId))
+					continue;
+
 				dba_idx* index = (dba_idx*) alloc(sizeof(struct dba_idx));
 				index->idx_next = relation->rel_indexes;
 				relation->rel_indexes = index;
 				strcpy(index->idx_name, Y.RDB$INDEX_NAME);
 				fb_utils::exact_name(index->idx_name);
 				index->idx_id = Y.RDB$INDEX_ID - 1;
+				index->idx_pagespace_id = indexPagespaceId;
 			}
 			END_FOR
 			ON_ERROR
@@ -1012,18 +1268,6 @@ int gstat(Firebird::UtilSvc* uSvc)
 		dba_exit(FINI_ERROR, tddba);
 	END_ERROR
 
-	FOR(TRANSACTION_HANDLE transact1 REQUEST_HANDLE request6)
-		TS IN RDB$TABLESPACES
-	{
-		const char* const tsName = fb_utils::exact_name(TS.RDB$TABLESPACE_NAME);
-		const char* const fileName = fb_utils::exact_name(TS.RDB$FILE_NAME);
-		db_open(TS.RDB$TABLESPACE_ID, tsName, fileName);
-	}
-	END_FOR
-	ON_ERROR
-		dba_exit(FINI_ERROR, tddba);
-	END_ERROR
-
 	auto getTablespaceName = [&tddba](ULONG id) -> const char*
 	{
 		for (const auto& tablespace : tddba->tablespaces)
@@ -1050,9 +1294,6 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	if (request5)
 		isc_release_request(status_vector, &request5);
-
-	if (request6)
-		isc_release_request(status_vector, &request6);
 
 	COMMIT transact1;
 	ON_ERROR
@@ -1088,6 +1329,8 @@ int gstat(Firebird::UtilSvc* uSvc)
 		}
 	}
 
+	tddba->printTablespacesInfo();
+
 	dba_print(false, 10);
 	// msg 10: \nAnalyzing database pages ...\n
 
@@ -1102,9 +1345,9 @@ int gstat(Firebird::UtilSvc* uSvc)
 			continue;
 		}
 
-		if (sw_data) {
+		if (sw_data && tddba->checkTablespaceFilter(relation->rel_pagespace_id))
 			analyze_data(relation, sw_record);
-		}
+
 		for (dba_idx* index = relation->rel_indexes; index; index = index->idx_next)
 		{
 			checkForShutdown(tddba);
@@ -1116,16 +1359,13 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 	for (const dba_rel* relation = tddba->relations; relation; relation = relation->rel_next)
 	{
-		if (relation->rel_id == -1) {
+		if (relation->rel_id == -1)
 			continue;
-		}
 
-		uSvc->printf(false, "%s (%d)\n",
-			QualifiedMetaString(relation->rel_name, relation->rel_schema).toQuotedString().c_str(),
-			relation->rel_id);
-
-		if (sw_data)
+		if (sw_data && tddba->checkTablespaceFilter(relation->rel_pagespace_id))
 		{
+			tddba->printRelationHeader(relation);
+
 			uSvc->printf(false, "    Tablespace: %s\n", getTablespaceName(relation->rel_pagespace_id));
 
 			dba_print(false, 11, SafeArg() << relation->rel_pointer_page << relation->rel_index_root);
@@ -1227,8 +1467,20 @@ int gstat(Firebird::UtilSvc* uSvc)
 
 			dba_print(false, 13);	// msg 13: "    Fill distribution:"
 			print_distribution("\t", relation->rel_fill_distribution);
+			uSvc->printf(false, "\n");
 		}
-		uSvc->printf(false, "\n");
+		else if (!tddba->sw_tablespace)
+		{
+			// Without -ts the table name is printed even when its data is not analyzed
+			tddba->printRelationHeader(relation);
+			uSvc->printf(false, "\n");
+		}
+		else if (relation->rel_indexes)
+		{
+			// With -ts a table is reported even when only its indexes, already filtered
+			// when they were collected, are located in the selected tablespaces
+			tddba->printRelationHeader(relation);
+		}
 
 		for (const dba_idx* index = relation->rel_indexes; index; index = index->idx_next)
 		{
@@ -2348,4 +2600,5 @@ static void print_help()
 			dba_print(true, in_sw_tab->in_sw_msg);
 	}
 	dba_print(true, 43);	// option -t accepts...
+	dba_print(true, 69);	// option -ts accepts...
 }

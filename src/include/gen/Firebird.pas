@@ -4624,6 +4624,7 @@ const
 	isc_spb_num_db = byte(6);
 	isc_spb_sts_table = byte(64);
 	isc_spb_sts_schema = byte(65);
+	isc_spb_sts_tablespace = byte(66);
 	isc_spb_sts_data_pages = $01;
 	isc_spb_sts_db_log = $02;
 	isc_spb_sts_hdr_pages = $04;
@@ -4632,6 +4633,7 @@ const
 	isc_spb_sts_record_versions = $20;
 	isc_spb_sts_nocreation = $80;
 	isc_spb_sts_encryption = $100;
+	isc_spb_sts_user_tablespaces = $200;
 	isc_spb_nbk_level = byte(5);
 	isc_spb_nbk_file = byte(6);
 	isc_spb_nbk_direct = byte(7);

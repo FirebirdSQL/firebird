@@ -2876,6 +2876,7 @@ bool Service::process_switches(ClumpletReader& spb, string& switches)
 			{
 			case isc_spb_sts_table:
 			case isc_spb_sts_schema:
+			case isc_spb_sts_tablespace:
 				if (!get_action_svc_parameter(spb.getClumpTag(), dba_in_sw_table, switches))
 				{
 					return false;

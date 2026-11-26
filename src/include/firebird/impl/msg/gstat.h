@@ -65,3 +65,7 @@ FB_IMPL_MSG_NO_SYMBOL(GSTAT, 64, "        Level @1: @2, total length: @3, blob p
 FB_IMPL_MSG_NO_SYMBOL(GSTAT, 65, "    -sch    schemaname <schemaname2...> (case sensitive)")
 FB_IMPL_MSG_NO_SYMBOL(GSTAT, 66, "option -sch needs a schema name")
 FB_IMPL_MSG_NO_SYMBOL(GSTAT, 67, "option -sch got a too long schema name @1")
+FB_IMPL_MSG_NO_SYMBOL(GSTAT, 68, "    -ts     tablespacename <tablespacename2...> (case sensitive)")
+FB_IMPL_MSG_NO_SYMBOL(GSTAT, 69, "option -ts accepts several tablespace names only if used after <database>")
+FB_IMPL_MSG_NO_SYMBOL(GSTAT, 70, "tablespace @1 not found")
+FB_IMPL_MSG_NO_SYMBOL(GSTAT, 71, "option -ts got a too long tablespace name @1")
