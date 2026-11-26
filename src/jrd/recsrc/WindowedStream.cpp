@@ -705,6 +705,11 @@ void WindowedStream::WindowStream::close(thread_db* tdbb) const
 	if (impure->irsb_flags & irsb_open)
 		aggFinish(tdbb, request, m_windowMap);
 
+	// The peer group ends bitmap may be large, so do not keep it while the stream is closed.
+	delete [] impure->peerBits;
+	impure->peerBits = nullptr;
+	impure->peerCapacity = impure->peerUsed = 0;
+
 	BaseAggWinStream::close(tdbb);
 }
 
