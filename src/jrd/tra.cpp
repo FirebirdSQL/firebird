@@ -3629,7 +3629,8 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	// Link the transaction to the attachment block before releasing
 	// header page for handling signals.
 
-	trans->linkToAttachment(attachment);
+	if (!(trans->tra_flags & TRA_meta))
+		trans->linkToAttachment(attachment);
 
 	try
 	{
