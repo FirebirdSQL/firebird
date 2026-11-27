@@ -52,6 +52,7 @@ class ExternalFile;
 class RelationPermanent;
 class jrd_rel;
 class Record;
+class ForeignTableAdapter;
 
 // trigger types
 inline constexpr int TRIGGER_PRE_STORE		= 1;
@@ -1171,7 +1172,19 @@ public:
 		return (rel_flags & REL_temp_ltt);
 	}
 
+	ForeignTableAdapter* getForeignAdapter() const noexcept
+	{
+		return rel_foreign_adapter;
+	}
+
+	void setForeignAdapter(ForeignTableAdapter* adapter) noexcept
+	{
+		fb_assert(!rel_foreign_adapter);
+		rel_foreign_adapter = adapter;
+	}
+
 	bool isReplicating(thread_db* tdbb);
+	bool isPageBased() const noexcept;
 
 	static int partners_ast_relation(void* ast_object);
 
@@ -1255,6 +1268,7 @@ private:
 	RelationPages* rel_pages_free = nullptr;
 
 	Firebird::Array<RelationPages*> rel_pagespaces;
+	ForeignTableAdapter* rel_foreign_adapter = nullptr;
 };
 
 
@@ -1340,6 +1354,11 @@ public:
 		return rel_perm->getOwnerName();
 	}
 
+	bool isPageBased() const noexcept
+	{
+		return rel_perm->isPageBased();
+	}
+
 	bool isTemporary() const noexcept
 	{
 		return rel_perm->isTemporary();
@@ -1378,6 +1397,11 @@ public:
 	bool checkFlags(ULONG mask)
 	{
 		return (rel_perm->rel_flags & mask);
+	}
+
+	ForeignTableAdapter* getForeignAdapter() const noexcept
+	{
+		return rel_perm->getForeignAdapter();
 	}
 
 	Record* getGCRecord(thread_db* tdbb)
@@ -1468,6 +1492,10 @@ private:
 	RelationPages* m_basePages = nullptr;
 };
 
+inline bool RelationPermanent::isPageBased() const noexcept
+{
+	return (!getExtFile() && !isView() && !isVirtual() && !getForeignAdapter());
+}
 
 /// class GCLock::Shared
 

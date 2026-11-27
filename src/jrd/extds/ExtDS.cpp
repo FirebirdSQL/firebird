@@ -43,6 +43,7 @@
 #include "../evl_proto.h"
 #include "../intl_proto.h"
 #include "../mov_proto.h"
+#include "../ForeignServer.h"
 
 
 #ifdef HAVE_SYS_TYPES_H
@@ -195,7 +196,8 @@ static bool isCurrentAccount(UserId* currUserID,
 }
 
 Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
-	const string& user, const string& pwd, const string& role, TraScope tra_scope)
+	const string& user, const string& pwd, const string& role, const PathName& providers, TraScope tra_scope,
+	const string& options)
 {
 	Attachment* att = tdbb->getAttachment();
 	if (att->att_ext_call_depth >= MAX_CALLBACKS)
@@ -214,8 +216,26 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	if (!isCurrentAtt)
 		prv->generateDPB(tdbb, dpb, user, pwd, role);
 
+	if (!providers.isEmpty())
+		dpb.insertString(isc_dpb_config, providers);
+
+	if (options.hasData())
+		dpb.insertString(isc_dpb_foreign_options, options);
+
+	return getProviderConnection(tdbb, prv, dpb, dbName.ToString(), user, pwd, role, tra_scope);
+}
+
+Connection* Manager::getProviderConnection(thread_db* tdbb, Provider* prv,
+	ClumpletWriter& dpb, const string& dbName, const string& user,
+	const string& pwd, const string& role, TraScope tra_scope)
+{
+	Attachment* att = tdbb->getAttachment();
+
+	const bool isCurrentAtt = (prv->getName() == INTERNAL_PROVIDER_NAME) &&
+	 	isCurrentAccount(att->att_user, user, pwd, role);
+
 	// look up at connections already bound to current attachment
-	Connection* conn = prv->getBoundConnection(tdbb, dbName, dpb, tra_scope, isCurrentAtt);
+	Connection* conn = prv->getBoundConnection(tdbb, dbName.ToPathName(), dpb, tra_scope, isCurrentAtt);
 	if (conn)
 		return conn;
 
@@ -235,7 +255,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 
 		while (true)
 		{
-			conn = m_connPool->getConnection(tdbb, prv, hash, dbName, dpb, ch);
+			conn = m_connPool->getConnection(tdbb, prv, hash, dbName.ToPathName(), dpb, ch);
 			if (!conn)
 				break;
 
@@ -254,7 +274,7 @@ Connection* Manager::getConnection(thread_db* tdbb, const string& dataSource,
 	if (!conn)
 	{
 		// finally, create new connection
-		conn = prv->createConnection(tdbb, dbName, dpb, tra_scope);
+		conn = prv->createConnection(tdbb, dbName.ToPathName(), dpb, tra_scope);
 		if (!isCurrentAtt)
 			m_connPool->addConnection(tdbb, conn, hash);
 	}
@@ -320,6 +340,10 @@ void Provider::generateDPB(thread_db* tdbb, ClumpletWriter& dpb,
 	if ((getFlags() & prvTrustedAuth) &&
 		isCurrentAccount(attachment->att_user, user, pwd, role))
 	{
+		if (!user.isEmpty()) {
+			dpb.insertString(isc_dpb_user_name, user);
+		}
+
 		attachment->att_user->populateDpb(dpb, true);
 	}
 	else
@@ -592,7 +616,8 @@ Connection::Connection(Provider& prov) :
 	m_sqlDialect(0),
 	m_wrapErrors(true),
 	m_broken(false),
-	m_features{}
+	m_features{},
+	m_foreignAdapter(nullptr)
 {
 }
 
@@ -607,6 +632,9 @@ void Connection::setup(const PathName& dbName, const ClumpletReader& dpb)
 void Connection::deleteConnection(thread_db* tdbb, Connection* conn)
 {
 	conn->m_deleting = true;
+
+	if (conn->m_foreignAdapter)
+		conn->m_foreignAdapter->releaseConnection();
 
 	if (conn->isConnected())
 		conn->detach(tdbb);
@@ -1736,6 +1764,8 @@ void Transaction::detachFromJrdTran()
 void Transaction::jrdTransactionEnd(thread_db* tdbb, jrd_tra* transaction,
 		bool commit, bool retain, bool force)
 {
+	transaction->tra_foreign_blob_map.clear();
+
 	Transaction* tran = transaction->tra_ext_common;
 	while (tran)
 	{
@@ -1773,6 +1803,7 @@ Statement::Statement(Connection& conn) :
 	m_nextInReq(NULL),
 	m_prevInReq(NULL),
 	m_sql(getPool()),
+	m_rawSql(getPool()),
 	m_singleton(false),
 	m_active(false),
 	m_fetched(false),

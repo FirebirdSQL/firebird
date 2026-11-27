@@ -326,3 +326,8 @@ FB_IMPL_MSG(DYN, 333, dyn_cant_set_ts_table, -901, "42", "000", "Cannot set tabl
 FB_IMPL_MSG(DYN, 334, dyn_cant_set_ts_index, -901, "42", "000", "Cannot set tablespace for temporary index @1")
 FB_IMPL_MSG(DYN, 335, dyn_dup_tablespace, -901, "42", "000", "Tablespace @1 already exists")
 FB_IMPL_MSG(DYN, 336, dyn_cannot_mod_sys_ts, -901, "42", "000", "Cannot ALTER or DROP system tablespace @1")
+FB_IMPL_MSG(DYN, 337, dyn_foreign_server_not_found, -901, "42", "000", "Foreign server @1 not found")
+FB_IMPL_MSG(DYN, 338, dyn_user_mapping_not_found, -901, "42", "000", "User mapping for user @1 and server @2 not found")
+FB_IMPL_MSG(DYN, 339, dyn_foreign_server_already_exists, -901, "42", "000", "Foreign server @1 already exists")
+FB_IMPL_MSG(DYN, 340, dyn_foreign_server_not_exist, -901, "42", "000", "Foreign server @1 does not exist")
+FB_IMPL_MSG_NO_SYMBOL(DYN, 341, "attempt to index a foreign table")
