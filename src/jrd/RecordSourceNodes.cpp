@@ -2254,6 +2254,18 @@ static void collectAllStreams(const ExprNode* node, SortedStreamList& streams)
 		collectAllStreams(*ref, streams);
 }
 
+static void collectAllStreams(const WindowClause::FrameExtent* frameExtent, SortedStreamList& streams)
+{
+	if (!frameExtent)
+		return;
+
+	if (frameExtent->frame1)
+		collectAllStreams(frameExtent->frame1->value, streams);
+
+	if (frameExtent->frame2)
+		collectAllStreams(frameExtent->frame2->value, streams);
+}
+
 void ProcedureSourceNode::collectNestedStreams(SortedStreamList& streamList) const
 {
 	collectAllStreams(inputSources, streamList);
@@ -2286,6 +2298,7 @@ void WindowSourceNode::collectNestedStreams(SortedStreamList& streamList) const
 		collectAllStreams(window.regroup, streamList);
 		collectAllStreams(window.order, streamList);
 		collectAllStreams(window.map, streamList);
+		collectAllStreams(window.frameExtent, streamList);
 	}
 }
 
