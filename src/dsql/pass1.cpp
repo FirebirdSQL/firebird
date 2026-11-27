@@ -648,6 +648,10 @@ dsql_ctx* PASS1_make_context(DsqlCompilerScratch* dsqlScratch, RecordSourceNode*
 		fb_assert(tableValueFunctionContext);
 		tableValueFunctionContext->outputField = tableValueFunctionNode->makeField(dsqlScratch);
 
+		// Default column name is the function name, needed even if the column is not referenced.
+		if (tableValueFunctionContext->outputField->fld_name.isEmpty())
+			tableValueFunctionContext->outputField->fld_name = tableValueFunctionContext->funName;
+
 		context->ctx_proc_inputs = tableValueFunctionNode->inputList;
 	}
 
