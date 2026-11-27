@@ -6564,6 +6564,21 @@ static void purge(thread_db* tdbb, record_param* rpb)
 		return; // true;
 	}
 
+	// The record could be in the middle of an update by another transaction,
+	// see fragment() in dpm.epp: the header still has the old transaction number
+	// but the back pointer already refers to the new back version. That version
+	// could be stored at the address we saw before, so the check above passes.
+	// Such a record is marked as gc_active and its owner holds the record GC lock.
+	if (rpb->rpb_flags & rpb_gc_active)
+	{
+		int state;
+		if (checkGCActive(tdbb, rpb, state))
+		{
+			CCH_RELEASE(tdbb, &rpb->getWindow(tdbb));
+			return;
+		}
+	}
+
 	rpb->rpb_b_page = 0;
 	rpb->rpb_b_line = 0;
 	rpb->rpb_flags &= ~(rpb_delta | rpb_gc_active);
