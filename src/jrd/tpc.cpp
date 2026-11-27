@@ -880,7 +880,6 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	// Populate array of blocks that might be unmapped and deleted.
 	// We scan for blocks to clean up in descending order, but delete them in
 	// ascending order to ensure for robust operation.
-	PathName fileName;
 	HalfStaticArray<TpcBlockNumber, 16> blocksToCleanup;
 
 	for (TpcBlockNumber blockNumber = lastInterestingBlockNumber; ;)
@@ -931,7 +930,7 @@ void TipCache::releaseSharedMemory(thread_db* tdbb, TraNumber oldest_old, TraNum
 	}
 }
 
-SnapshotHandle TipCache::allocateSnapshotSlot()
+SnapshotHandle TipCache::allocateSnapshotSlot(SnapshotHandle minSlot)
 {
 	// Try finding available slot
 	SnapshotList* snapshots = m_snapshots->getHeader();
@@ -940,7 +939,7 @@ SnapshotHandle TipCache::allocateSnapshotSlot()
 	SnapshotHandle slotNumber;
 
 	ULONG slots_used = snapshots->slots_used.load(std::memory_order_relaxed);
-	for (slotNumber = snapshots->min_free_slot; slotNumber < slots_used; slotNumber++)
+	for (slotNumber = MAX(snapshots->min_free_slot, minSlot); slotNumber < slots_used; slotNumber++)
 	{
 		if (!snapshots->slots[slotNumber].attachment_id.load(std::memory_order_relaxed))
 			return slotNumber;
@@ -1022,6 +1021,12 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 
 	SnapshotList* snapshots = m_snapshots->getHeader();
 
+	// A snapshot with a shared commitNumber takes a slot above the slot of an existing
+	// snapshot with the same number. updateActiveSnapshots() reads the slots in ascending
+	// order without the mutex. If the existing snapshot is released while the slots are
+	// read, the new one is still ahead of the reader, thus the number is not missed.
+	SnapshotHandle minSlot = 0;
+
 	if (commitNumber != 0)
 	{
 		ULONG slotsUsed = snapshots->slots_used.load(std::memory_order_relaxed);
@@ -1033,6 +1038,7 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 				snapshots->slots[slotNumber].snapshot.load(std::memory_order_relaxed) == commitNumber)
 			{
 				found = true;
+				minSlot = slotNumber + 1;
 				break;
 			}
 		}
@@ -1041,24 +1047,40 @@ SnapshotHandle TipCache::beginSnapshot(thread_db* tdbb, AttNumber attachmentId, 
 			ERR_post(Arg::Gds(isc_tra_snapshot_does_not_exist));
 	}
 
-	SnapshotHandle slotNumber = allocateSnapshotSlot();
+	// Free slots below minSlot are not checked, thus the watermark can be moved
+	// only if the search starts at the watermark
+	const bool moveWatermark = (minSlot <= snapshots->min_free_slot);
+
+	SnapshotHandle slotNumber = allocateSnapshotSlot(minSlot);
 
 	// Note, that allocateSnapshotSlot might remap memory and thus invalidate pointers
 	snapshots = m_snapshots->getHeader();
 
-	// Store snapshot commit number and return handle
 	SnapshotData* slot = snapshots->slots + slotNumber;
+	fb_assert(slot->snapshot.load(std::memory_order_relaxed) == 0);
+
+	// The order of the next steps is important for updateActiveSnapshots(), which reads
+	// the list without the mutex:
+	// 1. Take the slot. With snapshot == 0 it is seen as a snapshot that is being created.
+	// 2. Signal that the list has changed. A slot can be reused, thus slots_used
+	//    does not show every new snapshot.
+	// 3. Only then read the commit number. So a reader that did not see step 1 or 2
+	//    has read latest_commit_number before us, and our number is not less than its one.
+	// Steps 2 and 3 must be sequentially consistent with the reads in updateActiveSnapshots()
+	// and with the increment of latest_commit_number in setState().
+
+	slot->attachment_id.store(attachmentId, std::memory_order_release);
+	header->snapshot_change_count++;
 
 	if (commitNumber == 0)
-		commitNumber = header->latest_commit_number.load(std::memory_order_acquire);
+		commitNumber = header->latest_commit_number.load(std::memory_order_seq_cst);
 
+	// Store snapshot commit number and return handle
 	slot->snapshot.store(commitNumber, std::memory_order_release);
 
-	// Only assign attachment_id after we completed all other work
-	slot->attachment_id.store(attachmentId, std::memory_order_release);
-
 	// And now move allocator watermark position after we used slot for sure
-	snapshots->min_free_slot = slotNumber + 1;
+	if (moveWatermark)
+		snapshots->min_free_slot = slotNumber + 1;
 
 	return slotNumber;
 }
@@ -1117,7 +1139,64 @@ void TipCache::endSnapshot(thread_db* tdbb, SnapshotHandle handle, AttNumber att
 	deallocateSnapshotSlot(handle);
 
 	// Increment release event count
-	header->snapshot_release_count++;
+	header->snapshot_change_count++;
+}
+
+void TipCache::releaseDeadSnapshots(thread_db* tdbb)
+{
+	// Release the slots of dead attachments, to prevent GC inhibition in case of
+	// sudden death of attachment process
+
+	SnapshotList* snapshots = m_snapshots->getHeader();
+
+	ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
+
+	// Remap snapshot list if it has been grown by someone else
+	remapSnapshots(true);
+
+	snapshots = m_snapshots->getHeader();
+
+	GenericMap<Pair<NonPooled<AttNumber, bool> > > att_states;
+
+	// We modify snapshots list only while holding a mutex
+	SharedMutexGuard guard(m_snapshots, false);
+
+	for (ULONG slotNumber = 0; slotNumber < slots_used_org; slotNumber++)
+	{
+		SnapshotData* slot = snapshots->slots + slotNumber;
+		AttNumber slot_attachment_id = slot->attachment_id.load(std::memory_order_acquire);
+		if (slot_attachment_id)
+		{
+			bool isAttachmentDead;
+			if (!att_states.get(slot_attachment_id, isAttachmentDead))
+			{
+				ThreadStatusGuard temp_status(tdbb);
+				Lock temp_lock(tdbb, sizeof(AttNumber), LCK_attachment);
+				temp_lock.setKey(slot_attachment_id);
+				if ((isAttachmentDead = LCK_lock(tdbb, &temp_lock, LCK_EX, LCK_NO_WAIT)))
+					LCK_release(tdbb, &temp_lock);
+				att_states.put(slot_attachment_id, isAttachmentDead);
+			}
+
+			if (isAttachmentDead)
+			{
+				if (!guard.isLocked())
+				{
+					guard.lock();
+
+					// Check if slot was reused while we waited for the mutex
+					AttNumber slot_attachment_id2 = slot->attachment_id.load(std::memory_order_acquire);
+					if (slot_attachment_id != slot_attachment_id2)
+					{
+						slotNumber--;
+						continue;
+					}
+				}
+
+				deallocateSnapshotSlot(slotNumber);
+			}
+		}
+	}
 }
 
 void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSnapshots)
@@ -1130,120 +1209,121 @@ void TipCache::updateActiveSnapshots(thread_db* tdbb, ActiveSnapshots* activeSna
 
 	// This function is quite tricky as it reads snapshots list without locks (using atomics)
 
+	const bool populated = (activeSnapshots->m_lastCommit != CN_ACTIVE);
+
+	// Slow path. Initialization.
+	if (!populated)
+		releaseDeadSnapshots(tdbb);
+
 	SnapshotList* snapshots = m_snapshots->getHeader();
 
-	if (activeSnapshots->m_lastCommit == CN_ACTIVE)
+	// The rule to keep: a snapshot with CN less than m_lastCommit must not be missed
+	// at activeSnapshots. Else two record versions, that are different for this snapshot,
+	// get the same snapshot number and the older one is garbage collected.
+	//
+	// beginSnapshot() takes a slot and increments snapshot_change_count before it reads
+	// the commit number. We read latest_commit_number first. Therefore:
+	// - if the counters are not changed since the last read of the slots, every snapshot
+	//   created after that read has CN not less than the value that we read now;
+	// - a slot that we see as free can get only a snapshot with such CN, or a snapshot
+	//   with a shared CN. The latter takes a slot above its source, see beginSnapshot(),
+	//   thus we read the slots in ascending order and up to the current slots_used.
+	// The reads of latest_commit_number and of snapshot_change_count must not be reordered
+	// with regard to the increments in beginSnapshot() and in setState(), thus they are
+	// sequentially consistent. Acquire or release ordering is not enough for it on CPUs
+	// with weak memory ordering.
+
+	const CommitNumber lastCommit = header->latest_commit_number.load(std::memory_order_seq_cst);
+	const ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
+	const ULONG change_count = header->snapshot_change_count.load(std::memory_order_seq_cst);
+
+	// Fast path. If no snapshots were created or released since we were last called,
+	// update m_lastCommit only, to prevent active snapshots list from stalling.
+	// Stalled list of active snapshots could stop intermediate garbage collection
+	// by current list owner (attachment).
+
+	if (populated &&
+		activeSnapshots->m_changeCount == change_count &&
+		activeSnapshots->m_slots_used == slots_used_org)
 	{
-		// Slow path. Initialization.
-
-		activeSnapshots->m_lastCommit = header->latest_commit_number.load(std::memory_order_acquire);
-		activeSnapshots->m_releaseCount = header->snapshot_release_count.load(std::memory_order_relaxed);
-
-		// If new slots are allocated past this value - we don't care as we preserved
-		// lastCommit and new snapshots will have numbers >= lastCommit and we don't
-		// GC them anyways
-		ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
-
-		// Remap snapshot list if it has been grown by someone else
-		remapSnapshots(true);
-
-		snapshots = m_snapshots->getHeader();
-
-		GenericMap<Pair<NonPooled<AttNumber, bool> > > att_states;
-
-		// We modify snapshots list only while holding a mutex
-		SharedMutexGuard guard(m_snapshots, false);
-
-		activeSnapshots->m_snapshots.clear();
-		for (ULONG slotNumber = 0; slotNumber < slots_used_org; slotNumber++)
-		{
-			SnapshotData* slot = snapshots->slots + slotNumber;
-			AttNumber slot_attachment_id = slot->attachment_id.load(std::memory_order_acquire);
-			if (slot_attachment_id)
-			{
-				bool isAttachmentDead;
-				if (!att_states.get(slot_attachment_id, isAttachmentDead))
-				{
-					ThreadStatusGuard temp_status(tdbb);
-					Lock temp_lock(tdbb, sizeof(AttNumber), LCK_attachment);
-					temp_lock.setKey(slot_attachment_id);
-					if ((isAttachmentDead = LCK_lock(tdbb, &temp_lock, LCK_EX, LCK_NO_WAIT)))
-						LCK_release(tdbb, &temp_lock);
-					att_states.put(slot_attachment_id, isAttachmentDead);
-				}
-
-				if (isAttachmentDead)
-				{
-					if (!guard.isLocked())
-					{
-						guard.lock();
-
-						// Check if slot was reused while we waited for the mutex
-						AttNumber slot_attachment_id2 = slot->attachment_id.load(std::memory_order_acquire);
-						if (slot_attachment_id != slot_attachment_id2)
-						{
-							slotNumber--;
-							continue;
-						}
-					}
-
-					deallocateSnapshotSlot(slotNumber);
-				}
-				else
-				{
-					CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
-					if (slot_snapshot)
-						activeSnapshots->m_snapshots.set(slot_snapshot);
-				}
-			}
-		}
+		activeSnapshots->m_lastCommit = lastCommit;
+		return;
 	}
-	else
+
+	// Remap snapshot list if it has been grown by someone else
+	remapSnapshots(true);
+
+	snapshots = m_snapshots->getHeader();
+
+	// How many times a slot in a transitional state is read again before we give up
+	const int SLOT_SPIN_COUNT = 100;
+
+	activeSnapshots->m_snapshots.clear();
+
+	ULONG slots_used = slots_used_org;
+	for (ULONG slotNumber = 0; ; slotNumber++)
 	{
-		// Fast path. Quick update.
-
-		// Update m_lastCommit unconditionally, to prevent active snapshots list from
-		// stalling when there is no snapshots created\released since last update.
-		// Stalled list of active snapshots could stop intermediate garbage collection
-		// by current list owner (attachment).
-		// It is important to ensure that no snapshot with CN less than m_lastCommit
-		// could be missed at activeSnapshots, therefore we read slots_used after
-		// latest_commit_number using appropriate memory barriers.
-
-		activeSnapshots->m_lastCommit = header->latest_commit_number.load(std::memory_order_acquire);
-		ULONG slots_used_org = snapshots->slots_used.load(std::memory_order_acquire);
-		ULONG release_count = header->snapshot_release_count.load(std::memory_order_relaxed);
-
-		// If no snapshots were released since we were last called - do nothing
-		// Do not care about race issues here, because worst-case consequences are benign
-		if (activeSnapshots->m_releaseCount == release_count &&
-			activeSnapshots->m_slots_used == slots_used_org)
+		if (slotNumber >= slots_used)
 		{
+			// A snapshot with a shared CN could get a slot above our limit
+			const ULONG slots_used_now = snapshots->slots_used.load(std::memory_order_acquire);
+			if (slots_used_now <= slots_used)
+				break;
+
+			remapSnapshots(true);
+
+			snapshots = m_snapshots->getHeader();
+			slots_used = slots_used_now;
+		}
+
+		SnapshotData* const slot = snapshots->slots + slotNumber;
+
+		// A slot with attachment_id != 0 and snapshot == 0 is in a transitional state:
+		// beginSnapshot() has not stored the CN yet, or deallocateSnapshotSlot() has not
+		// cleared attachment_id yet. The owner of such slot holds the mutex and is
+		// between two stores, thus read the slot again a few times.
+
+		CommitNumber slot_snapshot = 0;
+		bool used = false;
+
+		for (int spin = 0; spin < SLOT_SPIN_COUNT; spin++)
+		{
+			used = (slot->attachment_id.load(std::memory_order_acquire) != 0);
+			if (!used)
+				break;
+
+			slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
+			if (slot_snapshot)
+				break;
+		}
+
+		if (!used)
+			continue;
+
+		if (!slot_snapshot)
+		{
+			// The snapshot number in this slot is not known, thus we have no complete list.
+			// The owner of the slot could be killed in the middle. Go back to the slow path,
+			// which releases the slots of dead attachments. No intermediate garbage collection
+			// is done by this attachment until then.
+
+			activeSnapshots->m_snapshots.clear();
+			activeSnapshots->m_lastCommit = CN_ACTIVE;
 			return;
 		}
 
-		activeSnapshots->m_slots_used = slots_used_org;
-		activeSnapshots->m_releaseCount = release_count;
+		// A snapshot with CN above lastCommit is necessary too: the fast path
+		// raises m_lastCommit later without a new read of the slots
 
-		// Remap snapshot list if it has been grown by someone else
-		remapSnapshots(true);
-
-		snapshots = m_snapshots->getHeader();
-
-		activeSnapshots->m_snapshots.clear();
-		for (SnapshotData* slot = snapshots->slots,
-				*end = snapshots->slots + slots_used_org;
-			 slot < end;
-			 slot++)
-		{
-			if (slot->attachment_id.load(std::memory_order_acquire))
-			{
-				CommitNumber slot_snapshot = slot->snapshot.load(std::memory_order_acquire);
-				if (slot_snapshot)
-					activeSnapshots->m_snapshots.set(slot_snapshot);
-			}
-		}
+		activeSnapshots->m_snapshots.set(slot_snapshot);
 	}
+
+	// The saved counters are the ones that we read before the slots. If a snapshot was
+	// created or released meanwhile, the next call reads the slots again.
+
+	activeSnapshots->m_lastCommit = lastCommit;
+	activeSnapshots->m_slots_used = slots_used;
+	activeSnapshots->m_changeCount = change_count;
 }
 
 TraNumber TipCache::generateTransactionId()
