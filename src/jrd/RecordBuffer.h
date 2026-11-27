@@ -64,6 +64,7 @@ private:
 	void reserveCache(thread_db* tdbb);
 	void releaseCache();
 	void flush();
+	bool isSequentialRead(offset_t chunkStart);
 
 private:
 	// Size of the chunk of records read at once when they are not in memory.
@@ -83,6 +84,10 @@ private:
 	// the space spilled to disk and counted in the temp cache usage.
 	Firebird::Array<UCHAR> cache;
 	CacheChunk cacheChunks[CACHE_CHUNKS];
+	// Chunks of the latest records read alone from disk, to detect the start of a sequential read.
+	offset_t missChunks[CACHE_CHUNKS];
+	unsigned missChunkCount = 0;
+	unsigned missChunkNext = 0;
 	FB_UINT64 cacheUse = 0;
 	ULONG cacheReserved = 0;		// bytes counted in the temp cache usage
 	Database* cacheDbb = nullptr;	// database where cacheReserved is counted

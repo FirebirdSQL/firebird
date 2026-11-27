@@ -135,8 +135,19 @@ bool RecordBuffer::fetch(offset_t position, Record* to_record)
 		return true;
 	}
 
-	// The record is not in memory, so read a chunk of records around it to avoid
-	// a file read for each record.
+	// The record is not in memory. Read it alone when the access looks random (e.g. hash join
+	// probes), as reading a chunk would read mostly records that are not needed.
+	if (!isSequentialRead(chunkStart))
+	{
+		missChunks[missChunkNext] = chunkStart;
+		missChunkNext = (missChunkNext + 1) % CACHE_CHUNKS;
+		missChunkCount = MIN(missChunkCount + 1, CACHE_CHUNKS);
+
+		space->read(position * length, to_record->getData(), length);
+		return true;
+	}
+
+	// Otherwise read a chunk of records around it to avoid a file read for each record.
 
 	UCHAR* const data = cache.begin() + (victim - cacheChunks) * chunkRecords * length;
 
@@ -149,6 +160,31 @@ bool RecordBuffer::fetch(offset_t position, Record* to_record)
 	memcpy(to_record->getData(), data + (position - victim->start) * length, length);
 
 	return true;
+}
+
+// The read looks sequential when the chunk is the same as or next to a cached chunk, or to a chunk
+// of a record recently read alone. Checking several chunks handles the interleaved sequential reads
+// of the window frame start, frame end and current record.
+bool RecordBuffer::isSequentialRead(offset_t chunkStart)
+{
+	const auto isNear = [&](offset_t start)
+	{
+		return start == chunkStart || start + chunkRecords == chunkStart || chunkStart + chunkRecords == start;
+	};
+
+	for (auto chunk = cacheChunks; chunk < cacheChunks + cacheChunkCount; ++chunk)
+	{
+		if (chunk->count && isNear(chunk->start))
+			return true;
+	}
+
+	for (unsigned i = 0; i < missChunkCount; ++i)
+	{
+		if (isNear(missChunks[i]))
+			return true;
+	}
+
+	return false;
 }
 
 // Allocate the cache after the space spilled to disk. It is counted in the temp cache usage, so
@@ -191,6 +227,8 @@ void RecordBuffer::releaseCache()
 	for (auto& chunk : cacheChunks)
 		chunk = CacheChunk();
 
+	missChunkCount = 0;
+	missChunkNext = 0;
 	cacheUse = 0;
 	chunkRecords = 0;
 	cacheChunkCount = 0;
