@@ -153,13 +153,6 @@ namespace Jrd
 				m_actions = next;
 			}
 
-			while (m_freeActions)
-			{
-				VerbAction* next = m_freeActions->vct_next;
-				delete m_freeActions;
-				m_freeActions = next;
-			}
-
 			while (m_lttActions)
 			{
 				LttUndoItem* next = m_lttActions->next;
@@ -359,7 +352,6 @@ namespace Jrd
 		MetaName m_name; 						// savepoint name
 		Savepoint* m_next = nullptr;			// next savepoint in the list
 		VerbAction* m_actions = nullptr;		// verb action list
-		VerbAction* m_freeActions = nullptr;	// free verb actions
 		LttUndoItem* m_lttActions = nullptr;	// LTT undo action list
 	};
 

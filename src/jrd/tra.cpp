@@ -101,7 +101,6 @@ static void expand_view_lock(thread_db* tdbb, jrd_tra*, jrd_rel*, UCHAR lock_typ
 static tx_inv_page* fetch_inventory_page(thread_db*, WIN* window, ULONG sequence, USHORT lock_level);
 static constexpr const char* get_lockname_v3(const UCHAR lock) noexcept;
 static ULONG inventory_page(thread_db*, ULONG);
-static int limbo_transaction(thread_db*, TraNumber id);
 static void restart_requests(thread_db*, jrd_tra*);
 static void start_sweeper(thread_db*);
 //static THREAD_ENTRY_DECLARE sweep_database(THREAD_ENTRY_PARAM);
@@ -950,6 +949,14 @@ void TRA_update_counters(thread_db* tdbb, Database* dbb)
 			header->hdr_oldest_snapshot = dbb->dbb_oldest_snapshot;
 	}
 
+	// Update dbb counters used to correctly finalize TIP cache.
+
+	if (dbb->dbb_next_transaction < next_transaction)
+		dbb->dbb_next_transaction = next_transaction;
+
+	if (dbb->dbb_oldest_transaction < oldest_transaction)
+		dbb->dbb_oldest_transaction = oldest_transaction;
+
 	CCH_RELEASE(tdbb, &window);
 }
 
@@ -1137,8 +1144,74 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 	if (number > dbb->dbb_next_transaction)
 		PAG_header(tdbb, true);
 
-	const int state = (number > dbb->dbb_next_transaction) ?
-		255 : limbo_transaction(tdbb, number);
+	MemoryPool* const pool = dbb->createPool();
+	jrd_tra* trans;
+	Lock* lock;
+
+	{	// scope
+		Jrd::ContextPoolHolder context(tdbb, pool);
+		trans = jrd_tra::create(pool, attachment, NULL);
+		trans->tra_number = number;
+
+		// Lock data is not zero to show other attachments that the transaction
+		// is in use: they must not mark it dead or take it as finished.
+		lock = FB_NEW_RPT(*pool, 0) Lock(tdbb, sizeof(TraNumber), LCK_tra, trans);
+		lock->setKey(number);
+		lock->lck_data = number;
+		trans->tra_lock = lock;
+	}
+
+	// Release the lock and the transaction if the reconnect fails
+	bool reconnected = false;
+
+	Cleanup cleanup([&]
+	{
+		if (!reconnected)
+		{
+			if (lock->lck_id)
+				LCK_release(tdbb, lock);
+
+			jrd_tra::destroy(attachment, trans);
+		}
+	});
+
+	int state = 255;
+	bool locked = false;
+
+	if (number <= dbb->dbb_next_transaction)
+	{
+		// Take the transaction lock. It prevents concurrent reconnect to the
+		// same transaction and makes other attachments see the transaction as
+		// active until it is committed or rolled back.
+		// Other attachments take this lock for a short time when they check the
+		// state of the transaction, so make a few attempts with timeouts of
+		// 1, 2, 4 and 8 seconds. After every attempt read the actual state from
+		// TIP: if the transaction is not in limbo anymore, there is nothing to
+		// wait for.
+
+		for (SSHORT timeout = 1; timeout < 10; timeout *= 2)
+		{
+			{	// scope
+				ThreadStatusGuard temp_status(tdbb);
+				locked = LCK_lock(tdbb, lock, LCK_write, -timeout);
+			}
+
+			state = TRA_fetch_state(tdbb, number);
+
+			if (locked || state != tra_limbo)
+				break;
+		}
+	}
+
+	if (state == tra_limbo && !locked)
+	{
+		// The transaction is in limbo, but somebody else uses it: its owner is
+		// still attached or another attachment has reconnected to it
+
+		// Cannot use Arg::Num here because transaction number is 64-bit unsigned integer
+		ERR_post(Arg::Gds(isc_random) << Arg::Str("cannot reconnect, transaction is in use") <<
+				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str("in limbo"));
+	}
 
 	if (state != tra_limbo)
 	{
@@ -1169,13 +1242,10 @@ jrd_tra* TRA_reconnect(thread_db* tdbb, const UCHAR* id, USHORT length)
 				 Arg::Gds(isc_tra_state) << Arg::Int64(number) << Arg::Str(text));
 	}
 
-	MemoryPool* const pool = dbb->createPool();
-	Jrd::ContextPoolHolder context(tdbb, pool);
-	jrd_tra* const trans = jrd_tra::create(pool, attachment, NULL);
-	trans->tra_number = number;
 	trans->tra_flags |= TRA_prepared | TRA_reconnected | TRA_write;
 
 	trans->linkToAttachment(attachment);
+	reconnected = true;
 
 	return trans;
 }
@@ -1271,6 +1341,16 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 		}
 	}
 
+	// Release the snapshot before the transaction lock. The lock data protects
+	// the snapshot, see shared snapshot handling in transaction_start().
+
+	if (!(transaction->tra_flags & TRA_read_committed) &&
+		!(transaction->tra_flags & TRA_reconnected))
+	{
+		dbb->dbb_tip_cache->endSnapshot(tdbb, transaction->tra_snapshot_handle,
+			transaction->tra_attachment->att_attachment_id);
+	}
+
 	++transaction->tra_use_count;
 
 	if (transaction->tra_lock)
@@ -1309,13 +1389,6 @@ void TRA_release_transaction(thread_db* tdbb, jrd_tra* transaction, Jrd::TraceTr
 
 	while (transaction->tra_open_cursors.hasData())
 		DsqlCursor::close(tdbb, transaction->tra_open_cursors.pop());
-
-	if (!(transaction->tra_flags & TRA_read_committed) &&
-		!(transaction->tra_flags & TRA_reconnected))
-	{
-		dbb->dbb_tip_cache->endSnapshot(tdbb, transaction->tra_snapshot_handle,
-			transaction->tra_attachment->att_attachment_id);
-	}
 
 	// Release the transaction and its pool
 
@@ -1966,47 +2039,31 @@ int TRA_wait(thread_db* tdbb, jrd_tra* trans, TraNumber number, tra_wait_t wait)
 	// Create, wait on, and release lock on target transaction.  If
 	// we can't get the lock due to deadlock
 
-	if (wait != tra_no_wait)
+	if (wait == tra_no_wait)
+		return TRA_get_state(tdbb, number);
+
+	Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
+	temp_lock.setKey(number);
+
+	const SSHORT timeout = (wait == tra_wait) ? trans->getLockWait() : 0;
+
+	if (!LCK_lock(tdbb, &temp_lock, LCK_read, timeout))
 	{
-		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra);
-		temp_lock.setKey(number);
+		fb_utils::init_status(tdbb->tdbb_status_vector);
+		return tra_active;
+	}
 
-		const SSHORT timeout = (wait == tra_wait) ? trans->getLockWait() : 0;
-
-		if (!LCK_lock(tdbb, &temp_lock, LCK_read, timeout))
-		{
-			fb_utils::init_status(tdbb->tdbb_status_vector);
-			return tra_active;
-		}
-
+	Cleanup releaseLock([&]
+	{
 		LCK_release(tdbb, &temp_lock);
-	}
+	});
 
-	int state = TRA_get_state(tdbb, number);
+	// We hold the lock: the transaction has no owner now and nobody can reconnect
+	// to it (transaction in limbo could be reconnected by gfix, for example).
+	// Get the state while the lock is held. If the transaction is still marked
+	// active on disk, it is marked dead there. The TIP cache is updated as well.
 
-	if (wait != tra_no_wait && state == tra_committed)
-		return state;
-
-	if (state == tra_precommitted)
-		return state;
-
-	// If the recorded state of the transaction is active, we know better.  If
-	// it were active, he'd be alive now.  Mark him dead.
-
-	if (state == tra_active)
-	{
-		state = tra_dead;
-		REPL_trans_cleanup(tdbb, number);
-		TRA_set_state(tdbb, 0, number, tra_dead);
-	}
-
-	// If the transaction disappeared into limbo, died, for constructively
-	// died, tweak the transaction state snapshot to reflect the new state.
-	// This is guaranteed safe.
-
-	TPC_set_state(tdbb, number, state);
-
-	return state;
+	return TPC_locked_state(tdbb, number);
 }
 
 
@@ -2369,44 +2426,6 @@ static ULONG inventory_page(thread_db* tdbb, ULONG sequence)
 	}
 
 	return dbb->getKnownPage(pag_transactions, sequence);
-}
-
-
-static int limbo_transaction(thread_db* tdbb, TraNumber id)
-{
-/**************************************
- *
- *	l i m b o _ t r a n s a c t i o n
- *
- **************************************
- *
- * Functional description
- *
- *	limbo_state is called when reconnecting
- *	to an existing transaction to assure that
- *	the transaction is actually in limbo.
- *	It returns the transaction state.
- *
- **************************************/
-	SET_TDBB(tdbb);
-	const Database* dbb = tdbb->getDatabase();
-	CHECK_DBB(dbb);
-
-	const ULONG trans_per_tip = dbb->dbb_page_manager.transPerTIP;
-
-	const ULONG page = id / trans_per_tip;
-	const ULONG number = id % trans_per_tip;
-
-	WIN window(DB_PAGE_SPACE);
-	const tx_inv_page* tip = fetch_inventory_page(tdbb, &window, page, LCK_write);
-
-	const ULONG trans_offset = TRANS_OFFSET(number);
-	const UCHAR* byte = tip->tip_transactions + trans_offset;
-	const USHORT shift = TRANS_SHIFT(number);
-	const int state = (*byte >> shift) & TRA_MASK;
-	CCH_RELEASE(tdbb, &window);
-
-	return state;
 }
 
 
@@ -3573,6 +3592,9 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 	Jrd::Attachment* const attachment = tdbb->getAttachment();
 	WIN window(DB_PAGE_SPACE);
 
+	const bool sharedSnapshot =
+		!(trans->tra_flags & TRA_read_committed) && trans->tra_snapshot_number;
+
 	Lock* lock = FB_NEW_RPT(*tdbb->getDefaultPool(), 0) Lock(tdbb, sizeof(TraNumber), LCK_tra);
 
 	// Read header page and allocate transaction number.  Since
@@ -3665,82 +3687,51 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			trans->tra_flags |= (TRA_readonly | TRA_precommitted);
 		}
 
-		// Next, take a snapshot of all transactions between the oldest interesting
-		// transaction and the current.  Don't bother to get a snapshot for
-		// read-committed transactions; they use the snapshot off the dbb block
-		// since they need to know what is currently committed.
-
-		if (!(trans->tra_flags & TRA_read_committed))
-		{
-			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
-				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
-		}
-
 		// Next task is to find the oldest active transaction on the system.  This
 		// is needed for garbage collection.  Things are made ever so slightly
 		// more complicated by the fact that existing transaction may have oldest
 		// actives older than they are.
+		// Take into account in-limbo transactions too.
 
 		Lock temp_lock(tdbb, sizeof(TraNumber), LCK_tra, trans);
 
 		trans->tra_oldest_active = number;
 		oldest_active = number;
 		bool cleanup = !(number % TRA_ACTIVE_CLEANUP);
-		int oldest_state;
+		int oldest_state = tra_active;
 
 		for (; active < number; active++)
 		{
 			//oldest_state = TPC_cache_state(tdbb, active);
-			constexpr ULONG mask = (1 << tra_active);
+			constexpr ULONG mask = (1 << tra_active) | (1 << tra_limbo);
 			active = TPC_find_states(tdbb, active, number, mask, oldest_state);
 			if (!active)
 			{
 				active = number;
 				break;
 			}
-			fb_assert(oldest_state == tra_active);
+			fb_assert(oldest_state == tra_active || oldest_state == tra_limbo);
 
-			if (oldest_state == tra_active)
+			if (oldest_state == tra_active || oldest_state == tra_limbo)
 			{
 				temp_lock.setKey(active);
-				TraNumber data = LCK_read_data(tdbb, &temp_lock);
+				const TraNumber data = LCK_read_data(tdbb, &temp_lock);
 				if (!data)
 				{
 					if (cleanup)
 					{
 						if (TRA_wait(tdbb, trans, active, tra_no_wait) == tra_committed)
+						{
 							cleanup = false;
-						continue;
+							continue;
+						}
 					}
-
-					data = active;
 				}
 
 				oldest_active = active;
 				break;
 			}
 		}
-
-		// Calculate attachment-local oldest active and oldest snapshot numbers
-		// looking at current attachment's transactions only. Calculated values
-		// are used to determine garbage collection threshold for attachment-local
-		// data such as temporary tables (GTT's).
-
-		trans->tra_att_oldest_active = number;
-		TraNumber att_oldest_active = number;
-		TraNumber att_oldest_snapshot = number;
-
-		for (jrd_tra* tx_att = attachment->att_transactions; tx_att; tx_att = tx_att->tra_next)
-		{
-			att_oldest_active = MIN(att_oldest_active, tx_att->tra_number);
-			att_oldest_snapshot = MIN(att_oldest_snapshot, tx_att->tra_att_oldest_active);
-		}
-
-		trans->tra_att_oldest_active = ((trans->tra_flags & TRA_read_committed) &&
-			!(trans->tra_flags & TRA_read_consistency)) ? number : att_oldest_active;
-
-		if (attachment->att_oldest_snapshot < att_oldest_snapshot)
-			attachment->att_oldest_snapshot = att_oldest_snapshot;
 
 		// Put the TID of the oldest active transaction (just calculated)
 		// in the new transaction's lock.
@@ -3758,9 +3749,69 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		// Query the minimum lock data for all active transaction locks.
 		// This will be the oldest active snapshot used for regulating garbage collection.
 
-		const TraNumber data = LCK_query_data(tdbb, LCK_tra, LCK_MIN);
+		TraNumber data = LCK_query_data(tdbb, LCK_tra, LCK_MIN);
+
+		if (oldest_state == tra_limbo)
+		{
+			// Preserve versions created by in-limbo transaction
+			if (!data || data > oldest_active)
+				data = oldest_active;
+		}
+
 		if (data && data < trans->tra_oldest_active)
 			trans->tra_oldest_active = data;
+
+		// A transaction started AT SNAPSHOT NUMBER shares a snapshot taken earlier by
+		// another transaction. The OIT and OAT read from the header page can already be
+		// past transactions that were active when that snapshot was taken and committed
+		// after it, so they must not be used to consider such transactions as committed.
+		//
+		// The lock data of every transaction that uses the snapshot is not greater than
+		// the oldest transaction that was active when the snapshot was taken. While such
+		// a lock exists, the OST can't move past that transaction. Thus the TIP cache keeps
+		// the commit numbers (see TipCache::updateOldestTransaction) and the garbage
+		// collection keeps the record versions that the snapshot needs, even when the OIT
+		// has moved further.
+		//
+		// The snapshot is attached at the end of this routine. If it still exists then,
+		// a transaction that uses it holds its lock now (the lock is released after the
+		// snapshot, see TRA_release_transaction), and the minimum lock data just queried
+		// accounts for it. Put this value into our own lock, to keep protecting
+		// the snapshot after its owner ends.
+
+		fb_assert(sharedSnapshot || !trans->tra_snapshot_number);
+
+		if (sharedSnapshot && lock->lck_data != (SINT64) trans->tra_oldest_active)
+			LCK_write_data(tdbb, lock, trans->tra_oldest_active);
+
+		// Calculate attachment-local oldest active and oldest snapshot numbers
+		// looking at current attachment's transactions only. Calculated values
+		// are used to determine garbage collection threshold for attachment-local
+		// data such as temporary tables (GTT's).
+		// A shared snapshot needs the same boundary here as in the transaction lock,
+		// else the record versions of GTT that it must see can be garbage collected.
+
+		const TraNumber att_boundary = sharedSnapshot ? trans->tra_oldest_active : number;
+
+		trans->tra_att_oldest_active = att_boundary;
+		TraNumber att_oldest_active = number;
+		TraNumber att_oldest_snapshot = number;
+
+		for (jrd_tra* tx_att = attachment->att_transactions; tx_att; tx_att = tx_att->tra_next)
+		{
+			att_oldest_active = MIN(att_oldest_active, tx_att->tra_number);
+			att_oldest_snapshot = MIN(att_oldest_snapshot, tx_att->tra_att_oldest_active);
+		}
+
+		trans->tra_att_oldest_active = ((trans->tra_flags & TRA_read_committed) &&
+			!(trans->tra_flags & TRA_read_consistency)) ? number : MIN(att_oldest_active, att_boundary);
+
+		// A shared snapshot can need record versions below the current threshold of
+		// the attachment, so the threshold is lowered for it. Record versions that
+		// were garbage collected before this moment are lost for the snapshot anyway.
+
+		if (sharedSnapshot || attachment->att_oldest_snapshot < att_oldest_snapshot)
+			attachment->att_oldest_snapshot = att_oldest_snapshot;
 
 		// Finally, scan transactions looking for the oldest interesting transaction -- the oldest
 		// non-commited transaction.  This will not be updated immediately, but saved until the
@@ -3789,6 +3840,12 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 
 		if (--oldest > dbb->dbb_oldest_transaction)
 			dbb->dbb_oldest_transaction = oldest;
+
+		// Transactions below the shared snapshot boundary are committed in that snapshot.
+		// Transactions above it must be checked against the snapshot commit number.
+
+		if (sharedSnapshot && trans->tra_oldest_active < trans->tra_oldest)
+			trans->tra_oldest = trans->tra_oldest_active;
 
 		if (oldest_active > dbb->dbb_oldest_active)
 			dbb->dbb_oldest_active = oldest_active;
@@ -3832,12 +3889,6 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 		if (!(trans->tra_flags & TRA_system) && !(trans->tra_flags & TRA_no_auto_undo))
 			trans->startSavepoint(true);
 
-		// if the user asked us to restart all requests in this attachment,
-		// do so now using the new transaction
-
-		if (trans->tra_flags & TRA_restart_requests)
-			restart_requests(tdbb, trans);
-
 		// If the transaction is read-only and read committed, it can be
 		// precommitted because it can't modify any records.
 		// 2014-08-26 NS XXX: with latest changes in TIP cache semantics and read
@@ -3853,8 +3904,25 @@ static void transaction_start(thread_db* tdbb, jrd_tra* trans)
 			trans->tra_flags |= TRA_precommitted;
 		}
 
+		// Next, take a snapshot of all transactions between the oldest interesting
+		// transaction and the current.  Don't bother to get a snapshot for
+		// read-committed transactions; they use the snapshot off the dbb block
+		// since they need to know what is currently committed.
+
+		if (!(trans->tra_flags & TRA_read_committed))
+		{
+			trans->tra_snapshot_handle = dbb->dbb_tip_cache->beginSnapshot(
+				tdbb, attachment->att_attachment_id, trans->tra_snapshot_number);
+		}
+
 		if (dbb->isReplicating(tdbb))
 			trans->tra_flags |= TRA_replicating;
+
+		// if the user asked us to restart all requests in this attachment,
+		// do so now using the new transaction
+
+		if (trans->tra_flags & TRA_restart_requests)
+			restart_requests(tdbb, trans);
 	}
 	catch (const Firebird::Exception&)
 	{

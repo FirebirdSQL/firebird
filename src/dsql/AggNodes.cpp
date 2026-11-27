@@ -209,6 +209,15 @@ bool AggNode::dsqlAggregate2Finder(Aggregate2Finder& visitor)
 	bool found = false;
 	FieldFinder fieldFinder(visitor.getPool(), visitor.checkScopeLevel, visitor.matchType);
 
+	// Fields used inside sub-selects of our arguments say nothing about the scope
+	// level this aggregate itself belongs to - they are checked when the sub-select
+	// is processed. Note that AggNode::dsqlAggregateFinder() treats an aggregate
+	// like this as belonging to the context where it's written (see the
+	// localDeepestLevel == 0 case there). Ignoring them here allows an aggregate
+	// like LIST(DISTINCT (SELECT ...)) to escape the checks that use this visitor,
+	// which makes it run without a sort block allocated. See #8012 in the tracker.
+	fieldFinder.ignoreSubSelects = true;
+
 	NodeRefsHolder holder(visitor.getPool());
 	getChildren(holder, true);
 
@@ -383,6 +392,8 @@ void AggNode::aggInit(thread_db* tdbb, Request* request) const
 	{
 		// Initialize a sort to reject duplicate values.
 
+		fb_assert(asb);
+
 		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 
 		// Get rid of the old sort areas if this request has been used already.
@@ -515,6 +526,8 @@ dsc* AggNode::execute(thread_db* tdbb, Request* request) const
 
 	if (distinct || sort)
 	{
+		fb_assert(asb);
+
 		impure_agg_sort* asbImpure = request->getImpure<impure_agg_sort>(asb->impure);
 		dsc desc = asb->desc;
 
@@ -842,6 +855,26 @@ DmlNode* CustomAggNode::parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch
 	if (mismatchStatus.hasData())
 		status_exception::raise(Arg::Gds(isc_fun_param_mismatch) << name.toQuotedString() << mismatchStatus);
 
+	if (!node->function.isSubRoutine() && csb->collectingDependencies())
+	{
+		{	// scope
+			Dependency dependency(obj_udf);
+			dependency.function = node->function();
+			csb->addDependency(dependency);
+		}
+
+		if (argNames)
+		{
+			for (const auto& argName : *argNames)
+			{
+				Dependency dependency(obj_udf);
+				dependency.function = node->function();
+				dependency.subName = argName;
+				csb->addDependency(dependency);
+			}
+		}
+	}
+
 	return node;
 }
 
@@ -971,8 +1004,53 @@ ValueExprNode* CustomAggNode::copy(thread_db* tdbb, NodeCopier& copier) const
 	auto* node = FB_NEW_POOL(*tdbb->getDefaultPool()) CustomAggNode(*tdbb->getDefaultPool(), name);
 	node->args = copier.copy(tdbb, args);
 	node->dsqlFilter = copier.copy(tdbb, dsqlFilter);
-	node->function = function;
+
+	if (function.isSubRoutine())
+		node->function = function;
+	else
+	{
+		auto* func = MetadataCache::getPerm<Cached::Function>(tdbb, name, 0);
+		node->function = copier.csb->csb_resources->functions.registerResource(func);
+	}
+
 	return node;
+}
+
+AggNode* CustomAggNode::pass1(thread_db* tdbb, CompilerScratch* csb)
+{
+	AggNode::pass1(tdbb, csb);
+
+	if (!function.isSubRoutine() && !(csb->csb_g_flags & (csb_internal | csb_ignore_perm)))
+	{
+		SLONG ssRelationId = csb->csb_view() ? csb->csb_view()->rel_id : 0;
+
+		CMP_post_access(tdbb, csb, function()->getSecurityName().schema, ssRelationId,
+			SCL_usage, obj_schemas, QualifiedName(function()->getName().schema));
+
+		if (function()->getName().package.isEmpty())
+		{
+			if (!ssRelationId && csb->csb_parent_relation)
+			{
+				fb_assert(csb->csb_parent_relation(tdbb)->rel_ss_definer.asBool());
+				ssRelationId = csb->csb_parent_relation()->rel_id;
+			}
+
+			CMP_post_access(tdbb, csb, function()->getSecurityName().object, ssRelationId,
+				SCL_execute, obj_functions, function()->getName());
+		}
+		else
+		{
+			CMP_post_access(tdbb, csb, function()->getSecurityName().object, ssRelationId,
+				SCL_execute, obj_packages, function()->getName().getSchemaAndPackage());
+		}
+
+		ExternalAccess temp(ExternalAccess::exa_function, function()->getId());
+		FB_SIZE_T idx;
+		if (!csb->csb_external.find(temp, idx))
+			csb->csb_external.insert(idx, temp);
+	}
+
+	return this;
 }
 
 AggNode* CustomAggNode::pass2(thread_db* tdbb, CompilerScratch* csb)
@@ -1163,9 +1241,9 @@ dsc* CustomAggNode::aggExecute(thread_db* tdbb, Request* request) const
 		const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 		dsc desc = *fmtDesc;
 		desc.dsc_address = outMsg + argOffset;
+		INTL_adjust_text_descriptor(tdbb, &desc);
 		auto* const impure = request->getImpure<impure_value_ex>(impureOffset);
 		EVL_make_value(tdbb, &desc, impure);
-		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
 
 		return &impure->vlu_desc;
 	}
@@ -1178,6 +1256,7 @@ dsc* CustomAggNode::aggExecute(thread_db* tdbb, Request* request) const
 
 bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionPhase phase) const
 {
+	const auto attachment = tdbb->getAttachment();
 	const auto func = function(request->getResources());
 	auto* const aggImpure = request->getImpure<Impure>(customImpure);
 
@@ -1202,6 +1281,11 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 	}
 
 	func->checkReload(tdbb);
+
+	// Replace the effective user according to the function's SQL SECURITY clause,
+	// so that dynamic SQL (EXECUTE STATEMENT) is checked against the proper user
+	const auto invoker = func->invoker ? func->invoker : attachment->att_ss_user;
+	AutoSetRestore<UserId*> userIdHolder(&attachment->att_ss_user, invoker);
 
 	const ULONG inMsgLength = func->getInputFormat() ? func->getInputFormat()->fmt_length : 0;
 	const ULONG outMsgLength = func->getOutputFormat()->fmt_length;
@@ -1321,9 +1405,9 @@ bool CustomAggNode::invoke(thread_db* tdbb, Request* request, AggregateFunctionP
 		const ULONG argOffset = (IPTR) fmtDesc[0].dsc_address;
 		dsc desc = *fmtDesc;
 		desc.dsc_address = outMsg + argOffset;
+		INTL_adjust_text_descriptor(tdbb, &desc);
 		auto* const impure = request->getImpure<impure_value_ex>(impureOffset);
 		EVL_make_value(tdbb, &desc, impure);
-		INTL_adjust_text_descriptor(tdbb, &impure->vlu_desc);
 		hasValue = true;
 	}
 
@@ -2317,13 +2401,20 @@ dsc* PercentileAggNode::aggExecute(thread_db* tdbb, Request* request) const
 
 AggNode* PercentileAggNode::dsqlCopy(DsqlCompilerScratch* dsqlScratch) /*const*/
 {
-	AggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(dsqlScratch->getPool(), type,
-		doDsqlPass(dsqlScratch, arg),
-		doDsqlPass(dsqlScratch, dsqlOrderClause) );
+	PercentileAggNode* node = FB_NEW_POOL(dsqlScratch->getPool()) PercentileAggNode(
+		dsqlScratch->getPool(), type, doDsqlPass(dsqlScratch, arg),
+		doDsqlPass(dsqlScratch, dsqlOrderClause));
 
 	PASS1_set_parameter_type(dsqlScratch, node->arg,
 		[&](dsc* desc) { desc->makeDouble(); },
 		false);
+
+	// The value argument is the same node as the WITHIN GROUP sort expression
+	// (aliased in the constructor). Passing it along with the order clause would
+	// leave it as the very node emitted by GEN_sort, so genBlr() would write the
+	// same sub-select context twice into the BLR and it would fail to parse with
+	// isc_ctxinuse. Pass it separately to get a distinct node with its own context.
+	node->valueArg = doDsqlPass(dsqlScratch, valueArg);
 
 	return node;
 }

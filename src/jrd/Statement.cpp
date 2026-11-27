@@ -275,7 +275,6 @@ void Request::setResources(VersionedObjects* r, RecordParameters& rpbsSetup)
 	{
 		req_rpb[n] = rpbsSetup[n];
 		req_rpb[n].rpb_relation = rpbsSetup[n].rpb_relation(r);
-		//fb_assert(req_rpb[n].rpb_relation);
 	}
 }
 

@@ -110,6 +110,21 @@ bool putStringArgument(char**& av, ClumpletWriter& spb, unsigned int tag)
 	return true;
 }
 
+bool putTablespacePath(char**& av, ClumpletWriter& spb, unsigned int tag)
+{
+	// Use a copy of argv so that in case of an error, the message gathers information from the real argv
+	char** avCopy = av;
+	for (unsigned i = 0; i < 2; i++)
+	{
+		if (*avCopy == nullptr)
+			return false;
+		spb.insertString(tag, *avCopy++);
+	}
+
+	av = avCopy;
+	return true;
+}
+
 // add callback to named KeyHolderPlugin
 IKeyHolderPlugin* keyHolder = NULL;
 
@@ -463,6 +478,9 @@ constexpr SvcSwitches restoreOptions[] =
 	{"res_parallel_workers", putIntArgument, 0, isc_spb_res_parallel_workers, 0},
 	{"res_fast_path", putOption, 0, isc_spb_res_fast_path, 0},
 	{"res_direct_io", putOption, 0, isc_spb_res_direct_io, 0},
+	{"res_ts_map", putStringArgument, 0, isc_spb_res_ts_mapping_file, 0},
+	{"res_ts_path", putTablespacePath, 0, isc_spb_res_ts_path, 0},
+	{"res_ts_orig", putOption, 0, isc_spb_res_ts_org_paths, 0},
 	{0, 0, 0, 0, 0}
 };
 

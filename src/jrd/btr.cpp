@@ -231,14 +231,25 @@ namespace
 
 			if (traNumber && rpt->getTransaction() != traNumber)
 			{
-				const auto backSlot = root->getBackSlot(rpt);
-				if (!backSlot)
-				{
-					CCH_unwind(tdbb, false);
-					BUGCHECK(204);		// msg 204 index inconsistent
-				}
+				// While the migration transaction is still active, other
+				// transactions must continue to see the old index (back slot).
+				// Once the migration is definitely committed, the migrate slot
+				// must be visible instead: it holds the new index and callers
+				// rely on checkIrtRepeat()/modifyIrtRepeat() to finalize the
+				// migration (set the slot to irt_normal and kill the back slot).
 
-				return backSlot;
+				const auto state = TPC_cache_state(tdbb, rpt->getTransaction());
+				if (state != tra_committed)
+				{
+					const auto backSlot = root->getBackSlot(rpt);
+					if (!backSlot)
+					{
+						CCH_unwind(tdbb, false);
+						BUGCHECK(204);	// msg 204 index inconsistent
+					}
+
+					return backSlot;
+				}
 			}
 		}
 
@@ -1510,6 +1521,7 @@ bool BTR_delete_index(thread_db* tdbb, WIN* window, MetaId id, bool withCleanup)
 		}
 
 		// remove the pointer to the top-level index page before we delete it
+		CCH_MARK(tdbb, window);
 		irt_desc->setEmpty();
 
 		const PageNumber prior(window->win_page);
@@ -4005,14 +4017,18 @@ void BTR_copy_index(thread_db* tdbb, jrd_rel* relation, MetaId indexId, ULONG pa
 
 	auto indexRpt = &root->irt_rpt[indexId];
 
-	if (checkIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, indexId))
+	if (checkIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, false))
 	{
 		root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &rootWindow);
+		indexRpt = &root->irt_rpt[indexId];
 
 		switch (modifyIrtRepeat(tdbb, indexRpt, relation->getPermanent(), &rootWindow, indexId))
 		{
 		case ModifyIrtRepeatValue::Skip:
 		case ModifyIrtRepeatValue::Modified:
+			// buffer could be released and refetched by modifyIrtRepeat
+			root = (index_root_page*) rootWindow.win_buffer;
+			indexRpt = &root->irt_rpt[indexId];
 			if (indexRpt->getState() == irt_drop)
 			{
 				CCH_RELEASE(tdbb, &rootWindow);

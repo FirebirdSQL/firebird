@@ -85,15 +85,7 @@ void CreateAlterTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* ds
 	if (!applyTablespacesDdl(tdbb))
 		return;
 
-	PathUtils::fixupSeparators(fileName);
-
-	if (PathUtils::isRelative(fileName))
-	{
-		PathName temp = fileName;
-		PathName db_path, db_file;
-		PathUtils::splitLastComponent(db_path, db_file, tdbb->getDatabase()->dbb_filename);
-		PathUtils::concatPath(fileName, db_path, temp);
-	}
+	Tablespace::resolveFileName(tdbb, fileName);
 
 	// run all statements under savepoint control
 	AutoSavePoint savePoint(tdbb, transaction);
@@ -191,8 +183,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 
 	DYN_UTIL_check_unique_name(tdbb, QualifiedName(name), obj_tablespace);
 
-	// File with tablespace should not exist. Checking it in DFW is silent and causes
-	// cleanup of existing files at phase 0. Early checking preserves existing files.
+	// File with tablespace should not exist
 	if (PIO_file_exists(fileName.c_str()))
 		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(fileName));
 
@@ -221,8 +212,7 @@ void CreateAlterTablespaceNode::executeCreate(thread_db* tdbb, DsqlCompilerScrat
 				X.RDB$OWNER_NAME.NULL = FALSE;
 				strcpy(X.RDB$OWNER_NAME, userName.c_str());
 
-				if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
-					status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+				Tablespace::checkFileNameLength(fileName.length());
 
 				X.RDB$FILE_NAME.NULL = FALSE;
 				strcpy(X.RDB$FILE_NAME, fileName.c_str());
@@ -276,8 +266,7 @@ bool CreateAlterTablespaceNode::executeAlter(thread_db* tdbb, DsqlCompilerScratc
 		if (X.RDB$SYSTEM_FLAG)
 			ERR_post(Arg::Gds(isc_dyn_cannot_mod_sys_ts) << Arg::Str(name));
 
-		if (fileName.length() >= sizeof(X.RDB$FILE_NAME))
-			status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+		Tablespace::checkFileNameLength(fileName.length());
 
 		modified = true;
 
@@ -402,7 +391,8 @@ void DropTablespaceNode::execute(thread_db* tdbb, DsqlCompilerScratch* dsqlScrat
 		executeDdlTrigger(tdbb, dsqlScratch, transaction, DTW_BEFORE,
 			DDL_TRIGGER_DROP_TABLESPACE, QualifiedName(name), {});
 
-		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, true);
+		// Don't open the backing file here: dropping a tablespace only needs its metadata and lock
+		const auto tableSpace = Tablespace::lookup(tdbb, X.RDB$TABLESPACE_ID, false);
 		tableSpace->mark(tdbb, Tablespace::Operation::DROP, transaction, "");
 
 		ERASE X;

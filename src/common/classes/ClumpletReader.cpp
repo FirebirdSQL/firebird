@@ -314,6 +314,8 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_dbname:
 			case isc_spb_res_fix_fss_data:
 			case isc_spb_res_fix_fss_metadata:
+			case isc_spb_res_ts_mapping_file:
+			case isc_spb_res_ts_path:
 			case isc_spb_bkp_stat:
 			case isc_spb_bkp_skip_data:
 			case isc_spb_bkp_include_data:

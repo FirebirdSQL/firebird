@@ -720,7 +720,9 @@ inline void index_root_page::irt_repeat::setNormal()
 			// deleted by current tra
 			|| getState() == irt_commit
 			// deleted not long ago
-			|| getState() == irt_drop);		// hvlad: is it possible ?
+			|| getState() == irt_drop		// hvlad: is it possible ?
+			// completed migration
+			|| getState() == irt_migrate);
 	fb_assert(irt_page_num && irt_page_space_id);
 	fb_assert(irt_transaction);
 

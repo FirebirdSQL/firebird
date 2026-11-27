@@ -26,6 +26,7 @@
 #include "../jrd/tra.h"
 #include "../jrd/cch_proto.h"
 #include "../jrd/met_proto.h"
+#include "../common/os/path_utils.h"
 
 #include "../jrd/Tablespace.h"
 
@@ -69,6 +70,26 @@ Tablespace* Tablespace::create(thread_db* tdbb, ULONG id)
 	fb_assert(PageSpace::isTablespace(id));
 
 	return Tablespace::init(tdbb, id, "", true);
+}
+
+void Tablespace::checkFileNameLength(FB_SIZE_T fileNameLength)
+{
+	if (fileNameLength > FILE_NAME_MAX_LENGTH)
+		status_exception::raise(Arg::Gds(isc_dyn_name_longer));
+}
+
+void Tablespace::resolveFileName(thread_db* tdbb, PathName& fileName)
+{
+	PathUtils::fixupSeparators(fileName);
+
+	if (PathUtils::isRelative(fileName))
+	{
+		const auto dbb = tdbb->getDatabase();
+		const PathName orgFileName = fileName;
+		PathName db_path, db_file;
+		PathUtils::splitLastComponent(db_path, db_file, dbb->dbb_filename);
+		PathUtils::concatPath(fileName, db_path, orgFileName);
+	}
 }
 
 Tablespace* Tablespace::lookup(thread_db* tdbb, ULONG id, bool open)
@@ -148,11 +169,16 @@ void Tablespace::mark(thread_db* tdbb, Operation operation, jrd_tra* transaction
 	{
 		m_flags |= MODIFIED;
 
-		CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
+		// The page space has to be rebuilt only when the backing file changes
 
-		const auto dbb = tdbb->getDatabase();
-		dbb->dbb_page_manager.deletePageSpace(m_id);
-		dbb->dbb_page_manager.allocatePageSpace(tdbb, m_id, false, fileName);
+		if (fileName.hasData())
+		{
+			CCH_flush(tdbb, FLUSH_ALL, 0, m_id);
+
+			const auto dbb = tdbb->getDatabase();
+			dbb->dbb_page_manager.deletePageSpace(m_id);
+			dbb->dbb_page_manager.allocatePageSpace(tdbb, m_id, false, fileName);
+		}
 	}
 	else if (operation == Operation::DROP)
 	{

@@ -57,6 +57,12 @@ namespace Jrd
 
 		inline PageNumber(const PageNumber& from) = default;
 
+		inline void clear()
+		{
+			m_pageNumber = 0;
+			m_pageSpaceID = INVALID_PAGE_SPACE;
+		}
+
 		inline bool isValid() const noexcept
 		{
 			return (m_pageSpaceID != INVALID_PAGE_SPACE);

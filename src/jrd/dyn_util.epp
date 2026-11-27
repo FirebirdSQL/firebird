@@ -357,7 +357,7 @@ bool DYN_UTIL_check_unique_name_nothrow(thread_db* tdbb,
 				TS IN RDB$TABLESPACES
 				WITH TS.RDB$TABLESPACE_NAME EQ object_name.object.c_str()
 			{
-				*errorCode = 326;	// isc_dyn_dup_tablespace
+				*errorCode = 335;	// isc_dyn_dup_tablespace
 			}
 			END_FOR
 
@@ -732,6 +732,10 @@ bool DYN_UTIL_find_field_source(thread_db* tdbb,
 				 PPR.RDB$PARAMETER_NAME EQ local_name
 		{
 			found = true;
+
+			fb_utils::exact_name_limit(PPR.RDB$FIELD_SOURCE_SCHEMA_NAME, sizeof(PPR.RDB$FIELD_SOURCE_SCHEMA_NAME));
+			strcpy(output_field_schema_name, PPR.RDB$FIELD_SOURCE_SCHEMA_NAME);
+
 			fb_utils::exact_name_limit(PPR.RDB$FIELD_SOURCE, sizeof(PPR.RDB$FIELD_SOURCE));
 			strcpy(output_field_name, PPR.RDB$FIELD_SOURCE);
 		}

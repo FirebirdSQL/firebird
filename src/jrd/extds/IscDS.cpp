@@ -117,14 +117,21 @@ void IscConnection::attach(thread_db* tdbb)
 		// therefore use working but definitely not ideal way to avoid remote & loopback
 		// providers to be used - add empty isc_dpb_address_path clumplet to DPB.
 		// See also get_new_dpb() in interface.cpp.
+		// In a case when real att_address_path is present use it - this also
+		// makes use of RemoteAccess config parameter consistent (GH #9056).
 
-		ClumpletWriter address_record(ClumpletReader::UnTagged, MAX_UCHAR - 2);
-		ClumpletWriter address_stack_buffer(ClumpletReader::UnTagged, MAX_UCHAR - 2);
-		address_stack_buffer.insertBytes(isc_dpb_address,
-			address_record.getBuffer(), address_record.getBufferLength());
+		if (attachment->att_address_path.hasData())
+			newDpb.insertData(isc_dpb_address_path, attachment->att_address_path);
+		else
+		{
+			ClumpletWriter address_record(ClumpletReader::UnTagged, MAX_UCHAR - 2);
+			ClumpletWriter address_stack_buffer(ClumpletReader::UnTagged, MAX_UCHAR - 2);
+			address_stack_buffer.insertBytes(isc_dpb_address,
+				address_record.getBuffer(), address_record.getBufferLength());
 
-		newDpb.insertBytes(isc_dpb_address_path, address_stack_buffer.getBuffer(),
-						   address_stack_buffer.getBufferLength());
+			newDpb.insertBytes(isc_dpb_address_path, address_stack_buffer.getBuffer(),
+				address_stack_buffer.getBufferLength());
+		}
 	}
 	newDpb.insertInt(isc_dpb_ext_call_depth, attachment->att_ext_call_depth + 1);
 

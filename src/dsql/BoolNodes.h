@@ -291,6 +291,14 @@ public:
 		return visitor.ignoreSubSelects ? false : BoolExprNode::dsqlAggregateFinder(visitor);
 	}
 
+	bool dsqlFieldFinder(FieldFinder& visitor) override
+	{
+		// Fields inside our sub-select are not related to the scope level being
+		// checked, see AggNode::dsqlAggregate2Finder() and
+		// RseBoolNode::dsqlAggregateFinder().
+		return !visitor.ignoreSubSelects && BoolExprNode::dsqlFieldFinder(visitor);
+	}
+
 	bool dsqlSubSelectFinder(SubSelectFinder& /*visitor*/) override
 	{
 		return true;

@@ -41,6 +41,9 @@
 #include "../dsql/DdlNodes.h"
 #include "../jrd/met.h"
 #include "../jrd/IntlManager.h"
+#include "../jrd/Tablespace.h"
+#include "../jrd/os/pio_proto.h"
+#include "../common/os/path_utils.h"
 
 
 DATABASE DB = FILENAME "ODS.RDB";
@@ -1621,6 +1624,82 @@ void afterInsertRelation(thread_db* tdbb, Record* record)
 	}
 }
 
+
+void beforeInsertTablespace(thread_db* tdbb, Record* record)
+{
+	if (!tdbb->getAttachment()->isRWGbak())
+		return;
+
+	// During a gbak restore the tablespace file name is taken verbatim from the
+	// backup / -ts switch. Gbak does not interpret it, as it may run on a machine
+	// with an incompatible file naming, so we normalize the separators and anchor
+	// a relative name to the directory of the database being restored here, using
+	// the same rules as CREATE/ALTER TABLESPACE, before the record is stored.
+
+	dsc desc;
+	if (!EVL_field(nullptr, record, f_ts_file, &desc))
+		return; // no file name (e.g. PRIMARY tablespace)
+
+	const string fileName(MOV_make_string2(tdbb, &desc, ttype_none));
+
+	PathName resolved = fileName.ToPathName();
+	Tablespace::resolveFileName(tdbb, resolved);
+
+	// The resolved path may be longer than the one we were given, as it is
+	// anchored to the directory of the database. Refuse it here with the same
+	// message CREATE/ALTER TABLESPACE uses, rather than let the store below fail
+	// with a generic conversion error.
+	Tablespace::checkFileNameLength(resolved.length());
+
+	// File with tablespace should not exist
+	if (PIO_file_exists(resolved))
+		ERR_post(Arg::Gds(isc_ts_file_exists) << Arg::Str(resolved));
+
+	dsc src;
+	src.makeText((USHORT) resolved.length(), ttype_none, (UCHAR*) resolved.c_str());
+	MOV_move(tdbb, &src, &desc);
+}
+
+
+void afterInsertTablespace(thread_db* tdbb, Record* record)
+{
+	const auto dbb = tdbb->getDatabase();
+	const auto attachment = tdbb->getAttachment();
+
+	if (!attachment->isRWGbak())
+		return;
+
+	dsc desc;
+	if (!EVL_field(nullptr, record, f_ts_id, &desc))
+	{
+		fb_assert(false);
+		return;
+	}
+
+	const auto tsId(static_cast<ULONG>(MOV_get_long(tdbb, &desc, 0)));
+	fb_assert(PageSpace::isTablespace(tsId)); // this is user tablespace
+
+	// Get the tablespace file name from the record
+	if (!EVL_field(nullptr, record, f_ts_file, &desc))
+	{
+		fb_assert(false);
+		return;
+	}
+
+	const string fileName(MOV_make_string2(tdbb, &desc, ttype_none));
+
+	// RDB$FILE_NAME always holds an absolute path by the time we get here.
+	//
+	// The empty name is left out of the check on purpose: PathUtils::isRelative()
+	// disagrees with itself across platforms there (it reports "" as relative on
+	// Windows, as absolute on POSIX), so testing it would make this assertion
+	// platform-dependent. An empty name is rejected when the file is opened.
+	fb_assert(!fileName.hasData() || !PathUtils::isRelative(fileName.ToPathName()));
+
+	// Allocate the page space (create file if needed)
+	dbb->dbb_page_manager.allocatePageSpace(tdbb, tsId, true, fileName.ToPathName());
+}
+
 template<USHORT Field, class CachedType, class IdType = MetaId>
 void populateCache(thread_db* tdbb, Record* record)
 {
@@ -1840,6 +1919,10 @@ void SystemTriggers::executeBeforeInsertTriggers(thread_db* tdbb, jrd_rel* relat
 		case rel_collations:
 			beforeInsertCollation(tdbb, record, relation);
 			break;
+
+		case rel_tablespaces:
+			beforeInsertTablespace(tdbb, record);
+			break;
 	}
 }
 
@@ -1865,6 +1948,10 @@ void SystemTriggers::executeAfterInsertTriggers(thread_db* tdbb, jrd_rel* relati
 
 		case rel_packages:
 			populateCache<f_pkg_id, Cached::Package>(tdbb, record);
+			break;
+
+		case rel_tablespaces:
+			afterInsertTablespace(tdbb, record);
 			break;
 	}
 }

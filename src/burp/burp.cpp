@@ -46,7 +46,7 @@
 #include "../burp/std_desc.h"
 #include "../burp/split/spit.h"
 #include "../jrd/license.h"
-
+#include "../jrd/obj.h"
 #include "../common/classes/timestamp.h"
 #include "../burp/burp_proto.h"
 #include "../burp/backu_proto.h"
@@ -1144,10 +1144,10 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_MAPPING_FILE:
 			if (++itr >= argc)
 			{
-				BURP_error(419, true, SafeArg() << in_sw_tab->in_sw_name);
+				BURP_error(441, true, SafeArg() << in_sw_tab->in_sw_name);
 				// parameter for option -@1 is missing
 			}
-			tdgbl->loadMapping(argv[itr], tdgbl->tablespace_mapping, false);
+			tdgbl->loadMapping(argv[itr], tdgbl->tablespaceFileMap, false);
 			break;
 		case IN_SW_BURP_TS_ORIGINAL_PATHS:
 			if (tdgbl->gbl_sw_ts_orig_paths)
@@ -1157,16 +1157,16 @@ int gbak(Firebird::UtilSvc* uSvc)
 		case IN_SW_BURP_TS_PATH:
 			if (itr + 2 >= argc)
 			{
-				BURP_error(419, true, SafeArg() << in_sw_tab->in_sw_name);
+				BURP_error(441, true, SafeArg() << in_sw_tab->in_sw_name);
 				// parameter for option -@1 is missing
 			}
 
 			{
-				Firebird::string ts_name = argv[++itr];
-				Firebird::string ts_path = argv[++itr];
+				const string ts_name(argv[++itr]);
+				const string ts_path(argv[++itr]);
 
 				if (ts_name.length() && ts_path.length())
-					tdgbl->tablespace_mapping.put(ts_name, ts_path);
+					tdgbl->tablespaceFileMap.put(ts_name, ts_path);
 			}
 
 			break;
@@ -2790,6 +2790,24 @@ void BurpGlobals::setupSkipIncludePattern(const string& regexp, USHORT alreadySe
 	}
 }
 
+burp_pkg* BurpGlobals::getPackage(const QualifiedMetaString& name) const
+{
+	const auto result = metaDictionary.get({obj_package_header, name});
+	return result ? result->package : nullptr;
+}
+
+burp_rel* BurpGlobals::getRelation(const QualifiedMetaString& name) const
+{
+	const auto result = metaDictionary.get({obj_relation, name});
+	return result ? result->relation : nullptr;
+}
+
+burp_prc* BurpGlobals::getProcedure(const QualifiedMetaString& name) const
+{
+	const auto result = metaDictionary.get({obj_procedure, name});
+	return result ? result->procedure : nullptr;
+}
+
 Firebird::string BurpGlobals::toSystem(const Firebird::PathName& from)
 {
 	Firebird::string to = from.ToString();
@@ -2957,7 +2975,7 @@ void BurpGlobals::loadMapping(const char* mapping_file, StringMap& map, bool cle
 	FILE* f = os_utils::fopen(mapping_file, fopen_read_type);
 	if (!f)
 	{
-		BURP_error(420, true, SafeArg() << mapping_file);	// msg 420 cannot open mapping file @1
+		BURP_error(442, true, SafeArg() << mapping_file);	// msg 442 cannot open mapping file @1
 	}
 
 	//Read lines from file, split by space and add to mapping

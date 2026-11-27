@@ -427,7 +427,7 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vec
 			write_pages = leftPages;
 
 		if (!seek_file(file, &bdb, &overlapped))
-			return 0;
+			break;
 
 		const DWORD to_write = (DWORD) write_pages * dbb->dbb_page_size;
 		DWORD written;

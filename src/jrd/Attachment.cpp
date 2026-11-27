@@ -209,6 +209,7 @@ Jrd::Attachment::Attachment(MemoryPool* pool, Database* dbb, JProvider* provider
 	  att_timestamp(TimeZoneUtil::getCurrentSystemTimeStamp()),
 	  att_context_vars(*pool),
 	  ddlTriggersContext(*pool),
+	  att_address_path(*pool),
 	  att_network_protocol(*pool),
 	  att_remote_crypt(*pool),
 	  att_remote_address(*pool),
@@ -859,20 +860,6 @@ ProfilerManager* Attachment::getProfilerManager(thread_db* tdbb)
 	return profilerManager;
 }
 
-ProfilerManager* Attachment::getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb)
-{
-	const auto* request = tdbb->getRequest();
-
-	return isProfilerActive() && !request->hasInternalStatement() ?
-		getProfilerManager(tdbb) :
-		nullptr;
-}
-
-bool Attachment::isProfilerActive()
-{
-	return att_profiler_manager && att_profiler_manager->isActive();
-}
-
 void Attachment::releaseProfilerManager(thread_db* tdbb)
 {
 	if (!att_profiler_manager)
@@ -899,21 +886,27 @@ void Attachment::createMetaTransaction(thread_db* tdbb)
 		{
 			LCK_release(tdbb, att_meta_transaction->tra_lock);
 			att_meta_transaction->tra_lock = nullptr;
+			att_meta_number = att_meta_transaction->tra_number;
 		}
 	}
 }
 
-jrd_tra* Attachment::getMetaTransaction(thread_db* tdbb)
+// noStore parameter means that data found by retuned transaction will never be stored in the cache
+// therefore in a case of missing user transaction system one can be used in more active way
+// this helps when access to uncommitted data from user transaction is needed (generators)
+
+jrd_tra* Attachment::getMetaTransaction(thread_db* tdbb, bool noStore)
 {
 	jrd_tra* tra = tdbb->getTransaction();
 
-	if (!att_meta_transaction)
+	if (noStore || !att_meta_transaction)
 	{
 		if ((tra == nullptr) || (tra == getSysTransaction()))
 			return getSysTransaction();
-
-		createMetaTransaction(tdbb);
 	}
+
+	if (!att_meta_transaction)
+		createMetaTransaction(tdbb);
 
 	att_meta_transaction->tra_number = tra && tra->tra_number ? tra->tra_number : 1;
     return att_meta_transaction;
@@ -924,6 +917,7 @@ void Attachment::rollbackMetaTransaction(thread_db* tdbb)
 	if (auto trans_meta = att_meta_transaction)
 	{
 		att_meta_transaction = nullptr;
+		trans_meta->tra_number = att_meta_number;
 		TRA_rollback(tdbb, trans_meta, false, true);
 	}
 }

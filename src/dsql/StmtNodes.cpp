@@ -1083,7 +1083,7 @@ void BulkInsertNode::assignValues(thread_db* tdbb, Request* request, jrd_rel* re
 		auto assign = nodeAs<AssignmentNode>(stmt);
 		//EXE_assignment(tdbb, assign);
 
-		if (assign->hasLineColumn)
+		if (assign->flags & FLAG_LINE_COLUMN)
 		{
 			request->req_src_line = assign->line;
 			request->req_src_column = assign->column;
@@ -1277,7 +1277,7 @@ const StmtNode* CompoundStmtNode::execute(thread_db* tdbb, Request* request, Exe
 			{
 				const StmtNode* stmt = i->getObject();
 
-				if (stmt->hasLineColumn)
+				if (stmt->flags & FLAG_LINE_COLUMN)
 				{
 					request->req_src_line = stmt->line;
 					request->req_src_column = stmt->column;
@@ -1828,18 +1828,22 @@ DmlNode* DeclareLocalTableNode::parse(thread_db* tdbb, MemoryPool& pool, Compile
 
 				for (USHORT i = 0; i < segmentCount; ++i)
 				{
-					const auto code = blrReader.getByte();
-					if (code == blr_dcl_local_table_index_segment)
-						index.segments.add({ blrReader.getWord(), 0 });
-					else
+					if (blrReader.getByte() != blr_dcl_local_table_index_segment)
 						PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index segment subcode");
+
+					auto& segment = index.segments.add();
+					segment.fieldId = blrReader.getWord();
+					segment.length = 0;
 
 					if (blrReader.peekByte() == blr_dcl_local_table_index_seg_length)
 					{
 						blrReader.getByte();
-						index.segments.back().length = blrReader.getWord();
+						segment.length = blrReader.getWord();
 					}
 				}
+
+				if (blrReader.getByte() != blr_end)
+					PAR_error(csb, Arg::Gds(isc_random) << "Invalid local table index terminator");
 
 				break;
 			}
@@ -2208,6 +2212,8 @@ void DeclareLocalTableNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 					dsqlScratch->appendUShort(segment.length);
 				}
 			}
+
+			dsqlScratch->appendUChar(blr_end);
 		}
 
 		dsqlScratch->appendUChar(blr_end);
@@ -2467,7 +2473,11 @@ void DeclareLocalTableNode::reset(thread_db* tdbb, Request* request) const
 
 		try
 		{
-			permanent->deletePages(tdbb, tempInstanceId);
+			{	// scope
+				// getTempPages() resolves frame relation pages using tdbb_temp_frame_id
+				AutoSetRestore<FB_UINT64> autoFrameId(&tdbb->tdbb_temp_frame_id, tempInstanceId);
+				permanent->deletePages(tdbb, tempInstanceId);
+			}
 
 			if (transaction)
 				transaction->discardTempFrameActions(relation, tempInstanceId);
@@ -6751,7 +6761,7 @@ void ExitNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	{
 		dsqlScratch->appendUChar(blr_begin);
 
-		if (hasLineColumn)
+		if (flags & FLAG_LINE_COLUMN)
 			dsqlScratch->putDebugSrcInfo(line, column);
 
 		dsqlScratch->appendUChar(blr_leave);
@@ -6889,7 +6899,7 @@ void ForNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 		dsqlScratch->appendUChar(dsqlLabelNumber);
 
 		// Put src info for blr_for.
-		if (hasLineColumn)
+		if (flags & FLAG_LINE_COLUMN)
 			dsqlScratch->putDebugSrcInfo(line, column);
 	}
 
@@ -7025,7 +7035,7 @@ const StmtNode* ForNode::execute(thread_db* tdbb, Request* request, ExeState* /*
 
 		case Request::req_sync:
 			{
-				if (hasLineColumn)
+				if (flags & FLAG_LINE_COLUMN)
 				{
 					request->req_src_line = line;
 					request->req_src_column = column;
@@ -7257,7 +7267,7 @@ void ForRangeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	fb_assert(dsqlLabelNumber < MAX_UCHAR);
 	dsqlScratch->appendUChar((UCHAR) dsqlLabelNumber);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_for_range);
@@ -7598,7 +7608,7 @@ LineColumnNode* LineColumnNode::dsqlPass(DsqlCompilerScratch* dsqlScratch)
 
 	statement->line = line;
 	statement->column = column;
-	statement->hasLineColumn = true;
+	statement->flags |= FLAG_LINE_COLUMN;
 
 	return this;
 }
@@ -7832,7 +7842,7 @@ void LoopNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	dsqlScratch->appendUChar(blr_loop);
 	dsqlScratch->appendUChar(blr_begin);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_if);
@@ -8399,7 +8409,7 @@ void MergeNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 	}
 
 	// Put src info for blr_for.
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	// Generate FOR loop
@@ -11307,7 +11317,7 @@ void ReturnNode::genBlr(DsqlCompilerScratch* dsqlScratch)
 {
 	dsqlScratch->appendUChar(blr_begin);
 
-	if (hasLineColumn)
+	if (flags & FLAG_LINE_COLUMN)
 		dsqlScratch->putDebugSrcInfo(line, column);
 
 	dsqlScratch->appendUChar(blr_assignment);

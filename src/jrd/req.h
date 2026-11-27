@@ -51,6 +51,7 @@ class jrd_tra;
 class Savepoint;
 class Cursor;
 class thread_db;
+class ProfilerRequestProfile;
 
 
 // record parameter block
@@ -58,50 +59,18 @@ class thread_db;
 struct RecordParameterBase
 {
 	RecordParameterBase()
-		: rpb_transaction_nr(0), rpb_record(NULL), rpb_prior(NULL),
-		  rpb_undo(NULL), rpb_format_number(0),
-		  rpb_temp_instance_id(0),
-		  rpb_page(0), rpb_line(0),
-		  rpb_f_page(0), rpb_f_line(0),
-		  rpb_b_page(0), rpb_b_line(0),
-		  rpb_address(NULL), rpb_length(0),
-		  rpb_flags(0), rpb_stream_flags(0), rpb_runtime_flags(0),
-		  rpb_org_scans(0), rpb_window(DB_PAGE_SPACE)
 	{
 	}
 
-	RecordNumber rpb_number;		// record number in relation
-	TraNumber	rpb_transaction_nr;	// transaction number
-	Record*		rpb_record;			// final record block
-	Record*		rpb_prior;			// prior record block if this is a delta record
-	Record*		rpb_undo;			// our first version of data if this is a second modification
-	USHORT		rpb_format_number;	// format number in relation
-	FB_UINT64	rpb_temp_instance_id;	// declared local table page instance
-
-	ULONG rpb_page;					// page number
-	USHORT rpb_line;				// line number on page
-
-	ULONG rpb_f_page;				// fragment page number
-	USHORT rpb_f_line;				// fragment line number on page
-
-	ULONG rpb_b_page;				// back page
-	USHORT rpb_b_line;				// back line
-
-	UCHAR* rpb_address;				// address of record sans header
-	ULONG rpb_length;				// length of record
-	USHORT rpb_flags;				// record ODS flags replica
-	USHORT rpb_stream_flags;		// stream flags
-	USHORT rpb_runtime_flags;		// runtime flags
-	SSHORT rpb_org_scans;			// relation scan count at stream open
+	USHORT rpb_stream_flags = 0;				// stream flags
 
 	RecordParameterBase& operator=(const RecordParameterBase&) = default;
+
 	void assign(const RecordParameterBase& from)
 	{
 		*this = from;
 	}
 
-protected:
-	struct win rpb_window;
 };
 
 struct RecordParameter : public RecordParameterBase
@@ -110,20 +79,21 @@ struct RecordParameter : public RecordParameterBase
 		: RecordParameterBase(), rpb_relation()
 	{ }
 
-	WIN& getWindow(thread_db* tdbb);	// in Statement.cpp
-
 	Rsc::Rel	rpb_relation;		// relation of record
 };
 
 struct record_param : public RecordParameterBase
 {
 	record_param()
-		: RecordParameterBase(), rpb_relation(nullptr)
+		: RecordParameterBase(), rpb_window(DB_PAGE_SPACE)
 	{ }
 
 	inline WIN& getWindow(thread_db* tdbb)
 	{
-		if (rpb_relation)
+		// A window holding a page already has its page space initialized,
+		// so there is no need to resolve the relation pages
+
+		if (rpb_relation && !rpb_window.win_bdb)
 		{
 			const auto relPages = rpb_relation->getPages(tdbb);
 			rpb_window.win_page.setPageSpaceID(relPages->getPageSpaceId());
@@ -132,9 +102,47 @@ struct record_param : public RecordParameterBase
 		return rpb_window;
 	}
 
-	jrd_rel*	rpb_relation;		// relation of record
+	// Assigns the given page space to the window. Unlike the overload above,
+	// it does not resolve the relation pages, so the page space may come from
+	// any source (e.g. an index page space), not necessarily the relation.
 
-	// rpb_relation is not assigned here!!!
+	inline WIN& getWindow(ULONG pageSpaceId)
+	{
+		rpb_window.win_page.setPageSpaceID(pageSpaceId);
+		return rpb_window;
+	}
+
+private:
+	struct win rpb_window;
+
+public:
+	Record*		rpb_record = nullptr;			// final record block
+	Record*		rpb_prior = nullptr;			// prior record block if this is a delta record
+	Record*		rpb_undo = nullptr;				// our first version of data if this is a second modification
+
+	RecordNumber rpb_number;					// record number in relation
+	jrd_rel*	rpb_relation = nullptr;			// relation of record
+
+	ULONG rpb_page = 0;							// page number
+	USHORT rpb_line = 0;						// line number on page
+
+	ULONG rpb_f_page = 0;						// fragment page number
+	USHORT rpb_f_line = 0;						// fragment line number on page
+
+	ULONG rpb_b_page = 0;						// back page
+	USHORT rpb_b_line = 0;						// back line
+
+	UCHAR* rpb_address = nullptr;				// address of record sans header
+	ULONG rpb_length = 0;						// length of record
+
+	TraNumber	rpb_transaction_nr = 0;			// transaction number
+	USHORT		rpb_format_number = 0;			// format number in relation
+	FB_UINT64	rpb_temp_instance_id = 0;		// declared local table page instance
+
+	USHORT rpb_flags = 0;						// record ODS flags replica
+	USHORT rpb_runtime_flags = 0;				// runtime flags
+	SSHORT rpb_org_scans = 0;					// relation scan count at stream open
+
 	record_param& operator=(const RecordParameter& from)
 	{
 		assign(from);
@@ -436,6 +444,9 @@ public:
 	RuntimeStatistics	req_base_stats;
 	AffectedRows req_records_affected;	// records affected by the last statement
 	FB_UINT64 req_profiler_ticks;		// profiler ticks
+	ProfilerRequestProfile* req_profiler_profile = nullptr;	// sampling profiler counters, owned by ProfilerManager
+	ULONG req_profiler_generation = 0;	// ProfilerManager generation of req_profiler_profile
+	bool req_profiler_sampled = false;	// executed while the profiler samples timings
 
 	const StmtNode*	req_next;			// next node for execution
 	EDS::Statement*	req_ext_stmt;		// head of list of active dynamic statements

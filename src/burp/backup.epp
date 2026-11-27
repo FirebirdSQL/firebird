@@ -383,6 +383,13 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 	BURP_verbose(msgVerbose_write_collations);
 	write_collations();
 
+	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
+	{
+		// Write tablespaces
+		BURP_verbose(433);	// msg 433 writing tablespaces
+		write_tablespaces();
+	}
+
 	// Write relations
 
 	BURP_verbose(154);
@@ -425,13 +432,6 @@ int BACKUP_backup(const TEXT* dbb_file, const TEXT* file_name)
 		// Write packages
 		BURP_verbose(336);	// msg 336 writing packages
 		write_packages();
-	}
-
-	if (tdgbl->runtimeODS >= DB_VERSION_DDL14)
-	{
-		// Write tablespaces
-		BURP_verbose(411);	// msg 411 writing tablespaces
-		write_tablespaces();
 	}
 
 	// Now go back and write all data
@@ -4616,7 +4616,7 @@ void write_tablespaces()
 		const SSHORT l = PUT_TEXT(att_ts_name, X.RDB$TABLESPACE_NAME);
 		MISC_terminate(X.RDB$TABLESPACE_NAME, temp, l, sizeof(temp));
 
-		BURP_verbose(412, temp);	// msg 412 writing tablespace @1
+		BURP_verbose(434, temp);	// msg 434 writing tablespace @1
 
 		if (!X.RDB$SECURITY_CLASS.NULL)
 			PUT_TEXT(att_ts_security_class, X.RDB$SECURITY_CLASS);

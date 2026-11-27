@@ -161,7 +161,7 @@ template <class Versioned>
 class ListEntry : public HazardObject
 {
 public:
-	enum State { INITIAL, RELOAD, MISSING, SCANNING, READY };
+	enum State { INITIAL, RELOAD, SCANNING, READY };
 
 	ListEntry(Versioned* object, TraNumber traNumber, ObjectBase::Flag fl, ListEntry* link = nullptr)
 		: object(object), traNumber(traNumber), cacheFlags(fl), state(INITIAL)
@@ -492,8 +492,6 @@ public:
 						break;
 
 					case ScanResult::SKIP:
-						if (savedState == MISSING)
-							result = ScanResult::MISS;
 						state = savedState;
 						break;
 
@@ -834,6 +832,9 @@ public:
 
 			case ScanResult::MISS:
 				rc = StoreResult::MISS;
+				break;
+
+			case ScanResult::SKIP:
 				break;
 			}
 		}
@@ -1253,11 +1254,11 @@ public:
 			for (SubArrayData* const end = &sub[SUBARRAY_SIZE]; sub < end; ++sub)
 			{
 				StoredElement* ptr = sub->load(atomics::memory_order_relaxed);
-				if (ptr)
+				if (ptr && ptr->nameIs(name))
 				{
 					auto listEntry = ptr->getEntry(tdbb, TransactionNumber::current(tdbb), fl | CacheFlag::MINISCAN);
 
-					if (listEntry && ptr->nameIs(name))
+					if (listEntry)
 					{
 						if (!(fl & (CacheFlag::ERASED | CacheFlag::MINISCAN)))
 							ptr->reload(tdbb, fl);		// found object to be reloaded w/o MINISCAN flag

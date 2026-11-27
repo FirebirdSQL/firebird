@@ -1238,7 +1238,8 @@ namespace Why
 			  statement(NULL),
 			  userHandle(NULL),
 			  pseudoOpened(false),
-			  delayedFormat(false)
+			  delayedFormat(false),
+			  cursorMessageLength(0)
 		{ }
 
 		~IscStatement() override;
@@ -1290,6 +1291,9 @@ namespace Why
 		YStatement* statement;
 		isc_stmt_handle* userHandle;
 		bool pseudoOpened, delayedFormat;
+		// Length of the output message the open cursor writes on every fetch:
+		// fixed at open, or by the first fetch when the format is delayed.
+		unsigned cursorMessageLength;
 	};
 
 	template <>
@@ -4664,6 +4668,7 @@ void IscStatement::openCursor(CheckStatusWrapper* status, isc_tr_handle* traHand
 	fb_assert(statement->cursor);
 
 	delayedFormat = (outMetadata == DELAYED_OUT_FORMAT);
+	cursorMessageLength = (!delayedFormat && outMetadata) ? outMetadata->getMessageLength(status) : 0;
 }
 
 void IscStatement::closeCursor(CheckStatusWrapper* status, bool raise)
@@ -4737,6 +4742,14 @@ FB_BOOLEAN IscStatement::fetch(CheckStatusWrapper* status, IMessageMetadata* out
 			return FB_FALSE;
 
 		delayedFormat = false;
+		cursorMessageLength = outMetadata->getMessageLength(status);
+	}
+	else if (outMetadata->getMessageLength(status) < cursorMessageLength)
+	{
+		// The cursor writes its own message layout into outBuffer, whatever
+		// format this call describes. A buffer sized for a shorter message
+		// would be overrun, so refuse it.
+		(Arg::Gds(isc_dsql_sqlda_err) << Arg::Gds(isc_dsql_sqlda_value_err)).raise();
 	}
 
 	return statement->cursor->fetchNext(status, outBuffer) == IStatus::RESULT_OK;

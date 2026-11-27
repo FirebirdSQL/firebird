@@ -633,13 +633,16 @@ USHORT PIO_init_data(thread_db* tdbb, jrd_file* file, FbStatusVector* status_vec
 		for (int r = 0; r < IO_RETRY; r++)
 		{
 			if (!seek_file(file, &bdb, &offset, status_vector))
-				return 0;
+				return (initPages - leftPages);
 
 			if ((written = os_utils::pwrite(file->fil_desc, zero_buff, to_write, LSEEK_OFFSET_CAST offset)) == to_write)
 				break;
 
 			if (written < 0 && !SYSCALL_INTERRUPTED(errno))
-				return unix_error("write", file, isc_io_write_err, status_vector);
+			{
+				unix_error("write", file, isc_io_write_err, status_vector);
+				return (initPages - leftPages);
+			}
 		}
 
 		leftPages -= write_pages;

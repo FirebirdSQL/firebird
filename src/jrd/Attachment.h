@@ -36,6 +36,7 @@
 #include "../jrd/RuntimeStatistics.h"
 #include "../jrd/Coercion.h"
 #include "../jrd/LocalTemporaryTable.h"
+#include "../jrd/DataPageNumberCache.h"
 
 #include "../common/classes/ByteChunk.h"
 #include "../common/classes/GenericMap.h"
@@ -402,6 +403,8 @@ typedef Firebird::RaiiUnlockGuard<StableAttachmentPart::Sync> AttSyncUnlockGuard
 //
 class Attachment : public pool_alloc<type_att>
 {
+	friend class ProfilerManager;
+
 public:
 	class SyncGuard
 	{
@@ -523,6 +526,7 @@ public:
 private:
 	jrd_tra*	att_sys_transaction;		// system transaction
 	jrd_tra*	att_meta_transaction;		// metadata read transaction
+	TraNumber	att_meta_number = 0;		// Number with which metadata transaction was started
 	StableAttachmentPart* att_stable;
 
 public:
@@ -566,6 +570,7 @@ public:
 	ISC_TIMESTAMP_TZ	att_timestamp;	    // Connection date and time
 	Firebird::StringMap att_context_vars;	// Context variables for the connection
 	Firebird::Stack<DdlTriggerContext*> ddlTriggersContext;	// Context variables for DDL trigger event
+	Firebird::UCharBuffer att_address_path;	// Full address stack on incoming connection
 	Firebird::string att_network_protocol;	// Network protocol used by client for connection
 	Firebird::PathName att_remote_crypt;	// Name of wire crypt plugin (if any)
 	Firebird::string att_remote_address;	// Protocol-specific address of remote client
@@ -607,6 +612,17 @@ public:
 
 	PageToBufferMap* att_bdb_cache;			// managed in CCH, created in att_pool, freed with it
 
+	// Single per-attachment cache of relation data page numbers, shared by all relations
+	DataPageNumberCache* att_dp_number_cache = nullptr;
+
+	DataPageNumberCache* getDPNumberCache()
+	{
+		if (!att_dp_number_cache)
+			att_dp_number_cache = FB_NEW_POOL(*att_pool) DataPageNumberCache();
+
+		return att_dp_number_cache;
+	}
+
 	Firebird::LeftPooledMap<QualifiedName, LocalTemporaryTable*> att_local_temporary_tables;
 	std::optional<USHORT> att_next_ltt_id;		// Next available LTT relation ID
 
@@ -632,8 +648,8 @@ public:
 	bool locksmith(thread_db* tdbb, SystemPrivilege sp) const;
 
 	jrd_tra* getSysTransaction() noexcept;
-	void setSysTransaction(jrd_tra* trans) noexcept;		// used only by TRA_init
-	jrd_tra* getMetaTransaction(thread_db* tdbb);			// RORC to read metadata
+	void setSysTransaction(jrd_tra* trans) noexcept;					// used only by TRA_init
+	jrd_tra* getMetaTransaction(thread_db* tdbb, bool noStore = false);	// RORC to read metadata
 	void createMetaTransaction(thread_db* tdbb);
 	void rollbackMetaTransaction(thread_db* tdbb);
 
@@ -781,8 +797,12 @@ public:
 	}
 
 	ProfilerManager* getProfilerManager(thread_db* tdbb);
-	ProfilerManager* getActiveProfilerManagerForNonInternalStatement(thread_db* tdbb);
-	bool isProfilerActive();
+
+	bool isProfilerActive() const noexcept
+	{
+		return att_profiler_active;
+	}
+
 	void releaseProfilerManager(thread_db* tdbb);
 	void purgeTransactions(thread_db* tdbb, const bool force_flag);
 
@@ -811,6 +831,7 @@ private:
 	InitialOptions att_initial_options;	// Initial session options
 	DebugOptions att_debug_options;
 	Firebird::AutoPtr<ProfilerManager> att_profiler_manager;	// ProfilerManager
+	bool att_profiler_active = false;	// att_profiler_manager has an active (not paused) session
 
 	JProvider* att_provider;	// Provider which created this attachment
 

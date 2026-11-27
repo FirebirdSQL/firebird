@@ -579,6 +579,9 @@
 #define isc_spb_res_fast_path			isc_spb_bkp_fast_path
 #define isc_spb_res_direct_io			isc_spb_bkp_direct_io
 #define isc_spb_res_replica_mode		20
+#define isc_spb_res_ts_mapping_file		24
+#define isc_spb_res_ts_path				25
+#define isc_spb_res_ts_org_paths		0x080000
 
 /*****************************************
  * Parameters for isc_action_svc_validate *

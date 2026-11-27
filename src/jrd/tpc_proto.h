@@ -113,6 +113,12 @@ public:
 	//   If transaction is marked active on disk, mark it dead.
 	CommitNumber snapshotState(thread_db* tdbb, TraNumber number);
 
+	// Same as snapshotState(), for a caller that holds the transaction lock (LCK_tra).
+	// While the lock is held, the transaction has no owner and nobody can reconnect
+	// to it. So the lock data is not queried (it could be stale) and the state read
+	// from TIP can't change.
+	CommitNumber lockedState(thread_db* tdbb, TraNumber number);
+
 	// If engine has recalculated Oldest (interesting) transaction or Oldest Snapshot
 	// number for the database (via Sweep or during regular transaction start) it
 	// needs to notify TPC, so that it can release cache resources. Any transaction
@@ -314,11 +320,18 @@ private:
 	class MemBlockInitializer final : public MemoryInitializer
 	{
 	public:
-		explicit MemBlockInitializer(TipCache *cache) noexcept : MemoryInitializer(cache) {}
+		explicit MemBlockInitializer(TipCache *cache, ULONG blockSize, bool fileExists) noexcept
+			: MemoryInitializer(cache),
+			m_blockSize(blockSize),
+			m_fileExists(fileExists)
+		{}
 		bool initialize(Firebird::SharedMemoryBase* sm, bool initFlag) override;
 
 		USHORT getType() const override { return Firebird::SharedMemoryBase::SRAM_TPC_BLOCK; }
 		const char* getName() const override { return "TipCache:TranBlock"; }
+
+		const ULONG m_blockSize;
+		const bool m_fileExists;
 	};
 
 	typedef Firebird::BePlusTree<StatusBlockData*, TpcBlockNumber, StatusBlockData> BlocksMemoryMap;
@@ -331,10 +344,10 @@ private:
 	ULONG m_transactionsPerBlock; // final. When set, we assume TPC has been initialized.
 
 	Firebird::AutoPtr<Lock> m_lock;
+	bool m_exclusive;					// have exclusive access
 
 	GlobalTpcInitializer globalTpcInitializer;
 	SnapshotsInitializer snapshotsInitializer;
-	MemBlockInitializer memBlockInitializer;
 
 	// Tree with TIP cache memory blocks
 	// Reads and writes to the tree are protected with m_sync_status.
@@ -369,7 +382,7 @@ private:
 	// Populate TIP cache from disk
 	void loadInventoryPages(thread_db *tdbb, GlobalTpcHeader* header);
 	// Init mapping for existing TIP blocks
-	void mapInventoryPages(const GlobalTpcHeader* header);
+	void mapInventoryPages(thread_db* tdbb, const GlobalTpcHeader* header);
 
 	static int tpc_block_blocking_ast(void* arg);
 
@@ -396,6 +409,7 @@ inline void TPC_set_state(thread_db* tdbb, TraNumber number, int state)
 }
 
 int TPC_snapshot_state(thread_db* tdbb, TraNumber number);
+int TPC_locked_state(thread_db* tdbb, TraNumber number);
 
 } // namespace Jrd
 

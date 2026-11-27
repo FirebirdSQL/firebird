@@ -523,7 +523,7 @@ RelationPages* RelationPermanent::getTempPages(thread_db* tdbb, RelationPages::I
 		if (!newPages)
 			newPages = FB_NEW_POOL(getPool()) RelationPages(getPool(), pageSpaceId, instanceId);
 		else
-			rel_pages_free = newPages->reuse(pageSpaceId, instanceId);
+			rel_pages_free = newPages->reuse(tdbb, pageSpaceId, instanceId);
 
 		newPages->addRef();
 
@@ -646,7 +646,7 @@ bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = null
 		return false;
 
 #ifdef VIO_DEBUG
-	const auto firstPointerPage = pages->getPointerPage(0);
+	const auto firstPointerPage = pages->getFirstPointerPage();
 	const auto ppNumber = firstPointerPage ? firstPointerPage.value().getPageNum() : 0;
 	const auto rootPage = pages->getIndexRootPage();
 	const auto irpNumber = rootPage ? rootPage.value().getPageNum() : 0;
@@ -677,7 +677,7 @@ bool RelationPermanent::deletePages(thread_db* tdbb, RelationPages* pages = null
 
 	MutexLockGuard g(rel_pages_mutex, FB_FUNCTION);
 
-	pages->free(rel_pages_free);
+	pages->free(tdbb, rel_pages_free);
 	return true;
 }
 
@@ -697,7 +697,7 @@ void RelationPermanent::freePages(thread_db* tdbb)
 		if (pages->hasData())
 			DPM_delete_relation_pages(tdbb, this, pages);
 
-		pages->free(rel_pages_free);
+		pages->free(tdbb, rel_pages_free);
 	}
 }
 
@@ -861,20 +861,21 @@ Cached::Relation* RelationPermanent::newVersion(thread_db* tdbb, const Qualified
 {
 	auto* relation = MetadataCache::getPerm<Cached::Relation>(tdbb, name, CacheFlag::MINISCAN);
 
-	if (relation)
-		relation->newVersion(tdbb);
-	else
+	if (!relation)
 	{
 		auto id = jrd_rel::getIdByName(tdbb, name);
 		if (id.has_value())
 		{
-			relation = MetadataCache::newVersion<Cached::Relation>(tdbb, id.value());
+			relation = MetadataCache::getPerm<Cached::Relation>(tdbb, id.value(), CacheFlag::MINISCAN | CacheFlag::AUTOCREATE);
 			fb_assert(relation);
 		}
 	}
 
 	if (relation)
+	{
+		relation->newVersion(tdbb);
 		DFW_post_work(tdbb->getTransaction(), dfw_commit_relation, nullptr, nullptr, relation->getId());
+	}
 
 	return relation;
 }
@@ -1085,9 +1086,14 @@ void IndexPermanent::reloadAst(thread_db* tdbb, TraNumber tran, bool erase)
 
 void Trigger::free(thread_db* tdbb)
 {
+	MutexLockGuard guard(compileMutex, FB_FUNCTION);
+
+	if (releaseInProgress)
+		return;
+
 	extTrigger.reset();
 
-	if (releaseInProgress || !statement)
+	if (!statement)
 		return;
 
 	AutoSetRestore<bool> autoProgressFlag(&releaseInProgress, true);

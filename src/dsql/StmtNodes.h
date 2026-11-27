@@ -228,15 +228,11 @@ public:
 		  statements(pool),
 		  onlyAssignments(false)
 	{
+		flags |= FLAG_NOT_PROFILED;
 	}
 
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
-
-	ProfileMode getProfileMode() const override
-	{
-		return ProfileMode::NONE;
-	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	CompoundStmtNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
@@ -466,15 +462,11 @@ public:
 		  name(pool, aName),
 		  dsqlSignature(pool, aName)
 	{
+		flags |= FLAG_NOT_PROFILED;
 	}
 
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
-
-	ProfileMode getProfileMode() const override
-	{
-		return ProfileMode::NONE;
-	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	DeclareSubFuncNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
@@ -529,15 +521,11 @@ public:
 		  name(pool, aName),
 		  dsqlSignature(pool, aName)
 	{
+		flags |= FLAG_NOT_PROFILED;
 	}
 
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
-
-	ProfileMode getProfileMode() const override
-	{
-		return ProfileMode::NONE;
-	}
 
 	Firebird::string internalPrint(NodePrinter& printer) const override;
 	DeclareSubProcNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
@@ -743,6 +731,7 @@ public:
 		  useCallerPrivs(false),
 		  traScope(EDS::traNotSet)	// not defined
 	{
+		flags |= FLAG_PROFILE_ON_RETURN;
 	}
 
 public:
@@ -753,11 +742,6 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	ExecStatementNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	ExecStatementNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
-
-	ProfileMode getProfileMode() const override
-	{
-		return ProfileMode::EVALUATE_RETURN;
-	}
 
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 
@@ -970,6 +954,7 @@ public:
 		  dsqlForceSingular(false),
 		  withLock(false)
 	{
+		flags |= FLAG_PROFILE_ON_RETURN;
 	}
 
 public:
@@ -980,11 +965,6 @@ public:
 	void genBlr(DsqlCompilerScratch* dsqlScratch) override;
 	StmtNode* pass1(thread_db* tdbb, CompilerScratch* csb) override;
 	StmtNode* pass2(thread_db* tdbb, CompilerScratch* csb) override;
-
-	ProfileMode getProfileMode() const override
-	{
-		return ProfileMode::EVALUATE_RETURN;
-	}
 
 	const StmtNode* execute(thread_db* tdbb, Request* request, ExeState* exeState) const override;
 

@@ -228,16 +228,14 @@ private:
 
 		Counts& operator[](ID id)
 		{
-			if ((m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id) ||
-				// if m_lastPos is mispositioned
-				m_counts.find(id, m_lastPos))
-			{
-				return m_counts[m_lastPos];
-			}
+			// Fast path: the last used group often repeats. The search and insertion
+			// path is kept out of line, as inlining it adds a Counts temporary and
+			// a stack protector to the hot bumpValue() frame.
 
-			Counts counts(id);
-			m_counts.insert(m_lastPos, counts);
-			return m_counts[m_lastPos];
+			if (m_lastPos != (FB_SIZE_T) ~0 && m_counts[m_lastPos].getGroupId() == id)
+				return m_counts[m_lastPos];
+
+			return findOrAdd(id);
 		}
 
 		unsigned getCount() const
@@ -280,6 +278,8 @@ private:
 		void adjust(const GroupedCountsArray& baseStats, const GroupedCountsArray& newStats);
 
 	private:
+		Counts& findOrAdd(ID id);
+
 		SortedCountsArray m_counts;
 		FB_SIZE_T m_lastPos = (FB_SIZE_T) ~0;
 	};

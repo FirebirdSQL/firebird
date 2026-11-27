@@ -1557,6 +1557,10 @@ static bool analyze_data_page( dba_rel* relation, const data_page* page, bool sw
 						relation->rel_record_space -= RHDF_SIZE;
 						relation->rel_record_space += analyze_fragments(relation, header);
 					}
+					else if (header->rhdf_flags & rhd_long_tranum)
+					{
+						relation->rel_record_space -= RHDE_SIZE;
+					}
 					else
 					{
 						relation->rel_record_space -= RHD_SIZE;
@@ -1663,8 +1667,14 @@ static ULONG analyze_fragments(dba_rel* relation, const rhdf* header)
 		if (!index->dpg_offset)
 			break;
 		space += index->dpg_length;
-		space -= RHDF_SIZE;
+
 		header = (const rhdf*) ((SCHAR *) page + index->dpg_offset);
+		if (header->rhdf_flags & rhd_incomplete)
+			space -= RHDF_SIZE;
+		else if (header->rhdf_flags & rhd_long_tranum)
+			space -= RHDE_SIZE;
+		else
+			space -= RHD_SIZE;
 
 		fragments++;
 	}
@@ -1868,6 +1878,8 @@ static ULONG analyze_versions( dba_rel* relation, const rhdf* header)
 			space -= RHDF_SIZE;
 			space += analyze_fragments(relation, header);
 		}
+		else if (header->rhdf_flags & rhd_long_tranum)
+			space -= RHDE_SIZE;
 		else
 			space -= RHD_SIZE;
 	}

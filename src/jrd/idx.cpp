@@ -1230,7 +1230,7 @@ bool IDX_mark_index(thread_db* tdbb, jrd_rel* relation, MetaId id)
 		index_root_page* root = BTR_fetch_root_for_update(FB_FUNCTION, tdbb, &window);
 
 	BTR_mark_index_for_delete(tdbb, relation->getPermanent(), id, &window, root, 0);
-		return true;
+	return true;
 }
 
 void IDX_mark_temp(thread_db* tdbb, RelationPermanent* relation, MetaId id, Attachment* current, TraNumber tran)
@@ -2169,8 +2169,7 @@ static idx_e check_foreign_key(thread_db* tdbb,
 			}
 			else
 			{
-				result = check_partner_index(tdbb, relation, record, transaction, idx,
-				partnerRelation, index_id);
+				result = check_partner_index(tdbb, relation, record, transaction, idx, partnerRelation, index_id);
 			}
 
 			if (result)
