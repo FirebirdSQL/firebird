@@ -1776,7 +1776,7 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 	Jrd::ContextPoolHolder context(tdbb, pool);
 	jrd_tra* const transaction = jrd_tra::create(pool, attachment, outer);
 
-	transaction->tra_flags = flags & TRA_OPTIONS_MASK;
+	transaction->tra_flags = flags & (TRA_OPTIONS_MASK | TRA_meta);
 	transaction->tra_lock_timeout = lock_timeout;
 
 	try
@@ -1789,7 +1789,8 @@ jrd_tra* TRA_start(thread_db* tdbb, ULONG flags, SSHORT lock_timeout, Jrd::jrd_t
 		throw;
 	}
 
-	if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_START))
+	if (!(flags & TRA_meta) &&
+		attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_TRANSACTION_START))
 	{
 		TraceConnectionImpl conn(attachment);
 		TraceTransactionImpl tran(transaction);
