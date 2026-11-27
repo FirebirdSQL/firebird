@@ -68,6 +68,8 @@
 #include "../common/os/fbsyslog.h"
 #include "iberror.h"
 
+#include <limits>
+
 #ifdef USE_VALGRIND
 #include <valgrind/memcheck.h>
 
@@ -150,6 +152,8 @@ struct ExtentsCache	// C++ aggregate - members are statically initialized to zer
 
 ExtentsCache defaultExtentsCache;
 ExtentsCache externalExtentsCache;
+
+static constexpr unsigned INVALID_LOCAL_CACHE_INDEX = std::numeric_limits<unsigned>::max();
 
 #ifndef WIN_NT
 struct FailedBlock
@@ -581,7 +585,8 @@ public:
 	MemMediumHunk**	prev;
 
 private:
-	unsigned 		useCount;
+	unsigned useCount = 0;
+	unsigned cacheIndex = INVALID_LOCAL_CACHE_INDEX;
 
 public:
 	MemMediumHunk(MemMediumHunk** top, size_t spaceAllocated)
@@ -606,6 +611,19 @@ public:
 	bool isFree() const noexcept
 	{
 		return useCount == 0;
+	}
+
+	bool isInCache() const
+	{
+		return cacheIndex != INVALID_LOCAL_CACHE_INDEX;
+	}
+	unsigned getCacheIndex() const
+	{
+		return cacheIndex;
+	}
+	void setCacheIndex(const unsigned index)
+	{
+		cacheIndex = index;
 	}
 
 	MemBlock* newBlock(size_t size) noexcept
@@ -1413,16 +1431,144 @@ public:
 	}
 };
 
+// Original policy: retain the latest candidate, releasing the previous
+// candidate if it is still empty.
+class SingleExtentCache
+{
+public:
+	// Returned extent must be released, if returned value is nullptr then none should be released.
+	MemMediumHunk* retain(MemMediumHunk* hunk)
+	{
+		MemMediumHunk* candidate = m_candidateForFree;
+		m_candidateForFree = hunk;
+		if (candidate && candidate != hunk && candidate->isFree())
+			return candidate;
+		return nullptr;
+	}
+
+	void remove(MemMediumHunk* hunk)
+	{}
+
+private:
+	MemMediumHunk* m_candidateForFree = nullptr;
+};
+
+class FifoExtentCache
+{
+private:
+	struct Slot
+	{
+		Slot* next = nullptr;
+		Slot* prev = nullptr;
+		MemMediumHunk* data = nullptr;
+	};
+
+public:
+	FifoExtentCache()
+	{
+		for (size_t i = 0; i < LOCAL_EXTENTS_CACHE_SIZE; ++i)
+			m_slots[i].next = i + 1 < LOCAL_EXTENTS_CACHE_SIZE ? &m_slots[i + 1] : nullptr;
+		m_freeSlots = &m_slots[0];
+	}
+
+	// Returned extent must be released, if returned value is nullptr then none should be released.
+	MemMediumHunk* retain(MemMediumHunk* hunk)
+	{
+		fb_assert(!hunk->isInCache());
+
+		Slot* slot = m_freeSlots;
+		if (slot)
+		{
+			m_freeSlots = slot->next;
+			appendCandidate(slot, hunk);
+
+			return nullptr;
+		}
+		else
+		{
+			// Keep the newly emptied extent and evict the oldest empty extent.
+			slot = m_usedSlots;
+			MemMediumHunk* victim = slot->data;
+			fb_assert(victim->isFree());
+			detachCandidate(slot);
+
+			appendCandidate(slot, hunk);
+
+			return victim;
+		}
+	}
+
+	void remove(MemMediumHunk* hunk)
+	{
+		if (!hunk->isInCache())
+			return;
+
+		Slot* slot = &m_slots[hunk->getCacheIndex()];
+		detachCandidate(slot);
+		slot->next = m_freeSlots;
+		m_freeSlots = slot;
+	}
+
+private:
+	void appendCandidate(Slot* slot, MemMediumHunk* hunk)
+	{
+		fb_assert(!hunk->isInCache() && hunk->isFree());
+
+		slot->data = hunk;
+		hunk->setCacheIndex(static_cast<unsigned>(slot - m_slots));
+		if (m_usedSlots)
+		{
+			slot->next = m_usedSlots;
+			slot->prev = m_usedSlots->prev;
+			slot->prev->next = slot;
+			m_usedSlots->prev = slot;
+		}
+		else
+		{
+			slot->next = slot->prev = slot;
+			m_usedSlots = slot;
+		}
+		++m_cachedCount;
+	}
+
+	void detachCandidate(Slot* slot)
+	{
+		fb_assert(m_cachedCount && slot->data);
+		if (slot->next == slot)
+			m_usedSlots = nullptr;
+		else
+		{
+			slot->prev->next = slot->next;
+			slot->next->prev = slot->prev;
+			if (m_usedSlots == slot)
+				m_usedSlots = slot->next;
+		}
+		--m_cachedCount;
+		slot->data->setCacheIndex(INVALID_LOCAL_CACHE_INDEX);
+		slot->data = nullptr;
+		slot->next = slot->prev = nullptr;
+	}
+
+private:
+	// 24 of small extents (4-7 KiB) is around 128KiB;
+	static constexpr size_t LOCAL_EXTENTS_CACHE_SIZE = 24;
+
+	Slot m_slots[LOCAL_EXTENTS_CACHE_SIZE] = {};
+	Slot* m_freeSlots = nullptr;
+	Slot* m_usedSlots = nullptr; // Oldest empty extent, prev is the newest.
+	unsigned m_cachedCount = 0;
+};
+
 
 // List of free small blocks of given size
 
-class LinkedList
+class NonReclaimingFreeList
 {
 public:
 	typedef MemSmallHunk Hunk;
 	static const unsigned MEM_OVERHEAD = offsetof(MemBlock, body);
 
-	static MemBlock* getElement(MemBlock** from) noexcept
+	MemBlock* pop(MemBlock** from)
 	{
 		MemBlock* rc = *from;
 		if (rc)
@@ -1430,7 +1576,7 @@ public:
 		return rc;
 	}
 
-	static void putElement(MemBlock** to, MemBlock* block) noexcept
+	static void push(MemBlock** to, MemBlock* block)
 	{
 		block->next = *to;
 		*to = block;
@@ -1450,29 +1596,27 @@ public:
 };
 
 
-// List of free medium blocks of given size
-
-class DoubleLinkedList
+// Free blocks in extents that can be released when empty.
+template <typename Cache>
+class ReclaimingFreeList
 {
 public:
 	typedef MemMediumHunk Hunk;
 	static constexpr unsigned MEM_OVERHEAD = offsetof(MemBlock, body);
 
-	DoubleLinkedList() noexcept
-	{ }
-
-	static MemBlock* getElement(MemBlock** from) noexcept
+	MemBlock* pop(MemBlock** from)
 	{
 		MemBlock* rc = SemiDoubleLink::pop(*from);
 		if (rc)
 		{
 			MemMediumHunk* hunk = rc->getHunk();
 			hunk->incrUsage();
+			m_cache.remove(hunk);
 		}
 		return rc;
 	}
 
-	void putElement(MemBlock** to, MemBlock* block);
+	void push(MemBlock** to, MemBlock* block);
 
 	static void validate(MemBlock* block, unsigned length)
 	{
@@ -1487,18 +1631,18 @@ public:
 	void decrUsage(MemMediumHunk* hunk, MemPool* pool);
 
 private:
-	MemMediumHunk* candidateForFree = nullptr;
+	Cache m_cache;
 };
 
 
 // Array (size == number of slots) of pointers to lists of free blocks
 
-template <class ListBuilder, class Limits>
+template <class FreeList, class Limits>
 class FreeObjects
 {
 private:
 	typedef MemBlock* FreeObjPtr;
-	typedef typename ListBuilder::Hunk Extent;
+	typedef typename FreeList::Hunk Extent;
 
 public:
 	FreeObjects() noexcept
@@ -1509,19 +1653,19 @@ public:
 
 	FreeObjPtr allocateBlock(MemPool* pool, size_t from, size_t& size)
 	{
-		size_t full_size = size + (from ? 0 : ListBuilder::MEM_OVERHEAD);
+		size_t full_size = size + (from ? 0 : FreeList::MEM_OVERHEAD);
 		if (full_size > Limits::TOP_LIMIT)
 			return NULL;
 
 		unsigned slot = Limits::getSlot(full_size, SLOT_ALLOC);
 		full_size = Limits::getSize(slot);
 
-		FreeObjPtr blk = ListBuilder::getElement(&freeObjects[slot]);
+		FreeObjPtr blk = m_freeList.pop(&m_freeObjects[slot]);
 		if (!blk && from)
 		{
 			for (unsigned slot1 = slot - 1; Limits::getSize(slot1) >= from; --slot1)
 			{
-				blk = ListBuilder::getElement(&freeObjects[slot1]);
+				blk = m_freeList.pop(&m_freeObjects[slot1]);
 				if (blk)
 				{
 					full_size = Limits::getSize(slot1);
@@ -1538,7 +1682,7 @@ public:
 		if (!blk)
 			blk = newBlock(pool, slot);
 
-		size = full_size - ListBuilder::MEM_OVERHEAD;
+		size = full_size - FreeList::MEM_OVERHEAD;
 		return blk;
 	}
 
@@ -1550,7 +1694,7 @@ public:
 			return false;		// Not our block
 
 		unsigned slot = Limits::getSlot(size, SLOT_ALLOC);
-		listBuilder.putElement(&freeObjects[slot], blk);
+		m_freeList.push(&m_freeObjects[slot], blk);
 		return true;
 	}
 
@@ -1558,7 +1702,7 @@ public:
 	void print_contents(FILE* file, MemPool* pool, bool used_only,
 						const char* filter_path, const size_t filter_len) noexcept
 	{
-		for (Extent* ext = currentExtent; ext; ext = ext->next)
+		for (Extent* ext = m_currentExtent; ext; ext = ext->next)
 			ext->print_contents(file, pool, used_only, filter_path, filter_len);
 	}
 #endif
@@ -1566,22 +1710,32 @@ public:
 	void validate(const MemPool* pool, StatInt& vMap, StatInt& vUse)
 	{
 		for (unsigned int slot = 0; slot < Limits::TOTAL_ELEMENTS; ++slot)
-			ListBuilder::validate(freeObjects[slot], Limits::getSize(slot));
+			FreeList::validate(m_freeObjects[slot], Limits::getSize(slot));
 
-		for (Extent* ext = currentExtent; ext; ext = ext->next)
+		for (Extent* ext = m_currentExtent; ext; ext = ext->next)
 			ext->validate(pool, ext->hdrSize(), vMap, vUse);
 	}
 
 private:
-	FreeObjPtr freeObjects[Limits::TOTAL_ELEMENTS]{};
-	ListBuilder listBuilder;
-	Extent* currentExtent = nullptr;
-
 	MemBlock* newBlock(MemPool* pool, unsigned slot);
+
+private:
+	FreeObjPtr m_freeObjects[Limits::TOTAL_ELEMENTS] = {};
+	FreeList m_freeList;
+	Extent* m_currentExtent = nullptr;
 };
 
 
 // Implementation of memory pool
+
+namespace MemPoolFlags
+{
+	using Flags = uint32_t;
+
+	constexpr Flags NONE                = 0;
+	constexpr Flags ALLOW_REDIRECTION   = 1 << 0;
+	constexpr Flags NO_WAIT_REDIRECTION = 1 << 1;
+}
 
 class MemPool
 {
@@ -1611,9 +1765,12 @@ private:
 	static const size_t minAllocation = 65536;
 	static const size_t roundingSize = ALLOC_ALIGNMENT;
 
-	FreeObjects<LinkedList, LowLimits> smallObjects;
+	using SmallFreeList = ReclaimingFreeList<FifoExtentCache>;
+	using MediumFreeList = ReclaimingFreeList<SingleExtentCache>;
+
+	FreeObjects<SmallFreeList, LowLimits> smallObjects;
 	Vector<MemBlock*, 16> parentRedirected;
-	FreeObjects<DoubleLinkedList, MediumLimits> mediumObjects;
+	FreeObjects<MediumFreeList, MediumLimits> mediumObjects;
 	MemBigHunk*		bigHunks;
 
 	Mutex			mutex;
@@ -1669,10 +1826,13 @@ private:
 	};
 #endif // VALIDATE_POOL
 
-	MemBlock* allocateInternal2(size_t from, size_t& length, bool flagRedirect);
-	MemBlock* allocateInternal(size_t from, size_t& length, bool flagRedirect)
+	MemBlock* allocateInternal2(size_t from, size_t& length, MemPoolFlags::Flags flags);
+	MemBlock* allocateInternal(size_t from, size_t& length, MemPoolFlags::Flags flags)
 	{
-		auto* block = allocateInternal2(from, length, flagRedirect);
+		auto* block = allocateInternal2(from, length, flags);
+		if (!block)
+			return nullptr;
+
 		block->pool = this;
 		return block;
 	}
@@ -1683,14 +1843,14 @@ private:
 
 public:
 	void* allocate(size_t size ALLOC_PARAMS);
-	MemBlock* allocateRange(size_t from, size_t& size ALLOC_PARAMS);
+	MemBlock* allocateRange(size_t from, size_t& size, MemPoolFlags::Flags flags ALLOC_PARAMS);
 
 private:
 	virtual void memoryIsExhausted(void);
 	void* allocRaw(size_t length);
 	static void releaseMemory(void* block, bool flagExtent) noexcept;
 	static void releaseRaw(bool destroying, void *block, size_t size, ExtentsCache* extentsCache) noexcept;
-	void* getExtent(size_t from, size_t& to);
+	void* getExtent(size_t from, size_t& to, MemPoolFlags::Flags flags);
 
 public:
 	static void releaseExtent(bool destroying, void *block, size_t size, MemPool* pool) noexcept;
@@ -1830,8 +1990,8 @@ private:
 	friend class MemoryPool;
 };
 
-
-void DoubleLinkedList::putElement(MemBlock** to, MemBlock* block)
+template <typename Cache>
+void ReclaimingFreeList<Cache>::push(MemBlock** to, MemBlock* block)
 {
 	MemPool* pool = block->pool;
 	MemMediumHunk* hunk = block->getHunk();
@@ -1841,44 +2001,43 @@ void DoubleLinkedList::putElement(MemBlock** to, MemBlock* block)
 	decrUsage(hunk, pool);
 }
 
-void DoubleLinkedList::decrUsage(MemMediumHunk* hunk, MemPool* pool)
+template <typename Cache>
+void ReclaimingFreeList<Cache>::decrUsage(MemMediumHunk* hunk, MemPool* pool)
 {
-	if (hunk->decrUsage())
+	if (!hunk->decrUsage())
+		return;
+
+	MemMediumHunk* oldHunk = m_cache.retain(hunk);
+	if (oldHunk)
 	{
-		if (candidateForFree && (candidateForFree != hunk) && candidateForFree->isFree())
-		{
-			candidateForFree->unlinkBlocks();
-			SemiDoubleLink::remove(candidateForFree);
-
-			fb_assert(pool);
-			MemPool::releaseExtent(false, candidateForFree, candidateForFree->length, pool);
-		}
-
-		candidateForFree = hunk;
+		oldHunk->unlinkBlocks();
+		SemiDoubleLink::remove(oldHunk);
+		fb_assert(pool);
+		MemPool::releaseExtent(false, oldHunk, oldHunk->length, pool);
 	}
 }
 
 
-template <class ListBuilder, class Limits>
-MemBlock* FreeObjects<ListBuilder, Limits>::newBlock(MemPool* pool, unsigned slot)
+template <class Blocks, class Limits>
+MemBlock* FreeObjects<Blocks, Limits>::newBlock(MemPool* pool, unsigned slot)
 {
 	const size_t size = Limits::getSize(slot);
 
-	if (!currentExtent || currentExtent->spaceRemaining < size)
+	if (!m_currentExtent || m_currentExtent->spaceRemaining < size)
 	{
-		Extent* const oldExtent = currentExtent;
+		Extent* const oldExtent = m_currentExtent;
 
 		// Allocate new extent before retiring the old one: if newExtent() throws,
 		// old extent keeps its usage reference and is retired by the next call
 		size_t size2 = size;
-		pool->newExtent(size2, &currentExtent);
-		currentExtent->incrUsage();
+		pool->newExtent(size2, &m_currentExtent);
+		m_currentExtent->incrUsage();
 
 		if (oldExtent)
 		{
 			// put remaining memory into appr. slots
 			while (oldExtent->spaceRemaining >= Limits::getSize(0) &&
-				   oldExtent->spaceRemaining > ListBuilder::MEM_OVERHEAD)
+				   oldExtent->spaceRemaining > Blocks::MEM_OVERHEAD)
 			{
 				unsigned sl1 = Limits::getSlot(oldExtent->spaceRemaining, SLOT_FREE);
 				if (sl1 == ~0u)
@@ -1887,23 +2046,23 @@ MemBlock* FreeObjects<ListBuilder, Limits>::newBlock(MemPool* pool, unsigned slo
 				const unsigned size1 = Limits::getSize(sl1);
 				MemBlock* b = oldExtent->newBlock(size1);
 
-				listBuilder.putElement(&freeObjects[sl1], b);
+				m_freeList.push(&m_freeObjects[sl1], b);
 			}
 			oldExtent->spaceRemaining = 0;
-			listBuilder.decrUsage(oldExtent, pool);
+			m_freeList.decrUsage(oldExtent, pool);
 		}
 	}
 
-	return currentExtent->newBlock(size);
+	return m_currentExtent->newBlock(size);
 }
 
-template <class ListBuilder, class Limits>
-FreeObjects<ListBuilder, Limits>::~FreeObjects()
+template <class Blocks, class Limits>
+FreeObjects<Blocks, Limits>::~FreeObjects()
 {
-	while (currentExtent)
+	while (m_currentExtent)
 	{
-		Extent* e = currentExtent;
-		currentExtent = currentExtent->next;
+		Extent* e = m_currentExtent;
+		m_currentExtent = m_currentExtent->next;
 
 		MemPool::releaseExtent(true, e, e->length, NULL);
 	}
@@ -2101,7 +2260,7 @@ void MemPool::newExtent(size_t& size, Extent** linkedList)
 {
 	// No large enough block found. We need to extend the pool
 	void* memory = NULL;
-	constexpr size_t TOTAL_OVERHEAD = DoubleLinkedList::MEM_OVERHEAD + GUARD_BYTES + VALGRIND_REDZONE;
+	constexpr size_t TOTAL_OVERHEAD = MediumFreeList::MEM_OVERHEAD + GUARD_BYTES + VALGRIND_REDZONE;
 	constexpr size_t FROM_LIMIT = mediumLimits[10];	// 4224 // 10
 	constexpr size_t TO_LIMIT = mediumLimits[15];	// 7552 // 15
 
@@ -2114,9 +2273,9 @@ void MemPool::newExtent(size_t& size, Extent** linkedList)
 		ext_size = std::max(TO_LIMIT, from);
 
 		fb_assert(ext_size < DEFAULT_ALLOCATION);
-		memory = parent->getExtent(from, ext_size);
+		memory = parent->getExtent(from, ext_size, MemPoolFlags::ALLOW_REDIRECTION | MemPoolFlags::NO_WAIT_REDIRECTION);
 	}
-	else
+	if (memory == nullptr)
 	{
 		fb_assert(ext_size <= DEFAULT_ALLOCATION);
 		ext_size = DEFAULT_ALLOCATION;
@@ -2172,10 +2331,17 @@ void MemoryPool::setStatsGroup(MemoryStats& newStats) noexcept
 	pool->setStatsGroup(newStats);
 }
 
-MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, bool flagRedirect)
+MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, MemPoolFlags::Flags flags)
 {
 	MutexEnsureUnlock guard(mutex, "MemPool::allocateInternal2");
-	guard.enter();
+	if (flags & MemPoolFlags::NO_WAIT_REDIRECTION)
+	{
+		// If parent is already doing allocation, do not wait it and do allocation by your-self.
+		if (guard.tryEnter() == false)
+			return nullptr;
+	}
+	else
+		guard.enter();
 
 	++blocksAllocated;
 	++blocksActive;
@@ -2188,10 +2354,11 @@ MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, bool flagRedir
 
 	// Parent redirection of medium blocks
 
-	if (parent_redirect && flagRedirect && length < PARENT_REDIRECT_THRESHOLD)
+	if (parent_redirect && (flags & MemPoolFlags::ALLOW_REDIRECTION) && length < PARENT_REDIRECT_THRESHOLD)
 	{
 		guard.leave();
-		block = parent->allocateInternal(from, length, false);
+		block = parent->allocateInternal(from, length,
+			(flags & ~MemPoolFlags::ALLOW_REDIRECTION) | MemPoolFlags::NO_WAIT_REDIRECTION);
 		guard.enter();
 
 		if (block)
@@ -2232,10 +2399,13 @@ MemBlock* MemPool::allocateInternal2(size_t from, size_t& length, bool flagRedir
 	return hunk->block;
 }
 
-MemBlock* MemPool::allocateRange(size_t from, size_t& size ALLOC_PARAMS_DEF)
+MemBlock* MemPool::allocateRange(size_t from, size_t& size, MemPoolFlags::Flags flags ALLOC_PARAMS_DEF)
 {
 	size_t length = from ? size : ROUNDUP(size + VALGRIND_REDZONE, roundingSize) + GUARD_BYTES;
-	MemBlock* memory = allocateInternal(from, length, true);
+	MemBlock* memory = allocateInternal(from, length, flags);
+	if (!memory)
+		return nullptr;
+
 	size = length - (VALGRIND_REDZONE + GUARD_BYTES);
 
 #ifdef USE_VALGRIND
@@ -2267,7 +2437,7 @@ void* MemPool::allocate(size_t size ALLOC_PARAMS_DEF)
 	Validator vld(this);
 #endif
 
-	MemBlock* memory = allocateRange(0, size ALLOC_PASS_ARGS);
+	MemBlock* memory = allocateRange(0, size, MemPoolFlags::ALLOW_REDIRECTION ALLOC_PASS_ARGS);
 
 	increment_usage(memory->getSize());
 
@@ -2501,12 +2671,23 @@ void* MemPool::allocRaw(size_t size)
 }
 
 
-void* MemPool::getExtent(size_t from, size_t& to)		// pass desired minimum size, return actual extent size
+void* MemPool::getExtent(size_t from, size_t& to, MemPoolFlags::Flags flags)		// pass desired minimum size, return actual extent size
 {
 #ifdef VALIDATE_POOL
-	MutexLockGuard guard(mutex, "MemPool::getExtent");
+	MutexEnsureUnlock guard(mutex, "MemPool::getExtent");
+	if (flags & MemPoolFlags::NO_WAIT_REDIRECTION)
+	{
+		// If parent is already doing allocation, do not wait it and do allocation by your-self.
+		if (guard.tryEnter() == false)
+			return nullptr;
+	}
+	else
+		guard.enter();
 #endif
-	MemBlock* extent = allocateRange(from, to);
+	MemBlock* extent = allocateRange(from, to, flags);
+	if (extent == nullptr)
+		return nullptr;
+
 	extent->setExtent();
 	return &extent->body;
 }

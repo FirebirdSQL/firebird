@@ -431,6 +431,7 @@ LINK_PLUG_LIBS = -L$(LIB) -L$(STATIC_LIB) $(SO_LINK_LIBS)
 # It's just a set of object files, prepared to be used by ld, not an output library
 COMMON_LIB	= $(OBJ)/common.a
 COMMON_TEST = $(FB_TESTS_DIR)/common_test$(EXEC_EXT)
+ALLOC_BENCH = $(FB_TESTS_DIR)/alloc_bench$(EXEC_EXT)
 
 # From utilities
 FBSVCMGR	= $(BIN)/fbsvcmgr$(EXEC_EXT)

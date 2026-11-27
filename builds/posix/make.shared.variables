@@ -44,6 +44,11 @@ Common_Test_Objects:= $(COT1) $(COT2) $(COT3) $(call makeObjects,yvalve,gds.cpp)
 
 AllObjects += $(Common_Test_Objects)
 
+# Standalone allocator benchmark (not part of the common library).
+Alloc_Bench_Objects:= $(call dirObjects,common/classes/bench)
+
+AllObjects += $(Alloc_Bench_Objects)
+
 
 # gpre
 GPRE_Common_Objects:= $(call dirObjects,gpre) $(call makeObjects,gpre/languages,@GPRE_LANGUAGE_MODULES@)
