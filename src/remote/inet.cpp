@@ -1070,6 +1070,13 @@ rem_port* INET_connect(const TEXT* name,
 		return unix_connect(port, name, packet, flag);
 #endif
 
+	// A port-only server argument leaves the TCP bind address to the configuration.
+	if (explicitTcpPort && name[0] == '/')
+	{
+		protocol = name + 1;
+		name = portConfig->getRemoteBindAddress();
+	}
+
 	if (name)
 	{
 		host = name;
@@ -1077,7 +1084,8 @@ rem_port* INET_connect(const TEXT* name,
 
 		if (pos != string::npos)
 		{
-			protocol = host.substr(pos + 1);
+			if (protocol.isEmpty())
+				protocol = host.substr(pos + 1);
 			host = host.substr(0, pos);
 		}
 
@@ -1086,6 +1094,12 @@ rem_port* INET_connect(const TEXT* name,
 			// host name or address is in brackets, remove them
 			host.erase(host.length() - 1);
 			host.erase(0, 1);
+		}
+
+		if (!packet && name[0] && host.isEmpty())
+		{
+			gds__log("INET/INET_connect: missing host in bind address '%s'", name);
+			inet_gen_error(true, port, Arg::Gds(isc_net_lookup_err) << Arg::Gds(isc_host_unknown));
 		}
 	}
 
