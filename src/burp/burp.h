@@ -1440,7 +1440,6 @@ public:
 		if (stmt)
 		{
 			stmt->free(&tdgbl->status_vector);
-			stmt->release();
 		}
 	}
 
