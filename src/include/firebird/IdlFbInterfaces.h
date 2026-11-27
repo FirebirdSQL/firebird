@@ -7217,7 +7217,7 @@ namespace Firebird
 		}
 	};
 
-#define FIREBIRD_IREPLICATED_FIELD_VERSION 2u
+#define FIREBIRD_IREPLICATED_FIELD_VERSION 3u
 
 	class IReplicatedField : public IVersioned
 	{
@@ -7231,6 +7231,8 @@ namespace Firebird
 			unsigned (CLOOP_CARG *getLength)(IReplicatedField* self) CLOOP_NOEXCEPT;
 			unsigned (CLOOP_CARG *getCharSet)(IReplicatedField* self) CLOOP_NOEXCEPT;
 			const void* (CLOOP_CARG *getData)(IReplicatedField* self) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *isPrimary)(IReplicatedField* self, unsigned* position) CLOOP_NOEXCEPT;
+			FB_BOOLEAN (CLOOP_CARG *isUnique)(IReplicatedField* self) CLOOP_NOEXCEPT;
 		};
 
 	protected:
@@ -7285,6 +7287,26 @@ namespace Firebird
 		const void* getData()
 		{
 			const void* ret = static_cast<VTable*>(this->cloopVTable)->getData(this);
+			return ret;
+		}
+
+		FB_BOOLEAN isPrimary(unsigned* position)
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->isPrimary(this, position);
+			return ret;
+		}
+
+		FB_BOOLEAN isUnique()
+		{
+			if (cloopVTable->version < 3)
+			{
+				return 0;
+			}
+			FB_BOOLEAN ret = static_cast<VTable*>(this->cloopVTable)->isUnique(this);
 			return ret;
 		}
 	};
@@ -21402,6 +21424,8 @@ namespace Firebird
 					this->getLength = &Name::cloopgetLengthDispatcher;
 					this->getCharSet = &Name::cloopgetCharSetDispatcher;
 					this->getData = &Name::cloopgetDataDispatcher;
+					this->isPrimary = &Name::cloopisPrimaryDispatcher;
+					this->isUnique = &Name::cloopisUniqueDispatcher;
 				}
 			} vTable;
 
@@ -21498,6 +21522,32 @@ namespace Firebird
 				return static_cast<const void*>(0);
 			}
 		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopisPrimaryDispatcher(IReplicatedField* self, unsigned* position) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::isPrimary(position);
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
+
+		static FB_BOOLEAN CLOOP_CARG cloopisUniqueDispatcher(IReplicatedField* self) CLOOP_NOEXCEPT
+		{
+			try
+			{
+				return static_cast<Name*>(self)->Name::isUnique();
+			}
+			catch (...)
+			{
+				StatusType::catchException(0);
+				return static_cast<FB_BOOLEAN>(0);
+			}
+		}
 	};
 
 	template <typename Name, typename StatusType, typename Base = IVersionedImpl<Name, StatusType, Inherit<IReplicatedField> > >
@@ -21520,6 +21570,8 @@ namespace Firebird
 		virtual unsigned getLength() = 0;
 		virtual unsigned getCharSet() = 0;
 		virtual const void* getData() = 0;
+		virtual FB_BOOLEAN isPrimary(unsigned* position) = 0;
+		virtual FB_BOOLEAN isUnique() = 0;
 	};
 
 	template <typename Name, typename StatusType, typename Base>

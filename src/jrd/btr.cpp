@@ -256,6 +256,56 @@ namespace
 		return rpt;
 	}
 
+	bool isIndexSlotStable(thread_db* tdbb, const index_root_page* root, Cached::Relation* rel, MetaId id)
+	{
+		const auto irt_desc = getIndexSlot(tdbb, root, id);
+		const TraNumber descTrans = irt_desc->getTransaction();
+
+		switch (irt_desc->getState())
+		{
+		case irt_normal:
+		case irt_migrate:
+			return true;
+
+		case irt_in_progress:		// index creation
+		case irt_concurrently:
+		case irt_drop:				// index removal
+			return false;
+
+		case irt_rollback:			// to be removed when irt_transaction dead
+			switch (indexCacheState(tdbb, descTrans, rel, id, true))
+			{
+			case tra_unknown:		// index in unknown state
+			case tra_dead:			// index failed creation
+				return false;
+			}
+			return true;
+
+		case irt_commit:			// change state on irt_transaction completion
+			switch (indexCacheState(tdbb, descTrans, rel, id, false))
+			{
+			case tra_unknown:		// index in unknown state
+			case tra_committed:		// index to be dropped
+				return false;
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	void removeUncachedIndices(thread_db* tdbb, RelationPermanent* rel, IndexDescList& idxList)
+	{
+		for (auto n = 0u; n < idxList.getCount(); )
+		{
+			auto& idx = idxList[n];
+			if (!rel->lookup_index(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
+				idxList.remove(n);
+			else
+				++n;
+		}
+	}
+
 } // namespace
 
 static ULONG add_node(thread_db*, WIN*, index_insertion*, temporary_key*, RecordNumber*,
@@ -1331,38 +1381,8 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 
 	for (MetaId id = 0; id < root->irt_count; id++)
 	{
-		const auto irt_desc = getIndexSlot(tdbb, root, id);
-		const TraNumber descTrans = irt_desc->getTransaction();
-
-		switch (irt_desc->getState())
-		{
-		case irt_normal:
-		case irt_migrate:
-			break;
-
-		case irt_in_progress:			// index creation - skip
-		case irt_concurrently:
-		case irt_drop:					// index removal - skip
+		if (!isIndexSlotStable(tdbb, root, relPerm, id))
 			continue;
-
-		case irt_rollback:		// to be removed when irt_transaction dead
-			switch (indexCacheState(tdbb, descTrans, relPerm, id, true))
-			{
-			case tra_unknown:	// skip - index in unknown state
-			case tra_dead:		// skip - index failed creation
-				continue;
-			}
-			break;
-
-		case irt_commit:		// change state on irt_transaction completion
-			switch (indexCacheState(tdbb, descTrans, relPerm, id, false))
-			{
-			case tra_unknown:	// skip - index in unknown state
-			case tra_committed:	// skip - index to be dropped
-				continue;
-			}
-			break;
-		}
 
 		index_desc idx;
 		if (BTR_description(tdbb, relPerm, root, &idx, id,
@@ -1374,14 +1394,7 @@ void BTR_all(thread_db* tdbb, jrd_rel* relation, IndexDescList& idxList, bool sy
 
 	CCH_RELEASE(tdbb, &window);
 
-	for (auto n = 0u; n < idxList.getCount(); )
-	{
-		auto& idx = idxList[n];
-		if (!relation->getPermanent()->lookup_index(tdbb, idx.idx_id, CacheFlag::AUTOCREATE))
-			idxList.remove(n);
-		else
-			++n;
-	}
+	removeUncachedIndices(tdbb, relPerm, idxList);
 }
 
 
@@ -4106,6 +4119,53 @@ void BTR_copy_index(thread_db* tdbb, jrd_rel* relation, MetaId indexId, ULONG pa
 	}
 
 	CCH_RELEASE(tdbb, &rootWindow);
+}
+
+
+void BTR_load_keys(Jrd::thread_db* tdbb, Jrd::jrd_rel* relation, Jrd::IndexDescList& idxList)
+{
+/**************************************
+ *
+ *	B T R _ l o a d _ k e y s
+ *
+ **************************************
+ *
+ * Functional description
+ *	Return descriptions of only stable unique indices for relation.
+ *
+ **************************************/
+	const auto rootPage = relation->getIndexRootPage(tdbb);
+	if (!rootPage)
+		return;
+
+	win window(rootPage.value());
+	const auto root = (index_root_page*) CCH_FETCH(tdbb, &window, LCK_read, pag_root);
+
+	Cleanup releaseWindow([&] {
+		if (window.win_bdb)
+			CCH_RELEASE(tdbb, &window);
+	});
+
+	const auto relPerm = relation->getPermanent();
+
+	for (USHORT i = 0; i < root->irt_count; i++)
+	{
+		if (!(root->irt_rpt[i].irt_flags & (irt_unique | irt_primary)))
+			continue;
+
+		if (!isIndexSlotStable(tdbb, root, relPerm, i))
+			continue;
+
+		index_desc idx;
+		idx.idx_id = idx_invalid;
+
+		if (BTR_description(tdbb, relPerm, root, &idx, i, BTR_DESCRIBE_NO_THROW))
+			idxList.add(idx);
+	}
+
+	CCH_RELEASE(tdbb, &window);
+
+	removeUncachedIndices(tdbb, relPerm, idxList);
 }
 
 
