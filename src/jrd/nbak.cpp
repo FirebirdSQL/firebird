@@ -540,7 +540,7 @@ void BackupManager::endBackup(thread_db* tdbb, bool recover)
 				NBAK_TRACE(("Merge: page %d is fetched", all.current().db_page));
 				if (page->pag_scn != current_scn)
 				{
-					CCH_MARK_SYSTEM(tdbb, &window2);
+					CCH_MARK_MERGE(tdbb, &window2);
 					NBAK_TRACE(("Merge: page %d is marked", all.current().db_page));
 				}
 				CCH_RELEASE(tdbb, &window2);

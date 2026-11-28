@@ -1725,6 +1725,11 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 
 	fb_assert(bdb->ourIOLock());
 
+	// A page changed by a regular (non-merge) operation must be written into the
+	// difference file again, even if the merge process has previously read it from
+	// there and marked it with BDB_merge.
+	bdb->bdb_flags &= ~BDB_merge;
+
 	// Allocate difference page (if in stalled mode) before mark page as dirty.
 	// It guarantees that disk space is allocated and page could be written later.
 
@@ -1775,6 +1780,32 @@ void CCH_mark(thread_db* tdbb, WIN* window, bool mark_system, bool must_write)
 		insertDirty(bcb, bdb);
 
 	bdb->bdb_flags |= BDB_marked | BDB_dirty;
+}
+
+
+void CCH_mark_merge(thread_db* tdbb, WIN* window)
+{
+/**************************************
+ *
+ *	C C H _ m a r k _ m e r g e
+ *
+ **************************************
+ *
+ * Functional description
+ *	Mark a window as dirty by the difference file merge process.
+ *	The page content is taken from the difference file, so it must
+ *	not be written back into the difference file while merging.
+ *
+ **************************************/
+	BufferDesc* bdb = window->win_bdb;
+	BLKCHK(bdb, type_bdb);
+
+	SET_TDBB(tdbb);
+
+	// CCH_mark() clears BDB_merge, so the flag must be set afterwards
+	CCH_mark(tdbb, window, true, false);
+
+	bdb->bdb_flags |= BDB_merge;
 }
 
 
@@ -5008,7 +5039,8 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 
 			if (!isTempPage &&
 				(backupState == Ods::hdr_nbak_stalled ||
-					(backupState == Ods::hdr_nbak_merge && bdb->bdb_difference_page)))
+					(backupState == Ods::hdr_nbak_merge && bdb->bdb_difference_page &&
+						!(bdb->bdb_flags & BDB_merge))))
 			{
 				if (!dbb->dbb_backup_manager->writeDifference(tdbb, status,
 						bdb->bdb_difference_page, bdb->bdb_buffer))
@@ -5113,7 +5145,7 @@ static bool write_page(thread_db* tdbb, BufferDesc* bdb, FbStatusVector* const s
 		if (!(bdb->bdb_bcb->bcb_flags & BCB_keep_pages))
 			removeDirty(bdb->bdb_bcb, bdb);
 
-		bdb->bdb_flags &= ~(BDB_must_write | BDB_system_dirty);
+		bdb->bdb_flags &= ~(BDB_must_write | BDB_system_dirty | BDB_merge);
 		clear_dirty_flag_and_nbak_state(tdbb, bdb);
 
 		if (bdb->bdb_flags & BDB_io_error)
