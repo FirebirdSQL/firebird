@@ -259,6 +259,11 @@ namespace Replication
 		}
 
 		return (int) exitCode;
+#elif defined(IOS)
+		// iOS: system() is unavailable in the SDK; replication journal archive
+		// commands are not run and fail like a command that did not succeed.
+		(void) command;
+		return -1;
 #else
 		return system(command.c_str());
 #endif

@@ -1825,7 +1825,12 @@ int API_ROUTINE gds__edit(const TEXT* file_name, USHORT /*type*/)
 	TEXT buffer[MAXPATHLEN * 2 + 5];
 	fb_utils::snprintf(buffer, sizeof(buffer), "%s \"%s\"", editor.c_str(), file_name);
 
+#ifdef IOS
+	// iOS: system() is unavailable in the SDK, so no external editor can be run.
+	FB_UNUSED_VAR(buffer);
+#else
 	FB_UNUSED(system(buffer));
+#endif
 
 	struct STAT after;
 	os_utils::stat(file_name, &after);

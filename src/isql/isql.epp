@@ -4069,7 +4069,12 @@ static processing_state copy_table(const QualifiedMetaString& source, const Qual
 			altdb = otherdb;
 		TEXT cmd[MAXPATHLEN * 2 + 20];
 		snprintf(cmd, sizeof(cmd), "isql -q %s -i %s", altdb, ftmp.c_str());
+#ifdef IOS
+		// iOS: system() is unavailable in the SDK, so a second isql cannot be run.
+		if (true)
+#else
 		if (system(cmd))
+#endif
 		{
 			IUTILS_msg_get(COPY_ERR, errbuf, SafeArg() << IUTILS_name_to_string(destination).c_str() << altdb);
 			STDERROUT(errbuf);
@@ -4765,7 +4770,13 @@ static processing_state escape(const TEXT* cmd)
 	if (!*shellcmd)
 		shellcmd = emptyCmd;
 
+#ifdef IOS
+	// iOS: system() is unavailable in the SDK, so no shell can be started.
+	FB_UNUSED_VAR(shellcmd);
+	const int rc = -1;
+#else
 	const int rc = system(shellcmd);
+#endif
 
 #ifdef WIN_NT
 	// If we are reading from the temp file, restore the read position because

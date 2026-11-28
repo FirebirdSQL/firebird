@@ -22,10 +22,18 @@
  */
 
 
+#import <TargetConditionals.h>
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 #import <os/log.h>
 
+#if TARGET_OS_IPHONE
+// iOS: SecTask* API is macOS-only; an iOS process is always sandboxed.
+Boolean isSandboxed()
+{
+	return true;
+}
+#else
 Boolean isSandboxed()
 {
 	SecTaskRef task = SecTaskCreateFromSelf(nil);
@@ -34,6 +42,7 @@ Boolean isSandboxed()
 
     return value != nil;
 }
+#endif
 
 const char* getTemporaryFolder()
 {
