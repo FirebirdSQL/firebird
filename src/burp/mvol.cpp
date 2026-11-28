@@ -1553,8 +1553,10 @@ static DESC next_volume( DESC handle, ULONG mode, bool full_buffer)
 		if (new_desc == INVALID_HANDLE_VALUE)
 #else
 		ULONG mode2 = mode;
+#ifdef O_DIRECT
 		if (mode == MODE_WRITE && tdgbl->gbl_sw_direct_io)
 			mode2 |= O_DIRECT;
+#endif
 
 		new_desc = open(new_file, mode2, open_mask);
 		if (new_desc < 0)

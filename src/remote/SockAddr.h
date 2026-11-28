@@ -93,6 +93,7 @@ public:
 	unsigned length() const { return len; }
 	unsigned short family() const;
 	unsigned short port() const;
+	static bool getPort(const UCHAR* address, unsigned length, unsigned short& port);
 	void setPort(unsigned short x);
 	int connect(SOCKET s) const;
 	int accept(SOCKET s);
@@ -106,11 +107,13 @@ public:
 
 #define AF_INET6_POSIX		10
 #define AF_INET6_WINDOWS	23
+#define AF_INET6_OPENBSD	24
 #define AF_INET6_FREEBSD	28
 #define AF_INET6_DARWIN		30
 
 #if AF_INET6 == AF_INET6_POSIX
 #elif AF_INET6 == AF_INET6_WINDOWS
+#elif AF_INET6 == AF_INET6_OPENBSD
 #elif AF_INET6 == AF_INET6_FREEBSD
 #elif AF_INET6 == AF_INET6_DARWIN
 #else
@@ -127,6 +130,7 @@ inline void SockAddr::checkAndFixFamily()
 
 	case AF_INET6_POSIX:
 	case AF_INET6_WINDOWS:
+	case AF_INET6_OPENBSD:
 	case AF_INET6_FREEBSD:
 	case AF_INET6_DARWIN:
 		data.sock.sa_family = AF_INET6;
@@ -233,6 +237,18 @@ inline unsigned short SockAddr::port() const
 		return ntohs(data.inet6.sin6_port);
 	}
 	return 0; // exception?
+}
+
+
+inline bool SockAddr::getPort(const UCHAR* address, unsigned length, unsigned short& port)
+{
+	constexpr unsigned offset = offsetof(sockaddr_in, sin_port);
+	static_assert(offset == offsetof(sockaddr_in6, sin6_port), "Socket port offsets differ");
+	if (length < offset + sizeof(port))
+		return false;
+	memcpy(&port, address + offset, sizeof(port));
+	port = ntohs(port);
+	return true;
 }
 
 
