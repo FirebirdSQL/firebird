@@ -1117,6 +1117,16 @@ public:
 	{
 	}
 
+	// This constructor is temporary workaround for copying of existing format.
+	// For details look at comment in CMP_procedure_arguments()
+	explicit MessageNode(MemoryPool& pool, const Format& oldFormat)
+		: TypedNode<StmtNode, StmtNode::TYPE_MESSAGE>(pool),
+		  itemsUsedInSubroutines(pool)
+	{
+		format = Format::newFormat(pool, oldFormat.fmt_count);
+		*format = oldFormat;
+	}
+
 public:
 	static DmlNode* parse(thread_db* tdbb, MemoryPool& pool, CompilerScratch* csb, const UCHAR blrOp);
 
