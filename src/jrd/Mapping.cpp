@@ -1828,7 +1828,7 @@ RecordBuffer* MappingList::getList(thread_db* tdbb, const RelationPermanent* rel
 					DumpField(f_sec_map_comment, VALUE_STRING, length, buf.c_str()));
 			}
 
-			buffer->store(record);
+			buffer->store(tdbb, record);
 		}
 		check("IResultSet::fetchNext", &st);
 

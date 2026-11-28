@@ -220,7 +220,7 @@ bool BufferedStream::internalGetRecord(thread_db* tdbb) const
 		}
 
 		// Put the record into the buffer
-		impure->irsb_buffer->store(buffer_record);
+		impure->irsb_buffer->store(tdbb, buffer_record);
 	}
 	else
 	{

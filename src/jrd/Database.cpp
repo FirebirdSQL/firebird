@@ -916,6 +916,11 @@ namespace Jrd
 		return true;
 	}
 
+	void Database::GlobalObjectHolder::reserveTempCache(FB_SIZE_T size)
+	{
+		m_tempCacheUsage.fetch_add(size);
+	}
+
 	void Database::GlobalObjectHolder::decTempCacheUsage(FB_SIZE_T size)
 	{
 		fb_assert(m_tempCacheUsage >= size);

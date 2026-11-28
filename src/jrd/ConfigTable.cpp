@@ -77,7 +77,7 @@ RecordBuffer* ConfigTable::getRecords(thread_db* tdbb, RelationPermanent* relati
 		if (valSrc)
 			putField(tdbb, rec, DumpField(f_cfg_source, VALUE_STRING, fb_strlen(valSrc), valSrc));
 
-		recordBuffer->store(rec);
+		recordBuffer->store(tdbb, rec);
 	}
 
 	return recordBuffer;

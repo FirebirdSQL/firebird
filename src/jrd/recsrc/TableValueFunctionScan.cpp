@@ -212,7 +212,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 		dsc fromDesc;
 		fromDesc.makeText(valueStr.size(), textType, (UCHAR*)(IPTR)(valueStr.c_str()));
 		assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-		impure->m_recordBuffer->store(record);
+		impure->m_recordBuffer->store(tdbb, record);
 		return;
 	}
 
@@ -246,7 +246,7 @@ void UnlistFunctionScan::internalOpen(thread_db* tdbb) const
 				fromDesc.makeText(static_cast<USHORT>(size), textType,
 					(UCHAR*)(IPTR) valueView.data());
 				assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-				impure->m_recordBuffer->store(record);
+				impure->m_recordBuffer->store(tdbb, record);
 			}
 
 			if (end != std::string_view::npos)
@@ -289,7 +289,7 @@ bool UnlistFunctionScan::nextBuffer(thread_db* tdbb) const
 			dsc fromDesc;
 			fromDesc.makeText(str.length(), textType, (UCHAR*)(IPTR)(str.c_str()));
 			assignParameter(tdbb, &fromDesc, toDesc, 0, record);
-			impure->m_recordBuffer->store(record);
+			impure->m_recordBuffer->store(tdbb, record);
 		};
 
 		string bufferString;

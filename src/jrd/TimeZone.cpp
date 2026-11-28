@@ -46,7 +46,7 @@ TimeZoneSnapshot::TimeZoneSnapshot(thread_db* tdbb, MemoryPool& pool)
 
 			putField(tdbb, tzRecord, DumpField(f_tz_id, VALUE_INTEGER, sizeof(idValue), &idValue));
 			putField(tdbb, tzRecord, DumpField(f_tz_name, VALUE_STRING, static_cast<USHORT>(strlen(name)), name));
-			tzBuffer->store(tzRecord);
+			tzBuffer->store(tdbb, tzRecord);
 		}
 	);
 }

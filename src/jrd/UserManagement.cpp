@@ -552,7 +552,7 @@ void UserManagement::list(IUser* u, unsigned cachePosition)
 				 DumpField(f_sec_comment, VALUE_STRING, static_cast<USHORT>(strlen(u->comment()->get())), u->comment()->get()));
 	}
 
-	buffer->store(record);
+	buffer->store(threadDbb, record);
 
 	if (u->userName()->entered() && u->attributes()->entered())
 	{
@@ -577,7 +577,7 @@ void UserManagement::list(IUser* u, unsigned cachePosition)
 			putField(threadDbb, record,
 					 DumpField(f_sec_attr_plugin, VALUE_STRING, static_cast<USHORT>(plugName.length()), plugName.c_str()));
 
-			buffer->store(record);
+			buffer->store(threadDbb, record);
 		}
 	}
 }

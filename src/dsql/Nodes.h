@@ -1173,11 +1173,40 @@ public:
 	virtual void aggInit(thread_db* tdbb, Request* request) const = 0;	// pure, but defined
 	virtual void aggFinish(thread_db* tdbb, Request* request) const;
 	virtual bool aggPass(thread_db* tdbb, Request* request) const;
+	void aggRemove(thread_db* tdbb, Request* request) const;
 	dsc* execute(thread_db* tdbb, Request* request) const override;
 
 	virtual unsigned getCapabilities() const = 0;
 	virtual void aggPass(thread_db* tdbb, Request* request, dsc* desc) const = 0;
 	virtual dsc* aggExecute(thread_db* tdbb, Request* request) const = 0;
+
+	// Inverse of aggPass, removing a value from the aggregation. Used for sliding window frames.
+	// The result must be the same as aggregating again without the removed values, except that
+	// partial results may raise arithmetic overflow errors that the aggregation of the whole frame
+	// would not. The caller handles these errors by aggregating the whole frame again.
+	// With ignoreOrder, values may be removed in any order, not only in the order they were passed.
+	virtual bool supportsAggRemove(bool /*ignoreOrder*/) const
+	{
+		return false;
+	}
+
+	// Called during compilation when aggRemove may be used, so the node can allocate what it needs.
+	virtual void prepareAggRemove(CompilerScratch* /*csb*/)
+	{
+	}
+
+	virtual void aggRemove(thread_db* /*tdbb*/, Request* /*request*/, dsc* /*desc*/) const
+	{
+		fb_assert(false);
+	}
+
+	// aggRemove may become unavailable while aggregating (for example, by a memory limit). The result
+	// stays correct for the values passed and not removed yet, but the caller must not call aggRemove
+	// anymore until aggFinish.
+	virtual bool isAggRemoveAvailable(Request* /*request*/) const
+	{
+		return true;
+	}
 
 	AggNode* dsqlPass(DsqlCompilerScratch* dsqlScratch) override;
 

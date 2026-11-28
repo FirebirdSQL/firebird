@@ -337,7 +337,7 @@ RecordBuffer* DbCreatorsList::getList(thread_db* tdbb, RelationPermanent* relati
 			putField(tdbb, record,
 					 DumpField(f_sec_crt_u_type, VALUE_INTEGER, sizeof(v), &v));
 
-			buffer->store(record);
+			buffer->store(tdbb, record);
 		}
 		check("IResultSet::fetchNext", &st);
 	}

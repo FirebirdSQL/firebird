@@ -10722,7 +10722,7 @@ const StmtNode* StoreNode::store(thread_db* tdbb, Request* request, WhichTrigger
 					DeclareLocalTableNode::validateRecord(localTable, rpb->rpb_record);
 
 				if (localTable && !localTable->useLtt)
-					localTableImpure->recordBuffer->store(rpb->rpb_record);
+					localTableImpure->recordBuffer->store(tdbb, rpb->rpb_record);
 				else if (auto* extFile = relation->getExtFile())
 					extFile->store(tdbb, rpb);
 				else if (relation->isVirtual())

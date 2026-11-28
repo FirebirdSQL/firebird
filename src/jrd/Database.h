@@ -215,6 +215,7 @@ class Database : public pool_alloc<type_dbb>
 		}
 
 		bool incTempCacheUsage(FB_SIZE_T size);
+		void reserveTempCache(FB_SIZE_T size);
 		void decTempCacheUsage(FB_SIZE_T size);
 
 	private:
@@ -616,6 +617,12 @@ public:
 	bool incTempCacheUsage(FB_SIZE_T size)
 	{
 		return dbb_gblobj_holder->incTempCacheUsage(size);
+	}
+
+	// Counts the usage even when it exceeds the limit.
+	void reserveTempCache(FB_SIZE_T size)
+	{
+		dbb_gblobj_holder->reserveTempCache(size);
 	}
 
 	void decTempCacheUsage(FB_SIZE_T size)
