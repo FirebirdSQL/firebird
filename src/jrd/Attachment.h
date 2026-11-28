@@ -193,7 +193,7 @@ public:
 private:
 	Firebird::SparseBitmap<CommitNumber> m_snapshots;		// List of active snapshots as of the moment of time
 	CommitNumber m_lastCommit;		// CN_ACTIVE here means object is not populated
-	ULONG m_releaseCount;			// Release event counter when list was last updated
+	ULONG m_changeCount;			// Snapshot change counter when list was last updated
 	ULONG m_slots_used;				// Snapshot slots used when list was last updated
 
 	friend class TipCache;

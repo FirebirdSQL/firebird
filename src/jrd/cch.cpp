@@ -1494,8 +1494,24 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	WIN temp = *window;
 	window->win_page = PageNumber(window->win_page.getPageSpaceID(), page);
 
+	const bool exclusive = (bdb->bdb_bcb->bcb_flags & BCB_exclusive);
+
 	LockState must_read;
-	if (bdb->bdb_bcb->bcb_flags & BCB_exclusive)
+	bool noWaitFailed = false;
+	if (wait < 0)
+	{
+		// Both page latches and page locks are granted in the order of
+		// requests, so a shared request waits when an exclusive one is
+		// pending. Two readers that follow pointers in the opposite
+		// directions then block each other if writers wait for both pages,
+		// and only the timeout breaks this cycle.
+		// The caller is ready for a failure, so don't wait for the next page
+		// while the current one is held.
+
+		must_read = CCH_fetch_lock(tdbb, window, lock, LCK_NO_WAIT, page_type);
+		noWaitFailed = (must_read == lsLatchTimeout || must_read == lsLockTimeout);
+	}
+	else if (exclusive)
 	{
 		// This prevents a deadlock with the precedence queue, as shown by
 		// mwrite mwrite1 2 mwrite2 2 test.fdb
@@ -1517,6 +1533,33 @@ pag* CCH_handoff(thread_db*	tdbb, WIN* window, ULONG page, int lock, SCHAR page_
 	{
 		*window = temp;
 		CCH_RELEASE(tdbb, window);
+
+		if (noWaitFailed)
+		{
+			// The current page is already released. Don't return at once,
+			// else the caller repeats the attempt in a busy loop.
+
+			if (exclusive)
+			{
+				// The latch is refused while a writer waits for the page or
+				// holds it. Let the other threads run.
+
+				Thread::yield();
+				JRD_reschedule(tdbb, true);
+			}
+			else
+			{
+				// A request without a wait doesn't ask the owner of the page
+				// lock to release it. Wait for the next page now: the owner
+				// gets the blocking AST, and the page lock stays in the cache
+				// for the next attempt.
+
+				WIN next(temp.win_page.getPageSpaceID(), page);
+				if (CCH_fetch(tdbb, &next, lock, pag_undefined, wait, true))
+					CCH_RELEASE(tdbb, &next);
+			}
+		}
+
 		return NULL;
 	}
 

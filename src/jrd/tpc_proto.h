@@ -178,8 +178,10 @@ private:
 		// of any one CPU accessing this variable
 		std::atomic<TraNumber> oldest_transaction;
 
-		// Incremented each time whenever snapshot is released
-		std::atomic<ULONG> snapshot_release_count;
+		// Incremented each time whenever snapshot is created or released.
+		// When a snapshot is created, it is incremented before the commit number is read,
+		// see beginSnapshot() and updateActiveSnapshots().
+		std::atomic<ULONG> snapshot_change_count;
 
 		// Shared counters
 		std::atomic<TraNumber> latest_transaction_id;
@@ -336,9 +338,13 @@ private:
 
 	static int tpc_block_blocking_ast(void* arg);
 
-	SnapshotHandle allocateSnapshotSlot();
+	// Find a free slot with a number not less than minSlot
+	SnapshotHandle allocateSnapshotSlot(SnapshotHandle minSlot);
 	void deallocateSnapshotSlot(SnapshotHandle slotNumber);
 	void remapSnapshots(bool sync);
+
+	// Release the slots of dead attachments, used by updateActiveSnapshots()
+	void releaseDeadSnapshots(thread_db* tdbb);
 };
 
 
