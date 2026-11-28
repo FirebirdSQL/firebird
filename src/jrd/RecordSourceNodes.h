@@ -71,6 +71,7 @@ public:
 	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream);
 	void findDependentFromStreams(const CompilerScratch* csb,
 		StreamType currentStream, SortedStreamList* streamList);
+	void collectStreams(SortedStreamList& streamList) const;
 
 	NullsPlacement getEffectiveNullOrder(unsigned index) const
 	{
@@ -93,16 +94,22 @@ public:
 class MapNode : public Firebird::PermanentStorage, public Printable
 {
 public:
-	explicit MapNode(MemoryPool& pool)
+	explicit MapNode(MemoryPool& pool, StreamType aShellStream)
 		: PermanentStorage(pool),
 		  sourceList(pool),
-		  targetList(pool)
+		  targetList(pool),
+		  shellStream(aShellStream)
 	{
 	}
 
 	MapNode* copy(thread_db* tdbb, NodeCopier& copier) const;
 	MapNode* pass1(thread_db* tdbb, CompilerScratch* csb);
 	MapNode* pass2(thread_db* tdbb, CompilerScratch* csb);
+	bool computable(CompilerScratch* csb, StreamType stream, bool allowOnlyCurrentStream);
+	void findDependentFromStreams(const CompilerScratch* csb,
+		StreamType currentStream, SortedStreamList* streamList);
+	void collectStreams(SortedStreamList& streamList) const;
+	void assertTargetStreams() const;
 
 public:
 	virtual Firebird::string internalPrint(NodePrinter& printer) const
@@ -118,6 +125,7 @@ public:
 public:
 	NestValueArray sourceList;
 	NestValueArray targetList;
+	const StreamType shellStream;	// stream whose fields are used in targetList
 };
 
 class PlanNode : public Firebird::PermanentStorage, public Printable
@@ -562,6 +570,7 @@ public:
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 	virtual void findDependentFromStreams(const CompilerScratch* csb,
 		StreamType currentStream, SortedStreamList* streamList);
+	virtual void collectStreams(SortedStreamList& streamList) const;
 
 	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
@@ -625,6 +634,7 @@ public:
 		bool allowOnlyCurrentStream, ValueExprNode* value);
 	virtual void findDependentFromStreams(const CompilerScratch* csb,
 		StreamType currentStream, SortedStreamList* streamList);
+	virtual void collectStreams(SortedStreamList& streamList) const;
 
 	virtual RecordSource* compile(thread_db* tdbb, Optimizer* opt, bool innerSubStream);
 
