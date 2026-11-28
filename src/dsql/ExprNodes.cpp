@@ -8173,9 +8173,12 @@ bool LiteralNode::sameAs(const ExprNode* other, bool ignoreStreams) const
 	const LiteralNode* const otherNode = nodeAs<LiteralNode>(other);
 	fb_assert(otherNode);
 
+	if (!DSC_EQUIV(&litDesc, &otherNode->litDesc, true))
+		return false;
+
 	try
 	{
-		auto tdbb = JRD_get_thread_data();
+		const auto tdbb = JRD_get_thread_data();
 		ThreadStatusGuard guard(tdbb);
 
 		return MOV_compare(tdbb, &litDesc, &otherNode->litDesc) == 0;
