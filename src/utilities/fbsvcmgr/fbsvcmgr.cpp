@@ -538,11 +538,13 @@ constexpr SvcSwitches statisticsOptions[] =
 	{"sts_nocreation", putOption, 0, isc_spb_sts_nocreation, 0},
 	{"sts_schema", putStringArgument, 0, isc_spb_sts_schema, 0},
 	{"sts_table", putStringArgument, 0, isc_spb_sts_table, 0},
+	{"sts_tablespace", putStringArgument, 0, isc_spb_sts_tablespace, 0},
 	{"sts_data_pages", putOption, 0, isc_spb_sts_data_pages, 0},
 	{"sts_hdr_pages", putOption, 0, isc_spb_sts_hdr_pages, 0},
 	{"sts_idx_pages", putOption, 0, isc_spb_sts_idx_pages, 0},
 	{"sts_sys_relations", putOption, 0, isc_spb_sts_sys_relations, 0},
 	{"sts_encryption", putOption, 0, isc_spb_sts_encryption, 0},
+	{"sts_user_tablespaces", putOption, 0, isc_spb_sts_user_tablespaces, 0},
 	{0, 0, 0, 0, 0}
 };
 

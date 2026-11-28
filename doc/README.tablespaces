@@ -131,9 +131,33 @@ UTILITIES
 
     3. ISQL
     SHOW {TABLESPACES | TABLESPACE <TS NAME>}
+
     Displays a list of all tablespaces names in alphabetical order or information about the specified tablespace.
 
-    4. Replication
+    4. GSTAT
+    -ts [tablespace ...]
+    Reports the tablespaces and limits the analysis to the objects located in them.
+    Without tablespace names all user-defined tablespaces are reported.
+    The names are case sensitive, "PRIMARY" can be used to reference the main database file,
+    and an unknown name is reported as an error.
+    The switch combines with the other ones: -ts selects the locations, -t and -sch select
+    the objects, and both are applied.
+
+    Before the analysis a "Tablespaces:" section lists every reported tablespace, in ascending
+    order of their IDs, with the file where it is located and the tables and indices it contains.
+
+    A tablespace containing no objects is marked as empty. The tables are listed even when their
+    data pages are not analyzed (for example, with -ts -i), because their location is known
+    from the metadata. When no tablespace matches the selection, the section is not printed.
+
+    A table whose data is located outside the selected tablespaces is still reported when one of
+    its indices matches the selection, but its data pages are not analyzed.
+
+    The same is available through the services API, using the action_db_stats options
+    sts_tablespace <tablespace> (can be repeated) and sts_user_tablespaces, the latter being
+    equivalent to -ts without names.
+
+    5. Replication
     There is an apply_tablespaces_ddl parameter for replication, it may be configured for the replica side.
     If this parameter is disabled, CREATE/ALTER/DROP TSABLESPACE statements will be ignored on the replica and
     tablespace-related clauses in CREATE/ALTER TABLE/INDEX statements will also be ignored.

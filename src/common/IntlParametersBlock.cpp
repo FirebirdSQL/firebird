@@ -324,6 +324,8 @@ IntlParametersBlock::TagType IntlSpbStart::checkTag(UCHAR tag, const char** tagN
 			return TAG_STRING;
 		FB_IPB_TAG(isc_spb_sts_schema);
 			return TAG_STRING;
+		FB_IPB_TAG(isc_spb_sts_tablespace);
+			return TAG_STRING;
 		FB_IPB_TAG(isc_spb_command_line);
 			return TAG_COMMAND_LINE;
 		}

@@ -428,6 +428,7 @@ ClumpletReader::ClumpletType ClumpletReader::getClumpletType(UCHAR tag) const
 			case isc_spb_command_line:
 			case isc_spb_sts_table:
 			case isc_spb_sts_schema:
+			case isc_spb_sts_tablespace:
 				return StringSpb;
 			case isc_spb_options:
 				return IntSpb;

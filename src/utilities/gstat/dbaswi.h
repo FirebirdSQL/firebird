@@ -52,6 +52,7 @@ inline constexpr int IN_SW_DBA_ENCRYPTION	= 15;	// analyze pages encryption
 inline constexpr int IN_SW_DBA_HELP			= 16;	// show help
 inline constexpr int IN_SW_DBA_ROLE			= 17;	// SQL role
 inline constexpr int IN_SW_DBA_SCHEMA		= 18;	// analyze specific schemas
+inline constexpr int IN_SW_DBA_TABLESPACE	= 19;	// tablespace statistics
 
 inline constexpr static struct Switches::in_sw_tab_t dba_in_sw_table[] =
 {
@@ -69,6 +70,8 @@ inline constexpr static struct Switches::in_sw_tab_t dba_in_sw_table[] =
     {IN_SW_DBA_SCHEMA,			isc_spb_sts_schema,			"SCHEMA",	0,0,0,	false,	false,	65,	1, NULL},	// msg 65: -sch    schemaname (case sensitive)
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	false,	35,	1, NULL},	// msg 35: -t      tablename
     {IN_SW_DBA_RELATION,		isc_spb_sts_table,			"TABLE",	0,0,0,	false,	true,	0,	1, NULL},	// no msg: let run old buggy code
+    {IN_SW_DBA_TABLESPACE,		isc_spb_sts_tablespace,			"TS",		0,0,0,	false,	false,	68,	2, NULL},	// msg 68: -ts     tablespacename (case sensitive)
+    {IN_SW_DBA_TABLESPACE,		isc_spb_sts_user_tablespaces,		"TS",		0,0,0,	false,	true,	0,	2, NULL},	// no msg: -ts without tablespace names
     {IN_SW_DBA_ROLE,			0,							"ROLE",		0,0,0,	false,	false,	57,	1, NULL},	// msg 57: -role   SQL role name
 	// special switch to avoid including creation date, only for tests (no message)
     {IN_SW_DBA_NOCREATION,		isc_spb_sts_nocreation,	"NOCREATION",	0,0,0,	false,	true,	0,	1, NULL},	// msg (ignored) -n suppress creation date
